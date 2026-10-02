@@ -26,6 +26,15 @@ describe('createPdfStore', () => {
     expect(got?.units[0]?.by).toBe('B')
   })
 
+  it("a unit's sentences come back as written, and a copy made before them reads as before: additive, no new version (the highlight's sentence level)", async () => {
+    const s = createPdfStore({ db: dbOf() })
+    const unit = { kind: 'para', src: 'One. Two.', hash: 'h', tr: 'Eins. Zwei.', pieces: [], state: 'whole' as const, by: 'B', tried: 'B', sentences: { src: [5], tr: [6] } }
+    await s.put({ ...body('d', { units: [unit] }), pdf: pdfOf(100) }, now)
+    expect((await s.get('d', 'zh-CN'))?.units[0]?.sentences).toEqual({ src: [5], tr: [6] })
+    await s.put({ ...body('e'), pdf: pdfOf(100) }, now)
+    expect((await s.get('e', 'zh-CN'))?.units[0]).not.toHaveProperty('sentences')
+  })
+
   it('what is stored is not the PDF', async () => {
     const db = dbOf()
     const s = createPdfStore({ db })
@@ -141,7 +150,8 @@ describe('createPdfStore', () => {
     const db = dbOf()
     await db.untypeset.put({ digest: 'd', lang: 'zh-CN', pipeline: '2' })
     expect(await createPdfStore({ db }).untypeset('d', 'zh-CN')).toEqual({ pipeline: '2' })
-    expect(db.verno).toBe(2)
+    // 3 is the marked original's readings, a table of their own (2026-10-02)
+    expect(db.verno).toBe(3)
   })
 
   it('patchFigures changes the figures alone; usage and clear', async () => {
@@ -154,6 +164,18 @@ describe('createPdfStore', () => {
     expect((await s.usage()).count).toBe(1)
     await s.clear()
     expect(await s.usage()).toEqual({ count: 0, bytes: 0 })
+  })
+
+  it('usage counts papers, as the settings page\'s line says, not records: a paper kept in two languages and two versions is one (#299, Part 5\'s M12)', async () => {
+    const s = createPdfStore({ db: dbOf() })
+    await s.put({ ...body('d1', { paper: '2608.02163' }), pdf: pdfOf(100) }, now)
+    await s.put({ ...body('d1', { paper: '2608.02163', lang: 'jpn' }), pdf: pdfOf(100) }, now)
+    await s.put({ ...body('d2', { paper: '2608.02163v2' }), pdf: pdfOf(100) }, now)
+    await s.put({ ...body('d3', { paper: 'hep-th/9711200v1' }), pdf: pdfOf(100) }, now)
+    const usage = await s.usage()
+    expect(usage.count).toBe(2)
+    // the bytes are every record's
+    expect(usage.bytes).toBeGreaterThan(4 * 100)
   })
 
   it('a figures patch touches no PDF: the ciphertext has a table of its own (final review)', async () => {
@@ -205,6 +227,42 @@ describe('createPdfStore', () => {
     await expect(s.usage()).rejects.toThrow('the entries cannot be read')
     db.transaction = (() => Promise.reject(new Error('the store cannot be written'))) as unknown as typeof db.transaction
     await expect(s.clear()).rejects.toThrow('the store cannot be written')
+  })
+
+  // the marked original's readings, one row per paper version (the F2 review's I3): written with a record, kept while
+  // any record of the paper is, gone with the last
+  const readings = { pipeline: '2', typesetting: '1', page: '1', log: 'AXT-END', cites: '', labels: '', bbl: null, marks: { pages: 1, width: 612, height: 792, columns: [1], marks: [] }, left: [['0s', {}]] as [string, unknown][] }
+  it('the original\'s readings: written with a record, one per paper whatever its language, read back by its PDF\'s digest', async () => {
+    const s = createPdfStore({ db: dbOf() })
+    expect(await s.original('d')).toBeUndefined()
+    await s.put({ ...body('d'), pdf: pdfOf(100) }, now, readings)
+    await s.put({ ...body('d', { lang: 'jpn' }), pdf: pdfOf(100) }, now)
+    expect([await s.original('d'), await s.original('e')]).toEqual([readings, undefined])
+  })
+
+  it('kept while a record of the paper is, gone with the last — deleted or evicted — and with clear', async () => {
+    const s = createPdfStore({ db: dbOf() })
+    await s.put({ ...body('d'), pdf: pdfOf(100) }, now, readings)
+    await s.put({ ...body('d', { lang: 'jpn' }), pdf: pdfOf(100) }, now)
+    await s.delete('d', 'zh-CN')
+    expect(await s.original('d')).toEqual(readings)
+    await s.delete('d', 'jpn')
+    expect(await s.original('d')).toBeUndefined()
+    let t = 0
+    const capped = createPdfStore({ db: dbOf(), maxBytes: 1500, clock: () => ++t })
+    await capped.put({ ...body('a'), pdf: pdfOf(1000) }, now, readings)
+    await capped.put({ ...body('b'), pdf: pdfOf(1000) }, now)
+    expect(await capped.original('a')).toBeUndefined()
+    await s.put({ ...body('d'), pdf: pdfOf(100) }, now, readings)
+    await s.clear()
+    expect(await s.original('d')).toBeUndefined()
+  })
+
+  it('written beside a stored copy a worse one does not replace: the readings are the paper\'s, not the copy\'s', async () => {
+    const s = createPdfStore({ db: dbOf() })
+    await s.put({ ...body('d'), pdf: pdfOf(10, 1) }, now)
+    expect(await s.put({ ...body('d', { units: [{ kind: 'para', src: 's', hash: 'h', state: 'whole', by: 'A', tried: 'A' }] }), pdf: pdfOf(10, 2) }, now, readings)).toBe(false)
+    expect(await s.original('d')).toEqual(readings)
   })
 
   it('delete removes a record, whatever its state', async () => {

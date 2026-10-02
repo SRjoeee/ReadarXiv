@@ -36,9 +36,33 @@ export function figureRegions({ fnArray, argsArray }, OPS, { min = 30 } = {}) {
       if (matrix) ctm = mul(ctm, matrix)
       if (depth++ === 0 && bbox) out.push({ kind: 'vector', ...box(ctm, bbox[0], bbox[1], bbox[2], bbox[3]) })
     } else if (fn === OPS.paintFormXObjectEnd) { ctm = stack.pop() ?? ctm; depth-- }
-    else if ((fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject || fn === OPS.paintImageMaskXObject) && depth === 0) out.push({ kind: 'raster', ...box(ctm, 0, 0, 1, 1), image: fn === OPS.paintImageXObject ? args[0] : undefined })
+    else if (depth === 0) {
+      const placed = placements(fn, args, OPS)
+      if (placed) for (const [m, image] of placed) out.push({ kind: 'raster', ...box(m ? mul(ctm, m) : ctm, 0, 0, 1, 1), image })
+    }
   }
   return out.filter(r => r.x1 - r.x0 >= min && r.y1 - r.y0 >= min)
+}
+
+/**
+ * An image operation's placements: [[transform, image id]], each image drawn in the unit square under the transform
+ * (none: the one in force) — or null for any other operation. The list a page is drawn by (the display intent's, which
+ * the floats read) has runs of save, transform, image, restore made one operation by PDF.js's optimiser (6.3.289,
+ * operator_list.js): a Repeat of one image at positions with one scale (a mask's with its skew too), a Group of masks
+ * or of inline images each with its own transform (the review of B4's fix round)
+ */
+function placements(fn, args, OPS) {
+  if (fn === OPS.paintImageXObject) return [[null, args[0]]]
+  if (fn === OPS.paintInlineImageXObject || fn === OPS.paintImageMaskXObject) return [[null]]
+  if (fn === OPS.paintImageXObjectRepeat || fn === OPS.paintImageMaskXObjectRepeat) {
+    // [id, scaleX, scaleY, positions]; a mask's [mask, scaleX, skewX, skewY, scaleY, positions]
+    const mask = fn === OPS.paintImageMaskXObjectRepeat, [a, b, c, d] = mask ? args.slice(1, 5) : [args[1], 0, 0, args[2]], at = args[mask ? 5 : 3], out = []
+    for (let i = 0; i + 1 < at.length; i += 2) out.push([[a, b, c, d, at[i], at[i + 1]], mask ? undefined : args[0]])
+    return out
+  }
+  if (fn === OPS.paintImageMaskXObjectGroup) return args[0].map(img => [img.transform])
+  if (fn === OPS.paintInlineImageXObjectGroup) return args[1].map(entry => [entry.transform])
+  return null
 }
 
 /** a text item's box in PDF units, with the angle it runs at (degrees, 0 = left to right) */

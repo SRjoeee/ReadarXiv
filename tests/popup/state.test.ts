@@ -514,6 +514,20 @@ describe('the rows that lead elsewhere', () => {
     p.stop()
   })
 
+  it('with the reader open, side by side keeps a stored stacked: the reader shows it as side by side, and pressing that choice changes no preference of the HTML page\'s (#299, Part 5\'s M6)', async () => {
+    const stored = async (test: (c: Awaited<ReturnType<typeof getConfig>>) => boolean) => { for (let i = 0; i < 100 && !test(await getConfig()); i++) await flush(); return test(await getConfig()) }
+    await setConfig({ ...(await getConfig()), mode: 'stack', pdfReader: { ...(await getConfig()).pdfReader, original: true } })
+    const p = await opened(w => { w.page = undefined; w.entry = { paper: '2501.07202', html: null, kind: 'pdf', pdf: null, readerOpen: true } })
+    p.popup.actions.chooseMode('side')
+    expect(await stored(c => !c.pdfReader.original)).toBe(true)
+    expect((await getConfig()).mode).toBe('stack')
+    // from the translation alone, side by side is the HTML page's side by side
+    await setConfig({ ...(await getConfig()), mode: 'only' })
+    p.popup.actions.chooseMode('side')
+    expect(await stored(c => c.mode === 'side')).toBe(true)
+    p.stop()
+  })
+
   it('the PDF entry opens the paper\'s PDF asking for the reader, in a new tab by default or on the page itself, and the popup closes (the reader\'s design, §2)', async () => {
     const pdf = 'https://arxiv.org/pdf/2501.07202#readarxiv'
     const p = await opened(w => { w.page = undefined; w.entry = { paper: '2501.07202', html: null, kind: 'abs', pdf, readerOpen: false } })

@@ -2,9 +2,12 @@
 // wire text with its opaque pieces as markers (DESIGN §6: `@a#`, `@@` for a literal @), comes back as pieces again;
 // the engine's slips are forgiven where they are unambiguous, and what still fails goes as runs — each stretch of text
 // between opaque pieces on its own — so that nothing is left untranslated.
+import { tokens } from './anchors.mjs'
+import { bySentence } from './highlight.mjs'
 import { latin1Bytes } from './latex-front.mjs'
 import { MIXED } from '@/cache/pdf-record'
 import { fromAlpha, TAG_RE, toAlpha } from '@/core/protector/tokens'
+import { sentenceCuts } from '@/core/sentences'
 
 // ---------------------------------------------------------------- markers wire format
 export { fromAlpha, toAlpha }
@@ -12,12 +15,19 @@ export const escape = s => s.replace(/@/g, '@@').replace(/&/g, '&amp;').replace(
 export const decode = s => s.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (m, b) => b[0] === '#' ? String.fromCodePoint(b[1].toLowerCase() === 'x' ? parseInt(b.slice(2), 16) : parseInt(b.slice(1), 10)) : { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }[b.toLowerCase()])
 /** source text is read byte for byte (latin1); its characters are UTF-8 */
 export const utf8 = s => new TextDecoder().decode(latin1Bytes(s))
-// the engine's text is plain text: TeX's special characters in it (a % for "percent", a # for "number") are escaped
-export const texEscape = s => s.replace(/[\\#$%&_{}~^]/g, c => ({ '\\': '\\textbackslash{}', '~': '\\textasciitilde{}', '^': '\\textasciicircum{}' })[c] ?? `\\${c}`)
+// the engine's text is plain text: TeX's special characters in it (a % for "percent", a # for "number") are escaped,
+// and the characters Unicode marks default ignorable, invisible by definition (a zero width space, a soft hyphen, a
+// direction mark, a variation selector), are dropped: no font of ours holds a glyph for one, and TeX's "Missing
+// character" for it reads as a letter lost (live.mjs unsettable) — two zero width spaces Google put inside a word failed
+// every way of setting 2608.02785 (2026-10-02). The scripts whose shaping needs a joiner (ZWJ, ZWNJ) are not typeset
+const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu
+export const texEscape = s => s.replace(INVISIBLE, '').replace(/[\\#$%&_{}~^]/g, c => ({ '\\': '\\textbackslash{}', '~': '\\textasciitilde{}', '^': '\\textasciicircum{}' })[c] ?? `\\${c}`)
 
-/** a unit → the wire text, and the table from marker id back to the original piece */
+/** a unit → the wire text, the table from marker id back to the original piece, and the markers the wire set apart
+ *  from a full stop before them (`stops`), from a digit before them (`numbers`) and from one after them
+ *  (`numbersAfter`), whose spaces rehydrate takes off again */
 export function serialize(u) {
-  const slots = []
+  const slots = [], stops = new Set(), numbers = new Set(), numbersAfter = new Set()
   let wire = ''
   const lead = u.pieces[0]?.t === 'text' ? u.pieces[0].s.match(/^\s*/)[0] : ''
   const trail = u.pieces.at(-1)?.t === 'text' ? u.pieces.at(-1).s.match(/\s*$/)[0] : ''
@@ -25,20 +35,50 @@ export function serialize(u) {
     if (p.t === 'text') { let s = utf8(p.s).replace(/\s+/g, ' '); if (k === 0) s = s.trimStart(); if (k === u.pieces.length - 1) s = s.trimEnd(); wire += escape(s); return }
     slots.push(p)
     const m = `@${toAlpha(slots.length)}#`
-    // a marker touching a letter is read as part of the word by the engine (#254): a space of ours around it
-    const before = /\p{L}$/u.test(wire) ? ' ' : ''
+    // a marker touching a word is read as part of it by the engine (#254): a space of ours around it. So is one right
+    // after a full stop, `models.@a#` — a citation or a footnote's mark after a sentence — which left the sentence's
+    // last word in English (the HTML page's protector, 09c25622: 13 of 17 blocks as sent, none with the space); of nine
+    // marks of punctuation before a closing marker only the period kept the word before it in English, 6 of 6 labels
+    // as sent and 0 of 6 spaced (Microsoft, 2026-09-28): RT-1's run-in labels came back with "tokenization." and
+    // "speed." in English
+    const before = /[\p{L}\p{N}\p{M}.]$/u.test(wire) ? ' ' : ''
+    if (wire.endsWith('.')) stops.add(slots.length)
+    if (/\p{N}$/u.test(wire)) numbers.add(slots.length)
     const nextText = u.pieces[k + 1]?.t === 'text' ? u.pieces[k + 1].s : ''
-    const after = /^\p{L}/u.test(utf8(nextText)) ? ' ' : ''
+    const after = /^[\p{L}\p{N}\p{M}]/u.test(utf8(nextText)) ? ' ' : ''
+    if (/^\p{N}/u.test(utf8(nextText))) numbersAfter.add(slots.length)
     wire += before + m + after
   })
-  return { wire, slots, lead, trail }
+  return { wire, slots, lead, trail, stops, numbers, numbersAfter }
 }
 
-/** the translation → pieces, or why it cannot be used */
-export function rehydrate(text, { slots, lead, trail }, tolerant = false) {
+/** the translation → pieces, or why it cannot be used. The space the wire set after a full stop before a marker is the
+ *  wire's, not the source's: it is taken off the text before that marker, as the HTML page's protector takes its own
+ *  (09c25622) — kept, `Fig.~\ref` came back as an ordinary space and then the tie (the review of A1, M3). Only while
+ *  that text still ends in a full stop (any script's, as the HTML page's label.ts knows them), or before a piece a space
+ *  never goes before: an engine that set a citation before the stop, `Modelle @a#.`, chose the space (the re-review of
+ *  A1, m5), but one that wrote `Eq.~` out as `Gleichung @a#` did not — a space and then the tie. Over the ten papers'
+ *  pieces set apart after a full stop, Microsoft's German, French, Spanish and Chinese left a space and no stop before
+ *  34, 38, 49 and 12 of them: a tie, a control space or a group's end every one, a citation never */
+const STOP_SPACE = /(?<=[.\u3002\uff0e\u0964\u0965\u06d4\u0589\u1362\u104b\u0f0d])[ \t\n\f\r]+$/, SPACE = /[ \t\n\f\r]+$/
+/** The space the wire set beside a digit (a percent after a number, `95\%`; a times between two, `3$\times$10`) is the
+ *  wire's too, taken off as the full stop's is: before the marker while the text there still ends in a digit, after it
+ *  while the text there still begins with one. Kept, 95\% came back as "95 %" in 20 of 53 Chinese units with a percent
+ *  after a number (the evaluation of the typesetting rule, 2026-10-01). A word's space (#254) stays the engine's — a
+ *  letter, or a combining mark ending a word, before a marker: the common case, whose space was always kept */
+const NUMBER_SPACE = /(?<=\p{N})[ \t\n\f\r]+$/u, NUMBER_LEAD = /^[ \t\n\f\r]+(?=\p{N})/u
+/** a piece a space never goes before: one that is a space itself (a tie, a control space, a kern), a group's end */
+const SPACING = /^(?:~|\\[ ,;:]|\\(?:q?quad|enspace|thinspace|nobreakspace)(?![A-Za-z])|\\hspace\*?\{|\}$)/
+export function rehydrate(text, { slots, lead, trail, stops, numbers, numbersAfter }, tolerant = false) {
   const pieces = [], seen = new Map()
-  let last = 0
-  const pushText = s => { if (s) pieces.push({ t: 'text', tr: true, s: texEscape(s) }) }
+  let last = 0, afterNumber = false
+  // a text between two markers, the wire's spaces off it: after the one before it, before the one after it (`before`)
+  const pushText = (s, before = null) => {
+    if (before) s = s.replace(before, '')
+    s = decode(s)
+    if (afterNumber) s = s.replace(NUMBER_LEAD, '')
+    if (s) pieces.push({ t: 'text', tr: true, s: texEscape(s) })
+  }
   // tolerant: the engine sometimes drops the closing # before a CJK character or punctuation (@b形, @g。). A lone @ can only
   // be a marker's remains, because a literal @ went out as @@; accepted only when no letter follows, never inside a word
   const L = toAlpha(Math.max(1, slots.length)).length
@@ -50,10 +90,12 @@ export function rehydrate(text, { slots, lead, trail }, tolerant = false) {
     const id = fromAlpha(m[1] ?? m[2])
     if (!slots[id - 1]) return { error: 'unknown marker' }
     if (seen.has(id)) return { error: 'duplicated marker' }
-    pushText(decode(buf)); buf = ''
+    const wires = stops?.has(id) ? STOP_SPACE : numbers?.has(id) ? NUMBER_SPACE : null
+    pushText(buf, wires && (SPACING.test(slots[id - 1].src ?? '') ? SPACE : wires)); buf = ''
     seen.set(id, pieces.length); pieces.push(slots[id - 1])
+    afterNumber = !!numbersAfter?.has(id)
   }
-  buf += text.slice(last); pushText(decode(buf))
+  buf += text.slice(last); pushText(buf)
   if (seen.size !== slots.length) return { error: 'lost marker' }
   // the two ends of a formatting group must stay in order and properly nested, or the braces stop balancing
   const stack = []
@@ -64,6 +106,117 @@ export function rehydrate(text, { slots, lead, trail }, tolerant = false) {
   if (stack.length) return { error: 'pair out of order' }
   if (lead) pieces.unshift({ t: 'text', s: lead }); if (trail) pieces.push({ t: 'text', s: trail })
   return { pieces }
+}
+
+// ---------------------------------------------------------------- sentences (plans/2026-10-01-pdf-highlight.md, B3)
+/** what the wire writes as one thing, a boundary inside which goes to its end: a marker (read tolerantly too, `@b`
+ *  without its `#`), an escaped @, an entity */
+const ENTITY = '&(?:#[xX][0-9a-fA-F]+|#\\d+|amp|lt|gt|quot|apos|nbsp);'
+const ATOM = new RegExp(`@@|@[a-z]+#?|${ENTITY}`, 'g')
+/** on the tags wire (an LLM's, Google's): a tag, an entity */
+const TAG_ATOM = new RegExp(`(?:${TAG_RE.source})|${ENTITY}`, 'g')
+/** each wire format's atoms, and how a reply is read back on it (strictly, or tolerantly where the format has a reading) */
+const SENTENCE_WIRE = {
+  markers: { atoms: ATOM, read: (text, ser, tolerant) => rehydrate(text, ser, tolerant) },
+  tags: { atoms: TAG_ATOM, read: (text, ser) => rehydrateTags(text, ser) },
+}
+/** where a sentence begins in the reply, while it is read back: a private-use character, which no reply holds (one that
+ *  did would give a sentinel too many, and no sentences) */
+const SENTINEL = '\ue000'
+const WORD = /^[\p{L}\p{N}]/u
+const atomsOf = (s, re) => [...s.matchAll(re)].map(m => [m.index, m.index + m[0].length])
+/** a boundary out of the atom it falls inside */
+const outOf = (atoms, c) => { for (const [a, b] of atoms) if (c > a && c < b) return b; return c }
+const cumulative = ls => { const out = []; let at = 0; for (const n of ls.slice(0, -1)) { at += n; out.push(at) } return out }
+/** how many characters that are not white space the source wire writes before `c`: an escaped @ or an entity one, a
+ *  marker or a tag none — the placeholder is a space in the plain text */
+function shownBefore(wire, c, re = ATOM) {
+  let n = 0, i = 0
+  for (const m of wire.slice(0, c).matchAll(re)) {
+    for (; i < m.index; i++) if (!/\s/.test(wire[i])) n++
+    if (m[0] === '@@' || m[0][0] === '&') n++
+    i = m.index + m[0].length
+  }
+  for (; i < c; i++) if (!/\s/.test(wire[i])) n++
+  return n
+}
+/** the offset in a plain text where its `n`-th character that is no white space has been passed, and its first letter
+ *  or digit from there: where a sentence's first word begins */
+function wordAfter(text, n) {
+  let i = 0
+  for (let seen = 0; i < text.length && seen < n; i++) if (!/\s/.test(text[i])) seen++
+  while (i < text.length && !WORD.test(text.slice(i, i + 2))) i++
+  return i
+}
+const nonSpace = s => s.replace(/\s+/g, '').length
+/** the pieces equal but for the sentinels and white space (the space rehydrate takes off before a stop-marker is not
+ *  taken where a sentinel stands between) */
+const sameBut = (withSentinels, b) => {
+  const bare = s => s.split(SENTINEL).join('').replace(/\s+/g, '')
+  // a sentinel between two markers is a text piece of its own, where the reply has none
+  const a = withSentinels.filter(p => !(p.t === 'text' && !p.s.split(SENTINEL).join('')))
+  return a.length === b.length && a.every((p, k) => (p.t === 'text' && b[k].t === 'text' ? bare(p.s) === bare(b[k].s) : p === b[k]))
+}
+
+/**
+ * A unit's sentences as its engine cut them — Microsoft's own sentence lengths for the wire it was sent (`sentLen`, kept
+ * by the extension's service as the segment's `alignment`, DESIGN §8.6: lengths in the wire's characters, one pair per
+ * sentence, verified to partition both texts) — as where each sentence after the first begins: `src` the offsets of
+ * their first words in the unit's plain source (plainSource, what the left side is anchored by), `tr` in its
+ * translation's (plainTranslated of `pieces`, what the right side is). `text` the engine's reply, `pieces` what it was
+ * read back as (rehydrate, `tolerant` or not). A boundary inside a marker goes to the marker's end — the engine cuts
+ * inside the closing marker at a unit's end (`…@g|#`), and rarely inside one in the middle (report-B §2(a)) — and one
+ * that then begins no sentence on either side (at the end, after its neighbour, or before a sentence with no word: a
+ * formula alone) is dropped on both sides together, the two sentences around it read as one. Null where the lengths do
+ * not partition both texts, or the reply's sentences cannot be read back as `pieces`: the unit is lit whole. `format`
+ * the wire's: markers (Microsoft's own lengths), or tags (the service's markers at the cuts sent, cutsOf: Google, an
+ * LLM; the lengths read where they landed, sentence-markers.ts), a boundary inside a tag or an entity to its end.
+ * What a copy keeps (CachedUnit.sentences) is these offsets, and their meaning is three functions': plainSource and
+ * plainTranslated, the texts they count in, and anchors.mjs tokens, which turns an offset into the word a side finds
+ * (sentenceStarts). Those three are the record's contract: a change to any of them changes what a kept copy's offsets
+ * name, and is a change of the record (live.mjs PIPELINE_VERSION)
+ */
+export function sentencesOf(u, ser, text, alignment, pieces, tolerant = false, format = 'markers') {
+  const { source, target } = alignment ?? {}, W = SENTENCE_WIRE[format]
+  if (!W || !source?.length || source.length !== target?.length) return null
+  if (source.reduce((a, b) => a + b, 0) !== ser.wire.length || target.reduce((a, b) => a + b, 0) !== text.length) return null
+  const plain = plainSource(u), translated = plainTranslated(pieces)
+  if (shownBefore(ser.wire, ser.wire.length, W.atoms) !== nonSpace(plain)) return null
+  const wireAtoms = atomsOf(ser.wire, W.atoms), textAtoms = atomsOf(text, W.atoms)
+  const cs = cumulative(source).map(c => outOf(wireAtoms, c)), ct = cumulative(target).map(c => outOf(textAtoms, c))
+  // the reply with a sentinel where each sentence begins, read back as the pieces were: the sentinels' places in its
+  // plain text are the boundaries'
+  let marked = '', last = 0
+  for (const c of ct) { marked += text.slice(last, c) + SENTINEL; last = c }
+  const back = W.read(marked + text.slice(last), ser, tolerant)
+  if (back.error || !sameBut(back.pieces, pieces)) return null
+  const withSentinels = plainTranslated(back.pieces)
+  const tn = []
+  for (let i = 0, n = 0; i < withSentinels.length; i++) { const ch = withSentinels[i]; if (ch === SENTINEL) tn.push(n); else if (!/\s/.test(ch)) n++ }
+  if (tn.length !== ct.length) return null
+  // each pair kept only where both sentences around it hold a word on both sides
+  const words = s => tokens(s).length
+  const total = [words(plain), words(translated)]
+  const out = { src: [], tr: [] }
+  let before = [0, 0]
+  cs.forEach((c, j) => {
+    const at = [wordAfter(plain, shownBefore(ser.wire, c, W.atoms)), wordAfter(translated, tn[j])]
+    const k = [words(plain.slice(0, at[0])), words(translated.slice(0, at[1]))]
+    if (k[0] <= before[0] || k[1] <= before[1] || k[0] >= total[0] || k[1] >= total[1]) return
+    out.src.push(at[0]); out.tr.push(at[1]); before = k
+  })
+  return out
+}
+
+/**
+ * A record's sentences (CachedUnit.sentences), where they are of their shape: as many starts on each side, each side's
+ * whole numbers rising inside its text — `src` and `tr`, the texts each side is anchored by —; else null, and the unit
+ * is lit whole (the review of B3, minor 5: a malformed field threw where the reader worked out the starts, and the
+ * side had no highlight)
+ */
+export function sentencesKept(s, src, tr) {
+  const ok = (xs, text) => Array.isArray(xs) && xs.every((o, j) => Number.isInteger(o) && o > (j ? xs[j - 1] : 0) && o < text.length)
+  return s && typeof s === 'object' && ok(s.src, src) && ok(s.tr, tr) && s.src.length === s.tr.length ? s : null
 }
 
 // ---------------------------------------------------------------- tags wire format (DESIGN §6: LLMs)
@@ -176,22 +329,54 @@ export function nameCells(units) {
   return new Set(units.filter(u => short(u) && isName(textOf(u), prose)))
 }
 
+/** what the sentence splitter reads a placeholder as (core/sentences SplitContext; the HTML page reads the node, here
+ *  its LaTeX): a citation annotates the sentence before it, a footnote (a nested unit) too; \citet is its sentence's
+ *  subject, a reference a number, an inline formula a word, a tie or a line break a space; anything else (a display, a
+ *  macro) the splitter's stand-in word. Restated from investigator B's probe (report-B §2(a): against Microsoft's own
+ *  boundaries on 532 units, 47 of ours alone — 3.6 %, mostly a run-in label by a placeholder — and 90 of its alone, 75
+ *  of them semicolons) */
+const CITE = /^\\(?:cite|citep|citealp|citeauthor|citeyear|parencite|footcite|nocite)\b/
+const CITET = /^\\(?:citet|textcite|Citet)\b/
+const REF = /^\\(?:ref|eqref|autoref|cref|Cref|pageref|nameref|Sref|secref|figref)\b/
+function splitContextOf(slots) {
+  const piece = id => slots[id - 1]?.void
+  return {
+    isAnnotation: id => { const p = piece(id); return !!p && (p.t === 'nested' || (p.t === 'ph' && CITE.test(p.src))) },
+    textOf: id => {
+      const p = piece(id)
+      if (p?.t !== 'ph') return undefined
+      if (p.src === '~' || /^\\\\/.test(p.src)) return ' '
+      if (CITET.test(p.src)) return 'Smith et al'
+      if (REF.test(p.src)) return '1'
+      if (/^(\$|\\\(|\\ensuremath)/.test(p.src)) return 'x'
+      return undefined
+    },
+  }
+}
+/** a unit's sentence cuts on its tags wire (core/sentences sentenceCuts): offsets in `ser.wire` where a sentence after
+ *  the first begins; [] for one sentence, which the service aligns whole */
+export function cutsOf(u, ser = serializeTags(u)) {
+  return sentenceCuts(ser.wire, 'tags', splitContextOf(ser.slots))
+}
+
 /**
- * Units → Map unit → translated pieces. `send(texts)` returns the translations of a list of wire texts in `format`
- * (WIRE). What the placeholders cannot bring back, even tolerantly where the format has a tolerant reading, goes again
+ * Units → Map unit → translated pieces. `send(texts, cuts)` returns the translations of a list of wire texts in `format`
+ * (WIRE), `{ text, by, alignment? }` (engine.mjs); on the tags path the sentence cuts of each whole unit that may light
+ * by sentence go with it (cutsOf: the service marks them and reads the translation's sentences back, DESIGN §8.6), on
+ * the others none. What the placeholders cannot bring back, even tolerantly where the format has a tolerant reading, goes again
  * as runs; a unit none of whose runs came back is left out (it stays in the source language). `how` counts each way.
  */
 export async function translateUnits(units, send, format = 'markers') {
   const wire = WIRE[format]
-  // unit → { pieces, state, by }: whole (read back strictly or tolerantly, or every run back), partial (some runs back),
+  // unit → { pieces, state, by, sentences? }: whole (read back strictly or tolerantly, or every run back), partial (some runs back),
   // none (the engine could not take it, runs included), lost (a failure of the service; engine.mjs, EngineError's
   // `lost`). `by` is the identity that answered, MIXED when runs of one unit had two (REPORT, eighteenth addendum)
   const results = new Map(), how = { whole: 0, tolerant: 0, runs: 0, untranslated: 0, lost: 0 }, failed = []
   // what came back, when some texts did not for a reason not theirs (engine.mjs, EngineError's `lost`): those stay in
   // the source language, counted, and the failure is kept — sent again piece by piece they would only fail again, as
   // many times over as they have pieces (Codex on #296)
-  const ask = async texts => {
-    try { return { texts: await send(texts), lost: null } } catch (e) {
+  const ask = async (texts, cuts) => {
+    try { return { texts: await (cuts ? send(texts, cuts) : send(texts)), lost: null } } catch (e) {
       if (!e?.partial) throw e
       how.error ??= e.kind
       return { texts: e.partial, lost: e.lost }
@@ -199,15 +384,24 @@ export async function translateUnits(units, send, format = 'markers') {
   }
   if (wire.serialize) {
     const sers = units.map(wire.serialize)
-    const { texts, lost } = await ask(sers.map(s => s.wire))
+    // the cuts of the units that may light by sentence: on Google each marked sentence is translated apart (B3b: the
+    // wording changed in 79 of 85 units), so a unit lit whole (a heading, a caption, a cell) goes as it would unmarked
+    const cuts = format === 'tags' ? units.map((u, i) => (bySentence(u.kind) ? cutsOf(u, sers[i]) : undefined)) : undefined
+    const { texts, lost } = await ask(sers.map(s => s.wire), cuts)
     units.forEach((u, i) => {
       if (lost?.has(i)) { how.lost++; results.set(u, { state: 'lost' }); return }
       const got = texts[i]
       if (got == null) { failed.push(u); return }
+      // a whole unit keeps its sentences where the engine's alignment came back (sentencesOf: Microsoft's own on markers,
+      // the service's markers at the cuts on tags; the runs below have no wire offsets to hang them on)
+      const whole = (pieces, tolerant) => {
+        const sentences = got.alignment ? sentencesOf(u, sers[i], got.text, got.alignment, pieces, tolerant, format) : null
+        results.set(u, { pieces, state: 'whole', by: got.by, ...(sentences ? { sentences } : {}) })
+      }
       const strict = wire.rehydrate(got.text, sers[i])
-      if (!strict.error) { results.set(u, { pieces: strict.pieces, state: 'whole', by: got.by }); how.whole++; return }
+      if (!strict.error) { whole(strict.pieces, false); how.whole++; return }
       const loose = wire.tolerant?.(got.text, sers[i])
-      if (loose && !loose.error) { results.set(u, { pieces: loose.pieces, state: 'whole', by: got.by }); how.tolerant++; return }
+      if (loose && !loose.error) { whole(loose.pieces, true); how.tolerant++; return }
       failed.push(u)
     })
   } else failed.push(...units)
@@ -241,7 +435,44 @@ export async function translateUnits(units, send, format = 'markers') {
   return { results, how }
 }
 
+/** a text piece as the compiled PDF shows it: a translation's TeX escapes undone, the source's bytes as UTF-8 */
+const shown = p => (p.tr ? p.s.replace(/\\(textbackslash|textasciitilde|textasciicircum)\{\}/g, ' ').replace(/\\([#$%&_{}])/g, '$1') : utf8(p.s))
+const plain = (pieces, textOf) => pieces.map(p => (p.t === 'text' ? textOf(p) : ' ')).join('').replace(/\s+/g, ' ').trim()
 /** a unit's plain text in the source (placeholders dropped: anchors are found from text alone) */
-export const plainSource = u => u.pieces.map(p => (p.t === 'text' ? utf8(p.s) : ' ')).join('').replace(/\s+/g, ' ').trim()
+export const plainSource = u => plain(u.pieces, p => utf8(p.s))
 /** a unit's plain text in its translation, as the compiled PDF shows it */
-export const plainTranslated = pieces => pieces.map(p => (p.t === 'text' ? (p.tr ? p.s.replace(/\\(textbackslash|textasciitilde|textasciicircum)\{\}/g, ' ').replace(/\\([#$%&_{}])/g, '$1') : utf8(p.s)) : ' ')).join('').replace(/\s+/g, ' ').trim()
+export const plainTranslated = pieces => plain(pieces, shown)
+const SLOT = '￼'
+/**
+ * A unit's plain text as the PDF shows it (plainTranslated's, which is plainSource's for pieces not translated) and
+ * `gaps`, the offsets in it where a placeholder stood: there the page has words the text does not — a formula's, a
+ * citation's number — which anchors.mjs lets stand in a run of words (a heading, Round $n$: …). Without placeholders,
+ * no `gaps`
+ */
+export function unitText(pieces) {
+  const text = plainTranslated(pieces)
+  if (!pieces.some(p => p.t === 'ph' || p.t === 'nested')) return { text }
+  const slotted = pieces.map(p => (p.t === 'text' ? shown(p) : p.t === 'ph' || p.t === 'nested' ? ` ${SLOT} ` : ' ')).join('').replace(/\s+/g, ' ').trim()
+  let bare = ''
+  const gaps = []
+  for (const c of slotted) {
+    if (c === SLOT) { if (gaps.at(-1) !== bare.length) gaps.push(bare.length) } else if (c !== ' ' || (bare && !bare.endsWith(' '))) bare += c
+  }
+  // the text is plainTranslated's, character for character, or the offsets would name other places: a text holding
+  // the slot character itself gives none
+  if (bare.trimEnd() !== text) return { text }
+  return { text, gaps: gaps.map(g => Math.min(g, text.length)).filter((g, i, a) => a.indexOf(g) === i) }
+}
+/**
+ * Each unit's text as a compile has it, for the anchors: translated where `done` has its pieces, the source's otherwise;
+ * with where its placeholders stood (unitText), its displays beyond its marks (displayEdges) and the sentences of the
+ * translation typeset (`sentencesOf(pieces)`: kept by the pieces they belong to, so that a translation come in since does
+ * not lend its sentences to the one shown)
+ */
+export const textsShown = (units, done, sentencesOf) => units.map((u, i) => {
+  const pieces = done.get(u), sentences = pieces && sentencesOf(pieces)
+  return { id: i, ...unitText(pieces ?? u.pieces), ...displayEdges(u), ...(sentences ? { sentences } : {}) }
+})
+/** the unit's displays beyond its marks and between its words, their letters as latex-front found them (displayOutside)
+ *  or a copy keeps them: for the anchors. A copy made when they were a bare `true` gives none */
+export const displayEdges = u => Object.fromEntries(['lead', 'trail', 'inner'].filter(k => typeof u[k] === 'string').map(k => [k, u[k]]))

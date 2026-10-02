@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { rules } from './css-rules'
+import { type Rule, rules, sheet } from './css-rules'
 
 /** the reader's sheet and the shared sheets it imports: the tokens (the redesign's design, §2.2) and the controls. A sheet renamed or gone fails here */
 const SHEET = ['../../src/entrypoints/pdf-reader/reader.css', '../../src/styles/tokens.css', '../../src/styles/controls.css']
@@ -49,5 +49,40 @@ describe('the reader\'s style sheet (the interface review, 2026-09-26)', () => {
     const itemRing = all.filter(r => r.selector.includes('.search:focus-visible') && r.selector.includes('.item[data-active]'))
     expect(itemRing.length).toBeGreaterThan(0)
     expect(itemRing.every(r => r.selector.includes(':not([data-axt-pointer])'))).toBe(true)
+  })
+
+  it('rings the capsule that is a stop of its own as the chrome\'s controls are rung (Codex and Devin on #307)', () => {
+    const ring = (selector: string) => all.find(r => r.selector.split(',').map(x => x.trim()).includes(selector))?.body.match(/outline:[^;]+/)?.[0]
+    expect(ring('.capsule:focus-visible')).toBe(ring('.chrome :focus-visible'))
+  })
+
+  it('shows the pointer over a switch\'s row, which a press on its words turns as a press on the switch does (#299 review; the popup\'s .toggle)', () => {
+    const row = all.find(r => r.selector.split(',').map(x => x.trim()).includes('.pop label.row'))
+    expect(row?.body).toMatch(/cursor:\s*pointer/)
+  })
+
+  it('gives a contents fold a 24 × 24 target, grown away from its link, its 18 px drawing unchanged (#299, Part 6\'s interface review; WCAG 2.5.8)', () => {
+    const px = (v: string) => Number.parseFloat(v)
+    const fold = all.find(r => r.selector === '.fold')?.body ?? ''
+    const size = ['width', 'height'].map(p => px(new RegExp(`(?:^|;)\\s*${p}:\\s*([\\d.]+)px`).exec(fold)?.[1] ?? 'NaN'))
+    expect(size).toEqual([18, 18])
+    expect(fold).toMatch(/position:\s*relative/)
+    const grown = all.find(r => r.selector === '.fold::before')?.body ?? ''
+    // inset: top right bottom left, as the shorthand reads
+    const [top = 0, right = 0, bottom = 0, left = 0] = (/inset:\s*([^;]+)/.exec(grown)?.[1] ?? '').trim().split(/\s+/).map(v => 0 - px(v))
+    expect(grown).toMatch(/content:\s*""/)
+    expect([size[0]! + left + right, size[1]! + top + bottom]).toEqual([24, 24])
+    // nothing toward the link that follows it: the row's 2 px gap stays a gap
+    expect(right).toBe(0)
+  })
+
+  it('presses nothing in by a scale under reduced motion: each press that scales has its rule there, as the toolbar\'s and the card\'s (#299, Part 6; §4.2: a motion is a fade or nothing)', () => {
+    const own = rules(sheet('../../src/entrypoints/pdf-reader/reader.css'))
+    const reduced = (r: Rule) => r.within.some(a => /prefers-reduced-motion:\s*reduce/.test(a))
+    const still = (r: Rule) => ['1', 'none'].includes(/(?:^|;)\s*scale:\s*([^;]+)/.exec(r.body)?.[1]?.trim() ?? '')
+    const pressed = own.filter(r => !reduced(r) && r.selector.includes(':active') && /(?:^|;)\s*scale:/.test(r.body) && !still(r))
+    expect(pressed.length).toBeGreaterThan(0)
+    const held = own.filter(r => reduced(r) && still(r)).flatMap(r => r.selector.split(',').map(x => x.trim()))
+    expect(pressed.map(r => r.selector).filter(selector => !held.includes(selector))).toEqual([])
   })
 })

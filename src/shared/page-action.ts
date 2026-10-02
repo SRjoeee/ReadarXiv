@@ -19,18 +19,18 @@ export function behindSettings(page: Pick<PageStatus, 'progress' | 'running'>, s
 
 /**
  * The retranslate cue (UI.md P6b), asked by the popup's view model and by the toggle: the page's session left its own
- * service for a refused key (`auth` among its hand-overs — `demotions`, since `engine.demoted` names only the most
+ * service for a refused key (a 401 among its hand-overs — `demotions`, since `engine.demoted` names only the most
  * recent), and that key has been made good since: the record holds the service no more, and the chain a start would
- * run on runs it again. The saved chain is the test: a 403 is `auth` too and never recorded
- * (background/health-guard.ts marks a 401 alone), and while the chain in force still passes the service over, a start
- * would meet the same refusal
+ * run on runs it again — while the chain in force still passes the service over, a start would meet the same refusal.
+ * A 403 is `auth` too and never recorded (background/health-guard.ts marks a 401 alone): not the key's, it is no cue,
+ * though a chain rebuilt since (another service's mark, a language pack) runs the service again (#299, row 75)
  */
 export function keyMadeGood(
   session: Pick<ProviderStatus, 'providerId' | 'demotions'> | null | undefined,
   rejected: Iterable<string>,
   saved: Pick<ProviderStatus, 'engine'> | null | undefined,
 ): boolean {
-  const refused = session?.demotions.find(d => d.kind === 'auth' && d.id === session.providerId)
+  const refused = session?.demotions.find(d => d.kind === 'auth' && d.status === 401 && d.id === session.providerId)
   return !!refused && !new Set(rejected).has(refused.id) && saved?.engine.id === refused.id && !saved.engine.demoted
 }
 

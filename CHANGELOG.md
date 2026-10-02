@@ -16,6 +16,10 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 - Two ways to translate: As you read, the default — the paragraphs you reach and those just below — and Whole paper. If you had chosen two or three screens ahead, or to start only when half or all of a paragraph shows, you now have As you read.
 - The words in figures show in every display — split, stacked and translation only — whenever figure translation is on; the per-display ticks are gone. If you had unticked every display, figure translation stays off.
 - The floating button and the figure viewer take the new look. The button follows the extension's appearance; the viewer's controls and a failed paragraph's retry follow the paper's own theme on arXiv.
+- The PDF reader's highlight follows the sentence you read: point at one and it lights on both sides, the original and its translation, from the moment the first pages of the translation appear. A paragraph whose sentences cannot be matched on both sides lights whole on both; headings, captions and table cells always light whole.
+- In the PDF reader, tables, algorithms and figures light whole with their captions, on both sides: a table to its rules, a figure outlined so its colours stay true. Pointing at a panel of a figure lights it with its own caption, and its main caption lights them all.
+- The PDF reader's highlight covers what it lights cleanly: one shape over a paragraph's formulas, inline or set on lines of their own, nothing lit beside it and no gap inside it, from a theorem's or a list's label to the paragraph's last full stop, and a sentence that runs on to the next column or page reaches across to it.
+- A sentence with an abbreviation in it — "Oregon v. Mitchell", "Mt.", "Ch. 3", "Eqn. 5", "Sect. 2" and the like — is no longer taken for two, and one that ends on a formula is no longer joined to the next: the hover highlight covers each sentence, and with Google or your own service each is translated as one.
 
 ## 0.4.1 — 2026-09-21
 

@@ -10,21 +10,22 @@
 //  4. the original itself with unit marks, for exact places on arXiv's PDF — when the compiler would otherwise wait,
 //     or after the final compile: the translation comes first;
 //  5. when every unit is in, the final compile: every pass, the images themselves.
+// With the typesetting rule (typeset/plan.mjs; experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md,
+// "The compile sequence"), where the reader can read a PDF's marks (`readMarks`): the font probe measures the body face
+// too (1); the original, in full with its line probes (4), since every plan is made from it — from the run's start in a
+// compiler of its own where the reader gives one (`compileOriginal`), beside the probe and the first preview, else right
+// after the first preview; each later preview is planned on its snapshot (3); the last preview of the whole translation,
+// complete, measures the final — else a draft one-pass of it does — and the final is set from that measure (5). The
+// first preview is set as today, and never waits for the original: nothing is known to plan it from yet. Where a plan
+// cannot be made, the translation is set as today, and the reason noted
 import { analyze } from './paper-meta.mjs'
-import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, readFontProbe, stripPdftexOption, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
-import { strategiesFor } from './scripts.mjs'
-import { nameCells, plainSource, plainTranslated, translateUnits } from './mt.mjs'
+import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
+import { nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
+import { WIDTH_PROBE } from './typeset/density.mjs'
+import { finalTypesetting, previewTypesetting } from './typeset/plan.mjs'
+import { LINES_TEX } from './typeset/tex.mjs'
 
-/** The TeX log of a compile's last pass. The browser's compiler (poc-site/tex.js) joins each step's log with its terminal
- *  output — `$ <command>`, then `LOG:` … `==` `STDOUT:` — and the terminal output repeats the errors; the last TeX step's
- *  log is taken, as the one that made the PDF, whatever the earlier passes' logs hold (BusyTeX's pipeline empties them
- *  today, Devin and Codex on #294). bibtex, biber, makeindex and xdvipdfmx are no TeX passes. A native compile's .log is
- *  the last pass's already */
-const lastTexLog = log => {
-  if (!(log ?? '').includes('\n==\nSTDOUT:')) return log ?? ''
-  const steps = [...log.matchAll(/^\$ (\S+)[^\n]*\n[\s\S]*?^LOG:\n([\s\S]*?)\n==\nSTDOUT:/gm)]
-  return steps.filter(m => !/^(?:bibtex|biber|makeindex|xdvipdfmx)/.test(m[1])).at(-1)?.[2] ?? ''
-}
 /** The characters a compile could not set, as its log names them: a glyph a font lacks (TeX logs it and goes on) or a
  *  letter no encoding holds (LaTeX's error; pdfTeX goes on without it). By code point where the log gives one, so that
  *  either message about a character is the same loss, each with the number of times it was lost. Counted in the TeX
@@ -58,27 +59,64 @@ const DRAFT = [
   '\\axtmark{g\\the\\axt@g b}\\rlap{\\raise\\Gin@req@height\\hbox{\\axtmark{g\\the\\axt@g t}}}}}\\makeatother',
 ].join('\n') + '\n'
 const beginDocument = text => text.search(/\\begin\s*\{document\}/)
-const stemOf = main => main.replace(/\.[^./]+$/, '')
-/** a compile the TeX page gave up on (BusyTeX's 180 s): the machine was slow, not the strategy wrong */
-const timedOut = r => !r.ok && /Compilation timeout/.test(r.error ?? '')
+/** a compile the TeX page failed, not TeX: BusyTeX's 180 s given up (the machine was slow), or the page's own failure
+ *  (protocol 2's `error`, no log: an engine it could not bring up, a compile before an init that failed). It says
+ *  nothing of the paper or of the strategy (the S3a review, I5 b) */
+const pageFailed = r => !r.ok && !!r.error
+/** BusyTeX's 180 s given up: the machine slow, neither the page down nor the paper. Not asked again but for the final,
+ *  and the run goes on to its final, as before the page's protocol 2 (the F2 review's M5) */
+const timedOut = r => pageFailed(r) && /Compilation timeout/.test(r.error)
 /** why a compile gave no PDF: the first TeX error, or what the compiler said */
 const whyFailed = r => (r.ok ? undefined : ((r.log ?? '').match(/^(?:\S+:\d+: .*|! .*)$/m)?.[0] ?? r.error ?? (r.log ?? '').slice(-300)).slice(0, 300))
+/** the lines of a compile's last TeX pass that the run and the rule read: each unit's lines, the forced breaks and the
+ *  document's end (typeset/tex.mjs readLines, readForced, completeLog), the letters it could not set (lostIn) */
+const READ_LINE = /^(?:AXT-|Missing character: |! LaTeX Error: Unicode character )/
+/**
+ * The marked original as the run and the rule read it: those lines of its log, its marks with every page's columns
+ * (`marks`, readMarks'), its references — the aux's \bibcite and \newlabel lines — and the bibliography its BibTeX
+ * or biber made (`bbl`, null where the paper ships its own or has none), which a draft with none of its own is given
+ * (runLive's `refs`). The same whether made now or kept: a run given them compiles no original (`original`;
+ * session.mjs keeps them for the visit and with the paper's records, cache.mjs originalRow)
+ */
+export const readingsOf = (o, marks) => ({ log: lastTexLog(o.log).split('\n').filter(l => READ_LINE.test(l)).join('\n'), marks, ...referencesOf(o) })
+/** an aux's lines of one command, those whose braces close on the line: a line cut short would stop TeX reading the
+ *  aux it is given */
+const auxLines = (aux, command) => (aux ?? '').split('\n').filter(l => l.startsWith(`\\${command}{`) && closed(l)).join('\n')
+const closed = line => { let depth = 0; for (const c of line.replace(/\\./g, '')) if (c === '{') depth++; else if (c === '}' && --depth < 0) return false; return depth === 0 }
+/** a compile's references as a draft is given them: its citations (\bibcite), its labels (\newlabel), its bibliography */
+const referencesOf = o => ({ cites: auxLines(o.aux, 'bibcite'), labels: auxLines(o.aux, 'newlabel'), bbl: o.bbl ?? null })
+/** the lists a pass writes at its end from an aux's \@writefile{<ext>}{<entry>} lines (LaTeX's \enddocument), by
+ *  extension: \tableofcontents's toc, \listoffigures' lof, \listoftables' lot, any list a package keeps so (backref's
+ *  brf) — each line's entry, in order */
+const listsOf = aux => {
+  const out = new Map()
+  for (const [, ext, entry] of auxLines(aux, '@writefile').matchAll(/^\\@writefile\{(\w+)\}\{(.*)\}$/gm)) out.set(ext, `${out.get(ext) ?? ''}${entry}\n`)
+  return out
+}
+/** TeX writes its log in lines of 79 characters at most, a warning about a long key over two: joined again (a line of
+ *  79 of its own is joined to the next too, so what is looked for in it is not anchored to a line's start) */
+const unwrapped = log => log.replace(/^(.{79})\n/gm, '$1')
+/** why a compile that gave a PDF is not shown (unsettable): the font that would not load, or the letters it lost */
+const whyUnset = r => (lastTexLog(r.log).match(/^! Font .* not loadable.*$/m)?.[0] ?? `a letter it could not set (${[...lostIn(r.log).keys()].slice(0, 5).join(', ')})`).slice(0, 300)
 
 /**
  * The compiler a visit uses, opened when first needed (`open` → { compile, close }) and again after a failure to open.
- * **A compile that did not answer throws it away**: BusyTeX gives up on waiting, not on the job, whose worker goes on
+ * **A compile the page failed throws it away**: BusyTeX gives up on waiting, not on the job, whose worker goes on
  * and whose output would answer the next compile — a draft taken for the final, the translation's PDF for the marked
- * original. Closing the TeX page's frame ends its worker; the next compile gets a fresh one (Part 4's final review)
+ * original (Part 4's final review); and a page whose init failed answers every compile with "compile before init".
+ * Closing the TeX page's frame ends its worker; the next compile gets a fresh one
  */
 export function compilerKeeper(open) {
   let current = null
   const get = () => (current ??= open().catch(e => { current = null; throw e }))
   return {
     ready: () => get().then(() => undefined),
+    /** the compiler closed, its frame and worker gone; a compile after it opens a fresh one */
+    close() { const was = current; current = null; void was?.then(c => c.close(), () => {}) },
     async compile(req) {
       const mine = get()
       const r = await (await mine).compile(req)
-      if (timedOut(r) && current === mine) { current = null; (await mine).close() }
+      if (pageFailed(r) && current === mine) { current = null; (await mine).close() }
       return r
     },
   }
@@ -93,73 +131,158 @@ export function openPaper(files) {
   return { fsys, meta, project, units: project.units, kept: nameCells(project.units) }
 }
 
-/** the preamble alone, closed at once: its log names the document's font families */
-export function probeFiles({ fsys, project }) {
+/** the preamble alone, closed at once: its log names the document's font families; with `width`, also how wide the
+ *  body face sets and at what sizes (typeset/density.mjs WIDTH_PROBE), which the typesetting rule measures text by */
+export function probeFiles({ fsys, project }, { width = false } = {}) {
   const text = latin1(fsys.read(project.main))
   const at = beginDocument(text)
-  return new Map([[project.main, latin1Bytes(text.slice(0, at) + FONT_PROBE + '\\begin{document}\\end{document}\n')]])
+  return new Map([[project.main, latin1Bytes(`${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}\\end{document}\n`)]])
 }
 
-/** the original with unit marks, as its own engine sets it (images as frames change no place on the page) */
-export function originalFiles({ fsys, project }) {
-  const out = patch(project, new Map(), { mark: markUnits(project.units) })
+/** the original with unit marks, as its own engine sets it (images as frames change no place on the page); with
+ *  `lines`, each unit's lines and the forced breaks in its log (typeset/tex.mjs LINES_TEX), which the typesetting rule
+ *  takes the original's flow from */
+export function originalFiles({ fsys, project }, { lines = false } = {}) {
+  const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
+  const out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base })
   const main = latin1(out.get(project.main))
-  out.set(project.main, latin1Bytes(DRAFT + MARK_DEF + main))
+  out.set(project.main, latin1Bytes(DRAFT + MARK_DEF + (lines ? LINES_TEX : '') + main))
   return out
 }
 
-/** the translation so far, with unit marks, set by one of strategiesFor (scripts.mjs) */
-export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl }) {
+/** the translation so far, with unit marks, set by one of strategiesFor (scripts.mjs); a strategy's `leading` sets the
+ *  translated units' own paragraphs, and those alone, at that factor of the paper's spacing (latex-front unitLeadTex).
+ *  `typeset`, the typesetting rule's (typeset/plan.mjs previewTypesetting, finalTypesetting): the strategy it sets the
+ *  type of, its TeX, each translated unit's macros — for the strategy it was made for: with another the translation is
+ *  set as today, and `note('typeset refused', …)` says so */
+export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl, typeset = null, note = () => {} }) {
+  if (typeset && typeset.for !== strategy.name) { note('typeset refused', { plan: typeset.for, strategy: strategy.name }); typeset = null }
+  if (typeset) strategy = typeset.strategy(strategy)
   const xe = strategy.xe
-  const out = patch(project, translated, { mark: markUnits(project.units) })
+  translated = new Map([...typesetBy(translated, strategy)].map(([u, pieces]) => [u, lineBreaks(u, pieces)]))
+  const base = markUnits(project.units, translated)
+  const index = new Map(project.units.map((u, i) => [u, i]))
+  const mark = typeset ? typeset.mark(base, translated) : strategy.leading ? u => { const m = base(u); return m && !m.whole && translated.has(u) ? { ...m, before: `\\axtlead{${index.get(u)}}` } : m } : base
+  const out = patch(project, translated, { mark })
   let main = latin1(out.get(project.main))
   const at = beginDocument(main)
-  main = main.slice(0, at) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + main.slice(at)
+  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + NO_OVERFLOW + (xe ? '' : EVEN_SPACES) + main.slice(at)
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
   if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
   if (xe && strategy.engine !== meta.compiler) main = XETEX_SHIM + XETEX_SHIM_R1 + stripPdftexOption(main)
-  main = (draft ? DRAFT : '') + MARK_DEF + main
+  // what the strategy puts before \documentclass (scripts.mjs: a paper's own CJK packages kept from loading under xeCJK)
+  main = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + main
   out.set(project.main, latin1Bytes(main))
   if (xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = stripPdftexOption(t); if (u !== t) out.set(f, latin1Bytes(u)) }
-  const stem = stemOf(project.main)
-  if (aux) out.set(`${stem}.aux`, new TextEncoder().encode(aux))
-  if (bbl && !meta.bbl) out.set(`${stem}.bbl`, new TextEncoder().encode(bbl))
+  for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = localizeNames(t); if (u !== t) out.set(f, latin1Bytes(u)) }
+  // where TeX reads them, in the root under the job's name (2608.12333's latex/arxiv.tex: arxiv.aux, not
+  // latex/arxiv.aux, where no preview had the run's references or bibliography)
+  const job = jobName(project.main)
+  if (aux) out.set(`${job}.aux`, new TextEncoder().encode(aux))
+  if (bbl && !meta.bbl) out.set(`${job}.bbl`, new TextEncoder().encode(bbl))
+  // a draft's one pass sets its contents lists from the files a pass writes them to at its end, from its aux's
+  // \@writefile lines: written from the aux it is given, else every list was set empty and every unit after it measured
+  // early by its height (the F2 re-review's N2: zh 2608.02459, its contents before 550 of its 555 units, 0.939 of a
+  // page's start drift, 0.098 with them). The final's passes write their own, as the original's do
+  if (draft && aux) for (const [ext, entries] of listsOf(aux)) if (!out.has(`${job}.${ext}`)) out.set(`${job}.${ext}`, new TextEncoder().encode(entries))
   return out
 }
 
+/** the units a translation into `lang` leaves as they are: the names a table holds (nameCells), and the author block's
+ *  names and places where the target writes them as the paper does (scripts.mjs authorsTranslated) */
+export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : new Set([...paper.kept, ...paper.units.filter(u => u.kind === 'author')]))
+
 /**
- * The reader's pipeline version (REPORT, eighteenth addendum): raised with any change to what a compile puts out
- * (latex-front, mt, the fonts, the scripts' strategies, the TeX tree) or to what a cached record holds (the units'
- * cutting, kinds and texts, paperContext(), the marks). A record of another version is translated again
+ * The reader's versions (REPORT, eighteenth addendum), apart since 2026-10-02 so that a change to the typesetting never
+ * asks the service again (the evaluation's ruling 4):
+ * - PIPELINE_VERSION, the translation's: raised with any change to what a unit is or what is sent for it and made of
+ *   the answer — the units' cutting, kinds and texts (latex-front), the wire and its reading back (mt), paperContext(),
+ *   the left side's marks. A record of another version is translated again, its translations shown meanwhile (session.mjs
+ *   seedFrom); one of this version gives its whole units by the identity that would answer now as they are (cache.mjs
+ *   reusable).
+ * - TYPESETTING_VERSION: raised with any change to how a compile sets a translation it is given — latex-front's TeX,
+ *   the scripts' strategies, the fonts, the typesetting rule (typeset/), the TeX tree. A record of another version is
+ *   compiled again from its translation; a paper none of the ways could set is tried again.
  */
 // 2: the front matter's notes are units (latex-front.mjs FRONT_MATTER)
-export const PIPELINE_VERSION = '2'
+// 3, 4: two branches each raised it twice, and their 3s and 4s are other pipelines —
+//   the highlight's (exp/pdf-highlight): 3, a translation's invisible characters dropped before TeX (mt.mjs texEscape) —
+//   a mark "cannot typeset" they caused goes; 4, a file \input under another spelling (./sections/a.tex) gets its
+//   translation (latex-front.mjs loadProject) — the copies that set it in English go;
+//   the typesetting rule's (exp/flow-integration): 3, CJK leading inside translated units alone, their displays at the
+//   paper's, and English hyphenation under a CJK target (scripts.mjs, latex-front.mjs unitLeadTex); the paper's own
+//   macros, argument-less declarations and the author block's names and places cut into units (latex-front.mjs); the
+//   wire spaced after a period (mt.mjs); 4, IEEEtran's blocks of names and of places each a unit; a translated line of
+//   names in a box that does not wrap set as a paragraph of the line's width (\\axtwide); a table narrower than its
+//   original kept at the original's width, and a tabular* measured at its columns' width before it is fitted
+//   (latex-front.mjs FIT_DEF, AUTHOR_WIDE); an e-mail address, and a list of names in braces before its domain, a
+//   placeholder (keepAddresses); a name kept whole in a line of names (lineBreaks)
+// 5, on each branch again: the highlight's, a file named through import.sty (\import, \subimport) or subfiles is walked,
+//    found as TeX finds it (latex-front.mjs loadProject), and a package's names are TeX's (tar.mjs untar) — such a
+//    paper's units are new; the merge's, the two branches' 3s and 4s together, and the wire's spaces beside a digit
+//    taken back (mt.mjs rehydrate)
+// 6: the two 5s together
+// 7: a tabularray table whose cells are math is math, no unit (latex-front.mjs TBLR_MATH) — 2608.29181's two tables
+//    were units, their formulas sent to the service
+export const PIPELINE_VERSION = '7'
+// 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
+//    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
+// 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a
+//    re-set's measure (every unit taken, no preview) had neither, and set 2608.08872 two pages long where its first
+//    visit set one —, and a compile that read no bibliography is no measure under biblatex either (runLive's `refs`,
+//    `referencesWhole`); readings kept under 1 have neither
+// 3: a draft sets its contents lists from the aux it is given (translationFiles), and a measure that set one from
+//    nothing is measured again with its own (runLive's `listsMissing`) — every draft had set them empty and measured
+//    every unit after them early by their height (zh 2608.02459: 0.939 of a page's start drift, 0.098 now)
+// 4: a measure that could not set a letter moves the chain before the final, which is set from a plan measured under its
+//    own strategy (runLive's finalTypeset) — under 3 such a final was set from the next strategy's plan uncorrected and
+//    stored as current (zh 2608.02459's re-set, xeCJK without σ); set again from their translation, nothing sent
+export const TYPESETTING_VERSION = '4'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
- * `translate(texts)` → translations of wire texts in `format` (mt.mjs WIRE: the chain's renderPath); `rank(i)` → how
+ * `translate(texts, cuts)` → translations of wire texts in `format` (mt.mjs WIRE: the chain's renderPath; `cuts` each text's
+ * sentence cuts on the tags path, mt.mjs translateUnits); `rank(i)` → how
  * far unit i is from the reader's place (lower comes first);
  * `onUpdate({ pdf,
  * texts, translated, final })` gets each compiled translation; `onOriginal({ pdf })` the marked original; `note(event,
  * data)` every step, for the timeline. A translation made again from a cached copy (REPORT, eighteenth addendum):
- * `seed`, index → the old translation { pieces, by, tried, state }, fills the run at the start; `marks`, the left
- * side's marks when known, skips the marked original; `identity` is what each unit is tried under; `pipelineCurrent`,
- * whether the seed's pipeline is this one. Resolves when the final compile is in, with `results` (index → { pieces,
- * state, by, tried }), `changed` (anything typeset changed), `settled` (a final that set every letter), `exhausted`
+ * `seed`, index → the old translation { pieces, by, tried, state, current }, fills the run at the start, and one
+ * `current` (cache.mjs reusable) is not sent again; `marks`, the left
+ * side's marks when known, skips the marked original (but where the typesetting rule needs its readings); `original`,
+ * the original's readings (readingsOf) as a run before gave them, taken with `marks` known: no original is compiled,
+ * and every preview is planned from the first;
+ * `identity` is what each unit is tried under; `pipelineCurrent`, whether the copy's compile is this reader's (its
+ * pipeline and its typesetting): a seeded run that changes nothing then compiles nothing. Resolves when the final compile is in, with `results` (index → { pieces,
+ * state, by, tried, sentences? }), `changed` (anything typeset changed), `settled` (a final that set every letter), `exhausted`
  * (every strategy failed to set the final, none for want of time: the paper cannot be had this way) and, with it,
  * `originalOk` (the paper's own source set here, or before: only then is it the translation that cannot be set, rather
- * than the compiler or its files that were down).
+ * than the compiler or its files that were down). `readMarks(pdf)` → a PDF's marks and page columns (typeset/places.mjs
+ * marksOf on a PDF.js document of the bytes, which it must not take: the reader shows them too): with it the
+ * translation is set by the typesetting rule, without as today.
  */
-export async function runLive(paper, { lang, compile, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, note = () => {}, seed = null, marks = null, identity = null, pipelineCurrent = false }) {
-  const { units, kept, meta, project } = paper
+export async function runLive(paper, { lang, compile, compileOriginal = null, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, note = () => {}, seed = null, marks = null, original: knownReadings = null, identity = null, pipelineCurrent = false, readMarks = null }) {
+  const { units, meta, project } = paper
+  const kept = keptFor(paper, lang)
   // the chain: a compile that gives no PDF moves on to the next strategy, which is tried at once
   const strategies = strategiesFor(meta, lang)
   let s = 0
   const strategy = () => strategies[s]
   const translated = new Map()
-  // index → { pieces, state, by, tried }: what the run made of each unit, for the record (cache.mjs unitsOf)
+  // index → { pieces, state, by, tried, sentences? }: what the run made of each unit, for the record (cache.mjs unitsOf)
   const results = new Map()
-  if (seed) for (const [i, s] of seed) translated.set(units[i], s.pieces)
+  // each translation's sentences (mt.mjs sentencesOf), by its pieces: a compile's texts carry those of the pieces it
+  // typeset, not of a translation come in while it compiled
+  const sentencesBy = new WeakMap()
+  const keep = (pieces, sentences) => { if (sentences) sentencesBy.set(pieces, sentences) }
+  // a seed's translation as the run keeps it: with its sentences, and its mark that the copy's final set it in the source
+  // (cache.mjs inSourceOf), which goes with it until a final sets the unit again (Devin and Codex on #309)
+  const seeded = old => (old ? { pieces: old.pieces, by: old.by, ...(old.sentences ? { sentences: old.sentences } : {}), ...(old.inSource ? { inSource: true } : {}) } : {})
+  if (seed) for (const [i, s] of seed) { translated.set(units[i], s.pieces); keep(s.pieces, s.sentences) }
+  // a seed taken as it is (cache.mjs reusable: whole, by this identity, of the wire sent now) is not sent again: a change
+  // to the typesetting alone asks the service for nothing (the evaluation's ruling 4)
+  const taken = new Set([...(seed ?? [])].filter(([, s]) => s.current).map(([i]) => i))
+  for (const i of taken) results.set(i, { ...seeded(seed.get(i)), state: 'whole', tried: identity })
   let changed = false
   // why the run stopped short: the service's failure (engine.mjs's kinds), after which nothing more is sent (§10.3)
   let stopped = null
@@ -170,11 +293,27 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
   const signal = () => { const w = wake; wake = null; w?.() }
   const sleep = () => new Promise(r => { wake = r })
 
-  // 1. the document's fonts, while the first batch is out
-  const fontsP = compile({ main: project.main, engine: meta.compiler, rerun: false, bibtex: false, overrides: probeFiles(paper) }).then(r => { const fonts = readFontProbe(r.log ?? ''); note('fonts', { fonts, ms: r.ms }); return fonts })
+  // a compile whose files did not all arrive (protocol 2's `network`: the TeX page asked each twice), or that the page
+  // itself failed (an `error` and no log: an engine it could not bring up), is not the paper's: asked once more as it
+  // was — in a fresh frame after the page's failure (compilerKeeper) — and the second time the run stops, as for a
+  // network that is down or with no compiler: no strategy changed, no aux or bbl taken from it, nothing remembered of it
+  // (the S3a report, "what the reader must do", and its fix round's duties a–d). One BusyTeX gave up on (timedOut) is
+  // given back as it is, its frame gone all the same: what each compile does with it is its own
+  const askOf = fn => async req => {
+    let r = await fn(req)
+    if (timedOut(r) || (!r.network?.length && !pageFailed(r))) return r
+    note('compile again', { network: r.network?.slice(0, 5), error: r.error?.slice(0, 200) })
+    r = await fn(req)
+    if (!r.network?.length && !pageFailed(r)) return r
+    throw Object.assign(new Error(r.network?.length ? `the TeX page could not fetch ${r.network.slice(0, 3).join(', ')}` : `the TeX page failed: ${String(r.error).slice(0, 200)}`), { compilerDown: r.network?.length ? 'network' : 'page' })
+  }
+  const ask = askOf(compile)
+  // 1. the document's fonts, while the first batch is out; with the rule, how wide its body face sets and at what sizes
+  const fontsP = ask({ main: project.main, engine: meta.compiler, rerun: false, bibtex: false, overrides: probeFiles(paper, { width: !!readMarks }) }).then(r => { const fonts = readFontProbe(r.log ?? ''); note('fonts', { fonts, ms: r.ms }); return { fonts, log: r.log ?? '' } })
 
   // 2. translation nearest the reader first, asked afresh for every batch: the reader may have moved
-  const todo = new Set(units.map((u, i) => i).filter(i => !kept.has(units[i])))
+  const todo = new Set(units.map((u, i) => i).filter(i => !kept.has(units[i]) && !taken.has(i)))
+  if (taken.size) note('translated', { units: 0, taken: taken.size, total: translated.size })
   const nextBatch = maxChars => {
     const order = [...todo].map(i => [i, rank(i)]).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(([i]) => i)
     const batch = []
@@ -203,10 +342,13 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
         if (!r) continue
         // a new result replaces a seed only when whole; with no seed, anything is better than the source
         if (r.state === 'whole' || (!old && r.pieces)) {
-          if (!old || JSON.stringify(old.pieces) !== JSON.stringify(r.pieces)) changed = fresh = true
+          const same = !!old && JSON.stringify(old.pieces) === JSON.stringify(r.pieces)
+          if (!same) changed = fresh = true
           translated.set(units[i], r.pieces)
-          results.set(i, { pieces: r.pieces, state: r.state, by: r.by, tried: identity })
-        } else results.set(i, { ...(old ? { pieces: old.pieces, by: old.by } : {}), state: r.state, tried: identity })
+          keep(r.pieces, r.sentences)
+          // the seed's pieces again are typeset as they were: its mark that a final set them in the source stays
+          results.set(i, { pieces: r.pieces, state: r.state, by: r.by, tried: identity, ...(r.sentences ? { sentences: r.sentences } : {}), ...(same && old.inSource ? { inSource: true } : {}) })
+        } else results.set(i, { ...seeded(old), state: r.state, tried: identity })
       }
       note('translated', { units: batch.length, how, ms: Date.now() - t0, total: translated.size })
       // a failure of the service, not of these texts (engine.mjs EngineError's lost): the batches after it would fail
@@ -216,7 +358,7 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
     }
     // stopped short: what was not sent is lost to the service, a seed's translation kept on screen
     if (stopped) {
-      for (const i of todo) { const old = seed?.get(i); results.set(i, { ...(old ? { pieces: old.pieces, by: old.by } : {}), state: 'lost', tried: identity }) }
+      for (const i of todo) results.set(i, { ...seeded(seed?.get(i)), state: 'lost', tried: identity })
       note('stopped', { kind: stopped, untried: todo.size })
       todo.clear()
     }
@@ -227,72 +369,254 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
   /** the units left in the source language for the service's failure: lost, with no seed's translation to show */
   const missing = () => [...results.values()].filter(r => r.state === 'lost' && !r.pieces).length
 
-  // 3–5. compiles
-  const fonts = await fontsP
-  // each unit's text as that compile has it: translated if it was in the snapshot, the source's otherwise
-  const texts = done => units.map((u, i) => ({ id: i, text: done.has(u) ? plainTranslated(done.get(u)) : plainSource(u) }))
-  let aux = null, bbl = null, previews = 0, originalP = null
-  // the marked original, compiled once: the left side's anchors, and the characters the paper's own compile could not set
-  const original = () => (originalP ??= compile({ main: project.main, engine: meta.compiler, rerun: true, bibtex: meta.bbl ? false : null, overrides: originalFiles(paper) }).then(o => {
-    note('original', { ok: o.ok, ms: o.ms, error: whyFailed(o) })
-    if (o.ok) onOriginal?.({ pdf: o.pdf })
-    return o
-  }))
-  /**
-   * Whether a compile set the translation (unsettable). A character its font lacks counts only if the paper's own
-   * compile set it, which only the original's full compile tells: the font probe has no body (probeFiles). So the
-   * original is asked for ahead of its turn, and only when a translation leaves a character out at all (Devin and
-   * Codex on #294)
-   */
-  const settled = async r => r.ok && !unsettable(r, lostIn(r.log).size ? lostIn((await original()).log) : undefined)
-  while (true) {
-    // a seeded run shows a preview only once no unit it would show in the source is left
-    if (dirty && seed && !complete()) dirty = false
-    if (dirty) {
-      dirty = false
-      const snapshot = new Map(translated), t0 = Date.now()
-      const r = await compile({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bbl, overrides: translationFiles(paper, snapshot, { strategy: strategy(), fonts, draft: true, aux, bbl }) })
-      if (r.aux) aux = r.aux
-      if (r.bbl) bbl = r.bbl
-      // shown only when it set every letter: a translation with letters missing is not one (Devin on #294); the note says
-      // ok for what is shown, and with no strategy left the reader keeps what it has
-      const shown = await settled(r)
-      note('preview', { ok: shown, units: snapshot.size, ms: r.ms, roundTrip: Date.now() - t0, strategy: strategy().name, error: shown ? undefined : whyFailed(r) ?? 'a letter it could not set' })
-      if (shown) { previews++; onUpdate?.({ pdf: r.pdf, texts: texts(snapshot), translated: snapshot.size, final: false }) }
-      else if (!timedOut(r) && s + 1 < strategies.length) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
-      continue
+  let previews = 0
+  /** the original as the rule reads it (readingsOf): its log's lines (each unit's lines, the forced breaks, the
+   *  document's end), its marks with every page's columns, its citations; null until it is in, and where it could not
+   *  be read. Known from a run before only with the left side's marks, which only a compile of it gives otherwise */
+  const known = marks && knownReadings
+  let readings = known ?? null
+  // a passing failure kept the rule from the final — a PDF's marks that could not be read —: the final is not this
+  // typesetting's, and the record says so, so that the next visit sets it again (the F2 review's M3)
+  let passing = false
+  const compiles = async () => {
+    // 3–5. compiles
+    // each unit's text as that compile has it: translated if the strategy set it from the snapshot, the source's otherwise
+    // — the author block under one that sets it as the paper has it (scripts.mjs typesetBy; the F2 review's M2) —; with
+    // where its placeholders stood, its displays beyond its marks and the sentences of the translation typeset, for the
+    // anchors
+    const texts = done => textsShown(units, typesetBy(done, strategy()), pieces => sentencesBy.get(pieces))
+    // the references the last draft made: its aux, and the bibliography BibTeX or biber made after it, if one ran
+    let aux = null, bbl = null
+    // known, the original is what it was: nothing compiled
+    let originalP = known ? Promise.resolve({ ok: true, log: known.log, aux: known.cites }) : null
+    /**
+     * A draft's references (the F2 re-review's N1): its own where a draft before made them, else the original's — its
+     * labels and citations, and its bibliography —, and the original's citations where its own have none. A translation
+     * keeps every label and citation and leaves the bibliography as it is: the original's are the ones its own passes
+     * write, and its biber's bibliography sets the translation's citations as the final's own does (2608.08872, 29181,
+     * 2607.24653 under xeCJK: the same entries in the same order, the same 92, 74 and 360 numbered citations; only the
+     * citation counts biblatex ignores differ). Without them a draft sets every citation as "?" or its key, and none of
+     * the bibliography: a first preview's aux has no citation, since its BibTeX ran after its one pass, and a re-set — a
+     * typesetting change, every unit taken — compiles no preview at all, so its measure had neither, and set 2608.08872
+     * two pages long where the full run set it one
+     */
+    let originalRefs = known ? { cites: known.cites, labels: known.labels, bbl: known.bbl } : { cites: '', labels: '', bbl: null }
+    const refs = a => (a ? (!originalRefs.cites || /^\\bibcite\{/m.test(a) ? a : `${a}\n${originalRefs.cites}`) : [originalRefs.labels, originalRefs.cites].filter(Boolean).join('\n') || null)
+    const bblAt = () => bbl ?? originalRefs.bbl
+    // the marked original, compiled once: the left side's anchors, the characters the paper's own compile could not set,
+    // and with the rule every plan's base — so in full, every pass: one pass sets references, citations and the pages they
+    // move unsettled, and its readings are another paper's (the review of 2026-10-01, M3)
+    const original = () => (originalP ??= askOf(compileOriginal ?? compile)({ main: project.main, engine: meta.compiler, rerun: true, bibtex: meta.bbl ? false : null, overrides: originalFiles(paper, { lines: !!readMarks }) }).then(async o => {
+      note('original', { ok: o.ok, ms: o.ms, error: whyFailed(o) })
+      if (o.ok) {
+        onOriginal?.({ pdf: o.pdf })
+        originalRefs = referencesOf(o)
+        if (readMarks) readings = await readMarks(o.pdf).then(m => readingsOf(o, m), e => { passing = true; note('typeset', { missing: `the original's marks (${String(e?.message ?? e).slice(0, 120)})` }); return null })
+      } else if (timedOut(o)) passing = true
+      return o
+    }))
+    /**
+     * Whether a compile set the translation (unsettable). A character its font lacks counts only if the paper's own
+     * compile set it, which only the original's full compile tells: the font probe has no body (probeFiles). So the
+     * original is asked for ahead of its turn, and only when a translation leaves a character out at all (Devin and
+     * Codex on #294)
+     */
+    const settled = async r => r.ok && !unsettable(r, lostIn(r.log).size ? lostIn((await original()).log) : undefined)
+    // with a compiler of its own, the original from the start, beside the probe and the first preview (the F2 review's
+    // I2): off the final's path when the translation comes quickly. Its failure is met where it is awaited
+    if (readMarks && compileOriginal) original().catch(() => {})
+    const { fonts, log: fontLog } = await fontsP
+    // the rule's plans, one per compile, made for the strategy the compile sets: none until the original is read, and
+    // none where an input is missing or partial (plan.mjs previewTypesetting) — the translation is set as today then,
+    // and the reason noted once
+    let toldMissing = null
+    // the strategies a compile with the rule failed under, TeX's failure: each tried again as today, the rule left out,
+    // before the chain moves on — the rule's TeX is one more thing that can fail, the strategy may well set the paper
+    // (the evaluation's ruling 6, 2026-10-01); and set as today from then on
+    const ruleFailed = new Set()
+    const withoutRule = r => { ruleFailed.add(strategy().name); note('typeset failed', { strategy: strategy().name, error: whyFailed(r) }) }
+    const planFor = snapshot => {
+      if (!readings || ruleFailed.has(strategy().name)) return null
+      const plan = previewTypesetting({ paper, translated: snapshot, lang, strategy: strategy(), fonts, fontLog, original: readings })
+      if (!plan.typeset && toldMissing !== plan.missing) { toldMissing = plan.missing; note('typeset', { missing: plan.missing }) }
+      return plan.typeset ? plan : null
     }
-    if (mtDone) break
-    // nothing new to compile yet: the original, if it is still to do, else wait for the next batch
-    if (!marks && !originalP && previews) { await original(); continue }
-    await sleep()
+    /** every unit to translate in a snapshot: the whole translation, which alone can measure the final */
+    const whole = snapshot => units.every(u => kept.has(u) || snapshot.has(u))
+    /** a compile's references as complete as the original's: a bibliography read, every citation defined, and as many
+     *  entries in it (a pass set from an earlier pass's references may lack some, and a bibliography of another length
+     *  moves every page after it), and every contents list it reads (listsMissing). biblatex writes no \bibcite, and its
+     *  warnings are the kernel's, its keys in plain quotes; a one-pass draft under it always asks for biber again and
+     *  says there were undefined references, which says nothing */
+    const bibcites = text => (text ?? '').match(/^\\bibcite\{/gm)?.length ?? 0, noFile = ext => `No file ${jobName(project.main)}.${ext}.`
+    const referencesWhole = r => { const log = unwrapped(lastTexLog(r.log)); return !log.includes(noFile('bbl')) && !/(?:LaTeX|Package natbib) Warning: Citation [`'].*undefined/.test(log) && bibcites(r.aux) === bibcites(readings?.cites) && !listsMissing(r) }
+    /** whether a draft set a contents list from nothing: one its aux writes (listsOf) whose file its pass did not find
+     *  (LaTeX's \@input: "No file <job>.<ext>."), as a draft does that was given no aux of this translation (the F2
+     *  re-review's N2) — the list set empty, every unit after it early by its height */
+    const listsMissing = r => { const log = unwrapped(lastTexLog(r.log)); return [...listsOf(r.aux).keys()].some(ext => log.includes(noFile(ext))) }
+    /** the preview that can measure the final: the last of the whole translation, planned, shown */
+    let measuring = null
+    // a preview of part of the translation held once for the last batch (below), as long as the last preview took
+    let held = false, previewMs = 0
+    /**
+     * A draft runs BibTeX or biber after its one pass where it was given no bibliography — for the drafts after it —,
+     * but the first preview not where the rule is on: its citations are undefined either way, and the original, compiled
+     * by then or right after it, gives the compiles after it its bibliography. biber's first run in a profile beside the
+     * original's own made 2608.29181's first preview 15.5 s, against 6.4 s without (the F2 re-review); and BusyTeX keeps
+     * no log of the pass before a biber run, which every compile here reads
+     */
+    const bibtexFor = () => !meta.bbl && !bblAt() && !(readMarks && !previews)
+    while (true) {
+      // with the rule, the original right after the first preview: every plan after it is made from it
+      if (readMarks && previews && !originalP) { await original(); continue }
+      // a seeded run shows a preview only once no unit it would show in the source is left
+      if (dirty && seed && !complete()) dirty = false
+      // the whole translation after the first preview waits for the original under way in its own compiler: planned, its
+      // preview measures the final, which a draft would have to otherwise (V1', the F2 review's measured proposal)
+      if (dirty && readMarks && compileOriginal && previews && !readings && whole(translated)) await original().catch(() => {})
+      // every unit sent and the last batch still out: a preview of part of the translation waits for it, once and as long
+      // as the last preview took — the whole translation's preview would replace it within that time, and only the whole
+      // one measures the final; begun, it held the whole one back by up to a preview (zh 2608.02163 on the protocol-2
+      // page: the last batch came 0.13 s after a preview of 200 of its 337 units began, the final 2.1 s later for it)
+      if (dirty && previews && !held && !todo.size && !mtDone && !whole(translated)) { held = true; await Promise.race([sleep(), new Promise(r => setTimeout(r, previewMs))]); continue }
+      if (dirty) {
+        dirty = false
+        const snapshot = new Map(translated), t0 = Date.now(), plan = planFor(snapshot)
+        const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: bibtexFor(), overrides: translationFiles(paper, snapshot, { strategy: strategy(), fonts, draft: true, aux: refs(aux), bbl: bblAt(), typeset: plan?.typeset ?? null, note }) })
+        if (r.aux) aux = r.aux
+        if (r.bbl) bbl = r.bbl
+        held = false
+        previewMs = r.ms ?? 0
+        // shown only when it set every letter: a translation with letters missing is not one (Devin on #294); the note says
+        // ok for what is shown, and with no strategy left the reader keeps what it has
+        const shown = await settled(r)
+        note('preview', { ok: shown, units: snapshot.size, ms: r.ms, roundTrip: Date.now() - t0, strategy: strategy().name, typeset: !!plan, error: shown ? undefined : whyFailed(r) ?? whyUnset(r) })
+        if (shown) {
+          previews++
+          measuring = plan && whole(snapshot) ? { plan, strategy: strategy().name, r } : null
+          onUpdate?.({ pdf: r.pdf, texts: texts(snapshot), translated: snapshot.size, final: false })
+        } else if (timedOut(r)) {
+          // the machine slow: nothing changed, the next batch or the final goes on
+        } else if (plan && !r.ok) { withoutRule(r); dirty = true }
+        else if (s + 1 < strategies.length) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
+        continue
+      }
+      if (mtDone) break
+      // nothing new to compile yet: the original, if it is still to do, else wait for the next batch
+      if (!marks && !originalP && previews) { await original(); continue }
+      await sleep()
+    }
+    await mt
+    // nothing to show: nothing compiled, not even the marked original; the reader says why (the reader's design, §10.3)
+    if (stopped && !translated.size) return { previews, translated: 0, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing(), original: readings, passing }
+    // a seeded run that changed nothing typeset, on the same pipeline: nothing to compile but the marked original, for a
+    // copy that has no marks — else they would never come (Devin on #298)
+    if (seed && !changed && pipelineCurrent) {
+      if (!marks) await original()
+      note('unchanged')
+      return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing(), original: readings, passing }
+    }
+    const all = new Map(translated), t0 = Date.now()
+    /**
+     * The final's typesetting (plan.mjs finalTypesetting): measured by the last preview where it was of the whole
+     * translation, under this strategy, and complete; else by a draft one-pass of the whole translation, planned — the
+     * evaluation's rulings of 2026-10-01: no measuring compile of its own in full, the last preview measures. null where
+     * no plan can be made: the final is set as today
+     */
+    const finalTypeset = async () => {
+      if (!readMarks) return null
+      await original()
+      const read = async r => { try { return await readMarks(r.pdf) } catch (e) { passing = true; note('typeset', { missing: `a preview's marks (${String(e?.message ?? e).slice(0, 120)})` }); return null } }
+      let m = measuring?.strategy === strategy().name && referencesWhole(measuring.r) ? measuring : null
+      let fin = m && finalTypesetting(m.plan.state, { log: m.r.log, marks: await read(m.r) }, all)
+      if (!fin?.typeset || fin.missing === 'a plan of the whole translation') {
+        const measure = async plan => {
+          const t1 = Date.now()
+          const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bblAt(), overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: true, aux: refs(aux), bbl: bblAt(), typeset: plan.typeset, note }) })
+          note('measure', { ok: r.ok, ms: r.ms, roundTrip: Date.now() - t1, strategy: strategy().name, error: whyFailed(r) })
+          return r
+        }
+        let plan, r
+        for (;;) {
+          plan = planFor(all)
+          if (!plan) return null
+          r = await measure(plan)
+          let unset = r.ok && !(await settled(r))
+          // one that set a contents list from nothing — a re-set's: every unit taken, no draft of this translation before
+          // it — is measured once more, given its own lists (the F2 re-review's N2). Not the original's lists instead: as
+          // tall as the translation's only where its entries are, and the thesis 2307.16209's figures' long captions made
+          // its re-set three pages short (-5 pages / 2.787 against -2 / 1.493 with its own). Not one that lost a letter
+          if (!unset && r.ok && listsMissing(r)) {
+            aux = r.aux
+            if (r.bbl) bbl = r.bbl
+            r = await measure(plan)
+            // judged as the first: a list may be set in a face without a letter its heading's face has (Devin on #309)
+            unset = r.ok && !(await settled(r))
+          }
+          // one that could not set a letter is no measure, as a preview that cannot is not shown: the chain moves on before
+          // the final, as from that preview, and the next strategy is measured — so that the final is set from a plan
+          // measured under the strategy it is compiled with, not from the next one's plan uncorrected once this one's
+          // final failed (the F2 re-review's N2: zh 2608.02459's re-set, measured under xeCJK, which has no σ there).
+          // Under the last strategy the final is set as before, and cannot set it either
+          if (unset && s + 1 < strategies.length) { const why = whyUnset(r); s++; aux = null; note('next strategy', { strategy: strategy().name, measure: why }); continue }
+          break
+        }
+        // BusyTeX gave up: the final from the plan uncorrected, which every input but the measure was there for
+        if (timedOut(r)) { passing = true; return plan.typeset }
+        // TeX's failure under the rule: the final as today (ruling 6)
+        if (!r.ok) { withoutRule(r); return null }
+        if (r.aux) aux = r.aux
+        if (r.bbl) bbl = r.bbl
+        m = { plan, r }
+        fin = finalTypesetting(plan.state, { log: r.log, marks: await read(r) }, all)
+      }
+      note('typeset', { final: true, missing: fin.missing, faces: fin.faces.size, measured: m.r === measuring?.r ? 'preview' : 'draft' })
+      return fin.typeset ?? m.plan.typeset
+    }
+    let typeset = await finalTypeset()
+    let r, ok, exhausted = false, finalAgain = false
+    for (;;) {
+      // the final's lines are read by nothing: its TeX without the line probes (tex.mjs typesetting's `final`)
+      r = await ask({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux: refs(aux), bbl: bblAt(), typeset: typeset?.final ?? typeset, note }) })
+      ok = await settled(r)
+      note('final', { ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, typeset: !!typeset, undefinedCitations: [...new Set([...unwrapped(lastTexLog(r.log)).matchAll(/(?:LaTeX|Package natbib) Warning: Citation [`']([^']+)' .*undefined/g)].map(m => m[1]))].slice(0, 8), error: ok ? undefined : whyFailed(r) ?? whyUnset(r) })
+      if (ok) break
+      // (a compile the page did not answer, or failed, was asked once more by `ask`, and a second failure stops the run:
+      // a slow machine or the page's own failure is no reason to change how the paper is set — Part 3's checks: a
+      // timed-out preview moved 2608.02163 to a strategy its class refuses.) One BusyTeX gave up on: once more as it
+      // was, then what is shown stays
+      if (timedOut(r)) { if (finalAgain) break; finalAgain = true; note('final again', { strategy: strategy().name }); continue }
+      if (typeset && !r.ok) { withoutRule(r); typeset = null; continue }
+      if (s + 1 >= strategies.length) { exhausted = true; break }
+      s++; aux = null
+      note('next strategy', { strategy: strategy().name })
+      // a plan is made for one strategy: the new one's, uncorrected, since what the preview measured was set by another
+      // (the handoff, 6)
+      typeset = planFor(all)?.typeset ?? null
+    }
+    if (ok) {
+      onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
+      // the units the final set in the source though translated, for the record: their translation stays the next run's.
+      // Said anew for every unit it set, a seed's mark included: it set them all again
+      const set = typesetBy(all, strategy())
+      units.forEach((u, i) => {
+        const r = results.get(i)
+        if (!r || !all.has(u)) return
+        const { inSource, ...rest } = r
+        results.set(i, set.has(u) ? rest : { ...rest, inSource: true })
+      })
+    }
+    // marks known come only from a compile of the paper's own source that set (onOriginal)
+    const own = marks && !originalP ? null : await original()
+    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing(), original: readings, passing }
   }
-  await mt
-  // nothing to show: nothing compiled, not even the marked original; the reader says why (the reader's design, §10.3)
-  if (stopped && !translated.size) return { previews, translated: 0, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing() }
-  // a seeded run that changed nothing typeset, on the same pipeline: nothing to compile but the marked original, for a
-  // copy that has no marks — else they would never come (Devin on #298)
-  if (seed && !changed && pipelineCurrent) {
-    if (!marks) await original()
-    note('unchanged')
-    return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing() }
+  try { return await compiles() } catch (e) {
+    if (!e?.compilerDown) throw e
+    // the TeX page down, by the network or by itself: no compile more, what is shown kept, and the reader told why
+    // (`compiler`), with the retry; the translation goes on to its end, the run's for the next to go on from — a seed
+    // whole and current is never sent again (cache.mjs reusable), so the retry asks the service for nothing more
+    note('compiler down', { why: e.compilerDown, error: e.message })
+    await mt
+    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: false, exhausted: false, stopped, compiler: { down: e.compilerDown, error: e.message }, missing: missing(), original: readings, passing }
   }
-  const all = new Map(translated), t0 = Date.now()
-  let r, ok, retried = false, exhausted = false
-  for (;;) {
-    r = await compile({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux, bbl }) })
-    ok = await settled(r)
-    note('final', { ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, undefinedCitations: [...new Set([...(r.log ?? '').matchAll(/^(?:LaTeX|Package natbib) Warning: Citation [`']([^']+)' .*undefined/gm)].map(m => m[1]))].slice(0, 8), error: ok ? undefined : whyFailed(r) ?? 'a letter it could not set' })
-    if (ok) break
-    // not answered: once more with the same strategy, then what is shown stays — a slow machine is no reason to change
-    // how the paper is set (Part 3's checks: a timed-out preview moved 2608.02163 to a strategy its class refuses)
-    if (timedOut(r)) { if (retried) break; retried = true; note('final again', { strategy: strategy().name }); continue }
-    if (s + 1 >= strategies.length) { exhausted = true; break }
-    s++; aux = null
-    note('next strategy', { strategy: strategy().name })
-  }
-  if (ok) onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
-  // marks known come only from a compile of the paper's own source that set (onOriginal)
-  const own = marks ? null : await original()
-  return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing() }
 }

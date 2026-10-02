@@ -29,15 +29,19 @@ import { displayOf, figuresShown, followOf, withDisplay } from '../settings'
 import { whenVisible } from '../visible'
 import { contentsOf, outlineOf } from '../outline'
 import { keepOverlays, pinned } from './overlay.mjs'
-import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
-import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
+import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from './anchors.mjs'
+import { blockOf, bySentence, clickOf, hitOf, layoutOf, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
+import { measurePane, pointerPath, pointOn } from './pointer.mjs'
+import { allTranslatedBy, copyTexts, decideWrite, digestOf, figureKeyOf, knownMarks, knownOriginal, labelOf, originalRow, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
+import { captionFor, floatHitOf, floatOf, floatsAgree, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from './floats.mjs'
 import { hostReady } from './host.mjs'
-import { compilerKeeper, openPaper, PIPELINE_VERSION, runLive } from './live.mjs'
-import { isName, plainSource, WIRE } from './mt.mjs'
-import { verified, VERIFIED } from './scripts.mjs'
+import { compilerKeeper, keptFor, openPaper, PIPELINE_VERSION, runLive, TYPESETTING_VERSION } from './live.mjs'
+import { displayEdges, isName, plainSource, sentencesKept, unitText, WIRE } from './mt.mjs'
+import { CJK, scriptOf, strategiesFor, verified, VERIFIED } from './scripts.mjs'
+import { marksOf as typesetMarksOf } from './typeset/places.mjs'
 import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
 import { unpackSource } from './tar.mjs'
 
@@ -189,7 +193,48 @@ function makeSide(container) {
   // fit: the fit the side was last given (page-width, page-fit, page-actual), kept as its pane's width changes; null at a scale
   // keeper: the overlays PDF.js removes from a page it draws again, put back (overlay.mjs); laid: each page's figures, by
   // the viewport scale they were laid at
-  return { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), byPage: new Map(), figs: new Map(), figGen: new Map(), frames: null, anchored: null, fit: 'page-width', keeper: keepOverlays('.axt-fig, .axt-hl-layer'), laid: new Map() }
+  // geo: the highlight's geometry (highlight.mjs), made after the side is anchored (makeGeo; layoutWanted: asked for at
+  // once, wantLayout); units: each unit's text as the side was anchored by it (id → { text, sentences? }); starts: where
+  // each unit's sentences after the first begin on it, made with the geometry (findSentences); at, scrollX, scrollY:
+  // where its pane and pages are, kept for the pointer (measure); lit: the highlight's elements painted on it, and shows
+  // what they were painted for (what was lit then, paint); startsFor: the units its starts were found from (findSentences)
+  const side = { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), units: new Map(), geo: null, makeGeo: null, layoutWanted: false, starts: null, startsFor: null, at: null, scrollX: 0, scrollY: 0, lit: [], shows: null, figs: new Map(), figGen: new Map(), frames: null, anchored: null, fit: 'page-width', keeper: keepOverlays('.axt-fig, .axt-hl-layer'), laid: new Map() }
+  // a unit's sentences' starts on this side where they are known on both and its shapes hold its words on both
+  // (highlight.mjs sentencesFit), for the hit test and the paint: else it is lit whole on both (a translation coming in,
+  // laid out out of sight, is the right side's to the left)
+  side.startsOf = id => {
+    const o = side === left ? right : left, mine = side.starts?.get(id), theirs = o.starts?.get(id)
+    if (!mine || !theirs || mine.length !== theirs.length) return null
+    const a = fits(side, id, mine), b = fits(o, id, theirs)
+    if (a === undefined || b === undefined) { wantFit(id); return null }
+    return a && b ? mine : null
+  }
+  /** a page's sentences, by this side's starts alone: what the fit reads (sentencesFit), made as the page is drawn */
+  side.ownStarts = id => side.starts?.get(id) ?? null
+  return side
+}
+/** whether a unit's sentences hold its words on a side, by the starts found there: read from its pages' sentences, made
+ *  as each was drawn (pageSentences); where one of its pages on either side has none yet, a task of its own makes them
+ *  and the pointer, a miss meanwhile, looks again (wantFit) — never in its frame */
+const fitted = new WeakMap()
+const fits = (side, id, starts, now = false) => {
+  let f = fitted.get(starts)
+  if (f === undefined && side.geo) { f = sentencesFit(side.geo, id, starts, !now); if (f !== undefined) fitted.set(starts, f) }
+  return side.geo ? f : false
+}
+const fitsWanted = new Set()
+function wantFit(id) {
+  if (fitsWanted.has(id)) return
+  fitsWanted.add(id)
+  if (fitsWanted.size > 1) return
+  setTimeout(() => {
+    for (const u of fitsWanted) for (const s of sides) { const st = s.starts?.get(u); if (st) fits(s, u, st, true) }
+    // what is lit drawn by them before the pointer is asked again: the pointer lighting the same leaves it as it is
+    const drawn = lit != null && fitsWanted.has(lit.id)
+    fitsWanted.clear()
+    if (drawn) for (const s of sides) paint(s)
+    pointer.again()
+  })
 }
 const left = makeSide(host.left)
 let right = makeSide(host.right)
@@ -212,7 +257,7 @@ async function open(side, url) {
 // ---------------------------------------------------------------- anchors
 async function textPages(doc) {
   const pages = []
-  for (let p = 1; p <= doc.numPages; p++) { const tc = await (await doc.getPage(p)).getTextContent(); pages.push({ page: p, items: tc.items, styles: tc.styles }) }
+  for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p), tc = await pg.getTextContent(); pages.push({ page: p, items: tc.items, styles: tc.styles, view: pg.view }) }
   return pages
 }
 /** the named destinations of our marks (axt-<unit>s / axt-<unit>e) in a PDF, as { page, x, y } */
@@ -239,8 +284,6 @@ async function pdfFrames(doc) {
 function index(side, anchors) {
   side.anchors = anchors
   side.groups = null
-  side.byPage = new Map()
-  for (const [id, a] of anchors) if (a) a.rects.forEach((r, k) => (side.byPage.get(r.page) ?? side.byPage.set(r.page, []).get(r.page)).push({ id, r, k }))
 }
 
 // ---------------------------------------------------------------- geometry: PDF units ↔ positions in a container
@@ -262,44 +305,247 @@ function unitTop(side, id) {
 }
 
 // ---------------------------------------------------------------- highlight
+// What a unit paints and where the pointer lights it are one geometry (highlight.mjs): a block per run of the unit —
+// one page and one column of it — across its rows inside the column's text edges, padded half the leading above and
+// below and PAD beside; a point lights the unit whose block holds it, the smallest where blocks overlap. So a pointer
+// anywhere on what is lit keeps it lit, over a formula as over its words (report-A: 43–50 % of a display unit's wash
+// turned it off). Where the unit's sentences are known on both sides (findSentences), its sentences instead: the
+// sentence under the pointer, its first row from its start, the rows between across the run, its last row to its end,
+// one outline per run (the plan of the highlight, B3). The look is the draft's (round 1 of the highlight, 2026-10-01),
+// multiplied into the page as the HTML page's band is (engine.css)
+/** what is lit: { id, s }, a unit's sentence s, or the whole unit where s is -1; null for nothing */
 let lit = null
 /** how many times each of the right side's pages had its figures laid (paintFigures), for the probes */
 const paints = new Map()
+/** the pad beside a block, in CSS pixels */
+const PAD = 3
+/** how long a pointer that lights nothing keeps what is lit: crossing the space between two paragraphs does not blink
+ *  (the HTML page's MISS_GRACE_MS) */
+const MISS_HOLD = 120
+/** the highlight's layer of a page, over its text layer (engine.css), made on first use and kept through PDF.js's
+ *  redraws (keepOverlays) */
+function layerOf(side, page) {
+  const pv = pageView(side, page)
+  if (!pv?.div) return null
+  let layer = pv.div.querySelector(':scope > .axt-hl-layer')
+  if (!layer) { layer = document.createElement('div'); layer.className = 'axt-hl-layer'; pv.div.append(layer) }
+  return layer
+}
+/** what each element painted draws, in its own box's CSS pixels: for the probes (the harness's litRects) */
+const drawn = new WeakMap()
+/** the lit unit's blocks or the lit sentence's shapes on a side, written only: every number comes from the geometry
+ *  and the pages' viewports. One element a run: a block, or a sentence's single row, as a box with rounded corners; a
+ *  sentence over rows of different reach as one outline (an SVG path) */
 function paint(side) {
-  for (const layer of side.container.querySelectorAll('.axt-hl-layer')) layer.replaceChildren()
+  // a sentence lit whose unit's sentences are not known on both sides now: while what makes them is on its way — the
+  // side's layout, a side's sentences, their fit (a new compile's side, our marked original's marks anchoring the left
+  // again) — what is drawn for it stays, and it is drawn anew when they land (wantFit, wantSentences, makeGeo); else
+  // nothing is drawn for it, and the pointer, asked again, lights what is there. Never the whole paragraph: it was drawn
+  // so, and kept until the pointer moved (the final review of the highlight, I2)
+  const starts = lit != null && lit.s >= 0 && side.geo ? side.startsOf(lit.id) : null
+  const waiting = lit != null && (side.geo ? lit.s >= 0 && !starts && sentencesWaited(lit.id) : !!side.makeGeo)
+  if (waiting && same(side.shows, lit)) return
+  for (const el of side.lit) el.remove()
+  side.lit = []
+  side.shows = null
   if (lit == null) return
-  const a = side.anchors.get(lit)
-  if (!a) return
-  for (const r of blocksOf(a.rects)) {
-    const pv = pageView(side, r.page)
-    if (!pv?.div) continue
-    let layer = pv.div.querySelector(':scope > .axt-hl-layer')
-    if (!layer) { layer = document.createElement('div'); layer.className = 'axt-hl-layer'; pv.div.append(layer) }
-    const box = toPageBox(side, r), el = document.createElement('div')
-    el.className = 'axt-hl'
+  if (paintFloat(side)) { side.shows = lit; return }
+  if (!side.geo) { wantLayout(side); return }
+  if (lit.s >= 0 && !starts) return
+  side.shows = lit
+  for (const run of runsOf(side.geo, lit.id)) {
+    const pv = pageView(side, run.page), layer = layerOf(side, run.page)
+    if (!layer) continue
+    const s = pv.viewport.scale
+    // what the run was drawn as when this was last lit at this scale: put back
+    const kept = drawnFor.get(run)?.get(starts ? lit.s : -1)
+    if (kept && kept.scale === s && kept.starts === starts) { layer.append(kept.el); side.lit.push(kept.el); continue }
+    const boxes = (starts ? sentenceOf(side.geo, run, starts, lit.s, PAD / s) : [blockOf(run, PAD / s)]).map(r => toPageBox(side, r))
+    if (!boxes.length) continue
+    let el
+    const X0 = Math.min(...boxes.map(b => b.left)), Y0 = Math.min(...boxes.map(b => b.top))
+    const local = boxes.map(b => ({ x0: b.left - X0, x1: b.left + b.width - X0, y0: b.top - Y0, y1: b.top + b.height - Y0 }))
+    const box = { left: X0, top: Y0, width: Math.max(...local.map(b => b.x1)), height: Math.max(...local.map(b => b.y1)) }
+    if (boxes.length === 1) { el = document.createElement('div'); el.className = 'axt-hl' } else {
+      el = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+      el.setAttribute('class', 'axt-hl axt-hl-shape')
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+      path.setAttribute('d', shapePath(local, RADIUS))
+      el.append(path)
+    }
     // scaled with the page while a pinch lasts (overlay.mjs pinned)
-    Object.assign(el.style, pinned({ left: box.left - 4, top: box.top - 3, width: box.width + 8, height: box.height + 6 }, pv.viewport.scale))
+    Object.assign(el.style, pinned(box, s))
+    drawn.set(el, { width: box.width, local })
     layer.append(el)
+    side.lit.push(el)
+    ;(drawnFor.get(run) ?? drawnFor.set(run, new Map()).get(run)).set(starts ? lit.s : -1, { scale: s, starts, el })
+    if (++drawnKept > DRAWN_KEPT) { drawnFor = new WeakMap(); drawnKept = 0 }
   }
+}
+/** the elements each run's sentences (and its block, -1) were drawn as, by the run, kept to be put back when lit again
+ *  at the same scale and by the same starts: a sweep lights the same few again and again, and the element made each
+ *  time cost a light more than its block did (round 1: 0.2 against 0.1 ms of script); at most DRAWN_KEPT, then anew */
+let drawnFor = new WeakMap(), drawnKept = 0
+const DRAWN_KEPT = 512
+/** a block's and a shape's corners, in CSS pixels (engine.css .axt-hl) */
+const RADIUS = 3
+const same = (a, b) => a === b || (!!a && !!b && a.id === b.id && a.s === b.s)
+function light(target) { if (!config.reading.sentenceHighlight) target = null; if (same(target, lit)) return; lit = target; for (const s of sides) paint(s) }
+/** a side's layout wanted now, where the pointer, a paint or a click met the side without one: made in a task of its
+ *  own at once, never in the frame or the event that asked (the pointer's frame made both sides' there, 25–48 ms, the
+ *  review of B1); when it lands what is lit is painted on it and the pointer looked at again (makeGeo) */
+function wantLayout(side) {
+  if (!side.makeGeo || side.layoutWanted) return
+  side.layoutWanted = true
+  setTimeout(() => { side.layoutWanted = false; if (sides.includes(side)) side.makeGeo?.() })
+}
+
+// The pointer's path (pointer.mjs): its moves taken once a frame, the unit under it found and lit, the pointer's place
+// read before anything is written. Nothing there reads the layout: where each pane and each of its pages is was kept
+// when the layout last changed (measure), and the scroll as its event gives it, so that finding the unit is arithmetic
+// (the draft measured one forced layout in 440 moves when the page's position was read there, one PDF.js's drawing had
+// left). A pointer that lights nothing lets go after MISS_HOLD; one that lights something again before then keeps the
+// wash on without a blink
+const pointer = pointerPath({
+  find: ({ where: side, x, y }) => {
+    if (!config.reading.sentenceHighlight) return null
+    // a side without its layout yet is a miss, its layout asked for
+    if (!side.geo) { wantLayout(side); return null }
+    const at = pointAt(side, x, y), hit = at && withFloats(side, at, hitOf(side.geo, at.page, at.x, at.y, PAD / at.scale, side.startsOf))
+    // a unit whose sentences are not yet worked out on both sides: a miss, until they are (wantFit); and one whose
+    // sentences are known but not yet found while the finding is on its way (sentencesPending); a float lights whole.
+    // The unit lit stays lit as it is drawn meanwhile (paint): a pointer resting on it through a new compile or the
+    // left's marks arriving does not let go after the miss's hold
+    if (!hit) return null
+    if (fitsWanted.has(hit.id) || (hit.s === -1 && !hit.float && sentencesPending(hit.id))) return lit?.id === hit.id ? lit : null
+    return { id: hit.id, s: hit.s ?? -1 }
+  },
+  light,
+  lit: () => lit != null,
+  hold: MISS_HOLD,
+  frame: requestAnimationFrame,
+  later: setTimeout,
+  cancel: clearTimeout,
+})
+/** where a side's pane and pages are on the screen (pointer.mjs measurePane: the pane's place as its layout has it,
+ *  whatever transform draws it moving), read where the layout is known clean: a ResizeObserver's callback runs after
+ *  the layout, whenever the pane or its pages change size — the pages laid, a zoom, a pinch's steps, the window, the
+ *  contents panel, a display of one pane or two. A pointer resting on the pane is looked at again in the next frame, by
+ *  what is kept now: a zoom's or a fit's scroll asked in its own frame, which runs before the new sizes are measured,
+ *  and what it found stayed lit until the pointer moved (Codex on #308) */
+function measure(side) {
+  side.at = measurePane(side.container, side.viewer.viewer, side.viewer._pages ?? [])
+  side.scrollX = side.container.scrollLeft; side.scrollY = side.container.scrollTop
+  pointer.again(side)
+}
+const measuredSide = new WeakMap() // a pane's container and page stack → its side, the one coming in too (replaceRight)
+const measured = new ResizeObserver(entries => { for (const s of new Set(entries.map(e => measuredSide.get(e.target)))) if (s) measure(s) })
+/** What moves a pane, or draws it moving, is on <html>: the panes swapped (their places, not their sizes), the contents
+ *  panel (the document area slid in by a translation, App.tsx), the display of one pane or two, a narrow window's. On
+ *  any of them both sides are measured in the next frame, and again as a slide of a pane's box ends, when its box on
+ *  the screen gives the fraction of a pixel the offsets round away (measurePane). What else was looked at moves no
+ *  pane: the dimmed pages (a filter, drawn in by a view transition over a layout that stays), the fonts coming in (the
+ *  panes are in a fixed box under a toolbar of fixed height), a zoom (PDF.js resizes the pages: the ResizeObserver);
+ *  the browser gate checks the kept places after each */
+function remeasure() {
+  requestAnimationFrame(() => {
+    for (const s of sides) measure(s)
+    for (const a of document.getAnimations()) {
+      const el = a.effect?.target
+      if (el && !a.effect.pseudoElement && sides.some(s => el.contains(s.container))) a.finished.then(() => { for (const s of sides) measure(s) }, () => {})
+    }
+  })
+}
+new MutationObserver(remeasure).observe(document.documentElement, { attributeFilter: ['data-axt-swapped', 'data-axt-contents', 'data-axt-pdf-mode', 'data-axt-narrow'] })
+/** a point of the screen → the page under it and the point in PDF units, from what measure kept; null off the pages.
+ *  A side that follows on the compositor shows its pages shifted from its scroll (glass) */
+function pointAt(side, clientX, clientY) {
+  const shift = glass.side === side ? (glass.kind === 'scroll' ? glass.shift(glass.from.scrollY) : glass.shift()) : 0
+  return pointOn(side.at, side.viewer._pages ?? [], side.scrollX, side.scrollY + shift, clientX, clientY)
+}
+
+// ---------------------------------------------------------------- floats
+// Tables, algorithms and figures light whole with their captions, on both sides (floats.mjs): a table one wash over it
+// and its caption, a figure outlined and its caption washed — a wash multiplied into a figure would change its colours.
+// A float lights by its caption's id, which both sides share; on a side where the float is not found the caption lights
+// alone, and a cell there alone
+/** the id of what is lit, whatever shape it has (a unit's id; { id, s } where a unit lights by sentence) */
+const litId = () => (lit !== null && typeof lit === 'object' ? lit.id : lit)
+/** the lit unit's float on a side — its caption's, or the one holding it (a cell) — painted; false where it is none's,
+ *  or where the side has no layout yet */
+function paintFloat(side) {
+  const f = side.geo && floatOf(side.geo, litId())
+  if (!f) return false
+  const pv = pageView(side, f.page), layer = layerOf(side, f.page)
+  if (!layer) return true
+  const s = pv.viewport.scale
+  for (const shape of floatShapes(side.geo, f, PAD / s)) {
+    const el = document.createElement('div')
+    el.className = shape.frame ? 'axt-hl axt-hl-frame' : 'axt-hl'
+    const box = toPageBox(side, shape)
+    Object.assign(el.style, pinned(box, s))
+    drawn.set(el, { width: box.width, local: [{ x0: 0, x1: box.width, y0: 0, y1: box.height }] })
+    layer.append(el)
+    side.lit.push(el)
+  }
+  return true
 }
 /**
- * A unit's lines as blocks: one per run of them down one column of one page, from the run's first line to its last and
- * across its widest, so that a paragraph reads as one wash behind its text, as on the HTML page, not as a selection of
- * lines with gaps between them (the owner, 2026-09-23). A line starts a new block on another page, in another column
- * (its span across the page no longer overlapping the block's), or far below the block (a large display between)
+ * The operator list a page was just drawn by, where PDF.js still holds it: the display intent's on the page's proxy
+ * (PDF.js 6.3.289's PDFPageProxy._intentStates; tests/pdf-reader/pdfjs-pin.test.ts pins the version). Asking the worker
+ * for the list again had it evaluate the page a second time, and the next page's drawing waited behind it: 130–180 ms
+ * more on 2608.06701's pages 7–8, the review of B4. The floats are the same from either list (the display one is
+ * optimised) on the ten papers' 123 pages with captions. Null where PDF.js has let it go: then it is asked for
  */
-function blocksOf(rects) {
-  const out = []
-  for (const r of rects) {
-    const b = out.at(-1), h = r.y1 - r.y0
-    const across = b && Math.min(b.x1, r.x1) - Math.max(b.x0, r.x0)
-    if (b && b.page === r.page && across > 0.3 * Math.min(b.x1 - b.x0, r.x1 - r.x0) && r.y1 <= b.y1 + h && b.y0 - r.y1 < 6 * h) {
-      b.x0 = Math.min(b.x0, r.x0); b.x1 = Math.max(b.x1, r.x1); b.y0 = Math.min(b.y0, r.y0)
-    } else out.push({ page: r.page, x0: r.x0, x1: r.x1, y0: r.y0, y1: r.y1 })
-  }
-  return out
+function drawnList(side, p) {
+  for (const st of pageView(side, p)?.pdfPage?._intentStates?.values() ?? []) if (st.displayReadyCapability && st.operatorList?.lastChunk) return st.operatorList
+  return null
 }
-function light(id) { if (!config.reading.sentenceHighlight) id = null; if (id === lit) return; lit = id; for (const s of sides) paint(s) }
+/** what the pointer lights at a point of a page (pointOn's), floats included: `hit` hitOf's there, or a float whose
+ *  painted shape holds the point (floats.mjs floatHitOf: over its caption and its cells, and over a larger block) */
+const withFloats = (side, at, hit) => floatHitOf(side.geo, at.page, at.x, at.y, PAD / at.scale, hit)
+/**
+ * A page's floats, made on its first drawing from what PDF.js draws it by (its figures, its rules and marks), once a
+ * layout; never on the pointer's path. A page without a caption asks for nothing. A drawing cancelled before the page's
+ * operator list came rejects it: the page is asked again at its next drawing (round 1: 2608.06701's page 3 on the left,
+ * at 2x, never got its floats). `error` the drawing's, where it failed (pagerendered's)
+ */
+function floatsFor(side, p, error = null) {
+  const L = side.geo
+  if (!L || !wantsFloats(L, p) || floatsOn(L, p)) return
+  const asked = (L.floatsAsked ??= new Set())
+  if (asked.has(p)) return
+  asked.add(p)
+  // the list the page was just drawn by, else asked for — asked for where its drawing failed (pagerendered's `error`):
+  // PDF.js marks a list whose stream failed complete, and it may have stopped short (the review of B4's fix round); a
+  // draft preview's figures are the frames set where its images go (paintFigures)
+  const shown = error ? null : drawnList(side, p)
+  const ops = shown ? Promise.resolve(shown) : side.doc.getPage(p).then(page => page.getOperatorList({ annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS }))
+  const figures = side.frames ? side.frames.then(f => f.get(p) ?? []) : shown ? ops.then(list => figureRegions(list, pdfjsLib.OPS)) : regionsOf(side, p)
+  Promise.all([figures, ops]).then(([regions, list]) => {
+    if (side.geo !== L) return
+    const t0 = performance.now(), paths = pathsOf(list, pdfjsLib.OPS), t1 = performance.now()
+    pageFloats(L, p, regions, paths)
+    // the main thread's cost, for the probes: reading the page's paths, making its floats (and the page's geometry, for
+    // a page drawn before the side's layout came)
+    ;(timing.floats ??= []).push({ paths: t1 - t0, floats: performance.now() - t1, ops: list.fnArray.length, marks: paths.marks.length })
+    // a float's kind its caption's on both sides, where the other side's is made (floatsAgree)
+    const other = side === left ? right : left, changed = floatsAgree(L, p, other.geo)
+    // what is lit there, and what is under a pointer resting on it, now that the page has its floats; a sentence drawn
+    // before they came may reach under one (highlight.mjs reachAt): what was drawn is let go, a lit sentence drawn again
+    drawnFor = new WeakMap(); drawnKept = 0
+    if (lit != null && lit.s >= 0) for (const s of sides) paint(s)
+    else {
+      if (lit != null && floatOf(L, litId())?.page === p) paint(side)
+      if (lit != null && changed.includes(floatOf(other.geo, litId()))) paint(other)
+    }
+    pointer.again()
+  }).catch(e => {
+    // asked again at the page's next drawing; a drawing cancelled is no fault, anything else is told
+    asked.delete(p)
+    if (!/abort|cancel|destroy/i.test(`${e?.name} ${e?.message}`)) console.warn('[floats]', e)
+  })
+}
 
 // ---------------------------------------------------------------- figure text
 // The HTML mode's image translation, run on the translation's pages: the extension's own modules — lines merged into
@@ -345,7 +591,12 @@ function perDoc(make) {
     let m = byDoc.get(side.doc)
     if (!m) byDoc.set(side.doc, (m = new Map()))
     const key = args.join(':')
-    if (!m.has(key)) m.set(key, make(side, ...args))
+    if (!m.has(key)) {
+      const made = make(side, ...args)
+      m.set(key, made)
+      // a failure is not kept: a page whose drawing was cancelled rejects its operator list, and is asked again
+      made?.catch?.(() => { if (m.get(key) === made) m.delete(key) })
+    }
     return m.get(key)
   }
 }
@@ -451,20 +702,19 @@ async function translateBoxes(boxes) {
 // A figure on a translation page — in arXiv's PDF shown there until the first preview, in a preview, in the final — is
 // one of arXiv's (the left's): its text is read and translated once, there, and every translation shows the same
 // overlay. A draft preview sets a frame where an image goes (live.mjs DRAFT), and the left's figure is drawn over it.
-const overlaps = (a, b) => Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0)
 /** the caption next to a figure's rectangle on a side's page (PDF units): a caption located there whose first line lies
  *  just below the rectangle, else whose last line lies just above it, across its column; the nearest, or null */
 function captionNear(side, page, r) {
-  const col = columnOf(side, page, r)
-  let below = null, above = null
+  // the highlight's floats' rule (floats.mjs captionFor): of captions in a row, the one over the figure (a subfigure's
+  // subcaption, the right one of two minipages' figures), else the nearest
+  const caps = []
   for (const [id, a] of side.anchors) {
     if (!a || unitKind.get(id) !== 'caption') continue
-    const first = a.rects[0], last = a.rects.at(-1), near = 3 * (first.y1 - first.y0) + 24
-    const down = first.page === page && overlaps(first, col) ? r.y0 - first.y1 : NaN, up = last.page === page && overlaps(last, col) ? last.y0 - r.y1 : NaN
-    if (down > -2 && down < near && !(below?.gap <= down)) below = { id, gap: down }
-    if (up > -2 && up < near && !(above?.gap <= up)) above = { id, gap: up }
+    const first = a.rects[0], last = a.rects.at(-1), on = a.rects.filter(q => q.page === page)
+    if (!on.length) continue
+    caps.push({ id, x0: Math.min(...on.map(q => q.x0)), x1: Math.max(...on.map(q => q.x1)), top: first.page === page ? first.y1 : Number.NaN, bottom: last.page === page ? last.y0 : Number.NaN, h: first.y1 - first.y0, col: columnOf(side, page, on[0]) })
   }
-  return (below ?? above)?.id ?? null
+  return captionFor(r, caps)?.id ?? null
 }
 /** rectangles' indices in reading order: rows from the top, each from the left; a rectangle is in a row when it shares
  *  half its height with the row's first */
@@ -594,20 +844,15 @@ function pointOf(side, event) {
   const [x, y] = pv.viewport.convertToPdfPoint(event.clientX - box.left - pageDiv.clientLeft, event.clientY - box.top - pageDiv.clientTop)
   return { page, x, y }
 }
-/** the unit under a pointer event, the line of it (its rect's index) and how far down that line */
+/** the unit a click is on and the line of it at the click's height (highlight.mjs clickOf: anywhere in what is painted,
+ *  its pads, a display's white space and a sentence's rows too); null off what is painted, or before the side's layout
+ *  is made */
 function hitAt(side, event) {
   const at = pointOf(side, event)
   if (!at) return null
-  const m = 2
-  let hit = null
-  for (const { id, r, k } of side.byPage.get(at.page) ?? []) {
-    if (at.x < r.x0 - m || at.x > r.x1 + m || at.y < r.y0 - m || at.y > r.y1 + m) continue
-    const area = (r.x1 - r.x0) * (r.y1 - r.y0)
-    if (!hit || area < hit.area) hit = { id, line: k, f: Math.min(1, Math.max(0, (r.y1 - at.y) / Math.max(1, r.y1 - r.y0))), area }
-  }
-  return hit
+  if (!side.geo) { wantLayout(side); return null }
+  return clickOf(side.geo, at.page, at.x, at.y, PAD / pageView(side, at.page).viewport.scale, side.startsOf)
 }
-const unitAt = (side, event) => hitAt(side, event)?.id ?? null
 
 // ---------------------------------------------------------------- scroll sync
 // Only the side the reader is scrolling drives the other: the one last touched by wheel, touch, keys or a press on
@@ -913,8 +1158,9 @@ function arm() {
   pts = pts.filter((p, i) => i === 0 || p[0] > pts[i - 1][0])
   if (pts[0][0] > 0) pts.unshift([0, pts[0][1]])
   if (pts.at(-1)[0] < Dmax) pts.push([Dmax, pts.at(-1)[1]])
-  const shift = () => {
-    const D = Math.min(Dmax, Math.max(0, dc.scrollTop))
+  // at the driver's position, its scrollTop unless given (the pointer's frame gives the one its scroll event read)
+  const shift = (at = dc.scrollTop) => {
+    const D = Math.min(Dmax, Math.max(0, at))
     let lo = 0, hi = pts.length - 1
     while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (pts[mid][0] <= D) lo = mid; else hi = mid }
     const [a, b] = [pts[lo], pts[hi]], t = b[0] === a[0] ? 0 : (D - a[0]) / (b[0] - a[0])
@@ -1133,7 +1379,11 @@ function stopGlide() { if (gliding) cancelAnimationFrame(gliding); gliding = 0 }
  * first line on one horizontal line with its counterpart's (the owner, 2026-09-22 — brought to the reading line, the
  * counterpart stood at a quarter down whatever the height of the paragraph clicked). With the first line above the
  * view — a long paragraph clicked far down — the clicked line is levelled, at its place within the other paragraph.
+ * What a click is on is what the highlight paints (hitAt): a click in a block's pads, in the white space beside a
+ * display, or on a float set inside a paragraph's block (a wrapfigure) is the unit's, and levelled by it.
  * A click on no paragraph linked on both sides — a heading, a figure, a formula, a table — goes by what is around it (placeAt).
+ * A table or figure lit whole (floats.mjs) is levelled so too where the click is off its cells and caption: by its twin
+ * or its distance from its caption, finer than by the caption alone.
  */
 let lastAlign = null // how the last click was levelled, for the test harness
 async function alignClick(from, event) {
@@ -1247,7 +1497,10 @@ const invalidate = () => { bake(); table = null; lines = null; flow = null; foll
 addEventListener('resize', invalidate)
 
 function attach(side) {
-  side.container.addEventListener('scroll', () => syncFrom(side), { passive: true })
+  // the scroll as the pointer's frame reads it (pointAt), first: read in the event, the layout is the frame's own; and
+  // what is under a pointer at rest looked at again (a wheel turned under it sends no move: the unit it had left stayed
+  // lit, the review of B1), on either pane, as the other follows
+  side.container.addEventListener('scroll', () => { side.scrollX = side.container.scrollLeft; side.scrollY = side.container.scrollTop; syncFrom(side); pointer.again() }, { passive: true })
   // a new driver: the other side goes on from where it stands, before the new driver's first step is taken; on the
   // compositor, a glide under way ends where it stands, and the follower is bound to the driver
   for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) side.container.addEventListener(type, () => {
@@ -1268,8 +1521,8 @@ function attach(side) {
     clearTimeout(follow.rest)
     follow.rest = setTimeout(() => { follow.rest = 0; alignTop(side) }, 150)
   }, { passive: true })
-  side.container.addEventListener('mousemove', e => light(unitAt(side, e)))
-  side.container.addEventListener('mouseleave', () => light(null))
+  side.container.addEventListener('mousemove', e => pointer.moved(side, e.clientX, e.clientY))
+  side.container.addEventListener('mouseleave', () => pointer.left(side))
   // A click, told apart from a drag that selects text, by the pointer's press and release: PDF.js moves its selection
   // helper (the text layer's endOfContent) under the pointer on the press, and a press whose target moves gets no
   // click event — a second click on a figure did nothing at all
@@ -1282,16 +1535,22 @@ function attach(side) {
     void alignClick(side, e)
   })
   // PDF.js re-renders a page's div on zoom and as pages come into view: the highlight and the figures are laid again there
-  side.eventBus.on('pagerendered', ({ pageNumber }) => {
+  side.eventBus.on('pagerendered', ({ pageNumber, error }) => {
     if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start
     paint(side)
+    // the page's highlight geometry and its sentences, on its first drawing (a page never drawn never needs it)
+    if (side.geo) pageSentences(side.geo, pageNumber, side.ownStarts)
     // figures laid once per page: kept through a redraw (keepOverlays), scaled with it (pinned); a draft preview's
     // copies of the left's figures are bitmaps drawn for one scale, and are drawn again at another
     const at = side.laid.get(pageNumber)
     if (side !== left && (at === undefined || (side.frames && at !== pageView(side, pageNumber).viewport.scale))) side.figs.set(pageNumber, paintFigures(side, pageNumber).catch(e => console.warn('[figures]', e)))
+    // its tables and figures, on its first drawing (floatsFor)
+    floatsFor(side, pageNumber, error)
   })
   // the overlays outlive a page drawn again (overlay.mjs keepOverlays): each page's div watched from the start
   side.eventBus.on('pagesinit', () => { for (const pv of side.viewer._pages) side.keeper.observe(pv.div) })
+  // where the pane and its pages are, for the pointer: again whenever they change size
+  for (const el of [side.container, side.viewer.viewer]) { measuredSide.set(el, side); measured.observe(el) }
   // a side opened out of the display (the original, while the translation alone is shown) waits at 1 for its width (relayout)
   side.eventBus.on('pagesinit', () => { const value = side.scale ?? fitWidth(side); side.viewer.currentScaleValue = shown(side) || typeof value === 'number' ? value : 1 })
   side.eventBus.on('scalechanging', ({ scale }) => { invalidate(); if (shown(side) && (side === left || !shown(left))) host.emit({ type: 'scale', scale }) })
@@ -1349,15 +1608,135 @@ export async function pdfBytes(which) {
 /** the units TeX sets away from where the source has them: a caption with its float, a footnote at the foot of its
  *  page, a table's cells, a picture's text (anchors.mjs anchorUnits) */
 const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
+/** how many sides are being anchored: the highlight's layouts wait for none to be (makeLayouts) */
+let anchoring = 0
 /** every unit located on a side: `texts` is the unit's text as that PDF has it; `marks` null = read them from the PDF */
 async function anchorSide(side, texts, marks) {
+  // the units' texts and sentences known at once, before the side's text comes: the other side's sentences are found
+  // from them (findSentences), and its layout may be made before this side's is — on a copy shown or a demo the two are
+  // anchored together, and the pointer over the left asked for its layout while the right was still reading its text:
+  // the left found no sentence, and the paper was lit by paragraph for the visit (the review of B3, C1)
+  side.units = new Map(texts.map(t => [t.id, t]))
+  anchoring++
+  try { return await anchorOne(side, texts, marks) } finally { anchoring--; makeLayouts() }
+}
+/** a unit's kind, for a side's layout, which keeps it: a function of the module's, so that the layout keeps nothing of
+ *  the anchoring that made it — an arrow made there kept that scope, and with it the side's tokens, for the visit
+ *  (2608.02459: the heap 31.7 MB against 10.5 once the layouts are made, the final review of the highlight, I3) */
+const kindOfUnit = id => unitKind.get(id)
+async function anchorOne(side, texts, marks) {
   const pages = await textPages(side.doc)
   const doc = tokenizeDocument(pages)
+  // the side's tokens, held weakly for the gate (spikes/highlight-gate-browser.mjs): they are let go once its layout is made
+  side.tokens = new WeakRef(doc)
   // the marks it went by, kept on the side: a cached copy keeps the right side's, which cost a second to read from its PDF
   side.marks = marks ?? (await pdfMarks(side.doc))
   const bounds = boundsFromMarks(doc, side.marks)
   index(side, anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(unitKind.get(id)) }))
+  // the highlight's layout, made in the page's idle time once no side is being anchored (makeLayouts), or at once if
+  // the highlight needs it first (wantLayout): the sides are anchored and shown without waiting for it
+  const views = pages.map(p => p.view), anchors = side.anchors
+  side.geo = null
+  side.starts = null
+  side.makeGeo = () => {
+    const t0 = performance.now()
+    side.geo = layoutOf(doc, views, anchors, kindOfUnit)
+    // the pages drawn before the layout was made: their geometry now, not in the pointer's frame (the review of B3, 4)
+    for (const pv of side.viewer._pages ?? []) if (pv.renderingState === 3) pageSentences(side.geo, pv.id, side.ownStarts)
+    side.makeGeo = null
+    layoutsDue.delete(side)
+    timing[side === left ? 'leftLayout' : 'rightLayout'] = performance.now() - t0
+    // its sentences in an idle period of their own, and the left's again when this is the right; asked for first, so
+    // that a sentence lit is waited for until they come, not drawn as its paragraph (paint)
+    wantSentences(side)
+    // the floats of the pages drawn before it came
+    for (const pv of side.viewer._pages ?? []) if (pv.renderingState === 3) floatsFor(side, pv.id)
+    // what is lit on it, and what is under a pointer resting on it, now that it has its blocks
+    if (lit != null) paint(side)
+    pointer.again(side)
+  }
+  layoutsDue.add(side)
   return bounds.size
+}
+/**
+ * Where each unit's sentences after the first begin on a side (anchors.mjs sentenceStarts): the sentences of the
+ * translation the right side shows (its units' `sentences`, mt.mjs sentencesOf), their `src` offsets on the left and
+ * `tr` on the right, found in the text the side was anchored by. Made with the side's layout, in idle time, and on the
+ * left again when a new compile replaces the right (replaceRight); a unit lights by sentence only where both sides
+ * found all its starts (makeSide's startsOf)
+ */
+function findSentences(side) {
+  const t0 = performance.now(), on = side === left ? 'src' : 'tr', starts = new Map(), from = (side === left ? right : side).units
+  for (const [id, u] of from) {
+    if (!u.sentences) continue
+    const st = sentenceStarts(side.anchors.get(id), side.units.get(id)?.text ?? '', u.sentences[on])
+    if (st) starts.set(id, st)
+  }
+  side.starts = starts
+  side.startsFor = from
+  // the sentences of the pages already drawn (the rest as each is drawn)
+  if (side.geo) for (const p of side.geo.cache.keys()) pageSentences(side.geo, p, side.ownStarts)
+  timing[side === left ? 'leftSentences' : 'rightSentences'] = performance.now() - t0
+}
+/** the sides whose sentences are to be found, in an idle period after their layout's (the review of B3, 3: the layout,
+ *  the sentences and the drawn pages' made in one task took 17.6 ms a side on 2608.02459): the left's again after the
+ *  right's, whose units it reads, where the left's layout is made */
+const sentencesDue = new Set()
+/** whether a unit of running text has sentences (the translation's) not yet found on both sides while what finds them
+ *  is on its way — a side's anchoring, its layout, its sentences' idle period: the pointer is a miss on it meanwhile, as
+ *  on an unfinished fit (the re-review of B3: a pointer resting from the load lit the paragraph, then the sentence, in
+ *  4 of 6 opens of 02459 and 06701). Where nothing is on its way, the unit is lit whole */
+const sentencesPending = id => !!right.units.get(id)?.sentences && bySentence(unitKind.get(id)) && (sentencesDue.size > 0 || ((!left.starts || !right.starts) && (anchoring > 0 || layoutsDue.size > 0)))
+/** whether a unit's sentences on both sides, or their fit, are on their way: what a sentence lit is drawn by (paint) */
+const sentencesWaited = id => fitsWanted.has(id) || sentencesPending(id)
+/** a side's sentences found in an idle period after its layout's; the left's again after the right's, whose units it
+ *  reads — the right shown, not a compile still coming in (replaceRight finds the left's at its swap), and not where the
+ *  left's were found from those units already */
+function wantSentences(side) {
+  sentencesDue.add(side)
+  if (side === right && left.geo && left.startsFor !== right.units) sentencesDue.add(left)
+  if (sentencesAsked) return
+  sentencesAsked = true
+  requestIdleCallback(() => {
+    sentencesAsked = false
+    for (const s of sentencesDue) if (s.geo) findSentences(s)
+    sentencesDue.clear()
+    if (lit != null) for (const s of sides) paint(s)
+    pointer.again()
+  })
+}
+let sentencesAsked = false
+/** a side coming in, ready for a sentence lit on it at its swap (replaceRight): its layout, then its sentences, each in
+ *  a task of its own, as the idle time would make them a moment after the swap — made before it, and only while a
+ *  sentence is lit (on 2608.02459 the right's layout 10–11 ms, its sentences 2–3 ms). Not in the swap's own task; the
+ *  yield's continuation ahead of the pages' drawing, which a timeout's waited behind (the swap 60–130 ms later) */
+async function sentenceReady(side) {
+  if (side.makeGeo) { await scheduler.yield(); side.makeGeo?.() }
+  if (side.geo && sentencesDue.has(side)) { await scheduler.yield(); if (sentencesDue.delete(side)) findSentences(side) }
+}
+/** the left anchored again by marks it did not have — our marked original's, when it is compiled (onOriginal) —: what is
+ *  lit stays drawn there until its layout and sentences are made again (paint) */
+async function anchorLeft(texts, marks) {
+  const n = await anchorSide(left, texts, marks)
+  invalidate(); paint(left)
+  return n
+}
+/** the sides' layouts still to make, one an idle period, none while a side is being anchored: an idle period comes
+ *  while the other side's text is still on its way from PDF.js's worker, and a layout made there held the worker's
+ *  answer back (2608.02459: 7.7 ms a side, cold) */
+const layoutsDue = new Set()
+let layoutsAsked = false
+function makeLayouts() {
+  if (layoutsAsked) return
+  layoutsAsked = true
+  requestIdleCallback(function next(deadline) {
+    layoutsAsked = false
+    const side = layoutsDue.values().next().value
+    if (!side || anchoring) return
+    if (deadline.timeRemaining() < 10) { layoutsAsked = true; requestIdleCallback(next); return }
+    side.makeGeo()
+    makeLayouts()
+  })
 }
 
 // ---------------------------------------------------------------- replacing the right side (#292)
@@ -1444,7 +1823,7 @@ export function goToUnit(id) {
   }
   reportHeading()
 }
-async function replaceRight(url, texts, { draft = false } = {}) {
+async function replaceRight(url, texts, { draft = false, hold = 0 } = {}) {
   const t0 = performance.now()
   bake()
   rightTexts = texts
@@ -1462,6 +1841,8 @@ async function replaceRight(url, texts, { draft = false } = {}) {
   if (draft) next.frames = opened.then(pdfFrames).catch(() => new Map())
   next.anchored = opened.then(() => inited).then(() => anchorSide(next, texts))
   await next.anchored
+  // the test harness's: the swap held back a while, as one waiting for its figures is, the idle periods coming meanwhile
+  if (hold) await new Promise(r => setTimeout(r, hold))
   const top = scrollFor(next, place)
   if (top != null) next.container.scrollTop = top - (offset ?? 0)
   else next.container.scrollTop = right.container.scrollTop
@@ -1473,6 +1854,9 @@ async function replaceRight(url, texts, { draft = false } = {}) {
     next.viewer.update(); check()
   })
   await Promise.race([Promise.all(next.viewer._getVisiblePages().views.map(v => next.figs.get(v.id))), new Promise(r => setTimeout(r, 1500))])
+  // a sentence lit: the new side's layout and sentences made before the swap, where the idle time has not made them yet
+  // (a new compile drawn at once), so that the sentence is drawn there at the swap itself (sentenceReady)
+  if (lit != null && lit.s >= 0) await sentenceReady(next)
   if (!draft) copies.clear()
   paints.clear()
   bake()
@@ -1480,15 +1864,30 @@ async function replaceRight(url, texts, { draft = false } = {}) {
   right = next; sides[1] = next
   next.fit = old.fit; refit.unobserve(old.container); refit.observe(next.container)
   if (driver === old) driver = next
+  // a pointer resting on the old pane is on the new one, for the highlight and for the sync's column: else it was
+  // looked for on a pane gone, and lit nothing until it moved (the final review of the highlight, I1)
+  pointer.rebind(old, next)
+  if (pointerX?.side === old) pointerX = { ...pointerX, side: next }
   container.classList.remove('axt-incoming')
   old.keeper.disconnect()
+  measured.unobserve(old.container); measured.unobserve(old.viewer.viewer)
+  layoutsDue.delete(old)
   old.container.remove()
   // the old viewer lets go of its pages (the reader's design, §10.4): its document set to none cancels every page view
   // and their text layers, which PDF.js otherwise keeps in the one map all its text layers share — a viewer per compile
   old.viewer.setDocument(null)
   old.linkService.setDocument(null)
   old.task.destroy() // the document and its worker-side state; PDF.js 6 destroys through the loading task
-  invalidate(); paint(right)
+  // the left's sentences are the new translation's: found again where its layout is made (else with it); and what is
+  // under the pointer looked at again — a sentence lit may be one the new translation has not (the review of B3, 8)
+  if (left.geo) findSentences(left)
+  // the sentence lit, worked out on both sides for the new translation now — the fit of its unit alone, its pages'
+  // geometry made where the new side has not drawn them (under 1 ms): a pointer resting on it sees it at the swap
+  // itself, where the new side was blank until a task of its own worked it out (25–217 ms, the re-review of the final
+  // review). The side's layout and sentences are not made in this task (13–20 ms more): sentenceReady made them before
+  if (lit != null && lit.s >= 0) for (const s of sides) { const st = s.geo && s.starts?.get(lit.id); if (st) fits(s, lit.id, st, true) }
+  invalidate(); paint(left); paint(right)
+  pointer.again()
   // the right is a new viewer: its page and page count, not the old one's
   host.emit({ type: 'page', side: 'right', page: right.viewer.currentPageNumber, pages: right.viewer.pagesCount })
   reportOutline()
@@ -1508,7 +1907,14 @@ const htmlVersion = () => Promise.race([
   fetch(htmlUrlOf(paper), { method: 'HEAD', credentials: 'omit' }).then(r => (r.status === 404 || r.status === 410 ? null : translatedHtmlUrlOf(paper)), () => translatedHtmlUrlOf(paper)),
   new Promise(resolve => setTimeout(resolve, 3000, translatedHtmlUrlOf(paper))),
 ])
-const waitFor = (origin, type) => new Promise(r => addEventListener('message', function h(e) { if (e.origin === origin && e.data?.type === type) { removeEventListener('message', h); r(e.data) } }))
+/** a message of `type` from `frame`'s page at `origin`: two TeX frames may be loading at once (the marked original has its own) */
+const waitFor = (origin, type, frame) => new Promise(r => addEventListener('message', function h(e) { if (e.origin === origin && e.source === frame.contentWindow && e.data?.type === type) { removeEventListener('message', h); r(e.data) } }))
+/** a compile's unit marks and each page's columns, as the typesetting rule reads them (typeset/places.mjs marksOf): from
+ *  a copy of the bytes, which the reader shows or anchors by too, and PDF.js would take */
+async function typesetMarksOfPdf(bytes) {
+  const task = pdfjsLib.getDocument({ data: bytes.slice(), ...ASSETS })
+  try { return await typesetMarksOf(await task.promise) } finally { task.destroy() }
+}
 /** our compile of the original, with unit marks → each mark with the word it stands by, to carry over to arXiv's PDF */
 async function marksOfPdf(bytes) {
   const task = pdfjsLib.getDocument({ data: bytes, ...ASSETS })
@@ -1516,14 +1922,33 @@ async function marksOfPdf(bytes) {
   try { return markWords(tokenizeDocument(await textPages(doc)), await pdfMarks(doc)) } finally { task.destroy() }
 }
 /** the test harness's hooks (spikes/*): the sides, the anchoring's and the sync's helpers, the cache's; getters stay live */
-const harness = () => ({ left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()),
+const harness = () => ({ left, get right() { return right },
+  // what is lit and what the pointer's last frame found: the unit, and its sentence (-1: the whole unit)
+  get lit() { return lit?.id ?? null }, get litSentence() { return lit?.s ?? null }, get pointerHit() { return pointer.hit?.id ?? null }, get pointerSentence() { return pointer.hit?.s ?? null },
+  /** a unit, or one of its sentences, lit as the pointer would light it */
+  light: (id, s = -1) => light(id == null ? null : { id, s }),
+  /** a unit's sentences' starts on the left where it lights by sentence, its fit worked out now on both sides if it was
+   *  not yet (as wantFit's task would), else null */
+  sentenced: id => { for (const s of sides) { const st = s.starts?.get(id); if (st) fits(s, id, st, true) } return left.startsOf(id) },
+  /** what is painted, as rectangles in the window's CSS pixels, by side: a shape's rows, a block's one */
+  litRects: () => sides.map(sd => sd.lit.flatMap(el => {
+    const b = el.getBoundingClientRect(), d = drawn.get(el)
+    // scaled with its page while a zoom or a pinch is drawn (overlay.mjs pinned)
+    const k = d ? b.width / d.width : 1
+    return (d?.local ?? []).map(r => ({ x0: b.left + r.x0 * k, x1: b.left + r.x1 * k, y0: b.top + r.y0 * k, y1: b.top + r.y1 * k }))
+  })),
+  pointAt, unitTop, unitDocTop, toPageBox, pageView, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()),
   // the right side replaced by a copy of what it shows, as a new compile replaces it (replaceRight)
   paintsOf: n => paints.get(n) ?? 0,
+  // a side's floats on a page, once made (floats.mjs)
+  floatsOn: (side, n) => floatsOn(side.geo, n) ?? null,
   paperContext: () => paperCtx,
-  swapRight: async () => {
+  swapRight: async (hold = 0) => {
     const url = URL.createObjectURL(new Blob([await right.doc.getData()], { type: 'application/pdf' }))
-    try { return await replaceRight(url, rightTexts ?? []) } finally { URL.revokeObjectURL(url) }
+    try { return await replaceRight(url, rightTexts ?? [], { hold }) } finally { URL.revokeObjectURL(url) }
   },
+  // the left anchored again by the marks it has, as our marked original's marks anchor it when they come (onOriginal)
+  reanchorLeft: () => anchorLeft([...left.units.values()], left.marks),
 })
 /**
  * A copy from this machine shown (REPORT, eighteenth addendum): the paper's state from the record rather than the
@@ -1545,10 +1970,12 @@ async function showCached(record, setContext, note = () => {}) {
     note('shown cached')
     if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true })
     headings = record.units.map((u, i) => ({ id: i, src: u.src, depth: u.depth, title: u.title, kind: u.kind })).filter(h => h.kind === 'heading')
-    rightTexts = record.units.map((u, i) => ({ id: i, text: u.tr ?? u.src }))
+    // the translation's texts made again from the pieces the copy keeps, the source's where the final set it in the
+    // source (cache.mjs copyTexts)
+    rightTexts = copyTexts(record.units)
     await Promise.all([
-      anchorSide(left, record.units.map((u, i) => ({ id: i, text: u.src })), new Map(record.marks)).then(() => note('cached left anchored')),
-      anchorSide(right, record.units.map((u, i) => ({ id: i, text: u.tr ?? u.src })), record.rightMarks?.length ? new Map(record.rightMarks) : undefined).then(() => note('cached right anchored')),
+      anchorSide(left, record.units.map((u, i) => ({ id: i, text: u.src, ...displayEdges(u) })), new Map(record.marks)).then(() => note('cached left anchored')),
+      anchorSide(right, rightTexts, record.rightMarks?.length ? new Map(record.rightMarks) : undefined).then(() => note('cached right anchored')),
     ])
   } finally { URL.revokeObjectURL(url) }
   invalidate(); paint(left); paint(right)
@@ -1607,9 +2034,12 @@ async function live() {
   const digest = await left.doc.getData().then(digestOf).then(d => { note('digest', { startedAt: Math.round(digestAt - timing.start), ms: Math.round(performance.now() - digestAt) }); return d }).catch(() => null)
   const lang0 = config?.targetLanguage ? toBcp47(config.targetLanguage) : null
   cacheKey = digest && lang0 ? { digest, lang: lang0 } : null
+  // the paper's marked original as a run here read it, whatever the language: with it, no run compiles the original
+  // (cache.mjs knownOriginal; the F2 review's I3)
+  const storedOriginal = digest ? pdfCache.original(digest) : Promise.resolve(undefined)
   cached = cacheKey ? await pdfCache.get(digest, lang0) : undefined
   if (cached) {
-    note('cache hit', { engine: cached.engine, pipeline: cached.pipeline })
+    note('cache hit', { engine: cached.engine, pipeline: cached.pipeline, typesetting: cached.typesetting })
     // opened, whatever follows: the least recently opened go first (a run that writes nothing would not say so)
     void pdfCache.touch(digest, lang0)
     try { await showCached(cached, setContext, note) } catch (e) {
@@ -1627,8 +2057,9 @@ async function live() {
   }
   // What the visit has had, kept from run to run (the reader's design, §8: a retry asks only for what is missing): the
   // paper's source once read, the compiler once it answers, what the last run made — the next one's seed —, the left
-  // side's marks, and whether a final has been shown
-  let paperP = null, compiler = null, made = null, leftMarks = null, finalShown = false
+  // side's marks and the marked original's readings, whether a final has been shown, and whether the last runs made a
+  // translation no PDF on hand sets (`unset`: cache.mjs unsetAfter)
+  let paperP = null, compiler = null, made = null, leftMarks = null, readings = null, finalShown = false, unset = false
   /** the paper's source, read and anchored: once, kept for a run again; a failure is thrown with the event it is */
   const readPaper = async () => {
     // the original on the right too, replaced as the translation comes in; opened where the original was being read, as
@@ -1649,7 +2080,7 @@ async function live() {
     const paperData = openPaper(files), units = paperData.units
     headings = units.map((u, i) => ({ id: i, src: plainSource(u), depth: u.depth, title: u.title, kind: u.kind })).filter(h => h.kind === 'heading')
     total = units.length - paperData.kept.size
-    const src = units.map((u, i) => ({ id: i, text: plainSource(u) }))
+    const src = units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
     const context = paperContext(units)
     setContext(context)
     // a failure before this read resolved the figures' context with nothing; a run again has it now (Part 4's final
@@ -1670,19 +2101,51 @@ async function live() {
     window.__reader.ready = true
     return p
   }
-  /** our site's TeX page, given the paper's project: { compile, close }, closing the page with its worker (live.mjs
-   *  compilerKeeper opens one when needed, and a fresh one after a compile that did not answer) */
-  const openCompiler = async p => {
+  /** our site's TeX page in a frame, loaded and ready, with its versions (protocol 2's `ready`: the page's, the engine's,
+   *  the tree's and its index's; '1' for a page of protocol 1): kept until a compiler takes it, so that the versions a
+   *  "cannot typeset" mark is judged by cost no second load */
+  let frameP = null
+  const texFrame = () => (frameP ??= (async () => {
     const frame = Object.assign(document.createElement('iframe'), { src: `${site}/tex.html`, hidden: true })
-    const ready = waitFor(site, 'ready')
+    const ready = waitFor(site, 'ready', frame)
     document.body.append(frame)
-    if (!(await Promise.race([ready.then(() => true), new Promise(r => setTimeout(r, 10000, false))]))) {
+    const said = await Promise.race([ready, new Promise(r => setTimeout(r, 10000, null))])
+    if (!said) {
       frame.remove()
-      throw Object.assign(new Error(`The TeX page is not running at ${site}: start it with node spikes/serve-live.mjs`), { event: 'no compiler' })
+      // our site's in a production build; one on this machine (http) is started by hand (addresses.mjs TEX_PAGE)
+      throw Object.assign(new Error(`The TeX page at ${site} did not answer${site.startsWith('http:') ? ': start it with node spikes/serve-live.mjs' : ''}`), { event: 'no compiler' })
     }
-    const initDone = waitFor(site, 'init-done')
-    frame.contentWindow.postMessage({ type: 'init', endpoint }, site)
-    note('compiler', { ms: (await initDone).ms })
+    return { frame, version: said.protocol === 2 ? [said.cv, said.eid, said.tid, said.index].join('/') : '1' }
+  })().catch(e => { frameP = null; throw e }))
+  /** the TeX page's versions the compiles were made under: what a "cannot typeset" mark holds for (the S3a review, I5 d) */
+  let compiledUnder = null
+  /**
+   * The TeX page as a compiler, given the paper's project and the visit's language: { compile, close }, closing the page
+   * with its worker (live.mjs compilerKeeper opens one when needed, and a fresh one after a compile the page failed).
+   * Protocol 2's hints (the S3a report): the engines the visit will use — the paper's own (the font probe, the marked
+   * original) and its first strategy's — and the CJK script whose faces that strategy sets, which the page fetches
+   * ahead; a page of protocol 1 reads the `endpoint` instead, and nothing else. An init the page reports failed is no
+   * compiler: the frame goes, and the failure is retried as a network down is (the S3a report's duties, a). `own`: the
+   * marked original's compiler, which sets the paper as it is, in its own engine alone
+   */
+  const openCompiler = async (p, lang, own = false) => {
+    // the frame taken at once: another compiler opening meanwhile loads one of its own
+    const mine = texFrame()
+    frameP = null
+    const { frame, version } = await mine
+    const meta = p.paperData.meta, script = scriptOf(lang), engine = meta.compiler === 'latex' ? 'pdflatex' : meta.compiler
+    let first = null
+    try { if (!own) first = strategiesFor(meta, lang)[0] } catch {}
+    const engines = [...new Set([engine, first?.engine].filter(Boolean))]
+    const initDone = waitFor(site, 'init-done', frame)
+    frame.contentWindow.postMessage({ type: 'init', protocol: 2, engines, fonts: !own && CJK[script] ? [script] : [], endpoint }, site)
+    const done = await initDone
+    if (done.error) {
+      frame.remove()
+      throw Object.assign(new Error(`The TeX page could not start: ${String(done.error).slice(0, 200)}`), { event: 'no compiler', kind: 'network' })
+    }
+    compiledUnder = version
+    note('compiler', { ms: done.ms, version, ...(own ? { own } : {}) })
     frame.contentWindow.postMessage({ type: 'project', key: paper, files: [...p.files].map(([path, content]) => ({ path, content })) }, site)
     let seq = 0
     const compile = req => new Promise(resolve => {
@@ -1710,7 +2173,7 @@ async function live() {
     }
     const lang = engine.lang
     note('engine', { lang, format: engine.format, engine: engine.engine })
-    if (!retrying && cached && isCurrent(cached, { identity: engine.identity, pipeline: PIPELINE_VERSION })) {
+    if (!retrying && cached && isCurrent(cached, { identity: engine.identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION })) {
       status(`${paper}, this machine's copy · translated into ${lang} by ${cached.engine}`)
       note('cache current')
       L.done = true
@@ -1720,7 +2183,17 @@ async function live() {
     // asked for nothing; a new pipeline tries once more (the maintainer, 2026-09-26). Only once the extension has said
     // which service would translate, and only for the same one: the failure was its translation's, which another
     // service, model or prompt may not repeat (Codex on #306)
-    if (!cached && cacheKey && stillUntypeset(await pdfCache.untypeset(cacheKey.digest, cacheKey.lang), { identity: engine.identity, pipeline: PIPELINE_VERSION })) return fail('cannot typeset', `${paper} could not be typeset into ${lang} by ${engine.engine} on this machine before: the right side shows the original`)
+    // and only for the TeX page's versions it was made under: a page fixed since (its fonts, its tree, its index) may set
+    // it (the S3a review, I5 d) — read from the page loaded for the compiles to come
+    const mark = !cached && cacheKey ? await pdfCache.untypeset(cacheKey.digest, cacheKey.lang) : undefined
+    const page = mark ? await texFrame().then(f => f.version, () => null) : null
+    if (mark && page && stillUntypeset(mark, { identity: engine.identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page })) {
+      // the frame loaded to read the page's versions goes: nothing will compile in it (the F2 review's M4)
+      const loaded = frameP
+      frameP = null
+      void loaded?.then(f => f.frame.remove(), () => {})
+      return fail('cannot typeset', `${paper} could not be typeset into ${lang} by ${engine.engine} on this machine before: the right side shows the original`)
+    }
     // single language first: a language whose typesetting the gate has not verified is not set (scripts.mjs VERIFIED)
     if (!verified(lang)) return fail('not verified', `Typesetting ${lang} is not verified yet (issue #295): the reader sets ${VERIFIED.join(', ')} for now; choose one in the extension's settings`)
     // the decision to translate, the step the controller's phase moves at: a copy on screen is translated again, and
@@ -1732,22 +2205,46 @@ async function live() {
     note('translating')
     let p, compile
     try { p = await (paperP ??= readPaper().catch(e => { paperP = null; throw e })) } catch (e) { return fail(e.event ?? 'fetch failed', e.message ?? String(e), e.kind) }
-    compiler ??= compilerKeeper(() => openCompiler(p))
+    compiler ??= compilerKeeper(() => openCompiler(p, lang))
     try { await compiler.ready() } catch (e) { return fail(e.event ?? 'no compiler', e.message ?? String(e), e.kind) }
     compile = compiler.compile
+    // the marked original in a TeX frame of its own, beside the translation's compiles from the run's start, and closed
+    // once it is in: its full compile is off the final's path (the F2 review's I2, V1'; the browser holds a second
+    // engine meanwhile, 150–450 MB measured)
+    const originalCompiler = compilerKeeper(() => openCompiler(p, lang, true))
+    const compileOriginal = async req => { try { return await originalCompiler.compile(req) } finally { originalCompiler.close() } }
     const { paperData, units, src, context, hashes } = p
-    // a run again: what the visit's last run made seeds it, over the copy's, so that only the missing are asked again —
-    // the rest, sent too, the background's cache answers
-    const seed = new Map(p.seed ?? [])
-    for (const [i, r] of made ?? []) if (r.pieces) seed.set(i, { pieces: r.pieces, by: r.by, tried: r.tried, state: r.state })
-    // one replacement at a time, in the order the compiles came in; the final's bytes once compiled
-    let swaps = Promise.resolve(), finalPdf = null
+    // the author block's names are kept for some languages (live.mjs keptFor): counted by the language now known
+    total = units.length - keptFor(paperData, lang).size
+    // a run again: what the visit's last run made seeds it, over the copy's (cache.mjs seedAgain: with their sentences);
+    // a seed whole, by the identity that answers now and of the wire sent now is taken as it is, never sent again — the
+    // copy's when it was made by this pipeline in this wire format (cache.mjs reusable) — and the rest are asked again
+    const seed = reusable(seedAgain(p.seed, made), { identity: engine.identity, copyWire: p.sameUnits && cached?.format === engine.format, made })
+    // one replacement at a time, in the order the compiles came in; the final's bytes once compiled, and whether this
+    // run's own final reached the screen (`shownNow`): a final an earlier run showed sets an earlier translation
+    let swaps = Promise.resolve(), finalPdf = null, shownNow = false
+    // the marked original's readings with the left side's marks: this visit's last run's, else the paper's as a run here
+    // stored them, made by this pipeline, typesetting and TeX page — then the run compiles no original (the F2 review's
+    // I3). The left side anchored by those marks, where nothing has anchored it by marks yet
+    const known = (readings && leftMarks?.length ? { readings, left: leftMarks } : null) ?? knownOriginal(await storedOriginal, { pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page: compiledUnder })
+    let marks = leftMarks ? new Map(leftMarks) : knownMarks(cached, p.sameUnits)
+    if (!marks && known) {
+      leftMarks = known.left
+      marks = new Map(leftMarks)
+      if (p.leftCurrent) swaps = swaps.then(async () => note('left marks', { marks: await anchorLeft(src, new Map(known.left)), kept: true })).catch(e => note('left marks failed', { error: String(e).slice(0, 200) }))
+    }
     const result = await runLive(paperData, {
-      lang, compile, note,
-      seed: seed.size ? seed : null, identity: engine.identity, pipelineCurrent: p.sameUnits || finalShown,
-      marks: leftMarks ? new Map(leftMarks) : knownMarks(cached, p.sameUnits),
+      lang, compile, compileOriginal, note,
+      // the copy's compile current: its pipeline and its typesetting this reader's, or this visit's final on screen —
+      // and no translation the visit's last runs made that none of them sets (cache.mjs pipelineCurrentFor; C1 of #309's
+      // fix round: a run again after a final the TeX page was down for wrote it over the copy's PDF)
+      seed: seed.size ? seed : null, identity: engine.identity, pipelineCurrent: pipelineCurrentFor({ copy: p.sameUnits && cached?.typesetting === TYPESETTING_VERSION, finalShown, unset }),
+      // the typesetting rule: the translation set as near its original's places as the rule can (live.mjs)
+      readMarks: typesetMarksOfPdf,
+      marks, original: known?.readings ?? null,
       format: engine.format,
-      translate: texts => engine.translate(texts, context),
+      // with the tags path's sentence cuts (mt.mjs cutsOf), which the service marks (B3b)
+      translate: (texts, cuts) => engine.translate(texts, context, cuts),
       // nearest the reading line on the page first, what lies ahead before what lies behind; on the side in view, since
       // the other one, out of the display, does not move with the reader (Codex on #297)
       rank: i => {
@@ -1756,18 +2253,24 @@ async function live() {
         const d = top - (c.scrollTop + c.clientHeight * readingLine)
         return d >= -c.clientHeight * 0.3 ? Math.abs(d) : 2 * Math.abs(d)
       },
-      onUpdate: ({ pdf, texts, translated, final }) => { if (final) finalPdf = pdf; (window.__reader.shownTexts ??= []).push({ final, texts }); swaps = swaps.then(async () => { if (!p.leftCurrent) { p.adoptUnits(); await anchorSide(left, src, leftMarks ? new Map(leftMarks) : new Map()); p.leftCurrent = true } const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); if (final) finalShown = true; note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
-      onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const marks = await marksOfPdf(pdf); leftMarks = [...marks]; const n = await anchorSide(left, src, marks); invalidate(); paint(left); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
+      onUpdate: ({ pdf, texts, translated, final }) => { if (final) finalPdf = pdf; (window.__reader.shownTexts ??= []).push({ final, texts }); swaps = swaps.then(async () => { if (!p.leftCurrent) { p.adoptUnits(); await anchorSide(left, src, leftMarks ? new Map(leftMarks) : new Map()); p.leftCurrent = true } const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); if (final) finalShown = shownNow = true; note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
+      onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const marks = await marksOfPdf(pdf); leftMarks = [...marks]; const n = await anchorLeft(src, marks); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
     }).catch(e => ({ error: e.message ?? String(e), kind: e?.kind }))
     if (result.results) made = result.results
+    if (result.original) readings = result.original
     // the engine's kind kept (engine.mjs EngineError), so that a key refused midway is worded as the popup words it
     if (result.error) return fail('failed', `Could not translate ${paper}: ${result.error}`, result.kind)
+    // the TeX page down, twice for one compile: by the network (its files), or by itself (an engine it could not bring
+    // up, a compile it gave up on) — no compiler, the retry offered, the network's back retrying by itself (the S3a
+    // report's duties, b); nothing written or marked, and what is shown stays
+    if (result.compiler) { await swaps; unset = unsetAfter(unset, result, shownNow); return fail('no compiler', `Could not typeset ${paper}: ${result.compiler.error}`, result.compiler.down === 'network' ? 'network' : 'unknown') }
     // the paragraphs the service left in the source, not a sum over batches: a seeded one keeps its old translation
     lost = result.missing ?? lost
     // stopped with nothing on screen translated: the card, with the service's reason (the reader's design, §8)
     if (result.stopped && !result.translated) return fail('failed', `Could not translate ${paper}: ${result.stopped}`, result.stopped)
     stopped = result.stopped ? { event: 'stopped', kind: result.stopped } : null
     await swaps
+    unset = unsetAfter(unset, result, shownNow)
     // every way of setting it tried and failed, a whole translation in hand and nothing on screen (the maintainer,
     // 2026-09-26). Remembered, so that a visit again asks nothing of the service, only when the paper's own source set
     // here: a TeX error from a compiler whose files were not there says nothing of the paper, and is tried again (Codex).
@@ -1777,7 +2280,7 @@ async function live() {
     if (result.exhausted && !result.stopped && !compiledOnce && !cached) {
       if (cacheKey && result.originalOk) {
         const identity = await engine.now().catch(() => engine.identity)
-        if (allTranslatedBy(result.results, identity)) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, { identity, pipeline: PIPELINE_VERSION })
+        if (allTranslatedBy(result.results, identity) && compiledUnder) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, { identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page: compiledUnder })
       }
       note('done', result)
       return fail('cannot typeset', `None of the ways of typesetting ${paper} into ${lang} worked: the right side shows the original`)
@@ -1785,14 +2288,19 @@ async function live() {
     // this machine's copy: the whole record for a final that settled; the units' provenance alone when nothing typeset
     // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")
     if (cacheKey) {
-      const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, context, units: unitsOf(units, paperData.kept, hashes, result.results), marks: leftMarks ?? (p.sameUnits ? cached.marks : []), rightMarks: [], figures: [...figureEntries.values()] }
-      const how = decideWrite({ result, cached, units: record.units, marks: record.marks, shown: finalShown })
-      const pdf = how === 'full' ? finalPdf : how === 'provenance' ? cached.pdf : null
+      const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, context, units: unitsOf(units, keptFor(paperData, lang), hashes, result.results), marks: leftMarks ?? (p.sameUnits ? cached.marks : []), rightMarks: [], figures: [...figureEntries.values()] }
+      const how = decideWrite({ result, cached, units: record.units, marks: record.marks, shown: shownNow })
+      // labelled by what set its PDF: this run's final, or the copy's own (cache.mjs labelOf)
+      const label = labelOf(how, { pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, passing: !!result.passing, cached })
+      Object.assign(record, label)
+      const pdf = !label ? null : how === 'full' ? finalPdf : cached.pdf
       // the right side's marks, as its PDF names them: the final's once it is on screen, else the copy's own
       record.rightMarks = how === 'full' ? [...(right.marks ?? [])] : (cached?.rightMarks ?? [])
       if (pdf) {
-        const now = { identity: await engine.now().catch(() => engine.identity), pipeline: PIPELINE_VERSION }
-        const written = await pdfCache.put({ ...record, pdf }, now)
+        const now = { identity: await engine.now().catch(() => engine.identity), pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION }
+        // the marked original's readings this run made, kept for the paper with whichever copy is stored
+        const original = result.original && result.original !== known?.readings && leftMarks?.length && compiledUnder ? originalRow(result.original, leftMarks, { pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page: compiledUnder }) : undefined
+        const written = await pdfCache.put({ ...record, pdf }, now, original)
         note('cache write', { how, written })
         // what this visit wrote is the copy a run again compares with
         if (written) cached = { ...record, pdf, createdAt: Date.now() }
@@ -1851,13 +2359,15 @@ async function demo() {
   timing.opened = performance.now() - timing.start
   const t1 = performance.now()
   // the text each unit has on the right: translated in the stages that have it, the original before
-  const textsAt = translated => units.map(u => ({ id: u.i, text: u.i < translated ? u.tr : u.src }))
+  // with the displays beyond each unit's marks (displayEdges), where the demo's units carry their letters, and a
+  // translated unit's sentences where the demo's units carry them (spikes/highlight-sentences.mjs)
+  const textsAt = translated => units.map(u => { const s = u.i < translated && sentencesKept(u.sentences, u.src, u.tr); return { id: u.i, text: u.i < translated ? u.tr : u.src, ...displayEdges(u), ...(s ? { sentences: s } : {}) } })
   // the marks: the translation's own destinations; for arXiv's PDF, those of our compile of the original with the word
   // each follows, so that only the ones that land on the same word are used
   prose = units.map(u => u.src).join('\n')
   unitKind = new Map(units.map(u => [u.i, u.kind]))
   const lMarks = await fetch(`${base}original-marks.json`).then(r => (r.ok ? r.json() : {})).then(o => new Map(Object.entries(o))).catch(() => new Map())
-  const [marksLeft, marksRight] = await Promise.all([anchorSide(left, units.map(u => ({ id: u.i, text: u.src })), lMarks), anchorSide(right, textsAt(stages ? stages[0].translated : Infinity))])
+  const [marksLeft, marksRight] = await Promise.all([anchorSide(left, units.map(u => ({ id: u.i, text: u.src, ...displayEdges(u) })), lMarks), anchorSide(right, textsAt(stages ? stages[0].translated : Infinity))])
   Object.assign(timing, { marksLeft, marksRight })
   // the contents: a demo's units carry no depth, so levels.json holds the source's (made with the demo); its first heading is the title
   const levels = await fetch(`${base}levels.json`).then(r => (r.ok ? r.json() : {})).catch(() => ({}))

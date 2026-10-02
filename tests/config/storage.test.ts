@@ -697,7 +697,7 @@ describe('provider selection', () => {
   })
 
   it('v19 adds the PDF reader\'s settings with their defaults, and touches nothing else', async () => {
-    const v18 = v19Stored({ version: 18, mode: 'only', reading: { sentenceHighlight: false, openIn: 'same-tab' } })
+    const v18 = v19Stored({ version: 18, mode: 'only', targetLanguage: 'jpn', reading: { sentenceHighlight: false, openIn: 'same-tab' } })
     delete v18.pdfReader
     await fakeBrowser.storage.local.set({ config: v18, config$: { v: 18 } })
     vi.resetModules()
@@ -708,12 +708,12 @@ describe('provider selection', () => {
     // a configuration from before v19 has no appearance, and reaches v20 following the system
     expect(config.pdfReader).toEqual({ enabled: true, original: false, sync: true, swapped: false, dimPages: true })
     expect(config.theme).toBe('system')
-    expect(config.mode).toBe('only')
-    expect(config.reading).toEqual({ sentenceHighlight: false, openIn: 'same-tab' })
+    // the whole value, so that "nothing else" is held: what the reader had, and v20's own preload and figure switch
+    expect(config).toEqual({ ...DEFAULT_CONFIG, mode: 'only', targetLanguage: 'jpn', reading: { sentenceHighlight: false, openIn: 'same-tab' }, preload: 'on-demand', image: { enabled: true } })
   })
 
   it('v20 makes the reader\'s appearance the extension\'s theme (the redesign\'s design, §3), and touches nothing else', async () => {
-    const v19 = v19Stored({ mode: 'only', pdfReader: { enabled: false, original: true, sync: false, swapped: true, appearance: 'dark', dimPages: false } })
+    const v19 = v19Stored({ mode: 'only', targetLanguage: 'jpn', pdfReader: { enabled: false, original: true, sync: false, swapped: true, appearance: 'dark', dimPages: false } })
     await fakeBrowser.storage.local.set({ config: v19, config$: { v: 19 } })
     vi.resetModules()
     const fresh = await import('@/config/storage')
@@ -721,7 +721,8 @@ describe('provider selection', () => {
     expect((await fresh.readConfig()).fallbackReason).toBeNull()
     expect(config.theme).toBe('dark')
     expect(config.pdfReader).toEqual({ enabled: false, original: true, sync: false, swapped: true, dimPages: false })
-    expect(config.mode).toBe('only')
+    // the whole value, so that "nothing else" is held: what the reader had, and v20's own preload and figure switch
+    expect(config).toEqual({ ...DEFAULT_CONFIG, mode: 'only', targetLanguage: 'jpn', theme: 'dark', pdfReader: config.pdfReader, preload: 'on-demand', image: { enabled: true } })
   })
 
   it('v20 leaves a hand-edited pdfReader that is not an object to the schema, which names it', async () => {

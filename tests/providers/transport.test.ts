@@ -826,6 +826,8 @@ describe('createLocalTransport: a refused key (the redesign\'s design, §4)', ()
     // has run and set it (Codex review, round 1)
     expect(status.engine.id).toBe('microsoft')
     expect(status.engine.demoted?.id).toBe(SVC.id)
+    // the record holds 401s alone, and the hand-over says so: the retranslate cue tells a refused key by it (#299, row 75)
+    expect(status.demotions).toEqual([{ id: SVC.id, kind: 'auth', status: 401 }])
   })
 
   it('still reaches it for a call that names it: the settings page asking whether the key works now', async () => {

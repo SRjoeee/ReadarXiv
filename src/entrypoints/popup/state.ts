@@ -18,6 +18,7 @@
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { isBuiltInService, isLlmChosen } from '@/config/services'
 import type { Mode } from '@/core/renderer'
+import { withDisplay } from '@/pdf-reader/settings'
 import { promptExists } from '@/providers/prompt-library'
 import type { ProviderStatus } from '@/providers/transport'
 import type { AxtMessage, EntryStatus, MessageHandlers, PageStatus, sendMessage, sendToActiveTab } from '@/shared/messages'
@@ -375,10 +376,13 @@ export function createPopupState(host: PopupHost, seed: { rejected?: readonly st
     // has no layout to switch and no listener for that message: there the preference is saved here, and the paper
     // opens in it (Devin on #247: the choice was lost, and the popup reported a failure). A display chosen is a
     // translated one: the PDF reader's original goes too (its design, §3), and the reader, open or next, follows. The
-    // reader cannot stack: stacked is greyed there, and a call for it does nothing (§9.2)
+    // reader cannot stack: stacked is greyed there, and a call for it does nothing (§9.2). Over the reader the choice is
+    // the reader's own (pdf-reader/settings.ts withDisplay): a stored stacked, shown as side by side there, stays
+    // stacked, as the reader's own switch keeps it (#299, Part 5's M6)
     chooseMode: (mode: Mode) => void guard(async () => {
       if (entry?.readerOpen && mode === 'stack') return
-      if (entry) await patchConfig(latest => ({ ...latest, mode, pdfReader: { ...latest.pdfReader, original: false } }))
+      if (entry?.readerOpen) await patchConfig(latest => withDisplay(latest, mode === 'only' ? 'translation' : 'bilingual'))
+      else if (entry) await patchConfig(latest => ({ ...latest, mode, pdfReader: { ...latest.pdfReader, original: false } }))
       else await host.toTab({ type: 'axt:set-mode', mode })
     }),
     // the PDF reader open: what it shows, through the settings it follows (§9.2)
