@@ -57,12 +57,14 @@ interface PageMessage {
 const ANSWER_MS = 10_000
 const QUIET_MS = 120_000
 /**
- * How long a reader that needs the page waits for a running warm-up, at its pace so far, before it is stopped. The
- * reader's page waits for the store 300 s before it downloads alongside (tex-page.mjs askMs): well under that, for a
- * pace that changes. Measured (2026-10-02, 13 Mbit/s, Chinese over arXiv's PDF page): stopped 11 s into a 24.5 s
- * warm-up, the six files in flight (36 MB) were fetched again and the first preview came at 31.5 s; waited for, 20.3 s
+ * How long a reader that needs the page waits for a running warm-up, at its pace so far, before it is stopped. On one
+ * link a stop saves no byte — the files in flight are lost, and the reader's page fetches them again — so a warm-up is
+ * waited for whenever it will be done before the reader's page stops waiting for the store (300 s, then it downloads
+ * alongside: tex-page.mjs askMs), with a quarter of that for a pace that changes. Measured (2026-10-02, 13 Mbit/s,
+ * Chinese over arXiv's PDF page): stopped 11 s into a 24.5 s warm-up, the six files in flight (36 MB) were fetched again
+ * and the first preview came at 31.5 s; waited for, at 20.3 s
  */
-export const READER_PATIENCE_MS = 120_000
+export const READER_PATIENCE_MS = 240_000
 
 /** a warm-up, or `deferred` when the lock is not free: a reader that typesets is open, or another warm-up runs */
 export async function warmTexPage(request: TexWarmJob, deps: TexWarmDeps): Promise<TexWarmResult> {
