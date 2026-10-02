@@ -16,6 +16,9 @@ export declare function probeFiles(paper: Paper, options?: { width?: boolean }):
 export declare function originalFiles(paper: Paper, options?: { lines?: boolean }): Map<string, Uint8Array>
 /** the units a translation into `lang` leaves as they are */
 export declare function keptFor(paper: Paper, lang: string): Set<SourceUnit>
+/** whether a compile's last TeX pass stopped short of the document's end (a fatal error), whatever PDF it left: such a
+ *  compile is one that failed */
+export declare const stoppedShort: (log: string | null | undefined) => boolean
 /** a compile as the TeX page answers it */
 export interface Compiled { ok: boolean; pdf?: Uint8Array | null; aux?: string | null; bbl?: string | null; log?: string; ms?: number; error?: string; network?: string[] }
 /** a compile asked of the TeX page */

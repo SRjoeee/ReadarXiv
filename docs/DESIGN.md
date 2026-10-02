@@ -903,8 +903,15 @@ is only how it meets the rest of the extension.
   translation after the first preview waits for the original's readings, and once every unit is sent a preview of
   part of it waits a preview's time for the last batch, so that the whole one is next. Where a plan cannot be made
   the translation is set as before it; where that was for a passing reason (a PDF's marks unread, a compile timed
-  out) the record carries no typesetting and the next visit sets it again. The reader speaks the TeX page's protocol 2 and still serves a
-  page of protocol 1: it names the engines and the CJK faces the visit will use, so that the page fetches them ahead;
+  out) the record carries no typesetting and the next visit sets it again. Nothing the reader writes into a paper's
+  lines follows the `\begin` or `\end` of an environment TeX reads line by line — verbatim's kind, listings',
+  comment.sty's, the paper's own found in its files (`latex-front.mjs` `LINE_ENVS`) —, and no table holding one is
+  fitted: comment.sty ends its environment only at a line that is its `\end` and nothing more, and a line probe written
+  after 2608.16117's kept its comment open to the end of the file, the paper after it lost. A compile that stopped
+  short of the document's end is no translation, whatever PDF it left: XeTeX ships the pages it set before a fatal
+  error, and a compiler that gives what it made took them as set (BusyTeX halts on a TeX error and gives none). The
+  reader speaks the TeX page's protocol 2 and still serves a page of protocol 1: it names the engines and the CJK
+  faces the visit will use, so that the page fetches them ahead;
   a compile whose files did not all arrive, or that the page itself failed (no log: an engine it could not bring up), is
   asked once more, and a second failure stops the compiles with no compiler — no strategy changed, nothing written or
   marked, the retry offered — while the translation goes on to its end for the retry to reuse. A compile BusyTeX gave
