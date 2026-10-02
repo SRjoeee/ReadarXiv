@@ -2,7 +2,8 @@
 // the index lists it: an upload not complete) is asked twice and then reported by its path in `compiled.network`,
 // never taken for a file the tree lacks; once the tree answers again, the same
 // compile succeeds with nothing to report. A file the tree lacks is "not found" with no request. Also: a compile
-// whose engine the init did not hint brings BusyTeX up again with it.
+// whose engine the init did not hint brings BusyTeX up again with it; and a draft whose biber runs after its one pass
+// returns that pass's log (busytex/tex-log.diff).
 //   node experiments/pdf-bilingual/tex-page/network-check.mjs      (after tex-page/build.mjs)
 import { mkdtempSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -78,6 +79,20 @@ const e = await compile(5, doc(), 'xelatex')
 check('a XeLaTeX compile after a pdfLaTeX-only init: BusyTeX comes up again with its part', e.ok, e)
 const f = await compile(6, doc())
 check('…and pdfLaTeX still compiles', f.ok, f)
+
+// a biblatex draft: one pass, then biber, no reruns — the pass's log comes back, not emptied for biber's
+const BIBLATEX = '\\documentclass{article}\\usepackage[backend=biber]{biblatex}\\addbibresource{refs.bib}\\begin{document}A citation \\cite{knuth}.\\printbibliography\\end{document}\n'
+const BIB = '@book{knuth, author = {Donald E. Knuth}, title = {The {\\TeX}book}, year = {1984}, publisher = {Addison-Wesley}}\n'
+const g = await tab.evaluate(async ({ text, bib }) => {
+  const h = window.texHost
+  h.send({ type: 'compile', id: 7, key: 'p', main: 'main.tex', engine: 'pdflatex', rerun: false, bibtex: true, overrides: [{ path: 'main.tex', content: new TextEncoder().encode(text) }, { path: 'refs.bib', content: new TextEncoder().encode(bib) }] })
+  const r = await h.wait(d => d?.type === 'compiled' && d.id === 7, 300000)
+  // each step's block of the log: its command, then its LOG section
+  const steps = (r.log ?? '').split(/\n(?=\$ )/).map(b => ({ cmd: b.match(/^\$ (\S+)/)?.[1] ?? null, log: b.match(/\nLOG:\n([\s\S]*?)\n==\nSTDOUT:/)?.[1] ?? '' }))
+  return { ok: r.ok, bbl: !!r.bbl, steps: steps.map(s => ({ cmd: s.cmd, chars: s.log.length, pdfTeX: /This is pdfTeX/.test(s.log) })) }
+}, { text: BIBLATEX, bib: BIB })
+const pass = g.steps.find(s => s.cmd === 'pdflatex')
+check('a biblatex draft (one pass, then biber): the pass\'s log comes back whole', g.steps.some(s => s.cmd === 'biber') && !!pass?.pdfTeX && pass.chars > 1000, g)
 
 await context.close()
 rmSync(profile, { recursive: true, force: true })
