@@ -897,8 +897,9 @@ is only how it meets the rest of the extension.
   `engine/tex-store.mjs`): nothing of the engine ships in the package (35 MB of engine and preloads, 39 MB of CJK faces,
   downloaded again with every update); instead, **as early as possible** — once the extension is installed or updated
   and the target language is known, again when that language changes, and at a worker's start when the last warm-up is
-  not the current language's of the last day (how a new version of the page is noticed: its files are versioned, and
-  only what is missing is downloaded) — the offscreen document frames the TeX page and has it download what a first
+  not the current language's of the last day, or a reader has since seen the page under other versions (how a new
+  version of the page is noticed: its files are versioned, and only what is missing is downloaded) — the offscreen
+  document frames the TeX page and has it download what a first
   visit in that language fetches ahead: BusyTeX, the hinted engines' preloads and bundles, the index, the script's CJK
   faces (the hints of `engine/hints.mjs`, a module that imports nothing, kept equal to `strategiesFor` by a test).
   **They are kept in the extension's own Cache Storage, not the page's**: with storage partitioning on (Playwright
@@ -907,22 +908,31 @@ is only how it meets the rest of the extension.
   document, or the reader open as a tab — while the extension's own storage and Web Locks are one in every context
   (Chrome 154, Chromium 153 and 145; a host permission for the page's site changes nothing over arXiv). So the page,
   told `store: true` (protocol 2's `want` / `have` / `keep`), asks the extension for the files its own cache lacks and
-  keeps what it is handed, checked as a download is. **One Web Lock** keeps the two apart: every reader that typesets
-  shares it while open, and a warm-up takes it alone only when it is free — no warm-up competes with a reading session
-  for the link, and a reader opened during one waits for it rather than download the same files. Never under
-  Save-Data, never for a language the reader does not set yet, never twice at once; a failure is tried again at the
-  next trigger, a worker's start no sooner than a quarter of an hour on; one for a language no longer wanted gives way
-  to the new one (a reader opened then would wait for files it does not need: German's TeX page took 22.9 s behind a
+  **keeps a file it is handed only when its SHA-256 is the one build.json gives** (another extension with access to
+  arXiv's pages can frame the page in the same partition and hand it anything, which every reader's page there would
+  then run: the warm-up review's I1; the page's own downloads stay held to their length, the transport being the
+  site's). **One Web Lock** keeps the two apart: every reader that typesets shares it while open, and a warm-up takes it
+  alone only when it is free — no warm-up competes with a reading session for the link. A reader opened during one
+  asks for it through the background: a warm-up its pace says will be done within four minutes is waited for, since on
+  one link a stop saves no byte — the files in flight are lost and fetched again (stopped 11 s into a 24.5 s Chinese
+  warm-up, the reader's first preview came at 31.5 s; waited for, 20.3 s) —; one that would outlast that, close to the
+  five minutes the reader's page waits for the store before it downloads alongside, is stopped, and the reader takes
+  what the store holds. Never under Save-Data, never for a language the reader does not set yet, never twice at once;
+  a failure is tried again at the next trigger, a worker's start no sooner than a quarter of an hour on, doubled with
+  each failure in a row up to a day (a store that cannot keep a file, a full disk, stops the warm-up at once); a page
+  that takes no warm-up (one from before it) is asked again a day on; one for a language no longer wanted gives way to
+  the new one (a reader opened then would wait for files it does not need: German's TeX page took 22.9 s behind a
   Chinese warm-up, 9.9 s with nothing warmed). No new permission, and nothing a reader sees: the diagnostics log says
-  what happened. Measured (2026-10-02, Chromium 153, partitioning on, the page served on this machine over a link like
+  what happened, a state that lasts once. Measured (2026-10-02, Chromium 153, partitioning on, the page served on this machine over a link like
   this machine's to tex.readarxiv.org — 13 Mbit/s, 30 ms —, the gate's translations, `spikes/reader-typeset.mjs`): the
   warm-up downloads 39.3 MB in 24.5 s for Chinese (45 requests) and 15.0 MB in 9.5 s for German (11); a first visit
   over arXiv's PDF page then starts its TeX page in 0.89 s instead of 25.0 s and shows its first preview in 6.4 s
   instead of 30.5 s (Chinese, 2608.02163), in 0.63 s and 3.6 s instead of 9.9 s and 12.9 s (German, 2608.02785), as
-  the reader open as a tab does; handing the files over costs 0.4–0.6 s of that (the next paper's page starts in
-  0.2–0.3 s). A reader opened during the warm-up downloads nothing twice and waits for it (Chinese 17.1 s and 23.0 s,
-  German 8.2 s and 11.5 s); a language changed meanwhile stops it, at most what was in flight lost. The finals are the
-  same, page by page. The store holds the language's files decoded (Chinese 113 MB, German 57 MB), as the page's own
+  the reader open as a tab does; handing the files over, their hashes checked, costs 0.4–0.7 s of that (the next
+  paper's page starts in 0.2–0.3 s; again with the hashes, 2026-10-02: 0.93 s against 0.25 s). A reader opened during
+  the warm-up downloads nothing twice and waits for it (Chinese 17.1 s and 23.0 s, German 8.2 s and 11.5 s; again,
+  16.9 s and 23.2 s); a language changed meanwhile stops it, at most what was in flight lost. The finals are the same,
+  page by page. The store holds the language's files decoded (Chinese 113 MB, German 57 MB), as the page's own
   cache over arXiv does once it has them.
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
