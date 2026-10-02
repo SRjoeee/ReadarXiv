@@ -290,7 +290,7 @@ describe('the background and the document together', () => {
       finishers.set(request.lang, resolve)
       signal.addEventListener('abort', () => resolve({ ok: false, lang: request.lang, error: 'stopped', stopped: true }))
     }), { report, idle: () => {} })
-    const warmup = createWarmup({ site: SITE, target: async () => target, saveData: () => false, readerOpen: async () => false, start, stop: async () => slot.stop(), load: async () => record, save: async r => { record = r }, now: () => T0, log: () => {} })
+    const warmup = createWarmup({ site: SITE, target: async () => target, saveData: () => false, readerOpen: async () => false, start, stop: async () => slot.giveWay(0), load: async () => record, save: async r => { record = r }, now: () => T0, log: () => {} })
 
     void warmup.trigger('install')
     await flush()

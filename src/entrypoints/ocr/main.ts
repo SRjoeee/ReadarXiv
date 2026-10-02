@@ -7,7 +7,7 @@
 import { texHints } from '@/pdf-reader/engine/hints.mjs'
 import { onMessages, sendMessage } from '@/shared/messages'
 import type { OcrWorkerReply } from './protocol'
-import { type TexFrame, warmSlot, warmTexPage } from './tex-warm'
+import { READER_PATIENCE_MS, type TexFrame, warmSlot, warmTexPage } from './tex-warm'
 
 /** Long enough to read on through a paper's figures without starting again, short enough not to keep 120 MB for a tab left open */
 const IDLE_MS = 60_000
@@ -18,7 +18,7 @@ const waiting = new Map<number, (reply: OcrWorkerReply) => void>()
 /** the TeX page's warm-up (./tex-warm.ts): one at a time; while one runs the document stays, and once done it goes —
  *  at once when no figure was read here, else after the figures' own minute */
 const warmUp = warmSlot(
-  (request, signal) => warmTexPage({ ...request, ...texHints({ compiler: 'pdflatex' }, request.lang) }, { frame: texFrame, locks: navigator.locks, caches, signal }),
+  (request, signal, progress) => warmTexPage({ ...request, ...texHints({ compiler: 'pdflatex' }, request.lang) }, { frame: texFrame, locks: navigator.locks, caches, signal, progress }),
   {
     // reported once the warm-up's place is free (tex-warm.ts warmSlot): the background's answer may wait on its next request here
     report: result => sendMessage({ type: 'axt:tex-warmed', result }),
@@ -84,6 +84,7 @@ onMessages({
     clearTimeout(idle)
     return warmUp.start(request).then(started => ({ started }))
   },
-  // A reader needs the TeX page: the running warm-up stops, keeping what came (it takes what the store holds)
-  'axt:tex-warm-stop': () => Promise.resolve({ stopped: warmUp.stop() }),
+  // A reader needs the TeX page: the running warm-up stops, keeping what came (it takes what the store holds), unless it
+  // will be done within the reader's patience — then the reader waits for it (tex-warm.ts READER_PATIENCE_MS)
+  'axt:tex-warm-stop': () => Promise.resolve({ stopped: warmUp.giveWay(READER_PATIENCE_MS) }),
 })

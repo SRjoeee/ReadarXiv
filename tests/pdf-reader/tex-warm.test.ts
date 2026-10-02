@@ -2,7 +2,7 @@
 // extension's store, its files kept, the frame gone. The page, Cache Storage and the lock manager are fakes here; in a
 // browser against the built page it runs in experiments/pdf-bilingual/spikes/reader-typeset.mjs (WARM=1)
 import { describe, expect, it, vi } from 'vitest'
-import { type TexFrame, warmSlot, warmTexPage } from '@/entrypoints/ocr/tex-warm'
+import { type TexFrame, warmPace, warmSlot, warmTexPage } from '@/entrypoints/ocr/tex-warm'
 import { LOCK, STORE } from '@/pdf-reader/engine/tex-store.mjs'
 import type { TexWarmResult } from '@/shared/tex-warm'
 
@@ -86,6 +86,12 @@ describe('warmTexPage', () => {
     expect(c.held()).toEqual(FILES.map(f => `${SITE}${f}`).sort())
     expect(page.made[0]?.removed).toBe(true)
     expect(l.asked).toEqual([{ name: LOCK, mode: 'exclusive', ifAvailable: true }])
+  })
+
+  it('says how far the page is (its warm progress), for the pace a reader\'s need is weighed against', async () => {
+    const seen: [number, number][] = []
+    await warmTexPage(REQUEST, { frame: texPage().frame, caches: cacheStorage().caches, progress: (loaded, total) => { seen.push([loaded, total]) } })
+    expect(seen).toEqual([[1, 1]])
   })
 
   it('answers the page\'s question from the store: a file held is not given again, and what the page no longer names goes', async () => {
@@ -248,16 +254,43 @@ describe('warmSlot', () => {
     expect(idle).not.toHaveBeenCalled()
   })
 
-  it('stop: the running warm-up stops whatever its language (a reader needs the page), and once it has, the document may close', async () => {
-    const r = runs(), idle = vi.fn(), reports: TexWarmResult[] = []
-    const slot = warmSlot(r.run, { report: async x => { reports.push(x) }, idle })
-    expect(slot.stop()).toBe(false)
+  it('a reader needs the page: a warm-up that would outlast the reader\'s patience at its pace is stopped (the review\'s M4), one nearly done is let finish — a stop loses the files in flight, which the reader\'s page fetches again', async () => {
+    let clock = 0
+    const runs = new Map<string, { progress: (loaded: number, total: number) => void }>()
+    const run = (request: { site: string; lang: string }, signal: AbortSignal, progress: (loaded: number, total: number) => void) => new Promise<TexWarmResult>(resolve => {
+      runs.set(request.lang, { progress })
+      signal.addEventListener('abort', () => resolve({ ok: false, lang: request.lang, error: String(signal.reason), stopped: true }), { once: true })
+    })
+    const idle = vi.fn(), reports: TexWarmResult[] = []
+    const slot = warmSlot(run, { report: async x => { reports.push(x) }, idle, now: () => clock })
+    expect(slot.giveWay(120_000)).toBe(false)
     await slot.start({ site: SITE, lang: 'zh' })
-    expect(slot.stop()).toBe(true)
+    // no byte yet: nothing to wait for
+    expect(slot.giveWay(120_000)).toBe(true)
     await tick()
-    expect(r.log).toEqual(['start zh', 'stopped zh'])
+    expect(reports).toMatchObject([{ ok: false, stopped: true, error: 'a reader needs the TeX page' }])
     expect(slot.running).toBe(false)
-    expect(reports).toMatchObject([{ ok: false, stopped: true }])
     expect(idle).toHaveBeenCalledTimes(1)
+    // 10 s in, 40 % done: 15 s left — let finish
+    await slot.start({ site: SITE, lang: 'zh' })
+    clock += 10_000
+    runs.get('zh')?.progress(40, 100)
+    expect(slot.giveWay(120_000)).toBe(false)
+    expect(slot.running).toBe(true)
+    // 60 s in, 30 % done: 140 s left — stopped
+    clock += 50_000
+    runs.get('zh')?.progress(30, 100)
+    expect(slot.giveWay(120_000)).toBe(true)
+  })
+
+  it('the pace: what is left at the speed so far, nothing known before a byte has come', () => {
+    let clock = 1000
+    const pace = warmPace(() => clock)
+    expect(pace.remainingMs()).toBe(Number.POSITIVE_INFINITY)
+    clock += 4000
+    pace.seen(25, 100)
+    expect(pace.remainingMs()).toBe(12_000)
+    pace.seen(100, 100)
+    expect(pace.remainingMs()).toBe(0)
   })
 })

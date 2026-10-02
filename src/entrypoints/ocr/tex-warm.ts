@@ -2,8 +2,10 @@
 // visit in the reader's language fetches ahead, and its files kept in the extension's store (pdf-reader/engine/
 // tex-store.mjs), from which the reader hands them to its own page — the page the reader frames over arXiv's PDF page
 // has a cache of its own, which nothing run here could fill. One warm-up at a time, and none while a reader that
-// typesets is open: the lock is taken alone, and only when it is free, so that the two never download a file twice; a
-// reader that needs the page while one runs has it stopped (through the background), and takes what the store holds.
+// typesets is open: the lock is taken alone, and only when it is free, so that the two never download a file twice. A
+// reader that needs the page while one runs asks for it (through the background): a warm-up that would outlast the
+// reader's patience at its pace is stopped, and the reader takes what the store holds; one nearly done is let finish
+// and waited for — a stop loses the files in flight, which the reader's page would fetch again.
 import { answerWant, keepFile, LOCK, pruneStore } from '@/pdf-reader/engine/tex-store.mjs'
 import type { TexWarmRequest, TexWarmResult } from '@/shared/tex-warm'
 
@@ -29,6 +31,8 @@ export interface TexWarmDeps {
   quietMs?: number
   /** stops the warm-up: what came is kept (a file being written is finished first), nothing is pruned */
   signal?: AbortSignal
+  /** how far the page is: its warm progress, in bytes */
+  progress?: (loaded: number, total: number) => void
   now?: () => number
 }
 
@@ -43,12 +47,22 @@ interface PageMessage {
   files?: string[] | number
   bytes?: boolean | number | ArrayBuffer
   url?: string
+  phase?: string
+  loaded?: number
+  total?: number
   error?: unknown
   network?: string[]
 }
 
 const ANSWER_MS = 10_000
 const QUIET_MS = 120_000
+/**
+ * How long a reader that needs the page waits for a running warm-up, at its pace so far, before it is stopped. The
+ * reader's page waits for the store 300 s before it downloads alongside (tex-page.mjs askMs): well under that, for a
+ * pace that changes. Measured (2026-10-02, 13 Mbit/s, Chinese over arXiv's PDF page): stopped 11 s into a 24.5 s
+ * warm-up, the six files in flight (36 MB) were fetched again and the first preview came at 31.5 s; waited for, 20.3 s
+ */
+export const READER_PATIENCE_MS = 120_000
 
 /** a warm-up, or `deferred` when the lock is not free: a reader that typesets is open, or another warm-up runs */
 export async function warmTexPage(request: TexWarmJob, deps: TexWarmDeps): Promise<TexWarmResult> {
@@ -98,7 +112,8 @@ async function warm({ site, lang, engines, fonts }: TexWarmJob, deps: TexWarmDep
         }
         if (versions === null || !m?.type) return
         within(quietMs, () => fail('the TeX page fell silent'))
-        if (m.type === 'want' && Array.isArray(m.files)) {
+        if (m.type === 'progress' && m.phase === 'warm') deps.progress?.(Number(m.loaded) || 0, Number(m.total) || 0)
+        else if (m.type === 'want' && Array.isArray(m.files)) {
           const want = { id: m.id ?? 0, files: m.files, bytes: m.bytes === true }
           if (!want.bytes) named = want.files
           void answerWant(site, want, caches).then(({ message, transfer }) => frame.post(message, transfer))
@@ -123,6 +138,19 @@ async function warm({ site, lang, engines, fonts }: TexWarmJob, deps: TexWarmDep
   }
 }
 
+/** a warm-up's pace, from the page's progress → what is left of it at the speed so far (Infinity before a byte) */
+export function warmPace(now: () => number = () => performance.now()) {
+  const t0 = now()
+  let loaded = 0, total = 0
+  return {
+    seen(l: number, t: number) { loaded = l; total = t },
+    remainingMs(): number {
+      const spent = now() - t0
+      return loaded > 0 && spent > 0 ? (Math.max(0, total - loaded) * spent) / loaded : Number.POSITIVE_INFINITY
+    },
+  }
+}
+
 /**
  * One warm-up at a time in the document: a second for the language running is let go (→ false), and one for another
  * language takes the place of the running one, which is stopped first — a reader opened now would wait for files no
@@ -131,14 +159,18 @@ async function warm({ site, lang, engines, fonts }: TexWarmJob, deps: TexWarmDep
  * document, which must not wait for that answer (the review's M1: a warm-up done as another language was asked for held
  * both sides until Chrome stopped the worker). `idle` runs once the last warm-up has ended and been reported
  */
-export function warmSlot(run: (request: TexWarmRequest, signal: AbortSignal) => Promise<TexWarmResult>, { report, idle }: { report: (result: TexWarmResult) => Promise<unknown>; idle: () => void }) {
-  let current: { lang: string; stop: AbortController; done: Promise<void> } | null = null
+export function warmSlot(
+  run: (request: TexWarmRequest, signal: AbortSignal, progress: (loaded: number, total: number) => void) => Promise<TexWarmResult>,
+  { report, idle, now }: { report: (result: TexWarmResult) => Promise<unknown>; idle: () => void; now?: () => number },
+) {
+  let current: { lang: string; stop: AbortController; done: Promise<void>; pace: ReturnType<typeof warmPace> } | null = null
   return {
     get running() { return current !== null },
-    /** the running warm-up stopped, whatever its language: a reader needs the page (it takes what the store holds) →
-     *  whether one ran */
-    stop(): boolean {
-      if (!current) return false
+    /** a reader needs the page: the running warm-up, whatever its language, stopped when what is left of it would
+     *  take longer than `patienceMs` at its pace (the reader takes what the store holds), else let finish for the
+     *  reader to wait for → whether one was stopped */
+    giveWay(patienceMs: number): boolean {
+      if (!current || current.pace.remainingMs() <= patienceMs) return false
       current.stop.abort('a reader needs the TeX page')
       return true
     },
@@ -147,7 +179,7 @@ export function warmSlot(run: (request: TexWarmRequest, signal: AbortSignal) => 
       const stop = new AbortController()
       let settle = () => {}
       const replaced = current
-      const mine = { lang: request.lang, stop, done: new Promise<void>(resolve => { settle = resolve }) }
+      const mine = { lang: request.lang, stop, done: new Promise<void>(resolve => { settle = resolve }), pace: warmPace(now) }
       current = mine
       if (replaced) {
         replaced.stop.abort('another language is wanted')
@@ -158,7 +190,7 @@ export function warmSlot(run: (request: TexWarmRequest, signal: AbortSignal) => 
         settle()
         return false
       }
-      void run(request, stop.signal)
+      void run(request, stop.signal, (loaded, total) => mine.pace.seen(loaded, total))
         .catch((e: unknown): TexWarmResult => ({ ok: false, lang: request.lang, error: e instanceof Error ? e.message : String(e) }))
         .then(async result => {
           settle()
