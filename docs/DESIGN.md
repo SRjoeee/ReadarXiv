@@ -924,17 +924,24 @@ is only how it meets the rest of the extension.
   that takes no warm-up (one from before it) is asked again a day on; one for a language no longer wanted gives way to
   the new one (a reader opened then would wait for files it does not need: German's TeX page took 22.9 s behind a
   Chinese warm-up, 9.9 s with nothing warmed). No new permission, and nothing a reader sees: the diagnostics log says
-  what happened, a state that lasts once. Measured (2026-10-02, Chromium 153, partitioning on, the page served on this machine over a link like
-  this machine's to tex.readarxiv.org — 13 Mbit/s, 30 ms —, the gate's translations, `spikes/reader-typeset.mjs`): the
-  warm-up downloads 39.3 MB in 24.5 s for Chinese (45 requests) and 15.0 MB in 9.5 s for German (11); a first visit
-  over arXiv's PDF page then starts its TeX page in 0.89 s instead of 25.0 s and shows its first preview in 6.4 s
-  instead of 30.5 s (Chinese, 2608.02163), in 0.63 s and 3.6 s instead of 9.9 s and 12.9 s (German, 2608.02785), as
-  the reader open as a tab does; handing the files over, their hashes checked, costs 0.4–0.7 s of that (the next
-  paper's page starts in 0.2–0.3 s; again with the hashes, 2026-10-02: 0.93 s against 0.25 s). A reader opened during
-  the warm-up downloads nothing twice and waits for it (Chinese 17.1 s and 23.0 s, German 8.2 s and 11.5 s; again,
-  16.9 s and 23.2 s); a language changed meanwhile stops it, at most what was in flight lost. The finals are the same,
-  page by page. The store holds the language's files decoded (Chinese 113 MB, German 57 MB), as the page's own
-  cache over arXiv does once it has them.
+  what happened, a state that lasts once. Measured (2026-10-02, Chromium 153, partitioning on, the page served on
+  this machine over a link like this machine's to tex.readarxiv.org — 13 Mbit/s, 30 ms —, the gate's translations,
+  `spikes/reader-typeset.mjs`), first on the page before the hashes and zlib level 6: the warm-up downloads 39.3 MB in
+  24.5 s for Chinese (45 requests) and 15.0 MB in 9.5 s for German (11); a first visit over arXiv's PDF page then
+  starts its TeX page in 0.89 s instead of 25.0 s and shows its first preview in 6.4 s instead of 30.5 s (Chinese,
+  2608.02163), in 0.63 s and 3.6 s instead of 9.9 s and 12.9 s (German, 2608.02785), as the reader open as a tab does;
+  handing the files over costs 0.4–0.6 s of that (the next paper's page starts in 0.2–0.3 s). A reader opened during
+  the warm-up downloads nothing twice and waits for it (Chinese 17.1 s and 23.0 s, German 8.2 s and 11.5 s); a
+  language changed meanwhile stops it, at most what was in flight lost. Then, Chinese alone, on the page as deployed
+  (c/24335c65c173, e/fc440737bc52: handed files checked by their SHA-256, xdvipdfmx at zlib level 6) with the machine
+  loaded by other work: the TeX page's start, the first preview and the final at 24.9, 30.7 and 88.9 s cold, 0.93,
+  12.3 and 69.4 s warmed (the hashes cost nothing measurable — 0.92 s before them —; the first preview came late for
+  the load: the reader reached its compiler at 15.4 s, against 6.9 s in an earlier warmed run), and 16.9, 23.2 and
+  81.0 s for a reader opened during the warm-up, nothing downloaded twice but `tex.html`; the next paper's page starts
+  in 0.25 s (0.33 s cold). Level 6 writes the same decoded PDF, about 2 % larger, and halves a final heavy with images
+  (in Node, on the built engine, the machine loaded: 2608.16117's Chinese final 93.2 → 47.4 s, 2608.09815's 20.0 →
+  8.5 s, 2608.02163's 11.5 → 8.3 s). The finals are the same, page by page. The store holds the language's files
+  decoded (Chinese 113 MB, German 57 MB), as the page's own cache over arXiv does once it has them.
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
   both sides together; headings, captions and cells whole; tables, algorithms and figures whole with their captions (a
