@@ -84,19 +84,21 @@ async function warm({ site, lang, engines, fonts }: TexWarmJob, deps: TexWarmDep
   try {
     return await new Promise<TexWarmResult>(resolve => {
       let timer: ReturnType<typeof setTimeout> | undefined
+      /** the files given, written in turn: the warm-up is done once the last is kept */
+      let writes = Promise.resolve()
       /** settled: what the page says after is not heard */
       let over = false
-      const end = (result: TexWarmResult | Promise<TexWarmResult>) => { if (over) return; over = true; clearTimeout(timer); resolve(result) }
+      // however it ends — done, stopped, failed, given up on —, the files already given are written first, and only then
+      // the lock goes: a reader waiting for it finds them in the store, and a warm-up after this one never prunes beside
+      // a write of this one's (Devin and Codex on #311: a write that failed with others queued ended it at once)
+      const end = (result: TexWarmResult) => { if (over) return; over = true; clearTimeout(timer); resolve(writes.then(() => result)) }
       const fail = (error: string, network?: string[]) => end({ ok: false, lang, error, ...(network?.length ? { network } : {}) })
       /** a page that says `ready` and no more takes no warm-up: one of protocol 2 from before it (the review's M3) */
       const unsupported = (versions: string) => end({ ok: false, lang, error: 'the TeX page takes no warm-up', unsupported: true, versions })
       const within = (ms: number, then: () => void) => { clearTimeout(timer); timer = setTimeout(then, ms) }
       within(answerMs, () => fail(`the TeX page at ${site} did not answer`))
-      /** the files given, written in turn: the warm-up is done once the last is kept */
-      let writes = Promise.resolve()
-      // stopped (another language is wanted, or a reader needs the page): the files already given are written first,
-      // so that a reader waiting for the lock finds them in the store
-      const stopped = () => end(writes.then(() => ({ ok: false as const, lang, error: typeof deps.signal?.reason === 'string' ? deps.signal.reason : 'stopped', stopped: true as const })))
+      // stopped (another language is wanted, or a reader needs the page)
+      const stopped = () => end({ ok: false, lang, error: typeof deps.signal?.reason === 'string' ? deps.signal.reason : 'stopped', stopped: true })
       if (deps.signal?.aborted) return stopped()
       deps.signal?.addEventListener('abort', stopped, { once: true })
       let versions: string | null = null
@@ -122,9 +124,9 @@ async function warm({ site, lang, engines, fonts }: TexWarmJob, deps: TexWarmDep
           void answerWant(site, want, caches).then(({ message, transfer }) => frame.post(message, transfer))
         } else if (m.type === 'keep' && typeof m.url === 'string' && m.bytes instanceof ArrayBuffer) {
           const keep = { url: m.url, bytes: m.bytes }
-          // a file given before the warm-up ended is written in turn, and one given after is not heard (`over`): a stop
-          // waits for the writes already queued, then the frame goes; a store that cannot keep a file (a full disk)
-          // stops the warm-up, rather than download what it cannot keep and be taken for done (the review's M2)
+          // a file given before the warm-up ended is written in turn, and one given after is not heard (`over`); a store
+          // that cannot keep a file (a full disk) ends the warm-up, rather than download what it cannot keep and be taken
+          // for done (the review's M2) — once the writes queued behind it are done, as every end waits for them
           writes = writes.then(async () => { if (!(await keepFile(site, keep, caches))) fail(`the extension's store could not keep ${keep.url.slice(keep.url.lastIndexOf('/') + 1)}`) })
         } else if (m.type === 'warm-done') {
           clearTimeout(timer)

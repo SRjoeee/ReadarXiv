@@ -10,8 +10,9 @@ const SITE = 'https://tex.readarxiv.org'
 const READY = { type: 'ready', protocol: 2, cv: 'c1', eid: 'e1', tid: 't1', index: 'index-0.txt' }
 const FILES = ['/e/e1/busytex.wasm', '/b/b0.bin', '/t/t1/index-0.txt']
 
-/** `full`: every write refused (a full disk); `slow`: each write waits for `flush` */
-function cacheStorage({ full = false, slow = false } = {}) {
+/** `full`: every write refused (a full disk); `refuse`: the write of the file whose address ends so refused; `slow`: each
+ *  write waits for `flush` */
+function cacheStorage({ full = false, refuse = '', slow = false } = {}) {
   const stores = new Map<string, Map<string, Uint8Array>>()
   const pending: (() => void)[] = []
   const open = async (name: string) => {
@@ -22,7 +23,7 @@ function cacheStorage({ full = false, slow = false } = {}) {
       put: async (url: string, r: Response) => {
         const bytes = new Uint8Array(await r.arrayBuffer())
         if (slow) await new Promise<void>(go => pending.push(go))
-        if (full) throw new DOMException('quota', 'QuotaExceededError')
+        if (full || (refuse && url.endsWith(refuse))) throw new DOMException('quota', 'QuotaExceededError')
         s.set(url, bytes)
       },
       delete: async (url: string) => s.delete(url),
@@ -155,6 +156,36 @@ describe('warmTexPage', () => {
     expect(settled).toBe(false)
     for (let i = 0; i < 20 && !settled; i++) { c.flush(); await new Promise(r => setTimeout(r, 0)) }
     await expect(result).resolves.toMatchObject({ ok: false, stopped: true })
+    expect(c.held()).toEqual(FILES.map(f => `${SITE}${f}`).sort())
+  })
+
+  it('a store that cannot keep one file while others are queued: the failure is said once those are written, the lock held till then (Devin and Codex on #311: a replacement pruning beside stale writes)', async () => {
+    const page = texPage({ endless: true }), c = cacheStorage({ slow: true, refuse: 'busytex.wasm' })
+    let settled = false
+    const result = warmTexPage(REQUEST, { frame: page.frame, caches: c.caches, locks: lockManager().locks, answerMs: 1000, quietMs: 60_000 }).then(r => { settled = true; return r })
+    const writing = async () => { for (let i = 0; i < 20 && !c.writing(); i++) await new Promise(r => setTimeout(r, 0)) }
+    await writing()
+    // the first file's write refused; the second's then runs
+    c.flush()
+    await writing()
+    expect(c.writing()).toBe(1)
+    await new Promise(r => setTimeout(r, 5))
+    expect(settled).toBe(false)
+    for (let i = 0; i < 20 && !settled; i++) { c.flush(); await new Promise(r => setTimeout(r, 0)) }
+    await expect(result).resolves.toMatchObject({ ok: false, lang: 'zh', error: expect.stringMatching(/could not keep busytex\.wasm/) })
+    expect(c.held()).toEqual([`${SITE}/b/b0.bin`, `${SITE}/t/t1/index-0.txt`])
+    expect(page.made[0]?.removed).toBe(true)
+  })
+
+  it('a page that falls silent while a file it gave is being written: given up once the write is done, not before', async () => {
+    const page = texPage({ endless: true }), c = cacheStorage({ slow: true })
+    let settled = false
+    const result = warmTexPage(REQUEST, { frame: page.frame, caches: c.caches, answerMs: 1000, quietMs: 10 }).then(r => { settled = true; return r })
+    await new Promise(r => setTimeout(r, 30))
+    expect(c.writing()).toBe(1)
+    expect(settled).toBe(false)
+    for (let i = 0; i < 20 && !settled; i++) { c.flush(); await new Promise(r => setTimeout(r, 0)) }
+    await expect(result).resolves.toMatchObject({ ok: false, error: 'the TeX page fell silent' })
     expect(c.held()).toEqual(FILES.map(f => `${SITE}${f}`).sort())
   })
 
