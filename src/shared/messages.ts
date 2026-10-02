@@ -173,6 +173,9 @@ export interface AxtMessages {
   'axt:ocr': { request: OcrCall; response: OcrMessageResponse }
   /** background → the offscreen document: recognise these bytes (§15.3). Answered by that page alone */
   'axt:ocr-run': { request: { image: string; mime: string }; response: OcrRunResponse }
+  /** background → the offscreen document: a figure was given up on, the recogniser's worker is ended (the figure in it
+   *  answered as failed) and the next figure starts a new one; the document stays, for the TeX page's warm-up */
+  'axt:ocr-reset': { request: Record<never, never>; response: { reset: true } }
   /** background → the offscreen document: the TeX page's warm-up for a language (DESIGN §16). Answered at once: started,
    *  or not while one of its own runs */
   'axt:tex-warm': { request: TexWarmRequest; response: { started: boolean } }

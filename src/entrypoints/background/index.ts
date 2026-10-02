@@ -129,6 +129,8 @@ export default defineBackground(() => {
   const recogniser = createRecogniserClient({
     offscreen,
     run: request => sendMessage({ type: 'axt:ocr-run', ...request }),
+    // a figure given up on ends the document's worker alone: a warm-up in the document goes on
+    reset: async () => (await sendMessage({ type: 'axt:ocr-reset' }))?.reset === true,
   })
   /**
    * The TeX page's warm-up (DESIGN §16): the files a first visit in the target language fetches from the page,

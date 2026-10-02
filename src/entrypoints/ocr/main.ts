@@ -39,15 +39,17 @@ function engine(): Worker {
     waiting.get(data.id)?.(data)
     waiting.delete(data.id)
   }
-  // The worker itself failed — its script did not load, or it ran out of memory: everyone waiting is told, and the
-  // next figure starts a new one
-  worker.onerror = event => {
-    for (const [id, settle] of waiting) settle({ id, ok: false, kind: 'unknown', message: event.message || 'the recognition worker failed' })
-    waiting.clear()
-    worker?.terminate()
-    worker = undefined
-  }
+  // The worker itself failed — its script did not load, or it ran out of memory
+  worker.onerror = event => endWorker(event.message || 'the recognition worker failed')
   return worker
+}
+
+/** the worker ended: everyone waiting is told, and the next figure starts a new one */
+function endWorker(message: string) {
+  for (const [id, settle] of waiting) settle({ id, ok: false, kind: 'unknown', message })
+  waiting.clear()
+  worker?.terminate()
+  worker = undefined
 }
 
 /** the TeX page in a hidden frame; what it says heard from that frame and its origin only */
@@ -76,6 +78,12 @@ onMessages({
       if (waiting.size === 0) idle = setTimeout(closeIfIdle, IDLE_MS)
       return reply.ok ? { ok: true as const, result: reply.result, warm: reply.warm } : { ok: false as const, kind: reply.kind, message: reply.message }
     })
+  },
+  // The background gave up on a figure: whatever the worker is doing, it is not coming back. The worker alone is ended,
+  // not this document, in which a warm-up may run (Devin on #311)
+  'axt:ocr-reset': () => {
+    endWorker('the recognition worker was reset')
+    return Promise.resolve({ reset: true as const })
   },
   // Answered at once; how it ended is reported apart (axt:tex-warmed), since a warm-up outlasts any answer's wait. One at
   // a time: a second for the language running is let go, and one for another language takes the place of the running
