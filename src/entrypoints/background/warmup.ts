@@ -134,7 +134,10 @@ export function createWarmup(deps: WarmupDeps) {
     const changed = record.unsupported !== undefined && record.unsupported !== versions
     if (!stale && !changed) return
     const { at: _at, unsupported: _unsupported, ...rest } = record
-    await deps.save(rest)
+    // the try those versions overturn — the success, or the verdict that the page takes none — holds back nothing: kept
+    // as tried, it would read as a try that did not succeed and wait out a back-off (Codex on #311). Tried at 0 is long
+    // ago, not never; a failure since the success keeps its own back-off
+    await deps.save(changed || record.tried === record.at ? { ...rest, tried: 0 } : rest)
     say(`a reader saw the TeX page under ${versions}: warmed again at the next start`)
   }
 

@@ -276,6 +276,30 @@ describe('createWarmup', () => {
     expect(none.started).toHaveLength(1)
   })
 
+  it('the warm-up a reader\'s versions overturn holds back nothing: the next worker\'s start warms however soon after it, and a page that took none is asked again whatever failures came before; a failure since the success keeps its back-off (Codex on #311)', async () => {
+    // seen five minutes after the warm-up, within the quarter of an hour a failure would wait
+    const soon = harness({ record: { tried: T0, lang: 'zh', versions: 'c1/e1/t1/i1', at: T0 } })
+    soon.tick(5 * MINUTE)
+    await soon.warmup.seen('c2/e1/t1/i1')
+    await soon.warmup.trigger('check')
+    expect(soon.started).toHaveLength(1)
+    // a page that took no warm-up, after six failures in a row (eight hours' back-off), seen two hours on under others
+    const none = harness({ record: { tried: T0, unsupported: 'c0/e0/t0/i0', failures: 6 } })
+    none.tick(2 * HOUR)
+    await none.warmup.seen('c1/e1/t1/i1')
+    await none.warmup.trigger('check')
+    expect(none.started).toHaveLength(1)
+    // a failure after the success: its own back-off still holds
+    const failed = harness({ record: { tried: T0 + MINUTE, lang: 'zh', versions: 'c1/e1/t1/i1', at: T0, failures: 1 } })
+    failed.tick(5 * MINUTE)
+    await failed.warmup.seen('c2/e1/t1/i1')
+    await failed.warmup.trigger('check')
+    expect(failed.started).toEqual([])
+    failed.tick(11 * MINUTE)
+    await failed.warmup.trigger('check')
+    expect(failed.started).toHaveLength(1)
+  })
+
   it('a reader that needs the page while a warm-up runs has the document stop it; that is no failure (the review\'s M4)', async () => {
     const t = harness()
     await t.warmup.trigger('install')
