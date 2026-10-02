@@ -767,7 +767,7 @@ Bitmaps were first read by Apple Vision, through a Swift helper over Native Mess
 - **The host is an offscreen document with one worker in it** (`entrypoints/ocr`). **A service worker cannot host the recogniser**: ONNX Runtime loads its glue with `import()`, which a service worker refuses (measured: "import() is disallowed on ServiceWorkerGlobalScope"), and a third of a second of WebAssembly per figure would hold up every translation request behind it. The document is a relay; the worker holds the models — the same shape a web page gives the recogniser (#155), and what the permission's stated reason, `WORKERS`, says. `offscreen` shows no install warning; `nativeMessaging` did.
 - **The policy gains `'wasm-unsafe-eval'` and nothing else**: an extension page may compile WebAssembly only when its policy says so, and `script-src` stays `'self'`. **Nothing is fetched at run time**: the runtime's default is to take its `.wasm` from jsDelivr, which is remote code; here it is the bundle build, whose glue is in the worker's chunk and whose one `.wasm` the bundler emits beside it (a `wasmPaths` override made the runtime `import()` its glue from that path and needed a second 14 MB copy there). Verified on Chrome 153 and on 131, the manifest's floor.
 - **One thread.** More threads need the page cross-origin isolated, by manifest keys (`cross_origin_embedder_policy`, `cross_origin_opener_policy`) that bind every extension page — the popup framed inside arXiv's page among them (§4.0c). Measured in a probe extension: four threads 195–414 ms a figure against 305–644 ms with one; not worth that risk while a translation request takes seconds.
-- **The document closes itself** a minute after the last figure: the models and the runtime hold some 120 MB (measured after 39 figures), and a timer in the background would die with its worker. So the background never remembers that the document is open: it asks before every figure (`hasDocument`), opens it when it is not there, and sends once more when nobody answers — the document may close between the asking and the sending.
+- **The document closes itself** a minute after the last figure: the models and the runtime hold some 120 MB (measured after 39 figures), and a timer in the background would die with its worker. So the background never remembers that the document is open: it asks before every figure (`hasDocument`), opens it when it is not there, and sends once more when nobody answers — the document may close between the asking and the sending. **The document is shared with the TeX page's warm-up** (§16; Chrome allows one per extension): whichever needs it opens it (`background/offscreen.ts`, both reasons, `WORKERS` and `IFRAME_SCRIPTING`), it stays while a warm-up runs, and closes at once after one when no figure was read in it. A figure given up on still closes it; a warm-up running then is tried again at its next trigger.
 - **Figures go in one at a time, and one that does not come back is given up on**: 30 s a figure, 90 s until the recogniser in the document has started (it compiles 14 MB of WebAssembly and loads the models; measured 130–330 ms on this machine, and a slow one is what the budget is for). Started is what the worker says with every answer (`warm`), not "a figure has come back": an animation is answered without starting it, and the still figure after it would have had the start to pay for on the short budget; after a failure the document is taken for cold, since the worker may have been replaced, and a late answer from a document already closed says nothing of the one open now (Codex on #281). On a timeout the document is closed — whatever the worker is doing, it is not coming back — and the next figure opens a fresh one. The figure given up on is not sent again: closing the document is what fails its send, and sent once more it would sit in the fresh document beside the next figure and take the worker, and the budget, from it (Codex on #281). Withdrawing a session answers its queued figures `aborted` at once and the one in the worker too; its late result is dropped.
 
 ```
@@ -893,6 +893,37 @@ is only how it meets the rest of the extension.
   up on (its 180 s: the machine slow) changes nothing either, but is not the page down: a preview, a measure or the
   marked original is not asked again and the run goes on to its final, which is asked once more and, timed out
   again, leaves what is shown.
+- **The TeX page's warm-up** (2026-10-02; `background/warmup.ts`, `entrypoints/ocr/tex-warm.ts`,
+  `engine/tex-store.mjs`): nothing of the engine ships in the package (35 MB of engine and preloads, 39 MB of CJK faces,
+  downloaded again with every update); instead, **as early as possible** — once the extension is installed or updated
+  and the target language is known, again when that language changes, and at a worker's start when the last warm-up is
+  not the current language's of the last day (how a new version of the page is noticed: its files are versioned, and
+  only what is missing is downloaded) — the offscreen document frames the TeX page and has it download what a first
+  visit in that language fetches ahead: BusyTeX, the hinted engines' preloads and bundles, the index, the script's CJK
+  faces (the hints of `engine/hints.mjs`, a module that imports nothing, kept equal to `strategiesFor` by a test).
+  **They are kept in the extension's own Cache Storage, not the page's**: with storage partitioning on (Playwright
+  turns it off by default; `tests/e2e/probes/tex-partition.mjs`), the page framed by the reader over arXiv's PDF page
+  has a Cache Storage and an HTTP cache of its own, apart from the page framed by any extension page — the offscreen
+  document, or the reader open as a tab — while the extension's own storage and Web Locks are one in every context
+  (Chrome 154, Chromium 153 and 145; a host permission for the page's site changes nothing over arXiv). So the page,
+  told `store: true` (protocol 2's `want` / `have` / `keep`), asks the extension for the files its own cache lacks and
+  keeps what it is handed, checked as a download is. **One Web Lock** keeps the two apart: every reader that typesets
+  shares it while open, and a warm-up takes it alone only when it is free — no warm-up competes with a reading session
+  for the link, and a reader opened during one waits for it rather than download the same files. Never under
+  Save-Data, never for a language the reader does not set yet, never twice at once; a failure is tried again at the
+  next trigger, a worker's start no sooner than a quarter of an hour on; one for a language no longer wanted gives way
+  to the new one (a reader opened then would wait for files it does not need: German's TeX page took 22.9 s behind a
+  Chinese warm-up, 9.9 s with nothing warmed). No new permission, and nothing a reader sees: the diagnostics log says
+  what happened. Measured (2026-10-02, Chromium 153, partitioning on, the page served on this machine over a link like
+  this machine's to tex.readarxiv.org — 13 Mbit/s, 30 ms —, the gate's translations, `spikes/reader-typeset.mjs`): the
+  warm-up downloads 39.3 MB in 24.5 s for Chinese (45 requests) and 15.0 MB in 9.5 s for German (11); a first visit
+  over arXiv's PDF page then starts its TeX page in 0.89 s instead of 25.0 s and shows its first preview in 6.4 s
+  instead of 30.5 s (Chinese, 2608.02163), in 0.63 s and 3.6 s instead of 9.9 s and 12.9 s (German, 2608.02785), as
+  the reader open as a tab does; handing the files over costs 0.4–0.6 s of that (the next paper's page starts in
+  0.2–0.3 s). A reader opened during the warm-up downloads nothing twice and waits for it (Chinese 17.1 s and 23.0 s,
+  German 8.2 s and 11.5 s); a language changed meanwhile stops it, at most what was in flight lost. The finals are the
+  same, page by page. The store holds the language's files decoded (Chinese 113 MB, German 57 MB), as the page's own
+  cache over arXiv does once it has them.
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
   both sides together; headings, captions and cells whole; tables, algorithms and figures whole with their captions (a
