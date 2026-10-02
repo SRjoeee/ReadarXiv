@@ -1,0 +1,13 @@
+--- busytex_pipeline.js
++++ busytex_pipeline.js
+@@ -741,7 +741,9 @@
+             ({ exit_code } = run(dvi, this.error_messages_all));
+         }
+ 
+-        const is_tex_log = entry => !entry.cmd.startsWith('bibtex') && !entry.cmd.startsWith('makeindex') && !entry.cmd.startsWith('xdvipdfmx');
++        // [research patch] biber is no TeX pass, as bibtex is not: a draft whose biber runs after its one pass keeps that
++        // pass's log, the reader's source of lost letters and line measurements
++        const is_tex_log = entry => !entry.cmd.startsWith('bibtex') && !entry.cmd.startsWith('biber') && !entry.cmd.startsWith('makeindex') && !entry.cmd.startsWith('xdvipdfmx');
+         const last_tex_idx = logs.reduce((acc, entry, i) => is_tex_log(entry) ? i : acc, -1);
+         for (let i = 0; i < logs.length; i++) {
+             if (is_tex_log(logs[i]) && i !== last_tex_idx)

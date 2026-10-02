@@ -1,51 +1,14 @@
 // Our static site's TeX page, framed by the reader (an extension page): BusyTeX in this origin, with its own caches.
-// Protocol, by postMessage, from extension pages only:
-//   → { type: 'init', endpoint }                       ← { type: 'init-done', ms }
-//   → { type: 'project', key, files: [{ path, content }] }   the package's files, kept here for every compile of it
-//   → { type: 'compile', id, key, main, engine, rerun, bibtex, overrides: [{ path, content }] }
-//   ← { type: 'compiled', id, ok, ms, pdf (transferred), aux, bbl, log }
-// Compiles run one at a time, in the order they were asked for. The page's extra files (pregenerated fonts) go with
-// every compile.
-import { BusyTexRunner, LuaLatex, PdfLatex, XeLatex } from '/lib/index.js'
+// The protocol is tex-page.mjs's; this wires it to the messages of the window that frames it, when its origin may drive
+// the page (tex-page.mjs mayDrive, build.json's framers). tex-page/build.mjs puts it in the site with build.json (the
+// versions, the addresses, the manifest, the framers) and texlyre-busytex's runner (lib/).
+import { BusyTexRunner, LuaLatex, PdfLatex, XeLatex } from './lib/index.js'
+import build from './build.json' with { type: 'json' }
+import { mayDrive, texPage } from './tex-page.mjs'
 
-let runner = null, endpoint = null, extra = []
-const projects = new Map()
-let queue = Promise.resolve()
-
-async function init(msg) {
-  const t0 = performance.now()
-  endpoint = msg.endpoint
-  runner = new BusyTexRunner({ busytexBasePath: '/busytex', preloadDataPackages: ['/busytex/texlive-basic.js'] })
-  await runner.initialize(true)
-  const list = await fetch('/extra/list.json').then(r => (r.ok ? r.json() : [])).catch(() => [])
-  extra = await Promise.all(list.map(async path => ({ path, content: new Uint8Array(await (await fetch(`/extra/${path}`)).arrayBuffer()) })))
-  return { type: 'init-done', ms: Math.round(performance.now() - t0) }
-}
-
-async function compile(msg) {
-  const t0 = performance.now()
-  const base = projects.get(msg.key) ?? new Map()
-  const files = new Map(base)
-  for (const o of msg.overrides ?? []) files.set(o.path, o.content)
-  const input = files.get(msg.main)
-  files.delete(msg.main)
-  const Engine = { xelatex: XeLatex, lualatex: LuaLatex }[msg.engine] ?? PdfLatex
-  const r = await new Engine(runner).compile({ input, mainTexPath: msg.main, additionalFiles: [...[...files].map(([path, content]) => ({ path, content })), ...extra], bibtex: msg.bibtex, rerun: msg.rerun, remoteEndpoint: endpoint, verbose: 'silent' })
-  const steps = r.logs ?? []
-  const tex = steps.filter(l => !/^(bibtex|biber|makeindex|xdvipdfmx)/.test(l.cmd ?? '')).at(-1)
-  // the bibliography a compile made, BibTeX's or biber's (biblatex): the next draft reads it, its citations set rather than
-  // each shown as its key, and BibTeX or biber is not run again
-  const bib = steps.filter(l => /^(?:bibtex|biber)/.test(l.cmd ?? '')).at(-1)
-  // an empty PDF is no PDF: BusyTeX returns one after a fatal error (a font whose metrics it cannot find)
-  const pdf = r.pdf?.byteLength ? r.pdf.slice().buffer : null
-  return [{ type: 'compiled', id: msg.id, ok: !!pdf, ms: Math.round(performance.now() - t0), pdf, aux: tex?.aux ?? null, bbl: bib?.aux ?? null, log: String(r.log ?? '') }, pdf ? [pdf] : []]
-}
-
+const page = texPage({ build, Runner: BusyTexRunner, Engines: { PdfLatex, XeLatex, LuaLatex }, fetch: (url, init) => fetch(url, init), caches })
 addEventListener('message', e => {
-  if (!e.origin.startsWith('chrome-extension://')) return
-  const msg = e.data, reply = (data, transfer = []) => e.source.postMessage(data, e.origin, transfer)
-  if (msg?.type === 'project') { projects.set(msg.key, new Map(msg.files.map(f => [f.path, f.content]))); return }
-  if (msg?.type === 'init') queue = queue.then(() => init(msg)).then(reply, err => reply({ type: 'init-done', error: String(err?.stack ?? err).slice(0, 400) }))
-  if (msg?.type === 'compile') queue = queue.then(() => compile(msg)).then(([data, transfer]) => reply(data, transfer), err => reply({ type: 'compiled', id: msg.id, ok: false, error: String(err?.stack ?? err).slice(0, 400) }))
+  if (e.source !== parent || !mayDrive(build.framers, e.origin)) return
+  page.receive(e.data, (data, transfer = []) => e.source.postMessage(data, e.origin, transfer))
 })
-parent.postMessage({ type: 'ready' }, '*')
+parent.postMessage(page.ready, '*')

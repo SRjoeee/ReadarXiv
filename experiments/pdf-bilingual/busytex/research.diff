@@ -22,7 +22,36 @@
      }
  }
  
-@@ -614,13 +619,13 @@
+@@ -494,7 +499,15 @@
+         this.remove(FS, cmd_log_path);
+ 
+         this.print('$ busytex ' + cmd.join(' '));
++        const open_before = new Set(FS.streams.filter(Boolean));
+         const { exit_code, stdout, stderr } = Module.callMainWithRedirects([...cmd], verbose != BusytexPipeline.VerboseSilent);
++        // [research patch] the files a command left open are closed when it ends, as a process's are when it exits: the
++        // heap goes back to its state before the command, so nothing refers to them any more, and each kept a file
++        // descriptor (kpathsea's log every pass, xdvipdfmx's fonts) until the instance had none left, after about 160 compiles.
++        // By stream, not number: a stream the command closed may have left its number to one it opened
++        for (const stream of FS.streams)
++            if (stream && !open_before.has(stream))
++                try { FS.close(stream); } catch (e) { }
+ 
+         Module.HEAPU8.fill(0);
+         Module.HEAPU8.set(mem_header);
+@@ -504,7 +517,11 @@
+ 
+         const aux = this.read_all_text(FS, cmd_aux_path);
+         const log = this.read_all_text(FS, cmd_log_path);
+-        const effective_exit_code = stdout.trim() ? (error_messages.some(err => stdout.includes(err)) ? exit_code : 0) : exit_code;
++        // [research patch] a TeX pass's own exit status stands: in batchmode it prints its banner alone, so the check of the
++        // terminal output for an error took a pass halted on its first error (--halt-on-error) for one that ended, and
++        // xdvipdfmx made a PDF of the pages written before it — a document cut short. bibtex, makeindex, xdvipdfmx as before
++        const is_tex_pass = !is_bibtex && !cmd[0].startsWith('makeindex') && !cmd[0].startsWith('xdvipdfmx');
++        const effective_exit_code = is_tex_pass ? exit_code : stdout.trim() ? (error_messages.some(err => stdout.includes(err)) ? exit_code : 0) : exit_code;
+ 
+         logs.push({
+             cmd: cmd.join(' '),
+@@ -614,13 +631,13 @@
          const verbose_args_for = key => (this.verbose_args[verbose] || this.verbose_args[BusytexPipeline.VerboseSilent])[key];
          const shell_escape_args = shell_escape ? ['--shell-escape'] : ['--no-shell-escape'];
  
@@ -43,7 +72,7 @@
          const bibtex8_cmd = ['bibtex8', '--8bit'].concat(verbose_args_for('bibtex8')).concat([aux_path]);
          const makeindex_cmd = ['makeindex', idx_path];
          const xdvipdfmx_cmd = ['xdvipdfmx'].concat(verbose_args_for('xdvipdfmx')).concat(['-o', pdf_path, xdv_path]);
-@@ -649,8 +654,8 @@
+@@ -649,8 +666,8 @@
              }
          }
  
@@ -54,7 +83,7 @@
  
          const mem_header = Uint8Array.from(Module.HEAPU8.slice(0, this.mem_header_size));
          const logs = [];
-@@ -666,8 +671,15 @@
+@@ -666,8 +683,15 @@
          if (exit_code == 0 && bibtex) {
              if (bib_backend == 'biber' && this.biber != null)
                  exit_code = await this._run_biber(FS, tex_path, files, verbose_args_for('biber'), logs);
