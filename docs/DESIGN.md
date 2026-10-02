@@ -891,7 +891,11 @@ is only how it meets the rest of the extension.
   contents before nearly all of it: 0.94 of a page's start drift, 0.10 with them). A draft that set a list from nothing
   is no measure, and a typesetting change's, which has no draft before it, is measured once more with its own lists;
   the original's are no stand-in, as tall as the translation's only where its entries are (a thesis's long figure
-  captions set its re-set three pages short). The final's passes write their own, as the original's do. The
+  captions set its re-set three pages short). The final's passes write their own, as the original's do. A measure that
+  could not set a letter is no measure either, as a preview that cannot is not shown: the strategy chain moves on before
+  the final, and the next strategy is measured, so that the final is always set from a plan measured under the
+  strategy it is compiled with (2608.02459's re-set measured under xeCJK, which has no σ there; its final, failed, fell
+  to CJKutf8 set from a plan uncorrected and was stored as current). The
   last preview of the whole translation measures where its text stood, and the final corrects it: a whole
   translation after the first preview waits for the original's readings, and once every unit is sent a preview of
   part of it waits a preview's time for the last batch, so that the whole one is next. Where a plan cannot be made

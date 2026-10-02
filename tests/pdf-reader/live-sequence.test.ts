@@ -466,6 +466,57 @@ describe('the contents lists, for every draft', () => {
   })
 })
 
+// A measure that could not set a letter (the F2 re-review's N2, its Important finding: zh 2608.02459's re-set measured
+// under xeCJK, which has no σ there): no measure, as a preview that loses one is not shown — the chain moves on before
+// the final, and the final is set from a plan measured under the strategy it is compiled with, not from the next
+// strategy's plan uncorrected after the first strategy's final failed
+describe('a measure that could not set a letter', () => {
+  const SIGMA = 'Missing character: There is no σ (U+03C3) in font [lmroman10-regular]:mapping=tex-text;!\n'
+  const strategyOf = (q: Req) => (main(q).includes('xeCJK') ? ':xe' : main(q).includes('CJKutf8') ? ':cjk' : '')
+  /** a compiler whose drafts and finals under the strategies `losing` lose σ, each compile kept with its strategy; with
+   *  `lists`, a draft's aux writes a contents list, and a draft given none says so in its log (as TeX does) */
+  const losing = (n: number, which: string[], lists = false) => {
+    const c = compiler(n), base = c.compile, seen: string[] = []
+    c.compile = async (q: Req) => {
+      const r = await base(q), kind = kindOf(q), s = strategyOf(q)
+      seen.push(`${kind}${ruled(q) ? '+rule' : ''}${s}`)
+      if (kind === 'probe' || kind === 'original') return r
+      const lost = which.includes(s) ? SIGMA : '', listed = lists && kind === 'preview'
+      return { ...r, aux: listed ? `\\relax\n\\@writefile{toc}{\\contentsline {section}{1}{1}}\n${r.aux}` : r.aux, log: `${lost}${listed && !q.overrides.has('main.toc') ? 'No file main.toc.\n' : ''}${r.log}` }
+    }
+    return { ...c, seen }
+  }
+  const taken = (p: ReturnType<typeof paper>) => new Map(p.units.map((u, i) => [i, { pieces: u.pieces.map(q => ((q as { t: string }).t === 'text' ? { ...(q as object), tr: true } : q)), state: 'whole', by: 'B', tried: 'B', current: true }]))
+  /** a re-set: every unit taken (a typesetting change), so no preview, and the final measured by a draft */
+  const reset = (c: ReturnType<typeof losing>, notes: [string, Record<string, unknown>][]) => {
+    const p = paper(4), n = p.units.length
+    return runLive(p, { lang: 'zh', compile: c.compile, translate: async () => { throw new Error('nothing is sent') }, format: 'markers', marks: new Map(), identity: 'B', seed: taken(p), pipelineCurrent: false, readMarks: async () => MARKS(n), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+  }
+  const steps = (notes: [string, Record<string, unknown>][]) => notes.filter(([e, d]) => e === 'measure' || e === 'next strategy' || e === 'final' || (e === 'typeset' && d.final)).map(([e, d]) => `${e}${d.strategy ? `:${d.strategy}` : ''}${e === 'typeset' ? `:${d.measured}` : ''}`)
+
+  it('a re-set\'s measure under xeCJK that loses σ moves the chain before the final: CJKutf8 measured, and its final set from that measure', async () => {
+    const c = losing(paper(4).units.length, [':xe']), notes: [string, Record<string, unknown>][] = []
+    const r = await reset(c, notes)
+    expect(c.seen).toEqual(['probe', 'original', 'preview+rule:xe', 'preview+rule:cjk', 'final+rule:cjk'])
+    expect(steps(notes)).toEqual(['measure:XeLaTeX + xeCJK', 'next strategy:pdfLaTeX + CJKutf8', 'measure:pdfLaTeX + CJKutf8', 'typeset:draft', 'final:pdfLaTeX + CJKutf8'])
+    expect(r.settled).toBe(true)
+  })
+
+  it('one that loses it under the last strategy too: the final as before, which cannot set it either', async () => {
+    const c = losing(paper(4).units.length, [':xe', ':cjk'])
+    const r = await reset(c, [])
+    expect(c.seen).toEqual(['probe', 'original', 'preview+rule:xe', 'preview+rule:cjk', 'final+rule:cjk'])
+    expect([r.settled, r.exhausted]).toEqual([false, true])
+  })
+
+  it('one that also set a list from nothing is not measured again under its strategy: the next strategy\'s is, with its own lists', async () => {
+    const c = losing(paper(4).units.length, [':xe'], true), notes: [string, Record<string, unknown>][] = []
+    const r = await reset(c, notes)
+    expect(c.seen).toEqual(['probe', 'original', 'preview+rule:xe', 'preview+rule:cjk', 'preview+rule:cjk', 'final+rule:cjk'])
+    expect(r.settled).toBe(true)
+  })
+})
+
 // Every unit sent and the last batch still out: a preview of part of the translation waits for it, once, as long as the
 // last preview took — the whole translation's would replace it within that time, and only the whole one measures the
 // final (zh 2608.02163 on the protocol-2 page: the last batch came 0.13 s after a preview of 200 of its 337 units began,

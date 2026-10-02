@@ -234,7 +234,10 @@ export const PIPELINE_VERSION = '7'
 // 3: a draft sets its contents lists from the aux it is given (translationFiles), and a measure that set one from
 //    nothing is measured again with its own (runLive's `listsMissing`) — every draft had set them empty and measured
 //    every unit after them early by their height (zh 2608.02459: 0.939 of a page's start drift, 0.098 now)
-export const TYPESETTING_VERSION = '3'
+// 4: a measure that could not set a letter moves the chain before the final, which is set from a plan measured under its
+//    own strategy (runLive's finalTypeset) — under 3 such a final was set from the next strategy's plan uncorrected and
+//    stored as current (zh 2608.02459's re-set, xeCJK without σ); set again from their translation, nothing sent
+export const TYPESETTING_VERSION = '4'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
@@ -527,23 +530,34 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       let m = measuring?.strategy === strategy().name && referencesWhole(measuring.r) ? measuring : null
       let fin = m && finalTypesetting(m.plan.state, { log: m.r.log, marks: await read(m.r) }, all)
       if (!fin?.typeset || fin.missing === 'a plan of the whole translation') {
-        const plan = planFor(all)
-        if (!plan) return null
-        const measure = async () => {
+        const measure = async plan => {
           const t1 = Date.now()
           const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bblAt(), overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: true, aux: refs(aux), bbl: bblAt(), typeset: plan.typeset, note }) })
           note('measure', { ok: r.ok, ms: r.ms, roundTrip: Date.now() - t1, strategy: strategy().name, error: whyFailed(r) })
           return r
         }
-        let r = await measure()
-        // one that set a contents list from nothing — a re-set's: every unit taken, no draft of this translation before
-        // it — is measured once more, given its own lists (the F2 re-review's N2). Not the original's lists instead: as
-        // tall as the translation's only where its entries are, and the thesis 2307.16209's figures' long captions made
-        // its re-set three pages short (-5 pages / 2.787 against -2 / 1.493 with its own)
-        if (r.ok && listsMissing(r)) {
-          aux = r.aux
-          if (r.bbl) bbl = r.bbl
-          r = await measure()
+        let plan, r
+        for (;;) {
+          plan = planFor(all)
+          if (!plan) return null
+          r = await measure(plan)
+          // one that could not set a letter is no measure, as a preview that cannot is not shown: the chain moves on before
+          // the final, as from that preview, and the next strategy is measured — so that the final is set from a plan
+          // measured under the strategy it is compiled with, not from the next one's plan uncorrected once this one's
+          // final failed (the F2 re-review's N2: zh 2608.02459's re-set, measured under xeCJK, which has no σ there).
+          // Under the last strategy the final is set as before, and cannot set it either
+          const unset = r.ok && !(await settled(r))
+          if (unset && s + 1 < strategies.length) { const why = whyUnset(r); s++; aux = null; note('next strategy', { strategy: strategy().name, measure: why }); continue }
+          // one that set a contents list from nothing — a re-set's: every unit taken, no draft of this translation before
+          // it — is measured once more, given its own lists (the F2 re-review's N2). Not the original's lists instead: as
+          // tall as the translation's only where its entries are, and the thesis 2307.16209's figures' long captions made
+          // its re-set three pages short (-5 pages / 2.787 against -2 / 1.493 with its own)
+          if (!unset && r.ok && listsMissing(r)) {
+            aux = r.aux
+            if (r.bbl) bbl = r.bbl
+            r = await measure(plan)
+          }
+          break
         }
         // BusyTeX gave up: the final from the plan uncorrected, which every input but the measure was there for
         if (timedOut(r)) { passing = true; return plan.typeset }
