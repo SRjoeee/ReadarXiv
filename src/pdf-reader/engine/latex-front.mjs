@@ -67,6 +67,40 @@ const OPT_ONLY = new Set(['toprule', 'midrule', 'bottomrule'])
 const ARITY = new Map([['hspace', 1], ['vspace', 1], ['addvspace', 1], ['color', 1], ['label', 1], ['ref', 1], ['eqref', 1], ['pageref', 1], ['setlength', 2], ['addtolength', 2], ['rule', 2], ['includegraphics', 1]])
 const MATH_ENVS = /^(equation|align|alignat|gather|multline|flalign|eqnarray|math|displaymath|dmath|IEEEeqnarray|subequations)\*?$/
 const SKIP_ENVS = /^(verbatim|Verbatim|lstlisting|minted|comment|tcblisting|tcboutputlisting|alltt|BVerbatim|LVerbatim|tikzpicture|pgfpicture|forest|array|algorithmic|algorithm2e|thebibliography|bibdiv|biblist|filecontents|picture|asy|pspicture|axis|circuitikz|dot2tex|pythontex|sagesilent)\*?$/
+/**
+ * Environments TeX reads line by line until a line that holds their \\end: the verbatim kind (the kernel's and
+ * verbatim.sty's, fancyvrb's, listings', minted's, moreverb's), filecontents, those of the packages that write their
+ * lines out (asy, dot2tex, pythontex, sagetex), and comment.sty's. Nothing of ours may follow their \\begin or their
+ * \\end on its line (lineBound): comment.sty ends its environment only at a line that is its \\end and nothing more, and
+ * skips the rest of its \\begin's line; verbatim.sty and fancyvrb drop what follows their \\end. 2608.16117's
+ * `\\end{comment}\\axtlines{14}` kept its comment open to the end of its file: the marked original failed, and every
+ * translation after it. Nor may one go into an argument (FIT_DEF's \\axtfit), which TeX reads whole before the
+ * environment could read its lines. The paper's own (lineEnvsOf) are found in its files; acmart's comments
+ * (\\specialcomment{acks}, \\excludecomment{CCSXML} …) are listed, since a paper need not ship the class
+ */
+const LINE_ENVS = /^(?:verbatim|Verbatim|BVerbatim|LVerbatim|SaveVerbatim|VerbatimOut|lstlisting|minted|comment|filecontents|tcblisting|tcboutputlisting|verbatimwrite|verbatimtab|boxedverbatim|asy|asydef|dot2tex|pythontex|pycode|pyblock|pyverbatim|sagesilent|sageblock|sagecommandline|acks|CCSXML|printonly|screenonly|anonsuppress)\*?$/
+/** the environments of the paper's own that TeX reads by lines (LINE_ENVS), as its files define them — a class it
+ *  ships among them (acmart's \\excludecomment{CCSXML}): comment.sty's, fancyvrb's, listings', tcolorbox's and minted's
+ *  definitions, and an environment that begins as comment.sty's or a verbatim does (\\newenvironment{x}{\\comment}…,
+ *  \\let\\x\\comment) */
+const lineEnvsOf = texts => {
+  const text = texts.map(uncommented).join('\n'), out = new Set()
+  for (const m of text.matchAll(/\\(?:(?:exclude|include|special|general|process)comment|(?:Re)?CustomVerbatimEnvironment|DefineVerbatimEnvironment|lstnewenvironment|(?:new|renew)tcblisting|(?:Declare|New|Renew|Provide)TCBListing)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)) out.add(m[1].trim())
+  for (const m of text.matchAll(/\\(?:re)?newenvironment\s*\*?\s*\{([^}]+)\}\s*(?:\[[^\]]*\]\s*)*\{\s*\\(?:comment|verbatim|Verbatim|BVerbatim|LVerbatim|lstlisting|minted)(?![A-Za-z])|\\let\s*\\([A-Za-z]+)\s*=?\s*\\(?:comment|verbatim|Verbatim)(?![A-Za-z])/g)) out.add((m[1] ?? m[2]).trim())
+  // minted's \\newminted[name]{lexer}{options}: the environment `name`, else <lexer>code
+  for (const m of text.matchAll(/\\newminted\s*(?:\[([^\]]+)\])?\s*\{([^}]+)\}/g)) out.add(m[1]?.trim() || `${m[2].trim()}code`)
+  return out
+}
+/** whether `env` is read by lines (LINE_ENVS, or the paper's own `lineEnvs`: by its name, a star in it as defined
+ *  (`\\DefineVerbatimEnvironment{Code*}`), or by the name its star is added to) */
+const isLineEnv = (env, lineEnvs) => LINE_ENVS.test(env) || !!lineEnvs?.has(env) || !!lineEnvs?.has(env.replace(/\*$/, ''))
+/** whether the line `at` stands on holds, before it, the \\begin or the \\end of an environment read by lines: nothing
+ *  of ours goes there (LINE_ENVS) */
+const lineBound = (text, at, lineEnvs) => {
+  const from = text.lastIndexOf('\n', at - 1) + 1
+  for (const m of text.slice(from, at).matchAll(/\\(?:begin|end)\s*\{([^}]+)\}/g)) if (isLineEnv(m[1].trim(), lineEnvs) && !inComment(text, from + m.index)) return true
+  return false
+}
 const ACCENTS = new Set(["'", '`', '"', '^', '~', '=', '.', 'u', 'v', 'H', 'c', 'd', 'b', 't', 'r', 'k'])
 // a number with an optional unit; spaces and tabs only, never a line end — the next line is not the command's
 const DIMEN = String.raw`[-+]?[ \t]*(?:\d+(?:\.\d*)?|\.\d+)[ \t]*(?:true[ \t]*)?(?:pt|em|ex|cm|mm|in|bp|sp|pc|dd|cc|mu|fill?l?|\\[A-Za-z@]+)?`
@@ -500,8 +534,11 @@ function walk(s, from, to, b, ctx) {
         // set to a width it cannot shrink below, measured at its columns' width first (\\axtstar) — not one with a
         // position argument, which \\axtstar does not read. tabularx and tabulary keep their width and read their own
         // body, which they cannot inside an argument (2608.02991: "Missing \\endgroup inserted"); one that breaks across
-        // pages cannot be boxed; \\verb and the like cannot go into an argument either
-        const verbatim = /\\(?:verb|lstinline|mintinline)(?![A-Za-z])|\\begin\s*\{(?:verbatim|lstlisting|minted)/.test(s.slice(i, afterEnd))
+        // pages cannot be boxed; \\verb and the like cannot go into an argument either, nor an environment TeX reads by
+        // lines (LINE_ENVS: a row hidden in a comment). What stands in a TeX comment (`\\\\ % \\begin{comment} …`) TeX
+        // never reads, so it keeps the table fitted
+        const body = s.slice(i, afterEnd), read = m => !inComment(s, i + m.index)
+        const verbatim = [...body.matchAll(/\\(?:verb|lstinline|mintinline)(?![A-Za-z])/g)].some(read) || [...body.matchAll(/\\begin\s*\{([^}]+)\}/g)].some(m => isLineEnv(m[1].trim(), ctx.lineEnvs) && read(m))
         if (/^tabu(lar)?$/.test(env) && !verbatim) ctx.fits.push({ file: b.file, start: i, end: afterEnd })
         if (env === 'tabular*' && !verbatim && !/^\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*\[/.test(s.slice(afterBegin).trimStart())) ctx.fits.push({ file: b.file, start: i, end: afterEnd, star: bodyEnd })
         i = afterEnd; continue
@@ -669,7 +706,10 @@ export function loadProject(root, main, { tables = false } = {}) {
   }
   // the paper's macros twice over, each for its own reader: `macros`, how a call takes its arguments and which it sets
   // as prose (paperMacros, the walker's); `bodies`, what each expands to (macroBodies, a display's letters)
-  const ctx = { tables, theorems, fits: [], macros: paperMacros(sources.map(sourceText)), envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\(?:lstnewenvironment|newtcblisting|DeclareTCBListing|NewTCBListing|DefineVerbatimEnvironment|newminted)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map(m => m[1].trim())), skipped, visit: (rel, dirs) => visit(rel, dirs), dirs: [], bodies: macroBodies(sources.map(sourceText)), ...tblrOf(sources.map(sourceText)) }
+  const skipEnvs = new Set([...sources.map(sourceText).join('\n').matchAll(/\\(?:lstnewenvironment|newtcblisting|DeclareTCBListing|NewTCBListing|DefineVerbatimEnvironment|newminted)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map(m => m[1].trim()))
+  // the environments of the paper's own that TeX reads by lines (LINE_ENVS), in a class it ships too
+  const lineEnvs = new Set([...skipEnvs, ...lineEnvsOf(fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(sourceText))])
+  const ctx = { tables, theorems, fits: [], lineEnvs, macros: paperMacros(sources.map(sourceText)), envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs, skipped, visit: (rel, dirs) => visit(rel, dirs), dirs: [], bodies: macroBodies(sources.map(sourceText)), ...tblrOf(sources.map(sourceText)) }
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first */
   function visit(rel, dirs = []) {
     const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
@@ -699,7 +739,7 @@ export function loadProject(root, main, { tables = false } = {}) {
   const enc = all.match(/\\usepackage\s*\[([^\]]*)\]\s*\{inputenc\}/)?.[1]?.split(',').map(x => x.trim()).find(x => /^(latin1|latin9|ansinew|cp1252|cp1250|latin2|applemac|decmulti)$/.test(x))
   const isUtf8 = t => { try { new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t)); return true } catch { return false } }
   const transcode = enc ? new Set([...files].filter(([, t]) => !isUtf8(t)).map(([f]) => f)) : new Set()
-  return { main: mainFile.rel, files, units, skipped, fits: ctx.fits, inputenc: enc ?? null, transcode }
+  return { main: mainFile.rel, files, units, skipped, fits: ctx.fits, lineEnvs, inputenc: enc ?? null, transcode }
 }
 
 /** the unit as the translator sees it: text with ⟦n⟧ for opaque pieces and ⟦n⟧…⟦/n⟧ for formatting pairs */
@@ -808,15 +848,33 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     // what acts on the unit's paragraph as a whole — its leading, its line probe — goes where the unit begins, outside
     // every group: inside a run-in label's (\\textbf{Label.}, a paper's \\nosection{…}), where the mark goes, an
     // assignment is undone when the label ends, and those paragraphs kept the paper's leading beside translated ones
-    // at 1.3 times it (2608.06007)
-    const parts = m?.before ? [utf8Bytes(m.before)] : []
+    // at 1.3 times it (2608.06007). Where the line the unit begins on holds, before it, the \\begin or \\end of an
+    // environment TeX reads by lines (lineBound, LINE_ENVS), it goes past that line's end and the spaces that open the
+    // next, before the unit's first word or command: TeX reads the line end's space and then ours, as it read the space
+    // before, and the line keeps nothing after the environment's \\begin or \\end. A unit whose own words share that
+    // line — the paper's choice — is marked where it begins, as before. (piece `beforeAt`, at `beforeCut` in its text,
+    // or before it at -1)
+    let beforeAt = 0, beforeCut = -1
+    if (m?.before && lineBound(project.files?.get(u.file) ?? '', u.start, project.lineEnvs)) {
+      let k = 0, crossed = false, cut = -1
+      for (; k < pieces.length && pieces[k].t === 'text'; k++) {
+        const ws = /^[ \t\r\n]*/.exec(pieces[k].s)[0]
+        crossed ||= ws.includes('\n')
+        if (ws.length < pieces[k].s.length) { cut = ws.length; break }
+      }
+      if (crossed) { beforeAt = k; beforeCut = cut }
+    }
+    const parts = []
     for (let k = 0; k < pieces.length; k++) {
       const p = pieces[k]
+      if (m?.before && k === beforeAt && beforeCut === -1) parts.push(utf8Bytes(m.before))
       if (p.t === 'nested') { parts.push(bytesOf(p.pre, srcEnc), render(p.unit), bytesOf(p.post, srcEnc)); continue }
       if (p.t === 'text') {
         const enc = p.tr ? 'utf8' : srcEnc
-        if (!m || (k !== startAt && k !== endAt)) { parts.push(bytesOf(p.s, enc)); continue }
-        const cuts = []
+        const beforeHere = !!m?.before && k === beforeAt && beforeCut >= 0
+        if (!m || (k !== startAt && k !== endAt && !beforeHere)) { parts.push(bytesOf(p.s, enc)); continue }
+        // in the order they stand: `before` at the end of the leading space, where the start mark goes too, and after it
+        const cuts = beforeHere ? [[beforeCut, m.before]] : []
         if (k === startAt) cuts.push([startCut, m.start])
         if (k === endAt) cuts.push([Math.max(startAt === k ? startCut : 0, p.s.replace(/[ \t\r\n]*$/, '').length), m.end])
         let at = 0
@@ -831,6 +889,7 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
       const next = pieces[k + 1]
       if (guardControlWords && /\\[A-Za-z@]+\*?$/.test(p.src) && next?.t === 'text' && next.tr && /^[^\s{[]/.test(next.s)) parts.push(utf8Bytes('{}'))
     }
+    if (m?.before && beforeAt === pieces.length && beforeCut === -1) parts.push(utf8Bytes(m.before))
     return concat(parts)
   }
   const byFile = new Map()

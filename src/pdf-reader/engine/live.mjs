@@ -47,6 +47,15 @@ export const lostIn = log => {
  *  translation that loses a character no more often is no worse; one more loss of it is a gap the translation added
  *  (Devin and Codex on #294). The chain moves on from it as from a compile with no PDF */
 export const unsettable = (r, known = new Map()) => /^! Font .* not loadable/m.test(r.log ?? '') || [...lostIn(r.log)].some(([c, n]) => n > (known.get(c) ?? 0))
+/** Whether a compile's last TeX pass stopped short of the document's end: TeX's fatal errors — an emergency stop (a
+ *  file that ended inside an argument, a line asked of no terminal, the job ended with no \\end), its capacity
+ *  exceeded, a hundred errors, its own confusion. Whatever PDF it left is part of the paper: XeTeX ships the pages it set
+ *  before the stop, and xdvipdfmx makes them a PDF (pdfTeX writes none). A compiler that answers with any PDF it made —
+ *  the gates' native one, latexmk -f in nonstop mode — gave 2608.16117's Chinese final, three pages of forty, as set
+ *  (its comment never ended: latex-front.mjs LINE_ENVS); the TeX page's BusyTeX halts on a TeX error, and gives none */
+export const stoppedShort = log => /^(?:! Emergency stop\.|! TeX capacity exceeded, sorry|\(That makes 100 errors; please try again\.\)|! This can't happen|! I can't go on meeting you like this)/m.test(lastTexLog(log))
+/** a compile that stopped short (stoppedShort) is one that failed, as the TeX page's is: its PDF not taken */
+const finished = r => (r.ok && stoppedShort(r.log) ? { ...r, ok: false, pdf: null } : r)
 /** images as frames of their own size (graphicx's draft), each frame's corners marked — g<n>a and g<n>b at its left and
  *  right ends on its baseline, g<n>t at its top right, n counting \includegraphics in the order TeX runs them — so that
  *  the reader lays the left's figure over its frame (session.mjs leftFor). A transformed include (\rotatebox or
@@ -237,7 +246,11 @@ export const PIPELINE_VERSION = '7'
 // 4: a measure that could not set a letter moves the chain before the final, which is set from a plan measured under its
 //    own strategy (runLive's finalTypeset) — under 3 such a final was set from the next strategy's plan uncorrected and
 //    stored as current (zh 2608.02459's re-set, xeCJK without σ); set again from their translation, nothing sent
-export const TYPESETTING_VERSION = '4'
+// 5: nothing of ours after the \\begin or \\end of an environment TeX reads by lines (latex-front.mjs LINE_ENVS), and no
+//    such environment in a fitted table — a copy of 4 could be a PDF of the pages before a comment that never ended
+//    (2608.16117: three of forty) —; and a compile that stopped short of the document's end is no translation
+//    (stoppedShort), where a compiler gives the PDF of what it set
+export const TYPESETTING_VERSION = '5'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
@@ -299,11 +312,12 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
   // network that is down or with no compiler: no strategy changed, no aux or bbl taken from it, nothing remembered of it
   // (the S3a report, "what the reader must do", and its fix round's duties a–d). One BusyTeX gave up on (timedOut) is
   // given back as it is, its frame gone all the same: what each compile does with it is its own
+  // (one that stopped short of the document's end failed: finished)
   const askOf = fn => async req => {
-    let r = await fn(req)
+    let r = finished(await fn(req))
     if (timedOut(r) || (!r.network?.length && !pageFailed(r))) return r
     note('compile again', { network: r.network?.slice(0, 5), error: r.error?.slice(0, 200) })
-    r = await fn(req)
+    r = finished(await fn(req))
     if (!r.network?.length && !pageFailed(r)) return r
     throw Object.assign(new Error(r.network?.length ? `the TeX page could not fetch ${r.network.slice(0, 3).join(', ')}` : `the TeX page failed: ${String(r.error).slice(0, 200)}`), { compilerDown: r.network?.length ? 'network' : 'page' })
   }

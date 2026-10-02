@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { copyTexts, decideWrite, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from '@/pdf-reader/engine/cache.mjs'
-import { type Compiled, compilerKeeper, keptFor, openPaper, runLive } from '@/pdf-reader/engine/live.mjs'
+import { type Compiled, compilerKeeper, keptFor, openPaper, runLive, stoppedShort } from '@/pdf-reader/engine/live.mjs'
 import type { Marks } from '@/pdf-reader/engine/typeset/places.mjs'
 
 // The reader's compiles with the typesetting rule (experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md,
@@ -269,6 +269,67 @@ describe('a compile the network or the page failed', () => {
   })
 })
 
+
+// A compile that stopped short of the document's end: TeX's fatal errors — an emergency stop (a file that ended inside
+// an argument, as 2608.16117's comment that never ended; a line read from no terminal; the job ended with no \end), its
+// capacity exceeded, a hundred errors — under XeTeX leave the pages shipped before them, which xdvipdfmx makes a PDF. A
+// compiler that answers with any PDF it made (the gates' native one: latexmk -f in nonstop mode) took it as set, and
+// the run reported a three-page translation of a forty-page paper settled. The TeX page's BusyTeX halts on a TeX error, so
+// that no PDF comes of it there
+describe('a compile that stopped short of the document\'s end', () => {
+  const kinds = (calls: { kind: string; ruled: boolean }[]) => calls.map(q => `${q.kind}${q.ruled ? '+rule' : ''}`)
+  const STOP = 'Runaway argument?\n! File ended while scanning use of \\next.\n<inserted text> \n                \\par \n)\n! Emergency stop.\n<*> main.tex\n            \n*** (job aborted, no legal \\end found)\n\nOutput written on main.xdv (2 pages, 88144 bytes).\n'
+  const STOPPED = '! File ended while scanning use of \\next.'
+  /** a log of every unit's lines but those after `at`, and then the stop */
+  const stopped = (at = 3) => `${linesLog(at)}${STOP}`
+
+  it('is no translation: a preview not shown, the final not settled, the chain moved on as from a compile with no PDF', async () => {
+    const t = translator(), n = paper().units.length
+    t.release()
+    const c = compiler(n, { log: k => (k === 'preview' || k === 'final' ? stopped() : null) })
+    const { r, notes } = await run({ compiler: c, translate: t.translate })
+    // the first batch's preview under xeCJK, then CJKutf8's of it and of the whole translation, its measure and its final
+    const previews = notes.filter(([e]) => e === 'preview')
+    expect(previews.map(([, d]) => [d.strategy, d.ok, d.error])).toEqual([['XeLaTeX + xeCJK', false, STOPPED], ['pdfLaTeX + CJKutf8', false, STOPPED], ['pdfLaTeX + CJKutf8', false, STOPPED]])
+    expect(notes.filter(([e]) => e === 'next strategy').length).toBe(1)
+    expect(notes.filter(([e]) => e === 'measure' || e === 'final').map(([e, d]) => [e, d.ok])).toEqual([['measure', false], ['final', false]])
+    expect([r.previews, r.settled, r.exhausted, r.originalOk]).toEqual([0, false, true, true])
+  })
+
+  it('a marked original that stopped short: no marks, no readings, and the paper\'s own source did not set here', async () => {
+    const t = translator(), n = paper().units.length
+    t.release()
+    const originals: string[] = []
+    const c = compiler(n, { log: k => (k === 'original' || k === 'preview' || k === 'final' ? stopped() : null) })
+    const p = paper()
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: null, identity: 'B', readMarks: async () => MARKS(p.units.length), onOriginal: () => originals.push('shown') })
+    expect(originals).toEqual([])
+    expect([r.settled, r.exhausted, r.originalOk, r.original]).toEqual([false, true, false, null])
+  })
+
+  it('is read off the last TeX pass: an emergency stop, a fatal error, the capacity exceeded, a hundred errors; not an error TeX went past', () => {
+    const end = 'Output written on main.pdf (12 pages, 412345 bytes).\nTranscript written on main.log.\n'
+    // 2608.16117's Chinese final before the fix, its comment never ended: XeTeX wrote the pages before the stop
+    expect(stoppedShort(`Excluding 'comment' comment.)\n${STOP}`)).toBe(true)
+    expect(stoppedShort('! LaTeX Error: File `missing.sty\' not found.\n! Emergency stop.\n<read *> \n*** (cannot \\read from terminal in nonstop modes)\n!  ==> Fatal error occurred, no output PDF file produced!\n')).toBe(true)
+    expect(stoppedShort('! TeX capacity exceeded, sorry [main memory size=5000000].\n!  ==> Fatal error occurred, no output PDF file produced!\n')).toBe(true)
+    expect(stoppedShort(`! Undefined control sequence.\n(That makes 100 errors; please try again.)\n${end}`)).toBe(true)
+    expect(stoppedShort(`! Undefined control sequence.\nl.12 \\foo\n${end}`)).toBe(false)
+    expect([stoppedShort(''), stoppedShort(null), stoppedShort(undefined)]).toEqual([false, false, false])
+    // the browser's compiler joins its steps' logs (latex-front.mjs lastTexLog): the last TeX pass decides
+    const step = (cmd: string, log: string) => `$ ${cmd}\nEXITCODE: 0\n\nLOG:\n${log}\n==\nSTDOUT:\n${log}\n==\nSTDERR:\n\n======`
+    expect(stoppedShort([step('xelatex main.tex', STOP), step('xelatex main.tex', end)].join('\n\n'))).toBe(false)
+    expect(stoppedShort([step('xelatex main.tex', end), step('xelatex main.tex', STOP), step('xdvipdfmx main.xdv', '')].join('\n\n'))).toBe(true)
+  })
+
+  it('one that went past an error to the end is set, as before', async () => {
+    const t = translator(), n = paper().units.length
+    const c = compiler(n, { on: k => { if (k === 'original') t.release() }, log: k => (k === 'final' ? `! Undefined control sequence.\nl.12 \\foo\n${linesLog(n)}` : null) })
+    const { r, calls } = await run({ compiler: c, translate: t.translate })
+    expect(kinds(calls)).toEqual(['probe', 'preview', 'original', 'preview+rule', 'final+rule'])
+    expect(r.settled).toBe(true)
+  })
+})
 
 // The original's readings kept (the F2 review's I3): what the rule and the run read of the marked original, given back by
 // a run, so that a run again in the visit, a revisit and another language compile no original (session.mjs, the
