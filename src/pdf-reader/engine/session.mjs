@@ -32,15 +32,16 @@ import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from './anchors.mjs'
 import { blockOf, bySentence, clickOf, hitOf, layoutOf, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
-import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedAgain, seedFrom, sourceHash, unitsOf } from './cache.mjs'
+import { allTranslatedBy, copyTexts, decideWrite, digestOf, figureKeyOf, knownMarks, knownOriginal, labelOf, originalRow, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
 import { captionFor, floatHitOf, floatOf, floatsAgree, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from './floats.mjs'
 import { hostReady } from './host.mjs'
-import { compilerKeeper, openPaper, PIPELINE_VERSION, runLive } from './live.mjs'
+import { compilerKeeper, keptFor, openPaper, PIPELINE_VERSION, runLive, TYPESETTING_VERSION } from './live.mjs'
 import { displayEdges, isName, plainSource, sentencesKept, unitText, WIRE } from './mt.mjs'
-import { verified, VERIFIED } from './scripts.mjs'
+import { CJK, scriptOf, strategiesFor, verified, VERIFIED } from './scripts.mjs'
+import { marksOf as typesetMarksOf } from './typeset/places.mjs'
 import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
 import { unpackSource } from './tar.mjs'
 
@@ -1906,7 +1907,14 @@ const htmlVersion = () => Promise.race([
   fetch(htmlUrlOf(paper), { method: 'HEAD', credentials: 'omit' }).then(r => (r.status === 404 || r.status === 410 ? null : translatedHtmlUrlOf(paper)), () => translatedHtmlUrlOf(paper)),
   new Promise(resolve => setTimeout(resolve, 3000, translatedHtmlUrlOf(paper))),
 ])
-const waitFor = (origin, type) => new Promise(r => addEventListener('message', function h(e) { if (e.origin === origin && e.data?.type === type) { removeEventListener('message', h); r(e.data) } }))
+/** a message of `type` from `frame`'s page at `origin`: two TeX frames may be loading at once (the marked original has its own) */
+const waitFor = (origin, type, frame) => new Promise(r => addEventListener('message', function h(e) { if (e.origin === origin && e.source === frame.contentWindow && e.data?.type === type) { removeEventListener('message', h); r(e.data) } }))
+/** a compile's unit marks and each page's columns, as the typesetting rule reads them (typeset/places.mjs marksOf): from
+ *  a copy of the bytes, which the reader shows or anchors by too, and PDF.js would take */
+async function typesetMarksOfPdf(bytes) {
+  const task = pdfjsLib.getDocument({ data: bytes.slice(), ...ASSETS })
+  try { return await typesetMarksOf(await task.promise) } finally { task.destroy() }
+}
 /** our compile of the original, with unit marks → each mark with the word it stands by, to carry over to arXiv's PDF */
 async function marksOfPdf(bytes) {
   const task = pdfjsLib.getDocument({ data: bytes, ...ASSETS })
@@ -1962,15 +1970,9 @@ async function showCached(record, setContext, note = () => {}) {
     note('shown cached')
     if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true })
     headings = record.units.map((u, i) => ({ id: i, src: u.src, depth: u.depth, title: u.title, kind: u.kind })).filter(h => h.kind === 'heading')
-    // the translation's texts made again from the pieces the copy keeps (unitText), which say where their placeholders
-    // stood; the source's from its plain text, which does not. A copy made before its units kept their displays beyond
-    // their marks (displayEdges) is anchored as it was then, and one made before they kept their sentences is lit whole;
-    // their sentences only where of their shape and the text made again is the one they were counted in (the review of
-    // B3, minor 5: a malformed field took the highlight off a side)
-    rightTexts = record.units.map((u, i) => {
-      const t = u.pieces ? unitText(u.pieces) : { text: u.src }, s = u.pieces && u.tr === t.text ? sentencesKept(u.sentences, u.src, t.text) : null
-      return { id: i, ...t, ...displayEdges(u), ...(s ? { sentences: s } : {}) }
-    })
+    // the translation's texts made again from the pieces the copy keeps, the source's where the final set it in the
+    // source (cache.mjs copyTexts)
+    rightTexts = copyTexts(record.units)
     await Promise.all([
       anchorSide(left, record.units.map((u, i) => ({ id: i, text: u.src, ...displayEdges(u) })), new Map(record.marks)).then(() => note('cached left anchored')),
       anchorSide(right, rightTexts, record.rightMarks?.length ? new Map(record.rightMarks) : undefined).then(() => note('cached right anchored')),
@@ -2032,9 +2034,12 @@ async function live() {
   const digest = await left.doc.getData().then(digestOf).then(d => { note('digest', { startedAt: Math.round(digestAt - timing.start), ms: Math.round(performance.now() - digestAt) }); return d }).catch(() => null)
   const lang0 = config?.targetLanguage ? toBcp47(config.targetLanguage) : null
   cacheKey = digest && lang0 ? { digest, lang: lang0 } : null
+  // the paper's marked original as a run here read it, whatever the language: with it, no run compiles the original
+  // (cache.mjs knownOriginal; the F2 review's I3)
+  const storedOriginal = digest ? pdfCache.original(digest) : Promise.resolve(undefined)
   cached = cacheKey ? await pdfCache.get(digest, lang0) : undefined
   if (cached) {
-    note('cache hit', { engine: cached.engine, pipeline: cached.pipeline })
+    note('cache hit', { engine: cached.engine, pipeline: cached.pipeline, typesetting: cached.typesetting })
     // opened, whatever follows: the least recently opened go first (a run that writes nothing would not say so)
     void pdfCache.touch(digest, lang0)
     try { await showCached(cached, setContext, note) } catch (e) {
@@ -2052,8 +2057,9 @@ async function live() {
   }
   // What the visit has had, kept from run to run (the reader's design, §8: a retry asks only for what is missing): the
   // paper's source once read, the compiler once it answers, what the last run made — the next one's seed —, the left
-  // side's marks, and whether a final has been shown
-  let paperP = null, compiler = null, made = null, leftMarks = null, finalShown = false
+  // side's marks and the marked original's readings, whether a final has been shown, and whether the last runs made a
+  // translation no PDF on hand sets (`unset`: cache.mjs unsetAfter)
+  let paperP = null, compiler = null, made = null, leftMarks = null, readings = null, finalShown = false, unset = false
   /** the paper's source, read and anchored: once, kept for a run again; a failure is thrown with the event it is */
   const readPaper = async () => {
     // the original on the right too, replaced as the translation comes in; opened where the original was being read, as
@@ -2095,19 +2101,51 @@ async function live() {
     window.__reader.ready = true
     return p
   }
-  /** our site's TeX page, given the paper's project: { compile, close }, closing the page with its worker (live.mjs
-   *  compilerKeeper opens one when needed, and a fresh one after a compile that did not answer) */
-  const openCompiler = async p => {
+  /** our site's TeX page in a frame, loaded and ready, with its versions (protocol 2's `ready`: the page's, the engine's,
+   *  the tree's and its index's; '1' for a page of protocol 1): kept until a compiler takes it, so that the versions a
+   *  "cannot typeset" mark is judged by cost no second load */
+  let frameP = null
+  const texFrame = () => (frameP ??= (async () => {
     const frame = Object.assign(document.createElement('iframe'), { src: `${site}/tex.html`, hidden: true })
-    const ready = waitFor(site, 'ready')
+    const ready = waitFor(site, 'ready', frame)
     document.body.append(frame)
-    if (!(await Promise.race([ready.then(() => true), new Promise(r => setTimeout(r, 10000, false))]))) {
+    const said = await Promise.race([ready, new Promise(r => setTimeout(r, 10000, null))])
+    if (!said) {
       frame.remove()
-      throw Object.assign(new Error(`The TeX page is not running at ${site}: start it with node spikes/serve-live.mjs`), { event: 'no compiler' })
+      // our site's in a production build; one on this machine (http) is started by hand (addresses.mjs TEX_PAGE)
+      throw Object.assign(new Error(`The TeX page at ${site} did not answer${site.startsWith('http:') ? ': start it with node spikes/serve-live.mjs' : ''}`), { event: 'no compiler' })
     }
-    const initDone = waitFor(site, 'init-done')
-    frame.contentWindow.postMessage({ type: 'init', endpoint }, site)
-    note('compiler', { ms: (await initDone).ms })
+    return { frame, version: said.protocol === 2 ? [said.cv, said.eid, said.tid, said.index].join('/') : '1' }
+  })().catch(e => { frameP = null; throw e }))
+  /** the TeX page's versions the compiles were made under: what a "cannot typeset" mark holds for (the S3a review, I5 d) */
+  let compiledUnder = null
+  /**
+   * The TeX page as a compiler, given the paper's project and the visit's language: { compile, close }, closing the page
+   * with its worker (live.mjs compilerKeeper opens one when needed, and a fresh one after a compile the page failed).
+   * Protocol 2's hints (the S3a report): the engines the visit will use — the paper's own (the font probe, the marked
+   * original) and its first strategy's — and the CJK script whose faces that strategy sets, which the page fetches
+   * ahead; a page of protocol 1 reads the `endpoint` instead, and nothing else. An init the page reports failed is no
+   * compiler: the frame goes, and the failure is retried as a network down is (the S3a report's duties, a). `own`: the
+   * marked original's compiler, which sets the paper as it is, in its own engine alone
+   */
+  const openCompiler = async (p, lang, own = false) => {
+    // the frame taken at once: another compiler opening meanwhile loads one of its own
+    const mine = texFrame()
+    frameP = null
+    const { frame, version } = await mine
+    const meta = p.paperData.meta, script = scriptOf(lang), engine = meta.compiler === 'latex' ? 'pdflatex' : meta.compiler
+    let first = null
+    try { if (!own) first = strategiesFor(meta, lang)[0] } catch {}
+    const engines = [...new Set([engine, first?.engine].filter(Boolean))]
+    const initDone = waitFor(site, 'init-done', frame)
+    frame.contentWindow.postMessage({ type: 'init', protocol: 2, engines, fonts: !own && CJK[script] ? [script] : [], endpoint }, site)
+    const done = await initDone
+    if (done.error) {
+      frame.remove()
+      throw Object.assign(new Error(`The TeX page could not start: ${String(done.error).slice(0, 200)}`), { event: 'no compiler', kind: 'network' })
+    }
+    compiledUnder = version
+    note('compiler', { ms: done.ms, version, ...(own ? { own } : {}) })
     frame.contentWindow.postMessage({ type: 'project', key: paper, files: [...p.files].map(([path, content]) => ({ path, content })) }, site)
     let seq = 0
     const compile = req => new Promise(resolve => {
@@ -2135,7 +2173,7 @@ async function live() {
     }
     const lang = engine.lang
     note('engine', { lang, format: engine.format, engine: engine.engine })
-    if (!retrying && cached && isCurrent(cached, { identity: engine.identity, pipeline: PIPELINE_VERSION })) {
+    if (!retrying && cached && isCurrent(cached, { identity: engine.identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION })) {
       status(`${paper}, this machine's copy · translated into ${lang} by ${cached.engine}`)
       note('cache current')
       L.done = true
@@ -2145,7 +2183,17 @@ async function live() {
     // asked for nothing; a new pipeline tries once more (the maintainer, 2026-09-26). Only once the extension has said
     // which service would translate, and only for the same one: the failure was its translation's, which another
     // service, model or prompt may not repeat (Codex on #306)
-    if (!cached && cacheKey && stillUntypeset(await pdfCache.untypeset(cacheKey.digest, cacheKey.lang), { identity: engine.identity, pipeline: PIPELINE_VERSION })) return fail('cannot typeset', `${paper} could not be typeset into ${lang} by ${engine.engine} on this machine before: the right side shows the original`)
+    // and only for the TeX page's versions it was made under: a page fixed since (its fonts, its tree, its index) may set
+    // it (the S3a review, I5 d) — read from the page loaded for the compiles to come
+    const mark = !cached && cacheKey ? await pdfCache.untypeset(cacheKey.digest, cacheKey.lang) : undefined
+    const page = mark ? await texFrame().then(f => f.version, () => null) : null
+    if (mark && page && stillUntypeset(mark, { identity: engine.identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page })) {
+      // the frame loaded to read the page's versions goes: nothing will compile in it (the F2 review's M4)
+      const loaded = frameP
+      frameP = null
+      void loaded?.then(f => f.frame.remove(), () => {})
+      return fail('cannot typeset', `${paper} could not be typeset into ${lang} by ${engine.engine} on this machine before: the right side shows the original`)
+    }
     // single language first: a language whose typesetting the gate has not verified is not set (scripts.mjs VERIFIED)
     if (!verified(lang)) return fail('not verified', `Typesetting ${lang} is not verified yet (issue #295): the reader sets ${VERIFIED.join(', ')} for now; choose one in the extension's settings`)
     // the decision to translate, the step the controller's phase moves at: a copy on screen is translated again, and
@@ -2157,19 +2205,43 @@ async function live() {
     note('translating')
     let p, compile
     try { p = await (paperP ??= readPaper().catch(e => { paperP = null; throw e })) } catch (e) { return fail(e.event ?? 'fetch failed', e.message ?? String(e), e.kind) }
-    compiler ??= compilerKeeper(() => openCompiler(p))
+    compiler ??= compilerKeeper(() => openCompiler(p, lang))
     try { await compiler.ready() } catch (e) { return fail(e.event ?? 'no compiler', e.message ?? String(e), e.kind) }
     compile = compiler.compile
+    // the marked original in a TeX frame of its own, beside the translation's compiles from the run's start, and closed
+    // once it is in: its full compile is off the final's path (the F2 review's I2, V1'; the browser holds a second
+    // engine meanwhile, 150–450 MB measured)
+    const originalCompiler = compilerKeeper(() => openCompiler(p, lang, true))
+    const compileOriginal = async req => { try { return await originalCompiler.compile(req) } finally { originalCompiler.close() } }
     const { paperData, units, src, context, hashes } = p
-    // a run again: what the visit's last run made seeds it, over the copy's, so that only the missing are asked again —
-    // the rest, sent too, the background's cache answers (cache.mjs seedAgain: with their sentences)
-    const seed = seedAgain(p.seed, made)
-    // one replacement at a time, in the order the compiles came in; the final's bytes once compiled
-    let swaps = Promise.resolve(), finalPdf = null
+    // the author block's names are kept for some languages (live.mjs keptFor): counted by the language now known
+    total = units.length - keptFor(paperData, lang).size
+    // a run again: what the visit's last run made seeds it, over the copy's (cache.mjs seedAgain: with their sentences);
+    // a seed whole, by the identity that answers now and of the wire sent now is taken as it is, never sent again — the
+    // copy's when it was made by this pipeline in this wire format (cache.mjs reusable) — and the rest are asked again
+    const seed = reusable(seedAgain(p.seed, made), { identity: engine.identity, copyWire: p.sameUnits && cached?.format === engine.format, made })
+    // one replacement at a time, in the order the compiles came in; the final's bytes once compiled, and whether this
+    // run's own final reached the screen (`shownNow`): a final an earlier run showed sets an earlier translation
+    let swaps = Promise.resolve(), finalPdf = null, shownNow = false
+    // the marked original's readings with the left side's marks: this visit's last run's, else the paper's as a run here
+    // stored them, made by this pipeline, typesetting and TeX page — then the run compiles no original (the F2 review's
+    // I3). The left side anchored by those marks, where nothing has anchored it by marks yet
+    const known = (readings && leftMarks?.length ? { readings, left: leftMarks } : null) ?? knownOriginal(await storedOriginal, { pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page: compiledUnder })
+    let marks = leftMarks ? new Map(leftMarks) : knownMarks(cached, p.sameUnits)
+    if (!marks && known) {
+      leftMarks = known.left
+      marks = new Map(leftMarks)
+      if (p.leftCurrent) swaps = swaps.then(async () => note('left marks', { marks: await anchorLeft(src, new Map(known.left)), kept: true })).catch(e => note('left marks failed', { error: String(e).slice(0, 200) }))
+    }
     const result = await runLive(paperData, {
-      lang, compile, note,
-      seed: seed.size ? seed : null, identity: engine.identity, pipelineCurrent: p.sameUnits || finalShown,
-      marks: leftMarks ? new Map(leftMarks) : knownMarks(cached, p.sameUnits),
+      lang, compile, compileOriginal, note,
+      // the copy's compile current: its pipeline and its typesetting this reader's, or this visit's final on screen —
+      // and no translation the visit's last runs made that none of them sets (cache.mjs pipelineCurrentFor; C1 of #309's
+      // fix round: a run again after a final the TeX page was down for wrote it over the copy's PDF)
+      seed: seed.size ? seed : null, identity: engine.identity, pipelineCurrent: pipelineCurrentFor({ copy: p.sameUnits && cached?.typesetting === TYPESETTING_VERSION, finalShown, unset }),
+      // the typesetting rule: the translation set as near its original's places as the rule can (live.mjs)
+      readMarks: typesetMarksOfPdf,
+      marks, original: known?.readings ?? null,
       format: engine.format,
       // with the tags path's sentence cuts (mt.mjs cutsOf), which the service marks (B3b)
       translate: (texts, cuts) => engine.translate(texts, context, cuts),
@@ -2181,18 +2253,24 @@ async function live() {
         const d = top - (c.scrollTop + c.clientHeight * readingLine)
         return d >= -c.clientHeight * 0.3 ? Math.abs(d) : 2 * Math.abs(d)
       },
-      onUpdate: ({ pdf, texts, translated, final }) => { if (final) finalPdf = pdf; (window.__reader.shownTexts ??= []).push({ final, texts }); swaps = swaps.then(async () => { if (!p.leftCurrent) { p.adoptUnits(); await anchorSide(left, src, leftMarks ? new Map(leftMarks) : new Map()); p.leftCurrent = true } const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); if (final) finalShown = true; note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
+      onUpdate: ({ pdf, texts, translated, final }) => { if (final) finalPdf = pdf; (window.__reader.shownTexts ??= []).push({ final, texts }); swaps = swaps.then(async () => { if (!p.leftCurrent) { p.adoptUnits(); await anchorSide(left, src, leftMarks ? new Map(leftMarks) : new Map()); p.leftCurrent = true } const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); if (final) finalShown = shownNow = true; note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
       onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const marks = await marksOfPdf(pdf); leftMarks = [...marks]; const n = await anchorLeft(src, marks); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
     }).catch(e => ({ error: e.message ?? String(e), kind: e?.kind }))
     if (result.results) made = result.results
+    if (result.original) readings = result.original
     // the engine's kind kept (engine.mjs EngineError), so that a key refused midway is worded as the popup words it
     if (result.error) return fail('failed', `Could not translate ${paper}: ${result.error}`, result.kind)
+    // the TeX page down, twice for one compile: by the network (its files), or by itself (an engine it could not bring
+    // up, a compile it gave up on) — no compiler, the retry offered, the network's back retrying by itself (the S3a
+    // report's duties, b); nothing written or marked, and what is shown stays
+    if (result.compiler) { await swaps; unset = unsetAfter(unset, result, shownNow); return fail('no compiler', `Could not typeset ${paper}: ${result.compiler.error}`, result.compiler.down === 'network' ? 'network' : 'unknown') }
     // the paragraphs the service left in the source, not a sum over batches: a seeded one keeps its old translation
     lost = result.missing ?? lost
     // stopped with nothing on screen translated: the card, with the service's reason (the reader's design, §8)
     if (result.stopped && !result.translated) return fail('failed', `Could not translate ${paper}: ${result.stopped}`, result.stopped)
     stopped = result.stopped ? { event: 'stopped', kind: result.stopped } : null
     await swaps
+    unset = unsetAfter(unset, result, shownNow)
     // every way of setting it tried and failed, a whole translation in hand and nothing on screen (the maintainer,
     // 2026-09-26). Remembered, so that a visit again asks nothing of the service, only when the paper's own source set
     // here: a TeX error from a compiler whose files were not there says nothing of the paper, and is tried again (Codex).
@@ -2202,7 +2280,7 @@ async function live() {
     if (result.exhausted && !result.stopped && !compiledOnce && !cached) {
       if (cacheKey && result.originalOk) {
         const identity = await engine.now().catch(() => engine.identity)
-        if (allTranslatedBy(result.results, identity)) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, { identity, pipeline: PIPELINE_VERSION })
+        if (allTranslatedBy(result.results, identity) && compiledUnder) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, { identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page: compiledUnder })
       }
       note('done', result)
       return fail('cannot typeset', `None of the ways of typesetting ${paper} into ${lang} worked: the right side shows the original`)
@@ -2210,14 +2288,19 @@ async function live() {
     // this machine's copy: the whole record for a final that settled; the units' provenance alone when nothing typeset
     // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")
     if (cacheKey) {
-      const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, context, units: unitsOf(units, paperData.kept, hashes, result.results), marks: leftMarks ?? (p.sameUnits ? cached.marks : []), rightMarks: [], figures: [...figureEntries.values()] }
-      const how = decideWrite({ result, cached, units: record.units, marks: record.marks, shown: finalShown })
-      const pdf = how === 'full' ? finalPdf : how === 'provenance' ? cached.pdf : null
+      const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, context, units: unitsOf(units, keptFor(paperData, lang), hashes, result.results), marks: leftMarks ?? (p.sameUnits ? cached.marks : []), rightMarks: [], figures: [...figureEntries.values()] }
+      const how = decideWrite({ result, cached, units: record.units, marks: record.marks, shown: shownNow })
+      // labelled by what set its PDF: this run's final, or the copy's own (cache.mjs labelOf)
+      const label = labelOf(how, { pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, passing: !!result.passing, cached })
+      Object.assign(record, label)
+      const pdf = !label ? null : how === 'full' ? finalPdf : cached.pdf
       // the right side's marks, as its PDF names them: the final's once it is on screen, else the copy's own
       record.rightMarks = how === 'full' ? [...(right.marks ?? [])] : (cached?.rightMarks ?? [])
       if (pdf) {
-        const now = { identity: await engine.now().catch(() => engine.identity), pipeline: PIPELINE_VERSION }
-        const written = await pdfCache.put({ ...record, pdf }, now)
+        const now = { identity: await engine.now().catch(() => engine.identity), pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION }
+        // the marked original's readings this run made, kept for the paper with whichever copy is stored
+        const original = result.original && result.original !== known?.readings && leftMarks?.length && compiledUnder ? originalRow(result.original, leftMarks, { pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page: compiledUnder }) : undefined
+        const written = await pdfCache.put({ ...record, pdf }, now, original)
         note('cache write', { how, written })
         // what this visit wrote is the copy a run again compares with
         if (written) cached = { ...record, pdf, createdAt: Date.now() }

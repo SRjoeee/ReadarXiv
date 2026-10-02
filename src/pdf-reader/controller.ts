@@ -24,6 +24,9 @@ export interface ReaderState {
   phase: Phase
   /** 0–1, the share of the paper's paragraphs translated */
   progress: number
+  /** the compiles finished since the translation was over (every paragraph in, or the service stopped): the typesetting
+   *  the final waits for; −1 while paragraphs are still to come */
+  finishing: number
   /** 0–1, the share of the paper's PDF downloaded, in hundredths; 0 while its size is unknown */
   loaded: number
   /** the paragraphs the service failed on: the notice's {n} */
@@ -62,6 +65,7 @@ export const INITIAL: ReaderState = {
   htmlVersion: null,
   phase: 'loading',
   progress: 0,
+  finishing: -1,
   loaded: 0,
   failedUnits: 0,
   failure: null,
@@ -90,6 +94,8 @@ const NOT_SUPPORTED = new Set(['not verified'])
 /** what each step of a run puts on the translation's side (session.mjs note) */
 const SHOWS: Record<string, Shown> = { 'shown cached': 'copy', 'cache unusable': 'none', 'shown preview': 'preview', 'shown final': 'final' }
 const making = (phase: Phase) => phase === 'translating' || phase === 'retranslating'
+/** a compile's end, as the session notes it: the font probe, a preview, the marked original, a measure, the final */
+const COMPILED: ReadonlySet<string> = new Set(['fonts', 'preview', 'original', 'measure', 'final'])
 /** the engine's error kinds are the chain's (engine.mjs); anything else, a crash included, is the popup's unknown */
 const kindOf = (kind: string | undefined): ProviderErrorKind => (PROVIDER_ERROR_KINDS as readonly string[]).includes(kind ?? '') ? (kind as ProviderErrorKind) : 'unknown'
 
@@ -144,13 +150,16 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
         case 'cache current':
           return { ...next, phase: 'ready', progress: 1 }
         case 'translating':
-          return { ...next, phase: event.again ? 'retranslating' : 'translating', failure: null, progress: event.total ? event.got / event.total : 0, failedUnits: event.lost }
+          return { ...next, phase: event.again ? 'retranslating' : 'translating', failure: null, progress: event.total ? event.got / event.total : 0, finishing: -1, failedUnits: event.lost }
         case 'done':
           return { ...next, phase: state.phase === 'failed' ? 'failed' : 'ready', failedUnits: event.lost, ...(shown === 'final' ? { progress: 1 } : {}) }
       }
       if (!making(state.phase)) return next
       const progress = event.total ? Math.min(1, event.got / event.total) : state.progress
-      return progress === state.progress && event.lost === state.failedUnits && next === state ? state : { ...next, progress, failedUnits: event.lost }
+      // the translation over — every paragraph translated or lost, or the service stopped —, each compile after it counted
+      const over = state.finishing >= 0 || event.event === 'stopped' || (event.total > 0 && event.got + event.lost >= event.total)
+      const finishing = !over ? -1 : state.finishing < 0 ? 0 : state.finishing + (COMPILED.has(event.event) ? 1 : 0)
+      return progress === state.progress && finishing === state.finishing && event.lost === state.failedUnits && next === state ? state : { ...next, progress, finishing, failedUnits: event.lost }
     }
     default:
       return state

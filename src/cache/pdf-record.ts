@@ -37,6 +37,9 @@ export interface CachedUnit {
    * before they were kept — the unit is lit whole then (the reader's highlight, sentence level)
    */
   sentences?: { src: number[]; tr: number[] }
+  /** translated, but the final set it in the source — the author block under a strategy that sets it as the paper has
+   *  it (CJKutf8): its translation seeds the next run, and the right side is anchored by the source */
+  inSource?: true
 }
 
 /**
@@ -61,7 +64,11 @@ export interface PdfRecordBody {
   engine: string
   /** the wire format of the run that made it */
   format: string
+  /** the reader's translation pipeline (live.mjs PIPELINE_VERSION): what its units are and what was sent for them */
   pipeline: string
+  /** the reader's typesetting (live.mjs TYPESETTING_VERSION): how its PDF was set from the translation; absent in a copy
+   *  made before the two were apart (2026-10-02), which is set again */
+  typesetting?: string
   context: { paperTitle?: string; abstract?: string }
   units: CachedUnit[]
   /** the left side's mark words: the entries of the Map marksOfPdf gives */
@@ -81,10 +88,38 @@ export interface PdfRecord extends PdfRecordBody {
   openedAt: number
 }
 
-/** What a copy is judged against: the identity that would answer now, and the reader's PIPELINE_VERSION */
+/**
+ * The marked original's readings, one per paper version (its PDF's digest), whatever the language (the F2 review's I3;
+ * the typesetting rule's handoff, "What to cache"): what the rule plans every compile from — the lines of the original's
+ * last TeX pass that are read (each unit's lines, the forced breaks, the document's end, the letters it could not set),
+ * its marks with every page's columns, its citations, labels and bibliography — and the left side's marks, under the
+ * versions that made them: a run with them compiles no original (pdf-reader/engine/cache.mjs originalRow, knownOriginal)
+ */
+export interface OriginalReadings {
+  pipeline: string
+  typesetting: string
+  /** the TeX page's versions it was compiled under (`Now.page`) */
+  page: string
+  log: string
+  /** its aux's \bibcite and \newlabel lines, and the bibliography its BibTeX or biber made (null where the paper
+   *  ships its own or has none): a draft with none of its own is given them (live.mjs runLive) */
+  cites: string
+  labels: string
+  bbl: string | null
+  /** typeset/places.mjs Marks, its Map as entries */
+  marks: { pages: number; width: number; height: number; columns: number[]; marks: [string, unknown][] }
+  /** the left side's mark words: the entries of the Map marksOfPdf gives */
+  left: [string, unknown][]
+}
+
+/** What a copy is judged against: the identity that would answer now, and the reader's PIPELINE_VERSION and
+ *  TYPESETTING_VERSION */
 export interface Now {
   identity: string
   pipeline: string
+  typesetting?: string
+  /** the TeX page's versions, where a mark is judged */
+  page?: string
 }
 
 /** A unit to translate is current when its translation was made, or it was settled, under the identity that would answer now */
@@ -94,9 +129,11 @@ export function unitIsCurrent(u: CachedUnit, identity: string): boolean {
   return false
 }
 
-/** A copy is current with the current pipeline and every unit to translate current; the kept names are none to translate */
+/** A copy is current with the current pipeline and typesetting and every unit to translate current; the kept names are
+ *  none to translate. A copy of another typesetting alone is set again from its translation, which asks the service
+ *  nothing (pdf-reader/engine/cache.mjs reusable) */
 export function isCurrent(record: PdfRecordBody, now: Now): boolean {
-  return record.pipeline === now.pipeline && record.units.every(u => u.state === 'kept' || unitIsCurrent(u, now.identity))
+  return record.pipeline === now.pipeline && record.typesetting === now.typesetting && record.units.every(u => u.state === 'kept' || unitIsCurrent(u, now.identity))
 }
 
 /**
@@ -106,6 +143,11 @@ export function isCurrent(record: PdfRecordBody, now: Now): boolean {
 export interface UntypesetMark {
   pipeline: string
   identity?: string
+  /** the typesetting that could not set it; absent in a mark made before the two versions were apart */
+  typesetting?: string
+  /** the TeX page's versions it was compiled under (its own, its engine's, its tree's, its index's; '1' for a page of
+   *  protocol 1): a page fixed since may set it */
+  page?: string
 }
 
 /**
@@ -116,15 +158,17 @@ export interface UntypesetMark {
  * reader leaves a mark only for one identity's whole translation (pdf-reader/engine/cache.mjs allTranslatedBy)
  */
 export function stillUntypeset(mark: UntypesetMark | undefined, now: Now): boolean {
-  return mark !== undefined && mark.pipeline === now.pipeline && mark.identity !== undefined && mark.identity === now.identity
+  return mark !== undefined && mark.pipeline === now.pipeline && mark.typesetting === now.typesetting && mark.page === now.page && mark.identity !== undefined && mark.identity === now.identity
 }
 
-/** What a copy is worth, in the order copies are compared: pipeline, units current, whole, partial, lost (fewer), marks */
+/** What a copy is worth, in the order copies are compared: pipeline, typesetting, units current, whole, partial, lost
+ *  (fewer), marks */
 function worth(record: PdfRecordBody, now: Now): number[] {
   const units = record.units.filter(u => u.state !== 'kept')
   const count = (f: (u: CachedUnit) => boolean) => units.filter(f).length
   return [
     record.pipeline === now.pipeline ? 1 : 0,
+    record.typesetting === now.typesetting ? 1 : 0,
     count(u => unitIsCurrent(u, now.identity)),
     count(u => u.state === 'whole'),
     count(u => u.state === 'partial'),

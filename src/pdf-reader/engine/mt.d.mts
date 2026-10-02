@@ -9,7 +9,7 @@ export declare function unitText(pieces: Piece[]): { text: string; gaps?: number
 /** an engine's plain text as TeX sets it: its invisible characters dropped, TeX's special characters escaped */
 export declare function texEscape(s: string): string
 /** a unit → the wire text of the markers format, and the table from marker id back to the original piece */
-export declare function serialize(u: { pieces: Piece[] }): { wire: string; slots: Piece[]; lead: string; trail: string; stops?: Set<number> }
+export declare function serialize(u: { pieces: Piece[] }): { wire: string; slots: Piece[]; lead: string; trail: string; stops?: Set<number>; numbers?: Set<number>; numbersAfter?: Set<number> }
 /** the translation → pieces, or why it cannot be used */
 export declare function rehydrate(text: string, ser: ReturnType<typeof serialize>, tolerant?: boolean): { pieces: Piece[] } | { error: string }
 /** where each sentence after the first begins: offsets of its first word in the plain source and in the plain translation */

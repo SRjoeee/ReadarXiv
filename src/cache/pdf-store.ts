@@ -4,7 +4,7 @@
 // reader's reads and writes is a miss, as in the translation cache (./store.ts); the settings page's count and clear
 // report theirs. Its own database, so that neither's schema or migrations touch the other's.
 import Dexie, { type DexieOptions, type Table } from 'dexie'
-import { atLeastAsGood, mergeFigures, type FigureEntry, type Now, type PdfRecord, type PdfRecordBody, type UntypesetMark } from './pdf-record'
+import { atLeastAsGood, mergeFigures, type FigureEntry, type Now, type OriginalReadings, type PdfRecord, type PdfRecordBody, type UntypesetMark } from './pdf-record'
 
 /** The small row eviction reads: no PDF, no units */
 interface Entry {
@@ -41,6 +41,9 @@ class PdfDatabase extends Dexie {
   /** the papers no typesetting strategy could set, by version and language, with the pipeline that tried and the
    *  identity whose translation it was (pdf-record.ts UntypesetMark: not indexed, so no new version) */
   untypeset!: Table<{ digest: string; lang: string } & UntypesetMark, [string, string]>
+  /** the marked original's readings, one per paper version (pdf-record.ts OriginalReadings): kept while any record of
+   *  the paper is, gone with the last */
+  originals!: Table<{ digest: string } & OriginalReadings, string>
 
   constructor(name = 'axt-pdf', options?: DexieOptions) {
     super(name, options)
@@ -48,6 +51,9 @@ class PdfDatabase extends Dexie {
     // 2: a paper that could not be typeset is remembered, so that a revisit asks the service for nothing (the
     // maintainer, 2026-09-26); the records are untouched
     this.version(2).stores({ untypeset: '[digest+lang]' })
+    // 3: the marked original's readings, so that a revisit, another language or a run again compiles no original (the F2
+    // review's I3, 2026-10-02); the records are untouched
+    this.version(3).stores({ originals: 'digest' })
   }
 }
 
@@ -60,8 +66,11 @@ export const PDF_CACHE_MAX_BYTES = 500 * 1024 * 1024
 
 export interface PdfStore {
   get(digest: string, lang: string): Promise<PdfRecord | undefined>
-  /** Written if at least as good as the stored copy (pdf-record.ts atLeastAsGood); whether it was */
-  put(record: PdfRecordBody & { pdf: Uint8Array<ArrayBuffer> }, now: Now): Promise<boolean>
+  /** Written if at least as good as the stored copy (pdf-record.ts atLeastAsGood); whether it was. `original`, the
+   *  paper's marked original as this run read it, is kept beside whichever copy is stored */
+  put(record: PdfRecordBody & { pdf: Uint8Array<ArrayBuffer> }, now: Now, original?: OriginalReadings): Promise<boolean>
+  /** The paper's marked original as a run read it, by its PDF's digest, or undefined; a failure reads as undefined */
+  original(digest: string): Promise<OriginalReadings | undefined>
   /** The figures' entries merged into the stored record's by key (pdf-record.ts mergeFigures), the PDF untouched */
   patchFigures(digest: string, lang: string, figures: FigureEntry[]): Promise<void>
   touch(digest: string, lang: string): Promise<void>
@@ -103,12 +112,15 @@ export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; c
       throw e
     }))
 
-  /** A record's rows removed together */
+  /** the tables a record's rows are in, and the paper's original's readings, which go with its last record */
+  const RECORD = [db.entries, db.bodies, db.pdfs, db.originals]
+  /** A record's rows removed together; the paper's original's readings with its last record */
   const remove = (digest: string, lang: string) =>
-    db.transaction('rw', db.entries, db.bodies, db.pdfs, async () => {
+    db.transaction('rw', RECORD, async () => {
       await db.entries.delete([digest, lang])
       await db.bodies.delete([digest, lang])
       await db.pdfs.delete([digest, lang])
+      if (!(await db.entries.where('[digest+lang]').between([digest, Dexie.minKey], [digest, Dexie.maxKey]).count())) await db.originals.delete(digest)
     })
 
   /**
@@ -143,7 +155,7 @@ export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; c
           // it is still the one read: another tab may have replaced it while this one decrypted (Devin on #298)
           warn(`[axt-pdf] a record did not decrypt and was deleted: ${(e as Error).message}`)
           await db
-            .transaction('rw', db.entries, db.bodies, db.pdfs, async () => {
+            .transaction('rw', RECORD, async () => {
               const current = await db.pdfs.get([digest, lang])
               if (current && sameBytes(current.iv, pdf.iv)) await remove(digest, lang)
             })
@@ -156,14 +168,16 @@ export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; c
       }
     },
 
-    async put(record, now) {
+    async put(record, now, original) {
       try {
         const { pdf, ...candidate } = record
         const iv = crypto.getRandomValues(new Uint8Array(12))
         const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await theKey(), pdf)
         const t = clock()
-        const written = await db.transaction('rw', db.entries, db.bodies, db.pdfs, async () => {
+        const written = await db.transaction('rw', RECORD, async () => {
           const stored = await db.bodies.get([candidate.digest, candidate.lang])
+          // the paper's, whichever copy stays: a record of the paper is stored either way
+          if (original) await db.originals.put({ ...original, digest: candidate.digest })
           if (stored && !atLeastAsGood(candidate, stored.body, now)) return false
           // the figures another tab saved and this one did not see are kept
           const body = stored ? { ...candidate, figures: mergeFigures(stored.body.figures, candidate.figures) } : candidate
@@ -183,8 +197,8 @@ export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; c
 
     async patchFigures(digest, lang, figures) {
       try {
-        // the pdfs table in scope for the eviction alone: the patch reads and writes no PDF
-        await db.transaction('rw', db.entries, db.bodies, db.pdfs, async () => {
+        // the pdfs and originals tables in scope for the eviction alone: the patch reads and writes neither
+        await db.transaction('rw', RECORD, async () => {
           const row = await db.bodies.get([digest, lang])
           const entry = await db.entries.get([digest, lang])
           if (!row || !entry) return
@@ -209,6 +223,17 @@ export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; c
       }
     },
 
+    async original(digest) {
+      try {
+        const row = await db.originals.get(digest)
+        if (!row) return undefined
+        const { digest: _d, ...readings } = row
+        return readings
+      } catch {
+        return undefined
+      }
+    },
+
     async delete(digest, lang) {
       try {
         await remove(digest, lang)
@@ -221,7 +246,8 @@ export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; c
       try {
         const row = await db.untypeset.get([digest, lang])
         if (!row) return undefined
-        return row.identity === undefined ? { pipeline: row.pipeline } : { pipeline: row.pipeline, identity: row.identity }
+        const { digest: _d, lang: _l, ...mark } = row
+        return mark
       } catch {
         return undefined
       }
@@ -229,17 +255,18 @@ export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; c
 
     async markUntypeset(digest, lang, mark) {
       try {
-        await db.untypeset.put({ digest, lang, pipeline: mark.pipeline, identity: mark.identity })
+        await db.untypeset.put({ digest, lang, ...mark })
       } catch (e) {
         warn(`[axt-pdf] untypeset mark failed: ${(e as Error).message}`)
       }
     },
 
     async clear() {
-      await db.transaction('rw', [db.entries, db.bodies, db.pdfs, db.untypeset], async () => {
+      await db.transaction('rw', [...RECORD, db.untypeset], async () => {
         await db.entries.clear()
         await db.bodies.clear()
         await db.pdfs.clear()
+        await db.originals.clear()
         await db.untypeset.clear()
       })
     },

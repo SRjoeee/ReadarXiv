@@ -871,10 +871,46 @@ is only how it meets the rest of the extension.
   figures' text goes through the same image pipeline and recogniser (§15). A vector figure's labels are read from
   PDF.js's text rather than recognised.
 - **Its store**: the compiled translations (with each unit's sentences, where its engine gave them), one record per paper version and target language, encrypted, in an
-  IndexedDB of their own (`src/cache/pdf-store.ts`), capped at 500 MB with the least recently opened going first. The
+  IndexedDB of their own (`src/cache/pdf-store.ts`), capped at 500 MB with the least recently opened going first. A
+  copy's units always describe its own PDF: a run that typesets nothing writes only who made and tried each unit, and
+  only where every unit's text is the one the stored PDF sets; a run again after a run whose final never reached the
+  screen (the TeX page down) compiles its own final rather than write that run's translation over the old PDF. The
   settings page counts them and clears them (UI.md S-O-73).
-- **Typesetting** runs in a TeX page outside the extension (BusyTeX, served locally during the experiment). No
-  reader-facing word names it (UI.md §3.5).
+- **Typesetting** runs in a TeX page outside the extension (BusyTeX): our site's, `https://tex.readarxiv.org`, in a
+  production build, and one on this machine in development (`addresses.mjs` `TEX_PAGE`, a build setting). No
+  reader-facing word names it (UI.md §3.5). The translation is set by the Flow rule (`src/pdf-reader/engine/typeset/`;
+  `experiments/pdf-bilingual/records/typesetting.md`): each unit's leading, the paper's type and the floats' pages
+  planned from our marked original's line probes and marks. The original is compiled in full in a TeX frame of its
+  own from the run's start, beside the probe and the first preview, which never waits for it, and the frame goes once
+  it is in (150–450 MB more meanwhile); what the rule reads of it is kept for the visit and, with the left side's
+  marks, per paper version in the store, so that a run again, a revisit or another language compiles no original. With
+  it are kept the original's labels and the bibliography its BibTeX or biber made, which a draft with none of its own
+  is given: a typesetting change compiles no preview, every paragraph taken as it is, and without them its measure set
+  no bibliography (2608.08872 two pages long where its first visit set one). The original's biber bibliography sets the
+  translation's citations as the final's own does, so the first preview runs no BibTeX or biber — its citations are
+  undefined either way —, and every compile after it reads the original's. A draft's one pass also sets its contents
+  lists from the files a pass writes them to at its end, so each draft is given the lists of the aux it is given: given
+  the aux alone, every list was empty and every paragraph after it measured early by its height (2608.02459, its
+  contents before nearly all of it: 0.94 of a page's start drift, 0.10 with them). A draft that set a list from nothing
+  is no measure, and a typesetting change's, which has no draft before it, is measured once more with its own lists;
+  the original's are no stand-in, as tall as the translation's only where its entries are (a thesis's long figure
+  captions set its re-set three pages short). The final's passes write their own, as the original's do. A measure that
+  could not set a letter is no measure either, as a preview that cannot is not shown: the strategy chain moves on before
+  the final, and the next strategy is measured, so that the final is always set from a plan measured under the
+  strategy it is compiled with (2608.02459's re-set measured under xeCJK, which has no σ there; its final, failed, fell
+  to CJKutf8 set from a plan uncorrected and was stored as current). The
+  last preview of the whole translation measures where its text stood, and the final corrects it: a whole
+  translation after the first preview waits for the original's readings, and once every unit is sent a preview of
+  part of it waits a preview's time for the last batch, so that the whole one is next. Where a plan cannot be made
+  the translation is set as before it; where that was for a passing reason (a PDF's marks unread, a compile timed
+  out) the record carries no typesetting and the next visit sets it again. The reader speaks the TeX page's protocol 2 and still serves a
+  page of protocol 1: it names the engines and the CJK faces the visit will use, so that the page fetches them ahead;
+  a compile whose files did not all arrive, or that the page itself failed (no log: an engine it could not bring up), is
+  asked once more, and a second failure stops the compiles with no compiler — no strategy changed, nothing written or
+  marked, the retry offered — while the translation goes on to its end for the retry to reuse. A compile BusyTeX gave
+  up on (its 180 s: the machine slow) changes nothing either, but is not the page down: a preview, a measure or the
+  marked original is not asked again and the run goes on to its final, which is asked once more and, timed out
+  again, leaves what is shown.
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
   both sides together; headings, captions and cells whole; tables, algorithms and figures whole with their captions (a
@@ -890,13 +926,18 @@ is only how it meets the rest of the extension.
   of time: a slow machine says nothing of the paper) — shows the original with the side-by-side and translation
   displays greyed and a capsule that says so, without why, offering the HTML version where arXiv has one (UI.md
   S-R-17/18). The failure to set it is kept in the store beside the records, by paper version, language,
-  `PIPELINE_VERSION` and the identity whose translation it was (the one a copy is judged by), when the paper's own
+  `PIPELINE_VERSION`, `TYPESETTING_VERSION`, the TeX page's versions and the identity whose translation it was (the one a copy is judged by), when the paper's own
   source set on this machine — otherwise the compiler or its files may have been down, and the next visit tries again
   — and when that one identity made every paragraph it translated: a run a hand-over mixed (a key refused midway, the
   free service finishing) is not kept, since the service that would answer next never translated the whole paper, as a
   copy is current only when every paragraph is. A visit again, once the extension has said which service would
   translate, asks that service and the TeX page for nothing if it is the same one; another service, model or prompt, a
-  new pipeline, or a mark kept before the identity was (2026-09-30) tries once more — the failure is the translated
-  text's, which they may not repeat (Codex on #306) —, and the settings page's clear forgets it.
+  new pipeline, typesetting or TeX page, or a mark kept before the identity was (2026-09-30) tries once more — the failure is the
+  translated text's, which they may not repeat (Codex on #306) —, and the settings page's clear forgets it.
+- **Two versions** (`live.mjs`): `PIPELINE_VERSION` for what a unit is and what is sent for it, `TYPESETTING_VERSION`
+  for how a compile sets it. A copy of another typesetting is compiled again from its own translation: a unit whole,
+  made by the identity that would answer now, of the wire sent now (the same pipeline and wire format) is never sent
+  again (`cache.mjs reusable`); the evaluation of 2026-10-01 measured a third of a paper's characters sent again when
+  the two were one version.
 - **Browsers**: PDF.js's modern build needs built-ins newer than the extension's floor. Where they are missing
   (`src/pdf-reader/support.ts`) the reader is not offered, and the browser's viewer keeps the PDF.

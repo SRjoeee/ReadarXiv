@@ -177,12 +177,14 @@ cases.push(['a final that did not answer is tried again with the same strategy, 
   const paper = openPaper(tex(PARAS)), events = []
   const c = slow('ok', 'ok', 'timeout')
   const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate: echo('B'), format: 'markers', marks: new Map(), identity: 'B', note: (e, d) => events.push([e, d?.strategy]) })
+  // asked again as it was (live.mjs: 'final again', BusyTeX's timeout being the machine's, not the page's), the
+  // strategy the same
   assert.equal(events.filter(([e]) => e === 'next strategy').length, 0)
   assert.equal(events.filter(([e]) => e === 'final again').length, 1)
-  assert.equal(new Set(events.filter(([e]) => e === 'final' || e === 'final again').map(([, s]) => s)).size, 1)
+  assert.equal(new Set(events.filter(([e]) => e === 'final').map(([, s]) => s)).size, 1)
   assert.equal(r.settled, true)
 }])
-cases.push(['a final that twice did not answer ends the run with what is shown, and writes nothing', async () => {
+cases.push(['a final that twice did not answer ends the run with what is shown and writes nothing: a slow machine, not the compiler down (the F2 review\'s M5)', async () => {
   const paper = openPaper(tex(PARAS)), events = []
   const c = slow('ok', 'ok', 'timeout', 'timeout')
   const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate: echo('B'), format: 'markers', marks: new Map(), identity: 'B', note: e => events.push(e) })
@@ -191,13 +193,15 @@ cases.push(['a final that twice did not answer ends the run with what is shown, 
   assert.equal(c.calls.filter(q => q.rerun).length, 2)
   // a slow machine says nothing of the paper: not remembered as one that cannot be typeset
   assert.equal(r.exhausted, false)
+  assert.equal(r.compiler, undefined)
 }])
 /** a compiler that sets the fonts probe and, if `own`, the paper's own source (the marked original: a rerun of a
- *  draft); every compile of the translation stops at a TeX error */
+ *  draft); every compile of the translation stops at a TeX error — answered with its log and no `error`, as the TeX
+ *  page answers TeX's failure (an `error` is the page's own: live.mjs pageFailed) */
 function refusing(own) {
   let n = 0
   const isOriginal = req => req.rerun && new TextDecoder('latin1').decode(req.overrides.get(req.main)).includes('{draft}{graphicx}')
-  return async req => (++n === 1 || (own && isOriginal(req)) ? { ok: true, pdf: new Uint8Array([1]), log: '', ms: 1 } : { ok: false, error: 'exit 1', log: `! LaTeX Error: ${req.engine} cannot set this.`, ms: 1 })
+  return async req => (++n === 1 || (own && isOriginal(req)) ? { ok: true, pdf: new Uint8Array([1]), log: '', ms: 1 } : { ok: false, log: `! LaTeX Error: ${req.engine} cannot set this.`, ms: 1 })
 }
 cases.push(['a paper no strategy sets is told apart: every strategy tried, nothing shown, its own source set (the maintainer, 2026-09-26)', async () => {
   const paper = openPaper(tex(PARAS)), events = []

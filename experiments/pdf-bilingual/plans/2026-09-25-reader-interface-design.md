@@ -301,9 +301,11 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
   leaves lighter (160 ms); a new state of the same kind changes its words in place — the words fade in, the capsule's
   width eases to theirs (200 ms) — instead of leaving and coming again.
 - **Progress** is a line along the toolbar's foot, not the capsule's: 2 px of quiet ink (`--ink-3` at 80 %, 2.67:1 on the chrome — the maintainer kept it over a graphic's 3:1 after trying both, 2026-10-02), its length
-  the share done — the PDF's download while the reader loads, the paragraphs translated while a translation runs. It
-  grows by a transform and fades out at the length it reached; each stage is a line of its own, so that the
-  translation's starts afresh rather than the download's shrinking back. It is all that shows a load or a translation
+  the share done of one process: the PDF's download its first stretch (all of it when the original alone is shown), the
+  paragraphs translated after it, the final's compile its last stretch (the maintainer asked why it ran twice,
+  2026-10-02: the download's line and the translation's were two). It grows by a transform, never runs back within a
+  process, and fades out at the length it reached; a process begun after it left — a translation asked for once the
+  original was read — is a line of its own, from its start. It is all that shows a load or a translation
   under way: no capsule does, and the words (正在加载, 正在翻译, 正在按当前设置重新翻译) are said to screen readers in
   the status region. (The harness's fifth round moved the progress into a fill of the capsule, ink at 8 %, with the
   status words; the maintainer asked for the line back, 2026-09-25 — the status words were what had to leave the
@@ -348,8 +350,8 @@ No state that tells the reader nothing is shown (no "done").
 | State | When | Shown |
 |---|---|---|
 | Reading | 原文; a translation ready; a stored translation shown, offline included | nothing |
-| Loading | a large PDF is loading | the progress line by the share downloaded; 正在加载 said to screen readers |
-| Translating | the first translation | the progress line by the share of paragraphs done; 正在翻译 said to screen readers |
+| Loading | a large PDF is loading | the progress line by the share downloaded, its first stretch; 正在加载 said to screen readers |
+| Translating | the first translation | the same line on, by the share of paragraphs done, then the final; 正在翻译 said to screen readers |
 | Translating again | a stored translation, settings changed | the progress line likewise, 正在按当前设置重新翻译 said to screen readers; the old translation stays readable and is replaced paragraph by paragraph |
 | Some paragraphs failed | a translation with gaps | capsule: {n} 处翻译失败 · 重试 · close |
 | Language not supported | the shared target language is not one of the nine | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the nine translates |
@@ -717,7 +719,7 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
 - **Found on each side** (`anchors.mjs sentenceStarts`, report-B's option X: no new TeX mark): the page token of each
   sentence's first word, as the unit's own text match inside its marks found it; its second or third word where the
   first was not found; past that, the unit lights whole. arXiv's PDF has marks only once our marked original is compiled
-  — in a live run when the compiler is first idle after a preview — so a unit there found by its text alone takes its
+  — in a live run right after the first preview (the typesetting rule plans every later compile from it, 2026-10-02) — so a unit there found by its text alone takes its
   starts where its match covers 80 % of its words or more (B3c): on the ten papers 625 of 738 units of more than one
   sentence, 1 702 starts, all on the token the marks give; on the ground truth's arXiv PDFs on the mark's line as often
   as with marks (98.6–100 % against 98.9–100 %). In a live open with Microsoft and nothing cached, the first sentence

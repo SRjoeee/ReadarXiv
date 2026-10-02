@@ -34,6 +34,16 @@ describe('reduce: the session events folded into the reader state', () => {
     expect(state.failedUnits).toBe(2)
   })
 
+  it('counts the compiles that end once the translation is over — every paragraph in or lost, or the service stopped — and from nothing at a run\'s start (the F2 review\'s M1)', () => {
+    const start = [note('translating', { total: 4 }), note('fonts', { total: 4 }), note('translated', { got: 2, total: 4 }), note('preview', { got: 2, total: 4 })]
+    expect(fold(start).finishing).toBe(-1)
+    const over = fold([...start, note('translated', { got: 4, total: 4 }), note('preview', { got: 4, total: 4 }), note('original', { got: 4, total: 4 }), note('typeset', { got: 4, total: 4 }), note('final', { got: 4, total: 4 })])
+    expect(over.finishing).toBe(3)
+    expect(fold([note('translating', { total: 4 })], over).finishing).toBe(-1)
+    expect(fold([...start, note('translated', { got: 3, total: 4, lost: 1 }), note('final', { got: 3, total: 4, lost: 1 })]).finishing).toBe(1)
+    expect(fold([...start, note('stopped', { got: 2, total: 4 }), note('final', { got: 2, total: 4 })]).finishing).toBe(1)
+  })
+
   it("says translating again when this machine's copy is being made again", () => {
     expect(fold([note('cache hit'), note('shown cached'), note('engine'), note('translating', { again: true }), note('translated', { got: 1, total: 4, again: true })]).phase).toBe('retranslating')
   })
