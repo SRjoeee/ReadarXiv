@@ -885,7 +885,13 @@ is only how it meets the rest of the extension.
   is given: a typesetting change compiles no preview, every paragraph taken as it is, and without them its measure set
   no bibliography (2608.08872 two pages long where its first visit set one). The original's biber bibliography sets the
   translation's citations as the final's own does, so the first preview runs no BibTeX or biber — its citations are
-  undefined either way —, and every compile after it reads the original's. The
+  undefined either way —, and every compile after it reads the original's. A draft's one pass also sets its contents
+  lists from the files a pass writes them to at its end, so each draft is given the lists of the aux it is given: given
+  the aux alone, every list was empty and every paragraph after it measured early by its height (2608.02459, its
+  contents before nearly all of it: 0.94 of a page's start drift, 0.10 with them). A draft that set a list from nothing
+  is no measure, and a typesetting change's, which has no draft before it, is measured once more with its own lists;
+  the original's are no stand-in, as tall as the translation's only where its entries are (a thesis's long figure
+  captions set its re-set three pages short). The final's passes write their own, as the original's do. The
   last preview of the whole translation measures where its text stood, and the final corrects it: a whole
   translation after the first preview waits for the original's readings, and once every unit is sent a preview of
   part of it waits a preview's time for the last batch, so that the whole one is next. Where a plan cannot be made
