@@ -43,9 +43,11 @@
 //   ← { type: 'want', id, files: [url], bytes }          the files the page would download: with `bytes`, those the
 //                                                       framer holds, else only which it holds
 //   → { type: 'have', id, files: { url: ArrayBuffer | true } }   (ArrayBuffers transferred). An init keeps what is
-//                                                       handed in its own cache, checked as a download is; a file
-//                                                       not handed, or wrong, is downloaded. Unanswered for askMs,
-//                                                       the page goes on alone
+//                                                       handed in its own cache once its bytes are the build's (their
+//                                                       SHA-256 is build.json's: another extension that frames the
+//                                                       page over arXiv shares its partition, and could hand
+//                                                       anything); a file not handed, or not the build's, is
+//                                                       downloaded. Unanswered for askMs, the page goes on alone
 //   ← { type: 'keep', url, bytes (transferred) }         a warm-up's file downloaded, for the framer to keep (the page
 //                                                       keeps no copy)
 //   The framer decides when it answers (an extension waits for its own warm-up, so that nothing is downloaded twice).
@@ -77,6 +79,36 @@ const DEFAULT_ENGINES = ['pdflatex', 'xelatex']
 const ENGINE_OF = { pdflatex: 'pdflatex', latex: 'pdflatex', xelatex: 'xelatex', lualatex: 'lualatex' }
 const engineOf = name => ENGINE_OF[name] ?? 'pdflatex'
 const ENGINE_CLASS = { pdflatex: 'PdfLatex', xelatex: 'XeLatex', lualatex: 'LuaLatex' }
+
+/** the preloaded tier's packages these engines load, in the build's order (an engine with no slim preload: all) */
+const packagesOf = (build, engines) => {
+  const order = Object.keys(build.packages), want = new Set()
+  for (const e of engines) for (const p of build.engines[engineOf(e)] ?? order) want.add(p)
+  return order.filter(p => want.has(p))
+}
+const enginesIn = (build, engines) => [...new Set(engines.map(engineOf))].filter(e => build.manifest.engines[e])
+const bundlesOf = (build, engines) => { const wanted = enginesIn(build, engines), bundles = build.manifest.bundles ?? {}; return (wanted.length ? ['common', ...wanted] : []).filter(b => bundles[b]) }
+const facesOf = (build, scripts) => scripts.flatMap(s => build.manifest.fonts[s] ?? [])
+const treeUrl = (build, path) => build.tree + path.split('/').map(encodeURIComponent).join('/')
+
+/**
+ * The files a visit with these hints fetches ahead → [{ url, size, sha256, phase, whole, index }]: BusyTeX and the
+ * engines' preloads ('engine'), the engines' bundles, the index and the scripts' faces ('files'). `whole`: used as bytes
+ * (the rest BusyTeX's worker reads from the cache itself); `sha256`: build.json's, what a file the framer hands over is
+ * held to (tex-page/build.mjs hashes every file this names for some visit)
+ */
+export function filesAhead(build, { engines, scripts }) {
+  const sha256 = build.sha256 ?? {}
+  const out = [[`${build.engine}busytex.wasm`, build.wasm], ...packagesOf(build, engines).map(p => [`${build.engine}tl-${p}.data`, build.packages[p]])]
+    .map(([url, size]) => ({ url, size, phase: 'engine', whole: false }))
+  const bundles = build.manifest.bundles ?? {}
+  for (const b of bundlesOf(build, engines)) out.push({ url: bundles[b].url, size: bundles[b].size, phase: 'files', whole: true })
+  out.push({ url: `${build.tree}${build.index}`, size: null, phase: 'files', whole: true, index: true })
+  for (const [, , path, size] of facesOf(build, scripts)) if (!out.some(f => f.url === treeUrl(build, path))) out.push({ url: treeUrl(build, path), size, phase: 'files', whole: true })
+  return out.map(f => ({ ...f, sha256: sha256[f.url] ?? null }))
+}
+/** every file the build fetches ahead for some visit: what the page's cache may hold, and what build.json hashes */
+export const everyFileAhead = build => filesAhead(build, { engines: Object.keys(ENGINE_CLASS), scripts: Object.keys(build.manifest.fonts) }).map(f => f.url)
 const CACHE_PREFIX = 'tex-'
 /** the one cache of the files fetched ahead */
 const FILES = `${CACHE_PREFIX}files`
@@ -94,7 +126,7 @@ const nameOf = url => decodeURIComponent(url.slice(url.lastIndexOf('/') + 1))
 const typeOf = url => (url.endsWith('.wasm') ? 'application/wasm' : 'application/octet-stream')
 
 /**
- * `build`: the build's description (build.json: versions, addresses, sizes, manifest); `Runner`, `Engines`:
+ * `build`: the build's description (build.json: versions, addresses, sizes and hashes, manifest); `Runner`, `Engines`:
  * texlyre-busytex's BusyTexRunner and { PdfLatex, XeLatex, LuaLatex }; `fetch`, `caches`, `digest` (SHA-256 of bytes):
  * the browser's. `stallMs`: a download with no byte for that long is given up (and tried once more). `askMs`: how long
  * the framer's store is waited for before the page goes on alone (a safety net: the framer is the extension's own page,
@@ -112,11 +144,7 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
   /** the last init's hints, for an init that failed and is tried again by the next compile */
   let hints = null
 
-  const packagesFor = engines => {
-    const want = new Set()
-    for (const e of engines) for (const p of build.engines[engineOf(e)] ?? order) want.add(p)
-    return order.filter(p => want.has(p))
-  }
+  const packagesFor = engines => packagesOf(build, engines)
 
   /** progress of one phase: the bytes of its downloads, said at most every progressEvery ms */
   const reporter = (reply, phase) => {
@@ -199,36 +227,24 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
     throw new NetworkFailure(nameOf(url), failure?.message ?? String(failure))
   }
 
-  const urlOf = path => build.tree + path.split('/').map(encodeURIComponent).join('/')
-  const engineAssets = packages => [[`${build.engine}busytex.wasm`, build.wasm], ...packages.map(p => [`${build.engine}tl-${p}.data`, build.packages[p]])]
+  const urlOf = path => treeUrl(build, path)
+  const hexOf = async bytes => [...new Uint8Array(await digest(bytes))].map(b => b.toString(16).padStart(2, '0')).join('')
   /** the index's bytes, checked against its name (index-<the first 12 hex digits of SHA-256 of its text and a NUL>) */
   const indexCheck = async bytes => {
     const expected = /^index-([0-9a-f]{12})\.txt$/.exec(build.index)?.[1]
     if (!expected) return true
     const withNul = new Uint8Array(bytes.length + 1)
     withNul.set(bytes)
-    const hex = [...new Uint8Array(await digest(withNul))].map(b => b.toString(16).padStart(2, '0')).join('')
-    return hex.slice(0, 12) === expected
+    return (await hexOf(withNul)).slice(0, 12) === expected
   }
-  const enginesOf = engines => [...new Set(engines.map(engineOf))].filter(e => build.manifest.engines[e])
-  const bundleNames = engines => { const wanted = enginesOf(engines), bundles = build.manifest.bundles ?? {}; return (wanted.length ? ['common', ...wanted] : []).filter(b => bundles[b]) }
-  const fontEntries = scripts => scripts.flatMap(s => build.manifest.fonts[s] ?? [])
+  const enginesOf = engines => enginesIn(build, engines)
+  const bundleNames = engines => bundlesOf(build, engines)
+  const fontEntries = scripts => facesOf(build, scripts)
 
-  /**
-   * The files a visit with these hints fetches ahead → [{ url, size, check, phase, whole }]: BusyTeX and the engines'
-   * preloads ('engine'), the engines' bundles, the index and the scripts' faces ('files'). `whole`: used as bytes (the
-   * rest BusyTeX's worker reads from the cache itself); `check`: the index's own
-   */
-  function filesFor({ engines, scripts }) {
-    const out = engineAssets(packagesFor(engines)).map(([url, size]) => ({ url, size, phase: 'engine', whole: false }))
-    const bundles = build.manifest.bundles ?? {}
-    for (const b of bundleNames(engines)) out.push({ url: bundles[b].url, size: bundles[b].size, phase: 'files', whole: true })
-    out.push({ url: `${build.tree}${build.index}`, size: null, check: indexCheck, phase: 'files', whole: true })
-    for (const [, , path, size] of fontEntries(scripts)) if (!out.some(f => f.url === urlOf(path))) out.push({ url: urlOf(path), size, phase: 'files', whole: true })
-    return out
-  }
+  /** the files a visit with these hints fetches ahead (filesAhead), the index's with its check: a download of it too */
+  const filesFor = hints => filesAhead(build, hints).map(f => (f.index ? { ...f, check: indexCheck } : f))
   /** every file the build fetches ahead for some visit: what the cache may hold */
-  const buildFiles = () => new Set(filesFor({ engines: Object.keys(ENGINE_CLASS), scripts: Object.keys(build.manifest.fonts) }).map(f => f.url))
+  const buildFiles = () => new Set(everyFileAhead(build))
 
   const openFiles = () => caches.open(FILES).catch(() => null)
   const pathOf = url => new URL(url, 'https://page.invalid/').pathname
@@ -242,8 +258,12 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
   }
   /** a file in hand, kept: with the wasm's own type, whatever the server or the framer said */
   const put = (cache, url, bytes) => cache?.put(url, new Response(bytes, { headers: { 'content-type': typeOf(url) } })).catch(() => {})
-  /** a file's bytes, as its build says they are: its length, and the index its name */
-  const sound = async (f, bytes) => (f.size == null || bytes.length === f.size) && (!f.check || await f.check(bytes))
+  /**
+   * a file the framer hands over, as its build says it is: its length, and the SHA-256 build.json gives (a file it
+   * gives none for is never taken). Downloads are held to their length alone, the transport being the site's; a file
+   * handed over may come from any extension that frames the page in this partition (the warm-up review's I1)
+   */
+  const sound = async (f, bytes) => !!f.sha256 && (f.size == null || bytes.length === f.size) && (await hexOf(bytes)) === f.sha256
 
   /**
    * The files from the page's cache, the rest downloaded into it, in parallel → Map url → bytes of the `whole` ones. A
@@ -292,7 +312,8 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
     answers.set(id, files => { clearTimeout(timer); answers.delete(id); resolve(files ?? {}) })
     reply({ type: 'want', id, files, bytes })
   })
-  /** the files the page's cache lacks, asked of the framer's store: those it hands over, sound, kept as downloads are */
+  /** the files the page's cache lacks, asked of the framer's store: those it hands over, sound, kept as downloads are;
+   *  one that is not sound is dropped, and downloaded */
   async function handedOver(files, reply) {
     const cache = await openFiles()
     if (!cache) return

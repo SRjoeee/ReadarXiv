@@ -3,9 +3,9 @@
 // compiled; version 2 adds `ready`'s versions, init's hints, progress during first downloads, and the network failures
 // a compile met — the page's own downloads' too, which are retried, timed out and checked —, the warm-up (download what a
 // first compile would fetch, compile nothing) and the framer's store (an extension keeps the page's files, since the
-// page framed over arXiv has a cache of its own: warm-brief's probe). BusyTeX's runner, the network, Cache Storage and
-// the framer are fakes here; the page itself runs in a browser in tex-page/measure.mjs, network-check.mjs and
-// warm-check.mjs
+// page framed over arXiv has a cache of its own: warm-brief's probe), which keeps a handed file only when its SHA-256 is
+// build.json's. BusyTeX's runner, the network, Cache Storage and the framer are fakes here; the page itself runs in a
+// browser in tex-page/measure.mjs, network-check.mjs and xext-check.mjs (another extension's bytes refused)
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { type Build, mayDrive, texPage } from '../../experiments/pdf-bilingual/poc-site/tex-page.mjs'
@@ -35,6 +35,10 @@ const SIZES: Record<string, number> = {
   '/b/b0.bin': 4, '/b/b1.bin': 10, '/b/b2.bin': 20,
   '/t/t1/fonts/opentype/public/fandol/FandolSong-Regular.otf': 30,
 }
+// every file fetched ahead, by the SHA-256 of the bytes the fake network answers (zeros of its size; the index's text):
+// what a file handed over by the framer is checked against
+BUILD.sha256 = Object.fromEntries([...Object.entries(SIZES).map(([url, n]) => [url, new Uint8Array(n)] as const), [`/t/t1/${BUILD.index}`, new TextEncoder().encode(INDEX)] as const]
+  .map(([url, bytes]) => [url, createHash('sha256').update(bytes).digest('hex')]))
 /** one answer of the fake network: the file, a dropped connection, a status (with Retry-After), the wrong length, or a
  *  body that never ends */
 type Outcome = 'ok' | 'drop' | 'stall' | { status: number; retryAfter?: number } | { length: number }
@@ -524,6 +528,29 @@ describe('the framer\'s store (store: true): an extension keeps the files, since
     await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'], store: true })
     expect(t.net.urls().sort()).toEqual([INDEX_URL, '/e/e1/tl-common.data'].sort())
     expect(t.bt.made[0]?.worker.sent).toContainEqual({ axt_tree: { base: '/t/t1/', index: INDEX } })
+  })
+
+  it('a handed file of the build\'s length but not its bytes is neither kept nor used: downloaded instead (another extension that frames the page over arXiv shares its partition: the warm-up review\'s I1)', async () => {
+    const framer = new Map(PDFLATEX_FILES())
+    framer.set('/e/e1/busytex.wasm', new Uint8Array(1000).fill(1))
+    framer.set('/b/b1.bin', new Uint8Array(10).fill(1))
+    framer.set('/e/e1/tl-pdftex.data', new Uint8Array(200).fill(1))
+    const t = page({ framer })
+    await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'], store: true })
+    expect(t.net.urls().sort()).toEqual(['/b/b1.bin', '/e/e1/busytex.wasm', '/e/e1/tl-pdftex.data'])
+    expect(t.sent.find(m => m.type === 'init-done')?.error).toBeUndefined()
+    const cache = await t.store.caches.open('tex-files')
+    for (const [url, n] of [['/e/e1/busytex.wasm', 1000], ['/b/b1.bin', 10], ['/e/e1/tl-pdftex.data', 200]] as const) {
+      expect(new Uint8Array(await (await cache.match(url))!.arrayBuffer())).toEqual(zeros(n))
+    }
+    expect(t.bt.made[0]?.registered).toContainEqual({ name: 'article.cls', format: 26, content: zeros(10) })
+  })
+
+  it('a file the build names no SHA-256 for is never taken from the framer', async () => {
+    const { '/e/e1/busytex.wasm': _, ...rest } = BUILD.sha256 ?? {}
+    const t = page({ framer: new Map(PDFLATEX_FILES()), build: { ...BUILD, sha256: rest } })
+    await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'], store: true })
+    expect(t.net.urls()).toEqual(['/e/e1/busytex.wasm'])
   })
 
   it('an init whose cache holds every file asks the framer nothing', async () => {

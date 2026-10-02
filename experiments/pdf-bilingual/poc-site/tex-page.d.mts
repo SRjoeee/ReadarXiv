@@ -22,8 +22,15 @@ export interface Build {
   extra?: string[]
   /** the origins that may drive the page; none: any extension page */
   framers?: string[]
+  /** the SHA-256 (hex) of every file fetched ahead, by its address: what a file the framer hands over must match */
+  sha256?: Record<string, string>
 }
+export interface FileAhead { url: string; size: number | null; sha256: string | null; phase: 'engine' | 'files'; whole: boolean; index?: true }
 export declare function mayDrive(framers: string[] | undefined, origin: string): boolean
+/** the files a visit with these hints fetches ahead */
+export declare function filesAhead(build: Build, hints: { engines: string[]; scripts: string[] }): FileAhead[]
+/** every file the build fetches ahead for some visit */
+export declare function everyFileAhead(build: Build): string[]
 export declare function texPage(options: {
   build: Build
   // biome-ignore lint/suspicious/noExplicitAny: the runner and its engines are texlyre-busytex's classes, or fakes

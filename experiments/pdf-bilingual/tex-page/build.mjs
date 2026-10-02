@@ -11,6 +11,8 @@
 //                           beside them as index-<iid>.txt, <iid> the index's own content, named in build.json
 //   b/<bid>.bin             the manifest's files of the engines, in bundles (both engines', each engine's own): one
 //                           object for each, its version its content's
+// build.json gives the SHA-256 of every file the page fetches ahead (the engine, its preloads, the bundles, the index,
+// the faces): a file handed over by the page's framer is kept only when its bytes are those
 // and out/tex-upload/<cv>.tsv, the upload list: every object with the local file to store and its headers
 // (upload.mjs; the first build makes the brotli copy of every file of the tree, about 30 minutes, kept by content)
 // Every version is a content address of what it holds. A brotli copy (quality 11) of every file under b/, c/, e/ and
@@ -26,6 +28,7 @@ import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
+import { everyFileAhead } from '../poc-site/tex-page.mjs'
 import { parseIndex, resolve } from '../poc-site/tex-tree.mjs'
 import { buildManifest, REFERENCE, scannedOnly, slimSets, worth } from './manifest.mjs'
 import { brotliSizes, brotliTo } from './sizes.mjs'
@@ -288,6 +291,19 @@ const build = {
   // FRAMERS: the origins that may drive the page, comma-separated (the store's extension, the development one
   // chrome-extension://llohepijpkbbfhjolcichpamiokeecab, https://app.readarxiv.org); unset, on this machine: any extension
   framers: (process.env.FRAMERS ?? '').split(',').map(o => o.trim()).filter(Boolean),
+}
+// the SHA-256 of every file the page fetches ahead for some visit (tex-page.mjs everyFileAhead), by its address: a
+// file the framer hands over is kept only when its bytes are these (another extension that frames the page over arXiv
+// shares its partition: the warm-up review's I1)
+{
+  const bytesAt = url => {
+    if (url.startsWith(build.engine)) return readFileSync(join(engineDir, url.slice(build.engine.length)))
+    if (url.startsWith('/b/')) return readFileSync(join(bundleDir, url.slice('/b/'.length)))
+    if (url === `${build.tree}${INDEX}`) return Buffer.from(text)
+    if (url.startsWith(build.tree)) return readFileSync(join(TREE, decodeURIComponent(url.slice(build.tree.length))))
+    throw new Error(`${url}: fetched ahead, and no file of this build`)
+  }
+  build.sha256 = Object.fromEntries(everyFileAhead(build).map(url => [url, sha(bytesAt(url))]))
 }
 const cv = versionOf(JSON.stringify(build), ...readdirSync(pageDir, { recursive: true }).sort().filter(f => statSync(join(pageDir, f)).isFile()).flatMap(f => [f, readFileSync(join(pageDir, f))]))
 writeFileSync(join(pageDir, 'build.json'), JSON.stringify({ cv, page: `/c/${cv}/`, ...build }))
