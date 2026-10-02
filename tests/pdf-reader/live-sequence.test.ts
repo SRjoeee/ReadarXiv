@@ -313,8 +313,9 @@ describe('the original\'s readings, kept', () => {
 
 // The original's labels and bibliography (the F2 re-review's N1): a draft with no references of its own — a re-set's
 // measure, where no preview ran (every unit taken: a typesetting change), or the first preview — is given the
-// original's \newlabel and \bibcite lines and its .bbl, kept with its readings. 2608.08872 (biblatex) re-set without
-// them went +1 page / 0.162 → +2 / 0.520
+// original's \newlabel and \bibcite lines and its .bbl, kept with its readings; and the first preview runs no BibTeX or
+// biber, whose citations are undefined either way (2608.29181, biber: 6.4 s against 15.5 s), the compiles after it
+// reading the original's bibliography. 2608.08872 (biblatex) re-set without them went +1 page / 0.162 → +2 / 0.520
 describe('the original\'s labels and bibliography, for a draft with none of its own', () => {
   const AUX = '\\relax\n\\newlabel{sec:a}{{1}{1}{Intro}{section.1}{}}\n\\newlabel{broken}{{1}{1}{An unclosed\n\\bibcite{a}{1}\n\\abx@aux@cite{0}{a}\n'
   const BBL = '% $ biblatex bbl format version 3.3 $\n\\refsection{0}\n\\entry{a}{article}{}{1}\n\\endentry\n\\endrefsection\n'
@@ -364,6 +365,25 @@ describe('the original\'s labels and bibliography, for a draft with none of its 
     expect(c.given.some(q => kindOf(q) === 'original')).toBe(false)
     const measure = c.given.find(q => kindOf(q) === 'preview')
     expect([text(measure, 'main.aux')?.includes('\\newlabel{sec:a}'), text(measure, 'main.bbl'), measure?.bibtex]).toEqual([true, BBL, false])
+  })
+
+  it('the first preview runs no bibliography program; the preview after the original, and the final, are given its bibliography', async () => {
+    const t = translator(), n = paper().units.length
+    const c = withOriginal(n, { on: k => { if (k === 'original') t.release() } })
+    await run({ compiler: c, translate: t.translate })
+    const previews = c.given.filter(q => kindOf(q) === 'preview')
+    expect(previews.map(q => [q.bibtex, text(q, 'main.bbl')])).toEqual([[false, null], [false, BBL]])
+    // the first preview's own aux, its labels, and the original's citations, which it has none of
+    expect(text(previews[1], 'main.aux')).toBe(`${OWN}\n\\bibcite{a}{1}`)
+    expect(text(c.given.find(q => kindOf(q) === 'final'), 'main.bbl')).toBe(BBL)
+  })
+
+  it('without the rule the original may come late: the first preview runs it as before', async () => {
+    const t = translator(), n = paper().units.length
+    t.release()
+    const c = withOriginal(n)
+    await run({ compiler: c, translate: t.translate, readMarks: null })
+    expect(c.given.find(q => kindOf(q) === 'preview')?.bibtex).toBe(true)
   })
 
   it('under biblatex (no \\bibcite anywhere), a preview that read no bibliography, or whose citation biblatex left undefined (its warning wrapped at 79 columns), is no measure: a draft of the whole translation measures', async () => {

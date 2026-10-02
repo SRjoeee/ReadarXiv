@@ -431,6 +431,14 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     let measuring = null
     // a preview of part of the translation held once for the last batch (below), as long as the last preview took
     let held = false, previewMs = 0
+    /**
+     * A draft runs BibTeX or biber after its one pass where it was given no bibliography — for the drafts after it —,
+     * but the first preview not where the rule is on: its citations are undefined either way, and the original, compiled
+     * by then or right after it, gives the compiles after it its bibliography. biber's first run in a profile beside the
+     * original's own made 2608.29181's first preview 15.5 s, against 6.4 s without (the F2 re-review); and BusyTeX keeps
+     * no log of the pass before a biber run, which every compile here reads
+     */
+    const bibtexFor = () => !meta.bbl && !bblAt() && !(readMarks && !previews)
     while (true) {
       // with the rule, the original right after the first preview: every plan after it is made from it
       if (readMarks && previews && !originalP) { await original(); continue }
@@ -447,7 +455,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       if (dirty) {
         dirty = false
         const snapshot = new Map(translated), t0 = Date.now(), plan = planFor(snapshot)
-        const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bblAt(), overrides: translationFiles(paper, snapshot, { strategy: strategy(), fonts, draft: true, aux: refs(aux), bbl: bblAt(), typeset: plan?.typeset ?? null, note }) })
+        const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: bibtexFor(), overrides: translationFiles(paper, snapshot, { strategy: strategy(), fonts, draft: true, aux: refs(aux), bbl: bblAt(), typeset: plan?.typeset ?? null, note }) })
         if (r.aux) aux = r.aux
         if (r.bbl) bbl = r.bbl
         held = false
