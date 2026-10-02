@@ -541,22 +541,24 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
           plan = planFor(all)
           if (!plan) return null
           r = await measure(plan)
+          let unset = r.ok && !(await settled(r))
+          // one that set a contents list from nothing — a re-set's: every unit taken, no draft of this translation before
+          // it — is measured once more, given its own lists (the F2 re-review's N2). Not the original's lists instead: as
+          // tall as the translation's only where its entries are, and the thesis 2307.16209's figures' long captions made
+          // its re-set three pages short (-5 pages / 2.787 against -2 / 1.493 with its own). Not one that lost a letter
+          if (!unset && r.ok && listsMissing(r)) {
+            aux = r.aux
+            if (r.bbl) bbl = r.bbl
+            r = await measure(plan)
+            // judged as the first: a list may be set in a face without a letter its heading's face has (Devin on #309)
+            unset = r.ok && !(await settled(r))
+          }
           // one that could not set a letter is no measure, as a preview that cannot is not shown: the chain moves on before
           // the final, as from that preview, and the next strategy is measured — so that the final is set from a plan
           // measured under the strategy it is compiled with, not from the next one's plan uncorrected once this one's
           // final failed (the F2 re-review's N2: zh 2608.02459's re-set, measured under xeCJK, which has no σ there).
           // Under the last strategy the final is set as before, and cannot set it either
-          const unset = r.ok && !(await settled(r))
           if (unset && s + 1 < strategies.length) { const why = whyUnset(r); s++; aux = null; note('next strategy', { strategy: strategy().name, measure: why }); continue }
-          // one that set a contents list from nothing — a re-set's: every unit taken, no draft of this translation before
-          // it — is measured once more, given its own lists (the F2 re-review's N2). Not the original's lists instead: as
-          // tall as the translation's only where its entries are, and the thesis 2307.16209's figures' long captions made
-          // its re-set three pages short (-5 pages / 2.787 against -2 / 1.493 with its own)
-          if (!unset && r.ok && listsMissing(r)) {
-            aux = r.aux
-            if (r.bbl) bbl = r.bbl
-            r = await measure(plan)
-          }
           break
         }
         // BusyTeX gave up: the final from the plan uncorrected, which every input but the measure was there for

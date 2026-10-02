@@ -536,13 +536,13 @@ describe('a measure that could not set a letter', () => {
   const strategyOf = (q: Req) => (main(q).includes('xeCJK') ? ':xe' : main(q).includes('CJKutf8') ? ':cjk' : '')
   /** a compiler whose drafts and finals under the strategies `losing` lose σ, each compile kept with its strategy; with
    *  `lists`, a draft's aux writes a contents list, and a draft given none says so in its log (as TeX does) */
-  const losing = (n: number, which: string[], lists = false) => {
+  const losing = (n: number, which: string[], lists = false, inListsOnly = false) => {
     const c = compiler(n), base = c.compile, seen: string[] = []
     c.compile = async (q: Req) => {
       const r = await base(q), kind = kindOf(q), s = strategyOf(q)
       seen.push(`${kind}${ruled(q) ? '+rule' : ''}${s}`)
       if (kind === 'probe' || kind === 'original') return r
-      const lost = which.includes(s) ? SIGMA : '', listed = lists && kind === 'preview'
+      const lost = which.includes(s) && (!inListsOnly || kind === 'final' || q.overrides.has('main.toc')) ? SIGMA : '', listed = lists && kind === 'preview'
       return { ...r, aux: listed ? `\\relax\n\\@writefile{toc}{\\contentsline {section}{1}{1}}\n${r.aux}` : r.aux, log: `${lost}${listed && !q.overrides.has('main.toc') ? 'No file main.toc.\n' : ''}${r.log}` }
     }
     return { ...c, seen }
@@ -568,6 +568,16 @@ describe('a measure that could not set a letter', () => {
     const r = await reset(c, [])
     expect(c.seen).toEqual(['probe', 'original', 'preview+rule:xe', 'preview+rule:cjk', 'final+rule:cjk'])
     expect([r.settled, r.exhausted]).toEqual([false, true])
+  })
+
+  // Devin on #309 (4165873818): the measure taken again with its lists is checked as the first is — a list set in a face
+  // without a letter its heading's face has loses it only once the list is there
+  it('one that loses it only once its lists are there — measured again with them — moves the chain too', async () => {
+    const c = losing(paper(4).units.length, [':xe'], true, true), notes: [string, Record<string, unknown>][] = []
+    const r = await reset(c, notes)
+    expect(c.seen).toEqual(['probe', 'original', 'preview+rule:xe', 'preview+rule:xe', 'preview+rule:cjk', 'preview+rule:cjk', 'final+rule:cjk'])
+    expect(steps(notes)).toEqual(['measure:XeLaTeX + xeCJK', 'measure:XeLaTeX + xeCJK', 'next strategy:pdfLaTeX + CJKutf8', 'measure:pdfLaTeX + CJKutf8', 'measure:pdfLaTeX + CJKutf8', 'typeset:draft', 'final:pdfLaTeX + CJKutf8'])
+    expect(r.settled).toBe(true)
   })
 
   it('one that also set a list from nothing is not measured again under its strategy: the next strategy\'s is, with its own lists', async () => {
