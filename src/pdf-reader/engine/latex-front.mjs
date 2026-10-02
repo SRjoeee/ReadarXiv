@@ -91,8 +91,9 @@ const lineEnvsOf = texts => {
   for (const m of text.matchAll(/\\newminted\s*(?:\[([^\]]+)\])?\s*\{([^}]+)\}/g)) out.add(m[1]?.trim() || `${m[2].trim()}code`)
   return out
 }
-/** whether `env` is read by lines (LINE_ENVS, or the paper's own `lineEnvs`) */
-const isLineEnv = (env, lineEnvs) => LINE_ENVS.test(env) || !!lineEnvs?.has(env.replace(/\*$/, ''))
+/** whether `env` is read by lines (LINE_ENVS, or the paper's own `lineEnvs`: by its name, a star in it as defined
+ *  (`\\DefineVerbatimEnvironment{Code*}`), or by the name its star is added to) */
+const isLineEnv = (env, lineEnvs) => LINE_ENVS.test(env) || !!lineEnvs?.has(env) || !!lineEnvs?.has(env.replace(/\*$/, ''))
 /** whether the line `at` stands on holds, before it, the \\begin or the \\end of an environment read by lines: nothing
  *  of ours goes there (LINE_ENVS) */
 const lineBound = (text, at, lineEnvs) => {

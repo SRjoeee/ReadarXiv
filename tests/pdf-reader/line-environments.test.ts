@@ -152,6 +152,12 @@ describe('nothing of the reader\'s on a line an environment read by lines must h
     expect(tex).toContain(`\\end{CCSXML}\n\\axtlines{${after}}\\leavevmode`)
   })
 
+  it('an environment of the paper\'s own whose name ends in a star', () => {
+    const p = paper(`${PREAMBLE}\n\\DefineVerbatimEnvironment{Code*}{Verbatim}{}\n\\begin{document}\n\\begin{Code*}\nt = 7\n\\end{Code*}\nThe paragraph after a starred environment of the paper's own.\n\\end{document}\n`)
+    const i = indexOf(p, 'after a starred environment')
+    expect(text(originalFiles(p, { lines: true }))).toContain(`\\end{Code*}\n\\axtlines{${i}}\\leavevmode\\axtmark{${i}s}The paragraph after a starred`)
+  })
+
   it('acmart\'s acknowledgements, a comment.sty environment of a class a paper need not ship: the probe on the line after its \\begin', () => {
     const p = openPaper(new Map([['main.tex', enc('\\documentclass{acmart}\n\\begin{document}\nA paragraph.\n\n\\begin{acks}\nWe thank the reviewers.\n\\end{acks}\n\\end{document}\n')]]))
     const i = indexOf(p, 'We thank')
@@ -176,6 +182,7 @@ describe('a table holding an environment read by lines is not fitted', () => {
     expect(fitted('\\begin{tabular}{l}\nA cell \\\\\n\\begin{comment}\nA row hidden \\\\\n\\end{comment}\n\\end{tabular}')).toBe(false)
     expect(fitted('\\begin{tabular}{l}\nA cell \\\\\n\\begin{hidden}\nA row hidden \\\\\n\\end{hidden}\n\\end{tabular}')).toBe(false)
     expect(fitted('\\begin{tabular}{l}\nA cell \\\\\n\\begin{Verbatim}\nx\n\\end{Verbatim}\n\\end{tabular}')).toBe(false)
+    expect(fitted('\\DefineVerbatimEnvironment{Code*}{Verbatim}{}\n\\begin{tabular}{l}\nA cell \\\\\n\\begin{Code*}\nx\n\\end{Code*}\n\\end{tabular}')).toBe(false)
   })
   it('what stands in a TeX comment TeX never reads: the table stays fitted', () => {
     expect(fitted('\\begin{tabular}{l}\nA cell \\\\ % \\begin{comment} was here once\n\\end{tabular}')).toBe(true)
