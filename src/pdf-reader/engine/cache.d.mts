@@ -18,7 +18,7 @@ export declare function allTranslatedBy(results: Map<number, { pieces?: unknown;
 /** the versions a write labels its record with, or null where it writes nothing */
 export declare function labelOf(how: 'full' | 'provenance' | null, options: { pipeline: string; typesetting: string; passing: boolean; cached?: { pipeline: string; typesetting?: string } | null }): { pipeline: string; typesetting: string | undefined } | null
 /** the marked original's readings as a run gives them (live.mjs readingsOf) */
-export interface Readings { log: string; cites: string; marks: import('./typeset/places.mjs').Marks }
+export interface Readings { log: string; cites: string; labels: string; bbl: string | null; marks: import('./typeset/places.mjs').Marks }
 /** the readings as the store keeps them, one per paper, with the left side's marks and the versions that made them */
 export declare function originalRow(readings: Readings, left: [string, unknown][], made: { pipeline: string; typesetting: string; page: string }): import('@/cache/pdf-record').OriginalReadings
 /** a stored original's readings and left marks under these versions, or null */

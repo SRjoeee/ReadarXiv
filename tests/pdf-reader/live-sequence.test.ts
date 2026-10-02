@@ -311,6 +311,77 @@ describe('the original\'s readings, kept', () => {
   })
 })
 
+// The original's labels and bibliography (the F2 re-review's N1): a draft with no references of its own — a re-set's
+// measure, where no preview ran (every unit taken: a typesetting change), or the first preview — is given the
+// original's \newlabel and \bibcite lines and its .bbl, kept with its readings. 2608.08872 (biblatex) re-set without
+// them went +1 page / 0.162 → +2 / 0.520
+describe('the original\'s labels and bibliography, for a draft with none of its own', () => {
+  const AUX = '\\relax\n\\newlabel{sec:a}{{1}{1}{Intro}{section.1}{}}\n\\newlabel{broken}{{1}{1}{An unclosed\n\\bibcite{a}{1}\n\\abx@aux@cite{0}{a}\n'
+  const BBL = '% $ biblatex bbl format version 3.3 $\n\\refsection{0}\n\\entry{a}{article}{}{1}\n\\endentry\n\\endrefsection\n'
+  const text = (q: Req | undefined, path: string) => (q?.overrides.get(path) ? new TextDecoder().decode(q.overrides.get(path)) : null)
+  /** a draft's own aux after its one pass with no bibliography: its labels, no citation */
+  const OWN = '\\relax\n\\newlabel{sec:a}{{1}{2}{Own}{section.1}{}}\n'
+  /** a compiler whose marked original's aux and bbl are AUX and BBL, a preview's aux OWN and, as TeX writes them from
+   *  the bibliography it was given, its citations; every request kept */
+  const withOriginal = (n: number, answering: Answering = {}, aux = AUX) => {
+    const c = compiler(n, answering), base = c.compile, given: Req[] = []
+    c.compile = async (q: Req) => {
+      given.push(q)
+      const r = await base(q), kind = kindOf(q), cites = q.overrides.has('main.bbl') && aux.includes('\\bibcite') ? '\\bibcite{a}{1}\n' : ''
+      return !r.ok ? r : kind === 'original' ? { ...r, aux, bbl: BBL } : kind === 'preview' ? { ...r, aux: OWN + cites } : r
+    }
+    return { ...c, given }
+  }
+  const taken = (p: ReturnType<typeof paper>) => new Map(p.units.map((u, i) => [i, { pieces: u.pieces.map(q => ((q as { t: string }).t === 'text' ? { ...(q as object), tr: true } : q)), state: 'whole', by: 'B', tried: 'B', current: true }]))
+
+  it('the readings carry the original\'s whole \\newlabel lines and its bbl beside its citations', async () => {
+    const p = paper(4), n = p.units.length, t = translator()
+    t.release()
+    const c = withOriginal(n)
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    expect([r.original?.labels, r.original?.cites, r.original?.bbl]).toEqual(['\\newlabel{sec:a}{{1}{1}{Intro}{section.1}{}}', '\\bibcite{a}{1}', BBL])
+  })
+
+  it('a re-set — every unit taken, so no preview — measures the final with the original\'s labels, citations and bibliography, and runs no bibliography program for it', async () => {
+    const p = paper(4), n = p.units.length, c = withOriginal(n)
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: async () => { throw new Error('nothing is sent') }, format: 'markers', marks: new Map(), identity: 'B', seed: taken(p), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    const measure = c.given.find(q => kindOf(q) === 'preview')
+    expect(text(measure, 'main.aux')).toContain('\\newlabel{sec:a}{{1}{1}{Intro}{section.1}{}}')
+    expect(text(measure, 'main.aux')).toContain('\\bibcite{a}{1}')
+    expect(text(measure, 'main.aux')).not.toContain('broken')
+    expect([text(measure, 'main.bbl'), measure?.bibtex]).toEqual([BBL, false])
+    expect(text(c.given.find(q => kindOf(q) === 'final'), 'main.bbl')).toBe(BBL)
+    expect(r.settled).toBe(true)
+  })
+
+  it('so does one given the readings a run before kept: no original compiled, the stored labels and bibliography handed on', async () => {
+    const p = paper(4), n = p.units.length, first = translator()
+    first.release()
+    const r1 = await runLive(p, { lang: 'zh', compile: withOriginal(n).compile, translate: first.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const kept = JSON.parse(JSON.stringify({ ...r1.original, marks: { ...r1.original?.marks, marks: [...(r1.original?.marks.marks ?? [])] } }))
+    const c = withOriginal(n)
+    await runLive(p, { lang: 'zh', compile: c.compile, translate: async () => { throw new Error('nothing is sent') }, format: 'markers', marks: new Map([['0s', {}]]), original: { ...kept, marks: { ...kept.marks, marks: new Map(kept.marks.marks) } }, identity: 'B', seed: taken(p), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(c.given.some(q => kindOf(q) === 'original')).toBe(false)
+    const measure = c.given.find(q => kindOf(q) === 'preview')
+    expect([text(measure, 'main.aux')?.includes('\\newlabel{sec:a}'), text(measure, 'main.bbl'), measure?.bibtex]).toEqual([true, BBL, false])
+  })
+
+  it('under biblatex (no \\bibcite anywhere), a preview that read no bibliography, or whose citation biblatex left undefined (its warning wrapped at 79 columns), is no measure: a draft of the whole translation measures', async () => {
+    const BIBLATEX = AUX.replace('\\bibcite{a}{1}\n', '')
+    const wrapped = `LaTeX Warning: Citation 'Cybenko89ApproximationSuperpositionsSigmoidal' on page\n 1 undefined on input line 318.\n`
+    const sequence = async (said: string) => {
+      const t = translator(), n = paper().units.length
+      let previews = 0
+      const c = withOriginal(n, { on: k => { if (k === 'original') t.release() }, log: k => (k === 'preview' && ++previews === 2 ? `${said}${linesLog(n)}` : null) }, BIBLATEX)
+      await run({ compiler: c, translate: t.translate })
+      return c.calls.map(q => `${q.kind}${q.ruled ? '+rule' : ''}`)
+    }
+    for (const missing of ['No file main.bbl.\n', wrapped]) expect(await sequence(missing)).toEqual(['probe', 'preview', 'original', 'preview+rule', 'preview+rule', 'final+rule'])
+    // and one that read it, its citations defined: the measure, whatever else biblatex says of every one-pass draft
+    expect(await sequence("LaTeX Warning: There were undefined references.\nPackage biblatex Warning: Please (re)run Biber on the file:\n")).toEqual(['probe', 'preview', 'original', 'preview+rule', 'final+rule'])
+  })
+})
+
 // Every unit sent and the last batch still out: a preview of part of the translation waits for it, once, as long as the
 // last preview took — the whole translation's would replace it within that time, and only the whole one measures the
 // final (zh 2608.02163 on the protocol-2 page: the last batch came 0.13 s after a preview of 200 of its 337 units began,

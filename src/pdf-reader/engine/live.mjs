@@ -73,13 +73,21 @@ const whyFailed = r => (r.ok ? undefined : ((r.log ?? '').match(/^(?:\S+:\d+: .*
 const READ_LINE = /^(?:AXT-|Missing character: |! LaTeX Error: Unicode character )/
 /**
  * The marked original as the run and the rule read it: those lines of its log, its marks with every page's columns
- * (`marks`, readMarks'), its citations (the aux's \bibcite lines, which a draft without them is given: withCites).
- * Small, and the same whether made now or kept: a run given them compiles no original (`original`; session.mjs keeps
- * them for the visit and with the paper's records, cache.mjs originalRow)
+ * (`marks`, readMarks'), its references — the aux's \bibcite and \newlabel lines — and the bibliography its BibTeX
+ * or biber made (`bbl`, null where the paper ships its own or has none), which a draft with none of its own is given
+ * (runLive's `refs`). The same whether made now or kept: a run given them compiles no original (`original`;
+ * session.mjs keeps them for the visit and with the paper's records, cache.mjs originalRow)
  */
-export const readingsOf = (o, marks) => ({ log: lastTexLog(o.log).split('\n').filter(l => READ_LINE.test(l)).join('\n'), marks, cites: citesOf(o.aux) })
-/** an aux's citations, its \bibcite lines */
-const citesOf = aux => (aux ?? '').match(/^\\bibcite\{.*$/gm)?.join('\n') ?? ''
+export const readingsOf = (o, marks) => ({ log: lastTexLog(o.log).split('\n').filter(l => READ_LINE.test(l)).join('\n'), marks, ...referencesOf(o) })
+/** an aux's lines of one command, those whose braces close on the line: a line cut short would stop TeX reading the
+ *  aux it is given */
+const auxLines = (aux, command) => (aux ?? '').split('\n').filter(l => l.startsWith(`\\${command}{`) && closed(l)).join('\n')
+const closed = line => { let depth = 0; for (const c of line.replace(/\\./g, '')) if (c === '{') depth++; else if (c === '}' && --depth < 0) return false; return depth === 0 }
+/** a compile's references as a draft is given them: its citations (\bibcite), its labels (\newlabel), its bibliography */
+const referencesOf = o => ({ cites: auxLines(o.aux, 'bibcite'), labels: auxLines(o.aux, 'newlabel'), bbl: o.bbl ?? null })
+/** TeX writes its log in lines of 79 characters at most, a warning about a long key over two: joined again (a line of
+ *  79 of its own is joined to the next too, so what is looked for in it is not anchored to a line's start) */
+const unwrapped = log => log.replace(/^(.{79})\n/gm, '$1')
 /** why a compile that gave a PDF is not shown (unsettable): the font that would not load, or the letters it lost */
 const whyUnset = r => (lastTexLog(r.log).match(/^! Font .* not loadable.*$/m)?.[0] ?? `a letter it could not set (${[...lostIn(r.log).keys()].slice(0, 5).join(', ')})`).slice(0, 300)
 
@@ -206,7 +214,11 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 export const PIPELINE_VERSION = '7'
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
-export const TYPESETTING_VERSION = '1'
+// 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a
+//    re-set's measure (every unit taken, no preview) had neither, and set 2608.08872 two pages long where its first
+//    visit set one —, and a compile that read no bibliography is no measure under biblatex either (runLive's `refs`,
+//    `referencesWhole`); readings kept under 1 have neither
+export const TYPESETTING_VERSION = '2'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
@@ -350,17 +362,24 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     // where its placeholders stood, its displays beyond its marks and the sentences of the translation typeset, for the
     // anchors
     const texts = done => textsShown(units, typesetBy(done, strategy()), pieces => sentencesBy.get(pieces))
+    // the references the last draft made: its aux, and the bibliography BibTeX or biber made after it, if one ran
     let aux = null, bbl = null
     // known, the original is what it was: nothing compiled
     let originalP = known ? Promise.resolve({ ok: true, log: known.log, aux: known.cites }) : null
     /**
-     * A draft's references, the original's citations with them where they have none. A first preview runs BibTeX after
-     * its one pass, so the preview after it read every citation from an aux that had none yet, set them as "?" and could
-     * measure nothing; and a visit whose translation comes quickly has just those two previews. A translation keeps every
-     * citation and leaves the bibliography as it is, so the original's labels are the ones its own passes write
+     * A draft's references (the F2 re-review's N1): its own where a draft before made them, else the original's — its
+     * labels and citations, and its bibliography —, and the original's citations where its own have none. A translation
+     * keeps every label and citation and leaves the bibliography as it is: the original's are the ones its own passes
+     * write, and its biber's bibliography sets the translation's citations as the final's own does (2608.08872, 29181,
+     * 2607.24653 under xeCJK: the same entries in the same order, the same 92, 74 and 360 numbered citations; only the
+     * citation counts biblatex ignores differ). Without them a draft sets every citation as "?" or its key, and none of
+     * the bibliography: a first preview's aux has no citation, since its BibTeX ran after its one pass, and a re-set — a
+     * typesetting change, every unit taken — compiles no preview at all, so its measure had neither, and set 2608.08872
+     * two pages long where the full run set it one
      */
-    let originalCites = known?.cites ?? ''
-    const withCites = a => (!originalCites || /^\\bibcite\{/m.test(a ?? '') ? a : `${a ?? ''}\n${originalCites}`)
+    let originalRefs = known ? { cites: known.cites, labels: known.labels, bbl: known.bbl } : { cites: '', labels: '', bbl: null }
+    const refs = a => (a ? (!originalRefs.cites || /^\\bibcite\{/m.test(a) ? a : `${a}\n${originalRefs.cites}`) : [originalRefs.labels, originalRefs.cites].filter(Boolean).join('\n') || null)
+    const bblAt = () => bbl ?? originalRefs.bbl
     // the marked original, compiled once: the left side's anchors, the characters the paper's own compile could not set,
     // and with the rule every plan's base — so in full, every pass: one pass sets references, citations and the pages they
     // move unsettled, and its readings are another paper's (the review of 2026-10-01, M3)
@@ -368,7 +387,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       note('original', { ok: o.ok, ms: o.ms, error: whyFailed(o) })
       if (o.ok) {
         onOriginal?.({ pdf: o.pdf })
-        originalCites = citesOf(o.aux)
+        originalRefs = referencesOf(o)
         if (readMarks) readings = await readMarks(o.pdf).then(m => readingsOf(o, m), e => { passing = true; note('typeset', { missing: `the original's marks (${String(e?.message ?? e).slice(0, 120)})` }); return null })
       } else if (timedOut(o)) passing = true
       return o
@@ -401,11 +420,13 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     }
     /** every unit to translate in a snapshot: the whole translation, which alone can measure the final */
     const whole = snapshot => units.every(u => kept.has(u) || snapshot.has(u))
-    /** a compile's references as complete as the original's: its citations defined, and as many entries in its
-     *  bibliography (a pass set from an earlier pass's references may lack some, and a bibliography of another length
-     *  moves every page after it) */
-    const bibcites = text => (text ?? '').match(/^\\bibcite\{/gm)?.length ?? 0
-    const referencesWhole = r => !/^(?:LaTeX|Package natbib) Warning: Citation .*undefined/m.test(lastTexLog(r.log)) && bibcites(r.aux) === bibcites(readings?.cites)
+    /** a compile's references as complete as the original's: a bibliography read, every citation defined, and as many
+     *  entries in it (a pass set from an earlier pass's references may lack some, and a bibliography of another length
+     *  moves every page after it). biblatex writes no \bibcite, and its warnings are the kernel's, its keys in plain
+     *  quotes; a one-pass draft under it always asks for biber again and says there were undefined references, which
+     *  says nothing */
+    const bibcites = text => (text ?? '').match(/^\\bibcite\{/gm)?.length ?? 0, noBbl = `No file ${jobName(project.main)}.bbl.`
+    const referencesWhole = r => { const log = unwrapped(lastTexLog(r.log)); return !log.includes(noBbl) && !/(?:LaTeX|Package natbib) Warning: Citation [`'].*undefined/.test(log) && bibcites(r.aux) === bibcites(readings?.cites) }
     /** the preview that can measure the final: the last of the whole translation, planned, shown */
     let measuring = null
     // a preview of part of the translation held once for the last batch (below), as long as the last preview took
@@ -426,7 +447,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       if (dirty) {
         dirty = false
         const snapshot = new Map(translated), t0 = Date.now(), plan = planFor(snapshot)
-        const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bbl, overrides: translationFiles(paper, snapshot, { strategy: strategy(), fonts, draft: true, aux: withCites(aux), bbl, typeset: plan?.typeset ?? null, note }) })
+        const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bblAt(), overrides: translationFiles(paper, snapshot, { strategy: strategy(), fonts, draft: true, aux: refs(aux), bbl: bblAt(), typeset: plan?.typeset ?? null, note }) })
         if (r.aux) aux = r.aux
         if (r.bbl) bbl = r.bbl
         held = false
@@ -477,7 +498,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
         const plan = planFor(all)
         if (!plan) return null
         const t1 = Date.now()
-        const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bbl, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: true, aux: withCites(aux), bbl, typeset: plan.typeset, note }) })
+        const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bblAt(), overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: true, aux: refs(aux), bbl: bblAt(), typeset: plan.typeset, note }) })
         note('measure', { ok: r.ok, ms: r.ms, roundTrip: Date.now() - t1, strategy: strategy().name, error: whyFailed(r) })
         // BusyTeX gave up: the final from the plan uncorrected, which every input but the measure was there for
         if (timedOut(r)) { passing = true; return plan.typeset }
@@ -495,9 +516,9 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     let r, ok, exhausted = false, finalAgain = false
     for (;;) {
       // the final's lines are read by nothing: its TeX without the line probes (tex.mjs typesetting's `final`)
-      r = await ask({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux, bbl, typeset: typeset?.final ?? typeset, note }) })
+      r = await ask({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux: refs(aux), bbl: bblAt(), typeset: typeset?.final ?? typeset, note }) })
       ok = await settled(r)
-      note('final', { ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, typeset: !!typeset, undefinedCitations: [...new Set([...(r.log ?? '').matchAll(/^(?:LaTeX|Package natbib) Warning: Citation [`']([^']+)' .*undefined/gm)].map(m => m[1]))].slice(0, 8), error: ok ? undefined : whyFailed(r) ?? whyUnset(r) })
+      note('final', { ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, typeset: !!typeset, undefinedCitations: [...new Set([...unwrapped(lastTexLog(r.log)).matchAll(/(?:LaTeX|Package natbib) Warning: Citation [`']([^']+)' .*undefined/g)].map(m => m[1]))].slice(0, 8), error: ok ? undefined : whyFailed(r) ?? whyUnset(r) })
       if (ok) break
       // (a compile the page did not answer, or failed, was asked once more by `ask`, and a second failure stops the run:
       // a slow machine or the page's own failure is no reason to change how the paper is set — Part 3's checks: a

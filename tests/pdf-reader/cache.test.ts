@@ -122,7 +122,7 @@ describe('reusable: the seeds a run takes as they are', () => {
 // The marked original's readings, one row per paper version in the store (src/cache/pdf-store.ts `originals`): JSON as
 // stored, taken back only under the versions that made them and with the left side's marks (the F2 review's I3)
 describe('the original\'s readings as stored', () => {
-  const readings = { log: 'AXT-LINES 0 4 12.0pt 10\nAXT-END', cites: '\\bibcite{a}{1}', marks: { pages: 1, width: 612, height: 792, columns: [1], marks: new Map([['0s', { page: 0, x: 72, y: 700 }]]) } }
+  const readings = { log: 'AXT-LINES 0 4 12.0pt 10\nAXT-END', cites: '\\bibcite{a}{1}', labels: '\\newlabel{s}{{1}{1}}', bbl: '\\entry{a}{article}{}{}', marks: { pages: 1, width: 612, height: 792, columns: [1], marks: new Map([['0s', { page: 0, x: 72, y: 700 }]]) } }
   const made = { pipeline: '7', typesetting: '1', page: 'cv/eid/tid/ix' }
   const left: [string, unknown][] = [['0s', { word: 'Paragraph' }]]
 

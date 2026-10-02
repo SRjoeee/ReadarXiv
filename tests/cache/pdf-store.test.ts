@@ -231,7 +231,7 @@ describe('createPdfStore', () => {
 
   // the marked original's readings, one row per paper version (the F2 review's I3): written with a record, kept while
   // any record of the paper is, gone with the last
-  const readings = { pipeline: '2', typesetting: '1', page: '1', log: 'AXT-END', cites: '', marks: { pages: 1, width: 612, height: 792, columns: [1], marks: [] }, left: [['0s', {}]] as [string, unknown][] }
+  const readings = { pipeline: '2', typesetting: '1', page: '1', log: 'AXT-END', cites: '', labels: '', bbl: null, marks: { pages: 1, width: 612, height: 792, columns: [1], marks: [] }, left: [['0s', {}]] as [string, unknown][] }
   it('the original\'s readings: written with a record, one per paper whatever its language, read back by its PDF\'s digest', async () => {
     const s = createPdfStore({ db: dbOf() })
     expect(await s.original('d')).toBeUndefined()

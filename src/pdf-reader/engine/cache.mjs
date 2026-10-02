@@ -87,13 +87,13 @@ export const knownMarks = (cached, samePipeline) => (samePipeline && cached?.mar
  * OriginalReadings), with the left side's marks, under the versions `made` { pipeline, typesetting, page } that made
  * them: JSON, the marks' Map as its entries
  */
-export const originalRow = (readings, left, made) => ({ pipeline: made.pipeline, typesetting: made.typesetting, page: made.page, log: readings.log, cites: readings.cites, marks: { ...readings.marks, marks: [...readings.marks.marks] }, left })
+export const originalRow = (readings, left, made) => ({ pipeline: made.pipeline, typesetting: made.typesetting, page: made.page, log: readings.log, cites: readings.cites, labels: readings.labels, bbl: readings.bbl, marks: { ...readings.marks, marks: [...readings.marks.marks] }, left })
 /**
  * A stored original's readings and left marks, { readings, left }, where this pipeline (the units the marks name), this
  * typesetting (the original's TeX, how its PDF is read) and this TeX page made them, and the left side's marks are
  * there: a run with them compiles no original (live.mjs runLive `original`); else null, and the original is compiled
  */
-export const knownOriginal = (row, now) => (row && row.pipeline === now.pipeline && row.typesetting === now.typesetting && row.page === now.page && row.left?.length ? { readings: { log: row.log, cites: row.cites, marks: { ...row.marks, marks: new Map(row.marks.marks) } }, left: row.left } : null)
+export const knownOriginal = (row, now) => (row && row.pipeline === now.pipeline && row.typesetting === now.typesetting && row.page === now.page && row.left?.length ? { readings: { log: row.log, cites: row.cites, labels: row.labels, bbl: row.bbl, marks: { ...row.marks, marks: new Map(row.marks.marks) } }, left: row.left } : null)
 
 /**
  * What a run writes (REPORT, eighteenth addendum, "Writing"): the whole record when it ended with a final that
