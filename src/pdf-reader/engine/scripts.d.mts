@@ -7,6 +7,7 @@ export interface Strategy { name: string; engine: string; xe: boolean; leading?:
 export declare function strategiesFor(meta: { compiler?: string }, lang: string): Strategy[]
 /** whether the author block's names and places are translated into `lang` */
 export declare function authorsTranslated(lang: string): boolean
-/** what the TeX page is told a visit will use: the paper's engine and the language's first strategy's, the CJK script
- *  whose faces it sets; `own`: the marked original's, its own engine alone */
-export declare function texHints(meta: { compiler?: string }, lang: string, own?: boolean): { engines: string[]; fonts: string[] }
+/** the script a BCP 47 tag is written in (its likely script) */
+export declare function scriptOf(lang: string): string
+/** the CJK scripts' typesetting (their faces, spacing and leading), by script */
+export declare const CJK: Record<string, unknown>

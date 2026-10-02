@@ -4,6 +4,7 @@
 // framed here. It closes itself once nothing has been asked of it for a while — the models and the runtime hold some
 // 120 MB, and the background's own timers die with its worker —, and at once after a warm-up when no figure has been
 // read in it.
+import { texHints } from '@/pdf-reader/engine/hints.mjs'
 import { onMessages, sendMessage } from '@/shared/messages'
 import type { TexWarmResult } from '@/shared/tex-warm'
 import type { OcrWorkerReply } from './protocol'
@@ -71,10 +72,8 @@ onMessages({
     if (warming) return Promise.resolve({ started: false })
     warming = true
     clearTimeout(idle)
-    // the hints a pdfLaTeX paper's visit in that language sends, as the reader makes them; the typesetting's module
-    // loaded for it alone, apart from the recogniser's
-    void import('@/pdf-reader/engine/scripts.mjs')
-      .then(({ texHints }) => warmTexPage({ ...request, ...texHints({ compiler: 'pdflatex' }, request.lang) }, { frame: texFrame, locks: navigator.locks, caches }))
+    // the hints a pdfLaTeX paper's visit in that language sends, as the reader makes them
+    void warmTexPage({ ...request, ...texHints({ compiler: 'pdflatex' }, request.lang) }, { frame: texFrame, locks: navigator.locks, caches })
       .catch((e: unknown): TexWarmResult => ({ ok: false, lang: request.lang, error: e instanceof Error ? e.message : String(e) }))
       .then(result => sendMessage({ type: 'axt:tex-warmed', result }).catch(() => undefined))
       .finally(() => {

@@ -238,18 +238,3 @@ export function strategiesFor(meta, lang) {
   }
   throw new Error(`no typesetting for ${lang} (script ${script}) yet`)
 }
-
-/**
- * What the TeX page is told a visit will use (its protocol 2 hints): the engines — the paper's own (the font probe, the
- * marked original) and the first strategy's for the language — and the CJK script whose faces that strategy sets.
- * `own`: the marked original's compiler, the paper as it is in its own engine alone. The warm-up downloads ahead what a
- * pdfLaTeX paper's hints name (background/warmup.ts), so that the reader's first visit asks for nothing it has not
- */
-export function texHints(meta, lang, own = false) {
-  // classic LaTeX is compiled by pdfLaTeX, its own engine and its first strategy's alike
-  const engineOf = name => (name === 'latex' ? 'pdflatex' : name)
-  let first = null
-  try { if (!own) first = strategiesFor(meta, lang)[0] } catch {}
-  const script = scriptOf(lang)
-  return { engines: [...new Set([engineOf(meta.compiler), engineOf(first?.engine)].filter(Boolean))], fonts: !own && CJK[script] ? [script] : [] }
-}

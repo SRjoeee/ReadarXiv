@@ -1,8 +1,10 @@
-// What the TeX page is told a visit will use (scripts.mjs texHints): the hints the reader's compilers send, and the ones
+// What the TeX page is told a visit will use (hints.mjs texHints): the hints the reader's compilers send, and the ones
 // the warm-up downloads ahead for the reader's target language — the same rule, so that a warm-up fetches what a first
-// visit's compiles ask for
+// visit's compiles ask for; and the rule kept equal to the typesetting's own (scripts.mjs strategiesFor), which the
+// offscreen document cannot load
 import { describe, expect, it } from 'vitest'
-import { texHints } from '@/pdf-reader/engine/scripts.mjs'
+import { CJK_SCRIPTS, texHints } from '@/pdf-reader/engine/hints.mjs'
+import { CJK, scriptOf, strategiesFor, VERIFIED } from '@/pdf-reader/engine/scripts.mjs'
 
 describe('texHints', () => {
   it('a CJK language: the paper\'s engine and XeLaTeX (its first strategy, xeCJK), and the script\'s faces', () => {
@@ -28,5 +30,19 @@ describe('texHints', () => {
 
   it('a language with no typesetting yet: the paper\'s engine alone', () => {
     expect(texHints({ compiler: 'pdflatex' }, 'ar')).toEqual({ engines: ['pdflatex'], fonts: [] })
+  })
+
+  it('agrees with the typesetting\'s strategies for every language the reader sets and every engine a paper is set with', () => {
+    expect([...CJK_SCRIPTS].sort()).toEqual(Object.keys(CJK).sort())
+    const engineOf = (name: string) => (name === 'latex' ? 'pdflatex' : name)
+    for (const lang of [...VERIFIED, 'zh-TW', 'sr', 'bg']) {
+      for (const compiler of ['pdflatex', 'latex', 'xelatex', 'lualatex']) {
+        const first = strategiesFor({ compiler }, lang)[0]
+        expect(texHints({ compiler }, lang), `${lang} ${compiler}`).toEqual({
+          engines: [...new Set([engineOf(compiler), engineOf(first?.engine ?? compiler)])],
+          fonts: CJK[scriptOf(lang)] ? [scriptOf(lang)] : [],
+        })
+      }
+    }
   })
 })

@@ -40,7 +40,8 @@ import { captionFor, floatHitOf, floatOf, floatsAgree, floatShapes, floatsOn, pa
 import { hostReady } from './host.mjs'
 import { compilerKeeper, keptFor, openPaper, PIPELINE_VERSION, runLive, TYPESETTING_VERSION } from './live.mjs'
 import { displayEdges, isName, plainSource, sentencesKept, unitText, WIRE } from './mt.mjs'
-import { texHints, verified, VERIFIED } from './scripts.mjs'
+import { texHints } from './hints.mjs'
+import { verified, VERIFIED } from './scripts.mjs'
 import { answerWant, shareLock } from './tex-store.mjs'
 import { marksOf as typesetMarksOf } from './typeset/places.mjs'
 import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
@@ -2144,7 +2145,7 @@ async function live() {
   /**
    * The TeX page as a compiler, given the paper's project and the visit's language: { compile, close }, closing the page
    * with its worker (live.mjs compilerKeeper opens one when needed, and a fresh one after a compile the page failed).
-   * Protocol 2's hints (the S3a report; scripts.mjs texHints): the engines the visit will use — the paper's own (the font
+   * Protocol 2's hints (the S3a report; hints.mjs): the engines the visit will use — the paper's own (the font
    * probe, the marked original) and its first strategy's — and the CJK script whose faces that strategy sets, which the
    * page fetches ahead, from the extension's store first (`store`: the warm-up's files, tex-store.mjs); a page of
    * protocol 1 reads the `endpoint` instead, and nothing else. An init the page reports failed is no
