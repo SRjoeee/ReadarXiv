@@ -5,6 +5,8 @@
 // whose engine the init did not hint brings BusyTeX up again with it; and a draft whose biber runs after its one pass
 // returns that pass's log (busytex/tex-log.diff).
 //   node experiments/pdf-bilingual/tex-page/network-check.mjs      (after tex-page/build.mjs)
+//   LIVE=1 node experiments/pdf-bilingual/tex-page/network-check.mjs      the site as deployed (https://tex.readarxiv.org), its
+//                                                                         objects served through this machine (serve.mjs upstream)
 import { mkdtempSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -14,7 +16,7 @@ import { serveTexSite } from './serve.mjs'
 const { chromium } = createRequire(new URL('../../../', import.meta.url).pathname)('playwright')
 const asked = []
 let failing = null // a tree path that fails, and how: a status (503, 404) or a dropped connection
-const server = await serveTexSite({ log: row => asked.push(row.path) })
+const server = await serveTexSite({ log: row => asked.push(row.path), upstream: process.env.LIVE ? 'https://tex.readarxiv.org' : null })
 // the fault: the site's handler is wrapped by listening first
 const handlers = server.listeners('request')
 server.removeAllListeners('request')

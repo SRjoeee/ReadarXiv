@@ -5,6 +5,8 @@
 // LLM_MOCK), so that no outside service is asked. Prints the reader's timeline and the page's requests.
 //   pnpm build && node experiments/pdf-bilingual/tex-page/build.mjs
 //   node experiments/pdf-bilingual/tex-page/reader-check.mjs [--de=2608.02163] [--zh=2608.18090]
+//   LIVE=1 … — the site as deployed (https://tex.readarxiv.org), its objects served through this machine (serve.mjs
+//   upstream), which a reader of protocol 1 takes as its `site`
 import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
@@ -19,7 +21,7 @@ const RUNS = [['deu', arg('de', '2608.02163')], ['cmn', arg('zh', '2608.18090')]
 const serve = handler => new Promise(r => { const s = createServer(handler).listen(0, '127.0.0.1', () => r(s)) })
 
 const requests = []
-const site = await serveTexSite({ log: row => requests.push(row) })
+const site = await serveTexSite({ log: row => requests.push(row), upstream: process.env.LIVE ? 'https://tex.readarxiv.org' : null })
 const corpus = await serve((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
   const [, kind, id] = decodeURIComponent(req.url.split('?')[0]).match(/^\/(src|pdf)\/(.+)$/) ?? []

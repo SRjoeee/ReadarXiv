@@ -5,8 +5,11 @@
 // among files of one name, where texlive-server took another for two small files): the comparison.
 // `link: { rtt, mbit }` makes the server a slow link: every response waits one round trip before its first byte, and
 // all bodies share the link's rate. `tls: true` serves HTTP/2 over TLS with a self-signed certificate (the browser
-// must accept it), as a CDN does.
-//   node experiments/pdf-bilingual/tex-page/serve.mjs [--port=8072] [--tls] [--today] [--rtt=30 --mbit=50]
+// must accept it), as a CDN does. `upstream: <origin>` serves the site deployed there instead of out/tex-site (LIVE:
+// https://tex.readarxiv.org): every object fetched from it as it is asked for — with brotli, which the site requires
+// —, its status and headers passed on, its bytes decoded, so that the checks run against the deployed objects with
+// their request log and their faults still this server's.
+//   node experiments/pdf-bilingual/tex-page/serve.mjs [--port=8072] [--tls] [--today] [--rtt=30 --mbit=50] [--upstream=<origin>]
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
@@ -45,8 +48,8 @@ export function certificateSpki() {
  * → the server, listening on 127.0.0.1:`port` (0: any free port). `log(row)` hears of every response:
  * { t, path, status, bytes (on the wire), encoding }
  */
-export async function serveTexSite({ port = 0, tls = false, today = false, link = null, log = null } = {}) {
-  const tree = JSON.parse(readFileSync(join(SITE, 'tree.json'), 'utf8'))
+export async function serveTexSite({ port = 0, tls = false, today = false, link = null, log = null, upstream = null } = {}) {
+  const tree = upstream ? null : JSON.parse(readFileSync(join(SITE, 'tree.json'), 'utf8'))
   let index = null
   const treeIndex = () => (index ??= parseIndex(readFileSync(join(SITE, 't', tree.tid, tree.index), 'utf8')))
   const todayDir = join(EXP, 'out/tex-today')
@@ -98,11 +101,23 @@ export async function serveTexSite({ port = 0, tls = false, today = false, link 
     }
     res.end()
   }
+  /** the deployed site's answer to a request, as it gave it: its status, the headers a page reads, its bytes decoded */
+  async function fromUpstream(req, res, t, path) {
+    const r = await fetch(new URL(req.url, upstream), { headers: { 'accept-encoding': 'br' } })
+    const body = Buffer.from(await r.arrayBuffer())
+    if (link?.rtt) await sleep(link.rtt)
+    res.statusCode = r.status
+    for (const h of ['content-type', 'cache-control', 'content-security-policy', 'x-content-type-options', 'last-modified', 'etag']) { const v = r.headers.get(h); if (v) res.setHeader(h, v) }
+    res.setHeader('content-length', body.length)
+    log?.({ t, path, status: r.status, bytes: body.length, encoding: 'identity' })
+    await send(res, body)
+  }
   const handler = async (req, res) => {
     const t = Date.now()
     const path = decodeURIComponent(new URL(req.url, 'http://x').pathname)
     res.setHeader('access-control-allow-origin', '*')
     try {
+      if (upstream) return await fromUpstream(req, res, t, path)
       const at = locate(path)
       if (link?.rtt) await sleep(link.rtt)
       if (!at || (at.file && (!existsSync(at.file) || !statSync(at.file).isFile()))) {
@@ -132,6 +147,6 @@ export async function serveTexSite({ port = 0, tls = false, today = false, link 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const arg = (name, fallback) => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback
   const tls = process.argv.includes('--tls')
-  const server = await serveTexSite({ port: Number(arg('port', '8072')), tls, today: process.argv.includes('--today'), link: arg('mbit', '') ? { rtt: Number(arg('rtt', '0')), mbit: Number(arg('mbit', '0')) } : null })
+  const server = await serveTexSite({ port: Number(arg('port', '8072')), tls, today: process.argv.includes('--today'), link: arg('mbit', '') ? { rtt: Number(arg('rtt', '0')), mbit: Number(arg('mbit', '0')) } : null, upstream: arg('upstream', null) })
   console.log(`The TeX page: ${tls ? 'https' : 'http'}://127.0.0.1:${server.address().port}/tex.html`)
 }

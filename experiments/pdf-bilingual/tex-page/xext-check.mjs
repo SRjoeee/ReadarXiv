@@ -9,6 +9,8 @@
 // the build's files in the cache it shares with B's, and starts and compiles. Before build.json carried the hashes, B's
 // bytes were kept and A's page ran them: its BusyTeX did not start.
 //   node experiments/pdf-bilingual/tex-page/xext-check.mjs      (after tex-page/build.mjs)
+//   LIVE=1 node experiments/pdf-bilingual/tex-page/xext-check.mjs      the site as deployed: its build.json, and every object
+//                                                                      fetched from https://tex.readarxiv.org by this server
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -17,8 +19,11 @@ import { certificateSpki, serveTexSite } from './serve.mjs'
 
 const { chromium } = createRequire(new URL('../../../', import.meta.url).pathname)('playwright')
 const SITE = new URL('../out/tex-site/', import.meta.url).pathname
-const cv = /\/c\/([0-9a-f]+)\/tex\.js/.exec(readFileSync(join(SITE, 'tex.html'), 'utf8'))?.[1]
-const build = JSON.parse(readFileSync(join(SITE, 'c', cv, 'build.json'), 'utf8'))
+const LIVE = process.env.LIVE ? 'https://tex.readarxiv.org' : null
+// the deployed site asks for brotli (a request without it is refused)
+const read = async path => (LIVE ? (await fetch(`${LIVE}/${path}`, { headers: { 'accept-encoding': 'br' } })).text() : readFileSync(join(SITE, path), 'utf8'))
+const cv = /\/c\/([0-9a-f]+)\/tex\.js/.exec(await read('tex.html'))?.[1]
+const build = JSON.parse(await read(`c/${cv}/build.json`))
 /** what B hands: every file a pdfLaTeX visit with Chinese faces fetches ahead, at the length build.json gives */
 const forged = {
   [`${build.engine}busytex.wasm`]: build.wasm,
@@ -28,7 +33,7 @@ const forged = {
 }
 
 const asked = []
-const server = await serveTexSite({ tls: true, log: row => asked.push(row.path) })
+const server = await serveTexSite({ tls: true, log: row => asked.push(row.path), upstream: LIVE })
 // arXiv's pages: a stub, which the probes' content scripts frame their pages in
 const site = server.listeners('request')
 server.removeAllListeners('request')
