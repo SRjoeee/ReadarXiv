@@ -880,7 +880,12 @@ is only how it meets the rest of the extension.
   planned from our marked original's line probes and marks. The original is compiled in full in a TeX frame of its
   own from the run's start, beside the probe and the first preview, which never waits for it, and the frame goes once
   it is in (150–450 MB more meanwhile); what the rule reads of it is kept for the visit and, with the left side's
-  marks, per paper version in the store, so that a run again, a revisit or another language compiles no original. The
+  marks, per paper version in the store, so that a run again, a revisit or another language compiles no original. With
+  it are kept the original's labels and the bibliography its BibTeX or biber made, which a draft with none of its own
+  is given: a typesetting change compiles no preview, every paragraph taken as it is, and without them its measure set
+  no bibliography (2608.08872 two pages long where its first visit set one). The original's biber bibliography sets the
+  translation's citations as the final's own does, so the first preview runs no BibTeX or biber — its citations are
+  undefined either way —, and every compile after it reads the original's. The
   last preview of the whole translation measures where its text stood, and the final corrects it: a whole
   translation after the first preview waits for the original's readings, and once every unit is sent a preview of
   part of it waits a preview's time for the last batch, so that the whole one is next. Where a plan cannot be made
