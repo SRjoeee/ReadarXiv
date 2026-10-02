@@ -40,7 +40,9 @@ import { captionFor, floatHitOf, floatOf, floatsAgree, floatShapes, floatsOn, pa
 import { hostReady } from './host.mjs'
 import { compilerKeeper, keptFor, openPaper, PIPELINE_VERSION, runLive, TYPESETTING_VERSION } from './live.mjs'
 import { displayEdges, isName, plainSource, sentencesKept, unitText, WIRE } from './mt.mjs'
-import { CJK, scriptOf, strategiesFor, verified, VERIFIED } from './scripts.mjs'
+import { texHints } from './hints.mjs'
+import { verified, VERIFIED } from './scripts.mjs'
+import { answerWant, shareLock } from './tex-store.mjs'
 import { marksOf as typesetMarksOf } from './typeset/places.mjs'
 import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
 import { unpackSource } from './tar.mjs'
@@ -2105,7 +2107,28 @@ async function live() {
    *  the tree's and its index's; '1' for a page of protocol 1): kept until a compiler takes it, so that the versions a
    *  "cannot typeset" mark is judged by cost no second load */
   let frameP = null
-  const texFrame = () => (frameP ??= (async () => {
+  /**
+   * The TeX page in use while this reader typesets into `lang` (tex-store.mjs): the lock shared, so that no warm-up
+   * starts meanwhile, and one running asked through the background to give way — stopped (it keeps what came) when it
+   * is for another language, or its pace says it would outlast the reader's patience (on a slow link the page would
+   * wait minutes for files it may not need), else waited for, since a stop loses the files in flight; and the files a
+   * page of ours asks for — those its own cache lacks: over arXiv's PDF page it has a cache of its own, which the
+   * warm-up could not fill — handed from the extension's store
+   */
+  let pageInUse = null
+  /** the page's versions last told to the background (warmup.ts seen) */
+  let versionTold = null
+  const usePage = lang => {
+    if (pageInUse) return
+    pageInUse = shareLock(undefined, () => void sendMessage({ type: 'axt:tex-give-way', lang }).catch(() => {}))
+    addEventListener('message', e => {
+      if (e.origin !== site || e.data?.type !== 'want' || ![...document.querySelectorAll('iframe')].some(f => f.contentWindow === e.source)) return
+      const page = e.source, id = e.data.id
+      void pageInUse.then(() => answerWant(site, e.data)).then(({ message, transfer }) => page.postMessage(message, site, transfer), () => page.postMessage({ type: 'have', id, files: {} }, site))
+    })
+  }
+  const texFrame = lang => (frameP ??= (async () => {
+    usePage(lang)
     const frame = Object.assign(document.createElement('iframe'), { src: `${site}/tex.html`, hidden: true })
     const ready = waitFor(site, 'ready', frame)
     document.body.append(frame)
@@ -2115,30 +2138,33 @@ async function live() {
       // our site's in a production build; one on this machine (http) is started by hand (addresses.mjs TEX_PAGE)
       throw Object.assign(new Error(`The TeX page at ${site} did not answer${site.startsWith('http:') ? ': start it with node spikes/serve-live.mjs' : ''}`), { event: 'no compiler' })
     }
-    return { frame, version: said.protocol === 2 ? [said.cv, said.eid, said.tid, said.index].join('/') : '1' }
+    const version = said.protocol === 2 ? [said.cv, said.eid, said.tid, said.index].join('/') : '1'
+    // told to the background once a visit: a page deployed since the last warm-up is warmed again at the next start
+    if (version !== versionTold) {
+      versionTold = version
+      void sendMessage({ type: 'axt:tex-seen', versions: version }).catch(() => {})
+    }
+    return { frame, version }
   })().catch(e => { frameP = null; throw e }))
   /** the TeX page's versions the compiles were made under: what a "cannot typeset" mark holds for (the S3a review, I5 d) */
   let compiledUnder = null
   /**
    * The TeX page as a compiler, given the paper's project and the visit's language: { compile, close }, closing the page
    * with its worker (live.mjs compilerKeeper opens one when needed, and a fresh one after a compile the page failed).
-   * Protocol 2's hints (the S3a report): the engines the visit will use — the paper's own (the font probe, the marked
-   * original) and its first strategy's — and the CJK script whose faces that strategy sets, which the page fetches
-   * ahead; a page of protocol 1 reads the `endpoint` instead, and nothing else. An init the page reports failed is no
+   * Protocol 2's hints (the S3a report; hints.mjs): the engines the visit will use — the paper's own (the font
+   * probe, the marked original) and its first strategy's — and the CJK script whose faces that strategy sets, which the
+   * page fetches ahead, from the extension's store first (`store`: the warm-up's files, tex-store.mjs); a page of
+   * protocol 1 reads the `endpoint` instead, and nothing else. An init the page reports failed is no
    * compiler: the frame goes, and the failure is retried as a network down is (the S3a report's duties, a). `own`: the
    * marked original's compiler, which sets the paper as it is, in its own engine alone
    */
   const openCompiler = async (p, lang, own = false) => {
     // the frame taken at once: another compiler opening meanwhile loads one of its own
-    const mine = texFrame()
+    const mine = texFrame(lang)
     frameP = null
     const { frame, version } = await mine
-    const meta = p.paperData.meta, script = scriptOf(lang), engine = meta.compiler === 'latex' ? 'pdflatex' : meta.compiler
-    let first = null
-    try { if (!own) first = strategiesFor(meta, lang)[0] } catch {}
-    const engines = [...new Set([engine, first?.engine].filter(Boolean))]
     const initDone = waitFor(site, 'init-done', frame)
-    frame.contentWindow.postMessage({ type: 'init', protocol: 2, engines, fonts: !own && CJK[script] ? [script] : [], endpoint }, site)
+    frame.contentWindow.postMessage({ type: 'init', protocol: 2, ...texHints(p.paperData.meta, lang, own), store: true, endpoint }, site)
     const done = await initDone
     if (done.error) {
       frame.remove()
@@ -2186,7 +2212,7 @@ async function live() {
     // and only for the TeX page's versions it was made under: a page fixed since (its fonts, its tree, its index) may set
     // it (the S3a review, I5 d) — read from the page loaded for the compiles to come
     const mark = !cached && cacheKey ? await pdfCache.untypeset(cacheKey.digest, cacheKey.lang) : undefined
-    const page = mark ? await texFrame().then(f => f.version, () => null) : null
+    const page = mark ? await texFrame(lang).then(f => f.version, () => null) : null
     if (mark && page && stillUntypeset(mark, { identity: engine.identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page })) {
       // the frame loaded to read the page's versions goes: nothing will compile in it (the F2 review's M4)
       const loaded = frameP

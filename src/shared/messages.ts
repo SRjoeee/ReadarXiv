@@ -9,6 +9,7 @@ import type { EntrySettings, FloatingEntryState } from '@/shared/entry-settings'
 import type { ImageProgress, OcrCall, OcrMessageResponse, OcrRunResponse } from './ocr'
 import type { DiagnosticSource, DiagnosticsExport } from '@/shared/diagnostics'
 import type { PageDecision } from '@/shared/page-action'
+import type { TexWarmRequest, TexWarmResult } from './tex-warm'
 
 /** What an abstract or PDF page answers the popup (§4.0b) */
 export interface EntryStatus {
@@ -172,6 +173,23 @@ export interface AxtMessages {
   'axt:ocr': { request: OcrCall; response: OcrMessageResponse }
   /** background → the offscreen document: recognise these bytes (§15.3). Answered by that page alone */
   'axt:ocr-run': { request: { image: string; mime: string }; response: OcrRunResponse }
+  /** background → the offscreen document: a figure was given up on, the recogniser's worker is ended (the figure in it
+   *  answered as failed) and the next figure starts a new one; the document stays, for the TeX page's warm-up */
+  'axt:ocr-reset': { request: Record<never, never>; response: { reset: true } }
+  /** background → the offscreen document: the TeX page's warm-up for a language (DESIGN §16). Answered at once: started,
+   *  or not while one of its own runs */
+  'axt:tex-warm': { request: TexWarmRequest; response: { started: boolean } }
+  /** the offscreen document → background: how a warm-up ended */
+  'axt:tex-warmed': { request: { result: TexWarmResult }; response: { ok: true } }
+  /** background → the offscreen document: a reader that typesets into `lang` (BCP 47) needs the TeX page — the warm-up
+   *  running is stopped unless it is for that language and will be done within the reader's patience (ocr/tex-warm.ts)
+   *  → whether one was stopped */
+  'axt:tex-warm-stop': { request: { lang: string }; response: { stopped: boolean } }
+  /** the PDF reader → background: it needs the TeX page for `lang` (BCP 47) and a warm-up holds it (the store's lock),
+   *  which is stopped unless it is for that language and nearly done */
+  'axt:tex-give-way': { request: { lang: string }; response: { ok: true } }
+  /** the PDF reader → background: the versions its TeX page said (`ready`), against the last warm-up's */
+  'axt:tex-seen': { request: { versions: string }; response: { ok: true } }
 }
 
 export type AxtMessageType = keyof AxtMessages

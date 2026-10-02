@@ -10,7 +10,10 @@ import type { OcrResult, OcrRunResponse } from '@/shared/ocr'
 const RESULT: OcrResult = { width: 10, height: 20, frames: 1, lines: [{ text: 'Accuracy', quad: [[0, 0], [1, 0], [1, 1], [0, 1]], conf: 0.98 }] }
 const FIGURE = { image: 'AAAA', mime: 'image/png' }
 
-/** An offscreen document that is there once created, and a `run` whose answers the test gives one by one */
+/**
+ * An offscreen document that is there once created, and a `run` whose answers the test gives one by one. Its `reset`
+ * is not answered (a document that is gone, or another page that heard it): a figure given up on closes it
+ */
 function harness(over: Partial<RecogniserClientDeps> = {}) {
   let open = false
   const pending: Array<{ request: { image: string; mime: string }; answer: (reply: OcrRunResponse) => void; fail: (e: Error) => void }> = []
@@ -20,8 +23,9 @@ function harness(over: Partial<RecogniserClientDeps> = {}) {
     close: vi.fn(async () => { open = false }),
   }
   const run = vi.fn((request: { image: string; mime: string }) => new Promise<OcrRunResponse>((answer, fail) => { pending.push({ request, answer, fail }) }))
-  const client = createRecogniserClient({ offscreen, run, ...over })
-  return { client, offscreen, run, pending, shut: () => { open = false } }
+  const reset = vi.fn(async () => false)
+  const client = createRecogniserClient({ offscreen, run, reset, ...over })
+  return { client, offscreen, run, reset, pending, shut: () => { open = false } }
 }
 const settle = () => new Promise(resolve => setTimeout(resolve, 0))
 
@@ -139,6 +143,54 @@ describe('createRecogniserClient', () => {
     expect(run).toHaveBeenCalledTimes(3)
     pending[2]!.answer({ ok: true, result: RESULT, warm: true })
     await expect(third).resolves.toEqual(RESULT)
+  })
+
+  it('a figure that does not come back: the document resets its recogniser and stays — a TeX warm-up in it goes on —, and the next figure has a fresh worker on the first figure\'s budget (Devin on #311)', async () => {
+    vi.useFakeTimers()
+    // the document as it answers: its worker ended, and the figure in it answered as failed
+    const reset = vi.fn(async () => { h.pending[1]!.answer({ ok: false, kind: 'unknown', message: 'the recognition worker was reset' }); return true })
+    const h = harness({ timeoutMs: 1_000, firstTimeoutMs: 5_000, reset })
+    const { client, offscreen, run, pending } = h
+    const first = client.ocr(FIGURE)
+    await vi.advanceTimersByTimeAsync(0)
+    pending[0]!.answer({ ok: true, result: RESULT, warm: true })
+    await first
+    const hung = client.ocr(FIGURE).catch((e: OcrBackendError) => e.kind)
+    const next = client.ocr(FIGURE)
+    await vi.advanceTimersByTimeAsync(1_001)
+    expect(await hung).toBe('timeout')
+    expect(reset).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(offscreen.close).not.toHaveBeenCalled()
+    expect(offscreen.create).toHaveBeenCalledTimes(1)
+    // the figure given up on is not sent again: the next one alone goes to the fresh worker, on the long budget — a
+    // millisecond short of it nothing more is given up on
+    expect(run).toHaveBeenCalledTimes(3)
+    expect(pending[2]!.request).toEqual(FIGURE)
+    await vi.advanceTimersByTimeAsync(4_998)
+    expect(reset).toHaveBeenCalledTimes(1)
+    pending[2]!.answer({ ok: true, result: RESULT, warm: true })
+    await expect(next).resolves.toEqual(RESULT)
+  })
+
+  it('a document that does not answer the reset within two seconds is closed, as one that is gone, and the next figure opens a fresh one', async () => {
+    vi.useFakeTimers()
+    const reset = vi.fn(() => new Promise<boolean>(() => {}))
+    const { client, offscreen, run, pending } = harness({ timeoutMs: 1_000, firstTimeoutMs: 5_000, reset })
+    const hung = client.ocr(FIGURE).catch((e: OcrBackendError) => e.kind)
+    const next = client.ocr(FIGURE)
+    await vi.advanceTimersByTimeAsync(5_001)
+    expect(await hung).toBe('timeout')
+    await vi.advanceTimersByTimeAsync(1_998)
+    expect(offscreen.close).not.toHaveBeenCalled()
+    expect(run).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(2)
+    expect(offscreen.close).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(offscreen.create).toHaveBeenCalledTimes(2)
+    expect(run).toHaveBeenCalledTimes(2)
+    pending[1]!.answer({ ok: true, result: RESULT, warm: true })
+    await expect(next).resolves.toEqual(RESULT)
   })
 
   it('a figure given up on is not sent again: the closing of the document fails its send, and that failure is nobody\'s to retry', async () => {

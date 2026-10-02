@@ -1,8 +1,5 @@
 // scripts.mjs's types (JavaScript until the engine's port), for the reader's tests
-/** the languages the typesetting gate verified, as BCP 47 tags */
-export declare const VERIFIED: readonly string[]
-/** whether a BCP 47 tag names a language whose typesetting is verified */
-export declare function verified(tag: string): boolean
+export { VERIFIED, verified } from './verified.mjs'
 /** a way to typeset a translation: its engine, the preamble it adds, and the factor on the paper's spacing that
  *  translated units are set at (absent for the paper's own) */
 export interface Strategy { name: string; engine: string; xe: boolean; leading?: number; authors?: false; front?: string; pre(fonts: unknown): string }
@@ -10,3 +7,7 @@ export interface Strategy { name: string; engine: string; xe: boolean; leading?:
 export declare function strategiesFor(meta: { compiler?: string }, lang: string): Strategy[]
 /** whether the author block's names and places are translated into `lang` */
 export declare function authorsTranslated(lang: string): boolean
+/** the script a BCP 47 tag is written in (its likely script) */
+export declare function scriptOf(lang: string): string
+/** the CJK scripts' typesetting (their faces, spacing and leading), by script */
+export declare const CJK: Record<string, unknown>
