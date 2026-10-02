@@ -16,6 +16,12 @@
 // Papers stay on this machine: nothing is written but out/reader-typeset/<build>-<lang>-<id>.json and the final's PDF.
 //   AXT_DATA=<data> MOCK=1 pnpm exec tsx experiments/pdf-bilingual/spikes/reader-typeset.mjs zh/2608.02163 ja/2608.18090 …
 //   BUILD=<another build> TAG=<name> … — another build (today's: one of the commit before the rule), its results named
+// The TeX page's warm-up (2026-10-02): TEX_HOST=<host:port> TEX_SPKI=<its key's SHA-256, base64> — the build's own page
+// (tex.readarxiv.org) served on this machine, by that name, its certificate trusted by its key; LOCALE=<tag> — the
+// browser's language (its accept-languages), which the extension's first target follows at install; WARM=1 — the paper opened once the
+// install's warm-up is done (its record reported), else at once, while a build that has one runs it; REVISIT=<id> —
+// another paper opened in the same profile once the first visit is done (the same paper would be this machine's copy,
+// which asks nothing of the TeX page), its times reported.
 import { execFile, execSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -38,6 +44,11 @@ const root = new URL('..', import.meta.url).pathname
 const DATA = process.env.AXT_DATA ?? join(root, 'data'), MOCK = !!process.env.MOCK
 const SITE = process.env.SITE ?? null, ENDPOINT = process.env.ENDPOINT ?? 'http://localhost:8070', EMBEDDED = !!process.env.EMBEDDED
 const TAG = process.env.TAG ?? 'rule', OUT = join(root, 'out/reader-typeset')
+const WARM = !!process.env.WARM, REVISIT = process.env.REVISIT ?? null
+const BROWSER_ARGS = [
+  ...(process.env.TEX_HOST ? [`--host-resolver-rules=MAP tex.readarxiv.org ${process.env.TEX_HOST}`] : []),
+  ...(process.env.TEX_SPKI ? [`--ignore-certificate-errors-spki-list=${process.env.TEX_SPKI}`] : []),
+]
 const PDFJS = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'))
 const pdfOf = bytes => getDocument({ data: new Uint8Array(bytes), verbosity: 0, cMapUrl: join(PDFJS, 'cmaps/'), cMapPacked: true, standardFontDataUrl: join(PDFJS, 'standard_fonts/') }).promise
 /** the extension's target language codes (config/languages.ts, ISO 639-3) */
@@ -162,32 +173,63 @@ for (const spec of process.argv.slice(2)) {
   llm.segments = 0; llm.misses = 0; llm.missed = []
   const om = await originalMarks(id, files, paper)
   // a fresh profile for every paper: no copy on this machine, nothing in the background's cache
-  const { context, worker, id: extId, readerUrl } = await launchWithReader({ profile: `reader-typeset-${TAG}`, extension })
+  const launched = Date.now()
+  const { context, worker, id: extId, readerUrl } = await launchWithReader({ profile: `reader-typeset-${TAG}`, extension, args: BROWSER_ARGS, languages: process.env.LOCALE ? `${process.env.LOCALE},${process.env.LOCALE.split('-')[0]}` : null })
   // the settings are written once a page of the extension has read them: its settings page, opened and closed
   await (await openOptions(context, extId)).close()
   if (MOCK) await seedService(worker, { id: 'svc-typeset1', name: 'the gate\'s translation', baseURL: `http://127.0.0.1:${mock.address().port}/v1`, model: 'mock' })
   await worker.evaluate(async code => { const { config } = await chrome.storage.local.get('config'); await chrome.storage.local.set({ config: { ...config, targetLanguage: code, fallback: { enabled: false } } }) }, CODE[lang])
   await new Promise(res => setTimeout(res, 500))
-  const page = await context.newPage(), errors = [], memory = []
-  page.on('pageerror', e => errors.push(e.message))
-  const sampling = setInterval(() => { const mb = rssOf(`reader-typeset-${TAG}-`); if (mb) memory.push(mb) }, 1000)
+  // the install's warm-up, waited for: its record once done (the background's, warmup.ts)
+  let warm = null
+  if (WARM) {
+    for (;;) {
+      const w = await worker.evaluate(() => chrome.storage.local.get('axt-tex-warm').then(o => o['axt-tex-warm'] ?? null)).catch(() => null)
+      if (w?.at) { warm = { ...w, sinceLaunchMs: Date.now() - launched }; break }
+      if (Date.now() - launched > 900000) { warm = { timedOut: true, record: w }; break }
+      await new Promise(res => setTimeout(res, 500))
+    }
+    console.log(`${spec} [${TAG}] warm-up: ${JSON.stringify(warm)}`)
+  }
   const src = `http://127.0.0.1:${corpus.address().port}`, at = SITE ? { site: SITE, endpoint: ENDPOINT } : {}
-  let reader = page
-  if (EMBEDDED) {
-    // arXiv's PDF page, which the extension lays the reader over; bilingual chosen there, as a reader chooses it
-    await page.goto(`https://arxiv.org/pdf/${id}`, { waitUntil: 'domcontentloaded', timeout: 120000 })
-    reader = await (await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 60000 })).contentFrame()
-    await reader.waitForFunction(() => window.__reader?.controller, null, { timeout: 60000 })
-    await reader.evaluate(() => window.__reader.controller.setDisplay('bilingual'))
-  } else await page.goto(readerUrl({ paper: id, live: '1', mode: 'bilingual', ...at, src: `${src}/src/${id}`, pdf: `${src}/pdf/${id}` }))
-  await reader.waitForFunction(() => window.__reader?.live?.done, null, { timeout: 900000, polling: 500 }).catch(() => {})
+  const memory = []
+  const sampling = setInterval(() => { const mb = rssOf(`reader-typeset-${TAG}-`); if (mb) memory.push(mb) }, 1000)
+  /** one visit to a paper: its events, the final's bytes (base64) and the page's errors */
+  const visit = async id => {
+    const page = await context.newPage(), errors = []
+    page.on('pageerror', e => errors.push(e.message))
+    let reader = page
+    if (EMBEDDED) {
+      // arXiv's PDF page, which the extension lays the reader over; bilingual chosen there, as a reader chooses it
+      await page.goto(`https://arxiv.org/pdf/${id}`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+      reader = await (await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 60000 })).contentFrame()
+      await reader.waitForFunction(() => window.__reader?.controller, null, { timeout: 60000 })
+      await reader.evaluate(() => window.__reader.controller.setDisplay('bilingual'))
+    } else await page.goto(readerUrl({ paper: id, live: '1', mode: 'bilingual', ...at, src: `${src}/src/${id}`, pdf: `${src}/pdf/${id}` }))
+    await reader.waitForFunction(() => window.__reader?.live?.done, null, { timeout: 900000, polling: 500 }).catch(() => {})
+    const live = await reader.evaluate(() => ({ events: window.__reader.live.events, failed: window.__reader.live.failed ?? null }))
+    const bytes = await reader.evaluate(async () => { const d = await window.__reader.debug?.right?.doc?.getData(); return d ? btoa(Array.from(d, c => String.fromCharCode(c)).join('')) : null })
+    await page.close()
+    return { live, bytes, errors }
+  }
+  /** a visit's times: the first preview and the final from the decision to translate, the TeX page's start (its
+   *  init-done's ms, and when it came) */
+  const timesOf = live => {
+    const when = name => live.events.find(e => e.event === name)?.t ?? null, from = when('translating')
+    const compiler = live.events.find(e => e.event === 'compiler')
+    return { firstPreview: when('shown preview') != null && from != null ? when('shown preview') - from : null, final: when('shown final') != null && from != null ? when('shown final') - from : null, texStart: compiler ? { ms: compiler.ms, at: compiler.t - (from ?? 0) } : null, cacheCurrent: live.events.some(e => e.event === 'cache current') }
+  }
+  const { live, bytes, errors } = await visit(id)
+  let again = null
+  if (REVISIT) {
+    const other = openPaper((await unpackSource(new Uint8Array(readFileSync(join(DATA, 'corpus', REVISIT, 'source.gz'))))).files)
+    replies = MOCK ? repliesFor(lang, REVISIT, other).replies : new Map()
+    again = await visit(REVISIT)
+  }
   clearInterval(sampling)
-  const live = await reader.evaluate(() => ({ events: window.__reader.live.events, failed: window.__reader.live.failed ?? null }))
-  const bytes = await reader.evaluate(async () => { const d = await window.__reader.debug?.right?.doc?.getData(); return d ? btoa(Array.from(d, c => String.fromCharCode(c)).join('')) : null })
   await context.close()
-  const when = name => live.events.find(e => e.event === name)?.t ?? null, from = when('translating')
   const out = { spec, build: TAG, mock: MOCK, embedded: EMBEDDED, missing: r.missing, llm: { ...llm }, failed: live.failed, errors: errors.slice(0, 5),
-    firstPreview: when('shown preview') != null && from != null ? when('shown preview') - from : null, final: when('shown final') != null && from != null ? when('shown final') - from : null,
+    ...timesOf(live), warm, revisit: again ? { paper: REVISIT, ...timesOf(again.live), failed: again.live.failed, errors: again.errors.slice(0, 5) } : null,
     peakMB: memory.length ? Math.max(...memory) : null,
     compiles: live.events.filter(e => ['compiler', 'fonts', 'preview', 'original', 'measure', 'final', 'typeset', 'typeset failed', 'next strategy', 'compile again', 'compiler down'].includes(e.event)).map(({ t, event, ok, ms, typeset, missing, measured, strategy, error, own }) => ({ t, event, ok, ms, typeset, missing, measured, strategy, error, own })) }
   if (bytes) {
@@ -200,7 +242,7 @@ for (const spec of process.argv.slice(2)) {
   }
   writeFileSync(join(OUT, `${TAG}-${lang}-${id}.json`), JSON.stringify(out, null, 1))
   const f = x => (x == null ? '-' : x.toFixed(3))
-  console.log(`${spec} [${TAG}] ${out.failed ? `FAILED ${out.failed}` : ''} first preview ${out.firstPreview} ms, final ${out.final} ms, peak ${out.peakMB} MB; ${out.result ? `pages ${out.result.pages} (of ${out.result.origPages}) start ${f(out.result.start)} end ${f(out.result.end)}` : 'no final'}${out.gate ? `; gate pages ${out.gate.pages} start ${f(out.gate.start)}` : ''}${MOCK ? `; replies missing ${r.missing}, misses ${llm.misses} of ${llm.segments}` : ''}`)
+  console.log(`${spec} [${TAG}] ${out.failed ? `FAILED ${out.failed}` : ''} TeX page start ${out.texStart?.ms ?? '-'} ms, first preview ${out.firstPreview} ms, final ${out.final} ms, peak ${out.peakMB} MB;${out.revisit ? ` then ${out.revisit.paper}: TeX page start ${out.revisit.texStart?.ms ?? '-'} ms, first preview ${out.revisit.firstPreview} ms${out.revisit.failed ? ` FAILED ${out.revisit.failed}` : ''};` : ''} ${out.result ? `pages ${out.result.pages} (of ${out.result.origPages}) start ${f(out.result.start)} end ${f(out.result.end)}` : 'no final'}${out.gate ? `; gate pages ${out.gate.pages} start ${f(out.gate.start)}` : ''}${MOCK ? `; replies missing ${r.missing}, misses ${llm.misses} of ${llm.segments}` : ''}`)
   if (out.result) console.log(`  target script per page: ${out.result.script.join(' ')}\n  (the original's:        ${out.result.originalScript.join(' ')})`)
   console.log(`  compiles: ${out.compiles.map(c => `${c.event}${c.own ? '(own)' : ''}${c.ok === false ? '!' : ''}${c.typeset ? '+rule' : ''}${c.measured ? `(${c.measured})` : ''}${c.missing ? `(${c.missing})` : ''}@${c.t}${c.ms != null ? `/${c.ms}` : ''}`).join(' → ')}`)
   for (const c of out.compiles.filter(c => c.ok === false)) console.log(`  ${c.event} failed under ${c.strategy}: ${c.error}`)

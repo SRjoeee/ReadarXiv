@@ -2,7 +2,7 @@
 // repository's build loaded (the reader is its page pdf-reader.html, src/entrypoints/pdf-reader), and the reader's
 // address in it. The reader translates through that build's background, with its default settings unless
 // a spike changes them. Build first: `pnpm build` at the repository root.
-import { cpSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,10 +10,18 @@ import { join } from 'node:path'
 const REPO = new URL('../../../', import.meta.url).pathname
 const { chromium } = createRequire(REPO)('playwright')
 export const BUILD = join(REPO, '.output/chrome-mv3')
+/**
+ * The features Playwright turns off (its chromiumSwitches.ts, 1.63), save one: storage partitioning, which a reader's
+ * Chrome has on. A later --disable-features replaces Playwright's list. Left off, the TeX page framed by the reader over
+ * arXiv's PDF page shared the cache of the one framed by an extension page, which in Chrome it does not (measured in
+ * Chrome 145, 153 and 154: the warm-up's report)
+ */
+const PLAYWRIGHT_OFF = ['AvoidUnnecessaryBeforeUnloadCheckSync', 'DestroyProfileOnBrowserClose', 'DialMediaRouteProvider', 'GlobalMediaControls', 'HttpsUpgrades', 'LensOverlay', 'MediaRouter', 'PaintHolding', 'BlockOriginHeaderModificationOnRedirect', 'Translate', 'AutoDeElevate', 'OptimizationHints']
 
 /**
  * { context, worker, id, readerUrl(query) }: `profile` names the temporary profile's directory, `extension` another
- * build. `demos`: the precompiled demo papers (poc-reader/papers, made on this machine by reader-papers.mjs) staged into
+ * build, `args` more of the browser's switches, `languages` the browser's (its accept-languages, which the extension's first
+ * target follows: `--lang` is ignored on macOS); the browser partitions storage as Chrome does. `demos`: the precompiled demo papers (poc-reader/papers, made on this machine by reader-papers.mjs) staged into
  * a temporary copy of the build, for the spikes that open them — a build never holds them, since arXiv's papers may not
  * be redistributed (Codex on #296).
  *
@@ -21,7 +29,7 @@ export const BUILD = join(REPO, '.output/chrome-mv3')
  * filled the disk (25 GiB). `context.close()` removes them once the browser has exited; a context that closes on its
  * own (the browser crashing, a headed window shut) removes them from its `close` event
  */
-export async function launchWithReader({ profile = 'reader', extension = BUILD, demos = false, headless = true, viewport = { width: 1600, height: 1000 } } = {}) {
+export async function launchWithReader({ profile = 'reader', extension = BUILD, demos = false, headless = true, viewport = { width: 1600, height: 1000 }, args = [], languages = null } = {}) {
   if (!existsSync(join(extension, 'pdf-reader.html'))) throw new Error(`no reader in ${extension}: \`pnpm build\` at the repository root`)
   const temporary = []
   const removeTemporary = () => {
@@ -40,9 +48,13 @@ export async function launchWithReader({ profile = 'reader', extension = BUILD, 
   }
   const profileDir = mkdtempSync(join(tmpdir(), `${profile}-`))
   temporary.push(profileDir)
+  if (languages) {
+    mkdirSync(join(profileDir, 'Default'), { recursive: true })
+    writeFileSync(join(profileDir, 'Default', 'Preferences'), JSON.stringify({ intl: { accept_languages: languages } }))
+  }
   let context
   try {
-    context = await chromium.launchPersistentContext(profileDir, { channel: 'chromium', headless, viewport, args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`] })
+    context = await chromium.launchPersistentContext(profileDir, { channel: 'chromium', headless, viewport, args: [`--disable-features=${PLAYWRIGHT_OFF.join(',')}`, `--disable-extensions-except=${extension}`, `--load-extension=${extension}`, ...args] })
   } catch (e) {
     removeTemporary()
     throw e
