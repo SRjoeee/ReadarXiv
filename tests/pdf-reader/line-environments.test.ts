@@ -177,4 +177,10 @@ describe('a table holding an environment read by lines is not fitted', () => {
     expect(fitted('\\begin{tabular}{l}\nA cell \\\\\n\\begin{hidden}\nA row hidden \\\\\n\\end{hidden}\n\\end{tabular}')).toBe(false)
     expect(fitted('\\begin{tabular}{l}\nA cell \\\\\n\\begin{Verbatim}\nx\n\\end{Verbatim}\n\\end{tabular}')).toBe(false)
   })
+  it('what stands in a TeX comment TeX never reads: the table stays fitted', () => {
+    expect(fitted('\\begin{tabular}{l}\nA cell \\\\ % \\begin{comment} was here once\n\\end{tabular}')).toBe(true)
+    expect(fitted('\\begin{tabular}{l}\nA cell \\\\% \\begin{verbatim}\n\\end{tabular}')).toBe(true)
+    expect(fitted('\\begin{tabular}{l}\nA cell % \\verb|x| was here once\n\\end{tabular}')).toBe(true)
+    expect(fitted('\\begin{tabular}{l}\nA cell of 5\\% \\begin{comment}\nA row hidden \\\\\n\\end{comment}\n\\end{tabular}')).toBe(false)
+  })
 })

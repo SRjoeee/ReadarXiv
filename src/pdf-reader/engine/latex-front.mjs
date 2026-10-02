@@ -534,9 +534,10 @@ function walk(s, from, to, b, ctx) {
         // position argument, which \\axtstar does not read. tabularx and tabulary keep their width and read their own
         // body, which they cannot inside an argument (2608.02991: "Missing \\endgroup inserted"); one that breaks across
         // pages cannot be boxed; \\verb and the like cannot go into an argument either, nor an environment TeX reads by
-        // lines (LINE_ENVS: a row hidden in a comment)
-        const body = s.slice(i, afterEnd)
-        const verbatim = /\\(?:verb|lstinline|mintinline)(?![A-Za-z])/.test(body) || [...body.matchAll(/\\begin\s*\{([^}]+)\}/g)].some(m => isLineEnv(m[1].trim(), ctx.lineEnvs))
+        // lines (LINE_ENVS: a row hidden in a comment). What stands in a TeX comment (`\\\\ % \\begin{comment} …`) TeX
+        // never reads, so it keeps the table fitted
+        const body = s.slice(i, afterEnd), read = m => !inComment(s, i + m.index)
+        const verbatim = [...body.matchAll(/\\(?:verb|lstinline|mintinline)(?![A-Za-z])/g)].some(read) || [...body.matchAll(/\\begin\s*\{([^}]+)\}/g)].some(m => isLineEnv(m[1].trim(), ctx.lineEnvs) && read(m))
         if (/^tabu(lar)?$/.test(env) && !verbatim) ctx.fits.push({ file: b.file, start: i, end: afterEnd })
         if (env === 'tabular*' && !verbatim && !/^\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*\[/.test(s.slice(afterBegin).trimStart())) ctx.fits.push({ file: b.file, start: i, end: afterEnd, star: bodyEnd })
         i = afterEnd; continue
