@@ -178,12 +178,13 @@ export interface AxtMessages {
   'axt:tex-warm': { request: TexWarmRequest; response: { started: boolean } }
   /** the offscreen document → background: how a warm-up ended */
   'axt:tex-warmed': { request: { result: TexWarmResult }; response: { ok: true } }
-  /** background → the offscreen document: a reader needs the TeX page — the warm-up running is stopped unless it will
-   *  be done within the reader's patience (ocr/tex-warm.ts) → whether one was stopped */
-  'axt:tex-warm-stop': { request: Record<never, never>; response: { stopped: boolean } }
-  /** the PDF reader → background: it needs the TeX page and a warm-up holds it (the store's lock), which is stopped
-   *  unless nearly done */
-  'axt:tex-give-way': { request: Record<never, never>; response: { ok: true } }
+  /** background → the offscreen document: a reader that typesets into `lang` (BCP 47) needs the TeX page — the warm-up
+   *  running is stopped unless it is for that language and will be done within the reader's patience (ocr/tex-warm.ts)
+   *  → whether one was stopped */
+  'axt:tex-warm-stop': { request: { lang: string }; response: { stopped: boolean } }
+  /** the PDF reader → background: it needs the TeX page for `lang` (BCP 47) and a warm-up holds it (the store's lock),
+   *  which is stopped unless it is for that language and nearly done */
+  'axt:tex-give-way': { request: { lang: string }; response: { ok: true } }
   /** the PDF reader → background: the versions its TeX page said (`ready`), against the last warm-up's */
   'axt:tex-seen': { request: { versions: string }; response: { ok: true } }
 }

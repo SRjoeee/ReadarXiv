@@ -6,7 +6,7 @@
 // extension's store by the offscreen document (entrypoints/ocr/tex-warm.ts), for the reader to hand to its page. Never
 // under Save-Data, never for a language nothing is typeset in yet, never while a reader that typesets is open (it shares
 // the lock: a warm-up would compete with its compiles for the link), and a reader opened during one has it stopped when
-// it would not be done within the reader's patience (entrypoints/ocr/tex-warm.ts); one
+// it is for another language or would not be done within the reader's patience (entrypoints/ocr/tex-warm.ts); one
 // at a time, the document's to keep — it ignores a second for the language it runs for, and stops one for a language no
 // longer wanted, whose files a reader opened now would otherwise wait for. A failure is tried again at the next
 // trigger, a worker's start no sooner than a quarter of an hour later, doubled with each failure in a row up to a day (a
@@ -48,8 +48,9 @@ export interface WarmupDeps {
   /** the offscreen document asked to warm → whether it started one (not while one for that language runs; one for
    *  another it stops first) */
   start(request: TexWarmRequest): Promise<boolean>
-  /** the document's running warm-up stopped, if there is one → whether one ran */
-  stop(): Promise<boolean>
+  /** the document's running warm-up stopped for a reader that typesets into `lang`, if there is one and it is for
+   *  another language or would outlast the reader's patience → whether one was stopped */
+  stop(lang: string): Promise<boolean>
   load(): Promise<WarmRecord | null>
   save(record: WarmRecord): Promise<void>
   now(): number
@@ -96,7 +97,8 @@ export function createWarmup(deps: WarmupDeps) {
   }
 
   /** the document's report: a success recorded (and a look again — the language may have changed meanwhile), a page
-   *  that takes no warm-up remembered under its versions, a failure counted; a stop or a deferral is none */
+   *  that takes no warm-up remembered under its versions, a failure counted, and its back-off counted from now; a stop
+   *  or a deferral is none */
   async function report(result: TexWarmResult): Promise<void> {
     const now = deps.now()
     if (result.ok) {
@@ -114,7 +116,10 @@ export function createWarmup(deps: WarmupDeps) {
       return
     }
     const failures = (record?.failures ?? 0) + 1
-    await deps.save({ ...record, failures })
+    // tried now, whatever the record says: a success reported meanwhile by a warm-up this one replaced (the review's M1
+    // race) wrote its own time as both the try's and the success's, under which this failure would back off nothing
+    // (the re-review's m3)
+    await deps.save({ ...record, tried: now, failures })
     say(`failed for ${result.lang} (${failures} in a row; again in ${Math.round(backOff(failures) / 60_000)} min at the earliest): ${result.error}${result.network?.length ? ` (${result.network.join(', ')})` : ''}`)
   }
 
@@ -143,8 +148,9 @@ export function createWarmup(deps: WarmupDeps) {
     done: (result: TexWarmResult): Promise<void> => run('report', () => report(result)).then(() => chain),
     /** the versions a reader's TeX page said (its `ready`) */
     seen: (versions: string): Promise<void> => run('versions', () => seen(versions)),
-    /** a reader needs the page now (the lock a warm-up holds): the warm-up stops, keeping what came, unless it will be
-     *  done within the reader's patience — asked at once, not in turn, since a step in turn may be waiting on the document */
-    giveWay: async (): Promise<void> => { await deps.stop().catch(() => false) },
+    /** a reader that typesets into `lang` needs the page now (the lock a warm-up holds): the warm-up stops, keeping
+     *  what came, unless it is for that language and will be done within the reader's patience — asked at once, not in
+     *  turn, since a step in turn may be waiting on the document */
+    giveWay: async (lang: string): Promise<void> => { await deps.stop(lang).catch(() => false) },
   }
 }

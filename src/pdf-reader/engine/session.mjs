@@ -2113,26 +2113,27 @@ async function live() {
    *  "cannot typeset" mark is judged by cost no second load */
   let frameP = null
   /**
-   * The TeX page in use while this reader typesets (tex-store.mjs): the lock shared, so that no warm-up starts
-   * meanwhile, and one running is stopped through the background (it keeps what came) rather than waited for — on a
-   * slow link the page would wait minutes for files it may not need; and the files a page of ours asks for — those its
-   * own cache lacks: over arXiv's PDF page it has a cache of its own, which the warm-up could not fill — handed from the
-   * extension's store
+   * The TeX page in use while this reader typesets into `lang` (tex-store.mjs): the lock shared, so that no warm-up
+   * starts meanwhile, and one running asked through the background to give way — stopped (it keeps what came) when it
+   * is for another language, or its pace says it would outlast the reader's patience (on a slow link the page would
+   * wait minutes for files it may not need), else waited for, since a stop loses the files in flight; and the files a
+   * page of ours asks for — those its own cache lacks: over arXiv's PDF page it has a cache of its own, which the
+   * warm-up could not fill — handed from the extension's store
    */
   let pageInUse = null
   /** the page's versions last told to the background (warmup.ts seen) */
   let versionTold = null
-  const usePage = () => {
+  const usePage = lang => {
     if (pageInUse) return
-    pageInUse = shareLock(undefined, () => void sendMessage({ type: 'axt:tex-give-way' }).catch(() => {}))
+    pageInUse = shareLock(undefined, () => void sendMessage({ type: 'axt:tex-give-way', lang }).catch(() => {}))
     addEventListener('message', e => {
       if (e.origin !== site || e.data?.type !== 'want' || ![...document.querySelectorAll('iframe')].some(f => f.contentWindow === e.source)) return
       const page = e.source, id = e.data.id
       void pageInUse.then(() => answerWant(site, e.data)).then(({ message, transfer }) => page.postMessage(message, site, transfer), () => page.postMessage({ type: 'have', id, files: {} }, site))
     })
   }
-  const texFrame = () => (frameP ??= (async () => {
-    usePage()
+  const texFrame = lang => (frameP ??= (async () => {
+    usePage(lang)
     const frame = Object.assign(document.createElement('iframe'), { src: `${site}/tex.html`, hidden: true })
     const ready = waitFor(site, 'ready', frame)
     document.body.append(frame)
@@ -2164,7 +2165,7 @@ async function live() {
    */
   const openCompiler = async (p, lang, own = false) => {
     // the frame taken at once: another compiler opening meanwhile loads one of its own
-    const mine = texFrame()
+    const mine = texFrame(lang)
     frameP = null
     const { frame, version } = await mine
     const initDone = waitFor(site, 'init-done', frame)
@@ -2216,7 +2217,7 @@ async function live() {
     // and only for the TeX page's versions it was made under: a page fixed since (its fonts, its tree, its index) may set
     // it (the S3a review, I5 d) — read from the page loaded for the compiles to come
     const mark = !cached && cacheKey ? await pdfCache.untypeset(cacheKey.digest, cacheKey.lang) : undefined
-    const page = mark ? await texFrame().then(f => f.version, () => null) : null
+    const page = mark ? await texFrame(lang).then(f => f.version, () => null) : null
     if (mark && page && stillUntypeset(mark, { identity: engine.identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page })) {
       // the frame loaded to read the page's versions goes: nothing will compile in it (the F2 review's M4)
       const loaded = frameP

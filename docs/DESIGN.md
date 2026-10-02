@@ -913,11 +913,12 @@ is only how it meets the rest of the extension.
   then run: the warm-up review's I1; the page's own downloads stay held to their length, the transport being the
   site's). **One Web Lock** keeps the two apart: every reader that typesets shares it while open, and a warm-up takes it
   alone only when it is free — no warm-up competes with a reading session for the link. A reader opened during one
-  asks for it through the background: a warm-up its pace says will be done within four minutes is waited for, since on
-  one link a stop saves no byte — the files in flight are lost and fetched again (stopped 11 s into a 24.5 s Chinese
-  warm-up, the reader's first preview came at 31.5 s; waited for, 20.3 s) —; one that would outlast that, close to the
-  five minutes the reader's page waits for the store before it downloads alongside, is stopped, and the reader takes
-  what the store holds. Never under Save-Data, never for a language the reader does not set yet, never twice at once;
+  asks for it through the background, with its language: a warm-up for that language its pace says will be done within
+  four minutes is waited for, since on one link a stop saves no byte — the files in flight are lost and fetched again
+  (stopped 11 s into a 24.5 s Chinese warm-up, the reader's first preview came at 31.5 s; waited for, 20.3 s) —; one
+  for another language (its faces are not the reader's), or one that would outlast that, close to the five minutes the
+  reader's page waits for the store before it downloads alongside, is stopped, and the reader takes what the store
+  holds. Never under Save-Data, never for a language the reader does not set yet, never twice at once;
   a failure is tried again at the next trigger, a worker's start no sooner than a quarter of an hour on, doubled with
   each failure in a row up to a day (a store that cannot keep a file, a full disk, stops the warm-up at once); a page
   that takes no warm-up (one from before it) is asked again a day on; one for a language no longer wanted gives way to

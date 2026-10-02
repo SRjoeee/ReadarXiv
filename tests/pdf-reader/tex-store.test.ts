@@ -63,7 +63,7 @@ describe('the store', () => {
 })
 
 describe('shareLock', () => {
-  it('a warm-up holds the lock: the reader asks it to stop (through the background), and is granted once it has (the review\'s M4)', async () => {
+  it('a warm-up holds the lock: the reader asks it to give way (through the background), and is granted once it has ended (the review\'s M4)', async () => {
     let release: (() => void) | null = null
     const asked: { mode?: string; ifAvailable?: boolean }[] = []
     // a lock manager whose lock a warm-up holds alone until `release`
@@ -85,7 +85,28 @@ describe('shareLock', () => {
     expect(held).toBe(true)
   })
 
-  it('the lock free: shared for the page\'s life, granted at once, and no warm-up asked to stop', async () => {
+  it('a reader whose call to the background throws (its extension context gone) still waits for the warm-up\'s lock: it never runs beside a warm-up that writes (the re-review\'s m5)', async () => {
+    let release: (() => void) | null = null
+    const asked: { mode?: string; ifAvailable?: boolean }[] = []
+    // as Web Locks do: a request's promise rejects when its callback throws
+    const locks = {
+      request: (_name: string, options: { mode?: string; ifAvailable?: boolean }, callback: (lock: unknown) => unknown) => {
+        asked.push({ mode: options.mode, ifAvailable: options.ifAvailable })
+        if (options.ifAvailable) return new Promise(done => { done(callback(null)) })
+        return new Promise(done => { release = () => { done(callback({ name: LOCK })) } })
+      },
+    }
+    let held = false
+    const share = shareLock(locks as unknown as LockManager, () => { throw new Error('Extension context invalidated.') }).then(() => { held = true })
+    await new Promise(r => setTimeout(r, 0))
+    expect(held).toBe(false)
+    expect(asked).toEqual([{ mode: 'shared', ifAvailable: true }, { mode: 'shared', ifAvailable: undefined }])
+    ;(release as unknown as () => void)()
+    await share
+    expect(held).toBe(true)
+  })
+
+  it('the lock free: shared for the page\'s life, granted at once, and no warm-up asked to give way', async () => {
     let busy = 0
     const asked: { name: string; mode?: string; ifAvailable?: boolean }[] = []
     let holding: unknown = null

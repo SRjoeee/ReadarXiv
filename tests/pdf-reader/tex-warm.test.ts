@@ -263,10 +263,10 @@ describe('warmSlot', () => {
     })
     const idle = vi.fn(), reports: TexWarmResult[] = []
     const slot = warmSlot(run, { report: async x => { reports.push(x) }, idle, now: () => clock })
-    expect(slot.giveWay(120_000)).toBe(false)
+    expect(slot.giveWay(120_000, 'zh')).toBe(false)
     await slot.start({ site: SITE, lang: 'zh' })
     // no byte yet: nothing to wait for
-    expect(slot.giveWay(120_000)).toBe(true)
+    expect(slot.giveWay(120_000, 'zh')).toBe(true)
     await tick()
     expect(reports).toMatchObject([{ ok: false, stopped: true, error: 'a reader needs the TeX page' }])
     expect(slot.running).toBe(false)
@@ -275,12 +275,32 @@ describe('warmSlot', () => {
     await slot.start({ site: SITE, lang: 'zh' })
     clock += 10_000
     runs.get('zh')?.progress(40, 100)
-    expect(slot.giveWay(120_000)).toBe(false)
+    expect(slot.giveWay(120_000, 'zh')).toBe(false)
     expect(slot.running).toBe(true)
     // 60 s in, 30 % done: 140 s left — stopped
     clock += 50_000
     runs.get('zh')?.progress(30, 100)
-    expect(slot.giveWay(120_000)).toBe(true)
+    expect(slot.giveWay(120_000, 'zh')).toBe(true)
+  })
+
+  it('a reader that needs the page in another language stops the warm-up however near its end: none of its faces are the reader\'s (the re-review\'s m4)', async () => {
+    let clock = 0
+    const progress = new Map<string, (loaded: number, total: number) => void>()
+    const run = (request: { site: string; lang: string }, signal: AbortSignal, seen: (loaded: number, total: number) => void) => new Promise<TexWarmResult>(resolve => {
+      progress.set(request.lang, seen)
+      signal.addEventListener('abort', () => resolve({ ok: false, lang: request.lang, error: String(signal.reason), stopped: true }), { once: true })
+    })
+    const reports: TexWarmResult[] = []
+    const slot = warmSlot(run, { report: async x => { reports.push(x) }, idle: () => {}, now: () => clock })
+    await slot.start({ site: SITE, lang: 'zh' })
+    // 10 s in, 90 % done: about a second left — a Chinese reader waits for it, a German one does not
+    clock += 10_000
+    progress.get('zh')?.(90, 100)
+    expect(slot.giveWay(120_000, 'zh')).toBe(false)
+    expect(slot.giveWay(120_000, 'de')).toBe(true)
+    await tick()
+    expect(reports).toMatchObject([{ ok: false, lang: 'zh', stopped: true, error: 'a reader needs the TeX page in another language' }])
+    expect(slot.running).toBe(false)
   })
 
   it('the pace: what is left at the speed so far, nothing known before a byte has come', () => {

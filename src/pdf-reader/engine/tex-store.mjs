@@ -5,7 +5,9 @@
 // warmup-report.md). So the warm-up (entrypoints/ocr/tex-warm.ts) keeps the page's files here, by their address on the
 // page's site, and the reader hands its page those its own cache lacks. One lock keeps the two from downloading a file
 // twice: the warm-up takes it alone and only when it is free, every reader that frames the page shares it while open;
-// a reader that finds a warm-up holding it asks it to stop (through the background), and takes what the store holds.
+// a reader that finds a warm-up holding it asks it to give way (through the background) — it is stopped when it is for
+// another language or its pace says it would outlast the reader's patience, else waited for — and then takes what the
+// store holds.
 
 /** the Cache Storage cache of the page's files, in the extension's origin */
 export const STORE = 'axt-tex-files'
@@ -51,15 +53,17 @@ export async function pruneStore(site, urls, caches = globalThis.caches) {
 }
 
 /** a reader's share of the lock, held for the page's life → settles once it is granted: at once, unless a warm-up
- *  holds it — then `busy` is called, which asks the warm-up to stop (it keeps what came), and the share is granted
- *  once it has: a reader that needs the page now does not wait for files it may not need, on a link that may be slow */
+ *  holds it — then `busy` is called, which asks the warm-up to give way (stopped, it keeps what came; one of the
+ *  reader's language nearly done is let finish), and the share is granted once it has ended. A `busy` that throws (an
+ *  extension context gone: runtime.sendMessage throws at once) changes nothing of that: the share is still asked for,
+ *  and the reader never runs beside a warm-up that writes (the re-review's m5) */
 export function shareLock(locks = globalThis.navigator?.locks, busy = null) {
   if (!locks?.request) return Promise.resolve()
   return new Promise(granted => {
     const hold = () => { granted(); return new Promise(() => {}) }
     locks.request(LOCK, { mode: 'shared', ifAvailable: true }, lock => {
       if (lock) return hold()
-      busy?.()
+      try { busy?.() } catch {}
       locks.request(LOCK, { mode: 'shared' }, hold).catch(() => granted())
       return undefined
     }).catch(() => granted())

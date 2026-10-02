@@ -181,6 +181,32 @@ describe('createWarmup', () => {
     expect(t.record()?.failures).toBeUndefined()
   })
 
+  it('a success reported by a warm-up already replaced does not hide its replacement\'s failure from the back-off (the re-review\'s m3)', async () => {
+    let reading = false
+    const t = harness({ readerOpen: async () => reading })
+    await t.warmup.trigger('install')
+    t.tick(MINUTE)
+    t.setTarget('deu')
+    await t.warmup.trigger('language')
+    expect(t.started.map(r => r.lang)).toEqual(['zh', 'de'])
+    // the Chinese warm-up ended well just as German took its place (the review's M1 race); a reader opened meanwhile
+    // defers the look the report sets off
+    reading = true
+    t.tick(MINUTE)
+    await t.warmup.done({ ok: true, lang: 'zh', versions: 'v', files: 1, bytes: 1, ms: 1 })
+    // German then fails: a disk that cannot keep its files
+    t.tick(MINUTE)
+    t.finish()
+    await t.warmup.done({ ok: false, lang: 'de', error: 'the extension\'s store could not keep b0.bin' })
+    reading = false
+    t.tick(MINUTE)
+    await t.warmup.trigger('check')
+    expect(t.started).toHaveLength(2)
+    t.tick(15 * MINUTE)
+    await t.warmup.trigger('check')
+    expect(t.started.map(r => r.lang)).toEqual(['zh', 'de', 'de'])
+  })
+
   it('a page that takes no warm-up: remembered under its versions, said once, and asked again at a day\'s check only (the review\'s M3)', async () => {
     const t = harness()
     await t.warmup.trigger('install')
@@ -226,8 +252,9 @@ describe('createWarmup', () => {
   it('a reader that needs the page while a warm-up runs has the document stop it; that is no failure (the review\'s M4)', async () => {
     const t = harness()
     await t.warmup.trigger('install')
-    await t.warmup.giveWay()
-    expect(t.deps.stop).toHaveBeenCalledTimes(1)
+    await t.warmup.giveWay('zh')
+    // the reader's language goes with it: a warm-up for another is stopped, however near its end (the re-review's m4)
+    expect(t.deps.stop).toHaveBeenCalledExactlyOnceWith('zh')
     t.finish()
     await t.warmup.done({ ok: false, lang: 'zh', error: 'a reader needs the page', stopped: true })
     expect(t.record()).toEqual({ tried: T0 })
@@ -290,7 +317,7 @@ describe('the background and the document together', () => {
       finishers.set(request.lang, resolve)
       signal.addEventListener('abort', () => resolve({ ok: false, lang: request.lang, error: 'stopped', stopped: true }))
     }), { report, idle: () => {} })
-    const warmup = createWarmup({ site: SITE, target: async () => target, saveData: () => false, readerOpen: async () => false, start, stop: async () => slot.giveWay(0), load: async () => record, save: async r => { record = r }, now: () => T0, log: () => {} })
+    const warmup = createWarmup({ site: SITE, target: async () => target, saveData: () => false, readerOpen: async () => false, start, stop: async lang => slot.giveWay(0, lang), load: async () => record, save: async r => { record = r }, now: () => T0, log: () => {} })
 
     void warmup.trigger('install')
     await flush()

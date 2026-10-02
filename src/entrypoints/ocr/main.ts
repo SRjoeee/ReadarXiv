@@ -85,6 +85,7 @@ onMessages({
     return warmUp.start(request).then(started => ({ started }))
   },
   // A reader needs the TeX page: the running warm-up stops, keeping what came (it takes what the store holds), unless it
-  // will be done within the reader's patience — then the reader waits for it (tex-warm.ts READER_PATIENCE_MS)
-  'axt:tex-warm-stop': () => Promise.resolve({ stopped: warmUp.giveWay(READER_PATIENCE_MS) }),
+  // is for the reader's language and will be done within the reader's patience — then the reader waits for it
+  // (tex-warm.ts READER_PATIENCE_MS)
+  'axt:tex-warm-stop': ({ lang }) => Promise.resolve({ stopped: warmUp.giveWay(READER_PATIENCE_MS, lang) }),
 })

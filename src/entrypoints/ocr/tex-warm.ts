@@ -3,9 +3,10 @@
 // tex-store.mjs), from which the reader hands them to its own page — the page the reader frames over arXiv's PDF page
 // has a cache of its own, which nothing run here could fill. One warm-up at a time, and none while a reader that
 // typesets is open: the lock is taken alone, and only when it is free, so that the two never download a file twice. A
-// reader that needs the page while one runs asks for it (through the background): a warm-up that would outlast the
-// reader's patience at its pace is stopped, and the reader takes what the store holds; one nearly done is let finish
-// and waited for — a stop loses the files in flight, which the reader's page would fetch again.
+// reader that needs the page while one runs asks for it (through the background): a warm-up for another language, or
+// one that would outlast the reader's patience at its pace, is stopped, and the reader takes what the store holds; one
+// of its language nearly done is let finish and waited for — a stop loses the files in flight, which the reader's page
+// would fetch again.
 import { answerWant, keepFile, LOCK, pruneStore } from '@/pdf-reader/engine/tex-store.mjs'
 import type { TexWarmRequest, TexWarmResult } from '@/shared/tex-warm'
 
@@ -29,7 +30,7 @@ export interface TexWarmDeps {
   answerMs?: number
   /** how long the page may then be silent — its own downloads give up after 30 s without a byte, twice */
   quietMs?: number
-  /** stops the warm-up: what came is kept (a file being written is finished first), nothing is pruned */
+  /** stops the warm-up: what came is kept (the files already given are written first), nothing is pruned */
   signal?: AbortSignal
   /** how far the page is: its warm progress, in bytes */
   progress?: (loaded: number, total: number) => void
@@ -93,8 +94,8 @@ async function warm({ site, lang, engines, fonts }: TexWarmJob, deps: TexWarmDep
       within(answerMs, () => fail(`the TeX page at ${site} did not answer`))
       /** the files given, written in turn: the warm-up is done once the last is kept */
       let writes = Promise.resolve()
-      // stopped (another language is wanted, or a reader needs the page): the file being written is finished first, so
-      // that a reader waiting for the lock finds it in the store
+      // stopped (another language is wanted, or a reader needs the page): the files already given are written first,
+      // so that a reader waiting for the lock finds them in the store
       const stopped = () => end(writes.then(() => ({ ok: false as const, lang, error: typeof deps.signal?.reason === 'string' ? deps.signal.reason : 'stopped', stopped: true as const })))
       if (deps.signal?.aborted) return stopped()
       deps.signal?.addEventListener('abort', stopped, { once: true })
@@ -121,8 +122,9 @@ async function warm({ site, lang, engines, fonts }: TexWarmJob, deps: TexWarmDep
           void answerWant(site, want, caches).then(({ message, transfer }) => frame.post(message, transfer))
         } else if (m.type === 'keep' && typeof m.url === 'string' && m.bytes instanceof ArrayBuffer) {
           const keep = { url: m.url, bytes: m.bytes }
-          // a file given is written, even once stopped; a store that cannot keep it (a full disk) stops the warm-up,
-          // rather than download what it cannot keep and be taken for done (the review's M2)
+          // a file given before the warm-up ended is written in turn, and one given after is not heard (`over`): a stop
+          // waits for the writes already queued, then the frame goes; a store that cannot keep a file (a full disk)
+          // stops the warm-up, rather than download what it cannot keep and be taken for done (the review's M2)
           writes = writes.then(async () => { if (!(await keepFile(site, keep, caches))) fail(`the extension's store could not keep ${keep.url.slice(keep.url.lastIndexOf('/') + 1)}`) })
         } else if (m.type === 'warm-done') {
           clearTimeout(timer)
@@ -168,12 +170,15 @@ export function warmSlot(
   let current: { lang: string; stop: AbortController; done: Promise<void>; pace: ReturnType<typeof warmPace> } | null = null
   return {
     get running() { return current !== null },
-    /** a reader needs the page: the running warm-up, whatever its language, stopped when what is left of it would
-     *  take longer than `patienceMs` at its pace (the reader takes what the store holds), else let finish for the
-     *  reader to wait for → whether one was stopped */
-    giveWay(patienceMs: number): boolean {
-      if (!current || current.pace.remainingMs() <= patienceMs) return false
-      current.stop.abort('a reader needs the TeX page')
+    /** a reader that typesets into `lang` needs the page: the running warm-up stopped when it is for another language
+     *  (none of its faces are the reader's: the re-review's m4), or when what is left of it would take longer than
+     *  `patienceMs` at its pace (the reader takes what the store holds), else let finish for the reader to wait for →
+     *  whether one was stopped */
+    giveWay(patienceMs: number, lang: string): boolean {
+      if (!current) return false
+      if (current.lang !== lang) current.stop.abort('a reader needs the TeX page in another language')
+      else if (current.pace.remainingMs() > patienceMs) current.stop.abort('a reader needs the TeX page')
+      else return false
       return true
     },
     async start(request: TexWarmRequest): Promise<boolean> {
