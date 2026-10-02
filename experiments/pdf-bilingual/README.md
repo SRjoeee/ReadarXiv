@@ -20,6 +20,7 @@ Rules and techniques here are expected to change; what settles is to be refactor
 | `spikes/` | Measurement and verification scripts; each file's header says what it measures and how to run it. A spike that imports the engine runs with tsx from the repository root (`pnpm exec tsx experiments/pdf-bilingual/spikes/<name>.mjs`), since the engine imports the extension's source by `@/`; the case spikes (`*-cases.mjs`) exit non-zero on a failure. `lang-gate.mjs` is the multi-language gate: run it before and after any change to how a translation is typeset. |
 | `busytex/research.diff` | Our patches to BusyTeX's pipeline and biber drivers. |
 | `busytex/tree.diff` | Our patch to BusyTeX's remote file fetch: the TeX page's index and tree answer it. |
+| `busytex/tex-log.diff` | Our patch to the logs a compile returns: biber is no TeX pass, so the pass before it keeps its log (the TeX page's build applies it after `research.diff`). |
 | `upstream/` | The same fixes as filed upstream, with self-made reproductions. |
 
 ## Setup

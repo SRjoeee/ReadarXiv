@@ -2,7 +2,7 @@
 //   tex.html                the entry (short-lived), loading the page's version
 //   c/<cv>/                 the page: tex.js, tex-page.mjs, texlyre-busytex's runner (lib/), build.json; legal/: the
 //                           licences, and the source the AGPL asks for (NOTICE.txt says what is where)
-//   e/<eid>/                the engine: BusyTeX with our patches (busytex/research.diff, busytex/tree.diff), its worker
+//   e/<eid>/                the engine: BusyTeX with our patches (busytex/research.diff, tree.diff, tex-log.diff), its worker
 //                           (poc-site/tex-worker.js after poc-site/tex-tree.mjs), and the preloaded tier split by engine
 //                           into tl-common, tl-pdftex, tl-xetex, tl-rest (Emscripten's file packager, no LZ4: served
 //                           with brotli)
@@ -181,6 +181,7 @@ mkdirSync(patched, { recursive: true })
 for (const f of ['busytex.js', 'busytex_pipeline.js', 'busytex_biber.js']) copyFileSync(join(BUSYTEX, f), join(patched, f))
 execFileSync('patch', ['-s', '-p0', '-d', patched, '-i', join(EXP, 'busytex/research.diff')])
 execFileSync('patch', ['-s', '-p0', '-d', patched, '-i', join(EXP, 'busytex/tree.diff')])
+execFileSync('patch', ['-s', '-p0', '-d', patched, '-i', join(EXP, 'busytex/tex-log.diff')])
 for (const f of ['busytex.js', 'busytex_pipeline.js', 'busytex_biber.js']) copyFileSync(join(patched, f), join(engineDir, f))
 copyFileSync(join(BUSYTEX, 'busytex_worker.js'), join(engineDir, 'busytex_worker_busytex.js'))
 const treeCode = readFileSync(join(EXP, 'poc-site/tex-tree.mjs'), 'utf8').replace(/^export /gm, '')
@@ -244,7 +245,7 @@ for (const f of ['tex.js', 'tex-page.mjs']) copyFileSync(join(EXP, 'poc-site', f
 // (LICENSE.TL, LICENSE.CTAN) and each package's own
 {
   const legal = join(pageDir, 'legal')
-  const SOURCE = ['package.json', 'setup.mjs', 'spikes/make-metafont.mjs', 'poc-site/tex.js', 'poc-site/tex-page.mjs', 'poc-site/tex-worker.js', 'poc-site/tex-tree.mjs', 'busytex/research.diff', 'busytex/tree.diff', 'tex-page/build.mjs', 'tex-page/tree.mjs', 'tex-page/kpathsea.mjs', 'tex-page/manifest.mjs', 'tex-page/sizes.mjs', 'tex-page/measured.json']
+  const SOURCE = ['package.json', 'setup.mjs', 'spikes/make-metafont.mjs', 'poc-site/tex.js', 'poc-site/tex-page.mjs', 'poc-site/tex-worker.js', 'poc-site/tex-tree.mjs', 'busytex/research.diff', 'busytex/tree.diff', 'busytex/tex-log.diff', 'tex-page/build.mjs', 'tex-page/tree.mjs', 'tex-page/kpathsea.mjs', 'tex-page/manifest.mjs', 'tex-page/sizes.mjs', 'tex-page/measured.json']
   for (const f of SOURCE) { mkdirSync(dirname(join(legal, 'source', f)), { recursive: true }); copyFileSync(join(EXP, f), join(legal, 'source', f)) }
   copyFileSync(join(EXP, 'node_modules/texlyre-busytex/LICENSE'), join(legal, 'AGPL-3.0.txt'))
   copyFileSync(join(EXP, '../../LICENSE'), join(legal, 'GPL-3.0.txt'))
@@ -260,7 +261,7 @@ GNU Affero General Public License, version 3 or later (AGPL-3.0.txt). This page 
 source is offered here:
   - this page's and its worker's, our patches to BusyTeX, and the build that made this site: source/ (setup.mjs
     fetches BusyTeX's published files and applies source/busytex/research.diff; tex-page/build.mjs builds the site,
-    applying source/busytex/tree.diff);
+    applying source/busytex/tree.diff and source/busytex/tex-log.diff);
   - BusyTeX's: https://github.com/TeXlyre/texlyre-busytex/tree/v${busytex}, its published files
     https://github.com/TeXlyre/texlyre-busytex/releases/tag/assets-v${busytex}, and the sources those were built from
     (busytex-versions.txt: TeX Live 2026, expat, fontconfig, Emscripten).
