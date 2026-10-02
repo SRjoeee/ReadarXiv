@@ -26,9 +26,29 @@ export async function seedFrom(record, units) {
   const seed = new Map()
   hashes.forEach((h, i) => {
     const u = byHash.get(h)
-    if (u) seed.set(i, { pieces: u.pieces, by: u.by, tried: u.tried, state: u.state, ...(u.sentences ? { sentences: u.sentences } : {}) })
+    if (u) seed.set(i, { pieces: ownNested(units[i], u.pieces), by: u.by, tried: u.tried, state: u.state, ...(u.sentences ? { sentences: u.sentences } : {}) })
   })
   return { seed, hashes }
+}
+/**
+ * A record's pieces with each nested piece the unit's own again. A unit nested in another — a footnote in a paragraph,
+ * an author's \thanks — is set where the outer unit's piece stands, by that piece's own unit (latex-front.mjs patch);
+ * the record holds a copy of it, by which no translation is found: a seeded paragraph set its note in the source, its
+ * marks unnamed, on every re-set (2608.02163's authors' notes in English where its first visit set them in Chinese).
+ * Matched by what the piece stands for — its braces and its unit's source —, each own piece once, as the translation
+ * placed them; the same source matched by hash has the same nested pieces
+ */
+const ownNested = (unit, pieces) => {
+  if (!pieces.some(p => p.t === 'nested')) return pieces
+  const own = unit.pieces.filter(p => p.t === 'nested'), used = new Set()
+  const same = (a, b) => a.pre === b.pre && a.post === b.post && JSON.stringify(a.unit?.pieces) === JSON.stringify(b.unit?.pieces)
+  return pieces.map(p => {
+    if (p.t !== 'nested') return p
+    const k = own.findIndex((q, j) => !used.has(j) && same(q, p))
+    if (k < 0) return p
+    used.add(k)
+    return own[k]
+  })
 }
 
 /**

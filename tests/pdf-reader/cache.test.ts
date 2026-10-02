@@ -4,6 +4,9 @@
 // (the final review of Codex 1 on #306)
 import { describe, expect, it } from 'vitest'
 import { allTranslatedBy, knownOriginal, labelOf, originalRow, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
+import { openPaper, translationFiles } from '@/pdf-reader/engine/live.mjs'
+import { translateUnits } from '@/pdf-reader/engine/mt.mjs'
+import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
 
 /** a run's results as live.mjs keeps them: index → { pieces, state, by, tried } */
 const results = (...rows: { by?: string; state?: string; pieces?: boolean }[]) =>
@@ -91,6 +94,41 @@ describe('the record keeps the sentences of the translation it keeps', () => {
     // a unit the last run did not translate keeps the copy's seed
     expect(seed.get(2)).toMatchObject({ pieces: tr('Vier'), by: 'g' })
     expect(seedAgain(null, null).size).toBe(0)
+  })
+})
+
+// A unit nested in another — a footnote in a paragraph, an author's \thanks — is set where the outer unit's nested piece
+// stands, by that piece's own unit (latex-front.mjs patch). A record keeps a copy of it, by which no translation is
+// found: a seeded paragraph set its note in the source, its marks unnamed (\axtmark{undefineds}) — every re-set, and
+// 2608.02163's re-set of 2026-10-02 set the authors' notes in English where its first visit set them in Chinese
+describe('a seed\'s nested pieces, after the record\'s round trip', () => {
+  const zh = async (texts: string[]) => texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' }))
+  const seeded = async (src: string) => {
+    const paper = openPaper(new Map([['main.tex', new TextEncoder().encode(src)]]))
+    const { results } = await translateUnits(paper.units as never, zh, 'markers')
+    const made = new Map(paper.units.map((u, i) => [i, { pieces: results.get(u as never)?.pieces, state: 'whole', by: 'B', tried: 'B' }]))
+    const record = JSON.parse(JSON.stringify({ units: unitsOf(paper.units, new Set(), await Promise.all(paper.units.map(u => sourceHash(u as never))), made) }))
+    const { seed } = await seedFrom(record, paper.units)
+    const translated = new Map([...seed].map(([i, s]) => [paper.units[i], s.pieces]))
+    const tex = new TextDecoder().decode(translationFiles(paper, translated as never, { strategy: strategiesFor(paper.meta, 'zh')[0] as never, fonts: { rm: 'cmr', sf: 'cmss', tt: 'cmtt', body: 'cmr' } }).get('main.tex'))
+    return { paper, seed, tex }
+  }
+
+  it('are the unit\'s own again: the note is set translated, with its marks', async () => {
+    const { paper, seed, tex } = await seeded('\\documentclass{article}\\begin{document}\nA paragraph with a note\\footnote{The note text is here.} and more words after it.\n\\end{document}\n')
+    const para = paper.units.findIndex(u => u.kind === 'para'), note = paper.units.findIndex(u => u.kind === 'footnote')
+    const nested = ((seed.get(para)?.pieces ?? []) as { t: string; unit?: unknown }[]).find(p => p.t === 'nested')
+    expect(nested?.unit).toBe(paper.units[note])
+    expect(tex).toContain(`\\footnote{\\axtlead{${note}}\\leavevmode\\axtmark{${note}s}\u8bba\u6587`)
+    expect(tex).not.toContain('The note text')
+  })
+
+  it('two notes of the same braces, each its own, wherever the translation moved them', async () => {
+    const { paper, seed, tex } = await seeded('\\documentclass{article}\\begin{document}\nFirst words\\footnote{Alpha note here.} then other words\\footnote{Beta note here.} end.\n\\end{document}\n')
+    const para = paper.units.findIndex(u => u.kind === 'para')
+    const units = ((seed.get(para)?.pieces ?? []) as { t: string; unit?: unknown }[]).filter(p => p.t === 'nested').map(p => paper.units.indexOf(p.unit as never))
+    expect(units.sort()).toEqual(paper.units.map((u, i) => (u.kind === 'footnote' ? i : -1)).filter(i => i >= 0).sort())
+    expect(tex).not.toMatch(/Alpha|Beta|undefineds/)
   })
 })
 
