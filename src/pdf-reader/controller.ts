@@ -151,10 +151,11 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
           return state.display === 'original' && state.phase === 'loading' ? { ...next, phase: 'ready' } : next
         case 'digest':
           return shown === 'none' && state.phase === 'ready' ? { ...next, phase: 'loading' } : next
+        // the copy's passages its typesetting left in the original (session.mjs, cache.mjs passagesInSource), from the
+        // moment it is on screen: current, not checked against the settings, or until a run translates it again
         case 'shown cached':
-          return state.phase === 'loading' ? { ...next, phase: 'ready' } : next
+          return { ...next, ...(state.phase === 'loading' ? { phase: 'ready' } : {}), failedUnits: event.lost }
         case 'cache current':
-          // the copy's passages its typesetting left in the original (session.mjs, cache.mjs passagesInSource)
           return { ...next, phase: 'ready', progress: 1, failedUnits: event.lost }
         case 'translating':
           return { ...next, phase: event.again ? 'retranslating' : 'translating', failure: null, partial: false, progress: event.total ? event.got / event.total : 0, finishing: -1, failedUnits: event.lost }

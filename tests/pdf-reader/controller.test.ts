@@ -27,6 +27,13 @@ describe('reduce: the session events folded into the reader state', () => {
     expect(fold([{ type: 'display', mode: 'bilingual' }, note('opened')]).phase).toBe('loading')
   })
 
+  it("a copy shown counts the passages it holds in the original from the moment it is on screen, whatever follows — current, not checked, or translated again (N-5)", () => {
+    // the service unreachable: the copy shown, and nothing after it
+    expect(fold([note('digest'), note('cache hit'), note('shown cached', { lost: 2 })])).toMatchObject({ phase: 'ready', shown: 'copy', failedUnits: 2 })
+    // translated again: the run's own count from its start
+    expect(fold([note('shown cached', { lost: 2 }), note('translating', { again: true })]).failedUnits).toBe(0)
+  })
+
   it("a copy current on a visit again counts the passages it holds in the original, as the run that made it did (I-6 of 2026-10-04)", () => {
     expect(fold([note('digest'), note('cache hit'), note('shown cached'), note('cache current', { lost: 2 })])).toMatchObject({ phase: 'ready', failedUnits: 2 })
     expect(fold([note('digest'), note('cache hit'), note('shown cached'), note('cache current')]).failedUnits).toBe(0)

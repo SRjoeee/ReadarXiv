@@ -2044,8 +2044,13 @@ async function live() {
     note('cache hit', { engine: cached.engine, pipeline: cached.pipeline, typesetting: cached.typesetting })
     // opened, whatever follows: the least recently opened go first (a run that writes nothing would not say so)
     void pdfCache.touch(digest, lang0)
+    // the passages the copy's typesetting left in the original, said with the copy on screen (S-P-60; the re-review's
+    // N-5): whatever follows — current, the service out of reach and the copy not checked, or a run translating again,
+    // whose own count replaces it
+    lost = passagesInSource(cached.units)
     try { await showCached(cached, setContext, note) } catch (e) {
       // a copy that cannot be shown is no copy: deleted, and the visit goes on as a miss (final review)
+      lost = 0
       note('cache unusable', { error: String(e?.message ?? e).slice(0, 200) })
       void pdfCache.delete(digest, lang0)
       cached = undefined
