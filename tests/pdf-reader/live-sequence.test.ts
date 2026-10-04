@@ -1359,6 +1359,25 @@ describe('the remedies in their order, wherever a compile fails', () => {
     expect([r.exhausted, r.inSource ?? 0, inSourceOfResults(r)]).toEqual([true, 0, 0])
   })
 
+  it('a paragraph that fails before its five footnotes are translated is six passages all the same: the bound holds (Codex, second round)', async () => {
+    // the paragraph alone in the first batch — longer than it, its notes ranked last —, the rest held back
+    const long = 'with words that run on for a line or two of prose '.repeat(52)
+    const src = `\\documentclass{article}\\begin{document}\n${Array.from({ length: 4 }, (_, k) => `Paragraph ${k} of the paper, ${k === 2 ? long : ''}with words that run on${k === 2 ? Array.from({ length: 5 }, (_, j) => `\\footnote{A note, number ${j + 5}, with words.}`).join('') : ''} for a line.\n`).join('\n')}\\end{document}\n`
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode(src)]])), n = p.units.length
+    const para = p.units.findIndex(u => u.pieces.some(x => (x as { t: string }).t === 'nested'))
+    const t = translator(), notes: [string, Record<string, unknown>][] = []
+    let previews = 0
+    const compile = async (q: Req): Promise<Compiled> => {
+      // the rest of the translation comes once a second preview is asked for
+      if (kindOf(q) === 'preview' && ++previews === 2) t.release()
+      return (kindOf(q) === 'probe' || kindOf(q) === 'original' ? null : failAt(q, 2)) ?? ok(n, q)
+    }
+    const rank = (i: number) => (i === para ? 0 : (p.units[i] as { nested?: boolean }).nested ? 100 + i : 10 + i)
+    const r = await runLive(p, { lang: 'zh', compile, translate: async texts => (await t.translate(texts)).map(x => ({ ...x, text: x.text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, T) })), rank, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+    expect(notes.filter(([e]) => e === 'in source')).toEqual([])
+    expect(inSourceOfResults(r)).toBeLessThanOrEqual(3)
+  })
+
   it('a paragraph with two footnotes is three passages: within the bound, all set in the source and counted', async () => {
     const p = withNotes(2), n = p.units.length, notes: [string, Record<string, unknown>][] = []
     const para = p.units.findIndex(u => u.pieces.some(x => (x as { t: string }).t === 'nested'))

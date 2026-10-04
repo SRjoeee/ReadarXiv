@@ -616,10 +616,15 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     const lostKey = message => { const c = /^Missing character: There is no (.+?) in font /.exec(message)?.[1]; return c && (c.match(/\(U\+([0-9A-F]+)\)/)?.[1] ?? c.trim()) }
     /** the letters of a unit's translation in a snapshot, its nested units' with them */
     const lettersOf = (u, snapshot) => [snapshot.get(u)?.filter(p => p.t === 'text' && p.tr).map(p => p.s).join('') ?? '', ...u.pieces.filter(p => p.t === 'nested').map(p => lettersOf(p.unit, snapshot))].join('')
-    /** the translated units in `snapshot` that setting `found` in the source sets there, not in `out` already: each with
-     *  every unit nested in it, once — the passages the bounds count (Codex's first medium: a paragraph's five footnotes
-     *  are six passages, which the bound of three had counted as one) */
-    const reverting = (found, out, snapshot) => [...new Set(found.flatMap(withNested))].filter(u => !out.has(u) && snapshot.has(u))
+    /**
+     * The passages setting `found` in the source under the strategy `at.s` sets there, each with every unit nested in
+     * it, once, none in `out` already: those translated, and those still to come — a unit with no answer in yet, which
+     * the source would hold all the same once it came —; not a unit left as it is (kept), lost to the service, or one the
+     * strategy sets as the paper has it (the author block under one that cannot take its names). The passages the bounds
+     * count (Codex's first medium, both rounds: a paragraph's five footnotes are six passages, which the bound of three
+     * had counted as one — and as one again while the five were still being translated)
+     */
+    const reverting = (found, out, at) => [...new Set(found.flatMap(withNested))].filter(u => !out.has(u) && !kept.has(u) && !(strategies[at.s].authors === false && u.kind === 'author') && (translated.has(u) || !results.has(indexOf.get(u))))
     /** whether the letters a compile (`at`) lost beyond the original's, where the log names them by code point, stand in
      *  the translation of a unit or a few — no more passages than `room`, what the strategy may still set in the source
      *  besides `out`: lost in more, they are the strategy's font's, and in none, not a unit's (a caption babel sets) */
@@ -627,7 +632,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       const codes = [...lostIn(at.r.log)].filter(([c, n]) => n > (known.get(c) ?? 0)).map(([c]) => (/^[0-9A-F]+$/.test(c) ? String.fromCodePoint(parseInt(c, 16)) : null))
       if (codes.some(c => c === null)) return true
       const holding = [...at.snapshot.keys()].filter(u => !u.nested && codes.some(c => lettersOf(u, at.snapshot).includes(c)))
-      const n = reverting(holding, out, at.snapshot).length
+      const n = reverting(holding, out, at).length
       return n > 0 && n <= room
     }
     /** the units a compile's errors stand in (`at`: the compile — its files, its units' lines in them, the units it set
@@ -669,12 +674,12 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     const take = how => { episode.tried.add(how); episode.trying = how; if (how !== 'rule') spent++; return how }
     /** whether units found in a compile (`at`) may be set in the source under the strategy: a passage or more, within
      *  its bounds and the run's */
-    const fits = (found, at) => { const n = reverting(found, inSource, at.snapshot).length; return n > 0 && placed + n <= IN_SOURCE_MAX && spent < SPENT_MAX }
+    const fits = (found, at) => { const n = reverting(found, inSource, at).length; return n > 0 && placed + n <= IN_SOURCE_MAX && spent < SPENT_MAX }
     /** units found in a compile (`at`) set in the source with every unit nested in each, as one round of the strategy's,
      *  each passage they set there counted; said */
     const place = (found, at) => {
       rounds++
-      placed += reverting(found, inSource, at.snapshot).length
+      placed += reverting(found, inSource, at).length
       for (const u of found.flatMap(withNested)) inSource.add(u)
       note('in source', { strategy: strategy().name, units: found.map(u => indexOf.get(u)), error: whyFailed(at.r) ?? whyUnset(at.r) })
     }
@@ -736,7 +741,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       if (!at || at.s >= s || lettersBack || spent >= SPENT_MAX) return false
       lettersAt = null
       const found = await letterUnits(at, new Set(), IN_SOURCE_MAX)
-      const n = reverting(found, new Set(), at.snapshot).length
+      const n = reverting(found, new Set(), at).length
       if (!n || n > IN_SOURCE_MAX || spent >= SPENT_MAX) return false
       lettersBack = true
       s = at.s; aux = null; inSource.clear(); rounds = placed = 0
