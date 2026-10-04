@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { copyTexts, decideWrite, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from '@/pdf-reader/engine/cache.mjs'
-import { citationLines, type Compiled, compilerKeeper, keptFor, openPaper, PIPELINE_VERSION, runLive, stoppedShort } from '@/pdf-reader/engine/live.mjs'
+import { citationLines, type Compiled, compilerKeeper, keptFor, openPaper, originalFiles, PIPELINE_VERSION, runLive, stoppedShort } from '@/pdf-reader/engine/live.mjs'
 import type { Marks } from '@/pdf-reader/engine/typeset/places.mjs'
 
 // The reader's compiles with the typesetting rule (experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md,
@@ -1233,5 +1233,54 @@ describe('the remedies in their order, wherever a compile fails', () => {
     expect(notes.filter(([e]) => ['next strategy', 'back to strategy', 'in source'].includes(e)).map(([e, d]) => [e, d.strategy])).toEqual([['next strategy', 'pdfLaTeX + CJKutf8'], ['in source', 'pdfLaTeX + CJKutf8']])
     expect(finalOf(notes)).toMatchObject({ ok: true, strategy: 'pdfLaTeX + CJKutf8' })
     expect([r.settled, r.inSource]).toEqual([true, 1])
+  })
+
+  it("a strategy's failure in no unit moves the chain on at once: an original under way in its own compiler is not waited for", async () => {
+    const p = paper(), n = p.units.length, order: string[] = []
+    let open: () => void = () => {}
+    const gate = new Promise<void>(r => { open = r })
+    // the original answers once the next strategy's first preview is asked for, or after a while, if the run waits for it
+    const compileOriginal = async (q: Req): Promise<Compiled> => { await gate; order.push('original in'); return ok(n, q) }
+    const compile = async (q: Req): Promise<Compiled> => {
+      const kind = kindOf(q), xe = /xeCJK/.test(text(q))
+      order.push(`${kind}${kind === 'preview' || kind === 'final' ? (xe ? '/xeCJK' : '/CJKutf8') : ''}`)
+      // xeCJK refuses the paper in its preamble: a class's conflict, no unit's
+      if (xe) return { ok: false, pdf: null, log: '! LaTeX Error: Command \\foo already defined.\nl.3 \\newcommand{\\foo}\n  {x}\n', ms: 1 }
+      if (kind === 'preview') open()
+      return ok(n, q)
+    }
+    setTimeout(() => open(), 300)
+    const r = await runLive(p, { lang: 'zh', compile, compileOriginal, translate: numbered, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    expect(order.indexOf('preview/CJKutf8')).toBeGreaterThan(-1)
+    expect(order.indexOf('preview/CJKutf8')).toBeLessThan(order.indexOf('original in'))
+    expect(r.settled).toBe(true)
+  })
+
+  it("the paper's own error, in a unit its original raises it in too, sets no unit in the source, whatever the text around it", async () => {
+    // nonstop: the original sets with an error TeX went past in unit 4's source; the translation, whole, fails on it and
+    // on a fatal error of no unit's — the error's context there is the translation's, never the original's
+    const p = paper(), n = p.units.length, notes: [string, Record<string, unknown>][] = []
+    const at = (q: Req, needle: string) => { const lines = text(q).split('\n'), k = lines.findIndex(l => l.includes(needle)); return k < 0 ? null : { n: k + 1, l: lines[k] as string } }
+    const own = (q: Req, needle: string) => { const x = at(q, needle); if (!x) return ''; const k = x.l.indexOf(needle) + needle.length; return `! Undefined control sequence.\nl.${x.n} ${x.l.slice(Math.max(0, k - 30), k)}\n  ${x.l.slice(k, k + 30)}\n` }
+    const compile = async (q: Req): Promise<Compiled> => {
+      const kind = kindOf(q)
+      if (kind === 'probe') return ok(n, q)
+      if (kind === 'original') return { ...ok(n, q), log: `${own(q, 'Paragraph 4 of')}${linesLog(n)}` }
+      const log = `${own(q, `${T} 4 ${T}`)}${linesLog(n)}`
+      return at(q, `${T} 11 ${T}`) ? { ok: false, pdf: null, log: `${log}! Emergency stop.\n<*> main.tex\n`, ms: 1 } : { ...ok(n, q), log }
+    }
+    const r = await runLive(p, { lang: 'zh', compile, translate: numbered, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+    expect(notes.filter(([e]) => e === 'original').length).toBe(1)
+    expect(notes.filter(([e]) => e === 'in source')).toEqual([])
+    expect(r.exhausted).toBe(true)
+  })
+
+  it("the original's files are the same bytes with its units' lines asked for and without; each unit found on its own lines", () => {
+    const p = paper(), spans: { lines?: () => { unit: unknown; first: number; last: number }[] } = {}
+    const plain = originalFiles(p, { lines: true }), withSpans = originalFiles(p, { lines: true, spans })
+    expect([...withSpans].map(([f, b]) => [f, new TextDecoder('latin1').decode(b)])).toEqual([...plain].map(([f, b]) => [f, new TextDecoder('latin1').decode(b)]))
+    const lines = new TextDecoder('latin1').decode(withSpans.get('main.tex')).split('\n'), found = spans.lines?.() ?? []
+    expect(found.map(x => x.unit)).toEqual(p.units)
+    for (const [i, x] of found.entries()) expect(lines.slice(x.first - 1, x.last).join('\n')).toContain(`Paragraph ${i} of`)
   })
 })

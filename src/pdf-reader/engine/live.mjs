@@ -166,12 +166,16 @@ export function probeFiles({ fsys, project }, { width = false } = {}) {
 
 /** the original with unit marks, as its own engine sets it (images as frames change no place on the page); with
  *  `lines`, each unit's lines and the forced breaks in its log (typeset/tex.mjs LINES_TEX), which the typesetting rule
- *  takes the original's flow from */
-export function originalFiles({ fsys, project }, { lines = false } = {}) {
+ *  takes the original's flow from. `spans`, an object, gets `lines()` as translationFiles' does: each unit's lines in
+ *  the files as written, worked out when asked — where the paper's own errors stand (runLive's ownErrors) */
+export function originalFiles({ fsys, project }, { lines = false, spans = null } = {}) {
   const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
-  const out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base })
-  const main = latin1(out.get(project.main))
-  out.set(project.main, latin1Bytes(DRAFT + MARK_DEF + (lines ? LINES_TEX : '') + main))
+  const raw = spans ? [] : null
+  const out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw })
+  const patched = spans ? new Map(out) : null
+  const head = DRAFT + MARK_DEF + (lines ? LINES_TEX : '')
+  out.set(project.main, latin1Bytes(head + latin1(out.get(project.main))))
+  if (spans) { let found = null; spans.lines = () => (found ??= unitLines(raw, patched, out, project.main, head.length)) }
   return out
 }
 
@@ -475,7 +479,14 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     // the marked original, compiled once: the left side's anchors, the characters the paper's own compile could not set,
     // and with the rule every plan's base — so in full, every pass: one pass sets references, citations and the pages they
     // move unsettled, and its readings are another paper's (the review of 2026-10-01, M3)
-    const original = () => (originalP ??= askOf(compileOriginal ?? compile)({ main: project.main, engine: meta.compiler, rerun: true, bibtex: meta.bbl ? false : null, overrides: originalFiles(paper, { lines: !!readMarks }) }).then(async o => {
+    // its files and its units' lines in them, and the compile once it is in: where the paper's own errors stand (ownErrors)
+    let originalAt = null, originalIn = null
+    const original = () => (originalP ??= (() => {
+      const spans = {}, overrides = originalFiles(paper, { lines: !!readMarks, spans })
+      originalAt = { files: overrides, lines: spans.lines }
+      return askOf(compileOriginal ?? compile)({ main: project.main, engine: meta.compiler, rerun: true, bibtex: meta.bbl ? false : null, overrides })
+    })().then(async o => {
+      originalIn = o
       note('original', { ok: o.ok, ms: o.ms, error: whyFailed(o) })
       if (o.ok) {
         onOriginal?.({ pdf: o.pdf })
@@ -566,10 +577,20 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       const u = last ? unitsAtErrors([e], last.files, last.lines())[0] : undefined
       return `${e.message}@${u ? indexOf.get(u) : `${e.before}|${e.after}`}`
     }
-    /** the paper's own TeX errors, as its marked original raised them (where its log is here: a run given the
-     *  original's readings has their lines alone), which no unit of the translation is the cause of */
-    const errorKey = e => `${e.message}|${e.before}|${e.after}`
-    const ownErrors = async () => new Set(texErrors(originalP ? (await originalP.catch(() => null))?.log : '').map(errorKey))
+    /**
+     * The paper's own TeX errors in its units, which no translation of them is the cause of: its marked original's, each
+     * as its message and the unit it stands in there — the text around an error is the source's in the original's log
+     * and the translation's in a translation's, and never the same (the review of 2026-10-04, M-1). Read once the
+     * original is in, and never waited for: a failure is placed, and the chain moves on, as soon as the compile ends
+     * (I-4: xeCJK's failure in its preamble had the next strategy's first preview wait the whole original in the
+     * browser, 1509 ms against 45 in a probe). A run given the original's readings has their lines alone, no errors
+     */
+    let ownRead = null
+    const ownErrors = () => {
+      if (!originalIn?.log || !originalAt) return new Set()
+      if (ownRead?.of !== originalIn) ownRead = { of: originalIn, keys: new Set(texErrors(originalIn.log).flatMap(e => unitsAtErrors([e], originalAt.files, originalAt.lines()).map(u => `${e.message}@${indexOf.get(u)}`))) }
+      return ownRead.keys
+    }
     /** a letter's key as lostIn counts it: its code point where the message gives one */
     const lostKey = message => { const c = /^Missing character: There is no (.+?) in font /.exec(message)?.[1]; return c && (c.match(/\(U\+([0-9A-F]+)\)/)?.[1] ?? c.trim()) }
     /** the letters of a unit's translation in a snapshot, its nested units' with them */
@@ -584,10 +605,16 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       return holding.length > 0 && holding.length <= room
     }
     /** the units a compile's errors stand in (`at`: the compile — its files, its units' lines in them, the units it set
-     *  translated), translated in it and not in `out`, the paper's own errors left out */
-    const placedIn = async (errors, at, out) => {
-      const own = await ownErrors()
-      return unitsAtErrors(errors.filter(e => !own.has(errorKey(e))), at.files, at.lines()).filter(u => !out.has(u) && withNested(u).some(x => at.snapshot.has(x)))
+     *  translated), translated in it and not in `out`, the paper's own errors left out (ownErrors, read only once an
+     *  error stands in a unit at all) */
+    const placedIn = (errors, at, out) => {
+      const found = new Set()
+      let mine = null
+      for (const e of errors) for (const u of unitsAtErrors([e], at.files, at.lines())) {
+        if (out.has(u) || !withNested(u).some(x => at.snapshot.has(x))) continue
+        if (!(mine ??= ownErrors()).has(`${e.message}@${indexOf.get(u)}`)) found.add(u)
+      }
+      return [...found]
     }
     /** whether a compile lost letters: an error that is one (LaTeX's "Unicode character … not set up"), or a PDF with
      *  letters left out (unsettable) */
@@ -650,7 +677,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       if (rounds >= ROUNDS) return null
       const at = { ...last, r, req, s }
       // a TeX error in a unit: its text breaks TeX under any strategy
-      let found = await placedIn(texErrors(r.log).filter(e => e.char === undefined), at, inSource)
+      let found = placedIn(texErrors(r.log).filter(e => e.char === undefined), at, inSource)
       if (!found.length) {
         if (!lettersLost(r)) return null
         lettersAt ??= at
