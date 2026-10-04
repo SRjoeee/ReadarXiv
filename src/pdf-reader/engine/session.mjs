@@ -22,6 +22,7 @@ import { appearanceRule } from '@/core/renderer/style-preset'
 import { renderImage, setImageModes } from '@/core/renderer/image'
 import { sendMessage } from '@/shared/messages'
 import { createSurfaceConfig } from '@/shared/surface-config'
+import { R } from '@/ui/strings'
 import { localeStale } from '@/ui/use-surface-config'
 import { ocrCall } from '../ocr'
 import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFViewer, pdfjsLib } from '../pdfjs'
@@ -870,7 +871,18 @@ let readingLine = 0.25
 let driver = null
 let table = null // [[leftTop, rightTop], ...] rising on both sides
 let lines = null // per side, every highlighted line in scroll coordinates
-const pageTop = (side, page) => { const pv = pageView(side, page); return pv.div.offsetTop + pv.div.clientTop }
+/**
+ * A page's top in its side's scroller, whatever the stack's transform. A page's offsetTop counts from its offsetParent,
+ * which is the scroller until the follower's `.pdfViewer` carries the compositor's transform (armed at rest too, and
+ * bound while the reader scrolls): the stack is then its pages' offsetParent, and where it stands in the scroller was
+ * missing from every top — 14 px, the first page's margin, which collapses out through the stack's edge (levelOf read
+ * the follower 14 px off level on the compositor, the screen showing it level). offsetTop ignores transforms, the
+ * stack's own included, so its place is added
+ */
+const pageTop = (side, page) => {
+  const div = pageView(side, page).div, stack = side.viewer.viewer
+  return div.offsetTop + div.clientTop + (div.offsetParent === stack ? stack.offsetTop + stack.clientTop : 0)
+}
 function unitDocTop(side, id) {
   const a = side.anchors.get(id)
   if (!a) return null
@@ -1551,6 +1563,18 @@ function attach(side) {
   })
   // the overlays outlive a page drawn again (overlay.mjs keepOverlays): each page's div watched from the start
   side.eventBus.on('pagesinit', () => { for (const pv of side.viewer._pages) side.keeper.observe(pv.div) })
+  // PDF.js names every page region "Page N", in English, in both panes: one name twice over (axe's landmark-unique) and not
+  // the interface's language (docs/UI.md S-R-11a). Each page is named by its side and number from the pack, and its
+  // translation id goes with the name's args: PDF.js's translator would write its own name over ours at the next change.
+  // The left is the original, whatever the display or the panes' order; a side coming in to replace the right is the translation
+  side.eventBus.on('pagesinit', () => {
+    const which = side === left ? 'original' : 'translation'
+    for (const pv of side.viewer._pages) {
+      pv.div.removeAttribute('data-l10n-id')
+      pv.div.removeAttribute('data-l10n-args')
+      pv.div.setAttribute('aria-label', R.pageName(which, pv.id))
+    }
+  })
   // where the pane and its pages are, for the pointer: again whenever they change size
   for (const el of [side.container, side.viewer.viewer]) { measuredSide.set(el, side); measured.observe(el) }
   // a side opened out of the display (the original, while the translation alone is shown) waits at 1 for its width (relayout)
