@@ -298,7 +298,14 @@ export const PIPELINE_VERSION = '7'
 //    such environment in a fitted table — a copy of 4 could be a PDF of the pages before a comment that never ended
 //    (2608.16117: three of forty) —; and a compile that stopped short of the document's end is no translation
 //    (stoppedShort), where a compiler gives the PDF of what it set
-export const TYPESETTING_VERSION = '5'
+// 6: a compile that fails is tried again before the chain moves on — without the rule's TeX, EVEN_SPACES' microtype or
+//    the references the run gives it, then with the units its log places the failure in set in the source (runLive's
+//    remedy, tex-errors.mjs) —, and a draft is given every citation line of the original's aux (citationLines): a
+//    reading of the original kept under 5 has its \bibcite lines alone, which broke every citation of 2610.02069 under
+//    apacite and babel on a revisit, and that paper's record, which none of the ways could set, is tried again. With
+//    them the tables fitted since 5 (2a346741: what stands in a TeX comment; 9cc9cd2d: a starred environment read by
+//    lines), whose \axtfit decisions changed under it
+export const TYPESETTING_VERSION = '6'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
