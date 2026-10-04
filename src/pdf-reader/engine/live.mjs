@@ -657,8 +657,9 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       const d = await ask({ ...at.req, rerun: false, bibtex: false, overrides })
       return placedIn(texErrors(d.log).filter(e => /^Missing character/.test(e.message) && !known.has(lostKey(e.message))), at, out)
     }
-    /** a remedy taken for the next compile: the episode's, and one of the run's budget */
-    const take = how => { episode.tried.add(how); episode.trying = how; spent++; return how }
+    /** a remedy taken for the next compile: the episode's, and one of the run's budget — but the rule's, ruling 6's from
+     *  before the budget, which nothing else may spend (the review of 2026-10-04, M-5) */
+    const take = how => { episode.tried.add(how); episode.trying = how; if (how !== 'rule') spent++; return how }
     /** whether units found in a compile (`at`) may be set in the source under the strategy: a passage or more, within
      *  its bounds and the run's */
     const fits = (found, at) => { const n = reverting(found, inSource, at.snapshot).length; return n > 0 && placed + n <= IN_SOURCE_MAX && spent < SPENT_MAX }
@@ -686,14 +687,18 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       const name = strategy().name, now = failureOf(r)
       episode ??= { tried: new Set(), trying: null, failure: null }
       if (episode.trying && episode.trying !== 'units') {
-        if (now !== episode.failure) note('kept', { strategy: name, by: episode.trying })
-        else if (episode.trying === 'rule') { ruleFailed.delete(name); note('typeset back', { strategy: name }) }
+        if (now !== episode.failure) {
+          note('kept', { strategy: name, by: episode.trying })
+          // another failure, which the last one hid: the remedies taken back for that one are untried for this one (the
+          // references' fault before the rule's in the final)
+          episode.tried = new Set([...episode.tried].filter(how => how === 'units' || (how === 'rule' ? ruleFailed.has(name) : without[how].has(name))))
+        } else if (episode.trying === 'rule') { ruleFailed.delete(name); note('typeset back', { strategy: name }) }
         else { without[episode.trying].delete(name); note(`${episode.trying} back`, { strategy: name }) }
       }
       episode.trying = null
       episode.failure = now
-      if (spent >= SPENT_MAX) return null
       if (!r.ok && ruled && !episode.tried.has('rule')) { withoutRule(r); return take('rule') }
+      if (spent >= SPENT_MAX) return null
       if (!r.ok) for (const how of ['spacing', 'references']) if (!episode.tried.has(how) && adds[how]()) { without[how].add(name); note(`without ${how}`, { strategy: name, error: whyFailed(r) }); return take(how) }
       if (rounds >= ROUNDS) return null
       const at = { ...last, r, req, s }
