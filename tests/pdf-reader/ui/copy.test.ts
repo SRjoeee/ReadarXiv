@@ -26,8 +26,8 @@ describe("the reader's words", () => {
 
   it('S-R-13 spaces the language\'s own name from the Chinese before it only where it is not Han, kana or hangul (UI.md §1 rule 9; the maintainer, 2026-10-04)', () => {
     const { R } = LOCALES['zh-CN']
-    // Latin, Cyrillic, Greek and Arabic names take the space; Han, kana and hangul names sit against the Chinese as it does
-    for (const code of ['deu', 'rus', 'ell', 'arb'] as const) expect(R.status.unsupported(OWN[code]), code).toBe(`${UNSUPPORTED} ${OWN[code]}`)
+    // a name in any script but Han, kana or hangul takes the space; Han, kana and hangul names sit against the Chinese as it does
+    for (const code of ['deu', 'rus', 'ell', 'arb', 'tha', 'hin'] as const) expect(R.status.unsupported(OWN[code]), code).toBe(`${UNSUPPORTED} ${OWN[code]}`)
     for (const code of ['jpn', 'kor', 'cmn', 'cmn-Hant'] as const) expect(R.status.unsupported(OWN[code]), code).toBe(`${UNSUPPORTED}${OWN[code]}`)
     // the English sentence has no Chinese before the name: unchanged, whatever the name's script
     for (const code of ['deu', 'jpn', 'arb'] as const) expect(LOCALES.en.R.status.unsupported(OWN[code]), code).toBe(`A bilingual PDF isn't available in ${OWN[code]} yet`)
