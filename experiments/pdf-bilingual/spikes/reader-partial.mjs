@@ -1,7 +1,7 @@
 // The reader when only part of a translation can be shown (S-R-19; plans/2026-10-04-compile-resilience.md, Task 5), in
 // Chromium with the build: a synthetic paper of our own whose first paragraphs set and whose last ones break every
-// strategy's compile \u2014 each an apacite citation with a note before it, whose key the control-word guard cuts from its
-// command (2610.02069's fault B), more of them than the safety net may set in the source \u2014, translated by an LLM
+// strategy's compile — each an apacite citation with a note before it, whose key the control-word guard cuts from its
+// command (2610.02069's fault B), more of them than the safety net may set in the source —, translated by an LLM
 // endpoint on this machine that gives every segment back marked (reader-live.mjs's LLM_MOCK). The first previews are
 // shown; every compile with the last paragraphs fails, the chain runs out, and the capsule must say the translation is
 // shown in part: the preview kept, the translated displays not greyed, its close working. Our TeX page and its tree

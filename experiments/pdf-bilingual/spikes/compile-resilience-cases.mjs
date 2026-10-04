@@ -1,8 +1,8 @@
 // experiments/pdf-bilingual/spikes/compile-resilience-cases.mjs
 // The compile's safety net under TeX (plans/2026-10-04-compile-resilience.md; src/pdf-reader/engine/tex-errors.mjs and
 // live.mjs runLive's remedies): small synthetic documents through the reader's own translationFiles, compiled natively
-// in Docker \u2014 halting on the first error as BusyTeX does, and in nonstop mode with latexmk -f as the gates' native
-// compiler does \u2014, each checking that TeX's log places a failure in the unit it stands in, and nowhere else.
+// in Docker — halting on the first error as BusyTeX does, and in nonstop mode with latexmk -f as the gates' native
+// compiler does —, each checking that TeX's log places a failure in the unit it stands in, and nowhere else.
 // typeset-busytex-cases.mjs runs the same documents under the reader's own BusyTeX. Exits non-zero on a failure.
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/compile-resilience-cases.mjs
 import { execFileSync } from 'node:child_process'
@@ -30,7 +30,7 @@ function compile(name, files, { engine, main = 'main.tex', halt }) {
   return existsSync(log) ? readFileSync(log, 'latin1') : ''
 }
 /** a paper, every unit translated into "Chinese" (its words each ZH), and the translation's text of unit `bad` put
- *  through `breaking` raw \u2014 what a translation that reached TeX unescaped would be */
+ *  through `breaking` raw — what a translation that reached TeX unescaped would be */
 function translated(files, breaking, bad) {
   const paper = openPaper(new Map([...files].map(([p, t]) => [p, enc(t)])))
   const tr = new Map(paper.units.map((u, i) => [u, u.pieces.map(p => (p.t === 'text' ? { ...p, tr: true, s: i === bad ? breaking(p.s.replace(/[A-Za-z]{2,}/g, ZH)) : p.s.replace(/[A-Za-z]{2,}/g, ZH) } : p))]))
@@ -38,7 +38,7 @@ function translated(files, breaking, bad) {
 }
 const PARAS = n => Array.from({ length: n }, (_, k) => `Paragraph ${k} of the paper runs on, with words that make a line of prose.`).join('\n\n')
 
-// 1. a unit whose translation breaks TeX \u2014 an undefined command glued to a subscript (\foo_bar) \u2014 under xeCJK: the log,
+// 1. a unit whose translation breaks TeX — an undefined command glued to a subscript (\foo_bar) — under xeCJK: the log,
 // halting or nonstop, places the failure in that unit alone, in the main file and in a file it \inputs, read as
 // Latin-1 (a native log) and as UTF-8 (BusyTeX's)
 for (const [where, files, bad] of [
@@ -57,7 +57,7 @@ for (const [where, files, bad] of [
 }
 
 // 2. a letter lost with no TeX error: the run's diagnosis, \tracinglostchars=3 before the first line, makes it an error at
-// its place \u2014 XeTeX's lost CJK letter in a Latin face, pdfTeX's lost 8-bit code in cmr10 \u2014 and the line numbers stay
+// its place — XeTeX's lost CJK letter in a Latin face, pdfTeX's lost 8-bit code in cmr10 — and the line numbers stay
 {
   // XeTeX, a German translation set in the paper's Latin Modern: unit 2 holds a letter none of its faces has
   const files = new Map([['main.tex', `\\documentclass{article}\n\\begin{document}\n${PARAS(4)}\n\\end{document}\n`]])

@@ -1,5 +1,5 @@
 // experiments/pdf-bilingual/spikes/typeset-busytex-cases.mjs
-// The typesetting rule's TeX under the reader's own compiler \u2014 BusyTeX in Chromium, its pdfTeX and its XeTeX \u2014 for the
+// The typesetting rule's TeX under the reader's own compiler — BusyTeX in Chromium, its pdfTeX and its XeTeX — for the
 // cases whose answer hangs on the LaTeX it ships: each page's columns as MARK_DEF reads them (latex-front.mjs), at the
 // end of a revtex paper whose grid closes at \end{document} before its last pages go out. typeset-tex-cases.mjs is the
 // native reference for the same documents. Needs the TeX Live package server (texlive-server, http://localhost:8070;
@@ -34,7 +34,7 @@ const docs = ['pdflatex', 'xelatex'].flatMap(engine => [
 ])
 
 // the compile's safety net (compile-resilience-cases.mjs is the native reference): a unit whose translation breaks TeX,
-// in the main file and in a file it \inputs, and a letter lost made an error by \tracinglostchars=3 \u2014 each placed by
+// in the main file and in a file it \inputs, and a letter lost made an error by \tracinglostchars=3 — each placed by
 // BusyTeX's log, read through lastTexLog, in its unit alone
 const ZH = '\u8bba\u6587', enc = s => new TextEncoder().encode(s)
 const PARAS = n => Array.from({ length: n }, (_, k) => `Paragraph ${k} of the paper runs on, with words that make a line of prose.`).join('\n\n')
