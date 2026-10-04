@@ -2,8 +2,9 @@
 // an icon, one sentence, at most one action. Reading shows nothing; a translation on screen is never covered by a
 // failure's card
 import type { ProviderErrorKind } from '@/providers/types'
-import { R, S, languageName, reasonText } from '@/ui/strings'
+import { R, S, reasonText } from '@/ui/strings'
 import type { ReaderState } from '../controller'
+import { ownName } from './languages'
 
 export type Capsule =
   /** the paper cannot be had as a bilingual PDF: said, with its HTML version (`href`) offered where there is one; not
@@ -29,7 +30,7 @@ export function capsuleOf(state: ReaderState, seen: { closed: boolean; narrowSho
   if (state.phase === 'failed' || state.phase === 'loading') return null
   // before anything else: it says why the translated displays are greyed (the maintainer, 2026-09-26)
   if (!state.available) return state.htmlVersion ? { kind: 'unavailable', text: R.status.noPdf, href: state.htmlVersion } : { kind: 'unavailable', text: R.status.noPdf }
-  if (!state.languageSupported && state.settings) return { kind: 'unsupported', text: R.status.unsupported(languageName(state.settings.targetLanguage)), action: 'language' }
+  if (!state.languageSupported && state.settings) return { kind: 'unsupported', text: R.status.unsupported(ownName(state.settings.targetLanguage)), action: 'language' }
   // before the notice of passages that failed: the passages left in the original are more than those
   if (!running(state) && state.partial && !seen.closed) return state.htmlVersion ? { kind: 'partial', text: R.status.partial, href: state.htmlVersion } : { kind: 'partial', text: R.status.partial }
   // the paragraphs that failed are told once the run has ended, with its retry where a stop is there to resume

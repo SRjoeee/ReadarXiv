@@ -51,6 +51,23 @@ describe('the reader\'s style sheet (the interface review, 2026-09-26)', () => {
     expect(itemRing.every(r => r.selector.includes(':not([data-axt-pointer])'))).toBe(true)
   })
 
+  it('sets the capsule\'s words on a whole 17 px line, so that they sit on its middle (the maintainer, 2026-10-04)', () => {
+    expect(all.find(r => r.selector === '.capsule .words')?.body).toMatch(/line-height: 17px;/)
+  })
+
+  it('closes the bar\'s zones up in a narrow window: 8 px below 400 px, 6 px below 360 px with the trail\'s dividers gone (the maintainer, 2026-10-04)', () => {
+    const at = (query: string, selector: string) => all.find(r => r.selector === selector && r.within.includes(query))?.body.trim()
+    expect(at('@media (width < 400px)', 'header.bar')).toBe('gap: 8px;')
+    expect(at('@media (width < 360px)', 'header.bar')).toBe('gap: 6px;')
+    expect(at('@media (width < 360px)', '[data-zone="trail"] > .divider')).toBe('display: none;')
+    // one specificity, so the cascade is the source's order: the base gap, then 400 px, then 360 px, which must win below it
+    const order = (query?: string) => all.findIndex(r => r.selector === 'header.bar' && (query ? r.within.includes(query) : r.within.length === 0))
+    const [base, below400, below360] = [order(), order('@media (width < 400px)'), order('@media (width < 360px)')]
+    expect(base).toBeGreaterThanOrEqual(0)
+    expect(base).toBeLessThan(below400)
+    expect(below400).toBeLessThan(below360)
+  })
+
   it('rings the capsule that is a stop of its own as the chrome\'s controls are rung (Codex and Devin on #307)', () => {
     const ring = (selector: string) => all.find(r => r.selector.split(',').map(x => x.trim()).includes(selector))?.body.match(/outline:[^;]+/)?.[0]
     expect(ring('.capsule:focus-visible')).toBe(ring('.chrome :focus-visible'))
