@@ -370,9 +370,10 @@ describe('patch: where each unit is written', () => {
     const p = loadProject(inMemory(new Map([['main.tex', enc(SRC)]])), 'main.tex')
     const units = p.units as (Unit & { nested?: boolean })[]
     const translated = new Map(units.map((u, i) => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: `<T${i}>` } : x))])) as Map<(typeof p.units)[number], unknown[]>
-    const spans: { file: string; unit: (typeof p.units)[number]; from: number; to: number }[] = []
-    const out = patch(p, translated, { spans })
+    const all: { file: string; unit: (typeof p.units)[number]; from: number; to: number; outer?: unknown }[] = []
+    const out = patch(p, translated, { spans: all })
     expect(out.get('main.tex')).toEqual(patch(p, translated).get('main.tex'))
+    const spans = all.filter(x => !x.outer)
     expect(spans.map(x => x.unit)).toEqual(units.filter(u => !u.nested))
     expect(spans.every((x, k) => x.file === 'main.tex' && x.from < x.to && (k === 0 || x.from >= (spans[k - 1] as { to: number }).to))).toBe(true)
     const text = new TextDecoder('latin1').decode(out.get('main.tex'))
@@ -380,5 +381,11 @@ describe('patch: where each unit is written', () => {
     const note = units.findIndex(u => u.nested)
     expect(note).toBeGreaterThan(-1)
     expect(spans.some(x => (x.unit as unknown) !== units[note] && text.slice(x.from, x.to).includes(`<T${note}>`))).toBe(true)
+    // and the footnote's own span, inside its paragraph's: its bytes the note as written, its paragraph named
+    const inner = all.filter(x => x.outer)
+    expect(inner.map(x => x.unit)).toEqual([units[note]])
+    const outer = spans.find(x => x.unit === inner[0]?.outer) as { from: number; to: number }
+    expect(text.slice(inner[0]?.from, inner[0]?.to)).toBe(`<T${note}>`)
+    expect([outer.from <= (inner[0]?.from ?? -1), (inner[0]?.to ?? Infinity) <= outer.to]).toEqual([true, true])
   })
 })

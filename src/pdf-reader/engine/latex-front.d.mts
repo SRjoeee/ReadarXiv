@@ -7,8 +7,9 @@ export declare function loadProject(root: ReturnType<typeof inMemory>, main: str
 /** the patched files (path → bytes): each unit's range replaced by its translated pieces, the rest untouched */
 /** what goes around a unit when it is written out (markUnits): `whole` puts it around all of the unit, inside the groups that open and close it */
 export type UnitMark = { start: string; end: string; before?: string; whole?: boolean } | null
-/** `spans`, where given, gets each top-level unit's byte range in the file as written */
-export declare function patch(project: { units: SourceUnit[] }, translated: Map<SourceUnit, unknown[]>, options?: { guardControlWords?: boolean; mark?: (unit: SourceUnit) => UnitMark; spans?: { file: string; unit: SourceUnit; from: number; to: number }[] | null }): Map<string, Uint8Array>
+/** `spans`, where given, gets each top-level unit's byte range in the file as written, and each nested unit's inside it
+ *  with the top-level unit it is written in (`outer`) */
+export declare function patch(project: { units: SourceUnit[] }, translated: Map<SourceUnit, unknown[]>, options?: { guardControlWords?: boolean; mark?: (unit: SourceUnit) => UnitMark; spans?: { file: string; unit: SourceUnit; from: number; to: number; outer?: SourceUnit }[] | null }): Map<string, Uint8Array>
 export declare function markUnits(units: SourceUnit[], translated?: Map<SourceUnit, unknown[]> | null): (unit: SourceUnit) => UnitMark
 /** a style's abstract heading written out, made to go by \\abstractname */
 export declare function localizeNames(text: string): string

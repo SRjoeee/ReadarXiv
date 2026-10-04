@@ -57,6 +57,17 @@ const lineAt = (bytes, n) => {
   return { from: at, to: end < 0 ? bytes.length : end }
 }
 
+/** whether a unit's range holds another's (a unit nested in it), in one file */
+const inside = (inner, outer) => inner !== outer && inner.from !== undefined && outer.from !== undefined && outer.from <= inner.from && inner.to <= outer.to
+/** of units that each hold an error's context, the one innermost: the one inside every other, else the innermost that
+ *  holds every one inside it (two footnotes of one paragraph: the paragraph), else all of them, which place nothing */
+const innermost = xs => {
+  if (xs.length < 2) return xs
+  const inner = xs.filter(x => !xs.some(y => inside(y, x)))
+  if (inner.length === 1) return inner
+  const around = xs.filter(x => inner.every(y => y === x || inside(y, x)))
+  return around.length ? around.filter(x => !around.some(y => inside(y, x))) : xs
+}
 /**
  * The units whose lines hold the errors: `files`, path → the bytes a compile was given; `lines`, each unit's
  * { file, unit, first, last, from?, to? } in them, its lines and its bytes (live.mjs translationFiles' `spans`). An
@@ -75,9 +86,10 @@ export function unitsAtErrors(errors, files, lines) {
       const bytes = files.get(file), line = bytes && lineAt(bytes, e.line)
       if (!line || !text(bytes, line.from, line.to).some(t => holds(t, e))) continue
       const here = at.filter(x => x.file === file)
-      // where units share the line: the one whose own bytes on it hold the context
+      // where units share the line: the one whose own bytes on it hold the context — of a unit and a unit nested in it
+      // (a paragraph and its footnote) that both do, the inner, unless more than one inner one does
       const own = here.length === 1 ? here : here.filter(x => x.from !== undefined && text(bytes, Math.max(line.from, x.from), Math.min(line.to, x.to)).some(t => holds(t, e)))
-      fits.push(...own.map(x => ({ ...x, bytes })))
+      fits.push(...innermost(own).map(x => ({ ...x, bytes })))
     }
     if (fits.length !== 1) continue
     const [fit] = fits

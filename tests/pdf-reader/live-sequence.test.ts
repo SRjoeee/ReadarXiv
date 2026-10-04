@@ -1320,4 +1320,22 @@ describe('the remedies in their order, wherever a compile fails', () => {
     // the paragraph set in the source is the one passage the safety net counts; the footnote is the service's
     expect([r.missing, r.inSource]).toEqual([1, 1])
   })
+
+  it("an error in a footnote's own words sets the footnote alone in the source, its paragraph translated", async () => {
+    const p = withNotes(1), n = p.units.length, notes: [string, Record<string, unknown>][] = []
+    const note = p.units.findIndex(u => (u as { nested?: boolean }).nested), para = p.units.findIndex(u => u.pieces.some(x => (x as { t: string }).t === 'nested'))
+    // TeX stopped inside the note, its number the context around the place: "number 5," as the translation keeps it
+    const compile = async (q: Req): Promise<Compiled> => {
+      if (kindOf(q) === 'probe' || kindOf(q) === 'original') return ok(n, q)
+      const lines = text(q).split('\n'), at = lines.findIndex(l => l.includes('\\footnote{') && l.includes('5, x')) + 1
+      if (!at) return ok(n, q)
+      const l = lines[at - 1] as string, k = l.indexOf('5,') + 1
+      return { ok: false, pdf: null, log: `! Undefined control sequence.\nl.${at} ${l.slice(Math.max(0, k - 30), k)}\n  ${l.slice(k, k + 30)}\n`, ms: 1 }
+    }
+    const translate = async (texts: string[]) => texts.map(t => ({ text: t.replace(/(?<![@a-z])[A-Za-z]{2,}/g, T).replace(/\b5,/, '5, x_y z, w_v u,'), by: 'B' }))
+    const r = await runLive(p, { lang: 'zh', compile, translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+    expect(notes.filter(([e]) => e === 'in source').map(([, d]) => d.units)).toEqual([[note]])
+    expect([r.settled, r.inSource]).toEqual([true, 1])
+    expect([(r.results.get(note) as { inSource?: boolean }).inSource, (r.results.get(para) as { inSource?: boolean }).inSource]).toEqual([true, undefined])
+  })
 })

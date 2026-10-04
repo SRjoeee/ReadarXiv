@@ -228,8 +228,9 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
 /**
  * Each unit's range as patch wrote it, found again in the file as written — this function's edits (the preamble's
  * additions, the engine's shims, localizeNames) come after patch, and leave the units' bytes as they are —, in order
- * from the last one's end, as the lines it stands on (1-based) and its bytes: { file, unit, first, last, from, to }.
- * The main file is searched past the TeX put before the paper (`skip` bytes); a unit not found again is left out
+ * from the last one's end, as the lines it stands on (1-based) and its bytes: { file, unit, first, last, from, to }; a
+ * nested unit where it stands in the unit it is written in (`outer`, found before it). The main file is searched past
+ * the TeX put before the paper (`skip` bytes); a unit not found again is left out
  */
 function unitLines(raw, patched, out, main, skip) {
   const byFile = new Map()
@@ -239,11 +240,22 @@ function unitLines(raw, patched, out, main, skip) {
     const was = latin1(patched.get(file)), now = latin1(out.get(file) ?? patched.get(file))
     let cursor = file === main ? skip : 0, line = 1, counted = 0
     const lineAt = k => { for (; counted < k; counted++) if (now.charCodeAt(counted) === 10) line++; return line }
+    const breaks = (from, to) => { let n = 0; for (let i = from; i < to; i++) if (now.charCodeAt(i) === 10) n++; return n }
+    const outers = new Map()
     for (const x of list) {
+      if (x.outer) {
+        const o = outers.get(x.outer)
+        if (!o) continue
+        const from = o.from + (x.from - o.was), to = from + (x.to - x.from), first = o.first + breaks(o.from, from)
+        found.push({ file, unit: x.unit, first, last: first + breaks(from, to - 1), from, to })
+        continue
+      }
       const bytes = was.slice(x.from, x.to), k = now.indexOf(bytes, cursor)
       if (k < 0 || !bytes) continue
       cursor = k + bytes.length
-      found.push({ file, unit: x.unit, first: lineAt(k), last: lineAt(cursor - 1), from: k, to: cursor })
+      const at = { file, unit: x.unit, first: lineAt(k), last: lineAt(cursor - 1), from: k, to: cursor }
+      outers.set(x.unit, { from: k, was: x.from, first: at.first })
+      found.push(at)
     }
   }
   return found
