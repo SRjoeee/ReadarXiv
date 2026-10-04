@@ -256,6 +256,7 @@ The bilingual PDF reader's own words (the reader's design, `experiments/pdf-bili
 | S-R-16 | The card · too many requests | 请求过于频繁 | The reader's own words for S-E's rate limit: S-E's 稍后自动重试 is the HTML page's chain retrying by itself, and a stopped run here does not — the reader retries (Part 6's interface review) |
 | S-R-17 | Cannot be had | 这篇论文暂不支持 PDF 翻译 | The paper has no source, or none of the ways of setting it worked: the original shown, 对照 and 译文 greyed. It says that, never why (the section's rule), and has no close: nothing else can be done here (the maintainer, 2026-09-26) |
 | S-R-18 | Its action | 改用 HTML 翻译 | Where arXiv has an HTML version (a HEAD; only a 404 or 410 means none): a link to it with `#readarxiv`, in a new tab or this one as S-O-49b says — this one being the PDF page the reader lies over. 改用 over 使用: the reader came for the PDF, and this is the other way |
+| S-R-19 | Shown in part | 这篇论文只能显示部分译文，其余为原文 | A preview of the translation is on screen and none of the ways of setting the whole worked: the preview stays, 对照 and 译文 stay as they are. It says that, never why (the section's rule), with S-R-18 where arXiv has an HTML version, and closes (S-R-15). Before the failure note (S-P-60), whose passages it covers (the maintainer, 2026-10-04) |
 
 ## 4. Popup state table [decided, 2026-09-10; redrawn 2026-09-27]
 

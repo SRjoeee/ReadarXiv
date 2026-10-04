@@ -75,7 +75,12 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
               </button>
             </>
           )}
-          {capsule.kind === 'unavailable' && capsule.href && <a data-action className="chip" href={capsule.href} target={sameTab ? '_top' : '_blank'} rel="noopener">{R.status.useHtml}</a>}
+          {(capsule.kind === 'unavailable' || capsule.kind === 'partial') && capsule.href && <a data-action className="chip" href={capsule.href} target={sameTab ? '_top' : '_blank'} rel="noopener">{R.status.useHtml}</a>}
+          {capsule.kind === 'partial' && (
+            <button type="button" aria-label={R.status.close} className="close" onClick={() => setClosed(true)}>
+              <Icon node={X} size={13} />
+            </button>
+          )}
           {capsule.kind === 'unsupported' && <button type="button" data-action className="chip" onClick={onChooseLanguage}>{R.status.chooseLanguage}</button>}
         </div>
       )}

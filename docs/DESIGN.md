@@ -1002,6 +1002,10 @@ is only how it meets the rest of the extension.
   translate, asks that service and the TeX page for nothing if it is the same one; another service, model or prompt, a
   new pipeline, typesetting or TeX page, or a mark kept before the identity was (2026-09-30) tries once more — the failure is the
   translated text's, which they may not repeat (Codex on #306) —, and the settings page's clear forgets it.
+- **A translation shown in part** — a preview of it on screen, and none of the ways able to set the whole — keeps the
+  preview and the displays as they are, and a capsule says so, without why, offering the HTML version where arXiv has
+  one (UI.md S-R-19; `cache.mjs` `endOf`). Before it, the progress line ended as for a whole translation and the reader
+  said nothing (2610.02069: its first preview, page 1 alone, stood for the paper).
 - **Two versions** (`live.mjs`): `PIPELINE_VERSION` for what a unit is and what is sent for it, `TYPESETTING_VERSION`
   for how a compile sets it. A copy of another typesetting is compiled again from its own translation: a unit whole,
   made by the identity that would answer now, of the wire sent now (the same pipeline and wire format) is never sent

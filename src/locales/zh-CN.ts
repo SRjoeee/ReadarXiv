@@ -400,6 +400,7 @@ const R = {
     rateLimited: '请求过于频繁', // S-R-16: a stopped run does not retry by itself, so the card promises no retry
     noPdf: '这篇论文暂不支持 PDF 翻译', // S-R-17: no source, or nothing typeset (the maintainer, 2026-09-26)
     useHtml: '改用 HTML 翻译', // S-R-18: the capsule's action, where the paper has an HTML version
+    partial: '这篇论文只能显示部分译文，其余为原文', // S-R-19: a preview on screen, the whole not set (the maintainer, 2026-10-04)
   },
 }
 

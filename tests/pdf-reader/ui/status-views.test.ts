@@ -45,6 +45,18 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
     expect(container.querySelector('[role="status"]')!.textContent).not.toContain('翻译失败')
   })
 
+  it('a translation shown in part: its words, S-R-18\'s link to the HTML version, and a close that keeps it closed (S-R-19)', async () => {
+    const fake = fakeController({ phase: 'ready', partial: true, htmlVersion: 'https://arxiv.org/html/x#readarxiv' })
+    const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
+    const capsule = container.querySelector('.capsule[data-kind="partial"]')!
+    expect(capsule.textContent).toContain(R.status.partial)
+    expect(capsule.querySelector('a[data-action]')?.getAttribute('href')).toBe('https://arxiv.org/html/x#readarxiv')
+    expect(capsule.querySelector('a[data-action]')?.textContent).toBe(R.status.useHtml)
+    await act(async () => capsule.querySelector<HTMLElement>(`button[aria-label="${R.status.close}"]`)!.click())
+    await act(async () => { await new Promise(r => setTimeout(r, 220)) })
+    expect(container.querySelector('.capsule')).toBeNull()
+  })
+
   describe('the narrow window\'s words: 5 s of being read, waiting while the pointer is over them or they hold the focus (the maintainer, 2026-10-01)', () => {
     afterEach(() => { vi.useRealTimers() })
     /** the capsule mounted reading, the clock faked, then the window made narrow */

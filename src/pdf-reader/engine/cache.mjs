@@ -176,6 +176,15 @@ export const unsetAfter = (unset, result, shown) => (unset || !!result?.changed)
 export const pipelineCurrentFor = ({ copy, finalShown, unset }) => !unset && (copy || finalShown)
 
 /**
+ * How a run whose final none of the ways could set ends for the reader (runLive's `exhausted`, not for the service's
+ * stop): with nothing of this visit ever on screen, the paper cannot be had (`cannot typeset`, S-R-17); with a preview
+ * of this visit on screen and no final (`compiledOnce`, `finalShown`), the translation is shown in part (`shown in part`,
+ * S-R-19: the preview stays, the progress line no longer says the translation is whole —
+ * plans/2026-10-04-compile-resilience.md, Task 5); with a final or this machine's copy on screen, nothing more is said
+ */
+export const endOf = (r, { compiledOnce, finalShown, cached }) => (!r.exhausted || r.stopped ? null : !compiledOnce && !cached ? 'cannot typeset' : compiledOnce && !finalShown ? 'shown in part' : null)
+
+/**
  * The versions a write labels its record with (`how`, decideWrite's), or null where it writes nothing (the F2 review's
  * M3): a full write this run's — with no typesetting where a passing failure kept the rule from its final (live.mjs
  * runLive `passing`), so that the next visit sets it again, asking the service nothing —; a provenance write keeps the

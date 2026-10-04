@@ -32,7 +32,7 @@ import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from './anchors.mjs'
 import { blockOf, bySentence, clickOf, hitOf, layoutOf, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
-import { allTranslatedBy, copyTexts, decideWrite, digestOf, figureKeyOf, knownMarks, knownOriginal, labelOf, originalRow, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from './cache.mjs'
+import { allTranslatedBy, copyTexts, decideWrite, digestOf, endOf, figureKeyOf, knownMarks, knownOriginal, labelOf, originalRow, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
@@ -2305,13 +2305,22 @@ async function live() {
     // With the identity that would answer now, as a copy is written: the mark holds for that service alone (Codex on #306),
     // and is left only when that service made the whole translation — a run a hand-over mixed is tried again (its final
     // review)
-    if (result.exhausted && !result.stopped && !compiledOnce && !cached) {
+    const end = endOf(result, { compiledOnce, finalShown, cached: !!cached })
+    if (end === 'cannot typeset') {
       if (cacheKey && result.originalOk) {
         const identity = await engine.now().catch(() => engine.identity)
         if (allTranslatedBy(result.results, identity) && compiledUnder) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, { identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page: compiledUnder })
       }
       note('done', result)
       return fail('cannot typeset', `None of the ways of typesetting ${paper} into ${lang} worked: the right side shows the original`)
+    }
+    // a preview of this visit on screen and none of the ways able to set the whole: the reader says the translation is
+    // shown in part, with the HTML version where arXiv has one, and keeps the preview and the displays as they are
+    // (S-R-19; the maintainer, 2026-10-04: the first preview stood alone while the progress line said it was done)
+    if (end === 'shown in part') {
+      host.emit({ type: 'html', url: await htmlVersion() })
+      host.emit({ type: 'fail', event: 'shown in part', text: `Only part of ${paper}'s translation could be typeset into ${lang}: the right side shows the last preview` })
+      status(`${paper}: none of the ways of typesetting the whole translation into ${lang} worked; the right side shows the last preview`)
     }
     // this machine's copy: the whole record for a final that settled; the units' provenance alone when nothing typeset
     // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")

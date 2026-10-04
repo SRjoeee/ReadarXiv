@@ -3,7 +3,7 @@
 // so it is written only for a translation that one identity made whole — as a copy is current only when every unit is
 // (the final review of Codex 1 on #306)
 import { describe, expect, it } from 'vitest'
-import { allTranslatedBy, knownOriginal, labelOf, originalRow, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
+import { allTranslatedBy, endOf, knownOriginal, labelOf, originalRow, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
 import { openPaper, translationFiles } from '@/pdf-reader/engine/live.mjs'
 import { translateUnits } from '@/pdf-reader/engine/mt.mjs'
 import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
@@ -213,5 +213,20 @@ describe('labelOf', () => {
     expect(labelOf('provenance', { ...now, passing: false, cached: { pipeline: '7', typesetting: '1' } })).toEqual({ pipeline: '7', typesetting: '1' })
     expect(labelOf('provenance', { ...now, passing: false, cached: { pipeline: '6', typesetting: '2' } })).toBeNull()
     expect(labelOf(null, { ...now, passing: false, cached: { pipeline: '7', typesetting: '2' } })).toBeNull()
+  })
+})
+
+// How a run that none of the ways could set ends for the reader (plans/2026-10-04-compile-resilience.md, Task 5): with
+// nothing of this visit ever shown, the paper cannot be had (S-R-17); with a preview of it on screen and no final, the
+// translation is shown in part (S-R-19); with a final or this machine's copy on screen, nothing more is said
+describe('endOf: what a run that could not set its final says', () => {
+  it('nothing ever shown is S-R-17; a preview and no final is the translation shown in part; a final or a copy, nothing', () => {
+    const ex = { exhausted: true, stopped: null }
+    expect(endOf(ex, { compiledOnce: false, finalShown: false, cached: false })).toBe('cannot typeset')
+    expect(endOf(ex, { compiledOnce: true, finalShown: false, cached: false })).toBe('shown in part')
+    expect(endOf(ex, { compiledOnce: true, finalShown: true, cached: false })).toBeNull()
+    expect(endOf(ex, { compiledOnce: false, finalShown: false, cached: true })).toBeNull()
+    expect(endOf({ exhausted: true, stopped: 'network' }, { compiledOnce: true, finalShown: false, cached: false })).toBeNull()
+    expect(endOf({ exhausted: false, stopped: null }, { compiledOnce: true, finalShown: false, cached: false })).toBeNull()
   })
 })

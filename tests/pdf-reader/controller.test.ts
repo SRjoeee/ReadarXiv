@@ -114,6 +114,13 @@ describe('reduce: the session events folded into the reader state', () => {
     expect(fold([{ type: 'fail', event: 'crashed', text: '' }])).toMatchObject({ phase: 'failed', failure: 'unknown' })
   })
 
+  it('a run that could show only part of its translation: said, the preview kept, the translated displays not greyed; a run again starts without it (S-R-19)', () => {
+    const s = fold([note('shown preview', { got: 9, total: 103 }), { type: 'html', url: 'https://arxiv.org/html/x#readarxiv' }, { type: 'fail', event: 'shown in part', text: '' }, note('done', { got: 103, total: 103 })])
+    expect(s).toMatchObject({ partial: true, available: true, phase: 'ready', shown: 'preview', failure: null, htmlVersion: 'https://arxiv.org/html/x#readarxiv' })
+    expect(INITIAL.partial).toBe(false)
+    expect(fold([note('translating', { got: 0, total: 103 })], s).partial).toBe(false)
+  })
+
   it("knows when the extension's settings could not be read", () => {
     expect(fold([{ type: 'notice', why: { kind: 'tooNew' } }]).settingsUnreadable).toBe(true)
     expect(fold([{ type: 'notice', why: { kind: 'tooNew' } }, { type: 'notice', why: null }]).settingsUnreadable).toBe(false)

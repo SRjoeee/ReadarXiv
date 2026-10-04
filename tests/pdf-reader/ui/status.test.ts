@@ -75,6 +75,13 @@ describe('the states (the reader\'s design, §8)', () => {
     expect(capsuleOf(at({ phase: 'ready', available: false, languageSupported: false, htmlVersion: null }), none)).toMatchObject({ kind: 'unavailable' })
   })
 
+  it('a translation shown in part: said, the HTML version offered where there is one, closable, before the notice of passages that failed (S-R-19)', () => {
+    expect(capsuleOf(at({ phase: 'ready', partial: true, htmlVersion: 'https://arxiv.org/html/x#readarxiv' }), none)).toEqual({ kind: 'partial', text: R.status.partial, href: 'https://arxiv.org/html/x#readarxiv' })
+    expect(capsuleOf(at({ phase: 'ready', partial: true, htmlVersion: null, failedUnits: 2 }), none)).toEqual({ kind: 'partial', text: R.status.partial })
+    expect(capsuleOf(at({ phase: 'ready', partial: true }), { closed: true, narrowShown: false })).toBeNull()
+    expect(capsuleOf(at({ phase: 'translating', partial: true }), none)).toBeNull()
+  })
+
   it('nothing translated: the card, with the reason; 设置 for a key, 重试 otherwise; no capsule', () => {
     expect(cardOf(at({ phase: 'failed', failure: 'network' }))).toEqual({ reason: '网络连接失败', action: 'retry' })
     expect(cardOf(at({ phase: 'failed', failure: 'no-key' }))).toEqual({ reason: '尚未配置 API Key', action: 'settings' })
