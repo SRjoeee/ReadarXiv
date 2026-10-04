@@ -324,9 +324,9 @@ describe('a compile that stopped short of the document\'s end', () => {
     expect(previews.map(([, d]) => [d.strategy, d.ok, d.error])).toEqual([['XeLaTeX + xeCJK', false, STOPPED], ['pdfLaTeX + CJKutf8', false, STOPPED], ['pdfLaTeX + CJKutf8', false, STOPPED]])
     expect(notes.filter(([e]) => e === 'next strategy').length).toBe(1)
     // under CJKutf8 the run's remedies before the chain ends, in their order: its first preview again without microtype,
-    // its measure's failure the rule's to try first — the final without it —, then the final without the references the
-    // original gave, the rule back (microtype tried already)
-    expect(notes.filter(([e]) => e === 'measure' || e === 'final').map(([e, d]) => [e, d.ok])).toEqual([['measure', false], ['final', false], ['final', false]])
+    // its measure's failure the rule's to try first — a draft without it, not the final (the re-review's N-1) —, then a
+    // draft without the references the original gave, the rule back (microtype tried already); the final, once
+    expect(notes.filter(([e]) => e === 'measure' || e === 'final').map(([e, d]) => [e, d.ok])).toEqual([['measure', false], ['measure', false], ['measure', false], ['final', false]])
     expect(notes.filter(([e]) => /^without /.test(e)).map(([e]) => e)).toEqual(['without spacing', 'without references'])
     expect([r.previews, r.settled, r.exhausted, r.originalOk]).toEqual([0, false, true, true])
   })
@@ -1170,11 +1170,31 @@ describe('the remedies in their order, wherever a compile fails', () => {
       return (kindOf(q) !== 'probe' && kindOf(q) !== 'original' && ruled(q) && failAt(q, 3)) || ok(n, q)
     }
     const r = await runLive(p, { lang: 'zh', compile, translate: numbered, format: 'markers', marks: new Map(), identity: 'B', seed: reusable(seed, { identity: 'B', copyWire: true }), pipelineCurrent: false, readMarks: async () => MARKS(n), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
-    expect(calls).toEqual(['probe', 'original', 'preview+rule', 'final'])
+    // leaving the rule out is tried with the measure's own draft, not with the final (the re-review's N-1)
+    expect(calls).toEqual(['probe', 'original', 'preview+rule', 'preview', 'final'])
     expect(remedies(notes)).toEqual(['typeset failed', 'recovered by rule'])
     expect(r.settled).toBe(true)
     expect(r.inSource).toBe(0)
     expect([...r.results.values()].some(x => (x as { inSource?: boolean }).inSource)).toBe(false)
+  })
+
+  it("a re-set whose measure fails on a unit's own fault: leaving the rule out is tried with a draft, the ladder goes on in the measure, and the final is measured (N-1)", async () => {
+    const p = paper(), n = p.units.length
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: numbered, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const hashes = await Promise.all(p.units.map(u => sourceHash(u)))
+    const record = JSON.parse(JSON.stringify({ format: 'markers', units: unitsOf(p.units, keptFor(p, 'zh'), hashes, r0.results) }))
+    const { seed } = await seedFrom(record, p.units)
+    const calls: string[] = [], notes: [string, Record<string, unknown>][] = []
+    // unit 3's translation breaks TeX whatever the setting (2610.02069's fault B on its next re-set)
+    const compile = async (q: Req): Promise<Compiled> => {
+      calls.push(`${kindOf(q)}${ruled(q) ? '+rule' : ''}`)
+      return (kindOf(q) !== 'probe' && kindOf(q) !== 'original' && failAt(q, 3, 'Missing $ inserted.')) || ok(n, q)
+    }
+    const r = await runLive(p, { lang: 'zh', compile, translate: numbered, format: 'markers', marks: new Map(), identity: 'B', seed: reusable(seed, { identity: 'B', copyWire: true }), pipelineCurrent: false, readMarks: async () => MARKS(n), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+    expect(calls).toEqual(['probe', 'original', 'preview+rule', 'preview', 'preview+rule', 'preview+rule', 'final+rule'])
+    expect(remedies(notes)).toEqual(['typeset failed', 'typeset back', 'without references', 'references back', 'in source [3]', 'recovered by units'])
+    expect(notes.filter(([e, d]) => e === 'typeset' && d.final).map(([, d]) => d.measured)).toEqual(['draft'])
+    expect([r.settled, r.inSource]).toEqual([true, 1])
   })
 
   it('a final that fails with the rule and, without it, with the references: set with neither, the rule kept off', async () => {

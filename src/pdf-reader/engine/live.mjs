@@ -865,22 +865,26 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
         let req
         const measure = async plan => {
           const t1 = Date.now()
-          req = { main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bblAt() && !off('references'), overrides: filesFor(all, { draft: true, typeset: plan.typeset }) }
+          req = { main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bblAt() && !off('references'), overrides: filesFor(all, { draft: true, typeset: plan?.typeset ?? null }) }
           const r = await ask(req)
-          note('measure', { ok: r.ok, ms: r.ms, roundTrip: Date.now() - t1, strategy: strategy().name, error: whyFailed(r) })
+          note('measure', { ok: r.ok, ms: r.ms, roundTrip: Date.now() - t1, strategy: strategy().name, typeset: !!plan, error: whyFailed(r) })
           return r
         }
-        let plan, r, unset
+        // `bare`: the rule's remedy on trial — the measure's draft without the plan, which says whether the paper sets
+        // without the rule; the final, a full compile, is not the trial (the re-review's N-1: a unit's fault on a re-set
+        // cost two failing finals and the measured plan). The same failure without it takes the rule back, and the ladder
+        // goes on in the measure, the plan measuring again; another keeps it off, and its drafts go on without it
+        let plan, r, unset, bare = false
         for (;;) {
-          plan = planFor(all)
-          if (!plan) return null
+          plan = bare ? null : planFor(all)
+          if (!plan && !bare) return null
           r = await measure(plan)
           unset = r.ok && !(await settled(r))
           // one that set a contents list from nothing — a re-set's: every unit taken, no draft of this translation before
           // it — is measured once more, given its own lists (the F2 re-review's N2). Not the original's lists instead: as
           // tall as the translation's only where its entries are, and the thesis 2307.16209's figures' long captions made
           // its re-set three pages short (-5 pages / 2.787 against -2 / 1.493 with its own). Not one that lost a letter
-          if (!unset && r.ok && listsMissing(r)) {
+          if (plan && !unset && r.ok && listsMissing(r)) {
             aux = r.aux
             if (r.bbl) bbl = r.bbl
             r = await measure(plan)
@@ -893,19 +897,22 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
           // final failed (the F2 re-review's N2: zh 2608.02459's re-set, measured under xeCJK, which has no σ there).
           // Under the last strategy the final is set as before, and cannot set it either. A TeX failure goes through the
           // run's remedies in their order, the rule's first — the plan's own TeX stands in each unit's lines, and a unit
-          // it broke would otherwise be set in the source for it (the review of 2026-10-04, I-1) —; the rule left out,
-          // no plan is left to measure, and the final is set as today (ruling 6)
-          if ((unset || (!r.ok && !timedOut(r))) && await remedy(r, true, req)) continue
-          if (unset && ahead()) { nextStrategy({ measure: whyUnset(r) }); continue }
-          if (unset && await backToLetters()) continue
+          // it broke would otherwise be set in the source for it (the review of 2026-10-04, I-1) —, tried in the measure
+          const how = unset || (!r.ok && !timedOut(r)) ? await remedy(r, !!plan, req) : null
+          bare = how === 'rule' || (bare && ruleFailed.has(strategy().name))
+          if (how) continue
+          if (unset && ahead()) { bare = false; nextStrategy({ measure: whyUnset(r) }); continue }
+          if (unset && await backToLetters()) { bare = false; continue }
           break
         }
         // BusyTeX gave up: the final from the plan uncorrected, which every input but the measure was there for
-        if (timedOut(r)) { passing = true; return plan.typeset }
-        // TeX's failure under the rule and no remedy left — the rule's tried in this failure, and taken back as not its
-        // cause, or none tried: the final as today (ruling 6)
-        if (!r.ok) { if (!episode?.tried.has('rule')) withoutRule(r); return null }
+        if (timedOut(r)) { passing = true; return plan?.typeset ?? null }
+        // TeX's failure and no remedy left: the final as today where the rule is off (ruling 6), else from the plan
+        // uncorrected — the rule tried and taken back is not the cause
+        if (!r.ok) { if (!episode?.tried.has('rule')) withoutRule(r); return ruleFailed.has(strategy().name) ? null : plan?.typeset ?? null }
         if (!unset) recovered()
+        // set without the rule: the rule was the cause, and the final is set as today (ruling 6)
+        if (!plan) return null
         if (r.aux) aux = r.aux
         if (r.bbl) bbl = r.bbl
         m = { plan, r }
