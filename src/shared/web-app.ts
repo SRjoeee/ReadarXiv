@@ -18,11 +18,10 @@ export const WEB_APP_MATCHES: string[] = WEB_APP_HOSTS.map(host => `https://${ho
 export const EXTENSION_MARK = 'data-readarxiv-extension'
 
 /**
- * <html> marked with the extension's version, once. A mark that already says this version is left as it is: setting
- * an attribute to the value it holds is still a write to a page's mutation observers
+ * <html> marked with the extension's version. Nothing of the page is read first, the mark included, so that the
+ * script reads nothing from the page, as PRIVACY.md and the store's justification say: it runs once, at
+ * document_start, and writes the one attribute
  */
 export function markWebAppPage(doc: Document, version: string): void {
-  const root = doc.documentElement
-  if (root.getAttribute(EXTENSION_MARK) === version) return
-  root.setAttribute(EXTENSION_MARK, version)
+  doc.documentElement.setAttribute(EXTENSION_MARK, version)
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { EXTENSION_MARK, markWebAppPage, WEB_APP_HOSTS, WEB_APP_MATCHES } from '@/shared/web-app'
 
 // The website's mark (shared/web-app.ts, DESIGN §4.0d): one attribute on <html>, its value the extension's version, so
@@ -17,16 +17,14 @@ describe('markWebAppPage', () => {
     expect(doc.documentElement.innerHTML).toBe(before.tree)
   })
 
-  it('writes the attribute once when it is marked again with the same version', async () => {
+  it('reads nothing of the page: the mark is written without the page being asked first', () => {
     const doc = page()
-    const writes: string[] = []
-    const watcher = new MutationObserver(records => { for (const r of records) writes.push(`${r.type}:${r.attributeName}`) })
-    watcher.observe(doc.documentElement, { attributes: true, childList: true, subtree: true, characterData: true })
+    const read = vi.spyOn(doc.documentElement, 'getAttribute')
+    const has = vi.spyOn(doc.documentElement, 'hasAttribute')
     markWebAppPage(doc, '0.4.1')
-    markWebAppPage(doc, '0.4.1')
-    await Promise.resolve()
-    watcher.disconnect()
-    expect(writes).toEqual([`attributes:${EXTENSION_MARK}`])
+    expect(read).not.toHaveBeenCalled()
+    expect(has).not.toHaveBeenCalled()
+    expect(doc.documentElement.getAttribute(EXTENSION_MARK)).toBe('0.4.1')
   })
 
   it('says the new version when the version changed', () => {
