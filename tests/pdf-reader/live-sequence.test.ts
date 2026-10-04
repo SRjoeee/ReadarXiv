@@ -1170,4 +1170,21 @@ describe('the remedies in their order, wherever a compile fails', () => {
     expect(r.inSource).toBe(0)
     expect([...r.results.values()].some(x => (x as { inSource?: boolean }).inSource)).toBe(false)
   })
+
+  it('a final that fails with the rule and, without it, with the references: set with neither, the rule kept off', async () => {
+    const p = paper(), n = p.units.length, finals: string[] = [], notes: [string, Record<string, unknown>][] = []
+    const given = (q: Req) => /\\bibcite/.test(new TextDecoder().decode(q.overrides.get('main.aux') ?? new Uint8Array()))
+    // two faults of the final's own, one after the other: the rule's TeX, then the references it is given
+    const compile = async (q: Req): Promise<Compiled> => {
+      if (kindOf(q) !== 'final') return ok(n, q)
+      finals.push(`final${ruled(q) ? '+rule' : ''}${given(q) ? '+refs' : ''}`)
+      if (ruled(q)) return { ok: false, pdf: null, log: '! Undefined control sequence.\nl.1 \\axtbroken\n  x\n', ms: 1 }
+      if (given(q)) return { ok: false, pdf: null, log: '! Illegal parameter number in definition of \\B@my@dummy.\nl.2 \\bibcite\n  x\n', ms: 1 }
+      return ok(n, q)
+    }
+    const r = await runLive(p, { lang: 'zh', compile, translate: numbered, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+    expect(finals).toEqual(['final+rule+refs', 'final+refs', 'final'])
+    expect(remedies(notes)).toEqual(['typeset failed', 'kept by rule', 'without references', 'recovered by references'])
+    expect([r.settled, r.exhausted]).toEqual([true, false])
+  })
 })

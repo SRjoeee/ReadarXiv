@@ -801,11 +801,16 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       // timed-out preview moved 2608.02163 to a strategy its class refuses.) One BusyTeX gave up on: once more as it
       // was, then what is shown stays
       if (timedOut(r)) { if (finalAgain) break; finalAgain = true; note('final again', { strategy: strategy().name }); continue }
-      // the run's remedies before the chain moves on (remedy); the rule taken back comes back with the final's plan, or
-      // — left out since a preview — the plan for this strategy, uncorrected (the handoff, 6)
+      // the run's remedies before the chain moves on (remedy). The rule left out by the remedy just tried comes back only
+      // where the remedy took it back — with the final's plan, or, left out since a preview or the measure, the plan for
+      // this strategy, uncorrected (the handoff, 6); kept off — the failure changed —, the final stays without it, and the
+      // next remedy is tried with the rule still off (the reviews of 2026-10-04: I-3, and Codex's second high)
       const back = episode?.trying === 'rule'
       const how = await remedy(r, !!typeset, req)
-      if (back) { typeset = planAside ?? planFor(all)?.typeset ?? null; planAside = null }
+      if (back) {
+        if (!ruleFailed.has(strategy().name)) typeset = planAside ?? planFor(all)?.typeset ?? null
+        planAside = null
+      }
       if (how === 'rule') { planAside = typeset; typeset = null; continue }
       if (how) continue
       if (s + 1 >= strategies.length) { exhausted = true; break }
