@@ -4,6 +4,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { basename, join, sep } from 'node:path'
+import { contentScriptsRunningOn } from './site-isolation.mjs'
 
 const OUT = '.output/chrome-mv3'
 const CONTENT_DIR = join(OUT, 'content-scripts')
@@ -30,12 +31,38 @@ function scan(path) {
 
 let failed = false
 
+// The website's mark (DESIGN §4.0d): the one content script that runs on the website's own pages, and the only door
+// into this extension for a page that is not arXiv's. It is checked first, and from the built manifest, because a
+// host added here is a permission warning for every installed copy (docs/RELEASE.md) and a script that grew is
+// something more than the mark. The hosts are read from the source that writes the manifest, so the two cannot differ
+// unseen (tests/shared/web-app.test.ts pins the list itself)
+const manifest = JSON.parse(readFileSync(join(OUT, 'manifest.json'), 'utf8'))
+const siteHosts = [...(/WEB_APP_HOSTS[^=]*=\s*\[([^\]]*)\]/.exec(readFileSync('src/shared/web-app.ts', 'utf8'))?.[1] ?? '').matchAll(/'([^']+)'/g)].map(m => m[1])
+const siteMatches = siteHosts.map(host => `https://${host}/*`)
+const SITE_SCRIPT = 'content-scripts/web-app.js'
+const siteEntries = (manifest.content_scripts ?? []).filter(entry => entry.js?.includes(SITE_SCRIPT))
+const siteEntry = siteEntries[0]
+const siteCode = existsSync(join(OUT, SITE_SCRIPT)) ? readFileSync(join(OUT, SITE_SCRIPT), 'utf8') : ''
+// What a script that only marks a page has no use for: a request, a message out, a store, a way to run text. The wrapper WXT puts around every
+// content script announces it with a `postMessage`: that call stays in the file, behind the option that turns it off (`noScriptStartedPostMessage`)
+const NOT_THE_MARK = /\b(sendMessage|sendNativeMessage|connect|fetch|XMLHttpRequest|sendBeacon|WebSocket|localStorage|sessionStorage|indexedDB|eval|innerHTML)\b/
+// Every other script, against every host the website has: a pattern that covers the website without naming it counts (scripts/site-isolation.mjs)
+const intruders = siteHosts.length === 0 ? [] : (manifest.content_scripts ?? []).filter(entry => entry !== siteEntry && siteHosts.some(host => contentScriptsRunningOn([entry], host).length > 0))
+const sameList = (a, b) => a.length === b.length && [...a].sort().every((value, at) => value === [...b].sort()[at])
+
 // The licences that go with every copy (scripts/third-party-notices.mjs): written through a WXT hook, and a hook that
 // stopped being called would leave a package that builds, loads and breaks three licences. React is in every build
 // of this extension, so its entry standing for "the list was written" cannot go stale
 const NOTICES = join(OUT, 'licenses/third-party.txt')
 const notices = existsSync(NOTICES) ? readFileSync(NOTICES, 'utf8') : ''
 for (const [what, ok] of [
+  [`the website's hosts are read from src/shared/web-app.ts: ${siteMatches.join(', ') || 'none found'}`, siteHosts.length > 0 && siteMatches.every(match => /^https:\/\/[a-z0-9.-]+\/\*$/.test(match))],
+  [`one content script runs on the website's pages, and it matches ${siteMatches.join(', ')} exactly`, siteEntries.length === 1 && sameList(siteEntry.matches, siteMatches) && siteEntry.js.length === 1],
+  [`it runs at document_start, in the isolated world, in the top frame, and brings no style sheet`, siteEntry?.run_at === 'document_start' && siteEntry.world === undefined && !siteEntry.all_frames && !siteEntry.css && !siteEntry.match_about_blank && !siteEntry.match_origin_as_fallback],
+  [`no other content script can run on the website${intruders.length > 0 ? ` (${intruders.map(entry => `${entry.js?.join(', ')} matches ${entry.matches.join(', ')}`).join('; ')})` : ''}`, intruders.length === 0],
+  [`the page has no way to speak to the extension: no externally_connectable, and the script is not a web-accessible resource`, manifest.externally_connectable === undefined && !(manifest.web_accessible_resources ?? []).some(entry => entry.resources.some(resource => resource.includes('web-app')))],
+  [`${join(OUT, SITE_SCRIPT)} holds nothing but the mark: its attribute, the version it reads, no request, message or store, WXT's page announcement off, ${siteCode.length} of 8000 bytes`,
+    siteCode.includes('data-readarxiv-extension') && siteCode.includes('getManifest') && !NOT_THE_MARK.test(siteCode) && /noScriptStartedPostMessage:\s*(!0|true)\b/.test(siteCode) && siteCode.length < 8000],
   [`${join(OUT, 'LICENSE')} is the project's licence`, existsSync(join(OUT, 'LICENSE')) && readFileSync(join(OUT, 'LICENSE'), 'utf8').includes('GNU GENERAL PUBLIC LICENSE')],
   [`${NOTICES} lists the bundled packages`, /^react \d[^\n]* — MIT$/m.test(notices)],
   [`${NOTICES} holds Apache-2.0's own text`, notices.includes('TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION')],
