@@ -1,8 +1,9 @@
 // The status capsule (the reader's design, §6.6): the document area's bottom centre, 58 px up, above the pills. A status
 // region present from the first paint, so that what it says later is announced; it rises in (240 ms) and leaves lighter
 // (160 ms); a new state of the same kind changes its words in place. A load or a translation under way has no capsule:
-// the progress line under the toolbar shows it (ProgressLine), and its words are said here. A notice has a chip and a
-// close, the close remembered for the visit; the narrow window's words leave by themselves after 5 s of being read,
+// the progress line under the toolbar shows it (ProgressLine), and its words are said here. A notice has a close,
+// remembered for the visit, and its retry chip where the run stopped for a reason a retry mends (status.ts capsuleOf);
+// the narrow window's words leave by themselves after 5 s of being read,
 // waiting while the pointer is over them or they hold the focus (the maintainer, 2026-10-01). A paper that
 // cannot be had as a bilingual PDF has no close: its HTML version is a link, opened where the settings say — a new tab,
 // or this one, the reader's own or the PDF page it lies over (`_top`; a click lets a frame navigate its page). A
@@ -69,7 +70,7 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
           <span key={capsule.text} id={words} className="words">{capsule.text}</span>
           {capsule.kind === 'notice' && (
             <>
-              <button type="button" data-action className="chip" onClick={controller.retry}>{S.failed.retry}</button>
+              {capsule.action === 'retry' && <button type="button" data-action className="chip" onClick={controller.retry}>{S.failed.retry}</button>}
               <button type="button" aria-label={R.status.close} className="close" onClick={() => setClosed(true)}>
                 <Icon node={X} size={13} />
               </button>

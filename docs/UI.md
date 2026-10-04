@@ -236,6 +236,10 @@ The bilingual PDF reader's own words (the reader's design, `experiments/pdf-bili
 §15). Where the popup already says the same thing, the reader shows the popup's string: 翻译服务 (S-P-10), 目标语言
 (S-P-20), 搜索语言 and 没有匹配的语言 (S-P-22/23), 对照高亮 (S-P-80), 图片翻译 (S-P-85), 设置 (S-P-02), {n} 处翻译失败 and
 重试 (S-P-60/61), and the reasons (S-E). No reader-facing string names a technical path (a test checks both packs).
+The reader's S-P-60 also counts the passages its typesetting had to leave in the original (DESIGN §16), on the visit
+that set them so and on every visit to that copy; S-P-61 comes with it only where the run stopped for a reason a retry
+mends, since those passages fail the same way again until a new version of the reader or of the paper (the
+maintainer's ruling 6, and the review of 2026-10-04).
 
 | ID | Where | Copy | Notes |
 |---|---|---|---|

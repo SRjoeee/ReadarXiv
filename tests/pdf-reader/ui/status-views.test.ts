@@ -3,7 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { FailureCard } from '@/pdf-reader/ui/FailureCard'
 import { StatusCapsule } from '@/pdf-reader/ui/StatusCapsule'
-import { R, setLocale } from '@/ui/strings'
+import { R, S, setLocale } from '@/ui/strings'
 import { mountElement } from '../../ui/render-hook'
 import { fakeController } from './fake-controller'
 import { stubPopovers } from './popover-stub'
@@ -34,7 +34,7 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
   })
 
   it('a notice\'s 重试 retries, and its close is remembered for the visit', async () => {
-    const fake = fakeController({ phase: 'ready', failedUnits: 2 })
+    const fake = fakeController({ phase: 'ready', failedUnits: 2, failure: 'network' })
     const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
     container.querySelector<HTMLElement>('button[data-action]')!.click()
     expect(fake.controller.retry).toHaveBeenCalledOnce()
@@ -43,6 +43,17 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
     // past the closed notice's 160 ms way out
     await act(async () => { await new Promise(r => setTimeout(r, 220)) })
     expect(container.querySelector('[role="status"]')!.textContent).not.toContain('翻译失败')
+  })
+
+  it('a notice of passages no retry can mend has no retry, and closes (I-5 of 2026-10-04)', async () => {
+    const fake = fakeController({ phase: 'ready', failedUnits: 1, failure: null })
+    const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
+    const capsule = container.querySelector('.capsule[data-kind="notice"]')!
+    expect(capsule.textContent).toContain(S.failed.text(1))
+    expect([capsule.querySelector('[data-action]'), capsule.textContent?.includes(S.failed.retry)]).toEqual([null, false])
+    await act(async () => capsule.querySelector<HTMLElement>(`button[aria-label="${R.status.close}"]`)!.click())
+    await act(async () => { await new Promise(r => setTimeout(r, 220)) })
+    expect(container.querySelector('.capsule')).toBeNull()
   })
 
   it('a translation shown in part: its words, S-R-18\'s link to the HTML version, and a close that keeps it closed (S-R-19)', async () => {
