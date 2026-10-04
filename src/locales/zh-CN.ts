@@ -5,6 +5,7 @@
 // English like the rest of the code; only the strings are Chinese.
 import type { ProviderErrorKind } from '@/providers/types'
 import { PREVIEW_SOURCE, PREVIEW_TARGET } from './preview'
+import { spacedAfterChinese } from './spacing'
 
 /** What the settings page says about a field the schema refused (config/schema.ts, config/appearance.ts, config/services.ts) */
 const FIELD: Record<string, string> = {
@@ -394,7 +395,7 @@ const R = {
     translating: '正在翻译',
     again: '正在按当前设置重新翻译',
     close: '关闭', // S-R-15: a notice's close button
-    unsupported: (language: string) => `PDF 对照暂不支持 ${language}`, // S-R-13: the language's own name, mostly not Chinese, hence the space (§1 rule 9)
+    unsupported: (language: string) => `PDF 对照暂不支持${spacedAfterChinese(language)}`, // S-R-13: the language's own name, spaced from the Chinese unless it is Han, kana or hangul (§1 rule 9)
     chooseLanguage: '选择语言',
     narrow: '窗口较窄，暂只显示译文', // S-R-14, after S-P-74
     rateLimited: '请求过于频繁', // S-R-16: a stopped run does not retry by itself, so the card promises no retry
