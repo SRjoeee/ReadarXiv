@@ -1780,7 +1780,16 @@ condition: a copy of pipeline 7, opened under 8, sends nothing again for units w
   (`copyWire`, from `sameUnits`), so every unit is sent to the extension's chain again.
 - **So the bump and fix 3 wait for the maintainer.** Fault B is caught by the safety net, and 2610.02069's unit 99 (its
   code-availability sentence) stays in English. Fix 3 and the bump are ready on the local branch
-  `exp/fix-compile-resilience-fix3`.
+  `exp/fix-compile-resilience-fix3` (`8f7aa742`, `1c57cfae`, `9f3fe710`):
+  - **The walker's half:** a command's own `<…>` right after its name, and a `(…)` touching it, are part of it
+    (`delimitedAfter`). It changes units in 2 of the 113 corpus papers: 2608.30640's `\nopagebreak(CRL)` and 2608.25210's
+    `\vldbvolume(\vldbissue)`.
+  - **The guard's half was dropped there:** a space in place of `{}` let a paper's macros that end in `\xspace` add a space
+    before a CJK letter or a full-width stop. In zh 2608.06701 (`\approach`, `\gemini`), 3 more of its 80 units stood
+    out, and newLanguage's set failed the typesetting gate (20 of 704 against 17). With the `{}` kept, the walker's half
+    alone keeps `\cite` and its prenote together.
+  - **Gates on that branch:** `typeset-gate --check` holds every record, its 57 results the same as the baseline's.
+    `lang-gate --check`, `patch-identity`, `highlight-gate`, the case spikes and the unit gates all pass.
 
 **2610.02069** (its source and the cached Microsoft translations stay in the session's scratchpad, never in the
 repository). Each final PDF was read page by page (`pdftotext -f p -l p`).
