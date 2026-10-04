@@ -552,7 +552,9 @@ whole. `whole` (`:459`) and `complete` (`:487`) read `kept.has(u) || inSource.ha
 Every compile sets `setting(snapshot)`: the preview's snapshot (`:498`), `all` in the measure and the final, `planFor`'s
 input and `texts(...)` for the anchors (a unit set in the source is shown with its source's text). After a final that
 set, `typesetBy(setting(all), strategy())` (`:615`) marks the units set in the source `inSource: true` in the results,
-the field the record already keeps (cache.mjs `inSourceOf`). The next visit's final tries them again.
+the field the record already keeps (cache.mjs `inSourceOf`). A copy that sets them so is current, so the next visit
+compiles nothing: they are tried again only after a version bump, a service change, or a change to the paper
+(corrected after the reviews, below; the failure note counts them on every visit meanwhile).
 
 **Verification.** The tests; `compile-resilience-cases.mjs` and `typeset-busytex-cases.mjs` exit 0; and **2610.02069
 with Tasks 1–2 only** (faults A and B still in the code): it must settle, ja and zh, native and `SLOW HALT`:
@@ -951,3 +953,43 @@ The maintainer's answers to the open questions above. They bind the work and ove
 7. **S-R-19's wording is approved,** in `docs/UI.md`'s conventions:
    - zh-CN: `\u8fd9\u7bc7\u8bba\u6587\u53ea\u80fd\u663e\u793a\u90e8\u5206\u8bd1\u6587\uff0c\u5176\u4f59\u4e3a\u539f\u6587`
    - en: "Only part of this paper's translation can be shown; the rest is in the original"
+
+### Review response (2026-10-04, the fix round)
+
+Two reviews of `b6d5f8cf` returned "with fixes": Opus's (`I-1` to `I-6`, `M-1` to `M-10`) and Codex's (two high, two
+medium). The controller's rulings on them, as built:
+
+- **I-1, Codex high 1: the rule before units, everywhere.** The measure takes the remedies in their order, the rule's
+  first (`live.mjs` `remedy(r, true, …)`): a re-set whose rule breaks one unit settles as `dec4573e` did, every unit
+  translated, the rule left out, in `probe, original, draft+rule, final`.
+- **I-2: lost letters are the strategy's.** A TeX error placed in a unit is set in the source at once; letters lost (a
+  PDF that left them out, or LaTeX's "Unicode character not set up") move the chain on first. Once no strategy after
+  the current one is left, the units holding them are set in the source under the first strategy that lost them, the
+  run going back to it once (`back to strategy`), from that strategy's own compile and within its own bounds.
+- **I-3, Codex high 2.** The final restores the rule's plan only where the remedy took the rule back.
+- **I-4.** The paper's own errors are read only once an error stands in a unit, and only if the original is in; they
+  are never waited for (the review's probe: 45 ms again, as at `dec4573e`, against 1509).
+- **I-5.** S-P-61's retry comes only where the run stopped for a reason a retry mends (the reader's `failure`).
+- **I-6, Codex medium 2.** A copy's `cache current` and a seeded run that changes nothing count the record's units
+  marked set in the source but the author block's (`cache.mjs` `passagesInSource`). No field is added to the record.
+- **Codex medium 1.** The bound counts every passage a unit set in the source takes with it, nested units expanded and
+  deduped, each translated one charged.
+- **Found on the way, fixed:** a remedy taken back is untried again once another remedy uncovers another failure (the
+  references' fault hiding the rule's in the final); and what a compile set translated is judged by the strategy (the
+  author block CJKutf8 sets as the paper has it is not a candidate for the source).
+
+The minors:
+
+| | Disposition |
+|---|---|
+| M-1 | Fixed: the paper's own errors keyed by message and unit, the original's located in its own files (`originalFiles` gains `spans`). |
+| M-2 | Fixed: S-R-19 only where the last preview shown lacked part of the translation (`shownPartial`). |
+| M-3 | Fixed: nested units have spans, and the innermost unit holding the context is placed. |
+| M-4 | Fixed: the references rung is skipped for an error the log shows before TeX read the aux. |
+| M-5 | Fixed: the rule's remedy is neither counted nor refused by `SPENT_MAX`. |
+| M-6 | Fixed: `docs/UI.md`'s reader section says what S-P-60 counts in the reader, and when S-P-61 comes. |
+| M-7 | Fixed: the count is the passages in the source the shown compile had translated, so a footnote the service lost is counted once, as lost. |
+| M-8 | Declined: a unit set in the source gets none of the plan's macros (`typeset/tex.mjs` `mark` gives them to translated units alone), only unused definitions stay in the head, and planning again would cost a measure on a failure path for a drift of that unit's height. |
+| M-9 | Fixed: the spikes' comments write their dashes as dashes. |
+| M-10 | Fixed: DESIGN §16 says that an error whose context holds no ASCII places nothing. |
+

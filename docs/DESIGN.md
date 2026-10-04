@@ -911,16 +911,27 @@ is only how it meets the rest of the extension.
   short of the document's end is no translation, whatever PDF it left: XeTeX ships the pages it set before a fatal
   error, and a compiler that gives what it made took them as set (BusyTeX halts on a TeX error and gives none). A
   compile of the translation that TeX fails is tried again before the chain moves on, one remedy a compile, the least
-  lost first: without the typesetting rule's TeX, without EVEN_SPACES' microtype, without the references the run gives
-  a draft or the final; then, as a safety net, with the units the log places the failure in set in the source — the
-  error's `l.<n>` line and the text around its place, found in a unit of the files the compile was given; a letter lost
-  with no error to place it made one by a pass with `\tracinglostchars=3`. A remedy after which the same failure comes
-  again is taken back; units set in the source stay so until the chain moves on, at most three rounds and
-  max(3, 2 %) of the units a strategy, eight remedy compiles a run. They count among the passages the failure note
-  names (UI.md S-P-60), and the record marks them set in the source (2610.02069: apacite's citations broke under babel
-  given the original's `\bibcite` lines alone — a draft is given every citation line of the original's aux, for any
-  key it cites, in its order (`citationLines`: apacite's `\APACbibcite`, harvard's, backref's) —, and one citation's key
-  went out as prose;
+  lost first, wherever it fails (a preview, the measure, the final): without the typesetting rule's TeX, without
+  EVEN_SPACES' microtype, without the references the run gives a draft or the final (not for an error TeX raised before
+  it read them); then, as a safety net, with the units the log places a TeX error in set in the source — the error's
+  `l.<n>` line and the text around its place, found in a unit of the files the compile was given, the innermost (a
+  footnote rather than its paragraph); the paper's own errors, its original's in the same unit, left out, read only
+  once the original is in and never waited for. Letters a strategy's fonts lack are the strategy's: the chain moves on
+  from them first, and only once no strategy is left that sets them are the units holding them set in the source,
+  under the first strategy that lost them, the run going back to it once (a letter lost with no error to place it made
+  one by a pass with `\tracinglostchars=3`). A remedy after which the same failure comes again is taken back, and tried
+  again once another remedy uncovers another failure; one kept stays off. Units set in the source stay so until the
+  chain moves on, at most three rounds and max(3, 2 %) of the units a strategy, each with every unit nested in it and
+  each such passage counted, eight remedy compiles a run (the rule's not among them, ruling 6's from before the
+  budget). An error whose context holds no ASCII within TeX's window (`tex-errors.mjs` `skeleton`) places nothing: the
+  log and the file agree on ASCII alone, and placing nothing is the safe failure — that compile is not rescued. The
+  passages set in the source count among those the failure note names (UI.md S-P-60), on the visit that set them and,
+  from the record's marks (the author block's left out, which CJKutf8 sets in the source on purpose), on every visit to
+  that copy; the note has no retry for them, since the same translation fails the same way, and they are tried again
+  only with a new version of the reader, another service or another version of the paper (2610.02069: apacite's
+  citations broke under babel given the original's `\bibcite` lines alone — a draft is given every citation line of the
+  original's aux, for any key it cites, in its order (`citationLines`: apacite's `\APACbibcite`, harvard's, backref's)
+  —, and one citation's key went out as prose;
   `experiments/pdf-bilingual/plans/2026-10-04-compile-resilience.md`). The
   reader speaks the TeX page's protocol 2 and still serves a page of protocol 1: it names the engines and the CJK
   faces the visit will use, so that the page fetches them ahead;
@@ -1002,9 +1013,9 @@ is only how it meets the rest of the extension.
   translate, asks that service and the TeX page for nothing if it is the same one; another service, model or prompt, a
   new pipeline, typesetting or TeX page, or a mark kept before the identity was (2026-09-30) tries once more — the failure is the
   translated text's, which they may not repeat (Codex on #306) —, and the settings page's clear forgets it.
-- **A translation shown in part** — a preview of it on screen, and none of the ways able to set the whole — keeps the
-  preview and the displays as they are, and a capsule says so, without why, offering the HTML version where arXiv has
-  one (UI.md S-R-19; `cache.mjs` `endOf`). Before it, the progress line ended as for a whole translation and the reader
+- **A translation shown in part** — a preview of it on screen that lacks some of it, and none of the ways able to set
+  the whole — keeps the preview and the displays as they are, and a capsule says so, without why, offering the HTML
+  version where arXiv has one (UI.md S-R-19; `cache.mjs` `endOf`); a whole preview on screen is not said to be part. Before it, the progress line ended as for a whole translation and the reader
   said nothing (2610.02069: its first preview, page 1 alone, stood for the paper).
 - **Two versions** (`live.mjs`): `PIPELINE_VERSION` for what a unit is and what is sent for it, `TYPESETTING_VERSION`
   for how a compile sets it. A copy of another typesetting is compiled again from its own translation: a unit whole,
