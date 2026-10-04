@@ -24,7 +24,7 @@ const root = new URL('..', import.meta.url).pathname
 const out = join(root, 'out/reader-in-source'), paperDir = join(out, 'paper')
 const ID = '2610.99998'
 // the settings page's switch for the free fallback, by its accessible name (UI.md S-O)
-const FALLBACK = '出问题时自动改用免费服务'
+const FALLBACK = '\u51fa\u95ee\u9898\u65f6\u81ea\u52a8\u6539\u7528\u514d\u8d39\u670d\u52a1'
 let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
 
