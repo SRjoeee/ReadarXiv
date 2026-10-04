@@ -1394,6 +1394,29 @@ describe('the remedies in their order, wherever a compile fails', () => {
     expect(inSourceOfResults(r)).toBeLessThanOrEqual(3)
   })
 
+  it('a letter lost in one of five footnotes: the diagnosis is made, and that footnote alone set in the source (Codex, second round)', async () => {
+    const p = withNotes(5), n = p.units.length, L = '\u0416', notes: [string, Record<string, unknown>][] = []
+    const note = p.units.findIndex(u => (u as { nested?: boolean }).nested && JSON.stringify(u.pieces).includes('number 7'))
+    // the note numbered 7 alone holds a letter neither strategy's fonts have
+    const translate = async (texts: string[]) => (await numbered(texts)).map(t => ({ ...t, text: t.text.replace(/7,/, `7 ${L},`) }))
+    const calls: string[] = []
+    const compile = async (q: Req): Promise<Compiled> => {
+      const kind = kindOf(q), src = text(q), tracked = /\\tracinglostchars=3/.test(src)
+      calls.push(`${kind}${tracked ? '+tracked' : ''}`)
+      if (kind === 'probe' || kind === 'original') return ok(n, q)
+      const lines = src.split('\n'), at = lines.findIndex(l => l.includes(L)) + 1
+      if (!at) return ok(n, q)
+      // as TeX logs a letter lost in a footnote: where it had read the note's argument, at its closing brace
+      const l = lines[at - 1] as string, k = l.indexOf('}}', l.indexOf(L)) + 2
+      if (tracked) return { ok: false, pdf: null, log: `! Missing character: There is no ${L} (U+0416) in font lmroman10-regular!\nl.${at} ${l.slice(Math.max(0, k - 30), k)}\n    ${l.slice(k, k + 30)}\n`, ms: 1 }
+      return { ...ok(n, q), log: `Missing character: There is no ${L} (U+0416) in font lmroman10-regular!\n${linesLog(n)}` }
+    }
+    const r = await runLive(p, { lang: 'zh', compile, translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+    expect(calls.filter(c => c.endsWith('+tracked')).length).toBe(1)
+    expect(notes.filter(([e]) => e === 'in source').map(([, d]) => d.units)).toEqual([[note]])
+    expect([r.settled, r.inSource, inSourceOfResults(r)]).toEqual([true, 1, 1])
+  })
+
   it('a paragraph with two footnotes is three passages: within the bound, all set in the source and counted', async () => {
     const p = withNotes(2), n = p.units.length, notes: [string, Record<string, unknown>][] = []
     const para = p.units.findIndex(u => u.pieces.some(x => (x as { t: string }).t === 'nested'))

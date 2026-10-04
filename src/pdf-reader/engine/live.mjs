@@ -614,8 +614,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     }
     /** a letter's key as lostIn counts it: its code point where the message gives one */
     const lostKey = message => { const c = /^Missing character: There is no (.+?) in font /.exec(message)?.[1]; return c && (c.match(/\(U\+([0-9A-F]+)\)/)?.[1] ?? c.trim()) }
-    /** the letters of a unit's translation in a snapshot, its nested units' with them */
-    const lettersOf = (u, snapshot) => [snapshot.get(u)?.filter(p => p.t === 'text' && p.tr).map(p => p.s).join('') ?? '', ...u.pieces.filter(p => p.t === 'nested').map(p => lettersOf(p.unit, snapshot))].join('')
+    /** the letters of a unit's own translation in a snapshot, not its nested units' */
+    const ownLetters = (u, snapshot) => snapshot.get(u)?.filter(p => p.t === 'text' && p.tr).map(p => p.s).join('') ?? ''
     /**
      * The passages setting `found` in the source under the strategy `at.s` sets there, each with every unit nested in
      * it, once, none in `out` already: those translated, and those still to come — a unit with no answer in yet, which
@@ -627,11 +627,14 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     const reverting = (found, out, at) => [...new Set(found.flatMap(withNested))].filter(u => !out.has(u) && !kept.has(u) && !(strategies[at.s].authors === false && u.kind === 'author') && (translated.has(u) || !results.has(indexOf.get(u))))
     /** whether the letters a compile (`at`) lost beyond the original's, where the log names them by code point, stand in
      *  the translation of a unit or a few — no more passages than `room`, what the strategy may still set in the source
-     *  besides `out`: lost in more, they are the strategy's font's, and in none, not a unit's (a caption babel sets) */
+     *  besides `out`: lost in more, they are the strategy's font's, and in none, not a unit's (a caption babel sets).
+     *  The units holding them by their own text, a footnote apart from its paragraph, each counted with what it would
+     *  take to the source (Codex's fourth medium, second round: a letter in one of a paragraph's five notes was counted
+     *  as the six, and never diagnosed); what the diagnosis places is counted again, exactly (fits) */
     const lostInFew = (at, known, out, room) => {
       const codes = [...lostIn(at.r.log)].filter(([c, n]) => n > (known.get(c) ?? 0)).map(([c]) => (/^[0-9A-F]+$/.test(c) ? String.fromCodePoint(parseInt(c, 16)) : null))
       if (codes.some(c => c === null)) return true
-      const holding = [...at.snapshot.keys()].filter(u => !u.nested && codes.some(c => lettersOf(u, at.snapshot).includes(c)))
+      const holding = [...at.snapshot.keys()].filter(u => codes.some(c => ownLetters(u, at.snapshot).includes(c)))
       const n = reverting(holding, out, at).length
       return n > 0 && n <= room
     }
