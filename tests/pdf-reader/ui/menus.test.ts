@@ -1,5 +1,6 @@
 import { act, createElement, type ReactNode } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { LANG_CODE_TO_LOCALE_NAME } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { fileName, type ReaderController } from '@/pdf-reader/controller'
 import { DownloadMenu, LanguageMenu, ServiceMenu, ZoomMenu } from '@/pdf-reader/ui/Menus'
@@ -44,6 +45,19 @@ describe('the reader\'s menus (the reader\'s design, §6.1, §6.7)', () => {
     ;(options[0] as HTMLElement).click()
     const change = controller.patchSettings.mock.calls[0]![0] as (c: Config) => Config
     expect(change({ ...DEFAULT_CONFIG, targetLanguage: 'cmn' }).targetLanguage).toBe('deu')
+  })
+
+  it('language: the button names the target by its own name in either interface language, as the menu\'s rows do (the maintainer, 2026-10-04)', async () => {
+    for (const locale of ['zh-CN', 'en'] as const) {
+      setLocale(locale)
+      const { container } = await openMenu(LanguageMenu, { settings: { ...DEFAULT_CONFIG, targetLanguage: 'jpn' } })
+      const button = container.querySelector<HTMLElement>('.menu-btn [data-value]')!
+      const row = [...container.querySelectorAll('[role="option"]')].find(o => o.getAttribute('aria-selected') === 'true')
+      expect([locale, button.textContent]).toEqual([locale, LANG_CODE_TO_LOCALE_NAME.jpn])
+      expect(row?.textContent).toBe(button.textContent)
+      document.body.innerHTML = ''
+    }
+    setLocale('zh-CN')
   })
 
   it('language: the arrows move one language at a time from the search field, and Enter picks once (the final review)', async () => {

@@ -194,7 +194,9 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .capsule svg { color: var(--ink-2); }
   /* one line wherever it fits; in a window too narrow for it the words wrap, balanced, and the icon and the actions keep
      their size (Part 6's interface review: at 320 px the English capsules ran past both edges, their action with them) */
-  .capsule .words { min-width: 0; padding-block: 8px; line-height: 1.35; text-wrap: balance; animation: words-in 180ms ease-out; }
+  /* 17 px, whole: 1.35 of 12.5 px is 16.875, which Chromium shares out unevenly, and the words sat 0.94 px above the
+     capsule's middle (the web's round-1 drafts, measured at 200 %; the maintainer, 2026-10-04) */
+  .capsule .words { min-width: 0; padding-block: 8px; line-height: 17px; text-wrap: balance; animation: words-in 180ms ease-out; }
   .capsule > svg, .capsule .chip, .capsule .close { flex: none; }
   .capsule .chip { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; color: inherit; text-decoration: none; border-radius: 999px; background: var(--fill); font-size: 12px; font-weight: 500; transition: scale 150ms; }
   .capsule .chip:active { scale: 0.96; }
@@ -220,6 +222,11 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .pop .row.narrowest-only { display: flex; } .pop .sep.narrowest-only { display: block; }
   [data-zone="trail"] > [data-wide], [data-zoom] > .tbtn:not(.zoom-value) { display: none; }
 }
+/* narrower still, the bar's three zones close up, 8 px apart below 400 px and 6 px below 360 px, where the trail's last
+   divider goes too: the bar holds at 320 px with a control more in its lead (the web's home, round 1 of its drafts;
+   the maintainer, 2026-10-04) */
+@media (width < 400px) { header.bar { gap: 8px; } }
+@media (width < 360px) { header.bar { gap: 6px; } [data-zone="trail"] > .divider { display: none; } }
 /* forced colours (Windows' contrast themes) drop the fills and the rings: a pressed button takes the system's
    Highlight, as a selection does (the interface review) */
 @media (forced-colors: active) {

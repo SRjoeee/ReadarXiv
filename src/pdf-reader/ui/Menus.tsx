@@ -2,10 +2,10 @@
 // download. Each is a toolbar control and its anchored popover; choosing closes it
 import { ChevronDown, Download } from 'lucide'
 import { browser } from 'wxt/browser'
-import type { LangCode } from '@/config/languages'
+import { LANG_CODE_TO_LOCALE_NAME, type LangCode } from '@/config/languages'
 import { isBuiltInService } from '@/config/services'
 import { MANAGE_SERVICES, serviceItems } from '@/ui/service-items'
-import { R, S, languageName, serviceName } from '@/ui/strings'
+import { R, S, serviceName } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import { Icon } from '@/ui/controls/Icon'
 import { languageItems } from './languages'
@@ -41,13 +41,14 @@ export function ZoomMenu({ controller }: { controller: ReaderController }) {
 }
 
 /** `name`: the toolbar's menu and the reading options' each have one, so that the capsule's choose-language action can
- *  open either (usePopover, App.tsx) */
+ *  open either (usePopover, App.tsx). The button names the target as the menu's rows do, by its own name, whatever the
+ *  interface's language: Japanese in Japanese, never in English (the maintainer, 2026-10-04) */
 export function LanguageMenu({ controller, name }: { controller: ReaderController; name?: string }) {
   const current = useReader(controller, s => s.settings?.targetLanguage ?? '')
   const pop = usePopover('listbox', name)
   return (
     <>
-      <ToolbarButton label={S.rows.language} value={current ? languageName(current) : ''} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
+      <ToolbarButton label={S.rows.language} value={current ? LANG_CODE_TO_LOCALE_NAME[current as LangCode] ?? current : ''} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
       <Popover {...pop.popover} role="listbox" label={S.rows.language}>
