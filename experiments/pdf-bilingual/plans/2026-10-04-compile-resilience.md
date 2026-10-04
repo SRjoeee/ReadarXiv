@@ -984,7 +984,7 @@ The minors:
 |---|---|
 | M-1 | Fixed: the paper's own errors keyed by message and unit, the original's located in its own files (`originalFiles` gains `spans`). |
 | M-2 | Fixed: S-R-19 only where the last preview shown lacked part of the translation (`shownPartial`). |
-| M-3 | Fixed: nested units have spans, and the innermost unit holding the context is placed. |
+| M-3 | Fixed: nested units have spans, and the innermost unit holding the context is placed. TeX reads a footnote as its command's argument and logs an error in it where the argument ends, so a nested unit holds the error when the text before the place stands in it and its closing brace (checked natively, halting and nonstop, and under BusyTeX). |
 | M-4 | Fixed: the references rung is skipped for an error the log shows before TeX read the aux. |
 | M-5 | Fixed: the rule's remedy is neither counted nor refused by `SPENT_MAX`. |
 | M-6 | Fixed: `docs/UI.md`'s reader section says what S-P-60 counts in the reader, and when S-P-61 comes. |

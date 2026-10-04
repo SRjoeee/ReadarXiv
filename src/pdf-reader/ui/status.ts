@@ -11,8 +11,9 @@ export type Capsule =
   | { kind: 'unavailable'; text: string; href?: string }
   /** the translation shown in part (S-R-19): said, with the HTML version offered where there is one; closable */
   | { kind: 'partial'; text: string; href?: string }
-  /** passages that failed (S-P-60): with its retry (S-P-61) only where the run stopped for a reason a retry mends (`failure`); the
-   *  passages the typesetting left in the original fail the same way again, until a new version (I-5 of 2026-10-04) */
+  /** passages that failed (S-P-60): with its retry (S-P-61) only where the run stopped for a reason a retry mends
+   *  (`failure`); the passages the typesetting left in the original fail the same way again, until a new version (I-5
+   *  of 2026-10-04) */
   | { kind: 'notice'; text: string; action: 'retry' | null }
   | { kind: 'unsupported'; text: string; action: 'language' }
   | { kind: 'narrow'; text: string }
