@@ -698,14 +698,16 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     const remedy = async (r, ruled, req) => {
       const name = strategy().name, now = failureOf(r)
       episode ??= { tried: new Set(), trying: null, failure: null }
-      if (episode.trying && episode.trying !== 'units') {
+      if (episode.trying) {
         if (now !== episode.failure) {
           note('kept', { strategy: name, by: episode.trying })
-          // another failure, which the last one hid: the remedies taken back for that one are untried for this one (the
-          // references' fault before the rule's in the final)
+          // another failure, which the last one hid: the remedies taken back for that one are untried for this one — the
+          // references' fault before the rule's in the final, a unit's before the rule's once the unit is in the source
+          // (Codex's third medium, second round) —; those in effect stay so, and the budget is the run's
           episode.tried = new Set([...episode.tried].filter(how => how === 'units' || (how === 'rule' ? ruleFailed.has(name) : without[how].has(name))))
         } else if (episode.trying === 'rule') { ruleFailed.delete(name); note('typeset back', { strategy: name }) }
-        else { without[episode.trying].delete(name); note(`${episode.trying} back`, { strategy: name }) }
+        else if (episode.trying !== 'units') { without[episode.trying].delete(name); note(`${episode.trying} back`, { strategy: name }) }
+        // units set in the source stay there
       }
       episode.trying = null
       episode.failure = now

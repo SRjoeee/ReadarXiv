@@ -1230,6 +1230,22 @@ describe('the remedies in their order, wherever a compile fails', () => {
     expect([r.settled, r.exhausted]).toEqual([true, false])
   })
 
+  it("a unit set in the source that uncovers the rule's own fault: the rule is tried again and left out, no innocent paragraph set in the source (Codex, second round)", async () => {
+    // unit 3, in the second batch, breaks TeX under any setting; with it in the source, the rule's TeX breaks on unit 5
+    const t = translator(), n = paper().units.length, notes: [string, Record<string, unknown>][] = []
+    const compile = async (q: Req): Promise<Compiled> => {
+      if (kindOf(q) === 'original') t.release()
+      if (kindOf(q) === 'probe' || kindOf(q) === 'original') return ok(n, q)
+      return failAt(q, 3) ?? (ruled(q) ? failAt(q, 5) : null) ?? ok(n, q)
+    }
+    const p = paper()
+    const r = await runLive(p, { lang: 'zh', compile, translate: async texts => (await t.translate(texts)).map(x => ({ ...x, text: x.text })), rank: i => (i === 3 ? 100 : i), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+    expect(notes.filter(([e]) => e === 'in source').map(([, d]) => d.units)).toEqual([[3]])
+    expect(remedies(notes).filter(e => /^typeset|^recovered/.test(e))).toEqual(['typeset failed', 'typeset back', 'typeset failed', 'recovered by rule'])
+    expect([r.settled, r.exhausted]).toEqual([true, false])
+    expect((r.results.get(5) as { inSource?: boolean }).inSource).toBeUndefined()
+  })
+
   it("the rule's remedy is not the budget's: with the run's remedies spent, a final that fails only with the rule is set without it, as before them", async () => {
     // four units, the bound three: every unit but the last breaks TeX under both strategies, the last under xeCJK too;
     // CJKutf8 fails with microtype, and its final and measure with the references or the rule
