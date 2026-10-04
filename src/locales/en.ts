@@ -344,6 +344,7 @@ const R: Locale['R'] = {
   download: { name: 'Download', translation: 'Translation PDF', original: 'Original PDF' },
   leave: 'Open in the default viewer',
   pill: { original: "Original's page", translation: "Translation's page", previous: 'Previous page', next: 'Next page' },
+  pageName: (side, n) => `${R.display[side]} · Page ${n}`,
   status: {
     loading: 'Loading',
     translating: 'Translating',

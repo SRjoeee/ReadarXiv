@@ -35,6 +35,14 @@ describe("the reader's words", () => {
     expect(spacedAfterChinese('')).toBe('')
   })
 
+  it("S-R-11a names a page by its side and takes the number as a parameter, in each language's own words (UI.md S-R-11a)", () => {
+    const zh = LOCALES['zh-CN'].R, en = LOCALES.en.R
+    expect([zh.pageName('original', 1), zh.pageName('translation', 12)]).toEqual(['原文 · 第 1 页', '译文 · 第 12 页'])
+    expect([en.pageName('original', 1), en.pageName('translation', 12)]).toEqual(['Original · Page 1', 'Translation · Page 12'])
+    // the side's word is the display switch's own (S-R-04), so the page's name and the switch's choice never drift apart
+    for (const R of [zh, en]) for (const side of ['original', 'translation'] as const) expect(R.pageName(side, 7)).toContain(R.display[side])
+  })
+
   for (const [code, pack] of Object.entries(LOCALES)) {
     it(`are all there in ${code}, none empty`, () => {
       const found = strings(pack.R)

@@ -390,6 +390,7 @@ const R = {
   download: { name: '下载', translation: '译文 PDF', original: '原文 PDF' }, // S-R-09
   leave: '在默认查看器中打开', // S-R-10
   pill: { original: '原文页码', translation: '译文页码', previous: '上一页', next: '下一页' }, // S-R-11
+  pageName: (side: 'original' | 'translation', n: number): string => `${R.display[side]} · 第 ${n} 页`, // S-R-11a: a page's name, said to screen readers; the number is a parameter, which a language places as it does its own numbers
   status: {
     loading: '正在加载', // S-R-12
     translating: '正在翻译',
