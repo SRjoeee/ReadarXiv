@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { copyTexts, decideWrite, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from '@/pdf-reader/engine/cache.mjs'
-import { type Compiled, compilerKeeper, keptFor, openPaper, runLive, stoppedShort } from '@/pdf-reader/engine/live.mjs'
+import { type Compiled, compilerKeeper, keptFor, openPaper, PIPELINE_VERSION, runLive, stoppedShort } from '@/pdf-reader/engine/live.mjs'
 import type { Marks } from '@/pdf-reader/engine/typeset/places.mjs'
 
 // The reader's compiles with the typesetting rule (experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md,
@@ -213,6 +213,35 @@ describe('a seed taken as it is (ruling 4: a typesetting change never asks the s
     expect([...r.results.keys()].sort((a, b) => a - b)).toEqual(p.units.map((_, i) => i))
     expect([...r.results.values()].every(x => (x as { state: string; by: string }).state === 'whole' && (x as { by: string }).by === 'B')).toBe(true)
     expect(c.calls.some(q => q.kind === 'final')).toBe(true)
+  })
+})
+
+// What a pipeline change costs a copy (plans/2026-10-04-compile-resilience.md, Rulings, 3): the reader seeds its run
+// from the copy by source hash (cache.mjs seedFrom), so the copy's translations are shown meanwhile, but takes a seed as
+// it is only when the copy was made by this pipeline in this wire format (reusable's copyWire, as session.mjs passes it)
+// — a copy of another pipeline has every unit sent again, the background's own cache answering what it still holds
+describe('a copy made by another pipeline', () => {
+  const visit = async (pipeline: string) => {
+    const p = paper(4), n = p.units.length
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: async texts => texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const hashes = await Promise.all(p.units.map(u => sourceHash(u)))
+    const record = JSON.parse(JSON.stringify({ pipeline, format: 'markers', marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), hashes, r0.results) }))
+    // as session.mjs reads it: the copy's units are this run's only on this pipeline
+    const sameUnits = record.pipeline === PIPELINE_VERSION
+    const { seed } = await seedFrom(record, p.units)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: async texts => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }, format: 'markers', marks: new Map(record.marks), identity: 'B', seed: reusable(seed, { identity: 'B', copyWire: sameUnits && record.format === 'markers' }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    return { sent, seeded: seed.size, r, units: p.units.length - keptFor(p, 'zh').size }
+  }
+  it('on this pipeline: no unit sent again', async () => {
+    const { sent, r } = await visit(PIPELINE_VERSION)
+    expect(sent).toEqual([])
+    expect(r.settled).toBe(true)
+  })
+  it('on another: every unit seeded by its source and sent again all the same', async () => {
+    const { sent, seeded, units } = await visit(`${PIPELINE_VERSION}-before`)
+    expect(seeded).toBe(units)
+    expect(sent).toHaveLength(units)
   })
 })
 

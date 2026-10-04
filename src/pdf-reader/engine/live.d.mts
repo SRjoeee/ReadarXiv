@@ -10,6 +10,9 @@ export interface Paper { fsys: ReturnType<typeof inMemory>; meta: ReturnType<typ
 export declare function openPaper(files: Map<string, Uint8Array>): Paper
 /** the translation so far, with unit marks, set by one of strategiesFor: the files that differ from the paper's */
 export declare function translationFiles(paper: Paper, translated: Map<SourceUnit, unknown[]>, options: { strategy: Pick<Strategy, 'engine' | 'pre'> & Partial<Strategy>; fonts: unknown; draft?: boolean; aux?: string | null; bbl?: string | null; typeset?: Typeset | null; note?: (event: string, data: unknown) => void }): Map<string, Uint8Array>
+/** the reader's versions: the translation's (what a unit is and what is sent for it) and the typesetting's */
+export declare const PIPELINE_VERSION: string
+export declare const TYPESETTING_VERSION: string
 /** the font probe; with `width`, the width and size probes the typesetting rule measures the face by */
 export declare function probeFiles(paper: Paper, options?: { width?: boolean }): Map<string, Uint8Array>
 /** the original with unit marks; with `lines`, each unit's lines and the forced breaks in its log */

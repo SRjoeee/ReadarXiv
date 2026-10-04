@@ -917,3 +917,37 @@ after.
 6. **Units set in the source are noted but not shown.** A paper fixed by the safety net shows one paragraph in English
    without a word. Should the capsule's passage count (S-P-60) include them?
 7. **The words of S-R-19**, above.
+
+## Rulings (2026-10-04)
+
+The maintainer's answers to the open questions above. They bind the work and override the tasks where they differ.
+
+1. **Ruling 6, refined: agreed.** When dropping the rule does not fix a failure, the rule comes back.
+2. **The remedies' order: the least lost first,** as planned.
+3. **The pipeline bump: fix 3 with `PIPELINE_VERSION` 7 → 8,** on one condition. The controller doubted the cost:
+   `session.mjs` seeds a run from the copy by source (`seedFrom`), so a unit whose source is unchanged should be reused
+   across a pipeline change, the compile alone redone. That was to be verified, and if a copy of 7 opened under 8 has
+   everything translated again, the work stops before the bump and reports.
+   - **Measured** (`tests/pdf-reader/live-sequence.test.ts`, "a copy made by another pipeline"): everything is sent
+     again. `seedFrom` does seed every unchanged unit, so the copy's translation is shown meanwhile. But `reusable` takes
+     a seed as it is only with `copyWire` or the visit's own last run (`made`), and `session.mjs` sets `copyWire` only
+     for a copy of this pipeline (`p.sameUnits`). On a visit's first run under 8, no seed of a copy of 7 is current, and
+     every unit is sent to the extension's chain again; the background's 30-day cache answers what it still holds. The
+     cost statement under "Versions" stands as written.
+   - **So the bump is not taken, and fix 3 (Task 4) is held with it,** for the maintainer to decide. The branch ships
+     fixes 1, 2, 4 and 5 under the typesetting bump alone, which is open question 3's other course: fault B is caught by
+     fix 4, at the cost of 2610.02069's unit 99 in English.
+4. **The bounds: accepted for now** (3 rounds, `max(3, 2 %)` of the units, 8 compiles a run). Each remedy taken is
+   noted in the reader's log (`note`: `without spacing`, `without references`, `typeset failed`, `in source`, each
+   `… back`, `recovered`), so that a corpus run can measure them later.
+5. **The additions' retry is split in two,** in this order:
+   1. without EVEN_SPACES' microtype, which loses only spacing;
+   2. then without the references the run gives a compile.
+
+   Each is taken back when it did not set the paper, as the rule is. This costs one more compile, on a failure path
+   only, and a preview keeps its citations whenever microtype alone was the fault.
+6. **Units set in the source by fix 4 count in S-P-60's notice** of passages that failed. The reader must not claim a
+   passage is translated when it is not.
+7. **S-R-19's wording is approved,** in `docs/UI.md`'s conventions:
+   - zh-CN: `\u8fd9\u7bc7\u8bba\u6587\u53ea\u80fd\u663e\u793a\u90e8\u5206\u8bd1\u6587\uff0c\u5176\u4f59\u4e3a\u539f\u6587`
+   - en: "Only part of this paper's translation can be shown; the rest is in the original"
