@@ -27,6 +27,12 @@
 :root {
   --bar: 44px;
   --side: 236px;
+  /* the capsule's motion (§6.6; the web's round 4, approved 2026-10-04), improve-animations' strong curves: the words
+     entering and leaving, the box closing, and the box opening on a softer ease-in-out that does not rush its middle.
+     capsule-motion.ts starts its animations on the same three (tests/pdf-reader/ui/capsule.test.ts holds them equal) */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-soft: cubic-bezier(0.65, 0, 0.35, 1);
 }
 @theme inline {
   --color-canvas: var(--canvas); --color-chrome: var(--chrome); --color-line: var(--chrome-line); --color-line-strong: var(--line-strong);
@@ -108,7 +114,10 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .divider { width: 0.5px; height: 18px; margin-inline: 6px; flex: none; background: var(--chrome-line); }
 
   .seg.display > button { width: 40px; padding: 0; }
-  .arxiv-id { display: inline-flex; flex: none; align-items: center; gap: 2px; margin: -2px -4px; padding: 2px 4px; border-radius: 5px; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; text-decoration: none; transition: color 150ms, background-color 150ms; }
+  /* 17 px, whole, as the capsule's words: on the 16.8 px line it inherited (12 px at 1.4) Chromium set its words 0.91 px
+     off the bar's centre line, where Firefox and WebKit set them on it (the web's measure, wave 2 Task 16; the drafts'
+     round 4 had this line) */
+  .arxiv-id { display: inline-flex; flex: none; align-items: center; gap: 2px; margin: -2px -4px; padding: 2px 4px; border-radius: 5px; color: var(--ink-2); font-size: 12px; line-height: 17px; font-variant-numeric: tabular-nums; text-decoration: none; transition: color 150ms, background-color 150ms; }
   .arxiv-id svg { opacity: 0; translate: -2px 2px; transition: opacity 150ms, translate 150ms ease-out; }
   .arxiv-id:focus-visible { color: var(--ink); background: var(--fill); }
   .arxiv-id:focus-visible svg { opacity: 1; translate: 0 0; }
@@ -185,18 +194,43 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   /* the status capsule (§6.6): fixed over the document area, above the pills, moved with it by the contents */
   .capsule-slot { position: fixed; z-index: 7; inset: auto 0 58px 0; display: flex; justify-content: center; pointer-events: none; transition: left 200ms var(--ease); }
   html[data-axt-contents] .capsule-slot { left: var(--side); }
-  .capsule { position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 8px; min-height: 34px; max-width: calc(100% - 24px); padding: 0 6px 0 12px; overflow: hidden; border-radius: 999px; pointer-events: auto;
+  /* --capsule-margin: the room kept each side in its slot, which capsule-motion.ts reads to know when a sentence must
+     wrap; --capsule-end: its end's padding, where what follows the words is pinned on one line */
+  .capsule { --capsule-margin: 12px; --capsule-end: 6px; position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 8px; min-height: 34px; max-width: calc(100% - 2 * var(--capsule-margin)); padding-block: 0; padding-inline: 12px var(--capsule-end); overflow: hidden; border-radius: 999px; pointer-events: auto;
     background: var(--float-bg); backdrop-filter: blur(16px) saturate(1.5); box-shadow: var(--float-shadow); color: var(--ink); font-size: 12.5px; animation: capsule-in 240ms var(--ease); }
   .capsule[data-alone] { padding-inline-end: 14px; }
   /* the capsule that leaves by itself is a stop of its own (StatusCapsule): the keyboard's ring, as the chrome's controls */
   .capsule:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .capsule[data-out] { animation: capsule-out 160ms ease-out forwards; pointer-events: none; }
   .capsule svg { color: var(--ink-2); }
-  /* one line wherever it fits; in a window too narrow for it the words wrap, balanced, and the icon and the actions keep
-     their size (Part 6's interface review: at 320 px the English capsules ran past both edges, their action with them) */
-  /* 17 px, whole: 1.35 of 12.5 px is 16.875, which Chromium shares out unevenly, and the words sat 0.94 px above the
+  /* the words' cell (Capsule, capsule-motion.ts): hidden from assistive technology, which is told the words whole in a
+     line of its own. A change's old and new words share its one grid cell, the old taken out of the flow where they
+     stand, so that the cell is the new words' width and nothing is laid out side by side.
+     17 px, whole: 1.35 of 12.5 px is 16.875, which Chromium shares out unevenly, and the words sat 0.94 px above the
      capsule's middle (the web's round-1 drafts, measured at 200 %; the maintainer, 2026-10-04) */
-  .capsule .words { min-width: 0; padding-block: 8px; line-height: 17px; text-wrap: balance; animation: words-in 180ms ease-out; }
+  .capsule .words { position: relative; display: grid; justify-items: start; flex: none; padding-block: 8px; line-height: 17px; }
+  .capsule .words > .line { grid-area: 1 / 1; white-space: nowrap; }
+  .capsule .words > .line[data-state="out"] { position: absolute; inset-block-start: 0; inset-inline-start: 0; }
+  /* one line wherever it fits, the box's width the motion's, and what follows the words pinned to its end, so that it
+     travels with the end as the box opens and closes; in a window too narrow for the sentence the words wrap, balanced,
+     the box's width its own, and the icon and the actions keep their size (Part 6's interface review: at 320 px the
+     English capsules ran past both edges, their action with them) */
+  .capsule .after { display: inline-flex; flex: none; align-items: center; gap: 8px; width: max-content; }
+  .capsule:not([data-wrap]) > .after, .capsule > .after[data-state="out"] { position: absolute; inset-block: 0; inset-inline-end: var(--capsule-end); }
+  .capsule > .after[data-state="out"] { pointer-events: none; }
+  .capsule[data-wrap] .words { flex: 0 1 auto; min-width: 0; }
+  .capsule[data-wrap] .words > .line { white-space: normal; text-wrap: balance; }
+  /* the count: tabular figures, each digit over a hidden 0 that holds its width, so that a changed digit cross-fades in
+     place; a digit gained opens a cell of its own as the box widens */
+  .capsule .num { display: inline-flex; font-variant-numeric: tabular-nums; }
+  .capsule .dg { display: inline-grid; justify-items: center; }
+  .capsule .dg > * { grid-area: 1 / 1; }
+  .capsule .dg > .gh { visibility: hidden; }
+  .capsule .dg:is([data-grow], [data-close]) { overflow: hidden; }
+  /* the moving end: while the box resizes, the words reaching it fade into the capsule's own ground over 16 px, never a cut */
+  .capsule::after { content: ""; position: absolute; z-index: 1; inset-block: 0; inset-inline-end: 0; width: 16px; pointer-events: none; background: linear-gradient(to right, transparent, var(--float-bg) 80%); opacity: 0; transition: opacity 150ms var(--ease-out); }
+  .capsule:dir(rtl)::after { background: linear-gradient(to left, transparent, var(--float-bg) 80%); }
+  .capsule[data-resizing]::after { opacity: 1; }
   .capsule > svg, .capsule .chip, .capsule .close { flex: none; }
   .capsule .chip { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; color: inherit; text-decoration: none; border-radius: 999px; background: var(--fill); font-size: 12px; font-weight: 500; transition: scale 150ms; }
   .capsule .chip:active { scale: 0.96; }

@@ -1,23 +1,26 @@
 // The reader's states (the reader's design, §8) as what the capsule, the progress line and the card show: one anatomy,
 // an icon, one sentence, at most one action. Reading shows nothing; a translation on screen is never covered by a
-// failure's card
+// failure's card. A capsule's sentence is its words in parts (capsule-words.ts): a count drawn in cells of its own, a
+// language's own name drawn in that language
+import { toBcp47 } from '@/config/languages'
 import type { ProviderErrorKind } from '@/providers/types'
 import { R, S, reasonText } from '@/ui/strings'
 import type { ReaderState } from '../controller'
+import { type CapsuleWords, plain, withCount, withPart } from './capsule-words'
 import { ownName } from './languages'
 
 export type Capsule =
   /** the paper cannot be had as a bilingual PDF: said, with its HTML version (`href`) offered where there is one; not
    *  closable */
-  | { kind: 'unavailable'; text: string; href?: string }
+  | { kind: 'unavailable'; words: CapsuleWords; href?: string }
   /** the translation shown in part (S-R-19): said, with the HTML version offered where there is one; closable */
-  | { kind: 'partial'; text: string; href?: string }
+  | { kind: 'partial'; words: CapsuleWords; href?: string }
   /** passages that failed (S-P-60): with its retry (S-P-61) only where the run stopped for a reason a retry mends
    *  (`failure`); the passages the typesetting left in the original fail the same way again, until a new version (I-5
    *  of 2026-10-04) */
-  | { kind: 'notice'; text: string; action: 'retry' | null }
-  | { kind: 'unsupported'; text: string; action: 'language' }
-  | { kind: 'narrow'; text: string }
+  | { kind: 'notice'; words: CapsuleWords; action: 'retry' | null }
+  | { kind: 'unsupported'; words: CapsuleWords; action: 'language' }
+  | { kind: 'narrow'; words: CapsuleWords }
 export interface Card { reason: string; action: 'retry' | 'settings' }
 
 /** the reasons a key settles: the settings are where it is fixed (the popup's rule) */
@@ -29,13 +32,18 @@ const running = (state: ReaderState) => state.phase === 'translating' || state.p
 export function capsuleOf(state: ReaderState, seen: { closed: boolean; narrowShown: boolean }): Capsule | null {
   if (state.phase === 'failed' || state.phase === 'loading') return null
   // before anything else: it says why the translated displays are greyed (the maintainer, 2026-09-26)
-  if (!state.available) return state.htmlVersion ? { kind: 'unavailable', text: R.status.noPdf, href: state.htmlVersion } : { kind: 'unavailable', text: R.status.noPdf }
-  if (!state.languageSupported && state.settings) return { kind: 'unsupported', text: R.status.unsupported(ownName(state.settings.targetLanguage)), action: 'language' }
+  if (!state.available) return state.htmlVersion ? { kind: 'unavailable', words: plain(R.status.noPdf), href: state.htmlVersion } : { kind: 'unavailable', words: plain(R.status.noPdf) }
+  if (!state.languageSupported && state.settings) {
+    // the language named by its own name, and drawn in its own language: the name a part with the target's tag as its
+    // `lang` (Devin on #313)
+    const code = state.settings.targetLanguage, name = ownName(code)
+    return { kind: 'unsupported', words: withPart(R.status.unsupported(name), { text: name, lang: toBcp47(code) }), action: 'language' }
+  }
   // before the notice of passages that failed: the passages left in the original are more than those
-  if (!running(state) && state.partial && !seen.closed) return state.htmlVersion ? { kind: 'partial', text: R.status.partial, href: state.htmlVersion } : { kind: 'partial', text: R.status.partial }
+  if (!running(state) && state.partial && !seen.closed) return state.htmlVersion ? { kind: 'partial', words: plain(R.status.partial), href: state.htmlVersion } : { kind: 'partial', words: plain(R.status.partial) }
   // the paragraphs that failed are told once the run has ended, with its retry where a stop is there to resume
-  if (!running(state) && state.failedUnits > 0 && !seen.closed) return { kind: 'notice', text: S.failed.text(state.failedUnits), action: state.failure ? 'retry' : null }
-  if (state.narrow && state.display === 'bilingual' && !seen.narrowShown) return { kind: 'narrow', text: R.status.narrow }
+  if (!running(state) && state.failedUnits > 0 && !seen.closed) return { kind: 'notice', words: withCount(S.failed.text(state.failedUnits), state.failedUnits), action: state.failure ? 'retry' : null }
+  if (state.narrow && state.display === 'bilingual' && !seen.narrowShown) return { kind: 'narrow', words: plain(R.status.narrow) }
   return null
 }
 

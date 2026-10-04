@@ -311,6 +311,16 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   const leftShown = () => page.evaluate(() => getComputedStyle(document.querySelector('.pane[data-side="left"]')).display !== 'none')
   check('a narrow window: 对照 kept, the translation alone', s.display === 'bilingual' && s.narrow && !(await leftShown()), JSON.stringify({ display: s.display, narrow: s.narrow }))
   check('…and the capsule says so', (await page.getByRole('status').textContent()).includes('窗口较窄'))
+  // the one capsule of the extension and the website (Capsule.tsx): its words drawn in a cell hidden from assistive
+  // technology, told whole in a line of its own, which names the group the keyboard stops at
+  const shared = await page.evaluate(() => {
+    const c = document.querySelector('.capsule[data-kind="narrow"]:not([data-out])'), cell = c?.querySelector('.words')
+    if (!c || !cell) return null
+    const lines = [...cell.querySelectorAll('.line')], told = document.getElementById(c.getAttribute('aria-labelledby') ?? '')
+    return { height: c.getBoundingClientRect().height, hidden: cell.getAttribute('aria-hidden'), lines: lines.length, lineHeight: lines[0]?.getBoundingClientRect().height, drawn: cell.textContent, told: told?.textContent ?? null, toldApart: !!told && c.contains(told) && !cell.contains(told) }
+  })
+  const named = shared?.told ? await page.getByRole('group', { name: shared.told, exact: true }).count() : 0
+  check('the shared capsule: one line, hidden words, named, 34 px', !!shared && shared.height === 34 && shared.hidden === 'true' && shared.lines === 1 && shared.lineHeight === 17 && shared.drawn === shared.told && shared.toldApart && named === 1, JSON.stringify({ shared, named }))
   await shot(page, '23-narrow')
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.waitForTimeout(600)
@@ -335,6 +345,25 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await shot(page, '23-narrow-320-en')
   await patch(page, { uiLanguage: 'auto' })
   await page.waitForTimeout(800)
+  await page.close()
+}
+
+// the arXiv link's words on the bar's centre line (within 0.5 px), beside the title and alone, as the website also draws
+// it: on the 16.8 px line it inherited, Chromium set them 0.91 px off when alone (the web's wave 2, Task 16)
+{
+  const page = await open({ mode: 'bilingual' })
+  const off = () => page.evaluate(() => {
+    const bar = document.querySelector('header.bar').getBoundingClientRect(), link = document.querySelector('.arxiv-id')
+    const texts = [...link.childNodes].filter(n => n.nodeType === 3), range = document.createRange()
+    range.setStart(texts[0], 0)
+    range.setEnd(texts.at(-1), texts.at(-1).length)
+    const rects = [...range.getClientRects()].filter(r => r.width > 0)
+    return (Math.min(...rects.map(r => r.top)) + Math.max(...rects.map(r => r.bottom))) / 2 - (bar.top + bar.bottom) / 2
+  })
+  const beside = await off()
+  await page.evaluate(() => { document.querySelector('.paper-title [data-title]').style.display = 'none' })
+  const alone = await off()
+  check('the arXiv link\'s words on the bar\'s centre line, beside the title and alone', Math.abs(beside) <= 0.5 && Math.abs(alone) <= 0.5, JSON.stringify({ beside, alone }))
   await page.close()
 }
 

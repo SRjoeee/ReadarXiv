@@ -1,18 +1,19 @@
 // The status capsule (the reader's design, §6.6): the document area's bottom centre, 58 px up, above the pills. A status
 // region present from the first paint, so that what it says later is announced; it rises in (240 ms) and leaves lighter
-// (160 ms); a new state of the same kind changes its words in place. A load or a translation under way has no capsule:
-// the progress line under the toolbar shows it (ProgressLine), and its words are said here. A notice has a close,
-// remembered for the visit, and its retry chip where the run stopped for a reason a retry mends (status.ts capsuleOf);
-// the narrow window's words leave by themselves after 5 s of being read,
+// (160 ms); a new state of the same kind changes its words in place, moving with its box (Capsule, capsule-motion.ts).
+// A load or a translation under way has no capsule: the progress line under the toolbar shows it (ProgressLine), and its
+// words are said here. A notice has a close, remembered for the visit, and its retry chip where the run stopped for a
+// reason a retry mends (status.ts capsuleOf); the narrow window's words leave by themselves after 5 s of being read,
 // waiting while the pointer is over them or they hold the focus (the maintainer, 2026-10-01). A paper that
 // cannot be had as a bilingual PDF has no close: its HTML version is a link, opened where the settings say — a new tab,
 // or this one, the reader's own or the PDF page it lies over (`_top`; a click lets a frame navigate its page). A
 // failure never takes the focus; the card's reason is said in this region
 import { Info, X } from 'lucide'
-import { type FocusEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { type FocusEvent, type HTMLAttributes, useEffect, useId, useRef, useState } from 'react'
 import { R, S } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import { Icon } from '@/ui/controls/Icon'
+import { Capsule as Drawn } from './Capsule'
 import { type Capsule, capsuleOf, cardOf, spokenOf } from './status'
 import { useReader } from './use-reader'
 
@@ -28,7 +29,7 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
   // a capsule that goes is kept 160 ms, leaving (reader.css .capsule[data-out]); one that comes replaces it at once
   const [leaving, setLeaving] = useState<Capsule | null>(null)
   const last = useRef<Capsule | null>(null)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: run as the capsule's words change, not on every render (capsuleOf makes a new object each time)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: run as the capsule's words change (equal words are one object), not on every render (capsuleOf makes a new capsule each time)
   useEffect(() => {
     if (!now && last.current) {
       setLeaving(last.current)
@@ -38,20 +39,8 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
     }
     last.current = now
     setLeaving(null)
-  }, [now?.kind, now?.text])
+  }, [now?.kind, now?.words])
   const linger = useTimedLeave(now?.kind === 'narrow', NARROW_MS, () => setNarrowShown(true))
-  // the same kind with other words: the words fade in and the capsule's width eases to theirs (200 ms); one read of its
-  // width when its words change, which is rare
-  const box = useRef<HTMLDivElement>(null)
-  const width = useRef<{ kind: string; w: number } | null>(null)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: one read of the width as the words change
-  useLayoutEffect(() => {
-    const el = box.current
-    if (!el || !now) { width.current = null; return }
-    const w = el.offsetWidth, before = width.current
-    if (before && before.kind === now.kind && before.w !== w && !matchMedia('(prefers-reduced-motion: reduce)').matches) el.animate([{ width: `${before.w}px` }, { width: `${w}px` }], { duration: 200, easing: 'cubic-bezier(0.2, 0, 0, 1)' })
-    width.current = { kind: now.kind, w }
-  }, [now?.kind, now?.text])
   const capsule = now ?? leaving
   // words alone, no chip at the end: padded there as at the start (reader.css)
   const alone = capsule?.kind === 'narrow' || (capsule?.kind === 'unavailable' && !capsule.href)
@@ -60,45 +49,45 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
   // their actions
   const words = useId()
   const timed = capsule?.kind === 'narrow' && now !== null ? { tabIndex: 0, role: 'group', 'aria-labelledby': words } : {}
+  const link = capsule && (capsule.kind === 'unavailable' || capsule.kind === 'partial') && capsule.href
   return (
     <div role="status" className="capsule-slot">
       {card && <span className="sr-only">{card.reason}</span>}
       {spoken && <span className="sr-only">{spoken}</span>}
       {capsule && (
-        <div ref={box} key={capsule.kind} className="chrome capsule" data-kind={capsule.kind} data-alone={alone ? '' : undefined} data-out={now ? undefined : ''} {...timed} {...linger}>
-          <Icon node={Info} size={15} />
-          <span key={capsule.text} id={words} className="words">{capsule.text}</span>
-          {capsule.kind === 'notice' && (
-            <>
-              {capsule.action === 'retry' && <button type="button" data-action className="chip" onClick={controller.retry}>{S.failed.retry}</button>}
-              <button type="button" aria-label={R.status.close} className="close" onClick={() => setClosed(true)}>
-                <Icon node={X} size={13} />
-              </button>
-            </>
-          )}
-          {(capsule.kind === 'unavailable' || capsule.kind === 'partial') && capsule.href && <a data-action className="chip" href={capsule.href} target={sameTab ? '_top' : '_blank'} rel="noopener">{R.status.useHtml}</a>}
-          {capsule.kind === 'partial' && (
-            <button type="button" aria-label={R.status.close} className="close" onClick={() => setClosed(true)}>
-              <Icon node={X} size={13} />
-            </button>
-          )}
-          {capsule.kind === 'unsupported' && <button type="button" data-action className="chip" onClick={onChooseLanguage}>{R.status.chooseLanguage}</button>}
-        </div>
+        <Drawn key={capsule.kind} kind={capsule.kind} icon={Info} words={capsule.words} wordsId={words} alone={alone} out={now === null} {...timed} {...linger}
+          // what follows the words, named by what it holds: another brings it in with the motion
+          afterKey={`${link ? 'link' : ''}|${capsule.kind === 'notice' ? capsule.action : ''}`}
+          after={
+            capsule.kind === 'narrow' || (capsule.kind === 'unavailable' && !link) ? null : (
+              <>
+                {capsule.kind === 'notice' && capsule.action === 'retry' && <button type="button" data-action className="chip" onClick={controller.retry}>{S.failed.retry}</button>}
+                {link && <a data-action className="chip" href={link} target={sameTab ? '_top' : '_blank'} rel="noopener">{R.status.useHtml}</a>}
+                {capsule.kind === 'unsupported' && <button type="button" data-action className="chip" onClick={onChooseLanguage}>{R.status.chooseLanguage}</button>}
+                {(capsule.kind === 'notice' || capsule.kind === 'partial') && (
+                  <button type="button" aria-label={R.status.close} className="close" onClick={() => setClosed(true)}>
+                    <Icon node={X} size={13} />
+                  </button>
+                )}
+              </>
+            )
+          }
+        />
       )}
     </div>
   )
 }
 
 /** how long the narrow window's words are read before they leave (S-R-14; the maintainer, 2026-10-01) */
-const NARROW_MS = 5000
+export const NARROW_MS = 5000
 
 /**
  * A capsule that leaves by itself after `ms` of being read: the time stands while the pointer is over it or it holds the
  * focus, and the rest of it runs once neither does (the maintainer, 2026-10-01). `on` starts it afresh, the pointer and
  * the focus as if elsewhere — a capsule just drawn has had neither — and `leave` is called once the time is out. The
- * handlers go on the capsule
+ * handlers go on the capsule; the website's capsule leaves the same way
  */
-function useTimedLeave(on: boolean, ms: number, leave: () => void) {
+export function useTimedLeave(on: boolean, ms: number, leave: () => void): HTMLAttributes<HTMLElement> {
   const at = useRef({ on: false, left: ms, since: 0, timer: 0, pointer: false, focus: false })
   const go = () => {
     const s = at.current

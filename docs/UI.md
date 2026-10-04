@@ -247,6 +247,16 @@ rows are written. The button's value and each row carry `lang` (the popup's rule
 rule, WCAG 2.5.3), so its name starts with the own name. A code the language table lacks shows as the code. S-R-13's sentence names the language the same way,
 so that the button and the sentence agree.
 
+**The capsule's words move with its box, as one motion** [decided, the maintainer, 2026-10-04: the web's round 4; the reader's design §6.6]: the capsule
+(S-R-13, S-R-14, S-R-17, S-R-19, S-P-60) is one component, the extension's and the website's (`src/pdf-reader/ui/Capsule.tsx`). A new sentence of the same kind
+changes in place. Growing, the box opens first (300 ms) and the old and new words cross-fade once, at the later of 60 % of its way and the new words fitting, so
+that no word stands past the border and the box is never empty; shrinking, the words change at once and the box closes after them (250 ms). A count in the
+sentence (S-P-60's {n}) changes in place, digit by digit, at most once every 300 ms; a digit gained opens its own room as the box widens. A chip that comes
+(S-P-61, S-R-18) appears once the box has opened for it, and until then nothing can reach it: no focus, no press, nothing told (Codex on #317). The words are hidden from screen readers, which are told the sentence whole, in a line of its own, once
+for each change of it. A sentence too long for one line at the window's width wraps, balanced, and then only its words cross-fade. Under reduced motion nothing
+slides: the words cross-fade with their blur, the width changes at once, and a loader stands still. Nothing in it is fitted to one language: any sentence, of
+any length, moves the same way.
+
 | ID | Where | Copy | Notes |
 |---|---|---|---|
 | S-R-02 | Contents toggle, and the sidebar's header | 目录 | Expanded while the sidebar is open (`aria-expanded`, controlling it) |
@@ -261,7 +271,7 @@ so that the button and the sentence agree.
 | S-R-11 | Page pills | 原文页码 · 译文页码 · 上一页 · 下一页 | |
 | S-R-11a | A page's name | 原文 · 第 {n} 页 · 译文 · 第 {n} 页 | Said to screen readers, never shown: each page of both panes is a region (PDF.js's), named by its side's word (S-R-04) and its number — English 「Original · Page 3」, 「Translation · Page 3」. PDF.js named every page 「Page N」, in English, in both panes: one name twice over for each page number (axe's `landmark-unique`), and not the interface's language (under `lang="zh-CN"`, with the number set between two isolates). The number is `R.pageName`'s parameter, so a language places it as it does its own numbers; the region's `lang` is the document's, the interface's. The left is the original and the right the translation, whatever the display or the panes' order. PDF.js's other words are its own, unchanged |
 | S-R-12 | A load or a translation under way | 正在加载 · 正在翻译 · 正在按当前设置重新翻译 | Said to screen readers in the status region, not shown: the 2 px line along the toolbar's foot shows how far it has come (the maintainer, 2026-09-25) |
-| S-R-13 | Language not supported | PDF 对照暂不支持{语言} · 选择语言 | {语言} is the language's own name (the maintainer, 2026-10-04), as the language button shows it. §1 rule 9's space goes between the Chinese and a name in any script but Han, kana or hangul (Latin, Cyrillic, Greek, Arabic, Devanagari, Thai and the rest), and not before one in Han, kana or hangul (`spacedAfterChinese`): 「PDF 对照暂不支持 Türkçe」, 「PDF 对照暂不支持日本語」; English 「A bilingual PDF isn't available in Türkçe yet」. The action opens the language menu: the toolbar's, or below 900 px the one the reading options hold, opened in them |
+| S-R-13 | Language not supported | PDF 对照暂不支持{语言} · 选择语言 | {语言} is the language's own name (the maintainer, 2026-10-04), as the language button shows it, and drawn in its own language: it carries `lang`, the target's BCP 47 tag, as the button's value does (Devin on #313). §1 rule 9's space goes between the Chinese and a name in any script but Han, kana or hangul (Latin, Cyrillic, Greek, Arabic, Devanagari, Thai and the rest), and not before one in Han, kana or hangul (`spacedAfterChinese`): 「PDF 对照暂不支持 Türkçe」, 「PDF 对照暂不支持日本語」; English 「A bilingual PDF isn't available in Türkçe yet」. The action opens the language menu: the toolbar's, or below 900 px the one the reading options hold, opened in them |
 | S-R-14 | Narrow window | 窗口较窄，暂只显示译文 | Once, when 对照 shows the translation alone (after S-P-74), for 5 s of being read: the time stands while the pointer is over it or it holds the focus, and the rest runs once neither does (the maintainer, 2026-10-01). Holding no action, it is a stop of its own for the keyboard while shown, a group its words name, rung as the chrome's controls are (Codex and Devin on #307) |
 | S-R-15 | A notice's close button | 关闭 | |
 | S-R-16 | The card · too many requests | 请求过于频繁 | The reader's own words for S-E's rate limit: S-E's 稍后自动重试 is the HTML page's chain retrying by itself, and a stopped run here does not — the reader retries (Part 6's interface review) |

@@ -86,7 +86,8 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
 
     it('leaves after 5 s', async () => {
       const { capsule, wait } = await narrow()
-      expect(capsule()?.textContent).toBe(R.status.narrow)
+      // drawn in the words' cell, and told whole in the line the group is named by
+      expect([capsule()?.querySelector('.words')?.textContent, capsule()?.querySelector('.sr-only')?.textContent]).toEqual([R.status.narrow, R.status.narrow])
       await wait(4999)
       expect(capsule()).not.toBeNull()
       await wait(1)
@@ -157,6 +158,13 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
     expect([container.querySelector('.capsule .words')?.textContent, link()]).toEqual(['这篇论文暂不支持 PDF 翻译', null])
     // words alone: the capsule's end padded as the start is, with no chip there to fill it (reader.css)
     expect(container.querySelector('.capsule')!.hasAttribute('data-alone')).toBe(true)
+  })
+
+  it('a language the reader cannot typeset: its own name told to a screen reader in its own language, as it is drawn (Codex and Devin on #317)', async () => {
+    const fake = fakeController({ phase: 'ready', languageSupported: false, settings: { ...DEFAULT_CONFIG, targetLanguage: 'jpn' } })
+    const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
+    const told = container.querySelector('.capsule[data-kind="unsupported"] .sr-only')!
+    expect([told.textContent, told.querySelector('[lang="ja"]')?.textContent]).toEqual([R.status.unsupported('日本語'), '日本語'])
   })
 
   it('the card says the reason and offers what can be done, never taking the focus', async () => {
