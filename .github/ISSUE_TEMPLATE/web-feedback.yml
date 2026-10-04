@@ -1,0 +1,46 @@
+name: 网站反馈 / Website feedback
+description: 关于 readarxiv.org 网站的问题与建议 / A problem or a suggestion about the readarxiv.org website
+labels: ['needs-triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        反馈公开可见，请勿填写个人信息。
+        Feedback here is public. Please do not include personal information.
+  - type: input
+    id: address
+    attributes:
+      label: 论文页面地址 / The paper's address
+      description: 出现问题的 readarxiv.org 阅读页地址（可选） / The readarxiv.org reader address where it happened (optional)
+      placeholder: https://readarxiv.org/abs/1706.03762v7?to=zh
+    validations:
+      required: false
+  - type: dropdown
+    id: language
+    attributes:
+      label: 翻译语言 / Translation language
+      options:
+        - 简体中文
+        - 繁體中文
+        - 日本語
+        - 한국어
+        - Deutsch
+        - Français
+        - Español
+        - Русский
+    validations:
+      required: false
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么 / What happened
+      description: 您看到了什么，原本期望看到什么 / What you saw, and what you expected to see
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: 浏览器与系统 / Browser and system
+      description: 例如 Chrome 140，macOS 26（可选） / For example Chrome 140 on macOS 26 (optional)
+    validations:
+      required: false
