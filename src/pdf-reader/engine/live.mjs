@@ -93,8 +93,23 @@ export const readingsOf = (o, marks) => ({ log: lastTexLog(o.log).split('\n').fi
  *  aux it is given */
 const auxLines = (aux, command) => (aux ?? '').split('\n').filter(l => l.startsWith(`\\${command}{`) && closed(l)).join('\n')
 const closed = line => { let depth = 0; for (const c of line.replace(/\\./g, '')) if (c === '{') depth++; else if (c === '}' && --depth < 0) return false; return depth === 0 }
-/** a compile's references as a draft is given them: its citations (\bibcite), its labels (\newlabel), its bibliography */
-const referencesOf = o => ({ cites: auxLines(o.aux, 'bibcite'), labels: auxLines(o.aux, 'newlabel'), bbl: o.bbl ?? null })
+/**
+ * An aux's citation lines: every closed line whose first argument is a key the aux cites — a \citation's or a
+ * \bibcite's (\nocite{*} cites keys no \citation names) —, in the aux's order, so that a later line overrides an earlier
+ * one as in the paper's own passes; not \citation's own, which a draft writes, nor \newlabel's, which are the labels.
+ * Not \bibcite's alone: apacite writes each entry twice, \bibcite then \APACbibcite, and with babel loaded after it
+ * babel's \bibcite keeps the entry wrapped, which only the second line makes whole again — given the first alone, every
+ * citation broke TeX (2610.02069: "Illegal parameter number in definition of \B@my@dummy"). harvard's \harvardcite,
+ * backref's \backcite and any other package's line of the kind go with them; biblatex's name a refsection first, and
+ * its drafts read the bibliography
+ */
+export const citationLines = aux => {
+  const all = (aux ?? '').split('\n').filter(closed), keys = new Set()
+  for (const l of all) { const m = /^\\(?:citation|bibcite)\{([^}]*)\}/.exec(l); if (m) for (const k of m[1].split(',')) keys.add(k.trim()) }
+  return all.filter(l => { const m = /^\\([A-Za-z@]+)\{([^{}]*)\}/.exec(l); return !!m && m[1] !== 'citation' && m[1] !== 'newlabel' && keys.has(m[2].trim()) }).join('\n')
+}
+/** a compile's references as a draft is given them: its citation lines, its labels (\newlabel), its bibliography */
+const referencesOf = o => ({ cites: citationLines(o.aux), labels: auxLines(o.aux, 'newlabel'), bbl: o.bbl ?? null })
 /** the lists a pass writes at its end from an aux's \@writefile{<ext>}{<entry>} lines (LaTeX's \enddocument), by
  *  extension: \tableofcontents's toc, \listoffigures' lof, \listoftables' lot, any list a package keeps so (backref's
  *  brf) — each line's entry, in order */
@@ -448,7 +463,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
      * two pages long where the full run set it one
      */
     let originalRefs = known ? { cites: known.cites, labels: known.labels, bbl: known.bbl } : { cites: '', labels: '', bbl: null }
-    const refs = a => (a ? (!originalRefs.cites || /^\\bibcite\{/m.test(a) ? a : `${a}\n${originalRefs.cites}`) : [originalRefs.labels, originalRefs.cites].filter(Boolean).join('\n') || null)
+    const refs = a => (a ? (!originalRefs.cites || citationLines(a) ? a : `${a}\n${originalRefs.cites}`) : [originalRefs.labels, originalRefs.cites].filter(Boolean).join('\n') || null)
     const bblAt = () => bbl ?? originalRefs.bbl
     // the marked original, compiled once: the left side's anchors, the characters the paper's own compile could not set,
     // and with the rule every plan's base — so in full, every pass: one pass sets references, citations and the pages they

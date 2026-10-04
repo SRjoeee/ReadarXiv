@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { copyTexts, decideWrite, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from '@/pdf-reader/engine/cache.mjs'
-import { type Compiled, compilerKeeper, keptFor, openPaper, PIPELINE_VERSION, runLive, stoppedShort } from '@/pdf-reader/engine/live.mjs'
+import { citationLines, type Compiled, compilerKeeper, keptFor, openPaper, PIPELINE_VERSION, runLive, stoppedShort } from '@/pdf-reader/engine/live.mjs'
 import type { Marks } from '@/pdf-reader/engine/typeset/places.mjs'
 
 // The reader's compiles with the typesetting rule (experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md,
@@ -1093,5 +1093,37 @@ describe('a unit the log places the failure in is set in the source, and the com
     const nested = p.units.findIndex(u => (u as { nested?: boolean }).nested)
     expect([(r.results.get(para) as { inSource?: boolean }).inSource, (r.results.get(nested) as { inSource?: boolean }).inSource]).toEqual([true, true])
     expect(r.inSource).toBe(2)
+  })
+})
+
+// The original's citation lines a draft is given (plans/2026-10-04-compile-resilience.md, Task 3): every closed aux line
+// whose first argument is a key the aux cites, in its order — apacite's \APACbibcite after its \bibcite (babel loaded
+// after apacite wraps the first, and only the second makes it whole again: 2610.02069), harvard's \harvardcite,
+// backref's \backcite — not only \bibcite
+describe('citationLines: every line of an aux for a key it cites, in its order', () => {
+  it("apacite's second line, harvard's, backref's; not \\citation, not a label, not a list's line, not a line cut short", () => {
+    const aux = ['\\relax', '\\citation{smith,jones}', '\\bibcite{smith}{\\citeauthoryear{Smith}{Smith}{{\\APACyear{2001}}}}', '\\APACbibcite{smith}{\\citeauthoryear{Smith}{Smith}{{\\APACyear{2001}}}}', '\\harvardcite{jones}{Jones}{Jones}{1999}', '\\backcite{smith}{{1}{1}{section.1}}', '\\newlabel{sec:a}{{1}{1}}', '\\newlabel{smith}{{2}{3}}', '\\@writefile{toc}{x}', '\\bibcite{cut}{{1}'].join('\n')
+    expect(citationLines(aux).split('\n')).toEqual(aux.split('\n').slice(2, 6))
+  })
+  it('\\nocite{*}: the keys \\bibcite names', () => {
+    expect(citationLines('\\citation{*}\n\\bibcite{a}{1}\n\\APACbibcite{a}{1}\n')).toBe('\\bibcite{a}{1}\n\\APACbibcite{a}{1}')
+  })
+  it("biblatex's lines name a refsection first, and are none; an aux with no citation, nothing", () => {
+    expect(citationLines('\\abx@aux@cite{0}{a}\n\\abx@aux@segm{0}{0}{a}\n')).toBe('')
+    expect(citationLines(null)).toBe('')
+  })
+  it("a draft is given the original's citation lines, both of apacite's, in the original's order; a draft's aux with its own is given as it is", async () => {
+    const ORIGINAL = '\\relax\n\\citation{a}\n\\bibcite{a}{W}\n\\APACbibcite{a}{C}\n'
+    const t = translator(), n = paper().units.length
+    const c = compiler(n, { on: k => { if (k === 'original') t.release() } }), base = c.compile, given: (string | null)[] = []
+    c.compile = async (q: Req) => {
+      const r = await base(q), kind = kindOf(q), aux = q.overrides.get('main.aux')
+      if (kind === 'preview' || kind === 'final') given.push(aux ? new TextDecoder().decode(aux) : null)
+      return kind === 'original' ? { ...r, aux: ORIGINAL } : kind === 'preview' ? { ...r, aux: '\\relax\n\\citation{a}\n' } : r
+    }
+    const { r } = await run({ compiler: c, translate: t.translate })
+    // the first preview has nothing; the one after the original its own aux and the original's two lines after it
+    expect(given[1]?.endsWith('\\bibcite{a}{W}\n\\APACbibcite{a}{C}')).toBe(true)
+    expect(r.original?.cites).toBe('\\bibcite{a}{W}\n\\APACbibcite{a}{C}')
   })
 })

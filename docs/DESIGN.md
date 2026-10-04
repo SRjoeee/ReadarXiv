@@ -918,7 +918,9 @@ is only how it meets the rest of the extension.
   again is taken back; units set in the source stay so until the chain moves on, at most three rounds and
   max(3, 2 %) of the units a strategy, eight remedy compiles a run. They count among the passages the failure note
   names (UI.md S-P-60), and the record marks them set in the source (2610.02069: apacite's citations broke under babel
-  given the original's `\bibcite` lines alone, and one citation's key went out as prose;
+  given the original's `\bibcite` lines alone — a draft is given every citation line of the original's aux, for any
+  key it cites, in its order (`citationLines`: apacite's `\APACbibcite`, harvard's, backref's) —, and one citation's key
+  went out as prose;
   `experiments/pdf-bilingual/plans/2026-10-04-compile-resilience.md`). The
   reader speaks the TeX page's protocol 2 and still serves a page of protocol 1: it names the engines and the CJK
   faces the visit will use, so that the page fetches them ahead;

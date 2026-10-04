@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { openPaper, translationFiles } from '../../../src/pdf-reader/engine/live.mjs'
+import { citationLines, openPaper, translationFiles } from '../../../src/pdf-reader/engine/live.mjs'
 import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
 import { texErrors, unitsAtErrors } from '../../../src/pdf-reader/engine/tex-errors.mjs'
 
@@ -89,6 +89,26 @@ for (const [where, files, bad] of [
   const errors = texErrors(log).filter(e => /^Missing character/.test(e.message))
   const placed = unitsAtErrors(errors, out, spans.lines()).map(u => paper.units.indexOf(u))
   check('pdfTeX, halting: with \\tracinglostchars=3 the lost code is an error at its line, in unit 1', errors.length === 1 && JSON.stringify(placed) === '[1]', JSON.stringify({ errors, placed }))
+}
+
+// 3. the references a draft is given (fix 1): apacite loaded before babel, as 2610.02069's class and preamble have them.
+// apacite writes each entry twice to the aux, \bibcite then \APACbibcite; babel's \bibcite keeps it wrapped, and only
+// the second line makes it whole again. Given the original's \bibcite lines alone, a one-pass draft breaks at every
+// citation, as every draft of 2610.02069 did; given its citation lines (citationLines), it sets them
+{
+  const BIB = '@article{alpha, author={Author, A. and Writer, B.}, title={A first title}, journal={J}, year={2001}}\n@article{beta, author={Someone, C.}, title={A second title}, journal={J}, year={2020}}\n'
+  const SRC = '\\documentclass{article}\n\\usepackage{apacite}\\usepackage[english]{babel}\n\\begin{document}\nA stream \\cite{alpha} alters, as \\citeA{beta} found.\n\\bibliographystyle{apacite}\n\\bibliography{refs}\n\\end{document}\n'
+  const files = new Map([['main.tex', enc(SRC)], ['refs.bib', enc(BIB)]])
+  compile('apa-original', files, { engine: 'pdflatex', halt: false })
+  const at = join(dir, 'apa-original'), aux = readFileSync(join(at, 'main.aux'), 'latin1'), bbl = readFileSync(join(at, 'main.bbl'))
+  const only = aux.split('\n').filter(l => l.startsWith('\\bibcite{')).join('\n'), lines = citationLines(aux)
+  check('the original\'s aux holds apacite\'s two lines for each entry, and citationLines gives both, in order', /\\APACbibcite\{alpha\}/.test(lines) && lines.indexOf('\\bibcite{alpha}') < lines.indexOf('\\APACbibcite{alpha}'), lines)
+  for (const engine of ['pdflatex', 'xelatex']) {
+    const draft = given => compile(`apa-${engine}-${given === lines ? 'lines' : 'bibcite'}`, new Map([...files, ['main.aux', enc(`\\relax\n${given}\n`)], ['main.bbl', bbl]]), { engine, halt: true })
+    const broken = draft(only), whole = draft(lines)
+    check(`${engine}, halting: a draft given the \\bibcite lines alone breaks at its citations (the fault, documented)`, /^! Illegal parameter number in definition of \\B@my@dummy/m.test(broken), broken.match(/^! .*$/m)?.[0] ?? 'no error')
+    check(`${engine}, halting: a draft given citationLines sets every citation, no error`, !/^! /m.test(whole) && /Output written on main\.(pdf|xdv)/.test(whole), whole.match(/^! .*$/m)?.[0] ?? 'no output')
+  }
 }
 
 console.log(failed ? `${failed} failed (${dir})` : `all passed (${dir})`)
