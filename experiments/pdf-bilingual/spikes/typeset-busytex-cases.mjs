@@ -49,7 +49,14 @@ function translatedFiles(files, { lang, pick, word, breaking, bad, tracked = fal
   const all = new Map([...[...files].map(([p, t]) => [p, enc(t)]), ...given])
   return { paper, out, lines: spans.lines(), bad, main: new TextDecoder().decode(all.get('main.tex')), extra: [...all].filter(([p]) => p !== 'main.tex').map(([path, b]) => ({ path, content: new TextDecoder().decode(b) })) }
 }
+// a footnote's own words that break TeX, and its paragraph's (compile-resilience-cases.mjs, 1b): TeX logs the footnote's
+// error where its argument ends, and the footnote is placed, not its paragraph
+const NOTED = `\\documentclass{article}\n\\begin{document}\n${PARAS(2)}\n\nA paragraph 1234567890123, with a note\\footnote{The note 2345678901234, says 3456789012345 and more.} and words 9876543210 after it.\n\n${PARAS(1)}\n\\end{document}\n`
+const notedUnits = openPaper(new Map([['main.tex', enc(NOTED)]])).units
+const NOTE = notedUnits.findIndex(u => u.nested), NOTED_PARA = notedUnits.findIndex(u => u.pieces.some(p => p.t === 'nested'))
 const SAFETY = {
+  'unit-note': { engine: 'xelatex', ...translatedFiles(new Map([['main.tex', NOTED]]), { lang: 'zh', pick: s => s[0], word: ZH, breaking: t => t.replace(/,/, ' \\foo_bar,'), bad: NOTE }) },
+  'unit-noted-para': { engine: 'xelatex', ...translatedFiles(new Map([['main.tex', NOTED]]), { lang: 'zh', pick: s => s[0], word: ZH, breaking: t => t.replace(/,/, ' \\foo_bar,'), bad: NOTED_PARA }) },
   'unit-main': { engine: 'xelatex', ...translatedFiles(new Map([['main.tex', `\\documentclass{article}\n\\begin{document}\n${PARAS(6)}\n\\end{document}\n`]]), { lang: 'zh', pick: s => s[0], word: ZH, breaking: t => t.replace(/,/, ' \\foo_bar,'), bad: 3 }) },
   'unit-input': { engine: 'xelatex', ...translatedFiles(new Map([['main.tex', `\\documentclass{article}\n\\begin{document}\n${PARAS(3)}\n\n\\input{sections/b}\n\\end{document}\n`], ['sections/b.tex', `${PARAS(5)}\n`]]), { lang: 'zh', pick: s => s[0], word: ZH, breaking: t => t.replace(/,/, ' \\foo_bar,'), bad: 5 }) },
   'lost-xe': { engine: 'xelatex', lost: true, ...translatedFiles(new Map([['main.tex', `\\documentclass{article}\n\\begin{document}\n${PARAS(4)}\n\\end{document}\n`]]), { lang: 'de', pick: s => s[1], word: 'W\u00f6rter', breaking: t => t.replace(/,/, ' \u3067,'), bad: 2, tracked: true }) },

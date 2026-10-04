@@ -20,7 +20,7 @@ const enc = s => new TextEncoder().encode(s)
 const ZH = '\u8bba\u6587'
 
 /** files into a fresh directory, compiled: `halt` one pass of `engine` halting on the first error, else latexmk -f in
- *  nonstop mode; \u2192 its log, read as a native log is (Latin-1) */
+ *  nonstop mode; → its log, read as a native log is (Latin-1) */
 function compile(name, files, { engine, main = 'main.tex', halt }) {
   const at = join(dir, name)
   for (const [p, b] of files) { const f = join(at, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
@@ -53,6 +53,26 @@ for (const [where, files, bad] of [
     const errors = texErrors(log), utf8 = texErrors(new TextDecoder().decode(Buffer.from(log, 'latin1')))
     const placed = unitsAtErrors(errors, out, spans.lines()).map(u => paper.units.indexOf(u)), placed8 = unitsAtErrors(utf8, out, spans.lines()).map(u => paper.units.indexOf(u))
     check(`${halt ? 'halting' : 'nonstop'}, ${where}: the failure placed in unit ${bad} alone (${errors.length} error${errors.length === 1 ? '' : 's'})`, errors.length > 0 && JSON.stringify(placed) === JSON.stringify([bad]) && JSON.stringify(placed8) === JSON.stringify([bad]), JSON.stringify({ placed, placed8, errors: errors.slice(0, 3) }))
+  }
+}
+
+// 1b. a footnote's own words that break TeX are the footnote's, not its paragraph's, and the paragraph's own words its
+// own: the nested unit's span inside its paragraph's, the innermost unit whose bytes hold the error's context. The
+// numbers keep ASCII around the place under a CJK translation, which the context is compared by (tex-errors.mjs skeleton)
+{
+  const src = `\\documentclass{article}\n\\begin{document}\n${PARAS(2)}\n\nA paragraph 1234567890123, with a note\\footnote{The note 2345678901234, says 3456789012345 and more.} and words 9876543210 after it.\n\n${PARAS(1)}\n\\end{document}\n`
+  const files = new Map([['main.tex', src]])
+  const units = openPaper(new Map([['main.tex', enc(src)]])).units
+  const note = units.findIndex(u => u.nested), para = units.findIndex(u => u.pieces.some(p => p.t === 'nested'))
+  for (const [what, bad] of [['a footnote', note], ['its paragraph', para]]) {
+    const { paper, tr } = translated(files, s => s.replace(/,/, ' \\foo_bar,'), bad)
+    const [xe] = strategiesFor(paper.meta, 'zh'), spans = {}
+    const out = translationFiles(paper, tr, { strategy: xe, fonts: null, draft: true, aux: null, bbl: null, spans })
+    for (const halt of [true, false]) {
+      const log = compile(`nested-${bad}-${halt}`, new Map([...[...files].map(([p, t]) => [p, enc(t)]), ...out]), { engine: 'xelatex', halt })
+      const errors = texErrors(log), placed = unitsAtErrors(errors, out, spans.lines()).map(u => paper.units.indexOf(u))
+      check(`${halt ? 'halting' : 'nonstop'}, ${what}'s own words: the failure placed in unit ${bad} alone (${errors.length} error${errors.length === 1 ? '' : 's'})`, errors.length > 0 && JSON.stringify(placed) === JSON.stringify([bad]), JSON.stringify({ placed, note, para, errors: errors.slice(0, 3) }))
+    }
   }
 }
 

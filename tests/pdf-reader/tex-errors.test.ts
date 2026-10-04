@@ -70,12 +70,16 @@ describe('unitsAtErrors: the units whose lines hold the errors', () => {
   it("a unit nested in another on the line: the innermost whose own text holds the context — a footnote's error is the footnote's, its paragraph's the paragraph's", () => {
     const line = 'The paragraph says \\bar{} here.\\footnote{The note says \\foo{} in it.} And on.'
     const f = new Map([['main.tex', enc(`\\begin{document}\n${line}\n\\end{document}`)]])
-    const at = (k: number) => 17 + k, note = line.indexOf('The note')
-    const lines = [{ file: 'main.tex', unit: 'p', first: 2, last: 2, from: at(0), to: at(line.length) }, { file: 'main.tex', unit: 'n', first: 2, last: 2, from: at(note), to: at(line.indexOf('} And')) }]
-    expect(unitsAtErrors([{ message: 'Undefined control sequence.', line: 2, before: 'The note says \\foo', after: '{} in it.' }], f, lines)).toEqual(['n'])
-    expect(unitsAtErrors([{ message: 'Undefined control sequence.', line: 2, before: 'The paragraph says \\bar', after: '{} here.' }], f, lines)).toEqual(['p'])
-    // a context that runs past the note's own text — the twelve characters before the place begin before the note —:
-    // the paragraph's, which holds it
-    expect(unitsAtErrors([{ message: 'Undefined control sequence.', line: 2, before: 'here.\\footnote{The', after: 'note says \\foo{} in it.' }], f, lines)).toEqual(['p'])
+    const at = (k: number) => 17 + k, note = line.indexOf('The note'), close = line.indexOf('} And')
+    const lines = [{ file: 'main.tex', unit: 'p', first: 2, last: 2, from: at(0), to: at(line.length) }, { file: 'main.tex', unit: 'n', first: 2, last: 2, from: at(note), to: at(close), post: 1 }]
+    const error = (before: string, after: string) => [{ message: 'Undefined control sequence.', line: 2, before, after }]
+    // TeX reads a footnote's text as its command's argument before it sets it: an error in it is logged where the
+    // argument ends, at its closing brace, the paragraph's words after it (compile-resilience-cases.mjs, natively)
+    expect(unitsAtErrors(error('The note says \\foo{} in it.}', 'And on.'), f, lines)).toEqual(['n'])
+    // an error TeX met inside the note's text
+    expect(unitsAtErrors(error('The note says \\foo', '{} in it.'), f, lines)).toEqual(['n'])
+    expect(unitsAtErrors(error('The paragraph says \\bar', '{} here.'), f, lines)).toEqual(['p'])
+    // past the note's end, in the paragraph's words after it: the paragraph's
+    expect(unitsAtErrors(error('says \\foo{} in it.} And', 'on.'), f, lines)).toEqual(['p'])
   })
 })

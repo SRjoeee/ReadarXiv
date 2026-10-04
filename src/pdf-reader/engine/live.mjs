@@ -248,7 +248,7 @@ function unitLines(raw, patched, out, main, skip) {
         const o = outers.get(x.outer)
         if (!o) continue
         const from = o.from + (x.from - o.was), to = from + (x.to - x.from), first = o.first + breaks(o.from, from)
-        found.push({ file, unit: x.unit, first, last: first + breaks(from, to - 1), from, to })
+        found.push({ file, unit: x.unit, first, last: first + breaks(from, to - 1), from, to, post: x.post ?? 0 })
         continue
       }
       const bytes = was.slice(x.from, x.to), k = now.indexOf(bytes, cursor)

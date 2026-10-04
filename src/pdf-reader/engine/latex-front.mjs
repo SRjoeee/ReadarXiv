@@ -809,7 +809,8 @@ export function pseudoTranslate(u, lang) {
  *  between the word and its comma, and a lost kern there respaces the whole line. */
 export function patch(project, translated /* Map unit -> pieces */, { guardControlWords = true, mark, spans = null } = {}) {
   const out = new Map()
-  // `inner`, where asked for: each unit nested in this one, at any depth, and its range in the bytes this gives
+  // `inner`, where asked for: each unit nested in this one, at any depth, its range in the bytes this gives and the
+  // length of what closes it after it (its piece's `post`)
   const render = (u, inner = null) => {
     const srcEnc = project.transcode?.has(u.file) ? 'utf8' : 'latin1'
     const pieces = translated.get(u) ?? u.pieces
@@ -900,7 +901,7 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     if (nested?.length) {
       let size = 0
       const starts = parts.map(b => { const at = size; size += b.length; return at })
-      for (const [k, unit, sub] of nested) inner.push({ unit, from: starts[k], to: starts[k] + parts[k].length }, ...sub.map(x => ({ ...x, from: x.from + starts[k], to: x.to + starts[k] })))
+      for (const [k, unit, sub] of nested) inner.push({ unit, from: starts[k], to: starts[k] + parts[k].length, post: parts[k + 1].length }, ...sub.map(x => ({ ...x, from: x.from + starts[k], to: x.to + starts[k] })))
     }
     return concat(parts)
   }
@@ -929,7 +930,7 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
       if (u.start < at) continue
       copy(at, u.start)
       const inner = spans && [], b = render(u, inner)
-      spans?.push({ file, unit: u, from: size, to: size + b.length }, ...inner.map(x => ({ file, unit: x.unit, from: size + x.from, to: size + x.to, outer: u })))
+      spans?.push({ file, unit: u, from: size, to: size + b.length }, ...inner.map(x => ({ file, unit: x.unit, from: size + x.from, to: size + x.to, post: x.post, outer: u })))
       add(b)
       at = u.end
     }

@@ -5,6 +5,6 @@ export interface TexError { message: string; line: number; before: string; after
 /** TeX's errors in a compile's last pass that a line of input places */
 export declare function texErrors(log: string | null | undefined): TexError[]
 /** a unit's lines and bytes in a file a compile was given (live.mjs translationFiles' spans) */
-export interface UnitLines<U> { file: string; unit: U; first: number; last: number; from?: number; to?: number }
+export interface UnitLines<U> { file: string; unit: U; first: number; last: number; from?: number; to?: number; post?: number }
 /** the units whose lines hold the errors */
 export declare function unitsAtErrors<U>(errors: TexError[], files: Map<string, Uint8Array>, lines: UnitLines<U>[]): U[]

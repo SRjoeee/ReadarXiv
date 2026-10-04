@@ -43,9 +43,12 @@ const skeleton = s => s.replace(/\^\^\^\^[0-9a-f]{4}|\^\^[0-9a-f]{2}|\^\^[@-_?]/
 /** how much of the text before and after an error's place must be found on its line */
 const CONTEXT = 12
 /** whether the text holds an error's context: the last characters before its place, and the first after; at least one
- *  of them there to look for */
-const holds = (text, e) => {
+ *  of them there to look for. `ending`: the text before the place alone, there to look for — where TeX stops in a unit
+ *  nested in another: it reads a footnote's text as its command's argument before it sets it, and an error in it is
+ *  logged where the argument ends, the outer unit's words after it */
+const holds = (text, e, ending = false) => {
   const b = skeleton(e.before).slice(-CONTEXT), a = skeleton(e.after).slice(0, CONTEXT), l = skeleton(text)
+  if (ending) return !!b && l.includes(b)
   return (!!b || !!a) && (!b || l.includes(b)) && (!a || l.includes(a))
 }
 const latin1Of = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return s }
@@ -70,7 +73,8 @@ const innermost = xs => {
 }
 /**
  * The units whose lines hold the errors: `files`, path → the bytes a compile was given; `lines`, each unit's
- * { file, unit, first, last, from?, to? } in them, its lines and its bytes (live.mjs translationFiles' `spans`). An
+ * { file, unit, first, last, from?, to?, post? } in them, its lines and its bytes, and for a unit nested in another the
+ * bytes after it that close it there (live.mjs translationFiles' `spans`). An
  * error is a unit's when one file the compile was given has a unit on the error's line whose text there holds the
  * error's context — so that a package's own line `n` is not the paper's — and that unit is one: where units share the
  * line, the one whose own bytes on it hold the context. A lost letter is a unit's only when the unit holds the letter.
@@ -87,8 +91,10 @@ export function unitsAtErrors(errors, files, lines) {
       if (!line || !text(bytes, line.from, line.to).some(t => holds(t, e))) continue
       const here = at.filter(x => x.file === file)
       // where units share the line: the one whose own bytes on it hold the context — of a unit and a unit nested in it
-      // (a paragraph and its footnote) that both do, the inner, unless more than one inner one does
-      const own = here.length === 1 ? here : here.filter(x => x.from !== undefined && text(bytes, Math.max(line.from, x.from), Math.min(line.to, x.to)).some(t => holds(t, e)))
+      // (a paragraph and its footnote) that both do, the inner, unless more than one inner one does. A nested unit
+      // (`post`, what closes it in its outer unit: a footnote's brace) holds it when the text before the place stands in
+      // it and what closes it: TeX was reading it, or had just read its argument (holds' `ending`)
+      const own = here.length === 1 ? here : here.filter(x => x.from !== undefined && text(bytes, Math.max(line.from, x.from), Math.min(line.to, x.to + (x.post ?? 0))).some(t => holds(t, e, x.post !== undefined)))
       fits.push(...innermost(own).map(x => ({ ...x, bytes })))
     }
     if (fits.length !== 1) continue
