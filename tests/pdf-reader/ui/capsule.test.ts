@@ -96,6 +96,15 @@ describe('the capsule', () => {
     expect(container.querySelectorAll('.sr-only')).toHaveLength(1)
   })
 
+  it('the line a screen reader is told keeps the part\'s language: the own name in its lang there too (Codex and Devin on #317)', async () => {
+    const said = withPart('PDF 对照暂不支持日本語', { text: '日本語', lang: 'ja' })
+    const { container } = await mountElement(createElement(Capsule, { kind: 'unsupported', icon: Info, words: said, wordsId: 'told' }))
+    const told = document.getElementById('told')!
+    expect([told.textContent, told.querySelector('[lang="ja"]')?.textContent, told.closest('[aria-hidden="true"]')]).toEqual(['PDF 对照暂不支持日本語', '日本語', null])
+    // the words drawn are as they were: the motion's cell, its part in its lang
+    expect(container.querySelector('.words .part[lang="ja"]')?.textContent).toBe('日本語')
+  })
+
   it('a count in cells of its own, one a digit, each over a hidden 0 that holds its width', async () => {
     const { container } = await mountElement(createElement(Capsule, { kind: 'progress', icon: 'spinner', words: withCount('Translating · 12 of 86 passages', 12) }))
     const cells = [...drawn(container).querySelectorAll('.num > .dg')].map(dg => [dg.querySelector('.gh')?.textContent, dg.querySelector('.d')?.textContent])

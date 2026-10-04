@@ -2,7 +2,8 @@
 // way — its words, and what follows them (a chip, a close). The words are drawn in a cell of their own, which the motion
 // owns (capsule-motion.ts), with the box's width: the words move with the box as one motion. The cell is hidden from
 // assistive technology; a screen reader is told the words whole, or `spoken` where they are other words (a count said
-// once a stage), in a line of its own, which changes only as that text does. `afterKey` names what follows the words:
+// once a stage), in a line of its own, which changes only as that text does. A part in another language is told in
+// that language too: the drawn cell's `lang` is hidden with it (Codex and Devin on #317). `afterKey` names what follows the words:
 // another key brings the new one in with the motion, and the old one leaves as a picture of it
 import { type IconNode, Loader } from 'lucide'
 import { type HTMLAttributes, type ReactNode, useLayoutEffect, useRef } from 'react'
@@ -21,6 +22,19 @@ export interface CapsuleProps extends Omit<HTMLAttributes<HTMLDivElement>, 'chil
   afterKey?: string
   out?: boolean
   alone?: boolean
+}
+
+/** the words whole, as a screen reader is told them, in their drawn order: a part keeps its own language */
+function told(w: CapsuleWords): ReactNode {
+  if (!w.part) return textOf(w)
+  return (
+    <>
+      {w.prefix}
+      {w.count}
+      <span lang={w.part.lang} dir="auto">{w.part.text}</span>
+      {w.suffix}
+    </>
+  )
 }
 
 export function Capsule({ kind, icon, words, spoken, wordsId, after, afterKey = '', out, alone, className, ...rest }: CapsuleProps) {
@@ -51,7 +65,7 @@ export function Capsule({ kind, icon, words, spoken, wordsId, after, afterKey = 
     <div ref={box} className={className ? `chrome capsule ${className}` : 'chrome capsule'} data-kind={kind} data-alone={alone ? '' : undefined} data-out={out ? '' : undefined} {...rest}>
       {icon === 'spinner' ? <Icon node={Loader} size={15} className="spin" /> : <Icon node={icon} size={15} />}
       <span ref={cell} className="words" aria-hidden="true" />
-      <span id={wordsId} className="sr-only">{spoken ?? textOf(words)}</span>
+      <span id={wordsId} className="sr-only">{spoken ?? told(words)}</span>
       {follows !== null && <span key={afterKey} ref={tail} className="after">{follows}</span>}
     </div>
   )

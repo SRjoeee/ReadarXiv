@@ -160,6 +160,13 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
     expect(container.querySelector('.capsule')!.hasAttribute('data-alone')).toBe(true)
   })
 
+  it('a language the reader cannot typeset: its own name told to a screen reader in its own language, as it is drawn (Codex and Devin on #317)', async () => {
+    const fake = fakeController({ phase: 'ready', languageSupported: false, settings: { ...DEFAULT_CONFIG, targetLanguage: 'jpn' } })
+    const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
+    const told = container.querySelector('.capsule[data-kind="unsupported"] .sr-only')!
+    expect([told.textContent, told.querySelector('[lang="ja"]')?.textContent]).toEqual([R.status.unsupported('日本語'), '日本語'])
+  })
+
   it('the card says the reason and offers what can be done, never taking the focus', async () => {
     const fake = fakeController({ phase: 'failed', failure: 'network' })
     const before = document.activeElement
