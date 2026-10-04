@@ -21,6 +21,7 @@
 import { analyze } from './paper-meta.mjs'
 import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
+import { texErrors, unitsAtErrors } from './tex-errors.mjs'
 import { nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
 import { WIDTH_PROBE } from './typeset/density.mjs'
 import { finalTypesetting, previewTypesetting } from './typeset/plan.mjs'
@@ -164,8 +165,10 @@ export function originalFiles({ fsys, project }, { lines = false } = {}) {
  *  `typeset`, the typesetting rule's (typeset/plan.mjs previewTypesetting, finalTypesetting): the strategy it sets the
  *  type of, its TeX, each translated unit's macros — for the strategy it was made for: with another the translation is
  *  set as today, and `note('typeset refused', …)` says so. `evenSpaces` false leaves out EVEN_SPACES' microtype, which
- *  the run adds under an 8-bit engine and may break a paper's own TeX (runLive's remedies) */
-export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl, typeset = null, evenSpaces = true, note = () => {} }) {
+ *  the run adds under an 8-bit engine and may break a paper's own TeX (runLive's remedies). `spans`, an object, gets
+ *  `lines()`: each unit's lines and bytes in the files as written ({ file, unit, first, last, from, to }), worked out
+ *  when asked — after a compile failed, which tex-errors.mjs locates by them —, so that a compile that sets pays nothing */
+export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl, typeset = null, evenSpaces = true, spans = null, note = () => {} }) {
   if (typeset && typeset.for !== strategy.name) { note('typeset refused', { plan: typeset.for, strategy: strategy.name }); typeset = null }
   if (typeset) strategy = typeset.strategy(strategy)
   const xe = strategy.xe
@@ -173,15 +176,19 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   const base = markUnits(project.units, translated)
   const index = new Map(project.units.map((u, i) => [u, i]))
   const mark = typeset ? typeset.mark(base, translated) : strategy.leading ? u => { const m = base(u); return m && !m.whole && translated.has(u) ? { ...m, before: `\\axtlead{${index.get(u)}}` } : m } : base
-  const out = patch(project, translated, { mark })
+  const raw = spans ? [] : null
+  const out = patch(project, translated, { mark, spans: raw })
+  // the files as patch wrote them, each unit's bytes in them, before this function's own edits
+  const patched = spans ? new Map(out) : null
   let main = latin1(out.get(project.main))
   const at = beginDocument(main)
   main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + NO_OVERFLOW + (xe || !evenSpaces ? '' : EVEN_SPACES) + main.slice(at)
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
   if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
-  if (xe && strategy.engine !== meta.compiler) main = XETEX_SHIM + XETEX_SHIM_R1 + stripPdftexOption(main)
+  const shim = xe && strategy.engine !== meta.compiler ? XETEX_SHIM + XETEX_SHIM_R1 : ''
   // what the strategy puts before \documentclass (scripts.mjs: a paper's own CJK packages kept from loading under xeCJK)
-  main = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + main
+  const head = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + shim
+  main = head + (shim ? stripPdftexOption(main) : main)
   out.set(project.main, latin1Bytes(main))
   if (xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = stripPdftexOption(t); if (u !== t) out.set(f, latin1Bytes(u)) }
   for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = localizeNames(t); if (u !== t) out.set(f, latin1Bytes(u)) }
@@ -195,7 +202,32 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   // early by its height (the F2 re-review's N2: zh 2608.02459, its contents before 550 of its 555 units, 0.939 of a
   // page's start drift, 0.098 with them). The final's passes write their own, as the original's do
   if (draft && aux) for (const [ext, entries] of listsOf(aux)) if (!out.has(`${job}.${ext}`)) out.set(`${job}.${ext}`, new TextEncoder().encode(entries))
+  if (spans) { let lines = null; spans.lines = () => (lines ??= unitLines(raw, patched, out, project.main, head.length)) }
   return out
+}
+
+/**
+ * Each unit's range as patch wrote it, found again in the file as written — this function's edits (the preamble's
+ * additions, the engine's shims, localizeNames) come after patch, and leave the units' bytes as they are —, in order
+ * from the last one's end, as the lines it stands on (1-based) and its bytes: { file, unit, first, last, from, to }.
+ * The main file is searched past the TeX put before the paper (`skip` bytes); a unit not found again is left out
+ */
+function unitLines(raw, patched, out, main, skip) {
+  const byFile = new Map()
+  for (const x of raw) (byFile.get(x.file) ?? byFile.set(x.file, []).get(x.file)).push(x)
+  const found = []
+  for (const [file, list] of byFile) {
+    const was = latin1(patched.get(file)), now = latin1(out.get(file) ?? patched.get(file))
+    let cursor = file === main ? skip : 0, line = 1, counted = 0
+    const lineAt = k => { for (; counted < k; counted++) if (now.charCodeAt(counted) === 10) line++; return line }
+    for (const x of list) {
+      const bytes = was.slice(x.from, x.to), k = now.indexOf(bytes, cursor)
+      if (k < 0 || !bytes) continue
+      cursor = k + bytes.length
+      found.push({ file, unit: x.unit, first: lineAt(k), last: lineAt(cursor - 1), from: k, to: cursor })
+    }
+  }
+  return found
 }
 
 /** the units a translation into `lang` leaves as they are: the names a table holds (nameCells), and the author block's
@@ -465,42 +497,123 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     const given = () => (off('references') ? { aux: null, bbl: null } : { aux: refs(aux), bbl: bblAt() })
     /** whether a compile under the strategy now has the addition, to leave out */
     const adds = { spacing: () => !strategy().xe && !off('spacing'), references: () => !off('references') && (!!refs(aux) || (!!bblAt() && !meta.bbl)) }
+    // the units a compile under this strategy could not set translated (the safety net, Task 2): set in the source until
+    // the chain moves on — another strategy may set them —, and so in the record (`inSource`). Each with every unit
+    // nested in it, which its source holds as written (a footnote, an author's note)
+    const inSource = new Set(), indexOf = new Map(units.map((u, i) => [u, i]))
+    const withNested = u => [u, ...u.pieces.filter(p => p.t === 'nested').flatMap(p => withNested(p.unit))]
+    /** a snapshot as a compile sets it: the units set in the source left out */
+    const setting = snapshot => { if (!inSource.size) return snapshot; const m = new Map(snapshot); for (const u of inSource) m.delete(u); return m }
+    // the last compile of the translation: the files it was given, its units' lines in them (worked out when asked) and
+    // the units it set translated — what the safety net places a failure by
+    let last = null
     /** the compile's files: the translation's, as the strategy and the remedies kept have them */
-    const filesFor = (snapshot, { draft, typeset }) => translationFiles(paper, snapshot, { strategy: strategy(), fonts, draft, ...given(), evenSpaces: !off('spacing'), typeset, note })
+    const filesFor = (snapshot, { draft, typeset }) => {
+      const spans = {}, set = setting(snapshot)
+      const files = translationFiles(paper, set, { strategy: strategy(), fonts, draft, ...given(), evenSpaces: !off('spacing'), typeset, spans, note })
+      last = { files, lines: spans.lines, snapshot: set }
+      return files
+    }
     /**
-     * The failure being recovered from (`episode`): the remedies tried, and the one the next compile tries; null once a
-     * compile under the strategy sets the translation, and when the chain moves on — a remedy that did not set the paper
-     * is not tried again meanwhile, whichever compile comes next (a preview, the measure, the final). `spent`: the
-     * compiles remedies have cost the run, at most SPENT_MAX — past it the chain moves on as before
+     * The failure being recovered from (`episode`): the remedies tried, the one the next compile tries and the failure it
+     * was tried for; null once a compile under the strategy sets the translation, and when the chain moves on — a remedy
+     * tried is not tried again meanwhile, whichever compile comes next (a preview, the measure, the final). `spent`: the
+     * compiles remedies have cost the run, a diagnosis included, at most SPENT_MAX — past it the chain moves on as before.
+     * The units set in the source: at most ROUNDS rounds and IN_SOURCE_MAX units per strategy — a failure placed in more
+     * units than that is the paper's or the strategy's, not a unit's (2610.02069's fault A stood in about ten of its 103
+     * units, its fault B in one)
      */
-    let episode = null, spent = 0
-    const SPENT_MAX = 8
+    let episode = null, spent = 0, rounds = 0, placed = 0
+    const SPENT_MAX = 8, ROUNDS = 3, IN_SOURCE_MAX = Math.max(3, Math.ceil(units.length * 0.02))
+    /** what a compile's failure is, to tell whether a remedy changed it: its first TeX error and the unit it stands in
+     *  (or its context), else what the compile said */
+    const failureOf = r => {
+      const e = texErrors(r.log)[0]
+      if (!e) return r.ok ? whyUnset(r) : whyFailed(r)
+      const u = last ? unitsAtErrors([e], last.files, last.lines())[0] : undefined
+      return `${e.message}@${u ? indexOf.get(u) : `${e.before}|${e.after}`}`
+    }
+    /** the paper's own TeX errors, as its marked original raised them (where its log is here: a run given the
+     *  original's readings has their lines alone), which no unit of the translation is the cause of */
+    const errorKey = e => `${e.message}|${e.before}|${e.after}`
+    const ownErrors = async () => new Set(texErrors(originalP ? (await originalP.catch(() => null))?.log : '').map(errorKey))
+    /** a letter's key as lostIn counts it: its code point where the message gives one */
+    const lostKey = message => { const c = /^Missing character: There is no (.+?) in font /.exec(message)?.[1]; return c && (c.match(/\(U\+([0-9A-F]+)\)/)?.[1] ?? c.trim()) }
+    /** the letters of a unit's translation in a snapshot, its nested units' with them */
+    const lettersOf = (u, snapshot) => [snapshot.get(u)?.filter(p => p.t === 'text' && p.tr).map(p => p.s).join('') ?? '', ...u.pieces.filter(p => p.t === 'nested').map(p => lettersOf(p.unit, snapshot))].join('')
+    /** whether the letters a compile lost beyond the original's, where the log names them by code point, stand in the
+     *  translation of a unit or a few — no more than a strategy may set in the source: lost in more, they are the
+     *  strategy's font's, and in none, not a unit's (a caption babel sets) */
+    const lostInFew = (r, known) => {
+      const codes = [...lostIn(r.log)].filter(([c, n]) => n > (known.get(c) ?? 0)).map(([c]) => (/^[0-9A-F]+$/.test(c) ? String.fromCodePoint(parseInt(c, 16)) : null))
+      if (codes.some(c => c === null)) return true
+      const holding = [...last.snapshot.keys()].filter(u => !u.nested && codes.some(c => lettersOf(u, last.snapshot).includes(c)))
+      return holding.length > 0 && holding.length <= IN_SOURCE_MAX - placed
+    }
     /**
-     * After a compile that did not set the translation (TeX's failure; BusyTeX's timeout is not one): the next thing to
-     * leave out, the least lost first, one a compile — the rule's TeX where the compile had a plan (ruling 6), microtype,
-     * the references. A remedy tried that did not set the paper was not the cause, and is taken back first, the rule too:
-     * one unit's fault no longer costs the rest of the run its rule (ruling 6, refined, 2026-10-04). Each remedy is noted
-     * (`without …`, `… back`, `recovered`), for a corpus run to measure. Gives the remedy taken, or null: none left
+     * The units a failed compile's log places its failure in, translated in it and not yet in the source. A compile that
+     * lost a letter with no TeX error to place it — where the letters lost stand in a few units (lostInFew) — is asked
+     * once more as one pass with \tracinglostchars=3, which makes each lost letter an error at its place (TeX Live 2021
+     * on), the letters the original loses left out; before the main file's first line, so that every line keeps its
+     * number
      */
-    const remedy = async (r, ruled) => {
-      const name = strategy().name
-      episode ??= { tried: new Set(), trying: null }
-      if (episode.trying === 'rule') { ruleFailed.delete(name); note('typeset back', { strategy: name }) }
-      else if (episode.trying) { without[episode.trying].delete(name); note(`${episode.trying} back`, { strategy: name }) }
+    const unitsOf = async (r, req) => {
+      const own = await ownErrors()
+      let errors = texErrors(r.log).filter(e => !own.has(errorKey(e)))
+      const known = !errors.length && r.ok && lostIn(r.log).size ? lostIn((await original()).log) : null
+      if (known && spent + 1 < SPENT_MAX && lostInFew(r, known)) {
+        spent++
+        note('lost letters', { strategy: strategy().name, letters: [...lostIn(r.log).keys()].slice(0, 5) })
+        const overrides = new Map(req.overrides)
+        overrides.set(project.main, latin1Bytes(`\\AtBeginDocument{\\tracinglostchars=3\\relax}${latin1(req.overrides.get(project.main))}`))
+        const d = await ask({ ...req, rerun: false, bibtex: false, overrides })
+        errors = texErrors(d.log).filter(e => /^Missing character/.test(e.message) && !known.has(lostKey(e.message)) && !own.has(errorKey(e)))
+      }
+      return unitsAtErrors(errors, last.files, last.lines()).filter(u => !inSource.has(u) && withNested(u).some(x => last.snapshot.has(x)))
+    }
+    /**
+     * After a compile that did not set the translation (TeX's failure, or a letter lost; BusyTeX's timeout is not one):
+     * the next remedy, the least lost first, one a compile — where TeX failed, the rule's TeX where the compile had a plan
+     * (ruling 6), microtype, the references; then the units the log places the failure in, set in the source. A remedy
+     * after which the same failure came again was not its cause, and is taken back first, the rule too: one unit's fault
+     * no longer costs the rest of the run its rule (ruling 6, refined, 2026-10-04); one after which the compile failed
+     * otherwise mended what it was tried for, and is kept (2610.02069: without its references, its apacite citation's key
+     * stood out). Units set in the source stay there. Each remedy is noted (`typeset failed`, `without …`, `in source`,
+     * `lost letters`, `… back`, `kept`, `recovered`), for a corpus run to measure. `req`: the compile's request. Gives the
+     * remedy taken, or null: none left
+     */
+    const remedy = async (r, ruled, req) => {
+      const name = strategy().name, now = failureOf(r)
+      episode ??= { tried: new Set(), trying: null, failure: null }
+      if (episode.trying && episode.trying !== 'units') {
+        if (now !== episode.failure) note('kept', { strategy: name, by: episode.trying })
+        else if (episode.trying === 'rule') { ruleFailed.delete(name); note('typeset back', { strategy: name }) }
+        else { without[episode.trying].delete(name); note(`${episode.trying} back`, { strategy: name }) }
+      }
       episode.trying = null
-      if (spent >= SPENT_MAX || r.ok) return null
+      episode.failure = now
+      if (spent >= SPENT_MAX) return null
       const take = how => { episode.tried.add(how); episode.trying = how; spent++; return how }
-      if (ruled && !episode.tried.has('rule')) { withoutRule(r); return take('rule') }
-      for (const how of ['spacing', 'references']) if (!episode.tried.has(how) && adds[how]()) { without[how].add(name); note(`without ${how}`, { strategy: name, error: whyFailed(r) }); return take(how) }
-      return null
+      if (!r.ok && ruled && !episode.tried.has('rule')) { withoutRule(r); return take('rule') }
+      if (!r.ok) for (const how of ['spacing', 'references']) if (!episode.tried.has(how) && adds[how]()) { without[how].add(name); note(`without ${how}`, { strategy: name, error: whyFailed(r) }); return take(how) }
+      if (rounds >= ROUNDS) return null
+      const found = await unitsOf(r, req)
+      if (!found.length || placed + found.length > IN_SOURCE_MAX || spent >= SPENT_MAX) return null
+      rounds++
+      placed += found.length
+      for (const u of found.flatMap(withNested)) inSource.add(u)
+      note('in source', { strategy: name, units: found.map(u => indexOf.get(u)), error: whyFailed(r) ?? whyUnset(r) })
+      return take('units')
     }
     /** a compile under the strategy set the translation: the remedy it tried is kept, and said */
     const recovered = () => { if (episode?.trying) note('recovered', { strategy: strategy().name, by: episode.trying }); episode = null }
-    /** the chain moves on: the next strategy, its own remedies, no references of the last */
-    const nextStrategy = (why = {}) => { s++; aux = null; episode = null; note('next strategy', { strategy: strategy().name, ...why }) }
+    /** the chain moves on: the next strategy, its own remedies and units, no references of the last */
+    const nextStrategy = (why = {}) => { s++; aux = null; episode = null; inSource.clear(); rounds = placed = 0; note('next strategy', { strategy: strategy().name, ...why }) }
+    // the units set in the source in the last compile shown (S-P-60 counts them: ruling 6 of 2026-10-04)
+    let shownInSource = 0
     const planFor = snapshot => {
       if (!readings || ruleFailed.has(strategy().name)) return null
-      const plan = previewTypesetting({ paper, translated: snapshot, lang, strategy: strategy(), fonts, fontLog, original: readings })
+      const plan = previewTypesetting({ paper, translated: setting(snapshot), lang, strategy: strategy(), fonts, fontLog, original: readings })
       if (!plan.typeset && toldMissing !== plan.missing) { toldMissing = plan.missing; note('typeset', { missing: plan.missing }) }
       return plan.typeset ? plan : null
     }
@@ -545,7 +658,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       if (dirty) {
         dirty = false
         const snapshot = new Map(translated), t0 = Date.now(), plan = planFor(snapshot)
-        const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: bibtexFor(), overrides: filesFor(snapshot, { draft: true, typeset: plan?.typeset ?? null }) })
+        const req = { main: project.main, engine: strategy().engine, rerun: false, bibtex: bibtexFor(), overrides: filesFor(snapshot, { draft: true, typeset: plan?.typeset ?? null }) }
+        const r = await ask(req)
         // a compile that failed may have written half an aux (a run cut short): the last good one's are kept
         if (r.ok && r.aux) aux = r.aux
         if (r.ok && r.bbl) bbl = r.bbl
@@ -559,10 +673,11 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
           recovered()
           previews++
           measuring = plan && whole(snapshot) ? { plan, strategy: strategy().name, r } : null
-          onUpdate?.({ pdf: r.pdf, texts: texts(snapshot), translated: snapshot.size, final: false })
+          shownInSource = inSource.size
+          onUpdate?.({ pdf: r.pdf, texts: texts(setting(snapshot)), translated: snapshot.size, final: false })
         } else if (timedOut(r)) {
           // the machine slow: nothing changed, the next batch or the final goes on
-        } else if (await remedy(r, !!plan)) dirty = true
+        } else if (await remedy(r, !!plan, req)) dirty = true
         else if (s + 1 < strategies.length) { nextStrategy(); dirty = true }
         // (under the last strategy the episode stays: a remedy that did not set this paper is not tried again until a
         // compile sets it)
@@ -595,11 +710,13 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       await original()
       const read = async r => { try { return await readMarks(r.pdf) } catch (e) { passing = true; note('typeset', { missing: `a preview's marks (${String(e?.message ?? e).slice(0, 120)})` }); return null } }
       let m = measuring?.strategy === strategy().name && referencesWhole(measuring.r) ? measuring : null
-      let fin = m && finalTypesetting(m.plan.state, { log: m.r.log, marks: await read(m.r) }, all)
+      let fin = m && finalTypesetting(m.plan.state, { log: m.r.log, marks: await read(m.r) }, setting(all))
       if (!fin?.typeset || fin.missing === 'a plan of the whole translation') {
+        let req
         const measure = async plan => {
           const t1 = Date.now()
-          const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bblAt() && !off('references'), overrides: filesFor(all, { draft: true, typeset: plan.typeset }) })
+          req = { main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bblAt() && !off('references'), overrides: filesFor(all, { draft: true, typeset: plan.typeset }) }
+          const r = await ask(req)
           note('measure', { ok: r.ok, ms: r.ms, roundTrip: Date.now() - t1, strategy: strategy().name, error: whyFailed(r) })
           return r
         }
@@ -626,7 +743,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
           // final failed (the F2 re-review's N2: zh 2608.02459's re-set, measured under xeCJK, which has no σ there).
           // Under the last strategy the final is set as before, and cannot set it either. The rule is what is measured: a
           // TeX failure is first tried again without the run's additions, and the rule's own remedy is after the loop
-          if ((unset || (!r.ok && !timedOut(r))) && await remedy(r, false)) continue
+          if ((unset || (!r.ok && !timedOut(r))) && await remedy(r, false, req)) continue
           if (unset && s + 1 < strategies.length) { nextStrategy({ measure: whyUnset(r) }); continue }
           break
         }
@@ -638,7 +755,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
         if (r.aux) aux = r.aux
         if (r.bbl) bbl = r.bbl
         m = { plan, r }
-        fin = finalTypesetting(plan.state, { log: r.log, marks: await read(r) }, all)
+        fin = finalTypesetting(plan.state, { log: r.log, marks: await read(r) }, setting(all))
       }
       note('typeset', { final: true, missing: fin.missing, faces: fin.faces.size, measured: m.r === measuring?.r ? 'preview' : 'draft' })
       return fin.typeset ?? m.plan.typeset
@@ -649,7 +766,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     let r, ok, exhausted = false, finalAgain = false
     for (;;) {
       // the final's lines are read by nothing: its TeX without the line probes (tex.mjs typesetting's `final`)
-      r = await ask({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: filesFor(all, { draft: false, typeset: typeset?.final ?? typeset }) })
+      const req = { main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: filesFor(all, { draft: false, typeset: typeset?.final ?? typeset }) }
+      r = await ask(req)
       ok = await settled(r)
       note('final', { ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, typeset: !!typeset, undefinedCitations: [...new Set([...unwrapped(lastTexLog(r.log)).matchAll(/(?:LaTeX|Package natbib) Warning: Citation [`']([^']+)' .*undefined/g)].map(m => m[1]))].slice(0, 8), error: ok ? undefined : whyFailed(r) ?? whyUnset(r) })
       if (ok) { recovered(); break }
@@ -661,7 +779,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       // the run's remedies before the chain moves on (remedy); the rule taken back comes back with the final's plan, or
       // — left out since a preview — the plan for this strategy, uncorrected (the handoff, 6)
       const back = episode?.trying === 'rule'
-      const how = await remedy(r, !!typeset)
+      const how = await remedy(r, !!typeset, req)
       if (back) { typeset = planAside ?? planFor(all)?.typeset ?? null; planAside = null }
       if (how === 'rule') { planAside = typeset; typeset = null; continue }
       if (how) continue
@@ -673,10 +791,12 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       typeset = planFor(all)?.typeset ?? null
     }
     if (ok) {
-      onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
+      shownInSource = inSource.size
+      onUpdate?.({ pdf: r.pdf, texts: texts(setting(all)), translated: all.size, final: true })
       // the units the final set in the source though translated, for the record: their translation stays the next run's.
-      // Said anew for every unit it set, a seed's mark included: it set them all again
-      const set = typesetBy(all, strategy())
+      // Said anew for every unit it set, a seed's mark included: it set them all again — those the safety net set in the
+      // source among them
+      const set = typesetBy(setting(all), strategy())
       units.forEach((u, i) => {
         const r = results.get(i)
         if (!r || !all.has(u)) return
@@ -686,7 +806,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     }
     // marks known come only from a compile of the paper's own source that set (onOriginal)
     const own = marks && !originalP ? null : await original()
-    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing(), original: readings, passing }
+    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing(), inSource: shownInSource, original: readings, passing }
   }
   try { return await compiles() } catch (e) {
     if (!e?.compilerDown) throw e

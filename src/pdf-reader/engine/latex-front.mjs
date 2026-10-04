@@ -807,7 +807,7 @@ export function pseudoTranslate(u, lang) {
  *  environment it would stand in the vertical list, where \\addvspace no longer sees the skip before it. The start
  *  mark comes with \\leavevmode, which starts the paragraph just as the word would; after the word it would come
  *  between the word and its comma, and a lost kern there respaces the whole line. */
-export function patch(project, translated /* Map unit -> pieces */, { guardControlWords = true, mark } = {}) {
+export function patch(project, translated /* Map unit -> pieces */, { guardControlWords = true, mark, spans = null } = {}) {
   const out = new Map()
   const render = u => {
     const srcEnc = project.transcode?.has(u.file) ? 'utf8' : 'latin1'
@@ -903,12 +903,16 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     const fits = (project.fits ?? []).filter(f => f.file === file && us.some(u => u.start >= f.start && u.end <= f.end && translated.has(u)))
     // (a tabular* between \\axtstar and \\axtstarbody, which measure its body at its columns' width)
     const inserts = fits.flatMap(f => [[f.start, [utf8Bytes(f.star ? '\\axtfit{\\axtstar' : '\\axtfit{')]], ...(f.star ? [[f.star, [utf8Bytes('\\axtstarbody')]]] : []), [f.end, [utf8Bytes('}{'), bytesOf(text.slice(f.start, f.end), enc), utf8Bytes('}')]]]).sort((a, b) => a[0] - b[0])
+    // the bytes written so far, where `spans` is asked for: each top-level unit's range in the file as written (a
+    // nested unit is written inside its own), which a compile's error is located by (tex-errors.mjs)
+    let size = 0
+    const add = (...bytes) => { parts.push(...bytes); if (spans) for (const b of bytes) size += b.length }
     const copy = (from, to) => {
-      for (const [pos, bytes] of inserts) if (pos >= from && pos < to) { parts.push(bytesOf(text.slice(from, pos), enc), ...bytes); from = pos }
-      parts.push(bytesOf(text.slice(from, to), enc))
+      for (const [pos, bytes] of inserts) if (pos >= from && pos < to) { add(bytesOf(text.slice(from, pos), enc), ...bytes); from = pos }
+      add(bytesOf(text.slice(from, to), enc))
     }
     let at = 0
-    for (const u of us) { if (u.start < at) continue; copy(at, u.start); parts.push(render(u)); at = u.end }
+    for (const u of us) { if (u.start < at) continue; copy(at, u.start); const b = render(u); spans?.push({ file, unit: u, from: size, to: size + b.length }); add(b); at = u.end }
     copy(at, text.length + 1)
     out.set(file, concat(parts))
   }

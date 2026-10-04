@@ -9,7 +9,8 @@ import type { Readings } from './cache.mjs'
 export interface Paper { fsys: ReturnType<typeof inMemory>; meta: ReturnType<typeof analyze>; project: { main: string; units: SourceUnit[] }; units: SourceUnit[]; kept: Set<SourceUnit> }
 export declare function openPaper(files: Map<string, Uint8Array>): Paper
 /** the translation so far, with unit marks, set by one of strategiesFor: the files that differ from the paper's */
-export declare function translationFiles(paper: Paper, translated: Map<SourceUnit, unknown[]>, options: { strategy: Pick<Strategy, 'engine' | 'pre'> & Partial<Strategy>; fonts: unknown; draft?: boolean; aux?: string | null; bbl?: string | null; typeset?: Typeset | null; evenSpaces?: boolean; note?: (event: string, data: unknown) => void }): Map<string, Uint8Array>
+/** `spans`, where given, gets `lines()`: each unit's lines and bytes in the files as written, worked out when asked */
+export declare function translationFiles(paper: Paper, translated: Map<SourceUnit, unknown[]>, options: { strategy: Pick<Strategy, 'engine' | 'pre'> & Partial<Strategy>; fonts: unknown; draft?: boolean; aux?: string | null; bbl?: string | null; typeset?: Typeset | null; evenSpaces?: boolean; spans?: { lines?: () => import('./tex-errors.mjs').UnitLines<SourceUnit>[] } | null; note?: (event: string, data: unknown) => void }): Map<string, Uint8Array>
 /** the reader's versions: the translation's (what a unit is and what is sent for it) and the typesetting's */
 export declare const PIPELINE_VERSION: string
 export declare const TYPESETTING_VERSION: string
@@ -49,6 +50,6 @@ export declare function runLive(paper: Paper, options: {
   /** a PDF's unit marks and page columns (typeset/places.mjs marksOf on a PDF.js document of the bytes): with it, the
    *  typesetting rule sets the translation; without, it is set as today */
   readMarks?: ((pdf: Uint8Array) => Promise<import('./typeset/places.mjs').Marks>) | null
-}): Promise<{ settled: boolean; exhausted: boolean; changed: boolean; results: Map<number, unknown>; previews: number; translated: number; units: number; originalOk?: boolean; stopped?: string | null; compiler?: { down: 'network' | 'page'; error: string }; missing?: number; original: Readings | null; passing: boolean }>
+}): Promise<{ settled: boolean; exhausted: boolean; changed: boolean; results: Map<number, unknown>; previews: number; translated: number; units: number; originalOk?: boolean; stopped?: string | null; compiler?: { down: 'network' | 'page'; error: string }; missing?: number; inSource?: number; original: Readings | null; passing: boolean }>
 /** the marked original as the run and the rule read it: the lines of its last pass that are read, its marks, its citations and labels, its bibliography */
 export declare function readingsOf(o: { log?: string; aux?: string | null; bbl?: string | null }, marks: import('./typeset/places.mjs').Marks): Readings

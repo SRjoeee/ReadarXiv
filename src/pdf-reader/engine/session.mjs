@@ -2290,8 +2290,10 @@ async function live() {
     // up, a compile it gave up on) — no compiler, the retry offered, the network's back retrying by itself (the S3a
     // report's duties, b); nothing written or marked, and what is shown stays
     if (result.compiler) { await swaps; unset = unsetAfter(unset, result, shownNow); return fail('no compiler', `Could not typeset ${paper}: ${result.compiler.error}`, result.compiler.down === 'network' ? 'network' : 'unknown') }
-    // the paragraphs the service left in the source, not a sum over batches: a seeded one keeps its old translation
-    lost = result.missing ?? lost
+    // the paragraphs the service left in the source, not a sum over batches: a seeded one keeps its old translation —
+    // and those translated that TeX could not set, which the compile's safety net set in the source (live.mjs
+    // `inSource`): the reader does not say a passage is translated when it is not (S-P-60; the maintainer, 2026-10-04)
+    lost = (result.missing ?? lost) + (result.inSource ?? 0)
     // stopped with nothing on screen translated: the card, with the service's reason (the reader's design, §8)
     if (result.stopped && !result.translated) return fail('failed', `Could not translate ${paper}: ${result.stopped}`, result.stopped)
     stopped = result.stopped ? { event: 'stopped', kind: result.stopped } : null

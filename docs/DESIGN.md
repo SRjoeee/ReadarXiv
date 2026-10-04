@@ -909,7 +909,17 @@ is only how it meets the rest of the extension.
   fitted: comment.sty ends its environment only at a line that is its `\end` and nothing more, and a line probe written
   after 2608.16117's kept its comment open to the end of the file, the paper after it lost. A compile that stopped
   short of the document's end is no translation, whatever PDF it left: XeTeX ships the pages it set before a fatal
-  error, and a compiler that gives what it made took them as set (BusyTeX halts on a TeX error and gives none). The
+  error, and a compiler that gives what it made took them as set (BusyTeX halts on a TeX error and gives none). A
+  compile of the translation that TeX fails is tried again before the chain moves on, one remedy a compile, the least
+  lost first: without the typesetting rule's TeX, without EVEN_SPACES' microtype, without the references the run gives
+  a draft or the final; then, as a safety net, with the units the log places the failure in set in the source — the
+  error's `l.<n>` line and the text around its place, found in a unit of the files the compile was given; a letter lost
+  with no error to place it made one by a pass with `\tracinglostchars=3`. A remedy after which the same failure comes
+  again is taken back; units set in the source stay so until the chain moves on, at most three rounds and
+  max(3, 2 %) of the units a strategy, eight remedy compiles a run. They count among the passages the failure note
+  names (UI.md S-P-60), and the record marks them set in the source (2610.02069: apacite's citations broke under babel
+  given the original's `\bibcite` lines alone, and one citation's key went out as prose;
+  `experiments/pdf-bilingual/plans/2026-10-04-compile-resilience.md`). The
   reader speaks the TeX page's protocol 2 and still serves a page of protocol 1: it names the engines and the CJK
   faces the visit will use, so that the page fetches them ahead;
   a compile whose files did not all arrive, or that the page itself failed (no log: an engine it could not bring up), is

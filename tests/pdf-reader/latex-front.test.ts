@@ -360,3 +360,25 @@ describe('a tabularray table whose cells are math is math (2608.29181: every way
     expect(texts(p).join('|')).toContain('Frozen profile')
   })
 })
+
+// Where patch writes each unit (spans), for the compile's safety net (plans/2026-10-04-compile-resilience.md, Task 2): a
+// failure TeX places on a line is located in the unit written there
+describe('patch: where each unit is written', () => {
+  const enc = (s: string) => new TextEncoder().encode(s)
+  const SRC = '\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nA paragraph with a note.\\footnote{The note itself, in a few words.} And more words after it.\n\nA second paragraph of words.\n\\end{document}\n'
+  it('one span per top-level unit, in file order, its bytes the unit as written; a footnote inside its paragraph\'s; the bytes the same with spans and without', () => {
+    const p = loadProject(inMemory(new Map([['main.tex', enc(SRC)]])), 'main.tex')
+    const units = p.units as (Unit & { nested?: boolean })[]
+    const translated = new Map(units.map((u, i) => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: `<T${i}>` } : x))])) as Map<(typeof p.units)[number], unknown[]>
+    const spans: { file: string; unit: (typeof p.units)[number]; from: number; to: number }[] = []
+    const out = patch(p, translated, { spans })
+    expect(out.get('main.tex')).toEqual(patch(p, translated).get('main.tex'))
+    expect(spans.map(x => x.unit)).toEqual(units.filter(u => !u.nested))
+    expect(spans.every((x, k) => x.file === 'main.tex' && x.from < x.to && (k === 0 || x.from >= (spans[k - 1] as { to: number }).to))).toBe(true)
+    const text = new TextDecoder('latin1').decode(out.get('main.tex'))
+    for (const x of spans) expect(text.slice(x.from, x.to)).toContain(`<T${units.indexOf(x.unit as unknown as Unit)}>`)
+    const note = units.findIndex(u => u.nested)
+    expect(note).toBeGreaterThan(-1)
+    expect(spans.some(x => (x.unit as unknown) !== units[note] && text.slice(x.from, x.to).includes(`<T${note}>`))).toBe(true)
+  })
+})

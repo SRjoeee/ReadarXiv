@@ -1,5 +1,5 @@
 // experiments/pdf-bilingual/spikes/typeset-busytex-cases.mjs
-// The typesetting rule's TeX under the reader's own compiler — BusyTeX in Chromium, its pdfTeX and its XeTeX — for the
+// The typesetting rule's TeX under the reader's own compiler \u2014 BusyTeX in Chromium, its pdfTeX and its XeTeX \u2014 for the
 // cases whose answer hangs on the LaTeX it ships: each page's columns as MARK_DEF reads them (latex-front.mjs), at the
 // end of a revtex paper whose grid closes at \end{document} before its last pages go out. typeset-tex-cases.mjs is the
 // native reference for the same documents. Needs the TeX Live package server (texlive-server, http://localhost:8070;
@@ -12,6 +12,9 @@ import { readFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { MARK_DEF } from '../../../src/pdf-reader/engine/latex-front.mjs'
+import { openPaper, translationFiles } from '../../../src/pdf-reader/engine/live.mjs'
+import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
+import { texErrors, unitsAtErrors } from '../../../src/pdf-reader/engine/tex-errors.mjs'
 import { marksOf } from '../../../src/pdf-reader/engine/typeset/places.mjs'
 
 const { chromium } = createRequire(new URL('../../../', import.meta.url))('playwright')
@@ -29,6 +32,30 @@ const docs = ['pdflatex', 'xelatex'].flatMap(engine => [
   { name: `refs2-${engine}`, engine, src: MARK_DEF + refsLast(260) },
   { name: `end1-${engine}`, engine, src: MARK_DEF + oneEnd },
 ])
+
+// the compile's safety net (compile-resilience-cases.mjs is the native reference): a unit whose translation breaks TeX,
+// in the main file and in a file it \inputs, and a letter lost made an error by \tracinglostchars=3 \u2014 each placed by
+// BusyTeX's log, read through lastTexLog, in its unit alone
+const ZH = '\u8bba\u6587', enc = s => new TextEncoder().encode(s)
+const PARAS = n => Array.from({ length: n }, (_, k) => `Paragraph ${k} of the paper runs on, with words that make a line of prose.`).join('\n\n')
+/** a paper's files translated into `word`s, unit `bad`'s text put through `breaking` raw; its files as translationFiles
+ *  writes them under the strategy `pick` chooses, and each unit's lines in them */
+function translatedFiles(files, { lang, pick, word, breaking, bad, tracked = false }) {
+  const paper = openPaper(new Map([...files].map(([p, t]) => [p, enc(t)])))
+  const tr = new Map(paper.units.map((u, i) => [u, u.pieces.map(p => (p.t === 'text' ? { ...p, tr: true, s: i === bad ? breaking(p.s.replace(/[A-Za-z]{2,}/g, word)) : p.s.replace(/[A-Za-z]{2,}/g, word) } : p))]))
+  const spans = {}, out = translationFiles(paper, tr, { strategy: pick(strategiesFor(paper.meta, lang)), fonts: null, draft: true, aux: null, bbl: null, spans })
+  const given = new Map(out)
+  if (tracked) given.set('main.tex', new Uint8Array([...enc('\\AtBeginDocument{\\tracinglostchars=3\\relax}'), ...out.get('main.tex')]))
+  const all = new Map([...[...files].map(([p, t]) => [p, enc(t)]), ...given])
+  return { paper, out, lines: spans.lines(), bad, main: new TextDecoder().decode(all.get('main.tex')), extra: [...all].filter(([p]) => p !== 'main.tex').map(([path, b]) => ({ path, content: new TextDecoder().decode(b) })) }
+}
+const SAFETY = {
+  'unit-main': { engine: 'xelatex', ...translatedFiles(new Map([['main.tex', `\\documentclass{article}\n\\begin{document}\n${PARAS(6)}\n\\end{document}\n`]]), { lang: 'zh', pick: s => s[0], word: ZH, breaking: t => t.replace(/,/, ' \\foo_bar,'), bad: 3 }) },
+  'unit-input': { engine: 'xelatex', ...translatedFiles(new Map([['main.tex', `\\documentclass{article}\n\\begin{document}\n${PARAS(3)}\n\n\\input{sections/b}\n\\end{document}\n`], ['sections/b.tex', `${PARAS(5)}\n`]]), { lang: 'zh', pick: s => s[0], word: ZH, breaking: t => t.replace(/,/, ' \\foo_bar,'), bad: 5 }) },
+  'lost-xe': { engine: 'xelatex', lost: true, ...translatedFiles(new Map([['main.tex', `\\documentclass{article}\n\\begin{document}\n${PARAS(4)}\n\\end{document}\n`]]), { lang: 'de', pick: s => s[1], word: 'W\u00f6rter', breaking: t => t.replace(/,/, ' \u3067,'), bad: 2, tracked: true }) },
+  'lost-pdf': { engine: 'pdflatex', lost: true, ...translatedFiles(new Map([['main.tex', `\\documentclass{article}\n\\begin{document}\n${PARAS(3)}\n\\end{document}\n`]]), { lang: 'de', pick: s => s[0], word: 'Worte', breaking: t => t.replace(/,/, ' \\char200,'), bad: 1, tracked: true }) },
+}
+for (const [name, d] of Object.entries(SAFETY)) docs.push({ name, engine: d.engine, src: d.main, extra: d.extra, keepLog: true })
 
 const server = createServer((req, res) => {
   const path = decodeURIComponent(req.url.split('?')[0])
@@ -48,10 +75,10 @@ async function inPage({ endpoint, docs }) {
   const out = []
   for (const d of docs) {
     const Engine = d.engine === 'xelatex' ? XeLatex : PdfLatex
-    const r = await new Engine(runner).compile({ input: d.src, mainTexPath: `${d.name}.tex`, additionalFiles: [], bibtex: false, rerun: false, remoteEndpoint: endpoint, verbose: 'silent' })
+    const r = await new Engine(runner).compile({ input: d.src, mainTexPath: d.extra ? 'main.tex' : `${d.name}.tex`, additionalFiles: d.extra ?? [], bibtex: false, rerun: false, remoteEndpoint: endpoint, verbose: 'silent' })
     let pdf = null
-    if (r.pdf?.length) { let s = ''; for (let i = 0; i < r.pdf.length; i += 0x8000) s += String.fromCharCode(...r.pdf.subarray(i, i + 0x8000)); pdf = btoa(s) }
-    out.push({ name: d.name, pdf, error: (String(r.log ?? '').match(/^! .*$/m)?.[0] ?? '').slice(0, 160) })
+    if (r.pdf?.length && !d.keepLog) { let s = ''; for (let i = 0; i < r.pdf.length; i += 0x8000) s += String.fromCharCode(...r.pdf.subarray(i, i + 0x8000)); pdf = btoa(s) }
+    out.push({ name: d.name, pdf, error: (String(r.log ?? '').match(/^! .*$/m)?.[0] ?? '').slice(0, 160), ...(d.keepLog ? { log: String(r.log ?? ''), made: !!r.pdf?.length } : {}) })
   }
   runner.terminate?.()
   return out
@@ -63,9 +90,14 @@ const browser = await chromium.launch()
 try {
   const page = await browser.newPage()
   await page.goto(`http://127.0.0.1:${server.address().port}/`)
-  const results = await page.evaluate(inPage, { endpoint: ENDPOINT, docs: docs.map(({ name, engine, src }) => ({ name, engine, src })) })
+  const results = await page.evaluate(inPage, { endpoint: ENDPOINT, docs: docs.map(({ name, engine, src, extra, keepLog }) => ({ name, engine, src, extra, keepLog })) })
+  for (const r of results.filter(x => SAFETY[x.name])) {
+    const d = SAFETY[r.name], errors = texErrors(r.log).filter(e => !d.lost || /^Missing character/.test(e.message))
+    const placed = unitsAtErrors(errors, d.out, d.lines).map(u => d.paper.units.indexOf(u))
+    check(`BusyTeX's ${d.engine}, ${r.name}: ${d.lost ? 'with \\tracinglostchars=3 the lost letter an error at its line' : 'the failure, halting it, placed'} in unit ${d.bad} alone`, !r.made && errors.length === 1 && JSON.stringify(placed) === JSON.stringify([d.bad]), JSON.stringify({ made: r.made, errors, placed, head: r.log.slice(0, 200) }))
+  }
   const cols = {}
-  for (const r of results) {
+  for (const r of results.filter(x => !SAFETY[x.name])) {
     if (!r.pdf) { cols[r.name] = `no PDF ${r.error}`; continue }
     const task = getDocument({ data: new Uint8Array(Buffer.from(r.pdf, 'base64')), verbosity: 0 })
     try { cols[r.name] = (await marksOf(await task.promise)).columns.join('') } finally { await task.destroy() }

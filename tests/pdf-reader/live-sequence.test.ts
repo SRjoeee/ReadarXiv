@@ -991,3 +991,107 @@ describe('a compile that fails is tried again without what the run added, before
     expect(after.every(q => !(q.aux ?? '').includes('\\citation{cut'))).toBe(true)
   })
 })
+
+// The safety net (plans/2026-10-04-compile-resilience.md, Task 2): a unit the log places a failure in is set in the
+// source and the compile tried again, before the chain moves on — 2610.02069's apacite citation, its key sent as prose,
+// broke every compile of the translation that held it. Within bounds: 3 rounds and max(3, 2 % of the units) per
+// strategy, 8 remedies a run
+describe('a unit the log places the failure in is set in the source, and the compile tried again', () => {
+  const T = '\u8bba\u6587'
+  /** the main file as TeX reads it, UTF-8 (the file's own `main` reads it as Latin-1, for its ASCII) */
+  const text = (q: Req) => new TextDecoder().decode(q.overrides.get(q.main))
+  /** the translator keeps each paragraph's number, so unit 7's translation is the one line that holds "T 7 T" */
+  const numbered = async (texts: string[]) => texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, T), by: 'B' }))
+  /** TeX on unit 7's translation: an error at its line (halt: no PDF), or the error and a letter lost (nonstop) */
+  const breaking = (mode: 'halt' | 'nonstop') => {
+    const calls: { kind: string; has7: boolean }[] = []
+    const compile = async (q: Req): Promise<Compiled> => {
+      const kind = kindOf(q), lines = text(q).split('\n'), n = lines.findIndex(l => l.includes(`${T} 7 ${T}`)) + 1
+      calls.push({ kind, has7: n > 0 })
+      if (kind === 'probe') return { ok: true, pdf: null, log: FONT_LOG, ms: 1 }
+      if (n > 0) {
+        const at = lines[n - 1] as string, k = at.indexOf(`${T} 7`) + 4
+        const block = `! Missing $ inserted.\n<inserted text> \n                $\nl.${n} ${at.slice(Math.max(0, k - 30), k)}\n    ${at.slice(k, k + 30)}\n`
+        if (mode === 'halt') return { ok: false, pdf: null, log: block, ms: 1 }
+        return { ok: true, pdf: new Uint8Array([1]), aux: null, bbl: null, log: `${block}Missing character: There is no ${T[0]} (U+8BBA) in font cmmi10!\n${linesLog(12)}`, ms: 1 }
+      }
+      return { ok: true, pdf: new Uint8Array([calls.length]), aux: null, bbl: null, log: linesLog(12), ms: 1 }
+    }
+    return { calls, compile }
+  }
+  const go = async (compile: (q: Req) => Promise<Compiled>) => {
+    const notes: [string, Record<string, unknown>][] = [], p = paper()
+    const r = await runLive(p, { lang: 'zh', compile, translate: numbered, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(p.units.length), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+    return { r, notes }
+  }
+  for (const mode of ['halt', 'nonstop'] as const) {
+    it(`${mode}: unit 7 alone set in the source, said, and kept so in the record; the strategy kept`, async () => {
+      const c = breaking(mode)
+      const { r, notes } = await go(c.compile)
+      expect(r.settled).toBe(true)
+      expect(notes.filter(([e]) => e === 'in source').map(([, d]) => d)).toEqual([expect.objectContaining({ strategy: 'XeLaTeX + xeCJK', units: [7] })])
+      expect(notes.map(([e]) => e)).not.toContain('next strategy')
+      expect((r.results.get(7) as { inSource?: boolean }).inSource).toBe(true)
+      expect((r.results.get(6) as { inSource?: boolean }).inSource).toBeUndefined()
+      expect(r.inSource).toBe(1)
+      expect(c.calls.filter(q => q.kind === 'final').every(q => !q.has7)).toBe(true)
+    })
+  }
+  it("a failure in every unit is no unit's: per strategy at most the bound set in the source, then the chain moves on", async () => {
+    // every translated line breaks TeX
+    const compile = async (q: Req): Promise<Compiled> => {
+      const kind = kindOf(q), lines = text(q).split('\n'), n = lines.findIndex(l => l.includes(T)) + 1
+      if (kind === 'probe') return { ok: true, pdf: null, log: FONT_LOG, ms: 1 }
+      if (n > 0 && kind !== 'original') return { ok: false, pdf: null, log: `! Undefined control sequence.\nl.${n} ${(lines[n - 1] as string).slice(0, 40)}\n  x\n`, ms: 1 }
+      return { ok: true, pdf: new Uint8Array([1]), aux: null, bbl: null, log: linesLog(12), ms: 1 }
+    }
+    const { r, notes } = await go(compile)
+    expect(r.exhausted).toBe(true)
+    // twelve units: the bound is max(3, ceil(2 % of 12)) = 3 per strategy, and 8 remedy compiles in all
+    for (const name of ['XeLaTeX + xeCJK', 'pdfLaTeX + CJKutf8']) expect(notes.filter(([e, d]) => e === 'in source' && d.strategy === name).flatMap(([, d]) => d.units as number[]).length).toBeLessThanOrEqual(3)
+    expect(notes.filter(([e]) => ['in source', 'without spacing', 'without references', 'typeset failed', 'lost letters'].includes(e)).length).toBeLessThanOrEqual(8)
+    expect(r.inSource).toBe(0)
+  })
+  it('a letter lost and no TeX error to place it: one pass with \\tracinglostchars=3 places it, the letters the original loses skipped', async () => {
+    // unit 7's translation alone holds the letter its font lacks
+    const L = '\u0416'
+    const translate = async (texts: string[]) => (await numbered(texts)).map(t => ({ ...t, text: t.text.replace(`${T} 7 ${T}`, `${T} 7 ${L} ${T}`) }))
+    const calls: string[] = []
+    const compile = async (q: Req): Promise<Compiled> => {
+      const kind = kindOf(q), src = text(q), lines = src.split('\n'), n = lines.findIndex(l => l.includes(`${T} 7 ${L}`)) + 1, tracked = /\\tracinglostchars=3/.test(src)
+      calls.push(`${kind}${tracked ? '+tracked' : ''}`)
+      if (kind === 'probe') return { ok: true, pdf: null, log: FONT_LOG, ms: 1 }
+      if (kind === 'original') return { ok: true, pdf: new Uint8Array([1]), aux: null, bbl: null, log: `Missing character: There is no ^^c3 in font cmr10!\n${linesLog(12)}`, ms: 1 }
+      if (n === 0) return { ok: true, pdf: new Uint8Array([1]), aux: null, bbl: null, log: linesLog(12), ms: 1 }
+      const at = lines[n - 1] as string, k = at.indexOf(L)
+      // as TeX: the original's own lost letter, then unit 7's, each an error only under \tracinglostchars=3
+      if (tracked) return { ok: false, pdf: null, log: `! Missing character: There is no ^^c3 in font cmr10!\nl.1 \\documentclass\n  x\n! Missing character: There is no ${L} (U+0416) in font cmr10!\nl.${n} ${at.slice(Math.max(0, k - 30), k)}\n    ${at.slice(k, k + 30)}\n`, ms: 1 }
+      return { ok: true, pdf: new Uint8Array([1]), aux: null, bbl: null, log: `Missing character: There is no ${L} (U+0416) in font cmr10!\n${linesLog(12)}`, ms: 1 }
+    }
+    const notes: [string, Record<string, unknown>][] = [], p = paper()
+    const r = await runLive(p, { lang: 'zh', compile, translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(p.units.length), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+    expect(r.settled).toBe(true)
+    expect(notes.find(([e]) => e === 'in source')?.[1]).toMatchObject({ units: [7] })
+    expect(calls.filter(c => c.endsWith('+tracked')).length).toBeGreaterThan(0)
+    expect(notes.map(([e]) => e)).not.toContain('next strategy')
+  })
+  it('a footnote is set in the source with its paragraph', async () => {
+    const src = `\\documentclass{article}\\begin{document}\n${Array.from({ length: 4 }, (_, k) => `Paragraph ${k} of the paper, with words${k === 2 ? '\\footnote{A note of the paper, with words.}' : ''} that run on for a line.\n`).join('\n')}\\end{document}\n`
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode(src)]])), n = p.units.length
+    const para = p.units.findIndex(u => u.pieces.some(x => (x as { t: string }).t === 'nested'))
+    // TeX on the paragraph's line: the footnote's translation breaks it
+    const compile = async (q: Req): Promise<Compiled> => {
+      const kind = kindOf(q), lines = text(q).split('\n'), at = lines.findIndex(l => l.includes('\\footnote{') && l.includes(T)) + 1
+      if (kind === 'probe') return { ok: true, pdf: null, log: FONT_LOG, ms: 1 }
+      if (at > 0 && kind !== 'original') { const l = lines[at - 1] as string, k = l.indexOf('\\footnote{') + 10; return { ok: false, pdf: null, log: `! Undefined control sequence.\nl.${at} ${l.slice(Math.max(0, k - 30), k)}\n  ${l.slice(k, k + 30)}\n`, ms: 1 } }
+      return { ok: true, pdf: new Uint8Array([1]), aux: null, bbl: null, log: linesLog(n), ms: 1 }
+    }
+    const notes: [string, Record<string, unknown>][] = []
+    const r = await runLive(p, { lang: 'zh', compile, translate: numbered, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+    expect(r.settled).toBe(true)
+    expect(notes.find(([e]) => e === 'in source')?.[1]).toMatchObject({ units: [para] })
+    const nested = p.units.findIndex(u => (u as { nested?: boolean }).nested)
+    expect([(r.results.get(para) as { inSource?: boolean }).inSource, (r.results.get(nested) as { inSource?: boolean }).inSource]).toEqual([true, true])
+    expect(r.inSource).toBe(2)
+  })
+})
