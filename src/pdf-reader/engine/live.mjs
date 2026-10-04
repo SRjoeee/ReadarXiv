@@ -751,6 +751,10 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     // counted as lost, once (`missing`; the review's M-7) —, the author block's left out, as a copy's count leaves it
     // (cache.mjs passagesInSource), so that a visit again says what the visit that made the copy said
     let shownInSource = 0
+    // whether the last compile this run showed lacked any of the translation — a unit not yet in, or set in the source —,
+    // null where it showed none: a run whose finals all fail says it shows the translation in part only then (cache.mjs
+    // endOf; the review of 2026-10-04, M-2: a whole preview on screen is no part)
+    let shownPartial = null
     const passagesShown = snapshot => [...inSource].filter(u => snapshot.has(u) && u.kind !== 'author').length
     const planFor = snapshot => {
       if (!readings || ruleFailed.has(strategy().name)) return null
@@ -815,6 +819,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
           previews++
           measuring = plan && whole(snapshot) ? { plan, strategy: strategy().name, r } : null
           shownInSource = passagesShown(snapshot)
+          shownPartial = !whole(setting(snapshot))
           onUpdate?.({ pdf: r.pdf, texts: texts(setting(snapshot)), translated: snapshot.size, final: false })
         } else if (timedOut(r)) {
           // the machine slow: nothing changed, the next batch or the final goes on
@@ -946,6 +951,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     }
     if (ok) {
       shownInSource = passagesShown(all)
+      shownPartial = !whole(setting(all))
       onUpdate?.({ pdf: r.pdf, texts: texts(setting(all)), translated: all.size, final: true })
       // the units the final set in the source though translated, for the record: their translation stays the next run's.
       // Said anew for every unit it set, a seed's mark included: it set them all again — those the safety net set in the
@@ -960,7 +966,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     }
     // marks known come only from a compile of the paper's own source that set (onOriginal)
     const own = marks && !originalP ? null : await original()
-    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing(), inSource: shownInSource, original: readings, passing }
+    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing(), inSource: shownInSource, shownPartial, original: readings, passing }
   }
   try { return await compiles() } catch (e) {
     if (!e?.compilerDown) throw e

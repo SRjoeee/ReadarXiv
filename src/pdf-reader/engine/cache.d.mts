@@ -20,7 +20,7 @@ export declare function pipelineCurrentFor(options: { copy: boolean; finalShown:
 /** the passages a copy's units (or a run's, with their kinds) hold in the original though translated: those marked set in the source but the author block's */
 export declare function passagesInSource(units: ({ kind?: string; inSource?: boolean } | null | undefined)[]): number
 /** how a run whose final none of the ways could set ends for the reader: S-R-17, S-R-19, or nothing more */
-export declare function endOf(result: { exhausted?: boolean; stopped?: string | null }, visit: { compiledOnce: boolean; finalShown: boolean; cached: boolean }): 'cannot typeset' | 'shown in part' | null
+export declare function endOf(result: { exhausted?: boolean; stopped?: string | null; shownPartial?: boolean | null }, visit: { compiledOnce: boolean; finalShown: boolean; cached: boolean }): 'cannot typeset' | 'shown in part' | null
 /** the seeds a run takes as they are (`current`): whole, by `identity`, of the wire sent now — the visit's last run's, or the copy's when `copyWire` */
 export declare function reusable<S extends { pieces?: unknown[]; state?: string; by?: string }>(seed: Map<number, S> | null | undefined, options: { identity: string; copyWire: boolean; made?: Map<number, { pieces?: unknown[] }> | null }): Map<number, S & { current: boolean }>
 /** SHA-256 hex of a unit's source pieces */

@@ -1417,4 +1417,16 @@ describe('the remedies in their order, wherever a compile fails', () => {
     const body = await run('(./main.tex\nLaTeX2e <2025-06-01>\n(./main.aux)\n! Illegal parameter number in definition of \\B@my@dummy.\nl.40 \\cite\n  {a}\n')
     expect(body).toContain('without references')
   })
+
+  it('a run whose finals all fail says whether the last preview it showed lacked any of the translation (M-2)', async () => {
+    const t = translator(), n = paper().units.length
+    // every final fails; the first preview has the first batch, the one after the original the whole translation
+    const c = compiler(n, { on: k => { if (k === 'original') t.release() }, fail: k => k === 'final' })
+    const whole = await run({ compiler: c, translate: t.translate })
+    expect([whole.r.exhausted, whole.r.previews, (whole.r as { shownPartial?: boolean | null }).shownPartial]).toEqual([true, 2, false])
+    // a preview of the whole translation fails as the finals do, in no unit: the one shown is the first batch's
+    const t2 = translator(), c2 = compiler(n, { on: k => { if (k === 'original') t2.release() }, fail: (k, q) => k === 'final' || (k === 'preview' && text(q).includes(`${T} 11 ${T}`)) })
+    const part = await run({ compiler: c2, translate: t2.translate })
+    expect([part.r.exhausted, part.r.previews, (part.r as { shownPartial?: boolean | null }).shownPartial]).toEqual([true, 1, true])
+  })
 })

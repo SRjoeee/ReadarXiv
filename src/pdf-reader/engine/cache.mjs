@@ -189,9 +189,11 @@ export const pipelineCurrentFor = ({ copy, finalShown, unset }) => !unset && (co
  * stop): with nothing of this visit ever on screen, the paper cannot be had (`cannot typeset`, S-R-17); with a preview
  * of this visit on screen and no final (`compiledOnce`, `finalShown`), the translation is shown in part (`shown in part`,
  * S-R-19: the preview stays, the progress line no longer says the translation is whole —
- * plans/2026-10-04-compile-resilience.md, Task 5); with a final or this machine's copy on screen, nothing more is said
+ * plans/2026-10-04-compile-resilience.md, Task 5) — unless the run's last preview held all of it (runLive's
+ * `shownPartial` false: S-R-19's "the rest is the original" would be false; the review of 2026-10-04, M-2); with a
+ * final or this machine's copy on screen, nothing more is said
  */
-export const endOf = (r, { compiledOnce, finalShown, cached }) => (!r.exhausted || r.stopped ? null : !compiledOnce && !cached ? 'cannot typeset' : compiledOnce && !finalShown ? 'shown in part' : null)
+export const endOf = (r, { compiledOnce, finalShown, cached }) => (!r.exhausted || r.stopped ? null : !compiledOnce && !cached ? 'cannot typeset' : compiledOnce && !finalShown && r.shownPartial !== false ? 'shown in part' : null)
 
 /**
  * The versions a write labels its record with (`how`, decideWrite's), or null where it writes nothing (the F2 review's

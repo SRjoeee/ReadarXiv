@@ -229,6 +229,13 @@ describe('endOf: what a run that could not set its final says', () => {
     expect(endOf({ exhausted: true, stopped: 'network' }, { compiledOnce: true, finalShown: false, cached: false })).toBeNull()
     expect(endOf({ exhausted: false, stopped: null }, { compiledOnce: true, finalShown: false, cached: false })).toBeNull()
   })
+  it('a preview on screen that set the whole translation is no translation shown in part: nothing is said of it (M-2 of 2026-10-04)', () => {
+    const visit = { compiledOnce: true, finalShown: false, cached: false }
+    expect(endOf({ exhausted: true, stopped: null, shownPartial: false }, visit)).toBeNull()
+    expect(endOf({ exhausted: true, stopped: null, shownPartial: true }, visit)).toBe('shown in part')
+    // a preview an earlier run of the visit showed: not known whole
+    expect(endOf({ exhausted: true, stopped: null, shownPartial: null }, visit)).toBe('shown in part')
+  })
 })
 
 // The passages a copy holds that its typesetting left in the original (the review of 2026-10-04, I-6): the reader's
