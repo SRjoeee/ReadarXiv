@@ -993,3 +993,20 @@ The minors:
 | M-9 | Fixed: the spikes' comments write their dashes as dashes. |
 | M-10 | Fixed: DESIGN §16 says that an error whose context holds no ASCII places nothing. |
 
+### Review response, the last round (2026-10-04)
+
+The re-review of `f2170c0a` (N-1 to N-5) and Codex's second round (four mediums), as built:
+
+- **N-1:** the measure tries leaving the rule out with its own draft without the plan, not with the final. The same
+  failure takes the rule back and the ladder goes on in the measure's drafts; the draft setting means the rule was the
+  cause, and the final is set as today. A unit's fault on a re-set costs drafts and keeps the final measured, as on
+  `b6d5f8cf`; a rule-only fault costs one draft more than at `dec4573e`.
+- **N-2, Codex medium 2:** a nested unit holds an error with both halves of the context in its own text, or where it
+  closes on the error's line and the text before the place ends there.
+- **Codex medium 1:** the bound counts the passages still to be translated with those translated.
+- **Codex medium 3:** a changed failure after units go to the source re-opens the remedies taken back.
+- **Codex medium 4:** the units holding a lost letter are found by their own text, footnotes apart from their paragraph.
+- **N-3:** "No file <job>.aux." is TeX past the aux: the references remedy stays for a compile given no aux.
+- **N-5:** the count is taken from the record when the copy is shown, every later path included.
+- The author block left out of the count is noted in DESIGN §16, with the field that would let it be counted.
+
