@@ -1053,8 +1053,8 @@ describe('a unit the log places the failure in is set in the source, and the com
     expect(notes.filter(([e]) => ['in source', 'without spacing', 'without references', 'typeset failed', 'lost letters'].includes(e)).length).toBeLessThanOrEqual(8)
     expect(r.inSource).toBe(0)
   })
-  it('a letter lost and no TeX error to place it: one pass with \\tracinglostchars=3 places it, the letters the original loses skipped', async () => {
-    // unit 7's translation alone holds the letter its font lacks
+  it('a letter lost and no TeX error to place it, under every strategy: the chain spent, back to the first, where one pass with \\tracinglostchars=3 places it, the letters the original loses skipped', async () => {
+    // unit 7's translation alone holds the letter both strategies' fonts lack
     const L = '\u0416'
     const translate = async (texts: string[]) => (await numbered(texts)).map(t => ({ ...t, text: t.text.replace(`${T} 7 ${T}`, `${T} 7 ${L} ${T}`) }))
     const calls: string[] = []
@@ -1072,9 +1072,13 @@ describe('a unit the log places the failure in is set in the source, and the com
     const notes: [string, Record<string, unknown>][] = [], p = paper()
     const r = await runLive(p, { lang: 'zh', compile, translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(p.units.length), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
     expect(r.settled).toBe(true)
+    // the next strategy first, as for any letter a font lacks; none left that sets it, the first strategy again, unit 7
+    // in the source there
+    expect(notes.filter(([e]) => ['next strategy', 'back to strategy', 'in source'].includes(e)).map(([e, d]) => [e, d.strategy])).toEqual([['next strategy', 'pdfLaTeX + CJKutf8'], ['back to strategy', 'XeLaTeX + xeCJK'], ['in source', 'XeLaTeX + xeCJK']])
     expect(notes.find(([e]) => e === 'in source')?.[1]).toMatchObject({ units: [7] })
-    expect(calls.filter(c => c.endsWith('+tracked')).length).toBeGreaterThan(0)
-    expect(notes.map(([e]) => e)).not.toContain('next strategy')
+    expect(calls.filter(c => c.endsWith('+tracked')).length).toBe(1)
+    expect(notes.filter(([e]) => e === 'final').at(-1)?.[1]).toMatchObject({ ok: true, strategy: 'XeLaTeX + xeCJK' })
+    expect((r.results.get(7) as { inSource?: boolean }).inSource).toBe(true)
   })
   it('a footnote is set in the source with its paragraph', async () => {
     const src = `\\documentclass{article}\\begin{document}\n${Array.from({ length: 4 }, (_, k) => `Paragraph ${k} of the paper, with words${k === 2 ? '\\footnote{A note of the paper, with words.}' : ''} that run on for a line.\n`).join('\n')}\\end{document}\n`
@@ -1186,5 +1190,48 @@ describe('the remedies in their order, wherever a compile fails', () => {
     expect(finals).toEqual(['final+rule+refs', 'final+refs', 'final'])
     expect(remedies(notes)).toEqual(['typeset failed', 'kept by rule', 'without references', 'recovered by references'])
     expect([r.settled, r.exhausted]).toEqual([true, false])
+  })
+
+  /** a compiler whose fonts under xeCJK (`lacks`) or CJKutf8 lack a letter unit 7's translation alone holds: a PDF with
+   *  the letter left out, and under \\tracinglostchars=3 an error at its place */
+  const L = '\u0416'
+  const withLetter = async (texts: string[]) => (await numbered(texts)).map(t => ({ ...t, text: t.text.replace(`${T} 7 ${T}`, `${T} 7 ${L} ${T}`) }))
+  const lacking = (n: number, lacks: (xe: boolean) => boolean, also: (q: Req) => Compiled | null = () => null) => {
+    const calls: string[] = []
+    const compile = async (q: Req): Promise<Compiled> => {
+      const kind = kindOf(q), src = text(q), xe = /xeCJK/.test(src), tracked = /\\tracinglostchars=3/.test(src)
+      calls.push(`${kind}${kind === 'preview' || kind === 'final' ? (xe ? '/xeCJK' : '/CJKutf8') : ''}${tracked ? '+tracked' : ''}`)
+      if (kind === 'probe' || kind === 'original') return ok(n, q)
+      const other = also(q)
+      if (other) return other
+      const lines = src.split('\n'), at = lines.findIndex(l => l.includes(`7 ${L}`)) + 1
+      if (!at || !lacks(xe)) return ok(n, q)
+      const l = lines[at - 1] as string, k = l.indexOf(L)
+      if (tracked) return { ok: false, pdf: null, log: `! Missing character: There is no ${L} (U+0416) in font lmroman10-regular!\nl.${at} ${l.slice(Math.max(0, k - 30), k)}\n    ${l.slice(k, k + 30)}\n`, ms: 1 }
+      return { ok: true, pdf: new Uint8Array([1]), aux: null, bbl: null, log: `Missing character: There is no ${L} (U+0416) in font lmroman10-regular!\n${linesLog(n)}`, ms: 1 }
+    }
+    return { calls, compile }
+  }
+  const finalOf = (notes: [string, Record<string, unknown>][]) => notes.filter(([e]) => e === 'final').at(-1)?.[1]
+
+  it('a letter the first strategy lacks, in one unit, which the next sets: the next strategy, every unit translated, as before the safety net', async () => {
+    const p = paper(), n = p.units.length, notes: [string, Record<string, unknown>][] = []
+    const c = lacking(n, xe => xe)
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: withLetter, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+    expect(remedies(notes)).toEqual(['next strategy'])
+    expect(c.calls.some(k => k.endsWith('+tracked'))).toBe(false)
+    expect(finalOf(notes)).toMatchObject({ ok: true, strategy: 'pdfLaTeX + CJKutf8' })
+    expect([r.settled, r.inSource]).toEqual([true, 0])
+    expect((r.results.get(7) as { inSource?: boolean }).inSource).toBeUndefined()
+  })
+
+  it('a letter only the last strategy lacks, the first having failed otherwise: its unit set in the source under the last', async () => {
+    const p = paper(), n = p.units.length, notes: [string, Record<string, unknown>][] = []
+    // xeCJK refuses the paper in its preamble, no unit's fault; CJKutf8 lacks the letter
+    const c = lacking(n, xe => !xe, q => (/xeCJK/.test(text(q)) ? { ok: false, pdf: null, log: '! LaTeX Error: Command \\foo already defined.\nl.3 \\newcommand{\\foo}\n  {x}\n', ms: 1 } : null))
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: withLetter, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+    expect(notes.filter(([e]) => ['next strategy', 'back to strategy', 'in source'].includes(e)).map(([e, d]) => [e, d.strategy])).toEqual([['next strategy', 'pdfLaTeX + CJKutf8'], ['in source', 'pdfLaTeX + CJKutf8']])
+    expect(finalOf(notes)).toMatchObject({ ok: true, strategy: 'pdfLaTeX + CJKutf8' })
+    expect([r.settled, r.inSource]).toEqual([true, 1])
   })
 })
