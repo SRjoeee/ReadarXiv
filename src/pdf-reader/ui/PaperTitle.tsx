@@ -2,9 +2,11 @@
 // arXiv id in ink-2 tabular figures, a link to the abstract page in a new tab, an arrow sliding in on hover or focus.
 // The title leaves when the lead is too narrow for it (reader.css, a container query), and the id when the lead cannot
 // hold it beside the contents' button: its own width, measured as it is drawn, against the lead's, which the grid gives
-// and a long language's menus or a long service name narrow (the interface review: the id was drawn under the switch)
+// and a long language's menus or a long service name narrow (the interface review: the id was drawn under the switch).
+// The first answer is given before the first paint, in a layout effect: measured in an effect, which runs after the
+// paint, a lead too narrow for the id drew it for two frames before it went (the pin's wave-1 review)
 import { ArrowUpRight } from 'lucide'
-import { useEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { R } from '@/ui/strings'
 import { Icon } from '@/ui/controls/Icon'
 import { useTip } from '@/ui/controls/tip'
@@ -15,11 +17,14 @@ export function PaperTitle({ id, title }: { id: string; title: string }) {
   const box = useRef<HTMLDivElement>(null)
   const [cramped, setCramped] = useState(false)
   // biome-ignore lint/correctness/useExhaustiveDependencies: measured again for another id, whose text is its width (one paper a visit)
-  useEffect(() => {
+  useLayoutEffect(() => {
     const own = box.current, lead = own?.parentElement, arxiv = own?.querySelector('[data-arxiv]')
     if (!own || !lead || !arxiv) return
     // what the lead needs beside the paper: its contents' button and the gaps, all but this box
     const need = arxiv.getBoundingClientRect().width + (own.getBoundingClientRect().left - lead.getBoundingClientRect().left) + Number.parseFloat(getComputedStyle(own).paddingInlineStart)
+    // the state for the frame about to be painted: a state set in a layout effect is rendered before the paint, where the
+    // observer's first answer comes in a task after it (the lead has no padding, so its box is its content's)
+    setCramped(lead.getBoundingClientRect().width < need)
     const observer = new ResizeObserver(([entry]) => { if (entry) setCramped(entry.contentRect.width < need) })
     observer.observe(lead)
     return () => observer.disconnect()
