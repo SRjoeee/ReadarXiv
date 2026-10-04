@@ -1395,4 +1395,26 @@ describe('the remedies in their order, wherever a compile fails', () => {
     expect(calls.filter(k => k !== 'probe')).toEqual([])
     expect([r.changed, r.inSource]).toEqual([false, 1])
   })
+
+  it("an error TeX raised before it read the references it was given is not theirs: they are not left out for it (M-4)", async () => {
+    const run = async (log: string) => {
+      const t = translator(), n = paper().units.length, notes: [string, Record<string, unknown>][] = []
+      const given = (q: Req) => /\\bibcite/.test(new TextDecoder().decode(q.overrides.get('main.aux') ?? new Uint8Array()))
+      // the previews after the original, given its references, fail where `log` says
+      const compile = async (q: Req): Promise<Compiled> => {
+        if (kindOf(q) === 'original') t.release()
+        return kindOf(q) === 'preview' && given(q) ? { ok: false, pdf: null, log, ms: 1 } : ok(n, q)
+      }
+      const p = paper()
+      await runLive(p, { lang: 'zh', compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+      return notes.map(([e]) => e)
+    }
+    // a package's option clash in the preamble: the aux is read at \begin{document}, after it
+    const preamble = await run('(./main.tex\nLaTeX2e <2025-06-01>\n(/usr/share/texlive/xcolor.sty)\n! LaTeX Error: Option clash for package xcolor.\nl.12 \\usepackage\n  {xcolor}\n')
+    expect(preamble).not.toContain('without references')
+    expect(preamble).toContain('next strategy')
+    // the same past \begin{document}, the aux read: the references are left out once
+    const body = await run('(./main.tex\nLaTeX2e <2025-06-01>\n(./main.aux)\n! Illegal parameter number in definition of \\B@my@dummy.\nl.40 \\cite\n  {a}\n')
+    expect(body).toContain('without references')
+  })
 })

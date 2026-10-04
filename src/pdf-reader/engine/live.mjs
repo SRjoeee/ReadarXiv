@@ -543,6 +543,13 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     const given = () => (off('references') ? { aux: null, bbl: null } : { aux: refs(aux), bbl: bblAt() })
     /** whether a compile under the strategy now has the addition, to leave out */
     const adds = { spacing: () => !strategy().xe && !off('spacing'), references: () => !off('references') && (!!refs(aux) || (!!bblAt() && !meta.bbl)) }
+    /** whether a compile's first TeX error came before TeX read the aux it was given — at \begin{document}, the
+     *  bibliography after it —, the log showing TeX at the main file, and not yet at the aux, where it stopped: an error
+     *  the references cannot be the cause of, whose compile is not tried again without them (the review of 2026-10-04,
+     *  M-4: a class's conflict in the preamble paid that compile). A log that shows neither says nothing */
+    const opened = name => new RegExp(`\\((?:[^()\\s]*/)?${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`)
+    const mainOpened = opened(project.main.split('/').at(-1)), auxOpened = opened(`${jobName(project.main)}.aux`)
+    const beforeReferences = r => { const log = unwrapped(lastTexLog(r.log)), at = log.search(/^! /m), head = log.slice(0, Math.max(0, at)); return at >= 0 && mainOpened.test(head) && !auxOpened.test(head) }
     // the units a compile under this strategy could not set translated (the safety net, Task 2): set in the source until
     // the chain moves on — another strategy may set them —, and so in the record (`inSource`). Each with every unit
     // nested in it, which its source holds as written (a footnote, an author's note)
@@ -699,7 +706,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       episode.failure = now
       if (!r.ok && ruled && !episode.tried.has('rule')) { withoutRule(r); return take('rule') }
       if (spent >= SPENT_MAX) return null
-      if (!r.ok) for (const how of ['spacing', 'references']) if (!episode.tried.has(how) && adds[how]()) { without[how].add(name); note(`without ${how}`, { strategy: name, error: whyFailed(r) }); return take(how) }
+      if (!r.ok) for (const how of ['spacing', 'references']) if (!episode.tried.has(how) && adds[how]() && !(how === 'references' && beforeReferences(r))) { without[how].add(name); note(`without ${how}`, { strategy: name, error: whyFailed(r) }); return take(how) }
       if (rounds >= ROUNDS) return null
       const at = { ...last, r, req, s }
       // a TeX error in a unit: its text breaks TeX under any strategy
