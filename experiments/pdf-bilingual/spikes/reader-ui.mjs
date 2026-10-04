@@ -311,6 +311,16 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   const leftShown = () => page.evaluate(() => getComputedStyle(document.querySelector('.pane[data-side="left"]')).display !== 'none')
   check('a narrow window: 对照 kept, the translation alone', s.display === 'bilingual' && s.narrow && !(await leftShown()), JSON.stringify({ display: s.display, narrow: s.narrow }))
   check('…and the capsule says so', (await page.getByRole('status').textContent()).includes('窗口较窄'))
+  // the one capsule of the extension and the website (Capsule.tsx): its words drawn in a cell hidden from assistive
+  // technology, told whole in a line of its own, which names the group the keyboard stops at
+  const shared = await page.evaluate(() => {
+    const c = document.querySelector('.capsule[data-kind="narrow"]:not([data-out])'), cell = c?.querySelector('.words')
+    if (!c || !cell) return null
+    const lines = [...cell.querySelectorAll('.line')], told = document.getElementById(c.getAttribute('aria-labelledby') ?? '')
+    return { height: c.getBoundingClientRect().height, hidden: cell.getAttribute('aria-hidden'), lines: lines.length, lineHeight: lines[0]?.getBoundingClientRect().height, drawn: cell.textContent, told: told?.textContent ?? null, toldApart: !!told && c.contains(told) && !cell.contains(told) }
+  })
+  const named = shared?.told ? await page.getByRole('group', { name: shared.told, exact: true }).count() : 0
+  check('the shared capsule: one line, hidden words, named, 34 px', !!shared && shared.height === 34 && shared.hidden === 'true' && shared.lines === 1 && shared.lineHeight === 17 && shared.drawn === shared.told && shared.toldApart && named === 1, JSON.stringify({ shared, named }))
   await shot(page, '23-narrow')
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.waitForTimeout(600)

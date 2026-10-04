@@ -37,11 +37,12 @@ function pdfjsFiles(): { absoluteSrc: string; relativeDest: string }[] {
 }
 
 /**
- * The pages for development alone — the popup's states (gallery) and the shared controls (controls): a release must not
- * ship a debug page anyone can open, so a production build leaves them out; `wxt` and `wxt build --mode development`
- * (tests/e2e/probes/controls.mjs) keep them. scripts/check-output.mjs checks the release
+ * The pages for development alone — the popup's states (gallery), the shared controls (controls) and the capsule's motion
+ * (capsule): a release must not ship a debug page anyone can open, so a production build leaves them out; `wxt` and
+ * `wxt build --mode development` (tests/e2e/probes/controls.mjs, capsule.mjs) keep them. scripts/check-output.mjs checks
+ * the release
  */
-const DEV_PAGES = ['gallery', 'controls']
+const DEV_PAGES = ['gallery', 'controls', 'capsule']
 
 // The WXT project configuration.
 export default defineConfig({

@@ -298,8 +298,32 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
 方」). It is `role="status"`, present and empty from the first paint, so that what it says later is announced.
 
 - A 34 px capsule on the floating surface. It enters by rising 10 px and fading in with a slight scale (240 ms) and
-  leaves lighter (160 ms); a new state of the same kind changes its words in place — the words fade in, the capsule's
-  width eases to theirs (200 ms) — instead of leaving and coming again.
+  leaves lighter (160 ms); a new state of the same kind changes its words in place instead of leaving and coming again,
+  its words moving with its box as one motion (the web's round 4, approved 2026-10-04; `Capsule.tsx`,
+  `capsule-motion.ts`, the one capsule of the extension and the website):
+  - **Growing, the box leads**: its width moves at once, 300 ms on `--ease-soft` (`cubic-bezier(0.65, 0, 0.35, 1)`); the
+    old words stay, and old and new cross-fade once, at the later of 60 % of the way (161 ms) and the new words fitting
+    — clear of what follows them, which is pinned to the box's end and travels with it.
+  - **Shrinking, the words lead**: they cross-fade at once while the box closes, 250 ms on `--ease-in-out`
+    (`cubic-bezier(0.77, 0, 0.175, 1)`), whose slow start keeps it behind them.
+  - **The cross-fade**, both ways, on `--ease-out` (`cubic-bezier(0.23, 1, 0.32, 1)`): the old words 150 ms, 1 → 0, 4 px
+    up, blurred to 2 px; the new 200 ms from 4 px below, 2 px → 0, starting with the old; the blur masks the overlap.
+    While the box resizes, its moving end fades into the capsule's ground over 16 px, never a cut.
+  - **A count** (`withCount`) changes in place: tabular figures, each digit over a hidden 0 that holds its width; a
+    changed digit cross-fades, 150 ms on `--ease-out`, shown at most once per 300 ms, a burst landing on its latest. A
+    digit gained opens a cell from nothing with the box, 300 ms on the soft curve, the whole number cross-fading at
+    161 ms — never a lone 0. It is the one width change between two changes of words.
+  - **A chip that comes** opens the box as growing words do and fades in once it fits.
+  - **A change mid-way** retargets from where things stand: the width from its current value, a fade from its current
+    opacity; words not yet shown are dropped unseen.
+  - **One line, 34 px, in every frame**, and no ink past the border; a sentence too long for one line at the window's
+    width wraps and balances (`data-wrap`), and then only its words cross-fade. Nothing is fitted to one language's
+    widths. Measured frame by frame in Chromium, Firefox and WebKit (`tests/e2e/probes/capsule.mjs`).
+  - **Reduced motion**: opacity with the 2 px blur, at once; nothing slides; the width snaps, growing at once and
+    shrinking once the old words have gone (150 ms); the spinner stands (the maintainer, 2026-10-04).
+  - **What a screen reader is told**: the words' cell is `aria-hidden`; the sentence is told whole (or `spoken`, other
+    words, where it holds a count said once a stage) in a line of its own, once per change of that text. A language's
+    own name (S-R-13) is a part drawn in its own `lang` (`withPart`; Devin on #313).
 - **Progress** is a line along the toolbar's foot, not the capsule's: 2 px of quiet ink (`--ink-3` at 80 %, 2.67:1 on the chrome — the maintainer kept it over a graphic's 3:1 after trying both, 2026-10-02), its length
   the share done of one process: the PDF's download its first stretch (all of it when the original alone is shown), the
   paragraphs translated after it, the final's compile its last stretch (the maintainer asked why it ran twice,

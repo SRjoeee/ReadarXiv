@@ -43,7 +43,7 @@ for (const [what, ok] of [
   // packages ship unlisted
   [`${NOTICES} lists what the recogniser's worker bundles`, /^onnxruntime-web \d[^\n]* — MIT$/m.test(notices) && /^esearch-ocr \d[^\n]* — Apache-2\.0$/m.test(notices)],
   // the dev pages (wxt.config.ts DEV_PAGES) are for development builds: a release holding one would ship a debug page
-  [`${OUT} holds no dev page`, !existsSync(join(OUT, 'gallery.html')) && !existsSync(join(OUT, 'controls.html'))],
+  [`${OUT} holds no dev page`, ['gallery.html', 'controls.html', 'capsule.html'].every(page => !existsSync(join(OUT, page)))],
 ]) {
   if (ok) console.log(`✓ ${what}`)
   else {

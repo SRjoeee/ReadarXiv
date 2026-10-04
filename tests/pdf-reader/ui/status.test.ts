@@ -1,7 +1,8 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { LANG_CODE_TO_LOCALE_NAME } from '@/config/languages'
+import { LANG_CODE_TO_LOCALE_NAME, toBcp47 } from '@/config/languages'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { INITIAL, type ReaderState } from '@/pdf-reader/controller'
+import { plain, textOf, withCount } from '@/pdf-reader/ui/capsule-words'
 import { capsuleOf, cardOf, lineOf, spokenOf } from '@/pdf-reader/ui/status'
 import { R, S, setLocale } from '@/ui/strings'
 
@@ -53,30 +54,44 @@ describe('the states (the reader\'s design, §8)', () => {
   })
 
   it('counts the paragraphs that failed, with 重试, until closed — the retry where the run stopped for the service', () => {
-    expect(capsuleOf(at({ phase: 'ready', failedUnits: 3, failure: 'network' }), none)).toEqual({ kind: 'notice', text: '3 处翻译失败', action: 'retry' })
+    expect(capsuleOf(at({ phase: 'ready', failedUnits: 3, failure: 'network' }), none)).toEqual({ kind: 'notice', words: withCount('3 处翻译失败', 3), action: 'retry' })
+    // the count a part of its own, so that it changes in place
+    expect(capsuleOf(at({ phase: 'ready', failedUnits: 3, failure: 'network' }), none)).toMatchObject({ words: { prefix: '', count: 3, suffix: ' 处翻译失败' } })
     expect(capsuleOf(at({ phase: 'ready', failedUnits: 3, failure: 'network' }), { ...none, closed: true })).toBeNull()
   })
 
   it('passages the typesetting left in the original, and no stop to resume: counted, with no retry — the same translation fails the same way (the review of 2026-10-04, I-5)', () => {
-    expect(capsuleOf(at({ phase: 'ready', failedUnits: 2, failure: null }), none)).toEqual({ kind: 'notice', text: S.failed.text(2), action: null })
+    expect(capsuleOf(at({ phase: 'ready', failedUnits: 2, failure: null }), none)).toEqual({ kind: 'notice', words: withCount(S.failed.text(2), 2), action: null })
     expect(capsuleOf(at({ phase: 'ready', failedUnits: 2, failure: null }), { ...none, closed: true })).toBeNull()
   })
 
   it('names a language the reader cannot typeset, and offers the menu', () => {
     const state = at({ phase: 'ready', languageSupported: false, settings: { ...DEFAULT_CONFIG, targetLanguage: 'arb' } })
     expect(capsuleOf(state, none)).toMatchObject({ kind: 'unsupported', action: 'language' })
-    expect(capsuleOf(state, none)!.text).toMatch(/^PDF 对照暂不支持/)
+    expect(textOf(capsuleOf(state, none)!.words)).toMatch(/^PDF 对照暂不支持/)
+  })
+
+  it('every kind\'s words say what its text said, and S-R-13\'s own name is a part with the target\'s BCP 47 tag as its lang (Devin on #313)', () => {
+    const said = (over: Partial<ReaderState>, seen = none) => textOf(capsuleOf(at({ phase: 'ready', ...over }), seen)!.words)
+    expect(said({ available: false, htmlVersion: null })).toBe(R.status.noPdf)
+    expect(said({ partial: true })).toBe(R.status.partial)
+    expect(said({ failedUnits: 12, failure: 'network' })).toBe(S.failed.text(12))
+    expect(said({ narrow: true })).toBe(R.status.narrow)
+    const unsupported = capsuleOf(at({ phase: 'ready', languageSupported: false, settings: { ...DEFAULT_CONFIG, targetLanguage: 'jpn' } }), none)!
+    expect([textOf(unsupported.words), unsupported.words.part]).toEqual([R.status.unsupported(LANG_CODE_TO_LOCALE_NAME.jpn), { text: LANG_CODE_TO_LOCALE_NAME.jpn, lang: toBcp47('jpn') }])
+    expect(toBcp47('jpn')).toBe('ja')
   })
 
   it('names that language by its own name, as the language button does, in either interface language (the maintainer, 2026-10-04)', () => {
     try {
       for (const locale of ['zh-CN', 'en'] as const) {
         setLocale(locale)
-        for (const target of ['arb', 'tur'] as const) {
-          const text = capsuleOf(at({ phase: 'ready', languageSupported: false, settings: { ...DEFAULT_CONFIG, targetLanguage: target } }), none)!.text
-          expect([locale, text]).toEqual([locale, R.status.unsupported(LANG_CODE_TO_LOCALE_NAME[target])])
-          // the name inside is the one the language button shows, not the interface's name for the language
-          expect(text).toContain(LANG_CODE_TO_LOCALE_NAME[target])
+        for (const target of ['arb', 'tur', 'jpn'] as const) {
+          const said = capsuleOf(at({ phase: 'ready', languageSupported: false, settings: { ...DEFAULT_CONFIG, targetLanguage: target } }), none)!.words
+          expect([locale, textOf(said)]).toEqual([locale, R.status.unsupported(LANG_CODE_TO_LOCALE_NAME[target])])
+          // the name inside is the one the language button shows, not the interface's name for the language, and it is
+          // drawn in its own language: a part whose lang is the target's BCP 47 tag (Devin on #313)
+          expect([locale, said.part]).toEqual([locale, { text: LANG_CODE_TO_LOCALE_NAME[target], lang: toBcp47(target) }])
         }
       }
       setLocale('en')
@@ -85,21 +100,21 @@ describe('the states (the reader\'s design, §8)', () => {
   })
 
   it('says once that a narrow window shows the translation alone', () => {
-    expect(capsuleOf(at({ phase: 'ready', narrow: true }), none)).toEqual({ kind: 'narrow', text: '窗口较窄，暂只显示译文' })
+    expect(capsuleOf(at({ phase: 'ready', narrow: true }), none)).toEqual({ kind: 'narrow', words: plain('窗口较窄，暂只显示译文') })
     expect(capsuleOf(at({ phase: 'ready', narrow: true }), { ...none, narrowShown: true })).toBeNull()
     expect(capsuleOf(at({ phase: 'ready', narrow: true, display: 'translation' }), none)).toBeNull()
   })
 
   it('a paper that cannot be had as a bilingual PDF: said, with the HTML version offered where there is one; not closable, before any other capsule (the maintainer, 2026-09-26)', () => {
-    expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: 'https://arxiv.org/html/1706.03762#readarxiv' }), none)).toEqual({ kind: 'unavailable', text: R.status.noPdf, href: 'https://arxiv.org/html/1706.03762#readarxiv' })
-    expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: null }), none)).toEqual({ kind: 'unavailable', text: R.status.noPdf })
+    expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: 'https://arxiv.org/html/1706.03762#readarxiv' }), none)).toEqual({ kind: 'unavailable', words: plain(R.status.noPdf), href: 'https://arxiv.org/html/1706.03762#readarxiv' })
+    expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: null }), none)).toEqual({ kind: 'unavailable', words: plain(R.status.noPdf) })
     expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: null, failedUnits: 3, narrow: true }), { closed: true, narrowShown: false })).toMatchObject({ kind: 'unavailable' })
     expect(capsuleOf(at({ phase: 'ready', available: false, languageSupported: false, htmlVersion: null }), none)).toMatchObject({ kind: 'unavailable' })
   })
 
   it('a translation shown in part: said, the HTML version offered where there is one, closable, before the notice of passages that failed (S-R-19)', () => {
-    expect(capsuleOf(at({ phase: 'ready', partial: true, htmlVersion: 'https://arxiv.org/html/x#readarxiv' }), none)).toEqual({ kind: 'partial', text: R.status.partial, href: 'https://arxiv.org/html/x#readarxiv' })
-    expect(capsuleOf(at({ phase: 'ready', partial: true, htmlVersion: null, failedUnits: 2 }), none)).toEqual({ kind: 'partial', text: R.status.partial })
+    expect(capsuleOf(at({ phase: 'ready', partial: true, htmlVersion: 'https://arxiv.org/html/x#readarxiv' }), none)).toEqual({ kind: 'partial', words: plain(R.status.partial), href: 'https://arxiv.org/html/x#readarxiv' })
+    expect(capsuleOf(at({ phase: 'ready', partial: true, htmlVersion: null, failedUnits: 2 }), none)).toEqual({ kind: 'partial', words: plain(R.status.partial) })
     expect(capsuleOf(at({ phase: 'ready', partial: true }), { closed: true, narrowShown: false })).toBeNull()
     expect(capsuleOf(at({ phase: 'translating', partial: true }), none)).toBeNull()
   })

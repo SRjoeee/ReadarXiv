@@ -86,7 +86,8 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
 
     it('leaves after 5 s', async () => {
       const { capsule, wait } = await narrow()
-      expect(capsule()?.textContent).toBe(R.status.narrow)
+      // drawn in the words' cell, and told whole in the line the group is named by
+      expect([capsule()?.querySelector('.words')?.textContent, capsule()?.querySelector('.sr-only')?.textContent]).toEqual([R.status.narrow, R.status.narrow])
       await wait(4999)
       expect(capsule()).not.toBeNull()
       await wait(1)
