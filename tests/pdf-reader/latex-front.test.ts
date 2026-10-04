@@ -370,7 +370,7 @@ describe('patch: where each unit is written', () => {
     const p = loadProject(inMemory(new Map([['main.tex', enc(SRC)]])), 'main.tex')
     const units = p.units as (Unit & { nested?: boolean })[]
     const translated = new Map(units.map((u, i) => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: `<T${i}>` } : x))])) as Map<(typeof p.units)[number], unknown[]>
-    const all: { file: string; unit: (typeof p.units)[number]; from: number; to: number; outer?: unknown }[] = []
+    const all: { file: string; unit: (typeof p.units)[number]; from: number; to: number; outer?: (typeof p.units)[number] }[] = []
     const out = patch(p, translated, { spans: all })
     expect(out.get('main.tex')).toEqual(patch(p, translated).get('main.tex'))
     const spans = all.filter(x => !x.outer)

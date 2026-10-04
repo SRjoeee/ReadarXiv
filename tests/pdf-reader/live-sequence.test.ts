@@ -1316,7 +1316,7 @@ describe('the remedies in their order, wherever a compile fails', () => {
   })
 
   it("the original's files are the same bytes with its units' lines asked for and without; each unit found on its own lines", () => {
-    const p = paper(), spans: { lines?: () => { unit: unknown; first: number; last: number }[] } = {}
+    const p = paper(), spans: NonNullable<NonNullable<Parameters<typeof originalFiles>[1]>['spans']> = {}
     const plain = originalFiles(p, { lines: true }), withSpans = originalFiles(p, { lines: true, spans })
     expect([...withSpans].map(([f, b]) => [f, new TextDecoder('latin1').decode(b)])).toEqual([...plain].map(([f, b]) => [f, new TextDecoder('latin1').decode(b)]))
     const lines = new TextDecoder('latin1').decode(withSpans.get('main.tex')).split('\n'), found = spans.lines?.() ?? []

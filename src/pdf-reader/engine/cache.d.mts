@@ -18,7 +18,7 @@ export declare function unsetAfter(unset: boolean, result: { changed?: boolean }
 /** runLive's `pipelineCurrent`: the seed is what the copy's PDF or a final this visit showed sets, and the visit holds nothing unset */
 export declare function pipelineCurrentFor(options: { copy: boolean; finalShown: boolean; unset: boolean }): boolean
 /** the passages a copy's units (or a run's, with their kinds) hold in the original though translated: those marked set in the source but the author block's */
-export declare function passagesInSource(units: ({ kind?: string; inSource?: boolean } | null | undefined)[]): number
+export declare function passagesInSource(units: ({ kind?: string; inSource?: boolean; [field: string]: unknown } | null | undefined)[]): number
 /** how a run whose final none of the ways could set ends for the reader: S-R-17, S-R-19, or nothing more */
 export declare function endOf(result: { exhausted?: boolean; stopped?: string | null; shownPartial?: boolean | null }, visit: { compiledOnce: boolean; finalShown: boolean; cached: boolean }): 'cannot typeset' | 'shown in part' | null
 /** the seeds a run takes as they are (`current`): whole, by `identity`, of the wire sent now — the visit's last run's, or the copy's when `copyWire` */
