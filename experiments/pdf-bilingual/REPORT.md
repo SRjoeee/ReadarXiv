@@ -1727,3 +1727,95 @@ the load stayed between 3.0 and 4.1. Runs used a headed 1440 × 900 window on th
 
   The fifth, chosen and pressed states barely visible in dark (1.06:1), would change the approved dark palette. It
   goes to the maintainer as a proposal with screenshots. The medium and low findings join #299's list.
+
+## Twenty-eighth addendum, 2026-10-04: a compile that fails is not a paper that cannot be set — BUILT
+
+**What happened.** 2610.02069 in Japanese and Chinese showed only the first few sentences translated. The front end
+(103 units) and the translation (103 of 103, both languages) were whole. Every compile after the first preview failed;
+the chain gave up XeLaTeX + xeCJK and then pdfLaTeX + CJKutf8, the run ended `exhausted`, and the reader kept its first
+preview — in Japanese not even that — while the progress line completed. Two faults, either enough to sink a run in
+the browser, where BusyTeX halts at the first TeX error:
+
+- **A, the references a draft was given:** the original's `\bibcite` lines alone. apacite writes each entry twice,
+  `\bibcite` then `\APACbibcite`; with babel loaded after apacite, babel's `\bibcite` keeps the entry wrapped, and only
+  the second line makes it whole again. Every citation broke TeX (`Illegal parameter number in definition of
+  \B@my@dummy`).
+- **B, a citation's own syntax:** apacite's `\cite<…>[…]{key}` is not read as one command. Its notes and key go out as
+  prose, the control-word guard writes `\cite{}` before the translated `<`, and the key's `_` stands in running text
+  (`Missing $ inserted`).
+
+The plan is `plans/2026-10-04-compile-resilience.md`; its last section holds the maintainer's seven rulings.
+
+**Built** (`a5a80ef2`, `95c412a0`, `acbae9b0`, `6c741194`; `TYPESETTING_VERSION` 6, `908df5af`):
+
+1. **Remedies before the chain moves on** (`live.mjs` `remedy`). A compile of the translation that TeX fails is tried
+   again, one remedy a compile, the least lost first:
+   - without the typesetting rule's TeX (ruling 6);
+   - without EVEN_SPACES' microtype, which loses only spacing;
+   - without the references the run gives a draft or the final (ruling 5 split these two, microtype first).
+
+   A remedy after which the same failure comes again is taken back, the rule too (ruling 6, refined). One after which
+   the compile fails otherwise mended what it was tried for, and is kept. A remedy is not tried again until a compile
+   under the strategy sets.
+2. **The safety net** (`tex-errors.mjs`). The last remedy sets in the source the units the log places the failure in.
+   - **Placing an error:** TeX's `l.<n>` line and the text around the error's place, found in a unit of the files the
+     compile was given. `patch()` says where it writes each unit; the lines are worked out only after a failure, so a
+     compile that sets pays nothing.
+   - **What places nothing:** an error the output routine or a `\write` raised.
+   - **A lost letter** places only a unit that holds it. One lost with no error is made an error by a pass with
+     `\tracinglostchars=3`, when the letters lost stand in a few units only.
+   - **Bounds** (ruling 4): 3 rounds and max(3, 2 %) of the units a strategy, 8 remedy compiles a run. Every remedy is
+     noted (`typeset failed`, `without …`, `in source`, `lost letters`, `… back`, `kept`, `recovered`).
+   - Units set in the source are marked in the record (`inSource`) and counted in the failure note (S-P-60, ruling 6).
+3. **Every citation line** of the original's aux for a draft (`citationLines`): every closed line whose first argument is
+   a key the aux cites, in order, `\citation`'s and `\newlabel`'s left out.
+4. **The reader says when only part can be shown** (S-R-19, ruling 7; `cache.mjs` `endOf`). A preview of the visit on
+   screen, and none of the ways able to set the whole: the preview and the displays stay, and the capsule says so, with
+   S-R-18 and a close.
+
+**Held: fix 3, a command's own delimited arguments, with `PIPELINE_VERSION` 8.** Ruling 3 took the pipeline bump on one
+condition: a copy of pipeline 7, opened under 8, sends nothing again for units whose source is unchanged.
+- **Measured** (`live-sequence.test.ts`, "a copy made by another pipeline"): it does send them. `seedFrom` seeds every
+  unchanged unit, so the copy is shown meanwhile. But `reusable` takes a seed as it is only for a copy of this pipeline
+  (`copyWire`, from `sameUnits`), so every unit is sent to the extension's chain again.
+- **So the bump and fix 3 wait for the maintainer.** Fault B is caught by the safety net, and 2610.02069's unit 99 (its
+  code-availability sentence) stays in English. Fix 3 and the bump are ready on the local branch
+  `exp/fix-compile-resilience-fix3`.
+
+**2610.02069** (its source and the cached Microsoft translations stay in the session's scratchpad, never in the
+repository). Each final PDF was read page by page (`pdftotext -f p -l p`).
+
+| Run | Before (`dec4573e`) | After |
+|---|---|---|
+| ja, native | exhausted, no preview shown | settled under xeCJK, unit 99 in the source |
+| zh, native | exhausted, the first preview kept (27 units) | the same as ja |
+| ja, `SLOW HALT` | exhausted, the first preview kept (9 units) | settled under xeCJK, after 5 previews. The rule and the references were each tried and taken back, then unit 99 set in the source |
+| zh, `SLOW HALT` | exhausted, as ja | the same as ja |
+| zh, in Chromium with the build | — | settled, its final shown, and the revisit's copy current |
+
+- **Every final:** 22 pages of 22, CJK on pages 1–20, and pages 21–22 the references, English as in the original.
+- **With both faults still in the code** (the safety nets alone, `95c412a0`), it settled in all four native and halting
+  runs: without the references (A), unit 99 in the source (B), no strategy dropped.
+- **With fix 3 as well,** on the held branch, it settles in all four with no remedy at all, unit 99 translated.
+
+**Gates against `dec4573e`:**
+- **Unit, lint, build:** typecheck, lint, 3 629 tests and the build pass.
+- **Case spikes:** all pass, native and BusyTeX. The new ones are `compile-resilience-cases.mjs` (13 checks) and
+  `typeset-busytex-cases.mjs`' four.
+- **The other gates are unchanged:**
+  - `front-gate`: no paper moved.
+  - `patch-identity`: 113 of 113 papers.
+  - `lang-gate --check`: all 216 results the same as the baseline.
+  - `highlight-gate`: the baseline met.
+- **`DRAFT=1 typeset-gate --check`:** every paper and set held its record, its 57 results the same as the baseline's.
+  This covers the round, unseen, newLanguage and twoLayouts sets. The fresh set's translations are no longer on this
+  machine, so it was not run.
+- **`reader-partial.mjs`** (new, Chromium): passes.
+
+**Performance.**
+- **The happy path compiles as before.** 2608.02163 (zh) and 2608.06701 (ja), their translations cached, each make the
+  same five compiles in the same order: probe, preview, original, measure, final. Their finals' text is the same.
+- **`translationFiles`** on 2608.02459 (555 units), interleaved, 10 runs each, three rounds: median 4.90–5.56 ms
+  before, 4.80–5.63 ms after. Its files are byte for byte as before over the corpus: 113 papers, zh and de, every
+  strategy, drafts and finals, 904 sets.
+- **On a failure only,** the units' lines cost 2.4–2.6 ms.
