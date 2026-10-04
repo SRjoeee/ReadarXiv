@@ -546,10 +546,13 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     /** whether a compile's first TeX error came before TeX read the aux it was given — at \begin{document}, the
      *  bibliography after it —, the log showing TeX at the main file, and not yet at the aux, where it stopped: an error
      *  the references cannot be the cause of, whose compile is not tried again without them (the review of 2026-10-04,
-     *  M-4: a class's conflict in the preamble paid that compile). A log that shows neither says nothing */
-    const opened = name => new RegExp(`\\((?:[^()\\s]*/)?${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`)
-    const mainOpened = opened(project.main.split('/').at(-1)), auxOpened = opened(`${jobName(project.main)}.aux`)
-    const beforeReferences = r => { const log = unwrapped(lastTexLog(r.log)), at = log.search(/^! /m), head = log.slice(0, Math.max(0, at)); return at >= 0 && mainOpened.test(head) && !auxOpened.test(head) }
+     *  M-4: a class's conflict in the preamble paid that compile). A log that shows neither says nothing; one where TeX
+     *  looked for the aux and found none ("No file <job>.aux.", a compile given a bibliography alone) is past it (the
+     *  re-review's N-3) */
+    const esc = name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const opened = name => new RegExp(`\\((?:[^()\\s]*/)?${esc(name)}\\b`)
+    const job = jobName(project.main), mainOpened = opened(project.main.split('/').at(-1)), auxOpened = opened(`${job}.aux`), auxMissing = new RegExp(`^No file ${esc(job)}\\.aux\\.`, 'm')
+    const beforeReferences = r => { const log = unwrapped(lastTexLog(r.log)), at = log.search(/^! /m), head = log.slice(0, Math.max(0, at)); return at >= 0 && mainOpened.test(head) && !auxOpened.test(head) && !auxMissing.test(head) }
     // the units a compile under this strategy could not set translated (the safety net, Task 2): set in the source until
     // the chain moves on — another strategy may set them —, and so in the record (`inSource`). Each with every unit
     // nested in it, which its source holds as written (a footnote, an author's note)

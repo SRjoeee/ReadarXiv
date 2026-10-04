@@ -1498,6 +1498,21 @@ describe('the remedies in their order, wherever a compile fails', () => {
     expect(body).toContain('without references')
   })
 
+  it("a compile given no aux, only a bibliography, read none: an error after it is the references' to try (N-3)", async () => {
+    const t = translator(), n = paper().units.length, notes: string[] = []
+    // the original cites nothing and labels nothing, and its BibTeX made a bibliography: a draft is given that alone
+    const compile = async (q: Req): Promise<Compiled> => {
+      const kind = kindOf(q)
+      if (kind === 'original') { t.release(); return { ...ok(n, q), aux: '\\relax\n', bbl: '\\begin{thebibliography}{1}\\bibitem{a} A.\\end{thebibliography}\n' } }
+      if (kind === 'probe') return ok(n, q)
+      if (q.overrides.has('main.bbl')) return { ok: false, pdf: null, log: '(./main.tex\nLaTeX2e <2025-06-01>\nNo file main.aux.\n(./main.bbl\n! Undefined control sequence.\nl.3 \\bibitem\n  {a}\n', ms: 1 }
+      return { ...ok(n, q), aux: null }
+    }
+    const p = paper()
+    await runLive(p, { lang: 'zh', compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), note: (e: string) => notes.push(e) })
+    expect(notes).toContain('without references')
+  })
+
   it('a run whose finals all fail says whether the last preview it showed lacked any of the translation (M-2)', async () => {
     const t = translator(), n = paper().units.length
     // every final fails; the first preview has the first batch, the one after the original the whole translation
