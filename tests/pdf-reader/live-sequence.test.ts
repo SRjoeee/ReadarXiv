@@ -140,14 +140,16 @@ describe('the compile sequence with the typesetting rule', () => {
     expect(notes.filter(([e]) => e === 'typeset failed').map(([, d]) => d.strategy)).toEqual(['XeLaTeX + xeCJK'])
   })
 
-  it('and the final: once without the rule on the same engine, then the next strategy, planned again', async () => {
+  it('and the final: once without the rule on the same engine, then without the references, the rule back, then the next strategy, planned again', async () => {
     const t = translator(), n = paper().units.length
     // the paper's own engine is pdfLaTeX: xeCJK first, CJKutf8 next; every final of xeCJK fails, and CJKutf8's with the rule
     const c = compiler(n, { on: k => { if (k === 'original') t.release() }, fail: (k, q) => k === 'final' && (main(q).includes('xeCJK') || ruled(q)) })
     const kindOf2 = (q: { kind: string; ruled: boolean; rerun: boolean }) => `${q.kind}${q.ruled ? '+rule' : ''}`
     const { calls, notes, r } = await run({ compiler: c, translate: t.translate })
     const finals = calls.filter(q => q.rerun && q.kind !== 'original').map(kindOf2)
-    expect(finals).toEqual(['final+rule', 'final', 'final+rule', 'final'])
+    // xeCJK: with the rule, without it, with it again and without the references the run gave it (the run's remedies,
+    // plans/2026-10-04-compile-resilience.md); CJKutf8: with the rule, without it
+    expect(finals).toEqual(['final+rule', 'final', 'final+rule', 'final+rule', 'final'])
     expect(notes.filter(([e]) => e === 'next strategy').length).toBe(1)
     expect(r.settled).toBe(true)
   })
@@ -321,7 +323,10 @@ describe('a compile that stopped short of the document\'s end', () => {
     const previews = notes.filter(([e]) => e === 'preview')
     expect(previews.map(([, d]) => [d.strategy, d.ok, d.error])).toEqual([['XeLaTeX + xeCJK', false, STOPPED], ['pdfLaTeX + CJKutf8', false, STOPPED], ['pdfLaTeX + CJKutf8', false, STOPPED]])
     expect(notes.filter(([e]) => e === 'next strategy').length).toBe(1)
-    expect(notes.filter(([e]) => e === 'measure' || e === 'final').map(([e, d]) => [e, d.ok])).toEqual([['measure', false], ['final', false]])
+    // under CJKutf8 the run's remedies before the chain ends: its first preview again without microtype, its measure
+    // without the references the original gave (microtype tried already), its final with nothing left to leave out
+    expect(notes.filter(([e]) => e === 'measure' || e === 'final').map(([e, d]) => [e, d.ok])).toEqual([['measure', false], ['measure', false], ['final', false]])
+    expect(notes.filter(([e]) => /^without /.test(e)).map(([e]) => e)).toEqual(['without spacing', 'without references'])
     expect([r.previews, r.settled, r.exhausted, r.originalOk]).toEqual([0, false, true, true])
   })
 
@@ -899,5 +904,90 @@ describe('the final\'s TeX', () => {
     const final = main(given.find(q => kindOf(q) === 'final' && ruled(q)) as Req), preview = main(given.find(q => kindOf(q) === 'preview' && ruled(q)) as Req)
     expect([/\\axtlines\{\d/.test(final), final.includes('AXT-LINES'), /\\axtlead\{\d/.test(final)]).toEqual([false, false, true])
     expect([/\\axtlines\{\d/.test(preview), preview.includes('AXT-LINES')]).toEqual([true, true])
+  })
+})
+
+// A compile that fails is tried again without what the run itself added to the paper before the chain moves on
+// (plans/2026-10-04-compile-resilience.md, Task 1, and its rulings): the least lost first — the typesetting rule's TeX,
+// then EVEN_SPACES' microtype (only spacing is lost), then the references a draft or the final is given (2610.02069: the
+// original's \bibcite lines without apacite's \APACbibcite broke every citation under babel). A remedy that set the
+// paper is kept for the strategy; one that did not is taken back before the next
+describe('a compile that fails is tried again without what the run added, before the chain moves on', () => {
+  /** what a compile is in any language: a translation's carry the run's \axtbalance, the original's and the probe's not */
+  const kindAny = (q: Req) => (main(q).includes('AXT-FONTS') ? 'probe' : main(q).includes('\\def\\axtbalance') ? (q.rerun ? 'final' : 'preview') : 'original')
+  const auxOf = (q: Req) => { const given = q.overrides.get('main.aux'); return given ? new TextDecoder().decode(given) : null }
+  /** a translation compile fails where `bad` says (fault A's shape, or microtype's); the original's aux has a \bibcite */
+  const failingWith = (bad: (q: Req) => boolean) => {
+    const calls: { kind: string; aux: string | null; microtype: boolean; cjkutf8: boolean; ruled: boolean }[] = []
+    const compile = async (q: Req): Promise<Compiled> => {
+      const kind = kindAny(q)
+      calls.push({ kind, aux: auxOf(q), microtype: /\{microtype\}/.test(main(q)), cjkutf8: /CJKutf8/.test(main(q)), ruled: ruled(q) })
+      if (kind !== 'probe' && kind !== 'original' && bad(q)) return { ok: false, pdf: null, log: '! Illegal parameter number in definition of \\B@my@dummy.\n', ms: 1 }
+      const made = kind === 'original' ? '\\citation{a}\n\\bibcite{a}{1}\n' : '\\citation{a}\n'
+      return { ok: true, pdf: new Uint8Array([calls.length]), aux: made, bbl: null, log: kind === 'probe' ? FONT_LOG : linesLog(paper().units.length), ms: 1 }
+    }
+    return { calls, compile }
+  }
+  /** the target's words for every English word, no batch held back (the file's translator() holds its second) */
+  const go = async (c: ReturnType<typeof failingWith>, lang = 'zh') => {
+    const notes: [string, Record<string, unknown>][] = [], p = paper()
+    const translate = async (texts: string[]) => texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, lang === 'de' ? 'W\u00f6rter' : '\u8bba\u6587'), by: 'B' }))
+    const r = await runLive(p, { lang, compile: c.compile, translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(p.units.length), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+    return { r, notes, events: notes.map(([e]) => e) }
+  }
+  const givenCites = (q: Req) => /\\bibcite/.test(auxOf(q) ?? '')
+
+  it('the references it was given break TeX: the rule taken back, the paper set without them, the strategy kept', async () => {
+    const c = failingWith(givenCites)
+    const { r, events, notes } = await go(c)
+    expect(r.settled).toBe(true)
+    // XeLaTeX adds no microtype: the rule first, then the references
+    expect(events.filter(e => ['typeset failed', 'typeset back', 'without spacing', 'without references', 'recovered'].includes(e))).toEqual(['typeset failed', 'typeset back', 'without references', 'recovered'])
+    expect(notes.find(([e]) => e === 'recovered')?.[1]).toMatchObject({ strategy: 'XeLaTeX + xeCJK', by: 'references' })
+    expect(events).not.toContain('next strategy')
+    // the rule came back: the final is set by it, and given no references
+    const final = c.calls.filter(q => q.kind === 'final').at(-1)
+    expect([final?.ruled, final?.aux]).toEqual([true, null])
+  })
+
+  it("EVEN_SPACES' microtype breaks TeX under the paper's pdfLaTeX: set without it, the references kept, the strategy kept", async () => {
+    const c = failingWith(q => /\{microtype\}/.test(main(q)))
+    const { r, notes, events } = await go(c, 'de')
+    expect(r.settled).toBe(true)
+    expect(events.filter(e => ['without spacing', 'without references'].includes(e))).toEqual(['without spacing'])
+    expect(notes.filter(([e]) => e === 'final').at(-1)?.[1]).toMatchObject({ ok: true, strategy: 'own engine' })
+    const final = c.calls.filter(q => q.kind === 'final').at(-1)
+    expect(final?.microtype).toBe(false)
+    expect(final?.aux).toContain('\\bibcite{a}')
+  })
+
+  it('without each it fails too: each comes back for the compiles after, and the chain moves on as before', async () => {
+    const c = failingWith(() => true)
+    const { r, events } = await go(c)
+    expect(r.exhausted).toBe(true)
+    // under pdfLaTeX + CJKutf8 a retry left microtype out; the next compile of that strategy has it again
+    const k = c.calls.findIndex(q => q.cjkutf8 && !q.microtype && q.kind !== 'original')
+    expect(k).toBeGreaterThan(-1)
+    expect(c.calls.slice(k + 1).filter(q => q.cjkutf8 && q.kind !== 'original').some(q => q.microtype)).toBe(true)
+    expect(events).toContain('spacing back')
+    expect(events).toContain('next strategy')
+  })
+
+  it('a compile that sets the paper pays nothing: the happy path compiles as before', async () => {
+    const t = translator(), n = paper().units.length
+    const c = compiler(n, { on: k => { if (k === 'original') t.release() } })
+    const { calls, notes } = await run({ compiler: c, translate: t.translate })
+    expect(calls.map(q => `${q.kind}${q.ruled ? '+rule' : ''}`)).toEqual(['probe', 'preview', 'original', 'preview+rule', 'final+rule'])
+    expect(notes.map(([e]) => e).filter(e => /without|back|recovered/.test(e))).toEqual([])
+  })
+
+  it("a failed compile's aux is not taken over the last good one", async () => {
+    // the preview after the original fails once, writing half an aux: the next draft is given the good one
+    let previews = 0
+    const c = failingWith(() => false), base = c.compile
+    c.compile = async (q: Req) => { const r = await base(q); return kindAny(q) === 'preview' && ++previews === 2 ? { ...r, ok: false, pdf: null, aux: '\\citation{cut', log: '! Undefined control sequence.\n' } : r }
+    await go(c)
+    const after = c.calls.filter(q => q.kind === 'preview' || q.kind === 'final').slice(2)
+    expect(after.every(q => !(q.aux ?? '').includes('\\citation{cut'))).toBe(true)
   })
 })

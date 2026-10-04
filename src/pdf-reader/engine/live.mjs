@@ -163,8 +163,9 @@ export function originalFiles({ fsys, project }, { lines = false } = {}) {
  *  translated units' own paragraphs, and those alone, at that factor of the paper's spacing (latex-front unitLeadTex).
  *  `typeset`, the typesetting rule's (typeset/plan.mjs previewTypesetting, finalTypesetting): the strategy it sets the
  *  type of, its TeX, each translated unit's macros — for the strategy it was made for: with another the translation is
- *  set as today, and `note('typeset refused', …)` says so */
-export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl, typeset = null, note = () => {} }) {
+ *  set as today, and `note('typeset refused', …)` says so. `evenSpaces` false leaves out EVEN_SPACES' microtype, which
+ *  the run adds under an 8-bit engine and may break a paper's own TeX (runLive's remedies) */
+export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl, typeset = null, evenSpaces = true, note = () => {} }) {
   if (typeset && typeset.for !== strategy.name) { note('typeset refused', { plan: typeset.for, strategy: strategy.name }); typeset = null }
   if (typeset) strategy = typeset.strategy(strategy)
   const xe = strategy.xe
@@ -175,7 +176,7 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   const out = patch(project, translated, { mark })
   let main = latin1(out.get(project.main))
   const at = beginDocument(main)
-  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + NO_OVERFLOW + (xe ? '' : EVEN_SPACES) + main.slice(at)
+  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + NO_OVERFLOW + (xe || !evenSpaces ? '' : EVEN_SPACES) + main.slice(at)
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
   if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
   if (xe && strategy.engine !== meta.compiler) main = XETEX_SHIM + XETEX_SHIM_R1 + stripPdftexOption(main)
@@ -446,9 +447,57 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     let toldMissing = null
     // the strategies a compile with the rule failed under, TeX's failure: each tried again as today, the rule left out,
     // before the chain moves on — the rule's TeX is one more thing that can fail, the strategy may well set the paper
-    // (the evaluation's ruling 6, 2026-10-01); and set as today from then on
+    // (the evaluation's ruling 6, 2026-10-01); and set as today from then on, unless that did not set the paper either
+    // (remedy: the rule back, ruling 6 refined)
     const ruleFailed = new Set()
     const withoutRule = r => { ruleFailed.add(strategy().name); note('typeset failed', { strategy: strategy().name, error: whyFailed(r) }) }
+    /**
+     * What the run itself adds to the paper beyond its translation, which a compile may fail on and the strategy does not
+     * need (plans/2026-10-04-compile-resilience.md, Task 1 and its rulings): EVEN_SPACES' microtype under an 8-bit engine
+     * (`spacing`: only the spacing is lost), and the references a draft or the final is given — the original's or a
+     * draft's aux and bibliography (`references`: a draft's citations and bibliography; the final's passes make their
+     * own). 2610.02069's apacite under babel broke every citation given the original's \bibcite lines alone. Per
+     * addition, the strategies it is left out of from then on
+     */
+    const without = { spacing: new Set(), references: new Set() }
+    const off = how => without[how].has(strategy().name)
+    /** what a compile of the translation is given beside it */
+    const given = () => (off('references') ? { aux: null, bbl: null } : { aux: refs(aux), bbl: bblAt() })
+    /** whether a compile under the strategy now has the addition, to leave out */
+    const adds = { spacing: () => !strategy().xe && !off('spacing'), references: () => !off('references') && (!!refs(aux) || (!!bblAt() && !meta.bbl)) }
+    /** the compile's files: the translation's, as the strategy and the remedies kept have them */
+    const filesFor = (snapshot, { draft, typeset }) => translationFiles(paper, snapshot, { strategy: strategy(), fonts, draft, ...given(), evenSpaces: !off('spacing'), typeset, note })
+    /**
+     * The failure being recovered from (`episode`): the remedies tried, and the one the next compile tries; null once a
+     * compile under the strategy sets the translation, and when the chain moves on — a remedy that did not set the paper
+     * is not tried again meanwhile, whichever compile comes next (a preview, the measure, the final). `spent`: the
+     * compiles remedies have cost the run, at most SPENT_MAX — past it the chain moves on as before
+     */
+    let episode = null, spent = 0
+    const SPENT_MAX = 8
+    /**
+     * After a compile that did not set the translation (TeX's failure; BusyTeX's timeout is not one): the next thing to
+     * leave out, the least lost first, one a compile — the rule's TeX where the compile had a plan (ruling 6), microtype,
+     * the references. A remedy tried that did not set the paper was not the cause, and is taken back first, the rule too:
+     * one unit's fault no longer costs the rest of the run its rule (ruling 6, refined, 2026-10-04). Each remedy is noted
+     * (`without …`, `… back`, `recovered`), for a corpus run to measure. Gives the remedy taken, or null: none left
+     */
+    const remedy = async (r, ruled) => {
+      const name = strategy().name
+      episode ??= { tried: new Set(), trying: null }
+      if (episode.trying === 'rule') { ruleFailed.delete(name); note('typeset back', { strategy: name }) }
+      else if (episode.trying) { without[episode.trying].delete(name); note(`${episode.trying} back`, { strategy: name }) }
+      episode.trying = null
+      if (spent >= SPENT_MAX || r.ok) return null
+      const take = how => { episode.tried.add(how); episode.trying = how; spent++; return how }
+      if (ruled && !episode.tried.has('rule')) { withoutRule(r); return take('rule') }
+      for (const how of ['spacing', 'references']) if (!episode.tried.has(how) && adds[how]()) { without[how].add(name); note(`without ${how}`, { strategy: name, error: whyFailed(r) }); return take(how) }
+      return null
+    }
+    /** a compile under the strategy set the translation: the remedy it tried is kept, and said */
+    const recovered = () => { if (episode?.trying) note('recovered', { strategy: strategy().name, by: episode.trying }); episode = null }
+    /** the chain moves on: the next strategy, its own remedies, no references of the last */
+    const nextStrategy = (why = {}) => { s++; aux = null; episode = null; note('next strategy', { strategy: strategy().name, ...why }) }
     const planFor = snapshot => {
       if (!readings || ruleFailed.has(strategy().name)) return null
       const plan = previewTypesetting({ paper, translated: snapshot, lang, strategy: strategy(), fonts, fontLog, original: readings })
@@ -479,7 +528,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
      * original's own made 2608.29181's first preview 15.5 s, against 6.4 s without (the F2 re-review); and BusyTeX keeps
      * no log of the pass before a biber run, which every compile here reads
      */
-    const bibtexFor = () => !meta.bbl && !bblAt() && !(readMarks && !previews)
+    const bibtexFor = () => !meta.bbl && !bblAt() && !(readMarks && !previews) && !off('references')
     while (true) {
       // with the rule, the original right after the first preview: every plan after it is made from it
       if (readMarks && previews && !originalP) { await original(); continue }
@@ -496,9 +545,10 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       if (dirty) {
         dirty = false
         const snapshot = new Map(translated), t0 = Date.now(), plan = planFor(snapshot)
-        const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: bibtexFor(), overrides: translationFiles(paper, snapshot, { strategy: strategy(), fonts, draft: true, aux: refs(aux), bbl: bblAt(), typeset: plan?.typeset ?? null, note }) })
-        if (r.aux) aux = r.aux
-        if (r.bbl) bbl = r.bbl
+        const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: bibtexFor(), overrides: filesFor(snapshot, { draft: true, typeset: plan?.typeset ?? null }) })
+        // a compile that failed may have written half an aux (a run cut short): the last good one's are kept
+        if (r.ok && r.aux) aux = r.aux
+        if (r.ok && r.bbl) bbl = r.bbl
         held = false
         previewMs = r.ms ?? 0
         // shown only when it set every letter: a translation with letters missing is not one (Devin on #294); the note says
@@ -506,13 +556,16 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
         const shown = await settled(r)
         note('preview', { ok: shown, units: snapshot.size, ms: r.ms, roundTrip: Date.now() - t0, strategy: strategy().name, typeset: !!plan, error: shown ? undefined : whyFailed(r) ?? whyUnset(r) })
         if (shown) {
+          recovered()
           previews++
           measuring = plan && whole(snapshot) ? { plan, strategy: strategy().name, r } : null
           onUpdate?.({ pdf: r.pdf, texts: texts(snapshot), translated: snapshot.size, final: false })
         } else if (timedOut(r)) {
           // the machine slow: nothing changed, the next batch or the final goes on
-        } else if (plan && !r.ok) { withoutRule(r); dirty = true }
-        else if (s + 1 < strategies.length) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
+        } else if (await remedy(r, !!plan)) dirty = true
+        else if (s + 1 < strategies.length) { nextStrategy(); dirty = true }
+        // (under the last strategy the episode stays: a remedy that did not set this paper is not tried again until a
+        // compile sets it)
         continue
       }
       if (mtDone) break
@@ -546,16 +599,16 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       if (!fin?.typeset || fin.missing === 'a plan of the whole translation') {
         const measure = async plan => {
           const t1 = Date.now()
-          const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bblAt(), overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: true, aux: refs(aux), bbl: bblAt(), typeset: plan.typeset, note }) })
+          const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bblAt() && !off('references'), overrides: filesFor(all, { draft: true, typeset: plan.typeset }) })
           note('measure', { ok: r.ok, ms: r.ms, roundTrip: Date.now() - t1, strategy: strategy().name, error: whyFailed(r) })
           return r
         }
-        let plan, r
+        let plan, r, unset
         for (;;) {
           plan = planFor(all)
           if (!plan) return null
           r = await measure(plan)
-          let unset = r.ok && !(await settled(r))
+          unset = r.ok && !(await settled(r))
           // one that set a contents list from nothing — a re-set's: every unit taken, no draft of this translation before
           // it — is measured once more, given its own lists (the F2 re-review's N2). Not the original's lists instead: as
           // tall as the translation's only where its entries are, and the thesis 2307.16209's figures' long captions made
@@ -571,14 +624,17 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
           // the final, as from that preview, and the next strategy is measured — so that the final is set from a plan
           // measured under the strategy it is compiled with, not from the next one's plan uncorrected once this one's
           // final failed (the F2 re-review's N2: zh 2608.02459's re-set, measured under xeCJK, which has no σ there).
-          // Under the last strategy the final is set as before, and cannot set it either
-          if (unset && s + 1 < strategies.length) { const why = whyUnset(r); s++; aux = null; note('next strategy', { strategy: strategy().name, measure: why }); continue }
+          // Under the last strategy the final is set as before, and cannot set it either. The rule is what is measured: a
+          // TeX failure is first tried again without the run's additions, and the rule's own remedy is after the loop
+          if ((unset || (!r.ok && !timedOut(r))) && await remedy(r, false)) continue
+          if (unset && s + 1 < strategies.length) { nextStrategy({ measure: whyUnset(r) }); continue }
           break
         }
         // BusyTeX gave up: the final from the plan uncorrected, which every input but the measure was there for
         if (timedOut(r)) { passing = true; return plan.typeset }
-        // TeX's failure under the rule: the final as today (ruling 6)
+        // TeX's failure under the rule, the additions tried: the final as today (ruling 6)
         if (!r.ok) { withoutRule(r); return null }
+        if (!unset) recovered()
         if (r.aux) aux = r.aux
         if (r.bbl) bbl = r.bbl
         m = { plan, r }
@@ -588,24 +644,32 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       return fin.typeset ?? m.plan.typeset
     }
     let typeset = await finalTypeset()
+    // the final's plan while the remedy of leaving the rule out is tried: back if that did not set the paper
+    let planAside = null
     let r, ok, exhausted = false, finalAgain = false
     for (;;) {
       // the final's lines are read by nothing: its TeX without the line probes (tex.mjs typesetting's `final`)
-      r = await ask({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux: refs(aux), bbl: bblAt(), typeset: typeset?.final ?? typeset, note }) })
+      r = await ask({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: filesFor(all, { draft: false, typeset: typeset?.final ?? typeset }) })
       ok = await settled(r)
       note('final', { ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, typeset: !!typeset, undefinedCitations: [...new Set([...unwrapped(lastTexLog(r.log)).matchAll(/(?:LaTeX|Package natbib) Warning: Citation [`']([^']+)' .*undefined/g)].map(m => m[1]))].slice(0, 8), error: ok ? undefined : whyFailed(r) ?? whyUnset(r) })
-      if (ok) break
+      if (ok) { recovered(); break }
       // (a compile the page did not answer, or failed, was asked once more by `ask`, and a second failure stops the run:
       // a slow machine or the page's own failure is no reason to change how the paper is set — Part 3's checks: a
       // timed-out preview moved 2608.02163 to a strategy its class refuses.) One BusyTeX gave up on: once more as it
       // was, then what is shown stays
       if (timedOut(r)) { if (finalAgain) break; finalAgain = true; note('final again', { strategy: strategy().name }); continue }
-      if (typeset && !r.ok) { withoutRule(r); typeset = null; continue }
+      // the run's remedies before the chain moves on (remedy); the rule taken back comes back with the final's plan, or
+      // — left out since a preview — the plan for this strategy, uncorrected (the handoff, 6)
+      const back = episode?.trying === 'rule'
+      const how = await remedy(r, !!typeset)
+      if (back) { typeset = planAside ?? planFor(all)?.typeset ?? null; planAside = null }
+      if (how === 'rule') { planAside = typeset; typeset = null; continue }
+      if (how) continue
       if (s + 1 >= strategies.length) { exhausted = true; break }
-      s++; aux = null
-      note('next strategy', { strategy: strategy().name })
+      nextStrategy()
       // a plan is made for one strategy: the new one's, uncorrected, since what the preview measured was set by another
       // (the handoff, 6)
+      planAside = null
       typeset = planFor(all)?.typeset ?? null
     }
     if (ok) {
