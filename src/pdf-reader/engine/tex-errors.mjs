@@ -43,14 +43,15 @@ const skeleton = s => s.replace(/\^\^\^\^[0-9a-f]{4}|\^\^[0-9a-f]{2}|\^\^[@-_?]/
 /** how much of the text before and after an error's place must be found on its line */
 const CONTEXT = 12
 /** whether the text holds an error's context: the last characters before its place, and the first after; at least one
- *  of them there to look for. `ending`: the text before the place alone, there to look for — where TeX stops in a unit
- *  nested in another: it reads a footnote's text as its command's argument before it sets it, and an error in it is
- *  logged where the argument ends, the outer unit's words after it */
-const holds = (text, e, ending = false) => {
+ *  of them there to look for */
+const holds = (text, e) => {
   const b = skeleton(e.before).slice(-CONTEXT), a = skeleton(e.after).slice(0, CONTEXT), l = skeleton(text)
-  if (ending) return !!b && l.includes(b)
   return (!!b || !!a) && (!b || l.includes(b)) && (!a || l.includes(a))
 }
+/** whether the text ends where an error's place is: its last characters are those before the place. TeX reads a
+ *  footnote's text as its command's argument before it sets it, and logs an error in it where the argument ends — the
+ *  footnote's closing brace before the place, the outer unit's words after it */
+const endsAtPlace = (text, e) => { const b = skeleton(e.before).slice(-CONTEXT); return !!b && skeleton(text).endsWith(b) }
 const latin1Of = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return s }
 /** line `n` of a file's bytes (1-based), and where it begins */
 const lineAt = (bytes, n) => {
@@ -92,9 +93,15 @@ export function unitsAtErrors(errors, files, lines) {
       const here = at.filter(x => x.file === file)
       // where units share the line: the one whose own bytes on it hold the context — of a unit and a unit nested in it
       // (a paragraph and its footnote) that both do, the inner, unless more than one inner one does. A nested unit
-      // (`post`, what closes it in its outer unit: a footnote's brace) holds it when the text before the place stands in
-      // it and what closes it: TeX was reading it, or had just read its argument (holds' `ending`)
-      const own = here.length === 1 ? here : here.filter(x => x.from !== undefined && text(bytes, Math.max(line.from, x.from), Math.min(line.to, x.to + (x.post ?? 0))).some(t => holds(t, e, x.post !== undefined)))
+      // (`post`, what closes it in its outer unit: a footnote's brace) holds it too where it closes on this line and
+      // the text before the place ends there (endsAtPlace): TeX had just read its argument — never where the text
+      // before the place merely stands in it (the re-review's N-2, Codex's second medium)
+      const own = here.length === 1 ? here : here.filter(x => {
+        if (x.from === undefined) return false
+        if (text(bytes, Math.max(line.from, x.from), Math.min(line.to, x.to)).some(t => holds(t, e))) return true
+        const close = x.to + (x.post ?? 0)
+        return x.post !== undefined && close <= line.to && text(bytes, Math.max(line.from, x.from), close).some(t => endsAtPlace(t, e))
+      })
       fits.push(...innermost(own).map(x => ({ ...x, bytes })))
     }
     if (fits.length !== 1) continue

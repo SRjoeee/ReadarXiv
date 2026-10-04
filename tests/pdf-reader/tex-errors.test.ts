@@ -82,4 +82,21 @@ describe('unitsAtErrors: the units whose lines hold the errors', () => {
     // past the note's end, in the paragraph's words after it: the paragraph's
     expect(unitsAtErrors(error('says \\foo{} in it.} And', 'on.'), f, lines)).toEqual(['p'])
   })
+  it("a footnote holds a paragraph's error only where the text before the place ends at the footnote's close, or the whole context stands in it (N-2)", () => {
+    // a CJK paragraph's Missing $ at its x_, whose ASCII before the place is x_ alone; the footnote on its line holds $x_1$
+    const line = '\u4e2d\u6587\u4e2d\u6587 x_ \u4e2d\u6587\u3002\\footnote{\u6ce8 $x_1$ \u6ce8\u3002} \u4e2d\u6587\u3002'
+    const head = '\\begin{document}\n', f = new Map([['main.tex', enc(`${head}${line}\n\\end{document}`)]])
+    const at = (k: number) => enc(head).length + k, byteOf = (s: string) => enc(line.slice(0, line.indexOf(s))).length
+    const lines = [{ file: 'main.tex', unit: 'p', first: 2, last: 2, from: at(0), to: at(enc(line).length) }, { file: 'main.tex', unit: 'n', first: 2, last: 2, from: at(byteOf('\u6ce8 $x_1$')), to: at(byteOf('} \u4e2d')), post: 1 }]
+    const error = [{ message: 'Missing $ inserted.', line: 2, before: '^^e4^^b8^^ad^^e6^^96^^87^^e4^^b8^^ad^^e6^^96^^87 x_', after: ' ^^e4^^b8^^ad^^e6^^96^^87^^e3^^80^^82\\footnote {^^e6^^b3^^a8 $x' }]
+    expect(unitsAtErrors(error, f, lines)).toEqual(['p'])
+  })
+  it("a letter lost in a paragraph's words is not a footnote's that holds the same words before another (Codex)", () => {
+    const line = 'Words LongIdentifier \u0398 outside the note.\\footnote{A LongIdentifier \u0398 details.} And on.'
+    const f = new Map([['main.tex', enc(`\\begin{document}\n${line}\n\\end{document}`)]])
+    const at = (k: number) => 17 + k, byteOf = (s: string) => enc(line.slice(0, line.indexOf(s))).length
+    const lines = [{ file: 'main.tex', unit: 'p', first: 2, last: 2, from: at(0), to: at(enc(line).length) }, { file: 'main.tex', unit: 'n', first: 2, last: 2, from: at(byteOf('A LongIdentifier')), to: at(byteOf('} And')), post: 1 }]
+    const lost = [{ message: 'Missing character: There is no \u0398 (U+0398) in font cmr10!', line: 2, before: 'Words LongIdentifier \u0398', after: ' outside the note.', char: 0x398 }]
+    expect(unitsAtErrors(lost, f, lines)).toEqual(['p'])
+  })
 })
