@@ -94,6 +94,15 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
   const ghosts = new Set<HTMLElement>()
   /** the look a picture starts leaving from: the one its original's fade had reached */
   const reached = new WeakMap<HTMLElement, Look>()
+  /** what waits, inert, for its entrance to begin, and the timer that lifts it */
+  const waiting = new Map<HTMLElement, number>()
+  /** a wait called off by another fade: what follows decides whether it is inert (one leaving is) */
+  function unwait(el: HTMLElement) {
+    const timer = waiting.get(el)
+    if (timer === undefined) return
+    win.clearTimeout(timer)
+    waiting.delete(el)
+  }
 
   // ------------------------------------------------------------------ how things look and fade
   function lookOf(el: HTMLElement): Look {
@@ -107,20 +116,39 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
   /** a fade from one look to another, after `delay`, on --ease-out; under reduced motion nothing slides */
   function fade(el: HTMLElement, from: Look, to: Look, ms: number, delay: number, fill: FillMode): Animation {
     fades.get(el)?.anim.cancel()
+    unwait(el)
     const still = reduced()
     const frame = (l: Look) => (still ? { opacity: l.o, filter: `blur(${l.b}px)` } : { opacity: l.o, translate: `0 ${l.y}px`, filter: `blur(${l.b}px)` })
     const anim = el.animate([frame(from), frame(to)], { duration: ms, delay, easing: css(OUT), fill })
     fades.set(el, { anim, from, to, ms, delay })
     return anim
   }
-  /** shown after `delay`: unseen until then, held below its place, blurred (the fade's first look, filled backwards) */
+  /**
+   * Shown after `delay`: unseen until then, held below its place, blurred (the fade's first look, filled backwards), and
+   * inert, so that no action in it can be focused, pressed or told while it cannot be seen (Codex on #317). It is lifted
+   * as the entrance begins: once the animation's start is fixed, at its delay from there. With no delay (shrinking,
+   * reduced motion) nothing waits
+   */
   function enter(el: HTMLElement, delay: number) {
     const anim = fade(el, BELOW, SHOWN, CHOREOGRAPHY.in, delay, 'backwards')
     anim.finished.then(() => { if (fades.get(el)?.anim === anim) fades.delete(el) }, () => {})
+    if (!(delay > 0)) return
+    el.inert = true
+    waiting.set(el, -1)
+    anim.ready.then(() => {
+      if (fades.get(el)?.anim !== anim || !waiting.has(el)) return
+      // rounded up: a timer truncates its delay to whole ms, and the wait must not end before the entrance begins
+      const left = Math.max(0, Math.ceil(delay - (Number(anim.currentTime) || 0)))
+      waiting.set(el, win.setTimeout(() => {
+        waiting.delete(el)
+        el.inert = false
+      }, left))
+    }, () => {})
   }
   function drop(el: HTMLElement) {
     fades.get(el)?.anim.cancel()
     fades.delete(el)
+    unwait(el)
     ghosts.delete(el)
     el.remove()
   }
@@ -426,6 +454,10 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
     },
     stop() {
       stopCount()
+      for (const el of [...waiting.keys()]) {
+        unwait(el)
+        el.inert = false
+      }
       watch?.disconnect()
       fonts?.removeEventListener?.('loadingdone', refit)
       width?.cancel()

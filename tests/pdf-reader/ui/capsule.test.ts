@@ -201,3 +201,86 @@ describe('the count', () => {
     expect(document.querySelector('.words')!.childElementCount).toBe(0)
   })
 })
+
+describe('an action that comes while the box opens for it (Codex on #317)', () => {
+  /**
+   * A capsule laid out by numbers (happy-dom lays nothing out): its icon 15 px, its words 100, the chip's wrapper 80, its
+   * paddings 12 and 6, its gap 8. The words drawn, then a chip to come with the box growing for it (141 → 229 px), which
+   * shows it once the box is open: 300 ms
+   */
+  function opening(reduced: boolean) {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    const slot = document.createElement('div'), box = document.createElement('div'), cell = document.createElement('span')
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    box.className = 'capsule'
+    cell.className = 'words'
+    box.append(icon, cell)
+    slot.append(box)
+    document.body.append(slot)
+    const after = document.createElement('span'), chip = document.createElement('button')
+    after.className = 'after'
+    chip.textContent = 'Show translation'
+    after.append(chip)
+    const real = window.getComputedStyle.bind(window)
+    const width = (el: Element) => (el === icon ? 15 : el.classList.contains('line') ? 100 : el === after ? 80 : 0)
+    const box3 = { paddingInlineStart: '12px', paddingInlineEnd: '6px', columnGap: '8px' } as Record<string | symbol, string>
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(el => new Proxy(real(el), {
+      get(s, p) {
+        if (el === box && p in box3) return box3[p]
+        if (p === 'width' && el !== box) return `${width(el)}px`
+        const v = Reflect.get(s, p)
+        return typeof v === 'function' ? v.bind(s) : v
+      },
+    }))
+    const motion = capsuleMotion(box, cell, { reduced: () => reduced })
+    motion.change(plain('Translating'))
+    box.append(after)
+    return { motion, after, chip }
+  }
+  afterEach(() => { vi.restoreAllMocks() })
+
+  it('unseen while the box opens, it is inert: nothing can focus it or tell it; once its entrance begins, it can be focused', async () => {
+    const { motion, after, chip } = opening(false)
+    motion.change(plain('Translating'), [after], [])
+    expect([chip.closest('[inert]'), after.inert]).toEqual([after, true])
+    await vi.advanceTimersByTimeAsync(299)
+    expect(after.inert).toBe(true)
+    await vi.advanceTimersByTimeAsync(1)
+    expect([after.inert, chip.closest('[inert]')]).toEqual([false, null])
+    chip.focus()
+    expect(document.activeElement).toBe(chip)
+    motion.stop()
+  })
+
+  it('under reduced motion it is shown at once, and can be focused at once', () => {
+    const { motion, after, chip } = opening(true)
+    motion.change(plain('Translating'), [after], [])
+    expect([after.inert, chip.closest('[inert]')]).toEqual([false, null])
+    chip.focus()
+    expect(document.activeElement).toBe(chip)
+    motion.stop()
+  })
+
+  it('one that goes is inert as soon as it starts to leave; one that goes before it was shown is gone at once', async () => {
+    const shown = opening(false)
+    shown.motion.change(plain('Translating'), [shown.after], [])
+    await vi.advanceTimersByTimeAsync(600)
+    shown.motion.change(plain('Translating'), [], [shown.after])
+    expect([shown.after.inert, shown.after.dataset.state, shown.after.isConnected]).toEqual([true, 'out', true])
+    shown.motion.stop()
+    vi.restoreAllMocks()
+    document.body.innerHTML = ''
+    const unseen = opening(false)
+    unseen.motion.change(plain('Translating'), [unseen.after], [])
+    unseen.motion.change(plain('Translating'), [], [unseen.after])
+    expect(unseen.after.isConnected).toBe(false)
+    unseen.motion.stop()
+  })
+
+  it('a change before it shows takes its wait with it: stopped, nothing is left inert', async () => {
+    const { motion, after } = opening(false)
+    motion.change(plain('Translating'), [after], [])
+    motion.stop()
+    expect(after.inert).toBe(false)
+  })
+})

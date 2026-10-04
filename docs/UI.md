@@ -252,7 +252,7 @@ so that the button and the sentence agree.
 changes in place. Growing, the box opens first (300 ms) and the old and new words cross-fade once, at the later of 60 % of its way and the new words fitting, so
 that no word stands past the border and the box is never empty; shrinking, the words change at once and the box closes after them (250 ms). A count in the
 sentence (S-P-60's {n}) changes in place, digit by digit, at most once every 300 ms; a digit gained opens its own room as the box widens. A chip that comes
-(S-P-61, S-R-18) appears once the box has opened for it. The words are hidden from screen readers, which are told the sentence whole, in a line of its own, once
+(S-P-61, S-R-18) appears once the box has opened for it, and until then nothing can reach it: no focus, no press, nothing told (Codex on #317). The words are hidden from screen readers, which are told the sentence whole, in a line of its own, once
 for each change of it. A sentence too long for one line at the window's width wraps, balanced, and then only its words cross-fade. Under reduced motion nothing
 slides: the words cross-fade with their blur, the width changes at once, and a loader stands still. Nothing in it is fitted to one language: any sentence, of
 any length, moves the same way.

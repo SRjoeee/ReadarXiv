@@ -4,7 +4,8 @@
 // words' ink against the border (only ink over 2 % opaque, within 0.5 px), the height (34 px) and the lines (one), each
 // change moving the width one way, the width still between changes while the count changes in place, the counts shown
 // at least 300 ms apart, and the frame intervals (none over 25 ms). At round 4's six settings, then four changes 80 ms
-// apart, the window narrowed mid-run, a sentence too long for the window, and reduced motion (only opacity and filter
+// apart, the window narrowed mid-run, a sentence too long for the window, an action that comes kept out of reach until it
+// shows (Chromium's own accessibility tree, over CDP; focus in every engine), and reduced motion (only opacity and filter
 // move, the spinner stands). The page is served over http from the development build, so that each engine opens it:
 //   pnpm exec wxt build --mode development && node tests/e2e/probes/capsule.mjs [--engine chromium,firefox,webkit]
 // The interval limit blocks in Chromium; headless Firefox and WebKit pace their frames unevenly, so there the intervals
@@ -269,6 +270,50 @@ for (const engine of engines) {
       return { wrap: c.hasAttribute('data-wrap'), box: [r.left, r.right], vw: innerWidth, ink: [Math.min(...q.map(x => x.left)), Math.max(...q.map(x => x.right))], lines: Math.round(line.getBoundingClientRect().height / 17), balance: getComputedStyle(line).textWrap }
     })
     check(`${engine} a sentence too long for one line: wrapped and balanced, inside the window, its words inside the capsule`, w.wrap && w.lines >= 2 && /balance/.test(w.balance ?? 'balance') && w.box[0] >= 0 && w.box[1] <= w.vw && w.ink[0] >= w.box[0] && w.ink[1] <= w.box[1], JSON.stringify(w))
+    await context.close()
+  }
+
+  // an action that comes while the box opens for it (Codex on #317): unseen, it is inert — it cannot be focused and is not
+  // in the accessibility tree — until its entrance begins; then it can be, with the keyboard's ring; under reduced motion
+  // at once
+  for (const motion of ['no-preference', 'reduce']) {
+    const context = await browser.newContext({ viewport: { width: 390, height: 780 }, reducedMotion: motion })
+    const page = await context.newPage()
+    await page.goto(`${BASE}?lang=zh-CN&chip=1`)
+    await page.evaluate(() => window.__capsule.set({ stage: 'translating', n: 25, total: 86, pages: 0 }))
+    await page.waitForTimeout(500)
+    const reach = () => page.evaluate(() => {
+      const chip = document.querySelector('.capsule .after:not([data-state]) .chip')
+      if (!chip) return null
+      chip.focus()
+      const focused = document.activeElement === chip
+      chip.blur()
+      return { focused, inert: !!chip.closest('[inert]') }
+    })
+    // the chip in the browser's own accessibility tree, by its words: Chromium's, over CDP (Playwright's role reading
+    // counts what is inert; Firefox's and WebKit's trees are not reachable, and there the engine's inert holds it out)
+    const cdp = engine === 'chromium' ? await context.newCDPSession(page) : null
+    const told = async () => {
+      if (!cdp) return null
+      const name = await page.locator('.capsule .after .chip').first().textContent()
+      const { nodes } = await cdp.send('Accessibility.getFullAXTree')
+      return nodes.filter(n => !n.ignored && n.role?.value === 'button' && n.name?.value === name).length
+    }
+    await page.evaluate(() => window.__capsule.set({ stage: 'translating', n: 25, total: 86, pages: 2 }))
+    await page.waitForTimeout(60)
+    const waiting = { ...(await reach()), told: await told() }
+    await page.waitForTimeout(500)
+    const shown = { ...(await reach()), told: await told() }
+    // the keyboard's way to it, and its ring: Tab from the top of the page
+    await page.locator('body').click({ position: { x: 5, y: 5 } })
+    let ring = null
+    for (let i = 0; i < 4 && !ring; i++) {
+      await page.keyboard.press(engine === 'webkit' ? 'Alt+Tab' : 'Tab')
+      ring = await page.evaluate(() => { const a = document.activeElement; return a?.matches('.capsule .chip') ? getComputedStyle(a).outline : null })
+    }
+    if (motion === 'reduce') check(`${engine} reduced motion: an action that comes can be focused at once`, waiting.focused && !waiting.inert && waiting.told !== 0, JSON.stringify(waiting))
+    else check(`${engine} an action that comes is inert while the box opens for it: not focusable, not in the accessibility tree`, waiting.focused === false && waiting.inert && !waiting.told, JSON.stringify(waiting))
+    check(`${engine}${motion === 'reduce' ? ' reduced motion:' : ''} once shown, the action can be focused, by the keyboard too, with its ring`, shown.focused && !shown.inert && shown.told !== 0 && /2px/.test(ring ?? ''), JSON.stringify({ shown, ring }))
     await context.close()
   }
 

@@ -313,7 +313,9 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
     changed digit cross-fades, 150 ms on `--ease-out`, shown at most once per 300 ms, a burst landing on its latest. A
     digit gained opens a cell from nothing with the box, 300 ms on the soft curve, the whole number cross-fading at
     161 ms — never a lone 0. It is the one width change between two changes of words.
-  - **A chip that comes** opens the box as growing words do and fades in once it fits.
+  - **A chip that comes** opens the box as growing words do and fades in once it fits; until its entrance begins it is
+    inert — not focusable, not pressed, not in the accessibility tree — and under reduced motion, with no wait, it is
+    reachable at once (Codex on #317). One that goes is inert as it starts to leave.
   - **A change mid-way** retargets from where things stand: the width from its current value, a fade from its current
     opacity; words not yet shown are dropped unseen.
   - **One line, 34 px, in every frame**, and no ink past the border; a sentence too long for one line at the window's
