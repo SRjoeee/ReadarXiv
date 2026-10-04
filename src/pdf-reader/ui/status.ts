@@ -2,8 +2,9 @@
 // an icon, one sentence, at most one action. Reading shows nothing; a translation on screen is never covered by a
 // failure's card
 import type { ProviderErrorKind } from '@/providers/types'
-import { R, S, languageName, reasonText } from '@/ui/strings'
+import { R, S, reasonText } from '@/ui/strings'
 import type { ReaderState } from '../controller'
+import { ownName } from './languages'
 
 export type Capsule =
   /** the paper cannot be had as a bilingual PDF: said, with its HTML version (`href`) offered where there is one; not
@@ -24,7 +25,7 @@ export function capsuleOf(state: ReaderState, seen: { closed: boolean; narrowSho
   if (state.phase === 'failed' || state.phase === 'loading') return null
   // before anything else: it says why the translated displays are greyed (the maintainer, 2026-09-26)
   if (!state.available) return state.htmlVersion ? { kind: 'unavailable', text: R.status.noPdf, href: state.htmlVersion } : { kind: 'unavailable', text: R.status.noPdf }
-  if (!state.languageSupported && state.settings) return { kind: 'unsupported', text: R.status.unsupported(languageName(state.settings.targetLanguage)), action: 'language' }
+  if (!state.languageSupported && state.settings) return { kind: 'unsupported', text: R.status.unsupported(ownName(state.settings.targetLanguage)), action: 'language' }
   // the paragraphs that failed are told once the run has ended, with its retry
   if (!running(state) && state.failedUnits > 0 && !seen.closed) return { kind: 'notice', text: S.failed.text(state.failedUnits), action: 'retry' }
   if (state.narrow && state.display === 'bilingual' && !seen.narrowShown) return { kind: 'narrow', text: R.status.narrow }

@@ -60,6 +60,12 @@ describe('the reader\'s style sheet (the interface review, 2026-09-26)', () => {
     expect(at('@media (width < 400px)', 'header.bar')).toBe('gap: 8px;')
     expect(at('@media (width < 360px)', 'header.bar')).toBe('gap: 6px;')
     expect(at('@media (width < 360px)', '[data-zone="trail"] > .divider')).toBe('display: none;')
+    // one specificity, so the cascade is the source's order: the base gap, then 400 px, then 360 px, which must win below it
+    const order = (query?: string) => all.findIndex(r => r.selector === 'header.bar' && (query ? r.within.includes(query) : r.within.length === 0))
+    const [base, below400, below360] = [order(), order('@media (width < 400px)'), order('@media (width < 360px)')]
+    expect(base).toBeGreaterThanOrEqual(0)
+    expect(base).toBeLessThan(below400)
+    expect(below400).toBeLessThan(below360)
   })
 
   it('rings the capsule that is a stop of its own as the chrome\'s controls are rung (Codex and Devin on #307)', () => {

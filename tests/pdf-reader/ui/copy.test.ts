@@ -15,7 +15,8 @@ describe("the reader's words", () => {
   it('carry the design\'s table (§15)', () => {
     const { R } = LOCALES['zh-CN']
     expect(R.display).toEqual({ name: '显示', original: '原文', bilingual: '对照', translation: '译文' })
-    expect(R.status.unsupported('Deutsch')).toBe('PDF 对照暂不支持Deutsch')
+    // a language's own name is mostly not Chinese: a space between, as UI.md §1 rule 9 asks (the maintainer, 2026-10-04)
+    expect(R.status.unsupported('Deutsch')).toBe('PDF 对照暂不支持 Deutsch')
     expect(R.status.narrow).toBe('窗口较窄，暂只显示译文')
     expect(LOCALES.en.R.display.bilingual).toBe('Side by side')
   })

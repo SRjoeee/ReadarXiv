@@ -1,8 +1,9 @@
 import { act, createElement, type ReactNode } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { LANG_CODE_TO_LOCALE_NAME } from '@/config/languages'
+import { LANG_CODE_TO_LOCALE_NAME, toBcp47 } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { fileName, type ReaderController } from '@/pdf-reader/controller'
+import { READER_LANGUAGES } from '@/pdf-reader/ui/languages'
 import { DownloadMenu, LanguageMenu, ServiceMenu, ZoomMenu } from '@/pdf-reader/ui/Menus'
 import { S, setLocale } from '@/ui/strings'
 import { mountElement } from '../../ui/render-hook'
@@ -48,16 +49,33 @@ describe('the reader\'s menus (the reader\'s design, §6.1, §6.7)', () => {
   })
 
   it('language: the button names the target by its own name in either interface language, as the menu\'s rows do (the maintainer, 2026-10-04)', async () => {
-    for (const locale of ['zh-CN', 'en'] as const) {
-      setLocale(locale)
-      const { container } = await openMenu(LanguageMenu, { settings: { ...DEFAULT_CONFIG, targetLanguage: 'jpn' } })
-      const button = container.querySelector<HTMLElement>('.menu-btn [data-value]')!
-      const row = [...container.querySelectorAll('[role="option"]')].find(o => o.getAttribute('aria-selected') === 'true')
-      expect([locale, button.textContent]).toEqual([locale, LANG_CODE_TO_LOCALE_NAME.jpn])
-      expect(row?.textContent).toBe(button.textContent)
-      document.body.innerHTML = ''
-    }
-    setLocale('zh-CN')
+    try {
+      for (const locale of ['zh-CN', 'en'] as const) {
+        setLocale(locale)
+        const { container } = await openMenu(LanguageMenu, { settings: { ...DEFAULT_CONFIG, targetLanguage: 'jpn' } })
+        const button = container.querySelector<HTMLElement>('.menu-btn [data-value]')!
+        const row = [...container.querySelectorAll('[role="option"]')].find(o => o.getAttribute('aria-selected') === 'true')
+        expect([locale, button.textContent]).toEqual([locale, LANG_CODE_TO_LOCALE_NAME.jpn])
+        expect(row?.textContent).toBe(button.textContent)
+        document.body.innerHTML = ''
+      }
+    } finally { setLocale('zh-CN') }
+  })
+
+  it('language: a code the table lacks shows the code itself, never nothing', async () => {
+    const { container } = await openMenu(LanguageMenu, { settings: { ...DEFAULT_CONFIG, targetLanguage: 'zzz' as never } })
+    expect(container.querySelector('.menu-btn [data-value]')?.textContent).toBe('zzz')
+  })
+
+  it('language: the button\'s value and each row carry the language they are written in, and the button\'s name starts with the own name (WCAG 3.1.2, 2.5.3)', async () => {
+    const { container } = await openMenu(LanguageMenu, { settings: { ...DEFAULT_CONFIG, targetLanguage: 'jpn' } })
+    const button = container.querySelector<HTMLElement>('.menu-btn')!
+    expect(button.querySelector('[data-value]')?.getAttribute('lang')).toBe(toBcp47('jpn'))
+    const options = [...container.querySelectorAll('[role="option"]')]
+    expect(options.map(o => o.querySelector('[lang]')?.getAttribute('lang'))).toEqual(READER_LANGUAGES.map(toBcp47))
+    // the name aria-labelledby builds: the value, then the label that is hidden
+    const name = button.getAttribute('aria-labelledby')!.split(' ').map(id => document.getElementById(id)?.textContent).join(' ')
+    expect(name).toBe(`${LANG_CODE_TO_LOCALE_NAME.jpn} ${S.rows.language}`)
   })
 
   it('language: the arrows move one language at a time from the search field, and Enter picks once (the final review)', async () => {

@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
+import { LANG_CODE_TO_LOCALE_NAME } from '@/config/languages'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { INITIAL, type ReaderState } from '@/pdf-reader/controller'
 import { capsuleOf, cardOf, lineOf, spokenOf } from '@/pdf-reader/ui/status'
@@ -60,6 +61,22 @@ describe('the states (the reader\'s design, §8)', () => {
     const state = at({ phase: 'ready', languageSupported: false, settings: { ...DEFAULT_CONFIG, targetLanguage: 'arb' } })
     expect(capsuleOf(state, none)).toMatchObject({ kind: 'unsupported', action: 'language' })
     expect(capsuleOf(state, none)!.text).toMatch(/^PDF 对照暂不支持/)
+  })
+
+  it('names that language by its own name, as the language button does, in either interface language (the maintainer, 2026-10-04)', () => {
+    try {
+      for (const locale of ['zh-CN', 'en'] as const) {
+        setLocale(locale)
+        for (const target of ['arb', 'tur'] as const) {
+          const text = capsuleOf(at({ phase: 'ready', languageSupported: false, settings: { ...DEFAULT_CONFIG, targetLanguage: target } }), none)!.text
+          expect([locale, text]).toEqual([locale, R.status.unsupported(LANG_CODE_TO_LOCALE_NAME[target])])
+          // the name inside is the one the language button shows, not the interface's name for the language
+          expect(text).toContain(LANG_CODE_TO_LOCALE_NAME[target])
+        }
+      }
+      setLocale('en')
+      expect(R.status.unsupported('X')).toBe("A bilingual PDF isn't available in X yet")
+    } finally { setLocale('zh-CN') }
   })
 
   it('says once that a narrow window shows the translation alone', () => {

@@ -2,13 +2,13 @@
 // download. Each is a toolbar control and its anchored popover; choosing closes it
 import { ChevronDown, Download } from 'lucide'
 import { browser } from 'wxt/browser'
-import { LANG_CODE_TO_LOCALE_NAME, type LangCode } from '@/config/languages'
+import { type LangCode, toBcp47 } from '@/config/languages'
 import { isBuiltInService } from '@/config/services'
 import { MANAGE_SERVICES, serviceItems } from '@/ui/service-items'
 import { R, S, serviceName } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import { Icon } from '@/ui/controls/Icon'
-import { languageItems } from './languages'
+import { languageItems, ownName } from './languages'
 import { Popover, usePopover } from '@/ui/controls/Popover'
 import { MenuList } from '@/ui/controls/MenuList'
 import { ToolbarButton } from './ToolbarButton'
@@ -42,17 +42,18 @@ export function ZoomMenu({ controller }: { controller: ReaderController }) {
 
 /** `name`: the toolbar's menu and the reading options' each have one, so that the capsule's choose-language action can
  *  open either (usePopover, App.tsx). The button names the target as the menu's rows do, by its own name, whatever the
- *  interface's language: Japanese in Japanese, never in English (the maintainer, 2026-10-04) */
+ *  interface's language: Japanese in Japanese, never in English (the maintainer, 2026-10-04). The name and the rows carry
+ *  the language they are written in (`lang`) */
 export function LanguageMenu({ controller, name }: { controller: ReaderController; name?: string }) {
   const current = useReader(controller, s => s.settings?.targetLanguage ?? '')
   const pop = usePopover('listbox', name)
   return (
     <>
-      <ToolbarButton label={S.rows.language} value={current ? LANG_CODE_TO_LOCALE_NAME[current as LangCode] ?? current : ''} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
+      <ToolbarButton label={S.rows.language} value={current ? ownName(current) : ''} valueLang={current ? toBcp47(current) : undefined} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
       <Popover {...pop.popover} role="listbox" label={S.rows.language}>
-        <MenuList key={pop.generation} kind="listbox" label={S.rows.language} search={S.menu.searchLanguages} noMatch={S.menu.noMatch} items={languageItems(current).map(i => ({ ...i, checked: i.selected }))} onClose={() => shut(pop.popover.id)}
+        <MenuList key={pop.generation} kind="listbox" label={S.rows.language} search={S.menu.searchLanguages} noMatch={S.menu.noMatch} items={languageItems(current).map(i => ({ ...i, checked: i.selected, lang: toBcp47(i.id) }))} onClose={() => shut(pop.popover.id)}
           onPick={code => { controller.patchSettings(c => ({ ...c, targetLanguage: code as LangCode })); shut(pop.popover.id) }} />
       </Popover>
     </>
