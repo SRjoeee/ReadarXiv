@@ -21,6 +21,7 @@
 import { analyze } from './paper-meta.mjs'
 import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
+import { passagesInSource } from './cache.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
 import { nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
 import { WIDTH_PROBE } from './typeset/density.mjs'
@@ -556,7 +557,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     const filesFor = (snapshot, { draft, typeset }) => {
       const spans = {}, set = setting(snapshot)
       const files = translationFiles(paper, set, { strategy: strategy(), fonts, draft, ...given(), evenSpaces: !off('spacing'), typeset, spans, note })
-      last = { files, lines: spans.lines, snapshot: set }
+      // the units it sets translated: not the author block under a strategy that sets its names as the paper has them
+      last = { files, lines: spans.lines, snapshot: typesetBy(set, strategy()) }
       return files
     }
     /**
@@ -734,9 +736,10 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     }
     // the passages the safety net set in the source in the last compile shown (S-P-60 counts them: ruling 6 of
     // 2026-10-04): the units it set there that the compile's snapshot had translated — a unit the service lost is
-    // counted as lost, once (`missing`; the review's M-7)
+    // counted as lost, once (`missing`; the review's M-7) —, the author block's left out, as a copy's count leaves it
+    // (cache.mjs passagesInSource), so that a visit again says what the visit that made the copy said
     let shownInSource = 0
-    const inSourceOf = snapshot => [...inSource].filter(u => snapshot.has(u)).length
+    const passagesShown = snapshot => [...inSource].filter(u => snapshot.has(u) && u.kind !== 'author').length
     const planFor = snapshot => {
       if (!readings || ruleFailed.has(strategy().name)) return null
       const plan = previewTypesetting({ paper, translated: setting(snapshot), lang, strategy: strategy(), fonts, fontLog, original: readings })
@@ -799,7 +802,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
           recovered()
           previews++
           measuring = plan && whole(snapshot) ? { plan, strategy: strategy().name, r } : null
-          shownInSource = inSourceOf(snapshot)
+          shownInSource = passagesShown(snapshot)
           onUpdate?.({ pdf: r.pdf, texts: texts(setting(snapshot)), translated: snapshot.size, final: false })
         } else if (timedOut(r)) {
           // the machine slow: nothing changed, the next batch or the final goes on
@@ -823,7 +826,10 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     if (seed && !changed && pipelineCurrent) {
       if (!marks) await original()
       note('unchanged')
-      return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing(), original: readings, passing }
+      // the copy's PDF stays, and the passages it holds in the original with it (cache.mjs passagesInSource: the seeds
+      // carry their mark)
+      const inSourceKept = passagesInSource([...results].map(([i, r]) => ({ kind: units[i].kind, inSource: r.inSource })))
+      return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing(), inSource: inSourceKept, original: readings, passing }
     }
     const all = new Map(translated), t0 = Date.now()
     /**
@@ -927,7 +933,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       typeset = planFor(all)?.typeset ?? null
     }
     if (ok) {
-      shownInSource = inSourceOf(all)
+      shownInSource = passagesShown(all)
       onUpdate?.({ pdf: r.pdf, texts: texts(setting(all)), translated: all.size, final: true })
       // the units the final set in the source though translated, for the record: their translation stays the next run's.
       // Said anew for every unit it set, a seed's mark included: it set them all again — those the safety net set in the

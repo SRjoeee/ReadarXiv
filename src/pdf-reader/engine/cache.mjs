@@ -62,6 +62,15 @@ const ownNested = (unit, pieces) => {
 export const inSourceOf = u => (u?.inSource ? { inSource: true } : {})
 
 /**
+ * The passages a copy or a run holds in the original though translated (S-P-60's count, the maintainer's ruling 6 of
+ * 2026-10-04): its units marked set in the source (inSourceOf) but the author block's, which a strategy that cannot take
+ * its names sets as the paper has them on purpose (scripts.mjs typesetBy) — so the units the compile's safety net set
+ * there, counted on every visit to the copy as on the one that made it (the review of 2026-10-04, I-6). From the
+ * record's units as they are: no field of the record's is added for it
+ */
+export const passagesInSource = units => units.filter(u => u?.inSource && u.kind !== 'author').length
+
+/**
  * A run again's seed: the copy's (seedFrom), with what the visit's last run made over it (runLive's results), so that
  * only the units still missing are asked again — each with its pieces, its provenance, its sentences and its mark of a
  * final that set it in the source, which the run passes on to what it shows and to the record (a seeded unit without

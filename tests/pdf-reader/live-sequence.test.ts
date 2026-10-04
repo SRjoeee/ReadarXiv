@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { copyTexts, decideWrite, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from '@/pdf-reader/engine/cache.mjs'
+import { copyTexts, decideWrite, passagesInSource, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from '@/pdf-reader/engine/cache.mjs'
 import { citationLines, type Compiled, compilerKeeper, keptFor, openPaper, originalFiles, PIPELINE_VERSION, runLive, stoppedShort } from '@/pdf-reader/engine/live.mjs'
 import type { Marks } from '@/pdf-reader/engine/typeset/places.mjs'
 
@@ -1337,5 +1337,22 @@ describe('the remedies in their order, wherever a compile fails', () => {
     expect(notes.filter(([e]) => e === 'in source').map(([, d]) => d.units)).toEqual([[note]])
     expect([r.settled, r.inSource]).toEqual([true, 1])
     expect([(r.results.get(note) as { inSource?: boolean }).inSource, (r.results.get(para) as { inSource?: boolean }).inSource]).toEqual([true, undefined])
+  })
+
+  it('a copy with a passage in the source, opened again: the copy counts it, and a run of it that changes nothing counts it too', async () => {
+    const p = paper(), n = p.units.length
+    // the first visit: unit 3 breaks TeX, and is set in the source
+    const r0 = await runLive(p, { lang: 'zh', compile: async q => (kindOf(q) === 'probe' || kindOf(q) === 'original' ? null : failAt(q, 3)) ?? ok(n, q), translate: numbered, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    expect([r0.settled, r0.inSource]).toEqual([true, 1])
+    const hashes = await Promise.all(p.units.map(u => sourceHash(u)))
+    const record = JSON.parse(JSON.stringify({ format: 'markers', units: unitsOf(p.units, keptFor(p, 'zh'), hashes, r0.results) }))
+    // a visit again: the copy current (session.mjs's 'cache current' counts it so), or a run of it that changes nothing
+    expect(passagesInSource(record.units)).toBe(1)
+    const { seed } = await seedFrom(record, p.units)
+    const calls: string[] = [], notes: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: async q => { calls.push(kindOf(q)); return ok(n, q) }, translate: numbered, format: 'markers', marks: new Map([['0s', {}]]), identity: 'B', seed: reusable(seed, { identity: 'B', copyWire: true }), pipelineCurrent: true, readMarks: async () => MARKS(n), note: (e: string) => notes.push(e) })
+    expect(notes).toContain('unchanged')
+    expect(calls.filter(k => k !== 'probe')).toEqual([])
+    expect([r.changed, r.inSource]).toEqual([false, 1])
   })
 })

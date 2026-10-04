@@ -32,7 +32,7 @@ import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from './anchors.mjs'
 import { blockOf, bySentence, clickOf, hitOf, layoutOf, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
-import { allTranslatedBy, copyTexts, decideWrite, digestOf, endOf, figureKeyOf, knownMarks, knownOriginal, labelOf, originalRow, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from './cache.mjs'
+import { allTranslatedBy, copyTexts, decideWrite, digestOf, endOf, figureKeyOf, knownMarks, knownOriginal, labelOf, originalRow, passagesInSource, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
@@ -2201,6 +2201,9 @@ async function live() {
     note('engine', { lang, format: engine.format, engine: engine.engine })
     if (!retrying && cached && isCurrent(cached, { identity: engine.identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION })) {
       status(`${paper}, this machine's copy · translated into ${lang} by ${cached.engine}`)
+      // the passages the copy's typesetting left in the original are said on this visit too, as on the one that made it
+      // (S-P-60; the review of 2026-10-04, I-6): a copy that sets them so is current, and nothing is compiled again
+      lost = passagesInSource(cached.units)
       note('cache current')
       L.done = true
       return

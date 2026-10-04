@@ -3,7 +3,7 @@
 // so it is written only for a translation that one identity made whole — as a copy is current only when every unit is
 // (the final review of Codex 1 on #306)
 import { describe, expect, it } from 'vitest'
-import { allTranslatedBy, endOf, knownOriginal, labelOf, originalRow, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
+import { allTranslatedBy, endOf, knownOriginal, labelOf, originalRow, passagesInSource, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
 import { openPaper, translationFiles } from '@/pdf-reader/engine/live.mjs'
 import { translateUnits } from '@/pdf-reader/engine/mt.mjs'
 import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
@@ -228,5 +228,16 @@ describe('endOf: what a run that could not set its final says', () => {
     expect(endOf(ex, { compiledOnce: false, finalShown: false, cached: true })).toBeNull()
     expect(endOf({ exhausted: true, stopped: 'network' }, { compiledOnce: true, finalShown: false, cached: false })).toBeNull()
     expect(endOf({ exhausted: false, stopped: null }, { compiledOnce: true, finalShown: false, cached: false })).toBeNull()
+  })
+})
+
+// The passages a copy holds that its typesetting left in the original (the review of 2026-10-04, I-6): the reader's
+// failure note counts them on every visit to the copy, as on the one that made it. A unit is marked set in the source
+// for one reason more: the author block under a strategy that sets its names as the paper has them (scripts.mjs
+// typesetBy), on purpose — the count leaves the author block out
+describe('passagesInSource: what a copy holds in the original that it had translated', () => {
+  it("every unit marked set in the source but the author block's", () => {
+    expect(passagesInSource([{ kind: 'paragraph', inSource: true }, { kind: 'author', inSource: true }, { kind: 'paragraph' }, { kind: 'caption', inSource: true }, { kind: 'paragraph', state: 'kept' }])).toBe(2)
+    expect(passagesInSource([])).toBe(0)
   })
 })
