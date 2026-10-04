@@ -595,14 +595,19 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     const lostKey = message => { const c = /^Missing character: There is no (.+?) in font /.exec(message)?.[1]; return c && (c.match(/\(U\+([0-9A-F]+)\)/)?.[1] ?? c.trim()) }
     /** the letters of a unit's translation in a snapshot, its nested units' with them */
     const lettersOf = (u, snapshot) => [snapshot.get(u)?.filter(p => p.t === 'text' && p.tr).map(p => p.s).join('') ?? '', ...u.pieces.filter(p => p.t === 'nested').map(p => lettersOf(p.unit, snapshot))].join('')
+    /** the translated units in `snapshot` that setting `found` in the source sets there, not in `out` already: each with
+     *  every unit nested in it, once — the passages the bounds count (Codex's first medium: a paragraph's five footnotes
+     *  are six passages, which the bound of three had counted as one) */
+    const reverting = (found, out, snapshot) => [...new Set(found.flatMap(withNested))].filter(u => !out.has(u) && snapshot.has(u))
     /** whether the letters a compile (`at`) lost beyond the original's, where the log names them by code point, stand in
-     *  the translation of a unit or a few — no more than `room`, what the strategy may still set in the source: lost in
-     *  more, they are the strategy's font's, and in none, not a unit's (a caption babel sets) */
-    const lostInFew = (at, known, room) => {
+     *  the translation of a unit or a few — no more passages than `room`, what the strategy may still set in the source
+     *  besides `out`: lost in more, they are the strategy's font's, and in none, not a unit's (a caption babel sets) */
+    const lostInFew = (at, known, out, room) => {
       const codes = [...lostIn(at.r.log)].filter(([c, n]) => n > (known.get(c) ?? 0)).map(([c]) => (/^[0-9A-F]+$/.test(c) ? String.fromCodePoint(parseInt(c, 16)) : null))
       if (codes.some(c => c === null)) return true
       const holding = [...at.snapshot.keys()].filter(u => !u.nested && codes.some(c => lettersOf(u, at.snapshot).includes(c)))
-      return holding.length > 0 && holding.length <= room
+      const n = reverting(holding, out, at.snapshot).length
+      return n > 0 && n <= room
     }
     /** the units a compile's errors stand in (`at`: the compile — its files, its units' lines in them, the units it set
      *  translated), translated in it and not in `out`, the paper's own errors left out (ownErrors, read only once an
@@ -630,7 +635,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       const errors = texErrors(at.r.log).filter(e => e.char !== undefined)
       if (errors.length || !at.r.ok) return placedIn(errors, at, out)
       const known = lostIn((await original()).log)
-      if (spent + 1 >= SPENT_MAX || !lostInFew(at, known, room)) return []
+      if (spent + 1 >= SPENT_MAX || !lostInFew(at, known, out, room)) return []
       spent++
       note('lost letters', { strategy: strategies[at.s].name, letters: [...lostIn(at.r.log).keys()].slice(0, 5) })
       const overrides = new Map(at.req.overrides)
@@ -640,14 +645,16 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     }
     /** a remedy taken for the next compile: the episode's, and one of the run's budget */
     const take = how => { episode.tried.add(how); episode.trying = how; spent++; return how }
-    /** whether units found may be set in the source under the strategy: some, within its bounds and the run's */
-    const fits = found => found.length > 0 && placed + found.length <= IN_SOURCE_MAX && spent < SPENT_MAX
-    /** units set in the source with every unit nested in each, as one round of the strategy's; said */
-    const place = (found, r) => {
+    /** whether units found in a compile (`at`) may be set in the source under the strategy: a passage or more, within
+     *  its bounds and the run's */
+    const fits = (found, at) => { const n = reverting(found, inSource, at.snapshot).length; return n > 0 && placed + n <= IN_SOURCE_MAX && spent < SPENT_MAX }
+    /** units found in a compile (`at`) set in the source with every unit nested in each, as one round of the strategy's,
+     *  each passage they set there counted; said */
+    const place = (found, at) => {
       rounds++
-      placed += found.length
+      placed += reverting(found, inSource, at.snapshot).length
       for (const u of found.flatMap(withNested)) inSource.add(u)
-      note('in source', { strategy: strategy().name, units: found.map(u => indexOf.get(u)), error: whyFailed(r) ?? whyUnset(r) })
+      note('in source', { strategy: strategy().name, units: found.map(u => indexOf.get(u)), error: whyFailed(at.r) ?? whyUnset(at.r) })
     }
     /**
      * After a compile that did not set the translation (TeX's failure, or a letter lost; BusyTeX's timeout is not one):
@@ -685,8 +692,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
         if (!lettersBack && (ahead() || lettersAt.s !== s)) return null
         found = await letterUnits(at, inSource, IN_SOURCE_MAX - placed)
       }
-      if (!fits(found)) return null
-      place(found, r)
+      if (!fits(found, at)) return null
+      place(found, at)
       return take('units')
     }
     /** a compile under the strategy set the translation: the remedy it tried is kept, and said */
@@ -703,17 +710,21 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       if (!at || at.s >= s || lettersBack || spent >= SPENT_MAX) return false
       lettersAt = null
       const found = await letterUnits(at, new Set(), IN_SOURCE_MAX)
-      if (!found.length || found.length > IN_SOURCE_MAX || spent >= SPENT_MAX) return false
+      const n = reverting(found, new Set(), at.snapshot).length
+      if (!n || n > IN_SOURCE_MAX || spent >= SPENT_MAX) return false
       lettersBack = true
       s = at.s; aux = null; inSource.clear(); rounds = placed = 0
       note('back to strategy', { strategy: strategy().name })
       episode = { tried: new Set(), trying: null, failure: null }
-      place(found, at.r)
+      place(found, at)
       take('units')
       return true
     }
-    // the units set in the source in the last compile shown (S-P-60 counts them: ruling 6 of 2026-10-04)
+    // the passages the safety net set in the source in the last compile shown (S-P-60 counts them: ruling 6 of
+    // 2026-10-04): the units it set there that the compile's snapshot had translated — a unit the service lost is
+    // counted as lost, once (`missing`; the review's M-7)
     let shownInSource = 0
+    const inSourceOf = snapshot => [...inSource].filter(u => snapshot.has(u)).length
     const planFor = snapshot => {
       if (!readings || ruleFailed.has(strategy().name)) return null
       const plan = previewTypesetting({ paper, translated: setting(snapshot), lang, strategy: strategy(), fonts, fontLog, original: readings })
@@ -776,7 +787,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
           recovered()
           previews++
           measuring = plan && whole(snapshot) ? { plan, strategy: strategy().name, r } : null
-          shownInSource = inSource.size
+          shownInSource = inSourceOf(snapshot)
           onUpdate?.({ pdf: r.pdf, texts: texts(setting(snapshot)), translated: snapshot.size, final: false })
         } else if (timedOut(r)) {
           // the machine slow: nothing changed, the next batch or the final goes on
@@ -904,7 +915,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       typeset = planFor(all)?.typeset ?? null
     }
     if (ok) {
-      shownInSource = inSource.size
+      shownInSource = inSourceOf(all)
       onUpdate?.({ pdf: r.pdf, texts: texts(setting(all)), translated: all.size, final: true })
       // the units the final set in the source though translated, for the record: their translation stays the next run's.
       // Said anew for every unit it set, a seed's mark included: it set them all again — those the safety net set in the

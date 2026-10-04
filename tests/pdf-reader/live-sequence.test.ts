@@ -1283,4 +1283,41 @@ describe('the remedies in their order, wherever a compile fails', () => {
     expect(found.map(x => x.unit)).toEqual(p.units)
     for (const [i, x] of found.entries()) expect(lines.slice(x.first - 1, x.last).join('\n')).toContain(`Paragraph ${i} of`)
   })
+
+  /** four paragraphs, the third with `notes` footnotes */
+  const withNotes = (notes: number) => openPaper(new Map([['main.tex', new TextEncoder().encode(`\\documentclass{article}\\begin{document}\n${Array.from({ length: 4 }, (_, k) => `Paragraph ${k} of the paper, with words that run on${k === 2 ? Array.from({ length: notes }, (_, j) => `\\footnote{A note, number ${j + 5}, with words.}`).join('') : ''} for a line.\n`).join('\n')}\\end{document}\n`)]]))
+  /** TeX stopped in the third paragraph's own words, in every compile of the translation that has them */
+  const brokenThird = (n: number) => async (q: Req): Promise<Compiled> => (kindOf(q) === 'probe' || kindOf(q) === 'original' ? null : failAt(q, 2)) ?? ok(n, q)
+  const inSourceOfResults = (r: { results: Map<number, unknown> }) => [...r.results.values()].filter(x => (x as { inSource?: boolean }).inSource).length
+
+  it('a paragraph with five footnotes is six passages set in the source: more than the bound allows, and none is', async () => {
+    const p = withNotes(5), n = p.units.length, notes: [string, Record<string, unknown>][] = []
+    // nine units: the bound is max(3, ceil(2 % of 9)) = 3
+    expect(n).toBe(9)
+    const r = await runLive(p, { lang: 'zh', compile: brokenThird(n), translate: numbered, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+    expect(notes.filter(([e]) => e === 'in source')).toEqual([])
+    expect([r.exhausted, r.inSource ?? 0, inSourceOfResults(r)]).toEqual([true, 0, 0])
+  })
+
+  it('a paragraph with two footnotes is three passages: within the bound, all set in the source and counted', async () => {
+    const p = withNotes(2), n = p.units.length, notes: [string, Record<string, unknown>][] = []
+    const para = p.units.findIndex(u => u.pieces.some(x => (x as { t: string }).t === 'nested'))
+    const r = await runLive(p, { lang: 'zh', compile: brokenThird(n), translate: numbered, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+    expect(notes.filter(([e]) => e === 'in source').map(([, d]) => d.units)).toEqual([[para]])
+    expect([r.settled, r.inSource, inSourceOfResults(r)]).toEqual([true, 3, 3])
+  })
+
+  it('a footnote the service lost and the safety net set in the source with its paragraph is counted once, as lost', async () => {
+    const p = withNotes(1), n = p.units.length, note = p.units.findIndex(u => (u as { nested?: boolean }).nested)
+    // one batch: the footnote's text lost to the service, the rest back
+    const translate = async (texts: string[]) => {
+      const back = await numbered(texts), k = texts.findIndex(t => t.includes('A note'))
+      throw Object.assign(new Error('the network is down'), { kind: 'network', partial: back.map((x, j) => (j === k ? null : x)), lost: new Set([k]) })
+    }
+    const r = await runLive(p, { lang: 'zh', compile: brokenThird(n), translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    expect(r.stopped).toBe('network')
+    expect((r.results.get(note) as { state?: string }).state).toBe('lost')
+    // the paragraph set in the source is the one passage the safety net counts; the footnote is the service's
+    expect([r.missing, r.inSource]).toEqual([1, 1])
+  })
 })
