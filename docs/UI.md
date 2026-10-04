@@ -236,6 +236,10 @@ The bilingual PDF reader's own words (the reader's design, `experiments/pdf-bili
 §15). Where the popup already says the same thing, the reader shows the popup's string: 翻译服务 (S-P-10), 目标语言
 (S-P-20), 搜索语言 and 没有匹配的语言 (S-P-22/23), 对照高亮 (S-P-80), 图片翻译 (S-P-85), 设置 (S-P-02), {n} 处翻译失败 and
 重试 (S-P-60/61), and the reasons (S-E). No reader-facing string names a technical path (a test checks both packs).
+The reader's S-P-60 also counts the passages its typesetting had to leave in the original (DESIGN §16), on the visit
+that set them so and on every visit to that copy; S-P-61 comes with it only where the run stopped for a reason a retry
+mends, since those passages fail the same way again until a new version of the reader or of the paper (the
+maintainer's ruling 6, and the review of 2026-10-04).
 
 **The reader names a target language by its own name, wherever it shows one** [decided, the maintainer, 2026-10-04; §6]: the toolbar's language button
 (and the one the reading options hold below 900 px) shows 日本語 in the Chinese and the English interface alike, never 日语 or "Japanese", exactly as its menu's
@@ -262,6 +266,7 @@ so that the button and the sentence agree.
 | S-R-16 | The card · too many requests | 请求过于频繁 | The reader's own words for S-E's rate limit: S-E's 稍后自动重试 is the HTML page's chain retrying by itself, and a stopped run here does not — the reader retries (Part 6's interface review) |
 | S-R-17 | Cannot be had | 这篇论文暂不支持 PDF 翻译 | The paper has no source, or none of the ways of setting it worked: the original shown, 对照 and 译文 greyed. It says that, never why (the section's rule), and has no close: nothing else can be done here (the maintainer, 2026-09-26) |
 | S-R-18 | Its action | 改用 HTML 翻译 | Where arXiv has an HTML version (a HEAD; only a 404 or 410 means none): a link to it with `#readarxiv`, in a new tab or this one as S-O-49b says — this one being the PDF page the reader lies over. 改用 over 使用: the reader came for the PDF, and this is the other way |
+| S-R-19 | Shown in part | 这篇论文只能显示部分译文，其余为原文 | A preview of the translation is on screen and none of the ways of setting the whole worked: the preview stays, 对照 and 译文 stay as they are. It says that, never why (the section's rule), with S-R-18 where arXiv has an HTML version, and closes (S-R-15). Before the failure note (S-P-60), whose passages it covers (the maintainer, 2026-10-04) |
 
 ## 4. Popup state table [decided, 2026-09-10; redrawn 2026-09-27]
 

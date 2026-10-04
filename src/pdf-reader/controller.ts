@@ -21,6 +21,9 @@ export interface ReaderState {
   available: boolean
   /** where the reader can read the paper translated instead, when it cannot be had as a bilingual PDF: its HTML version */
   htmlVersion: string | null
+  /** the run could show only part of its translation: a preview of it is on screen, and none of the ways could set the
+   *  whole (S-R-19); the displays stay as they are */
+  partial: boolean
   phase: Phase
   /** 0–1, the share of the paper's paragraphs translated */
   progress: number
@@ -63,6 +66,7 @@ export const INITIAL: ReaderState = {
   display: 'original',
   available: true,
   htmlVersion: null,
+  partial: false,
   phase: 'loading',
   progress: 0,
   finishing: -1,
@@ -135,6 +139,8 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       return event.config === state.settings && event.pack === state.pack ? state : { ...state, settings: event.config, pack: event.pack }
     case 'fail':
       if (CANNOT_BE_HAD.has(event.event)) return { ...state, available: false, phase: 'ready' }
+      // the translation shown in part: said, the preview kept, the displays as they are; the run's end follows
+      if (event.event === 'shown in part') return { ...state, partial: true }
       if (NOT_SUPPORTED.has(event.event)) return { ...state, languageSupported: false, phase: 'ready' }
       return { ...state, phase: state.shown === 'none' ? 'failed' : 'ready', failure: kindOf(event.kind) }
     case 'note': {
@@ -145,12 +151,14 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
           return state.display === 'original' && state.phase === 'loading' ? { ...next, phase: 'ready' } : next
         case 'digest':
           return shown === 'none' && state.phase === 'ready' ? { ...next, phase: 'loading' } : next
+        // the copy's passages its typesetting left in the original (session.mjs, cache.mjs passagesInSource), from the
+        // moment it is on screen: current, not checked against the settings, or until a run translates it again
         case 'shown cached':
-          return state.phase === 'loading' ? { ...next, phase: 'ready' } : next
+          return { ...next, ...(state.phase === 'loading' ? { phase: 'ready' } : {}), failedUnits: event.lost }
         case 'cache current':
-          return { ...next, phase: 'ready', progress: 1 }
+          return { ...next, phase: 'ready', progress: 1, failedUnits: event.lost }
         case 'translating':
-          return { ...next, phase: event.again ? 'retranslating' : 'translating', failure: null, progress: event.total ? event.got / event.total : 0, finishing: -1, failedUnits: event.lost }
+          return { ...next, phase: event.again ? 'retranslating' : 'translating', failure: null, partial: false, progress: event.total ? event.got / event.total : 0, finishing: -1, failedUnits: event.lost }
         case 'done':
           return { ...next, phase: state.phase === 'failed' ? 'failed' : 'ready', failedUnits: event.lost, ...(shown === 'final' ? { progress: 1 } : {}) }
       }

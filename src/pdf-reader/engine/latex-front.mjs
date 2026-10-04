@@ -807,9 +807,11 @@ export function pseudoTranslate(u, lang) {
  *  environment it would stand in the vertical list, where \\addvspace no longer sees the skip before it. The start
  *  mark comes with \\leavevmode, which starts the paragraph just as the word would; after the word it would come
  *  between the word and its comma, and a lost kern there respaces the whole line. */
-export function patch(project, translated /* Map unit -> pieces */, { guardControlWords = true, mark } = {}) {
+export function patch(project, translated /* Map unit -> pieces */, { guardControlWords = true, mark, spans = null } = {}) {
   const out = new Map()
-  const render = u => {
+  // `inner`, where asked for: each unit nested in this one, at any depth, its range in the bytes this gives and the
+  // length of what closes it after it (its piece's `post`)
+  const render = (u, inner = null) => {
     const srcEnc = project.transcode?.has(u.file) ? 'utf8' : 'latin1'
     const pieces = translated.get(u) ?? u.pieces
     const m = mark?.(u)
@@ -864,11 +866,17 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
       }
       if (crossed) { beforeAt = k; beforeCut = cut }
     }
-    const parts = []
+    const parts = [], nested = inner && []
     for (let k = 0; k < pieces.length; k++) {
       const p = pieces[k]
       if (m?.before && k === beforeAt && beforeCut === -1) parts.push(utf8Bytes(m.before))
-      if (p.t === 'nested') { parts.push(bytesOf(p.pre, srcEnc), render(p.unit), bytesOf(p.post, srcEnc)); continue }
+      if (p.t === 'nested') {
+        const sub = inner && []
+        parts.push(bytesOf(p.pre, srcEnc))
+        nested?.push([parts.length, p.unit, sub])
+        parts.push(render(p.unit, sub), bytesOf(p.post, srcEnc))
+        continue
+      }
       if (p.t === 'text') {
         const enc = p.tr ? 'utf8' : srcEnc
         const beforeHere = !!m?.before && k === beforeAt && beforeCut >= 0
@@ -890,6 +898,11 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
       if (guardControlWords && /\\[A-Za-z@]+\*?$/.test(p.src) && next?.t === 'text' && next.tr && /^[^\s{[]/.test(next.s)) parts.push(utf8Bytes('{}'))
     }
     if (m?.before && beforeAt === pieces.length && beforeCut === -1) parts.push(utf8Bytes(m.before))
+    if (nested?.length) {
+      let size = 0
+      const starts = parts.map(b => { const at = size; size += b.length; return at })
+      for (const [k, unit, sub] of nested) inner.push({ unit, from: starts[k], to: starts[k] + parts[k].length, post: parts[k + 1].length }, ...sub.map(x => ({ ...x, from: x.from + starts[k], to: x.to + starts[k] })))
+    }
     return concat(parts)
   }
   const byFile = new Map()
@@ -903,12 +916,24 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     const fits = (project.fits ?? []).filter(f => f.file === file && us.some(u => u.start >= f.start && u.end <= f.end && translated.has(u)))
     // (a tabular* between \\axtstar and \\axtstarbody, which measure its body at its columns' width)
     const inserts = fits.flatMap(f => [[f.start, [utf8Bytes(f.star ? '\\axtfit{\\axtstar' : '\\axtfit{')]], ...(f.star ? [[f.star, [utf8Bytes('\\axtstarbody')]]] : []), [f.end, [utf8Bytes('}{'), bytesOf(text.slice(f.start, f.end), enc), utf8Bytes('}')]]]).sort((a, b) => a[0] - b[0])
+    // the bytes written so far, where `spans` is asked for: each top-level unit's range in the file as written, and each
+    // unit nested in one, inside its range, with the top-level unit it is written in (`outer`), which a compile's error
+    // is located by (tex-errors.mjs)
+    let size = 0
+    const add = (...bytes) => { parts.push(...bytes); if (spans) for (const b of bytes) size += b.length }
     const copy = (from, to) => {
-      for (const [pos, bytes] of inserts) if (pos >= from && pos < to) { parts.push(bytesOf(text.slice(from, pos), enc), ...bytes); from = pos }
-      parts.push(bytesOf(text.slice(from, to), enc))
+      for (const [pos, bytes] of inserts) if (pos >= from && pos < to) { add(bytesOf(text.slice(from, pos), enc), ...bytes); from = pos }
+      add(bytesOf(text.slice(from, to), enc))
     }
     let at = 0
-    for (const u of us) { if (u.start < at) continue; copy(at, u.start); parts.push(render(u)); at = u.end }
+    for (const u of us) {
+      if (u.start < at) continue
+      copy(at, u.start)
+      const inner = spans && [], b = render(u, inner)
+      spans?.push({ file, unit: u, from: size, to: size + b.length }, ...inner.map(x => ({ file, unit: x.unit, from: size + x.from, to: size + x.to, post: x.post, outer: u })))
+      add(b)
+      at = u.end
+    }
     copy(at, text.length + 1)
     out.set(file, concat(parts))
   }

@@ -10,7 +10,12 @@ export type Capsule =
   /** the paper cannot be had as a bilingual PDF: said, with its HTML version (`href`) offered where there is one; not
    *  closable */
   | { kind: 'unavailable'; text: string; href?: string }
-  | { kind: 'notice'; text: string; action: 'retry' }
+  /** the translation shown in part (S-R-19): said, with the HTML version offered where there is one; closable */
+  | { kind: 'partial'; text: string; href?: string }
+  /** passages that failed (S-P-60): with its retry (S-P-61) only where the run stopped for a reason a retry mends
+   *  (`failure`); the passages the typesetting left in the original fail the same way again, until a new version (I-5
+   *  of 2026-10-04) */
+  | { kind: 'notice'; text: string; action: 'retry' | null }
   | { kind: 'unsupported'; text: string; action: 'language' }
   | { kind: 'narrow'; text: string }
 export interface Card { reason: string; action: 'retry' | 'settings' }
@@ -26,8 +31,10 @@ export function capsuleOf(state: ReaderState, seen: { closed: boolean; narrowSho
   // before anything else: it says why the translated displays are greyed (the maintainer, 2026-09-26)
   if (!state.available) return state.htmlVersion ? { kind: 'unavailable', text: R.status.noPdf, href: state.htmlVersion } : { kind: 'unavailable', text: R.status.noPdf }
   if (!state.languageSupported && state.settings) return { kind: 'unsupported', text: R.status.unsupported(ownName(state.settings.targetLanguage)), action: 'language' }
-  // the paragraphs that failed are told once the run has ended, with its retry
-  if (!running(state) && state.failedUnits > 0 && !seen.closed) return { kind: 'notice', text: S.failed.text(state.failedUnits), action: 'retry' }
+  // before the notice of passages that failed: the passages left in the original are more than those
+  if (!running(state) && state.partial && !seen.closed) return state.htmlVersion ? { kind: 'partial', text: R.status.partial, href: state.htmlVersion } : { kind: 'partial', text: R.status.partial }
+  // the paragraphs that failed are told once the run has ended, with its retry where a stop is there to resume
+  if (!running(state) && state.failedUnits > 0 && !seen.closed) return { kind: 'notice', text: S.failed.text(state.failedUnits), action: state.failure ? 'retry' : null }
   if (state.narrow && state.display === 'bilingual' && !seen.narrowShown) return { kind: 'narrow', text: R.status.narrow }
   return null
 }

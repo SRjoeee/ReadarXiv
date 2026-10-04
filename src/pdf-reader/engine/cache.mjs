@@ -62,6 +62,15 @@ const ownNested = (unit, pieces) => {
 export const inSourceOf = u => (u?.inSource ? { inSource: true } : {})
 
 /**
+ * The passages a copy or a run holds in the original though translated (S-P-60's count, the maintainer's ruling 6 of
+ * 2026-10-04): its units marked set in the source (inSourceOf) but the author block's, which a strategy that cannot take
+ * its names sets as the paper has them on purpose (scripts.mjs typesetBy) — so the units the compile's safety net set
+ * there, counted on every visit to the copy as on the one that made it (the review of 2026-10-04, I-6). From the
+ * record's units as they are: no field of the record's is added for it
+ */
+export const passagesInSource = units => units.filter(u => u?.inSource && u.kind !== 'author').length
+
+/**
  * A run again's seed: the copy's (seedFrom), with what the visit's last run made over it (runLive's results), so that
  * only the units still missing are asked again — each with its pieces, its provenance, its sentences and its mark of a
  * final that set it in the source, which the run passes on to what it shows and to the record (a seeded unit without
@@ -174,6 +183,17 @@ export const unsetAfter = (unset, result, shown) => (unset || !!result?.changed)
  * and the visit holds no translation that none sets (`unset`, unsetAfter)
  */
 export const pipelineCurrentFor = ({ copy, finalShown, unset }) => !unset && (copy || finalShown)
+
+/**
+ * How a run whose final none of the ways could set ends for the reader (runLive's `exhausted`, not for the service's
+ * stop): with nothing of this visit ever on screen, the paper cannot be had (`cannot typeset`, S-R-17); with a preview
+ * of this visit on screen and no final (`compiledOnce`, `finalShown`), the translation is shown in part (`shown in part`,
+ * S-R-19: the preview stays, the progress line no longer says the translation is whole —
+ * plans/2026-10-04-compile-resilience.md, Task 5) — unless the run's last preview held all of it (runLive's
+ * `shownPartial` false: S-R-19's "the rest is the original" would be false; the review of 2026-10-04, M-2); with a
+ * final or this machine's copy on screen, nothing more is said
+ */
+export const endOf = (r, { compiledOnce, finalShown, cached }) => (!r.exhausted || r.stopped ? null : !compiledOnce && !cached ? 'cannot typeset' : compiledOnce && !finalShown && r.shownPartial !== false ? 'shown in part' : null)
 
 /**
  * The versions a write labels its record with (`how`, decideWrite's), or null where it writes nothing (the F2 review's

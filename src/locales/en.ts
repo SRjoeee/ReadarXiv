@@ -355,6 +355,7 @@ const R: Locale['R'] = {
     rateLimited: 'Too many requests',
     noPdf: "This paper can't be read as a bilingual PDF yet",
     useHtml: 'Translate HTML instead',
+    partial: "Only part of this paper's translation can be shown; the rest is in the original",
   },
 }
 

@@ -3,7 +3,7 @@ import { LANG_CODE_TO_LOCALE_NAME } from '@/config/languages'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { INITIAL, type ReaderState } from '@/pdf-reader/controller'
 import { capsuleOf, cardOf, lineOf, spokenOf } from '@/pdf-reader/ui/status'
-import { R, setLocale } from '@/ui/strings'
+import { R, S, setLocale } from '@/ui/strings'
 
 const at = (over: Partial<ReaderState>): ReaderState => ({ ...INITIAL, settings: DEFAULT_CONFIG, display: 'bilingual', ...over })
 const none = { closed: false, narrowShown: false }
@@ -52,9 +52,14 @@ describe('the states (the reader\'s design, §8)', () => {
     expect(v({ finishing: 0 })).toBeLessThan(0.7)
   })
 
-  it('counts the paragraphs that failed, with 重试, until closed', () => {
-    expect(capsuleOf(at({ phase: 'ready', failedUnits: 3 }), none)).toEqual({ kind: 'notice', text: '3 处翻译失败', action: 'retry' })
-    expect(capsuleOf(at({ phase: 'ready', failedUnits: 3 }), { ...none, closed: true })).toBeNull()
+  it('counts the paragraphs that failed, with 重试, until closed — the retry where the run stopped for the service', () => {
+    expect(capsuleOf(at({ phase: 'ready', failedUnits: 3, failure: 'network' }), none)).toEqual({ kind: 'notice', text: '3 处翻译失败', action: 'retry' })
+    expect(capsuleOf(at({ phase: 'ready', failedUnits: 3, failure: 'network' }), { ...none, closed: true })).toBeNull()
+  })
+
+  it('passages the typesetting left in the original, and no stop to resume: counted, with no retry — the same translation fails the same way (the review of 2026-10-04, I-5)', () => {
+    expect(capsuleOf(at({ phase: 'ready', failedUnits: 2, failure: null }), none)).toEqual({ kind: 'notice', text: S.failed.text(2), action: null })
+    expect(capsuleOf(at({ phase: 'ready', failedUnits: 2, failure: null }), { ...none, closed: true })).toBeNull()
   })
 
   it('names a language the reader cannot typeset, and offers the menu', () => {
@@ -90,6 +95,13 @@ describe('the states (the reader\'s design, §8)', () => {
     expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: null }), none)).toEqual({ kind: 'unavailable', text: R.status.noPdf })
     expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: null, failedUnits: 3, narrow: true }), { closed: true, narrowShown: false })).toMatchObject({ kind: 'unavailable' })
     expect(capsuleOf(at({ phase: 'ready', available: false, languageSupported: false, htmlVersion: null }), none)).toMatchObject({ kind: 'unavailable' })
+  })
+
+  it('a translation shown in part: said, the HTML version offered where there is one, closable, before the notice of passages that failed (S-R-19)', () => {
+    expect(capsuleOf(at({ phase: 'ready', partial: true, htmlVersion: 'https://arxiv.org/html/x#readarxiv' }), none)).toEqual({ kind: 'partial', text: R.status.partial, href: 'https://arxiv.org/html/x#readarxiv' })
+    expect(capsuleOf(at({ phase: 'ready', partial: true, htmlVersion: null, failedUnits: 2 }), none)).toEqual({ kind: 'partial', text: R.status.partial })
+    expect(capsuleOf(at({ phase: 'ready', partial: true }), { closed: true, narrowShown: false })).toBeNull()
+    expect(capsuleOf(at({ phase: 'translating', partial: true }), none)).toBeNull()
   })
 
   it('nothing translated: the card, with the reason; 设置 for a key, 重试 otherwise; no capsule', () => {

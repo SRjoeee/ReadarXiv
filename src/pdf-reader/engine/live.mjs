@@ -21,6 +21,8 @@
 import { analyze } from './paper-meta.mjs'
 import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
+import { passagesInSource } from './cache.mjs'
+import { texErrors, unitsAtErrors } from './tex-errors.mjs'
 import { nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
 import { WIDTH_PROBE } from './typeset/density.mjs'
 import { finalTypesetting, previewTypesetting } from './typeset/plan.mjs'
@@ -92,8 +94,23 @@ export const readingsOf = (o, marks) => ({ log: lastTexLog(o.log).split('\n').fi
  *  aux it is given */
 const auxLines = (aux, command) => (aux ?? '').split('\n').filter(l => l.startsWith(`\\${command}{`) && closed(l)).join('\n')
 const closed = line => { let depth = 0; for (const c of line.replace(/\\./g, '')) if (c === '{') depth++; else if (c === '}' && --depth < 0) return false; return depth === 0 }
-/** a compile's references as a draft is given them: its citations (\bibcite), its labels (\newlabel), its bibliography */
-const referencesOf = o => ({ cites: auxLines(o.aux, 'bibcite'), labels: auxLines(o.aux, 'newlabel'), bbl: o.bbl ?? null })
+/**
+ * An aux's citation lines: every closed line whose first argument is a key the aux cites — a \citation's or a
+ * \bibcite's (\nocite{*} cites keys no \citation names) —, in the aux's order, so that a later line overrides an earlier
+ * one as in the paper's own passes; not \citation's own, which a draft writes, nor \newlabel's, which are the labels.
+ * Not \bibcite's alone: apacite writes each entry twice, \bibcite then \APACbibcite, and with babel loaded after it
+ * babel's \bibcite keeps the entry wrapped, which only the second line makes whole again — given the first alone, every
+ * citation broke TeX (2610.02069: "Illegal parameter number in definition of \B@my@dummy"). harvard's \harvardcite,
+ * backref's \backcite and any other package's line of the kind go with them; biblatex's name a refsection first, and
+ * its drafts read the bibliography
+ */
+export const citationLines = aux => {
+  const all = (aux ?? '').split('\n').filter(closed), keys = new Set()
+  for (const l of all) { const m = /^\\(?:citation|bibcite)\{([^}]*)\}/.exec(l); if (m) for (const k of m[1].split(',')) keys.add(k.trim()) }
+  return all.filter(l => { const m = /^\\([A-Za-z@]+)\{([^{}]*)\}/.exec(l); return !!m && m[1] !== 'citation' && m[1] !== 'newlabel' && keys.has(m[2].trim()) }).join('\n')
+}
+/** a compile's references as a draft is given them: its citation lines, its labels (\newlabel), its bibliography */
+const referencesOf = o => ({ cites: citationLines(o.aux), labels: auxLines(o.aux, 'newlabel'), bbl: o.bbl ?? null })
 /** the lists a pass writes at its end from an aux's \@writefile{<ext>}{<entry>} lines (LaTeX's \enddocument), by
  *  extension: \tableofcontents's toc, \listoffigures' lof, \listoftables' lot, any list a package keeps so (backref's
  *  brf) — each line's entry, in order */
@@ -150,12 +167,16 @@ export function probeFiles({ fsys, project }, { width = false } = {}) {
 
 /** the original with unit marks, as its own engine sets it (images as frames change no place on the page); with
  *  `lines`, each unit's lines and the forced breaks in its log (typeset/tex.mjs LINES_TEX), which the typesetting rule
- *  takes the original's flow from */
-export function originalFiles({ fsys, project }, { lines = false } = {}) {
+ *  takes the original's flow from. `spans`, an object, gets `lines()` as translationFiles' does: each unit's lines in
+ *  the files as written, worked out when asked — where the paper's own errors stand (runLive's ownErrors) */
+export function originalFiles({ fsys, project }, { lines = false, spans = null } = {}) {
   const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
-  const out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base })
-  const main = latin1(out.get(project.main))
-  out.set(project.main, latin1Bytes(DRAFT + MARK_DEF + (lines ? LINES_TEX : '') + main))
+  const raw = spans ? [] : null
+  const out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw })
+  const patched = spans ? new Map(out) : null
+  const head = DRAFT + MARK_DEF + (lines ? LINES_TEX : '')
+  out.set(project.main, latin1Bytes(head + latin1(out.get(project.main))))
+  if (spans) { let found = null; spans.lines = () => (found ??= unitLines(raw, patched, out, project.main, head.length)) }
   return out
 }
 
@@ -163,8 +184,11 @@ export function originalFiles({ fsys, project }, { lines = false } = {}) {
  *  translated units' own paragraphs, and those alone, at that factor of the paper's spacing (latex-front unitLeadTex).
  *  `typeset`, the typesetting rule's (typeset/plan.mjs previewTypesetting, finalTypesetting): the strategy it sets the
  *  type of, its TeX, each translated unit's macros — for the strategy it was made for: with another the translation is
- *  set as today, and `note('typeset refused', …)` says so */
-export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl, typeset = null, note = () => {} }) {
+ *  set as today, and `note('typeset refused', …)` says so. `evenSpaces` false leaves out EVEN_SPACES' microtype, which
+ *  the run adds under an 8-bit engine and may break a paper's own TeX (runLive's remedies). `spans`, an object, gets
+ *  `lines()`: each unit's lines and bytes in the files as written ({ file, unit, first, last, from, to }), worked out
+ *  when asked — after a compile failed, which tex-errors.mjs locates by them —, so that a compile that sets pays nothing */
+export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl, typeset = null, evenSpaces = true, spans = null, note = () => {} }) {
   if (typeset && typeset.for !== strategy.name) { note('typeset refused', { plan: typeset.for, strategy: strategy.name }); typeset = null }
   if (typeset) strategy = typeset.strategy(strategy)
   const xe = strategy.xe
@@ -172,15 +196,19 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   const base = markUnits(project.units, translated)
   const index = new Map(project.units.map((u, i) => [u, i]))
   const mark = typeset ? typeset.mark(base, translated) : strategy.leading ? u => { const m = base(u); return m && !m.whole && translated.has(u) ? { ...m, before: `\\axtlead{${index.get(u)}}` } : m } : base
-  const out = patch(project, translated, { mark })
+  const raw = spans ? [] : null
+  const out = patch(project, translated, { mark, spans: raw })
+  // the files as patch wrote them, each unit's bytes in them, before this function's own edits
+  const patched = spans ? new Map(out) : null
   let main = latin1(out.get(project.main))
   const at = beginDocument(main)
-  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + NO_OVERFLOW + (xe ? '' : EVEN_SPACES) + main.slice(at)
+  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + NO_OVERFLOW + (xe || !evenSpaces ? '' : EVEN_SPACES) + main.slice(at)
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
   if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
-  if (xe && strategy.engine !== meta.compiler) main = XETEX_SHIM + XETEX_SHIM_R1 + stripPdftexOption(main)
+  const shim = xe && strategy.engine !== meta.compiler ? XETEX_SHIM + XETEX_SHIM_R1 : ''
   // what the strategy puts before \documentclass (scripts.mjs: a paper's own CJK packages kept from loading under xeCJK)
-  main = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + main
+  const head = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + shim
+  main = head + (shim ? stripPdftexOption(main) : main)
   out.set(project.main, latin1Bytes(main))
   if (xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = stripPdftexOption(t); if (u !== t) out.set(f, latin1Bytes(u)) }
   for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = localizeNames(t); if (u !== t) out.set(f, latin1Bytes(u)) }
@@ -194,7 +222,44 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   // early by its height (the F2 re-review's N2: zh 2608.02459, its contents before 550 of its 555 units, 0.939 of a
   // page's start drift, 0.098 with them). The final's passes write their own, as the original's do
   if (draft && aux) for (const [ext, entries] of listsOf(aux)) if (!out.has(`${job}.${ext}`)) out.set(`${job}.${ext}`, new TextEncoder().encode(entries))
+  if (spans) { let lines = null; spans.lines = () => (lines ??= unitLines(raw, patched, out, project.main, head.length)) }
   return out
+}
+
+/**
+ * Each unit's range as patch wrote it, found again in the file as written — this function's edits (the preamble's
+ * additions, the engine's shims, localizeNames) come after patch, and leave the units' bytes as they are —, in order
+ * from the last one's end, as the lines it stands on (1-based) and its bytes: { file, unit, first, last, from, to }; a
+ * nested unit where it stands in the unit it is written in (`outer`, found before it). The main file is searched past
+ * the TeX put before the paper (`skip` bytes); a unit not found again is left out
+ */
+function unitLines(raw, patched, out, main, skip) {
+  const byFile = new Map()
+  for (const x of raw) (byFile.get(x.file) ?? byFile.set(x.file, []).get(x.file)).push(x)
+  const found = []
+  for (const [file, list] of byFile) {
+    const was = latin1(patched.get(file)), now = latin1(out.get(file) ?? patched.get(file))
+    let cursor = file === main ? skip : 0, line = 1, counted = 0
+    const lineAt = k => { for (; counted < k; counted++) if (now.charCodeAt(counted) === 10) line++; return line }
+    const breaks = (from, to) => { let n = 0; for (let i = from; i < to; i++) if (now.charCodeAt(i) === 10) n++; return n }
+    const outers = new Map()
+    for (const x of list) {
+      if (x.outer) {
+        const o = outers.get(x.outer)
+        if (!o) continue
+        const from = o.from + (x.from - o.was), to = from + (x.to - x.from), first = o.first + breaks(o.from, from)
+        found.push({ file, unit: x.unit, first, last: first + breaks(from, to - 1), from, to, post: x.post ?? 0 })
+        continue
+      }
+      const bytes = was.slice(x.from, x.to), k = now.indexOf(bytes, cursor)
+      if (k < 0 || !bytes) continue
+      cursor = k + bytes.length
+      const at = { file, unit: x.unit, first: lineAt(k), last: lineAt(cursor - 1), from: k, to: cursor }
+      outers.set(x.unit, { from: k, was: x.from, first: at.first })
+      found.push(at)
+    }
+  }
+  return found
 }
 
 /** the units a translation into `lang` leaves as they are: the names a table holds (nameCells), and the author block's
@@ -250,7 +315,14 @@ export const PIPELINE_VERSION = '7'
 //    such environment in a fitted table — a copy of 4 could be a PDF of the pages before a comment that never ended
 //    (2608.16117: three of forty) —; and a compile that stopped short of the document's end is no translation
 //    (stoppedShort), where a compiler gives the PDF of what it set
-export const TYPESETTING_VERSION = '5'
+// 6: a compile that fails is tried again before the chain moves on — without the rule's TeX, EVEN_SPACES' microtype or
+//    the references the run gives it, then with the units its log places the failure in set in the source (runLive's
+//    remedy, tex-errors.mjs) —, and a draft is given every citation line of the original's aux (citationLines): a
+//    reading of the original kept under 5 has its \bibcite lines alone, which broke every citation of 2610.02069 under
+//    apacite and babel on a revisit, and that paper's record, which none of the ways could set, is tried again. With
+//    them the tables fitted since 5 (2a346741: what stands in a TeX comment; 9cc9cd2d: a starred environment read by
+//    lines), whose \axtfit decisions changed under it
+export const TYPESETTING_VERSION = '6'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
@@ -415,12 +487,19 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
      * two pages long where the full run set it one
      */
     let originalRefs = known ? { cites: known.cites, labels: known.labels, bbl: known.bbl } : { cites: '', labels: '', bbl: null }
-    const refs = a => (a ? (!originalRefs.cites || /^\\bibcite\{/m.test(a) ? a : `${a}\n${originalRefs.cites}`) : [originalRefs.labels, originalRefs.cites].filter(Boolean).join('\n') || null)
+    const refs = a => (a ? (!originalRefs.cites || citationLines(a) ? a : `${a}\n${originalRefs.cites}`) : [originalRefs.labels, originalRefs.cites].filter(Boolean).join('\n') || null)
     const bblAt = () => bbl ?? originalRefs.bbl
     // the marked original, compiled once: the left side's anchors, the characters the paper's own compile could not set,
     // and with the rule every plan's base — so in full, every pass: one pass sets references, citations and the pages they
     // move unsettled, and its readings are another paper's (the review of 2026-10-01, M3)
-    const original = () => (originalP ??= askOf(compileOriginal ?? compile)({ main: project.main, engine: meta.compiler, rerun: true, bibtex: meta.bbl ? false : null, overrides: originalFiles(paper, { lines: !!readMarks }) }).then(async o => {
+    // its files and its units' lines in them, and the compile once it is in: where the paper's own errors stand (ownErrors)
+    let originalAt = null, originalIn = null
+    const original = () => (originalP ??= (() => {
+      const spans = {}, overrides = originalFiles(paper, { lines: !!readMarks, spans })
+      originalAt = { files: overrides, lines: spans.lines }
+      return askOf(compileOriginal ?? compile)({ main: project.main, engine: meta.compiler, rerun: true, bibtex: meta.bbl ? false : null, overrides })
+    })().then(async o => {
+      originalIn = o
       note('original', { ok: o.ok, ms: o.ms, error: whyFailed(o) })
       if (o.ok) {
         onOriginal?.({ pdf: o.pdf })
@@ -446,12 +525,253 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     let toldMissing = null
     // the strategies a compile with the rule failed under, TeX's failure: each tried again as today, the rule left out,
     // before the chain moves on — the rule's TeX is one more thing that can fail, the strategy may well set the paper
-    // (the evaluation's ruling 6, 2026-10-01); and set as today from then on
+    // (the evaluation's ruling 6, 2026-10-01); and set as today from then on, unless that did not set the paper either
+    // (remedy: the rule back, ruling 6 refined)
     const ruleFailed = new Set()
     const withoutRule = r => { ruleFailed.add(strategy().name); note('typeset failed', { strategy: strategy().name, error: whyFailed(r) }) }
+    /**
+     * What the run itself adds to the paper beyond its translation, which a compile may fail on and the strategy does not
+     * need (plans/2026-10-04-compile-resilience.md, Task 1 and its rulings): EVEN_SPACES' microtype under an 8-bit engine
+     * (`spacing`: only the spacing is lost), and the references a draft or the final is given — the original's or a
+     * draft's aux and bibliography (`references`: a draft's citations and bibliography; the final's passes make their
+     * own). 2610.02069's apacite under babel broke every citation given the original's \bibcite lines alone. Per
+     * addition, the strategies it is left out of from then on
+     */
+    const without = { spacing: new Set(), references: new Set() }
+    const off = how => without[how].has(strategy().name)
+    /** what a compile of the translation is given beside it */
+    const given = () => (off('references') ? { aux: null, bbl: null } : { aux: refs(aux), bbl: bblAt() })
+    /** whether a compile under the strategy now has the addition, to leave out */
+    const adds = { spacing: () => !strategy().xe && !off('spacing'), references: () => !off('references') && (!!refs(aux) || (!!bblAt() && !meta.bbl)) }
+    /** whether a compile's first TeX error came before TeX read the aux it was given — at \begin{document}, the
+     *  bibliography after it —, the log showing TeX at the main file, and not yet at the aux, where it stopped: an error
+     *  the references cannot be the cause of, whose compile is not tried again without them (the review of 2026-10-04,
+     *  M-4: a class's conflict in the preamble paid that compile). A log that shows neither says nothing; one where TeX
+     *  looked for the aux and found none ("No file <job>.aux.", a compile given a bibliography alone) is past it (the
+     *  re-review's N-3) */
+    const esc = name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const opened = name => new RegExp(`\\((?:[^()\\s]*/)?${esc(name)}\\b`)
+    const job = jobName(project.main), mainOpened = opened(project.main.split('/').at(-1)), auxOpened = opened(`${job}.aux`), auxMissing = new RegExp(`^No file ${esc(job)}\\.aux\\.`, 'm')
+    const beforeReferences = r => { const log = unwrapped(lastTexLog(r.log)), at = log.search(/^! /m), head = log.slice(0, Math.max(0, at)); return at >= 0 && mainOpened.test(head) && !auxOpened.test(head) && !auxMissing.test(head) }
+    // the units a compile under this strategy could not set translated (the safety net, Task 2): set in the source until
+    // the chain moves on — another strategy may set them —, and so in the record (`inSource`). Each with every unit
+    // nested in it, which its source holds as written (a footnote, an author's note)
+    const inSource = new Set(), indexOf = new Map(units.map((u, i) => [u, i]))
+    const withNested = u => [u, ...u.pieces.filter(p => p.t === 'nested').flatMap(p => withNested(p.unit))]
+    /** a snapshot as a compile sets it: the units set in the source left out */
+    const setting = snapshot => { if (!inSource.size) return snapshot; const m = new Map(snapshot); for (const u of inSource) m.delete(u); return m }
+    // the last compile of the translation: the files it was given, its units' lines in them (worked out when asked) and
+    // the units it set translated — what the safety net places a failure by
+    let last = null
+    /** the compile's files: the translation's, as the strategy and the remedies kept have them */
+    const filesFor = (snapshot, { draft, typeset }) => {
+      const spans = {}, set = setting(snapshot)
+      const files = translationFiles(paper, set, { strategy: strategy(), fonts, draft, ...given(), evenSpaces: !off('spacing'), typeset, spans, note })
+      // the units it sets translated: not the author block under a strategy that sets its names as the paper has them
+      last = { files, lines: spans.lines, snapshot: typesetBy(set, strategy()) }
+      return files
+    }
+    /**
+     * The failure being recovered from (`episode`): the remedies tried, the one the next compile tries and the failure it
+     * was tried for; null once a compile under the strategy sets the translation, and when the chain moves on — a remedy
+     * tried is not tried again meanwhile, whichever compile comes next (a preview, the measure, the final). `spent`: the
+     * compiles remedies have cost the run, a diagnosis included, at most SPENT_MAX — past it the chain moves on as before.
+     * The units set in the source: at most ROUNDS rounds and IN_SOURCE_MAX units per strategy — a failure placed in more
+     * units than that is the paper's or the strategy's, not a unit's (2610.02069's fault A stood in about ten of its 103
+     * units, its fault B in one)
+     */
+    let episode = null, spent = 0, rounds = 0, placed = 0
+    const SPENT_MAX = 8, ROUNDS = 3, IN_SOURCE_MAX = Math.max(3, Math.ceil(units.length * 0.02))
+    /**
+     * Letters a strategy's fonts lack are the strategy's, not a unit's: another strategy may set them (2608.02459's σ,
+     * which xeCJK's faces lack there and CJKutf8 sets). So the chain moves on from them first, as before the safety net,
+     * and only once no strategy is left that sets them are the units holding them set in the source — under the first
+     * strategy that lost them, the best in the chain's order (`lettersAt`: its compile, kept for it), the run going back
+     * to it once (`lettersBack`) and the chain ending there (the review of 2026-10-04, I-2). A TeX error in a unit is the
+     * unit's under any strategy, which is set in the source at once
+     */
+    let lettersAt = null, lettersBack = false
+    /** whether a strategy after this one is left to try: none once the run went back to one for its letters */
+    const ahead = () => s + 1 < strategies.length && !lettersBack
+    /** what a compile's failure is, to tell whether a remedy changed it: its first TeX error and the unit it stands in
+     *  (or its context), else what the compile said */
+    const failureOf = r => {
+      const e = texErrors(r.log)[0]
+      if (!e) return r.ok ? whyUnset(r) : whyFailed(r)
+      const u = last ? unitsAtErrors([e], last.files, last.lines())[0] : undefined
+      return `${e.message}@${u ? indexOf.get(u) : `${e.before}|${e.after}`}`
+    }
+    /**
+     * The paper's own TeX errors in its units, which no translation of them is the cause of: its marked original's, each
+     * as its message and the unit it stands in there — the text around an error is the source's in the original's log
+     * and the translation's in a translation's, and never the same (the review of 2026-10-04, M-1). Read once the
+     * original is in, and never waited for: a failure is placed, and the chain moves on, as soon as the compile ends
+     * (I-4: xeCJK's failure in its preamble had the next strategy's first preview wait the whole original in the
+     * browser, 1509 ms against 45 in a probe). A run given the original's readings has their lines alone, no errors
+     */
+    let ownRead = null
+    const ownErrors = () => {
+      if (!originalIn?.log || !originalAt) return new Set()
+      if (ownRead?.of !== originalIn) ownRead = { of: originalIn, keys: new Set(texErrors(originalIn.log).flatMap(e => unitsAtErrors([e], originalAt.files, originalAt.lines()).map(u => `${e.message}@${indexOf.get(u)}`))) }
+      return ownRead.keys
+    }
+    /** a letter's key as lostIn counts it: its code point where the message gives one */
+    const lostKey = message => { const c = /^Missing character: There is no (.+?) in font /.exec(message)?.[1]; return c && (c.match(/\(U\+([0-9A-F]+)\)/)?.[1] ?? c.trim()) }
+    /** the letters of a unit's own translation in a snapshot, not its nested units' */
+    const ownLetters = (u, snapshot) => snapshot.get(u)?.filter(p => p.t === 'text' && p.tr).map(p => p.s).join('') ?? ''
+    /**
+     * The passages setting `found` in the source under the strategy `at.s` sets there, each with every unit nested in
+     * it, once, none in `out` already: those translated, and those still to come — a unit with no answer in yet, which
+     * the source would hold all the same once it came —; not a unit left as it is (kept), lost to the service, or one the
+     * strategy sets as the paper has it (the author block under one that cannot take its names). The passages the bounds
+     * count (Codex's first medium, both rounds: a paragraph's five footnotes are six passages, which the bound of three
+     * had counted as one — and as one again while the five were still being translated)
+     */
+    const reverting = (found, out, at) => [...new Set(found.flatMap(withNested))].filter(u => !out.has(u) && !kept.has(u) && !(strategies[at.s].authors === false && u.kind === 'author') && (translated.has(u) || !results.has(indexOf.get(u))))
+    /** whether the letters a compile (`at`) lost beyond the original's, where the log names them by code point, stand in
+     *  the translation of a unit or a few — no more passages than `room`, what the strategy may still set in the source
+     *  besides `out`: lost in more, they are the strategy's font's, and in none, not a unit's (a caption babel sets).
+     *  The units holding them by their own text, a footnote apart from its paragraph, each counted with what it would
+     *  take to the source (Codex's fourth medium, second round: a letter in one of a paragraph's five notes was counted
+     *  as the six, and never diagnosed); what the diagnosis places is counted again, exactly (fits) */
+    const lostInFew = (at, known, out, room) => {
+      const codes = [...lostIn(at.r.log)].filter(([c, n]) => n > (known.get(c) ?? 0)).map(([c]) => (/^[0-9A-F]+$/.test(c) ? String.fromCodePoint(parseInt(c, 16)) : null))
+      if (codes.some(c => c === null)) return true
+      const holding = [...at.snapshot.keys()].filter(u => codes.some(c => ownLetters(u, at.snapshot).includes(c)))
+      const n = reverting(holding, out, at).length
+      return n > 0 && n <= room
+    }
+    /** the units a compile's errors stand in (`at`: the compile — its files, its units' lines in them, the units it set
+     *  translated), translated in it and not in `out`, the paper's own errors left out (ownErrors, read only once an
+     *  error stands in a unit at all) */
+    const placedIn = (errors, at, out) => {
+      const found = new Set()
+      let mine = null
+      for (const e of errors) for (const u of unitsAtErrors([e], at.files, at.lines())) {
+        if (out.has(u) || !withNested(u).some(x => at.snapshot.has(x))) continue
+        if (!(mine ??= ownErrors()).has(`${e.message}@${indexOf.get(u)}`)) found.add(u)
+      }
+      return [...found]
+    }
+    /** whether a compile lost letters: an error that is one (LaTeX's "Unicode character … not set up"), or a PDF with
+     *  letters left out (unsettable) */
+    const lettersLost = r => texErrors(r.log).some(e => e.char !== undefined) || (r.ok && lostIn(r.log).size > 0)
+    /**
+     * The units holding the letters a compile (`at`) lost, not in `out`: its errors that are letters; else — a PDF with
+     * letters lost and no error to place them, standing in a few units (lostInFew, at most `room`) — the compile asked
+     * once more as one pass with \tracinglostchars=3, which makes each lost letter an error at its place (TeX Live 2021
+     * on), the letters the original loses left out; before the main file's first line, so that every line keeps its
+     * number
+     */
+    const letterUnits = async (at, out, room) => {
+      const errors = texErrors(at.r.log).filter(e => e.char !== undefined)
+      if (errors.length || !at.r.ok) return placedIn(errors, at, out)
+      const known = lostIn((await original()).log)
+      if (spent + 1 >= SPENT_MAX || !lostInFew(at, known, out, room)) return []
+      spent++
+      note('lost letters', { strategy: strategies[at.s].name, letters: [...lostIn(at.r.log).keys()].slice(0, 5) })
+      const overrides = new Map(at.req.overrides)
+      overrides.set(project.main, latin1Bytes(`\\AtBeginDocument{\\tracinglostchars=3\\relax}${latin1(at.req.overrides.get(project.main))}`))
+      const d = await ask({ ...at.req, rerun: false, bibtex: false, overrides })
+      return placedIn(texErrors(d.log).filter(e => /^Missing character/.test(e.message) && !known.has(lostKey(e.message))), at, out)
+    }
+    /** a remedy taken for the next compile: the episode's, and one of the run's budget — but the rule's, ruling 6's from
+     *  before the budget, which nothing else may spend (the review of 2026-10-04, M-5) */
+    const take = how => { episode.tried.add(how); episode.trying = how; if (how !== 'rule') spent++; return how }
+    /** whether units found in a compile (`at`) may be set in the source under the strategy: a passage or more, within
+     *  its bounds and the run's */
+    const fits = (found, at) => { const n = reverting(found, inSource, at).length; return n > 0 && placed + n <= IN_SOURCE_MAX && spent < SPENT_MAX }
+    /** units found in a compile (`at`) set in the source with every unit nested in each, as one round of the strategy's,
+     *  each passage they set there counted; said */
+    const place = (found, at) => {
+      rounds++
+      placed += reverting(found, inSource, at).length
+      for (const u of found.flatMap(withNested)) inSource.add(u)
+      note('in source', { strategy: strategy().name, units: found.map(u => indexOf.get(u)), error: whyFailed(at.r) ?? whyUnset(at.r) })
+    }
+    /**
+     * After a compile that did not set the translation (TeX's failure, or a letter lost; BusyTeX's timeout is not one):
+     * the next remedy, the least lost first, one a compile — where TeX failed, the rule's TeX where the compile had a plan
+     * (ruling 6), microtype, the references; then the units the log places a TeX error in, set in the source, and units
+     * holding letters lost only once no strategy after this one is left (lettersAt). A remedy after which the same
+     * failure came again was not its cause, and is taken back first, the rule too: one unit's fault no longer costs the
+     * rest of the run its rule (ruling 6, refined, 2026-10-04); one after which the compile failed otherwise mended what
+     * it was tried for, and is kept (2610.02069: without its references, its apacite citation's key stood out). Units set
+     * in the source stay there. Each remedy is noted (`typeset failed`, `without …`, `in source`, `lost letters`,
+     * `… back`, `kept`, `recovered`, `back to strategy`), for a corpus run to measure. `req`: the compile's request.
+     * Gives the remedy taken, or null: none left
+     */
+    const remedy = async (r, ruled, req) => {
+      const name = strategy().name, now = failureOf(r)
+      episode ??= { tried: new Set(), trying: null, failure: null }
+      if (episode.trying) {
+        if (now !== episode.failure) {
+          note('kept', { strategy: name, by: episode.trying })
+          // another failure, which the last one hid: the remedies taken back for that one are untried for this one — the
+          // references' fault before the rule's in the final, a unit's before the rule's once the unit is in the source
+          // (Codex's third medium, second round) —; those in effect stay so, and the budget is the run's
+          episode.tried = new Set([...episode.tried].filter(how => how === 'units' || (how === 'rule' ? ruleFailed.has(name) : without[how].has(name))))
+        } else if (episode.trying === 'rule') { ruleFailed.delete(name); note('typeset back', { strategy: name }) }
+        else if (episode.trying !== 'units') { without[episode.trying].delete(name); note(`${episode.trying} back`, { strategy: name }) }
+        // units set in the source stay there
+      }
+      episode.trying = null
+      episode.failure = now
+      if (!r.ok && ruled && !episode.tried.has('rule')) { withoutRule(r); return take('rule') }
+      if (spent >= SPENT_MAX) return null
+      if (!r.ok) for (const how of ['spacing', 'references']) if (!episode.tried.has(how) && adds[how]() && !(how === 'references' && beforeReferences(r))) { without[how].add(name); note(`without ${how}`, { strategy: name, error: whyFailed(r) }); return take(how) }
+      if (rounds >= ROUNDS) return null
+      const at = { ...last, r, req, s }
+      // a TeX error in a unit: its text breaks TeX under any strategy
+      let found = placedIn(texErrors(r.log).filter(e => e.char === undefined), at, inSource)
+      if (!found.length) {
+        if (!lettersLost(r)) return null
+        lettersAt ??= at
+        // letters lost: a strategy after this one first, and none left, the first that lost them (backToLetters)
+        if (!lettersBack && (ahead() || lettersAt.s !== s)) return null
+        found = await letterUnits(at, inSource, IN_SOURCE_MAX - placed)
+      }
+      if (!fits(found, at)) return null
+      place(found, at)
+      return take('units')
+    }
+    /** a compile under the strategy set the translation: the remedy it tried is kept, and said */
+    const recovered = () => { if (episode?.trying) note('recovered', { strategy: strategy().name, by: episode.trying }); episode = null }
+    /** the chain moves on: the next strategy, its own remedies and units, no references of the last */
+    const nextStrategy = (why = {}) => { s++; aux = null; episode = null; inSource.clear(); rounds = placed = 0; note('next strategy', { strategy: strategy().name, ...why }) }
+    /**
+     * The chain spent with letters lost under an earlier strategy than this one, which no later one set (lettersAt): back
+     * to that strategy, once a run, with the units holding them set in the source there, placed from its own compile and
+     * within its own bounds, afresh. Whether it went back
+     */
+    const backToLetters = async () => {
+      const at = lettersAt
+      if (!at || at.s >= s || lettersBack || spent >= SPENT_MAX) return false
+      lettersAt = null
+      const found = await letterUnits(at, new Set(), IN_SOURCE_MAX)
+      const n = reverting(found, new Set(), at).length
+      if (!n || n > IN_SOURCE_MAX || spent >= SPENT_MAX) return false
+      lettersBack = true
+      s = at.s; aux = null; inSource.clear(); rounds = placed = 0
+      note('back to strategy', { strategy: strategy().name })
+      episode = { tried: new Set(), trying: null, failure: null }
+      place(found, at)
+      take('units')
+      return true
+    }
+    // the passages the safety net set in the source in the last compile shown (S-P-60 counts them: ruling 6 of
+    // 2026-10-04): the units it set there that the compile's snapshot had translated — a unit the service lost is
+    // counted as lost, once (`missing`; the review's M-7) —, the author block's left out, as a copy's count leaves it
+    // (cache.mjs passagesInSource), so that a visit again says what the visit that made the copy said
+    let shownInSource = 0
+    // whether the last compile this run showed lacked any of the translation — a unit not yet in, or set in the source —,
+    // null where it showed none: a run whose finals all fail says it shows the translation in part only then (cache.mjs
+    // endOf; the review of 2026-10-04, M-2: a whole preview on screen is no part)
+    let shownPartial = null
+    const passagesShown = snapshot => [...inSource].filter(u => snapshot.has(u) && u.kind !== 'author').length
     const planFor = snapshot => {
       if (!readings || ruleFailed.has(strategy().name)) return null
-      const plan = previewTypesetting({ paper, translated: snapshot, lang, strategy: strategy(), fonts, fontLog, original: readings })
+      const plan = previewTypesetting({ paper, translated: setting(snapshot), lang, strategy: strategy(), fonts, fontLog, original: readings })
       if (!plan.typeset && toldMissing !== plan.missing) { toldMissing = plan.missing; note('typeset', { missing: plan.missing }) }
       return plan.typeset ? plan : null
     }
@@ -479,7 +799,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
      * original's own made 2608.29181's first preview 15.5 s, against 6.4 s without (the F2 re-review); and BusyTeX keeps
      * no log of the pass before a biber run, which every compile here reads
      */
-    const bibtexFor = () => !meta.bbl && !bblAt() && !(readMarks && !previews)
+    const bibtexFor = () => !meta.bbl && !bblAt() && !(readMarks && !previews) && !off('references')
     while (true) {
       // with the rule, the original right after the first preview: every plan after it is made from it
       if (readMarks && previews && !originalP) { await original(); continue }
@@ -496,9 +816,11 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       if (dirty) {
         dirty = false
         const snapshot = new Map(translated), t0 = Date.now(), plan = planFor(snapshot)
-        const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: bibtexFor(), overrides: translationFiles(paper, snapshot, { strategy: strategy(), fonts, draft: true, aux: refs(aux), bbl: bblAt(), typeset: plan?.typeset ?? null, note }) })
-        if (r.aux) aux = r.aux
-        if (r.bbl) bbl = r.bbl
+        const req = { main: project.main, engine: strategy().engine, rerun: false, bibtex: bibtexFor(), overrides: filesFor(snapshot, { draft: true, typeset: plan?.typeset ?? null }) }
+        const r = await ask(req)
+        // a compile that failed may have written half an aux (a run cut short): the last good one's are kept
+        if (r.ok && r.aux) aux = r.aux
+        if (r.ok && r.bbl) bbl = r.bbl
         held = false
         previewMs = r.ms ?? 0
         // shown only when it set every letter: a translation with letters missing is not one (Devin on #294); the note says
@@ -506,13 +828,19 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
         const shown = await settled(r)
         note('preview', { ok: shown, units: snapshot.size, ms: r.ms, roundTrip: Date.now() - t0, strategy: strategy().name, typeset: !!plan, error: shown ? undefined : whyFailed(r) ?? whyUnset(r) })
         if (shown) {
+          recovered()
           previews++
           measuring = plan && whole(snapshot) ? { plan, strategy: strategy().name, r } : null
-          onUpdate?.({ pdf: r.pdf, texts: texts(snapshot), translated: snapshot.size, final: false })
+          shownInSource = passagesShown(snapshot)
+          shownPartial = !whole(setting(snapshot))
+          onUpdate?.({ pdf: r.pdf, texts: texts(setting(snapshot)), translated: snapshot.size, final: false })
         } else if (timedOut(r)) {
           // the machine slow: nothing changed, the next batch or the final goes on
-        } else if (plan && !r.ok) { withoutRule(r); dirty = true }
-        else if (s + 1 < strategies.length) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
+        } else if (await remedy(r, !!plan, req)) dirty = true
+        else if (ahead()) { nextStrategy(); dirty = true }
+        else if (await backToLetters()) dirty = true
+        // (under the last strategy the episode stays: a remedy that did not set this paper is not tried again until a
+        // compile sets it)
         continue
       }
       if (mtDone) break
@@ -528,7 +856,10 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     if (seed && !changed && pipelineCurrent) {
       if (!marks) await original()
       note('unchanged')
-      return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing(), original: readings, passing }
+      // the copy's PDF stays, and the passages it holds in the original with it (cache.mjs passagesInSource: the seeds
+      // carry their mark)
+      const inSourceKept = passagesInSource([...results].map(([i, r]) => ({ kind: units[i].kind, inSource: r.inSource })))
+      return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing(), inSource: inSourceKept, original: readings, passing }
     }
     const all = new Map(translated), t0 = Date.now()
     /**
@@ -542,25 +873,31 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       await original()
       const read = async r => { try { return await readMarks(r.pdf) } catch (e) { passing = true; note('typeset', { missing: `a preview's marks (${String(e?.message ?? e).slice(0, 120)})` }); return null } }
       let m = measuring?.strategy === strategy().name && referencesWhole(measuring.r) ? measuring : null
-      let fin = m && finalTypesetting(m.plan.state, { log: m.r.log, marks: await read(m.r) }, all)
+      let fin = m && finalTypesetting(m.plan.state, { log: m.r.log, marks: await read(m.r) }, setting(all))
       if (!fin?.typeset || fin.missing === 'a plan of the whole translation') {
+        let req
         const measure = async plan => {
           const t1 = Date.now()
-          const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bblAt(), overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: true, aux: refs(aux), bbl: bblAt(), typeset: plan.typeset, note }) })
-          note('measure', { ok: r.ok, ms: r.ms, roundTrip: Date.now() - t1, strategy: strategy().name, error: whyFailed(r) })
+          req = { main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bblAt() && !off('references'), overrides: filesFor(all, { draft: true, typeset: plan?.typeset ?? null }) }
+          const r = await ask(req)
+          note('measure', { ok: r.ok, ms: r.ms, roundTrip: Date.now() - t1, strategy: strategy().name, typeset: !!plan, error: whyFailed(r) })
           return r
         }
-        let plan, r
+        // `bare`: the rule's remedy on trial — the measure's draft without the plan, which says whether the paper sets
+        // without the rule; the final, a full compile, is not the trial (the re-review's N-1: a unit's fault on a re-set
+        // cost two failing finals and the measured plan). The same failure without it takes the rule back, and the ladder
+        // goes on in the measure, the plan measuring again; another keeps it off, and its drafts go on without it
+        let plan, r, unset, bare = false
         for (;;) {
-          plan = planFor(all)
-          if (!plan) return null
+          plan = bare ? null : planFor(all)
+          if (!plan && !bare) return null
           r = await measure(plan)
-          let unset = r.ok && !(await settled(r))
+          unset = r.ok && !(await settled(r))
           // one that set a contents list from nothing — a re-set's: every unit taken, no draft of this translation before
           // it — is measured once more, given its own lists (the F2 re-review's N2). Not the original's lists instead: as
           // tall as the translation's only where its entries are, and the thesis 2307.16209's figures' long captions made
           // its re-set three pages short (-5 pages / 2.787 against -2 / 1.493 with its own). Not one that lost a letter
-          if (!unset && r.ok && listsMissing(r)) {
+          if (plan && !unset && r.ok && listsMissing(r)) {
             aux = r.aux
             if (r.bbl) bbl = r.bbl
             r = await measure(plan)
@@ -571,48 +908,75 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
           // the final, as from that preview, and the next strategy is measured — so that the final is set from a plan
           // measured under the strategy it is compiled with, not from the next one's plan uncorrected once this one's
           // final failed (the F2 re-review's N2: zh 2608.02459's re-set, measured under xeCJK, which has no σ there).
-          // Under the last strategy the final is set as before, and cannot set it either
-          if (unset && s + 1 < strategies.length) { const why = whyUnset(r); s++; aux = null; note('next strategy', { strategy: strategy().name, measure: why }); continue }
+          // Under the last strategy the final is set as before, and cannot set it either. A TeX failure goes through the
+          // run's remedies in their order, the rule's first — the plan's own TeX stands in each unit's lines, and a unit
+          // it broke would otherwise be set in the source for it (the review of 2026-10-04, I-1) —, tried in the measure
+          const how = unset || (!r.ok && !timedOut(r)) ? await remedy(r, !!plan, req) : null
+          bare = how === 'rule' || (bare && ruleFailed.has(strategy().name))
+          if (how) continue
+          if (unset && ahead()) { bare = false; nextStrategy({ measure: whyUnset(r) }); continue }
+          if (unset && await backToLetters()) { bare = false; continue }
           break
         }
         // BusyTeX gave up: the final from the plan uncorrected, which every input but the measure was there for
-        if (timedOut(r)) { passing = true; return plan.typeset }
-        // TeX's failure under the rule: the final as today (ruling 6)
-        if (!r.ok) { withoutRule(r); return null }
+        if (timedOut(r)) { passing = true; return plan?.typeset ?? null }
+        // TeX's failure and no remedy left: the final as today where the rule is off (ruling 6), else from the plan
+        // uncorrected — the rule tried and taken back is not the cause
+        if (!r.ok) { if (!episode?.tried.has('rule')) withoutRule(r); return ruleFailed.has(strategy().name) ? null : plan?.typeset ?? null }
+        if (!unset) recovered()
+        // set without the rule: the rule was the cause, and the final is set as today (ruling 6)
+        if (!plan) return null
         if (r.aux) aux = r.aux
         if (r.bbl) bbl = r.bbl
         m = { plan, r }
-        fin = finalTypesetting(plan.state, { log: r.log, marks: await read(r) }, all)
+        fin = finalTypesetting(plan.state, { log: r.log, marks: await read(r) }, setting(all))
       }
       note('typeset', { final: true, missing: fin.missing, faces: fin.faces.size, measured: m.r === measuring?.r ? 'preview' : 'draft' })
       return fin.typeset ?? m.plan.typeset
     }
     let typeset = await finalTypeset()
+    // the final's plan while the remedy of leaving the rule out is tried: back if that did not set the paper
+    let planAside = null
     let r, ok, exhausted = false, finalAgain = false
     for (;;) {
       // the final's lines are read by nothing: its TeX without the line probes (tex.mjs typesetting's `final`)
-      r = await ask({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux: refs(aux), bbl: bblAt(), typeset: typeset?.final ?? typeset, note }) })
+      const req = { main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: filesFor(all, { draft: false, typeset: typeset?.final ?? typeset }) }
+      r = await ask(req)
       ok = await settled(r)
       note('final', { ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, typeset: !!typeset, undefinedCitations: [...new Set([...unwrapped(lastTexLog(r.log)).matchAll(/(?:LaTeX|Package natbib) Warning: Citation [`']([^']+)' .*undefined/g)].map(m => m[1]))].slice(0, 8), error: ok ? undefined : whyFailed(r) ?? whyUnset(r) })
-      if (ok) break
+      if (ok) { recovered(); break }
       // (a compile the page did not answer, or failed, was asked once more by `ask`, and a second failure stops the run:
       // a slow machine or the page's own failure is no reason to change how the paper is set — Part 3's checks: a
       // timed-out preview moved 2608.02163 to a strategy its class refuses.) One BusyTeX gave up on: once more as it
       // was, then what is shown stays
       if (timedOut(r)) { if (finalAgain) break; finalAgain = true; note('final again', { strategy: strategy().name }); continue }
-      if (typeset && !r.ok) { withoutRule(r); typeset = null; continue }
-      if (s + 1 >= strategies.length) { exhausted = true; break }
-      s++; aux = null
-      note('next strategy', { strategy: strategy().name })
-      // a plan is made for one strategy: the new one's, uncorrected, since what the preview measured was set by another
-      // (the handoff, 6)
+      // the run's remedies before the chain moves on (remedy). The rule left out by the remedy just tried comes back only
+      // where the remedy took it back — with the final's plan, or, left out since a preview or the measure, the plan for
+      // this strategy, uncorrected (the handoff, 6); kept off — the failure changed —, the final stays without it, and the
+      // next remedy is tried with the rule still off (the reviews of 2026-10-04: I-3, and Codex's second high)
+      const back = episode?.trying === 'rule'
+      const how = await remedy(r, !!typeset, req)
+      if (back) {
+        if (!ruleFailed.has(strategy().name)) typeset = planAside ?? planFor(all)?.typeset ?? null
+        planAside = null
+      }
+      if (how === 'rule') { planAside = typeset; typeset = null; continue }
+      if (how) continue
+      if (ahead()) nextStrategy()
+      else if (!(await backToLetters())) { exhausted = true; break }
+      // a plan is made for one strategy: the new one's — or the one gone back to's —, uncorrected, since what the
+      // preview measured was set by another (the handoff, 6)
+      planAside = null
       typeset = planFor(all)?.typeset ?? null
     }
     if (ok) {
-      onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
+      shownInSource = passagesShown(all)
+      shownPartial = !whole(setting(all))
+      onUpdate?.({ pdf: r.pdf, texts: texts(setting(all)), translated: all.size, final: true })
       // the units the final set in the source though translated, for the record: their translation stays the next run's.
-      // Said anew for every unit it set, a seed's mark included: it set them all again
-      const set = typesetBy(all, strategy())
+      // Said anew for every unit it set, a seed's mark included: it set them all again — those the safety net set in the
+      // source among them
+      const set = typesetBy(setting(all), strategy())
       units.forEach((u, i) => {
         const r = results.get(i)
         if (!r || !all.has(u)) return
@@ -622,7 +986,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     }
     // marks known come only from a compile of the paper's own source that set (onOriginal)
     const own = marks && !originalP ? null : await original()
-    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing(), original: readings, passing }
+    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing(), inSource: shownInSource, shownPartial, original: readings, passing }
   }
   try { return await compiles() } catch (e) {
     if (!e?.compilerDown) throw e

@@ -32,7 +32,7 @@ import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from './anchors.mjs'
 import { blockOf, bySentence, clickOf, hitOf, layoutOf, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
-import { allTranslatedBy, copyTexts, decideWrite, digestOf, figureKeyOf, knownMarks, knownOriginal, labelOf, originalRow, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from './cache.mjs'
+import { allTranslatedBy, copyTexts, decideWrite, digestOf, endOf, figureKeyOf, knownMarks, knownOriginal, labelOf, originalRow, passagesInSource, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
@@ -2044,8 +2044,13 @@ async function live() {
     note('cache hit', { engine: cached.engine, pipeline: cached.pipeline, typesetting: cached.typesetting })
     // opened, whatever follows: the least recently opened go first (a run that writes nothing would not say so)
     void pdfCache.touch(digest, lang0)
+    // the passages the copy's typesetting left in the original, said with the copy on screen (S-P-60; the re-review's
+    // N-5): whatever follows — current, the service out of reach and the copy not checked, or a run translating again,
+    // whose own count replaces it
+    lost = passagesInSource(cached.units)
     try { await showCached(cached, setContext, note) } catch (e) {
       // a copy that cannot be shown is no copy: deleted, and the visit goes on as a miss (final review)
+      lost = 0
       note('cache unusable', { error: String(e?.message ?? e).slice(0, 200) })
       void pdfCache.delete(digest, lang0)
       cached = undefined
@@ -2201,6 +2206,9 @@ async function live() {
     note('engine', { lang, format: engine.format, engine: engine.engine })
     if (!retrying && cached && isCurrent(cached, { identity: engine.identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION })) {
       status(`${paper}, this machine's copy · translated into ${lang} by ${cached.engine}`)
+      // the passages the copy's typesetting left in the original are said on this visit too, as on the one that made it
+      // (S-P-60; the review of 2026-10-04, I-6): a copy that sets them so is current, and nothing is compiled again
+      lost = passagesInSource(cached.units)
       note('cache current')
       L.done = true
       return
@@ -2290,8 +2298,10 @@ async function live() {
     // up, a compile it gave up on) — no compiler, the retry offered, the network's back retrying by itself (the S3a
     // report's duties, b); nothing written or marked, and what is shown stays
     if (result.compiler) { await swaps; unset = unsetAfter(unset, result, shownNow); return fail('no compiler', `Could not typeset ${paper}: ${result.compiler.error}`, result.compiler.down === 'network' ? 'network' : 'unknown') }
-    // the paragraphs the service left in the source, not a sum over batches: a seeded one keeps its old translation
-    lost = result.missing ?? lost
+    // the paragraphs the service left in the source, not a sum over batches: a seeded one keeps its old translation —
+    // and those translated that TeX could not set, which the compile's safety net set in the source (live.mjs
+    // `inSource`): the reader does not say a passage is translated when it is not (S-P-60; the maintainer, 2026-10-04)
+    lost = (result.missing ?? lost) + (result.inSource ?? 0)
     // stopped with nothing on screen translated: the card, with the service's reason (the reader's design, §8)
     if (result.stopped && !result.translated) return fail('failed', `Could not translate ${paper}: ${result.stopped}`, result.stopped)
     stopped = result.stopped ? { event: 'stopped', kind: result.stopped } : null
@@ -2303,13 +2313,22 @@ async function live() {
     // With the identity that would answer now, as a copy is written: the mark holds for that service alone (Codex on #306),
     // and is left only when that service made the whole translation — a run a hand-over mixed is tried again (its final
     // review)
-    if (result.exhausted && !result.stopped && !compiledOnce && !cached) {
+    const end = endOf(result, { compiledOnce, finalShown, cached: !!cached })
+    if (end === 'cannot typeset') {
       if (cacheKey && result.originalOk) {
         const identity = await engine.now().catch(() => engine.identity)
         if (allTranslatedBy(result.results, identity) && compiledUnder) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, { identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page: compiledUnder })
       }
       note('done', result)
       return fail('cannot typeset', `None of the ways of typesetting ${paper} into ${lang} worked: the right side shows the original`)
+    }
+    // a preview of this visit on screen and none of the ways able to set the whole: the reader says the translation is
+    // shown in part, with the HTML version where arXiv has one, and keeps the preview and the displays as they are
+    // (S-R-19; the maintainer, 2026-10-04: the first preview stood alone while the progress line said it was done)
+    if (end === 'shown in part') {
+      host.emit({ type: 'html', url: await htmlVersion() })
+      host.emit({ type: 'fail', event: 'shown in part', text: `Only part of ${paper}'s translation could be typeset into ${lang}: the right side shows the last preview` })
+      status(`${paper}: none of the ways of typesetting the whole translation into ${lang} worked; the right side shows the last preview`)
     }
     // this machine's copy: the whole record for a final that settled; the units' provenance alone when nothing typeset
     // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")

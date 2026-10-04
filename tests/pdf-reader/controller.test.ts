@@ -27,6 +27,18 @@ describe('reduce: the session events folded into the reader state', () => {
     expect(fold([{ type: 'display', mode: 'bilingual' }, note('opened')]).phase).toBe('loading')
   })
 
+  it("a copy shown counts the passages it holds in the original from the moment it is on screen, whatever follows — current, not checked, or translated again (N-5)", () => {
+    // the service unreachable: the copy shown, and nothing after it
+    expect(fold([note('digest'), note('cache hit'), note('shown cached', { lost: 2 })])).toMatchObject({ phase: 'ready', shown: 'copy', failedUnits: 2 })
+    // translated again: the run's own count from its start
+    expect(fold([note('shown cached', { lost: 2 }), note('translating', { again: true })]).failedUnits).toBe(0)
+  })
+
+  it("a copy current on a visit again counts the passages it holds in the original, as the run that made it did (I-6 of 2026-10-04)", () => {
+    expect(fold([note('digest'), note('cache hit'), note('shown cached'), note('cache current', { lost: 2 })])).toMatchObject({ phase: 'ready', failedUnits: 2 })
+    expect(fold([note('digest'), note('cache hit'), note('shown cached'), note('cache current')]).failedUnits).toBe(0)
+  })
+
   it("counts the translation's progress and the paragraphs the service failed on", () => {
     const state = fold([note('digest'), note('engine'), note('translating'), note('source', { total: 40 }), note('translated', { got: 10, total: 40, lost: 2 })])
     expect(state.phase).toBe('translating')
@@ -112,6 +124,13 @@ describe('reduce: the session events folded into the reader state', () => {
     expect(fold([{ type: 'fail', event: 'not verified', text: '' }])).toMatchObject({ languageSupported: false, phase: 'ready', failure: null })
     expect(fold([{ type: 'fail', event: 'no engine', text: '', kind: 'no-key' }])).toMatchObject({ phase: 'failed', failure: 'no-key' })
     expect(fold([{ type: 'fail', event: 'crashed', text: '' }])).toMatchObject({ phase: 'failed', failure: 'unknown' })
+  })
+
+  it('a run that could show only part of its translation: said, the preview kept, the translated displays not greyed; a run again starts without it (S-R-19)', () => {
+    const s = fold([note('shown preview', { got: 9, total: 103 }), { type: 'html', url: 'https://arxiv.org/html/x#readarxiv' }, { type: 'fail', event: 'shown in part', text: '' }, note('done', { got: 103, total: 103 })])
+    expect(s).toMatchObject({ partial: true, available: true, phase: 'ready', shown: 'preview', failure: null, htmlVersion: 'https://arxiv.org/html/x#readarxiv' })
+    expect(INITIAL.partial).toBe(false)
+    expect(fold([note('translating', { got: 0, total: 103 })], s).partial).toBe(false)
   })
 
   it("knows when the extension's settings could not be read", () => {
