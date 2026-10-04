@@ -4,6 +4,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { basename, join, sep } from 'node:path'
+import { contentScriptsRunningOn } from './site-isolation.mjs'
 
 const OUT = '.output/chrome-mv3'
 const CONTENT_DIR = join(OUT, 'content-scripts')
@@ -45,6 +46,8 @@ const siteCode = existsSync(join(OUT, SITE_SCRIPT)) ? readFileSync(join(OUT, SIT
 // What a script that only marks a page has no use for: a request, a message out, a store, a way to run text. The wrapper WXT puts around every
 // content script announces it with a `postMessage`: that call stays in the file, behind the option that turns it off (`noScriptStartedPostMessage`)
 const NOT_THE_MARK = /\b(sendMessage|sendNativeMessage|connect|fetch|XMLHttpRequest|sendBeacon|WebSocket|localStorage|sessionStorage|indexedDB|eval|innerHTML)\b/
+// Every other script, against every host the website has: a pattern that covers the website without naming it counts (scripts/site-isolation.mjs)
+const intruders = siteHosts.length === 0 ? [] : (manifest.content_scripts ?? []).filter(entry => entry !== siteEntry && siteHosts.some(host => contentScriptsRunningOn([entry], host).length > 0))
 const sameList = (a, b) => a.length === b.length && [...a].sort().every((value, at) => value === [...b].sort()[at])
 
 // The licences that go with every copy (scripts/third-party-notices.mjs): written through a WXT hook, and a hook that
@@ -56,7 +59,7 @@ for (const [what, ok] of [
   [`the website's hosts are read from src/shared/web-app.ts: ${siteMatches.join(', ') || 'none found'}`, siteHosts.length > 0 && siteMatches.every(match => /^https:\/\/[a-z0-9.-]+\/\*$/.test(match))],
   [`one content script runs on the website's pages, and it matches ${siteMatches.join(', ')} exactly`, siteEntries.length === 1 && sameList(siteEntry.matches, siteMatches) && siteEntry.js.length === 1],
   [`it runs at document_start, in the isolated world, in the top frame, and brings no style sheet`, siteEntry?.run_at === 'document_start' && siteEntry.world === undefined && !siteEntry.all_frames && !siteEntry.css && !siteEntry.match_about_blank && !siteEntry.match_origin_as_fallback],
-  [`no other content script matches the website`, (manifest.content_scripts ?? []).every(entry => entry === siteEntry || !entry.matches.some(match => siteHosts.some(host => match.includes(host))))],
+  [`no other content script can run on the website${intruders.length > 0 ? ` (${intruders.map(entry => `${entry.js?.join(', ')} matches ${entry.matches.join(', ')}`).join('; ')})` : ''}`, intruders.length === 0],
   [`the page has no way to speak to the extension: no externally_connectable, and the script is not a web-accessible resource`, manifest.externally_connectable === undefined && !(manifest.web_accessible_resources ?? []).some(entry => entry.resources.some(resource => resource.includes('web-app')))],
   [`${join(OUT, SITE_SCRIPT)} holds nothing but the mark: its attribute, the version it reads, no request, message or store, WXT's page announcement off, ${siteCode.length} of 8000 bytes`,
     siteCode.includes('data-readarxiv-extension') && siteCode.includes('getManifest') && !NOT_THE_MARK.test(siteCode) && /noScriptStartedPostMessage:\s*(!0|true)\b/.test(siteCode) && siteCode.length < 8000],
