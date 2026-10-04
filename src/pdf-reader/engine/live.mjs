@@ -763,16 +763,19 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
           // the final, as from that preview, and the next strategy is measured — so that the final is set from a plan
           // measured under the strategy it is compiled with, not from the next one's plan uncorrected once this one's
           // final failed (the F2 re-review's N2: zh 2608.02459's re-set, measured under xeCJK, which has no σ there).
-          // Under the last strategy the final is set as before, and cannot set it either. The rule is what is measured: a
-          // TeX failure is first tried again without the run's additions, and the rule's own remedy is after the loop
-          if ((unset || (!r.ok && !timedOut(r))) && await remedy(r, false, req)) continue
+          // Under the last strategy the final is set as before, and cannot set it either. A TeX failure goes through the
+          // run's remedies in their order, the rule's first — the plan's own TeX stands in each unit's lines, and a unit
+          // it broke would otherwise be set in the source for it (the review of 2026-10-04, I-1) —; the rule left out,
+          // no plan is left to measure, and the final is set as today (ruling 6)
+          if ((unset || (!r.ok && !timedOut(r))) && await remedy(r, true, req)) continue
           if (unset && s + 1 < strategies.length) { nextStrategy({ measure: whyUnset(r) }); continue }
           break
         }
         // BusyTeX gave up: the final from the plan uncorrected, which every input but the measure was there for
         if (timedOut(r)) { passing = true; return plan.typeset }
-        // TeX's failure under the rule, the additions tried: the final as today (ruling 6)
-        if (!r.ok) { withoutRule(r); return null }
+        // TeX's failure under the rule and no remedy left — the rule's tried in this failure, and taken back as not its
+        // cause, or none tried: the final as today (ruling 6)
+        if (!r.ok) { if (!episode?.tried.has('rule')) withoutRule(r); return null }
         if (!unset) recovered()
         if (r.aux) aux = r.aux
         if (r.bbl) bbl = r.bbl

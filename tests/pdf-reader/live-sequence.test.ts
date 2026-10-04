@@ -323,9 +323,10 @@ describe('a compile that stopped short of the document\'s end', () => {
     const previews = notes.filter(([e]) => e === 'preview')
     expect(previews.map(([, d]) => [d.strategy, d.ok, d.error])).toEqual([['XeLaTeX + xeCJK', false, STOPPED], ['pdfLaTeX + CJKutf8', false, STOPPED], ['pdfLaTeX + CJKutf8', false, STOPPED]])
     expect(notes.filter(([e]) => e === 'next strategy').length).toBe(1)
-    // under CJKutf8 the run's remedies before the chain ends: its first preview again without microtype, its measure
-    // without the references the original gave (microtype tried already), its final with nothing left to leave out
-    expect(notes.filter(([e]) => e === 'measure' || e === 'final').map(([e, d]) => [e, d.ok])).toEqual([['measure', false], ['measure', false], ['final', false]])
+    // under CJKutf8 the run's remedies before the chain ends, in their order: its first preview again without microtype,
+    // its measure's failure the rule's to try first — the final without it —, then the final without the references the
+    // original gave, the rule back (microtype tried already)
+    expect(notes.filter(([e]) => e === 'measure' || e === 'final').map(([e, d]) => [e, d.ok])).toEqual([['measure', false], ['final', false], ['final', false]])
     expect(notes.filter(([e]) => /^without /.test(e)).map(([e]) => e)).toEqual(['without spacing', 'without references'])
     expect([r.previews, r.settled, r.exhausted, r.originalOk]).toEqual([0, false, true, true])
   })
@@ -1125,5 +1126,48 @@ describe('citationLines: every line of an aux for a key it cites, in its order',
     // the first preview has nothing; the one after the original its own aux and the original's two lines after it
     expect(given[1]?.endsWith('\\bibcite{a}{W}\n\\APACbibcite{a}{C}')).toBe(true)
     expect(r.original?.cites).toBe('\\bibcite{a}{W}\n\\APACbibcite{a}{C}')
+  })
+})
+
+// The remedies' order and their taking back, after the reviews of 2026-10-04 (plans/2026-10-04-compile-resilience.md,
+// "Review response"): the least lost first wherever a compile fails — the rule, the run's additions, then units —, a
+// remedy kept off stays off, and what a strategy's fonts lack is the next strategy's to set before any unit goes to the
+// source
+describe('the remedies in their order, wherever a compile fails', () => {
+  const T = '\u8bba\u6587'
+  /** the main file as TeX reads it, UTF-8 */
+  const text = (q: Req) => new TextDecoder().decode(q.overrides.get(q.main))
+  /** each English word the target's, every paragraph keeping its number: unit 3's translation is the line with "T 3 T" */
+  const numbered = async (texts: string[]) => texts.map(t => ({ text: t.replace(/(?<![@a-z])[A-Za-z]{2,}/g, T), by: 'B' }))
+  const ok = (n: number, q: Req): Compiled => ({ ok: true, pdf: new Uint8Array([1]), aux: '\\citation{a}\n\\bibcite{a}{1}\n', bbl: null, log: kindOf(q) === 'probe' ? FONT_LOG : linesLog(n), ms: 1 })
+  /** TeX stopped at unit `i`'s translation, as halt-on-error writes it */
+  const failAt = (q: Req, i: number, message = 'Undefined control sequence.'): Compiled | null => {
+    const lines = text(q).split('\n'), at = lines.findIndex(l => l.includes(`${T} ${i} ${T}`)) + 1
+    if (!at) return null
+    const l = lines[at - 1] as string, k = l.indexOf(`${T} ${i} ${T}`) + 4
+    return { ok: false, pdf: null, log: `! ${message}\nl.${at} ${l.slice(Math.max(0, k - 30), k)}\n  ${l.slice(k, k + 30)}\n`, ms: 1 }
+  }
+  const REMEDIES = /^(?:typeset failed|typeset back|without |spacing back|references back|in source|lost letters|kept|recovered|next strategy|back to )/
+  const remedies = (notes: [string, Record<string, unknown>][]) => notes.filter(([e]) => REMEDIES.test(e)).map(([e, d]) => `${e}${d.by ? ` by ${d.by}` : ''}${d.units ? ` ${JSON.stringify(d.units)}` : ''}`)
+
+  it("a re-set whose measure fails only with the rule: the rule left out before any unit is set in the source, as before the safety net", async () => {
+    // a copy's whole translation, current: a re-set — no preview, the measure first
+    const p = paper(), n = p.units.length
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: numbered, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const hashes = await Promise.all(p.units.map(u => sourceHash(u)))
+    const record = JSON.parse(JSON.stringify({ format: 'markers', units: unitsOf(p.units, keptFor(p, 'zh'), hashes, r0.results) }))
+    const { seed } = await seedFrom(record, p.units)
+    const calls: string[] = [], notes: [string, Record<string, unknown>][] = []
+    // the rule's TeX breaks on unit 3: its macros stand in the unit's own lines
+    const compile = async (q: Req): Promise<Compiled> => {
+      calls.push(`${kindOf(q)}${ruled(q) ? '+rule' : ''}`)
+      return (kindOf(q) !== 'probe' && kindOf(q) !== 'original' && ruled(q) && failAt(q, 3)) || ok(n, q)
+    }
+    const r = await runLive(p, { lang: 'zh', compile, translate: numbered, format: 'markers', marks: new Map(), identity: 'B', seed: reusable(seed, { identity: 'B', copyWire: true }), pipelineCurrent: false, readMarks: async () => MARKS(n), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
+    expect(calls).toEqual(['probe', 'original', 'preview+rule', 'final'])
+    expect(remedies(notes)).toEqual(['typeset failed', 'recovered by rule'])
+    expect(r.settled).toBe(true)
+    expect(r.inSource).toBe(0)
+    expect([...r.results.values()].some(x => (x as { inSource?: boolean }).inSource)).toBe(false)
   })
 })
