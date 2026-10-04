@@ -348,6 +348,25 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.close()
 }
 
+// the arXiv link's words on the bar's centre line (within 0.5 px), beside the title and alone, as the website also draws
+// it: on the 16.8 px line it inherited, Chromium set them 0.91 px off when alone (the web's wave 2, Task 16)
+{
+  const page = await open({ mode: 'bilingual' })
+  const off = () => page.evaluate(() => {
+    const bar = document.querySelector('header.bar').getBoundingClientRect(), link = document.querySelector('.arxiv-id')
+    const texts = [...link.childNodes].filter(n => n.nodeType === 3), range = document.createRange()
+    range.setStart(texts[0], 0)
+    range.setEnd(texts.at(-1), texts.at(-1).length)
+    const rects = [...range.getClientRects()].filter(r => r.width > 0)
+    return (Math.min(...rects.map(r => r.top)) + Math.max(...rects.map(r => r.bottom))) / 2 - (bar.top + bar.bottom) / 2
+  })
+  const beside = await off()
+  await page.evaluate(() => { document.querySelector('.paper-title [data-title]').style.display = 'none' })
+  const alone = await off()
+  check('the arXiv link\'s words on the bar\'s centre line, beside the title and alone', Math.abs(beside) <= 0.5 && Math.abs(alone) <= 0.5, JSON.stringify({ beside, alone }))
+  await page.close()
+}
+
 // ---------------------------------------------------------------- Task 24: pinch zoom
 {
   const page = await open({ mode: 'bilingual' })

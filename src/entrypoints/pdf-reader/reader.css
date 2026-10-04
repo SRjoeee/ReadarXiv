@@ -114,7 +114,10 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .divider { width: 0.5px; height: 18px; margin-inline: 6px; flex: none; background: var(--chrome-line); }
 
   .seg.display > button { width: 40px; padding: 0; }
-  .arxiv-id { display: inline-flex; flex: none; align-items: center; gap: 2px; margin: -2px -4px; padding: 2px 4px; border-radius: 5px; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; text-decoration: none; transition: color 150ms, background-color 150ms; }
+  /* 17 px, whole, as the capsule's words: on the 16.8 px line it inherited (12 px at 1.4) Chromium set its words 0.91 px
+     off the bar's centre line, where Firefox and WebKit set them on it (the web's measure, wave 2 Task 16; the drafts'
+     round 4 had this line) */
+  .arxiv-id { display: inline-flex; flex: none; align-items: center; gap: 2px; margin: -2px -4px; padding: 2px 4px; border-radius: 5px; color: var(--ink-2); font-size: 12px; line-height: 17px; font-variant-numeric: tabular-nums; text-decoration: none; transition: color 150ms, background-color 150ms; }
   .arxiv-id svg { opacity: 0; translate: -2px 2px; transition: opacity 150ms, translate 150ms ease-out; }
   .arxiv-id:focus-visible { color: var(--ink); background: var(--fill); }
   .arxiv-id:focus-visible svg { opacity: 1; translate: 0 0; }
