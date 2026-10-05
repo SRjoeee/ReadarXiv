@@ -340,11 +340,11 @@ export function parseLayoutMarks(bytes) {
   const pages = checkPages(m.pages, 'pages')
   const views = checkViews(m.views, pages, 'views')
   if (!Array.isArray(m.columns) || m.columns.length !== pages) throw new LayoutRefusal('columns', `not ${pages} entries`)
-  m.columns.forEach((c, i) => { if (c !== 0 && c !== 1 && c !== 2) throw new LayoutRefusal(`columns[${i}]`, 'not 0, 1 or 2') })
+  for (let i = 0; i < m.columns.length; i++) { const c = m.columns[i]; if (c !== 0 && c !== 1 && c !== 2) throw new LayoutRefusal(`columns[${i}]`, 'not 0, 1 or 2') }
   if (!Array.isArray(m.marks)) throw new LayoutRefusal('marks', 'not an array')
   const names = new Set()
-  m.marks.forEach((e, i) => {
-    const at = `marks[${i}]`
+  for (let i = 0; i < m.marks.length; i++) {
+    const e = m.marks[i], at = `marks[${i}]`
     if (!Array.isArray(e) || e.length !== 4) throw new LayoutRefusal(at, 'not [name, page, x, y]')
     const [name, page, x, y] = e
     if (typeof name !== 'string' || !MARK_NAME.test(name)) throw new LayoutRefusal(`${at}[0]`, 'not a mark name')
@@ -354,19 +354,20 @@ export function parseLayoutMarks(bytes) {
     const o = 4 * (page - 1)
     if (!isNumber(x) || x < views[o] - 1 || x > views[o + 2] + 1) throw new LayoutRefusal(`${at}[2]`, 'not within its page')
     if (!isNumber(y) || y < views[o + 1] - 1 || y > views[o + 3] + 1) throw new LayoutRefusal(`${at}[3]`, 'not within its page')
-  })
+  }
   if (!Array.isArray(m.dropped)) throw new LayoutRefusal('dropped', 'not an array')
-  m.dropped.forEach((n, i) => { if (typeof n !== 'string' || !MARK_NAME.test(n)) throw new LayoutRefusal(`dropped[${i}]`, 'not a mark name') })
+  for (let i = 0; i < m.dropped.length; i++) { const n = m.dropped[i]; if (typeof n !== 'string' || !MARK_NAME.test(n)) throw new LayoutRefusal(`dropped[${i}]`, 'not a mark name') }
   if (!Array.isArray(m.lines)) throw new LayoutRefusal('lines', 'not an array')
   let id = -1
-  m.lines.forEach((e, i) => {
+  for (let i = 0; i < m.lines.length; i++) {
+    const e = m.lines[i]
     if (!Array.isArray(e) || e.length !== 2) throw new LayoutRefusal(`lines[${i}]`, 'not [id, count]')
     if (!isInteger(e[0], id + 1, Number.MAX_SAFE_INTEGER)) throw new LayoutRefusal(`lines[${i}][0]`, 'not an id above the last')
     if (!isInteger(e[1], 0, LINES_MAX)) throw new LayoutRefusal(`lines[${i}][1]`, `not a count 0 to ${LINES_MAX}`)
     id = e[0]
-  })
+  }
   if (!Array.isArray(m.words) || m.words.length > WORDS_MAX) throw new LayoutRefusal('words', `not an array of at most ${WORDS_MAX}`)
-  m.words.forEach((w, i) => { if (typeof w !== 'string' || w.length < 1 || w.length > WORD_MAX) throw new LayoutRefusal(`words[${i}]`, `not a word of 1 to ${WORD_MAX} code units`) })
+  for (let i = 0; i < m.words.length; i++) { const w = m.words[i]; if (typeof w !== 'string' || w.length < 1 || w.length > WORD_MAX) throw new LayoutRefusal(`words[${i}]`, `not a word of 1 to ${WORD_MAX} code units`) }
   const t = m.tokens
   if (!Array.isArray(t) || t.length % 6 !== 0) throw new LayoutRefusal('tokens', 'not of stride 6')
   for (let i = 0; i < t.length; i += 6) {

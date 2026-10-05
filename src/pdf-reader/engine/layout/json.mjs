@@ -86,11 +86,15 @@ export const isObject = v => typeof v === 'object' && v !== null && !Array.isArr
 export const isNumber = v => typeof v === 'number' && Number.isFinite(v)
 export const isInteger = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi
 
-/** an object with exactly `keys` */
+/** an untrusted string as a refusal names it: its first 20 code units, a control or bidi character escaped (a line
+ *  break, U+202E), never the whole of it; anything else by its type */
+export const told = v => (typeof v !== 'string' ? typeof v : JSON.stringify(v.slice(0, 20)).slice(1, -1).replace(/[\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`))
+
+/** an object with exactly `keys`: the schema's keys named as they are, a key of the file's own as `told` names it */
 export function checkKeys(v, keys, path) {
   if (!isObject(v)) throw new LayoutRefusal(path, 'not an object')
   for (const k of keys) if (!Object.hasOwn(v, k)) throw new LayoutRefusal(path ? `${path}.${k}` : k, 'missing')
-  for (const k of Object.keys(v)) if (!keys.includes(k)) throw new LayoutRefusal(path ? `${path}.${k}` : k, 'not a key of the schema')
+  for (const k of Object.keys(v)) if (!keys.includes(k)) throw new LayoutRefusal(path ? `${path}.${told(k)}` : told(k), 'not a key of the schema')
   return v
 }
 

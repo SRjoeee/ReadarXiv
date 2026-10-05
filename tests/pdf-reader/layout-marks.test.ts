@@ -396,6 +396,9 @@ describe('the marks file', () => {
     expect(refusal(bytes(JSON.stringify(valid()).replace('[0,0,612,792,0,0,612,792]', '[0,0,612,1e400,0,0,612,792]')))).toBe('views[3]')
     // not an object at all
     expect(refusal(bytes('[]'))).toBe('')
+    // a key of no schema, 100,000 code units long, is told by its first 20
+    const long = { ...valid(), [`k${'y'.repeat(100_000)}`]: 1 }
+    expect(refusal(bytes(long))).toBe(`k${'y'.repeat(19)}`)
     // within every bound: 300,000 words
     const many = valid()
     many.words = Array.from({ length: 300_000 }, (_, i) => `w${i}`)

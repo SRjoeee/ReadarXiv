@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { boundedJson, checkViews, countValues, LayoutRefusal, utf8Strict } from '@/pdf-reader/engine/layout/json.mjs'
+import { boundedJson, checkKeys, checkViews, countValues, LayoutRefusal, utf8Strict } from '@/pdf-reader/engine/layout/json.mjs'
 
 // What both of the layout's parsers share: the values of a JSON text counted before it is parsed, and UTF-8 refused when
 // malformed. The parsers' own bounds are tested with them (layout-marks.test.ts, layout-file.test.ts)
@@ -82,6 +82,18 @@ describe('boundedJson and checkViews', () => {
     expect(() => boundedJson(new Uint8Array([0x5b, 0xc3, 0x28, 0x5d]), { cap: 100, values: 5 })).toThrow(/UTF-8/)
     expect(() => boundedJson(new TextEncoder().encode('[1,'), { cap: 100, values: 5 })).toThrow(/not JSON/)
     expect(boundedJson(new TextEncoder().encode('[1,2,3,4]'), { cap: 100, values: 5 })).toEqual([1, 2, 3, 4])
+  })
+  it('tells a key of no schema by its first 20 code units, never a newline or a bidi control', () => {
+    // a file made from a paper names its own keys: one of 100,000 code units, a line break and U+202E among them
+    const key = `\n\u202e${'x'.repeat(100_000)}`
+    let refusal: LayoutRefusal | null = null
+    try { checkKeys({ a: 1, [key]: 2 }, ['a'], 'top') } catch (e) { refusal = e as LayoutRefusal }
+    expect(refusal).toBeInstanceOf(LayoutRefusal)
+    const said = `${refusal?.path} ${refusal?.message}`
+    expect(refusal?.path.length).toBeLessThanOrEqual(4 + 40)
+    expect(refusal?.message.length).toBeLessThan(120)
+    expect(said).not.toMatch(/[\n\u202e]/)
+    expect(refusal?.path).toBe('top.\\n\\u202exxxxxxxxxxxxxxxxxx')
   })
   it('a view is four finite numbers within the bound, not empty', () => {
     expect(checkViews([0, 0, 612, 792], 1, 'views')).toEqual([0, 0, 612, 792])
