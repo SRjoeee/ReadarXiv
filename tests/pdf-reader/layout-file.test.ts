@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { countValues } from '@/pdf-reader/engine/layout/json.mjs'
 import {
-  encodeLayout, indexLayout, LABEL_KINDS, LAYOUT, LAYOUT_CAP, LAYOUT_VALUES, type LayoutFile, LayoutRefusal, PH_FLAG, PH_KINDS,
+  encodeLayout, indexLayout, LABEL_KINDS, LAYOUT, LAYOUT_CAP, LAYOUT_DEPTH, LAYOUT_VALUES, type LayoutFile, LayoutRefusal, PH_FLAG, PH_KINDS,
   parseLayout, UNIT_FLAG, UNIT_KINDS,
 } from '@/pdf-reader/engine/layout/file.mjs'
 
@@ -218,6 +218,95 @@ describe('refused before it is decoded or parsed', () => {
   })
 })
 
+// ---------------------------------------------------------------- nesting
+/** how deep a value's brackets go: its own at 1, a number or a string at 0 */
+const depthOf = (v: unknown): number => (typeof v === 'object' && v !== null ? 1 + Math.max(0, ...Object.values(v).map(depthOf)) : 0)
+/** every path of a value but the root, with whether it is a container */
+function* nodes(v: unknown, path: (string | number)[] = []): Generator<[(string | number)[], boolean]> {
+  if (typeof v !== 'object' || v === null) return
+  for (const [k, c] of Object.entries(v)) {
+    const p = [...path, Array.isArray(v) ? Number(k) : k]
+    yield [p, typeof c === 'object' && c !== null]
+    yield* nodes(c, p)
+  }
+}
+/** the made file with the value at `path` written as `text` */
+function replaced(path: (string | number)[], text: string) {
+  const f = structuredClone(made())
+  // biome-ignore lint/suspicious/noExplicitAny: a test walks the file by path
+  let holder: any = f
+  for (const k of path.slice(0, -1)) holder = holder[k]
+  holder[path[path.length - 1]!] = '@@HERE@@'
+  const json = JSON.stringify(f), at = json.indexOf('"@@HERE@@"')
+  return utf8(json.slice(0, at) + text + json.slice(at + '"@@HERE@@"'.length))
+}
+
+describe('nesting is refused before JSON.parse', () => {
+  it('the deepest legal file nests LAYOUT_DEPTH = 4 deep: the file, lines (or frames, or erase), an entry [id, rows], its rows', () => {
+    const f = made()
+    // each key's value one bracket deeper than the file's own: the three entries arrays reach 4
+    const reach = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, 1 + depthOf(v)]))
+    expect(reach).toEqual({ schema: 1, layout: 1, pdfjs: 1, paper: 2, left: 1, views: 2, fonts: 2, units: 3, lines: 4, frames: 4, erase: 4, ph: 3, labels: 3, headings: 3 })
+    expect(depthOf(f)).toBe(4)
+    expect(LAYOUT_DEPTH).toBe(4)
+    const parse = vi.spyOn(JSON, 'parse')
+    expect(parseLayout(utf8(encodeLayout(f)))).toEqual(f)
+    expect(parse).toHaveBeenCalledTimes(1)
+  })
+
+  it('no legal file nests deeper: every leaf given an array, and every array an object, is refused', () => {
+    let leaves = 0, containers = 0
+    for (const [path, container] of nodes(made())) {
+      const e = refusal(replaced(path, container ? '{}' : '[]'))
+      expect(e, path.join('.')).not.toBeNull()
+      if (container) containers++; else leaves++
+    }
+    expect(leaves).toBeGreaterThan(250)
+    expect(containers).toBeGreaterThan(40)
+  })
+
+  it.each([
+    ['lines', ['lines', 0, 1, 0]],
+    ['frames', ['frames', 3, 1, 0]],
+    ['erase', ['erase', 0, 1, 0]],
+  ] as [string, (string | number)[]][])('one level deeper at %s is refused before JSON.parse, naming no path', (_, path) => {
+    const parse = vi.spyOn(JSON, 'parse')
+    const e = refusal(replaced(path, '[1]'))
+    expect(e).toMatchObject({ path: '', message: 'nested more than 4 deep' })
+    expect(parse).not.toHaveBeenCalled()
+  })
+
+  /** the made file with 999,000 brackets opened and closed at `left`: 1.91 MiB and 999,000 and a few values, within both caps */
+  const hostile = () => replaced(['left'], `${'['.repeat(999_000)}${']'.repeat(999_000)}`)
+
+  it('999,000 nested brackets, inside both caps, are refused before JSON.parse, after a few characters', () => {
+    const bytes = hostile()
+    const text = new TextDecoder().decode(bytes)
+    expect(bytes.length).toBeLessThan(LAYOUT_CAP)
+    expect(bytes.length / 2 ** 20).toBeCloseTo(1.91, 1)
+    expect(countValues(text)).toBeLessThanOrEqual(LAYOUT_VALUES)
+    const parse = vi.spyOn(JSON, 'parse')
+    const read = vi.spyOn(String.prototype, 'charCodeAt')
+    const e = refusal(bytes)
+    const calls = read.mock.calls.length
+    read.mockRestore()
+    expect(e).toMatchObject({ path: '', message: 'nested more than 4 deep' })
+    expect(parse).not.toHaveBeenCalled()
+    // the characters before `left`, and the brackets up to the fifth: never the million after
+    expect(calls).toBeLessThan(200)
+  })
+
+  it.runIf(TIMING)('timing: the 999,000-deep file is refused in under 5 ms', () => {
+    const bytes = hostile()
+    refusal(bytes)
+    const t = performance.now()
+    refusal(bytes)
+    const ms = performance.now() - t
+    console.info(`999,000 deep: ${bytes.length} bytes, refused in ${ms.toFixed(1)} ms`)
+    expect(ms).toBeLessThan(5)
+  })
+})
+
 /** [what is broken, the edit, the path its refusal names] */
 const ROWS: [string, Edit, string][] = [
   // the top level
@@ -238,6 +327,9 @@ const ROWS: [string, Edit, string][] = [
   ['paper without an id', f => { delete f.paper.id }, 'paper.id'],
   ['an id that is not arXiv\'s', f => { f.paper.id = '2608.123' }, 'paper.id'],
   ['an old-style id with a line feed after it', f => { f.paper.id = 'hep-th/9901001\n' }, 'paper.id'],
+  ['an archive of 17 letters', f => { f.paper.id = `${'a'.repeat(17)}/9901001` }, 'paper.id'],
+  ['an archive of 1 letter', f => { f.paper.id = '-/0000000' }, 'paper.id'],
+  ['an id of 3,000,000 letters', f => { f.paper.id = `${'a'.repeat(3_000_000)}/1234567` }, 'paper.id'],
   ['version 0', f => { f.paper.version = 0 }, 'paper.version'],
   ['version 1,001', f => { f.paper.version = 1001 }, 'paper.version'],
   ['version 1.5', f => { f.paper.version = 1.5 }, 'paper.version'],
@@ -385,6 +477,9 @@ describe('refused by every bound', () => {
       f => { f.paper.id = 'hep-th/9901001' },
       f => { f.paper.id = 'math.GT/0309136' },
       f => { f.paper.id = '0704.0001' },
+      f => { f.paper.id = `${'x'.repeat(16)}/9901001` },
+      f => { f.paper.id = 'cs/9901001' },
+      f => { f.paper.id = 'astro-ph.GA/0309136' },
     ]
     for (const edit of edges) expect(refusal(broken(edit))).toBeNull()
   })

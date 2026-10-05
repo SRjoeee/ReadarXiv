@@ -5,6 +5,8 @@ export declare const LAYOUT: '1'
 /** bytes */
 export declare const LAYOUT_CAP: number
 export declare const LAYOUT_VALUES: number
+/** the deepest the file nests: 4 */
+export declare const LAYOUT_DEPTH: number
 export declare const UNIT_KINDS: readonly ['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author']
 export declare const PH_KINDS: readonly ['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other']
 export declare const LABEL_KINDS: readonly ['number', 'item', 'caption', 'footnote']
@@ -27,7 +29,7 @@ export interface LayoutFile {
   labels: number[][]                       // unit, kind, page, x0, baseline, x1, top, bottom
   headings: [id: number, src: string][]
 }
-/** bytes, then UTF-8, then values counted, then JSON.parse, then every bound; throws LayoutRefusal */
+/** bytes, then UTF-8, then values and nesting counted, then JSON.parse, then every bound; throws LayoutRefusal */
 export declare function parseLayout(bytes: Uint8Array): LayoutFile
 /** the file as written: keys in the schema's order, numbers to a hundredth, no white space */
 export declare function encodeLayout(file: LayoutFile): string

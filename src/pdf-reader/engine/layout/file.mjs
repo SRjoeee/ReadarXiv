@@ -1,8 +1,8 @@
 // The layout file (prep/<mid>/layout-<sha256>.json, spec §4.2): arXiv's PDF as the layer lays over it, made by the layout
 // maker from a paper and read by the container's service and the reader's main thread. It is untrusted, so it is refused
-// within bounds before it is used: bytes, UTF-8, values counted before JSON.parse (json.mjs), then its shape and every
-// bound with plain loops. A refusal is of the whole file, names its path, and describes a value by its type, never by
-// its text. Coordinates are arXiv's PDF units, each page unrotated, y up as in PDF, pages 1-based: a rectangle is not
+// within bounds before it is used: bytes, UTF-8, values and nesting counted before JSON.parse (json.mjs), then its shape
+// and every bound with plain loops. A refusal is of the whole file, names its path, and describes a value by its type,
+// never by its text. Coordinates are arXiv's PDF units, each page unrotated, y up as in PDF, pages 1-based: a rectangle is not
 // empty, x0 < x1 and bottom < top. Every string is returned as it is; nothing here or downstream builds markup from one.
 // Imports json.mjs alone: the reader loads it.
 import { boundedJson, checkPages, checkViews, isInteger, isNumber, isObject, LayoutRefusal } from './json.mjs'
@@ -13,6 +13,9 @@ export { LayoutRefusal } from './json.mjs'
 export const LAYOUT = '1'
 export const LAYOUT_CAP = 4 * 2 ** 20
 export const LAYOUT_VALUES = 1_000_000
+/** the deepest the file nests: its object, then lines, frames or erase (the arrays of entries), then an entry [id, rows],
+ *  then its rows (a flat array of numbers): four brackets, and no other field of the schema reaches past three */
+export const LAYOUT_DEPTH = 4
 export const UNIT_KINDS = Object.freeze(['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author'])
 export const PH_KINDS = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other'])
 export const LABEL_KINDS = Object.freeze(['number', 'item', 'caption', 'footnote'])
@@ -21,8 +24,10 @@ export const PH_FLAG = Object.freeze({ SOURCE_BRACKETS: 1, NUMBERED: 2, RAISED: 
 
 const KEYS = ['schema', 'layout', 'pdfjs', 'paper', 'left', 'views', 'fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings']
 const PAPER_KEYS = ['id', 'version', 'pages']
-/** a new-style arXiv identifier, or an old one with its archive (and subject class) */
-const PAPER_ID = /^(?:\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?\/\d{7})$/
+/** a new-style arXiv identifier (10 characters), or an old one: its archive, 2 to 16 letters (the longest, astro-ph,
+ *  cond-mat or plasm-ph, has 8; the rest is margin), a subject class, a slash and 7 digits, so 27 characters at most. The
+ *  version is the paper's own field, never a suffix of the id */
+const PAPER_ID = /^(?:\d{4}\.\d{4,5}|[a-z-]{2,16}(?:\.[A-Z]{2})?\/\d{7})$/
 const PDFJS_MAX = 32, LEFT_MAX = 128, FONTS_MAX = 512, FONT_MAX = 128, VERSION_MAX = 1000
 const PIECES_MAX = 10000, DEPTH_MIN = -1, DEPTH_MAX = 5, DEPTH_NONE = 9
 const LINES_UNIT = 2000, LINES_ALL = 200000, SIZE_MAX = 200
@@ -110,10 +115,10 @@ function zeroes(r) {
 }
 
 // ---------------------------------------------------------------- the parser
-/** bytes, then UTF-8, then values counted, then JSON.parse, then every bound; throws LayoutRefusal */
+/** bytes, then UTF-8, then values and nesting counted, then JSON.parse, then every bound; throws LayoutRefusal */
 export function parseLayout(bytes) {
   if (!(bytes instanceof Uint8Array)) throw refuse('', `not bytes (${kindOf(bytes)})`)
-  const f = exactKeys(boundedJson(bytes, { cap: LAYOUT_CAP, values: LAYOUT_VALUES }), KEYS, '')
+  const f = exactKeys(boundedJson(bytes, { cap: LAYOUT_CAP, values: LAYOUT_VALUES, depth: LAYOUT_DEPTH }), KEYS, '')
   if (f.schema !== 1) throw refuse('schema', 'not 1')
   if (f.layout !== LAYOUT) throw refuse('layout', `not '${LAYOUT}'`)
   if (!printable(f.pdfjs, 1, PDFJS_MAX)) throw refuse('pdfjs', `not 1 to ${PDFJS_MAX} printable ASCII characters (${kindOf(f.pdfjs)})`)
