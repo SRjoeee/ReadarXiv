@@ -890,7 +890,13 @@ is only how it meets the rest of the extension.
   forgiveness more (`mt.mjs` `rehydrate`): a marker's `#` the engine set twice, `@e##` or `@e# #`, is the marker's,
   and so is the first stray `#` after a marker read without its own — the wire's text holds no `#` of its own, TeX's
   `\#` being a placeholder — where Microsoft's Chinese for 2610.02069 had set the second as text ("El Ni ñ#",
-  "Figure 10#").
+  "Figure 10#"). And an accent inside a word goes as the letter it makes (`latex-front.mjs` `accentLetter`: ten text
+  accents, `\~n`, `\'{e}`, `{\"o}`, `\v c`, `\'\i` …), so that the engine reads the word whole, where `El Ni{\~n}o`
+  had gone out as `El Ni @d#@e#@f# o` and come back without the word's end; wherever the source is set — the marked
+  original, a unit left as it is or set in the source — the accent is written as the source has it. Only a letter
+  every strategy sets: LaTeX's UTF-8 table declares it (pdfLaTeX sets it as the accent, in OT1, T1, T2A and CJKutf8)
+  and Latin Modern, TeX Gyre and CMU hold it in every face (XeLaTeX), 145 letters measured on TL 2026; any other, and
+  an accent the paper defines anew (`\def\v{\varphi}`), stays a placeholder.
 - **Its store**: the compiled translations (with each unit's sentences, where its engine gave them), one record per paper version and target language, encrypted, in an
   IndexedDB of their own (`src/cache/pdf-store.ts`), capped at 500 MB with the least recently opened going first. A
   copy's units always describe its own PDF: a run that typesets nothing writes only who made and tried each unit, and

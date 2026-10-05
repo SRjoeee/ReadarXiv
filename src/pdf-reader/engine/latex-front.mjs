@@ -102,6 +102,57 @@ const lineBound = (text, at, lineEnvs) => {
   return false
 }
 const ACCENTS = new Set(["'", '`', '"', '^', '~', '=', '.', 'u', 'v', 'H', 'c', 'd', 'b', 't', 'r', 'k'])
+/** the text accents whose letter goes into its word (accentLetter), by the combining mark each puts on its letter */
+const ACCENT_MARKS = { '`': '\u0300', "'": '\u0301', '^': '\u0302', '~': '\u0303', '"': '\u0308', c: '\u0327', v: '\u030c', u: '\u0306', H: '\u030b', '.': '\u0307' }
+/**
+ * The letters those accents make on an ASCII letter (or \\i, \\j) that every way of setting a translation sets as it
+ * sets the source's accent: LaTeX's UTF-8 table declares each (utf8enc.dfu, the accent itself under pdfLaTeX, in OT1,
+ * T1, T2A and inside CJKutf8's environment alike), and Latin Modern, TeX Gyre (Termes, Heros, Cursor, Pagella) and CMU
+ * hold each in every face, upright, bold, italic, sans, mono and small capitals (XeLaTeX with fontspec and xeCJK; a
+ * paper's own XeLaTeX font sets the same letter for the source's accent, its TU composite). Measured on TL 2026,
+ * 2026-10-05: of the 221 letters the ten accents make, 167 are declared, and the fonts lack 22 of those (Ḃ Ḟ Ẏ Ḱ Ẑ Ǩ
+ * in either case, and CMU but for its upright roman the cedilla's Ģ Ķ Ļ Ņ Ŗ): 145 letters. Any other accent or letter
+ * keeps the accent a placeholder, as before
+ */
+const SETTABLE = new Set('ÀÁÂÃÄÇÈÉÊËÌÍÎÏÑÒÓÔÕÖÙÚÛÜÝàáâãäçèéêëìíîïñòóôõöùúûüýÿĂăĆćĈĉĊċČčĎďĔĕĖėĚěĜĝĞğĠġĤĥĨĩĬĭİĴĵĹĺĽľŃńŇňŎŏŐőŔŕŘřŚśŜŝŞşŠšŢţŤťŨũŬŭŰűŴŵŶŷŸŹźŻżŽžǍǎǏǐǑǒǓǔǦǧǰǴǵṅỲỳ')
+/** the letter an accent's argument at s[k] names, as TeX reads it after the accent (spaces skipped): an ASCII letter, or
+ *  \\i or \\j — its control word's spaces, and an empty group ending it, with it —, bare or alone in braces; with where
+ *  its source ends, or null */
+function accentBase(s, k, to) {
+  k = skipSpaces(s, k)
+  if (k < to && /[A-Za-z]/.test(s[k])) return { base: s[k], end: k + 1 }
+  if (s[k] === '\\' && /^[ij](?![A-Za-z@])/.test(s.slice(k + 1, k + 3))) {
+    let e = skipSpaces(s, k + 2)
+    if (s.startsWith('{}', e)) e += 2
+    return e <= to ? { base: s[k + 1], end: e } : null
+  }
+  if (s[k] !== '{') return null
+  const e = matchGroup(s, k)
+  if (e < 0 || e > to) return null
+  const inner = accentBase(s, k + 1, e - 1)
+  return inner && skipSpaces(s, inner.end) === e - 1 ? { base: inner.base, end: e } : null
+}
+/**
+ * The letter an accent command at s[i] makes (`end` past its name): \\~n, \\~{n}, \\v c, \\'\\i, \\'{\\i} → ñ, ñ, č, í, í,
+ * where the letter is one Unicode has, every strategy sets it (SETTABLE) and the paper keeps the accent its own (not
+ * one of `own`, the accents it defines anew: \\def\\v{\\varphi}); with where its source ends, or null. A letter in its
+ * word, the engine reads the word whole: El Ni{\\~n}o went out as `El Ni @d#@e#@f# o southern oscillations`, and came
+ * back without the word's end (2610.02069)
+ */
+function accentLetter(s, i, end, name, to, own) {
+  const mark = ACCENT_MARKS[name]
+  if (!mark || own?.has(name)) return null
+  const arg = accentBase(s, end, to)
+  const letter = arg && (arg.base + mark).normalize('NFC')
+  return letter && SETTABLE.has(letter) ? { letter, end: arg.end } : null
+}
+/** the accents a paper's own files define anew (\\def\\v{\\varphi}, \\renewcommand{\\H}{\\mathcal{H}}, a package's
+ *  \\let\\'…): there the command is the paper's, and no letter is made of it */
+const ownAccents = texts => {
+  const out = new Set()
+  for (const m of texts.map(uncommented).join('\n').matchAll(/\\(?:(?:re|provide)?newcommand\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)DocumentCommand|[gex]?def|let)\s*\{?\s*\\([cvuH]|[.'`^~"])(?![A-Za-z@])/g)) out.add(m[1])
+  return out
+}
 // a number with an optional unit; spaces and tabs only, never a line end — the next line is not the command's
 const DIMEN = String.raw`[-+]?[ \t]*(?:\d+(?:\.\d*)?|\.\d+)[ \t]*(?:true[ \t]*)?(?:pt|em|ex|cm|mm|in|bp|sp|pc|dd|cc|mu|fill?l?|\\[A-Za-z@]+)?`
 // \looseness=-1, \parindent=\z@, \vskip 3pt plus 1fil, \penalty-100: a number, or = followed by a value; and the
@@ -358,10 +409,13 @@ class Builder {
   ph(src, start, end, display = false) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }; const p = { t: 'ph', src }; if (display) this.displays.add(p); this.cur.pieces.push(p); this.cur.end = end; return true }
   open(src, start) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end: start, pieces: [] }; const id = ++this.pairId; this.cur.pieces.push({ t: 'open', id, src }); return id }
   close(id, src, end) { if (this.cur) { this.cur.pieces.push({ t: 'close', id, src }); this.cur.end = end } }
+  /** a letter an accent made (accentLetter): text, its UTF-8 bytes read as the source's are, and `src` the accent as
+   *  the source writes it — what is set wherever the unit is set untranslated (patch). Joined with its word at flush */
+  letter(letter, src, start, end) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }; this.cur.pieces.push({ t: 'text', s: latin1(utf8Bytes(letter)), src }); this.cur.end = end }
   flush() {
     const u = this.cur; this.cur = null
     if (!u) return
-    u.pieces = keepAddresses(u.pieces)
+    u.pieces = joinLetters(keepAddresses(u.pieces))
     // trim placeholders and whitespace at both ends out of the unit: they stay in the source untouched
     const letters = u.pieces.filter(p => p.t === 'text').map(p => p.s).join('')
     if ((letters.match(/\p{L}/gu) ?? []).length < 2) {
@@ -382,6 +436,18 @@ class Builder {
   }
 }
 
+/** each letter an accent made joined with the text on either side of it (Builder.letter), so that its word is one
+ *  text piece: `s` the word as the engine reads it, `src` as the source writes it. After keepAddresses, which cuts text
+ *  pieces as their `s` has them */
+const joinLetters = pieces => {
+  const out = []
+  for (const p of pieces) {
+    const last = out.at(-1)
+    if (p.t === 'text' && last?.t === 'text' && (p.src !== undefined || last.src !== undefined)) out[out.length - 1] = { t: 'text', s: last.s + p.s, src: (last.src ?? last.s) + (p.src ?? p.s) }
+    else out.push(p)
+  }
+  return out
+}
 // an e-mail address, and the domain after a list of names in braces
 const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, HAS_EMAIL = new RegExp(EMAIL.source)
 const AT_DOMAIN = /^@[\w-]+(?:\.[\w-]+)+/
@@ -528,6 +594,12 @@ function walk(s, from, to, b, ctx) {
     if (c === '~') { endText(); b.ph('~', i, i + 1); i++; continue }
     if (c === '{') {
       const e = matchGroup(s, i); if (e < 0 || e > to) { i++; continue }
+      // a group around an accent alone, El Ni{\~n}o: the letter, in its word (accentLetter). The pair's id is spent as
+      // the group's would be, so that every pair after it keeps its id, and the units without such a letter their
+      // pieces (a copy's translations are found again by them: cache.mjs sourceHash)
+      const k = skipSpaces(s, i + 1), accent = s[k] === '\\' ? commandAt(s, k) : null
+      const letter = accent && accentLetter(s, k, accent.end, accent.name, e - 1, ctx.ownAccents)
+      if (letter && skipSpaces(s, letter.end) === e - 1) { endText(); b.pairId++; b.letter(letter.letter, s.slice(i, e), i, e); i = e; continue }
       endText(); const id = b.open('{', i); walk(s, i + 1, e - 1, b, ctx); b.close(id, '}', e); i = e; continue
     }
     if (c === '&' && b.cellMode) { endText(); b.flush(); i++; continue }
@@ -683,8 +755,11 @@ function walk(s, from, to, b, ctx) {
     if (call) { endText(); b.ph(s.slice(i, call.end), i, call.end); i = call.end; continue }
     if (name === 'verb') { const d = s[end]; const e = s.indexOf(d, end + 1); const stop = e < 0 ? end : e + 1; endText(); b.ph(s.slice(i, stop), i, stop); i = stop; continue }
     if (name === 'par') { endText(); b.flush(); i = end; continue }
-    // an accent and the letter it sits on are one opaque piece: \'o, \'{o}, \"\i, \v c. Left as text, the letter would be
-    // translated away and the accent put on whatever comes next — pdfTeX stops at a CJK character there
+    // an accent and its letter: the letter itself in its word where it is one every strategy sets (accentLetter), else
+    // one opaque piece, \'o, \'{o}, \"\i, \v c. Left as text, the letter would be translated away and the accent put on
+    // whatever comes next — pdfTeX stops at a CJK character there
+    const letter = ACCENTS.has(name) && accentLetter(s, i, end, name, to, ctx.ownAccents)
+    if (letter) { endText(); b.letter(letter.letter, s.slice(i, letter.end), i, letter.end); i = letter.end; continue }
     if (ACCENTS.has(name)) {
       let k = /^[A-Za-z]$/.test(name) ? skipSpaces(s, end) : end
       if (s[k] === '{') k = matchGroup(s, k)
@@ -747,7 +822,7 @@ export function loadProject(root, main, { tables = false } = {}) {
   const skipEnvs = new Set([...sources.map(sourceText).join('\n').matchAll(/\\(?:lstnewenvironment|newtcblisting|DeclareTCBListing|NewTCBListing|DefineVerbatimEnvironment|newminted)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map(m => m[1].trim()))
   // the environments of the paper's own that TeX reads by lines (LINE_ENVS), in a class it ships too
   const lineEnvs = new Set([...skipEnvs, ...lineEnvsOf(fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(sourceText))])
-  const ctx = { tables, theorems, fits: [], lineEnvs, macros: paperMacros(sources.map(sourceText)), envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs, skipped, visit: (rel, dirs) => visit(rel, dirs), dirs: [], bodies: macroBodies(sources.map(sourceText)), ...tblrOf(sources.map(sourceText)) }
+  const ctx = { tables, theorems, fits: [], lineEnvs, ownAccents: ownAccents(fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(sourceText)), macros: paperMacros(sources.map(sourceText)), envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs, skipped, visit: (rel, dirs) => visit(rel, dirs), dirs: [], bodies: macroBodies(sources.map(sourceText)), ...tblrOf(sources.map(sourceText)) }
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first */
   function visit(rel, dirs = []) {
     const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
@@ -851,7 +926,8 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
   // length of what closes it after it (its piece's `post`)
   const render = (u, inner = null) => {
     const srcEnc = project.transcode?.has(u.file) ? 'utf8' : 'latin1'
-    const pieces = translated.get(u) ?? u.pieces
+    // a source's text as the source writes it: a letter an accent made (Builder.letter) is the accent again
+    const pieces = (translated.get(u) ?? u.pieces).map(p => (p.t === 'text' && !p.tr && p.src !== undefined ? { ...p, s: p.src } : p))
     const m = mark?.(u)
     // before the first word, inside any font command's group (nothing precedes it there to kern with); before an
     // inline formula or citation that comes first; before the macro when the word is glued to one (\\name's: between

@@ -159,5 +159,26 @@ for (const [where, files, bad] of [
   }
 }
 
+// 5. an accent inside a word is its letter in the translation (latex-front.mjs accentLetter): a translation whose
+// words keep the letters — the units' text, read as the engine reads it (UTF-8), with its ASCII words replaced by the
+// target's and the letters left as they are — sets every one of them, halting, with no letter lost, under Chinese's two
+// strategies, German's two and Russian's two (T2A under pdfLaTeX, CMU under XeLaTeX), in the paper's Computer Modern
+// (OT1) and under T1 with Times; the original sets its accents as written
+const utf8 = s => new TextDecoder().decode(Uint8Array.from(s, c => c.charCodeAt(0)))
+for (const [face, pre] of [['OT1', ''], ['T1 Times', '\\usepackage[T1]{fontenc}\\usepackage{times}\n']]) {
+  const words = 'Poincar\\\'e, Erd\\H{o}s, El Ni{\\~n}o, Babu\\v{s}ka, Fran\\c{c}ois, \\.{Z}ywiec, Mart\\\'{\\i}nez, na\\"\\i ve, Erdo\\u{g}an and \\^{W}ales'
+  const files = new Map([['main.tex', `\\documentclass{article}\n${pre}\\begin{document}\n${PARAS(1)}\n\nThe works of ${words} are cited.\n\n\\section{On Poincar\\'e's lemma}\nAs Schr\\"odinger wrote.\n\\end{document}\n`]])
+  const paper = openPaper(new Map([...files].map(([p, t]) => [p, enc(t)])))
+  const trFor = word => new Map(paper.units.map(u => [u, u.pieces.map(p => (p.t === 'text' ? { t: 'text', tr: true, s: utf8(p.s).replace(/\p{L}+/gu, w => (/^[A-Za-z]{2,}$/.test(w) ? word : w)) } : p))]))
+  const original = compile(`accent-${face.length}-original`, new Map([...files].map(([p, t]) => [p, enc(t)])), { engine: 'pdflatex', halt: true })
+  check(`accents, ${face}: the original sets with no error and no letter lost`, !/^! /m.test(original) && !/^Missing character/m.test(original), original.match(/^(! |Missing character).*$/m)?.[0] ?? '')
+  for (const [lang, word] of [['zh', ZH], ['de', 'Wort'], ['ru', '\u0441\u043b\u043e\u0432\u043e']]) for (const strategy of strategiesFor(paper.meta, lang)) {
+    const out = translationFiles(paper, trFor(word), { strategy, fonts: null, draft: true, aux: null, bbl: null })
+    const text = new TextDecoder().decode(out.get('main.tex'))
+    const log = compile(`accent-${face.length}-${lang}-${strategy.engine}`, new Map([...[...files].map(([p, t]) => [p, enc(t)]), ...out]), { engine: strategy.engine, halt: true })
+    check(`accents, ${face}, ${lang} by ${strategy.name}, halting: the letters set, no error, no letter lost`, /Niño/.test(text) && /Erdős/.test(text) && !/^! /m.test(log) && !/^Missing character/m.test(log) && /Output written on main\.(pdf|xdv)/.test(log), log.match(/^(! |Missing character).*$/m)?.[0] ?? 'no output')
+  }
+}
+
 console.log(failed ? `${failed} failed (${dir})` : `all passed (${dir})`)
 process.exit(failed ? 1 : 0)

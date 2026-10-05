@@ -308,8 +308,10 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 //    multicite notes among them (latex-front.mjs citationArgs) — 2610.02069's unit 99 sent its citation's notes and
 //    key as prose, and the translated key stopped TeX —; a marker's `#` doubled or displaced in a reply read back with
 //    the marker (mt.mjs rehydrate) — "El Ni ñ#", "Figure 10#" in its Chinese, a copy's pieces holding the `#` as
-//    text. A copy of 7 has every unit sent again on its next visit, its translation shown meanwhile, the background's
-//    cache answering what it still holds
+//    text —; and an accent inside a word its letter in the word's text, the accent as written wherever the source is
+//    set (latex-front.mjs accentLetter) — El Ni{\~n}o went out as `El Ni @d#@e#@f# o`; 267 units in 40 of the
+//    corpus's 124 papers hold such a word. A copy of 7 has every unit sent again on its next visit, its translation shown
+//    meanwhile, the background's cache answering what it still holds
 export const PIPELINE_VERSION = '8'
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
