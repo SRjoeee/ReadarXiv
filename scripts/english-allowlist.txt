@@ -52,7 +52,7 @@ src/providers/glossary.ts 3
 src/providers/microsoft.ts 1
 src/ui/strings.ts 3
 tests/pdf-reader/latex-front.test.ts 11  # 2026-09-28: Chinese titles and paragraphs as a translation's pieces, the inputs and expectations of its line breaks and its title's words; 2026-09-30: a Japanese line of names, the input and expectations of its breaks (+2)
-tests/pdf-reader/mt-wire.test.ts 2  # 2026-10-02: Chinese replies with a percent and a times after a number, the inputs and expectations of the wire's spaces taken back
+tests/pdf-reader/mt-wire.test.ts 9  # 2026-10-02: Chinese replies with a percent and a times after a number, the inputs and expectations of the wire's spaces taken back; 2026-10-05: +7, Microsoft's Chinese and Japanese replies for 2610.02069 with a marker's # doubled or displaced, quoted as they came, the inputs and expectations of their read-back
 tests/pdf-reader/typeset-measure.test.ts 7  # 2026-10-01: Chinese, Korean and Cyrillic text as the inputs of the width model (density.mjs), each with the width xeCJK and the T2A faces set it at
 tests/pdf-reader/ui/copy.test.ts 5  # 2026-10-04: +1, the page's name in Chinese, the expectation; 2026-09-25: the reader's words, zh-CN expectations and the technical terms checked in Chinese
 tests/pdf-reader/ui/display-switch.test.ts 3  # 2026-09-25: the display switch's choices found by their Chinese names
@@ -63,7 +63,7 @@ tests/pdf-reader/controller.test.ts 1  # 2026-09-25: the contents' titles as a C
 tests/pdf-reader/anchors.test.ts 29  # 2026-10-01: a translation's text layer and its units, the tokenizer's CJK inputs and expectations; +5, a CJK full stop and brackets inking half their em, input and expectations; +4, a table cell's CJK word beside cells of a dash, input and expectations; +3, a Latin word among CJK characters placed by their widths, input and expectations; +3, an item of CJK text holding two em dashes, input and expectation
 tests/pdf-reader/highlight.test.ts 2  # 2026-10-01: a translation's heading ending in a CJK full stop, the input and the character found
 tests/pdf-reader/engine.test.ts 2  # 2026-10-01: a Chinese reply with its sentence lengths, as the background answers it
-tests/pdf-reader/mt.test.ts 24  # 2026-10-01: a translation's pieces, the plain text's CJK input; CJK replies with their full stops before a marker; Microsoft's Chinese replies cut into sentences (sentencesOf), and the first words expected
+tests/pdf-reader/mt.test.ts 27  # 2026-10-01: a translation's pieces, the plain text's CJK input; CJK replies with their full stops before a marker; Microsoft's Chinese replies cut into sentences (sentencesOf), and the first words expected; 2026-10-05: +3, a Chinese reply with a marker's # doubled, cut into sentences, and the first word expected
 tests/pdf-reader/ui/outline.test.ts 8  # 2026-09-25: the contents' titles as a Chinese reader sees them, the expectations
 tests/pdf-reader/ui/pane-floats.test.ts 1  # 2026-09-25: the pills' fields found by their Chinese names
 tests/pdf-reader/ui/status-views.test.ts 9  # 2026-10-05: +1, the unsupported language's own name told in its lang (Codex and Devin on #317); 2026-09-25: the states' words as the reader shows them, the expectations; +1, the card's reason said in the status region; +2, 2026-09-26: a paper that cannot be had, its words and its link's

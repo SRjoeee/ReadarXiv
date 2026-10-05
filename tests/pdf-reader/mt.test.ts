@@ -161,6 +161,15 @@ describe('sentencesOf: the engine\'s sentences, where each begins in the plain t
     expect(wordsAt(plainTranslated(back.pieces as never), s!.tr)).toEqual(['然后'])
   })
 
+  it('a marker\'s `#` doubled (`@a##`, Microsoft on 2610.02069) is one with it: a boundary between the two goes to its end, and no `#` is left', () => {
+    const r = '我们研究流@a##。当@b#增长时，它们收敛。'
+    const back = rehydrate(r, ser) as { pieces: unknown[] }
+    expect(plainTranslated(back.pieces as never)).not.toContain('#')
+    const s = sentencesOf(u, ser, r, cut(['We study flows @a#. ', 'They converge when @b# grows.'], ['我们研究流@a#', '#。当@b#增长时，它们收敛。']), back.pieces as never)
+    expect(wordsAt(plainSource(u), s!.src)).toEqual(['They'])
+    expect(wordsAt(plainTranslated(back.pieces as never), s!.tr)).toEqual(['当'])
+  })
+
   it('no alignment, or one that does not partition both texts, or a count that differs: null', () => {
     const back = rehydrate(reply, ser) as { pieces: unknown[] }
     expect(sentencesOf(u, ser, reply, undefined, back.pieces as never)).toBeNull()
