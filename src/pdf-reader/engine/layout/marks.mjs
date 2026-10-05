@@ -259,6 +259,8 @@ export function layoutMarking(units, classes, { lines = false } = {}) {
 // ---------------------------------------------------------------- the marks file
 export const MARKS_CAP = 8 * 2 ** 20
 export const MARKS_VALUES = 2_000_000
+/** the deepest a marks file nests: its object, then marks or lines, then each entry, [name, page, x, y] or [id, count] */
+export const MARKS_DEPTH = 3
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
 const KEYS = ['schema', 'engine', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens']
 const WORDS_MAX = 300_000, WORD_MAX = 200, LINES_MAX = 2000, BOX_MAX = 2000
@@ -343,9 +345,9 @@ export function encodeLayoutMarks(m) {
   })
 }
 
-/** bytes, then values, then JSON.parse, then every bound; throws LayoutRefusal, naming where */
+/** bytes, then values and nesting, then JSON.parse, then every bound; throws LayoutRefusal, naming where */
 export function parseLayoutMarks(bytes) {
-  const m = checkKeys(boundedJson(bytes, { cap: MARKS_CAP, values: MARKS_VALUES }), KEYS, '')
+  const m = checkKeys(boundedJson(bytes, { cap: MARKS_CAP, values: MARKS_VALUES, depth: MARKS_DEPTH }), KEYS, '')
   if (m.schema !== 1) throw new LayoutRefusal('schema', 'not 1')
   if (!ENGINES.includes(m.engine)) throw new LayoutRefusal('engine', `not one of ${ENGINES.join(', ')}`)
   const pages = checkPages(m.pages, 'pages')

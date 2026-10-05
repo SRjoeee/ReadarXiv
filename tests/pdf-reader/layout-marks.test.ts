@@ -352,6 +352,20 @@ const bytes = (v: unknown) => new TextEncoder().encode(typeof v === 'string' ? v
 const refusal = (b: Uint8Array) => { try { parseLayoutMarks(b); return null } catch (e) { if (!(e instanceof LayoutRefusal)) throw e; return e.path } }
 
 describe('the marks file', () => {
+  it('parseLayoutMarks refuses a file nested deeper than its 3 levels before JSON.parse, and quickly', () => {
+    // 999,000 arrays inside each other: 1.91 MiB of 999,000 values, inside both caps, which JSON.parse built in 70 ms
+    const deep = bytes(`${'['.repeat(999_000)}${']'.repeat(999_000)}`)
+    expect(deep.length).toBeLessThan(MARKS_CAP)
+    const parse = vi.spyOn(JSON, 'parse')
+    const t = performance.now()
+    let why = ''
+    try { parseLayoutMarks(deep) } catch (e) { if (!(e instanceof LayoutRefusal)) throw e; why = e.message }
+    const ms = performance.now() - t
+    expect(parse).not.toHaveBeenCalled()
+    parse.mockRestore()
+    expect(why).toBe('nested more than 3 deep')
+    expect(ms).toBeLessThan(50)
+  })
   it('encodeLayoutMarks and parseLayoutMarks round-trip', () => {
     const m = valid()
     expect(parseLayoutMarks(bytes(encodeLayoutMarks(m)))).toEqual(m)
@@ -395,6 +409,7 @@ describe('the marks file', () => {
       ['a negative width', m => { m.tokens[3] = -1 }, 'tokens[3]'],
       ['a word index past words', m => { m.tokens[5] = 3 }, 'tokens[5]'],
       ['a string where a number goes', m => { (m.marks[0] as unknown[])[2] = '72' }, 'marks[0][2]'],
+      ['an array where a number goes, a level deeper than the file has', m => { (m.marks[0] as unknown[])[2] = [72] }, ''],
     ]
     for (const [name, change, path] of rows) {
       const m = valid() as LayoutMarks & Record<string, unknown>
