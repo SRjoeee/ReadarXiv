@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { inMemory, lineBreaks, loadProject, localizeNames, markUnits, patch } from '@/pdf-reader/engine/latex-front.mjs'
+import { serialize } from '@/pdf-reader/engine/mt.mjs'
 
 // The PDF reader's LaTeX front end: what of a paper's source is prose to translate
 
@@ -292,6 +293,94 @@ describe('a translation breaks its lines as its own', () => {
   it('a paragraph keeps its forced breaks; long code and formulas get room to break', () => {
     expect(joined(lineBreaks({ kind: 'paragraph' }, [text('输入：'), ph('\\\\'), text('输出')]))).toBe('输入：[\\\\]输出')
     expect(joined(lineBreaks({ kind: 'paragraph' }, [ph('\\texttt{lib/ansible/plugins/callback/__init\\_\\_.py}')]))).toContain('lib/\\allowbreak{}ansible/\\allowbreak{}')
+  })
+})
+
+describe('a citation is one placeholder, its notes and keys with it (2610.02069: apacite\'s key sent as prose broke TeX)', () => {
+  const body = (b: string) => project(`\\documentclass{article}\\begin{document}\n${b}\n\\end{document}`).units as Unit[]
+  const phs = (u: Unit) => u.pieces.filter(p => p.t !== 'text').map(p => (p as { src?: string }).src)
+
+  it('apacite\'s \\cite<…>[…]{…}, 2610.02069\'s Open Research sentence as it stands: the call whole, nothing of it on the wire', () => {
+    const cite = '\\cite<>[available at \\url{https://doi.org/10.5281/zenodo.21144536}]{modified_code}'
+    const p = project(`\\documentclass{article}\\begin{document}\nThe code to reproduce the work in this paper is archived in a public repository ${cite}.\n\\end{document}`)
+    const [u] = p.units as Unit[]
+    expect(phs(u as Unit)).toEqual([cite])
+    expect(textOf(u as Unit).trim()).toBe('The code to reproduce the work in this paper is archived in a public repository .')
+    const { wire } = serialize(u as never)
+    expect(wire).toBe('The code to reproduce the work in this paper is archived in a public repository @a#.')
+    // written back, translated around it, the call byte for byte
+    expect(patched(p)).toContain(`<T0>${cite}<T0>`)
+  })
+
+  it('every form the rules know, apacite\'s prenote and biblatex\'s multicite notes among them, one placeholder each; a `<` or a `(` no key follows is the text\'s', () => {
+    const forms = [
+      // apacite
+      '\\cite<e.g.,>[p.~5]{key_one}', '\\citeA<see>{a,b}', '\\citeNP<cf.>[ch.~2]{x_y}', '\\citeauthor<>{k}', '\\fullcite<e.g.,>{k}', '\\shortciteNP<see>{k}', '\\cite<e.g.,>{k}',
+      // biblatex's notes for all of a multicite's citations
+      '\\cites(see)(and more)[p.~2]{a}{b_c}', '\\parencites(cf.)()[12]{a}[3]{b}',
+      // natbib, biblatex, the kernel's
+      '\\citep[e.g.,][p.~5]{key_one}', '\\citet[p.~3]{k}', '\\citep*[see][]{k}', '\\citealp{a,b}', '\\citeauthor{k}', '\\citeyear{k}', '\\parencite[see][12]{k}', '\\textcite{k}', '\\autocite[p.~2]{k}', '\\cites[a][b]{k1}[c][d]{k2}', '\\cite{a,b}', '\\Citet{k}',
+    ]
+    for (const f of forms) expect(body(`Words before ${f} and after.`).map(phs)).toEqual([[f]])
+    // a prenote that holds a group, and an angle inside it: the prenote closes outside every group
+    expect(body('As \\citeA<{\\em e.g.}, {a>b}>{k} said.').map(phs)).toEqual([['\\citeA<{\\em e.g.}, {a>b}>{k}']])
+    // no key after the angle: no prenote, the words around it prose as before
+    const plain = body('Shown by \\citet{k} that x <5 trials> in all.')
+    expect(plain.map(phs)).toEqual([['\\citet{k}']])
+    expect(textOf(plain[0] as Unit)).toContain('<5 trials> in all.')
+    expect(body('As \\citeyear <five runs> showed.').map(phs)).toEqual([['\\citeyear']])
+    expect(body('Both \\cites{a}{b} (see above) agree.').map(phs)).toEqual([['\\cites{a}{b}']])
+    expect(body('As \\textcites (that is) the rest.').map(phs)).toEqual([['\\textcites']])
+  })
+})
+
+describe('an accent inside a word is the letter itself before translation, and the accent again wherever the source is set (2610.02069: "El Ni ñ#")', () => {
+  const doc = (body: string, defs = '') => project(`\\documentclass{article}${defs}\\begin{document}\n${body}\n\\end{document}`)
+  /** a unit's words as the engine reads them: the wire, its text pieces' UTF-8 */
+  const wire = (p: ReturnType<typeof project>) => (p.units as never[]).map(u => serialize(u).wire)
+  const source = (p: ReturnType<typeof project>) => new TextDecoder('latin1').decode(patch(p, new Map()).get('main.tex'))
+
+  it('El Ni{\\~n}o, 2610.02069\'s unit 13 as it stands: one word on the wire, no marker inside it; written back byte for byte', () => {
+    const body = 'Processes from days (e.g., convection) to years (e.g., the quasi-biennial oscillation and El Ni{\\~n}o southern oscillations), which act on many timescales.'
+    const p = doc(body)
+    expect(wire(p)).toEqual(['Processes from days (e.g., convection) to years (e.g., the quasi-biennial oscillation and El Niño southern oscillations), which act on many timescales.'])
+    expect((p.units as Unit[])[0]?.pieces.map(x => x.t)).toEqual(['text'])
+    expect(source(p)).toContain(body)
+    // the marks around a unit that ends in such a letter: the end mark after the accent's own bytes, not inside them
+    const end = doc('The work of Poincar\\\'e')
+    expect(new TextDecoder('latin1').decode(patch(end, new Map(), { mark: markUnits(end.units) }).get('main.tex'))).toContain("\\leavevmode\\axtmark{0s}The work of Poincar\\'e\\axtend{0e}")
+  })
+
+  it('every form of the ten accents, with braces or without, in its word; the translation sets the letter itself', () => {
+    const forms: [string, string][] = [
+      ['Ni\\~no', 'Niño'], ['Ni\\~{n}o', 'Niño'], ['Ni{\\~n}o', 'Niño'], ['Ni{\\~{n}}o', 'Niño'], ['Poincar\\\'e', 'Poincaré'], ['Poincar\\\' e', 'Poincaré'],
+      ['Mart\\\'\\i nez', 'Martínez'], ['Mart\\\'{\\i}nez', 'Martínez'], ['na\\"\\i{}ve', 'naïve'], ['Schr\\"odinger', 'Schrödinger'], ['G\\"{o}del', 'Gödel'],
+      ['Fran\\c cois', 'François'], ['Fran\\c{c}ois', 'François'], ['Babu\\v{s}ka', 'Babuška'], ['\\v{C}ech', 'Čech'], ['Erdo\\u{g}an', 'Erdoğan'],
+      ['Erd\\H{o}s', 'Erdős'], ['Erd\\H os', 'Erdős'], ['\\.{Z}ywiec', 'Żywiec'], ['\\.Istanbul', 'İstanbul'], ['\\^{W}ales', 'Ŵales'], ['caf\\`a', 'cafà'],
+    ]
+    for (const [tex, word] of forms) {
+      const p = doc(`The work of ${tex} matters.`)
+      expect(wire(p)).toEqual([`The work of ${word} matters.`])
+      expect(source(p)).toContain(`The work of ${tex} matters.`)
+    }
+    // translated, the unit's text is the translation's, the letter in it as UTF-8
+    const p = doc('The work of Poincar\\\'e matters.')
+    const u = (p.units as Unit[])[0] as Unit
+    const out = new TextDecoder().decode(patch(p, new Map([[u, [{ t: 'text', tr: true, s: 'Die Arbeit von Poincaré ist wichtig.' }]]]) as never).get('main.tex'))
+    expect(out).toContain('Die Arbeit von Poincaré ist wichtig.')
+  })
+
+  it('a placeholder still where the letter is none every strategy sets, the accent is none of the ten, or the paper defines the accent anew', () => {
+    const kept = [
+      // fonts that lack it (Latin Modern: Ḃ; CMU's bold and italic: the cedilla's ņ), no letter at all, another accent
+      'B\\.{B}c', 'Ru\\c{n}a', 'Ma\\~{x}o', 'B\\=ar', 'B\\r{a}r', 'Ba\\k{a}r', 'Ba\\d{n}r',
+      // not one letter
+      'Mo\\\'{}r', 'Mo\\\'{ab}r',
+    ]
+    for (const tex of kept) expect(wire(doc(`The work of ${tex} matters.`))[0]).toMatch(/@a#/)
+    // the paper's own \\H and \\v, a math letter each, defined anew in its preamble; a definition commented out is none
+    expect(wire(doc('The space \\H{o} and \\v{s} here.', '\\renewcommand{\\H}{\\mathcal{H}}\\def\\v{\\varphi}'))).toEqual(['The space @a# and @b# here.'])
+    expect(wire(doc('The space \\H{o} and \\v{s} here.', '\n% \\def\\v{\\varphi}\n'))).toEqual(['The space ő and š here.'])
   })
 })
 

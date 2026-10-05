@@ -131,5 +131,54 @@ for (const [where, files, bad] of [
   }
 }
 
+// 4. a citation is one placeholder (fault B): apacite's \cite<>[…]{key}, 2610.02069's Open Research sentence as it
+// stands, keeps its key whole in a translation, which sets with no error, halting, under both of Chinese's strategies.
+// And the fault the browser spikes break a unit with now (reader-in-source.mjs, reader-partial.mjs): a command of the
+// paper's own whose argument in angle brackets the walker does not read (xparse's d<>), its key sent as prose — the
+// translation halts in that unit alone, as 2610.02069's did before
+{
+  const BIB = '@misc{modified_code, author={Author, A.}, title={The code}, year={2026}}\n@article{key_one, author={One, A. and Two, B.}, title={An earlier work}, journal={J}, year={2001}}\n'
+  const OPEN = 'The code to reproduce the work in this paper is archived in a public repository \\cite<>[available at \\url{https://doi.org/10.5281/zenodo.21144536}]{modified_code}.'
+  const OWN = 'The last paragraph compares the result with earlier work \\compare<e.g.,>{key_one} and finds it holds.'
+  const doc = last => `\\documentclass{article}\n\\usepackage{apacite}\\usepackage{url}\n\\NewDocumentCommand{\\compare}{d<>m}{\\IfValueT{#1}{#1~}\\cite{#2}}\n\\begin{document}\n${PARAS(2)}\n\n${last}\n\n${PARAS(1)}\n\\nocite{modified_code,key_one}\n\\bibliographystyle{apacite}\n\\bibliography{refs}\n\\end{document}\n`
+  for (const [what, last, breaks] of [['apacite\'s \\cite<>[…]{modified_code}', OPEN, false], ['a command of the paper\'s own with an angle argument (the browser spikes\' fault)', OWN, true]]) {
+    const files = new Map([['main.tex', doc(last)], ['refs.bib', BIB]])
+    const name = breaks ? 'own' : 'open'
+    const original = compile(`cite-${name}-original`, new Map([...files].map(([p, t]) => [p, enc(t)])), { engine: 'pdflatex', halt: false })
+    const at = join(dir, `cite-${name}-original`), aux = readFileSync(join(at, 'main.aux'), 'latin1'), bbl = readFileSync(join(at, 'main.bbl'), 'utf8')
+    check(`${what}: the original sets with no error`, !/^! /m.test(original), original.match(/^! .*$/m)?.[0] ?? '')
+    const { paper, tr } = translated(files, s => s, -1)
+    const bad = paper.units.findIndex(u => /compare|repository/.test(JSON.stringify(u.pieces)))
+    for (const strategy of strategiesFor(paper.meta, 'zh')) {
+      const spans = {}, out = translationFiles(paper, tr, { strategy, fonts: null, draft: true, aux: citationLines(aux), bbl, spans })
+      const log = compile(`cite-${name}-${strategy.engine}`, new Map([...[...files].map(([p, t]) => [p, enc(t)]), ...out]), { engine: strategy.engine, halt: true })
+      const errors = texErrors(log), placed = unitsAtErrors(errors, out, spans.lines()).map(u => paper.units.indexOf(u))
+      if (breaks) check(`${what}, ${strategy.name}, halting: the failure placed in its unit alone`, errors.length > 0 && JSON.stringify(placed) === JSON.stringify([bad]), JSON.stringify({ placed, bad, errors: errors.slice(0, 2) }))
+      else check(`${what}, ${strategy.name}, halting: the translation sets with no error, the call as written`, !/^! /m.test(log) && /Output written on main\.(pdf|xdv)/.test(log) && new TextDecoder().decode(out.get('main.tex')).includes(OPEN.slice(OPEN.indexOf('\\cite'), -1)), log.match(/^! .*$/m)?.[0] ?? 'no output')
+    }
+  }
+}
+
+// 5. an accent inside a word is its letter in the translation (latex-front.mjs accentLetter): a translation whose
+// words keep the letters — the units' text, read as the engine reads it (UTF-8), with its ASCII words replaced by the
+// target's and the letters left as they are — sets every one of them, halting, with no letter lost, under Chinese's two
+// strategies, German's two and Russian's two (T2A under pdfLaTeX, CMU under XeLaTeX), in the paper's Computer Modern
+// (OT1) and under T1 with Times; the original sets its accents as written
+const utf8 = s => new TextDecoder().decode(Uint8Array.from(s, c => c.charCodeAt(0)))
+for (const [face, pre] of [['OT1', ''], ['T1 Times', '\\usepackage[T1]{fontenc}\\usepackage{times}\n']]) {
+  const words = 'Poincar\\\'e, Erd\\H{o}s, El Ni{\\~n}o, Babu\\v{s}ka, Fran\\c{c}ois, \\.{Z}ywiec, Mart\\\'{\\i}nez, na\\"\\i ve, Erdo\\u{g}an and \\^{W}ales'
+  const files = new Map([['main.tex', `\\documentclass{article}\n${pre}\\begin{document}\n${PARAS(1)}\n\nThe works of ${words} are cited.\n\n\\section{On Poincar\\'e's lemma}\nAs Schr\\"odinger wrote.\n\\end{document}\n`]])
+  const paper = openPaper(new Map([...files].map(([p, t]) => [p, enc(t)])))
+  const trFor = word => new Map(paper.units.map(u => [u, u.pieces.map(p => (p.t === 'text' ? { t: 'text', tr: true, s: utf8(p.s).replace(/\p{L}+/gu, w => (/^[A-Za-z]{2,}$/.test(w) ? word : w)) } : p))]))
+  const original = compile(`accent-${face.length}-original`, new Map([...files].map(([p, t]) => [p, enc(t)])), { engine: 'pdflatex', halt: true })
+  check(`accents, ${face}: the original sets with no error and no letter lost`, !/^! /m.test(original) && !/^Missing character/m.test(original), original.match(/^(! |Missing character).*$/m)?.[0] ?? '')
+  for (const [lang, word] of [['zh', ZH], ['de', 'Wort'], ['ru', '\u0441\u043b\u043e\u0432\u043e']]) for (const strategy of strategiesFor(paper.meta, lang)) {
+    const out = translationFiles(paper, trFor(word), { strategy, fonts: null, draft: true, aux: null, bbl: null })
+    const text = new TextDecoder().decode(out.get('main.tex'))
+    const log = compile(`accent-${face.length}-${lang}-${strategy.engine}`, new Map([...[...files].map(([p, t]) => [p, enc(t)]), ...out]), { engine: strategy.engine, halt: true })
+    check(`accents, ${face}, ${lang} by ${strategy.name}, halting: the letters set, no error, no letter lost`, /Niño/.test(text) && /Erdős/.test(text) && !/^! /m.test(log) && !/^Missing character/m.test(log) && /Output written on main\.(pdf|xdv)/.test(log), log.match(/^(! |Missing character).*$/m)?.[0] ?? 'no output')
+  }
+}
+
 console.log(failed ? `${failed} failed (${dir})` : `all passed (${dir})`)
 process.exit(failed ? 1 : 0)

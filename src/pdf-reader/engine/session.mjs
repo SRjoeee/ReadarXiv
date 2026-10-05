@@ -33,13 +33,13 @@ import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from './anchors.mjs'
 import { blockOf, bySentence, clickOf, hitOf, layoutOf, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
-import { allTranslatedBy, copyTexts, decideWrite, digestOf, endOf, figureKeyOf, knownMarks, knownOriginal, labelOf, originalRow, passagesInSource, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from './cache.mjs'
+import { allTranslatedBy, copyReuse, copyTexts, decideWrite, digestOf, endOf, figureKeyOf, knownMarks, knownOriginal, labelOf, originalRow, passagesInSource, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
 import { captionFor, floatHitOf, floatOf, floatsAgree, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from './floats.mjs'
 import { hostReady } from './host.mjs'
-import { compilerKeeper, keptFor, openPaper, PIPELINE_VERSION, runLive, TYPESETTING_VERSION } from './live.mjs'
+import { compilerKeeper, keptFor, openPaper, PIPELINE_CARRIES, PIPELINE_VERSION, runLive, TYPESETTING_VERSION } from './live.mjs'
 import { displayEdges, isName, plainSource, sentencesKept, unitText, WIRE } from './mt.mjs'
 import { texHints } from './hints.mjs'
 import { verified, VERIFIED } from './scripts.mjs'
@@ -2276,8 +2276,9 @@ async function live() {
     total = units.length - keptFor(paperData, lang).size
     // a run again: what the visit's last run made seeds it, over the copy's (cache.mjs seedAgain: with their sentences);
     // a seed whole, by the identity that answers now and of the wire sent now is taken as it is, never sent again — the
-    // copy's when it was made by this pipeline in this wire format (cache.mjs reusable) — and the rest are asked again
-    const seed = reusable(seedAgain(p.seed, made), { identity: engine.identity, copyWire: p.sameUnits && cached?.format === engine.format, made })
+    // copy's when it was made by this pipeline in this wire format, or unit by unit by one that carries over into it
+    // (cache.mjs copyReuse, reusable) — and the rest are asked again
+    const seed = reusable(seedAgain(p.seed, made), { identity: engine.identity, ...copyReuse(cached, { pipeline: PIPELINE_VERSION, format: engine.format, context, carries: PIPELINE_CARRIES }), made })
     // one replacement at a time, in the order the compiles came in; the final's bytes once compiled, and whether this
     // run's own final reached the screen (`shownNow`): a final an earlier run showed sets an earlier translation
     let swaps = Promise.resolve(), finalPdf = null, shownNow = false

@@ -886,13 +886,31 @@ is only how it meets the rest of the extension.
   reader reads and writes them through the surface configuration, as the popup does, and follows a change made anywhere.
 - **Translation** goes through the background's chain (§8.0), whose segment cache answers what it already knows. The
   figures' text goes through the same image pipeline and recogniser (§15). A vector figure's labels are read from
-  PDF.js's text rather than recognised.
+  PDF.js's text rather than recognised. On the markers wire (§6.2, the free engines'), a reply is read back with one
+  forgiveness more (`mt.mjs` `rehydrate`): a marker's `#` the engine set twice, `@e##` or `@e# #`, is the marker's,
+  and so is the first stray `#` after a marker read without its own — the wire's text holds no `#` of its own, TeX's
+  `\#` being a placeholder — where Microsoft's Chinese for 2610.02069 had set the second as text ("El Ni ñ#",
+  "Figure 10#"). And an accent inside a word goes as the letter it makes (`latex-front.mjs` `accentLetter`: ten text
+  accents, `\~n`, `\'{e}`, `{\"o}`, `\v c`, `\'\i` …), so that the engine reads the word whole, where `El Ni{\~n}o`
+  had gone out as `El Ni @d#@e#@f# o` and come back without the word's end; wherever the source is set — the marked
+  original, a unit left as it is or set in the source — the accent is written as the source has it. Only a letter
+  every strategy sets: LaTeX's UTF-8 table declares it (pdfLaTeX sets it as the accent, in OT1, T1, T2A and CJKutf8)
+  and Latin Modern, TeX Gyre and CMU hold it in every face (XeLaTeX), 145 letters measured on TL 2026; any other, and
+  an accent the paper defines anew (`\def\v{\varphi}`), stays a placeholder.
 - **Its store**: the compiled translations (with each unit's sentences, where its engine gave them), one record per paper version and target language, encrypted, in an
   IndexedDB of their own (`src/cache/pdf-store.ts`), capped at 500 MB with the least recently opened going first. A
   copy's units always describe its own PDF: a run that typesets nothing writes only who made and tried each unit, and
   only where every unit's text is the one the stored PDF sets; a run again after a run whose final never reached the
-  screen (the TeX page down) compiles its own final rather than write that run's translation over the old PDF. The
-  settings page counts them and clears them (UI.md S-O-73).
+  screen (the TeX page down) compiles its own final rather than write that run's translation over the old PDF. **A new
+  pipeline voids only what its change reaches**, §5.5's rule taken unit by unit: a copy is matched to the units by their
+  source, and its translations are taken as they are where it was made by this pipeline, or by an earlier one that
+  carries over into it (`live.mjs` `PIPELINE_CARRIES`, `cache.mjs` `copyReuse`) — in the same wire format and for the
+  same paper's context, each translation by that pipeline's test of what it made of the answer. A unit whose source
+  pieces are unchanged is sent the same wire and cuts as before, and one a pipeline cuts anew has a new hash and is
+  sent as the new text it is, the background's cache keyed by that text (§9; the key holds no version of the reader's);
+  the left side's marks, the original's readings and the compile stay the pipeline's own. Pipeline 8 over a copy of 7
+  of 2610.02069: 4 of its 103 units sent again — the two cut anew, the two whose translation held 7's stray `#` —
+  where every one had been. The settings page counts them and clears them (UI.md S-O-73).
 - **Typesetting** runs in a TeX page outside the extension (BusyTeX): our site's, `https://tex.readarxiv.org`, in a
   production build, and one on this machine in development (`addresses.mjs` `TEX_PAGE`, a build setting). No
   reader-facing word names it (UI.md §3.5). The translation is set by the Flow rule (`src/pdf-reader/engine/typeset/`;
@@ -924,9 +942,14 @@ is only how it meets the rest of the extension.
   lines follows the `\begin` or `\end` of an environment TeX reads line by line — verbatim's kind, listings',
   comment.sty's, the paper's own found in its files (`latex-front.mjs` `LINE_ENVS`) —, and no table holding one is
   fitted: comment.sty ends its environment only at a line that is its `\end` and nothing more, and a line probe written
-  after 2608.16117's kept its comment open to the end of the file, the paper after it lost. A compile that stopped
-  short of the document's end is no translation, whatever PDF it left: XeTeX ships the pages it set before a fatal
-  error, and a compiler that gives what it made took them as set (BusyTeX halts on a TeX error and gives none). A
+  after 2608.16117's kept its comment open to the end of the file, the paper after it lost. A compile whose last
+  pass did not reach the document's end is no translation, whatever PDF it left and whatever the compiler said of it:
+  every compile carries a line that pass logs once the last page is out (`typeset/tex.mjs` `END_TEX`, a message alone,
+  which changes nothing typeset), and a pass without it failed — one stopped by a fatal error, after which XeTeX ships
+  the pages it set and a compiler that gives what it made took them as set, or one halted at a TeX error that the
+  compiler reported as a success (a TeX page of 2026-09-22, its BusyTeX before the TeX pass's own exit status was read,
+  gave 2610.02069's final as the 18 pages of 22 before the halt, its bibliography empty and every citation "(?, ?)").
+  The deployed TeX page halts on a TeX error and gives no PDF, so no compile that set the paper changes. A
   compile of the translation that TeX fails is tried again before the chain moves on, one remedy a compile, the least
   lost first, wherever it fails (a preview, the measure, the final): without the typesetting rule's TeX, without
   EVEN_SPACES' microtype, without the references the run gives a draft or the final (not for an error TeX raised before
@@ -953,8 +976,9 @@ is only how it meets the rest of the extension.
   only with a new version of the reader, another service or another version of the paper (2610.02069: apacite's
   citations broke under babel given the original's `\bibcite` lines alone — a draft is given every citation line of the
   original's aux, for any key it cites, in its order (`citationLines`: apacite's `\APACbibcite`, harvard's, backref's)
-  —, and one citation's key went out as prose;
-  `experiments/pdf-bilingual/plans/2026-10-04-compile-resilience.md`). The
+  —, and one citation's key went out as prose, apacite's `\cite<>[…]{modified_code}`, whose prenote in angle brackets
+  the walker did not read: a citation is one placeholder with every argument it takes, the prenote among them
+  (`latex-front.mjs` `citationArgs`); `experiments/pdf-bilingual/plans/2026-10-04-compile-resilience.md`). The
   reader speaks the TeX page's protocol 2 and still serves a page of protocol 1: it names the engines and the CJK
   faces the visit will use, so that the page fetches them ahead;
   a compile whose files did not all arrive, or that the page itself failed (no log: an engine it could not bring up), is

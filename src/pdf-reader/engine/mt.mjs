@@ -69,20 +69,29 @@ const STOP_SPACE = /(?<=[.\u3002\uff0e\u0964\u0965\u06d4\u0589\u1362\u104b\u0f0d
 const NUMBER_SPACE = /(?<=\p{N})[ \t\n\f\r]+$/u, NUMBER_LEAD = /^[ \t\n\f\r]+(?=\p{N})/u
 /** a piece a space never goes before: one that is a space itself (a tie, a control space, a kern), a group's end */
 const SPACING = /^(?:~|\\[ ,;:]|\\(?:q?quad|enspace|thinspace|nobreakspace)(?![A-Za-z])|\\hspace\*?\{|\}$)/
+/** a run of `#` the reply holds outside its markers, not an entity's (`&#39;`): the source's text holds none — TeX's
+ *  `\#` and a bare `#` are placeholders (latex-front.mjs walk) —, so on the wire a `#` is a marker's */
+const STRAY = /(?<!&)#+/g
 export function rehydrate(text, { slots, lead, trail, stops, numbers, numbersAfter }, tolerant = false) {
   const pieces = [], seen = new Map()
-  let last = 0, afterNumber = false
+  // `displaced`: the markers read without their `#` (tolerant), each owed one `#` the reply set after it
+  let last = 0, afterNumber = false, displaced = 0
   // a text between two markers, the wire's spaces off it: after the one before it, before the one after it (`before`)
   const pushText = (s, before = null) => {
+    if (displaced) s = s.replace(STRAY, c => (displaced ? (displaced--, '') : c))
     if (before) s = s.replace(before, '')
     s = decode(s)
     if (afterNumber) s = s.replace(NUMBER_LEAD, '')
     if (s) pieces.push({ t: 'text', tr: true, s: texEscape(s) })
   }
   // tolerant: the engine sometimes drops the closing # before a CJK character or punctuation (@b形, @g。). A lone @ can only
-  // be a marker's remains, because a literal @ went out as @@; accepted only when no letter follows, never inside a word
+  // be a marker's remains, because a literal @ went out as @@; accepted only when no letter follows, never inside a word.
+  // And a marker's `#` doubled is its own, read either way, a space between them or none: Microsoft wrote 2610.02069's
+  // `@e#` back as `@e##` and set the second `#` as text ("El Ni ñ#", and "Figure 10#" in its Chinese), and `@d#` as
+  // `@d# #` in its Japanese. One read without its `#` owes the first run of stray `#` after it, dropped with it (that
+  // paper's unit 47 in Chinese: `@a` in the middle of the reply, a lone `#` at its end)
   const L = toAlpha(Math.max(1, slots.length)).length
-  const re = tolerant ? new RegExp(`@@|@([a-z]{1,${L}})#|@([a-z]{1,${L}})(?![a-z#])`, 'g') : /@@|@([a-z]+)#/g
+  const re = tolerant ? new RegExp(`@@|@([a-z]{1,${L}})#(?:[ \t]*#)*|@([a-z]{1,${L}})(?![a-z#])`, 'g') : /@@|@([a-z]+)#(?:[ \t]*#)*/g
   let m, buf = ''
   while ((m = re.exec(text))) {
     buf += text.slice(last, m.index); last = re.lastIndex
@@ -94,6 +103,7 @@ export function rehydrate(text, { slots, lead, trail, stops, numbers, numbersAft
     pushText(buf, wires && (SPACING.test(slots[id - 1].src ?? '') ? SPACE : wires)); buf = ''
     seen.set(id, pieces.length); pieces.push(slots[id - 1])
     afterNumber = !!numbersAfter?.has(id)
+    if (m[2]) displaced++
   }
   buf += text.slice(last); pushText(buf)
   if (seen.size !== slots.length) return { error: 'lost marker' }
@@ -110,9 +120,9 @@ export function rehydrate(text, { slots, lead, trail, stops, numbers, numbersAft
 
 // ---------------------------------------------------------------- sentences (plans/2026-10-01-pdf-highlight.md, B3)
 /** what the wire writes as one thing, a boundary inside which goes to its end: a marker (read tolerantly too, `@b`
- *  without its `#`), an escaped @, an entity */
+ *  without its `#`, and with its `#` doubled, `@e##` or `@e# #`, as rehydrate reads it), an escaped @, an entity */
 const ENTITY = '&(?:#[xX][0-9a-fA-F]+|#\\d+|amp|lt|gt|quot|apos|nbsp);'
-const ATOM = new RegExp(`@@|@[a-z]+#?|${ENTITY}`, 'g')
+const ATOM = new RegExp(`@@|@[a-z]+(?:#(?:[ \\t]*#)*)?|${ENTITY}`, 'g')
 /** on the tags wire (an LLM's, Google's): a tag, an entity */
 const TAG_ATOM = new RegExp(`(?:${TAG_RE.source})|${ENTITY}`, 'g')
 /** each wire format's atoms, and how a reply is read back on it (strictly, or tolerantly where the format has a reading) */

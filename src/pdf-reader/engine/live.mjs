@@ -26,7 +26,7 @@ import { texErrors, unitsAtErrors } from './tex-errors.mjs'
 import { nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
 import { WIDTH_PROBE } from './typeset/density.mjs'
 import { finalTypesetting, previewTypesetting } from './typeset/plan.mjs'
-import { LINES_TEX } from './typeset/tex.mjs'
+import { completeLog, END_TEX, LINES_TEX } from './typeset/tex.mjs'
 
 /** The characters a compile could not set, as its log names them: a glyph a font lacks (TeX logs it and goes on) or a
  *  letter no encoding holds (LaTeX's error; pdfTeX goes on without it). By code point where the log gives one, so that
@@ -56,8 +56,14 @@ export const unsettable = (r, known = new Map()) => /^! Font .* not loadable/m.t
  *  the gates' native one, latexmk -f in nonstop mode — gave 2608.16117's Chinese final, three pages of forty, as set
  *  (its comment never ended: latex-front.mjs LINE_ENVS); the TeX page's BusyTeX halts on a TeX error, and gives none */
 export const stoppedShort = log => /^(?:! Emergency stop\.|! TeX capacity exceeded, sorry|\(That makes 100 errors; please try again\.\)|! This can't happen|! I can't go on meeting you like this)/m.test(lastTexLog(log))
-/** a compile that stopped short (stoppedShort) is one that failed, as the TeX page's is: its PDF not taken */
-const finished = r => (r.ok && stoppedShort(r.log) ? { ...r, ok: false, pdf: null } : r)
+/**
+ * A compile that did not finish is one that failed, as the TeX page's is: its PDF not taken. One that stopped short
+ * (stoppedShort), and one whose last pass never reached the document's end — every compile carries END_TEX, and only a
+ * pass that set the last page logs it (completeLog). A pass halted at a TeX error writes no such line, whatever the
+ * compiler made of it: a TeX page that took a halted pass's status for a success gave 2610.02069's final as the 18 pages
+ * set before the halt, its bibliography empty, every citation "(?, ?)", and the run stored it as whole (2026-10-05)
+ */
+const finished = r => (r.ok && (stoppedShort(r.log) || !completeLog(r.log)) ? { ...r, ok: false, pdf: null } : r)
 /** images as frames of their own size (graphicx's draft), each frame's corners marked — g<n>a and g<n>b at its left and
  *  right ends on its baseline, g<n>t at its top right, n counting \includegraphics in the order TeX runs them — so that
  *  the reader lays the left's figure over its frame (session.mjs leftFor). A transformed include (\rotatebox or
@@ -162,7 +168,7 @@ export function openPaper(files) {
 export function probeFiles({ fsys, project }, { width = false } = {}) {
   const text = latin1(fsys.read(project.main))
   const at = beginDocument(text)
-  return new Map([[project.main, latin1Bytes(`${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}\\end{document}\n`)]])
+  return new Map([[project.main, latin1Bytes(`${END_TEX}${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}\\end{document}\n`)]])
 }
 
 /** the original with unit marks, as its own engine sets it (images as frames change no place on the page); with
@@ -174,7 +180,7 @@ export function originalFiles({ fsys, project }, { lines = false, spans = null }
   const raw = spans ? [] : null
   const out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw })
   const patched = spans ? new Map(out) : null
-  const head = DRAFT + MARK_DEF + (lines ? LINES_TEX : '')
+  const head = DRAFT + MARK_DEF + END_TEX + (lines ? LINES_TEX : '')
   out.set(project.main, latin1Bytes(head + latin1(out.get(project.main))))
   if (spans) { let found = null; spans.lines = () => (found ??= unitLines(raw, patched, out, project.main, head.length)) }
   return out
@@ -207,7 +213,7 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
   const shim = xe && strategy.engine !== meta.compiler ? XETEX_SHIM + XETEX_SHIM_R1 : ''
   // what the strategy puts before \documentclass (scripts.mjs: a paper's own CJK packages kept from loading under xeCJK)
-  const head = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + shim
+  const head = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + END_TEX + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + shim
   main = head + (shim ? stripPdftexOption(main) : main)
   out.set(project.main, latin1Bytes(main))
   if (xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = stripPdftexOption(t); if (u !== t) out.set(f, latin1Bytes(u)) }
@@ -272,8 +278,8 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
  * - PIPELINE_VERSION, the translation's: raised with any change to what a unit is or what is sent for it and made of
  *   the answer — the units' cutting, kinds and texts (latex-front), the wire and its reading back (mt), paperContext(),
  *   the left side's marks. A record of another version is translated again, its translations shown meanwhile (session.mjs
- *   seedFrom); one of this version gives its whole units by the identity that would answer now as they are (cache.mjs
- *   reusable).
+ *   seedFrom), but for the units a version that carries over into this one leaves as they were (PIPELINE_CARRIES); one
+ *   of this version gives its whole units by the identity that would answer now as they are (cache.mjs reusable).
  * - TYPESETTING_VERSION: raised with any change to how a compile sets a translation it is given — latex-front's TeX,
  *   the scripts' strategies, the fonts, the typesetting rule (typeset/), the TeX tree. A record of another version is
  *   compiled again from its translation; a paper none of the ways could set is tried again.
@@ -298,7 +304,28 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 // 6: the two 5s together
 // 7: a tabularray table whose cells are math is math, no unit (latex-front.mjs TBLR_MATH) — 2608.29181's two tables
 //    were units, their formulas sent to the service
-export const PIPELINE_VERSION = '7'
+// 8: a citation is one placeholder with every argument it takes, apacite's prenote in angle brackets and biblatex's
+//    multicite notes among them (latex-front.mjs citationArgs) — 2610.02069's unit 99 sent its citation's notes and
+//    key as prose, and the translated key stopped TeX —; a marker's `#` doubled or displaced in a reply read back with
+//    the marker (mt.mjs rehydrate) — "El Ni ñ#", "Figure 10#" in its Chinese, a copy's pieces holding the `#` as
+//    text —; and an accent inside a word its letter in the word's text, the accent as written wherever the source is
+//    set (latex-front.mjs accentLetter) — El Ni{\~n}o went out as `El Ni @d#@e#@f# o`; 267 units in 40 of the
+//    corpus's 124 papers hold such a word. A copy of 7 carries its other units over (PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '8'
+/**
+ * The earlier pipelines whose copies carry their translations over into this one, unit by unit (cache.mjs copyReuse),
+ * each with the test a unit's translation, its pieces, must pass: DESIGN §5.5's rule for the HTML page's cache, here per
+ * unit — a version voids only what its change can reach. A unit whose source pieces are what they were (its hash) is
+ * sent the same wire and cuts as before; one a pipeline cuts otherwise has a new hash and no seed, and is sent as the new
+ * text it is. What is left to judge is what the pipeline makes of the answer, from the pieces a copy keeps (it keeps no
+ * reply). A pipeline that changes the wire for the same pieces, or what an answer is read as in a way its pieces do not
+ * show, carries nothing over: it has no entry.
+ * - 7: its reading back set a marker's `#` doubled or displaced as text, which this pipeline's takes with the marker
+ *   (mt.mjs rehydrate); TeX's `#` is never the text's own (`\#` and a bare `#` are placeholders), so a translation whose
+ *   text holds no `\#` was read back as this pipeline reads it, its sentences too. Units of 7 that fix 2 or 4 cut anew
+ *   (a citation's notes, an accent in a word) have new hashes
+ */
+export const PIPELINE_CARRIES = { 7: pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#')) }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a

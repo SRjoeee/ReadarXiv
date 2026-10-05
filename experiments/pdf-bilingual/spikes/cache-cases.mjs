@@ -9,10 +9,13 @@ import { translateUnits } from '../../../src/pdf-reader/engine/mt.mjs'
 
 const tex = paras => new Map([['main.tex', new TextEncoder().encode(`\\documentclass{article}\n\\begin{document}\n${paras.join('\n\n')}\n\\end{document}\n`)]])
 const PARAS = ['The first paragraph of the paper says something here.', 'The second paragraph of the paper says more.']
+/** the log of a pass that reached the document's end, which every compile marks (typeset/tex.mjs END_TEX): a log
+ *  without it is a compile that stopped short, and failed (live.mjs finished) */
+const DONE = 'AXT-END\n'
 /** a compiler that sets anything and counts its calls; a final is one with rerun */
 function compiler() {
   const calls = []
-  return { calls, compile: async req => { calls.push(req); return { ok: true, pdf: new Uint8Array([1, 2, 3]), log: '', ms: 1 } } }
+  return { calls, compile: async req => { calls.push(req); return { ok: true, pdf: new Uint8Array([1, 2, 3]), log: DONE, ms: 1 } } }
 }
 const echo = by => async texts => texts.map(text => ({ text, by }))
 /** a seed as a run by `translate` leaves it: its results' pieces (a source's own pieces carry no translation marks) */
@@ -201,7 +204,7 @@ cases.push(['a final that twice did not answer ends the run with what is shown a
 function refusing(own) {
   let n = 0
   const isOriginal = req => req.rerun && new TextDecoder('latin1').decode(req.overrides.get(req.main)).includes('{draft}{graphicx}')
-  return async req => (++n === 1 || (own && isOriginal(req)) ? { ok: true, pdf: new Uint8Array([1]), log: '', ms: 1 } : { ok: false, log: `! LaTeX Error: ${req.engine} cannot set this.`, ms: 1 })
+  return async req => (++n === 1 || (own && isOriginal(req)) ? { ok: true, pdf: new Uint8Array([1]), log: DONE, ms: 1 } : { ok: false, log: `! LaTeX Error: ${req.engine} cannot set this.`, ms: 1 })
 }
 cases.push(['a paper no strategy sets is told apart: every strategy tried, nothing shown, its own source set (the maintainer, 2026-09-26)', async () => {
   const paper = openPaper(tex(PARAS)), events = []
@@ -221,8 +224,8 @@ function stuckAfterTimeout(opened) {
   const inst = { id: opened.length, closed: false, compile: async req => {
     n++
     if (owed) { const out = owed; owed = null; return out }
-    if (n === 1 && inst.id === 0) { owed = { ok: true, pdf: new TextEncoder().encode(`output of ${req.name}`), log: '', ms: 1 }; return { ok: false, error: 'Error: Compilation timeout', log: '', ms: 180000 } }
-    return { ok: true, pdf: new TextEncoder().encode(`output of ${req.name}`), log: '', ms: 1 }
+    if (n === 1 && inst.id === 0) { owed = { ok: true, pdf: new TextEncoder().encode(`output of ${req.name}`), log: DONE, ms: 1 }; return { ok: false, error: 'Error: Compilation timeout', log: '', ms: 180000 } }
+    return { ok: true, pdf: new TextEncoder().encode(`output of ${req.name}`), log: DONE, ms: 1 }
   }, close: () => { inst.closed = true } }
   opened.push(inst)
   return inst

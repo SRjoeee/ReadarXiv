@@ -1,12 +1,13 @@
 // The reader when only part of a translation can be shown (S-R-19; plans/2026-10-04-compile-resilience.md, Task 5), in
 // Chromium with the build: a synthetic paper of our own whose first paragraphs set and whose last ones break every
-// strategy's compile — each an apacite citation with a note before it, whose key the control-word guard cuts from its
-// command (2610.02069's fault B), more of them than the safety net may set in the source —, translated by an LLM
-// endpoint on this machine that gives every segment back marked (reader-live.mjs's LLM_MOCK). The first previews are
-// shown; every compile with the last paragraphs fails, the chain runs out, and the capsule must say the translation is
-// shown in part: the preview kept, the translated displays not greyed, its close working. Our TeX page and its tree
-// (out/tex-site, node tex-page/build.mjs) and the TeX Live server on :8070; the build first (pnpm build). Exits non-zero
-// on a failure. Screenshots are the maintainer's: none is taken here.
+// strategy's compile — each a citation through a command of the paper's own whose argument in angle brackets the
+// walker does not read (xparse's d<>, as apacite's prenote was before the walker read it: 2610.02069's fault B), its key
+// cut from its command by the control-word guard, more of them than the safety net may set in the source —, translated
+// by an LLM endpoint on this machine that gives every segment back marked (reader-live.mjs's LLM_MOCK). The first
+// previews are shown; every compile with the last paragraphs fails, the chain runs out, and the capsule must say the
+// translation is shown in part: the preview kept, the translated displays not greyed, its close working. Our TeX page
+// and its tree (out/tex-site, node tex-page/build.mjs) and the TeX Live server on :8070; the build first (pnpm build).
+// Exits non-zero on a failure. Screenshots are the maintainer's: none is taken here.
 //   node experiments/pdf-bilingual/spikes/reader-partial.mjs
 import { execFileSync } from 'node:child_process'
 import { createServer } from 'node:http'
@@ -24,10 +25,10 @@ let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
 
 // the paper: sixty plain paragraphs, more than the first two batches a reader at its start is sent, then ten that cite
-// with apacite's prenote; its bibliography made natively, shipped as arXiv ships a .bbl, and its PDF the left side
+// through that command; its bibliography made natively, shipped as arXiv ships a .bbl, and its PDF the left side
 const para = k => `Paragraph ${k} of the synthetic paper describes a model of the atmosphere and the way its parts interact over a season, with words enough to make a few lines of prose.`
-const cited = k => `Paragraph ${k} of the synthetic paper compares the result with earlier work \\cite<e.g.,>[p.~${k}]{key_one} and finds it holds.`
-const SRC = `\\documentclass{article}\n\\usepackage{apacite}\n\\title{A Synthetic Paper}\\author{A. Author}\n\\begin{document}\n\\maketitle\n${[...Array.from({ length: 60 }, (_, k) => para(k)), ...Array.from({ length: 10 }, (_, k) => cited(60 + k))].join('\n\n')}\n\\bibliographystyle{apacite}\n\\bibliography{refs}\n\\end{document}\n`
+const cited = k => `Paragraph ${k} of the synthetic paper compares the result with earlier work \\compare<e.g.,>{key_one} and finds it holds.`
+const SRC = `\\documentclass{article}\n\\usepackage{apacite}\n\\NewDocumentCommand{\\compare}{d<>m}{\\IfValueT{#1}{#1~}\\cite{#2}}\n\\title{A Synthetic Paper}\\author{A. Author}\n\\begin{document}\n\\maketitle\n${[...Array.from({ length: 60 }, (_, k) => para(k)), ...Array.from({ length: 10 }, (_, k) => cited(60 + k))].join('\n\n')}\n\\bibliographystyle{apacite}\n\\bibliography{refs}\n\\end{document}\n`
 rmSync(out, { recursive: true, force: true })
 mkdirSync(paperDir, { recursive: true })
 writeFileSync(join(paperDir, 'main.tex'), SRC)
