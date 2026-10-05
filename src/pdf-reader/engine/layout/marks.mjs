@@ -74,7 +74,9 @@ export function classOf(piece) {
  *   space before the placeholder, a tie's penalty and space, an italic correction — are taken off, the mark set against
  *   the last letter (\relax first: TeX sets the word before only once a command that does not expand comes), and each put
  *   back: a citation command that takes the space off (cite.sty's \unskip) and tests the penalty before it sees them as
- *   before, and no glue becomes a place to break that was not one. Glued to a letter, before a formula or a box, the mark
+ *   before, and no glue becomes a place to break that was not one. Never past a kern of nothing: LaTeX ends its leaders
+ *   with one (\dotfill, \hrulefill), and leaders put back as glue lose their dots (e-TeX cannot tell them from glue);
+ *   leaders with no such kern before a placeholder would still lose them. Glued to a letter, before a formula or a box, the mark
  *   goes in an \hbox: TeX never hyphenates a word a formula or a box follows, and does one a whatsit follows (2608.01890).
  *   On an empty list — the paragraph TeX resumes after a display — it sets nothing, and expands to nothing: a mark there
  *   would keep the empty paragraph between two displays a line, and would end the \ignorespaces amsmath's \] began
@@ -111,7 +113,10 @@ export const LAYOUT_TEX = [
   '\\def\\axt@ift#1#2\\relax{\\if t#1\\expandafter\\@firstoftwo\\else\\expandafter\\@secondoftwo\\fi}',
   '\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\ifhmode\\axt@ift#1\\relax{\\axt@put{#1}}{\\axt@mark{#1}}\\else\\axt@mark{#1}\\fi\\fi}',
   '\\protected\\def\\/{\\ifnum\\lastnodetype=6 \\ifdim\\axt@icv=\\z@\\axt@icr\\else\\kern\\axt@icv\\relax\\fi\\else\\axt@icr\\fi}\\let\\@@italiccorr\\/',
-  '\\def\\axt@take{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\edef\\axt@back{\\hskip\\the\\lastskip\\relax\\axt@back}\\unskip\\expandafter\\axt@take\\or\\edef\\axt@back{\\kern\\the\\lastkern\\relax\\axt@back}\\unkern\\expandafter\\axt@take\\or\\edef\\axt@back{\\penalty\\the\\lastpenalty\\relax\\axt@back}\\unpenalty\\expandafter\\axt@take\\fi}',
+  '\\def\\axt@take{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@tg\\or\\expandafter\\axt@tk\\or\\expandafter\\axt@tp\\fi}',
+  '\\def\\axt@tg{\\edef\\axt@back{\\hskip\\the\\lastskip\\relax\\axt@back}\\unskip\\axt@take}',
+  '\\def\\axt@tk{\\ifdim\\lastkern=\\z@\\else\\edef\\axt@back{\\kern\\the\\lastkern\\relax\\axt@back}\\unkern\\expandafter\\axt@take\\fi}',
+  '\\def\\axt@tp{\\edef\\axt@back{\\penalty\\the\\lastpenalty\\relax\\axt@back}\\unpenalty\\axt@take}',
   '\\def\\axt@set#1{\\relax\\let\\axt@back\\@empty\\axt@take\\axt@put{#1}\\axt@back}',
   '\\def\\axt@putbox#1{\\axt@ic\\hbox{\\axt@mark{#1}}\\ifaxt@sig\\vadjust{}\\fi}',
   '\\def\\axt@boxy{\\ifcat\\noexpand\\axt@next$1\\else\\ifx\\axt@next\\(1\\else\\ifx\\axt@next\\ensuremath1\\else\\ifx\\axt@next\\mbox1\\else\\ifx\\axt@next\\textsuperscript1\\else0\\fi\\fi\\fi\\fi\\fi}',

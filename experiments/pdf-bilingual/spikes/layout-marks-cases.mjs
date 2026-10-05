@@ -60,6 +60,9 @@ const STAY = {
   'a control space before a blank line': doc('', `${prose(10, () => '')} \\cite{a}.\\\n\n${prose(10, () => '')} \\cite{b}.\\\n\n${prose(8, () => '')}\n\n${BIB}`),
   // a tabularray table, which the scanner reads as prose: \\SetCell must open its cell (2608.03994)
   'a tabularray row\'s \\SetCell': doc('\\usepackage{tabularray}', `\\begin{tblr}{colspec={lccccc}}\nModel & Size & \\SetCell[c=3]{c} Slopes & & & $\\delta_1$ \\\\\nAlpha & 1.5 & 2 & 3 & 4 & $x$ \\\\\n\\end{tblr}\n\n${prose(6, () => '')}`),
+  // leaders before a placeholder: a mark taking the glue off and putting it back would put back plain glue, the dots gone
+  // (\\dotfill ends in \\kern\\z@, which guards its leaders from an \\unskip)
+  'leaders before a formula': doc('', `\\noindent Total\\dotfill{} $0$\n\n\\noindent Total 0\\dotfill{} $0$\n\n\\noindent Sum \\hrulefill\\ $x$ and \\dotfill \\cite{a}\n\n${prose(6, () => '')}\n${BIB}`),
   'a word glued to a formula or a footnote\'s call, never hyphenated': doc('\\usepackage[margin=6.5cm]{geometry}', `${prose(30, i => [' representations$x_{' + i + '}$', ' characterization\\footnote{N.}', ' considerably$y$ is', ' experimentally\\footnotemark{} and'][i % 4])}`),
 }
 
