@@ -45,6 +45,7 @@ export interface LayoutMarks {
 }
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
+export declare const MARKS_DEPTH: number
 /** from a PDF.js document of the marked original and its last TeX pass's log; the caller opens and destroys the document */
 export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string }): Promise<LayoutMarks>
 export declare function encodeLayoutMarks(m: LayoutMarks): string

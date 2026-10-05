@@ -83,7 +83,8 @@ describe('layoutMarking', () => {
     const para = unit('para', [text('Text'), { t: 'nested', pre: '\\footnote{', unit: note, post: '}' }, text(' and '), ph('\\footnotemark'), text(' more.')])
     const units = [note, para]
     const { units: marked, mark } = layoutMarking(units, MARK_CLASSES, { lines: true })
-    expect(srcs(marked[1])).toEqual(['text', 'ph \\axtpma{n1.1a}', 'nested', 'ph \\axtpm{n1.1b}', 'text', 'ph \\axtpma{n1.3a}', 'ph \\footnotemark', 'text'])
+    // the opening mark only: fnpct's \\footnote, and a note's \\@ifnextchar, look at what follows the call
+    expect(srcs(marked[1])).toEqual(['text', 'ph \\axtpma{n1.1a}', 'nested', 'text', 'ph \\axtpma{n1.3a}', 'ph \\footnotemark', 'text'])
     // the call points at the note's own copy, marked as a unit of its own
     const call = nth(nth(marked, 1).pieces as Piece[], 2)
     expect(call.unit).toBe(marked[0])
@@ -146,11 +147,19 @@ describe('layoutMarking', () => {
     // (\\noexpand itself is a paper's macro to the classes, marked before it as any)
     expect(srcs(marked[0])).toEqual(['text', 'ph \\protect', 'ph \\eqref{e}', 'text', 'ph \\axtpma{p0.4a}', 'ph \\noexpand', 'text', 'ph $x$', 'text', 'ph \\axtpma{p0.8a}', 'ph $y$', 'ph \\axtpm{p0.8b}'])
   })
-  it('marks no macro inside a word, and none after one a letter follows', () => {
+  it('marks no macro inside a word', () => {
     // a letter command or an accent glued to the word's letters (Giessenbachstra\\ss e, 2608.15334): a mark there would
     // part the word, its hyphenation and its kerns; a citation, a formula, a reference begin with no letter of the word
     const { units: marked } = layoutMarking([unit('para', [text('In Giessenbachstra'), ph('\\ss'), text(' e, the '), ph('\\foo{x}'), text('ing and'), ph('\\cite{a}'), text(' then '), ph('\\foo{y}'), text(' end')])], MARK_CLASSES, { lines: false })
-    expect(srcs(marked[0])).toEqual(['text', 'ph \\ss', 'text', 'ph \\axtpma{p0.3a}', 'ph \\foo{x}', 'text', 'ph \\axtpma{p0.5a}', 'ph \\cite{a}', 'ph \\axtpm{p0.5b}', 'text', 'ph \\axtpma{p0.7a}', 'ph \\foo{y}', 'ph \\axtpm{p0.7b}', 'text'])
+    expect(srcs(marked[0])).toEqual(['text', 'ph \\ss', 'text', 'ph \\axtpma{p0.3a}', 'ph \\foo{x}', 'text', 'ph \\axtpma{p0.5a}', 'ph \\cite{a}', 'ph \\axtpm{p0.5b}', 'text', 'ph \\axtpma{p0.7a}', 'ph \\foo{y}', 'text'])
+  })
+  it('a paper\'s macro and a footnote\'s call get the opening mark only, and the piece right after them none', () => {
+    // a macro looks past its argument (\\xspace, \\@ifnextchar[, \\@esphack's \\ignorespaces after \\todo, \\nocite,
+    // \\marginpar), and fnpct's \\footnote for the punctuation after it: a mark there, or the next piece's opening mark, is
+    // what it would see. A source that ends in a control symbol gets the opening mark only too; LaTeX's \\) reads nothing
+    const note = { t: 'nested' as const, pre: '\\footnote{', unit: unit('footnote', [text('x')]), post: '}' }
+    const { units: marked } = layoutMarking([unit('para', [text('A '), ph('\\code{X}'), text(' is '), ph('\\code{a}'), note, text(' and '), ph('\\opt{b}'), text(' '), ph('$x$'), text(' then '), note, ph('\\cite{c}'), text(', '), ph('$y$\\%'), text(' or '), ph('\\(z\\)'), text('.')])], MARK_CLASSES, { lines: false })
+    expect(srcs(marked[0])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\code{X}', 'text', 'ph \\axtpma{p0.3a}', 'ph \\code{a}', 'nested', 'text', 'ph \\axtpma{p0.6a}', 'ph \\opt{b}', 'text', 'ph $x$', 'text', 'ph \\axtpma{n0.10a}', 'nested', 'ph \\cite{c}', 'text', 'ph \\axtpma{p0.13a}', 'ph $y$\\%', 'text', 'ph \\axtpma{p0.15a}', 'ph \\(z\\)', 'ph \\axtpm{p0.15b}', 'text'])
   })
   it('after a forced break, which may begin a table\'s row, passes over the commands before the next word', () => {
     // aastex's deluxetable: rows the scanner does not read as cells, \\ between them, \enddata after the last
@@ -171,8 +180,8 @@ describe('layoutMarking', () => {
     const env = layoutMarking([unit('para', [text('A '), ph('\\begin{subequations}x\\label{y}\\end{subequations}'), text(' B '), ph('\\begin{equation}a\\end {equation}'), text(' C')])], MARK_CLASSES, { lines: false }).units[0]
     expect(srcs(env)).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\begin{subequations}x\\label{y}\\end{subequations}', 'text', 'ph \\axtpma{p0.3a}', 'ph \\begin{equation}a\\end {equation}', 'text'])
     // nor after one that ends a line: the mark would stand on the next, and a blank line after it would end no paragraph
-    const atEnd = layoutMarking([unit('para', [text('A '), ph('\\foo{x}\n'), text('\n'), ph('$y$')])], MARK_CLASSES, { lines: false }).units[0]
-    expect(srcs(atEnd)).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\foo{x}\n', 'text', 'ph \\axtpma{p0.3a}', 'ph $y$', 'ph \\axtpm{p0.3b}'])
+    const atEnd = layoutMarking([unit('para', [text('A '), ph('\\cite{x}\n'), text('\n'), ph('$y$')])], MARK_CLASSES, { lines: false }).units[0]
+    expect(srcs(atEnd)).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\cite{x}\n', 'text', 'ph \\axtpma{p0.3a}', 'ph $y$', 'ph \\axtpm{p0.3b}'])
   })
 })
 
@@ -215,7 +224,8 @@ describe('originalFiles with the layout marks', () => {
     }
     // not vacuously: the sources hold every kind of mark
     const all = Object.values(SOURCES).map(src => decode(originalFiles(paperOf(src), { lines: true, layout: MARK_CLASSES }))).join('\n')
-    for (const m of ['\\axtpma{p', '\\axtpm{p', '\\axtpma{n', '\\axtpm{n', '\\axthmark{h', '\\leavevmode\\axtmark{t', '\\axtend{t']) expect(all).toContain(m)
+    for (const m of ['\\axtpma{p', '\\axtpm{p', '\\axtpma{n', '\\axthmark{h', '\\leavevmode\\axtmark{t', '\\axtend{t']) expect(all).toContain(m)
+    expect(all).not.toContain('\\axtpm{n')
   })
   it('puts LAYOUT_TEX after MARK_DEF, on the line the TeX after it begins: the paper\'s lines keep their numbers', () => {
     const p = paperOf(SOURCES.table)
@@ -342,6 +352,20 @@ const bytes = (v: unknown) => new TextEncoder().encode(typeof v === 'string' ? v
 const refusal = (b: Uint8Array) => { try { parseLayoutMarks(b); return null } catch (e) { if (!(e instanceof LayoutRefusal)) throw e; return e.path } }
 
 describe('the marks file', () => {
+  it('parseLayoutMarks refuses a file nested deeper than its 3 levels before JSON.parse, and quickly', () => {
+    // 999,000 arrays inside each other: 1.91 MiB of 999,000 values, inside both caps, which JSON.parse built in 70 ms
+    const deep = bytes(`${'['.repeat(999_000)}${']'.repeat(999_000)}`)
+    expect(deep.length).toBeLessThan(MARKS_CAP)
+    const parse = vi.spyOn(JSON, 'parse')
+    const t = performance.now()
+    let why = ''
+    try { parseLayoutMarks(deep) } catch (e) { if (!(e instanceof LayoutRefusal)) throw e; why = e.message }
+    const ms = performance.now() - t
+    expect(parse).not.toHaveBeenCalled()
+    parse.mockRestore()
+    expect(why).toBe('nested more than 3 deep')
+    expect(ms).toBeLessThan(50)
+  })
   it('encodeLayoutMarks and parseLayoutMarks round-trip', () => {
     const m = valid()
     expect(parseLayoutMarks(bytes(encodeLayoutMarks(m)))).toEqual(m)
@@ -385,6 +409,7 @@ describe('the marks file', () => {
       ['a negative width', m => { m.tokens[3] = -1 }, 'tokens[3]'],
       ['a word index past words', m => { m.tokens[5] = 3 }, 'tokens[5]'],
       ['a string where a number goes', m => { (m.marks[0] as unknown[])[2] = '72' }, 'marks[0][2]'],
+      ['an array where a number goes, a level deeper than the file has', m => { (m.marks[0] as unknown[])[2] = [72] }, ''],
     ]
     for (const [name, change, path] of rows) {
       const m = valid() as LayoutMarks & Record<string, unknown>
@@ -396,6 +421,9 @@ describe('the marks file', () => {
     expect(refusal(bytes(JSON.stringify(valid()).replace('[0,0,612,792,0,0,612,792]', '[0,0,612,1e400,0,0,612,792]')))).toBe('views[3]')
     // not an object at all
     expect(refusal(bytes('[]'))).toBe('')
+    // a key of no schema, 100,000 code units long, is told by its first 20
+    const long = { ...valid(), [`k${'y'.repeat(100_000)}`]: 1 }
+    expect(refusal(bytes(long))).toBe(`k${'y'.repeat(19)}`)
     // within every bound: 300,000 words
     const many = valid()
     many.words = Array.from({ length: 300_000 }, (_, i) => `w${i}`)
