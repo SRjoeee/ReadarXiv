@@ -24,6 +24,7 @@ import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
 import { passagesInSource } from './cache.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
 import { nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
+import { kOfSource, trPiecesOf } from './layer/pieces.mjs'
 import { WIDTH_PROBE } from './typeset/density.mjs'
 import { finalTypesetting, previewTypesetting } from './typeset/plan.mjs'
 import { completeLog, END_TEX, LINES_TEX } from './typeset/tex.mjs'
@@ -357,10 +358,16 @@ export const TYPESETTING_VERSION = '6'
  * sentence cuts on the tags path, mt.mjs translateUnits); `rank(i)` → how
  * far unit i is from the reader's place (lower comes first);
  * `onUpdate({ pdf,
- * texts, translated, final })` gets each compiled translation; `onOriginal({ pdf })` the marked original; `note(event,
- * data)` every step, for the timeline. A translation made again from a cached copy (REPORT, eighteenth addendum):
- * `seed`, index → the old translation { pieces, by, tried, state, current }, fills the run at the start, and one
- * `current` (cache.mjs reusable) is not sent again; `marks`, the left
+ * texts, translated, final })` gets each compiled translation; `onOriginal({ pdf, log })` the marked original, with its
+ * last TeX pass's log (lastTexLog); `onBatch({ seeded, units })` each batch's translated units, once their results are set
+ * and before the next batch is asked — and once, before the first batch, the seeds taken as they are (`seeded`) —, as
+ * the layer takes them (layer/pieces.mjs: each piece by its source index), which changes nothing the run does;
+ * `note(event, data)` every step, for the timeline. `previews` false compiles no preview: the original first, where
+ * the run compiles it, the measure and the final after the whole translation, the final the one update; a function of
+ * the original (`{ pdf, log }`, null where the run compiles none or it did not set) says which, once, as soon as it is in
+ * and before any compile of the translation; true, the default, is the run as before the flag. A translation made again
+ * from a cached copy (REPORT, eighteenth addendum): `seed`, index → the old translation { pieces, by, tried, state,
+ * current }, fills the run at the start, and one `current` (cache.mjs reusable) is not sent again; `marks`, the left
  * side's marks when known, skips the marked original (but where the typesetting rule needs its readings); `original`,
  * the original's readings (readingsOf) as a run before gave them, taken with `marks` known: no original is compiled,
  * and every preview is planned from the first;
@@ -373,7 +380,7 @@ export const TYPESETTING_VERSION = '6'
  * marksOf on a PDF.js document of the bytes, which it must not take: the reader shows them too): with it the
  * translation is set by the typesetting rule, without as today.
  */
-export async function runLive(paper, { lang, compile, compileOriginal = null, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, note = () => {}, seed = null, marks = null, original: knownReadings = null, identity = null, pipelineCurrent = false, readMarks = null }) {
+export async function runLive(paper, { lang, compile, compileOriginal = null, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, onBatch = null, note = () => {}, seed = null, marks = null, original: knownReadings = null, identity = null, pipelineCurrent = false, readMarks = null, previews: previewsOption = true }) {
   const { units, meta, project } = paper
   const kept = keptFor(paper, lang)
   // the chain: a compile that gives no PDF moves on to the next strategy, which is tried at once
@@ -427,8 +434,20 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
   // 2. translation nearest the reader first, asked afresh for every batch: the reader may have moved
   const todo = new Set(units.map((u, i) => i).filter(i => !kept.has(units[i]) && !taken.has(i)))
   if (taken.size) note('translated', { units: 0, taken: taken.size, total: translated.size })
+  /** units nearest the reader first, as `rank` has them now */
+  const nearest = ids => ids.map(i => [i, rank(i)]).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(([i]) => i)
+  /**
+   * A unit as the run's results have it, for the layer (onBatch): its pieces as the layer takes them (layer/pieces.mjs
+   * trPiecesOf, each non-text piece by its source index — a run's pieces are the unit's own objects, a seed's are found
+   * by their equals), none where it has none (none, lost; also where a piece has no source, which no run makes), its
+   * sentences, state and engine. Copies: the report reads the run, never changes it
+   */
+  const reported = i => {
+    const r = results.get(i), s = r?.sentences
+    return { id: i, pieces: (r?.pieces && trPiecesOf(r.pieces, kOfSource(units[i].pieces))) || [], sentences: Array.isArray(s?.src) && Array.isArray(s?.tr) ? { src: [...s.src], tr: [...s.tr] } : null, state: r?.state ?? 'none', by: r?.by ?? null }
+  }
   const nextBatch = maxChars => {
-    const order = [...todo].map(i => [i, rank(i)]).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(([i]) => i)
+    const order = nearest([...todo])
     const batch = []
     let chars = 0
     for (const i of order) { const n = plainSource(units[i]).length; if (batch.length && chars + n > maxChars) break; batch.push(i); chars += n }
@@ -436,6 +455,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
   }
   const mt = (async () => {
     try {
+    // the seeds taken as they are, once, before the first batch is asked
+    if (onBatch && taken.size) onBatch({ seeded: true, units: nearest([...taken]).map(reported) })
     for (let first = true; todo.size && !stopped; first = false) {
       const batch = nextBatch(first ? 2500 : 12000)
       batch.forEach(i => todo.delete(i))
@@ -463,6 +484,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
           results.set(i, { pieces: r.pieces, state: r.state, by: r.by, tried: identity, ...(r.sentences ? { sentences: r.sentences } : {}), ...(same && old.inSource ? { inSource: true } : {}) })
         } else results.set(i, { ...seeded(old), state: r.state, tried: identity })
       }
+      // the batch's units, in its order, before the next batch is asked
+      if (onBatch) onBatch({ seeded: false, units: batch.filter(i => results.has(i)).map(reported) })
       note('translated', { units: batch.length, how, ms: Date.now() - t0, total: translated.size })
       // a failure of the service, not of these texts (engine.mjs EngineError's lost): the batches after it would fail
       // the same way, each after the background's retries (the reader's design, §10.3)
@@ -488,6 +511,10 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
    *  be read. Known from a run before only with the left side's marks, which only a compile of it gives otherwise */
   const known = marks && knownReadings
   let readings = known ?? null
+  // whether previews are compiled and shown (the flag, `previews`): null until a function of the original says, once
+  let showing = typeof previewsOption === 'function' ? null : previewsOption !== false
+  // whether the run compiles the marked original: not where it is known; without the rule, only for the left side's marks
+  const compilesOriginal = !known && (!!readMarks || !marks)
   // a passing failure kept the rule from the final — a PDF's marks that could not be read —: the final is not this
   // typesetting's, and the record says so, so that the next visit sets it again (the F2 review's M3)
   let passing = false
@@ -529,7 +556,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       originalIn = o
       note('original', { ok: o.ok, ms: o.ms, error: whyFailed(o) })
       if (o.ok) {
-        onOriginal?.({ pdf: o.pdf })
+        onOriginal?.({ pdf: o.pdf, log: lastTexLog(o.log) })
         originalRefs = referencesOf(o)
         if (readMarks) readings = await readMarks(o.pdf).then(m => readingsOf(o, m), e => { passing = true; note('typeset', { missing: `the original's marks (${String(e?.message ?? e).slice(0, 120)})` }); return null })
       } else if (timedOut(o)) passing = true
@@ -546,6 +573,15 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     // I2): off the final's path when the translation comes quickly. Its failure is met where it is awaited
     if (readMarks && compileOriginal) original().catch(() => {})
     const { fonts, log: fontLog } = await fontsP
+    // the preview flag (the instant layer's spec, §4.10 row 10): previews off, or not yet known, the original comes first
+    // where the run compiles it — the compiler is free while the translation comes in, and nothing else is compiled
+    // before it is whole —, and with the rule a draft of the whole translation measures the final (finalTypeset), as a
+    // re-set's does. A function of the original says, once
+    if (showing !== true) {
+      const o = compilesOriginal ? await original() : null
+      if (showing === null) showing = !!(await previewsOption(o?.ok ? { pdf: o.pdf, log: lastTexLog(o.log) } : null))
+      note('previews', { shown: showing })
+    }
     // the rule's plans, one per compile, made for the strategy the compile sets: none until the original is read, and
     // none where an input is missing or partial (plan.mjs previewTypesetting) — the translation is set as today then,
     // and the reason noted once
@@ -828,6 +864,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
      */
     const bibtexFor = () => !meta.bbl && !bblAt() && !(readMarks && !previews) && !off('references')
     while (true) {
+      // no previews: a batch in asks for none
+      if (!showing) dirty = false
       // with the rule, the original right after the first preview: every plan after it is made from it
       if (readMarks && previews && !originalP) { await original(); continue }
       // a seeded run shows a preview only once no unit it would show in the source is left

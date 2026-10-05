@@ -67,8 +67,9 @@ const STOP_SPACE = /(?<=[.\u3002\uff0e\u0964\u0965\u06d4\u0589\u1362\u104b\u0f0d
  *  after a number (the evaluation of the typesetting rule, 2026-10-01). A word's space (#254) stays the engine's — a
  *  letter, or a combining mark ending a word, before a marker: the common case, whose space was always kept */
 const NUMBER_SPACE = /(?<=\p{N})[ \t\n\f\r]+$/u, NUMBER_LEAD = /^[ \t\n\f\r]+(?=\p{N})/u
-/** a piece a space never goes before: one that is a space itself (a tie, a control space, a kern), a group's end */
-const SPACING = /^(?:~|\\[ ,;:]|\\(?:q?quad|enspace|thinspace|nobreakspace)(?![A-Za-z])|\\hspace\*?\{|\}$)/
+/** a piece a space never goes before: one that is a space itself (a tie, a control space, a kern), a group's end.
+ *  layer/pieces.mjs writes it again (the reader's layer may not import this module); a test holds the two equal */
+export const SPACING = /^(?:~|\\[ ,;:]|\\(?:q?quad|enspace|thinspace|nobreakspace)(?![A-Za-z])|\\hspace\*?\{|\}$)/
 /** a run of `#` the reply holds outside its markers, not an entity's (`&#39;`): the source's text holds none — TeX's
  *  `\#` and a bare `#` are placeholders (latex-front.mjs walk) —, so on the wire a `#` is a marker's */
 const STRAY = /(?<!&)#+/g
@@ -445,8 +446,9 @@ export async function translateUnits(units, send, format = 'markers') {
   return { results, how }
 }
 
-/** a text piece as the compiled PDF shows it: a translation's TeX escapes undone, the source's bytes as UTF-8 */
-const shown = p => (p.tr ? p.s.replace(/\\(textbackslash|textasciitilde|textasciicircum)\{\}/g, ' ').replace(/\\([#$%&_{}])/g, '$1') : utf8(p.s))
+/** a text piece as the compiled PDF shows it: a translation's TeX escapes undone, the source's bytes as UTF-8.
+ *  layer/pieces.mjs writes it again (the reader's layer may not import this module); a test holds the two equal */
+export const shown = p => (p.tr ? p.s.replace(/\\(textbackslash|textasciitilde|textasciicircum)\{\}/g, ' ').replace(/\\([#$%&_{}])/g, '$1') : utf8(p.s))
 const plain = (pieces, textOf) => pieces.map(p => (p.t === 'text' ? textOf(p) : ' ')).join('').replace(/\s+/g, ' ').trim()
 /** a unit's plain text in the source (placeholders dropped: anchors are found from text alone) */
 export const plainSource = u => plain(u.pieces, p => utf8(p.s))
