@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { lastTexLog } from '../../../src/pdf-reader/engine/latex-front.mjs'
-import { layoutMarksOf, MARK_CLASSES } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { layoutMarksOf, MARK_CLASSES, punctuationMovers } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles } from '../../../src/pdf-reader/engine/live.mjs'
 
 let failed = 0
@@ -60,6 +60,14 @@ const STAY = {
   'a control space before a blank line': doc('', `${prose(10, () => '')} \\cite{a}.\\\n\n${prose(10, () => '')} \\cite{b}.\\\n\n${prose(8, () => '')}\n\n${BIB}`),
   // a tabularray table, which the scanner reads as prose: \\SetCell must open its cell (2608.03994)
   'a tabularray row\'s \\SetCell': doc('\\usepackage{tabularray}', `\\begin{tblr}{colspec={lccccc}}\nModel & Size & \\SetCell[c=3]{c} Slopes & & & $\\delta_1$ \\\\\nAlpha & 1.5 & 2 & 3 & 4 & $x$ \\\\\n\\end{tblr}\n\n${prose(6, () => '')}`),
+  // the paper's own switch: a package that sets the punctuation after a citation or a footnote's call before it (cite.sty's
+  // and natbib's super, natmove, fnpct); there no mark goes on a citation or a call the punctuation follows
+  'cite.sty [super], a citation before a full stop or a comma (the switch)': doc('\\usepackage[super]{cite}', `${prose(16, i => [' \\cite{a}.', ' \\cite{b},', ' \\cite{a} and', '~\\cite{b};'][i % 4])}\n\n${BIB}`),
+  'natbib [super] with natmove, a citation before a full stop or a comma (the switch)': doc('\\usepackage[super,sort&compress]{natbib}\\usepackage{natmove}', `${prose(16, i => [' \\cite{a}.', ' \\cite{b},', ' \\cite{a} and', ' \\cite{a,b}:'][i % 4])}\n\n${BIB}`),
+  'fnpct, a footnote\'s call before a full stop or a comma (the switch)': doc('\\usepackage{fnpct}', `${prose(16, i => [`\\footnote{Note ${i}.}.`, `\\footnote{Note ${i}.},`, ' and', `\\footnote{Note ${i}.} then`][i % 4])}`),
+  // a parameter set in a paragraph, a number or a dimension at its end: TeX takes the space after it as the number's end
+  // and reads on for a unit or a `plus`, which a closing mark would stop (2608.30640's `.\n\looseness=-1 While`)
+  'a number or a dimension set before a word': doc('', `${prose(16, i => ['.\n\\looseness=-1 While', ' \\linepenalty=100 and', ' \\spaceskip=3pt plus 1pt the', ' \\hyphenpenalty 50 we'][i % 4])}`),
   'a word glued to a formula or a footnote\'s call, never hyphenated': doc('\\usepackage[margin=6.5cm]{geometry}', `${prose(30, i => [' representations$x_{' + i + '}$', ' characterization\\footnote{N.}', ' considerably$y$ is', ' experimentally\\footnotemark{} and'][i % 4])}`),
 }
 
@@ -75,12 +83,14 @@ function compileAll(jobs) {
 }
 const jobs = []
 /** the source as v0 and v1 of a job: its files written, the job queued */
-function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', 'v1'] } = {}) {
+function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', 'v1'], own = true } = {}) {
   const paper = openPaper(new Map([['main.tex', new TextEncoder().encode(src)]]))
   for (const v of variants) {
     const d = join(dir, `${name}-${v}`)
     mkdirSync(d, { recursive: true })
-    for (const [path, bytes] of originalFiles(paper, v === 'v1' ? { lines: true, layout: MARK_CLASSES } : { lines: true })) writeFileSync(join(d, path), bytes)
+    // v1 with the paper's own switch, read from its preamble as the run reads it (the font probe's log adds what a class
+    // of TeX Live's loads: none here)
+    for (const [path, bytes] of originalFiles(paper, v === 'v1' ? { lines: true, layout: MARK_CLASSES, movesPunctuation: own ? punctuationMovers(paper) : [] } : { lines: true })) writeFileSync(join(d, path), bytes)
     jobs.push({ name: `${name}-${v}`, engine, passes })
   }
   return paper
@@ -153,8 +163,11 @@ queue('twice-xe', twiceSrc, { engine: 'xelatex', variants: ['v1'] })
 queue('twice-lua', twiceSrc, { engine: 'lualatex', variants: ['v1'] })
 // a heading set in capitals keeps its marks' names (a case change leaves them)
 const capsPaper = queue('caps', doc('\\makeatletter\\renewcommand\\section{\\@startsection{section}{1}{\\z@}{3ex}{2ex}{\\normalfont\\bfseries\\MakeUppercase}}\\makeatother', `\\section{Capital $x$ heading}\n${prose(6, () => '')}`), { variants: ['v1'] })
-// a finding: cite.sty's [super] moves a full stop after a citation before its number, looking past the closing mark
-queue('super-stop', doc('\\usepackage[super]{cite}', `${prose(12, i => (i % 2 ? ' \\cite{a}.' : ' \\cite{b},'))}\n\n${BIB}`))
+// a finding, what the paper's own switch keeps from moving: cite.sty's [super] moves a full stop after a citation before
+// its number, looking past the closing mark (v1 here without the switch)
+queue('super-stop', doc('\\usepackage[super]{cite}', `${prose(12, i => (i % 2 ? ' \\cite{a}.' : ' \\cite{b},'))}\n\n${BIB}`), { own: false })
+queue('natmove-stop', STAY['natbib [super] with natmove, a citation before a full stop or a comma (the switch)'], { own: false })
+queue('fnpct-stop', STAY['fnpct, a footnote\'s call before a full stop or a comma (the switch)'], { own: false })
 
 console.log(`compiling ${jobs.length} documents in ${dir}`)
 compileAll(jobs)
@@ -246,7 +259,12 @@ for (const [job, label] of [['files', 'with hyperref and nameref'], ['files-titl
 {
   const [a, b] = [await pdfOf('super-stop-v0'), await pdfOf('super-stop-v1')]
   const m = a && b ? moved(a, b) : ['no PDF']
-  console.log(`note cite.sty [super], a citation before a full stop or a comma: ${m.length ? `${m.length} items moved, e.g. ${m.slice(0, 2).join('; ')}` : 'ok'}`)
+  console.log(`note cite.sty [super], a citation before a full stop or a comma, without the paper's switch: ${m.length ? `${m.length} items moved, e.g. ${m.slice(0, 2).join('; ')}` : 'ok'}`)
+}
+for (const [job, label] of [['natmove-stop', "natbib [super] with natmove, a citation before a full stop or a comma"], ['fnpct-stop', "fnpct, a footnote's call before a full stop or a comma"]]) {
+  const [a, b] = [await pdfOf(`${job}-v0`), await pdfOf(`${job}-v1`)]
+  const m = a && b ? moved(a, b) : ['no PDF']
+  console.log(`note ${label}, without the paper's switch: ${m.length ? `${m.length} items moved, e.g. ${m.slice(0, 2).join('; ')}` : 'ok'}`)
 }
 
 if (!process.env.KEEP) rmSync(dir, { recursive: true, force: true })

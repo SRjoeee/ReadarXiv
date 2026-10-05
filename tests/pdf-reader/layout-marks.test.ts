@@ -5,7 +5,7 @@ import type { UnitLines } from '@/pdf-reader/engine/tex-errors.mjs'
 import { patch } from '@/pdf-reader/engine/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, parseLayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, parseLayoutMarks, punctuationMovers, superCitations } from '@/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/live.mjs'
 import { marksOf } from '@/pdf-reader/engine/typeset/places.mjs'
 
@@ -170,6 +170,9 @@ describe('layoutMarking', () => {
     // nor after an environment, whose \\end skips the spaces after it, a mark the first thing it would not skip
     const env = layoutMarking([unit('para', [text('A '), ph('\\begin{subequations}x\\label{y}\\end{subequations}'), text(' B '), ph('\\begin{equation}a\\end {equation}'), text(' C')])], MARK_CLASSES, { lines: false }).units[0]
     expect(srcs(env)).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\begin{subequations}x\\label{y}\\end{subequations}', 'text', 'ph \\axtpma{p0.3a}', 'ph \\begin{equation}a\\end {equation}', 'text'])
+    // nor after a number or a dimension, which takes the space after it as its end (2608.30640's \\looseness=-1)
+    const num = layoutMarking([unit('para', [text('A.\n'), ph('\\looseness=-1'), text(' While '), ph('\\parskip=3pt plus 1pt'), text(' B '), ph('\\foo{2}'), text(' C')])], MARK_CLASSES, { lines: false }).units[0]
+    expect(srcs(num)).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\looseness=-1', 'text', 'ph \\axtpma{p0.3a}', 'ph \\parskip=3pt plus 1pt', 'text', 'ph \\axtpma{p0.5a}', 'ph \\foo{2}', 'ph \\axtpm{p0.5b}', 'text'])
     // nor after one that ends a line: the mark would stand on the next, and a blank line after it would end no paragraph
     const atEnd = layoutMarking([unit('para', [text('A '), ph('\\foo{x}\n'), text('\n'), ph('$y$')])], MARK_CLASSES, { lines: false }).units[0]
     expect(srcs(atEnd)).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\foo{x}\n', 'text', 'ph \\axtpma{p0.3a}', 'ph $y$', 'ph \\axtpm{p0.3b}'])
@@ -240,6 +243,96 @@ describe('originalFiles with the layout marks', () => {
     const body = v1.slice(v1.indexOf('\\begin{document}'))
     expect(body).toContain('\\axthmark{h')
     expect(body).not.toContain('\\axtpma{')
+  })
+})
+
+describe('the per-paper switch: a paper whose citations take the punctuation after them', () => {
+  /** a paper of `files` (path → source), its main main.tex */
+  const paperIn = (files: Record<string, string>) => openPaper(new Map(Object.entries(files).map(([p, s]) => [p, new TextEncoder().encode(s)])))
+  const main = (pre: string, cls = '\\documentclass{article}') => ({ 'main.tex': `${cls}\n${pre}\n\\begin{document}\nA claim \\cite{a}. Another \\cite{b}, and more.\n\\end{document}\n` })
+  it('superCitations: cite.sty\'s and natbib\'s super, natmove and overcite, from the preamble the engine reads', () => {
+    const yes: [string, Record<string, string>][] = [
+      ['cite.sty [super]', main('\\usepackage[super]{cite}')],
+      ['cite.sty [superscript], among other options', main('\\usepackage[sort, superscript ,compress]{cite}')],
+      ['cite.sty with the class\'s super (a global option)', main('\\usepackage{cite}', '\\documentclass[11pt,super]{article}')],
+      ['cite.sty with super passed to it', main('\\PassOptionsToPackage{super}{cite}\n\\usepackage{cite}')],
+      ['cite.sty loaded by \\RequirePackage among others', main('\\RequirePackage[super]{amsmath,cite}')],
+      ['overcite', main('\\usepackage{overcite}')],
+      ['natbib [super]', main('\\usepackage[super,sort&compress,comma]{natbib}')],
+      ['natbib with \\setcitestyle{super}', main('\\usepackage{natbib}\n\\setcitestyle{super,open={},close={}}')],
+      ['natbib with \\bibpunct\'s s', main('\\usepackage{natbib}\n\\bibpunct{}{}{,}{s}{}{,}')],
+      ['natmove', main('\\usepackage{natmove}')],
+      ['a preamble \\input, its file read', { ...main('\\input{setup}'), 'setup.tex': '\\usepackage[super]{cite}\n' }],
+      ['an \\input with no braces', { ...main('\\input setup.tex'), 'setup.tex': '\\usepackage[super]{cite}\n' }],
+      ['a class of the paper\'s own', { ...main('', '\\documentclass{own}'), 'own.cls': '\\LoadClass{article}\n\\RequirePackage[super]{cite}\n' }],
+      ['a package of the paper\'s own, in a folder', { ...main('\\usepackage{sty/own}'), 'sty/own.sty': '\\RequirePackage[super]{natbib}\n' }],
+      ['biblatex, autocite=footnote', main('\\usepackage[style=numeric, autocite = footnote]{biblatex}')],
+      ['biblatex, autocite=superscript by \\ExecuteBibliographyOptions', main('\\usepackage{biblatex}\n\\ExecuteBibliographyOptions{autocite=superscript}')],
+      ['biblatex, a verbose style', main('\\usepackage[style=verbose-ibid,backend=biber]{biblatex}')],
+      ['biblatex, the authortitle citation style', main('\\usepackage[citestyle=authortitle-icomp]{biblatex}')],
+    ]
+    for (const [name, files] of yes) expect(superCitations(paperIn(files), ''), name).toBe(true)
+    const no: [string, Record<string, string>][] = [
+      ['cite.sty', main('\\usepackage{cite}')],
+      ['natbib, author-year', main('\\usepackage[round]{natbib}\n\\setcitestyle{authoryear,round,citesep={;}}')],
+      ['REVTeX\'s superscriptaddress', main('', '\\documentclass[aps,prl,superscriptaddress]{revtex4-2}')],
+      ['cite.sty [superscript,nomove], wlscirep\'s', { ...main('', '\\documentclass{wlscirep}'), 'wlscirep.cls': '\\LoadClass{article}\n\\RequirePackage[superscript,biblabel,nomove]{cite}\n' }],
+      ['super in a comment', main('% \\usepackage[super]{cite}\n\\usepackage{cite}')],
+      ['super given to another package', main('\\usepackage[super]{foo}\n\\usepackage{cite}')],
+      ['a super option and no cite.sty or natbib', main('', '\\documentclass[super]{article}')],
+      ['a file of the package the preamble does not read', { ...main('\\usepackage{natbib}'), 'SI.tex': '\\documentclass{article}\n\\usepackage[super]{natbib}\n' }],
+      ['super after \\begin{document}', { 'main.tex': '\\documentclass{article}\n\\usepackage{cite}\n\\begin{document}\nText \\verb|\\usepackage[super]{cite}|.\n\\end{document}\n' }],
+      ['a copy of natbib in the package, its \\bibstyle@nature among its definitions (2608.30640)', { ...main('\\usepackage{iclr}'), 'iclr.sty': '\\RequirePackage{natbib}\n', 'natbib.sty': '\\DeclareOption{super}{\\NAT@supertrue}\n\\newcommand\\bibstyle@nature{\\bibpunct{}{}{,}{s}{}{\\textsuperscript{,}}}\n' }],
+      ['biblatex, numeric, inline autocite', main('\\usepackage[style=numeric-comp]{biblatex}')],
+      ['biblatex, authortitle-terse (inline)', main('\\usepackage[style=authortitle-terse]{biblatex}')],
+    ]
+    for (const [name, files] of no) expect(superCitations(paperIn(files), ''), name).toBe(false)
+  })
+  it('superCitations: natmove or overcite a class loads, from a log of the paper\'s preamble (achemso)', () => {
+    const achemso = paperIn(main('', '\\documentclass[journal=jacsat,manuscript=article]{achemso}'))
+    expect(superCitations(achemso, '')).toBe(false)
+    const log = '(/usr/local/texlive/2026/texmf-dist/tex/latex/achemso/achemso.cls\nDocument Class: achemso 2022/11/25 v3.13f Support for submissions to ACS journals\n(/usr/local/texlive/2026/texmf-dist/tex/latex/achemso/natmove.sty\nPackage: natmove 2010/01/15 v1.1a Automatic citation moving with natbib\n'
+    expect(superCitations(achemso, log)).toBe(true)
+    // a path TeX cut at 79 characters
+    const cut = '(/usr/local/texlive/2026/texmf-dist/tex/latex/some-long-directory-name-xy/natmo\nve.sty)\n'
+    expect(cut.split('\n')[0]?.length).toBe(79)
+    expect(superCitations(achemso, cut)).toBe(true)
+    expect(superCitations(achemso, '(/usr/local/texlive/2026/texmf-dist/tex/latex/cite/overcite.sty\n')).toBe(true)
+    // the plain cite.sty and natbib loaded say nothing of super
+    expect(superCitations(achemso, '(/usr/local/texlive/2026/texmf-dist/tex/latex/natbib/natbib.sty\n(/usr/local/texlive/2026/texmf-dist/tex/latex/cite/cite.sty\n')).toBe(false)
+    // overcite with nomove passed in the preamble moves nothing
+    expect(superCitations(paperIn(main('\\usepackage[nomove]{overcite}')), '')).toBe(false)
+  })
+  it('punctuationMovers: cite where its citations take the punctuation, footnote where fnpct is loaded, by the preamble or the log', () => {
+    expect(punctuationMovers(paperIn(main('\\usepackage[super]{cite}')), '')).toEqual(['cite'])
+    expect(punctuationMovers(paperIn(main('\\usepackage{fnpct}')), '')).toEqual(['footnote'])
+    expect(punctuationMovers(paperIn(main('\\usepackage{natmove}\n\\usepackage[ranges]{fnpct}')), '')).toEqual(['cite', 'footnote'])
+    expect(punctuationMovers(paperIn(main('', '\\documentclass{own}')), '(/usr/local/texlive/2026/texmf-dist/tex/latex/fnpct/fnpct.sty\n')).toEqual(['footnote'])
+    expect(punctuationMovers(paperIn(main('\\usepackage{cite}')), '')).toEqual([])
+  })
+  it('layoutMarking with `movesPunctuation`: no mark for a placeholder of those classes the punctuation follows; every other keeps both', () => {
+    const units = [unit('para', [text('A '), ph('$x$'), text(' B '), ph('\\cite{c}'), text('. C '), ph('\\cite{d}'), text(' and '), ph('\\cite{e}'), text(', '), ph('\\cite{f}'), text(';'), ph('\\ref{r}'), text('.')])]
+    const { units: marked } = layoutMarking(units, MARK_CLASSES, { lines: false, movesPunctuation: ['cite'] })
+    expect(srcs(marked[0])).toEqual([
+      'text', 'ph \\axtpma{p0.1a}', 'ph $x$', 'ph \\axtpm{p0.1b}', 'text', 'ph \\cite{c}', 'text',
+      'ph \\axtpma{p0.5a}', 'ph \\cite{d}', 'ph \\axtpm{p0.5b}', 'text', 'ph \\cite{e}', 'text', 'ph \\cite{f}', 'text',
+      'ph \\axtpma{p0.11a}', 'ph \\ref{r}', 'ph \\axtpm{p0.11b}', 'text',
+    ])
+    // a footnote's call the punctuation follows, with fnpct
+    const note = unit('footnote', [text('N.')], { nested: true } as Partial<SourceUnit>)
+    const fn = [note, unit('para', [text('A'), { t: 'nested', pre: '\\footnote{', unit: note, post: '}' }, text('. B'), { t: 'nested', pre: '\\footnote{', unit: note, post: '}' }, text(' C')])]
+    expect(srcs(layoutMarking(fn, MARK_CLASSES, { lines: false, movesPunctuation: ['footnote'] }).units[1])).toEqual(['text', 'nested', 'text', 'ph \\axtpma{n1.3a}', 'nested', 'ph \\axtpm{n1.3b}', 'text'])
+    // the switch off: every citation marked as before
+    expect(srcs(layoutMarking(units, MARK_CLASSES, { lines: false, movesPunctuation: [] }).units[0])).toEqual(srcs(layoutMarking(units, MARK_CLASSES, { lines: false }).units[0]))
+    expect(srcs(layoutMarking(units, MARK_CLASSES, { lines: false }).units[0])).toContain('ph \\axtpm{p0.3b}')
+  })
+  it('originalFiles passes `movesPunctuation` on; without `layout` it changes no byte', () => {
+    const p = paperOf('\\documentclass{article}\n\\begin{document}\nA claim \\cite{k}. And \\cite{j} again, see \\ref{t}.\n\\end{document}\n')
+    const v1 = decode(originalFiles(p, { lines: true, layout: MARK_CLASSES, movesPunctuation: ['cite'] }))
+    expect(v1).toContain('A claim \\cite{k}. And \\axtpma{p0.3a}\\cite{j}\\axtpm{p0.3b} again')
+    expect(decode(originalFiles(p, { lines: true, layout: MARK_CLASSES, movesPunctuation: [] }))).toBe(decode(originalFiles(p, { lines: true, layout: MARK_CLASSES })))
+    const t = paperOf(SOURCES.table)
+    for (const lines of [false, true]) expect(sha(originalFiles(t, { lines, movesPunctuation: ['cite'] }).get('main.tex') as Uint8Array)).toBe(PIN.table?.[lines ? 'lines' : 'plain'])
   })
 })
 

@@ -11,7 +11,7 @@
 // aux, the lists and the bookmarks are byte for byte the paper's. The native cases (experiments/pdf-bilingual/spikes/
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) switches off a class
 // that moves a line of any paper.
-import { markUnits, NO_ARG_COMMANDS } from '../latex-front.mjs'
+import { latin1, markUnits, NO_ARG_COMMANDS, normalizePath } from '../latex-front.mjs'
 import { tokenizeDocument } from '../anchors.mjs'
 import { readLines } from '../typeset/tex.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, inView, isInteger, isNumber, LayoutRefusal } from './json.mjs'
@@ -19,7 +19,9 @@ import { boundedJson, checkKeys, checkPages, checkViews, inView, isInteger, isNu
 // ---------------------------------------------------------------- the classes
 /** every class, in this order */
 export const MARK_CLASSES = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref', 'code', 'url', 'footnote', 'macro'])
-/** the classes the run marks when asked (Task 2 removes any class that moves a line of any paper) */
+/** the classes the run marks when asked: the global default, every class (Task 2's corpus check). A paper's own switch
+ *  (punctuationMovers, layoutMarking's `movesPunctuation`) takes the marks off the placeholders of a class its
+ *  punctuation follows, where a package of the paper's moves that punctuation before them */
 export const LAYOUT_CLASSES = Object.freeze([...MARK_CLASSES])
 
 /** control words whose placeholder sets no ink, besides the declarations latex-front reads as taking no argument */
@@ -56,6 +58,87 @@ export function classOf(piece) {
   if (URL.test(src)) return 'url'
   if (FOOTNOTE_MARK.test(src)) return 'footnote'
   return 'macro'
+}
+
+// ---------------------------------------------------------------- the per-paper switch
+const uncomment = s => s.replace(/(^|[^\\])%.*$/gm, '$1')
+const options = s => (s ?? '').split(',').map(x => x.trim()).filter(Boolean)
+/** the packages the switch reads the options of: a copy of one in the paper's package is that package, its source no
+ *  choice of the paper's (natbib.sty defines \bibstyle@nature's superscripts: 2608.30640's copy is no paper of super) */
+const READ = new Set(['natbib', 'cite', 'overcite', 'natmove', 'biblatex', 'fnpct'])
+/** the preamble the engine reads, comments taken out: the main file's up to \begin{document}, each file it \input's
+ *  there, and each class and package of the paper's own it loads (the package's files, not TeX Live's, nor a copy of
+ *  one READ names), as far as they go */
+function preambleOf({ fsys, project }) {
+  const out = [], seen = new Set()
+  const visit = (path, whole) => {
+    const key = normalizePath(path)
+    if (seen.has(key) || READ.has(key.replace(/^.*\//, '').replace(/\.sty$/, ''))) return
+    seen.add(key)
+    const bytes = fsys.read(key)
+    if (!bytes) return
+    let text = uncomment(latin1(bytes))
+    if (!whole) { const at = text.search(/\\begin\s*\{document\}/); if (at >= 0) text = text.slice(0, at) }
+    out.push(text)
+    for (const m of text.matchAll(/\\(?:input|include)(?![A-Za-z@])\s*(?:\{([^{}]+)\}|([^\s{}\\]+))/g)) { const f = (m[1] ?? m[2]).trim(); visit(f, true); visit(`${f}.tex`, true) }
+    for (const m of text.matchAll(/\\(?:usepackage|RequirePackage(?:WithOptions)?)\s*(?:\[[^\]]*\])?\s*\{([^{}]+)\}/g)) for (const n of options(m[1])) visit(`${n}.sty`, true)
+    for (const m of text.matchAll(/\\(?:documentclass|LoadClass(?:WithOptions)?)\s*(?:\[[^\]]*\])?\s*\{([^{}]+)\}/g)) visit(`${m[1].trim()}.cls`, true)
+  }
+  visit(project.main, false)
+  return out.join('\n')
+}
+/** what the preamble loads and asks: each package's options (its own, passed to it, the class's taken as every
+ *  package's), and the packages loaded — by the preamble, or by a class of TeX Live's, which only `log` (a log of any
+ *  compile of the paper's preamble: the font probe's) tells */
+function packagesOf(paper, log) {
+  const pre = preambleOf(paper)
+  const global = options(/\\documentclass\s*(?:\[([^\]]*)\])?\s*\{/.exec(pre)?.[1])
+  const given = new Map(), loaded = new Set()
+  const give = (pkg, opts) => given.set(pkg, [...(given.get(pkg) ?? []), ...opts])
+  for (const m of pre.matchAll(/\\PassOptionsToPackage\s*\{([^{}]*)\}\s*\{([^{}]+)\}/g)) for (const n of options(m[2])) give(n, options(m[1]))
+  for (const m of pre.matchAll(/\\(?:usepackage|RequirePackage(?:WithOptions)?)\s*(?:\[([^\]]*)\])?\s*\{([^{}]+)\}/g)) for (const n of options(m[2])) { give(n, options(m[1])); loaded.add(n) }
+  const seen = (log ?? '').replace(/^(.{79})\n/gm, '$1')
+  for (const n of READ) if (new RegExp(`[/(]${n}\\.sty\\b`).test(seen)) loaded.add(n)
+  const opts = pkg => [...global, ...(given.get(pkg) ?? [])]
+  return { pre, loaded, opts }
+}
+/** the biblatex styles whose \autocite is a footnote's or a superscript's (TeX Live's standard ones: authortitle and its
+ *  -comp, -ibid, -icomp; verbose and every verbose-…) */
+const FOOTNOTE_STYLES = /^(?:authortitle(?:-comp|-ibid|-icomp)?|verbose(?:-[a-z0-9]+)?)$/
+/**
+ * Whether the paper's citations take the punctuation after them before them: superscript or footnote citations that look
+ * past their closing brace for a full stop, a comma, a semicolon or a colon and set it first — cite.sty's `super`
+ * (`superscript`, overcite) unless `nomove`; natmove's, which acts on natbib's `super` (achemso loads both); natbib loaded
+ * with `super` however it is asked (its option, \setcitestyle, \bibpunct's fourth argument); biblatex's \autocite as a
+ * footnote's or a superscript's (`autocite=`, or a style whose \autocite is one). There a closing mark after a citation
+ * stands where the package looks, and the move is lost: the full stop stays after the number and the line moves
+ * (2608.23865, 2608.25928: achemso); an opening mark before it parts the word's last letter from the punctuation set
+ * against it, and their kern is lost. Read from the preamble the engine reads (preambleOf) and `log` (packagesOf): no
+ * option is in a log, but the packages loaded are. cite.sty with `super` from a class of TeX Live's is beyond both
+ */
+export function superCitations(paper, log = '') {
+  const { pre, loaded, opts } = packagesOf(paper, log)
+  const has = (pkg, ...names) => opts(pkg).some(o => names.includes(o))
+  // the last of two contrary options wins
+  const moves = pkg => opts(pkg).lastIndexOf('nomove') <= opts(pkg).lastIndexOf('move')
+  if (loaded.has('overcite')) return moves('overcite') && moves('cite')
+  if (loaded.has('cite') && has('cite', 'super', 'superscript') && moves('cite')) return true
+  if (loaded.has('natmove')) return true
+  if (loaded.has('biblatex')) {
+    const keyed = [...opts('biblatex'), ...[...pre.matchAll(/\\ExecuteBibliographyOptions\s*(?:\[[^\]]*\])?\s*\{([^{}]*)\}/g)].flatMap(m => options(m[1]))].map(o => o.replace(/\s+/g, ''))
+    if (keyed.some(o => /^autocite=(?:footnote|superscript)$/.test(o) || (/^(?:style|citestyle)=/.test(o) && FOOTNOTE_STYLES.test(o.replace(/^[a-z]+=/, ''))))) return true
+  }
+  if (!loaded.has('natbib')) return false
+  return has('natbib', 'super') || [...pre.matchAll(/\\setcitestyle\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g)].some(m => options(m[1]).includes('super')) || /\\bibpunct\s*(?:\[[^\]]*\])?\s*\{[^{}]*\}\s*\{[^{}]*\}\s*\{[^{}]*\}\s*\{\s*s\s*\}/.test(pre)
+}
+/** the paper's own switch over LAYOUT_CLASSES: the classes a package of the paper's moves the punctuation after before —
+ *  `cite` where its citations do (superCitations), `footnote` where fnpct swaps a footnote's call and the punctuation
+ *  after it — whose placeholders the punctuation follows get no mark (layoutMarking's `movesPunctuation`) */
+export function punctuationMovers(paper, log = '') {
+  const out = []
+  if (superCitations(paper, log)) out.push('cite')
+  if (packagesOf(paper, log).loaded.has('fnpct')) out.push('footnote')
+  return out
 }
 
 // ---------------------------------------------------------------- the TeX
@@ -154,6 +237,10 @@ const SOLE = /^\\[A-Za-z@]+\*?(\{\})?$/
 const ENDS_ENV = /\\end\s*\{[^{}]*\}\s*$/
 /** a source that ends in a control word: TeX skips the spaces after it, and a macro of it may look ahead */
 const ENDS_IN_WORD = /\\[A-Za-z@]+\*?$/
+/** a source that ends in a number or a dimension — a parameter set, \looseness=-1, \parskip=3pt plus 1pt: TeX takes
+ *  the space after it as the number's end, and reads on for a unit or a `plus`; a mark there ends the number, and the
+ *  space is a space (2608.30640's `.\n\looseness=-1 While` gained one) */
+const ENDS_IN_NUMBER = /\d\s*(?:(?:true\s*)?(?:pt|pc|in|bp|cm|mm|dd|cc|sp|em|ex|mu|px)|fil{1,3})?$/
 /** a placeholder after which no mark goes, the next placeholder's neither: a paper's macro that ends in a control word
  *  (\xspace in it looks at what follows, and takes a footnote's call, or not, for the end of the phrase), \xspace itself,
  *  and a prefix that applies to the next token (\protect\eqref: a mark between them takes the \protect, and is written
@@ -206,11 +293,15 @@ function passedOver(pieces) {
  * - none right after a prefix or a macro that looks ahead (LOOKS_AHEAD), and none for a paper's macro glued to the
  *   letters before it, which may be letters of the same word;
  * - the opening mark only where the closing one would follow a control word (TeX skips the spaces after it; a paper's
- *   macro that is a control word alone is one), white space (a mark there would stand on the next line, a blank one no
+ *   macro that is a control word alone is one), a number or a dimension (ENDS_IN_NUMBER), white space (a mark there would stand on the next line, a blank one no
  *   paragraph's end any more: 2608.08350's `.\` before one), an environment's \end, or a paper's macro a letter follows
+ * - none for a placeholder the punctuation follows, of a class in `movesPunctuation` (the paper's own switch:
+ *   punctuationMovers): the package sets the full stop against the word before, where an opening mark would part the
+ *   word's last letter from it and lose their kern (2608.23865: Times' "y." and "r.", up to 0.85 pt), and looks for it
+ *   where the closing mark would stand. One no punctuation follows keeps both marks
  */
-export function layoutMarking(units, classes, { lines = false } = {}) {
-  const on = new Set(classes)
+export function layoutMarking(units, classes, { lines = false, movesPunctuation = [] } = {}) {
+  const on = new Set(classes), movers = new Set(movesPunctuation)
   const base = markUnits(units)
   const index = new Map(units.map((u, i) => [u, i]))
   const own = u => {
@@ -235,9 +326,10 @@ export function layoutMarking(units, classes, { lines = false } = {}) {
       // part the word's hyphenation and kerns; glued to the word after, it gets no closing mark
       const before = u.pieces[k - 1], next = u.pieces[k + 1]
       if (cls === 'macro' && before?.t === 'text' && WORD_END.test(before.s)) return [piece]
+      if (movers.has(cls) && next?.t === 'text' && /^[.,;:]/.test(next.s)) return [piece]
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
       const open = { t: 'ph', src: `\\axtpma{${name}a}` }
-      if (p.t === 'ph' && ((cls === 'macro' && (SOLE.test(p.src) || (next?.t === 'text' && WORD_START.test(next.s)))) || ENDS_IN_WORD.test(p.src) || /\s$/.test(p.src) || ENDS_ENV.test(p.src))) return [open, piece]
+      if (p.t === 'ph' && ((cls === 'macro' && (SOLE.test(p.src) || (next?.t === 'text' && WORD_START.test(next.s)))) || ENDS_IN_WORD.test(p.src) || ENDS_IN_NUMBER.test(p.src) || /\s$/.test(p.src) || ENDS_ENV.test(p.src))) return [open, piece]
       return [open, piece, { t: 'ph', src: `\\axtpm{${name}b}` }]
     })
   })
