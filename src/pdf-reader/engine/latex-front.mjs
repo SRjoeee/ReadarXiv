@@ -160,11 +160,49 @@ function argsAfter(s, i, max = 9) {
   }
   return { args, end: i }
 }
-/** a command's arguments: every adjacent one, or for a command of fixed arity (ARITY) its optional ones and then that
- *  many required */
+/** a citation command: natbib's, biblatex's, apacite's (\cite, \citep, \citet, \parencite, \textcite, \citeA, \citeNP,
+ *  \fullcite …) */
+const CITATION = /^[A-Za-z]*cite[A-Za-z]*$/i
+/** apacite's prenote at s[k] (`<`), \cite<e.g.,>[p.~5]{key}: after its closing `>`, outside every brace group and
+ *  within the paragraph; -1 where there is none */
+function angleGroup(s, k) {
+  let depth = 0
+  for (let j = k + 1; j < s.length; j++) {
+    const c = s[j]
+    if (c === '\\') { j++; continue }
+    if (c === '%') { j = skipComment(s, j); continue }
+    if (c === '\n' && /^\n[ \t]*\n/.test(s.slice(j, j + 80))) return -1
+    if (c === '{') depth++
+    else if (c === '}' && --depth < 0) return -1
+    else if (c === '>' && depth === 0) return j + 1
+  }
+  return -1
+}
+/**
+ * A citation's arguments, the whole call one placeholder: apacite's prenote in angle brackets, or biblatex's notes for
+ * all of a multicite's citations in parentheses (\cites(see)(and more)[p.~2]{a}{b}), then every adjacent [..] and {..}
+ * as for any command (natbib's \citep[see][p.~5]{key}). Read as text, apacite's
+ * \cite<>[available at \url{…}]{modified_code} sent `<>[available at` and the key's words to the engine, the key's `_`
+ * a placeholder, and the translated key stopped TeX (2610.02069, fault B). Those notes only where a key follows them,
+ * within the paragraph: a `<` or a `(` after a citation that takes none is the text's
+ */
+function citationArgs(s, i, name) {
+  const notes = []
+  let at = i
+  for (let n = 0; n < 2; n++) {
+    const k = skipSpaces(s, at), multi = /cites$/i.test(name)
+    const e = !multi && !n && s[k] === '<' ? angleGroup(s, k) : multi && s[k] === '(' ? matchGroup(s, k, '(', ')') : -1
+    if (e < 0 || /\n[ \t]*\n/.test(s.slice(k, e))) break
+    notes.push({ kind: 'opt', start: k, end: e }); at = e
+  }
+  const rest = notes.length ? argsAfter(s, at) : null
+  return rest?.args.some(a => a.kind === 'req') ? { args: [...notes, ...rest.args], end: rest.end } : argsAfter(s, i)
+}
+/** a command's arguments: every adjacent one — a citation's with its notes in angle brackets or parentheses
+ *  (citationArgs) —, or for a command of fixed arity (ARITY) its optional ones and then that many required */
 function commandArgs(s, i, name) {
   const want = ARITY.get(name)
-  if (want === undefined) return argsAfter(s, i)
+  if (want === undefined) return CITATION.test(name) ? citationArgs(s, i, name) : argsAfter(s, i)
   const args = []
   for (let got = 0; got < want;) {
     let k = skipSpaces(s, i)

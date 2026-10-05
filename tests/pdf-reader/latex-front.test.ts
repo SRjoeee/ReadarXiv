@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { inMemory, lineBreaks, loadProject, localizeNames, markUnits, patch } from '@/pdf-reader/engine/latex-front.mjs'
+import { serialize } from '@/pdf-reader/engine/mt.mjs'
 
 // The PDF reader's LaTeX front end: what of a paper's source is prose to translate
 
@@ -292,6 +293,44 @@ describe('a translation breaks its lines as its own', () => {
   it('a paragraph keeps its forced breaks; long code and formulas get room to break', () => {
     expect(joined(lineBreaks({ kind: 'paragraph' }, [text('输入：'), ph('\\\\'), text('输出')]))).toBe('输入：[\\\\]输出')
     expect(joined(lineBreaks({ kind: 'paragraph' }, [ph('\\texttt{lib/ansible/plugins/callback/__init\\_\\_.py}')]))).toContain('lib/\\allowbreak{}ansible/\\allowbreak{}')
+  })
+})
+
+describe('a citation is one placeholder, its notes and keys with it (2610.02069: apacite\'s key sent as prose broke TeX)', () => {
+  const body = (b: string) => project(`\\documentclass{article}\\begin{document}\n${b}\n\\end{document}`).units as Unit[]
+  const phs = (u: Unit) => u.pieces.filter(p => p.t !== 'text').map(p => (p as { src?: string }).src)
+
+  it('apacite\'s \\cite<…>[…]{…}, 2610.02069\'s Open Research sentence as it stands: the call whole, nothing of it on the wire', () => {
+    const cite = '\\cite<>[available at \\url{https://doi.org/10.5281/zenodo.21144536}]{modified_code}'
+    const p = project(`\\documentclass{article}\\begin{document}\nThe code to reproduce the work in this paper is archived in a public repository ${cite}.\n\\end{document}`)
+    const [u] = p.units as Unit[]
+    expect(phs(u as Unit)).toEqual([cite])
+    expect(textOf(u as Unit).trim()).toBe('The code to reproduce the work in this paper is archived in a public repository .')
+    const { wire } = serialize(u as never)
+    expect(wire).toBe('The code to reproduce the work in this paper is archived in a public repository @a#.')
+    // written back, translated around it, the call byte for byte
+    expect(patched(p)).toContain(`<T0>${cite}<T0>`)
+  })
+
+  it('every form the rules know, apacite\'s prenote and biblatex\'s multicite notes among them, one placeholder each; a `<` or a `(` no key follows is the text\'s', () => {
+    const forms = [
+      // apacite
+      '\\cite<e.g.,>[p.~5]{key_one}', '\\citeA<see>{a,b}', '\\citeNP<cf.>[ch.~2]{x_y}', '\\citeauthor<>{k}', '\\fullcite<e.g.,>{k}', '\\shortciteNP<see>{k}', '\\cite<e.g.,>{k}',
+      // biblatex's notes for all of a multicite's citations
+      '\\cites(see)(and more)[p.~2]{a}{b_c}', '\\parencites(cf.)()[12]{a}[3]{b}',
+      // natbib, biblatex, the kernel's
+      '\\citep[e.g.,][p.~5]{key_one}', '\\citet[p.~3]{k}', '\\citep*[see][]{k}', '\\citealp{a,b}', '\\citeauthor{k}', '\\citeyear{k}', '\\parencite[see][12]{k}', '\\textcite{k}', '\\autocite[p.~2]{k}', '\\cites[a][b]{k1}[c][d]{k2}', '\\cite{a,b}', '\\Citet{k}',
+    ]
+    for (const f of forms) expect(body(`Words before ${f} and after.`).map(phs)).toEqual([[f]])
+    // a prenote that holds a group, and an angle inside it: the prenote closes outside every group
+    expect(body('As \\citeA<{\\em e.g.}, {a>b}>{k} said.').map(phs)).toEqual([['\\citeA<{\\em e.g.}, {a>b}>{k}']])
+    // no key after the angle: no prenote, the words around it prose as before
+    const plain = body('Shown by \\citet{k} that x <5 trials> in all.')
+    expect(plain.map(phs)).toEqual([['\\citet{k}']])
+    expect(textOf(plain[0] as Unit)).toContain('<5 trials> in all.')
+    expect(body('As \\citeyear <five runs> showed.').map(phs)).toEqual([['\\citeyear']])
+    expect(body('Both \\cites{a}{b} (see above) agree.').map(phs)).toEqual([['\\cites{a}{b}']])
+    expect(body('As \\textcites (that is) the rest.').map(phs)).toEqual([['\\textcites']])
   })
 })
 

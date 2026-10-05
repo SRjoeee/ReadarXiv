@@ -1,8 +1,10 @@
 // The reader's count of the passages its typesetting left in the original (UI.md S-P-60 in the reader; the maintainer's
 // ruling 6 of 2026-10-04, and the reviews' I-5, I-6 and N-5), in Chromium with the build, over three visits to one
-// paper of our own: sixty plain paragraphs and one that cites with apacite's prenote, whose key the control-word guard
-// cuts from its command (2610.02069's fault B), which the compile's safety net sets in the source while the rest is set
-// translated. Translated by an LLM endpoint on this machine that gives every segment back marked (reader-live.mjs's
+// paper of our own: sixty plain paragraphs and one that cites through a command of the paper's own whose argument in
+// angle brackets the walker does not read (xparse's d<>, as apacite's prenote was before the walker read it:
+// 2610.02069's fault B), its key sent as prose and cut from its command by the control-word guard, which the compile's
+// safety net sets in the source while the rest is set translated (compile-resilience-cases.mjs, 4, checks the fault
+// natively). Translated by an LLM endpoint on this machine that gives every segment back marked (reader-live.mjs's
 // LLM_MOCK). Each visit must count that one passage, in the capsule with no retry — nothing stopped, and the same
 // translation fails the same way:
 //   1. the first, which makes the copy;
@@ -29,8 +31,8 @@ let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
 
 const para = k => `Paragraph ${k} of the synthetic paper describes a model of the atmosphere and the way its parts interact over a season, with words enough to make a few lines of prose.`
-const cited = 'The last paragraph of the synthetic paper compares the result with earlier work \\cite<e.g.,>[p.~5]{key_one} and finds it holds.'
-const SRC = `\\documentclass{article}\n\\usepackage{apacite}\n\\title{A Synthetic Paper}\\author{A. Author}\n\\begin{document}\n\\maketitle\n${[...Array.from({ length: 60 }, (_, k) => para(k)), cited].join('\n\n')}\n\\bibliographystyle{apacite}\n\\bibliography{refs}\n\\end{document}\n`
+const cited = 'The last paragraph of the synthetic paper compares the result with earlier work \\compare<e.g.,>{key_one} and finds it holds.'
+const SRC = `\\documentclass{article}\n\\usepackage{apacite}\n\\NewDocumentCommand{\\compare}{d<>m}{\\IfValueT{#1}{#1~}\\cite{#2}}\n\\title{A Synthetic Paper}\\author{A. Author}\n\\begin{document}\n\\maketitle\n${[...Array.from({ length: 60 }, (_, k) => para(k)), cited].join('\n\n')}\n\\bibliographystyle{apacite}\n\\bibliography{refs}\n\\end{document}\n`
 rmSync(out, { recursive: true, force: true })
 mkdirSync(paperDir, { recursive: true })
 writeFileSync(join(paperDir, 'main.tex'), SRC)

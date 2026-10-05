@@ -131,5 +131,33 @@ for (const [where, files, bad] of [
   }
 }
 
+// 4. a citation is one placeholder (fault B): apacite's \cite<>[…]{key}, 2610.02069's Open Research sentence as it
+// stands, keeps its key whole in a translation, which sets with no error, halting, under both of Chinese's strategies.
+// And the fault the browser spikes break a unit with now (reader-in-source.mjs, reader-partial.mjs): a command of the
+// paper's own whose argument in angle brackets the walker does not read (xparse's d<>), its key sent as prose — the
+// translation halts in that unit alone, as 2610.02069's did before
+{
+  const BIB = '@misc{modified_code, author={Author, A.}, title={The code}, year={2026}}\n@article{key_one, author={One, A. and Two, B.}, title={An earlier work}, journal={J}, year={2001}}\n'
+  const OPEN = 'The code to reproduce the work in this paper is archived in a public repository \\cite<>[available at \\url{https://doi.org/10.5281/zenodo.21144536}]{modified_code}.'
+  const OWN = 'The last paragraph compares the result with earlier work \\compare<e.g.,>{key_one} and finds it holds.'
+  const doc = last => `\\documentclass{article}\n\\usepackage{apacite}\\usepackage{url}\n\\NewDocumentCommand{\\compare}{d<>m}{\\IfValueT{#1}{#1~}\\cite{#2}}\n\\begin{document}\n${PARAS(2)}\n\n${last}\n\n${PARAS(1)}\n\\nocite{modified_code,key_one}\n\\bibliographystyle{apacite}\n\\bibliography{refs}\n\\end{document}\n`
+  for (const [what, last, breaks] of [['apacite\'s \\cite<>[…]{modified_code}', OPEN, false], ['a command of the paper\'s own with an angle argument (the browser spikes\' fault)', OWN, true]]) {
+    const files = new Map([['main.tex', doc(last)], ['refs.bib', BIB]])
+    const name = breaks ? 'own' : 'open'
+    const original = compile(`cite-${name}-original`, new Map([...files].map(([p, t]) => [p, enc(t)])), { engine: 'pdflatex', halt: false })
+    const at = join(dir, `cite-${name}-original`), aux = readFileSync(join(at, 'main.aux'), 'latin1'), bbl = readFileSync(join(at, 'main.bbl'), 'utf8')
+    check(`${what}: the original sets with no error`, !/^! /m.test(original), original.match(/^! .*$/m)?.[0] ?? '')
+    const { paper, tr } = translated(files, s => s, -1)
+    const bad = paper.units.findIndex(u => /compare|repository/.test(JSON.stringify(u.pieces)))
+    for (const strategy of strategiesFor(paper.meta, 'zh')) {
+      const spans = {}, out = translationFiles(paper, tr, { strategy, fonts: null, draft: true, aux: citationLines(aux), bbl, spans })
+      const log = compile(`cite-${name}-${strategy.engine}`, new Map([...[...files].map(([p, t]) => [p, enc(t)]), ...out]), { engine: strategy.engine, halt: true })
+      const errors = texErrors(log), placed = unitsAtErrors(errors, out, spans.lines()).map(u => paper.units.indexOf(u))
+      if (breaks) check(`${what}, ${strategy.name}, halting: the failure placed in its unit alone`, errors.length > 0 && JSON.stringify(placed) === JSON.stringify([bad]), JSON.stringify({ placed, bad, errors: errors.slice(0, 2) }))
+      else check(`${what}, ${strategy.name}, halting: the translation sets with no error, the call as written`, !/^! /m.test(log) && /Output written on main\.(pdf|xdv)/.test(log) && new TextDecoder().decode(out.get('main.tex')).includes(OPEN.slice(OPEN.indexOf('\\cite'), -1)), log.match(/^! .*$/m)?.[0] ?? 'no output')
+    }
+  }
+}
+
 console.log(failed ? `${failed} failed (${dir})` : `all passed (${dir})`)
 process.exit(failed ? 1 : 0)

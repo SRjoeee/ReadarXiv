@@ -958,8 +958,9 @@ is only how it meets the rest of the extension.
   only with a new version of the reader, another service or another version of the paper (2610.02069: apacite's
   citations broke under babel given the original's `\bibcite` lines alone — a draft is given every citation line of the
   original's aux, for any key it cites, in its order (`citationLines`: apacite's `\APACbibcite`, harvard's, backref's)
-  —, and one citation's key went out as prose;
-  `experiments/pdf-bilingual/plans/2026-10-04-compile-resilience.md`). The
+  —, and one citation's key went out as prose, apacite's `\cite<>[…]{modified_code}`, whose prenote in angle brackets
+  the walker did not read: a citation is one placeholder with every argument it takes, the prenote among them
+  (`latex-front.mjs` `citationArgs`); `experiments/pdf-bilingual/plans/2026-10-04-compile-resilience.md`). The
   reader speaks the TeX page's protocol 2 and still serves a page of protocol 1: it names the engines and the CJK
   faces the visit will use, so that the page fetches them ahead;
   a compile whose files did not all arrive, or that the page itself failed (no log: an engine it could not bring up), is
