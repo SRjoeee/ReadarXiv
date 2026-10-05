@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { copyTexts, decideWrite, passagesInSource, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from '@/pdf-reader/engine/cache.mjs'
 import { citationLines, type Compiled, compilerKeeper, keptFor, openPaper, originalFiles, PIPELINE_VERSION, runLive, stoppedShort } from '@/pdf-reader/engine/live.mjs'
 import type { Marks } from '@/pdf-reader/engine/typeset/places.mjs'
+import { END_TEX } from '@/pdf-reader/engine/typeset/tex.mjs'
 
 // The reader's compiles with the typesetting rule (experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md,
 // "The compile sequence"; the evaluation's rulings in the F2 brief): the font probe with its width probe; the first
@@ -123,12 +124,13 @@ describe('the compile sequence with the typesetting rule', () => {
     expect(r.settled).toBe(true)
   })
 
-  it('an original whose log stops short gives no plan: today\'s setting, and the reason noted once', async () => {
+  it('an original whose log stops short is no original (live.mjs finished): no plan, today\'s setting, its failure noted', async () => {
     const t = translator(), n = paper().units.length
     const c = compiler(n, { on: k => { if (k === 'original') t.release() }, log: k => (k === 'original' ? linesLog(n).replace('AXT-END\n', '') : null) })
-    const { calls, notes } = await run({ compiler: c, translate: t.translate })
+    const { calls, notes, r } = await run({ compiler: c, translate: t.translate })
     expect(calls.some(q => q.ruled)).toBe(false)
-    expect(notes.filter(([e]) => e === 'typeset').map(([, d]) => d.missing)).toEqual(["the original's log, whole"])
+    expect(notes.filter(([e]) => e === 'original').map(([, d]) => d.ok)).toEqual([false])
+    expect([r.settled, r.original]).toEqual([true, null])
   })
 
   it('a TeX failure under the rule tries the same engine without it before the next strategy (ruling 6): a preview', async () => {
@@ -355,6 +357,29 @@ describe('a compile that stopped short of the document\'s end', () => {
     const step = (cmd: string, log: string) => `$ ${cmd}\nEXITCODE: 0\n\nLOG:\n${log}\n==\nSTDOUT:\n${log}\n==\nSTDERR:\n\n======`
     expect(stoppedShort([step('xelatex main.tex', STOP), step('xelatex main.tex', end)].join('\n\n'))).toBe(false)
     expect(stoppedShort([step('xelatex main.tex', end), step('xelatex main.tex', STOP), step('xdvipdfmx main.xdv', '')].join('\n\n'))).toBe(true)
+  })
+
+  it('every compile carries the end\'s line: the probe, the marked original, every preview, measure and final', async () => {
+    const t = translator(), n = paper().units.length, given: Req[] = []
+    const c = compiler(n, { on: k => { if (k === 'original') t.release() } }), base = c.compile
+    c.compile = async (q: Req) => { given.push(q); return base(q) }
+    await run({ compiler: c, translate: t.translate })
+    expect(new Set(given.map(kindOf))).toEqual(new Set(['probe', 'original', 'preview', 'final']))
+    // (with the line probes it stands twice in the file, and is set once: TeX checks its own mark, \\axtendhook)
+    for (const q of given) expect(main(q)).toContain(END_TEX)
+  })
+
+  it('one whose last pass never reached the end, without a fatal error to say so, is no translation either', async () => {
+    // the TeX page of 2026-09-22 took a pass halted at a TeX error for a success: each compile of the translation a PDF
+    // of the pages before the halt, the halted pass the last, its log with no AXT-END (2610.02069's previews and final)
+    const t = translator(), n = paper().units.length
+    t.release()
+    const halted = `${linesLog(3).replace('AXT-END\n', '')}! Missing $ inserted.\n<inserted text> \n                $\nl.40 \\cite<>[available at \\url{https://doi.org/10.5281/zenodo.1}]{ x _\n                 y }.\n\nOutput written on main.xdv (2 pages, 88144 bytes).\n`
+    const c = compiler(n, { log: k => (k === 'preview' || k === 'final' ? halted : null) })
+    const { r, notes } = await run({ compiler: c, translate: t.translate })
+    expect(notes.filter(([e]) => e === 'preview').map(([, d]) => d.ok)).not.toContain(true)
+    expect(notes.filter(([e]) => e === 'final').map(([, d]) => [d.ok, d.error])).toEqual(expect.arrayContaining([[false, '! Missing $ inserted.']]))
+    expect([r.previews, r.settled, r.exhausted, r.originalOk]).toEqual([0, false, true, true])
   })
 
   it('one that went past an error to the end is set, as before', async () => {
@@ -1003,8 +1028,20 @@ describe('a unit the log places the failure in is set in the source, and the com
   const text = (q: Req) => new TextDecoder().decode(q.overrides.get(q.main))
   /** the translator keeps each paragraph's number, so unit 7's translation is the one line that holds "T 7 T" */
   const numbered = async (texts: string[]) => texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, T), by: 'B' }))
-  /** TeX on unit 7's translation: an error at its line (halt: no PDF), or the error and a letter lost (nonstop) */
-  const breaking = (mode: 'halt' | 'nonstop') => {
+  /**
+   * The TeX page that 2610.02069's maintainer PDF came from (BusyTeX of 2026-09-22, before the TeX pass's own exit status
+   * was read): it took a pass halted at a TeX error for a success, and xdvipdfmx made a PDF of the pages set before the
+   * halt — the final's 18 pages of 22, its bibliography empty. Its answer as the replay logged it: each step's log joined
+   * (latex-front.mjs lastTexLog), the halted pass with its exit code 0, its log ending at the error and the pages it had
+   * shipped, no AXT-END; then xdvipdfmx's step
+   */
+  const stalePage = (halted: string) => [
+    `$ xelatex -synctex=1 --no-shell-escape --interaction=batchmode --halt-on-error --no-pdf main.tex\nEXITCODE: 0\n\nTEXMFLOG:\n\n==\nMISSFONTLOG:\n\n==\nLOG:\n${halted}I've inserted a begin-math/end-math symbol since I think\nyou left one out. Proceed, with fingers crossed.\n\n \nHere is how much of TeX's memory you used:\n 21858 strings out of 468191\nOutput written on main.xdv (18 pages, 245688 bytes).\n==\nSTDOUT:\nThis is XeTeX, Version 3.141592653-2.6-0.999998 (TeX Live 2026_texlyre_busytexwasm)\nentering extended mode\n==\nSTDERR:\nprogram exited (with status: 1), but keepRuntimeAlive() is set (counter=0) due to an async operation\n======`,
+    '$ xdvipdfmx -o main.pdf main.xdv\nEXITCODE: 0\n\nTEXMFLOG:\n\n==\nMISSFONTLOG:\n\n==\nLOG:\n\n==\nSTDOUT:\n\n==\nSTDERR:\nmain.xdv -> main.pdf\n[1][2][3][4][5][6][7][8][9][10][11][12][13][14][15][16][17][18]\n8371188 bytes written\n======',
+  ].join('\n\n')
+  /** TeX on unit 7's translation: an error at its line (halt: no PDF), the error and a letter lost (nonstop), or the
+   *  halt taken for a success by a stale TeX page (stale: a PDF of the pages before it, stalePage) */
+  const breaking = (mode: 'halt' | 'nonstop' | 'stale') => {
     const calls: { kind: string; has7: boolean }[] = []
     const compile = async (q: Req): Promise<Compiled> => {
       const kind = kindOf(q), lines = text(q).split('\n'), n = lines.findIndex(l => l.includes(`${T} 7 ${T}`)) + 1
@@ -1014,6 +1051,8 @@ describe('a unit the log places the failure in is set in the source, and the com
         const at = lines[n - 1] as string, k = at.indexOf(`${T} 7`) + 4
         const block = `! Missing $ inserted.\n<inserted text> \n                $\nl.${n} ${at.slice(Math.max(0, k - 30), k)}\n    ${at.slice(k, k + 30)}\n`
         if (mode === 'halt') return { ok: false, pdf: null, log: block, ms: 1 }
+        // the units before 7 measured, then the halt
+        if (mode === 'stale') return { ok: true, pdf: new Uint8Array([1]), aux: null, bbl: '\\begin{thebibliography}{}\n\n\\end{thebibliography}', log: stalePage(`${linesLog(7).replace('AXT-END\n', '')}${block}`), ms: 1 }
         return { ok: true, pdf: new Uint8Array([1]), aux: null, bbl: null, log: `${block}Missing character: There is no ${T[0]} (U+8BBA) in font cmmi10!\n${linesLog(12)}`, ms: 1 }
       }
       return { ok: true, pdf: new Uint8Array([calls.length]), aux: null, bbl: null, log: linesLog(12), ms: 1 }
@@ -1025,7 +1064,9 @@ describe('a unit the log places the failure in is set in the source, and the com
     const r = await runLive(p, { lang: 'zh', compile, translate: numbered, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(p.units.length), note: (e: string, d: Record<string, unknown> = {}) => notes.push([e, d]) })
     return { r, notes }
   }
-  for (const mode of ['halt', 'nonstop'] as const) {
+  // stale: the halt is a failure as the TeX page's own would be, and the safety net places it — 2610.02069's unit 99 on
+  // the stale page, where the run had shown and stored the 18 pages before it as the whole translation
+  for (const mode of ['halt', 'nonstop', 'stale'] as const) {
     it(`${mode}: unit 7 alone set in the source, said, and kept so in the record; the strategy kept`, async () => {
       const c = breaking(mode)
       const { r, notes } = await go(c.compile)

@@ -26,7 +26,7 @@ import { texErrors, unitsAtErrors } from './tex-errors.mjs'
 import { nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
 import { WIDTH_PROBE } from './typeset/density.mjs'
 import { finalTypesetting, previewTypesetting } from './typeset/plan.mjs'
-import { LINES_TEX } from './typeset/tex.mjs'
+import { completeLog, END_TEX, LINES_TEX } from './typeset/tex.mjs'
 
 /** The characters a compile could not set, as its log names them: a glyph a font lacks (TeX logs it and goes on) or a
  *  letter no encoding holds (LaTeX's error; pdfTeX goes on without it). By code point where the log gives one, so that
@@ -56,8 +56,14 @@ export const unsettable = (r, known = new Map()) => /^! Font .* not loadable/m.t
  *  the gates' native one, latexmk -f in nonstop mode — gave 2608.16117's Chinese final, three pages of forty, as set
  *  (its comment never ended: latex-front.mjs LINE_ENVS); the TeX page's BusyTeX halts on a TeX error, and gives none */
 export const stoppedShort = log => /^(?:! Emergency stop\.|! TeX capacity exceeded, sorry|\(That makes 100 errors; please try again\.\)|! This can't happen|! I can't go on meeting you like this)/m.test(lastTexLog(log))
-/** a compile that stopped short (stoppedShort) is one that failed, as the TeX page's is: its PDF not taken */
-const finished = r => (r.ok && stoppedShort(r.log) ? { ...r, ok: false, pdf: null } : r)
+/**
+ * A compile that did not finish is one that failed, as the TeX page's is: its PDF not taken. One that stopped short
+ * (stoppedShort), and one whose last pass never reached the document's end — every compile carries END_TEX, and only a
+ * pass that set the last page logs it (completeLog). A pass halted at a TeX error writes no such line, whatever the
+ * compiler made of it: a TeX page that took a halted pass's status for a success gave 2610.02069's final as the 18 pages
+ * set before the halt, its bibliography empty, every citation "(?, ?)", and the run stored it as whole (2026-10-05)
+ */
+const finished = r => (r.ok && (stoppedShort(r.log) || !completeLog(r.log)) ? { ...r, ok: false, pdf: null } : r)
 /** images as frames of their own size (graphicx's draft), each frame's corners marked — g<n>a and g<n>b at its left and
  *  right ends on its baseline, g<n>t at its top right, n counting \includegraphics in the order TeX runs them — so that
  *  the reader lays the left's figure over its frame (session.mjs leftFor). A transformed include (\rotatebox or
@@ -162,7 +168,7 @@ export function openPaper(files) {
 export function probeFiles({ fsys, project }, { width = false } = {}) {
   const text = latin1(fsys.read(project.main))
   const at = beginDocument(text)
-  return new Map([[project.main, latin1Bytes(`${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}\\end{document}\n`)]])
+  return new Map([[project.main, latin1Bytes(`${END_TEX}${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}\\end{document}\n`)]])
 }
 
 /** the original with unit marks, as its own engine sets it (images as frames change no place on the page); with
@@ -174,7 +180,7 @@ export function originalFiles({ fsys, project }, { lines = false, spans = null }
   const raw = spans ? [] : null
   const out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw })
   const patched = spans ? new Map(out) : null
-  const head = DRAFT + MARK_DEF + (lines ? LINES_TEX : '')
+  const head = DRAFT + MARK_DEF + END_TEX + (lines ? LINES_TEX : '')
   out.set(project.main, latin1Bytes(head + latin1(out.get(project.main))))
   if (spans) { let found = null; spans.lines = () => (found ??= unitLines(raw, patched, out, project.main, head.length)) }
   return out
@@ -207,7 +213,7 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
   const shim = xe && strategy.engine !== meta.compiler ? XETEX_SHIM + XETEX_SHIM_R1 : ''
   // what the strategy puts before \documentclass (scripts.mjs: a paper's own CJK packages kept from loading under xeCJK)
-  const head = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + shim
+  const head = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + END_TEX + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + shim
   main = head + (shim ? stripPdftexOption(main) : main)
   out.set(project.main, latin1Bytes(main))
   if (xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = stripPdftexOption(t); if (u !== t) out.set(f, latin1Bytes(u)) }

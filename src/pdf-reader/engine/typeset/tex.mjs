@@ -3,21 +3,25 @@
 // what a typeset plan adds to a compile of the translation (live.mjs translationFiles' `typeset`).
 import { lastTexLog, PARA_END_TEX } from '../latex-front.mjs'
 
+/** Once the last page is out, AXT-END in the log: the pass reached the document's end (completeLog). Every compile
+ *  carries it (live.mjs: the probe, the marked original, the translation), and the line probes too (LINES_TEX), set
+ *  once whichever comes first. A message alone: nothing typeset changes */
+export const END_TEX = String.raw`\ifdefined\AddToHook\ifdefined\axtendhook\else\let\axtendhook\relax\AddToHook{enddocument/afterlastpage}{\message{^^JAXT-END^^J}}\fi\fi
+`
 /** a unit's line count and leading at its paragraph's end (PARA_END_TEX), in the log. Through \message: \typeout
  *  reads \prevgraf as 0. A unit whose group closed with no paragraph gives none. No probe from restricted horizontal
  *  mode, where a caption is measured in an \hbox. And each column the output routine makes at a forced break
  *  (\outputpenalty -10000: \newpage, \clearpage's, \pagebreak; LaTeX's float passes run below it), as AXT-FORCED:
- *  where the text starts at a column's top whatever came before (readForced). And once the last page is out, AXT-END:
- *  the readings are the whole paper's (completeLog) */
+ *  where the text starts at a column's top whatever came before (readForced). And once the last page is out, AXT-END
+ *  (END_TEX): the readings are the whole paper's (completeLog) */
 export const LINES_TEX = PARA_END_TEX + String.raw`\makeatletter
 \def\axt@linescap#1{\expandafter\xdef\csname axt@lg@#1\endcsname{\the\prevgraf\space\the\baselineskip\space\f@size}}
 \def\axt@linesmsg#1{\message{^^JAXT-LINES #1 \csname axt@lg@#1\endcsname^^J}}
 \protected\def\axtlines#1{\ifhmode\ifinner\else\axt@lines{#1}\fi\else\axt@lines{#1}\fi}
 \def\axt@lines#1{\ifdefined\AddToHookNext\axt@whenover{lines#1}{\axt@linescap{#1}}{}{\axt@linesmsg{#1}}\fi}
 \AtBeginDocument{\let\axt@forcedcol\@makecol\def\@makecol{\ifnum\outputpenalty=-\@M\message{^^JAXT-FORCED^^J}\fi\axt@forcedcol}}
-\ifdefined\AddToHook\AddToHook{enddocument/afterlastpage}{\message{^^JAXT-END^^J}}\fi
 \makeatother
-`
+` + END_TEX
 
 /**
  * Each float waits for the page and column its original was set on (the owner, 2026-09-30: figures on the pages they
@@ -81,8 +85,9 @@ export const readForced = log => {
   for (const m of lastTexLog(log).matchAll(/^AXT-(?:FORCED|LINES (\d+))/gm)) if (!m[1]) broke = true; else if (broke) { out.add(Number(m[1])); broke = false }
   return out
 }
-/** whether a compile's last pass reached the document's end (LINES_TEX's AXT-END): a compile that stopped short gives a
- *  PDF of what it set and line readings for part of the paper, which the rule takes no plan from (plan.mjs) */
+/** whether a compile's last pass reached the document's end (END_TEX's AXT-END): a compile that stopped short gives a
+ *  PDF of what it set and line readings for part of the paper, which the rule takes no plan from (plan.mjs) and the run
+ *  takes for a failure (live.mjs finished) */
 export const completeLog = log => /^AXT-END$/m.test(lastTexLog(log))
 /** each unit's lines, leading (pt) and size (pt) at its paragraph's end (LINES_TEX), by unit index */
 export const readLines = log => new Map([...lastTexLog(log).matchAll(/^AXT-LINES (\d+) (\d+) ([\d.]+)pt(?: ([\d.]+))?/gm)].map(m => [Number(m[1]), { lines: Number(m[2]), bs: Number(m[3]), ...(m[4] ? { size: Number(m[4]) } : {}) }]))

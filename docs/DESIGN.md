@@ -924,9 +924,14 @@ is only how it meets the rest of the extension.
   lines follows the `\begin` or `\end` of an environment TeX reads line by line — verbatim's kind, listings',
   comment.sty's, the paper's own found in its files (`latex-front.mjs` `LINE_ENVS`) —, and no table holding one is
   fitted: comment.sty ends its environment only at a line that is its `\end` and nothing more, and a line probe written
-  after 2608.16117's kept its comment open to the end of the file, the paper after it lost. A compile that stopped
-  short of the document's end is no translation, whatever PDF it left: XeTeX ships the pages it set before a fatal
-  error, and a compiler that gives what it made took them as set (BusyTeX halts on a TeX error and gives none). A
+  after 2608.16117's kept its comment open to the end of the file, the paper after it lost. A compile whose last
+  pass did not reach the document's end is no translation, whatever PDF it left and whatever the compiler said of it:
+  every compile carries a line that pass logs once the last page is out (`typeset/tex.mjs` `END_TEX`, a message alone,
+  which changes nothing typeset), and a pass without it failed — one stopped by a fatal error, after which XeTeX ships
+  the pages it set and a compiler that gives what it made took them as set, or one halted at a TeX error that the
+  compiler reported as a success (a TeX page of 2026-09-22, its BusyTeX before the TeX pass's own exit status was read,
+  gave 2610.02069's final as the 18 pages of 22 before the halt, its bibliography empty and every citation "(?, ?)").
+  The deployed TeX page halts on a TeX error and gives no PDF, so no compile that set the paper changes. A
   compile of the translation that TeX fails is tried again before the chain moves on, one remedy a compile, the least
   lost first, wherever it fails (a preview, the measure, the final): without the typesetting rule's TeX, without
   EVEN_SPACES' microtype, without the references the run gives a draft or the final (not for an error TeX raised before
