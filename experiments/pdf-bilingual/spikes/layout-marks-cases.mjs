@@ -68,6 +68,8 @@ const STAY = {
   'a macro with \\xspace after its argument': doc('\\usepackage{xspace}\\newcommand\\code[1]{\\texttt{#1}\\xspace}', `${prose(24, i => [' \\code{X} is', ' \\code{Y}.', ' \\code{Z}, then', ' \\code{a}\\footnote{x} and'][i % 4])}`),
   'a macro reading \\@ifnextchar[ after its argument': doc('\\makeatletter\\newcommand\\opt[1]{\\texttt{#1}\\@ifnextchar[\\opt@x{}}\\def\\opt@x[#1]{(#1)}\\makeatother', `${prose(24, i => (i % 2 ? ' \\opt{a} then' : ' \\opt{b}[c] and'))}`),
   'todonotes [disable], \\nocite and \\marginpar': doc('\\usepackage[disable]{todonotes}', `${prose(24, i => [' more \\todo{x} words', ' see \\nocite{a} then', ' then \\marginpar{note} then', ' and \\todo{y} $z$'][i % 4])}\n\n${BIB}`),
+  // LaTeX's \\) reads nothing after it: an inline formula of \\( \\) keeps its closing mark, as one of $ $
+  'an inline formula of \\( \\)': doc('', `${prose(24, i => [' \\(x_{' + i + '}\\) is', ' \\(y\\).', ' \\(z\\), then', '~\\(w\\) and'][i % 4])}`),
   'a macro that ends in leaders': doc('\\newcommand\\fillto[1]{#1\\dotfill}', `\\noindent\\fillto{Entry} $3$\n\n\\noindent\\fillto{Other entry} \\cite{a}\n\n${prose(6, () => '')}\n${BIB}`),
   'fnpct, a full stop after a footnote\'s call': doc('\\usepackage{fnpct}', `${prose(16, i => (i % 2 ? ' word\\footnote{One.}. And' : ' more\\footnote{Two.}, then'))}`),
   // an italic word's correction before \\eqref's \\textup, under each engine: XeTeX's word is a whatsit (review I2)
@@ -188,6 +190,11 @@ for (const [name, , engine] of stays) {
   }
 }
 
+{
+  const inline = await pdfOf(`${stayKey('an inline formula of \\( \\)', 'pdflatex')}-v1`)
+  const closing = [...(inline?.dests.keys() ?? [])].filter(k => /^p\d+\.\d+b$/.test(k)).length
+  check('an inline formula of \\( \\) has its closing marks', closing >= 18, JSON.stringify({ closing }))
+}
 {
   const lof = await pdfOf('lof-v1')
   const n = lofPaper.units.findIndex(u => u.kind === 'caption')
