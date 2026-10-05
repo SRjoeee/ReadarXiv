@@ -13,6 +13,9 @@ export declare function openPaper(files: Map<string, Uint8Array>): Paper
 export declare function translationFiles(paper: Paper, translated: Map<SourceUnit, unknown[]>, options: { strategy: Pick<Strategy, 'engine' | 'pre'> & Partial<Strategy>; fonts: unknown; draft?: boolean; aux?: string | null; bbl?: string | null; typeset?: Typeset | null; evenSpaces?: boolean; spans?: { lines?: () => import('./tex-errors.mjs').UnitLines<SourceUnit>[] } | null; note?: (event: string, data: unknown) => void }): Map<string, Uint8Array>
 /** the reader's versions: the translation's (what a unit is and what is sent for it) and the typesetting's */
 export declare const PIPELINE_VERSION: string
+/** the earlier pipelines whose copies carry their translations over into this one, unit by unit, with the test each
+ *  translation's pieces must pass (cache.mjs copyReuse) */
+export declare const PIPELINE_CARRIES: Record<string, (pieces: unknown[]) => boolean>
 export declare const TYPESETTING_VERSION: string
 /** the font probe; with `width`, the width and size probes the typesetting rule measures the face by */
 export declare function probeFiles(paper: Paper, options?: { width?: boolean }): Map<string, Uint8Array>

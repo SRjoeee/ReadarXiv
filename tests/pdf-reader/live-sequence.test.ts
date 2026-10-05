@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { copyTexts, decideWrite, passagesInSource, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from '@/pdf-reader/engine/cache.mjs'
-import { citationLines, type Compiled, compilerKeeper, keptFor, openPaper, originalFiles, PIPELINE_VERSION, runLive, stoppedShort } from '@/pdf-reader/engine/live.mjs'
+import { copyReuse, copyTexts, decideWrite, passagesInSource, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from '@/pdf-reader/engine/cache.mjs'
+import { citationLines, type Compiled, compilerKeeper, keptFor, openPaper, originalFiles, PIPELINE_CARRIES, PIPELINE_VERSION, runLive, stoppedShort } from '@/pdf-reader/engine/live.mjs'
 import type { Marks } from '@/pdf-reader/engine/typeset/places.mjs'
 import { END_TEX } from '@/pdf-reader/engine/typeset/tex.mjs'
 
@@ -230,11 +230,11 @@ describe('a copy made by another pipeline', () => {
     const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: async texts => texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
     const hashes = await Promise.all(p.units.map(u => sourceHash(u)))
     const record = JSON.parse(JSON.stringify({ pipeline, format: 'markers', marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), hashes, r0.results) }))
-    // as session.mjs reads it: the copy's units are this run's only on this pipeline
-    const sameUnits = record.pipeline === PIPELINE_VERSION
+    // as session.mjs reads it: the copy's translations are this run's on this pipeline, or unit by unit on one that
+    // carries over into it (cache.mjs copyReuse)
     const { seed } = await seedFrom(record, p.units)
     const sent: string[] = []
-    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: async texts => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }, format: 'markers', marks: new Map(record.marks), identity: 'B', seed: reusable(seed, { identity: 'B', copyWire: sameUnits && record.format === 'markers' }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: async texts => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }, format: 'markers', marks: new Map(record.marks), identity: 'B', seed: reusable(seed, { identity: 'B', ...copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: undefined, carries: PIPELINE_CARRIES }) }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
     return { sent, seeded: seed.size, r, units: p.units.length - keptFor(p, 'zh').size }
   }
   it('on this pipeline: no unit sent again', async () => {
@@ -242,10 +242,68 @@ describe('a copy made by another pipeline', () => {
     expect(sent).toEqual([])
     expect(r.settled).toBe(true)
   })
-  it('on another: every unit seeded by its source and sent again all the same', async () => {
+  it('on another that carries nothing over: every unit seeded by its source and sent again all the same', async () => {
     const { sent, seeded, units } = await visit(`${PIPELINE_VERSION}-before`)
     expect(seeded).toBe(units)
     expect(sent).toHaveLength(units)
+  })
+})
+
+// A copy made under pipeline 7, reopened under 8 (the maintainer's ruling 3 of the compile-resilience plan: a pipeline
+// bump sends nothing again for a unit whose source did not change). 8 cut two kinds of unit anew — a citation with
+// apacite's notes (fix 2), a word with an accent (fix 4) — and reads a marker's `#` doubled or displaced with its marker
+// (fix 3), which 7 had set as text. Only those units are sent; every other unit's translation is taken as the copy has it
+describe('a copy made under pipeline 7, reopened under 8', () => {
+  const T = '\u8bba\u6587'
+  const source = (paras: string[]) => `\\documentclass{article}\\begin{document}\n${paras.join('\n\n')}\n\\end{document}\n`
+  const PLAIN = Array.from({ length: 8 }, (_, k) => `Paragraph ${k} of the paper, with words that run on for a line or two of prose and an end.`)
+  const ACCENT = 'Years of the quasi-biennial oscillation and El Ni{\\~n}o southern oscillations, which act on many timescales.'
+  const CITE = 'The code to reproduce the work is archived in a public repository \\cite<>[available at \\url{https://doi.org/10.5281/zenodo.21144536}]{modified_code}.'
+  const FIG = 'The principal axes, shown in Fig.~\\ref{fig:pca}, are defined for each model.'
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, T), by: 'B' })) }
+  /** the two units 8 cuts anew, in the shape 08db9f43's walker cut them (the accent and its group three pieces; the
+   *  citation alone, its notes and key text): their hashes in a copy of 7 are not the units' now */
+  const SEVEN: Record<string, unknown[]> = {
+    [ACCENT]: [{ t: 'text', s: 'Years of the quasi-biennial oscillation and El Ni' }, { t: 'open', id: 1, src: '{' }, { t: 'ph', src: '\\~n' }, { t: 'close', id: 1, src: '}' }, { t: 'text', s: 'o southern oscillations, which act on many timescales.' }],
+    [CITE]: [{ t: 'text', s: 'The code to reproduce the work is archived in a public repository ' }, { t: 'ph', src: '\\cite' }, { t: 'text', s: '<>[available at ' }, { t: 'ph', src: '\\url{https://doi.org/10.5281/zenodo.21144536}' }, { t: 'text', s: ']' }, { t: 'open', id: 1, src: '{' }, { t: 'text', s: 'modified' }, { t: 'ph', src: '_' }, { t: 'text', s: 'code' }, { t: 'close', id: 1, src: '}' }, { t: 'text', s: '.' }],
+  }
+  /** a copy of `paras` as pipeline 7 left it: every unit translated by B, the two cut anew under their 7 cutting, and
+   *  the figure's translation with the `#` 7's reading back left of Microsoft's `@a#@b##` */
+  const copyOf7 = async (paras: string[]) => {
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode(source(paras))]])), n = p.units.length
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const hashes = await Promise.all(p.units.map((u, i) => (SEVEN[paras[i] ?? ''] ? sourceHash({ ...u, pieces: SEVEN[paras[i] ?? ''] } as never) : sourceHash(u))))
+    // the figure's translation with a `\#` after its reference, where 7 read Microsoft's `@a#@b##`
+    const stray = (pieces: unknown[]) => pieces.map((x, k) => { const q = x as { t: string; tr?: boolean; s?: string }; return q.t === 'text' && q.tr && (pieces[k - 1] as { src?: string })?.src === '\\ref{fig:pca}' ? { ...q, s: `\\#${q.s}` } : x })
+    const units = unitsOf(p.units, keptFor(p, 'zh'), hashes, r0.results).map((u, i) => (paras[i] === FIG && u.pieces ? { ...u, pieces: stray(u.pieces) } : u))
+    expect(JSON.stringify(units[paras.indexOf(FIG)]?.pieces)).toContain('\\\\#')
+    return { p, n, record: JSON.parse(JSON.stringify({ pipeline: '7', format: 'markers', context: {}, marks: [['0s', {}]], units })) }
+  }
+  const reopen = async (paras: string[], context: Record<string, string> = {}) => {
+    const { p, n, record } = await copyOf7(paras)
+    const { seed } = await seedFrom(record, p.units)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context, carries: PIPELINE_CARRIES }) }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    return { r, sent, units: p.units.length - keptFor(p, 'zh').size }
+  }
+
+  it('sends the units fixes 2–4 change, three of eleven, and takes the other eight as the copy has them', async () => {
+    const { r, sent, units } = await reopen([...PLAIN.slice(0, 3), ACCENT, PLAIN[3] as string, CITE, PLAIN[4] as string, FIG, ...PLAIN.slice(5)])
+    expect(units).toBe(11)
+    expect(sent).toEqual([
+      'Years of the quasi-biennial oscillation and El Niño southern oscillations, which act on many timescales.',
+      'The code to reproduce the work is archived in a public repository @a#.',
+      'The principal axes, shown in Fig. @a#@b#, are defined for each model.',
+    ].map(t => expect.stringContaining(t)))
+    expect(sent).toHaveLength(3)
+    expect(r.settled).toBe(true)
+  })
+
+  it('carries nothing over for another paper\'s context, nor from a pipeline that has no test (6)', async () => {
+    const paras = [...PLAIN.slice(0, 3), ACCENT, CITE, FIG]
+    expect((await reopen(paras, { paperTitle: 'Another title' })).sent).toHaveLength(6)
+    expect(copyReuse({ pipeline: '6', format: 'markers', context: {} }, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })).toEqual({ copyWire: false, carry: null })
+    expect(copyReuse({ pipeline: '7', format: 'tags', context: {} }, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })).toEqual({ copyWire: false, carry: null })
   })
 })
 

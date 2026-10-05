@@ -90,10 +90,28 @@ export function seedAgain(seed, made) {
  * made by this translation pipeline in this wire format (`copyWire`) — the same pipeline cuts the same units and writes
  * the same wire for the same source, which its hash matched. Any other seed is sent again, its translation shown meanwhile
  */
-export function reusable(seed, { identity, copyWire, made = null }) {
+export function reusable(seed, { identity, copyWire, carry = null, made = null }) {
   const out = new Map()
-  for (const [i, s] of seed ?? []) out.set(i, { ...s, current: s.state === 'whole' && !!s.pieces && s.by === identity && (copyWire || !!made?.get(i)?.pieces) })
+  for (const [i, s] of seed ?? []) out.set(i, { ...s, current: s.state === 'whole' && !!s.pieces && s.by === identity && (copyWire || !!carry?.(s.pieces) || !!made?.get(i)?.pieces) })
   return out
+}
+
+/**
+ * How much of a copy's translation is taken as it is (reusable), the copy matched to this run's units by their source
+ * (seedFrom): all of it where the copy was made by this pipeline in this wire format (`copyWire`); unit by unit where it
+ * was made by an earlier pipeline that carries over into this one (`carries`, live.mjs PIPELINE_CARRIES), in this wire
+ * format and for the same paper's context, each translation by that pipeline's test of its pieces (`carry`); else none.
+ * A carried unit is one whose source pieces are the same — its hash —, and so the wire and the cuts sent for it: what
+ * the translation is of. Its translation is sent again only where the test refuses it, and a unit the new pipeline cuts
+ * otherwise has a new hash, no seed, and is sent as a new text, the background's cache keyed by that text (src/cache/
+ * key.ts, which holds no version of the reader's). The context goes into an LLM's prompt and its cache key: another one,
+ * nothing carries over. The left side's marks, the original's readings and the compile stay the pipeline's own
+ */
+export function copyReuse(cached, { pipeline, format, context, carries = {} }) {
+  if (!cached || cached.format !== format) return { copyWire: false, carry: null }
+  if (cached.pipeline === pipeline) return { copyWire: true, carry: null }
+  const test = Object.hasOwn(carries, cached.pipeline) ? carries[cached.pipeline] : null
+  return { copyWire: false, carry: test && JSON.stringify(cached.context ?? {}) === JSON.stringify(context ?? {}) ? test : null }
 }
 
 /**

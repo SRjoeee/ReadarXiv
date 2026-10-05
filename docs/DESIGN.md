@@ -901,8 +901,16 @@ is only how it meets the rest of the extension.
   IndexedDB of their own (`src/cache/pdf-store.ts`), capped at 500 MB with the least recently opened going first. A
   copy's units always describe its own PDF: a run that typesets nothing writes only who made and tried each unit, and
   only where every unit's text is the one the stored PDF sets; a run again after a run whose final never reached the
-  screen (the TeX page down) compiles its own final rather than write that run's translation over the old PDF. The
-  settings page counts them and clears them (UI.md S-O-73).
+  screen (the TeX page down) compiles its own final rather than write that run's translation over the old PDF. **A new
+  pipeline voids only what its change reaches**, §5.5's rule taken unit by unit: a copy is matched to the units by their
+  source, and its translations are taken as they are where it was made by this pipeline, or by an earlier one that
+  carries over into it (`live.mjs` `PIPELINE_CARRIES`, `cache.mjs` `copyReuse`) — in the same wire format and for the
+  same paper's context, each translation by that pipeline's test of what it made of the answer. A unit whose source
+  pieces are unchanged is sent the same wire and cuts as before, and one a pipeline cuts anew has a new hash and is
+  sent as the new text it is, the background's cache keyed by that text (§9; the key holds no version of the reader's);
+  the left side's marks, the original's readings and the compile stay the pipeline's own. Pipeline 8 over a copy of 7
+  of 2610.02069: 4 of its 103 units sent again — the two cut anew, the two whose translation held 7's stray `#` —
+  where every one had been. The settings page counts them and clears them (UI.md S-O-73).
 - **Typesetting** runs in a TeX page outside the extension (BusyTeX): our site's, `https://tex.readarxiv.org`, in a
   production build, and one on this machine in development (`addresses.mjs` `TEX_PAGE`, a build setting). No
   reader-facing word names it (UI.md §3.5). The translation is set by the Flow rule (`src/pdf-reader/engine/typeset/`;

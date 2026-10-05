@@ -278,8 +278,8 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
  * - PIPELINE_VERSION, the translation's: raised with any change to what a unit is or what is sent for it and made of
  *   the answer — the units' cutting, kinds and texts (latex-front), the wire and its reading back (mt), paperContext(),
  *   the left side's marks. A record of another version is translated again, its translations shown meanwhile (session.mjs
- *   seedFrom); one of this version gives its whole units by the identity that would answer now as they are (cache.mjs
- *   reusable).
+ *   seedFrom), but for the units a version that carries over into this one leaves as they were (PIPELINE_CARRIES); one
+ *   of this version gives its whole units by the identity that would answer now as they are (cache.mjs reusable).
  * - TYPESETTING_VERSION: raised with any change to how a compile sets a translation it is given — latex-front's TeX,
  *   the scripts' strategies, the fonts, the typesetting rule (typeset/), the TeX tree. A record of another version is
  *   compiled again from its translation; a paper none of the ways could set is tried again.
@@ -310,9 +310,22 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 //    the marker (mt.mjs rehydrate) — "El Ni ñ#", "Figure 10#" in its Chinese, a copy's pieces holding the `#` as
 //    text —; and an accent inside a word its letter in the word's text, the accent as written wherever the source is
 //    set (latex-front.mjs accentLetter) — El Ni{\~n}o went out as `El Ni @d#@e#@f# o`; 267 units in 40 of the
-//    corpus's 124 papers hold such a word. A copy of 7 has every unit sent again on its next visit, its translation shown
-//    meanwhile, the background's cache answering what it still holds
+//    corpus's 124 papers hold such a word. A copy of 7 carries its other units over (PIPELINE_CARRIES)
 export const PIPELINE_VERSION = '8'
+/**
+ * The earlier pipelines whose copies carry their translations over into this one, unit by unit (cache.mjs copyReuse),
+ * each with the test a unit's translation, its pieces, must pass: DESIGN §5.5's rule for the HTML page's cache, here per
+ * unit — a version voids only what its change can reach. A unit whose source pieces are what they were (its hash) is
+ * sent the same wire and cuts as before; one a pipeline cuts otherwise has a new hash and no seed, and is sent as the new
+ * text it is. What is left to judge is what the pipeline makes of the answer, from the pieces a copy keeps (it keeps no
+ * reply). A pipeline that changes the wire for the same pieces, or what an answer is read as in a way its pieces do not
+ * show, carries nothing over: it has no entry.
+ * - 7: its reading back set a marker's `#` doubled or displaced as text, which this pipeline's takes with the marker
+ *   (mt.mjs rehydrate); TeX's `#` is never the text's own (`\#` and a bare `#` are placeholders), so a translation whose
+ *   text holds no `\#` was read back as this pipeline reads it, its sentences too. Units of 7 that fix 2 or 4 cut anew
+ *   (a citation's notes, an accent in a word) have new hashes
+ */
+export const PIPELINE_CARRIES = { 7: pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#')) }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a

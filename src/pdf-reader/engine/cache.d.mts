@@ -2,7 +2,7 @@
 import type { SourceUnit } from './latex-front.mjs'
 
 /** a stored copy's units: each unit's kind, source text and hash, a heading's depth and whether it is the title, and what the run made of it */
-export declare function unitsOf(units: SourceUnit[], kept: Set<SourceUnit>, hashes: string[], results: Map<number, unknown>): { kind: string; src: string; hash: string; title?: boolean; depth?: number; lead?: string; trail?: string; inner?: string; tr?: string; sentences?: { src: number[]; tr: number[] }; state: string; inSource?: true }[]
+export declare function unitsOf(units: SourceUnit[], kept: Set<SourceUnit>, hashes: string[], results: Map<number, unknown>): { kind: string; src: string; hash: string; title?: boolean; depth?: number; lead?: string; trail?: string; inner?: string; pieces?: unknown[]; tr?: string; sentences?: { src: number[]; tr: number[] }; by?: string; tried?: string; state: string; inSource?: true }[]
 /** the seed for a paper's units from a stored copy, matched by their source's hash, and the hashes */
 export declare function seedFrom(record: { units: unknown[] }, units: SourceUnit[]): Promise<{ seed: Map<number, { pieces: unknown[]; by?: string; tried?: string; state: string; sentences?: { src: number[]; tr: number[] }; inSource?: true }>; hashes: string[] }>
 /** a run again's seed: the copy's, with what the visit's last run made (its results) over it, sentences included */
@@ -22,7 +22,10 @@ export declare function passagesInSource(units: ({ kind?: string; inSource?: boo
 /** how a run whose final none of the ways could set ends for the reader: S-R-17, S-R-19, or nothing more */
 export declare function endOf(result: { exhausted?: boolean; stopped?: string | null; shownPartial?: boolean | null }, visit: { compiledOnce: boolean; finalShown: boolean; cached: boolean }): 'cannot typeset' | 'shown in part' | null
 /** the seeds a run takes as they are (`current`): whole, by `identity`, of the wire sent now — the visit's last run's, or the copy's when `copyWire` */
-export declare function reusable<S extends { pieces?: unknown[]; state?: string; by?: string }>(seed: Map<number, S> | null | undefined, options: { identity: string; copyWire: boolean; made?: Map<number, { pieces?: unknown[] }> | null }): Map<number, S & { current: boolean }>
+export declare function reusable<S extends { pieces?: unknown[]; state?: string; by?: string }>(seed: Map<number, S> | null | undefined, options: { identity: string; copyWire: boolean; carry?: ((pieces: unknown[]) => boolean) | null; made?: Map<number, { pieces?: unknown[] }> | null }): Map<number, S & { current: boolean }>
+/** how much of a copy's translation is taken as it is: all of a copy of this pipeline, unit by unit one of a pipeline
+ *  that carries over (live.mjs PIPELINE_CARRIES), in the same wire format and context */
+export declare function copyReuse(cached: { pipeline: string; format: string; context?: unknown } | null | undefined, now: { pipeline: string; format: string; context?: unknown; carries?: Record<string, (pieces: unknown[]) => boolean> }): { copyWire: boolean; carry: ((pieces: unknown[]) => boolean) | null }
 /** SHA-256 hex of a unit's source pieces */
 export declare function sourceHash(u: SourceUnit): Promise<string>
 
