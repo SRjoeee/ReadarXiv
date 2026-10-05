@@ -18,5 +18,7 @@ export declare function localizeNames(text: string): string
 export declare function lineBreaks<P>(unit: { kind: string; title?: boolean }, pieces: P[]): P[]
 /** a compile's log as its last TeX pass wrote it: the browser compiler's joined log cut to that pass, a native .log as it is */
 export declare const lastTexLog: (log: string | null | undefined) => string
+/** the declarations that take no argument (\centering, \small, \quad …): a brace group after one is a group of its own */
+export declare const NO_ARG_COMMANDS: ReadonlySet<string>
 /** TeX for the unit marks (\axtmark, \axtend) and each page's columns as named destinations */
 export declare const MARK_DEF: string
