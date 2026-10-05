@@ -7,7 +7,8 @@ export interface Strategy { name: string; engine: string; xe: boolean; leading?:
 export declare function strategiesFor(meta: { compiler?: string }, lang: string): Strategy[]
 /** whether the author block's names and places are translated into `lang` */
 export declare function authorsTranslated(lang: string): boolean
-/** the script a BCP 47 tag is written in (its likely script) */
-export declare function scriptOf(lang: string): string
+// the script of a language and the layer's per-script rules (layer-rules.mjs), re-exported
+export { LAYER_DIVERGES, LAYER_RULES, layerRulesFor, scriptOf } from './layer-rules.mjs'
+export type { LayerRules } from './layer-rules.mjs'
 /** the CJK scripts' typesetting (their faces, spacing and leading), by script */
 export declare const CJK: Record<string, unknown>
