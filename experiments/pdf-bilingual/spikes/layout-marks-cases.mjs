@@ -63,6 +63,13 @@ const STAY = {
   // leaders before a placeholder: a mark taking the glue off and putting it back would put back plain glue, the dots gone
   // (\\dotfill ends in \\kern\\z@, which guards its leaders from an \\unskip)
   'leaders before a formula': doc('', `\\noindent Total\\dotfill{} $0$\n\n\\noindent Total 0\\dotfill{} $0$\n\n\\noindent Sum \\hrulefill\\ $x$ and \\dotfill \\cite{a}\n\n${prose(6, () => '')}\n${BIB}`),
+  // a paper's macro looks ahead past its own argument, at what a closing mark would be (review C1): \\xspace, \\@ifnextchar,
+  // \\@esphack's \\ignorespaces (todonotes [disable], \\nocite, \\marginpar); the next placeholder's opening mark too
+  'a macro with \\xspace after its argument': doc('\\usepackage{xspace}\\newcommand\\code[1]{\\texttt{#1}\\xspace}', `${prose(24, i => [' \\code{X} is', ' \\code{Y}.', ' \\code{Z}, then', ' \\code{a}\\footnote{x} and'][i % 4])}`),
+  'a macro reading \\@ifnextchar[ after its argument': doc('\\makeatletter\\newcommand\\opt[1]{\\texttt{#1}\\@ifnextchar[\\opt@x{}}\\def\\opt@x[#1]{(#1)}\\makeatother', `${prose(24, i => (i % 2 ? ' \\opt{a} then' : ' \\opt{b}[c] and'))}`),
+  'todonotes [disable], \\nocite and \\marginpar': doc('\\usepackage[disable]{todonotes}', `${prose(24, i => [' more \\todo{x} words', ' see \\nocite{a} then', ' then \\marginpar{note} then', ' and \\todo{y} $z$'][i % 4])}\n\n${BIB}`),
+  'a macro that ends in leaders': doc('\\newcommand\\fillto[1]{#1\\dotfill}', `\\noindent\\fillto{Entry} $3$\n\n\\noindent\\fillto{Other entry} \\cite{a}\n\n${prose(6, () => '')}\n${BIB}`),
+  'fnpct, a full stop after a footnote\'s call': doc('\\usepackage{fnpct}', `${prose(16, i => (i % 2 ? ' word\\footnote{One.}. And' : ' more\\footnote{Two.}, then'))}`),
   'a word glued to a formula or a footnote\'s call, never hyphenated': doc('\\usepackage[margin=6.5cm]{geometry}', `${prose(30, i => [' representations$x_{' + i + '}$', ' characterization\\footnote{N.}', ' considerably$y$ is', ' experimentally\\footnotemark{} and'][i % 4])}`),
 }
 

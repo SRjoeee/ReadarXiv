@@ -6,8 +6,9 @@
 // The marks are TeX put into every paper's original, and a mark that moves a line moves the readings the typesetting
 // rule takes from it. So each is written to move nothing: a mark before a placeholder is set against the word before
 // it, the space and tie after that word put back (cite.sty's \unskip and its penalty test see them as before); none is
-// set in a contents list, a list of figures or the output routine's running heads (the gate); none goes after a control
-// word, whose following spaces TeX skips and which may look ahead; and none is written to a file or a PDF string, so the
+// set in a contents list, a list of figures or the output routine's running heads (the gate); none goes after a paper's
+// macro or a footnote's call, which may look at what follows, nor after a control word, whose following spaces TeX
+// skips; and none is written to a file or a PDF string, so the
 // aux, the lists and the bookmarks are byte for byte the paper's. The native cases (experiments/pdf-bilingual/spikes/
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) switches off a class
 // that moves a line of any paper.
@@ -151,19 +152,22 @@ export const MARK_NAME = /^(?:\d+[se]|c[12]-\d+|[th]\d+[se]|[pn]\d+\.\d+[ab]|g\d
 /** patch's own test of the pieces that are always set on the line, where a unit's start mark goes before one that opens
  *  the unit (latex-front.mjs INLINE: kept equal, which layout-marks.test.ts holds against patch itself) */
 const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]ref)(?![A-Za-z]))/
-const WORD_END = /[\p{L}\p{N}]$/u, WORD_START = /^[\p{L}\p{N}]/u
-/** a control word alone, with a star and an empty group: a macro's call that takes no argument */
-const SOLE = /^\\[A-Za-z@]+\*?(\{\})?$/
+const WORD_END = /[\p{L}\p{N}]$/u
 /** a source that ends an environment: \end skips the spaces after it where the environment says so (a display's,
  *  subequations' after a \label: 2608.12255), and a mark is the first thing it would not skip */
 const ENDS_ENV = /\\end\s*\{[^{}]*\}\s*$/
-/** a source that ends in a control word: TeX skips the spaces after it, and a macro of it may look ahead */
-const ENDS_IN_WORD = /\\[A-Za-z@]+\*?$/
-/** a placeholder after which no mark goes, the next placeholder's neither: a paper's macro that ends in a control word
- *  (\xspace in it looks at what follows, and takes a footnote's call, or not, for the end of the phrase), \xspace itself,
- *  and a prefix that applies to the next token (\protect\eqref: a mark between them takes the \protect, and is written
- *  to the list of figures as itself, 2608.23586) */
-const LOOKS_AHEAD = p => p?.t === 'ph' && ENDS_IN_WORD.test(p.src ?? '') && (classOf(p) === 'macro' || /\\(?:xspace\*?|protect|noexpand|expandafter|string|unexpanded|detokenize|global|long|outer|protected|immediate)$/.test(p.src))
+/** a source that ends in a control sequence: TeX skips the spaces after a control word, and a macro of either may look
+ *  ahead. Not LaTeX's \), which reads nothing after it */
+const ENDS_IN_CS = /\\(?:[A-Za-z@]+\*?|[^A-Za-z@)])$/
+/** a placeholder whose macro may look at what follows it: a paper's macro (\xspace, \@ifnextchar[ after its argument;
+ *  \@esphack's \ignorespaces after \todo, \nocite, \marginpar), a footnote's call (fnpct's \footnote moves the
+ *  punctuation after it), \xspace itself, and a prefix that applies to the next token (\protect\eqref: a mark between
+ *  them takes the \protect, and is written to the list of figures as itself, 2608.23586). It gets no closing mark, and
+ *  the piece right after it no mark at all, which its macro would see in that piece's place */
+const LOOKS_AHEAD = p => {
+  const cls = classOf(p)
+  return cls === 'macro' || cls === 'footnote' || (p?.t === 'ph' && /\\(?:xspace\*?|protect|noexpand|expandafter|string|unexpanded|detokenize|global|long|outer|protected|immediate)$/.test(p.src ?? ''))
+}
 
 /**
  * Where a unit's start mark goes, as patch places it: the first piece at or after it, from `from`. The commands at the
@@ -208,11 +212,11 @@ function passedOver(pieces) {
  * A placeholder of a class in `classes`, at index k of unit i, in a unit with a mark, gets \axtpma{p<i>.<k>a} before it
  * and \axtpm{p<i>.<k>b} after it (`n` for a footnote's call), but where a mark would change what TeX does:
  * - none at a unit's head before its start mark, nor so after a forced break or an alignment's tab (passedOver);
- * - none right after a prefix or a macro that looks ahead (LOOKS_AHEAD), and none for a paper's macro glued to the
- *   letters before it, which may be letters of the same word;
- * - the opening mark only where the closing one would follow a control word (TeX skips the spaces after it; a paper's
- *   macro that is a control word alone is one), white space (a mark there would stand on the next line, a blank one no
- *   paragraph's end any more: 2608.08350's `.\` before one), an environment's \end, or a paper's macro a letter follows
+ * - none right after a piece that may look ahead (LOOKS_AHEAD), and none for a paper's macro glued to the letters
+ *   before it, which may be letters of the same word;
+ * - the opening mark only for a piece that may look ahead, and where the closing one would follow a control sequence
+ *   (TeX skips the spaces after a control word), white space (a mark there would stand on the next line, a blank one no
+ *   paragraph's end any more: 2608.08350's `.\` before one) or an environment's \end
  */
 export function layoutMarking(units, classes, { lines = false } = {}) {
   const on = new Set(classes)
@@ -237,12 +241,12 @@ export function layoutMarking(units, classes, { lines = false } = {}) {
       const cls = passed && !passed.has(k) && !LOOKS_AHEAD(after) ? classOf(p) : null
       if (!cls || !on.has(cls)) return [piece]
       // a paper's macro may set letters: glued to the word before, it is part of it (an accent, \\ss), and a mark would
-      // part the word's hyphenation and kerns; glued to the word after, it gets no closing mark
-      const before = u.pieces[k - 1], next = u.pieces[k + 1]
+      // part the word's hyphenation and kerns
+      const before = u.pieces[k - 1]
       if (cls === 'macro' && before?.t === 'text' && WORD_END.test(before.s)) return [piece]
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
       const open = { t: 'ph', src: `\\axtpma{${name}a}` }
-      if (p.t === 'ph' && ((cls === 'macro' && (SOLE.test(p.src) || (next?.t === 'text' && WORD_START.test(next.s)))) || ENDS_IN_WORD.test(p.src) || /\s$/.test(p.src) || ENDS_ENV.test(p.src))) return [open, piece]
+      if (LOOKS_AHEAD(p) || ENDS_IN_CS.test(p.src) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
       return [open, piece, { t: 'ph', src: `\\axtpm{${name}b}` }]
     })
   })
