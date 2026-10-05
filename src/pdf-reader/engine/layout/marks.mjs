@@ -91,7 +91,9 @@ export function classOf(piece) {
  *   so, and \/ and LaTeX's \@@italiccorr add that letter's correction, measured when the mark was set, where they find
  *   it: TeX adds none after a whatsit, and cite.sty's [super] (\unskip then \/), \textup's left correction (\eqref),
  *   \textit and \textbf after their group set it on the letter before (0.14 pt after a "g" in cmr10, 1.45 pt after an
- *   italic "f"). An adjust node is nothing to TeX's line breaking, hyphenation and pdfTeX's margin kerning, as a whatsit.
+ *   italic "f"). The letter is a character, a ligature, or under XeTeX a word of a font of its own, which is a whatsit
+ *   (\lastnodetype 9: TeX's \/ adds no correction after any other whatsit, so one there measures nothing). An adjust
+ *   node is nothing to TeX's line breaking, hyphenation and pdfTeX's margin kerning, as a whatsit.
  *   A cell's marks do the same: its \axtmark.
  * - **Nothing written.** The three test \protect against \@typeset@protect and gobble their name otherwise, so written
  *   to a file (\protected@write: the aux's labels, the contents lists) or into a mark (running heads) they are gone; in a
@@ -109,7 +111,7 @@ export const LAYOUT_TEX = [
   '\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax}\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax\\fi}\\fi\\fi\\fi',
   '\\def\\axt@mark#1{\\axt@colseen\\ifaxt@off\\else\\axt@dest{#1}\\ifx\\axt@pend\\@empty\\else\\axt@dest{\\axt@pend}\\global\\let\\axt@pend\\@empty\\fi\\fi}',
   '\\def\\axt@icm{\\axt@icr\\ifnum\\lastnodetype=12 \\xdef\\axt@icv{\\the\\lastkern}\\unkern\\ifdim\\axt@icv=\\z@\\else\\global\\axt@sigtrue\\fi\\fi}',
-  '\\def\\axt@ic{\\global\\axt@sigfalse\\ifcase\\lastnodetype\\axt@icm\\or\\or\\or\\or\\or\\or\\global\\axt@sigtrue\\or\\axt@icm\\fi}',
+  '\\def\\axt@ic{\\global\\axt@sigfalse\\ifcase\\lastnodetype\\axt@icm\\or\\or\\or\\or\\or\\or\\global\\axt@sigtrue\\or\\axt@icm\\or\\or\\axt@icm\\fi}',
   '\\def\\axt@put#1{\\axt@ic\\axt@mark{#1}\\ifaxt@sig\\vadjust{}\\fi}',
   '\\def\\axt@ift#1#2\\relax{\\if t#1\\expandafter\\@firstoftwo\\else\\expandafter\\@secondoftwo\\fi}',
   '\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\ifhmode\\axt@ift#1\\relax{\\axt@put{#1}}{\\axt@mark{#1}}\\else\\axt@mark{#1}\\fi\\fi}',

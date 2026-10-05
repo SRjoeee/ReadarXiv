@@ -70,6 +70,8 @@ const STAY = {
   'todonotes [disable], \\nocite and \\marginpar': doc('\\usepackage[disable]{todonotes}', `${prose(24, i => [' more \\todo{x} words', ' see \\nocite{a} then', ' then \\marginpar{note} then', ' and \\todo{y} $z$'][i % 4])}\n\n${BIB}`),
   'a macro that ends in leaders': doc('\\newcommand\\fillto[1]{#1\\dotfill}', `\\noindent\\fillto{Entry} $3$\n\n\\noindent\\fillto{Other entry} \\cite{a}\n\n${prose(6, () => '')}\n${BIB}`),
   'fnpct, a full stop after a footnote\'s call': doc('\\usepackage{fnpct}', `${prose(16, i => (i % 2 ? ' word\\footnote{One.}. And' : ' more\\footnote{Two.}, then'))}`),
+  // an italic word's correction before \\eqref's \\textup, under each engine: XeTeX's word is a whatsit (review I2)
+  'an italic word before \\eqref': { engines: ['pdflatex', 'xelatex', 'lualatex'], src: doc('\\usepackage{iftex}\\ifPDFTeX\\else\\usepackage{fontspec}\\fi\\usepackage{amsmath}\\usepackage{amsthm}\\newtheorem{theorem}{Theorem}', `\\begin{equation} x = y \\label{e} \\end{equation}\n\\begin{theorem}${prose(24, i => [' by \\eqref{e}', ' with~\\eqref{e} and', ' of \\ref{e}', ' \\emph{set} by \\eqref{e}'][i % 4])}.\\end{theorem}\n${prose(6, () => '')}`) },
   'a word glued to a formula or a footnote\'s call, never hyphenated': doc('\\usepackage[margin=6.5cm]{geometry}', `${prose(30, i => [' representations$x_{' + i + '}$', ' characterization\\footnote{N.}', ' considerably$y$ is', ' experimentally\\footnotemark{} and'][i % 4])}`),
 }
 
@@ -136,10 +138,12 @@ const errorsOf = name => (read(name, 'log', 'latin1') ?? '').match(/^! .*/gm) ??
 const near = (m, page, x, y, d) => !!m && m.page === page && Math.hypot(m.x - x, m.y - y) <= d
 
 // ---------------------------------------------------------------- the jobs
-for (const [name, src] of Object.entries(STAY)) {
-  const key = name.replace(/[^A-Za-z0-9]+/g, '-')
-  queue(`stay-${key}`, src)
-  queue(`stay-${key}-hyperref`, src.replace('\n\\begin{document}', '\n\\usepackage{hyperref}\n\\begin{document}'))
+/** each document of STAY under each of its engines (pdfLaTeX unless it names others), by its job's key */
+const stays = Object.entries(STAY).flatMap(([name, v]) => (typeof v === 'string' ? [[name, v, 'pdflatex']] : v.engines.map(e => [name, v.src, e])))
+const stayKey = (name, engine) => `stay-${name.replace(/[^A-Za-z0-9]+/g, '-')}${engine === 'pdflatex' ? '' : `-${engine}`}`
+for (const [name, src, engine] of stays) {
+  queue(stayKey(name, engine), src, { engine })
+  queue(`${stayKey(name, engine)}-hyperref`, src.replace('\n\\begin{document}', '\n\\usepackage{hyperref}\n\\begin{document}'), { engine })
 }
 // a caption in the list of figures: the list alone on its page, the figure on the next
 const lofPaper = queue('lof', doc('', `\\listoffigures\n\\clearpage\n${prose(10, () => '')}\n\\begin{figure}[h]\\centering\\rule{2cm}{1cm}\\caption{\\textit{Zebra} caption text.}\\end{figure}\n${prose(10, () => '')}`), { passes: 3 })
@@ -152,7 +156,7 @@ queue('files', filesSrc, { passes: 3 })
 // titlesec sets nameref's title itself, past gettitlestring (2608.13505)
 queue('files-titlesec', filesSrc.replace('\\usepackage{hyperref}', '\\usepackage{titlesec}\\usepackage{hyperref}'), { passes: 3 })
 // the cells of a scaled table, under pdfTeX (failed) and under XeTeX (printed)
-const cellSrc = STAY['a cell in \\resizebox']
+const cellSrc = /** @type {string} */ (STAY['a cell in \\resizebox'])
 const cellPaper = queue('cell-xe', cellSrc, { engine: 'xelatex', variants: ['v1'] })
 // an opening mark before a space
 const spacePaper = queue('space', doc('', `We set the $x$ model here, and the $x$ model again.`))
@@ -170,11 +174,11 @@ console.log(`compiling ${jobs.length} documents in ${dir}`)
 compileAll(jobs)
 
 // ---------------------------------------------------------------- the checks
-for (const name of Object.keys(STAY)) {
+for (const [name, , engine] of stays) {
   for (const hyper of [false, true]) {
-    const key = `stay-${name.replace(/[^A-Za-z0-9]+/g, '-')}${hyper ? '-hyperref' : ''}`
+    const key = `${stayKey(name, engine)}${hyper ? '-hyperref' : ''}`
     const [a, b] = [await pdfOf(`${key}-v0`), await pdfOf(`${key}-v1`)]
-    const label = `no line moves: ${name}${hyper ? ', with hyperref' : ''}`
+    const label = `no line moves: ${name}${engine === 'pdflatex' ? '' : ` (${engine})`}${hyper ? ', with hyperref' : ''}`
     if (!a || !b) { check(label, false, `no PDF (${a ? 'v1' : 'v0'})`); continue }
     const m = moved(a, b), newErrors = errorsOf(`${key}-v1`).filter(e => !errorsOf(`${key}-v0`).includes(e))
     const logA = readLog(`${key}-v0`), logB = readLog(`${key}-v1`)
