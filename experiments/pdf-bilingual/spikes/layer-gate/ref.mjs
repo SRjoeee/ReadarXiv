@@ -5,7 +5,9 @@
 // counted. Each unit's lines are the fixture's own layout file's (the layout made for the fixture, data/layer-fixtures),
 // and the units that file does not locate are taken from the approved prototype's geometry of the same paper (its
 // anchors' rectangles, as the parity harness read them: a rectangle's baseline 0.24 of its height above its foot, its size
-// its height over 0.894). A new reference is a deliberate act: `layer-gate.mjs --freeze` writes one only where none is.
+// its height over 0.894). A new reference is a deliberate act: `layer-gate.mjs --freeze` writes one only where none is;
+// `--freeze=force --ref-layouts=<a later maker's fixtures>` refreshes it, that maker's lines first, then the fixture's
+// own, then the prototype's, so that a unit a later maker locates is measured by its own lines.
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
@@ -32,27 +34,36 @@ export function geometryFile(fixture, dir = PROTO_GEOMETRY) {
 
 /**
  * The reference of a fixture: { schema, from, pages: { [page]: [[id, kind, lines]] } }, each line six numbers (x0, x1,
- * baseline, top, bottom, size). `layout` is the fixture's layout file's bytes; `geometry` the prototype's file's, or null
+ * baseline, top, bottom, size). `layouts`: layout files' bytes (one, or several in order: a unit's lines are the first's
+ * that locates it, so that a later maker that locates more of the original refreshes the reference with what it finds);
+ * `geometry`: the prototype's file's, for the units none of them locates, or null
  */
-export function makeRef(layout, geometry, from = {}) {
-  const L = JSON.parse(Buffer.from(layout).toString('utf8'))
-  const kinds = new Map(L.units.map(u => [u[0], UNIT_KINDS[u[1]] ?? 'para']))
-  const pages = {}
+export function makeRef(layouts, geometry, from = {}) {
+  const files = (Array.isArray(layouts) ? layouts : [layouts]).map(b => JSON.parse(Buffer.from(b).toString('utf8')))
+  const pages = {}, taken = new Set(), bySource = []
   const add = (p, id, kind, line) => {
     const list = (pages[p] ??= [])
     let row = list.find(r => r[0] === id)
     if (!row) list.push((row = [id, kind, []]))
     row[2].push(...line)
   }
-  for (const [id, rows] of L.lines) {
-    // page, x0, x1, baseline, top, bottom, size, font
-    for (let i = 0; i + 7 < rows.length; i += 8) add(rows[i], id, kinds.get(id) ?? 'para', [rows[i + 1], rows[i + 2], rows[i + 3], rows[i + 4], rows[i + 5], rows[i + 6]])
+  for (const L of files) {
+    const kinds = new Map(L.units.map(u => [u[0], UNIT_KINDS[u[1]] ?? 'para']))
+    let n = 0
+    for (const [id, rows] of L.lines) {
+      if (taken.has(id) || !kinds.has(id)) continue
+      n++
+      // page, x0, x1, baseline, top, bottom, size, font
+      for (let i = 0; i + 7 < rows.length; i += 8) add(rows[i], id, kinds.get(id), [rows[i + 1], rows[i + 2], rows[i + 3], rows[i + 4], rows[i + 5], rows[i + 6]])
+    }
+    for (const [id] of L.lines) if (kinds.has(id)) taken.add(id)
+    bySource.push(n)
   }
   let extra = 0
   if (geometry) {
     const g = JSON.parse(Buffer.from(geometry).toString('utf8'))
     for (const [id, , rects] of g.left.units) {
-      if (kinds.has(id)) continue
+      if (taken.has(id)) continue
       extra++
       for (const [p, x0, y0, x1, y1] of rects) {
         const h = y1 - y0
@@ -61,13 +72,17 @@ export function makeRef(layout, geometry, from = {}) {
     }
   }
   for (const list of Object.values(pages)) list.sort((a, b) => a[0] - b[0])
-  return { schema: REF_SCHEMA, from: { ...from, layout: sha256(layout), extraUnits: extra }, pages }
+  const shas = (Array.isArray(layouts) ? layouts : [layouts]).map(b => sha256(b))
+  return { schema: REF_SCHEMA, from: { ...from, layout: shas.at(-1), ...(shas.length > 1 ? { layouts: shas, units: bySource } : {}), extraUnits: extra }, pages }
 }
 
-/** the reference made from a fixture's folder and the prototype's geometry, as the bytes ref.json holds */
-export function refBytesOf(dir, fixture, geometryDir = PROTO_GEOMETRY) {
+/** the reference made from a fixture's folder and the prototype's geometry, as the bytes ref.json holds; `newer`: folders
+ *  of fixtures made by a later maker, whose layout files go first */
+export function refBytesOf(dir, fixture, geometryDir = PROTO_GEOMETRY, newer = []) {
   const gFile = geometryFile(fixture, geometryDir)
-  const ref = makeRef(readFileSync(join(dir, 'layout.json')), gFile ? readFileSync(gFile) : null, { geometry: gFile ? basename(gFile) : null, geometrySha: gFile ? sha256(readFileSync(gFile)) : null })
+  const layouts = [...newer.map(d => join(d, fixture, 'layout.json')).filter(f => existsSync(f)), join(dir, 'layout.json')]
+  const makers = newer.filter(d => existsSync(join(d, fixture, 'layout.json'))).map(d => { try { return JSON.parse(readFileSync(join(d, fixture, 'units.json'), 'utf8')).engine ?? null } catch { return null } })
+  const ref = makeRef(layouts.map(f => readFileSync(f)), gFile ? readFileSync(gFile) : null, { geometry: gFile ? basename(gFile) : null, geometrySha: gFile ? sha256(readFileSync(gFile)) : null, ...(makers.length ? { makers } : {}) })
   return Buffer.from(JSON.stringify(ref))
 }
 

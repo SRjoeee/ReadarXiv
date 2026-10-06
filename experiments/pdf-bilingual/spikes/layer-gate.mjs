@@ -52,7 +52,9 @@
 //                index.html; default the engine's branch
 //   --composite  how crops are drawn on the copy: darken (the default since the maker round: the prototype's drawing, and
 //                the layer round's) or source-over (the lab's at first)
-//   --freeze     the reference text area of every fixture that has none (=force: made again, a deliberate change)
+//   --freeze     the reference text area of every fixture that has none (=force: made again, a deliberate change;
+//                --ref-layouts=<dir>,…: a later maker's fixtures' layout files first, the fixture's own, then the
+//                prototype's geometry for the units none locates)
 //   --write-floor  layer-gate/floor.json from this run: the prototype's floor as this gate measures it, v0 under the
 //                floor's conditions at the gate's own text place (--engine=<exp/layer-proto> --engine-kind=proto
 //                --proto-units=p7 --proto-faces=prototype --tier=pixel, the ten shared outputs); the floor before it kept
@@ -158,6 +160,9 @@ const WORKERS = typeof arg('workers') === 'string' ? Number(arg('workers')) : Ma
 const COMPOSITE = arg('composite') ?? 'darken'
 if (!['source-over', 'darken'].includes(COMPOSITE)) throw new Error(`--composite=${COMPOSITE}: source-over or darken`)
 const FREEZE = arg('freeze')
+/** --ref-layouts=<dir>,…: with --freeze=force, folders of fixtures a later maker made (out/layer-gate/fixtures/<key>),
+ *  whose layout files the refreshed reference takes first */
+const REF_LAYOUTS = typeof arg('ref-layouts') === 'string' ? arg('ref-layouts').split(',').filter(Boolean).map(d => resolve(d)) : []
 /** TeX's files the prototype's host read from TinyTeX: Latin Modern's faces, the hyphenation patterns */
 const TEXMF = process.env.TEXMF_DIST ?? join(process.env.HOME ?? '', 'Library/TinyTeX/texmf-dist')
 /** the progress folder's run whose engine panels stand beside this one's (openProgress sets it) */
@@ -187,7 +192,7 @@ if (FREEZE) {
   for (const name of readdirSync(REFS).filter(n => existsSync(join(REFS, n, 'layout.json'))).sort()) {
     const file = join(REFS, name, 'ref.json')
     if (existsSync(file) && FREEZE !== 'force') continue
-    writeFileSync(file, refBytesOf(join(REFS, name), name))
+    writeFileSync(file, refBytesOf(join(REFS, name), name, undefined, REF_LAYOUTS))
     made++
     console.log(`ref  ${name}: ${fileSha(file).slice(0, 12)}`)
   }
