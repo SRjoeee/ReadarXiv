@@ -33,7 +33,9 @@
 //                always this repository's: the instrument is the same for every branch); default this repository
 //   --layouts    made (the default): the layout files the engine's own maker makes from the fixtures' papers (spikes/
 //                layer-fixtures.mjs --engine --offline, cached by the engine's files in out/layer-gate/fixtures/), so that
-//                a change of the maker is measured end to end; fixed: the fixtures' own, as they were made for the lab
+//                a change of the maker is measured end to end: with the paper's own switch where the engine's marks file
+//                carries one (GATE_SWITCH=1 or 0 says otherwise), its marks read from each kept compile by its own reader;
+//                fixed: the fixtures' own, as they were made for the lab
 //   --fixtures   (or LAYER_FIXTURES) the fixtures' layout.json, units.json and arxiv.pdf from another folder of the same
 //                layout (the web's web/e2e/.fixtures/); the references stay data/layer-fixtures' (LAYER_REFS another)
 //   --check      the merge rule against the last record (default <engine>/experiments/pdf-bilingual/records/
@@ -48,7 +50,8 @@
 //                grid, each --panel-width wide (1,000 px): the original and the prototype above, this run and the previous
 //                recorded run (of the same layout files where there is one, else the baseline) below; metrics.md and
 //                index.html; default the engine's branch
-//   --composite  how crops are drawn on the copy: source-over (the lab's, as Plan 8d draws today) or darken
+//   --composite  how crops are drawn on the copy: darken (the default since the maker round: the prototype's drawing, and
+//                the layer round's) or source-over (the lab's at first)
 //   --freeze     the reference text area of every fixture that has none (=force: made again, a deliberate change)
 //   --write-floor  layer-gate/floor.json from this run: the prototype's floor as this gate measures it, v0 under the
 //                floor's conditions at the gate's own text place (--engine=<exp/layer-proto> --engine-kind=proto
@@ -137,6 +140,12 @@ if (!PROTO && !GIVEN && !arg('layouts') && !HAS_MAKER) console.log('the engine h
 const KEY = PROTO ? `${TIER}-proto${PROTO_UNITS === 'p7' ? '-p7' : ''}${PROTO_FACES === 'prototype' ? '-pf' : ''}${TEX_KEY}` : LAYOUTS === 'made' ? TIER : `${TIER}-${LAYOUTS}`
 if (!['made', 'fixed', 'given'].includes(LAYOUTS)) throw new Error(`--layouts=${LAYOUTS}: made or fixed`)
 const MAKER = join(here, 'layer-fixtures.mjs')
+/**
+ * Whether the maker asks TeX for the paper's own switch (layer-fixtures.mjs --switch): where the engine's marks file
+ * carries it (marks.mjs MARKS_SCHEMA 2 or more), so that its maker re-marks as the compile was marked; GATE_SWITCH=1 or 0
+ * says otherwise. At Task 12's tip the maker re-marks without it, and the switch stays off
+ */
+const SWITCH = process.env.GATE_SWITCH ? process.env.GATE_SWITCH !== '0' : !PROTO && HAS_MAKER && ((await import(join(ENGINE, 'src/pdf-reader/engine/layout/marks.mjs'))).MARKS_SCHEMA ?? 0) >= 2
 const FONTS = resolve(join(DATA, 'fonts'))
 const PDFJS = resolve(REPO, 'node_modules/pdfjs-dist')
 const GATE = join(here, 'layer-gate')
@@ -145,7 +154,8 @@ const PROGRESS = process.env.LAYER_PROGRESS ?? '/Users/cheongzhiyan/Downloads/re
 const ONLY = typeof arg('only') === 'string' ? arg('only').split(',').filter(Boolean) : null
 const PAGES = typeof arg('pages') === 'string' ? Number(arg('pages')) : null
 const WORKERS = typeof arg('workers') === 'string' ? Number(arg('workers')) : Math.max(1, Math.min(6, Math.floor(availableParallelism() / 2)))
-const COMPOSITE = arg('composite') ?? 'source-over'
+/** crops darkened in (the prototype's drawing, and the reader's since the layer round's fixes), or pasted source-over */
+const COMPOSITE = arg('composite') ?? 'darken'
 if (!['source-over', 'darken'].includes(COMPOSITE)) throw new Error(`--composite=${COMPOSITE}: source-over or darken`)
 const FREEZE = arg('freeze')
 /** TeX's files the prototype's host read from TinyTeX: Latin Modern's faces, the hyphenation patterns */
@@ -159,7 +169,7 @@ const PAGES_OF = 12, ALL_PAGES = new Set(['2307.16209v1'])
 /** the progress images' pages (the controller's set) and their width */
 const PANELS_SET = { '1512.03385v1-zh': [1, 2, 3], '1706.03762v7-ja': [1, 2], '2608.04322v1-de': [2], '1810.04805v2-ru': [2], '2307.16209v1-zh': [10] }
 /** --panel-pages=<fixture>:<p>,<p>;<fixture>:<p>: the progress images' pages in place of the controller's set (a look at others) */
-const PANELS = typeof arg('panel-pages') === 'string' ? Object.fromEntries(arg('panel-pages').split(';').filter(Boolean).map(x => { const [fx, ps] = x.split(':'); return [fx, ps.split(',').map(Number)] })) : PANELS_SET
+const PANELS = typeof arg('panel-pages') === 'string' ? Object.fromEntries(arg('panel-pages').split(';').filter(Boolean).map(x => { const [fx, ps] = x.split(':'); return [fx, ps.split(',').map(Number)] })) : process.env.GATE_PANELS ? JSON.parse(process.env.GATE_PANELS) : PANELS_SET
 /** each panel's width in the progress images' 2 x 2 grid (the controller's: about 1,000 px) */
 const PANEL_WIDTH = Number(arg('panel-width') ?? 1000), GAP = 12
 
@@ -251,7 +261,7 @@ const fontsDigest = sha256(readdirSync(FONTS).sort().map(f => `${f}:${statSync(j
 const browser = await chromium.launch()
 const inputs = {
   tier: TIER, pages: PAGES ? `the first ${PAGES}` : `the first ${PAGES_OF} of each output, every page of ${[...ALL_PAGES].join(', ')}`, scale: 2.5, inkScale: 2, inkMin: 4, composite: COMPOSITE,
-  layouts: LAYOUTS, fixtures: FIXTURES === REFS ? 'data/layer-fixtures' : FIXTURES.startsWith(ROOT) ? FIXTURES.slice(ROOT.length + 1) : FIXTURES, chromium: browser.version(),
+  layouts: LAYOUTS, ...(LAYOUTS === 'made' ? { switch: SWITCH } : {}), fixtures: FIXTURES === REFS ? 'data/layer-fixtures' : FIXTURES.startsWith(ROOT) ? FIXTURES.slice(ROOT.length + 1) : FIXTURES, chromium: browser.version(),
   pdfjs: readJson(join(PDFJS, 'package.json')).version, fonts: fontsDigest.slice(0, 16), checker: fileSha(CHECKER).slice(0, 16),
   // the instrument: the measures, their arithmetic, and the page that draws and accounts (lost ink's own glyphs)
   measures: sha256(['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => readFileSync(join(GATE, f))).join('\n')).slice(0, 16),
@@ -404,7 +414,7 @@ function madeFixtures() {
   walk(engineDir)
   // the layer's own modules make no layout (but the pieces, which the translation's units are read with)
   const used = files.filter(f => !f.startsWith(join(engineDir, 'layer') + sep) || f.endsWith(`${sep}pieces.mjs`))
-  const key = sha256([MAKER, ...used].map(f => `${f.slice(ENGINE.length)}\n`).join('') + [MAKER, ...used].map(f => fileSha(f)).join('\n')).slice(0, 16)
+  const key = sha256([MAKER, ...used].map(f => `${f.slice(ENGINE.length)}\n`).join('') + [MAKER, ...used].map(f => fileSha(f)).join('\n') + (SWITCH ? '|switch' : '')).slice(0, 16)
   const dir = join(ROOT, 'out/layer-gate/fixtures', key)
   const want = readdirSync(REFS).filter(n => /^[A-Za-z0-9._-]+v\d+-[A-Za-z-]+$/.test(n) && existsSync(join(REFS, n, 'layout.json'))).filter(n => !ONLY || ONLY.includes(n))
   const missing = want.filter(n => !existsSync(join(dir, n, 'units.json')) || !(existsSync(join(dir, n, 'layout.json')) || existsSync(join(dir, n, 'refusal.json'))))
@@ -412,7 +422,7 @@ function madeFixtures() {
     console.log(`making ${missing.length} output${missing.length === 1 ? '' : 's'}' layouts with the engine at ${ENGINE === REPO ? 'this tree' : ENGINE} (${key})`)
     const t = Date.now()
     try {
-      execFileSync(join(REPO, 'node_modules/.bin/tsx'), [MAKER, '--offline', `--engine=${ENGINE}`, `--only=${missing.map(n => { const { paper, target } = nameOf(n); return `${paper}:${target}` }).join(',')}`], { env: { ...process.env, LAYER_FIXTURES: dir }, stdio: ['ignore', 'inherit', 'inherit'] })
+      execFileSync(join(REPO, 'node_modules/.bin/tsx'), [MAKER, '--offline', ...(SWITCH ? ['--switch'] : []), `--engine=${ENGINE}`, `--only=${missing.map(n => { const { paper, target } = nameOf(n); return `${paper}:${target}` }).join(',')}`], { env: { ...process.env, LAYER_FIXTURES: dir }, stdio: ['ignore', 'inherit', 'inherit'] })
     } catch { console.log('FAIL the layout maker did not make every output') }
     console.log(`made in ${((Date.now() - t) / 1000).toFixed(1)} s`)
   }
