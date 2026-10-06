@@ -20,13 +20,14 @@
   "clean": 106,
   "accepted": 5,
   "switched": 2,
-  "failed": 0,
+  "failing": 0,
   "passedOver": 0,
   "lines": 198875,
   "lost": {
    "strict": 5,
    "joined": 3,
-   "tex": 6
+   "tex": 6,
+   "all": 6
   },
   "untraced": [],
   "moved": {
@@ -42,9 +43,14 @@
    "id": "2608.11761",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 475
+   },
    "ms": [
-    3667,
-    5858
+    3185,
+    5850
    ],
    "pages": [
     44,
@@ -59,7 +65,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -72,6 +79,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 575,
+    "dropped": 0,
+    "marks": 1529
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 321,
@@ -102,21 +115,20 @@
      "carried": 96
     }
    },
-   "marksFile": {
-    "kb": 575,
-    "dropped": 0,
-    "marks": 1529
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.27728",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 7,
+    "answered": 7,
+    "ms": 728
+   },
    "ms": [
-    5022,
-    5526
+    4979,
+    5973
    ],
    "pages": [
     17,
@@ -131,7 +143,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -144,6 +157,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 244,
+    "dropped": 0,
+    "marks": 646
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 103,
@@ -154,8 +173,8 @@
      "carried": 37
     },
     "footnote": {
-     "lines": 1,
-     "carried": 1
+     "lines": 2,
+     "carried": 2
     },
     "math": {
      "lines": 108,
@@ -186,21 +205,20 @@
      "carried": 9
     }
    },
-   "marksFile": {
-    "kb": 244,
-    "dropped": 0,
-    "marks": 645
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.28692",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 628
+   },
    "ms": [
-    4288,
-    6214
+    3684,
+    5555
    ],
    "pages": [
     10,
@@ -215,7 +233,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -228,6 +247,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 233,
+    "dropped": 0,
+    "marks": 569
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 96,
@@ -262,21 +287,20 @@
      "carried": 7
     }
    },
-   "marksFile": {
-    "kb": 233,
-    "dropped": 0,
-    "marks": 569
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.06701",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1075
+   },
    "ms": [
-    3737,
-    4195
+    3427,
+    3924
    ],
    "pages": [
     12,
@@ -291,7 +315,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -304,6 +329,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 324,
+    "dropped": 0,
+    "marks": 1235
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 156,
@@ -314,8 +345,8 @@
      "carried": 23
     },
     "footnote": {
-     "lines": 7,
-     "carried": 7
+     "lines": 12,
+     "carried": 12
     },
     "macro": {
      "lines": 250,
@@ -342,21 +373,20 @@
      "carried": 139
     }
    },
-   "marksFile": {
-    "kb": 324,
-    "dropped": 0,
-    "marks": 1228
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.06007",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1912
+   },
    "ms": [
-    10638,
-    11404
+    12025,
+    12033
    ],
    "pages": [
     19,
@@ -371,7 +401,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -384,6 +415,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 426,
+    "dropped": 0,
+    "marks": 965
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 189,
@@ -414,21 +451,20 @@
      "carried": 43
     }
    },
-   "marksFile": {
-    "kb": 426,
-    "dropped": 0,
-    "marks": 965
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.27181",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 789
+   },
    "ms": [
-    7738,
-    11844
+    7447,
+    11788
    ],
    "pages": [
     20,
@@ -443,7 +479,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -456,6 +493,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 575,
+    "dropped": 0,
+    "marks": 2889
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 239,
@@ -490,21 +533,20 @@
      "carried": 291
     }
    },
-   "marksFile": {
-    "kb": 575,
-    "dropped": 0,
-    "marks": 2889
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.12333",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 6,
+    "answered": 6,
+    "ms": 1478
+   },
    "ms": [
-    10853,
-    11846
+    9505,
+    10059
    ],
    "pages": [
     10,
@@ -519,7 +561,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -532,6 +575,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 233,
+    "dropped": 0,
+    "marks": 726
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 99,
@@ -574,21 +623,20 @@
      "carried": 17
     }
    },
-   "marksFile": {
-    "kb": 233,
-    "dropped": 0,
-    "marks": 722
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.08880",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 1001
+   },
    "ms": [
-    3520,
-    3940
+    3558,
+    3303
    ],
    "pages": [
     12,
@@ -603,7 +651,8 @@
    "lost": {
     "strict": 1,
     "joined": 0,
-    "tex": 1
+    "tex": 1,
+    "all": 1
    },
    "unitMarksMoved": 1,
    "captions": [],
@@ -616,6 +665,24 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 350,
+    "dropped": 0,
+    "marks": 1041
+   },
+   "traced": true,
+   "cause": "tex",
+   "causes": {
+    "accepted": 1,
+    "unexplained": 0
+   },
+   "boxes": [
+    {
+     "page": 6,
+     "near": "h84e",
+     "what": "heading end"
+    }
+   ],
    "classes": {
     "unit": {
      "lines": 181,
@@ -655,20 +722,6 @@
      "carried": 79
     }
    },
-   "marksFile": {
-    "kb": 350,
-    "dropped": 0,
-    "marks": 1041
-   },
-   "traced": true,
-   "cause": "tex",
-   "boxes": [
-    {
-     "page": 6,
-     "near": "h84e",
-     "what": "heading end"
-    }
-   ],
    "own": {
     "lost": 1
    },
@@ -678,9 +731,14 @@
    "id": "2608.08350",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 1113
+   },
    "ms": [
-    10745,
-    13535
+    11842,
+    14678
    ],
    "pages": [
     58,
@@ -695,7 +753,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -708,6 +767,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 975,
+    "dropped": 0,
+    "marks": 3613
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 517,
@@ -718,8 +783,8 @@
      "carried": 74
     },
     "footnote": {
-     "lines": 6,
-     "carried": 6
+     "lines": 9,
+     "carried": 9
     },
     "cite": {
      "lines": 108,
@@ -750,21 +815,20 @@
      "carried": 3
     }
    },
-   "marksFile": {
-    "kb": 975,
-    "dropped": 0,
-    "marks": 3605
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.02991",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 561
+   },
    "ms": [
-    2778,
-    3544
+    2795,
+    3628
    ],
    "pages": [
     26,
@@ -779,7 +843,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -792,6 +857,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 324,
+    "dropped": 0,
+    "marks": 1458
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 229,
@@ -830,21 +901,20 @@
      "carried": 102
     }
    },
-   "marksFile": {
-    "kb": 324,
-    "dropped": 0,
-    "marks": 1458
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.00812",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 674
+   },
    "ms": [
-    5410,
-    6190
+    5387,
+    6220
    ],
    "pages": [
     34,
@@ -859,7 +929,8 @@
    "lost": {
     "strict": 1,
     "joined": 0,
-    "tex": 1
+    "tex": 1,
+    "all": 1
    },
    "unitMarksMoved": 1,
    "captions": [],
@@ -872,6 +943,24 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 708,
+    "dropped": 0,
+    "marks": 4077
+   },
+   "traced": true,
+   "cause": "tex",
+   "causes": {
+    "accepted": 1,
+    "unexplained": 0
+   },
+   "boxes": [
+    {
+     "page": 7,
+     "near": "h51e",
+     "what": "heading end"
+    }
+   ],
    "classes": {
     "unit": {
      "lines": 382,
@@ -907,20 +996,6 @@
      "carried": 4
     }
    },
-   "marksFile": {
-    "kb": 708,
-    "dropped": 0,
-    "marks": 4077
-   },
-   "traced": true,
-   "cause": "tex",
-   "boxes": [
-    {
-     "page": 7,
-     "near": "h51e",
-     "what": "heading end"
-    }
-   ],
    "own": {
     "lost": 1
    },
@@ -930,9 +1005,14 @@
    "id": "2608.03994",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 7,
+    "answered": 7,
+    "ms": 1283
+   },
    "ms": [
-    10478,
-    11527
+    11784,
+    12659
    ],
    "pages": [
     14,
@@ -947,7 +1027,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -960,6 +1041,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 308,
+    "dropped": 0,
+    "marks": 874
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 232,
@@ -994,21 +1081,20 @@
      "carried": 3
     }
    },
-   "marksFile": {
-    "kb": 308,
-    "dropped": 0,
-    "marks": 867
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.30640",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 730
+   },
    "ms": [
-    6444,
-    11595
+    6428,
+    11878
    ],
    "pages": [
     34,
@@ -1023,7 +1109,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -1036,6 +1123,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 457,
+    "dropped": 0,
+    "marks": 1487
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 198,
@@ -1078,21 +1171,20 @@
      "carried": 19
     }
    },
-   "marksFile": {
-    "kb": 457,
-    "dropped": 0,
-    "marks": 1487
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.28697",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 535
+   },
    "ms": [
-    1619,
-    1875
+    1556,
+    1937
    ],
    "pages": [
     10,
@@ -1107,7 +1199,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -1120,6 +1213,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 145,
+    "dropped": 0,
+    "marks": 716
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 108,
@@ -1162,21 +1261,20 @@
      "carried": 36
     }
    },
-   "marksFile": {
-    "kb": 145,
-    "dropped": 0,
-    "marks": 716
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.08826",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 424
+   },
    "ms": [
-    3578,
-    3486
+    3819,
+    3781
    ],
    "pages": [
     9,
@@ -1191,7 +1289,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -1204,6 +1303,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 253,
+    "dropped": 0,
+    "marks": 993
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 132,
@@ -1234,21 +1339,20 @@
      "carried": 19
     }
    },
-   "marksFile": {
-    "kb": 253,
-    "dropped": 0,
-    "marks": 993
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.03063",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1682
+   },
    "ms": [
-    28951,
-    33295
+    12397,
+    13804
    ],
    "pages": [
     14,
@@ -1263,7 +1367,8 @@
    "lost": {
     "strict": 1,
     "joined": 1,
-    "tex": 2
+    "tex": 2,
+    "all": 2
    },
    "unitMarksMoved": 1,
    "captions": [],
@@ -1276,19 +1381,42 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 442,
+    "dropped": 0,
+    "marks": 1683
+   },
+   "traced": true,
+   "cause": "tex",
+   "causes": {
+    "accepted": 2,
+    "unexplained": 0
+   },
+   "boxes": [
+    {
+     "page": 7,
+     "near": "h174e",
+     "what": "heading end"
+    },
+    {
+     "page": 10,
+     "near": "h273e",
+     "what": "heading end"
+    }
+   ],
    "classes": {
     "unit": {
      "lines": 270,
-     "carried": 269
+     "carried": 268
     },
     "heading": {
      "lines": 72,
-     "carried": 71,
+     "carried": 70,
      "texLost": 2
     },
     "footnote": {
-     "lines": 1,
-     "carried": 1
+     "lines": 5,
+     "carried": 5
     },
     "math": {
      "lines": 179,
@@ -1303,8 +1431,8 @@
      "carried": 1
     },
     "macro": {
-     "lines": 9,
-     "carried": 9
+     "lines": 7,
+     "carried": 7
     },
     "cite": {
      "lines": 43,
@@ -1323,25 +1451,6 @@
      "carried": 125
     }
    },
-   "marksFile": {
-    "kb": 442,
-    "dropped": 0,
-    "marks": 1675
-   },
-   "traced": true,
-   "cause": "tex",
-   "boxes": [
-    {
-     "page": 7,
-     "near": "h174e",
-     "what": "heading end"
-    },
-    {
-     "page": 10,
-     "near": "h273e",
-     "what": "heading end"
-    }
-   ],
    "own": {
     "lost": 1
    },
@@ -1351,9 +1460,14 @@
    "id": "2608.15955",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 670
+   },
    "ms": [
-    4571,
-    4697
+    2227,
+    2499
    ],
    "pages": [
     11,
@@ -1368,7 +1482,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -1381,6 +1496,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 236,
+    "dropped": 0,
+    "marks": 1449
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 168,
@@ -1411,21 +1532,20 @@
      "carried": 28
     }
    },
-   "marksFile": {
-    "kb": 236,
-    "dropped": 0,
-    "marks": 1449
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.10073",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 1,
+    "answered": 1,
+    "ms": 411
+   },
    "ms": [
-    3389,
-    1136
+    1078,
+    1239
    ],
    "pages": [
     15,
@@ -1440,7 +1560,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -1453,6 +1574,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 212,
+    "dropped": 0,
+    "marks": 621
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 78,
@@ -1479,21 +1606,20 @@
      "carried": 27
     }
    },
-   "marksFile": {
-    "kb": 212,
-    "dropped": 0,
-    "marks": 621
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.18090",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 561
+   },
    "ms": [
-    4115,
-    5105
+    5184,
+    6848
    ],
    "pages": [
     15,
@@ -1508,7 +1634,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -1521,6 +1648,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 328,
+    "dropped": 0,
+    "marks": 1463
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 175,
@@ -1555,21 +1688,20 @@
      "carried": 21
     }
    },
-   "marksFile": {
-    "kb": 328,
-    "dropped": 0,
-    "marks": 1463
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.22816",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 865
+   },
    "ms": [
-    2756,
-    2875
+    3327,
+    3514
    ],
    "pages": [
     5,
@@ -1584,7 +1716,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -1597,6 +1730,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 74,
+    "dropped": 0,
+    "marks": 368
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 43,
@@ -1627,21 +1766,20 @@
      "carried": 5
     }
    },
-   "marksFile": {
-    "kb": 74,
-    "dropped": 0,
-    "marks": 368
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.02055",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 6,
+    "answered": 6,
+    "ms": 837
+   },
    "ms": [
-    7712,
-    9542
+    9235,
+    11294
    ],
    "pages": [
     63,
@@ -1656,7 +1794,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -1669,6 +1808,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 828,
+    "dropped": 0,
+    "marks": 4495
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 341,
@@ -1719,21 +1864,20 @@
      "carried": 116
     }
    },
-   "marksFile": {
-    "kb": 828,
-    "dropped": 0,
-    "marks": 4493
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.23818",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 8,
+    "answered": 8,
+    "ms": 703
+   },
    "ms": [
-    5551,
-    6239
+    5634,
+    6105
    ],
    "pages": [
     14,
@@ -1748,7 +1892,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -1761,6 +1906,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 251,
+    "dropped": 0,
+    "marks": 570
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 112,
@@ -1803,21 +1954,20 @@
      "carried": 16
     }
    },
-   "marksFile": {
-    "kb": 250,
-    "dropped": 0,
-    "marks": 567
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.29181",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 1330
+   },
    "ms": [
-    11969,
-    12649
+    15410,
+    17738
    ],
    "pages": [
     33,
@@ -1832,7 +1982,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -1845,6 +1996,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 544,
+    "dropped": 0,
+    "marks": 2328
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 252,
@@ -1883,21 +2040,20 @@
      "carried": 1
     }
    },
-   "marksFile": {
-    "kb": 544,
-    "dropped": 0,
-    "marks": 2328
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.21180",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 448
+   },
    "ms": [
-    2392,
-    2332
+    2398,
+    2270
    ],
    "pages": [
     13,
@@ -1912,7 +2068,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -1925,6 +2082,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 189,
+    "dropped": 0,
+    "marks": 344
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 74,
@@ -1955,21 +2118,20 @@
      "carried": 36
     }
    },
-   "marksFile": {
-    "kb": 189,
-    "dropped": 0,
-    "marks": 344
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.04322",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1118
+   },
    "ms": [
-    3187,
-    3974
+    3799,
+    4138
    ],
    "pages": [
     13,
@@ -1984,7 +2146,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -1997,6 +2160,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 397,
+    "dropped": 0,
+    "marks": 1024
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 213,
@@ -2035,21 +2204,20 @@
      "carried": 88
     }
    },
-   "marksFile": {
-    "kb": 397,
-    "dropped": 0,
-    "marks": 1024
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.27043",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 723
+   },
    "ms": [
-    4345,
-    5168
+    4149,
+    4749
    ],
    "pages": [
     18,
@@ -2064,7 +2232,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -2077,6 +2246,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 233,
+    "dropped": 2,
+    "marks": 597
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 135,
@@ -2111,21 +2286,20 @@
      "carried": 109
     }
    },
-   "marksFile": {
-    "kb": 233,
-    "dropped": 2,
-    "marks": 597
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.29558",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 641
+   },
    "ms": [
-    4307,
-    4729
+    4086,
+    4419
    ],
    "pages": [
     17,
@@ -2140,7 +2314,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -2153,6 +2328,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 231,
+    "dropped": 0,
+    "marks": 1159
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 133,
@@ -2187,21 +2368,20 @@
      "carried": 3
     }
    },
-   "marksFile": {
-    "kb": 231,
-    "dropped": 0,
-    "marks": 1159
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.30886",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 877
+   },
    "ms": [
-    4033,
-    4184
+    3659,
+    4013
    ],
    "pages": [
     9,
@@ -2216,7 +2396,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -2229,6 +2410,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 177,
+    "dropped": 0,
+    "marks": 351
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 54,
@@ -2263,21 +2450,20 @@
      "carried": 2
     }
    },
-   "marksFile": {
-    "kb": 177,
-    "dropped": 0,
-    "marks": 351
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.12425",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 659
+   },
    "ms": [
-    4281,
-    4477
+    4763,
+    4674
    ],
    "pages": [
     13,
@@ -2292,7 +2478,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -2305,6 +2492,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 271,
+    "dropped": 0,
+    "marks": 1937
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 205,
@@ -2331,21 +2524,20 @@
      "carried": 16
     }
    },
-   "marksFile": {
-    "kb": 271,
-    "dropped": 0,
-    "marks": 1937
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.08903",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 830
+   },
    "ms": [
-    3338,
-    3927
+    3019,
+    3602
    ],
    "pages": [
     14,
@@ -2360,7 +2552,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -2373,6 +2566,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 319,
+    "dropped": 0,
+    "marks": 876
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 96,
@@ -2403,21 +2602,20 @@
      "carried": 15
     }
    },
-   "marksFile": {
-    "kb": 319,
-    "dropped": 0,
-    "marks": 876
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.01890",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 935
+   },
    "ms": [
-    5011,
-    5613
+    5470,
+    6367
    ],
    "pages": [
     16,
@@ -2432,7 +2630,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -2445,6 +2644,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 403,
+    "dropped": 0,
+    "marks": 1459
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 167,
@@ -2455,8 +2660,8 @@
      "carried": 14
     },
     "footnote": {
-     "lines": 9,
-     "carried": 9
+     "lines": 10,
+     "carried": 10
     },
     "math": {
      "lines": 384,
@@ -2487,21 +2692,20 @@
      "carried": 9
     }
    },
-   "marksFile": {
-    "kb": 403,
-    "dropped": 0,
-    "marks": 1450
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.15016",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1019
+   },
    "ms": [
-    6131,
-    6206
+    6216,
+    6602
    ],
    "pages": [
     6,
@@ -2516,7 +2720,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -2529,6 +2734,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 184,
+    "dropped": 0,
+    "marks": 559
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 85,
@@ -2563,21 +2774,20 @@
      "carried": 24
     }
    },
-   "marksFile": {
-    "kb": 184,
-    "dropped": 0,
-    "marks": 559
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.20144",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 356
+   },
    "ms": [
-    1872,
-    1804
+    2251,
+    2156
    ],
    "pages": [
     10,
@@ -2592,7 +2802,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -2605,6 +2816,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 124,
+    "dropped": 0,
+    "marks": 388
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 69,
@@ -2639,21 +2856,20 @@
      "carried": 29
     }
    },
-   "marksFile": {
-    "kb": 124,
-    "dropped": 0,
-    "marks": 388
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.02163",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 6,
+    "answered": 6,
+    "ms": 486
+   },
    "ms": [
-    3231,
-    3221
+    3817,
+    3729
    ],
    "pages": [
     25,
@@ -2668,7 +2884,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -2681,6 +2898,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 551,
+    "dropped": 0,
+    "marks": 1256
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 202,
@@ -2723,21 +2946,20 @@
      "carried": 186
     }
    },
-   "marksFile": {
-    "kb": 551,
-    "dropped": 0,
-    "marks": 1256
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.04473",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 1,
+    "answered": 1,
+    "ms": 402
+   },
    "ms": [
-    1067,
-    1058
+    1523,
+    1475
    ],
    "pages": [
     20,
@@ -2752,7 +2974,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -2765,6 +2988,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 298,
+    "dropped": 0,
+    "marks": 863
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 210,
@@ -2791,21 +3020,20 @@
      "carried": 64
     }
    },
-   "marksFile": {
-    "kb": 298,
-    "dropped": 0,
-    "marks": 863
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.08876",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 549
+   },
    "ms": [
-    5709,
-    7712
+    5575,
+    7536
    ],
    "pages": [
     19,
@@ -2820,7 +3048,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -2833,6 +3062,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 407,
+    "dropped": 0,
+    "marks": 1423
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 123,
@@ -2875,21 +3110,20 @@
      "carried": 118
     }
    },
-   "marksFile": {
-    "kb": 407,
-    "dropped": 0,
-    "marks": 1423
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.16190",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 588
+   },
    "ms": [
-    2788,
-    3292
+    3237,
+    3718
    ],
    "pages": [
     10,
@@ -2904,7 +3138,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -2917,6 +3152,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 208,
+    "dropped": 0,
+    "marks": 587
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 114,
@@ -2947,21 +3188,20 @@
      "carried": 5
     }
    },
-   "marksFile": {
-    "kb": 208,
-    "dropped": 0,
-    "marks": 587
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.18685",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 625
+   },
    "ms": [
-    3900,
-    3920
+    8237,
+    8080
    ],
    "pages": [
     9,
@@ -2976,7 +3216,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -2989,6 +3230,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 225,
+    "dropped": 0,
+    "marks": 518
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 93,
@@ -3027,21 +3274,20 @@
      "carried": 59
     }
    },
-   "marksFile": {
-    "kb": 225,
-    "dropped": 0,
-    "marks": 518
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.20159",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 728
+   },
    "ms": [
-    5319,
-    5894
+    6684,
+    7328
    ],
    "pages": [
     28,
@@ -3056,7 +3302,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -3069,6 +3316,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 349,
+    "dropped": 0,
+    "marks": 1406
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 230,
@@ -3103,21 +3356,20 @@
      "carried": 6
     }
    },
-   "marksFile": {
-    "kb": 349,
-    "dropped": 0,
-    "marks": 1406
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.13416",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 6,
+    "answered": 6,
+    "ms": 1013
+   },
    "ms": [
-    7238,
-    9232
+    10573,
+    12970
    ],
    "pages": [
     18,
@@ -3132,7 +3384,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -3145,6 +3398,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 384,
+    "dropped": 0,
+    "marks": 1294
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 134,
@@ -3187,21 +3446,20 @@
      "carried": 60
     }
    },
-   "marksFile": {
-    "kb": 384,
-    "dropped": 0,
-    "marks": 1294
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.12606",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 757
+   },
    "ms": [
-    5832,
-    6436
+    8713,
+    9842
    ],
    "pages": [
     20,
@@ -3216,7 +3474,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -3229,6 +3488,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 501,
+    "dropped": 0,
+    "marks": 2236
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 134,
@@ -3259,21 +3524,20 @@
      "carried": 117
     }
    },
-   "marksFile": {
-    "kb": 501,
-    "dropped": 0,
-    "marks": 2236
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.07683",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 1141
+   },
    "ms": [
-    3644,
-    4163
+    6025,
+    6749
    ],
    "pages": [
     17,
@@ -3288,7 +3552,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -3301,6 +3566,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 324,
+    "dropped": 0,
+    "marks": 2387
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 248,
@@ -3339,21 +3610,20 @@
      "carried": 1
     }
    },
-   "marksFile": {
-    "kb": 324,
-    "dropped": 0,
-    "marks": 2384
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.09815",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 978
+   },
    "ms": [
-    4199,
-    5947
+    7552,
+    9252
    ],
    "pages": [
     11,
@@ -3368,7 +3638,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -3381,6 +3652,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 263,
+    "dropped": 0,
+    "marks": 995
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 70,
@@ -3407,21 +3684,20 @@
      "carried": 15
     }
    },
-   "marksFile": {
-    "kb": 263,
-    "dropped": 0,
-    "marks": 995
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.20990",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 797
+   },
    "ms": [
-    4380,
-    5125
+    5505,
+    6040
    ],
    "pages": [
     9,
@@ -3436,7 +3712,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -3449,6 +3726,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 158,
+    "dropped": 0,
+    "marks": 609
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 45,
@@ -3479,21 +3762,20 @@
      "carried": 40
     }
    },
-   "marksFile": {
-    "kb": 158,
-    "dropped": 0,
-    "marks": 609
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.02459",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 700
+   },
    "ms": [
-    4321,
-    6107
+    6745,
+    8775
    ],
    "pages": [
     88,
@@ -3508,7 +3790,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -3521,6 +3804,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 1239,
+    "dropped": 0,
+    "marks": 7229
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 904,
@@ -3555,21 +3844,20 @@
      "carried": 51
     }
    },
-   "marksFile": {
-    "kb": 1239,
-    "dropped": 0,
-    "marks": 7229
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.04183",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1203
+   },
    "ms": [
-    4671,
-    6705
+    5494,
+    8334
    ],
    "pages": [
     18,
@@ -3584,7 +3872,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -3597,6 +3886,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 381,
+    "dropped": 0,
+    "marks": 1466
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 168,
@@ -3606,13 +3901,17 @@
      "lines": 48,
      "carried": 48
     },
+    "footnote": {
+     "lines": 1,
+     "carried": 1
+    },
     "math": {
      "lines": 207,
      "carried": 207
     },
     "macro": {
-     "lines": 157,
-     "carried": 157
+     "lines": 156,
+     "carried": 156
     },
     "ref": {
      "lines": 48,
@@ -3635,21 +3934,20 @@
      "carried": 47
     }
    },
-   "marksFile": {
-    "kb": 381,
-    "dropped": 0,
-    "marks": 1465
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.15761",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 476
+   },
    "ms": [
-    3542,
-    4233
+    3503,
+    4361
    ],
    "pages": [
     29,
@@ -3664,7 +3962,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -3677,6 +3976,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 380,
+    "dropped": 0,
+    "marks": 978
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 277,
@@ -3686,9 +3991,13 @@
      "lines": 60,
      "carried": 60
     },
+    "footnote": {
+     "lines": 1,
+     "carried": 1
+    },
     "macro": {
-     "lines": 57,
-     "carried": 57
+     "lines": 56,
+     "carried": 56
     },
     "ref": {
      "lines": 38,
@@ -3711,21 +4020,20 @@
      "carried": 88
     }
    },
-   "marksFile": {
-    "kb": 380,
-    "dropped": 0,
-    "marks": 977
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.25304",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 616
+   },
    "ms": [
-    2980,
-    3590
+    3343,
+    4044
    ],
    "pages": [
     44,
@@ -3740,7 +4048,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -3753,6 +4062,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 569,
+    "dropped": 0,
+    "marks": 2501
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 295,
@@ -3795,21 +4110,20 @@
      "carried": 27
     }
    },
-   "marksFile": {
-    "kb": 569,
-    "dropped": 0,
-    "marks": 2501
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.05876",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 944
+   },
    "ms": [
-    4900,
-    4977
+    7762,
+    7855
    ],
    "pages": [
     13,
@@ -3824,7 +4138,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -3837,6 +4152,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 315,
+    "dropped": 0,
+    "marks": 1011
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 164,
@@ -3875,21 +4196,20 @@
      "carried": 134
     }
    },
-   "marksFile": {
-    "kb": 315,
-    "dropped": 0,
-    "marks": 1011
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.05970",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 825
+   },
    "ms": [
-    4634,
-    5578
+    7613,
+    8564
    ],
    "pages": [
     13,
@@ -3904,7 +4224,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -3917,6 +4238,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 212,
+    "dropped": 0,
+    "marks": 581
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 91,
@@ -3951,21 +4278,20 @@
      "carried": 51
     }
    },
-   "marksFile": {
-    "kb": 212,
-    "dropped": 0,
-    "marks": 581
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.25210",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 2640
+   },
    "ms": [
-    14875,
-    16240
+    29317,
+    31419
    ],
    "pages": [
     18,
@@ -3980,7 +4306,8 @@
    "lost": {
     "strict": 1,
     "joined": 1,
-    "tex": 1
+    "tex": 1,
+    "all": 1
    },
    "unitMarksMoved": 1,
    "captions": [],
@@ -3993,10 +4320,39 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 672,
+    "dropped": 1,
+    "marks": 2669
+   },
+   "traced": true,
+   "cause": "tex",
+   "causes": {
+    "accepted": 1,
+    "unexplained": 0
+   },
+   "boxes": [
+    {
+     "page": 9,
+     "near": "h189s",
+     "what": "heading start"
+    },
+    {
+     "page": 9,
+     "near": "h189e",
+     "what": "heading end"
+    },
+    {
+     "page": 9,
+     "near": "190s",
+     "what": "unit"
+    }
+   ],
    "classes": {
     "unit": {
      "lines": 338,
-     "carried": 337
+     "carried": 337,
+     "texLost": 1
     },
     "heading": {
      "lines": 26,
@@ -4020,8 +4376,8 @@
      "carried": 47
     },
     "macro": {
-     "lines": 165,
-     "carried": 165
+     "lines": 166,
+     "carried": 166
     },
     "url": {
      "lines": 3,
@@ -4040,25 +4396,6 @@
      "carried": 133
     }
    },
-   "marksFile": {
-    "kb": 672,
-    "dropped": 1,
-    "marks": 2665
-   },
-   "traced": true,
-   "cause": "tex",
-   "boxes": [
-    {
-     "page": 9,
-     "near": "h189s",
-     "what": "heading start"
-    },
-    {
-     "page": 9,
-     "near": "h189e",
-     "what": "heading end"
-    }
-   ],
    "own": {
     "lost": 1
    },
@@ -4068,9 +4405,14 @@
    "id": "2608.14893",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 835
+   },
    "ms": [
-    3596,
-    5696
+    7736,
+    11879
    ],
    "pages": [
     31,
@@ -4085,7 +4427,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -4098,6 +4441,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 386,
+    "dropped": 0,
+    "marks": 950
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 218,
@@ -4136,21 +4485,20 @@
      "carried": 122
     }
    },
-   "marksFile": {
-    "kb": 386,
-    "dropped": 0,
-    "marks": 950
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.27210",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 810
+   },
    "ms": [
-    3349,
-    3737
+    8584,
+    9300
    ],
    "pages": [
     18,
@@ -4165,7 +4513,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -4178,6 +4527,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 318,
+    "dropped": 0,
+    "marks": 1452
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 209,
@@ -4212,21 +4567,20 @@
      "carried": 1
     }
    },
-   "marksFile": {
-    "kb": 318,
-    "dropped": 0,
-    "marks": 1452
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.26008",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1706
+   },
    "ms": [
-    6271,
-    7586
+    14732,
+    18362
    ],
    "pages": [
     16,
@@ -4241,7 +4595,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -4254,6 +4609,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 334,
+    "dropped": 0,
+    "marks": 1105
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 332,
@@ -4292,21 +4653,20 @@
      "carried": 49
     }
    },
-   "marksFile": {
-    "kb": 334,
-    "dropped": 0,
-    "marks": 1105
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.24961",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 573
+   },
    "ms": [
-    4657,
-    5999
+    5111,
+    6635
    ],
    "pages": [
     16,
@@ -4321,7 +4681,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -4334,6 +4695,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 273,
+    "dropped": 0,
+    "marks": 887
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 107,
@@ -4364,21 +4731,20 @@
      "carried": 181
     }
    },
-   "marksFile": {
-    "kb": 273,
-    "dropped": 0,
-    "marks": 887
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.14934",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1900
+   },
    "ms": [
-    6295,
-    8273
+    17559,
+    24215
    ],
    "pages": [
     45,
@@ -4393,7 +4759,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -4406,6 +4773,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 954,
+    "dropped": 4,
+    "marks": 2473
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 165,
@@ -4448,21 +4821,20 @@
      "carried": 140
     }
    },
-   "marksFile": {
-    "kb": 954,
-    "dropped": 4,
-    "marks": 2473
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.07584",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 1093
+   },
    "ms": [
-    4392,
-    5052
+    10088,
+    11295
    ],
    "pages": [
     10,
@@ -4477,7 +4849,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -4490,6 +4863,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 191,
+    "dropped": 0,
+    "marks": 325
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 144,
@@ -4528,21 +4907,20 @@
      "carried": 17
     }
    },
-   "marksFile": {
-    "kb": 191,
-    "dropped": 0,
-    "marks": 325
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.20240",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 2430
+   },
    "ms": [
-    5147,
-    5261
+    12905,
+    13028
    ],
    "pages": [
     15,
@@ -4557,7 +4935,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -4570,6 +4949,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 433,
+    "dropped": 0,
+    "marks": 1184
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 216,
@@ -4616,21 +5001,20 @@
      "carried": 67
     }
    },
-   "marksFile": {
-    "kb": 433,
-    "dropped": 0,
-    "marks": 1184
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.11884",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 1420
+   },
    "ms": [
-    4512,
-    4645
+    6759,
+    6699
    ],
    "pages": [
     10,
@@ -4645,7 +5029,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -4658,6 +5043,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 263,
+    "dropped": 0,
+    "marks": 915
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 129,
@@ -4692,21 +5083,20 @@
      "carried": 86
     }
    },
-   "marksFile": {
-    "kb": 263,
-    "dropped": 0,
-    "marks": 915
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.17206",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 680
+   },
    "ms": [
-    2079,
-    2255
+    2559,
+    2707
    ],
    "pages": [
     19,
@@ -4721,7 +5111,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -4734,6 +5125,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 271,
+    "dropped": 0,
+    "marks": 2115
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 181,
@@ -4772,21 +5169,20 @@
      "carried": 2
     }
    },
-   "marksFile": {
-    "kb": 271,
-    "dropped": 0,
-    "marks": 2115
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.17060",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1174
+   },
    "ms": [
-    7280,
-    8265
+    6095,
+    8903
    ],
    "pages": [
     12,
@@ -4801,7 +5197,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -4814,6 +5211,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 370,
+    "dropped": 0,
+    "marks": 1643
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 179,
@@ -4848,21 +5251,20 @@
      "carried": 67
     }
    },
-   "marksFile": {
-    "kb": 370,
-    "dropped": 0,
-    "marks": 1643
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.11587",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 836
+   },
    "ms": [
-    5290,
-    5568
+    4825,
+    5594
    ],
    "pages": [
     5,
@@ -4877,7 +5279,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -4890,6 +5293,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 151,
+    "dropped": 0,
+    "marks": 396
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 91,
@@ -4924,21 +5333,20 @@
      "carried": 14
     }
    },
-   "marksFile": {
-    "kb": 151,
-    "dropped": 0,
-    "marks": 396
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.23586",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 3477
+   },
    "ms": [
-    3649,
-    4248
+    13446,
+    11939
    ],
    "pages": [
     35,
@@ -4953,7 +5361,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -4966,6 +5375,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 784,
+    "dropped": 0,
+    "marks": 3320
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 446,
@@ -5000,21 +5415,20 @@
      "carried": 44
     }
    },
-   "marksFile": {
-    "kb": 784,
-    "dropped": 0,
-    "marks": 3320
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.18626",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 3100
+   },
    "ms": [
-    3987,
-    4660
+    7815,
+    7564
    ],
    "pages": [
     9,
@@ -5029,7 +5443,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -5042,6 +5457,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 205,
+    "dropped": 0,
+    "marks": 434
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 92,
@@ -5080,21 +5501,20 @@
      "carried": 1
     }
    },
-   "marksFile": {
-    "kb": 205,
-    "dropped": 0,
-    "marks": 434
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.25750",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 3225
+   },
    "ms": [
-    3257,
-    5076
+    15848,
+    27010
    ],
    "pages": [
     18,
@@ -5109,7 +5529,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -5122,6 +5543,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 443,
+    "dropped": 0,
+    "marks": 1660
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 247,
@@ -5172,21 +5599,20 @@
      "carried": 31
     }
    },
-   "marksFile": {
-    "kb": 443,
-    "dropped": 0,
-    "marks": 1659
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.05519",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 2565
+   },
    "ms": [
-    1980,
-    2585
+    16154,
+    11304
    ],
    "pages": [
     8,
@@ -5201,7 +5627,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -5214,6 +5641,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 208,
+    "dropped": 0,
+    "marks": 481
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 119,
@@ -5252,21 +5685,20 @@
      "carried": 39
     }
    },
-   "marksFile": {
-    "kb": 208,
-    "dropped": 0,
-    "marks": 481
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.24839",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 591
+   },
    "ms": [
-    2354,
-    2462
+    2138,
+    2358
    ],
    "pages": [
     7,
@@ -5281,7 +5713,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -5294,6 +5727,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 167,
+    "dropped": 0,
+    "marks": 460
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 102,
@@ -5324,21 +5763,20 @@
      "carried": 28
     }
    },
-   "marksFile": {
-    "kb": 167,
-    "dropped": 0,
-    "marks": 460
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.20051",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 712
+   },
    "ms": [
-    5839,
-    7178
+    6227,
+    6976
    ],
    "pages": [
     60,
@@ -5353,7 +5791,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -5366,6 +5805,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 850,
+    "dropped": 6,
+    "marks": 5928
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 747,
@@ -5404,21 +5849,20 @@
      "carried": 71
     }
    },
-   "marksFile": {
-    "kb": 850,
-    "dropped": 6,
-    "marks": 5928
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.26528",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 434
+   },
    "ms": [
-    3584,
-    5222
+    3131,
+    4623
    ],
    "pages": [
     31,
@@ -5433,7 +5877,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -5446,6 +5891,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 477,
+    "dropped": 0,
+    "marks": 1657
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 198,
@@ -5476,21 +5927,20 @@
      "carried": 31
     }
    },
-   "marksFile": {
-    "kb": 477,
-    "dropped": 0,
-    "marks": 1657
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.18887",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 570
+   },
    "ms": [
-    1833,
-    1808
+    1951,
+    1943
    ],
    "pages": [
     8,
@@ -5505,7 +5955,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -5518,6 +5969,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 245,
+    "dropped": 0,
+    "marks": 852
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 142,
@@ -5556,21 +6013,20 @@
      "carried": 15
     }
    },
-   "marksFile": {
-    "kb": 245,
-    "dropped": 0,
-    "marks": 852
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.09189",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 2373
+   },
    "ms": [
-    10537,
-    11743
+    19676,
+    21240
    ],
    "pages": [
     20,
@@ -5585,7 +6041,8 @@
    "lost": {
     "strict": 1,
     "joined": 1,
-    "tex": 1
+    "tex": 1,
+    "all": 1
    },
    "unitMarksMoved": 1,
    "captions": [],
@@ -5598,6 +6055,24 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 516,
+    "dropped": 1,
+    "marks": 1367
+   },
+   "traced": true,
+   "cause": "tex",
+   "causes": {
+    "accepted": 1,
+    "unexplained": 0
+   },
+   "boxes": [
+    {
+     "page": 13,
+     "near": "h388e",
+     "what": "heading end"
+    }
+   ],
    "classes": {
     "unit": {
      "lines": 465,
@@ -5607,6 +6082,10 @@
      "lines": 48,
      "carried": 47,
      "texLost": 1
+    },
+    "footnote": {
+     "lines": 2,
+     "carried": 2
     },
     "cite": {
      "lines": 41,
@@ -5633,20 +6112,6 @@
      "carried": 207
     }
    },
-   "marksFile": {
-    "kb": 516,
-    "dropped": 1,
-    "marks": 1363
-   },
-   "traced": true,
-   "cause": "tex",
-   "boxes": [
-    {
-     "page": 13,
-     "near": "h388e",
-     "what": "heading end"
-    }
-   ],
    "own": {
     "lost": 1
    },
@@ -5656,9 +6121,14 @@
    "id": "2608.12255",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 7,
+    "answered": 7,
+    "ms": 1748
+   },
    "ms": [
-    24267,
-    29216
+    37684,
+    28194
    ],
    "pages": [
     52,
@@ -5673,7 +6143,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -5686,6 +6157,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 1364,
+    "dropped": 17,
+    "marks": 7516
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 507,
@@ -5732,21 +6209,20 @@
      "carried": 4
     }
    },
-   "marksFile": {
-    "kb": 1364,
-    "dropped": 17,
-    "marks": 7513
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.00055",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1944
+   },
    "ms": [
-    2435,
-    3124
+    11156,
+    12363
    ],
    "pages": [
     27,
@@ -5761,7 +6237,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -5774,6 +6251,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 317,
+    "dropped": 0,
+    "marks": 1455
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 142,
@@ -5784,8 +6267,8 @@
      "carried": 19
     },
     "footnote": {
-     "lines": 1,
-     "carried": 1
+     "lines": 2,
+     "carried": 2
     },
     "ref": {
      "lines": 38,
@@ -5812,21 +6295,20 @@
      "carried": 1
     }
    },
-   "marksFile": {
-    "kb": 317,
-    "dropped": 0,
-    "marks": 1454
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.02015",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1432
+   },
    "ms": [
-    5727,
-    6146
+    5679,
+    9026
    ],
    "pages": [
     26,
@@ -5841,7 +6323,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -5854,6 +6337,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 382,
+    "dropped": 0,
+    "marks": 1511
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 159,
@@ -5892,21 +6381,20 @@
      "carried": 1
     }
    },
-   "marksFile": {
-    "kb": 382,
-    "dropped": 0,
-    "marks": 1511
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.10322",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 931
+   },
    "ms": [
-    4717,
-    4967
+    6930,
+    7856
    ],
    "pages": [
     26,
@@ -5921,7 +6409,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -5934,6 +6423,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 328,
+    "dropped": 0,
+    "marks": 1738
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 105,
@@ -5944,8 +6439,8 @@
      "carried": 12
     },
     "footnote": {
-     "lines": 1,
-     "carried": 1
+     "lines": 2,
+     "carried": 2
     },
     "math": {
      "lines": 392,
@@ -5968,21 +6463,20 @@
      "carried": 7
     }
    },
-   "marksFile": {
-    "kb": 328,
-    "dropped": 0,
-    "marks": 1737
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.03841",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 837
+   },
    "ms": [
-    2238,
-    1455
+    3173,
+    2757
    ],
    "pages": [
     7,
@@ -5997,7 +6491,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -6010,6 +6505,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 124,
+    "dropped": 0,
+    "marks": 605
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 62,
@@ -6020,8 +6521,8 @@
      "carried": 5
     },
     "footnote": {
-     "lines": 1,
-     "carried": 1
+     "lines": 2,
+     "carried": 2
     },
     "cite": {
      "lines": 38,
@@ -6044,21 +6545,20 @@
      "carried": 13
     }
    },
-   "marksFile": {
-    "kb": 124,
-    "dropped": 0,
-    "marks": 604
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.30782",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 1236
+   },
    "ms": [
-    3415,
-    3112
+    6751,
+    6611
    ],
    "pages": [
     10,
@@ -6073,7 +6573,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -6086,6 +6587,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 246,
+    "dropped": 0,
+    "marks": 736
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 88,
@@ -6120,21 +6627,20 @@
      "carried": 61
     }
    },
-   "marksFile": {
-    "kb": 246,
-    "dropped": 0,
-    "marks": 736
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.18502",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1008
+   },
    "ms": [
-    3067,
-    4272
+    6927,
+    10155
    ],
    "pages": [
     54,
@@ -6149,7 +6655,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -6162,6 +6669,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 1094,
+    "dropped": 0,
+    "marks": 7157
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 411,
@@ -6200,21 +6713,20 @@
      "carried": 3
     }
    },
-   "marksFile": {
-    "kb": 1093,
-    "dropped": 0,
-    "marks": 7154
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.11605",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 900
+   },
    "ms": [
-    3276,
-    4071
+    7211,
+    8288
    ],
    "pages": [
     12,
@@ -6229,7 +6741,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -6242,6 +6755,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 224,
+    "dropped": 0,
+    "marks": 475
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 95,
@@ -6276,21 +6795,20 @@
      "carried": 27
     }
    },
-   "marksFile": {
-    "kb": 224,
-    "dropped": 0,
-    "marks": 475
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.12502",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1294
+   },
    "ms": [
-    4171,
-    5946
+    5420,
+    6509
    ],
    "pages": [
     16,
@@ -6305,7 +6823,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -6318,6 +6837,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 424,
+    "dropped": 0,
+    "marks": 1514
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 253,
@@ -6364,21 +6889,20 @@
      "carried": 98
     }
    },
-   "marksFile": {
-    "kb": 424,
-    "dropped": 0,
-    "marks": 1514
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.16117",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 7,
+    "answered": 7,
+    "ms": 1061
+   },
    "ms": [
-    8180,
-    9547
+    9347,
+    13047
    ],
    "pages": [
     40,
@@ -6393,7 +6917,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -6406,6 +6931,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 557,
+    "dropped": 0,
+    "marks": 1420
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 173,
@@ -6416,8 +6947,8 @@
      "carried": 20
     },
     "footnote": {
-     "lines": 5,
-     "carried": 5
+     "lines": 6,
+     "carried": 6
     },
     "math": {
      "lines": 263,
@@ -6432,29 +6963,28 @@
      "carried": 97
     },
     "cite": {
-     "lines": 116,
-     "carried": 116
+     "lines": 117,
+     "carried": 117
     },
     "eqref": {
      "lines": 7,
      "carried": 7
     }
    },
-   "marksFile": {
-    "kb": 556,
-    "dropped": 0,
-    "marks": 1413
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.21733",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 827
+   },
    "ms": [
-    3652,
-    4128
+    5599,
+    6912
    ],
    "pages": [
     19,
@@ -6469,7 +6999,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -6482,6 +7013,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 445,
+    "dropped": 0,
+    "marks": 1343
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 273,
@@ -6520,21 +7057,20 @@
      "carried": 13
     }
    },
-   "marksFile": {
-    "kb": 445,
-    "dropped": 0,
-    "marks": 1340
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.29867",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1180
+   },
    "ms": [
-    3771,
-    4611
+    6898,
+    7474
    ],
    "pages": [
     19,
@@ -6549,7 +7085,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -6562,6 +7099,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 343,
+    "dropped": 0,
+    "marks": 1323
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 185,
@@ -6596,21 +7139,20 @@
      "carried": 39
     }
    },
-   "marksFile": {
-    "kb": 343,
-    "dropped": 0,
-    "marks": 1323
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.10091",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 876
+   },
    "ms": [
-    2997,
-    3880
+    4908,
+    5986
    ],
    "pages": [
     15,
@@ -6625,7 +7167,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -6638,6 +7181,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 239,
+    "dropped": 0,
+    "marks": 897
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 94,
@@ -6676,12 +7225,6 @@
      "carried": 66
     }
    },
-   "marksFile": {
-    "kb": 239,
-    "dropped": 0,
-    "marks": 897
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
@@ -6689,11 +7232,16 @@
    "v0": "ok",
    "v1": "ok",
    "switched": [
-    "cite"
+    "\\cite"
    ],
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 712
+   },
    "ms": [
-    2012,
-    1912
+    2410,
+    2290
    ],
    "pages": [
     20,
@@ -6708,7 +7256,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -6721,6 +7270,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 170,
+    "dropped": 0,
+    "marks": 372
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 77,
@@ -6743,21 +7298,20 @@
      "carried": 14
     }
    },
-   "marksFile": {
-    "kb": 170,
-    "dropped": 0,
-    "marks": 372
-   },
-   "traced": true,
    "verdict": "switched"
   },
   {
    "id": "2608.19071",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 4223
+   },
    "ms": [
-    5177,
-    5643
+    22962,
+    30608
    ],
    "pages": [
     31,
@@ -6772,7 +7326,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -6785,6 +7340,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 528,
+    "dropped": 31,
+    "marks": 2928
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 254,
@@ -6823,21 +7384,20 @@
      "carried": 2
     }
    },
-   "marksFile": {
-    "kb": 528,
-    "dropped": 31,
-    "marks": 2928
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.01482",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 3397
+   },
    "ms": [
-    4248,
-    4468
+    19664,
+    26969
    ],
    "pages": [
     8,
@@ -6852,7 +7412,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -6865,6 +7426,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 171,
+    "dropped": 0,
+    "marks": 303
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 111,
@@ -6895,21 +7462,20 @@
      "carried": 11
     }
    },
-   "marksFile": {
-    "kb": 171,
-    "dropped": 0,
-    "marks": 303
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.13505",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 1663
+   },
    "ms": [
-    10813,
-    12225
+    12158,
+    15124
    ],
    "pages": [
     35,
@@ -6924,7 +7490,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -6937,6 +7504,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 698,
+    "dropped": 0,
+    "marks": 1249
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 304,
@@ -6945,6 +7518,10 @@
     "heading": {
      "lines": 40,
      "carried": 40
+    },
+    "footnote": {
+     "lines": 2,
+     "carried": 2
     },
     "math": {
      "lines": 86,
@@ -6979,21 +7556,20 @@
      "carried": 92
     }
    },
-   "marksFile": {
-    "kb": 698,
-    "dropped": 0,
-    "marks": 1247
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.16745",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1024
+   },
    "ms": [
-    7247,
-    8952
+    7887,
+    10898
    ],
    "pages": [
     23,
@@ -7008,7 +7584,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -7021,6 +7598,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 404,
+    "dropped": 0,
+    "marks": 1544
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 264,
@@ -7059,21 +7642,20 @@
      "carried": 187
     }
    },
-   "marksFile": {
-    "kb": 404,
-    "dropped": 0,
-    "marks": 1544
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.24503",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 657
+   },
    "ms": [
-    1201,
-    1336
+    3402,
+    3521
    ],
    "pages": [
     11,
@@ -7088,7 +7670,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -7101,6 +7684,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 137,
+    "dropped": 0,
+    "marks": 792
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 70,
@@ -7127,21 +7716,20 @@
      "carried": 63
     }
    },
-   "marksFile": {
-    "kb": 137,
-    "dropped": 0,
-    "marks": 792
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.04242",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 730
+   },
    "ms": [
-    2416,
-    2748
+    5517,
+    5547
    ],
    "pages": [
     8,
@@ -7156,7 +7744,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -7169,6 +7758,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 238,
+    "dropped": 0,
+    "marks": 370
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 93,
@@ -7203,21 +7798,20 @@
      "carried": 4
     }
    },
-   "marksFile": {
-    "kb": 238,
-    "dropped": 0,
-    "marks": 370
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.12096",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 7,
+    "answered": 7,
+    "ms": 4442
+   },
    "ms": [
-    17871,
-    18539
+    29997,
+    31002
    ],
    "pages": [
     23,
@@ -7232,7 +7826,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -7245,6 +7840,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 526,
+    "dropped": 0,
+    "marks": 3071
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 411,
@@ -7287,21 +7888,20 @@
      "carried": 2
     }
    },
-   "marksFile": {
-    "kb": 525,
-    "dropped": 0,
-    "marks": 3067
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.20847",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 955
+   },
    "ms": [
-    1643,
-    2736
+    3414,
+    3807
    ],
    "pages": [
     9,
@@ -7316,7 +7916,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -7329,6 +7930,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 227,
+    "dropped": 0,
+    "marks": 593
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 61,
@@ -7359,21 +7966,20 @@
      "carried": 5
     }
    },
-   "marksFile": {
-    "kb": 227,
-    "dropped": 0,
-    "marks": 593
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.30730",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 6,
+    "answered": 6,
+    "ms": 1562
+   },
    "ms": [
-    15307,
-    23764
+    20839,
+    29806
    ],
    "pages": [
     64,
@@ -7388,7 +7994,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -7401,6 +8008,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 1398,
+    "dropped": 0,
+    "marks": 4675
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 594,
@@ -7447,21 +8060,20 @@
      "carried": 584
     }
    },
-   "marksFile": {
-    "kb": 1398,
-    "dropped": 0,
-    "marks": 4675
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.02785",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1391
+   },
    "ms": [
-    4642,
-    4950
+    10214,
+    10772
    ],
    "pages": [
     14,
@@ -7476,7 +8088,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -7489,6 +8102,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 254,
+    "dropped": 0,
+    "marks": 1828
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 164,
@@ -7499,8 +8118,8 @@
      "carried": 3
     },
     "footnote": {
-     "lines": 1,
-     "carried": 1
+     "lines": 2,
+     "carried": 2
     },
     "ref": {
      "lines": 34,
@@ -7523,21 +8142,20 @@
      "carried": 3
     }
    },
-   "marksFile": {
-    "kb": 254,
-    "dropped": 0,
-    "marks": 1827
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.08872",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1306
+   },
    "ms": [
-    9991,
-    11326
+    12098,
+    13988
    ],
    "pages": [
     40,
@@ -7552,7 +8170,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -7565,6 +8184,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 515,
+    "dropped": 0,
+    "marks": 2184
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 263,
@@ -7595,21 +8220,20 @@
      "carried": 27
     }
    },
-   "marksFile": {
-    "kb": 515,
-    "dropped": 0,
-    "marks": 2184
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.14433",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 446
+   },
    "ms": [
-    3108,
-    3091
+    4469,
+    5013
    ],
    "pages": [
     16,
@@ -7624,7 +8248,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -7637,6 +8262,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 382,
+    "dropped": 0,
+    "marks": 1004
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 196,
@@ -7671,21 +8302,20 @@
      "carried": 16
     }
    },
-   "marksFile": {
-    "kb": 382,
-    "dropped": 0,
-    "marks": 1004
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.06233",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 515
+   },
    "ms": [
-    2322,
-    4353
+    3966,
+    8489
    ],
    "pages": [
     12,
@@ -7700,7 +8330,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -7713,6 +8344,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 327,
+    "dropped": 0,
+    "marks": 1163
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 100,
@@ -7743,21 +8380,20 @@
      "carried": 3
     }
    },
-   "marksFile": {
-    "kb": 327,
-    "dropped": 0,
-    "marks": 1163
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.25960",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1242
+   },
    "ms": [
-    7557,
-    9484
+    14444,
+    19715
    ],
    "pages": [
     25,
@@ -7772,7 +8408,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -7785,6 +8422,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 553,
+    "dropped": 0,
+    "marks": 1472
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 358,
@@ -7823,12 +8466,6 @@
      "carried": 195
     }
    },
-   "marksFile": {
-    "kb": 553,
-    "dropped": 0,
-    "marks": 1472
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
@@ -7836,11 +8473,16 @@
    "v0": "ok",
    "v1": "ok",
    "switched": [
-    "cite"
+    "\\cite"
    ],
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 1030
+   },
    "ms": [
-    2966,
-    3542
+    9012,
+    9188
    ],
    "pages": [
     30,
@@ -7855,7 +8497,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -7868,6 +8511,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 240,
+    "dropped": 0,
+    "marks": 523
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 117,
@@ -7902,21 +8551,20 @@
      "carried": 29
     }
    },
-   "marksFile": {
-    "kb": 240,
-    "dropped": 0,
-    "marks": 523
-   },
-   "traced": true,
    "verdict": "switched"
   },
   {
    "id": "2608.14557",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 2648
+   },
    "ms": [
-    3958,
-    4522
+    9184,
+    9278
    ],
    "pages": [
     2,
@@ -7931,7 +8579,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -7944,6 +8593,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 62,
+    "dropped": 1,
+    "marks": 189
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 35,
@@ -7982,21 +8637,20 @@
      "carried": 23
     }
    },
-   "marksFile": {
-    "kb": 62,
-    "dropped": 1,
-    "marks": 189
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.09038",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 546
+   },
    "ms": [
-    2144,
-    2279
+    3689,
+    3823
    ],
    "pages": [
     10,
@@ -8011,7 +8665,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -8024,6 +8679,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 312,
+    "dropped": 0,
+    "marks": 1820
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 155,
@@ -8058,21 +8719,20 @@
      "carried": 19
     }
    },
-   "marksFile": {
-    "kb": 312,
-    "dropped": 0,
-    "marks": 1819
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.22539",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1173
+   },
    "ms": [
-    4534,
-    4957
+    8996,
+    9296
    ],
    "pages": [
     8,
@@ -8087,7 +8747,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -8100,6 +8761,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 108,
+    "dropped": 0,
+    "marks": 666
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 86,
@@ -8130,21 +8797,20 @@
      "carried": 5
     }
    },
-   "marksFile": {
-    "kb": 108,
-    "dropped": 0,
-    "marks": 666
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.23517",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 0,
+    "answered": 0,
+    "ms": 946
+   },
    "ms": [
-    4901,
-    5957
+    6981,
+    7969
    ],
    "pages": [
     40,
@@ -8159,7 +8825,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -8172,22 +8839,27 @@
     "out": "same"
    },
    "errors": 0,
-   "classes": {},
    "marksFile": {
     "kb": 624,
     "dropped": 0,
     "marks": 70
    },
    "traced": true,
+   "classes": {},
    "verdict": "clean"
   },
   {
    "id": "2608.09812",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 6,
+    "answered": 6,
+    "ms": 701
+   },
    "ms": [
-    3022,
-    3176
+    4761,
+    4994
    ],
    "pages": [
     24,
@@ -8202,7 +8874,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -8215,6 +8888,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 316,
+    "dropped": 0,
+    "marks": 1385
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 158,
@@ -8249,21 +8928,20 @@
      "carried": 36
     }
    },
-   "marksFile": {
-    "kb": 316,
-    "dropped": 0,
-    "marks": 1372
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.13799",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1281
+   },
    "ms": [
-    4547,
-    4972
+    5568,
+    5930
    ],
    "pages": [
     7,
@@ -8278,7 +8956,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -8291,6 +8970,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 193,
+    "dropped": 0,
+    "marks": 641
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 127,
@@ -8325,21 +9010,20 @@
      "carried": 61
     }
    },
-   "marksFile": {
-    "kb": 193,
-    "dropped": 0,
-    "marks": 641
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.15334",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 8,
+    "answered": 8,
+    "ms": 781
+   },
    "ms": [
-    22032,
-    24684
+    33168,
+    44624
    ],
    "pages": [
     24,
@@ -8354,7 +9038,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -8367,6 +9052,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 711,
+    "dropped": 0,
+    "marks": 2327
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 284,
@@ -8377,12 +9068,12 @@
      "carried": 21
     },
     "footnote": {
-     "lines": 3,
-     "carried": 3
+     "lines": 20,
+     "carried": 20
     },
     "cite": {
-     "lines": 138,
-     "carried": 138
+     "lines": 139,
+     "carried": 139
     },
     "math": {
      "lines": 542,
@@ -8397,8 +9088,8 @@
      "carried": 116
     },
     "macro": {
-     "lines": 54,
-     "carried": 54
+     "lines": 53,
+     "carried": 53
     },
     "code": {
      "lines": 18,
@@ -8413,21 +9104,20 @@
      "carried": 22
     }
    },
-   "marksFile": {
-    "kb": 711,
-    "dropped": 0,
-    "marks": 2305
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.29782",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 630
+   },
    "ms": [
-    3325,
-    4284
+    4910,
+    8612
    ],
    "pages": [
     30,
@@ -8442,7 +9132,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -8455,6 +9146,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 556,
+    "dropped": 0,
+    "marks": 2911
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 289,
@@ -8489,21 +9186,20 @@
      "carried": 1
     }
    },
-   "marksFile": {
-    "kb": 556,
-    "dropped": 0,
-    "marks": 2911
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.29778",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 3042
+   },
    "ms": [
-    4751,
-    6023
+    14150,
+    13306
    ],
    "pages": [
     11,
@@ -8518,7 +9214,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -8531,6 +9228,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 259,
+    "dropped": 0,
+    "marks": 523
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 45,
@@ -8561,21 +9264,20 @@
      "carried": 13
     }
    },
-   "marksFile": {
-    "kb": 259,
-    "dropped": 0,
-    "marks": 523
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.17019",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 1357
+   },
    "ms": [
-    3635,
-    3252
+    7291,
+    7747
    ],
    "pages": [
     11,
@@ -8590,7 +9292,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -8603,6 +9306,12 @@
     "out": "none"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 275,
+    "dropped": 0,
+    "marks": 867
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 216,
@@ -8637,21 +9346,20 @@
      "carried": 72
     }
    },
-   "marksFile": {
-    "kb": 275,
-    "dropped": 0,
-    "marks": 867
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.09746",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1173
+   },
    "ms": [
-    2886,
-    3138
+    5276,
+    6515
    ],
    "pages": [
     23,
@@ -8666,7 +9374,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -8679,6 +9388,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 266,
+    "dropped": 0,
+    "marks": 1112
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 215,
@@ -8713,21 +9428,20 @@
      "carried": 18
     }
    },
-   "marksFile": {
-    "kb": 266,
-    "dropped": 0,
-    "marks": 1112
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.23393",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1043
+   },
    "ms": [
-    2399,
-    2372
+    4794,
+    5226
    ],
    "pages": [
     20,
@@ -8742,7 +9456,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -8755,6 +9470,12 @@
     "out": "same"
    },
    "errors": 0,
+   "marksFile": {
+    "kb": 346,
+    "dropped": 0,
+    "marks": 1038
+   },
+   "traced": true,
    "classes": {
     "unit": {
      "lines": 155,
@@ -8793,21 +9514,20 @@
      "carried": 15
     }
    },
-   "marksFile": {
-    "kb": 346,
-    "dropped": 0,
-    "marks": 1038
-   },
-   "traced": true,
    "verdict": "clean"
   },
   {
    "id": "2608.11084",
    "v0": "ok",
    "v1": "ok",
+   "probe": {
+    "samples": 0,
+    "answered": 0,
+    "ms": 1303
+   },
    "ms": [
-    5357,
-    6426
+    11486,
+    11686
    ],
    "pages": [
     35,
@@ -8822,7 +9542,8 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 0
+    "tex": 0,
+    "all": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -8835,18 +9556,18 @@
     "out": "same"
    },
    "errors": 0,
-   "classes": {
-    "heading": {
-     "lines": 1,
-     "carried": 1
-    }
-   },
    "marksFile": {
     "kb": 472,
     "dropped": 0,
     "marks": 36
    },
    "traced": true,
+   "classes": {
+    "heading": {
+     "lines": 1,
+     "carried": 1
+    }
+   },
    "verdict": "clean"
   }
  ]

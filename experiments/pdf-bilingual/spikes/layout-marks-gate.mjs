@@ -5,8 +5,8 @@
 // where arXiv's PDF — the readings compile's twin — has the text. So for each paper of the corpus:
 //   - v0, the marked original as the run makes it today (live.mjs originalFiles with its line probes), its destinations
 //     set as v1 sets its own — the zero-size FitR of layout/marks.mjs LAYOUT_TEX — so that a unit mark compares with
-//     a unit mark; v1, the same with the layout marks (LAYOUT_CLASSES, and the paper's own switch, punctuationMovers,
-//     read from its preamble and the font probe's log as the run would) — each compiled natively as spikes/gt-orig.mjs
+//     a unit mark; v1, the same with the layout marks (LAYOUT_CLASSES, and the paper's own switch: TeX's answers to the
+//     mark probe, below) — each compiled natively as spikes/gt-orig.mjs
 //     compiles: latexmk, Docker texlive/texlive:latest, --network none, 2 CPUs, 3 GB, 300 s (but -file-line-error: the
 //     logs are read as the run reads them), the date pinned. A compile is kept by what it was given (the TeX image, the engine, every
 //     file), as what it gave (its text items, readings, marks, the files it wrote, errors, time); its PDF is deleted;
@@ -18,21 +18,28 @@
 //     list of figures is); per class, the lines carried (a line not lost with a mark of the class on it) and, where any
 //     line is lost and --bisect is given, the lines lost (v1 with the class alone against v1 with none, which sets the
 //     units' own marks: headings', cells', MARK_DEF's — those against v0);
-//   - where lines are lost, TeX's own page boxes (\tracingoutput, a third and fourth compile) with the marks' own nodes
-//     taken out: the same boxes are a PDF-only offset (pdfTeX draws glyphs off the places TeX set), a difference is
-//     TeX's, named by the mark nearest it;
-//   - a verdict: clean, accepted (moved: its layout lines lost), switched (the paper's own switch is on), failed (v1
-//     does not compile), passed over (v0 does not). A class whose marks lose more of a paper's lines than they carry is
-//     to be switched off for it (`switchOff`), and the check fails until it is.
-// The rows go to records/layout-marks.json (ids, counts, page numbers, class names: no paper's content) when the run is
-// of the classes as committed; the details, to <data>/runs/layout-marks-gate/. Exit 1 where a paper failed or a class
-// is to be switched off.
+//   - TeX's own page boxes of every paper (\tracingoutput, a third and fourth compile) with the marks' own nodes taken
+//     out, every difference counted: a line TeX set otherwise, mapped to the page's line by the marks set in it, is lost
+//     and not carried; where items moved, the same boxes are a PDF-only offset;
+//   - a verdict: failing where a line is lost (strict, joined or by TeX) and not every loss has an accepted cause
+//     (layout-marks-compare.mjs verdictOf: items moved with TeX's boxes the same, a PDF-only offset; or every line TeX
+//     set otherwise a heading's lost kern, by its evidence: causesOf), or where v1 does not compile; accepted where every
+//     loss has one; with no line lost, switched (TeX's answers took marks off: the paper's own switch) or clean; passed
+//     over where v0 does not compile. A class whose marks lose more of a paper's lines than they carry is to be switched
+//     off for it (`switchOff`), and fails;
+//   - the check against records/layout-marks.json (unless --no-check): a paper worse than its recorded row (its verdict,
+//     its lines lost, its unit marks moved) fails the run.
+// The paper's own switch is TeX's answer to the mark probe (layout/marks.mjs markProbeTex), set in the font probe's
+// compile (probeFiles `marks`), as the run would set it. The rows go to records/layout-marks.json (ids, counts, page
+// numbers, class and command names: no paper's content) with --write; the details, to <data>/runs/layout-marks-gate/.
+// Exit 1 where a paper fails, a class is to be switched off, or a paper regressed.
 //   CORPUS_ROOT=<experiments dir holding data/corpus and out/corpus-meta.json> [AXT_DATA=<data folder for the results>] \
-//   pnpm exec tsx experiments/pdf-bilingual/spikes/layout-marks-gate.mjs [--papers=id,…] [--classes=a,b] [--bisect]
-//     --classes    v1 with these classes only (rows not recorded)
-//     --no-switch  v1 without the papers' own switches (rows not recorded): what the switch keeps from moving
-//     --literal    the switch as first ruled: a detected paper's citations without their closing marks (not recorded)
-//     --no-record  the rows not recorded (a paper beside the corpus)
+//   pnpm exec tsx experiments/pdf-bilingual/spikes/layout-marks-gate.mjs [--papers=id,…] [--classes=a,b] [--bisect] [--write]
+//     --classes    v1 with these classes only
+//     --no-switch  v1 without the papers' own switches: what the switch keeps from moving
+//     --plant=<pt> the gate's own test: a kern of that many points after v1's first closing mark, which must fail
+//     --no-check   no check against the record
+//     --write      the rows as the record (not for a variant)
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -42,11 +49,11 @@ import { promisify } from 'node:util'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { latin1, latin1Bytes, MARK_DEF } from '../../../src/pdf-reader/engine/latex-front.mjs'
-import { classOf, encodeLayoutMarks, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarksOf, MARK_CLASSES, parseLayoutMarks, punctuationMovers } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { encodeLayoutMarks, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarksOf, MARK_CLASSES, parseLayoutMarks, probeSamples, readMarkProbe, switchedOf } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles, probeFiles, readingsOf } from '../../../src/pdf-reader/engine/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
 import { marksOf } from '../../../src/pdf-reader/engine/typeset/places.mjs'
-import { attribute, boxDiff, compareReadings, fileStates, joinRuns, lineAt, linesOf, pageBoxes, strictMoves, verdictOf } from './layout-marks-compare.mjs'
+import { attribute, boxDiff, causesOf, classOfMark, compareReadings, fileStates, joinRuns, lineAt, linesOf, lostLines, pageBoxes, regressions, strictMoves, switchOffOf, traced, verdictOf, withFitr } from './layout-marks-compare.mjs'
 
 const run = promisify(execFile)
 const here = new URL('..', import.meta.url).pathname
@@ -55,20 +62,24 @@ const DATA = process.env.AXT_DATA ?? join(CORPUS_ROOT, 'data')
 const OUT = join(DATA, 'runs', 'layout-marks-gate'), CACHE = join(OUT, 'cache'), WORK = join(OUT, 'work')
 const RECORD = join(here, 'records/layout-marks.json')
 const args = process.argv.slice(2), arg = name => args.find(a => a.startsWith(`--${name}=`))?.split('=')[1]
-const BISECT = args.includes('--bisect'), NO_SWITCH = args.includes('--no-switch'), LITERAL = args.includes('--literal')
+const BISECT = args.includes('--bisect'), NO_SWITCH = args.includes('--no-switch'), WRITE = args.includes('--write'), CHECK = !args.includes('--no-check')
+/** the gate's own test: a kern of this many points after v1's first closing mark, which the check must fail */
+const PLANT = arg('plant')
 const CLASSES = arg('classes') !== undefined ? arg('classes').split(',').filter(Boolean) : [...LAYOUT_CLASSES]
 for (const c of CLASSES) if (!MARK_CLASSES.includes(c)) throw new Error(`--classes: no class ${c}`)
-const VARIANT = [arg('classes') !== undefined && `classes-${CLASSES.join('+')}`, NO_SWITCH && 'no-switch', LITERAL && 'literal'].filter(Boolean).join('-')
-const RECORDED = !VARIANT && !args.includes('--no-record')
+const VARIANT = [arg('classes') !== undefined && `classes-${CLASSES.join('+')}`, NO_SWITCH && 'no-switch', PLANT && `plant-${PLANT}`].filter(Boolean).join('-')
+if (WRITE && VARIANT) throw new Error('--write: a variant is never the record')
 const meta = JSON.parse(readFileSync(join(CORPUS_ROOT, 'out/corpus-meta.json'), 'utf8'))
 const ids = arg('papers')?.split(',').filter(Boolean) ?? meta.map(m => m.id)
 for (const id of ids) if (!existsSync(join(CORPUS_ROOT, 'data/corpus', id, 'source.gz'))) throw new Error(`no source for ${id}`)
 const image = (await run('docker', ['image', 'inspect', 'texlive/texlive:latest', '--format', '{{.Id}}'])).stdout.trim()
-/** v1's destinations, for v0: LAYOUT_TEX's definition of \axt@dest (a FitR of no size) and nothing else of it */
-const FITR = /\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\axt@dest#1\{.*?\\fi\\fi\\fi/.exec(LAYOUT_TEX)?.[0]
-if (!FITR) throw new Error("LAYOUT_TEX's destination definition not found")
 /** what a compile keeps of itself: raised when what is kept changes, so that a kept compile is read again */
-const FORMAT = 3
+const FORMAT = 4
+/** the code that reads a compile (its text items, readings, marks and marks file), hashed into every compile's key: a
+ *  change to it reads every compile again, not a stale result (the review, M4) */
+const READERS = createHash('sha256')
+for (const f of ['live.mjs', 'typeset/places.mjs', 'typeset/tex.mjs', 'layout/marks.mjs', 'layout/json.mjs', 'anchors.mjs', 'latex-front.mjs']) READERS.update(readFileSync(new URL(`../../../src/pdf-reader/engine/${f}`, import.meta.url)))
+const READ_HASH = READERS.digest('hex').slice(0, 16)
 /** every compile's date, pinned (pdfTeX's SOURCE_DATE_EPOCH with FORCE_SOURCE_DATE): a paper's \today is the same in v0
  *  and v1 whenever each was compiled (2608.20159's title page moved a day across midnight UTC) */
 const EPOCH = 1791244800
@@ -97,7 +108,7 @@ async function compile(id, files, { main, engine, bbl, kind }) {
   // bibliography (2608.30640's trace was 30 pages, its compile 34)
   const pdftex = kind === 'trace' ? [`-pdflatex=env max_print_line=1000000 ${engine} %O %S`] : []
   const cmd = kind === 'probe' ? [engine, '-interaction=nonstopmode', main] : ['latexmk', { xelatex: '-xelatex', lualatex: '-lualatex' }[engine] ?? '-pdf', ...pdftex, ...(bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main]
-  const hash = createHash('sha256').update(JSON.stringify([FORMAT, image, id, main, engine, !!bbl, kind, cmd, EPOCH]))
+  const hash = createHash('sha256').update(JSON.stringify([FORMAT, READ_HASH, image, id, main, engine, !!bbl, kind, cmd, EPOCH]))
   for (const [p, b] of [...files].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) hash.update(p).update(b)
   const key = join(CACHE, hash.digest('hex').slice(0, 32))
   if (existsSync(`${key}.json.gz`)) return unpack(`${key}.json.gz`)
@@ -158,107 +169,114 @@ const itemsOf = c => allOf(c).map(p => p.filter(i => /\S/.test(i.str)))
 const readingsIn = c => ({ ...c.readings, marks: { ...c.readings.marks, marks: new Map(c.readings.marks.marks) } })
 /** v1's errors v0 has not, each line of the log counted */
 const newErrors = (e0, e1) => { const left = [...e0]; return e1.filter(e => { const k = left.indexOf(e); if (k < 0) return true; left.splice(k, 1); return false }) }
-/** the lines of `ref` (its pages' lines) that `test` loses: strict, a line with an item not in place; joined, a line
- *  whose run of abutting items is not; a page `test` lacks or adds loses every line of it */
-function lostLines(ref, test, lines) {
-  const a = itemsOf(ref), b = test.ok ? itemsOf(test) : []
-  const strict = new Set(), joined = new Set()
-  for (const m of strictMoves(a, b).moved) strict.add(`${m.page}:${lines[m.page - 1].of[m.k]}`)
-  const runs = allOf(ref).map(joinRuns), runsB = test.ok ? allOf(test).map(joinRuns) : []
-  for (const m of strictMoves(runs, runsB).moved) joined.add(`${m.page}:${lines[m.page - 1].of[runs[m.page - 1][m.k].k]}`)
-  return { strict, joined }
-}
-/** the class a layout mark's name is of: a placeholder's (classOf), a footnote's call, a heading's, a cell's, a unit's
- *  (MARK_DEF); null for a page's columns and an image frame's corners */
-const classOfMark = (name, units) => {
-  const what = attribute(name, units)
-  return what.startsWith('heading') ? 'heading' : ['columns', 'image', 'unknown', 'none'].includes(what) ? null : what
-}
+/** the lines of `ref` that `test` loses (layout-marks-compare.mjs lostLines), the lines of `ref`'s pages */
+const lost = (ref, test, lines) => lostLines(itemsOf(ref), test.ok ? itemsOf(test) : [], allOf(ref), test.ok ? allOf(test) : [], lines)
 
 async function paperRow(id) {
   const { files: sources } = await unpackSource(new Uint8Array(readFileSync(join(CORPUS_ROOT, 'data/corpus', id, 'source.gz'))))
   const paper = openPaper(sources), { meta: m, project, units } = paper
   const opts = kind => ({ main: project.main, engine: m.compiler, bbl: m.bbl, kind })
   const withSources = over => { const all = new Map(sources); for (const [p, b] of over) all.set(p, b); return all }
-  // the paper's own switch, as the run would set it: its preamble, and the font probe's log
-  const probe = await compile(id, withSources(probeFiles(paper)), opts('probe'))
-  const detected = punctuationMovers(paper, probe.log ?? '')
-  const movers = NO_SWITCH ? [] : LITERAL ? detected.filter(c => c !== 'cite') : detected
+  // the paper's own switch, as the run would set it: TeX's answers to the mark probe, set in the font probe's compile
+  const samples = probeSamples(units)
+  const probe = await compile(id, withSources(probeFiles(paper, { marks: true })), opts('probe'))
+  const answered = readMarkProbe(probe.log ?? '', samples)
+  const switches = NO_SWITCH ? {} : answered
   const v1Of = classes => {
-    const files = originalFiles(paper, { lines: true, layout: classes, movesPunctuation: movers })
-    // the switch as first ruled: no closing mark for a citation, whatever follows it
-    if (LITERAL && detected.includes('cite')) for (const [p, b] of files) files.set(p, latin1Bytes(latin1(b).replace(/\\axtpm\{p(\d+)\.(\d+)b\}/g, (all, i, k) => (classOf(units[Number(i)]?.pieces[Number(k)]) === 'cite' ? '' : all))))
+    const files = originalFiles(paper, { lines: true, layout: classes, switches })
+    if (PLANT) for (const p of [project.main, ...[...files.keys()].filter(f => f !== project.main).sort()]) {
+      const t = latin1(files.get(p)), at = t.search(/\\axtpm\{p\d+\.\d+b\}/)
+      if (at < 0) continue
+      const end = t.indexOf('}', at) + 1
+      files.set(p, latin1Bytes(`${t.slice(0, end)}\\kern${PLANT}pt\\relax${t.slice(end)}`))
+      break
+    }
     return withSources(files)
   }
-  const v0Files = originalFiles(paper, { lines: true }), main = latin1(v0Files.get(project.main)), at = main.indexOf(MARK_DEF)
-  if (at < 0) throw new Error('no MARK_DEF in the main file')
-  v0Files.set(project.main, latin1Bytes(`${main.slice(0, at + MARK_DEF.length)}\\makeatletter${FITR}\\makeatother${main.slice(at + MARK_DEF.length)}`))
+  const v0Files = originalFiles(paper, { lines: true })
+  v0Files.set(project.main, latin1Bytes(withFitr(latin1(v0Files.get(project.main)), MARK_DEF, LAYOUT_TEX)))
   const f0 = withSources(v0Files), f1 = v1Of(CLASSES)
   const [c0, c1] = await Promise.all([compile(id, f0, opts('v0')), compile(id, f1, opts('v1'))])
   const row = { id, v0: c0.ok ? 'ok' : 'failed' }
   if (!c0.ok) return { row: { ...row, verdict: verdictOf(row) }, detail: { why: c0.why ?? c0.errors?.slice(0, 3) } }
   row.v1 = c1.ok ? 'ok' : 'failed'
-  if (detected.length) row.switched = detected
+  // the switch as applied (none under --no-switch): the commands TeX's answers take marks off, and the probe's own
+  // figures — its samples, those it answered, its compile's time
+  if (switchedOf(switches).length) row.switched = switchedOf(switches)
+  row.probe = { samples: samples.length, answered: Object.keys(answered).length, ms: probe.ms }
   row.ms = [c0.ms, c1.ms]
   if (!c1.ok) return { row: { ...row, verdict: verdictOf(row) }, detail: { why: c1.why ?? c1.errors?.slice(0, 3) } }
   const a = itemsOf(c0), b = itemsOf(c1), lines = a.map(linesOf)
   const strict = strictMoves(a, b), joined = strictMoves(allOf(c0).map(joinRuns), allOf(c1).map(joinRuns))
-  const lost = lostLines(c0, c1, lines)
+  const lostNow = lost(c0, c1, lines)
   const cmp = compareReadings(readingsIn(c0), readingsIn(c1), units)
   const r0 = new Map(c0.readings.marks.marks), r1 = new Map(c1.readings.marks.marks), gate = new Set(cmp.captions.map(([u]) => u))
   const unitMoved = [...new Set([...r0.keys(), ...r1.keys()])].filter(n => /^\d+[se]$/.test(n) && !gate.has(Number(n.slice(0, -1)))).filter(n => { const x = r0.get(n), y = r1.get(n); return !x || !y || x.page !== y.page || Math.abs(x.x - y.x) > 0.01 || Math.abs(x.y - y.y) > 0.01 })
-  // each class's marks by the line they stand on, and the lines carried: those not lost
+  // each class's marks by the line they stand on
   const byClass = {}
   for (const [name, page, x, y] of c1.marks ?? []) {
     const cls = classOfMark(name, units), l = cls && lines[page - 1] ? lineAt(lines[page - 1].lines, x, y) : -1
     if (l < 0) continue
     ;(byClass[cls] ??= new Set()).add(`${page}:${l}`)
   }
-  const classes = Object.fromEntries(Object.entries(byClass).map(([c, set]) => [c, { lines: set.size, carried: [...set].filter(k => !lost.strict.has(k)).length }]))
   Object.assign(row, {
     pages: [a.length, b.length], items: a.reduce((n, p) => n + p.length, 0), moved: { strict: strict.moved.length, joined: joined.moved.length },
-    lines: lines.reduce((n, p) => n + p.lines.length, 0), lost: { strict: lost.strict.size, joined: lost.joined.size },
+    lines: lines.reduce((n, p) => n + p.lines.length, 0), lost: { strict: lostNow.strict.size, joined: lostNow.joined.size },
     unitMarksMoved: unitMoved.length, captions: cmp.captions, readings: cmp.readings, files: fileStates(c0.files, c1.files ?? {}), errors: newErrors(c0.errors, c1.errors ?? []).length,
-    classes, marksFile: c1.marksFile,
+    marksFile: c1.marksFile,
   })
-  const detail = { moved: strict.moved.slice(0, 12), extra: strict.extra.slice(0, 12), joined: joined.moved.slice(0, 12), lost: [...lost.strict].slice(0, 40), unitMoved: unitMoved.slice(0, 20).map(n => [n, units[Number(n.slice(0, -1))]?.kind ?? null, r0.get(n) ?? null, r1.get(n) ?? null]), parts: cmp.parts, newErrors: newErrors(c0.errors, c1.errors ?? []).slice(0, 5) }
+  const detail = { switches: answered, moved: strict.moved.slice(0, 12), extra: strict.extra.slice(0, 12), joined: joined.moved.slice(0, 12), lost: [...lostNow.strict].slice(0, 40), unitMoved: unitMoved.slice(0, 20).map(n => [n, units[Number(n.slice(0, -1))]?.kind ?? null, r0.get(n) ?? null, r1.get(n) ?? null]), parts: cmp.parts, newErrors: newErrors(c0.errors, c1.errors ?? []).slice(0, 5) }
   // TeX's boxes, the marks' own nodes out, on every paper: a line TeX set otherwise inside one item that kept its place
   // and width (a justified line PDF.js gives whole, its glue making up a kern lost in it) moves no item, and the
   // layout maker reads its words off that item; where items moved, the same boxes are a PDF-only offset
   const trace = files => { const t = new Map(files); t.set(project.main, Buffer.concat([Buffer.from(TRACE), Buffer.from(t.get(project.main))])); return t }
   const [t0, t1] = await Promise.all([compile(id, trace(f0), opts('trace')), compile(id, trace(f1), opts('trace'))])
   // judged only where the trace compiles are the documents compiled: as many pages, each shipped out in the log
-  row.traced = [t0, t1].every((t, i) => t.ok && t.pages === t.pdfPages && t.pdfPages === [a, b][i].length)
+  row.traced = traced(t0, t1, a.length, b.length)
+  // the lines TeX set otherwise, as lines of the page: where the marks set in each stand (v1's marks file)
+  const texLost = new Set(), at1 = new Map((c1.marks ?? []).map(([n, page, x, y]) => [n, [page, x, y]]))
   if (row.traced) {
     const diff = boxDiff(pageBoxes(gunzipSync(readFileSync(t0.boxes)).toString('latin1')), pageBoxes(gunzipSync(readFileSync(t1.boxes)).toString('latin1')))
     row.lost.tex = new Set(diff.map(d => `${d.page}:${d.line}`)).size
-    if (lost.strict.size || diff.length) row.cause = diff.length ? 'tex' : 'pdf-only'
+    for (const d of diff) for (const n of d.inLine.length ? d.inLine : [d.near]) { const q = at1.get(n), l = q && lines[q[0] - 1] ? lineAt(lines[q[0] - 1].lines, q[1], q[2]) : -1; if (l >= 0) texLost.add(`${q[0]}:${l}`) }
+    if (lostNow.strict.size || diff.length) row.cause = diff.length ? 'tex' : 'pdf-only'
+    const causes = [...causesOf(diff).values()]
+    if (causes.length) row.causes = { accepted: causes.filter(c => c !== 'unexplained').length, unexplained: causes.filter(c => c === 'unexplained').length }
     const seen = new Map()
     for (const d of diff) { const k = `${d.page}|${d.near}`; if (!seen.has(k)) seen.set(k, { page: d.page, near: d.near, what: attribute(d.near, units) }) }
     if (diff.length) row.boxes = [...seen.values()]
     // the lines TeX set otherwise by the class of the mark nearest each difference (a heading's, a cell's, a class's)
     const byWhat = new Map()
     for (const d of diff) { const c = classOfMark(d.near, units) ?? 'none'; (byWhat.get(c) ?? byWhat.set(c, new Set()).get(c)).add(`${d.page}:${d.line}`) }
-    for (const [c, set] of byWhat) (row.classes[c] ??= { lines: 0, carried: 0 }).texLost = set.size
+    row.classes = {}
+    for (const [c, set] of byWhat) row.classes[c] = { texLost: set.size }
     detail.boxes = diff.slice(0, 40)
     detail.traces = [t0.boxes, t1.boxes]
   }
-  if (lost.strict.size || row.lost.tex) {
+  // every line lost, in items or in TeX's boxes, as lines of the page: TeX counts the lines it set otherwise, the items a
+  // line moved down by a change above it too, so neither count holds the other
+  row.lost.all = new Set([...lostNow.strict, ...lostNow.joined, ...texLost]).size
+  // each class's marks by the line they stand on, and the lines carried: those lost neither in items nor in TeX's boxes
+  const carriedOf = set => [...set].filter(k => !lostNow.strict.has(k) && !texLost.has(k)).length
+  const tex = row.classes ?? {}
+  row.classes = {}
+  for (const [c, set] of Object.entries(byClass)) row.classes[c] = { lines: set.size, carried: carriedOf(set) }
+  for (const [c, x] of Object.entries(tex)) row.classes[c] = { lines: 0, carried: 0, ...row.classes[c], ...x }
+  if (lostNow.strict.size || row.lost.tex) {
     // which marks lose the lines: the units' own (every v1 sets them: v1 with no class against v0), and each class alone
     // against v1 with none
     if (BISECT) {
       const none = await compile(id, v1Of([]), opts('v1'))
-      const own = lostLines(c0, none, lines)
-      row.own = { lost: own.strict.size }
+      row.own = { lost: lost(c0, none, lines).strict.size }
       for (const c of CLASSES) {
         const ci = await compile(id, v1Of([c]), opts('v1'))
-        const l = none.ok ? lostLines(none, ci, itemsOf(none).map(linesOf)) : lostLines(c0, ci, lines)
+        const l = none.ok ? lost(none, ci, itemsOf(none).map(linesOf)) : lost(c0, ci, lines)
         if (l.strict.size) (row.classes[c] ??= { lines: 0, carried: 0 }).lost = l.strict.size
       }
     }
   }
   // a class whose marks lose more lines than they carry: to be switched off for the paper
-  const off = Object.entries(row.classes).filter(([c, x]) => MARK_CLASSES.includes(c) && Math.max(x.lost ?? 0, x.texLost ?? 0) > x.carried).map(([c]) => c)
+  const off = switchOffOf(row.classes, MARK_CLASSES)
   if (off.length) row.switchOff = off
   row.verdict = verdictOf(row)
   return { row, detail }
@@ -272,11 +290,11 @@ await Promise.all(Array.from({ length: 2 }, async () => {
   while (next < ids.length) {
     const id = ids[next++]
     const t = Date.now()
-    const { row, detail } = await paperRow(id).catch(e => ({ row: { id, v0: 'ok', v1: 'failed', verdict: 'failed', error: String(e?.message ?? e).slice(0, 200) }, detail: { stack: String(e?.stack ?? e).slice(0, 1000) } }))
+    const { row, detail } = await paperRow(id).catch(e => ({ row: { id, v0: 'ok', v1: 'failed', verdict: 'failing', error: String(e?.message ?? e).slice(0, 200) }, detail: { stack: String(e?.stack ?? e).slice(0, 1000) } }))
     rows.push(row)
     writeFileSync(join(OUT, 'rows', `${id}${VARIANT ? `-${VARIANT}` : ''}.json`), JSON.stringify({ row, detail }, null, 1))
     const lostBy = Object.entries(row.classes ?? {}).filter(([, x]) => x.lost || x.texLost).map(([c, x]) => `${c} ${x.lost ?? 0}/${x.texLost ?? 0}`).join(', ')
-    const say = row.v0 === 'failed' ? 'v0 failed: passed over' : row.v1 !== 'ok' ? `FAILED ${row.error ?? 'v1 did not compile'}` : `${row.verdict}${row.switched ? ` (${row.switched})` : ''} pages ${row.pages.join('/')} lines ${row.lines} lost ${row.lost.strict}/${row.lost.joined}/${row.lost.tex ?? '-'} items moved ${row.moved.strict}/${row.moved.joined} unit marks moved ${row.unitMarksMoved}${row.captions.length ? ` captions ${row.captions.length}` : ''} readings ${row.readings} files ${Object.entries(row.files).filter(([, s]) => s === 'differs').map(([k]) => k).join(',') || 'same'}${row.cause ? ` cause ${row.cause}${row.boxes?.length ? `: ${row.boxes.slice(0, 6).map(x => `p${x.page} ${x.near ?? '-'} (${x.what})`).join('; ')}${row.boxes.length > 6 ? ` …${row.boxes.length}` : ''}` : ''}` : ''}${row.own ? ` own ${row.own.lost}` : ''}${lostBy ? ` by class ${lostBy}` : ''}${row.switchOff ? ` SWITCH OFF ${row.switchOff}` : ''}`
+    const say = row.v0 === 'failed' ? 'v0 failed: passed over' : row.v1 !== 'ok' ? `FAILED ${row.error ?? 'v1 did not compile'}` : `${row.verdict}${row.switched ? ` (${row.switched})` : ''} pages ${row.pages.join('/')} lines ${row.lines} lost ${row.lost.strict}/${row.lost.joined}/${row.lost.tex ?? '-'} (all ${row.lost.all ?? '-'}) items moved ${row.moved.strict}/${row.moved.joined} unit marks moved ${row.unitMarksMoved}${row.captions.length ? ` captions ${row.captions.length}` : ''} readings ${row.readings} files ${Object.entries(row.files).filter(([, s]) => s === 'differs').map(([k]) => k).join(',') || 'same'}${row.causes ? ` causes ${row.causes.accepted} accepted, ${row.causes.unexplained} unexplained` : ''}${row.cause ? ` cause ${row.cause}${row.boxes?.length ? `: ${row.boxes.slice(0, 6).map(x => `p${x.page} ${x.near ?? '-'} (${x.what})`).join('; ')}${row.boxes.length > 6 ? ` …${row.boxes.length}` : ''}` : ''}` : ''}${row.own ? ` own ${row.own.lost}` : ''}${lostBy ? ` by class ${lostBy}` : ''}${row.switchOff ? ` SWITCH OFF ${row.switchOff}` : ''}`
     console.log(`[${rows.length}/${ids.length}] ${id} ${Math.round((Date.now() - t) / 1000)} s ${say}`)
   }
 }))
@@ -286,16 +304,20 @@ rows.sort((x, y) => order.get(x.id) - order.get(y.id))
 const countsOf = rs => {
   const of = v => rs.filter(r => r.verdict === v).length, sum = f => rs.reduce((n, r) => n + (f(r) ?? 0), 0)
   return {
-    papers: rs.length, clean: of('clean'), accepted: of('accepted'), switched: of('switched'), failed: of('failed'), passedOver: of('passed over'),
-    lines: sum(r => r.lines), lost: { strict: sum(r => r.lost?.strict), joined: sum(r => r.lost?.joined), tex: sum(r => r.lost?.tex) }, untraced: rs.filter(r => r.v1 === 'ok' && !r.traced).map(r => r.id), moved: { strict: sum(r => r.moved?.strict), joined: sum(r => r.moved?.joined) },
+    papers: rs.length, clean: of('clean'), accepted: of('accepted'), switched: of('switched'), failing: of('failing'), passedOver: of('passed over'),
+    lines: sum(r => r.lines), lost: { strict: sum(r => r.lost?.strict), joined: sum(r => r.lost?.joined), tex: sum(r => r.lost?.tex), all: sum(r => r.lost?.all) }, untraced: rs.filter(r => r.v1 === 'ok' && !r.traced).map(r => r.id), moved: { strict: sum(r => r.moved?.strict), joined: sum(r => r.moved?.joined) },
     unitMarksMoved: sum(r => r.unitMarksMoved), captionPapers: rs.filter(r => r.captions?.length).length, switchOff: rs.filter(r => r.switchOff).map(r => r.id),
   }
 }
 const ratio = rows.filter(r => r.ms?.[0] > 0 && r.v1 === 'ok').map(r => r.ms[1] / r.ms[0] - 1).sort((x, y) => x - y)
 const median = ratio.length ? (ratio[(ratio.length - 1) >> 1] + ratio[ratio.length >> 1]) / 2 : null
 console.log(JSON.stringify({ ...countsOf(rows), compileTime: ratio.length ? { median: Math.round(1000 * median) / 10, max: Math.round(1000 * ratio.at(-1)) / 10 } : null, wall: Math.round((Date.now() - started) / 1000) }))
-if (RECORDED) {
-  const was = existsSync(RECORD) ? JSON.parse(readFileSync(RECORD, 'utf8')) : { rows: [] }
+// the check against the record: a paper worse than its recorded row fails the run (the review, I1)
+const record = existsSync(RECORD) ? JSON.parse(readFileSync(RECORD, 'utf8')) : { rows: [] }
+const worse = CHECK ? regressions(rows, record.rows) : []
+for (const w of worse) console.log(`REGRESSION ${w}`)
+if (WRITE) {
+  const was = record
   const byId = new Map(was.rows.map(r => [r.id, r]))
   for (const r of rows) byId.set(r.id, r)
   const all = [...byId.values()].sort((x, y) => (order.get(x.id) ?? 1e9) - (order.get(y.id) ?? 1e9) || (x.id < y.id ? -1 : 1))
@@ -303,4 +325,6 @@ if (RECORDED) {
   writeFileSync(RECORD, `${JSON.stringify(rec, null, 1)}\n`)
   console.log(`record: ${RECORD}`)
 }
-process.exit(rows.some(r => r.verdict === 'failed' || r.switchOff) ? 1 : 0)
+const failing = rows.filter(r => r.verdict === 'failing' || r.switchOff)
+for (const r of failing) console.log(`FAIL ${r.id}: ${r.verdict}${r.switchOff ? `, switch off ${r.switchOff}` : ''}`)
+process.exit(failing.length || worse.length ? 1 : 0)

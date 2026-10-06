@@ -180,16 +180,15 @@ function common(a, b) {
   for (let k = hi; k > 0; k--) pairs.push([n - k, m - k])
   return pairs
 }
-const PER_PAGE = 50
 /** every difference of two lists of nodes, as deep as it goes: the nodes in common aligned, and between them each pair
  *  of boxes of a kind, or of nodes of one text, compared inside; each difference [v0's node, v1's node, a v1 node beside
- *  it (to look for the nearest mark from)] */
+ *  it (to look for the nearest mark from)]. All of them: a count that stopped at a cap would stop counting lines too */
 function diffs(a, b, owner, out) {
   const pairs = [...common(a, b), [a.length, b.length]]
   let i = 0, j = 0
   for (const [pi, pj] of pairs) {
     const xs = a.slice(i, pi), ys = b.slice(j, pj), beside = b[j - 1] ?? b[pj] ?? owner
-    for (let k = 0; k < Math.max(xs.length, ys.length) && out.length < PER_PAGE; k++) {
+    for (let k = 0; k < Math.max(xs.length, ys.length); k++) {
       const x = xs[k], y = ys[k]
       if (x && y && (x.text === y.text || (BOX.test(x.text) && x.text.slice(0, 5) === y.text.slice(0, 5)))) {
         if (x.children.length === y.children.length && x.children.every((c, q) => hashOf(c) === hashOf(y.children[q]))) out.push([x, y, y])
@@ -224,25 +223,74 @@ function nearest(node) {
 }
 /** the line a node of a page's box is set in: the hbox around it that stands in a vertical list (a column, the page),
  *  by its path of child indices from the page's root; null for a node in no line */
-function lineOf(node) {
+const lineBox = node => {
   let n = node
   while (n?.parent && !(/^\\hbox\(/.test(n.text) && (n.parent.text === '' || /^\\vbox\(/.test(n.parent.text)))) n = n.parent
-  if (!n?.parent) return null
+  return n?.parent ? n : null
+}
+function lineOf(node) {
+  const n = lineBox(node)
+  if (!n) return null
   const path = []
   for (let m = n; m.parent; m = m.parent) path.unshift(m.parent.children.indexOf(m))
   return path.join('.')
 }
-/** every difference of each page's boxes once the marks' own nodes are out (at most PER_PAGE a page): v0's node and
- *  v1's (their text, null where that side has none), the name of the mark nearest it in v1, and the line it is set in
- *  (lineOf in v1's box: the lines TeX set otherwise are the distinct ones) */
+/** every mark's name in a node, in reading order */
+const destsIn = (node, out = []) => { const m = DEST.exec(node.text); if (m) out.push(m[1]); for (const c of node.children) destsIn(c, out); return out }
+/** every difference of each page's boxes once the marks' own nodes are out: v0's node and v1's (their text, null where
+ *  that side has none), the name of the mark nearest it in v1, the line it is set in (lineOf in v1's box: the lines TeX
+ *  set otherwise are the distinct ones), and the marks set in that line (`inLine`: where the line stands on the page) */
 export function boxDiff(pages0, pages1) {
   const out = []
   for (let p = 0; p < Math.max(pages0.length, pages1.length); p++) {
     const a = pages0[p] ? withoutMarks(pages0[p]) : { text: '', children: [], src: null }
     const b = pages1[p] ? withoutMarks(pages1[p]) : { text: '', children: [], src: null }
-    for (const [x, y, at] of diffs(a.children, b.children, b, [])) out.push({ page: p + 1, v0: x?.text ?? null, v1: y?.text ?? null, near: at?.src ? nearest(at.src) : null, line: at?.src ? lineOf(at.src) : null })
+    const marksOfLine = new Map()
+    for (const [x, y, at] of diffs(a.children, b.children, b, [])) {
+      const box = at?.src ? lineBox(at.src) : null
+      if (box && !marksOfLine.has(box)) marksOfLine.set(box, destsIn(box))
+      out.push({ page: p + 1, v0: x?.text ?? null, v1: y?.text ?? null, near: at?.src ? nearest(at.src) : null, line: at?.src ? lineOf(at.src) : null, inLine: box ? marksOfLine.get(box) : [] })
+    }
   }
   return out
+}
+
+/** a node's text as it would read set again at another stretch: microtype's font expansion and a box's glue set out */
+const unset = t => t.replace(/ \([+-]\d+\)/, '').replace(/, glue set [^,]*/, '')
+/**
+ * Each line TeX set otherwise (boxDiff's, by page and line), with its cause where the evidence names an accepted one:
+ * 'heading kern' when a kern v0 set beside a heading's mark is one v1 did not set (the font kern of a heading's last
+ * letter with the full stop its class appends after the end mark: ruling 2), and every other difference in the line
+ * lies beside a heading's mark or sets the same node again at another stretch (the line's glue set, microtype's
+ * expansion of its glyphs: 2608.25210); else 'unexplained'
+ */
+export function causesOf(diffs) {
+  const lines = new Map()
+  for (const d of diffs) { const k = `${d.page}:${d.line ?? '-'}`; (lines.get(k) ?? lines.set(k, []).get(k)).push(d) }
+  const out = new Map()
+  const head = d => /^h\d+[se]$/.test(d.near ?? ''), again = d => d.v0 !== null && d.v1 !== null && unset(d.v0) === unset(d.v1)
+  for (const [k, ds] of lines) {
+    const kern = ds.some(d => head(d) && /^\\kern-?\d/.test(d.v0 ?? '') && !/^\\kern/.test(d.v1 ?? ''))
+    out.set(k, kern && ds.every(d => head(d) || again(d)) ? 'heading kern' : 'unexplained')
+  }
+  return out
+}
+
+/** the lines (page:index of their page's lines) of `a` whose items `b` does not have in place: strict, every item with
+ *  ink to 0.01 pt in place and width; joined, every run of abutting items (`allA`, `allB`: every item, the spaces PDF.js
+ *  gives as items of their own among them); a page `b` lacks or adds loses every line of it */
+export function lostLines(a, b, allA, allB, lines) {
+  const strict = new Set(), joined = new Set()
+  for (const m of strictMoves(a, b).moved) strict.add(`${m.page}:${lines[m.page - 1].of[m.k]}`)
+  const runs = allA.map(joinRuns), runsB = allB.map(joinRuns)
+  for (const m of strictMoves(runs, runsB).moved) joined.add(`${m.page}:${lines[m.page - 1].of[runs[m.page - 1][m.k].k]}`)
+  return { strict, joined }
+}
+/** the class a layout mark's name is of: a placeholder's (classOf), a footnote's call, a heading's, a cell's, a unit's
+ *  (MARK_DEF); null for a page's columns and an image frame's corners */
+export function classOfMark(name, units) {
+  const what = attribute(name, units)
+  return what.startsWith('heading') ? 'heading' : ['columns', 'image', 'unknown', 'none'].includes(what) ? null : what
 }
 
 /** what a mark's name names: a heading's start or end, a cell's, a unit's (MARK_DEF), a page's columns, an image frame's,
@@ -261,14 +309,53 @@ export function attribute(name, units) {
 }
 
 /**
- * A paper's verdict, the layout marks' quality on it: 'passed over' (v0 does not compile); 'failed' (v1 does not: the
- * paper has no layout); 'switched' (the paper's own switch is on: a package of its moves the punctuation after a class's
- * placeholders), else 'clean' (no layout line lost: no item moved, no line TeX set otherwise) or 'accepted' (moved: N
- * layout lines lost)
+ * A paper's verdict, the layout marks' quality on it: 'passed over' (v0 does not compile); 'failing' where v1 does not
+ * (the paper has no layout), or where a line is lost (strict, joined or by TeX) and not every loss has an accepted
+ * cause; 'accepted' where every one has: the items moved but TeX's boxes are the same (a PDF-only offset: ruling 3),
+ * or every line TeX set otherwise is a heading's lost kern (causesOf: ruling 2); with no line lost, 'switched' where
+ * the paper's own switch took marks off, else 'clean'
  */
 export function verdictOf(row) {
   if (row.v0 === 'failed') return 'passed over'
-  if (row.v1 !== 'ok') return 'failed'
-  if (row.switched?.length) return 'switched'
-  return row.lost?.strict || row.lost?.tex ? 'accepted' : 'clean'
+  if (row.v1 !== 'ok') return 'failing'
+  const lost = row.lost && (row.lost.strict || row.lost.joined || row.lost.tex)
+  if (!lost) return row.switched?.length ? 'switched' : 'clean'
+  if (!row.traced) return 'failing'
+  if (row.cause === 'pdf-only') return 'accepted'
+  return row.causes && !row.causes.unexplained ? 'accepted' : 'failing'
+}
+
+/** v0's main file with v1's destinations: LAYOUT_TEX's definition of \axt@dest (a FitR of no size) right after MARK_DEF,
+ *  on the line MARK_DEF ends (the paper's lines keep their numbers), so that a unit mark compares with a unit mark;
+ *  throws where either is not found */
+export function withFitr(main, markDef, layoutTex) {
+  const fitr = /\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\axt@dest#1\{.*?\\fi\\fi\\fi/.exec(layoutTex)?.[0]
+  if (!fitr) throw new Error("LAYOUT_TEX's destination definition not found")
+  const at = main.indexOf(markDef)
+  if (at < 0) throw new Error('no MARK_DEF in the main file')
+  return `${main.slice(0, at + markDef.length)}\\makeatletter${fitr}\\makeatother${main.slice(at + markDef.length)}`
+}
+/** whether TeX's boxes judge a paper: both trace compiles made a PDF of as many pages as each shipped out in its log, and
+ *  as many as the compile it traces (BibTeX given a line length of a million wrote no bibliography: 2608.30640's trace
+ *  was 30 pages, its compile 34) */
+export const traced = (t0, t1, pages0, pages1) => [[t0, pages0], [t1, pages1]].every(([t, n]) => !!t?.ok && t.pages === t.pdfPages && t.pdfPages === n)
+/** the classes whose marks lose more of a paper's lines than they carry (by the bisect's or TeX's count): to be
+ *  switched off for it */
+export const switchOffOf = (classes, known) => Object.entries(classes ?? {}).filter(([c, x]) => known.includes(c) && Math.max(x.lost ?? 0, x.texLost ?? 0) > (x.carried ?? 0)).map(([c]) => c)
+
+/** how worse a verdict is: clean and switched, then accepted, then failing */
+const RANK = { clean: 0, switched: 0, 'passed over': 0, accepted: 1, failing: 2 }
+/** what a run lost against the record, paper by paper: a worse verdict, more lines lost (strict, joined or by TeX), more
+ *  unit marks moved; a paper the record has not is no regression */
+export function regressions(rows, recorded) {
+  const was = new Map(recorded.map(r => [r.id, r])), out = []
+  for (const r of rows) {
+    const w = was.get(r.id)
+    if (!w) continue
+    if ((RANK[r.verdict] ?? 2) > (RANK[w.verdict] ?? 2)) out.push(`${r.id}: ${w.verdict} → ${r.verdict}`)
+    // a figure the recorded row has not (an older record) is no figure to regress from
+    for (const k of ['strict', 'joined', 'tex', 'all']) if (w.lost?.[k] !== undefined && (r.lost?.[k] ?? 0) > w.lost[k]) out.push(`${r.id}: lines lost ${k} ${w.lost?.[k] ?? 0} → ${r.lost?.[k] ?? 0}`)
+    if ((r.unitMarksMoved ?? 0) > (w.unitMarksMoved ?? 0)) out.push(`${r.id}: unit marks moved ${w.unitMarksMoved ?? 0} → ${r.unitMarksMoved}`)
+  }
+  return out
 }

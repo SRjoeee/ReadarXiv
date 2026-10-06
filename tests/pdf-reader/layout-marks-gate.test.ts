@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Item, Readings } from '../../experiments/pdf-bilingual/spikes/layout-marks-compare.mjs'
-import { attribute, boxDiff, compareReadings, fileStates, joinRuns, lineAt, linesOf, pageBoxes, strictMoves, verdictOf } from '../../experiments/pdf-bilingual/spikes/layout-marks-compare.mjs'
+import type { Item, Readings, Row } from '../../experiments/pdf-bilingual/spikes/layout-marks-compare.mjs'
+import { attribute, boxDiff, causesOf, classOfMark, compareReadings, fileStates, joinRuns, lineAt, linesOf, lostLines, pageBoxes, regressions, strictMoves, switchOffOf, traced, verdictOf, withFitr } from '../../experiments/pdf-bilingual/spikes/layout-marks-compare.mjs'
 
 // The corpus check's comparisons (experiments/pdf-bilingual/spikes/layout-marks-gate.mjs): v0 against v1 of a paper, the
 // text items to 0.01 pt, the lines, the files TeX writes, the readings, and TeX's own page boxes where the PDF's items
@@ -124,23 +124,90 @@ describe('pageBoxes and boxDiff: TeX\'s own page boxes, the marks taken out', ()
   })
   it('a font kern lost beside a heading\'s end mark: the page, and the mark nearest the difference', () => {
     const v1 = [LINE[0] as string, '.\\hbox(6.94+2.22)x407.0, glue set 0.49', ...LINE.slice(2, 6), '..\\pdfdest name{axt-h3e} fitr width 0.0 height 0.0 depth 0.0', '..\\OT1/cmr/m/n/10 .']
-    expect(boxDiff(pageBoxes(logOf(['\\vbox(1.0+0.0)x2.0'], LINE)), pageBoxes(logOf(['\\vbox(1.0+0.0)x2.0'], v1)))).toEqual([{ page: 2, v0: '\\kern-0.135', v1: null, near: 'h3e', line: '0.0' }])
+    expect(boxDiff(pageBoxes(logOf(['\\vbox(1.0+0.0)x2.0'], LINE)), pageBoxes(logOf(['\\vbox(1.0+0.0)x2.0'], v1)))).toEqual([{ page: 2, v0: '\\kern-0.135', v1: null, near: 'h3e', line: '0.0', inLine: ['h3e'] }])
   })
   it('every difference of a page, each with its own nearest mark: a heading\'s first, a citation\'s further on', () => {
     const two = (kern: string, word: string, marks: boolean) => ['\\vbox(633.0+0.0)x407.0', '.\\hbox(6.94+2.22)x407.0', '..\\OT1/cmr/m/n/10 g', ...(marks ? ['..\\pdfdest name{axt-h3e} fitr'] : []), ...(kern ? [`..${kern}`] : []), '..\\OT1/cmr/m/n/10 .',
       '.\\glue(\\baselineskip) 2.0', '.\\hbox(6.94+2.22)x407.0', ...Array.from({ length: 6 }, (_, i) => `..\\OT1/cmr/m/n/10 ${'abcdef'[i]}`), ...(marks ? ['..\\pdfdest name{axt-p4.2a} fitr'] : []), `..\\OT1/cmr/m/n/10 ${word}`]
     expect(boxDiff(pageBoxes(logOf(two('\\kern-0.135', 'x', false))), pageBoxes(logOf(two('', 'y', true))))).toEqual([
-      { page: 1, v0: '\\kern-0.135', v1: null, near: 'h3e', line: '0.0' },
-      { page: 1, v0: '\\OT1/cmr/m/n/10 x', v1: '\\OT1/cmr/m/n/10 y', near: 'p4.2a', line: '0.2' },
+      { page: 1, v0: '\\kern-0.135', v1: null, near: 'h3e', line: '0.0', inLine: ['h3e'] },
+      { page: 1, v0: '\\OT1/cmr/m/n/10 x', v1: '\\OT1/cmr/m/n/10 y', near: 'p4.2a', line: '0.2', inLine: ['p4.2a'] },
     ])
   })
   it('a difference with no mark beside it in its box looks in the boxes around it', () => {
     const v0 = ['\\vbox(633.0+0.0)x407.0', '.\\hbox(6.94+2.22)x407.0', '..\\OT1/cmr/m/n/10 a', '.\\hbox(6.94+2.22)x407.0', '..\\OT1/cmr/m/n/10 b']
     const v1 = ['\\vbox(633.0+0.0)x407.0', '.\\hbox(6.94+2.22)x407.0', '..\\pdfdest name{axt-p7.2b} fitr width 0.0 height 0.0 depth 0.0', '..\\OT1/cmr/m/n/10 a', '.\\hbox(6.94+2.22)x407.0', '..\\OT1/cmr/m/n/10 c']
-    expect(boxDiff(pageBoxes(logOf(v0)), pageBoxes(logOf(v1)))).toEqual([{ page: 1, v0: '\\OT1/cmr/m/n/10 b', v1: '\\OT1/cmr/m/n/10 c', near: 'p7.2b', line: '0.1' }])
+    expect(boxDiff(pageBoxes(logOf(v0)), pageBoxes(logOf(v1)))).toEqual([{ page: 1, v0: '\\OT1/cmr/m/n/10 b', v1: '\\OT1/cmr/m/n/10 c', near: 'p7.2b', line: '0.1', inLine: [] }])
+  })
+  it('every difference counted, past fifty a page; a box that differs in its glue set alone is a difference', () => {
+    const many = (w: string) => ['\\vbox(633.0+0.0)x407.0', ...Array.from({ length: 60 }, () => ['.\\hbox(6.94+2.22)x407.0', `..\\OT1/cmr/m/n/10 ${w}`]).flat()]
+    const diff = boxDiff(pageBoxes(logOf(many('a'))), pageBoxes(logOf(many('b'))))
+    expect(diff).toHaveLength(60)
+    expect(new Set(diff.map(d => d.line)).size).toBe(60)
+    const set = (g: string) => ['\\vbox(633.0+0.0)x407.0', `.\\hbox(6.94+2.22)x407.0, glue set ${g}`, '..\\OT1/cmr/m/n/10 a', '..\\glue 3.33333 plus 1.66666', '..\\OT1/cmr/m/n/10 b']
+    expect(boxDiff(pageBoxes(logOf(set('0.5'))), pageBoxes(logOf(set('0.49'))))).toEqual([{ page: 1, v0: '\\hbox(6.94+2.22)x407.0, glue set 0.5', v1: '\\hbox(6.94+2.22)x407.0, glue set 0.49', near: null, line: '0.0', inLine: [] }])
   })
   it('a page v1 has more: a difference of its own', () => {
-    expect(boxDiff(pageBoxes(logOf(LINE)), pageBoxes(logOf(LINE, LINE)))).toEqual([{ page: 2, v0: null, v1: '\\vbox(633.0+0.0)x407.0', near: null, line: null }])
+    expect(boxDiff(pageBoxes(logOf(LINE)), pageBoxes(logOf(LINE, LINE)))).toEqual([{ page: 2, v0: null, v1: '\\vbox(633.0+0.0)x407.0', near: null, line: null, inLine: [] }])
+  })
+})
+
+describe('causesOf: each line TeX set otherwise, its cause from the evidence', () => {
+  const d = (line: string, near: string | null, v0: string | null, v1: string | null) => ({ page: 3, line, near, v0, v1 })
+  it('a heading\'s lost kern: every difference beside a heading\'s mark, one of them a kern v0 set and v1 did not', () => {
+    expect(causesOf([d('0.1', 'h4e', '\\kern-0.135', null), d('0.1', 'h4s', '\\hbox(6.9+2.2)x400.0, glue set 0.5', '\\hbox(6.9+2.2)x400.0, glue set 0.4')])).toEqual(new Map([['3:0.1', 'heading kern']]))
+  })
+  it('the line set again at another stretch is the kern\'s doing: the kern paired with a glyph, glyphs expanded otherwise beside another mark (2608.25210)', () => {
+    expect(causesOf([d('0.5', 'h189e', '\\kern-0.531', '\\T1/LinuxBiolinumT-TLF/m/it/9 (+5) .'), d('0.5', 'h189s', '\\T1/LinuxBiolinumT-TLF/m/it/9 (+7) C', '\\T1/LinuxBiolinumT-TLF/m/it/9 (+5) C'), d('0.5', '190s', '\\T1/ptm/m/n/9 (+7) a', '\\T1/ptm/m/n/9 (+5) a'), d('0.5', 'h189e', '\\T1/LinuxBiolinumT-TLF/m/it/9 (+7) .', null)]).get('3:0.5')).toBe('heading kern')
+    // a glyph of another letter beside another mark is no setting again
+    expect(causesOf([d('0.6', 'h1e', '\\kern-0.5', null), d('0.6', '2s', '\\T1/ptm/m/n/9 (+7) a', '\\T1/ptm/m/n/9 (+5) b')]).get('3:0.6')).toBe('unexplained')
+  })
+  it('anything else is unexplained: a placeholder\'s mark beside it, no kern lost, a kern v1 added', () => {
+    expect(causesOf([d('0.1', 'h4e', '\\kern-0.135', null), d('0.1', 'p2.3b', 'a', 'b')]).get('3:0.1')).toBe('unexplained')
+    expect(causesOf([d('0.2', 'h4e', 'a', 'b')]).get('3:0.2')).toBe('unexplained')
+    expect(causesOf([d('0.3', 'h4e', null, '\\kern0.02')]).get('3:0.3')).toBe('unexplained')
+    expect(causesOf([d('0.4', null, '\\kern-0.1', null)]).get('3:0.4')).toBe('unexplained')
+  })
+})
+
+describe('lostLines and classOfMark: the lines lost, and a mark\'s class', () => {
+  it('lostLines: a line with an item moved, strict and joined; a run cut elsewhere loses nothing joined', () => {
+    const a = [[item('We show', 72, 700, 30), item('that', 105, 700, 15), item('next', 72, 688, 15)]]
+    const b = [[item('We show', 72, 700, 30), item('that', 105.5, 700, 15), item('next', 72, 688, 15)]]
+    const lines = a.map(linesOf)
+    expect(lostLines(a, b, a, b, lines)).toEqual({ strict: new Set(['1:0']), joined: new Set(['1:0']) })
+    expect(lostLines(a, a, a, a, lines)).toEqual({ strict: new Set(), joined: new Set() })
+    // the same glyphs cut into two items: lost strict, not joined
+    const cut = [[item('We', 72, 700, 12), item(' show', 84, 700, 18), item('that', 105, 700, 15), item('next', 72, 688, 15)]]
+    expect(lostLines(a, cut.map(p => p.filter(i => i.str.trim())), a, cut, lines).joined.size).toBe(0)
+  })
+  it('classOfMark: a heading\'s start and end are a heading\'s; columns and image frames none', () => {
+    const units = [{ kind: 'heading', pieces: [] }, { kind: 'para', pieces: [{ t: 'text', s: 'A ' }, { t: 'ph', src: '$x$' }] }]
+    expect(['h0s', 'h0e', 't2s', '1e', 'p1.1a', 'n1.4b', 'c1-3', 'g2a'].map(n => classOfMark(n, units))).toEqual(['heading', 'heading', 'cell', 'unit', 'math', 'footnote', null, null])
+  })
+})
+
+describe('the gate\'s own steps: v0\'s destinations, the trace\'s judging, a class to switch off', () => {
+  it('withFitr: LAYOUT_TEX\'s destination right after MARK_DEF, on its line; nothing found, it throws', () => {
+    const main = 'DRAFT\nMARKDEF\nEND\n\\documentclass{article}\n'
+    const tex = 'A\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{fitr}\\else x\\fi\\fi\\fiB'
+    const out = withFitr(main, 'MARKDEF\n', tex)
+    expect(out).toBe('DRAFT\nMARKDEF\n\\makeatletter\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{fitr}\\else x\\fi\\fi\\fi\\makeatotherEND\n\\documentclass{article}\n')
+    expect(out.split('\n')).toHaveLength(main.split('\n').length)
+    expect(() => withFitr(main, 'NOPE', tex)).toThrow('no MARK_DEF')
+    expect(() => withFitr(main, 'MARKDEF\n', 'no definition')).toThrow('not found')
+  })
+  it('traced: both trace compiles whole, each shipping out every page of its PDF, as many as its compile\'s', () => {
+    const t = (pages: number, pdfPages: number, ok = true) => ({ ok, pages, pdfPages })
+    expect(traced(t(34, 34), t(34, 34), 34, 34)).toBe(true)
+    expect(traced(t(30, 30), t(30, 30), 34, 34)).toBe(false)
+    expect(traced(t(33, 34), t(34, 34), 34, 34)).toBe(false)
+    expect(traced(t(34, 34, false), t(34, 34), 34, 34)).toBe(false)
+    expect(traced(null, t(34, 34), 34, 34)).toBe(false)
+  })
+  it('switchOffOf: a placeholder class whose marks lose more lines than they carry, by either count; not a unit\'s own', () => {
+    expect(switchOffOf({ cite: { lines: 3, carried: 1, lost: 2 }, math: { lines: 9, carried: 9 }, macro: { lines: 1, carried: 0, texLost: 1 }, heading: { lines: 1, carried: 0, texLost: 1 } }, ['cite', 'math', 'macro'])).toEqual(['cite', 'macro'])
+    expect(switchOffOf(undefined, ['cite'])).toEqual([])
   })
 })
 
@@ -157,18 +224,31 @@ describe('attribute: what a mark name is', () => {
   })
 })
 
-describe('verdictOf: the layout marks\' quality on a paper', () => {
-  const ok = { v0: 'ok' as const, v1: 'ok' as const, lost: { strict: 0, joined: 0 } }
-  it('clean, accepted with its lines lost, switched where the paper\'s own switch is on', () => {
+describe('verdictOf and regressions: the check can fail', () => {
+  const ok = { v0: 'ok' as const, v1: 'ok' as const, traced: true, lost: { strict: 0, joined: 0, tex: 0 } }
+  it('clean, or switched where TeX\'s answers took marks off, while no line is lost', () => {
     expect(verdictOf(ok)).toBe('clean')
-    expect(verdictOf({ ...ok, lost: { strict: 2, joined: 1 } })).toBe('accepted')
-    // a line TeX set otherwise inside one item that kept its place and width: lost all the same
-    expect(verdictOf({ ...ok, lost: { strict: 0, joined: 0, tex: 1 } })).toBe('accepted')
-    expect(verdictOf({ ...ok, switched: ['cite'] })).toBe('switched')
-    expect(verdictOf({ ...ok, switched: ['cite'], lost: { strict: 1, joined: 1 } })).toBe('switched')
+    expect(verdictOf({ ...ok, switched: ['\\cite'] })).toBe('switched')
   })
-  it('passed over where v0 does not compile; failed where v1 does not', () => {
+  it('accepted where every loss has an accepted cause: a heading\'s kern, a PDF-only offset', () => {
+    expect(verdictOf({ ...ok, lost: { strict: 1, joined: 0, tex: 1 }, cause: 'tex', causes: { accepted: 1, unexplained: 0 } })).toBe('accepted')
+    expect(verdictOf({ ...ok, lost: { strict: 1, joined: 0, tex: 0 }, cause: 'pdf-only' })).toBe('accepted')
+  })
+  it('failing where a loss has no accepted cause, a loss was not traced, v1 did not compile; a switched paper\'s loss is judged too', () => {
+    expect(verdictOf({ ...ok, lost: { strict: 0, joined: 0, tex: 1 }, cause: 'tex', causes: { accepted: 0, unexplained: 1 } })).toBe('failing')
+    expect(verdictOf({ ...ok, lost: { strict: 30, joined: 30, tex: 8 }, cause: 'tex', causes: { accepted: 2, unexplained: 6 } })).toBe('failing')
+    expect(verdictOf({ ...ok, traced: false, lost: { strict: 1, joined: 1, tex: 0 } })).toBe('failing')
+    expect(verdictOf({ ...ok, v1: 'failed' })).toBe('failing')
+    expect(verdictOf({ ...ok, switched: ['\\cite'], lost: { strict: 46, joined: 46, tex: 14 }, cause: 'tex', causes: { accepted: 0, unexplained: 14 } })).toBe('failing')
     expect(verdictOf({ ...ok, v0: 'failed' })).toBe('passed over')
-    expect(verdictOf({ ...ok, v1: 'failed' })).toBe('failed')
+  })
+  it('regressions: a worse verdict, more lines lost, more unit marks moved than the record\'s row', () => {
+    const was: Row[] = [{ id: 'a', v0: 'ok', verdict: 'clean', lost: { strict: 0, joined: 0, tex: 0 }, unitMarksMoved: 0 }, { id: 'b', v0: 'ok', verdict: 'accepted', lost: { strict: 1, joined: 1, tex: 1 }, unitMarksMoved: 1 }]
+    const [a, b] = was as [Row, Row]
+    expect(regressions([{ ...a, verdict: 'accepted', lost: { strict: 0, joined: 0, tex: 1 } }, { ...b }], was)).toEqual(['a: clean → accepted', 'a: lines lost tex 0 → 1'])
+    expect(regressions([{ ...b, unitMarksMoved: 2 }, { id: 'c', v0: 'ok', verdict: 'failing' }], was)).toEqual(['b: unit marks moved 1 → 2'])
+    expect(regressions([{ ...a, verdict: 'switched' }], was)).toEqual([])
+    // a figure the record has not: nothing to regress from
+    expect(regressions([{ ...b, lost: { strict: 1, joined: 1, tex: 1, all: 2 } }], was)).toEqual([])
   })
 })
