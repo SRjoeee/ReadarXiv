@@ -167,6 +167,93 @@ const TABLE_ENVS = /^(tabular|tabularx|tabular\*|longtable|tabu|tabulary|superta
  *  is prose. Walked as prose, its formulas went to the translator, which wrote their parentheses full-width, and a
  *  \\left before one stopped TeX (2608.29181: every way of setting it failed, biber's "bcf is malformed" all it said) */
 const TBLR_ENVS = ['tblr', 'longtblr', 'talltblr']
+/** a rule across the whole table (booktabs', array's, arydshln's, hhline's, makecell's) and a longtable's head ending,
+ *  either of which ends the header; \\cline and \\cmidrule rule part of it, and do not */
+const FULL_RULE = /^(?:hline|hdashline|firsthline|lasthline|Hline|toprule|midrule|bottomrule|specialrule|Xhline|thickhline|hhline|tabucline|endhead|endfirsthead)$/
+/** the commands that stand in a cell without being its content — rules, spacing, colour, a strut — each with the
+ *  arguments it takes: `o` an optional [..], `p` an optional (..), a digit that many required {..}. Read by their own
+ *  arity, so that a cell's first group after them (\\hline {\\bf Parser}) stays the cell's */
+const NOT_CONTENT = new Map(Object.entries({
+  hline: '', hdashline: '', firsthline: '', lasthline: '', Hline: '', thickhline: '', endhead: '', endfirsthead: '', morecmidrules: '',
+  toprule: 'o', midrule: 'o', bottomrule: 'o', addlinespace: 'o', specialrule: '3', Xhline: '1', hhline: '1', tabucline: 'o1',
+  cline: '1', cdashline: '1', cmidrule: 'op1', vspace: '1', noalign: '1', rowcolor: 'o1', arrayrulecolor: 'o1', rule: 'o2',
+  centering: '', raggedright: '', raggedleft: '', relax: '', noindent: '', strut: '', nopagebreak: 'o', pagebreak: 'o', newpage: '',
+}))
+/** past a command's arguments by its spec (NOT_CONTENT) */
+function argsBySpec(s, i, spec) {
+  for (const a of spec) {
+    const k = skipSpaces(s, i)
+    if (a === 'o' || a === 'p') { const [open, close] = a === 'o' ? ['[', ']'] : ['(', ')']; if (s[k] === open) { const e = matchGroup(s, k, open, close); if (e > 0) i = e } continue }
+    for (let n = Number(a); n > 0; n--) { const q = skipSpaces(s, i); if (s[q] !== '{') return i; const e = matchGroup(s, q); if (e < 0) return i; i = e }
+  }
+  return i
+}
+/**
+ * A table's body as its cells lay it out (Problem 1 of the table-groups brief, 2026-10-07): each cell's stretch of the
+ * source [start, end) between its separators — `&` and the row's end (`\\\\`, `\\tabularnewline`), outside braces, math,
+ * comments and nested environments —, its row, its first column and the columns it spans (\\multicolumn{n}), and whether
+ * its row is the header's. The header is the rows from the first that holds anything up to the first rule across the
+ * whole table after it (FULL_RULE; a partial \\cmidrule under a spanning heading does not end it), when fewer rows stand
+ * above that rule than below it: a table with no such rule, or with its only one before the last rows, has no header,
+ * and every cell of it belongs to its column (a rule-based reading, the same for every table: the bold of a heading
+ * row is not read)
+ */
+export function tableGrid(s, from, to) {
+  const cells = [], rows = [{ rule: false, filled: false }]
+  let row = 0, col = 0, span = 1, start = from, content = false
+  const fill = () => { content = true; rows[row].filled = true }
+  const cut = end => { cells.push({ start, end, row, col, span }); col += span; span = 1 }
+  let i = from
+  while (i < to) {
+    const c = s[i]
+    if (c === '%') { i = skipComment(s, i); continue }
+    if (c === '{') { const e = matchGroup(s, i); if (e < 0 || e > to) { i++; continue } if (/\S/.test(s.slice(i + 1, e - 1).replace(/(^|[^\\])%.*$/gm, '$1'))) fill(); i = e; continue }
+    if (c === '$') { const e = mathEnd(s, i); if (e < 0 || e > to) { i++; continue } fill(); i = e; continue }
+    if (c === '&') { cut(i); i++; start = i; continue }
+    if (c !== '\\') { if (!/\s/.test(c)) fill(); i++; continue }
+    const { name, end } = commandAt(s, i)
+    if (name === '\\' || name === 'tabularnewline') {
+      cut(i)
+      let e = end
+      if (s[e] === '*') e++
+      const opt = argsAfter(s, e, 1)
+      if (opt.args[0]?.kind === 'opt') e = opt.end
+      row++; col = 0; content = false; rows[row] = { rule: false, filled: false }
+      i = e; start = e; continue
+    }
+    if (name === '(' || name === '[') { const e = mathEnd(s, i); if (e > 0 && e <= to) { fill(); i = e; continue } }
+    if (name === 'begin') {
+      const m = s.slice(end).match(/^\s*\{([^}]+)\}/)
+      if (m) { const [, after] = endOfEnv(s, end + m[0].length, m[1].trim()); fill(); i = Math.min(after, to); continue }
+    }
+    if (name === 'verb') { const d = s[end], e = d ? s.indexOf(d, end + 1) : -1; fill(); i = e < 0 || e >= to ? end : e + 1; continue }
+    if (name === 'multicolumn') {
+      const { args, end: e } = argsAfter(s, end, 3)
+      if (args.length === 3) { span = Math.max(1, Number.parseInt(s.slice(args[0].start + 1, args[0].end - 1), 10) || 1); if (/\S/.test(s.slice(args[2].start + 1, args[2].end - 1))) fill(); i = e; continue }
+    }
+    if (NOT_CONTENT.has(name)) { if (FULL_RULE.test(name) && !content) rows[row].rule = true; i = argsBySpec(s, end, NOT_CONTENT.get(name)); continue }
+    fill(); i = end
+  }
+  cut(to)
+  // the header: the filled rows up to the first full rule after the first of them, fewer than the filled rows below it
+  const filled = rows.map((r, k) => (r.filled ? k : -1)).filter(k => k >= 0)
+  let head = new Set()
+  for (let n = 0; n + 1 < filled.length; n++) {
+    if (!rows.slice(filled[n] + 1, filled[n + 1] + 1).some(r => r.rule)) continue
+    if (n + 1 < filled.length - (n + 1)) head = new Set(filled.slice(0, n + 1))
+    break
+  }
+  return cells.map(cell => ({ ...cell, head: head.has(cell.row) }))
+}
+/** each cell unit of a table walked from `file` given its cell's place in the grid (tableGrid): the cell whose stretch
+ *  holds the unit's start. `table` numbers the paper's tables in the order they are walked */
+function placeCells(units, file, grid, table) {
+  for (const u of units) {
+    if (u.kind !== 'cell' || u.file !== file) continue
+    const g = grid.find(c => c.start <= u.start && u.start < c.end) ?? grid.find(c => c.start <= u.start && u.start <= c.end)
+    if (g) u.cell = { table, row: g.row, col: g.col, span: g.span, head: g.head }
+  }
+}
 const TBLR_MATH = /\bmode\s*=\s*[id]?math\b/
 const uncommented = text => text.replace(/(^|[^\\])%.*$/gm, '$1')
 
@@ -638,8 +725,12 @@ function walk(s, from, to, b, ctx) {
         if (!ctx.tables) { ctx.skipped[env] = (ctx.skipped[env] ?? 0) + 1; i = afterEnd; continue }
         // a table: each cell is a unit of its own; & and \\ end it. The column specification and width stay as they are
         const { end: argsEnd } = argsAfter(s, afterBegin, env.startsWith('tabularx') || env === 'tabular*' || env === 'tabulary' ? 3 : 2)
-        const saved = b.kind, savedCell = b.cellMode; b.kind = 'cell'; b.cellMode = true
+        // (the paper's tables numbered in the order they begin, a table nested in a cell after the one it is in)
+        const saved = b.kind, savedCell = b.cellMode, first = b.units.length, table = (ctx.tableCount = (ctx.tableCount ?? 0) + 1); b.kind = 'cell'; b.cellMode = true
         walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved; b.cellMode = savedCell
+        // each cell unit's place in the table's grid (tableGrid), by which its consistency group is found (groups.mjs):
+        // a table nested in a cell gives its units the outer cell's place, set after its own
+        placeCells(b.units.slice(first), b.file, tableGrid(s, argsEnd, bodyEnd), table)
         // fitted to the line once translated (patch, FIT_DEF): a plain tabular, whose width is its columns'; a tabular*,
         // set to a width it cannot shrink below, measured at its columns' width first (\\axtstar) — not one with a
         // position argument, which \\axtstar does not read. tabularx and tabulary keep their width and read their own

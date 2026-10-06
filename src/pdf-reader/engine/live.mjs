@@ -23,6 +23,7 @@ import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, in
 import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
 import { passagesInSource } from './cache.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
+import { decideGroups } from './groups.mjs'
 import { nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
 import { WIDTH_PROBE } from './typeset/density.mjs'
 import { finalTypesetting, previewTypesetting } from './typeset/plan.mjs'
@@ -585,8 +586,32 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     // nested in it, which its source holds as written (a footnote, an author's note)
     const inSource = new Set(), indexOf = new Map(units.map((u, i) => [u, i]))
     const withNested = u => [u, ...u.pieces.filter(p => p.t === 'nested').flatMap(p => withNested(p.unit))]
-    /** a snapshot as a compile sets it: the units set in the source left out */
-    const setting = snapshot => { if (!inSource.size) return snapshot; const m = new Map(snapshot); for (const u of inSource) m.delete(u); return m }
+    /**
+     * A snapshot's table groups decided (groups.mjs, the table-groups brief): each cell's result as the run has it and
+     * its pieces as the snapshot does. `keep`, the cells of the groups kept whole in the source — a column of names, or
+     * one with a cell the translator could not take —, `wait` those of the groups with a cell not yet in, or lost to the
+     * service. Decided once per snapshot, so that every reading of one compile — its files, its plan, its anchors' texts
+     * — sets the same
+     */
+    const decidedFor = new WeakMap()
+    const decided = snapshot => {
+      let d = decidedFor.get(snapshot)
+      if (!d) { d = decideGroups(units, u => { const r = results.get(indexOf.get(u)); return r && { state: r.state, pieces: snapshot.get(u) } }, kept); decidedFor.set(snapshot, d) }
+      return d
+    }
+    /** a snapshot as a compile sets it: the units set in the source left out, and the table groups not translated whole */
+    const setting = snapshot => {
+      const { keep, wait } = decided(snapshot)
+      if (!inSource.size && !keep.size && !wait.size) return snapshot
+      const m = new Map(snapshot)
+      for (const set of [inSource, keep, wait]) for (const u of set) m.delete(u)
+      return m
+    }
+    /** whether a compile of the snapshot shows every unit translated: the names kept and the groups kept whole are */
+    const shownWhole = snapshot => { const set = setting(snapshot), { keep } = decided(snapshot); return units.every(u => kept.has(u) || keep.has(u) || set.has(u)) }
+    /** the run's results with the table groups kept whole marked so (`kept`, their translation with them: the next run's
+     *  seed, which decides them again), for the record (cache.mjs unitsOf) */
+    const markKept = snapshot => { for (const u of decided(snapshot).keep) { const i = indexOf.get(u), r = results.get(i); if (r?.pieces) { const { inSource: _, sentences: __, ...rest } = r; results.set(i, { ...rest, state: 'kept' }) } } }
     // the last compile of the translation: the files it was given, its units' lines in them (worked out when asked) and
     // the units it set translated — what the safety net places a failure by
     let last = null
@@ -859,7 +884,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
           previews++
           measuring = plan && whole(snapshot) ? { plan, strategy: strategy().name, r } : null
           shownInSource = passagesShown(snapshot)
-          shownPartial = !whole(setting(snapshot))
+          shownPartial = !shownWhole(snapshot)
           onUpdate?.({ pdf: r.pdf, texts: texts(setting(snapshot)), translated: snapshot.size, final: false })
         } else if (timedOut(r)) {
           // the machine slow: nothing changed, the next batch or the final goes on
@@ -886,6 +911,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       // the copy's PDF stays, and the passages it holds in the original with it (cache.mjs passagesInSource: the seeds
       // carry their mark)
       const inSourceKept = passagesInSource([...results].map(([i, r]) => ({ kind: units[i].kind, inSource: r.inSource })))
+      // the copy's PDF sets the groups its run kept whole, decided again from the same translations
+      markKept(new Map(translated))
       return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing(), inSource: inSourceKept, original: readings, passing }
     }
     const all = new Map(translated), t0 = Date.now()
@@ -998,18 +1025,19 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     }
     if (ok) {
       shownInSource = passagesShown(all)
-      shownPartial = !whole(setting(all))
+      shownPartial = !shownWhole(all)
       onUpdate?.({ pdf: r.pdf, texts: texts(setting(all)), translated: all.size, final: true })
       // the units the final set in the source though translated, for the record: their translation stays the next run's.
       // Said anew for every unit it set, a seed's mark included: it set them all again — those the safety net set in the
-      // source among them
-      const set = typesetBy(setting(all), strategy())
+      // source among them, and a table group waiting on a cell lost to the service. A group kept whole is kept (markKept)
+      const set = typesetBy(setting(all), strategy()), { keep } = decided(all)
       units.forEach((u, i) => {
         const r = results.get(i)
-        if (!r || !all.has(u)) return
+        if (!r || !all.has(u) || keep.has(u)) return
         const { inSource, ...rest } = r
         results.set(i, set.has(u) ? rest : { ...rest, inSource: true })
       })
+      markKept(all)
     }
     // marks known come only from a compile of the paper's own source that set (onOriginal)
     const own = marks && !originalP ? null : await original()
