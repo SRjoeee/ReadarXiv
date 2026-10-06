@@ -334,7 +334,12 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 //    text —; and an accent inside a word its letter in the word's text, the accent as written wherever the source is
 //    set (latex-front.mjs accentLetter) — El Ni{\~n}o went out as `El Ni @d#@e#@f# o`; 267 units in 40 of the
 //    corpus's 124 papers hold such a word. A copy of 7 carries its other units over (PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '8'
+// 9: a table's cells are decided by their group after translation, translated whole or kept whole (groups.mjs, the
+//    table-groups brief of 2026-10-07): a column of names kept in the source whole, its cells `kept` in the record with
+//    their translation, every cell with its group — the units' kept and translated states change. A copy of 8 carries
+//    every unit over: the cuts, the wire and its reading back are 8's, and its groups are decided again from its
+//    translations
+export const PIPELINE_VERSION = '9'
 /**
  * The earlier pipelines whose copies carry their translations over into this one, unit by unit (cache.mjs copyReuse),
  * each with the test a unit's translation, its pieces, must pass: DESIGN §5.5's rule for the HTML page's cache, here per
@@ -347,8 +352,9 @@ export const PIPELINE_VERSION = '8'
  *   (mt.mjs rehydrate); TeX's `#` is never the text's own (`\#` and a bare `#` are placeholders), so a translation whose
  *   text holds no `\#` was read back as this pipeline reads it, its sentences too. Units of 7 that fix 2 or 4 cut anew
  *   (a citation's notes, an accent in a word) have new hashes
+ * - 8: everything: what 9 changes comes after the answer (a table's groups, decided again from the copy's translations)
  */
-export const PIPELINE_CARRIES = { 7: pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#')) }
+export const PIPELINE_CARRIES = { 7: pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#')), 8: () => true }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a
