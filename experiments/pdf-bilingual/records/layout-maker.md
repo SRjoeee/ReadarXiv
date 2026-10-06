@@ -24,11 +24,14 @@ marks have a compile of their own: the maker reads that compile's marks file and
 |---|---|---|---|---|---|
 | Lines carried | 1,146/1,146 (100 %) | 600/610 (98.4 %) | 8,420/8,457 (99.6 %) | 1,349/1,355 (99.6 %) | ≥ 97.5 % |
 | research | 99.4 % | 97.5 % | 99.4 % | 99.3 % | |
-| Placeholders found, math cite ref code | 278/278 | 166/166 | 2,487/2,522 (98.6 %) | 201/201 | ≥ 98 % |
-| every kind | 312/313 | 171/171 | 3,338/3,471 | 208/208 | |
-| the research's grouping (with eqref and url) | 280/280 | 167/167 | 3,056/3,097 | 202/202 | |
+| Placeholders found, math cite ref code | 278/278 | 166/166 | 2,488/2,522 (98.7 %) | 201/201 | ≥ 98 % |
+| every kind | 312/313 | 171/171 | 3,345/3,471 | 208/208 | |
+| EMPTY, any kind (a paper's macro alone may draw nothing) | 0 | 0 | 0 | 0 | none of a kind that sets ink |
+| Running-text glyphs a placeholder took | 0 | 0 | 0 | 0 | 0 |
+| Visible pieces of located units with no row | 0 of 360 | 0 of 202 | 0 of 3,481 | 0 of 242 | 0 |
+| the research's grouping (with eqref and url) | 280/280 | 167/167 | 3,057/3,097 | 202/202 | |
 | research | 283/283 | 176/193 | 3,184/3,206 | 196/202 | |
-| Displays found / EMPTY | 2/2, 0 | none | 260/341, 0 | 1/1, 0 | none EMPTY |
+| Displays found / EMPTY | 2/2, 0 | none | 269/350, 0 | 1/1, 0 | none EMPTY |
 | Cells located | 164/164 | | | 156/156 | ≥ 95 % |
 | research | 164/164 | | | 145/156 | |
 | Footnotes located | | 5/5 | 24/29 (82.8 %) | | ≥ 80 % |
@@ -44,7 +47,7 @@ marks have a compile of their own: the maker reads that compile's marks file and
 | Units located (of all) | 278/280 | 167/175 | 432/449 | 286/289 | |
 | Split units | 20 | 5 | 79 | 11 | |
 | research | 19 | 5 | 80 | 13 | |
-| TeX's line count equal | 72/72 | 54/55 | 181/184 | 80/80 | |
+| TeX's line count equal | 72/72 | 55/55 | 181/184 | 80/80 | |
 | research | 72/73 | 58/59 | 185/189 | 80/81 | |
 | Room below, p10 / median / p90, pt | 1.52 / 3.51 / 18.49 | 1.19 / 7.48 / 20.22 | 9.66 / 18.26 / 36.83 | 2.06 / 3.05 / 16.72 | |
 | research | 1.71 / 3.49 / 18.58 | 1.32 / 7.48 / 20.22 | 4.83 / 18.26 / 36.28 | 2.09 / 3.17 / 16.31 | |
@@ -69,7 +72,7 @@ marks have a compile of their own: the maker reads that compile's marks file and
 |---|---|---|---|---|---|---|---|
 | 1512.03385v1 | 12 | 103.2 KB | 32.3 KB | 11.2 | 10.9 | 6.2 | 4.0 |
 | 1706.03762v7 | 15 | 48.6 KB | 16.4 KB | 6.0 | 4.9 | 3.3 | 2.2 |
-| 2307.16209v1 | 147 | 503.8 KB | 160.4 KB | 50.7 | 36.2 | 61.7 | 11.8 |
+| 2307.16209v1 | 147 | 501.9 KB | 159.7 KB | 50.7 | 36.2 | 61.7 | 11.1 |
 | 2608.04322v1 | 13 | 131.4 KB | 40.1 KB | 12.1 | 19.5 | 3.9 | 4.6 |
 
 - Against the spec's estimate (15–30 KB gzip for a 12–15-page paper, about 160 KB for the thesis): 1706 and the thesis
@@ -185,4 +188,37 @@ located. 2307's footnote calls are found 19/24 with it (23/27 before it).
   marks from it: on a switched paper a citation without marks by design is counted `unmarked`, not `marked` and LOST.
 - **Bounds:** the private PDF.js cancel is read on the pinned PDF.js by a test, and checked at run time (missing: one
   warning a paper, the bounds still hold); a unit whose faces would pass 512 names stays the original's.
+
+## Fix round 2 (the re-review of 2026-10-06)
+
+| 2307.16209v1 | before | after |
+|---|---|---|
+| Placeholders, every kind | 3,338/3,471, 6 EMPTY | 3,345/3,471, 0 EMPTY |
+| Displays found | 260/341 | 269/350 (`subequations` now displays) |
+| The re-review's nine (3 `subequations`, `$qQ$`, a cite, `$\ell$`, `$\Psi_0$`, `$\Psi_2^A$`, `$\ell,m,n$`) | 6 EMPTY, 3 without their base glyph | 7 found whole, 2 LOST (their marks past the line's end) |
+| Running-text glyphs a placeholder took | 101: units 90 and 151, a text line each (the re-review's count) | 0 |
+| A footnote's rule as a display's segment | 1 (unit 200) | 0 |
+
+- **`subequations` is a display** (`DISPLAY`, Task 1's marks): a corpus grep of the environments that open a
+  placeholder finds it the only display environment `DISPLAY` lacked (7 pieces in 3 papers; 2307's 9 more). Task 2's
+  gate on those three papers (2608.30886, 2608.12255, 2608.02015): 3 clean, 11,422 lines, none lost, no unit mark moved,
+  readings and files the same; their marked files are byte for byte the committed run's, so the gate took them from its
+  cache.
+- **The glyphs at a mark, from the data:** of 3,766 opening marks 18 lie more than 0.1 pt inside a glyph — 4 inside the
+  placeholder's own first glyph by 0.12–0.36 pt, 14 inside the glyph before it, 2.35 pt from its start or more; of 3,707
+  closing marks 51 — 43 inside the placeholder's last glyph, its middle before the mark, 8 inside the punctuation after,
+  its middle past it (the four papers; "inside" is more than 0.1 pt from either edge). So a placeholder's glyph begins no more than 0.4 pt (`MARK_SLACK`) before its opening mark and has
+  its middle before its closing mark.
+- **EMPTY only where a piece draws nothing:** its marks on one line, the line's ink either side, and no glyph of any unit's
+  between; else LOST. A display with no ink of its own is LOST.
+- **A middle row** (in the unit's order between a placeholder's two lines) is its ink only where it lies between those
+  lines on the page; and each glyph belongs to the unit's line whose baseline is nearest it (a big operator's row above a
+  text line takes none of the line's: 2307's unit 439, piece 9, took its text line while this round's count was built). The rows of one
+  line are merged until none is left (12 units had a script row apart).
+- **Every visible piece of a located unit has its row,** a piece of a class the marked original did not mark included
+  (LOST): no row is a piece that draws nothing, as the layer reads the file.
+- **A row of graphics alone wider than the display's glyphs** (a footnote's rule) is not the display's; `belowOf` reads
+  the rows of a page and column once, sorted, and finds the next line below by a binary search.
+- The machine's load stood near 120 during this round's runs: the times of this table's runs are not comparable, and
+  the table of times above is fix round 1's.
 
