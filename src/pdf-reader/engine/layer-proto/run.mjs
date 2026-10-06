@@ -337,7 +337,8 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   }
 
   // ---- no clipping (step 3): v0's fit drew what fitted at its last state and dropped the rest (2,314 characters on the
-  // gate's 29 outputs). A unit that does not fit there is given more room where the page has it.
+  // gate's 29 outputs). A unit that does not fit there is given more room where the page has it, and else stays the
+  // original's, whole: nothing of it is drawn in part.
   /**
    * How far a single line's slot may run on to one side (`dir` -1 or 1) of `from`, on its band of the original page, over
    * paper only: up to the first ink that is not the unit's own (`own`, its lines' erase extents: erased with it), read on
@@ -375,7 +376,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     let grew = false
     const out = p.blocks.map(b => {
       if (b.rects.length !== 1 || b.page > N) return b
-      const own = [...(p.prep.extents ?? new Map())].filter(([r]) => r[0] === b.page).map(([, e]) => (Array.isArray(e[0]) ? e : [e])).flat()
+      const own = [...(p.prep.extents ?? new Map())].filter(([r]) => r[0] === b.page).flatMap(([, e]) => (Array.isArray(e[0]) ? e : [e]))
       const [ax, az] = textArea(b.page)
       const right = paperTo(b, 1, b.x1, az, own), left = paperTo(b, -1, b.x0, ax, own)
       let x0 = b.x0, x1 = b.x1
@@ -481,10 +482,11 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     p.s = s
     p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P) }
     p.layout = L2.layoutUnit2(tokens, p.blocks, s, p.P, to)
-    // (step 3: a unit its states leave clipped given more room where the page has it)
+    // (step 3: never drawn in part: given more room where the page has it, else left the original's, whole)
     if (p.layout.clipped) {
       const further = fitFurther(p, tokens, s)
       if (further) { p.layout = further.layout; p.blocks = further.blocks }
+      else { p.refused = true; return }
     }
     const t4 = performance.now()
     p.layout.extents = new Map([...prep.extents].map(([r, e]) => [r.join(), e]))
@@ -520,7 +522,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   // well (the smallest any body unit of the page took)
   const laid = Array.from({ length: N + 1 }, () => [])
   const evenPass = pg => {
-    const body = laid[pg].filter(p => EVEN_KINDS.has(p.unit.kind))
+    const body = laid[pg].filter(p => EVEN_KINDS.has(p.unit.kind) && !p.refused)
     const target = Math.min(1, ...body.map(p => p.layout.scale))
     const leadTo = P.even >= 2 ? Math.min(P.leadBase, ...body.map(p => p.layout.state.lead)) : P.leadBase
     for (const p of body) {
@@ -537,15 +539,17 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   const arrive = p => {
     const t0 = performance.now()
     layout2(p)
+    // (a unit no step fits is the original's: neither erased nor drawn, nor checked)
+    if (p.refused) skipped.push({ id: p.id, kind: p.unit.kind, why: 'unfit', chars: trCharsOf(p.unit), pages: p.pages })
     if (P.even) {
       for (const pg of p.pages) {
         laid[pg].push(p)
         if (laid[pg].length === expected[pg]) {
           evenPass(pg)
-          for (const u of laid[pg]) paint(u, pg)
+          for (const u of laid[pg]) if (!u.refused) paint(u, pg)
         }
       }
-    } else for (const pg of p.pages) paint(p, pg)
+    } else if (!p.refused) for (const pg of p.pages) paint(p, pg)
     ms.set(p.id, performance.now() - t0)
   }
 
@@ -677,14 +681,14 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
      *  placeholders of the units with lines on it) */
     checkPage(pg) {
       needsCopy()
-      const here = placed.filter(p => p.pages.includes(pg))
+      const here = placed.filter(p => p.pages.includes(pg) && !p.refused)
       const only = rows.map((r, i) => (i === pg - 1 ? r : { ...r, base: false }))
       return checkAll({ N, placed: here, rows: only, pxOf, toPdf, chars2, audit, cols: colsOf, cellRects })
     },
     /** the prototype's completeness checker over every page still held (main.js check=1's window.__result.check) */
     check() {
       needsCopy()
-      return checkAll({ N, placed, rows, pxOf, toPdf, chars2, audit, cols: colsOf, cellRects })
+      return checkAll({ N, placed: placed.filter(p => !p.refused), rows, pxOf, toPdf, chars2, audit, cols: colsOf, cellRects })
     },
   }
 }

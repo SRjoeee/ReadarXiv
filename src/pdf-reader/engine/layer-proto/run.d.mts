@@ -9,7 +9,7 @@ import type { TexLines, Whole } from './tex.mjs'
 export interface Geometry { schema: number; kinds: string[]; left: { pages: number[][]; units: [number, number, Rect[]][] }; right?: unknown }
 /** a unit v0 places: its rectangles (all of them: a unit cut by the pages shown is laid over its lines past them too), the
  *  pages shown it has lines on (`cut`: it has more past them), and once laid its reading, tokens, blocks and layout */
-export interface Placed { id: number; stream: number; rects: Rect[]; unit: Unit; pages: number[]; cut: boolean; blocks: Block2[]; prep?: Prepared; tokens?: Token[]; layout?: Layout; s?: number; rec?: Rec; local?: Char[][]; tex?: (Whole & { lu: LayoutUnit; lines?: TexLines }) | null }
+export interface Placed { id: number; stream: number; rects: Rect[]; unit: Unit; pages: number[]; cut: boolean; blocks: Block2[]; prep?: Prepared; tokens?: Token[]; layout?: Layout; s?: number; rec?: Rec; local?: Char[][]; refused?: boolean; tex?: (Whole & { lu: LayoutUnit; lines?: TexLines }) | null }
 /** the hybrid's options (openProto `tex`): the layout file, the units file's pieces by unit id, and how the file's
  *  geometry is taken */
 export interface HybridOptions {
