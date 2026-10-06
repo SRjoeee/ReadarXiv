@@ -28,5 +28,5 @@ export declare function checkAll(o: {
   cols: (page: number) => number[][]
   cellRects: (page: number) => number[][]
 }): CheckResult
-/** paintBase's record of what it did: each erase, crop and restore */
+/** unitOps' record of what it drew: each erase, crop and restore */
 export interface Audit { what: 'erase' | 'crop' | 'restore'; unit: number; page: number; box?: number[]; k?: number; srcPage?: number; src?: number[]; dst?: number[]; boxes?: number }

@@ -11,7 +11,7 @@
 //
 // The completeness checker: does the layer show everything the original shows, once? Run in the page after every unit
 // is painted (main.js check=1, which score.mjs sets), from the original page's canvas, the layer's canvas (the copy,
-// erased, with its crops) and what paintBase recorded (each erased box, each crop drawn), with the units' alignments
+// erased, with its crops) and what unitOps recorded (each erased box, each crop drawn), with the units' alignments
 // (layer2.js prepareUnit). Four classes, each a count:
 //
 // (a) ink lost: the original's ink inside an erased box that the layer no longer shows (white on its canvas), and that
@@ -50,7 +50,7 @@ const r1 = x => Math.round(x * 10) / 10
 /**
  * The whole check. `placed`: main.js's placed units (each with prep, tokens, layout, blocks); `rows`: each page's
  * { left (original canvas), right (layer canvas) }; `pxOf(pg)`: PDF to device pixels; `toPdf(pg, x, y)` back;
- * `chars2`: each page's characters; `audit`: paintBase's records; `cols(pg)`: the page's columns [[x0, x1]…];
+ * `chars2`: each page's characters; `audit`: unitOps' records; `cols(pg)`: the page's columns [[x0, x1]…];
  * `cellRects(pg)`: table cells' rectangles (no equation number there).
  */
 export function checkAll({ N, placed, rows, pxOf, toPdf, chars2, audit, cols, cellRects }) {

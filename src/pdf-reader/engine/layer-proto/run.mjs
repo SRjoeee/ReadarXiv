@@ -5,10 +5,10 @@
 //
 // What a page of v0 is, as main.js made it at the approved URL's defaults (v=2, batch=8, delay=0, scale=1.25, ph=auto,
 // restoring on, no page-even): each page of the original drawn by PDF.js on a canvas (`left`), a copy of it (`right`) on
-// which each unit's lines are erased and its crops of math drawn (layer2.mjs paintBase, with what the erasing covers and
-// no painted unit accounts for put back), and an SVG over the copy holding each unit's translation as text (svgOfUnit).
-// The units are the made output's: their rectangles on the original (the geometry's left side, schema 1: the anchors'
-// lines) and their translations (the units file).
+// which each unit's lines are erased and its crops of math drawn (layer2.mjs unitOps and drawOps, with what the erasing
+// covers and no painted unit accounts for put back), and an SVG over the copy holding each unit's translation as text
+// (svgOfUnit). The units are the made output's: their rectangles on the original (the geometry's left side, schema 1:
+// the anchors' lines) and their translations (the units file).
 //
 // What changed from main.js, and why:
 // - main.js streamed the units a batch at a time while its pages were still being drawn, each unit laid and painted
@@ -19,6 +19,12 @@
 //   deterministic one. In it a unit is laid when its last page is drawn, so the pages are drawn one at a time and each
 //   page's units laid and painted as it is (until), and a page no unit will paint again may be let go (release): the
 //   prototype held every page's canvases, which a paper of 147 pages does not fit.
+// - main.js showed its copy, a canvas at 1.25 CSS px a unit, scaled: at any other zoom everything not set as SVG text (a
+//   table, a figure, a kept line, a formula's crop) was that canvas's pixels, a low-resolution screenshot. Here the
+//   drawing is kept as data (each page's operations, unitOps'), and a view draws the page at its own resolution
+//   (drawCopy): PDF.js's own rendering at the view's device pixels, the operations scaled to it, its crops and restores
+//   cut from that rendering; v0's own canvases at its own resolution are the analysis's (the ink maps) and the gate's
+//   (`copy`), never what a view shows.
 // - The page's DOM (its rows, the banner, the status line), the timings and long tasks, the scorer's extras (score=1)
 //   and the compiled final drawn beside (compare) are the host's or the measurement's, and are left out. The checker's
 //   audit of every erase and crop (main.js check=1) is always kept: it is what a gate measures the drawing by.
@@ -91,8 +97,10 @@ export const layOrder = (placed, batch = 8) => layGroups(placed, batch).flatMap(
  * in place of layGroups': a recorded run's). `faces`: 'roles' (the role table's) or 'prototype' (the prototype's own).
  * `faceUrl(file)`, `fontUrl(file)`, `hyphUrl(lang)`: where the host serves the role table's faces (by file name), the
  * prototype's Latin Modern (by name) and TeX's patterns. Nothing is drawn until `until(p)` is awaited.
+ * `copy`: whether each page's copy is kept at v0's own resolution (`right`), the plane the checker and the gate measure;
+ * a view draws the page at its own (drawCopy) and needs none.
  */
-export async function openProto({ doc, geometry, units: all, target: to, pages = 999, scale = 1.25, dpr = 1, params = {}, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json` }) {
+export async function openProto({ doc, geometry, units: all, target: to, pages = 999, scale = 1.25, dpr = 1, params = {}, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, copy = true }) {
   const P = L2.defaultParams(to)
   for (const k of PARAM_KEYS) if (params[k] !== undefined) P[k] = params[k]
   // iteration 2's hyphenation, fetched at once (local, small)
@@ -115,14 +123,15 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   for (let i = 1; i <= N; i++) {
     const view = geometry.left.pages[i - 1] ?? [0, 0, 612, 792]
     const w = (view[2] - view[0]) * scale, h = (view[3] - view[1]) * scale
-    const left = document.createElement('canvas'), right = document.createElement('canvas')
-    for (const c of [left, right]) { c.style.width = `${w}px`; c.style.height = `${h}px` }
+    const left = document.createElement('canvas'), right = copy ? document.createElement('canvas') : null
+    for (const c of [left, right]) if (c) { c.style.width = `${w}px`; c.style.height = `${h}px` }
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
     svg.setAttribute('class', 'tl')
     svg.setAttribute('width', String(w))
     svg.setAttribute('height', String(h))
     svg.setAttribute('xml:space', 'preserve')
-    rows.push({ page: i, left, right, svg, w, h, base: false })
+    // (ops: the page's drawing as data, every painted unit's in turn: kept when the page's canvases are let go)
+    rows.push({ page: i, left, right, svg, w, h, base: false, ops: [] })
   }
   const sheet = document.head.appendChild(document.createElement('style'))
   for (const rule of SVG_RULES) sheet.sheet.insertRule(rule, sheet.sheet.cssRules.length)
@@ -208,12 +217,15 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
       kept.hulls.push([Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)])
     }
     pageItems[pg] ??= L2.pageItemsOf(chars2[pg - 1] ?? [], pg, pxOf(pg), inks[pg])
-    return { orig: rows[pg - 1].left, items: pageItems[pg].items, cover: pageItems[pg].cover, ink: inks[pg], accounted: acc, kept }
+    return { items: pageItems[pg].items, cover: pageItems[pg].cover, ink: inks[pg], accounted: acc, kept }
   }
   const paint = (p, pg) => {
     const r = rows[pg - 1]
     const ro = restoreOf(p, pg)
-    L2.paintBase(r.right.getContext('2d'), p.layout, p.blocks, pg, { px: pxOf(pg), k: scale * dpr, origCanvasOf: j => (rows[j - 1]?.base ? rows[j - 1].left : null), pxOf, extents: p.layout.extents, audit, id: p.id, restore: ro })
+    // the unit's drawing as data, and on v0's own copy where it is kept: from the pages drawn now, as v0 drew it
+    const ops = L2.unitOps(p.layout, p.blocks, pg, { px: pxOf(pg), k: scale * dpr, hasSource: j => !!rows[j - 1]?.base, pxOf, extents: p.layout.extents, audit, id: p.id, restore: ro })
+    for (const o of ops) r.ops.push(o)
+    if (r.right) L2.drawOps(r.right.getContext('2d'), ops, 1, j => (rows[j - 1]?.base ? rows[j - 1].left : null))
     r.svg.insertAdjacentHTML('beforeend', L2.svgOfUnit(p.layout, pg, cssOf(pg), scale, p.id))
   }
 
@@ -384,8 +396,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     const r = rows[i - 1]
     r.left.width = Math.floor(viewport.width * dpr)
     r.left.height = Math.floor(viewport.height * dpr)
-    r.right.width = r.left.width
-    r.right.height = r.left.height
+    if (r.right) { r.right.width = r.left.width; r.right.height = r.left.height }
     r.view = page.view
     const textP = page.getTextContent()
     await page.render({ canvas: r.left, canvasContext: r.left.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
@@ -396,7 +407,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     if (roles) await loadRoleFaces([...new Set(tc.items.map(it => it.fontName))].map(fontOf).filter(st => st?.known).flatMap(st => roleIdsOf(st, 'latin')), faceUrl)
     chars2[i - 1] = L2.pageChars2(tc, fontOf)
     for (const c of chars2[i - 1]) if (c.st.fam !== 'math') { const key = `${c.st.fam}:${c.st.design}`; fontTally.set(key, (fontTally.get(key) ?? 0) + 1) }
-    r.right.getContext('2d').drawImage(r.left, 0, 0)
+    r.right?.getContext('2d').drawImage(r.left, 0, 0)
     r.base = true
     if (P.borrow) inkOf(i)
     if (i === 1) {
@@ -446,6 +457,17 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   }
   const cellRects = pg => geometry.left.units.filter(([id]) => geometry.kinds[id] === 'cell').flatMap(([, , rs]) => rs.filter(r => r[0] === pg))
   const toPdf = (pg, x, y) => views[pg - 1].convertToPdfPoint(x / dpr, y / dpr)
+  // a page as PDF.js draws it at k device pixels a PDF unit: drawCopy's source of another page's crop
+  const renderAt = async (pg, k) => {
+    const page = await doc.getPage(pg)
+    const viewport = page.getViewport({ scale: k })
+    const c = document.createElement('canvas')
+    c.width = Math.ceil(viewport.width)
+    c.height = Math.ceil(viewport.height)
+    await page.render({ canvas: c, canvasContext: c.getContext('2d'), viewport }).promise
+    return c
+  }
+  const needsCopy = () => { if (!copy) throw new Error("v0's checker reads its copy at its own resolution: open with copy: true") }
 
   return {
     N, P, rows, placed, skipped, stats, audit, order, ms, pageMs, chars: chars2, views,
@@ -466,23 +488,41 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
       })
       return busy
     },
-    /** a done page's canvases let go (its SVG stays): no unit paints it again */
+    /**
+     * Page `pg`'s copy at a view's own resolution, `k` device pixels a PDF unit (its CSS px a unit × its device pixel
+     * ratio × its zoom), once its units are painted (until): onto `ctx`, a canvas of the page at k, the page as PDF.js
+     * drew it at k (`source`, left untouched), then the page's drawing (its units' operations in the order v0 painted
+     * them) scaled to k, its restores and crops cut from `source` and, for a crop of another page, from that page drawn
+     * by PDF.js at k here. At any k and as often as the zoom changes, a page let go too: nothing of v0's own canvases is
+     * drawn, so that a table, a figure, a kept line and a crop are as sharp as the original at every zoom.
+     */
+    async drawCopy(pg, ctx, source, k) {
+      const r = rows[pg - 1]
+      const others = new Map()
+      for (const o of r.ops) if (o.op === 'crop' && o.page !== pg && !others.has(o.page)) others.set(o.page, await renderAt(o.page, k))
+      ctx.drawImage(source, 0, 0)
+      L2.drawOps(ctx, r.ops, k / (scale * dpr), j => (j === pg ? source : (others.get(j) ?? null)))
+      for (const c of others.values()) { c.width = 0; c.height = 0 }
+    },
+    /** a done page's canvases let go (its SVG and its drawing's operations stay): no unit paints it again */
     release(pg) {
       const r = rows[pg - 1]
       if (!r || drawnTo < doneAt[pg]) return
-      for (const c of [r.left, r.right]) { c.width = 0; c.height = 0 }
+      for (const c of [r.left, r.right]) if (c) { c.width = 0; c.height = 0 }
       r.base = false
       r.released = true
     },
     /** the prototype's completeness checker on one done page (main.js check=1's, its pixels of that page alone, its
      *  placeholders of the units with lines on it) */
     checkPage(pg) {
+      needsCopy()
       const here = placed.filter(p => p.pages.includes(pg))
       const only = rows.map((r, i) => (i === pg - 1 ? r : { ...r, base: false }))
       return checkAll({ N, placed: here, rows: only, pxOf, toPdf, chars2, audit, cols: colsOf, cellRects })
     },
     /** the prototype's completeness checker over every page still held (main.js check=1's window.__result.check) */
     check() {
+      needsCopy()
       return checkAll({ N, placed, rows, pxOf, toPdf, chars2, audit, cols: colsOf, cellRects })
     },
   }

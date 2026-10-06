@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
+import type { Audit } from '@/pdf-reader/engine/layer-proto/check.mjs'
 import { breakPoints, patternsOfTex } from '@/pdf-reader/engine/layer-proto/hyph.mjs'
 import { layGroups, layOrder } from '@/pdf-reader/engine/layer-proto/run.mjs'
 
@@ -63,5 +64,72 @@ describe("v0's reading of a placeholder's source", () => {
     expect(L2.phClass2('$\\sqrt{\\dmodel}$')).toEqual({ cls: 'other', unknown: true })
     expect(L2.phClass2('\\bert')).toEqual({ cls: 'umacro', unknown: true })
     expect(L2.phClass2('\\cite{he2016}')).toEqual({ cls: 'cite' })
+  })
+})
+
+describe("v0's drawing as data: recorded in its own device pixels, drawn at any resolution from the page drawn there", () => {
+  let L2: typeof import('@/pdf-reader/engine/layer-proto/layer2.mjs')
+  beforeAll(async () => {
+    const g = globalThis as { OffscreenCanvas?: unknown }
+    g.OffscreenCanvas ??= class { getContext() { return { font: '', measureText: (s: string) => ({ width: 50 * s.length }) } } }
+    L2 = await import('@/pdf-reader/engine/layer-proto/layer2.mjs')
+  })
+  // a page 792 units tall at 2.5 device pixels a unit; one block of two lines, a crop of page 1 on the second
+  const k = 2.5
+  const px = (x: number, y: number): [number, number] => [x * k, (792 - y) * k]
+  const rects = [[1, 100, 700, 300, 710], [1, 100, 686, 250, 696]]
+  const blocks = [{ page: 1, rects, x1: 300 }] as unknown as Parameters<typeof L2.unitOps>[1]
+  const L = { scale: 0.9, lines: [{ page: 1, baseline: 688, items: [{ x: 120, w: 18, t: { crop: { crop: [40, 500, 60, 510], page: 1, baseline: 502, k: 3 } } }] }] } as unknown as Parameters<typeof L2.unitOps>[0]
+  /** a 2D context that records its calls */
+  const recorder = () => {
+    const calls: unknown[][] = []
+    const ctx = new Proxy({} as Record<string, unknown>, {
+      get: (_, name: string) => (...args: unknown[]) => { calls.push([name, ...args]) },
+      set: (_, name: string, v) => { calls.push([`=${name}`, v]); return true },
+    })
+    return { ctx: ctx as unknown as CanvasRenderingContext2D, calls }
+  }
+  it("records v0's erase (its padding: 0.3 before the unit's first line, 1.8 elsewhere, 1.2 above and below) and its crop", () => {
+    const audit: Audit[] = []
+    const ops = L2.unitOps(L, blocks, 1, { px, k, hasSource: () => true, pxOf: () => px, audit, id: 7 })
+    expect(ops.map(o => o.op)).toEqual(['erase', 'erase', 'crop'])
+    // the first line from 0.3 before it; the second, not its block's last but the block's own, to its own right edge
+    expect(ops[0]).toEqual({ op: 'erase', box: [(100 - 0.3) * k, (792 - 711.2) * k, (300 + 1.8 - (100 - 0.3)) * k, (711.2 - 698.8) * k].map(v => expect.closeTo(v, 9)) })
+    expect(ops[1]).toEqual({ op: 'erase', box: [(100 - 1.8) * k, (792 - 697.2) * k, (250 + 1.8 - (100 - 1.8)) * k, (697.2 - 684.8) * k].map(v => expect.closeTo(v, 9)) })
+    // the crop: its source's box, laid at the item's place with its baseline on the line's, at the fit's scale
+    expect(ops[2]).toEqual({ op: 'crop', page: 1, src: [40 * k, (792 - 510) * k, 20 * k, 10 * k].map(v => expect.closeTo(v, 9)), dst: [120 * k, (792 - (688 + 8 * 0.9)) * k, 18 * k, 10 * 0.9 * k].map(v => expect.closeTo(v, 9)) })
+    expect(audit.map(a => (a as { what: string }).what)).toEqual(['erase', 'erase', 'crop'])
+  })
+  it('leaves out a crop whose page is not drawn, and records it nowhere', () => {
+    const audit: Audit[] = []
+    const ops = L2.unitOps(L, blocks, 1, { px, k, hasSource: () => false, pxOf: () => px, audit, id: 7 })
+    expect(ops.map(o => o.op)).toEqual(['erase', 'erase'])
+    expect(audit).toHaveLength(2)
+  })
+  const ops = [
+    { op: 'erase', box: [10, 20, 30, 40] },
+    { op: 'restore', page: 1, clip: [[10, 20, 30, 40]], boxes: [[12, 22, 4, 4]] },
+    { op: 'crop', page: 2, src: [1, 2, 3, 4], dst: [5, 6, 7, 8] },
+  ] as Parameters<typeof L2.drawOps>[1]
+  it("draws at v0's own resolution with v0's own calls and numbers: white, the page put back within the erase, the crop darkened in", () => {
+    const { ctx, calls } = recorder()
+    const page1 = { id: 1 } as unknown as CanvasImageSource, page2 = { id: 2 } as unknown as CanvasImageSource
+    L2.drawOps(ctx, ops, 1, p => (p === 1 ? page1 : page2))
+    expect(calls).toEqual([
+      ['save'], ['=fillStyle', '#fff'], ['fillRect', 10, 20, 30, 40],
+      ['save'], ['beginPath'], ['rect', 10, 20, 30, 40], ['clip'], ['drawImage', page1, 12, 22, 4, 4, 12, 22, 4, 4], ['restore'],
+      ['=globalCompositeOperation', 'darken'], ['drawImage', page2, 1, 2, 3, 4, 5, 6, 7, 8], ['=globalCompositeOperation', 'source-over'],
+      ['restore'],
+    ])
+  })
+  it('draws at any other resolution scaled, cut from the page drawn there; an operation with no page drawn is left out', () => {
+    const { ctx, calls } = recorder()
+    const page1 = { id: 1 } as unknown as CanvasImageSource
+    L2.drawOps(ctx, ops, 2, p => (p === 1 ? page1 : null))
+    expect(calls).toEqual([
+      ['save'], ['=fillStyle', '#fff'], ['fillRect', 20, 40, 60, 80],
+      ['save'], ['beginPath'], ['rect', 20, 40, 60, 80], ['clip'], ['drawImage', page1, 24, 44, 8, 8, 24, 44, 8, 8], ['restore'],
+      ['restore'],
+    ])
   })
 })

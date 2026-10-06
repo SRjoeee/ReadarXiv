@@ -152,8 +152,20 @@ export declare function inkMapOf(canvas: HTMLCanvasElement | OffscreenCanvas, fa
 export declare function freeBelow(map: InkMap | undefined, toDev: ToDev, k: number, x0: number, x1: number, yStart: number, yLimit: number): number
 export declare const setHyphenData: (lang: string, data: Patterns | true | null) => Map<string, Patterns | true | null>
 export declare function layoutUnit2(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params, to: string): Layout
-/** the unit's lines erased on the page's copy, what no painted unit accounts for put back, its crops drawn */
-export declare function paintBase(ctx: CanvasRenderingContext2D, L: Layout, blocks: readonly Block2[], page: number, o: { px: ToDev; k: number; origCanvasOf: (page: number) => HTMLCanvasElement | null; pxOf: (page: number) => ToDev; extents?: Map<string, number[]>; audit?: Audit[] | null; id?: number | null; restore?: unknown }): void
+/** a box in v0's device pixels on the page: [x, y, w, h] */
+export type DevBox = [number, number, number, number]
+/** one of the layer's drawing operations (unitOps'): the paper's white, the page's own pixels put back within the erased
+ *  boxes, a crop of a page's pixels darkened in */
+export type DrawOp =
+  | { op: 'erase'; box: DevBox }
+  | { op: 'restore'; page: number; clip: DevBox[]; boxes: DevBox[] }
+  | { op: 'crop'; page: number; src: DevBox; dst: DevBox }
+/** a canvas a drawing operation cuts from: the page as PDF.js drew it */
+export type DrawSource = CanvasImageSource
+/** the unit's lines erased on the page, what no painted unit accounts for put back, its crops: as operations */
+export declare function unitOps(L: Layout, blocks: readonly Block2[], page: number, o: { px: ToDev; k: number; hasSource: (page: number) => boolean; pxOf: (page: number) => ToDev; extents?: Map<string, number[]>; audit?: Audit[] | null; id?: number | null; restore?: unknown }): DrawOp[]
+/** the operations drawn on a copy of the page at `z` times v0's resolution, cut from each page as PDF.js drew it there */
+export declare function drawOps(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, ops: readonly DrawOp[], z: number, sourceOf: (page: number) => DrawSource | null | undefined): void
 export declare function pageItemsOf(chars: readonly Char[], page: number, px: ToDev, ink: InkMap | undefined): { items: { chars: Char[]; keys: string[]; box: number[] }[]; cover: Uint8Array | null }
 /** the unit's lines on one page as SVG markup (a <g data-u="id">) */
 export declare function svgOfUnit(L: Layout, page: number, toPx: (x: number, y: number) => number[], scale: number, id: number): string
