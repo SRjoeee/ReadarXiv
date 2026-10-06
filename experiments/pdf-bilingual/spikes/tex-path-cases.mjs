@@ -3,7 +3,9 @@
 // lab's report of 2026-10-06, concern 1), each as a small document through the reader's own translationFiles, compiled
 // natively in Docker with -halt-on-error. Each case with the fix and without it: the fix sets the document, and without
 // it TeX stops, or loses letters, where the lab's finals did. Exits non-zero on a failure.
-//   pnpm exec tsx experiments/pdf-bilingual/spikes/tex-path-cases.mjs
+//   [AXT_DATA=<the experiment's data>] pnpm exec tsx experiments/pdf-bilingual/spikes/tex-path-cases.mjs [R P U S F N …]
+// The cases named, or all. The METAFONT outputs the file server adds (spikes/make-metafont.mjs, AXT_DATA/metafont, as
+// faithful.mjs mounts them) are on the font path where they are there: a case that needs one is skipped without them
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -14,6 +16,9 @@ import { openPaper, translationFiles } from '../../../src/pdf-reader/engine/live
 import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
 
 const dir = mkdtempSync(join(tmpdir(), 'tex-path-cases-'))
+const named = process.argv.slice(2), want = c => !named.length || named.includes(c)
+const METAFONT = join(process.env.AXT_DATA ?? new URL('../data', import.meta.url).pathname, 'metafont')
+const faithful = ['-e', 'MKTEXTFM=0', '-e', 'MKTEXPK=0', '-e', 'MKTEXMF=0', ...(existsSync(METAFONT) ? ['-v', `${METAFONT}:/axt-metafont:ro`, '-e', 'TFMFONTS=/axt-metafont//:'] : [])]
 // PDF.js's character maps: without them a CJK PDF's text is not read
 const PDFJS = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'))
 let failed = 0
@@ -21,9 +26,10 @@ const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok 
 const enc = s => new TextEncoder().encode(s)
 /**
  * A document (`files`: path → text, main.tex the main file) through translationFiles under `strategy`, with what
- * `translate(paper)` gives (unit → pieces), `undo(paper)` first where the case is compiled without its fix, `fonts` the
- * font probe's families; compiled once by the strategy's engine halting on the first error, no font made on the way
- * (faithful.mjs) → { ok: TeX's exit status, log, error: its first, text: the PDF's }
+ * `translate(paper)` gives (unit → pieces), `undo(paper)` first where the case is compiled without its fix, `alter` on
+ * the main file's text as written (its bytes read as Latin-1 and written back so), `fonts` the font probe's families;
+ * compiled once by the strategy's engine halting on the first error, no font made on the way (faithful.mjs) → { ok:
+ * TeX's exit status, log, error: its first, text: the PDF's }
  */
 async function compile(name, files, strategy, { translate = () => new Map(), undo = null, alter = null, fonts = null } = {}) {
   const paper = openPaper(new Map(Object.entries(files).map(([p, t]) => [p, enc(t)])))
@@ -31,9 +37,9 @@ async function compile(name, files, strategy, { translate = () => new Map(), und
   const out = new Map([...paper.fsys.list().map(p => [p, paper.fsys.read(p)]), ...translationFiles(paper, translate(paper), { strategy, fonts, draft: false })])
   const at = join(dir, name)
   mkdirSync(at, { recursive: true })
-  for (const [p, b] of out) { mkdirSync(dirname(join(at, p)), { recursive: true }); writeFileSync(join(at, p), alter && p === 'main.tex' ? alter(new TextDecoder('latin1').decode(b)) : b) }
+  for (const [p, b] of out) { mkdirSync(dirname(join(at, p)), { recursive: true }); writeFileSync(join(at, p), alter && p === 'main.tex' ? Buffer.from(alter(Buffer.from(b).toString('latin1')), 'latin1') : b) }
   let ok = true
-  try { execFileSync('docker', ['run', '--rm', '--network', 'none', '-e', 'MKTEXTFM=0', '-e', 'MKTEXPK=0', '-e', 'MKTEXMF=0', '-v', `${at}:/work`, '-w', '/work', 'texlive/texlive:latest', strategy.engine, '-interaction=nonstopmode', '-halt-on-error', 'main.tex'], { stdio: 'ignore' }) } catch { ok = false }
+  try { execFileSync('docker', ['run', '--rm', '--network', 'none', ...faithful, '-v', `${at}:/work`, '-w', '/work', 'texlive/texlive:latest', strategy.engine, '-interaction=nonstopmode', '-halt-on-error', 'main.tex'], { stdio: 'ignore' }) } catch { ok = false }
   const log = existsSync(join(at, 'main.log')) ? readFileSync(join(at, 'main.log'), 'latin1') : ''
   if (ok && strategy.engine === 'xelatex') ok = existsSync(join(at, 'main.pdf'))
   let text = ''
@@ -50,7 +56,7 @@ const doc = (body, preamble = '') => `\\documentclass{article}\n${preamble}\\beg
 // R: a cell's row commands, which an engine moved after the cell's words (1512.03385 into es: "Nombre de la capa @a#",
 // the row's \hline; 1810.04805 into es and fr, \toprule): written where the row has them, TeX sets the table; as the
 // engine sent them, "Misplaced \noalign"
-{
+if (want('R')) {
   const R = { 'main.tex': doc('\\begin{tabular}{ll}\n\\toprule\nlayer name & output size \\\\\n\\midrule\nconv1 & 112 \\\\\n\\bottomrule\n\\end{tabular}', '\\usepackage{booktabs}\n') }
   const [es] = strategiesFor({ compiler: 'pdflatex' }, 'es')
   /** each cell translated as the engine sent it back: its words first, then every placeholder */
@@ -62,7 +68,7 @@ const doc = (body, preamble = '') => `\\documentclass{article}\n${preamble}\\beg
 
 // P: an image sized in pdfTeX's px (1810.04805: \includegraphics[width=360px]), its pdfLaTeX paper set by XeLaTeX for a
 // CJK target: given in bp, its value, the image sets; as the source has it, "Illegal unit of measure"
-{
+if (want('P')) {
   const P = { 'main.tex': doc('An image \\includegraphics[width=36px]{example-image} and another \\includegraphics[height=0.1\\textwidth]{example-image}.\\setbox0\\hbox{\\includegraphics[width=36px]{example-image}}\\typeout{AXT-WIDTH=\\the\\wd0}', '\\usepackage{graphicx}\n') }
   const [xe] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
   const fixed = await compile('p-fixed', P, xe), bare = await compile('p-bare', P, xe, { alter: tex => tex.replace(/\\makeatletter\\def\\axt@px[^\n]*\\makeatother\n/, '') })
@@ -72,19 +78,18 @@ const doc = (body, preamble = '') => `\\documentclass{article}\n${preamble}\\beg
 
 // U: a translated heading a class uppercases (2307.16209's abntex2, its running heads; here book's), set under CJKutf8:
 // with each CJK byte protected the case changers pass it by; as CJK defines them, "Extra \else"
-{
+if (want('U')) {
   const U = { 'main.tex': '\\documentclass{book}\n\\begin{document}\n\\chapter{Results of the study}\nWords of the chapter.\\newpage\nMore words of it.\\newpage\nAnd more.\n\\end{document}\n' }
   const [, cjkutf8] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
   const translate = paper => new Map(paper.units.filter(u => u.kind === 'heading').map(u => [u, [{ t: 'text', tr: true, s: '\u7814\u7a76\u7ed3\u679c' }]]))
   const fixed = await compile('u-fixed', U, cjkutf8, { translate }), bare = await compile('u-bare', U, cjkutf8, { translate, alter: tex => tex.replace('\\axtcjkprotect}', '}') })
   check('U: a translated chapter title in book\'s uppercased running heads sets under CJKutf8', fixed.ok && !/Missing character/.test(fixed.log), fixed.error)
-  // what TeX stops at depends on the characters: the thesis's "Extra \\else", here an encoding's missing command
-  check('U: without the bytes protected, \\MakeUppercase expands them and TeX stops', !bare.ok && /^! /m.test(bare.log), bare.error || 'it set')
+  check('U: without the bytes protected, \\MakeUppercase expands them: "Extra \\else" (as the thesis stopped)', !bare.ok && /^! Extra \\else\./m.test(bare.log), bare.error || 'it set')
 }
 
 // S: a paper that loads siunitx, its locale Chinese (2307.16209 into zh under XeLaTeX): siunitx 3.6.2 opens
 // babel-Hans-.ini; with a file that is not there passed over, the document sets. Without, it stops — under 3.6.2 alone
-{
+if (want('S')) {
   const S = { 'main.tex': doc('A number, \\num{1.5}, in a paragraph.', '\\usepackage{siunitx}\n') }
   const [xe] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
   const fixed = await compile('s-fixed', S, xe), bare = await compile('s-bare', S, xe, { alter: tex => tex.replace(/\\ExplSyntaxOn\n\\cs_if_exist:NT \\__siunitx_locale_setup:n[\s\S]*?\\ExplSyntaxOff\n/, '') })
@@ -97,7 +102,7 @@ const doc = (body, preamble = '') => `\\documentclass{article}\n${preamble}\\beg
 // F: a style that sets its subsection headings in a font it loads by name (cvpr.sty: \font\elvbf = ptmb scaled 1100),
 // translated into Russian (1512.03385 into ru): declared again in the strategy's encoding, the heading has its letters,
 // under T2A and under XeLaTeX; as the style loads it, the heading's letters are the raw font's glyphs or none
-{
+if (want('F')) {
   const F = {
     'main.tex': '\\documentclass{article}\n\\usepackage{times}\n\\usepackage{style}\n\\begin{document}\n\\subsection{Implementation}\nWords of the section.\n\\end{document}\n',
     'style.sty': '\\font\\elvbf  = ptmb scaled 1100 % ptmb7t elsewhere\n\\def\\subsection{\\@startsection{subsection}{2}{\\z@}{8pt}{6pt}{\\elvbf}}\n',
@@ -108,7 +113,9 @@ const doc = (body, preamble = '') => `\\documentclass{article}\n${preamble}\\beg
   for (const s of strategiesFor({ compiler: 'pdflatex' }, 'ru')) {
     const fixed = await compile('f-fixed', F, s, { translate, fonts }), bare = await compile('f-bare', F, s, { translate, fonts, alter: without })
     check(`F (${s.name}): a heading in a font the style loads by name has its Russian letters`, fixed.ok && !/Missing character/.test(fixed.log) && fixed.text.includes('Реализация'), fixed.error || (fixed.log.match(/^Missing character.*$/m)?.[0] ?? `the PDF reads ${JSON.stringify(fixed.text.slice(0, 40))}`))
-    check(`F (${s.name}): without it, the heading's letters are lost (as 1512.03385's were)`, !bare.text.includes('Реализация') && (/Missing character/.test(bare.log) || !bare.ok), bare.error || 'the heading set')
+    // the symptom is in the PDF alone: under T2A the raw font sets its own glyphs at T2A's slots, "—åàºŁçàöŁÿ", and
+    // logs a missing character only for the slots it has none at; the paragraph, in NFSS's T2A font, has its letters
+    check(`F (${s.name}): without it, the heading's letters are not in the PDF, the paragraph's are (as 1512.03385's headings)`, bare.ok && !bare.text.includes('Реализация') && bare.text.includes('Слова раздела'), bare.error || `the PDF reads ${JSON.stringify(bare.text.slice(0, 60))}`)
   }
 }
 
