@@ -12,7 +12,9 @@
 //           `d` a dimension, glue or number, `k` keys and values, `n` a name (a label, a file, a colour, a counter),
 //           `v` a name set as it is written (a URL, an e-mail address), `r` a register or a control sequence, `x` code (a
 //           definition's body, tokens never typeset as they stand), `m` math, `s` a literal
-// A register (\tabcolsep) is '=': TeX's assignment may follow it, `\tabcolsep=2pt`
+// A register (\tabcolsep) is '=': TeX's assignment may follow it, `\tabcolsep=2pt`; a token register (llncs'
+// \titlerunning) `?s{x`, its value a group. A command LaTeXML reads in code past its prototype (\cmidrule[]'s
+// (trim){a-b}, acronym's \ac*{key}) is not known: its arguments are no reader's text
 import { BINDINGS, COMMANDS, ENVIRONMENTS, FRONT, LATEXML_COMMIT, PACKAGE_COMMANDS, PACKAGE_ENVIRONMENTS, REQUIRES } from './latexml-args.mjs'
 
 export { LATEXML_COMMIT }
@@ -57,8 +59,17 @@ const CURATED = {
   newenvironment: '*s{n[d[x{x{x', renewenvironment: '*s{n[d[x{x{x', newtheorem: '*s{n[n{n[n', newcolumntype: '{n[d[x{x',
   DeclareMathOperator: '*s{r{x', newlength: '{r', newcounter: '{n[n', newif: '_r', let: '_r?s_r', def: '_rbx{x', gdef: '_rbx{x',
   edef: '_rbx{x', xdef: '_rbx{x',
-  // text the reader sees, set apart: a caption outside a float (caption's \captionof), a deluxetable's
+  // text the reader sees, set apart: a caption outside a float (caption's \captionof), a deluxetable's; the running
+  // heads' (set on every page; the front end keeps them as they are)
   captionof: '*s{n[t{t', tablecaption: '{t', markboth: '{t{t', markright: '{t',
+  // a note's text apart from its mark; a two-column page's full-width top, ICML's title block or a teaser figure there
+  footnotetext: '[d{t', twocolumn: '[c',
+  // what LaTeXML reads in code past its prototype: booktabs' \cmidrule[w](trim){a-b}, whose trim in parentheses the
+  // front end passes over first; acronym's key, set as the acronym it names; aastex's table width
+  cmidrule: '[d{n', tablewidth: '{d',
+  ac: '*s{n', acp: '*s{n', acs: '*s{n', acsp: '*s{n', acl: '*s{n', aclp: '*s{n', acf: '*s{n', acfp: '*s{n', acfi: '*s{n',
+  acsu: '*s{n', aclu: '*s{n', iac: '*s{n', Iac: '*s{n', Ac: '*s{n', Acp: '*s{n', Acs: '*s{n', Acl: '*s{n', Aclp: '*s{n',
+  Acf: '*s{n', Acfp: '*s{n', acused: '{n',
 }
 /** environments as the front end reads them, where LaTeXML's form is missing or says less: a table's position and
  *  columns (its cells are walked), a box's width, a list's options (enumitem's keys), a theorem's title */
@@ -105,20 +116,59 @@ export function bindingsOf(texts) {
   return out
 }
 /** a name's parameters by the forms LaTeXML gives it: where a paper's bindings (`bindings`) define it, theirs, and none
- *  where they differ; else the engine pools'; else, with no paper to tell (null), the one form every binding agrees on */
+ *  where they differ; else the engine pools'. A package's form only where the paper loads it: with no paper to tell
+ *  (null), none — a paper's own \degrees is no pstricks \degrees[…] */
 const byForms = (pools, packages, name, bindings) => {
   const pkg = packages[name]
   if (bindings && pkg) {
     const mine = pkg.filter(([, ...bs]) => bs.some(b => bindings.has(b))).map(([s]) => s)
     if (mine.length) return mine.length === 1 ? asParams(mine[0]) : null
   }
-  if (pools[name] !== undefined) return known(pools[name]) ? asParams(pools[name]) : null
-  return !bindings && pkg?.length === 1 ? asParams(pkg[0][0]) : null
+  return pools[name] !== undefined && known(pools[name]) ? asParams(pools[name]) : null
 }
 /** a command's parameters ({ shape, role } each, by the letters above), or null where the table does not know them: as
  *  written out here, else by LaTeXML's forms for the paper's bindings (bindingsOf; null for none known) */
 export function commandParams(name, bindings = null) {
   return known(CURATED[name]) ? asParams(CURATED[name]) : byForms(COMMANDS, PACKAGE_COMMANDS, name, bindings)
+}
+/** the ways a paper's files define a command, its name in group 1: whatever the table says of a name the paper defines
+ *  is another command's (melba.cls's \def\firstname{…}, which LaTeXML's moderncv gives an argument) */
+const OWN_COMMANDS = /\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|newtoks|DeclareMathOperator\*?)\s*\{?\s*\\([A-Za-z@]+)/g
+/** a paper as the table reads it: the bindings its files load (bindingsOf) and the commands they define (`own`), whose
+ *  arguments the table cannot know (llncs.cls' \newtoks\titlerunning among them) — not a command defined anew only
+ *  inside its own call's argument, which is the kernel's where it is called (inOwnCall) */
+export function paperOf(texts) {
+  const own = new Set()
+  for (const t of texts) {
+    const text = t.replace(/(^|[^\\])%.*$/gm, '$1')
+    for (const m of text.matchAll(OWN_COMMANDS)) if (!inOwnCall(text, m.index, m[1])) own.add(m[1])
+  }
+  return { bindings: bindingsOf(texts), own }
+}
+/**
+ * Whether a definition of \name at t[at] stands inside an argument of a call of \name before it: local to that call's
+ * group, it is no definition of the command where it is called (CVPR's teaser, \twocolumn[{\renewcommand\twocolumn[1][]{#1}
+ * \maketitle … \captionof{figure}{…}}]: the call is the kernel's, its optional argument the content it sets)
+ */
+export function inOwnCall(t, at, name) {
+  const call = `\\${name}`
+  for (let q = t.lastIndexOf(call, at - 1), seen = 0; q >= 0 && seen < 4; q = t.lastIndexOf(call, q - 1), seen++) {
+    let k = q + call.length
+    if (isLetter(t[k] ?? '')) continue
+    for (;;) {
+      while (t[k] === ' ' || t[k] === '\t' || t[k] === '\n') k++
+      if (t[k] !== '[' && t[k] !== '{') break
+      const e = t[k] === '[' ? groupEnd(t, k, '[', ']') : groupEnd(t, k)
+      if (e < 0) break
+      if (at > k && at < e) return true
+      k = e
+    }
+  }
+  return false
+}
+/** a command's parameters for a paper (paperOf), or null: none for one the paper defines, else the paper's bindings' */
+export function paperParams(name, paper = null) {
+  return paper?.own.has(name) ? null : commandParams(name, paper?.bindings ?? null)
 }
 /** an environment's parameters after its \begin{name}, or null: as written out here, else LaTeXML's environment for the
  *  paper's bindings. Not a command of its name: LaTeX's \begin{x} runs \x, but a command LaTeXML knows by a name
@@ -134,8 +184,9 @@ export function environmentParams(name, bindings = null) {
  */
 const NOT_FRONT_TEXT = new Set(['setcopyright', 'doi', 'acmDOI', 'acmISBN', 'ISSN', 'PII', 'arxivnumber', 'acmSubmissionID', 'acmArticle', 'acmArticleSeq', 'acmNumber', 'acmVolume', 'acmYear', 'acmMonth', 'acmPrice', 'volume', 'issue', 'pagerange', 'pubyear', 'microfiche', 'pacno', 'pacs', 'PACS', 'CRclass', 'ams', 'subclass'])
 /** front matter LaTeXML has no binding for: AAAI's and MELBA's \affiliations{…} (aaai2026.sty, melba.cls), achemso's
- *  \alsoaffiliation[…]{…}, the keywords environment of the classes that have one */
-const MORE_FRONT = { affiliations: ['author', 1], alsoaffiliation: ['author', 2], 'env:keywords': ['keywords', 0], 'env:IEEEkeywords': ['keywords', 0], 'env:abstract': ['abstract', 0] }
+ *  \alsoaffiliation[…]{…}, the keywords environment of the classes that have one; and ICML's title, which LaTeXML lets
+ *  be \title (an alias, whose hook the generator does not follow) */
+const MORE_FRONT = { affiliations: ['author', 1], alsoaffiliation: ['author', 2], icmltitle: ['title', 2], 'env:keywords': ['keywords', 0], 'env:IEEEkeywords': ['keywords', 0], 'env:abstract': ['abstract', 0] }
 export const FRONT_ROLES = Object.freeze({ ...Object.fromEntries(Object.entries(FRONT).filter(([k]) => !NOT_FRONT_TEXT.has(k.replace(/^env:/, '')))), ...MORE_FRONT })
 
 // ---------------------------------------------------------------- reading arguments as TeX takes them
@@ -226,15 +277,15 @@ const commandAt = (s, i) => {
  * a layer that draws a placeholder from its source draws its text alone (1706.03762's Table 2: "1pt-1pt0pt 0pt2.2ex"
  * drawn before a translated cell)
  */
-export function textArgsOf(src) {
+export function textArgsOf(src, paper = null) {
   let out = '', i = 0
   while (i < src.length) {
     const c = src[i]
     if (c === '%') { const e = src.indexOf('\n', i); i = e < 0 ? src.length : e + 1; continue }
-    if (c === '{') { const e = groupEnd(src, i); if (e < 0) { out += c; i++; continue } out += `{${textArgsOf(src.slice(i + 1, e - 1))}}`; i = e; continue }
+    if (c === '{') { const e = groupEnd(src, i); if (e < 0) { out += c; i++; continue } out += `{${textArgsOf(src.slice(i + 1, e - 1), paper)}}`; i = e; continue }
     if (c !== '\\') { out += c; i++; continue }
     const { name, end } = commandAt(src, i)
-    const params = /^[A-Za-z@]+$/.test(name) ? commandParams(name) : null
+    const params = /^[A-Za-z@]+$/.test(name) ? paperParams(name, paper) : null
     if (!params?.length) { out += src.slice(i, end); i = end; continue }
     const { args, end: e } = readArgs(src, end, params)
     out += src.slice(i, end)
@@ -242,7 +293,7 @@ export function textArgsOf(src) {
     for (const a of args) {
       if (!MAY_BE_TEXT.has(a.role)) continue
       const inner = src.slice(a.start, a.end)
-      out += a.shape === '[' ? `[${textArgsOf(inner.slice(1, -1))}]` : inner.startsWith('{') ? `{${textArgsOf(inner.slice(1, -1))}}` : textArgsOf(inner)
+      out += a.shape === '[' ? `[${textArgsOf(inner.slice(1, -1), paper)}]` : inner.startsWith('{') ? `{${textArgsOf(inner.slice(1, -1), paper)}}` : textArgsOf(inner, paper)
       kept = true
     }
     // a control word whose arguments went keeps its end: a letter after it is no part of its name
@@ -251,22 +302,38 @@ export function textArgsOf(src) {
   }
   return out
 }
-/** roles whose argument no command sets as ink: a dimension, keys, code, a literal (and a register, given in a group) */
-const INKLESS = new Set(['d', 'k', 'x', 's'])
 /**
- * Whether a placeholder can never be a text rendering: its source one command the table knows, its arguments all
- * there and nothing after them, each a dimension, keys, code or a register — a rule, a space, a length set, a row's
- * spacing, a definition. What it sets, if anything (a rule's bar), is the page's own drawing, never letters. A name
- * may set ink (\\ref's number, \\inst's mark, an image), a bare token too (\\left's delimiter), and a command with no
- * parameter may set text (\\LaTeX, \\today): none of them is such a one
+ * The commands that set no letters, whatever their arguments: space, rules, a length's or a counter's setting, a
+ * definition, a package's settings, each checked by hand (latex.ltx, booktabs, setspace, aastex). Proven by what they
+ * are, not by their arguments' types: \\centerline's, \\uppercase's and \\noalign's arguments are typeset,
+ * \\romannumeral, \\number and \\char print a number, \\box and \\unhbox a box; none of them is here. \\noalign only
+ * around one of these (\\noalign{\\vskip 4mm}, not \\noalign{\\hbox{Group A}})
  */
-export function textless(src) {
-  const s = src.trim()
+const TEXTLESS = new Set([
+  'vspace', 'hspace', 'addvspace', 'vskip', 'hskip', 'kern', 'penalty', 'enlargethispage', 'linebreak', 'pagebreak', 'nolinebreak', 'nopagebreak',
+  'rule', 'specialrule', 'addlinespace', 'toprule', 'midrule', 'bottomrule', 'cmidrule', 'cline', 'hhline', 'tabularnewline',
+  'setlength', 'addtolength', 'settowidth', 'settoheight', 'settodepth', 'setcounter', 'addtocounter', 'stepcounter', 'newlength', 'newcounter',
+  'fontsize', 'linespread', 'setstretch', 'tablewidth', 'phantom', 'hphantom', 'vphantom',
+  'newcommand', 'renewcommand', 'providecommand', 'DeclareRobustCommand', 'def', 'gdef', 'edef', 'xdef', 'let', 'newif', 'newenvironment', 'renewenvironment', 'newcolumntype', 'DeclareMathOperator',
+  'hypersetup', 'captionsetup', 'setlist', 'sisetup', 'lstset', 'tcbset', 'tikzset', 'pgfplotsset', 'definecolor', 'colorlet',
+])
+/**
+ * Whether a placeholder can never be a text rendering: its source one command of TEXTLESS, its arguments all there as
+ * the table reads them and nothing after them. What it sets, if anything (a rule's bar), is the page's own drawing,
+ * never letters. Anything else is not textless: a command the table does not know, one whose arguments it cannot read,
+ * one a paper defines itself (`paper`, paperOf: its \\rule is its own), one that prints its argument or a number
+ */
+export function textless(src, paper = null) {
+  // booktabs' trim, (lr), before \\cmidrule's columns: what the front end passes over too
+  const s = src.trim().replace(/^(\\cmidrule\s*(?:\[[^\]]*\]\s*)?)\([^()]*\)/, '$1')
   if (!/^\\[A-Za-z@]+/.test(s)) return false
   const { name, end } = commandAt(s, 0)
-  const params = commandParams(name)
-  if (!params?.length || params === REGISTER) return false
-  if (!params.every(p => INKLESS.has(p.role) || (p.role === 'r' && p.shape === '{')) || params.every(p => p.role === 's')) return false
-  const { end: e, complete } = readArgs(s, end, params)
-  return complete && !s.slice(e).trim()
+  if ((!TEXTLESS.has(name) && name !== 'noalign') || paper?.own.has(name)) return false
+  const params = paperParams(name, paper)
+  if (!params?.length) return false
+  const { args, end: e, complete } = readArgs(s, end, params)
+  if (!complete || s.slice(e).trim()) return false
+  if (name !== 'noalign') return true
+  const inner = args[0] ? s.slice(args[0].start, args[0].end).replace(/^\{([\s\S]*)\}$/, '$1').trim() : ''
+  return !inner || textless(inner, paper)
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import * as argRoles from '@/pdf-reader/engine/arg-roles.mjs'
 import { bindingsOf, commandParams, environmentParams, readArgs, textArgsOf, textless } from '@/pdf-reader/engine/arg-roles.mjs'
 
 // The role table: what each argument of a command is (text, a dimension, keys, a name …), from LaTeXML's prototypes and
@@ -35,6 +36,29 @@ describe('the table: LaTeXML\'s prototypes, and the commands written out where t
   it('a definition of nothing tells nothing: LaTeXML\'s \\IEEEauthorrefmark is \'\', which IEEEtran\'s takes an argument', () => {
     expect(roles('IEEEauthorrefmark', bindingsOf(['\\documentclass{IEEEtran}']))).toBeNull()
   })
+  it('arguments LaTeXML reads in code past its prototype are not known: listings\' \\lstinline reads its |…| itself, diagbox looks ahead, acronym\'s \\ac* ends on \\@ac', () => {
+    expect(roles('lstinline', bindingsOf(['\\usepackage{listings}']))).toBeNull()
+    expect(roles('diagbox', bindingsOf(['\\usepackage{diagbox}']))).toBeNull()
+    // …and written out where it matters: \\cmidrule[w]{a-b} after its trim, acronym's key
+    expect(roles('cmidrule', bindingsOf(['\\usepackage{booktabs}']))).toBe('[d{n')
+    expect(roles('ac', bindingsOf(['\\usepackage{acronym}']))).toBe('*s{n')
+    // a replacement that ends on a conditional's end reads nothing more: \\textbf{} is \\ifmmode…\\fi
+    expect(roles('textbf')).toBe('{a')
+  })
+  it('a token register takes a group as its value (llncs\' \\titlerunning, TeX\'s \\everypar, \\toks0=); any other register a value in TeX\'s syntax', () => {
+    expect(roles('titlerunning', bindingsOf(['\\documentclass{llncs}']))).toBe('?s{x')
+    expect(roles('everypar')).toBe('?s{x')
+    expect(roles('toks')).toBe('_d?s{x')
+    expect(roles('parindent')).toBe('=r')
+  })
+  it('an argument LaTeXML takes undigested or as a general text may be typeset (\\centerline, \\uppercase): never code', () => {
+    expect(roles('centerline')).toBe('{a')
+    expect(roles('uppercase')).toBe('{a')
+  })
+  it('a package\'s form only for a paper that loads it: with no paper, the kernel\'s and those written out alone (a paper\'s \\degrees is no pstricks \\degrees[…])', () => {
+    expect(roles('degrees')).toBeNull()
+    expect(roles('degrees', bindingsOf(['\\usepackage{pstricks}']))).toBe('[d')
+  })
 })
 
 describe('readArgs: the arguments as TeX takes them', () => {
@@ -66,10 +90,19 @@ describe('a placeholder\'s source with its text alone (the layer\'s source fallb
     // what the table does not know keeps everything
     expect(textArgsOf('\\mymacro{1pt}{x}')).toBe('\\mymacro{1pt}{x}')
   })
-  it('textless: one command with parameters, each a dimension, keys, code or a register, all there and nothing after; one with no parameter may set text', () => {
-    for (const src of ['\\specialrule{1pt}{-1pt}{0pt}', '\\rule{0pt}{2.2ex}', '\\addlinespace[2pt]', '\\setlength{\\tabcolsep}{3pt}', '\\fontsize{9}{11}', '\\noalign{\\vskip 4mm}', '\\tabularnewline[2pt]', '\\vspace*{-2mm}', '\\renewcommand\\arraystretch{1.1}']) expect(textless(src)).toBe(true)
+  it('textless: one command of those that set no letters, its arguments all there and nothing after; one with no parameter may set text', () => {
+    for (const src of ['\\specialrule{1pt}{-1pt}{0pt}', '\\rule{0pt}{2.2ex}', '\\addlinespace[2pt]', '\\setlength{\\tabcolsep}{3pt}', '\\fontsize{9}{11}', '\\noalign{\\vskip 4mm}', '\\tabularnewline[2pt]', '\\vspace*{-2mm}', '\\renewcommand\\arraystretch{1.1}', '\\cmidrule(lr){2-5}', '\\vskip 3pt plus 1fil']) expect(textless(src)).toBe(true)
     for (const src of ['\\LaTeX', '\\raisebox{-1pt}{x}', '\\textbf{x}', '\\cite[p.~5]{key}', '\\rule{0pt}', '\\rule{0pt}{2ex} text', '\\tabcolsep', '\\mymacro{1pt}']) expect(textless(src)).toBe(false)
     // a name may set ink: a reference's number, llncs' \inst mark, an image; a bare token too, \left's delimiter
     for (const src of ['\\ref{sec:a}', '\\inst{1}', '\\includegraphics[width=5cm]{a.png}', '\\left(', '\\section*']) expect(textless(src)).toBe(false)
+  })
+  it('never textless: a command that prints its argument, a number or a box, whatever its arguments\' types; \\noalign around one of them', () => {
+    for (const src of ['\\centerline{Title}', '\\leftline{x}', '\\rightline{x}', '\\uppercase{x}', '\\MakeTextUppercase{x}', '\\romannumeral 3', '\\number 12', '\\char 65', '\\unhbox\\mybox', '\\box0', '\\noalign{\\hbox{Group A}}', '\\detokenize{x}', '\\halign{#\\cr x\\cr}']) expect(textless(src), src).toBe(false)
+  })
+  it('a command the paper defines is its own: never textless, never read by the table (paperOf)', () => {
+    const paper = argRoles.paperOf(['\\renewcommand{\\rule}[2]{#1#2}'])
+    expect(textless('\\rule{1pt}{2pt}', paper)).toBe(false)
+    expect(textArgsOf('\\rule{1pt}{2pt}', paper)).toBe('\\rule{1pt}{2pt}')
+    expect(textless('\\rule{1pt}{2pt}')).toBe(true)
   })
 })

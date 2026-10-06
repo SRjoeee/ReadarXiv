@@ -90,7 +90,7 @@ function lex(text) {
 }
 
 // ---------------------------------------------------------------- definition calls
-const CALLS = ['DefMacro', 'DefMacroI', 'DefConstructor', 'DefConstructorI', 'DefPrimitive', 'DefPrimitiveI', 'DefEnvironment', 'DefEnvironmentI', 'DefRegister', 'DefRegisterI', 'DefMath', 'DefMathI']
+const CALLS = ['DefMacro', 'DefMacroI', 'DefConstructor', 'DefConstructorI', 'DefPrimitive', 'DefPrimitiveI', 'DefEnvironment', 'DefEnvironmentI', 'DefRegister', 'DefRegisterI', 'DefMath', 'DefMathI', 'Let']
 /** each call's arguments up to its closing parenthesis, split at the commas (and =>) outside any bracket: an argument
  *  is its tokens */
 function calls(toks) {
@@ -130,7 +130,8 @@ const isUndef = arg => arg.filter(t => t.c && /\S/.test(t.c)).map(t => t.c).join
 // ---------------------------------------------------------------- parameters
 /**
  * A parameter's role and how it is read, by its type. Roles: `a` an argument LaTeXML leaves untyped (text or a name,
- * it does not say; a digested one is not always typeset where it stands), `c` a box's content, set where it stands,
+ * it does not say; a digested one is not always typeset where it stands; an undigested one or a general text may be:
+ * \centerline's Undigested is \lx@centerline{\hbox{#1}}, \uppercase's GeneralText is set), `c` a box's content, set where it stands,
  * `d` a dimension, glue or number, `k` keys and values, `n` a name (a
  * label, a file, a URL, verbatim), `r` a register or a control sequence, `x` code (a definition's body, tokens read
  * unexpanded), `m` a math style's argument, `s` a literal or nothing (=, *, spaces). Shapes: `{` a brace group or a
@@ -138,13 +139,13 @@ const isUndef = arg => arg.filter(t => t.c && /\S/.test(t.c)).map(t => t.c).join
  * glue with plus and minus, one token, a keyword's value), `u` tokens up to a delimiter, `b` up to a brace
  */
 const TYPE_ROLE = {
-  Plain: 'a', Digested: 'a', DigestedBody: 'a', TextStyle: 'a', DigestUntil: 'a', GeneralText: 'x', XGeneralText: 'x',
+  Plain: 'a', Digested: 'a', DigestedBody: 'a', TextStyle: 'a', DigestUntil: 'a', GeneralText: 'a', XGeneralText: 'a',
   HBoxContents: 'c', VBoxContents: 'c', PBoxContents: 'c', MoveableBox: 'c', SVGMoveableBox: 'c',
   Dimension: 'd', Glue: 'd', MuDimension: 'd', MuGlue: 'd', Number: 'd', Float: 'd', NumExpr: 'd', DimExpr: 'd', GlueExpr: 'd', MuExpr: 'd', Length: 'd', Pair: 'd', RoundParenFloat: 'd', pgfNumber: 'd', pgfNumbers: 'd', Intarray: 'd', GraphixDimension: 'd', GraphixDimensions: 'd', PSCoord: 'd', PSDimension: 'd', PSAngle: 'd', PSDimFloat: 'd', PSDimDim: 'd', PSOrigin: 'd', OptionalPSCoord: 'd', ZeroPSCoord: 'd', BracketedPSAngle: 'd', BracketedPSDimension: 'd', OptionalPair: 'd', BoxSpecification: 'd', RuleSpecification: 'd',
   RequiredKeyVals: 'k', OptionalKeyVals: 'k', CommaList: 'k', XKV: 'k',
   Semiverbatim: 'n', OptionalSemiverbatim: 'n', HyperVerbatim: 'n', SanitizedVerbatim: 'n', Verbatim: 'n', TeXFileName: 'n', DirectoryList: 'n', UndigestedKey: 'n', UndigestedDefKey: 'n', BibURL: 'n', CSName: 'n', FontDef: 'n', Color: 'n', AlignmentTemplate: 'n',
   Variable: 'r', Token: 'r', DefToken: 'r', XToken: 'r', Register: 'r',
-  Undigested: 'x', OptionalUndigested: 'x', DefPlain: 'x', DefExpanded: 'x', Expanded: 'x', ExpandedPartially: 'x', ExpandedIfToken: 'x', Until: 'x', XUntil: 'x', UntilBrace: 'x', Balanced: 'x', LiteralBalanced: 'x', BalancedParen: 'x', I: 'a',
+  Undigested: 'a', OptionalUndigested: 'a', DefPlain: 'x', DefExpanded: 'x', Expanded: 'x', ExpandedPartially: 'x', ExpandedIfToken: 'x', Until: 'x', XUntil: 'x', UntilBrace: 'x', Balanced: 'x', LiteralBalanced: 'x', BalancedParen: 'x', I: 'a',
   TeXDelimiter: 'm', Relation: 'm', InScriptStyle: 'm', ScriptStyle: 'm', ScriptscriptStyle: 'm', DisplayStyle: 'm', InFractionStyle: 'm', OptionalInScriptStyle: 'm', ScriptStyleUntil: 'm', XMath: 'm',
   Optional: 'a', OptionalBracketed: 'a', OptionalAngle: 'a', BeamerAngled: 'a', OptionalBeamerAngled: 'a', BeamerSquared: 'a', XArgsOptional: 'a', alignsafeOptional: 'a', RequireBrace: 'a',
 }
@@ -185,13 +186,13 @@ function parseParams(p) {
 }
 
 // ---------------------------------------------------------------- the front matter's hooks
-/** LaTeXML's front matter hooks (Base_Utility.pool.ltxml), each by what our front end makes of its text: a title, a
- *  block of names and places, a note, an abstract, keywords, a line of prose; and the contact roles (\lx@add@contact's
+/** LaTeXML's front matter hooks (Base_Utility.pool.ltxml), each by what our front end makes of its text: a title (the
+ *  paper's, which the reader's context names), a subtitle, a block of names and places, a note, an abstract, keywords, a line of prose; and the contact roles (\lx@add@contact's
  *  role=…) by the same. Not addresses written out: e-mail, URL, ORCID, a phone, a first or family name; nor a
  *  publication's data (\lx@add@pubnote: a journal, a volume, a DOI), which a class may test as a key (Optica's
  *  \journal{opticajournal}) */
 const HOOKS = {
-  'lx@add@title': 'title', 'lx@add@subtitle': 'title', 'lx@add@author': 'author', 'lx@add@authors': 'author', 'lx@add@creator': 'author', 'lx@add@editor': 'author', 'lx@add@translator': 'author',
+  'lx@add@title': 'title', 'lx@add@subtitle': 'subtitle', 'lx@add@author': 'author', 'lx@add@authors': 'author', 'lx@add@creator': 'author', 'lx@add@editor': 'author', 'lx@add@translator': 'author',
   'lx@add@affiliation': 'author', 'lx@add@affiliations': 'author', 'lx@add@altaffiliation': 'author', 'lx@add@address': 'author', 'lx@add@altaddress': 'author', 'lx@add@currentaddress': 'author',
   'lx@add@thanks': 'note', 'lx@add@note': 'note', 'lx@add@pubnote@thanks': 'note',
   'lx@add@abstract': 'abstract', 'lx@begin@abstract': 'abstract', 'lx@add@keywords': 'keywords', 'lx@begin@keywords': 'keywords', 'lx@add@classification': 'keywords',
@@ -222,11 +223,23 @@ const files = [
 ]
 /** every definition read: name (with its @s, which a delegation may name) → { spec, binding, rank, order, replacement } */
 const defs = { cs: new Map(), env: new Map() }, front = new Map()
-const READS = /\$(?:gullet|_\[0\])\s*->\s*(?:read|skip)|\bRead(?:Arg|Optional|Until|Token|XToken|KeyVals|Number|Dimension|Glue|Balanced)|\breadArg\b/
-let definitions = 0, untyped = 0, order = 0
+const READS = /\$(?:gullet|_\[0\])\s*->\s*(?:read|skip|unread)|\bRead(?:Arg|Optional|Until|Token|XToken|KeyVals|Number|Dimension|Glue|Balanced)|\breadArg\b/
+/** a replacement that looks at what follows it: its arguments go on past its prototype (\cmidrule[]'s (trim){a-b},
+ *  read through \@ifnextchar() */
+const LOOKS_AHEAD = /\\(?:@ifnextchar|kernel@ifnextchar|@ifnch|@ifstar|@testopt|@protected@testopt|@dblarg|futurelet|@ifnextcharraw|IfNextToken|peek_)(?![A-Za-z@])/
+let definitions = 0, untyped = 0, order = 0, readOn = 0
+const aliases = []
 for (const [dir, f] of files) {
   const binding = f.replace(/\.ltxml$/, ''), rank = dir === 'Engine' ? RANK(f) : 0
   for (const { call, args } of calls(lex(readFileSync(join(lib, dir, f), 'utf8')))) {
+    // \let\a\b: \a reads what \b reads (icml's \icmltitle is \title). Not its front matter hook: an alias's name is
+    // often a word a paper uses otherwise (iopart's \paper)
+    if (call === 'Let') {
+      const a = csOf(args[0] ?? []), target = csOf(args[1] ?? [])
+      const m = a && /^\\([A-Za-z@]+)$/.exec(a), t = target && /^\\([A-Za-z@]+)$/.exec(target)
+      if (m && t) { const all = defs.cs.get(m[1]) ?? defs.cs.set(m[1], []).get(m[1]); all.push({ spec: { alias: t[1] }, binding: f.replace(/\.ltxml$/, ''), rank: dir === 'Engine' ? RANK(f) : 0, order: order++ }); aliases.push([m[1], t[1]]) }
+      continue
+    }
     const I = call.endsWith('I'), base = call.replace(/I$/, '')
     if (base === 'DefMath') continue
     definitions++
@@ -249,17 +262,25 @@ for (const [dir, f] of files) {
     }
     const body = args[1 + (I ? 1 : 0)] ?? []
     const replacement = strOf(body)
+    // the code the call runs, its strings left out: its body and the keywords after it (afterDigest => sub {…})
+    const code = args.slice(1 + (I ? 1 : 0)).flat().map(t => (t.s !== undefined ? '""' : t.c)).join('')
     let spec
-    if (base === 'DefRegister') spec = '='
+    // a token register (llncs' \titlerunning, Tokens()) takes a group as its value, never text where it stands; any
+    // other register a value in TeX's own syntax, an `=` before it
+    if (base === 'DefRegister') { const at = parseParams(params); if (at === null) continue; spec = /\bTokens\s*\(/.test(code) ? `${at}?s{x` : at ? '?' : '=' }
     else {
       spec = parseParams(params)
       if (spec === null) continue
       // no parameters: a definition of nothing tells nothing (LaTeXML drops what it does not render: its
       // \IEEEauthorrefmark is '', which IEEEtran's takes an argument), a macro reads what its expansion reads (resolved
-      // below), code that reads tokens itself is not known
+      // below)
       if (spec === '' && (replacement === '' || isUndef(body))) spec = '?'
       else if (spec === '' && base === 'DefMacro') spec = replacement === null ? '?' : { delegate: replacement }
-      else if (spec === '' && READS.test(body.map(t => (t.s !== undefined ? '""' : t.c)).join(''))) spec = '?'
+      // arguments read in code, not by the prototype: the prototype tells only where they begin (listings' \lx@lstinline
+      // OptionalKeyVals:LST reads its |…| itself), and so does a replacement that looks ahead (\cmidrule[]) or ends on a
+      // call taking more than it gives (acronym's \ac OptionalMatch:* ends on \@ac, which reads the key; resolved below)
+      else if (READS.test(code) || (base === 'DefMacro' && replacement !== null && LOOKS_AHEAD.test(replacement))) { spec = '?'; readOn++ }
+      else if (base === 'DefMacro' && replacement !== null && typeof spec === 'string') { const tail = /\\([A-Za-z@]+)\s*$/.exec(replacement); if (tail) spec = { tail: tail[1], spec } }
     }
     const all = defs[kind].get(name) ?? defs[kind].set(name, []).get(name)
     all.push({ spec, binding, rank, order: order++ })
@@ -352,13 +373,26 @@ function formOf(kind, name, depth = 0) {
   const forms = defs[kind].get(name) ?? (kind === 'env' ? null : null)
   if (!forms) return kind === 'env' && defs.cs.has(name) ? formOf('cs', name, depth) : '?'
   settled[kind].set(name, '?')
-  const spec = x => (typeof x.spec === 'object' ? delegated(x.spec.delegate, depth) : x.spec)
+  const spec = x => resolved(x.spec, depth)
   const top = Math.max(...forms.map(x => x.rank))
   const out = top > 0 ? spec(forms.filter(x => x.rank === top).at(-1)) : merge(forms.flatMap(spec))
   settled[kind].set(name, out)
   return out
 }
 
+/** a definition's form as read: a string; a delegating macro's, resolved; an alias's, its target's (one of nothing,
+ *  \let to \relax, tells nothing); a replacement ending on a call, its own unless that call takes more (`tail`) */
+function resolved(x, depth) {
+  if (typeof x !== 'object') return x
+  if (x.delegate !== undefined) return delegated(x.delegate, depth)
+  if (x.alias !== undefined) { const t = formOf('cs', x.alias, depth + 1); return typeof t === 'string' && t !== '' ? t : '?' }
+  if (ENDS_NOTHING.has(x.tail)) return x.spec
+  const t = formOf('cs', x.tail, depth + 1)
+  return typeof t === 'string' && !/[{_ub]/.test(t.replace(/(..)/g, (p) => p[0])) ? x.spec : '?'
+}
+/** control words a replacement may end on that read nothing after it: a conditional's end, a paragraph's, a group's,
+ *  spacing and no-ops; a call at the end that LaTeXML defines in code is otherwise not known */
+const ENDS_NOTHING = new Set(['fi', 'else', 'relax', 'par', 'endgraf', 'ignorespaces', 'unskip', 'egroup', 'endgroup', 'bgroup', 'begingroup', '@empty', 'empty', 'hline', 'nobreak', 'leavevmode', 'noindent', 'indent', 'hfil', 'hfill', 'vfil', 'vfill', 'hss', 'vss', 'quad', 'qquad', 'space', 'newline', 'break', 'allowbreak', 'penalty@', 'cr', 'crcr', '@@par', 'xspace', '@xspace', 'normalfont', 'rmfamily', 'sffamily', 'ttfamily', 'bfseries', 'mdseries', 'itshape', 'slshape', 'scshape', 'upshape', 'selectfont', 'centering', 'raggedright', 'raggedleft', 'strut', 'null', 'smallskip', 'medskip', 'bigskip', 'clearpage', 'newpage', 'eject', 'maketitle'])
 /** each binding's index in BINDINGS, and the bindings it loads (RequirePackage, LoadClass, InputDefinitions) */
 const bindingNames = files.filter(([dir]) => dir === 'Package').map(([, f]) => f.replace(/\.ltxml$/, ''))
 const bindingIndex = new Map(bindingNames.map((n, k) => [n, k]))
@@ -378,7 +412,7 @@ const reduce = kind => {
   let known = 0, unknown = 0, packaged = 0
   for (const name of [...defs[kind].keys()].sort()) {
     if (!/^[A-Za-z]+\*?$/.test(name)) continue
-    const forms = defs[kind].get(name), spec = x => (typeof x.spec === 'object' ? delegated(x.spec.delegate, 0) : x.spec)
+    const forms = defs[kind].get(name), spec = x => resolved(x.spec, 0)
     const top = Math.max(...forms.map(x => x.rank))
     if (top > 0) { const s0 = spec(forms.filter(x => x.rank === top).at(-1)); pools[name] = s0; if (s0 === '?') unknown++; else known++ }
     const bySpec = new Map()
@@ -408,4 +442,4 @@ const lines = [
   '',
 ]
 writeFileSync(resolvePath(out), lines.join('\n'))
-console.log(`${definitions} definitions read (${untyped} with a name or parameters built at run time); ${bindingNames.length} bindings; commands of the engine pools ${cs.known + cs.unknown} (arguments known ${cs.known}, read in code ${cs.unknown}), of packages ${cs.packaged}; environments of the pools ${env.known + env.unknown}, of packages ${env.packaged}; front matter ${front.size}`)
+console.log(`${definitions} definitions read (${untyped} with a name or parameters built at run time, ${readOn} reading on in code past a prototype, ${aliases.length} aliases); ${bindingNames.length} bindings; commands of the engine pools ${cs.known + cs.unknown} (arguments known ${cs.known}, read in code ${cs.unknown}), of packages ${cs.packaged}; environments of the pools ${env.known + env.unknown}, of packages ${env.packaged}; front matter ${front.size}`)
