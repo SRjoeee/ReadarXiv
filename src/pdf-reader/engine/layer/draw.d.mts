@@ -19,6 +19,11 @@ export interface UnitDraw {
    * its baseline takes only the pad); the pad given up where it would meet a kept rendering (a display, a label)
    */
   erase: number[]
+  /** with the text-removed PDF, on a page it removed: the unit's removed glyphs' and rules' boxes (x0, y0, x1, y1, stride
+   *  4), over which the reader puts the removed page's pixels in (swap.mjs swapMasks); `erase` is then empty */
+  swap: number[]
+  /** the page the crops are cut from: the original ('O'), or the text-removed PDF's page of the placeholders alone ('P') */
+  cropsFrom: 'O' | 'P'
   /**
    * per crop segment: k, srcX0, srcBottom, srcX1, srcTop, dstX, dstBaseline, srcBaseline, scale (stride 9). The original
    * page's pixels inside the source rectangle, drawn at `scale` (the unit's) from dstX, a source height y at
@@ -43,7 +48,9 @@ export interface DrawLine { baseline: number; runs: DrawRun[] }
  * web keeps them (white-space: pre). `from`, `to`: its first item's start and its last item's end in trText
  */
 export interface DrawRun { x: number[]; text: string; face: FaceId; caps: boolean; size: number; letterSpacing: number; wordSpacing: number; colour: number; shift: number; from: number; to: number }
-export declare function drawUnit(input: LayerInput, laid: LaidUnit, page: number): UnitDraw
+/** the text-removed PDF's manifest entry for a page (layout/remove.mjs): whether it is removed, each unit's removed boxes */
+export interface RemovedPage { ok: boolean; units?: Record<number, ArrayLike<number>> }
+export declare function drawUnit(input: LayerInput, laid: LaidUnit, page: number, removed?: RemovedPage | null): UnitDraw
 /** the laid boxes covering trText offsets [from, to): one a line (a sentence's shape), from where its first offset there is
  *  drawn to where its last ends (within a run of words by its share of the run's width), the line's em box high
  *  (0.75 of its size above its baseline, 0.25 below) */

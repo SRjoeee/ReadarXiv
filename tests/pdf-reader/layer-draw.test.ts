@@ -44,7 +44,14 @@ describe('the drawing', () => {
     // whatever the fit set: the lines drawn on each page are its own, and a page it is not on draws nothing
     expect(one.lines.map(l => l.baseline)).toEqual(u.lines.filter(l => l.page === 1).map(l => l.baseline))
     expect(two.lines.map(l => l.baseline)).toEqual(u.lines.filter(l => l.page === 2).map(l => l.baseline))
-    expect(drawUnit(inp, u, 3)).toEqual({ id: 1, page: 3, erase: [], crops: [], blend: 'darken', lines: [] })
+    expect(drawUnit(inp, u, 3)).toEqual({ id: 1, page: 3, erase: [], swap: [], crops: [], cropsFrom: 'O', blend: 'darken', lines: [] })
+    // the text-removed PDF: on a page it removed, the unit's removed boxes to swap and no erase, the crops from the
+    // placeholders' page; on a page it refused, or for a unit it does not name, the erase as before
+    const removed = drawUnit(inp, u, 1, { ok: true, units: { 1: [72, 697, 80, 707] } })
+    expect([removed.erase, removed.swap, removed.cropsFrom]).toEqual([[], [72, 697, 80, 707], 'P'])
+    expect(removed.lines).toEqual(one.lines)
+    near(drawUnit(inp, u, 1, { ok: false }).erase, own(0, 3))
+    near(drawUnit(inp, u, 1, { ok: true, units: { 2: [1, 2, 3, 4] } }).erase, own(0, 3))
     // a unit borrowing lines below its frame still erases only the layout's lines
     const tall = layoutOf([{ id: 1, lines: column(2), frames: [{ lines: 2, below: 200 }], erase: [[0, 72, 697.5, 472, 707], [1, 72, 685.5, 472, 695]] }])
     const t = laid(layUnit(inputOf(tall, 'zh'), 1, tr(han(160))))

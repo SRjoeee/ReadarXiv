@@ -155,18 +155,26 @@ function runsOf(line) {
 
 /**
  * What the web draws for a unit on a page, in PDF units (y up):
- * - `erase`: for the unit's lines on that page, the layout's erase padded by ERASE_PAD and kept off every other unit's
- *   lines and every kept rendering (x0, y0, x1, y1, stride 4), and nothing else;
+ * - with the text-removed PDF (`removed`: its manifest's entry for the page, layout/remove.mjs), on a page it removed
+ *   where it names the unit: `swap`, the unit's removed glyphs' and rules' boxes (x0, y0, x1, y1, stride 4), over which
+ *   the reader puts the removed page's pixels in (swap.mjs swapMasks: each unit its share of where the original and the
+ *   removed page differ, grown over its glyphs' real ink), `erase` empty, and `cropsFrom` 'P': the crops cut from the
+ *   page of the placeholders alone, which holds no other line's ink;
+ * - else (no add-on, a page it refused, a unit it does not name) `erase`: for the unit's lines on that page, the
+ *   layout's erase padded by ERASE_PAD and kept off every other unit's lines and every kept rendering (x0, y0, x1, y1,
+ *   stride 4), and nothing else; `swap` empty, and the crops cut from the original (`cropsFrom` 'O');
  * - `crops`: each crop's segments in turn (k, srcX0, srcBottom, srcX1, srcTop, dstX, dstBaseline, srcBaseline, scale,
  *   stride 9): drawn from the original page's pixels inside the segment at the unit's scale, side by side from its item's
  *   x, the segment's baseline (its line's in the original, so that a raised mark keeps its lift × the scale) on the line's;
  * - `blend`: how the copy lays the crops on what is under them (CROP_BLEND: darkened in, never pasted);
  * - `lines`: each laid line on the page, its baseline and its runs.
  */
-export function drawUnit(input, laid, page) {
+export function drawUnit(input, laid, page, removed = null) {
   const unit = input.file.unit(laid.id)
   const erase = [], crops = [], lines = []
-  if (unit) {
+  const boxes = removed?.ok ? removed.units?.[laid.id] : null
+  const swap = boxes?.length ? Array.from(boxes) : []
+  if (unit && !swap.length) {
     for (let i = 0; i < unit.erase.length; i++) {
       if (unit.lines[8 * i] !== page) continue
       for (const v of eraseOf(input.file, unit, i)) erase.push(v)
@@ -187,7 +195,7 @@ export function drawUnit(input, laid, page) {
     }
     lines.push({ baseline: line.baseline, runs: runsOf(line) })
   }
-  return { id: laid.id, page, erase, crops, blend: CROP_BLEND, lines }
+  return { id: laid.id, page, erase, swap, crops, cropsFrom: swap.length ? 'P' : 'O', blend: CROP_BLEND, lines }
 }
 
 /** an item's text maps onto its offsets one code unit each (no ligature, no drawn hyphen, no page text) */

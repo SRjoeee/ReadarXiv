@@ -48,7 +48,7 @@ describe("the reader's entry", () => {
     const modules = [...reached.keys()].map(f => f.slice(ENGINE.length, -'.mjs'.length)).sort()
     expect(modules).toEqual([
       'font-coverage', 'font-roles', 'layer-rules', 'layer/breaks', 'layer/draw', 'layer/fit', 'layer/hyphen', 'layer/layer', 'layer/net',
-      'layer/page', 'layer/pieces', 'layer/tokens', 'layout/file', 'layout/json',
+      'layer/page', 'layer/pieces', 'layer/swap', 'layer/tokens', 'layout/file', 'layout/json',
     ])
   })
 
@@ -65,6 +65,8 @@ describe("the reader's entry", () => {
       'bodyUnits', 'evenOf',
       'checkPieces',
       'drawUnit', 'spansOf', 'unitAt',
+      // the text-removed PDF's swap: where the removed page's pixels go in for each drawn unit
+      'swapMasks',
     ].sort())
     // each the module's own, not a copy
     const [file, pieces, fit, draw] = await Promise.all([
