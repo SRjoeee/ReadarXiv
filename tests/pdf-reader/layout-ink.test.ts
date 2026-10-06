@@ -58,8 +58,6 @@ describe('pageInk', () => {
     const notSpace = only(scaled([OPS.setWordSpacing, [2]], [OPS.setCharSpacing, [0.5]], show(g('-', 250), g('X', 500))).glyphs, 'X')
     const notSpacePlain = only(scaled(show(g('-', 250), g('X', 500))).glyphs, 'X')
     expect(notSpace.x0 - notSpacePlain.x0).toBeCloseTo(0.5 * 2, 9)
-    // a blank glyph is no glyph of the ink
-    expect(scaled(show(g(' ', 250, true))).glyphs).toEqual([])
     // a rise of 3 raises the baseline by 3, and the box with it
     const flat = only(ink(text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('X')))).glyphs, 'X')
     const risen = only(ink(text('f1', 10, [1, 0, 0, 1, 72, 700], [OPS.setTextRise, [3]], show(g('X')))).glyphs, 'X')
@@ -199,7 +197,7 @@ describe('pageInk', () => {
 
   it('a rotated page has no glyphs', () => {
     const page = text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A')))
-    for (const rotate of [90, 180, 270, -90, 450]) expect(ink(page, rotate)).toEqual({ glyphs: [], boxes: [], capped: false, rotated: true })
+    for (const rotate of [90, 180, 270, -90, 450]) expect(ink(page, rotate)).toEqual({ glyphs: [], boxes: [], points: [], boxAt: [], capped: false, rotated: true })
     expect(ink(page, 360).rotated).toBe(false)
     expect(ink(page, Number.NaN).rotated).toBe(true)
   })
@@ -221,6 +219,36 @@ describe('pageInk', () => {
     const b = ink(at)
     expect(b.capped).toBe(false)
     expect(b.glyphs.map(q => q.u)).toEqual(['A', 'Z'])
+  })
+
+  it('a painted glyph is ink whatever its Unicode: a symbolic font\'s code 32 (2307.16209\'s big left parenthesis) is a glyph', () => {
+    // txexs's parenthesis is drawn from code 32, which PDF.js gives the Unicode of a space
+    const { glyphs } = ink(text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('a', 500), g(' ', 750, true), g('', 500), g('b', 500))))
+    expect(glyphs.map(q => q.u)).toEqual(['a', ' ', '', 'b'])
+    expect(only(glyphs, ' ').x0).toBeCloseTo(77, 9)
+    expect(only(glyphs, ' ').x1).toBeCloseTo(84.5, 9)
+    // an invisible one is still none, and so is a glyph with no Unicode string at all
+    expect(ink(text('f1', 10, [1, 0, 0, 1, 72, 700], [OPS.setTextRenderingMode, [3]], show(g(' ', 750, true)))).glyphs).toEqual([])
+    expect(ink(text('f1', 10, [1, 0, 0, 1, 72, 700], show({ width: 500, isSpace: false, fontChar: 'x', vmetric: null }))).glyphs).toEqual([])
+  })
+
+  it('a rendering intent named axt-… is a point of the marked compile, in stream order among the glyphs and boxes', () => {
+    const path = (x: number): Op => [OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from([x, 690, x + 5, 691])]]
+    const { glyphs, boxes, points, boxAt } = ink([
+      ...text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A')), [OPS.setRenderingIntent, [{ name: 'axt-p1.2a' }]], show(g('B'))),
+      path(100),
+      // the operand as a string (PDF.js in a worker gives a name as an object, in Node as either)
+      [OPS.setRenderingIntent, ['axt-p1.2b']], [OPS.setRenderingIntent, [{ name: 'Perceptual' }]],
+      ...text('f1', 10, [1, 0, 0, 1, 72, 680], show(g('C'))),
+      [OPS.setRenderingIntent, [{ name: 'axt-bs1' }]], path(120), [OPS.setRenderingIntent, [{ name: 'axt-be1' }]],
+      // not a point: a name too long, of other characters, or none
+      [OPS.setRenderingIntent, [{ name: `axt-${'p'.repeat(80)}` }]], [OPS.setRenderingIntent, [{ name: 'axt-p1 2a' }]], [OPS.setRenderingIntent, [{ name: 'axt-' }]], [OPS.setRenderingIntent, []],
+    ])
+    expect(glyphs.map(q => q.u)).toEqual(['A', 'B', 'C'])
+    expect(boxes).toHaveLength(8)
+    expect(points).toEqual([{ name: 'p1.2a', glyph: 1, box: 0 }, { name: 'p1.2b', glyph: 2, box: 1 }, { name: 'bs1', glyph: 3, box: 1 }, { name: 'be1', glyph: 3, box: 2 }])
+    // each glyph's boxes shown before it
+    expect(boxAt).toEqual([0, 0, 1])
   })
 
   it('a hostile list gives no number that is not finite, and never throws', () => {

@@ -30,7 +30,8 @@ const item = (r: Run) => ({ str: r.s, dir: 'ltr', transform: [size(r), 0, 0, siz
 function opsOf(p: Page) {
   const ops: [number, unknown[]][] = []
   for (const r of p.runs) {
-    const glyphs = [...r.s].map(c => ({ unicode: c, width: (r.w ?? CH) * 1000, isSpace: c === ' ', fontChar: c, vmetric: null }))
+    // a space is a move, as TeX's pages show it: no glyph (the ink reader keeps every painted glyph)
+    const glyphs = [...r.s].map(c => (c === ' ' ? -(r.w ?? CH) * 1000 : { unicode: c, width: (r.w ?? CH) * 1000, isSpace: false, fontChar: c, vmetric: null }))
     ops.push([OPS.beginText, []], [OPS.setFont, [r.font ?? 'F1', size(r)]], [OPS.setTextMatrix, [[1, 0, 0, 1, r.x, r.y]]], [OPS.showText, [glyphs]], [OPS.endText, []])
   }
   for (const b of p.boxes ?? []) ops.push([OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from(b)]])

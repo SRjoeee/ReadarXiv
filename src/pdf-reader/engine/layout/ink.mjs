@@ -42,21 +42,30 @@ const fresh = () => ({
   tm: IDENTITY, x: 0, y: 0, lx: 0, ly: 0, pendingClip: false,
 })
 
+/** a point of the marked compile (layout/marks.mjs LAYOUT_TEX's \\axt@point): a rendering intent, `/axt-<name> ri`,
+ *  which PDF.js keeps in the operator list with its name (it drops marked-content points, DP and MP) and which its text
+ *  layer passes over. The name: a mark's, or a bracket's (bs, be, fs, fe and a number) */
+const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
+
 /**
- * A page's ink: { glyphs, boxes, capped, rotated }. `glyphs`: each glyph shown with a Unicode string that is not blank,
- * upright and painted (render mode not 3 or 7), as a Glyph; a vertical font's glyphs are passed over, a glyph set
- * rotated or mirrored is a box of its em instead (it has no baseline across the page). `boxes`: x0, y0, x1, y1 (stride
- * 4) for each image placed, each path painted (a stroke's widened by half the line width; a clip paints nothing), each
- * shading painted into a clip, and those glyphs; each cut to the clip in force (a form's box, a clipping path), and one
- * wholly outside it left out. `capped`: the list held more than OPS_CAP operations, and those past it were not read.
- * `rotated`: the page's /Rotate is not 0, and nothing is read (the layer lays over no rotated page)
+ * A page's ink: { glyphs, boxes, points, boxAt, capped, rotated }. `glyphs`: each glyph shown with a Unicode string,
+ * upright and painted (render mode not 3 or 7), as a Glyph, whatever its Unicode: a symbolic font's glyph that PDF.js
+ * gives a blank one (txexs's big left parenthesis is its code 32) is ink to erase and to draw; a vertical font's glyphs
+ * are passed over, a glyph set rotated or mirrored is a box of its em instead (it has no baseline across the page).
+ * `boxes`: x0, y0, x1, y1 (stride 4) for each image placed, each path painted (a stroke's widened by half the line
+ * width; a clip paints nothing), each shading painted into a clip, and those glyphs; each cut to the clip in force (a
+ * form's box, a clipping path), and one wholly outside it left out. Glyphs and boxes in the order the content stream
+ * shows them; `points`: each point of the marked compile (POINT), { name, glyph, box }, the glyphs and the boxes shown
+ * before it; `boxAt`: for each glyph, the boxes shown before it. On arXiv's PDF the points are nobody's. `capped`: the
+ * list held more than OPS_CAP operations, and those past it were not read. `rotated`: the page's /Rotate is not 0, and
+ * nothing is read (the layer lays over no rotated page)
  */
 export function pageInk(OPS, ops, commonObjs, { rotate }) {
   const turn = (((Number(rotate) % 360) + 360) % 360)
-  if (turn !== 0) return { glyphs: [], boxes: [], capped: false, rotated: true }
+  if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], capped: false, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
   const n = Math.min(fnArray.length, OPS_CAP)
-  const glyphs = [], boxes = []
+  const glyphs = [], boxes = [], points = [], boxAt = []
   const fonts = new Map()
   const fontOf = id => {
     if (!fonts.has(id)) {
@@ -76,7 +85,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate }) {
     beginAnnotation: ANNOTATION, endAnnotation: ANNOTATION_END, constructPath: PATH, clip: CLIP, eoClip: EO_CLIP,
     shadingFill: SHADING, paintImageXObject: IMAGE, paintInlineImageXObject: INLINE_IMAGE, paintImageMaskXObject: MASK,
     paintSolidColorImageMask: SOLID_MASK, paintImageXObjectRepeat: IMAGE_REPEAT, paintImageMaskXObjectRepeat: MASK_REPEAT,
-    paintImageMaskXObjectGroup: MASK_GROUP, paintInlineImageXObjectGroup: INLINE_GROUP,
+    paintImageMaskXObjectGroup: MASK_GROUP, paintInlineImageXObjectGroup: INLINE_GROUP, setRenderingIntent: INTENT,
   } = OPS
   const STROKES = new Set([OPS.stroke, OPS.closeStroke, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke])
   const PAINTS = new Set([...STROKES, OPS.fill, OPS.eoFill])
@@ -116,7 +125,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate }) {
    *  × the text matrix; `hs` the horizontal scale with the font's direction */
   const emit = (g, M, hs, xa, xb, ascent, descent) => {
     const u = g.unicode
-    if (typeof u !== 'string' || !/\S/.test(u) || (s.tr & 3) === 3) return
+    if (typeof u !== 'string' || (s.tr & 3) === 3) return
     const ty = s.y + s.rise, size = s.size
     const level = M[0] * hs > 0 && M[3] > 0 && Math.abs(M[1]) <= LEVEL * Math.abs(M[0])
     if (!level) { addBox(M, Math.min(xa, xb), ty + descent * size, Math.max(xa, xb), ty + ascent * size); return }
@@ -124,7 +133,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate }) {
     const sz = size * M[3]
     const name = typeof s.font.name === 'string' && s.font.name ? s.font.name : s.fontId
     const glyph = { u, x0: Math.min(ox, ex), x1: Math.max(ox, ex), y: oy, top: oy + ascent * sz, bottom: oy + descent * sz, size: sz, font: name }
-    if (finite(glyph.x0, glyph.x1, glyph.y, glyph.top, glyph.bottom, glyph.size)) glyphs.push(glyph)
+    if (finite(glyph.x0, glyph.x1, glyph.y, glyph.top, glyph.bottom, glyph.size)) { glyphs.push(glyph); boxAt.push(boxes.length / 4) }
   }
 
   /** showText as the canvas runs it (showText, showType3Text): each glyph's origin, its advance, the line moved on */
@@ -259,8 +268,14 @@ export function pageInk(OPS, ops, commonObjs, { rotate }) {
       }
       case MASK_GROUP: for (const img of Array.isArray(a[0]) ? a[0] : []) addBox(mul(s.ctm, matrixOf(img?.transform)), 0, 0, 1, 1); break
       case INLINE_GROUP: for (const e of Array.isArray(a[1]) ? a[1] : []) addBox(mul(s.ctm, matrixOf(e?.transform)), 0, 0, 1, 1); break
+      case INTENT: {
+        const name = typeof a[0] === 'string' ? a[0] : a[0] && typeof a[0] === 'object' ? a[0].name : null
+        const m = typeof name === 'string' ? POINT.exec(name) : null
+        if (m) points.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
+        break
+      }
       default:
     }
   }
-  return { glyphs, boxes, capped: fnArray.length > OPS_CAP, rotated: false }
+  return { glyphs, boxes, points, boxAt, capped: fnArray.length > OPS_CAP, rotated: false }
 }
