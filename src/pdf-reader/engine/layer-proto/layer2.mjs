@@ -1778,6 +1778,9 @@ export function inkMapOf(canvas, factor = 4) {
   const w = Math.ceil(canvas.width / factor), h = Math.ceil(canvas.height / factor)
   const c = new OffscreenCanvas(w, h)
   const x = c.getContext('2d', { willReadFrequently: true })
+  // (averaged over each cell: the default filter samples a few of its pixels and loses a rule a device pixel wide, a
+  // table's column rule at 0.4 pt, which a slot widened over the paper then ran over: 1512.03385's Table 2)
+  x.imageSmoothingQuality = 'high'
   x.drawImage(canvas, 0, 0, w, h)
   const d = x.getImageData(0, 0, w, h).data
   const ink = new Uint8Array(w * h)

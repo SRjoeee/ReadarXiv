@@ -489,13 +489,26 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     }
     return dir > 0 ? Math.min(x, limit) : Math.max(x, limit)
   }
+  /** what a unit's drawing takes away on page j, where its own ink may be run over: over the text-removed PDF, the layout
+   *  file's rectangles a unit it locates whole replaces (its lines' erase rectangles, its inline placeholders'
+   *  segments), all that it removes; drawn the old way, its lines' erase extents. A rule beside its text that an erase
+   *  extent reaches (a table's column rule) stays on the removed page, and a slot run over it is drawn over it */
+  const ownInk = (p, j) => {
+    if (p.tex && removedPage(j)) {
+      const lu = p.tex.lu, out = []
+      for (let l = 0; l < lu.erase.length; l++) { const e = lu.erase[l]; if (!e || lu.lines[8 * l] !== j) continue; for (let o = 0; o + 3 < e.length; o += 4) out.push([e[o], e[o + 1], e[o + 2], e[o + 3]]) }
+      for (const row of lu.ph.values()) { if (row.kind === 'display') continue; for (let o = 0; o + 5 < row.segs.length; o += 6) if (row.segs[o] === j) out.push([row.segs[o + 1], row.segs[o + 5], row.segs[o + 3], row.segs[o + 4]]) }
+      return out
+    }
+    return [...(p.prep.extents ?? new Map())].filter(([r]) => r[0] === j).flatMap(([, e]) => (Array.isArray(e[0]) ? e : [e]))
+  }
   /** a unit's single-line blocks widened over the paper beside them (paperTo), within the page's text area; a centred one
    *  as far to either side. Returns the widened blocks, or null where none grew */
   const widenOverPaper = p => {
     let grew = false
     const out = p.blocks.map(b => {
       if (b.rects.length !== 1 || b.page > N) return b
-      const own = [...(p.prep.extents ?? new Map())].filter(([r]) => r[0] === b.page).flatMap(([, e]) => (Array.isArray(e[0]) ? e : [e]))
+      const own = ownInk(p, b.page)
       const [ax, az] = textArea(b.page)
       const right = paperTo(b, 1, b.x1, az, own), left = paperTo(b, -1, b.x0, ax, own)
       let x0 = b.x0, x1 = b.x1
