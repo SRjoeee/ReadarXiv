@@ -264,6 +264,26 @@ describe('carrierOf', () => {
     expect(carrierOf(line, moved).carry(1, 90, 688)).toMatchObject({ x: 92, y: 688, whole: true })
   })
 
+  it('a line whose words stand together once inside one longer arXiv line near it is carried between them', () => {
+    // 1706's two panel titles on one baseline: ours keeps them two lines (the figure's frame between them in its order),
+    // arXiv's text layer one
+    const a = ['scaled', 'dot', 'product', 'attention'], b = ['multi', 'head', 'attention']
+    const ours = [...words(a, 4, 147.8, 713.3), ...words(['frame'], 4, 200, 600), ...words(b, 4, 363.6, 713.3)]
+    const theirs = [...words([...a, ...b], 4, 150, 713.3, [3, 3, 3, 98, 3, 3])]
+    const c = carrierOf(ours, theirs)
+    expect(c.carry(4, 147.8, 713.3)).toMatchObject({ page: 4, x: 150, y: 713.3, whole: false })
+    expect(c.carry(4, 363.6, 713.3)?.x).toBeCloseTo(at(theirs, 4).x, 6)
+    expect(c.lines.fuzzy).toBe(2)
+    // a heading arXiv runs on into a figure's own text, which ours draws as a frame
+    const h = carrierOf(words(['attention', 'visualizations'], 13, 108, 710), words(['attention', 'visualizations', 'input', 'input', 'layer5'], 13, 108, 710))
+    expect(h.carry(13, 108, 710)).toMatchObject({ page: 13, x: 108, y: 710 })
+    // not: the words twice in the line, two such lines, one word alone, a line beyond WINDOW
+    expect(carrierOf(words(['the', 'model'], 1, 72, 700), words(['the', 'model', 'and', 'the', 'model'], 1, 72, 700)).carry(1, 72, 700)).toBeNull()
+    expect(carrierOf(words(['the', 'model'], 1, 72, 700), [...words(['the', 'model', 'is'], 1, 72, 700), ...words(['of', 'the', 'model'], 1, 72, 690)]).carry(1, 72, 700)).toBeNull()
+    expect(carrierOf(words(['model'], 1, 72, 700), words(['the', 'model', 'is'], 1, 72, 700)).carry(1, 90, 700)).toBeNull()
+    expect(carrierOf(words(['the', 'model'], 1, 72, 700), words(['the', 'model', 'is'], 1, 72, 650)).carry(1, 72, 700)).toBeNull()
+  })
+
   it('counts', () => {
     const same = ['same', 'place', 'here'], moved = ['moved', 'down', 'whole'], spaced = ['set', 'at', 'other', 'spaces']
     const fuzzy = [...TEN], lost = ['reflowed', 'away', 'entirely']

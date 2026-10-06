@@ -616,7 +616,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       for (const j of cands) { const e = Math.abs(rows[j].base - mid); if (near(j) && e < d) { d = e; best = j } }
       return best
     }
-    const head = headEnd(u.pieces, 0)
+    const head = headEnd(u.pieces, 0), last = u.pieces.findLastIndex(p => p.t === 'text' && /[^ \t\r\n]/.test(p.s ?? ''))
     for (let k = 0; k < u.pieces.length; k++) {
       // every visible piece has its row, found, LOST or EMPTY: no row is a piece that draws nothing (an invisible one, a
       // group's open or close), as the layer reads the file
@@ -634,6 +634,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
         ph.push(entry)
         if (sym !== null) (one.symbols ??= []).push({ entry, sym })
         else if (cls === 'macro' && k < head) (one.heads ??= []).push({ entry, k, src: piece.src })
+        else if (cls === 'macro' && last >= 0 && k > last) (one.tails ??= []).push({ entry, k, src: piece.src })
         continue
       }
       const prefix = cls === 'footnote' ? 'n' : 'p', name = `${prefix}${i}.${k}a`, e = ownInk.get(name)
@@ -718,7 +719,8 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       ph.push({ row, cls, state: 'found', inferred: e[1] !== 0, text: PAGE_TEXT.has(cls) ? pageTextOf(gs) : null })
     }
     if (one.symbols) symbolsOf(one)
-    if (one.heads) headsOf(one)
+    if (one.heads) besideMarks(one, false)
+    if (one.tails) besideMarks(one, true)
   }
   // the bars: an arXiv glyph matched by two found pieces, an owned glyph of a found piece not matched (none, both; each
   // true by the matcher's own rule); and what the layer draws: an arXiv glyph inside a found inline piece's segments
@@ -751,49 +753,60 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   }
 
   /**
-   * A unit's head pieces: the paper's macros it opens with, before its start mark, where no mark goes (marks.mjs headEnd:
-   * 1810's \bert, "BERT", opening three paragraphs; a table row's \specialrule in 1706; a figure's \includegraphics before
-   * the text under it in 2307), where the start mark stands on the unit's first line. TeX set their ink before the mark:
-   * on that line left of it, or on a line before it, never on the unit's own lines, which begin at the mark. So, the
-   * piece nearest the mark first:
-   * - the glyphs right before the mark on its line, as a label's run takes them, those of no unit's, whose characters
-   *   are the text the probe showed the macro sets (marks.mjs readInkTexts): the piece is found there, a segment of the
-   *   first line, which takes them in and erases them, and the layer draws them where the translation puts the piece;
-   * - no such glyph within LABEL_EM of the mark (or of the piece found after it): the piece set nothing on the line
-   *   before the mark, and is EMPTY: the translation draws nothing for it, and its ink, wherever TeX set it, stays the
-   *   original's, as the unit's lines never take it;
-   * - else it stays LOST, and those before it: what the line shows there is not known as the piece's (a label, perhaps)
+   * A unit's head and tail pieces: the paper's macros it opens with, before its start mark, and those after its end mark,
+   * past its last words, where no mark goes (marks.mjs headEnd and passedOver; patch's end mark after the last word:
+   * 1810's \bert, "BERT", opening three paragraphs; a table row's \specialrule in 1706; a figure's \includegraphics
+   * before the text under it in 2307, and in 1706 after a forced break after its panel's title), where the mark stands
+   * on the unit's first line (its last). TeX set their ink before the start mark: on that line left of it, or on a line
+   * before it (after the end mark: right of it, or on a line after it), never on the unit's own lines, which begin at
+   * the one mark and end at the other. So, the piece nearest the mark first:
+   * - a head: the glyphs right before the mark on its line, as a label's run takes them (each within LABEL_EM of the
+   *   next), those of no unit's, whose characters are the text the probe showed the macro sets (marks.mjs readInkTexts):
+   *   the piece is found there, a segment of the first line, which takes them in and erases them, and the layer draws
+   *   them where the translation puts the piece;
+   * - no glyph of no unit's within LABEL_EM beside the mark (or beside the head found next to it): the piece set nothing
+   *   on the line beside the mark, and is EMPTY: the translation draws nothing for it, and its ink, wherever TeX set it,
+   *   stays the original's, as the unit's lines never take it;
+   * - else it stays LOST, and those beyond it: what the line shows there is not known as the piece's (a label, perhaps).
+   * A tail is looked at only where the last line took nothing past the end mark (its closing punctuation)
    */
-  function headsOf(one) {
-    const { id: i, rows, S } = one, r0 = rows[0]
-    if (!S || S.page !== r0.page || Math.abs(S.y - r0.base) >= 0.5 * r0.size) return
-    const P = ink[S.page], [cx0] = sideOf(S.page, columnOf(S.page, S.x, S.x))
-    const cand = band(P, S.y - 0.35 * P.most, S.y + 0.75 * Math.max(P.most, 6)).filter(g => P.y[g] > S.y - 0.35 * P.size[g] && P.y[g] < S.y + 0.75 * Math.max(P.size[g], 6) && P.x1[g] <= S.x + 0.05 && P.x0[g] >= cx0 - 1 && P.owner[g] === -1 && !P.taken[g]).sort((a, b) => P.x0[a] - P.x0[b] || a - b)
+  function besideMarks(one, tail) {
+    const { id: i, rows } = one, M = tail ? one.E : one.S, r = tail ? rows[rows.length - 1] : rows[0]
+    if (!M || M.page !== r.page || Math.abs(M.y - r.base) >= 0.5 * r.size) return
+    const P = ink[M.page], [cx0, cx1] = sideOf(M.page, columnOf(M.page, M.x, M.x))
+    if (tail && [...r.gl, ...(r.extra ?? [])].some(g => mid(P, g) > M.x + 0.05)) return
+    const beside = g => (tail ? P.x0[g] >= M.x - 0.05 && P.x1[g] <= cx1 + 1 : P.x1[g] <= M.x + 0.05 && P.x0[g] >= cx0 - 1)
+    const cand = band(P, M.y - 0.35 * P.most, M.y + 0.75 * Math.max(P.most, 6)).filter(g => P.y[g] > M.y - 0.35 * P.size[g] && P.y[g] < M.y + 0.75 * Math.max(P.size[g], 6) && beside(g) && P.owner[g] === -1 && !P.taken[g]).sort((a, b) => (tail ? P.x0[a] - P.x0[b] : P.x1[b] - P.x1[a]) || a - b)
+    // the run outwards from the mark, nearest first
     const run = []
-    let edge = S.x
-    for (let q = cand.length - 1; q >= 0; q--) { const g = cand[q]; if (edge - P.x1[g] > LABEL_EM * P.size[g]) break; run.unshift(g); edge = Math.min(edge, P.x0[g]) }
-    for (const h of [...one.heads].sort((x, y) => y.k - x.k)) {
+    let edge = M.x
+    for (const g of cand) {
+      if ((tail ? P.x0[g] - edge : edge - P.x1[g]) > LABEL_EM * P.size[g]) break
+      run.push(g)
+      edge = tail ? Math.max(edge, P.x1[g]) : Math.min(edge, P.x0[g])
+    }
+    for (const h of [...(tail ? one.tails : one.heads)].sort((x, y) => (tail ? x.k - y.k : y.k - x.k))) {
       const { entry } = h, kind = entry.row[2]
       if (!run.length) { entry.row = [i, h.k, kind, PH_FLAG.EMPTY]; entry.state = 'empty'; entry.head = true; continue }
-      const text = shown.get(h.src)
+      const text = tail ? null : shown.get(h.src)
       if (!text) return
       let got = '', n = 0
-      while (n < run.length && got.length < text.length) { got = charsOf(P.u[run[run.length - 1 - n]]).replace(/\s+/g, '') + got; n++ }
+      while (n < run.length && got.length < text.length) { got = charsOf(P.u[run[n]]).replace(/\s+/g, '') + got; n++ }
       if (got !== text.toLowerCase()) return
-      const gs = run.splice(run.length - n, n)
+      const gs = run.splice(0, n)
       let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
       for (const g of gs) { x0 = Math.min(x0, P.ix0[g]); x1 = Math.max(x1, P.ix1[g]); top = Math.max(top, P.top[g]); bottom = Math.min(bottom, P.bottom[g]) }
-      const inkBase = baselineOf(P, bodyOf(P, gs, r0.size), r0.base)
-      const flags = inkBase - r0.base >= SHIFT * r0.size ? PH_FLAG.RAISED : r0.base - inkBase >= SHIFT * r0.size ? PH_FLAG.LOWERED : 0
+      const inkBase = baselineOf(P, bodyOf(P, gs, r.size), r.base)
+      const flags = inkBase - r.base >= SHIFT * r.size ? PH_FLAG.RAISED : r.base - inkBase >= SHIFT * r.size ? PH_FLAG.LOWERED : 0
       // the unit's own ink, which its first line takes in and erasing covers
       for (const g of gs) P.owner[g] = i
-      r0.extra = (r0.extra ?? []).concat(gs)
-      r0.x0 = Math.min(r0.x0, x0); r0.x1 = Math.max(r0.x1, x1); r0.top = Math.max(r0.top, top); r0.bottom = Math.min(r0.bottom, bottom)
-      const view = viewAt(S.page), [sx0, sb, sx1, st] = solid(view, x0, bottom, x1, top)
-      entry.row = [i, h.k, kind, flags, S.page, sx0, Math.min(view[3], Math.max(view[1], r2(r0.base))), sx1, st, sb]
+      r.extra = (r.extra ?? []).concat(gs)
+      r.x0 = Math.min(r.x0, x0); r.x1 = Math.max(r.x1, x1); r.top = Math.max(r.top, top); r.bottom = Math.min(r.bottom, bottom)
+      const view = viewAt(M.page), [sx0, sb, sx1, st] = solid(view, x0, bottom, x1, top)
+      entry.row = [i, h.k, kind, flags, M.page, sx0, Math.min(view[3], Math.max(view[1], r2(r.base))), sx1, st, sb]
       entry.state = 'found'
       entry.head = true
-      matchedBy.set(`${i}.${h.k}`, gs.map(g => [S.page, g]))
+      matchedBy.set(`${i}.${h.k}`, gs.map(g => [M.page, g]))
     }
   }
 

@@ -8,7 +8,9 @@
 //  - the same words at other spaces: the position goes between the same two words' edges, as it stood between them;
 //  - no line of the same words: the nearest line within WINDOW on its page (or on the next or the previous page)
 //    holding FUZZY of its words in order (the longest common run), and the position goes between the words matched (a
-//    footnote's number glued to the word after it in one PDF, apart in the other).
+//    footnote's number glued to the word after it in one PDF, apart in the other);
+//  - else the one longer line within WINDOW on its page holding all of its words together, once: arXiv's text layer runs
+//    two things on one baseline into one line (two panel titles side by side, a heading and a figure's text beside it).
 // A position on no line carried carries to null: a reflowed line carries nothing. Pure, and over tokens alone
 // (anchors.mjs DocTokens: the marks file's for ours, tokenizeDocument's of arXiv's text layer for theirs).
 // Imports nothing.
@@ -219,9 +221,46 @@ export function carrierOf(marked, arxiv) {
           }
         }
       }
+      // a line of ours whose words stand, in order and together, once inside one longer arXiv line near it on its page,
+      // the only such line: arXiv's text layer runs two things on one baseline into one line where ours keeps them apart
+      // (1706's two panel titles side by side, "Scaled Dot-Product Attention" and "Multi-Head Attention"), or runs a
+      // figure's own text on after a heading ("Attention Visualizations Input-Input Layer5": ours draws the figure as a
+      // draft frame). The position goes between the words matched, as a fuzzy one does
+      if (!best && l.tokens.length >= FUZZY_PAIRS && l.tokens.length <= FUZZY_WORDS) {
+        const n = l.tokens.length, cs = byPage.get(l.page) ?? []
+        if (spend(cs.length)) return null
+        let only = null, many = false
+        for (const c of cs) {
+          if (c.tokens.length <= n || c.tokens.length > FUZZY_WORDS || Math.abs(c.y - l.y) > WINDOW) continue
+          if (spend(c.tokens.length)) return null
+          const at = runAt(l, c)
+          if (at === -2) { many = true; break }
+          if (at < 0) continue
+          if (only) { many = true; break }
+          only = { c, at }
+        }
+        if (only && !many) {
+          const { c, at } = only, pairs = l.tokens.map((_, a) => [a, at + a])
+          best = { rank: [0, Math.abs(c.y - l.y)], to: c, page: c.page, dx: arxiv[c.tokens[at]].x - marked[l.tokens[0]].x, dy: c.y - l.y, whole: false, pairs, fuzzy: true }
+        }
+      }
       if (best) found.set(l, best)
     }
     return found
+  }
+  /** where line `l`'s words begin as a run of `c`'s (an index into c's tokens), -1 where they are no run of it, -2 where
+   *  they are one more than once */
+  function runAt(l, c) {
+    const n = l.tokens.length
+    let at = -1
+    for (let j = 0; j + n <= c.tokens.length; j++) {
+      let k = 0
+      while (k < n && arxiv[c.tokens[j + k]].t === marked[l.tokens[k]].t) k++
+      if (k < n) continue
+      if (at >= 0) return -2
+      at = j
+    }
+    return at
   }
 
   /** the knots a position on a line not moved whole goes by: each matched word's two edges, ours → theirs, rising */

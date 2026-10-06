@@ -1033,6 +1033,17 @@ describe('makeLayout, a unit\'s head pieces: its macros before its start mark, w
     // the image is no line of the unit's, and nothing erases it
     for (const [, , y0] of chunk(rowsOf(file, 0, 'erase'), 5)) expect(y0!).toBeLessThan(720)
   })
+  it('after the end mark: 1706\'s panel title, its line break and image after it EMPTY; one with glyphs beside the mark LOST', async () => {
+    const title: Run[] = [{ s: 'Scaled Attention', x: 150, y: 713 }, { s: 'Multi Head', x: 363, y: 713 }]
+    const panel: World = { pages: [{ runs: title, boxes: [[150, 600, 260, 700]] }], marks: [['0s', 1, 150, 713], ['0e', 1, endOf(title[0] as Run), 713]], units: [unit('para', [ph('\\centering'), text('\n  Scaled Attention '), ph('\\\\'), text('\n  '), ph('\\vspace{0.5cm}'), text('\n  '), ph('\\includegraphics[scale=0.6]{a}'), text('\n')])] }
+    const { file } = await made(panel)
+    for (const k of [2, 4, 6]) { const row = file.ph.find(r => r[0] === 0 && r[1] === k); if (row) expect(row[3]).toBe(PH_FLAG.EMPTY) }
+    expect(file.ph.some(r => r[0] === 0 && ((r[3] ?? 0) & PH_FLAG.LOST) !== 0)).toBe(false)
+    // a tail with glyphs beside the end mark stays LOST: the panel's other title within LABEL_EM of it
+    const near: Run[] = [{ s: 'Scaled Attention', x: 150, y: 713 }, { s: 'Multi Head', x: 240, y: 713 }]
+    const close = await made({ ...panel, pages: [{ runs: near, boxes: [[150, 600, 260, 700]] }] })
+    expect(close.file.ph.some(r => r[0] === 0 && ((r[3] ?? 0) & PH_FLAG.LOST) !== 0)).toBe(true)
+  })
 })
 
 describe('makeLayout, an inline placeholder\'s line by its own glyphs\' baselines (the 6b review\'s I1)', () => {
