@@ -2,8 +2,8 @@
 
 Written by `spikes/layer-gate.mjs --record`. Each run below: the engine at its commit, Chromium 153.0.8010.12, PDF.js 6.3.289; pages: the first 12 of each output, every page of 2307.16209v1; the planes at 2.5 device px a PDF unit, lost ink at 2x; crops drawn source-over.
 
-- **pixel**: the engine at `60ad1455` (exp/layer-t12-gate), the gate at `60ad1455`, 2026-10-06; the engine's own layout files; 43.5 s.
-- **pixel-fixed**: the engine at `60ad1455` (exp/layer-t12-gate), the gate at `60ad1455`, 2026-10-06; the fixtures' layout files, as made for the layer lab; 43.1 s.
+- **pixel**: the engine at `9ec391f0` (exp/layer-t12-gate), the gate at `9ec391f0`, 2026-10-06; the engine's own layout files; 51 s.
+- **pixel-fixed**: the engine at `9ec391f0` (exp/layer-t12-gate), the gate at `9ec391f0`, 2026-10-06; the fixtures' layout files, as made for the layer lab; 56.1 s.
 
 Every measure is against arXiv's original page, whose own value is the first column. The prototype is the approved prototype's floor (the parity run, 2026-10-06, on the ten outputs it shares with the engine, pages 1-12). A defect is its count and, in brackets, its rate per 1,000 translated text cells (the model tier: per 1,000 cells of the drawn units' frames), which is what the merge rule compares.
 
@@ -31,7 +31,7 @@ Every measure is against arXiv's original page, whose own value is the first col
 | erase bites | 0 | 168 (1.26) | 171 (1.70) | 902 (2.55) | 170 (1.69) | 893 (2.53) |
 | vanished math | 0 | 13 (0.10) | 261 (2.59) | 684 (1.93) | 261 (2.59) | 752 (2.13) |
 | doubled crops | 0 | 5 (0.04) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
-| lost-ink regions | 0 | - | 1 (0.01) | 536 (1.51) | 1 (0.01) | 518 (1.47) |
+| lost-ink regions | 0 | - | 1 (0.01) | 45 (0.13) | 1 (0.01) | 43 (0.12) |
 | graphics px erased | 0 | 208 (1.56) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
 | graphics px overdrawn | 0 | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
 | crops with foreign ink | 0 | 11 (0.08) | 135 (1.34) | 247 (0.70) | 135 (1.34) | 248 (0.70) |
@@ -74,7 +74,7 @@ Every measure is against arXiv's original page, whose own value is the first col
 | 1810.04805v2-ko | 57.0 % | 31.3 % | 11.7 % | 57.2 % | 28 / 128 | 0.923 | 72.1 % | 9 (1.06) | 3268 (385.38) | 8 (0.94) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | lost 18, floor 4, unlocated 4, brackets 2 |
 | 1810.04805v2-ru | 62.3 % | 29.5 % | 8.2 % | 50.7 % | 30 / 128 | 0.693 | 3.1 % | 4 (0.43) | 3563 (384.94) | 8 (0.86) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | lost 18, floor 8, unlocated 4 |
 | 1810.04805v2-zh | 56.1 % | 29.1 % | 14.8 % | 45.3 % | 26 / 128 | 1.316 | 92.2 % | 4 (0.48) | 3543 (424.62) | 8 (0.96) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | lost 18, floor 4, unlocated 4 |
-| 2307.16209v1-zh | 52.0 % | 27.4 % | 20.6 % | 55.6 % | 122 / 514 | 1.130 | 96.6 % | 7750 (156.17) | 151498 (3052.86) | 64 (1.29) | 3 (0.06) | 4 (0.08) | 533 (10.74) | 0 (0) | 0 (0) | lost 99, unlocated 14, floor 7, missing 2 |
+| 2307.16209v1-zh | 52.0 % | 27.4 % | 20.6 % | 55.6 % | 122 / 514 | 1.130 | 96.6 % | 7750 (156.17) | 151498 (3052.86) | 64 (1.29) | 3 (0.06) | 4 (0.08) | 42 (0.85) | 0 (0) | 0 (0) | lost 99, unlocated 14, floor 7, missing 2 |
 | 2608.04322v1-de | 71.6 % | 17.8 % | 10.6 % | 27.6 % | 13 / 134 | 0.987 | 0.0 % | 2 (0.14) | 4439 (305.88) | 94 (6.48) | 23 (1.58) | 1 (0.07) | 0 (0) | 0 (0) | 0 (0) | lost 9, floor 3, unlocated 1 |
 | 2608.04322v1-es | 73.4 % | 17.2 % | 9.4 % | 29.7 % | 13 / 134 | 0.976 | 0.0 % | 1 (0.07) | 4450 (299.18) | 94 (6.32) | 26 (1.75) | 1 (0.07) | 0 (0) | 0 (0) | 0 (0) | lost 9, floor 3, unlocated 1 |
 | 2608.04322v1-fr | 71.6 % | 17.4 % | 11.0 % | 21.8 % | 15 / 134 | 1.144 | 0.0 % | 1 (0.07) | 4470 (308.21) | 94 (6.48) | 21 (1.45) | 1 (0.07) | 0 (0) | 0 (0) | 0 (0) | lost 9, floor 5, unlocated 1 |
