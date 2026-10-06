@@ -13,6 +13,7 @@
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) measures the layout
 // lines they carry and lose, and fails on a loss of no accepted cause.
 import { markUnits, NO_ARG_COMMANDS } from '../latex-front.mjs'
+import { textless } from '../arg-roles.mjs'
 import { tokenizeDocument } from '../anchors.mjs'
 import { plainTranslated } from '../mt.mjs'
 import { readLines } from '../typeset/tex.mjs'
@@ -55,6 +56,9 @@ export function classOf(piece) {
   if (piece?.t !== 'ph') return null
   const src = piece.src ?? ''
   if (INVISIBLE.test(src) || STRUCTURE.test(src)) return null
+  // a placeholder the role table says can set no letters (its arguments all dimensions, keys, code or registers: a
+  // strut's \\rule{0pt}{2.2ex}, \\specialrule{1pt}{-1pt}{0pt}, \\addlinespace[2pt]) is no text rendering: never ink, never LOST
+  if (textless(src)) return null
   if (DISPLAY.test(src)) return 'display'
   if (MATH.test(src)) return 'math'
   if (CITE.test(src)) return 'cite'
