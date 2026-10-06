@@ -555,6 +555,10 @@ const unfit = (id, why) => ({ id, fit: false, why })
 export function layUnit(input, id, tr, o = {}) {
   const unit = input.file.unit(id)
   if (!unit) return unfit(id, 'located')
+  // the names and places of a paper's authors stay the original's, as the approved prototype keeps them (main.js): the
+  // layer cannot set a block of names in its columns, and what a translation makes of a name or an address (an e-mail's
+  // user names translated, the names run together) is no longer the original's
+  if (unit.kind === 'author') return unfit(id, 'author')
   const pieces = checkPieces(tr?.pieces, unit)
   if (!pieces) return unfit(id, 'pieces')
   if (unit.lines.length < 8 || unit.frames.length < 6) return unfit(id, 'located')

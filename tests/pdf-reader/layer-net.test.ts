@@ -473,3 +473,10 @@ describe('a text symbol (PH_FLAG.TEXT, Fix 1 of the maker round)', () => {
     expect(r).toMatchObject({ fit: false, why: 'missing' })
   })
 })
+
+describe('an author block (the prototype\'s main.js)', () => {
+  it('stays the original\'s, whatever its translation: the layer does not set a block of names', () => {
+    const AUTHORS: UnitDef = { id: 4, kind: 'author', lines: column(1, { top: 400 }), erase: [[0, 72, 397.5, 472, 407]] }
+    expect(layUnit(input([AUTHORS]), 4, tr([[0, han(6)]]))).toMatchObject({ fit: false, why: 'author' })
+  })
+})
