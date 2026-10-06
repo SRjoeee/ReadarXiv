@@ -1051,6 +1051,11 @@ describe('makeLayout, a unit\'s head pieces: its macros before its start mark, w
     const { file } = await made(panel)
     for (const k of [2, 4, 6]) { const row = file.ph.find(r => r[0] === 0 && r[1] === k); if (row) expect(row[3]).toBe(PH_FLAG.EMPTY) }
     expect(file.ph.some(r => r[0] === 0 && ((r[3] ?? 0) & PH_FLAG.LOST) !== 0)).toBe(false)
+    // 1512's "… summarizes the architecture:" before its table: \\renewcommand, which looks ahead, has its opening mark
+    // alone and owns no ink: a tail all the same
+    const intro: Run[] = [{ s: 'the table summarizes it:', x: 72, y: 700 }]
+    const table = await made({ pages: [{ runs: intro }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(intro[0] as Run), 700]], units: [unit('para', [text('the table summarizes it:'), ph('\\renewcommand'), ph('\\arraystretch{1.1}'), text('\n')])] })
+    expect(table.file.ph.filter(r => r[0] === 0).map(r => r[3])).toEqual(table.file.ph.filter(r => r[0] === 0).map(() => PH_FLAG.EMPTY))
     // a tail with glyphs beside the end mark stays LOST: the panel's other title within LABEL_EM of it
     const near: Run[] = [{ s: 'Scaled Attention', x: 150, y: 713 }, { s: 'Multi Head', x: 240, y: 713 }]
     const close = await made({ ...panel, pages: [{ runs: near, boxes: [[150, 600, 260, 700]] }] })

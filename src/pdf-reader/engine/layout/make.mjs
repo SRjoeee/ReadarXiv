@@ -627,7 +627,13 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       if (!cls || (cls === 'macro' && inkless.has(piece.src))) continue
       const kind = PH_KIND.get(cls) ?? PH_KIND.get('other')
       const d = classes.has(cls) ? design.get(`${i}.${k}`) : null
-      const lost = why => ph.push({ row: [i, k, kind, PH_FLAG.LOST], cls, state: 'lost', why })
+      // a marked piece not found after the unit's end mark is a tail as an unmarked one is (besideMarks): \\renewcommand,
+      // which looks ahead and has its opening mark alone, owns no ink between points
+      const lost = why => {
+        const entry = { row: [i, k, kind, PH_FLAG.LOST], cls, state: 'lost', why }
+        ph.push(entry)
+        if (cls === 'macro' && last >= 0 && k > last) (one.tails ??= []).push({ entry, k, src: piece.src })
+      }
       // a piece the marked original gives no mark (at a unit's head, after a prefix or a control sequence's end, glued
       // to a word): its rendering is not known
       if (!d?.open) {
