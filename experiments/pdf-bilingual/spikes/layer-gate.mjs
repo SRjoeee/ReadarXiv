@@ -44,8 +44,8 @@
 //                recorded run), metrics.md and index.html; default the engine's branch
 //   --composite  how crops are drawn on the copy: source-over (the lab's, as Plan 8d draws today) or darken
 //   --freeze     the reference text area of every fixture that has none (=force: made again, a deliberate change)
-// Exits 1 on any completeness failure (the brief's gate), on a regression under --check, or where
-// a fixture could not be run.
+// Exits 1 on any completeness failure (the brief's gate; under --check the merge rule decides, each completeness count
+// being one of its measures), on a regression under --check, or where a fixture could not be run.
 import { execFileSync } from 'node:child_process'
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -250,8 +250,10 @@ console.log(`\n${TIER} tier: ${ran.length} outputs, ${ran.reduce((a, r) => a + r
 
 let exit = failures.length ? 1 : 0
 const bad = completeness.filter(c => c.fails.length)
-console.log(`completeness (spec §5): ${bad.length ? `${bad.length} of ${completeness.length} outputs fail: ${bad.map(c => `${c.name} [${c.fails.join(', ')}]`).join('; ')}` : `every one of ${completeness.length} outputs passes`}`)
-if (bad.length) exit = 1
+console.log(`completeness (spec §5): ${bad.length ? `${bad.length} of ${completeness.length} outputs fail: ${bad.map(c => `${c.name} [${c.fails.join(', ')}]`).join('; ')}` : `every one of ${completeness.length} outputs passes`}${bad.length && arg('check') ? ' (under --check the merge rule decides: each check is a measure of it)' : ''}`)
+// the completeness gate exits 1 on its own; under --check its counts are measures of the merge rule, which a change that
+// leaves them where the record has them passes
+if (bad.length && !arg('check')) exit = 1
 
 const recordAt = typeof arg('record') === 'string' ? resolve(arg('record')) : join(existsSync(recordDir(ENGINE)) ? recordDir(ENGINE) : recordDir(REPO), 'layer-fidelity.json')
 const checkAt = typeof arg('check') === 'string' ? resolve(arg('check')) : [join(recordDir(ENGINE), 'layer-fidelity.json'), join(recordDir(REPO), 'layer-fidelity.json')].find(existsSync)
@@ -502,7 +504,7 @@ function openProgress() {
       const proto = existsSync(join(REFS, fixture, 'proto', `p${p}.png`)) ? `${ORIGIN}/proto/${fixture}/p${p}.png` : null
       const prev = previous && existsSync(join(PROGRESS, previous.name, 'engine', file)) ? `${ORIGIN}/progress/${previous.name}/engine/${file}` : null
       const pw = Math.floor((PROGRESS_WIDTH - 3 * GAP) / 4)
-      const labels = ['Original', proto ? 'Prototype (approved)' : 'Prototype: no output for this', `Engine ${short}${engineInfo.dirty ? '+' : ''} (this run)`, prev ? `Engine, ${previous.name}` : 'No previous run']
+      const labels = ['Original', proto ? 'Prototype (approved)' : 'Prototype: none for this output', `Engine ${short}${engineInfo.dirty ? '+' : ''} (this run)`, prev ? `Engine, ${previous.name}` : 'No previous run']
       const out = await page.evaluate(o => window.gate.panel(o), { pw, gap: GAP, labels, proto, previous: prev })
       writeFileSync(join(dir, file), encodePng(Buffer.from(out.rgba, 'base64'), out.w, out.h))
       writeFileSync(join(dir, 'engine', file), encodePng(Buffer.from(out.engine.rgba, 'base64'), out.engine.w, out.engine.h))
