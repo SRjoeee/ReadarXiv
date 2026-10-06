@@ -1732,7 +1732,7 @@ export const SOLID = 1.25
  * pitch: its blocks' own (pitch0), the median of those that have one; none, leadBase. 1 where leadBase is.
  */
 export function leadOf(blocks, s, P) {
-  // (P.leadRel false: the leading as it was, leadBase on whatever pitch, for comparison)
+  // (P.leadRel false, run.mjs's default since the maintainer's ruling of 2026-10-07: leadBase on whatever pitch)
   if (P.leadRel === false || !(P.leadBase > 1) || !(s > 0)) return P.leadBase
   const pitches = blocks.map(b => b.pitch0).filter(v => v > 0).sort((a, b) => a - b)
   if (!pitches.length) return P.leadBase

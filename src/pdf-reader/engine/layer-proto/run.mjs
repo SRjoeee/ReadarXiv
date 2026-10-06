@@ -109,6 +109,9 @@ export const layOrder = (placed, batch = 8) => layGroups(placed, batch).flatMap(
 export async function openProto({ doc, geometry, units: all, target: to, pages = 999, scale = 1.25, dpr = 1, params = {}, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, copy = true }) {
   const P = L2.defaultParams(to)
   for (const k of PARAM_KEYS) if (params[k] !== undefined) P[k] = params[k]
+  // (the maintainer's ruling of 2026-10-07, on S3-11: the script's leading on the original's own pitch reads more
+  // naturally on a loose original than fix 2's relative leading (leadRel), which stays a switch)
+  P.leadRel ??= false
   // iteration 2's hyphenation, fetched at once (local, small)
   const hyphP = Promise.all([...new Set(['en', to === 'de' ? 'de' : null, to === 'ru' ? 'ru' : null].filter(Boolean))].map(async l => L2.setHyphenData(l, await loadHyphenation(l, hyphUrl(l)))))
   // the target's likely faces loaded meanwhile (Times-like until the paper's own designs are known), and Latin Modern at
