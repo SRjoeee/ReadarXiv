@@ -5,7 +5,7 @@ import type { TrPiece } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { layerRulesFor } from '@/pdf-reader/engine/layer-rules.mjs'
 import { PH_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { measure } from './helpers/layer-fixtures'
-import { column, han, inputOf, kanji, layoutOf, withText, words } from './helpers/layer-layout'
+import { column, han, inputOf, kanji, layoutOf, type UnitDef, withText, words } from './helpers/layer-layout'
 
 // The fit: a unit's translation set into the original's frames, giving up as little as it must, in the maintainer's order
 // (tracking, the space below, leading, size), or left the original's past the floor. Layouts are written in the tests and
@@ -421,6 +421,43 @@ describe('the fit', () => {
     expect(room.state.knob).toBe('borrow')
     expect(room.lines.at(-1)!.baseline).toBeLessThan(604)
     for (const l of room.lines.slice(5)) expect(l.x1).toBe(300)
+  })
+
+  it("a heading of one line is as wide as its column, not as its English words (fix 7a)", () => {
+    // a German heading at 72-150 over a column of paragraphs 72-300; the other column's paragraph 320-548 beside it
+    const page = (heading: Partial<UnitDef> = {}, more: UnitDef[] = []) => layoutOf([
+      { id: 1, kind: 'heading', lines: [{ x0: 72, x1: 150, baseline: 700 }], ...heading },
+      { id: 2, lines: column(6, { x0: 72, w: 228, top: 680 }) },
+      { id: 3, lines: column(9, { x0: 320, w: 228, top: 700 }) },
+      ...more,
+    ])
+    const long = words(5)
+    expect(long.length * 5).toBeGreaterThan(150 - 72)
+    const u = laid(layUnit(inputOf(page(), 'de'), 1, tr(long)))
+    expect(u.state).toEqual(state({ scale: 1, knob: 'none' }))
+    expect(u.lines).toHaveLength(1)
+    expect([u.lines[0]!.x0, u.lines[0]!.x1]).toEqual([72, 300])
+    // a title, centred over the page's text (no paragraph runs through its middle): as far to either side as the nearer
+    // edge allows, its text centred there
+    const title = laid(layUnit(inputOf(page({ flags: 4 | 1, lines: [{ x0: 280, x1: 340, baseline: 760 }] }), 'de'), 1, tr(long)))
+    expect(title.state).toEqual(state({ scale: 1, knob: 'none' }))
+    expect([title.lines[0]!.x0, title.lines[0]!.x1]).toEqual([72, 548])
+    const items = title.lines[0]!.items
+    expect((items[0]!.x + items.at(-1)!.x + items.at(-1)!.w) / 2).toBeCloseTo(310, 6)
+    // another unit's text on its baseline (a run-in heading's paragraph from 200): up to half an em before it
+    const runIn = laid(layUnit(inputOf(page({}, [{ id: 4, lines: [{ x0: 200, x1: 300, baseline: 700 }] }]), 'de'), 1, tr(words(2))))
+    expect(runIn.lines[0]!.x1).toBe(195)
+    // its own label beside it: a quarter of an em clear of it
+    const numbered = laid(layUnit(inputOf(page({ labels: [{ x0: 280, baseline: 700, x1: 290 }] }), 'de'), 1, tr(words(2))))
+    expect(numbered.lines[0]!.x1).toBe(277.5)
+    // the page's own text beside it (a running head no unit holds): not widened, the text set as before
+    const beside = { ...inputOf(page(), 'de'), textIn: (_p: number, x0: number) => (x0 > 150 ? 'Preprint' : null) }
+    const kept = layUnit(beside, 1, tr(long))
+    expect(kept.fit ? [kept.lines[0]!.x1, kept.state.knob] : kept.why).not.toEqual([300, 'none'])
+    // a paragraph of one line, and a heading of two, keep their extent
+    const para = layoutOf([{ id: 1, lines: [{ x0: 72, x1: 150, baseline: 700 }] }, { id: 2, lines: column(6, { x0: 72, w: 228, top: 680 }) }])
+    const p = layUnit(inputOf(para, 'de'), 1, tr(long))
+    expect(p.fit ? p.lines.every(l => l.x1 <= 150) : true).toBe(true)
   })
 
   it('the first line starts after its label', () => {

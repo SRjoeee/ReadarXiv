@@ -4,6 +4,8 @@
 // footnotes and cells fit alone. The leading is never evened: each unit's starts from the rules' own, so that one unit
 // that needs a tight leading does not set every paragraph of its page at it (fidelity-layer-report.md, fix 4).
 //
+// And every located unit's lines on a page, which the fit's widening and the drawing's keep-off read.
+//
 // Pure: no DOM, no clock. An original module (no port statement), importing nothing.
 
 /** the kinds a page evens. The scorer's BODY_KINDS (Plan 8a) is the same three; Plan 8d asserts that the two are equal */
@@ -33,4 +35,31 @@ export function evenOf(laid, rules) {
   let scale = Infinity
   for (const u of laid) scale = Math.min(scale, u.state.scale)
   return laid.some(u => u.state.scale > scale + 1e-9) ? { maxScale: scale } : null
+}
+
+// every located unit's lines on a page, made once a file and page
+const LINES = new WeakMap()
+/** every located unit's lines on a page, by baseline rising: each its unit's id and kind, x0, x1, baseline (b) and size
+ *  (s); and the largest size among them */
+export function linesOn(file, page) {
+  let pages = LINES.get(file)
+  if (!pages) LINES.set(file, (pages = new Map()))
+  let out = pages.get(page)
+  if (out) return out
+  const list = []
+  let most = 0
+  for (const id of file.onPage(page)) {
+    const unit = file.unit(id)
+    if (!unit) continue
+    const L = unit.lines
+    for (let o = 0; o + 7 < L.length; o += 8) {
+      if (L[o] !== page) continue
+      list.push({ id, kind: unit.kind, x0: L[o + 1], x1: L[o + 2], b: L[o + 3], s: L[o + 6] })
+      if (L[o + 6] > most) most = L[o + 6]
+    }
+  }
+  list.sort((a, b) => a.b - b.b)
+  out = { list, most }
+  pages.set(page, out)
+  return out
 }

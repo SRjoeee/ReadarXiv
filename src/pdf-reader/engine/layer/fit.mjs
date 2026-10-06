@@ -20,6 +20,7 @@
 import { scriptOf } from '../layer-rules.mjs'
 import { breakLines, placeLines } from './breaks.mjs'
 import { checkPieces, heldByNone, lostIn, netOf } from './net.mjs'
+import { linesOn } from './page.mjs'
 import { trText } from './pieces.mjs'
 import { faceSize, tokensOf } from './tokens.mjs'
 
@@ -39,6 +40,12 @@ const PITCH_OF_SIZE = 1.2
 const HOLDS = 1 / 3
 /** em at the unit's size: the gap kept beside a display's segment that does not hold its line, and after a label */
 const GAP = 0.25
+/** em at the unit's size: a widened heading keeps this clear of the next text on its baseline (the prototype's) */
+const WIDEN_GAP = 0.5
+/** of the unit's size: another line within this of a heading's baseline is on it */
+const SAME_BASELINE = 0.4
+/** a heading's column is the paragraphs' lines through its middle where there are this many, else the page's text */
+const COLUMN_LINES = 3
 // the scripts whose lines keep the layout's baselines at any size (their leading is × the pitch alone), and those that
 // are cut by characters where a split has no sentence start near its share
 const GRID = new Set(['Hans', 'Hant', 'Jpan', 'Kore'])
@@ -89,13 +96,59 @@ export function* statesOf(rules, o) {
 
 // ---------------------------------------------------------------- the unit's geometry, the same at every state
 
-/** the unit's lines, frames and displays as the fit reads them; null where they do not make a located unit */
-function geometryOf(unit, tokens, size) {
+/**
+ * The slot of a heading or a title of one line, widened: to its column's edge or the next text on its baseline, whichever
+ * is nearer, and a centred one as far to either side (the prototype's main.js:263-276). A heading is as wide as its
+ * column, not as its English words: a translation longer than them keeps its size where the column has room, as a
+ * German title does. The column: the page's paragraph lines through the heading's middle, where there are
+ * COLUMN_LINES of them, else every located line of the page; the next text: another unit's line or a label of its own on
+ * its baseline, and the page's own text (textIn) between it and the column's edge, where the slot is not widened at all.
+ * Null where nothing widens it
+ */
+function widenedOf(input, unit, size) {
+  if (unit.lines.length !== 8 || unit.frames.length !== 6 || (unit.kind !== 'heading' && !unit.title)) return null
+  const L = unit.lines, page = L[0], x0 = L[1], x1 = L[2], b = L[3]
+  const mid = (x0 + x1) / 2
+  let c0 = Infinity, c1 = -Infinity, cn = 0, a0 = Infinity, a1 = -Infinity, left = -Infinity, right = Infinity
+  for (const l of linesOn(input.file, page).list) {
+    if (l.id === unit.id) continue
+    a0 = Math.min(a0, l.x0)
+    a1 = Math.max(a1, l.x1)
+    if (l.kind === 'para' && l.x0 <= mid && l.x1 >= mid) { cn++; c0 = Math.min(c0, l.x0); c1 = Math.max(c1, l.x1) }
+    if (Math.abs(l.b - b) >= SAME_BASELINE * size) continue
+    if (l.x0 >= x1 - EPS) right = Math.min(right, l.x0 - WIDEN_GAP * size)
+    else if (l.x1 <= x0 + EPS) left = Math.max(left, l.x1 + WIDEN_GAP * size)
+  }
+  // its own labels on the line (a section number) are kept where they are: the text stays clear of them
+  const lb = unit.labels
+  for (let o = 0; o + 6 < lb.length; o += 7) {
+    if (lb[o + 1] !== page || Math.abs(lb[o + 3] - b) >= SAME_BASELINE * size) continue
+    if (lb[o + 2] >= x1 - EPS) right = Math.min(right, lb[o + 2] - GAP * size)
+    else if (lb[o + 4] <= x0 + EPS) left = Math.max(left, lb[o + 4] + GAP * size)
+  }
+  if (cn >= COLUMN_LINES) { a0 = c0; a1 = c1 }
+  right = Math.min(right, a1)
+  left = Math.max(left, a0)
+  // the page's own text beside the line, a running head or a figure's word no unit holds: no room taken there
+  const band = [b - 0.3 * size, b + 0.7 * size]
+  const textIn = input.textIn
+  if (right > x1 + EPS && textIn?.(page, x1 + 1, band[0], right, band[1])) right = x1
+  if (left < x0 - EPS && textIn?.(page, left, band[0], x0 - 1, band[1])) left = x0
+  if (unit.centred) {
+    const half = Math.min(right - mid, mid - left)
+    return half > (x1 - x0) / 2 + EPS ? { x0: mid - half, x1: mid + half } : null
+  }
+  return right > x1 + EPS ? { x0, x1: right } : null
+}
+
+/** the unit's lines, frames and displays as the fit reads them; null where they do not make a located unit. `wide`: a
+ *  heading's one line widened (widenedOf) */
+function geometryOf(unit, tokens, size, wide) {
   const L = unit.lines, n = L.length / 8
   const lines = new Array(n)
   for (let i = 0; i < n; i++) {
     const o = 8 * i
-    lines[i] = { i, page: L[o], x0: L[o + 1], x1: L[o + 2], baseline: L[o + 3], top: L[o + 4], bottom: L[o + 5], frame: -1, held: false, sx0: L[o + 1], sx1: L[o + 2], beside: [] }
+    lines[i] = { i, page: L[o], x0: L[o + 1], x1: L[o + 2], baseline: L[o + 3], top: L[o + 4], bottom: L[o + 5], frame: -1, held: false, sx0: wide?.x0 ?? L[o + 1], sx1: wide?.x1 ?? L[o + 2], beside: [] }
   }
   const F = unit.frames, frames = []
   for (let o = 0; o + 5 < F.length; o += 6) {
@@ -513,7 +566,7 @@ export function layUnit(input, id, tr, o = {}) {
   const sizes = []
   for (let i = 6; i < unit.lines.length; i += 8) sizes.push(unit.lines[i])
   const size = median(sizes)
-  const geo = geometryOf(unit, tokens, size)
+  const geo = geometryOf(unit, tokens, size, widenedOf(input, unit, size))
   if (!geo) return unfit(id, 'located')
   const script = scriptOf(target)
   const grid = { grid: GRID.has(script), byCharacter: BY_CHARACTER.has(script) }

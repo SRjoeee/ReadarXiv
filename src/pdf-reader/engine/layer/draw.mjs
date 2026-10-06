@@ -9,6 +9,7 @@
 // only relative modules, so that the reader's bundle holds it.
 import { faceSize } from './fit.mjs'
 import { keptOn } from './net.mjs'
+import { linesOn } from './page.mjs'
 
 /** of a line's size: its box's height above its baseline and below it (the em box), for a sentence's shape and a point */
 const ASCENT = 0.75, DESCENT = 0.25
@@ -40,30 +41,6 @@ const KEPT_SLACK = 0.5
 /** how the copy lays a crop on what is under it: darkened in (each channel the darker of the two), so that a crop's own
  *  paper never covers what lies under its box, a kept label or a crop beside it */
 export const CROP_BLEND = 'darken'
-
-// every located unit's lines on a page, by baseline, made once a file and page: id, x0, x1, baseline, size
-const LINES = new WeakMap()
-function linesOn(file, page) {
-  let pages = LINES.get(file)
-  if (!pages) LINES.set(file, (pages = new Map()))
-  let out = pages.get(page)
-  if (out) return out
-  const list = []
-  let most = 0
-  for (const id of file.onPage(page)) {
-    const L = file.unit(id)?.lines
-    if (!L) continue
-    for (let o = 0; o + 7 < L.length; o += 8) {
-      if (L[o] !== page) continue
-      list.push({ id, x0: L[o + 1], x1: L[o + 2], b: L[o + 3], s: L[o + 6] })
-      if (L[o + 6] > most) most = L[o + 6]
-    }
-  }
-  list.sort((a, b) => a.b - b.b)
-  out = { list, most }
-  pages.set(page, out)
-  return out
-}
 
 /** the first index of a sorted list whose baseline is at least y */
 function firstAt(list, y) {
