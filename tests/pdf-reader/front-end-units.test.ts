@@ -184,6 +184,8 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     expect(texts(projectOf({ 'main.tex': tex, 'llncs.cls': '\\newtoks\\titlerunning\n\\newtoks\\authorrunning\n' }))).toEqual(['Signpost Watermarking', 'Body words.'])
     // any token register, as TeX assigns it: an `=` before its group
     expect(texts(project(doc('\\everypar={\\hangindent 2em}Words of the paragraph.')))).toEqual(['Words of the paragraph.'])
+    // …and any other register its value in TeX's own syntax, the `=` with it (review I5's T10)
+    for (const set of ['\\parindent=0pt', '\\parindent 0pt', '\\tabcolsep=2pt', '\\looseness=-1']) expect(texts(project(doc(`${set} Words here.`))), set).toEqual(['Words here.'])
   })
   it('a macro argument a math environment holds is math (2608.23517\'s \\al{…} = \\begin{align}#1\\end{align})', () => {
     expect(texts(project(doc('Before.\n\\al{S &= \\int d^3 \\sigma \\, \\mathcal L_B}\nAfter.', '\\newcommand{\\al}[1]{\\begin{align}{#1}\\end{align}}')))).toEqual(['Before. After.'])
