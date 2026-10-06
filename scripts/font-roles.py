@@ -5,10 +5,12 @@
 #   python3 scripts/font-roles.py experiments/pdf-bilingual/data/fonts > src/pdf-reader/engine/font-coverage.mjs
 #   python3 scripts/font-roles.py experiments/pdf-bilingual/data/fonts --out src/pdf-reader/engine/font-coverage.mjs
 # The fonts folder (git-ignored: no font file is committed) holds every face's file under its table name, and
-# releases.json, which names each source's release: {"source-han-serif": "<the GitHub release's tag>", "texlive":
-# "texlive/texlive@sha256:<the image's digest>"}. Gathering it: Source Han Serif's regional OTFs (OTF/SimplifiedChinese,
-# OTF/TraditionalChinese, OTF/Korean) from that release of adobe-fonts/source-han-serif, every other file by
-# `docker run --rm --network none <image> kpsewhich <file>`, copied out of that image.
+# releases.json, which names each source's release: {"source-han-serif": "<the GitHub release's tag>",
+# "urw-base35-fonts": "<the tag>", "texlive": "texlive/texlive@sha256:<the image's digest>"}. Gathering it: Source Han
+# Serif's regional OTFs (OTF/SimplifiedChinese, OTF/TraditionalChinese, OTF/Korean) from that release of
+# adobe-fonts/source-han-serif; URW's NimbusRoman-*, NimbusSans-* and NimbusMonoPS-*.otf from fonts/ at that tag of
+# ArtifexSoftware/urw-base35-fonts; every other file by `docker run --rm --network none <image> kpsewhich <file>`,
+# copied out of that image.
 #
 # Fails (exit 1, nothing written with --out) on a file it cannot find; on a file whose SHA-256 differs from the committed
 # METRICS' (git HEAD's font-coverage.mjs, or --against's) while its source's release is unchanged — a re-run after a
@@ -29,8 +31,17 @@ ROOT = Path(__file__).resolve().parent.parent
 ROLES = ROOT / 'src/pdf-reader/engine/font-roles.mjs'
 COVERAGE_PATH = 'src/pdf-reader/engine/font-coverage.mjs'
 FREE_MIN = 10 * 1024 ** 3
-RELEASE_OF = {'texlive': 'texlive', 'hosted': 'source-han-serif'}
-RELEASE_FORM = {'texlive': re.compile(r'^texlive/texlive@sha256:[0-9a-f]{64}$'), 'source-han-serif': re.compile(r'^\d+\.\d+R?$')}
+RELEASE_FORM = {'texlive': re.compile(r'^texlive/texlive@sha256:[0-9a-f]{64}$'), 'source-han-serif': re.compile(r'^\d+\.\d+R?$'),
+                'urw-base35-fonts': re.compile(r'^\d{8}(\.\d+)?$')}
+# the hosted files' releases, by file name: Source Han Serif's (adobe-fonts/source-han-serif) and URW's base 35
+# (ArtifexSoftware/urw-base35-fonts); every other file is TeX Live's
+HOSTED = [(re.compile(r'^SourceHanSerif(SC|TC|K)-'), 'source-han-serif'), (re.compile(r'^(NimbusRoman|NimbusSans|NimbusMonoPS)-'), 'urw-base35-fonts')]
+
+
+def release_of(source, file):
+    if source == 'texlive':
+        return 'texlive'
+    return next((key for pattern, key in HOSTED if pattern.match(file)), None)
 
 
 def fail(problems):
@@ -50,8 +61,8 @@ def faces():
             cols = line.split()
             if len(cols) < 9:
                 fail([f'a FACE_TABLE row of {len(cols)} columns: {line.strip()}'])
-            if cols[2] not in RELEASE_OF:
-                fail([f'{cols[0]}: source {cols[2]!r}, neither texlive nor hosted'])
+            if release_of(cols[2], cols[1]) is None:
+                fail([f'{cols[0]}: source {cols[2]!r} and file {cols[1]}: neither TeX Live nor a hosted release'])
             # the licence is every column between the size and the web status (an SPDX expression may hold spaces)
             rows.append(cols[:7] + [' '.join(cols[7:-1]), cols[-1]])
     return rows
@@ -190,7 +201,7 @@ def main(argv):
         releases = json.loads((folder / 'releases.json').read_text(encoding='utf-8'))
     except (OSError, ValueError) as e:
         fail([f'{folder / "releases.json"}: {e}'])
-    used = {RELEASE_OF[source] for _, _, source, *_ in rows}
+    used = {release_of(source, file) for _, file, source, *_ in rows}
     for key in sorted(used):
         if not isinstance(releases.get(key), str) or not RELEASE_FORM[key].match(releases[key]):
             problems.append(f'releases.json: {key} is {releases.get(key)!r}, not a release in the form {RELEASE_FORM[key].pattern}')
@@ -205,7 +216,7 @@ def main(argv):
         coverage[face_id], metrics[face_id] = measure(path)
         if not coverage[face_id]:
             problems.append(f'{face_id}: {file} maps no character')
-        was, key = digests.get(face_id), RELEASE_OF[source]
+        was, key = digests.get(face_id), release_of(source, file)
         if was and released.get(key) == releases.get(key) and was != metrics[face_id]['sha256']:
             problems.append(f'{face_id}: {file} is {metrics[face_id]["sha256"]}, the committed METRICS say {was}, and {key} is still {releases.get(key)}')
     if problems:
