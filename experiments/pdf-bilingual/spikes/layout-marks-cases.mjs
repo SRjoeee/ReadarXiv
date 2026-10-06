@@ -637,7 +637,11 @@ for (const s of [...streams, luaStream]) {
   const points = a.pages.reduce((n, p) => n + p.points.length, 0), brackets = a.pages.reduce((n, p) => n + p.points.filter(q => /^[bf][se]\d+$/.test(q.name)).length, 0)
   if (s.engine === 'lualatex') console.log(`note ${label}: ${d.why ?? `every glyph and box within ${d.worst.toFixed(4)} pt, ${d.over} past 0.001`}; destinations ${JSON.stringify(a.dests) === JSON.stringify(b.dests) ? 'the same' : 'differ'}`)
   else {
-    check(`${label}: every glyph and box within 0.001 pt of the compile with no point, every destination the same`, !d.why && d.over === 0 && JSON.stringify(a.dests) === JSON.stringify(b.dests) && points > a.dests.length, JSON.stringify({ ...d, dests: [a.dests.length, b.dests.length], points }))
+    // xdvipdfmx writes a glyph after a special by a position it reckons otherwise: up to 0.0013 pt on case A's margin
+    // note since the float's points wrap its box, TeX's boxes the same (\tracingoutput)
+    const tol = s.engine === 'xelatex' ? 0.002 : 0.001
+    check(`${label}: every glyph and box within ${tol} pt of the compile with no point, every destination the same`, !d.why && d.worst <= tol && JSON.stringify(a.dests) === JSON.stringify(b.dests) && points > a.dests.length, JSON.stringify({ ...d, dests: [a.dests.length, b.dests.length], points }))
+    if (!d.why && d.over) console.log(`note ${label}: ${d.over} glyphs or boxes past 0.001 pt, ${d.worst.toFixed(4)} at most`)
   }
   const log = n => read(n, 'log', 'latin1') ?? ''
   const units = s.paper.units
