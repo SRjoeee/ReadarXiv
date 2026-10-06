@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { modelPage, type OrigLine, type UnitIn } from '../../experiments/pdf-bilingual/spikes/layer-gate/measure.mjs'
+import { modelPage, type OrigLine, pixelPage, type UnitIn } from '../../experiments/pdf-bilingual/spikes/layer-gate/measure.mjs'
 import { compare, fixtureTotals, type Measure, MEASURES, pageEntry, pooled, type Totals, worse } from '../../experiments/pdf-bilingual/spikes/layer-gate/score.mjs'
 
 // The layer gate's arithmetic (experiments/pdf-bilingual/spikes/layer-gate.mjs, Plan 8b Task 12): a page's model measures
@@ -30,6 +30,39 @@ describe('the model measures of a page', () => {
     expect(m.geo[0]!.blank).toBeCloseTo(2, 5)
     expect(m.geo[0]!.scale).toBe(1)
     expect(m.fills[0]!.fill).toBeLessThan(0.65)
+  })
+})
+
+describe("the coverage of the original's text area", () => {
+  // a 60 x 40 page at 1 px a unit: one reference line from 10 to 50 on baseline 20 at size 10, four cells of one em, each
+  // with a block of the original's ink
+  const W = 60, H = 40
+  const planeOf = (paint: (x: number, y: number) => number) => {
+    const a = new Uint8ClampedArray(W * H * 4)
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const v = paint(x, y); a.set([v, v, v, 255], 4 * (y * W + x)) }
+    return a
+  }
+  // the ink: rows 14 to 19 (PDF y 21 to 26), in each cell's x 12-17, 22-27, 32-37, 42-47
+  const inked = (x: number, y: number) => y >= 14 && y < 20 && (x - 10) % 10 >= 2 && (x - 10) % 10 < 8 && x >= 10 && x < 50
+  const O = planeOf((x, y) => (inked(x, y) ? 0 : 255))
+  const paper = planeOf(() => 255)
+  const ref = [{ id: 1, kind: 'para', orig: [{ x0: 10, x1: 50, baseline: 20, top: 27, bottom: 17.5, size: 10 }] }]
+  const measure = (o: { C: Uint8ClampedArray; T: Uint8ClampedArray; drawn: boolean; x1?: number }) => {
+    const units: UnitIn[] = [{ id: 1, kind: 'para', drawn: o.drawn, why: null, orig: ref[0]!.orig, lines: o.drawn ? [{ baseline: 20, size: 10, x0: 10, x1: o.x1 ?? 50 }] : [], erase: [[10, 17.5, 50, 27]], crops: [] }]
+    return (pixelPage({ k: 1, view: [0, 0, W, H], W, H, O, C: o.C, T: o.T, units, kept: [], items: [], ref, drawnText: '' }) as { coverage: { text: Record<string, number> } }).coverage.text
+  }
+
+  it('a face set on the same lines covers the same cells, whatever its stroke weight', () => {
+    // the translation's text dark, and light enough that no pixel of it is ink: the same four cells translated
+    const dark = planeOf((x, y) => (y >= 15 && y < 19 && x >= 11 && x < 49 && x % 3 === 0 ? 0 : 255))
+    const light = planeOf((x, y) => (y >= 15 && y < 19 && x >= 11 && x < 49 && x % 3 === 0 ? 200 : 255))
+    expect(measure({ C: paper, T: dark, drawn: true })).toEqual({ cells: 4, translated: 4, english: 0, blank: 0 })
+    expect(measure({ C: paper, T: light, drawn: true })).toEqual({ cells: 4, translated: 4, english: 0, blank: 0 })
+  })
+
+  it('a line set shorter leaves blank cells, and the original left in place is English', () => {
+    expect(measure({ C: paper, T: paper, drawn: true, x1: 30 })).toEqual({ cells: 4, translated: 2, english: 0, blank: 2 })
+    expect(measure({ C: O, T: paper, drawn: false })).toEqual({ cells: 4, translated: 0, english: 4, blank: 0 })
   })
 })
 
