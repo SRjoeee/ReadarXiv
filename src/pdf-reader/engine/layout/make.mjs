@@ -207,14 +207,16 @@ function lineOf(P, r, from, to, unit) {
   const L = r.x0 - 0.5, R = r.x1 + 0.5
   const first = band(P, Math.min(r.y0, r.y1), Math.max(r.y0, r.y1)).filter(i => mid(P, i) >= L && mid(P, i) <= R && ok(i))
   if (!first.length) return null
-  const size0 = median(first.map(i => P.size[i]))
-  const base = baselineOf(P, bodyOf(P, first, size0), r.base)
+  const mains = mainsOf(P, first)
+  const size0 = median(mains.map(i => P.size[i]))
+  const base = baselineOf(P, bodyOf(P, mains, size0), r.base)
   // by its own ink too: a glyph whose ink is centred off the line's band is no glyph of the line's text, whatever its
   // origin (a big delimiter of another cell's matrix hangs from a baseline by this one's, 1.5 em below it: 1512's
   // table; txexs's in 2307)
   // A line of such glyphs alone (a display's, which the anchor gave the unit) keeps them: it is its unit's, as before
   const onBand = i => { const c = (P.top[i] + P.bottom[i]) / 2; return c >= base - BAND_DOWN * size0 && c <= base + BAND_UP * size0 }
-  const all = band(P, base - SCRIPT(P.most), base + SCRIPT(P.most)).filter(i => Math.abs(P.y[i] - base) < SCRIPT(P.size[i]) && ok(i))
+  const window = band(P, base - SCRIPT(P.most), base + SCRIPT(P.most)).filter(i => Math.abs(P.y[i] - base) < SCRIPT(P.size[i]) && (P.owner[i] === -1 || P.owner[i] === unit))
+  const all = window.filter(ok)
   const banded = all.filter(onBand)
   const near = banded.some(i => mid(P, i) >= L && mid(P, i) <= R) ? banded : all
   const inside = near.filter(i => mid(P, i) >= L && mid(P, i) <= R)
@@ -224,18 +226,38 @@ function lineOf(P, r, from, to, unit) {
   const glue = GLUE * size0, taken = new Set(inside)
   const right = near.filter(i => !taken.has(i) && mid(P, i) > R).sort((a, b) => P.x0[a] - P.x0[b] || a - b)
   for (const i of right) { if (P.x0[i] - x1 > glue) break; taken.add(i); x1 = Math.max(x1, P.x1[i]) }
+  // its closing punctuation glued past its end mark: a mark carried past its line's last word stands where the formula
+  // before it ends in our compile, which arXiv's may set wider (1706's "… by 1/√dk." left its full stop standing)
+  if (to !== null) {
+    const after = window.filter(i => !taken.has(i) && mid(P, i) > to + 0.05 && /^[.,;:!?)\]]$/.test(P.u[i])).sort((a, b) => P.x0[a] - P.x0[b] || a - b)
+    for (const i of after) { if (P.x0[i] - x1 > glue) break; taken.add(i); x1 = Math.max(x1, P.x1[i]) }
+  }
   const left = near.filter(i => !taken.has(i) && mid(P, i) < L).sort((a, b) => P.x1[b] - P.x1[a] || a - b)
   for (const i of left) { if (x0 - P.x1[i] > glue) break; taken.add(i); x0 = Math.min(x0, P.x0[i]) }
   return rowOf(P, [...taken], r.page, r.ks, base)
 }
 
+/**
+ * A line's text glyphs: those within PART_MAIN of its largest size, where they are a quarter of its characters or more,
+ * else all of them. A line whose formulas set more script glyphs than it has words (1706's "and W^O ∈ R^{hd_v×d_model}.":
+ * 7 of 18 at 10 pt, the rest scripts) is the line of its words, by their size and baseline, not of its scripts
+ */
+function mainsOf(P, gs) {
+  let big = 0, all = 0, inBig = 0
+  for (const i of gs) if (P.size[i] > big) big = P.size[i]
+  const mains = gs.filter(i => P.size[i] >= PART_MAIN * big)
+  for (const i of gs) all += Math.max(1, P.u[i].length)
+  for (const i of mains) inBig += Math.max(1, P.u[i].length)
+  return inBig >= MAINS_SHARE * all ? mains : gs
+}
+const MAINS_SHARE = 0.25
 /** a line from its glyphs: its extent, the baseline most of its body glyphs share (glyphs within BODY of their median
  *  size; `near` breaks a tie), the extremes of its glyphs, their median size and the font most of its characters have */
 function rowOf(P, glyphs, page, ks, near) {
   const gl = [...glyphs].sort((a, b) => P.x0[a] - P.x0[b] || P.y[a] - P.y[b] || a - b)
   let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
   for (const i of gl) { x0 = Math.min(x0, P.x0[i]); x1 = Math.max(x1, P.x1[i]); top = Math.max(top, P.top[i]); bottom = Math.min(bottom, P.bottom[i]) }
-  const size = median(gl.map(i => P.size[i])), body = bodyOf(P, gl, size)
+  const size = median(mainsOf(P, gl).map(i => P.size[i])), body = bodyOf(P, gl, size)
   const fonts = new Map()
   for (const i of body) fonts.set(P.font[i], (fonts.get(P.font[i]) ?? 0) + Math.max(1, P.u[i].length))
   let font = -1, most = -1

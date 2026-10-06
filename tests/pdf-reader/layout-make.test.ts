@@ -1031,3 +1031,28 @@ describe('makeLayout, a note\'s mark the first line begins with (the maker round
     expect(rowsOf(n.file, 0, 'lines')[1]).toBe(72)
   })
 })
+
+describe('makeLayout, a line by its words (the maker round)', () => {
+  it('a line whose formula sets more script glyphs than it has words is the line of its words: their baseline and size', async () => {
+    // 1706's "and W^O ∈ R^{hd_v×d_model}.": 7 glyphs at 10 pt, 11 scripts at 7 and 5 pt, 3.6 pt up
+    const runs: Run[] = [{ s: 'first line of the unit here', x: 72, y: 700 }, { s: 'and', x: 72, y: 688 }, { s: 'hdxmodel', x: 92, y: 691.6, size: 7 }, { s: 'ab', x: 120, y: 690.6, size: 5 }, { s: '.', x: 126, y: 688 }]
+    const { file } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 127, 688], ['p0.1a', 1, 92, 688], ['p0.1b', 1, 126, 688]],
+      units: [unit('para', [text('first line of the unit here and '), ph('$R^{hdxmodel}_{ab}$'), text('.')])],
+    })
+    const second = chunk(rowsOf(file, 0, 'lines'), 8)[1]!
+    expect(second[3]).toBe(688)
+    expect(second[6]).toBe(10)
+  })
+  it('a unit\'s closing full stop glued past its end mark is its line\'s (an end mark after a formula, carried short of it)', async () => {
+    const runs: Run[] = [{ s: 'we scale it by xy', x: 72, y: 700 }, { s: '.', x: 157, y: 700 }]
+    const { file } = await made({
+      pages: [{ runs }],
+      // the end mark 0.5 pt short of the full stop, as a formula of another width on arXiv's leaves it
+      marks: [['0s', 1, 72, 700], ['0e', 1, 156.5, 700]],
+      units: [unit('para', [text('we scale it by xy.')])],
+    })
+    expect(rowsOf(file, 0, 'lines')[2]).toBeCloseTo(162, 1)
+  })
+})
