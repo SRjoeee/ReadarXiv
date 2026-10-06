@@ -82,7 +82,12 @@ export interface RenderingsContext {
 }
 /** part 4's answer: the gaps as it leaves them, and each placeholder's rendering (called once a placeholder, in the
  *  unit's order, for those the rules look for: 'cite', 'num', 'other'), or none found */
-export interface Renderings { gaps: Gap[]; gapFor(p: Placeholder, cls: 'cite' | 'num' | 'other'): Gap | null | undefined }
+export interface Renderings {
+  gaps: Gap[]; gapFor(p: Placeholder, cls: 'cite' | 'num' | 'other'): Gap | null | undefined
+  /** how a placeholder is drawn where the source knows it without the page (a layout file's macro that sets no ink: none;
+   *  its text symbol: the character), else null */
+  fixed?(p: Placeholder): { mode: 'none' | 'source'; text: string } | null
+}
 /** the parts of a unit another source gives in place of v0's; a part not given is v0's */
 export interface UnitParts {
   /** part 1 (and part 2's default): the unit's lines and their characters */

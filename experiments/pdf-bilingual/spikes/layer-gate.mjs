@@ -142,9 +142,11 @@ const REFS = resolve(process.env.LAYER_REFS ?? join(DATA, 'layer-fixtures'))
 const GIVEN = typeof arg('fixtures') === 'string' ? arg('fixtures') : process.env.LAYER_FIXTURES ?? null
 /** an engine before Task 6 has no layout maker: its layer is given the fixtures' own layout files */
 const HAS_MAKER = existsSync(join(ENGINE, 'src/pdf-reader/engine/layout/make.mjs'))
-// v0 is given no layout file: the fixtures' own serve the instrument (the kept renderings), as they served the parity run's
-const LAYOUTS = GIVEN ? 'given' : PROTO ? 'fixed' : arg('layouts') ?? (HAS_MAKER ? 'made' : 'fixed')
-if (!PROTO && !GIVEN && !arg('layouts') && !HAS_MAKER) console.log('the engine has no layout maker (layout/make.mjs): its layer is given the fixtures\' own layout files (--layouts=fixed)')
+// v0 is given no layout file: the fixtures' own serve the instrument (the kept renderings), as they served the parity run's.
+// The hybrid (--proto-tex) reads one, the engine's own maker's by default (made), as the layer does: a change of the maker
+// is measured end to end through the hybrid too. The instrument stays the fixtures' own layout files either way
+const LAYOUTS = GIVEN ? 'given' : PROTO && !TEX ? 'fixed' : arg('layouts') ?? (HAS_MAKER ? 'made' : 'fixed')
+if ((!PROTO || TEX) && !GIVEN && !arg('layouts') && !HAS_MAKER) console.log('the engine has no layout maker (layout/make.mjs): its layer is given the fixtures\' own layout files (--layouts=fixed)')
 /** the record's entry this run is: its tier, and the layout files it was given where they are not the engine's own */
 const KEY = PROTO ? `${TIER}-proto${PROTO_UNITS === 'p7' ? '-p7' : ''}${PROTO_FACES === 'prototype' ? '-pf' : ''}${TEX_KEY}${REMOVAL ? `-removal-${REMOVAL}` : ''}` : LAYOUTS === 'made' ? TIER : `${TIER}-${LAYOUTS}`
 if (REMOVAL && !PROTO) throw new Error('--removal: v0 only (--engine-kind=proto)')
@@ -155,7 +157,7 @@ const MAKER = join(here, 'layer-fixtures.mjs')
  * carries it (marks.mjs MARKS_SCHEMA 2 or more), so that its maker re-marks as the compile was marked; GATE_SWITCH=1 or 0
  * says otherwise. At Task 12's tip the maker re-marks without it, and the switch stays off
  */
-const SWITCH = process.env.GATE_SWITCH ? process.env.GATE_SWITCH !== '0' : !PROTO && HAS_MAKER && ((await import(join(ENGINE, 'src/pdf-reader/engine/layout/marks.mjs'))).MARKS_SCHEMA ?? 0) >= 2
+const SWITCH = process.env.GATE_SWITCH ? process.env.GATE_SWITCH !== '0' : LAYOUTS === 'made' && HAS_MAKER && ((await import(join(ENGINE, 'src/pdf-reader/engine/layout/marks.mjs'))).MARKS_SCHEMA ?? 0) >= 2
 const FONTS = resolve(join(DATA, 'fonts'))
 const PDFJS = resolve(REPO, 'node_modules/pdfjs-dist')
 const GATE = join(here, 'layer-gate')
@@ -239,6 +241,8 @@ function fileFor(path) {
     // v0's inputs: the made output's geometry (the prototype's, by paper), the fixture's record (its units file), the
     // prototype's own units file
     if (PROTO && file === 'geometry.json') return geometryFile(dir)
+    // the instrument's layout file (its kept renderings): the fixture's own, whichever the hybrid is given
+    if (PROTO && file === 'kept-layout.json') return join(REFS, dir, 'layout.json')
     if (PROTO && file === 'record.json') return join(FIXTURES, dir, 'record.json')
     if (PROTO && file === 'units-p7.json') return protoUnitsOf(dir)
     return null
@@ -516,8 +520,8 @@ function madeFixtures() {
   const files = []
   const walk = d => { for (const n of readdirSync(d).sort()) { const f = join(d, n); if (statSync(f).isDirectory()) walk(f); else if (/\.m?js$/.test(n)) files.push(f) } }
   walk(engineDir)
-  // the layer's own modules make no layout (but the pieces, which the translation's units are read with)
-  const used = files.filter(f => !f.startsWith(join(engineDir, 'layer') + sep) || f.endsWith(`${sep}pieces.mjs`))
+  // the layer's own modules make no layout (but the pieces, which the translation's units are read with), nor do v0's
+  const used = files.filter(f => !(f.startsWith(join(engineDir, 'layer') + sep) || f.startsWith(join(engineDir, 'layer-proto') + sep)) || f.endsWith(`${sep}layer${sep}pieces.mjs`))
   const key = sha256([MAKER, ...used].map(f => `${f.slice(ENGINE.length)}\n`).join('') + [MAKER, ...used].map(f => fileSha(f)).join('\n') + (SWITCH ? '|switch' : '')).slice(0, 16)
   const dir = join(ROOT, 'out/layer-gate/fixtures', key)
   const want = readdirSync(REFS).filter(n => /^[A-Za-z0-9._-]+v\d+-[A-Za-z-]+$/.test(n) && existsSync(join(REFS, n, 'layout.json'))).filter(n => !ONLY || ONLY.includes(n))
@@ -561,7 +565,7 @@ function completenessRows(run) {
 function checkAgainst(last, run) {
   const out = { failed: false, lines: [] }
   const say = s => { out.lines.push(s); console.log(s) }
-  for (const k of ['layouts', 'scale', 'inkScale', 'inkMin', 'composite', 'pages', 'checker', 'measures', 'kind', 'protoUnits', 'place', 'order', 'hyphenation', ...(AGAINST ? [] : ['tex', 'removal'])]) if (String(last.inputs[k] ?? (k === 'tex' || k === 'removal' ? 'none' : undefined)) !== String(run.inputs[k] ?? (k === 'tex' || k === 'removal' ? 'none' : undefined))) { say(`FAIL --check: the record's ${k} is ${last.inputs[k]}, this run's ${run.inputs[k]}: not comparable`); out.failed = true }
+  for (const k of ['layouts', 'scale', 'inkScale', 'inkMin', 'composite', 'pages', 'checker', 'measures', 'kind', 'protoUnits', 'place', 'order', 'hyphenation', ...(AGAINST ? [] : ['tex', 'removal'])].filter(k => !(AGAINST && PROTO && k === 'layouts'))) if (String(last.inputs[k] ?? (k === 'tex' || k === 'removal' ? 'none' : undefined)) !== String(run.inputs[k] ?? (k === 'tex' || k === 'removal' ? 'none' : undefined))) { say(`FAIL --check: the record's ${k} is ${last.inputs[k]}, this run's ${run.inputs[k]}: not comparable`); out.failed = true }
   for (const [name, f] of Object.entries(run.fixtures)) {
     const was = last.fixtures[name]
     if (was && was.meta.ref !== f.meta.ref) { say(`FAIL --check: ${name}'s reference is not the record's (${was.meta.ref} against ${f.meta.ref}): a new reference is a new baseline`); out.failed = true }

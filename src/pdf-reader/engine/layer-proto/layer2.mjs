@@ -925,11 +925,14 @@ function resolvePlaceholders(out, ctx, renderingsOf) {
   if (citeMap && !citeMap.macros) citeMap.macros = new Map()
   const macros = citeMap ? citeMap.macros : new Map()
   const plain = new Map(phs.map(p => [p, { t: norm(texToText2(p.src) || (p.unknown ? macros.get(p.src) ?? '' : '')), name: norm(nameOf(p.src)) }]))
-  const { gaps, gapFor } = renderingsOf({ ...ctx, uc, plain, out })
+  const { gaps, gapFor, fixed } = renderingsOf({ ...ctx, uc, plain, out })
   out.gaps = gaps
   const gapOf = new Map()
   for (const p of phs) {
-    if (p.cls === 'zero') out.set(p.k, { mode: 'none', text: '' })
+    // (a source that knows how a placeholder is drawn: a layout file's macro that sets no ink, or its text symbol)
+    const f = fixed?.(p)
+    if (f) out.set(p.k, f)
+    else if (p.cls === 'zero') out.set(p.k, { mode: 'none', text: '' })
     else if (p.cls === 'space') out.set(p.k, { mode: 'none', text: ' ' })
     else if (p.cls === 'symbol') {
       const text = texToText2(p.src)

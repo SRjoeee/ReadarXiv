@@ -16,6 +16,9 @@ import { charKey, charsOfUnit2, labelOf, learnCite, phClass2 } from './layer2.mj
 
 /** v0's placeholder classes that draw ink of their own (layer-proto/check.mjs VISIBLE; a nested footnote's mark is 'num') */
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
+/** v0's classes of a text macro: one the file holds no row for sets no ink (LAYOUT 3: the maker marks no macro TeX's ink
+ *  probe says sets nothing, nor one its class says cannot), and is drawn as nothing */
+const MACROS = new Set(['macro', 'umacro'])
 /** an anchors' rectangle's share of its line's size below and above its baseline (Times' descent and ascent, as anchors.mjs
  *  lineRects measures a line and v0's reading of a line is set to) */
 const BELOW = 0.215, ABOVE = 0.683
@@ -47,8 +50,10 @@ export function kOfPieces(unit, trPieces) {
  * carried (the maker writes a unit only where every one of its lines was carried to arXiv's page, so a unit in the file
  * has them all); every one of its placeholders that v0 draws ink for found, neither LOST nor EMPTY, but a symbol v0 draws
  * from its source as text (\%, $\times$), whose glyph its line's erasing covers, wherever it is (`symbols: 'strict'`:
- * that too). Its lines need not be in reading order: those out of it are a display's rows or number the file lists after
- * the line below, which v0's reading keeps as the original's (measured: asking it sent 123 units to v0 and drew worse).
+ * that too). A text symbol the file draws as its character (PH_FLAG.TEXT: no segments, its glyph the line's) is found; a
+ * text macro the file holds no row for sets no ink (inklessOf). Its lines need not be in reading order: those out of it
+ * are a display's rows or number the file lists after the line below, which v0's reading keeps as the original's
+ * (measured: asking it sent 123 units to v0 and drew worse).
  * Returns { ok, why, kOf }: why one of 'unlocated', 'pieces', 'no row', 'lost', 'empty'.
  */
 export function locatedWhole(lu, unit, trPieces, { symbols = 'text' } = {}) {
@@ -59,8 +64,9 @@ export function locatedWhole(lu, unit, trPieces, { symbols = 'text' } = {}) {
     const cls = p.t === 'nested' ? 'num' : p.t === 'ph' ? phClass2(p.src).cls : null
     if (!cls || !VISIBLE.has(cls) || (cls === 'symbol' && symbols === 'text')) continue
     const row = lu.ph.get(kOf[i])
-    if (!row) return { ok: false, why: 'no row' }
+    if (!row) { if (MACROS.has(cls)) continue; return { ok: false, why: 'no row' } }
     if (row.flags & PH_FLAG.EMPTY) return { ok: false, why: 'empty' }
+    if (row.flags & PH_FLAG.TEXT) continue
     if (row.flags & PH_FLAG.LOST || !row.segs.length) return { ok: false, why: 'lost' }
   }
   return { ok: true, why: null, kOf }
@@ -72,23 +78,29 @@ export function locatedWhole(lu, unit, trPieces, { symbols = 'text' } = {}) {
  * fonts' declared boxes, which reach a line lower under CMSY's descent, and v0 reads a line's extent from its characters
  * anyway). With each rectangle's exact baseline and size (`exact`) and its line in the file (`lineOf`). The file's frames
  * (its lines by page and column) bound no block: v0's own rule of where a block ends splits every block they would, and a
- * full-width caption's short last line, which the file puts in a column of its own, stays in its block.
+ * full-width caption's short last line, which the file puts in a column of its own, stays in its block. A line the
+ * unit's source does not write (the file's `held`: a display it does not hold, inside it) is no line of the unit's: it
+ * gets no slot and is never erased, and stays the original's. `total`: the unit's lines but those, on every page.
  */
 export function texRects(lu, maxPage = Infinity) {
   const rects = [], exact = new Map(), lineOf = new Map()
-  const L = lu.lines, F = lu.frames
+  const L = lu.lines, F = lu.frames, held = new Set(lu.held ?? [])
   for (let f = 0; f < F.length; f += 6) {
     for (let j = F[f + 2]; j < F[f + 2] + F[f + 3]; j++) {
       const page = L[8 * j], base = L[8 * j + 3], size = L[8 * j + 6]
-      if (page > maxPage) continue
+      if (page > maxPage || held.has(j)) continue
       const r = [page, r2(L[8 * j + 1]), r2(base - BELOW * size), r2(L[8 * j + 2]), r2(base + ABOVE * size)]
       rects.push(r)
       exact.set(r, { baseline: base, size })
       lineOf.set(r, j)
     }
   }
-  return { rects, exact, lineOf }
+  return { rects, exact, lineOf, total: L.length / 8 - held.size }
 }
+
+/** whether a placeholder of the unit's sets no ink by the file: a text macro (v0's 'macro' or 'umacro') the file holds no
+ *  row for (locatedWhole) */
+export const inklessOf = (lu, kOf, p) => MACROS.has(p.cls) && !lu.ph.has(kOf[p.k])
 
 /**
  * A placeholder's rendering from its segments in the file (stride 6: page, x0, baseline, x1, top, bottom): the unit's
@@ -145,7 +157,13 @@ export function texParts(lu, kOf, { use, lines = null, extents = 'v0' }) {
         const g = renderingOf(row.segs, uc, p.cls === 'display')
         if (g) found.set(p, p.cls === 'cite' ? learnCite(p, g, citeMap) : g)
       }
-      return { gaps, gapFor: p => found.get(p) ?? null }
+      // (a text macro that sets no ink is drawn as nothing; a text symbol the file draws as its character, as that)
+      const fixed = p => {
+        if (inklessOf(lu, kOf, p)) return { mode: 'none', text: '' }
+        const row = lu.ph.get(kOf[p.k])
+        return row && row.flags & PH_FLAG.TEXT && row.text && p.cls !== 'symbol' ? { mode: 'source', text: row.text } : null
+      }
+      return { gaps, gapFor: p => found.get(p) ?? null, fixed }
     },
   }
   if (use !== 'lines') return parts

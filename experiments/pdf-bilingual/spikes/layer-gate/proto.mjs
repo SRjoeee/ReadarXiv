@@ -155,10 +155,11 @@ window.gate = {
     const base = `/fixtures/${name}/`
     let geometry, unitsFile, layout, fixtureUnits, data
     try {
-      ;[geometry, unitsFile, layout, fixtureUnits, data] = await Promise.all([json(`${base}geometry.json`), json(`${base}${which === 'p7' ? 'units-p7.json' : 'record.json'}`), json(`${base}layout.json`), json(`${base}units.json`), bytes(`${base}arxiv.pdf`)])
+      // (layout: the instrument's, the fixture's own, whichever layout file the hybrid is given)
+      ;[geometry, unitsFile, layout, fixtureUnits, data] = await Promise.all([json(`${base}geometry.json`), json(`${base}${which === 'p7' ? 'units-p7.json' : 'record.json'}`), json(`${base}kept-layout.json`), json(`${base}units.json`), bytes(`${base}arxiv.pdf`)])
     } catch (e) { return { ready: false, why: String(e?.message ?? e).slice(0, 200) } }
     const doc = await pdfjs.getDocument({ data, ...PDF_ASSETS, ...V.PDF_OPTIONS }).promise
-    // the hybrid (--proto-tex): the fixture's layout file read by the engine's own reader, and the units file's pieces by
+    // the hybrid (--proto-tex): the layout file given (the engine's own maker's, or the fixture's) read by the engine's own reader, and the units file's pieces by
     // unit, beside v0's own inputs
     let texIn = null
     if (tex) {
