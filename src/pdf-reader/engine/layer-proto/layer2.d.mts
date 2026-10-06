@@ -160,13 +160,20 @@ export type DevBox = [number, number, number, number]
 export type DrawOp =
   | { op: 'erase'; box: DevBox }
   | { op: 'restore'; page: number; clip: DevBox[]; boxes: DevBox[] }
-  | { op: 'crop'; page: number; src: DevBox; dst: DevBox }
+  | { op: 'crop'; page: number; src: DevBox; dst: DevBox; plane?: Plane }
+  | { op: 'swap'; page: number; rects: DevBox[] }
+/** which drawing of a page an operation cuts from: the original, its text-removed page, its placeholders alone */
+export type Plane = 'O' | 'R' | 'P'
 /** a canvas a drawing operation cuts from: the page as PDF.js drew it */
 export type DrawSource = CanvasImageSource
 /** the unit's lines erased on the page, what no painted unit accounts for put back, its crops: as operations */
 export declare function unitOps(L: Layout, blocks: readonly Block2[], page: number, o: { px: ToDev; k: number; hasSource: (page: number) => boolean; pxOf: (page: number) => ToDev; extents?: Map<string, number[]>; audit?: Audit[] | null; id?: number | null; restore?: unknown }): DrawOp[]
-/** the operations drawn on a copy of the page at `z` times v0's resolution, cut from each page as PDF.js drew it there */
-export declare function drawOps(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, ops: readonly DrawOp[], z: number, sourceOf: (page: number) => DrawSource | null | undefined): void
+/** the unit on a page whose text the removed PDF has taken out: the removed page's pixels swapped in over its own glyphs
+ *  (`rects`), its crops cut from the placeholders' page where `removed` says its source page is removed */
+export declare function removalOps(L: Layout, page: number, o: { px: ToDev; k: number; hasSource: (page: number) => boolean; pxOf: (page: number) => ToDev; rects: DevBox[]; lines?: number[][]; removed: (page: number) => boolean; audit?: Audit[] | null; id?: number | null }): DrawOp[]
+/** the operations drawn on a copy of the page at `z` times v0's resolution, cut from each page and plane as PDF.js drew it
+ *  there */
+export declare function drawOps(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, ops: readonly DrawOp[], z: number, sourceOf: (page: number, plane: Plane) => DrawSource | null | undefined): void
 export declare function pageItemsOf(chars: readonly Char[], page: number, px: ToDev, ink: InkMap | undefined): { items: { chars: Char[]; keys: string[]; box: number[] }[]; cover: Uint8Array | null }
 /** the unit's lines on one page as SVG markup (a <g data-u="id">) */
 export declare function svgOfUnit(L: Layout, page: number, toPx: (x: number, y: number) => number[], scale: number, id: number): string

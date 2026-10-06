@@ -4,6 +4,7 @@ import type { Rect } from './layer1.mjs'
 import type { Block2, Char, DrawOp, DrawSource, Layout, Params, Prepared, Token, Unit } from './layer2.mjs'
 import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
 import type { TexLines, Whole } from './tex.mjs'
+import type { RemovalManifest, RemovalPlan } from '../layout/remove.mjs'
 
 /** the made output's geometry (schema 1): the pages' views, each unit's [id, stream, rects] on the original, its kind */
 export interface Geometry { schema: number; kinds: string[]; left: { pages: number[][]; units: [number, number, Rect[]][] }; right?: unknown }
@@ -62,6 +63,25 @@ export interface ProtoRun {
   release(page: number): void
   checkPage(page: number): CheckResult
   check(): CheckResult
+  /** the text-removed PDF's plan as made (removal mode 'plan') */
+  removalPlan(): RemovalPlan | null
+  /** how the removal went */
+  removalStats(): RemovalStats | null
+  /** a done page's removed page (or placeholders' page) at v0's own resolution (mode 'draw'), until it is released */
+  removedCanvas(page: number, plane?: 'R' | 'P'): HTMLCanvasElement | null
+}
+/** how the text-removed PDF went: pages removed, pages drawn the old way, units drawn by it and those whose removal was
+ *  not the plan's (drawn the old way), glyphs another unit had, differing pixels no unit reached */
+export interface RemovalStats { pages: number; refused: number; units: number; swapped: number; mismatched: number; taken: number; notOwned: number; unclaimed: number; differing: number; mismatch: unknown[]; byPage: Record<number, { units: number; swapped: number; mismatched: number }> }
+/** the text-removed PDF (removal.mjs, layout/remove.mjs) */
+export interface RemovalOptions {
+  OPS: Record<string, number>
+  /** 'plan': each unit's removal kept as the plan, v0's own drawing; 'draw': drawn by the add-on */
+  mode: 'plan' | 'draw'
+  /** with 'draw': arXiv's PDF with the add-on, its manifest, the plan it was made from */
+  doc?: { getPage(n: number): Promise<unknown> }
+  manifest?: RemovalManifest
+  plan?: RemovalPlan
 }
 export declare function openProto(o: {
   doc: { numPages: number; getPage(n: number): Promise<unknown> }
@@ -84,4 +104,6 @@ export declare function openProto(o: {
   copy?: boolean
   /** the hybrid (tex.mjs): null, v0 alone */
   tex?: HybridOptions | null
+  /** the text-removed PDF: null, v0's own drawing */
+  removal?: RemovalOptions | null
 }): Promise<ProtoRun>

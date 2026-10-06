@@ -2055,10 +2055,44 @@ export function unitOps(L, blocks, page, { px, k, hasSource, pxOf, extents, audi
 }
 
 /**
- * unitOps' operations drawn on `ctx`, a copy of the page, in their order, `z` times v0's resolution (1: v0's own canvas
- * calls, with the same numbers). `sourceOf(page)`: that page as PDF.js drew it at the same resolution as `ctx`, untouched,
- * which the restores and crops are cut from (null: the operation is left out). A crop is darkened in, never pasted: its
- * paper is white, and pasted it erased what it was laid over (a kept label).
+ * The unit's drawing on a page whose text the removed PDF has taken out (removal.mjs, layout/remove.mjs), as data: the
+ * removed page's pixels swapped in over the unit's own glyphs (`rects`, its share of where the original and the removed
+ * page differ, pageMasks'), then its crops, each cut from the page holding the placeholders alone (`plane: 'P'`), or
+ * from the original where its source page is not removed (`removed(page)` false). Nothing is erased or put back. The
+ * audit has the unit's swapped boxes (as its 'erase', what the gate's residue and bites read) and its crops, as unitOps'.
+ * `lines`: the unit's removed glyphs' boxes on the page grouped by line, in PDF units, for the audit.
+ */
+export function removalOps(L, page, { px, k, hasSource, pxOf, rects, lines = [], removed, audit = null, id = null }) {
+  const ops = []
+  if (rects.length) ops.push({ op: 'swap', page, rects })
+  for (const b of lines) {
+    const [ax, ay] = px(b[0], b[3]), [bx, by] = px(b[2], b[1])
+    audit?.push({ what: 'erase', unit: id, page, box: [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)], swap: true })
+  }
+  for (const line of L.lines) {
+    if (line.page !== page) continue
+    for (const it of line.items) {
+      if (!it.t.crop) continue
+      const c = it.t.crop.crop
+      if (!hasSource(it.t.crop.page)) continue
+      const sc = L.scale
+      const [sx0, sy0] = pxOf(it.t.crop.page)(c[0], c[3]), [sx1, sy1] = pxOf(it.t.crop.page)(c[2], c[1])
+      const [dx, dy] = px(it.x, line.baseline + (c[3] - it.t.crop.baseline) * sc)
+      const plane = removed(it.t.crop.page) ? 'P' : 'O'
+      ops.push({ op: 'crop', page: it.t.crop.page, plane, src: [sx0, sy0, sx1 - sx0, sy1 - sy0], dst: [dx, dy, it.w * k, (c[3] - c[1]) * sc * k] })
+      audit?.push({ what: 'crop', unit: id, page, k: it.t.crop.k, srcPage: it.t.crop.page, plane, src: c, dst: [dx, dy, dx + it.w * k, dy + (c[3] - c[1]) * sc * k] })
+    }
+  }
+  return ops
+}
+
+/**
+ * unitOps' and removalOps' operations drawn on `ctx`, a copy of the page, in their order, `z` times v0's resolution (1:
+ * v0's own canvas calls, with the same numbers). `sourceOf(page, plane)`: that page as PDF.js drew it at the same
+ * resolution as `ctx`, untouched, which the restores, swaps and crops are cut from (null: the operation is left out):
+ * plane 'O' (or none) the original, 'R' its text-removed page, 'P' its placeholders alone. A crop is darkened in, never
+ * pasted: its paper is white, and pasted it erased what it was laid over (a kept label). A swap puts the removed page's
+ * pixels in its rectangles.
  */
 export function drawOps(ctx, ops, z, sourceOf) {
   const at = b => [b[0] * z, b[1] * z, b[2] * z, b[3] * z]
@@ -2067,7 +2101,7 @@ export function drawOps(ctx, ops, z, sourceOf) {
   for (const o of ops) {
     if (o.op === 'erase') ctx.fillRect(...at(o.box))
     else if (o.op === 'restore') {
-      const src = sourceOf(o.page)
+      const src = sourceOf(o.page, 'O')
       if (!src) continue
       ctx.save()
       ctx.beginPath()
@@ -2075,8 +2109,17 @@ export function drawOps(ctx, ops, z, sourceOf) {
       ctx.clip()
       for (const b of o.boxes) { const d = at(b); ctx.drawImage(src, ...d, ...d) }
       ctx.restore()
+    } else if (o.op === 'swap') {
+      const src = sourceOf(o.page, 'R')
+      if (!src || !o.rects.length) continue
+      ctx.save()
+      ctx.beginPath()
+      for (const e of o.rects) ctx.rect(...at(e))
+      ctx.clip()
+      ctx.drawImage(src, 0, 0)
+      ctx.restore()
     } else if (o.op === 'crop') {
-      const src = sourceOf(o.page)
+      const src = sourceOf(o.page, o.plane ?? 'O')
       if (!src) continue
       ctx.globalCompositeOperation = 'darken'
       ctx.drawImage(src, ...at(o.src), ...at(o.dst))

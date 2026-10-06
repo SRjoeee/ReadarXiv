@@ -41,6 +41,7 @@ import { classifyFont, faceOf, loadRoleFaces, loadWebFaces, styleKey, setRoleFac
 import { loadHyphenation } from './hyph.mjs'
 import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
+import { fileOwnership, glyphsOfChars, indicesOf, inkOfPage, pageMasks, planOf, unitRemoval, unmappedOf } from './removal.mjs'
 import { locatedWhole, texParts, texRects } from './tex.mjs'
 
 /** the prototype's getDocument options beside the host's asset URLs (main.js ASSETS): its canvases on the GPU, the whole
@@ -105,8 +106,15 @@ export const layOrder = (placed, batch = 8) => layGroups(placed, batch).flatMap(
  * locates whole takes them; every other unit is v0's own. Null: v0 alone.
  * `copy`: whether each page's copy is kept at v0's own resolution (`right`), the plane the checker and the gate measure;
  * a view draws the page at its own (drawCopy) and needs none.
+ * `removal` (the text-removed PDF, removal.mjs and layout/remove.mjs): { OPS (PDF.js's), mode, doc, manifest, plan }.
+ * 'plan': each unit's removal is worked out as it is painted (the glyphs it replaces, its crops' glyphs) and kept as the
+ * plan (removalPlan()), which the remover makes the add-on from; the drawing is v0's own. 'draw': `doc` is arXiv's PDF
+ * with the add-on (its page sets at the manifest's places), `plan` the plan it was made from; on a page the manifest
+ * says is removed, each unit whose removal is the plan's is drawn by swapping the removed page's pixels in over its own
+ * glyphs and cutting its crops from the placeholders' page (layer2.mjs removalOps); every other page and unit is drawn
+ * the old way, erased and put back. Null: v0's own drawing.
  */
-export async function openProto({ doc, geometry, units: all, target: to, pages = 999, scale = 1.25, dpr = 1, params = {}, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, copy = true }) {
+export async function openProto({ doc, geometry, units: all, target: to, pages = 999, scale = 1.25, dpr = 1, params = {}, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, copy = true, removal = null }) {
   const P = L2.defaultParams(to)
   for (const k of PARAM_KEYS) if (params[k] !== undefined) P[k] = params[k]
   // iteration 2's hyphenation, fetched at once (local, small)
@@ -164,6 +172,8 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   // the hybrid: whether the layout file locates each unit whole, and so which source its geometry is (sources: each
   // unit's, with why a unit is v0's)
   const sources = { tex: [], v0: [], why: {} }
+  // (the ids the hybrid draws by the file's geometry: the text removal's owners first)
+  const fileDrawn = new Set()
   const judge = (id, u) => {
     if (!tex) return null
     const lu = tex.index.unit(id)
@@ -218,6 +228,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     }
   }
   placed.sort((a, b) => a.stream - b.stream)
+  for (const p of placed) if (p.tex) fileDrawn.add(p.id)
   // the lowest unit line of each page: no unit borrows below it (the page's text area)
   for (const [, , rects] of geometry.left.units) for (const r of rects) pageBottom[r[0]] = Math.min(pageBottom[r[0]] ?? Infinity, r[2] + 0.24 * (r[4] - r[2]))
   const expected = Array.from({ length: N + 1 }, () => 0)
@@ -272,13 +283,113 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     pageItems[pg] ??= L2.pageItemsOf(chars2[pg - 1] ?? [], pg, pxOf(pg), inks[pg])
     return { items: pageItems[pg].items, cover: pageItems[pg].cover, ink: inks[pg], accounted: acc, kept }
   }
+  // ---- the text-removed PDF: each page's ink as the remover names it, its characters carried to its glyphs, the file's
+  // ownership; the plan made or followed; the removed and placeholders' pages at v0's resolution; each unit's mask
+  const RM = removal ? {
+    mode: removal.mode, OPS: removal.OPS, ink: [], chars: [], own: [], unmapped: [], claimed: [], removed: [], phOnly: [], masks: [], slots: [],
+    plan: removal.mode === 'plan' ? { pages: {} } : removal.plan, manifest: removal.manifest ?? null,
+    stats: { pages: 0, refused: 0, units: 0, swapped: 0, mismatched: 0, taken: 0, notOwned: 0, unclaimed: 0, differing: 0, mismatch: [], byPage: {} },
+  } : null
+  /** whether page j's text is removed in the add-on (draw mode) */
+  const removedPage = j => RM?.mode === 'draw' && !!RM.manifest?.page?.[j]?.ok
+  const setOf = name => (RM?.manifest?.sets?.[name] ?? 0)
+  const noOwn = n => ({ owner: new Int32Array(n).fill(-1), ph: new Int32Array(n).fill(-1), paths: new Map(), linePaths: new Map() })
+  /** the unit's removal on a page, recorded in the plan (plan mode) */
+  const removalOf = (p, pg) => {
+    const ink = RM.ink[pg]
+    if (!ink || !p.prep) return null
+    const r = unitRemoval({ id: p.id, page: pg, prep: p.prep, tex: p.tex ? { lu: p.tex.lu, kOf: p.tex.kOf } : null, own: RM.own[pg], charMap: RM.chars[pg], unmapped: RM.unmapped[pg], ink, claimed: (RM.claimed[pg] ??= new Map()), fileDrawn })
+    RM.stats.taken += r.taken
+    RM.stats.notOwned += r.notOwned
+    if (RM.mode === 'plan') {
+      const pp = (RM.plan.pages[pg] ??= { shows: ink.shows, glyphs: ink.glyphs.length, units: [], crops: [] })
+      pp.units.push({ id: p.id, ...planOf(ink, r.glyphs, r.paths) })
+      for (const c of r.crops) pp.crops.push({ id: p.id, k: c.k, ...planOf(ink, c.glyphs, c.paths) })
+    }
+    return r
+  }
+  /** each unit's rectangles on page pg (draw mode): its share of where the original and the removed page differ */
+  const masksOf = pg => {
+    if (RM.masks[pg]) return RM.masks[pg]
+    const r = rows[pg - 1], ink = RM.ink[pg], px = pxOf(pg)
+    const W = r.left.width, H = r.left.height
+    const O = r.left.getContext('2d').getImageData(0, 0, W, H).data, Rm = RM.removed[pg].getContext('2d').getImageData(0, 0, W, H).data
+    const dev = b => { const [ax, ay] = px(b[0], b[3]), [bx, by] = px(b[2], b[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)] }
+    const units = RM.plan.pages[pg]?.units ?? []
+    const slots = units.map(u => {
+      const at = indicesOf(ink, u)
+      const boxes = []
+      for (const g of at?.glyphs ?? []) { const x = ink.glyphs[g]; boxes.push(dev([x.x0, x.bottom, x.x1, x.top])) }
+      for (const b of at?.paths ?? []) boxes.push(dev(ink.boxes.slice(4 * b, 4 * b + 4)))
+      return { id: u.id, boxes }
+    })
+    const m = pageMasks(O, Rm, W, H, slots)
+    RM.stats.unclaimed += m.unclaimed
+    RM.stats.differing += m.differing
+    RM.masks[pg] = new Map(slots.map((s, i) => [s.id, m.rects[i]]))
+    return RM.masks[pg]
+  }
+  /** a removal's lines on the page (PDF units): across its glyphs on one baseline, up and down its line's own ink band
+   *  (0.3 em below the baseline, 0.85 above, as the engine's layer's erase is bounded; a glyph's declared box reaches
+   *  further, CMSY's to the next line); and its rules' boxes. What the audit names the unit's swapped area, its text's:
+   *  its crops' glyphs and rules are their crops' (the audit's crops), and are no line's */
+  const removalLines = (pg, rm) => {
+    const ink = RM.ink[pg]
+    const cropped = new Set(rm.crops.flatMap(c => c.glyphs)), croppedPaths = new Set(rm.crops.flatMap(c => c.paths))
+    const gs = rm.glyphs.filter(g => !cropped.has(g)).map(g => ink.glyphs[g]).sort((a, b) => b.y - a.y || a.x0 - b.x0)
+    const out = []
+    for (const x of gs) {
+      const l = out.find(l => Math.abs(l.y - x.y) < 0.5 * Math.max(x.size, l.size))
+      if (l) { l.x0 = Math.min(l.x0, x.x0); l.x1 = Math.max(l.x1, x.x1); l.size = Math.max(l.size, x.size) }
+      else out.push({ y: x.y, size: x.size, x0: x.x0, x1: x.x1 })
+    }
+    const boxes = out.map(l => [l.x0, l.y - 0.3 * l.size, l.x1, l.y + 0.85 * l.size])
+    for (const b of rm.paths) if (!croppedPaths.has(b)) boxes.push(ink.boxes.slice(4 * b, 4 * b + 4))
+    return boxes
+  }
+  const sameRemoval = (id, pg, rm) => {
+    const u = RM.plan.pages[pg]?.units.find(u => u.id === id)
+    if (!u) return false
+    const mine = planOf(RM.ink[pg], rm.glyphs, rm.paths)
+    return u.glyphs.join() === mine.glyphs.join() && (u.paths ?? []).join() === mine.paths.join()
+  }
+  const sourceOn = (j, plane) => {
+    const r = rows[j - 1]
+    if (!r?.base) return null
+    return plane === 'R' ? RM?.removed[j] ?? null : plane === 'P' ? RM?.phOnly[j] ?? null : r.left
+  }
   const paint = (p, pg) => {
     const r = rows[pg - 1]
+    // (what the unit accounts for is counted whichever way it is drawn: a unit drawn the old way after it puts back only
+    // what no painted unit accounts for)
     const ro = restoreOf(p, pg)
-    // the unit's drawing as data, and on v0's own copy where it is kept: from the pages drawn now, as v0 drew it
-    const ops = L2.unitOps(p.layout, p.blocks, pg, { px: pxOf(pg), k: scale * dpr, hasSource: j => !!rows[j - 1]?.base, pxOf, extents: p.layout.extents, audit, id: p.id, restore: ro })
+    let ops = null
+    // the text-removed PDF: the unit's removal, the plan's; drawn by it on a page the add-on removed
+    const rm = RM ? removalOf(p, pg) : null
+    if (rm && removedPage(pg)) {
+      const here = (RM.stats.byPage[pg] ??= { units: 0, swapped: 0, mismatched: 0 })
+      RM.stats.units++
+      here.units++
+      if (sameRemoval(p.id, pg, rm)) {
+        ops = L2.removalOps(p.layout, pg, { px: pxOf(pg), k: scale * dpr, hasSource: j => !!rows[j - 1]?.base, pxOf, rects: masksOf(pg).get(p.id) ?? [], lines: removalLines(pg, rm), removed: removedPage, audit, id: p.id })
+        RM.stats.swapped++
+        here.swapped++
+      } else {
+        RM.stats.mismatched++
+        here.mismatched++
+        if (RM.stats.mismatch.length < 20) {
+          // (which of the unit's glyphs and rules the plan and this reading disagree on, as n.k and paths' places)
+          const u = RM.plan.pages[pg]?.units.find(u => u.id === p.id), now = planOf(RM.ink[pg], rm.glyphs, rm.paths)
+          const keys = pl => { const out = new Set(); for (let i = 0; i + 1 < (pl?.glyphs?.length ?? 0); i += 2) out.add(`${pl.glyphs[i]}.${pl.glyphs[i + 1]}`); for (const m of pl?.paths ?? []) out.add(`p${m}`); return out }
+          const a = keys(u), b = keys(now)
+          RM.stats.mismatch.push([p.id, pg, [...a].filter(k => !b.has(k)).slice(0, 6), [...b].filter(k => !a.has(k)).slice(0, 6)])
+        }
+      }
+    }
+    // else the unit's drawing as data, and on v0's own copy where it is kept: from the pages drawn now, as v0 drew it
+    if (!ops) ops = L2.unitOps(p.layout, p.blocks, pg, { px: pxOf(pg), k: scale * dpr, hasSource: j => !!rows[j - 1]?.base, pxOf, extents: p.layout.extents, audit, id: p.id, restore: ro })
     for (const o of ops) r.ops.push(o)
-    if (r.right) L2.drawOps(r.right.getContext('2d'), ops, 1, j => (rows[j - 1]?.base ? rows[j - 1].left : null))
+    if (r.right) L2.drawOps(r.right.getContext('2d'), ops, 1, sourceOn)
     r.svg.insertAdjacentHTML('beforeend', L2.svgOfUnit(p.layout, pg, cssOf(pg), scale, p.id))
   }
 
@@ -483,6 +594,27 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     for (const c of chars2[i - 1]) if (c.st.fam !== 'math') { const key = `${c.st.fam}:${c.st.design}`; fontTally.set(key, (fontTally.get(key) ?? 0) + 1) }
     r.right?.getContext('2d').drawImage(r.left, 0, 0)
     r.base = true
+    if (RM) {
+      // the page's ink as the remover names it, its characters carried there, the file's ownership of it
+      const ink = (RM.ink[i] = await inkOfPage(RM.OPS, page))
+      RM.chars[i] = glyphsOfChars(chars2[i - 1], ink, i)
+      RM.unmapped[i] = unmappedOf(ink, RM.chars[i])
+      RM.own[i] = tex ? fileOwnership(tex.index, i, ink) : noOwn(ink.glyphs.length)
+      if (removedPage(i)) {
+        // its removed page, and its placeholders' page where the plan crops from it, as v0 draws its own
+        RM.stats.pages++
+        const at = async (set, keep) => {
+          const pg = await removal.doc.getPage(setOf(set) + i)
+          const c = document.createElement('canvas')
+          c.width = r.left.width
+          c.height = r.left.height
+          await pg.render({ canvas: c, canvasContext: c.getContext('2d'), viewport: pg.getViewport({ scale }), transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
+          keep[i] = c
+        }
+        await at('R', RM.removed)
+        if (RM.plan.pages[i]?.crops?.length) await at('P', RM.phOnly)
+      } else if (RM.mode === 'draw') RM.stats.refused++
+    }
     if (P.borrow) inkOf(i)
     if (i === 1) {
       // the paper's designs from its first page: the serif with most characters, and its sans and mono
@@ -532,8 +664,8 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   const cellRects = pg => geometry.left.units.filter(([id]) => geometry.kinds[id] === 'cell').flatMap(([, , rs]) => rs.filter(r => r[0] === pg))
   const toPdf = (pg, x, y) => views[pg - 1].convertToPdfPoint(x / dpr, y / dpr)
   // a page as PDF.js draws it at k device pixels a PDF unit: drawCopy's source of another page's crop
-  const renderAt = async (pg, k) => {
-    const page = await doc.getPage(pg)
+  const renderAt = async (pg, k, plane = 'O') => {
+    const page = plane === 'O' ? await doc.getPage(pg) : await removal.doc.getPage(setOf(plane) + pg)
     const viewport = page.getViewport({ scale: k })
     const c = document.createElement('canvas')
     c.width = Math.ceil(viewport.width)
@@ -572,20 +704,31 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
      */
     async drawCopy(pg, ctx, source, k) {
       const r = rows[pg - 1]
+      // every page and plane the drawing cuts from but this page's own original (`source`): the removed page a swap takes
+      // from, the placeholders' pages and the other pages a crop takes from
       const others = new Map()
-      for (const o of r.ops) if (o.op === 'crop' && o.page !== pg && !others.has(o.page)) others.set(o.page, await renderAt(o.page, k))
+      const need = (j, plane) => { const key = `${plane}${j}`; if (!(plane === 'O' && j === pg) && !others.has(key)) others.set(key, [j, plane]) }
+      for (const o of r.ops) { if (o.op === 'swap') need(o.page, 'R'); else if (o.op === 'crop') need(o.page, o.plane ?? 'O') }
+      for (const [key, [j, plane]] of others) others.set(key, await renderAt(j, k, plane))
       ctx.drawImage(source, 0, 0)
-      L2.drawOps(ctx, r.ops, k / (scale * dpr), j => (j === pg ? source : (others.get(j) ?? null)))
+      L2.drawOps(ctx, r.ops, k / (scale * dpr), (j, plane = 'O') => (j === pg && plane === 'O' ? source : (others.get(`${plane}${j}`) ?? null)))
       for (const c of others.values()) { c.width = 0; c.height = 0 }
     },
     /** a done page's canvases let go (its SVG and its drawing's operations stay): no unit paints it again */
     release(pg) {
       const r = rows[pg - 1]
       if (!r || drawnTo < doneAt[pg]) return
-      for (const c of [r.left, r.right]) if (c) { c.width = 0; c.height = 0 }
+      for (const c of [r.left, r.right, RM?.removed[pg], RM?.phOnly[pg]]) if (c) { c.width = 0; c.height = 0 }
+      if (RM) for (const k of ['removed', 'phOnly', 'ink', 'chars', 'own', 'unmapped', 'claimed', 'masks']) RM[k][pg] = undefined
       r.base = false
       r.released = true
     },
+    /** the text-removed PDF's plan as made (plan mode): per page, the units' removals and the crops' glyphs */
+    removalPlan: () => RM?.plan ?? null,
+    /** how the removal went: pages removed and refused, units swapped and mismatched, glyphs another unit had */
+    removalStats: () => RM?.stats ?? null,
+    /** a done page's removed page at v0's own resolution (draw mode, until released), for a check */
+    removedCanvas: (pg, plane = 'R') => (plane === 'R' ? RM?.removed[pg] : RM?.phOnly[pg]) ?? null,
     /** the prototype's completeness checker on one done page (main.js check=1's, its pixels of that page alone, its
      *  placeholders of the units with lines on it) */
     checkPage(pg) {
