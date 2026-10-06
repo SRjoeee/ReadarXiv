@@ -53,6 +53,8 @@ export declare function openProto(o: {
   phMode?: 'auto' | 'source'
   restoring?: boolean
   order?: number[] | null
+  faces?: 'roles' | 'prototype'
+  faceUrl?: (file: string) => string
   fontUrl?: (file: string) => string
   hyphUrl?: (lang: string) => string
 }): Promise<ProtoRun>

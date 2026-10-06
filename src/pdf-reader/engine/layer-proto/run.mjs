@@ -24,8 +24,14 @@
 //   audit of every erase and crop (main.js check=1) is always kept: it is what a gate measures the drawing by.
 // - The prototype's host is the caller's: the PDF.js document (opened with PDF_OPTIONS, the prototype's), where the
 //   faces and the hyphenation patterns are served (fontUrl, hyphUrl).
+// - The faces are the role table's (faces: 'roles', the default since the maintainer's ruling of 2026-10-06; fonts.mjs
+//   setRoleFaces): each page's fonts' faces loaded before its characters are measured in them, the target's CJK faces and
+//   the paper's designs' at the first page, the paper's family read from its first page's fonts as the engine reads a
+//   layout file's (font-roles.mjs familyOfFonts). faces: 'prototype' draws in the prototype's own system faces and Latin
+//   Modern, as the approved prototype did (its floor's numbers).
 import { checkAll } from './check.mjs'
-import { classifyFont, loadWebFaces, styleKey } from './fonts.mjs'
+import { familyOfFonts } from '../font-roles.mjs'
+import { classifyFont, faceOf, loadRoleFaces, loadWebFaces, styleKey, setRoleFaces } from './fonts.mjs'
 import { loadHyphenation } from './hyph.mjs'
 import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
@@ -82,18 +88,27 @@ export const layOrder = (placed, batch = 8) => layGroups(placed, batch).flatMap(
  * output's geometry (schema 1); `units`: its units file's units (each { kind, src, pieces, state }); `target`: the
  * language. Options as main.js's query: `scale` (CSS px a PDF unit), `dpr`, `params` (layer2.mjs defaultParams'
  * overrides), `batch`, `phMode` ('auto' or 'source'), `restoring`, `order` (ids whose order a page's units are laid in,
- * in place of layGroups': a recorded run's). `fontUrl(file)`, `hyphUrl(lang)`: where the host serves Latin Modern's faces
- * and TeX's patterns. Nothing is drawn until `until(p)` is awaited.
+ * in place of layGroups': a recorded run's). `faces`: 'roles' (the role table's) or 'prototype' (the prototype's own).
+ * `faceUrl(file)`, `fontUrl(file)`, `hyphUrl(lang)`: where the host serves the role table's faces (by file name), the
+ * prototype's Latin Modern (by name) and TeX's patterns. Nothing is drawn until `until(p)` is awaited.
  */
-export async function openProto({ doc, geometry, units: all, target: to, pages = 999, scale = 1.25, dpr = 1, params = {}, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, fontUrl, hyphUrl = lang => `/hyph/${lang}.json` }) {
+export async function openProto({ doc, geometry, units: all, target: to, pages = 999, scale = 1.25, dpr = 1, params = {}, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json` }) {
   const P = L2.defaultParams(to)
   for (const k of PARAM_KEYS) if (params[k] !== undefined) P[k] = params[k]
   // iteration 2's hyphenation, fetched at once (local, small)
   const hyphP = Promise.all([...new Set(['en', to === 'de' ? 'de' : null, to === 'ru' ? 'ru' : null].filter(Boolean))].map(async l => L2.setHyphenData(l, await loadHyphenation(l, hyphUrl(l)))))
   // the target's likely faces loaded meanwhile (Times-like until the paper's own designs are known), and Latin Modern at
   // once: the page's characters are measured in their own designs
-  const warmP = L2.warmFaces(to, { serif: 'times' }, yieldNow)
-  const lmP = loadWebFaces(['cm', 'cmss', 'cmtt'], fontUrl)
+  const roles = faces === 'roles'
+  // (the role table's faces: the paper's family is known from its first page; until then its Latin faces, which no
+  // family changes)
+  setRoleFaces(roles ? to : null, 'times')
+  const warmP = roles ? null : L2.warmFaces(to, { serif: 'times' }, yieldNow)
+  const lmP = roles ? null : loadWebFaces(['cm', 'cmss', 'cmtt'], fontUrl)
+  // the role table's faces of a style in each weight and slant (a translation's run of the design may be bold where the
+  // original's is not), and of the CJK runs
+  const STYLES = [[false, false], [true, false], [false, true], [true, true]]
+  const roleIdsOf = (st, cls) => STYLES.flatMap(([bold, italic]) => faceOf({ ...st, fam: st.fam === 'math' ? 'serif' : st.fam, bold, italic }, cls, to).ids)
   const N = Math.min(doc.numPages, pages)
 
   const rows = []
@@ -375,8 +390,11 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     const textP = page.getTextContent()
     await page.render({ canvas: r.left, canvasContext: r.left.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
     const tc = await textP
-    if (i === 1) await lmP
-    chars2[i - 1] = L2.pageChars2(tc, fontOfPage(page, tc.styles))
+    if (i === 1 && lmP) await lmP
+    const fontOf = fontOfPage(page, tc.styles)
+    // the role table's faces of the page's fonts, before its characters are measured in them
+    if (roles) await loadRoleFaces([...new Set(tc.items.map(it => it.fontName))].map(fontOf).filter(st => st?.known).flatMap(st => roleIdsOf(st, 'latin')), faceUrl)
+    chars2[i - 1] = L2.pageChars2(tc, fontOf)
     for (const c of chars2[i - 1]) if (c.st.fam !== 'math') { const key = `${c.st.fam}:${c.st.design}`; fontTally.set(key, (fontTally.get(key) ?? 0) + 1) }
     r.right.getContext('2d').drawImage(r.left, 0, 0)
     r.base = true
@@ -386,9 +404,21 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
       const pick = fam => [...fontTally].filter(([k]) => k.startsWith(`${fam}:`)).sort((a, b) => b[1] - a[1])[0]?.[0].split(':')[1]
       const serif = pick('serif') ?? 'times'
       designs = { serif, sans: pick('sans') ?? (serif === 'cm' ? 'cmss' : 'helvetica'), mono: pick('mono') ?? (serif === 'cm' ? 'cmtt' : 'courier') }
-      await loadWebFaces([designs.serif, designs.sans, designs.mono], fontUrl)
-      await hyphP
-      await warmP
+      if (roles) {
+        // the paper's family from the first page's fonts, weighted by their characters; then the target's CJK faces and
+        // the designs' Latin faces, and each measured once
+        const weight = new Map()
+        for (const c of chars2[0]) if (c.st?.name) weight.set(c.st.name, (weight.get(c.st.name) ?? 0) + 1)
+        setRoleFaces(to, familyOfFonts([...weight.keys()], [...weight.values()]))
+        const st = fam => ({ fam, design: designs[fam], caps: false })
+        await loadRoleFaces([...roleIdsOf(st('serif'), 'cjk'), ...roleIdsOf(st('serif'), 'latin'), ...roleIdsOf(st('sans'), 'latin'), ...roleIdsOf(st('mono'), 'latin')], faceUrl)
+        await hyphP
+        await L2.warmFaces(to, designs, yieldNow)
+      } else {
+        await loadWebFaces([designs.serif, designs.sans, designs.mono], fontUrl)
+        await hyphP
+        await warmP
+      }
     }
   }
 

@@ -18,7 +18,13 @@
 //   oblique of their serif here (see the report). Latin and Cyrillic runs keep the original's family where the browser
 //   has one (Times, Latin Modern from TinyTeX's OpenType files served by serve.mjs, Palatino, Charter, Helvetica).
 //
-// v0's change: loadWebFaces takes the faces' URLs from its host.
+// v0's changes: loadWebFaces takes the faces' URLs from its host; and the role table's faces (font-roles.mjs, the
+// maintainer's ruling of 2026-10-06: Source Han Serif for CJK, Nimbus Roman and Sans, FreeMono, CMU and Domitian for the
+// paper's families, every face a file we serve) in place of the prototype's system faces once setRoleFaces is called:
+// faceOf then names the face faceFor gives, with its fallbacks (and, for a Latin run of a CJK target, the target's
+// body, as the prototype's tail), at its own weight and its size correction (a Hangul face's), Japanese and Korean
+// emphasis upright, and loadRoleFaces loads the files.
+import { FACES, faceFor, rolesFor } from '../font-roles.mjs'
 
 /** the PostScript name without its subset tag */
 const bare = name => String(name ?? '').replace(/^[A-Z]{6}\+/, '')
@@ -48,6 +54,34 @@ export function classifyFont(name, fallbackFamily) {
   // a font with no recognisable name (a Type 3 bitmap font, a renamed subset): its class as PDF.js guesses it
   const known = /[a-z]{3}/i.test(n) && !/^(t3|type3)/i.test(low)
   return { fam, bold, italic, caps, design, known, name: n }
+}
+
+/** the role table's roles v0 draws in (setRoleFaces), or null: the prototype's own faces */
+let ROLES = null
+/** v0 drawn in the role table's faces for a target and the paper's English family (font-roles.mjs familyOfFonts); a
+ *  falsy target goes back to the prototype's faces */
+export function setRoleFaces(target, family) { ROLES = target ? rolesFor(target, family) : null }
+export const roleFaces = () => ROLES
+/** the role table's face of a run: faceFor's, as faceOf's object, with the ids of its faces and fallbacks (`ids`) */
+function roleFaceOf(st, cls) {
+  const roles = ROLES
+  const id = faceFor(roles, { script: cls, cls: st.fam === 'math' ? 'serif' : st.fam, design: st.design ?? 'times', bold: !!st.bold, italic: !!st.italic, caps: !!st.caps })
+  const F = FACES[id]
+  const ids = [...new Set([id, ...(roles.fallbacks[id] ?? []), ...(cls !== 'cjk' && roles.cjk ? [roles.cjk.body] : [])])].filter(f => FACES[f])
+  const kai = cls === 'cjk' && st.italic && !!roles.cjk?.italic
+  return { family: [...new Set(ids.map(f => `"${FACES[f].family}"`))].join(', '), weight: F.weight, style: F.style, oblique: 0, stand: st.italic ? (cls === 'cjk' ? (kai ? 'kai' : '') : 'italic') : '', caps: !!st.caps && cls !== 'cjk', size: F.size ?? 1, id, ids }
+}
+const roleLoaded = new Map()
+/** the role table's faces by id, loaded once each from `urlOf(file)`; resolves when they can be measured */
+export function loadRoleFaces(ids, urlOf = file => `/fonts/${encodeURIComponent(file)}`) {
+  return Promise.all([...new Set(ids)].filter(id => FACES[id]).map(id => {
+    if (!roleLoaded.has(id)) {
+      const F = FACES[id], f = new FontFace(F.family, `url("${urlOf(F.file)}")`, { weight: String(F.weight), style: F.style })
+      document.fonts.add(f)
+      roleLoaded.set(id, f.load().catch(() => null))
+    }
+    return roleLoaded.get(id)
+  }))
 }
 
 /** a style's key: what the style match rate compares (class, weight, slant) */
@@ -87,6 +121,7 @@ export const OBLIQUE_DEG = 10
  * characters, 'latin' for the rest. `st`: { fam, bold, italic, design, caps }.
  */
 export function faceOf(st, cls, to) {
+  if (ROLES) return roleFaceOf(st, cls)
   const design = st.fam === 'mono' ? (st.design === 'cmtt' ? 'cmtt' : 'courier') : st.fam === 'sans' ? (st.design === 'cmss' ? 'cmss' : 'helvetica') : (LATIN[st.design] ? st.design : 'times')
   const latin = LATIN[design]
   const cyr = to === 'ru' && CYRILLIC[design] ? `, ${CYRILLIC[design]}` : ''
@@ -102,7 +137,7 @@ export function faceOf(st, cls, to) {
 }
 
 /** the canvas font string of a face at `px` */
-export const fontString = (face, px) => `${face.style === 'italic' ? 'italic ' : ''}${face.caps ? 'small-caps ' : ''}${face.weight === 700 ? 'bold ' : ''}${px}px ${face.family}`
+export const fontString = (face, px) => (face.id ? `${face.style === 'italic' ? 'italic ' : ''}${face.caps ? 'small-caps ' : ''}${face.weight} ${px * face.size}px ${face.family}` : `${face.style === 'italic' ? 'italic ' : ''}${face.caps ? 'small-caps ' : ''}${face.weight === 700 ? 'bold ' : ''}${px}px ${face.family}`)
 
 // ---- web fonts the browser lacks: Latin Modern from TinyTeX's OpenType files (serve.mjs /fonts/…)
 

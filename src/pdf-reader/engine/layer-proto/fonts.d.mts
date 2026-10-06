@@ -15,7 +15,7 @@ export interface FontClass {
 /** a run's style: a font class without the name */
 export interface Style { fam: string; bold?: boolean; italic?: boolean; caps?: boolean; design?: string; color?: string; known?: boolean }
 /** the face a run is drawn in: a CSS family list, its weight and style, an oblique's skew, what its slant became */
-export interface Face { family: string; weight: number; style: 'normal' | 'italic'; oblique: number; stand: string; caps?: boolean }
+export interface Face { family: string; weight: number; style: 'normal' | 'italic'; oblique: number; stand: string; caps?: boolean; size?: number; id?: string; ids?: string[] }
 export declare function classifyFont(name: string, fallbackFamily?: string): FontClass
 /** class, weight and slant: what the style match compares */
 export declare const styleKey: (s: Style) => string
@@ -28,3 +28,10 @@ export declare function faceOf(st: Style, cls: 'cjk' | 'latin', to: string): Fac
 export declare const fontString: (face: Face, px: number) => string
 /** the web faces (Latin Modern) a set of designs needs, loaded once; `urlOf` gives a face file's URL by its name */
 export declare function loadWebFaces(designs: readonly string[], urlOf?: (file: string) => string): Promise<unknown>
+/** v0 in the role table's faces (font-roles.mjs) for a target and the paper's English family; a falsy target: the
+ *  prototype's own faces again */
+export declare function setRoleFaces(target: string | null, family: string): void
+/** the role set v0 draws in, or null for the prototype's faces */
+export declare const roleFaces: () => import('../font-roles.mjs').RoleSet | null
+/** the role table's faces by id, loaded once each from `urlOf(file)` */
+export declare function loadRoleFaces(ids: readonly string[], urlOf?: (file: string) => string): Promise<unknown>

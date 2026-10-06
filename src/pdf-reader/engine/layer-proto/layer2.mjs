@@ -7,6 +7,7 @@
 //
 // v0's changes here: the linter's, none of which changes what runs: `!st?.known` for `!st || !st.known`, and two
 // unused locals and two unused names of a destructuring left out.
+// And the size correction of a role table face (fonts.mjs setRoleFaces) on each run's SVG size, 1 for the prototype's.
 //
 // The instant translation layer, second iteration (and third, below). What changed from layer.js (iteration 1), each measured in the report:
 //
@@ -2032,7 +2033,8 @@ export function svgOfUnit(L, page, toPx, scale, id) {
       if (!run) return
       const cls = faceClass(run.face)
       const fill = run.color ? ` fill="${COLOURS[run.color] ?? '#141414'}"` : ''
-      const size = n2(run.sup ? fs * 0.62 : fs)
+      // (v0: a role table face's size correction, 1 for the prototype's faces)
+      const size = n2((run.sup ? fs * 0.62 : fs) * (run.face.size ?? 1))
       const y = run.sup ? n2(by - L.f * 0.36 * scale) : n2(by)
       const xs = run.chars ? run.xs.map(n2).join(' ') : n2(run.xs[0])
       // a word laid out with tracking is drawn with it (single CJK characters carry it in their places)
