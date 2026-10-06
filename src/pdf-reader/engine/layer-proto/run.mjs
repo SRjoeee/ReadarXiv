@@ -288,7 +288,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   const RM = removal ? {
     mode: removal.mode, OPS: removal.OPS, ink: [], chars: [], own: [], unmapped: [], claimed: [], removed: [], phOnly: [], masks: [], slots: [],
     plan: removal.mode === 'plan' ? { pages: {} } : removal.plan, manifest: removal.manifest ?? null,
-    stats: { pages: 0, refused: 0, units: 0, swapped: 0, mismatched: 0, taken: 0, notOwned: 0, unclaimed: 0, differing: 0, mismatch: [], byPage: {} },
+    stats: { pages: 0, refused: 0, units: 0, swapped: 0, mismatched: 0, taken: 0, notOwned: 0, crossing: 0, unclaimed: 0, differing: 0, mismatch: [], byPage: {} },
   } : null
   /** whether page j's text is removed in the add-on (draw mode) */
   const removedPage = j => RM?.mode === 'draw' && !!RM.manifest?.page?.[j]?.ok
@@ -301,6 +301,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     const r = unitRemoval({ id: p.id, page: pg, prep: p.prep, tex: p.tex ? { lu: p.tex.lu, kOf: p.tex.kOf } : null, own: RM.own[pg], charMap: RM.chars[pg], unmapped: RM.unmapped[pg], ink, claimed: (RM.claimed[pg] ??= new Map()), fileDrawn })
     RM.stats.taken += r.taken
     RM.stats.notOwned += r.notOwned
+    RM.stats.crossing += r.crossing ?? 0
     if (RM.mode === 'plan') {
       const pp = (RM.plan.pages[pg] ??= { shows: ink.shows, glyphs: ink.glyphs.length, units: [], crops: [] })
       pp.units.push({ id: p.id, ...planOf(ink, r.glyphs, r.paths) })
