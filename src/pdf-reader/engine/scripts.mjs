@@ -117,6 +117,55 @@ const facesFor = (encoding, fonts) => {
   }).join('')
   return calls ? `${SUBSTITUTE}${calls}\\ExplSyntaxOff\n` : ''
 }
+/**
+ * A font a paper's style loads by name — \font\elvbf = ptmb scaled 1100, CVPR's and WACV's subsection headings; ICLR's,
+ * ACL's and COLM's line numbers in phvb — is outside NFSS, and has its own fixed encoding, which the strategy's never
+ * reaches: under T2A the Russian headings set in it came out as its glyphs at T2A's slots, "3.4. —åàºŁçàöŁÿ" for
+ * "Реализация", and the letters it has none at went missing (1512.03385 into ru: four units set in the source for
+ * them, the other headings garbled without a word in the log). Where a strategy sets the translation in another
+ * encoding than the paper's (T2A under pdfLaTeX, TU under XeLaTeX), each such font that is a text face fontname's scheme
+ * names — a base-35 face, Computer Modern — is declared again through NFSS (\DeclareFixedFont) in the document's
+ * encoding: its role's family, which the strategy's faces give the alphabet's letters (facesFor, fontspec's), its series
+ * and shape by the document's names, its size. One the scheme does not name — a symbol font (astrosym), one of another
+ * script (wncyr), a size TeX computes (`at\dimen@`) — stays as it is. Found in the paper's own files, a comment's left
+ * out (namedFonts); one a class in TeX Live loads is not seen
+ */
+const NAMED = /\\font\s*\\([A-Za-z@]+)\s*=?\s*([A-Za-z][A-Za-z0-9-]*)(?![A-Za-z0-9-])/g
+const UNIT_PT = { pt: 1, bp: 72.27 / 72, mm: 72.27 / 25.4, cm: 72.27 / 2.54, in: 72.27, pc: 12, dd: 1238 / 1157, cc: 12 * 1238 / 1157 }
+/** a font's file name in fontname's scheme → its role, bold or not, its shape and its design size, or null */
+const faceOf = name => {
+  const ps = /^[pu](tm|bk|nc|pl|hv|ag|cr)([a-z])([a-z]*?)(?:\d[a-z])?$/.exec(name)
+  if (ps) {
+    const [, face, weight, variant] = ps
+    return { role: face === 'cr' ? 'tt' : face === 'hv' || face === 'ag' ? 'sf' : 'rm', bold: /[bdsxhc]/.test(weight), shape: variant.includes('c') ? 'sc' : variant.includes('i') ? 'it' : variant.includes('o') ? 'sl' : 'up', design: 10 }
+  }
+  const cm = /^cm(r|b|bx|ti|sl|csc|u|bxti|bxsl|ss|ssbx|ssdc|ssi|tt|sltt|itt|tcsc|vtt)(\d+)$/.exec(name)
+  if (!cm) return null
+  const [, v, size] = cm
+  return { role: /^ss/.test(v) ? 'sf' : /tt$|^tcsc$/.test(v) ? 'tt' : 'rm', bold: /^(b|bx|bxti|bxsl|ssbx|ssdc)$/.test(v), shape: /^(ti|bxti|itt|u)$/.test(v) ? 'it' : /^(sl|bxsl|ssi|sltt)$/.test(v) ? 'sl' : /csc$/.test(v) ? 'sc' : 'up', design: size === '17' ? 17.28 : Number(size) }
+}
+/** the fonts a paper's own files load by name that NFSS can load again (`texts`, the files' text): { cs, role, bold,
+ *  shape, size } each, in pt, the last declaration of a name winning */
+export function namedFonts(texts) {
+  const out = new Map()
+  for (const text of texts) {
+    const plain = text.replace(/(^|[^\\])%.*$/gm, '$1')
+    for (const m of plain.matchAll(NAMED)) {
+      const face = faceOf(m[2])
+      if (!face) continue
+      const rest = plain.slice(m.index + m[0].length, m.index + m[0].length + 40)
+      const at = /^\s*at\s*(\d*\.?\d+)\s*(pt|bp|mm|cm|in|pc|dd|cc)(?![A-Za-z])/.exec(rest), scaled = /^\s*scaled\s*(?:(\d+)|\\magstep\s*(\d|half)(?![A-Za-z]))/.exec(rest)
+      // a size TeX would compute is not known here
+      if (!at && !scaled && /^\s*(?:at|scaled)(?![A-Za-z])/.test(rest)) continue
+      const size = at ? Number(at[1]) * UNIT_PT[at[2]] : scaled ? face.design * (scaled[1] ? Number(scaled[1]) / 1000 : scaled[2] === 'half' ? Math.sqrt(1.2) : 1.2 ** Number(scaled[2])) : face.design
+      out.set(m[1], { cs: m[1], role: face.role, bold: face.bold, shape: face.shape, size: Math.round(size * 100) / 100 })
+    }
+  }
+  return [...out.values()]
+}
+/** TeX declaring the fonts namedFonts found again through NFSS, in the encoding the document has at that point */
+const namedAgain = named => (named?.length ? `\\makeatletter\n${named.map(f => `\\DeclareFixedFont{\\${f.cs}}{\\encodingdefault}{\\${f.role}default}{\\${f.bold ? 'bf' : 'md'}default}{\\${f.shape}default}{${f.size}}\n`).join('')}\\makeatother\n` : '')
+
 /** Under XeLaTeX, the faces for an alphabet whose letters the paper's Latin faces lack: every role, Computer Modern's
  *  design (CMU), the face most arXiv papers are set in */
 const FACES = {
@@ -270,12 +319,13 @@ export function strategiesFor(meta, lang) {
   }
   if (script === 'Latn' || FACES[script]) {
     // a Unicode engine's faces: the alphabet's own, or the paper's Latin faces in their OpenType form
-    const faces = fonts => `${NO_MATH}\\usepackage{fontspec}\n${OWN_FEATURES}${FACES[script] ?? latinFontsFor(fonts)}`
-    if (!EIGHT_BIT.has(meta.compiler)) return [{ name: 'own engine', engine: meta.compiler, xe: true, pre: fonts => (FACES[script] ? faces(fonts) : '') + babel(lang) }]
+    // (each in the encoding it sets, the fonts the paper loads by name declared again in it: namedAgain)
+    const faces = (fonts, named) => `${NO_MATH}\\usepackage{fontspec}\n${OWN_FEATURES}${FACES[script] ?? latinFontsFor(fonts)}${namedAgain(named)}`
+    if (!EIGHT_BIT.has(meta.compiler)) return [{ name: 'own engine', engine: meta.compiler, xe: true, pre: (fonts, named) => (FACES[script] ? faces(fonts, named) : '') + babel(lang) }]
     const encoding = ENCODING[script]
     return [
-      { name: 'own engine', engine: meta.compiler, xe: false, pre: fonts => (encoding ? `\\usepackage[${encoding}]{fontenc}\n${facesFor(encoding, fonts)}` : '') + babel(lang) },
-      { name: 'XeLaTeX', engine: 'xelatex', xe: true, pre: fonts => faces(fonts) + babel(lang) },
+      { name: 'own engine', engine: meta.compiler, xe: false, pre: (fonts, named) => (encoding ? `\\usepackage[${encoding}]{fontenc}\n${facesFor(encoding, fonts)}${namedAgain(named)}` : '') + babel(lang) },
+      { name: 'XeLaTeX', engine: 'xelatex', xe: true, pre: (fonts, named) => faces(fonts, named) + babel(lang) },
     ]
   }
   throw new Error(`no typesetting for ${lang} (script ${script}) yet`)

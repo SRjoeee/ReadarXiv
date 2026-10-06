@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { keptFor, openPaper, translationFiles } from '@/pdf-reader/engine/live.mjs'
-import { authorsTranslated, strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
+import { authorsTranslated, namedFonts, strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
 
 // How a translation is typeset around its text: the leading of translated units and the hyphenation of the English left
 
@@ -145,5 +145,39 @@ describe('the last compile\'s references, given to the next', () => {
     const brings = (at: string) => openPaper(new Map([['latex/arxiv.tex', new TextEncoder().encode(SOURCE)], [at, bbl]])).meta.bbl
     expect(brings('arxiv.bbl')).toBe(true)
     expect(brings('latex/arxiv.bbl')).toBe(false)
+  })
+})
+
+describe('a font a paper\'s style loads by name, under a strategy that sets another encoding (1512.03385 into ru: "3.4. —åàºŁçàöŁÿ")', () => {
+  const CVPR = '\\font\\cvprtenhv  = phvb at 8pt % *** IF THIS FAILS, SEE cvpr.sty ***\n\\font\\elvbf  = ptmb scaled 1100\n%\\font\\elvbf  = ptmb7t scaled 1100\n'
+  const FIXED = '\\DeclareFixedFont{\\elvbf}{\\encodingdefault}{\\rmdefault}{\\bfdefault}{\\updefault}{11}'
+  it('reads the text faces fontname\'s scheme names, at their size, and passes over the others', () => {
+    expect(namedFonts([CVPR])).toEqual([{ cs: 'cvprtenhv', role: 'sf', bold: true, shape: 'up', size: 8 }, { cs: 'elvbf', role: 'rm', bold: true, shape: 'up', size: 11 }])
+    expect(namedFonts(['\\font\\tenit=cmti10 \\font\\big=cmr10 scaled\\magstep2 \\font\\mono=pcrr7t at 9pt'])).toEqual([
+      { cs: 'tenit', role: 'rm', bold: false, shape: 'it', size: 10 },
+      { cs: 'big', role: 'rm', bold: false, shape: 'up', size: 14.4 },
+      { cs: 'mono', role: 'tt', bold: false, shape: 'up', size: 9 },
+    ])
+    // a symbol font, another script's, a size TeX computes, a font TeX names at the time
+    expect(namedFonts(['\\font\\astro@font=astrosym at 7pt \\font\\cyr=wncyr10 \\font\\bighelv=phvr at #1 \\font\\@IEEEPARstartfont\\fontname\\font\\space at 3pt'])).toEqual([])
+  })
+  it('declares them again in the document\'s encoding where the strategy sets another than the paper\'s: T2A under pdfLaTeX, TU under XeLaTeX', () => {
+    const [own, xe] = strategiesFor(META, 'ru')
+    const named = namedFonts([CVPR])
+    const t2a = own?.pre({ rm: 'ptm', sf: 'phv', tt: 'pcr' }, named) ?? ''
+    expect(t2a.indexOf(FIXED)).toBeGreaterThan(t2a.indexOf('\\__axt_substitute:nnnn {T2A} {ptm}'))
+    expect(t2a.indexOf(FIXED)).toBeLessThan(t2a.indexOf('\\babelprovide'))
+    const tu = xe?.pre({ rm: 'ptm', sf: 'phv', tt: 'pcr' }, named) ?? ''
+    expect(tu.indexOf(FIXED)).toBeGreaterThan(tu.indexOf('\\setmonofont'))
+    // the paper's own encoding: its fonts as they are
+    expect(first(META, 'de').pre({ rm: 'ptm' }, named)).not.toContain('DeclareFixedFont')
+    expect(strategiesFor(META, 'zh').map(s => s.pre(null, named)).join('')).not.toContain('DeclareFixedFont')
+  })
+  it('from the paper\'s own files, a style beside the main file\'s', () => {
+    const files = new Map([['main.tex', '\\documentclass{article}\\usepackage{cvpr}\\begin{document}\nThe first paragraph of prose.\n\\end{document}\n'], ['cvpr.sty', CVPR]].map(([k, v]) => [k as string, new TextEncoder().encode(v as string)]))
+    const p = openPaper(files)
+    const main = (lang: string) => new TextDecoder().decode(translationFiles(p, new Map(), { strategy: first({ ...META, ...p.meta }, lang), fonts: null, draft: false, aux: null, bbl: null }).get('main.tex'))
+    expect(main('ru')).toContain(FIXED)
+    expect(main('fr')).not.toContain('DeclareFixedFont')
   })
 })

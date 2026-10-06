@@ -20,7 +20,7 @@
 // cannot be made, the translation is set as today, and the reason noted
 import { analyze } from './paper-meta.mjs'
 import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
-import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
+import { authorsTranslated, namedFonts, strategiesFor, typesetBy } from './scripts.mjs'
 import { passagesInSource } from './cache.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
 import { nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
@@ -186,6 +186,10 @@ export function originalFiles({ fsys, project }, { lines = false, spans = null }
   return out
 }
 
+/** the fonts a paper's own files load by name (scripts.mjs namedFonts), read once a paper */
+const namedOf = new WeakMap()
+const fontsByName = fsys => { let named = namedOf.get(fsys); if (!named) namedOf.set(fsys, (named = namedFonts(fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(f => latin1(fsys.read(f)))))); return named }
+
 /** the translation so far, with unit marks, set by one of strategiesFor (scripts.mjs); a strategy's `leading` sets the
  *  translated units' own paragraphs, and those alone, at that factor of the paper's spacing (latex-front unitLeadTex).
  *  `typeset`, the typesetting rule's (typeset/plan.mjs previewTypesetting, finalTypesetting): the strategy it sets the
@@ -208,7 +212,7 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   const patched = spans ? new Map(out) : null
   let main = latin1(out.get(project.main))
   const at = beginDocument(main)
-  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + NO_OVERFLOW + (xe || !evenSpaces ? '' : EVEN_SPACES) + main.slice(at)
+  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts, fontsByName(fsys)) + NO_OVERFLOW + (xe || !evenSpaces ? '' : EVEN_SPACES) + main.slice(at)
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
   if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
   const shim = xe && strategy.engine !== meta.compiler ? XETEX_SHIM + XETEX_SHIM_R1 : ''

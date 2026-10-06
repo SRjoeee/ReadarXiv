@@ -115,7 +115,7 @@ export function typesetting(units, plan) {
   const index = new Map(units.map((u, i) => [u, i]))
   const strategy = s => {
     if (s.name !== plan.strategy) return s
-    if (design.cjk) return { ...s, leading: type.lead, pre: fonts => s.pre(fonts).replace('\\setCJKmainfont[', `\\setCJKmainfont[Scale=${type.scale.toFixed(4)},`) + (type.track > 0.0005 ? `\\xeCJKsetup{CJKglue={\\hskip ${type.track.toFixed(4)}em plus 0.08\\baselineskip}}\n` : '') }
+    if (design.cjk) return { ...s, leading: type.lead, pre: (fonts, named) => s.pre(fonts, named).replace('\\setCJKmainfont[', `\\setCJKmainfont[Scale=${type.scale.toFixed(4)},`) + (type.track > 0.0005 ? `\\xeCJKsetup{CJKglue={\\hskip ${type.track.toFixed(4)}em plus 0.08\\baselineskip}}\n` : '') }
     return { ...s, leading: type.lead }
   }
   /** with each unit's line probe (LINES_TEX) where a compile is read, the previews and the measures; without, the final,
