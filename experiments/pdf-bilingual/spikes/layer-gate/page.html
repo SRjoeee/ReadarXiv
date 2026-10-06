@@ -11,7 +11,8 @@
   #text svg { position: absolute; left: 0; top: 0; overflow: visible; }
   #text text { white-space: pre; }
 </style>
-<script type="module" src="/gate/page.mjs"></script>
+<!-- the engine's layer (page.mjs), or the layer's v0 with no layout file (?kind=proto: proto.mjs) -->
+<script type="module">import(new URLSearchParams(location.search).get('kind') === 'proto' ? '/gate/proto.mjs' : '/gate/page.mjs')</script>
 </head>
 <body><div id="text"></div></body>
 </html>

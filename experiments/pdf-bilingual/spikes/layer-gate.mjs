@@ -25,6 +25,8 @@
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/layer-gate.mjs [--tier=model|pixel] [--engine=<worktree>] [--only=<fixture>,…]
 //       [--layouts=made|fixed] [--fixtures=<dir>] [--pages=<n>] [--workers=<n>] [--check[=<record>]] [--record[=<record>]] [--label=<short>]
 //       [--composite=source-over|darken] [--no-progress] [--panel-width=<px>] [--freeze[=force]]
+//       [--engine-kind=layer|proto] [--proto-units=fixture|p7] [--progress=<name|path>] [--previous=<name|path>] [--panels-only] [--proto-panels=<dir>]
+//       [--proto-place=<file>] [--proto-order=<file>] [--dump=<dir>]
 //   --engine     the engine measured: <worktree>/src/pdf-reader/engine served as /engine/ (the checker, layer/check.mjs, is
 //                always this repository's: the instrument is the same for every branch); default this repository
 //   --layouts    made (the default): the layout files the engine's own maker makes from the fixtures' papers (spikes/
@@ -46,6 +48,20 @@
 //                index.html; default the engine's branch
 //   --composite  how crops are drawn on the copy: source-over (the lab's, as Plan 8d draws today) or darken
 //   --freeze     the reference text area of every fixture that has none (=force: made again, a deliberate change)
+//   --engine-kind  layer (the default): the engine's layer entry (layer/layer.mjs) over a layout file; proto: the layer's
+//                v0, the approved prototype ported into the engine (layer-proto/run.mjs), which has no layout file: it
+//                reads the made output's geometry (the prototype's own, layer-gate/ref.mjs PROTO_GEOMETRY, by paper) and a
+//                units file, and is measured on the same pages, fixtures, references and measures (layer-gate/proto.mjs).
+//                Its runs are recorded apart (<tier>-proto), the fixtures' own layout files serving only the instrument
+//   --proto-units  fixture (the default): v0 translates what the engine does, each fixture's record.json; p7: the
+//                prototype's own staging output, which its floor was measured on (the ten shared outputs have one)
+//   --progress   the progress folder: a name under the progress folders, or a path (default <NN>-<label>); --previous the
+//                run whose engine panels and totals stand beside this one's (a name or a path; default the last recorded);
+//                --panels-only writes the engine panels and run.json alone (a run to stand beside another);
+//                --proto-panels the prototype's panels from a folder of <fixture>-p<n>.png (default each fixture's proto/)
+//   --proto-place, --proto-order, --dump  v0 against the live prototype (never recorded): each page's text where the
+//                prototype's own page put it (its floor was measured there: the text's anti-aliasing at a fraction of a
+//                pixel), each fixture's units in a live run's order, and v0's records, audit and page digests written out
 // Exits 1 on any completeness failure (the brief's gate; under --check the merge rule decides, each completeness count
 // being one of its measures), on a regression under --check, or where a fixture could not be run.
 import { execFileSync } from 'node:child_process'
@@ -55,7 +71,7 @@ import { availableParallelism } from 'node:os'
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
 import { chromium } from 'playwright'
 import { encodePng } from './layer-gate/png.mjs'
-import { nameOf, refBytesOf, refPages, sha256 } from './layer-gate/ref.mjs'
+import { geometryFile, nameOf, PROTO_GEOMETRY, refBytesOf, refPages, sha256 } from './layer-gate/ref.mjs'
 import { compare, fixtureTotals, MEASURES, pageEntry, pooled, REPORTED } from './layer-gate/score.mjs'
 
 const here = new URL('.', import.meta.url).pathname
@@ -66,15 +82,31 @@ const arg = name => { const a = process.argv.find(x => x === `--${name}` || x.st
 const TIER = arg('tier') ?? 'model'
 if (TIER !== 'model' && TIER !== 'pixel') throw new Error(`--tier=${TIER}: model or pixel`)
 const ENGINE = resolve(typeof arg('engine') === 'string' ? arg('engine') : REPO)
+/** the layer measured: the engine's layer entry over a layout file, or its v0 with none (proto.mjs) */
+const KIND = arg('engine-kind') ?? 'layer'
+if (!['layer', 'proto'].includes(KIND)) throw new Error(`--engine-kind=${KIND}: layer or proto`)
+const PROTO = KIND === 'proto'
+const PROTO_UNITS = arg('proto-units') ?? 'fixture'
+if (!['fixture', 'p7'].includes(PROTO_UNITS)) throw new Error(`--proto-units=${PROTO_UNITS}: fixture or p7`)
+const PROTO_PANELS = typeof arg('proto-panels') === 'string' ? resolve(arg('proto-panels')) : null
+/** --proto-place=<file>: the place, by fixture and page, the prototype's own page gave each page's text (its .pg box,
+ *  CSS px: { [fixture]: { [page]: [x, y] } }), which its floor was measured at; --dump=<dir>: v0's records, audit and
+ *  page digests per fixture, to compare with the live prototype's */
+const PROTO_PLACE = typeof arg('proto-place') === 'string' ? JSON.parse(readFileSync(resolve(arg('proto-place')), 'utf8')) : null
+const DUMP = typeof arg('dump') === 'string' ? resolve(arg('dump')) : null
+/** --proto-order=<file>: an order to lay each fixture's units in, by page ({ [fixture]: [ids] }: a live run's, where its
+ *  race between drawing and streaming went another way) */
+const PROTO_ORDER = typeof arg('proto-order') === 'string' ? JSON.parse(readFileSync(resolve(arg('proto-order')), 'utf8')) : null
 const REFS = resolve(process.env.LAYER_REFS ?? join(DATA, 'layer-fixtures'))
 /** whose layout files the layer is given: the engine's own maker's (made), or the fixtures' as they were made (fixed) */
 const GIVEN = typeof arg('fixtures') === 'string' ? arg('fixtures') : process.env.LAYER_FIXTURES ?? null
 /** an engine before Task 6 has no layout maker: its layer is given the fixtures' own layout files */
 const HAS_MAKER = existsSync(join(ENGINE, 'src/pdf-reader/engine/layout/make.mjs'))
-const LAYOUTS = GIVEN ? 'given' : arg('layouts') ?? (HAS_MAKER ? 'made' : 'fixed')
-if (!GIVEN && !arg('layouts') && !HAS_MAKER) console.log('the engine has no layout maker (layout/make.mjs): its layer is given the fixtures\' own layout files (--layouts=fixed)')
+// v0 is given no layout file: the fixtures' own serve the instrument (the kept renderings), as they served the parity run's
+const LAYOUTS = GIVEN ? 'given' : PROTO ? 'fixed' : arg('layouts') ?? (HAS_MAKER ? 'made' : 'fixed')
+if (!PROTO && !GIVEN && !arg('layouts') && !HAS_MAKER) console.log('the engine has no layout maker (layout/make.mjs): its layer is given the fixtures\' own layout files (--layouts=fixed)')
 /** the record's entry this run is: its tier, and the layout files it was given where they are not the engine's own */
-const KEY = LAYOUTS === 'made' ? TIER : `${TIER}-${LAYOUTS}`
+const KEY = PROTO ? `${TIER}-proto${PROTO_UNITS === 'p7' ? '-p7' : ''}` : LAYOUTS === 'made' ? TIER : `${TIER}-${LAYOUTS}`
 if (!['made', 'fixed', 'given'].includes(LAYOUTS)) throw new Error(`--layouts=${LAYOUTS}: made or fixed`)
 const MAKER = join(here, 'layer-fixtures.mjs')
 const FONTS = resolve(join(DATA, 'fonts'))
@@ -88,6 +120,10 @@ const WORKERS = typeof arg('workers') === 'string' ? Number(arg('workers')) : Ma
 const COMPOSITE = arg('composite') ?? 'source-over'
 if (!['source-over', 'darken'].includes(COMPOSITE)) throw new Error(`--composite=${COMPOSITE}: source-over or darken`)
 const FREEZE = arg('freeze')
+/** TeX's files the prototype's host read from TinyTeX: Latin Modern's faces, the hyphenation patterns */
+const TEXMF = process.env.TEXMF_DIST ?? join(process.env.HOME ?? '', 'Library/TinyTeX/texmf-dist')
+/** the progress folder's run whose engine panels stand beside this one's (openProgress sets it) */
+let PREVIOUS_DIR = null
 /** --debug-lost=<fixture>:<page>: that page's lost-ink regions written as images (out/layer-gate/lost/) */
 const DEBUG_LOST = arg('debug-lost')
 /** the brief's exact values: 12 pages an output, every page of the thesis */
@@ -128,23 +164,46 @@ const TYPES = {
   '.pdf': 'application/pdf', '.otf': 'font/otf', '.ttf': 'font/ttf', '.png': 'image/png', '.wasm': 'application/wasm', '.bcmap': 'application/octet-stream', '.pfb': 'application/octet-stream', '.icc': 'application/octet-stream',
 }
 const under = (dir, rel) => { const f = resolve(dir, normalize(rel).replace(/^([/\\])+/, '')); return f === dir || f.startsWith(dir + sep) ? f : null }
+/** the prototype's own staging output of a fixture (its units file beside its geometry), or null */
+const protoUnitsOf = name => { const { paper, target } = nameOf(name); const f = join(PROTO_GEOMETRY, `${paper}-${target}-units.json`); return existsSync(f) ? f : null }
+/** v0's hyphenation patterns, read from TeX's files by the engine's own reading (layer-proto/hyph.mjs), once */
+const HYPH = new Map()
+if (PROTO) {
+  const { patternsOfTex, TEX_PATTERN_FILES } = await import(join(ENGINE, 'src/pdf-reader/engine/layer-proto/hyph.mjs'))
+  for (const [lang, rel] of Object.entries(TEX_PATTERN_FILES)) if (existsSync(join(TEXMF, rel))) HYPH.set(lang, JSON.stringify(patternsOfTex(readFileSync(join(TEXMF, rel), 'latin1'))))
+}
 function fileFor(path) {
-  if (path.startsWith('/gate/')) return ['page.html', 'page.mjs', 'measure.mjs'].includes(path.slice(6)) ? join(GATE, path.slice(6)) : null
+  if (path.startsWith('/gate/')) return ['page.html', 'page.mjs', 'proto.mjs', 'measure.mjs'].includes(path.slice(6)) ? join(GATE, path.slice(6)) : null
+  if (path.startsWith('/proto-fonts/')) return /^\/proto-fonts\/lm(?:roman|sans|mono)10-[a-z]+\.otf$/.test(path) ? join(TEXMF, 'fonts/opentype/public/lm', path.slice(13)) : null
   if (path === '/engine/layer/check.mjs') return CHECKER
   if (path.startsWith('/engine/')) return /\.(m?js|json)$/.test(path) ? under(join(ENGINE, 'src/pdf-reader/engine'), path.slice(8)) : null
   if (path.startsWith('/pdfjs/')) return /^\/pdfjs\/(build|cmaps|standard_fonts|wasm|iccs)\//.test(path) ? under(PDFJS, path.slice(7)) : null
   if (path.startsWith('/fonts/')) return /^\/fonts\/[A-Za-z0-9._-]+\.(otf|ttf)$/.test(path) ? under(FONTS, path.slice(7)) : null
   if (path.startsWith('/fixtures/')) {
     const [dir, file, ...rest] = path.slice(10).split('/')
-    return !rest.length && fixtures.includes(dir) && ['arxiv.pdf', 'layout.json', 'units.json'].includes(file) ? join(FIXTURES, dir, file) : null
+    if (rest.length || !fixtures.includes(dir)) return null
+    if (['arxiv.pdf', 'layout.json', 'units.json'].includes(file)) return join(FIXTURES, dir, file)
+    // v0's inputs: the made output's geometry (the prototype's, by paper), the fixture's record (its units file), the
+    // prototype's own units file
+    if (PROTO && file === 'geometry.json') return geometryFile(dir)
+    if (PROTO && file === 'record.json') return join(FIXTURES, dir, 'record.json')
+    if (PROTO && file === 'units-p7.json') return protoUnitsOf(dir)
+    return null
   }
-  if (path.startsWith('/proto/')) { const m = /^\/proto\/([A-Za-z0-9._-]+)\/p(\d+)\.png$/.exec(path); return m && fixtures.includes(m[1]) ? join(REFS, m[1], 'proto', `p${m[2]}.png`) : null }
+  if (path.startsWith('/proto/')) { const m = /^\/proto\/([A-Za-z0-9._-]+)\/p(\d+)\.png$/.exec(path); return m && fixtures.includes(m[1]) ? (PROTO_PANELS ? join(PROTO_PANELS, `${m[1]}-p${m[2]}.png`) : join(REFS, m[1], 'proto', `p${m[2]}.png`)) : null }
   if (path.startsWith('/progress/')) { const m = /^\/progress\/([0-9]{2}-[a-z0-9-]+)\/engine\/([A-Za-z0-9._-]+\.png)$/.exec(path); return m ? join(PROGRESS, m[1], 'engine', m[2]) : null }
+  if (path.startsWith('/previous/')) { const m = /^\/previous\/([A-Za-z0-9._-]+\.png)$/.exec(path); return m && PREVIOUS_DIR ? join(PREVIOUS_DIR, 'engine', m[1]) : null }
   return null
 }
 const server = createServer((req, res) => {
   let path
   try { path = decodeURIComponent(new URL(req.url, 'http://127.0.0.1').pathname) } catch { res.writeHead(400); return res.end() }
+  const hy = /^\/hyph\/([a-z]+)\.json$/.exec(path)
+  if (PROTO && hy) {
+    if (!HYPH.has(hy[1])) { res.writeHead(404, { 'content-type': 'text/plain' }); return res.end('not found') }
+    res.writeHead(200, { 'content-type': TYPES['.json'], 'cache-control': 'no-store' })
+    return res.end(HYPH.get(hy[1]))
+  }
   const file = fileFor(path)
   if (!file || !existsSync(file) || !statSync(file).isFile()) { res.writeHead(404, { 'content-type': 'text/plain' }); return res.end('not found') }
   res.writeHead(200, { 'content-type': TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream', 'cache-control': 'no-store' })
@@ -165,7 +224,8 @@ const inputs = {
   layouts: LAYOUTS, fixtures: FIXTURES === REFS ? 'data/layer-fixtures' : FIXTURES.startsWith(ROOT) ? FIXTURES.slice(ROOT.length + 1) : FIXTURES, chromium: browser.version(),
   pdfjs: readJson(join(PDFJS, 'package.json')).version, fonts: fontsDigest.slice(0, 16), checker: fileSha(CHECKER).slice(0, 16),
   // the instrument: the measures, their arithmetic, and the page that draws and accounts (lost ink's own glyphs)
-  measures: sha256(['measure.mjs', 'score.mjs', 'page.mjs'].map(f => readFileSync(join(GATE, f))).join('\n')).slice(0, 16),
+  measures: sha256(['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => readFileSync(join(GATE, f))).join('\n')).slice(0, 16),
+  ...(PROTO ? { kind: 'proto', protoUnits: PROTO_UNITS, place: PROTO_PLACE ? 'the prototype page\'s' : 'the gate\'s', order: PROTO_ORDER ? 'given' : 'layGroups', hyphenation: sha256([...HYPH].map(([l, j]) => `${l}:${j}`).join('\n')).slice(0, 16) } : {}),
 }
 const leaks = []
 const t0 = Date.now()
@@ -195,10 +255,15 @@ async function runFixture(page, name, errors) {
   const { paper, target } = nameOf(name)
   const refFile = join(REFS, name, 'ref.json')
   const ref = readJson(refFile)
-  await page.goto(`${ORIGIN}/gate/page.html`)
+  await page.goto(`${ORIGIN}/gate/page.html${PROTO ? '?kind=proto' : ''}`)
   await page.waitForFunction(() => window.gateReady === true)
-  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE })
   const meta = { ref: fileSha(refFile).slice(0, 16), layout: fileSha(join(FIXTURES, name, 'layout.json')).slice(0, 16), units: fileSha(join(FIXTURES, name, 'units.json')).slice(0, 16) }
+  if (PROTO) {
+    const g = geometryFile(name), u = PROTO_UNITS === 'p7' ? protoUnitsOf(name) : join(FIXTURES, name, 'record.json')
+    if (!g || !u || !existsSync(u)) { failures.push(name); return { name, ready: false, why: !g ? 'no geometry for v0' : `no ${PROTO_UNITS === 'p7' ? "prototype's units file" : 'record.json'}`, meta } }
+    Object.assign(meta, { geometry: fileSha(g).slice(0, 16), protoUnits: fileSha(u).slice(0, 16) })
+  }
+  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null })
   if (!info.ready) { failures.push(name); return { name, ready: false, why: info.why, meta } }
   const n = Math.min(info.pages, PAGES ?? (ALL_PAGES.has(paper) ? info.pages : PAGES_OF))
   const pages = [], frames = []
@@ -223,6 +288,7 @@ async function runFixture(page, name, errors) {
     frames.push(f)
   }
   const summary = await page.evaluate(() => window.gate.summary())
+  if (PROTO && DUMP) { mkdirSync(DUMP, { recursive: true }); writeFileSync(join(DUMP, `${name}.json`), JSON.stringify(await page.evaluate(() => window.gate.dump()))) }
   if (errors.length) summary.pageErrors = errors.splice(0).slice(0, 5)
   return { name, ready: true, info, meta, pages, totals: fixtureTotals(pages, frames, TIER), summary }
 }
@@ -276,7 +342,8 @@ if (arg('check')) {
   }
 }
 if (arg('record')) {
-  if (ONLY || PAGES) { console.log('FAIL --record: a whole run only (no --only, no --pages)'); exit = 1 }
+  if (PROTO_PLACE || PROTO_ORDER) { console.log('FAIL --record: --proto-place and --proto-order are comparisons with the live prototype, never a record'); exit = 1 }
+  else if (ONLY || PAGES) { console.log('FAIL --record: a whole run only (no --only, no --pages)'); exit = 1 }
   else writeRecords(recordAt, run, completeness)
 }
 if (progress) progress.finish(run, verdict)
@@ -341,7 +408,7 @@ function completenessRows(run) {
 function checkAgainst(last, run) {
   const out = { failed: false, lines: [] }
   const say = s => { out.lines.push(s); console.log(s) }
-  for (const k of ['layouts', 'scale', 'inkScale', 'inkMin', 'composite', 'pages', 'checker', 'measures']) if (String(last.inputs[k]) !== String(run.inputs[k])) { say(`FAIL --check: the record's ${k} is ${last.inputs[k]}, this run's ${run.inputs[k]}: not comparable`); out.failed = true }
+  for (const k of ['layouts', 'scale', 'inkScale', 'inkMin', 'composite', 'pages', 'checker', 'measures', 'kind', 'protoUnits', 'place', 'order', 'hyphenation']) if (String(last.inputs[k]) !== String(run.inputs[k])) { say(`FAIL --check: the record's ${k} is ${last.inputs[k]}, this run's ${run.inputs[k]}: not comparable`); out.failed = true }
   for (const [name, f] of Object.entries(run.fixtures)) {
     const was = last.fixtures[name]
     if (was && was.meta.ref !== f.meta.ref) { say(`FAIL --check: ${name}'s reference is not the record's (${was.meta.ref} against ${f.meta.ref}): a new reference is a new baseline`); out.failed = true }
@@ -434,10 +501,10 @@ function originalOf(m) {
 }
 
 function fidelityMd(record) {
-  const keys = ['pixel', 'model', 'pixel-fixed', 'model-fixed', 'pixel-given', 'model-given'].filter(k => record.tiers[k])
+  const keys = ['pixel', 'model', 'pixel-fixed', 'model-fixed', 'pixel-given', 'model-given', 'pixel-proto', 'model-proto', 'pixel-proto-p7', 'model-proto-p7'].filter(k => record.tiers[k])
   const run = record.tiers[keys[0]]
   const ms = MEASURES.filter(m => run.tier === 'pixel' || m[1] === 'model')
-  const layoutsOf = r => (r.inputs.layouts === 'made' ? "the engine's own layout files" : r.inputs.layouts === 'fixed' ? "the fixtures' layout files, as made for the layer lab" : `the layout files of ${r.inputs.fixtures}`)
+  const layoutsOf = r => (r.inputs.kind === 'proto' ? `v0 (the prototype in the engine), no layout file: the prototype's geometry and ${r.inputs.protoUnits === 'p7' ? "its own staging units" : "the fixtures' record.json"}` : r.inputs.layouts === 'made' ? "the engine's own layout files" : r.inputs.layouts === 'fixed' ? "the fixtures' layout files, as made for the layer lab" : `the layout files of ${r.inputs.fixtures}`)
   const L = []
   L.push('# The instant layer against the original: the fidelity record', '')
   L.push(`Written by \`spikes/layer-gate.mjs --record\`. Each run below: the engine at its commit, ${run.inputs.chromium ? `Chromium ${run.inputs.chromium}` : ''}, PDF.js ${run.inputs.pdfjs}; pages: ${run.inputs.pages}; the planes at ${run.inputs.scale} device px a PDF unit, lost ink at ${run.inputs.inkScale}x; crops drawn ${run.inputs.composite}.`, '')
@@ -492,26 +559,34 @@ function openProgress() {
   const nn = folders.length ? Math.max(...folders.map(n => Number(n.slice(0, 2)))) + 1 : 0
   const raw = typeof arg('label') === 'string' ? arg('label') : engineInfo.branch ?? 'run'
   const label = raw.toLowerCase().replace(/^exp\//, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'run'
-  const name = `${String(nn).padStart(2, '0')}-${label}`
-  const dir = join(PROGRESS, name)
+  const asked = typeof arg('progress') === 'string' ? arg('progress') : null
+  const dir = asked ? resolve(PROGRESS, asked) : join(PROGRESS, `${String(nn).padStart(2, '0')}-${label}`)
+  const name = asked ? dir.slice(dir.lastIndexOf(sep) + 1) : `${String(nn).padStart(2, '0')}-${label}`
+  const panelsOnly = !!arg('panels-only')
   mkdirSync(join(dir, 'engine'), { recursive: true })
   // the previous recorded run, else the baseline
-  const runOf = n => { try { return { name: n, run: readJson(join(PROGRESS, n, 'run.json')) } } catch { return null } }
+  const runOf = n => { try { return { name: n, dir: join(PROGRESS, n), run: readJson(join(PROGRESS, n, 'run.json')) } } catch { return null } }
   const earlier = folders.map(runOf).filter(Boolean)
-  // of those recorded, the last whose layout files were of the same kind as this run's; else the last recorded; else 00
+  // of those recorded, the last whose layout files were of the same kind as this run's; else the last recorded; else 00;
+  // or the run asked for
   const recordedRuns = earlier.filter(e => e.run.recorded)
-  const previous = recordedRuns.filter(e => e.run.inputs?.layouts === LAYOUTS).at(-1) ?? recordedRuns.at(-1) ?? earlier.find(e => e.name.startsWith('00-')) ?? null
+  const askedPrev = typeof arg('previous') === 'string' ? resolve(PROGRESS, arg('previous')) : null
+  const previous = askedPrev ? (() => { try { return { name: askedPrev.slice(askedPrev.lastIndexOf(sep) + 1), dir: askedPrev, run: readJson(join(askedPrev, 'run.json')) } } catch { throw new Error(`--previous: no run.json in ${askedPrev}`) } })()
+    : recordedRuns.filter(e => e.run.inputs?.layouts === LAYOUTS).at(-1) ?? recordedRuns.at(-1) ?? earlier.find(e => e.name.startsWith('00-')) ?? null
+  PREVIOUS_DIR = previous?.dir ?? null
   const images = []
   const short = (engineInfo.commit ?? '').slice(0, 8)
+  const engineOf = r => (r?.inputs?.kind === 'proto' ? 'v0 (the prototype in the engine)' : 'the engine')
   return {
     dir, name, previous,
     async panel(page, fixture, p) {
       const file = `${fixture}-p${p}.png`
-      const proto = existsSync(join(REFS, fixture, 'proto', `p${p}.png`)) ? `${ORIGIN}/proto/${fixture}/p${p}.png` : null
-      const prev = previous && existsSync(join(PROGRESS, previous.name, 'engine', file)) ? `${ORIGIN}/progress/${previous.name}/engine/${file}` : null
-      const labels = ['Original', proto ? 'Prototype (approved)' : 'Prototype: none for this output', `This run: ${name}, the engine at ${short}${engineInfo.dirty ? '+' : ''}`, prev ? `Previous: ${previous.name}${previous.run.inputs?.layouts && previous.run.inputs.layouts !== LAYOUTS ? ` (layouts ${previous.run.inputs.layouts})` : ''}` : 'No previous run']
+      const protoFile = PROTO_PANELS ? join(PROTO_PANELS, file) : join(REFS, fixture, 'proto', `p${p}.png`)
+      const proto = !panelsOnly && existsSync(protoFile) ? `${ORIGIN}/proto/${fixture}/p${p}.png` : null
+      const prev = !panelsOnly && previous && existsSync(join(previous.dir, 'engine', file)) ? `${ORIGIN}/previous/${file}` : null
+      const labels = ['Original', proto ? (PROTO_PANELS ? 'Prototype (approved), as its own page draws it' : 'Prototype (approved)') : 'Prototype: none for this output', `This run: ${name}, ${engineOf({ inputs })} at ${short}${engineInfo.dirty ? '+' : ''}`, prev ? `Previous: ${previous.name}, ${engineOf(previous.run)} at ${previous.run.engine?.commit?.slice(0, 8) ?? '?'}${previous.run.inputs?.layouts && previous.run.inputs.layouts !== LAYOUTS ? ` (layouts ${previous.run.inputs.layouts})` : ''}` : 'No previous run']
       const out = await page.evaluate(o => window.gate.panel(o), { pw: PANEL_WIDTH, gap: GAP, labels, proto, previous: prev })
-      writeFileSync(join(dir, file), encodePng(Buffer.from(out.rgba, 'base64'), out.w, out.h))
+      if (!panelsOnly) writeFileSync(join(dir, file), encodePng(Buffer.from(out.rgba, 'base64'), out.w, out.h))
       writeFileSync(join(dir, 'engine', file), encodePng(Buffer.from(out.engine.rgba, 'base64'), out.engine.w, out.engine.h))
       images.push({ file, fixture, p })
     },
@@ -519,9 +594,10 @@ function openProgress() {
       const recorded = !!arg('record') && !ONLY && !PAGES
       const prevRun = previous?.run ?? null
       writeFileSync(join(dir, 'run.json'), JSON.stringify({ name, recorded, made: run.made, engine: run.engine, inputs: run.inputs, totals: run.totals, fixtures: Object.fromEntries(Object.entries(run.fixtures).map(([n, f]) => [n, { meta: f.meta, totals: f.totals, pages: f.pages }])) }))
+      if (panelsOnly) { console.log(`progress (panels): ${dir}`); return }
       const ms = MEASURES
-      const kind = l => (l === 'made' ? "the engine's own layout files" : l === 'fixed' ? "the fixtures' layout files (the layer lab's)" : 'layout files given')
-      const L = [`# ${name}`, '', `The engine at \`${short}\` (${engineInfo.branch}${engineInfo.dirty ? ', with changes' : ''}), on ${kind(LAYOUTS)}, ${run.made.slice(0, 16).replace('T', ' ')} UTC; compared with ${prevRun ? `\`${previous.name}\` (the engine at \`${prevRun.engine.commit?.slice(0, 8)}\`, on ${kind(prevRun.inputs?.layouts)})` : 'no earlier run'}. Every measure is against arXiv's original page. A defect is its count and, in brackets, its rate per 1,000 translated text cells.`, '']
+      const kind = r => (r?.kind === 'proto' ? `no layout file (the prototype's geometry, ${r.protoUnits === 'p7' ? "the prototype's own staging units" : "the fixtures' record.json units"})` : r?.layouts === 'made' ? "the engine's own layout files" : r?.layouts === 'fixed' ? "the fixtures' layout files (the layer lab's)" : 'layout files given')
+      const L = [`# ${name}`, '', `${engineOf(run)[0].toUpperCase()}${engineOf(run).slice(1)} at \`${short}\` (${engineInfo.branch}${engineInfo.dirty ? ', with changes' : ''}), on ${kind(run.inputs)}, ${run.made.slice(0, 16).replace('T', ' ')} UTC; compared with ${prevRun ? `\`${previous.name}\` (${engineOf(prevRun)} at \`${prevRun.engine.commit?.slice(0, 8)}\`, on ${kind(prevRun.inputs)})` : 'no earlier run'}. Every measure is against arXiv's original page. A defect is its count and, in brackets, its rate per 1,000 translated text cells.`, '']
       const fl = floorTotals(floor.pooled)
       const table = (title, rows) => {
         L.push(`## ${title}`, '', '| measure | Original | ' + rows.map(r => r[0]).join(' | ') + ' |', `|---|---|${rows.map(() => '---|').join('')}`)
