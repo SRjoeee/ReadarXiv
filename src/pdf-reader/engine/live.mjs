@@ -24,7 +24,7 @@ import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, in
 import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
 import { passagesInSource } from './cache.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
-import { decideGroups } from './groups.mjs'
+import { decideGroups, groupOf } from './groups.mjs'
 import { nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
 import { kOfSource, trPiecesOf } from './layer/pieces.mjs'
 import { WIDTH_PROBE } from './typeset/density.mjs'
@@ -488,9 +488,13 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
    * sentences, state and engine. Copies: the report reads the run, never changes it
    */
   const reported = i => {
-    const r = results.get(i), s = r?.sentences
-    return { id: i, pieces: (r?.pieces && trPiecesOf(r.pieces, kOfSource(units[i].pieces))) || [], sentences: Array.isArray(s?.src) && Array.isArray(s?.tr) ? { src: [...s.src], tr: [...s.tr] } : null, state: r?.state ?? 'none', by: r?.by ?? null }
+    const r = results.get(i), s = r?.sentences, group = groupOf(units[i])
+    return { id: i, pieces: (r?.pieces && trPiecesOf(r.pieces, kOfSource(units[i].pieces))) || [], sentences: Array.isArray(s?.src) && Array.isArray(s?.tr) ? { src: [...s.src], tr: [...s.tr] } : null, state: r?.state ?? 'none', by: r?.by ?? null, ...(group ? { group } : {}) }
   }
+  /** the table cells held in the source as the translation stands (groups.mjs decideGroups, as a compile decides them):
+   *  those of a group kept whole and of one waiting on a cell, by index — the layer draws none of them */
+  const indexOfUnit = new Map(units.map((u, i) => [u, i]))
+  const held = () => { const d = decideGroups(units, u => { const r = results.get(indexOfUnit.get(u)); return r && { state: r.state, pieces: translated.get(u) } }, kept); return [...d.keep, ...d.wait].map(u => indexOfUnit.get(u)).sort((a, b) => a - b) }
   const nextBatch = maxChars => {
     const order = nearest([...todo])
     const batch = []
@@ -501,7 +505,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
   const mt = (async () => {
     try {
     // the seeds taken as they are, once, before the first batch is asked
-    if (onBatch && taken.size) onBatch({ seeded: true, units: nearest([...taken]).map(reported) })
+    if (onBatch && taken.size) onBatch({ seeded: true, units: nearest([...taken]).map(reported), held: held() })
     for (let first = true; todo.size && !stopped; first = false) {
       const batch = nextBatch(first ? 2500 : 12000)
       batch.forEach(i => todo.delete(i))
@@ -530,7 +534,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
         } else results.set(i, { ...seeded(old), state: r.state, tried: identity })
       }
       // the batch's units, in its order, before the next batch is asked
-      if (onBatch) onBatch({ seeded: false, units: batch.filter(i => results.has(i)).map(reported) })
+      if (onBatch) onBatch({ seeded: false, units: batch.filter(i => results.has(i)).map(reported), held: held() })
       note('translated', { units: batch.length, how, ms: Date.now() - t0, total: translated.size })
       // a failure of the service, not of these texts (engine.mjs EngineError's lost): the batches after it would fail
       // the same way, each after the background's retries (the reader's design, §10.3)

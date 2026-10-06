@@ -73,7 +73,11 @@ export declare function runLive(paper: Paper, options: {
  *  the run's results have them */
 export interface BatchReport {
   seeded: boolean
-  units: { id: number; pieces: TrPiece[]; sentences: { src: number[]; tr: number[] } | null; state: 'whole' | 'partial' | 'none' | 'lost'; by: string | null }[]
+  /** each unit's table group, where it is a table cell (groups.mjs groupOf) */
+  units: { id: number; pieces: TrPiece[]; sentences: { src: number[]; tr: number[] } | null; state: 'whole' | 'partial' | 'none' | 'lost'; by: string | null; group?: string }[]
+  /** the table cells held in the source as the translation stands, by index: a group kept whole, or waiting on a cell
+   *  (groups.mjs decideGroups): the layer draws none of them, as the final sets none translated */
+  held: number[]
 }
 /** what names a compile's figures and tables: the target's names babel gives (caption-names.mjs), or the paper's own */
 export interface Captions { figure: 'target' | 'source'; table: 'target' | 'source' }

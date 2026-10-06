@@ -15,7 +15,7 @@ export interface Params {
  *  its font's class */
 export interface Char { ch: string; x0: number; x1: number; yb: number; size: number; item: number; ix: number; k: number; st: FontClass; ybEff?: number; page?: number; rect?: number[]; sep?: boolean; space?: boolean }
 /** a unit of the units file, as the layer reads it */
-export interface Unit { kind: string; src: string; pieces: { t: string; s?: string; src?: string }[]; state?: string; title?: boolean }
+export interface Unit { kind: string; src: string; pieces: { t: string; s?: string; src?: string }[]; state?: string; title?: boolean; group?: string }
 // ---- the per-unit reading (prepareUnit): the contract the rest of v0 reads
 //
 // A line's key is `page|x0,y0,x1,y1` of its rectangle (rectKey); a page character's is `page|item|k` (charKey). The
@@ -145,7 +145,10 @@ export declare function snapFirstRect(rects: Rect[], charsByPage: readonly (read
 export declare function snapFirstRect2(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[]): number | undefined
 export declare function extendRects(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown): number
 /** a unit's translation as tokens; `.base` is its base style */
-export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, baseIn: Style, designs: { serif: string; sans: string; mono: string }, P: Params): Token[] & { base: Style }
+export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, baseIn: Style, designs: { serif: string; sans: string; mono: string }, P: Params, lead?: { text: string; st: Partial<Style> } | null): Token[] & { base: Style }
+/** a float's label as the final sets it in the target: the target's name (capitals where the original's are), a space,
+ *  the original's number and punctuation; null where the final keeps the paper's name or the name is the original's */
+export declare function labelInTarget(label: { text?: string; chars?: { ch: string }[] } | null | undefined, names: { figure: string; table: string } | null | undefined, captions: { figure?: string; table?: string } | null | undefined, to: string): string | null
 /** the target's likely faces measured once each, a task apart */
 export declare function warmFaces(to: string, designs: { serif: string }, yieldNow: () => Promise<unknown>): Promise<void>
 export declare function blocks2(rects: readonly Rect[], pageViews: readonly number[][], keep: ReadonlySet<string> | null, lineInfo: Prepared['lineInfo'], regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null): Block2[]

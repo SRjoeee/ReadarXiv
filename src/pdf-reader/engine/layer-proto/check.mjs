@@ -93,7 +93,10 @@ export function checkAll({ N, placed, rows, pxOf, toPdf, chars2, audit, cols, ce
       if (v === 'acc' && r && (r.mode === 'crop' || r.mode === 'orig-text') && !drawnOf(r)) v = 'undrawn'
       setCat(key, v)
     }
-    if (prep.label?.chars?.length) kept.push({ unit: p.id, k: 'label', chars: prep.label.chars })
+    // (a label set in the target's name is drawn, its ink the unit's text, wherever its characters stand — a layout
+    // file's label box may lie before the unit's lines: run.mjs labelInTarget)
+    if (prep.label?.drawn) for (const c of prep.label.chars) setCat(charKey(c), 'acc')
+    else if (prep.label?.chars?.length) kept.push({ unit: p.id, k: 'label', chars: prep.label.chars })
     // what each placeholder draws, once
     for (const r of res) {
       if (!VISIBLE.has(r.cls)) continue
@@ -354,7 +357,7 @@ function categoriesOf(prep, unit, chars2) {
   const used = new Map()
   for (const r of res) if (r.gap) for (const c of r.gap.chars) if (!c.sep && !c.space) used.set(charKey(c), r)
   const keepSet = new Set(prep.keep ?? [])
-  const label = new Set((prep.label?.chars ?? []).map(charKey))
+  const label = new Set((prep.label && !prep.label.drawn ? prep.label.chars : []).map(charKey))
   const inGap = new Set()
   for (const g of prep.gaps ?? []) for (const c of g.chars) if (!c.sep && !c.space) inGap.add(charKey(c))
   const srcLetters = norm(unit.src ?? '')

@@ -697,6 +697,27 @@ export function labelOf(out, unit, rects, charsByPage, gapsIn) {
   }
   return gaps
 }
+/**
+ * A float's label as the final sets it in the target (the table-groups brief, Problem 2): `label` the label v0 or the
+ * layout file found on the unit's first line (labelOf: "Table 2:", the file's "Table2:"), `names` the target's names of a
+ * figure and a table (caption-names.mjs: babel's, which the final prints), `captions` which of the two the final names so
+ * (live.mjs captionsOf: `target` or `source`), `to` the target. The name the final's babel gives the float, in capitals
+ * where the original's is (a class's \MakeUppercase: TABLE I), a space, then the original's own number and punctuation;
+ * null where the label is no figure's or table's, where the final keeps the paper's own name for it, or where the name is
+ * the original's already (French's Figure and Table): the label is then kept as the original's ink
+ */
+export function labelInTarget(label, names, captions, to) {
+  const m = label?.text && /^\s*(Figure|Fig\.|FIGURE|FIG\.|Table|TABLE)\s*([0-9]+(?:\.[0-9]+)?[a-z]?|[IVXL]+)\s*([.:]?)\s*$/.exec(label.text)
+  if (!m || !names) return null
+  const kind = /^t/i.test(m[1]) ? 'table' : 'figure'
+  if (captions?.[kind] !== 'target' || !names[kind]) return null
+  const caps = m[1] === m[1].toUpperCase()
+  const name = caps ? names[kind].toLocaleUpperCase(to) : names[kind]
+  if (name === m[1]) return null
+  // the punctuation as the original's line has it after the number: a label's own characters, which labelOf took with it
+  const punct = m[3] || ((label.chars ?? []).map(c => c.ch).join('').match(/[.:]$/)?.[0] ?? '')
+  return `${name} ${m[2]}${punct}`
+}
 /** what a label reads as: a number, a mark, an item's, or a float's or a theorem's name and number */
 const LABEL = /^(?:[\d*†‡§¶•◦▪–·]{1,3}|\(?[a-z0-9ivx]{1,4}[.)]|(?:Figure|Fig\.|FIGURE|FIG\.|Table|TABLE|Algorithm|ALGORITHM|Listing|Theorem|Lemma|Definition|Proposition|Corollary|Remark|Example|Assumption)\s*[\dIVXL]+(?:\.\d+)?[a-z]?[.:]?)$/
 
@@ -1534,9 +1555,11 @@ function w100(s, face) {
 /**
  * A unit's pieces as tokens: { s, st, face, cls ('cjk'|'latin'), w100, glue (no break before), punct ('open'|'close'),
  * asp (CJK–Latin autospace before it), hyph (a language to hyphenate it in) }, { space }, { crop }, { sup }. `base`: the
- * unit's style ({ fam, bold, italic, caps, design }); `designs`: the paper's serif, sans and mono designs.
+ * unit's style ({ fam, bold, italic, caps, design }); `designs`: the paper's serif, sans and mono designs. `lead`: text
+ * set before the unit's own, in its own style ({ text, st }: a float's label in the target's name, labelInTarget), a
+ * space after it
  */
-export function tokensOf2(unit, resolved, to, baseIn, designs, P) {
+export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null) {
   const tokens = []
   const base = baseOf(unit, baseIn)
   const stack = [{ ...base }]
@@ -1600,6 +1623,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P) {
       })
     }
   }
+  if (lead?.text) { pushText(lead.text, { ...base, ...lead.st }, { label: true }); pushText(' ', { ...base, ...lead.st }) }
   unit.pieces.forEach((p, k) => {
     if (p.t === 'text') {
       pushText(p.s.replace(/\n/g, ' ').replace(/---/g, '—').replace(/--/g, '–').replace(/``/g, '“').replace(/''/g, '”'), style())
