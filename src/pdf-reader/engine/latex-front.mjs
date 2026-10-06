@@ -61,6 +61,8 @@ const CONTENT_BOX = new Map([['resizebox', 3], ['scalebox', 2], ['adjustbox', 2]
  *  \\centering's argument, the {\\small …} a table sat in stayed untranslated whole (five of 2608.05876's eight
  *  tables). The rules take an optional width alone (\\toprule[1pt]) */
 const NO_ARGS = new Set(['centering', 'raggedright', 'raggedleft', 'noindent', 'indent', 'normalfont', 'rmfamily', 'sffamily', 'ttfamily', 'bfseries', 'mdseries', 'itshape', 'upshape', 'slshape', 'scshape', 'em', 'bf', 'it', 'rm', 'sf', 'tt', 'sc', 'sl', 'normalsize', 'small', 'footnotesize', 'scriptsize', 'tiny', 'large', 'Large', 'LARGE', 'huge', 'Huge', 'selectfont', 'smallskip', 'medskip', 'bigskip', 'hfill', 'vfill', 'hfil', 'vfil', 'newline', 'clearpage', 'newpage', 'cleardoublepage', 'maketitle', 'appendix', 'toprule', 'midrule', 'bottomrule', 'hline', 'arraybackslash', 'protect', 'relax', 'leavevmode', 'strut', 'null', 'quad', 'qquad', 'enspace', 'thinspace', 'nobreak', 'allowbreak', 'sloppy', 'fussy', 'ignorespaces', 'unskip'])
+/** NO_ARGS by its exported name: the layout marks take a placeholder of one for one that sets no ink (layout/marks.mjs) */
+export const NO_ARG_COMMANDS = NO_ARGS
 const OPT_ONLY = new Set(['toprule', 'midrule', 'bottomrule'])
 /** how many required arguments some commands of fixed arity take, after any optional ones: a brace group after them is
  *  a group of its own (\\hspace{1mm}{#1}, the bulleted headings of 2608.06007) */
