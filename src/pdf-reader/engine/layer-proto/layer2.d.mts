@@ -16,22 +16,83 @@ export interface Params {
 export interface Char { ch: string; x0: number; x1: number; yb: number; size: number; item: number; ix: number; k: number; st: FontClass; ybEff?: number; page?: number; rect?: number[]; sep?: boolean; space?: boolean }
 /** a unit of the units file, as the layer reads it */
 export interface Unit { kind: string; src: string; pieces: { t: string; s?: string; src?: string }[]; state?: string; title?: boolean }
-/** a placeholder's resolution: how it is drawn */
-export interface Resolved { mode: string; text?: string; k?: number; src?: string; cls?: string; page?: number; crop?: number[]; baseline?: number; sup?: boolean; math?: boolean; gap?: unknown; region?: number; [more: string]: unknown }
+// ---- the per-unit reading (prepareUnit): the contract the rest of v0 reads
+//
+// A line's key is `page|x0,y0,x1,y1` of its rectangle (rectKey); a page character's is `page|item|k` (charKey). The
+// rest of v0 reads a Prepared and nothing else of how it was made: blocks2 (lineInfo, keep, regionOf, referenced), the
+// tokens (the resolutions, referenced), the drawing (extents), the restore (uc, cat), the gate's lost ink (uc, cat,
+// lineInfo) and the checker (the resolutions, uc, gaps, keep, label, cat). Each field is filled by one part; the four
+// parts that read the page's geometry (lines, extents, label, renderings) are v0's heuristics or another source's
+// (UnitParts), the rest are the same for every source.
+
+/** a run of the unit's page characters: a gap (what its source does not write: a placeholder's rendering, a label), or a
+ *  placeholder's rendering as its source found it. `of`: the gap it was cut from; `box`: where its ink is, where its
+ *  source knows it exactly (drawnAs places a crop by it) */
+export interface Gap { text: string; chars: Char[]; of?: Gap; unbracketed?: boolean; norm?: string; taken?: boolean; box?: RenderingBox }
+/** a rendering's ink as its source knows it: its extent across, the baseline of the line it sits on, its lines */
+export interface RenderingBox { x0: number; x1: number; baseline: number; lines: number }
+/** a placeholder of the unit by its piece index `k` (placeholdersOf): its source, its class (phClass2), whether it is a
+ *  paper's own macro, a nested footnote's mark; a citation's keys */
+export interface Placeholder { k: number; src: string; cls: string; unknown?: boolean; nested?: boolean; keys?: string[] }
+/** the paper's citations as learnt in lay order (a key's number), an author-year key's text, a macro's rendering */
+export type CiteMap = Map<string, string | undefined> & { text?: Map<string, string>; macros?: Map<string, string> }
+/** a line's baseline and size: measured from its characters or given exactly (exact), else from its rectangle */
+export interface LineInfo { baseline: number; size: number; exact: boolean }
+/** a line's erase extent, before the drawing's padding: one box [x0, y0, x1, y1], or several */
+export type Extent = number[] | number[][]
+/** a placeholder's resolution: how it is drawn ('none', 'symbol', 'kept', 'crop', 'orig-text', 'cite-map', 'source'),
+ *  with its placeholder (k, src, cls) and the rendering it took (gap) */
+export interface Resolved { mode: string; text?: string; k?: number; src?: string; cls?: string; page?: number; crop?: number[]; baseline?: number; sup?: boolean; math?: boolean; gap?: Gap | null; region?: number; second?: boolean; [more: string]: unknown }
 /** prepareUnit's answer: each placeholder's resolution by its piece's index, with the unit's reading of the page */
 export interface Prepared extends Map<number, Resolved> {
-  extents: Map<Rect, number[]>
+  /** part 1, frames and lines: the unit's page characters line by line (each with its line, `rect`), a space between
+   *  two items or two lines of one rectangle, a separator after each line */
   uc: Char[]
-  lineInfo: Map<string, { baseline: number; size: number; exact: boolean }>
+  /** part 1: each line's baseline and size, by its key (and by its key without x0) */
+  lineInfo: Map<string, LineInfo>
+  /** part 2, erase extents: each line's box (or boxes) to erase, by its rectangle */
+  extents: Map<Rect, Extent>
+  /** the alignment: the page characters that are the source's words */
+  matchedKeys: Set<string>
+  /** the alignment: the original's style (the majority of the source's words) */
   orig: { key: string; st: FontClass; size: number; runs: { key: string; n: number }[] } | null
-  keep?: string[]
-  label?: { x1: number; text: string; chars: Char[] }
+  /** the alignment: where the first source word starts on the first line */
   firstX0?: number
-  gaps?: { text: string; chars: Char[] }[]
+  /** the lines kept as the original's, by key: the alignment's (no source word), part 4's displays, the finish's */
+  keep?: string[]
+  /** part 3, labels: a label the class sets before the unit's first line, kept as the original's */
+  label?: { x1: number; text: string; chars: Char[] }
+  /** part 4: the gaps as the renderings left them (the checker's and the categories') */
+  gaps?: Gap[]
+  /** the finish: each kept line's region (a run of kept lines), and the regions a kept placeholder holds */
   regionOf: Map<string, number>
   referenced: Set<number>
+  /** the finish: what became of each of the unit's page characters, by its key */
   cat: Map<string, 'acc' | 'keep' | 'orphan' | 'undrawn'>
-  matchedKeys: Set<string>
+  /** the finish: the lines a located display holds */
+  displayLines?: Set<string>
+}
+/** part 1 and part 2 as a source gives them */
+export interface UnitLines { uc: Char[]; lineInfo: Map<string, LineInfo>; extents: Map<Rect, Extent> }
+/** what part 4 is given: the unit, its placeholders, its lines' characters, the gaps the labels left, the paper's
+ *  citations and each placeholder's plain text and name (`plain`) */
+export interface RenderingsContext {
+  unit: Unit; phs: Placeholder[]; rects: readonly Rect[]; charsByPage: readonly (readonly Char[] | undefined)[]; citeMap: CiteMap | null
+  gaps: Gap[]; uc: Char[]; plain: Map<Placeholder, { t: string; name: string }>; out: Prepared
+}
+/** part 4's answer: the gaps as it leaves them, and each placeholder's rendering (called once a placeholder, in the
+ *  unit's order, for those the rules look for: 'cite', 'num', 'other'), or none found */
+export interface Renderings { gaps: Gap[]; gapFor(p: Placeholder, cls: 'cite' | 'num' | 'other'): Gap | null | undefined }
+/** the parts of a unit another source gives in place of v0's; a part not given is v0's */
+export interface UnitParts {
+  /** part 1 (and part 2's default): the unit's lines and their characters */
+  lines?: (rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[]) => UnitLines
+  /** part 2: the erase extents, given the lines */
+  extents?: (lines: UnitLines, rects: readonly Rect[]) => Map<Rect, Extent>
+  /** part 3: sets out.label, returns the gaps without it */
+  label?: (out: Prepared, unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], gaps: Gap[]) => Gap[]
+  /** part 4: which ink each placeholder is */
+  renderings?: (ctx: RenderingsContext) => Renderings
 }
 /** a token of a unit's translation */
 export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; [more: string]: unknown }
@@ -59,7 +120,20 @@ export declare function extendRects2(rects: Rect[], charsByPage: readonly (reado
 export declare function extendFirstLines(rects: Rect[], pageViews: readonly number[][], others: readonly (readonly Rect[] | undefined)[]): void
 export declare function blocksOf2(rects: readonly Rect[], pageViews: readonly number[][], keep?: ReadonlySet<string> | null, regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null): Block[]
 export declare function gapsOf2(unitChars: readonly Char[], src: string, deny?: ReadonlySet<string> | null): { text: string; chars: Char[] }[]
-export declare function prepareUnit(unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], citeMap?: Map<string, string> | null, deny?: ReadonlySet<string> | null): Prepared
+/** the unit against its page, in parts: v0's, or `parts` another source gives (the per-unit reading's contract above) */
+export declare function prepareUnit(unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], citeMap?: CiteMap | null, deny?: ReadonlySet<string> | null, parts?: UnitParts | null): Prepared
+/** the unit's placeholders by piece index */
+export declare function placeholdersOf(unit: Unit): Placeholder[]
+/** parts 1 and 2, v0's: the unit's characters by its rectangles, each line's baseline and size, and its extent */
+export declare function linesOf(rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[]): UnitLines
+/** part 3, v0's: the first gap's label, out.label set; the gaps without it */
+export declare function labelOf(out: Prepared, unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], gaps: Gap[]): Gap[]
+/** part 4, v0's: the renderings by the alignment's gaps */
+export declare function v0Renderings(ctx: RenderingsContext): Renderings
+/** a citation's keys from its source */
+export declare const citeKeys: (src: string) => string[]
+/** a citation's rendering without the source's own brackets round it, and what it says learnt for the paper */
+export declare function learnCite(p: Placeholder, g: Gap, citeMap: CiteMap | null): Gap
 export declare function displayTouched(res: Prepared, uc: readonly Char[]): Set<string>
 /** a crop grown over the ink it touches */
 export declare function growCrop(r: { crop: number[]; [more: string]: unknown }, ink: InkMap | undefined, toDev: ToDev, k: number, pageChars?: readonly Char[]): void

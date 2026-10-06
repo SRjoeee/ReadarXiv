@@ -8,6 +8,10 @@
 // v0's changes here: the linter's, none of which changes what runs: `!st?.known` for `!st || !st.known`, and two
 // unused locals and two unused names of a destructuring left out.
 // And the size correction of a role table face (fonts.mjs setRoleFaces) on each run's SVG size, 1 for the prototype's.
+// And prepareUnit in parts (step 2 of the layer's new direction, 2026-10-06), so that the four which read the page's
+// geometry (lines, erase extents, labels, placeholder renderings) can come from another source: its statements moved
+// into the parts as they were, in the same order; a set of claimed characters, which nothing read, left out. Every
+// record, erase, crop, restore and SVG is the same on all 29 outputs.
 //
 // The instant translation layer, second iteration (and third, below). What changed from layer.js (iteration 1), each measured in the report:
 //
@@ -528,25 +532,74 @@ function rectStyle(uc) {
 }
 
 /**
- * A unit against its original page: its placeholders resolved (as layer.js resolvePlaceholders, the alignment always
- * made), its lines' baselines and sizes, and its original style. `charsByPage`: pageChars2's.
+ * A unit against its original page: v0's per-unit reading of it (`Prepared`, whose contract layer2.d.mts writes), which
+ * the rest of the layer reads (its blocks, tokens, drawing, restore and checker). It is made in parts, each filling its own
+ * fields; the four that read the page's geometry are v0's heuristics here, or a layout file's where it locates the unit
+ * whole (`parts`):
+ *   1. frames and lines (linesOf): the unit's characters on its lines, each line's baseline and size;
+ *   2. erase extents (the lines' own, linesOf's): each line's box to erase, before the drawing's padding;
+ *   then the alignment (alignUnit, either source's lines): which characters are the source's words, the original's
+ *   style, where the first word starts, the lines none of whose words are the source's (kept);
+ *   3. labels (labelOf): a label the class sets before the unit's first line, kept as the original's;
+ *   4. placeholder renderings (v0Renderings): which of the page's ink each placeholder is, and where it sits;
+ *   then the resolution's rules (resolvePlaceholders, either source's renderings): how each placeholder is drawn, the
+ *   paper's citations and macros learnt; and the finish (finishUnit): the kept lines in regions, each character's
+ *   category (what the restore and the checker read).
+ * `charsByPage`: pageChars2's (the unit's own part of each page).
  */
-export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = null) {
+export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = null, parts = null) {
+  const phs = placeholdersOf(unit)
+  const out = new Map()
+  const lines = (parts?.lines ?? linesOf)(rects, charsByPage)
+  out.extents = parts?.extents ? parts.extents(lines, rects) : lines.extents
+  // the checker's view (check.js): the unit's characters on the page, which of them are its source's words, and which
+  // gap each placeholder took
+  out.uc = lines.uc
+  out.lineInfo = lines.lineInfo
+  const aligned = alignUnit(out, unit, rects, deny)
+  const gaps = (parts?.label ?? labelOf)(out, unit, rects, charsByPage, aligned)
+  resolvePlaceholders(out, { unit, phs, rects, charsByPage, citeMap, gaps }, parts?.renderings ?? v0Renderings)
+  finishUnit(out, unit, rects, charsByPage)
+  // a displayed formula found, whose lines hold words the alignment took for the source's ("RMSE" in "RMSE_i(t) =",
+  // while the text says "…using the RMSE:"): aligned again without its lines' words, once
+  if (!deny) {
+    const touched = displayTouched(out, out.uc)
+    const matchedThere = touched.size > 0 && out.uc.some(c => !c.sep && !c.space && touched.has(`${c.page}|${c.rect.join()}`) && out.matchedKeys.has(charKey(c)))
+    if (touched.size && matchedThere) return prepareUnit(unit, rects, charsByPage, citeMap, touched, parts)
+  }
+  out.displayLines = displayTouched(out, out.uc)
+  return out
+}
+
+/** a unit's placeholders by piece index, each with its source and class (phClass2); a nested footnote is its mark */
+export function placeholdersOf(unit) {
   const phs = []
   unit.pieces.forEach((p, k) => {
     if (p.t === 'ph') phs.push({ k, src: p.src, ...phClass2(p.src) })
     else if (p.t === 'nested') phs.push({ k, src: '\\footnotemark', cls: 'num', nested: true })
   })
-  const out = new Map()
-  const looked = phs.filter(p => p.cls === 'cite' || p.cls === 'num' || p.cls === 'other' || p.cls === 'macro' || p.cls === 'umacro' || p.cls === 'display')
+  return phs
+}
+
+/**
+ * Part 1, frames and lines, and part 2, erase extents, v0's: the unit's characters by its rectangles (charsOfUnit2,
+ * which measures each line's extent as it reads it) and each line's baseline and size (lineInfoOf).
+ */
+export function linesOf(rects, charsByPage) {
   const extents = new Map()
   const uc = charsOfUnit2(rects, charsByPage, extents)
-  out.extents = extents
-  // the checker's view (check.js): the unit's characters on the page, which of them are its source's words, and which
-  // gap each placeholder took
-  out.uc = uc
+  return { uc, extents, lineInfo: lineInfoOf(rects, uc) }
+}
+
+/**
+ * The unit's words against its source (gapsOf2), on whichever lines part 1 gave: which page characters are its text
+ * (matchedKeys), its original style (orig), where its first word starts (firstX0), and the lines none of whose words are
+ * the source's, kept as the original's (keep). Returns the gaps: the page's runs of the unit that the source does not
+ * write, each a placeholder's rendering or a label.
+ */
+function alignUnit(out, unit, rects, deny) {
+  const uc = out.uc
   out.matchedKeys = new Set()
-  out.lineInfo = lineInfoOf(rects, uc)
   let gaps = []
   if (uc.some(c => !c.sep)) {
     gaps = gapsOf2(uc, unit.src, deny).filter(g => g.text && !g.chars.every(c => c.sep))
@@ -582,9 +635,17 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
       for (const [k, n] of words) if (k !== first && n >= 4 && (hits.get(k) ?? 0) < 0.2 * n && !out.keep.includes(k) && !gapsOf2.denied?.has(k)) out.keep.push(k)
     }
   } else out.orig = null
-  // a label the unit's first line starts with that no placeholder draws (the unit begins with text): a footnote's mark,
-  // a bullet, an item's number, set by the class before the unit's own start. Kept as the original's: the first line
-  // starts after it
+  return gaps
+}
+
+/**
+ * Part 3, labels, v0's: a label the unit's first line starts with that no placeholder draws (the unit begins with text):
+ * a footnote's mark, a bullet, an item's number, set by the class before the unit's own start. Kept as the original's:
+ * the first line starts after it (out.label). Returns the gaps without it.
+ */
+export function labelOf(out, unit, rects, charsByPage, gapsIn) {
+  let gaps = gapsIn
+  const uc = out.uc
   // Iteration 3: the label is the first gap's first atom, so that one written beside a placeholder's rendering is found
   // ("¹ http://image-net.org/…": the footnote's mark and its URL were one gap, the mark erased), and a unit may start
   // with a placeholder that cannot render as it (a URL, not a reference)
@@ -601,7 +662,6 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
       a = g0.chars.findIndex((c, i) => i > e && isReal(c))
       if (a >= 0 && g0.chars.slice(e + 1, a).some(c => c.sep)) break
     }
-    const LABEL = /^(?:[\d*†‡§¶•◦▪–·]{1,3}|\(?[a-z0-9ivx]{1,4}[.)]|(?:Figure|Fig\.|FIGURE|FIG\.|Table|TABLE|Algorithm|ALGORITHM|Listing|Theorem|Lemma|Definition|Proposition|Corollary|Remark|Example|Assumption)\s*[\dIVXL]+(?:\.\d+)?[a-z]?[.:]?)$/
     const pick = ends.map(([a, e]) => [a, e, g0.chars.slice(a, e + 1).filter(isReal).map(c => c.ch).join('').replace(/^(Figure|Fig\.|FIGURE|FIG\.|Table|TABLE|Algorithm|ALGORITHM|Listing|Theorem|Lemma|Definition|Proposition|Corollary|Remark|Example|Assumption)/, '$1 ')]).filter(([, , t]) => LABEL.test(t)).at(-1)
     const atom = pick ? g0.chars.slice(pick[0], pick[1] + 1).filter(c => !c.sep && !c.space) : []
     const e = pick?.[1] ?? -1
@@ -618,6 +678,60 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
       else gaps = gaps.slice(1)
     }
   }
+  return gaps
+}
+/** what a label reads as: a number, a mark, an item's, or a float's or a theorem's name and number */
+const LABEL = /^(?:[\d*†‡§¶•◦▪–·]{1,3}|\(?[a-z0-9ivx]{1,4}[.)]|(?:Figure|Fig\.|FIGURE|FIG\.|Table|TABLE|Algorithm|ALGORITHM|Listing|Theorem|Lemma|Definition|Proposition|Corollary|Remark|Example|Assumption)\s*[\dIVXL]+(?:\.\d+)?[a-z]?[.:]?)$/
+
+/** the longest common subsequence of two strings, over the longer's length */
+const lcs = (a, b) => {
+  if (!a || !b) return 0
+  const n = a.length, m = b.length, L = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1))
+  for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++) L[i][j] = a[i - 1] === b[j - 1] ? L[i - 1][j - 1] + 1 : Math.max(L[i - 1][j], L[i][j - 1])
+  return L[n][m] / Math.max(n, m)
+}
+/** a placeholder's class as the renderings are kept: a citation, a reference's or a mark's number, anything else */
+const renderingClass = c => (c === 'macro' || c === 'umacro' || c === 'display' ? 'other' : c)
+/** a citation's keys, from its source */
+export const citeKeys = src => src.replace(CITE, '').replace(/\}$/, '').split(',').map(k => k.trim()).filter(Boolean)
+const numsOf = g => {
+  const r = []
+  for (const m of g.text.matchAll(/(\d+)(?:\]?\s*[–-]\s*\[?(\d+))?/g)) {
+    const a = Number(m[1]), b = m[2] ? Number(m[2]) : a
+    for (let n = a; n <= b && n - a < 50; n++) r.push(String(n))
+  }
+  return r
+}
+/**
+ * A citation's rendering found: in the source's own brackets ("([10, 25, 24, 35])") its brackets are the source's text,
+ * and the rendering is what is inside them; and what it says learnt for the paper (citeMap: a key's number, an
+ * author-year key's text), by which the units laid after it draw a citation not found. Returns the rendering.
+ */
+export function learnCite(p, g0, citeMap) {
+  let g = g0
+  if (/^\(\s*\[/.test(g.text) && /\]\s*\)$/.test(g.text)) {
+    const real = g.chars.filter(c => !c.sep && !c.space && /\S/.test(c.ch))
+    const inner = g.chars.slice(g.chars.indexOf(real[0]) + 1, g.chars.indexOf(real.at(-1)))
+    g = { text: inner.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars: inner, of: g }
+  }
+  if (citeMap && p.keys.length === 1) citeMap.set(p.keys[0], numsOf(g)[0])
+  if (citeMap && p.keys.length === 1 && YEAR.test(g.text)) {
+    if (!citeMap.text) citeMap.text = new Map()
+    citeMap.text.set(p.keys[0], g.text)
+  }
+  return g
+}
+
+/**
+ * Part 4, placeholder renderings, v0's: which of the unit's gaps (the page's runs its source does not write) each
+ * placeholder's rendering is, by what they say. The gaps are grown over the math glyphs beside them and their citations
+ * cut out; the references, marks and formulas are aligned in order with runs of the gaps' atoms; the citations matched by
+ * their numbers, surnames and years. Returns the gaps as grown (out.gaps) and each placeholder's rendering
+ * (gapFor(p, cls), called once a placeholder in the unit's order).
+ */
+export function v0Renderings({ phs, gaps: gapsIn, uc, citeMap, plain }) {
+  let gaps = gapsIn
+  const looked = phs.filter(p => p.cls === 'cite' || p.cls === 'num' || p.cls === 'other' || p.cls === 'macro' || p.cls === 'umacro' || p.cls === 'display')
   // a math glyph next to a gap (no word, so no gap's: "√" before "dk", "−" between two) is that rendering's
   const ucIndex = new Map(uc.map((c, i) => [c, i]))
   const mathGlyph = c => c && !c.sep && !c.space && /\S/.test(c.ch) && !/[\p{L}\p{N}]/u.test(c.ch) && (c.st?.fam === 'math' || /^[√∑∏∫±∓×÷=<>≤≥≈∼≠∈∉⊂⊆∪∩→←⇒⇔∞∂∇′|‖·∗⋆]$/.test(c.ch))
@@ -647,22 +761,10 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   gaps = gaps.flatMap(splitCites)
   const byClass = { cite: [], num: [], other: [] }
   for (const g of gaps) byClass[gapClass2(g.text)].push(g)
-  out.gaps = gaps
-  const classOf = c => (c === 'macro' || c === 'umacro' || c === 'display' ? 'other' : c)
   // iteration 3: references and footnote marks too, so that one sharing a gap with another rendering is found ("5)²")
-  const others = phs.filter(p => (classOf(p.cls) === 'other' || p.cls === 'num') && looked.concat(phs.filter(q => q.nested)).includes(p)), og = [...byClass.num, ...byClass.other].sort((a, b) => gaps.indexOf(a) - gaps.indexOf(b))
-  const lcs = (a, b) => {
-    if (!a || !b) return 0
-    const n = a.length, m = b.length, L = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1))
-    for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++) L[i][j] = a[i - 1] === b[j - 1] ? L[i - 1][j - 1] + 1 : Math.max(L[i - 1][j], L[i][j - 1])
-    return L[n][m] / Math.max(n, m)
-  }
+  const others = phs.filter(p => (renderingClass(p.cls) === 'other' || p.cls === 'num') && looked.concat(phs.filter(q => q.nested)).includes(p)), og = [...byClass.num, ...byClass.other].sort((a, b) => gaps.indexOf(a) - gaps.indexOf(b))
   // a placeholder against a rendering: their plain texts alike; a paper's own macro by its name ("\imagenet",
   // "ImageNet"), or else any rendering that is no number, weakly (taken in order by what no better placeholder took)
-  // a paper's own macro is known by its rendering once it has been found (citeMap.macros, the paper's)
-  if (citeMap && !citeMap.macros) citeMap.macros = new Map()
-  const macros = citeMap ? citeMap.macros : new Map()
-  const plain = new Map(phs.map(p => [p, { t: norm(texToText2(p.src) || (p.unknown ? macros.get(p.src) ?? '' : '')), name: norm(nameOf(p.src)) }]))
   const WEAK = 0.55
   const NUMLIKE = /^\(?(?:\d+|[IVXLC]+|[A-Z])(?:[.-](?:\d+|[A-Z]))*[a-z]?\)?$/
   const sim = (p, g) => {
@@ -766,17 +868,8 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
     otherGap.set(p, r)
   })
   const citeGap = new Map(), usedCite = new Set()
-  const numsOf = g => {
-    const r = []
-    for (const m of g.text.matchAll(/(\d+)(?:\]?\s*[–-]\s*\[?(\d+))?/g)) {
-      const a = Number(m[1]), b = m[2] ? Number(m[2]) : a
-      for (let n = a; n <= b && n - a < 50; n++) r.push(String(n))
-    }
-    return r
-  }
   for (const p of phs.filter(p => p.cls === 'cite')) {
-    const keys = p.src.replace(CITE, '').replace(/\}$/, '').split(',').map(k => k.trim()).filter(Boolean)
-    p.keys = keys
+    const keys = p.keys
     const known = keys.map(k => citeMap?.get(k))
     const fits = g => !usedCite.has(g) && numsOf(g).length === keys.length && known.every(n => n === undefined || numsOf(g).includes(n))
     // an author-year citation by what its keys say (a surname, a year) where a rendering says it: the first that fits by
@@ -785,33 +878,39 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
     const hasName = keys.some(k => keyInfo(k).name.length >= 3)
     const scored = byClass.cite.filter(fits).map(g => [g, keyScore(keys, g.text)]).filter(([g, v]) => v > 0 || !hasName || !anyName(g.text))
     const named = scored.filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
-    let g = named.length ? named[0][0] : scored[0]?.[0]
+    const g = named.length ? named[0][0] : scored[0]?.[0]
     if (g) {
-      // a numeric citation in the source's own brackets ("([10, 25, 24, 35])"): the brackets are the source's text
-      if (/^\(\s*\[/.test(g.text) && /\]\s*\)$/.test(g.text)) {
-        const real = g.chars.filter(c => !c.sep && !c.space && /\S/.test(c.ch))
-        const inner = g.chars.slice(g.chars.indexOf(real[0]) + 1, g.chars.indexOf(real.at(-1)))
-        usedCite.add(g)
-        g = { text: inner.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars: inner, of: g }
-      }
       usedCite.add(g)
-      citeGap.set(p, g)
-      if (citeMap && keys.length === 1) citeMap.set(keys[0], numsOf(g)[0])
-      if (citeMap && keys.length === 1 && YEAR.test(g.text)) {
-        if (!citeMap.text) citeMap.text = new Map()
-        citeMap.text.set(keys[0], g.text)
-      }
+      const r = learnCite(p, g, citeMap)
+      usedCite.add(r)
+      citeGap.set(p, r)
     }
   }
   const taken = new Set([...otherGap.values()].map(r => r.of))
   byClass.num = byClass.num.filter(g => !taken.has(g))
   const next = { cite: 0, num: 0, other: 0 }
-  // the page's characters a placeholder's rendering holds: not the unit's own text (for the score's original runs)
-  const claimed = new Set()
-  const claim = g => { if (g) for (const c of g.chars) claimed.add(c) }
+  const gapFor = (p, cls) => (cls === 'other' ? otherGap.get(p) : cls === 'cite' ? citeGap.get(p) : otherGap.get(p) ?? byClass[cls][next[cls]++])
+  return { gaps, gapFor }
+}
+
+/**
+ * The resolution's rules, either source's renderings (`renderingsOf`, v0Renderings or a layout file's): each
+ * placeholder by piece index drawn as nothing, a space, a symbol from its source, a kept rendering, its rendering's page
+ * text or crop (drawnAs), a citation as the paper wrote it before (cite-map), or its source's plain text; a rendering in
+ * brackets the translation sets itself without its own; a second chance for a placeholder drawn from its source; the
+ * paper's own macros learnt by their renderings. Sets the resolutions, out.gaps and the kept lines of displays.
+ */
+function resolvePlaceholders(out, ctx, renderingsOf) {
+  const { unit, phs, rects, charsByPage, citeMap } = ctx
+  const uc = out.uc
+  for (const p of phs) if (p.cls === 'cite') p.keys = citeKeys(p.src)
+  // a paper's own macro is known by its rendering once it has been found (citeMap.macros, the paper's)
+  if (citeMap && !citeMap.macros) citeMap.macros = new Map()
+  const macros = citeMap ? citeMap.macros : new Map()
+  const plain = new Map(phs.map(p => [p, { t: norm(texToText2(p.src) || (p.unknown ? macros.get(p.src) ?? '' : '')), name: norm(nameOf(p.src)) }]))
+  const { gaps, gapFor } = renderingsOf({ ...ctx, uc, plain, out })
+  out.gaps = gaps
   const gapOf = new Map()
-  for (const g of otherGap.values()) claim(g)
-  for (const g of citeGap.values()) claim(g)
   for (const p of phs) {
     if (p.cls === 'zero') out.set(p.k, { mode: 'none', text: '' })
     else if (p.cls === 'space') out.set(p.k, { mode: 'none', text: ' ' })
@@ -823,8 +922,8 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
       else out.set(p.k, { mode: 'symbol', text: text.replace(/^\^\(?|\)$/g, ''), math: true, sup: /^\$?\^/.test(p.src.replace(/^\$/, '')) || /^\^/.test(text) })
     }
     else {
-      const cls = classOf(p.cls)
-      let g = cls === 'other' ? otherGap.get(p) : cls === 'cite' ? citeGap.get(p) : otherGap.get(p) ?? byClass[cls][next[cls]++]
+      const cls = renderingClass(p.cls)
+      let g = gapFor(p, cls)
       // (a citation's own round brackets as well: "\uFF08(Zhai et al., 2019a)\uFF09")
       if (g && (cls === 'num' || cls === 'other' || (cls === 'cite' && /^\(/.test(g.text))) && /^[([]/.test(g.text) && /[)\]]$/.test(g.text) && bracketed(unit.pieces, p.k)) {
         // the translation sets the brackets round it itself ("Eqn.\uFF08\ref{…}\uFF09"): the rendering without its own, which
@@ -833,7 +932,6 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
         const inner = g.chars.slice(g.chars.indexOf(real[0]) + 1, g.chars.indexOf(real.at(-1)))
         if (inner.some(c => /[\p{L}\p{N}]/u.test(c.ch))) g = { text: inner.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars: inner, of: g.of ?? g, unbracketed: true }
       }
-      claim(g)
       if (g) gapOf.set(p.k, g)
       if (!g && cls === 'cite' && citeMap && p.keys.length && p.keys.every(k => citeMap.has(k))) {
         // an author-year paper's citation as the page wrote it before (iteration 2 gave "[2017]")
@@ -880,6 +978,15 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
     // not found: drawn as it was found before, if it was
     if (r.mode === 'source' && !r.text && macros.has(p.src)) r.text = macros.get(p.src)
   }
+}
+
+/**
+ * The finish, either source's: a located display's lines all kept, the kept lines in runs (regions) in the unit's order
+ * with the kept placeholders' regions (the text after one starts below it), and what became of each of the unit's
+ * characters (categoriesOf: what the restore puts back and the checker reads).
+ */
+function finishUnit(out, unit, rects, charsByPage) {
+  const uc = out.uc
   // a located display's lines all kept: those it holds a third of, and their pieces on the same band (a fraction's
   // numerator line it holds less of was laid over and erased)
   out.keep = [...new Set([...(out.keep ?? []), ...displayTouched(out, uc)])]
@@ -902,15 +1009,6 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   // as a command) is drawn, not shown twice
   const trLetters = norm(unit.pieces.filter(p => p.t === 'text').map(p => p.s).join(' ') + ' ' + [...out.values()].map(r => r?.text ?? '').join(' '))
   out.cat = categoriesOf(out, uc, unit.src, keepSet, drawnTextOf(out, charsByPage), trLetters)
-  // a displayed formula found, whose lines hold words the alignment took for the source's ("RMSE" in "RMSE_i(t) =",
-  // while the text says "…using the RMSE:"): aligned again without its lines' words, once
-  if (!deny) {
-    const touched = displayTouched(out, uc)
-    const matchedThere = touched.size > 0 && uc.some(c => !c.sep && !c.space && touched.has(`${c.page}|${c.rect.join()}`) && out.matchedKeys.has(charKey(c)))
-    if (touched.size && matchedThere) return prepareUnit(unit, rects, charsByPage, citeMap, touched)
-  }
-  out.displayLines = displayTouched(out, uc)
-  return out
 }
 
 /** the lines a located displayed formula holds a third of the characters of, or more */
