@@ -95,10 +95,14 @@ const BINDING_INDEX = new Map(BINDINGS.map((b, k) => [b, k]))
  * Set of BINDINGS' indices, for commandParams
  */
 export function bindingsOf(texts) {
+  return bindingsOfText(texts.map(uncommented))
+}
+/** a text with its comments taken out, each to its line's end */
+const uncommented = t => t.replace(/(^|[^\\])%.*$/gm, '$1')
+function bindingsOfText(texts) {
   const out = new Set(), queue = []
   const add = k => { if (k !== undefined && !out.has(k)) { out.add(k); queue.push(k) } }
-  for (const t of texts) {
-    const text = t.replace(/(^|[^\\])%.*$/gm, '$1')
+  for (const text of texts) {
     for (const m of text.matchAll(/\\(documentclass|LoadClass(?:WithOptions)?|usepackage|RequirePackage(?:WithOptions)?)\s*(?:\[[^\]]*\]\s*)?\{([^}]*)\}/g)) {
       const cls = /class/i.test(m[1])
       for (const raw of m[2].split(',')) {
@@ -138,21 +142,22 @@ const OWN_COMMANDS = /\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobust
  *  arguments the table cannot know (llncs.cls' \newtoks\titlerunning among them) — not a command defined anew only
  *  inside its own call's argument, which is the kernel's where it is called (inOwnCall) */
 export function paperOf(texts) {
-  const own = new Set()
-  for (const t of texts) {
-    const text = t.replace(/(^|[^\\])%.*$/gm, '$1')
-    for (const m of text.matchAll(OWN_COMMANDS)) if (!inOwnCall(text, m.index, m[1])) own.add(m[1])
-  }
-  return { bindings: bindingsOf(texts), own }
+  const own = new Set(), plain = texts.map(uncommented)
+  for (const text of plain) for (const m of text.matchAll(OWN_COMMANDS)) if (!own.has(m[1]) && !inOwnCall(text, m.index, m[1])) own.add(m[1])
+  return { bindings: bindingsOfText(plain), own }
 }
+const OWN_CALL_WINDOW = 4000
 /**
  * Whether a definition of \name at t[at] stands inside an argument of a call of \name before it: local to that call's
  * group, it is no definition of the command where it is called (CVPR's teaser, \twocolumn[{\renewcommand\twocolumn[1][]{#1}
  * \maketitle … \captionof{figure}{…}}]: the call is the kernel's, its optional argument the content it sets)
  */
 export function inOwnCall(t, at, name) {
-  const call = `\\${name}`
-  for (let q = t.lastIndexOf(call, at - 1), seen = 0; q >= 0 && seen < 4; q = t.lastIndexOf(call, q - 1), seen++) {
+  // a call within the few thousand characters before the definition: an argument it encloses is no longer (a
+  // window, so that a package's thousands of definitions are not each searched back to the file's start)
+  const call = `\\${name}`, from = Math.max(0, at - OWN_CALL_WINDOW), before = t.slice(from, at)
+  for (let r = before.lastIndexOf(call), seen = 0; r >= 0 && seen < 4; r = r > 0 ? before.lastIndexOf(call, r - 1) : -1, seen++) {
+    const q = from + r
     let k = q + call.length
     if (isLetter(t[k] ?? '')) continue
     for (;;) {

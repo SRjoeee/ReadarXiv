@@ -601,7 +601,10 @@ const isConditional = (name, ifs) => TEX_IFS.has(name) || ifs.has(name) || /^if@
  */
 function newifValues(texts, ifs) {
   const set = new Map()
-  for (const t of texts) for (const c of texCommands(t, { ifs })) {
+  if (!ifs.size) return set
+  // only a file that sets one is read (a package's files mostly do not)
+  const sets = new RegExp(String.raw`\\(?:${[...ifs].map(n => n.slice(2).replace(/@/g, '\\@')).join('|')})(?:true|false)(?![A-Za-z@])`)
+  for (const t of texts.filter(x => sets.test(x))) for (const c of texCommands(t, { ifs })) {
     const m = /^(.+?)(true|false)$/.exec(c.name), name = m && `if${m[1]}`
     if (!name || !ifs.has(name)) continue
     if (c.inDef || !c.sure) { set.set(name, null); continue }
@@ -1077,32 +1080,42 @@ function texCommands(s, { from = 0, to = s.length, lineEnvs = null, ifs = new Se
  * brace TeX reads otherwise than the scanner) has the first one at any depth
  */
 export function documentBounds(s, options = {}) {
-  const cmds = texCommands(s, options)
+  return boundsOf(texCommands(s, options), s)
+}
+/** documentBounds from a file's commands (texCommands), read once for all a file's readers */
+function boundsOf(cmds, s) {
   const isDoc = (c, name) => c.name === name && c.env === 'document'
   // the first TeX surely acts on outside every group (none in a conditional it cannot tell: \\ifdefined\\x\\end{document}\\fi),
   // else the first outside every group, else the first
   const first = list => list.find(c => c.depth === 0 && c.sure) ?? list.find(c => c.depth === 0) ?? list[0]
   const begin = first(cmds.filter(c => isDoc(c, 'begin')))
   const end = first(cmds.filter(c => isDoc(c, 'end') && (!begin || c.at > begin.at)))
-  return { begin: begin ? begin.at : -1, body: begin ? begin.end : -1, end: end ? end.at : endinputCut(s, options) }
+  return { begin: begin ? begin.at : -1, body: begin ? begin.end : -1, end: end ? end.at : endinputCut(cmds, s) }
 }
-/** where TeX stops reading a file: the end of the line of an \\endinput it surely acts on (texCommands), else its end */
-function endinputCut(s, options = {}) {
-  const c = texCommands(s, options).find(x => x.name === 'endinput' && x.sure && !x.inDef)
+/** where TeX stops reading a file: the end of the line of an \\endinput it surely acts on (its commands, texCommands),
+ *  else its end */
+function endinputCut(cmds, s) {
+  const c = cmds.find(x => x.name === 'endinput' && x.sure && !x.inDef)
   if (!c) return s.length
   const eol = s.indexOf('\n', c.end)
   return eol < 0 ? s.length : eol
 }
-/** the \\end{document}s of a file TeX surely acts on where they stand, by where each starts: the walk stops at one of
- *  them, and at no other (one TeX never reaches: after an \\endinput, in a \\newif's false branch, 2608 review I4) */
-function documentEnds(s, options = {}) {
-  return new Set(texCommands(s, options).filter(c => c.name === 'end' && c.env === 'document' && c.sure && !c.inDef).map(c => c.at))
+/** the \\end{document}s of a file TeX surely acts on where they stand (its commands, texCommands), by where each starts:
+ *  the walk stops at one of them, and at no other (one TeX never reaches: after an \\endinput, in a \\newif's false
+ *  branch, the review's I4) */
+function documentEnds(cmds) {
+  return new Set(cmds.filter(c => c.name === 'end' && c.env === 'document' && c.sure && !c.inDef).map(c => c.at))
 }
 /** the main file's \\usepackage[…]{inputenc} that TeX acts on, the first in its preamble (LaTeX loads a package once: a
  *  second with other options is an option clash, not a switch): { start, end, options } or null */
 export function inputencOf(s, options = {}) {
-  const { begin } = documentBounds(s, options)
-  for (const c of texCommands(s, { ...options, to: begin < 0 ? s.length : begin })) {
+  return inputencFrom(texCommands(s, options), s)
+}
+/** inputencOf from a file's commands (texCommands), read once for all a file's readers */
+function inputencFrom(cmds, s) {
+  const { begin } = boundsOf(cmds, s)
+  for (const c of cmds) {
+    if (begin >= 0 && c.at >= begin) break
     if (c.name !== 'usepackage') continue
     const m = /^\s*\[([^\]]*)\]\s*\{\s*inputenc\s*\}/.exec(s.slice(c.end, c.end + 400))
     if (m) return { start: c.at, end: c.end + m[0].length, options: m[1] }
@@ -1263,6 +1276,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   const ifValues = newifValues(sources.map(sourceText), ifs)
   const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs) => visit(rel, dirs), dirs: [], bodies: macroBodies(sources.map(sourceText)), ...tblrOf(sources.map(sourceText)) }
   const scan = { lineEnvs, ifs, ifValues }
+  let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first */
   function visit(rel, dirs = []) {
     const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
@@ -1271,12 +1285,14 @@ function readProject(fsys, main, tables, sourceText, own) {
     ctx.dirs = dirs
     // the file as TeX reads it: up to the line of an \endinput it acts on; its \end{document}s, where the walk stops,
     // those it surely reaches (documentEnds)
-    let from = 0, to = endinputCut(f.text, scan)
-    ctx.ends.set(f.rel, documentEnds(f.text, scan))
+    const cmds = texCommands(f.text, scan)
+    if (f.rel === mainFile.rel) mainCmds = cmds
+    let from = 0, to = endinputCut(cmds, f.text)
+    ctx.ends.set(f.rel, documentEnds(cmds))
     if (f.rel === mainFile.rel) {
       // the document as TeX finds it (documentBounds): its preamble's front matter (frontMatter), then its body up to
       // the \end{document} TeX acts on, where the walk stops too
-      const bounds = documentBounds(f.text, scan)
+      const bounds = boundsOf(cmds, f.text)
       if (bounds.begin >= 0) { frontMatter(f.text, 0, bounds.begin, b, ctx); from = bounds.body }
       to = Math.min(to, bounds.end)
     }
@@ -1298,7 +1314,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   visit(mainFile.rel)
   storedBodies(calls, { ctx, files, units, own })
   // a source declared in a Latin-1 family encoding: its bytes read as latin1 are already the right characters
-  const enc = inputencOf(all, scan)?.options.split(',').map(x => x.trim()).find(x => /^(latin1|latin9|ansinew|cp1252|cp1250|latin2|applemac|decmulti)$/.test(x))
+  const enc = inputencFrom(mainCmds ?? texCommands(all, scan), all)?.options.split(',').map(x => x.trim()).find(x => /^(latin1|latin9|ansinew|cp1252|cp1250|latin2|applemac|decmulti)$/.test(x))
   const isUtf8 = t => { try { new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t)); return true } catch { return false } }
   const transcode = enc ? new Set([...files].filter(([, t]) => !isUtf8(t)).map(([f]) => f)) : new Set()
   return { main: mainFile.rel, files, units, skipped, fits: ctx.fits, lineEnvs, inputenc: enc ?? null, transcode }
