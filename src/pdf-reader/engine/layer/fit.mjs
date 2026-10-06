@@ -6,9 +6,10 @@
 // - Slots from the layout file: each frame's lines in order, on the layout's own baselines at leading 1 (CJK at any
 //   size, alphabets at full size), else from the frame's first baseline at the scaled pitch. A display's lines are no
 //   slots: the text before it fills the lines above it, the text after it starts below it.
-// - A split unit (more than one frame) is cut at the translation's sentence start nearest each frame's share of the
-//   source, each part laid in its own frame, the unit at one size and leading; a part that does not fit gives a sentence
-//   to the roomier frame before the fit moves on.
+// - A split unit (more than one frame) flows through its frames' lines in order, as one text, at one size and leading.
+//   Only where the flow would take a crop off its own page (a crop is drawn from its page's pixels) is it cut instead, at
+//   the translation's sentence start nearest each frame's share of the source, each part laid in its own frame; a part
+//   that does not fit gives a sentence to the roomier frame before the fit moves on.
 // - The completeness net (net.mjs) is on both sides: the pieces are refused within bounds before anything reads them, a
 //   unit whose layout lost a placeholder is refused before it is laid, and the laid unit is checked before it is returned.
 //   No unit the net refuses leaves here: it stays the original's, neither erased nor drawn.
@@ -326,11 +327,34 @@ function layPart(geo, part, j, state, f, m, ctx) {
   return { b, fits, free: fits ? slots.length - b.lines.length : -1 }
 }
 
+/** whether every crop of the laid lines is on a line of its own page: a crop is drawn from its own page's pixels */
+function cropsHome(b, unit) {
+  for (const line of b.lines) {
+    for (const it of line.items) {
+      if (it.t.kind === 'ph' && it.t.mode === 'crop' && cropPage(unit.ph.get(it.t.ph)?.segs) !== line.slot.page) return false
+    }
+  }
+  return true
+}
+
+/** where flowed text moves on to each frame after the first, as an offset in trText: its first line's first offset; the
+ *  text's end for a frame it does not reach */
+function startsOf(b, n, end) {
+  const out = []
+  for (let j = 1; j < n; j++) {
+    const line = b.lines.find(l => l.slot.frame >= j)
+    out.push(line ? line.items[0].t.at : end)
+  }
+  return out
+}
+
 /**
- * The unit laid at a state, or null where it does not fit. A split unit is laid at its first cuts, and where a part does
- * not fit, the cut beside it gives one sentence to the roomier frame (one whose part fits, the one with more free lines of
- * two) before the state moves on; a cut moves one way only at a state (a move back would return to cuts that failed),
- * and never empties a frame.
+ * The unit laid at a state, or null where it does not fit. A split unit flows through its frames' slots in order as one
+ * text (the parity report's fix 5: floors 26 to 16 on the 10 shared outputs, as the prototype flows it); only where the
+ * flow takes a crop off its own page is it laid at its first cuts instead, and where a part does not fit, the cut beside
+ * it gives one sentence to the roomier frame (one whose part fits, the one with more free lines of two) before the state
+ * moves on; a cut moves one way only at a state (a move back would return to cuts that failed), and never empties a
+ * frame. A flow that does not fit is no fit: no cut holds more than the flow does.
  */
 function layAt(geo, tokens, cut0, sentences, limits, state, size, ctx) {
   const f = size * state.scale
@@ -340,6 +364,11 @@ function layAt(geo, tokens, cut0, sentences, limits, state, size, ctx) {
     const r = layPart(geo, tokens, 0, state, f, m, ctx)
     return r.fits ? { parts: [r], cuts: [], f } : null
   }
+  const slots = []
+  for (let j = 0; j < n; j++) for (const s of slotsOf(geo, j, m, f, j === n - 1 ? state.borrow : 0, 0)) slots.push(s)
+  const flow = breakLines(tokens, slots, f, state, ctx)
+  if (flow.rest !== 0 || flow.overflow > 0 || split(flow)) return null
+  if (cropsHome(flow, ctx.unit)) return { parts: [{ b: flow, fits: true, free: slots.length - flow.lines.length }], cuts: startsOf(flow, n, ctx.len), f }
   const cuts = cut0.slice(), moved = new Int8Array(cuts.length)
   // each cut moves one way at a state, a sentence a time: at most every cut past every sentence
   for (let guard = 0; guard <= cuts.length * sentences.length; guard++) {
@@ -488,10 +517,11 @@ export function layUnit(input, id, tr, o = {}) {
   if (!geo) return unfit(id, 'located')
   const script = scriptOf(target)
   const grid = { grid: GRID.has(script), byCharacter: BY_CHARACTER.has(script) }
-  const ctx = { rules, target, measure, hyphen, grid: grid.grid }
-
-  // a split unit's first cuts: at the sentence start nearest each frame's share, else at the nearest character or word
   const text = trText(pieces), len = text.length
+  const ctx = { rules, target, measure, hyphen, grid: grid.grid, unit, len }
+
+  // where the flow takes a crop off its page, a split unit's first cuts: at the sentence start nearest each frame's share,
+  // else at the nearest character or word
   const sentences = []
   if (Array.isArray(tr.sentences)) for (const s of tr.sentences) if (Number.isInteger(s) && s > 0 && s < len && s > (sentences.at(-1) ?? 0)) sentences.push(s)
   const frames = geo.frames, cuts = [], limits = []
