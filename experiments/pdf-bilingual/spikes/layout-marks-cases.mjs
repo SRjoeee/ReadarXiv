@@ -677,7 +677,7 @@ for (const s of [...streams, luaStream]) {
     if (typeof rule[1] === 'string' && rule[1].startsWith('LOST:')) { if (how !== rule[1].slice(5)) bad.push({ name, src: src.slice(0, 40), how, want: rule[1] }); return }
     const want = typeof rule[1] === 'function' ? rule[1](src, n) : { s: rule[1], rules: rule[2] ?? 0 }
     // the glyphs' characters, TeX Live 2026's variation selectors (∑ U+FE01) left out
-    const got = e && e[1] < OWNED ? { s: Array.from({ length: e[2] }, (_, j) => m.chars[e[3 + 5 * j + 4]]).join('').replace(/[\s\ufe00-\ufe0f]/g, ''), rules: (e.length - 3 - 5 * e[2]) / 5 } : null
+    const got = e && e[1] < OWNED ? { s: Array.from({ length: e[2] }, (_, j) => m.chars[e[3 + 5 * j + 4]]).join('').replace(/\s|\p{Variation_Selector}/gu, ''), rules: (e.length - 3 - 5 * e[2]) / 5 } : null
     if (!got || got.s !== want.s || got.rules !== want.rules) bad.push({ name, src: src.slice(0, 40), how, got, want })
   }))
   const named = [...seen.values()].reduce((x, y) => x + y, 0)
@@ -696,7 +696,7 @@ for (const s of [...streams, luaStream]) {
         if (on && g < pg.glyphs.length) { all += pg.glyphs[g].u; if (body) chars += pg.glyphs[g].u }
       }
     }
-    const rows = rowsOf(units[i]?.pieces[k]?.src.trim() ?? '', 5).s, body0 = chars.replace(/[\s\ufe00-\ufe0f]/g, '')
+    const rows = rowsOf(units[i]?.pieces[k]?.src.trim() ?? '', 5).s, body0 = chars.replace(/\s|\p{Variation_Selector}/gu, '')
     check(`${label}: a display across a page, its rows in order in the stream, what TeX shipped between them outside the column bodies`, body0.startsWith(`${rows}andthetextafterthelongdisplay`) && !all.replace(/\s/g, '').startsWith(rows), JSON.stringify({ body: body0.slice(0, 80), all: all.slice(0, 80) }))
   }
 }

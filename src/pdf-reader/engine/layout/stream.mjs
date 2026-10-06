@@ -51,7 +51,7 @@ const WORK = 20_000_000
 const code = (body, depth) => depth * 2 + (body ? 1 : 0)
 /** a glyph's character as the text after a piece is compared with it: NFKC, lower case, no white space, no variation
  *  selector */
-const charOf = u => u.normalize('NFKC').toLowerCase().replace(/[\s\ufe00-\ufe0f]/g, '')
+const charOf = u => u.normalize('NFKC').toLowerCase().replace(/\s|\p{Variation_Selector}/gu, '')
 
 /** each page's regions: of each glyph, of each box, at each point; every page begins outside any body */
 function regionsOf(page) {
