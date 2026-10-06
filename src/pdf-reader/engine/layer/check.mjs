@@ -20,8 +20,8 @@ const PAST = 0.5
 /** the longest run, in atoms, a duplication is looked for at */
 const RUN_MAX = 4
 
-const OPENS = new Map([['(', 'round'], ['（', 'round'], ['[', 'square'], ['［', 'square']])
-const CLOSES = new Map([[')', 'round'], ['）', 'round'], [']', 'square'], ['］', 'square']])
+const OPENS = new Map([['(', 'round'], ['\uff08', 'round'], ['[', 'square'], ['\uff3b', 'square']])
+const CLOSES = new Map([[')', 'round'], ['\uff09', 'round'], [']', 'square'], ['\uff3d', 'square']])
 /** a run of Latin letters or digits: an atom of a duplication (a crop is an atom of its own) */
 const ATOM = /[\p{Script=Latin}\p{Nd}]+/gu
 
@@ -90,11 +90,11 @@ function eraseOn(unit, page) {
   return out
 }
 /** a rendering's own text where it can be known: page text's, else the layout's own (Task 6b), else an equation
- *  reference's '(…)' (amsmath's \eqref), else null */
+ *  reference's '(\u2026)' (amsmath's \eqref), else null */
 function renderingOf(it, row) {
   if (it.kind === 'page-text') return it.text ?? null
   if (typeof row?.text === 'string' && row.text.length) return row.text
-  return row?.kind === 'eqref' ? '(…)' : null
+  return row?.kind === 'eqref' ? '(\u2026)' : null
 }
 const atomsOf = s => (typeof s === 'string' ? s.normalize('NFKC').match(ATOM) ?? [] : [])
 /** each run of up to RUN_MAX atoms followed at once by itself, counted by the run */
