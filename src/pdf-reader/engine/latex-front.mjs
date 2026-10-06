@@ -911,8 +911,10 @@ function walk(s, from, to, b, ctx) {
     const call = own && macroArgs(s, end, macro, to)
     // a front matter command the paper's own class defines, its text handed elsewhere too (icml2024.sty's \\icmltitle:
     // the running head and the PDF's title): a unit of what it is, with no mark, which would be set wherever the class
-    // sets it (2608.07584 had no title)
-    if (call && !macro.prose && FRONT_ROLES[name]?.[1]) { const e = frontCommand(s, end, name, to, b, ctx, { front: true }); if (e > 0) { endText(); i = e; continue } }
+    // sets it (2608.07584 had no title). The text before it ends where the command begins (endText first): the
+    // paragraph's unit must not run over the call, whose source no piece of it holds — written back, the call was gone
+    // (the re-review's N1, \note{…} mid-paragraph)
+    if (call && !macro.prose && FRONT_ROLES[name]?.[1]) { endText(); const e = frontCommand(s, end, name, to, b, ctx, { front: true }); if (e > 0) { i = e; continue } }
     if (call && macro.prose) {
       const arg = call.reqs[macro.prose - 1 - (macro.opt ? 1 : 0)]
       if (arg?.group && macro.stores) {
@@ -954,8 +956,8 @@ function walk(s, from, to, b, ctx) {
     }
     if (name === '\\') { const { args, end: e } = argsAfter(s, end, 1); const stop = args[0]?.kind === 'opt' ? e : end; endText(); if (b.cellMode) { b.flush(); i = stop; continue } b.ph(s.slice(i, stop), i, stop); i = stop; continue }
     // the front matter's commands the role table knows by their hook (FRONT_ROLES: AAAI's \affiliations, amsart's
-    // \dedicatory, a \date): their text a unit of what it is
-    if (FRONT_ROLES[name]?.[1]) { const e = frontCommand(s, end, name, to, b, ctx); if (e > 0) { endText(); i = e; continue } }
+    // \dedicatory, a \date): their text a unit of what it is, the text before them ended first (above)
+    if (FRONT_ROLES[name]?.[1]) { endText(); const e = frontCommand(s, end, name, to, b, ctx); if (e > 0) { i = e; continue } }
     // a running head, kept as it is with its arguments (2608.04322's \markboth{…}%\n{…}, whose second argument was walked
     // as text only while a comment kept it from the command)
     if (RUNNING_HEADS.has(name)) { const call = commandArgs(s, end, name, to); endText(); b.ph(s.slice(i, call.end), i, call.end); i = call.end; continue }

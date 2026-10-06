@@ -95,6 +95,24 @@ describe('the document as TeX finds it (documentBounds): a match of the raw text
     expect(texts(project(doc('Words.\n\\def\\stop#1\\end{document}\nMore words.')))).toEqual(['Words. More words.'])
     expect(texts(project(doc('Use \\verb|\\end{document}| to end.\n\nMore words.')))).toEqual(['Use to end.', 'More words.'])
   })
+  it('a front matter command in the middle of a paragraph keeps its call in the translation (re-review N1: \\note{…} was deleted)', () => {
+    const fonts = { rm: 'cmr', sf: 'cmss', tt: 'cmtt', body: 'cmr' }
+    const written = (pre: string, body: string) => {
+      const paper = openPaper(new Map([['main.tex', enc(doc(body, pre))]]))
+      const tr = new Map((paper.units as unknown as Unit[]).map((u, i) => [u, u.pieces.map(x => (x.t === 'text' && /\S/.test(x.s ?? '') ? { ...x, tr: true, s: `<T${i}>` } : x))]))
+      const tex = new TextDecoder().decode(translationFiles(paper, tr as never, { strategy: strategiesFor(paper.meta, 'zh')[0] as never, fonts }).get('main.tex'))
+      return tex.slice(tex.indexOf('\\begin{document}', tex.indexOf('emergencystretch')))
+    }
+    // the paper's own macro, its argument handed to a command the table does not know
+    const own = written('\\usepackage{todonotes}\n\\newcommand{\\note}[1]{\\todo{#1}}', 'Some body words here.\\note{fix this wording please} More words here to finish.')
+    expect(own).toMatch(/\\note\{<T\d>\}/)
+    expect(own.match(/<T\d>/g)?.length).toBe(3)
+    // a command no file defines, and a paper's macro of no argument with a group after it
+    expect(written('', 'Some body words here.\\note{fix this wording please} More words here to finish.')).toMatch(/\\note\{<T\d>\}/)
+    expect(written('\\newcommand{\\note}{\\textsuperscript{*}}', 'Some body words here.\\note{} More words here to finish.')).toContain('\\note{}')
+    // …and one that opens a paragraph is read as before
+    expect(written('\\newcommand{\\note}[1]{\\todo{#1}}', '\\note{A note at the paragraph start.}\n\nBody words.')).toMatch(/\\note\{<T0>\}\n\n[^]*<T1>/)
+  })
   it('what goes before the document goes before the real \\begin{document}, not a commented one in the preamble (live.mjs)', () => {
     const paper = openPaper(new Map([['main.tex', enc('\\documentclass{article}\n% a comment: \\begin{document}\n\\begin{document}\nA paragraph of words.\n\\end{document}\n')]]))
     const probe = new TextDecoder().decode(probeFiles(paper).get('main.tex'))
