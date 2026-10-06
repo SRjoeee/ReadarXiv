@@ -333,6 +333,14 @@ function paramUse(s, from, to, textual = true, use = { text: new Set(), other: n
     const definer = DEF_PRIMITIVES.has(name) || /^(?:(?:re)?newcommand|providecommand)$/.test(name)
     const prose = INLINE_TEXT.has(name) || name === 'footnote' || (CAPTIONS.has(name) && name !== 'captionof') ? reqs[0] : CONTENT_BOX.has(name) ? reqs[CONTENT_BOX.get(name) - 1] : definer ? args.at(-1) : null
     for (const a of args) paramUse(s, a.start + 1, a.end - 1, textual && (a === prose || (!!known && (a.role === 't' || a.role === 'c'))), use, storing || (definer && a === prose))
+    // a command the table does not know reads what follows as its arguments, up to delimiters only its definition gives:
+    // a parameter in the run of tokens right after it is handed to it (acmart.cls's \\ccsdesc{…} =
+    // \\ccsdesc@parse#1~#2~~…, whose #2 goes into a \\csname: marked, it stopped TeX six times in 2608.09189)
+    if (!known && !CITATION.test(name)) for (let k = skipSpaces(s, e); k < to && !/[\s}]/.test(s[k]); k++) {
+      if (s[k] === '\\') k++
+      else if (s[k] === '{') { const g = matchGroup(s, k); if (g < 0 || g > to) break; for (const m of s.slice(k, g).matchAll(/#(\d)/g)) use.other.add(Number(m[1])); k = g - 1 }
+      else if (s[k] === '#' && /\d/.test(s[k + 1] ?? '')) use.other.add(Number(s[++k]))
+    }
     i = e
   }
   return use

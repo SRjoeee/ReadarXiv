@@ -156,6 +156,13 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     expect(units(p).map(u => [textOf(u), !!u.front])).toEqual([['Copyright for this paper by its authors.', true], ['Body words.', false]])
     expect(patched(p)).toContain('\\copyrightclause{<T0>}')
   })
+  it('a parameter in the run of tokens right after a command the table does not know is that command\'s to read (acmart.cls\'s \\ccsdesc: marked inside a \\csname, it stopped TeX six times in 2608.09189)', () => {
+    const cls = '\\newcommand\\ccsdesc[2][100]{%\n  \\ccsdesc@parse#1~#2~~\\ccsdesc@parse@end}\n\\def\\ccsdesc@parse#1~#2~#3~{\\expandafter\\gdef\\csname CCS@General@#2\\endcsname{\\textbf{#2}}\\ccsdesc@parse@finish}\n'
+    const p = project(doc('\\ccsdesc[500]{Information systems~Multimedia information systems}\n\nBody words.'), { 'acmart.cls': cls })
+    expect(texts(p)).toEqual(['Body words.'])
+    // a parameter that stands apart from such a command is still the macro's prose
+    expect(texts(project(doc('\\nosection{Run-in heading words}', '\\newcommand\\nosection[1]{\\unknownskip\n\\noindent #1}')))).toEqual(['Run-in heading words'])
+  })
   it('a definition in the body is no text: \\def\\x{…}\'s body stays as it is', () => {
     expect(texts(project(doc('Before. \\def\\foo{\\textbf{Bold words here}} After.')))).toEqual(['Before. After.'])
   })
