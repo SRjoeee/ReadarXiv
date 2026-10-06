@@ -1,0 +1,1380 @@
+{
+ "schema": 1,
+ "what": "the instant layer's cost budget (spikes/layer-perf.mjs)",
+ "made": "2026-10-06T21:32:48.347Z",
+ "old": {
+  "runs": [
+   {
+    "made": "2026-10-06T20:40:52.464Z",
+    "engine": {
+     "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-old",
+     "commit": "f267adb9acb1554421dc0107161a9ea84d6da715",
+     "branch": "HEAD",
+     "dirty": false
+    }
+   },
+   {
+    "made": "2026-10-06T20:42:55.207Z",
+    "engine": {
+     "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-old",
+     "commit": "f267adb9acb1554421dc0107161a9ea84d6da715",
+     "branch": "HEAD",
+     "dirty": false
+    }
+   },
+   {
+    "made": "2026-10-06T20:44:45.693Z",
+    "engine": {
+     "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-old",
+     "commit": "f267adb9acb1554421dc0107161a9ea84d6da715",
+     "branch": "HEAD",
+     "dirty": false
+    }
+   }
+  ],
+  "browser": {
+   "fixtures": {
+    "1512.03385v1-de": {
+     "pages": 12,
+     "firstDraw": 59.6,
+     "zoom": 22.7,
+     "zoomRender": 6.6,
+     "zoomCopy": 16.1,
+     "canvasPeak": 26035200,
+     "heapPeak": 74707532,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1512.03385v1-es": {
+     "pages": 12,
+     "firstDraw": 61.9,
+     "zoom": 23.8,
+     "zoomRender": 6.9,
+     "zoomCopy": 16.2,
+     "canvasPeak": 26035200,
+     "heapPeak": 116369808,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1512.03385v1-fr": {
+     "pages": 12,
+     "firstDraw": 64.8,
+     "zoom": 23.3,
+     "zoomRender": 6.8,
+     "zoomCopy": 16.5,
+     "canvasPeak": 26035200,
+     "heapPeak": 131186964,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1512.03385v1-ja": {
+     "pages": 12,
+     "firstDraw": 65.2,
+     "zoom": 25.5,
+     "zoomRender": 7.1,
+     "zoomCopy": 17.8,
+     "canvasPeak": 26035200,
+     "heapPeak": 91338588,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1512.03385v1-ko": {
+     "pages": 12,
+     "firstDraw": 71.3,
+     "zoom": 23.6,
+     "zoomRender": 6.5,
+     "zoomCopy": 17.1,
+     "canvasPeak": 26035200,
+     "heapPeak": 63636060,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1512.03385v1-ru": {
+     "pages": 12,
+     "firstDraw": 64.2,
+     "zoom": 23.6,
+     "zoomRender": 6.8,
+     "zoomCopy": 16.2,
+     "canvasPeak": 26035200,
+     "heapPeak": 73420148,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1512.03385v1-zh": {
+     "pages": 12,
+     "firstDraw": 67.3,
+     "zoom": 24.4,
+     "zoomRender": 6.7,
+     "zoomCopy": 17.7,
+     "canvasPeak": 26035200,
+     "heapPeak": 65541312,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1706.03762v7-de": {
+     "pages": 12,
+     "firstDraw": 58,
+     "zoom": 29.3,
+     "zoomRender": 6.3,
+     "zoomCopy": 21.5,
+     "canvasPeak": 25675200,
+     "heapPeak": 78284844,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1706.03762v7-es": {
+     "pages": 12,
+     "firstDraw": 50.7,
+     "zoom": 27.2,
+     "zoomRender": 6.3,
+     "zoomCopy": 20,
+     "canvasPeak": 25675200,
+     "heapPeak": 61214844,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1706.03762v7-fr": {
+     "pages": 12,
+     "firstDraw": 52.3,
+     "zoom": 27,
+     "zoomRender": 6.1,
+     "zoomCopy": 20.9,
+     "canvasPeak": 25675200,
+     "heapPeak": 64529592,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1706.03762v7-ja": {
+     "pages": 12,
+     "firstDraw": 59.5,
+     "zoom": 26,
+     "zoomRender": 6.2,
+     "zoomCopy": 20.3,
+     "canvasPeak": 25675200,
+     "heapPeak": 61685168,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1706.03762v7-ko": {
+     "pages": 12,
+     "firstDraw": 56.8,
+     "zoom": 28.5,
+     "zoomRender": 6.2,
+     "zoomCopy": 22,
+     "canvasPeak": 25675200,
+     "heapPeak": 51393676,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1706.03762v7-ru": {
+     "pages": 12,
+     "firstDraw": 54.9,
+     "zoom": 27.6,
+     "zoomRender": 6.1,
+     "zoomCopy": 21.1,
+     "canvasPeak": 25675200,
+     "heapPeak": 71493220,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1706.03762v7-zh": {
+     "pages": 12,
+     "firstDraw": 58.7,
+     "zoom": 26.4,
+     "zoomRender": 5.5,
+     "zoomCopy": 20.7,
+     "canvasPeak": 25675200,
+     "heapPeak": 57032496,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1810.04805v2-de": {
+     "pages": 12,
+     "firstDraw": 63.9,
+     "zoom": 23.8,
+     "zoomRender": 6.9,
+     "zoomCopy": 16.1,
+     "canvasPeak": 26846016,
+     "heapPeak": 72124988,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1810.04805v2-es": {
+     "pages": 12,
+     "firstDraw": 71.1,
+     "zoom": 29.4,
+     "zoomRender": 7.8,
+     "zoomCopy": 16.9,
+     "canvasPeak": 26846016,
+     "heapPeak": 73292384,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1810.04805v2-fr": {
+     "pages": 12,
+     "firstDraw": 67.3,
+     "zoom": 29.5,
+     "zoomRender": 8.6,
+     "zoomCopy": 17.1,
+     "canvasPeak": 26846016,
+     "heapPeak": 74681256,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1810.04805v2-ja": {
+     "pages": 12,
+     "firstDraw": 60.8,
+     "zoom": 23.8,
+     "zoomRender": 6.8,
+     "zoomCopy": 14.2,
+     "canvasPeak": 26846016,
+     "heapPeak": 76619000,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1810.04805v2-ko": {
+     "pages": 12,
+     "firstDraw": 62.9,
+     "zoom": 24.8,
+     "zoomRender": 7.9,
+     "zoomCopy": 15.1,
+     "canvasPeak": 26846016,
+     "heapPeak": 73152088,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1810.04805v2-ru": {
+     "pages": 12,
+     "firstDraw": 59.7,
+     "zoom": 24.1,
+     "zoomRender": 7.1,
+     "zoomCopy": 14.9,
+     "canvasPeak": 26846016,
+     "heapPeak": 91124620,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "1810.04805v2-zh": {
+     "pages": 12,
+     "firstDraw": 59.8,
+     "zoom": 23.9,
+     "zoomRender": 7,
+     "zoomCopy": 14.4,
+     "canvasPeak": 26846016,
+     "heapPeak": 75100584,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "2307.16209v1-zh": {
+     "pages": 12,
+     "firstDraw": 34,
+     "zoom": 18.1,
+     "zoomRender": 6.4,
+     "zoomCopy": 11.2,
+     "canvasPeak": 26126016,
+     "heapPeak": 39915304,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "2608.04322v1-de": {
+     "pages": 12,
+     "firstDraw": 78.2,
+     "zoom": 24.7,
+     "zoomRender": 6.6,
+     "zoomCopy": 18.4,
+     "canvasPeak": 26035200,
+     "heapPeak": 91793260,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "2608.04322v1-es": {
+     "pages": 12,
+     "firstDraw": 78.8,
+     "zoom": 25,
+     "zoomRender": 7.2,
+     "zoomCopy": 16.7,
+     "canvasPeak": 26035200,
+     "heapPeak": 133891984,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "2608.04322v1-fr": {
+     "pages": 12,
+     "firstDraw": 79.7,
+     "zoom": 24.9,
+     "zoomRender": 6.8,
+     "zoomCopy": 17.5,
+     "canvasPeak": 26035200,
+     "heapPeak": 86259672,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "2608.04322v1-ja": {
+     "pages": 12,
+     "firstDraw": 80.6,
+     "zoom": 24.2,
+     "zoomRender": 6.5,
+     "zoomCopy": 17.5,
+     "canvasPeak": 26035200,
+     "heapPeak": 98106664,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "2608.04322v1-ko": {
+     "pages": 12,
+     "firstDraw": 86.5,
+     "zoom": 24.6,
+     "zoomRender": 7.1,
+     "zoomCopy": 17.9,
+     "canvasPeak": 26035200,
+     "heapPeak": 96194736,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "2608.04322v1-ru": {
+     "pages": 12,
+     "firstDraw": 80,
+     "zoom": 24.5,
+     "zoomRender": 6.9,
+     "zoomCopy": 17.6,
+     "canvasPeak": 26035200,
+     "heapPeak": 98379376,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    },
+    "2608.04322v1-zh": {
+     "pages": 12,
+     "firstDraw": 78.6,
+     "zoom": 26.2,
+     "zoomRender": 7,
+     "zoomCopy": 18.3,
+     "canvasPeak": 26035200,
+     "heapPeak": 83191000,
+     "split": {
+      "render": null,
+      "text": null,
+      "ink": null,
+      "rp": null,
+      "lay": null,
+      "ops": null,
+      "compose": null,
+      "svg": null
+     }
+    }
+   },
+   "all": {
+    "pages": 348,
+    "firstDraw": 65.2,
+    "zoom": 24.9,
+    "zoomRender": 6.6,
+    "zoomCopy": 17.6,
+    "canvasPeak": 26846016,
+    "heapPeak": 133891984,
+    "split": {
+     "render": null,
+     "text": null,
+     "ink": null,
+     "rp": null,
+     "lay": null,
+     "ops": null,
+     "compose": null,
+     "svg": null
+    }
+   }
+  },
+  "server": {
+   "1512.03385v1": {
+    "makerMs": 385,
+    "makerOpsMs": 130,
+    "removerMs": 0,
+    "remover": null,
+    "layoutBytes": 103203,
+    "layoutGzip": 32256,
+    "addonBytes": 0,
+    "manifestGzip": 0,
+    "download": 32256
+   },
+   "1706.03762v7": {
+    "makerMs": 554,
+    "makerOpsMs": 204,
+    "removerMs": 0,
+    "remover": null,
+    "layoutBytes": 48647,
+    "layoutGzip": 16401,
+    "addonBytes": 0,
+    "manifestGzip": 0,
+    "download": 16401
+   },
+   "1810.04805v2": {
+    "makerMs": 464,
+    "makerOpsMs": 185,
+    "removerMs": 0,
+    "remover": null,
+    "layoutBytes": 119776,
+    "layoutGzip": 37470,
+    "addonBytes": 0,
+    "manifestGzip": 0,
+    "download": 37470
+   },
+   "2307.16209v1": {
+    "makerMs": 1762,
+    "makerOpsMs": 665,
+    "removerMs": 0,
+    "remover": null,
+    "layoutBytes": 503795,
+    "layoutGzip": 160421,
+    "addonBytes": 0,
+    "manifestGzip": 0,
+    "download": 160421
+   },
+   "2608.04322v1": {
+    "makerMs": 617,
+    "makerOpsMs": 249,
+    "removerMs": 0,
+    "remover": null,
+    "layoutBytes": 131426,
+    "layoutGzip": 40145,
+    "addonBytes": 0,
+    "manifestGzip": 0,
+    "download": 40145
+   }
+  }
+ },
+ "new": {
+  "label": "exp/layer",
+  "runs": [
+   {
+    "made": "2026-10-06T20:41:58.492Z",
+    "engine": {
+     "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-i01",
+     "commit": "957ca1429e697d1913fff3ec3eeb397518839afd",
+     "branch": "HEAD",
+     "dirty": false
+    }
+   },
+   {
+    "made": "2026-10-06T20:43:49.448Z",
+    "engine": {
+     "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-i01",
+     "commit": "957ca1429e697d1913fff3ec3eeb397518839afd",
+     "branch": "HEAD",
+     "dirty": false
+    }
+   },
+   {
+    "made": "2026-10-06T20:45:45.167Z",
+    "engine": {
+     "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-i01",
+     "commit": "957ca1429e697d1913fff3ec3eeb397518839afd",
+     "branch": "HEAD",
+     "dirty": false
+    }
+   }
+  ],
+  "browser": {
+   "fixtures": {
+    "1512.03385v1-de": {
+     "pages": 12,
+     "firstDraw": 67.6,
+     "zoom": 22.2,
+     "zoomRender": 6.7,
+     "zoomCopy": 15.9,
+     "canvasPeak": 26035200,
+     "heapPeak": 63042412,
+     "split": {
+      "render": 16.6,
+      "text": 15.6,
+      "ink": 0,
+      "rp": 0,
+      "lay": 25.2,
+      "ops": 2.6,
+      "compose": 0,
+      "svg": 1.5
+     }
+    },
+    "1512.03385v1-es": {
+     "pages": 12,
+     "firstDraw": 65.9,
+     "zoom": 22,
+     "zoomRender": 6.5,
+     "zoomCopy": 15.3,
+     "canvasPeak": 26035200,
+     "heapPeak": 91236588,
+     "split": {
+      "render": 14.1,
+      "text": 16.1,
+      "ink": 0,
+      "rp": 0,
+      "lay": 26.6,
+      "ops": 2.7,
+      "compose": 0,
+      "svg": 1.7
+     }
+    },
+    "1512.03385v1-fr": {
+     "pages": 12,
+     "firstDraw": 68.1,
+     "zoom": 22,
+     "zoomRender": 6.1,
+     "zoomCopy": 15.3,
+     "canvasPeak": 26035200,
+     "heapPeak": 100640732,
+     "split": {
+      "render": 15.3,
+      "text": 16.3,
+      "ink": 0,
+      "rp": 0,
+      "lay": 26.9,
+      "ops": 2.2,
+      "compose": 0,
+      "svg": 1.8
+     }
+    },
+    "1512.03385v1-ja": {
+     "pages": 12,
+     "firstDraw": 77.6,
+     "zoom": 21.6,
+     "zoomRender": 6.2,
+     "zoomCopy": 15.6,
+     "canvasPeak": 26035200,
+     "heapPeak": 104100720,
+     "split": {
+      "render": 17.4,
+      "text": 25.5,
+      "ink": 0,
+      "rp": 0,
+      "lay": 23.9,
+      "ops": 2.4,
+      "compose": 0,
+      "svg": 1.4
+     }
+    },
+    "1512.03385v1-ko": {
+     "pages": 12,
+     "firstDraw": 73.7,
+     "zoom": 21.2,
+     "zoomRender": 6.4,
+     "zoomCopy": 14.7,
+     "canvasPeak": 26035200,
+     "heapPeak": 65840132,
+     "split": {
+      "render": 16.3,
+      "text": 24,
+      "ink": 0,
+      "rp": 0,
+      "lay": 25.7,
+      "ops": 2.4,
+      "compose": 0,
+      "svg": 1.3
+     }
+    },
+    "1512.03385v1-ru": {
+     "pages": 12,
+     "firstDraw": 64.9,
+     "zoom": 22.4,
+     "zoomRender": 6.4,
+     "zoomCopy": 15.8,
+     "canvasPeak": 26035200,
+     "heapPeak": 92705776,
+     "split": {
+      "render": 15,
+      "text": 16.5,
+      "ink": 0,
+      "rp": 0,
+      "lay": 25.6,
+      "ops": 2.3,
+      "compose": 0,
+      "svg": 1.3
+     }
+    },
+    "1512.03385v1-zh": {
+     "pages": 12,
+     "firstDraw": 72.1,
+     "zoom": 23.2,
+     "zoomRender": 6.8,
+     "zoomCopy": 16.4,
+     "canvasPeak": 26035200,
+     "heapPeak": 70893528,
+     "split": {
+      "render": 17.7,
+      "text": 24.8,
+      "ink": 0,
+      "rp": 0,
+      "lay": 24.4,
+      "ops": 2.8,
+      "compose": 0,
+      "svg": 1.3
+     }
+    },
+    "1706.03762v7-de": {
+     "pages": 12,
+     "firstDraw": 52.1,
+     "zoom": 26.4,
+     "zoomRender": 5.9,
+     "zoomCopy": 20.6,
+     "canvasPeak": 25675200,
+     "heapPeak": 73282084,
+     "split": {
+      "render": 8.6,
+      "text": 12.1,
+      "ink": 0,
+      "rp": 0,
+      "lay": 15.5,
+      "ops": 1.7,
+      "compose": 0,
+      "svg": 1
+     }
+    },
+    "1706.03762v7-es": {
+     "pages": 12,
+     "firstDraw": 51.3,
+     "zoom": 25.5,
+     "zoomRender": 5.8,
+     "zoomCopy": 19.5,
+     "canvasPeak": 25675200,
+     "heapPeak": 70287220,
+     "split": {
+      "render": 10.9,
+      "text": 10.3,
+      "ink": 0,
+      "rp": 0,
+      "lay": 16.4,
+      "ops": 1.7,
+      "compose": 0,
+      "svg": 1.1
+     }
+    },
+    "1706.03762v7-fr": {
+     "pages": 12,
+     "firstDraw": 53,
+     "zoom": 25.2,
+     "zoomRender": 5.9,
+     "zoomCopy": 19.6,
+     "canvasPeak": 25675200,
+     "heapPeak": 65724240,
+     "split": {
+      "render": 10.4,
+      "text": 10.6,
+      "ink": 0,
+      "rp": 0,
+      "lay": 16.3,
+      "ops": 1.5,
+      "compose": 0,
+      "svg": 1.2
+     }
+    },
+    "1706.03762v7-ja": {
+     "pages": 12,
+     "firstDraw": 61.7,
+     "zoom": 26.5,
+     "zoomRender": 5.8,
+     "zoomCopy": 20.5,
+     "canvasPeak": 25675200,
+     "heapPeak": 61497972,
+     "split": {
+      "render": 12.1,
+      "text": 16.9,
+      "ink": 0,
+      "rp": 0,
+      "lay": 13.8,
+      "ops": 1.7,
+      "compose": 0,
+      "svg": 0.7
+     }
+    },
+    "1706.03762v7-ko": {
+     "pages": 12,
+     "firstDraw": 59.7,
+     "zoom": 28.8,
+     "zoomRender": 5.5,
+     "zoomCopy": 22.5,
+     "canvasPeak": 25675200,
+     "heapPeak": 60111460,
+     "split": {
+      "render": 11.1,
+      "text": 17.1,
+      "ink": 0,
+      "rp": 0,
+      "lay": 16.2,
+      "ops": 1.9,
+      "compose": 0,
+      "svg": 1
+     }
+    },
+    "1706.03762v7-ru": {
+     "pages": 12,
+     "firstDraw": 53.7,
+     "zoom": 25.2,
+     "zoomRender": 5.6,
+     "zoomCopy": 19.7,
+     "canvasPeak": 25675200,
+     "heapPeak": 65264000,
+     "split": {
+      "render": 9.8,
+      "text": 12.1,
+      "ink": 0,
+      "rp": 0,
+      "lay": 16.5,
+      "ops": 1.7,
+      "compose": 0,
+      "svg": 0.9
+     }
+    },
+    "1706.03762v7-zh": {
+     "pages": 12,
+     "firstDraw": 56.3,
+     "zoom": 25,
+     "zoomRender": 5.6,
+     "zoomCopy": 19.5,
+     "canvasPeak": 25675200,
+     "heapPeak": 55227472,
+     "split": {
+      "render": 8.3,
+      "text": 15.8,
+      "ink": 0,
+      "rp": 0,
+      "lay": 14.4,
+      "ops": 1.7,
+      "compose": 0,
+      "svg": 0.6
+     }
+    },
+    "1810.04805v2-de": {
+     "pages": 12,
+     "firstDraw": 59.9,
+     "zoom": 23.4,
+     "zoomRender": 6.8,
+     "zoomCopy": 14.3,
+     "canvasPeak": 26846016,
+     "heapPeak": 78560340,
+     "split": {
+      "render": 6.4,
+      "text": 16.7,
+      "ink": 0,
+      "rp": 0,
+      "lay": 22.7,
+      "ops": 2.8,
+      "compose": 0,
+      "svg": 1.1
+     }
+    },
+    "1810.04805v2-es": {
+     "pages": 12,
+     "firstDraw": 62.7,
+     "zoom": 22.8,
+     "zoomRender": 7,
+     "zoomCopy": 14.2,
+     "canvasPeak": 26846016,
+     "heapPeak": 66558292,
+     "split": {
+      "render": 6.8,
+      "text": 16.5,
+      "ink": 0,
+      "rp": 0,
+      "lay": 22.1,
+      "ops": 2.4,
+      "compose": 0,
+      "svg": 1.5
+     }
+    },
+    "1810.04805v2-fr": {
+     "pages": 12,
+     "firstDraw": 60.7,
+     "zoom": 22.6,
+     "zoomRender": 7.1,
+     "zoomCopy": 15.4,
+     "canvasPeak": 26846016,
+     "heapPeak": 88874784,
+     "split": {
+      "render": 6.9,
+      "text": 16.2,
+      "ink": 0,
+      "rp": 0,
+      "lay": 22.2,
+      "ops": 2.3,
+      "compose": 0,
+      "svg": 1.7
+     }
+    },
+    "1810.04805v2-ja": {
+     "pages": 12,
+     "firstDraw": 65.4,
+     "zoom": 24.5,
+     "zoomRender": 7.2,
+     "zoomCopy": 14.9,
+     "canvasPeak": 26846016,
+     "heapPeak": 69983444,
+     "split": {
+      "render": 7.2,
+      "text": 22.6,
+      "ink": 0,
+      "rp": 0,
+      "lay": 20,
+      "ops": 2.4,
+      "compose": 0,
+      "svg": 1.3
+     }
+    },
+    "1810.04805v2-ko": {
+     "pages": 12,
+     "firstDraw": 69.1,
+     "zoom": 23.1,
+     "zoomRender": 7.2,
+     "zoomCopy": 15.2,
+     "canvasPeak": 26846016,
+     "heapPeak": 78098600,
+     "split": {
+      "render": 7.6,
+      "text": 22.5,
+      "ink": 0,
+      "rp": 0,
+      "lay": 22,
+      "ops": 2.3,
+      "compose": 0,
+      "svg": 1.4
+     }
+    },
+    "1810.04805v2-ru": {
+     "pages": 12,
+     "firstDraw": 59.7,
+     "zoom": 25.8,
+     "zoomRender": 7.2,
+     "zoomCopy": 14.6,
+     "canvasPeak": 26846016,
+     "heapPeak": 87006640,
+     "split": {
+      "render": 6.4,
+      "text": 16.8,
+      "ink": 0,
+      "rp": 0,
+      "lay": 21.3,
+      "ops": 2.6,
+      "compose": 0,
+      "svg": 1.5
+     }
+    },
+    "1810.04805v2-zh": {
+     "pages": 12,
+     "firstDraw": 63.3,
+     "zoom": 24.3,
+     "zoomRender": 7.6,
+     "zoomCopy": 15.5,
+     "canvasPeak": 26846016,
+     "heapPeak": 74987732,
+     "split": {
+      "render": 6.9,
+      "text": 23.7,
+      "ink": 0,
+      "rp": 0,
+      "lay": 19.8,
+      "ops": 2.3,
+      "compose": 0,
+      "svg": 1.1
+     }
+    },
+    "2307.16209v1-zh": {
+     "pages": 12,
+     "firstDraw": 38.4,
+     "zoom": 17.6,
+     "zoomRender": 6,
+     "zoomCopy": 11.5,
+     "canvasPeak": 26126016,
+     "heapPeak": 36819012,
+     "split": {
+      "render": 6.2,
+      "text": 12.9,
+      "ink": 0,
+      "rp": 0,
+      "lay": 9.4,
+      "ops": 1.2,
+      "compose": 0,
+      "svg": 0.6
+     }
+    },
+    "2608.04322v1-de": {
+     "pages": 12,
+     "firstDraw": 94.9,
+     "zoom": 31.4,
+     "zoomRender": 9.4,
+     "zoomCopy": 19.8,
+     "canvasPeak": 26035200,
+     "heapPeak": 95106444,
+     "split": {
+      "render": 21,
+      "text": 26.5,
+      "ink": 0,
+      "rp": 0,
+      "lay": 33.1,
+      "ops": 3.7,
+      "compose": 0,
+      "svg": 1.8
+     }
+    },
+    "2608.04322v1-es": {
+     "pages": 12,
+     "firstDraw": 95.7,
+     "zoom": 28.4,
+     "zoomRender": 7.8,
+     "zoomCopy": 20.2,
+     "canvasPeak": 26035200,
+     "heapPeak": 84899000,
+     "split": {
+      "render": 16.5,
+      "text": 27.5,
+      "ink": 0,
+      "rp": 0,
+      "lay": 33.2,
+      "ops": 3.8,
+      "compose": 0,
+      "svg": 2.3
+     }
+    },
+    "2608.04322v1-fr": {
+     "pages": 12,
+     "firstDraw": 80.4,
+     "zoom": 29.1,
+     "zoomRender": 7.7,
+     "zoomCopy": 19.3,
+     "canvasPeak": 26035200,
+     "heapPeak": 94852592,
+     "split": {
+      "render": 15.7,
+      "text": 23.3,
+      "ink": 0,
+      "rp": 0,
+      "lay": 28.2,
+      "ops": 3.2,
+      "compose": 0,
+      "svg": 2
+     }
+    },
+    "2608.04322v1-ja": {
+     "pages": 12,
+     "firstDraw": 85.1,
+     "zoom": 27.2,
+     "zoomRender": 8,
+     "zoomCopy": 18.5,
+     "canvasPeak": 26035200,
+     "heapPeak": 101035632,
+     "split": {
+      "render": 20.6,
+      "text": 31.8,
+      "ink": 0,
+      "rp": 0,
+      "lay": 20.9,
+      "ops": 3.2,
+      "compose": 0,
+      "svg": 1.2
+     }
+    },
+    "2608.04322v1-ko": {
+     "pages": 12,
+     "firstDraw": 101.9,
+     "zoom": 26.4,
+     "zoomRender": 8.3,
+     "zoomCopy": 17.3,
+     "canvasPeak": 26035200,
+     "heapPeak": 98715528,
+     "split": {
+      "render": 18.4,
+      "text": 38.9,
+      "ink": 0,
+      "rp": 0,
+      "lay": 29.6,
+      "ops": 3.3,
+      "compose": 0,
+      "svg": 1.7
+     }
+    },
+    "2608.04322v1-ru": {
+     "pages": 12,
+     "firstDraw": 94.3,
+     "zoom": 28.5,
+     "zoomRender": 7.8,
+     "zoomCopy": 18,
+     "canvasPeak": 26035200,
+     "heapPeak": 94884584,
+     "split": {
+      "render": 17.2,
+      "text": 23,
+      "ink": 0,
+      "rp": 0,
+      "lay": 31.7,
+      "ops": 3.3,
+      "compose": 0,
+      "svg": 1.9
+     }
+    },
+    "2608.04322v1-zh": {
+     "pages": 12,
+     "firstDraw": 97.2,
+     "zoom": 31.9,
+     "zoomRender": 8.5,
+     "zoomCopy": 20,
+     "canvasPeak": 26035200,
+     "heapPeak": 100359584,
+     "split": {
+      "render": 18.7,
+      "text": 39.2,
+      "ink": 0,
+      "rp": 0,
+      "lay": 26.3,
+      "ops": 3.4,
+      "compose": 0,
+      "svg": 1.2
+     }
+    }
+   },
+   "all": {
+    "pages": 348,
+    "firstDraw": 67.6,
+    "zoom": 24.8,
+    "zoomRender": 6.8,
+    "zoomCopy": 17.3,
+    "canvasPeak": 26846016,
+    "heapPeak": 104100720,
+    "split": {
+     "render": 12,
+     "text": 19.6,
+     "ink": 0,
+     "rp": 0,
+     "lay": 20.3,
+     "ops": 2.4,
+     "compose": 0,
+     "svg": 1.2
+    }
+   }
+  },
+  "server": {
+   "1512.03385v1": {
+    "makerMs": 465,
+    "makerOpsMs": 132,
+    "removerMs": 195,
+    "remover": {
+     "parse": 38,
+     "ink": 48,
+     "plan": 83,
+     "make": 26,
+     "ops": 135
+    },
+    "layoutBytes": 107152,
+    "layoutGzip": 34425,
+    "addonBytes": 2174,
+    "manifestGzip": 364,
+    "download": 36963
+   },
+   "1706.03762v7": {
+    "makerMs": 521,
+    "makerOpsMs": 192,
+    "removerMs": 234,
+    "remover": {
+     "parse": 177,
+     "ink": 27,
+     "plan": 21,
+     "make": 9,
+     "ops": 218
+    },
+    "layoutBytes": 51636,
+    "layoutGzip": 17912,
+    "addonBytes": 2569,
+    "manifestGzip": 356,
+    "download": 20837
+   },
+   "1810.04805v2": {
+    "makerMs": 525,
+    "makerOpsMs": 175,
+    "removerMs": 134,
+    "remover": {
+     "parse": 36,
+     "ink": 40,
+     "plan": 48,
+     "make": 10,
+     "ops": 150
+    },
+    "layoutBytes": 128677,
+    "layoutGzip": 41443,
+    "addonBytes": 352,
+    "manifestGzip": 197,
+    "download": 41992
+   },
+   "2307.16209v1": {
+    "makerMs": 2205,
+    "makerOpsMs": 711,
+    "removerMs": 484,
+    "remover": {
+     "parse": 168,
+     "ink": 149,
+     "plan": 106,
+     "make": 61,
+     "ops": 539
+    },
+    "layoutBytes": 490227,
+    "layoutGzip": 156672,
+    "addonBytes": 32928,
+    "manifestGzip": 1086,
+    "download": 190686
+   },
+   "2608.04322v1": {
+    "makerMs": 693,
+    "makerOpsMs": 244,
+    "removerMs": 126,
+    "remover": {
+     "parse": 22,
+     "ink": 51,
+     "plan": 38,
+     "make": 15,
+     "ops": 232
+    },
+    "layoutBytes": 130683,
+    "layoutGzip": 41671,
+    "addonBytes": 1769,
+    "manifestGzip": 266,
+    "download": 43706
+   }
+  }
+ },
+ "over": [
+  "1512.03385v1-de first drawing: 59.6 -> 67.6",
+  "1512.03385v1-ja first drawing: 65.2 -> 77.6",
+  "2307.16209v1-zh first drawing: 34 -> 38.4",
+  "2608.04322v1-de first drawing: 78.2 -> 94.9",
+  "2608.04322v1-de zoom: 24.7 -> 31.4",
+  "2608.04322v1-es first drawing: 78.8 -> 95.7",
+  "2608.04322v1-es zoom: 25 -> 28.4",
+  "2608.04322v1-fr zoom: 24.9 -> 29.1",
+  "2608.04322v1-ja zoom: 24.2 -> 27.2",
+  "2608.04322v1-ko first drawing: 86.5 -> 101.9",
+  "2608.04322v1-ru first drawing: 80 -> 94.3",
+  "2608.04322v1-ru zoom: 24.5 -> 28.5",
+  "2608.04322v1-zh first drawing: 78.6 -> 97.2",
+  "2608.04322v1-zh zoom: 26.2 -> 31.9",
+  "1512.03385v1 maker: 385 -> 465",
+  "1810.04805v2 maker: 464 -> 525",
+  "2307.16209v1 maker: 1762 -> 2205",
+  "2608.04322v1 maker: 617 -> 693"
+ ]
+}
