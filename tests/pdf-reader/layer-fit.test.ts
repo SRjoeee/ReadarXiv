@@ -109,11 +109,12 @@ describe('the fit', () => {
     const file = nine(0)
     expect(layUnit(inputOf(file, 'zh'), 1, tr(''))).toEqual({ id: 1, fit: false, why: 'tokens' })
     expect(layUnit(inputOf(file, 'zh'), 1, tr('   \n  '))).toEqual({ id: 1, fit: false, why: 'tokens' })
-    expect(layUnit(inputOf(file, 'zh'), 1, { pieces: null as unknown as TrPiece[], sentences: null })).toEqual({ id: 1, fit: false, why: 'tokens' })
+    // no pieces at all: the net's checkPieces refuses them before the tokens are made (Task 11)
+    expect(layUnit(inputOf(file, 'zh'), 1, { pieces: null as unknown as TrPiece[], sentences: null })).toEqual({ id: 1, fit: false, why: 'pieces' })
     expect(layUnit(inputOf(file, 'zh'), 7, tr(han(10)))).toEqual({ id: 7, fit: false, why: 'located' })
-    // a placeholder whose rendering the layout lost: the tokens give none
+    // a placeholder whose rendering the layout lost: refused before the tokens are made, as the net's 'lost' (Task 11)
     const lost = layoutOf([{ id: 1, lines: column(3), ph: [{ k: 2, kind: 'math', flags: PH_FLAG.LOST }] }])
-    expect(layUnit(inputOf(lost, 'zh'), 1, tr([[0, han(5)], [1, 2]]))).toEqual({ id: 1, fit: false, why: 'tokens' })
+    expect(layUnit(inputOf(lost, 'zh'), 1, tr([[0, han(5)], [1, 2]]))).toEqual({ id: 1, fit: false, why: 'lost' })
   })
 
   it("baselines are the layout's at leading 1", () => {

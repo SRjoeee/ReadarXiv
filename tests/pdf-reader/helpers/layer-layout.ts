@@ -15,9 +15,11 @@ export interface LineSpec { page?: number; x0?: number; x1: number; baseline: nu
 export interface FrameSpec { page?: number; column?: number; lines: number; share?: number; below?: number }
 export interface PhSpec { k: number; kind: (typeof PH_KINDS)[number]; flags?: number; segs?: number[][] }
 export interface LabelSpec { kind?: (typeof LABEL_KINDS)[number]; page?: number; x0: number; baseline: number; x1: number }
+/** an erase rectangle: the unit's line it is on (its index), x0, y0, x1, y1 */
+export type EraseSpec = [line: number, x0: number, y0: number, x1: number, y1: number]
 export interface UnitDef {
   id: number; kind?: (typeof UNIT_KINDS)[number]; flags?: number; pieces?: number
-  lines: LineSpec[]; frames?: FrameSpec[]; ph?: PhSpec[]; labels?: LabelSpec[]
+  lines: LineSpec[]; frames?: FrameSpec[]; ph?: PhSpec[]; labels?: LabelSpec[]; erase?: EraseSpec[]
 }
 
 /** a line's rectangle as a 10 pt line's: 7 above its baseline, 2.5 below */
@@ -41,6 +43,7 @@ export function layoutOf(units: UnitDef[], pages = 2): LayoutIndex {
       first += f.lines
       return row
     })])
+    if (u.erase?.length) file.erase.push([u.id, u.erase.flat()])
     for (const p of u.ph ?? []) file.ph.push([u.id, p.k, PH_KINDS.indexOf(p.kind), p.flags ?? 0, ...(p.segs ?? []).flat()])
     for (const l of u.labels ?? []) file.labels.push([u.id, LABEL_KINDS.indexOf(l.kind ?? 'number'), l.page ?? 1, l.x0, l.baseline, l.x1, l.baseline + 7, l.baseline - 2.5])
     if (u.kind === 'heading') file.headings.push([u.id, 'Introduction'])

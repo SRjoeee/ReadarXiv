@@ -9,6 +9,9 @@
 // - A split unit (more than one frame) is cut at the translation's sentence start nearest each frame's share of the
 //   source, each part laid in its own frame, the unit at one size and leading; a part that does not fit gives a sentence
 //   to the roomier frame before the fit moves on.
+// - The completeness net (net.mjs) is on both sides: the pieces are refused within bounds before anything reads them, a
+//   unit whose layout lost a placeholder is refused before it is laid, and the laid unit is checked before it is returned.
+//   No unit the net refuses leaves here: it stays the original's, neither erased nor drawn.
 //
 // Pure, as the layer is: no DOM, no clock, no randomness; text is measured only through the function it is given, and
 // sizes and positions are PDF units, which no zoom changes. An original module (no port statement), importing only
@@ -16,6 +19,7 @@
 import { FACES } from '../font-roles.mjs'
 import { scriptOf } from '../layer-rules.mjs'
 import { breakLines, placeLines } from './breaks.mjs'
+import { checkPieces, heldByNone, lostIn, netOf } from './net.mjs'
 import { trText } from './pieces.mjs'
 import { tokensOf } from './tokens.mjs'
 
@@ -51,7 +55,7 @@ const content = t => t.kind === 'text' || t.kind === 'ph'
  * visual size), 1 for every other face. A run is drawn at the line's size × its face's correction, so the fit measures it
  * so: its width at 100 px times the correction.
  */
-function faceSize(face) {
+export function faceSize(face) {
   const v = Object.hasOwn(FACES, face) ? FACES[face].size : undefined
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 1
 }
@@ -431,18 +435,26 @@ const unfit = (id, why) => ({ id, fit: false, why })
 
 /**
  * A unit laid into its frames at the first state of the fit at which every token is placed and no line runs past its
- * slot, or why it stays the original's: 'located' (no lines or frames), 'tokens' (tokensOf gave none, or the translation
- * has nothing to draw), 'floor' (no state fits). Task 11 adds the net's reasons.
+ * slot, and which the completeness net passes; or why it stays the original's, the first of:
+ * - 'located': no such unit, or no lines or frames;
+ * - 'pieces': the pieces are not a translation of the unit (checkPieces);
+ * - 'lost': the layout lost a placeholder of the unit;
+ * - 'glyph': a text holds a character no face of the role set has; 'tokens': tokensOf gave none for any other reason, or the
+ *   translation has nothing to draw;
+ * - 'floor': no state fits;
+ * - the net's on the laid unit (netOf): 'missing', 'twice', 'overlap', 'erase', 'glyph', 'brackets'.
  */
 export function layUnit(input, id, tr, o = {}) {
   const unit = input.file.unit(id)
-  if (!unit || unit.lines.length < 8 || unit.frames.length < 6) return unfit(id, 'located')
+  if (!unit) return unfit(id, 'located')
+  const pieces = checkPieces(tr?.pieces, unit)
+  if (!pieces) return unfit(id, 'pieces')
+  if (unit.lines.length < 8 || unit.frames.length < 6) return unfit(id, 'located')
+  if (lostIn(unit)) return unfit(id, 'lost')
   const { measure: raw, rules, target, hyphen } = input
   const measure = (text, face, caps) => raw(text, face, caps) * faceSize(face)
-  const tokens = tr && Array.isArray(tr.pieces)
-    ? tokensOf(tr.pieces, { unit, file: input.file, target, rules, roles: input.roles, measure, hyphen, textIn: input.textIn })
-    : null
-  if (!tokens) return unfit(id, 'tokens')
+  const tokens = tokensOf(pieces, { unit, file: input.file, target, rules, roles: input.roles, measure, hyphen, textIn: input.textIn })
+  if (!tokens) return unfit(id, heldByNone(pieces, input.roles) ? 'glyph' : 'tokens')
   // nothing to draw: the unit's text would be erased and nothing set in its place
   if (!tokens.some(t => content(t) || t.kind === 'block')) return unfit(id, 'tokens')
 
@@ -456,7 +468,7 @@ export function layUnit(input, id, tr, o = {}) {
   const ctx = { rules, target, measure, hyphen, grid: grid.grid }
 
   // a split unit's first cuts: at the sentence start nearest each frame's share, else at the nearest character or word
-  const text = trText(tr.pieces), len = text.length
+  const text = trText(pieces), len = text.length
   const sentences = []
   if (Array.isArray(tr.sentences)) for (const s of tr.sentences) if (Number.isInteger(s) && s > 0 && s < len && s > (sentences.at(-1) ?? 0)) sentences.push(s)
   const frames = geo.frames, cuts = [], limits = []
@@ -488,7 +500,10 @@ export function layUnit(input, id, tr, o = {}) {
       lines.push(...linesOf(r.b, got.f, state, measure, grid))
       for (const t of r.b.tokens) if (t.kind === 'ph' || t.kind === 'block') drawn.set(t.ph, t.mode)
     }
-    return { id, fit: true, state, size: got.f, lines, cuts: got.cuts.slice(), drawn }
+    const laid = { id, fit: true, state, size: got.f, lines, cuts: got.cuts.slice(), drawn }
+    // the first state that fits is the unit's: one the net refuses stays the original's, whatever a later state would give
+    const why = netOf(input, laid, { pieces, sentences: tr.sentences })
+    return why ? unfit(id, why) : laid
   }
   return unfit(id, 'floor')
 }
