@@ -224,8 +224,11 @@ function lineOf(P, r, from, to, unit) {
   let x0 = Infinity, x1 = -Infinity
   for (const i of inside) { x0 = Math.min(x0, P.x0[i]); x1 = Math.max(x1, P.x1[i]) }
   const glue = GLUE * size0, taken = new Set(inside)
+  // glued to its ends, or before its end mark (after its start mark) on its last line (its first): TeX set them on the
+  // line before the mark, whatever the gap — a formula's scripts the window leaves out part a full stop from the line's
+  // last word (1706's "… by 1/√dk.": its k a script too far below the baseline, the stop 5.5 pt past the d)
   const right = near.filter(i => !taken.has(i) && mid(P, i) > R).sort((a, b) => P.x0[a] - P.x0[b] || a - b)
-  for (const i of right) { if (P.x0[i] - x1 > glue) break; taken.add(i); x1 = Math.max(x1, P.x1[i]) }
+  for (const i of right) { if (P.x0[i] - x1 > glue && to === null) break; taken.add(i); x1 = Math.max(x1, P.x1[i]) }
   // its closing punctuation glued past its end mark: a mark carried past its line's last word stands where the formula
   // before it ends in our compile, which arXiv's may set wider (1706's "… by 1/√dk." left its full stop standing)
   if (to !== null) {
@@ -233,7 +236,7 @@ function lineOf(P, r, from, to, unit) {
     for (const i of after) { if (P.x0[i] - x1 > glue) break; taken.add(i); x1 = Math.max(x1, P.x1[i]) }
   }
   const left = near.filter(i => !taken.has(i) && mid(P, i) < L).sort((a, b) => P.x1[b] - P.x1[a] || a - b)
-  for (const i of left) { if (x0 - P.x1[i] > glue) break; taken.add(i); x0 = Math.min(x0, P.x0[i]) }
+  for (const i of left) { if (x0 - P.x1[i] > glue && from === null) break; taken.add(i); x0 = Math.min(x0, P.x0[i]) }
   return rowOf(P, [...taken], r.page, r.ks, base)
 }
 

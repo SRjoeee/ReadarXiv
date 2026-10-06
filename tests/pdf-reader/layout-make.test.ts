@@ -998,6 +998,18 @@ describe('makeLayout, the maker round (Fix 3): the lines a unit\'s source does n
   })
 })
 
+describe('makeLayout, a unit\'s last line up to its end mark', () => {
+  it('takes the glyphs before the end mark whatever the gap: a full stop after a formula whose script the line leaves out', async () => {
+    // 1706's "… we scale the dot products by 1/√dk.": the k a script too far below the baseline for the line, the stop
+    // past the gap it leaves; the end mark after the stop
+    const runs: Run[] = [{ s: 'we scale the products by', x: 72, y: 700 }, { s: 'd', x: 195, y: 696, size: 7 }, { s: 'k', x: 198.5, y: 694, size: 5 }, { s: '.', x: 205, y: 700 }]
+    const { file } = await made({ pages: [{ runs }], marks: [['0s', 1, 72, 700], ['0e', 1, 207.5, 700]], units: [unit('para', [text('we scale the products by '), ph('$d_k$'), text('.')])] })
+    // the stop's own box, 205 to 210, in the line and its erase
+    expect(rowsOf(file, 0, 'lines')[2]).toBe(210)
+    expect(Math.max(...chunk(rowsOf(file, 0, 'erase'), 5).map(r => r[3] ?? 0))).toBeGreaterThanOrEqual(209)
+  })
+})
+
 describe('makeLayout, a unit\'s head pieces: its macros before its start mark, where no mark goes', () => {
   // 1810.04805's "\\bert{} is conceptually simple …": \\newcommand\\bert{BERT\\xspace}, the start mark after it
   const runs: Run[] = [{ s: 'BERT is conceptually simple', x: 72, y: 700 }]
