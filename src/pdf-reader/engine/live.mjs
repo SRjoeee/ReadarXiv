@@ -353,7 +353,13 @@ export const PIPELINE_CARRIES = { 7: pieces => !pieces.some(p => p.t === 'text' 
 //    apacite and babel on a revisit, and that paper's record, which none of the ways could set, is tried again. With
 //    them the tables fitted since 5 (2a346741: what stands in a TeX comment; 9cc9cd2d: a starred environment read by
 //    lines), whose \axtfit decisions changed under it
-export const TYPESETTING_VERSION = '6'
+// 7: the halts the layer lab's finals met when compiled as BusyTeX compiles (2026-10-06): a cell's row commands written
+//    where the row has them (latex-front.mjs rowsKept) — a copy of 6 set by a compiler that went past "Misplaced
+//    \noalign" lacks the rule —; a font a style loads by name declared again in the target's encoding (scripts.mjs
+//    namedFonts) — 6's Russian headings in CVPR's \elvbf were the raw font's glyphs —; graphicx's sizes in px given in
+//    bp under XeTeX (latex-front.mjs XETEX_SHIM), siunitx 3.6.2's misnamed locale file passed over and CJKutf8's bytes
+//    protected from LaTeX's case changing (scripts.mjs): papers none of the ways could set are tried again
+export const TYPESETTING_VERSION = '7'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
