@@ -190,6 +190,15 @@ describe('causesOf: each line TeX set otherwise, its cause from the evidence', (
     // a glyph of another letter beside another mark is no setting again
     expect(causesOf([d('0.6', 'h1e', '\\kern-0.5', null), d('0.6', '2s', '\\T1/ptm/m/n/9 (+7) a', '\\T1/ptm/m/n/9 (+5) b')]).get('3:0.6')).toBe('unexplained')
   })
+  it('a line whose nodes are all the same, its glue set alone other, is accepted as such, whatever mark is beside it (2608.18090\'s ruling)', () => {
+    expect(causesOf([d('0.9', 'p12.3a', '\\hbox(6.83+1.94)x252.0', '\\hbox(6.83+1.94)x252.0, glue set 0.74948')]).get('3:0.9')).toBe('glue set')
+    expect(causesOf([d('0.9', 'p12.3a', '\\hbox(6.83+1.94)x252.0, glue set -0.01106', '\\hbox(6.83+1.94)x252.0, glue set 0.74948')]).get('3:0.9')).toBe('glue set')
+    // another size, or a node beside it set otherwise, is no glue set alone
+    expect(causesOf([d('0.9', 'p12.3a', '\\hbox(6.83+1.94)x252.0', '\\hbox(6.83+2.0)x252.0, glue set 0.7')]).get('3:0.9')).toBe('unexplained')
+    expect(causesOf([d('0.9', 'p12.3a', '\\hbox(6.83+1.94)x252.0', '\\hbox(6.83+1.94)x252.0, glue set 0.7'), d('0.9', 'p12.3a', '\\glue 3.33', '\\glue 3.5')]).get('3:0.9')).toBe('unexplained')
+    // a glyph expanded otherwise is no glue set
+    expect(causesOf([d('0.9', 'p12.3a', '\\T1/ptm/m/n/9 (+7) a', '\\T1/ptm/m/n/9 (+5) a')]).get('3:0.9')).toBe('unexplained')
+  })
   it('anything else is unexplained: a placeholder\'s mark beside it, no kern lost, a kern v1 added', () => {
     expect(causesOf([d('0.1', 'h4e', '\\kern-0.135', null), d('0.1', 'p2.3b', 'a', 'b')]).get('3:0.1')).toBe('unexplained')
     expect(causesOf([d('0.2', 'h4e', 'a', 'b')]).get('3:0.2')).toBe('unexplained')

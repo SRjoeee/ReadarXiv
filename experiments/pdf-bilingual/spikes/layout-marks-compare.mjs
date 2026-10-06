@@ -273,13 +273,18 @@ export function boxDiff(pages0, pages1) {
 
 /** a node's text as it would read set again at another stretch: microtype's font expansion and a box's glue set out */
 const unset = t => t.replace(/ \([+-]\d+\)/, '').replace(/, glue set [^,]*/, '')
+/** a box's text without its glue set alone */
+const unglued = t => t.replace(/, glue set [^,]*/, '')
 /**
  * Each line TeX set otherwise (boxDiff's, by page and line), with its cause where the evidence names an accepted one:
  * 'heading kern' when a kern v0 set beside a heading's mark is one v1 did not set — v1 has nothing in its place, or
  * only a node v0 sets elsewhere in that line, the next node displaced (the font kern of a heading's last letter with the
  * full stop its class appends after the end mark: ruling 2; a glue, a kern or a box v1 adds there is no lost kern: the
  * re-review's m1) — and every other difference in the line lies beside a heading's mark or sets the same node again
- * at another stretch (the line's glue set, microtype's expansion of its glyphs: 2608.25210); else 'unexplained'
+ * at another stretch (the line's glue set, microtype's expansion of its glyphs: 2608.25210); 'glue set' when every
+ * difference in the line is a box whose own nodes are all the same and whose glue set alone is other (the ruling of
+ * 2026-10-06 on 2608.18090: the same nodes and breaks, packed otherwise by pdfTeX's protrusion and expansion as the
+ * layout of TeX's node memory falls; diffs reports a box itself only where its nodes are equal); else 'unexplained'
  */
 export function causesOf(diffs) {
   const lines = new Map()
@@ -290,7 +295,8 @@ export function causesOf(diffs) {
     // the nodes v0 sets in the line that v1 sets elsewhere or not at all, as they would read set again
     const gone = new Set(ds.filter(d => d.v0 !== null && d.v1 === null).map(d => unset(d.v0)))
     const kern = ds.some(d => head(d) && /^\\kern-?\d/.test(d.v0 ?? '') && (d.v1 === null || (!/^\\(?:kern|glue|hskip|[hv]box|rule|penalty)/.test(d.v1) && gone.has(unset(d.v1)))))
-    out.set(k, kern && ds.every(d => head(d) || again(d)) ? 'heading kern' : 'unexplained')
+    const glueSet = ds.every(d => d.v0 !== null && d.v1 !== null && BOX.test(d.v0) && BOX.test(d.v1) && d.v0 !== d.v1 && unglued(d.v0) === unglued(d.v1))
+    out.set(k, kern && ds.every(d => head(d) || again(d)) ? 'heading kern' : glueSet ? 'glue set' : 'unexplained')
   }
   return out
 }
