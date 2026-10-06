@@ -75,6 +75,9 @@ const STAY = {
   'biblatex style=chem-acs, \\autocite before . and ,': doc('\\usepackage[style=chem-acs]{biblatex}', `${prose(16, i => [' \\autocite{a}.', ' \\autocite{b},', ' \\autocite{a} and', ' \\autocite{b};'][i % 4])}`),
   'biblatex style=ext-verbose, \\autocite before . and ,': doc('\\usepackage[style=ext-verbose]{biblatex}', `${prose(16, i => [' \\autocite{a}.', ' \\autocite{b},', ' \\autocite{a} and', ' \\autocite{b}?'][i % 4])}`),
   'REVTeX 4.2 aip,jcp, \\cite before . and ,': doc('', `${prose(16, i => [' \\cite{a}.', ' \\cite{b},', ' \\cite{a} and', ' \\cite{a,b};'][i % 4])}\n\n${BIB}`, '\\documentclass[aip,jcp,reprint]{revtex4-2}'),
+  // REVTeX 4.2's own swap runs under citeautoscript alone: it takes the token after a citation into a \csname, a closing
+  // mark there an error (the re-review's I-new: the probe measured the box before)
+  'REVTeX 4.2 aip,jcp,citeautoscript, \\cite before !, ? and a word': doc('', `${prose(16, i => [' \\cite{a}!', ' \\cite{b}?', ' \\cite{a} and', ' \\cite{b}.'][i % 4])}\n\n${BIB}`, '\\documentclass[aip,jcp,reprint,citeautoscript]{revtex4-2}'),
   'natbib [super] alone, \\cite before . and ,': doc('\\usepackage[super]{natbib}', `${prose(16, i => [' \\cite{a}.', ' \\cite{b},', ' \\cite{a} and', ' \\citep{b};'][i % 4])}\n\n${BIB}`),
   // footnote calls: one whose note has a letter alone (no unit: a call all the same), and two in a row, the second
   // marked where TeX answers that a mark between them changes nothing; under footmisc's [multiple] too, whose separator
@@ -126,7 +129,7 @@ function prepare() {
   for (const q of probes) { const d = join(dir, `${q.name}-probe`); mkdirSync(d, { recursive: true }); for (const [path, bytes] of probeFiles(q.paper, { marks: true })) writeFileSync(join(d, path), bytes) }
   compileAll(probes.map(q => ({ name: `${q.name}-probe`, engine: q.engine === 'xelatex' ? 'xelatex -no-pdf' : q.engine, passes: 1, probe: true })))
   for (const q of queued) {
-    const switches = q.own ? readMarkProbe(read(`${q.name}-probe`, 'log', 'latin1') ?? '', probeSamples(q.paper.units)) : {}
+    const switches = q.own ? readMarkProbe(read(`${q.name}-probe`, 'log', 'latin1') ?? '', probeSamples(q.paper.units)) : null
     q.switches = switches
     for (const v of q.variants) {
       const d = join(dir, `${q.name}-${v}`)
@@ -230,6 +233,15 @@ for (const [name, , engine] of stays) {
   }
 }
 
+{
+  // REVTeX's swap takes the closing mark into a \csname: the probe's box with both marks errors, so before `!`, `?` and
+  // a word the answer is the opening mark alone, not every mark (a box that errors measured the previous box once)
+  const name = 'REVTeX 4.2 aip,jcp,citeautoscript, \\cite before !, ? and a word'
+  for (const key of [stayKey(name, 'pdflatex'), `${stayKey(name, 'pdflatex')}-hyperref`]) {
+    const got = queued.find(q => q.name === key)?.switches?.['\\cite']
+    check(`the mark probe's answer: ${key}`, got === '22221110', JSON.stringify({ got }))
+  }
+}
 {
   const inline = await pdfOf(`${stayKey('an inline formula of \\( \\)', 'pdflatex')}-v1`)
   const closing = [...(inline?.dests.keys() ?? [])].filter(k => /^p\d+\.\d+b$/.test(k)).length
