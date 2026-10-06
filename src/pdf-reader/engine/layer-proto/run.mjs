@@ -47,7 +47,7 @@ import { locatedWhole, texParts, texRects } from './tex.mjs'
  *  file read at once */
 export const PDF_OPTIONS = { cMapPacked: true, enableHWA: true, disableStream: true }
 /** the fit's parameters a host may set (main.js read them from the query), and the page-even pass's units */
-export const PARAM_KEYS = ['leadBase', 'leadFloor', 'trackMin', 'compressMax', 'borrow', 'borrowGap', 'floor', 'step', 'grid', 'cjkJust', 'spaceMax', 'autospace', 'spaceMin', 'hyphen', 'even', 'order', 'further', 'floorMin', 'trackStart']
+export const PARAM_KEYS = ['leadBase', 'leadFloor', 'trackMin', 'compressMax', 'borrow', 'borrowGap', 'floor', 'step', 'grid', 'cjkJust', 'spaceMax', 'autospace', 'spaceMin', 'hyphen', 'even', 'order', 'further', 'floorMin', 'trackStart', 'leadRel', 'fillSize']
 /** the page's body units that the even pass sets alike (a unit on two pages keeps its own fit) */
 const EVEN_KINDS = new Set(['para', 'abstract', 'list', 'item'])
 /** the SVG's own rules (the prototype's index.html): its text set as laid, in the layer's ink */
@@ -509,6 +509,10 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     p.prep = prep
     p.s = s
     p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P), trackStart: P.trackStart ?? cjkAdvance() }
+    // (fillBySize, P.fillSize, off by default: where the leading rule gave up a step (0.05) or more of the script's
+    // leading on a loose original, the paragraph is filled by its text's size instead, up to P.fillSize × the
+    // original's; a solid-set original keeps the script's leading, and its units are never grown)
+    if (P.fillSize > 1 && p.P.leadBase <= P.leadBase - 0.05 + 1e-9) p.P.growTo = P.fillSize
     p.layout = L2.layoutUnit2(tokens, p.blocks, s, p.P, to)
     // (step 3: never drawn in part: given more room where the page has it, else left the original's, whole)
     if (p.layout.clipped) {

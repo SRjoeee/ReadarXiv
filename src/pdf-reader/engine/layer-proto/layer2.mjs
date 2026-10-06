@@ -1732,7 +1732,8 @@ export const SOLID = 1.25
  * pitch: its blocks' own (pitch0), the median of those that have one; none, leadBase. 1 where leadBase is.
  */
 export function leadOf(blocks, s, P) {
-  if (!(P.leadBase > 1) || !(s > 0)) return P.leadBase
+  // (P.leadRel false: the leading as it was, leadBase on whatever pitch, for comparison)
+  if (P.leadRel === false || !(P.leadBase > 1) || !(s > 0)) return P.leadBase
   const pitches = blocks.map(b => b.pitch0).filter(v => v > 0).sort((a, b) => a - b)
   if (!pitches.length) return P.leadBase
   const p0 = pitches[pitches.length >> 1]
@@ -2069,6 +2070,17 @@ export function layoutUnit2(tokens, blocks, s, P, to) {
       tried++
       const f = s * st.scale
       const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, 'flow')
+      if (r.rest >= r.total) { last = { r, st, f }; break }
+    }
+  }
+  // (fillBySize, P.growTo: where the most natural state sets the whole unit with lines to spare, the largest size up to
+  // growTo × the original's at which it still does, its lines on the original's pitch: a loose original's paragraph
+  // filled by its text's size, not by lines looser than the original's own)
+  if (P.growTo > 1 && tried === 1 && last.r.rest >= last.r.total) {
+    for (let k = Math.round((P.growTo - 1) / P.step); k >= 1; k--) {
+      const st = { ...last.st, scale: Math.round((1 + k * P.step) * 1000) / 1000, knob: 'grow' }
+      const f = s * st.scale
+      const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale)
       if (r.rest >= r.total) { last = { r, st, f }; break }
     }
   }
