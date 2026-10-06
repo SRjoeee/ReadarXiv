@@ -64,9 +64,9 @@ const FURTHER = Object.freeze(['widen', 'flow', 'shrink']), FLOOR_MIN = 0.6
 /** the defaults, before the sweep chose (main.js overrides any of them from the query) */
 export function defaultParams(to) {
   const cjk = CJK_TARGETS.has(to)
-  if (to === 'zh' || to === 'zh-TW') return { cjk: true, leadBase: 1.3, leadFloor: 1.0, trackMin: -0.03, compressMax: to === 'zh-TW' ? 0 : 2, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 1, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.25, spaceMax: 1.0, autospace: 0.2, spaceMin: 0.8, hyphen: 1, further: FURTHER, floorMin: FLOOR_MIN, pitchLead: true }
-  if (cjk) return { cjk: true, leadBase: 1.0, leadFloor: 1.0, trackMin: -0.03, compressMax: 2, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 1, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.25, spaceMax: 1.0, autospace: to === 'ja' ? 0.2 : 0, spaceMin: 0.8, hyphen: 1, further: FURTHER, floorMin: FLOOR_MIN, pitchLead: true }
-  return { cjk: false, leadBase: 1.0, leadFloor: 0.95, trackMin: 0, compressMax: 0, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 0, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.12, spaceMax: 1.2, autospace: 0, spaceMin: 0.8, hyphen: 1, further: FURTHER, floorMin: FLOOR_MIN, pitchLead: true }
+  if (to === 'zh' || to === 'zh-TW') return { cjk: true, leadBase: 1.3, leadFloor: 1.0, trackMin: -0.03, compressMax: to === 'zh-TW' ? 0 : 2, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 1, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.25, spaceMax: 1.0, autospace: 0.2, spaceMin: 0.8, hyphen: 1, further: FURTHER, floorMin: FLOOR_MIN }
+  if (cjk) return { cjk: true, leadBase: 1.0, leadFloor: 1.0, trackMin: -0.03, compressMax: 2, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 1, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.25, spaceMax: 1.0, autospace: to === 'ja' ? 0.2 : 0, spaceMin: 0.8, hyphen: 1, further: FURTHER, floorMin: FLOOR_MIN }
+  return { cjk: false, leadBase: 1.0, leadFloor: 0.95, trackMin: 0, compressMax: 0, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 0, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.12, spaceMax: 1.2, autospace: 0, spaceMin: 0.8, hyphen: 1, further: FURTHER, floorMin: FLOOR_MIN }
 }
 
 // ---- the page's characters, each with its font's class
@@ -1758,13 +1758,13 @@ export const SOLID = 1.25
  * original's own pitch. Where the original is set solid that is leadBase, as before; where it is looser already, the
  * leading is not stacked on it (2307.16209, set one and a half: Chinese at 1.3 × its 1.5-spaced lines stood 1.95 em
  * apart and between them, a quarter of its text area blank that its own lines would have covered). The original's
- * pitch: its blocks' own (pitch0), the median of those that have one; none, leadBase. 1 where leadBase is. `pitchLead`
+ * pitch: its blocks' own (pitch0), the median of those that have one; none, leadBase. 1 where leadBase is. `leadRel`
  * false (a parameter): leadBase stacked on the original's pitch, as before step 3.
  */
 export function leadOf(blocks, s, P) {
-  // (the rule is named, pitchLead, so that it can be switched off: the thesis's fill falls with it, its coverage rises,
-  // a visual choice the maintainer is asked)
-  if (P.pitchLead === false || !(P.leadBase > 1) || !(s > 0)) return P.leadBase
+  // (P.leadRel false: the leading as it was, leadBase on whatever pitch, for comparison: the thesis's fill falls with
+  // the rule, its coverage rises, a visual choice the maintainer is asked)
+  if (P.leadRel === false || !(P.leadBase > 1) || !(s > 0)) return P.leadBase
   const pitches = blocks.map(b => b.pitch0).filter(v => v > 0).sort((a, b) => a - b)
   if (!pitches.length) return P.leadBase
   const p0 = pitches[pitches.length >> 1]
@@ -2101,6 +2101,17 @@ export function layoutUnit2(tokens, blocks, s, P, to) {
       tried++
       const f = s * st.scale
       const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, 'flow')
+      if (r.rest >= r.total) { last = { r, st, f }; break }
+    }
+  }
+  // (fillBySize, P.growTo: where the most natural state sets the whole unit with lines to spare, the largest size up to
+  // growTo × the original's at which it still does, its lines on the original's pitch: a loose original's paragraph
+  // filled by its text's size, not by lines looser than the original's own)
+  if (P.growTo > 1 && tried === 1 && last.r.rest >= last.r.total) {
+    for (let k = Math.round((P.growTo - 1) / P.step); k >= 1; k--) {
+      const st = { ...last.st, scale: Math.round((1 + k * P.step) * 1000) / 1000, knob: 'grow' }
+      const f = s * st.scale
+      const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale)
       if (r.rest >= r.total) { last = { r, st, f }; break }
     }
   }

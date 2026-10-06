@@ -130,3 +130,23 @@ describe("Hangul's advance given back: the fit's tracking starts where its face'
     expect(L2.layoutUnit2(words(4, 4) as never, [block] as never, 10, { ...P, trackStart: 0 } as never, 'ko').state.track).toBe(0)
   })
 })
+
+describe('the thesis pitch, switchable: the leading rule off, and fillBySize', () => {
+  it("leaves the script's leading on any pitch where the rule is off (leadRel: false)", () => {
+    expect(L2.leadOf([{ pitch0: 17.93 }] as never, 11.96, { leadBase: 1.3, leadRel: false } as never)).toBe(1.3)
+  })
+  it('grows a unit whose natural state leaves lines to spare to the largest size up to growTo that sets it whole, on the same pitch', () => {
+    // two lines of 100 pt at pitch 15; two words of 13 syllables, 65 pt at size 10, a line each with room to spare: they
+    // still fit a line each at 1.1 (71.5 pt), the lines on the original's baselines
+    const block = { page: 1, rects: [[1, 0, 98, 100, 108], [1, 0, 83, 100, 93]], x0: 0, x1: 100, B: [100, 85], exact: [true, true], sizes: [10, 10], pitch0: 15, free: 0, indent: 0, after: 0, centred: false }
+    const words = (n: number, of: number) => Array.from({ length: n }, (_, q) => [...(q ? [{ space: true, w100: 25 }] : []), { s: '한'.repeat(of), cls: 'cjk', w100: 50 * of, st: {} }]).flat()
+    const P = { ...L2.defaultParams('zh'), leadBase: 1, borrow: 0 }
+    const natural = L2.layoutUnit2(words(2, 13) as never, [block] as never, 10, P as never, 'zh')
+    expect(natural.scale).toBe(1)
+    const grown = L2.layoutUnit2(words(2, 13) as never, [block] as never, 10, { ...P, growTo: 1.1 } as never, 'zh')
+    expect(grown.scale).toBeGreaterThan(1)
+    expect(grown.scale).toBeLessThanOrEqual(1.1)
+    expect(grown.lines.map(l => l.baseline)).toEqual([100, 85])
+    expect(grown.clipped).toBe(false)
+  })
+})

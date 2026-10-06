@@ -12,10 +12,11 @@ export interface Params {
   hyphen: number; even?: number; maxScale?: number; _compress?: number
   /** step 3: the further steps for a unit the states leave clipped (run.mjs fitFurther), and the size the last goes down to */
   further?: readonly ('widen' | 'flow' | 'shrink')[]; floorMin?: number; refuse?: number; flowPast?: boolean
-  /** step 3's leading, relative to the original's own pitch (leadOf); false: stacked on it, as before */
-  pitchLead?: boolean
   /** step 3: the CJK runs' tracking the fit's first state takes (run.mjs: a face's size correction given back) */
   trackStart?: number
+  /** the leading relative to the original's pitch (leadOf; false: leadBase on any pitch); fillBySize's cap (run.mjs
+   *  fillSize, off at 0) and the size a unit may grow to (growTo) */
+  leadRel?: boolean; fillSize?: number; growTo?: number
 }
 /** a character of the original page: its box from its item (PDF units), its baseline and size, its item and place in it,
  *  its font's class */
