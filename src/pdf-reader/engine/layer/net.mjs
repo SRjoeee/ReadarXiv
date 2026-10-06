@@ -10,9 +10,10 @@
 //
 // Pure, as the layer is: no DOM, no clock, no randomness. An original module (no port statement), importing only relative
 // modules, so that the reader's bundle holds it.
-import { canDraw } from '../font-roles.mjs'
+import { canDraw, faceFor } from '../font-roles.mjs'
 import { PH_FLAG } from '../layout/file.mjs'
 import { COLOUR_SHIFT, LAYER_COLOURS, STYLE } from './pieces.mjs'
+import { faceSize, ownText, pageTextOf } from './tokens.mjs'
 
 /** the most pieces a translated unit may have */
 export const PIECES_MAX = 20_000
@@ -21,14 +22,15 @@ const TEXT_MAX = 16_000
 /** a style's flags: STYLE's bits below COLOUR_SHIFT, a colour's index + 1 in LAYER_COLOURS above it */
 const STYLE_END = (LAYER_COLOURS.length + 1) << COLOUR_SHIFT
 /**
- * Whether a text holds a control character a text piece may not: C0 but the line feed, DEL, C1, and the bidirectional
- * controls that reorder what is drawn (embeddings, overrides, isolates and the marks). The no-break space, the zero width
- * space and the other invisible characters are text (the layer draws none of them)
+ * Whether a text holds a control character a text piece may not: C0 but its white space (the line feed, the tab, the
+ * carriage return, the line and form feeds: the pipeline's pieces carry the source's, and trText and the tokens read them
+ * as white space), DEL, C1, and the bidirectional controls that reorder what is drawn (embeddings, overrides, isolates and
+ * the marks). The no-break space, the zero width space and the other invisible characters are text (none is drawn)
  */
 function hasControl(s) {
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i)
-    if ((c < 0x20 && c !== 0x0a) || (c >= 0x7f && c <= 0x9f) || c === 0x061c || c === 0x200e || c === 0x200f || (c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069)) return true
+    if ((c < 0x20 && (c < 0x09 || c > 0x0d)) || (c >= 0x7f && c <= 0x9f) || c === 0x061c || c === 0x200e || c === 0x200f || (c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069)) return true
   }
   return false
 }
@@ -43,14 +45,22 @@ const OVERLAP_SHARE = 0.5
  */
 const PAIRS_MAX = 2_000_000
 
-/** the classes whose rendering is a citation's or reference's form, brackets and all */
-const BRACKETED = new Set(['cite', 'ref', 'eqref'])
-const OPEN_BRACKETS = new Set(['(', '[', '\uff08', '\uff3b']), CLOSE_BRACKETS = new Set([')', ']', '\uff09', '\uff3d'])
-const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu
+/** the classes whose rendering may bring its own brackets where no text of it reads: a citation (natbib's '(Hill et al.,
+ *  2016)', a numeric '[3]'), beside which a bracket the translation does not balance is taken as doubled. An equation
+ *  reference's are known ('(…)'); a \ref renders a bare number */
+const BRACKETED = new Set(['cite'])
+/** brackets by kind, half and full width alike: round and square */
+const OPENS = new Map([['(', 'round'], ['\uff08', 'round'], ['[', 'square'], ['\uff3b', 'square']])
+const CLOSES = new Map([[')', 'round'], ['\uff09', 'round'], [']', 'square'], ['\uff3d', 'square']])
 
-const firstChar = s => String.fromCodePoint(s.codePointAt(0))
-const lastChar = s => { const n = s.length; return n > 1 && (s.charCodeAt(n - 1) & 0xfc00) === 0xdc00 ? s.slice(n - 2) : s.slice(n - 1) }
 const visible = row => (row.flags & (PH_FLAG.EMPTY | PH_FLAG.LOST)) === 0
+/** the unit's size: its lines' median, as the tokens take it */
+function sizeOf(unit) {
+  const sizes = []
+  for (let i = 6; i < unit.lines.length; i += 8) sizes.push(unit.lines[i])
+  sizes.sort((a, b) => a - b)
+  return (sizes[(sizes.length - 1) >> 1] + sizes[sizes.length >> 1]) / 2
+}
 
 // ---------------------------------------------------------------- the pieces
 
@@ -105,14 +115,16 @@ function check(pieces, unit) {
       out[i] = [2, k, style]
     }
   }
-  if (open.length) return null
-  return pairs.length && !sourcePairs(pairs) ? null : out
+  // an open still open here is the source's (a unit cut inside its groups): it holds to the unit's end, as the tokens take it
+  return pairs.length && !sourcePairs(pairs, open) ? null : out
 }
 
-/** whether the pairs (open, close, open, close, …) are those the k's give the source: its opens and closes matched in k order */
-function sourcePairs(pairs) {
+/** whether the pairs (open, close, open, close, …) are those the k's give the source: its opens (those left open too) and
+ *  closes matched in k order */
+function sourcePairs(pairs, left) {
   const marks = []
   for (let i = 0; i < pairs.length; i += 2) marks.push(2 * pairs[i], 2 * pairs[i + 1] + 1)
+  for (const k of left) marks.push(2 * k)
   marks.sort((a, b) => a - b)
   const stack = [], openOf = new Map()
   for (const m of marks) {
@@ -162,7 +174,32 @@ export function netOf(input, laid, tr) {
   const unit = input.file.unit(laid.id)
   if (!unit) return 'missing'
   if (lostIn(unit)) return 'lost'
-  return drawnOnce(unit, laid) ?? overlapIn(unit) ?? erasing(input.file, unit) ?? glyphs(laid, input.roles) ?? brackets(input, unit, laid, tr)
+  const pieces = Array.isArray(tr?.pieces) ? tr.pieces : []
+  return drawnOnce(unit, laid) ?? pageTexts(input, unit, laid, pieces) ?? overlapIn(unit) ?? erasing(input.file, unit) ?? glyphs(laid, input.roles) ?? brackets(input, unit, laid, pieces)
+}
+
+/** a text's width in ems in a face, as the fit measures it: the measure at 100 px, × the face's size correction */
+const emOf = input => (text, face, caps) => (input.measure(text, face, caps) / 100) * faceSize(face)
+
+/**
+ * 'missing' where a page text is not its placeholder's own: what it draws is not what the placeholder's own text gives
+ * (tokens.mjs pageTextOf: the layout's text, else the page's within the width band, its brackets dropped as the tokens drop
+ * them). The page's text is read again here, and measured: a text item of a whole line is never the citation
+ */
+function pageTexts(input, unit, laid, pieces) {
+  const at = new Map()
+  pieces.forEach((p, i) => { if (p[0] === 1) at.set(p[1], i) })
+  const em = emOf(input), size = sizeOf(unit)
+  for (const line of laid.lines) {
+    for (const it of line.items) {
+      if (it.kind !== 'page-text') continue
+      const row = unit.ph.get(it.ph), i = at.get(it.ph)
+      if (!row || i === undefined) return 'missing'
+      const shown = pageTextOf(row, pieces[i - 1], pieces[i + 1], { textIn: input.textIn, width: t => em(t, it.face, !!it.caps), size })
+      if (shown === null || shown !== it.text) return 'missing'
+    }
+  }
+  return null
 }
 
 /** 'missing' or 'twice' where a visible placeholder is not drawn exactly once */
@@ -281,38 +318,73 @@ function glyphs(laid, roles) {
   return null
 }
 
-/** the drawn rendering of a citation or reference as text: its page text, or the page's own text inside a crop's first
- *  (`end` false) or last segment; null for any other placeholder, or where there is no text to read */
-function renderingText(input, row, item, end) {
-  if (!BRACKETED.has(row.kind)) return null
-  if (item.kind === 'page-text') return item.text ?? null
-  if (typeof input.textIn !== 'function' || row.segs.length < 6) return null
-  const o = end ? row.segs.length - 6 : 0, s = row.segs
-  const t = input.textIn(s[o], s[o + 1], s[o + 5], s[o + 3], s[o + 4])
-  return typeof t === 'string' ? t.replace(INVISIBLE, '').trim() || null : null
+/** where each bracket of the translation's text pieces closes or is closed: by piece index and index in it, its partner's,
+ *  null for one the translation leaves unmatched. A close matches the innermost open where that is of its kind */
+function bracketPairs(pieces) {
+  const partner = new Map(), stack = []
+  pieces.forEach((p, i) => {
+    if (p[0] !== 0) return
+    for (let j = 0; j < p[1].length; j++) {
+      const ch = p[1][j], key = `${i}:${j}`
+      if (OPENS.has(ch)) { stack.push({ key, kind: OPENS.get(ch) }); partner.set(key, null) }
+      else if (CLOSES.has(ch)) {
+        const top = stack[stack.length - 1]
+        if (top && top.kind === CLOSES.get(ch)) { stack.pop(); partner.set(key, top.key); partner.set(top.key, key) }
+        else partner.set(key, null)
+      }
+    }
+  })
+  return partner
 }
 
-/** 'brackets' where the translation brackets a rendering that brings its own: the text piece right before a placeholder
- *  ends with an opening bracket and its rendering begins with one, or the piece right after it begins with a closing one
- *  and its rendering ends with one */
-function brackets(input, unit, laid, tr) {
-  const pieces = Array.isArray(tr?.pieces) ? tr.pieces : []
-  const drawn = new Map()
-  for (const line of laid.lines) for (const it of line.items) if (it.ph !== undefined && !drawn.has(it.ph)) drawn.set(it.ph, it)
+/** the first or last character of a text piece that is not white space, with its key in bracketPairs, or null */
+function beside(pieces, i, end) {
+  const p = pieces[i]
+  if (p?.[0] !== 0) return null
+  const s = p[1]
+  if (end) { for (let j = s.length - 1; j >= 0; j--) if (!/\s/.test(s[j])) return { ch: s[j], key: `${i}:${j}` } }
+  else for (let j = 0; j < s.length; j++) if (!/\s/.test(s[j])) return { ch: s[j], key: `${i}:${j}` }
+  return null
+}
+
+/**
+ * 'brackets' where a bracket of the translation doubles one the rendering beside it brings: an opening bracket right before
+ * a placeholder whose rendering begins with one of its kind (round or square, of either width), or a closing one right
+ * after one that ends with one of its kind (white space between them aside), where the translation leaves that bracket
+ * unmatched, or matches it with one right on the rendering's other side (a pair of its own around the rendering alone).
+ * One the translation matches further off is nesting, which passes: '(or (3.1))', and '([10, 25])' whose kinds differ.
+ * The rendering is its page text, or a crop's own text (tokens.mjs ownText: the layout's, else the page's within the width
+ * band); an equation reference's is '(…)' (amsmath's \eqref) where none reads. A citation or reference whose rendering
+ * cannot be read has a bracket beside it that the translation leaves unmatched taken as doubled, whatever its kind
+ */
+function brackets(input, unit, laid, pieces) {
+  const items = new Map()
+  for (const line of laid.lines) for (const it of line.items) if (it.ph !== undefined && !items.has(it.ph)) items.set(it.ph, it)
+  let partner = null, latin
+  const em = emOf(input), size = sizeOf(unit)
   for (let i = 0; i < pieces.length; i++) {
     const p = pieces[i]
     if (p[0] !== 1) continue
-    const item = drawn.get(p[1]), row = unit.ph.get(p[1])
+    const item = items.get(p[1]), row = unit.ph.get(p[1])
     if (!item || !row) continue
-    const before = pieces[i - 1], after = pieces[i + 1]
-    if (before?.[0] === 0 && before[1].length && OPEN_BRACKETS.has(lastChar(before[1]))) {
-      const s = renderingText(input, row, item, false)
-      if (s && OPEN_BRACKETS.has(firstChar(s))) return 'brackets'
+    const b = beside(pieces, i - 1, true), a = beside(pieces, i + 1, false)
+    const open = b && OPENS.get(b.ch), close = a && CLOSES.get(a.ch)
+    if (!open && !close) continue
+    partner ??= bracketPairs(pieces)
+    let r = null
+    if (item.kind === 'page-text') r = item.text ?? null
+    else {
+      latin ??= faceFor(input.roles, { script: 'latin', cls: 'serif', design: input.roles.family, bold: false, italic: false, caps: false })
+      r = ownText(row, { textIn: input.textIn, width: t => em(t, latin, false), size })
+      if (r === null && row.kind === 'eqref') r = '(\u2026)'
     }
-    if (after?.[0] === 0 && after[1].length && CLOSE_BRACKETS.has(firstChar(after[1]))) {
-      const s = renderingText(input, row, item, true)
-      if (s && CLOSE_BRACKETS.has(lastChar(s))) return 'brackets'
+    if (r === null || !r.length) {
+      // its rendering unread: a citation beside a bracket the translation leaves unmatched
+      if (BRACKETED.has(row.kind) && ((open && partner.get(b.key) === null) || (close && partner.get(a.key) === null))) return 'brackets'
+      continue
     }
+    if (open && OPENS.get(r[0]) === open && (partner.get(b.key) === null || (a && partner.get(b.key) === a.key))) return 'brackets'
+    if (close && CLOSES.get(r[r.length - 1]) === close && (partner.get(a.key) === null || (b && partner.get(a.key) === b.key))) return 'brackets'
   }
   return null
 }

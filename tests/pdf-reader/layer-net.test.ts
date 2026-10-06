@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { drawUnit, type UnitDraw } from '@/pdf-reader/engine/layer/draw.mjs'
 import { type LayerInput, type Laid, type LaidUnit, layUnit, type Tr } from '@/pdf-reader/engine/layer/fit.mjs'
 import { checkPieces, netOf, PIECES_MAX } from '@/pdf-reader/engine/layer/net.mjs'
-import { STYLE, type TrPiece } from '@/pdf-reader/engine/layer/pieces.mjs'
+import { COLOUR_SHIFT, LAYER_COLOURS, STYLE, type TrPiece } from '@/pdf-reader/engine/layer/pieces.mjs'
+import { PAGE_TEXT_MAX, PAGE_TEXT_MIN } from '@/pdf-reader/engine/layer/tokens.mjs'
 import { PH_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
-import { column, type EraseSpec, han, inputOf, layoutOf, type PhSpec, type UnitDef } from './helpers/layer-layout'
+import { column, type EraseSpec, han, inputOf, layoutOf, type PhSpec, type UnitDef, withText } from './helpers/layer-layout'
 
 // The completeness net (the instant layer's spec §4.5): a translation's pieces refused within bounds before anything is
 // laid, and a laid unit refused, before it is drawn, where it would show a page with a placeholder missing or doubled, a
@@ -59,6 +60,9 @@ const input = (units: UnitDef[], text: LayerInput['textIn'] = textIn, target = '
 const WHOLE: TrPiece[] = [[0, han(20)], [1, 2], [0, han(10)], [1, 4], [0, han(5)], [1, 8], [0, han(10)], [1, 6], [0, han(30)]]
 const without = (k: number) => WHOLE.filter(p => !(p[0] === 1 && p[1] === k))
 
+/** the items of a laid unit that are placeholders, as [k, kind, text] */
+const drawnPh = (u: LaidUnit) => u.lines.flatMap(l => l.items).filter(it => it.ph !== undefined).map(it => [it.ph, it.kind, it.text])
+
 /** the reader's loop over a page: every unit laid, and only those laid whole drawn */
 function page(inp: LayerInput, trs: Map<number, Tr>, p = 1) {
   const laidOf = new Map<number, Laid>(), draws: UnitDraw[] = []
@@ -91,7 +95,9 @@ describe('checkPieces', () => {
       ['a k twice', [[1, 2], [0, 'a'], [1, 2]], unit],
       ['a k twice: an open and a close', [[2, 2, STYLE.BOLD], [0, 'a'], [3, 2]], unit],
       ['[3, k] with no open', [[0, 'a'], [3, 4]], unit],
-      ['an open never closed', [[2, 1, STYLE.BOLD], [0, 'a']], unit],
+      // an open left open is the source's (closed at the unit's end), but not where it crosses the source's groups: of the
+      // source's opens 1 and 3 and its close 4 (3's), the translation closes 1 with 4
+      ['an open left open that crosses the source\'s groups', [[2, 3, STYLE.BOLD], [2, 1, STYLE.ITALIC], [0, 'a'], [3, 4]], unit],
       // the source's groups are 1–4 and 2–3: the translation closes the outer one first
       ['groups crossed', [[2, 1, STYLE.BOLD], [2, 2, STYLE.ITALIC], [0, 'a'], [3, 4], [0, 'b'], [3, 3]], unit],
       ['a style that is no integer', [[2, 1, 1.5], [3, 2]], unit],
@@ -99,7 +105,10 @@ describe('checkPieces', () => {
       ['a text of 16,001 code units', [[0, 'a'.repeat(16_001)]], unit],
       ['a text holding \\u0000', [[0, 'a\u0000b']], unit],
       ['a text holding \\u202e', [[0, 'a\u202eb']], unit],
-      ['a text holding a tab', [[0, 'a\tb']], unit],
+      ['a text holding DEL', [[0, 'a\u007fb']], unit],
+      ['a text holding U+0085 (C1)', [[0, 'a\u0085b']], unit],
+      ['a text holding U+0001', [[0, 'a\u0001b']], unit],
+      ['a style at the colours\' end', [[2, 1, (LAYER_COLOURS.length + 1) << COLOUR_SHIFT], [3, 2]], unit],
       ['a text that is no string', [[0, 5]], unit],
       ['20,001 pieces', many(PIECES_MAX + 1, () => [0, 'a']), unit],
       ['10,000 placeholders in a unit of 9,999 pieces', many(10_000, i => [1, i]), big],
@@ -126,6 +135,17 @@ describe('checkPieces', () => {
     // the second inside the first. Neither crosses the source's groups
     expect(checkPieces([[2, 1, STYLE.BOLD], [0, 'a'], [3, 6]], unit)).not.toBeNull()
     expect(checkPieces([[2, 1, STYLE.BOLD], [2, 3, STYLE.ITALIC], [3, 4], [3, 2]], unit)).not.toBeNull()
+    // the last colour's style, with every flag but SWITCH
+    expect(checkPieces([[2, 1, (LAYER_COLOURS.length << COLOUR_SHIFT) | (STYLE.SWITCH - 1)], [3, 2]], unit)).not.toBeNull()
+  })
+
+  it('a tab and the other white space are text, and an open the source leaves open is closed at the end (fix round 1, I1)', () => {
+    // the pipeline's own pieces carry the source's white space: '\n\t', ' \n\t\t'
+    for (const s of ['\n\t', ' \n\t\t\t', 'a\tb', 'a\rb', 'a\u000bb', 'a\u000cb']) expect(checkPieces([[0, s]], unit), JSON.stringify(s)).toEqual([[0, s]])
+    // \multirow{2}{*}{\shortstack{\textbf{Avg.}: the source unit holds three opens and one close, and so does its translation
+    const avg: TrPiece[] = [[2, 1, STYLE.BOLD], [2, 2, STYLE.SANS], [2, 3, STYLE.BOLD], [0, 'Avg.'], [3, 4]]
+    expect(checkPieces(avg, unit)).toEqual(avg)
+    expect(checkPieces([[2, 1, STYLE.BOLD], [0, 'a']], unit)).toEqual([[2, 1, STYLE.BOLD], [0, 'a']])
   })
 })
 
@@ -153,8 +173,9 @@ describe('the net', () => {
       { why: 'brackets', units: [para({ ph: [MATH, { ...EQREF, flags: PH_FLAG.SOURCE_BRACKETS }, CALL, DISPLAY] })], pieces: [[0, han(20)], [1, 2], [0, `${han(10)}\uff08`], [1, 3], [0, `\uff09${han(5)}`], [1, 8], [0, han(10)], [1, 6], [0, han(30)]], text: eqText },
       // the closing side: '(3)' right before '\uff09', the opening bracket a space away, so no drop either
       { why: 'brackets', units: [para({ ph: [MATH, EQREF, CALL, DISPLAY] })], pieces: [[0, han(20)], [1, 2], [0, `${han(10)}\uff08 `], [1, 3], [0, `\uff09${han(5)}`], [1, 8], [0, han(10)], [1, 6], [0, han(30)]], text: eqText },
-      // a raised citation is its own ink, never page text: its rendering read from the page inside its segment, '[7]'
-      { why: 'brackets', units: [para({ ph: [MATH, { ...CITE, flags: PH_FLAG.RAISED }, CALL, DISPLAY] })], pieces: [[0, han(20)], [1, 2], [0, `${han(10)}\uff08`], [1, 4], [0, han(5)], [1, 8], [0, han(10)], [1, 6], [0, han(30)]] },
+      // a raised citation is its own ink, never page text: its rendering read from the page inside its segment, '(7)', after
+      // an opening bracket of its kind the translation never closes
+      { why: 'brackets', units: [para({ ph: [MATH, { ...CITE, flags: PH_FLAG.RAISED }, CALL, DISPLAY] })], pieces: [[0, han(20)], [1, 2], [0, `${han(10)}\uff08`], [1, 4], [0, han(5)], [1, 8], [0, han(10)], [1, 6], [0, han(30)]], text: (_p, x0) => (x0 === 200 ? '(7)' : null) },
       { why: 'pieces', units: [para()], pieces: [...WHOLE, [1, 2]] },
     ]
     try {
@@ -242,5 +263,154 @@ describe('the net', () => {
     expect(layUnit(inp, 9, tr(WHOLE))).toEqual({ id: 9, fit: false, why: 'located' })
     // a character held by no face of the role set, though every other is: the glyph, not the tokens
     expect(layUnit(inp, 1, tr([[0, `${han(3)}\ue000`]]))).toEqual({ id: 1, fit: false, why: 'glyph' })
+  })
+
+})
+
+describe('the net, fix round 1 (the review)', () => {
+  // a citation 105 wide on line 0: '(Al-Rfou et al., 2018)' in the fake measure (20 letters at 5, two spaces at 2.5)
+  const AUTHOR = '(Al-Rfou et al., 2018)'
+  const NATBIB: PhSpec = { k: 4, kind: 'cite', segs: [[1, 200, 700, 305, 707, 697.5]] }
+  const natbib = (o: Partial<UnitDef> = {}) => para({ ph: [MATH, NATBIB, CALL, DISPLAY], ...o })
+  const own = (text: string | null) => (_p: number, x0: number) => (x0 === 200 ? text : null)
+
+  it("a citation's page text is its own, or the citation is drawn as its ink (C1)", () => {
+    // the reader's textIn gives whole text items: here the line the citation stands in. Its width is 2.4 times the
+    // segment's: not the citation's own, which is then drawn as the original's ink
+    const line = 'Shortcut connections (Al-Rfou et al., 2018) are those skipping one or'
+    const u = laid(layUnit(input([natbib(), HEADING], own(line)), 1, tr(WHOLE)))
+    expect(drawnPh(u)).toEqual([[2, 'crop', undefined], [4, 'crop', undefined], [8, 'crop', undefined]])
+    // the citation's own text and the sentence's period, in one text item: 1.02 of the segment, which no width can tell
+    // from the citation's own (its own is 0.94-1.07 on the lab's fixtures). A reading that ends with a mark the band cannot
+    // place, one character of 22, is not trusted: a period, or a bracket, which a formula's item may have run on to
+    const period = laid(layUnit(input([natbib(), HEADING], own(`${AUTHOR}.`)), 1, tr(WHOLE)))
+    expect(drawnPh(period)[1]).toEqual([4, 'crop', undefined])
+    const exact = laid(layUnit(input([natbib(), HEADING], own(AUTHOR)), 1, tr(WHOLE)))
+    expect(drawnPh(exact)[1]).toEqual([4, 'crop', undefined])
+    // a short one, whose brackets the band places: drawn as its page text
+    const SHORT: PhSpec = { k: 4, kind: 'cite', segs: [[1, 200, 700, 227.5, 707, 697.5]] }
+    const short = laid(layUnit(input([para({ ph: [MATH, SHORT, CALL, DISPLAY] }), HEADING], own('[3, 4]')), 1, tr(WHOLE)))
+    expect(drawnPh(short)[1]).toEqual([4, 'page-text', '[3, 4]'])
+  })
+
+  it("the layout's own text of a placeholder is taken before the page's (C1, a)", () => {
+    const asked: number[] = []
+    const fragment = (_p: number, x0: number) => { asked.push(x0); return x0 === 200 ? `see ${AUTHOR} and more` : null }
+    const inp = input([natbib(), HEADING], fragment)
+    const u = laid(layUnit({ ...inp, file: withText(inp.file, 1, 4, AUTHOR) }, 1, tr(WHOLE)))
+    expect(drawnPh(u)[1]).toEqual([4, 'page-text', AUTHOR])
+    expect(asked).not.toContain(200)
+    // the layout's own text is measured too: one not as wide as its segments is drawn as the ink
+    const wide = laid(layUnit({ ...inp, file: withText(inp.file, 1, 4, `${AUTHOR} ${AUTHOR}`) }, 1, tr(WHOLE)))
+    expect(drawnPh(wide)[1]).toEqual([4, 'crop', undefined])
+  })
+
+  it('the page-text band is 0.85-1.15 of the segments\' width', () => {
+    expect([PAGE_TEXT_MIN, PAGE_TEXT_MAX]).toEqual([0.85, 1.15])
+    // '[7]' is 15 wide: a segment of 15 / 0.86 holds it, one of 15 / 0.84 does not; and 15 / 1.14, 15 / 1.16
+    const at = (w: number) => {
+      const seg: PhSpec = { k: 4, kind: 'cite', segs: [[1, 200, 700, 200 + w, 707, 697.5]] }
+      return drawnPh(laid(layUnit(input([para({ ph: [MATH, seg, CALL, DISPLAY] }), HEADING], own('[7]')), 1, tr(WHOLE))))[1]![1]
+    }
+    expect([at(15 / 0.86), at(15 / 0.84), at(15 / 1.14), at(15 / 1.16)]).toEqual(['page-text', 'crop', 'page-text', 'crop'])
+  })
+
+  it('the net refuses page text that is not the placeholder\'s own, whatever drew it (C1, b)', () => {
+    const plain = input([natbib(), HEADING], own(null))
+    const inp = { ...plain, file: withText(plain.file, 1, 4, AUTHOR) }
+    const u = laid(layUnit(inp, 1, tr(WHOLE)))
+    expect(drawnPh(u)[1]).toEqual([4, 'page-text', AUTHOR])
+    const edit = (text: string): LaidUnit => {
+      const lines = structuredClone(u.lines)
+      for (const l of lines) for (const it of l.items) if (it.ph === 4) it.text = text
+      return { ...u, lines }
+    }
+    expect(netOf(inp, u, tr(WHOLE))).toBeNull()
+    expect(netOf(inp, edit(`connections ${AUTHOR} are those`), tr(WHOLE))).toBe('missing')
+    expect(netOf(inp, edit('(Al-Rfou et al., 2019)'), tr(WHOLE))).toBe('missing')
+    // the placeholder's own text the net reads is a line: what was drawn cannot be shown to be the citation's own
+    expect(netOf({ ...plain, file: withText(plain.file, 1, 4, `see ${AUTHOR} and more`) }, u, tr(WHOLE))).toBe('missing')
+    expect(netOf({ ...plain, textIn: own(`see ${AUTHOR} and more`) }, u, tr(WHOLE))).toBe('missing')
+  })
+
+  it('a doubled bracket is one of the same kind the translation does not balance; nesting passes (I2)', () => {
+    const NAT = [[0, han(20)], [1, 2], [0, han(10)]] as TrPiece[]
+    const tail = [[1, 8], [0, han(10)], [1, 6], [0, han(30)]] as TrPiece[]
+    const lay = (pieces: TrPiece[], o: { text?: string | null; layoutText?: string; ph?: PhSpec } = {}) => {
+      const inp = input([natbib(o.ph ? { ph: [MATH, o.ph, CALL, DISPLAY] } : {}), HEADING], own(o.text ?? null))
+      return layUnit(o.layoutText ? { ...inp, file: withText(inp.file, 1, 4, o.layoutText) } : inp, 1, tr(pieces))
+    }
+    const why = (r: Laid) => (r.fit ? 'fit' : r.why)
+    // 'objectives (Hill et al., 2016).' translated with a ')' of its own: the citation drawn as its ink (no page text
+    // reads), its rendering unknown, and a closing bracket the translation never opened right after it
+    expect(why(lay([...NAT, [1, 4], [0, `)${han(5)}`], ...tail]))).toBe('brackets')
+    // the same with the layout's own text, which says it ends with its own ')'
+    expect(why(lay([...NAT, [1, 4], [0, `)${han(5)}`], ...tail], { layoutText: AUTHOR }))).toBe('brackets')
+    // '(or the scalar equation (3.1))': the closing bracket after the rendering closes the translation's own '\uff08'
+    const EQ: PhSpec = { k: 4, kind: 'eqref', segs: [[1, 200, 700, 225, 707, 697.5]] }
+    expect(why(lay([...NAT, [0, `\uff08${han(4)}`], [1, 4], [0, `\uff09${han(5)}`], ...tail], { text: '(3.1)', ph: EQ }))).toBe('fit')
+    // '([10, 25])' in '\uff08[10, 25] \u7b49\uff09': brackets of another kind beside it
+    const SQ: PhSpec = { k: 4, kind: 'cite', segs: [[1, 200, 700, 240, 707, 697.5]] }
+    expect(why(lay([...NAT, [0, '\uff08'], [1, 4], [0, ` \u7b49\uff09${han(5)}`], ...tail], { text: '[10, 25]', ph: SQ }))).toBe('fit')
+    // a bracket of another kind beside it that the translation leaves unmatched: a stray, not a double
+    expect(why(lay([...NAT, [0, '\uff08'], [1, 4], [0, ` \u7b49${han(5)}`], ...tail], { text: '[10, 25]', ph: SQ }))).toBe('fit')
+    expect(why(lay([...NAT, [1, 4], [0, `\uff09${han(5)}`], ...tail], { text: '[10, 25]', ph: SQ }))).toBe('fit')
+    // an equation reference brings its own '(' and ')' (amsmath's \eqref) even where no text of it reads: right inside a
+    // pair of the translation's own, doubled
+    expect(why(lay([...NAT, [0, '\uff08'], [1, 4], [0, `\uff09${han(5)}`], ...tail], { ph: EQ }))).toBe('brackets')
+    // a macro drawn as its ink over two lines, its text read from both: its last segment's ')' beside the translation's
+    const TWO: PhSpec = { k: 4, kind: 'macro', segs: [[1, 200, 700, 215, 707, 697.5], [1, 72, 688, 84.5, 695, 685.5]] }
+    const parts = (_p: number, x0: number) => (x0 === 200 ? 'a(b' : x0 === 72 ? 'c)' : null)
+    const inp = input([natbib({ ph: [MATH, TWO, CALL, DISPLAY] }), HEADING], parts)
+    expect(why(layUnit(inp, 1, tr([...NAT, [1, 4], [0, `)${han(5)}`], ...tail])))).toBe('brackets')
+    // one that begins with its own '(' and ends otherwise, inside a pair of the translation's own: the opening side alone
+    const opens = (_p: number, x0: number) => (x0 === 200 ? '(ab' : x0 === 72 ? 'cd' : null)
+    const inp2 = input([natbib({ ph: [MATH, TWO, CALL, DISPLAY] }), HEADING], opens)
+    expect(why(layUnit(inp2, 1, tr([...NAT, [0, '\uff08'], [1, 4], [0, `\uff09${han(5)}`], ...tail])))).toBe('brackets')
+  })
+
+  it("a crop stays in its own page's part of a split unit (I4)", () => {
+    const lines = [...column(3, { page: 1 }), ...column(3, { page: 2 })]
+    const frames = [{ page: 1, lines: 3 }, { page: 2, lines: 3, share: 500 }]
+    const math = (k: number, page: number): PhSpec => ({ k, kind: 'math', segs: [[page, 100, 688, 130, 695, 685.5]] })
+    // a formula of page 2 early in the translation: cut by the share it would be in page 1's part, and drawn there from
+    // pixels that are not its own
+    const file = layoutOf([{ id: 1, lines, frames, ph: [math(2, 2)] }])
+    const u = laid(layUnit(inputOf(file, 'zh'), 1, tr([[0, han(20)], [1, 2], [0, han(60)]])))
+    expect(u.lines.find(l => l.items.some(it => it.ph === 2))!.page).toBe(2)
+    expect(u.cuts[0]).toBeLessThanOrEqual(20)
+    // a formula of page 2 before one of page 1: no cut keeps both on their pages, and the unit stays the original's
+    const both = layoutOf([{ id: 1, lines, frames, ph: [math(2, 2), math(4, 1)] }])
+    expect(layUnit(inputOf(both, 'zh'), 1, tr([[0, han(10)], [1, 2], [0, han(10)], [1, 4], [0, han(50)]]))).toEqual({ id: 1, fit: false, why: 'missing' })
+    // one formula over the page break (a segment on each page): drawn from neither page whole
+    const over = layoutOf([{ id: 1, lines, frames, ph: [{ k: 2, kind: 'math', segs: [[1, 400, 676, 470, 683, 673.5], [2, 72, 700, 90, 707, 697.5]] }] }])
+    expect(layUnit(inputOf(over, 'zh'), 1, tr([[0, han(10)], [1, 2], [0, han(60)]]))).toEqual({ id: 1, fit: false, why: 'missing' })
+  })
+
+  it("the brief's exact values and the net's paths: 0.5 pt, half the smaller, each line's own page (I3)", () => {
+    const why = (units: UnitDef[], pieces: TrPiece[] = WHOLE) => { const r = layUnit(input(units), 1, tr(pieces)); return r.fit ? 'fit' : r.why }
+    // an erase rectangle over the display by 0.6 pt and by 0.4 pt, up and across
+    expect(why([para({ erase: [...ERASE, [3, 140, 672.4, 400, 680]] }), HEADING])).toBe('erase')
+    expect(why([para({ erase: [...ERASE, [3, 140, 672.6, 400, 680]] }), HEADING])).toBe('fit')
+    expect(why([para({ erase: [...ERASE, [3, 379.4, 660, 400, 672]] }), HEADING])).toBe('erase')
+    expect(why([para({ erase: [...ERASE, [3, 379.6, 660, 400, 672]] }), HEADING])).toBe('fit')
+    // a second formula over the first by 0.55 and by 0.45 of the smaller
+    const second = (x0: number): PhSpec => ({ k: 4, kind: 'math', segs: [[1, x0, 700, x0 + 20, 707, 697.5]] })
+    expect(why([para({ ph: [MATH, second(119), CALL, DISPLAY] }), HEADING])).toBe('overlap')
+    expect(why([para({ ph: [MATH, second(121), CALL, DISPLAY] }), HEADING])).toBe('fit')
+    // a unit over two pages: its page-2 erase over a page-2 display, which page 1 has none of
+    const lines = [...column(3, { page: 1 }), ...column(3, { page: 2 })]
+    const frames = [{ page: 1, lines: 3 }, { page: 2, lines: 3, share: 500 }]
+    const display: PhSpec = { k: 6, kind: 'display', segs: [[2, 150, 688, 380, 697, 683]] }
+    const two = (erase: EraseSpec[]) => { const r = layUnit(inputOf(layoutOf([{ id: 1, lines, frames, ph: [display], erase }]), 'zh'), 1, tr([[0, han(30)], [1, 6], [0, han(30)]])); return r.fit ? 'fit' : r.why }
+    expect(two([[3, 72, 697.5, 472, 707], [4, 140, 690, 400, 694]])).toBe('erase')
+    expect(two([[3, 72, 697.5, 472, 707]])).toBe('fit')
+    // a formula over two lines, its second segment on the other page, set in page 1's part: no page holds its pixels whole
+    const across: PhSpec = { k: 2, kind: 'math', segs: [[1, 400, 676, 470, 683, 673.5], [2, 72, 700, 90, 707, 697.5]] }
+    const l2 = laid(layUnit(inputOf(layoutOf([{ id: 1, lines, frames }]), 'zh'), 1, tr([[0, han(10)], [0, han(60)]])))
+    const crop = { ...l2.lines[0]!.items[0]!, kind: 'crop' as const, ph: 2, text: undefined, face: undefined }
+    const forged: LaidUnit = { ...l2, lines: [{ ...l2.lines[0]!, items: [crop, ...l2.lines[0]!.items.slice(1)] }, ...l2.lines.slice(1)], drawn: new Map([[2, 'crop']]) }
+    const inp = inputOf(layoutOf([{ id: 1, lines, frames, ph: [across] }]), 'zh')
+    expect(netOf(inp, forged, tr([[0, han(5)], [1, 2], [0, han(60)]]))).toBe('missing')
   })
 })

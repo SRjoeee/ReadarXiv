@@ -16,12 +16,11 @@
 // Pure, as the layer is: no DOM, no clock, no randomness; text is measured only through the function it is given, and
 // sizes and positions are PDF units, which no zoom changes. An original module (no port statement), importing only
 // relative modules, so that the reader's bundle holds it.
-import { FACES } from '../font-roles.mjs'
 import { scriptOf } from '../layer-rules.mjs'
 import { breakLines, placeLines } from './breaks.mjs'
 import { checkPieces, heldByNone, lostIn, netOf } from './net.mjs'
 import { trText } from './pieces.mjs'
-import { tokensOf } from './tokens.mjs'
+import { faceSize, tokensOf } from './tokens.mjs'
 
 /** a split part's sentence start is taken within this share of the translation's length from its frame's share */
 export const SPLIT_NEAR = 0.2
@@ -50,15 +49,8 @@ const median = xs => { const s = xs.slice().sort((a, b) => a - b); return (s[(s.
 const cpLength = s => { let n = 0; for (let i = 0; i < s.length; i++) if ((s.charCodeAt(i) & 0xfc00) !== 0xdc00) n++; return n }
 const content = t => t.kind === 'text' || t.kind === 'ph'
 
-/**
- * A face's size correction (the role table's Face.size: Source Han Serif K's Hangul set at its family's ideographs'
- * visual size), 1 for every other face. A run is drawn at the line's size × its face's correction, so the fit measures it
- * so: its width at 100 px times the correction.
- */
-export function faceSize(face) {
-  const v = Object.hasOwn(FACES, face) ? FACES[face].size : undefined
-  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 1
-}
+/** a face's size correction (tokens.mjs's), here for the drawing */
+export { faceSize }
 
 /**
  * The fit's states in order, from the most natural, each knob taken to its bound before the next (spec §4.5's order):
@@ -290,6 +282,16 @@ function nearest(xs, x) {
 
 // ---------------------------------------------------------------- laying
 
+/** the page a crop's segments are on, or 0 where they are on two (a formula over a page break: no page holds it whole) */
+function cropPage(segs) {
+  let page = 0
+  for (let s = 0; segs && s + 5 < segs.length; s += 6) {
+    if (page && segs[s] !== page) return 0
+    page = segs[s]
+  }
+  return page
+}
+
 /** each part's tokens: those starting at or after its cut and before the next */
 function partsOf(tokens, cuts) {
   const parts = cuts.map(() => [])
@@ -396,6 +398,8 @@ function itemsOf(line, f, state, measure, grid) {
         run.text += ' '
         continue
       }
+      // a space between two items: the item before it says so, for the drawing to write it there and nowhere else
+      if (out.length) out[out.length - 1].space = 1
       run = null
       continue
     }
@@ -497,8 +501,22 @@ export function layUnit(input, id, tr, o = {}) {
     for (let j = 1; j < frames.length; j++) {
       // the part of frame j holds the displays of frame j: its cut after those before it, at or before its own first
       const d = geo.before(j)
-      const lo = d > 0 ? (blockAt[d - 1] ?? -1) + 1 : 0, hi = blockAt[d] ?? len
-      limits.push([lo, hi])
+      limits.push([d > 0 ? (blockAt[d - 1] ?? -1) + 1 : 0, blockAt[d] ?? len])
+    }
+    // a crop is drawn from its own page's pixels: it goes in a part whose frame is on that page, so the cut before the
+    // first such frame is at or before it and the cut after the last one past it. Where no cut can keep every crop on its
+    // page, the cuts are what they can be, and the net refuses the unit
+    for (const t of tokens) {
+      if (t.kind !== 'ph' || t.mode !== 'crop') continue
+      const page = cropPage(unit.ph.get(t.ph)?.segs)
+      let ja = -1, jb = -1
+      for (let j = 0; j < frames.length; j++) if (frames[j].page === page) { if (ja < 0) ja = j; jb = j }
+      if (ja < 0) continue
+      if (ja > 0) limits[ja - 1][1] = Math.min(limits[ja - 1][1], t.at)
+      if (jb < frames.length - 1) limits[jb][0] = Math.max(limits[jb][0], t.at + 1)
+    }
+    for (let j = 1; j < frames.length; j++) {
+      const [lo, hi] = limits[j - 1]
       const at = (Math.max(0, frames[j].share) / 1000) * len
       const near = sentences.filter(s => Math.abs(s - at) <= SPLIT_NEAR * len + 1e-9)
       let c = nearest(near, at) ?? nearest(bounds, at) ?? Math.round(at)

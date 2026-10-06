@@ -7,7 +7,7 @@
 //
 // Pure, as the layer is: no DOM, no clock; text is measured only through the function it is given. An original module (no
 // port statement), importing only relative modules, so that the reader's bundle holds it.
-import { canDraw, classifyFont, faceFor } from '../font-roles.mjs'
+import { canDraw, classifyFont, FACES, faceFor } from '../font-roles.mjs'
 import { scriptOf } from '../layer-rules.mjs'
 import { PH_FLAG } from '../layout/file.mjs'
 import { COLOUR_SHIFT, STYLE } from './pieces.mjs'
@@ -54,6 +54,78 @@ const AFTER_SEPARATOR = /(?<=[/.\-_#?&=])(?=[^/.\-_#?&=])/u
 const AFTER_HYPHEN = /(?<=\p{L}[-/])(?=\p{L})/u
 const WORD = /^[^\p{L}]*(\p{L}[\p{L}\p{M}]*)[^\p{L}]*$/u
 const HYPHEN_MIN_LETTERS = 5
+
+/**
+ * A page text's width over its segments' width (both at the unit's size) that may be the placeholder's own: 0.85 to 1.15.
+ * On the layer lab's 29 fixtures, the citations' and references' own text (PyMuPDF's characters inside their segments,
+ * measured in the faces the layer draws in) lies at 0.94-1.07 (3,241 of 3,242; the one outside, at 0.11, an equation
+ * reference whose segment holds math), and the reader's PDF.js text items, which are whole lines where a citation stands
+ * within one, at 0.98-49 (median 2.42): those within the band are the citation and the sentence's period after it
+ */
+export const PAGE_TEXT_MIN = 0.85, PAGE_TEXT_MAX = 1.15
+/**
+ * The marks a reading of the page may begin or end with that the band cannot place, one character among many: a text
+ * item that ran on to the sentence's period after the placeholder, or to the source's bracket around it (a formula's item
+ * holding the ')' after it). A reading whose end is one of them, and that is still within the band without it, is not
+ * trusted (the layout's own text is): its placeholder is drawn as its ink, and the bracket rule takes its rendering as
+ * unread. Of the fixtures' readings, the 35 wrong ones the band holds all end in a period
+ */
+const LOOSE = new Set(['.', ',', ';', ':', '!', '?', '(', ')', '[', ']', '\uff08', '\uff09', '\uff3b', '\uff3d'])
+
+/**
+ * A face's size correction (the role table's Face.size: Source Han Serif K's Hangul set at its family's ideographs'
+ * visual size), 1 for every other face. A run is drawn at the line's size × its face's correction, so the fit measures it
+ * so: its width at 100 px times the correction.
+ */
+export function faceSize(face) {
+  const v = typeof face === 'string' && Object.hasOwn(FACES, face) ? FACES[face].size : undefined
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 1
+}
+
+/** a text as the page shows it: its invisible characters dropped, its white space one space, trimmed */
+const clean = s => (typeof s === 'string' ? s.replace(INVISIBLE, '').replace(/\s+/g, ' ').trim() : '')
+
+/**
+ * A placeholder's own text, for its page text: the layout's (`row.text`, the placeholder's own glyphs' text) where its row
+ * has one, else the page's text inside each of its segments (`textIn`), joined by spaces; null where neither reads, or where
+ * what reads is not the placeholder's own by its width: `width(text)` in ems at the unit's `size` within PAGE_TEXT_MIN to
+ * PAGE_TEXT_MAX of its segments' width, and, read by textIn, no longer so with a mark of LOOSE at either end taken off.
+ * The reader's textIn may give whole text items, a line where a citation stands within one: never trusted unmeasured
+ */
+export function ownText(row, o) {
+  let s, read = false
+  if (typeof row?.text === 'string') s = clean(row.text)
+  else {
+    if (typeof o.textIn !== 'function' || !row?.segs) return null
+    const parts = []
+    for (let i = 0; i + 5 < row.segs.length; i += 6) {
+      const one = clean(o.textIn(row.segs[i], row.segs[i + 1], row.segs[i + 5], row.segs[i + 3], row.segs[i + 4]))
+      if (!one) return null
+      parts.push(one)
+    }
+    s = parts.join(' ')
+    read = true
+  }
+  if (!s || !row.segs) return null
+  let segW = 0
+  for (let i = 0; i + 5 < row.segs.length; i += 6) segW += row.segs[i + 3] - row.segs[i + 1]
+  if (!(segW > 0)) return null
+  const fits = t => {
+    const r = (o.width(t) * o.size) / segW
+    return r >= PAGE_TEXT_MIN && r <= PAGE_TEXT_MAX
+  }
+  if (!fits(s)) return null
+  if (read && s.length > 1 && ((LOOSE.has(s.at(-1)) && fits(s.slice(0, -1).trimEnd())) || (LOOSE.has(s[0]) && fits(s.slice(1).trimStart())))) return null
+  return s
+}
+
+/** the page text a placeholder is drawn as, or null: its own text (ownText), its own brackets dropped where the translation
+ *  brackets it (`before` and `after`: the pieces beside its own), unless the source's own brackets are those */
+export function pageTextOf(row, before, after, o) {
+  const own = ownText(row, o)
+  if (!own) return null
+  return (!(row.flags & PH_FLAG.SOURCE_BRACKETS) && opensBefore(before) && closesAfter(after) ? unbracket(own) : own) || null
+}
 
 /** thrown inside tokensOf where the unit cannot be drawn, and caught at its edge */
 const UNDRAWABLE = Symbol('undrawable')
@@ -403,22 +475,12 @@ function build(pieces, o) {
     rawPos += s.length
   }
 
-  /** a visible placeholder of a citation or reference as the page's own text, or null where it is not readable there */
+  /** a visible placeholder of a citation or reference as the page's own text (pageTextOf), or null where it has none
+   *  there: then it is drawn as the original's ink */
   const pageText = (row, k, index, st, at, len) => {
-    const parts = []
-    for (let i = 0; i + 5 < row.segs.length; i += 6) {
-      const s = textIn(row.segs[i], row.segs[i + 1], row.segs[i + 5], row.segs[i + 3], row.segs[i + 4])
-      const one = typeof s === 'string' ? s.replace(INVISIBLE, '').replace(/\s+/g, ' ').trim() : ''
-      if (!one) return null
-      parts.push(one)
-    }
-    if (!parts.length) return null
-    // its own brackets are dropped where the translation brackets it, unless the source's own brackets are those
-    let shown = parts.join(' ')
-    if (!(row.flags & PH_FLAG.SOURCE_BRACKETS) && opensBefore(pieces[index - 1]) && closesAfter(pieces[index + 1])) shown = unbracket(shown)
-    if (!shown) return null
     const face = faceOf('latin', st)
-    if (!canDraw(shown, [face], roles)) return null
+    const shown = pageTextOf(row, pieces[index - 1], pieces[index + 1], { textIn, width: t => widthOf(t, face, st.caps), size: unitSize })
+    if (!shown || !canDraw(shown, [face], roles)) return null
     return { kind: 'ph', s: shown, script: 'latin', face, caps: st.caps, w: widthOf(shown, face, st.caps), ph: k, mode: 'page-text', colour: st.colour, at, len }
   }
 
@@ -440,7 +502,7 @@ function build(pieces, o) {
     if (row.kind === 'display') { emitPlain({ kind: 'block', w: 0, ph: k, mode: 'kept', colour: st.colour, at, len }); return }
     const raised = (row.flags & PH_FLAG.RAISED) !== 0
     // a raised mark is the original's own ink: the page text has no size or lift of its own
-    let t = !raised && textIn && PAGE_TEXT.has(row.kind) ? pageText(row, k, index, st, at, len) : null
+    let t = !raised && PAGE_TEXT.has(row.kind) ? pageText(row, k, index, st, at, len) : null
     if (!t) {
       let width = 0
       for (let i = 0; i + 5 < row.segs.length; i += 6) width += row.segs[i + 3] - row.segs[i + 1]

@@ -18,7 +18,7 @@ export const measure: Measure = text => {
   return w
 }
 
-export interface PhSpec { kind: string; flags?: number; segs?: number[] }
+export interface PhSpec { kind: string; flags?: number; segs?: number[]; text?: string }
 export interface UnitSpec { kind: string; title: boolean; centred: boolean; lineFonts: number[]; size: number; ph: Record<number, PhSpec> }
 
 /** a located unit with one line per entry of `lineFonts` (each an index into the layout's fonts), all of one size */
@@ -27,8 +27,9 @@ export function unitOf(o: Partial<UnitSpec> = {}): LayoutUnit {
   const size = o.size ?? 10
   const lines = new Float64Array(lineFonts.length * 8)
   for (const [i, font] of lineFonts.entries()) lines.set([1, 72, 540, 700 - 12 * i, 710 - 12 * i, 698 - 12 * i, size, font], i * 8)
-  const ph = new Map<number, { kind: string; flags: number; segs: Float64Array }>()
-  for (const [k, p] of Object.entries(o.ph ?? {})) ph.set(Number(k), { kind: p.kind, flags: p.flags ?? 0, segs: Float64Array.from(p.segs ?? [1, 100, 700, 130, 710, 698]) })
+  const ph = new Map<number, { kind: string; flags: number; segs: Float64Array; text?: string }>()
+  // `text`: the layout's own text of the placeholder (Task 6b's), where a test gives one
+  for (const [k, p] of Object.entries(o.ph ?? {})) ph.set(Number(k), { kind: p.kind, flags: p.flags ?? 0, segs: Float64Array.from(p.segs ?? [1, 100, 700, 130, 710, 698]), ...(p.text === undefined ? {} : { text: p.text }) })
   return {
     id: 1, kind: o.kind ?? 'para', depth: 0, title: o.title ?? false, front: false, centred: o.centred ?? false, pieces: 64,
     lines, frames: new Float64Array(0), erase: [], ph, labels: new Float64Array(0), heading: null,

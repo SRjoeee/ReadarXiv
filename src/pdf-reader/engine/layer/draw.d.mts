@@ -23,8 +23,9 @@ export interface DrawLine { baseline: number; runs: DrawRun[] }
  * letter and word spacing; one a UTF-16 code unit for a run that places each character (CJK characters, tracked Hangul,
  * every one in the BMP), its spacing 0. `size`: the line's × its face's Face.size, applied here once (no `size-adjust` in
  * `@font-face`). `colour`: LAYER_COLOURS' index + 1, 0 for none. A space at its end, or within a run that places each
- * character, stands for the gap in trText after an item, written for copying and finding. `from`, `to`: its first item's
- * start and its last item's end in trText
+ * character, is the translation's space after an item (LaidItem.space), written for copying and finding; after a crop it is
+ * a run of its own, one space at the crop's right edge. None stands where trText has a space for a group's piece only. The
+ * web keeps them (white-space: pre). `from`, `to`: its first item's start and its last item's end in trText
  */
 export interface DrawRun { x: number[]; text: string; face: FaceId; caps: boolean; size: number; letterSpacing: number; wordSpacing: number; colour: number; shift: number; from: number; to: number }
 export declare function drawUnit(input: LayerInput, laid: LaidUnit, page: number): UnitDraw

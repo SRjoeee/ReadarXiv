@@ -35,7 +35,12 @@ export interface FitState { scale: number; lead: number; track: number; letter: 
  * one's `to` falls short of the next's `from`, which the drawing writes for copying and finding. `colour`: LAYER_COLOURS'
  * index + 1, 0 for none
  */
-export interface LaidItem { kind: 'text' | 'crop' | 'page-text'; x: number; w: number; text?: string; face?: FaceId; caps?: boolean; ph?: number; colour: number; raised: number; from: number; to: number }
+export interface LaidItem {
+  kind: 'text' | 'crop' | 'page-text'; x: number; w: number; text?: string; face?: FaceId; caps?: boolean; ph?: number; colour: number; raised: number; from: number; to: number
+  /** 1 where a space of the translation follows it on its line (a space the breaker placed), which the drawing writes for
+   *  copying and finding; absent elsewhere, also where trText has a space for a group's piece the translation has none at */
+  space?: 1
+}
 /**
  * A line on its page and frame (the frame's index in the unit), its slot's left and right, its baseline (y up, PDF units)
  * and the size it is set at. `mode`: as placeLines left it. `letterSpacing`: PDF units after each character of its text
@@ -63,7 +68,8 @@ export declare function statesOf(rules: LayerRules, o: { below: number; pitch: n
  *  a LOST row refused, its tokens made, then laid at the first state that fits, which the completeness net (netOf) passes or
  *  refuses. No LaidUnit it returns is one the net refuses */
 export declare function layUnit(input: LayerInput, id: number, tr: Tr, o?: { maxScale?: number; lead?: number }): Laid
-/** a face's size correction (Face.size; 1 for a face with none): a run is measured, and drawn, at the line's size × it */
+/** a face's size correction (Face.size; 1 for a face with none): a run is measured, and drawn, at the line's size × it
+ *  (tokens.mjs's, re-exported for the drawing) */
 export declare function faceSize(face: FaceId | undefined): number
 /** a split part's sentence start is taken within this share of the translation's length from its frame's share: 0.2 */
 export declare const SPLIT_NEAR: number

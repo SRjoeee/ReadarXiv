@@ -5,7 +5,7 @@ import type { TrPiece } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { layerRulesFor } from '@/pdf-reader/engine/layer-rules.mjs'
 import { PH_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { measure } from './helpers/layer-fixtures'
-import { column, han, inputOf, kanji, layoutOf, words } from './helpers/layer-layout'
+import { column, han, inputOf, kanji, layoutOf, withText, words } from './helpers/layer-layout'
 
 // The fit: a unit's translation set into the original's frames, giving up as little as it must, in the maintainer's order
 // (tracking, the space below, leading, size), or left the original's past the floor. Layouts are written in the tests and
@@ -230,10 +230,10 @@ describe('the fit', () => {
   })
 
   it('a placeholder is drawn whole: one wider than every line is unfit, never cut across two lines', () => {
-    // a citation read from the page, 20 characters (90 at 10), in lines 60 wide: no state sets it on one line
-    const citing = (w: number) => layoutOf([{ id: 1, lines: column(12, { w }), ph: [{ k: 3, kind: 'cite', segs: [[1, 100, 700, 180, 707, 697.5]] }] }])
-    const textIn = () => '[12, 13, 14, 15, 16]'
-    const lay = (w: number, target: string, pieces: TrPiece[]) => layUnit({ ...inputOf(citing(w), target), textIn }, 1, tr(pieces))
+    // a citation's own text, 20 characters (90 at 10), in lines 60 wide: no state sets it on one line. The layout's (Task
+    // 6b's): read from the page, a reading whose bracket the width band cannot place is not trusted (Task 11)
+    const citing = (w: number) => withText(layoutOf([{ id: 1, lines: column(12, { w }), ph: [{ k: 3, kind: 'cite', segs: [[1, 100, 700, 180, 707, 697.5]] }] }]), 1, 3, '[12, 13, 14, 15, 16]')
+    const lay = (w: number, target: string, pieces: TrPiece[]) => layUnit(inputOf(citing(w), target), 1, tr(pieces))
     expect(lay(60, 'zh', [[0, han(5)], [1, 3], [0, han(5)]])).toEqual({ id: 1, fit: false, why: 'floor' })
     expect(lay(60, 'en', [[0, 'see the '], [1, 3], [0, ' for data']])).toEqual({ id: 1, fit: false, why: 'floor' })
     // in lines 80 wide it fits once the size is small enough, whole on one line
@@ -441,7 +441,7 @@ describe('the fit', () => {
     expect(json(one)).toBe(json(two))
     // PDF units only: every line and item has exactly the contract's fields, and every number lies on the page
     const LINE = ['baseline', 'frame', 'from', 'items', 'letterSpacing', 'mode', 'page', 'size', 'to', 'wordSpacing', 'x0', 'x1']
-    const ITEM = new Set(['caps', 'colour', 'face', 'from', 'kind', 'ph', 'raised', 'text', 'to', 'w', 'x'])
+    const ITEM = new Set(['caps', 'colour', 'face', 'from', 'kind', 'ph', 'raised', 'space', 'text', 'to', 'w', 'x'])
     for (const r of one) {
       const u = laid(r)
       expect(Object.keys(u).sort()).toEqual(['cuts', 'drawn', 'fit', 'id', 'lines', 'size', 'state'])

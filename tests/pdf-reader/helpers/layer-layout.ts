@@ -51,6 +51,16 @@ export function layoutOf(units: UnitDef[], pages = 2): LayoutIndex {
   return indexLayout(parseLayout(new TextEncoder().encode(encodeLayout(file))))
 }
 
+/** the layout's own text of a placeholder (Task 6b's: its own glyphs' text), set on a unit's row of an index: the file
+ *  format has no place for it yet */
+export function withText(file: LayoutIndex, id: number, k: number, text: string): LayoutIndex {
+  const unit = file.unit(id)!
+  const ph = new Map(unit.ph)
+  ph.set(k, { ...unit.ph.get(k)!, text } as never)
+  const own = { ...unit, ph }
+  return { ...file, unit: (i: number) => (i === id ? own : file.unit(i)) }
+}
+
 /** n lines of one column: from `top` down at `pitch`, `x0` to `x0 + w`; `baselines` gives them their own */
 export function column(n: number, o: { page?: number; x0?: number; w?: number; top?: number; pitch?: number; baselines?: number[] } = {}): LineSpec[] {
   const x0 = o.x0 ?? 72, w = o.w ?? 400, pitch = o.pitch ?? 12, start = o.top ?? 700

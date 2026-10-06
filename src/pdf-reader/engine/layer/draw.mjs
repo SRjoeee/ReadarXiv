@@ -20,16 +20,26 @@ const single = s => s.length === 1 && (s.charCodeAt(0) & 0xf800) !== 0xd800
  * character too and has its face, caps and colour (CJK characters, and Hangul or Latin letters tracked one by one): x
  * holds each character's place. Any other text item (a run of Latin or Hangul words, a CJK word, a character outside the
  * BMP) and every page text is a run of its own at one x, with the line's letter spacing, and a text item its word
- * spacing. A gap between an item and the next (a space of trText) is written as a space at the end of the item's run, with
- * an x of its own where the run places each character, for copying and finding; a crop writes none
+ * spacing. A space is written where the translation has one between two items (the fit's `space`), and nowhere else (not
+ * where trText has one for a group's piece): at the end of the item's run, with an x of its own where the run places each
+ * character, or, after a crop, as a run of its own at the crop's right edge, in the face of the text beside it
  */
 function runsOf(line) {
   const runs = []
   const items = line.items
   let run = null, each = false
   for (let q = 0; q < items.length; q++) {
-    const it = items[q], next = items[q + 1]
-    if (it.kind === 'crop') { run = null; continue }
+    const it = items[q]
+    if (it.kind === 'crop') {
+      run = null
+      if (it.space) {
+        let face
+        for (let r = q + 1; r < items.length && face === undefined; r++) face = items[r].face
+        for (let r = q - 1; r >= 0 && face === undefined; r--) face = items[r].face
+        if (face !== undefined) runs.push({ x: [it.x + it.w], text: ' ', face, caps: false, size: line.size * faceSize(face), letterSpacing: 0, wordSpacing: 0, colour: 0, shift: 0, from: it.to, to: it.to })
+      }
+      continue
+    }
     const text = it.text ?? ''
     const one = it.kind === 'text' && single(text)
     const face = it.face, caps = !!it.caps
@@ -46,7 +56,7 @@ function runsOf(line) {
       each = one
       runs.push(run)
     }
-    if (next !== undefined && next.from > it.to) {
+    if (it.space) {
       run.text += ' '
       if (each) run.x.push(it.x + it.w)
     }

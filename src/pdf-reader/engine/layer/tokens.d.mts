@@ -31,6 +31,25 @@ export interface Token {
   at: number; len: number        // its offsets in trText(pieces)
 }
 
+/** a page text's width over its segments' width that may be the placeholder's own: 0.85 to 1.15 (the citations' own text
+ *  lies at 0.94-1.07 on the layer lab's 29 fixtures) */
+export declare const PAGE_TEXT_MIN: number
+export declare const PAGE_TEXT_MAX: number
+/** a face's size correction (Face.size; 1 for a face with none): a run is measured, and drawn, at the line's size × it */
+export declare function faceSize(face: FaceId | undefined): number
+/** what a placeholder's own text is measured with: `width(text)` in ems, at the unit's `size` (PDF units) */
+export interface OwnTextIn { textIn?: TextIn; width: (text: string) => number; size: number }
+/**
+ * A placeholder's own text: its row's `text` (the layout's: its own glyphs' text, Task 6b) where it has one, else the page's
+ * text inside its segments (`textIn`) joined by spaces; null where neither reads, or where what reads is not within
+ * PAGE_TEXT_MIN to PAGE_TEXT_MAX of its segments' width, or, read by textIn, would still be with a period, comma, semicolon,
+ * colon, ! or ? at either end taken off (a text item that ran on to the sentence's period)
+ */
+export declare function ownText(row: { segs: Float64Array; text?: string }, o: OwnTextIn): string | null
+/** the page text a placeholder is drawn as (ownText, its own brackets dropped where the translation's pieces beside it
+ *  bracket it and the source's do not), or null */
+export declare function pageTextOf(row: { flags: number; segs: Float64Array; text?: string }, before: TrPiece | undefined, after: TrPiece | undefined, o: OwnTextIn): string | null
+
 /** every character that may not begin a line, and every one that may not end it: the kinsoku sets */
 export declare const NO_START: string
 export declare const NO_END: string
@@ -43,7 +62,8 @@ export declare function hyphenCore(text: string): { lead: number; core: string }
 
 /**
  * A unit's translation as tokens, or null where it cannot be drawn: a placeholder the layout lost (a LOST row), a character
- * no face holds, a unit with no lines.
+ * no face holds, a unit with no lines. A citation or reference (not raised) is page text where pageTextOf gives it one, else
+ * a crop of its ink: the reader's textIn, which may give whole text items, is never trusted unmeasured.
  *
  * A `[1, k]` with no `ph` row draws nothing: the layout maker writes a row for every visible placeholder, found or LOST, so
  * a piece with none is an invisible one. `classOf` is a defence against a maker that did not: given, it names the class of

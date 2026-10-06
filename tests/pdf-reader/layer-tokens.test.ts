@@ -152,8 +152,10 @@ describe('placeholders', () => {
     expect(own([[0, 'see ( '], [1, 3], [0, ')']])).toBe('[12]')
     // the source's own brackets: nothing dropped
     expect(own([[0, 'see ('], [1, 3], [0, ')']], ph('cite', PH_FLAG.SOURCE_BRACKETS, [1, 200, 700, 220, 710, 698]))).toBe('[12]')
-    // page text with parentheses of its own, and one whose brackets are not a pair
-    const author = (text: string) => need([[0, '('], [1, 3], [0, ')']], { unit: { ph: { 3: rows[3]! } }, textIn: () => text }).find(t => t.mode === 'page-text')?.s
+    // page text with parentheses of its own, and one whose brackets are not a pair: the layout's own text (Task 6b's), each
+    // segment as wide as its text, as a citation's own is (Task 11's page-text band; read from the page, a reading whose
+    // bracket the band cannot place is not trusted)
+    const author = (text: string) => need([[0, '('], [1, 3], [0, ')']], { unit: { ph: { 3: { ...ph('cite', 0, [1, 200, 700, 200 + measure(text, '', false) / 10, 710, 698]), text } } } }).find(t => t.mode === 'page-text')?.s
     expect(author('(Smith, 2020)')).toBe('Smith, 2020')
     expect(author('Smith (2020)')).toBe('Smith (2020)')
     expect(author('[1)')).toBe('[1)')
@@ -166,7 +168,9 @@ describe('placeholders', () => {
     // a character no face holds in the page text: the crop of its ink
     expect(need([[0, 'see '], [1, 3]], { unit: { ph: rows }, textIn: () => '[\ue000]' }).at(-1)?.mode).toBe('crop')
     for (const kind of ['math', 'footnote', 'macro', 'url', 'code', 'other', 'ref', 'eqref']) {
-      expect(need([[0, 'a '], [1, 5]], { unit: { ph: { 5: ph(kind) } }, textIn: kind === 'ref' || kind === 'eqref' ? () => '3' : undefined }).at(-1)?.mode, kind).toBe(kind === 'ref' || kind === 'eqref' ? 'page-text' : 'crop')
+      // a reference's '3', its segment as wide as it
+      const read = kind === 'ref' || kind === 'eqref'
+      expect(need([[0, 'a '], [1, 5]], { unit: { ph: { 5: ph(kind, 0, read ? [1, 100, 700, 105, 710, 698] : undefined) } }, textIn: read ? () => '3' : undefined }).at(-1)?.mode, kind).toBe(read ? 'page-text' : 'crop')
     }
     // a placeholder of two segments is one crop, as wide as both
     const wrapped = need([[0, 'a '], [1, 5]], { unit: { ph: { 5: ph('math', 0, [1, 100, 700, 130, 710, 698, 1, 72, 688, 92, 698, 686]) } } }).at(-1)!
@@ -205,7 +209,7 @@ describe('placeholders', () => {
   })
 
   it('every kind of token has its width in ems: at a size f it is w times f', () => {
-    const tokens = need([[0, 'ab '], [1, 2], [0, ' ('], [1, 3], [0, ')']], { unit: { ph: { 2: ph('math', 0, [1, 100, 700, 130, 710, 698]), 3: ph('cite', 0, [1, 200, 700, 220, 710, 698]) } }, textIn: () => '[1]' })
+    const tokens = need([[0, 'ab '], [1, 2], [0, ' ('], [1, 3], [0, ')']], { unit: { ph: { 2: ph('math', 0, [1, 100, 700, 130, 710, 698]), 3: ph('cite', 0, [1, 200, 700, 215, 710, 698]) } }, textIn: () => '[1]' })
     // a text of two Latin characters (the fake measure's 100 at 100 px) is 1 em, a space a quarter, a formula of 30 units
     // in a unit of size 10 is 3, page text of one character 0.5 em after its brackets are dropped
     expect(tokens.map(t => [t.kind, t.mode ?? null, t.w])).toEqual([
@@ -442,7 +446,7 @@ describe('offsets', () => {
     expect(need([[0, '\u200b\u200d']])).toEqual([])
     // the page's own text too
     const textIn: TextIn = () => '[12\u200b]'
-    const cited = need([[0, 'see '], [1, 3]], { unit: { ph: { 3: ph('cite') } }, textIn })
+    const cited = need([[0, 'see '], [1, 3]], { unit: { ph: { 3: ph('cite', 0, [1, 200, 700, 220, 710, 698]) } }, textIn })
     expect(cited.find(t => t.mode === 'page-text')).toMatchObject({ s: '[12]' })
   })
 

@@ -89,10 +89,11 @@ describe('the drawing', () => {
     expect(runs[1]).toEqual(expect.objectContaining({ x: [items[10]!.x], face: items[10]!.face, letterSpacing: line.letterSpacing, wordSpacing: line.wordSpacing }))
     expect(runs[2]!.x).toEqual(items.slice(11).map(it => it.x))
     expect(runs[0]).toEqual(expect.objectContaining({ letterSpacing: 0, wordSpacing: 0, size: 10, shift: 0, caps: false, colour: 0 }))
-    // a run is one face's: a bold group's characters are a run of their own, between the body's
+    // a run is one face's: a bold group's characters are a run of their own, between the body's. trText holds a space for
+    // each of the group's pieces, which the translation has no space at: none is written (fix round 1, concern 3)
     const bold = laid(layUnit(inp, 1, tr([[0, han(5)], [2, 1, STYLE.BOLD], [0, han(5)], [3, 2], [0, han(5)]])))
     const faces = drawUnit(inp, bold, 1).lines[0]!.runs
-    expect(faces.map(r => [r.face, r.text.trimEnd()])).toEqual([['shs-sc-regular', han(5)], ['shs-sc-bold', han(5)], ['shs-sc-regular', han(5)]])
+    expect(faces.map(r => [r.face, r.text])).toEqual([['shs-sc-regular', han(5)], ['shs-sc-bold', han(5)], ['shs-sc-regular', han(5)]])
     // German justified: a line's words one run at one x, with the line's letter and word spacing
     const de = laid(layUnit(inputOf(nine(), 'de'), 1, tr(words(60))))
     const just = de.lines.findIndex(l => l.mode === 'just')
@@ -131,7 +132,7 @@ describe('the drawing', () => {
       expect(pos).toBe(t.length)
     }
     // with placeholders: every run within trText, in order; a text run its own slice of it, a page text the placeholder's
-    const file = layoutOf([{ id: 1, lines: column(9), ph: [{ k: 2, kind: 'math', segs: [[1, 100, 700, 130, 707, 697.5]] }, { k: 4, kind: 'cite', segs: [[1, 200, 700, 215, 707, 697.5]] }] }])
+    const file = layoutOf([{ id: 1, lines: column(9), ph: [{ k: 2, kind: 'math', segs: [[1, 100, 700, 130, 707, 697.5]] }, { k: 4, kind: 'cite', segs: [[1, 200, 700, 220, 707, 697.5]] }] }])
     const inp = { ...inputOf(file, 'zh'), textIn: (_p: number, x0: number) => (x0 === 200 ? '[12]' : null) }
     const pieces: TrPiece[] = [[0, `${han(38)} LLM`], [1, 2], [0, han(20)], [1, 4], [0, ` ${han(60)}`]]
     const u = laid(layUnit(inp, 1, tr(pieces)))
@@ -193,10 +194,50 @@ describe('the drawing', () => {
     expect(unitAt([small, big], 1, 80, 296)?.id).toBe(1)
   })
 
+  it("a space is written where the translation has one, a crop's sides too, and nowhere else (fix round 1, concern 3)", () => {
+    // German: 'aaaa bbbb', a formula, 'cccc dddd', the formula's own space collapsed into the text's (its offsets [9, 9))
+    const file = layoutOf([{ id: 1, lines: column(2), ph: [{ k: 2, kind: 'math', segs: [[1, 100, 700, 130, 707, 697.5]] }] }])
+    const inp = inputOf(file, 'de')
+    const u = laid(layUnit(inp, 1, tr([[0, 'aaaa bbbb '], [1, 2], [0, ' cccc dddd']])))
+    const line = u.lines[0]!, crop = line.items.find(it => it.kind === 'crop')!
+    expect([crop.from, crop.to]).toEqual([9, 9])
+    const runs = drawUnit(inp, u, 1).lines[0]!.runs
+    expect(runs.map(r => r.text)).toEqual(['aaaa bbbb ', ' ', 'cccc dddd'])
+    expect(runs[1]!.x).toEqual([crop.x + crop.w])
+    // a word glued to a formula ('$x$-axis'): no space either side
+    const glued = laid(layUnit(inp, 1, tr([[0, 'aaaa '], [1, 2], [0, '-axis']])))
+    expect(drawUnit(inp, glued, 1).lines[0]!.runs.map(r => r.text)).toEqual(['aaaa ', '-axis'])
+    // a crop's space in the face of the text after it, at its size correction: Korean's Hangul
+    const ko = inputOf(file, 'ko')
+    const k = laid(layUnit(ko, 1, tr([[0, '\ubaa8\ub378 '], [1, 2], [0, ' \ub370\uc774\ud130']])))
+    const space = drawUnit(ko, k, 1).lines[0]!.runs.find(r => r.text === ' ')!
+    expect(space.face).toBe('shs-k-regular')
+    expect(space.size).toBeCloseTo(10 * FACES['shs-k-regular']!.size, 9)
+  })
+
+  it("spansOf takes a cut word's tail with the word, not with the offset after it (I3)", () => {
+    // a German word of 38 letters with a zero width space in it (its text one shorter than its offsets, so the piece a cut
+    // leaves of it has no offsets of its own), cut over lines 100 wide: its tail fills line 1, the next word starts line 2
+    const word = `${'x'.repeat(19)}\u200b${'x'.repeat(19)}`
+    const file = layoutOf([{ id: 1, lines: column(4, { w: 100 }) }])
+    const u = laid(layUnit(inputOf(file, 'de'), 1, tr(`${word} yyyy zz`)))
+    const items = u.lines.flatMap(l => l.items.map(it => ({ l, it })))
+    const tail = items.find(({ it }) => it.from === 39 && it.to === 39)!
+    const next = items.find(({ it }) => it.text?.startsWith('yyyy'))!
+    expect(tail.l).not.toBe(next.l)
+    // the word itself: its two lines, the tail's whole
+    const own = spansOf(u, 0, 39)
+    expect(own).toHaveLength(2)
+    expect(own[1]!.x0).toBe(tail.it.x)
+    expect(own[1]!.x1).toBe(tail.it.x + tail.it.w)
+    // from the offset after it: the tail is not in it
+    expect(spansOf(u, 39, 44)).toEqual([expect.objectContaining({ y0: next.l.baseline - 2.5 })])
+  })
+
   it('the same input gives the same drawing', () => {
     const file = layoutOf([{
       id: 1, lines: column(9),
-      ph: [{ k: 2, kind: 'math', segs: [[1, 100, 700, 130, 707, 697.5]] }, { k: 4, kind: 'cite', segs: [[1, 200, 700, 215, 707, 697.5]] }, { k: 6, kind: 'display', segs: [[1, 150, 652, 380, 661, 647]] }],
+      ph: [{ k: 2, kind: 'math', segs: [[1, 100, 700, 130, 707, 697.5]] }, { k: 4, kind: 'cite', segs: [[1, 200, 700, 220, 707, 697.5]] }, { k: 6, kind: 'display', segs: [[1, 150, 652, 380, 661, 647]] }],
       erase: [[0, 72, 697.5, 472, 707], [1, 72, 685.5, 472, 695]],
     }])
     const pieces: TrPiece[] = [[0, `${han(38)} LLM`], [1, 2], [0, han(20)], [1, 4], [0, ` ${han(30)}`], [1, 6], [0, han(30)]]
