@@ -41,3 +41,28 @@ describe("v0's displayed formulas: the engine's environments", () => {
     expect(phClass('$x = 1$')).toBe('other')
   })
 })
+
+describe('no unit drawn in part: the text run past a display where the slots after it are too few', () => {
+  // a line is 100 pt wide at size 10, each 'x' 5 pt (the test's canvas: 50 px a character at 100 px)
+  const word = (n: number) => ({ s: 'x'.repeat(n), cls: 'latin', w100: 50 * n, st: {} })
+  const space = { space: true, w100: 25 }
+  const block = (B: number[], after: number) => ({ page: 1, rects: B.map(b => [1, 0, b - 2, 100, b + 8]), x0: 0, x1: 100, B, exact: B.map(() => true), sizes: B.map(() => 10), pitch0: 12, free: 0, indent: 0, after, centred: false })
+  const P = () => ({ ...L2.defaultParams('de'), borrow: 0 })
+  // one line of text before a display, three after it, which leaves the original one line below it and three above it
+  const blocks = [block([500, 488, 476, 464], 0), block([300], 1)]
+  const after = [word(18), space, word(18), space, word(18)]
+  it("is clipped in the translation's order, and set whole once the text may run on into the lines above the display", () => {
+    const tokens = [word(18), { blockTo: 0, w100: 0 }, ...after]
+    expect(L2.layoutUnit2(tokens as never, blocks as never, 10, P() as never, 'de').clipped).toBe(true)
+    const flow = L2.layoutUnit2(tokens as never, blocks as never, 10, { ...P(), flowPast: true } as never, 'de')
+    expect(flow.clipped).toBe(false)
+    expect(flow.scale).toBe(1)
+    // the display breaks the line once: its text after it starts on the next line, above the display
+    expect(flow.lines.map(l => l.baseline)).toEqual([500, 488, 476, 464])
+  })
+  it("breaks the line once a region: a placeholder kept in the display's lines after it is no second break", () => {
+    const tokens = [word(18), { blockTo: 0, w100: 0 }, word(4), { blockTo: 0, w100: 0 }, word(4)]
+    const flow = L2.layoutUnit2(tokens as never, blocks as never, 10, { ...P(), flowPast: true } as never, 'de')
+    expect(flow.lines.map(l => l.items.filter(it => it.t.s).length)).toEqual([1, 2])
+  })
+})

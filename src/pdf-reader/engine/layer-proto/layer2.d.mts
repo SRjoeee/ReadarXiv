@@ -10,6 +10,8 @@ export interface Params {
   cjk: boolean; leadBase: number; leadFloor: number; trackMin: number; compressMax: number; borrow: number; borrowGap: number
   floor: number; step: number; grid: number; order: string[]; cjkJust: number; spaceMax: number; autospace: number; spaceMin: number
   hyphen: number; even?: number; maxScale?: number; _compress?: number
+  /** step 3: the further steps for a unit the states leave clipped (run.mjs fitFurther), and the size the last goes down to */
+  further?: readonly ('widen' | 'flow' | 'shrink')[]; floorMin?: number; refuse?: number; flowPast?: boolean
 }
 /** a character of the original page: its box from its item (PDF units), its baseline and size, its item and place in it,
  *  its font's class */

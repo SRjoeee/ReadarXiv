@@ -8,6 +8,10 @@
 // v0's changes here: the linter's, none of which changes what runs: `!st?.known` for `!st || !st.known`, and two
 // unused locals and two unused names of a destructuring left out.
 // And the size correction of a role table face (fonts.mjs setRoleFaces) on each run's SVG size, 1 for the prototype's.
+// And step 3 (2026-10-07): a unit's leading relative to the original's own pitch (leadOf); the display environments the
+// engine knows (layer1.mjs DISPLAY); and no unit drawn in part: past the fit's last state the host's further steps
+// (run.mjs fitFurther: a single line widened over the paper beside it, the text run past a display, the size on below
+// its floor, P.further and P.floorMin), the flow past a display being this module's (breakLines 'flow', P.flowPast).
 // And prepareUnit in parts (step 2 of the layer's new direction, 2026-10-06), so that the four which read the page's
 // geometry (lines, erase extents, labels, placeholder renderings) can come from another source: its statements moved
 // into the parts as they were, in the same order; a set of claimed characters, which nothing read, left out. Every
@@ -53,12 +57,16 @@ import { breakPoints } from './hyph.mjs'
 
 // ---- parameters: per script, each a prior from the public repo's typesetting research, swept on the layer
 
+/** step 3: the fit's further steps for a unit its states leave clipped (run.mjs fitFurther), in order, and the size the
+ *  last may go down to: on the gate's 29 outputs they took clipped characters from 943 to 140 (widen 100, flow 138, the
+ *  size 465), most below the floor at 0.775 */
+const FURTHER = Object.freeze(['widen', 'flow', 'shrink']), FLOOR_MIN = 0.6
 /** the defaults, before the sweep chose (main.js overrides any of them from the query) */
 export function defaultParams(to) {
   const cjk = CJK_TARGETS.has(to)
-  if (to === 'zh' || to === 'zh-TW') return { cjk: true, leadBase: 1.3, leadFloor: 1.0, trackMin: -0.03, compressMax: to === 'zh-TW' ? 0 : 2, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 1, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.25, spaceMax: 1.0, autospace: 0.2, spaceMin: 0.8, hyphen: 1 }
-  if (cjk) return { cjk: true, leadBase: 1.0, leadFloor: 1.0, trackMin: -0.03, compressMax: 2, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 1, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.25, spaceMax: 1.0, autospace: to === 'ja' ? 0.2 : 0, spaceMin: 0.8, hyphen: 1 }
-  return { cjk: false, leadBase: 1.0, leadFloor: 0.95, trackMin: 0, compressMax: 0, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 0, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.12, spaceMax: 1.2, autospace: 0, spaceMin: 0.8, hyphen: 1 }
+  if (to === 'zh' || to === 'zh-TW') return { cjk: true, leadBase: 1.3, leadFloor: 1.0, trackMin: -0.03, compressMax: to === 'zh-TW' ? 0 : 2, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 1, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.25, spaceMax: 1.0, autospace: 0.2, spaceMin: 0.8, hyphen: 1, further: FURTHER, floorMin: FLOOR_MIN }
+  if (cjk) return { cjk: true, leadBase: 1.0, leadFloor: 1.0, trackMin: -0.03, compressMax: 2, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 1, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.25, spaceMax: 1.0, autospace: to === 'ja' ? 0.2 : 0, spaceMin: 0.8, hyphen: 1, further: FURTHER, floorMin: FLOOR_MIN }
+  return { cjk: false, leadBase: 1.0, leadFloor: 0.95, trackMin: 0, compressMax: 0, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 0, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.12, spaceMax: 1.2, autospace: 0, spaceMin: 0.8, hyphen: 1, further: FURTHER, floorMin: FLOOR_MIN }
 }
 
 // ---- the page's characters, each with its font's class
@@ -1771,6 +1779,9 @@ const tokW = (t, f, st, scale) => {
  * widths (punctuation compressed as the state allows), the space a line may shrink, and `rest`, the first token left.
  */
 function breakLines(tokensIn, slots, f, st, P, scale, strict = true) {
+  // (step 3, 'flow': a kept region breaks the line and skips no slot: the text after a display may stand above it, where
+  // the slots below it are too few for it and those above it too many; the last resort before the unit is not drawn)
+  const flow = strict === 'flow'
   let tokens = tokensIn
   const lines = []
   let li = 0, i = 0
@@ -1787,7 +1798,7 @@ function breakLines(tokensIn, slots, f, st, P, scale, strict = true) {
     li++
     if (li >= slots.length) return
     if ((slots[li].after ?? 0) > consumed) {
-      if (strict) { stop = true; return }
+      if (strict === true) { stop = true; return }
       spilled = true
     }
     open()
@@ -1795,7 +1806,15 @@ function breakLines(tokensIn, slots, f, st, P, scale, strict = true) {
   if (slots.length) open()
   while (i < tokens.length && li < slots.length && !stop) {
     if (tokens[i].blockTo !== undefined) {
+      const fresh = tokens[i].blockTo + 1 > consumed
       consumed = Math.max(consumed, tokens[i].blockTo + 1)
+      if (flow) {
+        // (a region passed once breaks the line once: its kept placeholders after it are no breaks)
+        if (fresh && line.items.length) { while (line.items.at(-1)?.t.space) { const sp = line.items.pop(); line.x -= sp.w; line.spaces -= sp.w } advance() }
+        if ((slots[li]?.after ?? 0) < consumed) spilled = true
+        i++
+        continue
+      }
       if ((slots[li].after ?? 0) < consumed) {
         let q = li + 1
         while (q < slots.length && (slots[q].after ?? 0) < consumed) q++
@@ -1991,7 +2010,9 @@ function* statesOf(P, blocks, s) {
 }
 
 /**
- * A unit laid out: the first state of the fit at which every token is placed; at the last, what fits, clipped.
+ * A unit laid out: the first state of the fit at which every token is placed; at the last, what fits, clipped (which the
+ * host never draws: run.mjs fitFurther). P.flowPast (step 3): where a kept region still stops it, every state again with
+ * the text run past the region (breakLines 'flow').
  * `s`: the original's size (PDF units). Returns { lines, f, s, scale, state, knob, clipped, lostChars, chars, tried }.
  */
 export function layoutUnit2(tokens, blocks, s, P, to) {
@@ -2007,6 +2028,15 @@ export function layoutUnit2(tokens, blocks, s, P, to) {
   if (last.r.rest < last.r.total && tokens.some(t => t.blockTo !== undefined)) {
     const r = breakLines(tokens, slotsAt(blocks, last.st, P, s), last.f, last.st, P, last.st.scale, false)
     if (r.rest > last.r.rest) last = { ...last, r }
+  }
+  // (step 3, P.flowPast: and else through every slot, a kept region only breaking the line, from the most natural state)
+  if (P.flowPast && last.r.rest < last.r.total && tokens.some(t => t.blockTo !== undefined)) {
+    for (const st of statesOf(P, blocks, s)) {
+      tried++
+      const f = s * st.scale
+      const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, 'flow')
+      if (r.rest >= r.total) { last = { r, st, f }; break }
+    }
   }
   const { r, st, f } = last
   const clipped = r.rest < r.total

@@ -47,7 +47,7 @@ import { locatedWhole, texParts, texRects } from './tex.mjs'
  *  file read at once */
 export const PDF_OPTIONS = { cMapPacked: true, enableHWA: true, disableStream: true }
 /** the fit's parameters a host may set (main.js read them from the query), and the page-even pass's units */
-export const PARAM_KEYS = ['leadBase', 'leadFloor', 'trackMin', 'compressMax', 'borrow', 'borrowGap', 'floor', 'step', 'grid', 'cjkJust', 'spaceMax', 'autospace', 'spaceMin', 'hyphen', 'even', 'order']
+export const PARAM_KEYS = ['leadBase', 'leadFloor', 'trackMin', 'compressMax', 'borrow', 'borrowGap', 'floor', 'step', 'grid', 'cjkJust', 'spaceMax', 'autospace', 'spaceMin', 'hyphen', 'even', 'order', 'further', 'floorMin']
 /** the page's body units that the even pass sets alike (a unit on two pages keeps its own fit) */
 const EVEN_KINDS = new Set(['para', 'abstract', 'list', 'item'])
 /** the SVG's own rules (the prototype's index.html): its text set as laid, in the layer's ink */
@@ -336,6 +336,82 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     return Math.max(0, last - lowest)
   }
 
+  // ---- no clipping (step 3): v0's fit drew what fitted at its last state and dropped the rest (2,314 characters on the
+  // gate's 29 outputs). A unit that does not fit there is given more room where the page has it.
+  /**
+   * How far a single line's slot may run on to one side (`dir` -1 or 1) of `from`, on its band of the original page, over
+   * paper only: up to the first ink that is not the unit's own (`own`, its lines' erase extents: erased with it), read on
+   * the page's ink map, never past `limit`. Before another line's text (a neighbouring cell, whose translation may run on
+   * towards it too) to half the paper between them; before any other ink (a rule, a figure) to a quarter of an em clear of
+   * it. Returns the edge.
+   */
+  const paperTo = (b, dir, from, limit, own) => {
+    const map = inkOf(b.page)
+    if (!map) return from
+    const px = pxOf(b.page), f = map.factor, z = b.sizes[0], B = b.B[0]
+    const top = B + 0.8 * z, bottom = B - 0.25 * z
+    const [, r0] = px(from, top), [, r1] = px(from, bottom)
+    const ra = Math.max(0, Math.floor(Math.min(r0, r1) / f)), rb = Math.min(map.h - 1, Math.floor(Math.max(r0, r1) / f))
+    const ownAt = x => own.some(e => x >= e[0] - 0.3 && x <= e[2] + 0.3 && e[1] < top && e[3] > bottom)
+    const step = f / (scale * dpr)
+    let x = from
+    for (; dir > 0 ? x < limit : x > limit; x += dir * step) {
+      const [cx] = px(x + dir * step / 2, B)
+      const c = Math.floor(cx / f)
+      if (c < 0 || c >= map.w) break
+      if (ownAt(x + dir * step / 2)) continue
+      let inked = false
+      for (let r = ra; r <= rb && !inked; r++) if (map.ink[r * map.w + c]) inked = true
+      if (!inked) continue
+      // the ink a character of the page stands on is text, any other ink a rule's or a figure's
+      const text = (chars2[b.page - 1] ?? []).some(ch => /\S/.test(ch.ch) && ch.x1 >= x - step && ch.x0 <= x + 2 * step && ch.yb - 0.25 * ch.size < top && ch.yb + 0.8 * ch.size > bottom)
+      return text ? from + (x - from) / 2 : x - dir * 0.25 * z
+    }
+    return dir > 0 ? Math.min(x, limit) : Math.max(x, limit)
+  }
+  /** a unit's single-line blocks widened over the paper beside them (paperTo), within the page's text area; a centred one
+   *  as far to either side. Returns the widened blocks, or null where none grew */
+  const widenOverPaper = p => {
+    let grew = false
+    const out = p.blocks.map(b => {
+      if (b.rects.length !== 1 || b.page > N) return b
+      const own = [...(p.prep.extents ?? new Map())].filter(([r]) => r[0] === b.page).map(([, e]) => (Array.isArray(e[0]) ? e : [e])).flat()
+      const [ax, az] = textArea(b.page)
+      const right = paperTo(b, 1, b.x1, az, own), left = paperTo(b, -1, b.x0, ax, own)
+      let x0 = b.x0, x1 = b.x1
+      if (b.centred) { const half = Math.min(right - b.x1, b.x0 - left); if (half > 0.1) { x0 -= half; x1 += half } }
+      else if (right > b.x1 + 0.1) x1 = right
+      if (x1 - x0 <= b.x1 - b.x0 + 0.1) return b
+      grew = true
+      return { ...b, x0, x1, widened: true }
+    })
+    return grew ? out : null
+  }
+  /**
+   * The fit's further steps for a unit its states leave clipped (P.further, in order): 'widen', its single lines widened
+   * over the paper beside them (widenOverPaper), the fit run again in them; 'flow', the text run past a display where the
+   * slots after it are too few (layoutUnit2's P.flowPast: out of the translation's order, but all of it shown, as v0's
+   * own last pass already ran text on past a display); 'shrink', the size's steps on below the fit's floor, to
+   * P.floorMin. Returns the first layout that sets every token, with the blocks it was laid in, or null.
+   */
+  const fitFurther = (p, tokens, s) => {
+    for (const step of P.further ?? []) {
+      if (step === 'widen') {
+        const wide = widenOverPaper(p)
+        if (!wide) continue
+        const l = L2.layoutUnit2(tokens, wide, s, p.P, to)
+        if (!l.clipped) return { layout: { ...l, knob: 'widen' }, blocks: wide }
+      } else if (step === 'shrink' && P.floorMin < P.floor - 1e-9) {
+        const l = L2.layoutUnit2(tokens, p.blocks, s, { ...p.P, floor: P.floorMin }, to)
+        if (!l.clipped) return { layout: { ...l, knob: 'below-floor' }, blocks: p.blocks }
+      } else if (step === 'flow') {
+        const l = L2.layoutUnit2(tokens, p.blocks, s, { ...p.P, flowPast: true }, to)
+        if (!l.clipped) return { layout: { ...l, knob: 'flow' }, blocks: p.blocks }
+      }
+    }
+    return null
+  }
+
   const layout2 = p => {
     const t0 = performance.now()
     // the unit's lines grown over words the anchors left out beside them, then its first line's edge snapped back to
@@ -400,11 +476,16 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P)
     const t3 = performance.now()
     // (the unit's leading relative to the original's own pitch, step 3: leadOf)
-    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P) }
-    p.layout = L2.layoutUnit2(tokens, p.blocks, s, p.P, to)
     p.tokens = tokens
     p.prep = prep
     p.s = s
+    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P) }
+    p.layout = L2.layoutUnit2(tokens, p.blocks, s, p.P, to)
+    // (step 3: a unit its states leave clipped given more room where the page has it)
+    if (p.layout.clipped) {
+      const further = fitFurther(p, tokens, s)
+      if (further) { p.layout = further.layout; p.blocks = further.blocks }
+    }
     const t4 = performance.now()
     p.layout.extents = new Map([...prep.extents].map(([r, e]) => [r.join(), e]))
     if (p.blocks[0] && (prep.label || prep.firstX0 !== undefined || inkBefore !== undefined)) {
