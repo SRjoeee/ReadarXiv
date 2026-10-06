@@ -116,6 +116,28 @@ export const citationLines = aux => {
   for (const l of all) { const m = /^\\(?:citation|bibcite)\{([^}]*)\}/.exec(l); if (m) for (const k of m[1].split(',')) keys.add(k.trim()) }
   return all.filter(l => { const m = /^\\([A-Za-z@]+)\{([^{}]*)\}/.exec(l); return !!m && m[1] !== 'citation' && m[1] !== 'newlabel' && keys.has(m[2].trim()) }).join('\n')
 }
+/**
+ * What names a translation's floats (the table-groups brief, Problem 2): at the document's end, each float's label as
+ * the class defines it (\fnum@figure, \fnum@table, one level of it) and the meaning of its name (\figurename,
+ * \tablename), written to the log for captionsOf. Whether the final labels a figure with the name babel gives the
+ * target (scripts.mjs, \babelprovide{axttarget}; caption-names.mjs holds those names) is the paper's as much as the
+ * target's: a class that writes its own word into the label (naaclhlt2019.sty's \fnum@figure, "Figure \thefigure"),
+ * a paper that selects another language in its body (2307.16209's \selectlanguage{english}), polyglossia (babel not
+ * loaded), and CJKutf8 (no babel) keep the paper's names. Read, never expanded: nothing in it can fail a compile
+ */
+export const CAPTIONS_PROBE = String.raw`\makeatletter\AtEndDocument{\typeout{AXT-CAPTIONS figure=\ifdefined\fnum@figure\detokenize\expandafter{\fnum@figure}\fi|\ifdefined\figurename\meaning\figurename\fi|table=\ifdefined\fnum@table\detokenize\expandafter{\fnum@table}\fi|\ifdefined\tablename\meaning\tablename\fi|}}\makeatother` + '\n'
+/**
+ * Whether a compile labelled its figures and its tables with the target's names (CAPTIONS_PROBE's line): `target` where
+ * the name is babel's for the target (its meaning babel's for axttarget) and the label is made of the name — it names
+ * \figurename, or writes no word of its own (a wrapper around the class's own definition) —, `source` otherwise; null
+ * where the log has no such line (a compile before the probe, or one that did not reach the document's end)
+ */
+export function captionsOf(log) {
+  const m = /^AXT-CAPTIONS figure=(.*?)\|(.*?)\|table=(.*?)\|(.*?)\|/m.exec(unwrapped(lastTexLog(log ?? '')))
+  if (!m) return null
+  const named = (fnum, meaning, name) => /axttarget/.test(meaning) && (fnum.includes(`\\${name}`) || !/(?<![\\A-Za-z@])[A-Za-z]{3,}/.test(fnum))
+  return { figure: named(m[1], m[2], 'figurename') ? 'target' : 'source', table: named(m[3], m[4], 'tablename') ? 'target' : 'source' }
+}
 /** a compile's references as a draft is given them: its citation lines, its labels (\newlabel), its bibliography */
 const referencesOf = o => ({ cites: citationLines(o.aux), labels: auxLines(o.aux, 'newlabel'), bbl: o.bbl ?? null })
 /** the lists a pass writes at its end from an aux's \@writefile{<ext>}{<entry>} lines (LaTeX's \enddocument), by
@@ -214,7 +236,7 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
   const shim = xe && strategy.engine !== meta.compiler ? XETEX_SHIM + XETEX_SHIM_R1 : ''
   // what the strategy puts before \documentclass (scripts.mjs: a paper's own CJK packages kept from loading under xeCJK)
-  const head = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + END_TEX + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + shim
+  const head = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + END_TEX + CAPTIONS_PROBE + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + shim
   main = head + (shim ? stripPdftexOption(main) : main)
   out.set(project.main, latin1Bytes(main))
   if (xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = stripPdftexOption(t); if (u !== t) out.set(f, latin1Bytes(u)) }
@@ -820,6 +842,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     // null where it showed none: a run whose finals all fail says it shows the translation in part only then (cache.mjs
     // endOf; the review of 2026-10-04, M-2: a whole preview on screen is no part)
     let shownPartial = null
+    /** what names the floats of the translation last shown (captionsOf): the layer labels them so too */
+    let captions = null
     const passagesShown = snapshot => [...inSource].filter(u => snapshot.has(u) && u.kind !== 'author').length
     const planFor = snapshot => {
       if (!readings || ruleFailed.has(strategy().name)) return null
@@ -885,7 +909,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
           measuring = plan && whole(snapshot) ? { plan, strategy: strategy().name, r } : null
           shownInSource = passagesShown(snapshot)
           shownPartial = !shownWhole(snapshot)
-          onUpdate?.({ pdf: r.pdf, texts: texts(setting(snapshot)), translated: snapshot.size, final: false })
+          captions = captionsOf(r.log) ?? captions
+          onUpdate?.({ pdf: r.pdf, texts: texts(setting(snapshot)), translated: snapshot.size, final: false, captions })
         } else if (timedOut(r)) {
           // the machine slow: nothing changed, the next batch or the final goes on
         } else if (await remedy(r, !!plan, req)) dirty = true
@@ -1026,7 +1051,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     if (ok) {
       shownInSource = passagesShown(all)
       shownPartial = !shownWhole(all)
-      onUpdate?.({ pdf: r.pdf, texts: texts(setting(all)), translated: all.size, final: true })
+      captions = captionsOf(r.log) ?? captions
+      onUpdate?.({ pdf: r.pdf, texts: texts(setting(all)), translated: all.size, final: true, captions })
       // the units the final set in the source though translated, for the record: their translation stays the next run's.
       // Said anew for every unit it set, a seed's mark included: it set them all again — those the safety net set in the
       // source among them, and a table group waiting on a cell lost to the service. A group kept whole is kept (markKept)
@@ -1041,7 +1067,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     }
     // marks known come only from a compile of the paper's own source that set (onOriginal)
     const own = marks && !originalP ? null : await original()
-    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing(), inSource: shownInSource, shownPartial, original: readings, passing }
+    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing(), inSource: shownInSource, shownPartial, captions, original: readings, passing }
   }
   try { return await compiles() } catch (e) {
     if (!e?.compilerDown) throw e

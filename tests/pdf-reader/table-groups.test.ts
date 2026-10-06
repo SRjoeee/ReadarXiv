@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { copyTexts, reusable, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
 import { decideGroups, groupOf, NAMES_SHARE, unchanged } from '@/pdf-reader/engine/groups.mjs'
 import { inMemory, loadProject, type SourceUnit, tableGrid } from '@/pdf-reader/engine/latex-front.mjs'
-import { type Compiled, keptFor, openPaper, runLive } from '@/pdf-reader/engine/live.mjs'
+import { CAPTION_NAMES, captionNames } from '@/pdf-reader/engine/caption-names.mjs'
+import { CAPTIONS_PROBE, captionsOf, type Compiled, keptFor, openPaper, runLive, translationFiles } from '@/pdf-reader/engine/live.mjs'
 import { plainSource as plainOf } from '@/pdf-reader/engine/mt.mjs'
+import { babelTags, VERIFIED } from '@/pdf-reader/engine/scripts.mjs'
 
 // A table's consistency groups (the table-groups brief, 2026-10-07): the grid the TeX front end reads, each cell's
 // group, the decision over what came back, and the run that sets the final and keeps the record by it
@@ -165,3 +167,33 @@ describe('runLive: the final and the record read the same decision', () => {
   })
 })
 
+describe('what names the floats: the target\'s names babel gives, where the final uses them', () => {
+  it('the table holds each target the reader typesets, found by the tags the final\'s babel tries', () => {
+    for (const lang of [...VERIFIED, 'zh-TW']) {
+      const names = captionNames(lang)
+      expect(names, lang).not.toBeNull()
+      expect(Object.values(CAPTION_NAMES)).toContain(names)
+      const tag = babelTags(lang).find(t => Object.hasOwn(CAPTION_NAMES, t))
+      expect(names).toBe(CAPTION_NAMES[tag as keyof typeof CAPTION_NAMES])
+    }
+    expect(captionNames('zh-TW')).toEqual({ figure: '圖', table: '表' })
+    expect(captionNames('ja')).toEqual({ figure: '図', table: '表' })
+    expect(captionNames('es')).toEqual({ figure: 'Figura', table: 'Cuadro' })
+    expect(captionNames('ru')?.figure).toBe('Рис.')
+  })
+  it('every compile of the translation writes what names its floats; captionsOf reads it, wrapped as TeX wraps its log', () => {
+    const paper = openPaper(new Map([['main.tex', enc(doc('Some prose.'))]]))
+    const files = translationFiles(paper, new Map(), { strategy: { name: 'x', engine: 'pdflatex', xe: false, pre: () => '' }, fonts: {} })
+    expect(new TextDecoder().decode(files.get('main.tex'))).toContain(CAPTIONS_PROBE.trim())
+    const wrap = (line: string) => line.match(/.{1,79}/g)?.join('\n') ?? ''
+    const log = (fig: string, figName: string) => `${wrap(`AXT-CAPTIONS figure=${fig}|${figName}|table=\\tablename \\nobreakspace \\thetable |macro:->\\bbl@ensure@axttarget {\\axttargettablename }|`)}\nAXT-END\n`
+    // the kernel's label of babel's name
+    expect(captionsOf(log('\\figurename \\nobreakspace \\thefigure ', 'macro:->\\bbl@ensure@axttarget {\\axttargetfigurename }'))).toEqual({ figure: 'target', table: 'target' })
+    // a class that writes its own word into the label (naaclhlt2019.sty)
+    expect(captionsOf(log('\\figcapfont Figure \\thefigure ', 'macro:->\\bbl@ensure@axttarget {\\axttargetfigurename }'))?.figure).toBe('source')
+    // a wrapper around the class's own definition, and a name another language set (2307.16209's \selectlanguage{english})
+    expect(captionsOf(log('{\\ifFBfrench \\FBfigtabshape \\fi \\fnum@figureORI }', 'macro:->\\bbl@ensure@axttarget {\\axttargetfigurename }'))?.figure).toBe('target')
+    expect(captionsOf(log('{\\ifFBfrench \\FBfigtabshape \\fi \\fnum@figureORI }', 'macro:->Figure'))?.figure).toBe('source')
+    expect(captionsOf('AXT-END\n')).toBeNull()
+  })
+})

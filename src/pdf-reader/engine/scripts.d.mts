@@ -7,6 +7,9 @@ export interface Strategy { name: string; engine: string; xe: boolean; leading?:
 export declare function strategiesFor(meta: { compiler?: string }, lang: string): Strategy[]
 /** whether the author block's names and places are translated into `lang` */
 export declare function authorsTranslated(lang: string): boolean
+/** the tags of babel's locale files a final tries for `lang`, the first the TeX tree holds imported: the tag itself,
+ *  its language and script, its language */
+export declare function babelTags(lang: string): string[]
 /** the script a BCP 47 tag is written in (its likely script) */
 export declare function scriptOf(lang: string): string
 /** the CJK scripts' typesetting (their faces, spacing and leading), by script */

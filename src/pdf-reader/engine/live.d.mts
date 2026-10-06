@@ -42,7 +42,7 @@ export declare function runLive(paper: Paper, options: {
   translate: (texts: string[], cuts?: number[][]) => Promise<({ text: string; by: string | null } | null)[]>
   format?: 'markers' | 'tags' | 'runs'
   rank?: (i: number) => number
-  onUpdate?: (u: { pdf: Uint8Array; texts: unknown[]; translated: number; final: boolean }) => void
+  onUpdate?: (u: { pdf: Uint8Array; texts: unknown[]; translated: number; final: boolean; captions?: Captions | null }) => void
   onOriginal?: (o: { pdf: Uint8Array }) => void
   note?: (event: string, data?: Record<string, unknown>) => void
   seed?: Map<number, unknown> | null
@@ -54,7 +54,13 @@ export declare function runLive(paper: Paper, options: {
   /** a PDF's unit marks and page columns (typeset/places.mjs marksOf on a PDF.js document of the bytes): with it, the
    *  typesetting rule sets the translation; without, it is set as today */
   readMarks?: ((pdf: Uint8Array) => Promise<import('./typeset/places.mjs').Marks>) | null
-}): Promise<{ settled: boolean; exhausted: boolean; changed: boolean; results: Map<number, unknown>; previews: number; translated: number; units: number; originalOk?: boolean; stopped?: string | null; compiler?: { down: 'network' | 'page'; error: string }; missing?: number; inSource?: number; shownPartial?: boolean | null; original: Readings | null; passing: boolean }>
+}): Promise<{ settled: boolean; exhausted: boolean; changed: boolean; results: Map<number, unknown>; previews: number; translated: number; units: number; originalOk?: boolean; stopped?: string | null; compiler?: { down: 'network' | 'page'; error: string }; missing?: number; inSource?: number; shownPartial?: boolean | null; captions?: Captions | null; original: Readings | null; passing: boolean }>
+/** what names a compile's figures and tables: the target's names babel gives (caption-names.mjs), or the paper's own */
+export interface Captions { figure: 'target' | 'source'; table: 'target' | 'source' }
+/** the TeX that writes what names the floats to the log, at the document's end, in every compile of the translation */
+export declare const CAPTIONS_PROBE: string
+/** whether a compile labelled its figures and its tables with the target's names, from its log; null with no such line */
+export declare function captionsOf(log: string | null | undefined): Captions | null
 /** an aux's citation lines: every closed line whose first argument is a key it cites, \citation's and \newlabel's left out, in its order */
 export declare function citationLines(aux: string | null | undefined): string
 /** the marked original as the run and the rule read it: the lines of its last pass that are read, its marks, its citations and labels, its bibliography */
