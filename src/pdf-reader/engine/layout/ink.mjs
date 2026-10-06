@@ -49,14 +49,23 @@ const fresh = () => ({
  * 4) for each image placed, each path painted (a stroke's widened by half the line width; a clip paints nothing), each
  * shading painted into a clip, and those glyphs; each cut to the clip in force (a form's box, a clipping path), and one
  * wholly outside it left out. `capped`: the list held more than OPS_CAP operations, and those past it were not read.
- * `rotated`: the page's /Rotate is not 0, and nothing is read (the layer lays over no rotated page)
+ * `rotated`: the page's /Rotate is not 0, and nothing is read (the layer lays over no rotated page).
+ * `indices` (the text remover's, layout/remove.mjs): each glyph also carries where the content stream shows it: `n`, its
+ * text-showing operation's place among the page's own (an annotation's appearance not counted: -1 there), and `k`, its
+ * place among that operation's glyphs; and `paths` gives, for each box, its path's place among the page's own painted
+ * paths (constructPath), or its kind: -1 a path of an annotation's appearance, -2 a shading, -3 an image, -4 a glyph set
+ * rotated or mirrored; and `shows` counts the page's own text-showing operations. `blanks`: a glyph whose Unicode is
+ * blank is a glyph too (`blank: true`): a symbolic font's glyph that PDF.js gives a blank one (a big bracket of an
+ * extension font) is ink. Both off, the answer is the maker's, unchanged.
  */
-export function pageInk(OPS, ops, commonObjs, { rotate }) {
+export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, blanks = false }) {
   const turn = (((Number(rotate) % 360) + 360) % 360)
-  if (turn !== 0) return { glyphs: [], boxes: [], capped: false, rotated: true }
+  if (turn !== 0) return indices ? { glyphs: [], boxes: [], paths: [], shows: 0, capped: false, rotated: true } : { glyphs: [], boxes: [], capped: false, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
   const n = Math.min(fnArray.length, OPS_CAP)
-  const glyphs = [], boxes = []
+  const glyphs = [], boxes = [], paths = []
+  // (indices: the showing operation's place and the glyph's within it; the painted path's place; inside an annotation, -1)
+  let showAt = -1, pathAt = -1, inAnnotation = 0, curShow = -1, glyphAt = -1
   const fonts = new Map()
   const fontOf = id => {
     if (!fonts.has(id)) {
@@ -99,7 +108,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate }) {
     if (clip) { bx0 = Math.max(bx0, clip[0]); by0 = Math.max(by0, clip[1]); bx1 = Math.min(bx1, clip[2]); by1 = Math.min(by1, clip[3]) }
     return bx0 <= bx1 && by0 <= by1 ? [bx0, by0, bx1, by1] : null
   }
-  const addBox = (m, x0, y0, x1, y1) => { const b = boxOf(m, x0, y0, x1, y1, s.clip); if (b) boxes.push(b[0], b[1], b[2], b[3]) }
+  const addBox = (m, x0, y0, x1, y1, path = -1) => { const b = boxOf(m, x0, y0, x1, y1, s.clip); if (b) { boxes.push(b[0], b[1], b[2], b[3]); if (indices) paths.push(path) } }
   /** the clip in force cut to a rectangle of space `m`; nothing left of it is a clip of no area */
   const clipTo = (m, x0, y0, x1, y1) => {
     const b = boxOf(m, x0, y0, x1, y1, s.clip)
@@ -116,19 +125,21 @@ export function pageInk(OPS, ops, commonObjs, { rotate }) {
    *  × the text matrix; `hs` the horizontal scale with the font's direction */
   const emit = (g, M, hs, xa, xb, ascent, descent) => {
     const u = g.unicode
-    if (typeof u !== 'string' || !/\S/.test(u) || (s.tr & 3) === 3) return
+    if (typeof u !== 'string' || (!blanks && !/\S/.test(u)) || (s.tr & 3) === 3) return
     const ty = s.y + s.rise, size = s.size
     const level = M[0] * hs > 0 && M[3] > 0 && Math.abs(M[1]) <= LEVEL * Math.abs(M[0])
-    if (!level) { addBox(M, Math.min(xa, xb), ty + descent * size, Math.max(xa, xb), ty + ascent * size); return }
+    if (!level) { addBox(M, Math.min(xa, xb), ty + descent * size, Math.max(xa, xb), ty + ascent * size, -4); return }
     const ox = M[0] * xa + M[2] * ty + M[4], oy = M[1] * xa + M[3] * ty + M[5], ex = M[0] * xb + M[2] * ty + M[4]
     const sz = size * M[3]
     const name = typeof s.font.name === 'string' && s.font.name ? s.font.name : s.fontId
     const glyph = { u, x0: Math.min(ox, ex), x1: Math.max(ox, ex), y: oy, top: oy + ascent * sz, bottom: oy + descent * sz, size: sz, font: name }
+    if (indices) { glyph.n = curShow; glyph.k = glyphAt; if (!/\S/.test(u)) glyph.blank = true }
     if (finite(glyph.x0, glyph.x1, glyph.y, glyph.top, glyph.bottom, glyph.size)) glyphs.push(glyph)
   }
 
   /** showText as the canvas runs it (showText, showType3Text): each glyph's origin, its advance, the line moved on */
   const show = arr => {
+    if (indices) { if (!inAnnotation) showAt++; curShow = inAnnotation ? -1 : showAt; glyphAt = -1 }
     const f = s.font
     if (!f || !Array.isArray(arr)) return
     const size = s.size, hs = s.hs * s.dir, vertical = !!f.vertical
@@ -140,6 +151,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate }) {
       for (const g of arr) {
         if (typeof g === 'number') { s.x += (((vertical ? 1 : -1) * g * size) / 1000) * hs; continue }
         if (!g || typeof g !== 'object') continue
+        glyphAt++
         // its advance through its own font matrix (x and translation), spacing after it unscaled by direction
         const w = (num(g.width) * fm[0] + fm[4]) * size, spacing = (g.isSpace ? s.ws : 0) + s.cs
         if (!vertical) emit(g, M, hs, s.x, s.x + w * hs, ASCENT, DESCENT)
@@ -155,6 +167,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate }) {
       let w = 0
       for (const g of arr) {
         if (!g || typeof g !== 'object') continue
+        glyphAt++
         const gw = num(g.width) * adv
         if (!vertical) emit(g, M, hs, s.x + w * hs, s.x + (w + gw) * hs, ascent, descent)
         w += gw
@@ -166,6 +179,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate }) {
     for (const g of arr) {
       if (typeof g === 'number') { x += ((vertical ? 1 : -1) * g * size) / 1000; continue }
       if (!g || typeof g !== 'object') continue
+      glyphAt++
       const spacing = (g.isSpace ? s.ws : 0) + s.cs
       if (vertical) {
         const vm = g.vmetric || f.defaultVMetrics
@@ -223,6 +237,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate }) {
       case GROUP_END: pop(); break
       case ANNOTATION: {
         // [id, rect, transform, matrix, …]: an annotation's appearance in its own space, clipped to its rectangle
+        inAnnotation++
         push()
         const rect = a[1]
         s = fresh()
@@ -230,14 +245,15 @@ export function pageInk(OPS, ops, commonObjs, { rotate }) {
         s.ctm = mul(matrixOf(a[2]), matrixOf(a[3]))
         break
       }
-      case ANNOTATION_END: pop(); break
+      case ANNOTATION_END: inAnnotation = Math.max(0, inAnnotation - 1); pop(); break
       case CLIP: case EO_CLIP: s.pendingClip = true; break
       case PATH: {
         const op = a[0], mm = a[2]
+        if (!inAnnotation) pathAt++
         const ok = mm && mm.length >= 4 && finite(mm[0], mm[1], mm[2], mm[3]) && mm[2] >= mm[0] && mm[3] >= mm[1]
         if (ok && PAINTS.has(op)) {
           const e = STROKES.has(op) ? s.lw / 2 : 0
-          addBox(s.ctm, mm[0] - e, mm[1] - e, mm[2] + e, mm[3] + e)
+          addBox(s.ctm, mm[0] - e, mm[1] - e, mm[2] + e, mm[3] + e, inAnnotation ? -1 : pathAt)
         }
         // a clip takes effect after the path is painted (the canvas's pendingClip)
         if (s.pendingClip) { if (ok) clipTo(s.ctm, mm[0], mm[1], mm[2], mm[3]); else s.clip = [0, 0, -1, -1]; s.pendingClip = false }
@@ -245,22 +261,22 @@ export function pageInk(OPS, ops, commonObjs, { rotate }) {
       }
       case SHADING:
         // painted over the clip in force; with none, the page's background, left out
-        if (s.clip && s.clip[0] <= s.clip[2] && s.clip[1] <= s.clip[3]) boxes.push(s.clip[0], s.clip[1], s.clip[2], s.clip[3])
+        if (s.clip && s.clip[0] <= s.clip[2] && s.clip[1] <= s.clip[3]) { boxes.push(s.clip[0], s.clip[1], s.clip[2], s.clip[3]); if (indices) paths.push(-2) }
         break
-      case IMAGE: case INLINE_IMAGE: case MASK: case SOLID_MASK: addBox(s.ctm, 0, 0, 1, 1); break
+      case IMAGE: case INLINE_IMAGE: case MASK: case SOLID_MASK: addBox(s.ctm, 0, 0, 1, 1, -3); break
       case IMAGE_REPEAT: case MASK_REPEAT: {
         // [id, scaleX, scaleY, positions]; a mask's [mask, scaleX, skewX, skewY, scaleY, positions]
         const mask = fn === MASK_REPEAT
         const [sa, sb, sc, sd] = mask ? [a[1], a[2], a[3], a[4]] : [a[1], 0, 0, a[2]]
         const at = a[mask ? 5 : 3]
         if (!at || !(at.length >= 0)) break
-        for (let i = 0; i + 1 < at.length; i += 2) addBox(mul(s.ctm, matrixOf([sa, sb, sc, sd, at[i], at[i + 1]])), 0, 0, 1, 1)
+        for (let i = 0; i + 1 < at.length; i += 2) addBox(mul(s.ctm, matrixOf([sa, sb, sc, sd, at[i], at[i + 1]])), 0, 0, 1, 1, -3)
         break
       }
-      case MASK_GROUP: for (const img of Array.isArray(a[0]) ? a[0] : []) addBox(mul(s.ctm, matrixOf(img?.transform)), 0, 0, 1, 1); break
-      case INLINE_GROUP: for (const e of Array.isArray(a[1]) ? a[1] : []) addBox(mul(s.ctm, matrixOf(e?.transform)), 0, 0, 1, 1); break
+      case MASK_GROUP: for (const img of Array.isArray(a[0]) ? a[0] : []) addBox(mul(s.ctm, matrixOf(img?.transform)), 0, 0, 1, 1, -3); break
+      case INLINE_GROUP: for (const e of Array.isArray(a[1]) ? a[1] : []) addBox(mul(s.ctm, matrixOf(e?.transform)), 0, 0, 1, 1, -3); break
       default:
     }
   }
-  return { glyphs, boxes, capped: fnArray.length > OPS_CAP, rotated: false }
+  return indices ? { glyphs, boxes, paths, shows: showAt + 1, capped: fnArray.length > OPS_CAP, rotated: false } : { glyphs, boxes, capped: fnArray.length > OPS_CAP, rotated: false }
 }

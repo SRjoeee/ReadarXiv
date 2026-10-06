@@ -54,6 +54,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.43",
+    "@cantoo/pdf-lib": "2.11.1",
     "ai": "^7.0.91",
     "dexie": "^4.4.5",
     "esearch-ocr": "8.5.2",
