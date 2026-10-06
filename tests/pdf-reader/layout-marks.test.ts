@@ -6,7 +6,7 @@ import type { UnitLines } from '@/pdf-reader/engine/tex-errors.mjs'
 import { patch } from '@/pdf-reader/engine/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, OWNED_ALL, parseLayoutMarks, POINTS_TEX, askedCommands, FOLLOWERS, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, OWNED_ALL, parseLayoutMarks, POINTS_TEX, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/live.mjs'
 import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
 import { marksOf } from '@/pdf-reader/engine/typeset/places.mjs'
@@ -492,7 +492,7 @@ function fakeDocument(pages: { view: number[]; items?: unknown[] }[], dests: [st
 const item = (str: string, x: number, y: number, size = 10) => ({ str, transform: [size, 0, 0, size, x, y], width: str.length * size * 0.5, height: size, fontName: 'f1', hasEOL: false })
 /** a page's operator list in stream order: a run of glyphs at its place (each 5 pt wide at 10 pt), a point (`/axt-<name> ri`),
  *  a rule */
-type Shown = [s: string, x: number, y: number, size?: number] | { at: string } | { rule: number[] }
+type Shown = [s: string, x: number, y: number, size?: number] | { at: string } | { rule: number[] } | { glyphs: string[]; x: number; y: number; size?: number; step?: number }
 const FONT = { name: 'ABCDEF+CMR10', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false }
 function opsOf(shown: Shown[]) {
   const ops: [number, unknown[]][] = []
@@ -500,6 +500,10 @@ function opsOf(shown: Shown[]) {
     if (Array.isArray(s)) {
       const [str, x, y, size = 10] = s
       ops.push([OPS.beginText, []], [OPS.setFont, ['f1', size]], [OPS.setTextMatrix, [[1, 0, 0, 1, x, y]]], [OPS.showText, [[...str].map(c => (c === ' ' ? -500 : { unicode: c, width: 500, isSpace: false, fontChar: c, vmetric: null }))]], [OPS.endText, []])
+    } else if ('glyphs' in s) {
+      // each glyph a Unicode string of its own (a ligature's, or many distinct ones), `step` its advance in thousandths
+      const step = s.step ?? 500
+      ops.push([OPS.beginText, []], [OPS.setFont, ['f1', s.size ?? 10]], [OPS.setTextMatrix, [[1, 0, 0, 1, s.x, s.y]]], [OPS.showText, [s.glyphs.map(u => ({ unicode: u, width: step, isSpace: false, fontChar: u, vmetric: null }))]], [OPS.endText, []])
     } else if ('at' in s) ops.push([OPS.setRenderingIntent, [{ name: `axt-${s.at}` }]])
     else ops.push([OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from(s.rule)]])
   }
@@ -563,6 +567,68 @@ describe('reading the marked original', () => {
     expect(m.owned).toEqual([])
     expect(m.chars).toEqual([])
   })
+  it('layoutMarksOf writes past its caps as not owned, and nothing its own parser refuses (the 6b review\'s I3 and Minor 1)', async () => {
+    // pieces of $x$ each between its points; their glyphs given as runs of many glyphs
+    const pieceOf = (n: number) => unit('para', Array.from({ length: n }, (_, k) => [text(k ? ' and ' : 'see '), ph('$x$')]).flat())
+    const parse = async (units: SourceUnit[], shown: Shown[], dests: [string, number, number, number][], view = [0, 0, 612, 792]) => {
+      const doc = streamDocument([{ view, items: [item('see', 72, 700)], shown }], dests.map(([n, ...r]) => [`axt-${n}`, ...r]))
+      const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', units, OPS })
+      return { m, back: parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m))) }
+    }
+    // a piece of GLYPHS_PIECE + 1 glyphs: not owned, how so
+    {
+      const glyphs = Array.from({ length: GLYPHS_PIECE + 1 }, () => 'x')
+      const { back } = await parse([pieceOf(1)], [{ at: '0s' }, { at: 'p0.1a' }, { glyphs, x: 72, y: 700, step: 1 }, { at: 'p0.1b' }, { at: '0e' }], [['0s', 1, 72, 700], ['p0.1a', 1, 72, 700], ['p0.1b', 1, 300, 700], ['0e', 1, 300, 700]])
+      expect(back.owned).toEqual([['p0.1a', OWNED_HOW.indexOf('more glyphs than a piece may own')]])
+    }
+    // 65,537 distinct characters over four pieces: the 65,536th place is '', which every one past it is written as
+    {
+      const per = 16_385, shown: Shown[] = [{ at: '0s' }], dests: [string, number, number, number][] = [['0s', 1, 72, 700]]
+      for (let q = 0; q < 4; q++) {
+        const k = 2 * q + 1, glyphs = Array.from({ length: per }, (_, i) => { const n = q * per + i; return String.fromCharCode(0x4e00 + (n % 20000)) + String.fromCharCode(0x4e00 + Math.floor(n / 20000)) })
+        shown.push({ at: `p0.${k}a` }, { glyphs, x: 72, y: 700 - 10 * q, step: 1 }, { at: `p0.${k}b` })
+        dests.push([`p0.${k}a`, 1, 72, 700 - 10 * q], [`p0.${k}b`, 1, 300, 700 - 10 * q])
+      }
+      shown.push({ at: '0e' }); dests.push(['0e', 1, 300, 670])
+      const { m, back } = await parse([pieceOf(4)], shown, dests)
+      expect(m.chars).toHaveLength(65_536)
+      expect(m.chars.at(-1)).toBe('')
+      expect(back.chars).toHaveLength(65_536)
+    }
+  }, 60_000)
+  it('layoutMarksOf: past OWNED_ALL a paper\'s pieces are not owned, and past MARKS_CAP its last owned pieces are cut, never the file refused', async () => {
+    // 14 pieces, in name order (p0.1a, p0.11a, …) 12 of 20,000 glyphs and one of 9,999: 249,999 owned; the last, 20,000
+    // more, past OWNED_ALL
+    const n = 14, per = 20_000, past = OWNED_HOW.indexOf('past the glyphs a paper may own')
+    const units = [unit('para', Array.from({ length: n }, (_, k) => [text(k ? ' and ' : 'see '), ph('$x$')]).flat())]
+    const run = async (big: boolean) => {
+      const shown: Shown[] = [{ at: '0s' }], dests: [string, number, number, number][] = [['0s', 1, big ? 10_000 : 72, big ? 13_000 : 700]]
+      for (let q = 0; q < n; q++) {
+        const k = 2 * q + 1, y = big ? 13_000.11 - 300 * q : 700 - 12 * q, count = q === n - 2 ? 9_999 : per
+        // at coordinates of five digits on a page of 14,000 pt, each glyph a character of its own kind (an index of five
+        // digits into `chars`): some 8.6 MB, past MARKS_CAP; else 4 MB of one character, within it
+        const glyphs = Array.from({ length: count }, (_, i) => { if (!big) return 'x'; const c = 10_000 + ((q * per + i) % 55_000); return String.fromCharCode(0x4e00 + (c % 20000)) + String.fromCharCode(0x4e00 + Math.floor(c / 20000)) })
+        shown.push({ at: `p0.${k}a` }, { glyphs, x: big ? 10_000.11 : 72, y, size: big ? 199.99 : 10, step: big ? 1 : 0.01 }, { at: `p0.${k}b` })
+        dests.push([`p0.${k}a`, 1, big ? 10_000 : 72, y], [`p0.${k}b`, 1, big ? 13_000 : 80, y])
+      }
+      shown.push({ at: '0e' }); dests.push(['0e', 1, big ? 13_000 : 80, big ? 9_000 : 500])
+      const view = big ? [0, 0, 14_000, 14_000] : [0, 0, 612, 792]
+      const doc = streamDocument([{ view, items: [item('see', dests[0]![2], dests[0]![3])], shown }], dests.map(([nm, ...r]) => [`axt-${nm}`, ...r]))
+      const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', units, OPS })
+      const written = encodeLayoutMarks(m)
+      expect(new TextEncoder().encode(written).length).toBeLessThanOrEqual(MARKS_CAP)
+      return parseLayoutMarks(new TextEncoder().encode(written))
+    }
+    // within the cap: the last piece alone past OWNED_ALL
+    const small = await run(false)
+    expect(small.owned.at(-1)).toEqual(['p0.9a', past])
+    expect(small.owned.filter(e => e.length === 2).length).toBe(1)
+    // past the cap: owned pieces from the last cut to fit the file, never the file refused
+    const large = await run(true)
+    expect(large.owned.at(-1)).toEqual(['p0.9a', past])
+    expect(large.owned.filter(e => e.length === 2 && e[1] === past).length).toBeGreaterThan(1)
+    expect(large.owned.some(e => e.length > 2)).toBe(true)
+  }, 120_000)
   it('layoutMarksOf reads the marked compile\'s operator lists: each piece\'s own glyphs and rules by its points, and how', async () => {
     const units = [unit('para', [text('see '), ph('$x^2$'), text(' and '), ph('$\\frac{1}{d}$'), text(' by '), ph('\\bert'), text(' models. '), ph('\\[a=b\\]')]), unit('para', [text('Next words')])]
     const shown: Shown[] = [
@@ -681,6 +747,8 @@ describe('the marks file', () => {
       ['chars not an array', m => { (m as Record<string, unknown>).chars = 'x2' }, 'chars'],
       ['a char of 33 code units', m => { m.chars[0] = 'x'.repeat(33) }, 'chars[0]'],
       ['a char that is a number', m => { (m.chars as unknown[])[1] = 2 }, 'chars[1]'],
+      ['65,537 chars', m => { m.chars = Array.from({ length: 65_537 }, (_, i) => String(i)) }, 'chars'],
+      ['a piece of 2,001 rules', m => { const e = nth(m.owned, 1); e.length = 3 + 5 * (e[2] as number); for (let r = 0; r < 2001; r++) e.push(1, 100, 702, 110, 702.4) }, 'owned[1]'],
       ['owned not an array', m => { (m as Record<string, unknown>).owned = {} }, 'owned'],
       ['an owned entry of one field', m => { (m.owned[2] as unknown[]).pop() }, 'owned[2]'],
       ['an owned name of no opening mark', m => { nth(m.owned, 1)[0] = 'p0.3b' }, 'owned[1][0]'],

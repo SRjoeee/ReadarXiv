@@ -17,7 +17,7 @@ import { tokenizeDocument } from '../anchors.mjs'
 import { plainTranslated } from '../mt.mjs'
 import { readLines } from '../typeset/tex.mjs'
 import { pageInk } from './ink.mjs'
-import { boundedJson, checkKeys, checkPages, checkViews, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
+import { boundedJson, checkKeys, checkPages, checkViews, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
 import { OWNED, OWNED_HOW, ownedOf, WANT } from './stream.mjs'
 
 // ---------------------------------------------------------------- the classes
@@ -709,6 +709,9 @@ export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLAS
         let u = g.u.length > CHAR_MAX ? g.u.slice(0, /[\ud800-\udbff]/.test(g.u[CHAR_MAX - 1]) ? CHAR_MAX - 1 : CHAR_MAX) : g.u
         let c = charOf.get(u)
         if (c === undefined) {
+          // the last place of `chars` kept for '', every character past it written so: the parser takes CHARS_MAX at
+          // most (the 6b review's Minor 1: the 65,537th was pushed as '' past it)
+          if (chars.length >= CHARS_MAX - 1 && !charOf.has('')) { charOf.set('', chars.length); chars.push('') }
           if (chars.length >= CHARS_MAX) u = ''
           c = charOf.get(u) ?? chars.length
           if (c === chars.length) { chars.push(u); charOf.set(u, c) }
@@ -719,7 +722,29 @@ export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLAS
       owned.push(row)
     }
   }
-  return { schema: MARKS_SCHEMA, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens, chars, owned }
+  return fitted({ schema: MARKS_SCHEMA, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens, chars, owned })
+}
+
+/**
+ * The marks file within what its own parser takes: past MARKS_CAP's bytes or MARKS_VALUES' values (OWNED_ALL's 250,000
+ * glyphs beside the rest of a paper large enough to reach it), each owned piece from the last written as not owned
+ * ('past the glyphs a paper may own') until it fits, so that a paper loses the own ink of its last pieces, never its
+ * whole layer (the 6b review's Minor 1). The writer writes nothing the parser refuses
+ */
+function fitted(m) {
+  const text = encodeLayoutMarks(m)
+  let bytes = new TextEncoder().encode(text).length, values = countValues(text)
+  if (bytes <= MARKS_CAP && values <= MARKS_VALUES) return m
+  const past = OWNED_HOW.indexOf('past the glyphs a paper may own'), owned = [...m.owned]
+  for (let q = owned.length - 1; q >= 0 && (bytes > MARKS_CAP || values > MARKS_VALUES); q--) {
+    const e = owned[q]
+    if (e.length <= 2) continue
+    const was = JSON.stringify(ownedRow(e)), now = JSON.stringify([e[0], past])
+    bytes -= new TextEncoder().encode(was).length - new TextEncoder().encode(now).length
+    values -= countValues(was) - countValues(now)
+    owned[q] = [e[0], past]
+  }
+  return { ...m, owned }
 }
 
 /** the marks file as written: the schema's keys in order, numbers to a hundredth */
@@ -728,10 +753,11 @@ export function encodeLayoutMarks(m) {
   return JSON.stringify({
     schema, engine, marking: { classes: marking.classes, switches: marking.switches, inkless: marking.inkless }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, words,
     tokens: tokens.map((v, i) => (i % 6 === 0 || i % 6 === 5 ? v : r2(v))), chars,
-    // a glyph's page and character, a rule's page, as they are; its coordinates to a hundredth
-    owned: owned.map(e => e.map((v, j) => (j < 3 || (j - 3) % 5 === 0 || (j < 3 + 5 * e[2] && (j - 3) % 5 === 4) ? v : r2(v)))),
+    owned: owned.map(ownedRow),
   })
 }
+/** an owned row as written: a glyph's page and character, a rule's page, as they are; its coordinates to a hundredth */
+const ownedRow = e => e.map((v, j) => (j < 3 || (j - 3) % 5 === 0 || (j < 3 + 5 * e[2] && (j - 3) % 5 === 4) ? v : r2(v)))
 
 /** bytes, then values and nesting, then JSON.parse, then every bound; throws LayoutRefusal, naming where */
 export function parseLayoutMarks(bytes) {
