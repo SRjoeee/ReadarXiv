@@ -363,6 +363,10 @@ export function extendFirstLines(rects, pageViews, others) {
  * on below it) lost its key, was laid over and erased (1512.03385 page 3's equations (1) and (2)). Each block also says
  * how many of the unit's kept regions come before it (`after`, counting those in `referenced`): the text that follows a
  * formula in the translation starts below it.
+ * A far-in first line is not moved to its block's edge here (v0's change, step 2): extendFirstLines has moved every one
+ * whose start the anchors missed, and left one where another unit's line stands before it (a run-in heading: 1810.04805's
+ * "Model Architecture", 1706.03762's "Encoder:"), over which the translation was laid and which it never erased; a
+ * layout file's first line starts at the unit's own mark (IEEE's "Index Terms—" before it).
  */
 export function blocksOf2(rects, pageViews, keep = null, regionOf = null, referenced = null) {
   const kept = r => !!keep?.has(rectKey(r))
@@ -387,10 +391,6 @@ export function blocksOf2(rects, pageViews, keep = null, regionOf = null, refere
     b.h = median(rs.map(r => r[4] - r[2]))
     b.pitch = rs.length > 1 ? median(rs.slice(1).map((r, i) => rs[i][4] - r[4])) : b.h * 1.38
     b.indent = Math.max(0, rs[0][1] - b.x0)
-    if (b.indent > 0.25 * (b.x1 - b.x0)) {
-      b.indent = 0
-      if (!kept(rs[0])) rs[0] = [rs[0][0], b.x0, rs[0][2], rs[0][3], rs[0][4]]
-    }
     const centres = rs.map(r => (r[1] + r[3]) / 2)
     const view = pageViews[b.page - 1]
     const pageCentre = view ? (view[0] + view[2]) / 2 : 306
@@ -676,6 +676,16 @@ export function labelOf(out, unit, rects, charsByPage, gapsIn) {
       const rest = g0.chars.slice(e + 1)
       if (rest.some(isReal)) gaps = [{ text: rest.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars: rest.slice(rest.findIndex(isReal)) }, ...gaps.slice(1)]
       else gaps = gaps.slice(1)
+    }
+    // (v0's change, step 2) or, where the unit begins with text and its first line opens with what its source does not
+    // write, before its first word: another unit's ink on that line (a run-in heading the anchors did not place, which
+    // extendFirstLines took in: 1810.04805's "Input/Output Representations"), kept as the original's like a label, the
+    // first line starting after it; it was kept and laid over
+    const real = g0.chars.filter(isReal)
+    const drawsFirst = unit.pieces.find(p => (p.t === 'text' ? /\S/.test(p.s) : p.t === 'ph' ? !['zero', 'space'].includes(phClass(p.src)) : p.t === 'nested'))
+    if (!out.label && real.length && drawsFirst?.t === 'text' && out.firstX0 !== undefined && real.every(c => `${c.page}|${c.rect.join()}` === firstKey && c.x1 <= out.firstX0 + 0.1) && uc.findIndex(isReal) === uc.indexOf(real[0]) && !nearIn(norm(real.map(c => c.ch).join('')), norm(unit.src), unit.src)) {
+      out.label = { x1: Math.max(...real.map(c => c.x1)), text: g0.text, chars: real }
+      gaps = gaps.slice(1)
     }
   }
   return gaps

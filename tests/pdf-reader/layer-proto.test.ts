@@ -133,3 +133,32 @@ describe("v0's drawing as data: recorded in its own device pixels, drawn at any 
     ])
   })
 })
+
+describe("v0's first lines: never laid over ink a unit does not erase (step 2)", () => {
+  let L2: typeof import('@/pdf-reader/engine/layer-proto/layer2.mjs')
+  beforeAll(async () => {
+    const g = globalThis as { OffscreenCanvas?: unknown }
+    g.OffscreenCanvas ??= class { getContext() { return { font: '', measureText: (s: string) => ({ width: 50 * s.length }) } } }
+    L2 = await import('@/pdf-reader/engine/layer-proto/layer2.mjs')
+  })
+  const serif = { fam: 'serif', bold: false, italic: false, caps: false, known: false } as never
+  /** a text item's characters, each half its size wide, from x on baseline yb */
+  const item = (text: string, x: number, yb: number, size: number, n: number, st = serif) => [...text].map((ch, k) => ({ ch, x0: x + 0.5 * size * k, x1: x + 0.5 * size * (k + 1), yb, size, item: n, ix: x, k, st }))
+  it('a far-in first line keeps its start, which extendFirstLines left after another unit\'s line', () => {
+    const [b] = L2.blocksOf2([[1, 200, 98, 400, 107], [1, 50, 86, 400, 95]] as never, [[0, 0, 612, 792]])
+    expect(b.rects[0][1]).toBe(200)
+    expect(b.indent).toBe(150)
+  })
+  it("a first line that opens with what its source does not write, before its first word, keeps it as a label", () => {
+    const page = [...item('Input Representations', 10, 100, 10, 0, { ...serif as object, bold: true } as never), ...item('To make it work', 130, 100, 10, 1)]
+    const rect = [1, 10, 97.85, 210, 106.83]
+    const unit = { kind: 'para', src: 'To make it work', pieces: [{ t: 'text', s: '\n' }, { t: 'text', s: '\u4E3A\u4E86' }] } as never
+    const p = L2.prepareUnit(unit, [rect] as never, [page as never], new Map() as never)
+    expect(p.label?.text).toBe('Input Representations')
+    // not where it is the source's own text, which the alignment missed
+    const own = { kind: 'para', src: 'Input Representations To make it work', pieces: [{ t: 'text', s: '\u4E3A\u4E86' }] } as never
+    const pageMissed = [...item('Inputt Representationss', 10, 100, 10, 0), ...item('To make it work', 130, 100, 10, 1)]
+    expect(L2.prepareUnit(own, [rect] as never, [pageMissed as never], new Map() as never).label).toBeUndefined()
+  })
+})
+
