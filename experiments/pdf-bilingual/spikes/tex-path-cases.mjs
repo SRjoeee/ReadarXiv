@@ -3,7 +3,7 @@
 // lab's report of 2026-10-06, concern 1), each as a small document through the reader's own translationFiles, compiled
 // natively in Docker with -halt-on-error. Each case with the fix and without it: the fix sets the document, and without
 // it TeX stops, or loses letters, where the lab's finals did. Exits non-zero on a failure.
-//   [AXT_DATA=<the experiment's data>] pnpm exec tsx experiments/pdf-bilingual/spikes/tex-path-cases.mjs [R P U S F N …]
+//   [AXT_DATA=<the experiment's data>] pnpm exec tsx experiments/pdf-bilingual/spikes/tex-path-cases.mjs [R P U S F N I …]
 // The cases named, or all. The METAFONT outputs the file server adds (spikes/make-metafont.mjs, AXT_DATA/metafont, as
 // faithful.mjs mounts them) are on the font path where they are there: a case that needs one is skipped without them
 import { execFileSync } from 'node:child_process'
@@ -141,6 +141,25 @@ if (want('N')) {
     const fonts = times ? { rm: 'ptm', sf: 'phv', tt: 'pcr', body: 'ptm' } : { rm: 'cmr', sf: 'cmss', tt: 'cmtt', body: 'cmr' }
     const r = await compile('n', { 'main.tex': main(times), 'style.sty': style }, s, { translate, fonts })
     check(`N (${s.name}, ${paper}): the fonts the style loads by name are the document's own bold sans and roman, no shape up undefined`, r.ok && same(r) && !shapeUp(r), r.error || shapeUp(r) || `${read(r, 'NAMED').join(', ')} against ${read(r, 'OWN').join(', ')}`)
+  }
+}
+
+// I: F's font, in a file TeX reads that loadProject does not walk (the re-review of fix/tex-path-errors, N1): a file the
+// preamble \\inputs, a package named by its path, a file a style \\inputs. Declared again, the heading has its Russian
+// letters; missed, it is the raw font's glyphs again
+if (want('I')) {
+  const fontsTeX = '\\font\\elvbf  = ptmb scaled 1100\n\\def\\subsection{\\@startsection{subsection}{2}{\\z@}{8pt}{6pt}{\\elvbf}}\n'
+  const main = load => `\\documentclass{article}\n\\usepackage{times}\n${load}\n\\begin{document}\n\\subsection{Implementation}\nWords of the section.\n\\end{document}\n`
+  const arrangements = [
+    ['a file the preamble \\inputs', { 'main.tex': main('\\makeatletter\\input{style}\\makeatother'), 'style.tex': fontsTeX }],
+    ['a package named by its path', { 'main.tex': main('\\usepackage{sty/style}'), 'sty/style.sty': fontsTeX }],
+    ['a file a style \\inputs', { 'main.tex': main('\\usepackage{style}'), 'style.sty': '\\input{sub/fonts}\n', 'sub/fonts.tex': fontsTeX }],
+  ]
+  const translate = paper => new Map(paper.units.map(u => [u, [{ t: 'text', tr: true, s: u.kind === 'heading' ? 'Реализация' : 'Слова раздела.' }]]))
+  const [own] = strategiesFor({ compiler: 'pdflatex' }, 'ru')
+  for (const [where, files] of arrangements) {
+    const r = await compile('i', files, own, { translate, fonts: { rm: 'ptm', sf: 'phv', tt: 'pcr', body: 'ptm' } })
+    check(`I: CVPR's heading font in ${where} is declared again, the heading has its Russian letters`, r.ok && r.text.includes('Реализация') && r.text.includes('Слова раздела'), r.error || `the PDF reads ${JSON.stringify(r.text.slice(0, 60))}`)
   }
 }
 

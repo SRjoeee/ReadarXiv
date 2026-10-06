@@ -191,6 +191,28 @@ describe('a font a paper\'s style loads by name, under a strategy that sets anot
     expect(main('ru')).toContain(FIXED)
     expect(main('fr')).not.toContain('\\let\\expandafter\\elvbf')
   })
+  it('from every file TeX may read, as TeX finds it: a preamble\'s \\input, a package by its path, a file a style \\inputs (the re-review, N1)', () => {
+    const FONT = '\\font\\elvbf  = ptmb scaled 1100\n'
+    const ru = (files: Record<string, string>) => {
+      const p = openPaper(new Map(Object.entries(files).map(([k, v]) => [k, new TextEncoder().encode(v)])))
+      return new TextDecoder().decode(translationFiles(p, new Map(), { strategy: first({ ...META, ...p.meta }, 'ru'), fonts: null, draft: false, aux: null, bbl: null }).get('main.tex'))
+    }
+    const main = (preamble: string) => `\\documentclass{article}${preamble}\\begin{document}\nThe first paragraph of prose.\n\\end{document}\n`
+    const read: [string, Record<string, string>][] = [
+      ['\\input{fonts}', { 'main.tex': main('\\input{fonts}'), 'fonts.tex': FONT }],
+      ['\\input{fonts.tex}', { 'main.tex': main('\\input{fonts.tex}'), 'fonts.tex': FONT }],
+      ['\\input fonts', { 'main.tex': main('\\input fonts\n'), 'fonts.tex': FONT }],
+      ['\\usepackage{sty/cvpr}', { 'main.tex': main('\\usepackage{sty/cvpr}'), 'sty/cvpr.sty': FONT }],
+      ['\\usepackage{./cvpr}', { 'main.tex': main('\\usepackage{./cvpr}'), 'cvpr.sty': FONT }],
+      ['a style\'s \\input{fontsdef}', { 'main.tex': main('\\usepackage{outer}'), 'outer.sty': '\\input{fontsdef}\n', 'fontsdef.tex': FONT }],
+      ['a style\'s \\input{sub/fonts}', { 'main.tex': main('\\usepackage{cvpr}'), 'cvpr.sty': '\\input{sub/fonts}\n', 'sub/fonts.tex': FONT }],
+      ['an \\input in a macro TeX runs', { 'main.tex': main('\\newcommand\\setupfonts{\\input{fonts}}\\setupfonts'), 'fonts.tex': FONT }],
+      ['a name TeX makes, \\input{\\jobname-fonts}: any file', { 'main.tex': main('\\input{\\jobname-fonts}'), 'main-fonts.tex': FONT }],
+    ]
+    for (const [how, files] of read) expect(ru(files), how).toContain(FIXED)
+    // a file no load names, and one named in a comment alone, TeX does not read
+    expect(ru({ 'main.tex': main('% \\usepackage{cvpr}\n'), 'cvpr.sty': FONT, 'stray.tex': FONT })).not.toContain('\\let\\expandafter\\elvbf')
+  })
   it('from the files TeX reads alone: a style loaded by one the paper loads, not one it never loads (M5)', () => {
     const files = new Map([
       ['main.tex', '\\documentclass{article}\\usepackage{outer}\\begin{document}\nThe first paragraph of prose.\n\\end{document}\n'],

@@ -19,7 +19,7 @@
 // first preview is set as today, and never waits for the original: nothing is known to plan it from yet. Where a plan
 // cannot be made, the translation is set as today, and the reason noted
 import { analyze } from './paper-meta.mjs'
-import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, normalizePath, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { authorsTranslated, namedFonts, strategiesFor, typesetBy } from './scripts.mjs'
 import { passagesInSource } from './cache.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
@@ -186,25 +186,46 @@ export function originalFiles({ fsys, project }, { lines = false, spans = null }
   return out
 }
 
-/** the text of each of the paper's own files TeX reads: those loadProject walked, and each style or class of the
- *  paper's own that one of them loads (\usepackage, \RequirePackage, \documentclass, \LoadClass), and so on */
+/**
+ * The text of each of the paper's own files TeX may read: the main file, preamble and all, and every file of the paper's
+ * a text reached names as TeX loads files — \\input (with braces or without), \\include, \\InputIfFileExists,
+ * \\subfile, \\import and \\subimport, a style by \\usepackage or \\RequirePackage, a class by \\documentclass or
+ * \\LoadClass —, found by its path as TeX finds it (`.tex`, `.sty`, `.cls` added) and else by its name in any directory.
+ * Named anywhere in a file but a comment, in a macro's body or a conditional too: where it is not known whether TeX
+ * reads a file, it is read. A name TeX makes (\\input{\\jobname-x}) could be any file: every file then. Walked by
+ * loadProject alone, a preamble's \\input, a package named by its path and a file a style \\inputs were missed, and
+ * the fonts in them never declared again (the re-review of fix/tex-path-errors, N1)
+ */
+const LOADS = [
+  [/\\(?:@@?)?input(?![A-Za-z@])\s*(?:\{([^{}]*)\}|([^\s{}%\\]+))/g, '.tex'],
+  [/\\(?:include|InputIfFileExists|subfile)\s*\{([^{}]*)\}/g, '.tex'],
+  [/\\(?:sub)?import\*?\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, '.tex', true],
+  [/\\(?:usepackage|RequirePackage(?:WithOptions)?)\s*(?:\[[^\]]*\]\s*)?\{([^{}]*)\}/g, '.sty', false, true],
+  [/\\(?:documentclass|LoadClass(?:WithOptions)?)\s*(?:\[[^\]]*\]\s*)?\{([^{}]*)\}/g, '.cls'],
+]
 function readByTeX(fsys, project) {
-  const own = new Map(fsys.list().filter(f => /\.(sty|cls)$/i.test(f)).map(f => [f.split('/').pop().toLowerCase(), f]))
-  const texts = [...project.files.values()], queue = [...texts], seen = new Set()
+  const sources = fsys.list().filter(f => /\.(tex|sty|cls|ltx|def|cfg)$/i.test(f)), here = new Set(sources), byName = new Map()
+  for (const f of sources) { const k = f.split('/').pop().toLowerCase(); byName.set(k, [...(byName.get(k) ?? []), f]) }
+  /** the paper's files a name in a load stands for: by its path (with the extension TeX adds), else by its name */
+  const resolve = (name, ext) => {
+    const path = normalizePath(name.trim().replace(/^"|"$/g, ''))
+    for (const c of [path, `${path}${ext}`]) if (here.has(c)) return [c]
+    const base = path.split('/').pop().toLowerCase()
+    return byName.get(base) ?? byName.get(`${base}${ext}`) ?? []
+  }
+  const read = new Set([project.main, ...(project.files?.keys() ?? [])].filter(f => here.has(f))), queue = [...read]
   while (queue.length) {
-    const text = queue.pop().replace(/(^|[^\\])%.*$/gm, '$1')
-    for (const m of text.matchAll(/\\(usepackage|RequirePackage|documentclass|LoadClass)\s*(?:\[[^\]]*\]\s*)?\{([^}]*)\}/g)) {
-      for (const name of m[2].split(',')) {
-        const f = own.get(`${name.trim()}.${/class/i.test(m[1]) ? 'cls' : 'sty'}`.toLowerCase())
-        if (!f || seen.has(f)) continue
-        seen.add(f)
-        const t = latin1(fsys.read(f))
-        texts.push(t)
-        queue.push(t)
+    const text = latin1(fsys.read(queue.pop())).replace(/(^|[^\\])%.*$/gm, '$1')
+    for (const [re, ext, pair, list] of LOADS) {
+      for (const m of text.matchAll(re)) {
+        const names = pair ? [`${m[1]}/${m[2]}`] : list ? m[1].split(',') : [m[1] ?? m[2]]
+        // a name TeX makes: any file
+        if (names.some(n => /[\\#]/.test(n))) return sources.map(f => latin1(fsys.read(f)))
+        for (const f of names.flatMap(n => resolve(n, ext))) if (!read.has(f)) { read.add(f); queue.push(f) }
       }
     }
   }
-  return texts
+  return [...read].map(f => latin1(fsys.read(f)))
 }
 /** the fonts the paper's own files load by name where TeX reads them (scripts.mjs namedFonts), read once a paper */
 const namedOf = new WeakMap()
