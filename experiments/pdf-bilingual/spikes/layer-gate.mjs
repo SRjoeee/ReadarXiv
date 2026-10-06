@@ -544,8 +544,10 @@ function fidelityMd(record) {
 }
 /** what a floor keeps of a run's totals: the measures the prototype's floor has always had (v0's own checker and its own
  *  lost-ink accounting are not the engine's, and are left out) */
-const NOT_FLOOR = ['lostInk', 'lostInkPx', 'missing', 'twice', 'brackets', 'duplicated', 'numbersLost', 'numbersTotal', 'numbersShown', 'wrongPageText', 'droppedPh', 'modelCells', 'rates', 'modelRates', 'style']
-const floorOf = t => Object.fromEntries(Object.entries(t).filter(([k]) => !NOT_FLOOR.includes(k)))
+function floorOf(t) {
+  const not = ['lostInk', 'lostInkPx', 'missing', 'twice', 'brackets', 'duplicated', 'numbersLost', 'numbersTotal', 'numbersShown', 'wrongPageText', 'droppedPh', 'modelCells', 'rates', 'modelRates', 'style']
+  return Object.fromEntries(Object.entries(t).filter(([k]) => !not.includes(k)))
+}
 /** floor.json from v0's run under the floor's conditions at the gate's place, the floor before it kept beside it */
 function writeFloor(run, shared) {
   const file = join(GATE, 'floor.json'), had = readJson(file)
