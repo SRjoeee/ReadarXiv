@@ -15,8 +15,9 @@ import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks, typ
 // before the run its fifth number names; `order`, the runs' order in the stream where it is not the text layer's
 
 const CH = 0.5
-/** a run of glyphs; `blank`: each painted with the Unicode of a space (a symbolic font's code 32) */
-type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean }
+/** a run of glyphs; `blank`: each painted with the Unicode of a space (a symbolic font's code 32); `one`: the whole
+ *  string one glyph's Unicode (a character and its variation selector) */
+type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean }
 type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped'; points?: Record<string, [run: number, char: number]>; order?: number[] }
 type Mark = [name: string, page: number, x: number, y: number]
 type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches }
@@ -30,8 +31,8 @@ const size = (r: Run) => r.size ?? 10
 const adv = (r: Run) => (r.w ?? CH) * size(r)
 /** where a run's character j begins, and where the run ends */
 const xAt = (r: Run, j: number) => r.x + j * adv(r)
-const endOf = (r: Run) => xAt(r, r.s.length)
-const item = (r: Run) => ({ str: r.blank ? ' '.repeat(r.s.length) : r.s, dir: 'ltr', transform: [size(r), 0, 0, size(r), r.x, r.y], width: r.s.length * adv(r), height: size(r), fontName: r.font ?? 'F1', hasEOL: false })
+const endOf = (r: Run) => xAt(r, r.one ? 1 : r.s.length)
+const item = (r: Run) => ({ str: r.blank ? ' '.repeat(r.s.length) : r.s, dir: 'ltr', transform: [size(r), 0, 0, size(r), r.x, r.y], width: (r.one ? 1 : r.s.length) * adv(r), height: size(r), fontName: r.font ?? 'F1', hasEOL: false })
 /** where each mark's point stands in a page's stream: [run, character] before which it is shown, in the marks' order */
 function pointsOf(p: Page, page: number, marks: Mark[]) {
   const out: [name: string, run: number, char: number][] = []
@@ -63,6 +64,7 @@ function opsOf(p: Page, points: [string, number, number][] = []) {
     // a space is a move, as TeX's pages show it: no glyph (the ink reader keeps every painted glyph); a point between two
     // characters parts the run's showText
     let glyphs: unknown[] = []
+    if (r.one) { ops.push([OPS.showText, [[{ unicode: r.s, width: (r.w ?? CH) * 1000, isSpace: false, fontChar: r.s, vmetric: null }]]], [OPS.endText, []]); continue }
     for (let c = 0; c <= r.s.length; c++) {
       if (points.some(([, pr, pc]) => pr === ri && pc === c)) { if (glyphs.length) ops.push([OPS.showText, [glyphs]]); glyphs = []; at(ri, c) }
       if (c === r.s.length) break
@@ -490,26 +492,24 @@ describe('makeLayout, the review of 2026-10-06', () => {
     expect(stats.ph).toMatchObject({ found: 3, empty: 0, lost: 0 })
   })
 
-  it('a display that ends its unit is its own ink to its unit\'s end mark, never EMPTY; alone at its page\'s foot, found all the same', async () => {
-    // the next paragraph's lines set the column's right edge, where the number stands
-    const runs: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: 'a=b', x: 150, y: 680 }, { s: '(2)', x: 252, y: 680 }, ...[0, 1, 2].map((j): Run => ({ s: words(10 + 10 * j, 10), x: 72, y: 660 - 12 * j }))]
+  it("a display that ends its unit is its own ink to the next unit's start mark, the next heading's number left out; alone at its page's foot, LOST", async () => {
+    // MARK_DEF sets the unit's end mark before the display that ends it (where the display left the paragraph): in the
+    // stream, the end mark's point, the display's opening point, the display, the next unit's number and start mark
+    const runs: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: 'a=b', x: 150, y: 680 }, { s: '(2)', x: 252, y: 680 }, { s: '3', x: 72, y: 660, size: 12 }, { s: 'Results', x: 90, y: 660, size: 12 }, ...[0, 1, 2].map((j): Run => ({ s: words(10 + 10 * j, 10), x: 72, y: 640 - 12 * j }))]
     const w: World = {
-      // the unit's end mark set where the display left the paragraph, its point after the display in the stream
-      pages: [{ runs, points: { '0e': [3, 0] } }],
-      marks: [['0s', 1, 72, 700], ['0e', 1, 217, 700], ['p0.1a', 1, 217, 700], ['1s', 1, 72, 660], ['1e', 1, 267, 636]],
-      units: [unit('para', [text(`${words(0, 10)} `), ph('\\[a=b\\]')]), unit('para', [text(words(10, 30))])],
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 217, 700], ['p0.1a', 1, 217, 700], ['h1s', 1, 90, 660], ['h1e', 1, 132, 660], ['2s', 1, 72, 640], ['2e', 1, 267, 616]],
+      units: [unit('para', [text(`${words(0, 10)} `), ph('\\[a=b\\]')]), unit('heading', [text('Results')], { depth: 1 }), unit('para', [text(words(10, 30))])],
     }
     const { file, stats } = await made(w)
     expect(phOf(file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.NUMBERED, 1, 150, 680, 165, 687.5, 677.5, 1, 252, 680, 267, 687.5, 677.5])
     expect(stats.ph.byKind.display).toEqual([1, 1])
-    // nothing below it in its column: its own ink all the same (the geometric maker's LOST); with no other line to give
-    // the column's edge, its number is not told apart
-    const alone = await made({ ...w, pages: [{ runs: runs.slice(0, 3), points: { '0e': [3, 0] } }], marks: (w.marks as Mark[]).slice(0, 3), units: [w.units[0] as SourceUnit] })
-    expect(phOf(alone.file, 0, 1)).toEqual([0, 1, 1, 0, 1, 150, 680, 267, 687.5, 677.5])
-    // its end mark not where its point would end it (the next unit's is next): LOST, not EMPTY
-    const unended = await made({ ...w, pages: [{ runs }] })
-    expect(phOf(unended.file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.LOST])
-    expect(unended.stats.ph.why).toEqual({ "open, the next mark not its unit's": 1 })
+    // the heading's number is its label, not the display's
+    expect(file.labels.map(l => l.slice(0, 4))).toEqual([[1, 0, 1, 72]])
+    // nothing after it on its page: its end is not known (the next mark on the next page), LOST, not EMPTY
+    const alone = await made({ ...w, pages: [{ runs: runs.slice(0, 3) }], marks: (w.marks as Mark[]).slice(0, 3), units: [w.units[0] as SourceUnit] })
+    expect(phOf(alone.file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.LOST])
+    expect(alone.stats.ph.why).toEqual({ 'open, the next mark on another page': 1 })
   })
 
   it('a caption centred whole, its label with it, is CENTRED', async () => {
@@ -641,7 +641,7 @@ describe('makeLayout, the re-review of 2026-10-06', () => {
   it('subequations is a display: one ending its unit is found, not an EMPTY macro', async () => {
     const runs: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: 'a=b', x: 150, y: 680 }, { s: '(2a)', x: 247, y: 680 }, ...body(660, 10)]
     const { file } = await made({
-      pages: [{ runs, points: { '0e': [3, 0] } }],
+      pages: [{ runs }],
       marks: [['0s', 1, 72, 700], ['0e', 1, 217, 700], ['p0.1a', 1, 217, 700], ['1s', 1, 72, 660], ['1e', 1, 267, 636]],
       units: [unit('para', [text(`${words(0, 10)} `), ph('\\begin{subequations}\\begin{align}a&=b\\end{align}\\end{subequations}')]), unit('para', [text(words(10, 30))])],
     })
@@ -706,7 +706,7 @@ describe('makeLayout, the re-review of 2026-10-06', () => {
     const theirs: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: 'a=b and more', x: 72, y: 680 }, ...more]
     const ours: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: 'x=y', x: 150, y: 690 }, { s: 'a=b and more', x: 72, y: 680 }, ...more]
     const lost = await made({
-      pages: [{ runs: theirs }], marked: [{ runs: ours, points: { '0e': [2, 0] } }],
+      pages: [{ runs: theirs }], marked: [{ runs: ours }],
       marks: [['0s', 1, 72, 700], ['0e', 1, 217, 700], ['p0.1a', 1, 217, 700], ['1s', 1, 72, 680], ['1e', 1, 267, 528]],
       units: [unit('para', [text(`${words(0, 10)} `), ph('\\[x=y\\]')]), unit('para', [text(`a=b and more ${words(10, 120)}`)])],
     })
@@ -737,6 +737,17 @@ describe('makeLayout, the content stream (Task 6b)', () => {
     expect(segs).toEqual([[1, 87, 700, 143, 706.72 + 7.5, 697.5 - 1.75]])
     expect(stats.match.recoded).toBe(1)
     expect(stats.ph).toMatchObject({ found: 1, lost: 0, unmatched: 0, twice: 0 })
+    // TeX Live 2026's sum with a variation selector (U+FE01) and arXiv's plain one, 1.2 pt off its carried place: the same
+    // character, matched by it where the place alone would not do
+    const vs = ours.map(r => (r.s === '\u2211' ? { ...r, s: '\u2211\ufe01', one: true } : r))
+    const off = theirs.map(r => (r.s === 'P' ? { ...r, s: '\u2211', x: r.x + 1.2 } : r))
+    const same = await made({
+      pages: [{ runs: [...off, ...below] }], marked: [{ runs: [...vs, ...below], points: { 'p0.1a': [2, 0], 'p0.1b': [7, 0] } }],
+      marks: [['0s', 1, 72, 712], ['0e', 1, 188, 700], ['p0.1a', 1, 82, 700], ['p0.1b', 1, 143, 700], ['1s', 1, 72, 600], ['1e', 1, endOf(below[11] as Run), 468]],
+      units: [unit('para', [text('the dot product of two words is '), ph('$q\\cdot k=\\sum_{i=1}^{d_k}q_ik_i$'), text(' over all')]), unit('para', [text(words(0, 120))])],
+    })
+    expect(same.stats.ph).toMatchObject({ found: 1, lost: 0 })
+    expect(same.stats.match).toMatchObject({ recoded: 0, same: 14 })
   })
 
   it("a fraction's bar and its denominator's script 5.27 pt below the line are its own (1706.03762's 33.3)", async () => {

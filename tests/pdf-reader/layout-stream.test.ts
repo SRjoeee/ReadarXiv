@@ -99,6 +99,9 @@ describe('ownedOf', () => {
   it('an opening point alone owns to where the text after it begins, a hyphen at a line\'s end passed over', () => {
     const page = pageOf(['a call', { at: 'n0.2a' }, { u: '1', x: 102, y: 703.5, size: 7 }, ' and the text ', { at: 'p0.4a' }, 'BERT', ' con-\nsiderably more ', { at: '0e' }])
     expect(owned([page], { 'n0.2a': open('andthete'), 'p0.4a': open('consider') })).toEqual({ 'n0.2a': ['1', 0], 'p0.4a': ['BERT', 0] })
+    // a glyph's variation selector (TeX Live 2026's cmex sets one) is no character of the text after
+    const vs = pageOf(['as ', { at: 'p0.1a' }, 'x', { u: '\u2211\ufe01', x: 150, y: 700 }, { u: 'i', x: 155, y: 700 }, 's more', { at: '0e' }])
+    expect(owned([vs], { 'p0.1a': open('\u2211ismore') })).toEqual({ 'p0.1a': ['x', 0] })
   })
 
   it('an opening point alone: nothing before the text after it is LOST, nothing at all before its next point EMPTY', () => {
@@ -108,6 +111,15 @@ describe('ownedOf', () => {
     // a macro that sets nothing, at a paragraph's end
     const none = pageOf(['the end', { at: 'p0.1a' }, { at: '0e' }])
     expect(owned([none], { 'p0.1a': open('', ['0e']) })).toEqual({ 'p0.1a': ['', 0] })
+  })
+
+  it('a display that ends its unit ends at the next unit\'s start mark (its own end mark set before it), the next unit\'s label left out', () => {
+    // MARK_DEF sets a unit's end mark before a display that ends it; the next unit a heading, its number on its line
+    const page = pageOf(['define', { at: '0e' }, { at: 'p0.1a' }, '\na=b(1)', '\n', { u: '2', x: 72, y: 676 }, { at: 'h1s' }, { u: 'R', x: 85, y: 676 }, 'esults'])
+    expect(owned([page], { 'p0.1a': open('', ['0e']) })).toEqual({ 'p0.1a': ['a=b(1)', 0] })
+    // the next mark an earlier unit's start: none
+    const earlier = pageOf(['define', { at: 'p3.1a' }, '\na=b(1)', { at: '2s' }, 'text'])
+    expect(owned([earlier], { 'p3.1a': open('', ['3e']) })).toEqual({ 'p3.1a': "open, the next mark not its unit's" })
   })
 
   it('an opening point alone with no text after it ends at its unit\'s next mark, and no other', () => {

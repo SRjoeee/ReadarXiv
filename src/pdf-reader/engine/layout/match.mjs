@@ -27,7 +27,9 @@ const SCRIPT = size => 0.6 * Math.max(size, 5) + 1.5
 /** the glyph visits a paper's matching may cost: the real papers' heaviest costs a few million */
 export const MATCH_WORK = 50_000_000
 
-const NF = s => s.normalize('NFKC').replace(/\s/g, '')
+/** a glyph's character as two PDFs are compared by it: NFKC, no white space, no variation selector (TeX Live 2026's cmex
+ *  sets one after a big operator or delimiter: ∑ U+FE01, which arXiv's older TeX gives plain) */
+const NF = s => s.normalize('NFKC').replace(/[\s\ufe00-\ufe0f]/g, '')
 
 /**
  * The matcher of a paper: `ink[page]` arXiv's glyphs (the maker's arrays, by baseline: n, x0, x1, y, size, u, taken)

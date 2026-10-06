@@ -34,7 +34,9 @@ const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i]))
 /** a bracket's point: a column's body (b) or a float's box (f), its start (s) or end (e), by a number */
 const BRACKET = /^([bf])([se])\d+$/
 /** a piece's opening point: a placeholder's (p) or a footnote call's (n), by its unit and source piece index */
-const OPENING = /^([pn]\d+\.\d+)a$/
+const OPENING = /^([pn])(\d+)\.(\d+)a$/
+/** a unit's start mark: MARK_DEF's, a cell's, a heading's */
+const START = /^[th]?(\d+)s$/
 /** a range in a region outside the column bodies (an output routine of its own: REVTeX's, multicol's) that goes from
  *  low on a page to high on it, and right by this share of the page's width and up by this share of its height, crossed
  *  into the next column: what TeX shipped between is in it, and cannot be told apart */
@@ -46,8 +48,9 @@ const WORK = 20_000_000
 
 /** a region's code: in a column's body or not, at a depth of floats */
 const code = (body, depth) => depth * 2 + (body ? 1 : 0)
-/** a glyph's character as the text after a piece is compared with it: NFKC, lower case, no white space */
-const charOf = u => u.normalize('NFKC').toLowerCase().replace(/\s/g, '')
+/** a glyph's character as the text after a piece is compared with it: NFKC, lower case, no white space, no variation
+ *  selector */
+const charOf = u => u.normalize('NFKC').toLowerCase().replace(/[\s\ufe00-\ufe0f]/g, '')
 
 /** each page's regions: of each glyph, of each box, at each point; every page begins outside any body */
 function regionsOf(page) {
@@ -82,9 +85,11 @@ function regionsOf(page) {
  *   bodies, not across a column (JUMP_X, JUMP_Y). A closing point expected (`closing`) and not read: none.
  * - An opening point alone: to the next mark's point on its page, in its region; where text follows the piece in its
  *   unit, to where that text's first WANT characters (`want`) begin, a hyphen passed over; where none does, the next
- *   mark must be its unit's next one (`ends`), and no unmarked visible piece may come between (`blocked`). Nothing at
- *   all before the next point is a piece of nothing; nothing before the text after it, with glyphs there, is none
- *   (REVTeX sets the punctuation after a citation before its number).
+ *   mark must be its unit's next one (`ends`), or a later unit's start mark — MARK_DEF sets a unit's end mark before a
+ *   display that ends it — and then what stands on that mark's line before it is that unit's label (a heading's number,
+ *   an item's mark), not the piece's; no unmarked visible piece may come between (`blocked`). Nothing at all before the
+ *   next point is a piece of nothing; nothing before the text after it, with glyphs there, is none (REVTeX sets the
+ *   punctuation after a citation before its number).
  * A name set twice owns nothing, nor where the work is past its bound
  */
 export function ownedOf(pages, { follows, dropped = [] }) {
@@ -107,7 +112,7 @@ export function ownedOf(pages, { follows, dropped = [] }) {
     if (!m) continue
     const f = follows(name)
     if (!f) continue
-    const close = `${m[1]}b`, closes = where.get(close) ?? []
+    const close = `${name.slice(0, -1)}b`, closes = where.get(close) ?? []
     if (list.length > 1 || closes.length > 1 || twice.has(name) || twice.has(close)) { out.set(name, none(HOW['a mark set twice'])); continue }
     if (work > WORK) { out.set(name, none(HOW['past the glyphs a paper may own'])); continue }
     const [pa, qa] = list[0], A = pages[pa - 1].points[qa], rA = regions[pa - 1].at[qa]
@@ -151,9 +156,17 @@ export function ownedOf(pages, { follows, dropped = [] }) {
     if (jumps()) { out.set(name, none(HOW['across a column, unbracketed'])); continue }
     if (!glyphs.length && !boxes.length) { out.set(name, { how: HOW[f.want ? 'open, to the text after it' : "open, to its unit's next mark"], glyphs, boxes }); continue }
     if (!f.want) {
+      const later = START.exec(N.name)
       if (f.blocked) out.set(name, none(HOW['open, an unmarked piece follows']))
-      else if (!f.ends.includes(N.name)) out.set(name, none(HOW["open, the next mark not its unit's"]))
-      else out.set(name, { how: HOW["open, to its unit's next mark"], glyphs, boxes })
+      else if (f.ends.includes(N.name)) out.set(name, { how: HOW["open, to its unit's next mark"], glyphs, boxes })
+      else if (later && Number(later[1]) > Number(m[2])) {
+        // the next unit's label: the glyphs on its start mark's line before it, the boxes after the first of them
+        const after = P.glyphs[N.glyph], size = g => P.glyphs[g].size
+        let end = glyphs.length
+        while (after && end > 0 && Math.abs(P.glyphs[glyphs[end - 1][1]].y - after.y) < 0.5 * Math.max(size(glyphs[end - 1][1]), after.size)) end--
+        const upTo = end < glyphs.length ? P.boxAt[glyphs[end][1]] : N.box
+        out.set(name, { how: HOW["open, to its unit's next mark"], glyphs: glyphs.slice(0, end), boxes: boxes.filter(([, b]) => b < upTo) })
+      } else out.set(name, none(HOW["open, the next mark not its unit's"]))
       continue
     }
     const end = textAt(P, glyphs, f.want)
