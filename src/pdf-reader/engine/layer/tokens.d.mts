@@ -75,3 +75,21 @@ export declare function tokensOf(pieces: readonly TrPiece[], o: {
   unit: LayoutUnit; file: LayoutIndex; target: string; rules: LayerRules; roles: RoleSet; measure: Measure; hyphen: Hyphenator | null
   textIn?: TextIn; classOf?: (k: number) => string | null
 }): Token[] | null
+/** the classes whose rendering may bring its own brackets where no text of it reads: a citation */
+export declare const BRACKETED: ReadonlySet<string>
+/** brackets by kind, half and full width alike: round and square */
+export declare const OPENS: ReadonlyMap<string, 'round' | 'square'>
+export declare const CLOSES: ReadonlyMap<string, 'round' | 'square'>
+/** where each bracket of the translation's text pieces closes or is closed, by `${piece index}:${index in it}`: its
+ *  partner's key, null for one the translation leaves unmatched */
+export declare function bracketPairs(pieces: readonly TrPiece[]): Map<string, string | null>
+/** the first (end false) or last (end true) character of text piece i that is not white space, with its key; null where
+ *  piece i is no text or has none */
+export declare function beside(pieces: readonly TrPiece[], i: number, end: boolean): { ch: string; key: string } | null
+/**
+ * The translation's brackets that echo a citation's own, by key: unmatched, right before (after) a citation whose own text
+ * (ownText, measured by `o`) begins (ends) with a bracket of that kind or reads nowhere, the source not bracketing it
+ * (SOURCE_BRACKETS). The tokens keep each for its offset in trText and draw nothing for it; the net does not take it as
+ * doubled
+ */
+export declare function echoesOf(pieces: readonly TrPiece[], unit: { ph: ReadonlyMap<number, { kind: string; flags: number; segs: Float64Array; text?: string }> } | null | undefined, o: OwnTextIn): Set<string>

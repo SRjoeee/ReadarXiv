@@ -22,7 +22,8 @@ export declare function checkPieces(pieces: unknown, unit: LayoutUnit): TrPiece[
  * (two placeholders' segments share more than half the smaller), 'erase' (an erase rectangle meets a display's segment or a
  * label on its page by more than 0.5 pt), 'glyph' (a drawn character its face has not), 'brackets' (a bracket of the
  * translation beside a rendering's own of its kind, that the translation leaves unmatched or pairs around the rendering
- * alone; a citation or reference whose rendering reads nowhere, beside a bracket the translation leaves unmatched)
+ * alone; a citation or reference whose rendering reads nowhere, beside a bracket the translation leaves unmatched; never
+ * a bracket that echoes a citation's own, which the tokens do not draw: tokens.mjs echoesOf)
  */
 export declare function netOf(input: LayerInput, laid: LaidUnit, tr: Tr): Unfit['why'] | null
 /** the net's checks that need no laying, which layUnit runs first: a LOST row in the unit */

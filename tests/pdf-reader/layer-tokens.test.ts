@@ -172,6 +172,36 @@ describe('placeholders', () => {
     expect(author('[1)')).toBe('[1)')
   })
 
+  it("a bracket that echoes a citation's own is kept for its offset in trText and drawn as nothing (the brackets echo)", () => {
+    const unread: TextIn = () => null
+    const cite = rows[3]!
+    const tokensFor = (pieces: TrPiece[], o: { spec?: PhSpec; textIn?: TextIn; target?: string } = {}) => need(pieces, { unit: { ph: { 3: o.spec ?? cite } }, textIn: o.textIn ?? unread, target: o.target })
+    const drawn = (tokens: Token[]) => tokens.filter(t => t.kind === 'text').map(t => t.s).join('')
+    // 1810.04805-ja's unit 81, 'pairs [cite]).': a ')' the translation never opened, after a citation that reads nowhere
+    const close: TrPiece[] = [[0, 'pairs '], [1, 3], [0, ').']]
+    const a = tokensFor(close)
+    expect(drawn(a)).toBe('pairs.')
+    // the offsets are trText's, which still holds the ')': the token after the citation covers ').' and draws '.', as a
+    // token with an invisible character does
+    const t = trText(close)
+    const dot = a.find(k => k.s === '.')!
+    expect(t.slice(dot.at, dot.at + dot.len)).toBe(').')
+    expect(t.slice(0, dot.at)).toBe('pairs ')
+    // Japanese, the citation's own text read as '[12]' and the translation's ']' after it
+    const ja = tokensFor([[0, '\u30da\u30a2'], [1, 3], [0, ']\u306e']], { textIn: () => '[12]', target: 'ja' })
+    expect(drawn(ja)).toBe('\u30da\u30a2\u306e')
+    expect(ja.find(k => k.mode === 'page-text')?.s).toBe('[12]')
+    // an opening '(' it never closes, before a citation that reads nowhere
+    expect(drawn(tokensFor([[0, 'see ('], [1, 3], [0, ' and']]))).toBe('seeand')
+    // not an echo: a bracket of another kind than the rendering's own, one the translation matches, one beside a citation
+    // the source brackets itself
+    expect(drawn(tokensFor([[0, 'see ('], [1, 3], [0, ' x']], { textIn: () => '[12]' }))).toBe('see(x')
+    expect(drawn(tokensFor([[0, 'see ( '], [1, 3], [0, ')']]))).toBe('see()')
+    expect(drawn(tokensFor(close, { spec: ph('cite', PH_FLAG.SOURCE_BRACKETS, [1, 200, 700, 220, 710, 698]) }))).toBe('pairs).')
+    // nor beside a formula, whose rendering brings no brackets
+    expect(drawn(need([[0, 'where '], [1, 2], [0, ').']], { unit: { ph: rows }, textIn: unread }))).toBe('where).')
+  })
+
   it('without page text, a citation is a crop, and so is any other visible placeholder', () => {
     expect(need([[0, 'see '], [1, 3]], { unit: { ph: rows } }).at(-1)?.mode).toBe('crop')
     expect(need([[0, 'see '], [1, 3]], { unit: { ph: rows }, textIn: () => null }).at(-1)?.mode).toBe('crop')

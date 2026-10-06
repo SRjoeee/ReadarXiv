@@ -127,6 +127,77 @@ export function pageTextOf(row, before, after, o) {
   return (!(row.flags & PH_FLAG.SOURCE_BRACKETS) && opensBefore(before) && closesAfter(after) ? unbracket(own) : own) || null
 }
 
+// ---------------------------------------------------------------- brackets beside a rendering
+
+/** the classes whose rendering may bring its own brackets where no text of it reads: a citation (natbib's '(Hill et al.,
+ *  2016)', a numeric '[3]'). An equation reference's are known ('(…)'); a \ref renders a bare number */
+export const BRACKETED = new Set(['cite'])
+/** brackets by kind, half and full width alike: round and square */
+export const OPENS = new Map([['(', 'round'], ['\uff08', 'round'], ['[', 'square'], ['\uff3b', 'square']])
+export const CLOSES = new Map([[')', 'round'], ['\uff09', 'round'], [']', 'square'], ['\uff3d', 'square']])
+
+/** where each bracket of the translation's text pieces closes or is closed: by piece index and index in it, its partner's,
+ *  null for one the translation leaves unmatched. A close matches the innermost open where that is of its kind */
+export function bracketPairs(pieces) {
+  const partner = new Map(), stack = []
+  pieces.forEach((p, i) => {
+    if (p[0] !== 0) return
+    for (let j = 0; j < p[1].length; j++) {
+      const ch = p[1][j], key = `${i}:${j}`
+      if (OPENS.has(ch)) { stack.push({ key, kind: OPENS.get(ch) }); partner.set(key, null) }
+      else if (CLOSES.has(ch)) {
+        const top = stack[stack.length - 1]
+        if (top && top.kind === CLOSES.get(ch)) { stack.pop(); partner.set(key, top.key); partner.set(top.key, key) }
+        else partner.set(key, null)
+      }
+    }
+  })
+  return partner
+}
+
+/** the first or last character of a text piece that is not white space, with its key in bracketPairs, or null */
+export function beside(pieces, i, end) {
+  const p = pieces[i]
+  if (p?.[0] !== 0) return null
+  const s = p[1]
+  if (end) { for (let j = s.length - 1; j >= 0; j--) if (!/\s/.test(s[j])) return { ch: s[j], key: `${i}:${j}` } }
+  else for (let j = 0; j < s.length; j++) if (!/\s/.test(s[j])) return { ch: s[j], key: `${i}:${j}` }
+  return null
+}
+
+/**
+ * The translation's brackets that echo a citation's own, by their keys in bracketPairs: one right before a citation (white
+ * space between aside) that the translation never closes, or right after one that it never opened, where the citation's
+ * own text (ownText, `o` its measure: the body's upright face) begins, or ends, with a bracket of its kind, or reads
+ * nowhere. A citation brings its brackets in its rendering, and a machine translation repeats one of them in its own text
+ * ('… pairs [cite])…'): drawn, the page would show it twice. Every one of the 11 the net refused on the layer lab's 29
+ * fixtures was such an echo. The tokens keep it for its offset in trText and draw nothing for it, and the net does not
+ * take it as doubled. Not beside a citation the source brackets itself (SOURCE_BRACKETS: those brackets are the source's)
+ */
+export function echoesOf(pieces, unit, o) {
+  const out = new Set()
+  let partner = null
+  for (let i = 0; i < pieces.length; i++) {
+    const p = pieces[i]
+    if (p[0] !== 1) continue
+    const row = unit?.ph?.get(p[1])
+    if (!row || !BRACKETED.has(row.kind) || row.flags & (PH_FLAG.EMPTY | PH_FLAG.LOST | PH_FLAG.SOURCE_BRACKETS)) continue
+    const b = beside(pieces, i - 1, true), a = beside(pieces, i + 1, false)
+    const open = b && OPENS.get(b.ch), close = a && CLOSES.get(a.ch)
+    if (!open && !close) continue
+    partner ??= bracketPairs(pieces)
+    const unopened = open && partner.get(b.key) === null, unclosed = close && partner.get(a.key) === null
+    if (!unopened && !unclosed) continue
+    const r = ownText(row, o)
+    if (unopened && (!r || OPENS.get(r[0]) === open)) out.add(b.key)
+    if (unclosed && (!r || CLOSES.get(r[r.length - 1]) === close)) out.add(a.key)
+  }
+  return out
+}
+
+/** a character kept for its offset and drawn as nothing: a default-ignorable one (the word joiner), which every token drops */
+const UNDRAWN = '\u2060'
+
 /** thrown inside tokensOf where the unit cannot be drawn, and caught at its edge */
 const UNDRAWABLE = Symbol('undrawable')
 
@@ -333,6 +404,16 @@ function build(pieces, o) {
     return w
   }
 
+  // a bracket of the translation that echoes a citation's own (echoesOf): its character kept, as one that draws nothing,
+  // so that every offset stays trText's
+  const upright = faceFor(roles, { script: 'latin', cls: 'serif', design: body, bold: false, italic: false, caps: false })
+  const echoes = upright ? echoesOf(pieces, unit, { textIn, width: t => widthOf(t, upright, false), size: unitSize }) : new Set()
+  const undrawn = (s, index) => {
+    let out = s
+    for (let j = 0; j < s.length; j++) if (echoes.has(`${index}:${j}`)) out = `${out.slice(0, j)}${UNDRAWN}${out.slice(j + 1)}`
+    return out
+  }
+
   const cjkBreaking = CJK_BREAKING.has(scriptOf(target))
   const isCjk = ch => { const cp = ch.codePointAt(0); return isCjkCode(cp) || (cjkBreaking && CJK_PUNCT.has(cp)) }
   const cjkToken = t => t.kind === 'text' && t.script === 'cjk'
@@ -514,7 +595,7 @@ function build(pieces, o) {
 
   pieces.forEach((p, index) => {
     switch (p[0]) {
-      case 0: text(p[1]); break
+      case 0: text(echoes.size ? undrawn(p[1], index) : p[1]); break
       case 1: placeholder(p[1], index); break
       case 2:
         flush()
