@@ -36,6 +36,8 @@
 //                a change of the maker is measured end to end: with the paper's own switch where the engine's marks file
 //                carries one (GATE_SWITCH=1 or 0 says otherwise), its marks read from each kept compile by its own reader;
 //                fixed: the fixtures' own, as they were made for the lab
+//   --records    (or LAYER_RECORDS) the translation alone (record.json, units.json) from another folder of the same layout:
+//                spikes/table-groups.mjs --write's decided records over the engine's own layout files
 //   --fixtures   (or LAYER_FIXTURES) the fixtures' layout.json, units.json and arxiv.pdf from another folder of the same
 //                layout (the web's web/e2e/.fixtures/); the references stay data/layer-fixtures' (LAYER_REFS another)
 //   --check      the merge rule against the last record (default <engine>/experiments/pdf-bilingual/records/
@@ -145,6 +147,12 @@ const PROTO_ORDER = typeof arg('proto-order') === 'string' ? JSON.parse(readFile
 const REFS = resolve(process.env.LAYER_REFS ?? join(DATA, 'layer-fixtures'))
 /** whose layout files the layer is given: the engine's own maker's (made), or the fixtures' as they were made (fixed) */
 const GIVEN = typeof arg('fixtures') === 'string' ? arg('fixtures') : process.env.LAYER_FIXTURES ?? null
+/** --records=<dir> (or LAYER_RECORDS): the translation (record.json, units.json) from another folder of the fixtures'
+ *  layout, the layout files still made or given as --layouts says: spikes/table-groups.mjs --write's decided records
+ *  (each cell's group, the captions) measured over the engine's own maker's layout files */
+const RECORDS = typeof arg('records') === 'string' ? resolve(arg('records')) : process.env.LAYER_RECORDS ? resolve(process.env.LAYER_RECORDS) : null
+/** a fixture's translation file: the --records folder's, else the fixtures' */
+const trFile = (dir, file) => join(RECORDS ?? FIXTURES, dir, file)
 /** an engine before Task 6 has no layout maker: its layer is given the fixtures' own layout files */
 const HAS_MAKER = existsSync(join(ENGINE, 'src/pdf-reader/engine/layout/make.mjs'))
 // v0 is given no layout file: the fixtures' own serve the instrument (the kept renderings), as they served the parity run's.
@@ -242,13 +250,14 @@ function fileFor(path) {
   if (path.startsWith('/fixtures/')) {
     const [dir, file, ...rest] = path.slice(10).split('/')
     if (rest.length || !fixtures.includes(dir)) return null
-    if (['arxiv.pdf', 'layout.json', 'units.json'].includes(file)) return join(FIXTURES, dir, file)
+    if (file === 'units.json') return trFile(dir, file)
+    if (['arxiv.pdf', 'layout.json'].includes(file)) return join(FIXTURES, dir, file)
     // v0's inputs: the made output's geometry (the prototype's, by paper), the fixture's record (its units file), the
     // prototype's own units file
     if (PROTO && file === 'geometry.json') return geometryFile(dir)
     // the instrument's layout file (its kept renderings): the fixture's own, whichever the hybrid is given
     if (PROTO && file === 'kept-layout.json') return join(REFS, dir, 'layout.json')
-    if (PROTO && file === 'record.json') return join(FIXTURES, dir, 'record.json')
+    if (PROTO && file === 'record.json') return trFile(dir, 'record.json')
     if (PROTO && file === 'units-p7.json') return protoUnitsOf(dir)
     return null
   }
@@ -286,7 +295,7 @@ const fontsDigest = sha256(readdirSync(FONTS).sort().map(f => `${f}:${statSync(j
 const browser = await chromium.launch()
 const inputs = {
   tier: TIER, pages: PAGES ? `the first ${PAGES}` : `the first ${PAGES_OF} of each output, every page of ${[...ALL_PAGES].join(', ')}`, scale: 2.5, inkScale: 2, inkMin: 4, composite: COMPOSITE,
-  layouts: LAYOUTS, ...(LAYOUTS === 'made' ? { switch: SWITCH } : {}), fixtures: FIXTURES === REFS ? 'data/layer-fixtures' : FIXTURES.startsWith(ROOT) ? FIXTURES.slice(ROOT.length + 1) : FIXTURES, chromium: browser.version(),
+  layouts: LAYOUTS, ...(LAYOUTS === 'made' ? { switch: SWITCH } : {}), fixtures: FIXTURES === REFS ? 'data/layer-fixtures' : FIXTURES.startsWith(ROOT) ? FIXTURES.slice(ROOT.length + 1) : FIXTURES, ...(RECORDS ? { records: RECORDS.startsWith(ROOT) ? RECORDS.slice(ROOT.length + 1) : RECORDS } : {}), chromium: browser.version(),
   pdfjs: readJson(join(PDFJS, 'package.json')).version, fonts: fontsDigest.slice(0, 16), checker: fileSha(CHECKER).slice(0, 16),
   // the instrument: the measures, their arithmetic, and the page that draws and accounts (lost ink's own glyphs)
   measures: sha256(['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => readFileSync(join(GATE, f))).join('\n')).slice(0, 16),
@@ -322,9 +331,9 @@ async function runFixture(page, name, errors) {
   const ref = readJson(refFile)
   await page.goto(`${ORIGIN}/gate/page.html${PROTO ? '?kind=proto' : ''}`)
   await page.waitForFunction(() => window.gateReady === true)
-  const meta = { ref: fileSha(refFile).slice(0, 16), layout: fileSha(join(FIXTURES, name, 'layout.json')).slice(0, 16), units: fileSha(join(FIXTURES, name, 'units.json')).slice(0, 16) }
+  const meta = { ref: fileSha(refFile).slice(0, 16), layout: fileSha(join(FIXTURES, name, 'layout.json')).slice(0, 16), units: fileSha(trFile(name, 'units.json')).slice(0, 16) }
   if (PROTO) {
-    const g = geometryFile(name), u = PROTO_UNITS === 'p7' ? protoUnitsOf(name) : join(FIXTURES, name, 'record.json')
+    const g = geometryFile(name), u = PROTO_UNITS === 'p7' ? protoUnitsOf(name) : trFile(name, 'record.json')
     if (!g || !u || !existsSync(u)) { failures.push(name); return { name, ready: false, why: !g ? 'no geometry for v0' : `no ${PROTO_UNITS === 'p7' ? "prototype's units file" : 'record.json'}`, meta } }
     Object.assign(meta, { geometry: fileSha(g).slice(0, 16), protoUnits: fileSha(u).slice(0, 16) })
   }
