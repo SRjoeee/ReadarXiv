@@ -1,0 +1,85 @@
+// experiments/pdf-bilingual/spikes/layer-gate/ref.mjs
+// The fidelity gate's reference text area (Plan 8b, Task 12; the parity report's §6): per fixture, the original's text by
+// unit, page and line, against which every rendering is scored. It is made once and frozen (ref.json beside the fixture's
+// files, never in the repository: it is made of the paper), so that a layout that drops a unit cannot shrink what is
+// counted. Each unit's lines are the fixture's own layout file's (the layout made for the fixture, data/layer-fixtures),
+// and the units that file does not locate are taken from the approved prototype's geometry of the same paper (its
+// anchors' rectangles, as the parity harness read them: a rectangle's baseline 0.24 of its height above its foot, its size
+// its height over 0.894). A new reference is a deliberate act: `layer-gate.mjs --freeze` writes one only where none is.
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
+
+export const REF_SCHEMA = 1
+const UNIT_KINDS = ['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author']
+/** the approved prototype's geometry (iteration 2's data, outside the repository) */
+export const PROTO_GEOMETRY = '/Users/cheongzhiyan/Developer/readarxiv-research/2026-10-06-plan8/instant-layer/iteration-2/data'
+export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
+
+/** a fixture's name as its paper with its version, and its target */
+export function nameOf(fixture) {
+  const m = /^(.+v\d+)-([A-Za-z-]+)$/.exec(fixture)
+  if (!m) throw new Error(`${fixture}: not <id>v<n>-<target>`)
+  return { paper: m[1], target: m[2] }
+}
+
+/** the prototype's geometry file for a paper: the target's own, else the first of zh, ja, ko, de, ru (the original's
+ *  anchors are the same whatever the target) */
+export function geometryFile(fixture, dir = PROTO_GEOMETRY) {
+  const { paper, target } = nameOf(fixture)
+  return [target, 'zh', 'ja', 'ko', 'de', 'ru'].map(t => join(dir, `${paper}-${t}-geometry.json`)).find(f => existsSync(f)) ?? null
+}
+
+/**
+ * The reference of a fixture: { schema, from, pages: { [page]: [[id, kind, lines]] } }, each line six numbers (x0, x1,
+ * baseline, top, bottom, size). `layout` is the fixture's layout file's bytes; `geometry` the prototype's file's, or null
+ */
+export function makeRef(layout, geometry, from = {}) {
+  const L = JSON.parse(Buffer.from(layout).toString('utf8'))
+  const kinds = new Map(L.units.map(u => [u[0], UNIT_KINDS[u[1]] ?? 'para']))
+  const pages = {}
+  const add = (p, id, kind, line) => {
+    const list = (pages[p] ??= [])
+    let row = list.find(r => r[0] === id)
+    if (!row) list.push((row = [id, kind, []]))
+    row[2].push(...line)
+  }
+  for (const [id, rows] of L.lines) {
+    // page, x0, x1, baseline, top, bottom, size, font
+    for (let i = 0; i + 7 < rows.length; i += 8) add(rows[i], id, kinds.get(id) ?? 'para', [rows[i + 1], rows[i + 2], rows[i + 3], rows[i + 4], rows[i + 5], rows[i + 6]])
+  }
+  let extra = 0
+  if (geometry) {
+    const g = JSON.parse(Buffer.from(geometry).toString('utf8'))
+    for (const [id, , rects] of g.left.units) {
+      if (kinds.has(id)) continue
+      extra++
+      for (const [p, x0, y0, x1, y1] of rects) {
+        const h = y1 - y0
+        add(p, id, g.kinds[id] ?? 'para', [x0, x1, y0 + 0.24 * h, y1, y0, h / 0.894])
+      }
+    }
+  }
+  for (const list of Object.values(pages)) list.sort((a, b) => a[0] - b[0])
+  return { schema: REF_SCHEMA, from: { ...from, layout: sha256(layout), extraUnits: extra }, pages }
+}
+
+/** the reference made from a fixture's folder and the prototype's geometry, as the bytes ref.json holds */
+export function refBytesOf(dir, fixture, geometryDir = PROTO_GEOMETRY) {
+  const gFile = geometryFile(fixture, geometryDir)
+  const ref = makeRef(readFileSync(join(dir, 'layout.json')), gFile ? readFileSync(gFile) : null, { geometry: gFile ? basename(gFile) : null, geometrySha: gFile ? sha256(readFileSync(gFile)) : null })
+  return Buffer.from(JSON.stringify(ref))
+}
+
+/** a reference as the page reads it: by page, each unit { id, kind, orig: [{ x0, x1, baseline, top, bottom, size }] } */
+export function refPages(ref) {
+  const out = {}
+  for (const [p, list] of Object.entries(ref.pages)) {
+    out[p] = list.map(([id, kind, v]) => {
+      const orig = []
+      for (let i = 0; i + 5 < v.length; i += 6) orig.push({ x0: v[i], x1: v[i + 1], baseline: v[i + 2], top: v[i + 3], bottom: v[i + 4], size: v[i + 5] })
+      return { id, kind, orig }
+    })
+  }
+  return out
+}

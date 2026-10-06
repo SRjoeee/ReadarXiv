@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Layer gate</title>
+<!-- the engine's modules as they are, and PDF.js's pinned modern build by this map: no bundler -->
+<script type="importmap">{ "imports": { "pdfjs-dist": "/pdfjs/build/pdf.mjs", "pdfjs-dist/": "/pdfjs/" } }</script>
+<style>
+  html, body { margin: 0; background: #fff; }
+  #text { position: absolute; left: 0; top: 0; background: #fff; overflow: hidden; }
+  #text svg { position: absolute; left: 0; top: 0; overflow: visible; }
+  #text text { white-space: pre; }
+</style>
+<script type="module" src="/gate/page.mjs"></script>
+</head>
+<body><div id="text"></div></body>
+</html>
