@@ -43,6 +43,9 @@ const FOOT = 36
 const MERGE = 0.5, ERASE_MAX = 16
 /** an equation's number, within an em of its column's edge */
 const NUMBER = /^\((?:[A-Z]?\d+(?:[.\-]\d+)*[a-z]?|[ivxl]+)\)$/
+/** a row of glyphs smaller than this share of a line's, its baseline within their script window of the line's, is a
+ *  script of that line */
+const SCRIPT_SIZE = 0.85
 /** a placeholder's ink raised or lowered: its baseline this share of its line's size off the line's */
 const SHIFT = 0.2
 /** a centred unit: every line's centre within CENTRE of its column's, one line at least shorter than SHORT of it */
@@ -79,11 +82,18 @@ function within(promise, ms) {
   const late = new Promise(resolve => { timer = setTimeout(() => resolve(null), Math.max(0, ms)) })
   return Promise.race([Promise.resolve(promise).then(v => v, () => null), late]).finally(() => clearTimeout(timer))
 }
-/** a page's operator list given up on: PDF.js's own cancellation, where its page has one (its rendering's), so that the
- *  worker stops parsing; the bound holds without it */
-function giveUp(page) {
+/** a page's operator list given up on: PDF.js's own cancellation (its rendering's, PDFPageProxy._abortOperatorList on
+ *  its _intentStates, read on the pinned PDF.js by layout-make.test.ts), so that the worker stops parsing. Where a PDF.js
+ *  has none, a warning, once a paper (`seen`), and the maker goes on waiting: the worker parses the page to its end, the
+ *  pages after it wait behind it, and each is still given up past OPS_MS and the paper past OPS_PAPER_MS */
+function giveUp(page, seen) {
+  if (typeof page?._abortOperatorList !== 'function' || !(page?._intentStates instanceof Map)) {
+    if (!seen.warned) console.warn('layout maker: this PDF.js cancels no operator list; the pages after a slow one wait behind it')
+    seen.warned = true
+    return
+  }
   try {
-    for (const state of page?._intentStates?.values?.() ?? []) page._abortOperatorList?.({ intentState: state, reason: new Error('the layout maker gave up'), force: true })
+    for (const state of page._intentStates.values()) page._abortOperatorList({ intentState: state, reason: new Error('the layout maker gave up'), force: true })
   } catch {}
 }
 
@@ -294,6 +304,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   const ink = new Array(pages + 1).fill(null), names = [], nameId = new Map()
   const fontIds = raw => { const n = fontName(raw); if (!nameId.has(n)) { nameId.set(n, names.length); names.push(n) } return nameId.get(n) }
   let waited = 0
+  const seen = { warned: false }
   for (let p = 1; p <= pages; p++) {
     const page = held[p - 1]
     if (!page || dark.has(p)) continue
@@ -302,7 +313,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     let ops = null
     try { ops = await within(page.getOperatorList(), Math.min(OPS_MS, OPS_PAPER_MS - waited)) } catch {}
     waited += now() - t0
-    if (!ops) { giveUp(page); stats.timedOut.push(p); dark.add(p); continue }
+    if (!ops) { giveUp(page, seen); stats.timedOut.push(p); dark.add(p); continue }
     const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0 })
     if (got.capped) stats.capped.push(p)
     // a page whose ink is not whole has no ink: its units stay the original's, never erased in part
@@ -383,6 +394,19 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
 
   // ---------------------------------------------------------------- each located unit's lines
   t = now()
+  /** a line's column: 0 or 1 on a page of two columns, 2 for a line across both, 0 on a page of one */
+  const twoCols = p => marks.columns[p - 1] === 2
+  const middle = p => { const v = viewAt(p); return (v[0] + v[2]) / 2 }
+  const columnOf = (p, x0, x1) => (!twoCols(p) ? 0 : x0 < middle(p) - 4 && x1 > middle(p) + 4 ? 2 : (x0 + x1) / 2 >= middle(p) ? 1 : 0)
+  /** a column's x range on its page: its side of the page, or the page */
+  const sideOf = (p, col) => { const v = viewAt(p); return !twoCols(p) || col === 2 ? [v[0], v[2]] : col === 1 ? [middle(p), v[2]] : [v[0], middle(p)] }
+  /** two of a unit's rows one line: on one page and in one column, on one baseline, or the smaller a script of the other */
+  const oneLine = (o, r) => {
+    if (o.page !== r.page || columnOf(o.page, o.x0, o.x1) !== columnOf(r.page, r.x0, r.x1)) return false
+    if (Math.abs(o.base - r.base) < 0.5 * Math.max(o.size, r.size)) return true
+    const [small, big] = o.size < r.size ? [o, r] : [r, o]
+    return small.size < SCRIPT_SIZE * big.size && Math.abs(small.base - big.base) < SCRIPT(small.size) && small.x0 < big.x1 + big.size && small.x1 > big.x0 - big.size
+  }
   const placed = []
   for (let i = 0; i < units.length; i++) {
     const u = units[i], a = anchors.get(i)
@@ -401,10 +425,11 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       rows.push(row)
     }
     if (!rows.length) continue
-    // two of the anchor's rectangles of one line (its tokens out of order: a script before its base): one line
+    // the anchor's rectangles of one line (its tokens out of order: a script before its base, the line's two parts
+    // either side of a formula, 1706.03762's note): one line, wherever the second begins
     for (let j = 1; j < rows.length; j++) {
       const r = rows[j]
-      const q = rows.findIndex((o, n) => n < j && o.page === r.page && Math.abs(o.base - r.base) < 0.5 * Math.max(o.size, r.size) && o.x0 < r.x1 && r.x0 < o.x1)
+      const q = rows.findIndex((o, n) => n < j && oneLine(o, r))
       if (q < 0) continue
       const o = rows[q]
       rows[q] = rowOf(ink[r.page], new Set([...o.gl, ...r.gl]), r.page, [...o.ks, ...r.ks], o.base)
@@ -413,12 +438,6 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     for (const row of rows) for (const g of row.gl) ink[row.page].owner[g] = i
     placed.push({ id: i, u, a, rows, S, E })
   }
-  /** a line's column: 0 or 1 on a page of two columns, 2 for a line across both, 0 on a page of one */
-  const twoCols = p => marks.columns[p - 1] === 2
-  const middle = p => { const v = viewAt(p); return (v[0] + v[2]) / 2 }
-  const columnOf = (p, x0, x1) => (!twoCols(p) ? 0 : x0 < middle(p) - 4 && x1 > middle(p) + 4 ? 2 : (x0 + x1) / 2 >= middle(p) ? 1 : 0)
-  /** a column's x range on its page: its side of the page, or the page */
-  const sideOf = (p, col) => { const v = viewAt(p); return !twoCols(p) || col === 2 ? [v[0], v[2]] : col === 1 ? [middle(p), v[2]] : [v[0], middle(p)] }
   // each column's text edges, the most common start and end of the body's lines (its own page's, else those of the
   // pages like it: the same columns, the same side of a spread, then the same columns)
   const edges = new Map()
@@ -531,15 +550,17 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       const r = rows[j], P = ink[r.page], em = r.size
       const L = onLine(j).filter(g => !P.taken[g])
       if (x0 !== null && x1 !== null) return L.filter(g => P.x0[g] >= x0 - 0.02 && P.x0[g] < x1 - 0.02)
+      // to the line's end or from its start: as far as each glyph is within an em of the next, and the line's extent an
+      // em at most
       if (x0 !== null) {
         const out = []
         let edge = x0
-        for (const g of L) { if (P.x0[g] < x0 - 0.02) continue; if (P.x0[g] - edge > em) break; out.push(g); edge = Math.max(edge, P.x1[g]) }
+        for (const g of L) { if (P.x0[g] < x0 - 0.02) continue; if (P.x0[g] - edge > em || P.x0[g] > r.x1 + em) break; out.push(g); edge = Math.max(edge, P.x1[g]) }
         return out
       }
       const out = []
       let edge = x1
-      for (let q = L.length - 1; q >= 0; q--) { const g = L[q]; if (P.x0[g] >= x1 - 0.02) continue; if (Number.isFinite(edge) && edge - P.x1[g] > em) break; out.unshift(g); edge = P.x0[g] }
+      for (let q = L.length - 1; q >= 0; q--) { const g = L[q]; if (P.x0[g] >= x1 - 0.02) continue; if ((Number.isFinite(edge) && edge - P.x1[g] > em) || P.x1[g] < r.x0 - em) break; out.unshift(g); edge = P.x0[g] }
       return out
     }
     for (let k = 0; k < u.pieces.length; k++) {
@@ -565,7 +586,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       let segs = []
       if (cls === 'display') {
         segs = displaySegments(rows, from, { j: to.line ?? to.j }, one)
-        if (segs === null) { lost('display across a page or a column'); continue }
+        if (segs === null) { lost(to.j > from.j ? 'display across a page or a column' : 'display ending its unit, nothing below it'); continue }
         if (segs.numbered) flags |= PH_FLAG.NUMBERED
       } else {
         // the glyphs from the opening mark to the end, scripts and all, one segment a line, none another one's
@@ -617,16 +638,44 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   }
 
   /**
-   * A display's segments: the rows of glyphs and graphics between the line of its opening mark and the line it ends on,
-   * in the column of its opening mark, each a segment, an equation number at its column's edge its own last one; null
-   * where the two lines are not on one page and in one column
+   * Where a display that ends its unit ends: the next line below its opening mark's in its column, another located
+   * unit's, or the next unit's start mark there (a float's passed over), as the height the display's glyphs' middles
+   * stand above; null where neither is on its page and in its column
+   */
+  function belowOf(one, ra, col) {
+    let lo = null
+    for (const o of placed) {
+      if (o === one) continue
+      for (const r of o.rows) if (r.page === ra.page && r.top < ra.bottom && columnOf(r.page, r.x0, r.x1) === col && (lo === null || r.top > lo)) lo = r.top
+    }
+    for (let n = one.id + 1; n < units.length; n++) {
+      if (FLOATING.has(units[n].kind)) continue
+      const S = carriedUnit.get(`${n}s`)
+      if (S && S.page === ra.page && S.y < ra.base && columnOf(S.page, S.x, S.x) === col) { const y = S.y + 0.5 * ra.size; if (lo === null || y > lo) lo = y }
+      break
+    }
+    return lo
+  }
+
+  /**
+   * A display's segments: the rows of glyphs and graphics between the line of its opening mark and the line it ends on
+   * (for one that ends its unit, belowOf), in the column of its opening mark, each a segment, an equation number at its
+   * column's edge its own last one; null where the two lines are not on one page and in one column, or the end of a
+   * display that ends its unit is not found
    */
   function displaySegments(rows, from, to, one) {
-    const ra = rows[from.j], rb = rows[to.j]
-    const col = columnOf(ra.page, ra.x0, ra.x1)
-    if (rb.page !== ra.page || columnOf(rb.page, rb.x0, rb.x1) !== col) return null
-    if (to.j === from.j) return []
-    const P = ink[ra.page], [cx0, cx1] = sideOf(ra.page, col), hi = ra.bottom, lo = rb.top
+    const ra = rows[from.j], col = columnOf(ra.page, ra.x0, ra.x1)
+    let lo
+    if (to.j > from.j) {
+      const rb = rows[to.j]
+      if (rb.page !== ra.page || columnOf(rb.page, rb.x0, rb.x1) !== col) return null
+      lo = rb.top
+    } else {
+      // the unit's end mark where its opening mark is: TeX set it on the line the display left
+      lo = belowOf(one, ra, col)
+      if (lo === null) return null
+    }
+    const P = ink[ra.page], [cx0, cx1] = sideOf(ra.page, col), hi = ra.bottom
     const items = []
     for (const g of band(P, lo - SCRIPT(P.most), hi + SCRIPT(P.most))) {
       const c = (P.top[g] + P.bottom[g]) / 2
@@ -706,6 +755,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   const fontIndex = new Map(), fonts = []
   const fontOf = id => { if (!fontIndex.has(id)) { fontIndex.set(id, fonts.length); fonts.push(names[id]) } return fontIndex.get(id) }
   const outUnits = [], outLines = [], outFrames = [], outErase = [], outHeadings = []
+  const labelAt = new Map(labels.map(l => [l[0], l[3]]))
   const inside = (p, x, y) => (kept.get(p) ?? []).some(([a, c, b, d]) => x >= a && x <= b && y >= c && y <= d)
   const meets = (p, a, c, b, d) => (kept.get(p) ?? []).some(([e, f, g, h]) => a < g && b > e && c < h && d > f)
   for (const one of placed) {
@@ -739,7 +789,8 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       }
       for (const e of merged) erase.push(j, ...solid(view, e[0], e[1], e[2], e[3]))
     })
-    if (refuse) continue
+    // a unit whose faces would take the file past FONTS_MAX names stays the original's: a count never gets it refused
+    if (refuse || fonts.length + new Set(rows.map(r => r.font).filter(f => !fontIndex.has(f))).size > FONTS_MAX) continue
     // lines
     const lines = []
     for (const r of rows) {
@@ -777,14 +828,16 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       const below = Math.min(H, Math.max(0, r2(lastRow.bottom - (Number.isFinite(next) ? next : view[1] + FOOT))))
       frames.push(f.page, f.col, f.first, f.n, q === 0 ? -1 : share, below)
     }
-    // flags: centred where every line's centre is its column's and one line at least is short of it
+    // flags: centred where every line's centre is its column's and one line at least is short of it; the first line from
+    // its label on (a caption's "Figure 1." centred with its text)
     let centred = rows.length > 0, short = false
-    for (const r of rows) {
-      const e = edgesOf(r.page, columnOf(r.page, r.x0, r.x1))
-      if (!e) { centred = false; break }
-      if (Math.abs((r.x0 + r.x1) / 2 - (e[0] + e[1]) / 2) > CENTRE) { centred = false; break }
-      if (r.x1 - r.x0 < SHORT * (e[1] - e[0])) short = true
-    }
+    rows.forEach((r, j) => {
+      if (!centred) return
+      const x0 = j === 0 && labelAt.has(i) ? Math.min(r.x0, labelAt.get(i)) : r.x0
+      const e = edgesOf(r.page, columnOf(r.page, x0, r.x1))
+      if (!e || Math.abs((x0 + r.x1) / 2 - (e[0] + e[1]) / 2) > CENTRE) { centred = false; return }
+      if (r.x1 - x0 < SHORT * (e[1] - e[0])) short = true
+    })
     const flags = (u.title ? UNIT_FLAG.TITLE : 0) | (u.front ? UNIT_FLAG.FRONT : 0) | (centred && short ? UNIT_FLAG.CENTRED : 0)
     const depth = Number.isInteger(u.depth) && u.depth >= -1 && u.depth <= 5 ? u.depth : 9
     outUnits.push([i, KIND.get(u.kind), depth, flags, u.pieces.length])
@@ -809,7 +862,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   // what the file holds of the units it does not: nothing; their placeholders and labels go with them
   const kept1 = new Set(outUnits.map(r => r[0]))
   const file = {
-    schema: 1, layout: LAYOUT, pdfjs, paper: { id: paper.id, version: paper.version, pages }, left, views, fonts: fonts.slice(0, FONTS_MAX),
+    schema: 1, layout: LAYOUT, pdfjs, paper: { id: paper.id, version: paper.version, pages }, left, views, fonts,
     units: outUnits, lines: outLines, frames: outFrames, erase: outErase,
     ph: ph.filter(p => kept1.has(p.row[0])).map(p => p.row), labels: labels.filter(r => kept1.has(r[0])), headings: outHeadings,
   }

@@ -228,6 +228,35 @@ describe('carrierOf', () => {
   })
 })
 
+describe('carrierOf, the review of 2026-10-06', () => {
+  it('a page of words each repeated finds every line its neighbours once, not by a search a line', () => {
+    // 64,000 one-word lines, each word twice on each side: no line unique, each looking for a unique neighbour
+    const ts = Array.from({ length: 64000 }, (_, i) => tok(`w${i >> 1}`, 1, 72, 790 - i * 0.01, 3, 0.005))
+    const c = carrierOf(ts, ts)
+    expect(c.lines.total).toBe(64000)
+    expect(c.carry(1, 73, 790)).toMatchObject({ page: 1, y: 790 })
+    // a search a line took 11.3 s on a laptop, the neighbours found once 0.2 s: the bound is the test's time
+  }, 3000)
+
+  it("a paper's pages together are bounded: past PAPER_WORK the pages after carry nothing", () => {
+    // 1,400 one-word lines alike on each page: about 2 million each, under the page's bound
+    const page = (p: number) => Array.from({ length: 1400 }, (_, i) => tok(`x${p}`, p, 72, 790 - i * 0.5, 3, 0.4))
+    expect(carrierOf(page(1), page(1)).over).toEqual([])
+    const all = Array.from({ length: 12 }, (_, p) => page(p + 1)).flat()
+    const over = carrierOf(all, all).over
+    expect(over.length).toBeGreaterThan(0)
+    expect(over).not.toContain(1)
+    expect(over.at(-1)).toBe(12)
+  })
+
+  it("words twice on arXiv's page are not unique there, whatever the page beside it holds", () => {
+    const ws = ['results', 'on', 'imagenet']
+    // twice on its own page, both far; once on the next page: not carried at all
+    const c = carrierOf(words(ws, 2, 72, 400), [...words(ws, 2, 72, 300), ...words(ws, 2, 72, 380), ...words(ws, 3, 72, 700)])
+    expect(c.carry(2, 80, 400)).toBeNull()
+  })
+})
+
 describe('tokensOfMarks', () => {
   it('tokensOfMarks round-trips a marks file\'s tokens into DocTokens', async () => {
     const styles = { f1: { ascent: 0.8, descent: -0.2, fontFamily: 'serif' } }

@@ -1,9 +1,9 @@
-import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/latex-front.mjs'
 import { encodeLayout, type LayoutFile, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { OPS_CAP } from '@/pdf-reader/engine/layout/ink.mjs'
-import { CARRY_MIN, fontName, type LayoutStats, makeLayout, OPS_MS } from '@/pdf-reader/engine/layout/make.mjs'
+import { CARRY_MIN, fontName, type LayoutStats, makeLayout, OPS_MS, OPS_PAPER_MS } from '@/pdf-reader/engine/layout/make.mjs'
 import { encodeLayoutMarks, layoutMarksOf, parseLayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 
 // The layout maker over a fake PDF.js document of arXiv's PDF and a marks file made, as the run makes it, from a fake
@@ -38,7 +38,7 @@ function opsOf(p: Page) {
   return { fnArray: ops.map(o => o[0]), argsArray: ops.map(o => o[1]) }
 }
 const commonObjs = { get: (id: string) => FONTS[id] ?? null }
-function arxivOf(pages: Page[]) {
+function arxivOf(pages: Page[], asked: number[] = []) {
   return {
     numPages: pages.length,
     getPage: async (n: number) => {
@@ -46,7 +46,10 @@ function arxivOf(pages: Page[]) {
       return {
         view: p.view ?? [0, 0, 612, 792], rotate: 0, commonObjs,
         getTextContent: async () => ({ items: p.runs.map(item), styles: STYLES }),
-        getOperatorList: () => (p.ops === 'never' ? new Promise(() => {}) : p.ops === 'fails' ? Promise.reject(new Error('broken page')) : Promise.resolve(opsOf(p))),
+        getOperatorList: () => {
+          asked.push(n)
+          return p.ops === 'never' ? new Promise(() => {}) : p.ops === 'fails' ? Promise.reject(new Error('broken page')) : Promise.resolve(opsOf(p))
+        },
       }
     },
   }
@@ -62,7 +65,7 @@ function markedOf(pages: Page[], marks: Mark[]) {
 async function marksOf(w: World, log = '') {
   return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex' }))))
 }
-const make = async (w: World, log = '') => makeLayout({ units: w.units, marks: await marksOf(w, log), arxiv: arxivOf(w.pages), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
+const make = async (w: World, log = '', asked: number[] = []) => makeLayout({ units: w.units, marks: await marksOf(w, log), arxiv: arxivOf(w.pages, asked), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
 /** a made file: it parses, and made again it is the same bytes */
 async function made(w: World, log = ''): Promise<{ file: LayoutFile; stats: LayoutStats }> {
   const one = await make(w, log), two = await make(w, log)
@@ -76,7 +79,7 @@ async function made(w: World, log = ''): Promise<{ file: LayoutFile; stats: Layo
 
 const text = (s: string) => ({ t: 'text', s })
 const ph = (src: string) => ({ t: 'ph', src })
-const unit = (kind: string, pieces: unknown[], more: Partial<SourceUnit> = {}): SourceUnit => ({ kind, pieces, ...more })
+const unit = (kind: string, pieces: unknown[], more: Partial<SourceUnit> & { front?: boolean } = {}): SourceUnit => ({ kind, pieces, ...more })
 const words = (from: number, n: number) => Array.from({ length: n }, (_, i) => `w${from + i}`).join(' ')
 const rowsOf = (f: LayoutFile, id: number, kind: 'lines' | 'frames' | 'erase') => { const e = f[kind].find(([u]) => u === id); if (!e) throw new Error(`no ${kind} for ${id}`); return e[1] }
 const chunk = (rows: number[], n: number) => Array.from({ length: rows.length / n }, (_, i) => rows.slice(i * n, i * n + n))
@@ -408,5 +411,153 @@ describe('makeLayout', () => {
     // the call: its number, raised, to the full stop after it
     expect(phOf(file, 0, 2)).toEqual([0, 2, 5, PH_FLAG.RAISED, 1, 122, 688, 125.5, 691.5 + 5.25, 691.5 - 1.75])
     expect(stats.ph).toMatchObject({ unmarked: 1, marked: 1, found: 1, inferred: 1 })
+  })
+})
+
+describe('makeLayout, the review of 2026-10-06', () => {
+  it('a line the text layer gives as two runs on one baseline is one line, each placeholder inked to its own marks', async () => {
+    // a superscript in a formula: the anchor's line rectangles break at it, and the second one begins past a symbol and
+    // a gap (1706.03762's note, unit 34: rows 107.8-346.3 and 358.9-503.9 on one baseline)
+    const runs: Run[] = [
+      { s: 'the dot product', x: 72, y: 700 }, { s: 'q', x: 152, y: 700 }, { s: 'i', x: 157, y: 705.5, size: 7 }, { s: '\u00b7', x: 165, y: 700 },
+      { s: 'k=ssssssss', x: 171, y: 700 }, { s: 'has mean', x: 226, y: 700 }, { s: '0', x: 271, y: 700 },
+      { s: 'and variance', x: 281, y: 700 }, { s: 'd', x: 346, y: 700 }, { s: 'k', x: 351, y: 697, size: 7 }, { s: '.', x: 354.5, y: 700 },
+    ]
+    const { file, stats } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 359.5, 700], ['p0.1a', 1, 147, 700], ['p0.1b', 1, 221, 700], ['p0.3a', 1, 266, 700], ['p0.3b', 1, 276, 700], ['p0.5a', 1, 341, 700], ['p0.5b', 1, 354.5, 700]],
+      units: [unit('para', [text('the dot product '), ph('$q^i \\cdot k=ssssssss$'), text(' has mean '), ph('$0$'), text(' and variance '), ph('$d_k$'), text('.')])],
+    })
+    expect(chunk(rowsOf(file, 0, 'lines'), 8).map(l => l.slice(0, 4))).toEqual([[1, 72, 359.5, 700]])
+    expect(phOf(file, 0, 1)).toEqual([0, 1, 0, 0, 1, 152, 700, 221, 710.75, 697.5])
+    expect(phOf(file, 0, 3)).toEqual([0, 3, 0, 0, 1, 271, 700, 276, 707.5, 697.5])
+    expect(phOf(file, 0, 5)).toEqual([0, 5, 0, 0, 1, 346, 700, 354.5, 707.5, 695.25])
+    expect(stats.ph).toMatchObject({ found: 3, empty: 0, lost: 0 })
+  })
+
+  it('a display that ends its unit is its ink down to the next line of the column, never EMPTY', async () => {
+    // the next paragraph's lines set the column's right edge, where the number stands
+    const runs: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: 'a=b', x: 150, y: 680 }, { s: '(2)', x: 252, y: 680 }, ...[0, 1, 2].map((j): Run => ({ s: words(10 + 10 * j, 10), x: 72, y: 660 - 12 * j }))]
+    const w: World = {
+      pages: [{ runs }],
+      // the unit's end mark where its display's opening mark is (TeX sets it on the line the display left)
+      marks: [['0s', 1, 72, 700], ['0e', 1, 217, 700], ['p0.1a', 1, 217, 700], ['1s', 1, 72, 660], ['1e', 1, 267, 636]],
+      units: [unit('para', [text(`${words(0, 10)} `), ph('\\[a=b\\]')]), unit('para', [text(words(10, 30))])],
+    }
+    const { file, stats } = await made(w)
+    expect(phOf(file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.NUMBERED, 1, 150, 680, 165, 687.5, 677.5, 1, 252, 680, 267, 687.5, 677.5])
+    expect(stats.ph.byKind.display).toEqual([1, 1])
+    // nothing below it in its column to bound it: LOST, not EMPTY
+    const alone = await made({ ...w, pages: [{ runs: runs.slice(0, 3) }], marks: (w.marks as Mark[]).slice(0, 3), units: [w.units[0] as SourceUnit] })
+    expect(phOf(alone.file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.LOST])
+  })
+
+  it('a caption centred whole, its label with it, is CENTRED', async () => {
+    const para = [0, 1, 2, 3].map((j): Run => ({ s: `${'abcd efgh '.repeat(3)}line${j} wxyz`, x: 72, y: 700 - 12 * j }))
+    // "Fig. 1." and its text, centred together on 172
+    const label: Run = { s: 'Fig. 1.', x: 172 - 57.5, y: 600 }, cap: Run = { s: 'Some text here', x: 172 - 17.5 + 2.5, y: 600 }
+    const { file } = await made({
+      pages: [{ runs: [...para, label, cap] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(para[3] as Run), 664], ['1s', 1, cap.x, 600], ['1e', 1, endOf(cap), 600]],
+      units: [unit('para', [text(para.map(r => r.s).join(' '))]), unit('caption', [text('Some text here')])],
+    })
+    expect(file.labels.map(l => l[0])).toEqual([1])
+    expect((file.units[1]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(UNIT_FLAG.CENTRED)
+  })
+
+  it('erase rectangles merge within half an em of each other, and a line keeps 16 at most, the closest merged first', async () => {
+    // gaps of 4.5 and 5.5 pt at 10 pt: the first merged, the second not
+    const near: Run[] = [{ s: 'aaa', x: 72, y: 700 }, { s: 'bbb', x: 91.5, y: 700 }, { s: 'ccc', x: 112, y: 700 }]
+    // 18 words 6 pt apart but two pairs, 5.6 and 5.8 pt apart: those two merged, 16 left
+    const gaps = Array.from({ length: 17 }, (_, j) => (j === 4 ? 5.8 : j === 11 ? 5.6 : 6))
+    const many: Run[] = []
+    for (let j = 0, x = 72; j < 18; j++) { many.push({ s: `w${String.fromCharCode(97 + j)}`, x, y: 600 }); x += 10 + (gaps[j] ?? 0) }
+    const last = many[17] as Run
+    const { file } = await made({
+      pages: [{ runs: [...near, ...many] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 127, 700], ['1s', 1, 72, 600], ['1e', 1, endOf(last), 600]],
+      units: [unit('para', [text('aaa bbb ccc')]), unit('para', [text(many.map(r => r.s).join(' '))])],
+    })
+    expect(chunk(rowsOf(file, 0, 'erase'), 5).map(e => [e[1], e[3]])).toEqual([[72, 106.5], [112, 127]])
+    const rects = chunk(rowsOf(file, 1, 'erase'), 5)
+    expect(rects).toHaveLength(16)
+    const merged = rects.filter(e => (e[3] as number) - (e[1] as number) > 10).map(e => [e[1], e[3]])
+    const r2 = (v: unknown) => Math.round((v as number) * 100) / 100
+    expect(merged.map(m => m.map(r2))).toEqual([[xAt(many[4] as Run, 0), endOf(many[5] as Run)], [xAt(many[11] as Run, 0), endOf(many[12] as Run)]].map(m => m.map(r2)))
+  })
+
+  it('a unit whose every glyph erasing leaves out has no erase entry; a rule of no height is erased a hundredth high', async () => {
+    // a cell standing inside a display's row: its glyph is inside the display's segment
+    const runs: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: 'a', x: 150, y: 680 }, { s: 'zz', x: 190, y: 680 }, { s: 'b', x: 230, y: 680 }, { s: words(10, 10), x: 72, y: 660 }]
+    const { file } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 267, 660], ['p0.1a', 1, 217, 700], ['t1s', 1, 190, 680], ['t1e', 1, 200, 680]],
+      units: [unit('para', [text(`${words(0, 10)} `), ph('\\begin{equation}a b\\end{equation}'), text(` ${words(10, 10)}`)]), unit('cell', [text('zz')])],
+    })
+    expect(file.units.map(u => u[0])).toEqual([0, 1])
+    expect(file.erase.map(([u]) => u)).toEqual([0])
+    // a formula of two glyphs 6 pt apart either side of a rule of no height: three rectangles, the rule's 0.01 high
+    const r: Run[] = [{ s: 'see', x: 72, y: 700 }, { s: 'x', x: 140, y: 700 }, { s: 'y', x: 185, y: 700 }, { s: 'and more', x: 200, y: 700 }]
+    const rule = await made({
+      pages: [{ runs: r, boxes: [[151, 703, 179, 703]] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 240, 700], ['p0.1a', 1, 87, 700], ['p0.1b', 1, 190, 700]],
+      units: [unit('para', [text('see '), ph('$\\overline{x y}$'), text(' and more')])],
+    })
+    expect(chunk(rowsOf(rule.file, 0, 'erase'), 5).filter(e => e[1] === 151)).toEqual([[0, 151, 703, 179, 703.01]])
+  })
+
+  it('units past 512 faces stay the original\'s: a count of fonts never gets the file refused', async () => {
+    // 515 one-word units, each in a face of its own
+    for (let f = 0; f < 515; f++) FONTS[`G${f}`] = { name: `ABCDEF+Face${f}`, fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false }
+    const runs = Array.from({ length: 515 }, (_, f): Run => ({ s: `word${f}`, x: 72 + 100 * (f % 5), y: 780 - 1.4 * Math.floor(f / 5) * 10, font: `G${f}` }))
+    const { file } = await made({
+      pages: [{ runs }],
+      marks: runs.flatMap((r, f): Mark[] => [[`${f}s`, 1, r.x, r.y], [`${f}e`, 1, endOf(r), r.y]]),
+      units: runs.map(r => unit('para', [text(r.s)])),
+    })
+    expect(file.fonts).toHaveLength(512)
+    expect(file.units).toHaveLength(512)
+    expect(file.units.at(-1)?.[0]).toBe(511)
+  })
+
+  it('a placeholder set below its line is LOWERED; a title and the front matter are flagged', async () => {
+    const runs: Run[] = [{ s: 'A Title of Front Matter', x: 72, y: 740 }, { s: 'Some Author and Another', x: 72, y: 725 }, { s: 'alpha beta', x: 72, y: 700 }, { s: 'xy', x: 127, y: 697, size: 7 }, { s: 'gamma delta', x: 140, y: 700 }]
+    const { file } = await made({
+      pages: [{ runs }],
+      // the front matter carries no marks: placed by its words alone
+      marks: [['2s', 1, 72, 700], ['2e', 1, 195, 700], ['p2.1a', 1, 122, 700], ['p2.1b', 1, 134, 700]],
+      units: [unit('heading', [text('A Title of Front Matter')], { title: true, front: true }), unit('author', [text('Some Author and Another')], { front: true }), unit('para', [text('alpha beta '), ph('$_{xy}$'), text(' gamma delta')])],
+    })
+    expect(phOf(file, 2, 1)[3]).toBe(PH_FLAG.LOWERED)
+    expect(file.units.map(u => u[3])).toEqual([UNIT_FLAG.TITLE | UNIT_FLAG.FRONT, UNIT_FLAG.FRONT, 0])
+  })
+
+  it("a paper's operator lists are waited for OPS_PAPER_MS in all: the pages past it are not asked", async () => {
+    const pages = Array.from({ length: 8 }, (_, j): Page => ({ runs: [{ s: `alpha beta gamma ${j}`, x: 72, y: 700 }], ops: 'never' }))
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    const asked: number[] = []
+    const out = make({ pages, marked: pages.map(p => ({ runs: p.runs })), marks: [], units: [unit('para', [text('alpha beta gamma 0')])] }, '', asked)
+    await vi.advanceTimersByTimeAsync(OPS_PAPER_MS + 10 * OPS_MS)
+    const done = await out
+    expect(asked).toEqual([1, 2, 3, 4, 5, 6])
+    expect(done.stats.timedOut).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+  })
+
+  it('the pinned PDF.js has the cancel the maker gives a page up with; without it the maker warns once and goes on', async () => {
+    const pdf = '%PDF-1.4\n1 0 obj <</Type/Catalog/Pages 2 0 R>> endobj\n2 0 obj <</Type/Pages/Kids[3 0 R]/Count 1>> endobj\n3 0 obj <</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<<>>>> endobj\n4 0 obj <</Length 16>> stream\n0 0 m 10 10 l S\nendstream endobj\ntrailer <</Root 1 0 R>>\n%%EOF\n'
+    const task = getDocument({ data: new TextEncoder().encode(pdf), verbosity: 0 })
+    const page = (await (await task.promise).getPage(1)) as unknown as { _abortOperatorList?: unknown; _intentStates?: unknown }
+    expect(typeof page._abortOperatorList).toBe('function')
+    expect(page._intentStates).toBeInstanceOf(Map)
+    await task.destroy()
+    // the fake pages have no cancel: two pages given up, one warning
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.useFakeTimers()
+    const p = (s: string): Page => ({ runs: [{ s, x: 72, y: 700 }], ops: 'never' })
+    const out = make({ pages: [p('alpha beta gamma'), p('delta epsilon zeta')], marked: [{ runs: p('alpha beta gamma').runs }, { runs: p('delta epsilon zeta').runs }], marks: [], units: [] })
+    await vi.advanceTimersByTimeAsync(3 * OPS_MS)
+    await out
+    expect(warn).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
   })
 })

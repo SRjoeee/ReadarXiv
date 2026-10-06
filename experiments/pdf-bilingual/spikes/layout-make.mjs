@@ -36,7 +36,9 @@ const BARS = {
   '2307.16209v1': { footnotes: 0.8, headings: 45 },
   '2608.04322v1': { cells: 0.95, headings: 20 },
 }
-const LINES_MIN = 0.975, PH_MIN = 0.98, BASELINE = 0.003, BASELINES_MIN = 0.98
+/** first baselines within a hundredth of TeX's start marks: the marks file holds hundredths (the controller's ruling of
+ *  2026-10-06 on the brief's 0.003 pt, which a file of hundredths cannot show) */
+const LINES_MIN = 0.975, PH_MIN = 0.98, BASELINE = 0.01, BASELINES_MIN = 0.98
 const pct = (a, b) => (b ? `${((100 * a) / b).toFixed(1)} %` : '-')
 const free = dir => { const s = statfsSync(dir); return s.bavail * s.bsize }
 
@@ -110,10 +112,13 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
   if (bar.cells) { const [a, b] = kind('cell'); check(id, 'cells located', a >= bar.cells * b, `${a}/${b} ${pct(a, b)}`) }
   if (bar.footnotes) { const [a, b] = kind('footnote'); check(id, 'footnotes located', a >= bar.footnotes * b, `${a}/${b} ${pct(a, b)}`) }
   if (bar.headings) { const [a, b] = S.labels.heading ?? [0, 0]; check(id, 'heading labels', a >= bar.headings, `${a}/${b} (bar ${bar.headings})`) }
-  // the marks file holds TeX's places to a hundredth (marks.mjs), the baselines are to a hundredth: a hundredth apart is
-  // the closest two numbers can be that differ, and is printed beside the bar
-  const firsts = S.baselines.first, close = firsts.filter(d => d <= BASELINE + 1e-9).length, step = firsts.filter(d => d <= 0.01 + 1e-9).length
-  check(id, `first baselines within ${BASELINE} pt of TeX's start marks`, close >= BASELINES_MIN * firsts.length, `${close}/${firsts.length} ${pct(close, firsts.length)}; within 0.01 pt ${step}/${firsts.length} ${pct(step, firsts.length)}`)
+  // the brief's 0.003 pt printed beside the bar
+  const firsts = S.baselines.first, close = firsts.filter(d => d <= BASELINE + 1e-9).length, fine = firsts.filter(d => d <= 0.003 + 1e-9).length
+  check(id, `first baselines within ${BASELINE} pt of TeX's start marks`, close >= BASELINES_MIN * firsts.length, `${close}/${firsts.length} ${pct(close, firsts.length)}; within 0.003 pt ${fine}/${firsts.length} ${pct(fine, firsts.length)}`)
+  // displays: none written EMPTY (the layer draws nothing for one, and a display with ink lost from the page is the
+  // completeness the layer must keep); found of those marked printed beside it
+  const displays = out.file.ph.filter(r => r[2] === 1), dEmpty = displays.filter(r => r[3] & 16).length, dLost = displays.filter(r => r[3] & 32).length
+  check(id, 'displays: none EMPTY', dEmpty === 0, `found ${displays.length - dEmpty - dLost}/${displays.length}, EMPTY ${dEmpty}, LOST ${dLost}`)
   // what was made, and what it cost
   const kept = keptFor(paper, 'zh'), cells = paper.units.map((u, i) => [u, i]).filter(([u]) => u.kind === 'cell' && !kept.has(u))
   const placedIds = new Set(out.file.units.map(u => u[0]))
@@ -121,7 +126,7 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
     id, engine: paper.meta.compiler, compileMs, pages: out.file.paper.pages,
     lines: S.lines, units: S.units, translatedCells: [cells.filter(([, i]) => placedIds.has(i)).length, cells.length],
     ph: S.ph, labels: S.labels, frames: S.frames, capped: S.capped, timedOut: S.timedOut, over: S.over,
-    lastBaselines: `${S.baselines.last.filter(d => d <= BASELINE + 1e-9).length}/${S.baselines.last.length} within ${BASELINE}, ${S.baselines.last.filter(d => d <= 0.01 + 1e-9).length} within 0.01`,
+    lastBaselines: `${S.baselines.last.filter(d => d <= BASELINE + 1e-9).length}/${S.baselines.last.length} within ${BASELINE}`,
     bytes: { ...S.bytes, gzip9: gzipSync(text, { level: 9 }).length }, ms: Object.fromEntries(Object.entries(S.ms).map(([k, v]) => [k, Math.round(v)])), wallMs: Math.round(wall),
     fonts: out.file.fonts.length,
   }))

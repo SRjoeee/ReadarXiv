@@ -102,8 +102,9 @@ function commonRun(a, b, A, B) {
  * The marked original's lines matched to arXiv's (a Carrier). A marked line is matched to arXiv's line of the same
  * signature and word count on its page or the next or the previous: the nearest by page, then one that moved whole
  * before one that did not, then the nearest by distance; whole when every word stands at the first word's offset from
- * its partner within WHOLE. A partner is taken at any distance only where the words occur once on the line's page and
- * once on the partner's (unique); where they occur more than once on either, a partner is taken only within NEAR of
+ * its partner within WHOLE. A partner is taken at any distance only where the words occur once on the line's page, in
+ * ours and at most once in arXiv's, and once on the partner's (unique); where they occur more than once, a partner is
+ * taken only within NEAR of
  * where the line's neighbours put it — the offset of the nearest line before it and the nearest after it on its page
  * carried to a unique partner, or no offset where neither is — the nearest to that place (an equation's lone symbol,
  * a running head, a short line a page repeats: 2608.04322's one-symbol lines of a display found the same symbol 8.3 pt
@@ -155,7 +156,8 @@ export function carrierOf(marked, arxiv) {
     const options = new Map(), unique = new Map()
     // the same words: every partner on the line's page and the two beside it, unique or not
     for (const l of ls) {
-      const list = [], mine = counts.get(`${l.page}\u0000${l.sig}`)
+      // the words' count on its page, in ours and in arXiv's: more than one on either, and no partner is unique
+      const list = [], mine = counts.get(`${l.page}\u0000${l.sig}`), here = bySig.get(`${l.page}\u0000${l.sig}`)?.length ?? 0
       for (const p of [l.page, l.page + 1, l.page - 1]) {
         const cs = bySig.get(`${p}\u0000${l.sig}`)
         if (!cs) continue
@@ -164,7 +166,7 @@ export function carrierOf(marked, arxiv) {
           if (c.tokens.length !== l.tokens.length) continue
           const dx = X(arxiv, c, 0) - X(marked, l, 0), dy = c.y - l.y
           const whole = l.tokens.every((k, j) => { const t = marked[k], u = arxiv[c.tokens[j]]; return Math.abs(u.x - t.x - dx) <= WHOLE && Math.abs(u.y - t.y - dy) <= WHOLE })
-          list.push({ rank: [Math.abs(c.page - l.page), whole ? 0 : 1, Math.hypot(dx, dy)], to: c, page: c.page, dx, dy, whole, pairs: null, fuzzy: false, unique: mine === 1 && cs.length === 1 })
+          list.push({ rank: [Math.abs(c.page - l.page), whole ? 0 : 1, Math.hypot(dx, dy)], to: c, page: c.page, dx, dy, whole, pairs: null, fuzzy: false, unique: mine === 1 && cs.length === 1 && here <= 1 })
         }
       }
       options.set(l, list)
@@ -172,14 +174,17 @@ export function carrierOf(marked, arxiv) {
       for (const o of list) if (o.unique && (!best || before(o.rank, best.rank))) best = o
       if (best) unique.set(l, best)
     }
+    // each line's nearest neighbours before and after it carried to a unique partner, in two passes
+    const prev = new Array(ls.length).fill(null), next = new Array(ls.length).fill(null)
+    for (let i = 1; i < ls.length; i++) prev[i] = unique.get(ls[i - 1]) ?? prev[i - 1]
+    for (let i = ls.length - 2; i >= 0; i--) next[i] = unique.get(ls[i + 1]) ?? next[i + 1]
     const found = new Map()
     for (let i = 0; i < ls.length; i++) {
       const l = ls[i]
+      if (spend(1)) return null
       let best = unique.get(l) ?? null
       // words that occur more than once: within NEAR of where the neighbours carried to a unique partner put the line
-      const refs = []
-      for (let j = i - 1; j >= 0; j--) if (unique.has(ls[j])) { refs.push(unique.get(ls[j])); break }
-      for (let j = i + 1; j < ls.length; j++) if (unique.has(ls[j])) { refs.push(unique.get(ls[j])); break }
+      const refs = [prev[i], next[i]].filter(r => r !== null)
       if (!refs.length) refs.push({ page: l.page, dx: 0, dy: 0 })
       let near = null
       for (const o of options.get(l)) {
@@ -196,7 +201,8 @@ export function carrierOf(marked, arxiv) {
           const cs = byPage.get(p) ?? []
           if (spend(cs.length)) return null
           for (const c of cs) {
-            if (c.page === l.page && Math.abs(c.y - l.y) > WINDOW) continue
+            // a line of the same words was the first step's to take or leave: a partner the words' repetition refused
+            if (c.sig === l.sig || (c.page === l.page && Math.abs(c.y - l.y) > WINDOW)) continue
             const m = c.tokens.length
             // the run holds at most the shorter line's words: a pair it cannot reach is not looked at
             if (m > FUZZY_WORDS || Math.min(n, m) < FUZZY * Math.max(n, m)) continue
