@@ -2,9 +2,9 @@
 // reader): the sync follows nothing until both sides are anchored (syncFrom, alignTop and arm go by the anchors), so a
 // scroll whose every step and whose rest came before that had nothing to level the pair by, and the pair stood apart
 // until the next scroll's rest. Once located, the pair is levelled by the side read, as at a rest (session.mjs
-// levelLocated), by the side of the reader's last input (a wheel, a touch, a key, a press; never a hover) that scrolled.
-// The reader in the extension, live, in bilingual; rows 1–3 with the follower on the compositor and by script, the rest
-// on the compositor, where a hover makes a side the driver:
+// levelLocated), by the side of the reader's last input (a wheel, a touch, a key, a press, the page pill, the contents;
+// never a hover) that scrolled. The reader in the extension, live, in bilingual; rows 1–3 and 8 with the follower on the
+// compositor and by script, the rest on the compositor, where a hover makes a side the driver:
 //   1. a first visit, the source held back 3 s (the right shows the original until the source is read and both sides
 //      are anchored by it): the right read in the frame after its first page is drawn — a wheel event, which makes it
 //      the side read, then 0.3 of its range —, then the left so;
@@ -27,8 +27,11 @@
 //      lastLocated), and nothing moves once the pair is located;
 //   7. a guard: this machine's copy located, the right read, the pointer then over the left, then a swap (compositor).
 //      The website's swap levelled the incoming right by the driver, and a hover threw the right back (3,745 to 12 px);
-//      this one keeps the right's own place (replaceRight: placeOf, scrollFor), which the row holds.
-// Rows 1–5 pass when the side was read before the pair was located, and once located and still for 700 ms: the side
+//      this one keeps the right's own place (replaceRight: placeOf, scrollFor), which the row holds;
+//   8. a first visit, the source late, a side's page pill, which scrolls its pane with no event on the pane (goToPage):
+//      alone, its page typed then Enter, and after a wheel on the other side, its next button pressed three times; on
+//      either side, by script and on the compositor. The side the pill moved is the side read.
+// Rows 1–5 and 8 pass when the side was read before the pair was located, and once located and still for 700 ms: the side
 // read stands where the reader put it, and the pair is within 2 px of level by it (the sync's own tolerance,
 // level-on-screen.mjs). No TeX page is needed (a first visit stops at its compile, after its row is read), and nothing
 // leaves this machine: every request off it is stopped, and named at the end.
@@ -128,14 +131,14 @@ async function still(page) {
 /** a visit, `side` read early in the frame after the right's first page, or by the wheel (`wheel`, after `before` read
  *  so), the pointer then moved over `pointerTo`, then a zoom (`zoom`): once the pair is located and both sides still for 700 ms, where the side
  *  read stands against where the reader put it (after the zoom), and how far the pair is from level by it */
-async function visit(side, compositor, { wheel = false, pointerTo = null, zoom = false, before = null, first = 'rightFirstPage', slower = 0 } = {}) {
+async function visit(side, compositor, { wheel = false, pill = null, pointerTo = null, zoom = false, before = null, first = 'rightFirstPage', slower = 0 } = {}) {
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', e => errors.push(e.message))
   if (slower) await (await context.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: slower })
-  await page.addInitScript(readEarly, [side, wheel ? null : SHARE, first, wheel ? null : pointerTo])
+  await page.addInitScript(readEarly, [side, wheel || pill ? null : SHARE, first, wheel || pill ? null : pointerTo])
   await page.goto(urlOf(compositor))
-  if (wheel) {
+  if (wheel || pill) {
     await page.waitForFunction(() => window.__early?.at != null, null, { timeout: 60_000, polling: 'raf' })
     if (before) {
       const b = await page.locator(`#${before}`).boundingBox()
@@ -143,12 +146,23 @@ async function visit(side, compositor, { wheel = false, pointerTo = null, zoom =
       for (let i = 0; i < 3; i++) { await page.mouse.wheel(0, 400); await sleep(60) }
       await sleep(400)
     }
-    const box = await page.locator(`#${side}`).boundingBox()
-    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5)
-    for (let i = 0; i < 5; i++) { await page.mouse.wheel(0, 400); await sleep(60) }
+    if (pill === 'typed') {
+      // the side's page pill, by the keyboard: its page typed, then Enter (the pill shows while focused)
+      const field = page.locator(`section.pane[data-side="${side}"] .pill input`)
+      await field.fill('5')
+      await field.press('Enter')
+    } else if (pill === 'next') {
+      // the side's page pill, by the pointer: focused, which shows it, then its next button pressed three times
+      await page.locator(`section.pane[data-side="${side}"] .pill input`).focus()
+      for (let i = 0; i < 3; i++) { await page.locator(`section.pane[data-side="${side}"] .pill button`).nth(1).click(); await sleep(150) }
+    } else {
+      const box = await page.locator(`#${side}`).boundingBox()
+      await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5)
+      for (let i = 0; i < 5; i++) { await page.mouse.wheel(0, 400); await sleep(60) }
+    }
     // the scroll and its rest over (scrollend, then 150 ms), before the pair is located
     await sleep(400)
-    if (pointerTo && wheel) {
+    if (pointerTo) {
       const to = await page.locator(`#${pointerTo}`).boundingBox()
       for (let i = 1; i <= 4; i++) { await page.mouse.move(to.x + to.width * 0.2 * i, to.y + to.height * 0.5); await sleep(20) }
     }
@@ -193,10 +207,25 @@ if (wanted(5)) {
   row(passes(e) && e.top > 0, '5. a first visit, the source late, the left then the right read by the wheel, the pointer then over the left, then a zoom, before the pair is located (compositor)', show(e))
 }
 
+// 8: the page pill, which scrolls its pane with no event on the pane: a side's pill alone (its page typed, then Enter),
+// and a side's pill (its next button) after a wheel on the other side, all before the pair is located; the side the
+// pill moved is the side read
+if (wanted(8)) {
+  for (const [compositor, by] of followers) {
+    for (const side of ['left', 'right']) {
+      const other = side === 'left' ? 'right' : 'left'
+      const alone = await visit(side, compositor, { pill: 'typed' })
+      row(passes(alone) && alone.top > 0, `8. a first visit, the source late, the ${side}'s page pill alone, a page typed (${by})`, show(alone))
+      const after = await visit(side, compositor, { pill: 'next', before: other })
+      row(passes(after) && after.top > 0, `8. a first visit, the source late, a wheel on the ${other}, then the ${side}'s page pill, its next button (${by})`, show(after))
+    }
+  }
+}
+
 // the copy row 3 opens: the demo's translation, its units with their translations as pieces (cache.mjs copyTexts makes
 // the right's texts from them), every unit kept (current under any service), written from a first visit's page, which
 // has the paper's cache key
-const writer = [3, 4, 5, 6].some(wanted) ? await context.newPage() : null
+const writer = [3, 4, 6, 7].some(wanted) ? await context.newPage() : null
 await writer?.goto(urlOf(true))
 await writer?.waitForFunction(() => window.__reader?.ready && window.__reader.debug, null, { timeout: 60_000, polling: 50 })
 const copied = writer && await writer.evaluate(async ({ paper, demo, pipeline, typesetting }) => {

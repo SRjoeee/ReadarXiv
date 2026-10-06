@@ -961,8 +961,8 @@ const follow = { pos: null, lastD: null, rest: 0, spring: 0, moving: false }
 /** the side the reader scrolled while the pair was not located, 'left' or 'right' (syncFrom notes it), or null: the pair
  *  is levelled by it once it is (levelLocated), and it is gone then */
 let readEarly = null
-/** the side of the reader's last input, 'left' or 'right' (attach, lead): a wheel, a touch, a key or a press on a pane, or
- *  a press on its scroll indicator; never a hover. Only a scroll of that side is the reader's: PDF.js scrolls a side by
+/** the side of the reader's last input, 'left' or 'right' (attach, lead, goToPage, goToUnit): a wheel, a touch, a key or a
+ *  press on a pane, a press on its scroll indicator, its page pill, or an entry of the contents; never a hover. Only a scroll of that side is the reader's: PDF.js scrolls a side by
  *  itself (its pages laid out a margin down, 0 to 14 px; a zoom or a resize keeping its place), and on the compositor a
  *  hover makes a side the driver */
 let inputOn = null
@@ -1671,7 +1671,13 @@ export function pinch(which, factor, origin) {
   }
 }
 /** a side at a page */
-export function goToPage(which, page) { const s = which === 'left' ? left : right; if (s.doc) s.viewer.currentPageNumber = page }
+export function goToPage(which, page) {
+  // the reader's input on that side, which scrolls its pane with no event on it (inputOn: its page pill's buttons and its
+  // typed page); before the pair is located, the side read (readEarly)
+  const s = which === 'left' ? left : right
+  inputOn = nameOf(s)
+  if (s.doc) s.viewer.currentPageNumber = page
+}
 /** a side's PDF as it is shown, for the download (the reader's design, §6.1): the original, or the translation on screen */
 export async function pdfBytes(which) {
   const side = which === 'original' ? left : right
@@ -1888,6 +1894,8 @@ export function goToUnit(id) {
   invalidate()
   const top = unitDocTop(lead, id)
   if (top == null) return
+  // the reader's input on the side read, with no event on its pane (inputOn), as goToPage's
+  inputOn = nameOf(lead)
   take(lead)
   lead.container.scrollTop = top - 28
   const second = other(lead)
