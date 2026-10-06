@@ -981,3 +981,38 @@ describe('makeLayout, the maker round (Fix 3): the lines a unit\'s source does n
     expect(rowsOf(file, 0, 'lines')).toHaveLength(16)
   })
 })
+
+describe('makeLayout, an inline placeholder\'s line by its own glyphs\' baselines (the 6b review\'s I1)', () => {
+  it('a radical whose origin TeX raises to the line above sits on its own line, not LOWERED (1706 31.8)', async () => {
+    // \sqrt{d_k}: the radical's origin at its bar, on the line above's baseline; d on the line; k below it
+    const runs: Run[] = [{ s: 'words of the line above', x: 72, y: 712 }, { s: 'see', x: 72, y: 700 }, { s: '\u221a', x: 92, y: 712 }, { s: 'd', x: 97, y: 700 }, { s: 'k', x: 102, y: 698, size: 7 }, { s: 'and more words', x: 110, y: 700 }]
+    const { file } = await made({
+      // the opening point before the radical in the stream, as TeX's content stream has it
+      pages: [{ runs, points: { 'p0.1a': [2, 0] } }],
+      marks: [['0s', 1, 72, 712], ['0e', 1, endOf(runs[5] as Run), 700], ['p0.1a', 1, 92, 700], ['p0.1b', 1, 106, 700]],
+      units: [unit('para', [text('words of the line above see '), ph('$\\sqrt{d_k}$'), text(' and more words')])],
+    })
+    const seg = phOf(file, 0, 1)
+    expect(seg[6]).toBe(700)
+    expect(seg[3] & PH_FLAG.LOWERED).toBe(0)
+  })
+  it('a script-led formula sits on the line its largest glyphs do, not by its scripts\' baseline (2307 162.7)', async () => {
+    // A^{(i)}: three of its four glyphs are its superscript's, 6 pt up, nearer the line above (11 pt up) than its own
+    const runs: Run[] = [{ s: 'words of the line above', x: 72, y: 711 }, { s: 'the matrix', x: 72, y: 700 }, { s: 'A', x: 125, y: 700 }, { s: '(i)', x: 130, y: 706, size: 7 }, { s: 'is upper', x: 145, y: 700 }]
+    const { file } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 711], ['0e', 1, endOf(runs[4] as Run), 700], ['p0.1a', 1, 125, 700], ['p0.1b', 1, 140.5, 700]],
+      units: [unit('para', [text('words of the line above the matrix '), ph('$A^{(i)}$'), text(' is upper')])],
+    })
+    expect(phOf(file, 0, 1)[6]).toBe(700)
+  })
+  it('a part on a line that is not the unit\'s is LOST, never given the line below (2307 128.5)', async () => {
+    const runs: Run[] = [{ s: 'first line of the unit', x: 72, y: 700 }, { s: 'second line of it', x: 72, y: 688 }, { s: 'xyz', x: 72, y: 664 }]
+    const { file } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[1] as Run), 688], ['p0.1a', 1, 72, 664], ['p0.1b', 1, 87, 664]],
+      units: [unit('para', [text('first line of the unit '), ph('$xyz$'), text(' second line of it')])],
+    })
+    expect(phOf(file, 0, 1)).toEqual([0, 1, 0, PH_FLAG.LOST])
+  })
+})

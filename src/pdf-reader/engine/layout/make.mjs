@@ -61,6 +61,10 @@ const SHIFT = 0.2
 const CENTRE = 2, SHORT = 0.9
 /** segments a placeholder may have: an inline one, a display */
 const SEGS_INLINE = 4, SEGS_DISPLAY = 64
+/** a part of an inline placeholder's line (rowOfPart): its main glyphs those within PART_MAIN of its largest size;
+ *  one sits on a line within PART_ON of the line's size of its baseline; with none on one, the line within PART_NEAR of
+ *  their middle baseline */
+const PART_MAIN = 0.85, PART_ON = 0.2, PART_NEAR = 0.6
 /** an inline placeholder's glyphs in stream order are parts, one a line: a new part where arXiv's next glyph stands on
  *  another page, back left by BREAK_X and down by BREAK_Y (a line's end), up by more than BREAK_UP of its size or
  *  BREAK_FAR across (the next column); each part on the unit's line its own baseline stands on, the nearest within
@@ -544,6 +548,46 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       })
       return best
     }
+    /**
+     * The unit's line a part of an inline placeholder's ink sits on, by its own glyphs' baselines (the 6b review's I1):
+     * the line most of its largest glyphs (within PART_MAIN of its largest size: not its scripts, which may stand on a
+     * script row, nor a fraction's parts) sit on, within PART_ON of its size; on a tie, the line its carried mark (`mark`:
+     * the piece's opening mark for its first part, its closing one for its last) stands on. Where none of them sits on a
+     * line (a fraction, a raised sign alone), the mark's line, else the nearest line, within PART_NEAR of the line's
+     * size of their middle baseline; -1 for none: a part on no line of the unit's (2307 128.5's line is not the unit's,
+     * which the old nearest-in-2.5-em took the line 18 pt below for). A radical's origin is raised to its bar (1706
+     * 31.8), a script-heavy formula's median glyph is a script (2307 162.7): neither decides
+     */
+    const rowOfPart = (part, mark) => {
+      const P = ink[part.page]
+      let x0 = Infinity, x1 = -Infinity, big = 0
+      for (const g of part.gs) { x0 = Math.min(x0, P.x0[g]); x1 = Math.max(x1, P.x1[g]); big = Math.max(big, P.size[g]) }
+      const mains = part.gs.filter(g => P.size[g] >= PART_MAIN * big)
+      const col = columnOf(part.page, x0, x1)
+      const cands = []
+      rows.forEach((r, j) => {
+        if (r.page !== part.page) return
+        const c = columnOf(r.page, r.x0, r.x1)
+        if (c === col || c === 2 || col === 2) cands.push(j)
+      })
+      if (!cands.length) return -1
+      const marked = j => !!mark && mark.page === part.page && Math.abs(mark.y - rows[j].base) < 0.5 * rows[j].size
+      let best = -1, most = 0
+      for (const j of cands) {
+        const r = rows[j]
+        let n = 0
+        for (const g of mains) if (Math.abs(P.y[g] - r.base) <= PART_ON * r.size) n++
+        if (n > most || (n === most && n > 0 && marked(j) && !marked(best))) { best = j; most = n }
+      }
+      if (best >= 0) return best
+      const mid = median(mains.map(g => P.y[g]))
+      const near = j => Math.abs(rows[j].base - mid) <= PART_NEAR * rows[j].size
+      const atMark = cands.find(j => marked(j) && near(j))
+      if (atMark !== undefined) return atMark
+      let d = Infinity
+      for (const j of cands) { const e = Math.abs(rows[j].base - mid); if (near(j) && e < d) { d = e; best = j } }
+      return best
+    }
     for (let k = 0; k < u.pieces.length; k++) {
       // every visible piece has its row, found, LOST or EMPTY: no row is a piece that draws nothing (an invisible one, a
       // group's open or close), as the layer reads the file
@@ -594,12 +638,9 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
         }
         const byRow = new Map(), partRow = []
         let off = false
-        for (const part of parts) {
-          const P = ink[part.page]
-          let x0 = Infinity, x1 = -Infinity
-          for (const g of part.gs) { x0 = Math.min(x0, P.x0[g]); x1 = Math.max(x1, P.x1[g]) }
-          const base = baselineOf(P, bodyOf(P, part.gs, median(part.gs.map(g => P.size[g]))), P.y[part.gs[0]])
-          const j = rowFor(part.page, x0, x1, base)
+        const openAt = markOf(name), closeAt = markOf(`${prefix}${i}.${k}b`)
+        for (const [q, part] of parts.entries()) {
+          const j = rowOfPart(part, q === 0 ? openAt : q === parts.length - 1 ? closeAt : null)
           if (j < 0) { off = true; break }
           partRow.push(j)
           ;(byRow.get(j) ?? byRow.set(j, { gs: [], boxes: [] }).get(j)).gs.push(...part.gs)
