@@ -186,7 +186,8 @@ export function breakLines(tokens, slots, f, state, o) {
 
   /** a group longer than an empty line: a first word hyphenated where its language allows, else what fits of the group, the
    *  token that does not fit cut by characters (a word of running text with a hyphen drawn, the rest without), and the rest
-   *  left for the next line; a token alone that cannot be cut is placed and overflows */
+   *  left for the next line. Only text is cut: a placeholder (a crop, or the page's own text) is drawn whole, and one alone
+   *  wider than its line is placed and overflows, as a token that cannot be cut does */
   const cut = (group, b) => {
     const cap = room()
     let x = 0, q = 0
@@ -195,9 +196,9 @@ export function breakLines(tokens, slots, f, state, o) {
     let piece = null, suffix = ''
     if (q < group.length) {
       const t = group[q], space = cap + EPS - x - b.items[q].asp
-      let k = t.word ? prefixFitting(t, space, '-') : 0
+      let k = t.kind === 'text' && t.word ? prefixFitting(t, space, '-') : 0
       if (k > 0) suffix = '-'
-      else k = prefixFitting(t, space, '')
+      else if (t.kind === 'text') k = prefixFitting(t, space, '')
       if (k > 0) piece = k
       else if (q === 0) q = 1
     }
