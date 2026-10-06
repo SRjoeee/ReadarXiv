@@ -1110,10 +1110,13 @@ function storedBodies(calls, { ctx, files, units, own }) {
     if ((all.match(named)?.length ?? 0) - (all.match(defined)?.length ?? 0) !== call.n) continue
     const text = files.get(file) ?? own.find(x => x.file === file)?.text
     if (text === undefined || units.some(u => u.file === file && u.start < end && u.end > start)) continue
-    if (kind !== 'author' && (uncommented(text.slice(start, end)).replace(/\\[A-Za-z@]+\*?/g, ' ').match(/\p{L}{2,}/gu)?.length ?? 0) < 4) continue
     const had = files.has(file), before = units.length, b = new Builder(file, units, text, ctx.bodies)
     if (kind === 'author') frontBlock(text, start, end, b, ctx)
     else { b.kind = kind; walk(text, start, end, b, ctx); b.flush() }
+    // the words its units hold, as they would be sent: fewer than four, and it is no prose (\contentsname's
+    // "Contents", set in a heading)
+    const words = units.slice(before).flatMap(u => u.pieces.filter(p => p.t === 'text').map(p => p.s)).join(' ').match(/\p{L}{2,}/gu)?.length ?? 0
+    if (kind !== 'author' && words < 4) { units.length = before; continue }
     for (const u of units.slice(before)) u.stored = true
     if (units.length > before && !had) files.set(file, text)
   }
