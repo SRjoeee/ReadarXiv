@@ -63,7 +63,7 @@ function keptOf(layout, p) {
 
 window.gate = {
   /** a fixture opened: v0, the made output's geometry, the units file asked for and arXiv's PDF */
-  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces }) {
+  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces, tex }) {
     let V
     try { V = await import('/engine/layer-proto/run.mjs') } catch (e) { return { ready: false, why: `layer-proto/run.mjs: ${String(e?.message ?? e).slice(0, 200)}` } }
     const base = `/fixtures/${name}/`
@@ -72,7 +72,14 @@ window.gate = {
       ;[geometry, unitsFile, layout, fixtureUnits, data] = await Promise.all([json(`${base}geometry.json`), json(`${base}${which === 'p7' ? 'units-p7.json' : 'record.json'}`), json(`${base}layout.json`), json(`${base}units.json`), bytes(`${base}arxiv.pdf`)])
     } catch (e) { return { ready: false, why: String(e?.message ?? e).slice(0, 200) } }
     const doc = await pdfjs.getDocument({ data, cMapUrl: '/pdfjs/cmaps/', standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/', ...V.PDF_OPTIONS }).promise
-    const run = await V.openProto({ doc, geometry, units: unitsFile.units, target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json` })
+    // the hybrid (--proto-tex): the fixture's layout file read by the engine's own reader, and the units file's pieces by
+    // unit, beside v0's own inputs
+    let texIn = null
+    if (tex) {
+      const F = await import('/engine/layout/file.mjs')
+      texIn = { ...tex, index: F.indexLayout(F.parseLayout(await bytes(`${base}layout.json`))), pieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])) }
+    }
+    const run = await V.openProto({ doc, geometry, units: unitsFile.units, target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(texIn ? { tex: texIn } : {}), faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json` })
     S = { V, run, doc, geometry, layout, ref, name, target, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: new Map(run.placed.map(p => [p.id, p])), checks: [], place: place ?? null, dump: dump ? [] : null }
     return { ready: true, pages: doc.numPages, units: unitsFile.units.length, located: geometry.left.units.length, even: run.P.even ?? null, family: null }
   },
@@ -145,7 +152,9 @@ window.gate = {
       let h = 0x811c9dc5
       for (let i = 0; i < C.length; i++) { h ^= C[i]; h = Math.imul(h, 0x01000193) >>> 0 }
       const svg = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(row.svg.innerHTML)))].map(b => b.toString(16).padStart(2, '0')).join('')
-      S.dump.push({ p, W, H, copy: h.toString(16), svg })
+      // (and what the checker found on the page, with its reasons)
+      const why = list => list.filter(on).map(e => ({ unit: e.unit, k: e.k, mode: e.mode, why: e.why }))
+      S.dump.push({ p, W, H, copy: h.toString(16), svg, check: { missing: why(ck.b.list.missing), duplicated: why(ck.b.list.duplicated), brackets: why(ck.b.list.brackets) } })
     }
     S.cur = { p, page, W, H, view, O, C, units, kept: keptOf(S.layout, p), items, drawnText, recs }
     return out
@@ -266,7 +275,9 @@ window.gate = {
   /** what --dump writes: the lay order, the records (no timings), the audit, and each page's digests */
   dump() {
     const { run } = S
-    return { order: run.order, stats: run.stats.map(({ ms, ...r }) => r), audit: run.audit, pages: S.dump ?? [] }
+    // (each laid unit's resolutions, for a look at what a source made of it)
+    const units = run.placed.filter(p => p.prep).map(p => ({ id: p.id, source: p.tex ? 'tex' : 'v0', rects: p.rects, label: p.prep.label?.text, keep: p.prep.keep, res: [...p.prep.values()].map(r => ({ k: r.k, mode: r.mode, src: r.src?.slice(0, 60), text: r.text, crop: r.crop, baseline: r.baseline, gap: r.gap?.text, chars: r.gap?.chars.filter(c => !c.sep && !c.space).map(c => [c.ch, Math.round(c.x0 * 100) / 100, Math.round(c.yb * 100) / 100, Math.round(c.size * 100) / 100]) })) }))
+    return { order: run.order, stats: run.stats.map(({ ms, ...r }) => r), audit: run.audit, pages: (S.dump ?? []).map(({ check, ...d }) => d), checks: (S.dump ?? []).map(d => ({ p: d.p, ...d.check })), units }
   },
 
   /** the fixture's laid units, counted: v0 lays every unit it places (past its floor it clips), by its fit's knob */
@@ -286,6 +297,8 @@ window.gate = {
       medianScale: scales.length ? scales[Math.floor(scales.length / 2)] : null,
       page1Ms: run.pageMs[1] ?? null, slowestUnitMs: ms.length ? Math.max(...ms) : null,
       faces: Object.values(run.designs), failedFaces: [], errors: 0, order: run.order.length, ownChecker: checker,
+      // the hybrid: the units each source's geometry draws, and why the others are v0's
+      ...(run.sources?.tex.length || run.sources?.v0.length ? { sources: { tex: run.sources.tex.length, v0: run.sources.v0.length, texOnly: run.sources.texOnly ?? 0, why: run.sources.why, texIds: run.sources.tex } } : {}),
     }
   },
 }
