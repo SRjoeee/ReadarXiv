@@ -131,7 +131,7 @@ describe('pageInk', () => {
   })
 
   it('a vertical font\'s glyphs are passed over', () => {
-    expect(ink(text('v1', 10, [1, 0, 0, 1, 72, 700], show(g('一', 1000), g('二', 1000)))).glyphs).toEqual([])
+    expect(ink(text('v1', 10, [1, 0, 0, 1, 72, 700], show(g('\u4e00', 1000), g('\u4e8c', 1000)))).glyphs).toEqual([])
   })
 
   it('an invisible glyph is no ink; a font not found shows nothing', () => {

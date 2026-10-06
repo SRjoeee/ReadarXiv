@@ -11,6 +11,8 @@ export interface Carrier {
   /** a position of the marked original on arXiv's PDF, or null where its line was not carried */
   carry(page: number, x: number, y: number): { page: number; x: number; y: number; whole: boolean } | null
   readonly lines: { total: number; same: number; moved: number; respaced: number; fuzzy: number }
+  /** the marked original's pages that cost more work than a page or the paper may: none of their lines is carried */
+  readonly over: readonly number[]
 }
 export declare function carrierOf(marked: readonly DocToken[], arxiv: readonly DocToken[]): Carrier
 /** the marks file's tokens as DocTokens (page, x, y, w, h, t) */

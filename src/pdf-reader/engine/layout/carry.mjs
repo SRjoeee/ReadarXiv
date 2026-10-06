@@ -30,6 +30,17 @@ const FUZZY = 0.8, FUZZY_PAIRS = 2
 const WINDOW = 40
 /** a line of more words than this is matched by its signature alone: the run between two lines costs their product */
 const FUZZY_WORDS = 1000
+/** a line whose words occur more than once on its page, in either PDF, is carried only to a partner within this of where
+ *  its neighbours put it, PDF units: of 3,540 such carries on the four researched papers, none that the lines around it
+ *  in reading order contradict lies within 12 of that place, and a limit of 40 instead takes 2 more they confirm */
+const NEAR = 5
+/** the work a marked page may cost, and a paper: the words compared with a partner's, the lines looked at and the cells
+ *  of the runs between two lines. On the four researched papers the heaviest page costs 88,874 and the heaviest paper
+ *  666,069 (2307.16209, 147 pages); a page past PAGE_WORK, or once the paper is past PAPER_WORK, carries none of its lines
+ *  (8,000 lines of one word alike on a page cost 64 million) */
+const PAGE_WORK = 2_000_000, PAPER_WORK = 20_000_000
+/** the lines near a position looked at, at most */
+const SCAN = 64
 /** a marks file's token box, as tokenizeDocument takes a face that gives no metrics */
 const ASCENT = 0.75, DESCENT = -0.22
 
@@ -38,11 +49,12 @@ const usable = t => !!t && typeof t.t === 'string' && t.t.length > 0 && Number.i
 
 /**
  * Tokens → lines, in the tokens' order: a token joins the line before it when on the same page, within CLUSTER of the
- * smaller height of the line's first token's baseline, and not left of the line's start by more than LEFT. A token with
- * no text (the rest of a word given in parts) or with a number that is not finite is no word of a line. A line's
- * baseline is the one most of its characters share (to a hundredth), its height its median one, its extent all of its
- * tokens'; `tokens` and `sig` are its words on that baseline (within SIG_BASE of their height, of at least SIG_FLOOR of
- * the median height; all its words when none is), `tokens` as indices into the given list
+ * smaller height of the line's first token's baseline, and not left of the line's start by more than LEFT; a line of one
+ * token smaller than SIG_FLOOR of the next (a footnote's number, raised) takes the next within CLUSTER of its height, and
+ * its baseline. A token with no text (the rest of a word given in parts) or with a number that is not finite is no word
+ * of a line. A line's baseline is the one most of its characters share (to a hundredth), its height its median one, its
+ * extent all of its tokens'; `tokens` and `sig` are its words on that baseline (within SIG_BASE of their height, of at
+ * least SIG_FLOOR of the median height; all its words when none is), `tokens` as indices into the given list
  */
 export function linesOf(tokens) {
   const groups = []
@@ -50,7 +62,10 @@ export function linesOf(tokens) {
   for (let k = 0; k < tokens.length; k++) {
     const t = tokens[k]
     if (!usable(t)) continue
-    if (!cur || t.page !== cur.page || Math.abs(t.y - cur.y0) > CLUSTER * Math.min(t.h, cur.h0) || t.x + t.w < cur.x0 - LEFT) {
+    // a line opened by a smaller token (a footnote's number, raised) is a line of the next one's baseline, within half
+    // of that one's height
+    const opened = cur && cur.all.length === 1 && t.page === cur.page && SIG_FLOOR * t.h > cur.h0 && Math.abs(t.y - cur.y0) <= CLUSTER * t.h && t.x >= cur.x0
+    if (opened) { cur.y0 = t.y; cur.h0 = t.h } else if (!cur || t.page !== cur.page || Math.abs(t.y - cur.y0) > CLUSTER * Math.min(t.h, cur.h0) || t.x + t.w < cur.x0 - LEFT) {
       cur = { page: t.page, y0: t.y, h0: t.h, x0: t.x, x1: t.x + t.w, all: [] }
       groups.push(cur)
     }
@@ -87,62 +102,120 @@ function commonRun(a, b, A, B) {
  * The marked original's lines matched to arXiv's (a Carrier). A marked line is matched to arXiv's line of the same
  * signature and word count on its page or the next or the previous: the nearest by page, then one that moved whole
  * before one that did not, then the nearest by distance; whole when every word stands at the first word's offset from
- * its partner within WHOLE. Else to the nearest arXiv line (by page, then by distance less the words matched) within
- * WINDOW of its baseline on its page, or anywhere on the next or the previous page, whose longest common run of words
- * holds FUZZY of the longer line's and at least FUZZY_PAIRS. `lines`: every marked line (`total`), and those carried,
- * each counted once: at the same place (`same`), moved whole (`moved`), the same words at other spaces (`respaced`),
- * matched by most of their words (`fuzzy`)
+ * its partner within WHOLE. A partner is taken at any distance only where the words occur once on the line's page and
+ * once on the partner's (unique); where they occur more than once on either, a partner is taken only within NEAR of
+ * where the line's neighbours put it — the offset of the nearest line before it and the nearest after it on its page
+ * carried to a unique partner, or no offset where neither is — the nearest to that place (an equation's lone symbol,
+ * a running head, a short line a page repeats: 2608.04322's one-symbol lines of a display found the same symbol 8.3 pt
+ * away; 2608.08350's line of five words an identical one 575 pt away). Else to the nearest arXiv line (by page, then by
+ * distance less the words matched) within WINDOW of its baseline on its page, or anywhere on the next or the previous
+ * page, whose longest common run of words holds FUZZY of the longer line's and at least FUZZY_PAIRS. The work a marked
+ * page and a paper cost is bounded (PAGE_WORK, PAPER_WORK): a page past it carries none of its lines and is listed in
+ * `over`, which the maker takes as a page with no ink. `lines`: every marked line (`total`), and those carried, each
+ * counted once: at the same place (`same`), moved whole (`moved`), the same words at other spaces (`respaced`), matched
+ * by most of their words (`fuzzy`)
  */
 export function carrierOf(marked, arxiv) {
   const ours = linesOf(marked), theirs = linesOf(arxiv)
-  const bySig = new Map(), byPage = new Map()
+  const bySig = new Map(), byPage = new Map(), counts = new Map()
   for (const c of theirs) {
     const key = `${c.page}\u0000${c.sig}`
     ;(bySig.get(key) ?? bySig.set(key, []).get(key)).push(c)
     ;(byPage.get(c.page) ?? byPage.set(c.page, []).get(c.page)).push(c)
   }
-  const X = (ts, l, j) => ts[l.tokens[j]].x
-  const match = new Map()
-  const lines = { total: ours.length, same: 0, moved: 0, respaced: 0, fuzzy: 0 }
+  const oursOn = new Map()
   for (const l of ours) {
-    let best = null
-    for (const p of [l.page, l.page + 1, l.page - 1]) {
-      for (const c of bySig.get(`${p}\u0000${l.sig}`) ?? []) {
-        if (c.tokens.length !== l.tokens.length) continue
-        const dx = X(arxiv, c, 0) - X(marked, l, 0), dy = c.y - l.y
-        const whole = l.tokens.every((k, j) => { const t = marked[k], u = arxiv[c.tokens[j]]; return Math.abs(u.x - t.x - dx) <= WHOLE && Math.abs(u.y - t.y - dy) <= WHOLE })
-        const rank = [Math.abs(c.page - l.page), whole ? 0 : 1, Math.hypot(dx, dy)]
-        if (!best || before(rank, best.rank)) best = { rank, to: c, page: c.page, dx, dy, whole, pairs: null, fuzzy: false }
-      }
+    const key = `${l.page}\u0000${l.sig}`
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+    ;(oursOn.get(l.page) ?? oursOn.set(l.page, []).get(l.page)).push(l)
+  }
+  const X = (ts, l, j) => ts[l.tokens[j]].x
+  const match = new Map(), over = []
+  const lines = { total: ours.length, same: 0, moved: 0, respaced: 0, fuzzy: 0 }
+  let spent = 0
+  for (const page of [...oursOn.keys()].sort((a, b) => a - b)) {
+    const ls = oursOn.get(page)
+    let work = 0
+    /** whether the page, or the paper, is past its work with n more */
+    const spend = n => (work += n) > PAGE_WORK || spent + work > PAPER_WORK
+    const found = spent > PAPER_WORK ? null : matchPage(ls, spend)
+    spent += work
+    if (found === null) { over.push(page); continue }
+    for (const [l, best] of found) {
+      match.set(l, best)
+      if (best.fuzzy) lines.fuzzy++
+      else if (!best.whole) lines.respaced++
+      else if (best.page === l.page && Math.abs(best.dx) < SAME && Math.abs(best.dy) < SAME) lines.same++
+      else lines.moved++
     }
-    if (!best && l.tokens.length >= FUZZY_PAIRS && l.tokens.length <= FUZZY_WORDS) {
-      const n = l.tokens.length
+  }
+
+  /** one marked page's lines → their partners, or null where the page, or the paper, cost more than its bound */
+  function matchPage(ls, spend) {
+    const options = new Map(), unique = new Map()
+    // the same words: every partner on the line's page and the two beside it, unique or not
+    for (const l of ls) {
+      const list = [], mine = counts.get(`${l.page}\u0000${l.sig}`)
       for (const p of [l.page, l.page + 1, l.page - 1]) {
-        for (const c of byPage.get(p) ?? []) {
-          if (c.page === l.page && Math.abs(c.y - l.y) > WINDOW) continue
-          const m = c.tokens.length
-          // the run holds at most the shorter line's words: a pair it cannot reach is not looked at
-          if (m > FUZZY_WORDS || Math.min(n, m) < FUZZY * Math.max(n, m)) continue
-          const pairs = commonRun(l.tokens, c.tokens, marked, arxiv)
-          if (pairs.length < FUZZY_PAIRS || pairs.length < FUZZY * Math.max(n, m)) continue
-          const rank = [Math.abs(c.page - l.page), Math.abs(c.y - l.y) - pairs.length]
-          if (!best || before(rank, best.rank)) {
-            const [i, j] = pairs[0]
-            best = { rank, to: c, page: c.page, dx: arxiv[c.tokens[j]].x - marked[l.tokens[i]].x, dy: c.y - l.y, whole: false, pairs, fuzzy: true }
+        const cs = bySig.get(`${p}\u0000${l.sig}`)
+        if (!cs) continue
+        if (spend(cs.length * l.tokens.length)) return null
+        for (const c of cs) {
+          if (c.tokens.length !== l.tokens.length) continue
+          const dx = X(arxiv, c, 0) - X(marked, l, 0), dy = c.y - l.y
+          const whole = l.tokens.every((k, j) => { const t = marked[k], u = arxiv[c.tokens[j]]; return Math.abs(u.x - t.x - dx) <= WHOLE && Math.abs(u.y - t.y - dy) <= WHOLE })
+          list.push({ rank: [Math.abs(c.page - l.page), whole ? 0 : 1, Math.hypot(dx, dy)], to: c, page: c.page, dx, dy, whole, pairs: null, fuzzy: false, unique: mine === 1 && cs.length === 1 })
+        }
+      }
+      options.set(l, list)
+      let best = null
+      for (const o of list) if (o.unique && (!best || before(o.rank, best.rank))) best = o
+      if (best) unique.set(l, best)
+    }
+    const found = new Map()
+    for (let i = 0; i < ls.length; i++) {
+      const l = ls[i]
+      let best = unique.get(l) ?? null
+      // words that occur more than once: within NEAR of where the neighbours carried to a unique partner put the line
+      const refs = []
+      for (let j = i - 1; j >= 0; j--) if (unique.has(ls[j])) { refs.push(unique.get(ls[j])); break }
+      for (let j = i + 1; j < ls.length; j++) if (unique.has(ls[j])) { refs.push(unique.get(ls[j])); break }
+      if (!refs.length) refs.push({ page: l.page, dx: 0, dy: 0 })
+      let near = null
+      for (const o of options.get(l)) {
+        if (o.unique) continue
+        for (const r of refs) {
+          const d = r.page === o.page ? Math.hypot(o.dx - r.dx, o.dy - r.dy) : Infinity
+          if (d <= NEAR && (!near || d < near.d)) near = { o, d }
+        }
+      }
+      if (near && (!best || before(near.o.rank, best.rank))) best = near.o
+      if (!best && l.tokens.length >= FUZZY_PAIRS && l.tokens.length <= FUZZY_WORDS) {
+        const n = l.tokens.length
+        for (const p of [l.page, l.page + 1, l.page - 1]) {
+          const cs = byPage.get(p) ?? []
+          if (spend(cs.length)) return null
+          for (const c of cs) {
+            if (c.page === l.page && Math.abs(c.y - l.y) > WINDOW) continue
+            const m = c.tokens.length
+            // the run holds at most the shorter line's words: a pair it cannot reach is not looked at
+            if (m > FUZZY_WORDS || Math.min(n, m) < FUZZY * Math.max(n, m)) continue
+            if (spend(n * m)) return null
+            const pairs = commonRun(l.tokens, c.tokens, marked, arxiv)
+            if (pairs.length < FUZZY_PAIRS || pairs.length < FUZZY * Math.max(n, m)) continue
+            const rank = [Math.abs(c.page - l.page), Math.abs(c.y - l.y) - pairs.length]
+            if (!best || before(rank, best.rank)) {
+              const [a, b] = pairs[0]
+              best = { rank, to: c, page: c.page, dx: arxiv[c.tokens[b]].x - marked[l.tokens[a]].x, dy: c.y - l.y, whole: false, pairs, fuzzy: true }
+            }
           }
         }
       }
+      if (best) found.set(l, best)
     }
-    if (!best) continue
-    match.set(l, best)
-    if (best.fuzzy) lines.fuzzy++
-    else if (!best.whole) lines.respaced++
-    else if (best.page === l.page && Math.abs(best.dx) < SAME && Math.abs(best.dy) < SAME) lines.same++
-    else lines.moved++
+    return found
   }
 
-  const oursOn = new Map()
-  for (const l of ours) (oursOn.get(l.page) ?? oursOn.set(l.page, []).get(l.page)).push(l)
   /** the knots a position on a line not moved whole goes by: each matched word's two edges, ours → theirs, rising */
   const knotsOf = new Map()
   const knots = (l, m) => {
@@ -173,15 +246,33 @@ export function carrierOf(marked, arxiv) {
     }
     return x + (last[1] - last[0])
   }
+  // each page's lines by baseline, for the lines near a position
+  const nearby = new Map()
+  for (const [page, ls] of oursOn) {
+    const by = [...ls].sort((a, b) => a.y - b.y)
+    let h = 0
+    for (const l of by) if (l.h > h) h = l.h
+    nearby.set(page, { ys: Float64Array.from(by, l => l.y), by, h })
+  }
   return {
     lines,
+    over,
     /** the marked line a position stands on — on its page, within half its height of its baseline, from its height
-     *  before its start to twice its height past its end, the nearest by baseline — carried as that line was */
+     *  before its start to twice its height past its end, the nearest by baseline of the SCAN lines nearest it — carried
+     *  as that line was */
     carry(page, x, y) {
       if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+      const n = nearby.get(page)
+      if (!n) return null
+      let lo = 0, hi = n.ys.length
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (n.ys[mid] < y) lo = mid + 1; else hi = mid }
       let on = null
-      for (const l of oursOn.get(page) ?? []) {
-        const d = Math.abs(l.y - y)
+      // outwards from the position's baseline, both ways, while a line's baseline may still be within half a height
+      for (let a = lo - 1, b = lo, seen = 0; seen < SCAN && (a >= 0 || b < n.ys.length); seen++) {
+        const takeB = b < n.ys.length && (a < 0 || n.ys[b] - y <= y - n.ys[a])
+        const i = takeB ? b++ : a--
+        if (Math.abs(n.ys[i] - y) >= 0.5 * n.h) { if (takeB) b = n.ys.length; else a = -1; continue }
+        const l = n.by[i], d = Math.abs(l.y - y)
         if (d < 0.5 * l.h && x >= l.x0 - l.h && x <= l.x1 + 2 * l.h && (!on || d < on.d)) on = { l, d }
       }
       const m = on && match.get(on.l)

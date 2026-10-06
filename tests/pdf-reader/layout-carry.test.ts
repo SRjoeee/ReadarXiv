@@ -41,6 +41,15 @@ describe('linesOf', () => {
     expect(l?.sig).toBe('xx yyyyy z')
   })
 
+  it('a line opened by a raised footnote number holds the words after it', () => {
+    // the number 3.6 above the line and smaller, its words after it; and a subscript later in the line
+    const ts = [tok('8', 1, 101.88, 66.57, 3.6, 7.3), ...words(['we', 'will', 'label', 'the', 'angular', 'parameters'], 1, 106, 62.95), tok('ang', 1, 250, 61.45, 10, 7), ...words(['while', 'for', 'the', 'radial'], 1, 262, 62.95)]
+    const ls = linesOf(ts)
+    expect(ls).toHaveLength(1)
+    expect(ls[0]?.y).toBe(62.95)
+    expect(ls[0]?.sig).toBe('we will label the angular parameters while for the radial')
+  })
+
   it('a line holding no word of the median height keeps all its words in its signature', () => {
     // the baseline most characters share is the small word's; the word of the median height is off it
     const [l] = linesOf([tok('aa', 1, 72, 700, 10, 10), tok('bbbbb', 1, 85, 702, 25, 4)])
@@ -146,11 +155,51 @@ describe('carrierOf', () => {
   it('the partner nearest by page, then by distance', () => {
     const ws = ['results', 'on', 'imagenet']
     const marked = words(ws, 2, 72, 400)
-    const arxiv = [...words(ws, 1, 72, 400), ...words(ws, 2, 72, 300), ...words(ws, 2, 72, 380), ...words(ws, 3, 72, 400)]
-    expect(carrierOf(marked, arxiv).carry(2, 80, 400)).toMatchObject({ page: 2, y: 380 })
+    // twice on its page (within NEAR of where it was: 402), once on the pages beside it
+    const arxiv = [...words(ws, 1, 72, 400), ...words(ws, 2, 72, 300), ...words(ws, 2, 72, 402), ...words(ws, 3, 72, 400)]
+    expect(carrierOf(marked, arxiv).carry(2, 80, 400)).toMatchObject({ page: 2, y: 402 })
     expect(carrierOf(marked, [...words(ws, 1, 72, 400), ...words(ws, 3, 72, 402)]).carry(2, 80, 400)).toMatchObject({ page: 1, y: 400 })
     // two pages away: not looked at
     expect(carrierOf(marked, words(ws, 4, 72, 400)).carry(2, 80, 400)).toBeNull()
+  })
+
+  it('words that occur more than once on a page carry only near where their neighbours put them; once on each side, at any distance', () => {
+    const ws = ['the', 'same', 'five', 'words', 'here'], A = ['alpha', 'beta', 'gamma', 'delta'], B = ['red', 'green', 'blue', 'cyan']
+    // ours: a unique line, then the repeated one; arXiv: the same, 0.61 pt lower, and the repeated words again 575 pt away
+    const marked = [...words(A, 1, 72, 700), ...words(ws, 1, 72, 686), ...words(B, 1, 72, 660)]
+    const near = [...words(A, 1, 72, 699.39), ...words(ws, 1, 72, 685.39), ...words(B, 1, 72, 659.39), ...words(ws, 1, 72, 111)]
+    expect(carrierOf(marked, near).carry(1, 80, 686)).toMatchObject({ page: 1, y: 685.39, whole: true })
+    // the near one gone: the far one is not taken, the words being twice on arXiv's page
+    const far = [...words(A, 1, 72, 699.39), ...words(B, 1, 72, 659.39), ...words(ws, 1, 72, 111), ...words(ws, 1, 72, 90)]
+    expect(carrierOf(marked, far).carry(1, 80, 686)).toBeNull()
+    // twice on our page, once on arXiv's: the far one is not taken either
+    expect(carrierOf([...marked, ...words(ws, 1, 72, 300)], [...words(A, 1, 72, 699.39), ...words(B, 1, 72, 659.39), ...words(ws, 1, 72, 111)]).carry(1, 80, 686)).toBeNull()
+    // once on each side: taken however far it is
+    expect(carrierOf(marked, [...words(A, 1, 72, 699.39), ...words(B, 1, 72, 659.39), ...words(ws, 1, 72, 111)]).carry(1, 80, 686)).toMatchObject({ page: 1, y: 111, whole: true })
+    // a page TeX Live set lower, its lines all 27 pt down: the repeated line goes with its neighbours, not to the nearer copy
+    const shifted = [...words(A, 1, 72, 673), ...words(ws, 1, 72, 659), ...words(B, 1, 72, 633), ...words(ws, 1, 72, 684)]
+    expect(carrierOf(marked, shifted).carry(1, 80, 686)).toMatchObject({ page: 1, y: 659 })
+    // one symbol of a display, the same symbol 8.3 pt away on a page where nothing moved (2608.04322): not carried
+    const sym = [...words(A, 1, 72, 700), tok('l', 1, 100, 686, 3), tok('l', 1, 300, 600, 3), ...words(B, 1, 72, 660)]
+    const ours = [...words(A, 1, 72, 700), tok('l', 1, 100, 677.7, 3), tok('l', 1, 300, 600, 3), ...words(B, 1, 72, 660)]
+    expect(carrierOf(ours, sym).carry(1, 101, 677.7)).toBeNull()
+    expect(carrierOf(ours, sym).carry(1, 301, 600)).toMatchObject({ page: 1, y: 600 })
+  })
+
+  it('a page that costs more than its work bound carries none of its lines, and is listed', () => {
+    // 8,000 lines of one word alike on a page: every pair of them compared would be 64 million comparisons
+    const many = Array.from({ length: 8000 }, (_, i) => tok('x', 1, 72, 790 - i * 0.09, 3, 0.1))
+    const other = words(['attention', 'is', 'all', 'you', 'need'], 2, 72, 700)
+    const c = carrierOf([...many, ...other], [...many, ...other])
+    expect(c.over).toEqual([1])
+    expect(c.carry(1, 73, 790)).toBeNull()
+    expect(c.carry(2, 80, 700)).toMatchObject({ page: 2, y: 700, whole: true })
+    // two lines of 900 words with no signature alike, on 60 lines a page: the runs between them, 810,000 cells a pair
+    const long = (seed: number, page: number, y: number) => Array.from({ length: 900 }, (_, i) => tok(`w${(i * seed) % 997}`, page, 72 + i * 0.5, y, 0.4, 2))
+    const ours = Array.from({ length: 30 }, (_, i) => long(3 + i, 1, 700 - i * 2)).flat()
+    const theirs = Array.from({ length: 30 }, (_, i) => long(5 + i, 1, 700 - i * 2)).flat()
+    expect(carrierOf(ours, theirs).over).toEqual([1])
+    expect(carrierOf(words(['a', 'b'], 1, 72, 700), words(['a', 'b'], 1, 72, 700)).over).toEqual([])
   })
 
   it('a position on no line carries to null', () => {
