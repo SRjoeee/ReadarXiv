@@ -24,12 +24,15 @@ const ALPHABET = { leadBase: 1.0, leadFloor: 0.95, trackMin: 0, letterMin: -0.01
  * Each script's rules for the layer. Leadings are × the original's line pitch, sizes × the original's size, tracking
  * and letter spacing in em (≤ 0: the layer only tightens), `borrowMax` the share of the free space below a unit's last
  * frame it may take. `compress`: full-width punctuation compressed first — 0 none, 1 at a line's start and between two
- * marks, 2 every mark (Traditional Chinese centres its punctuation, which has no half to take). `even`: what page-even
- * moves among a page's body units — the size, the size and the leading, or each unit on its own
+ * marks, 2 every mark (Traditional Chinese centres its punctuation, which has no half to take). `even`: whether page-even
+ * sets a page's body units at one size ('size') or leaves each unit at its own ('unit'). Page-even never moves the
+ * leading: one unit that needs a tight leading set the whole page at it, its other paragraphs left with blank lines at
+ * their feet (the parity report, §3.2; dropping it, blank lines a body frame 0.82 to 0.73 on the 10 shared outputs,
+ * fidelity-layer-report.md, fix 4)
  */
 export const LAYER_RULES = freeze({
-  Hans: freeze({ leadBase: 1.3, leadFloor: 1.0, ...CJK, compress: 2, even: 'size-and-lead', autospace: 0.2 }),
-  Hant: freeze({ leadBase: 1.3, leadFloor: 1.0, ...CJK, compress: 0, even: 'size-and-lead', autospace: 0.2 }),
+  Hans: freeze({ leadBase: 1.3, leadFloor: 1.0, ...CJK, compress: 2, even: 'size', autospace: 0.2 }),
+  Hant: freeze({ leadBase: 1.3, leadFloor: 1.0, ...CJK, compress: 0, even: 'size', autospace: 0.2 }),
   Jpan: freeze({ leadBase: 1.0, leadFloor: 1.0, ...CJK, compress: 2, even: 'size', autospace: 0.2 }),
   // Korean spaces its words: no space of the layer's own between Hangul and Latin
   Kore: freeze({ leadBase: 1.0, leadFloor: 1.0, ...CJK, compress: 2, even: 'size', autospace: 0 }),

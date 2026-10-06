@@ -59,13 +59,13 @@ export { faceSize }
  * 2. the space below the last frame: 1 to 6 lines of `pitch`, then all of `below` × borrowMax (PDF units);
  * 3. leading: in steps of 0.05 down to leadFloor, then leadFloor itself;
  * 4. size: in steps of sizeStep down to sizeFloor.
- * The first state is leadBase (or `lead`), no tracking, compression 1 where the rules compress, no borrowing, and scale 1
- * (or `maxScale`): 'even' where page-even set it.
+ * The first state is leadBase, no tracking, compression 1 where the rules compress, no borrowing, and scale 1 (or
+ * `maxScale`): 'even' where page-even set it.
  */
 export function* statesOf(rules, o) {
   const st = {
-    scale: o.maxScale ?? 1, lead: o.lead ?? rules.leadBase, track: 0, letter: 0, compress: rules.compress > 0 ? 1 : 0, borrow: 0,
-    knob: o.maxScale !== undefined || o.lead !== undefined ? 'even' : 'none',
+    scale: o.maxScale ?? 1, lead: rules.leadBase, track: 0, letter: 0, compress: rules.compress > 0 ? 1 : 0, borrow: 0,
+    knob: o.maxScale !== undefined ? 'even' : 'none',
   }
   yield { ...st }
   st.knob = 'track'
@@ -528,7 +528,7 @@ export function layUnit(input, id, tr, o = {}) {
   }
 
   const last = frames[frames.length - 1]
-  for (const state of statesOf(rules, { below: last.below, pitch: last.pitch, maxScale: o.maxScale, lead: o.lead })) {
+  for (const state of statesOf(rules, { below: last.below, pitch: last.pitch, maxScale: o.maxScale })) {
     const got = layAt(geo, tokens, cuts, sentences, limits, state, size, ctx)
     if (!got) continue
     const lines = [], drawn = new Map()

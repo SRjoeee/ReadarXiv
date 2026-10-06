@@ -1,7 +1,8 @@
 // Page-even (Plan 8b, Task 10; the instant layer's spec §4.5): a page's body units set at one size, the smallest any of
-// them needs, and where the script's rules say so at one leading. Each unit is first laid at its own fit; once the page's
-// last body unit is laid, the units above that setting are laid again from it, once: at most one re-laying a page. A
-// unit on two pages keeps its own fit; headings, captions, footnotes and cells fit alone.
+// them needs. Each unit is first laid at its own fit; once the page's last body unit is laid, the units above that size
+// are laid again from it, once: at most one re-laying a page. A unit on two pages keeps its own fit; headings, captions,
+// footnotes and cells fit alone. The leading is never evened: each unit's starts from the rules' own, so that one unit
+// that needs a tight leading does not set every paragraph of its page at it (fidelity-layer-report.md, fix 4).
 //
 // Pure: no DOM, no clock. An original module (no port statement), importing nothing.
 
@@ -23,16 +24,13 @@ export function bodyUnits(file, page) {
 }
 
 /**
- * The page's even setting once all its body units are laid: the smallest scale any took, and in 'size-and-lead' the
- * smallest leading (in 'size', the rules' leadBase, from which each unit's own fit starts); null where nothing needs
- * laying again: in 'unit', with no unit, or with every unit already at it. The units above it are laid again with it
- * (layUnit's `maxScale` and `lead`), once; one that comes back unfit keeps its first fit.
+ * The page's even setting once all its body units are laid: the smallest scale any took; null where nothing needs laying
+ * again: in 'unit', with no unit, or with every unit already at it. The units above it are laid again with it (layUnit's
+ * `maxScale`, each from the rules' own leading), once; one that comes back unfit keeps its first fit.
  */
 export function evenOf(laid, rules) {
   if (rules.even === 'unit' || !laid.length) return null
-  const both = rules.even === 'size-and-lead'
-  let scale = Infinity, lead = Infinity
-  for (const u of laid) { scale = Math.min(scale, u.state.scale); lead = Math.min(lead, u.state.lead) }
-  const above = laid.some(u => u.state.scale > scale + 1e-9 || (both && u.state.lead > lead + 1e-9))
-  return above ? { maxScale: scale, lead: both ? lead : rules.leadBase } : null
+  let scale = Infinity
+  for (const u of laid) scale = Math.min(scale, u.state.scale)
+  return laid.some(u => u.state.scale > scale + 1e-9) ? { maxScale: scale } : null
 }

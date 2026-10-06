@@ -62,12 +62,12 @@ export interface LaidUnit { id: number; fit: true; state: FitState; size: number
 export interface Unfit { id: number; fit: false; why: 'located' | 'tokens' | 'floor' | 'pieces' | 'missing' | 'twice' | 'lost' | 'overlap' | 'erase' | 'glyph' | 'brackets' }
 export type Laid = LaidUnit | Unfit
 /** the fit's states in order, from the most natural (spec §4.5's order: tracking, the space below, leading, size): `below`
- *  and `pitch` are the last frame's (PDF units), `maxScale` and `lead` page-even's start */
-export declare function statesOf(rules: LayerRules, o: { below: number; pitch: number; maxScale?: number; lead?: number }): Generator<FitState>
+ *  and `pitch` are the last frame's (PDF units), `maxScale` page-even's start (the leading always starts at leadBase) */
+export declare function statesOf(rules: LayerRules, o: { below: number; pitch: number; maxScale?: number }): Generator<FitState>
 /** a unit laid into its frames, or why it stays the original's: its pieces checked first (checkPieces), the unit located,
  *  a LOST row refused, its tokens made, then laid at the first state that fits, which the completeness net (netOf) passes or
  *  refuses. No LaidUnit it returns is one the net refuses */
-export declare function layUnit(input: LayerInput, id: number, tr: Tr, o?: { maxScale?: number; lead?: number }): Laid
+export declare function layUnit(input: LayerInput, id: number, tr: Tr, o?: { maxScale?: number }): Laid
 /** a face's size correction (Face.size; 1 for a face with none): a run is measured, and drawn, at the line's size × it
  *  (tokens.mjs's, re-exported for the drawing) */
 export declare function faceSize(face: FaceId | undefined): number

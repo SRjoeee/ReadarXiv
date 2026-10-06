@@ -45,10 +45,10 @@ describe('the states', () => {
     expect(de.filter(s => s.knob === 'track').map(s => [s.letter, s.track, s.compress])).toEqual([[-0.01, 0, 0]])
     expect(de.filter(s => s.knob === 'borrow').map(s => s.borrow)).toEqual([12, 24, 36, 48, 60, 72, 200])
     expect(de.filter(s => s.knob === 'lead').map(s => s.lead)).toEqual([0.95])
-    // a page-even start: its scale and leading, then on down from there; Traditional Chinese compresses nothing
-    const even = [...statesOf(layerRulesFor('zh-TW'), { below: 0, pitch: 12, maxScale: 0.9, lead: 1.15 })]
-    expect(even[0]).toEqual({ scale: 0.9, lead: 1.15, track: 0, letter: 0, compress: 0, borrow: 0, knob: 'even' })
-    expect(even.filter(s => s.knob === 'lead').map(s => s.lead)).toEqual([1.1, 1.05, 1])
+    // a page-even start: its scale, the rules' own leading, then on down from there; Traditional Chinese compresses nothing
+    const even = [...statesOf(layerRulesFor('zh-TW'), { below: 0, pitch: 12, maxScale: 0.9 })]
+    expect(even[0]).toEqual({ scale: 0.9, lead: 1.3, track: 0, letter: 0, compress: 0, borrow: 0, knob: 'even' })
+    expect(even.filter(s => s.knob === 'lead').map(s => s.lead)).toEqual([1.25, 1.2, 1.15, 1.1, 1.05, 1])
     expect(even.filter(s => s.knob === 'shrink').map(s => s.scale)).toEqual([0.875, 0.85, 0.825, 0.8, 0.775, 0.75])
     expect(even.every(s => s.compress === 0 && s.borrow === 0)).toBe(true)
     // borrowMax: the share of the space below a unit may take, here a half of 100
@@ -124,10 +124,11 @@ describe('the fit', () => {
     // the layout's own baselines, not a grid: the fit sets its lines on them
     const B = [700, 688.4, 676.1, 664.5, 652, 640.3, 628.2, 616, 604.1]
     const file = nine(0, B)
-    // zh at scale 0.9 and leading 1 (page-even's start): every line on its frame's next baseline
-    const zh = laid(layUnit(inputOf(file, 'zh'), 1, tr(han(200)), { maxScale: 0.9, lead: 1 }))
-    expect(zh.state).toEqual(state({ scale: 0.9, lead: 1, knob: 'even' }))
-    expect(zh.lines.length).toBeGreaterThan(3)
+    // zh at leading 1 (a text that needs it: nine lines of 42 at its tightest tracking): every line on its frame's next
+    // baseline
+    const zh = laid(layUnit(inputOf(file, 'zh'), 1, tr(han(350))))
+    expect(zh.state).toEqual(state({ scale: 1, lead: 1, track: -0.05, compress: 2, knob: 'lead' }))
+    expect(zh.lines.length).toBe(9)
     zh.lines.forEach((l, k) => { expect(l.baseline).toBe(B[k]) })
     // de at full size (its leading is 1.0)
     const de = laid(layUnit(inputOf(file, 'de'), 1, tr(words(80))))
