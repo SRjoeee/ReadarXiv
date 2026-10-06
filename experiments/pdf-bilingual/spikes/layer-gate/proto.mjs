@@ -61,9 +61,37 @@ function keptOf(layout, p) {
   return out
 }
 
+/**
+ * What the consistency measures read of a fixture (the table-groups brief, 2026-10-07): its table groups, each the
+ * record's translated cells of one `group` (cache.mjs unitsOf; spikes/table-groups.mjs writes the fixtures so), and a
+ * group drawn partly where some of its cells are drawn and some are not, at the first page one is drawn on; and whether
+ * a drawn unit's float label stands in the source language where the final names it in the target's — the record's
+ * `captions` (live.mjs captionsOf: `target` for figures or tables) and the target's names (`names`, caption-names.mjs,
+ * the gate's own) differing from the label's own word, and the unit drawing no label of its own (`prep.label.drawn`)
+ */
+function consistencyOf(record, S, names) {
+  const members = new Map()
+  for (const [id, u] of (record.units ?? []).entries()) if (u?.group && u.pieces && (u.state === 'whole' || u.state === 'partial') && S.translated.has(id)) (members.get(u.group) ?? members.set(u.group, []).get(u.group)).push(id)
+  const split = []
+  for (const ids of members.values()) {
+    const drawn = ids.filter(id => S.byId.has(id))
+    if (drawn.length && drawn.length < ids.length) split.push({ ids, page: Math.min(...drawn.map(id => S.byId.get(id).pages[0])) })
+  }
+  const captions = record.captions ?? null
+  const labelSource = id => {
+    const label = S.byId.get(id)?.prep?.label
+    const m = label && /^(Figure|Fig\.|FIGURE|FIG\.|Table|TABLE)\s*[0-9IVXL]/.exec(label.text ?? '')
+    if (!m || !names || !captions) return false
+    const kind = /^t/i.test(m[1]) ? 'table' : 'figure'
+    if (captions[kind] !== 'target' || names[kind].toLowerCase() === m[1].toLowerCase()) return false
+    return !label.drawn
+  }
+  return { split, labelSource }
+}
+
 window.gate = {
   /** a fixture opened: v0, the made output's geometry, the units file asked for and arXiv's PDF */
-  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces, tex }) {
+  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces, tex, names = null }) {
     let V
     try { V = await import('/engine/layer-proto/run.mjs') } catch (e) { return { ready: false, why: `layer-proto/run.mjs: ${String(e?.message ?? e).slice(0, 200)}` } }
     const base = `/fixtures/${name}/`
@@ -79,8 +107,9 @@ window.gate = {
       const F = await import('/engine/layout/file.mjs')
       texIn = { ...tex, index: F.indexLayout(F.parseLayout(await bytes(`${base}layout.json`))), pieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])) }
     }
-    const run = await V.openProto({ doc, geometry, units: unitsFile.units, target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(texIn ? { tex: texIn } : {}), faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json` })
+    const run = await V.openProto({ doc, geometry, units: unitsFile.units, target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(texIn ? { tex: texIn } : {}), labels: { names, captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json` })
     S = { V, run, doc, geometry, layout, ref, name, target, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: new Map(run.placed.map(p => [p.id, p])), checks: [], place: place ?? null, dump: dump ? [] : null }
+    S.consistency = consistencyOf(unitsFile, S, names)
     return { ready: true, pages: doc.numPages, units: unitsFile.units.length, located: geometry.left.units.length, even: run.P.even ?? null, family: null }
   },
 
@@ -131,7 +160,12 @@ window.gate = {
     if (clippedIds.length) where.clipped = clippedIds
     // the style: each unit's base as drawn against the original's (styleMatch's base), on its first page
     const first = recs.filter(r => r.pages[0] === p && r.match?.total)
-    const out = { page: p, ms, model, check, where, style: [first.filter(r => r.match.base).length, first.length], drawn: recs.length, evened: false }
+    // the consistency measures (the table-groups brief): a table group drawn partly, on the page of its first cell drawn;
+    // a float's label left in the source language where the final names it in the target's, on its unit's first page
+    const split = S.consistency.split.filter(x => x.page === p), labels = recs.filter(r => r.pages[0] === p && S.consistency.labelSource(r.id))
+    if (split.length) where.groupsSplit = split.map(x => x.ids[0])
+    if (labels.length) where.labelsSource = labels.map(r => r.id)
+    const out = { page: p, ms, model, check, where, consistency: { groupsSplit: split.length, labelsSource: labels.length }, style: [first.filter(r => r.match.base).length, first.length], drawn: recs.length, evened: false }
     if (!pixel) return out
     const row = run.rows[p - 1]
     const W = row.left.width, H = row.left.height
