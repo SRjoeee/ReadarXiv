@@ -399,7 +399,9 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     const t2 = performance.now()
     const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P)
     const t3 = performance.now()
-    p.layout = L2.layoutUnit2(tokens, p.blocks, s, P, to)
+    // (the unit's leading relative to the original's own pitch, step 3: leadOf)
+    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P) }
+    p.layout = L2.layoutUnit2(tokens, p.blocks, s, p.P, to)
     p.tokens = tokens
     p.prep = prep
     p.s = s
@@ -444,7 +446,8 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
       if (p.pages[0] !== pg) continue
       if (p.layout.scale <= target + 1e-9 && p.layout.state.lead <= leadTo + 1e-9) continue
       const keep = { extents: p.layout.extents, rec: p.rec }
-      p.layout = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...P, maxScale: target, leadBase: Math.min(P.leadBase, leadTo) }, to)
+      const PU = p.P ?? P
+      p.layout = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...PU, maxScale: target, leadBase: Math.min(PU.leadBase, leadTo) }, to)
       p.layout.extents = keep.extents
       if (p.rec) Object.assign(p.rec, { f: r1(p.layout.f), sizeRatio: r1(p.layout.f / p.s), fitScale: p.layout.scale, knob: p.layout.knob, lead: p.layout.state.lead, lines: p.layout.lines.map(l => [l.page, r1(l.baseline), l.target !== null ? r1(p.blocks[l.block].B[l.target]) : null, l.target !== null ? p.blocks[l.block].exact[l.target] : false, l.mode, 0]) })
     }

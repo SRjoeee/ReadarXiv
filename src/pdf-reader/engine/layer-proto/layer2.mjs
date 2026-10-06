@@ -1681,6 +1681,24 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
   return blocks
 }
 
+/** a solid-set original's pitch, × its size: TeX's \baselineskip is 1.2 × the size at 10 and 12 pt, 1.24 at 11 pt */
+export const SOLID = 1.25
+/**
+ * The unit's leading (step 3), relative to the original's own pitch: the script's leading (leadBase, 1.3 in Chinese) is
+ * of a solid-set original's line, so the translation's pitch is leadBase × SOLID × its size, but never closer than the
+ * original's own pitch. Where the original is set solid that is leadBase, as before; where it is looser already, the
+ * leading is not stacked on it (2307.16209, set one and a half: Chinese at 1.3 × its 1.5-spaced lines stood 1.95 em
+ * apart and between them, a quarter of its text area blank that its own lines would have covered). The original's
+ * pitch: its blocks' own (pitch0), the median of those that have one; none, leadBase. 1 where leadBase is.
+ */
+export function leadOf(blocks, s, P) {
+  if (!(P.leadBase > 1) || !(s > 0)) return P.leadBase
+  const pitches = blocks.map(b => b.pitch0).filter(v => v > 0).sort((a, b) => a - b)
+  if (!pitches.length) return P.leadBase
+  const p0 = pitches[pitches.length >> 1]
+  return Math.min(P.leadBase, Math.max(1, Math.round((1000 * P.leadBase * SOLID * s) / p0) / 1000))
+}
+
 // ---- the white space below: an ink map of the original page
 
 /** the original page's ink at a quarter of its canvas's resolution: one readback of a small canvas */
