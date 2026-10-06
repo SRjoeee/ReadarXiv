@@ -46,7 +46,7 @@ export declare function runLive(paper: Paper, options: {
   translate: (texts: string[], cuts?: number[][]) => Promise<({ text: string; by: string | null } | null)[]>
   format?: 'markers' | 'tags' | 'runs'
   rank?: (i: number) => number
-  onUpdate?: (u: { pdf: Uint8Array; texts: unknown[]; translated: number; final: boolean }) => void
+  onUpdate?: (u: { pdf: Uint8Array; texts: unknown[]; translated: number; final: boolean; captions?: Captions | null }) => void
   /** the marked original, with its last TeX pass's log (lastTexLog) */
   onOriginal?: (o: { pdf: Uint8Array; log: string }) => void
   /** each batch's translated units, once their results are set and before the next batch is asked; and once, before the
@@ -67,7 +67,7 @@ export declare function runLive(paper: Paper, options: {
    *  function of the marked original (null where the run compiles none, or it did not set) says which, once, as soon as
    *  the original is in, before any compile of the translation */
   previews?: boolean | ((original: { pdf: Uint8Array; log: string } | null) => boolean | Promise<boolean>)
-}): Promise<{ settled: boolean; exhausted: boolean; changed: boolean; results: Map<number, unknown>; previews: number; translated: number; units: number; originalOk?: boolean; stopped?: string | null; compiler?: { down: 'network' | 'page'; error: string }; missing?: number; inSource?: number; shownPartial?: boolean | null; original: Readings | null; passing: boolean }>
+}): Promise<{ settled: boolean; exhausted: boolean; changed: boolean; results: Map<number, unknown>; previews: number; translated: number; units: number; originalOk?: boolean; stopped?: string | null; compiler?: { down: 'network' | 'page'; error: string }; missing?: number; inSource?: number; shownPartial?: boolean | null; captions?: Captions | null; original: Readings | null; passing: boolean }>
 /** a batch's translated units as the layer takes them (runLive's onBatch): each unit's pieces by their source indices
  *  (layer/pieces.mjs trPiecesOf; none where it has none), its sentences (mt.mjs sentencesOf's), its state and engine, as
  *  the run's results have them */
@@ -75,6 +75,12 @@ export interface BatchReport {
   seeded: boolean
   units: { id: number; pieces: TrPiece[]; sentences: { src: number[]; tr: number[] } | null; state: 'whole' | 'partial' | 'none' | 'lost'; by: string | null }[]
 }
+/** what names a compile's figures and tables: the target's names babel gives (caption-names.mjs), or the paper's own */
+export interface Captions { figure: 'target' | 'source'; table: 'target' | 'source' }
+/** the TeX that writes what names the floats to the log, at the document's end, in every compile of the translation */
+export declare const CAPTIONS_PROBE: string
+/** whether a compile labelled its figures and its tables with the target's names, from its log; null with no such line */
+export declare function captionsOf(log: string | null | undefined): Captions | null
 /** an aux's citation lines: every closed line whose first argument is a key it cites, \citation's and \newlabel's left out, in its order */
 export declare function citationLines(aux: string | null | undefined): string
 /** the marked original as the run and the rule read it: the lines of its last pass that are read, its marks, its citations and labels, its bibliography */

@@ -958,6 +958,17 @@ const glideMs = d => (reduced.matches ? 0 : Math.min(450, 250 + 0.25 * Math.abs(
  * driver scrolling, from its first step to its scroll's end
  */
 const follow = { pos: null, lastD: null, rest: 0, spring: 0, moving: false }
+/** the side the reader scrolled while the pair was not located, 'left' or 'right' (syncFrom notes it), or null: the pair
+ *  is levelled by it once it is (levelLocated), and it is gone then */
+let readEarly = null
+/** the side of the reader's last input, 'left' or 'right' (attach, lead, goToPage, goToUnit): a wheel, a touch, a key or a
+ *  press on a pane, a press on its scroll indicator, its page pill, or an entry of the contents; never a hover. Only a scroll of that side is the reader's: PDF.js scrolls a side by
+ *  itself (its pages laid out a margin down, 0 to 14 px; a zoom or a resize keeping its place), and on the compositor a
+ *  hover makes a side the driver */
+let inputOn = null
+const nameOf = side => (side === left ? 'left' : side === right ? 'right' : null)
+/** what the pair was levelled by when last located ('left', 'right' or null), for the test harness */
+let lastLocated
 /** the positions to go on from: the driver's as it is, the follower's as it is — after a click, a glide or a new driver */
 function rebase() {
   if (!driver) return
@@ -1080,6 +1091,39 @@ function alignTop(side) {
   if (Math.abs(target - tc.scrollTop) < 1) { rebase(); arm(); return }
   if (onCompositor()) glideOn(to, target)
   else springTo(tc, target)
+}
+/**
+ * Both sides just located, where they were not (a first visit's original on both, this machine's copy, a demo): the
+ * sync follows nothing before (syncFrom, alignTop and arm go by the anchors), so a side read before had no step
+ * followed and no rest that levelled, and the pair stood apart until the next scroll's rest (6,393 px on 2608.02163,
+ * spikes/early-scroll.mjs; the website's 5,129 px, readarxiv-web #23). Levelled by the side the reader scrolled
+ * meanwhile (readEarly: a scroll of the side of their last input), as at its rest (alignTop): it stays where the reader
+ * put it. Not by the driver: on the compositor a hover over the other side makes that one the driver, and the side
+ * scrolled was thrown back (2,000 px); nor by a scroll PDF.js made by itself on the side of the driver (a zoom after a
+ * hover threw the side scrolled back too). In the next frame, after the scroll events it brings: a scroll under way is
+ * followed then (syncFrom), and its rest levels the pair itself; a rest waited for since before the locate is called
+ * off. In the probes' Current mode, the other side is settled by it instead (settle). Nothing the reader scrolled:
+ * nothing moves, and the follower is bound as at any rest (arm)
+ */
+function levelLocated() {
+  invalidate()
+  const name = readEarly
+  readEarly = null
+  lastLocated = name
+  // a rest still waited for is a scroll's that ended before the pair was located: the reader's, which the record names,
+  // or a scroll PDF.js made by itself on the driver (the copy put where the original is read, after a hover made the
+  // copy's pane the driver), whose rest would level the pair by it. The record decides (Codex on #322)
+  clearTimeout(follow.rest)
+  follow.rest = 0
+  requestAnimationFrame(() => {
+    const side = name === 'left' ? left : name === 'right' ? right : null
+    if (!side || follow.moving || follow.rest || !bothShown()) return arm()
+    // the probes' Current mode: the other side put at the reading line's place, as after a scroll (settle)
+    if (syncMode === 'current') { take(side); return settle(side) }
+    if (!together()) return arm()
+    take(side)
+    alignTop(side)
+  })
 }
 /** a critically damped spring to a position: no overshoot, no bounce, 250–450 ms as the distance asks; one step with
  *  reduced motion */
@@ -1236,6 +1280,11 @@ export function setSyncMode(next) {
 function syncFrom(side) {
   const mine = placed.get(side.container)
   if (mine != null) { placed.delete(side.container); if (Math.abs(mine - side.container.scrollTop) < 1) return }
+  // a side the reader scrolled before both sides are located: nothing follows it yet, and the pair is levelled by it once
+  // they are (levelLocated). A put of ours has returned above; the side of the reader's last input (inputOn), whatever
+  // the driver is: a hover over the other side may have made that one the driver since. A side coming in (replaceRight's,
+  // out of sight) is neither
+  if (nameOf(side) !== null && nameOf(side) === inputOn && (!left.anchors.size || !right.anchors.size)) readEarly = inputOn
   // the follower scrolled by something else — a link, PDF.js, the find bar: it stands where that put it, and the
   // together modes go on from there; on the compositor its transform is given up, and it is bound again
   if (driver && side !== driver) {
@@ -1518,6 +1567,7 @@ function attach(side) {
   // a new driver: the other side goes on from where it stands, before the new driver's first step is taken; on the
   // compositor, a glide under way ends where it stands, and the follower is bound to the driver
   for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) side.container.addEventListener(type, () => {
+    inputOn = nameOf(side)
     take(side)
     if (glass.kind === 'glide') bake()
     arm()
@@ -1604,6 +1654,13 @@ for (const s of sides) refit.observe(s.container)
  *  units), as long as it is in view: the same file opens on the right at the same place */
 let readAt = null
 left.eventBus.on('updateviewarea', ({ location }) => { if (shown(left)) readAt = location })
+/** the right opened there; PDF.js's scroll marked as the reader's own (put), so that the sync does not take it for the
+ *  side read's (levelLocated levels the pair by that one) */
+function rightAtReadAt() {
+  if (!readAt) return
+  right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true })
+  placed.set(right.container, right.container.scrollTop)
+}
 /** figure text on or off */
 export function setFigures(on) { void save(c => ({ ...c, image: { ...c.image, enabled: on } })) } // figure text on or off, in the settings; followFigures shows it
 /** the sides shown scaled by a factor, within PDF.js's range */
@@ -1623,7 +1680,16 @@ export function pinch(which, factor, origin) {
   }
 }
 /** a side at a page */
-export function goToPage(which, page) { const s = which === 'left' ? left : right; if (s.doc) s.viewer.currentPageNumber = page }
+export function goToPage(which, page) {
+  // the reader's input on that side, which scrolls its pane with no event on it (inputOn: its page pill's buttons and its
+  // typed page); before the pair is located, the side read (readEarly). It makes that side the driver, as a press in its
+  // pane does (lead), so that the other follows the jump and is levelled at its rest: from the side that was not the
+  // driver, the jump was taken for the follower scrolled by something else, and the other side stayed where it was
+  const s = which === 'left' ? left : right
+  inputOn = nameOf(s)
+  take(s); arm()
+  if (s.doc) s.viewer.currentPageNumber = page
+}
 /** a side's PDF as it is shown, for the download (the reader's design, §6.1): the original, or the translation on screen */
 export async function pdfBytes(which) {
   const side = which === 'original' ? left : right
@@ -1813,7 +1879,7 @@ export function setNarrow(on) {
   if (mode === 'bilingual') relayout(on ? 'bilingual' : 'translation', place)
 }
 /** a side made the leading one, as a press in its pane makes it: a press on its scroll indicator (the reader's design, §6.5) */
-export function lead(which) { const s = which === 'left' ? left : right; take(s); arm() }
+export function lead(which) { const s = which === 'left' ? left : right; inputOn = nameOf(s); take(s); arm() }
 /** the heading being read: the last one whose top is above the reading line on the side read (the translation's when
  *  it is shown), told when it changes — as the reading moves (PDF.js's updateviewarea), and as the contents change */
 let readingHeading
@@ -1840,6 +1906,8 @@ export function goToUnit(id) {
   invalidate()
   const top = unitDocTop(lead, id)
   if (top == null) return
+  // the reader's input on the side read, with no event on its pane (inputOn), as goToPage's
+  inputOn = nameOf(lead)
   take(lead)
   lead.container.scrollTop = top - 28
   const second = other(lead)
@@ -1963,7 +2031,7 @@ const harness = () => ({ left, get right() { return right },
     const k = d ? b.width / d.width : 1
     return (d?.local ?? []).map(r => ({ x0: b.left + r.x0 * k, x1: b.left + r.x1 * k, y0: b.top + r.y0 * k, y1: b.top + r.y1 * k }))
   })),
-  pointAt, unitTop, unitDocTop, toPageBox, pageView, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()),
+  pointAt, unitTop, unitDocTop, toPageBox, pageView, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, get lastLocated() { return lastLocated }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()),
   // the right side replaced by a copy of what it shows, as a new compile replaces it (replaceRight)
   paintsOf: n => paints.get(n) ?? 0,
   // a side's floats on a page, once made (floats.mjs)
@@ -1994,7 +2062,7 @@ async function showCached(record, setContext, note = () => {}) {
     await laid
     // shown: its pages laid out and drawing; the anchors, which the highlight and the sync need, follow
     note('shown cached')
-    if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true })
+    rightAtReadAt()
     headings = record.units.map((u, i) => ({ id: i, src: u.src, depth: u.depth, title: u.title, kind: u.kind })).filter(h => h.kind === 'heading')
     // the translation's texts made again from the pieces the copy keeps, the source's where the final set it in the
     // source (cache.mjs copyTexts)
@@ -2004,7 +2072,7 @@ async function showCached(record, setContext, note = () => {}) {
       anchorSide(right, rightTexts, record.rightMarks?.length ? new Map(record.rightMarks) : undefined).then(() => note('cached right anchored')),
     ])
   } finally { URL.revokeObjectURL(url) }
-  invalidate(); paint(left); paint(right)
+  levelLocated(); paint(left); paint(right)
   reportOutline()
 }
 async function live() {
@@ -2102,7 +2170,7 @@ async function live() {
       ;[srcBytes] = await Promise.all([
         fetch(srcUrl).then(r => { if (!r.ok) throw new Error(`the source: HTTP ${r.status}`); return r.arrayBuffer() }).then(b => new Uint8Array(b)),
         // the original on the right until a translation comes, unless this machine's copy (or a run before) put it there
-        cached || right.doc ? Promise.resolve() : open(right, pdfUrl).then(() => rightLaid).then(() => { if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true }) }),
+        cached || right.doc ? Promise.resolve() : open(right, pdfUrl).then(() => rightLaid).then(rightAtReadAt),
       ])
     } catch (e) { throw Object.assign(new Error(`Could not fetch ${paper} from arXiv (${e.message ?? e})`), { event: 'fetch failed', kind: 'network' }) }
     note('source fetched')
@@ -2124,7 +2192,10 @@ async function live() {
     const { seed, hashes } = cached ? await seedFrom(cached, units) : { seed: null, hashes: await Promise.all(units.map(sourceHash)) }
     const p = { files, paperData, units, src, context, sameUnits, seed, hashes, leftCurrent: !cached || sameUnits, adoptUnits: () => { prose = src.map(x => x.text).join('\n'); unitKind = new Map(units.map((u, i) => [i, u.kind])) } }
     if (p.leftCurrent) p.adoptUnits()
-    if (!cached) await Promise.all([anchorSide(left, src, new Map()), anchorSide(right, src, new Map())])
+    if (!cached) {
+      await Promise.all([anchorSide(left, src, new Map()), anchorSide(right, src, new Map())])
+      levelLocated()
+    }
     note('anchored')
     rightTexts ??= src
     reportOutline()
@@ -2438,6 +2509,7 @@ async function demo() {
   unitKind = new Map(units.map(u => [u.i, u.kind]))
   const lMarks = await fetch(`${base}original-marks.json`).then(r => (r.ok ? r.json() : {})).then(o => new Map(Object.entries(o))).catch(() => new Map())
   const [marksLeft, marksRight] = await Promise.all([anchorSide(left, units.map(u => ({ id: u.i, text: u.src, ...displayEdges(u) })), lMarks), anchorSide(right, textsAt(stages ? stages[0].translated : Infinity))])
+  levelLocated()
   Object.assign(timing, { marksLeft, marksRight })
   // the contents: a demo's units carry no depth, so levels.json holds the source's (made with the demo); its first heading is the title
   const levels = await fetch(`${base}levels.json`).then(r => (r.ok ? r.json() : {})).catch(() => ({}))

@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- In the PDF reader's Side by side display, scrolling while the paper is still opening no longer leaves the two sides apart: once both are ready, the other side comes level with the one you scrolled. It used to stay where it was, up to several pages off, until your next scroll ended.
 - In the PDF reader, the message at the foot of the page moves as one: a longer message waits for its capsule to open, a shorter one changes first and the capsule closes after it, and a count changes in place, digit by digit. A language the bilingual PDF does not support yet has its name drawn in that language's own letterforms.
 - A new look for the popup, the settings page and the floating button, drawn from the PDF reader's: the same greys, type, controls and motion, and a new red — arXiv's own, to the eye — for the one main action on each screen and for the switches of the popup and the settings page (the PDF reader keeps its own). The popup's name and its main button are larger. Every row of the popup and the settings page is measured so that its parts stand on one line.
 - One appearance for the whole extension — follow the system, light or dark — set on the settings page, under Appearance, or in the PDF reader's reading options. The reader used to have its own and the popup and the settings page followed the system; what you had chosen in the reader is now the extension's.

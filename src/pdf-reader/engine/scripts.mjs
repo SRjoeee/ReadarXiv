@@ -139,7 +139,7 @@ const FACES = {
  *  patterns and broke only at hyphens of their own: the references' lines ended in one less than half as often
  *  (2608.06701: 5 % against 12 %), their word spaces a fifth wider, and underfull lines went from 10 to 70
  *  (2608.12333). The source is English in v1 (TranslateRequest.source) */
-const babelTags = lang => { const l = new Intl.Locale(lang); return [...new Set([lang, `${l.language}-${l.maximize().script}`, l.language])] }
+export const babelTags = lang => { const l = new Intl.Locale(lang); return [...new Set([lang, `${l.language}-${l.maximize().script}`, l.language])] }
 const provide = ([tag, ...rest], opts) => (rest.length ? `\\IfFileExists{babel-${tag}.ini}{\\babelprovide[import=${tag},main${opts}]{axttarget}}{${provide(rest, opts)}}` : `\\babelprovide[import=${tag},main${opts}]{axttarget}`)
 const babel = (lang, hyphenrules) => `\\IfPackageLoadedTF{polyglossia}{}{\\IfPackageLoadedTF{babel}{}{\\usepackage[safe=none]{babel}}${provide(babelTags(lang), hyphenrules ? `,hyphenrules=${hyphenrules}` : '')}}\n`
 /** After fontspec: the fonts declared from here on carry exactly the features given them. A paper's class may set

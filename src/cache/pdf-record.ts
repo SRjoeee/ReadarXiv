@@ -2,7 +2,9 @@
 // REPORT.md, eighteenth addendum) — when a copy is current, and which of two copies is kept. Pure, so that the store
 // and the reader share them.
 
-/** What became of a unit in the runs that made the copy */
+/** What became of a unit in the runs that made the copy. `kept`: set as the source has it on purpose — a name the
+ *  reader keeps without asking, or a cell of a table group kept whole (pdf-reader/engine/groups.mjs), which keeps the
+ *  translation its group was decided by in `pieces` and has no `tr` */
 export type UnitState = 'whole' | 'partial' | 'none' | 'lost' | 'kept'
 
 /** `by` when a unit's pieces came from more than one identity: never current */
@@ -40,6 +42,10 @@ export interface CachedUnit {
   /** translated, but the final set it in the source — the author block under a strategy that sets it as the paper has
    *  it (CJKutf8): its translation seeds the next run, and the right side is anchored by the source */
   inSource?: true
+  /** a table cell's consistency group (pdf-reader/engine/groups.mjs groupOf: the table's header, or a column), which
+   *  is translated whole or kept whole: the layer draws a group whole or not at all, as the final sets it; absent for
+   *  every other unit, and in a copy made before groups were read */
+  group?: string
 }
 
 /**
