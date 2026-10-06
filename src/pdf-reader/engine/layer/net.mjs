@@ -45,7 +45,7 @@ const PAIRS_MAX = 2_000_000
 
 /** the classes whose rendering is a citation's or reference's form, brackets and all */
 const BRACKETED = new Set(['cite', 'ref', 'eqref'])
-const OPEN_BRACKETS = new Set(['(', '[', '（', '［']), CLOSE_BRACKETS = new Set([')', ']', '）', '］'])
+const OPEN_BRACKETS = new Set(['(', '[', '\uff08', '\uff3b']), CLOSE_BRACKETS = new Set([')', ']', '\uff09', '\uff3d'])
 const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu
 
 const firstChar = s => String.fromCodePoint(s.codePointAt(0))

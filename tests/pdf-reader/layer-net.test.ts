@@ -12,19 +12,20 @@ import { column, type EraseSpec, han, inputOf, layoutOf, type PhSpec, type UnitD
 // original's: not erased, not drawn. Layouts are written in the tests and read through the real parser; the measure is the
 // brief's fake one (a CJK character 1 em, a Latin one 0.5, a space 0.25) at size 10
 
-// the line breaker's double: as the real one, but where `twice` is set it also sets the first placeholder it placed on the
-// line after its own, as a breaker that cut a placeholder in two would
+// the line breaker's double: as the real one, but where `twice` is set its placeLines also sets the first placeholder of
+// the lines on the line after its own, a fault past the fit's own checks (a placeholder in two items is never a fit there),
+// which the net must still catch
 const double = vi.hoisted(() => ({ twice: false }))
 vi.mock('@/pdf-reader/engine/layer/breaks.mjs', async importOriginal => {
   const real = await importOriginal<typeof import('@/pdf-reader/engine/layer/breaks.mjs')>()
   return {
     ...real,
-    breakLines: (...args: Parameters<typeof real.breakLines>) => {
-      const b = real.breakLines(...args)
-      if (!double.twice) return b
+    placeLines: (...args: Parameters<typeof real.placeLines>) => {
+      real.placeLines(...args)
+      const b = args[0]
+      if (!double.twice) return
       const at = b.lines.findIndex(l => l.items.some(it => it.t.kind === 'ph'))
       if (at >= 0 && at + 1 < b.lines.length) b.lines[at + 1]!.items.push({ ...b.lines[at]!.items.find(it => it.t.kind === 'ph')! })
-      return b
     },
   }
 })
@@ -97,7 +98,7 @@ describe('checkPieces', () => {
       ['a style past the colours', [[2, 1, 1 << 20], [3, 2]], unit],
       ['a text of 16,001 code units', [[0, 'a'.repeat(16_001)]], unit],
       ['a text holding \\u0000', [[0, 'a\u0000b']], unit],
-      ['a text holding \\u202e', [[0, 'a‮b']], unit],
+      ['a text holding \\u202e', [[0, 'a\u202eb']], unit],
       ['a text holding a tab', [[0, 'a\tb']], unit],
       ['a text that is no string', [[0, 5]], unit],
       ['20,001 pieces', many(PIECES_MAX + 1, () => [0, 'a']), unit],
@@ -113,7 +114,7 @@ describe('checkPieces', () => {
   })
 
   it('accepts a SWITCH without a close and a text with \\n and \\u00a0', () => {
-    const pieces: TrPiece[] = [[0, 'a\nb c'], [2, 1, STYLE.BOLD | STYLE.SWITCH], [0, 'd'], [2, 3, STYLE.ITALIC], [1, 4], [3, 5], [1, 8]]
+    const pieces: TrPiece[] = [[0, 'a\nb\u00a0c'], [2, 1, STYLE.BOLD | STYLE.SWITCH], [0, 'd'], [2, 3, STYLE.ITALIC], [1, 4], [3, 5], [1, 8]]
     expect(checkPieces(pieces, unit)).toEqual(pieces)
     // the largest answers within bounds: 16,000 code units, 20,000 pieces, every k below the unit's pieces once, the source's
     // groups reordered as siblings
@@ -145,11 +146,15 @@ describe('the net', () => {
       // an erase rectangle over the display's body, and one over another unit's label
       { why: 'erase', units: [para({ erase: [...ERASE, [3, 140, 660, 400, 672]] })], pieces: WHOLE },
       { why: 'erase', units: [para({ erase: [...ERASE, [5, 60, 595, 120, 610]] }), HEADING], pieces: WHOLE },
-      { why: 'glyph', units: [para()], pieces: [[0, `${han(5)}`], ...WHOLE] },
-      // '（' right before the page's own '(3)': SOURCE_BRACKETS unset, and no closing bracket after it, so the drop rule
+      { why: 'glyph', units: [para()], pieces: [[0, `${han(5)}\ue000`], ...WHOLE] },
+      // '\uff08' right before the page's own '(3)': SOURCE_BRACKETS unset, and no closing bracket after it, so the drop rule
       // does not take the page text's own; then the same with both brackets and SOURCE_BRACKETS set, which keeps them
-      { why: 'brackets', units: [para({ ph: [MATH, EQREF, CALL, DISPLAY] })], pieces: [[0, han(20)], [1, 2], [0, `${han(10)}（`], [1, 3], [0, han(5)], [1, 8], [0, han(10)], [1, 6], [0, han(30)]], text: eqText },
-      { why: 'brackets', units: [para({ ph: [MATH, { ...EQREF, flags: PH_FLAG.SOURCE_BRACKETS }, CALL, DISPLAY] })], pieces: [[0, han(20)], [1, 2], [0, `${han(10)}（`], [1, 3], [0, `）${han(5)}`], [1, 8], [0, han(10)], [1, 6], [0, han(30)]], text: eqText },
+      { why: 'brackets', units: [para({ ph: [MATH, EQREF, CALL, DISPLAY] })], pieces: [[0, han(20)], [1, 2], [0, `${han(10)}\uff08`], [1, 3], [0, han(5)], [1, 8], [0, han(10)], [1, 6], [0, han(30)]], text: eqText },
+      { why: 'brackets', units: [para({ ph: [MATH, { ...EQREF, flags: PH_FLAG.SOURCE_BRACKETS }, CALL, DISPLAY] })], pieces: [[0, han(20)], [1, 2], [0, `${han(10)}\uff08`], [1, 3], [0, `\uff09${han(5)}`], [1, 8], [0, han(10)], [1, 6], [0, han(30)]], text: eqText },
+      // the closing side: '(3)' right before '\uff09', the opening bracket a space away, so no drop either
+      { why: 'brackets', units: [para({ ph: [MATH, EQREF, CALL, DISPLAY] })], pieces: [[0, han(20)], [1, 2], [0, `${han(10)}\uff08 `], [1, 3], [0, `\uff09${han(5)}`], [1, 8], [0, han(10)], [1, 6], [0, han(30)]], text: eqText },
+      // a raised citation is its own ink, never page text: its rendering read from the page inside its segment, '[7]'
+      { why: 'brackets', units: [para({ ph: [MATH, { ...CITE, flags: PH_FLAG.RAISED }, CALL, DISPLAY] })], pieces: [[0, han(20)], [1, 2], [0, `${han(10)}\uff08`], [1, 4], [0, han(5)], [1, 8], [0, han(10)], [1, 6], [0, han(30)]] },
       { why: 'pieces', units: [para()], pieces: [...WHOLE, [1, 2]] },
     ]
     try {
@@ -187,7 +192,7 @@ describe('the net', () => {
     expect(v.lines.flatMap(l => l.items).filter(it => it.ph !== undefined).map(it => [it.ph, it.kind])).toEqual([[2, 'crop'], [4, 'crop'], [8, 'crop']])
     // an equation reference bracketed by the translation, its own brackets dropped by the tokens: no bracket doubled
     const eq = input([para({ ph: [MATH, { k: 3, kind: 'eqref', segs: [[1, 200, 700, 215, 707, 697.5]] }, CALL, DISPLAY] }), HEADING], (_p, x0) => (x0 === 200 ? '(3)' : null))
-    const pieces: TrPiece[] = [[0, han(20)], [1, 2], [0, `${han(10)}（`], [1, 3], [0, `）${han(5)}`], [1, 8], [0, han(10)], [1, 6], [0, han(30)]]
+    const pieces: TrPiece[] = [[0, han(20)], [1, 2], [0, `${han(10)}\uff08`], [1, 3], [0, `\uff09${han(5)}`], [1, 8], [0, han(10)], [1, 6], [0, han(30)]]
     const w = laid(layUnit(eq, 1, tr(pieces)))
     expect(w.lines.flatMap(l => l.items).find(it => it.ph === 3)!.text).toBe('3')
     // a display whose own segments overlap (a tall body over its number): one placeholder, kept once, carries nothing twice
@@ -215,7 +220,7 @@ describe('the net', () => {
     expect(netOf(inp, edit(lines => { at(lines, 2).l.page = 2 }), tr(WHOLE))).toBe('missing')
     // a kept display that is not
     expect(netOf(inp, { ...u, drawn: new Map([...u.drawn].filter(([k]) => k !== 6)) }, tr(WHOLE))).toBe('missing')
-    expect(netOf(inp, edit(lines => { const it = lines[0]!.items.find(i => i.kind === 'text')!; it.text = '' }), tr(WHOLE))).toBe('glyph')
+    expect(netOf(inp, edit(lines => { const it = lines[0]!.items.find(i => i.kind === 'text')!; it.text = '\ue000' }), tr(WHOLE))).toBe('glyph')
     expect(netOf(inp, edit(lines => { const it = lines[0]!.items.find(i => i.kind === 'text')!; it.face = 'no-such-face' }), tr(WHOLE))).toBe('glyph')
     expect(netOf(inp, u, tr(WHOLE))).toBeNull()
   })
@@ -236,6 +241,6 @@ describe('the net', () => {
     expect(layUnit(inp, 1, tr([[1, 64]]))).toEqual({ id: 1, fit: false, why: 'pieces' })
     expect(layUnit(inp, 9, tr(WHOLE))).toEqual({ id: 9, fit: false, why: 'located' })
     // a character held by no face of the role set, though every other is: the glyph, not the tokens
-    expect(layUnit(inp, 1, tr([[0, `${han(3)}`]]))).toEqual({ id: 1, fit: false, why: 'glyph' })
+    expect(layUnit(inp, 1, tr([[0, `${han(3)}\ue000`]]))).toEqual({ id: 1, fit: false, why: 'glyph' })
   })
 })

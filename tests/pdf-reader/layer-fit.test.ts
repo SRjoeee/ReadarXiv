@@ -378,7 +378,8 @@ describe('the fit', () => {
     expect(held.lines.some(l => l.baseline === 688)).toBe(false)
     const beside = laid(layUnit(inputOf(unitWith(344), 'ja'), 1, tr([[0, kanji(26)], [1, 4]])))
     expect(beside.lines.map(l => [l.baseline, l.x1])).toEqual([[700, 472]])
-    const below = laid(layUnit(inputOf(unitWith(344), 'ja'), 1, tr(kanji(66))))
+    // the display held by the translation, as the completeness net requires of every visible placeholder (Task 11)
+    const below = laid(layUnit(inputOf(unitWith(344), 'ja'), 1, tr([[0, kanji(66)], [1, 4]])))
     expect(below.lines.map(l => [l.baseline, l.x1])).toEqual([[700, 472], [688, 341.5]])
   })
 

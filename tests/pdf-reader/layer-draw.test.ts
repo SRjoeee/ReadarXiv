@@ -103,7 +103,7 @@ describe('the drawing', () => {
     // Korean tracked into its characters: one run, each character and the space between its words at its x, at the face's
     // size correction
     const one = layoutOf([{ id: 1, lines: column(1, { w: 76 }), frames: [{ lines: 1 }] }])
-    const text = '모델을 사용합니다'
+    const text = '\ubaa8\ub378\uc744 \uc0ac\uc6a9\ud569\ub2c8\ub2e4'
     const ko = laid(layUnit(inputOf(one, 'ko'), 1, tr(text)))
     expect(ko.state.track).toBeLessThan(0)
     const k = drawUnit(inputOf(one, 'ko'), ko, 1).lines[0]!.runs
