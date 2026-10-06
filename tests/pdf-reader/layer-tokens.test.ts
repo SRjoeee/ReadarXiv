@@ -292,9 +292,9 @@ describe('the characters', () => {
       ['text', '\ud55c\uad6d\uc5b4', 'cjk', false], ['space', null, null, false], ['text', 'BERT', 'latin', false], ['text', '\ub97c', 'cjk', true],
       ['space', null, null, false], ['text', '\ubb38\uc7a5', 'cjk', false],
     ])
-    // Hangul is set in the Korean role: Un Batang
-    expect(texts(tokens)[0]!.face).toBe('unbatang')
-    expect(tokens.find(t => t.kind === 'space')?.face).toBe('unbatang')
+    // Hangul is set in the Korean role: Source Han Serif K (the maintainer, 2026-10-06, in place of Un Batang)
+    expect(texts(tokens)[0]!.face).toBe('shs-k-regular')
+    expect(tokens.find(t => t.kind === 'space')?.face).toBe('shs-k-regular')
   })
 
   it('a curly apostrophe between two Latin letters is part of the word, in Chinese and Japanese too; elsewhere it closes a quote', () => {
@@ -426,6 +426,24 @@ describe('offsets', () => {
     expect(tokens.map(t => t.kind)).toEqual(['text', 'break', 'text'])
     expect(tokens[1]).toMatchObject({ w: 0 })
     expect(Boolean(tokens[2]!.glue)).toBe(false)
+  })
+
+  it('a character with no glyph of its own (a zero width space, a soft hyphen, a variation selector) is neither measured nor drawn', () => {
+    // inside a word, after a copyright sign (which Chromium would set as an emoji with it), and alone between two words
+    const tokens = need([[0, 'data\u200bset co\u00adoperate \u00a9\ufe0f \u200b end']])
+    expect(texts(tokens).map(t => [t.s, t.w])).toEqual([['dataset', 3.5], ['cooperate', 4.5], ['\u00a9', 0.5], ['end', 1.5]])
+    // the offsets stay trText's, which keeps them
+    const trt = trText([[0, 'data\u200bset co\u00adoperate \u00a9\ufe0f \u200b end']])
+    expect(texts(tokens).map(t => trt.slice(t.at, t.at + t.len))).toEqual(['data\u200bset', 'co\u00adoperate', '\u00a9\ufe0f', 'end'])
+    // in Chinese, one between two characters is no token, and the characters still meet with no space
+    const zh = need([[0, '\u6a21\u200b\u578b']], { target: 'zh' })
+    expect(zh.map(t => [t.kind, t.s, t.at])).toEqual([['text', '\u6a21', 0], ['text', '\u578b', 2]])
+    // a text of them alone draws nothing
+    expect(need([[0, '\u200b\u200d']])).toEqual([])
+    // the page's own text too
+    const textIn: TextIn = () => '[12\u200b]'
+    const cited = need([[0, 'see '], [1, 3]], { unit: { ph: { 3: ph('cite') } }, textIn })
+    expect(cited.find(t => t.mode === 'page-text')).toMatchObject({ s: '[12]' })
   })
 
   it('a unit with no lines, or a piece that is none, is not drawn', () => {

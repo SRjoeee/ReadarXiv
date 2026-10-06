@@ -42,6 +42,10 @@ const OPEN_BRACKETS = new Set(['(', '[', '\uff08', '\uff3b']), CLOSE_BRACKETS = 
 const LIGATURES = [['---', '\u2014'], ['--', '\u2013'], ['``', '\u201c'], ["''", '\u201d']]
 
 const WS = /\s/
+// the characters with no glyph of their own (a zero width space, a soft hyphen, a variation selector, a joiner), which a
+// translation can carry (Google's zero width spaces): neither measured nor drawn, as the TeX path's texEscape drops them.
+// Drawn, Chromium would set a copyright sign and a variation selector after it as an emoji
+const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu
 const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u
 const LETTER = /\p{L}/u
 const URL_LIKE = /^(?:https?|ftp):\/\/|^www\./i
@@ -272,8 +276,11 @@ function build(pieces, o) {
   let run = null        // the Latin or CJK word being read: { script, st, raw, s }
   let pending = null    // white space met and not yet written: { raw, st }
 
-  /** a text token: its face must hold every character */
-  const textToken = (s, script, st, rawStart, rawLen) => {
+  /** a text token, its invisible characters dropped (its offsets still the source's), or null where it has none other: its
+   *  face must hold every character */
+  const textToken = (source, script, st, rawStart, rawLen) => {
+    const s = source.replace(INVISIBLE, '')
+    if (!s) return null
     const face = faceOf(script, st)
     if (!canDraw(s, [face], roles)) throw UNDRAWABLE
     const [at, len] = span(rawStart, rawStart + rawLen)
@@ -335,9 +342,10 @@ function build(pieces, o) {
     let off = 0
     parts.forEach((part, i) => {
       const t = textToken(part, script, st, start + off, part.length)
+      if (!t) { off += part.length; return }
       // an alphabetic word of running text: one that is cut by characters draws a hyphen, one of a language with patterns
       // (and not a heading's) may be hyphenated there
-      const word = script === 'latin' && st.cls !== 'mono' && !urlLike && hyphenCore(part) !== null
+      const word = script === 'latin' && st.cls !== 'mono' && !urlLike && hyphenCore(t.s) !== null
       if (word) t.word = true
       if (hyphen && word && !noWords) t.hyph = hyphen.lang
       emit(t, i > 0)
@@ -349,6 +357,7 @@ function build(pieces, o) {
   const single = (ch, rawStart, rawLen, st) => {
     const script = isCjk(ch) ? 'cjk' : 'latin'
     const t = textToken(ch, script, st, rawStart, rawLen)
+    if (!t) return
     if (cjkBreaking && script === 'cjk' && rules.compress > 0) {
       if (CLOSE_SET.has(ch)) t.punct = 'close'
       else if (OPEN_SET.has(ch)) t.punct = 'open'
@@ -399,7 +408,7 @@ function build(pieces, o) {
     const parts = []
     for (let i = 0; i + 5 < row.segs.length; i += 6) {
       const s = textIn(row.segs[i], row.segs[i + 1], row.segs[i + 5], row.segs[i + 3], row.segs[i + 4])
-      const one = typeof s === 'string' ? s.replace(/\s+/g, ' ').trim() : ''
+      const one = typeof s === 'string' ? s.replace(INVISIBLE, '').replace(/\s+/g, ' ').trim() : ''
       if (!one) return null
       parts.push(one)
     }
