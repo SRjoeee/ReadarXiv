@@ -57,8 +57,9 @@
 //                prototype's geometry for the units none locates)
 //   --write-floor  layer-gate/floor.json from this run: the prototype's floor as this gate measures it, v0 under the
 //                floor's conditions at the gate's own text place (--engine=<exp/layer-proto> --engine-kind=proto
-//                --proto-units=p7 --proto-faces=prototype --tier=pixel, the ten shared outputs); the floor before it kept
-//                beside it as "old"
+//                --proto-units=p7 --proto-faces=prototype --tier=pixel, the ten shared outputs; v0 at its port,
+//                exp/layer-proto f654c05c, whose drawing is the live prototype's); the committed floor kept beside it as
+//                "old", every earlier one in "history"
 //   --proto-tex  the hybrid (layer-proto/tex.mjs): v0 with each unit the fixture's layout file locates whole taking the
 //                file's geometry, every other unit v0's own: ph, each placeholder's ink by its segments; lines, the unit's
 //                lines and label too, and the units the file locates whole that v0's geometry does not hold but table cells
@@ -504,7 +505,7 @@ function writeRecords(file, run, rows) {
   const tiers = { ...(had?.tiers ?? {}) }
   tiers[KEY] = run
   if (run.tier === 'pixel') delete tiers[KEY.replace(/^pixel/, 'model')]
-  const record = { schema: 1, what: 'the instant layer against the original page, per fixture and page (spikes/layer-gate.mjs)', floor: { what: floor.what, measured: floor.measured ?? null, shared: floor.shared, pooled: floor.pooled, byFixture: floor.byFixture, old: floor.old ?? null }, tiers }
+  const record = { schema: 1, what: 'the instant layer against the original page, per fixture and page (spikes/layer-gate.mjs)', floor: { what: floor.what, measured: floor.measured ?? null, shared: floor.shared, pooled: floor.pooled, byFixture: floor.byFixture, old: floor.old ?? null, history: floor.history ?? null }, tiers }
   writeFileSync(file, `${JSON.stringify(record, null, 0).replace(/\{"p":/g, '\n{"p":')}\n`)
   writeFileSync(file.replace(/\.json$/, '.md'), fidelityMd(record))
   const gateFile = join(dirname(file), 'layer-gate.json')
@@ -566,9 +567,10 @@ function fidelityMd(record) {
   L.push('# The instant layer against the original: the fidelity record', '')
   L.push(`Written by \`spikes/layer-gate.mjs --record\`. Each run below: the engine at its commit, ${run.inputs.chromium ? `Chromium ${run.inputs.chromium}` : ''}, PDF.js ${run.inputs.pdfjs}; pages: ${run.inputs.pages}; the planes at ${run.inputs.scale} device px a PDF unit, lost ink at ${run.inputs.inkScale}x; crops drawn ${run.inputs.composite}.`, '')
   for (const k of keys) { const r = record.tiers[k]; L.push(`- **${k}**: the engine at \`${r.engine.commit?.slice(0, 8)}\` (${r.engine.branch}${r.engine.dirty ? ', with changes' : ''}), the gate at \`${r.gate.commit?.slice(0, 8)}\`${r.gate.dirty ? ' with changes' : ''}, ${r.made.slice(0, 10)}; ${layoutsOf(r)}; ${r.seconds} s.`) }
-  L.push('', 'Every measure is against arXiv\'s original page, whose own value is the first column. The prototype\'s floor is the approved prototype as this gate measures it (v0, the prototype ported into the engine, under its own units and faces at the gate\'s text place); the parity run\'s floor it replaces stands beside it (measured at the prototype page\'s text place, 0.19 CSS px off, with coverage read from the translation\'s ink). Both are the ten outputs the prototype shares with the engine, pages 1-12. A defect is its count and, in brackets, its rate per 1,000 translated text cells (the model tier: per 1,000 cells of the drawn units\' frames), which is what the merge rule compares.', '')
+  L.push('', 'Every measure is against arXiv\'s original page, whose own value is the first column. The prototype\'s floor is the approved prototype as this gate measures it (v0, the prototype ported into the engine, under its own units and faces at the gate\'s text place); the floors it replaces stand beside it: the one before it, and the parity run\'s (measured at the prototype page\'s text place, 0.19 CSS px off, with coverage read from the translation\'s ink). Both are the ten outputs the prototype shares with the engine, pages 1-12. A defect is its count and, in brackets, its rate per 1,000 translated text cells (the model tier: per 1,000 cells of the drawn units\' frames), which is what the merge rule compares.', '')
   const fl = floorTotals(record.floor.pooled)
-  const cols = [['Prototype floor (v0, this gate), shared ten', fl], ...(record.floor.old ? [['Prototype floor (the parity run, before), shared ten', floorTotals(record.floor.old.pooled)]] : [])]
+  const first = record.floor.history?.[0] ?? record.floor.old
+  const cols = [['Prototype floor (v0, this gate), shared ten', fl], ...(record.floor.old ? [['The floor before it, shared ten', floorTotals(record.floor.old.pooled)]] : []), ...(first && first !== record.floor.old && record.floor.history?.length > 1 ? [['The parity run\'s floor, shared ten', floorTotals(first.pooled)]] : [])]
   for (const k of keys) { const r = record.tiers[k]; cols.push([`${k}, shared ten`, r.totals.shared], [`${k}, all ${r.totals.all?.outputs ?? ''}`, r.totals.all]) }
   L.push('## Against the original', '', `| measure | Original | ${cols.map(c => c[0]).join(' | ')} |`, `|---|---|${cols.map(() => '---|').join('')}`)
   for (const m of ms) L.push(`| ${m[4]} | ${originalOf(m)} | ${cols.map(c => shown(c[1], m)).join(' | ')} |`)
@@ -590,17 +592,23 @@ function floorOf(t) {
 }
 /** floor.json from v0's run under the floor's conditions at the gate's place, the floor before it kept beside it */
 function writeFloor(run, shared) {
-  const file = join(GATE, 'floor.json'), had = readJson(file)
-  const old = had.old ?? { what: had.what, pooled: had.pooled, byFixture: had.byFixture }
+  // the floor it replaces: the committed one (git's HEAD), so that a floor written twice keeps the one before both;
+  // GATE_FLOOR_BASE names another file
+  const file = join(GATE, 'floor.json')
+  const base = process.env.GATE_FLOOR_BASE ? readJson(resolve(process.env.GATE_FLOOR_BASE)) : JSON.parse(git(REPO, ['show', `HEAD:${file.slice(REPO.length + 1)}`]) ?? readFileSync(file, 'utf8'))
+  const previous = { what: base.what, measured: base.measured ?? null, pooled: base.pooled, byFixture: base.byFixture }
+  // every floor before it, the parity run's first
+  const history = [...(base.history ?? (base.old ? [base.old] : [])), previous]
+  const ref = Object.fromEntries(shared.map(n => [n, run.fixtures[n].meta.ref]))
   const out = {
-    schema: 2,
-    what: "the approved prototype's floor as this gate measures it: v0 (the prototype ported into the engine, exp/layer-proto) under the floor's conditions (the prototype's own staging units and faces), at the gate's own text place, on the ten outputs it shares with the engine, by the gate's measures (layer-gate.mjs --engine-kind=proto --proto-units=p7 --proto-faces=prototype --write-floor)",
-    measured: { made: run.made, engine: run.engine, gate: run.gate, inputs: run.inputs },
+    schema: 3,
+    what: "the approved prototype's floor as this gate measures it: v0 (the prototype ported into the engine, exp/layer-proto, at its port: every record, erase, crop and SVG the live prototype's) under the floor's conditions (the prototype's own staging units and faces), at the gate's own text place, on the ten outputs it shares with the engine, by the gate's measures and references (layer-gate.mjs --engine-kind=proto --proto-units=p7 --proto-faces=prototype --write-floor)",
+    measured: { made: run.made, engine: run.engine, gate: run.gate, inputs: run.inputs, ref },
     shared, pooled: floorOf(run.totals.shared), byFixture: Object.fromEntries(shared.map(n => [n, floorOf(run.fixtures[n].totals)])),
-    old,
+    old: previous, history,
   }
   writeFileSync(file, `${JSON.stringify(out, null, 1)}\n`)
-  console.log(`the floor: ${file} (the floor before it kept as "old")`)
+  console.log(`the floor: ${file} (the floor before it kept as "old", every one before in "history")`)
 }
 /** the prototype's pooled floor with its defects' rates per 1,000 translated text cells */
 function floorTotals(f) {
