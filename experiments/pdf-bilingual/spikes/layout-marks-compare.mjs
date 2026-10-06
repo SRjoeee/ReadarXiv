@@ -132,8 +132,11 @@ export function pageBoxes(log) {
   return pages
 }
 const DEST = /^\\pdfdest name\{axt-([^}]+)\}/
+/** a point of the layout marks (LAYOUT_TEX's POINTS_TEX): pdfTeX's and LuaTeX's literal, xdvipdfmx's special */
+const POINT = /^\\(?:pdfliteral direct\{|special\{pdf:code )\/axt-[A-Za-z0-9.-]+ ri\}$/
 const BOX = /^\\[hv]box\(/
-/** the box without the marks' own nodes, each node keeping its own (`src`): a mark's destination, the empty \vadjust
+/** the box without the marks' own nodes, each node keeping its own (`src`): a mark's destination and its point, the
+ *  points around a column's body and a float's box, the empty \vadjust
  *  that says a mark took an italic correction, an empty box a mark was set in, a kern of no width (an upright letter's
  *  italic correction, which a mark takes and gives back only where it has a width; a formula's math node, with no
  *  \mathsurround, which a mark at a line's start keeps from being discarded there), and a discretionary — one left in
@@ -143,7 +146,7 @@ const BOX = /^\\[hv]box\(/
 function withoutMarks(node) {
   const children = []
   for (const c of node.children) {
-    if (DEST.test(c.text) || /^\\kern ?-?0\.0$/.test(c.text) || /^\\math(?:on|off)$/.test(c.text) || /^\\discretionary\b/.test(c.text)) continue
+    if (DEST.test(c.text) || POINT.test(c.text) || /^\\kern ?-?0\.0$/.test(c.text) || /^\\math(?:on|off)$/.test(c.text) || /^\\discretionary\b/.test(c.text)) continue
     const f = withoutMarks(c)
     if (c.text === '\\vadjust' && !f.children.length) continue
     if (/^\\hbox\(0\.0\+0\.0\)x0\.0$/.test(c.text) && c.children.length && !f.children.length) continue

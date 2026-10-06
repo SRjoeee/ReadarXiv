@@ -19,7 +19,7 @@
 //     line is lost and --bisect is given, the lines lost (v1 with the class alone against v1 with none, which sets the
 //     units' own marks: headings', cells', MARK_DEF's — those against v0);
 //   - TeX's own page boxes of every paper (\tracingoutput, a third and fourth compile) with the marks' own nodes taken
-//     out, every difference counted: a line TeX set otherwise, mapped to the page's line by the marks set in it, is lost
+//     out (their destinations and points, the points around the column bodies and the floats), every difference counted: a line TeX set otherwise, mapped to the page's line by the marks set in it, is lost
 //     and not carried; where items moved, the same boxes are a PDF-only offset;
 //   - a verdict: failing where a line is lost (strict, joined or by TeX) and not every loss has an accepted cause
 //     (layout-marks-compare.mjs verdictOf: items moved with TeX's boxes the same, a PDF-only offset; or every line TeX
@@ -32,7 +32,8 @@
 // The paper's own switch is TeX's answer to the mark probe (layout/marks.mjs markProbeTex), set in the font probe's
 // compile (probeFiles `marks`), as the run would set it. The rows go to records/layout-marks.json (ids, counts, page
 // numbers, class and command names: no paper's content) with --write; the details, to <data>/runs/layout-marks-gate/.
-// Exit 1 where a paper fails, a class is to be switched off, or a paper regressed.
+// Exit 1 where a paper fails, a class is to be switched off, or a paper regressed. AXT_COMPILES=<n> runs n compiles at
+// once at most (4, or 2 above a load of 16, by default).
 //   CORPUS_ROOT=<experiments dir holding data/corpus and out/corpus-meta.json> [AXT_DATA=<data folder for the results>] \
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/layout-marks-gate.mjs [--papers=id,…] [--classes=a,b] [--bisect] [--write]
 //     --classes    v1 with these classes only
@@ -47,7 +48,7 @@ import { loadavg } from 'node:os'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { gunzipSync, gzipSync } from 'node:zlib'
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { latin1, latin1Bytes, MARK_DEF } from '../../../src/pdf-reader/engine/latex-front.mjs'
 import { encodeLayoutMarks, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarksOf, MARK_CLASSES, parseLayoutMarks, probeSamples, readMarkProbe, switchedOf } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles, probeFiles, readingsOf } from '../../../src/pdf-reader/engine/live.mjs'
@@ -78,7 +79,7 @@ const FORMAT = 4
 /** the code that reads a compile (its text items, readings, marks and marks file), hashed into every compile's key: a
  *  change to it reads every compile again, not a stale result (the review, M4) */
 const READERS = createHash('sha256')
-for (const f of ['live.mjs', 'typeset/places.mjs', 'typeset/tex.mjs', 'layout/marks.mjs', 'layout/json.mjs', 'anchors.mjs', 'latex-front.mjs']) READERS.update(readFileSync(new URL(`../../../src/pdf-reader/engine/${f}`, import.meta.url)))
+for (const f of ['live.mjs', 'typeset/places.mjs', 'typeset/tex.mjs', 'layout/marks.mjs', 'layout/json.mjs', 'layout/ink.mjs', 'layout/stream.mjs', 'anchors.mjs', 'latex-front.mjs']) READERS.update(readFileSync(new URL(`../../../src/pdf-reader/engine/${f}`, import.meta.url)))
 const READ_HASH = READERS.digest('hex').slice(0, 16)
 /** every compile's date, pinned (pdfTeX's SOURCE_DATE_EPOCH with FORCE_SOURCE_DATE): a paper's \today is the same in v0
  *  and v1 whenever each was compiled (2608.20159's title page moved a day across midnight UTC) */
@@ -86,7 +87,7 @@ const EPOCH = 1791244800
 
 // ---------------------------------------------------------------- compiles: four at a time, two above a load of 16
 let active = 0
-const limit = () => (loadavg()[0] > 16 ? 2 : 4)
+const limit = () => Number(process.env.AXT_COMPILES) || (loadavg()[0] > 16 ? 2 : 4)
 async function slot() { while (active >= limit()) await new Promise(r => setTimeout(r, 2000)); active++ }
 /** TeX's page boxes in the log, whole: each node on its line (no line cut at 79 characters) */
 const TRACE = '\\tracingoutput=1 \\tracingonline=0 \\showboxbreadth=2147483647 \\showboxdepth=2147483647 '
@@ -152,7 +153,8 @@ async function compile(id, files, { main, engine, bbl, kind, marking = {} }) {
           const m = await layoutMarksOf(pdf, log, { engine, ...marking }), enc = encodeLayoutMarks(m)
           parseLayoutMarks(new TextEncoder().encode(enc))
           out.marks = m.marks
-          out.marksFile = { kb: Math.round(enc.length / 1024), dropped: m.dropped.length, marks: m.marks.length }
+          // the pieces with an opening point, and those that own their ink by it (layout/stream.mjs)
+          out.marksFile = { kb: Math.round(enc.length / 1024), dropped: m.dropped.length, marks: m.marks.length, owned: m.owned.filter(e => e.length > 2).length, points: m.owned.length }
         }
       } finally { await task.destroy() }
     }
@@ -196,7 +198,7 @@ async function paperRow(id) {
   const v0Files = originalFiles(paper, { lines: true })
   v0Files.set(project.main, latin1Bytes(withFitr(latin1(v0Files.get(project.main)), MARK_DEF, LAYOUT_TEX)))
   const f0 = withSources(v0Files), f1 = v1Of(CLASSES)
-  const [c0, c1] = await Promise.all([compile(id, f0, opts('v0')), compile(id, f1, { ...opts('v1'), marking: { classes: CLASSES, movesPunctuation: movers } })])
+  const [c0, c1] = await Promise.all([compile(id, f0, opts('v0')), compile(id, f1, { ...opts('v1'), marking: { classes: CLASSES, switches, units, OPS } })])
   const row = { id, v0: c0.ok ? 'ok' : 'failed' }
   if (!c0.ok) return { row: { ...row, verdict: verdictOf(row) }, detail: { why: c0.why ?? c0.errors?.slice(0, 3) } }
   row.v1 = c1.ok ? 'ok' : 'failed'

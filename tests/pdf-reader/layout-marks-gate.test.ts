@@ -122,6 +122,11 @@ describe('pageBoxes and boxDiff: TeX\'s own page boxes, the marks taken out', ()
     const space = (g: string) => [...LINE.slice(0, 4), `..${g}`, ...LINE.slice(5)]
     expect(boxDiff(pageBoxes(logOf(space('\\glue(\\spaceskip) 3.0 plus 1.0'))), pageBoxes(logOf(space('\\glue 3.0 plus 1.0'))))).toEqual([])
   })
+  it('the points are no difference: each engine\'s literal beside a destination, around a column\'s body; a literal of the paper\'s own is', () => {
+    const v1 = ['\\vbox(633.0+0.0)x407.0', '.\\pdfliteral direct{/axt-bs1 ri}', '.\\hbox(6.94+2.22)x407.0, glue set 0.5', '..\\pdfdest name{axt-p0.1a} fitr width 0.0 height 0.0 depth 0.0', '..\\pdfliteral direct{/axt-p0.1a ri}', ...LINE.slice(2, 4), '..\\special{pdf:code /axt-p0.1b ri}', ...LINE.slice(4), '.\\pdfliteral direct{/axt-be1 ri}']
+    expect(boxDiff(pageBoxes(logOf(LINE)), pageBoxes(logOf(v1)))).toEqual([])
+    expect(boxDiff(pageBoxes(logOf(LINE)), pageBoxes(logOf([...LINE.slice(0, 3), '..\\pdfliteral direct{0 g}', ...LINE.slice(3)])))).toHaveLength(1)
+  })
   it('a font kern lost beside a heading\'s end mark: the page, and the mark nearest the difference', () => {
     const v1 = [LINE[0] as string, '.\\hbox(6.94+2.22)x407.0, glue set 0.49', ...LINE.slice(2, 6), '..\\pdfdest name{axt-h3e} fitr width 0.0 height 0.0 depth 0.0', '..\\OT1/cmr/m/n/10 .']
     expect(boxDiff(pageBoxes(logOf(['\\vbox(1.0+0.0)x2.0'], LINE)), pageBoxes(logOf(['\\vbox(1.0+0.0)x2.0'], v1)))).toEqual([{ page: 2, v0: '\\kern-0.135', v1: null, near: 'h3e', line: '0.0', inLine: ['h3e'] }])
