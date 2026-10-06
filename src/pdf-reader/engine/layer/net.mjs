@@ -263,7 +263,8 @@ function overlapIn(unit) {
 // the kept renderings of each page (every display's segments and every label of the units on it), as x0, y0, x1, y1,
 // made once a file and page
 const KEPT = new WeakMap()
-function keptOn(file, page) {
+/** a page's kept renderings: every display's segments and every label of the units on it (x0, y0, x1, y1, stride 4) */
+export function keptOn(file, page) {
   let pages = KEPT.get(file)
   if (!pages) KEPT.set(file, (pages = new Map()))
   let out = pages.get(page)

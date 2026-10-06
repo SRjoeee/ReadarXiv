@@ -1,6 +1,6 @@
 // net.mjs's types: the instant layer's completeness net
 import type { RoleSet } from '../font-roles.mjs'
-import type { LayoutUnit } from '../layout/file.mjs'
+import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
 import type { LayerInput, LaidUnit, Tr, Unfit } from './fit.mjs'
 import type { TrPiece } from './pieces.mjs'
 
@@ -29,3 +29,6 @@ export declare function netOf(input: LayerInput, laid: LaidUnit, tr: Tr): Unfit[
 export declare function lostIn(unit: LayoutUnit): boolean
 /** a text piece holding a character no face of the role set holds (where tokensOf gave none: 'glyph', not 'tokens') */
 export declare function heldByNone(pieces: readonly TrPiece[], roles: RoleSet): boolean
+/** a page's kept renderings, which no erase may meet: every display's segments and every label of the units on it
+ *  (x0, y0, x1, y1, stride 4), made once a file and page */
+export declare function keptOn(file: LayoutIndex, page: number): readonly number[]

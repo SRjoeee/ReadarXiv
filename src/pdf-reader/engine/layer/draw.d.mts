@@ -2,10 +2,22 @@
 import type { FaceId } from '../font-roles.mjs'
 import type { LayerInput, LaidUnit } from './fit.mjs'
 
+/** PDF units each of the layout's erase rectangles grows by, within its line's own ink band (0.3 em below its baseline,
+ *  0.85 above) */
+export declare const ERASE_PAD: 0.6
+/** of a line's size, below and above its baseline: the band its glyphs' ink takes, which no other unit's erase enters */
+export declare const INK_BAND: Readonly<{ below: 0.25; above: 0.8 }>
+/** how the copy lays crops on what is under them: darkened in, each channel the darker of the two */
+export declare const CROP_BLEND: 'darken'
+
 /** what the web draws for a unit on a page, in PDF units (y up): the erase, the crops, the text */
 export interface UnitDraw {
   id: number; page: number
-  /** x0, y0, x1, y1 (stride 4): the layout's own erase for the unit's lines on the page, nothing else */
+  /**
+   * x0, y0, x1, y1 (stride 4), for the unit's lines on the page and nothing else: the layout's own erase rectangles, each
+   * grown by ERASE_PAD within its line's own band and kept off the ink band of every other unit's line (a line beside it on
+   * its baseline takes only the pad); the pad given up where it would meet a kept rendering (a display, a label)
+   */
   erase: number[]
   /**
    * per crop segment: k, srcX0, srcBottom, srcX1, srcTop, dstX, dstBaseline, srcBaseline, scale (stride 9). The original
@@ -14,6 +26,9 @@ export interface UnitDraw {
    * its lift × the scale; a placeholder of several segments has them side by side, in order
    */
   crops: number[]
+  /** how the copy lays the crops on what is under them (CROP_BLEND): darkened in, never pasted, so that a crop's own paper
+   *  covers nothing under its box */
+  blend: 'darken'
   lines: DrawLine[]
 }
 export interface DrawLine { baseline: number; runs: DrawRun[] }
