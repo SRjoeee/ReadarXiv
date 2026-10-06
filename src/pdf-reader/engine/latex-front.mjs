@@ -1091,16 +1091,16 @@ function endinputCut(s, options = {}) {
 function documentEnds(s, options = {}) {
   return new Set(texCommands(s, options).filter(c => c.name === 'end' && c.env === 'document' && c.sure && !c.inDef).map(c => c.at))
 }
-/** the main file's \\usepackage[…]{inputenc} that TeX acts on, the last in its preamble: { start, end, options } or null */
+/** the main file's \\usepackage[…]{inputenc} that TeX acts on, the first in its preamble (LaTeX loads a package once: a
+ *  second with other options is an option clash, not a switch): { start, end, options } or null */
 export function inputencOf(s, options = {}) {
   const { begin } = documentBounds(s, options)
-  let found = null
   for (const c of texCommands(s, { ...options, to: begin < 0 ? s.length : begin })) {
     if (c.name !== 'usepackage') continue
     const m = /^\s*\[([^\]]*)\]\s*\{\s*inputenc\s*\}/.exec(s.slice(c.end, c.end + 400))
-    if (m) found = { start: c.at, end: c.end + m[0].length, options: m[1] }
+    if (m) return { start: c.at, end: c.end + m[0].length, options: m[1] }
   }
-  return found
+  return null
 }
 
 /** the package's tabularray tables (TBLR_ENVS and the names \\NewTblrEnviron gives), and whether \\SetTblrInner makes

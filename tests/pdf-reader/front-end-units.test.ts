@@ -69,6 +69,31 @@ describe('the document as TeX finds it (documentBounds): a match of the raw text
     const tex = doc('Words.', '% \\usepackage[latin1]{inputenc}\n\\usepackage[latin1]{inputenc}')
     expect(tex.slice(inputencOf(tex)?.start, inputencOf(tex)?.end)).toBe('\\usepackage[latin1]{inputenc}')
     expect(tex.lastIndexOf('\\usepackage')).toBe(inputencOf(tex)?.start)
+    // two TeX acts on: the first is loaded, the second with other options an option clash, not a switch (review M2)
+    const two = doc('Words.', '\\usepackage[latin1]{inputenc}\n\\usepackage[utf8]{inputenc}')
+    expect(inputencOf(two)?.options).toBe('latin1')
+    expect(inputencOf(two)?.start).toBe(two.indexOf('\\usepackage'))
+  })
+  it('a \\begin{document} or \\end{document} inside a definition\'s body is no bound, whatever stands before it (review I5)', () => {
+    // a definition's body in the preamble, then the real begin
+    const pre = doc('Body words.', '\\newcommand{\\startdoc}{\\begin{document}}')
+    expect(documentBounds(pre).begin).toBe(pre.lastIndexOf('\\begin{document}'))
+    // a body \\newcommand that holds an end, before the real one
+    const body = doc('Words.\n\\newcommand{\\enddoc}{\\end{document}}\nMore words.')
+    expect(documentBounds(body).end).toBe(body.lastIndexOf('\\end{document}'))
+    expect(texts(project(body))).toEqual(['Words. More words.'])
+    // an end in a preamble definition is before the document: never its end, though no end in the body is outside a group
+    const grouped = '\\documentclass{article}\n\\def\\edo{\\end{document}}\n\\begin{document}\nWords.\n{\\end{document}}\n'
+    const g = documentBounds(grouped)
+    expect(g.end).toBeGreaterThan(g.begin)
+    expect(grouped.slice(g.end)).toBe('\\end{document}}\n')
+  })
+  it('what TeX does not run as it stands: \\iffalse in a \\def with a \\fi after it, a \\def\\x#1\\end{document}\'s parameter text (\\end its delimiter, {document} its body), \\verb (review I5)', () => {
+    const iffa = doc('Body words.\n\n\\iffa hidden \\fi\n\nMore words.', '\\def\\iffa{\\iffalse}')
+    expect(documentBounds(iffa).begin).toBe(iffa.indexOf('\\begin{document}'))
+    expect(texts(project(iffa))).toEqual(['Body words.', 'hidden', 'More words.'])
+    expect(texts(project(doc('Words.\n\\def\\stop#1\\end{document}\nMore words.')))).toEqual(['Words. More words.'])
+    expect(texts(project(doc('Use \\verb|\\end{document}| to end.\n\nMore words.')))).toEqual(['Use to end.', 'More words.'])
   })
   it('what goes before the document goes before the real \\begin{document}, not a commented one in the preamble (live.mjs)', () => {
     const paper = openPaper(new Map([['main.tex', enc('\\documentclass{article}\n% a comment: \\begin{document}\n\\begin{document}\nA paragraph of words.\n\\end{document}\n')]]))
@@ -96,6 +121,9 @@ describe('the preamble\'s front matter (frontMatter): what a class keeps for \\m
     const p = project(doc('\\maketitle\nBody words.', '\\input{front}'), { 'front.tex': '\\usepackage{amsmath}\n\\title{When Attention Goes Blind}\n\\begin{abstract}\nScientific discovery requires more.\n\\end{abstract}\n' })
     expect(units(p).filter(u => u.file === 'front.tex').map(u => [u.kind, textOf(u)])).toEqual([['heading', 'When Attention Goes Blind'], ['abstract', 'Scientific discovery requires more.']])
     expect(patched(p, 'front.tex')).toContain('\\title{<T0>}')
+  })
+  it('a front matter command inside a \\newcommand\'s body is set where it is used, not in the preamble (review I5)', () => {
+    expect(texts(project(doc('Body words.', '\\newcommand{\\mythanks}{\\thanks{Funded by the agency.}}\n\\newcommand{\\mykeys}{\\keywords{alpha, beta}}')))).toEqual(['Body words.'])
   })
   it('nothing from a definition\'s body, a skipped conditional or a comment', () => {
     const p = project(doc('Body.', '\\newcommand{\\settitle}{\\title{Not this one}}\n\\iffalse\n\\abstract{Nor this one.}\n\\fi\n% \\keywords{nor these}\n\\title{This one}'))
@@ -161,6 +189,12 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
   })
   it('a command the table does not know keeps every adjacent group, as before: some prose stays, nothing breaks', () => {
     expect(texts(project(doc('Before \\unknowncmd{some words here}{and more} after.')))).toEqual(['Before after.'])
+    // …but a blank line after a comment is \\par: the group after it is no argument (review I5)
+    expect(texts(project(doc('Before \\unknowncmd{a}%\n\n{Second words here.}'))).join(' ')).toContain('Second words here.')
+  })
+  it('…where the paper loads that class too: moderncv\'s \\firstname{…} would take the M of Michal (review I5: the guard\'s test proved nothing)', () => {
+    const tex = '\\documentclass{moderncv}\n\\NewDocumentCommand{\\firstname}{}{\\scshape}\n\\begin{document}\n\\firstname Michal wrote this.\n\\end{document}\n'
+    expect(texts(projectOf({ 'main.tex': tex }))).toEqual(['Michal wrote this.'])
   })
   it('a command the paper defines is the paper\'s, whatever form LaTeXML gives a name of another class (melba.cls\'s \\firstname, moderncv\'s {…})', () => {
     const p = project(doc('Body.', '\\author{\\firstname Michal \\surname Nohel}'), { 'cls.cls': '\\def\\@maketitle{\\def\\firstname{\\reset@font\\normalsize}\\def\\surname{\\bf}}' })
