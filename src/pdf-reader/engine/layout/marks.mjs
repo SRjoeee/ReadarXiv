@@ -552,7 +552,7 @@ export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLAS
     for (const name of [...found.keys()].sort()) {
       const e = found.get(name)
       if (e.how >= OWNED) { owned.push([name, e.how]); continue }
-      const not = how => owned.push([name, OWNED_HOW.indexOf(how)])
+      const not = how => { const k = OWNED_HOW.indexOf(how); if (k < OWNED) throw new Error(`no how ${how} of a piece not owned`); owned.push([name, k]) }
       if (e.glyphs.length > GLYPHS_PIECE || e.boxes.length > RULES_PIECE) { not('more glyphs than a piece may own'); continue }
       if (all + e.glyphs.length + e.boxes.length > OWNED_ALL) { not('past the glyphs a paper may own'); continue }
       const gs = e.glyphs.map(([p, g]) => [p, stream[p - 1].glyphs[g]]), bs = e.boxes.map(([p, b]) => [p, stream[p - 1].boxes.slice(4 * b, 4 * b + 4)])

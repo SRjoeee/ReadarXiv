@@ -8,7 +8,7 @@ import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, OWNED_ALL, parseLayoutMarks, POINTS_TEX, FOLLOWERS, markProbeTex, PROBE_SCHEMA, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/live.mjs'
-import { OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
+import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
 import { marksOf } from '@/pdf-reader/engine/typeset/places.mjs'
 
 // The layout marks as text: which placeholder gets which mark, the units' own marks, the TeX that goes with them, the
@@ -498,6 +498,17 @@ describe('reading the marked original', () => {
     // the units' marks file the same but for the new fields: no stream read, nothing owned
     const plain = await layoutMarksOf(doc, '', { engine: 'pdflatex' })
     expect({ ...plain, owned: m.owned, chars: m.chars }).toEqual(m)
+  })
+  it('layoutMarksOf owns no ink off its page: the piece is written as not owned, and the file parses', async () => {
+    const units = [unit('para', [text('see '), ph('$x$'), text(' and '), ph('$y$'), text(' end')])]
+    const shown: Shown[] = [['see', 72, 700], { at: '0s' }, { at: 'p0.1a' }, ['x', 5000, 700], { at: 'p0.1b' }, ['and', 106, 700], { at: 'p0.3a' }, ['y', 130, 700, 300], { at: 'p0.3b' }, ['end', 140, 700], { at: '0e' }]
+    const dests: [string, number, number, number][] = [['0s', 1, 72, 700], ['p0.1a', 1, 87, 700], ['p0.1b', 1, 100.5, 700], ['p0.3a', 1, 121, 700], ['p0.3b', 1, 135, 700], ['0e', 1, 160, 700]]
+    const doc = streamDocument([{ view: [0, 0, 612, 792], items: [item('see', 72, 700)], shown }], dests.map(([n, ...r]) => [`axt-${n}`, ...r]))
+    const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', units, OPS })
+    // a glyph past the page's view, a glyph past the size a glyph may have
+    expect(m.owned).toEqual([['p0.1a', OWNED_HOW.indexOf('ink out of bounds')], ['p0.3a', OWNED_HOW.indexOf('ink out of bounds')]])
+    expect(OWNED_HOW.indexOf('ink out of bounds')).toBeGreaterThanOrEqual(OWNED)
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m)))).toEqual(m)
   })
   it('layoutMarksOf leaves out a mark or a word off its page, and refuses an engine it does not know', async () => {
     const doc = fakeDocument([{ view: [0, 0, 612, 792], items: [item('kept', 72, 700), item('off', 5000, 700), item('x'.repeat(201), 72, 650)] }], [['axt-0s', 1, 72, 700], ['axt-1s', 1, 9000, 700], ['axt-2s', 1, null, null]])

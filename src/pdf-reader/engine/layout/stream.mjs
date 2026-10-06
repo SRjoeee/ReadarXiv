@@ -29,6 +29,7 @@ export const OWNED_HOW = Object.freeze([
   'open, nothing before the text after it',
   'more glyphs than a piece may own',
   'past the glyphs a paper may own',
+  'ink out of bounds',
 ])
 export const OWNED = 4
 const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i]))
