@@ -59,6 +59,17 @@ describe('tokens: a run of Latin letters or digits ends where a CJK character be
     expect(boundsFromMarks(doc, marks).get('0')).toEqual([0, 4])
   })
 
+  it('a mark\'s word is one on its own baseline before one only near it: a figure\'s large label beside a heading', () => {
+    // 1706's "Attention Visualizations" at 710.04 and the figure's "Layer5" at 714.75, set at 16.3 pt, which begins
+    // before the heading's end mark: the end mark's word is the heading's last, as our compile has it
+    const doc = tokenizeDocument([{ page: 13, items: [item('Attention Visualizations', 108, 710.04, { size: 12, width: 122.78 }), item('Layer5', 203, 714.75, { size: 16.3, width: 40 })], styles: {} }])
+    const marks = new Map([['171s', { page: 13, x: 108, y: 710.04, t: 'attention' }], ['171e', { page: 13, x: 230.78, y: 710.04, t: 'visualizations' }]])
+    expect(boundsFromMarks(doc, marks).get('171')).toEqual([0, 1])
+    // with no word on the baseline, one near it as before
+    const near = tokenizeDocument([{ page: 1, items: [item('word', 50, 702, { size: 10 })], styles: {} }])
+    expect(boundsFromMarks(near, new Map([['0s', { page: 1, x: 50, y: 700 }], ['0e', { page: 1, x: 70, y: 700 }]])).get('0')).toEqual([0, 0])
+  })
+
   it('a word the tokenizer still joins with a CJK character — a Latin word hyphenated at a line\'s end, CJK on the next — is carried whole, and bounds its unit (the review of A1, M2)', () => {
     const doc = tokenizeDocument([{ page: 1, items: [item('GPT-', 50, 700, { eol: true }), item('风格的模型', 50, 688, { eol: true })], styles: {} }])
     expect(doc[0]?.t).toBe('gpt风')

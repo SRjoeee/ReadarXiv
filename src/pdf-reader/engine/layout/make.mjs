@@ -15,7 +15,7 @@
 // is refused where too few lines are carried, where arXiv's page count is out of bounds, and where its own parser refuses
 // it: a file the parser refuses is never returned.
 // Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes.
-import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument, tokens } from '../anchors.mjs'
+import { anchorUnits, boundsFromMarks, markWords, tokenAtMark, tokenizeDocument, tokens } from '../anchors.mjs'
 import { displayEdges, plainSource, unitText } from '../mt.mjs'
 import { carrierOf, tokensOfMarks } from './carry.mjs'
 import { encodeLayout, isPageText, LAYOUT, LayoutRefusal, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
@@ -277,18 +277,8 @@ function solid(view, x0, y0, x1, y1) {
   return [a, c, b, d]
 }
 
-/** the token a mark stands at, as anchors.mjs boundsFromMarks finds it: for a start mark the word whose box is nearest
- *  it, for an end mark the last word that begins before it */
-function tokenAt(doc, byPage, m, start) {
-  let best = null
-  for (const k of byPage.get(m.page) ?? []) {
-    const t = doc[k]
-    if (Math.abs(t.y - m.y) > t.h * 0.4) continue
-    if (start) { const d = m.x < t.x ? t.x - m.x : m.x > t.x + t.w ? m.x - t.x - t.w : 0; if (d < 8 && (!best || d < best.d)) best = { k, d } }
-    else if (t.x < m.x + 1 && (!best || t.x > doc[best.k].x)) best = { k }
-  }
-  return best?.k ?? null
-}
+/** the token a mark stands at, as anchors.mjs boundsFromMarks finds it (tokenAtMark) */
+const tokenAt = tokenAtMark
 /** a footnote's number glued to a word in one PDF and apart in the other: the word with the digits before it (a start
  *  mark's word) or after it (an end mark's) taken off, where a letter remains */
 const unglued = (w, start) => { const v = start ? w.replace(/^\d+/, '') : w.replace(/\d+$/, ''); return /\p{L}/u.test(v) ? v : null }

@@ -18,6 +18,8 @@ export declare function tokenizeDocument(pages: TextPage[]): DocToken[]
 /** marks (`${id}s` / `${id}e` → where, and the word carried with it) → id → [first token, last token] */
 export declare function boundsFromMarks(doc: DocToken[], marks: Map<string, { page: number; x: number; y: number; t?: string | null }>): Map<string, [number, number]>
 /** each mark with the word it stands by in `doc`, the document the marks were recorded in */
+/** the token a mark sits right after on its baseline (its index in `doc`), or null: `byPage` each page's token indices */
+export declare function tokenAtMark(doc: readonly DocToken[], byPage: Map<number, number[]>, mk: { page: number; x: number; y: number }, start: boolean): number | null
 export declare function markWords(doc: DocToken[], marks: Map<string, { page: number; x: number; y: number }>): Map<string, { page: number; x: number; y: number; t: string | null }>
 export declare function anchorUnits(doc: DocToken[], units: UnitText[], options?: { minCoverage?: number; bounds?: Map<string, [number, number]>; floating?: (id: number) => boolean }): Map<number, Anchor | null>
 /** where each of a unit's sentences after the first begins on the page: the page token of its first word found, rising */
