@@ -42,7 +42,7 @@ describe("v0's displayed formulas: the engine's environments", () => {
   })
   it("draws a table's rules and a strut a translation carries as nothing, a rule with a width still looked for", async () => {
     const { phClass, texToText } = await import('@/pdf-reader/engine/layer-proto/layer1.mjs')
-    for (const src of ['\\specialrule{1pt}{-1pt}{0pt}', '\\rule{0pt}{2.2ex}', '\\rule[-1ex]{0pt}{3ex}', '\\cmidrule(lr){2-3}', '\\arrayrulecolor{gray}']) {
+    for (const src of ['\\specialrule{1pt}{-1pt}{0pt}', '\\rule{0pt}{2.2ex}', '\\rule[-1ex]{0pt}{3ex}', '\\cmidrule(lr){2-3}', '\\arrayrulecolor{gray}', '\\includegraphics[width=5cm]{{berimbau.jpg}}']) {
       expect(phClass(src)).toBe('zero')
       expect(texToText(src)).toBe('')
     }
