@@ -9,8 +9,9 @@ import { boundedJson, checkPages, checkViews, isInteger, isNumber, isObject, Lay
 
 export { LayoutRefusal } from './json.mjs'
 
-/** the maker's version: raised with any change to the layout maker or to this schema; it enters no output identity */
-export const LAYOUT = '1'
+/** the maker's version: raised with any change to the layout maker or to this schema; it enters no output identity.
+ *  2: placeholders found by their own ink in the content stream, and the page text of citations and references */
+export const LAYOUT = '2'
 export const LAYOUT_CAP = 4 * 2 ** 20
 export const LAYOUT_VALUES = 1_000_000
 /** the deepest the file nests: its object, then lines, frames or erase (the arrays of entries), then an entry [id, rows],
@@ -22,7 +23,23 @@ export const LABEL_KINDS = Object.freeze(['number', 'item', 'caption', 'footnote
 export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4 })
 export const PH_FLAG = Object.freeze({ SOURCE_BRACKETS: 1, NUMBERED: 2, RAISED: 4, LOWERED: 8, EMPTY: 16, LOST: 32 })
 
-const KEYS = ['schema', 'layout', 'pdfjs', 'paper', 'left', 'views', 'fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings']
+const KEYS = ['schema', 'layout', 'pdfjs', 'paper', 'left', 'views', 'fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText']
+/** the placeholders the layer may draw as text in the page's face (Task 9's tokens), whose own text the file may hold */
+export const PAGE_TEXT_KINDS = Object.freeze(['cite', 'ref', 'eqref'])
+/** a page text's code units at most, and a file's in all */
+export const TEXT_MAX = 256, PAGE_TEXT_ALL = 500_000
+/** a page text: 1 to TEXT_MAX code units, and of white space only a space, as the text layer gives it: no control
+ *  character (C0, DEL, C1), no bidi control, no line or paragraph separator, no byte order mark, no lone surrogate */
+export function isPageText(s) {
+  if (typeof s !== 'string' || s.length < 1 || s.length > TEXT_MAX) return false
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i)
+    if (c < 0x20 || (c >= 0x7f && c <= 0x9f) || c === 0x061c || c === 0x200e || c === 0x200f || (c >= 0x2028 && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069) || c === 0xfeff) return false
+    if (c >= 0xd800 && c <= 0xdbff) { const d = s.charCodeAt(i + 1); if (!(d >= 0xdc00 && d <= 0xdfff)) return false; i++; continue }
+    if (c >= 0xdc00 && c <= 0xdfff) return false
+  }
+  return true
+}
 const PAPER_KEYS = ['id', 'version', 'pages']
 /** a new-style arXiv identifier (10 characters), or an old one: its archive, 2 to 16 letters (the longest, astro-ph,
  *  cond-mat or plasm-ph, has 8; the rest is margin), a subject class, a slash and 7 digits, so 27 characters at most. The
@@ -37,6 +54,7 @@ const SLACK = 1
 const UNIT_BITS = UNIT_FLAG.TITLE | UNIT_FLAG.FRONT | UNIT_FLAG.CENTRED
 const PH_BITS = 63
 const HEADING = UNIT_KINDS.indexOf('heading'), DISPLAY = PH_KINDS.indexOf('display')
+const PAGE_TEXT = new Set(PAGE_TEXT_KINDS.map(k => PH_KINDS.indexOf(k)))
 const ID_MAX = Number.MAX_SAFE_INTEGER
 
 // ---------------------------------------------------------------- refusals
@@ -231,7 +249,7 @@ export function parseLayout(bytes) {
   }
 
   // placeholders: unit, k, kind, flags, then per segment: page, x0, baseline, x1, top, bottom
-  const ph = array(f.ph, 'ph'), seen = new Set()
+  const ph = array(f.ph, 'ph'), seen = new Set(), pageTexts = new Set()
   for (let i = 0; i < ph.length; i++) {
     const r = ph[i]
     if (!Array.isArray(r) || r.length < 4 || (r.length - 4) % 6 !== 0) throw refuse(`ph[${i}]`, `not 4 + 6 × n numbers (${kindOf(r)})`)
@@ -252,6 +270,7 @@ export function parseLayout(bytes) {
     if (empty || lost ? segs !== 0 : segs < 1 || segs > most) throw refuse(`ph[${i}]`, empty || lost ? 'segments on an EMPTY or LOST placeholder' : `not 1 to ${most} segments`)
     for (let o = 4; o < r.length; o += 6) checkBox(r, o, 1, 3, 2, 4, 5, false, views, pages, 'ph', i, -1)
     zeroes(r)
+    if (!empty && !lost && PAGE_TEXT.has(kind)) pageTexts.add(key)
   }
 
   // labels: unit, kind, page, x0, baseline, x1, top, bottom, a rectangle as a line's
@@ -280,6 +299,26 @@ export function parseLayout(bytes) {
     if (typeof src !== 'string' || src.length > SRC_MAX) throw refuse(`headings[${i}][1]`, `not a string of at most ${SRC_MAX} code units (${kindOf(src)})`)
     if (e[0] === 0) e[0] = 0
   }
+
+  // page texts: unit, k, its own text; of a found placeholder of a page-text kind, rising by unit and k
+  const texts = array(f.pageText, 'pageText')
+  let lastKey = -1, all = 0
+  for (let i = 0; i < texts.length; i++) {
+    const e = texts[i]
+    if (!Array.isArray(e) || e.length !== 3) throw refuse(`pageText[${i}]`, `not [id, k, text] (${kindOf(e)})`)
+    const u = slot.get(e[0])
+    if (u === undefined) throw refuse(`pageText[${i}][0]`, 'not a unit of units')
+    if (u * (PIECES_MAX + 1) < Math.floor(lastKey / (PIECES_MAX + 1)) * (PIECES_MAX + 1)) throw refuse(`pageText[${i}][0]`, 'not a unit from the last on')
+    const key = u * (PIECES_MAX + 1) + e[1]
+    if (!isInteger(e[1], 0, PIECES_MAX) || !pageTexts.has(key)) throw refuse(`pageText[${i}][1]`, 'not a found placeholder of a page-text kind')
+    if (key <= lastKey) throw refuse(`pageText[${i}][1]`, 'not a piece above the last')
+    lastKey = key
+    const text = e[2]
+    if (!isPageText(text)) throw refuse(`pageText[${i}][2]`, `not 1 to ${TEXT_MAX} code units of text (${kindOf(text)})`)
+    all += text.length
+    if (all > PAGE_TEXT_ALL) throw refuse('pageText', `more than ${PAGE_TEXT_ALL} code units`)
+    if (e[0] === 0) e[0] = 0
+  }
   return f
 }
 
@@ -291,7 +330,7 @@ const LINE_EXACT = [0, 7], FRAME_EXACT = [0, 1, 2, 3, 4], ERASE_EXACT = [0], LAB
 
 /** the file as written: keys in the schema's order, numbers to a hundredth, no white space */
 export function encodeLayout(file) {
-  const { schema, layout, pdfjs, paper, left, views, fonts, units, lines, frames, erase, ph, labels, headings } = file
+  const { schema, layout, pdfjs, paper, left, views, fonts, units, lines, frames, erase, ph, labels, headings, pageText } = file
   return JSON.stringify({
     schema, layout, pdfjs,
     paper: { id: paper.id, version: paper.version, pages: paper.pages },
@@ -306,6 +345,7 @@ export function encodeLayout(file) {
     ph: ph.map(r => r.map((v, j) => (j < 4 || (j - 4) % 6 === 0 ? v : r2(v)))),
     labels: labels.map(r => rounded(r, 8, LABEL_EXACT)),
     headings,
+    pageText,
   })
 }
 
@@ -315,7 +355,7 @@ const NO_UNITS = Object.freeze([])
 
 /** a parsed file's index, in one pass over each array; every typed array holds numbers copied from the file */
 export function indexLayout(file) {
-  const { units, lines, frames, erase, ph, labels, headings, views, fonts } = file
+  const { units, lines, frames, erase, ph, labels, headings, views, fonts, pageText } = file
   const pages = file.paper.pages
   const byId = new Map()
   for (let i = 0; i < units.length; i++) {
@@ -349,10 +389,12 @@ export function indexLayout(file) {
     for (let j = 0; j < rows.length; j += 5) (perLine[rows[j]] ??= []).push(rows[j + 1], rows[j + 2], rows[j + 3], rows[j + 4])
     for (let l = 0; l < perLine.length; l++) if (perLine[l] !== undefined) unit.erase[l] = Float64Array.from(perLine[l])
   }
+  const textOf = new Map()
+  for (let i = 0; i < pageText.length; i++) textOf.set(`${pageText[i][0]}|${pageText[i][1]}`, pageText[i][2])
   for (let i = 0; i < ph.length; i++) {
     const r = ph[i], segs = new Float64Array(r.length - 4)
     for (let j = 4; j < r.length; j++) segs[j - 4] = r[j]
-    byId.get(r[0]).ph.set(r[1], { kind: PH_KINDS[r[2]], flags: r[3], segs })
+    byId.get(r[0]).ph.set(r[1], { kind: PH_KINDS[r[2]], flags: r[3], segs, text: textOf.get(`${r[0]}|${r[1]}`) ?? null })
   }
   const labelsOf = new Map()
   for (let i = 0; i < labels.length; i++) {

@@ -4,17 +4,22 @@ import type { SourceUnit } from '@/pdf-reader/engine/latex-front.mjs'
 import { encodeLayout, type LayoutFile, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { OPS_CAP } from '@/pdf-reader/engine/layout/ink.mjs'
 import { CARRY_MIN, fontName, type LayoutStats, makeLayout, OPS_MS, OPS_PAPER_MS } from '@/pdf-reader/engine/layout/make.mjs'
-import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
+import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks, type Switches } from '@/pdf-reader/engine/layout/marks.mjs'
 
 // The layout maker over a fake PDF.js document of arXiv's PDF and a marks file made, as the run makes it, from a fake
 // marked original: each run of text is a text item and the glyphs of an operator list alike, every character half an em
-// wide, so that a word's place in the text layer is its glyphs' place
+// wide, so that a word's place in the text layer is its glyphs' place. The marked original's operator list shows its
+// runs in their order, and a point (`/axt-<name> ri`) beside each mark: before the first glyph on the mark's baseline at
+// or right of it, else after the last one on that baseline (a page's `points` places one by hand, before a run's
+// character, as TeX's content stream has it where a mark's place does not tell); a box is shown at the page's end, or
+// before the run its fifth number names; `order`, the runs' order in the stream where it is not the text layer's
 
 const CH = 0.5
-type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number }
-type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped' }
+/** a run of glyphs; `blank`: each painted with the Unicode of a space (a symbolic font's code 32) */
+type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean }
+type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped'; points?: Record<string, [run: number, char: number]>; order?: number[] }
 type Mark = [name: string, page: number, x: number, y: number]
-type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; movers?: MarkClass[] }
+type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches }
 
 const FONTS: Record<string, unknown> = {
   F1: { name: 'ABCDEF+CMR10', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false },
@@ -26,15 +31,49 @@ const adv = (r: Run) => (r.w ?? CH) * size(r)
 /** where a run's character j begins, and where the run ends */
 const xAt = (r: Run, j: number) => r.x + j * adv(r)
 const endOf = (r: Run) => xAt(r, r.s.length)
-const item = (r: Run) => ({ str: r.s, dir: 'ltr', transform: [size(r), 0, 0, size(r), r.x, r.y], width: r.s.length * adv(r), height: size(r), fontName: r.font ?? 'F1', hasEOL: false })
-function opsOf(p: Page) {
-  const ops: [number, unknown[]][] = []
-  for (const r of p.runs) {
-    // a space is a move, as TeX's pages show it: no glyph (the ink reader keeps every painted glyph)
-    const glyphs = [...r.s].map(c => (c === ' ' ? -(r.w ?? CH) * 1000 : { unicode: c, width: (r.w ?? CH) * 1000, isSpace: false, fontChar: c, vmetric: null }))
-    ops.push([OPS.beginText, []], [OPS.setFont, [r.font ?? 'F1', size(r)]], [OPS.setTextMatrix, [[1, 0, 0, 1, r.x, r.y]]], [OPS.showText, [glyphs]], [OPS.endText, []])
+const item = (r: Run) => ({ str: r.blank ? ' '.repeat(r.s.length) : r.s, dir: 'ltr', transform: [size(r), 0, 0, size(r), r.x, r.y], width: r.s.length * adv(r), height: size(r), fontName: r.font ?? 'F1', hasEOL: false })
+/** where each mark's point stands in a page's stream: [run, character] before which it is shown, in the marks' order */
+function pointsOf(p: Page, page: number, marks: Mark[]) {
+  const out: [name: string, run: number, char: number][] = []
+  for (const [name, at] of Object.entries(p.points ?? {})) out.push([name, at[0], at[1]])
+  for (const [name, pg, x, y] of marks) {
+    if (pg !== page || p.points?.[name]) continue
+    let first: [number, number] | null = null, last: [number, number] | null = null
+    p.runs.forEach((r, ri) => {
+      if (Math.abs(r.y - y) >= 0.5 * size(r)) return
+      for (let c = 0; c < r.s.length; c++) {
+        if (r.s[c] === ' ') continue
+        if (!first && xAt(r, c) >= x - 0.01) first = [ri, c]
+        last = [ri, c + 1]
+      }
+    })
+    const at: [number, number] = first ?? last ?? [p.runs.length, 0]
+    out.push([name, at[0], at[1]])
   }
-  for (const b of p.boxes ?? []) ops.push([OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from(b)]])
+  return out
+}
+function opsOf(p: Page, points: [string, number, number][] = []) {
+  const ops: [number, unknown[]][] = []
+  const at = (ri: number, c: number) => { for (const [name, r, ch] of points) if (r === ri && ch === c) ops.push([OPS.setRenderingIntent, [{ name: `axt-${name}` }]]) }
+  const box = (b: number[]) => ops.push([OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from(b.slice(0, 4))]])
+  for (const ri of p.order ?? p.runs.map((_, i) => i)) {
+    const r = p.runs[ri] as Run
+    for (const b of p.boxes ?? []) if (b[4] === ri) box(b)
+    ops.push([OPS.beginText, []], [OPS.setFont, [r.font ?? 'F1', size(r)]], [OPS.setTextMatrix, [[1, 0, 0, 1, r.x, r.y]]])
+    // a space is a move, as TeX's pages show it: no glyph (the ink reader keeps every painted glyph); a point between two
+    // characters parts the run's showText
+    let glyphs: unknown[] = []
+    for (let c = 0; c <= r.s.length; c++) {
+      if (points.some(([, pr, pc]) => pr === ri && pc === c)) { if (glyphs.length) ops.push([OPS.showText, [glyphs]]); glyphs = []; at(ri, c) }
+      if (c === r.s.length) break
+      const ch = r.s[c] as string
+      glyphs.push(ch === ' ' ? -(r.w ?? CH) * 1000 : { unicode: r.blank ? ' ' : ch, width: (r.w ?? CH) * 1000, isSpace: !!r.blank, fontChar: ch, vmetric: null })
+    }
+    if (glyphs.length) ops.push([OPS.showText, [glyphs]])
+    ops.push([OPS.endText, []])
+  }
+  at(p.runs.length, 0)
+  for (const b of p.boxes ?? []) if (b[4] === undefined) box(b)
   if (p.ops === 'capped') while (ops.length <= OPS_CAP) ops.push([OPS.save, []])
   return { fnArray: ops.map(o => o[0]), argsArray: ops.map(o => o[1]) }
 }
@@ -58,13 +97,16 @@ function arxivOf(pages: Page[], asked: number[] = []) {
 function markedOf(pages: Page[], marks: Mark[]) {
   return {
     numPages: pages.length,
-    getPage: async (n: number) => { const p = pages[n - 1] as Page; return { view: p.view ?? [0, 0, 612, 792], getTextContent: async () => ({ items: p.runs.map(item), styles: STYLES }) } },
+    getPage: async (n: number) => {
+      const p = pages[n - 1] as Page
+      return { view: p.view ?? [0, 0, 612, 792], rotate: 0, commonObjs, getTextContent: async () => ({ items: p.runs.map(item), styles: STYLES }), getOperatorList: async () => opsOf({ ...p, ops: undefined }, pointsOf(p, n, marks)) }
+    },
     getDestinations: async () => new Map(marks.map(([name, page, x, y]) => [`axt-${name}`, [{ num: 100 + page, gen: 0 }, { name: 'FitR' }, x, y, null]])),
     getPageIndex: async (ref: { num: number }) => ref.num - 101,
   }
 }
-async function marksOf(w: World, log = '') {
-  return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', movesPunctuation: w.movers ?? [] }))))
+async function marksOf(w: World, log = '', classes?: MarkClass[]) {
+  return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? {}, units: w.units, OPS, ...(classes ? { classes } : {}) }))))
 }
 const make = async (w: World, log = '', asked: number[] = []) => makeLayout({ units: w.units, marks: await marksOf(w, log), arxiv: arxivOf(w.pages, asked), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
 /** a made file: it parses, and made again it is the same bytes */
@@ -180,12 +222,13 @@ describe('makeLayout', () => {
     expect(phOf(file, 0, 3).slice(5, 8)).toEqual([at(12), 700, at(15)])
   })
 
-  it('a mark not carried makes the placeholder LOST; marks with nothing between make it EMPTY', async () => {
+  it('a piece whose points are out of order, or set twice, is LOST; one whose points hold nothing is EMPTY', async () => {
     const runs: Run[] = [{ s: 'one two three four five six seven', x: 72, y: 700 }]
     const at = (j: number) => xAt(runs[0] as Run, j)
     const { file, stats } = await made({
       pages: [{ runs }],
-      // p0.1a off every line (between lines); p0.3a and p0.3b at one place; p0.5: its opening mark set twice, dropped
+      // p0.1a off every line, its point last in the stream; p0.3a and p0.3b at one place; p0.5: its opening mark set
+      // twice, dropped
       marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700], ['p0.1a', 1, at(3), 650], ['p0.1b', 1, at(7), 700], ['p0.3a', 1, at(14), 700], ['p0.3b', 1, at(14), 700], ['p0.5a', 1, at(23), 700], ['p0.5b', 1, at(27), 700]],
       units: [unit('para', [text('one '), ph('$t$'), text(' three '), ph('\\cite{x}'), text(' five '), ph('$s$'), text(' seven')])],
     }, 'pdfTeX warning (dest): destination with the same identifier (name{axt-p0.5a}) has been already used, duplicate ignored\n')
@@ -195,17 +238,24 @@ describe('makeLayout', () => {
     expect(stats.ph).toMatchObject({ marked: 3, found: 0, empty: 1, lost: 2 })
   })
 
-  it('a glyph two placeholders would take goes to the first', async () => {
-    const runs: Run[] = [{ s: 'say XYZ now and later', x: 72, y: 700 }]
-    const at = (j: number) => xAt(runs[0] as Run, j)
-    const { file } = await made({
-      pages: [{ runs }],
-      // the first's marks around X and Y, the second's around Y and Z
-      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700], ['p0.1a', 1, at(4), 700], ['p0.1b', 1, at(6), 700], ['p0.2a', 1, at(5), 700], ['p0.2b', 1, at(7), 700]],
-      units: [unit('para', [text('say '), ph('$X$'), ph('$Z$'), text(' now and later')])],
-    })
-    expect(phOf(file, 0, 1).slice(5, 8)).toEqual([at(4), 700, at(6)])
-    expect(phOf(file, 0, 2).slice(5, 8)).toEqual([at(6), 700, at(7)])
+  it('one arXiv glyph to one piece: a second piece whose own glyph is not on arXiv\'s page is LOST, and takes nothing of the first\'s', async () => {
+    const ours: Run[] = [{ s: 'say XX now and later', x: 72, y: 700 }]
+    const at = (j: number) => xAt(ours[0] as Run, j)
+    const w: World = {
+      pages: [{ runs: ours }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(ours[0] as Run), 700], ['p0.1a', 1, at(4), 700], ['p0.1b', 1, at(5), 700], ['p0.2a', 1, at(5), 700], ['p0.2b', 1, at(6), 700]],
+      units: [unit('para', [text('say '), ph('$X$'), ph('$X$'), text(' now and later')])],
+    }
+    // each its own X
+    const both = await made(w)
+    expect(phOf(both.file, 0, 1).slice(5, 8)).toEqual([at(4), 700, at(5)])
+    expect(phOf(both.file, 0, 2).slice(5, 8)).toEqual([at(5), 700, at(6)])
+    expect(both.stats.ph).toMatchObject({ found: 2, twice: 0, unmatched: 0, owned: 2, matched: 2 })
+    // arXiv's page holds one X: the first piece's; the second is LOST, never found on the first's glyph
+    const one = await made({ ...w, marked: [{ runs: ours }], pages: [{ runs: [{ s: 'say X now and later', x: 72, y: 700 }] }] })
+    expect(phOf(one.file, 0, 1).slice(5, 8)).toEqual([at(4), 700, at(5)])
+    expect(phOf(one.file, 0, 2)).toEqual([0, 2, 0, PH_FLAG.LOST])
+    expect(one.stats.ph.why).toEqual({ "its glyphs not all matched on arXiv's page": 1 })
   })
 
   it("a heading's number is its label, and the erase leaves it out, and leaves out every display segment", async () => {
@@ -380,12 +430,15 @@ describe('makeLayout', () => {
   it("a radical's sign, raised to its bar, is the formula's ink", async () => {
     // the sign's origin 7.7 above the line, past the window of scripts; its bar a rule over the radicand
     const runs: Run[] = [{ s: 'scaled by', x: 72, y: 700 }, { s: '\u221a', x: 122, y: 707.7 }, { s: 'dk', x: 127, y: 700 }, { s: 'here and there', x: 142, y: 700 }]
+    // in the stream: the opening point, the sign, the bar, the radicand, the closing point
     const { file } = await made({
-      pages: [{ runs, boxes: [[127, 707.2, 137, 707.6]] }],
+      pages: [{ runs, boxes: [[127, 707.2, 137, 707.6, 2]], points: { 'p0.1a': [1, 0] } }],
       marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[3] as Run), 700], ['p0.1a', 1, 117, 700], ['p0.1b', 1, 137, 700]],
       units: [unit('para', [text('scaled by '), ph('$\\sqrt{d_k}$'), text(' here and there')])],
     })
     expect(phOf(file, 0, 1).slice(4, 10)).toEqual([1, 122, 700, 137, 707.7 + 7.5, 697.5])
+    // the bar is its own, and erased with it
+    expect(chunk(rowsOf(file, 0, 'erase'), 5).some(e => (e[1] as number) <= 127 && (e[3] as number) >= 137 && (e[2] as number) <= 707.2 && (e[4] as number) >= 707.6)).toBe(true)
   })
 
   it('the names of draft image frames are no lines of the paper', async () => {
@@ -402,7 +455,8 @@ describe('makeLayout', () => {
     const runs: Run[] = [{ s: 'Bold words follow here', x: 72, y: 700 }, { s: 'and a note', x: 72, y: 688 }, { s: '1', x: 122, y: 691.5, size: 7 }, { s: '. Then more', x: 125.5, y: 688 }]
     const note = unit('footnote', [text('A note.')])
     const { file, stats } = await made({
-      pages: [{ runs }],
+      // the call's point before its number in the stream
+      pages: [{ runs, points: { 'n0.2a': [2, 0] } }],
       // the footnote's call: its opening mark alone, as Task 1's marking now sets it
       marks: [['0s', 1, 97, 700], ['0e', 1, endOf(runs[3] as Run), 688], ['n0.2a', 1, 122, 688]],
       units: [unit('para', [ph('\\textbf{Bold}'), text(' words follow here and a note'), { t: 'nested', unit: note }, text('. Then more')]), note],
@@ -436,21 +490,26 @@ describe('makeLayout, the review of 2026-10-06', () => {
     expect(stats.ph).toMatchObject({ found: 3, empty: 0, lost: 0 })
   })
 
-  it('a display that ends its unit is its ink down to the next line of the column, never EMPTY', async () => {
+  it('a display that ends its unit is its own ink to its unit\'s end mark, never EMPTY; alone at its page\'s foot, found all the same', async () => {
     // the next paragraph's lines set the column's right edge, where the number stands
     const runs: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: 'a=b', x: 150, y: 680 }, { s: '(2)', x: 252, y: 680 }, ...[0, 1, 2].map((j): Run => ({ s: words(10 + 10 * j, 10), x: 72, y: 660 - 12 * j }))]
     const w: World = {
-      pages: [{ runs }],
-      // the unit's end mark where its display's opening mark is (TeX sets it on the line the display left)
+      // the unit's end mark set where the display left the paragraph, its point after the display in the stream
+      pages: [{ runs, points: { '0e': [3, 0] } }],
       marks: [['0s', 1, 72, 700], ['0e', 1, 217, 700], ['p0.1a', 1, 217, 700], ['1s', 1, 72, 660], ['1e', 1, 267, 636]],
       units: [unit('para', [text(`${words(0, 10)} `), ph('\\[a=b\\]')]), unit('para', [text(words(10, 30))])],
     }
     const { file, stats } = await made(w)
     expect(phOf(file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.NUMBERED, 1, 150, 680, 165, 687.5, 677.5, 1, 252, 680, 267, 687.5, 677.5])
     expect(stats.ph.byKind.display).toEqual([1, 1])
-    // nothing below it in its column to bound it: LOST, not EMPTY
-    const alone = await made({ ...w, pages: [{ runs: runs.slice(0, 3) }], marks: (w.marks as Mark[]).slice(0, 3), units: [w.units[0] as SourceUnit] })
-    expect(phOf(alone.file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.LOST])
+    // nothing below it in its column: its own ink all the same (the geometric maker's LOST); with no other line to give
+    // the column's edge, its number is not told apart
+    const alone = await made({ ...w, pages: [{ runs: runs.slice(0, 3), points: { '0e': [3, 0] } }], marks: (w.marks as Mark[]).slice(0, 3), units: [w.units[0] as SourceUnit] })
+    expect(phOf(alone.file, 0, 1)).toEqual([0, 1, 1, 0, 1, 150, 680, 267, 687.5, 677.5])
+    // its end mark not where its point would end it (the next unit's is next): LOST, not EMPTY
+    const unended = await made({ ...w, pages: [{ runs }] })
+    expect(phOf(unended.file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.LOST])
+    expect(unended.stats.ph.why).toEqual({ "open, the next mark not its unit's": 1 })
   })
 
   it('a caption centred whole, its label with it, is CENTRED', async () => {
@@ -491,7 +550,8 @@ describe('makeLayout, the review of 2026-10-06', () => {
     // a cell standing inside a display's row: its glyph is inside the display's segment
     const runs: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: 'a', x: 150, y: 680 }, { s: 'zz', x: 190, y: 680 }, { s: 'b', x: 230, y: 680 }, { s: words(10, 10), x: 72, y: 660 }]
     const { file } = await made({
-      pages: [{ runs }],
+      // in the marked original's stream the cell after the paragraph
+      pages: [{ runs }], marked: [{ runs, order: [0, 1, 3, 4, 2], points: { 't1s': [2, 0], 't1e': [2, 2] } }],
       marks: [['0s', 1, 72, 700], ['0e', 1, 267, 660], ['p0.1a', 1, 217, 700], ['t1s', 1, 190, 680], ['t1e', 1, 200, 680]],
       units: [unit('para', [text(`${words(0, 10)} `), ph('\\begin{equation}a b\\end{equation}'), text(` ${words(10, 10)}`)]), unit('cell', [text('zz')])],
     })
@@ -500,7 +560,7 @@ describe('makeLayout, the review of 2026-10-06', () => {
     // a formula of two glyphs 6 pt apart either side of a rule of no height: three rectangles, the rule's 0.01 high
     const r: Run[] = [{ s: 'see', x: 72, y: 700 }, { s: 'x', x: 140, y: 700 }, { s: 'y', x: 185, y: 700 }, { s: 'and more', x: 200, y: 700 }]
     const rule = await made({
-      pages: [{ runs: r, boxes: [[151, 703, 179, 703]] }],
+      pages: [{ runs: r, boxes: [[151, 703, 179, 703, 3]] }],
       marks: [['0s', 1, 72, 700], ['0e', 1, 240, 700], ['p0.1a', 1, 87, 700], ['p0.1b', 1, 190, 700]],
       units: [unit('para', [text('see '), ph('$\\overline{x y}$'), text(' and more')])],
     })
@@ -511,7 +571,7 @@ describe('makeLayout, the review of 2026-10-06', () => {
     // a citation a full stop follows, on a paper whose package moves it: the switch gave it no mark
     const runs: Run[] = [{ s: 'as shown', x: 72, y: 700 }, { s: '12', x: 112, y: 703, size: 7 }, { s: '. More words here', x: 119, y: 700 }]
     const w: World = { pages: [{ runs }], marks: [['0s', 1, 72, 700], ['0e', 1, 204, 700]], units: [unit('para', [text('as shown '), ph('\\cite{a}'), text('. More words here')])] }
-    const switched = await made({ ...w, movers: ['cite'] })
+    const switched = await made({ ...w, switches: { '\\cite': '22222222' } })
     expect(phOf(switched.file, 0, 1)).toEqual([0, 1, 2, PH_FLAG.LOST])
     expect(switched.stats.ph).toMatchObject({ marked: 0, unmarked: 1, lost: 0 })
     // the same marks file but made with every class marking it: its marks expected, and missing
@@ -581,19 +641,19 @@ describe('makeLayout, the re-review of 2026-10-06', () => {
   it('subequations is a display: one ending its unit is found, not an EMPTY macro', async () => {
     const runs: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: 'a=b', x: 150, y: 680 }, { s: '(2a)', x: 247, y: 680 }, ...body(660, 10)]
     const { file } = await made({
-      pages: [{ runs }],
+      pages: [{ runs, points: { '0e': [3, 0] } }],
       marks: [['0s', 1, 72, 700], ['0e', 1, 217, 700], ['p0.1a', 1, 217, 700], ['1s', 1, 72, 660], ['1e', 1, 267, 636]],
       units: [unit('para', [text(`${words(0, 10)} `), ph('\\begin{subequations}\\begin{align}a&=b\\end{align}\\end{subequations}')]), unit('para', [text(words(10, 30))])],
     })
     expect(phOf(file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.NUMBERED, 1, 150, 680, 165, 687.5, 677.5, 1, 247, 680, 267, 687.5, 677.5])
   })
 
-  it("a placeholder's glyphs begin no more than 0.4 pt before its opening mark and have their middles before its closing mark: a carried mark a few tenths off keeps its base glyph", async () => {
-    // the opening mark carried 0.36 pt right of the formula's first glyph (2307.16209's $\Psi_0$, $\ell$)
+  it("a carried mark a few tenths off its glyph changes nothing: a piece is its own glyphs, its base glyph and no comma after it", async () => {
+    // the opening mark carried 0.36 pt right of the formula's first glyph (2307.16209's $\\Psi_0$, $\\ell$), the closing
+    // mark 0.2 pt into the comma after its formula; in the stream, each point where TeX set it
     const runs: Run[] = [{ s: 'shown by', x: 72, y: 700 }, { s: 'P', x: 117, y: 700 }, { s: '0', x: 122, y: 698, size: 7 }, { s: 'and more', x: 130.5, y: 700 }, { s: 'x', x: 175.5, y: 700 }, { s: ', then', x: 180.5, y: 700 }]
     const { file } = await made({
-      pages: [{ runs }],
-      // and a closing mark carried 0.2 pt into the comma after its formula: the comma is the text's
+      pages: [{ runs, points: { 'p0.1a': [1, 0], 'p0.3b': [5, 0] } }],
       marks: [['0s', 1, 72, 700], ['0e', 1, 210.5, 700], ['p0.1a', 1, 117.36, 700], ['p0.1b', 1, 125.5, 700], ['p0.3a', 1, 170.5, 700], ['p0.3b', 1, 180.7, 700]],
       units: [unit('para', [text('shown by '), ph('$P_0$'), text(' and more '), ph('$x$'), text(', then')])],
     })
@@ -601,15 +661,15 @@ describe('makeLayout, the re-review of 2026-10-06', () => {
     expect(phOf(file, 0, 3)).toEqual([0, 3, 0, 0, 1, 175.5, 700, 180.5, 707.5, 697.5])
   })
 
-  it("marks past the line's last glyph, the formula set on the next line, are LOST, not EMPTY", async () => {
-    // our compile set qQ past the margin; arXiv's at the next line's start
-    const runs: Run[] = [{ s: 'see the value', x: 72, y: 700 }, { s: 'qQ', x: 72, y: 688 }, { s: 'and then more words', x: 87, y: 688 }]
+  it("a formula our compile set at a line's end and arXiv's at the next line's start is found there (2307.16209's $qQ$, a cite)", async () => {
+    const ours: Run[] = [{ s: 'see the value of the long word', x: 72, y: 700 }, { s: 'qQ', x: 227, y: 700 }, { s: 'and then more words', x: 72, y: 688 }]
+    const theirs: Run[] = [{ s: 'see the value of the long word', x: 72, y: 700 }, { s: 'qQ', x: 72, y: 688 }, { s: 'and then more words', x: 87, y: 688 }]
     const { file, stats } = await made({
-      pages: [{ runs }],
-      marks: [['0s', 1, 72, 700], ['0e', 1, 182, 688], ['p0.1a', 1, 140, 700], ['p0.1b', 1, 150, 700]],
-      units: [unit('para', [text('see the value '), ph('$qQ$'), text(' and then more words')])],
+      pages: [{ runs: theirs }], marked: [{ runs: ours }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 167, 688], ['p0.1a', 1, 222, 700], ['p0.1b', 1, 237, 700]],
+      units: [unit('para', [text('see the value of the long word '), ph('$qQ$'), text(' and then more words')])],
     })
-    expect(phOf(file, 0, 1)).toEqual([0, 1, 0, PH_FLAG.LOST])
+    expect(phOf(file, 0, 1)).toEqual([0, 1, 0, 0, 1, 72, 688, 82, 695.5, 685.5])
     expect(stats.ph.empty).toBe(0)
   })
 
@@ -617,7 +677,8 @@ describe('makeLayout, the re-review of 2026-10-06', () => {
     // the anchor's rows out of order: the line above comes between the formula's two lines in the content stream
     const runs: Run[] = [{ s: 'first line ends with', x: 72, y: 700 }, { s: 'a+', x: 177, y: 700 }, { s: 'words of a line above', x: 72, y: 712 }, { s: 'b', x: 72, y: 688 }, { s: 'then the rest', x: 82, y: 688 }]
     const { file, stats } = await made({
-      pages: [{ runs }],
+      // in TeX's content stream the line above comes first
+      pages: [{ runs }], marked: [{ runs, order: [2, 0, 1, 3, 4] }],
       marks: [['0s', 1, 72, 700], ['0e', 1, 147, 688], ['p0.1a', 1, 172, 700], ['p0.1b', 1, 77, 688]],
       units: [unit('para', [text('first line ends with '), ph('$a+b$'), text(' words of a line above then the rest')])],
     })
@@ -633,29 +694,154 @@ describe('makeLayout, the re-review of 2026-10-06', () => {
       units: [unit('para', [text('see '), ph('\\url{www.example.org}'), text(' and '), ph('$x$'), text(' here '), ph('~'), { t: 'open' }, { t: 'close' }])],
     }
     // a marks file made without the url class: the url piece no mark, its row LOST; the tie and the group none
-    const marks = parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.pages, w.marks), '', { engine: 'pdflatex', classes: ['math'] }))))
+    const marks = await marksOf(w, '', ['math'])
     const out = await makeLayout({ units: w.units, marks, arxiv: arxivOf(w.pages), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
     if (!('file' in out)) throw new Error('refused')
     expect(out.file.ph.map(r => [r[1], r[3]])).toEqual([[1, PH_FLAG.LOST], [3, 0]])
   })
 
-  it("a display whose ink is all another unit's is LOST, not EMPTY; a footnote's rule under a display is no segment of it", async () => {
-    // the next unit's text holds the display's glyphs: nothing left for the display
-    const owned: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: 'a=b and more', x: 72, y: 680 }, ...body(660, 10)]
+  it("a display whose own ink arXiv's page does not hold is LOST, not EMPTY", async () => {
+    // our compile set x=y where arXiv's page has the next unit's words
+    const more = Array.from({ length: 12 }, (_, j): Run => ({ s: words(10 + 10 * j, 10), x: 72, y: 660 - 12 * j }))
+    const theirs: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: 'a=b and more', x: 72, y: 680 }, ...more]
+    const ours: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: 'x=y', x: 150, y: 690 }, { s: 'a=b and more', x: 72, y: 680 }, ...more]
     const lost = await made({
-      pages: [{ runs: owned }],
-      marks: [['0s', 1, 72, 700], ['0e', 1, 217, 700], ['p0.1a', 1, 217, 700], ['1s', 1, 72, 680], ['1e', 1, 267, 636]],
-      units: [unit('para', [text(`${words(0, 10)} `), ph('\\[x=y\\]')]), unit('para', [text(`a=b and more ${words(10, 30)}`)])],
+      pages: [{ runs: theirs }], marked: [{ runs: ours, points: { '0e': [2, 0] } }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 217, 700], ['p0.1a', 1, 217, 700], ['1s', 1, 72, 680], ['1e', 1, 267, 528]],
+      units: [unit('para', [text(`${words(0, 10)} `), ph('\\[x=y\\]')]), unit('para', [text(`a=b and more ${words(10, 120)}`)])],
     })
     expect(phOf(lost.file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.LOST])
-    // a display at the column's foot, the footnote's rule and text below it
-    const runs: Run[] = [...body(700, 0), { s: 'a=b', x: 150, y: 660 }, { s: '1', x: 72, y: 620, size: 7 }, { s: 'A note here', x: 76, y: 617, size: 8 }]
-    const { file } = await made({
-      pages: [{ runs, boxes: [[72, 635, 250, 635.4]] }],
-      marks: [['0s', 1, 72, 700], ['0e', 1, 267, 676], ['p0.1a', 1, 267, 676], ['1s', 1, 76, 617], ['1e', 1, 120, 617]],
-      units: [unit('para', [text(`${words(0, 30)} `), ph('\\[a=b\\]')]), unit('footnote', [text('A note here')])],
-    })
-    expect(phOf(file, 0, 1)).toEqual([0, 1, 1, 0, 1, 150, 660, 165, 667.5, 657.5])
+    expect(lost.stats.ph.empty).toBe(0)
   })
 })
 
+describe('makeLayout, the content stream (Task 6b)', () => {
+  const segsOf = (row: number[]) => chunk(row.slice(4), 6)
+
+  it("a sum raised off its line, and its limits, are the formula's own on its line: whole (1706.03762's 34.9), arXiv's P for its sum", async () => {
+    // the line above is the unit's own: its baseline nearer the raised sum than the formula's line
+    const ours: Run[] = [
+      { s: 'the dot product of two words', x: 72, y: 712 }, { s: 'is', x: 72, y: 700 }, { s: 'q·k=', x: 87, y: 700 }, { s: '∑', x: 107, y: 706.72 },
+      { s: 'dk', x: 112, y: 703.6, size: 7 }, { s: 'i=1', x: 112, y: 697.5, size: 7 }, { s: 'qiki', x: 123, y: 700 }, { s: 'over all', x: 148, y: 700 },
+    ]
+    const theirs = ours.map(r => (r.s === '∑' ? { ...r, s: 'P' } : r))
+    // a paragraph below, so that the lines carried are most of the page's
+    const below = Array.from({ length: 12 }, (_, j): Run => ({ s: words(10 * j, 10), x: 72, y: 600 - 12 * j }))
+    const { file, stats } = await made({
+      pages: [{ runs: [...theirs, ...below] }], marked: [{ runs: [...ours, ...below], points: { 'p0.1a': [2, 0], 'p0.1b': [7, 0] } }],
+      marks: [['0s', 1, 72, 712], ['0e', 1, 188, 700], ['p0.1a', 1, 82, 700], ['p0.1b', 1, 143, 700], ['1s', 1, 72, 600], ['1e', 1, endOf(below[11] as Run), 468]],
+      units: [unit('para', [text('the dot product of two words is '), ph('$q\\cdot k=\\sum_{i=1}^{d_k}q_ik_i$'), text(' over all')]), unit('para', [text(words(0, 120))])],
+    })
+    const segs = segsOf(phOf(file, 0, 1))
+    // one segment on the formula's line, the sum's top in it
+    expect(segs).toEqual([[1, 87, 700, 143, 706.72 + 7.5, 697.5 - 1.75]])
+    expect(stats.match.recoded).toBe(1)
+    expect(stats.ph).toMatchObject({ found: 1, lost: 0, unmatched: 0, twice: 0 })
+  })
+
+  it("a fraction's bar and its denominator's script 5.27 pt below the line are its own (1706.03762's 33.3)", async () => {
+    const runs: Run[] = [
+      { s: 'divided by', x: 72, y: 700 }, { s: '1', x: 123, y: 705.5, size: 7 }, { s: '√', x: 121, y: 699, size: 7 }, { s: 'd', x: 125.5, y: 696.5, size: 7 },
+      { s: 'k', x: 129, y: 694.73, size: 5 }, { s: 'and more', x: 140, y: 700 },
+    ]
+    const { file } = await made({
+      pages: [{ runs, boxes: [[121, 702.3, 133.5, 702.7, 2]], points: { 'p0.1a': [1, 0], 'p0.1b': [5, 0] } }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 180, 700], ['p0.1a', 1, 122, 700], ['p0.1b', 1, 135, 700]],
+      units: [unit('para', [text('divided by '), ph('$\\frac{1}{\\sqrt{d_k}}$'), text(' and more')])],
+    })
+    // the k's bottom, the numerator's top, the bar inside
+    expect(segsOf(phOf(file, 0, 1))).toEqual([[1, 121, 700, 133.5, 705.5 + 5.25, 694.73 - 1.25]])
+  })
+
+  it("a closing bracket past the carried closing mark is the piece's own: an eqref's ')', a cite's ']' (2307.16209's 429.18, 210.43)", async () => {
+    const runs: Run[] = [{ s: 'by', x: 72, y: 700 }, { s: '(3.83)', x: 87, y: 700 }, { s: 'and', x: 122, y: 700 }, { s: '[52]', x: 142, y: 700 }, { s: 'then more', x: 167, y: 700 }]
+    const { file } = await made({
+      pages: [{ runs, points: { 'p0.1b': [1, 6], 'p0.3b': [3, 4] } }],
+      // the closing marks carried 2.8 pt before the bracket's end, and inside the 2 before it
+      marks: [['0s', 1, 72, 700], ['0e', 1, 212, 700], ['p0.1a', 1, 82, 700], ['p0.1b', 1, 114.2, 700], ['p0.3a', 1, 137, 700], ['p0.3b', 1, 155, 700]],
+      units: [unit('para', [text('by '), ph('\\eqref{e}'), text(' and '), ph('\\cite{l}'), text(' then more')])],
+    })
+    expect(phOf(file, 0, 1).slice(5, 8)).toEqual([87, 700, 117])
+    expect(phOf(file, 0, 3).slice(5, 8)).toEqual([142, 700, 162])
+  })
+
+  it("arXiv's glyph of a blank Unicode at the place of the formula's own is matched there (2307.16209's big left parenthesis)", async () => {
+    const ours: Run[] = [{ s: 'the series', x: 72, y: 700 }, { s: '(', x: 127, y: 700 }, { s: 'a+b)', x: 132, y: 700 }, { s: 'ends here', x: 157, y: 700 }]
+    const theirs = ours.map(r => (r.s === '(' ? { ...r, blank: true } : r))
+    const { file, stats } = await made({
+      pages: [{ runs: theirs }], marked: [{ runs: ours }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 202, 700], ['p0.1a', 1, 122, 700], ['p0.1b', 1, 152, 700]],
+      units: [unit('para', [text('the series '), ph('$(a+b)$'), text(' ends here')])],
+    })
+    expect(phOf(file, 0, 1).slice(5, 8)).toEqual([127, 700, 152])
+    expect(stats.match.recoded).toBe(1)
+  })
+
+  it('a piece whose own glyph or rule arXiv\'s page lacks is LOST, never found short', async () => {
+    const ours: Run[] = [{ s: 'we have', x: 72, y: 700 }, { s: 'x+y', x: 112, y: 700 }, { s: 'here and', x: 132, y: 700 }]
+    const w: World = {
+      pages: [{ runs: [ours[0], { s: 'x+', x: 112, y: 700 }, ours[2]] as Run[] }], marked: [{ runs: ours }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 172, 700], ['p0.1a', 1, 107, 700], ['p0.1b', 1, 127, 700]],
+      units: [unit('para', [text('we have '), ph('$x+y$'), text(' here and')])],
+    }
+    const short = await made(w)
+    expect(phOf(short.file, 0, 1)).toEqual([0, 1, 0, PH_FLAG.LOST])
+    // its bar not on arXiv's page
+    const r: Run[] = [{ s: 'see', x: 72, y: 700 }, { s: 'x', x: 140, y: 700 }, { s: 'y', x: 185, y: 700 }, { s: 'and more', x: 200, y: 700 }]
+    const bar: World = {
+      pages: [{ runs: r }], marked: [{ runs: r, boxes: [[151, 703, 179, 703.4, 3]] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 240, 700], ['p0.1a', 1, 87, 700], ['p0.1b', 1, 190, 700]],
+      units: [unit('para', [text('see '), ph('$\\overline{x y}$'), text(' and more')])],
+    }
+    const nobar = await made(bar)
+    expect(phOf(nobar.file, 0, 1)).toEqual([0, 1, 0, PH_FLAG.LOST])
+    expect(nobar.stats.ph.why).toEqual({ "a rule not matched on arXiv's page": 1 })
+    // with it: found, the bar its own
+    const withBar = await made({ ...bar, pages: [{ runs: r, boxes: [[151, 703, 179, 703.4]] }] })
+    expect(phOf(withBar.file, 0, 1).slice(4, 10)).toEqual([1, 140, 700, 190, 707.5, 697.5])
+  })
+
+  it("a display whose rows no line carries is found by its block's offset, its glyph of another Unicode at its place", async () => {
+    const shift = (r: Run): Run => ({ ...r, x: r.x + 3, y: r.y - 2 })
+    const lines = Array.from({ length: 12 }, (_, j): Run => ({ s: words(10 + 10 * j, 10), x: 72, y: 660 - 12 * j }))
+    const ours: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: '∫fdx=0', x: 150, y: 680 }, ...lines]
+    // arXiv's page all 3 pt right and 2 pt down: every line moved whole; the integral sign its raw code
+    const theirs = ours.map(r => shift(r.s.startsWith('∫') ? { ...r, s: `R${r.s.slice(1)}` } : r))
+    const { file, stats } = await made({
+      pages: [{ runs: theirs }], marked: [{ runs: ours, points: { 'p0.1a': [1, 0] } }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 267, 528], ['p0.1a', 1, 217, 700]],
+      units: [unit('para', [text(`${words(0, 10)} `), ph('\\[\\int f dx = 0\\]'), text(` ${words(10, 120)}`)])],
+    })
+    expect(segsOf(phOf(file, 0, 1))).toEqual([[1, 153, 678, 183, 685.5, 675.5]])
+    expect(stats.match.vote).toBe(6)
+  })
+
+  it("a respaced line's formula is found by the run's correction", async () => {
+    const ours: Run[] = [{ s: 'one two', x: 72, y: 700 }, { s: 'x+y', x: 112, y: 700 }, { s: 'three four five', x: 132, y: 700 }]
+    // arXiv's word spaces 2 pt wider
+    const theirs: Run[] = [{ s: 'one', x: 72, y: 700 }, { s: 'two', x: 89, y: 700 }, { s: 'x+y', x: 116, y: 700 }, { s: 'three', x: 138, y: 700 }, { s: 'four', x: 165, y: 700 }, { s: 'five', x: 187, y: 700 }]
+    const { file, stats } = await made({
+      pages: [{ runs: theirs }], marked: [{ runs: ours }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 207, 700], ['p0.1a', 1, 107, 700], ['p0.1b', 1, 127, 700]],
+      units: [unit('para', [text('one two '), ph('$x+y$'), text(' three four five')])],
+    })
+    expect(stats.lines).toMatchObject({ carried: 1, total: 1 })
+    expect(phOf(file, 0, 1).slice(5, 8)).toEqual([116, 700, 131])
+  })
+
+  it("a found citation's and reference's own text: their glyphs' characters, a space where arXiv's glyphs stand apart; none of a control character", async () => {
+    const runs: Run[] = [{ s: 'see', x: 72, y: 700 }, { s: '[1, 2]', x: 92, y: 700 }, { s: 'and', x: 127, y: 700 }, { s: '3', x: 147, y: 700 }, { s: 'with', x: 157, y: 700 }, { s: 'x', x: 182, y: 700 }, { s: 'now', x: 192, y: 700 }]
+    const w: World = {
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 207, 700], ['p0.1a', 1, 87, 700], ['p0.1b', 1, 122, 700], ['p0.3a', 1, 142, 700], ['p0.3b', 1, 152, 700], ['p0.5a', 1, 177, 700], ['p0.5b', 1, 187, 700]],
+      units: [unit('para', [text('see '), ph('\\cite{a,b}'), text(' and '), ph('\\ref{s}'), text(' with '), ph('$x$'), text(' now')])],
+    }
+    const { file, stats } = await made(w)
+    expect(file.pageText).toEqual([[0, 1, '[1, 2]'], [0, 3, '3']])
+    expect(stats.ph.texts).toBe(2)
+    // arXiv's 3 drawn under a control character's Unicode: matched at its place, but no page text
+    const control = await made({ ...w, marked: [{ runs }], pages: [{ runs: runs.map(r => (r.s === '3' ? { ...r, s: '\u0003' } : r)) }] })
+    expect(phOf(control.file, 0, 3).slice(5, 8)).toEqual([147, 700, 152])
+    expect(control.file.pageText).toEqual([[0, 1, '[1, 2]']])
+  })
+})

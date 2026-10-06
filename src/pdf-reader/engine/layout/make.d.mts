@@ -22,8 +22,14 @@ export interface LayoutStats {
   /** `marked`: the placeholders of the located units the marked original marks (an opening mark at least), by kind
    *  found among them; `unmarked`: those it gives no mark (LOST, beside them); `inferred`: those found whose end is
    *  inferred, having no closing mark; `why`: the LOST among them by cause; `textTaken`: glyphs a placeholder took that are
-   *  letters of the unit's own words as the anchor paired them (running text), to be none */
-  ph: { marked: number; found: number; empty: number; lost: number; byKind: Record<string, [found: number, marked: number]>; unmarked: number; inferred: number; why: Record<string, number>; textTaken: number }
+   *  letters of the unit's own words as the anchor paired them (running text), to be none. The bars of the own ink:
+   *  `owned` and `matched`, the glyphs and rules of the found pieces in the marks file and on arXiv's page, `unmatched`
+   *  their difference, and `twice`, arXiv's glyphs matched by two found pieces, each to be none; `texts`, the page texts
+   *  written */
+  ph: { marked: number; found: number; empty: number; lost: number; byKind: Record<string, [found: number, marked: number]>; unmarked: number; inferred: number; why: Record<string, number>; textTaken: number; owned: number; matched: number; unmatched: number; twice: number; texts: number }
+  /** the matcher's matches by kind (the same character, another Unicode at the place, loosely on the line, by a vote),
+   *  those it rejected off their run, its work, and the pieces past its bound */
+  match: { same: number; recoded: number; loose: number; vote: number; rejected: number; work: number; over: number }
   /** by the unit's kind: the units with a label, of the located units whose start mark was carried to their first line */
   labels: Record<string, [found: number, units: number]>
   frames: { units: number; split: number; lineCountChecked: number; lineCountEqual: number }

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { countValues } from '@/pdf-reader/engine/layout/json.mjs'
 import {
-  encodeLayout, indexLayout, LABEL_KINDS, LAYOUT, LAYOUT_CAP, LAYOUT_DEPTH, LAYOUT_VALUES, type LayoutFile, LayoutRefusal, PH_FLAG, PH_KINDS,
-  parseLayout, UNIT_FLAG, UNIT_KINDS,
+  encodeLayout, indexLayout, LABEL_KINDS, LAYOUT, LAYOUT_CAP, LAYOUT_DEPTH, LAYOUT_VALUES, type LayoutFile, LayoutRefusal, PAGE_TEXT_ALL, PAGE_TEXT_KINDS, PH_FLAG, PH_KINDS,
+  parseLayout, TEXT_MAX, UNIT_FLAG, UNIT_KINDS,
 } from '@/pdf-reader/engine/layout/file.mjs'
 
 // The layout file (spec §4.2): a file made from a paper, read by the container's service and by the reader's main thread.
@@ -76,6 +76,7 @@ function made(): LayoutFile {
       [8, LABEL_KINDS.indexOf('footnote'), 2, 66, 100, 70, 106, 98],
     ],
     headings: [[0, 'A title'], [3, 'Method <b onclick="x()">&amp;</b>']],
+    pageText: [[2, 3, '[12, 3]']],
   }
 }
 
@@ -118,16 +119,20 @@ describe('a valid file', () => {
     expect(u.ph.get(2)!.kind).toBe('display')
     expect(u.ph.get(2)!.flags).toBe(PH_FLAG.NUMBERED)
     expect([...u.ph.get(2)!.segs]).toEqual([2, 312, 690, 500, 697.5, 687.25, 2, 520, 690, 540, 697.5, 687.25])
-    expect(u.ph.get(4)).toEqual({ kind: 'ref', flags: PH_FLAG.EMPTY, segs: new Float64Array(0) })
+    expect(u.ph.get(4)).toEqual({ kind: 'ref', flags: PH_FLAG.EMPTY, segs: new Float64Array(0), text: null })
     expect(u.ph.has(1)).toBe(false)
     const two = index.unit(2)!
     expect(two.erase.map(e => [...e])).toEqual([[72, 647.25, 300, 657.5, 310, 647.25, 540, 657.5], [72, 635.25, 380.75, 645.5]])
-    expect(two.ph.get(3)).toEqual({ kind: 'cite', flags: PH_FLAG.SOURCE_BRACKETS, segs: new Float64Array([1, 300, 638, 320, 645.5, 635.25]) })
+    // a page-text placeholder's own text, as its glyphs give it
+    expect(two.ph.get(3)).toEqual({ kind: 'cite', flags: PH_FLAG.SOURCE_BRACKETS, segs: new Float64Array([1, 300, 638, 320, 645.5, 635.25]), text: '[12, 3]' })
+    expect(two.ph.get(1)?.text).toBeNull()
     expect(index.unit(0)).toMatchObject({ kind: 'heading', depth: 0, title: true, heading: 'A title' })
     expect(index.unit(7)).toMatchObject({ kind: 'caption', centred: true })
     expect([...index.unit(3)!.labels]).toEqual([0, 2, 50, 720, 66, 728.5, 717])
     expect([...index.unit(8)!.labels]).toEqual([3, 2, 66, 100, 70, 106, 98])
-    expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.LOST, segs: new Float64Array(0) })
+    expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.LOST, segs: new Float64Array(0), text: null })
+    expect(LAYOUT).toBe('2')
+    expect(PAGE_TEXT_KINDS).toEqual(['cite', 'ref', 'eqref'])
     expect(index.unit(1)).toBeNull()
     expect(index.unit(4)).toBeNull()
     expect(index.view(2)).toEqual([0, 0, 612, 792])
@@ -246,7 +251,7 @@ describe('nesting is refused before JSON.parse', () => {
     const f = made()
     // each key's value one bracket deeper than the file's own: the three entries arrays reach 4
     const reach = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, 1 + depthOf(v)]))
-    expect(reach).toEqual({ schema: 1, layout: 1, pdfjs: 1, paper: 2, left: 1, views: 2, fonts: 2, units: 3, lines: 4, frames: 4, erase: 4, ph: 3, labels: 3, headings: 3 })
+    expect(reach).toEqual({ schema: 1, layout: 1, pdfjs: 1, paper: 2, left: 1, views: 2, fonts: 2, units: 3, lines: 4, frames: 4, erase: 4, ph: 3, labels: 3, headings: 3, pageText: 3 })
     expect(depthOf(f)).toBe(4)
     expect(LAYOUT_DEPTH).toBe(4)
     const parse = vi.spyOn(JSON, 'parse')
@@ -314,7 +319,7 @@ const ROWS: [string, Edit, string][] = [
   ['an extra key', f => { f.extra = 1 }, 'extra'],
   ['an extra key of 10,000 characters is named by its first 20', f => { f['k'.repeat(10000)] = 1 }, `${'k'.repeat(20)}…`],
   ['schema 2', f => { f.schema = 2 }, 'schema'],
-  ["layout '2'", f => { f.layout = '2' }, 'layout'],
+  ["layout '1', the maker's before the content stream", f => { f.layout = '1' }, 'layout'],
   ['layout 1 as a number', f => { f.layout = 1 }, 'layout'],
   ['pdfjs empty', f => { f.pdfjs = '' }, 'pdfjs'],
   ['pdfjs of 33 characters', f => { f.pdfjs = '5'.repeat(33) }, 'pdfjs'],
@@ -444,6 +449,28 @@ const ROWS: [string, Edit, string][] = [
   ['an object where a row goes', f => { f.ph[0] = {} }, 'ph[0]'],
   ['true where an id goes', f => { f.headings[0][0] = true }, 'headings[0][0]'],
   ['an array where a src goes', f => { f.headings[0][1] = ['A title'] }, 'headings[0][1]'],
+  // the page text: [unit, k, text] of a found placeholder of a page-text kind, rising, its text 1 to TEXT_MAX code units
+  // of characters the text layer may give (a space; no control, bidi or lone surrogate)
+  ['page text not an array', f => { f.pageText = {} }, 'pageText'],
+  ['a page text of two fields', f => { f.pageText[0].pop() }, 'pageText[0]'],
+  ['a page text of no unit of units', f => { f.pageText[0][0] = 4 }, 'pageText[0][0]'],
+  ['a page text of a piece with no row', f => { f.pageText[0][1] = 2 }, 'pageText[0][1]'],
+  ['a page text of a formula', f => { f.pageText[0][1] = 1 }, 'pageText[0][1]'],
+  ['a page text of an EMPTY reference', f => { f.pageText[0] = [5, 4, '(2)'] }, 'pageText[0][1]'],
+  ['a page text of a LOST one', f => { f.ph[1][3] = PH_FLAG.LOST; f.ph[1].length = 4 }, 'pageText[0][1]'],
+  ['page texts not rising', f => { f.pageText.push([2, 3, '[1]']) }, 'pageText[1][1]'],
+  ['a page text of a unit before the last', f => { f.ph.push([0, 0, CITE, 0, 1, 200, 650, 230.5, 657.5, 646]); f.pageText.push([0, 0, '[1]']) }, 'pageText[1][0]'],
+  ['an empty page text', f => { f.pageText[0][2] = '' }, 'pageText[0][2]'],
+  [`a page text of ${'257'} code units`, f => { f.pageText[0][2] = 'x'.repeat(TEXT_MAX + 1) }, 'pageText[0][2]'],
+  ['a page text that is no string', f => { f.pageText[0][2] = 12 }, 'pageText[0][2]'],
+  ['a page text with a tab', f => { f.pageText[0][2] = '[1,\t2]' }, 'pageText[0][2]'],
+  ['a page text with a line break', f => { f.pageText[0][2] = '[1,\n2]' }, 'pageText[0][2]'],
+  ['a page text with DEL', f => { f.pageText[0][2] = '[1\u007f]' }, 'pageText[0][2]'],
+  ['a page text with a C1 control', f => { f.pageText[0][2] = '[1\u0085]' }, 'pageText[0][2]'],
+  ['a page text with a bidi override', f => { f.pageText[0][2] = '[\u202e21]' }, 'pageText[0][2]'],
+  ['a page text with a bidi isolate', f => { f.pageText[0][2] = '[\u206621]' }, 'pageText[0][2]'],
+  ['a page text with a lone surrogate', f => { f.pageText[0][2] = '[\ud83d]' }, 'pageText[0][2]'],
+  ['a page text with a byte order mark', f => { f.pageText[0][2] = '\ufeff[1]' }, 'pageText[0][2]'],
 ]
 
 describe('refused by every bound', () => {
@@ -472,7 +499,7 @@ describe('refused by every bound', () => {
       f => { f.frames[3][1][10] = 1000; f.frames[3][1][16] = 1000; f.frames[3][1][5] = 0 },
       f => { f.erase[0][1].push(...row(14, [0, 72, 647.25, 300, 657.5])) },
       f => { f.ph[0].push(...row(3, f.ph[0].slice(4))); f.ph[3].push(...row(62, f.ph[3].slice(4, 10))) },
-      f => { f.ph[0][3] = PH_FLAG.RAISED | PH_FLAG.LOWERED | PH_FLAG.SOURCE_BRACKETS; f.ph[1][1] = 4 },
+      f => { f.ph[0][3] = PH_FLAG.RAISED | PH_FLAG.LOWERED | PH_FLAG.SOURCE_BRACKETS; f.ph[1][1] = 4; f.pageText[0][1] = 4 },
       f => { f.labels.push(...Array.from({ length: 3 }, () => [...f.labels[1]])); f.headings[1][1] = 'x'.repeat(4000) },
       f => { f.paper.id = 'hep-th/9901001' },
       f => { f.paper.id = 'math.GT/0309136' },
@@ -480,8 +507,27 @@ describe('refused by every bound', () => {
       f => { f.paper.id = `${'x'.repeat(16)}/9901001` },
       f => { f.paper.id = 'cs/9901001' },
       f => { f.paper.id = 'astro-ph.GA/0309136' },
+      // a page text of TEXT_MAX code units, of a space, a no-break space and a character outside the BMP; none at all
+      f => { f.pageText[0][2] = `[1,\u00a02 \u{1d465}${'9'.repeat(TEXT_MAX - 9)}]` },
+      f => { f.pageText = [] },
+      f => { f.ph.push([8, 0, PH_KINDS.indexOf('eqref'), PH_FLAG.RAISED, 2, 72, 100, 90, 106, 98]); f.pageText.push([8, 0, '(3.1)']) },
     ]
     for (const edit of edges) expect(refusal(broken(edit))).toBeNull()
+    expect(`[1,\u00a02 \u{1d465}${'9'.repeat(TEXT_MAX - 9)}]`).toHaveLength(TEXT_MAX)
+  })
+
+  it('the page texts of a file are PAGE_TEXT_ALL code units at most', () => {
+    // a unit of 2,000 citations, each with a page text of TEXT_MAX code units
+    const n = Math.ceil(PAGE_TEXT_ALL / TEXT_MAX) + 1
+    const edit: Edit = f => {
+      f.units[1][4] = 10000
+      f.ph = f.ph.filter((r: number[]) => r[0] !== 2)
+      f.pageText = []
+      for (let k = 0; k < n; k++) { f.ph.splice(k, 0, [2, k, CITE, 0, 1, 200, 650, 230.5, 657.5, 646]); f.pageText.push([2, k, 'x'.repeat(TEXT_MAX)]) }
+    }
+    expect(refusal(broken(edit))?.path).toBe('pageText')
+    const fewer: Edit = f => { edit(f); f.pageText.length = n - 2 }
+    expect(refusal(broken(fewer))).toBeNull()
   })
 })
 
@@ -496,7 +542,7 @@ function largest(): LayoutFile {
   const views: number[] = []
   for (let p = 0; p < PAGES; p++) views.push(0, 0, 612, 792)
   const fonts = Array.from({ length: 512 }, (_, i) => `NimbusRomNo9L-Regu${i}`)
-  const f: LayoutFile = { schema: 1, layout: LAYOUT, pdfjs: '5.4.296', paper: { id: '2608.30730', version: 3, pages: PAGES }, left: 'f'.repeat(64), views, fonts, units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [] }
+  const f: LayoutFile = { schema: 1, layout: LAYOUT, pdfjs: '5.4.296', paper: { id: '2608.30730', version: 3, pages: PAGES }, left: 'f'.repeat(64), views, fonts, units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [] }
   for (let i = 0; i < UNITS; i++) {
     const id = 2 * i, heading = i % 10 === 0, n = linesOf(i), page = 1 + (i % (PAGES - 1))
     f.units.push([id, heading ? H : P, heading ? 1 : 9, i % 8 === 0 ? UNIT_FLAG.CENTRED : 0, 40])

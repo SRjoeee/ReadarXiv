@@ -1,7 +1,7 @@
 // file.mjs's types (JavaScript until the engine's port), for the reader and its tests
 export { LayoutRefusal } from './json.mjs'
 /** the maker's version: raised with any change to the layout maker or the schema; it enters no output identity */
-export declare const LAYOUT: '1'
+export declare const LAYOUT: '2'
 /** bytes */
 export declare const LAYOUT_CAP: number
 export declare const LAYOUT_VALUES: number
@@ -12,6 +12,14 @@ export declare const PH_KINDS: readonly ['math', 'display', 'cite', 'ref', 'eqre
 export declare const LABEL_KINDS: readonly ['number', 'item', 'caption', 'footnote']
 export declare const UNIT_FLAG: { readonly TITLE: 1; readonly FRONT: 2; readonly CENTRED: 4 }
 export declare const PH_FLAG: { readonly SOURCE_BRACKETS: 1; readonly NUMBERED: 2; readonly RAISED: 4; readonly LOWERED: 8; readonly EMPTY: 16; readonly LOST: 32 }
+/** the placeholders the layer may draw as text in the page's face, whose own text the file may hold */
+export declare const PAGE_TEXT_KINDS: readonly ['cite', 'ref', 'eqref']
+/** a page text's code units at most, and a file's in all */
+export declare const TEXT_MAX: number
+export declare const PAGE_TEXT_ALL: number
+/** a page text: 1 to TEXT_MAX code units; of white space a space alone; no control, bidi or separator character, no lone
+ *  surrogate */
+export declare function isPageText(s: unknown): s is string
 /** prep/<mid>/layout-<sha256>.json (spec §4.2). arXiv's PDF units, each page unrotated, y up, pages 1-based */
 export interface LayoutFile {
   schema: 1
@@ -28,6 +36,8 @@ export interface LayoutFile {
   ph: number[][]                           // unit, k, kind, flags, then per segment: page, x0, baseline, x1, top, bottom
   labels: number[][]                       // unit, kind, page, x0, baseline, x1, top, bottom
   headings: [id: number, src: string][]
+  /** each found page-text placeholder's own text (its glyphs' characters in stream order), by unit and k, rising */
+  pageText: [id: number, k: number, text: string][]
 }
 /** bytes, then UTF-8, then values and nesting counted, then JSON.parse, then every bound; throws LayoutRefusal */
 export declare function parseLayout(bytes: Uint8Array): LayoutFile
@@ -39,7 +49,7 @@ export interface LayoutUnit {
   lines: Float64Array                      // stride 8, as the file
   frames: Float64Array                     // stride 6
   erase: Float64Array[]                    // per line: x0, y0, x1, y1 (stride 4)
-  ph: ReadonlyMap<number, { kind: (typeof PH_KINDS)[number]; flags: number; segs: Float64Array }>   // by k; segs stride 6
+  ph: ReadonlyMap<number, { kind: (typeof PH_KINDS)[number]; flags: number; segs: Float64Array; text: string | null }>   // by k; segs stride 6; text: the page text
   labels: Float64Array                     // per label: kind, page, x0, baseline, x1, top, bottom (stride 7)
   heading: string | null
 }
