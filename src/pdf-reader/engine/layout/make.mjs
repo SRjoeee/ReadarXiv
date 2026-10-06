@@ -137,6 +137,15 @@ function band(P, lo, hi) {
   return out
 }
 const mid = (P, i) => (P.x0[i] + P.x1[i]) / 2
+/** a carried mark stands a little off its glyph's edge: on the four researched papers 18 of 3,766 opening marks lie more
+ *  than 0.1 pt inside a glyph, 4 inside the placeholder's own first glyph by 0.12–0.36 pt (2307.16209's $\Psi_0$,
+ *  $\ell$) and 14 inside the glyph before it, 2.35 pt from its start or more; of 3,707 closing marks 52 lie inside a
+ *  glyph, 46 the placeholder's last, its middle before the mark, and 6 the punctuation after it, its middle past the mark.
+ *  So a placeholder's glyph begins no more than MARK_SLACK before its opening mark, and has its middle before its closing
+ *  mark */
+const MARK_SLACK = 0.4
+const startsFrom = (P, g, x) => P.x0[g] >= x - MARK_SLACK
+const endsBy = (P, g, x) => mid(P, g) <= x
 /** the baseline most of the glyphs' characters share (to a hundredth), the one nearest `near` on a tie */
 function baselineOf(P, gs, near) {
   const votes = new Map()
@@ -255,7 +264,7 @@ function blank(units) {
   return {
     lines: { carried: 0, total: 0 },
     units: { located: 0, total: units.length, byKind: {}, unplaced: 0 },
-    ph: { marked: 0, found: 0, empty: 0, lost: 0, byKind: {}, unmarked: 0, inferred: 0, why: {} },
+    ph: { marked: 0, found: 0, empty: 0, lost: 0, byKind: {}, unmarked: 0, inferred: 0, why: {}, textTaken: 0 },
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
     capped: [], timedOut: [], over: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
   }
@@ -427,13 +436,18 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     if (!rows.length) continue
     // the anchor's rectangles of one line (its tokens out of order: a script before its base, the line's two parts
     // either side of a formula, 1706.03762's note): one line, wherever the second begins
-    for (let j = 1; j < rows.length; j++) {
-      const r = rows[j]
-      const q = rows.findIndex((o, n) => n < j && oneLine(o, r))
-      if (q < 0) continue
-      const o = rows[q]
-      rows[q] = rowOf(ink[r.page], new Set([...o.gl, ...r.gl]), r.page, [...o.ks, ...r.ks], o.base)
-      rows.splice(j--, 1)
+    // again over the merged rows until none is left to merge: a row may match one only once another merge has made it
+    for (let merged = true; merged;) {
+      merged = false
+      for (let j = 1; j < rows.length; j++) {
+        const r = rows[j]
+        const q = rows.findIndex((o, n) => n < j && oneLine(o, r))
+        if (q < 0) continue
+        const o = rows[q]
+        rows[q] = rowOf(ink[r.page], new Set([...o.gl, ...r.gl]), r.page, [...o.ks, ...r.ks], o.base)
+        rows.splice(j--, 1)
+        merged = true
+      }
     }
     for (const row of rows) for (const g of row.gl) ink[row.page].owner[g] = i
     placed.push({ id: i, u, a, rows, S, E })
@@ -480,6 +494,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   }
   const classes = new Set(marks.marking.classes)
   const ph = [], kept = new Map() // kept: page → the rectangles erasing leaves out (displays' segments, labels)
+  const below = new Map() // page|column → the located units' rows there, by top (belowOf)
   const keep = (p, r) => (kept.get(p) ?? kept.set(p, []).get(p)).push(r)
   for (const one of placed) {
     const { id: i, u, a, rows, E } = one
@@ -496,10 +511,16 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     const placeOf = m => { const j = rowAt(m); return j < 0 ? null : { j, x: m.x } }
     /** the glyphs on line j's baseline, scripts and all, on its side of the page, no other unit's, by origin */
     const seen = new Map()
+    /** whether another of the unit's lines holds glyph g nearer than line j: its baseline nearer the glyph's, the glyph
+     *  in its window and within an em of its extent (a big operator's row above a text line takes none of the line's) */
+    const nearer = (j, g) => {
+      const r = rows[j], P = ink[r.page], d = Math.abs(P.y[g] - r.base), m = mid(P, g)
+      return rows.some((o, n) => n !== j && o.page === r.page && Math.abs(P.y[g] - o.base) < d && Math.abs(P.y[g] - o.base) < SCRIPT(P.size[g]) && m >= o.x0 - o.size && m <= o.x1 + o.size)
+    }
     const onLine = j => {
       if (seen.has(j)) return seen.get(j)
       const r = rows[j], P = ink[r.page], [s0, s1] = sideOf(r.page, columnOf(r.page, r.x0, r.x1))
-      const gs = band(P, r.base - SCRIPT(P.most), r.base + SCRIPT(P.most)).filter(g => Math.abs(P.y[g] - r.base) < SCRIPT(P.size[g]) && mid(P, g) >= s0 && mid(P, g) <= s1 && (P.owner[g] === -1 || P.owner[g] === i)).sort((x, y) => P.x0[x] - P.x0[y] || x - y)
+      const gs = band(P, r.base - SCRIPT(P.most), r.base + SCRIPT(P.most)).filter(g => Math.abs(P.y[g] - r.base) < SCRIPT(P.size[g]) && mid(P, g) >= s0 && mid(P, g) <= s1 && (P.owner[g] === -1 || P.owner[g] === i) && !nearer(j, g)).sort((x, y) => P.x0[x] - P.x0[y] || x - y)
       seen.set(j, gs)
       return gs
     }
@@ -551,25 +572,51 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     const inkOn = (j, x0, x1) => {
       const r = rows[j], P = ink[r.page], em = r.size
       const L = onLine(j).filter(g => !P.taken[g])
-      if (x0 !== null && x1 !== null) return L.filter(g => P.x0[g] >= x0 - 0.02 && P.x0[g] < x1 - 0.02)
+      // from an opening mark, the glyphs that begin no more than MARK_SLACK before it; up to a closing mark, those whose
+      // middle is before it (startsFrom, endsBy)
+      if (x0 !== null && x1 !== null) return L.filter(g => startsFrom(P, g, x0) && endsBy(P, g, x1))
       // to the line's end or from its start: as far as each glyph is within an em of the next, and the line's extent an
       // em at most
       if (x0 !== null) {
         const out = []
         let edge = x0
-        for (const g of L) { if (P.x0[g] < x0 - 0.02) continue; if (P.x0[g] - edge > em || P.x0[g] > r.x1 + em) break; out.push(g); edge = Math.max(edge, P.x1[g]) }
+        for (const g of L) { if (!startsFrom(P, g, x0)) continue; if (P.x0[g] - edge > em || P.x0[g] > r.x1 + em) break; out.push(g); edge = Math.max(edge, P.x1[g]) }
         return out
       }
       const out = []
       let edge = x1
-      for (let q = L.length - 1; q >= 0; q--) { const g = L[q]; if (P.x0[g] >= x1 - 0.02) continue; if ((Number.isFinite(edge) && edge - P.x1[g] > em) || P.x1[g] < r.x0 - em) break; out.unshift(g); edge = P.x0[g] }
+      for (let q = L.length - 1; q >= 0; q--) { const g = L[q]; if (!endsBy(P, g, x1)) continue; if ((Number.isFinite(edge) && edge - P.x1[g] > em) || P.x1[g] < r.x0 - em) break; out.unshift(g); edge = P.x0[g] }
       return out
     }
+    /** whether nothing is drawn between two places on line j and the line's ink goes on either side of them: no glyph of
+     *  any unit's, taken or not, has its middle between them, and one has its middle before them and one after */
+    const drawsNothing = (j, x0, x1) => {
+      const r = rows[j], P = ink[r.page], [s0, s1] = sideOf(r.page, columnOf(r.page, r.x0, r.x1))
+      let before = false, after = false
+      for (const g of band(P, r.base - SCRIPT(P.most), r.base + SCRIPT(P.most))) {
+        if (Math.abs(P.y[g] - r.base) >= SCRIPT(P.size[g]) || mid(P, g) < s0 || mid(P, g) > s1) continue
+        if (startsFrom(P, g, x0) && endsBy(P, g, x1)) return false
+        if (!startsFrom(P, g, x0)) before = true
+        else after = true
+      }
+      return before && after
+    }
+    /** whether a glyph is a letter of a word of the unit's text, as the anchor paired the word: running text, never a
+     *  placeholder's (counted, `textTaken`). A word's box is its item's even share, so a bracket beside it may fall in it:
+     *  the glyph's letter is the word's too */
+    const paired = new Map()
+    for (const k of a.pairs?.values() ?? []) { const t = doc[k]; if (t?.t) (paired.get(t.page) ?? paired.set(t.page, []).get(t.page)).push(t) }
+    const inWord = (page, g) => {
+      const P = ink[page], m = mid(P, g), c = charsOf(P.u[g])
+      return /\p{L}/u.test(c) && (paired.get(page) ?? []).some(t => m >= t.x && m <= t.x + t.w && Math.abs(P.y[g] - t.y) < 0.5 * t.h && t.t.includes(c))
+    }
     for (let k = 0; k < u.pieces.length; k++) {
+      // every visible piece has its row, found, LOST or EMPTY: no row is a piece that draws nothing (an invisible one, a
+      // group's open or close), as the layer reads the file
       const piece = u.pieces[k], cls = classOf(piece)
-      if (!cls || !classes.has(cls)) continue
+      if (!cls) continue
       const kind = PH_KIND.get(cls) ?? PH_KIND.get('other')
-      const d = design.get(`${i}.${k}`)
+      const d = classes.has(cls) ? design.get(`${i}.${k}`) : null
       const lost = why => ph.push({ row: [i, k, kind, PH_FLAG.LOST], cls, state: 'lost', why })
       // a piece the marked original gives no mark (at a unit's head, after a prefix or a control sequence's end, glued
       // to a word): its rendering is not known
@@ -588,13 +635,18 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       let segs = []
       if (cls === 'display') {
         segs = displaySegments(rows, from, { j: to.line ?? to.j }, one)
-        if (segs === null) { lost(to.j > from.j ? 'display across a page or a column' : 'display ending its unit, nothing below it'); continue }
+        if (segs === null) { lost(segs === null && to.j > from.j ? 'display across a page or a column, or no ink of its own' : 'display ending its unit, nothing below it, or no ink of its own'); continue }
         if (segs.numbered) flags |= PH_FLAG.NUMBERED
       } else {
         // the glyphs from the opening mark to the end, scripts and all, one segment a line, none another one's
         if (to.j - from.j >= SEGS_INLINE) { lost('more lines than an inline placeholder may have'); continue }
+        const ra = rows[from.j], rb = rows[to.j]
+        /** a row between the first and the last in the unit's order is the placeholder's only where it lies between their
+         *  lines on the page: one the anchor gave out of order (a line above, a script row) is a text line, never its ink */
+        const between = r => (r.page === ra.page ? r.base < ra.base - 0.5 * r.size : r.page > ra.page) && (r.page === rb.page ? r.base > rb.base + 0.5 * r.size : r.page < rb.page)
         for (let j = from.j; j <= to.j; j++) {
           const r = rows[j], P = ink[r.page]
+          if (j !== from.j && j !== to.j && !between(r)) continue
           const gs = from.j === to.j ? inkOn(j, from.x, to.x) : j === from.j ? inkOn(j, from.x, null) : j === to.j ? inkOn(j, null, to.x) : inkOn(j, -Infinity, Infinity)
           if (!gs.length) continue
           let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
@@ -606,13 +658,13 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
           if (boxes.length) {
             const lo = from.j === j ? from.x : -Infinity, hi = to.j === j ? to.x : Infinity, has = new Set(gs)
             for (const g of band(P, r.base - 2 * SCRIPT(P.most), r.base + 2 * SCRIPT(P.most))) {
-              if (has.has(g) || P.taken[g] || (P.owner[g] !== -1 && P.owner[g] !== i) || P.x0[g] < lo - 0.02 || P.x0[g] >= hi - 0.02) continue
+              if (has.has(g) || P.taken[g] || (P.owner[g] !== -1 && P.owner[g] !== i) || !startsFrom(P, g, lo) || !endsBy(P, g, hi)) continue
               if (boxes.some(b => P.x0[g] <= b[2] + 0.1 && P.x1[g] >= b[0] - 0.1 && P.bottom[g] <= b[3] + 0.1 && P.top[g] >= b[1] - 0.1)) { gs.push(g); x0 = Math.min(x0, P.x0[g]); x1 = Math.max(x1, P.x1[g]) }
             }
           }
           for (const b of boxes) { top = Math.max(top, b[3]); bottom = Math.min(bottom, b[1]) }
           for (const g of gs) { top = Math.max(top, P.top[g]); bottom = Math.min(bottom, P.bottom[g]) }
-          for (const g of gs) { P.taken[g] = 1; P.owner[g] = i }
+          for (const g of gs) { P.taken[g] = 1; P.owner[g] = i; if (inWord(r.page, g)) stats.ph.textTaken++ }
           segs.push({ page: r.page, x0, base: r.base, x1, top, bottom, inkBase: baselineOf(P, bodyOf(P, gs, r.size), r.base), size: r.size, row: j, boxes, gs })
         }
         if (segs.length) {
@@ -628,7 +680,13 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
           one.boxes = (one.boxes ?? []).concat(segs.flatMap(sg => sg.boxes.map(b => [sg.row, b])))
         }
       }
-      if (!segs.length) { ph.push({ row: [i, k, kind, flags | PH_FLAG.EMPTY], cls, state: 'empty' }); continue }
+      // EMPTY only where the piece draws nothing: its marks on one line, the line's ink either side of them and no glyph of
+      // anyone's between; else its ink is somewhere it was not found, and it is LOST (its unit stays the original's)
+      if (!segs.length) {
+        if (cls !== 'display' && from.j === to.j && drawsNothing(from.j, from.x, to.x)) ph.push({ row: [i, k, kind, flags | PH_FLAG.EMPTY], cls, state: 'empty' })
+        else lost(from.j === to.j ? 'ink between its marks not its own, or past its line' : 'no ink between its lines')
+        continue
+      }
       const row = [i, k, kind, flags]
       for (const s of segs) {
         const [x0, bottom, x1, top] = solid(viewAt(s.page), s.x0, s.bottom, s.x1, s.top)
@@ -646,10 +704,14 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
    */
   function belowOf(one, ra, col) {
     let lo = null
-    for (const o of placed) {
-      if (o === one) continue
-      for (const r of o.rows) if (r.page === ra.page && r.top < ra.bottom && columnOf(r.page, r.x0, r.x1) === col && (lo === null || r.top > lo)) lo = r.top
-    }
+    // the located units' rows of the page and column, by their tops falling, made once: the first below the line not
+    // the unit's own is the nearest
+    const key = `${ra.page}|${col}`
+    if (!below.has(key)) below.set(key, placed.flatMap(o => o.rows.filter(r => r.page === ra.page && columnOf(r.page, r.x0, r.x1) === col).map(r => [r.top, o.id])).sort((p, q) => q[0] - p[0] || p[1] - q[1]))
+    const tops = below.get(key)
+    let a = 0, b = tops.length
+    while (a < b) { const m = (a + b) >> 1; if (tops[m][0] >= ra.bottom) a = m + 1; else b = m }
+    for (let q = a; q < tops.length; q++) if (tops[q][1] !== one.id) { lo = tops[q][0]; break }
     for (let n = one.id + 1; n < units.length; n++) {
       if (FLOATING.has(units[n].kind)) continue
       const S = carriedUnit.get(`${n}s`)
@@ -717,13 +779,19 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       const base = gs.length ? baselineOf(P, bodyOf(P, gs, median(gs.map(g => P.size[g]))), (top + bottom) / 2) : (top + bottom) / 2
       return { page: ra.page, x0, x1, top, bottom, base }
     }
+    // a row of graphics alone wider than the display's glyphs is not the display's: a footnote's rule under it, a frame
+    let gx0 = Infinity, gx1 = -Infinity
+    for (const line of lines) for (const it of line.items) if (it.g >= 0) { gx0 = Math.min(gx0, it.x0); gx1 = Math.max(gx1, it.x1) }
+    const alien = line => line.items.every(it => it.g < 0) && line.items.some(it => it.x0 < gx0 - 1 || it.x1 > gx1 + 1)
     lines.forEach((line, l) => {
+      if (alien(line)) return
       const its = number && number.l === l ? line.items.filter(it => !number.run.includes(it)) : line.items
       if (its.length) segs.push(segOf(its))
     })
     if (number) segs.push(segOf(number.run))
-    if (segs.length > SEGS_DISPLAY) return null
-    for (const line of lines) for (const it of line.items) if (it.g >= 0) P.taken[it.g] = 1
+    // a display has ink: none of its own found (all another unit's, or none there) is no display found
+    if (!segs.length || segs.length > SEGS_DISPLAY) return null
+    for (const line of lines) if (!alien(line)) for (const it of line.items) if (it.g >= 0) P.taken[it.g] = 1
     segs.numbered = !!number
     return segs
   }

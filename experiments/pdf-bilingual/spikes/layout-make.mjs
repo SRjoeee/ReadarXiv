@@ -17,7 +17,7 @@ import { promisify } from 'node:util'
 import { gzipSync } from 'node:zlib'
 import { getDocument, OPS, version } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { keptFor, openPaper, originalFiles } from '../../../src/pdf-reader/engine/live.mjs'
-import { LAYOUT_CLASSES, encodeLayoutMarks, layoutMarksOf, parseLayoutMarks, punctuationMovers } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { classOf, LAYOUT_CLASSES, encodeLayoutMarks, layoutMarksOf, parseLayoutMarks, punctuationMovers } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { encodeLayout } from '../../../src/pdf-reader/engine/layout/file.mjs'
 import { makeLayout } from '../../../src/pdf-reader/engine/layout/make.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
@@ -133,6 +133,17 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
   // completeness the layer must keep); found of those marked printed beside it
   const displays = out.file.ph.filter(r => r[2] === 1), dEmpty = displays.filter(r => r[3] & 16).length, dLost = displays.filter(r => r[3] & 32).length
   check(id, 'displays: none EMPTY', dEmpty === 0, `found ${displays.length - dEmpty - dLost}/${displays.length}, EMPTY ${dEmpty}, LOST ${dLost}`)
+  // every placeholder: found or LOST, EMPTY only where the source draws nothing — a paper's macro may (\bert defined
+  // empty), every other kind sets ink; and no placeholder takes a glyph of the unit's own words (running text)
+  const MACRO = 6, empties = out.file.ph.filter(r => r[3] & 16)
+  const inked = empties.filter(r => r[2] !== MACRO)
+  check(id, 'placeholders: none EMPTY of a kind that sets ink', inked.length === 0, `EMPTY ${empties.length} (${empties.filter(r => r[2] === MACRO).map(r => JSON.stringify(String(paper.units[r[0]].pieces[r[1]].src).slice(0, 30))).join(' ') || 'none'})${inked.length ? `; of kinds that set ink: ${inked.map(r => `${r[0]}.${r[1]}`).join(' ')}` : ''}`)
+  check(id, 'running-text glyphs taken by a placeholder', S.ph.textTaken === 0, `${S.ph.textTaken}`)
+  // every visible piece of a located unit has its row (found, LOST or EMPTY): the layer reads a missing row as a piece
+  // that draws nothing
+  const rowed = new Set(out.file.ph.map(r => `${r[0]}.${r[1]}`))
+  const missing = out.file.units.flatMap(([u]) => paper.units[u].pieces.map((p, k) => (classOf(p) && !rowed.has(`${u}.${k}`) ? `${u}.${k}` : null)).filter(Boolean))
+  check(id, 'visible pieces with no row', missing.length === 0, `${missing.length} of ${rowed.size + missing.length}${missing.length ? ` (${missing.slice(0, 5).join(' ')})` : ''}`)
   // what was made, and what it cost
   const kept = keptFor(paper, 'zh'), cells = paper.units.map((u, i) => [u, i]).filter(([u]) => u.kind === 'cell' && !kept.has(u))
   const placedIds = new Set(out.file.units.map(u => u[0]))

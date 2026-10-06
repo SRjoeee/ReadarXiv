@@ -21,8 +21,9 @@ export interface LayoutStats {
   units: { located: number; total: number; byKind: Record<string, [located: number, total: number]>; unplaced: number }
   /** `marked`: the placeholders of the located units the marked original marks (an opening mark at least), by kind
    *  found among them; `unmarked`: those it gives no mark (LOST, beside them); `inferred`: those found whose end is
-   *  inferred, having no closing mark; `why`: the LOST among them by cause */
-  ph: { marked: number; found: number; empty: number; lost: number; byKind: Record<string, [found: number, marked: number]>; unmarked: number; inferred: number; why: Record<string, number> }
+   *  inferred, having no closing mark; `why`: the LOST among them by cause; `textTaken`: glyphs a placeholder took that are
+   *  letters of the unit's own words as the anchor paired them (running text), to be none */
+  ph: { marked: number; found: number; empty: number; lost: number; byKind: Record<string, [found: number, marked: number]>; unmarked: number; inferred: number; why: Record<string, number>; textTaken: number }
   /** by the unit's kind: the units with a label, of the located units whose start mark was carried to their first line */
   labels: Record<string, [found: number, units: number]>
   frames: { units: number; split: number; lineCountChecked: number; lineCountEqual: number }

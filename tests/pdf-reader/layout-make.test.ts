@@ -573,3 +573,88 @@ describe('makeLayout, the review of 2026-10-06', () => {
     warn.mockRestore()
   })
 })
+
+describe('makeLayout, the re-review of 2026-10-06', () => {
+  const body = (y: number, from: number) => [0, 1, 2].map((j): Run => ({ s: words(from + 10 * j, 10), x: 72, y: y - 12 * j }))
+
+  it('subequations is a display: one ending its unit is found, not an EMPTY macro', async () => {
+    const runs: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: 'a=b', x: 150, y: 680 }, { s: '(2a)', x: 247, y: 680 }, ...body(660, 10)]
+    const { file } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 217, 700], ['p0.1a', 1, 217, 700], ['1s', 1, 72, 660], ['1e', 1, 267, 636]],
+      units: [unit('para', [text(`${words(0, 10)} `), ph('\\begin{subequations}\\begin{align}a&=b\\end{align}\\end{subequations}')]), unit('para', [text(words(10, 30))])],
+    })
+    expect(phOf(file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.NUMBERED, 1, 150, 680, 165, 687.5, 677.5, 1, 247, 680, 267, 687.5, 677.5])
+  })
+
+  it("a placeholder's glyphs are those whose middles lie between its marks: a carried mark a few tenths off keeps its base glyph", async () => {
+    // the opening mark carried 0.36 pt right of the formula's first glyph (2307.16209's $\Psi_0$, $\ell$)
+    const runs: Run[] = [{ s: 'shown by', x: 72, y: 700 }, { s: 'P', x: 117, y: 700 }, { s: '0', x: 122, y: 698, size: 7 }, { s: 'and more', x: 130.5, y: 700 }, { s: 'x', x: 175.5, y: 700 }, { s: ', then', x: 180.5, y: 700 }]
+    const { file } = await made({
+      pages: [{ runs }],
+      // and a closing mark carried 0.2 pt into the comma after its formula: the comma is the text's
+      marks: [['0s', 1, 72, 700], ['0e', 1, 210.5, 700], ['p0.1a', 1, 117.36, 700], ['p0.1b', 1, 125.5, 700], ['p0.3a', 1, 170.5, 700], ['p0.3b', 1, 180.7, 700]],
+      units: [unit('para', [text('shown by '), ph('$P_0$'), text(' and more '), ph('$x$'), text(', then')])],
+    })
+    expect(phOf(file, 0, 1)).toEqual([0, 1, 0, 0, 1, 117, 700, 125.5, 707.5, 696.25])
+    expect(phOf(file, 0, 3)).toEqual([0, 3, 0, 0, 1, 175.5, 700, 180.5, 707.5, 697.5])
+  })
+
+  it("marks past the line's last glyph, the formula set on the next line, are LOST, not EMPTY", async () => {
+    // our compile set qQ past the margin; arXiv's at the next line's start
+    const runs: Run[] = [{ s: 'see the value', x: 72, y: 700 }, { s: 'qQ', x: 72, y: 688 }, { s: 'and then more words', x: 87, y: 688 }]
+    const { file, stats } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 182, 688], ['p0.1a', 1, 140, 700], ['p0.1b', 1, 150, 700]],
+      units: [unit('para', [text('see the value '), ph('$qQ$'), text(' and then more words')])],
+    })
+    expect(phOf(file, 0, 1)).toEqual([0, 1, 0, PH_FLAG.LOST])
+    expect(stats.ph.empty).toBe(0)
+  })
+
+  it("a placeholder across lines takes a row between them only where it lies between its marks' lines: never a text line", async () => {
+    // the anchor's rows out of order: the line above comes between the formula's two lines in the content stream
+    const runs: Run[] = [{ s: 'first line ends with', x: 72, y: 700 }, { s: 'a+', x: 177, y: 700 }, { s: 'words of a line above', x: 72, y: 712 }, { s: 'b', x: 72, y: 688 }, { s: 'then the rest', x: 82, y: 688 }]
+    const { file, stats } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 147, 688], ['p0.1a', 1, 172, 700], ['p0.1b', 1, 77, 688]],
+      units: [unit('para', [text('first line ends with '), ph('$a+b$'), text(' words of a line above then the rest')])],
+    })
+    expect(phOf(file, 0, 1)).toEqual([0, 1, 0, 0, 1, 177, 700, 187, 707.5, 697.5, 1, 72, 688, 77, 695.5, 685.5])
+    expect(stats.ph.textTaken).toBe(0)
+  })
+
+  it('every visible piece of a located unit has its row: one of a class the marked original left unmarked is LOST', async () => {
+    const runs: Run[] = [{ s: 'see', x: 72, y: 700 }, { s: 'www.example.org', x: 92, y: 700 }, { s: 'and', x: 172, y: 700 }, { s: 'x', x: 192, y: 700 }, { s: 'here', x: 202, y: 700 }]
+    const w: World = {
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 222, 700], ['p0.3a', 1, 187, 700], ['p0.3b', 1, 197, 700]],
+      units: [unit('para', [text('see '), ph('\\url{www.example.org}'), text(' and '), ph('$x$'), text(' here '), ph('~'), { t: 'open' }, { t: 'close' }])],
+    }
+    // a marks file made without the url class: the url piece no mark, its row LOST; the tie and the group none
+    const marks = parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.pages, w.marks), '', { engine: 'pdflatex', classes: ['math'] }))))
+    const out = await makeLayout({ units: w.units, marks, arxiv: arxivOf(w.pages), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
+    if (!('file' in out)) throw new Error('refused')
+    expect(out.file.ph.map(r => [r[1], r[3]])).toEqual([[1, PH_FLAG.LOST], [3, 0]])
+  })
+
+  it("a display whose ink is all another unit's is LOST, not EMPTY; a footnote's rule under a display is no segment of it", async () => {
+    // the next unit's text holds the display's glyphs: nothing left for the display
+    const owned: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: 'a=b and more', x: 72, y: 680 }, ...body(660, 10)]
+    const lost = await made({
+      pages: [{ runs: owned }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 217, 700], ['p0.1a', 1, 217, 700], ['1s', 1, 72, 680], ['1e', 1, 267, 636]],
+      units: [unit('para', [text(`${words(0, 10)} `), ph('\\[x=y\\]')]), unit('para', [text(`a=b and more ${words(10, 30)}`)])],
+    })
+    expect(phOf(lost.file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.LOST])
+    // a display at the column's foot, the footnote's rule and text below it
+    const runs: Run[] = [...body(700, 0), { s: 'a=b', x: 150, y: 660 }, { s: '1', x: 72, y: 620, size: 7 }, { s: 'A note here', x: 76, y: 617, size: 8 }]
+    const { file } = await made({
+      pages: [{ runs, boxes: [[72, 635, 250, 635.4]] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 267, 676], ['p0.1a', 1, 267, 676], ['1s', 1, 76, 617], ['1e', 1, 120, 617]],
+      units: [unit('para', [text(`${words(0, 30)} `), ph('\\[a=b\\]')]), unit('footnote', [text('A note here')])],
+    })
+    expect(phOf(file, 0, 1)).toEqual([0, 1, 1, 0, 1, 150, 660, 165, 667.5, 657.5])
+  })
+})
+
