@@ -1,21 +1,26 @@
 // The font role table: for each target and English family, the face file each role is drawn in, the same files in both
 // renderers — the TeX path sets them, the instant layer draws in web fonts made from them (spec §4.4, under the
 // maintainer's rulings of 2026-10-06, §1.3). One rendering on every device: every face is a file we serve, TeX Live's or
-// Source Han Serif's own release, under a family name of ours; none is a face the reader's device holds, and nothing
-// here names a generic family. A character no face of a run's role holds keeps its unit the original's (canDraw).
+// an upstream release's, under a family name of ours; none is a face the reader's device holds, and nothing here names
+// a generic family. A character no face of a run's role holds keeps its unit the original's (canDraw).
 //
-// - CJK: one family, Source Han Serif (Noto Serif CJK's design), with Harano Aji Mincho, TeX Live's repackaging of its
-//   Japanese, for ja; its static weights follow the paper's English family (Light beside Computer Modern and Garamond,
-//   Regular beside the rest) and its bold is the family's real bold (SemiBold, Bold), headings too: serif bold as the
-//   original's. The Kai stays as today (FandolKai, AR PL KaitiM Big5); Japanese and Korean emphasis stays upright. Korean
-//   is Source Han Serif K (the maintainer, 2026-10-06, in place of Un Batang), its Hangul set at the size of the
-//   family's ideographs (Face.size).
-// - Latin and Cyrillic: the same glyphs and family as the English original for every target, from the cleanest source of
-//   them (the maintainer's rule, 2026-10-06): URW's base 35 from its own release (Nimbus Roman for Times, Nimbus Sans for
-//   Helvetica, with their Cyrillic, under AGPL-3.0 with URW's PostScript/PDF embedding exception), Domitian for Palatino
-//   (URW's P052 glyphs under the OFL), CMU for Computer Modern's text (CM's glyphs exactly) and Latin Modern for its
-//   bold italic, small capitals, sans and typewriter (nearer CM's than CMU's), the paper's own family elsewhere
-//   (faceFor's table).
+// Which face a target takes is one rule in two tiers (the maintainer, 2026-10-06), and it governs every target to come:
+// - Tier 1, the scripts the paper's Western families are drawn for (Latin, Greek, Cyrillic, Vietnamese): the original's
+//   own family, its same glyphs where a source has them, from the cleanest source of them. Today, measured against what
+//   arXiv's PDFs embed: Times → Nimbus Roman and Helvetica → Nimbus Sans (URW's base 35 release: 62 and 53-62 of 62
+//   glyphs the same; GNU FreeSerif and FreeSans are 3-24 and 13-26, their advances reworked), Courier → GNU FreeMono
+//   (57-60 of 62 at the original's weight; its bold oblique 32), Computer Modern → CMU (its text 62 of 62; Latin Modern
+//   for its bold italic, small capitals, sans and typewriter, nearer CM's), Palatino → Domitian (URW's P052 glyphs under
+//   the OFL), and each other family its own files. Where the family lacks a script a target needs, its unit stays the
+//   original's until a source of that family has it: Nimbus Roman, Nimbus Sans and Domitian hold 12 of Vietnamese's 104
+//   letters and no polytonic Greek, which CMU, FreeSerif, FreeSans and FreeMono hold whole.
+// - Tier 2, the scripts no Western family covers well (CJK, Arabic, Hebrew, the Indic scripts, Thai and the rest): the
+//   Noto superfamily, one design per script. Source Han Serif is Noto Serif CJK: zh, zh-Hant and ko in Source Han Serif
+//   SC, TC and K, ja in Harano Aji Mincho (Source Han Serif JP), at static weights that follow the paper's English family
+//   (Light beside Computer Modern and Garamond, Regular beside the rest), its real bold (SemiBold, Bold) for bold and
+//   headings, as the original's serif bold; Korean's Hangul at the size of the family's ideographs (Face.size). The Kai
+//   stays as today (FandolKai, AR PL KaitiM Big5); Japanese and Korean emphasis is upright. GNU FreeFont's own Arabic,
+//   Indic and Thai glyphs are not taken for Tier 2: their styles are not one design.
 //
 // Also the names behind both renderers' reading of a paper's fonts: each design's NFSS family names (the TeX path's
 // font probe, familyOfProbe) and its PostScript names (a PDF's fonts, classifyFont and familyOfFonts), in one table.
@@ -45,8 +50,8 @@ import { scriptOf } from './layer-rules.mjs'
  * has an identifier:
  * - Source Han Serif, Harano Aji, EB Garamond, Erewhon: OFL-1.1, their name tables; CMU (cm-unicode 0.7.0): OFL-1.1,
  *   each file's name table ("licensed under the SIL Open Font License, Version 1.1") and TeX Live's catalogue (ofl);
- * - Latin Modern and TeX Gyre Cursor: the GUST Font License, Latin Modern's name tables and CFF notices and TeX Live's
- *   catalogue (gfl) for both (SPDX has no identifier for it);
+ * - Latin Modern: the GUST Font License, its name tables and CFF notices and TeX Live's catalogue (gfl; SPDX has no
+ *   identifier for it);
  * - Linux Libertine O and Linux Biolinum O: the GPL and the OFL-1.1, their name tables; Domitian: the OFL-1.1 and the
  *   LPPL-1.3c, TeX Live's catalogue; each served under the OFL;
  * - FandolKai: "GPL + GPL font exception", CTAN's fonts/fandol README, which names no version; its COPYING is the GPL's
@@ -58,7 +63,7 @@ import { scriptOf } from './layer-rules.mjs'
  * - Inconsolata zi4: its regular OFL-1.1, its bold Apache-2.0, their name tables;
  * - GNU FreeMono: GPL-3.0-or-later with the FSF's font exception, verbatim in its name tables (Courier's design: URW's
  *   Nimbus Mono L, the original's glyphs, 60, 57, 60 and 32 of 62 in its four styles, at the original's ink);
- * - Nimbus Roman, Nimbus Sans and Nimbus Mono PS: URW's base 35 release, ArtifexSoftware/urw-base35-fonts at tag
+ * - Nimbus Roman and Nimbus Sans: URW's base 35 release, ArtifexSoftware/urw-base35-fonts at tag
  *   20200910, whose LICENSE reads "GNU AFFERO GENERAL PUBLIC LICENSE Version 3 (see the file COPYING), with the
  *   following exemption: As a special exception, permission is granted to include these font programs in a Postscript
  *   or PDF file …": AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817, the exception SPDX lists from that very
@@ -70,8 +75,8 @@ import { scriptOf } from './layer-rules.mjs'
  * utm*8a, uhv*8a, ucr*8a, upl*8a), over A–Z, a–z and 0–9, a glyph the same when its advance is equal, its bounding box
  * within 5 units and its ink within 1 %: Nimbus Roman 62 of 62 in each style (TeX Gyre Termes 60, Tempora 21–55);
  * Nimbus Sans 53–62, its letters all and its digits 14 units off (TeX Gyre Heros 0–38); Domitian 62 (Pagella 58–59; its
- * Cyrillic is P052's, 66 of 66); TeX Gyre Cursor 55–59 at the original's ink (Nimbus Mono PS 0, its regular a quarter
- * darker: the maintainer's choice for Courier's Cyrillic, on its effect)
+ * Cyrillic is P052's, 66 of 66); GNU FreeMono 60, 57, 60 and 32 at the original's ink (TeX Gyre Cursor 55–59, Nimbus
+ * Mono PS 0, its regular a quarter darker); GNU FreeSerif 3–24 and FreeSans 13–26, their advances reworked
  */
 const FACE_TABLE = `
 shs-sc-light             SourceHanSerifSC-Light.otf      hosted   shs-sc         300  normal  1      OFL-1.1                                               ofl
