@@ -1673,9 +1673,12 @@ export function pinch(which, factor, origin) {
 /** a side at a page */
 export function goToPage(which, page) {
   // the reader's input on that side, which scrolls its pane with no event on it (inputOn: its page pill's buttons and its
-  // typed page); before the pair is located, the side read (readEarly)
+  // typed page); before the pair is located, the side read (readEarly). It makes that side the driver, as a press in its
+  // pane does (lead), so that the other follows the jump and is levelled at its rest: from the side that was not the
+  // driver, the jump was taken for the follower scrolled by something else, and the other side stayed where it was
   const s = which === 'left' ? left : right
   inputOn = nameOf(s)
+  take(s); arm()
   if (s.doc) s.viewer.currentPageNumber = page
 }
 /** a side's PDF as it is shown, for the download (the reader's design, §6.1): the original, or the translation on screen */

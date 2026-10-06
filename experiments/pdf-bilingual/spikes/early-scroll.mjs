@@ -30,7 +30,10 @@
 //      this one keeps the right's own place (replaceRight: placeOf, scrollFor), which the row holds;
 //   8. a first visit, the source late, a side's page pill, which scrolls its pane with no event on the pane (goToPage):
 //      alone, its page typed then Enter, and after a wheel on the other side, its next button pressed three times; on
-//      either side, by script and on the compositor. The side the pill moved is the side read.
+//      either side, by script and on the compositor. The side the pill moved is the side read;
+//   9. this machine's copy located, a side read by the wheel (the driver), then the other side's page pill, page 8
+//      typed, by script and on the compositor: the side the pill moved becomes the driver (goToPage), stays where the
+//      jump put it, and the other side follows to its matching place, within 2 px of level.
 // Rows 1–5 and 8 pass when the side was read before the pair was located, and once located and still for 700 ms: the side
 // read stands where the reader put it, and the pair is within 2 px of level by it (the sync's own tolerance,
 // level-on-screen.mjs). No TeX page is needed (a first visit stops at its compile, after its row is read), and nothing
@@ -225,7 +228,7 @@ if (wanted(8)) {
 // the copy row 3 opens: the demo's translation, its units with their translations as pieces (cache.mjs copyTexts makes
 // the right's texts from them), every unit kept (current under any service), written from a first visit's page, which
 // has the paper's cache key
-const writer = [3, 4, 6, 7].some(wanted) ? await context.newPage() : null
+const writer = [3, 4, 6, 7, 9].some(wanted) ? await context.newPage() : null
 await writer?.goto(urlOf(true))
 await writer?.waitForFunction(() => window.__reader?.ready && window.__reader.debug, null, { timeout: 60_000, polling: 50 })
 const copied = writer && await writer.evaluate(async ({ paper, demo, pipeline, typesetting }) => {
@@ -295,6 +298,35 @@ if (copied && wanted(7)) {
   const after = await page.evaluate(() => { const d = window.__reader.debug; return { top: d.right.container.scrollTop, level: d.levelOf(d.right)?.error ?? null } })
   row(Math.abs(after.top - before) <= 1 && after.level != null && Math.abs(after.level) <= 2 && !swap.error && !errors.length, "7. this machine's copy, the right read, the pointer then over the left, a swap (compositor): the right stays where it was read", `the right ${Math.round(before)} -> ${Math.round(after.top)}; ${after.level == null ? 'no unit to level by' : `${after.level.toFixed(1)} px from level`}${swap.error ? `; swap failed: ${swap.error}` : ''}${errors.length ? `; page errors: ${errors.slice(0, 2).join(' | ')}` : ''}`)
   await page.close()
+}
+// 9: the pair located (this machine's copy), a side read by the wheel (the driver), then the other side's page pill, its
+// page typed: the side the pill moved becomes the driver, and the other side follows it to its matching place
+if (copied && wanted(9)) {
+  for (const [compositor, by] of followers) {
+    for (const side of ['right', 'left']) {
+      const other = side === 'left' ? 'right' : 'left'
+      const page = await context.newPage()
+      const errors = []
+      page.on('pageerror', e => errors.push(e.message))
+      await page.goto(urlOf(compositor))
+      await page.waitForFunction(() => window.__reader?.ready && window.__reader.debug?.right.anchors.size, null, { timeout: 60_000, polling: 50 })
+      await still(page)
+      const o = await page.locator(`#${other}`).boundingBox()
+      await page.mouse.move(o.x + o.width / 2, o.y + o.height / 2)
+      for (let i = 0; i < 3; i++) { await page.mouse.wheel(0, 400); await sleep(60) }
+      await still(page)
+      const field = page.locator(`section.pane[data-side="${side}"] .pill input`)
+      await field.fill('8')
+      await field.press('Enter')
+      await sleep(300)
+      const jumped = await page.evaluate(side => { const d = window.__reader.debug; return { top: d[side].container.scrollTop, other: d.shownAt(d[side === 'left' ? 'right' : 'left']) } }, side)
+      await still(page)
+      const end = await page.evaluate(side => { const d = window.__reader.debug, s = d[side], o = d[side === 'left' ? 'right' : 'left']; return { top: s.container.scrollTop, other: d.shownAt(o), level: d.levelOf(s)?.error ?? null } }, side)
+      const ok = Math.abs(end.top - jumped.top) <= 1 && end.level != null && Math.abs(end.level) <= 2 && !errors.length
+      row(ok, `9. this machine's copy located, the ${other} read, then the ${side}'s page pill, page 8 typed (${by}): the ${other} follows to its matching place`, `the ${side} jumped to ${Math.round(jumped.top)}, now ${Math.round(end.top)}; the ${other} ${Math.round(jumped.other)} -> ${Math.round(end.other)}; ${end.level == null ? 'no unit to level by' : `${end.level.toFixed(1)} px from level`}${errors.length ? `; page errors: ${errors.slice(0, 2).join(' | ')}` : ''}`)
+      await page.close()
+    }
+  }
 }
 if (away.length) console.log(`stopped on their way off this machine: ${[...new Set(away.map(u => new URL(u).origin))].join(', ')}`)
 await context.close()
