@@ -50,7 +50,7 @@ import { promisify } from 'node:util'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { latin1, latin1Bytes, MARK_DEF } from '../../../src/pdf-reader/engine/latex-front.mjs'
-import { askedCommands, encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarksOf, MARK_CLASSES, parseLayoutMarks, probeSamples, readInkProbe, readMarkProbe, switchedOf } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { askedCommands, encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarksOf, MARK_CLASSES, parseLayoutMarks, probeSamples, readInkProbe, readInkTexts, readMarkProbe, switchedOf } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles, probeFiles, readingsOf } from '../../../src/pdf-reader/engine/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
 import { marksOf } from '../../../src/pdf-reader/engine/typeset/places.mjs'
@@ -189,6 +189,7 @@ async function paperRow(id) {
   // set no ink, which get no mark (readInkProbe)
   const switches = NO_SWITCH ? null : answered
   const inkless = NO_SWITCH ? null : readInkProbe(probe.log ?? '', inkSamples(units))
+  const texts = NO_SWITCH ? null : readInkTexts(probe.log ?? '', inkSamples(units))
   const v1Of = classes => {
     const files = originalFiles(paper, { lines: true, layout: classes, switches, inkless })
     if (PLANT) for (const p of [project.main, ...[...files.keys()].filter(f => f !== project.main).sort()]) {
@@ -203,7 +204,7 @@ async function paperRow(id) {
   const v0Files = originalFiles(paper, { lines: true })
   v0Files.set(project.main, latin1Bytes(withFitr(latin1(v0Files.get(project.main)), MARK_DEF, LAYOUT_TEX)))
   const f0 = withSources(v0Files), f1 = v1Of(CLASSES)
-  const [c0, c1] = await Promise.all([compile(id, f0, opts('v0')), compile(id, f1, { ...opts('v1'), marking: { classes: CLASSES, switches, inkless, units, OPS } })])
+  const [c0, c1] = await Promise.all([compile(id, f0, opts('v0')), compile(id, f1, { ...opts('v1'), marking: { classes: CLASSES, switches, inkless, texts, units, OPS } })])
   const row = { id, v0: c0.ok ? 'ok' : 'failed' }
   if (!c0.ok) return { row: { ...row, verdict: verdictOf(row) }, detail: { why: c0.why ?? c0.errors?.slice(0, 3) } }
   row.v1 = c1.ok ? 'ok' : 'failed'

@@ -20,7 +20,7 @@ const CH = 0.5
 type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean; eol?: boolean }
 type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped'; points?: Record<string, [run: number, char: number]>; order?: number[] }
 type Mark = [name: string, page: number, x: number, y: number]
-type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[] }
+type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[]; texts?: [string, string][] }
 
 const FONTS: Record<string, unknown> = {
   F1: { name: 'ABCDEF+CMR10', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false },
@@ -110,7 +110,7 @@ function markedOf(pages: Page[], marks: Mark[]) {
   }
 }
 async function marksOf(w: World, log = '', classes?: MarkClass[]) {
-  return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, inkless: w.inkless ?? null, units: w.units, OPS, ...(classes ? { classes } : {}) }))))
+  return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, inkless: w.inkless ?? null, texts: w.texts ?? null, units: w.units, OPS, ...(classes ? { classes } : {}) }))))
 }
 const make = async (w: World, log = '', asked: number[] = []) => makeLayout({ units: w.units, marks: await marksOf(w, log), arxiv: arxivOf(w.pages, asked), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
 /** a made file: it parses, and made again it is the same bytes */
@@ -909,14 +909,15 @@ describe('makeLayout, the maker round (Fix 1): text symbols and the macros TeX s
     expect(pt(file, 0, 1)).toBe('_')
     expect(chunk(rowsOf(file, 0, 'erase'), 5).some(([, x0, y0, x1, y1]) => x0! <= 97.6 && x1! >= 100.6 && y0! <= 700 && y1! >= 700.4)).toBe(true)
   })
-  it('a macro TeX said sets no ink (marking.inkless) gets no row, marked or not; one TeX did not say so stays LOST at a head', async () => {
+  it('a macro TeX said sets no ink (marking.inkless) gets no row, marked or not; one TeX did not say so is a head piece', async () => {
     const runs: Run[] = [{ s: 'Table rows of text', x: 72, y: 700 }]
     const marks: Mark[] = [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700]]
     const units = [unit('para', [ph('\\rule{0pt}{2ex}'), text('Table rows of text')])]
     const said = await made({ pages: [{ runs }], marks, units, inkless: ['\\rule{0pt}{2ex}'] })
     expect(said.file.ph.find(r => r[0] === 0 && r[1] === 0)).toBeUndefined()
+    // at the unit's head, nothing on its line before the start mark: EMPTY (headsOf)
     const not = await made({ pages: [{ runs }], marks, units })
-    expect(phOf(not.file, 0, 0)).toEqual([0, 0, 6, PH_FLAG.LOST])
+    expect(phOf(not.file, 0, 0)).toEqual([0, 0, 6, PH_FLAG.EMPTY])
   })
 })
 
@@ -994,6 +995,43 @@ describe('makeLayout, the maker round (Fix 3): the lines a unit\'s source does n
     const { file } = await made({ pages: [{ runs }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[1] as Run), 688]], units: [unit('para', [text('models learn residual functions functions residual learn models')])] })
     expect(file.held).toEqual([])
     expect(rowsOf(file, 0, 'lines')).toHaveLength(16)
+  })
+})
+
+describe('makeLayout, a unit\'s head pieces: its macros before its start mark, where no mark goes', () => {
+  // 1810.04805's "\\bert{} is conceptually simple …": \\newcommand\\bert{BERT\\xspace}, the start mark after it
+  const runs: Run[] = [{ s: 'BERT is conceptually simple', x: 72, y: 700 }]
+  const bert: World = { pages: [{ runs }], marks: [['0s', 1, 97, 700], ['0e', 1, endOf(runs[0] as Run), 700]], units: [unit('para', [ph('\\bert'), text(' is conceptually simple')])] }
+  it('a macro whose letters the probe showed stand right before the start mark is found there, a segment of the first line', async () => {
+    const { file, stats } = await made({ ...bert, texts: [['\\bert', 'BERT']] })
+    const row = phOf(file, 0, 0)
+    expect(row[3]).toBe(0)
+    // page, x0, baseline, x1, top, bottom: its four glyphs
+    expect(row.slice(4, 8)).toEqual([1, 72, 700, 92])
+    expect(file.labels).toEqual([])
+    // the first line begins where the paragraph does, and its erase takes the letters in
+    expect(rowsOf(file, 0, 'lines')[1]).toBe(72)
+    expect(chunk(rowsOf(file, 0, 'erase'), 5)[0]?.[1]).toBe(72)
+    expect(stats.ph.heads).toEqual([1, 0])
+    expect(stats.ph.unmarked).toBe(0)
+  })
+  it('one whose letters are not the probe\'s, or with no answer, stays LOST, its glyphs a label as before', async () => {
+    for (const texts of [undefined, [['\\bert', 'BART']] as [string, string][]]) {
+      const { file, stats } = await made({ ...bert, ...(texts ? { texts } : {}) })
+      expect(phOf(file, 0, 0)[3]).toBe(PH_FLAG.LOST)
+      expect(file.labels).toHaveLength(1)
+      expect(stats.ph.heads).toEqual([0, 0])
+    }
+  })
+  it('one that set nothing on the line before the start mark is EMPTY: a figure\'s image above its text, a row\'s rule', async () => {
+    const text1: Run[] = [{ s: 'Retrieved from the reference', x: 72, y: 700 }]
+    const fig: World = { pages: [{ runs: text1, boxes: [[72, 720, 200, 800]] }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(text1[0] as Run), 700]], units: [unit('para', [ph('\\includegraphics[width=5cm]{a.jpg}'), ph('\\\\'), text('\n\tRetrieved from the reference')])] }
+    const { file, stats } = await made(fig)
+    expect(phOf(file, 0, 0)[3]).toBe(PH_FLAG.EMPTY)
+    expect(file.ph.some(r => r[0] === 0 && ((r[3] ?? 0) & PH_FLAG.LOST) !== 0)).toBe(false)
+    expect(stats.ph.heads[1]).toBeGreaterThanOrEqual(1)
+    // the image is no line of the unit's, and nothing erases it
+    for (const [, , y0] of chunk(rowsOf(file, 0, 'erase'), 5)) expect(y0!).toBeLessThan(720)
   })
 })
 

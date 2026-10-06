@@ -39,6 +39,12 @@ export declare function inkSamples(units: readonly SourceUnit[]): string[]
 export declare function inkSection(samples: readonly string[]): string
 /** the samples TeX set no ink for, from the probe's log */
 export declare function readInkProbe(log: string, samples: readonly string[]): string[]
+/** a macro's text as the ink section shows it set, at most */
+export declare const INK_TEXT_MAX: number
+/** each sample's text, where the probe showed it sets letters and digits of text fonts alone: [source, text] */
+export declare function readInkTexts(log: string, samples: readonly string[]): [string, string][]
+/** where a unit's start mark goes, as patch places it: the first piece at or after it, from `from` */
+export declare function headEnd(pieces: readonly unknown[], from?: number): number
 /** LaTeX's text symbols, each the one character it sets */
 export declare const TEXT_SYMBOLS: Readonly<Record<string, string>>
 /** a symbol's text (TEXT_SYMBOLS), its source alone or followed by `{}`, else null */
@@ -79,7 +85,8 @@ export interface LayoutMarks {
   /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (TeX's answers to the
    *  mark probe, readMarkProbe; null where the probe was not run), so that whoever reads the file knows which pieces
    *  have marks */
-  marking: { classes: MarkClass[]; switches: Switches | null; inkless: string[] | null }
+  /** `texts`: the probe's texts, flat (source, text, source, text, …), null where no probe ran */
+  marking: { classes: MarkClass[]; switches: Switches | null; inkless: string[] | null; texts: string[] | null }
   pages: number
   /** per page: x0, y0, x1, y1 (stride 4) */
   views: number[]
@@ -113,7 +120,7 @@ export declare const RULES_PIECE: number
 export declare const OWNED_ALL: number
 /** from a PDF.js document of the marked original and its last TeX pass's log; the caller opens and destroys the
  *  document. With the paper's `units` and PDF.js's operator codes, each marked piece's own ink from its operator lists */
-export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; switches?: Switches | null; inkless?: readonly string[] | null; units?: readonly SourceUnit[] | null; OPS?: Record<string, number> | null }): Promise<LayoutMarks>
+export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; switches?: Switches | null; inkless?: readonly string[] | null; texts?: readonly (readonly [string, string])[] | readonly string[] | null; units?: readonly SourceUnit[] | null; OPS?: Record<string, number> | null }): Promise<LayoutMarks>
 export declare function encodeLayoutMarks(m: LayoutMarks): string
 /** bytes, then values, then JSON.parse, then every bound below; throws LayoutRefusal */
 export declare function parseLayoutMarks(bytes: Uint8Array): LayoutMarks

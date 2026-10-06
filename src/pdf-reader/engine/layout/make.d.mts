@@ -28,8 +28,9 @@ export interface LayoutStats {
    *  their difference, and `twice`, arXiv's glyphs matched by two found pieces, each to be none (each holds by the
    *  matcher's rule); `foreign`, arXiv's glyphs half inside a found inline piece's segments (its crop) by their own ink
    *  that are not its own, and `shared`, those inside two found pieces' segments, each to be none; `texts`, the page
-   *  texts written (the TEXT symbols' too) */
-  ph: { marked: number; found: number; empty: number; lost: number; byKind: Record<string, [found: number, marked: number]>; unmarked: number; symbols: number; inferred: number; why: Record<string, number>; textTaken: number; owned: number; matched: number; unmatched: number; twice: number; foreign: number; shared: number; texts: number }
+   *  texts written (the TEXT symbols' too); `heads`, the unmarked pieces before a unit's start mark (headsOf) found by
+   *  the text the probe showed them set, and EMPTY, having set nothing on the line before the mark */
+  ph: { marked: number; found: number; empty: number; lost: number; byKind: Record<string, [found: number, marked: number]>; unmarked: number; symbols: number; inferred: number; why: Record<string, number>; textTaken: number; owned: number; matched: number; unmatched: number; twice: number; foreign: number; shared: number; texts: number; heads: [found: number, empty: number] }
   /** the matcher's matches by kind (the same character, another Unicode at the place, loosely on the line, by a vote),
    *  those it rejected off their run, its work, and the pieces past its bound */
   match: { same: number; recoded: number; loose: number; vote: number; rejected: number; work: number; over: number }

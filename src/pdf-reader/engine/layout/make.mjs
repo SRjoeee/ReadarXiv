@@ -20,7 +20,7 @@ import { displayEdges, plainSource, unitText } from '../mt.mjs'
 import { carrierOf, tokensOfMarks } from './carry.mjs'
 import { encodeLayout, isPageText, LAYOUT, LayoutRefusal, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
 import { pageInk } from './ink.mjs'
-import { classOf, layoutMarking, symbolText } from './marks.mjs'
+import { classOf, headEnd, layoutMarking, symbolText } from './marks.mjs'
 import { matcherOf } from './match.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
 
@@ -310,7 +310,7 @@ function blank(units) {
   return {
     lines: { carried: 0, total: 0, held: 0 },
     units: { located: 0, total: units.length, byKind: {}, unplaced: 0 },
-    ph: { marked: 0, found: 0, empty: 0, lost: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, foreign: 0, shared: 0, texts: 0 },
+    ph: { marked: 0, found: 0, empty: 0, lost: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, foreign: 0, shared: 0, texts: 0, heads: [0, 0] },
     match: { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0 },
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
     capped: [], timedOut: [], over: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
@@ -542,6 +542,9 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   const classes = new Set(marks.marking.classes)
   /** the paper's macros TeX said set no ink (marks.mjs readInkProbe): no row, as an invisible placeholder has none */
   const inkless = new Set(marks.marking.inkless ?? [])
+  /** the texts the probe showed the paper's macros set (marks.mjs readInkTexts): a head piece's, found by its letters */
+  const shown = new Map()
+  for (let j = 0, f = marks.marking.texts ?? []; j + 1 < f.length; j += 2) shown.set(f[j], f[j + 1])
   const ph = [], kept = new Map() // kept: page → the rectangles erasing leaves out (displays' segments, labels)
   const keep = (p, r) => (kept.get(p) ?? kept.set(p, []).get(p)).push(r)
   const ownInk = new Map(marks.owned.map(e => [e[0], e]))
@@ -613,6 +616,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       for (const j of cands) { const e = Math.abs(rows[j].base - mid); if (near(j) && e < d) { d = e; best = j } }
       return best
     }
+    const head = headEnd(u.pieces, 0)
     for (let k = 0; k < u.pieces.length; k++) {
       // every visible piece has its row, found, LOST or EMPTY: no row is a piece that draws nothing (an invisible one, a
       // group's open or close), as the layer reads the file
@@ -629,6 +633,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
         const entry = { row: [i, k, kind, PH_FLAG.LOST], cls, state: 'unmarked' }
         ph.push(entry)
         if (sym !== null) (one.symbols ??= []).push({ entry, sym })
+        else if (cls === 'macro' && k < head) (one.heads ??= []).push({ entry, k, src: piece.src })
         continue
       }
       const prefix = cls === 'footnote' ? 'n' : 'p', name = `${prefix}${i}.${k}a`, e = ownInk.get(name)
@@ -713,6 +718,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       ph.push({ row, cls, state: 'found', inferred: e[1] !== 0, text: PAGE_TEXT.has(cls) ? pageTextOf(gs) : null })
     }
     if (one.symbols) symbolsOf(one)
+    if (one.heads) headsOf(one)
   }
   // the bars: an arXiv glyph matched by two found pieces, an owned glyph of a found piece not matched (none, both; each
   // true by the matcher's own rule); and what the layer draws: an arXiv glyph inside a found inline piece's segments
@@ -742,6 +748,53 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       }
     }
     for (const at of inside.values()) if (at.size > 1) stats.ph.shared++
+  }
+
+  /**
+   * A unit's head pieces: the paper's macros it opens with, before its start mark, where no mark goes (marks.mjs headEnd:
+   * 1810's \bert, "BERT", opening three paragraphs; a table row's \specialrule in 1706; a figure's \includegraphics before
+   * the text under it in 2307), where the start mark stands on the unit's first line. TeX set their ink before the mark:
+   * on that line left of it, or on a line before it, never on the unit's own lines, which begin at the mark. So, the
+   * piece nearest the mark first:
+   * - the glyphs right before the mark on its line, as a label's run takes them, those of no unit's, whose characters
+   *   are the text the probe showed the macro sets (marks.mjs readInkTexts): the piece is found there, a segment of the
+   *   first line, which takes them in and erases them, and the layer draws them where the translation puts the piece;
+   * - no such glyph within LABEL_EM of the mark (or of the piece found after it): the piece set nothing on the line
+   *   before the mark, and is EMPTY: the translation draws nothing for it, and its ink, wherever TeX set it, stays the
+   *   original's, as the unit's lines never take it;
+   * - else it stays LOST, and those before it: what the line shows there is not known as the piece's (a label, perhaps)
+   */
+  function headsOf(one) {
+    const { id: i, rows, S } = one, r0 = rows[0]
+    if (!S || S.page !== r0.page || Math.abs(S.y - r0.base) >= 0.5 * r0.size) return
+    const P = ink[S.page], [cx0] = sideOf(S.page, columnOf(S.page, S.x, S.x))
+    const cand = band(P, S.y - 0.35 * P.most, S.y + 0.75 * Math.max(P.most, 6)).filter(g => P.y[g] > S.y - 0.35 * P.size[g] && P.y[g] < S.y + 0.75 * Math.max(P.size[g], 6) && P.x1[g] <= S.x + 0.05 && P.x0[g] >= cx0 - 1 && P.owner[g] === -1 && !P.taken[g]).sort((a, b) => P.x0[a] - P.x0[b] || a - b)
+    const run = []
+    let edge = S.x
+    for (let q = cand.length - 1; q >= 0; q--) { const g = cand[q]; if (edge - P.x1[g] > LABEL_EM * P.size[g]) break; run.unshift(g); edge = Math.min(edge, P.x0[g]) }
+    for (const h of [...one.heads].sort((x, y) => y.k - x.k)) {
+      const { entry } = h, kind = entry.row[2]
+      if (!run.length) { entry.row = [i, h.k, kind, PH_FLAG.EMPTY]; entry.state = 'empty'; entry.head = true; continue }
+      const text = shown.get(h.src)
+      if (!text) return
+      let got = '', n = 0
+      while (n < run.length && got.length < text.length) { got = charsOf(P.u[run[run.length - 1 - n]]).replace(/\s+/g, '') + got; n++ }
+      if (got !== text.toLowerCase()) return
+      const gs = run.splice(run.length - n, n)
+      let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
+      for (const g of gs) { x0 = Math.min(x0, P.ix0[g]); x1 = Math.max(x1, P.ix1[g]); top = Math.max(top, P.top[g]); bottom = Math.min(bottom, P.bottom[g]) }
+      const inkBase = baselineOf(P, bodyOf(P, gs, r0.size), r0.base)
+      const flags = inkBase - r0.base >= SHIFT * r0.size ? PH_FLAG.RAISED : r0.base - inkBase >= SHIFT * r0.size ? PH_FLAG.LOWERED : 0
+      // the unit's own ink, which its first line takes in and erasing covers
+      for (const g of gs) P.owner[g] = i
+      r0.extra = (r0.extra ?? []).concat(gs)
+      r0.x0 = Math.min(r0.x0, x0); r0.x1 = Math.max(r0.x1, x1); r0.top = Math.max(r0.top, top); r0.bottom = Math.min(r0.bottom, bottom)
+      const view = viewAt(S.page), [sx0, sb, sx1, st] = solid(view, x0, bottom, x1, top)
+      entry.row = [i, h.k, kind, flags, S.page, sx0, Math.min(view[3], Math.max(view[1], r2(r0.base))), sx1, st, sb]
+      entry.state = 'found'
+      entry.head = true
+      matchedBy.set(`${i}.${h.k}`, gs.map(g => [S.page, g]))
+    }
   }
 
   /**
@@ -1113,6 +1166,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     if (!kept1.has(p.row[0])) continue
     if (p.state === 'unmarked') { stats.ph.unmarked++; continue }
     if (p.state === 'text') { stats.ph.symbols++; continue }
+    if (p.head) { stats.ph.heads[p.state === 'found' ? 0 : 1]++; continue }
     const tally = stats.ph.byKind[p.cls] ??= [0, 0]
     stats.ph.marked++
     tally[1]++

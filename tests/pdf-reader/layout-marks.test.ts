@@ -6,7 +6,7 @@ import type { UnitLines } from '@/pdf-reader/engine/tex-errors.mjs'
 import { patch } from '@/pdf-reader/engine/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, OWNED_ALL, parseLayoutMarks, POINTS_TEX, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, OWNED_ALL, parseLayoutMarks, POINTS_TEX, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/live.mjs'
 import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
 import { marksOf } from '@/pdf-reader/engine/typeset/places.mjs'
@@ -408,6 +408,37 @@ describe('what a paper\'s macro sets: TeX asked (the ink section), and LaTeX\'s 
     expect(readInkProbe(log, samples)).toEqual(['\\rule{0pt}{2.0ex}', '\\fontsize{7.6pt}{1em}', '\\color{red}'])
     expect(readInkProbe('', samples)).toEqual([])
   })
+  it('readInkTexts: a box of letters and digits of text fonts alone, at any depth, is its text; anything else no answer', () => {
+    // 1810.04805's own listings (TeX Live 2026's pdfTeX): \newcommand\bert{BERT\xspace}, and \bertbase's subscript in
+    // small capitals inside math
+    const log = [
+      'LAYOUT-PROBE 1 ink-at 0', '> \\box75=', '\\hbox(7.31458+0.0)x27.33098', '.\\OT1/ptm/m/n/10.95 B', '.\\OT1/ptm/m/n/10.95 E', '.\\OT1/ptm/m/n/10.95 R', '.\\kern-0.657', '.\\OT1/ptm/m/n/10.95 T', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 0',
+      'LAYOUT-PROBE 1 ink-at 1', '> \\box75=', '\\hbox(7.31458+1.76027)x49.59885', '.\\OT1/ptm/m/n/10.95 B', '.\\OT1/ptm/m/n/10.95 E', '.\\OT1/ptm/m/n/10.95 R', '.\\kern-0.657', '.\\OT1/ptm/m/n/10.95 T', '.\\mathon', '.\\hbox(5.43198+0.09995)x22.26787, shifted 1.66032', '..\\OT1/ptm/m/sc/8 B', '..\\kern-0.27998', '..\\OT1/ptm/m/sc/8 A', '..\\OT1/ptm/m/sc/8 S', '..\\OT1/ptm/m/sc/8 E', '.\\mathoff', '', './main.tex:9: OK.', 'LAYOUT-PROBE 1 ink-end 1',
+      // a ligature, a space
+      'LAYOUT-PROBE 1 ink-at 2', '> \\box75=', '\\hbox(6.9+0.0)x40.0', '.\\T1/cmr/m/n/10 ^^\\ (ligature ffi)', '.\\T1/cmr/m/n/10 x', '.\\glue 3.33 plus 1.66', '.\\T1/cmr/m/n/10 2', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 2',
+      // a math italic letter, a symbol, a rule, an error, nothing at all, a cut listing
+      'LAYOUT-PROBE 1 ink-at 3', '> \\box75=', '\\hbox(4.3+0.0)x5.7', '.\\mathon', '.\\OML/cmm/m/it/10 x', '.\\mathoff', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 3',
+      'LAYOUT-PROBE 1 ink-at 4', '> \\box75=', '\\hbox(6.8+0.1)x8.3', '.\\OT1/ptm/m/n/10 %', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 4',
+      'LAYOUT-PROBE 1 ink-at 5', '> \\box75=', '\\hbox(6.8+0.0)x10.0', '.\\OT1/ptm/m/n/10 A', '.\\rule(0.4+0.0)x3.0', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 5',
+      'LAYOUT-PROBE 1 ink-at 6', '! Undefined control sequence.', '> \\box75=', '\\hbox(6.8+0.0)x5.0', '.\\OT1/ptm/m/n/10 A', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 6',
+      'LAYOUT-PROBE 1 ink-at 7', '> \\box75=', '\\hbox(0.0+0.0)x0.0', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 7',
+      'LAYOUT-PROBE 1 ink-at 8', '> \\box75=', '\\hbox(6.8+0.0)x5.0', '.\\OT1/ptm/m/n/10 A',
+    ].join('\n')
+    const samples = ['\\bert', '\\bertbase', '\\office', '\\x', '\\pct', '\\boxed', '\\broken', '\\nothing', '\\cut']
+    expect(readInkTexts(log, samples)).toEqual([['\\bert', 'BERT'], ['\\bertbase', 'BERTBASE'], ['\\office', 'ffix2']])
+    expect(readInkTexts('', samples)).toEqual([])
+    // 65 letters: past INK_TEXT_MAX, no answer
+    const long = ['LAYOUT-PROBE 1 ink-at 0', '> \\box75=', '\\hbox(6.8+0.0)x325.0', ...Array.from({ length: 65 }, () => '.\\OT1/ptm/m/n/10 A'), '', '! OK.', 'LAYOUT-PROBE 1 ink-end 0'].join('\n')
+    expect(readInkTexts(long, ['\\long'])).toEqual([])
+  })
+  it('headEnd: a unit\'s head before its start mark, as patch places it', () => {
+    const ph = (src: string) => ({ t: 'ph', src }), text = (s: string) => ({ t: 'text', s })
+    // a macro and a space before the first word: passed over; one glued to its word: the mark before it
+    expect(headEnd([ph('\\bert'), text(' is simple')])).toBe(1)
+    expect(headEnd([ph('\\bert'), text("'s model")])).toBe(0)
+    expect(headEnd([ph('\\specialrule{1pt}{-1pt}{0pt}'), text('\n'), ph('\\rule{0pt}{2ex}'), text('Transformer')])).toBe(3)
+    expect(headEnd([ph('$x$'), text(' is')])).toBe(0)
+  })
   it('symbolText: LaTeX\'s text symbols, each its one character, alone or before an empty group', () => {
     expect(symbolText('\\%')).toBe('%')
     expect(symbolText('\\_')).toBe('_')
@@ -562,12 +593,17 @@ describe('reading the marked original', () => {
     // no probe run: null, which the maker re-marks as LAYOUT_TEX sets every mark; a probe that answered nothing is {},
     // which the maker re-marks with no mark for an asked command (Task 2's m4): the two kept apart through the file
     const plain = await layoutMarksOf(doc, '', { engine: 'pdflatex' })
-    expect(plain.marking).toEqual({ classes: [...LAYOUT_CLASSES], switches: null, inkless: null })
+    expect(plain.marking).toEqual({ classes: [...LAYOUT_CLASSES], switches: null, inkless: null, texts: null })
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(plain))).marking.switches).toBeNull()
     const none = await layoutMarksOf(doc, '', { engine: 'pdflatex', switches: {} })
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(none))).marking.switches).toEqual({})
     const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', classes: ['math', 'cite'], switches: { '\\cite': '22220000', '\\ref': 'x0000000' } })
-    expect(m.marking).toEqual({ classes: ['math', 'cite'], switches: { '\\cite': '22220000', '\\ref': 'x0000000' }, inkless: null })
+    expect(m.marking).toEqual({ classes: ['math', 'cite'], switches: { '\\cite': '22220000', '\\ref': 'x0000000' }, inkless: null, texts: null })
+    // the probe's texts, as readInkTexts gives them, written flat (the file nests no deeper)
+    const said = await layoutMarksOf(doc, '', { engine: 'pdflatex', texts: [['\\bert', 'BERT'], ['\\ours', 'OURS']] })
+    expect(said.marking.texts).toEqual(['\\bert', 'BERT', '\\ours', 'OURS'])
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(said))).marking.texts).toEqual(['\\bert', 'BERT', '\\ours', 'OURS'])
+    await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', texts: [['\\bert', 'BE RT']] })).rejects.toThrow(LayoutRefusal)
     const none2 = await layoutMarksOf(doc, '', { engine: 'pdflatex', inkless: ['\\rule{0pt}{2ex}'] })
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(none2))).marking.inkless).toEqual(['\\rule{0pt}{2ex}'])
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m))).marking).toEqual(m.marking)
@@ -693,7 +729,7 @@ describe('reading the marked original', () => {
 
 /** a made-up marks file of two pages, every field used */
 const valid = (): LayoutMarks => ({
-  schema: 3, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], switches: { '\\cite': '22220000', '\\footnote': '00000012' }, inkless: ['\\rule{0pt}{2ex}', '\\fontsize{7.6pt}{1em}'] }, pages: 2,
+  schema: 3, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], switches: { '\\cite': '22220000', '\\footnote': '00000012' }, inkless: ['\\rule{0pt}{2ex}', '\\fontsize{7.6pt}{1em}'], texts: ['\\bert', 'BERT'] }, pages: 2,
   views: [0, 0, 612, 792, 0, 0, 612, 792],
   columns: [1, 2],
   marks: [['0s', 1, 72, 700], ['0e', 1, 300.5, 650.25], ['c1-1', 1, 0, 0], ['c2-2', 2, 0, 0], ['p0.3a', 1, 100, 700], ['p0.3b', 1, 120.75, 700], ['h1s', 2, 72, 720], ['t2s', 2, 80, 500], ['n0.5a', 1, 200, 680], ['g1t', 2, 300, 400]],
@@ -755,6 +791,13 @@ describe('the marks file', () => {
       ['an inkless source empty', m => { (m.marking.inkless as string[])[0] = '' }, 'marking.inkless[0]'],
       ['an inkless source of 201 code units', m => { (m.marking.inkless as string[])[0] = `\\x${'y'.repeat(199)}` }, 'marking.inkless[0]'],
       ['65 inkless sources', m => { m.marking.inkless = Array.from({ length: 65 }, (_, i) => `\\m${'i'.repeat(i + 1)}`) }, 'marking.inkless'],
+      ['no texts key', m => { delete (m.marking as Partial<LayoutMarks['marking']>).texts }, 'marking.texts'],
+      ['texts of an odd length', m => { (m.marking.texts as string[]).push('\\x') }, 'marking.texts'],
+      ['texts in pairs, a level deeper than the file has', m => { (m.marking as Record<string, unknown>).texts = [['\\bert', 'BERT']] }, ''],
+      ['a text source twice', m => { m.marking.texts = ['\\bert', 'BERT', '\\bert', 'B'] }, 'marking.texts[2]'],
+      ['a text of a space', m => { m.marking.texts = ['\\bert', 'BE RT'] }, 'marking.texts[1]'],
+      ['a text of 65 letters', m => { m.marking.texts = ['\\bert', 'B'.repeat(65)] }, 'marking.texts[1]'],
+      ['65 texts', m => { m.marking.texts = Array.from({ length: 65 }, (_, i) => [`\\m${'i'.repeat(i + 1)}`, 'A']).flat() }, 'marking.texts'],
       ['chars not an array', m => { (m as Record<string, unknown>).chars = 'x2' }, 'chars'],
       ['a char of 33 code units', m => { m.chars[0] = 'x'.repeat(33) }, 'chars[0]'],
       ['a char that is a number', m => { (m.chars as unknown[])[1] = 2 }, 'chars[1]'],
