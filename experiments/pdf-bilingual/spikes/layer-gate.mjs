@@ -350,7 +350,7 @@ const floor = readJson(join(GATE, 'floor.json'))
 const ran = [...results.values()].filter(r => r.ready).sort((a, b) => a.name.localeCompare(b.name))
 const run = {
   schema: 1, tier: TIER, made: new Date().toISOString(), seconds,
-  gate: { commit: git(REPO, ['rev-parse', 'HEAD']), dirty: !!git(REPO, ['status', '--porcelain', '--untracked-files=no', '--', 'experiments/pdf-bilingual/spikes/layer-gate', 'experiments/pdf-bilingual/spikes/layer-gate.mjs', 'src/pdf-reader/engine/layer/check.mjs']) },
+  gate: { commit: git(REPO, ['rev-parse', 'HEAD']), dirty: !!git(REPO, ['status', '--porcelain', '--untracked-files=no', '--', 'experiments/pdf-bilingual/spikes/layer-gate', 'experiments/pdf-bilingual/spikes/layer-gate.mjs', 'src/pdf-reader/engine/layer/check.mjs', ':(exclude)experiments/pdf-bilingual/spikes/layer-gate/floor.json']) },
   engine: engineInfo, inputs,
   totals: { all: pooled(ran.map(r => r.totals), TIER), shared: pooled(ran.filter(r => floor.shared.includes(r.name)).map(r => r.totals), TIER) },
   fixtures: Object.fromEntries(ran.map(r => [r.name, { meta: r.meta, info: { pages: r.info.pages, units: r.info.units, located: r.info.located, even: r.info.even, family: r.info.family }, summary: r.summary, totals: r.totals, pages: r.pages.map(compact) }])),
