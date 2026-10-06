@@ -21,13 +21,19 @@ export interface Slot { frame: number; page: number; x0: number; x1: number; bas
  * it), 'last' (the unit's last line, or one a break or a display ends), 'centred', or 'ragged' (to be justified, but not
  * within the caps).
  * `rest`: the content tokens (text and placeholders) left over where the slots ran out, or where the text would run on below a
- * display it has not reached: 0 when the unit is laid whole.
+ * display it has not reached: 0 when every token is placed.
+ * `overflow`: how far the widest line runs past its slot, in ems of the size (so `overflow * f` PDF units), 0 where every line
+ * fits: a line fits when its items, spaces at SPACE_MIN of their width, are no wider than the slot. A lone item that is wider
+ * (a formula, a word no character of which fits) is placed all the same and shows here, never in `rest`. A closing mark
+ * hung at a line's end and an opening mark shifted back by half an em are counted by their advances, which already leave out
+ * what stands outside the slot: neither is overflow. Where it is above 0 the text would be clipped, and the unit is unfit.
  * `tokens`: the tokens the lines hold, in order: the input, where the breaker cut a word (by characters, or at a hyphen) its
  * pieces in the word's place.
  */
 export interface Broken {
   lines: { slot: Slot; items: { t: Token; w: number; x: number; shift: number; asp: number }[]; mode: 'just' | 'last' | 'centred' | 'ragged' }[]
   rest: number
+  overflow: number
   tokens: Token[]
 }
 

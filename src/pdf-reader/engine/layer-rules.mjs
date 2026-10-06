@@ -16,7 +16,8 @@ const freeze = rules => Object.freeze(rules)
 // CJK and Latin. The words of a CJK target's Latin text break as English does (its patterns, Task 8)
 const CJK = { trackMin: -0.05, letterMin: 0, borrowMax: 1, sizeStep: 0.025, sizeFloor: 0.75, spaceMax: 1.0, hyphenate: 'en' }
 // alphabets: the leading down to 0.95 of the original's, letter spacing tightened by at most a hundredth of an em, word
-// spaces stretched to at most 1.2 of their own, the size as CJK's. Hyphenation is the language's, filled by layerRulesFor
+// spaces stretched by at most 1.2 of their own width each (spaceMax is the extra a space may take, so a stretched space is
+// at most 2.2 times its natural width), the size as CJK's. Hyphenation is the language's, filled by layerRulesFor
 const ALPHABET = { leadBase: 1.0, leadFloor: 0.95, trackMin: 0, letterMin: -0.01, compress: 0, borrowMax: 1, sizeStep: 0.025, sizeFloor: 0.75, even: 'size', autospace: 0, spaceMax: 1.2, hyphenate: null }
 
 /**
