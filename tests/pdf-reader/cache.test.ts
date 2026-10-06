@@ -248,3 +248,42 @@ describe('passagesInSource: what a copy holds in the original that it had transl
     expect(passagesInSource([])).toBe(0)
   })
 })
+
+// A pair's id is its place among its file's pairs: a pair the front end makes earlier in the file (a front matter's
+// unit, an argument it now reads as text) numbers every pair after it anew, and the units' hashes change with them —
+// 1,962 units of the corpus's 117 papers in the front end's round of 2026-10-06 — though their sources are the same
+describe('a copy\'s translation of a unit whose pairs are numbered anew', () => {
+  const zh = async (texts: string[]) => texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' }))
+  type P = { t: string; id?: number; unit?: { pieces: P[] } }
+  /** the pieces numbered as an earlier front end numbered them: every pair `by` further on, a nested unit's too */
+  const shifted = (pieces: P[], by: number): P[] => pieces.map(p => (p.t === 'open' || p.t === 'close' ? { ...p, id: (p.id ?? 0) + by } : p.t === 'nested' && p.unit ? { ...p, unit: { ...p.unit, pieces: shifted(p.unit.pieces, by) } } : p))
+  const SRC = '\\documentclass{article}\n\\begin{document}\nA paragraph with \\textbf{bold words} and \\emph{a stress}, and a note\\footnote{A note with \\textit{italics}.} after it.\n\n{\\bf Another} paragraph.\n\\end{document}\n'
+  /** the paper, and a copy of it made by a front end that numbered its pairs `by` further on, translated */
+  const copyOf = async (by: number, change = (s: string) => s) => {
+    const paper = openPaper(new Map([['main.tex', new TextEncoder().encode(change(SRC))]]))
+    const earlier = openPaper(new Map([['main.tex', new TextEncoder().encode(SRC)]]))
+    const { results } = await translateUnits(earlier.units as never, zh, 'markers')
+    const old = earlier.units.map(u => ({ ...u, pieces: shifted((u as { pieces: P[] }).pieces, by) }))
+    const made = new Map(earlier.units.map((u, i) => [i, { pieces: shifted((results.get(u as never)?.pieces ?? []) as P[], by), state: 'whole', by: 'B', tried: 'B' }]))
+    const record = JSON.parse(JSON.stringify({ units: unitsOf(old as never, new Set(), await Promise.all(old.map(u => sourceHash(u as never))), made) }))
+    return { paper, record }
+  }
+  const ids = (pieces: unknown[]): (number | undefined)[] => (pieces as P[]).flatMap(p => (p.t === 'open' ? [p.id] : p.t === 'nested' ? ids(p.unit?.pieces ?? []) : []))
+  it('is the unit\'s: matched by its pieces numbered as the copy\'s were, its pairs numbered as the unit\'s are, a nested note\'s too', async () => {
+    const { paper, record } = await copyOf(5)
+    const { seed } = await seedFrom(record, paper.units)
+    expect(seed.size).toBe(paper.units.length)
+    for (const [i, s] of seed) expect(ids(s.pieces)).toEqual(ids((paper.units[i] as { pieces: unknown[] }).pieces))
+    // and set as the unit's own: its note by its own unit, translated, in the file as written
+    const translated = new Map([...seed].map(([k, s]) => [paper.units[k], s.pieces]))
+    const tex = new TextDecoder().decode(translationFiles(paper, translated as never, { strategy: strategiesFor(paper.meta, 'zh')[0] as never, fonts: { rm: 'cmr', sf: 'cmss', tt: 'cmtt', body: 'cmr' } }).get('main.tex'))
+    expect(tex).toMatch(/\\textbf\{\s*\u8bba\u6587/)
+    expect(tex).not.toMatch(/bold words|italics/)
+  })
+  it('not a unit whose source differs but in its text: its pieces numbered as the copy\'s do not hash to the copy\'s hash', async () => {
+    const { paper, record } = await copyOf(5, s => s.replace('\\emph{a stress}', '\\textsc{a stress}'))
+    const { seed } = await seedFrom(record, paper.units)
+    // the note (its own unit) and the last paragraph keep theirs; the paragraph whose pair is another command has none
+    expect(seed.size).toBe(paper.units.length - 1)
+  })
+})
