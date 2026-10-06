@@ -47,7 +47,7 @@ import { locatedWhole, texParts, texRects } from './tex.mjs'
  *  file read at once */
 export const PDF_OPTIONS = { cMapPacked: true, enableHWA: true, disableStream: true }
 /** the fit's parameters a host may set (main.js read them from the query), and the page-even pass's units */
-export const PARAM_KEYS = ['leadBase', 'leadFloor', 'trackMin', 'compressMax', 'borrow', 'borrowGap', 'floor', 'step', 'grid', 'cjkJust', 'spaceMax', 'autospace', 'spaceMin', 'hyphen', 'even', 'order', 'further', 'floorMin']
+export const PARAM_KEYS = ['leadBase', 'leadFloor', 'trackMin', 'compressMax', 'borrow', 'borrowGap', 'floor', 'step', 'grid', 'cjkJust', 'spaceMax', 'autospace', 'spaceMin', 'hyphen', 'even', 'order', 'further', 'floorMin', 'trackStart']
 /** the page's body units that the even pass sets alike (a unit on two pages keeps its own fit) */
 const EVEN_KINDS = new Set(['para', 'abstract', 'list', 'item'])
 /** the SVG's own rules (the prototype's index.html): its text set as laid, in the layer's ink */
@@ -413,6 +413,17 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     return null
   }
 
+  /**
+   * The CJK runs' tracking a fit starts from (step 3): the em a syllable's advance loses to its face's size correction
+   * (the role table's Source Han Serif K is drawn at 0.959 of the size, its Hangul a twenty-fifth shorter a syllable than
+   * the faces the prototype was approved in), given back, so that a line of the translation is as long as at the
+   * original's size; 0 where the face is drawn at its size (Chinese, Japanese, the prototype's own faces).
+   */
+  const cjkAdvance = () => {
+    if (!P.cjk) return 0
+    const c = faceOf({ fam: 'serif', bold: false, italic: false, caps: false, design: designs.serif }, 'cjk', to).size ?? 1
+    return c < 1 ? Math.round((1 - c) * 1000) / 1000 : 0
+  }
   const layout2 = p => {
     const t0 = performance.now()
     // the unit's lines grown over words the anchors left out beside them, then its first line's edge snapped back to
@@ -497,7 +508,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     p.tokens = tokens
     p.prep = prep
     p.s = s
-    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P) }
+    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P), trackStart: P.trackStart ?? cjkAdvance() }
     p.layout = L2.layoutUnit2(tokens, p.blocks, s, p.P, to)
     // (step 3: never drawn in part: given more room where the page has it, else left the original's, whole)
     if (p.layout.clipped) {

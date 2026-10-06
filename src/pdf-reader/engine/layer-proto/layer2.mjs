@@ -2010,12 +2010,14 @@ function placeItems(lines, f, P, to) {
 /** the fit's states, from the most natural, each knob in the order given taken to its bound before the next */
 function* statesOf(P, blocks, s) {
   // maxScale: a size set from outside (the page's even pass), from which the fit starts
-  const st = { lead: P.leadBase, track: 0, trackLatin: 0, compress: P.compressMax > 0 ? 1 : 0, borrow: 0, scale: P.maxScale ?? 1, knob: P.maxScale ? 'even' : 'none' }
+  // (step 3: the CJK runs' tracking from P.trackStart, a face's size correction given back, run.mjs; down from it)
+  const t0 = P.cjk ? P.trackStart ?? 0 : 0
+  const st = { lead: P.leadBase, track: t0, trackLatin: 0, compress: P.compressMax > 0 ? 1 : 0, borrow: 0, scale: P.maxScale ?? 1, knob: P.maxScale ? 'even' : 'none' }
   yield { ...st }
   for (const knob of P.order) {
     if (knob === 'track') {
       if (P.compressMax >= 2 && st.compress < 2) { st.compress = 2; yield { ...st, knob } }
-      for (let t = -0.01; t >= P.trackMin - 1e-9; t -= 0.01) {
+      for (let t = t0 - 0.01; t >= P.trackMin - 1e-9; t -= 0.01) {
         if (P.cjk) st.track = t
         else st.trackLatin = t
         yield { ...st, knob }

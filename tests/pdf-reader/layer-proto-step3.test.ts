@@ -117,3 +117,16 @@ describe("a unit's first line grown over the words its source begins with ('Goog
     expect(rect[1]).toBe(start)
   })
 })
+
+describe("Hangul's advance given back: the fit's tracking starts where its face's size correction left it", () => {
+  const block = { page: 1, rects: [[1, 0, 98, 100, 108]], x0: 0, x1: 100, B: [100], exact: [true], sizes: [10], pitch0: null, free: 0, indent: 0, after: 0, centred: false }
+  // Korean words of syllables 5 pt wide at size 10, a space 2.5 pt (it may shrink to 0.8 of it)
+  const words = (n: number, of: number) => Array.from({ length: n }, (_, q) => [...(q ? [{ space: true, w100: 25 }] : []), { s: '\uD55C'.repeat(of), cls: 'cjk', w100: 50 * of, st: {} }]).flat()
+  it('sets the first state at trackStart, and tightens from it down to trackMin where the text needs it', () => {
+    const P = { ...L2.defaultParams('ko'), trackStart: 0.04, borrow: 0 }
+    // 16 syllables: 80 pt, 6.4 pt of tracking, 7.5 of spaces; 18: 90 pt, which fits once the tracking is down to 0.03
+    expect(L2.layoutUnit2(words(4, 4) as never, [block] as never, 10, P as never, 'ko').state.track).toBeCloseTo(0.04, 6)
+    expect(L2.layoutUnit2(words(3, 6) as never, [block] as never, 10, P as never, 'ko').state.track).toBeCloseTo(0.03, 6)
+    expect(L2.layoutUnit2(words(4, 4) as never, [block] as never, 10, { ...P, trackStart: 0 } as never, 'ko').state.track).toBe(0)
+  })
+})
