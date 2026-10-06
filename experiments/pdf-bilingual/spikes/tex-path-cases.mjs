@@ -92,7 +92,7 @@ if (want('U')) {
 if (want('S')) {
   const S = { 'main.tex': doc('A number, \\num{1.5}, in a paragraph.', '\\usepackage{siunitx}\n') }
   const [xe] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
-  const fixed = await compile('s-fixed', S, xe), bare = await compile('s-bare', S, xe, { alter: tex => tex.replace(/\\ExplSyntaxOn\n\\cs_if_exist:NT \\__siunitx_locale_setup:n[\s\S]*?\\ExplSyntaxOff\n/, '') })
+  const fixed = await compile('s-fixed', S, xe), bare = await compile('s-bare', S, xe, { alter: tex => tex.replace(/\\ExplSyntaxOn\n\\IfPackageAtLeastTF \{ siunitx \}[\s\S]*?\\ExplSyntaxOff\n/, '') })
   const version = fixed.log.match(/^Package: siunitx \S+ (v[\d.]+)/m)?.[1] ?? '?'
   check(`S: siunitx (${version}) with the target's locale Chinese sets`, fixed.ok, fixed.error)
   if (version === 'v3.6.2') check('S: without it, siunitx 3.6.2 stops at "File \'babel-Hans-.ini\' not found" (as the thesis did)', !bare.ok && /babel-Hans-\.ini' not found/.test(bare.log), bare.error)

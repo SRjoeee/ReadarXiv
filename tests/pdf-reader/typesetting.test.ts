@@ -159,6 +159,12 @@ describe('a font a paper\'s style loads by name, under a strategy that sets anot
       { cs: 'big', role: 'rm', bold: false, shape: 'up', size: 14.4 },
       { cs: 'mono', role: 'tt', bold: false, shape: 'up', size: 9 },
     ])
+    // in a text encoding only: not TS1's symbols nor a math encoding's (the review of fix/tex-path-errors, M4)
+    expect(namedFonts(['\\font\\tc=ptmr8c \\font\\mi=ptmri7m \\font\\sy=ptmr7y \\font\\ot=ptmb7t at 9pt']).map(f => f.cs)).toEqual(['ot'])
+    // where TeX reads it as the file is read: not in a macro's body, nor in a conditional the file opens at its top (aastex631's
+    // \iftwelvepoint, acl.sty's \ifacl@linenumbers: M5); a macro of the name that takes its branches (etoolbox's \iftoggle,
+    // wacv.sty's) is no conditional, nor are \newif's and \let's names
+    expect(namedFonts(['\\newif\\iftwelvepoint\n\\def\\x{\\font\\inbody=ptmb}\n\\iftwelvepoint \\font\\foo=cmr12 \\else \\font\\foo=cmr10\\fi\n\\iftoggle{final}{\\relax}{}\n\\let\\ifq\\iftrue\n\\font\\elvbf = ptmb scaled 1100\n']).map(f => f.cs)).toEqual(['elvbf'])
     // a symbol font, another script's, a size TeX computes, a font TeX names at the time
     expect(namedFonts(['\\font\\astro@font=astrosym at 7pt \\font\\cyr=wncyr10 \\font\\bighelv=phvr at #1 \\font\\@IEEEPARstartfont\\fontname\\font\\space at 3pt'])).toEqual([])
   })
@@ -184,5 +190,17 @@ describe('a font a paper\'s style loads by name, under a strategy that sets anot
     const main = (lang: string) => new TextDecoder().decode(translationFiles(p, new Map(), { strategy: first({ ...META, ...p.meta }, lang), fonts: null, draft: false, aux: null, bbl: null }).get('main.tex'))
     expect(main('ru')).toContain(FIXED)
     expect(main('fr')).not.toContain('\\let\\expandafter\\elvbf')
+  })
+  it('from the files TeX reads alone: a style loaded by one the paper loads, not one it never loads (M5)', () => {
+    const files = new Map([
+      ['main.tex', '\\documentclass{article}\\usepackage{outer}\\begin{document}\nThe first paragraph of prose.\n\\end{document}\n'],
+      ['outer.sty', '\\RequirePackage{inner}\n'],
+      ['inner.sty', '\\font\\elvbf  = ptmb scaled 1100\n'],
+      ['unused.sty', '\\font\\stray = phvb at 8pt\n'],
+    ].map(([k, v]) => [k as string, new TextEncoder().encode(v as string)]))
+    const p = openPaper(files)
+    const tex = new TextDecoder().decode(translationFiles(p, new Map(), { strategy: first({ ...META, ...p.meta }, 'ru'), fonts: null, draft: false, aux: null, bbl: null }).get('main.tex'))
+    expect(tex).toContain(FIXED)
+    expect(tex).not.toContain('\\stray')
   })
 })

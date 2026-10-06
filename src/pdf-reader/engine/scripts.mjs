@@ -134,7 +134,8 @@ const NAMED = /\\font\s*\\([A-Za-z@]+)\s*=?\s*([A-Za-z][A-Za-z0-9-]*)(?![A-Za-z0
 const UNIT_PT = { pt: 1, bp: 72.27 / 72, mm: 72.27 / 25.4, cm: 72.27 / 2.54, in: 72.27, pc: 12, dd: 1238 / 1157, cc: 12 * 1238 / 1157 }
 /** a font's file name in fontname's scheme → its role, bold or not, its shape and its design size, or null */
 const faceOf = name => {
-  const ps = /^[pu](tm|bk|nc|pl|hv|ag|cr)([a-z])([a-z]*?)(?:\d[a-z])?$/.exec(name)
+  // in a text encoding, or the raw font: not TS1's symbols (ptmr8c) nor a math encoding's (7m, 7y)
+  const ps = /^[pu](tm|bk|nc|pl|hv|ag|cr)([a-z])([a-z]*?)(?:7t|8t|8r|8a|8y)?$/.exec(name)
   if (ps) {
     const [, face, weight, variant] = ps
     return { role: face === 'cr' ? 'tt' : face === 'hv' || face === 'ag' ? 'sf' : 'rm', bold: /[bdsxhc]/.test(weight), shape: variant.includes('c') ? 'sc' : variant.includes('i') ? 'it' : variant.includes('o') ? 'sl' : 'up', design: 10 }
@@ -144,15 +145,48 @@ const faceOf = name => {
   const [, v, size] = cm
   return { role: /^ss/.test(v) ? 'sf' : /tt$|^tcsc$/.test(v) ? 'tt' : 'rm', bold: /^(b|bx|bxti|bxsl|ssbx|ssdc)$/.test(v), shape: /^(ti|bxti|itt|u)$/.test(v) ? 'it' : /^(sl|bxsl|ssi|sltt)$/.test(v) ? 'sl' : /csc$/.test(v) ? 'sc' : 'up', design: size === '17' ? 17.28 : Number(size) }
 }
-/** the fonts a paper's own files load by name that NFSS can load again (`texts`, the files' text): { cs, role, bold,
- *  shape, size } each, in pt, the last declaration of a name winning */
+/**
+ * Where in a file's text TeX reads it as the file is read: 1 at each character not inside a brace group (a macro's
+ * body, a local group) nor inside a conditional the file opens at its top (aastex631's \iftwelvepoint \font\foo=cmr12
+ * \else \font\foo=cmr10\fi, acl.sty's \ifacl@linenumbers: which branch runs is an option's; the review of
+ * fix/tex-path-errors, M5). \newif's and \let's names are not conditionals opened
+ */
+const skipSpaces = (text, k) => { while (k < text.length && /\s/.test(text[k])) k++; return k }
+function topLevel(plain) {
+  const out = new Uint8Array(plain.length)
+  let depth = 0, conds = 0, names = 0
+  for (let i = 0; i < plain.length; i++) {
+    const c = plain[i]
+    if (c === '\\') {
+      const token = /^\\(?:[A-Za-z@]+|.)/s.exec(plain.slice(i, i + 80))?.[0] ?? '\\', name = token.slice(1)
+      if (depth === 0) {
+        if (names) names--
+        else if (name === 'newif') names = 1
+        else if (name === 'let') names = 2
+        // a TeX conditional; not a macro of the name that takes its branches as arguments (etoolbox's \iftoggle{…}{…}{…},
+        // which wacv.sty sets its fonts after: no \fi closes it), nor \iff
+        else if (/^if[A-Za-z@]*$/.test(name) && name !== 'iff' && plain[skipSpaces(plain, i + token.length)] !== '{') conds++
+        else if (name === 'fi' && conds) conds--
+      }
+      out.fill(depth === 0 && conds === 0 ? 1 : 0, i, i + token.length)
+      i += token.length - 1
+      continue
+    }
+    if (c === '{') depth++
+    else if (c === '}' && depth) depth--
+    out[i] = depth === 0 && conds === 0 ? 1 : 0
+  }
+  return out
+}
+/** the fonts a paper's own files load by name where TeX reads them (`texts`, the text of each file TeX reads: topLevel)
+ *  that NFSS can load again: { cs, role, bold, shape, size } each, in pt, the last declaration of a name winning */
 export function namedFonts(texts) {
   const out = new Map()
   for (const text of texts) {
-    const plain = text.replace(/(^|[^\\])%.*$/gm, '$1')
+    const plain = text.replace(/(^|[^\\])%.*$/gm, '$1'), top = topLevel(plain)
     for (const m of plain.matchAll(NAMED)) {
       const face = faceOf(m[2])
-      if (!face) continue
+      if (!face || !top[m.index]) continue
       const rest = plain.slice(m.index + m[0].length, m.index + m[0].length + 40)
       const at = /^\s*at\s*(\d*\.?\d+)\s*(pt|bp|mm|cm|in|pc|dd|cc)(?![A-Za-z])/.exec(rest), scaled = /^\s*scaled\s*(?:(\d+)|\\magstep\s*(\d|half)(?![A-Za-z]))/.exec(rest)
       // a size TeX would compute is not known here
@@ -201,18 +235,19 @@ const babel = (lang, hyphenrules) => `\\IfPackageLoadedTF{polyglossia}{}{\\IfPac
  * no locale has — Chinese is babel-zh-Hans.ini and babel-zh-Hant.ini, and a paper that loads siunitx stopped at "File
  * 'babel-Hans-.ini' not found" in zh and zh-Hant (2307.16209 in TeX Live's image; josephwright/siunitx#891, fixed in
  * 3.6.3 on 2026-09-28; the TeX page's tree has 3.4.14, without the lookup). A file the lookup names that is not there is
- * passed over, whatever the version: siunitx's own default, the full stop, is the decimal marker of both Chinese files,
- * as 3.6.3 reads them, and a siunitx without the lookup has no such function
+ * passed over: siunitx's own default, the full stop, is the decimal marker of both Chinese files, as 3.6.3 reads them.
+ * In 3.6.2 alone, dated 2026-09-18 (the review of fix/tex-path-errors, M3): a later siunitx that kept the function's
+ * name and gave it something else than a file would lose its comma for de, fr, es and ru without a word
  */
 const SIUNITX_LOCALE = String.raw`\ExplSyntaxOn
-\cs_if_exist:NT \__siunitx_locale_setup:n
+\IfPackageAtLeastTF { siunitx } { 2026-09-18 } { \IfPackageAtLeastTF { siunitx } { 2026-09-19 } { } { \cs_if_exist:NT \__siunitx_locale_setup:n
   {
     \cs_if_exist:NF \__axt_siunitx_locale_setup:n
       {
         \cs_new_eq:NN \__axt_siunitx_locale_setup:n \__siunitx_locale_setup:n
         \cs_set_protected:Npn \__siunitx_locale_setup:n #1 { \file_if_exist:nT {#1} { \__axt_siunitx_locale_setup:n {#1} } }
       }
-  }
+  } } } { }
 \ExplSyntaxOff
 `
 /** After fontspec: the fonts declared from here on carry exactly the features given them. A paper's class may set

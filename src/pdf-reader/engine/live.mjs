@@ -186,9 +186,29 @@ export function originalFiles({ fsys, project }, { lines = false, spans = null }
   return out
 }
 
-/** the fonts a paper's own files load by name (scripts.mjs namedFonts), read once a paper */
+/** the text of each of the paper's own files TeX reads: those loadProject walked, and each style or class of the
+ *  paper's own that one of them loads (\usepackage, \RequirePackage, \documentclass, \LoadClass), and so on */
+function readByTeX(fsys, project) {
+  const own = new Map(fsys.list().filter(f => /\.(sty|cls)$/i.test(f)).map(f => [f.split('/').pop().toLowerCase(), f]))
+  const texts = [...project.files.values()], queue = [...texts], seen = new Set()
+  while (queue.length) {
+    const text = queue.pop().replace(/(^|[^\\])%.*$/gm, '$1')
+    for (const m of text.matchAll(/\\(usepackage|RequirePackage|documentclass|LoadClass)\s*(?:\[[^\]]*\]\s*)?\{([^}]*)\}/g)) {
+      for (const name of m[2].split(',')) {
+        const f = own.get(`${name.trim()}.${/class/i.test(m[1]) ? 'cls' : 'sty'}`.toLowerCase())
+        if (!f || seen.has(f)) continue
+        seen.add(f)
+        const t = latin1(fsys.read(f))
+        texts.push(t)
+        queue.push(t)
+      }
+    }
+  }
+  return texts
+}
+/** the fonts the paper's own files load by name where TeX reads them (scripts.mjs namedFonts), read once a paper */
 const namedOf = new WeakMap()
-const fontsByName = fsys => { let named = namedOf.get(fsys); if (!named) namedOf.set(fsys, (named = namedFonts(fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(f => latin1(fsys.read(f)))))); return named }
+const fontsByName = (fsys, project) => { let named = namedOf.get(fsys); if (!named) namedOf.set(fsys, (named = namedFonts(readByTeX(fsys, project)))); return named }
 
 /** the translation so far, with unit marks, set by one of strategiesFor (scripts.mjs); a strategy's `leading` sets the
  *  translated units' own paragraphs, and those alone, at that factor of the paper's spacing (latex-front unitLeadTex).
@@ -212,7 +232,7 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   const patched = spans ? new Map(out) : null
   let main = latin1(out.get(project.main))
   const at = beginDocument(main)
-  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts, fontsByName(fsys)) + NO_OVERFLOW + (xe || !evenSpaces ? '' : EVEN_SPACES) + main.slice(at)
+  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts, fontsByName(fsys, project)) + NO_OVERFLOW + (xe || !evenSpaces ? '' : EVEN_SPACES) + main.slice(at)
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
   if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
   const shim = xe && strategy.engine !== meta.compiler ? XETEX_SHIM + XETEX_SHIM_R1 : ''

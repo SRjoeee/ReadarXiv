@@ -72,6 +72,8 @@ describe('2307.16209 into zh: siunitx 3.6.2\'s locale file, and a heading upperc
       const guard = pre.indexOf('\\cs_if_exist:NT \\__siunitx_locale_setup:n')
       expect(guard).toBeGreaterThan(pre.indexOf('\\babelprovide'))
       expect(pre.slice(guard)).toContain('\\file_if_exist:nT {#1} { \\__axt_siunitx_locale_setup:n {#1} }')
+      // in 3.6.2 alone, dated 2026-09-18: at least that day, and not the next (the review of fix/tex-path-errors, M3)
+      expect(pre.slice(pre.indexOf('\\babelprovide'), guard)).toContain('\\IfPackageAtLeastTF { siunitx } { 2026-09-18 } { \\IfPackageAtLeastTF { siunitx } { 2026-09-19 } { } {')
     }
   })
   it('U: under CJKutf8 each CJK byte is made protected as soon as the CJK environment begins', () => {
