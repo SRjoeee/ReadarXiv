@@ -6,8 +6,9 @@
 // The marks are TeX put into every paper's original, and a mark that moves a line moves the readings the typesetting
 // rule takes from it. So each is written to move nothing: a mark before a placeholder is set against the word before
 // it, the space and tie after that word put back (cite.sty's \unskip and its penalty test see them as before); none is
-// set in a contents list, a list of figures or the output routine's running heads (the gate); none goes after a control
-// word, whose following spaces TeX skips and which may look ahead; and none is written to a file or a PDF string, so the
+// set in a contents list, a list of figures or the output routine's running heads (the gate); none goes after a paper's
+// macro or a footnote's call, which may look at what follows, nor after a control word, whose following spaces TeX
+// skips; and none is written to a file or a PDF string, so the
 // aux, the lists and the bookmarks are byte for byte the paper's. The native cases (experiments/pdf-bilingual/spikes/
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) switches off a class
 // that moves a line of any paper.
@@ -65,7 +66,7 @@ const uncomment = s => s.replace(/(^|[^\\])%.*$/gm, '$1')
 const options = s => (s ?? '').split(',').map(x => x.trim()).filter(Boolean)
 /** the packages the switch reads the options of: a copy of one in the paper's package is that package, its source no
  *  choice of the paper's (natbib.sty defines \bibstyle@nature's superscripts: 2608.30640's copy is no paper of super) */
-const READ = new Set(['natbib', 'cite', 'overcite', 'natmove', 'biblatex', 'fnpct'])
+const READ = new Set(['natbib', 'cite', 'overcite', 'natmove', 'biblatex'])
 /** the preamble the engine reads, comments taken out: the main file's up to \begin{document}, each file it \input's
  *  there, and each class and package of the paper's own it loads (the package's files, not TeX Live's, nor a copy of
  *  one READ names), as far as they go */
@@ -131,14 +132,13 @@ export function superCitations(paper, log = '') {
   if (!loaded.has('natbib')) return false
   return has('natbib', 'super') || [...pre.matchAll(/\\setcitestyle\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g)].some(m => options(m[1]).includes('super')) || /\\bibpunct\s*(?:\[[^\]]*\])?\s*\{[^{}]*\}\s*\{[^{}]*\}\s*\{[^{}]*\}\s*\{\s*s\s*\}/.test(pre)
 }
-/** the paper's own switch over LAYOUT_CLASSES: the classes a package of the paper's moves the punctuation after before —
- *  `cite` where its citations do (superCitations), `footnote` where fnpct swaps a footnote's call and the punctuation
- *  after it — whose placeholders the punctuation follows get no mark (layoutMarking's `movesPunctuation`) */
+/** the paper's own switch over LAYOUT_CLASSES: the classes a package of the paper's moves the punctuation after before,
+ *  whose placeholders the punctuation follows get no mark (layoutMarking's `movesPunctuation`) — `cite` where its
+ *  citations do (superCitations). Not `footnote` for fnpct, which swaps a call and the punctuation after it: a call gets
+ *  its opening mark alone (LOOKS_AHEAD), and fnpct sets the punctuation after a node of its own, which the opening mark
+ *  does not part from the word (Times' "y." the same width with a whatsit before the call or none) */
 export function punctuationMovers(paper, log = '') {
-  const out = []
-  if (superCitations(paper, log)) out.push('cite')
-  if (packagesOf(paper, log).loaded.has('fnpct')) out.push('footnote')
-  return out
+  return superCitations(paper, log) ? ['cite'] : []
 }
 
 // ---------------------------------------------------------------- the TeX
@@ -157,7 +157,9 @@ export function punctuationMovers(paper, log = '') {
  *   space before the placeholder, a tie's penalty and space, an italic correction — are taken off, the mark set against
  *   the last letter (\relax first: TeX sets the word before only once a command that does not expand comes), and each put
  *   back: a citation command that takes the space off (cite.sty's \unskip) and tests the penalty before it sees them as
- *   before, and no glue becomes a place to break that was not one. Glued to a letter, before a formula or a box, the mark
+ *   before, and no glue becomes a place to break that was not one. Never past a kern of nothing: LaTeX ends its leaders
+ *   with one (\dotfill, \hrulefill), and leaders put back as glue lose their dots (e-TeX cannot tell them from glue);
+ *   leaders with no such kern before a placeholder would still lose them. Glued to a letter, before a formula or a box, the mark
  *   goes in an \hbox: TeX never hyphenates a word a formula or a box follows, and does one a whatsit follows (2608.01890).
  *   On an empty list — the paragraph TeX resumes after a display — it sets nothing, and expands to nothing: a mark there
  *   would keep the empty paragraph between two displays a line, and would end the \ignorespaces amsmath's \] began
@@ -171,7 +173,9 @@ export function punctuationMovers(paper, log = '') {
  *   so, and \/ and LaTeX's \@@italiccorr add that letter's correction, measured when the mark was set, where they find
  *   it: TeX adds none after a whatsit, and cite.sty's [super] (\unskip then \/), \textup's left correction (\eqref),
  *   \textit and \textbf after their group set it on the letter before (0.14 pt after a "g" in cmr10, 1.45 pt after an
- *   italic "f"). An adjust node is nothing to TeX's line breaking, hyphenation and pdfTeX's margin kerning, as a whatsit.
+ *   italic "f"). The letter is a character, a ligature, or under XeTeX a word of a font of its own, which is a whatsit
+ *   (\lastnodetype 9: TeX's \/ adds no correction after any other whatsit, so one there measures nothing). An adjust
+ *   node is nothing to TeX's line breaking, hyphenation and pdfTeX's margin kerning, as a whatsit.
  *   A cell's marks do the same: its \axtmark.
  * - **Nothing written.** The three test \protect against \@typeset@protect and gobble their name otherwise, so written
  *   to a file (\protected@write: the aux's labels, the contents lists) or into a mark (running heads) they are gone; in a
@@ -189,12 +193,15 @@ export const LAYOUT_TEX = [
   '\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax}\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax\\fi}\\fi\\fi\\fi',
   '\\def\\axt@mark#1{\\axt@colseen\\ifaxt@off\\else\\axt@dest{#1}\\ifx\\axt@pend\\@empty\\else\\axt@dest{\\axt@pend}\\global\\let\\axt@pend\\@empty\\fi\\fi}',
   '\\def\\axt@icm{\\axt@icr\\ifnum\\lastnodetype=12 \\xdef\\axt@icv{\\the\\lastkern}\\unkern\\ifdim\\axt@icv=\\z@\\else\\global\\axt@sigtrue\\fi\\fi}',
-  '\\def\\axt@ic{\\global\\axt@sigfalse\\ifcase\\lastnodetype\\axt@icm\\or\\or\\or\\or\\or\\or\\global\\axt@sigtrue\\or\\axt@icm\\fi}',
+  '\\def\\axt@ic{\\global\\axt@sigfalse\\ifcase\\lastnodetype\\axt@icm\\or\\or\\or\\or\\or\\or\\global\\axt@sigtrue\\or\\axt@icm\\or\\or\\axt@icm\\fi}',
   '\\def\\axt@put#1{\\axt@ic\\axt@mark{#1}\\ifaxt@sig\\vadjust{}\\fi}',
   '\\def\\axt@ift#1#2\\relax{\\if t#1\\expandafter\\@firstoftwo\\else\\expandafter\\@secondoftwo\\fi}',
   '\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\ifhmode\\axt@ift#1\\relax{\\axt@put{#1}}{\\axt@mark{#1}}\\else\\axt@mark{#1}\\fi\\fi}',
   '\\protected\\def\\/{\\ifnum\\lastnodetype=6 \\ifdim\\axt@icv=\\z@\\axt@icr\\else\\kern\\axt@icv\\relax\\fi\\else\\axt@icr\\fi}\\let\\@@italiccorr\\/',
-  '\\def\\axt@take{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\edef\\axt@back{\\hskip\\the\\lastskip\\relax\\axt@back}\\unskip\\expandafter\\axt@take\\or\\edef\\axt@back{\\kern\\the\\lastkern\\relax\\axt@back}\\unkern\\expandafter\\axt@take\\or\\edef\\axt@back{\\penalty\\the\\lastpenalty\\relax\\axt@back}\\unpenalty\\expandafter\\axt@take\\fi}',
+  '\\def\\axt@take{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@tg\\or\\expandafter\\axt@tk\\or\\expandafter\\axt@tp\\fi}',
+  '\\def\\axt@tg{\\edef\\axt@back{\\hskip\\the\\lastskip\\relax\\axt@back}\\unskip\\axt@take}',
+  '\\def\\axt@tk{\\ifdim\\lastkern=\\z@\\else\\edef\\axt@back{\\kern\\the\\lastkern\\relax\\axt@back}\\unkern\\expandafter\\axt@take\\fi}',
+  '\\def\\axt@tp{\\edef\\axt@back{\\penalty\\the\\lastpenalty\\relax\\axt@back}\\unpenalty\\axt@take}',
   '\\def\\axt@set#1{\\relax\\let\\axt@back\\@empty\\axt@take\\axt@put{#1}\\axt@back}',
   '\\def\\axt@putbox#1{\\axt@ic\\hbox{\\axt@mark{#1}}\\ifaxt@sig\\vadjust{}\\fi}',
   '\\def\\axt@boxy{\\ifcat\\noexpand\\axt@next$1\\else\\ifx\\axt@next\\(1\\else\\ifx\\axt@next\\ensuremath1\\else\\ifx\\axt@next\\mbox1\\else\\ifx\\axt@next\\textsuperscript1\\else0\\fi\\fi\\fi\\fi\\fi}',
@@ -229,23 +236,26 @@ export const MARK_NAME = /^(?:\d+[se]|c[12]-\d+|[th]\d+[se]|[pn]\d+\.\d+[ab]|g\d
 /** patch's own test of the pieces that are always set on the line, where a unit's start mark goes before one that opens
  *  the unit (latex-front.mjs INLINE: kept equal, which layout-marks.test.ts holds against patch itself) */
 const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]ref)(?![A-Za-z]))/
-const WORD_END = /[\p{L}\p{N}]$/u, WORD_START = /^[\p{L}\p{N}]/u
-/** a control word alone, with a star and an empty group: a macro's call that takes no argument */
-const SOLE = /^\\[A-Za-z@]+\*?(\{\})?$/
+const WORD_END = /[\p{L}\p{N}]$/u
 /** a source that ends an environment: \end skips the spaces after it where the environment says so (a display's,
  *  subequations' after a \label: 2608.12255), and a mark is the first thing it would not skip */
 const ENDS_ENV = /\\end\s*\{[^{}]*\}\s*$/
-/** a source that ends in a control word: TeX skips the spaces after it, and a macro of it may look ahead */
-const ENDS_IN_WORD = /\\[A-Za-z@]+\*?$/
+/** a source that ends in a control sequence: TeX skips the spaces after a control word, and a macro of either may look
+ *  ahead. Not LaTeX's \), which reads nothing after it */
+const ENDS_IN_CS = /\\(?:[A-Za-z@]+\*?|[^A-Za-z@)])$/
 /** a source that ends in a number or a dimension — a parameter set, \looseness=-1, \parskip=3pt plus 1pt: TeX takes
  *  the space after it as the number's end, and reads on for a unit or a `plus`; a mark there ends the number, and the
  *  space is a space (2608.30640's `.\n\looseness=-1 While` gained one) */
 const ENDS_IN_NUMBER = /\d\s*(?:(?:true\s*)?(?:pt|pc|in|bp|cm|mm|dd|cc|sp|em|ex|mu|px)|fil{1,3})?$/
-/** a placeholder after which no mark goes, the next placeholder's neither: a paper's macro that ends in a control word
- *  (\xspace in it looks at what follows, and takes a footnote's call, or not, for the end of the phrase), \xspace itself,
- *  and a prefix that applies to the next token (\protect\eqref: a mark between them takes the \protect, and is written
- *  to the list of figures as itself, 2608.23586) */
-const LOOKS_AHEAD = p => p?.t === 'ph' && ENDS_IN_WORD.test(p.src ?? '') && (classOf(p) === 'macro' || /\\(?:xspace\*?|protect|noexpand|expandafter|string|unexpanded|detokenize|global|long|outer|protected|immediate)$/.test(p.src))
+/** a placeholder whose macro may look at what follows it: a paper's macro (\xspace, \@ifnextchar[ after its argument;
+ *  \@esphack's \ignorespaces after \todo, \nocite, \marginpar), a footnote's call (fnpct's \footnote moves the
+ *  punctuation after it), \xspace itself, and a prefix that applies to the next token (\protect\eqref: a mark between
+ *  them takes the \protect, and is written to the list of figures as itself, 2608.23586). It gets no closing mark, and
+ *  the piece right after it no mark at all, which its macro would see in that piece's place */
+const LOOKS_AHEAD = p => {
+  const cls = classOf(p)
+  return cls === 'macro' || cls === 'footnote' || (p?.t === 'ph' && /\\(?:xspace\*?|protect|noexpand|expandafter|string|unexpanded|detokenize|global|long|outer|protected|immediate)$/.test(p.src ?? ''))
+}
 
 /**
  * Where a unit's start mark goes, as patch places it: the first piece at or after it, from `from`. The commands at the
@@ -290,15 +300,17 @@ function passedOver(pieces) {
  * A placeholder of a class in `classes`, at index k of unit i, in a unit with a mark, gets \axtpma{p<i>.<k>a} before it
  * and \axtpm{p<i>.<k>b} after it (`n` for a footnote's call), but where a mark would change what TeX does:
  * - none at a unit's head before its start mark, nor so after a forced break or an alignment's tab (passedOver);
- * - none right after a prefix or a macro that looks ahead (LOOKS_AHEAD), and none for a paper's macro glued to the
- *   letters before it, which may be letters of the same word;
- * - the opening mark only where the closing one would follow a control word (TeX skips the spaces after it; a paper's
- *   macro that is a control word alone is one), a number or a dimension (ENDS_IN_NUMBER), white space (a mark there would stand on the next line, a blank one no
- *   paragraph's end any more: 2608.08350's `.\` before one), an environment's \end, or a paper's macro a letter follows
+ * - none right after a piece that may look ahead (LOOKS_AHEAD), and none for a paper's macro glued to the letters
+ *   before it, which may be letters of the same word;
  * - none for a placeholder the punctuation follows, of a class in `movesPunctuation` (the paper's own switch:
  *   punctuationMovers): the package sets the full stop against the word before, where an opening mark would part the
  *   word's last letter from it and lose their kern (2608.23865: Times' "y." and "r.", up to 0.85 pt), and looks for it
- *   where the closing mark would stand. One no punctuation follows keeps both marks
+ *   where the closing mark would stand. One no punctuation follows keeps its marks. A citation is no piece that looks
+ *   ahead, so this is what takes its marks off there
+ * - the opening mark only for a piece that may look ahead, and where the closing one would follow a control sequence
+ *   (TeX skips the spaces after a control word), a number or a dimension (ENDS_IN_NUMBER), white space (a mark there
+ *   would stand on the next line, a blank one no paragraph's end any more: 2608.08350's `.\` before one) or an
+ *   environment's \end
  */
 export function layoutMarking(units, classes, { lines = false, movesPunctuation = [] } = {}) {
   const on = new Set(classes), movers = new Set(movesPunctuation)
@@ -323,13 +335,13 @@ export function layoutMarking(units, classes, { lines = false, movesPunctuation 
       const cls = passed && !passed.has(k) && !LOOKS_AHEAD(after) ? classOf(p) : null
       if (!cls || !on.has(cls)) return [piece]
       // a paper's macro may set letters: glued to the word before, it is part of it (an accent, \\ss), and a mark would
-      // part the word's hyphenation and kerns; glued to the word after, it gets no closing mark
+      // part the word's hyphenation and kerns
       const before = u.pieces[k - 1], next = u.pieces[k + 1]
       if (cls === 'macro' && before?.t === 'text' && WORD_END.test(before.s)) return [piece]
       if (movers.has(cls) && next?.t === 'text' && /^[.,;:]/.test(next.s)) return [piece]
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
       const open = { t: 'ph', src: `\\axtpma{${name}a}` }
-      if (p.t === 'ph' && ((cls === 'macro' && (SOLE.test(p.src) || (next?.t === 'text' && WORD_START.test(next.s)))) || ENDS_IN_WORD.test(p.src) || ENDS_IN_NUMBER.test(p.src) || /\s$/.test(p.src) || ENDS_ENV.test(p.src))) return [open, piece]
+      if (LOOKS_AHEAD(p) || ENDS_IN_CS.test(p.src) || ENDS_IN_NUMBER.test(p.src) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
       return [open, piece, { t: 'ph', src: `\\axtpm{${name}b}` }]
     })
   })
@@ -340,6 +352,8 @@ export function layoutMarking(units, classes, { lines = false, movesPunctuation 
 // ---------------------------------------------------------------- the marks file
 export const MARKS_CAP = 8 * 2 ** 20
 export const MARKS_VALUES = 2_000_000
+/** the deepest a marks file nests: its object, then marks or lines, then each entry, [name, page, x, y] or [id, count] */
+export const MARKS_DEPTH = 3
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
 const KEYS = ['schema', 'engine', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens']
 const WORDS_MAX = 300_000, WORD_MAX = 200, LINES_MAX = 2000, BOX_MAX = 2000
@@ -424,19 +438,19 @@ export function encodeLayoutMarks(m) {
   })
 }
 
-/** bytes, then values, then JSON.parse, then every bound; throws LayoutRefusal, naming where */
+/** bytes, then values and nesting, then JSON.parse, then every bound; throws LayoutRefusal, naming where */
 export function parseLayoutMarks(bytes) {
-  const m = checkKeys(boundedJson(bytes, { cap: MARKS_CAP, values: MARKS_VALUES }), KEYS, '')
+  const m = checkKeys(boundedJson(bytes, { cap: MARKS_CAP, values: MARKS_VALUES, depth: MARKS_DEPTH }), KEYS, '')
   if (m.schema !== 1) throw new LayoutRefusal('schema', 'not 1')
   if (!ENGINES.includes(m.engine)) throw new LayoutRefusal('engine', `not one of ${ENGINES.join(', ')}`)
   const pages = checkPages(m.pages, 'pages')
   const views = checkViews(m.views, pages, 'views')
   if (!Array.isArray(m.columns) || m.columns.length !== pages) throw new LayoutRefusal('columns', `not ${pages} entries`)
-  m.columns.forEach((c, i) => { if (c !== 0 && c !== 1 && c !== 2) throw new LayoutRefusal(`columns[${i}]`, 'not 0, 1 or 2') })
+  for (let i = 0; i < m.columns.length; i++) { const c = m.columns[i]; if (c !== 0 && c !== 1 && c !== 2) throw new LayoutRefusal(`columns[${i}]`, 'not 0, 1 or 2') }
   if (!Array.isArray(m.marks)) throw new LayoutRefusal('marks', 'not an array')
   const names = new Set()
-  m.marks.forEach((e, i) => {
-    const at = `marks[${i}]`
+  for (let i = 0; i < m.marks.length; i++) {
+    const e = m.marks[i], at = `marks[${i}]`
     if (!Array.isArray(e) || e.length !== 4) throw new LayoutRefusal(at, 'not [name, page, x, y]')
     const [name, page, x, y] = e
     if (typeof name !== 'string' || !MARK_NAME.test(name)) throw new LayoutRefusal(`${at}[0]`, 'not a mark name')
@@ -446,19 +460,20 @@ export function parseLayoutMarks(bytes) {
     const o = 4 * (page - 1)
     if (!isNumber(x) || x < views[o] - 1 || x > views[o + 2] + 1) throw new LayoutRefusal(`${at}[2]`, 'not within its page')
     if (!isNumber(y) || y < views[o + 1] - 1 || y > views[o + 3] + 1) throw new LayoutRefusal(`${at}[3]`, 'not within its page')
-  })
+  }
   if (!Array.isArray(m.dropped)) throw new LayoutRefusal('dropped', 'not an array')
-  m.dropped.forEach((n, i) => { if (typeof n !== 'string' || !MARK_NAME.test(n)) throw new LayoutRefusal(`dropped[${i}]`, 'not a mark name') })
+  for (let i = 0; i < m.dropped.length; i++) { const n = m.dropped[i]; if (typeof n !== 'string' || !MARK_NAME.test(n)) throw new LayoutRefusal(`dropped[${i}]`, 'not a mark name') }
   if (!Array.isArray(m.lines)) throw new LayoutRefusal('lines', 'not an array')
   let id = -1
-  m.lines.forEach((e, i) => {
+  for (let i = 0; i < m.lines.length; i++) {
+    const e = m.lines[i]
     if (!Array.isArray(e) || e.length !== 2) throw new LayoutRefusal(`lines[${i}]`, 'not [id, count]')
     if (!isInteger(e[0], id + 1, Number.MAX_SAFE_INTEGER)) throw new LayoutRefusal(`lines[${i}][0]`, 'not an id above the last')
     if (!isInteger(e[1], 0, LINES_MAX)) throw new LayoutRefusal(`lines[${i}][1]`, `not a count 0 to ${LINES_MAX}`)
     id = e[0]
-  })
+  }
   if (!Array.isArray(m.words) || m.words.length > WORDS_MAX) throw new LayoutRefusal('words', `not an array of at most ${WORDS_MAX}`)
-  m.words.forEach((w, i) => { if (typeof w !== 'string' || w.length < 1 || w.length > WORD_MAX) throw new LayoutRefusal(`words[${i}]`, `not a word of 1 to ${WORD_MAX} code units`) })
+  for (let i = 0; i < m.words.length; i++) { const w = m.words[i]; if (typeof w !== 'string' || w.length < 1 || w.length > WORD_MAX) throw new LayoutRefusal(`words[${i}]`, `not a word of 1 to ${WORD_MAX} code units`) }
   const t = m.tokens
   if (!Array.isArray(t) || t.length % 6 !== 0) throw new LayoutRefusal('tokens', 'not of stride 6')
   for (let i = 0; i < t.length; i += 6) {

@@ -60,14 +60,30 @@ const STAY = {
   'a control space before a blank line': doc('', `${prose(10, () => '')} \\cite{a}.\\\n\n${prose(10, () => '')} \\cite{b}.\\\n\n${prose(8, () => '')}\n\n${BIB}`),
   // a tabularray table, which the scanner reads as prose: \\SetCell must open its cell (2608.03994)
   'a tabularray row\'s \\SetCell': doc('\\usepackage{tabularray}', `\\begin{tblr}{colspec={lccccc}}\nModel & Size & \\SetCell[c=3]{c} Slopes & & & $\\delta_1$ \\\\\nAlpha & 1.5 & 2 & 3 & 4 & $x$ \\\\\n\\end{tblr}\n\n${prose(6, () => '')}`),
-  // the paper's own switch: a package that sets the punctuation after a citation or a footnote's call before it (cite.sty's
-  // and natbib's super, natmove, fnpct); there no mark goes on a citation or a call the punctuation follows
+  // the paper's own switch: a package that sets the punctuation after a citation before it (cite.sty's and natbib's
+  // super, natmove); there no mark goes on a citation the punctuation follows
   'cite.sty [super], a citation before a full stop or a comma (the switch)': doc('\\usepackage[super]{cite}', `${prose(16, i => [' \\cite{a}.', ' \\cite{b},', ' \\cite{a} and', '~\\cite{b};'][i % 4])}\n\n${BIB}`),
   'natbib [super] with natmove, a citation before a full stop or a comma (the switch)': doc('\\usepackage[super,sort&compress]{natbib}\\usepackage{natmove}', `${prose(16, i => [' \\cite{a}.', ' \\cite{b},', ' \\cite{a} and', ' \\cite{a,b}:'][i % 4])}\n\n${BIB}`),
-  'fnpct, a footnote\'s call before a full stop or a comma (the switch)': doc('\\usepackage{fnpct}', `${prose(16, i => [`\\footnote{Note ${i}.}.`, `\\footnote{Note ${i}.},`, ' and', `\\footnote{Note ${i}.} then`][i % 4])}`),
+  // fnpct, in Times, whose "y." kerns: a call keeps its opening mark alone (it looks ahead), and fnpct sets the full stop
+  // after a node of its own, which the mark does not part from the word; no switch is needed
+  'fnpct in Times, a footnote\'s call before a full stop or a comma': doc('\\usepackage{times}\\usepackage{fnpct}', `${prose(16, i => [` way\\footnote{Note ${i}.}.`, ` day\\footnote{Note ${i}.},`, ' and', ` key\\footnote{Note ${i}.} then`][i % 4])}`),
   // a parameter set in a paragraph, a number or a dimension at its end: TeX takes the space after it as the number's end
   // and reads on for a unit or a `plus`, which a closing mark would stop (2608.30640's `.\n\looseness=-1 While`)
   'a number or a dimension set before a word': doc('', `${prose(16, i => ['.\n\\looseness=-1 While', ' \\linepenalty=100 and', ' \\spaceskip=3pt plus 1pt the', ' \\hyphenpenalty 50 we'][i % 4])}`),
+  // leaders before a placeholder: a mark taking the glue off and putting it back would put back plain glue, the dots gone
+  // (\\dotfill ends in \\kern\\z@, which guards its leaders from an \\unskip)
+  'leaders before a formula': doc('', `\\noindent Total\\dotfill{} $0$\n\n\\noindent Total 0\\dotfill{} $0$\n\n\\noindent Sum \\hrulefill\\ $x$ and \\dotfill \\cite{a}\n\n${prose(6, () => '')}\n${BIB}`),
+  // a paper's macro looks ahead past its own argument, at what a closing mark would be (review C1): \\xspace, \\@ifnextchar,
+  // \\@esphack's \\ignorespaces (todonotes [disable], \\nocite, \\marginpar); the next placeholder's opening mark too
+  'a macro with \\xspace after its argument': doc('\\usepackage{xspace}\\newcommand\\code[1]{\\texttt{#1}\\xspace}', `${prose(24, i => [' \\code{X} is', ' \\code{Y}.', ' \\code{Z}, then', ' \\code{a}\\footnote{x} and'][i % 4])}`),
+  'a macro reading \\@ifnextchar[ after its argument': doc('\\makeatletter\\newcommand\\opt[1]{\\texttt{#1}\\@ifnextchar[\\opt@x{}}\\def\\opt@x[#1]{(#1)}\\makeatother', `${prose(24, i => (i % 2 ? ' \\opt{a} then' : ' \\opt{b}[c] and'))}`),
+  'todonotes [disable], \\nocite and \\marginpar': doc('\\usepackage[disable]{todonotes}', `${prose(24, i => [' more \\todo{x} words', ' see \\nocite{a} then', ' then \\marginpar{note} then', ' and \\todo{y} $z$'][i % 4])}\n\n${BIB}`),
+  // LaTeX's \\) reads nothing after it: an inline formula of \\( \\) keeps its closing mark, as one of $ $
+  'an inline formula of \\( \\)': doc('', `${prose(24, i => [' \\(x_{' + i + '}\\) is', ' \\(y\\).', ' \\(z\\), then', '~\\(w\\) and'][i % 4])}`),
+  'a macro that ends in leaders': doc('\\newcommand\\fillto[1]{#1\\dotfill}', `\\noindent\\fillto{Entry} $3$\n\n\\noindent\\fillto{Other entry} \\cite{a}\n\n${prose(6, () => '')}\n${BIB}`),
+  'fnpct, a full stop after a footnote\'s call': doc('\\usepackage{fnpct}', `${prose(16, i => (i % 2 ? ' word\\footnote{One.}. And' : ' more\\footnote{Two.}, then'))}`),
+  // an italic word's correction before \\eqref's \\textup, under each engine: XeTeX's word is a whatsit (review I2)
+  'an italic word before \\eqref': { engines: ['pdflatex', 'xelatex', 'lualatex'], src: doc('\\usepackage{iftex}\\ifPDFTeX\\else\\usepackage{fontspec}\\fi\\usepackage{amsmath}\\usepackage{amsthm}\\newtheorem{theorem}{Theorem}', `\\begin{equation} x = y \\label{e} \\end{equation}\n\\begin{theorem}${prose(24, i => [' by \\eqref{e}', ' with~\\eqref{e} and', ' of \\ref{e}', ' \\emph{set} by \\eqref{e}'][i % 4])}.\\end{theorem}\n${prose(6, () => '')}`) },
   'a word glued to a formula or a footnote\'s call, never hyphenated': doc('\\usepackage[margin=6.5cm]{geometry}', `${prose(30, i => [' representations$x_{' + i + '}$', ' characterization\\footnote{N.}', ' considerably$y$ is', ' experimentally\\footnotemark{} and'][i % 4])}`),
 }
 
@@ -136,10 +152,12 @@ const errorsOf = name => (read(name, 'log', 'latin1') ?? '').match(/^! .*/gm) ??
 const near = (m, page, x, y, d) => !!m && m.page === page && Math.hypot(m.x - x, m.y - y) <= d
 
 // ---------------------------------------------------------------- the jobs
-for (const [name, src] of Object.entries(STAY)) {
-  const key = name.replace(/[^A-Za-z0-9]+/g, '-')
-  queue(`stay-${key}`, src)
-  queue(`stay-${key}-hyperref`, src.replace('\n\\begin{document}', '\n\\usepackage{hyperref}\n\\begin{document}'))
+/** each document of STAY under each of its engines (pdfLaTeX unless it names others), by its job's key */
+const stays = Object.entries(STAY).flatMap(([name, v]) => (typeof v === 'string' ? [[name, v, 'pdflatex']] : v.engines.map(e => [name, v.src, e])))
+const stayKey = (name, engine) => `stay-${name.replace(/[^A-Za-z0-9]+/g, '-')}${engine === 'pdflatex' ? '' : `-${engine}`}`
+for (const [name, src, engine] of stays) {
+  queue(stayKey(name, engine), src, { engine })
+  queue(`${stayKey(name, engine)}-hyperref`, src.replace('\n\\begin{document}', '\n\\usepackage{hyperref}\n\\begin{document}'), { engine })
 }
 // a caption in the list of figures: the list alone on its page, the figure on the next
 const lofPaper = queue('lof', doc('', `\\listoffigures\n\\clearpage\n${prose(10, () => '')}\n\\begin{figure}[h]\\centering\\rule{2cm}{1cm}\\caption{\\textit{Zebra} caption text.}\\end{figure}\n${prose(10, () => '')}`), { passes: 3 })
@@ -152,7 +170,7 @@ queue('files', filesSrc, { passes: 3 })
 // titlesec sets nameref's title itself, past gettitlestring (2608.13505)
 queue('files-titlesec', filesSrc.replace('\\usepackage{hyperref}', '\\usepackage{titlesec}\\usepackage{hyperref}'), { passes: 3 })
 // the cells of a scaled table, under pdfTeX (failed) and under XeTeX (printed)
-const cellSrc = STAY['a cell in \\resizebox']
+const cellSrc = /** @type {string} */ (STAY['a cell in \\resizebox'])
 const cellPaper = queue('cell-xe', cellSrc, { engine: 'xelatex', variants: ['v1'] })
 // an opening mark before a space
 const spacePaper = queue('space', doc('', `We set the $x$ model here, and the $x$ model again.`))
@@ -167,17 +185,16 @@ const capsPaper = queue('caps', doc('\\makeatletter\\renewcommand\\section{\\@st
 // its number, looking past the closing mark (v1 here without the switch)
 queue('super-stop', doc('\\usepackage[super]{cite}', `${prose(12, i => (i % 2 ? ' \\cite{a}.' : ' \\cite{b},'))}\n\n${BIB}`), { own: false })
 queue('natmove-stop', STAY['natbib [super] with natmove, a citation before a full stop or a comma (the switch)'], { own: false })
-queue('fnpct-stop', STAY['fnpct, a footnote\'s call before a full stop or a comma (the switch)'], { own: false })
 
 console.log(`compiling ${jobs.length} documents in ${dir}`)
 compileAll(jobs)
 
 // ---------------------------------------------------------------- the checks
-for (const name of Object.keys(STAY)) {
+for (const [name, , engine] of stays) {
   for (const hyper of [false, true]) {
-    const key = `stay-${name.replace(/[^A-Za-z0-9]+/g, '-')}${hyper ? '-hyperref' : ''}`
+    const key = `${stayKey(name, engine)}${hyper ? '-hyperref' : ''}`
     const [a, b] = [await pdfOf(`${key}-v0`), await pdfOf(`${key}-v1`)]
-    const label = `no line moves: ${name}${hyper ? ', with hyperref' : ''}`
+    const label = `no line moves: ${name}${engine === 'pdflatex' ? '' : ` (${engine})`}${hyper ? ', with hyperref' : ''}`
     if (!a || !b) { check(label, false, `no PDF (${a ? 'v1' : 'v0'})`); continue }
     const m = moved(a, b), newErrors = errorsOf(`${key}-v1`).filter(e => !errorsOf(`${key}-v0`).includes(e))
     const logA = readLog(`${key}-v0`), logB = readLog(`${key}-v1`)
@@ -187,6 +204,11 @@ for (const name of Object.keys(STAY)) {
   }
 }
 
+{
+  const inline = await pdfOf(`${stayKey('an inline formula of \\( \\)', 'pdflatex')}-v1`)
+  const closing = [...(inline?.dests.keys() ?? [])].filter(k => /^p\d+\.\d+b$/.test(k)).length
+  check('an inline formula of \\( \\) has its closing marks', closing >= 18, JSON.stringify({ closing }))
+}
 {
   const lof = await pdfOf('lof-v1')
   const n = lofPaper.units.findIndex(u => u.kind === 'caption')
@@ -261,7 +283,7 @@ for (const [job, label] of [['files', 'with hyperref and nameref'], ['files-titl
   const m = a && b ? moved(a, b) : ['no PDF']
   console.log(`note cite.sty [super], a citation before a full stop or a comma, without the paper's switch: ${m.length ? `${m.length} items moved, e.g. ${m.slice(0, 2).join('; ')}` : 'ok'}`)
 }
-for (const [job, label] of [['natmove-stop', "natbib [super] with natmove, a citation before a full stop or a comma"], ['fnpct-stop', "fnpct, a footnote's call before a full stop or a comma"]]) {
+for (const [job, label] of [['natmove-stop', "natbib [super] with natmove, a citation before a full stop or a comma"]]) {
   const [a, b] = [await pdfOf(`${job}-v0`), await pdfOf(`${job}-v1`)]
   const m = a && b ? moved(a, b) : ['no PDF']
   console.log(`note ${label}, without the paper's switch: ${m.length ? `${m.length} items moved, e.g. ${m.slice(0, 2).join('; ')}` : 'ok'}`)

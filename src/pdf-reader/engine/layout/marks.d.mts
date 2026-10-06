@@ -12,8 +12,8 @@ type PaperFiles = { fsys: { read(path: string): Uint8Array | null }; project: { 
  *  overcite, biblatex's footnote or superscript \autocite): from the preamble the engine reads and `log`, a log of any
  *  compile of the paper's preamble (the font probe's) */
 export declare function superCitations(paper: PaperFiles, log?: string): boolean
-/** the paper's own switch: the classes a package of its moves the punctuation after before (`cite` where superCitations,
- *  `footnote` where fnpct is loaded), for layoutMarking's and originalFiles' `movesPunctuation` */
+/** the paper's own switch: the classes a package of its moves the punctuation after before (`cite` where superCitations),
+ *  for layoutMarking's and originalFiles' `movesPunctuation` */
 export declare function punctuationMovers(paper: PaperFiles, log?: string): MarkClass[]
 /** a placeholder whose rendering is never ink: matched on its leading control sequence */
 export declare const INVISIBLE: RegExp
@@ -55,6 +55,7 @@ export interface LayoutMarks {
 }
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
+export declare const MARKS_DEPTH: number
 /** from a PDF.js document of the marked original and its last TeX pass's log; the caller opens and destroys the document */
 export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string }): Promise<LayoutMarks>
 export declare function encodeLayoutMarks(m: LayoutMarks): string
