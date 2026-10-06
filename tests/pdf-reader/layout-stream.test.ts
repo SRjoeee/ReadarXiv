@@ -48,7 +48,7 @@ describe('ownedOf', () => {
     // a fraction's numerator, its bar and its denominator; a sum's limits above and below
     const page = pageOf(['the sum ', { at: 'p0.1a' }, { u: 'n', x: 120, y: 708, size: 7 }, { u: '∑', x: 118, y: 700 }, { u: 'i', x: 119, y: 693, size: 7 }, { at: 'p0.1b' }, ' and ', { at: 'p0.3a' }, '1', { rule: [150, 703, 160, 703.4] }, { u: 'd', x: 152, y: 695 }, { at: 'p0.3b' }, ' more'])
     expect(owned([page], { 'p0.1a': closed, 'p0.3a': closed })).toEqual({ 'p0.1a': ['n∑i', 0], 'p0.3a': ['1d', 1] })
-    expect(OWNED_HOW[OWNED - 1]).toBe("open, to its unit's next mark")
+    expect(OWNED_HOW[OWNED - 1]).toBe("open, to its column's end")
   })
 
   it('nothing between its two points: a piece of nothing (EMPTY); the closing point first: out of order', () => {
@@ -99,6 +99,9 @@ describe('ownedOf', () => {
   it('an opening point alone owns to where the text after it begins, a hyphen at a line\'s end passed over', () => {
     const page = pageOf(['a call', { at: 'n0.2a' }, { u: '1', x: 102, y: 703.5, size: 7 }, ' and the text ', { at: 'p0.4a' }, 'BERT', ' con-\nsiderably more ', { at: '0e' }])
     expect(owned([page], { 'n0.2a': open('andthete'), 'p0.4a': open('consider') })).toEqual({ 'n0.2a': ['1', 0], 'p0.4a': ['BERT', 0] })
+    // a ligature's glyph past the characters looked for (2307.16209's "with the fi|rst"): it begins them
+    const lig = pageOf(['by ', { at: 'p0.1a' }, 'x+y', ' with the ', { u: 'fi', x: 150, y: 700 }, 'rst', { at: '0e' }])
+    expect(owned([lig], { 'p0.1a': open('withthef') })).toEqual({ 'p0.1a': ['x+y', 0] })
     // a glyph's variation selector (TeX Live 2026's cmex sets one) is no character of the text after
     const vs = pageOf(['as ', { at: 'p0.1a' }, 'x', { u: '\u2211\ufe01', x: 150, y: 700 }, { u: 'i', x: 155, y: 700 }, 's more', { at: '0e' }])
     expect(owned([vs], { 'p0.1a': open('\u2211ismore') })).toEqual({ 'p0.1a': ['x', 0] })
@@ -120,6 +123,16 @@ describe('ownedOf', () => {
     // the next mark an earlier unit's start: none
     const earlier = pageOf(['define', { at: 'p3.1a' }, '\na=b(1)', { at: '2s' }, 'text'])
     expect(owned([earlier], { 'p3.1a': open('', ['3e']) })).toEqual({ 'p3.1a': "open, the next mark not its unit's" })
+  })
+
+  it('a display that ends its unit at a column\'s foot, a footnote\'s mark next, ends with the column\'s body (2307.16209\'s 200.65)', () => {
+    // the footnote's unit an earlier one: its text shipped below the body
+    const foot = pageOf([{ at: 'bs1' }, 'words', { at: '7e' }, { at: 'p7.2a' }, '\na=b(3)', { at: 'be1' }, { rule: [72, 120, 200, 120.4] }, '\n7', { at: '6s' }, 'A note'])
+    expect(owned([foot], { 'p7.2a': open('', ['7e']) })).toEqual({ 'p7.2a': ['a=b(3)', 0] })
+    expect(OWNED_HOW.indexOf("open, to its column's end")).toBeLessThan(OWNED)
+    // a body begun again before the next mark (the display may go on in the next column): not so ended
+    const next = pageOf([{ at: 'bs1' }, 'words', { at: '7e' }, { at: 'p7.2a' }, '\na=b', { at: 'be1' }, '\n7 A note', { at: 'bs2' }, 'c=d(3)', { at: '6s' }, 'more'])
+    expect(owned([next], { 'p7.2a': open('', ['7e']) })).toEqual({ 'p7.2a': "open, the next mark not its unit's" })
   })
 
   it('an opening point alone with no text after it ends at its unit\'s next mark, and no other', () => {

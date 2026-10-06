@@ -15,6 +15,7 @@ export const OWNED_HOW = Object.freeze([
   'closed',
   'open, to the text after it',
   "open, to its unit's next mark",
+  "open, to its column's end",
   'marks out of order',
   'a mark set twice',
   'its marks in two regions',
@@ -29,7 +30,7 @@ export const OWNED_HOW = Object.freeze([
   'more glyphs than a piece may own',
   'past the glyphs a paper may own',
 ])
-export const OWNED = 3
+export const OWNED = 4
 const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i]))
 /** a bracket's point: a column's body (b) or a float's box (f), its start (s) or end (e), by a number */
 const BRACKET = /^([bf])([se])\d+$/
@@ -87,7 +88,8 @@ function regionsOf(page) {
  *   unit, to where that text's first WANT characters (`want`) begin, a hyphen passed over; where none does, the next
  *   mark must be its unit's next one (`ends`), or a later unit's start mark — MARK_DEF sets a unit's end mark before a
  *   display that ends it — and then what stands on that mark's line before it is that unit's label (a heading's number,
- *   an item's mark), not the piece's; no unmarked visible piece may come between (`blocked`). Nothing at all before the
+ *   an item's mark), not the piece's; or, where that mark is outside the bodies (a footnote's), the column's body's end;
+ *   no unmarked visible piece may come between (`blocked`). Nothing at all before the
  *   next point is a piece of nothing; nothing before the text after it, with glyphs there, is none (REVTeX sets the
  *   punctuation after a citation before its number).
  * A name set twice owns nothing, nor where the work is past its bound
@@ -152,6 +154,17 @@ export function ownedOf(pages, { follows, dropped = [] }) {
     const next = seq[(rank.get(`${pa}|${qa}`) ?? -2) + 1]
     if (!next || next[0] !== pa) { out.set(name, none(HOW['open, the next mark on another page'])); continue }
     const P = pages[pa - 1], N = P.points[next[1]]
+    // nothing after it in its unit, its next mark outside the bodies (a footnote's, shipped below its column): the piece
+    // ends with its column's body, where no body begins again before that mark
+    if (!f.want && rA % 2 === 1 && regions[pa - 1].at[next[1]] % 2 === 0) {
+      let E = null
+      for (let q = qa + 1; q < next[1]; q++) { const n = P.points[q].name; if (/^be\d+$/.test(n)) E = P.points[q]; else if (/^bs\d+$/.test(n)) E = null }
+      if (E) {
+        take(pa, A.glyph, E.glyph, A.box, E.box)
+        out.set(name, f.blocked && (glyphs.length || boxes.length) ? none(HOW['open, an unmarked piece follows']) : { how: HOW["open, to its column's end"], glyphs, boxes })
+        continue
+      }
+    }
     take(pa, A.glyph, N.glyph, A.box, N.box)
     if (jumps()) { out.set(name, none(HOW['across a column, unbracketed'])); continue }
     if (!glyphs.length && !boxes.length) { out.set(name, { how: HOW[f.want ? 'open, to the text after it' : "open, to its unit's next mark"], glyphs, boxes }); continue }
@@ -179,8 +192,9 @@ export function ownedOf(pages, { follows, dropped = [] }) {
 }
 
 /** where the text `want` begins among the glyphs (indices into `glyphs`, all of page P): the first glyph from which
- *  their characters spell it (a hyphen the text has not passed over, white space never compared), or from which they
- *  spell the start of it up to the last glyph (the text runs to the next point); -1 where it is nowhere */
+ *  their characters spell it (a hyphen the text has not passed over, white space never compared, the last glyph's
+ *  characters past its end: a ligature), or from which they spell the start of it up to the last glyph (the text runs
+ *  to the next point); -1 where it is nowhere */
 function textAt(P, glyphs, want) {
   const chars = glyphs.map(([, g]) => charOf(P.glyphs[g].u))
   for (let e = 0; e < chars.length; e++) {
@@ -189,7 +203,8 @@ function textAt(P, glyphs, want) {
     for (; h < chars.length && w < want.length; h++) {
       const c = chars[h]
       if (!c) continue
-      if (want.startsWith(c, w)) { w += c.length; continue }
+      // a glyph of several characters (a ligature) may run past the characters looked for
+      if (want.startsWith(c, w) || (w + c.length > want.length && c.startsWith(want.slice(w)))) { w += c.length; continue }
       if ((c === '-' || c === '‐') && h > e) continue
       break
     }
