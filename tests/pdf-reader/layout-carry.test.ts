@@ -247,7 +247,9 @@ describe('carrierOf, the review of 2026-10-06', () => {
     expect(over.length).toBeGreaterThan(0)
     expect(over).not.toContain(1)
     expect(over.at(-1)).toBe(12)
-  })
+    // about 20 million steps by design: 1-5 s alone, past the default 30 s in the full suite on a loaded machine; the row
+    // holds the bound's effect, not its speed
+  }, 120_000)
 
   it("words twice on arXiv's page are not unique there, whatever the page beside it holds", () => {
     const ws = ['results', 'on', 'imagenet']
