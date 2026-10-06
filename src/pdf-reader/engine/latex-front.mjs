@@ -578,18 +578,38 @@ function tikzText(s, from, to, b, ctx) {
 // TeX's own conditionals: each is closed by a \\fi (etoolbox's \\ifdef, \\ifbool … are macros that take braces instead)
 const TEX_IFS = new Set(['if', 'ifx', 'ifnum', 'ifdim', 'ifodd', 'ifcase', 'ifcat', 'iftrue', 'iffalse', 'ifvmode', 'ifhmode', 'ifmmode', 'ifinner', 'ifvoid', 'ifhbox', 'ifvbox', 'ifeof', 'ifdefined', 'ifcsname', 'iffontchar', 'ifincsname', 'ifpdfprimitive'])
 /** where a skipped conditional branch ends: after its \\fi, or at an \\else of the same depth (that branch is typeset) */
-function branchEnd(s, from, to, ifs) {
+function branchEnd(s, from, to, ifs, { toFi = false } = {}) {
   let depth = 0
   for (let k = from; k < to; k++) {
     if (s[k] === '%') { k = skipComment(s, k); continue }
     if (s[k] !== '\\') continue
     const { name, end } = commandAt(s, k)
-    if (TEX_IFS.has(name) || ifs.has(name)) depth++
+    if (isConditional(name, ifs)) depth++
     else if (name === 'fi') { if (depth-- === 0) return end }
-    else if ((name === 'else' || name === 'or') && depth === 0) return end
+    else if ((name === 'else' || name === 'or') && depth === 0 && !toFi) return end
     k = end - 1
   }
   return -1
+}
+/** a control word TeX takes as a conditional, which a \\fi ends: TeX's own, the paper's \\newif ones, LaTeX's internal
+ *  \\if@… — not etoolbox's \\ifdefempty{…}{…}{…} and the like, macros that no \\fi ends */
+const isConditional = (name, ifs) => TEX_IFS.has(name) || ifs.has(name) || /^if@/.test(name)
+/**
+ * The paper's \\newif conditionals TeX resolves the same wherever it reads them: one set true or false (\\longtrue) only
+ * where TeX surely acts on it, never in a definition's body, and always to the same value; one never set, false, as
+ * \\newif leaves it. A Map of the conditional's name to its value; one set otherwise is not in it
+ */
+function newifValues(texts, ifs) {
+  const set = new Map()
+  for (const t of texts) for (const c of texCommands(t, { ifs })) {
+    const m = /^(.+?)(true|false)$/.exec(c.name), name = m && `if${m[1]}`
+    if (!name || !ifs.has(name)) continue
+    if (c.inDef || !c.sure) { set.set(name, null); continue }
+    if (set.get(name) !== null) (set.get(name) ?? set.set(name, new Set()).get(name)).add(m[2] === 'true')
+  }
+  const out = new Map()
+  for (const name of ifs) { const v = set.get(name); if (v === undefined) out.set(name, false); else if (v?.size === 1) out.set(name, [...v][0]) }
+  return out
 }
 
 /** whether s[at] is inside a comment: an unescaped % before it on its line */
@@ -784,10 +804,11 @@ function walk(s, from, to, b, ctx) {
       i = afterEnd; continue
     }
     if (name === 'end') {
-      endText(); b.flush(); const m = s.slice(end).match(/^\s*\{([^}]+)\}/); i = end + (m ? m[0].length : 0)
+      endText(); b.flush(); const m = s.slice(end).match(/^\s*\{([^}]+)\}/), at = i; i = end + (m ? m[0].length : 0)
       // \end{document} where the walk reaches it, in whatever file: TeX stops there, and nothing after it is typeset
       // (its \begin, in the main file, is before the walk; a subfile's own is walked as an environment, its \end with it)
-      if (m?.[1].trim() === 'document') { ctx.ended = true; return }
+      // — one TeX surely reaches (documentEnds): not one in a conditional's branch it skips or cannot tell
+      if (m?.[1].trim() === 'document' && (ctx.ends?.get(b.file)?.has(at) ?? true)) { ctx.ended = true; return }
       continue
     }
     if (name === 'item') { endText(); b.flush(); const { args, end: e } = argsAfter(s, end, 1); i = args.length && args[0].kind === 'opt' ? e : end; continue }
@@ -970,16 +991,18 @@ const DEF_PRIMITIVES = new Set(['def', 'gdef', 'edef', 'xdef'])
  *  or environment is used */
 const DEFINERS = /^(?:(?:(?:re)?newcommand|providecommand)|DeclareRobustCommand|(?:re)?newenvironment|(?:New|Renew|Provide|Declare)Document(?:Command|Environment))$/
 /**
- * The control words of s[from, to) that TeX acts on where they stand, in order, each { name, at, end, depth, env, inDef }:
- * none in a comment, in a definition's parameter text (\\def\\x#1\\end{document}{…}), in a skipped conditional
- * (\\iffalse … \\fi, `ifs` the paper's own), in an environment TeX reads by lines (LINE_ENVS, the paper's `lineEnvs`: a
- * filecontents in the preamble that writes a whole document out) or in \\verb. `depth`, the brace groups open around it
- * — a definition's body among them (\\def\\edo{… \\end{document}}, 2608.23517's preamble) —; `inDef`, whether it stands
- * in a definition's body, which TeX runs only where the definition is used; `env`, an environment's name for \\begin and
- * \\end
+ * The control words of s[from, to) that TeX acts on where they stand, in order, each { name, at, end, depth, env, inDef,
+ * sure }: none in a comment, in a definition's parameter text (\\def\\x#1\\end{document}{…}), in a branch TeX skips
+ * (\\iffalse … \\fi, \\iftrue's \\else, a \\newif's whose value it knows: `ifs` the paper's conditionals, `ifValues` the
+ * values, newifValues), in an environment TeX reads by lines (LINE_ENVS, the paper's `lineEnvs`: a filecontents in the
+ * preamble that writes a whole document out), in \\verb, or after the line of an \\endinput TeX acts on, where it stops
+ * reading the file. `depth`, the brace groups open around it — a definition's body among them (\\def\\edo{…
+ * \\end{document}}, 2608.23517's preamble) —; `inDef`, whether it stands in a definition's body, which TeX runs only
+ * where the definition is used; `sure`, whether TeX surely acts on it: no conditional whose branch it cannot tell
+ * (\\ifdefined, \\ifx, a \\newif set two ways) is open around it; `env`, an environment's name for \\begin and \\end
  */
-function texCommands(s, { from = 0, to = s.length, lineEnvs = null, ifs = new Set() } = {}) {
-  const out = [], defs = []
+function texCommands(s, { from = 0, to = s.length, lineEnvs = null, ifs = new Set(), ifValues = null } = {}) {
+  const out = [], defs = [], conds = []
   let depth = 0
   for (let i = from; i < to; i++) {
     const c = s[i]
@@ -990,16 +1013,36 @@ function texCommands(s, { from = 0, to = s.length, lineEnvs = null, ifs = new Se
     const { name, end } = commandAt(s, i)
     if (!/^[A-Za-z@]+$/.test(name)) { i = end - 1; continue }
     while (defs.length && defs.at(-1) <= i) defs.pop()
-    const inDef = defs.length > 0
-    // (one in a definition's body is that body's: \\def\\iffa{\\iffalse} skipped 2608.23517's \\begin{document} to a \\fi)
-    if (name === 'iffalse' && !inDef) { const stop = branchEnd(s, end, to, ifs); if (stop > 0) { i = stop - 1; continue } }
+    const inDef = defs.length > 0, sure = conds.every(x => x.known)
+    // conditionals where TeX reads them (one in a definition's body is that body's: \\def\\iffa{\\iffalse} skipped
+    // 2608.23517's \\begin{document} to a \\fi): a branch TeX skips is passed over, \\iffalse's and a \\newif's set false,
+    // or the \\else of \\iftrue and of one set true; any other one's branches are both read, neither surely
+    if (!inDef && isConditional(name, ifs)) {
+      const value = name === 'iftrue' ? true : name === 'iffalse' ? false : ifValues?.get(name)
+      if (value === false) { const stop = branchEnd(s, end, to, ifs); if (stop > 0) { if (/\\else$/.test(s.slice(stop - 5, stop))) conds.push({ known: true }); i = stop - 1; continue } }
+      conds.push({ known: value === true }); i = end - 1; continue
+    }
+    if (!inDef && (name === 'else' || name === 'or') && conds.length) {
+      if (conds.at(-1).known) { const stop = branchEnd(s, end, to, ifs, { toFi: true }); if (stop > 0) { conds.pop(); i = stop - 1; continue } }
+      i = end - 1; continue
+    }
+    if (!inDef && name === 'fi') { conds.pop(); i = end - 1; continue }
+    // \\newif\\ifx and \\let\\ifx\\iftrue name a conditional, which TeX does not open there
+    if (name === 'newif' || name === 'let') {
+      let k = skipSpaces(s, end)
+      if (s[k] === '\\') k = commandAt(s, k).end
+      if (name === 'let') { k = skipSpaces(s, k); if (s[k] === '=') k = skipSpaces(s, k + 1); if (s[k] === '\\') k = commandAt(s, k).end }
+      out.push({ name, at: i, end, depth, inDef, sure }); i = k - 1; continue
+    }
+    // \\endinput: TeX reads the rest of its line, then nothing more of the file
+    if (name === 'endinput' && !inDef && sure) { const eol = s.indexOf('\n', end); to = Math.min(to, eol < 0 ? s.length : eol) }
     if (name === 'verb' || name === 'lstinline') { const d = s[end]; const e = d && !/[\s{[]/.test(d) ? s.indexOf(d, end + 1) : -1; if (e > 0) { i = e; continue } }
     if (DEF_PRIMITIVES.has(name)) {
       // \\def\\x<parameter text>{body}: the name and the parameter text, which ends at the body's brace
       let k = skipSpaces(s, end)
       k = s[k] === '\\' ? commandAt(s, k).end : k + 1
       while (k < to && s[k] !== '{' && s[k] !== '%') k++
-      out.push({ name, at: i, end, depth, inDef })
+      out.push({ name, at: i, end, depth, inDef, sure })
       const e = s[k] === '{' ? matchGroup(s, k) : -1
       if (e > 0) defs.push(e)
       i = k - 1; continue
@@ -1008,11 +1051,11 @@ function texCommands(s, { from = 0, to = s.length, lineEnvs = null, ifs = new Se
     const m = (name === 'begin' || name === 'end') && /^\s*\{([^{}]*)\}/.exec(s.slice(end, end + 200))
     if (m) {
       const env = m[1].trim(), after = end + m[0].length
-      out.push({ name, at: i, end: after, depth, env, inDef })
+      out.push({ name, at: i, end: after, depth, env, inDef, sure })
       if (name === 'begin' && isLineEnv(env, lineEnvs)) { i = endOfEnv(s, after, env)[1] - 1; continue }
       i = after - 1; continue
     }
-    out.push({ name, at: i, end, depth, inDef })
+    out.push({ name, at: i, end, depth, inDef, sure })
     i = end - 1
   }
   return out
@@ -1029,10 +1072,24 @@ function texCommands(s, { from = 0, to = s.length, lineEnvs = null, ifs = new Se
 export function documentBounds(s, options = {}) {
   const cmds = texCommands(s, options)
   const isDoc = (c, name) => c.name === name && c.env === 'document'
-  const begin = cmds.find(c => isDoc(c, 'begin') && c.depth === 0) ?? cmds.find(c => isDoc(c, 'begin'))
-  const after = cmds.filter(c => isDoc(c, 'end') && (!begin || c.at > begin.at))
-  const end = after.find(c => c.depth === 0) ?? after[0]
-  return { begin: begin ? begin.at : -1, body: begin ? begin.end : -1, end: end ? end.at : s.length }
+  // the first TeX surely acts on outside every group (none in a conditional it cannot tell: \\ifdefined\\x\\end{document}\\fi),
+  // else the first outside every group, else the first
+  const first = list => list.find(c => c.depth === 0 && c.sure) ?? list.find(c => c.depth === 0) ?? list[0]
+  const begin = first(cmds.filter(c => isDoc(c, 'begin')))
+  const end = first(cmds.filter(c => isDoc(c, 'end') && (!begin || c.at > begin.at)))
+  return { begin: begin ? begin.at : -1, body: begin ? begin.end : -1, end: end ? end.at : endinputCut(s, options) }
+}
+/** where TeX stops reading a file: the end of the line of an \\endinput it surely acts on (texCommands), else its end */
+function endinputCut(s, options = {}) {
+  const c = texCommands(s, options).find(x => x.name === 'endinput' && x.sure && !x.inDef)
+  if (!c) return s.length
+  const eol = s.indexOf('\n', c.end)
+  return eol < 0 ? s.length : eol
+}
+/** the \\end{document}s of a file TeX surely acts on where they stand, by where each starts: the walk stops at one of
+ *  them, and at no other (one TeX never reaches: after an \\endinput, in a \\newif's false branch, 2608 review I4) */
+function documentEnds(s, options = {}) {
+  return new Set(texCommands(s, options).filter(c => c.name === 'end' && c.env === 'document' && c.sure && !c.inDef).map(c => c.at))
 }
 /** the main file's \\usepackage[…]{inputenc} that TeX acts on, the last in its preamble: { start, end, options } or null */
 export function inputencOf(s, options = {}) {
@@ -1065,7 +1122,7 @@ const tblrOf = texts => {
  * affiliation). Nothing in a comment, a skipped conditional or a definition's body, which TeX runs only where it is used
  */
 function frontMatter(s, from, to, b, ctx) {
-  const cmds = texCommands(s, { from, to, lineEnvs: ctx.lineEnvs, ifs: ctx.ifs }).filter(c => !c.inDef)
+  const cmds = texCommands(s, { from, to, lineEnvs: ctx.lineEnvs, ifs: ctx.ifs, ifValues: ctx.ifValues }).filter(c => !c.inDef)
   const titles = cmds.filter(c => c.name === 'title'), title = titles.filter(c => c.depth === 0).at(-1) ?? titles.at(-1)
   let past = from
   for (const c of cmds) {
@@ -1194,20 +1251,27 @@ function readProject(fsys, main, tables, sourceText, own) {
   // the theorem-like environments, as any of the package's files defines them (theoremsOf), and the paper's own
   // environments' arguments (envDefs)
   const theorems = theoremsOf(ownTexts)
-  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs, skipped, visit: (rel, dirs) => visit(rel, dirs), dirs: [], bodies: macroBodies(sources.map(sourceText)), ...tblrOf(sources.map(sourceText)) }
+  // the paper's \\newif conditionals, and those whose value TeX reads the same everywhere (newifValues)
+  const ifs = new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1]))
+  const ifValues = newifValues(sources.map(sourceText), ifs)
+  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs) => visit(rel, dirs), dirs: [], bodies: macroBodies(sources.map(sourceText)), ...tblrOf(sources.map(sourceText)) }
+  const scan = { lineEnvs, ifs, ifValues }
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first */
   function visit(rel, dirs = []) {
     const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
     seen.add(f.rel); files.set(f.rel, f.text)
     const b = new Builder(f.rel, units, f.text, ctx.bodies), outer = ctx.dirs
     ctx.dirs = dirs
-    let from = 0, to = f.text.length
+    // the file as TeX reads it: up to the line of an \endinput it acts on; its \end{document}s, where the walk stops,
+    // those it surely reaches (documentEnds)
+    let from = 0, to = endinputCut(f.text, scan)
+    ctx.ends.set(f.rel, documentEnds(f.text, scan))
     if (f.rel === mainFile.rel) {
       // the document as TeX finds it (documentBounds): its preamble's front matter (frontMatter), then its body up to
       // the \end{document} TeX acts on, where the walk stops too
-      const bounds = documentBounds(f.text, { lineEnvs, ifs: ctx.ifs })
+      const bounds = documentBounds(f.text, scan)
       if (bounds.begin >= 0) { frontMatter(f.text, 0, bounds.begin, b, ctx); from = bounds.body }
-      to = bounds.end
+      to = Math.min(to, bounds.end)
     }
     walk(f.text, from, to, b, ctx); b.flush()
     ctx.dirs = outer
@@ -1227,7 +1291,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   visit(mainFile.rel)
   storedBodies(calls, { ctx, files, units, own })
   // a source declared in a Latin-1 family encoding: its bytes read as latin1 are already the right characters
-  const enc = inputencOf(all, { lineEnvs, ifs: ctx.ifs })?.options.split(',').map(x => x.trim()).find(x => /^(latin1|latin9|ansinew|cp1252|cp1250|latin2|applemac|decmulti)$/.test(x))
+  const enc = inputencOf(all, scan)?.options.split(',').map(x => x.trim()).find(x => /^(latin1|latin9|ansinew|cp1252|cp1250|latin2|applemac|decmulti)$/.test(x))
   const isUtf8 = t => { try { new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t)); return true } catch { return false } }
   const transcode = enc ? new Set([...files].filter(([, t]) => !isUtf8(t)).map(([f]) => f)) : new Set()
   return { main: mainFile.rel, files, units, skipped, fits: ctx.fits, lineEnvs, inputenc: enc ?? null, transcode }

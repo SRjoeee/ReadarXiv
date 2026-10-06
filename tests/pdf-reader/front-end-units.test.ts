@@ -47,6 +47,18 @@ describe('the document as TeX finds it (documentBounds): a match of the raw text
     const p = project(doc('Before the input.\n\n\\input{part}\n\nNever typeset after it.'), { 'part.tex': 'Inside the part.\n\\end{document}\nAfter its end.\n' })
     expect(texts(p)).toEqual(['Before the input.', 'Inside the part.'])
   })
+  it('…but not one TeX never reaches: after an \\endinput, whose line TeX still reads, or in a branch it skips (review I4: the rest was lost)', () => {
+    expect(texts(project(doc('Alpha.\n\n\\input{sec}\n\nBeta.'), { 'sec.tex': 'Section words.\n\\endinput Last words.\nOld draft.\n\\end{document}\n' }))).toEqual(['Alpha.', 'Section words. Last words.', 'Beta.'])
+    expect(texts(project(doc('Alpha.\n\n\\input{sec}\n\nBeta.', '\\newif\\iflong\n\\longtrue'), { 'sec.tex': 'Section words.\n\\iflong\\else\\end{document}\\fi\nMore words.\n' }))).toEqual(['Alpha.', 'Section words.', 'More words.', 'Beta.'])
+    // a conditional TeX's branch of which the reader cannot tell: no stop
+    expect(texts(project(doc('Alpha.\n\n\\input{sec}\n\nBeta.'), { 'sec.tex': 'Section words.\n\\ifdefined\\short\\end{document}\\fi\nMore words.\n' }))).toEqual(['Alpha.', 'Section words.', 'More words.', 'Beta.'])
+  })
+  it('the main file\'s \\end{document} TeX acts on: not one in a \\newif\'s false branch or \\iftrue\'s \\else (review M1)', () => {
+    expect(texts(project(doc('Alpha.\n\\ifshort\\end{document}\\fi\nBeta.', '\\newif\\ifshort\\shortfalse')))).toEqual(['Alpha.', 'Beta.'])
+    expect(texts(project(doc('Alpha.\n\\iftrue\\else\\end{document}\\fi\nBeta.')))).toEqual(['Alpha.', 'Beta.'])
+    // a \newif set two ways is not one TeX's branch of which the reader can tell: no stop there either
+    expect(texts(project(doc('Alpha.\n\\ifshort\\end{document}\\fi\nBeta.', '\\newif\\ifshort\\shorttrue\n\\shortfalse')))).toEqual(['Alpha.', 'Beta.'])
+  })
   it('the title TeX keeps: the last \\title it acts on, never a commented one (2608.23818, 2608.16745)', () => {
     const p = project(doc('\\maketitle\nWords.', '% \\title{An old title}\n% Note: both \\title{} and \\workshoptitle{}\n\\title{A first title}\n\\title{The real title}'))
     expect(units(p).filter(u => u.title).map(textOf)).toEqual(['The real title'])
