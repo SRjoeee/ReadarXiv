@@ -82,39 +82,47 @@ export function swapMasks(O, Rm, W, H, slots) {
   }
   let unclaimed = 0
   for (let i = 0; i < N; i++) if (diff[i] && label[i] < 0) unclaimed++
-  // each unit's pixels, a pixel more into what does not differ, as rectangles: runs by row, runs alike on the rows below
-  // joined
+  // each unit's pixels, a pixel more into what does not differ (each such pixel the first labelled neighbour's), as
+  // rectangles: runs by row, a run alike on the row below joined to it
   const out = slots.map(() => [])
-  const mask = new Uint8Array(N)
-  const bounds = slots.map(() => [W, H, -1, -1])
-  for (let i = 0; i < N; i++) { const s = label[i]; if (s < 0) continue; const x = i % W, y = (i - x) / W, b = bounds[s]; if (x < b[0]) b[0] = x; if (y < b[1]) b[1] = y; if (x > b[2]) b[2] = x; if (y > b[3]) b[3] = y }
-  slots.forEach((_, si) => {
-    const [bx0, by0, bx1, by1] = bounds[si]
-    if (bx1 < 0) return
-    const x0 = Math.max(0, bx0 - 1), y0 = Math.max(0, by0 - 1), x1 = Math.min(W - 1, bx1 + 1), y1 = Math.min(H - 1, by1 + 1)
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      const i = y * W + x
-      let on = label[i] === si
-      if (!on && !diff[i]) for (let dy = -1; dy <= 1 && !on; dy++) for (let dx = -1; dx <= 1 && !on; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < W && yy < H && label[yy * W + xx] === si) on = true }
-      mask[i] = on ? 1 : 0
-    }
-    let open = new Map()
-    for (let y = y0; y <= y1 + 1; y++) {
-      const runs = new Map()
-      if (y <= y1) {
-        let from = -1
-        for (let x = x0; x <= x1 + 1; x++) {
-          const on = x <= x1 && mask[y * W + x]
-          if (on && from < 0) from = x
-          if (!on && from >= 0) { runs.set(`${from},${x}`, [from, x]); from = -1 }
-        }
+  const dil = new Int32Array(N).fill(-1)
+  let ylo = H, yhi = -1
+  for (let i = 0; i < N; i++) {
+    const s = label[i]
+    if (s < 0) continue
+    dil[i] = s
+    const x = i % W, y = (i - x) / W
+    if (y < ylo) ylo = y
+    if (y > yhi) yhi = y
+    for (let dy = -1; dy <= 1; dy++) {
+      const yy = y + dy
+      if (yy < 0 || yy >= H) continue
+      for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx
+        if (xx < 0 || xx >= W) continue
+        const j = yy * W + xx
+        if (!diff[j] && dil[j] === -1) dil[j] = s
       }
-      const next = new Map()
-      for (const [k, r] of runs) { const o = open.get(k); if (o) { o[3]++; next.set(k, o) } else next.set(k, [r[0], y, r[1] - r[0], 1]) }
-      for (const [k, o] of open) if (!next.has(k)) out[si].push(o)
-      open = next
     }
-    for (let y = y0; y <= y1; y++) mask.fill(0, y * W + x0, y * W + x1 + 1)
-  })
+  }
+  let open = new Map()
+  for (let y = Math.max(0, ylo - 1); y <= Math.min(H - 1, yhi + 1) + 1; y++) {
+    const next = new Map()
+    if (y < H) {
+      let x = 0
+      while (x < W) {
+        const s = dil[y * W + x]
+        if (s < 0) { x++; continue }
+        let e = x + 1
+        while (e < W && dil[y * W + e] === s) e++
+        const key = `${s}|${x}|${e}`, o = open.get(key)
+        if (o) { o[1][3]++; next.set(key, o) } else next.set(key, [s, [x, y, e - x, 1]])
+        x = e
+      }
+    }
+    for (const [key, o] of open) if (!next.has(key)) out[o[0]].push(o[1])
+    open = next
+  }
+  for (const o of open.values()) out[o[0]].push(o[1])
   return { rects: out, unclaimed, differing: diff.reduce((a, v) => a + v, 0) }
 }

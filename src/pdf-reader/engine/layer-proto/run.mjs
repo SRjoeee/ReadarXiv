@@ -288,7 +288,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   const RM = removal ? {
     mode: removal.mode, OPS: removal.OPS, ink: [], chars: [], own: [], unmapped: [], claimed: [], removed: [], phOnly: [], masks: [], slots: [],
     plan: removal.mode === 'plan' ? { pages: {} } : removal.plan, manifest: removal.manifest ?? null,
-    stats: { pages: 0, refused: 0, units: 0, swapped: 0, mismatched: 0, taken: 0, notOwned: 0, crossing: 0, unclaimed: 0, differing: 0, mismatch: [], byPage: {} },
+    stats: { pages: 0, refused: 0, units: 0, swapped: 0, mismatched: 0, taken: 0, notOwned: 0, crossing: 0, unclaimed: 0, differing: 0, mismatch: [], byPage: {}, ms: { ink: 0, render: 0, read: 0, masks: 0 } },
   } : null
   /** whether page j's text is removed in the add-on (draw mode) */
   const removedPage = j => RM?.mode === 'draw' && !!RM.manifest?.page?.[j]?.ok
@@ -314,7 +314,10 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     if (RM.masks[pg]) return RM.masks[pg]
     const r = rows[pg - 1], ink = RM.ink[pg], px = pxOf(pg)
     const W = r.left.width, H = r.left.height
+    let t = performance.now()
     const O = r.left.getContext('2d').getImageData(0, 0, W, H).data, Rm = RM.removed[pg].getContext('2d').getImageData(0, 0, W, H).data
+    RM.stats.ms.read += performance.now() - t
+    t = performance.now()
     const dev = b => { const [ax, ay] = px(b[0], b[3]), [bx, by] = px(b[2], b[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)] }
     const units = RM.plan.pages[pg]?.units ?? []
     const slots = units.map(u => {
@@ -325,6 +328,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
       return { id: u.id, boxes }
     })
     const m = pageMasks(O, Rm, W, H, slots)
+    RM.stats.ms.masks += performance.now() - t
     RM.stats.unclaimed += m.unclaimed
     RM.stats.differing += m.differing
     RM.masks[pg] = new Map(slots.map((s, i) => [s.id, m.rects[i]]))
@@ -597,13 +601,16 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     r.base = true
     if (RM) {
       // the page's ink as the remover names it, its characters carried there, the file's ownership of it
+      const t0 = performance.now()
       const ink = (RM.ink[i] = await inkOfPage(RM.OPS, page))
       RM.chars[i] = glyphsOfChars(chars2[i - 1], ink, i)
       RM.unmapped[i] = unmappedOf(ink, RM.chars[i])
       RM.own[i] = tex ? fileOwnership(tex.index, i, ink) : noOwn(ink.glyphs.length)
+      RM.stats.ms.ink += performance.now() - t0
       if (removedPage(i)) {
         // its removed page, and its placeholders' page where the plan crops from it, as v0 draws its own
         RM.stats.pages++
+        const t = performance.now()
         const at = async (set, keep) => {
           const pg = await removal.doc.getPage(setOf(set) + i)
           const c = document.createElement('canvas')
@@ -614,6 +621,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
         }
         await at('R', RM.removed)
         if (RM.plan.pages[i]?.crops?.length) await at('P', RM.phOnly)
+        RM.stats.ms.render += performance.now() - t
       } else if (RM.mode === 'draw') RM.stats.refused++
     }
     if (P.borrow) inkOf(i)

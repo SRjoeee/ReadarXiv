@@ -72,7 +72,12 @@ export interface ProtoRun {
 }
 /** how the text-removed PDF went: pages removed, pages drawn the old way, units drawn by it and those whose removal was
  *  not the plan's (drawn the old way), glyphs another unit had, differing pixels no unit reached */
-export interface RemovalStats { pages: number; refused: number; units: number; swapped: number; mismatched: number; taken: number; notOwned: number; unclaimed: number; differing: number; mismatch: unknown[]; byPage: Record<number, { units: number; swapped: number; mismatched: number }> }
+export interface RemovalStats {
+  pages: number; refused: number; units: number; swapped: number; mismatched: number; taken: number; notOwned: number; crossing: number; unclaimed: number; differing: number; mismatch: unknown[]
+  byPage: Record<number, { units: number; swapped: number; mismatched: number }>
+  /** the time it took, ms in all: the pages' ink and ownership, the removed pages drawn, read back, the masks */
+  ms: { ink: number; render: number; read: number; masks: number }
+}
 /** the text-removed PDF (removal.mjs, layout/remove.mjs) */
 export interface RemovalOptions {
   OPS: Record<string, number>
