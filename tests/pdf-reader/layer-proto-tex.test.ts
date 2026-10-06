@@ -112,10 +112,11 @@ describe("v0's reading with the file's renderings", () => {
     expect(tex?.baseline).toBe(100)
     expect(tex?.crop?.[0]).toBeCloseTo(61.4)
     expect(tex?.crop?.[3]).toBeCloseTo(107.8)
-    // v0's own: by its characters' baseline, on which the superscript is set at the line's
+    // v0's own (step 3): on its line's measured baseline too, a crop all script having no glyph of the line's size; by its
+    // characters' own baseline, as before, the superscript was set on the line's and lost its raise
     const v0 = L2.prepareUnit(unit, [rect.slice()] as never, [page as never], new Map() as never).get(1)
     expect(v0?.mode).toBe('crop')
-    expect(v0?.baseline).toBe(103.6)
+    expect(v0?.baseline).toBe(100)
   })
   it("grows a crop the file knows over no other's glyph, a formula's included", () => {
     const toDev = (x: number, y: number): [number, number] => [x * 2, (200 - y) * 2]
