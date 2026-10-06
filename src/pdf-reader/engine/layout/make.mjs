@@ -889,18 +889,23 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   // text: a display its source does not hold (TeX set the unit's end mark after it: 1706 page 4, 2608 page 5), another
   // unit's line the anchor took. It is held, as the prototype keeps it (layer2.js): no slot, never erased; at the
   // unit's end it is no line of the unit's at all. A word counts as the source's where the anchor paired it, or where it
-  // is a word of three letters or more of the source's text anywhere (a line out of reading order is the unit's still)
+  // is a word of three letters or more of the source's text anywhere (a line out of reading order is the unit's still);
+  // the rest of a word given in parts (a token of no text, tokenizeDocument) as its first part does: a paragraph's last
+  // line that holds only the rest of a word cut by a hyphen ("mod-" / "els.") is the unit's. A word of its own hyphen
+  // cut there is one word in the text layer ("fine-" / "tuning.": finetuning), so the source's words count joined too
   for (const one of placed) {
     const { id: i, a, rows } = one
     if (rows.length < 2) continue
     const paired = new Set(a.pairs?.values() ?? [])
-    const words = new Set(tokens(texts[i].text).map(t => t.t).filter(t => t.length >= 3 && /\p{L}/u.test(t)))
+    const words = new Set([texts[i].text, texts[i].text.replace(/(?<=\p{L})-(?=\p{L})/gu, '')].flatMap(s => tokens(s).map(t => t.t)).filter(t => t.length >= 3 && /\p{L}/u.test(t)))
     const boxed = new Set((one.boxes ?? []).map(([row]) => row))
     const held = new Set()
     rows.forEach((r, j) => {
       if (j === 0 || r.extra?.length || boxed.has(j)) return
       let n = 0, hits = 0
-      for (const k of r.ks) {
+      for (const k0 of r.ks) {
+        let k = k0
+        while (k > 0 && doc[k]?.t === '') k--
         const t = doc[k]?.t
         if (!t || !/\p{L}/u.test(t)) continue
         n++

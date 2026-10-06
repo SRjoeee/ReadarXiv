@@ -546,6 +546,17 @@ describe('reading the marked original', () => {
     expect(m.tokens.slice(24, 30)).toEqual([2, 92, 720, 15, 10, 3])
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m)))).toEqual(m)
   })
+  it('layoutMarksOf writes the rest of a word cut by a hyphen as word -1 after it, and none after a word left out', async () => {
+    const eol = (str: string, x: number, y: number) => ({ ...item(str, x, y), hasEOL: true })
+    const long = 'x'.repeat(201)
+    const doc = fakeDocument([{ view: [0, 0, 612, 792], items: [item('text generation', 72, 700), eol('mod-', 160, 700), item('els.', 72, 688), eol(`${long}-`, 72, 676), item('tail', 72, 664)] }], [])
+    const m = await layoutMarksOf(doc, '', { engine: 'pdflatex' })
+    expect(m.words).toEqual(['text', 'generation', 'models'])
+    // models, then its rest at the next line's start; the 201-letter word and its rest left out
+    expect(m.tokens.slice(12, 24)).toEqual([1, 160, 700, 15, 10, 2, 1, 72, 688, 15, 10, -1])
+    expect(m.tokens.length).toBe(6 * 4)
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m)))).toEqual(m)
+  })
   it('layoutMarksOf records the classes and the paper\'s switch the marked original was made with', async () => {
     const doc = fakeDocument([{ view: [0, 0, 612, 792], items: [item('kept', 72, 700)] }], [['axt-0s', 1, 72, 700]])
     // no probe run: null, which the maker re-marks as LAYOUT_TEX sets every mark; a probe that answered nothing is {},
@@ -791,6 +802,9 @@ describe('the marks file', () => {
       ['a token 2,001 high', m => { m.tokens[4] = 2001 }, 'tokens[4]'],
       ['a negative width', m => { m.tokens[3] = -1 }, 'tokens[3]'],
       ['a word index past words', m => { m.tokens[5] = 3 }, 'tokens[5]'],
+      // -1: the rest of the word before, given in parts; never the first token's, nor another negative
+      ['the first token a rest', m => { m.tokens[5] = -1 }, 'tokens[5]'],
+      ['a word index of -2', m => { m.tokens[11] = -2 }, 'tokens[11]'],
       ['a string where a number goes', m => { (m.marks[0] as unknown[])[2] = '72' }, 'marks[0][2]'],
       ['an array where a number goes, a level deeper than the file has', m => { (m.marks[0] as unknown[])[2] = [72] }, ''],
     ]
@@ -799,6 +813,10 @@ describe('the marks file', () => {
       change(m)
       expect(refusal(bytes(m)), name).toBe(path)
     }
+    // a later token the rest of the word before
+    const rest = valid()
+    rest.tokens[11] = -1
+    expect(refusal(bytes(rest))).toBeNull()
     // a number written 1e400 is Infinity once parsed
     expect(refusal(bytes(JSON.stringify(valid()).replace('"0s",1,72,700', '"0s",1,1e400,700')))).toBe('marks[0][2]')
     expect(refusal(bytes(JSON.stringify(valid()).replace('[0,0,612,792,0,0,612,792]', '[0,0,612,1e400,0,0,612,792]')))).toBe('views[3]')

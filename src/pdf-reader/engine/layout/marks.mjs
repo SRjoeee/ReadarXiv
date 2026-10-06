@@ -630,8 +630,10 @@ function followsOf(units, names) {
  * compile's operator lists by its points (layout/stream.mjs ownedOf): `owned`, by its opening mark's name, how it was
  * found (OWNED_HOW) and, where it was, its glyphs (page, origin, baseline, size, a character of `chars`) and its rules
  * (page and box) in stream order; a piece of more than GLYPHS_PIECE glyphs or RULES_PIECE rules, or past OWNED_ALL in the
- * paper, or with ink off its page, is not owned. A token whose word is the rest of one given in parts, longer than a word
- * may be, or off its page is left out. Numbers to a hundredth. What it gives, parseLayoutMarks takes
+ * paper, or with ink off its page, is not owned. A token whose word is the rest of one given in parts (the second line's
+ * part of a word cut by a hyphen) is written with word -1, after the token it is the rest of, for a paragraph whose last
+ * line holds nothing else holds its end mark (layout/carry.mjs); a token longer than a word may be, or off its page, is
+ * left out, and its rests with it. Numbers to a hundredth. What it gives, parseLayoutMarks takes
  */
 export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLASSES, switches = null, inkless = null, units = null, OPS = null }) {
   if (!ENGINES.includes(engine)) throw new LayoutRefusal('engine', `not one of ${ENGINES.join(', ')}`)
@@ -676,18 +678,22 @@ export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLAS
   marks.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
   const lines = [...readLines(log)].filter(([id, l]) => isInteger(id, 0, Number.MAX_SAFE_INTEGER) && isInteger(l.lines, 0, LINES_MAX)).sort((a, b) => a[0] - b[0]).map(([id, l]) => [id, l.lines])
   const words = [], wordOf = new Map(), tokens = []
+  // kept: whether the token before was written, so that a rest is written only after the word it is the rest of
+  let kept = false
   for (const t of tokenizeDocument(text)) {
-    if (!t.t || t.t.length > WORD_MAX) continue
+    const rest = t.t === ''
+    if ((rest && !kept) || t.t.length > WORD_MAX) { kept = false; continue }
     const x = r2(t.x), y = r2(t.y), w = r2(t.w), h = r2(t.h)
-    if (!inView(views, t.page, x, y) || !(w >= 0 && w <= BOX_MAX) || !(h >= 0 && h <= BOX_MAX)) continue
-    let k = wordOf.get(t.t)
+    if (!inView(views, t.page, x, y) || !(w >= 0 && w <= BOX_MAX) || !(h >= 0 && h <= BOX_MAX)) { kept = false; continue }
+    let k = rest ? -1 : wordOf.get(t.t)
     if (k === undefined) {
-      if (words.length >= WORDS_MAX) continue
+      if (words.length >= WORDS_MAX) { kept = false; continue }
       k = words.length
       words.push(t.t)
       wordOf.set(t.t, k)
     }
     tokens.push(t.page, x, y, w, h, k)
+    kept = true
   }
   // each piece's own ink, by its points in the content stream
   const chars = [], owned = []
@@ -808,7 +814,7 @@ export function parseLayoutMarks(bytes) {
     if (!isNumber(t[i + 1]) || t[i + 1] < views[o] - 1 || t[i + 1] > views[o + 2] + 1) throw new LayoutRefusal(`tokens[${i + 1}]`, 'not within its page')
     if (!isNumber(t[i + 2]) || t[i + 2] < views[o + 1] - 1 || t[i + 2] > views[o + 3] + 1) throw new LayoutRefusal(`tokens[${i + 2}]`, 'not within its page')
     for (const j of [3, 4]) if (!isNumber(t[i + j]) || t[i + j] < 0 || t[i + j] > BOX_MAX) throw new LayoutRefusal(`tokens[${i + j}]`, `not 0 to ${BOX_MAX}`)
-    if (!isInteger(t[i + 5], 0, m.words.length - 1)) throw new LayoutRefusal(`tokens[${i + 5}]`, 'not a word of words')
+    if (!isInteger(t[i + 5], 0, m.words.length - 1) && !(t[i + 5] === -1 && i > 0)) throw new LayoutRefusal(`tokens[${i + 5}]`, 'not a word of words, nor the rest of the word before (-1)')
   }
   if (!Array.isArray(m.chars) || m.chars.length > CHARS_MAX) throw new LayoutRefusal('chars', `not an array of at most ${CHARS_MAX}`)
   for (let i = 0; i < m.chars.length; i++) { const c = m.chars[i]; if (typeof c !== 'string' || c.length > CHAR_MAX) throw new LayoutRefusal(`chars[${i}]`, `not a string of at most ${CHAR_MAX} code units`) }

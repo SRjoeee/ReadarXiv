@@ -17,7 +17,7 @@ import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks, typ
 const CH = 0.5
 /** a run of glyphs; `blank`: each painted with the Unicode of a space (a symbolic font's code 32); `one`: the whole
  *  string one glyph's Unicode (a character and its variation selector) */
-type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean }
+type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean; eol?: boolean }
 type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped'; points?: Record<string, [run: number, char: number]>; order?: number[] }
 type Mark = [name: string, page: number, x: number, y: number]
 type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[] }
@@ -32,7 +32,7 @@ const adv = (r: Run) => (r.w ?? CH) * size(r)
 /** where a run's character j begins, and where the run ends */
 const xAt = (r: Run, j: number) => r.x + j * adv(r)
 const endOf = (r: Run) => xAt(r, r.one ? 1 : r.s.length)
-const item = (r: Run) => ({ str: r.blank ? ' '.repeat(r.s.length) : r.s, dir: 'ltr', transform: [size(r), 0, 0, size(r), r.x, r.y], width: (r.one ? 1 : r.s.length) * adv(r), height: size(r), fontName: r.font ?? 'F1', hasEOL: false })
+const item = (r: Run) => ({ str: r.blank ? ' '.repeat(r.s.length) : r.s, dir: 'ltr', transform: [size(r), 0, 0, size(r), r.x, r.y], width: (r.one ? 1 : r.s.length) * adv(r), height: size(r), fontName: r.font ?? 'F1', hasEOL: !!r.eol })
 /** where each mark's point stands in a page's stream: [run, character] before which it is shown, in the marks' order */
 function pointsOf(p: Page, page: number, marks: Mark[]) {
   const out: [name: string, run: number, char: number][] = []
@@ -973,6 +973,21 @@ describe('makeLayout, the maker round (Fix 3): the lines a unit\'s source does n
     expect(rowsOf(both.file, 0, 'lines')).toHaveLength(24)
     expect(both.file.held).toEqual([[0, [1]]])
     expect(chunk(rowsOf(both.file, 0, 'erase'), 5).map(r => r[0])).not.toContain(1)
+  })
+  it('a paragraph\'s last line holding only the rest of a word cut by a hyphen is the unit\'s, its end mark carried there', async () => {
+    // 1810.04805's "… of text generation mod-" / "els.": the rest is its first part's word, a word of the source's
+    const runs: Run[] = [{ s: 'the robustness of text generation mod-', x: 72, y: 700, eol: true }, { s: 'els.', x: 72, y: 688 }]
+    const { file, stats } = await made({ pages: [{ runs }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[1] as Run), 688]], units: [unit('para', [text('the robustness of text generation models.')])] })
+    expect(rowsOf(file, 0, 'lines')).toHaveLength(16)
+    expect(rowsOf(file, 0, 'lines')[11]).toBe(688)
+    expect(file.held).toEqual([])
+    expect(stats.lines.held).toBe(0)
+    expect(chunk(rowsOf(file, 0, 'erase'), 5).map(r => r[0])).toContain(1)
+    // a word of its own hyphen cut there ("fine-" / "tuning.", 2608.04322's unit 95): the text layer joins its parts
+    const own: Run[] = [{ s: 'used for safety-enhanced fine-', x: 72, y: 700, eol: true }, { s: 'tuning.', x: 72, y: 688 }]
+    const joined = await made({ pages: [{ runs: own }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(own[1] as Run), 688]], units: [unit('para', [text('used for safety-enhanced fine-tuning.')])] })
+    expect(rowsOf(joined.file, 0, 'lines')).toHaveLength(16)
+    expect(joined.stats.lines.held).toBe(0)
   })
   it('a line of the unit\'s own words the anchor did not pair is the unit\'s: a word of its source anywhere counts', async () => {
     const runs: Run[] = [{ s: 'models learn residual functions', x: 72, y: 700 }, { s: 'functions residual learn models', x: 72, y: 688 }]

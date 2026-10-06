@@ -93,7 +93,8 @@ export interface LayoutMarks {
   lines: [id: number, n: number][]
   /** the marked original's distinct words */
   words: string[]
-  /** its text tokens (tokenizeDocument): page, x, y, w, h, word (stride 6) */
+  /** its text tokens (tokenizeDocument): page, x, y, w, h, word (stride 6); word -1 the rest of the word before, given
+   *  in parts */
   tokens: number[]
   /** the owned glyphs' distinct characters */
   chars: string[]

@@ -232,6 +232,38 @@ describe('carrierOf', () => {
     expect(two.carry(1, 150, 700)?.x).toBe(151)
   })
 
+  it('a position on the rest of a word cut by a hyphen, alone on its line, carries with the rest of its partner', () => {
+    // 1810.04805's "… of text generation mod-" / "els.": the paragraph's last line holds only the word's rest, no word of
+    // a line, and the unit's end mark stands after it (six units of the shared ten)
+    const ws = ['the', 'robustness', 'of', 'models']
+    const first = words(ws, 1, 72, 700), arxivFirst = words(ws, 1, 74, 690)
+    const rest = tok('', 1, 72, 688, 15), arxivRest = tok('', 1, 75, 678, 15)
+    const c = carrierOf([...first, rest], [...arxivFirst, arxivRest])
+    expect(c.carry(1, 72 + 15 + 3, 688)).toMatchObject({ page: 1, x: 75 + 15 + 3, y: 678, whole: false })
+    // past the rest's reach, or off its baseline: as before
+    expect(c.carry(1, 72 + 15 + 6 * H + 1, 688)).toBeNull()
+    expect(c.carry(1, 90, 683)).toBeNull()
+    // arXiv's word whole on one line: no rest to carry with
+    expect(carrierOf([...first, rest], arxivFirst).carry(1, 90, 688)).toBeNull()
+    // a word on the next page: carried to the next page's rest
+    const turned = carrierOf([...first, tok('', 2, 72, 760, 15)], [...arxivFirst, tok('', 2, 73, 750, 15)])
+    expect(turned.carry(2, 90, 760)).toMatchObject({ page: 2, x: 91, y: 750 })
+  })
+
+  it('a rest beside another column\'s line on its baseline is the rest\'s; one in a line of words is the line\'s', () => {
+    const ws = ['the', 'robustness', 'of', 'models'], left = ['left', 'column', 'words', 'reaching', 'far']
+    // the left column's line ends 40 pt left of the mark, within its reach; the rest is the mark's own
+    const ours = [...words(ws, 1, 307, 700), ...words(left, 1, 150, 688), tok('', 1, 307, 688, 15)]
+    const theirs = [...words(ws, 1, 307, 690), ...words(left, 1, 150, 688), tok('', 1, 307, 678, 15)]
+    const mark = 307 + 15 + 3
+    expect(end(words(left, 1, 150, 688).at(-1))).toBeGreaterThan(mark - 6 * H)
+    expect(carrierOf(ours, theirs).carry(1, mark, 688)).toMatchObject({ page: 1, x: mark, y: 678 })
+    // "els. Then we": the line of words after the rest holds the mark, as before
+    const line = [...words(ws, 1, 72, 700), tok('', 1, 72, 688, 15), ...words(['then', 'we'], 1, 93, 688)]
+    const moved = [...words(ws, 1, 72, 700), tok('', 1, 72, 688, 15), ...words(['then', 'we'], 1, 95, 688)]
+    expect(carrierOf(line, moved).carry(1, 90, 688)).toMatchObject({ x: 92, y: 688, whole: true })
+  })
+
   it('counts', () => {
     const same = ['same', 'place', 'here'], moved = ['moved', 'down', 'whole'], spaced = ['set', 'at', 'other', 'spaces']
     const fuzzy = [...TEN], lost = ['reflowed', 'away', 'entirely']
@@ -291,11 +323,15 @@ describe('tokensOfMarks', () => {
     expect(m.words.filter(w => w === 'attention')).toHaveLength(1)
     const back = tokensOfMarks(m)
     const r2 = (v: number) => Math.round(v * 100) / 100
-    const direct = tokenizeDocument([{ page: 1, items, styles }]).filter(t => t.t)
+    const direct = tokenizeDocument([{ page: 1, items, styles }])
     expect(back.map(t => [t.t, t.page, t.x, t.y, t.w, t.h])).toEqual(direct.map(t => [t.t, t.page, r2(t.x), r2(t.y), r2(t.w), r2(t.h)]))
-    // the word cut by a hyphen is one word
+    // the word cut by a hyphen is one word, its rest a token of no text after it (word -1 in the file)
     expect(back.map(t => t.t)).toContain('attention')
     expect(back.map(t => t.t)).not.toContain('atten')
+    const k = back.findIndex(t => t.t === '')
+    expect(back[k - 1]?.t).toBe('attention')
+    expect(back[k]).toMatchObject({ x: 72, y: 688.13 })
+    expect(m.tokens[6 * k + 5]).toBe(-1)
     for (const t of back) {
       expect(t.top).toBeCloseTo(t.y + 0.75 * t.h, 9)
       expect(t.bottom).toBeCloseTo(t.y - 0.22 * t.h, 9)
