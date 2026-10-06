@@ -53,13 +53,16 @@ async function itemsOf(page) {
 }
 
 /** the kept renderings of a page as the parity harness read them from the layout file: every display's segments, every
- *  label ([x0, y0, x1, y1]) */
-function keptOf(layout, p) {
+ *  label ([x0, y0, x1, y1]) but those of the units in `relabelled`, whose label is drawn in the target's name and so is
+ *  their text (the table-groups brief: v0's labelInTarget) */
+function keptOf(layout, p, relabelled = new Set()) {
   const out = []
   for (const r of layout.ph) if (PHK[r[2]] === 'display') for (let s = 4; s + 5 < r.length; s += 6) if (r[s] === p) out.push([r[s + 1], r[s + 5], r[s + 3], r[s + 4]])
-  for (const l of layout.labels) if (l[2] === p) out.push([l[3], l[7], l[5], l[6]])
+  for (const l of layout.labels) if (l[2] === p && !relabelled.has(l[0])) out.push([l[3], l[7], l[5], l[6]])
   return out
 }
+/** the units drawn whose float label v0 draws in the target's name */
+const relabelledOf = recs => new Set(recs.filter(r => S.byId.get(r.id)?.prep?.label?.drawn).map(r => r.id))
 
 /**
  * What the consistency measures read of a fixture (the table-groups brief, 2026-10-07): its table groups, each the
@@ -72,10 +75,15 @@ function keptOf(layout, p) {
 function consistencyOf(record, S, names) {
   const members = new Map()
   for (const [id, u] of (record.units ?? []).entries()) if (u?.group && u.pieces && (u.state === 'whole' || u.state === 'partial') && S.translated.has(id)) (members.get(u.group) ?? members.set(u.group, []).get(u.group)).push(id)
-  const split = []
-  for (const ids of members.values()) {
-    const drawn = ids.filter(id => S.byId.has(id))
-    if (drawn.length && drawn.length < ids.length) split.push({ ids, page: Math.min(...drawn.map(id => S.byId.get(id).pages[0])) })
+  // (drawn: laid and recorded, run.stats — a unit placed may still be let go with its group, run.mjs settleGroup)
+  const splitOn = p => {
+    const drawn = new Map(S.run.stats.map(r => [r.id, r]))
+    const out = []
+    for (const ids of members.values()) {
+      const here = ids.filter(id => drawn.has(id))
+      if (here.length && here.length < ids.length && Math.min(...here.map(id => drawn.get(id).pages[0])) === p) out.push({ ids })
+    }
+    return out
   }
   const captions = record.captions ?? null
   const labelSource = id => {
@@ -86,7 +94,7 @@ function consistencyOf(record, S, names) {
     if (captions[kind] !== 'target' || names[kind].toLowerCase() === m[1].toLowerCase()) return false
     return !label.drawn
   }
-  return { split, labelSource }
+  return { splitOn, labelSource }
 }
 
 window.gate = {
@@ -136,7 +144,10 @@ window.gate = {
       const mine = S.audit.get(`${r.id}|${p}`) ?? []
       const erase = mine.filter(a => a.what === 'erase').map(a => boxPdf(a.box))
       const crops = mine.filter(a => a.what === 'crop').map(a => ({ k: a.k, src: a.src, dst: boxPdf(a.dst) }))
-      return { id: r.id, kind: r.kind, drawn: true, why: null, orig: refOf.get(r.id)?.orig ?? [], lines, erase, crops, phs: [], pageText: [] }
+      // (a label drawn in the target's name is the unit's own line too: its glyphs' band, which the erasing may take)
+      const label = S.byId.get(r.id)?.prep?.label, mark = label?.drawn ? label.chars.filter(c => c.page === p) : []
+      const own = mark.length ? [{ baseline: Math.max(...mark.map(c => c.yb)), size: Math.max(...mark.map(c => c.size)), x0: Math.min(...mark.map(c => c.x0)), x1: Math.max(...mark.map(c => c.x1)) }] : []
+      return { id: r.id, kind: r.kind, drawn: true, why: null, orig: refOf.get(r.id)?.orig ?? [], own, lines, erase, crops, phs: [], pageText: [] }
     })
     const drawnIds = new Set(recs.map(r => r.id))
     for (const r of refHere) if (S.translated.has(r.id) && !drawnIds.has(r.id)) units.push({ id: r.id, kind: r.kind, drawn: false, why: S.skipped.get(r.id) ?? 'unanchored', orig: r.orig, lines: [], erase: [], crops: [] })
@@ -162,7 +173,7 @@ window.gate = {
     const first = recs.filter(r => r.pages[0] === p && r.match?.total)
     // the consistency measures (the table-groups brief): a table group drawn partly, on the page of its first cell drawn;
     // a float's label left in the source language where the final names it in the target's, on its unit's first page
-    const split = S.consistency.split.filter(x => x.page === p), labels = recs.filter(r => r.pages[0] === p && S.consistency.labelSource(r.id))
+    const split = S.consistency.splitOn(p), labels = recs.filter(r => r.pages[0] === p && S.consistency.labelSource(r.id))
     if (split.length) where.groupsSplit = split.map(x => x.ids[0])
     if (labels.length) where.labelsSource = labels.map(r => r.id)
     const out = { page: p, ms, model, check, where, consistency: { groupsSplit: split.length, labelsSource: labels.length }, style: [first.filter(r => r.match.base).length, first.length], drawn: recs.length, evened: false }
@@ -190,7 +201,7 @@ window.gate = {
       const why = list => list.filter(on).map(e => ({ unit: e.unit, k: e.k, mode: e.mode, why: e.why }))
       S.dump.push({ p, W, H, copy: h.toString(16), svg, check: { missing: why(ck.b.list.missing), duplicated: why(ck.b.list.duplicated), brackets: why(ck.b.list.brackets) } })
     }
-    S.cur = { p, page, W, H, view, O, C, units, kept: keptOf(S.layout, p), items, drawnText, recs }
+    S.cur = { p, page, W, H, view, O, C, units, kept: keptOf(S.layout, p, relabelledOf(recs)), items, drawnText, recs }
     return out
   },
 
@@ -222,6 +233,8 @@ window.gate = {
         if (cat === 'acc') fill(accounted, c.x0, c.yb - 0.3 * c.size, c.x1, c.yb + 0.85 * c.size)
         else if (cat === 'keep') fill(barred, c.x0 - 0.3, c.yb - 0.3 * c.size - 0.3, c.x1 + 0.3, c.yb + 0.85 * c.size + 0.3)
       }
+      // (a label drawn in the target's name: its characters the unit's text, wherever they stand)
+      if (prep.label?.drawn) for (const c of prep.label.chars) if (c.page === p) fill(accounted, c.x0, c.yb - 0.3 * c.size, c.x1, c.yb + 0.85 * c.size)
       for (const rect of u.rects) {
         if (rect[0] !== p) continue
         const info = prep.lineInfo?.get(`${rect[0]}|${rect.slice(1).join()}`)

@@ -14,7 +14,8 @@
 //   units: every translated unit with a frame on the page: { id, kind, drawn, why, orig: [{ x0, x1, baseline, top, bottom,
 //     size }] (its lines in the original: the frozen reference's where it has them), lines: [{ baseline, size, x0, x1 }]
 //     (as laid, on this page), erase: [[x0, y0, x1, y1]], crops: [{ k, src: [x0, y0, x1, y1], dst: [..] }],
-//     pageText: [{ w, segW }], phs: [{ kind, status }] };
+//     pageText: [{ w, segW }], phs: [{ kind, status }], own: the lines it draws beside its own (a label in the target's
+//     name), as orig's, for the erase bites alone };
 //   ref: every unit of the frozen reference on the page, translated or not: { id, kind, orig };
 //   kept: rectangles a drawing must keep (displays' segments, labels); items: the page's text items { x0, y0, x1, y1, str,
 //   math } (str is read here and never returned).
@@ -297,11 +298,12 @@ export function pixelPage({ k, view, W, H, O, C, T, units, kept, items, ref, dra
     }
   }
 
-  // erase bites: the original's ink erased outside every drawn unit's own lines (its glyphs' bands) and under no crop:
-  // ink of a line, a formula or a figure no drawn unit owns, destroyed
+  // erase bites: the original's ink erased outside every drawn unit's own lines (its glyphs' bands, and those it draws
+  // anew beside them, `own`: a float's label set in the target's name) and under no crop: ink of a line, a formula or a
+  // figure no drawn unit owns, destroyed
   const ownM = mask(), eraseRaw = mask()
   for (const u of drawn) {
-    for (const l of u.orig) paint(ownM, [l.x0 - 1, l.baseline - 0.3 * l.size, l.x1 + 1, l.baseline + 0.88 * l.size])
+    for (const l of [...u.orig, ...(u.own ?? [])]) paint(ownM, [l.x0 - 1, l.baseline - 0.3 * l.size, l.x1 + 1, l.baseline + 0.88 * l.size])
     for (const e of u.erase) paint(eraseRaw, e, 0)
   }
   const bite = mask()
