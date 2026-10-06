@@ -33,7 +33,9 @@
 //                always this repository's: the instrument is the same for every branch); default this repository
 //   --layouts    made (the default): the layout files the engine's own maker makes from the fixtures' papers (spikes/
 //                layer-fixtures.mjs --engine --offline, cached by the engine's files in out/layer-gate/fixtures/), so that
-//                a change of the maker is measured end to end; fixed: the fixtures' own, as they were made for the lab
+//                a change of the maker is measured end to end: with the paper's own switch where the engine's marks file
+//                carries one (GATE_SWITCH=1 or 0 says otherwise), its marks read from each kept compile by its own reader;
+//                fixed: the fixtures' own, as they were made for the lab
 //   --fixtures   (or LAYER_FIXTURES) the fixtures' layout.json, units.json and arxiv.pdf from another folder of the same
 //                layout (the web's web/e2e/.fixtures/); the references stay data/layer-fixtures' (LAYER_REFS another)
 //   --check      the merge rule against the last record (default <engine>/experiments/pdf-bilingual/records/
@@ -48,12 +50,16 @@
 //                grid, each --panel-width wide (1,000 px): the original and the prototype above, this run and the previous
 //                recorded run (of the same layout files where there is one, else the baseline) below; metrics.md and
 //                index.html; default the engine's branch
-//   --composite  how crops are drawn on the copy: source-over (the lab's, as Plan 8d draws today) or darken
-//   --freeze     the reference text area of every fixture that has none (=force: made again, a deliberate change)
+//   --composite  how crops are drawn on the copy: darken (the default since the maker round: the prototype's drawing, and
+//                the layer round's) or source-over (the lab's at first)
+//   --freeze     the reference text area of every fixture that has none (=force: made again, a deliberate change;
+//                --ref-layouts=<dir>,…: a later maker's fixtures' layout files first, the fixture's own, then the
+//                prototype's geometry for the units none locates)
 //   --write-floor  layer-gate/floor.json from this run: the prototype's floor as this gate measures it, v0 under the
 //                floor's conditions at the gate's own text place (--engine=<exp/layer-proto> --engine-kind=proto
-//                --proto-units=p7 --proto-faces=prototype --tier=pixel, the ten shared outputs); the floor before it kept
-//                beside it as "old"
+//                --proto-units=p7 --proto-faces=prototype --tier=pixel, the ten shared outputs; v0 at its port,
+//                exp/layer-proto f654c05c, whose drawing is the live prototype's); the committed floor kept beside it as
+//                "old", every earlier one in "history"
 //   --proto-tex  the hybrid (layer-proto/tex.mjs): v0 with each unit the fixture's layout file locates whole taking the
 //                file's geometry, every other unit v0's own: ph, each placeholder's ink by its segments; lines, the unit's
 //                lines and label too, and the units the file locates whole that v0's geometry does not hold but table cells
@@ -137,6 +143,12 @@ if (!PROTO && !GIVEN && !arg('layouts') && !HAS_MAKER) console.log('the engine h
 const KEY = PROTO ? `${TIER}-proto${PROTO_UNITS === 'p7' ? '-p7' : ''}${PROTO_FACES === 'prototype' ? '-pf' : ''}${TEX_KEY}` : LAYOUTS === 'made' ? TIER : `${TIER}-${LAYOUTS}`
 if (!['made', 'fixed', 'given'].includes(LAYOUTS)) throw new Error(`--layouts=${LAYOUTS}: made or fixed`)
 const MAKER = join(here, 'layer-fixtures.mjs')
+/**
+ * Whether the maker asks TeX for the paper's own switch (layer-fixtures.mjs --switch): where the engine's marks file
+ * carries it (marks.mjs MARKS_SCHEMA 2 or more), so that its maker re-marks as the compile was marked; GATE_SWITCH=1 or 0
+ * says otherwise. At Task 12's tip the maker re-marks without it, and the switch stays off
+ */
+const SWITCH = process.env.GATE_SWITCH ? process.env.GATE_SWITCH !== '0' : !PROTO && HAS_MAKER && ((await import(join(ENGINE, 'src/pdf-reader/engine/layout/marks.mjs'))).MARKS_SCHEMA ?? 0) >= 2
 const FONTS = resolve(join(DATA, 'fonts'))
 const PDFJS = resolve(REPO, 'node_modules/pdfjs-dist')
 const GATE = join(here, 'layer-gate')
@@ -145,9 +157,13 @@ const PROGRESS = process.env.LAYER_PROGRESS ?? '/Users/cheongzhiyan/Downloads/re
 const ONLY = typeof arg('only') === 'string' ? arg('only').split(',').filter(Boolean) : null
 const PAGES = typeof arg('pages') === 'string' ? Number(arg('pages')) : null
 const WORKERS = typeof arg('workers') === 'string' ? Number(arg('workers')) : Math.max(1, Math.min(6, Math.floor(availableParallelism() / 2)))
-const COMPOSITE = arg('composite') ?? 'source-over'
+/** crops darkened in (the prototype's drawing, and the reader's since the layer round's fixes), or pasted source-over */
+const COMPOSITE = arg('composite') ?? 'darken'
 if (!['source-over', 'darken'].includes(COMPOSITE)) throw new Error(`--composite=${COMPOSITE}: source-over or darken`)
 const FREEZE = arg('freeze')
+/** --ref-layouts=<dir>,…: with --freeze=force, folders of fixtures a later maker made (out/layer-gate/fixtures/<key>),
+ *  whose layout files the refreshed reference takes first */
+const REF_LAYOUTS = typeof arg('ref-layouts') === 'string' ? arg('ref-layouts').split(',').filter(Boolean).map(d => resolve(d)) : []
 /** TeX's files the prototype's host read from TinyTeX: Latin Modern's faces, the hyphenation patterns */
 const TEXMF = process.env.TEXMF_DIST ?? join(process.env.HOME ?? '', 'Library/TinyTeX/texmf-dist')
 /** the progress folder's run whose engine panels stand beside this one's (openProgress sets it) */
@@ -159,7 +175,7 @@ const PAGES_OF = 12, ALL_PAGES = new Set(['2307.16209v1'])
 /** the progress images' pages (the controller's set) and their width */
 const PANELS_SET = { '1512.03385v1-zh': [1, 2, 3], '1706.03762v7-ja': [1, 2], '2608.04322v1-de': [2], '1810.04805v2-ru': [2], '2307.16209v1-zh': [10] }
 /** --panel-pages=<fixture>:<p>,<p>;<fixture>:<p>: the progress images' pages in place of the controller's set (a look at others) */
-const PANELS = typeof arg('panel-pages') === 'string' ? Object.fromEntries(arg('panel-pages').split(';').filter(Boolean).map(x => { const [fx, ps] = x.split(':'); return [fx, ps.split(',').map(Number)] })) : PANELS_SET
+const PANELS = typeof arg('panel-pages') === 'string' ? Object.fromEntries(arg('panel-pages').split(';').filter(Boolean).map(x => { const [fx, ps] = x.split(':'); return [fx, ps.split(',').map(Number)] })) : process.env.GATE_PANELS ? JSON.parse(process.env.GATE_PANELS) : PANELS_SET
 /** each panel's width in the progress images' 2 x 2 grid (the controller's: about 1,000 px) */
 const PANEL_WIDTH = Number(arg('panel-width') ?? 1000), GAP = 12
 
@@ -177,7 +193,7 @@ if (FREEZE) {
   for (const name of readdirSync(REFS).filter(n => existsSync(join(REFS, n, 'layout.json'))).sort()) {
     const file = join(REFS, name, 'ref.json')
     if (existsSync(file) && FREEZE !== 'force') continue
-    writeFileSync(file, refBytesOf(join(REFS, name), name))
+    writeFileSync(file, refBytesOf(join(REFS, name), name, undefined, REF_LAYOUTS))
     made++
     console.log(`ref  ${name}: ${fileSha(file).slice(0, 12)}`)
   }
@@ -251,7 +267,7 @@ const fontsDigest = sha256(readdirSync(FONTS).sort().map(f => `${f}:${statSync(j
 const browser = await chromium.launch()
 const inputs = {
   tier: TIER, pages: PAGES ? `the first ${PAGES}` : `the first ${PAGES_OF} of each output, every page of ${[...ALL_PAGES].join(', ')}`, scale: 2.5, inkScale: 2, inkMin: 4, composite: COMPOSITE,
-  layouts: LAYOUTS, fixtures: FIXTURES === REFS ? 'data/layer-fixtures' : FIXTURES.startsWith(ROOT) ? FIXTURES.slice(ROOT.length + 1) : FIXTURES, chromium: browser.version(),
+  layouts: LAYOUTS, ...(LAYOUTS === 'made' ? { switch: SWITCH } : {}), fixtures: FIXTURES === REFS ? 'data/layer-fixtures' : FIXTURES.startsWith(ROOT) ? FIXTURES.slice(ROOT.length + 1) : FIXTURES, chromium: browser.version(),
   pdfjs: readJson(join(PDFJS, 'package.json')).version, fonts: fontsDigest.slice(0, 16), checker: fileSha(CHECKER).slice(0, 16),
   // the instrument: the measures, their arithmetic, and the page that draws and accounts (lost ink's own glyphs)
   measures: sha256(['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => readFileSync(join(GATE, f))).join('\n')).slice(0, 16),
@@ -334,7 +350,7 @@ const floor = readJson(join(GATE, 'floor.json'))
 const ran = [...results.values()].filter(r => r.ready).sort((a, b) => a.name.localeCompare(b.name))
 const run = {
   schema: 1, tier: TIER, made: new Date().toISOString(), seconds,
-  gate: { commit: git(REPO, ['rev-parse', 'HEAD']), dirty: !!git(REPO, ['status', '--porcelain', '--untracked-files=no', '--', 'experiments/pdf-bilingual/spikes/layer-gate', 'experiments/pdf-bilingual/spikes/layer-gate.mjs', 'src/pdf-reader/engine/layer/check.mjs']) },
+  gate: { commit: git(REPO, ['rev-parse', 'HEAD']), dirty: !!git(REPO, ['status', '--porcelain', '--untracked-files=no', '--', 'experiments/pdf-bilingual/spikes/layer-gate', 'experiments/pdf-bilingual/spikes/layer-gate.mjs', 'src/pdf-reader/engine/layer/check.mjs', ':(exclude)experiments/pdf-bilingual/spikes/layer-gate/floor.json']) },
   engine: engineInfo, inputs,
   totals: { all: pooled(ran.map(r => r.totals), TIER), shared: pooled(ran.filter(r => floor.shared.includes(r.name)).map(r => r.totals), TIER) },
   fixtures: Object.fromEntries(ran.map(r => [r.name, { meta: r.meta, info: { pages: r.info.pages, units: r.info.units, located: r.info.located, even: r.info.even, family: r.info.family }, summary: r.summary, totals: r.totals, pages: r.pages.map(compact) }])),
@@ -404,7 +420,7 @@ function madeFixtures() {
   walk(engineDir)
   // the layer's own modules make no layout (but the pieces, which the translation's units are read with)
   const used = files.filter(f => !f.startsWith(join(engineDir, 'layer') + sep) || f.endsWith(`${sep}pieces.mjs`))
-  const key = sha256([MAKER, ...used].map(f => `${f.slice(ENGINE.length)}\n`).join('') + [MAKER, ...used].map(f => fileSha(f)).join('\n')).slice(0, 16)
+  const key = sha256([MAKER, ...used].map(f => `${f.slice(ENGINE.length)}\n`).join('') + [MAKER, ...used].map(f => fileSha(f)).join('\n') + (SWITCH ? '|switch' : '')).slice(0, 16)
   const dir = join(ROOT, 'out/layer-gate/fixtures', key)
   const want = readdirSync(REFS).filter(n => /^[A-Za-z0-9._-]+v\d+-[A-Za-z-]+$/.test(n) && existsSync(join(REFS, n, 'layout.json'))).filter(n => !ONLY || ONLY.includes(n))
   const missing = want.filter(n => !existsSync(join(dir, n, 'units.json')) || !(existsSync(join(dir, n, 'layout.json')) || existsSync(join(dir, n, 'refusal.json'))))
@@ -412,7 +428,7 @@ function madeFixtures() {
     console.log(`making ${missing.length} output${missing.length === 1 ? '' : 's'}' layouts with the engine at ${ENGINE === REPO ? 'this tree' : ENGINE} (${key})`)
     const t = Date.now()
     try {
-      execFileSync(join(REPO, 'node_modules/.bin/tsx'), [MAKER, '--offline', `--engine=${ENGINE}`, `--only=${missing.map(n => { const { paper, target } = nameOf(n); return `${paper}:${target}` }).join(',')}`], { env: { ...process.env, LAYER_FIXTURES: dir }, stdio: ['ignore', 'inherit', 'inherit'] })
+      execFileSync(join(REPO, 'node_modules/.bin/tsx'), [MAKER, '--offline', ...(SWITCH ? ['--switch'] : []), `--engine=${ENGINE}`, `--only=${missing.map(n => { const { paper, target } = nameOf(n); return `${paper}:${target}` }).join(',')}`], { env: { ...process.env, LAYER_FIXTURES: dir }, stdio: ['ignore', 'inherit', 'inherit'] })
     } catch { console.log('FAIL the layout maker did not make every output') }
     console.log(`made in ${((Date.now() - t) / 1000).toFixed(1)} s`)
   }
@@ -489,7 +505,7 @@ function writeRecords(file, run, rows) {
   const tiers = { ...(had?.tiers ?? {}) }
   tiers[KEY] = run
   if (run.tier === 'pixel') delete tiers[KEY.replace(/^pixel/, 'model')]
-  const record = { schema: 1, what: 'the instant layer against the original page, per fixture and page (spikes/layer-gate.mjs)', floor: { what: floor.what, measured: floor.measured ?? null, shared: floor.shared, pooled: floor.pooled, byFixture: floor.byFixture, old: floor.old ?? null }, tiers }
+  const record = { schema: 1, what: 'the instant layer against the original page, per fixture and page (spikes/layer-gate.mjs)', floor: { what: floor.what, measured: floor.measured ?? null, shared: floor.shared, pooled: floor.pooled, byFixture: floor.byFixture, old: floor.old ?? null, history: floor.history ?? null }, tiers }
   writeFileSync(file, `${JSON.stringify(record, null, 0).replace(/\{"p":/g, '\n{"p":')}\n`)
   writeFileSync(file.replace(/\.json$/, '.md'), fidelityMd(record))
   const gateFile = join(dirname(file), 'layer-gate.json')
@@ -551,9 +567,10 @@ function fidelityMd(record) {
   L.push('# The instant layer against the original: the fidelity record', '')
   L.push(`Written by \`spikes/layer-gate.mjs --record\`. Each run below: the engine at its commit, ${run.inputs.chromium ? `Chromium ${run.inputs.chromium}` : ''}, PDF.js ${run.inputs.pdfjs}; pages: ${run.inputs.pages}; the planes at ${run.inputs.scale} device px a PDF unit, lost ink at ${run.inputs.inkScale}x; crops drawn ${run.inputs.composite}.`, '')
   for (const k of keys) { const r = record.tiers[k]; L.push(`- **${k}**: the engine at \`${r.engine.commit?.slice(0, 8)}\` (${r.engine.branch}${r.engine.dirty ? ', with changes' : ''}), the gate at \`${r.gate.commit?.slice(0, 8)}\`${r.gate.dirty ? ' with changes' : ''}, ${r.made.slice(0, 10)}; ${layoutsOf(r)}; ${r.seconds} s.`) }
-  L.push('', 'Every measure is against arXiv\'s original page, whose own value is the first column. The prototype\'s floor is the approved prototype as this gate measures it (v0, the prototype ported into the engine, under its own units and faces at the gate\'s text place); the parity run\'s floor it replaces stands beside it (measured at the prototype page\'s text place, 0.19 CSS px off, with coverage read from the translation\'s ink). Both are the ten outputs the prototype shares with the engine, pages 1-12. A defect is its count and, in brackets, its rate per 1,000 translated text cells (the model tier: per 1,000 cells of the drawn units\' frames), which is what the merge rule compares.', '')
+  L.push('', 'Every measure is against arXiv\'s original page, whose own value is the first column. The prototype\'s floor is the approved prototype as this gate measures it (v0, the prototype ported into the engine, under its own units and faces at the gate\'s text place); the floors it replaces stand beside it: the one before it, and the parity run\'s (measured at the prototype page\'s text place, 0.19 CSS px off, with coverage read from the translation\'s ink). Both are the ten outputs the prototype shares with the engine, pages 1-12. A defect is its count and, in brackets, its rate per 1,000 translated text cells (the model tier: per 1,000 cells of the drawn units\' frames), which is what the merge rule compares.', '')
   const fl = floorTotals(record.floor.pooled)
-  const cols = [['Prototype floor (v0, this gate), shared ten', fl], ...(record.floor.old ? [['Prototype floor (the parity run, before), shared ten', floorTotals(record.floor.old.pooled)]] : [])]
+  const first = record.floor.history?.[0] ?? record.floor.old
+  const cols = [['Prototype floor (v0, this gate), shared ten', fl], ...(record.floor.old ? [['The floor before it, shared ten', floorTotals(record.floor.old.pooled)]] : []), ...(first && first !== record.floor.old && record.floor.history?.length > 1 ? [['The parity run\'s floor, shared ten', floorTotals(first.pooled)]] : [])]
   for (const k of keys) { const r = record.tiers[k]; cols.push([`${k}, shared ten`, r.totals.shared], [`${k}, all ${r.totals.all?.outputs ?? ''}`, r.totals.all]) }
   L.push('## Against the original', '', `| measure | Original | ${cols.map(c => c[0]).join(' | ')} |`, `|---|---|${cols.map(() => '---|').join('')}`)
   for (const m of ms) L.push(`| ${m[4]} | ${originalOf(m)} | ${cols.map(c => shown(c[1], m)).join(' | ')} |`)
@@ -575,17 +592,23 @@ function floorOf(t) {
 }
 /** floor.json from v0's run under the floor's conditions at the gate's place, the floor before it kept beside it */
 function writeFloor(run, shared) {
-  const file = join(GATE, 'floor.json'), had = readJson(file)
-  const old = had.old ?? { what: had.what, pooled: had.pooled, byFixture: had.byFixture }
+  // the floor it replaces: the committed one (git's HEAD), so that a floor written twice keeps the one before both;
+  // GATE_FLOOR_BASE names another file
+  const file = join(GATE, 'floor.json')
+  const base = process.env.GATE_FLOOR_BASE ? readJson(resolve(process.env.GATE_FLOOR_BASE)) : JSON.parse(git(REPO, ['show', `HEAD:${file.slice(REPO.length + 1)}`]) ?? readFileSync(file, 'utf8'))
+  const previous = { what: base.what, measured: base.measured ?? null, pooled: base.pooled, byFixture: base.byFixture }
+  // every floor before it, the parity run's first
+  const history = [...(base.history ?? (base.old ? [base.old] : [])), previous]
+  const ref = Object.fromEntries(shared.map(n => [n, run.fixtures[n].meta.ref]))
   const out = {
-    schema: 2,
-    what: "the approved prototype's floor as this gate measures it: v0 (the prototype ported into the engine, exp/layer-proto) under the floor's conditions (the prototype's own staging units and faces), at the gate's own text place, on the ten outputs it shares with the engine, by the gate's measures (layer-gate.mjs --engine-kind=proto --proto-units=p7 --proto-faces=prototype --write-floor)",
-    measured: { made: run.made, engine: run.engine, gate: run.gate, inputs: run.inputs },
+    schema: 3,
+    what: "the approved prototype's floor as this gate measures it: v0 (the prototype ported into the engine, exp/layer-proto, at its port: every record, erase, crop and SVG the live prototype's) under the floor's conditions (the prototype's own staging units and faces), at the gate's own text place, on the ten outputs it shares with the engine, by the gate's measures and references (layer-gate.mjs --engine-kind=proto --proto-units=p7 --proto-faces=prototype --write-floor)",
+    measured: { made: run.made, engine: run.engine, gate: run.gate, inputs: run.inputs, ref },
     shared, pooled: floorOf(run.totals.shared), byFixture: Object.fromEntries(shared.map(n => [n, floorOf(run.fixtures[n].totals)])),
-    old,
+    old: previous, history,
   }
   writeFileSync(file, `${JSON.stringify(out, null, 1)}\n`)
-  console.log(`the floor: ${file} (the floor before it kept as "old")`)
+  console.log(`the floor: ${file} (the floor before it kept as "old", every one before in "history")`)
 }
 /** the prototype's pooled floor with its defects' rates per 1,000 translated text cells */
 function floorTotals(f) {
