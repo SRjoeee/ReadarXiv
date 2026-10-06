@@ -39,8 +39,13 @@ export declare const INVISIBLE: RegExp
 export declare const DISPLAY: RegExp
 /** a piece's class, or null where it is not marked (text, a group's open or close, an invisible placeholder) */
 export declare function classOf(piece: { t: string; src?: string }): MarkClass | null
-/** the TeX that goes after MARK_DEF in the marked original: the gate and the marks' macros */
+/** the TeX that goes after MARK_DEF in the marked original: the gate and the marks' macros, the points last */
 export declare const LAYOUT_TEX: string
+/** LAYOUT_TEX's last part: a point (`/axt-<name> ri`) beside each destination, around each column's body and each
+ *  float's box */
+export declare const POINTS_TEX: string
+/** the source pieces of a unit that TeX ligatures and LaTeX's quotes set as other characters, as the glyphs have them */
+export declare const asSet: (s: string) => string
 /** every destination name the marked original may hold (without its 'axt-'): a unit's start or end (MARK_DEF), a page's
  *  columns, a cell's (t) or a heading's (h) start or end, a placeholder's (p) or a footnote call's (n) opening or closing
  *  mark by its unit and source piece index, a draft image frame's corner (g) */
@@ -52,12 +57,12 @@ export declare function layoutMarking(units: readonly SourceUnit[], classes: rea
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {
-  schema: 1
+  schema: 2
   /** the engine that compiled it (meta.compiler) */
   engine: string
-  /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (punctuationMovers),
-   *  so that whoever reads the file knows which pieces have marks */
-  marking: { classes: MarkClass[]; movesPunctuation: MarkClass[] }
+  /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (TeX's answers to the
+   *  mark probe, readMarkProbe), so that whoever reads the file knows which pieces have marks */
+  marking: { classes: MarkClass[]; switches: Switches }
   pages: number
   /** per page: x0, y0, x1, y1 (stride 4) */
   views: number[]
@@ -73,12 +78,24 @@ export interface LayoutMarks {
   words: string[]
   /** its text tokens (tokenizeDocument): page, x, y, w, h, word (stride 6) */
   tokens: number[]
+  /** the owned glyphs' distinct characters */
+  chars: string[]
+  /** each marked piece's own ink by its points in the content stream (layout/stream.mjs), by its opening mark's name,
+   *  rising: [name, how] where it is not owned (how ≥ OWNED, OWNED_HOW), else [name, how, n, …n glyphs (page, x0,
+   *  baseline, size, a character of chars), …its rules (page, x0, y0, x1, y1)] */
+  owned: (string | number)[][]
 }
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number
-/** from a PDF.js document of the marked original and its last TeX pass's log; the caller opens and destroys the document */
-export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; movesPunctuation?: readonly MarkClass[] }): Promise<LayoutMarks>
+export declare const MARKS_SCHEMA: 2
+/** a piece's own ink at most, its glyphs and its rules; and a paper's in all */
+export declare const GLYPHS_PIECE: number
+export declare const RULES_PIECE: number
+export declare const OWNED_ALL: number
+/** from a PDF.js document of the marked original and its last TeX pass's log; the caller opens and destroys the
+ *  document. With the paper's `units` and PDF.js's operator codes, each marked piece's own ink from its operator lists */
+export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; switches?: Switches; units?: readonly SourceUnit[] | null; OPS?: Record<string, number> | null }): Promise<LayoutMarks>
 export declare function encodeLayoutMarks(m: LayoutMarks): string
 /** bytes, then values, then JSON.parse, then every bound below; throws LayoutRefusal */
 export declare function parseLayoutMarks(bytes: Uint8Array): LayoutMarks

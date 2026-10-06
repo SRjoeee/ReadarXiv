@@ -14,8 +14,11 @@
 // lines they carry and lose, and fails on a loss of no accepted cause.
 import { markUnits, NO_ARG_COMMANDS } from '../latex-front.mjs'
 import { tokenizeDocument } from '../anchors.mjs'
+import { plainTranslated } from '../mt.mjs'
 import { readLines } from '../typeset/tex.mjs'
-import { boundedJson, checkKeys, checkPages, checkViews, inView, isInteger, isNumber, LayoutRefusal } from './json.mjs'
+import { pageInk } from './ink.mjs'
+import { boundedJson, checkKeys, checkPages, checkViews, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
+import { OWNED, OWNED_HOW, ownedOf, WANT } from './stream.mjs'
 
 // ---------------------------------------------------------------- the classes
 /** every class, in this order */
@@ -193,12 +196,31 @@ export const switchedOf = switches => Object.keys(switches).filter(c => /[12]/.t
  *   taken out first, at gettitlestring and where nameref sanitizes a title whoever set it (titlesec). What does the work
  *   is \protected, so an expansion (an \edef, a case change's) never runs it, and a case change leaves its name as it is
  *   (l3text's \l_text_case_exclude_arg_tl): a heading set in capitals keeps its marks' names.
+ * - **The points.** Beside each destination, a point (POINTS_TEX): a rendering intent named after it, `/axt-<name> ri`,
+ *   in each engine's literal (pdfTeX's and LuaTeX's `direct`, xdvipdfmx's `pdf:code`), which PDF.js keeps in the operator
+ *   list in its place among the glyphs (it drops DP and MP, and splits its text items at a BMC: tokens moved by up to
+ *   14 pt) and its text layer passes over. So the content stream gives each piece's own ink between its points
+ *   (layout/stream.mjs). And around each column's body (\@cclv in \@makecol, repacked to its own height and depth: a
+ *   whatsit adds no height, and one last keeps the box's depth) and each float's box, points alone (bs, be, fs, fe and a
+ *   count kept in a macro): a range across a page or a column, or one an [h] float is shipped into, is cut to its own.
+ *   Every glyph, box and destination where it was (the stream spike of 2026-10-06: pdfLaTeX and XeLaTeX to 1e-12 pt on
+ *   seven papers; LuaTeX's PDF writer sets the glyphs after a literal by an absolute matrix, ≤ 0.011 pt off: accepted)
  * What no TeX here can keep: a font kern between a heading's last letter and a full stop its class adds by expansion
  * (acmart's \@addpunct, amsart's and IEEEtran's run-in heads; 0.09 to 1.22 pt on that line, accepted: Task 2), and a
  * punctuation mark a package sets before a citation or a call by looking past it (natmove, cite.sty's super, biblatex's
  * \autocite, fnpct) — where TeX's answer to the mark probe takes the marks off (layoutMarking's `switches`). pdfTeX may
  * draw a virtual font's glyph after a whatsit off where TeX set it; no corpus paper shows it (Task 2's TeX boxes)
  */
+/** the points (LAYOUT_TEX's last part): `\\axt@point{name}` in each engine, beside each destination; around each column's
+ *  body and each float's box */
+export const POINTS_TEX = [
+  '\\ifdefined\\XeTeXrevision\\def\\axt@point#1{\\special{pdf:code /axt-#1 ri}}\\else\\ifdefined\\pdfextension\\def\\axt@point#1{\\pdfextension literal direct{/axt-#1 ri}}\\else\\ifdefined\\pdfliteral\\def\\axt@point#1{\\ifnum\\pdfoutput>0 \\pdfliteral direct{/axt-#1 ri}\\fi}\\else\\def\\axt@point#1{}\\fi\\fi\\fi',
+  '\\let\\axt@destonly\\axt@dest\\def\\axt@dest#1{\\axt@destonly{#1}\\axt@point{#1}}',
+  '\\gdef\\axt@bn{0}\\def\\axt@bump{\\xdef\\axt@bn{\\the\\numexpr\\axt@bn+1\\relax}}',
+  '\\ifdefined\\AddToHook\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\unvbox\\@cclv\\axt@point{be\\axt@bn}}\\endgroup\\fi}\\fi',
+  '\\AtBeginDocument{\\ifdefined\\@floatboxreset\\let\\axt@fbr\\@floatboxreset\\def\\@floatboxreset{\\axt@fbr\\axt@bump\\axt@point{fs\\axt@bn}}\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\par\\axt@point{fe\\axt@bn}\\axt@efb}\\fi}',
+].join('')
+
 export const LAYOUT_TEX = [
   '\\makeatletter\\newif\\ifaxt@off\\global\\let\\axt@pend\\@empty\\let\\axt@icr\\/\\def\\axt@icv{0pt}\\newif\\ifaxt@sig',
   '\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax}\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax\\fi}\\fi\\fi\\fi',
@@ -235,6 +257,7 @@ export const LAYOUT_TEX = [
   '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtpma\\@gobble\\let\\axtpm\\@gobble\\let\\axthmark\\@gobble}\\fi}',
   '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axt@pma\\axt@pm\\axt@hm}\\fi',
   '\\ifdefined\\ExplSyntaxOn\\ExplSyntaxOn\\regex_const:Nn\\c__axt_marks_regex{\\c{axtpma|axtpm|axthmark}\\cB.\\c[^BE].*\\cE.}\\cs_new_protected:Npn\\axt@unmark#1{\\regex_replace_all:NnN\\c__axt_marks_regex{}#1}\\ExplSyntaxOff\\fi',
+  POINTS_TEX,
   '\\makeatother',
 ].join('')
 
@@ -370,11 +393,34 @@ export function layoutMarking(units, classes, { lines = false, switches = {} } =
 // ---------------------------------------------------------------- the marks file
 export const MARKS_CAP = 8 * 2 ** 20
 export const MARKS_VALUES = 2_000_000
-/** the deepest a marks file nests: its object, then marks or lines, then each entry, [name, page, x, y] or [id, count] */
+/** the deepest a marks file nests: its object, then marks, lines or owned (or the marking's switch), then each entry,
+ *  [name, page, x, y], [id, count] or a piece's own ink */
 export const MARKS_DEPTH = 3
+/** the marks file's schema: 2 holds each piece's own ink (`chars`, `owned`) and the switch TeX answered */
+export const MARKS_SCHEMA = 2
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
-const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens']
-const MARKING_KEYS = ['classes', 'movesPunctuation']
+const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens', 'chars', 'owned']
+const MARKING_KEYS = ['classes', 'switches']
+/** a piece's own ink at most: its glyphs, its rules; and a paper's in all (each 5 values) */
+export const GLYPHS_PIECE = 20_000, RULES_PIECE = 2_000, OWNED_ALL = 250_000
+/** the distinct characters of the owned glyphs at most, and the code units of one */
+const CHARS_MAX = 65_536, CHAR_MAX = 32
+/** a glyph's size within (0, SIZE_MAX] */
+const SIZE_MAX = 200
+/** a piece's opening mark: the name its own ink is kept under */
+const OPENING = /^[pn]\d+\.\d+a$/
+/** the paper's own switch as the marking takes it (readMarkProbe): at most PROBE_MAX commands, each a control word, its
+ *  answer a code 0, 1 or 2 a follower; else a refusal at `path` */
+function checkSwitches(v, path) {
+  if (!isObject(v)) throw new LayoutRefusal(path, 'not an object')
+  const keys = Object.keys(v)
+  if (keys.length > PROBE_MAX) throw new LayoutRefusal(path, `more than ${PROBE_MAX} commands`)
+  for (const k of keys) {
+    if (!/^\\[A-Za-z@]{1,63}$/.test(k)) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a control word')
+    if (typeof v[k] !== 'string' || v[k].length !== FOLLOWERS.length || !/^[012]+$/.test(v[k])) throw new LayoutRefusal(`${path}.${told(k)}`, `not ${FOLLOWERS.length} codes of 0, 1 or 2`)
+  }
+  return v
+}
 /** a list of classes as the marking takes it: each one of MARK_CLASSES, none twice; else a refusal at `path` */
 function checkClasses(v, path) {
   if (!Array.isArray(v) || v.length > MARK_CLASSES.length) throw new LayoutRefusal(path, `not an array of at most ${MARK_CLASSES.length} classes`)
@@ -397,27 +443,56 @@ const duplicatesIn = log => {
   return [...out].filter(n => MARK_NAME.test(n))
 }
 
+/** the source pieces of a unit that TeX ligatures and LaTeX's quotes set as other characters, as the glyphs have them */
+export const asSet = s => s.replace(/---/g, '\u2014').replace(/--/g, '\u2013').replace(/``/g, '\u201c').replace(/''/g, '\u201d').replace(/`/g, '\u2018').replace(/'/g, '\u2019').replace(/[~\s]/g, '')
+/** a unit's end marks, any of which may be the next mark after its last piece */
+const endsOf = i => [`${i}e`, `t${i}e`, `h${i}e`]
+/**
+ * What the marking says of each piece with an opening mark, for its own ink (layout/stream.mjs Follow): by its opening
+ * mark's name, whether it has a closing mark (`names`: the destinations set and those dropped), the first WANT
+ * characters of the text after it in its unit up to the next visible piece, its unit's next marks, and whether a visible
+ * piece with no mark follows it with no text between
+ */
+function followsOf(units, names) {
+  const nameOf = (i, k) => { const c = classOf(units[i]?.pieces[k]); return c ? `${c === 'footnote' ? 'n' : 'p'}${i}.${k}` : null }
+  return name => {
+    const m = /^([pn])(\d+)\.(\d+)a$/.exec(name)
+    const i = m ? Number(m[2]) : -1, k = m ? Number(m[3]) : -1, u = units[i]
+    if (!u || nameOf(i, k) !== name.slice(0, -1)) return null
+    let after = '', q = k + 1
+    for (; q < u.pieces.length && !classOf(u.pieces[q]); q++) if (u.pieces[q].t === 'text') after += plainTranslated([u.pieces[q]])
+    const want = asSet(after).normalize('NFKC').toLowerCase().replace(/\s/g, '').slice(0, WANT)
+    const next = q < u.pieces.length ? nameOf(i, q) : null
+    return { closing: names.has(`${name.slice(0, -1)}b`), want, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked: !!next && !names.has(`${next}a`) }
+  }
+}
+
 /**
  * The marks file (internal, prep/<mid>/marks-<sha>.json) from a PDF.js document of the marked original and its last
  * TeX pass's log; the caller opens and destroys the document. Every destination MARK_NAME takes, by page (1-based) and
  * place, but one the log reports set twice (`dropped`: TeX kept the first, wherever that was) or off its page's view;
  * each page's view and columns (MARK_DEF's c<n>-<k>); each unit's line count (LINES_TEX's AXT-LINES); the document's
- * text tokens (tokenizeDocument), their words once each; and what the marked original was marked with (`marking`: the
- * classes and the paper's own switch it was given to layoutMarking), so that the maker knows which pieces have marks. A
- * token whose word is the rest of one given in parts, longer than a word may be, or off its page is left out. Numbers to
- * a hundredth. What it gives, parseLayoutMarks takes
+ * text tokens (tokenizeDocument), their words once each; what the marked original was marked with (`marking`: the
+ * classes and the paper's own switch it was given to layoutMarking), so that the maker knows which pieces have marks;
+ * and, given the paper's `units` and PDF.js's operator codes `OPS`, each marked piece's own ink, read from the marked
+ * compile's operator lists by its points (layout/stream.mjs ownedOf): `owned`, by its opening mark's name, how it was
+ * found (OWNED_HOW) and, where it was, its glyphs (page, origin, baseline, size, a character of `chars`) and its rules
+ * (page and box) in stream order; a piece of more than GLYPHS_PIECE glyphs or RULES_PIECE rules, or past OWNED_ALL in the
+ * paper, or with ink off its page, is not owned. A token whose word is the rest of one given in parts, longer than a word
+ * may be, or off its page is left out. Numbers to a hundredth. What it gives, parseLayoutMarks takes
  */
-export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLASSES, movesPunctuation = [] }) {
+export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLASSES, switches = {}, units = null, OPS = null }) {
   if (!ENGINES.includes(engine)) throw new LayoutRefusal('engine', `not one of ${ENGINES.join(', ')}`)
-  const marking = { classes: [...checkClasses(classes, 'classes')], movesPunctuation: [...checkClasses(movesPunctuation, 'movesPunctuation')] }
+  const marking = { classes: [...checkClasses(classes, 'classes')], switches: { ...checkSwitches(switches, 'switches') } }
   const pdf = marked
   const pages = checkPages(pdf.numPages, 'pages')
-  const views = [], text = []
+  const views = [], text = [], stream = []
   for (let p = 1; p <= pages; p++) {
     const page = await pdf.getPage(p)
     views.push(...page.view.slice(0, 4).map(r2))
     const content = await page.getTextContent()
     text.push({ page: p, items: content.items, styles: content.styles })
+    if (units && OPS) stream.push({ ...pageInk(OPS, await page.getOperatorList(), page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0 }), view: page.view.slice(0, 4) })
   }
   checkViews(views, pages, 'views')
   const dropped = duplicatesIn(log), twice = new Set(dropped)
@@ -431,11 +506,13 @@ export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLAS
     if (!pageOf.has(key)) pageOf.set(key, pdf.getPageIndex(ref).then(i => i + 1, () => null))
     return pageOf.get(key)
   }
-  const dests = await pdf.getDestinations()
+  const dests = await pdf.getDestinations(), set = new Set(dropped)
   for (const [full, d] of dests instanceof Map ? dests : Object.entries(dests ?? {})) {
     if (!full.startsWith('axt-') || !Array.isArray(d)) continue
     const name = full.slice(4)
-    if (!MARK_NAME.test(name) || twice.has(name)) continue
+    if (!MARK_NAME.test(name)) continue
+    set.add(name)
+    if (twice.has(name)) continue
     const page = await pageNumber(d[0]), x = d[2], y = d[3]
     if (!isInteger(page, 1, pages) || !isNumber(x) || !isNumber(y)) continue
     const c = /^c([12])-\d+$/.exec(name)
@@ -459,26 +536,58 @@ export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLAS
     }
     tokens.push(t.page, x, y, w, h, k)
   }
-  return { schema: 1, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens }
+  // each piece's own ink, by its points in the content stream
+  const chars = [], owned = []
+  if (units && OPS) {
+    const charOf = new Map(), found = ownedOf(stream, { follows: followsOf(units, set), dropped })
+    let all = 0
+    const ok = (p, x, y) => inView(views, p, r2(x), r2(y))
+    for (const name of [...found.keys()].sort()) {
+      const e = found.get(name)
+      if (e.how >= OWNED) { owned.push([name, e.how]); continue }
+      const not = how => owned.push([name, OWNED_HOW.indexOf(how)])
+      if (e.glyphs.length > GLYPHS_PIECE || e.boxes.length > RULES_PIECE) { not('more glyphs than a piece may own'); continue }
+      if (all + e.glyphs.length + e.boxes.length > OWNED_ALL) { not('past the glyphs a paper may own'); continue }
+      const gs = e.glyphs.map(([p, g]) => [p, stream[p - 1].glyphs[g]]), bs = e.boxes.map(([p, b]) => [p, stream[p - 1].boxes.slice(4 * b, 4 * b + 4)])
+      if (gs.some(([p, g]) => !ok(p, g.x0, g.y) || !(r2(g.size) > 0 && g.size <= SIZE_MAX)) || bs.some(([p, b]) => !ok(p, b[0], b[1]) || !ok(p, b[2], b[3]))) { not('ink out of bounds'); continue }
+      all += gs.length + bs.length
+      const row = [name, e.how, gs.length]
+      for (const [p, g] of gs) {
+        let u = g.u.length > CHAR_MAX ? g.u.slice(0, /[\ud800-\udbff]/.test(g.u[CHAR_MAX - 1]) ? CHAR_MAX - 1 : CHAR_MAX) : g.u
+        let c = charOf.get(u)
+        if (c === undefined) {
+          if (chars.length >= CHARS_MAX) u = ''
+          c = charOf.get(u) ?? chars.length
+          if (c === chars.length) { chars.push(u); charOf.set(u, c) }
+        }
+        row.push(p, r2(g.x0), r2(g.y), r2(g.size), c)
+      }
+      for (const [p, b] of bs) row.push(p, r2(b[0]), r2(b[1]), r2(b[2]), r2(b[3]))
+      owned.push(row)
+    }
+  }
+  return { schema: MARKS_SCHEMA, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens, chars, owned }
 }
 
 /** the marks file as written: the schema's keys in order, numbers to a hundredth */
 export function encodeLayoutMarks(m) {
-  const { schema, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens } = m
+  const { schema, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens, chars, owned } = m
   return JSON.stringify({
-    schema, engine, marking: { classes: marking.classes, movesPunctuation: marking.movesPunctuation }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, words,
-    tokens: tokens.map((v, i) => (i % 6 === 0 || i % 6 === 5 ? v : r2(v))),
+    schema, engine, marking: { classes: marking.classes, switches: marking.switches }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, words,
+    tokens: tokens.map((v, i) => (i % 6 === 0 || i % 6 === 5 ? v : r2(v))), chars,
+    // a glyph's page and character, a rule's page, as they are; its coordinates to a hundredth
+    owned: owned.map(e => e.map((v, j) => (j < 3 || (j - 3) % 5 === 0 || (j < 3 + 5 * e[2] && (j - 3) % 5 === 4) ? v : r2(v)))),
   })
 }
 
 /** bytes, then values and nesting, then JSON.parse, then every bound; throws LayoutRefusal, naming where */
 export function parseLayoutMarks(bytes) {
   const m = checkKeys(boundedJson(bytes, { cap: MARKS_CAP, values: MARKS_VALUES, depth: MARKS_DEPTH }), KEYS, '')
-  if (m.schema !== 1) throw new LayoutRefusal('schema', 'not 1')
+  if (m.schema !== MARKS_SCHEMA) throw new LayoutRefusal('schema', `not ${MARKS_SCHEMA}`)
   if (!ENGINES.includes(m.engine)) throw new LayoutRefusal('engine', `not one of ${ENGINES.join(', ')}`)
   const marking = checkKeys(m.marking, MARKING_KEYS, 'marking')
   checkClasses(marking.classes, 'marking.classes')
-  checkClasses(marking.movesPunctuation, 'marking.movesPunctuation')
+  checkSwitches(marking.switches, 'marking.switches')
   const pages = checkPages(m.pages, 'pages')
   const views = checkViews(m.views, pages, 'views')
   if (!Array.isArray(m.columns) || m.columns.length !== pages) throw new LayoutRefusal('columns', `not ${pages} entries`)
@@ -520,6 +629,42 @@ export function parseLayoutMarks(bytes) {
     if (!isNumber(t[i + 2]) || t[i + 2] < views[o + 1] - 1 || t[i + 2] > views[o + 3] + 1) throw new LayoutRefusal(`tokens[${i + 2}]`, 'not within its page')
     for (const j of [3, 4]) if (!isNumber(t[i + j]) || t[i + j] < 0 || t[i + j] > BOX_MAX) throw new LayoutRefusal(`tokens[${i + j}]`, `not 0 to ${BOX_MAX}`)
     if (!isInteger(t[i + 5], 0, m.words.length - 1)) throw new LayoutRefusal(`tokens[${i + 5}]`, 'not a word of words')
+  }
+  if (!Array.isArray(m.chars) || m.chars.length > CHARS_MAX) throw new LayoutRefusal('chars', `not an array of at most ${CHARS_MAX}`)
+  for (let i = 0; i < m.chars.length; i++) { const c = m.chars[i]; if (typeof c !== 'string' || c.length > CHAR_MAX) throw new LayoutRefusal(`chars[${i}]`, `not a string of at most ${CHAR_MAX} code units`) }
+  // each piece's own ink: its opening mark's name, rising; how (OWNED_HOW); where owned, its glyphs (page, x0, baseline,
+  // size, a character) and rules (page, x0, y0, x1, y1), each within its page's view by 1
+  if (!Array.isArray(m.owned)) throw new LayoutRefusal('owned', 'not an array')
+  const within = (page, x, y) => { const o = 4 * (page - 1); return x >= views[o] - 1 && x <= views[o + 2] + 1 && y >= views[o + 1] - 1 && y <= views[o + 3] + 1 }
+  let last = '', all = 0
+  for (let i = 0; i < m.owned.length; i++) {
+    const e = m.owned[i], at = `owned[${i}]`
+    if (!Array.isArray(e) || e.length < 2) throw new LayoutRefusal(at, 'not [name, how, …]')
+    if (typeof e[0] !== 'string' || !OPENING.test(e[0])) throw new LayoutRefusal(`${at}[0]`, "not a piece's opening mark")
+    if (e[0] <= last) throw new LayoutRefusal(`${at}[0]`, 'not a name above the last')
+    last = e[0]
+    if (!isInteger(e[1], 0, OWNED_HOW.length - 1)) throw new LayoutRefusal(`${at}[1]`, 'not a how of OWNED_HOW')
+    if (e[1] >= OWNED) { if (e.length !== 2) throw new LayoutRefusal(at, 'not [name, how] for a piece not owned'); continue }
+    const n = e[2]
+    if (e.length < 3 || !isInteger(n, 0, GLYPHS_PIECE)) throw new LayoutRefusal(e.length < 3 ? at : `${at}[2]`, `not a glyph count 0 to ${GLYPHS_PIECE}`)
+    const rules = (e.length - 3 - 5 * n) / 5
+    if (!Number.isInteger(rules) || rules < 0) throw new LayoutRefusal(at, 'not 5 numbers a glyph and a rule')
+    if (rules > RULES_PIECE) throw new LayoutRefusal(at, `more than ${RULES_PIECE} rules`)
+    all += n + rules
+    if (all > OWNED_ALL) throw new LayoutRefusal('owned', `more than ${OWNED_ALL} glyphs and rules`)
+    for (let j = 3; j < e.length; j += 5) {
+      const page = e[j]
+      if (!isInteger(page, 1, pages)) throw new LayoutRefusal(`${at}[${j}]`, `not a page 1 to ${pages}`)
+      for (let c = 1; c <= (j < 3 + 5 * n ? 2 : 4); c++) {
+        const v = e[j + c], x = c % 2 === 1
+        if (!isNumber(v) || !within(page, x ? v : views[4 * (page - 1)], x ? views[4 * (page - 1) + 1] : v)) throw new LayoutRefusal(`${at}[${j + c}]`, 'not a number within its page')
+        if (c >= 3 && v < e[j + c - 2]) throw new LayoutRefusal(`${at}[${j + c}]`, `not ${x ? 'right' : 'above'} of its other edge`)
+      }
+      if (j < 3 + 5 * n) {
+        if (!isNumber(e[j + 3]) || e[j + 3] <= 0 || e[j + 3] > SIZE_MAX) throw new LayoutRefusal(`${at}[${j + 3}]`, `not a size above 0 to ${SIZE_MAX}`)
+        if (!isInteger(e[j + 4], 0, m.chars.length - 1)) throw new LayoutRefusal(`${at}[${j + 4}]`, 'not a character of chars')
+      }
+    }
   }
   return m
 }
