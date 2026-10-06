@@ -176,10 +176,10 @@ describe('what names the floats: the target\'s names babel gives, where the fina
       const tag = babelTags(lang).find(t => Object.hasOwn(CAPTION_NAMES, t))
       expect(names).toBe(CAPTION_NAMES[tag as keyof typeof CAPTION_NAMES])
     }
-    expect(captionNames('zh-TW')).toEqual({ figure: '圖', table: '表' })
-    expect(captionNames('ja')).toEqual({ figure: '図', table: '表' })
+    expect(captionNames('zh-TW')).toEqual({ figure: '\u5716', table: '\u8868' })
+    expect(captionNames('ja')).toEqual({ figure: '\u56f3', table: '\u8868' })
     expect(captionNames('es')).toEqual({ figure: 'Figura', table: 'Cuadro' })
-    expect(captionNames('ru')?.figure).toBe('Рис.')
+    expect(captionNames('ru')?.figure).toBe('\u0420\u0438\u0441.')
   })
   it('every compile of the translation writes what names its floats; captionsOf reads it, wrapped as TeX wraps its log', () => {
     const paper = openPaper(new Map([['main.tex', enc(doc('Some prose.'))]]))
