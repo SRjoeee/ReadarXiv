@@ -13,7 +13,8 @@
 // - Latin and Cyrillic: the same glyphs and family as the English original for every target, from the cleanest source of
 //   them (the maintainer's rule, 2026-10-06): URW's base 35 from its own release (Nimbus Roman for Times, Nimbus Sans for
 //   Helvetica, with their Cyrillic, under AGPL-3.0 with URW's PostScript/PDF embedding exception), Domitian for Palatino
-//   (URW's P052 glyphs under the OFL), Latin Modern and CMU for Computer Modern, the paper's own family elsewhere
+//   (URW's P052 glyphs under the OFL), CMU for Computer Modern's text (CM's glyphs exactly) and Latin Modern for its
+//   bold italic, small capitals, sans and typewriter (nearer CM's than CMU's), the paper's own family elsewhere
 //   (faceFor's table).
 //
 // Also the names behind both renderers' reading of a paper's fonts: each design's NFSS family names (the TeX path's
@@ -42,7 +43,8 @@ import { scriptOf } from './layer-rules.mjs'
  *
  * Licences as each font's own name table or official licence file states them, in SPDX (licence list 3.29.0) where it
  * has an identifier:
- * - Source Han Serif, Harano Aji, EB Garamond, Erewhon, CMU: OFL-1.1, their name tables;
+ * - Source Han Serif, Harano Aji, EB Garamond, Erewhon: OFL-1.1, their name tables; CMU (cm-unicode 0.7.0): OFL-1.1,
+ *   each file's name table ("licensed under the SIL Open Font License, Version 1.1") and TeX Live's catalogue (ofl);
  * - Latin Modern and TeX Gyre Cursor: the GUST Font License, Latin Modern's name tables and CFF notices and TeX Live's
  *   catalogue (gfl) for both (SPDX has no identifier for it);
  * - Linux Libertine O and Linux Biolinum O: the GPL and the OFL-1.1, their name tables; Domitian: the OFL-1.1 and the
@@ -338,14 +340,21 @@ export function rolesFor(target, family) {
   return Object.freeze({ target, family, cjk: cjk && Object.freeze(cjk), fallbacks: Object.freeze(fallbacks) })
 }
 
-// the groups of a design: [the Latin target's (and a CJK target's Latin runs'), the Cyrillic target's]; `other` by class
+// the groups of a design: [the Latin target's (and a CJK target's Latin runs'), the Cyrillic target's], each one group
+// or a group by style; `other` by class. Computer Modern's text is CMU Serif, CM's own glyphs (62 of 62 against TeX
+// Live's cmr10, cmbx10 and cmti10, where Latin Modern has 59 and 60), but its bold italic Latin Modern's (59 against
+// cmbxti10, CMU 32), as its small capitals are (LM's caps face 26 of 26 against cmcsc10, CMU's smcp 3) and its sans and
+// typewriter (LM 57-59 against cmss10, cmssbx10, cmssi10 and cmitt10, CMU 21-43; cmtt10 60 and 61)
+const CM_TEXT = { regular: 'cmun-serif', bold: 'cmun-serif', italic: 'cmun-serif', bolditalic: 'lm-roman' }
 const LATIN_GROUPS = {
-  cm: ['lm-roman', 'cmun-serif'], times: ['nimbus-roman', 'nimbus-roman'], libertine: ['libertine', 'libertine'], palatino: ['domitian', 'domitian'],
+  cm: [CM_TEXT, 'cmun-serif'], times: ['nimbus-roman', 'nimbus-roman'], libertine: ['libertine', 'libertine'], palatino: ['domitian', 'domitian'],
   charter: ['xcharter', 'xcharter'], garamond: ['ebgaramond', 'ebgaramond'], utopia: ['erewhon', 'erewhon'],
   helvetica: ['nimbus-sans', 'nimbus-sans'], cmss: ['lm-sans', 'cmun-sans'], courier: ['cursor', 'nimbus-mono'], cmtt: ['lm-mono', 'cmun-mono'],
   beramono: ['dejavu-mono', 'dejavu-mono'], inconsolata: ['inconsolata', 'pt-mono'], biolinum: ['biolinum', 'biolinum'],
 }
-const OTHER_GROUPS = { serif: LATIN_GROUPS.cm, sans: LATIN_GROUPS.cmss, mono: LATIN_GROUPS.cmtt }
+// a family of no table: Latin Modern, fontspec's default, as the TeX path sets it
+const OTHER_GROUPS = { serif: ['lm-roman', 'cmun-serif'], sans: LATIN_GROUPS.cmss, mono: LATIN_GROUPS.cmtt }
+const styleOf = (bold, italic) => (bold ? (italic ? 'bolditalic' : 'bold') : italic ? 'italic' : 'regular')
 // The letters a target's text is set in: its language's where listed, else its script's (a CJK target's Latin runs are
 // English). A face that lacks one cannot set the target
 const LATIN = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
@@ -395,9 +404,10 @@ export function faceFor(roles, run) {
   if (run.cls === 'math') return 'lm-math'
   const cyrillic = scriptOf(roles.target) === 'Cyrl' ? 1 : 0
   const groups = Object.hasOwn(LATIN_GROUPS, run.design) ? LATIN_GROUPS[run.design] : Object.hasOwn(OTHER_GROUPS, run.cls) ? OTHER_GROUPS[run.cls] : OTHER_GROUPS.serif
-  const group = groups[cyrillic]
-  // Latin Modern's caps face, upright and oblique; it has no bold
-  if (run.caps && !run.bold && group === 'lm-roman') return run.italic ? 'lm-roman-caps-italic' : 'lm-roman-caps'
+  const column = groups[cyrillic]
+  const group = typeof column === 'string' ? column : column[styleOf(run.bold, run.italic)]
+  // Latin Modern's caps face, upright and oblique, for CM's small capitals and an unknown family's; it has no bold
+  if (run.caps && !run.bold && !cyrillic && (group === 'lm-roman' || column === CM_TEXT)) return run.italic ? 'lm-roman-caps-italic' : 'lm-roman-caps'
   return styled(group, run.bold, run.italic, lettersOf(roles.target))
 }
 

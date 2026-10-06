@@ -109,8 +109,10 @@ describe('the roles', () => {
 
   it('faceFor by design', () => {
     // [design, the Latin target's group (and a CJK target's Latin runs), the Cyrillic target's]
-    const table: [Design, string, string][] = [
-      ['cm', 'lm-roman', 'cmun-serif'], ['other', 'lm-roman', 'cmun-serif'], ['times', 'nimbus-roman', 'nimbus-roman'],
+    // CM's text in CMU Serif, CM's own glyphs, but its bold italic in Latin Modern (nearer CM's than CMU's)
+    const CM_TEXT = { regular: 'cmun-serif', bold: 'cmun-serif', italic: 'cmun-serif', bolditalic: 'lm-roman' }
+    const table: [Design, string | Record<string, string>, string][] = [
+      ['cm', CM_TEXT, 'cmun-serif'], ['other', 'lm-roman', 'cmun-serif'], ['times', 'nimbus-roman', 'nimbus-roman'],
       ['libertine', 'libertine', 'libertine'], ['palatino', 'domitian', 'domitian'], ['charter', 'xcharter', 'xcharter'],
       ['garamond', 'ebgaramond', 'ebgaramond'], ['utopia', 'erewhon', 'erewhon'], ['helvetica', 'nimbus-sans', 'nimbus-sans'],
       ['cmss', 'lm-sans', 'cmun-sans'], ['courier', 'cursor', 'nimbus-mono'], ['cmtt', 'lm-mono', 'cmun-mono'],
@@ -127,9 +129,10 @@ describe('the roles', () => {
     const missingIn = (target: string, group: string) => (target === 'ru' && group === 'libertine' ? { bolditalic: 'bold' } : missing[group])
     const clsOf = (d: Design): FontClass['cls'] => (['helvetica', 'cmss', 'biolinum'].includes(d) ? 'sans' : ['courier', 'cmtt', 'beramono', 'inconsolata'].includes(d) ? 'mono' : 'serif')
     for (const [design, latn, cyrl] of table) {
-      for (const [target, group] of [['de', latn], ['zh', latn], ['ja', latn], ['ru', cyrl]] as const) {
+      for (const [target, groups] of [['de', latn], ['zh', latn], ['ja', latn], ['ru', cyrl]] as const) {
         const roles = rolesFor(target, 'cm')
         for (const [bold, italic, style] of STYLES) {
+          const group = typeof groups === 'string' ? groups : groups[style]!
           const want = `${group}-${missingIn(target, group)?.[style] ?? style}`
           expect(faceFor(roles, run({ design, cls: clsOf(design), bold, italic })), `${target} ${design} ${style}`).toBe(want)
           expect(FACES[want], want).toBeDefined()
@@ -152,7 +155,7 @@ describe('the roles', () => {
     expect(faceFor(rolesFor('ru', 'cm'), run({ design: 'cm', caps: true }))).toBe('cmun-serif-regular')
     // the caps face has an oblique and no bold: italic small capitals take it, bold ones the family's bold
     expect(faceFor(rolesFor('de', 'cm'), run({ design: 'cm', caps: true, italic: true }))).toBe('lm-roman-caps-italic')
-    expect(faceFor(rolesFor('de', 'cm'), run({ design: 'cm', caps: true, bold: true }))).toBe('lm-roman-bold')
+    expect(faceFor(rolesFor('de', 'cm'), run({ design: 'cm', caps: true, bold: true }))).toBe('cmun-serif-bold')
     expect(faceFor(rolesFor('de', 'cm'), run({ design: 'cm', caps: true, bold: true, italic: true }))).toBe('lm-roman-bolditalic')
     // CJK runs: the body family by weight and slant, whatever the run's class (no sans, no fangsong: §4.4)
     const zh = rolesFor('zh', 'cm')
@@ -417,6 +420,27 @@ describe('the fixes of the review', () => {
     expect(FACES['nimbus-mono-bolditalic']).toMatchObject({ file: 'NimbusMonoPS-BoldItalic.otf', source: 'hosted' })
     // no face of TeX Live's nimbus15 (AGPL with no exception in its files), no Tempora, no TeX Gyre Termes, Heros or Pagella
     expect(Object.values(FACES).filter(f => /^(zhv|zco|Tempora|texgyre(termes|heros|pagella))-/.test(f.file))).toEqual([])
+  })
+
+  it('Computer Modern: CMU Serif, CM\'s own glyphs; Latin Modern where it is nearer CM\'s, and for an unknown family', () => {
+    // against TeX Live's AMS Type 1 CM (cmr10, cmbx10, cmti10, cmbxti10, cmcsc10): CMU 62 of 62 for the roman, bold and
+    // italic; for the bold italic Latin Modern 59 to CMU's 32, for the small capitals LM's caps face 26 of 26 to CMU's smcp 3
+    for (const target of ['de', 'fr', 'zh', 'ja']) {
+      const roles = rolesFor(target, 'cm')
+      expect(faceFor(roles, run({ design: 'cm' })), target).toBe('cmun-serif-regular')
+      expect(faceFor(roles, run({ design: 'cm', bold: true }))).toBe('cmun-serif-bold')
+      expect(faceFor(roles, run({ design: 'cm', italic: true }))).toBe('cmun-serif-italic')
+      expect(faceFor(roles, run({ design: 'cm', bold: true, italic: true }))).toBe('lm-roman-bolditalic')
+      expect(faceFor(roles, run({ design: 'cm', caps: true }))).toBe('lm-roman-caps')
+      expect(faceFor(roles, run({ design: 'cm', caps: true, italic: true }))).toBe('lm-roman-caps-italic')
+      // CM's sans and typewriter stay Latin Modern's, nearer CMSS's and CMTT's than CMU's
+      expect(faceFor(roles, run({ design: 'cmss', cls: 'sans' }))).toBe('lm-sans-regular')
+      expect(faceFor(roles, run({ design: 'cmtt', cls: 'mono', italic: true }))).toBe('lm-mono-italic')
+      // a family of no table: Latin Modern, as fontspec's default
+      expect(faceFor(roles, run({ design: 'other' }))).toBe('lm-roman-regular')
+    }
+    for (const [bold, italic, style] of STYLES) expect(faceFor(rolesFor('ru', 'cm'), run({ design: 'cm', bold, italic }))).toBe(`cmun-serif-${style}`)
+    expect(FACES['cmun-serif-regular']).toMatchObject({ file: 'cmunrm.otf', licence: 'OFL-1.1', web: 'ofl', source: 'texlive' })
   })
 
   it('Korean: Source Han Serif K with its size correction, and no role draws Un Batang', () => {
