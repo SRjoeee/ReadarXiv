@@ -310,28 +310,29 @@ function mathEnd(s, i) { // s[i] is '$' or starts \( \[ ; returns index after th
  * Where a macro body sets its parameters: `text` those it typesets as prose — bare, in a group, in \\textbf and the
  * like, in the content of a box — and `other` those it hands to anything else: \\label, \\ref, a width, math
  */
-function paramUse(s, from, to, textual = true, use = { text: new Set(), other: new Set() }) {
+function paramUse(s, from, to, textual = true, use = { text: new Set(), other: new Set(), typeset: new Set(), stored: new Set() }, storing = false) {
   let i = from
   while (i < to) {
     const c = s[i]
     if (c === '%') { i = skipComment(s, i) + 1; continue }
-    if (c === '#') { if (/\d/.test(s[i + 1] ?? '')) (textual ? use.text : use.other).add(Number(s[i + 1])); i += 2; continue }
-    if (c === '$' || (c === '\\' && (s[i + 1] === '(' || s[i + 1] === '['))) { const e = mathEnd(s, i); if (e < 0 || e > to) { i++; continue } paramUse(s, i + 1, e - 1, false, use); i = e; continue }
-    if (c === '{') { const e = matchGroup(s, i); if (e < 0 || e > to) { i++; continue } paramUse(s, i + 1, e - 1, textual, use); i = e; continue }
+    if (c === '#') { if (/\d/.test(s[i + 1] ?? '')) { const n = Number(s[i + 1]); if (textual) { use.text.add(n); (storing ? use.stored : use.typeset).add(n) } else use.other.add(n) } i += 2; continue }
+    if (c === '$' || (c === '\\' && (s[i + 1] === '(' || s[i + 1] === '['))) { const e = mathEnd(s, i); if (e < 0 || e > to) { i++; continue } paramUse(s, i + 1, e - 1, false, use, storing); i = e; continue }
+    if (c === '{') { const e = matchGroup(s, i); if (e < 0 || e > to) { i++; continue } paramUse(s, i + 1, e - 1, textual, use, storing); i = e; continue }
     if (c !== '\\') { i++; continue }
     const { name, end } = commandAt(s, i)
     if (NO_ARGS.has(name) || !/^[A-Za-z@]+$/.test(name)) { i = end; continue }
     // a math environment's body is math (2608.23517's \def\al#1{\begin{align}#1\end{align}}: its displays went out as
     // prose, and TeX stopped at "Double subscript")
     const env = name === 'begin' && /^\s*\{([^}]+)\}/.exec(s.slice(end, end + 100))
-    if (env && MATH_ENVS.test(env[1].trim())) { const [bodyEnd, afterEnd] = endOfEnv(s, end + env[0].length, env[1].trim()); paramUse(s, end + env[0].length, Math.min(bodyEnd, to), false, use); i = Math.min(afterEnd, to); continue }
+    if (env && MATH_ENVS.test(env[1].trim())) { const [bodyEnd, afterEnd] = endOfEnv(s, end + env[0].length, env[1].trim()); paramUse(s, end + env[0].length, Math.min(bodyEnd, to), false, use, storing); i = Math.min(afterEnd, to); continue }
     const { args, end: e, known } = commandArgs(s, end, name)
     const reqs = args.filter(a => a.kind === 'req')
     // typeset as prose: the text of a font command or a box, of a caption or a footnote (2608.06007's
     // \\ncaption{…} = \\caption{\\textnormal{#1}}), the role table's text and content, and what a definition inside the
     // body stores (\\gdef\\@tablecaption{#1}: LaTeX keeps a title so, for \\maketitle to set)
-    const prose = INLINE_TEXT.has(name) || name === 'footnote' || (CAPTIONS.has(name) && name !== 'captionof') ? reqs[0] : CONTENT_BOX.has(name) ? reqs[CONTENT_BOX.get(name) - 1] : DEF_PRIMITIVES.has(name) || /^(?:(?:re)?newcommand|providecommand)$/.test(name) ? args.at(-1) : null
-    for (const a of args) paramUse(s, a.start + 1, a.end - 1, textual && (a === prose || (!!known && (a.role === 't' || a.role === 'c'))), use)
+    const definer = DEF_PRIMITIVES.has(name) || /^(?:(?:re)?newcommand|providecommand)$/.test(name)
+    const prose = INLINE_TEXT.has(name) || name === 'footnote' || (CAPTIONS.has(name) && name !== 'captionof') ? reqs[0] : CONTENT_BOX.has(name) ? reqs[CONTENT_BOX.get(name) - 1] : definer ? args.at(-1) : null
+    for (const a of args) paramUse(s, a.start + 1, a.end - 1, textual && (a === prose || (!!known && (a.role === 't' || a.role === 'c'))), use, storing || (definer && a === prose))
     i = e
   }
   return use
@@ -361,7 +362,11 @@ function paperMacros(files) {
     if (!params && readsOn(t.slice(k + 1, e - 1))) { out.delete(name); continue }
     const use = paramUse(t, k + 1, e - 1)
     const prose = [...use.text].filter(n => n <= params && !use.other.has(n) && !(opt && n === 1))
-    out.set(name, { params, opt, prose: prose.length === 1 ? prose[0] : undefined, ...(params ? {} : { body: { file, start: k + 1, end: e - 1 } }) })
+    // one that only stores its prose (\\def\\@copyrightclause{#1}: ceurart's, set on the first page and in the PDF's
+    // metadata) has it set elsewhere, perhaps more than once: a front unit, with no mark (2608.12096's \\conference,
+    // marked where it was called, left a translation's leading on every page after it)
+    const p0 = prose.length === 1 ? prose[0] : undefined
+    out.set(name, { params, opt, prose: p0, ...(p0 && use.stored.has(p0) && !use.typeset.has(p0) ? { stores: true } : {}), ...(params ? {} : { body: { file, start: k + 1, end: e - 1 } }) })
   }
   return out
 }
@@ -863,6 +868,12 @@ function walk(s, from, to, b, ctx) {
     const call = own && macroArgs(s, end, macro, to)
     if (call && macro.prose) {
       const arg = call.reqs[macro.prose - 1 - (macro.opt ? 1 : 0)]
+      if (arg?.group && macro.stores) {
+        endText(); b.flush()
+        const before = b.units.length, saved = b.kind; b.kind = 'para'; walk(s, arg.start + 1, arg.end - 1, b, ctx); b.flush(); b.kind = saved
+        for (const u of b.units.slice(before)) u.front = true
+        i = call.end; continue
+      }
       if (arg?.group) {
         // an argument that holds paragraphs, a figure or a proof (\\techreport{…}, \\revised{…} around whole passages)
         // is walked as an environment's body is; one within a paragraph is part of it, the call around it a pair

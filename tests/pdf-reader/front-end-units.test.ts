@@ -151,6 +151,14 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     expect(texts(project(doc('\\tablecap{Measured properties of the waves.}', '\\def\\tablecap#1{\\gdef\\@tablecap{#1}}')))).toEqual(['Measured properties of the waves.'])
     expect(texts(project(doc('\\bibl{references}', '\\newcommand{\\bibl}[1]{\\foo{#1}}')))).toEqual([])
   })
+  it('a macro that only stores its argument has it set elsewhere: a front unit with no mark (2608.12096\'s ceurart \\copyrightclause, whose mark left the translation\'s leading on every page)', () => {
+    const p = project(doc('\\copyrightclause{Copyright for this paper by its authors.}\n\nBody words.'), { 'ceurart.cls': '\\DeclareRobustCommand\\copyrightclause[1]{%\n  \\def\\@copyrightclause{#1}%\n}\n' })
+    expect(units(p).map(u => [textOf(u), !!u.front])).toEqual([['Copyright for this paper by its authors.', true], ['Body words.', false]])
+    expect(patched(p)).toContain('\\copyrightclause{<T0>}')
+  })
+  it('a definition in the body is no text: \\def\\x{…}\'s body stays as it is', () => {
+    expect(texts(project(doc('Before. \\def\\foo{\\textbf{Bold words here}} After.')))).toEqual(['Before. After.'])
+  })
   it('a caption outside a float, caption\'s \\captionof{figure}{…}: its text the caption\'s, its kind name kept (2608.24961)', () => {
     const p = project(doc('\\begin{minipage}{\\linewidth}\\captionof{table}{AI use categories and subcategories.}\\end{minipage}'))
     expect(units(p).map(u => [u.kind, textOf(u)])).toEqual([['caption', 'AI use categories and subcategories.']])

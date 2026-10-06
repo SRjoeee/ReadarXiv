@@ -55,8 +55,8 @@ const CURATED = {
   // definitions: a name, an arity, a default and a body, none of them typeset where they stand
   newcommand: '*s{r[d[x{x', renewcommand: '*s{r[d[x{x', providecommand: '*s{r[d[x{x', DeclareRobustCommand: '*s{r[d[x{x',
   newenvironment: '*s{n[d[x{x{x', renewenvironment: '*s{n[d[x{x{x', newtheorem: '*s{n[n{n[n', newcolumntype: '{n[d[x{x',
-  DeclareMathOperator: '*s{r{x', newlength: '{r', newcounter: '{n[n', newif: '_r', let: '_r?s_r', def: '_rb{x', gdef: '_rb{x',
-  edef: '_rb{x', xdef: '_rb{x',
+  DeclareMathOperator: '*s{r{x', newlength: '{r', newcounter: '{n[n', newif: '_r', let: '_r?s_r', def: '_rbx{x', gdef: '_rbx{x',
+  edef: '_rbx{x', xdef: '_rbx{x',
   // text the reader sees, set apart: a caption outside a float (caption's \captionof), a deluxetable's
   captionof: '*s{n[t{t', tablecaption: '{t', markboth: '{t{t', markright: '{t',
 }
