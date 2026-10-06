@@ -133,7 +133,7 @@ export function typesetting(units, plan) {
     mark: (base, translated) => u => {
       const m = base(u), i = index.get(u)
       if (m?.whole || !translated.has(u)) return m
-      if (!m) return sizes.has(i) && ROLES.has(u.kind) && !u.front ? { start: `\\axtsizein{${i}}`, end: '' } : m
+      if (!m) return sizes.has(i) && ROLES.has(u.kind) && !u.front && !u.stored ? { start: `\\axtsizein{${i}}`, end: '' } : m
       return { ...m, before: `${floatsAt.has(i) ? `\\axtfloatat{${i}}` : ''}${lines ? `\\axtlines{${i}}` : ''}${sizes.has(i) ? `\\axtsize{${i}}` : ''}\\axtlead{${i}}` }
     },
   })

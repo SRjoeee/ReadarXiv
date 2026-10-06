@@ -19,7 +19,7 @@
 // first preview is set as today, and never waits for the original: nothing is known to plan it from yet. Where a plan
 // cannot be made, the translation is set as today, and the reason noted
 import { analyze } from './paper-meta.mjs'
-import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { BALANCE_DEF, documentBounds, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
 import { passagesInSource } from './cache.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
@@ -75,7 +75,9 @@ const DRAFT = [
   '\\def\\Gin@setfile#1#2#3{\\leavevmode\\global\\advance\\axt@g\\@ne\\axtmark{g\\the\\axt@g a}\\axt@setfile{#1}{#2}{#3}%',
   '\\axtmark{g\\the\\axt@g b}\\rlap{\\raise\\Gin@req@height\\hbox{\\axtmark{g\\the\\axt@g t}}}}}\\makeatother',
 ].join('\n') + '\n'
-const beginDocument = text => text.search(/\\begin\s*\{document\}/)
+/** where the main file's \\begin{document} stands as TeX finds it (latex-front.mjs documentBounds: none in a comment, a
+ *  definition or a filecontents), -1 where it has none: what goes before the document goes there */
+const beginDocument = text => documentBounds(text).begin
 /** a compile the TeX page failed, not TeX: BusyTeX's 180 s given up (the machine was slow), or the page's own failure
  *  (protocol 2's `error`, no log: an engine it could not bring up, a compile before an init that failed). It says
  *  nothing of the paper or of the strategy (the S3a review, I5 b) */
@@ -210,7 +212,9 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   const at = beginDocument(main)
   main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + NO_OVERFLOW + (xe || !evenSpaces ? '' : EVEN_SPACES) + main.slice(at)
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
-  if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
+  // (the \\usepackage TeX acts on, inputencOf: a commented one said utf8 and the source stayed Latin-1)
+  const inputenc = project.inputenc && inputencOf(main)
+  if (inputenc) main = main.slice(0, inputenc.start) + main.slice(inputenc.start, inputenc.end).replace(/\[([^\]]*)\]/, (m, opts) => `[${opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',')}]`) + main.slice(inputenc.end)
   const shim = xe && strategy.engine !== meta.compiler ? XETEX_SHIM + XETEX_SHIM_R1 : ''
   // what the strategy puts before \documentclass (scripts.mjs: a paper's own CJK packages kept from loading under xeCJK)
   const head = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + END_TEX + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + shim

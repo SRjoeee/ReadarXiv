@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------- files and bytes
 // Node's file system for the spikes; in the page the branch is never taken, and the bundler is told not to follow it
 const nodeFs = typeof process !== 'undefined' && process.versions?.node ? await import(/* @vite-ignore */ 'node:fs') : null
+import { bindingsOf, commandParams, environmentParams, FRONT_ROLES, paramsOf, readArgs } from './arg-roles.mjs'
 /** a directory under Node, as a project's file system: { list(): relative paths, read(path): bytes or null } */
 export function folder(dir) {
   const { readdirSync, readFileSync } = nodeFs
@@ -37,8 +38,10 @@ const HEADINGS = new Set(['part', 'chapter', 'section', 'subsection', 'subsubsec
 /** a sectioning command's depth, as LaTeX's article and book classes count it: the reader's contents rank it (outline.ts);
  *  a paragraph heading is not in the contents */
 const DEPTH = { part: -1, chapter: 0, section: 1, subsection: 2, subsubsection: 3 }
-const OWN_UNIT_ARG = new Set(['caption', 'subcaption', 'subcaptionbox', 'footnote', 'thanks', 'abstract', 'keywords']) // the argument is a unit of its own
-const CAPTIONS = new Set(['caption', 'subcaption', 'subcaptionbox'])
+const OWN_UNIT_ARG = new Set(['caption', 'subcaption', 'subcaptionbox', 'captionof', 'tablecaption', 'footnote', 'thanks', 'abstract', 'keywords']) // the argument is a unit of its own
+/** a figure's or a table's caption: caption's \\captionof{figure}{…} outside a float, a deluxetable's \\tablecaption{…}
+ *  (their text found by the role table, 2608.24961, 2608.12606) */
+const CAPTIONS = new Set(['caption', 'subcaption', 'subcaptionbox', 'captionof', 'tablecaption'])
 /** the front matter's blocks of names and places: their notes (\\thanks, \\footnote) each a footnote of its own
  *  (1706.03762's author block: its footnotes stayed in English, the whole block one opaque command), and the names and
  *  places between them units of kind 'author' — translated where the target's script writes names its own way
@@ -52,7 +55,7 @@ const FRONT_PROSE = new Set(['IEEEauthorblockN', 'IEEEauthorblockA', 'institutio
 const FRONT_LINES = new Set(['IEEEauthorblockN', 'IEEEauthorblockA'])
 /** import.sty's commands that read a file from a directory, {dir}{file}: whether the directory is the one imported last's */
 const IMPORTS = new Map([['import', false], ['inputfrom', false], ['includefrom', false], ['subimport', true], ['subinputfrom', true], ['subincludefrom', true]])
-const INLINE_TEXT = new Set(['textbf', 'textit', 'emph', 'textsl', 'textsc', 'underline', 'textup', 'textrm', 'textsf', 'textmd', 'uline'])
+const INLINE_TEXT = new Set(['textbf', 'textit', 'emph', 'textsl', 'textsc', 'underline', 'textup', 'textrm', 'textsf', 'textmd', 'textnormal', 'uline'])
 // commands whose last required argument is typeset as it stands — a scaled table, a boxed or coloured phrase, a TikZ
 // picture fitted to the column — by how many required arguments they take, that one included. The others (a width,
 // an angle, a colour) stay as they are
@@ -62,9 +65,6 @@ const CONTENT_BOX = new Map([['resizebox', 3], ['scalebox', 2], ['adjustbox', 2]
  *  tables). The rules take an optional width alone (\\toprule[1pt]) */
 const NO_ARGS = new Set(['centering', 'raggedright', 'raggedleft', 'noindent', 'indent', 'normalfont', 'rmfamily', 'sffamily', 'ttfamily', 'bfseries', 'mdseries', 'itshape', 'upshape', 'slshape', 'scshape', 'em', 'bf', 'it', 'rm', 'sf', 'tt', 'sc', 'sl', 'normalsize', 'small', 'footnotesize', 'scriptsize', 'tiny', 'large', 'Large', 'LARGE', 'huge', 'Huge', 'selectfont', 'smallskip', 'medskip', 'bigskip', 'hfill', 'vfill', 'hfil', 'vfil', 'newline', 'clearpage', 'newpage', 'cleardoublepage', 'maketitle', 'appendix', 'toprule', 'midrule', 'bottomrule', 'hline', 'arraybackslash', 'protect', 'relax', 'leavevmode', 'strut', 'null', 'quad', 'qquad', 'enspace', 'thinspace', 'nobreak', 'allowbreak', 'sloppy', 'fussy', 'ignorespaces', 'unskip'])
 const OPT_ONLY = new Set(['toprule', 'midrule', 'bottomrule'])
-/** how many required arguments some commands of fixed arity take, after any optional ones: a brace group after them is
- *  a group of its own (\\hspace{1mm}{#1}, the bulleted headings of 2608.06007) */
-const ARITY = new Map([['hspace', 1], ['vspace', 1], ['addvspace', 1], ['color', 1], ['label', 1], ['ref', 1], ['eqref', 1], ['pageref', 1], ['setlength', 2], ['addtolength', 2], ['rule', 2], ['includegraphics', 1]])
 const MATH_ENVS = /^(equation|align|alignat|gather|multline|flalign|eqnarray|math|displaymath|dmath|IEEEeqnarray|subequations)\*?$/
 const SKIP_ENVS = /^(verbatim|Verbatim|lstlisting|minted|comment|tcblisting|tcboutputlisting|alltt|BVerbatim|LVerbatim|tikzpicture|pgfpicture|forest|array|algorithmic|algorithm2e|thebibliography|bibdiv|biblist|filecontents|picture|asy|pspicture|axis|circuitikz|dot2tex|pythontex|sagesilent)\*?$/
 /**
@@ -150,7 +150,7 @@ function accentLetter(s, i, end, name, to, own) {
  *  \\let\\'…): there the command is the paper's, and no letter is made of it */
 const ownAccents = texts => {
   const out = new Set()
-  for (const m of texts.map(uncommented).join('\n').matchAll(/\\(?:(?:re|provide)?newcommand\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)DocumentCommand|[gex]?def|let)\s*\{?\s*\\([cvuH]|[.'`^~"])(?![A-Za-z@])/g)) out.add(m[1])
+  for (const m of texts.map(uncommented).join('\n').matchAll(/\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)DocumentCommand|[gex]?def|let)\s*\{?\s*\\([cvuH]|[.'`^~"])(?![A-Za-z@])/g)) out.add(m[1])
   return out
 }
 // a number with an optional unit; spaces and tabs only, never a line end — the next line is not the command's
@@ -249,21 +249,35 @@ function citationArgs(s, i, name) {
   const rest = notes.length ? argsAfter(s, at) : null
   return rest?.args.some(a => a.kind === 'req') ? { args: [...notes, ...rest.args], end: rest.end } : argsAfter(s, i)
 }
-/** a command's arguments: every adjacent one — a citation's with its notes in angle brackets or parentheses
- *  (citationArgs) —, or for a command of fixed arity (ARITY) its optional ones and then that many required */
-function commandArgs(s, i, name) {
-  const want = ARITY.get(name)
-  if (want === undefined) return CITATION.test(name) ? citationArgs(s, i, name) : argsAfter(s, i)
-  const args = []
-  for (let got = 0; got < want;) {
-    let k = skipSpaces(s, i)
-    if (s[k] === '*' && (s[k + 1] === '{' || s[k + 1] === '[')) k++
-    const e = s[k] === '[' ? matchGroup(s, k, '[', ']') : s[k] === '{' ? matchGroup(s, k) : -1
-    if (e < 0) break
-    args.push({ kind: s[k] === '[' ? 'opt' : 'req', start: k, end: e }); i = e
-    if (s[k] === '{') got++
+/** the paper loadProject reads: its LaTeXML bindings (arg-roles.mjs bindingsOf) and the commands its own files define,
+ *  whose arguments the table cannot know (melba.cls's \\def\\firstname{…}, which LaTeXML's moderncv gives one). Set for
+ *  the time a project is read — loadProject is synchronous —, else null: the table's forms every binding agrees on */
+let paper = null
+const OWN_COMMANDS = /\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|DeclareMathOperator\*?)\s*\{?\s*\\([A-Za-z@]+)/g
+const paperOf = texts => ({ bindings: bindingsOf(texts), own: new Set(texts.flatMap(t => [...uncommented(t).matchAll(OWN_COMMANDS)].map(m => m[1]))) })
+/**
+ * A command's arguments: a citation's every adjacent one, its notes in angle brackets or parentheses with them
+ * (citationArgs); one whose parameters the role table knows (arg-roles.mjs), exactly those as TeX takes them — a group
+ * or a single token each, an optional one where it is given — and any optional ones after them, which a package may
+ * have added; else, a command the table does not know, every adjacent one (some prose stays untranslated, nothing
+ * breaks). Taken as every adjacent group, \setlength\tabcolsep{1.0mm}'s {1.0mm} and the group of three tables after it
+ * were \tabcolsep's (2307.16209: three captions in English). `known`, read by the table; each argument's `role` and
+ * `param` (its parameter's index) then too. A register (\tabcolsep) takes none: TeX's assignment after it is read with it
+ */
+function commandArgs(s, i, name, to = s.length) {
+  if (CITATION.test(name)) return citationArgs(s, i, name)
+  const params = paper?.own.has(name) ? null : commandParams(name, paper?.bindings ?? null)
+  if (params) {
+    if (params.length === 1 && params[0].shape === '=') return { args: [], end: i, known: true }
+    const r = readArgs(s, i, params, to)
+    if (r.complete) {
+      const args = r.args.map(a => ({ ...a, kind: a.shape === '[' ? 'opt' : 'req' }))
+      let end = r.end
+      if (params.length) for (;;) { const k = skipSpaces(s, end); if (s[k] !== '[') break; const e = matchGroup(s, k, '[', ']'); if (e < 0 || e > to) break; args.push({ kind: 'opt', shape: '[', role: 'a', start: k, end: e }); end = e }
+      return { args, end, known: true }
+    }
   }
-  return { args, end: i }
+  return argsAfter(s, i)
 }
 /** after a command that takes no required argument: past its optional ones when it has any, else where it ends */
 function optsAfter(s, i, opts) {
@@ -306,10 +320,13 @@ function paramUse(s, from, to, textual = true, use = { text: new Set(), other: n
     if (c !== '\\') { i++; continue }
     const { name, end } = commandAt(s, i)
     if (NO_ARGS.has(name) || !/^[A-Za-z@]+$/.test(name)) { i = end; continue }
-    const { args, end: e } = commandArgs(s, end, name)
+    const { args, end: e, known } = commandArgs(s, end, name)
     const reqs = args.filter(a => a.kind === 'req')
-    const prose = INLINE_TEXT.has(name) ? reqs[0] : CONTENT_BOX.has(name) ? reqs[CONTENT_BOX.get(name) - 1] : null
-    for (const a of args) paramUse(s, a.start + 1, a.end - 1, textual && a === prose, use)
+    // typeset as prose: the text of a font command or a box, of a caption or a footnote (2608.06007's
+    // \\ncaption{…} = \\caption{\\textnormal{#1}}), the role table's text and content, and what a definition inside the
+    // body stores (\\gdef\\@tablecaption{#1}: LaTeX keeps a title so, for \\maketitle to set)
+    const prose = INLINE_TEXT.has(name) || name === 'footnote' || (CAPTIONS.has(name) && name !== 'captionof') ? reqs[0] : CONTENT_BOX.has(name) ? reqs[CONTENT_BOX.get(name) - 1] : DEF_PRIMITIVES.has(name) || /^(?:(?:re)?newcommand|providecommand)$/.test(name) ? args.at(-1) : null
+    for (const a of args) paramUse(s, a.start + 1, a.end - 1, textual && (a === prose || (!!known && (a.role === 't' || a.role === 'c'))), use)
     i = e
   }
   return use
@@ -322,21 +339,44 @@ function paramUse(s, from, to, textual = true, use = { text: new Set(), other: n
  * them would swap the arguments. The count alone matters too: TeX takes a token for an argument without braces
  * (\\inline{\\onenode x}, 2608.12096), and translated, the x became a character pdfTeX could not take
  */
-function paperMacros(texts) {
+function paperMacros(files) {
   const out = new Map()
-  const re = /\\(?:(?:re|provide)?newcommand|DeclareRobustCommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*\[(\d)\]|\\(?:[egx]?def)\s*\\([A-Za-z@]+)((?:#\d)+)(?=\s*\{)/g
-  for (const t of texts) for (const m of t.matchAll(re)) {
+  const re = /\\(?:((?:re)?newcommand|providecommand|DeclareRobustCommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[(\d)\])?|(?:[egx]?def)\s*\\([A-Za-z@]+)\s*((?:#\d\s*)*)(?=\{))/g
+  for (const { file, text: t } of files) for (const m of t.matchAll(re)) {
     if (inComment(t, m.index)) continue
-    const name = m[1] ?? m[2] ?? m[4], params = m[3] ? Number(m[3]) : m[5].length / 2
+    const name = m[2] ?? m[3] ?? m[5], params = m[1] ? Number(m[4] ?? 0) : (m[6].match(/#\d/g) ?? []).length
+    // \\providecommand defines nothing a definition before it made (2608.16190's \\def\\cpanauthor{…} and its fallback)
+    if (m[1] === 'providecommand' && out.has(name)) continue
     let k = skipSpaces(t, m.index + m[0].length), opt = false
-    if (m[3] && t[k] === '[') { const e = matchGroup(t, k, '[', ']'); if (e < 0) continue; k = skipSpaces(t, e); opt = true }
+    if (m[4] && t[k] === '[') { const e = matchGroup(t, k, '[', ']'); if (e < 0) continue; k = skipSpaces(t, e); opt = true }
     if (t[k] !== '{') continue
     const e = matchGroup(t, k); if (e < 0) continue
+    // one that takes no argument but whose body reads on (\\textcolor{red}, \\includegraphics[width=3cm], \\@ifstar…): what
+    // follows a call is the body's arguments, not known here
+    if (!params && readsOn(t.slice(k + 1, e - 1))) { out.delete(name); continue }
     const use = paramUse(t, k + 1, e - 1)
     const prose = [...use.text].filter(n => n <= params && !use.other.has(n) && !(opt && n === 1))
-    out.set(name, { params, opt, prose: prose.length === 1 ? prose[0] : undefined })
+    out.set(name, { params, opt, prose: prose.length === 1 ? prose[0] : undefined, ...(params ? {} : { body: { file, start: k + 1, end: e - 1 } }) })
   }
   return out
+}
+/** whether a macro body ends where something after a call goes on being read: in a command whose arguments it does not
+ *  all give (by the role table), in one the table does not know, after a bracket (\\includegraphics[…]), or with a
+ *  look ahead anywhere in it */
+function readsOn(body) {
+  if (/\\(?:@ifnextchar|@ifstar|kernel@ifnextchar|@ifnch|@testopt|@protected@testopt|@dblarg|futurelet|afterassignment|expandafter|csname|IfBooleanTF|NewDocumentCommand)(?![A-Za-z@])/.test(body)) return true
+  const t = uncommented(body).trimEnd()
+  if (!t || /\\[A-Za-z@]+\*?$|\]$|#\d$|\\$/.test(t)) return !!t && !/^[^\\]*$/.test(t)
+  // the last command at the body's top level, and whether the text goes on after its arguments
+  let last = -1, depth = 0
+  for (let i = 0; i < t.length; i++) { if (t[i] === '\\') { if (depth === 0 && isLetter(t[i + 1] ?? '')) last = i; i++; continue } if (t[i] === '{') depth++; else if (t[i] === '}') depth-- }
+  if (last < 0) return false
+  const { name, end } = commandAt(t, last)
+  if (NO_ARGS.has(name)) return false
+  const params = commandParams(name)
+  if (!params) return !/[^\s{}]/.test(t.slice(argsAfter(t, end).end))
+  const r = readArgs(t, end, params)
+  return !r.complete
 }
 /** a paper macro's arguments at a call, as TeX takes them: its optional one when given, then each required one a brace
  *  group or a single token; null when the call runs past `to` */
@@ -382,7 +422,7 @@ export function displayLetters(src, macros = new Map()) {
 function macroBodies(texts) {
   const out = new Map()
   for (const t of texts) {
-    for (const m of t.matchAll(/\\(?:(?:re|provide)?newcommand\*?\s*\{?\s*\\([A-Za-z@]+)\s*\}?\s*(?:\[\d\]\s*)?(?:\[[^\]]*\]\s*)?|def\s*\\([A-Za-z@]+)\s*(?:#\d\s*)*|DeclareMathOperator\*?\s*\{\s*\\([A-Za-z@]+)\s*\}\s*)(?=\{)/g)) {
+    for (const m of t.matchAll(/\\(?:(?:(?:re)?newcommand|providecommand)\*?\s*\{?\s*\\([A-Za-z@]+)\s*\}?\s*(?:\[\d\]\s*)?(?:\[[^\]]*\]\s*)?|def\s*\\([A-Za-z@]+)\s*(?:#\d\s*)*|DeclareMathOperator\*?\s*\{\s*\\([A-Za-z@]+)\s*\}\s*)(?=\{)/g)) {
       const at = m.index + m[0].length, e = matchGroup(t, at)
       if (e > 0) out.set(m[1] ?? m[2] ?? m[3], t.slice(at + 1, e - 1))
     }
@@ -448,13 +488,15 @@ const joinLetters = pieces => {
   }
   return out
 }
-// an e-mail address, and the domain after a list of names in braces
-const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, HAS_EMAIL = new RegExp(EMAIL.source)
+// an e-mail address or a web address — the latter's last stop, comma or parenthesis the sentence's —, and the domain
+// after a list of names in braces
+const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\b(?:https?|ftp):\/\/[^\s{}\\]*[^\s{}\\.,;:!?)\]]|\bwww\.[\w-]+(?:\.[\w-]+)+(?:\/[^\s{}\\]*[^\s{}\\.,;:!?)\]])?/g, HAS_EMAIL = new RegExp(EMAIL.source)
 const AT_DOMAIN = /^@[\w-]+(?:\.[\w-]+)+/
-/** An address is not prose: an e-mail in a unit's text (jatin@us.ibm.com), and a list of names in escaped braces with
- *  its domain ({sl225, samand2, reyhaneh}@illinois.edu), each become a placeholder, kept as the paper has it. Sent as
- *  text, a machine translation spelled one of 2608.06701's names in katakana and joined the list with the ideographic
- *  comma */
+/** An address is not prose: an e-mail in a unit's text (jatin@us.ibm.com), a web address a link shows as its text
+ *  (\\href{https://osf.io/gjvbs}{https://osf.io/gjvbs}, now that a link's text is text: 2608.14893), and a list of names
+ *  in escaped braces with its domain ({sl225, samand2, reyhaneh}@illinois.edu), each become a placeholder, kept as the
+ *  paper has it. Sent as text, a machine translation spelled one of 2608.06701's names in katakana and joined the list
+ *  with the ideographic comma */
 function keepAddresses(pieces) {
   const lists = []
   for (let k = 0; k < pieces.length; k++) {
@@ -577,11 +619,64 @@ function frontBlock(s, from, to, b, ctx) {
   }
   names(past, to)
 }
+/** a command's text and content arguments (commandArgs, `known`), walked: within a paragraph each one a pair around its
+ *  text, the command's other arguments kept with the pair's open or close; one that holds paragraphs, a figure or a
+ *  table ends the paragraph before the command and is walked as an environment's body is, the command's own source left
+ *  as it stands (\\IfFileExists{…}{\\begin{figure}…}{}, whose caption stayed in English: 2608.28697) */
+function walkArgs(s, i, end, walked, b, ctx) {
+  if (walked.some(a => holdsBlock(s.slice(a.start + 1, a.end - 1)))) { b.flush(); for (const a of walked) { walk(s, a.start + 1, a.end - 1, b, ctx); b.flush() } return }
+  let from = i
+  walked.forEach((a, k) => {
+    const id = b.open(s.slice(from, a.start + 1), from)
+    walk(s, a.start + 1, a.end - 1, b, ctx)
+    const last = k === walked.length - 1
+    b.close(id, last ? s.slice(a.end - 1, end) : '}', last ? end : a.end)
+    from = a.end
+  })
+}
+/** the parameters of a theorem-like environment: its title, optional */
+const THEOREM_PARAMS = paramsOf('[t')
+/**
+ * An environment's arguments after its \\begin{name}: those its definition takes — the paper's own (\\newenvironment's
+ * count), a theorem's optional title, else the role table's (arg-roles.mjs environmentParams) — and any optional ones
+ * after them, which a package may add (enumitem's keys after a list's \\begin); else, an environment nothing defines,
+ * every adjacent group. Their end, and `title`, a theorem's: its optional argument, unless that is a list of keys
+ * (thmtools' name=…, label=…)
+ */
+function envArgs(s, at, to, env, ctx) {
+  const params = ctx.envs.get(env) ?? (ctx.theorems.has(env) ? THEOREM_PARAMS : null) ?? (ctx.ownEnvs.has(env) || isLineEnv(env, ctx.lineEnvs) ? null : environmentParams(env, paper?.bindings ?? null))
+  const r = params && readArgs(s, at, params, to)
+  if (!r?.complete) return { end: argsAfter(s, at).end, title: null }
+  let end = r.end
+  for (;;) { const k = skipSpaces(s, end); if (s[k] !== '[') break; const e = matchGroup(s, k, '[', ']'); if (e < 0 || e > to) break; end = e }
+  const t = r.args.find(a => a.role === 't' && a.shape === '[')
+  return { end, title: t && !/^\s*[A-Za-z][\w\s-]*=/.test(uncommented(s.slice(t.start + 1, t.end - 1))) ? t : null }
+}
+/**
+ * A front matter command (FRONT_ROLES, the role table's hooks), in the preamble or the body: the argument its hook takes
+ * walked by what it is — a title or subtitle a heading, names and places an author block (frontBlock), a note a front
+ * note, an abstract or keywords a unit of their kind, a line of prose (a dedication, a date) a front unit —, its other
+ * arguments as they are. Where the table knows its parameters the hook's is found by its index, else it is its n-th
+ * required argument or its last. Its end, or -1 where it has no such argument
+ */
+function frontCommand(s, end, name, to, b, ctx) {
+  const [role, n] = FRONT_ROLES[name]
+  const call = commandArgs(s, end, name, to)
+  const reqs = call.args.filter(a => a.kind === 'req' && s[a.start] === '{')
+  const arg = call.known ? call.args.find(a => a.param === n - 1 && s[a.start] === '{') : reqs[n - 1] ?? reqs.at(-1)
+  if (!arg) return -1
+  b.flush()
+  const from = arg.start + 1, upTo = arg.end - 1, saved = b.kind
+  if (role === 'author') frontBlock(s, from, upTo, b, ctx)
+  else if (role === 'note' || role === 'prose') { const before = b.units.length; b.kind = role === 'note' ? 'footnote' : 'para'; walk(s, from, upTo, b, ctx); b.flush(); b.kind = saved; for (const u of b.units.slice(before)) u.front = true }
+  else { b.kind = role === 'abstract' ? 'abstract' : 'heading'; walk(s, from, upTo, b, ctx); b.flush(); b.kind = saved }
+  return call.end
+}
 function walk(s, from, to, b, ctx) {
   let i = from, textStart = -1
   const endText = () => { if (textStart >= 0 && textStart < i) b.text(s.slice(textStart, i), textStart, i); textStart = -1 }
   const startText = () => { if (textStart < 0) textStart = i }
-  while (i < to) {
+  while (i < to && !ctx.ended) {
     const c = s[i]
     if (c === '%') { endText(); i = skipComment(s, i) + 1; continue }
     if (c === '\n') {
@@ -637,7 +732,8 @@ function walk(s, from, to, b, ctx) {
       if (TABLE_ENVS.test(env)) {
         if (!ctx.tables) { ctx.skipped[env] = (ctx.skipped[env] ?? 0) + 1; i = afterEnd; continue }
         // a table: each cell is a unit of its own; & and \\ end it. The column specification and width stay as they are
-        const { end: argsEnd } = argsAfter(s, afterBegin, env.startsWith('tabularx') || env === 'tabular*' || env === 'tabulary' ? 3 : 2)
+        const tp = ctx.ownEnvs.has(env) ? null : environmentParams(env, paper?.bindings ?? null), tr = tp && readArgs(s, afterBegin, tp, bodyEnd)
+        const argsEnd = tr?.complete ? tr.end : argsAfter(s, afterBegin, env.startsWith('tabularx') || env === 'tabular*' || env === 'tabulary' ? 3 : 2).end
         const saved = b.kind, savedCell = b.cellMode; b.kind = 'cell'; b.cellMode = true
         walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved; b.cellMode = savedCell
         // fitted to the line once translated (patch, FIT_DEF): a plain tabular, whose width is its columns'; a tabular*,
@@ -653,13 +749,23 @@ function walk(s, from, to, b, ctx) {
         if (env === 'tabular*' && !verbatim && !/^\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*\[/.test(s.slice(afterBegin).trimStart())) ctx.fits.push({ file: b.file, start: i, end: afterEnd, star: bodyEnd })
         i = afterEnd; continue
       }
-      // everything else is a container: its body is walked, its own arguments ([Name] of a theorem, {width} of a minipage) stay
-      const { end: argsEnd } = argsAfter(s, afterBegin)
+      // everything else is a container: its body is walked, its own arguments stay ({width} of a minipage, a list's
+      // options) — those its definition takes (envArgs), a group after them the body's (\\begin{proof}{…}: 2608.25304's
+      // eleven proofs in English) —, but a theorem's title, a heading of its own (\\begin{theorem}[Convergence of X]:
+      // the reader sees it as the body's words)
+      const { end: argsEnd, title } = envArgs(s, afterBegin, bodyEnd, env, ctx)
+      if (title) { const saved = b.kind; b.kind = 'heading'; walk(s, title.start + 1, title.end - 1, b, ctx); b.flush(); b.kind = saved }
       const saved = b.kind; b.kind = env === 'abstract' ? 'abstract' : ctx.theorems.has(env) ? 'theorem' : saved
       walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved
       i = afterEnd; continue
     }
-    if (name === 'end') { endText(); b.flush(); const m = s.slice(end).match(/^\s*\{[^}]+\}/); i = end + (m ? m[0].length : 0); continue }
+    if (name === 'end') {
+      endText(); b.flush(); const m = s.slice(end).match(/^\s*\{([^}]+)\}/); i = end + (m ? m[0].length : 0)
+      // \end{document} where the walk reaches it, in whatever file: TeX stops there, and nothing after it is typeset
+      // (its \begin, in the main file, is before the walk; a subfile's own is walked as an environment, its \end with it)
+      if (m?.[1].trim() === 'document') { ctx.ended = true; return }
+      continue
+    }
     if (name === 'item') { endText(); b.flush(); const { args, end: e } = argsAfter(s, end, 1); i = args.length && args[0].kind === 'opt' ? e : end; continue }
     if (name === 'input' || name === 'include' || name === 'subfile' || IMPORTS.has(name)) {
       endText(); b.flush(); const { args, end: e } = argsAfter(s, end, IMPORTS.has(name) ? 2 : 1)
@@ -673,8 +779,11 @@ function walk(s, from, to, b, ctx) {
       i = e; continue
     }
     if (HEADINGS.has(name) || OWN_UNIT_ARG.has(name)) {
-      const { args, end: e } = argsAfter(s, end, 2)
-      const req = args.find(a => a.kind === 'req')
+      // its text: where the role table knows a text argument, that one (\\captionof's after its {figure}); else its first
+      // required argument, an optional one before it (a short caption, a heading's for the contents) kept as it is
+      const read = name === 'captionof' || name === 'tablecaption' ? commandArgs(s, end, name, to) : null
+      const { args, end: e } = read?.known ? read : argsAfter(s, end, 2)
+      const req = read?.known ? args.findLast(a => a.kind === 'req' && a.role === 't') : args.find(a => a.kind === 'req')
       if (!req) { endText(); b.ph(s.slice(i, end), i, end); i = end; continue }
       const saved = b.kind
       if (name === 'footnote' || name === 'thanks') {
@@ -695,7 +804,8 @@ function walk(s, from, to, b, ctx) {
         i = e; continue
       }
       endText(); b.flush()
-      b.kind = CAPTIONS.has(name) ? 'caption' : 'heading'; b.title = name === 'title'; b.depth = DEPTH[name]; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.depth = undefined; b.kind = saved
+      // an abstract given as an argument (sn-jnl's \\abstract{…}) is the paper's abstract, as its environment is
+      b.kind = CAPTIONS.has(name) ? 'caption' : name === 'abstract' ? 'abstract' : 'heading'; b.title = name === 'title'; b.depth = DEPTH[name]; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.depth = undefined; b.kind = saved
       i = e; continue
     }
     // \multicolumn{n}{spec}{text}, \multirow{n}{width}{text}, \makecell{text}: only the last argument is prose
@@ -741,8 +851,9 @@ function walk(s, from, to, b, ctx) {
       const { args, end: e } = argsAfter(s, end, 1)
       if (args[0]?.kind === 'req') { endText(); const id = b.open(s.slice(i, args[0].start + 1), i); walk(s, args[0].start + 1, args[0].end - 1, b, ctx); b.close(id, '}', e); i = e; continue }
     }
-    const macro = ctx.macros.get(name)
-    const call = macro && macroArgs(s, end, macro, to)
+    // (an accent the paper defines anew as a macro of no argument stays the accent's placeholder with its letter, below)
+    const macro = ctx.macros.get(name), own = macro && !(macro.params === 0 && ACCENTS.has(name))
+    const call = own && macroArgs(s, end, macro, to)
     if (call && macro.prose) {
       const arg = call.reqs[macro.prose - 1 - (macro.opt ? 1 : 0)]
       if (arg?.group) {
@@ -752,7 +863,13 @@ function walk(s, from, to, b, ctx) {
         endText(); const id = b.open(s.slice(i, arg.start + 1), i); walk(s, arg.start + 1, arg.end - 1, b, ctx); b.close(id, s.slice(arg.end - 1, call.end), call.end); i = call.end; continue
       }
     }
-    if (call) { endText(); b.ph(s.slice(i, call.end), i, call.end); i = call.end; continue }
+    if (call) {
+      let e = call.end
+      // a macro of no argument: an empty group after it ends its name, and goes with it (\\method{} is); each call the
+      // walk meets is counted, its prose body walked where every call is one (storedBodies)
+      if (!macro.params) { const k = skipSpaces(s, e); if (s.startsWith('{}', k)) e = k + 2; ctx.called?.(name, b.kind) }
+      endText(); b.ph(s.slice(i, e), i, e); i = e; continue
+    }
     if (name === 'verb') { const d = s[end]; const e = s.indexOf(d, end + 1); const stop = e < 0 ? end : e + 1; endText(); b.ph(s.slice(i, stop), i, stop); i = stop; continue }
     if (name === 'par') { endText(); b.flush(); i = end; continue }
     // an accent and its letter: the letter itself in its word where it is one every strategy sets (accentLetter), else
@@ -768,12 +885,21 @@ function walk(s, from, to, b, ctx) {
       if (k > 0 && k <= to) { endText(); if (!b.ph(s.slice(i, k), i, k)) startText(); i = k; continue }
     }
     if (name === '\\') { const { args, end: e } = argsAfter(s, end, 1); const stop = args[0]?.kind === 'opt' ? e : end; endText(); if (b.cellMode) { b.flush(); i = stop; continue } b.ph(s.slice(i, stop), i, stop); i = stop; continue }
-    // any other command: opaque together with its adjacent arguments
-    // (unknown arity: every adjacent argument goes with it — some prose stays untranslated, nothing breaks)
-    // booktabs' \cmidrule(lr){2-5} and \cmidrule[w](lr){2-5}: a trim argument in parentheses
+    // the front matter's commands the role table knows by their hook (FRONT_ROLES: AAAI's \affiliations, amsart's
+    // \dedicatory, a \date): their text a unit of what it is
+    if (FRONT_ROLES[name]?.[1]) { const e = frontCommand(s, end, name, to, b, ctx); if (e > 0) { endText(); i = e; continue } }
+    // any other command: its arguments as the role table reads them (commandArgs) — its text and a box's content among
+    // them walked (walkArgs), the rest kept with it —, or with every adjacent argument where the table does not know it
+    // (some prose stays untranslated, nothing breaks). booktabs' \cmidrule(lr){2-5} and \cmidrule[w](lr){2-5}: a trim
+    // argument in parentheses
     let from = end
     if (name === 'cmidrule') { const k0 = skipSpaces(s, argsAfter(s, end, 1).end); if (s[k0] === '(') { const c0 = s.indexOf(')', k0); if (c0 > 0 && c0 < to) from = c0 + 1 } }
-    let { end: e } = !/^[A-Za-z@]+$/.test(name) ? { end } : NO_ARGS.has(name) ? optsAfter(s, from, OPT_ONLY.has(name)) : commandArgs(s, from, name)
+    const args = !/^[A-Za-z@]+$/.test(name) || NO_ARGS.has(name) ? null : commandArgs(s, from, name, to)
+    const walked = args?.known ? args.args.filter(a => (a.role === 't' || a.role === 'c') && s[a.start] === '{') : []
+    if (walked.length) { endText(); walkArgs(s, i, args.end, walked, b, ctx); i = args.end; continue }
+    let { end: e } = !/^[A-Za-z@]+$/.test(name) ? { end } : NO_ARGS.has(name) ? optsAfter(s, from, OPT_ONLY.has(name)) : args
+    // an empty group after a command the table knows ends its name, and goes with it (\\LaTeX{} is), as before the table
+    if (args?.known) { const k = skipSpaces(s, e); if (s.startsWith('{}', k) && k + 2 <= to) e = k + 2 }
     // TeX's own assignment and glue syntax belongs to the command: \looseness=-1, \parindent=0pt, \vskip 3pt plus 1fil, \penalty-100
     if (e === end && /^[A-Za-z@]+$/.test(name)) { const m = s.slice(e, Math.min(to, e + 120)).match(name === 'hrule' || name === 'vrule' ? RULE_SPEC : ASSIGNMENT); if (m) e += m[0].length }
     endText(); b.ph(s.slice(i, e), i, e)
@@ -786,6 +912,88 @@ function walk(s, from, to, b, ctx) {
 // ---------------------------------------------------------------- project
 const listSources = fsys => fsys.list().filter(f => /\.(tex|sty)$/i.test(f))
 
+/** TeX's macro definitions whose parameter text runs up to the body's brace: what stands in it is no command TeX runs */
+const DEF_PRIMITIVES = new Set(['def', 'gdef', 'edef', 'xdef'])
+/** LaTeX's definitions, whose body (their last argument, as the role table reads them) TeX runs only where the command
+ *  or environment is used */
+const DEFINERS = /^(?:(?:(?:re)?newcommand|providecommand)|DeclareRobustCommand|(?:re)?newenvironment|(?:New|Renew|Provide|Declare)Document(?:Command|Environment))$/
+/**
+ * The control words of s[from, to) that TeX acts on where they stand, in order, each { name, at, end, depth, env, inDef }:
+ * none in a comment, in a definition's parameter text (\\def\\x#1\\end{document}{…}), in a skipped conditional
+ * (\\iffalse … \\fi, `ifs` the paper's own), in an environment TeX reads by lines (LINE_ENVS, the paper's `lineEnvs`: a
+ * filecontents in the preamble that writes a whole document out) or in \\verb. `depth`, the brace groups open around it
+ * — a definition's body among them (\\def\\edo{… \\end{document}}, 2608.23517's preamble) —; `inDef`, whether it stands
+ * in a definition's body, which TeX runs only where the definition is used; `env`, an environment's name for \\begin and
+ * \\end
+ */
+function texCommands(s, { from = 0, to = s.length, lineEnvs = null, ifs = new Set() } = {}) {
+  const out = [], defs = []
+  let depth = 0
+  for (let i = from; i < to; i++) {
+    const c = s[i]
+    if (c === '%') { i = skipComment(s, i); continue }
+    if (c === '{') { depth++; continue }
+    if (c === '}') { if (depth > 0) depth--; continue }
+    if (c !== '\\') continue
+    const { name, end } = commandAt(s, i)
+    if (!/^[A-Za-z@]+$/.test(name)) { i = end - 1; continue }
+    while (defs.length && defs.at(-1) <= i) defs.pop()
+    const inDef = defs.length > 0
+    // (one in a definition's body is that body's: \\def\\iffa{\\iffalse} skipped 2608.23517's \\begin{document} to a \\fi)
+    if (name === 'iffalse' && !inDef) { const stop = branchEnd(s, end, to, ifs); if (stop > 0) { i = stop - 1; continue } }
+    if (name === 'verb' || name === 'lstinline') { const d = s[end]; const e = d && !/[\s{[]/.test(d) ? s.indexOf(d, end + 1) : -1; if (e > 0) { i = e; continue } }
+    if (DEF_PRIMITIVES.has(name)) {
+      // \\def\\x<parameter text>{body}: the name and the parameter text, which ends at the body's brace
+      let k = skipSpaces(s, end)
+      k = s[k] === '\\' ? commandAt(s, k).end : k + 1
+      while (k < to && s[k] !== '{' && s[k] !== '%') k++
+      out.push({ name, at: i, end, depth, inDef })
+      const e = s[k] === '{' ? matchGroup(s, k) : -1
+      if (e > 0) defs.push(e)
+      i = k - 1; continue
+    }
+    if (DEFINERS.test(name)) { const params = commandParams(name), r = params && readArgs(s, end, params, to); if (r?.complete && r.end > end) defs.push(r.end) }
+    const m = (name === 'begin' || name === 'end') && /^\s*\{([^{}]*)\}/.exec(s.slice(end, end + 200))
+    if (m) {
+      const env = m[1].trim(), after = end + m[0].length
+      out.push({ name, at: i, end: after, depth, env, inDef })
+      if (name === 'begin' && isLineEnv(env, lineEnvs)) { i = endOfEnv(s, after, env)[1] - 1; continue }
+      i = after - 1; continue
+    }
+    out.push({ name, at: i, end, depth, inDef })
+    i = end - 1
+  }
+  return out
+}
+/**
+ * The document's bounds in a main file as TeX finds them (texCommands): `begin` where its \\begin{document} stands and
+ * `body` where the body starts after it, the first one outside every brace group; `end` where the first \\end{document}
+ * after it stands, outside every group, or the text's end. -1 for `begin` and `body` where the file has none. Taken as
+ * the first match of the raw text, a commented `%\\end{document}` ended ResNet's walk before its appendix C
+ * (1512.03385), a comment's "until \\end{document}" ended 2608.11084's four lines into its body, and a \\def in the
+ * preamble that holds one gave 2608.23517 no unit at all. A text whose groups never close at a \\begin{document} (a
+ * brace TeX reads otherwise than the scanner) has the first one at any depth
+ */
+export function documentBounds(s, options = {}) {
+  const cmds = texCommands(s, options)
+  const isDoc = (c, name) => c.name === name && c.env === 'document'
+  const begin = cmds.find(c => isDoc(c, 'begin') && c.depth === 0) ?? cmds.find(c => isDoc(c, 'begin'))
+  const after = cmds.filter(c => isDoc(c, 'end') && (!begin || c.at > begin.at))
+  const end = after.find(c => c.depth === 0) ?? after[0]
+  return { begin: begin ? begin.at : -1, body: begin ? begin.end : -1, end: end ? end.at : s.length }
+}
+/** the main file's \\usepackage[…]{inputenc} that TeX acts on, the last in its preamble: { start, end, options } or null */
+export function inputencOf(s, options = {}) {
+  const { begin } = documentBounds(s, options)
+  let found = null
+  for (const c of texCommands(s, { ...options, to: begin < 0 ? s.length : begin })) {
+    if (c.name !== 'usepackage') continue
+    const m = /^\s*\[([^\]]*)\]\s*\{\s*inputenc\s*\}/.exec(s.slice(c.end, c.end + 400))
+    if (m) found = { start: c.at, end: c.end + m[0].length, options: m[1] }
+  }
+  return found
+}
+
 /** the package's tabularray tables (TBLR_ENVS and the names \\NewTblrEnviron gives), and whether \\SetTblrInner makes
  *  every table's cells math; comments taken out first */
 const tblrOf = texts => {
@@ -795,10 +1003,117 @@ const tblrOf = texts => {
   return { tblrEnvs: new Set([...TBLR_ENVS, ...named]), tblrMath: inner.some(t => TBLR_MATH.test(t)) }
 }
 
+/**
+ * The preamble's prose, in the order it is written. TeX sets nothing there, but a class keeps the front matter's text
+ * for \\maketitle, and each is a unit as the body would make it: the title TeX keeps (the last \\title it acts on — a
+ * commented one never: 2608.23818's old title was translated, its real one stayed English), the author blocks and their
+ * notes (FRONT_MATTER), every front matter command the role table knows (FRONT_ROLES: AAAI's \\affiliations, \\keywords,
+ * a \\thanks, a \\date; frontCommand), an abstract or keywords written as an environment or as \\abstract{…}
+ * (2608.08903, 2608.01482), and the same in a file the preamble \\inputs (2608.13505's abstract, 2608.03994's title and
+ * affiliation). Nothing in a comment, a skipped conditional or a definition's body, which TeX runs only where it is used
+ */
+function frontMatter(s, from, to, b, ctx) {
+  const cmds = texCommands(s, { from, to, lineEnvs: ctx.lineEnvs, ifs: ctx.ifs }).filter(c => !c.inDef)
+  const titles = cmds.filter(c => c.name === 'title'), title = titles.filter(c => c.depth === 0).at(-1) ?? titles.at(-1)
+  let past = from
+  for (const c of cmds) {
+    if (c.at < past) continue
+    if (c.name === 'title') {
+      if (c !== title) continue
+      const { args, end } = argsAfter(s, c.end, 2), req = args.find(a => a.kind === 'req')
+      if (req) { b.kind = 'heading'; b.title = true; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.kind = undefined; past = end }
+      continue
+    }
+    if (FRONT_MATTER.has(c.name)) { const { args, end } = argsAfter(s, c.end, 3); for (const a of args) (a.kind === 'req' ? frontBlock : frontNotes)(s, a.start + 1, a.end - 1, b, ctx); past = end; continue }
+    // a \thanks of its own (revtex's, after \author{…}): a front note, as in the body
+    if (c.name === 'thanks') { const { args, end } = argsAfter(s, c.end, 2); if (args.some(a => a.kind === 'req')) { b.flush(); frontNote(s, c.at, end, b, ctx); past = end } continue }
+    if (c.name === 'begin' && FRONT_ROLES[`env:${c.env}`]) {
+      const [bodyEnd, afterEnd] = endOfEnv(s, c.end, c.env), { end: argsEnd } = envArgs(s, c.end, bodyEnd, c.env, ctx), saved = b.kind
+      b.flush(); b.kind = FRONT_ROLES[`env:${c.env}`][0] === 'abstract' ? 'abstract' : 'heading'; walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved
+      past = afterEnd; continue
+    }
+    // \abstract{…}, where a class takes the abstract as an argument (sn-jnl, MELBA)
+    if (c.name === 'abstract' && s[skipSpaces(s, c.end)] === '{') {
+      const k = skipSpaces(s, c.end), e = matchGroup(s, k)
+      if (e > 0) { const saved = b.kind; b.flush(); b.kind = 'abstract'; walk(s, k + 1, e - 1, b, ctx); b.flush(); b.kind = saved; past = e }
+      continue
+    }
+    if (c.name === 'input' || c.name === 'include') {
+      const m = /^\s*(?:\{([^{}]+)\}|([^\s{}%\\]+))/.exec(s.slice(c.end, c.end + 300))
+      if (m) { ctx.visitFront?.((m[1] ?? m[2]).trim(), ctx.dirs); past = c.end + m[0].length }
+      continue
+    }
+    if (FRONT_ROLES[c.name]?.[1]) { const e = frontCommand(s, c.end, c.name, to, b, ctx); if (e > 0) past = e }
+  }
+  b.flush()
+}
+/** LaTeX's and its packages' ways of defining a theorem-like environment, the name it defines in group 1 */
+const THEOREM_DEFINERS = /\\(?:newtheorem\*?|spnewtheorem\*?|newmdtheoremenv|newproof|newdefinition|newexample|newremark)\s*(?:\[[^\]]*\]\s*)?\{([^}]+)\}|\\declaretheorem\s*(?:\[[^\]]*\]\s*)?\{([^}]+)\}/g
+/** the theorem-like environments of a paper, as its files define them (\\newtheorem, thmtools' \\declaretheorem, llncs'
+ *  \\spnewtheorem, elsarticle's \\newproof, mdframed's), and those the common classes define themselves */
+const theoremsOf = texts => {
+  const names = new Set(['proof', 'theorem', 'lemma', 'corollary', 'proposition', 'definition', 'remark', 'example'])
+  for (const m of texts.map(uncommented).join('\n').matchAll(THEOREM_DEFINERS)) for (const n of (m[1] ?? m[2]).split(',')) if (n.trim()) names.add(n.trim())
+  return names
+}
+/** every environment a paper's files define, by whatever package: none of them is the role table's environment of the
+ *  same name */
+const OWN_ENVS = /\\(?:(?:re|provide)?newenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment|(?:re)?newtcolorbox|(?:New|Renew|Declare|Provide)TColorBox|newtcbtheorem|newmdenv|newlist|DeclareFloatingEnvironment|newfloat|lstnewenvironment|(?:exclude|include|special|general|process)comment|newtheorem|declaretheorem|spnewtheorem|newmdtheoremenv|DefineVerbatimEnvironment|newminted|NewTblrEnviron)\s*\*?\s*(?:\[[^\]]*\]\s*)?\{([^}]+)\}/g
+const ownEnvsOf = texts => new Set([...texts.map(uncommented).join('\n').matchAll(OWN_ENVS)].flatMap(m => m[1].split(',').map(x => x.trim())))
+/** the paper's own environments' parameters, as its files define them: \\newenvironment{name}[n][default] takes n
+ *  arguments, the first optional where it has a default; one defined twice, the last */
+const envDefs = texts => {
+  const out = new Map()
+  for (const t of texts) for (const m of t.matchAll(/\\(?:re|provide)?newenvironment\s*\*?\s*\{([^}]+)\}\s*(?:\[\s*(\d)\s*\])?\s*(\[)?/g)) {
+    if (inComment(t, m.index)) continue
+    const n = Number(m[2] ?? 0), opt = !!m[3] && n > 0
+    out.set(m[1].trim(), paramsOf((opt ? '[a' : '') + '{a'.repeat(n - (opt ? 1 : 0))))
+  }
+  return out
+}
+
+/**
+ * The prose a paper keeps in a macro of no argument, set wherever it is called (2608.04322's case-study table, each cell
+ * a \\newcommand of paragraphs; 2608.16190's \\def\\cpanauthor{…} in its \\author{…}): its body walked where it is
+ * defined, its units `stored` — set where it is called, perhaps more than once, so with no mark —, of the kind of the
+ * place it is called from (an author block's names and places, a cell, a paragraph). Only a body that holds prose (four
+ * words or more; names and places in an author block whatever their count: one short name, \\newcommand\\model{Transformer},
+ * read alone is no sentence a translator can tell the sense of), and only where every use of the macro in the package's
+ * files is a call the walk met in running text (`calls`): one inside a \\label, a file name or a comparison stays as it is
+ */
+function storedBodies(calls, { ctx, files, units, own }) {
+  ctx.ended = false
+  let all = null
+  for (const [name, call] of calls) {
+    const macro = ctx.macros.get(name)
+    if (!macro?.body || call.kinds.size !== 1) continue
+    const { file, start, end } = macro.body, kind = [...call.kinds][0]
+    all ??= own.map(x => uncommented(x.text)).join('\n')
+    const named = new RegExp(String.raw`\\${name}(?![A-Za-z@])`, 'g'), defined = new RegExp(String.raw`\\(?:(?:(?:re)?newcommand|providecommand)\*?\s*\{?\s*|DeclareRobustCommand\*?\s*\{?\s*|[gex]?def\s*|let\s*)\\${name}(?![A-Za-z@])`, 'g')
+    if ((all.match(named)?.length ?? 0) - (all.match(defined)?.length ?? 0) !== call.n) continue
+    const text = files.get(file) ?? own.find(x => x.file === file)?.text
+    if (text === undefined || units.some(u => u.file === file && u.start < end && u.end > start)) continue
+    if (kind !== 'author' && (uncommented(text.slice(start, end)).replace(/\\[A-Za-z@]+\*?/g, ' ').match(/\p{L}{2,}/gu)?.length ?? 0) < 4) continue
+    const had = files.has(file), before = units.length, b = new Builder(file, units, text, ctx.bodies)
+    if (kind === 'author') frontBlock(text, start, end, b, ctx)
+    else { b.kind = kind; walk(text, start, end, b, ctx); b.flush() }
+    for (const u of units.slice(before)) u.stored = true
+    if (units.length > before && !had) files.set(file, text)
+  }
+}
+
 /** `root`: a directory (Node) or a file system (folder, inMemory) */
 export function loadProject(root, main, { tables = false } = {}) {
   const fsys = asFiles(root)
-  const sourceText = f => latin1(fsys.read(f))
+  // each file's text read once: the package's TeX (.tex, .sty, .cls) is read by several of the passes below
+  const texts = new Map(), sourceText = f => texts.get(f) ?? texts.set(f, latin1(fsys.read(f))).get(f)
+  const own = fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(f => ({ file: f, text: sourceText(f) }))
+  const outer = paper
+  paper = paperOf(own.map(x => x.text))
+  try { return readProject(fsys, main, tables, sourceText, own) } finally { paper = outer }
+}
+function readProject(fsys, main, tables, sourceText, own) {
+  const ownTexts = own.map(x => x.text)
   // a file as TeX finds it — in the directories import.sty puts on its path (`dirs`, the last imported first), then from
   // the package's root, where TeX runs — and by the name the package holds it under, whatever spelling named it
   // (\input{./sections/a.tex}): the units' file and the translation's key, which must replace that file rather than
@@ -808,21 +1123,23 @@ export function loadProject(root, main, { tables = false } = {}) {
   const mainFile = read(main)
   if (!mainFile) throw new Error(`main file ${main} not found`)
   const all = mainFile.text
-  const theorems = new Set([...all.matchAll(/\\newtheorem\*?\s*\{([^}]+)\}/g)].map(m => m[1].trim()).concat(['proof', 'theorem', 'lemma', 'corollary', 'proposition', 'definition', 'remark', 'example']))
   const skipped = {}
   // \newcommand{\be}{\begin{equation}}, \def\ee{\end{equation}} and the like, in any .tex or .sty of the package
   const envMacros = new Map()
   const sources = listSources(fsys)
   for (const f of sources) {
     const t = sourceText(f)
-    for (const m of t.matchAll(/\\(?:(?:re|provide)?newcommand\*?\s*\{?\\([A-Za-z@]+)\}?|def\\([A-Za-z@]+))\s*\{\s*\\(begin|end)\s*\{([^}]+)\}\s*\}/g)) envMacros.set(m[1] ?? m[2], { side: m[3], env: m[4].trim() })
+    for (const m of t.matchAll(/\\(?:(?:(?:re)?newcommand|providecommand)\*?\s*\{?\\([A-Za-z@]+)\}?|def\\([A-Za-z@]+))\s*\{\s*\\(begin|end)\s*\{([^}]+)\}\s*\}/g)) envMacros.set(m[1] ?? m[2], { side: m[3], env: m[4].trim() })
   }
   // the paper's macros twice over, each for its own reader: `macros`, how a call takes its arguments and which it sets
   // as prose (paperMacros, the walker's); `bodies`, what each expands to (macroBodies, a display's letters)
   const skipEnvs = new Set([...sources.map(sourceText).join('\n').matchAll(/\\(?:lstnewenvironment|newtcblisting|DeclareTCBListing|NewTCBListing|DefineVerbatimEnvironment|newminted)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map(m => m[1].trim()))
   // the environments of the paper's own that TeX reads by lines (LINE_ENVS), in a class it ships too
-  const lineEnvs = new Set([...skipEnvs, ...lineEnvsOf(fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(sourceText))])
-  const ctx = { tables, theorems, fits: [], lineEnvs, ownAccents: ownAccents(fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(sourceText)), macros: paperMacros(sources.map(sourceText)), envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs, skipped, visit: (rel, dirs) => visit(rel, dirs), dirs: [], bodies: macroBodies(sources.map(sourceText)), ...tblrOf(sources.map(sourceText)) }
+  const lineEnvs = new Set([...skipEnvs, ...lineEnvsOf(ownTexts)])
+  // the theorem-like environments, as any of the package's files defines them (theoremsOf), and the paper's own
+  // environments' arguments (envDefs)
+  const theorems = theoremsOf(ownTexts)
+  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs, skipped, visit: (rel, dirs) => visit(rel, dirs), dirs: [], bodies: macroBodies(sources.map(sourceText)), ...tblrOf(sources.map(sourceText)) }
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first */
   function visit(rel, dirs = []) {
     const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
@@ -831,25 +1148,31 @@ export function loadProject(root, main, { tables = false } = {}) {
     ctx.dirs = dirs
     let from = 0, to = f.text.length
     if (f.rel === mainFile.rel) {
-      const m = f.text.match(/\\begin\s*\{document\}/)
-      // the preamble: the title is prose, and the front matter's notes (FRONT_MATTER), in the order they are written
-      const pre = m ? f.text.slice(0, m.index) : ''
-      const t = pre.match(/\\title\s*(\[[^\]]*\])?\s*\{/)
-      const front = [...pre.matchAll(/\\([A-Za-z@]+)(?![A-Za-z@])\*?/g)].filter(c => FRONT_MATTER.has(c[1]) && !inComment(pre, c.index))
-      for (const at of [t?.index, ...front.map(c => c.index)].filter(x => x !== undefined).sort((x, y) => x - y)) {
-        if (at === t?.index) { const s0 = t.index + t[0].length - 1, e0 = matchGroup(f.text, s0); if (e0 > 0) { b.kind = 'heading'; b.title = true; walk(f.text, s0 + 1, e0 - 1, b, ctx); b.flush(); b.title = false; b.kind = undefined } continue }
-        const c = front.find(x => x.index === at)
-        for (const a of argsAfter(f.text, at + c[0].length, 3).args) (a.kind === 'req' ? frontBlock : frontNotes)(f.text, a.start + 1, a.end - 1, b, ctx)
-      }
-      from = m ? m.index + m[0].length : 0
-      const e = f.text.match(/\\end\s*\{document\}/); to = e ? e.index : to
+      // the document as TeX finds it (documentBounds): its preamble's front matter (frontMatter), then its body up to
+      // the \end{document} TeX acts on, where the walk stops too
+      const bounds = documentBounds(f.text, { lineEnvs, ifs: ctx.ifs })
+      if (bounds.begin >= 0) { frontMatter(f.text, 0, bounds.begin, b, ctx); from = bounds.body }
+      to = bounds.end
     }
     walk(f.text, from, to, b, ctx); b.flush()
     ctx.dirs = outer
   }
+  /** a file the preamble \inputs, read as the preamble is (frontMatter): its front matter's units, the file among the
+   *  project's only where it has any */
+  function visitFront(rel, dirs = []) {
+    const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
+    seen.add(f.rel)
+    const before = units.length, b = new Builder(f.rel, units, f.text, ctx.bodies)
+    frontMatter(f.text, 0, f.text.length, b, ctx); b.flush()
+    if (units.length > before) files.set(f.rel, f.text)
+  }
+  ctx.visitFront = visitFront
+  const calls = new Map()
+  ctx.called = (name, kind) => { const c = calls.get(name) ?? calls.set(name, { n: 0, kinds: new Set() }).get(name); c.n++; c.kinds.add(kind ?? 'para') }
   visit(mainFile.rel)
+  storedBodies(calls, { ctx, files, units, own })
   // a source declared in a Latin-1 family encoding: its bytes read as latin1 are already the right characters
-  const enc = all.match(/\\usepackage\s*\[([^\]]*)\]\s*\{inputenc\}/)?.[1]?.split(',').map(x => x.trim()).find(x => /^(latin1|latin9|ansinew|cp1252|cp1250|latin2|applemac|decmulti)$/.test(x))
+  const enc = inputencOf(all, { lineEnvs, ifs: ctx.ifs })?.options.split(',').map(x => x.trim()).find(x => /^(latin1|latin9|ansinew|cp1252|cp1250|latin2|applemac|decmulti)$/.test(x))
   const isUtf8 = t => { try { new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t)); return true } catch { return false } }
   const transcode = enc ? new Set([...files].filter(([, t]) => !isUtf8(t)).map(([f]) => f)) : new Set()
   return { main: mainFile.rel, files, units, skipped, fits: ctx.fits, lineEnvs, inputenc: enc ?? null, transcode }
@@ -1272,10 +1595,11 @@ const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]r
 /** marks for the units whose place a reader shows: not headings (their text is also typeset in running heads and
  *  tables of contents), not the author block's names, places and notes (typeset again in running heads and the
  *  PDF's metadata, compared by the class, kept as they are for some languages), not table cells, not the texts of a TikZ picture (set through the picture's own transformation,
- *  which a destination's position does not follow) */
+ *  which a destination's position does not follow), not a macro's body (storedBodies: set where it is called, perhaps
+ *  more than once) */
 export const markUnits = (units, translated = null) => {
   const id = new Map(units.map((u, i) => [u, i]))
-  return u => (u.kind === 'author' ? (translated?.has(u) && fitsWide(u) ? AUTHOR_WIDE : null) : u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' || u.front ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` })
+  return u => (u.kind === 'author' ? (translated?.has(u) && fitsWide(u) ? AUTHOR_WIDE : null) : u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' || u.front || u.stored ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` })
 }
 /** A translated line of names or places goes into \\axtwide (FIT_DEF), all of it — its marks, a \\IEEEauthorrefmark
  *  after the last name — inside the braces that hold it: in a box that does not wrap (a table's c column, where

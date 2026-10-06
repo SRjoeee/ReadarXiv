@@ -131,6 +131,6 @@ function typesettingOf(state, type, leads, faces) {
   let last = null
   units.forEach((u, i) => { if (leads.has(i)) last = leads.get(i); else if (last != null && translated.has(u)) factor(i, last) })
   const sizes = new Map(faces)
-  if (!cjk) units.forEach((u, i) => { if (translated.has(u) && ((u.kind !== 'heading' && u.kind !== 'cell' && u.kind !== 'figure' && u.kind !== 'author' && !u.front) || (u.kind === 'figure' && !u.front))) sizes.set(i, type.size) })
+  if (!cjk) units.forEach((u, i) => { if (translated.has(u) && !u.stored && ((u.kind !== 'heading' && u.kind !== 'cell' && u.kind !== 'figure' && u.kind !== 'author' && !u.front) || (u.kind === 'figure' && !u.front))) sizes.set(i, type.size) })
   return typesetting(units, { design, strategy, type, leads: factors, sizes, floatsAt, tableMin: FLOW.tableMin })
 }
