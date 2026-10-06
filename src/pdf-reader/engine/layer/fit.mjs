@@ -47,12 +47,12 @@ const cpLength = s => { let n = 0; for (let i = 0; i < s.length; i++) if ((s.cha
 const content = t => t.kind === 'text' || t.kind === 'ph'
 
 /**
- * A face's size against the Latin face it stands beside (Source Han Serif's visual size, the role table's per-face
- * correction where the table gives one), else 1. The fit measures every run at its drawn size: a face set at 0.95 of
- * the line's size is 0.95 as wide, and the drawing sets its runs at `size × sizeAdjust`.
+ * A face's size correction (the role table's Face.size: Source Han Serif K's Hangul set at its family's ideographs'
+ * visual size), 1 for every other face. A run is drawn at the line's size × its face's correction, so the fit measures it
+ * so: its width at 100 px times the correction.
  */
-function sizeAdjust(face) {
-  const v = Object.hasOwn(FACES, face) ? FACES[face].sizeAdjust : undefined
+function faceSize(face) {
+  const v = Object.hasOwn(FACES, face) ? FACES[face].size : undefined
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 1
 }
 
@@ -438,7 +438,7 @@ export function layUnit(input, id, tr, o = {}) {
   const unit = input.file.unit(id)
   if (!unit || unit.lines.length < 8 || unit.frames.length < 6) return unfit(id, 'located')
   const { measure: raw, rules, target, hyphen } = input
-  const measure = (text, face, caps) => raw(text, face, caps) * sizeAdjust(face)
+  const measure = (text, face, caps) => raw(text, face, caps) * faceSize(face)
   const tokens = tr && Array.isArray(tr.pieces)
     ? tokensOf(tr.pieces, { unit, file: input.file, target, rules, roles: input.roles, measure, hyphen, textIn: input.textIn })
     : null

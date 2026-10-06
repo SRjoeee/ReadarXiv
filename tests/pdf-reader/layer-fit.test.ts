@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { FACES } from '@/pdf-reader/engine/font-roles.mjs'
 import { type FitState, type Laid, type LaidUnit, layUnit, SPLIT_NEAR, statesOf } from '@/pdf-reader/engine/layer/fit.mjs'
 import type { TrPiece } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { layerRulesFor } from '@/pdf-reader/engine/layer-rules.mjs'
@@ -380,19 +381,34 @@ describe("the lines' items", () => {
   it('a CJK character is an item of its own; Korean words tracked are drawn a character an item at their places', () => {
     const zh = laid(layUnit(inputOf(nine(0), 'zh'), 1, tr(han(30))))
     expect(zh.lines[0]!.items.every(it => [...it.text!].length === 1)).toBe(true)
-    // Korean a little too long for its one line (8.25 em in 8): tracked, its Hangul words cut into characters, each at its place
-    const one = layoutOf([{ id: 1, lines: column(1, { w: 80 }), frames: [{ lines: 1 }] }])
+    // Korean a little too long for its one line (8.25 em at Source Han Serif K's 0.959 in 7.6): tracked, its Hangul words cut
+    // into characters, each at its place
+    const one = layoutOf([{ id: 1, lines: column(1, { w: 76 }), frames: [{ lines: 1 }] }])
     const text = '\ubaa8\ub378\uc744 \uc0ac\uc6a9\ud569\ub2c8\ub2e4'
     const ko = laid(layUnit(inputOf(one, 'ko'), 1, tr(text)))
     expect(ko.state).toEqual(state({ knob: 'track', scale: 1 }))
     expect(ko.state.track).toBeLessThan(0)
     const items = ko.lines[0]!.items
     expect(items.map(it => it.text)).toEqual([...text.replace(' ', '')])
-    // each character 1 em with the tracking, the next one after it (a space between the words)
-    for (let q = 1; q < items.length; q++) expect(items[q]!.x - items[q - 1]!.x).toBeGreaterThanOrEqual(10 * (1 + ko.state.track) - 1e-9)
-    for (const it of items) expect(it.w).toBeCloseTo(10 * (1 + ko.state.track), 9)
+    // each character 0.959 em with the tracking, the next one after it (a space between the words)
+    const em = 10 * (0.959 + ko.state.track)
+    for (let q = 1; q < items.length; q++) expect(items[q]!.x - items[q - 1]!.x).toBeGreaterThanOrEqual(em - 1e-9)
+    for (const it of items) expect(it.w).toBeCloseTo(em, 9)
     expect(items[3]!.from).toBe(4)
     expect(items.at(-1)!.to).toBe(text.length)
+  })
+
+  it("a face's size correction is measured: Korean's Hangul at its family's ideographs' size", () => {
+    // Source Han Serif K Regular (a Times paper's Korean body) is set at 0.959 of the line's size; Chinese at the size itself
+    expect(FACES['shs-k-regular']!.size).toBe(0.959)
+    const ko = laid(layUnit(inputOf(nine(0), 'ko'), 1, tr('\ubaa8\ub378\uc744 \uc0ac\uc6a9\ud569\ub2c8\ub2e4')))
+    const word = ko.lines[0]!.items[0]!
+    expect(word.face).toBe('shs-k-regular')
+    expect(word.text).toBe('\ubaa8\ub378\uc744 \uc0ac\uc6a9\ud569\ub2c8\ub2e4')
+    // its eight syllables and the space between its words, both in the Korean face
+    expect(word.w).toBeCloseTo((8 * 10 + 2.5) * 0.959, 9)
+    const zh = laid(layUnit(inputOf(nine(0), 'zh'), 1, tr(han(3))))
+    expect(zh.lines[0]!.items.map(it => it.w)).toEqual([10, 10, 10])
   })
 
   it("each placeholder is drawn as the tokens say, and every one is in `drawn`", () => {

@@ -6,8 +6,8 @@ import type { Hyphenator } from './hyphen.mjs'
 import type { TrPiece } from './pieces.mjs'
 import type { Measure, TextIn } from './tokens.mjs'
 
-/** what the fit is given beside a unit's translation. `measure` is a face's width at 100 px as drawn at the line's size; a
- *  face the role table gives a size correction (`sizeAdjust`) is measured and drawn at `size × sizeAdjust` */
+/** what the fit is given beside a unit's translation. `measure` is a face's width at 100 px; a face the role table gives a
+ *  size correction (Face.size, below 1 for Source Han Serif K) is measured, and drawn, at the line's size × that */
 export interface LayerInput { file: LayoutIndex; target: string; rules: LayerRules; roles: RoleSet; measure: Measure; hyphen: Hyphenator | null; textIn?: TextIn }
 /** a unit's translation: its pieces and its sentence starts in trText (mt.mjs sentencesOf's `tr`), or null (lit whole) */
 export interface Tr { pieces: readonly TrPiece[]; sentences: readonly number[] | null }
@@ -21,8 +21,9 @@ export interface FitState { scale: number; lead: number; track: number; letter: 
 /**
  * What a line draws, in reading order, each from `x` (PDF units; a mark compression shifted drawn back over its blank half)
  * with its width `w`:
- * - 'text': a CJK character, or a run of Latin words in one face, caps and colour with the spaces between them, set with
- *   the line's letterSpacing after every character and its wordSpacing more after every space, which fill `w` exactly;
+ * - 'text': a CJK character, or a run of Latin words in one face, caps and colour with the spaces between them, set at
+ *   the line's size × its face's Face.size with the line's letterSpacing after every character and its wordSpacing more
+ *   after every space, which fill `w` exactly;
  * - 'crop': placeholder `ph` drawn as the original's ink of its segments, scaled by the state's scale; `raised` is 1 for a
  *   raised mark (a superscript citation or footnote call), whose lift is its own ink's, else 0;
  * - 'page-text': placeholder `ph` drawn as the page's own text `text`, in `face`.
