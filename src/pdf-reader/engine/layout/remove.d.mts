@@ -3,10 +3,10 @@ import type { Glyph } from './ink.mjs'
 
 /** the remover's version: it enters the add-on's key */
 export declare const REMOVAL: '1'
-/** the page sets an add-on holds after arXiv's own N pages: R at N + p, P at 2N + p */
-export declare const SETS: readonly ['R', 'P']
-/** the check's sets after them: F (the removed glyphs alone), C (the crops' placeholders, each a colour) */
-export declare const CHECK_SETS: readonly ['F', 'C']
+/** the page sets an add-on holds after arXiv's own N pages: R at N + p */
+export declare const SETS: readonly ['R']
+/** the check's sets after them: P (the placeholders alone), F (the removed glyphs alone), C (P, each crop a colour) */
+export declare const CHECK_SETS: readonly ['P', 'F', 'C']
 /** a content stream's operators */
 export declare function lex(bytes: Uint8Array): { op: string; args: unknown[]; s: number; e: number }[]
 /** the PDF object layer's exports the remover reads (@cantoo/pdf-lib) */

@@ -137,6 +137,47 @@ async function gpuPlane(doc, n, W, H) {
  * each time), and the removed page inside it (the footprint page drawn on white and on black). Each crop laid on the page:
  * its source plane, and the coloured placeholders' page of its source page with its own rules' boxes
  */
+/**
+ * The truth's account of a page drawn over the paper's add-on (the gate's instrument; the engine reads no ink): what its
+ * drawing must have replaced, glyph by glyph, by the gate's own reading of the page's ink (each glyph its outline's box,
+ * the check's outline table) and the engine's own rule of what a drawn unit replaces (removal.mjs unitRemoval, over the
+ * layout file's ownership): `items`, every glyph and rule the add-on removed, device pixels, and whether a unit drawn
+ * by the add-on replaces it; `erase`, what such a unit replaces that the add-on kept (paper white in the truth); and the
+ * areas of the units drawn the old way (v0's own readings), which the truth leaves out (their erase is the gate's own
+ * measures')
+ */
+async function truthOf(p, page) {
+  const R = await import('/engine/layer-proto/removal.mjs'), I = await import('/engine/layout/ink.mjs')
+  const { run } = S, index = S.texIndex
+  if (!index) return null
+  S.outlines ??= I.readOutlines(S.rm.manifest.outlines)
+  const ink = await R.inkOfPage(pdfjs.OPS, page, S.outlines)
+  const own = R.fileOwnership(index, p, ink), plan = R.pagePlan(index, p, ink, own)
+  const charMap = R.glyphsOfChars(run.chars[p - 1] ?? [], ink, p), unmapped = R.unmappedOf(ink, charMap)
+  const at = new Map(), byPath = new Map()
+  ink.glyphs.forEach((g, i) => { if (g.n >= 0) at.set(`${g.n}.${g.k}`, i) })
+  ink.paths.forEach((m, b) => { if (m >= 0) byPath.set(m, b) })
+  const removed = new Set(), removedP = new Set()
+  for (const u of plan.units) { for (let q = 0; q + 1 < u.glyphs.length; q += 2) removed.add(at.get(`${u.glyphs[q]}.${u.glyphs[q + 1]}`)); for (const m of u.paths) removedP.add(byPath.get(m)) }
+  const fileDrawn = new Set(run.placed.filter(q => q.tex).map(q => q.id)), claimed = new Map()
+  const drawnHere = new Set(run.stats.filter(r => r.pages.includes(p)).map(r => r.id))
+  const done = new Set(), doneP = new Set(), extraG = []
+  for (const q of run.placed) {
+    if (!q.tex || !q.prep || q.refused || !drawnHere.has(q.id) || !q.pages.includes(p)) continue
+    const rm = R.unitRemoval({ id: q.id, page: p, prep: q.prep, tex: { lu: q.tex.lu, kOf: q.tex.kOf }, own, charMap, unmapped, ink, claimed, fileDrawn })
+    for (const g of rm.glyphs) { done.add(g); if (!removed.has(g)) extraG.push(g) }
+    for (const b of rm.paths) doneP.add(b)
+  }
+  const pageView = (await S.doc.getPage(p)).view
+  const dev = b => [(b[0] - pageView[0]) * K, (pageView[3] - b[3]) * K, (b[2] - pageView[0]) * K, (pageView[3] - b[1]) * K]
+  const box = g => { const x = ink.glyphs[g]; return x.ix1 > x.ix0 && x.top > x.bottom ? [x.ix0, x.bottom, x.ix1, x.top] : null }
+  const items = []
+  for (const g of removed) { const b = box(g); if (b) items.push({ box: dev(b), replaced: done.has(g) }) }
+  for (const b of removedP) items.push({ box: dev(ink.boxes.slice(4 * b, 4 * b + 4)), replaced: doneP.has(b) })
+  const erase = extraG.map(box).filter(Boolean).map(b => dev([b[0] - 0.6, b[1] - 0.6, b[2] + 0.6, b[3] + 0.6]))
+  return { items, erase }
+}
+
 async function removalMeasures(cur, T) {
   const { p, W, H, view, O, C, units, kept } = cur
   const { cdoc, rdoc, manifest, plan, mode } = S.rm
@@ -150,14 +191,16 @@ async function removalMeasures(cur, T) {
     // the add-on is the paper's: of what it removed, the truth takes out what this page's drawing replaces (each
     // footprint pixel its glyph's, replacedFoot), and leaves the rest the original's (a line a reading keeps, a unit not
     // drawn); what a unit replaces that the add-on kept is erased, paper white
-    const truth = mode === 'draw' ? S.run.removalTruth?.(p) : null
+    const truth = mode === 'draw' ? await truthOf(p, await S.doc.getPage(p)) : null
     const take = truth ? replacedFoot(foot, W, H, truth.items) : foot
     Rm = new Uint8ClampedArray(O)
     for (let i = 0, q = 0; i < W * H; i++, q += 4) if (take[i]) { Rm[q] = R[q]; Rm[q + 1] = R[q + 1]; Rm[q + 2] = R[q + 2] }
     for (const e of truth?.erase ?? []) for (let y = Math.max(0, Math.floor(e[1])); y < Math.min(H, Math.ceil(e[3])); y++) for (let x = Math.max(0, Math.floor(e[0])); x < Math.min(W, Math.ceil(e[2])); x++) { const q = 4 * (y * W + x); Rm[q] = Rm[q + 1] = Rm[q + 2] = 255 }
   }
   const drawn = units.filter(u => u.drawn)
-  const out = removalPage({ k: K, view, W, H, O, Rm, C, T, crops: drawn.flatMap(u => u.crops.map(c => c.devDst)), kept })
+  // (the units drawn the old way, v0's own readings: their erase is the gate's erase measures', not the truth's)
+  const oldWay = drawn.filter(u => !S.byId.get(u.id)?.tex).flatMap(u => (S.audit.get(`${u.id}|${p}`) ?? []).filter(a => a.what === 'erase' && !a.swap).map(a => a.box))
+  const out = removalPage({ k: K, view, W, H, O, Rm, C, T, crops: drawn.flatMap(u => u.crops.map(c => c.devDst)), kept, excluded: oldWay })
   // each crop's foreign ink, from the plane it was cut from
   const planes = new Map()
   const plane = async (key, make) => { if (!planes.has(key)) planes.set(key, await make()); return planes.get(key) }
@@ -195,7 +238,7 @@ window.gate = {
    * the driver's: arXiv's PDF with it at `url`, its manifest, the plan it was made from), v0 is opened over it, and a
    * second reading of the add-on drawn by the CPU is kept for the exactness check's and the truth's planes
    */
-  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces, tex, removal, addon = null, names = null }) {
+  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces, tex, removal, addon = null, names = null, perf = false }) {
     let V
     try { V = await import('/engine/layer-proto/run.mjs') } catch (e) { return { ready: false, why: `layer-proto/run.mjs: ${String(e?.message ?? e).slice(0, 200)}` } }
     const base = `/fixtures/${name}/`
@@ -212,7 +255,9 @@ window.gate = {
       const F = await import('/engine/layout/file.mjs')
       texIn = { ...tex, index: F.indexLayout(F.parseLayout(await bytes(`${base}layout.json`))), pieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])) }
     }
-    const opts = { doc, geometry, units: unitsFile.units, target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(texIn ? { tex: texIn } : {}), labels: { names, captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json` }
+    const texIndex = texIn?.index ?? null
+    // (--perf: no copy of v0's own, as a reader opens it: the page's drawing is drawCopy's, at a view's resolution)
+    const opts = { doc, geometry, units: unitsFile.units, target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(texIn ? { tex: texIn } : {}), labels: { names, captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`, ...(perf ? { copy: false } : {}) }
     let rm = null
     if (removal && addon) {
       const combined = await bytes(addon.url)
@@ -224,7 +269,7 @@ window.gate = {
     // (v0 leaves its inputs as they were: checked when the fixture is done, summary's inputsChanged)
     const before = JSON.stringify([geometry, unitsFile.units])
     const run = await V.openProto(opts)
-    S = { V, run, doc, geometry, layout, ref, name, target, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: new Map(run.placed.map(p => [p.id, p])), checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: () => JSON.stringify([geometry, unitsFile.units]) } }
+    S = { V, run, doc, geometry, layout, ref, name, target, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: new Map(run.placed.map(p => [p.id, p])), checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: () => JSON.stringify([geometry, unitsFile.units]) }, perf, texIndex }
     S.consistency = consistencyOf(unitsFile, S, names)
     return { ready: true, pages: doc.numPages, units: unitsFile.units.length, located: geometry.left.units.length, family: null, even: run.P.even ?? null }
   },
@@ -263,8 +308,9 @@ window.gate = {
     const drawnIds = new Set(recs.map(r => r.id))
     for (const r of refHere) if (S.translated.has(r.id) && !drawnIds.has(r.id)) units.push({ id: r.id, kind: r.kind, drawn: false, why: S.skipped.get(r.id) ?? 'unanchored', orig: r.orig, lines: [], erase: [], crops: [] })
     const model = modelPage({ units, ref: refHere, items, translated: S.translated })
-    // the prototype's own checker on the page: what it finds there, by the unit it is in
-    const ck = run.checkPage(p)
+    // the prototype's own checker on the page: what it finds there, by the unit it is in (none for --perf: v0 is opened
+    // with no copy of its own, as a reader opens it, and the checker reads that copy)
+    const ck = S.perf ? { a: { regions: 0 }, b: { list: { missing: [], duplicated: [], brackets: [] } }, c: { list: [] }, d: { found: 0, ok: 0 } } : run.checkPage(p)
     const on = e => e.page === p
     const check = {
       missing: ck.b.list.missing.filter(on).map(e => e.k), twice: ck.b.list.duplicated.filter(on).map(e => e.k), brackets: ck.b.list.brackets.filter(on).map(e => e.k),
@@ -446,6 +492,44 @@ window.gate = {
   },
 
   /** the fixture's laid units, counted: v0 lays every unit it places (past its floor it clips), by its fit's knob */
+  /**
+   * A done page's costs (--perf): its first drawing (v0's page step, `pageMs`: its original drawn, its units laid and
+   * painted, and over the text-removed PDF its ink read; `times`, the engine's own split where it gives one; then its
+   * drawing at the gate's resolution, drawCopy, which draws the removed page there itself: `copy`), its drawing again at a zoom (`zoomK`, twice the gate's device pixels a unit: the original drawn there
+   * by PDF.js, then the page's drawing at that resolution, drawCopy, which draws the removed and placeholders' pages there
+   * itself), and the canvases its drawing holds (bytes: v0's own at the gate's resolution, its copy, the removed pages)
+   */
+  async perf(p) {
+    const { run, doc } = S
+    const page = await doc.getPage(p)
+    // the page's drawing at the gate's own resolution, from v0's drawing of the original (its first drawing's last step,
+    // as a reader draws its view: v0 keeps no copy)
+    const r0 = run.rows[p - 1], first = document.createElement('canvas')
+    first.width = r0.left.width; first.height = r0.left.height
+    let t = performance.now()
+    await run.drawCopy(p, first.getContext('2d'), r0.left, K)
+    const copyMs = performance.now() - t
+    first.width = 0; first.height = 0
+    const zoomK = 2 * K
+    const vp = page.getViewport({ scale: zoomK })
+    const src = document.createElement('canvas'), dst = document.createElement('canvas')
+    for (const c of [src, dst]) { c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height) }
+    t = performance.now()
+    await page.render({ canvas: src, canvasContext: src.getContext('2d'), viewport: vp }).promise
+    const zoomRender = performance.now() - t
+    t = performance.now()
+    await run.drawCopy(p, dst.getContext('2d'), src, zoomK)
+    const zoomCopy = performance.now() - t
+    for (const c of [src, dst]) { c.width = 0; c.height = 0 }
+    let canvasBytes = 0
+    const add = c => { if (c) canvasBytes += 4 * c.width * c.height }
+    for (const r of run.rows) { add(r.left); add(r.right) }
+    for (let q = 1; q <= run.rows.length; q++) add(run.removedCanvas?.(q))
+    const r1 = v => Math.round(v * 10) / 10
+    const times = run.pageTimes?.[p] ? Object.fromEntries(Object.entries(run.pageTimes[p]).map(([k, v]) => [k, r1(v)])) : null
+    return { firstDraw: r1((run.pageMs[p] ?? 0) + copyMs), step: r1(run.pageMs[p] ?? 0), copy: r1(copyMs), times, zoomRender: r1(zoomRender), zoomCopy: r1(zoomCopy), canvasBytes, heap: performance.memory?.usedJSHeapSize ?? null }
+  },
+
   summary() {
     const { run } = S
     const knob = {}, scales = []

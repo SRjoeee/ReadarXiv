@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { Glyph } from '@/pdf-reader/engine/layout/ink.mjs'
-import { fileOwnership, glyphsOfChars, indicesOf, pagePlan, planOf, type RemovalInk, unitRemoval, unmappedOf } from '@/pdf-reader/engine/layer-proto/removal.mjs'
+import { fileOwnership, fileSwap, glyphsOfChars, indicesOf, pageDirty, pagePlan, planOf, type RemovalInk, unitRemoval, unmappedOf } from '@/pdf-reader/engine/layer-proto/removal.mjs'
 import { swapRects } from '@/pdf-reader/engine/layer/swap.mjs'
 
 // The layer's side of the text-removed PDF (layer-proto/removal.mjs): the text layer's characters carried to glyphs, the
@@ -92,6 +92,35 @@ describe("a unit's swap as rectangles over its glyphs' outlines", () => {
   })
 })
 
+describe("a unit's drawing from the layout file's rectangles", () => {
+  // one unit, two lines (baselines 100 and 88), each erased over x 10-60; a placeholder over x 30-40 on the first line
+  const lu = { id: 7, lines: Float64Array.from([1, 10, 60, 100, 107, 98, 10, 0, 1, 10, 60, 88, 95, 86, 10, 0]), erase: [Float64Array.from([10, 98, 60, 107]), Float64Array.from([10, 86, 60, 95])], ph: new Map([[3, { kind: 'math', flags: 0, segs: Float64Array.from([1, 30, 100, 40, 107, 98]), text: null }]]), labels: new Float64Array(0) } as never
+  const lines = { rects: [[1, 10, 97.85, 60, 106.83], [1, 10, 85.85, 60, 94.83]], lineOf: new Map(), jOf: [0, 1] }
+  const prepOf = (keep: string[], kept: number[]) => Object.assign(new Map(kept.map(k => [k, { k, mode: 'kept' }])), { keep, uc: [], cat: new Map(), label: null }) as never
+  const inside = (rects: number[][], x: number, y: number) => rects.some(r => x >= r[0]! && x <= r[2]! && y >= r[1]! && y <= r[3]!)
+  it('fills its lines with paper, and swaps where kept ink lies under them', () => {
+    const a = fileSwap({ page: 1, lu, kOf: [-1, -1, -1, 3], lines, prep: prepOf([], []) })
+    expect(a.swap).toEqual([])
+    expect(inside(a.fill, 20, 103) && inside(a.fill, 35, 103) && inside(a.fill, 20, 90)).toBe(true)
+    const b = fileSwap({ page: 1, lu, kOf: [-1, -1, -1, 3], lines, prep: prepOf([], []), dirty: [[50, 89, 52, 91]] })
+    expect(inside(b.swap, 51, 90)).toBe(true)
+    expect(inside(b.fill, 20, 103)).toBe(true)
+  })
+  it('keeps clear of a placeholder and a line its reading keeps, and of the units the file draws otherwise', () => {
+    const c = fileSwap({ page: 1, lu, kOf: [-1, -1, -1, 3], lines, prep: prepOf(['1|10,85.85,60,94.83'], [3]), others: [[55, 104, 70, 110]] })
+    expect(inside(c.fill, 35, 103)).toBe(false)
+    expect(inside(c.fill, 20, 90)).toBe(false)
+    expect(inside(c.fill, 20, 103)).toBe(true)
+    expect(inside(c.fill, 57, 106)).toBe(false)
+  })
+  it("the add-on's kept ink under the page's units' rectangles (the manifest's)", () => {
+    const index = { onPage: () => [7], unit: () => lu } as never
+    // a glyph the plan removes (0.0, on the first line), one it keeps (1.0, under the second's rectangle), one far off
+    const ink = inkOf([g('a', 12, 100, 0, 0), g('b', 20, 88, 1, 0), g('c', 200, 300, 2, 0)])
+    expect(pageDirty(index, 1, ink, { units: [{ glyphs: [0, 0], paths: [] }] })).toEqual([20, 85.8, 25, 95.5])
+  })
+})
+
 describe("the paper's plan, from the layout file alone", () => {
   it("removes every glyph the file gives a unit and its label's; the placeholders' page holds each placeholder's and the free ink", () => {
     // one unit, one line (baseline 100, x 10-60) erased over x 10-60, a placeholder over x 30-40; a label box before it
@@ -117,23 +146,28 @@ describe('the drawing over the text-removed PDF', () => {
     const ctx = new Proxy({}, { get: (_t, k) => (k === 'canvas' ? {} : (...a: unknown[]) => calls.push([k, ...a])), set: (_t, k, v) => { calls.push([`=${String(k)}`, v]); return true } }) as unknown as CanvasRenderingContext2D
     return { ctx, calls }
   }
-  it("removalOps: the swap over the unit's own rectangles, its crops from the placeholders' page where its source page is removed", () => {
+  it("removalOps: the swap where kept ink lies under the unit, the paper elsewhere in one path, its crops from the original through their clips", () => {
     const px = (x: number, y: number) => [x * 2, (200 - y) * 2] as [number, number]
     const L = { scale: 1, lines: [{ page: 1, baseline: 100, items: [{ x: 20, w: 10, t: { crop: { crop: [40, 50, 50, 60], page: 1, baseline: 52, k: 3 } } }] }] } as never
     const audit: Record<string, unknown>[] = []
-    const ops = L2.removalOps(L, 1, { px, k: 2, hasSource: () => true, pxOf: () => px, rects: [[1, 2, 3, 4]], lines: [[10, 98, 60, 108]], removed: () => true, audit: audit as never, id: 7 })
-    expect(ops).toEqual([{ op: 'swap', page: 1, rects: [[1, 2, 3, 4]] }, { op: 'crop', page: 1, plane: 'P', src: [80, 280, 20, 20], dst: [40, 184, 20, 20] }])
+    const clips = new Map([[3, { rects: [[80, 280, 10, 10]], own: [[81, 281, 8, 8]] }]])
+    const ops = L2.removalOps(L, 1, { px, k: 2, hasSource: () => true, pxOf: () => px, rects: [[1, 2, 3, 4]], erase: [[5, 6, 7, 8], [9, 10, 11, 12]], clips, lines: [[10, 98, 60, 108]], removed: () => true, audit: audit as never, id: 7 })
+    expect(ops).toEqual([{ op: 'swap', page: 1, rects: [[1, 2, 3, 4]] }, { op: 'paper', rects: [[5, 6, 7, 8], [9, 10, 11, 12]] }, { op: 'crop', page: 1, plane: 'O', src: [80, 280, 20, 20], dst: [40, 184, 20, 20], clip: [[80, 280, 10, 10]] }])
     expect(audit.map(a => a.what)).toEqual(['erase', 'crop'])
+    // (no clip for a crop the unit's placeholders do not name: its box whole)
     expect(L2.removalOps(L, 1, { px, k: 2, hasSource: () => true, pxOf: () => px, rects: [], removed: () => false }).map(o => (o as { plane?: string }).plane ?? o.op)).toEqual(['O'])
   })
-  it("drawOps: a swap is the removed page's pixels clipped to its rectangles; a crop cut from its plane", () => {
+  it("drawOps: a swap is the removed page's pixels clipped to its rectangles; the paper one path; a crop through its clip", () => {
     const { ctx, calls } = recorder()
-    const O = { id: 'O' } as unknown as CanvasImageSource, R = { id: 'R' } as unknown as CanvasImageSource, P = { id: 'P' } as unknown as CanvasImageSource
-    L2.drawOps(ctx, [{ op: 'swap', page: 1, rects: [[1, 2, 3, 4]] }, { op: 'crop', page: 1, plane: 'P', src: [1, 1, 1, 1], dst: [2, 2, 2, 2] }], 2, (_p, plane) => (plane === 'R' ? R : plane === 'P' ? P : O))
+    const O = { id: 'O' } as unknown as CanvasImageSource, R = { id: 'R' } as unknown as CanvasImageSource
+    L2.drawOps(ctx, [{ op: 'swap', page: 1, rects: [[1, 2, 3, 4]] }, { op: 'paper', rects: [[1, 1, 1, 1], [2, 1, 1, 1]] }, { op: 'crop', page: 1, plane: 'O', src: [1, 1, 2, 2], dst: [4, 4, 2, 2], clip: [[1, 1, 1, 1]] }], 2, (_p, plane) => (plane === 'R' ? R : O))
     expect(calls).toEqual([
       ['save'], ['=fillStyle', '#fff'],
       ['save'], ['beginPath'], ['rect', 2, 4, 6, 8], ['clip'], ['drawImage', R, 0, 0], ['restore'],
-      ['=globalCompositeOperation', 'darken'], ['drawImage', P, 2, 2, 2, 2, 4, 4, 4, 4], ['=globalCompositeOperation', 'source-over'],
+      ['beginPath'], ['rect', 2, 2, 2, 2], ['rect', 4, 2, 2, 2], ['fill'],
+      ['save'], ['beginPath'], ['rect', 8, 8, 2, 2], ['clip'],
+      ['=globalCompositeOperation', 'darken'], ['drawImage', O, 2, 2, 4, 4, 8, 8, 4, 4], ['=globalCompositeOperation', 'source-over'],
+      ['restore'],
       ['restore'],
     ])
   })

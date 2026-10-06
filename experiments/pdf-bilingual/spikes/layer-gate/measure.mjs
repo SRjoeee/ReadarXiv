@@ -450,20 +450,23 @@ export function outsideOf({ k, view, W, H, O, Rm, foot }) {
  * - traces: the same at the antialiased edge (O darker than 248, Rm white, C darker than 248), regions of 3 px;
  * - trueBites: Rm's ink (what stays) gone from C, regions of 4 px.
  */
-export function removalPage({ k, view, W, H, O, Rm, C, T, crops, kept }) {
+export function removalPage({ k, view, W, H, O, Rm, C, T, crops, kept, excluded = [] }) {
   const N = W * H
   const toPx = (x, y) => [(x - view[0]) * k, (view[3] - y) * k]
   const fill = (m, x0, y0, x1, y1) => { for (let y = Math.max(0, Math.floor(y0)); y < Math.min(H, Math.ceil(y1)); y++) m.fill(1, y * W + Math.max(0, Math.floor(x0)), y * W + Math.min(W, Math.ceil(x1))) }
   const cropM = new Uint8Array(N), keptM = new Uint8Array(N)
   for (const b of crops) fill(cropM, b[0] - 1, b[1] - 1, b[2] + 1, b[3] + 1)
   for (const r of kept) { const [ax, ay] = toPx(r[0], r[3]), [bx, by] = toPx(r[2], r[1]); fill(keptM, ax - 1.5, ay - 1.5, bx + 1.5, by + 1.5) }
+  // (the areas of the units drawn the old way, device pixels: no truth's)
+  const exclM = new Uint8Array(N)
+  for (const b of excluded) fill(exclM, b[0] - 1, b[1] - 1, b[2] + 1, b[3] + 1)
   const res = new Uint8Array(N), trace = new Uint8Array(N), bite = new Uint8Array(N)
   for (let i = 0, q = 0; i < N; i++, q += 4) {
     const o = lum(O, q), r = lum(Rm, q), c = lum(C, q)
-    const free = !cropM[i] && !keptM[i] && !(lum(T, q) < TRACE)
+    const free = !cropM[i] && !keptM[i] && !exclM[i] && !(lum(T, q) < TRACE)
     if (free && o < INK && r >= TRACE && c < TRACE) res[i] = 1
     if (free && o < 248 && r >= 254 && c < 248) trace[i] = 1
-    if (r < INK && c >= TRACE) bite[i] = 1
+    if (!exclM[i] && r < INK && c >= TRACE) bite[i] = 1
   }
   const where = { trueResidue: [], traces: [], trueBites: [] }
   const R1 = regions(res, W, H, 3), R2 = regions(trace, W, H, 3), R3 = regions(bite, W, H, 4)

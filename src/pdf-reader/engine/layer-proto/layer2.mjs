@@ -2170,18 +2170,19 @@ export function unitOps(L, blocks, page, { px, k, hasSource, pxOf, extents, audi
 
 /**
  * The unit's drawing on a page whose text the removed PDF has taken out (removal.mjs, layout/remove.mjs), as data: the
- * removed page's pixels swapped in over the unit's own glyphs (`rects`, device pixels: layer/swap.mjs swapRects over
- * their outline boxes), then what it replaces that the add-on kept (`erase`, each an extra glyph's outline erased), then
- * its crops, each cut from the page holding the placeholders alone (`plane: 'P'`), or from the original where its source
- * page is not removed (`removed(page)` false). Nothing is put back. The
+ * removed page's pixels swapped in over the unit's own glyphs (`rects`, device pixels, where kept ink lies under them),
+ * then its other rectangles filled with paper (`erase`, one path: the fill takes no kept ink), then
+ * its crops, each cut from the original through its own glyphs' and rules' outline boxes (`clips`, by the piece's
+ * index: `rects` drawn through, `own` its boxes unpadded, for a check). Nothing is put back. The
  * audit has the unit's swapped boxes (as its 'erase', what the gate's residue and bites read) and its crops, as unitOps'.
  * `lines`: the unit's removed glyphs' boxes on the page grouped by line, in PDF units, for the audit.
  */
 export function removalOps(L, page, { px, k, hasSource, pxOf, rects, erase = [], lines = [], removed, audit = null, id = null, clips = null }) {
   const ops = []
   if (rects.length) ops.push({ op: 'swap', page, rects })
-  // (what the unit replaces that the add-on did not remove: erased the old way, each over its own outline)
-  for (const box of erase) ops.push({ op: 'erase', box })
+  // (the rest filled with paper, all of it one path: two rectangles' shared edge, a fraction of a pixel, would show a
+  // seam of the original's ink where each covered it in part)
+  if (erase.length) ops.push({ op: 'paper', rects: erase })
   for (const b of lines) {
     const [ax, ay] = px(b[0], b[3]), [bx, by] = px(b[2], b[1])
     audit?.push({ what: 'erase', unit: id, page, box: [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)], swap: true })
@@ -2195,10 +2196,10 @@ export function removalOps(L, page, { px, k, hasSource, pxOf, rects, erase = [],
       const sc = L.scale
       const [sx0, sy0] = pxOf(it.t.crop.page)(c[0], c[3]), [sx1, sy1] = pxOf(it.t.crop.page)(c[2], c[1])
       const [dx, dy] = px(it.x, line.baseline + (c[3] - it.t.crop.baseline) * sc)
-      // (cut from the placeholders' page through its own glyphs' and rules' outline boxes, where it has them: that page
-      // holds every placeholder of the paper's, and a crop's box may reach another's; else from the original)
-      const cut = removed(it.t.crop.page) ? clips?.get(it.t.crop.k) ?? null : null, clip = cut?.rects ?? null
-      const plane = clip?.length || (removed(it.t.crop.page) && !clips) ? 'P' : 'O'
+      // (cut from the original through its own glyphs' and rules' outline boxes, where it has them: a crop's box may
+      // reach another line's ink, its glyphs' boxes do not)
+      const cut = clips?.get(it.t.crop.k) ?? null, clip = cut?.rects ?? null
+      const plane = 'O'
       ops.push({ op: 'crop', page: it.t.crop.page, plane, src: [sx0, sy0, sx1 - sx0, sy1 - sy0], dst: [dx, dy, it.w * k, (c[3] - c[1]) * sc * k], ...(clip?.length ? { clip } : {}) })
       audit?.push({ what: 'crop', unit: id, page, k: it.t.crop.k, srcPage: it.t.crop.page, plane, src: c, dst: [dx, dy, dx + it.w * k, dy + (c[3] - c[1]) * sc * k], ...(clip?.length ? { clip, own: cut.own } : {}) })
     }
@@ -2220,6 +2221,11 @@ export function drawOps(ctx, ops, z, sourceOf) {
   ctx.fillStyle = '#fff'
   for (const o of ops) {
     if (o.op === 'erase') ctx.fillRect(...at(o.box))
+    else if (o.op === 'paper') {
+      ctx.beginPath()
+      for (const e of o.rects) ctx.rect(...at(e))
+      ctx.fill()
+    }
     else if (o.op === 'restore') {
       const src = sourceOf(o.page, 'O')
       if (!src) continue

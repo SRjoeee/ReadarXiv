@@ -184,6 +184,7 @@ export type DevBox = [number, number, number, number]
  *  boxes, a crop of a page's pixels darkened in */
 export type DrawOp =
   | { op: 'erase'; box: DevBox }
+  | { op: 'paper'; rects: DevBox[] }
   | { op: 'restore'; page: number; clip: DevBox[]; boxes: DevBox[] }
   | { op: 'crop'; page: number; src: DevBox; dst: DevBox; plane?: Plane; clip?: DevBox[] }
   | { op: 'swap'; page: number; rects: DevBox[] }

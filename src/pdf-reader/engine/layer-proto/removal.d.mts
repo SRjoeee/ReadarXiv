@@ -27,3 +27,11 @@ export declare function pagePlan(index: LayoutIndex, page: number, ink: RemovalI
   units: { id: number; glyphs: number[]; paths: number[] }[]; crops: { id: number; k: number; glyphs: number[]; paths: number[] }[]
   shows: number; glyphs: number; own: FileOwnership & { label: Int32Array }
 }
+/** the ink the add-on keeps on a page that meets its units' rectangles (the manifest's `dirty`: x0, y0, x1, y1 stride 4) */
+export declare function pageDirty(index: LayoutIndex, page: number, ink: RemovalInk, plan: { units: { glyphs: number[]; paths: number[] }[] } | undefined, pad?: number): number[]
+/** a unit's drawing over the text-removed PDF from the layout file's rectangles: swapped, filled with paper, erased extra,
+ *  its crops' clips; PDF units */
+export declare function fileSwap(o: {
+  page: number; lu: LayoutUnit; kOf: readonly number[]; lines: { rects: number[][]; lineOf: Map<number[], number>; jOf?: number[] }; prep: Prepared
+  others?: number[][]; dirty?: number[][]; pad?: number
+}): { swap: number[][]; fill: number[][]; extra: number[][]; clips: Map<number, { rects: number[][]; own: number[][] }>; lines: number[][] }

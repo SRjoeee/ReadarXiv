@@ -52,6 +52,9 @@ export interface ProtoRun {
   order: number[]
   ms: Map<number, number>
   pageMs: number[]
+  /** each page's costs, ms: its original drawn, its text read, the removal's ink reading and plan, its removed and
+   *  placeholders' pages drawn, its units laid, their operations made, drawn on the copy and set as SVG */
+  pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; ops: number; compose: number; svg: number }[]
   chars: Char[][]
   views: { convertToViewportPoint(x: number, y: number): number[]; convertToPdfPoint(x: number, y: number): number[] }[]
   readonly designs: { serif: string; sans: string; mono: string }
@@ -64,31 +67,26 @@ export interface ProtoRun {
   release(page: number): void
   checkPage(page: number): CheckResult
   check(): CheckResult
-  /** what a done page's drawing replaces of what the add-on removed (each removed glyph's and rule's box, device pixels,
-   *  and whether it is replaced), and the boxes erased for what the add-on kept; null where the add-on draws nothing */
-  removalTruth(page: number): { items: { box: number[]; replaced: boolean }[]; erase: number[][] } | null
   /** how the removal went */
   removalStats(): RemovalStats | null
-  /** a done page's removed page (or placeholders' page) at v0's own resolution (mode 'draw'), until it is released */
-  removedCanvas(page: number, plane?: 'R' | 'P'): HTMLCanvasElement | null
+  /** a done page's removed page at v0's own resolution (mode 'draw', with v0's copy), until it is released */
+  removedCanvas(page: number): HTMLCanvasElement | null
 }
-/** how the text-removed PDF went: pages removed, pages drawn the old way, units drawn by it, those the layout file locates
- *  whole (tex) and v0's own (v0), units whose plan this reading makes otherwise than the add-on's, what units replace that
- *  the add-on kept (erased over their outlines), glyphs another unit had, the swaps' rectangles, the glyphs with an
- *  outline box and without */
+/** how the text-removed PDF went: pages removed, pages drawn the old way, units drawn by it (tex: the layout file's
+ *  rectangles) and the old way (v0: its own reading), the rectangles filled with paper and swapped from the removed page,
+ *  the characters erased the file gives no rectangle for, the pages a swap drew the removed page for */
 export interface RemovalStats {
-  pages: number; refused: number; units: number; tex: number; v0: number; mismatched: number; extraGlyphs: number; extraUnits: number
-  taken: number; notOwned: number; crossing: number; rects: number; outlined: number; unoutlined: number; mismatch: unknown[]; extras: unknown[]
-  byPage: Record<number, { units: number; tex: number; v0: number; extra: number }>
-  /** the time it took, ms in all: the pages' ink, ownership and plan, the removed pages drawn, the swaps' rectangles */
-  ms: { ink: number; render: number; swap: number }
+  pages: number; refused: number; units: number; tex: number; v0: number; fills: number; swaps: number; swapPages: number; extra: number
+  byPage: Record<number, { units: number; tex: number; v0: number }>
+  /** the time it took, ms in all: the removed pages drawn, the rectangles worked out */
+  ms: { render: number; rects: number }
 }
 /** the text-removed PDF (removal.mjs, layout/remove.mjs) */
 export interface RemovalOptions {
   OPS: Record<string, number>
   /** 'draw': drawn by the add-on */
   mode: 'draw'
-  /** arXiv's PDF with the paper's add-on, its manifest (with the outline table), the plan it was made from (to check) */
+  /** arXiv's PDF with the paper's add-on, its manifest (each page's state and the kept ink under its units' rectangles) */
   doc: { getPage(n: number): Promise<unknown> }
   manifest: RemovalManifest
   plan?: RemovalPlan | null

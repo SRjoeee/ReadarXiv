@@ -81,10 +81,11 @@ export function locatedWhole(lu, unit, trPieces, { symbols = 'text' } = {}) {
  * full-width caption's short last line, which the file puts in a column of its own, stays in its block. A line the
  * unit's source does not write (the file's `held`: a display it does not hold, inside it) is kept as the original's
  * (`held`, its rectangles): v0's reading of a display's lines inside a unit, no slot, never erased, the text after it
- * starting below it.
+ * starting below it. `jOf`: each rectangle's line in the file, by its place (a rectangle v0 later replaces, a line it
+ * starts at its label, keeps its place).
  */
 export function texRects(lu, maxPage = Infinity) {
-  const rects = [], exact = new Map(), lineOf = new Map(), held = []
+  const rects = [], exact = new Map(), lineOf = new Map(), held = [], jOf = []
   const L = lu.lines, F = lu.frames, heldLines = new Set(lu.held ?? [])
   for (let f = 0; f < F.length; f += 6) {
     for (let j = F[f + 2]; j < F[f + 2] + F[f + 3]; j++) {
@@ -94,10 +95,11 @@ export function texRects(lu, maxPage = Infinity) {
       rects.push(r)
       exact.set(r, { baseline: base, size })
       lineOf.set(r, j)
+      jOf.push(j)
       if (heldLines.has(j)) held.push(r)
     }
   }
-  return { rects, exact, lineOf, held }
+  return { rects, exact, lineOf, held, jOf }
 }
 
 /** whether a placeholder of the unit's sets no ink by the file: a text macro (v0's 'macro' or 'umacro') the file holds no

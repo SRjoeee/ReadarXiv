@@ -4,10 +4,10 @@
 // stays as it was. The update appends page sets after arXiv's own N pages, each page p of a set at a fixed place:
 //   R, at N + p: the translatable units' glyphs (and their inline placeholders' rules) removed, a display formula and
 //      everything else kept: what the layer shows under a drawn unit's translation;
-//   P, at 2N + p: the placeholders the layer crops alone, every other glyph, rule, image and form left out: the crops'
-//      source, which holds no other line's ink whatever a crop's box;
-// and, for a check only (the gate), F (the removed glyphs alone: their footprint) and C (P with each crop's glyphs in a
-// colour of its own). One PDF.js document then serves the original and every set, its fonts parsed once.
+// and, for a check only (the gate), P (the placeholders alone, every other glyph, rule, image and form left out), F (the
+// removed glyphs alone: their footprint) and C (P with each crop's glyphs in a colour of its own). The layer cuts its
+// crops from the original, each through its own glyphs' outline boxes, so that no reader needs P. One PDF.js document
+// then serves the original and every set, its fonts parsed once.
 //
 // A glyph is named by where the content stream shows it, as PDF.js's operator list does (layout/ink.mjs pageInk's
 // `indices`): its text-showing operation's place among the page's own (n) and its place among that operation's glyphs
@@ -31,9 +31,9 @@
 
 /** the remover's version: raised with any change to what it writes; it enters the add-on's key */
 export const REMOVAL = '1'
-/** the page sets an add-on holds, in order after arXiv's own pages: R at N + p, P at 2N + p, then the check's */
-export const SETS = Object.freeze(['R', 'P'])
-export const CHECK_SETS = Object.freeze(['F', 'C'])
+/** the page sets an add-on holds, in order after arXiv's own pages: R at N + p, then the check's (P, F, C) */
+export const SETS = Object.freeze(['R'])
+export const CHECK_SETS = Object.freeze(['P', 'F', 'C'])
 
 const WS = new Uint8Array(256)
 for (const c of [0, 9, 10, 12, 13, 32]) WS[c] = 1

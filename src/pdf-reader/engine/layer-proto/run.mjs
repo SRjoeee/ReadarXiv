@@ -41,9 +41,7 @@ import { classifyFont, faceOf, loadRoleFaces, loadWebFaces, styleKey, setRoleFac
 import { loadHyphenation } from './hyph.mjs'
 import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
-import { fileOwnership, glyphsOfChars, inkOfPage, pagePlan, unitRemoval, unmappedOf } from './removal.mjs'
-import { avoidIndex, SWAP_PAD, swapRects } from '../layer/swap.mjs'
-import { readOutlines } from '../layout/ink.mjs'
+import { fileSwap } from './removal.mjs'
 import { locatedWhole, texParts, texRects } from './tex.mjs'
 
 /** the prototype's getDocument options beside the host's asset URLs (main.js ASSETS): its canvases on the GPU, the whole
@@ -113,8 +111,8 @@ export const layOrder = (placed, batch = 8) => layGroups(placed, batch).flatMap(
  * target, made from the layout file alone (removal.mjs pagePlan, `plan` where the host has it, to check this reading
  * against); the manifest's outline table gives each glyph its outline's box. On a page the manifest says is removed, a
  * unit the file locates whole is drawn by swapping the removed page's pixels in over the glyphs it replaces (swap.mjs
- * swapRects, over their outlines: no pixel is read) and cutting its crops from the placeholders' page (layer2.mjs
- * removalOps), a unit v0 reads on its own (the file's miss) alike over what the add-on removed of what its reading
+ * swapRects, over their outlines: no pixel is read) and cutting its crops from the original through their own glyphs'
+ * outline boxes (layer2.mjs removalOps), a unit v0 reads on its own (the file's miss) alike over what the add-on removed of what its reading
  * accounts for; what a unit replaces that the add-on kept is erased over its own outline, no line whole. Every other
  * page is drawn the old way, erased and put back, but its table cells: a table's group there stays the original's (an
  * erase takes the table's rules). Null: v0's own drawing.
@@ -314,139 +312,93 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     pageItems[pg] ??= L2.pageItemsOf(chars2[pg - 1] ?? [], pg, pxOf(pg), inks[pg])
     return { items: pageItems[pg].items, cover: pageItems[pg].cover, ink: inks[pg], accounted: acc, kept }
   }
-  // ---- the text-removed PDF (one add-on a paper, made from the layout file: removal.mjs pagePlan): each page's ink as
-  // the remover names it, each glyph's box its outline's (the add-on's outline table), its characters carried to its
-  // glyphs, the file's ownership and the page's plan made again from them (which must be the add-on's); the removed and
-  // placeholders' pages at v0's resolution
+  // ---- the text-removed PDF (one add-on a paper, made from the layout file: removal.mjs pagePlan). Nothing of the page's
+  // ink is read here: a unit's swap is the layout file's own rectangles (its lines' erase, its placeholders' segments,
+  // its label), filled with paper where the manifest says nothing kept lies under them, else the removed page swapped in
   const RM = removal ? {
-    mode: removal.mode, OPS: removal.OPS, ink: [], chars: [], own: [], unmapped: [], claimed: [], removed: [], phOnly: [], plans: [], replaced: [],
-    plan: removal.plan ?? null, manifest: removal.manifest ?? null, outlines: removal.manifest?.outlines ? readOutlines(removal.manifest.outlines) : null,
-    stats: { pages: 0, refused: 0, units: 0, tex: 0, v0: 0, mismatched: 0, extraGlyphs: 0, extraUnits: 0, taken: 0, notOwned: 0, crossing: 0, rects: 0, outlined: 0, unoutlined: 0, mismatch: [], extras: [], byPage: {}, ms: { ink: 0, render: 0, swap: 0 } },
+    mode: removal.mode, manifest: removal.manifest ?? null, removed: [], others: [],
+    stats: { pages: 0, refused: 0, units: 0, tex: 0, v0: 0, fills: 0, swaps: 0, swapPages: 0, extra: 0, byPage: {}, ms: { render: 0, rects: 0 } },
   } : null
   /** whether page j's text is removed in the add-on (draw mode) */
   const removedPage = j => RM?.mode === 'draw' && !!RM.manifest?.page?.[j]?.ok
   const setOf = name => (RM?.manifest?.sets?.[name] ?? 0)
-  const noOwn = n => ({ owner: new Int32Array(n).fill(-1), ph: new Int32Array(n).fill(-1), paths: new Map(), linePaths: new Map() })
-  /** the glyphs a drawn unit replaces on a page (its reading's: what it keeps left out), unitRemoval's */
-  const removalOf = (p, pg) => {
-    const ink = RM.ink[pg]
-    if (!ink || !p.prep) return null
-    const r = unitRemoval({ id: p.id, page: pg, prep: p.prep, tex: p.tex ? { lu: p.tex.lu, kOf: p.tex.kOf } : null, own: RM.own[pg], charMap: RM.chars[pg], unmapped: RM.unmapped[pg], ink, claimed: (RM.claimed[pg] ??= new Map()), fileDrawn })
-    RM.stats.taken += r.taken
-    RM.stats.notOwned += r.notOwned
-    RM.stats.crossing += r.crossing ?? 0
-    return r
-  }
-  /** a glyph's or a rule's box on page pg, PDF units (its outline's, layout/ink.mjs; a glyph drawn as nothing: null) */
-  const glyphBox = (ink, g) => { const x = ink.glyphs[g]; return x.ix1 > x.ix0 && x.top > x.bottom ? [x.ix0, x.bottom, x.ix1, x.top] : null }
-  const ruleBox = (ink, b) => ink.boxes.slice(4 * b, 4 * b + 4)
-  /** a unit's swap on page pg: the rectangles (v0's device pixels) the removed page's pixels go into over the glyphs and
-   *  rules it replaces that the add-on removed (swap.mjs swapRects), and what it replaces that the add-on did not
-   *  (`extra`: glyphs and rules, erased the old way) */
-  const swapOf = (p, pg, rm) => {
-    const t = performance.now()
-    const ink = RM.ink[pg], plan = RM.plans[pg]
-    plan.all ??= { glyphs: new Set(plan.glyphs), paths: new Set(plan.paths) }
-    const gs = new Set(rm.glyphs), ps = new Set(rm.paths)
-    const own = [], extra = []
-    for (const g of rm.glyphs) {
-      const b = glyphBox(ink, g)
-      if (!b) continue
-      if (plan.all.glyphs.has(g)) { own.push(b); continue }
-      extra.push(b)
-      if (RM.stats.extras.length < 40) RM.stats.extras.push([p.id, pg, ink.glyphs[g].u, `${ink.glyphs[g].n}.${ink.glyphs[g].k}`, b.map(v => Math.round(v * 10) / 10)])
+  /** the kept ink under the paper's units' rectangles on page j, by the manifest (x0, y0, x1, y1 each): where a fill would
+   *  take it, the removed page is swapped in instead */
+  const dirtyOf = j => { const d = RM.manifest.page[j]?.dirty ?? []; const out = []; for (let q = 0; q + 3 < d.length; q += 4) out.push([d[q], d[q + 1], d[q + 2], d[q + 3]]); return out }
+  /** the rectangles on page j of every unit the layout file holds that no unit drawn by the file's rectangles is (its
+   *  lines' erase, its placeholders' segments, its labels): a unit not translated, kept as the original's, or v0's own,
+   *  whose removed glyphs a swap or a fill keeps clear of. A unit the file's rectangles draw fills its own; two such
+   *  units' rectangles may meet (a footnote's lines 9 pt apart), and neither leaves the other's edge. Once a page */
+  const othersOf = j => {
+    if (RM.others[j]) return RM.others[j]
+    const byFile = new Set(placed.filter(q => q.tex && !q.refused).map(q => q.id))
+    const boxes = []
+    for (const id of tex?.index.onPage(j) ?? []) {
+      if (byFile.has(id)) continue
+      const lu = tex.index.unit(id)
+      for (let l = 0; l < lu.erase.length; l++) { const e = lu.erase[l]; if (!e || lu.lines[8 * l] !== j) continue; for (let o = 0; o + 3 < e.length; o += 4) boxes.push([e[o], e[o + 1], e[o + 2], e[o + 3]]) }
+      for (const row of lu.ph.values()) for (let o = 0; o + 5 < row.segs.length; o += 6) if (row.segs[o] === j) boxes.push([row.segs[o + 1], row.segs[o + 5], row.segs[o + 3], row.segs[o + 4]])
+      const lb = lu.labels
+      for (let o = 0; o + 6 < lb.length; o += 7) if (lb[o + 1] === j) boxes.push([lb[o + 2], lb[o + 6], lb[o + 4], lb[o + 5]])
     }
-    for (const b of rm.paths) (plan.all.paths.has(b) ? own : extra).push(ruleBox(ink, b))
-    // what the add-on removed that this unit does not replace (the page's index of it, built once): shown from the
-    // original, never swapped
-    plan.items ??= [...plan.glyphs.map(g => ['g', g, glyphBox(ink, g)]), ...plan.paths.map(b => ['r', b, ruleBox(ink, b)])].filter(x => x[2])
-    const items = plan.items, near = avoidIndexOf(plan)
-    const avoid = r => near(r).filter(i => !(items[i][0] === 'g' ? gs.has(items[i][1]) : ps.has(items[i][1]))).map(i => items[i][2])
+    return (RM.others[j] = boxes)
+  }
+  /**
+   * A unit's drawing over the text-removed PDF on page pg, from the layout file's rectangles (removal.mjs fileSwap): the
+   * rectangles (v0's device pixels) the removed page is swapped into where kept ink lies under them, those filled with
+   * paper elsewhere, its crops' clips (its placeholders' segments), and the characters its reading accounts for that the
+   * file gives it no rectangle for (erased over their boxes)
+   */
+  const swapOf = (p, pg) => {
+    const t = performance.now()
+    const sw = fileSwap({ page: pg, lu: p.tex.lu, kOf: p.tex.kOf, lines: p.tex.lines, prep: p.prep, others: othersOf(pg), dirty: dirtyOf(pg) })
     const px = pxOf(pg)
     const dev = b => { const [ax, ay] = px(b[0], b[3]), [bx, by] = px(b[2], b[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)] }
-    const rects = swapRects(own, avoid).map(dev)
-    // (an extra glyph erased over its outline, a little grown for its antialiased edge)
-    const erase = extra.map(b => dev([b[0] - SWAP_PAD, b[1] - SWAP_PAD, b[2] + SWAP_PAD, b[3] + SWAP_PAD]))
-    // (what the page's drawing replaces, for a check of it: removalTruth)
-    const done = (RM.replaced[pg] ??= { glyphs: new Set(), paths: new Set(), erase: [] })
-    for (const g of rm.glyphs) done.glyphs.add(g)
-    for (const b of rm.paths) done.paths.add(b)
-    done.erase.push(...erase)
-    // each crop cut from the placeholders' page through its own glyphs' and rules' outline boxes (v0's piece index: k),
-    // where that page holds them all (the file found its placeholder); else from the original, as the old way cuts it
-    const clips = new Map()
-    for (const c of rm.crops) {
-      if (!c.glyphs.length && !c.paths.length) continue
-      if (!c.glyphs.every(g => plan.pGlyphs.has(g)) || !c.paths.every(b => plan.pPaths.has(b))) continue
-      const boxes = [...c.glyphs.map(g => glyphBox(ink, g)).filter(Boolean), ...c.paths.map(b => ruleBox(ink, b))]
-      if (boxes.length) clips.set(c.k, { rects: boxes.map(b => dev([b[0] - SWAP_PAD, b[1] - SWAP_PAD, b[2] + SWAP_PAD, b[3] + SWAP_PAD])), own: boxes.map(dev) })
-    }
-    RM.stats.ms.swap += performance.now() - t
-    RM.stats.rects += rects.length
-    if (extra.length) { RM.stats.extraGlyphs += extra.length; RM.stats.extraUnits++ }
-    return { rects, erase, clips }
-  }
-  /** a page's removed glyphs and rules indexed by place, once (avoidIndex over the plan's items, by item index) */
-  const avoidIndexOf = plan => {
-    if (plan.near) return plan.near
-    const boxes = plan.items.map(x => x[2])
-    const byBox = new Map(boxes.map((b, i) => [b, i]))
-    const index = avoidIndex(boxes)
-    plan.near = r => index(r).map(b => byBox.get(b))
-    return plan.near
-  }
-  /** a removal's lines on the page (PDF units): across its glyphs on one baseline, up and down its line's own ink band
-   *  (0.3 em below the baseline, 0.85 above, as the engine's layer's erase is bounded; a glyph's declared box reaches
-   *  further, CMSY's to the next line); and its rules' boxes. What the audit names the unit's swapped area, its text's:
-   *  its crops' glyphs and rules are their crops' (the audit's crops), and are no line's */
-  const removalLines = (pg, rm) => {
-    const ink = RM.ink[pg]
-    const cropped = new Set(rm.crops.flatMap(c => c.glyphs)), croppedPaths = new Set(rm.crops.flatMap(c => c.paths))
-    const gs = rm.glyphs.filter(g => !cropped.has(g)).map(g => ink.glyphs[g]).sort((a, b) => b.y - a.y || a.x0 - b.x0)
-    const out = []
-    for (const x of gs) {
-      const l = out.find(l => Math.abs(l.y - x.y) < 0.5 * Math.max(x.size, l.size))
-      if (l) { l.x0 = Math.min(l.x0, x.x0); l.x1 = Math.max(l.x1, x.x1); l.size = Math.max(l.size, x.size) }
-      else out.push({ y: x.y, size: x.size, x0: x.x0, x1: x.x1 })
-    }
-    const boxes = out.map(l => [l.x0, l.y - 0.3 * l.size, l.x1, l.y + 0.85 * l.size])
-    for (const b of rm.paths) if (!croppedPaths.has(b)) boxes.push(ink.boxes.slice(4 * b, 4 * b + 4))
-    return boxes
+    const clips = new Map([...sw.clips].map(([k, c]) => [k, { rects: c.rects.map(dev), own: c.own.map(dev) }]))
+    RM.stats.ms.rects += performance.now() - t
+    RM.stats.fills += sw.fill.length
+    RM.stats.swaps += sw.swap.length
+    RM.stats.extra += sw.extra.length
+    return { rects: sw.swap.map(dev), erase: [...sw.fill, ...sw.extra].map(dev), clips, lines: sw.lines }
   }
   const sourceOn = (j, plane) => {
     const r = rows[j - 1]
     if (!r?.base) return null
-    return plane === 'R' ? RM?.removed[j] ?? null : plane === 'P' ? RM?.phOnly[j] ?? null : r.left
+    return plane === 'R' ? RM?.removed[j] ?? null : r.left
   }
   const paint = (p, pg) => {
+    const tOps = performance.now()
     const r = rows[pg - 1]
     // (what the unit accounts for is counted whichever way it is drawn: a unit drawn the old way after it puts back only
     // what no painted unit accounts for)
     const ro = restoreOf(p, pg)
     let ops = null
-    // the text-removed PDF, on a page the add-on removed, every unit by it: the removed page swapped in over the glyphs
-    // it replaces that the add-on removed, and each glyph it replaces that the add-on kept erased over its own outline
-    // (removal.mjs unitRemoval: a unit the layout file locates whole replaces what the file gives it, but what its reading
-    // keeps; a unit v0 reads on its own, the file's miss, what its reading accounts for); its crops cut from the
-    // placeholders' page where the file found its placeholders, else from the original. No line is erased whole: the
-    // add-on is the paper's, and no output needs a plan of its own
+    // the text-removed PDF, on a page the add-on removed: a unit the layout file locates whole is drawn over the file's own
+    // rectangles (filled with paper, or the removed page swapped in where kept ink lies under them), its crops cut from
+    // the original through its placeholders' segments; a unit v0 reads on its own (the file's miss) is drawn the old way,
+    // erased and put back. No output needs a plan of its own: the add-on is the paper's
     if (RM?.mode === 'draw' && removedPage(pg)) {
-      const here = (RM.stats.byPage[pg] ??= { units: 0, tex: 0, v0: 0, extra: 0 })
+      const here = (RM.stats.byPage[pg] ??= { units: 0, tex: 0, v0: 0 })
       RM.stats.units++
       here.units++
-      const rm = removalOf(p, pg)
-      if (rm) {
-        const sw = swapOf(p, pg, rm)
-        ops = L2.removalOps(p.layout, pg, { px: pxOf(pg), k: scale * dpr, hasSource: j => !!rows[j - 1]?.base, pxOf, rects: sw.rects, erase: sw.erase, clips: sw.clips, lines: removalLines(pg, rm), removed: removedPage, audit, id: p.id })
-        if (p.tex) { RM.stats.tex++; here.tex++ } else { RM.stats.v0++; here.v0++ }
-        if (sw.erase.length) here.extra++
-      }
+      if (p.tex && p.prep) {
+        const sw = swapOf(p, pg)
+        ops = L2.removalOps(p.layout, pg, { px: pxOf(pg), k: scale * dpr, hasSource: j => !!rows[j - 1]?.base, pxOf, rects: sw.rects, erase: sw.erase, clips: sw.clips, lines: sw.lines, removed: removedPage, audit, id: p.id })
+        RM.stats.tex++
+        here.tex++
+      } else { RM.stats.v0++; here.v0++ }
     }
     // else the unit's drawing as data, and on v0's own copy where it is kept: from the pages drawn now, as v0 drew it
     if (!ops) ops = L2.unitOps(p.layout, p.blocks, pg, { px: pxOf(pg), k: scale * dpr, hasSource: j => !!rows[j - 1]?.base, pxOf, extents: p.layout.extents, audit, id: p.id, restore: ro })
     for (const o of ops) r.ops.push(o)
+    const tCompose = performance.now()
     if (r.right) L2.drawOps(r.right.getContext('2d'), ops, 1, sourceOn)
+    const tSvg = performance.now()
     r.svg.insertAdjacentHTML('beforeend', L2.svgOfUnit(p.layout, pg, cssOf(pg), scale, p.id))
+    const T = timesOf(pg)
+    T.ops += tCompose - tOps
+    T.compose += tSvg - tCompose
+    T.svg += performance.now() - tSvg
   }
 
   // the columns of each page, as its paragraphs' lines span them: a line centred in its column (a caption under its
@@ -768,6 +720,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   const arrive = p => {
     const t0 = performance.now()
     layout2(p)
+    timesOf(p.pages[0]).lay += performance.now() - t0
     // (a unit no step fits is the original's: neither erased nor drawn, nor checked)
     if (p.refused) skipped.push({ id: p.id, kind: p.unit.kind, why: 'unfit', chars: trCharsOf(p.unit), pages: p.pages })
     const g = p.unit.group && groupCells.has(p.unit.group) ? p.unit.group : null
@@ -787,7 +740,14 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   }
 
   // a page drawn: its characters read, its copy made and its ink mapped; the paper's designs from the first
+  // each page's costs, ms (the gate's --perf): its original drawn (render), its text read (text), the removal's reading of
+  // its ink and its plan (ink), its removed page drawn for v0's copy (rp); its units laid (lay: a unit's on its first
+  // page) and painted, their operations made (ops: the erase and its put-back, or the swap's rectangles), drawn on the
+  // copy (compose) and set as SVG (svg)
+  const pageTimes = []
+  const timesOf = pg => (pageTimes[pg] ??= { render: 0, text: 0, ink: 0, rp: 0, lay: 0, ops: 0, compose: 0, svg: 0 })
   const drawPage = async i => {
+    const tPage = performance.now()
     const page = await doc.getPage(i)
     const viewport = page.getViewport({ scale })
     views[i - 1] = viewport
@@ -798,69 +758,35 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     r.view = page.view
     const textP = page.getTextContent()
     await page.render({ canvas: r.left, canvasContext: r.left.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
+    const tRendered = performance.now()
+    timesOf(i).render += tRendered - tPage
     const tc = await textP
     if (i === 1 && lmP) await lmP
     const fontOf = fontOfPage(page, tc.styles)
     // the role table's faces of the page's fonts, before its characters are measured in them
     if (roles) await loadRoleFaces([...new Set(tc.items.map(it => it.fontName))].map(fontOf).filter(st => st?.known).flatMap(st => roleIdsOf(st, 'latin')), faceUrl)
     chars2[i - 1] = L2.pageChars2(tc, fontOf)
+    timesOf(i).text += performance.now() - tRendered
     for (const c of chars2[i - 1]) if (c.st.fam !== 'math') { const key = `${c.st.fam}:${c.st.design}`; fontTally.set(key, (fontTally.get(key) ?? 0) + 1) }
     r.right?.getContext('2d').drawImage(r.left, 0, 0)
     r.base = true
     if (RM) {
-      // the page's ink as the remover names it (each glyph its outline's box, the add-on's table), its characters
-      // carried there, the file's ownership of it, and the page's plan made again from these (the add-on's, exactly)
-      const t0 = performance.now()
-      const ink = (RM.ink[i] = await inkOfPage(RM.OPS, page, RM.outlines))
-      RM.chars[i] = glyphsOfChars(chars2[i - 1], ink, i)
-      RM.unmapped[i] = unmappedOf(ink, RM.chars[i])
-      RM.own[i] = tex ? fileOwnership(tex.index, i, ink) : noOwn(ink.glyphs.length)
-      if (tex && RM.mode === 'draw') {
-        const pl = pagePlan(tex.index, i, ink, RM.own[i])
-        const at = new Map()
-        ink.glyphs.forEach((g, gi) => { if (g.n >= 0) at.set(`${g.n}.${g.k}`, gi) })
-        const byPath = new Map()
-        ink.paths.forEach((m, b) => { if (m >= 0) byPath.set(m, b) })
-        const byUnit = new Map(), glyphs = [], paths = []
-        for (const u of pl.units) {
-          const gs = new Set(), ps = new Set()
-          for (let q = 0; q + 1 < u.glyphs.length; q += 2) { const g = at.get(`${u.glyphs[q]}.${u.glyphs[q + 1]}`); gs.add(g); glyphs.push(g) }
-          for (const m of u.paths) { const b = byPath.get(m); ps.add(b); paths.push(b) }
-          byUnit.set(u.id, { glyphs: gs, paths: ps })
-        }
-        // (and what the placeholders' page holds: each found placeholder's glyphs and rules)
-        const pGlyphs = new Set(), pPaths = new Set()
-        for (const c of pl.crops) {
-          for (let q = 0; q + 1 < c.glyphs.length; q += 2) pGlyphs.add(at.get(`${c.glyphs[q]}.${c.glyphs[q + 1]}`))
-          for (const m of c.paths) pPaths.add(byPath.get(m))
-        }
-        RM.plans[i] = { byUnit, glyphs, paths, crops: pl.crops.length, pGlyphs, pPaths }
-        // (the add-on's plan, the server's reading of the same file: a unit whose removal this reading makes otherwise)
-        const theirs = RM.plan?.pages?.[i]
-        if (theirs) {
-          const key = u => `${u.id}:${u.glyphs.join()}:${u.paths.join()}`
-          const mineKeys = new Set(pl.units.map(key))
-          for (const u of theirs.units) if (!mineKeys.has(key(u))) { RM.stats.mismatched++; if (RM.stats.mismatch.length < 20) RM.stats.mismatch.push([u.id, i]) }
-          if (theirs.units.length !== pl.units.length) RM.stats.mismatched += Math.max(0, pl.units.length - theirs.units.length)
-        }
-        for (const g of ink.glyphs) { if (g.n < 0) continue; if (g.ix1 > g.ix0 || g.top > g.bottom) RM.stats.outlined++; else RM.stats.unoutlined++ }
-      }
-      RM.stats.ms.ink += performance.now() - t0
       if (removedPage(i)) {
-        // its removed page, and its placeholders' page where the plan crops from it, as v0 draws its own
         RM.stats.pages++
-        const t = performance.now()
-        const at = async (set, keep) => {
-          const pg = await removal.doc.getPage(setOf(set) + i)
+        // its removed page, where v0 keeps a copy of its own (the gate's) and the manifest has kept ink under a unit's
+        // rectangles there: a view draws it at its own resolution, drawCopy, and only where a swap asks for it
+        if (copy && RM.manifest.page[i]?.dirty?.length) {
+          const t = performance.now()
+          const pg = await removal.doc.getPage(setOf('R') + i)
           const c = document.createElement('canvas')
           c.width = r.left.width
           c.height = r.left.height
           await pg.render({ canvas: c, canvasContext: c.getContext('2d'), viewport: pg.getViewport({ scale }), transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
-          keep[i] = c
+          RM.removed[i] = c
+          RM.stats.swapPages++
+          RM.stats.ms.render += performance.now() - t
+          timesOf(i).rp += performance.now() - t
         }
-        await at('R', RM.removed)
-        if (RM.plans[i]?.crops) await at('P', RM.phOnly)
-        RM.stats.ms.render += performance.now() - t
       } else if (RM.mode === 'draw') RM.stats.refused++
     }
     if (P.borrow) inkOf(i)
@@ -924,7 +850,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   const needsCopy = () => { if (!copy) throw new Error("v0's checker reads its copy at its own resolution: open with copy: true") }
 
   return {
-    N, P, rows, placed, skipped, stats, audit, order, ms, pageMs, chars: chars2, views, sources,
+    N, P, rows, placed, skipped, stats, audit, order, ms, pageMs, pageTimes, chars: chars2, views, sources,
     get designs() { return designs },
     /** the page after whose units page `pg` is done */
     doneAt: pg => doneAt[pg],
@@ -953,7 +879,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     async drawCopy(pg, ctx, source, k) {
       const r = rows[pg - 1]
       // every page and plane the drawing cuts from but this page's own original (`source`): the removed page a swap takes
-      // from, the placeholders' pages and the other pages a crop takes from
+      // from, and the other pages a crop takes from
       const others = new Map()
       const need = (j, plane) => { const key = `${plane}${j}`; if (!(plane === 'O' && j === pg) && !others.has(key)) others.set(key, [j, plane]) }
       for (const o of r.ops) { if (o.op === 'swap') need(o.page, 'R'); else if (o.op === 'crop') need(o.page, o.plane ?? 'O') }
@@ -966,31 +892,16 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     release(pg) {
       const r = rows[pg - 1]
       if (!r || drawnTo < doneAt[pg]) return
-      for (const c of [r.left, r.right, RM?.removed[pg], RM?.phOnly[pg]]) if (c) { c.width = 0; c.height = 0 }
-      if (RM) for (const k of ['removed', 'phOnly', 'ink', 'chars', 'own', 'unmapped', 'claimed', 'plans', 'replaced']) RM[k][pg] = undefined
+      for (const c of [r.left, r.right, RM?.removed[pg]]) if (c) { c.width = 0; c.height = 0 }
+      if (RM) for (const k of ['removed', 'others']) RM[k][pg] = undefined
       r.base = false
       r.released = true
     },
-    /**
-     * What a done page's drawing replaces of what the add-on removed, for a check of it (the gate's truth): each removed
-     * glyph's and rule's box (v0's device pixels; a glyph's its outline's) and whether a drawn unit replaces it, and the
-     * boxes erased for what a unit replaces that the add-on kept. Null for a page not drawn by the add-on
-     */
-    removalTruth(pg) {
-      const plan = RM?.plans[pg], ink = RM?.ink[pg]
-      if (!plan || !ink) return null
-      const done = RM.replaced[pg] ?? { glyphs: new Set(), paths: new Set(), erase: [] }
-      const px = pxOf(pg)
-      const dev = b => { const [ax, ay] = px(b[0], b[3]), [bx, by] = px(b[2], b[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)] }
-      const items = []
-      for (const g of plan.glyphs) { const b = glyphBox(ink, g); if (b) items.push({ box: dev(b), replaced: done.glyphs.has(g) }) }
-      for (const b of plan.paths) items.push({ box: dev(ruleBox(ink, b)), replaced: done.paths.has(b) })
-      return { items, erase: done.erase.map(e => [e[0], e[1], e[0] + e[2], e[1] + e[3]]) }
-    },
-    /** how the removal went: pages removed and refused, units swapped and mismatched, glyphs another unit had */
+    /** how the removal went: pages removed and refused, units drawn by it (tex) and the old way (v0), the rectangles filled
+     *  and swapped, the pages a swap draws the removed page for */
     removalStats: () => RM?.stats ?? null,
     /** a done page's removed page at v0's own resolution (draw mode, until released), for a check */
-    removedCanvas: (pg, plane = 'R') => (plane === 'R' ? RM?.removed[pg] : RM?.phOnly[pg]) ?? null,
+    removedCanvas: pg => RM?.removed[pg] ?? null,
     /** the prototype's completeness checker on one done page (main.js check=1's, its pixels of that page alone, its
      *  placeholders of the units with lines on it) */
     checkPage(pg) {

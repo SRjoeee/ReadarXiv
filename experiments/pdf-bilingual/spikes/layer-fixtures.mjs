@@ -341,7 +341,11 @@ async function layoutOf(id, paper, dir) {
   const task = open(new Uint8Array(readFileSync(join(dir, 'arxiv.pdf'))))
   const m = /^(.+)v(\d+)$/.exec(id)
   try {
-    const out = await makeLayout({ units: paper.units, marks, arxiv: await task.promise, OPS, paper: { id: m[1], version: Number(m[2]) }, left: '', pdfjs: PDFJS })
+    const arxivDoc = await task.promise
+    const tm = performance.now()
+    const out = await makeLayout({ units: paper.units, marks, arxiv: arxivDoc, OPS, paper: { id: m[1], version: Number(m[2]) }, left: '', pdfjs: PDFJS })
+    // (the maker's own time, and its operator lists' within it: the server's prepare reads them once for the remover too)
+    out.stats.makerMs = Math.round(performance.now() - tm)
     // GATE_DBG=<dir>: the maker's own diagnostics, where it gives them
     if (out.stats.dbg && process.env.GATE_DBG) writeFileSync(join(process.env.GATE_DBG, `${id}.json`), JSON.stringify({ dbg: out.stats.dbg, u: out.stats.dbgU }))
     return 'file' in out ? { text: encodeLayout(out.file), stats: out.stats, switched } : { refused: out.refused, stats: out.stats, switched }
@@ -417,7 +421,7 @@ for (const [id, target] of asked) {
       const hashes = await Promise.all(paper.units.map(sourceHash))
       papers.set(id, { dir, paper, layout, hashes, ms: Date.now() - t0 })
       const s = layout.stats
-      console.log(`${id}: ${layout.text ? `layout ${layout.text.length} bytes` : `refused (${layout.refused})`}${layout.switched?.length ? `, switched ${layout.switched.join(' ')}` : ''}${s ? `, lines carried ${s.lines.carried}/${s.lines.total}, units located ${s.units.located}/${s.units.total}` : ''}${s ? `, ph ${JSON.stringify({ found: s.ph.found, lost: s.ph.lost, unmarked: s.ph.unmarked, symbols: s.ph.symbols, twice: s.ph.twice, unmatched: s.ph.unmatched, foreign: s.ph.foreign, shared: s.ph.shared })}` : ''} (${Date.now() - t0} ms)`)
+      console.log(`${id}: ${layout.text ? `layout ${layout.text.length} bytes` : `refused (${layout.refused})`}${layout.switched?.length ? `, switched ${layout.switched.join(' ')}` : ''}${s ? `, lines carried ${s.lines.carried}/${s.lines.total}, units located ${s.units.located}/${s.units.total}` : ''}${s ? `, ph ${JSON.stringify({ found: s.ph.found, lost: s.ph.lost, unmarked: s.ph.unmarked, symbols: s.ph.symbols, twice: s.ph.twice, unmatched: s.ph.unmatched, foreign: s.ph.foreign, shared: s.ph.shared })}` : ''} (${Date.now() - t0} ms${s?.makerMs !== undefined ? `; maker ${s.makerMs} ms, its operator lists ${Math.round(s.ms?.ops ?? 0)} ms` : ''})`)
     }
     const { dir, paper, layout, hashes } = papers.get(id)
     const m = /^(.+)v(\d+)$/.exec(id)
