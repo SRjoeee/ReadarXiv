@@ -51,8 +51,10 @@ export interface LaidItem {
 export interface LaidLine { page: number; frame: number; x0: number; x1: number; baseline: number; size: number; mode: 'just' | 'last' | 'centred' | 'ragged'; items: LaidItem[]; wordSpacing: number; letterSpacing: number; from: number; to: number }
 /**
  * A unit laid whole: its state, the size it is set at (PDF units: the original's size × scale), its lines in reading
- * order (each frame's in turn), each cut of a split unit as an offset in trText (the start of frame 1's part, frame 2's, …;
- * none for one frame), and how each placeholder the translation holds is drawn, by k
+ * order (each frame's in turn), where a split unit's text moves on to each next frame as an offset in trText (frame 1's
+ * first, frame 2's, …; the text's end for a frame it does not reach; none for one frame: the text flows through its
+ * frames, cut at sentences only where the flow would take a crop off its page), and how each placeholder the translation
+ * holds is drawn, by k
  */
 export interface LaidUnit { id: number; fit: true; state: FitState; size: number; lines: LaidLine[]; cuts: number[]; drawn: ReadonlyMap<number, 'crop' | 'page-text' | 'kept'> }
 /** a unit that stays the original's, and why: 'located' (no such unit, or no lines or frames), 'tokens' (not drawable, or
@@ -62,12 +64,12 @@ export interface LaidUnit { id: number; fit: true; state: FitState; size: number
 export interface Unfit { id: number; fit: false; why: 'located' | 'tokens' | 'floor' | 'pieces' | 'missing' | 'twice' | 'lost' | 'overlap' | 'erase' | 'glyph' | 'brackets' }
 export type Laid = LaidUnit | Unfit
 /** the fit's states in order, from the most natural (spec §4.5's order: tracking, the space below, leading, size): `below`
- *  and `pitch` are the last frame's (PDF units), `maxScale` and `lead` page-even's start */
-export declare function statesOf(rules: LayerRules, o: { below: number; pitch: number; maxScale?: number; lead?: number }): Generator<FitState>
+ *  and `pitch` are the last frame's (PDF units), `maxScale` page-even's start (the leading always starts at leadBase) */
+export declare function statesOf(rules: LayerRules, o: { below: number; pitch: number; maxScale?: number }): Generator<FitState>
 /** a unit laid into its frames, or why it stays the original's: its pieces checked first (checkPieces), the unit located,
  *  a LOST row refused, its tokens made, then laid at the first state that fits, which the completeness net (netOf) passes or
  *  refuses. No LaidUnit it returns is one the net refuses */
-export declare function layUnit(input: LayerInput, id: number, tr: Tr, o?: { maxScale?: number; lead?: number }): Laid
+export declare function layUnit(input: LayerInput, id: number, tr: Tr, o?: { maxScale?: number }): Laid
 /** a face's size correction (Face.size; 1 for a face with none): a run is measured, and drawn, at the line's size × it
  *  (tokens.mjs's, re-exported for the drawing) */
 export declare function faceSize(face: FaceId | undefined): number

@@ -9,7 +9,7 @@ export interface LayerRules {
   compress: number                      // full-width punctuation compressed first: 0 none, 1 at a line's start and between marks, 2 every mark
   borrowMax: number                     // share of the free space below the last frame
   sizeStep: number; sizeFloor: number   // × the original's size
-  even: 'size' | 'size-and-lead' | 'unit'
+  even: 'size' | 'unit'                 // page-even: the page's body units at one size, or each at its own; never the leading
   autospace: number                     // em between CJK and Latin (zh, ja)
   spaceMax: number                      // the extra a word space may take when justifying, × its own width (Korean, alphabets)
   hyphenate: string | null              // the patterns' language

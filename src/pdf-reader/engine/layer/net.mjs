@@ -13,7 +13,7 @@
 import { canDraw, faceFor } from '../font-roles.mjs'
 import { PH_FLAG } from '../layout/file.mjs'
 import { COLOUR_SHIFT, LAYER_COLOURS, STYLE } from './pieces.mjs'
-import { faceSize, ownText, pageTextOf } from './tokens.mjs'
+import { BRACKETED, beside, bracketPairs, CLOSES, echoesOf, faceSize, OPENS, ownText, pageTextOf } from './tokens.mjs'
 
 /** the most pieces a translated unit may have */
 export const PIECES_MAX = 20_000
@@ -44,14 +44,6 @@ const OVERLAP_SHARE = 0.5
  * this the unit cannot be shown to pass, and it stays the original's. A real unit compares a few hundred
  */
 const PAIRS_MAX = 2_000_000
-
-/** the classes whose rendering may bring its own brackets where no text of it reads: a citation (natbib's '(Hill et al.,
- *  2016)', a numeric '[3]'), beside which a bracket the translation does not balance is taken as doubled. An equation
- *  reference's are known ('(…)'); a \ref renders a bare number */
-const BRACKETED = new Set(['cite'])
-/** brackets by kind, half and full width alike: round and square */
-const OPENS = new Map([['(', 'round'], ['\uff08', 'round'], ['[', 'square'], ['\uff3b', 'square']])
-const CLOSES = new Map([[')', 'round'], ['\uff09', 'round'], [']', 'square'], ['\uff3d', 'square']])
 
 const visible = row => (row.flags & (PH_FLAG.EMPTY | PH_FLAG.LOST)) === 0
 /** the unit's size: its lines' median, as the tokens take it */
@@ -168,7 +160,8 @@ export function heldByNone(pieces, roles) {
  *   0.5 pt, across and up;
  * - 'glyph': a drawn character is not in its face (canDraw);
  * - 'brackets': an opening bracket of the translation right before a drawn citation or reference that begins with its own
- *   bracket, or a closing one right after one that ends with its own (a doubled bracket).
+ *   bracket, or a closing one right after one that ends with its own (a doubled bracket); an echo of a citation's own,
+ *   which the tokens do not draw (tokens.mjs echoesOf), is none.
  */
 export function netOf(input, laid, tr) {
   const unit = input.file.unit(laid.id)
@@ -263,7 +256,8 @@ function overlapIn(unit) {
 // the kept renderings of each page (every display's segments and every label of the units on it), as x0, y0, x1, y1,
 // made once a file and page
 const KEPT = new WeakMap()
-function keptOn(file, page) {
+/** a page's kept renderings: every display's segments and every label of the units on it (x0, y0, x1, y1, stride 4) */
+export function keptOn(file, page) {
   let pages = KEPT.get(file)
   if (!pages) KEPT.set(file, (pages = new Map()))
   let out = pages.get(page)
@@ -318,35 +312,6 @@ function glyphs(laid, roles) {
   return null
 }
 
-/** where each bracket of the translation's text pieces closes or is closed: by piece index and index in it, its partner's,
- *  null for one the translation leaves unmatched. A close matches the innermost open where that is of its kind */
-function bracketPairs(pieces) {
-  const partner = new Map(), stack = []
-  pieces.forEach((p, i) => {
-    if (p[0] !== 0) return
-    for (let j = 0; j < p[1].length; j++) {
-      const ch = p[1][j], key = `${i}:${j}`
-      if (OPENS.has(ch)) { stack.push({ key, kind: OPENS.get(ch) }); partner.set(key, null) }
-      else if (CLOSES.has(ch)) {
-        const top = stack[stack.length - 1]
-        if (top && top.kind === CLOSES.get(ch)) { stack.pop(); partner.set(key, top.key); partner.set(top.key, key) }
-        else partner.set(key, null)
-      }
-    }
-  })
-  return partner
-}
-
-/** the first or last character of a text piece that is not white space, with its key in bracketPairs, or null */
-function beside(pieces, i, end) {
-  const p = pieces[i]
-  if (p?.[0] !== 0) return null
-  const s = p[1]
-  if (end) { for (let j = s.length - 1; j >= 0; j--) if (!/\s/.test(s[j])) return { ch: s[j], key: `${i}:${j}` } }
-  else for (let j = 0; j < s.length; j++) if (!/\s/.test(s[j])) return { ch: s[j], key: `${i}:${j}` }
-  return null
-}
-
 /**
  * 'brackets' where a bracket of the translation doubles one the rendering beside it brings: an opening bracket right before
  * a placeholder whose rendering begins with one of its kind (round or square, of either width), or a closing one right
@@ -355,31 +320,37 @@ function beside(pieces, i, end) {
  * One the translation matches further off is nesting, which passes: '(or (3.1))', and '([10, 25])' whose kinds differ.
  * The rendering is its page text, or a crop's own text (tokens.mjs ownText: the layout's, else the page's within the width
  * band); an equation reference's is '(…)' (amsmath's \eqref) where none reads. A citation or reference whose rendering
- * cannot be read has a bracket beside it that the translation leaves unmatched taken as doubled, whatever its kind
+ * cannot be read has a bracket beside it that the translation leaves unmatched taken as doubled, whatever its kind. A
+ * bracket that echoes a citation's own (tokens.mjs echoesOf: unmatched, beside a citation whose rendering brings one of
+ * its kind or reads nowhere, the source bracketing it not) is not drawn, and doubles nothing
  */
 function brackets(input, unit, laid, pieces) {
   const items = new Map()
   for (const line of laid.lines) for (const it of line.items) if (it.ph !== undefined && !items.has(it.ph)) items.set(it.ph, it)
-  let partner = null, latin
+  let partner = null
   const em = emOf(input), size = sizeOf(unit)
+  const latin = faceFor(input.roles, { script: 'latin', cls: 'serif', design: input.roles.family, bold: false, italic: false, caps: false })
+  const own = { textIn: input.textIn, width: t => em(t, latin, false), size }
+  // a bracket that echoes a citation's own is drawn as nothing by the tokens (echoesOf): no bracket doubled there
+  const echoes = echoesOf(pieces, unit, own)
   for (let i = 0; i < pieces.length; i++) {
     const p = pieces[i]
     if (p[0] !== 1) continue
     const item = items.get(p[1]), row = unit.ph.get(p[1])
     if (!item || !row) continue
     const b = beside(pieces, i - 1, true), a = beside(pieces, i + 1, false)
-    const open = b && OPENS.get(b.ch), close = a && CLOSES.get(a.ch)
+    const open = b && !echoes.has(b.key) && OPENS.get(b.ch), close = a && !echoes.has(a.key) && CLOSES.get(a.ch)
     if (!open && !close) continue
     partner ??= bracketPairs(pieces)
     let r = null
     if (item.kind === 'page-text') r = item.text ?? null
     else {
-      latin ??= faceFor(input.roles, { script: 'latin', cls: 'serif', design: input.roles.family, bold: false, italic: false, caps: false })
-      r = ownText(row, { textIn: input.textIn, width: t => em(t, latin, false), size })
+      r = ownText(row, own)
       if (r === null && row.kind === 'eqref') r = '(\u2026)'
     }
     if (r === null || !r.length) {
-      // its rendering unread: a citation beside a bracket the translation leaves unmatched
+      // its rendering unread: a citation beside a bracket the translation leaves unmatched (one the source brackets: the
+      // others are echoes)
       if (BRACKETED.has(row.kind) && ((open && partner.get(b.key) === null) || (close && partner.get(a.key) === null))) return 'brackets'
       continue
     }

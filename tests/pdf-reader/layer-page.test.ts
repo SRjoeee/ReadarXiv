@@ -7,8 +7,8 @@ import type { LayoutIndex } from '@/pdf-reader/engine/layout/file.mjs'
 import { column, han, inputOf, layoutOf, type UnitDef, words } from './helpers/layer-layout'
 
 // Page-even: a page's body units (paragraphs, the abstract, theorems whose frames all lie on the page) set at one size,
-// the smallest any of them took, and in zh at one leading; laid again once, from that setting. Headings, captions,
-// footnotes, cells and a unit on two pages keep their own fit. Layouts are written in the tests; the measure is the fake one
+// the smallest any of them took, never at one leading; laid again once, from that size. Headings, captions, footnotes,
+// cells and a unit on two pages keep their own fit. Layouts are written in the tests; the measure is the fake one
 
 const laid = (r: Laid): LaidUnit => {
   if (!r.fit) throw new Error(`unfit: ${r.why}`)
@@ -31,10 +31,9 @@ function evenPage(file: LayoutIndex, page: number, input: LayerInput, trs: Reado
   const body = bodyUnits(file, page).map(id => first.get(id)!).filter((r): r is LaidUnit => r.fit)
   const even = evenOf(body, input.rules)
   const out = new Map(first)
-  const both = input.rules.even === 'size-and-lead'
   if (even) {
     for (const u of body) {
-      if (!(u.state.scale > even.maxScale + 1e-9 || (both && u.state.lead > even.lead + 1e-9))) continue
+      if (!(u.state.scale > even.maxScale + 1e-9)) continue
       const again = layUnit(input, u.id, trs.get(u.id)!, even)
       if (again.fit) out.set(u.id, again)
     }
@@ -56,23 +55,31 @@ describe('page-even', () => {
     expect(bodyUnits(file, 2)).toEqual([9])
   })
 
-  it('evenOf: the smallest scale, and in size-and-lead the smallest leading; null in unit mode and when every unit is at it', () => {
+  it('evenOf: the smallest scale and never the leading; null in unit mode and when every unit is at it', () => {
     const zh = layerRulesFor('zh'), de = layerRulesFor('de')
-    expect(zh.even).toBe('size-and-lead')
-    expect(de.even).toBe('size')
-    expect(evenOf([at(1, 1.3), at(0.95, 1), at(1, 1.1)], zh)).toEqual({ maxScale: 0.95, lead: 1 })
-    // the smallest leading even where the smallest scale's unit has another
-    expect(evenOf([at(0.95, 1.2), at(1, 1.05)], zh)).toEqual({ maxScale: 0.95, lead: 1.05 })
-    // in 'size' the size alone: each unit's leading starts from the rules' own
-    expect(evenOf([at(1, 1), at(0.9, 0.95)], de)).toEqual({ maxScale: 0.9, lead: de.leadBase })
+    // every script evens the size alone (fix 4)
+    for (const t of ['zh', 'zh-TW', 'ja', 'ko', 'de', 'ru']) expect(layerRulesFor(t).even, t).toBe('size')
+    expect(evenOf([at(1, 1.3), at(0.95, 1), at(1, 1.1)], zh)).toEqual({ maxScale: 0.95 })
+    expect(evenOf([at(1, 1), at(0.9, 0.95)], de)).toEqual({ maxScale: 0.9 })
+    // one unit that needed a tighter leading at full size: nothing to lay again (the leading was evened before fix 4)
+    expect(evenOf([at(1, 1.3), at(1, 1), at(1, 1.15)], zh)).toBeNull()
     // nothing to lay again
     expect(evenOf([at(1, 1.3), at(0.95, 1)], { ...zh, even: 'unit' })).toBeNull()
-    expect(evenOf([at(0.95, 1), at(0.95, 1)], zh)).toBeNull()
+    expect(evenOf([at(0.95, 1), at(0.95, 1.3)], zh)).toBeNull()
     expect(evenOf([at(0.9, 1), at(0.9, 0.95)], de)).toBeNull()
     expect(evenOf([], zh)).toBeNull()
-    // Japanese and Korean even the size alone
-    expect(layerRulesFor('ja').even).toBe('size')
-    expect(layerRulesFor('ko').even).toBe('size')
+  })
+
+  it("one paragraph that needs a tight leading leaves the page's other paragraphs at their own (fix 4)", () => {
+    // zh: three paragraphs of nine lines at full size, the middle one set at a leading of 1.1, the others at their 1.3
+    const file = layoutOf([nine(1, 700), nine(2, 580), nine(3, 460)])
+    const input = inputOf(file, 'zh')
+    const trs = new Map([[1, tr(han(250))], [2, tr(han(314))], [3, tr(han(250))]])
+    const { first, out, even } = evenPage(file, 1, input, trs)
+    expect([1, 2, 3].map(id => laid(first.get(id)!).state.lead)).toEqual([1.3, 1.1, 1.3])
+    expect([1, 2, 3].map(id => laid(first.get(id)!).state.scale)).toEqual([1, 1, 1])
+    expect(even).toBeNull()
+    for (const id of [1, 2, 3]) expect(out.get(id), `unit ${id}`).toBe(first.get(id))
   })
 
   it('evened once: re-laying with evenOf\'s setting changes only the units above it, and evenOf of the result is null', () => {
@@ -89,13 +96,13 @@ describe('page-even', () => {
       const before = [1, 2, 3].map(id => laid(first.get(id)!))
       const least = Math.min(...before.map(u => u.state.scale))
       expect(least, target).toBeLessThan(1)
-      expect(even, target).toEqual({ maxScale: least, lead: target === 'zh' ? Math.min(...before.map(u => u.state.lead)) : input.rules.leadBase })
+      expect(even, target).toEqual({ maxScale: least })
       for (const u of before) {
         const after = laid(out.get(u.id)!)
-        const above = u.state.scale > even!.maxScale || (target === 'zh' && u.state.lead > even!.lead)
-        if (!above) { expect(after, `${target} ${u.id}`).toBe(u); continue }
-        expect(after.state, `${target} ${u.id}`).toEqual(expect.objectContaining({ scale: even!.maxScale, knob: 'even' }))
-        if (target === 'zh') expect(after.state.lead).toBe(even!.lead)
+        if (!(u.state.scale > even!.maxScale)) { expect(after, `${target} ${u.id}`).toBe(u); continue }
+        // at the page's size, from the rules' own leading on down as far as it needs ('even' where it needs nothing more)
+        expect(after.state.scale, `${target} ${u.id}`).toBe(even!.maxScale)
+        expect(['even', 'track', 'borrow', 'lead'], `${target} ${u.id}`).toContain(after.state.knob)
         for (const l of after.lines) expect(l.size).toBeCloseTo(10 * even!.maxScale, 9)
         // the same text, all of it
         expect(after.lines.flatMap(l => l.items.map(it => it.text)).join(target === 'zh' ? '' : ' ')).toBe(texts[u.id - 1])
@@ -122,8 +129,8 @@ describe('page-even', () => {
     const { first, out, even } = evenPage(file, 1, input, trs)
     expect(laid(first.get(4)!).state.scale).toBeLessThan(laid(first.get(3)!).state.scale)
     // the setting is the paragraphs' alone: the caption's smaller size is not the page's
-    expect(even).toEqual({ maxScale: laid(first.get(3)!).state.scale, lead: 1 })
-    expect(laid(out.get(1)!).state).toEqual(expect.objectContaining({ scale: even!.maxScale, lead: 1, knob: 'even' }))
+    expect(even).toEqual({ maxScale: laid(first.get(3)!).state.scale })
+    expect(laid(out.get(1)!).state).toEqual(expect.objectContaining({ scale: even!.maxScale, lead: 1.3, knob: 'even' }))
     for (const id of [2, 4, 5, 6, 7]) expect(out.get(id), `unit ${id}`).toBe(first.get(id))
     expect(laid(out.get(7)!).state.scale).toBe(1)
   })

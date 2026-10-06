@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { drawUnit, type UnitDraw } from '@/pdf-reader/engine/layer/draw.mjs'
 import { type LayerInput, type Laid, type LaidUnit, layUnit, type Tr } from '@/pdf-reader/engine/layer/fit.mjs'
 import { checkPieces, netOf, PIECES_MAX } from '@/pdf-reader/engine/layer/net.mjs'
-import { COLOUR_SHIFT, LAYER_COLOURS, STYLE, type TrPiece } from '@/pdf-reader/engine/layer/pieces.mjs'
+import { COLOUR_SHIFT, LAYER_COLOURS, STYLE, type TrPiece, trText } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { PAGE_TEXT_MAX, PAGE_TEXT_MIN } from '@/pdf-reader/engine/layer/tokens.mjs'
 import { PH_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { column, type EraseSpec, han, inputOf, layoutOf, type PhSpec, type UnitDef, withText } from './helpers/layer-layout'
@@ -174,8 +174,9 @@ describe('the net', () => {
       // the closing side: '(3)' right before '\uff09', the opening bracket a space away, so no drop either
       { why: 'brackets', units: [para({ ph: [MATH, EQREF, CALL, DISPLAY] })], pieces: [[0, han(20)], [1, 2], [0, `${han(10)}\uff08 `], [1, 3], [0, `\uff09${han(5)}`], [1, 8], [0, han(10)], [1, 6], [0, han(30)]], text: eqText },
       // a raised citation is its own ink, never page text: its rendering read from the page inside its segment, '(7)', after
-      // an opening bracket of its kind the translation never closes
-      { why: 'brackets', units: [para({ ph: [MATH, { ...CITE, flags: PH_FLAG.RAISED }, CALL, DISPLAY] })], pieces: [[0, han(20)], [1, 2], [0, `${han(10)}\uff08`], [1, 4], [0, han(5)], [1, 8], [0, han(10)], [1, 6], [0, han(30)]], text: (_p, x0) => (x0 === 200 ? '(7)' : null) },
+      // an opening bracket of its kind the translation never closes, where the source brackets the citation itself (its
+      // brackets the source's, not an echo: without SOURCE_BRACKETS it is one, which the tokens do not draw)
+      { why: 'brackets', units: [para({ ph: [MATH, { ...CITE, flags: PH_FLAG.RAISED | PH_FLAG.SOURCE_BRACKETS }, CALL, DISPLAY] })], pieces: [[0, han(20)], [1, 2], [0, `${han(10)}\uff08`], [1, 4], [0, han(5)], [1, 8], [0, han(10)], [1, 6], [0, han(30)]], text: (_p, x0) => (x0 === 200 ? '(7)' : null) },
       { why: 'pieces', units: [para()], pieces: [...WHOLE, [1, 2]] },
     ]
     try {
@@ -341,11 +342,13 @@ describe('the net, fix round 1 (the review)', () => {
       return layUnit(o.layoutText ? { ...inp, file: withText(inp.file, 1, 4, o.layoutText) } : inp, 1, tr(pieces))
     }
     const why = (r: Laid) => (r.fit ? 'fit' : r.why)
-    // 'objectives (Hill et al., 2016).' translated with a ')' of its own: the citation drawn as its ink (no page text
-    // reads), its rendering unknown, and a closing bracket the translation never opened right after it
-    expect(why(lay([...NAT, [1, 4], [0, `)${han(5)}`], ...tail]))).toBe('brackets')
+    // 'objectives (Hill et al., 2016).' translated with a ')' of its own, where the source brackets the citation itself: the
+    // citation drawn as its ink (no page text reads), its rendering unknown, and a closing bracket the translation never
+    // opened right after it (without SOURCE_BRACKETS that ')' is an echo, the next test)
+    const SOURCE: PhSpec = { ...NATBIB, flags: PH_FLAG.SOURCE_BRACKETS }
+    expect(why(lay([...NAT, [1, 4], [0, `)${han(5)}`], ...tail], { ph: SOURCE }))).toBe('brackets')
     // the same with the layout's own text, which says it ends with its own ')'
-    expect(why(lay([...NAT, [1, 4], [0, `)${han(5)}`], ...tail], { layoutText: AUTHOR }))).toBe('brackets')
+    expect(why(lay([...NAT, [1, 4], [0, `)${han(5)}`], ...tail], { layoutText: AUTHOR, ph: SOURCE }))).toBe('brackets')
     // '(or the scalar equation (3.1))': the closing bracket after the rendering closes the translation's own '\uff08'
     const EQ: PhSpec = { k: 4, kind: 'eqref', segs: [[1, 200, 700, 225, 707, 697.5]] }
     expect(why(lay([...NAT, [0, `\uff08${han(4)}`], [1, 4], [0, `\uff09${han(5)}`], ...tail], { text: '(3.1)', ph: EQ }))).toBe('fit')
@@ -367,6 +370,42 @@ describe('the net, fix round 1 (the review)', () => {
     const opens = (_p: number, x0: number) => (x0 === 200 ? '(ab' : x0 === 72 ? 'cd' : null)
     const inp2 = input([natbib({ ph: [MATH, TWO, CALL, DISPLAY] }), HEADING], opens)
     expect(why(layUnit(inp2, 1, tr([...NAT, [0, '\uff08'], [1, 4], [0, `\uff09${han(5)}`], ...tail])))).toBe('brackets')
+  })
+
+  it("a bracket that echoes a citation's own is kept for its offset and drawn as nothing; the unit is drawn (the brackets echo)", () => {
+    const NAT = [[0, han(20)], [1, 2], [0, han(10)]] as TrPiece[]
+    const tail = [[1, 8], [0, han(10)], [1, 6], [0, han(30)]] as TrPiece[]
+    const lay = (pieces: TrPiece[], o: { text?: string | null; layoutText?: string } = {}) => {
+      const base = input([natbib(), HEADING], own(o.text ?? null))
+      const inp = o.layoutText ? { ...base, file: withText(base.file, 1, 4, o.layoutText) } : base
+      return { inp, r: layUnit(inp, 1, tr(pieces)) }
+    }
+    // '… pairs (Rajpurkar et al., 2016).' translated '… [cite])…', 1810.04805-ja's unit 81: a ')' the translation
+    // never opened, right after a citation whose rendering is its own ink and reads nowhere; then the same where the
+    // layout's own text says it ends with ')'; then an opening '\uff08' the translation never closes, before it
+    const close: TrPiece[] = [...NAT, [1, 4], [0, `)${han(5)}`], ...tail]
+    const open: TrPiece[] = [...NAT.slice(0, 2), [0, `${han(10)}\uff08`], [1, 4], [0, han(5)], ...tail]
+    for (const [pieces, o, bracket] of [[close, {}, ')'], [close, { layoutText: AUTHOR }, ')'], [open, { layoutText: AUTHOR }, '\uff08']] as const) {
+      const { inp, r } = lay(pieces, o)
+      const u = laid(r)
+      expect(netOf(inp, u, tr(pieces))).toBeNull()
+      // nothing draws the bracket: no text item holds it, and the drawing's runs hold it only as the page text's own
+      const items = u.lines.flatMap(l => l.items)
+      expect(items.filter(it => it.kind === 'text').map(it => it.text).join('')).not.toContain(bracket)
+      const count = (s: string) => s.split(bracket).length - 1
+      const runs = drawUnit(inp, u, 1).lines.flatMap(l => l.runs.map(rn => rn.text)).join('')
+      expect(count(runs)).toBe(count(items.filter(it => it.kind === 'page-text').map(it => it.text).join('')))
+      // every offset is still trText's, which holds it: the text after it starts one past it
+      const t = trText([...pieces])
+      const at = t.indexOf(bracket)
+      expect(at).toBeGreaterThan(0)
+      const after = items.find(it => it.kind === 'text' && it.from > at)!
+      expect(t.slice(after.from, after.to)).toBe(after.text)
+      expect(items.every(it => it.from >= 0 && it.to <= t.length)).toBe(true)
+    }
+    // a bracket of another kind beside it is the translation's own, and is drawn
+    const other = laid(lay([...NAT, [1, 4], [0, `]${han(5)}`], ...tail], { layoutText: AUTHOR }).r)
+    expect(other.lines.flatMap(l => l.items.map(it => it.text ?? '')).join('')).toContain(']')
   })
 
   it("a crop stays in its own page's part of a split unit (I4)", () => {

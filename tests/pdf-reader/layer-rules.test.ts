@@ -13,8 +13,8 @@ const SCRIPTS: Script[] = ['Hans', 'Hant', 'Jpan', 'Kore', 'Latn', 'Cyrl']
 
 // the plan's table (2026-10-06, iteration 2's chosen values); superseded as data by the sweep's pull request (§6.2 step 5)
 const PRIORS: Record<Script, LayerRules> = {
-  Hans: { leadBase: 1.3, leadFloor: 1.0, trackMin: -0.05, letterMin: 0, compress: 2, borrowMax: 1, sizeStep: 0.025, sizeFloor: 0.75, even: 'size-and-lead', autospace: 0.2, spaceMax: 1.0, hyphenate: 'en' },
-  Hant: { leadBase: 1.3, leadFloor: 1.0, trackMin: -0.05, letterMin: 0, compress: 0, borrowMax: 1, sizeStep: 0.025, sizeFloor: 0.75, even: 'size-and-lead', autospace: 0.2, spaceMax: 1.0, hyphenate: 'en' },
+  Hans: { leadBase: 1.3, leadFloor: 1.0, trackMin: -0.05, letterMin: 0, compress: 2, borrowMax: 1, sizeStep: 0.025, sizeFloor: 0.75, even: 'size', autospace: 0.2, spaceMax: 1.0, hyphenate: 'en' },
+  Hant: { leadBase: 1.3, leadFloor: 1.0, trackMin: -0.05, letterMin: 0, compress: 0, borrowMax: 1, sizeStep: 0.025, sizeFloor: 0.75, even: 'size', autospace: 0.2, spaceMax: 1.0, hyphenate: 'en' },
   Jpan: { leadBase: 1.0, leadFloor: 1.0, trackMin: -0.05, letterMin: 0, compress: 2, borrowMax: 1, sizeStep: 0.025, sizeFloor: 0.75, even: 'size', autospace: 0.2, spaceMax: 1.0, hyphenate: 'en' },
   Kore: { leadBase: 1.0, leadFloor: 1.0, trackMin: -0.05, letterMin: 0, compress: 2, borrowMax: 1, sizeStep: 0.025, sizeFloor: 0.75, even: 'size', autospace: 0, spaceMax: 1.0, hyphenate: 'en' },
   Latn: { leadBase: 1.0, leadFloor: 0.95, trackMin: 0, letterMin: -0.01, compress: 0, borrowMax: 1, sizeStep: 0.025, sizeFloor: 0.75, even: 'size', autospace: 0, spaceMax: 1.2, hyphenate: null },

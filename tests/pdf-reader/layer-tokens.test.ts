@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { rolesFor } from '@/pdf-reader/engine/font-roles.mjs'
+import { type Design, type FontClass, faceFor, rolesFor } from '@/pdf-reader/engine/font-roles.mjs'
 import { layerRulesFor } from '@/pdf-reader/engine/layer-rules.mjs'
 import type { Hyphenator } from '@/pdf-reader/engine/layer/hyphen.mjs'
 import { STYLE, type TrPiece, trText } from '@/pdf-reader/engine/layer/pieces.mjs'
@@ -14,6 +14,15 @@ import { fileOf, measure, type PhSpec, type UnitSpec, unitOf } from './helpers/l
 const REGULAR = 'NimbusRomNo9L-Regu'
 const ITALIC = 'NimbusRomNo9L-ReguItal'
 const MEDIUM = 'NimbusRomNo9L-Medi'
+
+/** the role table's faces for a Times paper's runs, as the tokens ask for them (font-roles.mjs faceFor): read from the
+ *  table, so that a change of the table's faces is not a change of these tests */
+const ROLES = rolesFor('en', 'times')
+const faceOf = (design: Design, cls: FontClass['cls'], bold = false, italic = false) => faceFor(ROLES, { script: 'latin', cls, design, bold, italic, caps: false })
+const F = {
+  regular: faceOf('times', 'serif'), italic: faceOf('times', 'serif', false, true), bold: faceOf('times', 'serif', true),
+  boldItalic: faceOf('times', 'serif', true, true), mono: faceOf('courier', 'mono'), typewriter: faceOf('cmtt', 'mono'),
+}
 
 interface Opts { target: string; fonts: string[]; unit: Partial<UnitSpec>; textIn: TextIn; hyphen: Hyphenator | null; classOf: (k: number) => string | null }
 const run = (pieces: TrPiece[], o: Partial<Opts> = {}) => {
@@ -52,55 +61,57 @@ describe('the exact values', () => {
 
 describe('the style of a run', () => {
   it("the base style is the lines' font, groups on top, emph toggles", () => {
+    // the four styles are four faces of the table, so that each expectation below tells them apart
+    expect(new Set([F.regular, F.italic, F.bold, F.boldItalic]).size).toBe(4)
     // an italic original: a word in \emph is upright, the rest stays italic
     const emph = need([[0, 'the '], [2, 1, STYLE.EMPH], [0, 'word'], [3, 2], [0, ' rest']], { fonts: [ITALIC] })
-    expect(faces(emph)).toEqual([['the', 'termes-italic'], ['word', 'termes-regular'], ['rest', 'termes-italic']])
+    expect(faces(emph)).toEqual([['the', F.italic], ['word', F.regular], ['rest', F.italic]])
     // an upright original: \emph is italic, and a group of \textbf is bold
     const upright = need([[0, 'a '], [2, 1, STYLE.EMPH], [0, 'b'], [3, 2], [0, ' '], [2, 3, STYLE.BOLD], [0, 'c'], [3, 4]])
-    expect(faces(upright)).toEqual([['a', 'termes-regular'], ['b', 'termes-italic'], ['c', 'termes-bold']])
+    expect(faces(upright)).toEqual([['a', F.regular], ['b', F.italic], ['c', F.bold]])
     // \emph in \emph is upright again, and \textnormal undoes everything the lines had
     const twice = need([[2, 1, STYLE.EMPH], [0, 'a '], [2, 2, STYLE.EMPH], [0, 'b'], [3, 3], [3, 4]])
-    expect(faces(twice)).toEqual([['a', 'termes-italic'], ['b', 'termes-regular']])
+    expect(faces(twice)).toEqual([['a', F.italic], ['b', F.regular]])
     const normal = need([[2, 1, STYLE.NORMAL], [0, 'plain'], [3, 2]], { fonts: [MEDIUM] })
-    expect(faces(normal)).toEqual([['plain', 'termes-regular']])
-    expect(faces(need([[0, 'heavy']], { fonts: [MEDIUM] }))).toEqual([['heavy', 'termes-bold']])
+    expect(faces(normal)).toEqual([['plain', F.regular]])
+    expect(faces(need([[0, 'heavy']], { fonts: [MEDIUM] }))).toEqual([['heavy', F.bold]])
   })
 
   it('the font of most of the lines is the base', () => {
     const file = [REGULAR, ITALIC]
-    expect(faces(need([[0, 'x']], { fonts: file, unit: { lineFonts: [1, 1, 0] } }))).toEqual([['x', 'termes-italic']])
-    expect(faces(need([[0, 'x']], { fonts: file, unit: { lineFonts: [0, 1, 0] } }))).toEqual([['x', 'termes-regular']])
+    expect(faces(need([[0, 'x']], { fonts: file, unit: { lineFonts: [1, 1, 0] } }))).toEqual([['x', F.italic]])
+    expect(faces(need([[0, 'x']], { fonts: file, unit: { lineFonts: [0, 1, 0] } }))).toEqual([['x', F.regular]])
     // a tie goes to the font the lines meet first
-    expect(faces(need([[0, 'x']], { fonts: file, unit: { lineFonts: [1, 0] } }))).toEqual([['x', 'termes-italic']])
+    expect(faces(need([[0, 'x']], { fonts: file, unit: { lineFonts: [1, 0] } }))).toEqual([['x', F.italic]])
   })
 
   it('where the groups hold half the text and set a style, the base does not', () => {
     // the lines are italic because the \textit group is most of the unit: the words outside it are upright
     const pieces: TrPiece[] = [[0, 'a '], [2, 1, STYLE.ITALIC], [0, 'quite a long italic passage here'], [3, 2], [0, ' b']]
-    expect(faces(need(pieces, { fonts: [ITALIC] }))).toEqual([['a', 'termes-regular'], ['quite', 'termes-italic'], ['a', 'termes-italic'], ['long', 'termes-italic'], ['italic', 'termes-italic'], ['passage', 'termes-italic'], ['here', 'termes-italic'], ['b', 'termes-regular']])
+    expect(faces(need(pieces, { fonts: [ITALIC] }))).toEqual([['a', F.regular], ['quite', F.italic], ['a', F.italic], ['long', F.italic], ['italic', F.italic], ['passage', F.italic], ['here', F.italic], ['b', F.regular]])
     // a small group leaves the base alone
     const small = need([[0, 'a long run of ordinary words '], [2, 1, STYLE.ITALIC], [0, 'x'], [3, 2]], { fonts: [ITALIC] })
-    expect(faces(small).at(0)).toEqual(['a', 'termes-italic'])
+    expect(faces(small).at(0)).toEqual(['a', F.italic])
     // bold and italic are judged apart: bold groups do not make an italic base upright
     const bold = need([[2, 1, STYLE.BOLD], [0, 'a long bold passage of the unit'], [3, 2], [0, ' tail']], { fonts: ['NimbusRomNo9L-MediItal'] })
-    expect(faces(bold).at(-1)).toEqual(['tail', 'termes-italic'])
-    expect(faces(bold).at(0)).toEqual(['a', 'termes-bolditalic'])
+    expect(faces(bold).at(-1)).toEqual(['tail', F.italic])
+    expect(faces(bold).at(0)).toEqual(['a', F.boldItalic])
   })
 
   it("a switch holds to its group's end", () => {
     // inside a group: \bfseries holds to the group's close
     const grouped = need([[0, 'x '], [2, 1, 0], [0, 'a '], [2, 2, STYLE.BOLD | STYLE.SWITCH], [0, 'b '], [3, 3], [0, 'c']])
-    expect(faces(grouped)).toEqual([['x', 'termes-regular'], ['a', 'termes-regular'], ['b', 'termes-bold'], ['c', 'termes-regular']])
+    expect(faces(grouped)).toEqual([['x', F.regular], ['a', F.regular], ['b', F.bold], ['c', F.regular]])
     // at the top: to the unit's end, through the groups opened after it
     const top = need([[0, 'p '], [2, 1, STYLE.BOLD | STYLE.SWITCH], [0, 'q '], [2, 2, 0], [0, 'n'], [3, 3], [0, ' m']])
-    expect(faces(top)).toEqual([['p', 'termes-regular'], ['q', 'termes-bold'], ['n', 'termes-bold'], ['m', 'termes-bold']])
+    expect(faces(top)).toEqual([['p', F.regular], ['q', F.bold], ['n', F.bold], ['m', F.bold]])
   })
 
   it('a monospaced group takes the paper\'s mono design, and a colour is the group\'s', () => {
     const mono = need([[2, 1, STYLE.MONO], [0, 'xy'], [3, 2]], { fonts: [REGULAR, 'NimbusMonL-Regu'], unit: { lineFonts: [0, 0, 1] } })
-    expect(faces(mono)).toEqual([['xy', 'cursor-regular']])
+    expect(faces(mono)).toEqual([['xy', F.mono]])
     // no mono font in the paper: Latin Modern's typewriter
-    expect(faces(need([[2, 1, STYLE.MONO], [0, 'x'], [3, 2]]))).toEqual([['x', 'lm-mono-regular']])
+    expect(faces(need([[2, 1, STYLE.MONO], [0, 'x'], [3, 2]]))).toEqual([['x', F.typewriter]])
     const red = need([[0, 'a '], [2, 1, 3 << 11], [0, 'b'], [3, 2], [0, ' c']])
     expect(texts(red).map(t => t.colour)).toEqual([0, 3, 0])
   })
@@ -126,7 +137,7 @@ describe('placeholders', () => {
     expect(seen).toEqual([[1, 200, 698, 220, 710]])
     // the page text is drawn in the run's face, at its measure
     const page = tokens.find(t => t.mode === 'page-text')!
-    expect(page).toMatchObject({ face: 'termes-regular', script: 'latin', w: 1, ph: 3 })
+    expect(page).toMatchObject({ face: F.regular, script: 'latin', w: 1, ph: 3 })
   })
 
   it('a formula after a space is not glued, and one before CJK text is not either', () => {
@@ -159,6 +170,36 @@ describe('placeholders', () => {
     expect(author('(Smith, 2020)')).toBe('Smith, 2020')
     expect(author('Smith (2020)')).toBe('Smith (2020)')
     expect(author('[1)')).toBe('[1)')
+  })
+
+  it("a bracket that echoes a citation's own is kept for its offset in trText and drawn as nothing (the brackets echo)", () => {
+    const unread: TextIn = () => null
+    const cite = rows[3]!
+    const tokensFor = (pieces: TrPiece[], o: { spec?: PhSpec; textIn?: TextIn; target?: string } = {}) => need(pieces, { unit: { ph: { 3: o.spec ?? cite } }, textIn: o.textIn ?? unread, target: o.target })
+    const drawn = (tokens: Token[]) => tokens.filter(t => t.kind === 'text').map(t => t.s).join('')
+    // 1810.04805-ja's unit 81, 'pairs [cite]).': a ')' the translation never opened, after a citation that reads nowhere
+    const close: TrPiece[] = [[0, 'pairs '], [1, 3], [0, ').']]
+    const a = tokensFor(close)
+    expect(drawn(a)).toBe('pairs.')
+    // the offsets are trText's, which still holds the ')': the token after the citation covers ').' and draws '.', as a
+    // token with an invisible character does
+    const t = trText(close)
+    const dot = a.find(k => k.s === '.')!
+    expect(t.slice(dot.at, dot.at + dot.len)).toBe(').')
+    expect(t.slice(0, dot.at)).toBe('pairs ')
+    // Japanese, the citation's own text read as '[12]' and the translation's ']' after it
+    const ja = tokensFor([[0, '\u30da\u30a2'], [1, 3], [0, ']\u306e']], { textIn: () => '[12]', target: 'ja' })
+    expect(drawn(ja)).toBe('\u30da\u30a2\u306e')
+    expect(ja.find(k => k.mode === 'page-text')?.s).toBe('[12]')
+    // an opening '(' it never closes, before a citation that reads nowhere
+    expect(drawn(tokensFor([[0, 'see ('], [1, 3], [0, ' and']]))).toBe('seeand')
+    // not an echo: a bracket of another kind than the rendering's own, one the translation matches, one beside a citation
+    // the source brackets itself
+    expect(drawn(tokensFor([[0, 'see ('], [1, 3], [0, ' x']], { textIn: () => '[12]' }))).toBe('see(x')
+    expect(drawn(tokensFor([[0, 'see ( '], [1, 3], [0, ')']]))).toBe('see()')
+    expect(drawn(tokensFor(close, { spec: ph('cite', PH_FLAG.SOURCE_BRACKETS, [1, 200, 700, 220, 710, 698]) }))).toBe('pairs).')
+    // nor beside a formula, whose rendering brings no brackets
+    expect(drawn(need([[0, 'where '], [1, 2], [0, ').']], { unit: { ph: rows }, textIn: unread }))).toBe('where).')
   })
 
   it('without page text, a citation is a crop, and so is any other visible placeholder', () => {

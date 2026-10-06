@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FACES } from '@/pdf-reader/engine/font-roles.mjs'
-import { type DrawRun, drawUnit, spansOf, unitAt } from '@/pdf-reader/engine/layer/draw.mjs'
+import { type DrawRun, drawUnit, ERASE_PAD, spansOf, unitAt } from '@/pdf-reader/engine/layer/draw.mjs'
 import { type Laid, type LaidUnit, layUnit, type Tr } from '@/pdf-reader/engine/layer/fit.mjs'
 import { STYLE, type TrPiece, trText } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { PH_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
@@ -18,9 +18,17 @@ const laid = (r: Laid): LaidUnit => {
 const strides = (xs: number[], n: number) => Array.from({ length: xs.length / n }, (_, i) => xs.slice(n * i, n * i + n))
 const nine = () => layoutOf([{ id: 1, lines: column(9), frames: [{ lines: 9 }] }])
 
+/** a rectangle (x0, y0, x1, y1) of a 10 pt line at baseline b grown by the erase's pad on every side, up and down within
+ *  the line's own band (3 below its baseline, 8.5 above) */
+const padded = (r: number[], b: number) => [r[0]! - ERASE_PAD, Math.min(r[1]!, Math.max(r[1]! - ERASE_PAD, b - 3)), r[2]! + ERASE_PAD, Math.max(r[3]!, Math.min(r[3]! + ERASE_PAD, b + 8.5))]
+const near = (xs: number[], ys: number[]) => {
+  expect(xs).toHaveLength(ys.length)
+  xs.forEach((x, i) => { expect(x, `value ${i}`).toBeCloseTo(ys[i]!, 9) })
+}
+
 describe('the drawing', () => {
-  it("the erase is the layout's and nothing else", () => {
-    // a unit split over two pages, every line with two erase rectangles, and another unit below it on page 1
+  it("the erase is the layout's for the unit's lines on the page, each rectangle padded, and nothing else", () => {
+    // a unit split over two pages, every line with two erase rectangles, and another unit far below it on page 1
     const lines = [...column(3, { page: 1 }), ...column(3, { page: 2 })]
     const erase: EraseSpec[] = lines.flatMap((l, i): EraseSpec[] => [[i, 72, l.baseline - 2.5, 200 + i, l.baseline + 7], [i, 210 + i, l.baseline - 2, 472, l.baseline + 6]])
     const file = layoutOf([
@@ -29,19 +37,76 @@ describe('the drawing', () => {
     ])
     const inp = inputOf(file, 'zh')
     const u = laid(layUnit(inp, 1, tr(han(150))))
-    const own = (from: number, to: number) => erase.filter(e => e[0] >= from && e[0] < to).flatMap(e => e.slice(1))
+    const own = (from: number, to: number) => erase.filter(e => e[0] >= from && e[0] < to).flatMap(e => padded(e.slice(1), lines[e[0]]!.baseline))
     const one = drawUnit(inp, u, 1), two = drawUnit(inp, u, 2)
-    expect(one.erase).toEqual(own(0, 3))
-    expect(two.erase).toEqual(own(3, 6))
+    near(one.erase, own(0, 3))
+    near(two.erase, own(3, 6))
     // whatever the fit set: the lines drawn on each page are its own, and a page it is not on draws nothing
     expect(one.lines.map(l => l.baseline)).toEqual(u.lines.filter(l => l.page === 1).map(l => l.baseline))
     expect(two.lines.map(l => l.baseline)).toEqual(u.lines.filter(l => l.page === 2).map(l => l.baseline))
-    expect(drawUnit(inp, u, 3)).toEqual({ id: 1, page: 3, erase: [], crops: [], lines: [] })
-    // a unit borrowing lines below its frame still erases only the layout's
+    expect(drawUnit(inp, u, 3)).toEqual({ id: 1, page: 3, erase: [], crops: [], blend: 'darken', lines: [] })
+    // a unit borrowing lines below its frame still erases only the layout's lines
     const tall = layoutOf([{ id: 1, lines: column(2), frames: [{ lines: 2, below: 200 }], erase: [[0, 72, 697.5, 472, 707], [1, 72, 685.5, 472, 695]] }])
     const t = laid(layUnit(inputOf(tall, 'zh'), 1, tr(han(160))))
     expect(t.lines.length).toBeGreaterThan(2)
-    expect(drawUnit(inputOf(tall, 'zh'), t, 1).erase).toEqual([72, 697.5, 472, 707, 72, 685.5, 472, 695])
+    near(drawUnit(inputOf(tall, 'zh'), t, 1).erase, [...padded([72, 697.5, 472, 707], 700), ...padded([72, 685.5, 472, 695], 688)])
+    // the pad's own band: 2.5 below the baseline grows to 3 at most, 7 above to 7.6
+    expect(padded([72, 697.5, 472, 707], 700)).toEqual([72 - ERASE_PAD, 697, 472 + ERASE_PAD, 707 + ERASE_PAD])
+  })
+
+  it("the erase keeps off every other unit's lines: across another baseline, and beside on its own only the pad (fix 2)", () => {
+    // unit 1's line at 700 with a glyph box down to 683 (a math face's declared descent, CMSY's 0.96 em); unit 2's line 12
+    // below it, whose ink band is 685.5 to 696; unit 3 beside unit 1 on its baseline, 0.4 to the right of its rectangle
+    const file = layoutOf([
+      { id: 1, lines: [{ x1: 300, baseline: 700 }], erase: [[0, 72, 683, 300, 707]] },
+      { id: 2, lines: [{ x1: 472, baseline: 688 }], erase: [[0, 72, 685.5, 472, 695]] },
+      { id: 3, lines: [{ x0: 300.4, x1: 472, baseline: 700 }], erase: [[0, 300.4, 697.5, 472, 707]] },
+    ])
+    const inp = inputOf(file, 'zh')
+    const one = drawUnit(inp, laid(layUnit(inp, 1, tr(han(20)))), 1)
+    // up from unit 2's band and its gap; to the right no further than unit 3's line less its gap, never into its own box
+    near(one.erase, [72 - ERASE_PAD, 696 + 0.15, 300.4 - 0.15, 707 + ERASE_PAD])
+    // unit 2's padded rectangle stays below unit 1's band (697.5 up): nothing to give up
+    const two = drawUnit(inp, laid(layUnit(inp, 2, tr(han(30)))), 1)
+    near(two.erase, [72 - ERASE_PAD, 685, 472 + ERASE_PAD, 695 + ERASE_PAD])
+    // no erase rectangle of any of them meets another unit's band
+    for (const id of [1, 2, 3]) {
+      const d = drawUnit(inp, laid(layUnit(inp, id, tr(han(10)))), 1)
+      for (let i = 0; i + 3 < d.erase.length; i += 4) {
+        for (const [other, b, x0, x1] of [[1, 700, 72, 300], [2, 688, 72, 472], [3, 700, 300.4, 472]] as const) {
+          if (other === id) continue
+          const across = Math.min(d.erase[i + 2]!, x1) - Math.max(d.erase[i]!, x0), up = Math.min(d.erase[i + 3]!, b + 8) - Math.max(d.erase[i + 1]!, b - 2.5)
+          expect(across > 0 && up > 0, `unit ${id} into unit ${other}`).toBe(false)
+        }
+      }
+    }
+  })
+
+  it('the pad never takes the erase onto a kept rendering, and an erase kept off to nothing is the layout\'s (fix 2)', () => {
+    // a display of another unit 0.05 below unit 1's rectangle: padded, the erase would meet it by 0.55
+    const file = layoutOf([
+      { id: 1, lines: [{ x1: 472, baseline: 700 }], erase: [[0, 72, 698.5, 472, 707]] },
+      { id: 2, lines: [{ x1: 472, baseline: 680 }], ph: [{ k: 1, kind: 'display', segs: [[1, 100, 690, 400, 698.45, 686]] }] },
+    ])
+    const inp = inputOf(file, 'zh')
+    expect(drawUnit(inp, laid(layUnit(inp, 1, tr(han(20)))), 1).erase).toEqual([72, 698.5, 472, 707])
+    // a rectangle wholly inside another unit's band: kept off, nothing is left, and the layout's is drawn as it was
+    const inside = layoutOf([
+      { id: 1, lines: [{ x1: 472, baseline: 700 }], erase: [[0, 100, 688, 140, 692]] },
+      { id: 2, lines: [{ x1: 472, baseline: 688 }] },
+    ])
+    const i2 = inputOf(inside, 'zh')
+    expect(drawUnit(i2, laid(layUnit(i2, 1, tr(han(20)))), 1).erase).toEqual([100, 688, 140, 692])
+  })
+
+  it("crops are darkened in, and their sources are the layout's segments as they are (fix 2)", () => {
+    // a formula on line 0 (baseline 700) whose box reaches 690, into the band of line 1: the layout's segment is drawn whole
+    // (cut there, a formula's own ink would go: its box is the maker's to make from the ink)
+    const file = layoutOf([{ id: 1, lines: column(3), ph: [{ k: 2, kind: 'math', segs: [[1, 200, 700, 260, 709, 690]] }] }])
+    const inp = inputOf(file, 'zh')
+    const d = drawUnit(inp, laid(layUnit(inp, 1, tr([[0, han(10)], [1, 2], [0, han(30)]]))), 1)
+    expect(d.blend).toBe('darken')
+    expect(strides(d.crops, 9).map(c => c.slice(0, 5))).toEqual([[2, 200, 690, 260, 709]])
   })
 
   it('a crop keeps its ink\'s place against the baseline, scaled with the unit', () => {

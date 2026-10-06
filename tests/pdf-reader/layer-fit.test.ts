@@ -5,7 +5,7 @@ import type { TrPiece } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { layerRulesFor } from '@/pdf-reader/engine/layer-rules.mjs'
 import { PH_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { measure } from './helpers/layer-fixtures'
-import { column, han, inputOf, kanji, layoutOf, withText, words } from './helpers/layer-layout'
+import { column, han, inputOf, kanji, layoutOf, type UnitDef, withText, words } from './helpers/layer-layout'
 
 // The fit: a unit's translation set into the original's frames, giving up as little as it must, in the maintainer's order
 // (tracking, the space below, leading, size), or left the original's past the floor. Layouts are written in the tests and
@@ -45,10 +45,10 @@ describe('the states', () => {
     expect(de.filter(s => s.knob === 'track').map(s => [s.letter, s.track, s.compress])).toEqual([[-0.01, 0, 0]])
     expect(de.filter(s => s.knob === 'borrow').map(s => s.borrow)).toEqual([12, 24, 36, 48, 60, 72, 200])
     expect(de.filter(s => s.knob === 'lead').map(s => s.lead)).toEqual([0.95])
-    // a page-even start: its scale and leading, then on down from there; Traditional Chinese compresses nothing
-    const even = [...statesOf(layerRulesFor('zh-TW'), { below: 0, pitch: 12, maxScale: 0.9, lead: 1.15 })]
-    expect(even[0]).toEqual({ scale: 0.9, lead: 1.15, track: 0, letter: 0, compress: 0, borrow: 0, knob: 'even' })
-    expect(even.filter(s => s.knob === 'lead').map(s => s.lead)).toEqual([1.1, 1.05, 1])
+    // a page-even start: its scale, the rules' own leading, then on down from there; Traditional Chinese compresses nothing
+    const even = [...statesOf(layerRulesFor('zh-TW'), { below: 0, pitch: 12, maxScale: 0.9 })]
+    expect(even[0]).toEqual({ scale: 0.9, lead: 1.3, track: 0, letter: 0, compress: 0, borrow: 0, knob: 'even' })
+    expect(even.filter(s => s.knob === 'lead').map(s => s.lead)).toEqual([1.25, 1.2, 1.15, 1.1, 1.05, 1])
     expect(even.filter(s => s.knob === 'shrink').map(s => s.scale)).toEqual([0.875, 0.85, 0.825, 0.8, 0.775, 0.75])
     expect(even.every(s => s.compress === 0 && s.borrow === 0)).toBe(true)
     // borrowMax: the share of the space below a unit may take, here a half of 100
@@ -124,10 +124,11 @@ describe('the fit', () => {
     // the layout's own baselines, not a grid: the fit sets its lines on them
     const B = [700, 688.4, 676.1, 664.5, 652, 640.3, 628.2, 616, 604.1]
     const file = nine(0, B)
-    // zh at scale 0.9 and leading 1 (page-even's start): every line on its frame's next baseline
-    const zh = laid(layUnit(inputOf(file, 'zh'), 1, tr(han(200)), { maxScale: 0.9, lead: 1 }))
-    expect(zh.state).toEqual(state({ scale: 0.9, lead: 1, knob: 'even' }))
-    expect(zh.lines.length).toBeGreaterThan(3)
+    // zh at leading 1 (a text that needs it: nine lines of 42 at its tightest tracking): every line on its frame's next
+    // baseline
+    const zh = laid(layUnit(inputOf(file, 'zh'), 1, tr(han(350))))
+    expect(zh.state).toEqual(state({ scale: 1, lead: 1, track: -0.05, compress: 2, knob: 'lead' }))
+    expect(zh.lines.length).toBe(9)
     zh.lines.forEach((l, k) => { expect(l.baseline).toBe(B[k]) })
     // de at full size (its leading is 1.0)
     const de = laid(layUnit(inputOf(file, 'de'), 1, tr(words(80))))
@@ -144,8 +145,8 @@ describe('the fit', () => {
   })
 
   it('only the last frame borrows', () => {
-    // two frames of five lines, 200 wide (four lines of 20 characters at zh's leading): the first part fits, the second needs
-    // more lines than its frame has
+    // two frames of five lines, 200 wide (four lines of 20 characters at zh's leading): the text flows through both and needs
+    // more lines than the second has
     const two = (below0: number, below1: number) => layoutOf([{
       id: 1,
       lines: [...column(5, { x0: 72, w: 200 }), ...column(5, { x0: 320, w: 200 })],
@@ -158,23 +159,12 @@ describe('the fit', () => {
     expect(first.every(l => l.baseline >= 652)).toBe(true)
     expect(second.some(l => l.baseline < 652)).toBe(true)
     expect(textOf(a).join('')).toBe(text)
-    // the first frame's space below is never taken: with none below the last, nothing borrows
+    // the first frame's space below is never taken: with none below the last, nothing borrows, the leading tightens
     const b = laid(layUnit(inputOf(two(100, 0), 'zh'), 1, tr(text)))
     expect(b.state.borrow).toBe(0)
-    expect(b.state.knob).toBe('shrink')
+    expect(b.state.knob).toBe('lead')
     expect(b.lines.every(l => l.baseline >= 652 - 0.01)).toBe(true)
     expect(textOf(b).join('')).toBe(text)
-    // the first part too long for its frame: it never takes its frame's space below, the state moves on instead
-    const long = layoutOf([{
-      id: 1,
-      lines: [...column(5, { x0: 72, w: 200 }), ...column(5, { x0: 320, w: 200 })],
-      frames: [{ lines: 5, below: 100 }, { column: 1, lines: 5, share: 600, below: 100 }],
-    }])
-    const c = laid(layUnit(inputOf(long, 'zh'), 1, tr(text)))
-    expect(c.cuts).toEqual([108])
-    expect(c.lines.filter(l => l.frame === 0).every(l => l.baseline >= 652 - 0.01)).toBe(true)
-    expect(['lead', 'shrink']).toContain(c.state.knob)
-    expect(textOf(c).join('')).toBe(text)
   })
 
   it('a line that ends where its text ended is set to its frame\'s widest', () => {
@@ -192,41 +182,62 @@ describe('the fit', () => {
     expect((last[0]!.x + last.at(-1)!.x + last.at(-1)!.w) / 2).toBeCloseTo(306, 6)
   })
 
-  it("a split unit is cut at the sentence nearest each frame's share", () => {
+  it('a split unit flows through its frames: each filled before the next starts, the cuts where the text moves on (fix 5)', () => {
     // 1512's unit 16: five lines in the left column, nine in the right, the second box from 0.37 of the source; the
-    // translation's sentences start at 0.31 and 0.42 of it
+    // translation's sentences start at 0.31 and 0.42 of it. Flowed, the left frame takes four full lines whatever the
+    // sentences and the share (before fix 5: cut at the sentence 84 or 62)
     const split = (left: number) => layoutOf([{
       id: 1,
       lines: [...column(5, { x0: 40, w: left }), ...column(9, { x0: 320, w: 240 })],
       frames: [{ lines: 5 }, { column: 1, lines: 9, share: 370 }],
     }])
     const text = han(200), sentences = [62, 84]
-    // the left frame holds 0.42 of it (four lines of 22): cut at 0.42's start, the nearer
-    const a = laid(layUnit(inputOf(split(220), 'zh'), 1, tr(text, sentences)))
-    expect(a.cuts).toEqual([84])
-    expect(a.state.knob).toBe('none')
-    expect(a.lines.find(l => l.frame === 1)!.from).toBe(84)
-    expect(a.lines.filter(l => l.frame === 0).at(-1)!.to).toBe(84)
-    // it does not (four lines of 20): the cut gives a sentence to the roomier right frame before any state moves
-    const b = laid(layUnit(inputOf(split(200), 'zh'), 1, tr(text, sentences)))
-    expect(b.cuts).toEqual([62])
-    expect(b.state.knob).toBe('none')
-    expect(b.lines.find(l => l.frame === 1)!.from).toBe(62)
-    for (const u of [a, b]) expect(textOf(u).join('')).toBe(text)
+    for (const [left, per] of [[220, 22], [200, 20]] as const) {
+      const u = laid(layUnit(inputOf(split(left), 'zh'), 1, tr(text, sentences)))
+      expect(u.state.knob, `${left}`).toBe('none')
+      expect(u.lines.filter(l => l.frame === 0).map(l => l.to - l.from), `${left}`).toEqual([per, per, per, per])
+      expect(u.cuts, `${left}`).toEqual([4 * per])
+      expect(u.lines.find(l => l.frame === 1)!.from).toBe(4 * per)
+      expect(textOf(u).join('')).toBe(text)
+    }
+    // a translation shorter than the first frame: the second is left empty, the cut at the text's end
+    const short = laid(layUnit(inputOf(split(220), 'zh'), 1, tr(han(60))))
+    expect(short.lines.every(l => l.frame === 0)).toBe(true)
+    expect(short.cuts).toEqual([60])
   })
 
-  it('of two neighbours, the roomier takes the sentence; the other cut stays', () => {
-    // three frames: the middle one's part (75 characters in four lines of 18) does not fit; the first frame has one line to
+  it("where the flow would take a crop off its page, the split is cut at the sentence nearest each frame's share", () => {
+    // the left frame on page 1, the right on page 2, a formula of page 2 at 85 of the translation: flowed, it would be set
+    // in the left frame's fourth line (88 characters), so the unit is cut at the sentence nearest the share (84)
+    const lines = [...column(5, { x0: 40, w: 220 }), ...column(9, { page: 2, x0: 320, w: 240 })]
+    const file = layoutOf([{ id: 1, lines, frames: [{ lines: 5 }, { page: 2, column: 1, lines: 9, share: 370 }], ph: [{ k: 2, kind: 'math', segs: [[2, 330, 700, 340, 707, 697.5]] }] }])
+    const pieces: TrPiece[] = [[0, han(85)], [1, 2], [0, han(115)]]
+    const u = laid(layUnit(inputOf(file, 'zh'), 1, tr(pieces, [62, 84])))
+    expect(u.cuts).toEqual([84])
+    expect(u.state.knob).toBe('none')
+    expect(u.lines.find(l => l.items.some(it => it.ph === 2))!.page).toBe(2)
+    expect(textOf(u).join('')).toBe(`${han(85)}[2]${han(115)}`)
+    // the same formula past the left frame's last character: the flow sets it on page 2, and nothing is cut at a sentence
+    const later: TrPiece[] = [[0, han(90)], [1, 2], [0, han(110)]]
+    const v = laid(layUnit(inputOf(file, 'zh'), 1, tr(later, [62, 84])))
+    expect(v.cuts).toEqual([88])
+    expect(v.lines.find(l => l.items.some(it => it.ph === 2))!.page).toBe(2)
+  })
+
+  it('of two neighbours, the roomier takes the sentence; the other cut stays (the cut where a crop must keep its page)', () => {
+    // three frames, the last on page 2 and a formula of page 2 at 150: flowed, it would be set on page 1 (176 characters
+    // there). Cut: the middle one's part (75 characters in four lines of 18) does not fit; the first frame has one line to
     // spare, the last two: the last takes a sentence, its cut moving back from 150 to 140
     const file = layoutOf([{
       id: 1,
       lines: [...column(5, { x0: 40, w: 260 }), ...column(5, { x0: 320, w: 180 }), ...column(9, { page: 2, w: 300 })],
       frames: [{ lines: 5 }, { column: 1, lines: 5, share: 250 }, { page: 2, lines: 9, share: 500 }],
+      ph: [{ k: 2, kind: 'math', segs: [[2, 100, 700, 110, 707, 697.5]] }],
     }])
-    const u = laid(layUnit(inputOf(file, 'zh'), 1, tr(han(300), [60, 75, 140, 150])))
+    const u = laid(layUnit(inputOf(file, 'zh'), 1, tr([[0, han(150)], [1, 2], [0, han(149)]], [60, 75, 140, 150])))
     expect(u.cuts).toEqual([75, 140])
     expect(u.state.knob).toBe('none')
-    expect(textOf(u).join('')).toBe(han(300))
+    expect(textOf(u).join('')).toBe(`${han(150)}[2]${han(149)}`)
   })
 
   it('a placeholder is drawn whole: one wider than every line is unfit, never cut across two lines', () => {
@@ -245,9 +256,9 @@ describe('the fit', () => {
     }
   })
 
-  it("a split's cut keeps each frame's displays in its own part", () => {
-    // a display in each frame (its third line): the part of the right frame starts after the left one's display however
-    // small its share, and at the right one's display however large
+  it("a split unit's flow keeps every display where it is: the text after one never above it", () => {
+    // a display in each frame (its third line): the 60 characters between them fill the left frame below its display; the
+    // right frame's lines above its display take nothing, the text after it starts below it (the share does not matter)
     const file = (share: number) => layoutOf([{
       id: 1,
       lines: [...column(6, { x0: 40, w: 260 }), ...column(6, { x0: 320, w: 260 })],
@@ -255,65 +266,66 @@ describe('the fit', () => {
       ph: [{ k: 2, kind: 'display', segs: [[1, 60, 676, 280, 683, 673.5]] }, { k: 5, kind: 'display', segs: [[1, 340, 676, 560, 683, 673.5]] }],
     }])
     const pieces: TrPiece[] = [[0, kanji(40)], [1, 2], [0, kanji(60)], [1, 5], [0, kanji(30)]]
-    // trText: 40 characters, the left display at 40, 60, the right display at 101, 30
-    const low = laid(layUnit(inputOf(file(50), 'ja'), 1, tr(pieces)))
-    expect(low.cuts).toEqual([41])
-    const high = laid(layUnit(inputOf(file(900), 'ja'), 1, tr(pieces)))
-    expect(high.cuts).toEqual([101])
-    for (const u of [low, high]) expect([...u.drawn]).toEqual([[2, 'kept'], [5, 'kept']])
+    for (const share of [50, 900]) {
+      const u = laid(layUnit(inputOf(file(share), 'ja'), 1, tr(pieces)))
+      expect([...u.drawn]).toEqual([[2, 'kept'], [5, 'kept']])
+      // the left frame: 40 above its display, 60 below it; the right frame: 30 below its display, none above it
+      const left = u.lines.filter(l => l.frame === 0), right = u.lines.filter(l => l.frame === 1)
+      expect(left.filter(l => l.baseline > 676).map(l => l.to - l.from).reduce((a, b) => a + b, 0)).toBe(40)
+      expect(left.filter(l => l.baseline < 676).map(l => l.to - l.from).reduce((a, b) => a + b, 0)).toBe(60)
+      expect(right.every(l => l.baseline < 676)).toBe(true)
+      expect(right.map(l => l.to - l.from).reduce((a, b) => a + b, 0)).toBe(30)
+      expect(u.cuts).toEqual([right[0]!.from])
+    }
   })
 
-  it("a frame with no line to spare is roomier than one whose part does not fit: its last line may take the sentence", () => {
-    // two frames of four lines of 20 (zh's leading over five lines): 84 characters on the left do not fit, 66 on the right
-    // fill four lines with room on the last; the sentence from 75 goes right before any state moves
-    const file = layoutOf([{
-      id: 1,
-      lines: [...column(5, { x0: 72, w: 200 }), ...column(5, { x0: 320, w: 200 })],
-      frames: [{ lines: 5 }, { column: 1, lines: 5, share: 560 }],
-    }])
-    const u = laid(layUnit(inputOf(file, 'zh'), 1, tr(han(150), [75, 84])))
-    expect(u.cuts).toEqual([75])
-    expect(u.state.knob).toBe('none')
-    expect(textOf(u).join('')).toBe(han(150))
-  })
-
-  it('a split with no boundary near the share is cut by characters in CJK and by words in alphabets', () => {
+  it('a split cut by characters in CJK and by words in alphabets where no sentence is near the share (the cut where a crop must keep its page)', () => {
     expect(SPLIT_NEAR).toBe(0.2)
     const split = layoutOf([{
       id: 1,
-      lines: [...column(5, { x0: 40, w: 260 }), ...column(9, { x0: 320, w: 260 })],
-      frames: [{ lines: 5 }, { column: 1, lines: 9, share: 370 }],
+      lines: [...column(5, { x0: 40, w: 260 }), ...column(9, { page: 2, x0: 320, w: 260 })],
+      frames: [{ lines: 5 }, { page: 2, column: 1, lines: 9, share: 370 }],
+      ph: [{ k: 2, kind: 'math', segs: [[2, 330, 700, 340, 707, 697.5]] }],
     }])
-    // sentences at 10 and 190 of 200 are farther than 0.2 of it from the share's 74: cut at the 74th character
-    const zh = laid(layUnit(inputOf(split, 'zh'), 1, tr(han(200), [10, 190])))
+    // sentences at 10 and 190 of 201 are farther than 0.2 of it from the share's 74.4; a formula of page 2 at 80, which the
+    // flow would set on page 1 (104 characters there): cut at the 74th character
+    const zh = laid(layUnit(inputOf(split, 'zh'), 1, tr([[0, han(80)], [1, 2], [0, han(120)]], [10, 190])))
     expect(zh.cuts).toEqual([74])
     expect(zh.lines.find(l => l.frame === 1)!.from).toBe(74)
-    // with no sentences at all, too
-    expect(laid(layUnit(inputOf(split, 'zh'), 1, tr(han(200)))).cuts).toEqual([74])
-    // de: at the start of the word nearest 0.37 of the text
-    const text = words(40), share = 0.37 * text.length
-    const starts = [...text.matchAll(/ (?=\S)/g)].map(m => m.index! + 1)
+    // de: at the start of the word nearest 0.37 of the text, the formula of page 2 at its 0.42, which the flow would set in
+    // the left frame (five lines of 52 characters)
+    const text = words(80), at = text.indexOf(' ', Math.floor(0.42 * text.length))
+    const pieces: TrPiece[] = [[0, text.slice(0, at)], [1, 2], [0, text.slice(at)]]
+    const full = `${text.slice(0, at)} ${text.slice(at + 1)}`, share = 0.37 * full.length
+    const starts = [...full.matchAll(/ (?=\S)/g)].map(m => m.index! + 1).filter(s => s <= at)
     const want = starts.reduce((best, s) => (Math.abs(s - share) < Math.abs(best - share) ? s : best))
-    const de = laid(layUnit(inputOf(split, 'de'), 1, tr(text)))
+    const de = laid(layUnit(inputOf(split, 'de'), 1, tr(pieces)))
     expect(de.cuts).toEqual([want])
-    expect(text[want - 1]).toBe(' ')
+    expect(full[want - 1]).toBe(' ')
     expect(de.lines.find(l => l.frame === 1)!.from).toBe(want)
-    expect(textOf(de).join(' ')).toBe(text)
   })
 
-  it('a split unit is set at one scale in both frames', () => {
-    // a narrow left frame (12 characters a line) holds its share only below full size; the right one has room to spare
+  it('a split unit is set at one scale in all its frames', () => {
+    // two narrow frames (12 characters a line) hold the text only below full size
     const split = layoutOf([{
       id: 1,
-      lines: [...column(5, { x0: 40, w: 120 }), ...column(9, { x0: 320, w: 240 })],
-      frames: [{ lines: 5 }, { column: 1, lines: 9, share: 370 }],
+      lines: [...column(5, { x0: 40, w: 120 }), ...column(5, { x0: 320, w: 120 })],
+      frames: [{ lines: 5 }, { column: 1, lines: 5, share: 500 }],
     }])
-    const u = laid(layUnit(inputOf(split, 'zh'), 1, tr(han(200))))
+    const u = laid(layUnit(inputOf(split, 'zh'), 1, tr(han(130))))
     expect(u.state.scale).toBeLessThan(1)
     expect(new Set(u.lines.map(l => l.frame))).toEqual(new Set([0, 1]))
     for (const l of u.lines) expect(l.size).toBe(u.size)
     expect(u.size).toBeCloseTo(10 * u.state.scale, 9)
-    expect(textOf(u).join('')).toBe(han(200))
+    expect(textOf(u).join('')).toBe(han(130))
+    // a narrow left frame and a roomy right one: the flow takes what the left cannot hold on to the right, at full size
+    // (before fix 5 the left frame's share forced the whole unit below full size)
+    const roomy = layoutOf([{
+      id: 1,
+      lines: [...column(5, { x0: 40, w: 120 }), ...column(9, { x0: 320, w: 240 })],
+      frames: [{ lines: 5 }, { column: 1, lines: 9, share: 370 }],
+    }])
+    expect(laid(layUnit(inputOf(roomy, 'zh'), 1, tr(han(200)))).state.scale).toBe(1)
   })
 
   it('a display keeps its lines: the text before fills the lines above, the text after starts below, its number untouched', () => {
@@ -409,6 +421,43 @@ describe('the fit', () => {
     expect(room.state.knob).toBe('borrow')
     expect(room.lines.at(-1)!.baseline).toBeLessThan(604)
     for (const l of room.lines.slice(5)) expect(l.x1).toBe(300)
+  })
+
+  it("a heading of one line is as wide as its column, not as its English words (fix 7a)", () => {
+    // a German heading at 72-150 over a column of paragraphs 72-300; the other column's paragraph 320-548 beside it
+    const page = (heading: Partial<UnitDef> = {}, more: UnitDef[] = []) => layoutOf([
+      { id: 1, kind: 'heading', lines: [{ x0: 72, x1: 150, baseline: 700 }], ...heading },
+      { id: 2, lines: column(6, { x0: 72, w: 228, top: 680 }) },
+      { id: 3, lines: column(9, { x0: 320, w: 228, top: 700 }) },
+      ...more,
+    ])
+    const long = words(5)
+    expect(long.length * 5).toBeGreaterThan(150 - 72)
+    const u = laid(layUnit(inputOf(page(), 'de'), 1, tr(long)))
+    expect(u.state).toEqual(state({ scale: 1, knob: 'none' }))
+    expect(u.lines).toHaveLength(1)
+    expect([u.lines[0]!.x0, u.lines[0]!.x1]).toEqual([72, 300])
+    // a title, centred over the page's text (no paragraph runs through its middle): as far to either side as the nearer
+    // edge allows, its text centred there
+    const title = laid(layUnit(inputOf(page({ flags: 4 | 1, lines: [{ x0: 280, x1: 340, baseline: 760 }] }), 'de'), 1, tr(long)))
+    expect(title.state).toEqual(state({ scale: 1, knob: 'none' }))
+    expect([title.lines[0]!.x0, title.lines[0]!.x1]).toEqual([72, 548])
+    const items = title.lines[0]!.items
+    expect((items[0]!.x + items.at(-1)!.x + items.at(-1)!.w) / 2).toBeCloseTo(310, 6)
+    // another unit's text on its baseline (a run-in heading's paragraph from 200): up to half an em before it
+    const runIn = laid(layUnit(inputOf(page({}, [{ id: 4, lines: [{ x0: 200, x1: 300, baseline: 700 }] }]), 'de'), 1, tr(words(2))))
+    expect(runIn.lines[0]!.x1).toBe(195)
+    // its own label beside it: a quarter of an em clear of it
+    const numbered = laid(layUnit(inputOf(page({ labels: [{ x0: 280, baseline: 700, x1: 290 }] }), 'de'), 1, tr(words(2))))
+    expect(numbered.lines[0]!.x1).toBe(277.5)
+    // the page's own text beside it (a running head no unit holds): not widened, the text set as before
+    const beside = { ...inputOf(page(), 'de'), textIn: (_p: number, x0: number) => (x0 > 150 ? 'Preprint' : null) }
+    const kept = layUnit(beside, 1, tr(long))
+    expect(kept.fit ? [kept.lines[0]!.x1, kept.state.knob] : kept.why).not.toEqual([300, 'none'])
+    // a paragraph of one line, and a heading of two, keep their extent
+    const para = layoutOf([{ id: 1, lines: [{ x0: 72, x1: 150, baseline: 700 }] }, { id: 2, lines: column(6, { x0: 72, w: 228, top: 680 }) }])
+    const p = layUnit(inputOf(para, 'de'), 1, tr(long))
+    expect(p.fit ? p.lines.every(l => l.x1 <= 150) : true).toBe(true)
   })
 
   it('the first line starts after its label', () => {
