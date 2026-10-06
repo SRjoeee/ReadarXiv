@@ -201,8 +201,11 @@ export const switchedOf = switches => Object.keys(switches).filter(c => /[12]/.t
  *   list in its place among the glyphs (it drops DP and MP, and splits its text items at a BMC: tokens moved by up to
  *   14 pt) and its text layer passes over. So the content stream gives each piece's own ink between its points
  *   (layout/stream.mjs). And around each column's body (\@cclv in \@makecol, repacked to its own height and depth: a
- *   whatsit adds no height, and one last keeps the box's depth; the closing one before the body's last glue, put back as
- *   it was, for LaTeX's \@outputbox@removebskip takes off a \vfil it finds last and puts it back below the footnotes)
+ *   whatsit adds no height, and one last keeps the box's depth; the opening one with a \penalty10000 after it, for a
+ *   whatsit before the body's first glue makes it a place to break, and \vsplit — balance.sty's last page — then takes
+ *   an empty column; the closing one after the body's last box, its glue, kerns and penalties taken off and put back
+ *   after it, so that no place to break is made or lost, and LaTeX's \@outputbox@removebskip still finds a \vfil
+ *   last)
  *   and around each float's finished box (after \@endfloatbox, the box repacked as the body is: a point at the box's
  *   start would give its first paragraph a \parskip), points alone (bs, be, fs, fe and a count kept in a macro): a range
  *   across a page or a column, or one an [h] float is shipped into, is cut to its own.
@@ -220,7 +223,8 @@ export const POINTS_TEX = [
   '\\ifdefined\\XeTeXrevision\\def\\axt@point#1{\\special{pdf:code /axt-#1 ri}}\\else\\ifdefined\\pdfextension\\def\\axt@point#1{\\pdfextension literal direct{/axt-#1 ri}}\\else\\ifdefined\\pdfliteral\\def\\axt@point#1{\\ifnum\\pdfoutput>0 \\pdfliteral direct{/axt-#1 ri}\\fi}\\else\\def\\axt@point#1{}\\fi\\fi\\fi',
   '\\let\\axt@destonly\\axt@dest\\def\\axt@dest#1{\\axt@destonly{#1}\\axt@point{#1}}',
   '\\gdef\\axt@bn{0}\\def\\axt@bump{\\xdef\\axt@bn{\\the\\numexpr\\axt@bn+1\\relax}}',
-  '\\ifdefined\\AddToHook\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\unvbox\\@cclv\\ifnum\\lastnodetype=11 \\edef\\axt@vback{\\vskip\\the\\lastskip\\relax}\\unskip\\else\\let\\axt@vback\\@empty\\fi\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\fi}\\fi',
+  '\\def\\axt@vtake{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@vtg\\or\\expandafter\\axt@vtk\\or\\expandafter\\axt@vtp\\fi}\\def\\axt@vtg{\\edef\\axt@vback{\\vskip\\the\\lastskip\\relax\\axt@vback}\\unskip\\axt@vtake}\\def\\axt@vtk{\\edef\\axt@vback{\\kern\\the\\lastkern\\relax\\axt@vback}\\unkern\\axt@vtake}\\def\\axt@vtp{\\edef\\axt@vback{\\penalty\\the\\lastpenalty\\relax\\axt@vback}\\unpenalty\\axt@vtake}',
+  '\\ifdefined\\AddToHook\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\fi}\\fi',
   '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
 ].join('')
 
