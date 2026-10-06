@@ -24,6 +24,10 @@ const srcs = (u: SourceUnit | undefined) => ((u?.pieces ?? []) as Piece[]).map(p
 afterEach(() => { vi.restoreAllMocks() })
 
 describe('the classes', () => {
+  it('subequations is a display, as every display environment of the corpus', () => {
+    for (const env of ['subequations', 'equation', 'equation*', 'align', 'align*', 'gather', 'gather*', 'multline', 'multline*', 'flalign', 'alignat', 'eqnarray', 'eqnarray*', 'displaymath', 'dmath', 'IEEEeqnarray'])
+      expect(classOf({ t: 'ph', src: `\\begin{${env}}a\\end{${env}}` })).toBe('display')
+  })
   it('classOf: each class by its source', () => {
     const cases: [string, string][] = [
       ['$x$', 'math'], ['\\(x\\)', 'math'], ['\\ensuremath{x}', 'math'],
@@ -430,6 +434,14 @@ describe('reading the marked original', () => {
     expect(m.tokens.slice(24, 30)).toEqual([2, 92, 720, 15, 10, 3])
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m)))).toEqual(m)
   })
+  it('layoutMarksOf records the classes and the paper\'s switch the marked original was made with', async () => {
+    const doc = fakeDocument([{ view: [0, 0, 612, 792], items: [item('kept', 72, 700)] }], [['axt-0s', 1, 72, 700]])
+    expect((await layoutMarksOf(doc, '', { engine: 'pdflatex' })).marking).toEqual({ classes: [...LAYOUT_CLASSES], movesPunctuation: [] })
+    const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', classes: ['math', 'cite'], movesPunctuation: ['cite'] })
+    expect(m.marking).toEqual({ classes: ['math', 'cite'], movesPunctuation: ['cite'] })
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m))).marking).toEqual(m.marking)
+    await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', classes: ['math', 'tikz' as 'math'] })).rejects.toThrow(LayoutRefusal)
+  })
   it('layoutMarksOf leaves out a mark or a word off its page, and refuses an engine it does not know', async () => {
     const doc = fakeDocument([{ view: [0, 0, 612, 792], items: [item('kept', 72, 700), item('off', 5000, 700), item('x'.repeat(201), 72, 650)] }], [['axt-0s', 1, 72, 700], ['axt-1s', 1, 9000, 700], ['axt-2s', 1, null, null]])
     const m = await layoutMarksOf(doc, '', { engine: 'xelatex' })
@@ -448,7 +460,7 @@ describe('reading the marked original', () => {
 
 /** a made-up marks file of two pages, every field used */
 const valid = (): LayoutMarks => ({
-  schema: 1, engine: 'pdflatex', pages: 2,
+  schema: 1, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], movesPunctuation: ['cite'] }, pages: 2,
   views: [0, 0, 612, 792, 0, 0, 612, 792],
   columns: [1, 2],
   marks: [['0s', 1, 72, 700], ['0e', 1, 300.5, 650.25], ['c1-1', 1, 0, 0], ['c2-2', 2, 0, 0], ['p0.3a', 1, 100, 700], ['p0.3b', 1, 120.75, 700], ['h1s', 2, 72, 720], ['t2s', 2, 80, 500], ['n0.5a', 1, 200, 680], ['g1t', 2, 300, 400]],
@@ -478,7 +490,7 @@ describe('the marks file', () => {
   it('encodeLayoutMarks and parseLayoutMarks round-trip', () => {
     const m = valid()
     expect(parseLayoutMarks(bytes(encodeLayoutMarks(m)))).toEqual(m)
-    expect(Object.keys(JSON.parse(encodeLayoutMarks(m)))).toEqual(['schema', 'engine', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens'])
+    expect(Object.keys(JSON.parse(encodeLayoutMarks(m)))).toEqual(['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens'])
   })
   it('parseLayoutMarks refuses past its bounds', () => {
     const big = new Uint8Array(MARKS_CAP + 1).fill(0x20)
@@ -491,6 +503,12 @@ describe('the marks file', () => {
     const rows: [string, (m: LayoutMarks & Record<string, unknown>) => void, string][] = [
       ['schema 2', m => { m.schema = 2 as 1 }, 'schema'],
       ['engine context', m => { m.engine = 'context' }, 'engine'],
+      ['marking not an object', m => { (m as Record<string, unknown>).marking = ['math'] }, 'marking'],
+      ['marking with a key of no schema', m => { (m.marking as Record<string, unknown>).extra = [] }, 'marking.extra'],
+      ['a class of no MARK_CLASSES', m => { (m.marking.classes as string[])[0] = 'tikz' }, 'marking.classes[0]'],
+      ['a class twice', m => { (m.marking.classes as string[])[1] = 'math' }, 'marking.classes[1]'],
+      ['a switch of no class', m => { (m.marking.movesPunctuation as string[])[0] = 'Cite' }, 'marking.movesPunctuation[0]'],
+      ['a switch that is no array', m => { (m.marking as Record<string, unknown>).movesPunctuation = 'cite' }, 'marking.movesPunctuation'],
       ['pages 0', m => { m.pages = 0 }, 'pages'],
       ['pages 10,001', m => { m.pages = 10001 }, 'pages'],
       ['a missing key', m => { delete (m as Partial<LayoutMarks>).dropped }, 'dropped'],

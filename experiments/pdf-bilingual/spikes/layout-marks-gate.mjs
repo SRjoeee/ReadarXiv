@@ -105,7 +105,7 @@ const boxesOf = log => { const out = [], lines = log.split('\n'); for (let i = 0
  * file's size and the names it dropped; with `trace`, the box displays of its log (kept, gzipped). `probe`: one pass,
  * its log kept
  */
-async function compile(id, files, { main, engine, bbl, kind }) {
+async function compile(id, files, { main, engine, bbl, kind, marking = {} }) {
   // the trace's lines whole for pdfTeX alone: BibTeX reads max_print_line too, and with it at a million writes no
   // bibliography (2608.30640's trace was 30 pages, its compile 34)
   const pdftex = kind === 'trace' ? [`-pdflatex=env max_print_line=1000000 ${engine} %O %S`] : []
@@ -151,7 +151,7 @@ async function compile(id, files, { main, engine, bbl, kind }) {
         const r = readingsOf({ log, aux, bbl: bblText }, await marksOf(pdf))
         out.readings = { ...r, marks: { ...r.marks, marks: [...r.marks.marks] } }
         if (kind === 'v1') {
-          const m = await layoutMarksOf(pdf, log, { engine }), enc = encodeLayoutMarks(m)
+          const m = await layoutMarksOf(pdf, log, { engine, ...marking }), enc = encodeLayoutMarks(m)
           parseLayoutMarks(new TextEncoder().encode(enc))
           out.marks = m.marks
           out.marksFile = { kb: Math.round(enc.length / 1024), dropped: m.dropped.length, marks: m.marks.length }
@@ -199,7 +199,7 @@ async function paperRow(id) {
   const v0Files = originalFiles(paper, { lines: true })
   v0Files.set(project.main, latin1Bytes(withFitr(latin1(v0Files.get(project.main)), MARK_DEF, LAYOUT_TEX)))
   const f0 = withSources(v0Files), f1 = v1Of(CLASSES)
-  const [c0, c1] = await Promise.all([compile(id, f0, opts('v0')), compile(id, f1, opts('v1'))])
+  const [c0, c1] = await Promise.all([compile(id, f0, opts('v0')), compile(id, f1, { ...opts('v1'), marking: { classes: CLASSES, movesPunctuation: movers } })])
   const row = { id, v0: c0.ok ? 'ok' : 'failed' }
   if (!c0.ok) return { row: { ...row, verdict: verdictOf(row) }, detail: { why: c0.why ?? c0.errors?.slice(0, 3) } }
   row.v1 = c1.ok ? 'ok' : 'failed'
