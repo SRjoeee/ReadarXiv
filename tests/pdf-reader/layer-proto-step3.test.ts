@@ -31,3 +31,13 @@ describe("the leading, relative to the original's own pitch", () => {
     expect(L2.leadOf(blocks(18), 12, { leadBase: 1 })).toBe(1)
   })
 })
+
+describe("v0's displayed formulas: the engine's environments", () => {
+  it('reads subequations, alignat, flalign, dmath and IEEEeqnarray as displays, not as inline formulas', async () => {
+    const { phClass } = await import('@/pdf-reader/engine/layer-proto/layer1.mjs')
+    for (const env of ['subequations', 'alignat', 'flalign', 'dmath', 'IEEEeqnarray', 'equation*', 'align'])
+      expect(phClass(`\\begin{${env}}x = 1\\end{${env}}`)).toBe('display')
+    expect(phClass('\\begin {subequations}x\\end{subequations}')).toBe('display')
+    expect(phClass('$x = 1$')).toBe('other')
+  })
+})
