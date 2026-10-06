@@ -4,8 +4,8 @@ Written by `spikes/layer-gate.mjs --record`. Each run below: the engine at its c
 
 - **pixel**: the engine at `535b8a02` (exp/layer-t12-gate), the gate at `535b8a02`, 2026-10-06; the engine's own layout files; 53.4 s.
 - **pixel-fixed**: the engine at `535b8a02` (exp/layer-t12-gate), the gate at `535b8a02`, 2026-10-06; the fixtures' layout files, as made for the layer lab; 67.8 s.
-- **pixel-proto**: the engine at `178673a9` (exp/layer-proto), the gate at `178673a9`, 2026-10-06; v0 (the prototype in the engine), no layout file: the prototype's geometry and the fixtures' record.json, the role table's faces; 70.6 s.
-- **pixel-proto-tex-lines**: the engine at `178673a9` (exp/layer-proto), the gate at `178673a9`, 2026-10-06; v0 (the prototype in the engine), no layout file: the prototype's geometry and the fixtures' record.json, the role table's faces; the hybrid: each unit the fixture's layout file locates whole takes its lines, label and placeholders from the file, with the units only the file holds (but cells); 91.5 s.
+- **pixel-proto**: the engine at `e6fb8391` (exp/layer-proto), the gate at `e6fb8391`, 2026-10-06; v0 (the prototype in the engine), no layout file: the prototype's geometry and the fixtures' record.json, the role table's faces; 62.2 s.
+- **pixel-proto-tex-lines**: the engine at `e6fb8391` (exp/layer-proto), the gate at `e6fb8391`, 2026-10-06; v0 (the prototype in the engine), no layout file: the prototype's geometry and the fixtures' record.json, the role table's faces; the hybrid: each unit the fixture's layout file locates whole takes its lines, label and placeholders from the file, with the units only the file holds (but cells); 75.5 s.
 
 Every measure is against arXiv's original page, whose own value is the first column. The prototype's floor is the approved prototype as this gate measures it (v0, the prototype ported into the engine, under its own units and faces at the gate's text place); the parity run's floor it replaces stands beside it (measured at the prototype page's text place, 0.19 CSS px off, with coverage read from the translation's ink). Both are the ten outputs the prototype shares with the engine, pages 1-12. A defect is its count and, in brackets, its rate per 1,000 translated text cells (the model tier: per 1,000 cells of the drawn units' frames), which is what the merge rule compares.
 
@@ -14,40 +14,40 @@ Every measure is against arXiv's original page, whose own value is the first col
 | measure | Original | Prototype floor (v0, this gate), shared ten | Prototype floor (the parity run, before), shared ten | pixel, shared ten | pixel, all 29 | pixel-fixed, shared ten | pixel-fixed, all 29 | pixel-proto, shared ten | pixel-proto, all 29 | pixel-proto-tex-lines, shared ten | pixel-proto-tex-lines, all 29 |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | text translated | 100.0 % | 87.5 % | 90.7 % | 65.6 % | 60.4 % | 65.6 % | 60.4 % | 87.4 % | 82.1 % | 87.5 % | 82.2 % |
-| text English | 0.0 % | 0.5 % | 0.5 % | 20.0 % | 22.7 % | 20.0 % | 22.9 % | 0.5 % | 2.3 % | 0.4 % | 1.2 % |
+| text English | 0.0 % | 0.5 % | 0.5 % | 20.0 % | 22.7 % | 20.0 % | 22.9 % | 0.5 % | 2.3 % | 0.4 % | 1.1 % |
 | text blank | 0.0 % | 12.0 % | 8.8 % | 14.4 % | 16.8 % | 14.4 % | 16.8 % | 12.1 % | 15.5 % | 12.1 % | 16.7 % |
 | table cells translated | 100.0 % | 5.8 % | 6.1 % | 40.6 % | 38.6 % | 40.6 % | 38.6 % | 5.8 % | 7.2 % | 5.8 % | 7.3 % |
-| text units left English | 0 | 7 / 1194 | 7 / 1194 | 186 / 1194 | 684 / 3979 | 186 / 1194 | 686 / 3979 | 7 / 1194 | 97 / 3979 | 0 / 1194 | 12 / 3979 |
+| text units left English | 0 | 7 / 1194 | 7 / 1194 | 186 / 1194 | 684 / 3979 | 186 / 1194 | 686 / 3979 | 7 / 1194 | 97 / 3979 | 0 / 1194 | 9 / 3979 |
 | cells left English | 0 | 635 / 686 | 635 / 686 | 217 / 686 | 499 / 1601 | 217 / 686 | 499 / 1601 | 635 / 686 | 1431 / 1601 | 635 / 686 | 1431 / 1601 |
 | fill (median) | 1 | 0.916 | 0.916 | 0.888 | 0.885 | 0.888 | 0.885 | 0.913 | 0.911 | 0.914 | 0.918 |
-| blank lines / frame | 0 | 0.611 | 0.611 | 0.823 | 0.817 | 0.820 | 0.815 | 0.618 | 0.665 | 0.616 | 0.629 |
-| frames with a blank line | 0.0 % | 27.0 % | 27.0 % | 37.0 % | 36.1 % | 36.9 % | 36.0 % | 27.7 % | 27.1 % | 27.4 % | 26.6 % |
+| blank lines / frame | 0 | 0.611 | 0.611 | 0.823 | 0.817 | 0.820 | 0.815 | 0.618 | 0.665 | 0.616 | 0.625 |
+| frames with a blank line | 0.0 % | 27.0 % | 27.0 % | 37.0 % | 36.1 % | 36.9 % | 36.0 % | 27.7 % | 27.1 % | 27.4 % | 26.5 % |
 | pitch spread | 0 | 0.088 | 0.088 | 0.047 | 0.056 | 0.047 | 0.076 | 0.093 | 0.147 | 0.093 | 0.152 |
 | size (median) | 1 | 0.978 | 0.978 | 0.957 | 0.941 | 0.957 | 0.941 | 0.981 | 0.972 | 0.981 | 0.972 |
-| full size | 100.0 % | 64.0 % | 64.0 % | 59.8 % | 47.1 % | 59.8 % | 46.8 % | 64.3 % | 58.7 % | 63.9 % | 58.7 % |
+| full size | 100.0 % | 64.0 % | 64.0 % | 59.8 % | 47.1 % | 59.8 % | 46.8 % | 64.3 % | 58.7 % | 63.9 % | 59.3 % |
 | size spread | 0 | 0.069 | 0.069 | 0.038 | 0.019 | 0.038 | 0.019 | 0.069 | 0.070 | 0.069 | 0.070 |
-| frames past the right edge | 0.0 % | 14.0 % | 14.0 % | 0.0 % | 0.9 % | 0.0 % | 0.9 % | 13.7 % | 11.7 % | 13.7 % | 11.7 % |
-| overlap regions | 0 | 122 (0.95) | 119 (0.90) | 324 (3.37) | 8396 (25.90) | 326 (3.39) | 8451 (26.09) | 73 (0.57) | 861 (1.95) | 11 (0.09) | 479 (1.09) |
-| stray text | 0 | 62 (0.48) | 62 (0.47) | 2 (0.02) | 8 (0.03) | 2 (0.02) | 8 (0.03) | 63 (0.49) | 310 (0.70) | 42 (0.33) | 245 (0.56) |
-| residue regions | 0 | 591 (4.61) | 587 (4.41) | 31311 (325.43) | 247098 (762.14) | 31337 (325.85) | 246592 (761.43) | 567 (4.42) | 2482 (5.63) | 529 (4.12) | 1734 (3.93) |
-| erase bites | 0 | 168 (1.31) | 168 (1.26) | 171 (1.78) | 902 (2.78) | 170 (1.77) | 893 (2.76) | 144 (1.12) | 7812 (17.73) | 144 (1.12) | 1130 (2.56) |
-| vanished math | 0 | 13 (0.10) | 13 (0.10) | 261 (2.71) | 684 (2.11) | 261 (2.71) | 752 (2.32) | 14 (0.11) | 906 (2.06) | 11 (0.09) | 852 (1.93) |
-| doubled crops | 0 | 5 (0.04) | 5 (0.04) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 5 (0.04) | 42 (0.10) | 2 (0.02) | 35 (0.08) |
-| lost-ink regions | 0 | - | - | 1 (0.01) | 45 (0.14) | 1 (0.01) | 43 (0.13) | 21 (0.16) | 131 (0.30) | 21 (0.16) | 74 (0.17) |
+| frames past the right edge | 0.0 % | 14.0 % | 14.0 % | 0.0 % | 0.9 % | 0.0 % | 0.9 % | 13.7 % | 11.7 % | 13.7 % | 12.0 % |
+| overlap regions | 0 | 122 (0.95) | 119 (0.90) | 324 (3.37) | 8396 (25.90) | 326 (3.39) | 8451 (26.09) | 73 (0.57) | 861 (1.95) | 11 (0.09) | 432 (0.98) |
+| stray text | 0 | 62 (0.48) | 62 (0.47) | 2 (0.02) | 8 (0.03) | 2 (0.02) | 8 (0.03) | 63 (0.49) | 310 (0.70) | 42 (0.33) | 233 (0.53) |
+| residue regions | 0 | 591 (4.61) | 587 (4.41) | 31311 (325.43) | 247098 (762.14) | 31337 (325.85) | 246592 (761.43) | 567 (4.42) | 2482 (5.63) | 527 (4.11) | 1562 (3.54) |
+| erase bites | 0 | 168 (1.31) | 168 (1.26) | 171 (1.78) | 902 (2.78) | 170 (1.77) | 893 (2.76) | 144 (1.12) | 7812 (17.73) | 144 (1.12) | 1116 (2.53) |
+| vanished math | 0 | 13 (0.10) | 13 (0.10) | 261 (2.71) | 684 (2.11) | 261 (2.71) | 752 (2.32) | 14 (0.11) | 906 (2.06) | 11 (0.09) | 765 (1.74) |
+| doubled crops | 0 | 5 (0.04) | 5 (0.04) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 5 (0.04) | 42 (0.10) | 2 (0.02) | 31 (0.07) |
+| lost-ink regions | 0 | - | - | 1 (0.01) | 45 (0.14) | 1 (0.01) | 43 (0.13) | 21 (0.16) | 131 (0.30) | 21 (0.16) | 66 (0.15) |
 | graphics px erased | 0 | 208 (1.62) | 208 (1.56) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 208 (1.62) | 477 (1.08) | 208 (1.62) | 403 (0.91) |
 | graphics px overdrawn | 0 | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 826 (1.87) | 0 (0) | 101 (0.23) |
 | crops with foreign ink | 0 | 11 (0.09) | 11 (0.08) | 135 (1.40) | 247 (0.76) | 135 (1.40) | 248 (0.77) | 11 (0.09) | 46 (0.10) | 6 (0.05) | 30 (0.07) |
 | wrong page text | 0 | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
 | dropped placeholders | 0 | - | - | 0 (0) | 0 (0) | 0 (0) | 2 (0.01) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
-| placeholders missing | 0 | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 4 (0.01) | 0 (0) | 3 (0.01) |
-| placeholders twice | 0 | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 22 (0.05) | 0 (0) | 17 (0.04) |
+| placeholders missing | 0 | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 4 (0.01) | 0 (0) | 2 (0.01) |
+| placeholders twice | 0 | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 22 (0.05) | 0 (0) | 15 (0.03) |
 | doubled brackets | 0 | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
 | duplications | 0 | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
 | clipped characters | 0 | 99 (0.77) | 99 (0.74) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 101 (0.79) | 2302 (5.22) | 110 (0.86) | 2314 (5.25) |
 | equation numbers not shown | 0 | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 1 (0.00) | 0 (0) | 1 (0.00) |
 | pitch ratio (not gated) | 1 | 1.094 | 1.094 | 1.076 | 1.023 | 1.076 | 1.023 | 1.096 | 1.047 | 1.096 | 1.048 |
 | |top shift| (pt) (not gated) | 0 | 0.186 | 0.184 | 0.323 | 0.451 | 0.323 | 0.451 | 0.164 | 0.229 | 0.168 | 0.230 |
-| lines on a layout baseline (not gated) | 100.0 % | 49.3 % | 49.3 % | 53.3 % | 48.6 % | 55.0 % | 49.1 % | 50.0 % | 52.6 % | 50.3 % | 49.3 % |
+| lines on a layout baseline (not gated) | 100.0 % | 49.3 % | 49.3 % | 53.3 % | 48.6 % | 55.0 % | 49.1 % | 50.0 % | 52.6 % | 50.3 % | 49.2 % |
 
 **Below the prototype's floor on the shared ten** (pixel): text translated, text English, text blank, text units left English, fill (median), blank lines / frame, frames with a blank line, size (median), full size, overlap regions, residue regions, erase bites, vanished math, crops with foreign ink.
 
