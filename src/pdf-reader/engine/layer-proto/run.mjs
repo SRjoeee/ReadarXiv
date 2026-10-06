@@ -383,8 +383,15 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced)
     for (const b of p.blocks) if (!b.centred && centredInColumn(b)) b.centred = true
     if (p.unit.kind !== 'cell') for (const b of p.blocks) widen(b)
-    // a label the first line starts with stays the original's: the line starts after it
-    if (prep.label && p.blocks[0]) p.blocks[0].indent = Math.max(p.blocks[0].indent, prep.label.x1 + 0.25 * s - p.blocks[0].x0)
+    // a label the first line starts with stays the original's: the line starts after it. A file's first line starts at
+    // the unit's own mark, and so where the original's text does: after a label the file sets apart, at the line's own
+    // start; after one it holds (a footnote's mark), where its first word is, never before the label's end (v0's quarter
+    // of an em after it set a footnote's text 1.7 pt right of the original's)
+    if (prep.label && p.blocks[0]) {
+      const b = p.blocks[0]
+      if (!fileLines) b.indent = Math.max(b.indent, prep.label.x1 + 0.25 * s - b.x0)
+      else if (prep.label.x1 > p.rects[0][1] + 0.1) b.indent = Math.max(b.indent, (prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s) - b.x0)
+    }
     if (P.borrow && p.unit.kind !== 'cell') for (const b of p.blocks) b.freeOf = () => freeFor(b, s)
     const t2 = performance.now()
     const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P)
