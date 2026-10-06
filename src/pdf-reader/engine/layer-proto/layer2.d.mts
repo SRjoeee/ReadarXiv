@@ -17,6 +17,8 @@ export interface Params {
   /** the leading relative to the original's pitch (leadOf; false: leadBase on any pitch); fillBySize's cap (run.mjs
    *  fillSize, off at 0) and the size a unit may grow to (growTo) */
   leadRel?: boolean; fillSize?: number; growTo?: number
+  /** run.mjs's adaptiveFill (D, off by default): a loose original's units spread over their frames, page by page */
+  adaptiveFill?: { band?: number; track?: number; size?: number } | null
 }
 /** a character of the original page: its box from its item (PDF units), its baseline and size, its item and place in it,
  *  its font's class */
