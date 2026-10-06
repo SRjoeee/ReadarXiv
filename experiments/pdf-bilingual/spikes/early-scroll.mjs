@@ -2,8 +2,9 @@
 // reader): the sync follows nothing until both sides are anchored (syncFrom, alignTop and arm go by the anchors), so a
 // scroll whose every step and whose rest came before that had nothing to level the pair by, and the pair stood apart
 // until the next scroll's rest. Once located, the pair is levelled by the side read, as at a rest (session.mjs
-// levelLocated). The reader in the extension, live, in bilingual, each row with the follower on the compositor and by
-// script:
+// levelLocated), by the side of the reader's last input (a wheel, a touch, a key, a press; never a hover) that scrolled.
+// The reader in the extension, live, in bilingual; rows 1–3 with the follower on the compositor and by script, the rest
+// on the compositor, where a hover makes a side the driver:
 //   1. a first visit, the source held back 3 s (the right shows the original until the source is read and both sides
 //      are anchored by it): the right read in the frame after its first page is drawn — a wheel event, which makes it
 //      the side read, then 0.3 of its range —, then the left so;
@@ -17,14 +18,24 @@
 //      the original's first page: the left read in the frame after its own first page is drawn, the pointer moved over
 //      the right once the scroll's rest has passed, before the copy opens (compositor only: by script a pointer moved
 //      takes no side). The copy opens where the left is read (readAt): PDF.js's scroll there is the reader's own put,
-//      not the side read, though the right is the driver by then.
-// A row passes when the side was read before the pair was located, and once located and still for 700 ms: the side
+//      not the side read, though the right is the driver by then;
+//   5. a first visit, the source late: the left read by the wheel, then the right, the pointer then over the left (the
+//      driver, by a hover), then the toolbar's zoom (compositor). PDF.js scrolls the left by itself to keep its place:
+//      only a scroll of the side of the reader's last input is the reader's, and the right, read last, stays;
+//   6. this machine's copy, no input at all, the pointer resting over the left from the start (compositor): PDF.js lays
+//      the original's pages out a margin down by itself (0 to 14 px); nothing is noted as read (the harness's
+//      lastLocated), and nothing moves once the pair is located;
+//   7. a guard: this machine's copy located, the right read, the pointer then over the left, then a swap (compositor).
+//      The website's swap levelled the incoming right by the driver, and a hover threw the right back (3,745 to 12 px);
+//      this one keeps the right's own place (replaceRight: placeOf, scrollFor), which the row holds.
+// Rows 1–5 pass when the side was read before the pair was located, and once located and still for 700 ms: the side
 // read stands where the reader put it, and the pair is within 2 px of level by it (the sync's own tolerance,
 // level-on-screen.mjs). No TeX page is needed (a first visit stops at its compile, after its row is read), and nothing
 // leaves this machine: every request off it is stopped, and named at the end.
 // Build first (`pnpm build`); the paper in data/corpus, and its demo (poc-reader/papers, spikes/reader-papers.mjs) for
 // the copy. Exits non-zero on a FAIL.
-//   node experiments/pdf-bilingual/spikes/early-scroll.mjs [id]      BUILD=<dir> another build; LATE=<ms> the source's delay
+//   node experiments/pdf-bilingual/spikes/early-scroll.mjs [id]      BUILD=<dir> another build; LATE=<ms> the source's delay;
+//   ONLY=<rows' numbers, by commas> those rows alone
 import { createServer } from 'node:http'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -39,6 +50,9 @@ const SOURCE_LATE = Number(process.env.LATE ?? 3000)
 const SHARE = 0.3
 const live = readFileSync(join(root, '../../src/pdf-reader/engine/live.mjs'), 'utf8')
 const [PIPELINE, TYPESETTING] = ['PIPELINE_VERSION', 'TYPESETTING_VERSION'].map(name => live.match(new RegExp(`export const ${name} = '([^']+)'`))[1])
+// ONLY=<rows' numbers, by commas> runs those alone
+const only = process.env.ONLY ? process.env.ONLY.split(',').map(Number) : null
+const wanted = n => !only || only.includes(n)
 let failed = 0
 const row = (ok, name, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name} — ${detail}`); if (!ok) failed++ }
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -90,10 +104,31 @@ function readEarly([side, share, first, pointerTo]) {
   }
   requestAnimationFrame(watch)
 }
-/** a visit, `side` read early in the frame after the right's first page, or by the wheel (`wheel`), the pointer then
- *  moved over `pointerTo`: once the pair is located and both sides still for 700 ms, where the side read stands against
- *  where the reader put it, and how far the pair is from level by it */
-async function visit(side, compositor, { wheel = false, pointerTo = null, first = 'rightFirstPage', slower = 0 } = {}) {
+/** in the page before its own code: where both sides are shown in the first frame after the pair is located, before
+ *  anything levels it (levelLocated's frame comes after this one's, asked for later) */
+function noteLocate() {
+  const watch = () => {
+    const d = window.__reader?.ready ? window.__reader.debug : null
+    if (!d?.left.anchors.size || !d.right.anchors.size) return requestAnimationFrame(watch)
+    window.__atLocate = { left: d.shownAt(d.left), right: d.shownAt(d.right) }
+  }
+  requestAnimationFrame(watch)
+}
+/** where both sides are shown once both have been still for 700 ms */
+async function still(page) {
+  let last = null, n = 0
+  for (let i = 0; i < 100 && n < 7; i++) {
+    await sleep(100)
+    const now = await page.evaluate(() => { const d = window.__reader.debug; return [d.shownAt(d.left), d.shownAt(d.right)] })
+    n = last && Math.abs(now[0] - last[0]) < 0.5 && Math.abs(now[1] - last[1]) < 0.5 ? n + 1 : 0
+    last = now
+  }
+  return last
+}
+/** a visit, `side` read early in the frame after the right's first page, or by the wheel (`wheel`, after `before` read
+ *  so), the pointer then moved over `pointerTo`, then a zoom (`zoom`): once the pair is located and both sides still for 700 ms, where the side
+ *  read stands against where the reader put it (after the zoom), and how far the pair is from level by it */
+async function visit(side, compositor, { wheel = false, pointerTo = null, zoom = false, before = null, first = 'rightFirstPage', slower = 0 } = {}) {
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', e => errors.push(e.message))
@@ -102,6 +137,12 @@ async function visit(side, compositor, { wheel = false, pointerTo = null, first 
   await page.goto(urlOf(compositor))
   if (wheel) {
     await page.waitForFunction(() => window.__early?.at != null, null, { timeout: 60_000, polling: 'raf' })
+    if (before) {
+      const b = await page.locator(`#${before}`).boundingBox()
+      await page.mouse.move(b.x + b.width * 0.5, b.y + b.height * 0.5)
+      for (let i = 0; i < 3; i++) { await page.mouse.wheel(0, 400); await sleep(60) }
+      await sleep(400)
+    }
     const box = await page.locator(`#${side}`).boundingBox()
     await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5)
     for (let i = 0; i < 5; i++) { await page.mouse.wheel(0, 400); await sleep(60) }
@@ -111,6 +152,8 @@ async function visit(side, compositor, { wheel = false, pointerTo = null, first 
       const to = await page.locator(`#${pointerTo}`).boundingBox()
       for (let i = 1; i <= 4; i++) { await page.mouse.move(to.x + to.width * 0.2 * i, to.y + to.height * 0.5); await sleep(20) }
     }
+    // the toolbar's zoom (its buttons call the session's zoomBy): PDF.js scrolls each side by itself to keep its place
+    if (zoom) { await page.evaluate(() => window.__reader.session.zoomBy(1.1)); await sleep(400) }
     await page.evaluate(side => Object.assign(window.__early, { top: document.getElementById(side).scrollTop, located: !!window.__reader.ready, at: performance.now() - window.__reader.live.t0 }), side)
   }
   await page.waitForFunction(() => window.__reader?.ready && window.__reader.debug?.left.anchors.size && window.__reader.debug.right.anchors.size && window.__early?.top !== null, null, { timeout: 60_000, polling: 50 })
@@ -136,20 +179,27 @@ const followers = [[true, 'compositor'], [false, 'script']]
 // 1–2: a first visit, the source late
 late = SOURCE_LATE
 for (const [compositor, by] of followers) {
-  for (const side of ['right', 'left']) { const e = await visit(side, compositor); row(passes(e), `1. a first visit, the source late, the ${side} read early (${by})`, show(e)) }
-  for (const [side, pointerTo] of [['right', null], ['left', 'right']]) {
+  if (wanted(1)) for (const side of ['right', 'left']) { const e = await visit(side, compositor); row(passes(e), `1. a first visit, the source late, the ${side} read early (${by})`, show(e)) }
+  if (wanted(2)) for (const [side, pointerTo] of [['right', null], ['left', 'right']]) {
     const e = await visit(side, compositor, { wheel: true, pointerTo })
     row(passes(e) && e.top > 0, `2. a first visit, the source late, the ${side} read by the wheel, its rest before the pair is located${pointerTo ? `, the pointer then over the ${pointerTo}` : ''} (${by})`, show(e))
   }
+}
+// 5: the left read by the wheel, then the right, the pointer then over the left (the driver, by a hover), then the
+// toolbar's zoom, all before the pair is located: PDF.js's own scroll of the left, which keeps its place, is not the
+// reader's, and the right, read last, stays where it was read
+if (wanted(5)) {
+  const e = await visit('right', true, { wheel: true, before: 'left', pointerTo: 'left', zoom: true })
+  row(passes(e) && e.top > 0, '5. a first visit, the source late, the left then the right read by the wheel, the pointer then over the left, then a zoom, before the pair is located (compositor)', show(e))
 }
 
 // the copy row 3 opens: the demo's translation, its units with their translations as pieces (cache.mjs copyTexts makes
 // the right's texts from them), every unit kept (current under any service), written from a first visit's page, which
 // has the paper's cache key
-const writer = await context.newPage()
-await writer.goto(urlOf(true))
-await writer.waitForFunction(() => window.__reader?.ready && window.__reader.debug, null, { timeout: 60_000, polling: 50 })
-const copied = await writer.evaluate(async ({ paper, demo, pipeline, typesetting }) => {
+const writer = [3, 4, 5, 6].some(wanted) ? await context.newPage() : null
+await writer?.goto(urlOf(true))
+await writer?.waitForFunction(() => window.__reader?.ready && window.__reader.debug, null, { timeout: 60_000, polling: 50 })
+const copied = writer && await writer.evaluate(async ({ paper, demo, pipeline, typesetting }) => {
   const d = window.__reader.debug, key = d.cacheKey()
   if (!key) return false
   const [pdf, demoUnits] = await Promise.all([fetch(`${demo}/translation.pdf`).then(r => r.arrayBuffer()).then(b => new Uint8Array(b)), fetch(`${demo}/units.json`).then(r => r.json())])
@@ -157,20 +207,65 @@ const copied = await writer.evaluate(async ({ paper, demo, pipeline, typesetting
   const record = { digest: key.digest, lang: key.lang, paper, engine: 'early-scroll', format: 'markers', pipeline, typesetting, context: {}, units, marks: [], rightMarks: [], figures: [] }
   return d.pdfCache.put({ ...record, pdf }, { identity: 'early-scroll', pipeline, typesetting })
 }, { paper, demo: `${at}/demo/${paper}`, pipeline: PIPELINE, typesetting: TYPESETTING })
-await writer.close()
+await writer?.close()
 
 // 3: this machine's copy
 late = 0
-if (!copied) row(false, '3. a copy written', 'the reader had no cache key, or the store refused the copy')
-else {
+if (writer && !copied) row(false, '3. a copy written', 'the reader had no cache key, or the store refused the copy')
+if (copied && wanted(3)) {
   for (const [compositor, by] of followers) {
     for (const side of ['right', 'left']) {
       const e = await visit(side, compositor)
       row(e.shownCached && passes(e), `3. this machine's copy, the ${side} read early (${by})`, `${e.shownCached ? '' : 'no copy shown; '}${show(e)}`)
     }
   }
+}
+if (copied && wanted(4)) {
   const e = await visit('left', true, { first: 'leftFirstPage', pointerTo: 'right', slower: 4 })
   row(e.shownCached && e.rightOpen === false && passes(e), "4. this machine's copy, the left read before the copy opens, the pointer then over the right (compositor)", `${e.shownCached ? '' : 'no copy shown; '}${e.rightOpen ? 'the copy already open; ' : ''}${show(e)}`)
+}
+// 6: no input at all, the pointer resting over the left from the start (on the compositor a pointer moved over a side
+// makes it the driver): PDF.js's own scrolls of a side (its pages laid out, the copy put where the original is read) are
+// not the reader's, and once the pair is located nothing moves
+if (copied && wanted(6)) {
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', e => errors.push(e.message))
+  await page.addInitScript(noteLocate)
+  await page.goto(urlOf(true), { waitUntil: 'commit' })
+  const box = { x: 1440 * 0.25, y: 900 * 0.5 }
+  for (let i = 0; !(await page.evaluate(() => !!window.__atLocate).catch(() => false)) && i < 600; i++) { await page.mouse.move(box.x + (i % 2), box.y); await sleep(30) }
+  const end = await still(page)
+  const at = await page.evaluate(() => window.__atLocate)
+  // what the locate levelled by (the harness's lastLocated): nothing, with no input; undefined where the build has no such record
+  const by = await page.evaluate(() => window.__reader.debug.lastLocated)
+  const moved = at ? [end[0] - at.left, end[1] - at.right].map(x => Math.round(x * 10) / 10) : null
+  row(!!at && by === null && moved.every(x => Math.abs(x) <= 1) && !errors.length, "6. this machine's copy, no input, the pointer resting over the left from the start (compositor): once located, nothing noted as read and nothing moves", at ? `levelled by ${by === undefined ? '(no record in this build)' : by ?? 'nothing'}; at the locate left ${Math.round(at.left)}, right ${Math.round(at.right)}; moved since ${moved.join(' / ')} px${errors.length ? `; page errors: ${errors.slice(0, 2).join(' | ')}` : ''}` : 'never located')
+  await page.close()
+}
+
+// 7: a swap while the right is read and the pointer rests on the left (the website's standing() levelled the incoming
+// right by the driver, and a hover had made the left the driver: the right thrown from 3,745 to 12 px). Here the swap
+// keeps the right's own place (replaceRight: placeOf, scrollFor)
+if (copied && wanted(7)) {
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', e => errors.push(e.message))
+  await page.goto(urlOf(true))
+  await page.waitForFunction(() => window.__reader?.ready && window.__reader.debug?.right.anchors.size, null, { timeout: 60_000, polling: 50 })
+  await still(page)
+  const r = await page.locator('#right').boundingBox(), l = await page.locator('#left').boundingBox()
+  await page.mouse.move(r.x + r.width / 2, r.y + r.height / 2)
+  for (let i = 0; i < 6; i++) { await page.mouse.wheel(0, 600); await sleep(60) }
+  await still(page)
+  // the pointer over the left after the rest: the left is the driver, by a hover
+  for (let i = 1; i <= 4; i++) { await page.mouse.move(l.x + l.width * 0.2 * i, l.y + l.height / 2); await sleep(30) }
+  const before = await page.evaluate(() => window.__reader.debug.right.container.scrollTop)
+  const swap = await page.evaluate(() => window.__reader.debug.swapRight(1500))
+  await still(page)
+  const after = await page.evaluate(() => { const d = window.__reader.debug; return { top: d.right.container.scrollTop, level: d.levelOf(d.right)?.error ?? null } })
+  row(Math.abs(after.top - before) <= 1 && after.level != null && Math.abs(after.level) <= 2 && !swap.error && !errors.length, "7. this machine's copy, the right read, the pointer then over the left, a swap (compositor): the right stays where it was read", `the right ${Math.round(before)} -> ${Math.round(after.top)}; ${after.level == null ? 'no unit to level by' : `${after.level.toFixed(1)} px from level`}${swap.error ? `; swap failed: ${swap.error}` : ''}${errors.length ? `; page errors: ${errors.slice(0, 2).join(' | ')}` : ''}`)
+  await page.close()
 }
 if (away.length) console.log(`stopped on their way off this machine: ${[...new Set(away.map(u => new URL(u).origin))].join(', ')}`)
 await context.close()
