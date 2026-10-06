@@ -71,14 +71,14 @@ export interface ProtoRun {
   /** a done page's removed page (or placeholders' page) at v0's own resolution (mode 'draw'), until it is released */
   removedCanvas(page: number, plane?: 'R' | 'P'): HTMLCanvasElement | null
 }
-/** how the text-removed PDF went: pages removed, pages drawn the old way, units drawn by it (swapped) and the old way
- *  (erased: v0's own units; cells among them never), units whose plan this reading makes otherwise than the add-on's,
- *  what units replace that the add-on kept (erased over their outlines), glyphs another unit had, the swaps' rectangles,
- *  the glyphs with an outline box and without */
+/** how the text-removed PDF went: pages removed, pages drawn the old way, units drawn by it, those the layout file locates
+ *  whole (tex) and v0's own (v0), units whose plan this reading makes otherwise than the add-on's, what units replace that
+ *  the add-on kept (erased over their outlines), glyphs another unit had, the swaps' rectangles, the glyphs with an
+ *  outline box and without */
 export interface RemovalStats {
-  pages: number; refused: number; units: number; swapped: number; erased: number; cellsErased: number; mismatched: number; extraGlyphs: number; extraUnits: number
-  taken: number; notOwned: number; crossing: number; rects: number; outlined: number; unoutlined: number; mismatch: unknown[]
-  byPage: Record<number, { units: number; swapped: number; erased: number; extra: number }>
+  pages: number; refused: number; units: number; tex: number; v0: number; mismatched: number; extraGlyphs: number; extraUnits: number
+  taken: number; notOwned: number; crossing: number; rects: number; outlined: number; unoutlined: number; mismatch: unknown[]; extras: unknown[]
+  byPage: Record<number, { units: number; tex: number; v0: number; extra: number }>
   /** the time it took, ms in all: the pages' ink, ownership and plan, the removed pages drawn, the swaps' rectangles */
   ms: { ink: number; render: number; swap: number }
 }

@@ -2092,7 +2092,7 @@ export function unitOps(L, blocks, page, { px, k, hasSource, pxOf, extents, audi
  * audit has the unit's swapped boxes (as its 'erase', what the gate's residue and bites read) and its crops, as unitOps'.
  * `lines`: the unit's removed glyphs' boxes on the page grouped by line, in PDF units, for the audit.
  */
-export function removalOps(L, page, { px, k, hasSource, pxOf, rects, erase = [], lines = [], removed, audit = null, id = null }) {
+export function removalOps(L, page, { px, k, hasSource, pxOf, rects, erase = [], lines = [], removed, audit = null, id = null, clips = null }) {
   const ops = []
   if (rects.length) ops.push({ op: 'swap', page, rects })
   // (what the unit replaces that the add-on did not remove: erased the old way, each over its own outline)
@@ -2110,9 +2110,12 @@ export function removalOps(L, page, { px, k, hasSource, pxOf, rects, erase = [],
       const sc = L.scale
       const [sx0, sy0] = pxOf(it.t.crop.page)(c[0], c[3]), [sx1, sy1] = pxOf(it.t.crop.page)(c[2], c[1])
       const [dx, dy] = px(it.x, line.baseline + (c[3] - it.t.crop.baseline) * sc)
-      const plane = removed(it.t.crop.page) ? 'P' : 'O'
-      ops.push({ op: 'crop', page: it.t.crop.page, plane, src: [sx0, sy0, sx1 - sx0, sy1 - sy0], dst: [dx, dy, it.w * k, (c[3] - c[1]) * sc * k] })
-      audit?.push({ what: 'crop', unit: id, page, k: it.t.crop.k, srcPage: it.t.crop.page, plane, src: c, dst: [dx, dy, dx + it.w * k, dy + (c[3] - c[1]) * sc * k] })
+      // (cut from the placeholders' page through its own glyphs' and rules' outline boxes, where it has them: that page
+      // holds every placeholder of the paper's, and a crop's box may reach another's; else from the original)
+      const cut = removed(it.t.crop.page) ? clips?.get(it.t.crop.k) ?? null : null, clip = cut?.rects ?? null
+      const plane = clip?.length || (removed(it.t.crop.page) && !clips) ? 'P' : 'O'
+      ops.push({ op: 'crop', page: it.t.crop.page, plane, src: [sx0, sy0, sx1 - sx0, sy1 - sy0], dst: [dx, dy, it.w * k, (c[3] - c[1]) * sc * k], ...(clip?.length ? { clip } : {}) })
+      audit?.push({ what: 'crop', unit: id, page, k: it.t.crop.k, srcPage: it.t.crop.page, plane, src: c, dst: [dx, dy, dx + it.w * k, dy + (c[3] - c[1]) * sc * k], ...(clip?.length ? { clip, own: cut.own } : {}) })
     }
   }
   return ops
@@ -2153,9 +2156,19 @@ export function drawOps(ctx, ops, z, sourceOf) {
     } else if (o.op === 'crop') {
       const src = sourceOf(o.page, o.plane ?? 'O')
       if (!src) continue
+      const s = at(o.src), d = at(o.dst)
+      if (o.clip) {
+        // its own ink's boxes (source pixels) where they land: the crop's map from its source to its place
+        const sx = d[2] / (s[2] || 1), sy = d[3] / (s[3] || 1)
+        ctx.save()
+        ctx.beginPath()
+        for (const e of o.clip) { const b = at(e); ctx.rect(d[0] + (b[0] - s[0]) * sx, d[1] + (b[1] - s[1]) * sy, b[2] * sx, b[3] * sy) }
+        ctx.clip()
+      }
       ctx.globalCompositeOperation = 'darken'
-      ctx.drawImage(src, ...at(o.src), ...at(o.dst))
+      ctx.drawImage(src, ...s, ...d)
       ctx.globalCompositeOperation = 'source-over'
+      if (o.clip) ctx.restore()
     }
   }
   ctx.restore()

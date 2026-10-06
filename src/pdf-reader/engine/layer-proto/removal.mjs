@@ -39,7 +39,8 @@ export async function inkOfPage(OPS, page, outlines = null, collect = null) {
  * The paper's removal on a page, from the layout file alone (the add-on is one a paper, whatever the target): every unit
  * the file holds replaces there every glyph the file gives it (fileOwnership's: its lines' and its placeholders'), the
  * glyphs of its label (the file's label box: drawn in the target's name where the final names it so), its placeholders'
- * rules and the rules its lines hold; the placeholders' page holds each inline placeholder's glyphs and rules. What a
+ * rules and the rules its lines hold; the placeholders' page holds each inline placeholder's glyphs and rules, and the
+ * ink no unit's text is (`id` -1: a crop of what the file does not find is cut from it, through its own boxes). What a
  * target's drawing keeps of these (a line its reading keeps, a placeholder it keeps, a label it keeps) is shown from the
  * original: its swap leaves them out. Returns { units: [{ id, glyphs: [n, k, …], paths }], crops: [{ id, k, glyphs,
  * paths }], shows, glyphs } (layout/remove.mjs RemovalPlan's page), and `own`, the ownership it was made from, with
@@ -70,8 +71,14 @@ export function pagePlan(index, page, ink, own = fileOwnership(index, page, ink)
   }
   for (const [b, o] of own.paths) { const m = ink.paths[b]; unitOf(o.id).paths.push(m); cropOf(o.id, o.k).paths.push(m) }
   for (const [b, id] of own.linePaths) unitOf(id).paths.push(ink.paths[b])
+  // and the ink no unit's text is (no line's glyph, no line's rule): the placeholders' page holds it too, so that a crop
+  // of what the file does not find (a placeholder v0 reads on its own, LOST to the file) is cut from it as well, each
+  // through its own ink's boxes, never another line's
+  const free = { id: -1, k: -1, glyphs: [], paths: [] }
+  for (let g = 0; g < n; g++) if (G[g].n >= 0 && own.owner[g] === -1 && label[g] === -1) free.glyphs.push(G[g].n, G[g].k)
+  ink.paths.forEach((m, b) => { if (m >= 0 && !own.paths.has(b) && !own.linePaths.has(b)) free.paths.push(m) })
   const byId = (a, b) => a.id - b.id || (a.k ?? 0) - (b.k ?? 0)
-  return { units: [...units.values()].sort(byId), crops: [...crops.values()].sort(byId), shows: ink.shows, glyphs: n, own: { ...own, label } }
+  return { units: [...units.values()].sort(byId), crops: [...crops.values(), ...(free.glyphs.length || free.paths.length ? [free] : [])].sort(byId), shows: ink.shows, glyphs: n, own: { ...own, label } }
 }
 
 /**

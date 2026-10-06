@@ -485,17 +485,21 @@ function hueNear(P, q, col) {
 /**
  * The ink a crop carries that is not its placeholder's: inside its source box (device pixels), the ink of the plane it
  * is cut from (`src`: the original's, or the placeholders' page's) that lies a pixel or more from its own ink (`own`: the
- * coloured placeholders' page, where its placeholder's glyphs are `colour`, and its own rules' boxes, device pixels).
- * Returns the foreign pixels.
+ * coloured placeholders' page, where its placeholder's glyphs are `colour`, and its own rules' boxes, device pixels),
+ * within the boxes it is drawn through where it has them (`clip`: x0, y0, x1, y1), its own glyphs' boxes (`ownBoxes`)
+ * its own too. Returns the foreign pixels.
  */
-export function cropForeignPx({ W, H, src, own, colour, box, rules = [] }) {
+export function cropForeignPx({ W, H, src, own, colour, box, rules = [], clip = null, ownBoxes = null }) {
   const [x0, y0, x1, y1] = box.map((v, i) => (i < 2 ? Math.max(0, Math.floor(v)) : Math.min(i === 2 ? W : H, Math.ceil(v))))
   const ruled = (x, y) => rules.some(r => x >= r[0] - 1 && x <= r[2] + 1 && y >= r[1] - 1 && y <= r[3] + 1)
   let n = 0
   for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
     const q = 4 * (y * W + x)
     if (lum(src, q) >= INK) continue
-    let mine = ruled(x, y)
+    // (outside the boxes it is drawn through, a crop carries nothing)
+    if (clip && !clip.some(r => x >= r[0] && x < r[2] && y >= r[1] && y < r[3])) continue
+    // (its own glyphs' outline boxes, a pixel around, where the crop names them: a placeholder the plan has no colour for)
+    let mine = ruled(x, y) || !!ownBoxes?.some(r => x >= r[0] - 1 && x <= r[2] + 1 && y >= r[1] - 1 && y <= r[3] + 1)
     for (let dy = -1; dy <= 1 && !mine; dy++) for (let dx = -1; dx <= 1 && !mine; dx++) {
       const xx = x + dx, yy = y + dy
       if (xx >= 0 && yy >= 0 && xx < W && yy < H && colour && hueNear(own, 4 * (yy * W + xx), colour)) mine = true

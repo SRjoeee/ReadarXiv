@@ -114,8 +114,10 @@ export const layOrder = (placed, batch = 8) => layGroups(placed, batch).flatMap(
  * against); the manifest's outline table gives each glyph its outline's box. On a page the manifest says is removed, a
  * unit the file locates whole is drawn by swapping the removed page's pixels in over the glyphs it replaces (swap.mjs
  * swapRects, over their outlines: no pixel is read) and cutting its crops from the placeholders' page (layer2.mjs
- * removalOps); a unit v0 reads on its own (the file's miss) is drawn the old way, erased and put back; a table cell only
- * the first way, its group the original's otherwise. Every other page is drawn the old way. Null: v0's own drawing.
+ * removalOps), a unit v0 reads on its own (the file's miss) alike over what the add-on removed of what its reading
+ * accounts for; what a unit replaces that the add-on kept is erased over its own outline, no line whole. Every other
+ * page is drawn the old way, erased and put back, but its table cells: a table's group there stays the original's (an
+ * erase takes the table's rules). Null: v0's own drawing.
  * `labels`: { names, captions }, the target's names of a figure and a table (caption-names.mjs) and which of the two the
  * final names so (the record's `captions`, live.mjs captionsOf): a float's label is drawn in the target's name where the
  * final's is (layer2.mjs labelInTarget), else kept as the original's ink. A table's group (each record unit's `group`) is
@@ -212,13 +214,6 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
       if (!p && (p = placeOf(id, stream, rects, u, null))) w.why = 'pages'
     } else p = placeOf(id, stream, rects, u, w?.lu ? w : null)
     if (!p) continue
-    // over the text-removed PDF a table cell is drawn by the removal alone, never erased (an erase takes the table's rules
-    // with its text): a cell the file does not locate whole is not drawn, and its group stays the original's
-    if (removal && u.kind === 'cell' && !p.tex) {
-      skipped.push({ id, kind: u.kind, why: 'cell: not located whole', chars: trCharsOf(u), pages: p.pages })
-      if (tex) sources.why[`cell, ${w?.why ?? 'v0'}`] = (sources.why[`cell, ${w?.why ?? 'v0'}`] ?? 0) + 1
-      continue
-    }
     placed.push(p)
     if (tex) {
       if (p.tex) sources.tex.push(id)
@@ -323,7 +318,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   const RM = removal ? {
     mode: removal.mode, OPS: removal.OPS, ink: [], chars: [], own: [], unmapped: [], claimed: [], removed: [], phOnly: [], plans: [], replaced: [],
     plan: removal.plan ?? null, manifest: removal.manifest ?? null, outlines: removal.manifest?.outlines ? readOutlines(removal.manifest.outlines) : null,
-    stats: { pages: 0, refused: 0, units: 0, swapped: 0, erased: 0, cellsErased: 0, mismatched: 0, extraGlyphs: 0, extraUnits: 0, taken: 0, notOwned: 0, crossing: 0, rects: 0, outlined: 0, unoutlined: 0, mismatch: [], extras: [], byPage: {}, ms: { ink: 0, render: 0, swap: 0 } },
+    stats: { pages: 0, refused: 0, units: 0, tex: 0, v0: 0, mismatched: 0, extraGlyphs: 0, extraUnits: 0, taken: 0, notOwned: 0, crossing: 0, rects: 0, outlined: 0, unoutlined: 0, mismatch: [], extras: [], byPage: {}, ms: { ink: 0, render: 0, swap: 0 } },
   } : null
   /** whether page j's text is removed in the add-on (draw mode) */
   const removedPage = j => RM?.mode === 'draw' && !!RM.manifest?.page?.[j]?.ok
@@ -347,17 +342,18 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
    *  (`extra`: glyphs and rules, erased the old way) */
   const swapOf = (p, pg, rm) => {
     const t = performance.now()
-    const ink = RM.ink[pg], plan = RM.plans[pg], mine = plan.byUnit.get(p.id)
+    const ink = RM.ink[pg], plan = RM.plans[pg]
+    plan.all ??= { glyphs: new Set(plan.glyphs), paths: new Set(plan.paths) }
     const gs = new Set(rm.glyphs), ps = new Set(rm.paths)
     const own = [], extra = []
     for (const g of rm.glyphs) {
       const b = glyphBox(ink, g)
       if (!b) continue
-      if (mine?.glyphs.has(g)) { own.push(b); continue }
+      if (plan.all.glyphs.has(g)) { own.push(b); continue }
       extra.push(b)
       if (RM.stats.extras.length < 40) RM.stats.extras.push([p.id, pg, ink.glyphs[g].u, `${ink.glyphs[g].n}.${ink.glyphs[g].k}`, b.map(v => Math.round(v * 10) / 10)])
     }
-    for (const b of rm.paths) (mine?.paths.has(b) ? own : extra).push(ruleBox(ink, b))
+    for (const b of rm.paths) (plan.all.paths.has(b) ? own : extra).push(ruleBox(ink, b))
     // what the add-on removed that this unit does not replace (the page's index of it, built once): shown from the
     // original, never swapped
     plan.items ??= [...plan.glyphs.map(g => ['g', g, glyphBox(ink, g)]), ...plan.paths.map(b => ['r', b, ruleBox(ink, b)])].filter(x => x[2])
@@ -373,10 +369,19 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     for (const g of rm.glyphs) done.glyphs.add(g)
     for (const b of rm.paths) done.paths.add(b)
     done.erase.push(...erase)
+    // each crop cut from the placeholders' page through its own glyphs' and rules' outline boxes (v0's piece index: k),
+    // where that page holds them all (the file found its placeholder); else from the original, as the old way cuts it
+    const clips = new Map()
+    for (const c of rm.crops) {
+      if (!c.glyphs.length && !c.paths.length) continue
+      if (!c.glyphs.every(g => plan.pGlyphs.has(g)) || !c.paths.every(b => plan.pPaths.has(b))) continue
+      const boxes = [...c.glyphs.map(g => glyphBox(ink, g)).filter(Boolean), ...c.paths.map(b => ruleBox(ink, b))]
+      if (boxes.length) clips.set(c.k, { rects: boxes.map(b => dev([b[0] - SWAP_PAD, b[1] - SWAP_PAD, b[2] + SWAP_PAD, b[3] + SWAP_PAD])), own: boxes.map(dev) })
+    }
     RM.stats.ms.swap += performance.now() - t
     RM.stats.rects += rects.length
     if (extra.length) { RM.stats.extraGlyphs += extra.length; RM.stats.extraUnits++ }
-    return { rects, erase }
+    return { rects, erase, clips }
   }
   /** a page's removed glyphs and rules indexed by place, once (avoidIndex over the plan's items, by item index) */
   const avoidIndexOf = plan => {
@@ -416,24 +421,22 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     // what no painted unit accounts for)
     const ro = restoreOf(p, pg)
     let ops = null
-    // the text-removed PDF, on a page the add-on removed: a unit the layout file locates whole is drawn by it (the removed
-    // page swapped in over the glyphs it replaces, its crops cut from the placeholders' page); any other unit (v0's own
-    // reading, the file's miss) is drawn the old way, erased and put back, the add-on holding nothing of its own
+    // the text-removed PDF, on a page the add-on removed, every unit by it: the removed page swapped in over the glyphs
+    // it replaces that the add-on removed, and each glyph it replaces that the add-on kept erased over its own outline
+    // (removal.mjs unitRemoval: a unit the layout file locates whole replaces what the file gives it, but what its reading
+    // keeps; a unit v0 reads on its own, the file's miss, what its reading accounts for); its crops cut from the
+    // placeholders' page where the file found its placeholders, else from the original. No line is erased whole: the
+    // add-on is the paper's, and no output needs a plan of its own
     if (RM?.mode === 'draw' && removedPage(pg)) {
-      const here = (RM.stats.byPage[pg] ??= { units: 0, swapped: 0, erased: 0, extra: 0 })
+      const here = (RM.stats.byPage[pg] ??= { units: 0, tex: 0, v0: 0, extra: 0 })
       RM.stats.units++
       here.units++
-      const rm = p.tex ? removalOf(p, pg) : null
+      const rm = removalOf(p, pg)
       if (rm) {
         const sw = swapOf(p, pg, rm)
-        ops = L2.removalOps(p.layout, pg, { px: pxOf(pg), k: scale * dpr, hasSource: j => !!rows[j - 1]?.base, pxOf, rects: sw.rects, erase: sw.erase, lines: removalLines(pg, rm), removed: removedPage, audit, id: p.id })
-        RM.stats.swapped++
-        here.swapped++
+        ops = L2.removalOps(p.layout, pg, { px: pxOf(pg), k: scale * dpr, hasSource: j => !!rows[j - 1]?.base, pxOf, rects: sw.rects, erase: sw.erase, clips: sw.clips, lines: removalLines(pg, rm), removed: removedPage, audit, id: p.id })
+        if (p.tex) { RM.stats.tex++; here.tex++ } else { RM.stats.v0++; here.v0++ }
         if (sw.erase.length) here.extra++
-      } else {
-        RM.stats.erased++
-        here.erased++
-        if (p.unit.kind === 'cell') RM.stats.cellsErased++
       }
     }
     // else the unit's drawing as data, and on v0's own copy where it is kept: from the pages drawn now, as v0 drew it
@@ -706,7 +709,13 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
           for (const m of u.paths) { const b = byPath.get(m); ps.add(b); paths.push(b) }
           byUnit.set(u.id, { glyphs: gs, paths: ps })
         }
-        RM.plans[i] = { byUnit, glyphs, paths, crops: pl.crops.length }
+        // (and what the placeholders' page holds: each found placeholder's glyphs and rules)
+        const pGlyphs = new Set(), pPaths = new Set()
+        for (const c of pl.crops) {
+          for (let q = 0; q + 1 < c.glyphs.length; q += 2) pGlyphs.add(at.get(`${c.glyphs[q]}.${c.glyphs[q + 1]}`))
+          for (const m of c.paths) pPaths.add(byPath.get(m))
+        }
+        RM.plans[i] = { byUnit, glyphs, paths, crops: pl.crops.length, pGlyphs, pPaths }
         // (the add-on's plan, the server's reading of the same file: a unit whose removal this reading makes otherwise)
         const theirs = RM.plan?.pages?.[i]
         if (theirs) {

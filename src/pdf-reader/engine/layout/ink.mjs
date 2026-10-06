@@ -74,9 +74,12 @@ export function outlineBox(commonObjs, font, fontChar) {
   return x0 <= x1 ? [x0, y0, x1, y1] : []
 }
 
-/** a glyph's key in an outline table: its font's PostScript name (its subset tag kept: one embedded font) and its
- *  character, as PDF.js names them alike in Node and in the browser */
-export const outlineKey = (font, fontId, fontChar) => `${typeof font?.name === 'string' && font.name ? font.name : fontId}|${fontChar}`
+/** a glyph's key in an outline table: its font's PostScript name, its character as PDF.js maps it and its advance, as
+ *  PDF.js gives them alike in Node and in the browser (its Unicode is not: a symbol font's glyph is blank in one and a
+ *  private-use character in the other). A name alone is not one font: a long paper embeds one subset several times, each
+ *  its own encoding (2307.16209's TeX Gyre Pagella, 546 characters that met another's; by character and advance, 51,
+ *  whose boxes the table joins) */
+export const outlineKey = (font, fontId, g) => `${typeof font?.name === 'string' && font.name ? font.name : fontId}|${g.fontChar}|${Math.round(1000 * (Number(g.width) || 0))}`
 
 /**
  * An outline table as the reader is sent it: { [font]: [char, x0, y0, x1, y1, …] } with each box in thousandths of an em
@@ -86,7 +89,7 @@ export const outlineKey = (font, fontId, fontChar) => `${typeof font?.name === '
 export function outlineTable(collected) {
   const out = {}
   for (const [key, box] of collected) {
-    // (a PostScript name holds no '|'; the character may be one)
+    // (a PostScript name holds no '|'; the rest of the key may)
     const at = key.indexOf('|'), font = key.slice(0, at), ch = key.slice(at + 1)
     const row = (out[font] ??= [])
     if (box.length === 4) row.push(ch, Math.floor(1000 * box[0]), Math.floor(1000 * box[1]), Math.ceil(1000 * box[2]), Math.ceil(1000 * box[3]))
@@ -205,11 +208,15 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   const outlines = new Map()
   /** a glyph's outline box in em (outlineBox), once a font and character; else the given table's */
   const outlineOf = g => {
-    const key = `${s.fontId}|${g.fontChar}`
+    const key = `${s.fontId}|${g.fontChar}|${g.width}`
     if (!outlines.has(key)) {
       let box = outlineBox(commonObjs, s.font, g.fontChar)
-      if (box === null && given) box = given.get(outlineKey(s.font, s.fontId, g.fontChar)) ?? null
-      else if (box !== null && collect) collect.set(outlineKey(s.font, s.fontId, g.fontChar), box)
+      if (box === null && given) box = given.get(outlineKey(s.font, s.fontId, g)) ?? null
+      else if (box !== null && collect) {
+        // (two glyphs of one key, rare: the box of both, which a swap covers either with)
+        const k = outlineKey(s.font, s.fontId, g), had = collect.get(k)
+        collect.set(k, had && had.length === 4 && box.length === 4 ? [Math.min(had[0], box[0]), Math.min(had[1], box[1]), Math.max(had[2], box[2]), Math.max(had[3], box[3])] : had?.length === 4 ? had : box)
+      }
       outlines.set(key, box)
     }
     return outlines.get(key)

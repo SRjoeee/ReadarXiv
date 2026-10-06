@@ -178,7 +178,9 @@ async function removalMeasures(cur, T) {
     const ink = await plane(`ink${q}`, async () => R.inkOfPage(pdfjs.OPS, await cdoc.getPage(q)))
     const at = ci >= 0 ? R.indicesOf(ink, plan.pages[q].crops[ci]) : null
     const rules = (at?.paths ?? []).map(b => dev(ink.boxes.slice(4 * b, 4 * b + 4)))
-    const n = cropForeignPx({ W, H, src, own, colour, box: dev(c.src), rules })
+    // (a crop drawn through its own ink's boxes carries nothing outside them: v0's device pixels, at the gate's)
+    const xyxy = l => (l ? l.map(e => [e[0], e[1], e[0] + e[2], e[1] + e[3]]) : null)
+    const n = cropForeignPx({ W, H, src, own, colour, box: dev(c.src), rules, clip: xyxy(c.clip), ownBoxes: xyxy(c.own) })
     crops++
     foreignPx += n
     if (n >= 6) foreign++
@@ -252,7 +254,7 @@ window.gate = {
       const lines = (r.lines ?? []).filter(l => l[0] === p).map(l => ({ baseline: l[1], size: r.f, x0: l[6], x1: l[7] })).filter(l => Number.isFinite(l.x0) && Number.isFinite(l.x1))
       const mine = S.audit.get(`${r.id}|${p}`) ?? []
       const erase = mine.filter(a => a.what === 'erase').map(a => boxPdf(a.box))
-      const crops = mine.filter(a => a.what === 'crop').map(a => ({ k: a.k, src: a.src, dst: boxPdf(a.dst), plane: a.plane ?? 'O', srcPage: a.srcPage, devDst: a.dst }))
+      const crops = mine.filter(a => a.what === 'crop').map(a => ({ k: a.k, src: a.src, dst: boxPdf(a.dst), plane: a.plane ?? 'O', srcPage: a.srcPage, devDst: a.dst, clip: a.clip ?? null, own: a.own ?? null }))
       // (a label drawn in the target's name is the unit's own line too: its glyphs' band, which the erasing may take)
       const label = S.byId.get(r.id)?.prep?.label, mark = label?.drawn ? label.chars.filter(c => c.page === p) : []
       const own = mark.length ? [{ baseline: Math.max(...mark.map(c => c.yb)), size: Math.max(...mark.map(c => c.size)), x0: Math.min(...mark.map(c => c.x0)), x1: Math.max(...mark.map(c => c.x1)) }] : []
@@ -290,7 +292,7 @@ window.gate = {
     // plan's)
     if (S.rm) {
       const st = S.run.removalStats?.()?.byPage?.[p]
-      out.removal = { ok: !!S.rm.manifest.page[p]?.ok, refused: S.rm.manifest.page[p]?.ok ? 0 : (S.rm.plan.pages[p]?.units?.length ? 1 : 0), units: st?.units ?? 0, swapped: st?.swapped ?? 0, erased: st?.erased ?? 0, extra: st?.extra ?? 0, mismatched: 0 }
+      out.removal = { ok: !!S.rm.manifest.page[p]?.ok, refused: S.rm.manifest.page[p]?.ok ? 0 : (S.rm.plan.pages[p]?.units?.length ? 1 : 0), units: st?.units ?? 0, swapped: (st?.tex ?? 0) + (st?.v0 ?? 0), tex: st?.tex ?? 0, v0: st?.v0 ?? 0, extra: st?.extra ?? 0, mismatched: 0 }
     }
     if (!pixel) return out
     const row = run.rows[p - 1]

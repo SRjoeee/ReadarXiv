@@ -93,14 +93,15 @@ describe("a unit's swap as rectangles over its glyphs' outlines", () => {
 })
 
 describe("the paper's plan, from the layout file alone", () => {
-  it("removes every glyph the file gives a unit and its label's; the placeholders' page holds each placeholder's", () => {
+  it("removes every glyph the file gives a unit and its label's; the placeholders' page holds each placeholder's and the free ink", () => {
     // one unit, one line (baseline 100, x 10-60) erased over x 10-60, a placeholder over x 30-40; a label box before it
     const unit = { lines: Float64Array.from([1, 10, 60, 100, 107, 98, 10, 0]), erase: [Float64Array.from([10, 98, 60, 107])], ph: new Map([[3, { kind: 'math', flags: 0, segs: Float64Array.from([1, 30, 100, 40, 107, 98]), text: null }]]), labels: Float64Array.from([1, 1, 2, 100, 8, 107, 98]) }
     const index = { onPage: (p: number) => (p === 1 ? [7] : []), unit: () => unit } as never
     const ink = inkOf([g('L', 3, 100, 0, 0), g('a', 12, 100, 1, 0), g('x', 32, 100, 1, 1), g('b', 50, 100, 1, 2), g('z', 70, 100, 2, 0)])
     const plan = pagePlan(index, 1, ink)
     expect(plan.units).toEqual([{ id: 7, glyphs: [0, 0, 1, 0, 1, 1, 1, 2], paths: [] }])
-    expect(plan.crops).toEqual([{ id: 7, k: 3, glyphs: [1, 1], paths: [] }])
+    // (and the ink no unit's text is: the glyph past the line, for a crop the file does not find)
+    expect(plan.crops).toEqual([{ id: -1, k: -1, glyphs: [2, 0], paths: [] }, { id: 7, k: 3, glyphs: [1, 1], paths: [] }])
   })
 })
 
