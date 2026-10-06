@@ -126,6 +126,16 @@ describe('pageBoxes and boxDiff: TeX\'s own page boxes, the marks taken out', ()
     const v1 = ['\\vbox(633.0+0.0)x407.0', '.\\pdfliteral direct{/axt-bs1 ri}', '.\\hbox(6.94+2.22)x407.0, glue set 0.5', '..\\pdfdest name{axt-p0.1a} fitr width 0.0 height 0.0 depth 0.0', '..\\pdfliteral direct{/axt-p0.1a ri}', ...LINE.slice(2, 4), '..\\special{pdf:code /axt-p0.1b ri}', ...LINE.slice(4), '.\\pdfliteral direct{/axt-be1 ri}']
     expect(boxDiff(pageBoxes(logOf(LINE)), pageBoxes(logOf(v1)))).toEqual([])
     expect(boxDiff(pageBoxes(logOf(LINE)), pageBoxes(logOf([...LINE.slice(0, 3), '..\\pdfliteral direct{0 g}', ...LINE.slice(3)])))).toHaveLength(1)
+    // a column's body: the penalty after its opening point is the point's; the glue put back after its closing point has
+    // lost its name, no more; any other penalty or name is a difference
+    const body = (head: string[], tail: string[]) => ['\\vbox(633.0+0.0)x407.0', '.\\vbox(600.0+0.0)x407.0', ...head, '..\\glue(\\topskip) 3.0', '..\\hbox(6.94+2.22)x407.0', '...\\OT1/cmr/m/n/10 W', ...tail]
+    const v0 = body([], ['..\\glue(\\belowdisplayskip) 6.0 plus 2.0', '..\\penalty 150', '..\\glue 0.0 plus 1.0fil'])
+    const v1b = body(['..\\pdfliteral direct{/axt-bs3 ri}', '..\\penalty 10000'], ['..\\pdfliteral direct{/axt-be3 ri}', '..\\glue 6.0 plus 2.0', '..\\penalty 150', '..\\glue 0.0 plus 1.0fil'])
+    expect(boxDiff(pageBoxes(logOf(v0)), pageBoxes(logOf(v1b)))).toEqual([])
+    expect(boxDiff(pageBoxes(logOf(v0)), pageBoxes(logOf(body(['..\\pdfliteral direct{/axt-p0.1a ri}', '..\\penalty 10000'], v0.slice(-3)))))).toHaveLength(1)
+    // a name lost anywhere but in a list's last run of glue, kerns and penalties is a difference
+    const mid = (g: string) => body([], [g, '..\\hbox(6.94+2.22)x407.0', '..\\penalty 150'])
+    expect(boxDiff(pageBoxes(logOf(mid('..\\glue(\\parskip) 6.0'))), pageBoxes(logOf(mid('..\\glue 6.0'))))).toHaveLength(1)
   })
   it('a font kern lost beside a heading\'s end mark: the page, and the mark nearest the difference', () => {
     const v1 = [LINE[0] as string, '.\\hbox(6.94+2.22)x407.0, glue set 0.49', ...LINE.slice(2, 6), '..\\pdfdest name{axt-h3e} fitr width 0.0 height 0.0 depth 0.0', '..\\OT1/cmr/m/n/10 .']

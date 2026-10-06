@@ -18,6 +18,7 @@ import { lastTexLog, latin1, latin1Bytes } from '../../../src/pdf-reader/engine/
 import { pageInk } from '../../../src/pdf-reader/engine/layout/ink.mjs'
 import { classOf, encodeLayoutMarks, layoutMarking, layoutMarksOf, MARK_CLASSES, POINTS_TEX, probeSamples, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { OWNED, OWNED_HOW } from '../../../src/pdf-reader/engine/layout/stream.mjs'
+import { boxDiff, pageBoxes } from './layout-marks-compare.mjs'
 import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/live.mjs'
 
 let failed = 0
@@ -115,17 +116,18 @@ const STAY = {
  *  calls xdvipdfmx quiet (-q), which then says nothing of a destination set twice: the two steps here, as the TeX page
  *  runs them */
 function compileAll(jobs) {
-  const pass = j => (j.engine === 'xelatex' && !j.probe ? 'xelatex -no-pdf -interaction=nonstopmode main.tex >> term.txt 2>&1; xdvipdfmx main.xdv >> term.txt 2>&1' : `${j.engine} -interaction=nonstopmode main.tex >> term.txt 2>&1`)
+  // a traced job writes TeX's page boxes whole (no line cut at 79 characters)
+  const pass = j => (j.engine === 'xelatex' && !j.probe ? 'xelatex -no-pdf -interaction=nonstopmode main.tex >> term.txt 2>&1; xdvipdfmx main.xdv >> term.txt 2>&1' : `${j.trace ? 'max_print_line=1000000 ' : ''}${j.engine} -interaction=nonstopmode main.tex >> term.txt 2>&1`)
   const script = jobs.map(j => `cd /work/${j.name} && for i in ${Array.from({ length: j.passes }, (_, k) => k + 1).join(' ')}; do ${pass(j)}; done`).join('\n')
   writeFileSync(join(dir, 'run.sh'), `${script}\n`)
   try { execFileSync('docker', ['run', '--rm', '--network', 'none', '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'sh', 'run.sh'], { stdio: 'ignore', timeout: 1_800_000 }) } catch {}
 }
 const jobs = [], queued = []
 /** the source as v0 and v1 of a job, queued: written once the mark probes have answered (prepare) */
-function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', 'v1'], own = true } = {}) {
+function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', 'v1'], own = true, trace = false } = {}) {
   const paper = openPaper(new Map([['main.tex', new TextEncoder().encode(src)]]))
   if (STREAM_ONLY && !name.startsWith('stream-')) return paper
-  queued.push({ name, paper, engine, passes, variants, own })
+  queued.push({ name, paper, engine, passes, variants, own, trace })
   return paper
 }
 /** v1 with the paper's own switch as the run gets it: the mark probe compiled first, one pass in the paper's engine (the
@@ -142,7 +144,7 @@ function prepare() {
       mkdirSync(d, { recursive: true })
       // v1np: v1 with no points, LAYOUT_TEX as it was before them
       for (const [path, bytes] of originalFiles(q.paper, v === 'v0' ? { lines: true } : { lines: true, layout: MARK_CLASSES, switches })) writeFileSync(join(d, path), v === 'v1np' && path === 'main.tex' ? latin1Bytes(latin1(bytes).replace(POINTS_TEX, '')) : bytes)
-      jobs.push({ name: `${q.name}-${v}`, engine: q.engine, passes: q.passes })
+      jobs.push({ name: `${q.name}-${v}`, engine: q.engine, passes: q.passes, trace: q.trace })
     }
   }
 }
@@ -448,6 +450,18 @@ const streams = []
 for (const [name, src] of Object.entries(STREAM)) for (const engine of ['pdflatex', 'xelatex']) streams.push({ key: streamKey(name, engine), name, engine, paper: queue(streamKey(name, engine), src, { engine, variants: ['v1', 'v1np'] }) })
 // LuaTeX's PDF writer sets the glyphs after a literal by an absolute matrix: a note of how far (the ruling: ≤ ~0.011 pt)
 const luaStream = { key: streamKey('A', 'lualatex'), name: 'A', engine: 'lualatex', paper: queue(streamKey('A', 'lualatex'), STREAM.A, { engine: 'lualatex', variants: ['v1', 'v1np'] }) }
+/** TeX's own page boxes with the points and without them, what the corpus check's trace compares: a balanced last page
+ *  whose material begins with a float taller than the first try at its column (balance.sty \vsplits it: a point at the
+ *  body's top made its \topskip glue a place to break, 2608.06007), a last page a \clearpage's \vfil ends (LaTeX's
+ *  \@outputbox@removebskip, 2608.24503), floats (a point at a float's top gave its paragraph a \parskip, 2608.01890) */
+const TRACE = '\\tracingoutput=1 \\tracingonline=0 \\showboxbreadth=2147483647 \\showboxdepth=2147483647 '
+const TRACED = {
+  'a balanced last page, a tall [h] float first': doc('\\usepackage{balance}', `${Array.from({ length: 24 }, () => prose(12, () => '')).join('\n\n')}\n\n\\clearpage\n\\balance\n\\begin{figure}[h]\\centering\\rule{1cm}{15cm}\\caption{A tall figure with $x$.}\\end{figure}\n${prose(5, i => (i === 3 ? ' $y_1$' : ''))}`, '\\documentclass[twocolumn]{article}'),
+  'a last page a \\clearpage ends': doc('', `${Array.from({ length: 9 }, () => prose(14, i => (i === 5 ? ' $z$' : ''))).join('\n\n')}`),
+  'floats: a figure, a table, a footnote below': doc('', `${prose(10, () => '')}\n\\begin{figure}[t]\\centering\\rule{2cm}{1cm}\\caption{A figure with $x$.}\\end{figure}\n${prose(10, i => (i === 4 ? '\\footnote{A note.}' : ''))}\n\\begin{table}[h]\\centering\\begin{tabular}{ll}a & b\\\\\\end{tabular}\\caption{A table.}\\end{table}\n${prose(10, () => '')}`),
+}
+const traceKey = name => `stream-trace-${name.replace(/[^A-Za-z0-9]+/g, '-')}`
+for (const [name, src] of Object.entries(TRACED)) queue(traceKey(name), `${TRACE}${src}`, { variants: ['v1', 'v1np'], trace: true })
 
 prepare()
 console.log(`compiling ${jobs.length} documents in ${dir}, after ${queued.filter(q => q.own && q.variants.includes('v1')).length} mark probes`)
@@ -699,6 +713,13 @@ for (const s of [...streams, luaStream]) {
     const rows = rowsOf(units[i]?.pieces[k]?.src.trim() ?? '', 5).s, body0 = chars.replace(/\s|\p{Variation_Selector}/gu, '')
     check(`${label}: a display across a page, its rows in order in the stream, what TeX shipped between them outside the column bodies`, body0.startsWith(`${rows}andthetextafterthelongdisplay`) && !all.replace(/\s/g, '').startsWith(rows), JSON.stringify({ body: body0.slice(0, 80), all: all.slice(0, 80) }))
   }
+}
+
+// TeX's own boxes: the points' nodes out (the corpus check's comparison), nothing else different
+for (const name of Object.keys(TRACED)) {
+  const boxesOf = v => { const log = read(`${traceKey(name)}-${v}`, 'log', 'latin1') ?? ''; const out = [], lines = log.split('\n'); for (let i = 0; i < lines.length; i++) if (/^Completed box being shipped out \[/.test(lines[i])) { const at = i; while (i < lines.length && lines[i] !== '') i++; out.push(...lines.slice(at, i), '') } return pageBoxes(out.join('\n')) }
+  const [a, b] = [boxesOf('v1np'), boxesOf('v1')], d = boxDiff(a, b)
+  check(`the stream, TeX's boxes with the points and without them the same: ${name}`, a.length > 0 && a.length === b.length && !d.length, JSON.stringify({ pages: [a.length, b.length], differences: d.length, first: d.slice(0, 3).map(x => [x.page, x.v0, x.v1]) }))
 }
 
 if (!process.env.KEEP) rmSync(dir, { recursive: true, force: true })

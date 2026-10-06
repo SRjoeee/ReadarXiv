@@ -133,7 +133,7 @@ export function pageBoxes(log) {
 }
 const DEST = /^\\pdfdest name\{axt-([^}]+)\}/
 /** a point of the layout marks (LAYOUT_TEX's POINTS_TEX): pdfTeX's and LuaTeX's literal, xdvipdfmx's special */
-const POINT = /^\\(?:pdfliteral direct\{|special\{pdf:code )\/axt-[A-Za-z0-9.-]+ ri\}$/
+const POINT = /^\\(?:pdfliteral direct\{|special\{pdf:code )\/axt-([A-Za-z0-9.-]+) ri\}$/
 const BOX = /^\\[hv]box\(/
 /** the box without the marks' own nodes, each node keeping its own (`src`): a mark's destination and its point, the
  *  points around a column's body and a float's box, the empty \vadjust
@@ -145,13 +145,22 @@ const BOX = /^\\[hv]box\(/
  *  kern's) */
 function withoutMarks(node) {
   const children = []
+  // a column body's points: the penalty after its opening one is its own; the glue its closing one takes off the body's
+  // end and puts back after it has lost its name only (layout/marks.mjs POINTS_TEX), so the names of a list's last glue,
+  // kerns and penalties are no difference, either side
+  let opened = false
   for (const c of node.children) {
-    if (DEST.test(c.text) || POINT.test(c.text) || /^\\kern ?-?0\.0$/.test(c.text) || /^\\math(?:on|off)$/.test(c.text) || /^\\discretionary\b/.test(c.text)) continue
+    const point = POINT.exec(c.text)
+    if (point) { opened = /^bs\d+$/.test(point[1]); continue }
+    if (opened && c.text === '\\penalty 10000') { opened = false; continue }
+    opened = false
+    if (DEST.test(c.text) || /^\\kern ?-?0\.0$/.test(c.text) || /^\\math(?:on|off)$/.test(c.text) || /^\\discretionary\b/.test(c.text)) continue
     const f = withoutMarks(c)
     if (c.text === '\\vadjust' && !f.children.length) continue
     if (/^\\hbox\(0\.0\+0\.0\)x0\.0$/.test(c.text) && c.children.length && !f.children.length) continue
     children.push(f)
   }
+  for (let i = children.length - 1; i >= 0 && /^\\(?:glue|kern|penalty)/.test(children[i].text); i--) children[i].text = children[i].text.replace(/^\\glue\(\\[A-Za-z]+\) /, '\\glue ')
   return { text: node.text.replace(/^\\glue\(\\x?spaceskip\) /, '\\glue ').replace(/^\\kern /, '\\kern'), children, src: node }
 }
 /** a subtree's hash (cyrb53 of its text and its children's hashes), kept on the node */
