@@ -1,6 +1,6 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { type Glyph, OPS_CAP, pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
+import { type Glyph, OPS_CAP, outlineBox, pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
 
 // arXiv's ink from a page's operator list, as PDF.js's canvas places it: the lists are written here with pdfjs-dist's own
 // operator codes, in the shapes PDF.js 6.3.289 gives them (a text matrix as one argument, a path as [op, data, minMax])
@@ -258,5 +258,45 @@ describe('pageInk', () => {
     expect(glyphs).toEqual([])
     expect(boxes).toEqual([])
     expect(() => ink([[OPS.setFont, []], [OPS.showText, []], [OPS.showText, [null]], [OPS.setTextMatrix, []], [OPS.transform, []], [OPS.paintImageXObjectRepeat, ['x']], [OPS.constructPath, []], [OPS.paintFormXObjectBegin, []]])).not.toThrow()
+  })
+})
+
+describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
+  // PDF.js's glyph outlines as it gives them where it draws glyphs as paths (Node): DrawOPS in em from the origin, y up
+  const M = 0, L = 1, C = 2, Z = 4
+  const sy: Record<string, number[]> = {
+    // CMSY10's calligraphic F: its outline from -0.032 to 0.691 em, the font declaring a descent of 0.96
+    F: [M, 0.02, -0.032, L, 0.6, -0.032, C, 0.7, 0.2, 0.7, 0.5, 0.65, 0.691, L, 0.05, 0.691, Z],
+    // a space drawn: no outline
+    ' ': [],
+  }
+  const objs = (paths: Record<string, number[]>) => ({
+    has: (id: string) => id in FONTS || id.startsWith('cmsy_path_'),
+    get: (id: string) => { if (id in FONTS) return FONTS[id]; const ch = id.slice('cmsy_path_'.length); return ch in paths ? { path: new Float32Array(paths[ch]!) } : null },
+  })
+  FONTS.cmsy = { name: 'MJNQMS+CMSY10', loadedName: 'cmsy', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.775, descent: -0.96, isType3Font: false, vertical: false }
+  it('outlineBox: the extremes of its points and control points; [] for none drawn; null where no outline is given', () => {
+    const o = objs(sy)
+    expect(outlineBox(o, FONTS.cmsy, 'F')).toEqual([expect.closeTo(0.02, 6), expect.closeTo(-0.032, 6), expect.closeTo(0.7, 6), expect.closeTo(0.691, 6)])
+    expect(outlineBox(o, FONTS.cmsy, ' ')).toEqual([])
+    expect(outlineBox(o, FONTS.cmsy, 'Q')).toBeNull()
+    expect(outlineBox(commonObjs, FONTS.cmsy, 'F')).toBeNull()
+    expect(outlineBox(o, FONTS.f1, 'F')).toBeNull()
+  })
+  it('a glyph\'s top and bottom are its outline\'s, not its font\'s declared ascent and descent; its ink across is kept apart from its advance', () => {
+    const { glyphs } = pageInk(OPS, list(text('cmsy', 10, [1, 0, 0, 1, 72, 700], show(g('F', 600), g(' ', 300)))), objs(sy), { rotate: 0 })
+    const f = only(glyphs, 'F')
+    expect(f.bottom).toBeCloseTo(700 - 0.32, 4)
+    expect(f.top).toBeCloseTo(700 + 6.91, 4)
+    expect(f.ix0).toBeCloseTo(72.2, 4)
+    expect(f.ix1).toBeCloseTo(79, 4)
+    // the declared 0.96 em would reach the next line, 9.6 pt below
+    expect(f.bottom).toBeGreaterThan(700 - 9.6 + 1)
+    // a space drawn has no ink: nothing up or down
+    const sp = glyphs.find(q => q.u === ' ')!
+    expect(sp.top).toBe(sp.bottom)
+    // no outline given: the declared box, as before
+    const declared = only(pageInk(OPS, list(text('cmsy', 10, [1, 0, 0, 1, 72, 700], show(g('F', 600)))), commonObjs, { rotate: 0 }).glyphs, 'F')
+    expect(declared.bottom).toBeCloseTo(700 - 9.6, 6)
   })
 })

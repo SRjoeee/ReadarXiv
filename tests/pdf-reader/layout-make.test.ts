@@ -79,7 +79,9 @@ function opsOf(p: Page, points: [string, number, number][] = []) {
   if (p.ops === 'capped') while (ops.length <= OPS_CAP) ops.push([OPS.save, []])
   return { fnArray: ops.map(o => o[0]), argsArray: ops.map(o => o[1]) }
 }
-const commonObjs = { get: (id: string) => FONTS[id] ?? null }
+/** PDF.js's glyph outlines (where it draws glyphs as paths, as in Node), by `<loadedName>_path_<fontChar>`: DrawOPS in em */
+const PATHS: Record<string, number[]> = {}
+const commonObjs = { get: (id: string) => (id in PATHS ? { path: new Float32Array(PATHS[id]!) } : (FONTS[id] ?? null)), has: (id: string) => id in PATHS || id in FONTS }
 function arxivOf(pages: Page[], asked: number[] = []) {
   return {
     numPages: pages.length,
@@ -915,5 +917,43 @@ describe('makeLayout, the maker round (Fix 1): text symbols and the macros TeX s
     expect(said.file.ph.find(r => r[0] === 0 && r[1] === 0)).toBeUndefined()
     const not = await made({ pages: [{ runs }], marks, units })
     expect(phOf(not.file, 0, 0)).toEqual([0, 0, 6, PH_FLAG.LOST])
+  })
+})
+
+describe('makeLayout, the maker round (Fix 2): crops and erases from the glyphs\' own ink', () => {
+  // a calligraphic F of CMSY10, which declares a descent of 0.96 em: its own outline reaches 0.03 em below its baseline
+  FONTS.F3 = { name: 'ABCDEF+CMSY10', loadedName: 'F3L', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.775, descent: -0.96, isType3Font: false, vertical: false }
+  const runs: Run[] = [{ s: 'see', x: 72, y: 700 }, { s: 'FF', x: 92, y: 700, font: 'F3' }, { s: 'and more words', x: 107, y: 700 }, { s: 'next line of the words here', x: 72, y: 688 }]
+  const w: World = {
+    pages: [{ runs }],
+    marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[3] as Run), 688], ['p0.1a', 1, 92, 700], ['p0.1b', 1, 102, 700]],
+    units: [unit('para', [text('see '), ph('$\\mathcal{FF}$'), text(' and more words next line of the words here')])],
+  }
+  it('a formula\'s crop is its glyphs\' own ink, never the next line\'s: the bar sees a crop that takes another glyph', async () => {
+    for (const k of Object.keys(PATHS)) delete PATHS[k]
+    // its font's declared box: the crop reaches the next line and takes its letters (the 6b review's I2)
+    const declared = await made(w)
+    expect(declared.stats.ph.foreign).toBeGreaterThan(0)
+    PATHS.F3L_path_F = [0, 0.02, -0.03, 1, 0.48, -0.03, 1, 0.48, 0.69, 1, 0.02, 0.69, 4]
+    const own = await made(w)
+    const seg = phOf(own.file, 0, 1)
+    // segment: page, x0, baseline, x1, top, bottom
+    expect(seg[9]).toBeGreaterThan(699.5)
+    expect(seg[8]).toBeLessThan(707.1)
+    expect(own.stats.ph).toMatchObject({ found: 1, foreign: 0, shared: 0 })
+    // and the line's erase reaches no lower than its own glyphs
+    for (const [line, , y0] of chunk(rowsOf(own.file, 0, 'erase'), 5)) if (line === 0) expect(y0!).toBeGreaterThan(688 + 7.5)
+    for (const k of Object.keys(PATHS)) delete PATHS[k]
+  })
+  it('a big delimiter of another cell, hanging from a baseline by this line\'s, is no glyph of this line', async () => {
+    // a CMEX bracket piece whose origin is 4 pt below the line's baseline and whose ink hangs 1.8 em below it
+    FONTS.F4 = { name: 'ABCDEF+CMEX10', loadedName: 'F4L', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.04, descent: -0.96, isType3Font: false, vertical: false }
+    PATHS['F4L_path_['] = [0, 0, -1.8, 1, 0.3, -1.8, 1, 0.3, 0.05, 1, 0, 0.05, 4]
+    const cell: Run[] = [{ s: '[', x: 70, y: 696, font: 'F4' }, { s: 'max pool stride', x: 72, y: 700 }]
+    const { file } = await made({ pages: [{ runs: cell }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(cell[1] as Run), 700]], units: [unit('para', [text('max pool stride')])] })
+    const line = rowsOf(file, 0, 'lines')
+    // its line's foot is its own letters', not the bracket's 18 pt below
+    expect(line[5]).toBeGreaterThan(697)
+    for (const k of Object.keys(PATHS)) delete PATHS[k]
   })
 })

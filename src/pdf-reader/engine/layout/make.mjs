@@ -49,6 +49,9 @@ const FOOT = 36
 const MERGE = 0.5, ERASE_MAX = 16
 /** an equation's number, within an em of its column's edge */
 const NUMBER = /^\((?:[A-Z]?\d+(?:[.\-]\d+)*[a-z]?|[ivxl]+)\)$/
+/** a line's band, by its glyphs' own ink: their centres between BAND_DOWN em below its baseline and BAND_UP above (a
+ *  subscript's ink is centred near the baseline, a superscript's 0.6 em above it) */
+const BAND_DOWN = 0.45, BAND_UP = 0.95
 /** a row of glyphs smaller than this share of a line's, its baseline within their script window of the line's, is a
  *  script of that line */
 const SCRIPT_SIZE = 0.85
@@ -118,7 +121,8 @@ function viewOf(v) {
   return [x0, y0, x1, y1].every(n => Number.isFinite(n) && Math.abs(n) <= COORD_MAX) && x0 < x1 && y0 < y1 ? [x0, y0, x1, y1] : null
 }
 
-/** a page's glyphs by baseline, rising, in arrays (x0, x1, y, top, bottom, size, font, u), and its boxes */
+/** a page's glyphs by baseline, rising, in arrays (x0, x1, y, top, bottom, size, font, u; ix0 and ix1 their ink across
+ *  with their advance; top and bottom their own ink up and down, ink.mjs), and its boxes */
 function glyphsOf(got, fontIds) {
   const order = got.glyphs.map((_, i) => i).sort((a, b) => {
     const p = got.glyphs[a], q = got.glyphs[b]
@@ -126,12 +130,15 @@ function glyphsOf(got, fontIds) {
   })
   const n = order.length, P = {
     n, x0: new Float64Array(n), x1: new Float64Array(n), y: new Float64Array(n), top: new Float64Array(n), bottom: new Float64Array(n),
+    ix0: new Float64Array(n), ix1: new Float64Array(n),
     size: new Float64Array(n), font: new Int32Array(n), u: new Array(n), owner: new Int32Array(n).fill(-1), taken: new Uint8Array(n),
     boxes: [], boxTaken: new Uint8Array(got.boxes.length >> 2), most: 0,
   }
   order.forEach((g, i) => {
     const t = got.glyphs[g]
     P.x0[i] = t.x0; P.x1[i] = t.x1; P.y[i] = t.y; P.top[i] = t.top; P.bottom[i] = t.bottom; P.size[i] = t.size; P.u[i] = t.u
+    // its ink across: its outline's and its advance's together (ink.mjs: an italic's overhang past its advance)
+    P.ix0[i] = Math.min(t.x0, t.ix0 ?? t.x0); P.ix1[i] = Math.max(t.x1, t.ix1 ?? t.x1)
     P.font[i] = fontIds(t.font)
     if (t.size > P.most) P.most = t.size
   })
@@ -195,7 +202,14 @@ function lineOf(P, r, from, to, unit) {
   if (!first.length) return null
   const size0 = median(first.map(i => P.size[i]))
   const base = baselineOf(P, bodyOf(P, first, size0), r.base)
-  const near = band(P, base - SCRIPT(P.most), base + SCRIPT(P.most)).filter(i => Math.abs(P.y[i] - base) < SCRIPT(P.size[i]) && ok(i))
+  // by its own ink too: a glyph whose ink is centred off the line's band is no glyph of the line's text, whatever its
+  // origin (a big delimiter of another cell's matrix hangs from a baseline by this one's, 1.5 em below it: 1512's
+  // table; txexs's in 2307)
+  // A line of such glyphs alone (a display's, which the anchor gave the unit) keeps them: it is its unit's, as before
+  const onBand = i => { const c = (P.top[i] + P.bottom[i]) / 2; return c >= base - BAND_DOWN * size0 && c <= base + BAND_UP * size0 }
+  const all = band(P, base - SCRIPT(P.most), base + SCRIPT(P.most)).filter(i => Math.abs(P.y[i] - base) < SCRIPT(P.size[i]) && ok(i))
+  const banded = all.filter(onBand)
+  const near = banded.some(i => mid(P, i) >= L && mid(P, i) <= R) ? banded : all
   const inside = near.filter(i => mid(P, i) >= L && mid(P, i) <= R)
   if (!inside.length) return null
   let x0 = Infinity, x1 = -Infinity
@@ -267,7 +281,7 @@ function blank(units) {
   return {
     lines: { carried: 0, total: 0 },
     units: { located: 0, total: units.length, byKind: {}, unplaced: 0 },
-    ph: { marked: 0, found: 0, empty: 0, lost: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, texts: 0 },
+    ph: { marked: 0, found: 0, empty: 0, lost: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, foreign: 0, shared: 0, texts: 0 },
     match: { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0 },
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
     capped: [], timedOut: [], over: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
@@ -603,7 +617,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
         for (const j of [...byRow.keys()].sort((x, y) => x - y)) {
           const r = rows[j], P = ink[r.page], { gs: own, boxes } = byRow.get(j)
           let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
-          for (const g of own) { x0 = Math.min(x0, P.x0[g]); x1 = Math.max(x1, P.x1[g]); top = Math.max(top, P.top[g]); bottom = Math.min(bottom, P.bottom[g]) }
+          for (const g of own) { x0 = Math.min(x0, P.ix0[g]); x1 = Math.max(x1, P.ix1[g]); top = Math.max(top, P.top[g]); bottom = Math.min(bottom, P.bottom[g]) }
           for (const b of boxes) { x0 = Math.min(x0, b[0]); x1 = Math.max(x1, b[2]); top = Math.max(top, b[3]); bottom = Math.min(bottom, b[1]) }
           const inkBase = own.length ? baselineOf(P, bodyOf(P, own, r.size), r.base) : r.base
           segs.push({ page: r.page, x0, base: r.base, x1, top, bottom, inkBase, size: r.size, row: j, boxes, gs: own })
@@ -634,12 +648,34 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     }
     if (one.symbols) symbolsOf(one)
   }
-  // the bars: an arXiv glyph matched by two found pieces, an owned glyph of a found piece not matched (none, both)
+  // the bars: an arXiv glyph matched by two found pieces, an owned glyph of a found piece not matched (none, both; each
+  // true by the matcher's own rule); and what the layer draws: an arXiv glyph inside a found inline piece's segments
+  // (its crop) that is not its own (`foreign`), and one inside two found pieces' segments (`shared`), by its own ink,
+  // half of it or more inside (none, both: the 6b review's I2)
   {
     const seen = new Map()
     for (const gs of matchedBy.values()) for (const [p, g] of gs) { const key = `${p}|${g}`; seen.set(key, (seen.get(key) ?? 0) + 1) }
     for (const n of seen.values()) if (n > 1) stats.ph.twice++
     stats.ph.unmatched = stats.ph.owned - stats.ph.matched
+    const inside = new Map()
+    for (const e of ph) {
+      if (e.state !== 'found') continue
+      const r = e.row, own = new Set((matchedBy.get(`${r[0]}.${r[1]}`) ?? []).map(([p, g]) => `${p}|${g}`))
+      for (let o = 4; o + 5 < r.length; o += 6) {
+        const page = r[o], x0 = r[o + 1], x1 = r[o + 3], top = r[o + 4], bottom = r[o + 5], P = ink[page]
+        if (!P) continue
+        for (const g of band(P, bottom - 2 * P.most, top + 2 * P.most)) {
+          const w = Math.min(x1, P.ix1[g]) - Math.max(x0, P.ix0[g]), h = Math.min(top, P.top[g]) - Math.max(bottom, P.bottom[g])
+          const area = (P.ix1[g] - P.ix0[g]) * (P.top[g] - P.bottom[g])
+          if (w <= 0 || h <= 0 || !(area > 0) || w * h < 0.5 * area) continue
+          const key = `${page}|${g}`
+          const at = inside.get(key) ?? inside.set(key, new Set()).get(key)
+          at.add(`${r[0]}.${r[1]}`)
+          if (e.cls !== 'display' && !own.has(key)) stats.ph.foreign++
+        }
+      }
+    }
+    for (const at of inside.values()) if (at.size > 1) stats.ph.shared++
   }
 
   /**
@@ -735,7 +771,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     let numbered = false
     for (const page of pages) {
       const P = ink[page], items = []
-      for (const [p, g] of gs) if (p === page) items.push({ g, x0: P.x0[g], x1: P.x1[g], top: P.top[g], bottom: P.bottom[g] })
+      for (const [p, g] of gs) if (p === page) items.push({ g, x0: P.ix0[g], x1: P.ix1[g], top: P.top[g], bottom: P.bottom[g] })
       for (const [p, b] of bs) if (p === page) { const B = P.boxes[b]; items.push({ g: -1, x0: B[0], x1: B[2], top: B[3], bottom: B[1] }) }
       items.sort((x, y) => y.top - x.top || x.x0 - y.x0 || x.g - y.g)
       const lines = []
@@ -798,7 +834,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     const mine = run.filter(g => P.x1[g] <= r0.x0 + 0.01)
     if (!mine.length) continue
     let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
-    for (const g of mine) { x0 = Math.min(x0, P.x0[g]); x1 = Math.max(x1, P.x1[g]); top = Math.max(top, P.top[g]); bottom = Math.min(bottom, P.bottom[g]) }
+    for (const g of mine) { x0 = Math.min(x0, P.ix0[g]); x1 = Math.max(x1, P.ix1[g]); top = Math.max(top, P.top[g]); bottom = Math.min(bottom, P.bottom[g]) }
     const view = viewAt(S.page), [a, c, b, d] = solid(view, x0, bottom, x1, top)
     const base = Math.min(d, Math.max(c, baselineOf(P, mine, S.y)))
     labels.push([i, LABEL_OF[u.kind] ?? 1, S.page, a, base, b, d, c])
@@ -821,7 +857,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     rows.forEach((r, j) => {
       const P = ink[r.page], view = viewAt(r.page)
       const rects = []
-      for (const g of new Set([...r.gl, ...(r.extra ?? [])])) if (!inside(r.page, mid(P, g), (P.top[g] + P.bottom[g]) / 2)) rects.push([P.x0[g], P.bottom[g], P.x1[g], P.top[g], P.size[g]])
+      for (const g of new Set([...r.gl, ...(r.extra ?? [])])) if (!inside(r.page, mid(P, g), (P.top[g] + P.bottom[g]) / 2)) rects.push([P.ix0[g], P.bottom[g], P.ix1[g], P.top[g], P.size[g]])
       for (const [row, b] of one.boxes ?? []) if (row === j) rects.push([b[0], b[1], b[2], b[3], r.size])
       rects.sort((p, q) => p[0] - q[0] || p[1] - q[1])
       const merged = []

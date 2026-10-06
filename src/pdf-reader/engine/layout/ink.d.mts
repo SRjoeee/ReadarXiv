@@ -1,7 +1,11 @@
 // ink.mjs's types (JavaScript until the engine's port), for the layout maker and its tests
 /** a glyph as PDF.js's canvas places it: its character, its box in the page's user space (y up), baseline, size and the
  *  font's PostScript name (its subset tag kept: the font table strips it) */
-export interface Glyph { u: string; x0: number; x1: number; y: number; top: number; bottom: number; size: number; font: string }
+/** a glyph: its advance across (x0, x1) and baseline; `top` and `bottom` its own ink up and down, `ix0` and `ix1` across,
+ *  where PDF.js gives its outline (outlineBox), else its font's declared ascent and descent and its advance */
+export interface Glyph { u: string; x0: number; x1: number; y: number; top: number; bottom: number; size: number; font: string; ix0: number; ix1: number }
+/** a glyph's outline box in em from its origin ([x0, y0, x1, y1], y up), [] for none drawn, null where PDF.js gives none */
+export declare function outlineBox(commonObjs: unknown, font: unknown, fontChar: unknown): number[] | null
 /** the operations read on a page at most */
 export declare const OPS_CAP: number
 /** a point of the marked compile (`/axt-<name> ri`): its name, and the glyphs and boxes the page showed before it */

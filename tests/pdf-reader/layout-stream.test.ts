@@ -15,7 +15,7 @@ function pageOf(items: Item[], view = [0, 0, 612, 792]): StreamPage {
       for (const u of it) {
         if (u === ' ') { x += 3; continue }
         if (u === '\n') { x = 72; y -= 12; continue }
-        glyphs.push({ u, x0: x, x1: x + 5, y, top: y + 7, bottom: y - 2, size: 10, font: 'F' })
+        glyphs.push({ u, x0: x, x1: x + 5, y, top: y + 7, bottom: y - 2, size: 10, font: 'F', ix0: x, ix1: x + 5 })
         boxAt.push(boxes.length / 4)
         x += 5
       }
@@ -23,7 +23,7 @@ function pageOf(items: Item[], view = [0, 0, 612, 792]): StreamPage {
     else if ('rule' in it) boxes.push(...it.rule)
     else {
       const size = it.size ?? 10
-      glyphs.push({ u: it.u, x0: it.x, x1: it.x + 0.5 * size, y: it.y, top: it.y + 0.7 * size, bottom: it.y - 0.2 * size, size, font: 'F' })
+      glyphs.push({ u: it.u, x0: it.x, x1: it.x + 0.5 * size, y: it.y, top: it.y + 0.7 * size, bottom: it.y - 0.2 * size, size, font: 'F', ix0: it.x, ix1: it.x + 0.5 * size })
       boxAt.push(boxes.length / 4)
       x = it.x + 0.5 * size
       y = it.y
