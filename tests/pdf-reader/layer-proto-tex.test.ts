@@ -37,14 +37,14 @@ describe("the hybrid's test: whether the layout file locates a unit whole", () =
     expect(T.kOfPieces(unit, tr.slice(1))).toBeNull()
     expect(T.kOfPieces(unit, [[1, 0], ...tr.slice(1)])).toBeNull()
   })
-  it('passes a unit whose lines are in order and whose drawn placeholders are all found', () => {
+  it('passes a unit whose drawn placeholders are all found, its lines in any order (a display\'s rows the file lists late)', () => {
     const w = T.locatedWhole(unitOf([line], [[1, 0, [1, 20, 100, 25, 107, 98]], [2, 32, []], [3, 0, [1, 40, 100, 45, 107, 98]]]), unit, tr)
     expect(w).toEqual({ ok: true, why: null, kOf: [-1, 1, 2, 3] })
   })
-  it('fails a unit the file does not hold, lines out of order, a drawn placeholder LOST, EMPTY or with no row', () => {
+  it('fails a unit the file does not hold, a drawn placeholder LOST, EMPTY or with no row', () => {
     const found = [1, 0, [1, 20, 100, 25, 107, 98]] as [number, number, number[]], sym = [3, 0, [1, 40, 100, 45, 107, 98]] as [number, number, number[]]
     expect(T.locatedWhole(null, unit, tr).why).toBe('unlocated')
-    expect(T.locatedWhole(unitOf([line, [1, 10, 100, 110, 117, 108, 10, 0]], [found, sym]), unit, tr).why).toBe('order')
+    expect(T.locatedWhole(unitOf([line, [1, 10, 100, 110, 117, 108, 10, 0]], [found, sym]), unit, tr).ok).toBe(true)
     expect(T.locatedWhole(unitOf([line], [[1, 32, []], sym]), unit, tr).why).toBe('lost')
     expect(T.locatedWhole(unitOf([line], [[1, 16, []], sym]), unit, tr).why).toBe('empty')
     expect(T.locatedWhole(unitOf([line], [sym]), unit, tr).why).toBe('no row')

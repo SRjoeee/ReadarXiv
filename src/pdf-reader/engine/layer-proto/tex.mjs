@@ -45,20 +45,16 @@ export function kOfPieces(unit, trPieces) {
 /**
  * Whether the layout file locates a unit whole, against the file (`lu`, its indexLayout unit, or null): its lines all
  * carried (the maker writes a unit only where every one of its lines was carried to arXiv's page, so a unit in the file
- * has them all), in reading order (each line of a frame below the one before, the frames page by page); every one of its
- * placeholders that v0 draws ink for found, neither LOST nor EMPTY, but a symbol v0 draws from its source as text (\%,
- * $\times$), whose glyph its line's erasing covers, wherever it is (`symbols: 'strict'`: that too). Returns { ok, why,
- * kOf }: why one of 'unlocated', 'pieces', 'order', 'no row', 'lost', 'empty'.
+ * has them all); every one of its placeholders that v0 draws ink for found, neither LOST nor EMPTY, but a symbol v0 draws
+ * from its source as text (\%, $\times$), whose glyph its line's erasing covers, wherever it is (`symbols: 'strict'`:
+ * that too). Its lines need not be in reading order: those out of it are a display's rows or number the file lists after
+ * the line below, which v0's reading keeps as the original's (measured: asking it sent 123 units to v0 and drew worse).
+ * Returns { ok, why, kOf }: why one of 'unlocated', 'pieces', 'no row', 'lost', 'empty'.
  */
 export function locatedWhole(lu, unit, trPieces, { symbols = 'text' } = {}) {
   if (!lu) return { ok: false, why: 'unlocated' }
   const kOf = kOfPieces(unit, trPieces)
   if (!kOf) return { ok: false, why: 'pieces' }
-  const L = lu.lines, F = lu.frames
-  for (let f = 0; f < F.length; f += 6) {
-    if (f > 0 && F[f] < F[f - 6]) return { ok: false, why: 'order' }
-    for (let j = F[f + 2] + 1; j < F[f + 2] + F[f + 3]; j++) if (L[8 * j + 3] > L[8 * (j - 1) + 3] - 0.3 * L[8 * j + 6]) return { ok: false, why: 'order' }
-  }
   for (const [i, p] of unit.pieces.entries()) {
     const cls = p.t === 'nested' ? 'num' : p.t === 'ph' ? phClass2(p.src).cls : null
     if (!cls || !VISIBLE.has(cls) || (cls === 'symbol' && symbols === 'text')) continue
