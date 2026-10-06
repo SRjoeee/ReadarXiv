@@ -280,6 +280,13 @@ describe('a copy\'s translation of a unit whose pairs are numbered anew', () => 
     expect(tex).toMatch(/\\textbf\{\s*\u8bba\u6587/)
     expect(tex).not.toMatch(/bold words|italics/)
   })
+  it('a cell that closes a group an earlier cell opened: the close numbered with the pairs (2608.16745\'s tables)', async () => {
+    const unit = { kind: 'cell', pieces: [{ t: 'open', id: 18, src: '\\textbf{' }, { t: 'text', s: 'Style' }, { t: 'close', id: 18, src: '}' }, { t: 'close', id: 16, src: '}' }] }
+    const old = { ...unit, pieces: shifted(unit.pieces, 44) }
+    const record = { units: [{ kind: 'cell', src: 'Style', hash: await sourceHash(old as never), pieces: shifted(unit.pieces, 44).map(p => (p.t === 'text' ? { ...p, tr: true } : p)), by: 'B', tried: 'B', state: 'whole' }] }
+    const { seed } = await seedFrom(record as never, [unit] as never)
+    expect((seed.get(0)?.pieces as P[] | undefined)?.map(p => p.id ?? null)).toEqual([18, null, 18, 16])
+  })
   it('not a unit whose source differs but in its text: its pieces numbered as the copy\'s do not hash to the copy\'s hash', async () => {
     const { paper, record } = await copyOf(5, s => s.replace('\\emph{a stress}', '\\textsc{a stress}'))
     const { seed } = await seedFrom(record, paper.units)

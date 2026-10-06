@@ -39,8 +39,9 @@ export async function seedFrom(record, units) {
   }
   return { seed, hashes }
 }
-/** the ids of the pairs in pieces, a nested unit's too, in the order of their numbers: the order they stand in */
-const pairIds = (pieces, out = new Set()) => { for (const p of pieces) { if (p.t === 'open') out.add(p.id); else if (p.t === 'nested' && p.unit?.pieces) pairIds(p.unit.pieces, out) } return [...out].sort((a, b) => a - b) }
+/** the ids of the pairs in pieces, a nested unit's too, in the order of their numbers: the order they stand in. A close
+ *  counts as its open does: a cell may end a group an earlier cell opened */
+const pairIds = (pieces, out = new Set()) => { for (const p of pieces) { if (p.t === 'open' || p.t === 'close') out.add(p.id); else if (p.t === 'nested' && p.unit?.pieces) pairIds(p.unit.pieces, out) } return [...out].sort((a, b) => a - b) }
 /** the pieces with each pair's id mapped (`to`), a nested unit's too */
 const renumber = (pieces, to) => pieces.map(p => ((p.t === 'open' || p.t === 'close') && to.has(p.id) ? { ...p, id: to.get(p.id) } : p.t === 'nested' && p.unit?.pieces ? { ...p, unit: { ...p.unit, pieces: renumber(p.unit.pieces, to) } } : p))
 /** the record's translation of a unit whose source is that record unit's but for its pairs' numbers — the unit's pieces
