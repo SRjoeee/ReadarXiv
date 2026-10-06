@@ -376,9 +376,13 @@ describe('LAYOUT_TEX', () => {
     expect(POINTS_TEX).toContain('\\ifdefined\\pdfliteral\\def\\axt@point#1{\\ifnum\\pdfoutput>0 \\pdfliteral direct{/axt-#1 ri}\\fi}')
     expect(POINTS_TEX).toContain('\\let\\axt@destonly\\axt@dest\\def\\axt@dest#1{\\axt@destonly{#1}\\axt@point{#1}}')
     // the column's body repacked to its own height and depth, a point first and last; a float's box, a point first and last
-    expect(POINTS_TEX).toContain('\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\unvbox\\@cclv\\axt@point{be\\axt@bn}}\\endgroup\\fi}')
-    expect(POINTS_TEX).toContain('\\def\\@floatboxreset{\\axt@fbr\\axt@bump\\axt@point{fs\\axt@bn}}')
-    expect(POINTS_TEX).toContain('\\def\\@endfloatbox{\\par\\axt@point{fe\\axt@bn}\\axt@efb}')
+    // the closing point before the body's last glue, which is put back as it was: LaTeX's \@outputbox@removebskip looks
+    // at the body's \lastskip (the \vfil of a \clearpage), which a point last would hide (2608.24503's last page)
+    expect(POINTS_TEX).toContain('\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\unvbox\\@cclv\\ifnum\\lastnodetype=11 \\edef\\axt@vback{\\vskip\\the\\lastskip\\relax}\\unskip\\else\\let\\axt@vback\\@empty\\fi\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\fi}')
+    // a float's points around its finished box (\@endfloatbox closes it): at its start a point would give its first
+    // paragraph a \parskip (2608.01890's figures)
+    expect(POINTS_TEX).toContain('\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}')
+    expect(POINTS_TEX).not.toContain('@floatboxreset')
     // after the destination's own definition, inside LAYOUT_TEX; its count a macro, no register; one line
     expect(LAYOUT_TEX.indexOf(POINTS_TEX)).toBeGreaterThan(LAYOUT_TEX.indexOf('\\def\\axt@dest#1'))
     expect(LAYOUT_TEX.endsWith(`${POINTS_TEX}\\makeatother`)).toBe(true)
