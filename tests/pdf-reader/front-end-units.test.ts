@@ -277,6 +277,14 @@ describe('a theorem\'s title is the reader\'s text (the coverage policy: 309 tit
     expect(units(p).map(u => [u.kind, textOf(u)])).toEqual([['heading', 'Convergence of the scheme'], ['theorem', 'The scheme converges.'], ['heading', 'Proof of Theorem'], ['theorem', 'By induction.']])
     expect(patched(p)).toContain('\\begin{theorem}[<T0>]')
   })
+  it('a translated title holding a ] of its own goes in a group, its brackets not ended early (review M5); one without stays as it is', () => {
+    const p = project(doc('\\begin{theorem}[Convergence of the scheme]\nThe scheme converges.\n\\end{theorem}', '\\newtheorem{theorem}{Theorem}'))
+    const as = (s: string) => new Map(units(p).map(u => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: u.kind === 'heading' ? s : x.s } : x))]))
+    const write = (s: string) => new TextDecoder().decode(patch(p, as(s) as never).get('main.tex'))
+    expect(write('\u6536\u655b [\u89c1\u9644\u5f55]')).toContain('\\begin{theorem}[{\u6536\u655b [\u89c1\u9644\u5f55]}]')
+    expect(write('\u6536\u655b {[}\u89c1\u9644\u5f55{]}')).toContain('\\begin{theorem}[\u6536\u655b {[}\u89c1\u9644\u5f55{]}]')
+    expect(write('\u6536\u655b')).toContain('\\begin{theorem}[\u6536\u655b]')
+  })
   it('a theorem defined in a package\'s file or by thmtools; keys in the brackets (thmtools\' name=…, label=…) stay', () => {
     expect(texts(project(doc('\\begin{claim}[A claim]\nWords.\n\\end{claim}'), { 'defs.sty': '\\declaretheorem{claim}' }))).toEqual(['A claim', 'Words.'])
     expect(texts(project(doc('\\begin{theorem}[name=Foo, label=thm:x]\nWords.\n\\end{theorem}')))).toEqual(['Words.'])

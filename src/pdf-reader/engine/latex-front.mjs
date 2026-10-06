@@ -663,7 +663,11 @@ function frontBlock(s, from, to, b, ctx) {
 function walkArgs(s, i, end, walked, b, ctx) {
   // content given as an optional argument is set apart from the paragraph: \\twocolumn[…], ICML's title block and a
   // CVPR teaser's figure across the page's top
-  if (walked.some(a => a.shape === '[' || holdsBlock(s.slice(a.start + 1, a.end - 1)))) { b.flush(); for (const a of walked) { walk(s, a.start + 1, a.end - 1, b, ctx); b.flush() } return }
+  if (walked.some(a => a.shape === '[' || holdsBlock(s.slice(a.start + 1, a.end - 1)))) {
+    b.flush()
+    for (const a of walked) { const before = b.units.length; walk(s, a.start + 1, a.end - 1, b, ctx); b.flush(); if (a.shape === '[') for (const u of b.units.slice(before)) u.bracketed = true }
+    return
+  }
   let from = i
   walked.forEach((a, k) => {
     const id = b.open(s.slice(from, a.start + 1), from)
@@ -800,7 +804,8 @@ function walk(s, from, to, b, ctx) {
       // eleven proofs in English) —, but a theorem's title, a heading of its own (\\begin{theorem}[Convergence of X]:
       // the reader sees it as the body's words)
       const { end: argsEnd, title } = envArgs(s, afterBegin, bodyEnd, env, ctx)
-      if (title) { const saved = b.kind; b.kind = 'heading'; walk(s, title.start + 1, title.end - 1, b, ctx); b.flush(); b.kind = saved }
+      // (its units `bracketed`: written back in its brackets, a translation's own ] would end them, patch)
+      if (title) { const saved = b.kind, before = b.units.length; b.kind = 'heading'; walk(s, title.start + 1, title.end - 1, b, ctx); b.flush(); b.kind = saved; for (const u of b.units.slice(before)) u.bracketed = true }
       const saved = b.kind; b.kind = env === 'abstract' ? 'abstract' : ctx.theorems.has(env) ? 'theorem' : saved
       walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved
       i = afterEnd; continue
@@ -1299,6 +1304,19 @@ function readProject(fsys, main, tables, sourceText, own) {
   return { main: mainFile.rel, files, units, skipped, fits: ctx.fits, lineEnvs, inputenc: enc ?? null, transcode }
 }
 
+/** whether bytes of TeX hold a ] outside every group and not escaped: one that would close an optional argument */
+function closesBracket(bytes) {
+  let depth = 0
+  for (let k = 0; k < bytes.length; k++) {
+    const c = bytes[k]
+    if (c === 0x5c) k++
+    else if (c === 0x7b) depth++
+    else if (c === 0x7d) depth--
+    else if (c === 0x5d && depth <= 0) return true
+  }
+  return false
+}
+
 /** the unit as the translator sees it: text with ⟦n⟧ for opaque pieces and ⟦n⟧…⟦/n⟧ for formatting pairs */
 export function unitText(u) {
   let n = 0
@@ -1488,8 +1506,13 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
       if (u.start < at) continue
       copy(at, u.start)
       const inner = spans && [], b = render(u, inner)
+      // a unit written back inside an optional argument's brackets (a theorem's title): a ] its translation holds outside
+      // any group would end them early (a translated "Convergence [see the appendix]"), so the unit goes in a group of its own
+      const group = u.bracketed && closesBracket(b)
+      if (group) add(utf8Bytes('{'))
       spans?.push({ file, unit: u, from: size, to: size + b.length }, ...inner.map(x => ({ file, unit: x.unit, from: size + x.from, to: size + x.to, post: x.post, outer: u })))
       add(b)
+      if (group) add(utf8Bytes('}'))
       at = u.end
     }
     copy(at, text.length + 1)
