@@ -5,8 +5,8 @@ import type { UnitLines } from '@/pdf-reader/engine/tex-errors.mjs'
 import { patch } from '@/pdf-reader/engine/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, parseLayoutMarks, punctuationMovers, superCitations } from '@/pdf-reader/engine/layout/marks.mjs'
-import { openPaper, originalFiles } from '@/pdf-reader/engine/live.mjs'
+import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, parseLayoutMarks, FOLLOWERS, markProbeTex, PROBE_SCHEMA, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
+import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/live.mjs'
 import { marksOf } from '@/pdf-reader/engine/typeset/places.mjs'
 
 // The layout marks as text: which placeholder gets which mark, the units' own marks, the TeX that goes with them, the
@@ -256,97 +256,94 @@ describe('originalFiles with the layout marks', () => {
   })
 })
 
-describe('the per-paper switch: a paper whose citations take the punctuation after them', () => {
-  /** a paper of `files` (path → source), its main main.tex */
-  const paperIn = (files: Record<string, string>) => openPaper(new Map(Object.entries(files).map(([p, s]) => [p, new TextEncoder().encode(s)])))
-  const main = (pre: string, cls = '\\documentclass{article}') => ({ 'main.tex': `${cls}\n${pre}\n\\begin{document}\nA claim \\cite{a}. Another \\cite{b}, and more.\n\\end{document}\n` })
-  it('superCitations: cite.sty\'s and natbib\'s super, natmove and overcite, from the preamble the engine reads', () => {
-    const yes: [string, Record<string, string>][] = [
-      ['cite.sty [super]', main('\\usepackage[super]{cite}')],
-      ['cite.sty [superscript], among other options', main('\\usepackage[sort, superscript ,compress]{cite}')],
-      ['cite.sty with the class\'s super (a global option)', main('\\usepackage{cite}', '\\documentclass[11pt,super]{article}')],
-      ['cite.sty with super passed to it', main('\\PassOptionsToPackage{super}{cite}\n\\usepackage{cite}')],
-      ['cite.sty loaded by \\RequirePackage among others', main('\\RequirePackage[super]{amsmath,cite}')],
-      ['overcite', main('\\usepackage{overcite}')],
-      ['natbib [super]', main('\\usepackage[super,sort&compress,comma]{natbib}')],
-      ['natbib with \\setcitestyle{super}', main('\\usepackage{natbib}\n\\setcitestyle{super,open={},close={}}')],
-      ['natbib with \\bibpunct\'s s', main('\\usepackage{natbib}\n\\bibpunct{}{}{,}{s}{}{,}')],
-      ['natmove', main('\\usepackage{natmove}')],
-      ['a preamble \\input, its file read', { ...main('\\input{setup}'), 'setup.tex': '\\usepackage[super]{cite}\n' }],
-      ['an \\input with no braces', { ...main('\\input setup.tex'), 'setup.tex': '\\usepackage[super]{cite}\n' }],
-      ['a class of the paper\'s own', { ...main('', '\\documentclass{own}'), 'own.cls': '\\LoadClass{article}\n\\RequirePackage[super]{cite}\n' }],
-      ['a package of the paper\'s own, in a folder', { ...main('\\usepackage{sty/own}'), 'sty/own.sty': '\\RequirePackage[super]{natbib}\n' }],
-      ['biblatex, autocite=footnote', main('\\usepackage[style=numeric, autocite = footnote]{biblatex}')],
-      ['biblatex, autocite=superscript by \\ExecuteBibliographyOptions', main('\\usepackage{biblatex}\n\\ExecuteBibliographyOptions{autocite=superscript}')],
-      ['biblatex, a verbose style', main('\\usepackage[style=verbose-ibid,backend=biber]{biblatex}')],
-      ['biblatex, the authortitle citation style', main('\\usepackage[citestyle=authortitle-icomp]{biblatex}')],
-    ]
-    for (const [name, files] of yes) expect(superCitations(paperIn(files), ''), name).toBe(true)
-    const no: [string, Record<string, string>][] = [
-      ['cite.sty', main('\\usepackage{cite}')],
-      ['natbib, author-year', main('\\usepackage[round]{natbib}\n\\setcitestyle{authoryear,round,citesep={;}}')],
-      ['REVTeX\'s superscriptaddress', main('', '\\documentclass[aps,prl,superscriptaddress]{revtex4-2}')],
-      ['cite.sty [superscript,nomove], wlscirep\'s', { ...main('', '\\documentclass{wlscirep}'), 'wlscirep.cls': '\\LoadClass{article}\n\\RequirePackage[superscript,biblabel,nomove]{cite}\n' }],
-      ['super in a comment', main('% \\usepackage[super]{cite}\n\\usepackage{cite}')],
-      ['super given to another package', main('\\usepackage[super]{foo}\n\\usepackage{cite}')],
-      ['a super option and no cite.sty or natbib', main('', '\\documentclass[super]{article}')],
-      ['a file of the package the preamble does not read', { ...main('\\usepackage{natbib}'), 'SI.tex': '\\documentclass{article}\n\\usepackage[super]{natbib}\n' }],
-      ['super after \\begin{document}', { 'main.tex': '\\documentclass{article}\n\\usepackage{cite}\n\\begin{document}\nText \\verb|\\usepackage[super]{cite}|.\n\\end{document}\n' }],
-      ['a copy of natbib in the package, its \\bibstyle@nature among its definitions (2608.30640)', { ...main('\\usepackage{iclr}'), 'iclr.sty': '\\RequirePackage{natbib}\n', 'natbib.sty': '\\DeclareOption{super}{\\NAT@supertrue}\n\\newcommand\\bibstyle@nature{\\bibpunct{}{}{,}{s}{}{\\textsuperscript{,}}}\n' }],
-      ['biblatex, numeric, inline autocite', main('\\usepackage[style=numeric-comp]{biblatex}')],
-      ['biblatex, authortitle-terse (inline)', main('\\usepackage[style=authortitle-terse]{biblatex}')],
-    ]
-    for (const [name, files] of no) expect(superCitations(paperIn(files), ''), name).toBe(false)
-  })
-  it('superCitations: natmove or overcite a class loads, from a log of the paper\'s preamble (achemso)', () => {
-    const achemso = paperIn(main('', '\\documentclass[journal=jacsat,manuscript=article]{achemso}'))
-    expect(superCitations(achemso, '')).toBe(false)
-    const log = '(/usr/local/texlive/2026/texmf-dist/tex/latex/achemso/achemso.cls\nDocument Class: achemso 2022/11/25 v3.13f Support for submissions to ACS journals\n(/usr/local/texlive/2026/texmf-dist/tex/latex/achemso/natmove.sty\nPackage: natmove 2010/01/15 v1.1a Automatic citation moving with natbib\n'
-    expect(superCitations(achemso, log)).toBe(true)
-    // a path TeX cut at 79 characters
-    const cut = '(/usr/local/texlive/2026/texmf-dist/tex/latex/some-long-directory-name-xy/natmo\nve.sty)\n'
-    expect(cut.split('\n')[0]?.length).toBe(79)
-    expect(superCitations(achemso, cut)).toBe(true)
-    expect(superCitations(achemso, '(/usr/local/texlive/2026/texmf-dist/tex/latex/cite/overcite.sty\n')).toBe(true)
-    // the plain cite.sty and natbib loaded say nothing of super
-    expect(superCitations(achemso, '(/usr/local/texlive/2026/texmf-dist/tex/latex/natbib/natbib.sty\n(/usr/local/texlive/2026/texmf-dist/tex/latex/cite/cite.sty\n')).toBe(false)
-    // overcite with nomove passed in the preamble moves nothing
-    expect(superCitations(paperIn(main('\\usepackage[nomove]{overcite}')), '')).toBe(false)
-  })
-  it('punctuationMovers: cite where its citations take the punctuation, by the preamble or the log; nothing for fnpct', () => {
-    expect(punctuationMovers(paperIn(main('\\usepackage[super]{cite}')), '')).toEqual(['cite'])
-    expect(punctuationMovers(paperIn(main('', '\\documentclass{achemso}')), '(/usr/local/texlive/2026/texmf-dist/tex/latex/achemso/natmove.sty\n')).toEqual(['cite'])
-    // a footnote's call keeps its opening mark alone (it looks ahead), which fnpct's swap does not mind
-    expect(punctuationMovers(paperIn(main('\\usepackage{fnpct}')), '')).toEqual([])
-    expect(punctuationMovers(paperIn(main('\\usepackage{natmove}\n\\usepackage[ranges]{fnpct}')), '')).toEqual(['cite'])
-    expect(punctuationMovers(paperIn(main('\\usepackage{cite}')), '')).toEqual([])
-  })
-  it('layoutMarking with `movesPunctuation`: no mark for a placeholder of those classes the punctuation follows; every other keeps both', () => {
-    const units = [unit('para', [text('A '), ph('$x$'), text(' B '), ph('\\cite{c}'), text('. C '), ph('\\cite{d}'), text(' and '), ph('\\cite{e}'), text(', '), ph('\\cite{f}'), text(';'), ph('\\ref{r}'), text('.')])]
-    const { units: marked } = layoutMarking(units, MARK_CLASSES, { lines: false, movesPunctuation: ['cite'] })
-    expect(srcs(marked[0])).toEqual([
-      'text', 'ph \\axtpma{p0.1a}', 'ph $x$', 'ph \\axtpm{p0.1b}', 'text', 'ph \\cite{c}', 'text',
-      'ph \\axtpma{p0.5a}', 'ph \\cite{d}', 'ph \\axtpm{p0.5b}', 'text', 'ph \\cite{e}', 'text', 'ph \\cite{f}', 'text',
-      'ph \\axtpma{p0.11a}', 'ph \\ref{r}', 'ph \\axtpm{p0.11b}', 'text',
+describe('the paper\'s own switch: TeX asked what a mark does before what follows', () => {
+  const paperIn = (body: string, pre = '') => openPaper(new Map([['main.tex', new TextEncoder().encode(`\\documentclass{article}\n${pre}\n\\begin{document}\n${body}\n\\end{document}\n`)]]))
+  it('probeSamples: each command of a citation, a reference or a footnote\'s call once, a call with a note of its own words; none TeX could not set in a box', () => {
+    const p = paperIn('A claim \\cite{a,b}. More \\cite{c} and \\citep[p.~3]{d}, see \\ref{x} and \\url{http://x.org/\\%7e}, \\url{http://y.org}. Note\\footnote[2]{The note.} and $x$ and \\bert{} here.')
+    expect(probeSamples(p.units)).toEqual([
+      { command: '\\cite', src: '\\cite{a,b}', call: false }, { command: '\\citep', src: '\\citep[p.~3]{d}', call: false }, { command: '\\ref', src: '\\ref{x}', call: false },
+      { command: '\\url', src: '\\url{http://y.org}', call: false }, { command: '\\footnote', src: '\\footnote[2]{A note.}', call: true },
     ])
-    // a footnote's call the punctuation follows, with fnpct
-    const note = unit('footnote', [text('N.')], { nested: true } as Partial<SourceUnit>)
-    const fn = [note, unit('para', [text('A'), { t: 'nested', pre: '\\footnote{', unit: note, post: '}' }, text('. B'), { t: 'nested', pre: '\\footnote{', unit: note, post: '}' }, text(' C')])]
-    expect(srcs(layoutMarking(fn, MARK_CLASSES, { lines: false, movesPunctuation: ['footnote'] }).units[1])).toEqual(['text', 'nested', 'text', 'ph \\axtpma{n1.3a}', 'nested', 'text'])
-    // without the switch the first call keeps its opening mark (a call looks ahead: no closing one), which would part
-    // fnpct's full stop from the word
-    expect(srcs(layoutMarking(fn, MARK_CLASSES, { lines: false }).units[1])).toEqual(['text', 'ph \\axtpma{n1.1a}', 'nested', 'text', 'ph \\axtpma{n1.3a}', 'nested', 'text'])
-    // the switch off: every citation marked as before
-    expect(srcs(layoutMarking(units, MARK_CLASSES, { lines: false, movesPunctuation: [] }).units[0])).toEqual(srcs(layoutMarking(units, MARK_CLASSES, { lines: false }).units[0]))
-    expect(srcs(layoutMarking(units, MARK_CLASSES, { lines: false }).units[0])).toContain('ph \\axtpm{p0.3b}')
   })
-  it('originalFiles passes `movesPunctuation` on; without `layout` it changes no byte', () => {
+  it('markProbeTex: for each sample and follower the four boxes after a word, ended at a space; a call before a second one; one line a sample, its count of errors started again', () => {
+    const tex = markProbeTex([{ src: '\\cite{a}', call: false }, { src: '\\footnote{A note.}', call: true }])
+    expect(tex.match(/\\typeout\{LAYOUT-PROBE 1 punct \d+ \\axt@qo\}/g)).toEqual(['\\typeout{LAYOUT-PROBE 1 punct 0 \\axt@qo}', '\\typeout{LAYOUT-PROBE 1 punct 1 \\axt@qo}'])
+    // one document of sections, each a group of its own
+    expect(tex.startsWith('\\makeatletter\\begingroup')).toBe(true)
+    expect(probeTex(['A', 'B'])).toBe('\\makeatletterA\nB\\makeatother\n')
+    for (const f of ['.', ',', ';', ':', '!', '?']) {
+      expect(tex).toContain(`\\hbox{way \\cite{a}${f} \\unskip`)
+      expect(tex).toContain(`\\hbox{way \\cite{a}{}${f} \\unskip`)
+      expect(tex).toContain(`\\hbox{way \\axtpma{q0a}\\cite{a}\\axtpm{q0b}${f} \\unskip`)
+      expect(tex).toContain(`\\hbox{way \\axtpma{q0a}\\cite{a}${f} \\unskip`)
+    }
+    expect(tex).toContain('\\hbox{way \\cite{a} x \\unskip')
+    expect(tex).toContain('\\hbox{way \\footnote{A note.}\\axtpma{q1c}\\footnote{A note.} \\unskip')
+    expect(tex.match(/\\noindent\\par/g)).toHaveLength(2)
+    // every box from the same state: the footnote counter as it was, biblatex's trackers reset
+    expect(tex.match(/\\setbox\\axt@qbox/g)?.length).toBe((tex.match(/\\axt@qreset\\setbox\\axt@qbox/g) ?? []).length)
+    expect(tex).toContain('\\global\\c@footnote=\\axt@qfn')
+    expect(tex).toContain('\\ifdefined\\citereset\\citereset\\fi')
+    // it writes nothing to a file and no line the run takes for a reading
+    expect(tex).not.toMatch(/\\write|\\immediate|AXT-/)
+    expect(FOLLOWERS).toEqual(['.', ',', ';', ':', '!', '?', 'word', 'call'])
+  })
+  it('readProbe: the rows of every section, tagged, with their schema; readMarkProbe takes its own and no other', () => {
+    expect(probeRow('punct', 3, '\\axt@qo')).toBe(`\\typeout{LAYOUT-PROBE ${PROBE_SCHEMA} punct 3 \\axt@qo}`)
+    const log = 'LAYOUT-PROBE 1 punct 0 00000000\nLAYOUT-PROBE 1 role 4 display\nother line\nLAYOUT-PROBE 2 punct 1 22222222\nLAYOUT-PROBE 1 punct 1 22222200\nLAYOUT-PROBE 1 punct 2 2200000\nLAYOUT-PROBE 1 punct 7 22222222\nLAYOUT-PROBE 1 punct 0\n'
+    expect(readProbe(log).map(r => [r.schema, r.tag, r.fields.join(' ')])).toEqual([[1, 'punct', '0 00000000'], [1, 'role', '4 display'], [2, 'punct', '1 22222222'], [1, 'punct', '1 22222200'], [1, 'punct', '2 2200000'], [1, 'punct', '7 22222222'], [1, 'punct', '0']])
+    const samples = [{ command: '\\cite' }, { command: '\\autocite' }, { command: '\\footnote' }]
+    // another schema's row, a section of another tag, a code cut short, a sample the probe has not: no answer
+    expect(readMarkProbe(log, samples)).toEqual({ '\\cite': '00000000', '\\autocite': '22222200' })
+    expect(switchedOf({ '\\cite': '00000000', '\\autocite': '22222200', '\\footnote': '00000002' })).toEqual(['\\autocite'])
+  })
+  it('probeFiles with `marks`: the marks\' TeX first and the probe after the width probe; without it the bytes as before', () => {
+    const p = paperIn('A claim \\cite{a}. Note\\footnote{The note.}.', '\\usepackage{cite}')
+    const text = (m: Map<string, Uint8Array>) => new TextDecoder().decode(m.get('main.tex'))
+    expect(text(probeFiles(p, { marks: false }))).toBe(text(probeFiles(p)))
+    expect(text(probeFiles(p))).not.toContain('LAYOUT-PROBE')
+    const on = text(probeFiles(p, { width: true, marks: true }))
+    expect(on.indexOf(LAYOUT_TEX)).toBeGreaterThan(0)
+    expect(on.indexOf(LAYOUT_TEX)).toBeLessThan(on.indexOf('\\documentclass'))
+    expect(on.indexOf('LAYOUT-PROBE 1 punct 0')).toBeGreaterThan(on.indexOf('AXT-WIDTH'))
+    expect(on.indexOf('LAYOUT-PROBE 1 punct 1')).toBeLessThan(on.indexOf('\\end{document}'))
+  })
+  it('layoutMarking with `switches`: no mark (2), the opening mark alone (1) or both (0), by the command and what follows it', () => {
+    const units = [unit('para', [text('A '), ph('\\cite{c}'), text('. C '), ph('\\cite{d}'), text(' and '), ph('\\cite{e}'), text('? '), ph('\\citet{f}'), text(', '), ph('\\ref{r}'), text('.')])]
+    const switches = { '\\cite': '22220010', '\\citet': '00000000' }
+    expect(srcs(layoutMarking(units, MARK_CLASSES, { lines: false, switches }).units[0])).toEqual([
+      'text', 'ph \\cite{c}', 'text', 'ph \\axtpma{p0.3a}', 'ph \\cite{d}', 'text', 'ph \\axtpma{p0.5a}', 'ph \\cite{e}', 'ph \\axtpm{p0.5b}', 'text',
+      'ph \\axtpma{p0.7a}', 'ph \\citet{f}', 'ph \\axtpm{p0.7b}', 'text', 'ph \\axtpma{p0.9a}', 'ph \\ref{r}', 'ph \\axtpm{p0.9b}', 'text',
+    ])
+    // no answer: the marks as before
+    expect(srcs(layoutMarking(units, MARK_CLASSES, { lines: false, switches: {} }).units[0])).toEqual(srcs(layoutMarking(units, MARK_CLASSES, { lines: false }).units[0]))
+  })
+  it('a footnote\'s call TeX answered for: both marks where they change nothing, none before what fnpct moves; two calls in a row each marked where a mark between them changes nothing', () => {
+    const note = (s: string) => unit('footnote', [text(s)], { nested: true } as Partial<SourceUnit>)
+    const a = note('One note.'), b = note('Two note.'), c = note('Three note.')
+    const call = (n: SourceUnit) => ({ t: 'nested', pre: '\\footnote{', unit: n, post: '}' })
+    const units = [a, b, c, unit('para', [text('A'), call(a), call(b), text(' and'), call(c), text('. D')])]
+    const marked = (switches: Record<string, string>) => srcs(layoutMarking(units, MARK_CLASSES, { lines: false, switches }).units[3])
+    // without an answer: C1, the opening mark alone, and nothing on the second call of two
+    expect(marked({})).toEqual(['text', 'ph \\axtpma{n3.1a}', 'nested', 'nested', 'text', 'ph \\axtpma{n3.4a}', 'nested', 'text'])
+    // fnpct: a call before a full stop gets none; a mark between two calls changes nothing
+    expect(marked({ '\\footnote': '22000000' })).toEqual(['text', 'ph \\axtpma{n3.1a}', 'nested', 'ph \\axtpm{n3.1b}', 'ph \\axtpma{n3.2a}', 'nested', 'ph \\axtpm{n3.2b}', 'text', 'nested', 'text'])
+    // footmisc's [multiple]: a mark between two calls changes them
+    expect(marked({ '\\footnote': '00000002' })).toEqual(['text', 'ph \\axtpma{n3.1a}', 'nested', 'nested', 'text', 'ph \\axtpma{n3.4a}', 'nested', 'ph \\axtpm{n3.4b}', 'text'])
+  })
+  it('a footnote whose note makes no unit (fewer than two letters) is a call, marked as one', () => {
+    const p = paperIn('One\\footnote{A}\\footnote{B} and more.')
+    const pieces = p.units[0]?.pieces as Piece[]
+    expect(pieces.filter(x => x.t === 'ph').map(x => classOf(x))).toEqual(['footnote', 'footnote'])
+    expect(srcs(layoutMarking(p.units, MARK_CLASSES, { lines: false }).units[0])).toContain('ph \\axtpma{n0.1a}')
+  })
+  it('originalFiles passes `switches` on; without `layout` it changes no byte', () => {
     const p = paperOf('\\documentclass{article}\n\\begin{document}\nA claim \\cite{k}. And \\cite{j} again, see \\ref{t}.\n\\end{document}\n')
-    const v1 = decode(originalFiles(p, { lines: true, layout: MARK_CLASSES, movesPunctuation: ['cite'] }))
+    const v1 = decode(originalFiles(p, { lines: true, layout: MARK_CLASSES, switches: { '\\cite': '22220000' } }))
     expect(v1).toContain('A claim \\cite{k}. And \\axtpma{p0.3a}\\cite{j}\\axtpm{p0.3b} again')
-    expect(decode(originalFiles(p, { lines: true, layout: MARK_CLASSES, movesPunctuation: [] }))).toBe(decode(originalFiles(p, { lines: true, layout: MARK_CLASSES })))
+    expect(decode(originalFiles(p, { lines: true, layout: MARK_CLASSES, switches: {} }))).toBe(decode(originalFiles(p, { lines: true, layout: MARK_CLASSES })))
     const t = paperOf(SOURCES.table)
-    for (const lines of [false, true]) expect(sha(originalFiles(t, { lines, movesPunctuation: ['cite'] }).get('main.tex') as Uint8Array)).toBe(PIN.table?.[lines ? 'lines' : 'plain'])
+    for (const lines of [false, true]) expect(sha(originalFiles(t, { lines, switches: { '\\cite': '22222222' } }).get('main.tex') as Uint8Array)).toBe(PIN.table?.[lines ? 'lines' : 'plain'])
   })
 })
 
