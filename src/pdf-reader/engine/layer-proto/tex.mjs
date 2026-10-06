@@ -79,23 +79,25 @@ export function locatedWhole(lu, unit, trPieces, { symbols = 'text' } = {}) {
  * anyway). With each rectangle's exact baseline and size (`exact`) and its line in the file (`lineOf`). The file's frames
  * (its lines by page and column) bound no block: v0's own rule of where a block ends splits every block they would, and a
  * full-width caption's short last line, which the file puts in a column of its own, stays in its block. A line the
- * unit's source does not write (the file's `held`: a display it does not hold, inside it) is no line of the unit's: it
- * gets no slot and is never erased, and stays the original's. `total`: the unit's lines but those, on every page.
+ * unit's source does not write (the file's `held`: a display it does not hold, inside it) is kept as the original's
+ * (`held`, its rectangles): v0's reading of a display's lines inside a unit, no slot, never erased, the text after it
+ * starting below it.
  */
 export function texRects(lu, maxPage = Infinity) {
-  const rects = [], exact = new Map(), lineOf = new Map()
-  const L = lu.lines, F = lu.frames, held = new Set(lu.held ?? [])
+  const rects = [], exact = new Map(), lineOf = new Map(), held = []
+  const L = lu.lines, F = lu.frames, heldLines = new Set(lu.held ?? [])
   for (let f = 0; f < F.length; f += 6) {
     for (let j = F[f + 2]; j < F[f + 2] + F[f + 3]; j++) {
       const page = L[8 * j], base = L[8 * j + 3], size = L[8 * j + 6]
-      if (page > maxPage || held.has(j)) continue
+      if (page > maxPage) continue
       const r = [page, r2(L[8 * j + 1]), r2(base - BELOW * size), r2(L[8 * j + 2]), r2(base + ABOVE * size)]
       rects.push(r)
       exact.set(r, { baseline: base, size })
       lineOf.set(r, j)
+      if (heldLines.has(j)) held.push(r)
     }
   }
-  return { rects, exact, lineOf, total: L.length / 8 - held.size }
+  return { rects, exact, lineOf, held }
 }
 
 /** whether a placeholder of the unit's sets no ink by the file: a text macro (v0's 'macro' or 'umacro') the file holds no
@@ -168,6 +170,7 @@ export function texParts(lu, kOf, { use, lines = null, extents = 'v0' }) {
   }
   if (use !== 'lines') return parts
   const { exact, lineOf } = lines
+  const held = (lines.held ?? []).map(rectKey)
   parts.lines = (rects, charsByPage) => {
     const ext = new Map()
     const uc = charsOfUnit2(rects, charsByPage, ext, exact)
@@ -177,7 +180,7 @@ export function texParts(lu, kOf, { use, lines = null, extents = 'v0' }) {
       lineInfo.set(rectKey(r), info)
       lineInfo.set(`${r[0]}|${r[2]}|${r[3]}|${r[4]}`, info)
     }
-    return { uc, extents: ext, lineInfo }
+    return { uc, extents: ext, lineInfo, held }
   }
   if (extents === 'tex') {
     parts.extents = (_lines, rects) => {

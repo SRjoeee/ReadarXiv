@@ -187,7 +187,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     return { id, stream, rects: onPages, unit: u, blocks: blocksOf(onPages, geometry.left.pages), pages: [...new Set(onPages.map(r => r[0]))], cut: onPages.length < total, tex: t }
   }
   /** a unit the file locates whole, placed by its lines in the file (texRects: the rectangles its exact baselines are by) */
-  const placeByFile = (id, stream, u, w) => { const lines = texRects(w.lu, N); return placeOf(id, stream, lines.rects, u, { ...w, lines }, lines.total) }
+  const placeByFile = (id, stream, u, w) => { const lines = texRects(w.lu, N); return placeOf(id, stream, lines.rects, u, { ...w, lines }, w.lu.lines.length / 8) }
   for (const [id, stream, rects] of geometry.left.units) {
     const u = all[id]
     if (!u?.pieces || (u.state !== 'whole' && u.state !== 'partial')) continue

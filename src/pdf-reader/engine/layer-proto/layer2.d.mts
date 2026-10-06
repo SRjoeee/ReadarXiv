@@ -73,7 +73,11 @@ export interface Prepared extends Map<number, Resolved> {
   displayLines?: Set<string>
 }
 /** part 1 and part 2 as a source gives them */
-export interface UnitLines { uc: Char[]; lineInfo: Map<string, LineInfo>; extents: Map<Rect, Extent> }
+export interface UnitLines {
+  uc: Char[]; lineInfo: Map<string, LineInfo>; extents: Map<Rect, Extent>
+  /** the lines (rectKey) the unit's source does not write, by the source's knowledge: kept as the original's */
+  held?: string[]
+}
 /** what part 4 is given: the unit, its placeholders, its lines' characters, the gaps the labels left, the paper's
  *  citations and each placeholder's plain text and name (`plain`) */
 export interface RenderingsContext {

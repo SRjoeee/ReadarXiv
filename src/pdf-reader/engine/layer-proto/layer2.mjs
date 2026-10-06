@@ -564,6 +564,8 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   out.uc = lines.uc
   out.lineInfo = lines.lineInfo
   const aligned = alignUnit(out, unit, rects, deny)
+  // (the lines part 1's source says the unit's source does not write: kept as the original's, as a display's are)
+  if (lines.held?.length) out.keep = [...new Set([...(out.keep ?? []), ...lines.held])]
   const gaps = (parts?.label ?? labelOf)(out, unit, rects, charsByPage, aligned)
   resolvePlaceholders(out, { unit, phs, rects, charsByPage, citeMap, gaps }, parts?.renderings ?? v0Renderings)
   finishUnit(out, unit, rects, charsByPage)
