@@ -7,16 +7,18 @@ export declare class LayoutRefusal extends Error {
 }
 /** the values a JSON text holds (every object, array, string, number, true, false, null), counted outside strings
  *  without parsing, stopped once past `max` (the web's src/shared/json-values.ts valuesOf, written anew here) */
-export declare function countValues(text: string, max?: number): number
+export declare function countValues(text: string, max?: number, maxDepth?: number): number
 /** UTF-8 bytes as text, refusing malformed input (TextDecoder fatal) */
 export declare function utf8Strict(bytes: Uint8Array): string
 /** bytes past `cap` refused before decoding, malformed UTF-8 before counting, values past `values` before JSON.parse */
-export declare function boundedJson(bytes: Uint8Array, o: { cap: number; values: number }): unknown
+export declare function boundedJson(bytes: Uint8Array, o: { cap: number; values: number; depth?: number }): unknown
 export declare const PAGES_MAX: number
 export declare const COORD_MAX: number
 export declare const isObject: (v: unknown) => v is Record<string, unknown>
 export declare const isNumber: (v: unknown) => v is number
 export declare const isInteger: (v: unknown, lo: number, hi: number) => v is number
+/** an untrusted string as a refusal names it: its first 20 code units, control and bidi characters escaped; else its type */
+export declare const told: (v: unknown) => string
 /** an object with exactly `keys` */
 export declare function checkKeys<K extends string>(v: unknown, keys: readonly K[], path: string): Record<K, unknown>
 /** a page count: an integer 1 to PAGES_MAX */
