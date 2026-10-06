@@ -13,6 +13,7 @@
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) measures the layout
 // lines they carry and lose, and fails on a loss of no accepted cause.
 import { markUnits, NO_ARG_COMMANDS } from '../latex-front.mjs'
+import { textless } from '../arg-roles.mjs'
 import { tokenizeDocument } from '../anchors.mjs'
 import { plainTranslated } from '../mt.mjs'
 import { readLines } from '../typeset/tex.mjs'
@@ -50,11 +51,20 @@ const URL = /^\\(?:url|href)(?![A-Za-z@])/
 const FOOTNOTE_MARK = /^\\footnote(?:mark)?(?![A-Za-z@])/
 
 /** a piece's class, or null where it is not marked (text, a group's open or close, an invisible placeholder) */
+/** \\rule's call: what TeX's ink section measures, not the role table (a strut, \\rule{0pt}{2ex}, none; a bar, ink) */
+export const RULE = /^\s*\\rule\b/
 export function classOf(piece) {
   if (piece?.t === 'nested') return 'footnote'
   if (piece?.t !== 'ph') return null
   const src = piece.src ?? ''
   if (INVISIBLE.test(src) || STRUCTURE.test(src)) return null
+  // a placeholder that can set no letters is no text rendering: never ink, never LOST — one of the commands the role
+  // table proves so (arg-roles.mjs textless: rules, space, a length's or a counter's setting, a definition, a register's
+  // assignment; a strut's \\rule{0pt}{2.2ex}, \\specialrule{1pt}{-1pt}{0pt}, \\addlinespace[2pt]), its arguments all there.
+  // Not \\centerline, \\uppercase, \\noalign{\\hbox{…}} or a number printer. Read with no paper, by the kernel's forms and
+  // those written out: a table's rule stays the page's own vector ink. Not \\rule either, which a box holds and TeX is
+  // asked about (the ink section): a strut sets none, but a bar in a line (a legend's square) is ink that moves with it
+  if (textless(src) && !RULE.test(src)) return null
   if (DISPLAY.test(src)) return 'display'
   if (MATH.test(src)) return 'math'
   if (CITE.test(src)) return 'cite'

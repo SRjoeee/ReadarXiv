@@ -31,7 +31,7 @@ describe('the classes', () => {
       expect(classOf({ t: 'ph', src: `\\begin{${env}}a\\end{${env}}` })).toBe('display')
   })
   it('classOf: each class by its source', () => {
-    const cases: [string, string][] = [
+    const cases: [string, string | null][] = [
       ['$x$', 'math'], ['\\(x\\)', 'math'], ['\\ensuremath{x}', 'math'],
       ['\\[x\\]', 'display'], ['$$x$$', 'display'], ['\\begin{equation}x\\end{equation}', 'display'], ['\\begin {align*}a&b\\end{align*}', 'display'],
       ['\\begin{gather}x\\end{gather}', 'display'], ['\\begin{IEEEeqnarray}{c}x\\end{IEEEeqnarray}', 'display'],
@@ -42,7 +42,13 @@ describe('the classes', () => {
       ['\\texttt{x}', 'code'], ['\\verb|x|', 'code'], ['\\verb*+x+', 'code'], ['\\lstinline|x|', 'code'],
       ['\\url{https://x.org}', 'url'], ['\\href{https://x.org}{x}', 'url'],
       ['\\footnotemark', 'footnote'], ['\\footnotemark[2]', 'footnote'],
-      ['\\bert', 'macro'], ['\\bert{}', 'macro'], ['\\rule{1em}{1pt}', 'macro'], ['\\includegraphics[width=1em]{x}', 'macro'], ['\\refstepcounter{x}', 'macro'], ['\\citex@y', 'macro'],
+      ['\\bert', 'macro'], ['\\bert{}', 'macro'], ['\\includegraphics[width=1em]{x}', 'macro'], ['\\refstepcounter{x}', 'macro'], ['\\citex@y', 'macro'],
+      // the role table's (arg-roles.mjs textless): commands that set no letters, so no ink — a table's rule is the page's
+      // own drawing, a strut nothing (1706.03762's Table 2: nine cells refused as LOST); one that prints its argument stays
+      ['\\specialrule{1pt}{-1pt}{0pt}', null], ['\\addlinespace[2pt]', null], ['\\setlength{\\tabcolsep}{3pt}', null], ['\\fontsize{7.6pt}{1em}', null], ['\\cmidrule(lr){2-5}', null],
+      ['\\centerline{x}', 'macro'], ['\\noalign{\\hbox{Group A}}', 'macro'], ['\\romannumeral 3', 'macro'],
+      // but \\rule, which a box holds: TeX is asked (the ink section), a strut sets no ink and a bar in a line does
+      ['\\rule{1em}{1pt}', 'macro'], ['\\rule{0pt}{2.2ex}', 'macro'],
     ]
     for (const [src, cls] of cases) expect(classOf({ t: 'ph', src }), src).toBe(cls)
     expect(classOf({ t: 'nested', unit: unit('footnote', []) } as Piece & { t: string })).toBe('footnote')
@@ -185,9 +191,11 @@ describe('layoutMarking', () => {
     // nor after an environment, whose \\end skips the spaces after it, a mark the first thing it would not skip
     const env = layoutMarking([unit('para', [text('A '), ph('\\begin{subequations}x\\label{y}\\end{subequations}'), text(' B '), ph('\\begin{equation}a\\end {equation}'), text(' C')])], MARK_CLASSES, { lines: false }).units[0]
     expect(srcs(env)).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\begin{subequations}x\\label{y}\\end{subequations}', 'text', 'ph \\axtpma{p0.3a}', 'ph \\begin{equation}a\\end {equation}', 'text'])
-    // nor after a number or a dimension, which takes the space after it as its end (2608.30640's \\looseness=-1)
-    const num = layoutMarking([unit('para', [text('A.\n'), ph('\\looseness=-1'), text(' While '), ph('\\parskip=3pt plus 1pt'), text(' B '), ph('\\ref{x2}'), text(' C')])], MARK_CLASSES, { lines: false }).units[0]
-    expect(srcs(num)).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\looseness=-1', 'text', 'ph \\axtpma{p0.3a}', 'ph \\parskip=3pt plus 1pt', 'text', 'ph \\axtpma{p0.5a}', 'ph \\ref{x2}', 'ph \\axtpm{p0.5b}', 'text'])
+    // nor after a number or a dimension, which takes the space after it as its end (2608.30640's \\looseness=-1: a
+    // register's assignment, which the role table proves sets no letters, so no mark at all; a paper's own one keeps
+    // its opening mark)
+    const num = layoutMarking([unit('para', [text('A.\n'), ph('\\looseness=-1'), text(' While '), ph('\\myskip=3pt plus 1pt'), text(' B '), ph('\\ref{x2}'), text(' C')])], MARK_CLASSES, { lines: false }).units[0]
+    expect(srcs(num)).toEqual(['text', 'ph \\looseness=-1', 'text', 'ph \\axtpma{p0.3a}', 'ph \\myskip=3pt plus 1pt', 'text', 'ph \\axtpma{p0.5a}', 'ph \\ref{x2}', 'ph \\axtpm{p0.5b}', 'text'])
     // nor after one that ends a line: the mark would stand on the next, and a blank line after it would end no paragraph
     const atEnd = layoutMarking([unit('para', [text('A '), ph('\\cite{x}\n'), text('\n'), ph('$y$')])], MARK_CLASSES, { lines: false }).units[0]
     expect(srcs(atEnd)).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\cite{x}\n', 'text', 'ph \\axtpma{p0.3a}', 'ph $y$', 'ph \\axtpm{p0.3b}'])
@@ -452,7 +460,9 @@ describe('what a paper\'s macro sets: TeX asked (the ink section), and LaTeX\'s 
     const opens = (inkless: string[] | null) => layoutMarking(p.units, MARK_CLASSES, { lines: false, inkless }).units.flatMap(u => srcs(u)).filter(s => /^ph \\axtpma/.test(s))
     expect(opens(null).length).toBeGreaterThan(0)
     const marked = (inkless: string[] | null) => opens(inkless).length
-    expect(marked(['\\fontsize{7pt}{1em}'])).toBe(marked(null) - 1)
+    // (the paper's own macro TeX said sets no ink; \\fontsize the role table proves sets no letters gets none either way)
+    expect(marked(['\\bert{}'])).toBe(marked(null) - 1)
+    expect(marked(['\\fontsize{7pt}{1em}'])).toBe(marked(null))
     expect(marked([])).toBe(marked(null))
   })
   it('probeFiles with the marks asks about the paper\'s macros after its citations', () => {

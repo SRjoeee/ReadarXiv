@@ -9,6 +9,7 @@
 // the words and their alignment, the CJK line-break marks. Iteration 1's own measuring, fit and paint (pageChars,
 // resolvePlaceholders, tokensOf, layoutUnit, paintPart) are left out: v0 is iteration 2 and 3 (layer2.mjs), which
 // replaced them.
+import { textArgsOf, textless } from '../arg-roles.mjs'
 
 // ---- the units' blocks
 
@@ -77,6 +78,9 @@ export function blocksOf(rects, pageViews, keep = null) {
 
 // (step 3: a table's rules, \specialrule and \cmidrule, and a strut, \rule of no width, are no text either: v0 found no
 // rendering for them and drew their arguments as text, "1pt-1pt0pt 0pt2.2ex" in 1706.03762's table cells)
+/** \rule's call, which the role table's textless takes in but v0 reads itself (ZERO: a strut nothing, a bar looked
+ *  for), as the layout maker leaves it to TeX (layout/marks.mjs RULE, the same) */
+const RULE = /^\s*\\rule\b/
 const ZERO = /^(?:\\(?:footnotesize|scriptsize|tiny|small|normalsize|large|Large|LARGE|huge|Huge|selectfont|noindent|hline|centering|raggedright|par|newline|linebreak|bf|it|rm|em|sf|tt|sc|bfseries|itshape|rmfamily|mdseries|upshape|protect|toprule|midrule|bottomrule|smallskip|medskip|bigskip|vfill|hfill|null|relax|arraystretch|clearpage|newpage|thanks|ignorespaces|unskip|xspace|noalign|cr|nobreak|allowbreak|strut)\b\*?|\\(?:v|h)space\*?\{[^}]*\}|\\fontsize\{[^}]*\}\{[^}]*\}|\\label\{[^}]*\}|\\c?line\{[^}]*\}|\\(?:v|h)skip\s*[-\d.]+\s*[a-z]*|\\setlength\{[^}]*\}\{[^}]*\}|\\arraystretch\{[^}]*\}|\\renewcommand.*|\\addlinespace(?:\[[^\]]*\])?|\\specialrule\{[^}]*\}\{[^}]*\}\{[^}]*\}|\\cmidrule(?:\[[^\]]*\])?(?:\([^)]*\))?\{[^}]*\}|\\rule(?:\[[^\]]*\])?\{0(?:\.0*)?[a-z]*\}\{[^}]*\}|\\arrayrulecolor\{[^}]*\}|\\includegraphics\*?(?:\[[^\]]*\])?\{[^}]*\})$/
 const SPACE = /^(?:~|\\,|\\;|\\:|\\ |\\quad|\\qquad|\\\\(?:\[[^\]]*\])?|\\And|\\and|\\AND|\\enspace|\\thinspace)$/
 export const CITE = /^\\(?:cite|citep|citet|citealp|citealt|citeauthor|citeyear|parencite|textcite|autocite)\*?(?:\[[^\]]*\])*\{/
@@ -100,7 +104,12 @@ export function texToText(src) {
   if (CITE.test(src)) return '[·]'
   if (/^\\footnotemark\[(\d+)\]/.test(src)) return script(src.match(/\[(\d+)\]/)[1], SUP, '^')
   if (NUM.test(src)) return '?'
-  let s = src.replace(/^\$\$?|\$\$?$/g, '').replace(/^\\\(|\\\)$/g, '').replace(/^\\\[|\\\]$/g, '')
+  // what is never text goes before the source is drawn (arg-roles.mjs): a command proven to set no letters draws nothing
+  // (textless: a table's rule, space, a length, a definition), any other keeps only its arguments that may be text
+  // (textArgsOf: a rule's sizes, keys, a file, a label go). A \rule is v0's own (ZERO): a strut nothing, a bar in a
+  // line looked for on the page and cropped, as the layout maker asks TeX about it (layout/marks.mjs RULE)
+  if (textless(src) && !RULE.test(src)) return ''
+  let s = textArgsOf(src).replace(/^\$\$?|\$\$?$/g, '').replace(/^\\\(|\\\)$/g, '').replace(/^\\\[|\\\]$/g, '')
   s = s.replace(/\\(?:url|texttt|textsf|textrm|textbf|textit|emph|mathrm|mathbf|mathit|mathsf|mathtt|mathcal|mathbb|mathfrak|boldsymbol|bm|ve|vec|operatorname|text|mbox|hbox)\s*\{([^{}]*)\}/g, '\u200b$1\u200b')
   s = s.replace(/\\(?:hat|widehat)\s*\{?(\w)\}?/g, '$1̂').replace(/\\(?:tilde|widetilde)\s*\{?(\w)\}?/g, '$1̃').replace(/\\(?:bar|overline)\s*\{?(\w)\}?/g, '$1̄')
   s = s.replace(/\\frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, '$1/$2').replace(/\\sqrt\s*\{([^{}]*)\}/g, '√($1)')
@@ -113,7 +122,7 @@ export function phClass(src) {
   if (MACROS[src]) return 'macro'
   if (/^\\color\{[^}]*\}$/.test(src)) return 'zero'
   if (SPACE.test(src)) return 'space'
-  if (ZERO.test(src)) return 'zero'
+  if (ZERO.test(src) || (textless(src) && !RULE.test(src))) return 'zero'
   if (CITE.test(src)) return 'cite'
   if (NUM.test(src)) return 'num'
   if (DISPLAY.test(src)) return 'display'
