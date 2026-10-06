@@ -77,6 +77,8 @@ function made(): LayoutFile {
     ],
     headings: [[0, 'A title'], [3, 'Method <b onclick="x()">&amp;</b>']],
     pageText: [[2, 3, '[12, 3]']],
+    // unit 5's second line: a line its source does not write, not erased
+    held: [[5, [1]]],
   }
 }
 
@@ -141,6 +143,8 @@ describe('a valid file', () => {
     expect([...index.unit(8)!.labels]).toEqual([3, 2, 66, 100, 70, 106, 98])
     expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.LOST, segs: new Float64Array(0), text: null })
     expect(LAYOUT).toBe('3')
+    expect(index.unit(5)!.held).toEqual([1])
+    expect(index.unit(2)!.held).toEqual([])
     expect(PAGE_TEXT_KINDS).toEqual(['cite', 'ref', 'eqref'])
     expect(index.unit(1)).toBeNull()
     expect(index.unit(4)).toBeNull()
@@ -260,7 +264,7 @@ describe('nesting is refused before JSON.parse', () => {
     const f = made()
     // each key's value one bracket deeper than the file's own: the three entries arrays reach 4
     const reach = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, 1 + depthOf(v)]))
-    expect(reach).toEqual({ schema: 1, layout: 1, pdfjs: 1, paper: 2, left: 1, views: 2, fonts: 2, units: 3, lines: 4, frames: 4, erase: 4, ph: 3, labels: 3, headings: 3, pageText: 3 })
+    expect(reach).toEqual({ schema: 1, layout: 1, pdfjs: 1, paper: 2, left: 1, views: 2, fonts: 2, units: 3, lines: 4, frames: 4, erase: 4, ph: 3, labels: 3, headings: 3, pageText: 3, held: 4 })
     expect(depthOf(f)).toBe(4)
     expect(LAYOUT_DEPTH).toBe(4)
     const parse = vi.spyOn(JSON, 'parse')
@@ -434,6 +438,13 @@ const ROWS: [string, Edit, string][] = [
   ['TEXT on a formula', f => { f.ph[0][3] = PH_FLAG.TEXT }, 'ph[0]'],
   ['TEXT and LOST', f => { f.ph[5][3] = PH_FLAG.TEXT | PH_FLAG.LOST }, 'ph[5]'],
   ['a TEXT placeholder with no text', f => { f.ph[5][3] = PH_FLAG.TEXT }, 'pageText'],
+  ['held not an array', f => { (f as Record<string, unknown>).held = {} }, 'held'],
+  ['held of a unit without lines', f => { f.held.unshift([1, [1]]) }, 'held[0][0]'],
+  ['held its first line', f => { f.held[0]![1] = [0] }, 'held[0][1][0]'],
+  ['held past its lines', f => { f.held[0]![1] = [5] }, 'held[0][1][0]'],
+  ['held twice', f => { f.held[0]![1] = [1, 1] }, 'held[0][1][1]'],
+  ['held a line with an erase', f => { f.held[0]![1] = [3] }, 'held[0][1][0]'],
+  ['held of no lines', f => { f.held[0]![1] = [] }, 'held[0][1]'],
   ['a placeholder row of 9', f => { f.ph[0].pop() }, 'ph[0]'],
   ['a segment on page 4', f => { f.ph[0][4] = 4 }, 'ph[0][4]'],
   ['a segment of x0 = x1', f => { f.ph[0][7] = f.ph[0][5] }, 'ph[0][7]'],
@@ -554,7 +565,7 @@ function largest(): LayoutFile {
   const views: number[] = []
   for (let p = 0; p < PAGES; p++) views.push(0, 0, 612, 792)
   const fonts = Array.from({ length: 512 }, (_, i) => `NimbusRomNo9L-Regu${i}`)
-  const f: LayoutFile = { schema: 1, layout: LAYOUT, pdfjs: '5.4.296', paper: { id: '2608.30730', version: 3, pages: PAGES }, left: 'f'.repeat(64), views, fonts, units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [] }
+  const f: LayoutFile = { schema: 1, layout: LAYOUT, pdfjs: '5.4.296', paper: { id: '2608.30730', version: 3, pages: PAGES }, left: 'f'.repeat(64), views, fonts, units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [] }
   for (let i = 0; i < UNITS; i++) {
     const id = 2 * i, heading = i % 10 === 0, n = linesOf(i), page = 1 + (i % (PAGES - 1))
     f.units.push([id, heading ? H : P, heading ? 1 : 9, i % 8 === 0 ? UNIT_FLAG.CENTRED : 0, 40])

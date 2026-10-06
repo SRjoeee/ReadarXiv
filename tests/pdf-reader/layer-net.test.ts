@@ -480,3 +480,17 @@ describe('an author block (the prototype\'s main.js)', () => {
     expect(layUnit(input([AUTHORS]), 4, tr([[0, han(6)]]))).toMatchObject({ fit: false, why: 'author' })
   })
 })
+
+describe('a held line (the layout\'s `held`, Fix 3 of the maker round)', () => {
+  it('gets no slot: the text flows round it, and its line is drawn on', () => {
+    const lines = column(5, { top: 500 })
+    const U: UnitDef = { id: 5, lines, held: [1], erase: [0, 2, 3, 4].map((i): EraseSpec => [i, 72, lines[i]!.baseline - 2.5, 472, lines[i]!.baseline + 7]) }
+    const heldBase = lines[1]!.baseline, text = tr([[0, han(150)]])
+    // not held: the text is laid on that line too
+    const free = laid(layUnit(input([{ ...U, held: [] }]), 5, text))
+    expect(free.lines.some(l => Math.abs(l.baseline - heldBase) < 5)).toBe(true)
+    const u = laid(layUnit(input([U]), 5, text))
+    for (const l of u.lines) expect(Math.abs(l.baseline - heldBase)).toBeGreaterThan(5)
+    expect(u.lines.length).toBeGreaterThan(0)
+  })
+})

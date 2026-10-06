@@ -38,6 +38,8 @@ export interface LayoutFile {
   headings: [id: number, src: string][]
   /** each found page-text placeholder's own text (its glyphs' characters in stream order), by unit and k, rising */
   pageText: [id: number, k: number, text: string][]
+  /** per unit, the lines its source does not write, by index rising: held (no slot, never erased) */
+  held: [id: number, lines: number[]][]
 }
 /** bytes, then UTF-8, then values and nesting counted, then JSON.parse, then every bound; throws LayoutRefusal */
 export declare function parseLayout(bytes: Uint8Array): LayoutFile
@@ -52,6 +54,8 @@ export interface LayoutUnit {
   ph: ReadonlyMap<number, { kind: (typeof PH_KINDS)[number]; flags: number; segs: Float64Array; text: string | null }>   // by k; segs stride 6; text: the page text
   labels: Float64Array                     // per label: kind, page, x0, baseline, x1, top, bottom (stride 7)
   heading: string | null
+  /** the lines its source does not write: no slot, never erased (rising, never its first) */
+  held: readonly number[]
 }
 export interface LayoutIndex {
   readonly file: LayoutFile

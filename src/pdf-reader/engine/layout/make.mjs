@@ -279,7 +279,7 @@ function sameWord(doc, byPage, c, start, ours) {
 /** stats before anything is read */
 function blank(units) {
   return {
-    lines: { carried: 0, total: 0 },
+    lines: { carried: 0, total: 0, held: 0 },
     units: { located: 0, total: units.length, byKind: {}, unplaced: 0 },
     ph: { marked: 0, found: 0, empty: 0, lost: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, foreign: 0, shared: 0, texts: 0 },
     match: { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0 },
@@ -817,6 +817,39 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     return segs
   }
 
+  // ---------------------------------------------------------------- the lines a unit's source does not write
+  // A line of the unit's (its anchor's) after its first that carries none of its source's words and no ink of its
+  // found placeholders, or a line of four words or more under a fifth of which are its source's, is not the unit's
+  // text: a display its source does not hold (TeX set the unit's end mark after it: 1706 page 4, 2608 page 5), another
+  // unit's line the anchor took. It is held, as the prototype keeps it (layer2.js): no slot, never erased; at the
+  // unit's end it is no line of the unit's at all. A word counts as the source's where the anchor paired it, or where it
+  // is a word of three letters or more of the source's text anywhere (a line out of reading order is the unit's still)
+  for (const one of placed) {
+    const { id: i, a, rows } = one
+    if (rows.length < 2) continue
+    const paired = new Set(a.pairs?.values() ?? [])
+    const words = new Set(tokens(texts[i].text).map(t => t.t).filter(t => t.length >= 3 && /\p{L}/u.test(t)))
+    const boxed = new Set((one.boxes ?? []).map(([row]) => row))
+    const held = new Set()
+    rows.forEach((r, j) => {
+      if (j === 0 || r.extra?.length || boxed.has(j)) return
+      let n = 0, hits = 0
+      for (const k of r.ks) {
+        const t = doc[k]?.t
+        if (!t || !/\p{L}/u.test(t)) continue
+        n++
+        if (paired.has(k) || words.has(t)) hits++
+      }
+      if (hits === 0 || (n >= 4 && hits < 0.2 * n)) held.add(j)
+    })
+    if (!held.size) continue
+    const free = r => { const P = ink[r.page]; for (const g of r.gl) if (P.owner[g] === i) P.owner[g] = -1 }
+    // held at the unit's end: no line of the unit's
+    while (rows.length > 1 && held.has(rows.length - 1)) { free(rows.at(-1)); held.delete(rows.length - 1); rows.pop(); stats.lines.held++ }
+    for (const j of held) free(rows[j])
+    if (held.size) { one.held = [...held].sort((x, y) => x - y); stats.lines.held += held.size }
+  }
+
   // ---------------------------------------------------------------- labels
   const labels = []
   const owned = (p, g, unit) => ink[p].owner[g] !== -1 && ink[p].owner[g] !== unit
@@ -845,7 +878,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   // ---------------------------------------------------------------- erase, frames, rows
   const fontIndex = new Map(), fonts = []
   const fontOf = id => { if (!fontIndex.has(id)) { fontIndex.set(id, fonts.length); fonts.push(names[id]) } return fontIndex.get(id) }
-  const outUnits = [], outLines = [], outFrames = [], outErase = [], outHeadings = []
+  const outUnits = [], outLines = [], outFrames = [], outErase = [], outHeadings = [], outHeld = []
   const labelAt = new Map(labels.map(l => [l[0], l[3]]))
   const inside = (p, x, y) => (kept.get(p) ?? []).some(([a, c, b, d]) => x >= a && x <= b && y >= c && y <= d)
   const meets = (p, a, c, b, d) => (kept.get(p) ?? []).some(([e, f, g, h]) => a < g && b > e && c < h && d > f)
@@ -854,7 +887,10 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     // the erase: each line's own glyphs and its placeholders' rules, but what erasing leaves out, merged
     const erase = []
     let refuse = false
+    const heldRows = new Set(one.held ?? [])
     rows.forEach((r, j) => {
+      // a held line is never erased
+      if (heldRows.has(j)) return
       const P = ink[r.page], view = viewAt(r.page)
       const rects = []
       for (const g of new Set([...r.gl, ...(r.extra ?? [])])) if (!inside(r.page, mid(P, g), (P.top[g] + P.bottom[g]) / 2)) rects.push([P.ix0[g], P.bottom[g], P.ix1[g], P.top[g], P.size[g]])
@@ -935,6 +971,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     outLines.push([i, lines])
     outFrames.push([i, frames])
     if (erase.length) outErase.push([i, erase])
+    if (one.held?.length) outHeld.push([i, [...one.held]])
     if (u.kind === 'heading') {
       let src = plainSource(u)
       if (src.length > SRC_MAX) src = src.slice(0, /[\ud800-\udbff]/.test(src[SRC_MAX - 1]) ? SRC_MAX - 1 : SRC_MAX)
@@ -957,6 +994,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     units: outUnits, lines: outLines, frames: outFrames, erase: outErase,
     ph: ph.filter(p => kept1.has(p.row[0])).map(p => p.row), labels: labels.filter(r => kept1.has(r[0])), headings: outHeadings,
     pageText: ph.filter(p => kept1.has(p.row[0]) && p.text).map(p => [p.row[0], p.row[1], p.text]),
+    held: outHeld,
   }
   stats.ph.texts = file.pageText.length
   Object.assign(stats.match, matcher.stats)

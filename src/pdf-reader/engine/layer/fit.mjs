@@ -158,6 +158,9 @@ function geometryOf(unit, tokens, size, wide) {
     frames.push(fr)
   }
   if (!frames.length || lines.some(l => l.frame < 0)) return null
+  // the lines the unit's source does not write (the layout's `held`): no slot, never erased (a display it does not hold
+  // stays where it is, and the text flows round it)
+  for (const i of unit.held ?? []) if (lines[i]) lines[i].held = true
 
   // displays: the lines a segment holds by a third of their width or more are no slots; a segment beside a line keeps
   // the line clear of it. Each display is placed in reading order by the first line it holds, else the first line of its

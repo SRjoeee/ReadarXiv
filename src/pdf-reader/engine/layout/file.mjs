@@ -11,8 +11,8 @@ export { LayoutRefusal } from './json.mjs'
 
 /** the maker's version: raised with any change to the layout maker or to this schema; it enters no output identity.
  *  2: placeholders found by their own ink in the content stream, and the page text of citations and references;
- *  3: a text symbol the marking could not mark drawn as its character (PH_FLAG.TEXT), and no row for a macro TeX said
- *  sets no ink */
+ *  3: a text symbol the marking could not mark drawn as its character (PH_FLAG.TEXT), no row for a macro TeX said
+ *  sets no ink, glyph boxes by their own ink, and the lines a unit's source does not write held (`held`) */
 export const LAYOUT = '3'
 export const LAYOUT_CAP = 4 * 2 ** 20
 export const LAYOUT_VALUES = 1_000_000
@@ -27,7 +27,7 @@ export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4 })
  *  the unit's lines on arXiv's page show it (a macro's only, no segments: its ink is the line's, erased with it) */
 export const PH_FLAG = Object.freeze({ SOURCE_BRACKETS: 1, NUMBERED: 2, RAISED: 4, LOWERED: 8, EMPTY: 16, LOST: 32, TEXT: 64 })
 
-const KEYS = ['schema', 'layout', 'pdfjs', 'paper', 'left', 'views', 'fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText']
+const KEYS = ['schema', 'layout', 'pdfjs', 'paper', 'left', 'views', 'fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held']
 /** the placeholders the layer may draw as text in the page's face (Task 9's tokens), whose own text the file may hold */
 export const PAGE_TEXT_KINDS = Object.freeze(['cite', 'ref', 'eqref'])
 /** a page text's code units at most, and a file's in all */
@@ -229,7 +229,7 @@ export function parseLayout(bytes) {
   for (let u = 0; u < n; u++) if (rowsAt[u] !== null && framed[u] === 0) throw refuse('frames', `none for unit ${units[u][0]}, which has lines`)
 
   // erase: line, x0, y0, x1, y1, on the line's page
-  const erase = array(f.erase, 'erase')
+  const erase = array(f.erase, 'erase'), erasedLines = new Map()
   last = -1
   for (let i = 0; i < erase.length; i++) {
     const e = erase[i], u = entry(e, i, 'erase', last, slot, 5), r = e[1], own = rowsAt[u]
@@ -239,6 +239,7 @@ export function parseLayout(bytes) {
       const line = r[j]
       if (!isInteger(line, 0, count - 1)) throw refuse(at('erase', i, 1, j), "not a line of the unit's")
       if (++onLine[line] > ERASE_LINE) throw refuse(at('erase', i, 1, j), `more than ${ERASE_LINE} rectangles on its line`)
+      ;(erasedLines.get(u) ?? erasedLines.set(u, new Set()).get(u)).add(line)
       const v = 4 * (own[8 * line] - 1)
       const xlo = views[v] - SLACK, ylo = views[v + 1] - SLACK, xhi = views[v + 2] + SLACK, yhi = views[v + 3] + SLACK
       for (let c = 1; c <= 4; c++) {
@@ -327,6 +328,24 @@ export function parseLayout(bytes) {
     symbols.delete(key)
   }
   if (symbols.size) throw refuse('pageText', 'a TEXT placeholder with no text')
+
+  // held: a unit's lines its source does not write (no slot, never erased), by index rising, never its first; none
+  // erased
+  const held = array(f.held, 'held')
+  last = -1
+  for (let i = 0; i < held.length; i++) {
+    const e = held[i], u = entry(e, i, 'held', last, slot, 1), r = e[1], own = rowsAt[u]
+    if (own === null) throw refuse(`held[${i}][0]`, 'a unit without lines')
+    const count = own.length / 8
+    let prev = 0
+    for (let j = 0; j < r.length; j++) {
+      if (!isInteger(r[j], prev + 1, count - 1)) throw refuse(at('held', i, 1, j), "not a line of the unit's after the last, nor its first")
+      if (erasedLines.get(u)?.has(r[j])) throw refuse(at('held', i, 1, j), 'a line with an erase')
+      prev = r[j]
+    }
+    if (e[0] === 0) e[0] = 0
+    last = e[0]
+  }
   return f
 }
 
@@ -338,7 +357,7 @@ const LINE_EXACT = [0, 7], FRAME_EXACT = [0, 1, 2, 3, 4], ERASE_EXACT = [0], LAB
 
 /** the file as written: keys in the schema's order, numbers to a hundredth, no white space */
 export function encodeLayout(file) {
-  const { schema, layout, pdfjs, paper, left, views, fonts, units, lines, frames, erase, ph, labels, headings, pageText } = file
+  const { schema, layout, pdfjs, paper, left, views, fonts, units, lines, frames, erase, ph, labels, headings, pageText, held } = file
   return JSON.stringify({
     schema, layout, pdfjs,
     paper: { id: paper.id, version: paper.version, pages: paper.pages },
@@ -354,16 +373,18 @@ export function encodeLayout(file) {
     labels: labels.map(r => rounded(r, 8, LABEL_EXACT)),
     headings,
     pageText,
+    held,
   })
 }
 
 // ---------------------------------------------------------------- the index
 const NONE = Object.freeze(new Float64Array(0))
 const NO_UNITS = Object.freeze([])
+const NO_HELD = Object.freeze([])
 
 /** a parsed file's index, in one pass over each array; every typed array holds numbers copied from the file */
 export function indexLayout(file) {
-  const { units, lines, frames, erase, ph, labels, headings, views, fonts, pageText } = file
+  const { units, lines, frames, erase, ph, labels, headings, views, fonts, pageText, held } = file
   const pages = file.paper.pages
   const byId = new Map()
   for (let i = 0; i < units.length; i++) {
@@ -371,7 +392,7 @@ export function indexLayout(file) {
     byId.set(id, {
       id, kind: UNIT_KINDS[kind], depth,
       title: (flags & UNIT_FLAG.TITLE) !== 0, front: (flags & UNIT_FLAG.FRONT) !== 0, centred: (flags & UNIT_FLAG.CENTRED) !== 0,
-      pieces, lines: NONE, frames: NONE, erase: [], ph: new Map(), labels: NONE, heading: null,
+      pieces, lines: NONE, frames: NONE, erase: [], ph: new Map(), labels: NONE, heading: null, held: NO_HELD,
     })
   }
   for (let i = 0; i < lines.length; i++) {
@@ -413,6 +434,7 @@ export function indexLayout(file) {
   }
   for (const [id, list] of labelsOf) byId.get(id).labels = Float64Array.from(list)
   for (let i = 0; i < headings.length; i++) byId.get(headings[i][0]).heading = headings[i][1]
+  for (let i = 0; i < held.length; i++) byId.get(held[i][0]).held = Object.freeze([...held[i][1]])
   for (const unit of byId.values()) {
     Object.freeze(unit.erase)
     Object.freeze(unit)

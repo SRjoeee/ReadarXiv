@@ -19,7 +19,7 @@ export interface LabelSpec { kind?: (typeof LABEL_KINDS)[number]; page?: number;
 export type EraseSpec = [line: number, x0: number, y0: number, x1: number, y1: number]
 export interface UnitDef {
   id: number; kind?: (typeof UNIT_KINDS)[number]; flags?: number; pieces?: number
-  lines: LineSpec[]; frames?: FrameSpec[]; ph?: PhSpec[]; labels?: LabelSpec[]; erase?: EraseSpec[]
+  lines: LineSpec[]; frames?: FrameSpec[]; ph?: PhSpec[]; labels?: LabelSpec[]; erase?: EraseSpec[]; held?: number[]
 }
 
 /** a line's rectangle as a 10 pt line's: 7 above its baseline, 2.5 below */
@@ -31,7 +31,7 @@ export function layoutOf(units: UnitDef[], pages = 2): LayoutIndex {
   const file: LayoutFile = {
     schema: 1, layout: LAYOUT, pdfjs: '5.4.296', paper: { id: '1512.03385', version: 1, pages }, left: '',
     views: Array.from({ length: pages }, () => [0, 0, 612, 792]).flat(), fonts: ['NimbusRomNo9L-Regu'],
-    units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [],
+    units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [],
   }
   for (const u of units) {
     file.units.push([u.id, UNIT_KINDS.indexOf(u.kind ?? 'para'), u.kind === 'heading' ? 1 : 9, u.flags ?? 0, u.pieces ?? 64])
@@ -44,6 +44,7 @@ export function layoutOf(units: UnitDef[], pages = 2): LayoutIndex {
       return row
     })])
     if (u.erase?.length) file.erase.push([u.id, u.erase.flat()])
+    if (u.held?.length) file.held.push([u.id, [...u.held]])
     for (const p of u.ph ?? []) {
       file.ph.push([u.id, p.k, PH_KINDS.indexOf(p.kind), p.flags ?? 0, ...(p.segs ?? []).flat()])
       // a placeholder's own text: a text symbol's character (PH_FLAG.TEXT), or a page text's

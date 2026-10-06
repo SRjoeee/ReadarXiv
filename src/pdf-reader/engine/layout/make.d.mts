@@ -16,7 +16,7 @@ export interface MakeInput {
   pdfjs: string
 }
 export interface LayoutStats {
-  lines: { carried: number; total: number }
+  lines: { carried: number; total: number; held: number }
   /** `unplaced`: the units arXiv's text would place whose own marks were not carried there (they stay the original's) */
   units: { located: number; total: number; byKind: Record<string, [located: number, total: number]>; unplaced: number }
   /** `marked`: the placeholders of the located units the marked original marks (an opening mark at least), by kind

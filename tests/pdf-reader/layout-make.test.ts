@@ -414,7 +414,7 @@ describe('makeLayout', () => {
       units: [unit('para', [text('alpha beta gamma delta')]), unit('para', [text(words(0, 100))])],
     })
     expect(file.units.map(u => u[0])).toEqual([1])
-    expect(stats.lines).toEqual({ carried: 10, total: 11 })
+    expect(stats.lines).toEqual({ carried: 10, total: 11, held: 0 })
   })
 
   it("a footnote's number glued to its first word on arXiv's still bounds the note, and is its label", async () => {
@@ -452,7 +452,7 @@ describe('makeLayout', () => {
       marks: [['0s', 1, 72, 700], ['0e', 1, endOf(text1), 700], ['g1a', 1, 150, 480], ['g1b', 1, 400, 480], ['g1t', 1, 400, 560]],
       units: [unit('para', [text('alpha beta gamma delta')])],
     })
-    expect(stats.lines).toEqual({ carried: 1, total: 1 })
+    expect(stats.lines).toEqual({ carried: 1, total: 1, held: 0 })
   })
 
   it('a placeholder the marked original gives no mark is LOST; a closing mark not set, its end is the text after it', async () => {
@@ -955,5 +955,29 @@ describe('makeLayout, the maker round (Fix 2): crops and erases from the glyphs\
     // its line's foot is its own letters', not the bracket's 18 pt below
     expect(line[5]).toBeGreaterThan(697)
     for (const k of Object.keys(PATHS)) delete PATHS[k]
+  })
+})
+
+describe('makeLayout, the maker round (Fix 3): the lines a unit\'s source does not write', () => {
+  it('a display its source does not hold, given to it by its end mark after it, is no line of the unit\'s at its end; held in its middle', async () => {
+    // TeX set the unit's end mark after the display (1706 page 4's unit 32, "... computed as:"): the anchor takes its lines
+    const runs: Run[] = [{ s: 'the attention is computed as', x: 72, y: 700 }, { s: 'Z = W X + b', x: 150, y: 680 }]
+    const end: World = { pages: [{ runs }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[1] as Run), 680]], units: [unit('para', [text('the attention is computed as')])] }
+    const tail = await made(end)
+    expect(rowsOf(tail.file, 0, 'lines')).toHaveLength(8)
+    expect(tail.file.held).toEqual([])
+    expect(tail.stats.lines.held).toBe(1)
+    // the same display between two lines of the unit's own words: held, never erased
+    const mid: Run[] = [...runs, { s: 'where the words go on here', x: 72, y: 660 }]
+    const both = await made({ pages: [{ runs: mid }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(mid[2] as Run), 660]], units: [unit('para', [text('the attention is computed as where the words go on here')])] })
+    expect(rowsOf(both.file, 0, 'lines')).toHaveLength(24)
+    expect(both.file.held).toEqual([[0, [1]]])
+    expect(chunk(rowsOf(both.file, 0, 'erase'), 5).map(r => r[0])).not.toContain(1)
+  })
+  it('a line of the unit\'s own words the anchor did not pair is the unit\'s: a word of its source anywhere counts', async () => {
+    const runs: Run[] = [{ s: 'models learn residual functions', x: 72, y: 700 }, { s: 'functions residual learn models', x: 72, y: 688 }]
+    const { file } = await made({ pages: [{ runs }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[1] as Run), 688]], units: [unit('para', [text('models learn residual functions functions residual learn models')])] })
+    expect(file.held).toEqual([])
+    expect(rowsOf(file, 0, 'lines')).toHaveLength(16)
   })
 })
