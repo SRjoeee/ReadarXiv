@@ -35,6 +35,7 @@ export interface Row {
   v0: 'ok' | 'failed'
   v1?: 'ok' | 'failed'
   switched?: string[]
+  unanswered?: string[]
   lost?: { strict: number; joined: number; tex?: number; all?: number }
   traced?: boolean
   cause?: 'tex' | 'pdf-only'

@@ -54,9 +54,12 @@ and v1 whenever each was compiled. An unpinned v0 from the cache against a v1 ma
 - The **verdict** (fix round 1: the check can fail):
   - *failing* where a line is lost and not every loss has an accepted cause, or where v1 does not compile;
   - *accepted* where every loss has one, read from the evidence, not the paper: items moved while TeX's boxes are the
-    same (a PDF-only offset, ruling 3), or every line TeX set otherwise a heading's lost kern (ruling 2: every
-    difference in the line beside a heading's mark, one of them a kern v0 set and v1 did not);
-  - with no line lost, *switched* where TeX's answers took marks off (the paper's own switch), else *clean*;
+    same (a PDF-only offset, ruling 3), or every line TeX set otherwise a heading's lost kern (ruling 2: a kern v0 set
+    beside a heading's mark and v1 did not, with nothing in its place in v1 or only a node v0 sets elsewhere in that
+    line, never a kern, glue, box, rule or penalty of v1's own (fix round 2); every other difference in the line
+    beside a heading's mark, or the same node set again at another stretch);
+  - with no line lost, *switched* where TeX's answers took marks off, or a position had no answer (the paper's own
+    switch), else *clean*;
   - *passed over* where v0 does not compile.
 
   A class whose marks lose more of a paper's lines than they carry is to be switched off for that paper
@@ -64,9 +67,30 @@ and v1 whenever each was compiled. An unpinned v0 from the cache against a v1 ma
 - **The check against this record** (the default): a paper whose verdict is worse than its recorded row's, or whose
   lines lost or unit marks moved grow, fails the run. Only `--write` writes the record. The gate's own test,
   `--plant=<pt>`, sets a kern after v1's first closing mark: 0.02 pt and 5 pt on 2608.11761 both fail (exit 1).
+  `--plant-at=<mark>` and `--plant-kind=kern|glue` put it elsewhere: a 0.02 pt glue after `h84e`, in 2608.08880's
+  accepted heading line, fails too (fix round 2).
 
 The aux, toc, lof, lot and out, and the readings (`readingsOf`, compared byte for byte with the marks in name order),
 are still compared. They no longer decide anything, since the layout compile feeds neither.
+
+## The run (fix round 2, 2026-10-06)
+
+- **The marks measured:** fix round 1 with fix round 2: a probe box that errors answers nothing (its register voided
+  before it, its error read as its own), no answer is no mark, and the heading-kern rule takes only a kern-class
+  difference in the lost kern's place.
+- **Wall time:** 2,723 s, every compile made again (the reading code's hash changed): the font probe with the mark
+  probe, v0, v1, the two traces, and the bisects. Written in the same run (`--bisect --write`).
+- **The figures:** the same as fix round 1, paper by paper. 106 clean, 5 accepted, 2 switched, 0 failing, none passed
+  over; lines lost 5 strict, 3 joined, 6 by TeX, 6 all; items moved 13 strict, 6 joined; unit marks moved 5; no
+  regression against the record; `switchOff` empty. Every row's verdict, lines lost, items moved, unit marks moved,
+  class counts and marks file is unchanged.
+- **The marks:** 169,448, the same. No answer now means no mark (the re-review's m4), and its cost on the corpus is
+  **0 marks**: every one of the 399 samples (0 to 8 a paper, under `PROBE_MAX` 16; two papers ask none) was answered,
+  no asked command went unasked, and none of the 111 probe logs holds an error inside a box. The answers are `00000000` (every mark) for 403 commands, and `22220000`
+  (no mark before `.,;:`) for the two achemso papers' `\cite`.
+- **The accepted five** stay accepted under the tightened heading-kern rule: in each, the lost kern has nothing in its
+  place or (2608.25210) the full stop v0 sets elsewhere in the line.
+- **The layout compile's own cost:** median +15.2 %, max +382 % (under a load of 6 to 15; one pair met a peak).
 
 ## The run (fix round 1, 2026-10-06)
 
@@ -209,9 +233,19 @@ The boxes are compared by width, height, depth and their last node. The answer i
 Every box starts from the same state (the footnote counter as it was, biblatex's trackers reset) and ends at a space,
 where each package's lookahead stops. An empty paragraph after each command starts TeX's error count again.
 
+**A box that errors** (fix round 2, the re-review's I-new): the register is voided before each box, so a box an error
+ends early reads as a void box, never as the box before it still in the register. A row `punct-at <i> <j> <box>` goes
+before each box, so an error TeX logs is that box's. An error in the box as the paper sets it, or with `{}`, leaves
+that follower no answer (`x`); in the box with the opening mark, no mark; in the box with both marks, no closing mark.
+REVTeX 4.2 with `citeautoscript` is the case: its swap takes the closing mark into a `\csname`, so before `!`, `?` and
+a word the probe now answers the opening mark alone (`22221110`), where it had answered every mark and the full
+compile broke every such citation.
+
 **What the switch does** (`layoutMarking`'s `switches`): a placeholder of an answered command gets the marks TeX's
-answer for what follows it allows. With no answer (no row), its marks are as before. A footnote's call TeX answered for
-may keep its closing mark, and the piece after it its marks, where the answer says a mark there changes nothing.
+answer for what follows it allows. With no answer (no row, an `x`, or a command of an asked class TeX was not asked
+about), it gets no mark (fix round 2, the re-review's m4: the safe direction). With no probe run at all (`switches`
+null), the marks are as before. A footnote's call TeX answered for may keep its closing mark, and the piece after it
+its marks, where the answer says a mark there changes nothing.
 Measured on native documents (all now move 0 items):
 
 | Preamble | Answer before `.` `,` `;` `:` `!` `?` |
@@ -221,6 +255,7 @@ Measured on native documents (all now move 0 items):
 | fnpct (`\footnote`) | no mark before `.` and `,` (the review's M2: the call's opening mark marked the full stop) |
 | a citation macro ending in `\xspace` | no mark before all six |
 | natbib `[super]` alone, plain cite.sty, biblatex numeric `\cite`, REVTeX 4.2 `aip,jcp` and `aps` | every mark |
+| REVTeX 4.2 `aip,jcp,citeautoscript` (fix round 2) | no mark before `.,;:`; no closing mark before `!`, `?` and a word |
 
 REVTeX 4.2 `aip,jcp` answers every mark: there `\@cite` is `\NAT@citesuper` (checked), yet with the paper's own
 `\cite` nothing moves in a preamble-only compile or in the native case (0 items). The review measured 31 items in a
@@ -244,7 +279,12 @@ no mark.
 **Limits:**
 - The probe asks what the preamble alone makes of a command. A behaviour set by the aux on a later pass, or by
   something in the body, is not seen; the corpus check measures it.
-- A command the paper writes only with a source TeX cannot set in a box (a `\verb`, a `%`) is not asked about.
+- A command the paper writes only with a source TeX cannot set in a box (a `\verb`, a `%`) is not asked about, and so
+  gets no mark.
+- The probe cannot see a space factor: `\unskip` takes the follower's space off before the box is measured (the
+  re-review's m2). A closing mark that resets biblatex's `!` and `?` space factors reads as no change; the corpus check
+  would call such a paper failing.
+- A row must fit one log line (79 characters at the default `max_print_line`); today's are at most 32.
 - In production the layout compile must be written after the font probe's compile returns: Task 14.
 
 ## The compile time, v0 against v1: the layout compile's own cost
@@ -276,7 +316,7 @@ The median is 324 KB raw and the largest 1,398 KB (2608.30730), all under `MARKS
 
 ## A row of `layout-marks.json`
 
-`{ id, v0, v1, switched?: <commands TeX's answers took marks off>, probe: { samples, answered, ms }, ms: [v0, v1],
+`{ id, v0, v1, switched?: <commands TeX's answers took marks off>, unanswered?: <asked commands with no answer>, probe: { samples, answered, ms }, ms: [v0, v1],
 pages: [v0, v1], items, moved: { strict, joined }, lines, lost: { strict, joined, tex, all }, unitMarksMoved, captions:
 [unit, v0Page, v1Page][], readings, files: { aux, toc, lof, lot, out }, errors, marksFile: { kb, dropped, marks },
 traced, cause?: 'tex' | 'pdf-only', causes?: { accepted, unexplained }, boxes?: [{ page, near, what }], classes: {

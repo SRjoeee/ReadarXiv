@@ -49,7 +49,7 @@ import { promisify } from 'node:util'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { latin1, latin1Bytes, MARK_DEF } from '../../../src/pdf-reader/engine/latex-front.mjs'
-import { encodeLayoutMarks, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarksOf, MARK_CLASSES, parseLayoutMarks, probeSamples, readMarkProbe, switchedOf } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { askedCommands, encodeLayoutMarks, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarksOf, MARK_CLASSES, parseLayoutMarks, probeSamples, readMarkProbe, switchedOf } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles, probeFiles, readingsOf } from '../../../src/pdf-reader/engine/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
 import { marksOf } from '../../../src/pdf-reader/engine/typeset/places.mjs'
@@ -63,11 +63,13 @@ const OUT = join(DATA, 'runs', 'layout-marks-gate'), CACHE = join(OUT, 'cache'),
 const RECORD = join(here, 'records/layout-marks.json')
 const args = process.argv.slice(2), arg = name => args.find(a => a.startsWith(`--${name}=`))?.split('=')[1]
 const BISECT = args.includes('--bisect'), NO_SWITCH = args.includes('--no-switch'), WRITE = args.includes('--write'), CHECK = !args.includes('--no-check')
-/** the gate's own test: a kern of this many points after v1's first closing mark, which the check must fail */
-const PLANT = arg('plant')
+/** the gate's own test: a kern (or with --plant-kind=glue, a glue) of this many points after v1's first closing mark,
+ *  or after the mark --plant-at names (h84e), which the check must fail. Written so that a \write drops it, as the
+ *  marks are */
+const PLANT = arg('plant'), PLANT_AT = arg('plant-at'), PLANT_KIND = arg('plant-kind') ?? 'kern'
 const CLASSES = arg('classes') !== undefined ? arg('classes').split(',').filter(Boolean) : [...LAYOUT_CLASSES]
 for (const c of CLASSES) if (!MARK_CLASSES.includes(c)) throw new Error(`--classes: no class ${c}`)
-const VARIANT = [arg('classes') !== undefined && `classes-${CLASSES.join('+')}`, NO_SWITCH && 'no-switch', PLANT && `plant-${PLANT}`].filter(Boolean).join('-')
+const VARIANT = [arg('classes') !== undefined && `classes-${CLASSES.join('+')}`, NO_SWITCH && 'no-switch', PLANT && `plant-${PLANT}${PLANT_KIND === 'kern' ? '' : `-${PLANT_KIND}`}${PLANT_AT ? `-${PLANT_AT}` : ''}`].filter(Boolean).join('-')
 if (WRITE && VARIANT) throw new Error('--write: a variant is never the record')
 const meta = JSON.parse(readFileSync(join(CORPUS_ROOT, 'out/corpus-meta.json'), 'utf8'))
 const ids = arg('papers')?.split(',').filter(Boolean) ?? meta.map(m => m.id)
@@ -181,14 +183,15 @@ async function paperRow(id) {
   const samples = probeSamples(units)
   const probe = await compile(id, withSources(probeFiles(paper, { marks: true })), opts('probe'))
   const answered = readMarkProbe(probe.log ?? '', samples)
-  const switches = NO_SWITCH ? {} : answered
+  // --no-switch: the probe not asked (switches null), every mark as LAYOUT_TEX sets it
+  const switches = NO_SWITCH ? null : answered
   const v1Of = classes => {
     const files = originalFiles(paper, { lines: true, layout: classes, switches })
     if (PLANT) for (const p of [project.main, ...[...files.keys()].filter(f => f !== project.main).sort()]) {
-      const t = latin1(files.get(p)), at = t.search(/\\axtpm\{p\d+\.\d+b\}/)
+      const t = latin1(files.get(p)), at = PLANT_AT ? t.search(new RegExp(`\\\\axt[a-z]*\\{${PLANT_AT.replace(/\./g, '\\.')}\\}`)) : t.search(/\\axtpm\{p\d+\.\d+b\}/)
       if (at < 0) continue
-      const end = t.indexOf('}', at) + 1
-      files.set(p, latin1Bytes(`${t.slice(0, end)}\\kern${PLANT}pt\\relax${t.slice(end)}`))
+      const end = t.indexOf('}', at) + 1, what = PLANT_KIND === 'glue' ? `\\hskip${PLANT}pt\\relax` : `\\kern${PLANT}pt\\relax`
+      files.set(p, latin1Bytes(`${t.slice(0, end)}\\expandafter\\ifx\\csname @typeset@protect\\endcsname\\protect${what}\\fi${t.slice(end)}`))
       break
     }
     return withSources(files)
@@ -203,6 +206,9 @@ async function paperRow(id) {
   // the switch as applied (none under --no-switch): the commands TeX's answers take marks off, and the probe's own
   // figures — its samples, those it answered, its compile's time
   if (switchedOf(switches).length) row.switched = switchedOf(switches)
+  // the asked commands TeX gave no answer for: none of their placeholders is marked (the re-review's m4)
+  const unanswered = switches ? [...askedCommands(units)].filter(c => !switches[c]).sort() : []
+  if (unanswered.length) row.unanswered = unanswered
   row.probe = { samples: samples.length, answered: Object.keys(answered).length, ms: probe.ms }
   row.ms = [c0.ms, c1.ms]
   if (!c1.ok) return { row: { ...row, verdict: verdictOf(row) }, detail: { why: c1.why ?? c1.errors?.slice(0, 3) } }
@@ -294,7 +300,7 @@ await Promise.all(Array.from({ length: 2 }, async () => {
     rows.push(row)
     writeFileSync(join(OUT, 'rows', `${id}${VARIANT ? `-${VARIANT}` : ''}.json`), JSON.stringify({ row, detail }, null, 1))
     const lostBy = Object.entries(row.classes ?? {}).filter(([, x]) => x.lost || x.texLost).map(([c, x]) => `${c} ${x.lost ?? 0}/${x.texLost ?? 0}`).join(', ')
-    const say = row.v0 === 'failed' ? 'v0 failed: passed over' : row.v1 !== 'ok' ? `FAILED ${row.error ?? 'v1 did not compile'}` : `${row.verdict}${row.switched ? ` (${row.switched})` : ''} pages ${row.pages.join('/')} lines ${row.lines} lost ${row.lost.strict}/${row.lost.joined}/${row.lost.tex ?? '-'} (all ${row.lost.all ?? '-'}) items moved ${row.moved.strict}/${row.moved.joined} unit marks moved ${row.unitMarksMoved}${row.captions.length ? ` captions ${row.captions.length}` : ''} readings ${row.readings} files ${Object.entries(row.files).filter(([, s]) => s === 'differs').map(([k]) => k).join(',') || 'same'}${row.causes ? ` causes ${row.causes.accepted} accepted, ${row.causes.unexplained} unexplained` : ''}${row.cause ? ` cause ${row.cause}${row.boxes?.length ? `: ${row.boxes.slice(0, 6).map(x => `p${x.page} ${x.near ?? '-'} (${x.what})`).join('; ')}${row.boxes.length > 6 ? ` …${row.boxes.length}` : ''}` : ''}` : ''}${row.own ? ` own ${row.own.lost}` : ''}${lostBy ? ` by class ${lostBy}` : ''}${row.switchOff ? ` SWITCH OFF ${row.switchOff}` : ''}`
+    const say = row.v0 === 'failed' ? 'v0 failed: passed over' : row.v1 !== 'ok' ? `FAILED ${row.error ?? 'v1 did not compile'}` : `${row.verdict}${row.switched ? ` (${row.switched})` : ''}${row.unanswered ? ` unanswered ${row.unanswered}` : ''} pages ${row.pages.join('/')} lines ${row.lines} lost ${row.lost.strict}/${row.lost.joined}/${row.lost.tex ?? '-'} (all ${row.lost.all ?? '-'}) items moved ${row.moved.strict}/${row.moved.joined} unit marks moved ${row.unitMarksMoved}${row.captions.length ? ` captions ${row.captions.length}` : ''} readings ${row.readings} files ${Object.entries(row.files).filter(([, s]) => s === 'differs').map(([k]) => k).join(',') || 'same'}${row.causes ? ` causes ${row.causes.accepted} accepted, ${row.causes.unexplained} unexplained` : ''}${row.cause ? ` cause ${row.cause}${row.boxes?.length ? `: ${row.boxes.slice(0, 6).map(x => `p${x.page} ${x.near ?? '-'} (${x.what})`).join('; ')}${row.boxes.length > 6 ? ` …${row.boxes.length}` : ''}` : ''}` : ''}${row.own ? ` own ${row.own.lost}` : ''}${lostBy ? ` by class ${lostBy}` : ''}${row.switchOff ? ` SWITCH OFF ${row.switchOff}` : ''}`
     console.log(`[${rows.length}/${ids.length}] ${id} ${Math.round((Date.now() - t) / 1000)} s ${say}`)
   }
 }))
@@ -304,7 +310,7 @@ rows.sort((x, y) => order.get(x.id) - order.get(y.id))
 const countsOf = rs => {
   const of = v => rs.filter(r => r.verdict === v).length, sum = f => rs.reduce((n, r) => n + (f(r) ?? 0), 0)
   return {
-    papers: rs.length, clean: of('clean'), accepted: of('accepted'), switched: of('switched'), failing: of('failing'), passedOver: of('passed over'),
+    papers: rs.length, clean: of('clean'), accepted: of('accepted'), switched: of('switched'), failing: of('failing'), passedOver: of('passed over'), unanswered: rs.filter(r => r.unanswered).length,
     lines: sum(r => r.lines), lost: { strict: sum(r => r.lost?.strict), joined: sum(r => r.lost?.joined), tex: sum(r => r.lost?.tex), all: sum(r => r.lost?.all) }, untraced: rs.filter(r => r.v1 === 'ok' && !r.traced).map(r => r.id), moved: { strict: sum(r => r.moved?.strict), joined: sum(r => r.moved?.joined) },
     unitMarksMoved: sum(r => r.unitMarksMoved), captionPapers: rs.filter(r => r.captions?.length).length, switchOff: rs.filter(r => r.switchOff).map(r => r.id),
   }

@@ -259,10 +259,11 @@ export function boxDiff(pages0, pages1) {
 const unset = t => t.replace(/ \([+-]\d+\)/, '').replace(/, glue set [^,]*/, '')
 /**
  * Each line TeX set otherwise (boxDiff's, by page and line), with its cause where the evidence names an accepted one:
- * 'heading kern' when a kern v0 set beside a heading's mark is one v1 did not set (the font kern of a heading's last
- * letter with the full stop its class appends after the end mark: ruling 2), and every other difference in the line
- * lies beside a heading's mark or sets the same node again at another stretch (the line's glue set, microtype's
- * expansion of its glyphs: 2608.25210); else 'unexplained'
+ * 'heading kern' when a kern v0 set beside a heading's mark is one v1 did not set — v1 has nothing in its place, or
+ * only a node v0 sets elsewhere in that line, the next node displaced (the font kern of a heading's last letter with the
+ * full stop its class appends after the end mark: ruling 2; a glue, a kern or a box v1 adds there is no lost kern: the
+ * re-review's m1) — and every other difference in the line lies beside a heading's mark or sets the same node again
+ * at another stretch (the line's glue set, microtype's expansion of its glyphs: 2608.25210); else 'unexplained'
  */
 export function causesOf(diffs) {
   const lines = new Map()
@@ -270,7 +271,9 @@ export function causesOf(diffs) {
   const out = new Map()
   const head = d => /^h\d+[se]$/.test(d.near ?? ''), again = d => d.v0 !== null && d.v1 !== null && unset(d.v0) === unset(d.v1)
   for (const [k, ds] of lines) {
-    const kern = ds.some(d => head(d) && /^\\kern-?\d/.test(d.v0 ?? '') && !/^\\kern/.test(d.v1 ?? ''))
+    // the nodes v0 sets in the line that v1 sets elsewhere or not at all, as they would read set again
+    const gone = new Set(ds.filter(d => d.v0 !== null && d.v1 === null).map(d => unset(d.v0)))
+    const kern = ds.some(d => head(d) && /^\\kern-?\d/.test(d.v0 ?? '') && (d.v1 === null || (!/^\\(?:kern|glue|hskip|[hv]box|rule|penalty)/.test(d.v1) && gone.has(unset(d.v1)))))
     out.set(k, kern && ds.every(d => head(d) || again(d)) ? 'heading kern' : 'unexplained')
   }
   return out
@@ -313,13 +316,13 @@ export function attribute(name, units) {
  * (the paper has no layout), or where a line is lost (strict, joined or by TeX) and not every loss has an accepted
  * cause; 'accepted' where every one has: the items moved but TeX's boxes are the same (a PDF-only offset: ruling 3),
  * or every line TeX set otherwise is a heading's lost kern (causesOf: ruling 2); with no line lost, 'switched' where
- * the paper's own switch took marks off, else 'clean'
+ * the paper's own switch took marks off (TeX's answers, or a command it did not answer), else 'clean'
  */
 export function verdictOf(row) {
   if (row.v0 === 'failed') return 'passed over'
   if (row.v1 !== 'ok') return 'failing'
   const lost = row.lost && (row.lost.strict || row.lost.joined || row.lost.tex)
-  if (!lost) return row.switched?.length ? 'switched' : 'clean'
+  if (!lost) return row.switched?.length || row.unanswered?.length ? 'switched' : 'clean'
   if (!row.traced) return 'failing'
   if (row.cause === 'pdf-only') return 'accepted'
   return row.causes && !row.causes.unexplained ? 'accepted' : 'failing'

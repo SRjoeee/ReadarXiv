@@ -159,6 +159,11 @@ describe('causesOf: each line TeX set otherwise, its cause from the evidence', (
   })
   it('the line set again at another stretch is the kern\'s doing: the kern paired with a glyph, glyphs expanded otherwise beside another mark (2608.25210)', () => {
     expect(causesOf([d('0.5', 'h189e', '\\kern-0.531', '\\T1/LinuxBiolinumT-TLF/m/it/9 (+5) .'), d('0.5', 'h189s', '\\T1/LinuxBiolinumT-TLF/m/it/9 (+7) C', '\\T1/LinuxBiolinumT-TLF/m/it/9 (+5) C'), d('0.5', '190s', '\\T1/ptm/m/n/9 (+7) a', '\\T1/ptm/m/n/9 (+5) a'), d('0.5', 'h189e', '\\T1/LinuxBiolinumT-TLF/m/it/9 (+7) .', null)]).get('3:0.5')).toBe('heading kern')
+    // a glue (or a kern, a box) v1 sets in the kern's place is no lost kern: the re-review's 0.02 pt glue after h84e
+    expect(causesOf([d('0.7', 'h84e', '\\kern-0.54993', '\\glue 0.02')]).get('3:0.7')).toBe('unexplained')
+    expect(causesOf([d('0.7', 'h84e', '\\kern-0.54993', '\\hbox(0.0+0.0)x5.0')]).get('3:0.7')).toBe('unexplained')
+    // nor a glyph v0 does not set elsewhere in the line
+    expect(causesOf([d('0.8', 'h1e', '\\kern-0.5', '\\OT1/cmr/m/n/10 x')]).get('3:0.8')).toBe('unexplained')
     // a glyph of another letter beside another mark is no setting again
     expect(causesOf([d('0.6', 'h1e', '\\kern-0.5', null), d('0.6', '2s', '\\T1/ptm/m/n/9 (+7) a', '\\T1/ptm/m/n/9 (+5) b')]).get('3:0.6')).toBe('unexplained')
   })
