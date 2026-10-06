@@ -958,6 +958,9 @@ const glideMs = d => (reduced.matches ? 0 : Math.min(450, 250 + 0.25 * Math.abs(
  * driver scrolling, from its first step to its scroll's end
  */
 const follow = { pos: null, lastD: null, rest: 0, spring: 0, moving: false }
+/** the side last scrolled while it was the driver, before both sides were located: the pair is levelled by it once they
+ *  are (levelLocated) */
+let readEarly = null
 /** the positions to go on from: the driver's as it is, the follower's as it is — after a click, a glide or a new driver */
 function rebase() {
   if (!driver) return
@@ -1080,6 +1083,27 @@ function alignTop(side) {
   if (Math.abs(target - tc.scrollTop) < 1) { rebase(); arm(); return }
   if (onCompositor()) glideOn(to, target)
   else springTo(tc, target)
+}
+/**
+ * Both sides just located, where they were not (a first visit's original on both, this machine's copy, a demo): the
+ * sync follows nothing before (syncFrom, alignTop and arm go by the anchors), so a side read before had no step
+ * followed and no rest that levelled, and the pair stood apart until the next scroll's rest (6,393 px on 2608.02163,
+ * spikes/early-scroll.mjs; the website's 5,129 px, readarxiv-web #23). Levelled by the side scrolled meanwhile
+ * (readEarly), as at its rest (alignTop): it stays where the reader put it. Not by the driver as it now is: on the
+ * compositor the pointer moved over the other side makes that one the driver, and the side scrolled was thrown back
+ * (2,000 px). In the next frame, after the scroll events it brings: a scroll under way is followed then (syncFrom), and
+ * its rest, or one already waited for, levels the pair itself. Nothing scrolled: nothing moves, and the follower is
+ * bound as at any rest (arm)
+ */
+function levelLocated() {
+  invalidate()
+  const side = readEarly
+  readEarly = null
+  requestAnimationFrame(() => {
+    if (!side || follow.moving || follow.rest || !together() || !bothShown()) return arm()
+    take(side)
+    alignTop(side)
+  })
 }
 /** a critically damped spring to a position: no overshoot, no bounce, 250–450 ms as the distance asks; one step with
  *  reduced motion */
@@ -1242,6 +1266,9 @@ function syncFrom(side) {
     if (glass.side === side) { drop(); rebase(); arm() } else if (together()) rebase()
     return
   }
+  // the side read, scrolled before both sides are located: nothing follows it yet, and the pair is levelled by it once
+  // they are (levelLocated)
+  if (side === driver && (!left.anchors.size || !right.anchors.size)) readEarly = side
   if (syncMode === 'off' || !bothShown() || side !== driver || !left.anchors.size || !right.anchors.size) return
   // a scroll under way, its rest's wait begun again: here, with the event, since the scroll's end comes in the same
   // frame as its last step, before a frame's callback would run
@@ -1604,6 +1631,13 @@ for (const s of sides) refit.observe(s.container)
  *  units), as long as it is in view: the same file opens on the right at the same place */
 let readAt = null
 left.eventBus.on('updateviewarea', ({ location }) => { if (shown(left)) readAt = location })
+/** the right opened there; PDF.js's scroll marked as the reader's own (put), so that the sync does not take it for the
+ *  side read's (levelLocated levels the pair by that one) */
+function rightAtReadAt() {
+  if (!readAt) return
+  right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true })
+  placed.set(right.container, right.container.scrollTop)
+}
 /** figure text on or off */
 export function setFigures(on) { void save(c => ({ ...c, image: { ...c.image, enabled: on } })) } // figure text on or off, in the settings; followFigures shows it
 /** the sides shown scaled by a factor, within PDF.js's range */
@@ -1994,7 +2028,7 @@ async function showCached(record, setContext, note = () => {}) {
     await laid
     // shown: its pages laid out and drawing; the anchors, which the highlight and the sync need, follow
     note('shown cached')
-    if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true })
+    rightAtReadAt()
     headings = record.units.map((u, i) => ({ id: i, src: u.src, depth: u.depth, title: u.title, kind: u.kind })).filter(h => h.kind === 'heading')
     // the translation's texts made again from the pieces the copy keeps, the source's where the final set it in the
     // source (cache.mjs copyTexts)
@@ -2004,7 +2038,7 @@ async function showCached(record, setContext, note = () => {}) {
       anchorSide(right, rightTexts, record.rightMarks?.length ? new Map(record.rightMarks) : undefined).then(() => note('cached right anchored')),
     ])
   } finally { URL.revokeObjectURL(url) }
-  invalidate(); paint(left); paint(right)
+  levelLocated(); paint(left); paint(right)
   reportOutline()
 }
 async function live() {
@@ -2102,7 +2136,7 @@ async function live() {
       ;[srcBytes] = await Promise.all([
         fetch(srcUrl).then(r => { if (!r.ok) throw new Error(`the source: HTTP ${r.status}`); return r.arrayBuffer() }).then(b => new Uint8Array(b)),
         // the original on the right until a translation comes, unless this machine's copy (or a run before) put it there
-        cached || right.doc ? Promise.resolve() : open(right, pdfUrl).then(() => rightLaid).then(() => { if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true }) }),
+        cached || right.doc ? Promise.resolve() : open(right, pdfUrl).then(() => rightLaid).then(rightAtReadAt),
       ])
     } catch (e) { throw Object.assign(new Error(`Could not fetch ${paper} from arXiv (${e.message ?? e})`), { event: 'fetch failed', kind: 'network' }) }
     note('source fetched')
@@ -2124,7 +2158,10 @@ async function live() {
     const { seed, hashes } = cached ? await seedFrom(cached, units) : { seed: null, hashes: await Promise.all(units.map(sourceHash)) }
     const p = { files, paperData, units, src, context, sameUnits, seed, hashes, leftCurrent: !cached || sameUnits, adoptUnits: () => { prose = src.map(x => x.text).join('\n'); unitKind = new Map(units.map((u, i) => [i, u.kind])) } }
     if (p.leftCurrent) p.adoptUnits()
-    if (!cached) await Promise.all([anchorSide(left, src, new Map()), anchorSide(right, src, new Map())])
+    if (!cached) {
+      await Promise.all([anchorSide(left, src, new Map()), anchorSide(right, src, new Map())])
+      levelLocated()
+    }
     note('anchored')
     rightTexts ??= src
     reportOutline()
@@ -2438,6 +2475,7 @@ async function demo() {
   unitKind = new Map(units.map(u => [u.i, u.kind]))
   const lMarks = await fetch(`${base}original-marks.json`).then(r => (r.ok ? r.json() : {})).then(o => new Map(Object.entries(o))).catch(() => new Map())
   const [marksLeft, marksRight] = await Promise.all([anchorSide(left, units.map(u => ({ id: u.i, text: u.src, ...displayEdges(u) })), lMarks), anchorSide(right, textsAt(stages ? stages[0].translated : Infinity))])
+  levelLocated()
   Object.assign(timing, { marksLeft, marksRight })
   // the contents: a demo's units carry no depth, so levels.json holds the source's (made with the demo); its first heading is the title
   const levels = await fetch(`${base}levels.json`).then(r => (r.ok ? r.json() : {})).catch(() => ({}))

@@ -815,6 +815,9 @@ The owner kept same speed as the direction and asked for two things:
 - **Two faults found by measuring, both in the script path too**:
   - The rest's wait was cancelled when the scroll's end came in the same frame as its last step, because the frame's callback cleared it after `scrollend`. The wait is now restarted in the scroll event itself.
   - After an outside scroll of the follower, the next step pulled it back to where it had been. The together modes now take the follower's position afresh.
+- **Found later (2026-10-06, the website's reviews; `spikes/early-scroll.mjs`): a side read before the pair is located.** The sync follows nothing until both sides are anchored. A side scrolled before that, its rest included, was never followed, and nothing levelled the pair once it was located: the two stood apart until the next scroll's rest. On 2608.02163 that was 2,000–6,888 px, on a first visit (the original on both sides until the source is read: the pair located 0.3–0.6 s after the right's first page, the source served from this machine) and on this machine's copy (0.2–1.1 s, while both sides are anchored). Once both are located, the pair is now levelled by the side scrolled meanwhile, as at its rest (`levelLocated`): within 0.4 px, the side read unmoved.
+  - It is the side scrolled, not the driver as it then is: on the compositor a pointer moved over the other side makes that one the driver, and levelling by it threw the original back from 2,014 to 14 px.
+  - The copy's pane is put where the original is read (PDF.js's scroll to `readAt`) as the reader's own put, which the sync does not take for reading: taken for it on a machine four times slower, with the pointer over the copy, the original was thrown back 925 px.
 
 ### MEASURED (`spikes/sync-frames.mjs`, Chromium, the build, same speed)
 
