@@ -89,14 +89,20 @@ describe('a placeholder\'s source with its text alone (the layer\'s source fallb
     expect(textArgsOf('\\textbf{A \\rule{0pt}{2ex}B}')).toBe('\\textbf{A \\rule B}')
     // what the table does not know keeps everything
     expect(textArgsOf('\\mymacro{1pt}{x}')).toBe('\\mymacro{1pt}{x}')
+    // a kept argument given bare keeps the space before it: no part of the control word's name ($\\mathcalO$ drew nothing)
+    expect(textArgsOf('$\\mathcal O$')).toBe('$\\mathcal O$')
+    expect(textArgsOf('$A_{\\Delta,\\mathbf n}$')).toBe('$A_{\\Delta,\\mathbf n}$')
   })
   it('textless: one command of those that set no letters, its arguments all there and nothing after; one with no parameter may set text', () => {
-    for (const src of ['\\specialrule{1pt}{-1pt}{0pt}', '\\rule{0pt}{2.2ex}', '\\addlinespace[2pt]', '\\setlength{\\tabcolsep}{3pt}', '\\fontsize{9}{11}', '\\noalign{\\vskip 4mm}', '\\tabularnewline[2pt]', '\\vspace*{-2mm}', '\\renewcommand\\arraystretch{1.1}', '\\cmidrule(lr){2-5}', '\\vskip 3pt plus 1fil']) expect(textless(src)).toBe(true)
+    for (const src of ['\\specialrule{1pt}{-1pt}{0pt}', '\\rule{0pt}{2.2ex}', '\\addlinespace[2pt]', '\\setlength{\\tabcolsep}{3pt}', '\\fontsize{9}{11}', '\\noalign{\\vskip 4mm}', '\\tabularnewline[2pt]', '\\vspace*{-2mm}', '\\renewcommand\\arraystretch{1.1}', '\\cmidrule(lr){2-5}', '\\vskip 3pt plus 1fil', '\\looseness=-1', '\\parindent 0pt']) expect(textless(src), src).toBe(true)
     for (const src of ['\\LaTeX', '\\raisebox{-1pt}{x}', '\\textbf{x}', '\\cite[p.~5]{key}', '\\rule{0pt}', '\\rule{0pt}{2ex} text', '\\tabcolsep', '\\mymacro{1pt}']) expect(textless(src)).toBe(false)
     // a name may set ink: a reference's number, llncs' \inst mark, an image; a bare token too, \left's delimiter
     for (const src of ['\\ref{sec:a}', '\\inst{1}', '\\includegraphics[width=5cm]{a.png}', '\\left(', '\\section*']) expect(textless(src)).toBe(false)
   })
   it('never textless: a command that prints its argument, a number or a box, whatever its arguments\' types; \\noalign around one of them', () => {
+    // a value in TeX's syntax ends before a control word no register's: \\textbf here is the text's
+    for (const src of ['\\looseness = -1 \\textbf', '\\vskip 2pt\\textbf', '\\penalty-100\\LaTeX']) expect(textless(src), src).toBe(false)
+    expect(textless('\\hskip 2\\parindent')).toBe(true)
     for (const src of ['\\centerline{Title}', '\\leftline{x}', '\\rightline{x}', '\\uppercase{x}', '\\MakeTextUppercase{x}', '\\romannumeral 3', '\\number 12', '\\char 65', '\\unhbox\\mybox', '\\box0', '\\noalign{\\hbox{Group A}}', '\\detokenize{x}', '\\halign{#\\cr x\\cr}']) expect(textless(src), src).toBe(false)
   })
   it('a command the paper defines is its own: never textless, never read by the table (paperOf)', () => {

@@ -289,10 +289,15 @@ export function textArgsOf(src, paper = null) {
     if (!params?.length) { out += src.slice(i, end); i = end; continue }
     const { args, end: e } = readArgs(src, end, params)
     out += src.slice(i, end)
-    let kept = false
+    let kept = false, at = end
     for (const a of args) {
+      const gap = src.slice(at, a.start)
+      at = a.end
       if (!MAY_BE_TEXT.has(a.role)) continue
       const inner = src.slice(a.start, a.end)
+      // the space before a kept argument stays: a token given bare is no part of the control word's name
+      // ($\\mathcal O$, not $\\mathcalO$)
+      out += /^\s*$/.test(gap) ? gap : ''
       out += a.shape === '[' ? `[${textArgsOf(inner.slice(1, -1), paper)}]` : inner.startsWith('{') ? `{${textArgsOf(inner.slice(1, -1), paper)}}` : textArgsOf(inner, paper)
       kept = true
     }
@@ -319,7 +324,7 @@ const TEXTLESS = new Set([
 ])
 /**
  * Whether a placeholder can never be a text rendering: its source one command of TEXTLESS, its arguments all there as
- * the table reads them and nothing after them. What it sets, if anything (a rule's bar), is the page's own drawing,
+ * the table reads them and nothing after them, or a register's assignment (\\looseness=-1, \\parindent 0pt). What it sets, if anything (a rule's bar), is the page's own drawing,
  * never letters. Anything else is not textless: a command the table does not know, one whose arguments it cannot read,
  * one a paper defines itself (`paper`, paperOf: its \\rule is its own), one that prints its argument or a number
  */
@@ -328,11 +333,14 @@ export function textless(src, paper = null) {
   const s = src.trim().replace(/^(\\cmidrule\s*(?:\[[^\]]*\]\s*)?)\([^()]*\)/, '$1')
   if (!/^\\[A-Za-z@]+/.test(s)) return false
   const { name, end } = commandAt(s, 0)
-  if ((!TEXTLESS.has(name) && name !== 'noalign') || paper?.own.has(name)) return false
+  if ((!TEXTLESS.has(name) && name !== 'noalign' && paperParams(name, paper) !== REGISTER) || paper?.own.has(name)) return false
   const params = paperParams(name, paper)
   if (!params?.length) return false
+  // a control word in a value in TeX's own syntax is a register's, or the value ends before it (\\looseness=-1\\textbf)
+  const registers = v => [...v.matchAll(/\\([A-Za-z@]+)/g)].every(m => paperParams(m[1], paper) === REGISTER)
+  if (params === REGISTER) { const m = TEX_VALUE.exec(s.slice(end)); return !!m && /\S/.test(m[0]) && !s.slice(end + m[0].length).trim() && registers(m[0]) }
   const { args, end: e, complete } = readArgs(s, end, params)
-  if (!complete || s.slice(e).trim()) return false
+  if (!complete || s.slice(e).trim() || !args.every(a => a.shape !== '_' || s[a.start] === '{' || registers(s.slice(a.start, a.end)))) return false
   if (name !== 'noalign') return true
   const inner = args[0] ? s.slice(args[0].start, args[0].end).replace(/^\{([\s\S]*)\}$/, '$1').trim() : ''
   return !inner || textless(inner, paper)
