@@ -315,7 +315,15 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 //    text —; and an accent inside a word its letter in the word's text, the accent as written wherever the source is
 //    set (latex-front.mjs accentLetter) — El Ni{\~n}o went out as `El Ni @d#@e#@f# o`; 267 units in 40 of the
 //    corpus's 124 papers hold such a word. A copy of 7 carries its other units over (PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '8'
+// 9: every piece of typeset body text a unit, as TeX reads the source (the front end's round of 2026-10-06): the
+//    document's bounds as TeX finds them (latex-front.mjs documentBounds — ResNet's appendix C, 2608.11084's and
+//    2608.23517's bodies), the title TeX keeps, the preamble's front matter (frontMatter), arguments read by the role
+//    table (arg-roles.mjs: the group no command takes walked, a command's text and a box's content walked), theorems'
+//    titles, a macro's prose body (storedBodies), a web address a placeholder. Of the 25,097 units of the corpus's 117
+//    papers 1,107 are new or cut anew; 2,103 are the same but for their pairs' numbers, and seedFrom finds their copy's
+//    translation again (cache.mjs). Nothing is sent or read back otherwise: a copy of 8 carries over every unit it holds
+//    the source of (PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '9'
 /**
  * The earlier pipelines whose copies carry their translations over into this one, unit by unit (cache.mjs copyReuse),
  * each with the test a unit's translation, its pieces, must pass: DESIGN §5.5's rule for the HTML page's cache, here per
@@ -328,8 +336,10 @@ export const PIPELINE_VERSION = '8'
  *   (mt.mjs rehydrate); TeX's `#` is never the text's own (`\#` and a bare `#` are placeholders), so a translation whose
  *   text holds no `\#` was read back as this pipeline reads it, its sentences too. Units of 7 that fix 2 or 4 cut anew
  *   (a citation's notes, an accent in a word) have new hashes
+ * - 8: 9 changes what a unit is, not what is sent for one or made of its answer: every translation of 8 is one 9
+ *   would make of the same pieces
  */
-export const PIPELINE_CARRIES = { 7: pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#')) }
+export const PIPELINE_CARRIES = { 7: pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#')), 8: () => true }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a
