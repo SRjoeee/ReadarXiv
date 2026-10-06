@@ -141,7 +141,8 @@ export function glyphsOfChars(chars, ink, page) {
  * The layout file's ownership of a page's glyphs and rules (the maker's rule, from what the file holds): a glyph is the
  * line's whose baseline it stands on within a script's window, inside the line's extent across and one of its erase
  * rectangles, outside every kept rectangle (a display's segments, a label), the nearest by baseline where two lines would
- * take it; a blank glyph (no Unicode: a big bracket) is also a line's inside one of its inline placeholders' segments. A
+ * take it; a blank glyph (no Unicode: a big bracket) is also a line's inside one of its inline placeholders' segments; and
+ * a glyph no line takes inside an inline placeholder's segment is that placeholder's (a deep subscript). A
  * line's glyph inside one of its unit's inline placeholders' segments on that line is that placeholder's; a rule (a
  * painted path) inside an inline placeholder's segment is its. Returns { owner (glyph -> unit id, -1), ph (glyph -> the
  * placeholder's source index k, -1), paths: Map(box index -> { id, k }), linePaths: Map(box index -> unit id) }: a rule
@@ -184,7 +185,13 @@ export function fileOwnership(index, page, ink) {
       best = l
       d = dy
     }
-    if (best < 0) continue
+    if (best < 0) {
+      // a glyph no line takes that lies inside an inline placeholder's segment is that placeholder's: a subscript set
+      // deeper than a script's window of its line (1706.03762's 1/√d_k, whose k the crop lacked and left standing)
+      const seg = segs.find(s => inBox(mid, cy, s.x0, s.bottom, s.x1, s.top, x.blank ? 0.3 : 0.1))
+      if (seg) { owner[g] = seg.id; ph[g] = seg.k }
+      continue
+    }
     const L = lines[best]
     owner[g] = L.id
     for (const s of segs) if (s.id === L.id && Math.abs(s.base - L.base) < 0.5 && inBox(mid, cy, s.x0, s.bottom, s.x1, s.top, x.blank ? 0.3 : 0.1)) { ph[g] = s.k; break }
