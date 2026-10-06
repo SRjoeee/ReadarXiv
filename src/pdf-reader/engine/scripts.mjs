@@ -138,7 +138,27 @@ const FACES = {
  *  (2608.12333). The source is English in v1 (TranslateRequest.source) */
 const babelTags = lang => { const l = new Intl.Locale(lang); return [...new Set([lang, `${l.language}-${l.maximize().script}`, l.language])] }
 const provide = ([tag, ...rest], opts) => (rest.length ? `\\IfFileExists{babel-${tag}.ini}{\\babelprovide[import=${tag},main${opts}]{axttarget}}{${provide(rest, opts)}}` : `\\babelprovide[import=${tag},main${opts}]{axttarget}`)
-const babel = (lang, hyphenrules) => `\\IfPackageLoadedTF{polyglossia}{}{\\IfPackageLoadedTF{babel}{}{\\usepackage[safe=none]{babel}}${provide(babelTags(lang), hyphenrules ? `,hyphenrules=${hyphenrules}` : '')}}\n`
+const babel = (lang, hyphenrules) => `\\IfPackageLoadedTF{polyglossia}{}{\\IfPackageLoadedTF{babel}{}{\\usepackage[safe=none]{babel}}${provide(babelTags(lang), hyphenrules ? `,hyphenrules=${hyphenrules}` : '')}}\n${SIUNITX_LOCALE}`
+/**
+ * With the target's locale the document's: siunitx 3.6.2 (2026-09-18) reads the locale's decimal marker from babel's ini
+ * file at \begin{document}, and where babel-<language>-<script>.ini is there it opens babel-<script>-<region>.ini, which
+ * no locale has — Chinese is babel-zh-Hans.ini and babel-zh-Hant.ini, and a paper that loads siunitx stopped at "File
+ * 'babel-Hans-.ini' not found" in zh and zh-Hant (2307.16209 in TeX Live's image; josephwright/siunitx#891, fixed in
+ * 3.6.3 on 2026-09-28; the TeX page's tree has 3.4.14, without the lookup). A file the lookup names that is not there is
+ * passed over, whatever the version: siunitx's own default, the full stop, is the decimal marker of both Chinese files,
+ * as 3.6.3 reads them, and a siunitx without the lookup has no such function
+ */
+const SIUNITX_LOCALE = String.raw`\ExplSyntaxOn
+\cs_if_exist:NT \__siunitx_locale_setup:n
+  {
+    \cs_if_exist:NF \__axt_siunitx_locale_setup:n
+      {
+        \cs_new_eq:NN \__axt_siunitx_locale_setup:n \__siunitx_locale_setup:n
+        \cs_set_protected:Npn \__siunitx_locale_setup:n #1 { \file_if_exist:nT {#1} { \__axt_siunitx_locale_setup:n {#1} } }
+      }
+  }
+\ExplSyntaxOff
+`
 /** After fontspec: the fonts declared from here on carry exactly the features given them. A paper's class may set
  *  fontspec's defaults for its own faces — newtxtext, which AAAI's style loads, sets Extension=.otf under XeTeX — and
  *  every font declared later inherits them: a .ttf face (bsmi00lp, ipaexm, UnBatang) is then looked for as .otf and
@@ -208,6 +228,28 @@ const MT_SLOT = String.raw`\makeatletter\ExplSyntaxOn
 \ExplSyntaxOff\makeatother
 `
 
+/**
+ * Under CJKutf8 a translated character is a run of active bytes, its first a macro that reads the others. LaTeX's case
+ * changing (\MakeUppercase, \MakeLowercase: the kernel's \text_expand:n) expands every active character but a protected
+ * one or one of inputenc's own (\UTFviii@…octets), and CJK's are neither: a class that uppercases a translated heading
+ * or running head stopped TeX at "Extra \else" (2307.16209's abntex2, its running heads; the standard book and report,
+ * memoir and acmart uppercase theirs too). In the CJK environment each first byte is made protected, its meaning as CJK
+ * gave it: the case changers pass it by, the character is set as before, and the PDF's text, its bookmarks and its
+ * contents lists come out as they did (spikes/tex-path-cases.mjs). The \lccode the loop borrows is given back
+ */
+const CJK_PROTECTED = String.raw`\makeatletter\ExplSyntaxOn
+\cs_gset_protected:Npn \__axt_cjk_protect:N #1
+  {
+    \bool_lazy_and:nnT { \token_if_macro_p:N #1 } { ! \token_if_protected_macro_p:N #1 }
+      { \tl_if_empty:eT { \cs_parameter_spec:N #1 } { \exp_args:NNo \cs_set_protected_nopar:Npn #1 {#1} } }
+  }
+\cs_gset_eq:NN \axt@cjk@protect \__axt_cjk_protect:N
+\ExplSyntaxOff
+\begingroup\catcode126=13
+\gdef\axtcjkprotect{\@tempcnta\lccode126 \count@"C2 \loop\lccode126=\count@\lowercase{\axt@cjk@protect~}\advance\count@\@ne\ifnum\count@<"F5 \repeat\lccode126=\@tempcnta}
+\endgroup\makeatother
+`
+
 /** the strategies to try for a paper, in order: { name, engine, xe, pre(fonts) → the preamble's addition, front → what
  *  goes before \documentclass (absent for nothing), leading — the factor on the paper's spacing inside translated units,
  *  absent for 1 } */
@@ -221,7 +263,7 @@ export function strategiesFor(meta, lang) {
     if (EIGHT_BIT.has(meta.compiler)) {
       // the floats still held at \\end{document} are set inside the CJK environment, before it closes: set after it, a
       // translated table held to the end had every character "not set up for use with LaTeX" (2608.25210)
-      const cjkutf8 = `\\usepackage{CJKutf8}\n\\AtBeginDocument{\\begin{CJK}{UTF8}{${cjk.cjkutf8}}}\n\\AtEndDocument{\\clearpage\\end{CJK}}\n`
+      const cjkutf8 = `\\usepackage{CJKutf8}\n${CJK_PROTECTED}\\AtBeginDocument{\\begin{CJK}{UTF8}{${cjk.cjkutf8}}\\axtcjkprotect}\n\\AtEndDocument{\\clearpage\\end{CJK}}\n`
       out.push({ name: 'pdfLaTeX + CJKutf8', engine: meta.compiler, xe: false, authors: false, ...lead, pre: () => cjkutf8 })
     }
     return out

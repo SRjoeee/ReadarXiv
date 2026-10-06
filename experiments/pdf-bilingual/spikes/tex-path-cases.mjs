@@ -59,6 +59,30 @@ const doc = (body, preamble = '') => `\\documentclass{article}\n${preamble}\\beg
   check('P: without it, XeTeX has no unit px: "Illegal unit of measure" (as the CJK finals failed)', !bare.ok && /Illegal unit of measure/.test(bare.log), bare.error)
 }
 
+// U: a translated heading a class uppercases (2307.16209's abntex2, its running heads; here book's), set under CJKutf8:
+// with each CJK byte protected the case changers pass it by; as CJK defines them, "Extra \else"
+{
+  const U = { 'main.tex': '\\documentclass{book}\n\\begin{document}\n\\chapter{Results of the study}\nWords of the chapter.\\newpage\nMore words of it.\\newpage\nAnd more.\n\\end{document}\n' }
+  const [, cjkutf8] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
+  const translate = paper => new Map(paper.units.filter(u => u.kind === 'heading').map(u => [u, [{ t: 'text', tr: true, s: '研究结果' }]]))
+  const fixed = compile('u-fixed', U, cjkutf8, { translate }), bare = compile('u-bare', U, cjkutf8, { translate, alter: tex => tex.replace('\\axtcjkprotect}', '}') })
+  check('U: a translated chapter title in book\'s uppercased running heads sets under CJKutf8', fixed.ok && !/Missing character/.test(fixed.log), fixed.error)
+  // what TeX stops at depends on the characters: the thesis's "Extra \\else", here an encoding's missing command
+  check('U: without the bytes protected, \\MakeUppercase expands them and TeX stops', !bare.ok && /^! /m.test(bare.log), bare.error || 'it set')
+}
+
+// S: a paper that loads siunitx, its locale Chinese (2307.16209 into zh under XeLaTeX): siunitx 3.6.2 opens
+// babel-Hans-.ini; with a file that is not there passed over, the document sets. Without, it stops — under 3.6.2 alone
+{
+  const S = { 'main.tex': doc('A number, \\num{1.5}, in a paragraph.', '\\usepackage{siunitx}\n') }
+  const [xe] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
+  const fixed = compile('s-fixed', S, xe), bare = compile('s-bare', S, xe, { alter: tex => tex.replace(/\\ExplSyntaxOn\n\\cs_if_exist:NT \\__siunitx_locale_setup:n[\s\S]*?\\ExplSyntaxOff\n/, '') })
+  const version = fixed.log.match(/^Package: siunitx \S+ (v[\d.]+)/m)?.[1] ?? '?'
+  check(`S: siunitx (${version}) with the target's locale Chinese sets`, fixed.ok, fixed.error)
+  if (version === 'v3.6.2') check('S: without it, siunitx 3.6.2 stops at "File \'babel-Hans-.ini\' not found" (as the thesis did)', !bare.ok && /babel-Hans-\.ini' not found/.test(bare.log), bare.error)
+  else console.log(`skip S without the fix: siunitx ${version} is not 3.6.2, the version with the misnamed file`)
+}
+
 rmSync(dir, { recursive: true, force: true })
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)

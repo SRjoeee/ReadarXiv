@@ -63,3 +63,26 @@ describe('P: pdfTeX\'s unit px, which XeTeX does not know, under XeLaTeX (1810.0
     expect(main(translationFiles(image(), new Map(), { strategy: es as never, fonts: null, draft: false }))).not.toContain('\\axt@pxkeys')
   })
 })
+
+describe('2307.16209 into zh: siunitx 3.6.2\'s locale file, and a heading uppercased under CJKutf8', () => {
+  const [xe, cjkutf8] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
+  it('S: wherever the target\'s locale is the document\'s, siunitx\'s lookup passes over a file that is not there (josephwright/siunitx#891)', () => {
+    for (const lang of ['zh', 'zh-Hant', 'ja', 'de', 'ru']) {
+      const pre = strategiesFor({ compiler: 'pdflatex' }, lang)[0]?.pre(null) ?? ''
+      const guard = pre.indexOf('\\cs_if_exist:NT \\__siunitx_locale_setup:n')
+      expect(guard).toBeGreaterThan(pre.indexOf('\\babelprovide'))
+      expect(pre.slice(guard)).toContain('\\file_if_exist:nT {#1} { \\__axt_siunitx_locale_setup:n {#1} }')
+    }
+  })
+  it('U: under CJKutf8 each CJK byte is made protected as soon as the CJK environment begins', () => {
+    const pre = cjkutf8?.pre(null) ?? ''
+    expect(pre).toContain('\\AtBeginDocument{\\begin{CJK}{UTF8}{gbsn}\\axtcjkprotect}')
+    expect(pre.indexOf('\\gdef\\axtcjkprotect')).toBeLessThan(pre.indexOf('\\AtBeginDocument'))
+    expect(pre).toContain('\\cs_set_protected_nopar:Npn #1 {#1}')
+    // the \lccode it borrows is given back
+    expect(pre).toMatch(/\\@tempcnta\\lccode126 [\s\S]*\\lccode126=\\@tempcnta\}/)
+  })
+  it('not under xeCJK, whose characters are XeTeX\'s own', () => {
+    expect(xe?.pre(null)).not.toContain('axtcjkprotect')
+  })
+})
