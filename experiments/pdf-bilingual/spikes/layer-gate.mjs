@@ -350,7 +350,8 @@ async function runFixture(page, name, errors) {
   // the text-removed PDF: the paper's add-on, made from its layout file alone (or cached), checked, and v0 opened over it
   const removal = REMOVAL ? await addonOf(name) : null
   if (removal) Object.assign(meta, { addon: removal.key })
-  const addon = removal ? { url: `/removal/${name}.pdf`, manifest: removal.manifest, plan: removal.plan } : null
+  // (--perf: what a reader is sent, the R set and its manifest, no plan)
+  const addon = removal ? (PERF ? { url: `/removal/${name}.pdf`, manifest: removal.shippedManifest, plan: null } : { url: `/removal/${name}.pdf`, manifest: removal.manifest, plan: removal.plan }) : null
   const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES, tex: TEX, params: PROTO_PARAMS, names: captionNames(target), removal: REMOVAL, addon, perf: PERF })
   if (!info.ready) { failures.push(name); return { name, ready: false, why: info.why, meta } }
   const n = Math.min(info.pages, PAGES ?? (ALL_PAGES.has(paper) ? info.pages : PAGES_OF))
@@ -417,7 +418,7 @@ function addonOf(name) {
   const bytes = new Uint8Array(readFileSync(pdfFile))
   const key = sha256([sha256(bytes), fileSha(layoutFile), removerDigest()].join('|')).slice(0, 24)
   if (!ADDON_RUNS.has(key)) ADDON_RUNS.set(key, makeAddonOf(key, bytes, layoutFile))
-  return ADDON_RUNS.get(key).then(a => { ADDONS.set(name, a.file); return a })
+  return ADDON_RUNS.get(key).then(a => { ADDONS.set(name, PERF ? a.shippedFile : a.file); return a })
 }
 /**
  * The paper's add-on made in memory (the server's step, after the layout maker): its plan from the layout file, the
@@ -481,8 +482,8 @@ const openNode = async data => (await import('pdfjs-dist/legacy/build/pdf.mjs'))
 
 async function makeAddonOf(key, bytes, layoutFile) {
   const dir = join(ROOT, 'out/layer-gate/removal', key)
-  const file = join(dir, 'combined.pdf')
-  if (!existsSync(join(dir, 'done.json'))) {
+  const file = join(dir, 'combined.pdf'), shippedFile = join(dir, 'shipped.pdf')
+  if (!existsSync(join(dir, 'done.json')) || !existsSync(shippedFile)) {
     mkdirSync(dir, { recursive: true })
     const { checkPage } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/remove.mjs'))
     const { pageInk } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/ink.mjs'))
@@ -497,7 +498,10 @@ async function makeAddonOf(key, bytes, layoutFile) {
     ms.check = performance.now() - t
     for (const d of [doc, comb]) { try { await d.loadingTask.destroy() } catch {} }
     writeFileSync(file, out.bytes)
+    // (and what a reader is sent: arXiv's PDF with the R set alone, and its manifest; --perf opens these)
+    writeFileSync(shippedFile, shipped.bytes)
     const shippedManifest = JSON.stringify(shipped.manifest)
+    writeFileSync(join(dir, 'shipped-manifest.json'), shippedManifest)
     const summary = {
       pages: N, planned: Object.keys(plan.pages).length, removed: Object.values(out.manifest.page).filter(x => x.ok).length, refused: Object.entries(out.manifest.page).filter(([, x]) => !x.ok && x.refused !== 'not planned').map(([p, x]) => [Number(p), x.refused]),
       appended: shipped.appended, appendedWithCheck: out.appended, manifestBytes: shippedManifest.length, manifestGzip: gzipSync(shippedManifest).length, outlines: collected.size,
@@ -513,7 +517,7 @@ async function makeAddonOf(key, bytes, layoutFile) {
   const pixels = TIER !== 'pixel' ? null : existsSync(pxFile) ? Promise.resolve(readJson(pxFile)) : new Promise((ok, fail) => {
     execFile(process.execPath, [join(GATE, 'removal-pixels.mjs'), file, join(dir, 'manifest.json'), pxFile], { maxBuffer: 1 << 24 }, e => (e ? fail(e) : ok(readJson(pxFile))))
   })
-  return { key, file, manifest: readJson(join(dir, 'manifest.json')), plan: readJson(join(dir, 'plan.json')), check: readJson(join(dir, 'check.json')), summary: readJson(join(dir, 'done.json')), pixels }
+  return { key, file, shippedFile, manifest: readJson(join(dir, 'manifest.json')), shippedManifest: readJson(join(dir, 'shipped-manifest.json')), plan: readJson(join(dir, 'plan.json')), check: readJson(join(dir, 'check.json')), summary: readJson(join(dir, 'done.json')), pixels }
 }
 
 /**

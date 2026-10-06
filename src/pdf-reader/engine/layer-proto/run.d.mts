@@ -4,7 +4,7 @@ import type { Rect } from './layer1.mjs'
 import type { Block2, Char, DrawOp, DrawSource, Layout, Params, Prepared, Token, Unit } from './layer2.mjs'
 import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
 import type { TexLines, Whole } from './tex.mjs'
-import type { RemovalManifest, RemovalPlan } from '../layout/remove.mjs'
+import type { RemovalManifest } from '../layout/remove.mjs'
 
 /** the made output's geometry (schema 1): the pages' views, each unit's [id, stream, rects] on the original, its kind */
 export interface Geometry { schema: number; kinds: string[]; left: { pages: number[][]; units: [number, number, Rect[]][] }; right?: unknown }
@@ -86,10 +86,10 @@ export interface RemovalOptions {
   OPS: Record<string, number>
   /** 'draw': drawn by the add-on */
   mode: 'draw'
-  /** arXiv's PDF with the paper's add-on, its manifest (each page's state and the kept ink under its units' rectangles) */
+  /** arXiv's PDF with the paper's add-on (it may be openProto's `doc` itself, one document), its manifest (arXiv's page
+   *  count, each page's state and the kept ink under its units' rectangles) */
   doc: { getPage(n: number): Promise<unknown> }
   manifest: RemovalManifest
-  plan?: RemovalPlan | null
 }
 export declare function openProto(o: {
   doc: { numPages: number; getPage(n: number): Promise<unknown> }

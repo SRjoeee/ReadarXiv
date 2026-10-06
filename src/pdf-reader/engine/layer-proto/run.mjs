@@ -106,16 +106,15 @@ export const layOrder = (placed, batch = 8) => layGroups(placed, batch).flatMap(
  * locates whole takes them; every other unit is v0's own. Null: v0 alone.
  * `copy`: whether each page's copy is kept at v0's own resolution (`right`), the plane the checker and the gate measure;
  * a view draws the page at its own (drawCopy) and needs none.
- * `removal` (the text-removed PDF, removal.mjs and layout/remove.mjs): { OPS (PDF.js's), mode: 'draw', doc, manifest,
- * plan }: `doc` is arXiv's PDF with the paper's add-on (its page sets at the manifest's places), one a paper whatever the
- * target, made from the layout file alone (removal.mjs pagePlan, `plan` where the host has it, to check this reading
- * against); the manifest's outline table gives each glyph its outline's box. On a page the manifest says is removed, a
- * unit the file locates whole is drawn by swapping the removed page's pixels in over the glyphs it replaces (swap.mjs
- * swapRects, over their outlines: no pixel is read) and cutting its crops from the original through their own glyphs'
- * outline boxes (layer2.mjs removalOps), a unit v0 reads on its own (the file's miss) alike over what the add-on removed of what its reading
- * accounts for; what a unit replaces that the add-on kept is erased over its own outline, no line whole. Every other
- * page is drawn the old way, erased and put back, but its table cells: a table's group there stays the original's (an
- * erase takes the table's rules). Null: v0's own drawing.
+ * `removal` (the text-removed PDF, removal.mjs and layout/remove.mjs): { OPS (PDF.js's), mode: 'draw', doc, manifest }:
+ * `doc` is arXiv's PDF with the paper's add-on appended (its page sets at the manifest's places), one a paper whatever the
+ * target, made from the layout file alone; it may be the `doc` v0 is given, the one document a reader opens (arXiv's own
+ * pages the manifest's count). On a page the manifest says is removed, a unit the file locates whole is drawn over the
+ * file's own rectangles (removal.mjs fileSwap: its lines' erase rectangles, its inline placeholders' segments, a label it
+ * draws in the target's name, less what its reading keeps), filled with paper, or the removed page swapped in where the
+ * manifest's `dirty` boxes say kept ink lies under them; its crops are cut from the original through their placeholders'
+ * segments (layer2.mjs removalOps). No ink is read and no pixel. A unit v0 reads on its own (the file's miss) is drawn
+ * the old way, erased and put back, as on a page the add-on did not remove. Null: v0's own drawing.
  * `labels`: { names, captions }, the target's names of a figure and a table (caption-names.mjs) and which of the two the
  * final names so (the record's `captions`, live.mjs captionsOf): a float's label is drawn in the target's name where the
  * final's is (layer2.mjs labelInTarget), else kept as the original's ink. A table's group (each record unit's `group`) is
@@ -138,7 +137,9 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   // original's is not), and of the CJK runs
   const STYLES = [[false, false], [true, false], [false, true], [true, true]]
   const roleIdsOf = (st, cls) => STYLES.flatMap(([bold, italic]) => faceOf({ ...st, fam: st.fam === 'math' ? 'serif' : st.fam, bold, italic }, cls, to).ids)
-  const N = Math.min(doc.numPages, pages)
+  // (arXiv's own pages: `doc` may be the paper with its add-on appended, one document a reader opens, whose sets follow
+  // them: the manifest's count)
+  const N = Math.min(removal?.manifest?.pages ?? doc.numPages, doc.numPages, pages)
 
   const rows = []
   for (let i = 1; i <= N; i++) {

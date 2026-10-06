@@ -251,7 +251,11 @@ window.gate = {
       // (layout: the instrument's, the fixture's own, whichever layout file the hybrid is given)
       ;[geometry, unitsFile, layout, fixtureUnits, data] = await Promise.all([json(`${base}geometry.json`), json(`${base}${which === 'p7' ? 'units-p7.json' : 'record.json'}`), json(`${base}kept-layout.json`), json(`${base}units.json`), bytes(`${base}arxiv.pdf`)])
     } catch (e) { return { ready: false, why: String(e?.message ?? e).slice(0, 200) } }
-    const doc = await pdfjs.getDocument({ data, ...PDF_ASSETS, ...V.PDF_OPTIONS }).promise
+    // (--perf, drawing by the add-on: as a reader opens it, one document, arXiv's pages and the add-on's appended to
+    // them, its fonts parsed once; neither the check's second reading nor the plan, which no reader has)
+    const one = perf && removal === 'draw' && addon
+    const combined = removal && addon ? await bytes(addon.url) : null
+    const doc = await pdfjs.getDocument({ data: one ? combined : data, ...PDF_ASSETS, ...V.PDF_OPTIONS }).promise
     // the hybrid (--proto-tex): the layout file given (the engine's own maker's, or the fixture's) read by the engine's
     // own reader, and the units file's pieces by unit, beside v0's own inputs
     let texIn = null
@@ -263,19 +267,21 @@ window.gate = {
     // (--perf: no copy of v0's own, as a reader opens it: the page's drawing is drawCopy's, at a view's resolution)
     const opts = { doc, geometry, units: unitsFile.units, target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(texIn ? { tex: texIn } : {}), labels: { names, captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`, ...(perf ? { copy: false } : {}) }
     let rm = null
-    if (removal && addon) {
-      const combined = await bytes(addon.url)
+    if (one) {
+      rm = { mode: removal, manifest: addon.manifest, plan: { pages: {} }, rdoc: doc, cdoc: null }
+      opts.removal = { OPS: pdfjs.OPS, mode: 'draw', doc, manifest: addon.manifest }
+    } else if (removal && addon) {
       const rdoc = await pdfjs.getDocument({ data: combined.slice(), ...PDF_ASSETS, ...V.PDF_OPTIONS }).promise
       const cdoc = await pdfjs.getDocument({ data: combined.slice(), ...PDF_ASSETS, ...V.PDF_OPTIONS, enableHWA: false }).promise
       rm = { mode: removal, manifest: addon.manifest, plan: addon.plan, rdoc, cdoc }
-      if (removal === 'draw') opts.removal = { OPS: pdfjs.OPS, mode: 'draw', doc: rdoc, manifest: addon.manifest, plan: addon.plan }
+      if (removal === 'draw') opts.removal = { OPS: pdfjs.OPS, mode: 'draw', doc: rdoc, manifest: addon.manifest }
     }
     // (v0 leaves its inputs as they were: checked when the fixture is done, summary's inputsChanged)
     const before = JSON.stringify([geometry, unitsFile.units])
     const run = await V.openProto(opts)
     S = { V, run, doc, geometry, layout, ref, name, target, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: new Map(run.placed.map(p => [p.id, p])), checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: () => JSON.stringify([geometry, unitsFile.units]) }, perf, texIndex }
     S.consistency = consistencyOf(unitsFile, S, names)
-    return { ready: true, pages: doc.numPages, units: unitsFile.units.length, located: geometry.left.units.length, family: null, even: run.P.even ?? null }
+    return { ready: true, pages: one ? run.N : doc.numPages, units: unitsFile.units.length, located: geometry.left.units.length, family: null, even: run.P.even ?? null }
   },
 
   /** how the run drew by the add-on (draw): pages removed and refused, units swapped and drawn the old way */
