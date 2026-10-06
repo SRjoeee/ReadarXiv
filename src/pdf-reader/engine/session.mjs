@@ -1101,17 +1101,26 @@ function alignTop(side) {
  * put it. Not by the driver: on the compositor a hover over the other side makes that one the driver, and the side
  * scrolled was thrown back (2,000 px); nor by a scroll PDF.js made by itself on the side of the driver (a zoom after a
  * hover threw the side scrolled back too). In the next frame, after the scroll events it brings: a scroll under way is
- * followed then (syncFrom), and its rest, or one already waited for, levels the pair itself. Nothing the reader
- * scrolled: nothing moves, and the follower is bound as at any rest (arm)
+ * followed then (syncFrom), and its rest levels the pair itself; a rest waited for since before the locate is called
+ * off. In the probes' Current mode, the other side is settled by it instead (settle). Nothing the reader scrolled:
+ * nothing moves, and the follower is bound as at any rest (arm)
  */
 function levelLocated() {
   invalidate()
   const name = readEarly
   readEarly = null
   lastLocated = name
+  // a rest still waited for is a scroll's that ended before the pair was located: the reader's, which the record names,
+  // or a scroll PDF.js made by itself on the driver (the copy put where the original is read, after a hover made the
+  // copy's pane the driver), whose rest would level the pair by it. The record decides (Codex on #322)
+  clearTimeout(follow.rest)
+  follow.rest = 0
   requestAnimationFrame(() => {
     const side = name === 'left' ? left : name === 'right' ? right : null
-    if (!side || follow.moving || follow.rest || !together() || !bothShown()) return arm()
+    if (!side || follow.moving || follow.rest || !bothShown()) return arm()
+    // the probes' Current mode: the other side put at the reading line's place, as after a scroll (settle)
+    if (syncMode === 'current') { take(side); return settle(side) }
+    if (!together()) return arm()
     take(side)
     alignTop(side)
   })

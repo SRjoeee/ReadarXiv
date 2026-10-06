@@ -33,8 +33,11 @@
 //      either side, by script and on the compositor. The side the pill moved is the side read;
 //   9. this machine's copy located, a side read by the wheel (the driver), then the other side's page pill, page 8
 //      typed, by script and on the compositor: the side the pill moved becomes the driver (goToPage), stays where the
-//      jump put it, and the other side follows to its matching place, within 2 px of level.
-// Rows 1–5 and 8 pass when the side was read before the pair was located, and once located and still for 700 ms: the side
+//      jump put it, and the other side follows to its matching place, within 2 px of level;
+//  10. the probes' Current mode (?sync=current, which the interface does not offer: the other side settled at the
+//      reading line's place after a scroll): a first visit, the source late, either side read early, as in row 1; once
+//      located, the other side is settled by it (both sides the original: level is the same place).
+// Rows 1–5, 8 and 10 pass when the side was read before the pair was located, and once located and still for 700 ms: the side
 // read stands where the reader put it, and the pair is within 2 px of level by it (the sync's own tolerance,
 // level-on-screen.mjs). No TeX page is needed (a first visit stops at its compile, after its row is read), and nothing
 // leaves this machine: every request off it is stopped, and named at the end.
@@ -59,8 +62,8 @@ const [PIPELINE, TYPESETTING] = ['PIPELINE_VERSION', 'TYPESETTING_VERSION'].map(
 // ONLY=<rows' numbers, by commas> runs those alone
 const only = process.env.ONLY ? process.env.ONLY.split(',').map(Number) : null
 const wanted = n => !only || only.includes(n)
-let failed = 0
-const row = (ok, name, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name} — ${detail}`); if (!ok) failed++ }
+let failed = 0, ran = 0
+const row = (ok, name, detail) => { ran++; console.log(`${ok ? 'PASS' : 'FAIL'} ${name} — ${detail}`); if (!ok) failed++ }
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 // arXiv's two paths, /src/<id> and /pdf/<id>, from the corpus, the source `late` ms late; /demo/<id>/<file>, the demo's
@@ -81,7 +84,7 @@ const { context, readerUrl } = await launchWithReader({ profile: 'early-scroll',
 // the TeX page's address is the corpus's, which has none: a first visit stops at its compile
 const away = []
 await context.route(url => !/^(chrome-extension:|data:|blob:|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(url.href), r => { away.push(r.request().url()); return r.abort() })
-const urlOf = compositor => readerUrl({ paper, live: '1', mode: 'bilingual', site: at, endpoint: at, src: `${at}/src/${paper}`, pdf: `${at}/pdf/${paper}`, ...(compositor ? {} : { compositor: '0' }) })
+const urlOf = (compositor, sync = null) => readerUrl({ paper, live: '1', mode: 'bilingual', site: at, endpoint: at, src: `${at}/src/${paper}`, pdf: `${at}/pdf/${paper}`, ...(compositor ? {} : { compositor: '0' }), ...(sync ? { sync } : {}) })
 
 /** in the page before its own code: `side` read in the frame after a first page is drawn (`first`: the right's, or the
  *  left's) — a wheel event, then `share` of its range —, or, with no share, only the time of that frame; the pointer then
@@ -134,13 +137,13 @@ async function still(page) {
 /** a visit, `side` read early in the frame after the right's first page, or by the wheel (`wheel`, after `before` read
  *  so), the pointer then moved over `pointerTo`, then a zoom (`zoom`): once the pair is located and both sides still for 700 ms, where the side
  *  read stands against where the reader put it (after the zoom), and how far the pair is from level by it */
-async function visit(side, compositor, { wheel = false, pill = null, pointerTo = null, zoom = false, before = null, first = 'rightFirstPage', slower = 0 } = {}) {
+async function visit(side, compositor, { wheel = false, pill = null, pointerTo = null, zoom = false, before = null, first = 'rightFirstPage', slower = 0, sync = null } = {}) {
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', e => errors.push(e.message))
   if (slower) await (await context.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: slower })
   await page.addInitScript(readEarly, [side, wheel || pill ? null : SHARE, first, wheel || pill ? null : pointerTo])
-  await page.goto(urlOf(compositor))
+  await page.goto(urlOf(compositor, sync))
   if (wheel || pill) {
     await page.waitForFunction(() => window.__early?.at != null, null, { timeout: 60_000, polling: 'raf' })
     if (before) {
@@ -222,6 +225,15 @@ if (wanted(8)) {
       const after = await visit(side, compositor, { pill: 'next', before: other })
       row(passes(after) && after.top > 0, `8. a first visit, the source late, a wheel on the ${other}, then the ${side}'s page pill, its next button (${by})`, show(after))
     }
+  }
+}
+
+// 10: the probes' Current mode (?sync=current: the other side put at the reading line's place, by a settle after the
+// scroll): a side read early, on a first visit with the source late; once located, the other side is settled by it
+if (wanted(10)) {
+  for (const side of ['right', 'left']) {
+    const e = await visit(side, false, { sync: 'current' })
+    row(passes(e), `10. a first visit, the source late, the ${side} read early, Current mode`, show(e))
   }
 }
 
@@ -331,5 +343,7 @@ if (copied && wanted(9)) {
 if (away.length) console.log(`stopped on their way off this machine: ${[...new Set(away.map(u => new URL(u).origin))].join(', ')}`)
 await context.close()
 corpus.close()
-console.log(failed ? `${failed} FAIL` : 'every row PASS')
+// a selection that ran nothing (a row's precondition skipped) is no pass (Codex and Devin on #322: ONLY=7 once ran nothing)
+if (!ran) row(false, 'rows run', `none of ${only ? `ONLY=${only.join(',')}` : 'the rows'} ran`)
+console.log(failed ? `${failed} FAIL` : `every row PASS (${ran})`)
 process.exit(failed ? 1 : 0)
