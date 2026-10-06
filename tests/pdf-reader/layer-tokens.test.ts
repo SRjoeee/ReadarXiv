@@ -126,7 +126,7 @@ describe('placeholders', () => {
     expect(seen).toEqual([[1, 200, 698, 220, 710]])
     // the page text is drawn in the run's face, at its measure
     const page = tokens.find(t => t.mode === 'page-text')!
-    expect(page).toMatchObject({ face: 'termes-regular', script: 'latin', w: 100, ph: 3 })
+    expect(page).toMatchObject({ face: 'termes-regular', script: 'latin', w: 1, ph: 3 })
   })
 
   it('a formula after a space is not glued, and one before CJK text is not either', () => {
@@ -187,6 +187,32 @@ describe('placeholders', () => {
     for (const cls of ['math', 'cite', 'ref', 'eqref', 'code', 'url', 'footnote']) expect(run([[0, 'a '], [1, 2]], { classOf: () => cls }), cls).toBeNull()
   })
 
+  it('a missing row draws nothing, and where the unit\'s source says it has ink, the unit stays the original\'s', () => {
+    // the layout maker writes a row for every visible placeholder, found or LOST: a piece with none is an invisible one
+    expect(need([[0, 'a '], [1, 9], [0, ' b']]).map(t => t.kind)).toEqual(['text', 'space', 'text'])
+    // classOf, given, is a defence: a class with ink for a k with no row is no invisible piece
+    const asked: number[] = []
+    for (const cls of ['math', 'cite', 'ref', 'eqref', 'code', 'url', 'footnote']) {
+      expect(run([[0, 'a '], [1, 9]], { classOf: k => { asked.push(k); return cls } }), cls).toBeNull()
+    }
+    expect(new Set(asked)).toEqual(new Set([9]))
+    // a class with no ink, or none known, leaves the piece invisible
+    for (const classOf of [() => null, () => 'macro', () => 'other']) expect(run([[0, 'a '], [1, 9]], { classOf })).not.toBeNull()
+    // a k that has a row is read from its row, whatever classOf says
+    const rows = { 2: ph('math', 0, [1, 100, 700, 130, 710, 698]) }
+    expect(need([[0, 'a '], [1, 2]], { unit: { ph: rows }, classOf: () => 'macro' }).at(-1)?.mode).toBe('crop')
+    expect(need([[0, 'a '], [1, 2]], { unit: { ph: rows }, classOf: () => 'math' }).at(-1)?.mode).toBe('crop')
+  })
+
+  it('every kind of token has its width in ems: at a size f it is w times f', () => {
+    const tokens = need([[0, 'ab '], [1, 2], [0, ' ('], [1, 3], [0, ')']], { unit: { ph: { 2: ph('math', 0, [1, 100, 700, 130, 710, 698]), 3: ph('cite', 0, [1, 200, 700, 220, 710, 698]) } }, textIn: () => '[1]' })
+    // a text of two Latin characters (the fake measure's 100 at 100 px) is 1 em, a space a quarter, a formula of 30 units
+    // in a unit of size 10 is 3, page text of one character 0.5 em after its brackets are dropped
+    expect(tokens.map(t => [t.kind, t.mode ?? null, t.w])).toEqual([
+      ['text', null, 1], ['space', null, 0.25], ['ph', 'crop', 3], ['space', null, 0.25], ['text', null, 0.5], ['ph', 'page-text', 0.5], ['text', null, 0.5],
+    ])
+  })
+
   it('an invisible placeholder draws nothing', () => {
     // a placeholder with no row, whose class has no ink, or whose class nothing says
     for (const classOf of [undefined, () => null, () => 'macro']) {
@@ -216,8 +242,8 @@ describe('the characters', () => {
       ['\u6211', 'cjk'], ['\u4eec', 'cjk'], ['\u4f7f', 'cjk'], ['\u7528', 'cjk'], ['BERT', 'latin'], ['\u6a21', 'cjk'], ['\u578b', 'cjk'], ['\uff0c', 'cjk'],
       ['\u201c', 'cjk'], ['ok', 'latin'], ['\u201d', 'cjk'], ['.', 'latin'],
     ])
-    // each CJK character is measured by itself, a Latin word whole
-    expect(tokens.map(t => t.w)).toEqual([100, 100, 100, 100, 200, 100, 100, 100, 100, 100, 100, 50])
+    // each CJK character is measured by itself, a Latin word whole, every width in ems: the fake measure's 100 px is 1
+    expect(tokens.map(t => t.w)).toEqual([1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 0.5])
     // curly quotes are CJK in Chinese and Japanese only
     expect(texts(need([[0, '\u201cok\u201d']], { target: 'ja' })).map(t => t.script)).toEqual(['cjk', 'latin', 'cjk'])
     expect(texts(need([[0, '\u201cok\u201d']], { target: 'ko' })).map(t => t.script)).toEqual(['latin'])

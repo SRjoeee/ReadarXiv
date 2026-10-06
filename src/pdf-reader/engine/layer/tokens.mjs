@@ -248,7 +248,8 @@ function build(pieces, o) {
     const key = `${face}|${caps ? 1 : 0}|${text}`
     let w = widths.get(key)
     if (w === undefined) {
-      w = measure(text, face, caps)
+      // Measure gives a width at 100 px: a token's width is in ems, so that at a size f it is w * f for every kind of token
+      w = measure(text, face, caps) / 100
       if (!Number.isFinite(w) || w < 0) throw UNDRAWABLE
       widths.set(key, w)
     }

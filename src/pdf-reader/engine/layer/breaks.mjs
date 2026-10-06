@@ -23,12 +23,11 @@ const CJK_BREAKING = new Set(['Hans', 'Hant', 'Jpan'])
 const cpLength = s => { let n = 0; for (let i = 0; i < s.length; i++) if ((s.charCodeAt(i) & 0xfc00) !== 0xdc00) n++; return n }
 const inline = t => t.kind === 'text' || t.kind === 'ph'
 
-/** a token's width at size f: its measure at 100 px, its characters' tracking (CJK) or letter spacing (Latin) added; a crop's
- *  width is in PDF units at size 1 */
+/** a token's width at size f: its width in ems times f, its characters' tracking (CJK) or letter spacing (Latin) added */
 function widthAt(t, f, state) {
-  if (t.kind === 'text') return (t.w * f) / 100 + (t.script === 'cjk' ? state.track : state.letter) * f * cpLength(t.s)
-  if (t.kind === 'space') return (t.w * f) / 100
-  if (t.kind === 'ph') return t.mode === 'crop' ? t.w * f : (t.w * f) / 100 + state.letter * f * cpLength(t.s)
+  if (t.kind === 'text') return t.w * f + (t.script === 'cjk' ? state.track : state.letter) * f * cpLength(t.s)
+  if (t.kind === 'space') return t.w * f
+  if (t.kind === 'ph') return t.mode === 'crop' ? t.w * f : t.w * f + state.letter * f * cpLength(t.s)
   return 0
 }
 
@@ -92,7 +91,7 @@ export function breakLines(tokens, slots, f, state, o) {
     for (const t of group) {
       const it = { t, w: widthAt(t, f, state), x: 0, shift: 0, asp: 0 }
       if (t.kind === 'space') spaces += it.w
-      const meta = { half: t.punct ? (t.w * f) / 200 : 0, cut: false }
+      const meta = { half: t.punct ? (t.w * f) / 2 : 0, cut: false }
       if (t.asp && pv && pv.t.kind !== 'space') it.asp = autospace
       if (t.punct && compress >= 2) {
         it.w -= meta.half
@@ -132,8 +131,8 @@ export function breakLines(tokens, slots, f, state, o) {
     const exact = t.s.length === t.len
     const head = { ...t, s: t.s.slice(0, cut) + suffix, len: exact ? cut : t.len }
     const tail = { ...t, s: t.s.slice(cut), at: exact ? t.at + cut : t.at + t.len, len: exact ? t.len - cut : 0 }
-    head.w = measure(head.s, t.face, t.caps)
-    tail.w = measure(tail.s, t.face, t.caps)
+    head.w = measure(head.s, t.face, t.caps) / 100
+    tail.w = measure(tail.s, t.face, t.caps) / 100
     delete head.hyph
     delete tail.glue
     delete tail.asp

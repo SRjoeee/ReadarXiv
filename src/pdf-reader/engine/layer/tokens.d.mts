@@ -15,8 +15,9 @@ export interface Token {
   s?: string                     // text: its characters as drawn (a ligature as its one character, a hyphenated piece with its hyphen)
   script?: 'cjk' | 'latin'
   face?: FaceId; caps?: boolean
-  /** at 100 px, as Measure gives it; for a crop, its width in PDF units at size 1 (its segments' width over the
-   *  unit's size), so that at a size f it is `w * f`; 0 for a break and a block */
+  /** its width in ems, so that at a size f (PDF units) it is `w * f` for every kind of token: a text, a space or page text
+   *  as Measure gives it (at 100 px) over 100, a crop its segments' width over the unit's own size; 0 for a break and a
+   *  block. Tracking, letter spacing and compression are the line breaker's, on top */
   w: number
   glue?: boolean                 // no break before it (a space: no break at it, kinsoku across a space)
   punct?: 'open' | 'close'       // a full-width mark (compressible)
@@ -40,9 +41,14 @@ export declare const COMPRESS_OPEN: string
 export declare function hyphenCore(text: string): { lead: number; core: string } | null
 
 /**
- * A unit's translation as tokens, or null where it cannot be drawn: a k with no visible rendering it needs, a character
- * no face holds, a unit with no lines. `classOf` names the class of a source piece the layout has no row for (marks.mjs's
- * classes): where it says a class that has ink, the unit is not drawn; without it, such a piece is an invisible one
+ * A unit's translation as tokens, or null where it cannot be drawn: a placeholder the layout lost (a LOST row), a character
+ * no face holds, a unit with no lines.
+ *
+ * A `[1, k]` with no `ph` row draws nothing: the layout maker writes a row for every visible placeholder, found or LOST, so
+ * a piece with none is an invisible one. `classOf` is a defence against a maker that did not: given, it names the class of
+ * a source piece (marks.mjs's classes), and where it says a class that has ink (math, cite, ref, eqref, code, url,
+ * footnote) for a `k` with no row the result is null, the unit staying the original's, never "invisible". A `k` that has a
+ * row is read from the row whatever `classOf` says.
  */
 export declare function tokensOf(pieces: readonly TrPiece[], o: {
   unit: LayoutUnit; file: LayoutIndex; target: string; rules: LayerRules; roles: RoleSet; measure: Measure; hyphen: Hyphenator | null

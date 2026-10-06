@@ -183,7 +183,7 @@ describe('Korean and the alphabets', () => {
     expect(b.lines.slice(1).map(l => [l.items[0]!.t.at, l.items[0]!.t.len])).toEqual([[3, 4], [7, 4], [11, 2]])
     // the pieces are tokens of the result, the whole word is not
     expect(b.tokens.map(t => t.s ?? ' ')).toEqual(['ab', ' ', 'abcd', 'efgh', 'ij'])
-    expect(b.tokens.slice(2).map(t => t.w)).toEqual([200, 200, 100])
+    expect(b.tokens.slice(2).map(t => t.w)).toEqual([2, 2, 1])
     expect(b.rest).toBe(0)
   })
 
@@ -204,8 +204,8 @@ describe('hyphenation', () => {
     expect(texts(b)).toEqual(['ein Donau-', 'dampfschiff fuhr'])
     // the first piece takes the offsets of its letters and no more: its hyphen is drawn, not in the text
     const [head, tail] = [b.lines[0]!.items[2]!.t, b.lines[1]!.items[0]!.t]
-    expect([head.s, head.at, head.len, head.w]).toEqual(['Donau-', 4, 5, 300])
-    expect([tail.s, tail.at, tail.len, tail.w]).toEqual(['dampfschiff', 9, 11, 550])
+    expect([head.s, head.at, head.len, head.w]).toEqual(['Donau-', 4, 5, 3])
+    expect([tail.s, tail.at, tail.len, tail.w]).toEqual(['dampfschiff', 9, 11, 5.5])
     expect(b.tokens).toHaveLength(tokens.length + 1)
     expect(b.rest).toBe(0)
     // the head carries no mark of a word to hyphenate, the tail still does
