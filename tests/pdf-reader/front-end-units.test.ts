@@ -157,6 +157,15 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
   })
 })
 
+describe('a line of names a translation may widen goes into \\axtwide, but not one that ends a table\'s row', () => {
+  it('authblk\'s \\authorcr (2608.03994, its authors reached through the preamble\'s \\input): set in a box, it stopped TeX at \\maketitle', () => {
+    const p = project(doc('\\maketitle\nBody.', '\\author[1]{Christopher Schroeder}\n\\author[4]{\\authorcr Martin Potthast}'))
+    const tex = patched(p)
+    expect(tex).toMatch(/\\author\[1\]\{\\axtwide\{<T0>\}\}/)
+    expect(tex).toMatch(/\\author\[4\]\{\\authorcr(?:\{\}| )<T1>\}/)
+  })
+})
+
 describe('a theorem\'s title is the reader\'s text (the coverage policy: 309 titles of 29 papers stayed English)', () => {
   it('\\begin{theorem}[Convergence of X]: a heading of its own before the theorem\'s body, translated in its brackets', () => {
     const p = project(doc('\\begin{theorem}[Convergence of the scheme]\nThe scheme converges.\n\\end{theorem}\n\\begin{proof}[Proof of Theorem~\\ref{t}]\nBy induction.\n\\end{proof}', '\\newtheorem{theorem}{Theorem}'))

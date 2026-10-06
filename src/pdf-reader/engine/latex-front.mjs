@@ -1626,9 +1626,11 @@ export const markUnits = (units, translated = null) => {
  *  article and IEEEtran set their author blocks) a line the translation made wider than the page is set as a paragraph
  *  of the line's width instead (2608.06701: Japanese names ran 126 pt past the page). Not one that breaks its own lines
  *  or holds a note: \\axtwide sets its argument twice to measure it, and a \\thanks set twice is kept twice; nor one
- *  that holds \\and, which in article ends the table the names are set in, and cannot be set inside a box */
+ *  that holds \\and, which in article ends the table the names are set in, and cannot be set inside a box; nor any
+ *  other row's end of a table's (authblk's \\authorcr: 2608.03994's authors, an \\author{\\authorcr …} in a box,
+ *  stopped TeX at \\maketitle with a hundred "Missing } inserted") */
 const AUTHOR_WIDE = { start: '\\axtwide{', end: '}', whole: true }
-const fitsWide = u => !u.pieces.some(p => p.t === 'nested' || (p.t === 'ph' && /\\(?:\\|newline|linebreak|par|thanks|footnote|footnotemark|and|And|AND)(?![A-Za-z@])|^\\\\/.test(p.src ?? '')))
+const fitsWide = u => !u.pieces.some(p => p.t === 'nested' || (p.t === 'ph' && /\\(?:\\|newline|linebreak|par|thanks|footnote|footnotemark|and|And|AND|authorcr|cr|crcr|tabularnewline)(?![A-Za-z@])|^\\\\/.test(p.src ?? '')))
 
 /** Goes before \\begin{document} of the original's own compile: the log then says which font families the document set
  *  for its roles, however it set them (its class, a package, a conference style) */
