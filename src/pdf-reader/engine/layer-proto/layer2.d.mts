@@ -10,6 +10,12 @@ export interface Params {
   cjk: boolean; leadBase: number; leadFloor: number; trackMin: number; compressMax: number; borrow: number; borrowGap: number
   floor: number; step: number; grid: number; order: string[]; cjkJust: number; spaceMax: number; autospace: number; spaceMin: number
   hyphen: number; even?: number; maxScale?: number; _compress?: number
+  /** step 3: the further steps for a unit the states leave clipped (run.mjs fitFurther), and the size the last goes down to */
+  further?: readonly ('widen' | 'flow' | 'shrink')[]; floorMin?: number; refuse?: number; flowPast?: boolean
+  /** step 3's leading, relative to the original's own pitch (leadOf); false: stacked on it, as before */
+  pitchLead?: boolean
+  /** step 3: the CJK runs' tracking the fit's first state takes (run.mjs: a face's size correction given back) */
+  trackStart?: number
 }
 /** a character of the original page: its box from its item (PDF units), its baseline and size, its item and place in it,
  *  its font's class */
@@ -126,7 +132,7 @@ export declare function texToText2(src: string): string
 export declare function phClass2(src: string): { cls: string; unknown?: boolean }
 /** the unit's characters by its rectangles; `exact`: each rectangle's baseline and size where a layout file gives them */
 export declare function charsOfUnit2(rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], extents?: Map<Rect, number[]>, exact?: ReadonlyMap<Rect, { baseline: number; size: number }> | null): Char[]
-export declare function extendRects2(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, pageViews: readonly number[][]): number
+export declare function extendRects2(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, pageViews: readonly number[][], wordChars?: readonly (readonly Char[] | undefined)[]): number
 export declare function extendFirstLines(rects: Rect[], pageViews: readonly number[][], others: readonly (readonly Rect[] | undefined)[]): void
 export declare function blocksOf2(rects: readonly Rect[], pageViews: readonly number[][], keep?: ReadonlySet<string> | null, regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null): Block[]
 export declare function gapsOf2(unitChars: readonly Char[], src: string, deny?: ReadonlySet<string> | null): { text: string; chars: Char[] }[]
@@ -152,7 +158,8 @@ export declare function nearIn(letters: string, hay: string, src?: string): bool
 export declare const charKey: (c: { page?: number; item: number; k: number }) => string
 export declare function snapFirstRect(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[]): number | undefined
 export declare function snapFirstRect2(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[]): number | undefined
-export declare function extendRects(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown): number
+/** wordChars: the page's characters the first line may grow over the words its source begins with (step 3) */
+export declare function extendRects(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, wordChars?: readonly (readonly Char[] | undefined)[]): number
 /** a unit's translation as tokens; `.base` is its base style */
 export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, baseIn: Style, designs: { serif: string; sans: string; mono: string }, P: Params, lead?: { text: string; st: Partial<Style> } | null): Token[] & { base: Style }
 /** a float's label as the final sets it in the target: the target's name (capitals where the original's are), a space,
@@ -164,6 +171,12 @@ export declare function blocks2(rects: readonly Rect[], pageViews: readonly numb
 export declare function inkMapOf(canvas: HTMLCanvasElement | OffscreenCanvas, factor?: number): InkMap
 export declare function freeBelow(map: InkMap | undefined, toDev: ToDev, k: number, x0: number, x1: number, yStart: number, yLimit: number): number
 export declare const setHyphenData: (lang: string, data: Patterns | true | null) => Map<string, Patterns | true | null>
+/** a crop's baseline: its glyphs' at its line's text size, else its line's measured baseline, else its largest glyphs' */
+export declare function cropBaselineOf(real: readonly Char[], lineInfo: Prepared['lineInfo'] | null, main: readonly Char[]): number
+/** a solid-set original's pitch, × its size (TeX's \baselineskip: 1.2 at 10 and 12 pt, 1.24 at 11) */
+export declare const SOLID: number
+/** the unit's leading relative to the original's own pitch: leadBase of a solid line, never closer than the original's */
+export declare function leadOf(blocks: readonly Pick<Block2, 'pitch0'>[], s: number, P: Pick<Params, 'leadBase'>): number
 export declare function layoutUnit2(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params, to: string): Layout
 /** a box in v0's device pixels on the page: [x, y, w, h] */
 export type DevBox = [number, number, number, number]

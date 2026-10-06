@@ -50,7 +50,7 @@ import { locatedWhole, texParts, texRects } from './tex.mjs'
  *  file read at once */
 export const PDF_OPTIONS = { cMapPacked: true, enableHWA: true, disableStream: true }
 /** the fit's parameters a host may set (main.js read them from the query), and the page-even pass's units */
-export const PARAM_KEYS = ['leadBase', 'leadFloor', 'trackMin', 'compressMax', 'borrow', 'borrowGap', 'floor', 'step', 'grid', 'cjkJust', 'spaceMax', 'autospace', 'spaceMin', 'hyphen', 'even', 'order']
+export const PARAM_KEYS = ['leadBase', 'leadFloor', 'trackMin', 'compressMax', 'borrow', 'borrowGap', 'floor', 'step', 'grid', 'cjkJust', 'spaceMax', 'autospace', 'spaceMin', 'hyphen', 'even', 'order', 'further', 'floorMin', 'trackStart', 'pitchLead']
 /** the page's body units that the even pass sets alike (a unit on two pages keeps its own fit) */
 const EVEN_KINDS = new Set(['para', 'abstract', 'list', 'item'])
 /** the SVG's own rules (the prototype's index.html): its text set as laid, in the layer's ink */
@@ -193,14 +193,17 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     const w = locatedWhole(lu, u, tex.pieces.get(id), { symbols: tex.symbols ?? 'text' })
     return w.ok ? { lu, kOf: w.kOf } : { why: w.why }
   }
-  const placeOf = (id, stream, rects, u, t, total = rects.length) => {
+  const placeOf = (id, stream, rects, u, t) => {
     const onPages = rects.filter(r => r[0] <= N)
     if (!onPages.length) return null
-    // (cut: the unit goes on past the pages shown, so that it has fewer lines here than it has)
-    return { id, stream, rects: onPages, unit: u, blocks: blocksOf(onPages, geometry.left.pages), pages: [...new Set(onPages.map(r => r[0]))], cut: onPages.length < total, tex: t }
+    // (cut: the unit goes on past the pages shown. It is laid over all its lines, those past the pages shown too, and
+    // drawn on the pages shown: laid over the lines shown alone, all of its translation was set into them, shrunk to the
+    // floor and the rest clipped, though the reader shows its next page as any other (1810.04805's unit 164 on page 12 of
+    // 12 shown, 200 characters clipped in each alphabet). Its pages are the pages shown: it is laid when they are drawn)
+    return { id, stream, rects, unit: u, blocks: blocksOf(onPages, geometry.left.pages), pages: [...new Set(onPages.map(r => r[0]))], cut: onPages.length < rects.length, tex: t }
   }
   /** a unit the file locates whole, placed by its lines in the file (texRects: the rectangles its exact baselines are by) */
-  const placeByFile = (id, stream, u, w) => { const lines = texRects(w.lu, N); return placeOf(id, stream, lines.rects, u, { ...w, lines }, w.lu.lines.length / 8) }
+  const placeByFile = (id, stream, u, w) => { const lines = texRects(w.lu); return placeOf(id, stream, lines.rects, u, { ...w, lines }) }
   for (const [id, stream, rects] of GU) {
     const u = all[id]
     if (!u?.pieces || (u.state !== 'whole' && u.state !== 'partial')) continue
@@ -497,6 +500,94 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     return Math.max(0, last - lowest)
   }
 
+  // ---- no clipping (step 3): v0's fit drew what fitted at its last state and dropped the rest (2,314 characters on the
+  // gate's 29 outputs). A unit that does not fit there is given more room where the page has it, and else stays the
+  // original's, whole: nothing of it is drawn in part.
+  /**
+   * How far a single line's slot may run on to one side (`dir` -1 or 1) of `from`, on its band of the original page, over
+   * paper only: up to the first ink that is not the unit's own (`own`, its lines' erase extents: erased with it), read on
+   * the page's ink map, never past `limit`. Before another line's text (a neighbouring cell, whose translation may run on
+   * towards it too) to half the paper between them; before any other ink (a rule, a figure) to a quarter of an em clear of
+   * it. Returns the edge.
+   */
+  const paperTo = (b, dir, from, limit, own) => {
+    const map = inkOf(b.page)
+    if (!map) return from
+    const px = pxOf(b.page), f = map.factor, z = b.sizes[0], B = b.B[0]
+    const top = B + 0.8 * z, bottom = B - 0.25 * z
+    const [, r0] = px(from, top), [, r1] = px(from, bottom)
+    const ra = Math.max(0, Math.floor(Math.min(r0, r1) / f)), rb = Math.min(map.h - 1, Math.floor(Math.max(r0, r1) / f))
+    const ownAt = x => own.some(e => x >= e[0] - 0.3 && x <= e[2] + 0.3 && e[1] < top && e[3] > bottom)
+    const step = f / (scale * dpr)
+    let x = from
+    for (; dir > 0 ? x < limit : x > limit; x += dir * step) {
+      const [cx] = px(x + dir * step / 2, B)
+      const c = Math.floor(cx / f)
+      if (c < 0 || c >= map.w) break
+      if (ownAt(x + dir * step / 2)) continue
+      let inked = false
+      for (let r = ra; r <= rb && !inked; r++) if (map.ink[r * map.w + c]) inked = true
+      if (!inked) continue
+      // the ink a character of the page stands on is text, any other ink a rule's or a figure's
+      const text = (chars2[b.page - 1] ?? []).some(ch => /\S/.test(ch.ch) && ch.x1 >= x - step && ch.x0 <= x + 2 * step && ch.yb - 0.25 * ch.size < top && ch.yb + 0.8 * ch.size > bottom)
+      return text ? from + (x - from) / 2 : x - dir * 0.25 * z
+    }
+    return dir > 0 ? Math.min(x, limit) : Math.max(x, limit)
+  }
+  /** a unit's single-line blocks widened over the paper beside them (paperTo), within the page's text area; a centred one
+   *  as far to either side. Returns the widened blocks, or null where none grew */
+  const widenOverPaper = p => {
+    let grew = false
+    const out = p.blocks.map(b => {
+      if (b.rects.length !== 1 || b.page > N) return b
+      const own = [...(p.prep.extents ?? new Map())].filter(([r]) => r[0] === b.page).flatMap(([, e]) => (Array.isArray(e[0]) ? e : [e]))
+      const [ax, az] = textArea(b.page)
+      const right = paperTo(b, 1, b.x1, az, own), left = paperTo(b, -1, b.x0, ax, own)
+      let x0 = b.x0, x1 = b.x1
+      if (b.centred) { const half = Math.min(right - b.x1, b.x0 - left); if (half > 0.1) { x0 -= half; x1 += half } }
+      else if (right > b.x1 + 0.1) x1 = right
+      if (x1 - x0 <= b.x1 - b.x0 + 0.1) return b
+      grew = true
+      return { ...b, x0, x1, widened: true }
+    })
+    return grew ? out : null
+  }
+  /**
+   * The fit's further steps for a unit its states leave clipped (P.further, in order): 'widen', its single lines widened
+   * over the paper beside them (widenOverPaper), the fit run again in them; 'flow', the text run past a display where the
+   * slots after it are too few (layoutUnit2's P.flowPast: out of the translation's order, but all of it shown, as v0's
+   * own last pass already ran text on past a display); 'shrink', the size's steps on below the fit's floor, to
+   * P.floorMin. Returns the first layout that sets every token, with the blocks it was laid in, or null.
+   */
+  const fitFurther = (p, tokens, s) => {
+    for (const step of P.further ?? []) {
+      if (step === 'widen') {
+        const wide = widenOverPaper(p)
+        if (!wide) continue
+        const l = L2.layoutUnit2(tokens, wide, s, p.P, to)
+        if (!l.clipped) return { layout: { ...l, knob: 'widen' }, blocks: wide }
+      } else if (step === 'shrink' && P.floorMin < P.floor - 1e-9) {
+        const l = L2.layoutUnit2(tokens, p.blocks, s, { ...p.P, floor: P.floorMin }, to)
+        if (!l.clipped) return { layout: { ...l, knob: 'below-floor' }, blocks: p.blocks }
+      } else if (step === 'flow') {
+        const l = L2.layoutUnit2(tokens, p.blocks, s, { ...p.P, flowPast: true }, to)
+        if (!l.clipped) return { layout: { ...l, knob: 'flow' }, blocks: p.blocks }
+      }
+    }
+    return null
+  }
+
+  /**
+   * The CJK runs' tracking a fit starts from (step 3): the em a syllable's advance loses to its face's size correction
+   * (the role table's Source Han Serif K is drawn at 0.959 of the size, its Hangul a twenty-fifth shorter a syllable than
+   * the faces the prototype was approved in), given back, so that a line of the translation is as long as at the
+   * original's size; 0 where the face is drawn at its size (Chinese, Japanese, the prototype's own faces).
+   */
+  const cjkAdvance = () => {
+    if (!P.cjk) return 0
+    const c = faceOf({ fam: 'serif', bold: false, italic: false, caps: false, design: designs.serif }, 'cjk', to).size ?? 1
+    return c < 1 ? Math.round((1 - c) * 1000) / 1000 : 0
+  }
   const layout2 = p => {
     const t0 = performance.now()
     // the unit's lines grown over words the anchors left out beside them, then its first line's edge snapped back to
@@ -519,17 +610,34 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     if (p.dropped) p.rects = kept
     // iteration 3: the unit's own part of each of its pages (its rectangles' box, 20 pt above and below, 60 pt to
     // either side), one pass over the page, for every search below (each scanned the whole page, rectangle by rectangle)
-    const local = []
+    const local = [], windows = []
     for (const pg of p.pages) {
       const rs = p.rects.filter(r => r[0] === pg)
       const x0 = Math.min(...rs.map(r => r[1])) - 60, x1 = Math.max(...rs.map(r => r[3])) + 60, y0 = Math.min(...rs.map(r => r[2])) - 20, y1 = Math.max(...rs.map(r => r[4])) + 20
+      windows[pg - 1] = [x0, x1, y0, y1]
       local[pg - 1] = (chars2[pg - 1] ?? []).filter(c => c.x1 >= x0 && c.x0 <= x1 && c.yb >= y0 && c.yb <= y1)
     }
     p.local = local
     // iteration 3: a block's far-in first line from its block's edge, and lines over what stands beside them, before the
     // unit is aligned (what they then hold is the unit's)
     if (!fileLines) L2.extendFirstLines(p.rects, geometry.left.pages, others)
-    p.grown = L2.extendRects2(p.rects, local, others, p.unit.src, wordsOf, norm, geometry.left.pages)
+    // (the words its source begins with before its first line over the page's whole width on its lines' bands, step 3:
+    // they may stand further from it than the unit's own part of its page reaches, 60 pt, 1706.03762's "Work performed
+    // while at Google" before "Research.")
+    const bands = []
+    for (const pg of p.pages) {
+      const rs = p.rects.filter(r => r[0] === pg)
+      const y0 = Math.min(...rs.map(r => r[2])) - 20, y1 = Math.max(...rs.map(r => r[4])) + 20
+      bands[pg - 1] = (chars2[pg - 1] ?? []).filter(c => c.yb >= y0 && c.yb <= y1)
+    }
+    p.grown = L2.extendRects2(p.rects, local, others, p.unit.src, wordsOf, norm, geometry.left.pages, bands)
+    // (and the unit's part of its page again where its lines grew past it: what they grew over is the unit's to read and
+    // to account for, or its characters there were put back under the translation)
+    if (p.grown) for (const pg of p.pages) {
+      const rs = p.rects.filter(r => r[0] === pg), [x0, x1, y0, y1] = windows[pg - 1]
+      const gx0 = Math.min(x0, ...rs.map(r => r[1])), gx1 = Math.max(x1, ...rs.map(r => r[3]))
+      if (gx0 < x0 || gx1 > x1) local[pg - 1] = (chars2[pg - 1] ?? []).filter(c => c.x1 >= gx0 && c.x0 <= gx1 && c.yb >= y0 && c.yb <= y1)
+    }
     const inkBefore = fileLines ? undefined : L2.snapFirstRect2(p.rects, local)
     // the hybrid: a unit the file locates whole read with the file's parts
     const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0' }) : null
@@ -573,10 +681,18 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     const lead = prep.label?.drawn ? { text: prep.label.drawn, st: (st => (st && st.fam !== 'math' ? { bold: !!st.bold, italic: !!st.italic } : {}))(prep.label.chars[0]?.st) } : null
     const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead)
     const t3 = performance.now()
-    p.layout = L2.layoutUnit2(tokens, p.blocks, s, P, to)
+    // (the unit's leading relative to the original's own pitch, step 3: leadOf)
     p.tokens = tokens
     p.prep = prep
     p.s = s
+    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P), trackStart: P.trackStart ?? cjkAdvance() }
+    p.layout = L2.layoutUnit2(tokens, p.blocks, s, p.P, to)
+    // (step 3: never drawn in part: given more room where the page has it, else left the original's, whole)
+    if (p.layout.clipped) {
+      const further = fitFurther(p, tokens, s)
+      if (further) { p.layout = further.layout; p.blocks = further.blocks }
+      else { p.refused = true; return }
+    }
     const t4 = performance.now()
     p.layout.extents = new Map([...prep.extents].map(([r, e]) => [r.join(), e]))
     if (p.blocks[0] && (prep.label || prep.firstX0 !== undefined || inkBefore !== undefined)) {
@@ -613,14 +729,15 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   // well (the smallest any body unit of the page took)
   const laid = Array.from({ length: N + 1 }, () => [])
   const evenPass = pg => {
-    const body = laid[pg].filter(p => EVEN_KINDS.has(p.unit.kind))
+    const body = laid[pg].filter(p => EVEN_KINDS.has(p.unit.kind) && !p.refused)
     const target = Math.min(1, ...body.map(p => p.layout.scale))
     const leadTo = P.even >= 2 ? Math.min(P.leadBase, ...body.map(p => p.layout.state.lead)) : P.leadBase
     for (const p of body) {
       if (p.pages[0] !== pg) continue
       if (p.layout.scale <= target + 1e-9 && p.layout.state.lead <= leadTo + 1e-9) continue
       const keep = { extents: p.layout.extents, rec: p.rec }
-      p.layout = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...P, maxScale: target, leadBase: Math.min(P.leadBase, leadTo) }, to)
+      const PU = p.P ?? P
+      p.layout = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...PU, maxScale: target, leadBase: Math.min(PU.leadBase, leadTo) }, to)
       p.layout.extents = keep.extents
       if (p.rec) Object.assign(p.rec, { f: r1(p.layout.f), sizeRatio: r1(p.layout.f / p.s), fitScale: p.layout.scale, knob: p.layout.knob, lead: p.layout.state.lead, lines: p.layout.lines.map(l => [l.page, r1(l.baseline), l.target !== null ? r1(p.blocks[l.block].B[l.target]) : null, l.target !== null ? p.blocks[l.block].exact[l.target] : false, l.mode, 0]) })
     }
@@ -644,13 +761,15 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     laidCells.done = true
     const pages = new Set(laidCells.list.flatMap(p => p.pages))
     // (and over the text-removed PDF, a cell on a page the remover refused: it could only be erased)
-    const why = pages.size > 1 ? 'on two pages' : laidCells.list.some(p => p.layout.clipped) ? 'a cell clipped' : RM?.mode === 'draw' && [...pages].some(pg => !removedPage(pg)) ? 'its page not removed' : null
+    const why = pages.size > 1 ? 'on two pages' : laidCells.list.some(p => p.refused || p.layout.clipped) ? 'a cell unfit' : RM?.mode === 'draw' && [...pages].some(pg => !removedPage(pg)) ? 'its page not removed' : null
     if (why) { for (const p of laidCells.list) withhold(p, why); return }
     for (const p of laidCells.list) for (const pg of p.pages) paint(p, pg)
   }
   const arrive = p => {
     const t0 = performance.now()
     layout2(p)
+    // (a unit no step fits is the original's: neither erased nor drawn, nor checked)
+    if (p.refused) skipped.push({ id: p.id, kind: p.unit.kind, why: 'unfit', chars: trCharsOf(p.unit), pages: p.pages })
     const g = p.unit.group && groupCells.has(p.unit.group) ? p.unit.group : null
     if (g) (groupLaid.get(g) ?? groupLaid.set(g, { list: [], done: false }).get(g)).list.push(p)
     if (P.even) {
@@ -658,12 +777,12 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
         laid[pg].push(p)
         if (laid[pg].length === expected[pg]) {
           evenPass(pg)
-          for (const u of laid[pg]) if (!u.unit.group || !groupCells.has(u.unit.group)) paint(u, pg)
+          for (const u of laid[pg]) if (!u.refused && (!u.unit.group || !groupCells.has(u.unit.group))) paint(u, pg)
           for (const gg of new Set(laid[pg].map(u => u.unit.group).filter(x => x && groupCells.has(x)))) settleGroup(gg)
         }
       }
     } else if (g) settleGroup(g)
-    else for (const pg of p.pages) paint(p, pg)
+    else if (!p.refused) for (const pg of p.pages) paint(p, pg)
     ms.set(p.id, performance.now() - t0)
   }
 
@@ -876,14 +995,14 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
      *  placeholders of the units with lines on it) */
     checkPage(pg) {
       needsCopy()
-      const here = placed.filter(p => p.pages.includes(pg))
+      const here = placed.filter(p => p.pages.includes(pg) && !p.refused)
       const only = rows.map((r, i) => (i === pg - 1 ? r : { ...r, base: false }))
       return checkAll({ N, placed: here, rows: only, pxOf, toPdf, chars2, audit, cols: colsOf, cellRects })
     },
     /** the prototype's completeness checker over every page still held (main.js check=1's window.__result.check) */
     check() {
       needsCopy()
-      return checkAll({ N, placed, rows, pxOf, toPdf, chars2, audit, cols: colsOf, cellRects })
+      return checkAll({ N, placed: placed.filter(p => !p.refused), rows, pxOf, toPdf, chars2, audit, cols: colsOf, cellRects })
     },
   }
 }

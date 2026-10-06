@@ -8,6 +8,10 @@
 // v0's changes here: the linter's, none of which changes what runs: `!st?.known` for `!st || !st.known`, and two
 // unused locals and two unused names of a destructuring left out.
 // And the size correction of a role table face (fonts.mjs setRoleFaces) on each run's SVG size, 1 for the prototype's.
+// And step 3 (2026-10-07): a unit's leading relative to the original's own pitch (leadOf); the display environments the
+// engine knows (layer1.mjs DISPLAY); and no unit drawn in part: past the fit's last state the host's further steps
+// (run.mjs fitFurther: a single line widened over the paper beside it, the text run past a display, the size on below
+// its floor, P.further and P.floorMin), the flow past a display being this module's (breakLines 'flow', P.flowPast).
 // And prepareUnit in parts (step 2 of the layer's new direction, 2026-10-06), so that the four which read the page's
 // geometry (lines, erase extents, labels, placeholder renderings) can come from another source: its statements moved
 // into the parts as they were, in the same order; a set of claimed characters, which nothing read, left out. Every
@@ -53,12 +57,16 @@ import { breakPoints } from './hyph.mjs'
 
 // ---- parameters: per script, each a prior from the public repo's typesetting research, swept on the layer
 
+/** step 3: the fit's further steps for a unit its states leave clipped (run.mjs fitFurther), in order, and the size the
+ *  last may go down to: on the gate's 29 outputs they took clipped characters from 943 to 140 (widen 100, flow 138, the
+ *  size 465), most below the floor at 0.775 */
+const FURTHER = Object.freeze(['widen', 'flow', 'shrink']), FLOOR_MIN = 0.6
 /** the defaults, before the sweep chose (main.js overrides any of them from the query) */
 export function defaultParams(to) {
   const cjk = CJK_TARGETS.has(to)
-  if (to === 'zh' || to === 'zh-TW') return { cjk: true, leadBase: 1.3, leadFloor: 1.0, trackMin: -0.03, compressMax: to === 'zh-TW' ? 0 : 2, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 1, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.25, spaceMax: 1.0, autospace: 0.2, spaceMin: 0.8, hyphen: 1 }
-  if (cjk) return { cjk: true, leadBase: 1.0, leadFloor: 1.0, trackMin: -0.03, compressMax: 2, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 1, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.25, spaceMax: 1.0, autospace: to === 'ja' ? 0.2 : 0, spaceMin: 0.8, hyphen: 1 }
-  return { cjk: false, leadBase: 1.0, leadFloor: 0.95, trackMin: 0, compressMax: 0, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 0, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.12, spaceMax: 1.2, autospace: 0, spaceMin: 0.8, hyphen: 1 }
+  if (to === 'zh' || to === 'zh-TW') return { cjk: true, leadBase: 1.3, leadFloor: 1.0, trackMin: -0.03, compressMax: to === 'zh-TW' ? 0 : 2, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 1, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.25, spaceMax: 1.0, autospace: 0.2, spaceMin: 0.8, hyphen: 1, further: FURTHER, floorMin: FLOOR_MIN, pitchLead: true }
+  if (cjk) return { cjk: true, leadBase: 1.0, leadFloor: 1.0, trackMin: -0.03, compressMax: 2, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 1, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.25, spaceMax: 1.0, autospace: to === 'ja' ? 0.2 : 0, spaceMin: 0.8, hyphen: 1, further: FURTHER, floorMin: FLOOR_MIN, pitchLead: true }
+  return { cjk: false, leadBase: 1.0, leadFloor: 0.95, trackMin: 0, compressMax: 0, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 0, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.12, spaceMax: 1.2, autospace: 0, spaceMin: 0.8, hyphen: 1, further: FURTHER, floorMin: FLOOR_MIN, pitchLead: true }
 }
 
 // ---- the page's characters, each with its font's class
@@ -288,8 +296,8 @@ export function charsOfUnit2(rects, charsByPage, extents, exact = null) {
  * block's right edge. Before, those characters were erased with the line (its erasing reaches the block's edge) though
  * no placeholder held them. Mutates the rectangles.
  */
-export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn, pageViews) {
-  let grown = extendRects(rects, charsByPage, others, src, wordsOfFn, normFn)
+export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn, pageViews, wordChars = charsByPage) {
+  let grown = extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, wordChars)
   const blocks = blocksOf(rects, pageViews)
   const lastOf = new Set(blocks.map(b => b.rects.at(-1).join()))
   const edgeOf = new Map()
@@ -993,7 +1001,7 @@ function resolvePlaceholders(out, ctx, renderingsOf) {
         continue
       }
       if (!g) out.set(p.k, { mode: 'source', text: p.nested ? '*' : texToText2(p.src), math: p.cls === 'other', sup })
-      else out.set(p.k, drawnAs(p, g, cls, sup))
+      else out.set(p.k, drawnAs(p, g, cls, sup, out.lineInfo))
     }
   }
   // each resolution with its placeholder and the gap it took (the checker's)
@@ -1012,7 +1020,7 @@ function resolvePlaceholders(out, ctx, renderingsOf) {
     if (!inner.some(c => /[\p{L}\p{N}]/u.test(c.ch))) continue
     const ng = { text: inner.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars: inner, of: g.of ?? g, unbracketed: true }
     const cls = p.cls === 'cite' ? 'cite' : p.cls === 'num' ? 'num' : 'other'
-    out.set(p.k, { ...drawnAs(p, ng, cls, r.sup), k: p.k, src: p.src, cls: p.cls, gap: ng, second: r.second })
+    out.set(p.k, { ...drawnAs(p, ng, cls, r.sup, out.lineInfo), k: p.k, src: p.src, cls: p.cls, gap: ng, second: r.second })
   }
   for (const p of phs) {
     const r = out.get(p.k)
@@ -1093,9 +1101,28 @@ function drawnTextOf(res, charsByPage) {
   return `|${parts.join('|')}|`
 }
 
+/**
+ * A crop's baseline without a source that knows its ink (step 3): the baseline its glyphs of its line's text size stand
+ * on, the line's own (its rendering's line: the unit's line that holds most of its characters, `lineInfo`); where it has
+ * none (a fraction, a formula all scripts), that line's baseline where it was measured from its characters (exact) and
+ * stands within 0.6 em; else its largest glyphs' (`main`). By its characters' median size, a crop most of whose glyphs
+ * were a script ("i^{th}": 'i' and two of the script) was set on the script's baseline, 3.96 pt low, and a fraction on
+ * its radical's origin (1706.03762's "1/√dk", 1.2 pt low).
+ */
+export function cropBaselineOf(real, lineInfo, main) {
+  const big = Math.max(...real.map(c => c.size))
+  const n = new Map()
+  for (const c of real) { const k = `${c.page}|${c.rect?.join()}`; n.set(k, (n.get(k) ?? 0) + 1) }
+  const info = lineInfo && real.length ? lineInfo.get([...n].sort((a, b) => b[1] - a[1])[0][0]) : null
+  const atText = real.filter(c => c.size >= 0.85 * (info?.size || big))
+  if (atText.length) return median(atText.map(c => c.yb))
+  const own = median(main.map(c => c.yb))
+  return info?.exact && Math.abs(info.baseline - own) <= 0.6 * big ? info.baseline : own
+}
+
 /** a placeholder drawn from its rendering on the page: as the page's text (a citation, a reference, a macro, a formula
- *  over lines) or as a crop of the page (a formula) */
-function drawnAs(p, g, cls, sup) {
+ *  over lines) or as a crop of the page (a formula); `lineInfo`, the unit's lines' (Prepared's) */
+function drawnAs(p, g, cls, sup, lineInfo = null) {
   const real = g.chars.filter(c => !c.sep && !c.space)
   const lines = new Set(real.map(c => c.rect.join()))
   const lineSize = median(real.map(c => c.size))
@@ -1112,7 +1139,7 @@ function drawnAs(p, g, cls, sup) {
   const broken = box ? box.lines > 1 : lines.size > 1 && !oneLine
   if (cls !== 'other' || broken || p.cls === 'macro' || p.cls === 'umacro') return { mode: 'orig-text', text: g.text, sup: sup || (cls === 'num' && real.length && real.every(c => c.size < lineSize * 0.85)), st: gst }
   const main = real.filter(c => c.size >= lineSize * 0.85)
-  const own = median((main.length ? main : real).map(c => c.yb))
+  const own = cropBaselineOf(real, lineInfo, main.length ? main : real)
   // (with a box: the baseline of the line its ink sits on, where its characters stand on that line, so that a raised or
   // lowered formula keeps its raise, which its characters' own baseline set on the line; and its ink's own extent
   // across, which its characters' places in their items only estimate)
@@ -1200,7 +1227,7 @@ function secondChance(out, phs, gaps, plain, lcs, unit, citeMap, uc) {
     g.taken = true
     const r = out.get(p.k)
     const cls = p.cls === 'cite' ? 'cite' : p.cls === 'num' ? 'num' : 'other'
-    const nr = p.cls === 'display' ? { mode: 'kept', text: '' } : drawnAs(p, g, cls, r.sup)
+    const nr = p.cls === 'display' ? { mode: 'kept', text: '' } : drawnAs(p, g, cls, r.sup, out.lineInfo)
     if (p.cls === 'display') out.keep = [...(out.keep ?? []), ...displayLines(g, uc)]
     out.set(p.k, { ...nr, k: p.k, src: p.src, cls: p.cls, gap: g, second: true })
   }
@@ -1458,34 +1485,47 @@ export function snapFirstRect2(rects, charsByPage) {
  * line's words out (1706.03762's "‡Work performed while at Google Research." anchored as "Research."), and what they
  * leave out is neither erased nor laid over. Mutates the rectangles; returns how many grew.
  */
-export function extendRects(rects, charsByPage, others, src, wordsOfFn, normFn) {
-  const want = new Set(wordsOfFn([...src].map(ch => ({ ch }))).map(w => w.w))
+export function extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, wordChars = charsByPage) {
+  const srcWords = wordsOfFn([...src].map(ch => ({ ch }))).map(w => w.w)
+  const want = new Set(srcWords)
+  const srcStart = ` ${srcWords.join(' ')} `
   let grown = 0
   for (const r of rects) {
     const page = charsByPage[r[0] - 1] ?? []
     const inside = page.filter(c => c.x0 >= r[1] - 0.5 && c.x1 <= r[3] + 0.5 && c.yb >= r[2] - 0.2 && c.yb <= r[4] && /\S/.test(c.ch))
     if (!inside.length) continue
     const yb = median(inside.map(c => c.yb)), size = median(inside.map(c => c.size))
-    const line = page.filter(c => Math.abs(c.yb - yb) < 0.3 * size && /\S/.test(c.ch)).sort((a, b) => a.x0 - b.x0)
+    const lineIn = chars => chars.filter(c => Math.abs(c.yb - yb) < 0.3 * size && /\S/.test(c.ch)).sort((a, b) => a.x0 - b.x0)
+    const line = lineIn(page)
     const foreign = c => (others[r[0]] ?? []).some(o => c.x0 >= o[1] - 0.5 && c.x1 <= o[3] + 0.5 && c.yb >= o[2] - 0.2 && c.yb <= o[4])
-    const grow = dir => {
+    const grow = (dir, chars = line) => {
       const got = []
       let edge = dir < 0 ? Math.min(...inside.map(c => c.x0)) : Math.max(...inside.map(c => c.x1))
-      const cands = dir < 0 ? line.filter(c => c.x1 <= edge + 0.1).reverse() : line.filter(c => c.x0 >= edge - 0.1)
+      const cands = dir < 0 ? chars.filter(c => c.x1 <= edge + 0.1).reverse() : chars.filter(c => c.x0 >= edge - 0.1)
       for (const c of cands) {
         if (dir < 0 ? edge - c.x1 > 1.2 * size : c.x0 - edge > 1.2 * size) break
-        if (foreign(c) || inside.includes(c)) break
+        if (foreign(c) || inside.some(d => d.item === c.item && d.k === c.k)) break
         got.push(c)
         edge = dir < 0 ? c.x0 : c.x1
       }
       return got
     }
     for (const dir of [-1, 1]) {
-      const got = grow(dir)
-      if (!got.length) continue
-      const text = (dir < 0 ? [...got].reverse() : got).map(c => c.ch).join('')
-      const words = text.split(/[^\p{L}\p{N}]+/u).map(w => normFn(w)).filter(w => w.length > 1)
-      if (!words.some(w => want.has(w))) continue
+      let got = grow(dir)
+      const words = got.length ? (dir < 0 ? [...got].reverse() : got).map(c => c.ch).join('').split(/[^\p{L}\p{N}]+/u).map(w => normFn(w)).filter(w => w.length > 1) : []
+      if (!words.some(w => want.has(w))) {
+        // (step 3: before the unit's first line, the words its source begins with, over the page's whole width on the
+        // line, each word apart: the line's characters are its non-space ones, and joined they read one word that is
+        // none of the source's ("whileatGoogle"), so that 1706.03762's "‡Work performed while at Google Research.",
+        // anchored and located as "Research.", kept its English head unerased, and the translation, "Google Research…",
+        // was laid after it: "Google Google Research")
+        if (dir > 0 || r !== rects[0]) continue
+        got = grow(dir, lineIn(wordChars[r[0] - 1] ?? []))
+        const run = [...got].reverse()
+        const text = run.map((c, n) => (n && (c.x0 - run[n - 1].x1 > 0.12 * c.size || (c.item !== run[n - 1].item && c.x0 - run[n - 1].x1 > 0.05 * c.size)) ? ` ${c.ch}` : c.ch)).join('')
+        const apart = text.split(/[^\p{L}\p{N}]+/u).map(w => normFn(w)).filter(w => w.length > 1)
+        if (apart.length < 2 || !srcStart.startsWith(` ${apart.join(' ')} `)) continue
+      }
       if (dir < 0) r[1] = Math.round(Math.min(...got.map(c => c.x0)) * 100) / 100
       else r[3] = Math.round(Math.max(...got.map(c => c.x1)) * 100) / 100
       grown++
@@ -1710,6 +1750,27 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
   return blocks
 }
 
+/** a solid-set original's pitch, × its size: TeX's \baselineskip is 1.2 × the size at 10 and 12 pt, 1.24 at 11 pt */
+export const SOLID = 1.25
+/**
+ * The unit's leading (step 3), relative to the original's own pitch: the script's leading (leadBase, 1.3 in Chinese) is
+ * of a solid-set original's line, so the translation's pitch is leadBase × SOLID × its size, but never closer than the
+ * original's own pitch. Where the original is set solid that is leadBase, as before; where it is looser already, the
+ * leading is not stacked on it (2307.16209, set one and a half: Chinese at 1.3 × its 1.5-spaced lines stood 1.95 em
+ * apart and between them, a quarter of its text area blank that its own lines would have covered). The original's
+ * pitch: its blocks' own (pitch0), the median of those that have one; none, leadBase. 1 where leadBase is. `pitchLead`
+ * false (a parameter): leadBase stacked on the original's pitch, as before step 3.
+ */
+export function leadOf(blocks, s, P) {
+  // (the rule is named, pitchLead, so that it can be switched off: the thesis's fill falls with it, its coverage rises,
+  // a visual choice the maintainer is asked)
+  if (P.pitchLead === false || !(P.leadBase > 1) || !(s > 0)) return P.leadBase
+  const pitches = blocks.map(b => b.pitch0).filter(v => v > 0).sort((a, b) => a - b)
+  if (!pitches.length) return P.leadBase
+  const p0 = pitches[pitches.length >> 1]
+  return Math.min(P.leadBase, Math.max(1, Math.round((1000 * P.leadBase * SOLID * s) / p0) / 1000))
+}
+
 // ---- the white space below: an ink map of the original page
 
 /** the original page's ink at a quarter of its canvas's resolution: one readback of a small canvas */
@@ -1782,6 +1843,9 @@ const tokW = (t, f, st, scale) => {
  * widths (punctuation compressed as the state allows), the space a line may shrink, and `rest`, the first token left.
  */
 function breakLines(tokensIn, slots, f, st, P, scale, strict = true) {
+  // (step 3, 'flow': a kept region breaks the line and skips no slot: the text after a display may stand above it, where
+  // the slots below it are too few for it and those above it too many; the last resort before the unit is not drawn)
+  const flow = strict === 'flow'
   let tokens = tokensIn
   const lines = []
   let li = 0, i = 0
@@ -1798,7 +1862,7 @@ function breakLines(tokensIn, slots, f, st, P, scale, strict = true) {
     li++
     if (li >= slots.length) return
     if ((slots[li].after ?? 0) > consumed) {
-      if (strict) { stop = true; return }
+      if (strict === true) { stop = true; return }
       spilled = true
     }
     open()
@@ -1806,7 +1870,15 @@ function breakLines(tokensIn, slots, f, st, P, scale, strict = true) {
   if (slots.length) open()
   while (i < tokens.length && li < slots.length && !stop) {
     if (tokens[i].blockTo !== undefined) {
+      const fresh = tokens[i].blockTo + 1 > consumed
       consumed = Math.max(consumed, tokens[i].blockTo + 1)
+      if (flow) {
+        // (a region passed once breaks the line once: its kept placeholders after it are no breaks)
+        if (fresh && line.items.length) { while (line.items.at(-1)?.t.space) { const sp = line.items.pop(); line.x -= sp.w; line.spaces -= sp.w } advance() }
+        if ((slots[li]?.after ?? 0) < consumed) spilled = true
+        i++
+        continue
+      }
       if ((slots[li].after ?? 0) < consumed) {
         let q = li + 1
         while (q < slots.length && (slots[q].after ?? 0) < consumed) q++
@@ -1970,12 +2042,14 @@ function placeItems(lines, f, P, to) {
 /** the fit's states, from the most natural, each knob in the order given taken to its bound before the next */
 function* statesOf(P, blocks, s) {
   // maxScale: a size set from outside (the page's even pass), from which the fit starts
-  const st = { lead: P.leadBase, track: 0, trackLatin: 0, compress: P.compressMax > 0 ? 1 : 0, borrow: 0, scale: P.maxScale ?? 1, knob: P.maxScale ? 'even' : 'none' }
+  // (step 3: the CJK runs' tracking from P.trackStart, a face's size correction given back, run.mjs; down from it)
+  const t0 = P.cjk ? P.trackStart ?? 0 : 0
+  const st = { lead: P.leadBase, track: t0, trackLatin: 0, compress: P.compressMax > 0 ? 1 : 0, borrow: 0, scale: P.maxScale ?? 1, knob: P.maxScale ? 'even' : 'none' }
   yield { ...st }
   for (const knob of P.order) {
     if (knob === 'track') {
       if (P.compressMax >= 2 && st.compress < 2) { st.compress = 2; yield { ...st, knob } }
-      for (let t = -0.01; t >= P.trackMin - 1e-9; t -= 0.01) {
+      for (let t = t0 - 0.01; t >= P.trackMin - 1e-9; t -= 0.01) {
         if (P.cjk) st.track = t
         else st.trackLatin = t
         yield { ...st, knob }
@@ -2002,7 +2076,9 @@ function* statesOf(P, blocks, s) {
 }
 
 /**
- * A unit laid out: the first state of the fit at which every token is placed; at the last, what fits, clipped.
+ * A unit laid out: the first state of the fit at which every token is placed; at the last, what fits, clipped (which the
+ * host never draws: run.mjs fitFurther). P.flowPast (step 3): where a kept region still stops it, every state again with
+ * the text run past the region (breakLines 'flow').
  * `s`: the original's size (PDF units). Returns { lines, f, s, scale, state, knob, clipped, lostChars, chars, tried }.
  */
 export function layoutUnit2(tokens, blocks, s, P, to) {
@@ -2018,6 +2094,15 @@ export function layoutUnit2(tokens, blocks, s, P, to) {
   if (last.r.rest < last.r.total && tokens.some(t => t.blockTo !== undefined)) {
     const r = breakLines(tokens, slotsAt(blocks, last.st, P, s), last.f, last.st, P, last.st.scale, false)
     if (r.rest > last.r.rest) last = { ...last, r }
+  }
+  // (step 3, P.flowPast: and else through every slot, a kept region only breaking the line, from the most natural state)
+  if (P.flowPast && last.r.rest < last.r.total && tokens.some(t => t.blockTo !== undefined)) {
+    for (const st of statesOf(P, blocks, s)) {
+      tried++
+      const f = s * st.scale
+      const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, 'flow')
+      if (r.rest >= r.total) { last = { r, st, f }; break }
+    }
   }
   const { r, st, f } = last
   const clipped = r.rest < r.total
