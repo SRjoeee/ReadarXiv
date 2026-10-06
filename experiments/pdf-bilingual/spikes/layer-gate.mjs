@@ -26,7 +26,7 @@
 //       [--layouts=made|fixed] [--fixtures=<dir>] [--pages=<n>] [--workers=<n>] [--check[=<record>]] [--record[=<record>]] [--label=<short>]
 //       [--composite=source-over|darken] [--no-progress] [--panel-width=<px>] [--freeze[=force]]
 //       [--engine-kind=layer|proto] [--proto-units=fixture|p7] [--progress=<name|path>] [--previous=<name|path>] [--panels-only] [--proto-panels=<dir>]
-//       [--proto-place=<file>] [--proto-order=<file>] [--dump=<dir>]
+//       [--proto-faces=roles|prototype] [--proto-place=<file>] [--proto-order=<file>] [--dump=<dir>]
 //   --engine     the engine measured: <worktree>/src/pdf-reader/engine served as /engine/ (the checker, layer/check.mjs, is
 //                always this repository's: the instrument is the same for every branch); default this repository
 //   --layouts    made (the default): the layout files the engine's own maker makes from the fixtures' papers (spikes/
@@ -59,6 +59,8 @@
 //                run whose engine panels and totals stand beside this one's (a name or a path; default the last recorded);
 //                --panels-only writes the engine panels and run.json alone (a run to stand beside another);
 //                --proto-panels the prototype's panels from a folder of <fixture>-p<n>.png (default each fixture's proto/)
+//   --proto-faces  the faces v0 draws in: the role table's (its default) or the prototype's own (its floor's; recorded
+//                apart, <tier>-proto-pf)
 //   --proto-place, --proto-order, --dump  v0 against the live prototype (never recorded): each page's text where the
 //                prototype's own page put it (its floor was measured there: the text's anti-aliasing at a fraction of a
 //                pixel), each fixture's units in a live run's order, and v0's records, audit and page digests written out
@@ -88,6 +90,9 @@ if (!['layer', 'proto'].includes(KIND)) throw new Error(`--engine-kind=${KIND}: 
 const PROTO = KIND === 'proto'
 const PROTO_UNITS = arg('proto-units') ?? 'fixture'
 if (!['fixture', 'p7'].includes(PROTO_UNITS)) throw new Error(`--proto-units=${PROTO_UNITS}: fixture or p7`)
+/** --proto-faces=roles|prototype: the faces v0 draws in (its own default, the role table's, where not given) */
+const PROTO_FACES = typeof arg('proto-faces') === 'string' ? arg('proto-faces') : null
+if (PROTO_FACES && !['roles', 'prototype'].includes(PROTO_FACES)) throw new Error(`--proto-faces=${PROTO_FACES}: roles or prototype`)
 const PROTO_PANELS = typeof arg('proto-panels') === 'string' ? resolve(arg('proto-panels')) : null
 /** --proto-place=<file>: the place, by fixture and page, the prototype's own page gave each page's text (its .pg box,
  *  CSS px: { [fixture]: { [page]: [x, y] } }), which its floor was measured at; --dump=<dir>: v0's records, audit and
@@ -106,7 +111,7 @@ const HAS_MAKER = existsSync(join(ENGINE, 'src/pdf-reader/engine/layout/make.mjs
 const LAYOUTS = GIVEN ? 'given' : PROTO ? 'fixed' : arg('layouts') ?? (HAS_MAKER ? 'made' : 'fixed')
 if (!PROTO && !GIVEN && !arg('layouts') && !HAS_MAKER) console.log('the engine has no layout maker (layout/make.mjs): its layer is given the fixtures\' own layout files (--layouts=fixed)')
 /** the record's entry this run is: its tier, and the layout files it was given where they are not the engine's own */
-const KEY = PROTO ? `${TIER}-proto${PROTO_UNITS === 'p7' ? '-p7' : ''}` : LAYOUTS === 'made' ? TIER : `${TIER}-${LAYOUTS}`
+const KEY = PROTO ? `${TIER}-proto${PROTO_UNITS === 'p7' ? '-p7' : ''}${PROTO_FACES === 'prototype' ? '-pf' : ''}` : LAYOUTS === 'made' ? TIER : `${TIER}-${LAYOUTS}`
 if (!['made', 'fixed', 'given'].includes(LAYOUTS)) throw new Error(`--layouts=${LAYOUTS}: made or fixed`)
 const MAKER = join(here, 'layer-fixtures.mjs')
 const FONTS = resolve(join(DATA, 'fonts'))
@@ -225,7 +230,7 @@ const inputs = {
   pdfjs: readJson(join(PDFJS, 'package.json')).version, fonts: fontsDigest.slice(0, 16), checker: fileSha(CHECKER).slice(0, 16),
   // the instrument: the measures, their arithmetic, and the page that draws and accounts (lost ink's own glyphs)
   measures: sha256(['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => readFileSync(join(GATE, f))).join('\n')).slice(0, 16),
-  ...(PROTO ? { kind: 'proto', protoUnits: PROTO_UNITS, place: PROTO_PLACE ? 'the prototype page\'s' : 'the gate\'s', order: PROTO_ORDER ? 'given' : 'layGroups', hyphenation: sha256([...HYPH].map(([l, j]) => `${l}:${j}`).join('\n')).slice(0, 16) } : {}),
+  ...(PROTO ? { kind: 'proto', protoUnits: PROTO_UNITS, place: PROTO_PLACE ? 'the prototype page\'s' : 'the gate\'s', order: PROTO_ORDER ? 'given' : 'layGroups', faces: PROTO_FACES ?? 'the engine\'s default', hyphenation: sha256([...HYPH].map(([l, j]) => `${l}:${j}`).join('\n')).slice(0, 16) } : {}),
 }
 const leaks = []
 const t0 = Date.now()
@@ -263,7 +268,7 @@ async function runFixture(page, name, errors) {
     if (!g || !u || !existsSync(u)) { failures.push(name); return { name, ready: false, why: !g ? 'no geometry for v0' : `no ${PROTO_UNITS === 'p7' ? "prototype's units file" : 'record.json'}`, meta } }
     Object.assign(meta, { geometry: fileSha(g).slice(0, 16), protoUnits: fileSha(u).slice(0, 16) })
   }
-  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null })
+  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES })
   if (!info.ready) { failures.push(name); return { name, ready: false, why: info.why, meta } }
   const n = Math.min(info.pages, PAGES ?? (ALL_PAGES.has(paper) ? info.pages : PAGES_OF))
   const pages = [], frames = []
@@ -501,10 +506,10 @@ function originalOf(m) {
 }
 
 function fidelityMd(record) {
-  const keys = ['pixel', 'model', 'pixel-fixed', 'model-fixed', 'pixel-given', 'model-given', 'pixel-proto', 'model-proto', 'pixel-proto-p7', 'model-proto-p7'].filter(k => record.tiers[k])
+  const keys = ['pixel', 'model', 'pixel-fixed', 'model-fixed', 'pixel-given', 'model-given', 'pixel-proto', 'model-proto', 'pixel-proto-pf', 'model-proto-pf', 'pixel-proto-p7', 'model-proto-p7', 'pixel-proto-p7-pf', 'model-proto-p7-pf'].filter(k => record.tiers[k])
   const run = record.tiers[keys[0]]
   const ms = MEASURES.filter(m => run.tier === 'pixel' || m[1] === 'model')
-  const layoutsOf = r => (r.inputs.kind === 'proto' ? `v0 (the prototype in the engine), no layout file: the prototype's geometry and ${r.inputs.protoUnits === 'p7' ? "its own staging units" : "the fixtures' record.json"}` : r.inputs.layouts === 'made' ? "the engine's own layout files" : r.inputs.layouts === 'fixed' ? "the fixtures' layout files, as made for the layer lab" : `the layout files of ${r.inputs.fixtures}`)
+  const layoutsOf = r => (r.inputs.kind === 'proto' ? `v0 (the prototype in the engine), no layout file: the prototype's geometry and ${r.inputs.protoUnits === 'p7' ? "its own staging units" : "the fixtures' record.json"}, ${r.inputs.faces === 'prototype' ? "the prototype's own faces" : "the role table's faces"}` : r.inputs.layouts === 'made' ? "the engine's own layout files" : r.inputs.layouts === 'fixed' ? "the fixtures' layout files, as made for the layer lab" : `the layout files of ${r.inputs.fixtures}`)
   const L = []
   L.push('# The instant layer against the original: the fidelity record', '')
   L.push(`Written by \`spikes/layer-gate.mjs --record\`. Each run below: the engine at its commit, ${run.inputs.chromium ? `Chromium ${run.inputs.chromium}` : ''}, PDF.js ${run.inputs.pdfjs}; pages: ${run.inputs.pages}; the planes at ${run.inputs.scale} device px a PDF unit, lost ink at ${run.inputs.inkScale}x; crops drawn ${run.inputs.composite}.`, '')

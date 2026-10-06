@@ -1,24 +1,25 @@
 // experiments/pdf-bilingual/spikes/layer-gate/proto.mjs
 // The layer gate's page for an engine with no layout file (--engine-kind=proto): the instant layer's v0, the approved
-// prototype ported into the engine (src/pdf-reader/engine/layer-proto/run.mjs), measured on the same pages, fixtures and
-// measures as the engine's layer (page.mjs). v0 reads what the prototype read: arXiv's PDF through PDF.js, the made
+// prototype ported into the engine (src/pdf-reader/engine/layer-proto/run.mjs), measured on the same pages, fixtures
+// and measures as the engine's layer (page.mjs). v0 reads what the prototype read: arXiv's PDF through PDF.js, the made
 // output's geometry (its units' line rectangles on the original, the anchors': the prototype's own data, served by the
 // gate as each fixture's geometry.json) and a units file (the fixture's record.json, the same translation the engine's
 // units.json carries; or the prototype's own staging output, units-p7.json, which its floor was measured on). It draws
-// as the prototype drew: its own canvases at 1.25 CSS px a unit and the page's device pixel ratio (2 here, the floor's
-// 2.5 device px a unit), the copy erased, restored and cropped, the text as SVG.
+// as the prototype drew, in its faces (the role table's since 2026-10-06, or the prototype's own, --proto-faces): its
+// own canvases at 1.25 CSS px a unit and the page's device pixel ratio (2 here, the floor's 2.5 device px a unit), the
+// copy erased, restored and cropped, the text as SVG.
 //
 // The planes and the model are taken as the parity harness took them from the prototype (scratchpad parity/
 // run-proto.mjs, 2026-10-06), so that v0's measures compare with the prototype's floor: O is v0's own drawing of the
-// original, C its copy, T an element screenshot of its SVG on white; each unit's laid lines are its record's (as main.js
-// recorded them, rounded), its erase and crops are the drawing's audit; the kept renderings are the layout file's
-// displays and labels on the page (the instrument's, as the parity harness read them); a translated unit v0 does not
-// draw is left 'unanchored' (or the reason v0 gives). The completeness checks are the prototype's own checker's (layer-
-// proto/check.mjs), page by page; the clipped characters are each unit's own count, on its first page. Lost ink is the
-// gate's lostInk on v0's own planes at 2.5 device px a unit (regions of more than 6 px, the 2x floor of 4 px scaled by
-// area), against what v0 accounts for: its units' characters it draws in translation or elsewhere (the checker's 'acc'
-// and the crops' sources), grown over the ink connected to them within their lines' bands, never into a kept character,
-// a kept rendering or a line of a unit v0 does not draw.
+// original, C its copy, T an element screenshot of its SVG on white; each unit's laid lines are its record's (as
+// main.js recorded them, rounded), its erase and crops are the drawing's audit; the kept renderings are the layout
+// file's displays and labels on the page (the instrument's, as the parity harness read them); a translated unit v0 does
+// not draw is left 'unanchored' (or the reason v0 gives). The completeness checks are the prototype's own checker's
+// (layer- proto/check.mjs), page by page; the clipped characters are each unit's own count, on its first page. Lost ink
+// is the gate's lostInk on v0's own planes at 2.5 device px a unit (regions of more than 6 px, the 2x floor of 4 px
+// scaled by area), against what v0 accounts for: its units' characters it draws in translation or elsewhere (the
+// checker's 'acc' and the crops' sources), grown over the ink connected to them within their lines' bands, never into a
+// kept character, a kept rendering or a line of a unit v0 does not draw.
 import * as pdfjs from 'pdfjs-dist'
 import { lostInk } from '/engine/layer/check.mjs'
 import { MATH_FONT, modelPage, pixelPage } from '/gate/measure.mjs'
@@ -62,7 +63,7 @@ function keptOf(layout, p) {
 
 window.gate = {
   /** a fixture opened: v0, the made output's geometry, the units file asked for and arXiv's PDF */
-  async open({ name, target, ref, units: which, pages, params, place, dump, order }) {
+  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces }) {
     let V
     try { V = await import('/engine/layer-proto/run.mjs') } catch (e) { return { ready: false, why: `layer-proto/run.mjs: ${String(e?.message ?? e).slice(0, 200)}` } }
     const base = `/fixtures/${name}/`
@@ -71,7 +72,7 @@ window.gate = {
       ;[geometry, unitsFile, layout, fixtureUnits, data] = await Promise.all([json(`${base}geometry.json`), json(`${base}${which === 'p7' ? 'units-p7.json' : 'record.json'}`), json(`${base}layout.json`), json(`${base}units.json`), bytes(`${base}arxiv.pdf`)])
     } catch (e) { return { ready: false, why: String(e?.message ?? e).slice(0, 200) } }
     const doc = await pdfjs.getDocument({ data, cMapUrl: '/pdfjs/cmaps/', standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/', ...V.PDF_OPTIONS }).promise
-    const run = await V.openProto({ doc, geometry, units: unitsFile.units, target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json` })
+    const run = await V.openProto({ doc, geometry, units: unitsFile.units, target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json` })
     S = { V, run, doc, geometry, layout, ref, name, target, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: new Map(run.placed.map(p => [p.id, p])), checks: [], place: place ?? null, dump: dump ? [] : null }
     return { ready: true, pages: doc.numPages, units: unitsFile.units.length, located: geometry.left.units.length, even: run.P.even ?? null, family: null }
   },
