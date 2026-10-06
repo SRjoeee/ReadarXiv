@@ -401,6 +401,48 @@ function displayOutside(pieces, displays, macros) {
   const letters = ps => { const ds = ps.filter(p => displays.has(p)); return ds.length ? ds.map(p => displayLetters(p.src, macros)).join(' ') : null }
   return { lead: first > 0 ? letters(pieces.slice(0, first)) : null, trail: last >= 0 ? letters(pieces.slice(last + 1)) : null, inner: first >= 0 && last > first ? letters(pieces.slice(first + 1, last)) : null }
 }
+/**
+ * The commands TeX takes only where a table's row or cell begins or ends: \noalign's (\hline, booktabs' rules,
+ * \rowcolor, arydshln's, makecell's), \omit's (\cline, \multicolumn), a row's own end (\tabularnewline, \cr, longtable's
+ * \endhead and the rest). A cell's unit holds those standing at its start or its end as placeholders, and an engine
+ * moves a placeholder where its language puts the words: Microsoft's Spanish wrote "Nombre de la capa @a#", the row's
+ * \hline after the cell's text, and its French "Système @a#" with \toprule, and TeX stopped there, "Misplaced \noalign"
+ * (1512.03385 into es, 1810.04805 into es and fr, the layer lab of 2026-10-06; 1219 cells of 73 of the corpus's 124
+ * papers begin with one). So the unit keeps them (Builder.flush: `rowLead`, `rowTrail`, apart from its pieces, which the
+ * engine is sent and the records match by), and patch writes them where the source has them (rowsKept)
+ */
+const ROW_COMMANDS = new Set(['hline', 'cline', 'noalign', 'omit', 'multicolumn', 'multispan', 'toprule', 'midrule', 'bottomrule', 'cmidrule', 'addlinespace', 'specialrule', 'morecmidrules', 'hhline', 'rowcolor', 'hiderowcolors', 'showrowcolors', 'arrayrulecolor', 'hdashline', 'cdashline', 'firsthline', 'lasthline', 'Xhline', 'Xcline', 'hlineB', 'clineB', 'tabucline', 'rowfont', 'tabularnewline', 'cr', 'crcr', 'endhead', 'endfirsthead', 'endfoot', 'endlastfoot'])
+/** whether a placeholder is one of ROW_COMMANDS, or the paper's macro that begins with one (`bodies`, macroBodies: a
+ *  \thickhline of \noalign, a \resultgroup of \multicolumn) */
+const rowCommand = (src, bodies, depth = 0) => {
+  const name = /^\\([A-Za-z@]+)/.exec(src)?.[1]
+  if (!name) return false
+  if (ROW_COMMANDS.has(name)) return true
+  const body = bodies?.get(name)
+  return body !== undefined && depth < 4 && rowCommand(body.replace(/^(?:\s|%[^\n]*(?:\n|$)|\\relax(?![A-Za-z@]))+/, ''), bodies, depth + 1)
+}
+const blank = p => p.t === 'text' && !/\S/.test(p.s)
+/** a cell's row commands at its start and at its end, by their source: { lead, trail } */
+function rowEdges(pieces, bodies) {
+  const lead = [], trail = []
+  for (const p of pieces) { if (blank(p)) continue; if (p.t !== 'ph' || !rowCommand(p.src, bodies)) break; lead.push(p.src) }
+  for (let k = pieces.length - 1; k >= 0; k--) { const p = pieces[k]; if (blank(p)) continue; if (p.t !== 'ph' || !rowCommand(p.src, bodies)) break; trail.unshift(p.src) }
+  return { lead, trail }
+}
+/** a translation of a cell with its row commands where the source has them, before and after everything else and in
+ *  the source's order; the translation as it is where they are there already */
+function rowsKept(u, pieces) {
+  const lead = u.rowLead ?? [], trail = u.rowTrail ?? []
+  if (!lead.length && !trail.length) return pieces
+  const shown = pieces.filter(p => !blank(p)), at = (p, src) => p?.t === 'ph' && p.src === src
+  if (lead.every((src, k) => at(shown[k], src)) && trail.every((src, k) => at(shown[shown.length - trail.length + k], src))) return pieces
+  const rest = [...pieces]
+  const take = (src, last) => { const k = last ? rest.findLastIndex(p => at(p, src)) : rest.findIndex(p => at(p, src)); return k < 0 ? [] : rest.splice(k, 1) }
+  const first = lead.flatMap(src => take(src, false)), end = [...trail].reverse().flatMap(src => take(src, true)).reverse()
+  // a space after them, which TeX skips: the word after a command's name stays apart from it
+  return [...first, ...(first.length ? [{ t: 'text', s: ' ' }] : []), ...rest, ...end]
+}
+
 // A unit: { file, kind, start, end, pieces: [{t:'text', s} | {t:'ph', src} | {t:'open', id, src} | {t:'close', id, src}] }
 class Builder {
   constructor(file, units, src = '', macros = new Map()) { this.file = file; this.units = units; this.src = src; this.macros = macros; this.cur = null; this.pairId = 0; this.displays = new WeakSet() }
@@ -432,6 +474,8 @@ class Builder {
     // the paper's title, which goes with every batch to an LLM as the HTML page's does (DESIGN §8.2)
     if (this.title) u.title = true
     if (this.depth !== undefined) u.depth = this.depth
+    // a cell's row commands, which patch writes where the source has them (rowsKept)
+    if (u.kind === 'cell') { const { lead, trail } = rowEdges(u.pieces, this.macros); if (lead.length) u.rowLead = lead; if (trail.length) u.rowTrail = trail }
     this.units.push(u)
   }
 }
@@ -926,8 +970,10 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
   // length of what closes it after it (its piece's `post`)
   const render = (u, inner = null) => {
     const srcEnc = project.transcode?.has(u.file) ? 'utf8' : 'latin1'
-    // a source's text as the source writes it: a letter an accent made (Builder.letter) is the accent again
-    const pieces = (translated.get(u) ?? u.pieces).map(p => (p.t === 'text' && !p.tr && p.src !== undefined ? { ...p, s: p.src } : p))
+    // a source's text as the source writes it: a letter an accent made (Builder.letter) is the accent again; a cell's
+    // row commands where the source has them (rowsKept)
+    const own = translated.get(u)
+    const pieces = (own ? rowsKept(u, own) : u.pieces).map(p => (p.t === 'text' && !p.tr && p.src !== undefined ? { ...p, s: p.src } : p))
     const m = mark?.(u)
     // before the first word, inside any font command's group (nothing precedes it there to kern with); before an
     // inline formula or citation that comes first; before the macro when the word is glued to one (\\name's: between

@@ -478,3 +478,55 @@ describe('patch: where each unit is written', () => {
     expect([outer.from <= (inner[0]?.from ?? -1), (inner[0]?.to ?? Infinity) <= outer.to]).toEqual([true, true])
   })
 })
+
+describe('a cell\'s row commands stay where the row has them (1512.03385 into es, 1810.04805 into es and fr: "Misplaced \\noalign")', () => {
+  type Piece = { t: string; s?: string; src?: string; tr?: boolean }
+  type Cell = { kind: string; pieces: Piece[]; rowLead?: string[]; rowTrail?: string[] }
+  const tables = (tex: string) => loadProject(inMemory(new Map([['main.tex', new TextEncoder().encode(tex)]])), 'main.tex', { tables: true })
+  const doc = (body: string, preamble = '') => `\\documentclass{article}${preamble}\\begin{document}\n${body}\n\\end{document}\n`
+  const cellOf = (p: ReturnType<typeof tables>, word: string) => (p.units as unknown as Cell[]).find(u => u.kind === 'cell' && u.pieces.some(x => x.t === 'text' && x.s?.includes(word))) as Cell
+  /** the cell translated as an engine that moved its placeholders sent it back: its words first, then every placeholder */
+  const moved = (u: Cell, words: string) => [{ t: 'text', tr: true, s: `${words} ` }, ...u.pieces.filter(x => x.t === 'ph'), { t: 'text', s: ' ' }]
+  const written = (p: ReturnType<typeof tables>, translated: Map<Cell, Piece[]>) => new TextDecoder().decode(patch(p, translated as unknown as Map<(typeof p.units)[number], unknown[]>).get('main.tex'))
+  const TABLE = doc('\\begin{tabular}{ll}\n\\hline\nlayer name & output size \\\\\n\\toprule\n\\rowcolor{gray}\nSystem & Score \\\\\n\\end{tabular}', '\\usepackage{booktabs,colortbl}')
+
+  it('a cell keeps the rules its row begins with, apart from its pieces: what the engine is sent, and the records are matched by, is as before', () => {
+    const p = tables(TABLE)
+    const first = cellOf(p, 'layer name'), second = cellOf(p, 'System')
+    expect(first.rowLead).toEqual(['\\hline'])
+    expect(second.rowLead).toEqual(['\\toprule', '\\rowcolor{gray}'])
+    expect(first.pieces.filter(x => x.t === 'ph').map(x => x.src)).toEqual(['\\hline'])
+    expect(cellOf(p, 'output size').rowLead).toBeUndefined()
+  })
+
+  it('a translation that moved them after its words is written with them first, in the source\'s order, before every word', () => {
+    const p = tables(TABLE)
+    const first = cellOf(p, 'layer name'), second = cellOf(p, 'System')
+    const tex = written(p, new Map([[first, moved(first, 'Nombre de la capa')], [second, moved(second, 'Sistema')]]))
+    expect(tex).toContain('\\hline Nombre de la capa')
+    expect(tex).toMatch(/\\toprule\\rowcolor\{gray\} Sistema/)
+    expect(tex).not.toMatch(/capa\s*\\hline|Sistema\s*\\toprule/)
+  })
+
+  it('a translation that has them in place is written byte for byte as before', () => {
+    const p = tables(TABLE)
+    const first = cellOf(p, 'layer name')
+    const inPlace = first.pieces.map(x => (x.t === 'text' && /\S/.test(x.s ?? '') ? { ...x, tr: true, s: (x.s ?? '').replace('layer name', 'Nombre de la capa') } : x))
+    expect(written(p, new Map([[first, inPlace]]))).toContain('\\hline\nNombre de la capa & output size')
+  })
+
+  it('the paper\'s own rule, a macro that begins with \\noalign, is one (a paper\'s \\thickhline or \\shline)', () => {
+    const p = tables(doc('\\begin{tabular}{l}\n\\thickhline\nA cell of words \\\\\n\\end{tabular}', '\\newcommand{\\thickhline}{\\noalign{\\hrule height 1pt}}'))
+    const cell = cellOf(p, 'A cell')
+    expect(cell.rowLead).toEqual(['\\thickhline'])
+    expect(written(p, new Map([[cell, moved(cell, 'Una celda')]]))).toContain('\\thickhline Una celda')
+  })
+
+  it('a row\'s own end at a cell\'s end stays last, and a cell\'s other placeholders stay the engine\'s', () => {
+    const p = tables(doc('\\begin{tabular}{l}\n\\textbf{A} cell of words \\tabularnewline\n\\end{tabular}'))
+    const cell = cellOf(p, 'cell of words')
+    expect(cell.rowTrail).toEqual(['\\tabularnewline'])
+    const tex = written(p, new Map([[cell, [{ t: 'ph', src: '\\tabularnewline' }, { t: 'text', tr: true, s: 'Una celda ' }, ...cell.pieces.filter(x => x.t === 'open' || x.t === 'close')]]]))
+    expect(tex).toMatch(/Una celda \\textbf\{\}\s*\\tabularnewline/)
+  })
+})
