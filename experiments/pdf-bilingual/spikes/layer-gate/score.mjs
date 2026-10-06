@@ -44,6 +44,19 @@ export const MEASURES = [
   ['duplicated', 'model', 'defect', 'down', 'duplications'],
   ['clipped', 'model', 'defect', 'down', 'clipped characters'],
   ['numbersLost', 'model', 'defect', 'down', 'equation numbers not shown'],
+  // the text-removed PDF's (--removal): its removed page the truth of what stays (pdf-remove-report.md §3.1)
+  ['trueResidue', 'pixel', 'defect', 'down', 'leftover English (true residue)'],
+  ['traces', 'pixel', 'defect', 'down', 'faint leftovers (traces)'],
+  ['trueBites', 'pixel', 'defect', 'down', 'kept ink destroyed (true bites)'],
+  ['cropForeignInk', 'pixel', 'defect', 'down', 'crops carrying foreign ink (6 px or more)'],
+  // and its exactness: the glyphs removed are the glyphs the layer replaces, nothing else removed or moved
+  ['rmOutside', 'pixel', 'defect', 'down', 'pixels changed outside the removed glyphs'],
+  ['rmMissed', 'model', 'defect', 'down', 'glyphs and rules replaced, not removed'],
+  ['rmOther', 'model', 'defect', 'down', 'glyphs and rules removed, not replaced'],
+  ['rmMoved', 'model', 'defect', 'down', 'kept glyphs moved'],
+  ['rmPOther', 'model', 'defect', 'down', "placeholders' page: other ink or a crop's glyph missing"],
+  ['rmMismatched', 'model', 'defect', 'down', "units whose removal is not the plan's"],
+  ['rmRefused', 'model', 'defect', 'down', 'pages refused by the remover'],
 ]
 /** recorded beside them, not gated: the pitch is the rules' (CJK's leading is 1.3 by rule), the top a position */
 export const REPORTED = [['pitch', 'pitch ratio'], ['dTop', '|top shift| (pt)'], ['onGrid', 'lines on a layout baseline']]
@@ -80,14 +93,19 @@ export function pageEntry(page, model, pixel) {
     clipped: model.check.clipped, numbersTotal: model.check.numbers.total, numbersShown: model.check.numbers.shown, numbersLost: model.check.numbers.total - model.check.numbers.shown,
     where: model.where, style: model.style, drawn: model.drawn,
   }
+  if (model.removal) Object.assign(e, { rmRefused: model.removal.refused, rmMismatched: model.removal.mismatched, rmUnits: model.removal.units, rmSwapped: model.removal.swapped })
+  const ck = model.removalCheck
+  if (ck) Object.assign(e, { rmRemoved: ck.removed + ck.rulesRemoved, rmMissed: ck.missed + ck.rulesMissed, rmOther: ck.other + ck.extra + ck.rulesOther, rmMoved: ck.moved, rmPOther: ck.pOther + ck.pMissing })
   if (pixel) {
     Object.assign(e, {
       textCells: pixel.coverage.text.cells, textTranslatedCells: pixel.coverage.text.translated, textEnglishCells: pixel.coverage.text.english, textBlankCells: pixel.coverage.text.blank,
       cellCells: pixel.coverage.cells.cells, cellTranslatedCells: pixel.coverage.cells.translated, neutral: pixel.neutral,
       overlap: pixel.overlap, overlapPx: pixel.overlapPx, stray: pixel.stray, residue: pixel.residue, residuePx: pixel.residuePx, bites: pixel.bites, bitePx: pixel.bitePx,
       vanished: pixel.vanished, doubled: pixel.doubled, graphicsPx: pixel.graphics.px, graphicsErased: pixel.graphics.erased, graphicsOverdrawn: pixel.graphics.overdrawn,
-      lostInk: pixel.lostInk.regions, lostInkPx: pixel.lostInk.px, lostBoxes: pixel.lostInk.boxes,
+      lostInk: pixel.lostInk.regions, lostInkPx: pixel.lostInk.px, lostBoxes: pixel.lostInk.boxes, regionsAt: pixel.regionsAt,
     })
+    const rm = pixel.removal
+    if (rm) Object.assign(e, { trueResidue: rm.trueResidue, trueResiduePx: rm.trueResiduePx, traces: rm.traces, tracesPx: rm.tracesPx, trueBites: rm.trueBites, trueBitesPx: rm.trueBitesPx, cropForeignInk: rm.cropForeignInk, cropForeignInkPx: rm.cropForeignInkPx, rmCrops: rm.crops, truthAt: rm.at })
   }
   return { entry: e, frames: { body, fills, pitches, scales } }
 }
@@ -120,6 +138,8 @@ export function fixtureTotals(pages, frames, tier) {
       overlapPx: sum(pages, p => p.overlapPx), residuePx: sum(pages, p => p.residuePx), bitePx: sum(pages, p => p.bitePx), lostInkPx: sum(pages, p => p.lostInkPx), graphicsPx: sum(pages, p => p.graphicsPx),
     })
   }
+  // the text-removed PDF's sums, where the run has them
+  for (const k of ['rmRemoved', 'rmUnits', 'rmSwapped', 'trueResiduePx', 'tracesPx', 'trueBitesPx', 'rmDiffering', 'cropForeignInkPx', 'rmCrops']) if (pages.some(p => p[k] !== undefined)) t[k] = sum(pages, p => p[k])
   for (const d of DEFECTS) if (pages.some(p => p[d] !== undefined)) t[d] = sum(pages, p => p[d])
   t.rates = ratesOf(t, tier)
   t.modelRates = ratesOf(t, 'model')
@@ -164,6 +184,7 @@ export function pooled(list, tier) {
     })
   }
   for (const d of DEFECTS) if (list.some(t => t[d] !== undefined)) out[d] = sum(list, t => t[d] ?? 0)
+  for (const k of ['rmRemoved', 'rmUnits', 'rmSwapped', 'trueResiduePx', 'tracesPx', 'trueBitesPx', 'rmDiffering', 'cropForeignInkPx', 'rmCrops']) if (list.some(t => t[k] !== undefined)) out[k] = sum(list, t => t[k] ?? 0)
   out.rates = ratesOf(out, tier)
   out.modelRates = ratesOf(out, 'model')
   return out

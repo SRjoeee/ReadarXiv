@@ -22,7 +22,7 @@
 // kept character, a kept rendering or a line of a unit v0 does not draw.
 import * as pdfjs from 'pdfjs-dist'
 import { lostInk } from '/engine/layer/check.mjs'
-import { MATH_FONT, modelPage, pixelPage } from '/gate/measure.mjs'
+import { cropForeignPx, footprintOf, MATH_FONT, modelPage, pixelPage, removalPage } from '/gate/measure.mjs'
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
 /** device pixels a PDF unit: v0's canvases at 1.25 CSS px and dpr 2 (the floor's), and the lost-ink check's 2x floor */
@@ -61,9 +61,95 @@ function keptOf(layout, p) {
   return out
 }
 
+const PDF_ASSETS = { cMapUrl: '/pdfjs/cmaps/', standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/' }
+
+/** a page of a document drawn by the CPU at the gate's resolution on `bg` (the exactness check's and the truth's planes,
+ *  so that a figure's antialiasing is the same in each) */
+async function cpuPlane(doc, n, bg = '#ffffff') {
+  const pg = await doc.getPage(n), dpr = devicePixelRatio, vp = pg.getViewport({ scale: K / dpr })
+  const c = document.createElement('canvas')
+  c.width = Math.floor(vp.width * dpr)
+  c.height = Math.floor(vp.height * dpr)
+  const x = c.getContext('2d', { willReadFrequently: true })
+  x.fillStyle = bg
+  x.fillRect(0, 0, c.width, c.height)
+  await pg.render({ canvas: c, canvasContext: x, viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined, background: bg }).promise
+  const d = x.getImageData(0, 0, c.width, c.height).data
+  c.width = 0
+  c.height = 0
+  return d
+}
+
+/** a page of a document as v0 draws its own canvases (the GPU's, at the gate's resolution): the removed page as the copy
+ *  would take it */
+async function gpuPlane(doc, n, W, H) {
+  const pg = await doc.getPage(n), dpr = devicePixelRatio
+  const c = document.createElement('canvas')
+  c.width = W
+  c.height = H
+  await pg.render({ canvas: c, canvasContext: c.getContext('2d'), viewport: pg.getViewport({ scale: K / dpr }), transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
+  const d = c.getContext('2d').getImageData(0, 0, W, H).data
+  c.width = 0
+  c.height = 0
+  return d
+}
+
+/**
+ * The text-removed PDF's measures of the page prepared last (removalPage's, and each crop's foreign ink). The truth's
+ * removed page is the original as the copy was made from it outside the removed glyphs' footprint (where the two are the
+ * same, which the driver's exactness check sees to in Node: the browser's canvas draws a figure a little differently
+ * each time), and the removed page inside it (the footprint page drawn on white and on black). Each crop laid on the page:
+ * its source plane, and the coloured placeholders' page of its source page with its own rules' boxes
+ */
+async function removalMeasures(cur, T) {
+  const { p, W, H, view, O, C, units, kept } = cur
+  const { cdoc, rdoc, manifest, plan, mode } = S.rm
+  const set = s => manifest.sets[s]
+  const ok = !!manifest.page[p]?.ok
+  let Rm = O
+  if (ok) {
+    const own = mode === 'draw' ? S.run.removedCanvas(p) : null
+    const R = own ? own.getContext('2d').getImageData(0, 0, W, H).data : await gpuPlane(rdoc, set('R') + p, W, H)
+    const foot = footprintOf(await cpuPlane(cdoc, set('F') + p), await cpuPlane(cdoc, set('F') + p, '#000000'), W, H)
+    Rm = new Uint8ClampedArray(O)
+    for (let i = 0, q = 0; i < W * H; i++, q += 4) if (foot[i]) { Rm[q] = R[q]; Rm[q + 1] = R[q + 1]; Rm[q + 2] = R[q + 2] }
+  }
+  const drawn = units.filter(u => u.drawn)
+  const out = removalPage({ k: K, view, W, H, O, Rm, C, T, crops: drawn.flatMap(u => u.crops.map(c => c.devDst)), kept })
+  // each crop's foreign ink, from the plane it was cut from
+  const planes = new Map()
+  const plane = async (key, make) => { if (!planes.has(key)) planes.set(key, await make()); return planes.get(key) }
+  const R = await import('/engine/layer-proto/removal.mjs')
+  let crops = 0, foreign = 0, foreignPx = 0
+  for (const u of drawn) for (const c of u.crops) {
+    const q = c.srcPage
+    if (!manifest.page[q]?.ok) continue
+    const ci = (plan.pages[q]?.crops ?? []).findIndex(x => x.id === u.id && x.k === c.k)
+    const colour = manifest.colours?.[`${q}.${ci}`] ?? null
+    const own = await plane(`C${q}`, () => cpuPlane(cdoc, set('C') + q))
+    const src = c.plane === 'P' ? await plane(`P${q}`, () => cpuPlane(cdoc, set('P') + q)) : await plane(`O${q}`, () => cpuPlane(cdoc, q))
+    const qv = (await cdoc.getPage(q)).view
+    const toPx = (x, y) => [(x - qv[0]) * K, (qv[3] - y) * K]
+    const dev = b => { const [ax, ay] = toPx(b[0], b[3]), [bx, by] = toPx(b[2], b[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)] }
+    const ink = await plane(`ink${q}`, async () => R.inkOfPage(pdfjs.OPS, await cdoc.getPage(q)))
+    const at = ci >= 0 ? R.indicesOf(ink, plan.pages[q].crops[ci]) : null
+    const rules = (at?.paths ?? []).map(b => dev(ink.boxes.slice(4 * b, 4 * b + 4)))
+    const n = cropForeignPx({ W, H, src, own, colour, box: dev(c.src), rules })
+    crops++
+    foreignPx += n
+    if (n >= 6) foreign++
+  }
+  return { ...out, ok, crops, cropForeignInk: foreign, cropForeignInkPx: foreignPx }
+}
+
 window.gate = {
-  /** a fixture opened: v0, the made output's geometry, the units file asked for and arXiv's PDF */
-  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces, tex }) {
+  /**
+   * A fixture opened: v0, the made output's geometry, the units file asked for and arXiv's PDF. With `removal` (the
+   * text-removed PDF: 'draw', v0 drawing by it; 'measure', v0's own drawing measured against it), v0 is first run over
+   * the pages asked as a plan (removal.mjs, each unit's removal as it would draw it), which the driver makes the add-on
+   * from (`plan()`), and the fixture is then opened again over it (openRemoved): answered with `plan: true`
+   */
+  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces, tex, removal }) {
     let V
     try { V = await import('/engine/layer-proto/run.mjs') } catch (e) { return { ready: false, why: `layer-proto/run.mjs: ${String(e?.message ?? e).slice(0, 200)}` } }
     const base = `/fixtures/${name}/`
@@ -71,7 +157,7 @@ window.gate = {
     try {
       ;[geometry, unitsFile, layout, fixtureUnits, data] = await Promise.all([json(`${base}geometry.json`), json(`${base}${which === 'p7' ? 'units-p7.json' : 'record.json'}`), json(`${base}layout.json`), json(`${base}units.json`), bytes(`${base}arxiv.pdf`)])
     } catch (e) { return { ready: false, why: String(e?.message ?? e).slice(0, 200) } }
-    const doc = await pdfjs.getDocument({ data, cMapUrl: '/pdfjs/cmaps/', standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/', ...V.PDF_OPTIONS }).promise
+    const doc = await pdfjs.getDocument({ data, ...PDF_ASSETS, ...V.PDF_OPTIONS }).promise
     // the hybrid (--proto-tex): the fixture's layout file read by the engine's own reader, and the units file's pieces by
     // unit, beside v0's own inputs
     let texIn = null
@@ -79,9 +165,45 @@ window.gate = {
       const F = await import('/engine/layout/file.mjs')
       texIn = { ...tex, index: F.indexLayout(F.parseLayout(await bytes(`${base}layout.json`))), pieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])) }
     }
-    const run = await V.openProto({ doc, geometry, units: unitsFile.units, target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(texIn ? { tex: texIn } : {}), faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json` })
+    const opts = { doc, geometry, units: unitsFile.units, target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(texIn ? { tex: texIn } : {}), faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json` }
+    // (each run of v0 its own copy of the geometry and the units: v0 grows its units' lines in place, so that a second run
+    // over the same objects would start from the first's grown lines)
+    const fresh = () => ({ ...opts, geometry: structuredClone(geometry), units: structuredClone(unitsFile.units) })
+    const info = { ready: true, pages: doc.numPages, units: unitsFile.units.length, located: geometry.left.units.length, family: null }
+    if (removal) {
+      // the plan: v0 over every page asked, its copy not kept, each page let go once done
+      const t0 = performance.now()
+      const planRun = await V.openProto({ ...fresh(), copy: false, removal: { OPS: pdfjs.OPS, mode: 'plan' } })
+      const n = Math.min(doc.numPages, pages)
+      for (let p = 1; p <= n; p++) { await planRun.until(p); for (let q = 1; q <= p; q++) if (!planRun.rows[q - 1]?.released) planRun.release(q) }
+      S = { plan: planRun.removalPlan(), planStats: planRun.removalStats(), planMs: performance.now() - t0, pending: { opts: fresh(), data, name, ref, geometry, layout, fixtureUnits, place, dump, removal, V, doc } }
+      return { ...info, even: planRun.P.even ?? null, plan: true }
+    }
+    const run = await V.openProto(opts)
     S = { V, run, doc, geometry, layout, ref, name, target, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: new Map(run.placed.map(p => [p.id, p])), checks: [], place: place ?? null, dump: dump ? [] : null }
-    return { ready: true, pages: doc.numPages, units: unitsFile.units.length, located: geometry.left.units.length, even: run.P.even ?? null, family: null }
+    return { ...info, even: run.P.even ?? null }
+  },
+
+  /** the plan the first run made (open's, with `removal`), and its numbers */
+  plan() { const { byPage, ...stats } = S.planStats ?? {}; void byPage; return { plan: S.plan, stats, ms: Math.round(S.planMs) } },
+  /** how the second run drew by the add-on (draw): pages removed and refused, units swapped and drawn the old way */
+  removalStats() { const st = S.run?.removalStats?.(); if (!st) return null; const { byPage, ...rest } = st; void byPage; return rest },
+
+  /**
+   * The fixture opened again over the add-on (`url`: arXiv's PDF with it; `manifest` the remover's): v0 drawing by it
+   * ('draw') or its own way ('measure'), the add-on at hand either way for the measures that read the removed page; and a
+   * second reading of the add-on drawn by the CPU (`check`), for the exactness check's pixels
+   */
+  async openRemoved({ url, manifest }) {
+    const { opts, data, name, ref, geometry, layout, fixtureUnits, place, dump, removal, V, doc } = S.pending
+    const plan = S.plan
+    const combined = await bytes(url)
+    const rdoc = await pdfjs.getDocument({ data: combined.slice(), ...PDF_ASSETS, ...V.PDF_OPTIONS }).promise
+    const cdoc = await pdfjs.getDocument({ data: combined.slice(), ...PDF_ASSETS, ...V.PDF_OPTIONS, enableHWA: false }).promise
+    const run = await V.openProto({ ...opts, ...(removal === 'draw' ? { removal: { OPS: pdfjs.OPS, mode: 'draw', doc: rdoc, manifest, plan } } : {}) })
+    S = { V, run, doc, geometry, layout, ref, name, target: opts.target, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: new Map(run.placed.map(p => [p.id, p])), checks: [], place: place ?? null, dump: dump ? [] : null, rm: { mode: removal, manifest, plan, rdoc, cdoc, planStats: S.planStats, planMs: S.planMs } }
+    void data
+    return { ready: true }
   },
 
   /** a page laid and its model measured; with `pixel`, its planes taken and its SVG set for the driver's screenshot */
@@ -106,7 +228,7 @@ window.gate = {
       const lines = (r.lines ?? []).filter(l => l[0] === p).map(l => ({ baseline: l[1], size: r.f, x0: l[6], x1: l[7] })).filter(l => Number.isFinite(l.x0) && Number.isFinite(l.x1))
       const mine = S.audit.get(`${r.id}|${p}`) ?? []
       const erase = mine.filter(a => a.what === 'erase').map(a => boxPdf(a.box))
-      const crops = mine.filter(a => a.what === 'crop').map(a => ({ k: a.k, src: a.src, dst: boxPdf(a.dst) }))
+      const crops = mine.filter(a => a.what === 'crop').map(a => ({ k: a.k, src: a.src, dst: boxPdf(a.dst), plane: a.plane ?? 'O', srcPage: a.srcPage, devDst: a.dst }))
       return { id: r.id, kind: r.kind, drawn: true, why: null, orig: refOf.get(r.id)?.orig ?? [], lines, erase, crops, phs: [], pageText: [] }
     })
     const drawnIds = new Set(recs.map(r => r.id))
@@ -132,6 +254,12 @@ window.gate = {
     // the style: each unit's base as drawn against the original's (styleMatch's base), on its first page
     const first = recs.filter(r => r.pages[0] === p && r.match?.total)
     const out = { page: p, ms, model, check, where, style: [first.filter(r => r.match.base).length, first.length], drawn: recs.length, evened: false }
+    // the text-removed PDF: whether this page is removed, and its units drawn by it or the old way (their removal not the
+    // plan's)
+    if (S.rm) {
+      const st = S.run.removalStats?.()?.byPage?.[p]
+      out.removal = { ok: !!S.rm.manifest.page[p]?.ok, refused: S.rm.manifest.page[p]?.ok ? 0 : (S.rm.plan.pages[p]?.units?.length ? 1 : 0), units: st?.units ?? 0, swapped: st?.swapped ?? 0, mismatched: st?.mismatched ?? 0 }
+    }
     if (!pixel) return out
     const row = run.rows[p - 1]
     const W = row.left.width, H = row.left.height
@@ -217,6 +345,7 @@ window.gate = {
     S.lost = { lost, W, H, orig: O, copy: C, accounted }
     const [vx0, , , vy1] = view
     m.lostInk = { regions: lost.length, px: lost.reduce((a, l) => a + l.px, 0), boxes: lost.slice(0, 8).map(l => [vx0 + l.box[0] / K, vy1 - l.box[3] / K, vx0 + l.box[2] / K, vy1 - l.box[1] / K].map(v => Math.round(v * 10) / 10)) }
+    if (S.rm) m.removal = await removalMeasures(S.cur, T)
     return m
   },
 

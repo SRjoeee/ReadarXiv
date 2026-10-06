@@ -112,9 +112,11 @@ export function modelPage({ units, ref, items, translated }) {
     for (const t of u.pageText ?? []) if (t.segW > 0 && t.w > 1.3 * t.segW) wrongPageText++
     for (const q of u.phs ?? []) if ((q.status === 'norow' || q.status === 'empty') && (q.kind === 'math' || q.kind === 'cite')) droppedPh++
   }
-  // crops whose source box holds a text item of a line above or below it
+  // crops whose source box holds a text item of a line above or below it (a crop cut from the placeholders' page, the
+  // text-removed PDF's, holds no line's text whatever its box: its foreign ink is the pixel tier's, cropForeignInk)
   let cropForeign = 0
   for (const u of drawn) for (const c of u.crops) {
+    if (c.plane === 'P') continue
     const [x0, y0, x1, y1] = c.src
     if (items.some(it => {
       const base = it.y0 + 0.22 * (it.y1 - it.y0)
@@ -128,23 +130,26 @@ export function modelPage({ units, ref, items, translated }) {
   return { units: counts, fills, geo, wrongPageText, droppedPh, cropForeign, modelCells }
 }
 
-/** 4-connected components of a mask, counted by size: { n } each (the pixels' list is not kept) */
-function components(m, W, H, min) {
+/** 4-connected components of a mask, counted by size: their count; with `boxes`, the first BOXES regions' device-pixel
+ *  boxes and sizes pushed to it ([x0, y0, x1, y1, px]: where a regression is, for a look) */
+const BOXES = 8
+function components(m, W, H, min, boxes = null) {
   const seen = new Uint8Array(W * H), stack = []
   let regions = 0
   for (let s = 0; s < W * H; s++) {
     if (!m[s] || seen[s]) continue
-    let n = 0
+    let n = 0, x0 = W, y0 = H, x1 = -1, y1 = -1
     stack.push(s); seen[s] = 1
     while (stack.length) {
       const i = stack.pop(), x = i % W
       n++
+      if (boxes) { const y = (i - x) / W; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y }
       if (x > 0 && m[i - 1] && !seen[i - 1]) { seen[i - 1] = 1; stack.push(i - 1) }
       if (x < W - 1 && m[i + 1] && !seen[i + 1]) { seen[i + 1] = 1; stack.push(i + 1) }
       if (i >= W && m[i - W] && !seen[i - W]) { seen[i - W] = 1; stack.push(i - W) }
       if (i + W < W * H && m[i + W] && !seen[i + W]) { seen[i + W] = 1; stack.push(i + W) }
     }
-    if (n >= min) regions++
+    if (n >= min) { regions++; if (boxes && boxes.length < BOXES) boxes.push([x0, y0, x1 + 1, y1 + 1, n]) }
   }
   return regions
 }
@@ -195,7 +200,8 @@ export function pixelPage({ k, view, W, H, O, C, T, units, kept, items, ref, dra
   const ov = mask()
   let overlapPx = 0
   for (let i = 0; i < W * H; i++) if (inkT(i) && inkC(i)) { ov[i] = 1; overlapPx++ }
-  const overlap = components(ov, W, H, 6)
+  const where = { overlap: [], residue: [], bites: [], doubled: [] }
+  const overlap = components(ov, W, H, 6, where.overlap)
   const ovOrig = mask()
   for (let i = 0; i < W * H; i++) if (ov[i] && !cropM[i]) ovOrig[i] = 1
   const overlapOrig = components(ovOrig, W, H, 6)
@@ -227,7 +233,7 @@ export function pixelPage({ k, view, W, H, O, C, T, units, kept, items, ref, dra
     if (!eraseM[i] || cropM[i] || keptM[i] || intactM[i] || inkT(i)) continue
     if (traceO(i) && traceC(i)) { res[i] = 1; residuePx++ }
   }
-  const residue = components(res, W, H, 3)
+  const residue = components(res, W, H, 3, where.residue)
 
   // crops shown twice: the source still showing in the copy where a crop of it is drawn
   let doubled = 0
@@ -235,7 +241,7 @@ export function pixelPage({ k, view, W, H, O, C, T, units, kept, items, ref, dra
     const [x0, y0, x1, y1] = boxPx(c.src)
     let o = 0, s = 0
     for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = y * W + x; if (cropM[i]) continue; if (inkO(i)) { o++; if (inkC(i)) s++ } }
-    if (o >= 8 && s / o >= 0.6) doubled++
+    if (o >= 8 && s / o >= 0.6) { doubled++; if (where.doubled.length < BOXES) where.doubled.push(c.src.map(v => Math.round(v * 10) / 10).concat(u.id)) }
   }
 
   // math erased and drawn nowhere: a math-font item mostly inside a drawn unit's erase, gone from the copy, under no
@@ -307,7 +313,7 @@ export function pixelPage({ k, view, W, H, O, C, T, units, kept, items, ref, dra
   const bite = mask()
   let bitePx = 0
   for (let i = 0; i < W * H; i++) if (eraseRaw[i] && !ownM[i] && !cropM[i] && inkO(i) && !traceC(i)) { bite[i] = 1; bitePx++ }
-  const bites = components(bite, W, H, 4)
+  const bites = components(bite, W, H, 4, where.bites)
 
   // graphics: the original's ink that is no text (outside every text item and every reference line), erased or written over
   const textM = mask()
@@ -321,5 +327,131 @@ export function pixelPage({ k, view, W, H, O, C, T, units, kept, items, ref, dra
     if (inkT(i)) graphics.overdrawn++
   }
 
-  return { coverage, neutral, overlap, overlapOrig, overlapPx, stray, residue, residuePx, doubled, vanished, bites, bitePx, graphics }
+  // (the regions' boxes in PDF units, for a look)
+  const pdfBox = b => [view[0] + b[0] / k, view[3] - b[3] / k, view[0] + b[2] / k, view[3] - b[1] / k].map(v => Math.round(v * 10) / 10).concat(b[4])
+  const regionsAt = Object.fromEntries(Object.entries(where).filter(([, l]) => l.length).map(([key, l]) => [key, key === 'doubled' ? l : l.map(pdfBox)]))
+  return { coverage, neutral, overlap, overlapOrig, overlapPx, stray, residue, residuePx, doubled, vanished, bites, bitePx, graphics, regionsAt }
+}
+
+/** components of a mask (4-connected) of at least `min` pixels: their count and pixels */
+function regions(m, W, H, min) {
+  const seen = new Uint8Array(W * H), stack = []
+  let n = 0, px = 0
+  for (let s = 0; s < W * H; s++) {
+    if (!m[s] || seen[s]) continue
+    let c = 0
+    stack.push(s); seen[s] = 1
+    while (stack.length) {
+      const i = stack.pop(), x = i % W
+      c++
+      if (x > 0 && m[i - 1] && !seen[i - 1]) { seen[i - 1] = 1; stack.push(i - 1) }
+      if (x < W - 1 && m[i + 1] && !seen[i + 1]) { seen[i + 1] = 1; stack.push(i + 1) }
+      if (i >= W && m[i - W] && !seen[i - W]) { seen[i - W] = 1; stack.push(i - W) }
+      if (i + W < W * H && m[i + W] && !seen[i + W]) { seen[i + W] = 1; stack.push(i + W) }
+    }
+    if (c >= min) { n++; px += c }
+  }
+  return { n, px }
+}
+
+/** a footprint (the removed glyphs alone, drawn on white `Fw` and on black `Fb`, RGBA at W x H) as a mask a pixel
+ *  around: where the original and its removed page may differ */
+export function footprintOf(Fw, Fb, W, H) {
+  const N = W * H, foot = new Uint8Array(N)
+  for (let i = 0, q = 0; i < N; i++, q += 4) {
+    const on = Fw[q] < 255 || Fw[q + 1] < 255 || Fw[q + 2] < 255 || Fb[q] > 0 || Fb[q + 1] > 0 || Fb[q + 2] > 0
+    if (!on) continue
+    const x = i % W, y = (i - x) / W
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < W && yy < H) foot[yy * W + xx] = 1 }
+  }
+  return foot
+}
+
+/**
+ * The exactness check's pixels of a page: where the original (O) and its removed page (Rm) differ, and how many of those
+ * lie outside the removed glyphs' own ink (`foot`, footprintOf's), which must be none; with the regions' boxes in PDF
+ * units. On planes drawn by one renderer that draws a page alike every time (PDF.js in Node: the browser's canvas does
+ * not, a figure's pixels flickering between two drawings)
+ */
+export function outsideOf({ k, view, W, H, O, Rm, foot }) {
+  const N = W * H, outside = new Uint8Array(N)
+  let differing = 0, n = 0
+  for (let i = 0, q = 0; i < N; i++, q += 4) {
+    if (O[q] === Rm[q] && O[q + 1] === Rm[q + 1] && O[q + 2] === Rm[q + 2]) continue
+    differing++
+    if (!foot[i]) { n++; outside[i] = 1 }
+  }
+  const out = { differing, outside: n }
+  if (n) {
+    const boxes = []
+    components(outside, W, H, 1, boxes)
+    out.at = boxes.map(b => [view[0] + b[0] / k, view[3] - b[3] / k, view[0] + b[2] / k, view[3] - b[1] / k].map(v => Math.round(v * 10) / 10).concat(b[4]))
+  }
+  return out
+}
+
+/**
+ * The text-removed PDF's measures of a page, its removed page (Rm) the truth of what stays (the feasibility spike's,
+ * pdf-remove-report.md §3.1), on the planes at `k` device pixels a PDF unit: O the original as the copy was made from it,
+ * Rm the removed page (O itself outside the removed glyphs' footprint, where the two are the same: the exactness check's),
+ * C the copy (erased or swapped, cropped, before the text), T the text alone. A pixel is free where no crop is laid
+ * (`crops`, device-pixel boxes, a pixel around), nothing is kept (`kept`, PDF units, 1.5 px around) and the text is not
+ * drawn.
+ * - trueResidue: the removed ink (O's ink Rm lacks) still showing in C where free (leftover English), regions of 3 px;
+ * - traces: the same at the antialiased edge (O darker than 248, Rm white, C darker than 248), regions of 3 px;
+ * - trueBites: Rm's ink (what stays) gone from C, regions of 4 px.
+ */
+export function removalPage({ k, view, W, H, O, Rm, C, T, crops, kept }) {
+  const N = W * H
+  const toPx = (x, y) => [(x - view[0]) * k, (view[3] - y) * k]
+  const fill = (m, x0, y0, x1, y1) => { for (let y = Math.max(0, Math.floor(y0)); y < Math.min(H, Math.ceil(y1)); y++) m.fill(1, y * W + Math.max(0, Math.floor(x0)), y * W + Math.min(W, Math.ceil(x1))) }
+  const cropM = new Uint8Array(N), keptM = new Uint8Array(N)
+  for (const b of crops) fill(cropM, b[0] - 1, b[1] - 1, b[2] + 1, b[3] + 1)
+  for (const r of kept) { const [ax, ay] = toPx(r[0], r[3]), [bx, by] = toPx(r[2], r[1]); fill(keptM, ax - 1.5, ay - 1.5, bx + 1.5, by + 1.5) }
+  const res = new Uint8Array(N), trace = new Uint8Array(N), bite = new Uint8Array(N)
+  for (let i = 0, q = 0; i < N; i++, q += 4) {
+    const o = lum(O, q), r = lum(Rm, q), c = lum(C, q)
+    const free = !cropM[i] && !keptM[i] && !(lum(T, q) < TRACE)
+    if (free && o < INK && r >= TRACE && c < TRACE) res[i] = 1
+    if (free && o < 248 && r >= 254 && c < 248) trace[i] = 1
+    if (r < INK && c >= TRACE) bite[i] = 1
+  }
+  const where = { trueResidue: [], traces: [], trueBites: [] }
+  const R1 = regions(res, W, H, 3), R2 = regions(trace, W, H, 3), R3 = regions(bite, W, H, 4)
+  components(res, W, H, 3, where.trueResidue)
+  components(bite, W, H, 4, where.trueBites)
+  const pdfBox = b => [view[0] + b[0] / k, view[3] - b[3] / k, view[0] + b[2] / k, view[3] - b[1] / k].map(v => Math.round(v * 10) / 10).concat(b[4])
+  return { trueResidue: R1.n, trueResiduePx: R1.px, traces: R2.n, tracesPx: R2.px, trueBites: R3.n, trueBitesPx: R3.px, at: Object.fromEntries(Object.entries(where).filter(([, l]) => l.length).map(([key, l]) => [key, l.map(pdfBox)])) }
+}
+
+/** whether a pixel's ink is of a colour (its departure from white in the same proportions): the check's coloured
+ *  placeholders' page */
+function hueNear(P, q, col) {
+  const d0 = 255 - P[q], d1 = 255 - P[q + 1], d2 = 255 - P[q + 2], sd = d0 + d1 + d2
+  if (sd < 30) return false
+  const e0 = 255 - col[0], e1 = 255 - col[1], e2 = 255 - col[2], se = e0 + e1 + e2
+  return Math.abs(d0 / sd - e0 / se) + Math.abs(d1 / sd - e1 / se) + Math.abs(d2 / sd - e2 / se) < 0.25
+}
+
+/**
+ * The ink a crop carries that is not its placeholder's: inside its source box (device pixels), the ink of the plane it
+ * is cut from (`src`: the original's, or the placeholders' page's) that lies a pixel or more from its own ink (`own`: the
+ * coloured placeholders' page, where its placeholder's glyphs are `colour`, and its own rules' boxes, device pixels).
+ * Returns the foreign pixels.
+ */
+export function cropForeignPx({ W, H, src, own, colour, box, rules = [] }) {
+  const [x0, y0, x1, y1] = box.map((v, i) => (i < 2 ? Math.max(0, Math.floor(v)) : Math.min(i === 2 ? W : H, Math.ceil(v))))
+  const ruled = (x, y) => rules.some(r => x >= r[0] - 1 && x <= r[2] + 1 && y >= r[1] - 1 && y <= r[3] + 1)
+  let n = 0
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+    const q = 4 * (y * W + x)
+    if (lum(src, q) >= INK) continue
+    let mine = ruled(x, y)
+    for (let dy = -1; dy <= 1 && !mine; dy++) for (let dx = -1; dx <= 1 && !mine; dx++) {
+      const xx = x + dx, yy = y + dy
+      if (xx >= 0 && yy >= 0 && xx < W && yy < H && colour && hueNear(own, 4 * (yy * W + xx), colour)) mine = true
+    }
+    if (!mine) n++
+  }
+  return n
 }
