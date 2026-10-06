@@ -11,8 +11,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { lastTexLog } from '../../../src/pdf-reader/engine/latex-front.mjs'
-import { layoutMarksOf, MARK_CLASSES } from '../../../src/pdf-reader/engine/layout/marks.mjs'
-import { openPaper, originalFiles } from '../../../src/pdf-reader/engine/live.mjs'
+import { layoutMarksOf, MARK_CLASSES, probeSamples, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/live.mjs'
 
 let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
@@ -60,6 +60,33 @@ const STAY = {
   'a control space before a blank line': doc('', `${prose(10, () => '')} \\cite{a}.\\\n\n${prose(10, () => '')} \\cite{b}.\\\n\n${prose(8, () => '')}\n\n${BIB}`),
   // a tabularray table, which the scanner reads as prose: \\SetCell must open its cell (2608.03994)
   'a tabularray row\'s \\SetCell': doc('\\usepackage{tabularray}', `\\begin{tblr}{colspec={lccccc}}\nModel & Size & \\SetCell[c=3]{c} Slopes & & & $\\delta_1$ \\\\\nAlpha & 1.5 & 2 & 3 & 4 & $x$ \\\\\n\\end{tblr}\n\n${prose(6, () => '')}`),
+  // the paper's own switch: a package that sets the punctuation after a citation before it (cite.sty's and natbib's
+  // super, natmove); there no mark goes on a citation the punctuation follows
+  'cite.sty [super], a citation before a full stop or a comma (the switch)': doc('\\usepackage[super]{cite}', `${prose(16, i => [' \\cite{a}.', ' \\cite{b},', ' \\cite{a} and', '~\\cite{b};'][i % 4])}\n\n${BIB}`),
+  'natbib [super] with natmove, a citation before a full stop or a comma (the switch)': doc('\\usepackage[super,sort&compress]{natbib}\\usepackage{natmove}', `${prose(16, i => [' \\cite{a}.', ' \\cite{b},', ' \\cite{a} and', ' \\cite{a,b}:'][i % 4])}\n\n${BIB}`),
+  // fnpct, in Times, whose "y." kerns: a call keeps its opening mark alone (it looks ahead), and fnpct sets the full stop
+  // after a node of its own, which the mark does not part from the word; no switch is needed
+  'fnpct in Times, a footnote\'s call before a full stop or a comma': doc('\\usepackage{times}\\usepackage{fnpct}', `${prose(16, i => [` way\\footnote{Note ${i}.}.`, ` day\\footnote{Note ${i}.},`, ' and', ` key\\footnote{Note ${i}.} then`][i % 4])}`),
+  // what moves the punctuation after a citation, wherever it comes from (review I2): biblatex's \autocite scans for
+  // .,;:!? as a superscript or a footnote, in its own styles and in other packages' (biblatex-chem, biblatex-ext);
+  // REVTeX 4.2's superscripts swap it (\super@cite@swap); natbib's super alone
+  'biblatex autocite=superscript, \\autocite before ? and !': doc('\\usepackage[autocite=superscript]{biblatex}', `${prose(16, i => [' \\autocite{a}?', ' \\autocite{b}!', ' \\autocite{a} and', ' \\autocite{b}.'][i % 4])}`),
+  'biblatex autocite=footnote, \\autocite before ? and !': doc('\\usepackage[autocite=footnote]{biblatex}', `${prose(16, i => [' \\autocite{a}?', ' \\autocite{b}!', ' \\autocite{a} and', ' \\autocite{b},'][i % 4])}`),
+  'biblatex style=chem-acs, \\autocite before . and ,': doc('\\usepackage[style=chem-acs]{biblatex}', `${prose(16, i => [' \\autocite{a}.', ' \\autocite{b},', ' \\autocite{a} and', ' \\autocite{b};'][i % 4])}`),
+  'biblatex style=ext-verbose, \\autocite before . and ,': doc('\\usepackage[style=ext-verbose]{biblatex}', `${prose(16, i => [' \\autocite{a}.', ' \\autocite{b},', ' \\autocite{a} and', ' \\autocite{b}?'][i % 4])}`),
+  'REVTeX 4.2 aip,jcp, \\cite before . and ,': doc('', `${prose(16, i => [' \\cite{a}.', ' \\cite{b},', ' \\cite{a} and', ' \\cite{a,b};'][i % 4])}\n\n${BIB}`, '\\documentclass[aip,jcp,reprint]{revtex4-2}'),
+  // REVTeX 4.2's own swap runs under citeautoscript alone: it takes the token after a citation into a \csname, a closing
+  // mark there an error (the re-review's I-new: the probe measured the box before)
+  'REVTeX 4.2 aip,jcp,citeautoscript, \\cite before !, ? and a word': doc('', `${prose(16, i => [' \\cite{a}!', ' \\cite{b}?', ' \\cite{a} and', ' \\cite{b}.'][i % 4])}\n\n${BIB}`, '\\documentclass[aip,jcp,reprint,citeautoscript]{revtex4-2}'),
+  'natbib [super] alone, \\cite before . and ,': doc('\\usepackage[super]{natbib}', `${prose(16, i => [' \\cite{a}.', ' \\cite{b},', ' \\cite{a} and', ' \\citep{b};'][i % 4])}\n\n${BIB}`),
+  // footnote calls: one whose note has a letter alone (no unit: a call all the same), and two in a row, the second
+  // marked where TeX answers that a mark between them changes nothing; under footmisc's [multiple] too, whose separator
+  // comes from a flag the first call sets, not from a look ahead
+  'a footnote of one letter, and two calls in a row': doc('', `${prose(16, i => [' word\\footnote{A}', ' more\\footnote{One note.}\\footnote{Two note.} and', ' then\\footnote{B}\\footnote{C}.', ' last'][i % 4])}`),
+  'two calls in a row under footmisc [multiple]': doc('\\usepackage[multiple]{footmisc}', `${prose(16, i => [' more\\footnote{One note.}\\footnote{Two note.} and', ' word\\footnote{A}\\footnote{B}', ' then', ' last\\footnote{Three note.}.'][i % 4])}`),
+  // a parameter set in a paragraph, a number or a dimension at its end: TeX takes the space after it as the number's end
+  // and reads on for a unit or a `plus`, which a closing mark would stop (2608.30640's `.\n\looseness=-1 While`)
+  'a number or a dimension set before a word': doc('', `${prose(16, i => ['.\n\\looseness=-1 While', ' \\linepenalty=100 and', ' \\spaceskip=3pt plus 1pt the', ' \\hyphenpenalty 50 we'][i % 4])}`),
   // leaders before a placeholder: a mark taking the glue off and putting it back would put back plain glue, the dots gone
   // (\\dotfill ends in \\kern\\z@, which guards its leaders from an \\unskip)
   'leaders before a formula': doc('', `\\noindent Total\\dotfill{} $0$\n\n\\noindent Total 0\\dotfill{} $0$\n\n\\noindent Sum \\hrulefill\\ $x$ and \\dotfill \\cite{a}\n\n${prose(6, () => '')}\n${BIB}`),
@@ -71,7 +98,8 @@ const STAY = {
   // LaTeX's \\) reads nothing after it: an inline formula of \\( \\) keeps its closing mark, as one of $ $
   'an inline formula of \\( \\)': doc('', `${prose(24, i => [' \\(x_{' + i + '}\\) is', ' \\(y\\).', ' \\(z\\), then', '~\\(w\\) and'][i % 4])}`),
   'a macro that ends in leaders': doc('\\newcommand\\fillto[1]{#1\\dotfill}', `\\noindent\\fillto{Entry} $3$\n\n\\noindent\\fillto{Other entry} \\cite{a}\n\n${prose(6, () => '')}\n${BIB}`),
-  'fnpct, a full stop after a footnote\'s call': doc('\\usepackage{fnpct}', `${prose(16, i => (i % 2 ? ' word\\footnote{One.}. And' : ' more\\footnote{Two.}, then'))}`),
+  // the probe takes the marks off these calls (fnpct sets the full stop first); the formula keeps the case from being vacuous
+  'fnpct, a full stop after a footnote\'s call': doc('\\usepackage{fnpct}', `${prose(16, i => (i % 2 ? ' word\\footnote{One.}. And $x$' : ' more\\footnote{Two.}, then'))}`),
   // an italic word's correction before \\eqref's \\textup, under each engine: XeTeX's word is a whatsit (review I2)
   'an italic word before \\eqref': { engines: ['pdflatex', 'xelatex', 'lualatex'], src: doc('\\usepackage{iftex}\\ifPDFTeX\\else\\usepackage{fontspec}\\fi\\usepackage{amsmath}\\usepackage{amsthm}\\newtheorem{theorem}{Theorem}', `\\begin{equation} x = y \\label{e} \\end{equation}\n\\begin{theorem}${prose(24, i => [' by \\eqref{e}', ' with~\\eqref{e} and', ' of \\ref{e}', ' \\emph{set} by \\eqref{e}'][i % 4])}.\\end{theorem}\n${prose(6, () => '')}`) },
   'a word glued to a formula or a footnote\'s call, never hyphenated': doc('\\usepackage[margin=6.5cm]{geometry}', `${prose(30, i => [' representations$x_{' + i + '}$', ' characterization\\footnote{N.}', ' considerably$y$ is', ' experimentally\\footnotemark{} and'][i % 4])}`),
@@ -82,22 +110,34 @@ const STAY = {
  *  calls xdvipdfmx quiet (-q), which then says nothing of a destination set twice: the two steps here, as the TeX page
  *  runs them */
 function compileAll(jobs) {
-  const pass = j => (j.engine === 'xelatex' ? 'xelatex -no-pdf -interaction=nonstopmode main.tex >> term.txt 2>&1; xdvipdfmx main.xdv >> term.txt 2>&1' : `${j.engine} -interaction=nonstopmode main.tex >> term.txt 2>&1`)
+  const pass = j => (j.engine === 'xelatex' && !j.probe ? 'xelatex -no-pdf -interaction=nonstopmode main.tex >> term.txt 2>&1; xdvipdfmx main.xdv >> term.txt 2>&1' : `${j.engine} -interaction=nonstopmode main.tex >> term.txt 2>&1`)
   const script = jobs.map(j => `cd /work/${j.name} && for i in ${Array.from({ length: j.passes }, (_, k) => k + 1).join(' ')}; do ${pass(j)}; done`).join('\n')
   writeFileSync(join(dir, 'run.sh'), `${script}\n`)
   try { execFileSync('docker', ['run', '--rm', '--network', 'none', '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'sh', 'run.sh'], { stdio: 'ignore', timeout: 1_800_000 }) } catch {}
 }
-const jobs = []
-/** the source as v0 and v1 of a job: its files written, the job queued */
-function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', 'v1'] } = {}) {
+const jobs = [], queued = []
+/** the source as v0 and v1 of a job, queued: written once the mark probes have answered (prepare) */
+function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', 'v1'], own = true } = {}) {
   const paper = openPaper(new Map([['main.tex', new TextEncoder().encode(src)]]))
-  for (const v of variants) {
-    const d = join(dir, `${name}-${v}`)
-    mkdirSync(d, { recursive: true })
-    for (const [path, bytes] of originalFiles(paper, v === 'v1' ? { lines: true, layout: MARK_CLASSES } : { lines: true })) writeFileSync(join(d, path), bytes)
-    jobs.push({ name: `${name}-${v}`, engine, passes })
-  }
+  queued.push({ name, paper, engine, passes, variants, own })
   return paper
+}
+/** v1 with the paper's own switch as the run gets it: the mark probe compiled first, one pass in the paper's engine (the
+ *  font probe's compile, `marks`), its answers read; then every job's files written */
+function prepare() {
+  const probes = queued.filter(q => q.own && q.variants.includes('v1'))
+  for (const q of probes) { const d = join(dir, `${q.name}-probe`); mkdirSync(d, { recursive: true }); for (const [path, bytes] of probeFiles(q.paper, { marks: true })) writeFileSync(join(d, path), bytes) }
+  compileAll(probes.map(q => ({ name: `${q.name}-probe`, engine: q.engine === 'xelatex' ? 'xelatex -no-pdf' : q.engine, passes: 1, probe: true })))
+  for (const q of queued) {
+    const switches = q.own ? readMarkProbe(read(`${q.name}-probe`, 'log', 'latin1') ?? '', probeSamples(q.paper.units)) : null
+    q.switches = switches
+    for (const v of q.variants) {
+      const d = join(dir, `${q.name}-${v}`)
+      mkdirSync(d, { recursive: true })
+      for (const [path, bytes] of originalFiles(q.paper, v === 'v1' ? { lines: true, layout: MARK_CLASSES, switches } : { lines: true })) writeFileSync(join(d, path), bytes)
+      jobs.push({ name: `${q.name}-${v}`, engine: q.engine, passes: q.passes })
+    }
+  }
 }
 const read = (name, ext, enc) => { const f = join(dir, name, `main.${ext}`); return existsSync(f) ? readFileSync(f, enc) : null }
 /** a compiled PDF's text items by page (string, origin, width, size) and its axt- destinations (page 1-based) */
@@ -169,10 +209,13 @@ queue('twice-xe', twiceSrc, { engine: 'xelatex', variants: ['v1'] })
 queue('twice-lua', twiceSrc, { engine: 'lualatex', variants: ['v1'] })
 // a heading set in capitals keeps its marks' names (a case change leaves them)
 const capsPaper = queue('caps', doc('\\makeatletter\\renewcommand\\section{\\@startsection{section}{1}{\\z@}{3ex}{2ex}{\\normalfont\\bfseries\\MakeUppercase}}\\makeatother', `\\section{Capital $x$ heading}\n${prose(6, () => '')}`), { variants: ['v1'] })
-// a finding: cite.sty's [super] moves a full stop after a citation before its number, looking past the closing mark
-queue('super-stop', doc('\\usepackage[super]{cite}', `${prose(12, i => (i % 2 ? ' \\cite{a}.' : ' \\cite{b},'))}\n\n${BIB}`))
+// a finding, what the paper's own switch keeps from moving: cite.sty's [super] moves a full stop after a citation before
+// its number, looking past the closing mark (v1 here without the switch)
+queue('super-stop', doc('\\usepackage[super]{cite}', `${prose(12, i => (i % 2 ? ' \\cite{a}.' : ' \\cite{b},'))}\n\n${BIB}`), { own: false })
+queue('natmove-stop', STAY['natbib [super] with natmove, a citation before a full stop or a comma (the switch)'], { own: false })
 
-console.log(`compiling ${jobs.length} documents in ${dir}`)
+prepare()
+console.log(`compiling ${jobs.length} documents in ${dir}, after ${queued.filter(q => q.own && q.variants.includes('v1')).length} mark probes`)
 compileAll(jobs)
 
 // ---------------------------------------------------------------- the checks
@@ -190,6 +233,15 @@ for (const [name, , engine] of stays) {
   }
 }
 
+{
+  // REVTeX's swap takes the closing mark into a \csname: the probe's box with both marks errors, so before `!`, `?` and
+  // a word the answer is the opening mark alone, not every mark (a box that errors measured the previous box once)
+  const name = 'REVTeX 4.2 aip,jcp,citeautoscript, \\cite before !, ? and a word'
+  for (const key of [stayKey(name, 'pdflatex'), `${stayKey(name, 'pdflatex')}-hyperref`]) {
+    const got = queued.find(q => q.name === key)?.switches?.['\\cite']
+    check(`the mark probe's answer: ${key}`, got === '22221110', JSON.stringify({ got }))
+  }
+}
 {
   const inline = await pdfOf(`${stayKey('an inline formula of \\( \\)', 'pdflatex')}-v1`)
   const closing = [...(inline?.dests.keys() ?? [])].filter(k => /^p\d+\.\d+b$/.test(k)).length
@@ -260,6 +312,17 @@ for (const [job, label] of [['files', 'with hyperref and nameref'], ['files-titl
   }
 }
 {
+  // every call carries its opening mark: a note of one letter is a call, and a second call is marked where the probe
+  // says a mark between two calls changes nothing, which footmisc [multiple] does not contradict (nothing moves)
+  const key = name => `stay-${name.replace(/[^A-Za-z0-9]+/g, '-')}-v1`
+  const calls = async name => { const r = await pdfOf(key(name)); return r ? [...r.dests.keys()].filter(k => /^n\d+\.\d+a$/.test(k)).length : -1 }
+  const plain = await calls('a footnote of one letter, and two calls in a row'), multiple = await calls('two calls in a row under footmisc [multiple]')
+  // the plain document's 16 phrases: 4 one-letter calls, 8 calls in pairs, 8 in pairs before a full stop, none on the last
+  check('every footnote call is marked, a note of one letter and the second of two included', plain === 20, `${plain} opening marks, 20 calls`)
+  // 20 calls: 8 in pairs of whole notes, 8 in pairs of one letter, 4 alone
+  check('under footmisc [multiple] too, every call is marked', multiple === 20, `${multiple} opening marks, 20 calls`)
+}
+{
   const r = await pdfOf('caps-v1')
   const i = capsPaper.units.findIndex(u => u.kind === 'heading')
   check('a heading set in capitals keeps its marks\' names', !!r?.dests.has(`h${i}s`) && !!r?.dests.has(`h${i}e`) && [...(r?.dests.keys() ?? [])].every(k => !/[A-Z]/.test(k)), JSON.stringify([...(r?.dests.keys() ?? [])]))
@@ -267,7 +330,12 @@ for (const [job, label] of [['files', 'with hyperref and nameref'], ['files-titl
 {
   const [a, b] = [await pdfOf('super-stop-v0'), await pdfOf('super-stop-v1')]
   const m = a && b ? moved(a, b) : ['no PDF']
-  console.log(`note cite.sty [super], a citation before a full stop or a comma: ${m.length ? `${m.length} items moved, e.g. ${m.slice(0, 2).join('; ')}` : 'ok'}`)
+  console.log(`note cite.sty [super], a citation before a full stop or a comma, without the paper's switch: ${m.length ? `${m.length} items moved, e.g. ${m.slice(0, 2).join('; ')}` : 'ok'}`)
+}
+for (const [job, label] of [['natmove-stop', "natbib [super] with natmove, a citation before a full stop or a comma"]]) {
+  const [a, b] = [await pdfOf(`${job}-v0`), await pdfOf(`${job}-v1`)]
+  const m = a && b ? moved(a, b) : ['no PDF']
+  console.log(`note ${label}, without the paper's switch: ${m.length ? `${m.length} items moved, e.g. ${m.slice(0, 2).join('; ')}` : 'ok'}`)
 }
 
 if (!process.env.KEEP) rmSync(dir, { recursive: true, force: true })

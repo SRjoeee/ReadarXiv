@@ -10,8 +10,8 @@
 // macro or a footnote's call, which may look at what follows, nor after a control word, whose following spaces TeX
 // skips; and none is written to a file or a PDF string, so the
 // aux, the lists and the bookmarks are byte for byte the paper's. The native cases (experiments/pdf-bilingual/spikes/
-// layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) switches off a class
-// that moves a line of any paper.
+// layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) measures the layout
+// lines they carry and lose, and fails on a loss of no accepted cause.
 import { markUnits, NO_ARG_COMMANDS } from '../latex-front.mjs'
 import { tokenizeDocument } from '../anchors.mjs'
 import { readLines } from '../typeset/tex.mjs'
@@ -20,7 +20,9 @@ import { boundedJson, checkKeys, checkPages, checkViews, inView, isInteger, isNu
 // ---------------------------------------------------------------- the classes
 /** every class, in this order */
 export const MARK_CLASSES = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref', 'code', 'url', 'footnote', 'macro'])
-/** the classes the run marks when asked (Task 2 removes any class that moves a line of any paper) */
+/** the classes the run marks when asked: the global default, every class (Task 2's corpus check). The paper's own switch
+ *  (layoutMarking's `switches`, what TeX answers to the mark probe) takes marks off a command's placeholders where TeX
+ *  says they would change what follows them */
 export const LAYOUT_CLASSES = Object.freeze([...MARK_CLASSES])
 
 /** control words whose placeholder sets no ink, besides the declarations latex-front reads as taking no argument */
@@ -40,7 +42,9 @@ const EQREF = /^\\eqref(?![A-Za-z@])/
 const REF = /^\\(?:ref|autoref|[cC]ref|pageref|nameref)(?![A-Za-z@])/
 const CODE = /^\\(?:texttt|verb|lstinline)(?![A-Za-z@])/
 const URL = /^\\(?:url|href)(?![A-Za-z@])/
-const FOOTNOTE_MARK = /^\\footnotemark(?![A-Za-z@])/
+/** a footnote's call: \footnotemark, and a \footnote whose note the scanner made no unit of (fewer than two letters: a
+ *  number, a link) — a call all the same, which the layer places by its mark */
+const FOOTNOTE_MARK = /^\\footnote(?:mark)?(?![A-Za-z@])/
 
 /** a piece's class, or null where it is not marked (text, a group's open or close, an invisible placeholder) */
 export function classOf(piece) {
@@ -58,6 +62,125 @@ export function classOf(piece) {
   if (FOOTNOTE_MARK.test(src)) return 'footnote'
   return 'macro'
 }
+
+// ---------------------------------------------------------------- the paper's own switch: TeX asked
+/** what the mark probe sets after a placeholder: the six marks of punctuation a package may look for and set first
+ *  (biblatex scans for all six; natmove, cite.sty and REVTeX for the first four), a word after a space, and for a
+ *  footnote's call a second call */
+export const FOLLOWERS = Object.freeze(['.', ',', ';', ':', '!', '?', 'word', 'call'])
+const PUNCT = '.,;:!?'
+/** the classes whose commands the probe asks about: a package may look past their closing brace (a paper's macro has
+ *  its opening mark alone anyway: LOOKS_AHEAD) */
+const ASKED = new Set(['cite', 'ref', 'eqref', 'url', 'footnote'])
+/** the commands asked about at most, a paper */
+export const PROBE_MAX = 16
+/** a piece's leading command: \cite of \cite[p.~3]{a}, \footnote of a call; null for none */
+export const commandOf = p => (p?.t === 'nested' ? /^\\[A-Za-z@]+/.exec(p.pre ?? '')?.[0] : p?.t === 'ph' ? /^\\[A-Za-z@]+/.exec(p.src ?? '')?.[0] : null) ?? null
+/**
+ * The mark probe's samples: each command of the asked classes the paper writes, once, by the first piece of it TeX can
+ * set in a box (no comment or parameter sign, no \verb): a placeholder's own source (a citation of the keys the paper
+ * cites), or a call with a note of its own words
+ */
+export function probeSamples(units) {
+  const seen = new Map()
+  for (const u of units) for (const p of u.pieces) {
+    const cmd = commandOf(p), cls = classOf(p)
+    if (!cmd || !ASKED.has(cls) || seen.has(cmd) || seen.size >= PROBE_MAX) continue
+    const src = p.t === 'nested' ? `${p.pre}A note.${p.post}` : p.src
+    if (/[%#]|\\(?:verb|lstinline)(?![A-Za-z@])/.test(src) || src.length > 400) continue
+    seen.set(cmd, { command: cmd, src, call: cls === 'footnote' })
+  }
+  return [...seen.values()]
+}
+// ---- the probe document: sections, each writing tagged rows
+/** the probe's schema: raised when a row's shape changes; a new section adds rows of a tag of its own, and changes no
+ *  other's */
+export const PROBE_SCHEMA = 1
+/** the TeX that writes one row: `LAYOUT-PROBE <schema> <tag> <fields…>`, fields separated by spaces, each written by
+ *  TeX (a macro's expansion) or given here; never a line the run reads as a reading (no `AXT-`) */
+export const probeRow = (tag, ...fields) => `\\typeout{LAYOUT-PROBE ${PROBE_SCHEMA} ${tag} ${fields.join(' ')}}`
+/** the probe document's body, after \begin{document} of the font probe's compile (the paper's own preamble): its
+ *  sections' TeX, each a self-contained group of tests that writes its own rows, in order */
+export const probeTex = sections => `\\makeatletter${sections.join('\n')}\\makeatother\n`
+/** every row a probe's log holds: { schema, tag, fields }, in order. Rows of another schema or of a tag the caller does
+ *  not know are the caller's to pass over */
+export function readProbe(log) {
+  const out = []
+  for (const m of (log ?? '').matchAll(/^LAYOUT-PROBE (\d+) ([a-z][a-z0-9-]*)((?: [^ \n]+)*) *$/gm)) out.push({ schema: Number(m[1]), tag: m[2], fields: m[3].trim().split(' ').filter(Boolean) })
+  return out
+}
+
+/**
+ * The punctuation section of the probe (`punct`). For each sample and
+ * each follower, the sample set in a box after a word, as the paper sets it, then with `{}` between it and the follower
+ * (does the command look at what follows?), with its two layout marks, with its opening mark alone, the boxes compared
+ * by width, height, depth and their last node; for `call`, the call before a second one with an opening mark between
+ * them or none. One row a sample, `punct <i> <a code a follower>`: 0 every mark as LAYOUT_TEX sets it, 1 no
+ * closing mark, 2 no mark (for `call`: 0 a mark may stand between the two calls, 2 none may); before each box a row
+ * `punct-at <i> <j> <box>`, so that an error TeX logs is that box's (readMarkProbe). Each
+ * box is set into a register voided first, and says whether it closed where it was meant to (\ifinner at its last
+ * statement): a box an error ended early is never the box before it, still in the register (the re-review's I-new:
+ * REVTeX's citeautoscript was answered every mark before `!`, `?` and a word). Every box starts from the
+ * same state: the footnote counter as it was (a call's number of two digits is wider than one of one: 2608.27728), and
+ * biblatex's citation trackers reset (a second citation of a key may be set short). Every box ends at a space,
+ * where each package's lookahead stops (REVTeX's swap takes any token after the citation in a \csname); an empty
+ * paragraph after each sample starts TeX's error count again. Writes nothing, ships out nothing
+ */
+export function punctuationSection(samples) {
+  const box = (i, j, n, body) => `${probeRow('punct-at', i, j, n)}\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn{}\\axt@qreset\\setbox\\axt@qbox\\hbox{way ${body} \\unskip\\xdef\\axt@qn{\\the\\lastnodetype\\ifinner\\ifhmode/in\\fi\\fi}}\\xdef\\axt@q${n}{\\the\\wd\\axt@qbox/\\the\\ht\\axt@qbox/\\the\\dp\\axt@qbox/\\axt@qn}`
+  const put = d => `\\xdef\\axt@qo{\\axt@qo${d}}`
+  const tests = samples.map(({ src, call }, i) => {
+    const open = `\\axtpma{q${i}a}`, close = `\\axtpm{q${i}b}`
+    const each = [...PUNCT, ' x'].map((f, j) => `\\begingroup${box(i, j, 'a', `${src}${f}`)}${box(i, j, 'b', `${src}{}${f}`)}${box(i, j, 'c', `${open}${src}${close}${f}`)}${box(i, j, 'd', `${open}${src}${f}`)}\\endgroup\\ifx\\axt@qa\\axt@qb\\ifx\\axt@qa\\axt@qd\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\else${put(2)}\\fi\\else${put(2)}\\fi`).join('')
+    const again = call ? `\\begingroup${box(i, 7, 'a', `${src}${src}`)}${box(i, 7, 'e', `${src}\\axtpma{q${i}c}${src}`)}\\endgroup\\ifx\\axt@qa\\axt@qe${put(0)}\\else${put(2)}\\fi` : put(0)
+    return `${each}${again}${probeRow('punct', i, '\\axt@qo')}\\gdef\\axt@qo{}\\noindent\\par`
+  })
+  const reset = '\\edef\\axt@qfn{\\ifdefined\\c@footnote\\the\\c@footnote\\else0\\fi}\\def\\axt@qreset{\\ifdefined\\c@footnote\\global\\c@footnote=\\axt@qfn\\relax\\fi\\ifdefined\\citereset\\citereset\\fi}'
+  return `\\begingroup\\newbox\\axt@qbox\\gdef\\axt@qo{}${reset}${tests.join('\n')}\\endgroup`
+}
+/** the probe document of the layout marks: today its punctuation section alone */
+export const markProbeTex = samples => probeTex([punctuationSection(samples)])
+/** a line TeX logs for an error: `! …`, or `<file>:<line>: …` under -file-line-error */
+const TEX_ERROR = /^(?:! |[^\s:]+:\d+: )/
+/**
+ * What TeX answered, from the probe's log: per sample's command, its code a follower (FOLLOWERS), for layoutMarking's
+ * `switches`. A box TeX logged an error in (after its `punct-at` row, before the next row) answers nothing: an error in
+ * the box as the paper sets it or with `{}` leaves the follower no answer at all (`x`); in the box with its opening mark,
+ * no mark (2); in the box with both marks, no closing mark (1); in a second call's, none between (2). A sample with no
+ * row (the probe stopped short of it), a row of another schema or another shape is no answer at all. layoutMarking sets
+ * no mark where there is no answer
+ */
+export function readMarkProbe(log, samples) {
+  const out = {}, errored = new Map()
+  let at = null
+  for (const line of (log ?? '').split('\n')) {
+    if (TEX_ERROR.test(line)) { if (at) (errored.get(at[0]) ?? errored.set(at[0], new Set()).get(at[0])).add(at[1]); continue }
+    const [r] = readProbe(line)
+    if (!r || r.schema !== PROBE_SCHEMA) continue
+    if (r.tag === 'punct-at' && r.fields.length === 3) { at = [`${r.fields[0]}:${r.fields[1]}`, r.fields[2]]; continue }
+    at = null
+    if (r.tag !== 'punct' || r.fields.length !== 2) continue
+    const i = r.fields[0], s = samples[Number(i)], codes = r.fields[1]
+    if (!s || !/^[012]+$/.test(codes) || codes.length !== FOLLOWERS.length) continue
+    out[s.command] = [...codes].map((c, j) => {
+      const bad = errored.get(`${i}:${j}`)
+      if (!bad) return c
+      if (bad.has('a') || bad.has('b')) return 'x'
+      if (bad.has('d') || bad.has('e')) return '2'
+      return c === '2' ? '2' : '1'
+    }).join('')
+  }
+  return out
+}
+/** the commands of the asked classes a paper writes: those an answer is looked for (layoutMarking sets none for one TeX
+ *  did not answer) */
+export function askedCommands(units) {
+  const out = new Set()
+  for (const u of units) for (const p of u.pieces) { const cmd = commandOf(p); if (cmd && ASKED.has(classOf(p))) out.add(cmd) }
+  return out
+}
+/** the commands whose marks TeX's answers take off anywhere but between two calls: the paper's own switch, on */
+export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /[12x]/.test(switches[c].slice(0, FOLLOWERS.length - 1))).sort()
 
 // ---------------------------------------------------------------- the TeX
 /**
@@ -102,9 +225,10 @@ export function classOf(piece) {
  *   is \protected, so an expansion (an \edef, a case change's) never runs it, and a case change leaves its name as it is
  *   (l3text's \l_text_case_exclude_arg_tl): a heading set in capitals keeps its marks' names.
  * What no TeX here can keep: a font kern between a heading's last letter and a full stop its class adds by expansion
- * (acmart's \@addpunct; 0.03-0.14 pt on that line), and a punctuation mark a superscript citation moves before itself by
- * looking past the closing mark (cite.sty's and natbib's [super]); and pdfTeX draws a virtual font's glyph after any
- * whatsit up to half a point from where TeX set it, though TeX's lists and places are the same
+ * (acmart's \@addpunct, amsart's and IEEEtran's run-in heads; 0.09 to 1.22 pt on that line, accepted: Task 2), and a
+ * punctuation mark a package sets before a citation or a call by looking past it (natmove, cite.sty's super, biblatex's
+ * \autocite, fnpct) — where TeX's answer to the mark probe takes the marks off (layoutMarking's `switches`). pdfTeX may
+ * draw a virtual font's glyph after a whatsit off where TeX set it; no corpus paper shows it (Task 2's TeX boxes)
  */
 export const LAYOUT_TEX = [
   '\\makeatletter\\newif\\ifaxt@off\\global\\let\\axt@pend\\@empty\\let\\axt@icr\\/\\def\\axt@icv{0pt}\\newif\\ifaxt@sig',
@@ -214,14 +338,32 @@ function passedOver(pieces) {
  * A placeholder of a class in `classes`, at index k of unit i, in a unit with a mark, gets \axtpma{p<i>.<k>a} before it
  * and \axtpm{p<i>.<k>b} after it (`n` for a footnote's call), but where a mark would change what TeX does:
  * - none at a unit's head before its start mark, nor so after a forced break or an alignment's tab (passedOver);
- * - none right after a piece that may look ahead (LOOKS_AHEAD), and none for a paper's macro glued to the letters
- *   before it, which may be letters of the same word;
- * - the opening mark only for a piece that may look ahead, and where the closing one would follow a control sequence
- *   (TeX skips the spaces after a control word), white space (a mark there would stand on the next line, a blank one no
- *   paragraph's end any more: 2608.08350's `.\` before one) or an environment's \end
+ * - none right after a piece that may look ahead (LOOKS_AHEAD), unless TeX answered that a mark there changes nothing
+ *   (`switches`: a footnote's call's `word`, or its `call` before another call), and none for a paper's macro glued to
+ *   the letters before it, which may be letters of the same word;
+ * - as TeX answered for the piece's command and what follows it (`switches`, the paper's own switch: readMarkProbe):
+ *   none (a package sets the full stop before a citation against the word before it, where an opening mark would part
+ *   them and lose their kern, and looks for it where the closing mark would stand: 2608.23865, up to 0.85 pt), or the
+ *   opening mark alone (REVTeX's superscripts take the token after a citation in a \csname), or both;
+ * - the opening mark only for a piece that may look ahead (but a footnote's call TeX answered for), and where the
+ *   closing one would follow a control sequence (TeX skips the spaces after a control word), white space (a mark there
+ *   would stand on the next line, a blank one no paragraph's end any more: 2608.08350's `.\` before one) or an
+ *   environment's \end
  */
-export function layoutMarking(units, classes, { lines = false } = {}) {
+export function layoutMarking(units, classes, { lines = false, switches = null } = {}) {
   const on = new Set(classes)
+  /** what TeX answered for a piece's command before what follows it: a code of readMarkProbe's ('x' no answer: no mark
+   *  as '2'); with `switches` and no answer for an asked class's command, '2' too — no mark where TeX did not say one
+   *  is safe (the re-review's m4); with no `switches` at all (the probe not run), undefined: the marks as before */
+  const answer = (p, next) => {
+    if (!switches) return undefined
+    const codes = switches[commandOf(p)]
+    if (!codes) return ASKED.has(classOf(p)) ? '2' : undefined
+    const code = classOf(next) === 'footnote' && classOf(p) === 'footnote' ? (codes[7] === '0' ? codes[6] : codes[7] === 'x' ? 'x' : '1') : codes[next?.t === 'text' && next.s[0] && PUNCT.includes(next.s[0]) ? PUNCT.indexOf(next.s[0]) : 6]
+    return code === 'x' ? '2' : code
+  }
+  /** whether a piece after one that may look ahead may have its marks: TeX answered so for a footnote's call */
+  const free = (after, p) => classOf(after) === 'footnote' && !!switches?.[commandOf(after)] && (classOf(p) === 'footnote' ? switches[commandOf(after)][7] === '0' : switches[commandOf(after)][6] === '0')
   const base = markUnits(units)
   const index = new Map(units.map((u, i) => [u, i]))
   const own = u => {
@@ -240,15 +382,17 @@ export function layoutMarking(units, classes, { lines = false } = {}) {
       const piece = p.t === 'nested' ? { ...p, unit: copyOf.get(p.unit) ?? p.unit } : p
       const after = last
       if (p.t !== 'text' || /[^ \t\r\n]/.test(p.s)) last = p
-      const cls = passed && !passed.has(k) && !LOOKS_AHEAD(after) ? classOf(p) : null
+      const cls = passed && !passed.has(k) && !(LOOKS_AHEAD(after) && !free(after, p)) ? classOf(p) : null
       if (!cls || !on.has(cls)) return [piece]
       // a paper's macro may set letters: glued to the word before, it is part of it (an accent, \\ss), and a mark would
       // part the word's hyphenation and kerns
-      const before = u.pieces[k - 1]
+      const before = u.pieces[k - 1], next = u.pieces[k + 1]
       if (cls === 'macro' && before?.t === 'text' && WORD_END.test(before.s)) return [piece]
+      const said = answer(p, next)
+      if (said === '2') return [piece]
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
       const open = { t: 'ph', src: `\\axtpma{${name}a}` }
-      if (LOOKS_AHEAD(p) || ENDS_IN_CS.test(p.src) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
+      if (said === '1' || (LOOKS_AHEAD(p) && !(cls === 'footnote' && said === '0')) || ENDS_IN_CS.test(p.src) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
       return [open, piece, { t: 'ph', src: `\\axtpm{${name}b}` }]
     })
   })
