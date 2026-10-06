@@ -75,7 +75,7 @@ const doc = (body, preamble = '') => `\\documentclass{article}\n${preamble}\\beg
 {
   const U = { 'main.tex': '\\documentclass{book}\n\\begin{document}\n\\chapter{Results of the study}\nWords of the chapter.\\newpage\nMore words of it.\\newpage\nAnd more.\n\\end{document}\n' }
   const [, cjkutf8] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
-  const translate = paper => new Map(paper.units.filter(u => u.kind === 'heading').map(u => [u, [{ t: 'text', tr: true, s: '研究结果' }]]))
+  const translate = paper => new Map(paper.units.filter(u => u.kind === 'heading').map(u => [u, [{ t: 'text', tr: true, s: '\u7814\u7a76\u7ed3\u679c' }]]))
   const fixed = await compile('u-fixed', U, cjkutf8, { translate }), bare = await compile('u-bare', U, cjkutf8, { translate, alter: tex => tex.replace('\\axtcjkprotect}', '}') })
   check('U: a translated chapter title in book\'s uppercased running heads sets under CJKutf8', fixed.ok && !/Missing character/.test(fixed.log), fixed.error)
   // what TeX stops at depends on the characters: the thesis's "Extra \\else", here an encoding's missing command
