@@ -275,8 +275,8 @@ on 2307 is 2.3 million glyph visits of its 50 million bound.
 - **Layout identity** (`layout-marks-cases.mjs`, the stream spike's four documents with their points and without them):
   pdfLaTeX every glyph and box within 1.1e-13 pt, every destination the same, the marks file the same to its hundredths
   but for the new fields; XeLaTeX the same but for case A's margin note's first word, 0.0013 pt, xdvipdfmx's own (TeX's
-  boxes the same by `\tracingoutput`); LuaLaTeX 0.0097 pt on 38 glyphs (the ruling). The full native suite, 205
-  documents, 211 checks: all ok.
+  boxes the same by `\tracingoutput`); LuaLaTeX 0.0097 pt on 38 glyphs (the ruling). The full native suite, 211
+  documents with the traced ones, 214 checks: all ok.
 - **Found on the way and fixed**, each with its row: MARK_DEF sets a unit's end mark before a display that ends it (such
   a display runs to the next unit's start mark, that unit's label left out, or to its column's end before a footnote's
   mark); TeX Live 2026's cmex sets a variation selector after a big operator (`∑` U+FE01), which arXiv's PDFs lack; a `fi`
