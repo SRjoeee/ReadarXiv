@@ -45,7 +45,7 @@ async function inksOf(data: Uint8Array) {
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p)
     const opList = await page.getOperatorList()
-    pages.push({ opList, ink: pageInk(OPS, opList, page.commonObjs, { rotate: 0, indices: true, blanks: true }) as Ink })
+    pages.push({ opList, ink: pageInk(OPS, opList, page.commonObjs, { rotate: 0, indices: true }) as Ink })
   }
   return { doc, pages }
 }

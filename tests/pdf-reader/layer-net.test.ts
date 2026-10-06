@@ -453,3 +453,61 @@ describe('the net, fix round 1 (the review)', () => {
     expect(netOf(inp, forged, tr([[0, han(5)], [1, 2], [0, han(60)]]))).toBe('missing')
   })
 })
+
+describe('a text symbol (PH_FLAG.TEXT, Fix 1 of the maker round)', () => {
+  // \% glued to a number, which the marking gives no mark: the layout found its character on the unit's line and draws it
+  const SYM: UnitDef = { id: 3, lines: column(2, { top: 500 }), ph: [{ k: 1, kind: 'macro', flags: PH_FLAG.TEXT, text: '%' }], erase: [[0, 72, 497.5, 472, 507], [1, 72, 485.5, 472, 495]] }
+  const pieces: TrPiece[] = [[0, `${han(8)}3.57`], [1, 1], [0, han(12)]]
+  it('is drawn as its character in the run, an item that names its k, glued to the number before it, and the net passes it', () => {
+    const inp = input([SYM])
+    const u = laid(layUnit(inp, 3, tr(pieces)))
+    expect(drawnPh(u)).toEqual([[1, 'text', '%']])
+    const items = u.lines.flatMap(l => l.items)
+    const at = items.findIndex(it => it.ph === 1)
+    // nothing breaks between the number and its sign
+    expect(items[at - 1]?.text?.endsWith('3.57')).toBe(true)
+    expect(netOf(inp, u, tr(pieces))).toBeNull()
+  })
+  it('a translation that drops it leaves the unit the original\'s: missing', () => {
+    const r = layUnit(input([SYM]), 3, tr([[0, `${han(8)}3.57`], [0, han(12)]]))
+    expect(r).toMatchObject({ fit: false, why: 'missing' })
+  })
+})
+
+describe('an author block (the prototype\'s main.js)', () => {
+  it('stays the original\'s, whatever its translation: the layer does not set a block of names', () => {
+    const AUTHORS: UnitDef = { id: 4, kind: 'author', lines: column(1, { top: 400 }), erase: [[0, 72, 397.5, 472, 407]] }
+    expect(layUnit(input([AUTHORS]), 4, tr([[0, han(6)]]))).toMatchObject({ fit: false, why: 'author' })
+  })
+})
+
+describe('a held line (the layout\'s `held`, Fix 3 of the maker round)', () => {
+  it('gets no slot: the text flows round it, and its line is drawn on', () => {
+    const lines = column(5, { top: 500 })
+    const U: UnitDef = { id: 5, lines, held: [1], erase: [0, 2, 3, 4].map((i): EraseSpec => [i, 72, lines[i]!.baseline - 2.5, 472, lines[i]!.baseline + 7]) }
+    const heldBase = lines[1]!.baseline, text = tr([[0, han(150)]])
+    // not held: the text is laid on that line too
+    const free = laid(layUnit(input([{ ...U, held: [] }]), 5, text))
+    expect(free.lines.some(l => Math.abs(l.baseline - heldBase) < 5)).toBe(true)
+    const u = laid(layUnit(input([U]), 5, text))
+    for (const l of u.lines) expect(Math.abs(l.baseline - heldBase)).toBeGreaterThan(5)
+    expect(u.lines.length).toBeGreaterThan(0)
+  })
+})
+
+describe('a note of one line (the maker round: its mark a label)', () => {
+  const line = { x0: 90, x1: 200, baseline: 120 }
+  const NOTE: UnitDef = { id: 7, kind: 'footnote', lines: [line], labels: [{ kind: 'footnote', x0: 80, baseline: 123, x1: 84 }], erase: [[0, 90, 117.5, 200, 127]] }
+  const BODY: UnitDef = { id: 8, lines: column(5, { top: 300, x0: 72, w: 400 }) }
+  it('is as wide as its column, from its label on, never over it', () => {
+    const u = laid(layUnit(input([NOTE, BODY]), 7, tr([[0, han(30)]])))
+    expect(u.lines).toHaveLength(1)
+    expect(u.lines[0]!.x0).toBeGreaterThan(84)
+    expect(u.lines[0]!.x1).toBeGreaterThan(400)
+  })
+  it('is not widened where page text stands before it on its line: the layout holds it from inside', () => {
+    const text = (_p: number, x0: number) => (x0 < 90 && x0 > 84 ? 'Work performed' : null)
+    const r = layUnit(input([NOTE, BODY], text), 7, tr([[0, han(30)]]))
+    expect(r).toMatchObject({ fit: false, why: 'floor' })
+  })
+})

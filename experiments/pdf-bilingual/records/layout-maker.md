@@ -222,3 +222,91 @@ located. 2307's footnote calls are found 19/24 with it (23/27 before it).
 - The machine's load stood near 120 during this round's runs: the times of this table's runs are not comparable, and
   the table of times above is fix round 1's.
 
+
+## Task 6b: each placeholder by its own ink, in content-stream order
+
+The window-and-ownership geometry gave way to each piece's own ink: a point (`/axt-<name> ri`) beside each destination,
+points around each column's body and each float's box (`marks.mjs` POINTS_TEX), the glyphs and rules between a piece's
+points in the marked compile's content stream (`stream.mjs`), kept in the marks file (schema 2), and each carried and
+matched glyph by glyph on arXiv's page (`match.mjs`). Found is every owned glyph and rule matched, EMPTY nothing between
+the points, else LOST. Run: `layout-make.mjs` on the four papers, compiled as the corpus check compiles (the paper's own
+switch from the mark probe, the date pinned), TeX Live 2026 in Docker, one compile at a time.
+
+| | 1512.03385v1 | 1706.03762v7 | 2307.16209v1 | 2608.04322v1 |
+|---|---|---|---|---|
+| Visible pieces of located units | 360 | 202 | 3,481 | 242 |
+| Found, fix round 2 → stream | 312 → 312 | 171 → 171 | 3,345 → **3,382** | 208 → 208 |
+| EMPTY, fix round 2 → stream | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 |
+| LOST of the marked, fix round 2 → stream | 1 → 1 | 0 → 0 | 126 → **91** | 0 → 0 |
+| Unmarked (no opening mark by the marking) | 47 → 47 | 31 → 31 | 10 → 8 (Task 2's fix round marks more calls) | 34 → 34 |
+| Pieces LOST → found, found → LOST | 0, 0 | 0, 0 | **41**, 4 | 0, 0 |
+| Fix round 2 found, lacking own glyphs: the spike's count (its debug hook); by segment rectangles | 0; 0 | 3; 2 (31.8 `√`, 33.3 `k`) | 24; 16 (151.39 `Í`, 162.13 `(i)`, 210.43 `]`, `(∞)` ×3, …) | 1; 1 (39.3 `=`) |
+| Fix round 2 found, taking glyphs not its own: the spike's; by rectangles | 3; 3 (`,` `,` `)`) | 1; 1 (`.`) | 8; 8 (`,` ×3, `.`, `-sion`, …) | 1; 1 (`,`) |
+| **Owned glyphs and rules of found pieces not matched** | 0 of 1,143 | 0 of 762 | 0 of 35,661 | 0 of 793 |
+| **arXiv glyphs matched by two found pieces** | 0 | 0 | 0 | 0 |
+| EMPTY with ink; running-text glyphs taken; visible pieces with no row | 0; 0; 0 | 0; 0; 0 | 0; 0; 0 | 0; 0; 0 |
+| Matched by the same character; another Unicode at its place; a vote | 1,143; 0; 0 | 758; 1; 0 | 34,111; 324; 524 | 793; 0; 0 |
+| Page texts written; equal to arXiv's glyphs inside the segments; a run of its text layer's characters | 207; 207; 207 | 78; 78; 78 | 996; 996; 996 | 101; 101; 101 |
+| Marks file, bytes, fix round 2 → stream | 348,561 → 380,435 | 224,201 → 247,474 | 2,104,705 → 3,125,666 | 407,089 → 429,107 |
+| Layout file raw / gzip, fix round 2 → stream | 103,203 / 32,582 → 106,142 / 33,212 | 48,561 / 16,522 → 49,686 / 16,758 | 501,887 / 160,345 → 517,831 / 164,030 | 131,355 / 40,448 → 132,851 / 40,678 |
+| Maker, ms: whole (rows stage, the matching in it) | 331 (88) | 338 (45) | 1,648 (380) | 406 (72) |
+| layoutMarksOf, ms (the operator lists and the ownership with it); the layout compile, ms | 408; 3,303 | 114; 1,772 | 805; 15,428 | 125; 3,568 |
+
+Fix round 2's columns are its layout files (`9cb65b8c`, the data's `layout.json` of 12:47–12:50) and, for the spike's
+counts, `stream-owner-report.md`, which measured them with a debug hook; the rectangle counts take arXiv's glyphs inside
+each file's segments, for pieces found in both. The times are the last run's, at a load of 3 to 8; the matcher's work
+on 2307 is 2.3 million glyph visits of its 50 million bound.
+
+- **The named cases, all found whole:** 1706.03762 34.9 (`q·k=Σ…`, arXiv's `P`), 33.3 (`1/√d_k`), 31.8 (`√d_k`);
+  2307.16209 151.39, 162.13, 240.46, 245.21, 248.17, 319.7, 429.18 (`(3.83)`), 210.43 (`[52]`), 210.33 and 379.33 (set
+  on the next line on arXiv's page, found by the next-line start); 2608.04322 39.3 (with its `=`). Each a row of the spike.
+- **2307's 4 found → LOST**, each a display: 64.7 and 248.15 open at a page's foot, their next mark on the next page (the
+  ruling: their end is not inferred); 114.39 and 114.43, a `cases` brace arXiv's older TeX builds of other pieces at
+  other heights (the spike's "partial").
+- **2307's LOST, by reason (91):** an open display whose next mark is on another page 32; a display an unmarked display
+  follows 14, and the 19 after them that TeX set no point for (the empty paragraph between two displays); glyphs on
+  lines the carrier does not place 21 (units 106, 114, 121, 132, 240, 336) and the two `cases` braces; 88.39, opening on
+  a line where the unit has no row; 132.35 and 214.59, the text after them not found. These are the spike's limits.
+- **Rigid:** every found piece of 1512, 1706 and 2608 moved to arXiv's page at one offset (within 5.1 pt across, 0.6 pt
+  up). On 2307 seven displays are 0.61–0.67 pt up, and two move otherwise, both real layout differences: 240.50's rows
+  each rigid, its parts (3.103c) and (3.103d) 8 pt further apart on arXiv's page (the glue between them); 111.21's rows
+  rigid, its number 11 pt higher on arXiv's page (an older amsmath centring the tag on its `aligned`), matched by its own
+  line's carry.
+- **Layout identity** (`layout-marks-cases.mjs`, the stream spike's four documents with their points and without them):
+  pdfLaTeX every glyph and box within 1.1e-13 pt, every destination the same, the marks file the same to its hundredths
+  but for the new fields; XeLaTeX the same but for case A's margin note's first word, 0.0013 pt, xdvipdfmx's own (TeX's
+  boxes the same by `\tracingoutput`); LuaLaTeX 0.0097 pt on 38 glyphs (the ruling). The full native suite, 211
+  documents with the traced ones, 214 checks: all ok.
+- **Found on the way and fixed**, each with its row: MARK_DEF sets a unit's end mark before a display that ends it (such
+  a display runs to the next unit's start mark, that unit's label left out, or to its column's end before a footnote's
+  mark); TeX Live 2026's cmex sets a variation selector after a big operator (`∑` U+FE01), which arXiv's PDFs lack; a `fi`
+  ligature running past the eight characters a text search looks for; arXiv's big left parenthesis of a blank Unicode
+  (`ink.mjs` keeps every painted glyph).
+- **The brackets, found by TeX's own boxes** (the corpus check's trace, on papers run before the corpus run; no glyph had
+  moved in any): LaTeX 2026's `\@outputbox@removebskip` reads the column body's last glue (2608.24503's last page); a
+  point at a float's top gave its first paragraph a `\parskip` (2608.01890: the float's points now wrap its finished
+  box); the body's opening point, a whatsit before its first glue, made that glue a place to break, and balance.sty's
+  `\vsplit` took an empty first column on 2608.06007's last page (acmart), the columns 15 pt taller. The opening point
+  now has a `\penalty10000` after it, and the closing one goes after the body's last box, the glue, kerns and penalties
+  after it taken off and put back: no place to break made or lost (pdfTeX's `\vsplit` of a 400 pt box to 200 pt leaves
+  50 pt without the point and with point and penalty, 460 pt with the point alone). The trace takes the penalty as the
+  point's, and forgives a glue's name lost in the run the closing point put back, there alone (the footnotes may follow
+  that run: 2608.12333).
+- **The corpus check** (`layout-marks-gate.mjs`, the 113 papers, one compile at a time, against Task 2's record of 106
+  clean, 5 accepted, 2 switched, 0 failing). A first run stopped at 2608.06007 (the balance.sty finding above). The
+  second ran whole: 103, 5, 2 and 3 failing — 2608.12333, a footnote after the run a closing point put back (the trace's
+  fault, now forgiven there alone); 2608.28697, a piece whose ink lies off its page written with a how the table did not
+  hold, so the marks file's parser refused it (`OWNED_HOW` now has it); and 2608.18090, below. The final run, after both
+  fixes: **105 clean, 5 accepted, 2 switched, 1 failing** (2608.18090), none passed over; the accepted and switched
+  papers Task 2's own, and every count of lost lines and moved items Task 2's but for 2608.18090's one line and nine
+  items (lost strict 6, joined 4, by TeX 7; moved 22 and 7). 62,854 of the 63,797 pieces with an opening point own
+  their ink; the marks files 58.5 MB in all; 86 minutes, compiles median 19 s.
+- **2608.18090, a line pdfTeX packs by where its nodes sit in memory.** The third line of unit 12 on page 2 (`state at
+  residual block 20 … of`) has the same nodes in v0 and v1 but for the marks' own, and the same line breaks
+  (`\tracingparagraphs`: that line's badness 0 in both); v1 packs it with a glue set of 0.74948, v0 with none, and its
+  words move by up to 19.3 pt. The paper loads microtype, protrusion and expansion at level 2: with either off, the two
+  are the same. With both on, a box register holding five empty `\pdfliteral`s, set before the body and never shipped,
+  gives v0's line a glue set of −0.01106, and one to five of them give v1's line v0's setting; five zero kerns change
+  nothing. So the packing reads the layout of TeX's node memory, which any node the marks add moves; it needs the
+  citations resolved and the body before it, and both kinds of points (with either kind off, it is gone). Not the
+  points' doing, and not to be fixed in them: left failing for a ruling.

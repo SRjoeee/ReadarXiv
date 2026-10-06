@@ -8,7 +8,9 @@
 //  - the same words at other spaces: the position goes between the same two words' edges, as it stood between them;
 //  - no line of the same words: the nearest line within WINDOW on its page (or on the next or the previous page)
 //    holding FUZZY of its words in order (the longest common run), and the position goes between the words matched (a
-//    footnote's number glued to the word after it in one PDF, apart in the other).
+//    footnote's number glued to the word after it in one PDF, apart in the other);
+//  - else the one longer line within WINDOW on its page holding all of its words together, once: arXiv's text layer runs
+//    two things on one baseline into one line (two panel titles side by side, a heading and a figure's text beside it).
 // A position on no line carried carries to null: a reflowed line carries nothing. Pure, and over tokens alone
 // (anchors.mjs DocTokens: the marks file's for ours, tokenizeDocument's of arXiv's text layer for theirs).
 // Imports nothing.
@@ -41,6 +43,8 @@ const NEAR = 5
 const PAGE_WORK = 2_000_000, PAPER_WORK = 20_000_000
 /** the lines near a position looked at, at most */
 const SCAN = 64
+/** a position past a line's last word that is the line's still, of its height: a formula ends a line with no word */
+const PAST = 6
 /** a marks file's token box, as tokenizeDocument takes a face that gives no metrics */
 const ASCENT = 0.75, DESCENT = -0.22
 
@@ -217,9 +221,46 @@ export function carrierOf(marked, arxiv) {
           }
         }
       }
+      // a line of ours whose words stand, in order and together, once inside one longer arXiv line near it on its page,
+      // the only such line: arXiv's text layer runs two things on one baseline into one line where ours keeps them apart
+      // (1706's two panel titles side by side, "Scaled Dot-Product Attention" and "Multi-Head Attention"), or runs a
+      // figure's own text on after a heading ("Attention Visualizations Input-Input Layer5": ours draws the figure as a
+      // draft frame). The position goes between the words matched, as a fuzzy one does
+      if (!best && l.tokens.length >= FUZZY_PAIRS && l.tokens.length <= FUZZY_WORDS) {
+        const n = l.tokens.length, cs = byPage.get(l.page) ?? []
+        if (spend(cs.length)) return null
+        let only = null, many = false
+        for (const c of cs) {
+          if (c.tokens.length <= n || c.tokens.length > FUZZY_WORDS || Math.abs(c.y - l.y) > WINDOW) continue
+          if (spend(c.tokens.length)) return null
+          const at = runAt(l, c)
+          if (at === -2) { many = true; break }
+          if (at < 0) continue
+          if (only) { many = true; break }
+          only = { c, at }
+        }
+        if (only && !many) {
+          const { c, at } = only, pairs = l.tokens.map((_, a) => [a, at + a])
+          best = { rank: [0, Math.abs(c.y - l.y)], to: c, page: c.page, dx: arxiv[c.tokens[at]].x - marked[l.tokens[0]].x, dy: c.y - l.y, whole: false, pairs, fuzzy: true }
+        }
+      }
       if (best) found.set(l, best)
     }
     return found
+  }
+  /** where line `l`'s words begin as a run of `c`'s (an index into c's tokens), -1 where they are no run of it, -2 where
+   *  they are one more than once */
+  function runAt(l, c) {
+    const n = l.tokens.length
+    let at = -1
+    for (let j = 0; j + n <= c.tokens.length; j++) {
+      let k = 0
+      while (k < n && arxiv[c.tokens[j + k]].t === marked[l.tokens[k]].t) k++
+      if (k < n) continue
+      if (at >= 0) return -2
+      at = j
+    }
+    return at
   }
 
   /** the knots a position on a line not moved whole goes by: each matched word's two edges, ours → theirs, rising */
@@ -260,16 +301,46 @@ export function carrierOf(marked, arxiv) {
     for (const l of by) if (l.h > h) h = l.h
     nearby.set(page, { ys: Float64Array.from(by, l => l.y), by, h })
   }
+  // the rest of each word given in parts (a token with no text after its first part's, tokenizeDocument), ours by page:
+  // its first part's index and how many parts on it is, the first part on a line of ours
+  const lineOf = new Map()
+  for (const l of ours) for (const k of l.tokens) lineOf.set(k, l)
+  const restsOn = new Map()
+  for (let k = 1; k < marked.length; k++) {
+    const r = marked[k]
+    if (r.t !== '' || !Number.isInteger(r.page) || ![r.x, r.y, r.w, r.h].every(Number.isFinite)) continue
+    let f = k - 1
+    while (f >= 0 && marked[f].t === '') f--
+    if (f < 0 || !usable(marked[f]) || !lineOf.has(f)) continue
+    ;(restsOn.get(r.page) ?? restsOn.set(r.page, []).get(r.page)).push({ r, f, n: k - f })
+  }
+  /** a rest of ours carried as its first part's partner's same rest: arXiv's token as many on from the first part's
+   *  partner, a rest of that token's, or null */
+  const restCarried = ({ r, f, n }) => {
+    const l = lineOf.get(f), m = match.get(l)
+    if (!m) return null
+    const i = l.tokens.indexOf(f)
+    const pair = m.pairs ? m.pairs.find(([a]) => a === i) : [i, i]
+    const g = pair ? m.to.tokens[pair[1]] : undefined
+    if (g === undefined || arxiv[g]?.t !== marked[f].t) return null
+    for (let j = g + 1; j <= g + n; j++) if (arxiv[j]?.t !== '') return null
+    const R = arxiv[g + n]
+    return Number.isInteger(R.page) && [R.x, R.y, R.w].every(Number.isFinite) ? { R, dx: R.x + R.w - (r.x + r.w), dy: R.y - r.y } : null
+  }
   return {
     lines,
     over,
     /** the marked line a position stands on — on its page, within half its height of its baseline, from its height
-     *  before its start to twice its height past its end, the nearest by baseline of the SCAN lines nearest it — carried
-     *  as that line was */
+     *  before its start to PAST of its height past its end (a unit's end mark after the formula its line ends with:
+     *  1706's "… by 1/√dk", the formula no word), the nearest across of the SCAN lines nearest it, then by baseline —
+     *  carried as that line was. Or the rest of a word given in parts that it stands on or past, by the same reach, where
+     *  no line holds it or the line's nearest edge is a height further than the rest's: a paragraph whose last line is
+     *  the rest of a word cut by a hyphen ("mod-" / "els."), which no line of words holds and where its end mark stands
+     *  (six units of the shared ten), and one beside another column's line on its baseline — carried with the rest's
+     *  partner, the rest of the first part's partner, by its right edge's offset; not where arXiv's word is whole */
     carry(page, x, y) {
       if (!Number.isFinite(x) || !Number.isFinite(y)) return null
-      const n = nearby.get(page)
-      if (!n) return null
+      const n = nearby.get(page) ?? { ys: new Float64Array(0), by: [], h: 0 }
       let lo = 0, hi = n.ys.length
       while (lo < hi) { const mid = (lo + hi) >> 1; if (n.ys[mid] < y) lo = mid + 1; else hi = mid }
       let on = null
@@ -278,8 +349,17 @@ export function carrierOf(marked, arxiv) {
         const takeB = b < n.ys.length && (a < 0 || n.ys[b] - y <= y - n.ys[a])
         const i = takeB ? b++ : a--
         if (Math.abs(n.ys[i] - y) >= 0.5 * n.h) { if (takeB) b = n.ys.length; else a = -1; continue }
-        const l = n.by[i], d = Math.abs(l.y - y)
-        if (d < 0.5 * l.h && x >= l.x0 - l.h && x <= l.x1 + 2 * l.h && (!on || d < on.d)) on = { l, d }
+        const l = n.by[i], d = Math.abs(l.y - y), dx = x < l.x0 ? l.x0 - x : x > l.x1 ? x - l.x1 : 0
+        if (d < 0.5 * l.h && x >= l.x0 - l.h && x <= l.x1 + PAST * l.h && (!on || dx < on.dx || (dx === on.dx && d < on.d))) on = { l, d, dx }
+      }
+      let rest = null
+      for (const c of restsOn.get(page) ?? []) {
+        const { r } = c, d = Math.abs(r.y - y), dx = x < r.x ? r.x - x : x > r.x + r.w ? x - r.x - r.w : 0
+        if (d < 0.5 * r.h && x >= r.x - r.h && x <= r.x + r.w + PAST * r.h && (!rest || dx < rest.dx || (dx === rest.dx && d < rest.d))) rest = { c, d, dx }
+      }
+      if (rest && (!on || on.dx > rest.dx + on.l.h)) {
+        const k = restCarried(rest.c)
+        if (k) return { page: k.R.page, x: x + k.dx, y: y + k.dy, whole: false }
       }
       const m = on && match.get(on.l)
       return m ? { page: m.page, x: mapX(on.l, m, x), y: y + m.dy, whole: m.whole } : null
@@ -289,13 +369,14 @@ export function carrierOf(marked, arxiv) {
 const before = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] < b[i]; return false }
 
 /** the marks file's tokens (page, x, y, w, h, word; stride 6) as DocTokens, in its order: a box's top and bottom as
- *  tokenizeDocument takes a face that gives no metrics, for the file keeps no face. `m` is a parsed marks file
+ *  tokenizeDocument takes a face that gives no metrics, for the file keeps no face; a token of word -1, the rest of the
+ *  word before given in parts, with no text, as tokenizeDocument gives it. `m` is a parsed marks file
  *  (parseLayoutMarks) */
 export function tokensOfMarks(m) {
   const t = m.tokens, words = m.words, out = []
   for (let i = 0; i + 5 < t.length; i += 6) {
     const y = t[i + 2], h = t[i + 4]
-    out.push({ t: words[t[i + 5]], page: t[i], x: t[i + 1], y, w: t[i + 3], h, top: y + ASCENT * h, bottom: y + DESCENT * h, sym: null, far: null })
+    out.push({ t: t[i + 5] === -1 ? '' : words[t[i + 5]], page: t[i], x: t[i + 1], y, w: t[i + 3], h, top: y + ASCENT * h, bottom: y + DESCENT * h, sym: null, far: null })
   }
   return out
 }

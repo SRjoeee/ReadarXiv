@@ -25,7 +25,7 @@ export interface Token {
   hyph?: string                  // the language a word may hyphenate in
   word?: boolean                 // an alphabetic word of running text (five letters or more; no URL, nothing in a typewriter face): cut by characters, it draws a hyphen
   ph?: number                    // a placeholder's k; with `mode`
-  mode?: 'crop' | 'page-text' | 'kept'
+  mode?: 'crop' | 'page-text' | 'text' | 'kept'
   raised?: boolean
   colour: number                 // a colour's index + 1 in LAYER_COLOURS, 0 for none
   at: number; len: number        // its offsets in trText(pieces)

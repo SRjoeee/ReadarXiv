@@ -132,8 +132,11 @@ export function pageBoxes(log) {
   return pages
 }
 const DEST = /^\\pdfdest name\{axt-([^}]+)\}/
+/** a point of the layout marks (LAYOUT_TEX's POINTS_TEX): pdfTeX's and LuaTeX's literal, xdvipdfmx's special */
+const POINT = /^\\(?:pdfliteral direct\{|special\{pdf:code )\/axt-([A-Za-z0-9.-]+) ri\}$/
 const BOX = /^\\[hv]box\(/
-/** the box without the marks' own nodes, each node keeping its own (`src`): a mark's destination, the empty \vadjust
+/** the box without the marks' own nodes, each node keeping its own (`src`): a mark's destination and its point, the
+ *  points around a column's body and a float's box, the empty \vadjust
  *  that says a mark took an italic correction, an empty box a mark was set in, a kern of no width (an upright letter's
  *  italic correction, which a mark takes and gives back only where it has a width; a formula's math node, with no
  *  \mathsurround, which a mark at a line's start keeps from being discarded there), and a discretionary — one left in
@@ -142,15 +145,27 @@ const BOX = /^\\[hv]box\(/
  *  kern's) */
 function withoutMarks(node) {
   const children = []
+  // a column body's points: the penalty after its opening one is its own; the glue, kerns and penalties its closing one
+  // takes off the body's end and puts back after it (layout/marks.mjs POINTS_TEX), each `putBack`, which diffs forgives
+  // a glue's name lost, no more
+  let opened = false, closed = false
   for (const c of node.children) {
+    const point = POINT.exec(c.text)
+    if (point) { opened = /^bs\d+$/.test(point[1]); closed = /^be\d+$/.test(point[1]); continue }
+    if (opened && c.text === '\\penalty 10000') { opened = false; continue }
+    opened = false
+    closed &&= /^\\(?:glue|kern|penalty)/.test(c.text)
     if (DEST.test(c.text) || /^\\kern ?-?0\.0$/.test(c.text) || /^\\math(?:on|off)$/.test(c.text) || /^\\discretionary\b/.test(c.text)) continue
     const f = withoutMarks(c)
     if (c.text === '\\vadjust' && !f.children.length) continue
     if (/^\\hbox\(0\.0\+0\.0\)x0\.0$/.test(c.text) && c.children.length && !f.children.length) continue
+    if (closed) f.putBack = true
     children.push(f)
   }
   return { text: node.text.replace(/^\\glue\(\\x?spaceskip\) /, '\\glue ').replace(/^\\kern /, '\\kern'), children, src: node }
 }
+/** a glue a column's closing point put back (withoutMarks): v0's own, its name lost */
+const putBack = (x, y) => !!y.putBack && !x.children.length && !y.children.length && x.text.replace(/^\\glue\(\\[A-Za-z]+\) /, '\\glue ') === y.text
 /** a subtree's hash (cyrb53 of its text and its children's hashes), kept on the node */
 const hashOf = node => {
   if (node.hash !== undefined) return node.hash
@@ -190,6 +205,7 @@ function diffs(a, b, owner, out) {
     const xs = a.slice(i, pi), ys = b.slice(j, pj), beside = b[j - 1] ?? b[pj] ?? owner
     for (let k = 0; k < Math.max(xs.length, ys.length); k++) {
       const x = xs[k], y = ys[k]
+      if (x && y && putBack(x, y)) continue
       if (x && y && (x.text === y.text || (BOX.test(x.text) && x.text.slice(0, 5) === y.text.slice(0, 5)))) {
         if (x.children.length === y.children.length && x.children.every((c, q) => hashOf(c) === hashOf(y.children[q]))) out.push([x, y, y])
         else diffs(x.children, y.children, y, out)
@@ -257,13 +273,18 @@ export function boxDiff(pages0, pages1) {
 
 /** a node's text as it would read set again at another stretch: microtype's font expansion and a box's glue set out */
 const unset = t => t.replace(/ \([+-]\d+\)/, '').replace(/, glue set [^,]*/, '')
+/** a box's text without its glue set alone */
+const unglued = t => t.replace(/, glue set [^,]*/, '')
 /**
  * Each line TeX set otherwise (boxDiff's, by page and line), with its cause where the evidence names an accepted one:
  * 'heading kern' when a kern v0 set beside a heading's mark is one v1 did not set — v1 has nothing in its place, or
  * only a node v0 sets elsewhere in that line, the next node displaced (the font kern of a heading's last letter with the
  * full stop its class appends after the end mark: ruling 2; a glue, a kern or a box v1 adds there is no lost kern: the
  * re-review's m1) — and every other difference in the line lies beside a heading's mark or sets the same node again
- * at another stretch (the line's glue set, microtype's expansion of its glyphs: 2608.25210); else 'unexplained'
+ * at another stretch (the line's glue set, microtype's expansion of its glyphs: 2608.25210); 'glue set' when every
+ * difference in the line is a box whose own nodes are all the same and whose glue set alone is other (the ruling of
+ * 2026-10-06 on 2608.18090: the same nodes and breaks, packed otherwise by pdfTeX's protrusion and expansion as the
+ * layout of TeX's node memory falls; diffs reports a box itself only where its nodes are equal); else 'unexplained'
  */
 export function causesOf(diffs) {
   const lines = new Map()
@@ -274,7 +295,8 @@ export function causesOf(diffs) {
     // the nodes v0 sets in the line that v1 sets elsewhere or not at all, as they would read set again
     const gone = new Set(ds.filter(d => d.v0 !== null && d.v1 === null).map(d => unset(d.v0)))
     const kern = ds.some(d => head(d) && /^\\kern-?\d/.test(d.v0 ?? '') && (d.v1 === null || (!/^\\(?:kern|glue|hskip|[hv]box|rule|penalty)/.test(d.v1) && gone.has(unset(d.v1)))))
-    out.set(k, kern && ds.every(d => head(d) || again(d)) ? 'heading kern' : 'unexplained')
+    const glueSet = ds.every(d => d.v0 !== null && d.v1 !== null && BOX.test(d.v0) && BOX.test(d.v1) && d.v0 !== d.v1 && unglued(d.v0) === unglued(d.v1))
+    out.set(k, kern && ds.every(d => head(d) || again(d)) ? 'heading kern' : glueSet ? 'glue set' : 'unexplained')
   }
   return out
 }

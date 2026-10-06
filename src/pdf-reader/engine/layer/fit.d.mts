@@ -56,12 +56,13 @@ export interface LaidLine { page: number; frame: number; x0: number; x1: number;
  * frames, cut at sentences only where the flow would take a crop off its page), and how each placeholder the translation
  * holds is drawn, by k
  */
-export interface LaidUnit { id: number; fit: true; state: FitState; size: number; lines: LaidLine[]; cuts: number[]; drawn: ReadonlyMap<number, 'crop' | 'page-text' | 'kept'> }
-/** a unit that stays the original's, and why: 'located' (no such unit, or no lines or frames), 'tokens' (not drawable, or
+export interface LaidUnit { id: number; fit: true; state: FitState; size: number; lines: LaidLine[]; cuts: number[]; drawn: ReadonlyMap<number, 'crop' | 'page-text' | 'text' | 'kept'> }
+/** a unit that stays the original's, and why: 'located' (no such unit, or no lines or frames), 'author' (an author block,
+ *  kept as the paper has it), 'tokens' (not drawable, or
  *  nothing to draw), 'floor' (no state of the fit places every token); the rest are the net's (net.mjs): 'pieces' (refused by
  *  checkPieces), 'lost', 'glyph' (a character no face of the role set holds, or one its face has not), 'missing', 'twice',
  *  'overlap', 'erase', 'brackets' */
-export interface Unfit { id: number; fit: false; why: 'located' | 'tokens' | 'floor' | 'pieces' | 'missing' | 'twice' | 'lost' | 'overlap' | 'erase' | 'glyph' | 'brackets' }
+export interface Unfit { id: number; fit: false; why: 'located' | 'author' | 'tokens' | 'floor' | 'pieces' | 'missing' | 'twice' | 'lost' | 'overlap' | 'erase' | 'glyph' | 'brackets' }
 export type Laid = LaidUnit | Unfit
 /** the fit's states in order, from the most natural (spec §4.5's order: tracking, the space below, leading, size): `below`
  *  and `pitch` are the last frame's (PDF units), `maxScale` page-even's start (the leading always starts at leadBase) */

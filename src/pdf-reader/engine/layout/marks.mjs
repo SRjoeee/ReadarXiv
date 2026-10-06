@@ -14,8 +14,11 @@
 // lines they carry and lose, and fails on a loss of no accepted cause.
 import { markUnits, NO_ARG_COMMANDS } from '../latex-front.mjs'
 import { tokenizeDocument } from '../anchors.mjs'
+import { plainTranslated } from '../mt.mjs'
 import { readLines } from '../typeset/tex.mjs'
-import { boundedJson, checkKeys, checkPages, checkViews, inView, isInteger, isNumber, LayoutRefusal } from './json.mjs'
+import { pageInk } from './ink.mjs'
+import { boundedJson, checkKeys, checkPages, checkViews, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
+import { OWNED, OWNED_HOW, ownedOf, WANT } from './stream.mjs'
 
 // ---------------------------------------------------------------- the classes
 /** every class, in this order */
@@ -138,8 +141,142 @@ export function punctuationSection(samples) {
   const reset = '\\edef\\axt@qfn{\\ifdefined\\c@footnote\\the\\c@footnote\\else0\\fi}\\def\\axt@qreset{\\ifdefined\\c@footnote\\global\\c@footnote=\\axt@qfn\\relax\\fi\\ifdefined\\citereset\\citereset\\fi}'
   return `\\begingroup\\newbox\\axt@qbox\\gdef\\axt@qo{}${reset}${tests.join('\n')}\\endgroup`
 }
-/** the probe document of the layout marks: today its punctuation section alone */
-export const markProbeTex = samples => probeTex([punctuationSection(samples)])
+// ---- what a paper's macro sets: TeX asked
+/** the distinct sources of the paper's macros the ink section asks about, at most */
+export const INK_MAX = 64
+/** a macro's source as the ink section asks about it, at most */
+const INK_SRC_MAX = 200
+/**
+ * The ink section's samples: the source of each of the paper's macros (classOf 'macro'), once, in the order the paper
+ * writes them, that TeX can set in a box of its own (no comment or parameter sign, no \verb, its braces balanced, no
+ * environment, no paragraph's end), at most INK_MAX. A symbol the layout draws as text (TEXT_SYMBOLS) is not asked
+ */
+export function inkSamples(units) {
+  const seen = new Set()
+  for (const u of units) for (const p of u.pieces) {
+    if (seen.size >= INK_MAX) return [...seen]
+    if (p.t !== 'ph' || classOf(p) !== 'macro' || seen.has(p.src) || symbolText(p.src) !== null) continue
+    const src = p.src ?? ''
+    if (!src || src.length > INK_SRC_MAX || /[%#]|\\(?:verb|lstinline|begin|end|par)(?![A-Za-z@])/.test(src) || !balanced(src)) continue
+    seen.add(src)
+  }
+  return [...seen]
+}
+const balanced = s => { let d = 0; for (let i = 0; i < s.length; i++) { if (s[i] === '\\') { i++; continue } if (s[i] === '{') d++; else if (s[i] === '}' && --d < 0) return false } return d === 0 }
+/**
+ * The ink section of the probe (`ink`): each sample set in a box of its own, in a group, and the box shown in the log
+ * (\showbox, every node: TeX's own list of what it set), between a row `ink-at <i>` and a row `ink-end <i>`; an empty
+ * paragraph after each starts TeX's error count again. Writes nothing, ships out nothing (readInkProbe)
+ */
+export function inkSection(samples) {
+  const show = '\\begingroup\\showboxbreadth=100000 \\showboxdepth=100000 \\tracingonline=0 \\showbox\\axt@ibox\\endgroup'
+  const tests = samples.map((src, i) => `${probeRow('ink-at', i)}\\begingroup\\global\\setbox\\axt@ibox\\box\\voidb@x\\setbox\\axt@ibox\\hbox{${src}}${show}\\endgroup${probeRow('ink-end', i)}\\noindent\\par`)
+  return `\\begingroup\\newbox\\axt@ibox${tests.join('\n')}\\endgroup`
+}
+/** the probe document of the layout marks: its punctuation section, then its ink section */
+export const markProbeTex = (samples, ink = []) => probeTex([punctuationSection(samples), ...(ink.length ? [inkSection(ink)] : [])])
+/** a node TeX lists that sets no ink: glue, a kern, a penalty, a math switch, a box (its own nodes listed below it), a
+ *  mark, a colour stack, a write, a destination, a saved or restored matrix, an adjust's or a discretionary's head
+ *  (theirs below), leaders' head (their box or rule below) */
+const NO_INK_NODE = /^\.+\\(?:glue|kern|penalty|mathon|mathoff|[hv]box\(|mark|pdfcolorstack|write|openout|closeout|pdfdest|pdfsave|pdfrestore|pdfsetmatrix|vadjust|discretionary|leaders|cleaders|xleaders)/
+/** a rule TeX lists: its height, depth and width (`*` running) */
+const RULE_NODE = /^\.+\\rule\(([-\d.*]+)\+([-\d.*]+)\)x([-\d.*]+)$/
+/**
+ * The sources TeX set no ink for, from the probe's log (inkSection): each sample whose box TeX listed in full, of nodes
+ * that set nothing — no character, no rule both wide and high (TeX ships no rule of no width or height: a strut), no
+ * literal, special, insertion or node it lists otherwise — with no error between its rows but the listing's own `! OK.`.
+ * A sample with no listing, an error, a line cut short or a node not known is no answer: what it sets is not known
+ */
+export function readInkProbe(log, samples) {
+  const out = []
+  let at = null, nodes = null, bad = false, done = false
+  for (const line of (log ?? '').split('\n')) {
+    const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
+    if (r && r.schema === PROBE_SCHEMA && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
+      const i = Number(r.fields[0])
+      if (r.tag === 'ink-at') { at = i; nodes = null; bad = false; done = false; continue }
+      if (at === i && nodes && !bad && samples[i] !== undefined) out.push(samples[i])
+      at = null
+      continue
+    }
+    if (at === null || done) continue
+    // the listing's own end, `! OK.` (`<file>:<line>: OK.` under -file-line-error)
+    if (/^(?:! |[^\s:]+:\d+: )OK\.$/.test(line)) { done = nodes !== null; if (!done) bad = true; continue }
+    if (TEX_ERROR.test(line)) { bad = true; continue }
+    if (/^> \\box\d+=/.test(line)) { nodes = []; continue }
+    if (nodes === null) continue
+    if (/^\\hbox\(/.test(line) && !nodes.length) { nodes.push(line); continue }
+    if (NO_INK_NODE.test(line)) { nodes.push(line); continue }
+    const rule = RULE_NODE.exec(line)
+    if (rule && rule[3] !== '*' && Number(rule[3]) <= 0) { nodes.push(line); continue }
+    if (rule && rule[1] !== '*' && rule[2] !== '*' && Number(rule[1]) + Number(rule[2]) <= 0) { nodes.push(line); continue }
+    if (line === '') continue
+    bad = true
+  }
+  return out
+}
+
+/** a macro's text as the ink section shows it set, at most */
+export const INK_TEXT_MAX = 64
+/** a character node of a text font's (OT1, T1, LY1, TU), a letter or a digit, as TeX lists it; a ligature of them */
+const TEXT_CHAR = /^\.+\\(?:OT1|T1|LY1|TU)\/\S+ ([A-Za-z0-9])$/
+const TEXT_LIGATURE = /^\.+\\(?:OT1|T1|LY1|TU)\/\S+ \S+ \(ligature ([A-Za-z0-9]{2,3})\)$/
+/** a node between a macro's letters that sets no ink: glue, a kern, a penalty, a math switch, a box's head */
+const TEXT_PASS = /^\.+\\(?:glue|kern|penalty|mathon|mathoff|[hv]box\()/
+/**
+ * The text each sample sets, from the probe's log (inkSection): each sample whose box TeX listed in full with no error
+ * between its rows, of letters and digits of text fonts (OT1, T1, LY1, TU: those are ASCII's there) and ligatures of
+ * them, at any depth, with nothing else but nodes that set no ink between them — \newcommand\bert{BERT\xspace}'s
+ * "BERT", a model's name with a subscript in small capitals "BERTBASE" — as [source, text], the letters in TeX's order,
+ * at most INK_TEXT_MAX. Anything else (a rule, an image, a symbol, an error) is no answer: what it sets is not known as
+ * text. The layout finds such a macro, set at a unit's head where no mark goes, by its letters (make.mjs)
+ */
+export function readInkTexts(log, samples) {
+  const out = []
+  let at = null, text = null, bad = false, done = false
+  for (const line of (log ?? '').split('\n')) {
+    const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
+    if (r && r.schema === PROBE_SCHEMA && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
+      const i = Number(r.fields[0])
+      if (r.tag === 'ink-at') { at = i; text = null; bad = false; done = false; continue }
+      if (at === i && done && !bad && text && text.length <= INK_TEXT_MAX && samples[i] !== undefined) out.push([samples[i], text])
+      at = null
+      continue
+    }
+    if (at === null || done) continue
+    if (/^(?:! |[^\s:]+:\d+: )OK\.$/.test(line)) { done = text !== null; if (!done) bad = true; continue }
+    if (TEX_ERROR.test(line)) { bad = true; continue }
+    if (/^> \\box\d+=/.test(line)) { text = ''; continue }
+    if (text === null) continue
+    if (/^\\hbox\(/.test(line) && !text) continue
+    const c = TEXT_CHAR.exec(line) ?? TEXT_LIGATURE.exec(line)
+    if (c) { text += c[1]; continue }
+    if (TEXT_PASS.test(line) || line === '') continue
+    bad = true
+  }
+  return out
+}
+
+// ---- what a paper's symbol sets: LaTeX's own
+/**
+ * LaTeX's text symbols (the kernel's and textcomp's commands, as LaTeX defines them in every encoding), each the one
+ * character it sets: the layout draws one the marking cannot mark (glued to the word before it, at a unit's head) as
+ * text, where arXiv's page shows that character on the unit's line (make.mjs). The prototype's texToText, for text
+ */
+export const TEXT_SYMBOLS = Object.freeze({
+  '\\%': '%', '\\&': '&', '\\#': '#', '\\$': '$', '\\_': '_', '\\{': '{', '\\}': '}',
+  '\\textbackslash': '\\', '\\textless': '<', '\\textgreater': '>', '\\textbar': '|', '\\textasciitilde': '~', '\\textasciicircum': '^',
+  '\\textunderscore': '_', '\\textdollar': '$', '\\textbraceleft': '{', '\\textbraceright': '}',
+  '\\S': '\u00a7', '\\P': '\u00b6', '\\textsection': '\u00a7', '\\textparagraph': '\u00b6', '\\dag': '\u2020', '\\ddag': '\u2021',
+  '\\textdagger': '\u2020', '\\textdaggerdbl': '\u2021', '\\copyright': '\u00a9', '\\textcopyright': '\u00a9', '\\textregistered': '\u00ae',
+  '\\texttrademark': '\u2122', '\\pounds': '\u00a3', '\\textsterling': '\u00a3', '\\textdegree': '\u00b0', '\\textbullet': '\u2022',
+  '\\textperiodcentered': '\u00b7', '\\ldots': '\u2026', '\\dots': '\u2026', '\\textellipsis': '\u2026', '\\textendash': '\u2013', '\\textemdash': '\u2014',
+})
+/** a symbol's text: its source one of TEXT_SYMBOLS, alone or followed by an empty group (`\%{}`, `\dots{}`), else null */
+export function symbolText(src) {
+  const m = /^(\\(?:[A-Za-z]+|[%&#$_{}]))(?:\{\})?$/.exec(src ?? '')
+  return m && Object.hasOwn(TEXT_SYMBOLS, m[1]) ? TEXT_SYMBOLS[m[1]] : null
+}
 /** a line TeX logs for an error: `! …`, or `<file>:<line>: …` under -file-line-error */
 const TEX_ERROR = /^(?:! |[^\s:]+:\d+: )/
 /**
@@ -224,12 +361,38 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /[
  *   taken out first, at gettitlestring and where nameref sanitizes a title whoever set it (titlesec). What does the work
  *   is \protected, so an expansion (an \edef, a case change's) never runs it, and a case change leaves its name as it is
  *   (l3text's \l_text_case_exclude_arg_tl): a heading set in capitals keeps its marks' names.
+ * - **The points.** Beside each destination, a point (POINTS_TEX): a rendering intent named after it, `/axt-<name> ri`,
+ *   in each engine's literal (pdfTeX's and LuaTeX's `direct`, xdvipdfmx's `pdf:code`), which PDF.js keeps in the operator
+ *   list in its place among the glyphs (it drops DP and MP, and splits its text items at a BMC: tokens moved by up to
+ *   14 pt) and its text layer passes over. So the content stream gives each piece's own ink between its points
+ *   (layout/stream.mjs). And around each column's body (\@cclv in \@makecol, repacked to its own height and depth: a
+ *   whatsit adds no height, and one last keeps the box's depth; the opening one with a \penalty10000 after it, for a
+ *   whatsit before the body's first glue makes it a place to break, and \vsplit — balance.sty's last page — then takes
+ *   an empty column; the closing one after the body's last box, its glue, kerns and penalties taken off and put back
+ *   after it, so that no place to break is made or lost, and LaTeX's \@outputbox@removebskip still finds a \vfil
+ *   last)
+ *   and around each float's finished box (after \@endfloatbox, the box repacked as the body is: a point at the box's
+ *   start would give its first paragraph a \parskip), points alone (bs, be, fs, fe and a count kept in a macro): a range
+ *   across a page or a column, or one an [h] float is shipped into, is cut to its own.
+ *   Every glyph, box and destination where it was (the stream spike of 2026-10-06: pdfLaTeX and XeLaTeX to 1e-12 pt on
+ *   seven papers; LuaTeX's PDF writer sets the glyphs after a literal by an absolute matrix, ≤ 0.011 pt off: accepted)
  * What no TeX here can keep: a font kern between a heading's last letter and a full stop its class adds by expansion
  * (acmart's \@addpunct, amsart's and IEEEtran's run-in heads; 0.09 to 1.22 pt on that line, accepted: Task 2), and a
  * punctuation mark a package sets before a citation or a call by looking past it (natmove, cite.sty's super, biblatex's
  * \autocite, fnpct) — where TeX's answer to the mark probe takes the marks off (layoutMarking's `switches`). pdfTeX may
  * draw a virtual font's glyph after a whatsit off where TeX set it; no corpus paper shows it (Task 2's TeX boxes)
  */
+/** the points (LAYOUT_TEX's last part): `\\axt@point{name}` in each engine, beside each destination; around each column's
+ *  body and each float's box */
+export const POINTS_TEX = [
+  '\\ifdefined\\XeTeXrevision\\def\\axt@point#1{\\special{pdf:code /axt-#1 ri}}\\else\\ifdefined\\pdfextension\\def\\axt@point#1{\\pdfextension literal direct{/axt-#1 ri}}\\else\\ifdefined\\pdfliteral\\def\\axt@point#1{\\ifnum\\pdfoutput>0 \\pdfliteral direct{/axt-#1 ri}\\fi}\\else\\def\\axt@point#1{}\\fi\\fi\\fi',
+  '\\let\\axt@destonly\\axt@dest\\def\\axt@dest#1{\\axt@destonly{#1}\\axt@point{#1}}',
+  '\\gdef\\axt@bn{0}\\def\\axt@bump{\\xdef\\axt@bn{\\the\\numexpr\\axt@bn+1\\relax}}',
+  '\\def\\axt@vtake{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@vtg\\or\\expandafter\\axt@vtk\\or\\expandafter\\axt@vtp\\fi}\\def\\axt@vtg{\\edef\\axt@vback{\\vskip\\the\\lastskip\\relax\\axt@vback}\\unskip\\axt@vtake}\\def\\axt@vtk{\\edef\\axt@vback{\\kern\\the\\lastkern\\relax\\axt@vback}\\unkern\\axt@vtake}\\def\\axt@vtp{\\edef\\axt@vback{\\penalty\\the\\lastpenalty\\relax\\axt@vback}\\unpenalty\\axt@vtake}',
+  '\\ifdefined\\AddToHook\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\fi}\\fi',
+  '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
+].join('')
+
 export const LAYOUT_TEX = [
   '\\makeatletter\\newif\\ifaxt@off\\global\\let\\axt@pend\\@empty\\let\\axt@icr\\/\\def\\axt@icv{0pt}\\newif\\ifaxt@sig',
   '\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax}\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax\\fi}\\fi\\fi\\fi',
@@ -266,6 +429,7 @@ export const LAYOUT_TEX = [
   '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtpma\\@gobble\\let\\axtpm\\@gobble\\let\\axthmark\\@gobble}\\fi}',
   '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axt@pma\\axt@pm\\axt@hm}\\fi',
   '\\ifdefined\\ExplSyntaxOn\\ExplSyntaxOn\\regex_const:Nn\\c__axt_marks_regex{\\c{axtpma|axtpm|axthmark}\\cB.\\c[^BE].*\\cE.}\\cs_new_protected:Npn\\axt@unmark#1{\\regex_replace_all:NnN\\c__axt_marks_regex{}#1}\\ExplSyntaxOff\\fi',
+  POINTS_TEX,
   '\\makeatother',
 ].join('')
 
@@ -302,7 +466,7 @@ const LOOKS_AHEAD = p => {
  * row's start it would begin the cell before \cline's \noalign or \multicolumn's \omit, which TeX refuses. A unit that
  * opens with a footnote's call gets no start mark (patch); its pieces after the call are in the paragraph the call began
  */
-function headEnd(pieces, from = 0) {
+export function headEnd(pieces, from = 0) {
   for (let k = from; k < pieces.length; k++) {
     const p = pieces[k]
     if (p.t === 'text') {
@@ -350,8 +514,10 @@ function passedOver(pieces) {
  *   would stand on the next line, a blank one no paragraph's end any more: 2608.08350's `.\` before one) or an
  *   environment's \end
  */
-export function layoutMarking(units, classes, { lines = false, switches = null } = {}) {
+export function layoutMarking(units, classes, { lines = false, switches = null, inkless = null } = {}) {
   const on = new Set(classes)
+  /** a paper's macro TeX said sets no ink (readInkProbe): no mark, as an invisible placeholder has none */
+  const none = new Set(inkless ?? [])
   /** what TeX answered for a piece's command before what follows it: a code of readMarkProbe's ('x' no answer: no mark
    *  as '2'); with `switches` and no answer for an asked class's command, '2' too — no mark where TeX did not say one
    *  is safe (the re-review's m4); with no `switches` at all (the probe not run), undefined: the marks as before */
@@ -383,7 +549,7 @@ export function layoutMarking(units, classes, { lines = false, switches = null }
       const after = last
       if (p.t !== 'text' || /[^ \t\r\n]/.test(p.s)) last = p
       const cls = passed && !passed.has(k) && !(LOOKS_AHEAD(after) && !free(after, p)) ? classOf(p) : null
-      if (!cls || !on.has(cls)) return [piece]
+      if (!cls || !on.has(cls) || (cls === 'macro' && none.has(p.src))) return [piece]
       // a paper's macro may set letters: glued to the word before, it is part of it (an accent, \\ss), and a mark would
       // part the word's hyphenation and kerns
       const before = u.pieces[k - 1], next = u.pieces[k + 1]
@@ -403,11 +569,65 @@ export function layoutMarking(units, classes, { lines = false, switches = null }
 // ---------------------------------------------------------------- the marks file
 export const MARKS_CAP = 8 * 2 ** 20
 export const MARKS_VALUES = 2_000_000
-/** the deepest a marks file nests: its object, then marks or lines, then each entry, [name, page, x, y] or [id, count] */
+/** the deepest a marks file nests: its object, then marks, lines or owned (or the marking's switch), then each entry,
+ *  [name, page, x, y], [id, count] or a piece's own ink */
 export const MARKS_DEPTH = 3
+/** the marks file's schema: 2 holds each piece's own ink (`chars`, `owned`) and the switch TeX answered; 3 the switch
+ *  null where no probe ran, the macros TeX said set no ink (`marking.inkless`) and the texts it showed they set
+ *  (`marking.texts`), and the rest of a word given in parts (a token of word -1) */
+export const MARKS_SCHEMA = 3
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
-const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens']
-const MARKING_KEYS = ['classes', 'movesPunctuation']
+const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens', 'chars', 'owned']
+const MARKING_KEYS = ['classes', 'switches', 'inkless', 'texts']
+/** a piece's own ink at most: its glyphs, its rules; and a paper's in all (each 5 values) */
+export const GLYPHS_PIECE = 20_000, RULES_PIECE = 2_000, OWNED_ALL = 250_000
+/** the distinct characters of the owned glyphs at most, and the code units of one */
+const CHARS_MAX = 65_536, CHAR_MAX = 32
+/** a glyph's size within (0, SIZE_MAX] */
+const SIZE_MAX = 200
+/** a piece's opening mark: the name its own ink is kept under */
+const OPENING = /^[pn]\d+\.\d+a$/
+/** the paper's own switch as the marking takes it (readMarkProbe): null where the probe was not run (every mark as
+ *  LAYOUT_TEX sets it), else at most PROBE_MAX commands, each a control word, its answer a code 0, 1, 2 or x (no answer)
+ *  a follower; else a refusal at `path` */
+function checkSwitches(v, path) {
+  if (v === null) return null
+  if (!isObject(v)) throw new LayoutRefusal(path, 'not null or an object')
+  const keys = Object.keys(v)
+  if (keys.length > PROBE_MAX) throw new LayoutRefusal(path, `more than ${PROBE_MAX} commands`)
+  for (const k of keys) {
+    if (!/^\\[A-Za-z@]{1,63}$/.test(k)) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a control word')
+    if (typeof v[k] !== 'string' || v[k].length !== FOLLOWERS.length || !/^[012x]+$/.test(v[k])) throw new LayoutRefusal(`${path}.${told(k)}`, `not ${FOLLOWERS.length} codes of 0, 1, 2 or x`)
+  }
+  return v
+}
+/** the macros TeX said set no ink (readInkProbe), as the marking takes them: null where no probe ran, else at most
+ *  INK_MAX sources of 1 to INK_SRC_MAX code units, none twice; else a refusal at `path` */
+function checkInkless(v, path) {
+  if (v === null) return null
+  if (!Array.isArray(v) || v.length > INK_MAX) throw new LayoutRefusal(path, `not null or an array of at most ${INK_MAX} sources`)
+  const seen = new Set()
+  v.forEach((src, i) => {
+    if (typeof src !== 'string' || src.length < 1 || src.length > INK_SRC_MAX || seen.has(src)) throw new LayoutRefusal(`${path}[${i}]`, `not a source of 1 to ${INK_SRC_MAX} code units, once`)
+    seen.add(src)
+  })
+  return v
+}
+/** the macros' texts the probe showed (readInkTexts), as the maker takes them: null where no probe ran, else a flat
+ *  list of at most INK_MAX pairs (the file nests no deeper: MARKS_DEPTH), each a source of 1 to INK_SRC_MAX code units,
+ *  none twice, then its 1 to INK_TEXT_MAX letters and digits; else a refusal at `path` */
+function checkTexts(v, path) {
+  if (v === null) return null
+  if (!Array.isArray(v) || v.length % 2 !== 0 || v.length > 2 * INK_MAX) throw new LayoutRefusal(path, `not null or a list of at most ${INK_MAX} pairs`)
+  const seen = new Set()
+  for (let i = 0; i < v.length; i += 2) {
+    const src = v[i], text = v[i + 1]
+    if (typeof src !== 'string' || src.length < 1 || src.length > INK_SRC_MAX || seen.has(src)) throw new LayoutRefusal(`${path}[${i}]`, `not a source of 1 to ${INK_SRC_MAX} code units, once`)
+    if (typeof text !== 'string' || !/^[A-Za-z0-9]+$/.test(text) || text.length > INK_TEXT_MAX) throw new LayoutRefusal(`${path}[${i + 1}]`, `not 1 to ${INK_TEXT_MAX} letters and digits`)
+    seen.add(src)
+  }
+  return v
+}
 /** a list of classes as the marking takes it: each one of MARK_CLASSES, none twice; else a refusal at `path` */
 function checkClasses(v, path) {
   if (!Array.isArray(v) || v.length > MARK_CLASSES.length) throw new LayoutRefusal(path, `not an array of at most ${MARK_CLASSES.length} classes`)
@@ -430,27 +650,63 @@ const duplicatesIn = log => {
   return [...out].filter(n => MARK_NAME.test(n))
 }
 
+/** the source pieces of a unit that TeX ligatures and LaTeX's quotes set as other characters, as the glyphs have them */
+export const asSet = s => s.replace(/---/g, '\u2014').replace(/--/g, '\u2013').replace(/``/g, '\u201c').replace(/''/g, '\u201d').replace(/`/g, '\u2018').replace(/'/g, '\u2019').replace(/[~\s]/g, '')
+/** a unit's end marks, any of which may be the next mark after its last piece */
+const endsOf = i => [`${i}e`, `t${i}e`, `h${i}e`]
+/**
+ * What the marking says of each piece with an opening mark, for its own ink (layout/stream.mjs Follow): by its opening
+ * mark's name, whether it has a closing mark (`names`: the destinations set and those dropped), the first WANT
+ * characters of the text after it in its unit up to the next visible piece, its unit's next marks, and whether a visible
+ * piece with no mark follows it with no text between
+ */
+function followsOf(units, names) {
+  const nameOf = (i, k) => { const c = classOf(units[i]?.pieces[k]); return c ? `${c === 'footnote' ? 'n' : 'p'}${i}.${k}` : null }
+  return name => {
+    const m = /^([pn])(\d+)\.(\d+)a$/.exec(name)
+    const i = m ? Number(m[2]) : -1, k = m ? Number(m[3]) : -1, u = units[i]
+    if (!u || nameOf(i, k) !== name.slice(0, -1)) return null
+    let after = '', q = k + 1
+    for (; q < u.pieces.length && !classOf(u.pieces[q]); q++) if (u.pieces[q].t === 'text') after += plainTranslated([u.pieces[q]])
+    const want = asSet(after).normalize('NFKC').toLowerCase().replace(/\s/g, '').slice(0, WANT)
+    const next = q < u.pieces.length ? nameOf(i, q) : null
+    return { closing: names.has(`${name.slice(0, -1)}b`), want, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked: !!next && !names.has(`${next}a`) }
+  }
+}
+
 /**
  * The marks file (internal, prep/<mid>/marks-<sha>.json) from a PDF.js document of the marked original and its last
  * TeX pass's log; the caller opens and destroys the document. Every destination MARK_NAME takes, by page (1-based) and
  * place, but one the log reports set twice (`dropped`: TeX kept the first, wherever that was) or off its page's view;
  * each page's view and columns (MARK_DEF's c<n>-<k>); each unit's line count (LINES_TEX's AXT-LINES); the document's
- * text tokens (tokenizeDocument), their words once each; and what the marked original was marked with (`marking`: the
- * classes and the paper's own switch it was given to layoutMarking), so that the maker knows which pieces have marks. A
- * token whose word is the rest of one given in parts, longer than a word may be, or off its page is left out. Numbers to
- * a hundredth. What it gives, parseLayoutMarks takes
+ * text tokens (tokenizeDocument), their words once each; what the marked original was marked with (`marking`: the
+ * classes and the paper's own switch it was given to layoutMarking, null where no probe was run: the two mark
+ * differently, layoutMarking setting no mark for an asked command TeX did not answer; and the paper's macros TeX said
+ * set no ink, `inkless`, and the text the probe showed each set, `texts` (readInkTexts' pairs, written flat), each null
+ * where no probe was run), so that the maker knows which pieces have marks and finds those that have none;
+ * and, given the paper's `units` and PDF.js's operator codes `OPS`, each marked piece's own ink, read from the marked
+ * compile's operator lists by its points (layout/stream.mjs ownedOf): `owned`, by its opening mark's name, how it was
+ * found (OWNED_HOW) and, where it was, its glyphs (page, origin, baseline, size, a character of `chars`) and its rules
+ * (page and box) in stream order; a piece of more than GLYPHS_PIECE glyphs or RULES_PIECE rules, or past OWNED_ALL in the
+ * paper, or with ink off its page, is not owned. A token whose word is the rest of one given in parts (the second line's
+ * part of a word cut by a hyphen) is written with word -1, after the token it is the rest of, for a paragraph whose last
+ * line holds nothing else holds its end mark (layout/carry.mjs); a token longer than a word may be, or off its page, is
+ * left out, and its rests with it. Numbers to a hundredth. What it gives, parseLayoutMarks takes
  */
-export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLASSES, movesPunctuation = [] }) {
+export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLASSES, switches = null, inkless = null, texts = null, units = null, OPS = null }) {
   if (!ENGINES.includes(engine)) throw new LayoutRefusal('engine', `not one of ${ENGINES.join(', ')}`)
-  const marking = { classes: [...checkClasses(classes, 'classes')], movesPunctuation: [...checkClasses(movesPunctuation, 'movesPunctuation')] }
+  const sw = checkSwitches(switches, 'switches'), none = checkInkless(inkless, 'inkless')
+  const said = texts === null ? null : checkTexts(Array.isArray(texts) ? texts.flat() : texts, 'texts')
+  const marking = { classes: [...checkClasses(classes, 'classes')], switches: sw === null ? null : { ...sw }, inkless: none === null ? null : [...none], texts: said === null ? null : [...said] }
   const pdf = marked
   const pages = checkPages(pdf.numPages, 'pages')
-  const views = [], text = []
+  const views = [], text = [], stream = []
   for (let p = 1; p <= pages; p++) {
     const page = await pdf.getPage(p)
     views.push(...page.view.slice(0, 4).map(r2))
     const content = await page.getTextContent()
     text.push({ page: p, items: content.items, styles: content.styles })
+    if (units && OPS) stream.push({ ...pageInk(OPS, await page.getOperatorList(), page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0 }), view: page.view.slice(0, 4) })
   }
   checkViews(views, pages, 'views')
   const dropped = duplicatesIn(log), twice = new Set(dropped)
@@ -464,11 +720,13 @@ export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLAS
     if (!pageOf.has(key)) pageOf.set(key, pdf.getPageIndex(ref).then(i => i + 1, () => null))
     return pageOf.get(key)
   }
-  const dests = await pdf.getDestinations()
+  const dests = await pdf.getDestinations(), set = new Set(dropped)
   for (const [full, d] of dests instanceof Map ? dests : Object.entries(dests ?? {})) {
     if (!full.startsWith('axt-') || !Array.isArray(d)) continue
     const name = full.slice(4)
-    if (!MARK_NAME.test(name) || twice.has(name)) continue
+    if (!MARK_NAME.test(name)) continue
+    set.add(name)
+    if (twice.has(name)) continue
     const page = await pageNumber(d[0]), x = d[2], y = d[3]
     if (!isInteger(page, 1, pages) || !isNumber(x) || !isNumber(y)) continue
     const c = /^c([12])-\d+$/.exec(name)
@@ -479,39 +737,103 @@ export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLAS
   marks.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
   const lines = [...readLines(log)].filter(([id, l]) => isInteger(id, 0, Number.MAX_SAFE_INTEGER) && isInteger(l.lines, 0, LINES_MAX)).sort((a, b) => a[0] - b[0]).map(([id, l]) => [id, l.lines])
   const words = [], wordOf = new Map(), tokens = []
+  // kept: whether the token before was written, so that a rest is written only after the word it is the rest of
+  let kept = false
   for (const t of tokenizeDocument(text)) {
-    if (!t.t || t.t.length > WORD_MAX) continue
+    const rest = t.t === ''
+    if ((rest && !kept) || t.t.length > WORD_MAX) { kept = false; continue }
     const x = r2(t.x), y = r2(t.y), w = r2(t.w), h = r2(t.h)
-    if (!inView(views, t.page, x, y) || !(w >= 0 && w <= BOX_MAX) || !(h >= 0 && h <= BOX_MAX)) continue
-    let k = wordOf.get(t.t)
+    if (!inView(views, t.page, x, y) || !(w >= 0 && w <= BOX_MAX) || !(h >= 0 && h <= BOX_MAX)) { kept = false; continue }
+    let k = rest ? -1 : wordOf.get(t.t)
     if (k === undefined) {
-      if (words.length >= WORDS_MAX) continue
+      if (words.length >= WORDS_MAX) { kept = false; continue }
       k = words.length
       words.push(t.t)
       wordOf.set(t.t, k)
     }
     tokens.push(t.page, x, y, w, h, k)
+    kept = true
   }
-  return { schema: 1, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens }
+  // each piece's own ink, by its points in the content stream
+  const chars = [], owned = []
+  if (units && OPS) {
+    const charOf = new Map(), found = ownedOf(stream, { follows: followsOf(units, set), dropped })
+    let all = 0
+    const ok = (p, x, y) => inView(views, p, r2(x), r2(y))
+    for (const name of [...found.keys()].sort()) {
+      const e = found.get(name)
+      if (e.how >= OWNED) { owned.push([name, e.how]); continue }
+      const not = how => { const k = OWNED_HOW.indexOf(how); if (k < OWNED) throw new Error(`no how ${how} of a piece not owned`); owned.push([name, k]) }
+      if (e.glyphs.length > GLYPHS_PIECE || e.boxes.length > RULES_PIECE) { not('more glyphs than a piece may own'); continue }
+      if (all + e.glyphs.length + e.boxes.length > OWNED_ALL) { not('past the glyphs a paper may own'); continue }
+      const gs = e.glyphs.map(([p, g]) => [p, stream[p - 1].glyphs[g]]), bs = e.boxes.map(([p, b]) => [p, stream[p - 1].boxes.slice(4 * b, 4 * b + 4)])
+      if (gs.some(([p, g]) => !ok(p, g.x0, g.y) || !(r2(g.size) > 0 && g.size <= SIZE_MAX)) || bs.some(([p, b]) => !ok(p, b[0], b[1]) || !ok(p, b[2], b[3]))) { not('ink out of bounds'); continue }
+      all += gs.length + bs.length
+      const row = [name, e.how, gs.length]
+      for (const [p, g] of gs) {
+        let u = g.u.length > CHAR_MAX ? g.u.slice(0, /[\ud800-\udbff]/.test(g.u[CHAR_MAX - 1]) ? CHAR_MAX - 1 : CHAR_MAX) : g.u
+        let c = charOf.get(u)
+        if (c === undefined) {
+          // the last place of `chars` kept for '', every character past it written so: the parser takes CHARS_MAX at
+          // most (the 6b review's Minor 1: the 65,537th was pushed as '' past it)
+          if (chars.length >= CHARS_MAX - 1 && !charOf.has('')) { charOf.set('', chars.length); chars.push('') }
+          if (chars.length >= CHARS_MAX) u = ''
+          c = charOf.get(u) ?? chars.length
+          if (c === chars.length) { chars.push(u); charOf.set(u, c) }
+        }
+        row.push(p, r2(g.x0), r2(g.y), r2(g.size), c)
+      }
+      for (const [p, b] of bs) row.push(p, r2(b[0]), r2(b[1]), r2(b[2]), r2(b[3]))
+      owned.push(row)
+    }
+  }
+  return fitted({ schema: MARKS_SCHEMA, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens, chars, owned })
+}
+
+/**
+ * The marks file within what its own parser takes: past MARKS_CAP's bytes or MARKS_VALUES' values (OWNED_ALL's 250,000
+ * glyphs beside the rest of a paper large enough to reach it), each owned piece from the last written as not owned
+ * ('past the glyphs a paper may own') until it fits, so that a paper loses the own ink of its last pieces, never its
+ * whole layer (the 6b review's Minor 1). The writer writes nothing the parser refuses
+ */
+function fitted(m) {
+  const text = encodeLayoutMarks(m)
+  let bytes = new TextEncoder().encode(text).length, values = countValues(text)
+  if (bytes <= MARKS_CAP && values <= MARKS_VALUES) return m
+  const past = OWNED_HOW.indexOf('past the glyphs a paper may own'), owned = [...m.owned]
+  for (let q = owned.length - 1; q >= 0 && (bytes > MARKS_CAP || values > MARKS_VALUES); q--) {
+    const e = owned[q]
+    if (e.length <= 2) continue
+    const was = JSON.stringify(ownedRow(e)), now = JSON.stringify([e[0], past])
+    bytes -= new TextEncoder().encode(was).length - new TextEncoder().encode(now).length
+    values -= countValues(was) - countValues(now)
+    owned[q] = [e[0], past]
+  }
+  return { ...m, owned }
 }
 
 /** the marks file as written: the schema's keys in order, numbers to a hundredth */
 export function encodeLayoutMarks(m) {
-  const { schema, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens } = m
+  const { schema, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens, chars, owned } = m
   return JSON.stringify({
-    schema, engine, marking: { classes: marking.classes, movesPunctuation: marking.movesPunctuation }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, words,
-    tokens: tokens.map((v, i) => (i % 6 === 0 || i % 6 === 5 ? v : r2(v))),
+    schema, engine, marking: { classes: marking.classes, switches: marking.switches, inkless: marking.inkless, texts: marking.texts }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, words,
+    tokens: tokens.map((v, i) => (i % 6 === 0 || i % 6 === 5 ? v : r2(v))), chars,
+    owned: owned.map(ownedRow),
   })
 }
+/** an owned row as written: a glyph's page and character, a rule's page, as they are; its coordinates to a hundredth */
+const ownedRow = e => e.map((v, j) => (j < 3 || (j - 3) % 5 === 0 || (j < 3 + 5 * e[2] && (j - 3) % 5 === 4) ? v : r2(v)))
 
 /** bytes, then values and nesting, then JSON.parse, then every bound; throws LayoutRefusal, naming where */
 export function parseLayoutMarks(bytes) {
   const m = checkKeys(boundedJson(bytes, { cap: MARKS_CAP, values: MARKS_VALUES, depth: MARKS_DEPTH }), KEYS, '')
-  if (m.schema !== 1) throw new LayoutRefusal('schema', 'not 1')
+  if (m.schema !== MARKS_SCHEMA) throw new LayoutRefusal('schema', `not ${MARKS_SCHEMA}`)
   if (!ENGINES.includes(m.engine)) throw new LayoutRefusal('engine', `not one of ${ENGINES.join(', ')}`)
   const marking = checkKeys(m.marking, MARKING_KEYS, 'marking')
   checkClasses(marking.classes, 'marking.classes')
-  checkClasses(marking.movesPunctuation, 'marking.movesPunctuation')
+  checkSwitches(marking.switches, 'marking.switches')
+  checkInkless(marking.inkless, 'marking.inkless')
+  checkTexts(marking.texts, 'marking.texts')
   const pages = checkPages(m.pages, 'pages')
   const views = checkViews(m.views, pages, 'views')
   if (!Array.isArray(m.columns) || m.columns.length !== pages) throw new LayoutRefusal('columns', `not ${pages} entries`)
@@ -552,7 +874,43 @@ export function parseLayoutMarks(bytes) {
     if (!isNumber(t[i + 1]) || t[i + 1] < views[o] - 1 || t[i + 1] > views[o + 2] + 1) throw new LayoutRefusal(`tokens[${i + 1}]`, 'not within its page')
     if (!isNumber(t[i + 2]) || t[i + 2] < views[o + 1] - 1 || t[i + 2] > views[o + 3] + 1) throw new LayoutRefusal(`tokens[${i + 2}]`, 'not within its page')
     for (const j of [3, 4]) if (!isNumber(t[i + j]) || t[i + j] < 0 || t[i + j] > BOX_MAX) throw new LayoutRefusal(`tokens[${i + j}]`, `not 0 to ${BOX_MAX}`)
-    if (!isInteger(t[i + 5], 0, m.words.length - 1)) throw new LayoutRefusal(`tokens[${i + 5}]`, 'not a word of words')
+    if (!isInteger(t[i + 5], 0, m.words.length - 1) && !(t[i + 5] === -1 && i > 0)) throw new LayoutRefusal(`tokens[${i + 5}]`, 'not a word of words, nor the rest of the word before (-1)')
+  }
+  if (!Array.isArray(m.chars) || m.chars.length > CHARS_MAX) throw new LayoutRefusal('chars', `not an array of at most ${CHARS_MAX}`)
+  for (let i = 0; i < m.chars.length; i++) { const c = m.chars[i]; if (typeof c !== 'string' || c.length > CHAR_MAX) throw new LayoutRefusal(`chars[${i}]`, `not a string of at most ${CHAR_MAX} code units`) }
+  // each piece's own ink: its opening mark's name, rising; how (OWNED_HOW); where owned, its glyphs (page, x0, baseline,
+  // size, a character) and rules (page, x0, y0, x1, y1), each within its page's view by 1
+  if (!Array.isArray(m.owned)) throw new LayoutRefusal('owned', 'not an array')
+  const within = (page, x, y) => { const o = 4 * (page - 1); return x >= views[o] - 1 && x <= views[o + 2] + 1 && y >= views[o + 1] - 1 && y <= views[o + 3] + 1 }
+  let last = '', all = 0
+  for (let i = 0; i < m.owned.length; i++) {
+    const e = m.owned[i], at = `owned[${i}]`
+    if (!Array.isArray(e) || e.length < 2) throw new LayoutRefusal(at, 'not [name, how, …]')
+    if (typeof e[0] !== 'string' || !OPENING.test(e[0])) throw new LayoutRefusal(`${at}[0]`, "not a piece's opening mark")
+    if (e[0] <= last) throw new LayoutRefusal(`${at}[0]`, 'not a name above the last')
+    last = e[0]
+    if (!isInteger(e[1], 0, OWNED_HOW.length - 1)) throw new LayoutRefusal(`${at}[1]`, 'not a how of OWNED_HOW')
+    if (e[1] >= OWNED) { if (e.length !== 2) throw new LayoutRefusal(at, 'not [name, how] for a piece not owned'); continue }
+    const n = e[2]
+    if (e.length < 3 || !isInteger(n, 0, GLYPHS_PIECE)) throw new LayoutRefusal(e.length < 3 ? at : `${at}[2]`, `not a glyph count 0 to ${GLYPHS_PIECE}`)
+    const rules = (e.length - 3 - 5 * n) / 5
+    if (!Number.isInteger(rules) || rules < 0) throw new LayoutRefusal(at, 'not 5 numbers a glyph and a rule')
+    if (rules > RULES_PIECE) throw new LayoutRefusal(at, `more than ${RULES_PIECE} rules`)
+    all += n + rules
+    if (all > OWNED_ALL) throw new LayoutRefusal('owned', `more than ${OWNED_ALL} glyphs and rules`)
+    for (let j = 3; j < e.length; j += 5) {
+      const page = e[j]
+      if (!isInteger(page, 1, pages)) throw new LayoutRefusal(`${at}[${j}]`, `not a page 1 to ${pages}`)
+      for (let c = 1; c <= (j < 3 + 5 * n ? 2 : 4); c++) {
+        const v = e[j + c], x = c % 2 === 1
+        if (!isNumber(v) || !within(page, x ? v : views[4 * (page - 1)], x ? views[4 * (page - 1) + 1] : v)) throw new LayoutRefusal(`${at}[${j + c}]`, 'not a number within its page')
+        if (c >= 3 && v < e[j + c - 2]) throw new LayoutRefusal(`${at}[${j + c}]`, `not ${x ? 'right' : 'above'} of its other edge`)
+      }
+      if (j < 3 + 5 * n) {
+        if (!isNumber(e[j + 3]) || e[j + 3] <= 0 || e[j + 3] > SIZE_MAX) throw new LayoutRefusal(`${at}[${j + 3}]`, `not a size above 0 to ${SIZE_MAX}`)
+        if (!isInteger(e[j + 4], 0, m.chars.length - 1)) throw new LayoutRefusal(`${at}[${j + 4}]`, 'not a character of chars')
+      }
+    }
   }
   return m
 }

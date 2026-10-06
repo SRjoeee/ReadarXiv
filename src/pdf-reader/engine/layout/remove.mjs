@@ -685,7 +685,7 @@ export async function makeAddon({ R, bytes, OPS, opListOf, deflate, plan, sets =
 
 /**
  * The add-on's page p checked by PDF.js's own reading, independent of the remover: `orig`, `removed` and `kept` are the
- * ink (layout/ink.mjs pageInk with `indices` and `blanks`) of arXiv's page and of its R and P pages; `entry` the plan's
+ * ink (layout/ink.mjs pageInk with `indices`) of arXiv's page and of its R and P pages; `entry` the plan's
  * page. R must lack exactly the planned glyphs and rules, every other glyph in the same order with the same character,
  * font and place, every other rule the same box; P must hold exactly the crops' glyphs and rules, and nothing else.
  * Returns the counts: removed, missed (planned, still there), other (not planned, gone), moved, extra; rules removed,

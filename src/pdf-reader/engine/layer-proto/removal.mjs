@@ -32,10 +32,10 @@ const real = c => !c.sep && !c.space && /\S/.test(c.ch)
 const keyOf = (page, c) => `${page}|${c.item}|${c.k}`
 const norm = s => String(s ?? '').normalize('NFKC').replace(/\s+/g, '')
 
-/** a page's ink as the remover names its glyphs and rules (pageInk with `indices` and `blanks`) */
+/** a page's ink as the remover names its glyphs and rules (pageInk with `indices`; every painted glyph, a blank one too) */
 export async function inkOfPage(OPS, page) {
   const ops = await page.getOperatorList()
-  return pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, indices: true, blanks: true })
+  return pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, indices: true })
 }
 
 /**

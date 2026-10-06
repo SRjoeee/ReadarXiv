@@ -24,8 +24,8 @@ export declare function probeFiles(paper: Paper, options?: { width?: boolean; ma
  *  given, gets `lines()`: each unit's lines and bytes in the files as written. `layout` null or absent: the bytes as at
  *  3cb5a733; else the units marked by layoutMarking (layout/marks.mjs) with those classes, and LAYOUT_TEX after MARK_DEF;
  *  `switches` (with `layout` only), the paper's own switch (readMarkProbe): marks off where TeX said they change what
- *  follows */
-export declare function originalFiles(paper: Paper, options?: { lines?: boolean; spans?: { lines?: () => import('./tex-errors.mjs').UnitLines<SourceUnit>[] } | null; layout?: readonly import('./layout/marks.mjs').MarkClass[] | null; switches?: import('./layout/marks.mjs').Switches | null }): Map<string, Uint8Array>
+ *  follows; `inkless` (with `layout` only), the macros TeX said set no ink (readInkProbe): no mark */
+export declare function originalFiles(paper: Paper, options?: { lines?: boolean; spans?: { lines?: () => import('./tex-errors.mjs').UnitLines<SourceUnit>[] } | null; layout?: readonly import('./layout/marks.mjs').MarkClass[] | null; switches?: import('./layout/marks.mjs').Switches | null; inkless?: readonly string[] | null }): Map<string, Uint8Array>
 /** the units a translation into `lang` leaves as they are */
 export declare function keptFor(paper: Paper, lang: string): Set<SourceUnit>
 /** whether a compile's last TeX pass stopped short of the document's end (a fatal error), whatever PDF it left: such a

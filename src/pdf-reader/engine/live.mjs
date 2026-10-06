@@ -19,7 +19,7 @@
 // first preview is set as today, and never waits for the original: nothing is known to plan it from yet. Where a plan
 // cannot be made, the translation is set as today, and the reason noted
 import { analyze } from './paper-meta.mjs'
-import { LAYOUT_TEX, layoutMarking, markProbeTex, probeSamples } from './layout/marks.mjs'
+import { inkSamples, LAYOUT_TEX, layoutMarking, markProbeTex, probeSamples } from './layout/marks.mjs'
 import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
 import { passagesInSource } from './cache.mjs'
@@ -169,12 +169,12 @@ export function openPaper(files) {
  *  body face sets and at what sizes (typeset/density.mjs WIDTH_PROBE), which the typesetting rule measures text by;
  *  with `marks`, the layout marks' TeX (MARK_DEF, LAYOUT_TEX) first and, after the width probe, the mark probe
  *  (layout/marks.mjs markProbeTex: what the paper's own citation and footnote commands do with a mark and with what
- *  follows them), whose answers (readMarkProbe, over `probeSamples(paper.units)`) are the paper's own switch.
- *  Without it, the bytes as before */
+ *  follows them), whose answers (readMarkProbe, over `probeSamples(paper.units)`) are the paper's own switch, and what
+ *  each of its macros sets (readInkProbe, over `inkSamples(paper.units)`). Without it, the bytes as before */
 export function probeFiles({ fsys, project }, { width = false, marks = false } = {}) {
   const text = latin1(fsys.read(project.main))
   const at = beginDocument(text)
-  const head = marks ? MARK_DEF + LAYOUT_TEX : '', probe = marks ? markProbeTex(probeSamples(project.units)) : ''
+  const head = marks ? MARK_DEF + LAYOUT_TEX : '', probe = marks ? markProbeTex(probeSamples(project.units), inkSamples(project.units)) : ''
   return new Map([[project.main, latin1Bytes(`${head}${END_TEX}${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}${probe}\\end{document}\n`)]])
 }
 
@@ -186,13 +186,14 @@ export function probeFiles({ fsys, project }, { width = false, marks = false } =
  *  placeholder of those classes and each cell and heading, and LAYOUT_TEX after MARK_DEF; `spans` names the paper's own
  *  units; `switches`, the paper's own switch (layout/marks.mjs readMarkProbe: TeX's answers to the mark probe), the
  *  marks taken off where TeX said they change what follows, and where it gave no answer; without `switches`, the marks
- *  as before. Without `layout`, the bytes as before */
-export function originalFiles({ fsys, project }, { lines = false, spans = null, layout = null, switches = null } = {}) {
+ *  as before; `inkless`, the paper's macros TeX said set no ink (readInkProbe), given no mark. Without `layout`, the
+ *  bytes as before */
+export function originalFiles({ fsys, project }, { lines = false, spans = null, layout = null, switches = null, inkless = null } = {}) {
   const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
   const raw = spans ? [] : null
   let out
   if (layout) {
-    const marked = layoutMarking(project.units, layout, { lines, switches }), paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
+    const marked = layoutMarking(project.units, layout, { lines, switches, inkless }), paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
     out = patch({ ...project, units: marked.units }, new Map(), { mark: marked.mark, spans: raw })
     for (const x of raw ?? []) { x.unit = paperOf.get(x.unit) ?? x.unit; if (x.outer) x.outer = paperOf.get(x.outer) ?? x.outer }
   } else out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw })

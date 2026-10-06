@@ -1,6 +1,6 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { type Glyph, OPS_CAP, pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
+import { type Glyph, OPS_CAP, outlineBox, pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
 
 // arXiv's ink from a page's operator list, as PDF.js's canvas places it: the lists are written here with pdfjs-dist's own
 // operator codes, in the shapes PDF.js 6.3.289 gives them (a text matrix as one argument, a path as [op, data, minMax])
@@ -58,8 +58,6 @@ describe('pageInk', () => {
     const notSpace = only(scaled([OPS.setWordSpacing, [2]], [OPS.setCharSpacing, [0.5]], show(g('-', 250), g('X', 500))).glyphs, 'X')
     const notSpacePlain = only(scaled(show(g('-', 250), g('X', 500))).glyphs, 'X')
     expect(notSpace.x0 - notSpacePlain.x0).toBeCloseTo(0.5 * 2, 9)
-    // a blank glyph is no glyph of the ink
-    expect(scaled(show(g(' ', 250, true))).glyphs).toEqual([])
     // a rise of 3 raises the baseline by 3, and the box with it
     const flat = only(ink(text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('X')))).glyphs, 'X')
     const risen = only(ink(text('f1', 10, [1, 0, 0, 1, 72, 700], [OPS.setTextRise, [3]], show(g('X')))).glyphs, 'X')
@@ -199,7 +197,7 @@ describe('pageInk', () => {
 
   it('a rotated page has no glyphs', () => {
     const page = text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A')))
-    for (const rotate of [90, 180, 270, -90, 450]) expect(ink(page, rotate)).toEqual({ glyphs: [], boxes: [], capped: false, rotated: true })
+    for (const rotate of [90, 180, 270, -90, 450]) expect(ink(page, rotate)).toEqual({ glyphs: [], boxes: [], points: [], boxAt: [], capped: false, rotated: true })
     expect(ink(page, 360).rotated).toBe(false)
     expect(ink(page, Number.NaN).rotated).toBe(true)
   })
@@ -223,6 +221,36 @@ describe('pageInk', () => {
     expect(b.glyphs.map(q => q.u)).toEqual(['A', 'Z'])
   })
 
+  it('a painted glyph is ink whatever its Unicode: a symbolic font\'s code 32 (2307.16209\'s big left parenthesis) is a glyph', () => {
+    // txexs's parenthesis is drawn from code 32, which PDF.js gives the Unicode of a space
+    const { glyphs } = ink(text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('a', 500), g(' ', 750, true), g('', 500), g('b', 500))))
+    expect(glyphs.map(q => q.u)).toEqual(['a', ' ', '', 'b'])
+    expect(only(glyphs, ' ').x0).toBeCloseTo(77, 9)
+    expect(only(glyphs, ' ').x1).toBeCloseTo(84.5, 9)
+    // an invisible one is still none, and so is a glyph with no Unicode string at all
+    expect(ink(text('f1', 10, [1, 0, 0, 1, 72, 700], [OPS.setTextRenderingMode, [3]], show(g(' ', 750, true)))).glyphs).toEqual([])
+    expect(ink(text('f1', 10, [1, 0, 0, 1, 72, 700], show({ width: 500, isSpace: false, fontChar: 'x', vmetric: null }))).glyphs).toEqual([])
+  })
+
+  it('a rendering intent named axt-… is a point of the marked compile, in stream order among the glyphs and boxes', () => {
+    const path = (x: number): Op => [OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from([x, 690, x + 5, 691])]]
+    const { glyphs, boxes, points, boxAt } = ink([
+      ...text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A')), [OPS.setRenderingIntent, [{ name: 'axt-p1.2a' }]], show(g('B'))),
+      path(100),
+      // the operand as a string (PDF.js in a worker gives a name as an object, in Node as either)
+      [OPS.setRenderingIntent, ['axt-p1.2b']], [OPS.setRenderingIntent, [{ name: 'Perceptual' }]],
+      ...text('f1', 10, [1, 0, 0, 1, 72, 680], show(g('C'))),
+      [OPS.setRenderingIntent, [{ name: 'axt-bs1' }]], path(120), [OPS.setRenderingIntent, [{ name: 'axt-be1' }]],
+      // not a point: a name too long, of other characters, or none
+      [OPS.setRenderingIntent, [{ name: `axt-${'p'.repeat(80)}` }]], [OPS.setRenderingIntent, [{ name: 'axt-p1 2a' }]], [OPS.setRenderingIntent, [{ name: 'axt-' }]], [OPS.setRenderingIntent, []],
+    ])
+    expect(glyphs.map(q => q.u)).toEqual(['A', 'B', 'C'])
+    expect(boxes).toHaveLength(8)
+    expect(points).toEqual([{ name: 'p1.2a', glyph: 1, box: 0 }, { name: 'p1.2b', glyph: 2, box: 1 }, { name: 'bs1', glyph: 3, box: 1 }, { name: 'be1', glyph: 3, box: 2 }])
+    // each glyph's boxes shown before it
+    expect(boxAt).toEqual([0, 0, 1])
+  })
+
   it('a hostile list gives no number that is not finite, and never throws', () => {
     const { glyphs, boxes } = ink([
       [OPS.transform, [Number.NaN, 0, 0, 1, 0, 0]], ...text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A'))), [OPS.constructPath, [OPS.fill, [null], Float32Array.from([0, 0, 1, 1])]],
@@ -230,5 +258,45 @@ describe('pageInk', () => {
     expect(glyphs).toEqual([])
     expect(boxes).toEqual([])
     expect(() => ink([[OPS.setFont, []], [OPS.showText, []], [OPS.showText, [null]], [OPS.setTextMatrix, []], [OPS.transform, []], [OPS.paintImageXObjectRepeat, ['x']], [OPS.constructPath, []], [OPS.paintFormXObjectBegin, []]])).not.toThrow()
+  })
+})
+
+describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
+  // PDF.js's glyph outlines as it gives them where it draws glyphs as paths (Node): DrawOPS in em from the origin, y up
+  const M = 0, L = 1, C = 2, Z = 4
+  const sy: Record<string, number[]> = {
+    // CMSY10's calligraphic F: its outline from -0.032 to 0.691 em, the font declaring a descent of 0.96
+    F: [M, 0.02, -0.032, L, 0.6, -0.032, C, 0.7, 0.2, 0.7, 0.5, 0.65, 0.691, L, 0.05, 0.691, Z],
+    // a space drawn: no outline
+    ' ': [],
+  }
+  const objs = (paths: Record<string, number[]>) => ({
+    has: (id: string) => id in FONTS || id.startsWith('cmsy_path_'),
+    get: (id: string) => { if (id in FONTS) return FONTS[id]; const ch = id.slice('cmsy_path_'.length); return ch in paths ? { path: new Float32Array(paths[ch]!) } : null },
+  })
+  FONTS.cmsy = { name: 'MJNQMS+CMSY10', loadedName: 'cmsy', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.775, descent: -0.96, isType3Font: false, vertical: false }
+  it('outlineBox: the extremes of its points and control points; [] for none drawn; null where no outline is given', () => {
+    const o = objs(sy)
+    expect(outlineBox(o, FONTS.cmsy, 'F')).toEqual([expect.closeTo(0.02, 6), expect.closeTo(-0.032, 6), expect.closeTo(0.7, 6), expect.closeTo(0.691, 6)])
+    expect(outlineBox(o, FONTS.cmsy, ' ')).toEqual([])
+    expect(outlineBox(o, FONTS.cmsy, 'Q')).toBeNull()
+    expect(outlineBox(commonObjs, FONTS.cmsy, 'F')).toBeNull()
+    expect(outlineBox(o, FONTS.f1, 'F')).toBeNull()
+  })
+  it('a glyph\'s top and bottom are its outline\'s, not its font\'s declared ascent and descent; its ink across is kept apart from its advance', () => {
+    const { glyphs } = pageInk(OPS, list(text('cmsy', 10, [1, 0, 0, 1, 72, 700], show(g('F', 600), g(' ', 300)))), objs(sy), { rotate: 0 })
+    const f = only(glyphs, 'F')
+    expect(f.bottom).toBeCloseTo(700 - 0.32, 4)
+    expect(f.top).toBeCloseTo(700 + 6.91, 4)
+    expect(f.ix0).toBeCloseTo(72.2, 4)
+    expect(f.ix1).toBeCloseTo(79, 4)
+    // the declared 0.96 em would reach the next line, 9.6 pt below
+    expect(f.bottom).toBeGreaterThan(700 - 9.6 + 1)
+    // a space drawn has no ink: nothing up or down
+    const sp = glyphs.find(q => q.u === ' ')!
+    expect(sp.top).toBe(sp.bottom)
+    // no outline given: the declared box, as before
+    const declared = only(pageInk(OPS, list(text('cmsy', 10, [1, 0, 0, 1, 72, 700], show(g('F', 600)))), commonObjs, { rotate: 0 }).glyphs, 'F')
+    expect(declared.bottom).toBeCloseTo(700 - 9.6, 6)
   })
 })

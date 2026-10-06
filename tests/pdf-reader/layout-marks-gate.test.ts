@@ -122,6 +122,29 @@ describe('pageBoxes and boxDiff: TeX\'s own page boxes, the marks taken out', ()
     const space = (g: string) => [...LINE.slice(0, 4), `..${g}`, ...LINE.slice(5)]
     expect(boxDiff(pageBoxes(logOf(space('\\glue(\\spaceskip) 3.0 plus 1.0'))), pageBoxes(logOf(space('\\glue 3.0 plus 1.0'))))).toEqual([])
   })
+  it('the points are no difference: each engine\'s literal beside a destination, around a column\'s body; a literal of the paper\'s own is', () => {
+    const v1 = ['\\vbox(633.0+0.0)x407.0', '.\\pdfliteral direct{/axt-bs1 ri}', '.\\hbox(6.94+2.22)x407.0, glue set 0.5', '..\\pdfdest name{axt-p0.1a} fitr width 0.0 height 0.0 depth 0.0', '..\\pdfliteral direct{/axt-p0.1a ri}', ...LINE.slice(2, 4), '..\\special{pdf:code /axt-p0.1b ri}', ...LINE.slice(4), '.\\pdfliteral direct{/axt-be1 ri}']
+    expect(boxDiff(pageBoxes(logOf(LINE)), pageBoxes(logOf(v1)))).toEqual([])
+    expect(boxDiff(pageBoxes(logOf(LINE)), pageBoxes(logOf([...LINE.slice(0, 3), '..\\pdfliteral direct{0 g}', ...LINE.slice(3)])))).toHaveLength(1)
+    // a column's body: the penalty after its opening point is the point's; the glue put back after its closing point has
+    // lost its name, no more; any other penalty or name is a difference
+    const body = (head: string[], tail: string[]) => ['\\vbox(633.0+0.0)x407.0', '.\\vbox(600.0+0.0)x407.0', ...head, '..\\glue(\\topskip) 3.0', '..\\hbox(6.94+2.22)x407.0', '...\\OT1/cmr/m/n/10 W', ...tail]
+    const v0 = body([], ['..\\glue(\\belowdisplayskip) 6.0 plus 2.0', '..\\penalty 150', '..\\glue 0.0 plus 1.0fil'])
+    const v1b = body(['..\\pdfliteral direct{/axt-bs3 ri}', '..\\penalty 10000'], ['..\\pdfliteral direct{/axt-be3 ri}', '..\\glue 6.0 plus 2.0', '..\\penalty 150', '..\\glue 0.0 plus 1.0fil'])
+    expect(boxDiff(pageBoxes(logOf(v0)), pageBoxes(logOf(v1b)))).toEqual([])
+    expect(boxDiff(pageBoxes(logOf(v0)), pageBoxes(logOf(body(['..\\pdfliteral direct{/axt-p0.1a ri}', '..\\penalty 10000'], v0.slice(-3)))))).toHaveLength(1)
+    // the run put back after the closing point need not end the list: the footnotes come after it (2608.12333)
+    const notes = ['..\\glue 9.0 plus 4.0 minus 2.0', '..\\kern -3.0', '..\\hbox(0.4+0.0)x50.0']
+    const v0n = body([], ['..\\penalty 0', '..\\glue(\\belowdisplayskip) 11.0 plus 3.0 minus 6.0', ...notes])
+    const v1n = (put: string[]) => body(['..\\pdfliteral direct{/axt-bs4 ri}', '..\\penalty 10000'], ['..\\pdfliteral direct{/axt-be4 ri}', ...put, ...notes])
+    expect(boxDiff(pageBoxes(logOf(v0n)), pageBoxes(logOf(v1n(['..\\penalty 0', '..\\glue 11.0 plus 3.0 minus 6.0']))))).toEqual([])
+    // put back otherwise, it is a difference
+    expect(boxDiff(pageBoxes(logOf(v0n)), pageBoxes(logOf(v1n(['..\\penalty 0', '..\\glue 11.0 plus 3.0 minus 5.0']))))).toHaveLength(1)
+    // a name lost anywhere but in the run a closing point put back is a difference: in a list's middle, at its end
+    const mid = (g: string) => body([], [g, '..\\hbox(6.94+2.22)x407.0', '..\\penalty 150'])
+    expect(boxDiff(pageBoxes(logOf(mid('..\\glue(\\parskip) 6.0'))), pageBoxes(logOf(mid('..\\glue 6.0'))))).toHaveLength(1)
+    expect(boxDiff(pageBoxes(logOf(body([], ['..\\glue(\\parskip) 6.0']))), pageBoxes(logOf(body([], ['..\\glue 6.0']))))).toHaveLength(1)
+  })
   it('a font kern lost beside a heading\'s end mark: the page, and the mark nearest the difference', () => {
     const v1 = [LINE[0] as string, '.\\hbox(6.94+2.22)x407.0, glue set 0.49', ...LINE.slice(2, 6), '..\\pdfdest name{axt-h3e} fitr width 0.0 height 0.0 depth 0.0', '..\\OT1/cmr/m/n/10 .']
     expect(boxDiff(pageBoxes(logOf(['\\vbox(1.0+0.0)x2.0'], LINE)), pageBoxes(logOf(['\\vbox(1.0+0.0)x2.0'], v1)))).toEqual([{ page: 2, v0: '\\kern-0.135', v1: null, near: 'h3e', line: '0.0', inLine: ['h3e'] }])
@@ -166,6 +189,15 @@ describe('causesOf: each line TeX set otherwise, its cause from the evidence', (
     expect(causesOf([d('0.8', 'h1e', '\\kern-0.5', '\\OT1/cmr/m/n/10 x')]).get('3:0.8')).toBe('unexplained')
     // a glyph of another letter beside another mark is no setting again
     expect(causesOf([d('0.6', 'h1e', '\\kern-0.5', null), d('0.6', '2s', '\\T1/ptm/m/n/9 (+7) a', '\\T1/ptm/m/n/9 (+5) b')]).get('3:0.6')).toBe('unexplained')
+  })
+  it('a line whose nodes are all the same, its glue set alone other, is accepted as such, whatever mark is beside it (2608.18090\'s ruling)', () => {
+    expect(causesOf([d('0.9', 'p12.3a', '\\hbox(6.83+1.94)x252.0', '\\hbox(6.83+1.94)x252.0, glue set 0.74948')]).get('3:0.9')).toBe('glue set')
+    expect(causesOf([d('0.9', 'p12.3a', '\\hbox(6.83+1.94)x252.0, glue set -0.01106', '\\hbox(6.83+1.94)x252.0, glue set 0.74948')]).get('3:0.9')).toBe('glue set')
+    // another size, or a node beside it set otherwise, is no glue set alone
+    expect(causesOf([d('0.9', 'p12.3a', '\\hbox(6.83+1.94)x252.0', '\\hbox(6.83+2.0)x252.0, glue set 0.7')]).get('3:0.9')).toBe('unexplained')
+    expect(causesOf([d('0.9', 'p12.3a', '\\hbox(6.83+1.94)x252.0', '\\hbox(6.83+1.94)x252.0, glue set 0.7'), d('0.9', 'p12.3a', '\\glue 3.33', '\\glue 3.5')]).get('3:0.9')).toBe('unexplained')
+    // a glyph expanded otherwise is no glue set
+    expect(causesOf([d('0.9', 'p12.3a', '\\T1/ptm/m/n/9 (+7) a', '\\T1/ptm/m/n/9 (+5) a')]).get('3:0.9')).toBe('unexplained')
   })
   it('anything else is unexplained: a placeholder\'s mark beside it, no kern lost, a kern v1 added', () => {
     expect(causesOf([d('0.1', 'h4e', '\\kern-0.135', null), d('0.1', 'p2.3b', 'a', 'b')]).get('3:0.1')).toBe('unexplained')

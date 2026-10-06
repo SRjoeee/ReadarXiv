@@ -1,12 +1,14 @@
 import { createHash } from 'node:crypto'
+import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/latex-front.mjs'
 import type { UnitLines } from '@/pdf-reader/engine/tex-errors.mjs'
 import { patch } from '@/pdf-reader/engine/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, parseLayoutMarks, askedCommands, FOLLOWERS, markProbeTex, PROBE_SCHEMA, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, OWNED_ALL, parseLayoutMarks, POINTS_TEX, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/live.mjs'
+import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
 import { marksOf } from '@/pdf-reader/engine/typeset/places.mjs'
 
 // The layout marks as text: which placeholder gets which mark, the units' own marks, the TeX that goes with them, the
@@ -366,6 +368,101 @@ describe('the paper\'s own switch: TeX asked what a mark does before what follow
   })
 })
 
+describe('what a paper\'s macro sets: TeX asked (the ink section), and LaTeX\'s text symbols', () => {
+  const paperIn = (body: string, pre = '') => openPaper(new Map([['main.tex', new TextEncoder().encode(`\\documentclass{article}\n${pre}\n\\begin{document}\n${body}\n\\end{document}\n`)]]))
+  it('inkSamples: each macro\'s source once, in order, that a box can hold; no text symbol, no comment or parameter, no environment', () => {
+    const p = paperIn('A \\rule{0pt}{2ex} b \\fontsize{7pt}{1em}\\selectfont c \\rule{0pt}{2ex} d 3.57\\% e \\bert{} f \\verb|x| g \\hspace{1pt} h.')
+    const got = inkSamples(p.units)
+    expect(got).toContain('\\rule{0pt}{2ex}')
+    expect(got.filter(s => s === '\\rule{0pt}{2ex}')).toHaveLength(1)
+    expect(got.indexOf('\\rule{0pt}{2ex}')).toBeLessThan(got.indexOf('\\bert{}') === -1 ? Infinity : got.indexOf('\\bert{}'))
+    expect(got).not.toContain('\\%')
+    expect(got.some(s => /\\verb/.test(s))).toBe(false)
+  })
+  it('inkSection: each sample in a voided box, shown in full in the log between its rows, its error count started again', () => {
+    const tex = inkSection(['\\rule{0pt}{2ex}', '\\bert{}'])
+    expect(tex.match(/\\typeout\{LAYOUT-PROBE 1 ink-(?:at|end) \d\}/g)).toEqual(['\\typeout{LAYOUT-PROBE 1 ink-at 0}', '\\typeout{LAYOUT-PROBE 1 ink-end 0}', '\\typeout{LAYOUT-PROBE 1 ink-at 1}', '\\typeout{LAYOUT-PROBE 1 ink-end 1}'])
+    expect(tex).toContain('\\global\\setbox\\axt@ibox\\box\\voidb@x\\setbox\\axt@ibox\\hbox{\\rule{0pt}{2ex}}')
+    expect(tex).toContain('\\showboxbreadth=100000 \\showboxdepth=100000 \\tracingonline=0 \\showbox\\axt@ibox')
+    expect(tex.match(/\\noindent\\par/g)).toHaveLength(2)
+    expect(tex).not.toMatch(/\\write|\\immediate|AXT-/)
+    // after the punctuation section, in the same document
+    const doc = markProbeTex([{ src: '\\cite{a}', call: false }], ['\\bert{}'])
+    expect(doc.indexOf('punct 0')).toBeLessThan(doc.indexOf('ink-at 0'))
+    expect(markProbeTex([{ src: '\\cite{a}', call: false }])).not.toContain('ink-at')
+  })
+  it('readInkProbe: a box TeX listed with no character and no rule both wide and high sets no ink; an error or a cut listing is no answer', () => {
+    // TeX Live 2025's pdfTeX log of the section, as it writes it (\showbox under \tracingonline=0)
+    const log = [
+      'LAYOUT-PROBE 1 ink-at 0', '> \\box54=', '\\hbox(6.81989+0.11491)x8.32996', '.\\OT1/ptm/m/n/10 %', '', '! OK.', '\\axt@ink ...', 'l.7 \\axt@ink{0}{\\%}', '', 'LAYOUT-PROBE 1 ink-end 0',
+      'LAYOUT-PROBE 1 ink-at 1', '> \\box54=', '\\hbox(8.99997+0.0)x0.0', '.\\hbox(8.99997+0.0)x0.0', '..\\rule(8.99997+0.0)x0.0', '', '! OK.', 'l.8 x', 'LAYOUT-PROBE 1 ink-end 1',
+      'LAYOUT-PROBE 1 ink-at 2', '> \\box54=', '\\hbox(0.0+0.0)x0.0', '', './main.tex:9: OK.', 'LAYOUT-PROBE 1 ink-end 2',
+      'LAYOUT-PROBE 1 ink-at 3', '> \\box54=', '\\hbox(0.4+0.0)x3.6', '.\\kern 0.59998', '.\\vbox(0.4+0.0)x3.00003', '..\\rule(0.4+0.0)x3.00003', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 3',
+      'LAYOUT-PROBE 1 ink-at 4', '> \\box54=', '\\hbox(0.0+0.0)x0.0', '.\\pdfcolorstack 0 push {1 0 0 rg 1 0 0 RG}', '.\\glue 3.33 plus 1.66', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 4',
+      'LAYOUT-PROBE 1 ink-at 5', '! Misplaced \\noalign.', '> \\box54=', '\\hbox(0.0+0.0)x0.0', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 5',
+      'LAYOUT-PROBE 1 ink-at 6', '> \\box54=', '\\hbox(0.0+0.0)x0.0', '.\\pdfliteral{0 0 m 10 10 l S}', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 6',
+      'LAYOUT-PROBE 1 ink-at 7', '> \\box54=', '\\hbox(0.0+0.0)x0.0', '.\\glue(\\spaceskip) 3.33 plus 1.66 minus 1.11 and a line cut sh', 'ort by TeX', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 7',
+      'LAYOUT-PROBE 1 ink-at 8', '> \\box54=', '\\hbox(0.0+0.0)x0.0',
+    ].join('\n')
+    const samples = ['\\%', '\\rule{0pt}{2.0ex}', '\\fontsize{7.6pt}{1em}', '\\_', '\\color{red}', '\\specialrule{1pt}{-1pt}{0pt}', '\\tikzmark', '\\long', '\\cut']
+    expect(readInkProbe(log, samples)).toEqual(['\\rule{0pt}{2.0ex}', '\\fontsize{7.6pt}{1em}', '\\color{red}'])
+    expect(readInkProbe('', samples)).toEqual([])
+  })
+  it('readInkTexts: a box of letters and digits of text fonts alone, at any depth, is its text; anything else no answer', () => {
+    // 1810.04805's own listings (TeX Live 2026's pdfTeX): \newcommand\bert{BERT\xspace}, and \bertbase's subscript in
+    // small capitals inside math
+    const log = [
+      'LAYOUT-PROBE 1 ink-at 0', '> \\box75=', '\\hbox(7.31458+0.0)x27.33098', '.\\OT1/ptm/m/n/10.95 B', '.\\OT1/ptm/m/n/10.95 E', '.\\OT1/ptm/m/n/10.95 R', '.\\kern-0.657', '.\\OT1/ptm/m/n/10.95 T', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 0',
+      'LAYOUT-PROBE 1 ink-at 1', '> \\box75=', '\\hbox(7.31458+1.76027)x49.59885', '.\\OT1/ptm/m/n/10.95 B', '.\\OT1/ptm/m/n/10.95 E', '.\\OT1/ptm/m/n/10.95 R', '.\\kern-0.657', '.\\OT1/ptm/m/n/10.95 T', '.\\mathon', '.\\hbox(5.43198+0.09995)x22.26787, shifted 1.66032', '..\\OT1/ptm/m/sc/8 B', '..\\kern-0.27998', '..\\OT1/ptm/m/sc/8 A', '..\\OT1/ptm/m/sc/8 S', '..\\OT1/ptm/m/sc/8 E', '.\\mathoff', '', './main.tex:9: OK.', 'LAYOUT-PROBE 1 ink-end 1',
+      // a ligature, a space
+      'LAYOUT-PROBE 1 ink-at 2', '> \\box75=', '\\hbox(6.9+0.0)x40.0', '.\\T1/cmr/m/n/10 ^^\\ (ligature ffi)', '.\\T1/cmr/m/n/10 x', '.\\glue 3.33 plus 1.66', '.\\T1/cmr/m/n/10 2', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 2',
+      // a math italic letter, a symbol, a rule, an error, nothing at all, a cut listing
+      'LAYOUT-PROBE 1 ink-at 3', '> \\box75=', '\\hbox(4.3+0.0)x5.7', '.\\mathon', '.\\OML/cmm/m/it/10 x', '.\\mathoff', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 3',
+      'LAYOUT-PROBE 1 ink-at 4', '> \\box75=', '\\hbox(6.8+0.1)x8.3', '.\\OT1/ptm/m/n/10 %', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 4',
+      'LAYOUT-PROBE 1 ink-at 5', '> \\box75=', '\\hbox(6.8+0.0)x10.0', '.\\OT1/ptm/m/n/10 A', '.\\rule(0.4+0.0)x3.0', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 5',
+      'LAYOUT-PROBE 1 ink-at 6', '! Undefined control sequence.', '> \\box75=', '\\hbox(6.8+0.0)x5.0', '.\\OT1/ptm/m/n/10 A', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 6',
+      'LAYOUT-PROBE 1 ink-at 7', '> \\box75=', '\\hbox(0.0+0.0)x0.0', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 7',
+      'LAYOUT-PROBE 1 ink-at 8', '> \\box75=', '\\hbox(6.8+0.0)x5.0', '.\\OT1/ptm/m/n/10 A',
+    ].join('\n')
+    const samples = ['\\bert', '\\bertbase', '\\office', '\\x', '\\pct', '\\boxed', '\\broken', '\\nothing', '\\cut']
+    expect(readInkTexts(log, samples)).toEqual([['\\bert', 'BERT'], ['\\bertbase', 'BERTBASE'], ['\\office', 'ffix2']])
+    expect(readInkTexts('', samples)).toEqual([])
+    // 65 letters: past INK_TEXT_MAX, no answer
+    const long = ['LAYOUT-PROBE 1 ink-at 0', '> \\box75=', '\\hbox(6.8+0.0)x325.0', ...Array.from({ length: 65 }, () => '.\\OT1/ptm/m/n/10 A'), '', '! OK.', 'LAYOUT-PROBE 1 ink-end 0'].join('\n')
+    expect(readInkTexts(long, ['\\long'])).toEqual([])
+  })
+  it('headEnd: a unit\'s head before its start mark, as patch places it', () => {
+    const ph = (src: string) => ({ t: 'ph', src }), text = (s: string) => ({ t: 'text', s })
+    // a macro and a space before the first word: passed over; one glued to its word: the mark before it
+    expect(headEnd([ph('\\bert'), text(' is simple')])).toBe(1)
+    expect(headEnd([ph('\\bert'), text("'s model")])).toBe(0)
+    expect(headEnd([ph('\\specialrule{1pt}{-1pt}{0pt}'), text('\n'), ph('\\rule{0pt}{2ex}'), text('Transformer')])).toBe(3)
+    expect(headEnd([ph('$x$'), text(' is')])).toBe(0)
+  })
+  it('symbolText: LaTeX\'s text symbols, each its one character, alone or before an empty group', () => {
+    expect(symbolText('\\%')).toBe('%')
+    expect(symbolText('\\_')).toBe('_')
+    expect(symbolText('\\dots{}')).toBe('\u2026')
+    expect(symbolText('\\S')).toBe('\u00a7')
+    for (const src of ['\\%x', '\\bert', '\\bert{}', '%', '\\{a\\}', undefined]) expect(symbolText(src)).toBeNull()
+    for (const ch of Object.values(TEXT_SYMBOLS)) expect([...ch]).toHaveLength(1)
+  })
+  it('layoutMarking: a macro TeX said sets no ink gets no mark, where it would have had one; the rest as before', () => {
+    const p = paperIn('Words \\fontsize{7pt}{1em} more and \\bert{} here, and so on.')
+    const opens = (inkless: string[] | null) => layoutMarking(p.units, MARK_CLASSES, { lines: false, inkless }).units.flatMap(u => srcs(u)).filter(s => /^ph \\axtpma/.test(s))
+    expect(opens(null).length).toBeGreaterThan(0)
+    const marked = (inkless: string[] | null) => opens(inkless).length
+    expect(marked(['\\fontsize{7pt}{1em}'])).toBe(marked(null) - 1)
+    expect(marked([])).toBe(marked(null))
+  })
+  it('probeFiles with the marks asks about the paper\'s macros after its citations', () => {
+    const p = paperIn('A claim \\cite{a} and \\rule{0pt}{2ex} here.')
+    const text = new TextDecoder().decode(probeFiles(p, { marks: true }).get('main.tex'))
+    expect(text).toContain('LAYOUT-PROBE 1 ink-at 0')
+    expect(text).toContain('\\hbox{\\rule{0pt}{2ex}}')
+  })
+})
+
 describe('LAYOUT_TEX', () => {
   it('LAYOUT_TEX holds the gate and the vanishing writes', () => {
     expect(LAYOUT_TEX).toContain('\\AddToHook{cmd/@starttoc/before}{\\global\\axt@offtrue}')
@@ -381,6 +478,28 @@ describe('LAYOUT_TEX', () => {
     // one line, no comment: the paper's lines keep their numbers in the log
     expect(LAYOUT_TEX).not.toContain('\n')
     expect(LAYOUT_TEX).not.toContain('%')
+  })
+  it('LAYOUT_TEX sets a point beside each destination, around each column\'s body and around each float\'s box', () => {
+    // a rendering intent named after the destination, in each engine's literal; none in DVI
+    expect(POINTS_TEX).toContain('\\ifdefined\\XeTeXrevision\\def\\axt@point#1{\\special{pdf:code /axt-#1 ri}}')
+    expect(POINTS_TEX).toContain('\\ifdefined\\pdfextension\\def\\axt@point#1{\\pdfextension literal direct{/axt-#1 ri}}')
+    expect(POINTS_TEX).toContain('\\ifdefined\\pdfliteral\\def\\axt@point#1{\\ifnum\\pdfoutput>0 \\pdfliteral direct{/axt-#1 ri}\\fi}')
+    expect(POINTS_TEX).toContain('\\let\\axt@destonly\\axt@dest\\def\\axt@dest#1{\\axt@destonly{#1}\\axt@point{#1}}')
+    // the column's body repacked to its own height and depth, a point first and last; a float's box, a point first and last
+    // the opening point with a \penalty10000 after it: a whatsit before the body's first glue makes it a place to break,
+    // and \vsplit (balance.sty's last page) then takes an empty column (2608.06007); the closing one after the body's last
+    // box, its glue, kerns and penalties taken off and put back after it, each where TeX had it: LaTeX's
+    // \@outputbox@removebskip reads the body's \lastskip (2608.24503), and no place to break is made or lost
+    expect(POINTS_TEX).toContain('\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\fi}')
+    expect(POINTS_TEX).toContain('\\def\\axt@vtake{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@vtg\\or\\expandafter\\axt@vtk\\or\\expandafter\\axt@vtp\\fi}')
+    // a float's points around its finished box (\@endfloatbox closes it): at its start a point would give its first
+    // paragraph a \parskip (2608.01890's figures)
+    expect(POINTS_TEX).toContain('\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}')
+    expect(POINTS_TEX).not.toContain('@floatboxreset')
+    // after the destination's own definition, inside LAYOUT_TEX; its count a macro, no register; one line
+    expect(LAYOUT_TEX.indexOf(POINTS_TEX)).toBeGreaterThan(LAYOUT_TEX.indexOf('\\def\\axt@dest#1'))
+    expect(LAYOUT_TEX.endsWith(`${POINTS_TEX}\\makeatother`)).toBe(true)
+    for (const word of ['\\newcount', '\\newbox', '\\newdimen', '\\typeout', '\n', '%']) expect(POINTS_TEX).not.toContain(word)
   })
 })
 
@@ -402,6 +521,30 @@ function fakeDocument(pages: { view: number[]; items?: unknown[] }[], dests: [st
   }
 }
 const item = (str: string, x: number, y: number, size = 10) => ({ str, transform: [size, 0, 0, size, x, y], width: str.length * size * 0.5, height: size, fontName: 'f1', hasEOL: false })
+/** a page's operator list in stream order: a run of glyphs at its place (each 5 pt wide at 10 pt), a point (`/axt-<name> ri`),
+ *  a rule */
+type Shown = [s: string, x: number, y: number, size?: number] | { at: string } | { rule: number[] } | { glyphs: string[]; x: number; y: number; size?: number; step?: number }
+const FONT = { name: 'ABCDEF+CMR10', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false }
+function opsOf(shown: Shown[]) {
+  const ops: [number, unknown[]][] = []
+  for (const s of shown) {
+    if (Array.isArray(s)) {
+      const [str, x, y, size = 10] = s
+      ops.push([OPS.beginText, []], [OPS.setFont, ['f1', size]], [OPS.setTextMatrix, [[1, 0, 0, 1, x, y]]], [OPS.showText, [[...str].map(c => (c === ' ' ? -500 : { unicode: c, width: 500, isSpace: false, fontChar: c, vmetric: null }))]], [OPS.endText, []])
+    } else if ('glyphs' in s) {
+      // each glyph a Unicode string of its own (a ligature's, or many distinct ones), `step` its advance in thousandths
+      const step = s.step ?? 500
+      ops.push([OPS.beginText, []], [OPS.setFont, ['f1', s.size ?? 10]], [OPS.setTextMatrix, [[1, 0, 0, 1, s.x, s.y]]], [OPS.showText, [s.glyphs.map(u => ({ unicode: u, width: step, isSpace: false, fontChar: u, vmetric: null }))]], [OPS.endText, []])
+    } else if ('at' in s) ops.push([OPS.setRenderingIntent, [{ name: `axt-${s.at}` }]])
+    else ops.push([OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from(s.rule)]])
+  }
+  return { fnArray: ops.map(o => o[0]), argsArray: ops.map(o => o[1]) }
+}
+/** fakeDocument's, with each page's operator list */
+function streamDocument(pages: { view: number[]; items?: unknown[]; shown: Shown[] }[], dests: [string, number, number | null, number | null][]) {
+  const doc = fakeDocument(pages, dests)
+  return { ...doc, getPage: async (n: number) => ({ ...(await doc.getPage(n)), rotate: 0, commonObjs: { get: () => FONT }, getOperatorList: async () => opsOf(nth(pages, n - 1).shown) }) }
+}
 
 describe('reading the marked original', () => {
   it('marksOf reads none of the layout marks', async () => {
@@ -434,13 +577,139 @@ describe('reading the marked original', () => {
     expect(m.tokens.slice(24, 30)).toEqual([2, 92, 720, 15, 10, 3])
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m)))).toEqual(m)
   })
+  it('layoutMarksOf writes the rest of a word cut by a hyphen as word -1 after it, and none after a word left out', async () => {
+    const eol = (str: string, x: number, y: number) => ({ ...item(str, x, y), hasEOL: true })
+    const long = 'x'.repeat(201)
+    const doc = fakeDocument([{ view: [0, 0, 612, 792], items: [item('text generation', 72, 700), eol('mod-', 160, 700), item('els.', 72, 688), eol(`${long}-`, 72, 676), item('tail', 72, 664)] }], [])
+    const m = await layoutMarksOf(doc, '', { engine: 'pdflatex' })
+    expect(m.words).toEqual(['text', 'generation', 'models'])
+    // models, then its rest at the next line's start; the 201-letter word and its rest left out
+    expect(m.tokens.slice(12, 24)).toEqual([1, 160, 700, 15, 10, 2, 1, 72, 688, 15, 10, -1])
+    expect(m.tokens.length).toBe(6 * 4)
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m)))).toEqual(m)
+  })
   it('layoutMarksOf records the classes and the paper\'s switch the marked original was made with', async () => {
     const doc = fakeDocument([{ view: [0, 0, 612, 792], items: [item('kept', 72, 700)] }], [['axt-0s', 1, 72, 700]])
-    expect((await layoutMarksOf(doc, '', { engine: 'pdflatex' })).marking).toEqual({ classes: [...LAYOUT_CLASSES], movesPunctuation: [] })
-    const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', classes: ['math', 'cite'], movesPunctuation: ['cite'] })
-    expect(m.marking).toEqual({ classes: ['math', 'cite'], movesPunctuation: ['cite'] })
+    // no probe run: null, which the maker re-marks as LAYOUT_TEX sets every mark; a probe that answered nothing is {},
+    // which the maker re-marks with no mark for an asked command (Task 2's m4): the two kept apart through the file
+    const plain = await layoutMarksOf(doc, '', { engine: 'pdflatex' })
+    expect(plain.marking).toEqual({ classes: [...LAYOUT_CLASSES], switches: null, inkless: null, texts: null })
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(plain))).marking.switches).toBeNull()
+    const none = await layoutMarksOf(doc, '', { engine: 'pdflatex', switches: {} })
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(none))).marking.switches).toEqual({})
+    const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', classes: ['math', 'cite'], switches: { '\\cite': '22220000', '\\ref': 'x0000000' } })
+    expect(m.marking).toEqual({ classes: ['math', 'cite'], switches: { '\\cite': '22220000', '\\ref': 'x0000000' }, inkless: null, texts: null })
+    // the probe's texts, as readInkTexts gives them, written flat (the file nests no deeper)
+    const said = await layoutMarksOf(doc, '', { engine: 'pdflatex', texts: [['\\bert', 'BERT'], ['\\ours', 'OURS']] })
+    expect(said.marking.texts).toEqual(['\\bert', 'BERT', '\\ours', 'OURS'])
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(said))).marking.texts).toEqual(['\\bert', 'BERT', '\\ours', 'OURS'])
+    await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', texts: [['\\bert', 'BE RT']] })).rejects.toThrow(LayoutRefusal)
+    const none2 = await layoutMarksOf(doc, '', { engine: 'pdflatex', inkless: ['\\rule{0pt}{2ex}'] })
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(none2))).marking.inkless).toEqual(['\\rule{0pt}{2ex}'])
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m))).marking).toEqual(m.marking)
+    await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', switches: { '\\cite': '2222000y' } })).rejects.toThrow(LayoutRefusal)
     await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', classes: ['math', 'tikz' as 'math'] })).rejects.toThrow(LayoutRefusal)
+    await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', switches: { '\\cite': '2222' } })).rejects.toThrow(LayoutRefusal)
+    // no operator list read without the units and PDF.js's operator codes: no piece owns anything
+    expect(m.owned).toEqual([])
+    expect(m.chars).toEqual([])
+  })
+  it('layoutMarksOf writes past its caps as not owned, and nothing its own parser refuses (the 6b review\'s I3 and Minor 1)', async () => {
+    // pieces of $x$ each between its points; their glyphs given as runs of many glyphs
+    const pieceOf = (n: number) => unit('para', Array.from({ length: n }, (_, k) => [text(k ? ' and ' : 'see '), ph('$x$')]).flat())
+    const parse = async (units: SourceUnit[], shown: Shown[], dests: [string, number, number, number][], view = [0, 0, 612, 792]) => {
+      const doc = streamDocument([{ view, items: [item('see', 72, 700)], shown }], dests.map(([n, ...r]) => [`axt-${n}`, ...r]))
+      const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', units, OPS })
+      return { m, back: parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m))) }
+    }
+    // a piece of GLYPHS_PIECE + 1 glyphs: not owned, how so
+    {
+      const glyphs = Array.from({ length: GLYPHS_PIECE + 1 }, () => 'x')
+      const { back } = await parse([pieceOf(1)], [{ at: '0s' }, { at: 'p0.1a' }, { glyphs, x: 72, y: 700, step: 1 }, { at: 'p0.1b' }, { at: '0e' }], [['0s', 1, 72, 700], ['p0.1a', 1, 72, 700], ['p0.1b', 1, 300, 700], ['0e', 1, 300, 700]])
+      expect(back.owned).toEqual([['p0.1a', OWNED_HOW.indexOf('more glyphs than a piece may own')]])
+    }
+    // 65,537 distinct characters over four pieces: the 65,536th place is '', which every one past it is written as
+    {
+      const per = 16_385, shown: Shown[] = [{ at: '0s' }], dests: [string, number, number, number][] = [['0s', 1, 72, 700]]
+      for (let q = 0; q < 4; q++) {
+        const k = 2 * q + 1, glyphs = Array.from({ length: per }, (_, i) => { const n = q * per + i; return String.fromCharCode(0x4e00 + (n % 20000)) + String.fromCharCode(0x4e00 + Math.floor(n / 20000)) })
+        shown.push({ at: `p0.${k}a` }, { glyphs, x: 72, y: 700 - 10 * q, step: 1 }, { at: `p0.${k}b` })
+        dests.push([`p0.${k}a`, 1, 72, 700 - 10 * q], [`p0.${k}b`, 1, 300, 700 - 10 * q])
+      }
+      shown.push({ at: '0e' }); dests.push(['0e', 1, 300, 670])
+      const { m, back } = await parse([pieceOf(4)], shown, dests)
+      expect(m.chars).toHaveLength(65_536)
+      expect(m.chars.at(-1)).toBe('')
+      expect(back.chars).toHaveLength(65_536)
+    }
+  }, 60_000)
+  it('layoutMarksOf: past OWNED_ALL a paper\'s pieces are not owned, and past MARKS_CAP its last owned pieces are cut, never the file refused', async () => {
+    // 14 pieces, in name order (p0.1a, p0.11a, …) 12 of 20,000 glyphs and one of 9,999: 249,999 owned; the last, 20,000
+    // more, past OWNED_ALL
+    const n = 14, per = 20_000, past = OWNED_HOW.indexOf('past the glyphs a paper may own')
+    const units = [unit('para', Array.from({ length: n }, (_, k) => [text(k ? ' and ' : 'see '), ph('$x$')]).flat())]
+    const run = async (big: boolean) => {
+      const shown: Shown[] = [{ at: '0s' }], dests: [string, number, number, number][] = [['0s', 1, big ? 10_000 : 72, big ? 13_000 : 700]]
+      for (let q = 0; q < n; q++) {
+        const k = 2 * q + 1, y = big ? 13_000.11 - 300 * q : 700 - 12 * q, count = q === n - 2 ? 9_999 : per
+        // at coordinates of five digits on a page of 14,000 pt, each glyph a character of its own kind (an index of five
+        // digits into `chars`): some 8.6 MB, past MARKS_CAP; else 4 MB of one character, within it
+        const glyphs = Array.from({ length: count }, (_, i) => { if (!big) return 'x'; const c = 10_000 + ((q * per + i) % 55_000); return String.fromCharCode(0x4e00 + (c % 20000)) + String.fromCharCode(0x4e00 + Math.floor(c / 20000)) })
+        shown.push({ at: `p0.${k}a` }, { glyphs, x: big ? 10_000.11 : 72, y, size: big ? 199.99 : 10, step: big ? 1 : 0.01 }, { at: `p0.${k}b` })
+        dests.push([`p0.${k}a`, 1, big ? 10_000 : 72, y], [`p0.${k}b`, 1, big ? 13_000 : 80, y])
+      }
+      shown.push({ at: '0e' }); dests.push(['0e', 1, big ? 13_000 : 80, big ? 9_000 : 500])
+      const view = big ? [0, 0, 14_000, 14_000] : [0, 0, 612, 792]
+      const doc = streamDocument([{ view, items: [item('see', dests[0]![2], dests[0]![3])], shown }], dests.map(([nm, ...r]) => [`axt-${nm}`, ...r]))
+      const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', units, OPS })
+      const written = encodeLayoutMarks(m)
+      expect(new TextEncoder().encode(written).length).toBeLessThanOrEqual(MARKS_CAP)
+      return parseLayoutMarks(new TextEncoder().encode(written))
+    }
+    // within the cap: the last piece alone past OWNED_ALL
+    const small = await run(false)
+    expect(small.owned.at(-1)).toEqual(['p0.9a', past])
+    expect(small.owned.filter(e => e.length === 2).length).toBe(1)
+    // past the cap: owned pieces from the last cut to fit the file, never the file refused
+    const large = await run(true)
+    expect(large.owned.at(-1)).toEqual(['p0.9a', past])
+    expect(large.owned.filter(e => e.length === 2 && e[1] === past).length).toBeGreaterThan(1)
+    expect(large.owned.some(e => e.length > 2)).toBe(true)
+  }, 120_000)
+  it('layoutMarksOf reads the marked compile\'s operator lists: each piece\'s own glyphs and rules by its points, and how', async () => {
+    const units = [unit('para', [text('see '), ph('$x^2$'), text(' and '), ph('$\\frac{1}{d}$'), text(' by '), ph('\\bert'), text(' models. '), ph('\\[a=b\\]')]), unit('para', [text('Next words')])]
+    const shown: Shown[] = [
+      ['see', 72, 700], { at: '0s' }, { at: 'p0.1a' }, ['x', 92, 700], ['2', 97, 703.5, 7], { at: 'p0.1b' }, ['and', 106, 700],
+      { at: 'p0.3a' }, ['1', 130, 705], { rule: [130, 702, 135, 702.4] }, ['d', 130, 695], { at: 'p0.3b' }, ['by', 140, 700],
+      { at: 'p0.5a' }, ['BERT', 155, 700], ['models.', 178, 700], { at: 'p0.7a' }, ['a=b', 150, 680], { at: '0e' }, { at: '1s' }, ['Next', 72, 660],
+    ]
+    const dests: [string, number, number, number][] = [['0s', 1, 72, 700], ['p0.1a', 1, 87, 700], ['p0.1b', 1, 100.5, 700], ['p0.3a', 1, 121, 700], ['p0.3b', 1, 135, 700], ['p0.5a', 1, 150, 700], ['p0.7a', 1, 213, 700], ['0e', 1, 213, 700], ['1s', 1, 72, 660]]
+    const doc = streamDocument([{ view: [0, 0, 612, 792], items: [item('see', 72, 700)], shown }], dests.map(([n, ...r]) => [`axt-${n}`, ...r]))
+    const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', units, OPS })
+    const of = (name: string) => m.owned.find(e => e[0] === name)
+    // each glyph its page, origin, baseline, size and character; each rule its page and box
+    expect(m.chars).toEqual(['x', '2', '1', 'd', 'B', 'E', 'R', 'T', 'a', '=', 'b'])
+    expect(of('p0.1a')).toEqual(['p0.1a', OWNED_HOW.indexOf('closed'), 2, 1, 92, 700, 10, 0, 1, 97, 703.5, 7, 1])
+    expect(of('p0.3a')).toEqual(['p0.3a', OWNED_HOW.indexOf('closed'), 2, 1, 130, 705, 10, 2, 1, 130, 695, 10, 3, 1, 130, 702, 135, 702.4])
+    // an opening mark alone: to where the text after it begins, a display to its unit's end mark
+    expect(of('p0.5a')).toEqual(['p0.5a', OWNED_HOW.indexOf('open, to the text after it'), 4, 1, 155, 700, 10, 4, 1, 160, 700, 10, 5, 1, 165, 700, 10, 6, 1, 170, 700, 10, 7])
+    expect(of('p0.7a')?.slice(0, 3)).toEqual(['p0.7a', OWNED_HOW.indexOf("open, to its unit's next mark"), 3])
+    expect(m.owned.map(e => e[0])).toEqual(['p0.1a', 'p0.3a', 'p0.5a', 'p0.7a'])
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m)))).toEqual(m)
+    // the units' marks file the same but for the new fields: no stream read, nothing owned
+    const plain = await layoutMarksOf(doc, '', { engine: 'pdflatex' })
+    expect({ ...plain, owned: m.owned, chars: m.chars }).toEqual(m)
+  })
+  it('layoutMarksOf owns no ink off its page: the piece is written as not owned, and the file parses', async () => {
+    const units = [unit('para', [text('see '), ph('$x$'), text(' and '), ph('$y$'), text(' end')])]
+    const shown: Shown[] = [['see', 72, 700], { at: '0s' }, { at: 'p0.1a' }, ['x', 5000, 700], { at: 'p0.1b' }, ['and', 106, 700], { at: 'p0.3a' }, ['y', 130, 700, 300], { at: 'p0.3b' }, ['end', 140, 700], { at: '0e' }]
+    const dests: [string, number, number, number][] = [['0s', 1, 72, 700], ['p0.1a', 1, 87, 700], ['p0.1b', 1, 100.5, 700], ['p0.3a', 1, 121, 700], ['p0.3b', 1, 135, 700], ['0e', 1, 160, 700]]
+    const doc = streamDocument([{ view: [0, 0, 612, 792], items: [item('see', 72, 700)], shown }], dests.map(([n, ...r]) => [`axt-${n}`, ...r]))
+    const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', units, OPS })
+    // a glyph past the page's view, a glyph past the size a glyph may have
+    expect(m.owned).toEqual([['p0.1a', OWNED_HOW.indexOf('ink out of bounds')], ['p0.3a', OWNED_HOW.indexOf('ink out of bounds')]])
+    expect(OWNED_HOW.indexOf('ink out of bounds')).toBeGreaterThanOrEqual(OWNED)
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m)))).toEqual(m)
   })
   it('layoutMarksOf leaves out a mark or a word off its page, and refuses an engine it does not know', async () => {
     const doc = fakeDocument([{ view: [0, 0, 612, 792], items: [item('kept', 72, 700), item('off', 5000, 700), item('x'.repeat(201), 72, 650)] }], [['axt-0s', 1, 72, 700], ['axt-1s', 1, 9000, 700], ['axt-2s', 1, null, null]])
@@ -460,7 +729,7 @@ describe('reading the marked original', () => {
 
 /** a made-up marks file of two pages, every field used */
 const valid = (): LayoutMarks => ({
-  schema: 1, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], movesPunctuation: ['cite'] }, pages: 2,
+  schema: 3, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], switches: { '\\cite': '22220000', '\\footnote': '00000012' }, inkless: ['\\rule{0pt}{2ex}', '\\fontsize{7.6pt}{1em}'], texts: ['\\bert', 'BERT'] }, pages: 2,
   views: [0, 0, 612, 792, 0, 0, 612, 792],
   columns: [1, 2],
   marks: [['0s', 1, 72, 700], ['0e', 1, 300.5, 650.25], ['c1-1', 1, 0, 0], ['c2-2', 2, 0, 0], ['p0.3a', 1, 100, 700], ['p0.3b', 1, 120.75, 700], ['h1s', 2, 72, 720], ['t2s', 2, 80, 500], ['n0.5a', 1, 200, 680], ['g1t', 2, 300, 400]],
@@ -468,6 +737,9 @@ const valid = (): LayoutMarks => ({
   lines: [[0, 3], [2, 1], [7, 12]],
   words: ['the', 'model', 'x'],
   tokens: [1, 72, 700, 15.5, 10, 0, 1, 90, 700, 25, 10, 1, 2, 72, 720, 6, 12, 2],
+  chars: ['x', '2', '\u2211', ''],
+  // p0.3: x and its raised 2, and a rule; n0.5: one glyph of a blank Unicode; p2.1: out of order
+  owned: [['n0.5a', 1, 1, 1, 200, 680, 7, 3], ['p0.3a', 0, 2, 1, 100, 700, 10, 0, 1, 105, 703.5, 7, 1, 1, 100, 702, 110, 702.4], ['p2.1a', OWNED_HOW.indexOf('marks out of order')]],
 })
 const bytes = (v: unknown) => new TextEncoder().encode(typeof v === 'string' ? v : JSON.stringify(v))
 const refusal = (b: Uint8Array) => { try { parseLayoutMarks(b); return null } catch (e) { if (!(e instanceof LayoutRefusal)) throw e; return e.path } }
@@ -490,7 +762,7 @@ describe('the marks file', () => {
   it('encodeLayoutMarks and parseLayoutMarks round-trip', () => {
     const m = valid()
     expect(parseLayoutMarks(bytes(encodeLayoutMarks(m)))).toEqual(m)
-    expect(Object.keys(JSON.parse(encodeLayoutMarks(m)))).toEqual(['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens'])
+    expect(Object.keys(JSON.parse(encodeLayoutMarks(m)))).toEqual(['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens', 'chars', 'owned'])
   })
   it('parseLayoutMarks refuses past its bounds', () => {
     const big = new Uint8Array(MARKS_CAP + 1).fill(0x20)
@@ -501,14 +773,52 @@ describe('the marks file', () => {
     parse.mockRestore()
     expect(refusal(new Uint8Array([0x7b, 0xc3, 0x28, 0x7d]))).toBe('')
     const rows: [string, (m: LayoutMarks & Record<string, unknown>) => void, string][] = [
-      ['schema 2', m => { m.schema = 2 as 1 }, 'schema'],
+      ['schema 1, a file before the stream', m => { m.schema = 1 as 3 }, 'schema'],
+      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 3 }, 'schema'],
       ['engine context', m => { m.engine = 'context' }, 'engine'],
       ['marking not an object', m => { (m as Record<string, unknown>).marking = ['math'] }, 'marking'],
       ['marking with a key of no schema', m => { (m.marking as Record<string, unknown>).extra = [] }, 'marking.extra'],
       ['a class of no MARK_CLASSES', m => { (m.marking.classes as string[])[0] = 'tikz' }, 'marking.classes[0]'],
       ['a class twice', m => { (m.marking.classes as string[])[1] = 'math' }, 'marking.classes[1]'],
-      ['a switch of no class', m => { (m.marking.movesPunctuation as string[])[0] = 'Cite' }, 'marking.movesPunctuation[0]'],
-      ['a switch that is no array', m => { (m.marking as Record<string, unknown>).movesPunctuation = 'cite' }, 'marking.movesPunctuation'],
+      ['the switch an array', m => { (m.marking as Record<string, unknown>).switches = ['\\cite'] }, 'marking.switches'],
+      ['a switch of no command', m => { (m.marking.switches as Record<string, string>).cite = '00000000' }, 'marking.switches.cite'],
+      ['a switch of 7 codes', m => { (m.marking.switches as Record<string, string>)['\\cite'] = '2222000' }, 'marking.switches.\\\\cite'],
+      ['a switch of a code 3', m => { (m.marking.switches as Record<string, string>)['\\cite'] = '22223000' }, 'marking.switches.\\\\cite'],
+      ['a switch of 17 commands', m => { for (let i = 0; i < 17; i++) (m.marking.switches as Record<string, string>)[`\\c${'i'.repeat(i + 1)}te`] = '00000000' }, 'marking.switches'],
+      ['no inkless key', m => { delete (m.marking as Partial<LayoutMarks['marking']>).inkless }, 'marking.inkless'],
+      ['the inkless an object', m => { (m.marking as Record<string, unknown>).inkless = {} }, 'marking.inkless'],
+      ['an inkless source twice', m => { (m.marking.inkless as string[])[1] = '\\rule{0pt}{2ex}' }, 'marking.inkless[1]'],
+      ['an inkless source empty', m => { (m.marking.inkless as string[])[0] = '' }, 'marking.inkless[0]'],
+      ['an inkless source of 201 code units', m => { (m.marking.inkless as string[])[0] = `\\x${'y'.repeat(199)}` }, 'marking.inkless[0]'],
+      ['65 inkless sources', m => { m.marking.inkless = Array.from({ length: 65 }, (_, i) => `\\m${'i'.repeat(i + 1)}`) }, 'marking.inkless'],
+      ['no texts key', m => { delete (m.marking as Partial<LayoutMarks['marking']>).texts }, 'marking.texts'],
+      ['texts of an odd length', m => { (m.marking.texts as string[]).push('\\x') }, 'marking.texts'],
+      ['texts in pairs, a level deeper than the file has', m => { (m.marking as Record<string, unknown>).texts = [['\\bert', 'BERT']] }, ''],
+      ['a text source twice', m => { m.marking.texts = ['\\bert', 'BERT', '\\bert', 'B'] }, 'marking.texts[2]'],
+      ['a text of a space', m => { m.marking.texts = ['\\bert', 'BE RT'] }, 'marking.texts[1]'],
+      ['a text of 65 letters', m => { m.marking.texts = ['\\bert', 'B'.repeat(65)] }, 'marking.texts[1]'],
+      ['65 texts', m => { m.marking.texts = Array.from({ length: 65 }, (_, i) => [`\\m${'i'.repeat(i + 1)}`, 'A']).flat() }, 'marking.texts'],
+      ['chars not an array', m => { (m as Record<string, unknown>).chars = 'x2' }, 'chars'],
+      ['a char of 33 code units', m => { m.chars[0] = 'x'.repeat(33) }, 'chars[0]'],
+      ['a char that is a number', m => { (m.chars as unknown[])[1] = 2 }, 'chars[1]'],
+      ['65,537 chars', m => { m.chars = Array.from({ length: 65_537 }, (_, i) => String(i)) }, 'chars'],
+      ['a piece of 2,001 rules', m => { const e = nth(m.owned, 1); e.length = 3 + 5 * (e[2] as number); for (let r = 0; r < 2001; r++) e.push(1, 100, 702, 110, 702.4) }, 'owned[1]'],
+      ['owned not an array', m => { (m as Record<string, unknown>).owned = {} }, 'owned'],
+      ['an owned entry of one field', m => { (m.owned[2] as unknown[]).pop() }, 'owned[2]'],
+      ['an owned name of no opening mark', m => { nth(m.owned, 1)[0] = 'p0.3b' }, 'owned[1][0]'],
+      ['owned names not rising', m => { nth(m.owned, 2)[0] = 'n0.5a' }, 'owned[2][0]'],
+      ['a how of no OWNED_HOW', m => { nth(m.owned, 2)[1] = OWNED_HOW.length }, 'owned[2][1]'],
+      ['a piece not owned with glyphs', m => { (m.owned[2] as unknown[]).push(0) }, 'owned[2]'],
+      ['an owned piece of no glyph count', m => { (m.owned[1] as unknown[]).length = 2 }, 'owned[1]'],
+      ['a glyph count past its rows', m => { nth(m.owned, 1)[2] = 4 }, 'owned[1]'],
+      ['a rule of four numbers', m => { (m.owned[1] as unknown[]).pop() }, 'owned[1]'],
+      ['a glyph on page 3', m => { nth(m.owned, 1)[3] = 3 }, 'owned[1][3]'],
+      ['a glyph 2 pt left of its view', m => { nth(m.owned, 1)[4] = -2 }, 'owned[1][4]'],
+      ['a glyph of size 0', m => { nth(m.owned, 1)[6] = 0 }, 'owned[1][6]'],
+      ['a glyph of size 201', m => { nth(m.owned, 1)[6] = 201 }, 'owned[1][6]'],
+      ['a glyph of a char past chars', m => { nth(m.owned, 1)[7] = 4 }, 'owned[1][7]'],
+      ['a rule right of its right edge', m => { nth(m.owned, 1)[14] = 111 }, 'owned[1][16]'],
+      ['a rule off its page', m => { nth(m.owned, 1)[17] = 800 }, 'owned[1][17]'],
       ['pages 0', m => { m.pages = 0 }, 'pages'],
       ['pages 10,001', m => { m.pages = 10001 }, 'pages'],
       ['a missing key', m => { delete (m as Partial<LayoutMarks>).dropped }, 'dropped'],
@@ -535,6 +845,9 @@ describe('the marks file', () => {
       ['a token 2,001 high', m => { m.tokens[4] = 2001 }, 'tokens[4]'],
       ['a negative width', m => { m.tokens[3] = -1 }, 'tokens[3]'],
       ['a word index past words', m => { m.tokens[5] = 3 }, 'tokens[5]'],
+      // -1: the rest of the word before, given in parts; never the first token's, nor another negative
+      ['the first token a rest', m => { m.tokens[5] = -1 }, 'tokens[5]'],
+      ['a word index of -2', m => { m.tokens[11] = -2 }, 'tokens[11]'],
       ['a string where a number goes', m => { (m.marks[0] as unknown[])[2] = '72' }, 'marks[0][2]'],
       ['an array where a number goes, a level deeper than the file has', m => { (m.marks[0] as unknown[])[2] = [72] }, ''],
     ]
@@ -543,6 +856,10 @@ describe('the marks file', () => {
       change(m)
       expect(refusal(bytes(m)), name).toBe(path)
     }
+    // a later token the rest of the word before
+    const rest = valid()
+    rest.tokens[11] = -1
+    expect(refusal(bytes(rest))).toBeNull()
     // a number written 1e400 is Infinity once parsed
     expect(refusal(bytes(JSON.stringify(valid()).replace('"0s",1,72,700', '"0s",1,1e400,700')))).toBe('marks[0][2]')
     expect(refusal(bytes(JSON.stringify(valid()).replace('[0,0,612,792,0,0,612,792]', '[0,0,612,1e400,0,0,612,792]')))).toBe('views[3]')
@@ -551,6 +868,13 @@ describe('the marks file', () => {
     // a key of no schema, 100,000 code units long, is told by its first 20
     const long = { ...valid(), [`k${'y'.repeat(100_000)}`]: 1 }
     expect(refusal(bytes(long))).toBe(`k${'y'.repeat(19)}`)
+    // a piece of 20,001 glyphs, and a paper of more than OWNED_ALL owned glyphs and rules
+    const piece = valid()
+    piece.owned[1] = ['p0.3a', 0, 20_001, ...Array.from({ length: 20_001 }, () => [1, 100, 700, 10, 0]).flat()]
+    expect(refusal(bytes(piece))).toBe('owned[1][2]')
+    const paper = valid()
+    paper.owned = Array.from({ length: Math.ceil(OWNED_ALL / 10_000) + 1 }, (_, i) => [`p${String(i).padStart(3, '0')}.1a`, 0, 10_000, ...Array.from({ length: 10_000 }, () => [1, 100, 700, 10, 0]).flat()])
+    expect(refusal(bytes(paper))).toBe('owned')
     // within every bound: 300,000 words
     const many = valid()
     many.words = Array.from({ length: 300_000 }, (_, i) => `w${i}`)

@@ -43,27 +43,70 @@ const fresh = () => ({
 })
 
 /**
- * A page's ink: { glyphs, boxes, capped, rotated }. `glyphs`: each glyph shown with a Unicode string that is not blank,
- * upright and painted (render mode not 3 or 7), as a Glyph; a vertical font's glyphs are passed over, a glyph set
- * rotated or mirrored is a box of its em instead (it has no baseline across the page). `boxes`: x0, y0, x1, y1 (stride
- * 4) for each image placed, each path painted (a stroke's widened by half the line width; a clip paints nothing), each
- * shading painted into a clip, and those glyphs; each cut to the clip in force (a form's box, a clipping path), and one
- * wholly outside it left out. `capped`: the list held more than OPS_CAP operations, and those past it were not read.
- * `rotated`: the page's /Rotate is not 0, and nothing is read (the layer lays over no rotated page).
+ * A glyph's own ink in em, [x0, y0, x1, y1] from its origin, y up: the extremes of its outline, as PDF.js gives it where
+ * it draws glyphs as paths (`<font's loadedName>_path_<fontChar>` in the common objects, a FontPathInfo: in Node, where
+ * the font face is disabled by default, or wherever the document is opened with `disableFontFace`). The outline's points
+ * and its curves' control points bound it, and a font's outline has a point at each extreme (TrueType's and CFF's own
+ * rule), so the box is its ink. [] for a glyph of no outline (a space drawn); null where no outline is given (a Type 3
+ * font, the browser's default): the font's declared ascent and descent then
+ */
+export function outlineBox(commonObjs, font, fontChar) {
+  if (!font || typeof font.loadedName !== 'string' || typeof fontChar !== 'string' || typeof commonObjs?.has !== 'function') return null
+  const id = `${font.loadedName}_path_${fontChar}`
+  let path = null
+  try { if (commonObjs.has(id)) path = commonObjs.get(id)?.path } catch { return null }
+  if (!path || typeof path.length !== 'number') return null
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+  // DrawOPS: moveTo 0 and lineTo 1 a point, curveTo 2 three, quadraticCurveTo 3 two, closePath 4 none
+  for (let i = 0; i < path.length;) {
+    const op = path[i++], k = op === 0 || op === 1 ? 2 : op === 2 ? 6 : op === 3 ? 4 : op === 4 ? 0 : -1
+    if (k < 0 || i + k > path.length) return null
+    for (let q = 0; q < k; q += 2) {
+      const x = path[i + q], y = path[i + q + 1]
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+      if (x < x0) x0 = x
+      if (x > x1) x1 = x
+      if (y < y0) y0 = y
+      if (y > y1) y1 = y
+    }
+    i += k
+  }
+  return x0 <= x1 ? [x0, y0, x1, y1] : []
+}
+
+/** a point of the marked compile (layout/marks.mjs LAYOUT_TEX's \\axt@point): a rendering intent, `/axt-<name> ri`,
+ *  which PDF.js keeps in the operator list with its name (it drops marked-content points, DP and MP) and which its text
+ *  layer passes over. The name: a mark's, or a bracket's (bs, be, fs, fe and a number) */
+const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
+
+/**
+ * A page's ink: { glyphs, boxes, points, boxAt, capped, rotated }. `glyphs`: each glyph shown with a Unicode string,
+ * upright and painted (render mode not 3 or 7), as a Glyph, whatever its Unicode: a symbolic font's glyph that PDF.js
+ * gives a blank one (txexs's big left parenthesis is its code 32) is ink to erase and to draw; a vertical font's glyphs
+ * are passed over, a glyph set rotated or mirrored is a box of its em instead (it has no baseline across the page). A
+ * glyph's `top` and `bottom`, and its ink across (`ix0`, `ix1`), are its own outline's (outlineBox) where PDF.js gives it:
+ * a font's declared descent is no glyph's (CMSY10 declares 0.96 em, a line and more below its baseline; Pagella's
+ * descenders reach past its declared 0.156 em); else its font's declared ascent and descent, and its advance.
+ * `boxes`: x0, y0, x1, y1 (stride 4) for each image placed, each path painted (a stroke's widened by half the line
+ * width; a clip paints nothing), each shading painted into a clip, and those glyphs; each cut to the clip in force (a
+ * form's box, a clipping path), and one wholly outside it left out. Glyphs and boxes in the order the content stream
+ * shows them; `points`: each point of the marked compile (POINT), { name, glyph, box }, the glyphs and the boxes shown
+ * before it; `boxAt`: for each glyph, the boxes shown before it. On arXiv's PDF the points are nobody's. `capped`: the
+ * list held more than OPS_CAP operations, and those past it were not read. `rotated`: the page's /Rotate is not 0, and
+ * nothing is read (the layer lays over no rotated page).
  * `indices` (the text remover's, layout/remove.mjs): each glyph also carries where the content stream shows it: `n`, its
  * text-showing operation's place among the page's own (an annotation's appearance not counted: -1 there), and `k`, its
- * place among that operation's glyphs; and `paths` gives, for each box, its path's place among the page's own painted
- * paths (constructPath), or its kind: -1 a path of an annotation's appearance, -2 a shading, -3 an image, -4 a glyph set
- * rotated or mirrored; and `shows` counts the page's own text-showing operations. `blanks`: a glyph whose Unicode is
- * blank is a glyph too (`blank: true`): a symbolic font's glyph that PDF.js gives a blank one (a big bracket of an
- * extension font) is ink. Both off, the answer is the maker's, unchanged.
+ * place among that operation's glyphs, and `blank: true` where its Unicode is blank; and `paths` gives, for each box,
+ * its path's place among the page's own painted paths (constructPath), or its kind: -1 a path of an annotation's
+ * appearance, -2 a shading, -3 an image, -4 a glyph set rotated or mirrored; and `shows` counts the page's own
+ * text-showing operations. Off, the answer is the maker's, unchanged
  */
-export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, blanks = false }) {
+export function pageInk(OPS, ops, commonObjs, { rotate, indices = false }) {
   const turn = (((Number(rotate) % 360) + 360) % 360)
-  if (turn !== 0) return indices ? { glyphs: [], boxes: [], paths: [], shows: 0, capped: false, rotated: true } : { glyphs: [], boxes: [], capped: false, rotated: true }
+  if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], ...(indices ? { paths: [], shows: 0 } : {}), capped: false, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
   const n = Math.min(fnArray.length, OPS_CAP)
-  const glyphs = [], boxes = [], paths = []
+  const glyphs = [], boxes = [], points = [], boxAt = [], paths = []
   // (indices: the showing operation's place and the glyph's within it; the painted path's place; inside an annotation, -1)
   let showAt = -1, pathAt = -1, inAnnotation = 0, curShow = -1, glyphAt = -1
   const fonts = new Map()
@@ -85,7 +128,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, blanks 
     beginAnnotation: ANNOTATION, endAnnotation: ANNOTATION_END, constructPath: PATH, clip: CLIP, eoClip: EO_CLIP,
     shadingFill: SHADING, paintImageXObject: IMAGE, paintInlineImageXObject: INLINE_IMAGE, paintImageMaskXObject: MASK,
     paintSolidColorImageMask: SOLID_MASK, paintImageXObjectRepeat: IMAGE_REPEAT, paintImageMaskXObjectRepeat: MASK_REPEAT,
-    paintImageMaskXObjectGroup: MASK_GROUP, paintInlineImageXObjectGroup: INLINE_GROUP,
+    paintImageMaskXObjectGroup: MASK_GROUP, paintInlineImageXObjectGroup: INLINE_GROUP, setRenderingIntent: INTENT,
   } = OPS
   const STROKES = new Set([OPS.stroke, OPS.closeStroke, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke])
   const PAINTS = new Set([...STROKES, OPS.fill, OPS.eoFill])
@@ -123,18 +166,31 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, blanks 
 
   /** a glyph shown from text-space x `xa` to `xb` on the current line (the horizontal scale applied), under M = the CTM
    *  × the text matrix; `hs` the horizontal scale with the font's direction */
+  const outlines = new Map()
+  /** a glyph's outline box in em (outlineBox), once a font and character */
+  const outlineOf = g => {
+    const key = `${s.fontId}|${g.fontChar}`
+    if (!outlines.has(key)) outlines.set(key, outlineBox(commonObjs, s.font, g.fontChar))
+    return outlines.get(key)
+  }
   const emit = (g, M, hs, xa, xb, ascent, descent) => {
     const u = g.unicode
-    if (typeof u !== 'string' || (!blanks && !/\S/.test(u)) || (s.tr & 3) === 3) return
+    if (typeof u !== 'string' || (s.tr & 3) === 3) return
     const ty = s.y + s.rise, size = s.size
     const level = M[0] * hs > 0 && M[3] > 0 && Math.abs(M[1]) <= LEVEL * Math.abs(M[0])
     if (!level) { addBox(M, Math.min(xa, xb), ty + descent * size, Math.max(xa, xb), ty + ascent * size, -4); return }
     const ox = M[0] * xa + M[2] * ty + M[4], oy = M[1] * xa + M[3] * ty + M[5], ex = M[0] * xb + M[2] * ty + M[4]
     const sz = size * M[3]
     const name = typeof s.font.name === 'string' && s.font.name ? s.font.name : s.fontId
-    const glyph = { u, x0: Math.min(ox, ex), x1: Math.max(ox, ex), y: oy, top: oy + ascent * sz, bottom: oy + descent * sz, size: sz, font: name }
+    const glyph = { u, x0: Math.min(ox, ex), x1: Math.max(ox, ex), y: oy, top: oy + ascent * sz, bottom: oy + descent * sz, size: sz, font: name, ix0: Math.min(ox, ex), ix1: Math.max(ox, ex) }
+    const box = outlineOf(g)
+    if (box?.length === 4) {
+      // the outline across from the origin (its x in em × size, the horizontal scale and the direction), and up
+      const a = M[0] * (xa + box[0] * size * hs) + M[2] * ty + M[4], b = M[0] * (xa + box[2] * size * hs) + M[2] * ty + M[4]
+      glyph.ix0 = Math.min(a, b); glyph.ix1 = Math.max(a, b); glyph.top = oy + box[3] * sz; glyph.bottom = oy + box[1] * sz
+    } else if (box) { glyph.top = glyph.bottom = oy; glyph.ix0 = glyph.ix1 = ox }
     if (indices) { glyph.n = curShow; glyph.k = glyphAt; if (!/\S/.test(u)) glyph.blank = true }
-    if (finite(glyph.x0, glyph.x1, glyph.y, glyph.top, glyph.bottom, glyph.size)) glyphs.push(glyph)
+    if (finite(glyph.x0, glyph.x1, glyph.y, glyph.top, glyph.bottom, glyph.size, glyph.ix0, glyph.ix1)) { glyphs.push(glyph); boxAt.push(boxes.length / 4) }
   }
 
   /** showText as the canvas runs it (showText, showType3Text): each glyph's origin, its advance, the line moved on */
@@ -275,8 +331,14 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, blanks 
       }
       case MASK_GROUP: for (const img of Array.isArray(a[0]) ? a[0] : []) addBox(mul(s.ctm, matrixOf(img?.transform)), 0, 0, 1, 1, -3); break
       case INLINE_GROUP: for (const e of Array.isArray(a[1]) ? a[1] : []) addBox(mul(s.ctm, matrixOf(e?.transform)), 0, 0, 1, 1, -3); break
+      case INTENT: {
+        const name = typeof a[0] === 'string' ? a[0] : a[0] && typeof a[0] === 'object' ? a[0].name : null
+        const m = typeof name === 'string' ? POINT.exec(name) : null
+        if (m) points.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
+        break
+      }
       default:
     }
   }
-  return indices ? { glyphs, boxes, paths, shows: showAt + 1, capped: fnArray.length > OPS_CAP, rotated: false } : { glyphs, boxes, capped: fnArray.length > OPS_CAP, rotated: false }
+  return { glyphs, boxes, points, boxAt, ...(indices ? { paths, shows: showAt + 1 } : {}), capped: fnArray.length > OPS_CAP, rotated: false }
 }
