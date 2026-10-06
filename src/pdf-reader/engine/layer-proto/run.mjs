@@ -459,8 +459,8 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   // gate's 29 outputs). A unit that does not fit there is given more room where the page has it, and else stays the
   // original's, whole: nothing of it is drawn in part.
   /**
-   * How far a single line's slot may run on to one side (`dir` -1 or 1) of `from`, on its band of the original page, over
-   * paper only: up to the first ink that is not the unit's own (`own`, its lines' erase extents: erased with it), read on
+   * How far a single line's slot may run on to one side (`dir` -1 or 1) of `from`, on its band of the original page (its
+   * core, the x-height, for ink), over paper only: up to the first ink that is not the unit's own (`own`, its lines' erase extents: erased with it), read on
    * the page's ink map, never past `limit`. Before another line's text (a neighbouring cell, whose translation may run on
    * towards it too) to half the paper between them; before any other ink (a rule, a figure) to a quarter of an em clear of
    * it. Returns the edge.
@@ -470,7 +470,9 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     if (!map) return from
     const px = pxOf(b.page), f = map.factor, z = b.sizes[0], B = b.B[0]
     const top = B + 0.8 * z, bottom = B - 0.25 * z
-    const [, r0] = px(from, top), [, r1] = px(from, bottom)
+    // (the ink looked for is on the line's core, its x-height: a table's rule above or below the line, which the map
+    // holds (inkMapOf, averaged), runs along it and stands beside nothing; a column rule or a neighbour's text crosses it)
+    const [, r0] = px(from, B + 0.55 * z), [, r1] = px(from, B + 0.1 * z)
     const ra = Math.max(0, Math.floor(Math.min(r0, r1) / f)), rb = Math.min(map.h - 1, Math.floor(Math.max(r0, r1) / f))
     const ownAt = x => own.some(e => x >= e[0] - 0.3 && x <= e[2] + 0.3 && e[1] < top && e[3] > bottom)
     const step = f / (scale * dpr)
