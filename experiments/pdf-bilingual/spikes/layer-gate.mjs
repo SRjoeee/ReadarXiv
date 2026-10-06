@@ -458,13 +458,17 @@ async function buildAddon(bytes, layoutFile, { check = true } = {}) {
   }
   ms.plan = performance.now() - t
   const outlines = outlineTable(collected)
-  // the shipped add-on (R alone), and the time it takes; its manifest carries each removed page's kept ink under the
-  // units' rectangles (pageDirty: where the reader swaps the removed page in, a fill with paper elsewhere)
+  // the shipped add-on, and the time it takes: each page's kept ink under its units' rectangles (pageDirty, the
+  // manifest's `dirty`: where the reader swaps the removed page in), and the removed page, R, only where there is some.
+  // A page with none is filled with paper over the file's rectangles alone: it needs no removed page, only the
+  // manifest's word that the page is drawn so (ok, no dirty)
   t = performance.now()
-  const shipped = await makeAddon({ R, bytes, OPS, opListOf: async p => ops[p], deflate: b => new Uint8Array(deflateSync(b)), plan, sets: SETS })
   const dirty = {}
   for (const [p, pp] of Object.entries(plan.pages)) { const d = pageDirty(index, Number(p), inks[p], pp); if (d.length) dirty[p] = d }
+  const swapped = { pages: Object.fromEntries(Object.entries(plan.pages).filter(([p]) => dirty[p])) }
+  const shipped = await makeAddon({ R, bytes, OPS, opListOf: async p => ops[p], deflate: b => new Uint8Array(deflateSync(b)), plan: swapped, sets: SETS, compact: true })
   for (const [p, d] of Object.entries(dirty)) if (shipped.manifest.page[p]?.ok) shipped.manifest.page[p].dirty = d
+  for (const p of Object.keys(plan.pages)) if (!dirty[p]) shipped.manifest.page[p] = { ok: true }
   ms.make = performance.now() - t
   let out = null
   if (check) {
@@ -474,6 +478,8 @@ async function buildAddon(bytes, layoutFile, { check = true } = {}) {
     // (the check's manifest: the gate's own reading of the page's ink boxes each glyph by the outline table, as Node does)
     out.manifest.outlines = outlines
     for (const [p, d] of Object.entries(dirty)) if (out.manifest.page[p]?.ok) out.manifest.page[p].dirty = d
+    // (the pages drawn by the add-on are the check's, every set of it made: the truth reads its planes)
+    for (const p of Object.keys(plan.pages)) if (!out.manifest.page[p]?.ok) shipped.manifest.page[p] = { ok: false, refused: out.manifest.page[p]?.refused ?? 'refused' }
   }
   return { doc, inks, plan, shipped, out, collected, ms }
 }

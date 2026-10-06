@@ -1,9 +1,11 @@
 // The text-removed PDF (Plan 8b, the instant layer's text removal; the feasibility spike of 2026-10-06/07,
 // pdf-remove-report.md): arXiv's PDF with chosen glyphs and rules taken out of its content streams, written as an
 // incremental update, so that arXiv's file is a byte-for-byte prefix of the result and every other operator and byte
-// stays as it was. The update appends page sets after arXiv's own N pages, each page p of a set at a fixed place:
+// stays as it was. The update appends page sets after arXiv's own N pages, each page p of a set at a fixed place (or,
+// `compact`, only the pages it removes, each where the manifest's page entry names it, `at`):
 //   R, at N + p: the translatable units' glyphs (and their inline placeholders' rules) removed, a display formula and
-//      everything else kept: what the layer shows under a drawn unit's translation;
+//      everything else kept: what the layer shows under a drawn unit's translation where kept ink lies under its
+//      rectangles (the reader's add-on holds those pages alone, compact: elsewhere it fills them with paper);
 // and, for a check only (the gate), P (the placeholders alone, every other glyph, rule, image and form left out), F (the
 // removed glyphs alone: their footprint) and C (P with each crop's glyphs in a colour of its own). The layer cuts its
 // crops from the original, each through its own glyphs' outline boxes, so that no reader needs P. One PDF.js document
@@ -29,8 +31,8 @@
 // the PDF object layer (@cantoo/pdf-lib, MIT), deflate and a tolerant inflate are given. It runs where the layout file is
 // made, once a paper.
 
-/** the remover's version: raised with any change to what it writes; it enters the add-on's key */
-export const REMOVAL = '1'
+/** the remover's version: raised with any change to what it writes; it enters the add-on's key (2: compact sets) */
+export const REMOVAL = '2'
 /** the page sets an add-on holds, in order after arXiv's own pages: R at N + p, then the check's (P, F, C) */
 export const SETS = Object.freeze(['R'])
 export const CHECK_SETS = Object.freeze(['P', 'F', 'C'])
@@ -473,7 +475,7 @@ function applyEdits(bytes, list) {
  * Returns { bytes, appended, manifest } where the manifest says, per page, whether it is removed (`ok`) or refused and
  * why, and each unit's removed boxes (x0, y0, x1, y1 stride 4, PDF units).
  */
-export async function makeAddon({ R, bytes, OPS, opListOf, deflate, plan, sets = SETS, boxesOf = null, pathBoxOf = null }) {
+export async function makeAddon({ R, bytes, OPS, opListOf, deflate, plan, sets = SETS, boxesOf = null, pathBoxOf = null, compact = false }) {
   const { PL, ctx, doc } = R
   const { PDFName, PDFRef, PDFDict, PDFRawStream } = PL
   const N = R.numPages
@@ -487,7 +489,7 @@ export async function makeAddon({ R, bytes, OPS, opListOf, deflate, plan, sets =
   // one empty content stream for every page of a set that shows nothing
   const empty = alloc()
   streamObj(empty, '<< /Length 0 >>', new Uint8Array(0))
-  const manifest = { schema: 1, removal: REMOVAL, pages: N, sets: Object.fromEntries(sets.map((s, i) => [s, (i + 1) * N])), page: {} }
+  const manifest = { schema: 1, removal: REMOVAL, pages: N, sets: compact ? {} : Object.fromEntries(sets.map((s, i) => [s, (i + 1) * N])), page: {} }
   const stats = { removed: 0, rules: 0, cut: 0, hidden: 0, refused: 0, forms: 0, streams: 0 }
   const paletteOf = new Map()
 
@@ -550,6 +552,12 @@ export async function makeAddon({ R, bytes, OPS, opListOf, deflate, plan, sets =
     const entry = plan.pages?.[p] ?? null
     const out = { ok: false }
     manifest.page[p] = out
+    // (a page the plan leaves alone is not read: each of its sets shows the original's, or nothing)
+    if (!entry) {
+      out.refused = 'not planned'
+      pagesOut.push(Object.fromEntries(sets.map(s => [s, s === 'R' ? { contents: null, resources: null } : { contents: empty.toString(), resources: null }])))
+      continue
+    }
     const opList = await opListOf(p)
     const al = R.alignPage(p - 1, OPS, opList)
     const why = [...al.why]
@@ -636,6 +644,9 @@ export async function makeAddon({ R, bytes, OPS, opListOf, deflate, plan, sets =
   const kids = []
   for (const s of sets) {
     for (let p = 1; p <= N; p++) {
+      // (compact: a page it did not remove has no page in the set; one it did is named where it is)
+      if (compact && !manifest.page[p].ok) continue
+      if (compact) (manifest.page[p].at ??= {})[s] = N + kids.length + 1
       const node = doc.getPages()[p - 1].node, o = pagesOut[p - 1][s]
       const inh = k => { const v = node.getInheritableAttribute ? node.getInheritableAttribute(PDFName.of(k)) : node.get(PDFName.of(k)); return v ? ` /${k} ${v.toString()}` : '' }
       const own = k => { const v = node.get(PDFName.of(k)); return v ? ` /${k} ${v.toString()}` : '' }

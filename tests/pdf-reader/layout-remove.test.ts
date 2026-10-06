@@ -133,4 +133,19 @@ describe('the text remover', () => {
     expect(out.manifest.page[1]?.units?.[5]).toHaveLength(5 * 4)
     expect(out.manifest.page[2]).toEqual({ ok: false, refused: 'not planned' })
   })
+
+  it('compact: holds a page only for each page it removes, named where it is', async () => {
+    const bytes = PDF
+    const { pages } = await inksOf(bytes)
+    const ink = pages[0]!.ink
+    const out = await makeAddon({ R: await openRemover(bytes, { PL }), bytes, OPS, opListOf: async q => pages[q - 1]!.opList, deflate, plan: { pages: { 1: { units: [{ id: 5, glyphs: glyphsOf(ink, 'Hello', 250), paths: [] }], crops: [] } } }, compact: true })
+    const after = await inksOf(out.bytes)
+    // arXiv's two pages, then page 1's removed page alone; page 2, not planned, has none
+    expect(after.doc.numPages).toBe(3)
+    expect(out.manifest.page[1]).toMatchObject({ ok: true, at: { R: 3 } })
+    expect(out.manifest.page[2]?.at).toBeUndefined()
+    expect(out.manifest.sets).toEqual({})
+    expect(after.pages[2]!.ink.glyphs.map(g => g.u).join('')).not.toContain('Hello')
+    expect(after.pages[2]!.ink.glyphs.length).toBe(ink.glyphs.length - 5)
+  })
 })

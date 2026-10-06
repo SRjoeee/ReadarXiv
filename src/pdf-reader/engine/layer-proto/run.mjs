@@ -322,7 +322,9 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   } : null
   /** whether page j's text is removed in the add-on (draw mode) */
   const removedPage = j => RM?.mode === 'draw' && !!RM.manifest?.page?.[j]?.ok
-  const setOf = name => (RM?.manifest?.sets?.[name] ?? 0)
+  /** page j's page in a set of the add-on: where its manifest entry names it (a compact add-on, which holds the pages it
+   *  removes alone), else at the set's fixed place */
+  const setPage = (name, j) => RM?.manifest?.page?.[j]?.at?.[name] ?? (RM?.manifest?.sets?.[name] ?? 0) + j
   /** the kept ink under the paper's units' rectangles on page j, by the manifest (x0, y0, x1, y1 each): where a fill would
    *  take it, the removed page is swapped in instead */
   const dirtyOf = j => { const d = RM.manifest.page[j]?.dirty ?? []; const out = []; for (let q = 0; q + 3 < d.length; q += 4) out.push([d[q], d[q + 1], d[q + 2], d[q + 3]]); return out }
@@ -782,7 +784,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
         // rectangles there: a view draws it at its own resolution, drawCopy, and only where a swap asks for it
         if (copy && RM.manifest.page[i]?.dirty?.length) {
           const t = performance.now()
-          const pg = await removal.doc.getPage(setOf('R') + i)
+          const pg = await removal.doc.getPage(setPage('R', i))
           const c = document.createElement('canvas')
           c.width = r.left.width
           c.height = r.left.height
@@ -844,7 +846,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   const toPdf = (pg, x, y) => views[pg - 1].convertToPdfPoint(x / dpr, y / dpr)
   // a page as PDF.js draws it at k device pixels a PDF unit: drawCopy's source of another page's crop
   const renderAt = async (pg, k, plane = 'O') => {
-    const page = plane === 'O' ? await doc.getPage(pg) : await removal.doc.getPage(setOf(plane) + pg)
+    const page = plane === 'O' ? await doc.getPage(pg) : await removal.doc.getPage(setPage(plane, pg))
     const viewport = page.getViewport({ scale: k })
     const c = document.createElement('canvas')
     c.width = Math.ceil(viewport.width)
