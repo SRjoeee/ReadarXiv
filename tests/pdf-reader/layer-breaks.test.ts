@@ -459,6 +459,18 @@ describe('crops and page text', () => {
     expect(b.lines[1]!.items[0]!.w).toBe(600)
     expect(b.rest).toBe(0)
   })
+
+  it('a placeholder of the page\'s own text is never cut by characters: one wider than its line is placed whole and overflows', () => {
+    // a citation read from the page, 20 characters (9 ems), in slots of 6 ems: one item on one line, 3 ems over
+    const cite: Token = { kind: 'ph', s: '[12, 13, 14, 15, 16]', script: 'latin', face: 'termes-regular', w: 9, ph: 3, mode: 'page-text', colour: 0, at: 8, len: 1 }
+    const tokens = [...tokenize('see the ', 'en'), { kind: 'space', face: 'termes-regular', w: 0.25, colour: 0, at: 7, len: 1 } as Token, cite]
+    const b = breakLines(tokens, slotsOf([60, 60, 60]), 10, state(), contextOf('en'))
+    expect(texts(b)).toEqual(['see the', '[12, 13, 14, 15, 16]'])
+    expect(b.lines[1]!.items.map(it => it.t)).toEqual([cite])
+    expect(b.rest).toBe(0)
+    expect(b.overflow).toBeCloseTo(3, 10)
+    expect(b.tokens.filter(t => t.ph === 3)).toEqual([cite])
+  })
 })
 
 describe('properties over random text', () => {

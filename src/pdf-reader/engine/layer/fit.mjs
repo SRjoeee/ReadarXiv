@@ -181,17 +181,21 @@ function geometryOf(unit, tokens, size) {
       const gap = lines[i].baseline - lines[i + 1].baseline
       if (gap > EPS) fr.gaps.push(gap)
     }
-    // a line that ends a run ends where the text did, not at the frame's edge: it is set to the frame's widest
+    // a line that ends a run ends where the text did, not at the frame's edge: it is set as wide as the line above it in
+    // the run (the frame's widest where the run has one line), so never over what narrows the lines beside it, a figure
+    // the text wraps around
     let lo = Infinity, hi = -Infinity, body = Infinity
     for (const r of fr.runs) for (const i of r.lines) { lo = Math.min(lo, lines[i].x0); hi = Math.max(hi, lines[i].x1); if (i > 0) body = Math.min(body, lines[i].x0) }
     if (!Number.isFinite(lo)) for (let i = fr.first; i <= end; i++) { lo = Math.min(lo, lines[i].x0); hi = Math.max(hi, lines[i].x1) }
     for (const r of fr.runs) {
-      const last = lines[r.lines[r.lines.length - 1]]
-      last.sx1 = Math.max(last.sx1, hi)
-      if (unit.centred) last.sx0 = Math.min(last.sx0, lo)
+      const k = r.lines.length, last = lines[r.lines[k - 1]], above = k > 1 ? lines[r.lines[k - 2]] : null
+      last.sx1 = Math.max(last.sx1, above ? above.x1 : hi)
+      if (unit.centred) last.sx0 = Math.min(last.sx0, above ? above.x0 : lo)
     }
-    fr.bx0 = Number.isFinite(body) ? body : lo
-    fr.bx1 = hi
+    // a line borrowed below the frame is as wide as the frame's last line: no wider than the lines it continues
+    const tail = fr.runs.length ? lines[fr.runs[fr.runs.length - 1].lines.at(-1)] : null
+    fr.bx0 = tail && tail.i > 0 ? tail.sx0 : Number.isFinite(body) ? body : lo
+    fr.bx1 = tail ? tail.sx1 : hi
   }
   const all = frames.flatMap(fr => fr.gaps)
   const unitPitch = all.length ? median(all) : PITCH_OF_SIZE * size
@@ -298,20 +302,33 @@ function partsOf(tokens, cuts) {
   return parts
 }
 
+/** whether a placeholder stands in two of the lines' items */
+function split(b) {
+  const seen = new Set()
+  for (const line of b.lines) for (const it of line.items) {
+    if (it.t.kind !== 'ph') continue
+    if (seen.has(it.t.ph)) return true
+    seen.add(it.t.ph)
+  }
+  return false
+}
+
 /** a part laid in frame j at a state: its lines, whether it fits whole, and its frame's free lines */
 function layPart(geo, part, j, state, f, m, ctx) {
   const last = j === geo.frames.length - 1
   const slots = slotsOf(geo, j, m, f, last ? state.borrow : 0, geo.before(j))
   const b = breakLines(part, slots, f, state, ctx)
-  // every token placed and no line past its slot (the breaker's overflow): a clipped character is never a fit
-  const fits = b.rest === 0 && !(b.overflow > 0)
+  // every token placed, no line past its slot (the breaker's overflow), and no placeholder in two pieces (the breaker cuts
+  // only text; this holds whatever it does): a clipped character or a placeholder drawn twice is never a fit
+  const fits = b.rest === 0 && !(b.overflow > 0) && !split(b)
   return { b, fits, free: fits ? slots.length - b.lines.length : -1 }
 }
 
 /**
  * The unit laid at a state, or null where it does not fit. A split unit is laid at its first cuts, and where a part does
- * not fit, the cut beside it gives one sentence to the roomier frame (the one with more free lines) before the state moves
- * on; a cut moves one way only at a state, and never empties a frame.
+ * not fit, the cut beside it gives one sentence to the roomier frame (one whose part fits, the one with more free lines of
+ * two) before the state moves on; a cut moves one way only at a state (a move back would return to cuts that failed),
+ * and never empties a frame.
  */
 function layAt(geo, tokens, cut0, sentences, limits, state, size, ctx) {
   const f = size * state.scale
@@ -331,8 +348,10 @@ function layAt(geo, tokens, cut0, sentences, limits, state, size, ctx) {
     for (let j = 0; j < n && !done; j++) {
       if (laid[j].fits) continue
       const sides = []
-      if (j + 1 < n && laid[j + 1].free > 0) sides.push({ c: j, dir: -1, free: laid[j + 1].free })
-      if (j > 0 && laid[j - 1].free > 0) sides.push({ c: j - 1, dir: 1, free: laid[j - 1].free })
+      // the roomier side: a neighbour with more free lines than this part, which has fewer than none (its last line may
+      // still hold a sentence where it has none to spare); the roomier of two first
+      if (j + 1 < n && laid[j + 1].fits) sides.push({ c: j, dir: -1, free: laid[j + 1].free })
+      if (j > 0 && laid[j - 1].fits) sides.push({ c: j - 1, dir: 1, free: laid[j - 1].free })
       sides.sort((a, b) => b.free - a.free)
       for (const { c, dir } of sides) {
         if (moved[c] === -dir) continue

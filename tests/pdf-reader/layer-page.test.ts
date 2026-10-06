@@ -24,7 +24,7 @@ const at = (scale: number, lead: number, id = 1): LaidUnit => ({
 const nine = (id: number, top: number, kind: UnitDef['kind'] = 'para', page = 1): UnitDef => ({ id, kind, lines: column(9, { top, page }), frames: [{ lines: 9, page }] })
 
 /** what the reader's page does (Task 11's entry): every unit at its own fit, then the body units above the page's even
- *  setting laid again from it, once */
+ *  setting laid again from it, once; one that comes back unfit keeps its first fit */
 function evenPage(file: LayoutIndex, page: number, input: LayerInput, trs: ReadonlyMap<number, Tr>) {
   const first = new Map<number, Laid>()
   for (const id of file.onPage(page)) first.set(id, layUnit(input, id, trs.get(id)!))
@@ -32,7 +32,13 @@ function evenPage(file: LayoutIndex, page: number, input: LayerInput, trs: Reado
   const even = evenOf(body, input.rules)
   const out = new Map(first)
   const both = input.rules.even === 'size-and-lead'
-  if (even) for (const u of body) if (u.state.scale > even.maxScale + 1e-9 || (both && u.state.lead > even.lead + 1e-9)) out.set(u.id, layUnit(input, u.id, trs.get(u.id)!, even))
+  if (even) {
+    for (const u of body) {
+      if (!(u.state.scale > even.maxScale + 1e-9 || (both && u.state.lead > even.lead + 1e-9))) continue
+      const again = layUnit(input, u.id, trs.get(u.id)!, even)
+      if (again.fit) out.set(u.id, again)
+    }
+  }
   return { first, out, even }
 }
 

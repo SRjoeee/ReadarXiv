@@ -20,23 +20,28 @@ export interface Tr { pieces: readonly TrPiece[]; sentences: readonly number[] |
 export interface FitState { scale: number; lead: number; track: number; letter: number; compress: 0 | 1 | 2; borrow: number; knob: 'none' | 'even' | 'track' | 'borrow' | 'lead' | 'shrink' }
 /**
  * What a line draws, in reading order, each from `x` (PDF units; a mark compression shifted drawn back over its blank half)
- * with its width `w`:
- * - 'text': a CJK character, or a run of Latin words in one face, caps and colour with the spaces between them, set at
- *   the line's size × its face's Face.size with the line's letterSpacing after every character and its wordSpacing more
- *   after every space, which fill `w` exactly;
+ * with its width `w`. Every item is set at the line's size × its face's Face.size, and its `w` is exactly:
+ * - 'text': its text's width there, plus the line's letterSpacing after every character (its spaces too), plus the line's
+ *   wordSpacing more after every space. A text item is one of:
+ *   - a CJK character where the target breaks between characters (zh, ja), or any CJK character the tracking moves (each
+ *     at its own place, so its tracking is in `x` and `w`, not in letterSpacing);
+ *   - a run of words in one face, caps and colour with the spaces between them: Latin words, and Korean's Hangul words
+ *     while the tracking is none. A line justified between its characters (CJK) has a run a word, with no spaces in it;
+ * - 'page-text': placeholder `ph` drawn as the page's own text `text`, in `face`: its width there, plus the line's
+ *   letterSpacing after every character (its spaces too), and no word spacing;
  * - 'crop': placeholder `ph` drawn as the original's ink of its segments, scaled by the state's scale; `raised` is 1 for a
- *   raised mark (a superscript citation or footnote call), whose lift is its own ink's, else 0;
- * - 'page-text': placeholder `ph` drawn as the page's own text `text`, in `face`.
- * `from` and `to` are its offsets in trText: a space between two items is where one's `to` falls short of the next's
- * `from`, which the drawing writes for copying and finding. `colour`: LAYER_COLOURS' index + 1, 0 for none
+ *   raised mark (a superscript citation or footnote call), whose lift is its own ink's, else 0.
+ * A placeholder is one item, never two. `from` and `to` are its offsets in trText: a space between two items is where
+ * one's `to` falls short of the next's `from`, which the drawing writes for copying and finding. `colour`: LAYER_COLOURS'
+ * index + 1, 0 for none
  */
 export interface LaidItem { kind: 'text' | 'crop' | 'page-text'; x: number; w: number; text?: string; face?: FaceId; caps?: boolean; ph?: number; colour: number; raised: number; from: number; to: number }
 /**
  * A line on its page and frame (the frame's index in the unit), its slot's left and right, its baseline (y up, PDF units)
  * and the size it is set at. `mode`: as placeLines left it. `letterSpacing`: PDF units after each character of its text
- * items (the alphabets' letter spacing; a CJK character is an item of its own, its tracking in its place); `wordSpacing`:
- * what each space of a text item takes beyond its own width and the letter spacing, as SVG's word-spacing. `from`, `to`:
- * its items' offsets in trText
+ * and page-text items (the state's letter spacing × the size: the alphabets'; 0 in a CJK target, whose tracking is in its
+ * characters' places); `wordSpacing`: what each space of a text item takes beyond its own width and the letter spacing, as
+ * SVG's word-spacing (the justification's extra per space, less letterSpacing). `from`, `to`: its items' offsets in trText
  */
 export interface LaidLine { page: number; frame: number; x0: number; x1: number; baseline: number; size: number; mode: 'just' | 'last' | 'centred' | 'ragged'; items: LaidItem[]; wordSpacing: number; letterSpacing: number; from: number; to: number }
 /**

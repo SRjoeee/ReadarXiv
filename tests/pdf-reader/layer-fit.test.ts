@@ -4,6 +4,7 @@ import { type FitState, type Laid, type LaidUnit, layUnit, SPLIT_NEAR, statesOf 
 import type { TrPiece } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { layerRulesFor } from '@/pdf-reader/engine/layer-rules.mjs'
 import { PH_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
+import { measure } from './helpers/layer-fixtures'
 import { column, han, inputOf, kanji, layoutOf, words } from './helpers/layer-layout'
 
 // The fit: a unit's translation set into the original's frames, giving up as little as it must, in the maintainer's order
@@ -50,6 +51,8 @@ describe('the states', () => {
     expect(even.filter(s => s.knob === 'lead').map(s => s.lead)).toEqual([1.1, 1.05, 1])
     expect(even.filter(s => s.knob === 'shrink').map(s => s.scale)).toEqual([0.875, 0.85, 0.825, 0.8, 0.775, 0.75])
     expect(even.every(s => s.compress === 0 && s.borrow === 0)).toBe(true)
+    // borrowMax: the share of the space below a unit may take, here a half of 100
+    expect([...statesOf({ ...layerRulesFor('zh'), borrowMax: 0.5 }, { below: 100, pitch: 12 })].filter(s => s.knob === 'borrow').map(s => s.borrow)).toEqual([12, 24, 36, 48, 50])
     // a leading the steps do not land on: the floor itself last
     expect([...statesOf({ ...layerRulesFor('zh'), leadFloor: 1.02 }, { below: 0, pitch: 12 })].filter(s => s.knob === 'lead').map(s => s.lead)).toEqual([1.25, 1.2, 1.15, 1.1, 1.05, 1.02])
   })
@@ -226,6 +229,54 @@ describe('the fit', () => {
     expect(textOf(u).join('')).toBe(han(300))
   })
 
+  it('a placeholder is drawn whole: one wider than every line is unfit, never cut across two lines', () => {
+    // a citation read from the page, 20 characters (90 at 10), in lines 60 wide: no state sets it on one line
+    const citing = (w: number) => layoutOf([{ id: 1, lines: column(12, { w }), ph: [{ k: 3, kind: 'cite', segs: [[1, 100, 700, 180, 707, 697.5]] }] }])
+    const textIn = () => '[12, 13, 14, 15, 16]'
+    const lay = (w: number, target: string, pieces: TrPiece[]) => layUnit({ ...inputOf(citing(w), target), textIn }, 1, tr(pieces))
+    expect(lay(60, 'zh', [[0, han(5)], [1, 3], [0, han(5)]])).toEqual({ id: 1, fit: false, why: 'floor' })
+    expect(lay(60, 'en', [[0, 'see the '], [1, 3], [0, ' for data']])).toEqual({ id: 1, fit: false, why: 'floor' })
+    // in lines 80 wide it fits once the size is small enough, whole on one line
+    for (const target of ['zh', 'en']) {
+      const u = laid(lay(80, target, target === 'zh' ? [[0, han(5)], [1, 3], [0, han(5)]] : [[0, 'see the '], [1, 3], [0, ' for data']]))
+      expect(u.state.knob, target).toBe('shrink')
+      const cites = u.lines.flatMap(l => l.items).filter(it => it.ph === 3)
+      expect(cites.map(it => [it.kind, it.text]), target).toEqual([['page-text', '[12, 13, 14, 15, 16]']])
+    }
+  })
+
+  it("a split's cut keeps each frame's displays in its own part", () => {
+    // a display in each frame (its third line): the part of the right frame starts after the left one's display however
+    // small its share, and at the right one's display however large
+    const file = (share: number) => layoutOf([{
+      id: 1,
+      lines: [...column(6, { x0: 40, w: 260 }), ...column(6, { x0: 320, w: 260 })],
+      frames: [{ lines: 6 }, { column: 1, lines: 6, share }],
+      ph: [{ k: 2, kind: 'display', segs: [[1, 60, 676, 280, 683, 673.5]] }, { k: 5, kind: 'display', segs: [[1, 340, 676, 560, 683, 673.5]] }],
+    }])
+    const pieces: TrPiece[] = [[0, kanji(40)], [1, 2], [0, kanji(60)], [1, 5], [0, kanji(30)]]
+    // trText: 40 characters, the left display at 40, 60, the right display at 101, 30
+    const low = laid(layUnit(inputOf(file(50), 'ja'), 1, tr(pieces)))
+    expect(low.cuts).toEqual([41])
+    const high = laid(layUnit(inputOf(file(900), 'ja'), 1, tr(pieces)))
+    expect(high.cuts).toEqual([101])
+    for (const u of [low, high]) expect([...u.drawn]).toEqual([[2, 'kept'], [5, 'kept']])
+  })
+
+  it("a frame with no line to spare is roomier than one whose part does not fit: its last line may take the sentence", () => {
+    // two frames of four lines of 20 (zh's leading over five lines): 84 characters on the left do not fit, 66 on the right
+    // fill four lines with room on the last; the sentence from 75 goes right before any state moves
+    const file = layoutOf([{
+      id: 1,
+      lines: [...column(5, { x0: 72, w: 200 }), ...column(5, { x0: 320, w: 200 })],
+      frames: [{ lines: 5 }, { column: 1, lines: 5, share: 560 }],
+    }])
+    const u = laid(layUnit(inputOf(file, 'zh'), 1, tr(han(150), [75, 84])))
+    expect(u.cuts).toEqual([75])
+    expect(u.state.knob).toBe('none')
+    expect(textOf(u).join('')).toBe(han(150))
+  })
+
   it('a split with no boundary near the share is cut by characters in CJK and by words in alphabets', () => {
     expect(SPLIT_NEAR).toBe(0.2)
     const split = layoutOf([{
@@ -307,9 +358,36 @@ describe('the fit', () => {
     const file = layoutOf([{ id: 1, lines, ph: [{ k: 4, kind: 'display', segs: [[1, 400, lines[1]!.baseline, 470, lines[1]!.baseline + 7, lines[1]!.baseline - 2.5]] }] }])
     const u = laid(layUnit(inputOf(file, 'ja'), 1, tr([[0, kanji(90)], [1, 4]])))
     const second = u.lines.find(l => l.baseline === lines[1]!.baseline)!
-    expect(second.x1).toBeLessThanOrEqual(400)
+    // a quarter of an em clear of it
+    expect(second.x1).toBeCloseTo(397.5, 9)
     expect(u.lines.some(l => l.baseline === lines[2]!.baseline)).toBe(false)
     expect(textOf(u).join('')).toBe(kanji(90))
+    // a line 16 wide, over 1.5 em at 10, holds a character
+    const wider = column(4)
+    wider[2] = { ...wider[2]!, x0: 456, x1: 472 }
+    const v = laid(layUnit(inputOf(layoutOf([{ id: 1, lines: wider }]), 'ja'), 1, tr(kanji(90))))
+    expect(v.lines.find(l => l.baseline === wider[2]!.baseline)?.items.map(it => it.text)).toEqual([kanji(90)[80]])
+  })
+
+  it('a display holds a line it covers by a third of its width or more; less, and the line keeps clear of it', () => {
+    // line 1 (72-472) under a segment from its right edge: 136 of 400 is more than a third, 128 less
+    const unitWith = (x0: number) => layoutOf([{ id: 1, lines: column(4), ph: [{ k: 4, kind: 'display', segs: [[1, x0, 688, 472, 695, 685.5]] }] }])
+    // held: the 45 characters before the display have line 0 alone (40), so the unit is set smaller, never on line 1
+    const held = laid(layUnit(inputOf(unitWith(336), 'ja'), 1, tr([[0, kanji(45)], [1, 4], [0, kanji(40)]])))
+    expect(held.state.knob).toBe('shrink')
+    expect(held.lines.some(l => l.baseline === 688)).toBe(false)
+    const beside = laid(layUnit(inputOf(unitWith(344), 'ja'), 1, tr([[0, kanji(26)], [1, 4]])))
+    expect(beside.lines.map(l => [l.baseline, l.x1])).toEqual([[700, 472]])
+    const below = laid(layUnit(inputOf(unitWith(344), 'ja'), 1, tr(kanji(66))))
+    expect(below.lines.map(l => [l.baseline, l.x1])).toEqual([[700, 472], [688, 341.5]])
+  })
+
+  it('a unit with no two lines takes its pitch as 1.2 times its size', () => {
+    // one line of 100: its second line, borrowed below it, a pitch of 12 down
+    const file = layoutOf([{ id: 1, lines: [{ x1: 172, baseline: 700 }], frames: [{ lines: 1, below: 50 }] }])
+    const u = laid(layUnit(inputOf(file, 'de'), 1, tr(words(6))))
+    expect(u.state).toEqual(state({ knob: 'borrow', borrow: 12 }))
+    expect(u.lines.map(l => l.baseline)).toEqual([700, 688])
   })
 
   it('two lines never stand closer than 0.7 of the pitch', () => {
@@ -317,6 +395,19 @@ describe('the fit', () => {
     const file = nine(0, [700, 688, 685, 676, 664, 652, 640, 628, 616])
     const u = laid(layUnit(inputOf(file, 'ja'), 1, tr(kanji(300))))
     for (let k = 1; k < u.lines.length; k++) expect(u.lines[k - 1]!.baseline - u.lines[k]!.baseline).toBeGreaterThanOrEqual(0.7 * 12 - 1e-9)
+  })
+
+  it('a line that ends a run is never set over what narrows the lines above it, a figure the text wraps around', () => {
+    // lines 1-5 full (72-472), lines 6-9 narrowed by a figure at 300-472, the last one's text ending at 250
+    const lines = column(9).map((l, i) => (i < 5 ? l : { ...l, x1: i === 8 ? 250 : 300 }))
+    const u = laid(layUnit(inputOf(layoutOf([{ id: 1, lines }]), 'ja'), 1, tr(kanji(296))))
+    expect(u.lines.map(l => l.x1)).toEqual([472, 472, 472, 472, 472, 300, 300, 300, 300])
+    for (const l of u.lines.slice(5)) for (const it of l.items) expect(it.x + it.w).toBeLessThanOrEqual(300 + 0.01)
+    // a line borrowed below the frame is as narrow as the frame's last line
+    const room = laid(layUnit(inputOf(layoutOf([{ id: 1, lines, frames: [{ lines: 9, below: 30 }] }]), 'ja'), 1, tr(kanji(320))))
+    expect(room.state.knob).toBe('borrow')
+    expect(room.lines.at(-1)!.baseline).toBeLessThan(604)
+    for (const l of room.lines.slice(5)) expect(l.x1).toBe(300)
   })
 
   it('the first line starts after its label', () => {
@@ -377,6 +468,39 @@ describe("the lines' items", () => {
     const natural = (chars - spaces) * 5 + spaces * 2.5
     expect(natural + chars * just.letterSpacing + spaces * just.wordSpacing).toBeCloseTo(run.w, 9)
     expect(run.x + run.w).toBeCloseTo(just.x1, 9)
+  })
+
+  it('every text and page-text item is its width: natural at the size, the letter spacing after each character, the word spacing after each space', () => {
+    /** a text's width at the line's size in its face, with the fake measure */
+    const natural = (text: string, face: string, size: number) => (measure(text, face, false) / 100) * size * FACES[face]!.size
+    const holds = (u: LaidUnit) => {
+      for (const l of u.lines) for (const it of l.items) {
+        if (it.kind === 'crop') continue
+        const chars = [...it.text!].length, spaces = it.kind === 'text' ? it.text!.split(' ').length - 1 : 0
+        expect(natural(it.text!, it.face!, l.size) + chars * l.letterSpacing + spaces * l.wordSpacing, `${it.kind} ${it.text}`).toBeCloseTo(it.w, 9)
+      }
+    }
+    // de just past full size: letter spacing on, a justified line squeezed, a citation as the page's text (no word spacing)
+    const file = layoutOf([{ id: 1, lines: column(2, { w: 158 }), ph: [{ k: 3, kind: 'cite', segs: [[1, 100, 700, 140, 707, 697.5]] }] }])
+    const de = laid(layUnit({ ...inputOf(file, 'de'), textIn: () => '[12, 13]' }, 1, tr([[0, words(8)], [1, 3], [0, ' und daten']])))
+    expect(de.state).toEqual(state({ knob: 'track', letter: -0.01, scale: 1 }))
+    expect(de.lines.map(l => l.mode)).toEqual(['just', 'last'])
+    for (const l of de.lines) expect(l.letterSpacing).toBeCloseTo(-0.1, 9)
+    expect(de.lines[0]!.items.map(it => it.text)).toEqual([words(6)])
+    expect(de.lines[1]!.items.map(it => [it.kind, it.text])).toEqual([['text', 'eine methode'], ['page-text', '[12, 13]'], ['text', 'und daten']])
+    holds(de)
+    expect(de.lines[0]!.items[0]!.x + de.lines[0]!.items[0]!.w).toBeCloseTo(de.lines[0]!.x1, 9)
+    // Korean at no tracking: its Hangul words and their spaces one run in Source Han Serif K, justified by the word spacing
+    const ko = laid(layUnit(inputOf(nine(0), 'ko'), 1, tr('\ubaa8\ub378\uc744 \uc0ac\uc6a9\ud569\ub2c8\ub2e4 \ub370\uc774\ud130 '.repeat(12).trim())))
+    expect(ko.state.knob).toBe('none')
+    const just = ko.lines.filter(l => l.mode === 'just')
+    expect(just.length).toBeGreaterThan(0)
+    for (const l of just) {
+      expect(l.items.length).toBe(1)
+      expect(l.wordSpacing).toBeGreaterThan(0)
+      expect(l.items[0]!.x + l.items[0]!.w).toBeCloseTo(l.x1, 9)
+    }
+    holds(ko)
   })
 
   it('a CJK character is an item of its own; Korean words tracked are drawn a character an item at their places', () => {
