@@ -44,3 +44,22 @@ describe('E: xeCJK\'s microtype patch, set right after xeCJK', () => {
     for (const s of strategiesFor({ compiler: 'pdflatex' }, 'ru')) expect(s.pre(null)).not.toContain('__xeCJK_get_ambiguous_slot')
   })
 })
+
+describe('P: pdfTeX\'s unit px, which XeTeX does not know, under XeLaTeX (1810.04805: \\includegraphics[width=360px])', () => {
+  const IMAGE = '\\documentclass{article}\n\\usepackage{graphicx}\n\\begin{document}\nAn image \\includegraphics[width=360px]{a.pdf} in a paragraph.\n\\end{document}\n'
+  const image = () => openPaper(new Map([['main.tex', new TextEncoder().encode(IMAGE)]]))
+  it('a pdfLaTeX paper set by XeLaTeX has graphicx\'s sizes in px given in bp, before \\documentclass', () => {
+    const [xe] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
+    const text = main(translationFiles(image(), new Map(), { strategy: xe as never, fonts: null, draft: false }))
+    const at = text.indexOf('\\AddToHook{package/graphicx/after}{\\axt@pxkeys}')
+    expect(at).toBeGreaterThan(-1)
+    expect(at).toBeLessThan(text.indexOf('\\documentclass'))
+    expect(text).toContain('\\else#1{#2bp}\\fi')
+    // the source as it is: only the size TeX reads goes through it
+    expect(text).toContain('\\includegraphics[width=360px]{a.pdf}')
+  })
+  it('not under the paper\'s own pdfLaTeX, which knows px', () => {
+    const [es] = strategiesFor({ compiler: 'pdflatex' }, 'es')
+    expect(main(translationFiles(image(), new Map(), { strategy: es as never, fonts: null, draft: false }))).not.toContain('\\axt@pxkeys')
+  })
+})

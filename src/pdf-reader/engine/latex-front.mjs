@@ -1385,6 +1385,10 @@ export const XETEX_SHIM = [
   '\\ifdefined\\pdfinfo\\else\\long\\def\\pdfinfo#1{}\\fi',
   '\\ifdefined\\pdfglyphtounicode\\else\\def\\pdfglyphtounicode#1#2{}\\fi',
   '\\ifdefined\\pdfgentounicode\\else\\newcount\\pdfgentounicode\\fi',
+  // pdfTeX's unit px, \pdfpxdimen (1 bp, pdfTeX's default and both trees' formats'), which XeTeX does not know: an image
+  // sized in it (1810.04805's \includegraphics[width=360px]) stopped every CJK target's XeLaTeX at "Illegal unit of
+  // measure". graphicx's sizes given in px are given in bp, their value; any other size goes through as it is
+  '\\makeatletter\\def\\axt@px#1#2px#3\\axt@px@end{\\ifx\\relax#3\\relax#1{#2}\\else#1{#2bp}\\fi}\\def\\axt@pxkeys{\\@for\\axt@k:=width,height,totalheight\\do{\\expandafter\\let\\csname axt@px@\\axt@k\\expandafter\\endcsname\\csname KV@Gin@\\axt@k\\endcsname\\expandafter\\edef\\csname KV@Gin@\\axt@k\\endcsname##1{\\noexpand\\axt@px\\expandafter\\noexpand\\csname axt@px@\\axt@k\\endcsname##1px\\noexpand\\axt@px@end}}}\\AddToHook{package/graphicx/after}{\\axt@pxkeys}\\makeatother',
 ].join('\n') + '\n'
 
 // ---------------------------------------------------------------- engine adaptation: rules for known incompatibilities

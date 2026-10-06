@@ -49,6 +49,16 @@ const doc = (body, preamble = '') => `\\documentclass{article}\n${preamble}\\beg
   check('R: as the engine sent it, the rule after the words: "Misplaced \\noalign" (as the finals stopped)', !bare.ok && /Misplaced \\noalign/.test(bare.log), bare.error)
 }
 
+// P: an image sized in pdfTeX's px (1810.04805: \includegraphics[width=360px]), its pdfLaTeX paper set by XeLaTeX for a
+// CJK target: given in bp, its value, the image sets; as the source has it, "Illegal unit of measure"
+{
+  const P = { 'main.tex': doc('An image \\includegraphics[width=36px]{example-image} and another \\includegraphics[height=0.1\\textwidth]{example-image}.\\setbox0\\hbox{\\includegraphics[width=36px]{example-image}}\\typeout{AXT-WIDTH=\\the\\wd0}', '\\usepackage{graphicx}\n') }
+  const [xe] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
+  const fixed = compile('p-fixed', P, xe), bare = compile('p-bare', P, xe, { alter: tex => tex.replace(/\\makeatletter\\def\\axt@px[^\n]*\\makeatother\n/, '') })
+  check('P: an image sized in px sets under XeLaTeX, 36px as wide as pdfTeX sets it (36 bp, 36.135 pt)', fixed.ok && /AXT-WIDTH=36\.135pt/.test(fixed.log), fixed.error || (fixed.log.match(/AXT-WIDTH=.*$/m)?.[0] ?? 'no width'))
+  check('P: without it, XeTeX has no unit px: "Illegal unit of measure" (as the CJK finals failed)', !bare.ok && /Illegal unit of measure/.test(bare.log), bare.error)
+}
+
 rmSync(dir, { recursive: true, force: true })
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)
