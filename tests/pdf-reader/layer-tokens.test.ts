@@ -297,6 +297,52 @@ describe('the characters', () => {
     expect(tokens.find(t => t.kind === 'space')?.face).toBe('unbatang')
   })
 
+  it('a curly apostrophe between two Latin letters is part of the word, in Chinese and Japanese too; elsewhere it closes a quote', () => {
+    for (const target of ['zh', 'ja']) {
+      // Newton's: one Latin word, no compressible mark, no gap in the middle of it
+      expect(need([[0, 'Newton\u2019s law']], { target }).map(t => [t.kind, t.s ?? null, t.script ?? null, t.punct ?? null]), target).toEqual([
+        ['text', 'Newton\u2019s', 'latin', null], ['space', null, null, null], ['text', 'law', 'latin', null],
+      ])
+      // after a CJK character, or before one, it is the closing quote it is there
+      expect(need([[0, '\u6a21\u2019s']], { target }).map(t => [t.s, t.script, t.punct ?? null])).toEqual([['\u6a21', 'cjk', null], ['\u2019', 'cjk', 'close'], ['s', 'latin', null]])
+      expect(need([[0, 'Newton\u2019\u6a21']], { target }).map(t => [t.s, t.script, t.punct ?? null])).toEqual([['Newton', 'latin', null], ['\u2019', 'cjk', 'close'], ['\u6a21', 'cjk', null]])
+      // at the start of a word, or at its end
+      expect(need([[0, '\u2019tis']], { target }).map(t => [t.s, t.script])).toEqual([['\u2019', 'cjk'], ['tis', 'latin']])
+      expect(need([[0, 'dogs\u2019']], { target }).map(t => [t.s, t.script])).toEqual([['dogs', 'latin'], ['\u2019', 'cjk']])
+    }
+    // the plain apostrophe never was a CJK character
+    expect(need([[0, "Newton's"]], { target: 'zh' }).map(t => [t.s, t.script])).toEqual([["Newton's", 'latin']])
+  })
+
+  it('a prose word is marked as one, so that cutting it by characters draws a hyphen; a URL, a typewriter run and a short word are not', () => {
+    const marks = (pieces: TrPiece[], o: Partial<Opts> = {}) => texts(need(pieces, o)).map(t => [t.s, Boolean(t.word)])
+    expect(marks([[0, 'translation, abcd 12345 a1b2c3']])).toEqual([['translation,', true], ['abcd', false], ['12345', false], ['a1b2c3', false]])
+    expect(marks([[2, 1, STYLE.MONO], [0, 'identifier'], [3, 2]])).toEqual([['identifier', false]])
+    expect(marks([[0, 'https://example.org']]).map(([, word]) => word)).toEqual([false, false, false])
+    // a heading's words are words, though no pattern hyphenates them
+    expect(marks([[0, 'translation']], { unit: { kind: 'heading' } })).toEqual([['translation', true]])
+  })
+
+  it('a URL breaks after # and & as well, and a mono run after any separator', () => {
+    const parts = (pieces: TrPiece[]) => texts(need(pieces)).map(t => t.s)
+    expect(parts([[0, 'http://x.org/p#frag&a=1']])).toEqual(['http://', 'x.', 'org/', 'p#', 'frag&', 'a=', '1'])
+    expect(parts([[2, 1, STYLE.MONO], [0, 'a#b&c'], [3, 2]])).toEqual(['a#', 'b&', 'c'])
+  })
+
+  it('the compatibility ideographs, the Hangul jamo and the middle dot are CJK', () => {
+    const scripts = (text: string, target: string) => texts(need([[0, text]], { target })).map(t => t.script)
+    // the compatibility block, in a target that breaks between characters and in one that keeps words whole
+    expect(scripts('\uf900\uf901', 'zh')).toEqual(['cjk', 'cjk'])
+    expect(scripts('\uf900\uf901', 'ko')).toEqual(['cjk'])
+    // the jamo
+    expect(scripts('\u1100\u1161', 'ko')).toEqual(['cjk'])
+    // the middle dot, in Chinese and Japanese only
+    expect(scripts('\u00b7', 'zh')).toEqual(['cjk'])
+    expect(scripts('\u00b7', 'ja')).toEqual(['cjk'])
+    expect(scripts('\u00b7', 'ko')).toEqual(['latin'])
+    expect(scripts('\u00b7', 'en')).toEqual(['latin'])
+  })
+
   it('a Latin word is cut after its own hyphen or slash, a URL or a mono run after its separators', () => {
     const parts = (pieces: TrPiece[]) => texts(need(pieces)).map(t => [t.s, Boolean(t.glue)])
     expect(parts([[0, 'state-of-the-art']])).toEqual([['state-', false], ['of-', false], ['the-', false], ['art', false]])

@@ -6,7 +6,8 @@
 // together, `punct` the full-width marks compression takes half of, `asp` a CJK-Latin gap, `hyph` a word that may be
 // hyphenated. Here a line takes whole groups of glued tokens while they fit, its spaces shrinking to SPACE_MIN of their
 // width; a closing mark hangs its blank half in the margin; a word longer than its line is hyphenated where a hyphenator
-// allows, else cut by characters. An original module (no port statement), importing only relative modules.
+// allows, else cut by characters, with a hyphen drawn at the cut where it is a word of running text (a CJK or Korean word, a
+// URL and a typewriter run are cut without one). An original module (no port statement), importing only relative modules.
 import { scriptOf } from '../layer-rules.mjs'
 import { hyphenCore } from './tokens.mjs'
 
@@ -44,7 +45,7 @@ export function breakLines(tokens, slots, f, state, o) {
   const lines = []
   const compress = state.compress
   const autospace = rules.autospace * f
-  let i = 0, si = 0, consumed = 0, line = null, stopped = false
+  let i = 0, si = 0, consumed = 0, line = null, stopped = false, overflow = 0
 
   /** the next slot with width that the text may go to: not below a display it has not reached */
   const open = () => {
@@ -72,8 +73,17 @@ export function breakLines(tokens, slots, f, state, o) {
     const { slot } = line
     const last = line.items[line.items.length - 1], meta = line.meta[line.meta.length - 1]
     if (last.t.punct === 'close' && compress < 2 && !meta.cut && !slot.centred) { last.w -= meta.half; meta.cut = true }
-    let x = slot.x0
-    for (const it of line.items) { x += it.asp; it.x = x + it.shift; x += it.w }
+    // what the line holds, spaces at their shortest, past its slot: the hung mark and the shifted one count by their advances
+    let x = slot.x0, natural = 0, spaces = 0
+    for (const it of line.items) {
+      x += it.asp
+      it.x = x + it.shift
+      x += it.w
+      natural += it.asp + it.w
+      if (it.t.kind === 'space') spaces += it.w
+    }
+    const over = natural - spaces * (1 - SPACE_MIN) - (slot.x1 - slot.x0)
+    if (over > EPS) overflow = Math.max(overflow, f > 0 ? over / f : over)
     lines.push({ slot, items: line.items, mode: slot.centred ? 'centred' : mode })
     line = null
     si++
@@ -161,35 +171,40 @@ export function breakLines(tokens, slots, f, state, o) {
     return true
   }
 
-  /** the most of a token's characters that fit `space`, as units of its text; 0 where it has fewer than two characters or
-   *  not the first */
-  const prefixFitting = (t, space) => {
+  /** the most of a token's characters that fit `space` with `suffix` (a hyphen) after them, as units of its text; 0 where it
+   *  has fewer than two characters or not the first */
+  const prefixFitting = (t, space, suffix) => {
     if (t.s === undefined || cpLength(t.s) < 2) return 0
     let best = 0, n = 0
     for (const ch of t.s) {
       n += ch.length
-      if (n >= t.s.length || textWidth(t.s.slice(0, n), t) > space) break
+      if (n >= t.s.length || textWidth(t.s.slice(0, n) + suffix, t) > space) break
       best = n
     }
     return best
   }
 
-  /** a group longer than an empty line: what fits of it, a token that does not cut by characters, and the rest left for the
-   *  next line; a token alone that cannot be cut is placed and overflows */
+  /** a group longer than an empty line: a first word hyphenated where its language allows, else what fits of the group, the
+   *  token that does not fit cut by characters (a word of running text with a hyphen drawn, the rest without), and the rest
+   *  left for the next line; a token alone that cannot be cut is placed and overflows */
   const cut = (group, b) => {
     const cap = room()
     let x = 0, q = 0
     while (q < b.items.length && x + b.items[q].w + b.items[q].asp <= cap + EPS) { x += b.items[q].w + b.items[q].asp; q++ }
-    let piece = null
+    if (q === 0 && hyphenate(group[0], b)) return
+    let piece = null, suffix = ''
     if (q < group.length) {
-      const k = prefixFitting(group[q], cap + EPS - x - b.items[q].asp)
+      const t = group[q], space = cap + EPS - x - b.items[q].asp
+      let k = t.word ? prefixFitting(t, space, '-') : 0
+      if (k > 0) suffix = '-'
+      else k = prefixFitting(t, space, '')
       if (k > 0) piece = k
       else if (q === 0) q = 1
     }
     for (let p = 0; p < q; p++) { line.items.push(b.items[p]); line.meta.push(b.metas[p]) }
     i += q
     if (piece !== null) {
-      const [head, tail] = split(group[q], piece, '')
+      const [head, tail] = split(group[q], piece, suffix)
       out.splice(i, 1, head, tail)
       line.items.push({ t: head, w: widthAt(head, f, state), x: 0, shift: 0, asp: b.items[q].asp })
       line.meta.push({ half: 0, cut: false })
@@ -242,7 +257,7 @@ export function breakLines(tokens, slots, f, state, o) {
   if (line?.items.length) close('last')
   let rest = 0
   if (stopped) for (let q = i; q < out.length; q++) if (inline(out[q])) rest++
-  return { lines, rest, tokens: out }
+  return { lines, rest, overflow, tokens: out }
 }
 
 /**

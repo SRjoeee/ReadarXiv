@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { layerRulesFor } from '@/pdf-reader/engine/layer-rules.mjs'
 import { type Broken, breakLines, CJK_JUST_MAX, placeLines, SPACE_MIN } from '@/pdf-reader/engine/layer/breaks.mjs'
 import { type Hyphenator, loadHyphenator } from '@/pdf-reader/engine/layer/hyphen.mjs'
+import { STYLE } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { NO_END, NO_START, type Token } from '@/pdf-reader/engine/layer/tokens.mjs'
 import { contextOf, slotsOf, tokenize } from './helpers/layer-fixtures'
 
@@ -177,14 +178,23 @@ describe('Korean and the alphabets', () => {
     expect(texts(lay(tokenize('BERT\ub97c BERT\ub97c', 'ko'), [300, 300], 'ko'))).toEqual(['BERT\ub97c', 'BERT\ub97c'])
   })
 
-  it('a word longer than its line is cut by characters, after the words before it have a line of their own', () => {
+  it('a word longer than its line is cut by characters, after the words before it have a line of their own, with a hyphen at each cut', () => {
     const b = lay(tokenize('ab abcdefghij', 'en'), [200, 200, 200, 200], 'en')
-    expect(texts(b)).toEqual(['ab', 'abcd', 'efgh', 'ij'])
-    expect(b.lines.slice(1).map(l => [l.items[0]!.t.at, l.items[0]!.t.len])).toEqual([[3, 4], [7, 4], [11, 2]])
+    expect(texts(b)).toEqual(['ab', 'abc-', 'def-', 'ghij'])
+    // the hyphen is drawn, not in the text: each piece's offsets are its letters'
+    expect(b.lines.slice(1).map(l => [l.items[0]!.t.at, l.items[0]!.t.len])).toEqual([[3, 3], [6, 3], [9, 4]])
     // the pieces are tokens of the result, the whole word is not
-    expect(b.tokens.map(t => t.s ?? ' ')).toEqual(['ab', ' ', 'abcd', 'efgh', 'ij'])
-    expect(b.tokens.slice(2).map(t => t.w)).toEqual([2, 2, 1])
+    expect(b.tokens.map(t => t.s ?? ' ')).toEqual(['ab', ' ', 'abc-', 'def-', 'ghij'])
+    expect(b.tokens.slice(2).map(t => t.w)).toEqual([2, 2, 2])
     expect(b.rest).toBe(0)
+    expect(b.overflow).toBe(0)
+  })
+
+  it('a URL, a typewriter run and a CJK word are cut without a hyphen', () => {
+    // the first piece of a URL fits a line of its own; the second, 26 letters, is cut in sixes
+    expect(texts(lay(tokenize('http://abcdefghijklmnopqrstuvwxyz', 'en'), [400, 300, 300, 300, 300, 300], 'en'))).toEqual(['http://', 'abcdef', 'ghijkl', 'mnopqr', 'stuvwx', 'yz'])
+    const mono = tokenize([[2, 1, STYLE.MONO], [0, 'abcdefghijklmnop'], [3, 2]], 'en')
+    expect(texts(lay(mono, [300, 300, 300], 'en'))).toEqual(['abcdef', 'ghijkl', 'mnop'])
   })
 
   it('a Latin word breaks after its own hyphen, and a URL after its separators', () => {
@@ -234,6 +244,20 @@ describe('hyphenation', () => {
     expect(texts(lay(marked, [600, 1000, 1000], 'de', state(), german))[0]).toBe('ein')
   })
 
+  it('a first word wider than an empty line is hyphenated by its patterns before it is cut by characters', () => {
+    // 480 wide: the patterns' last point that fits, then the long rest, which they have no point for, cut with its hyphen
+    expect(texts(lay(tokenize('Donaudampfschiff', 'de', { hyphen: german }), [480, 480, 480], 'de', state(), german))).toEqual(['Donau-', 'dampfsch-', 'iff'])
+    // with no patterns it is cut by characters alone, the hyphen still drawn
+    expect(texts(lay(tokenize('Donaudampfschiff', 'de'), [480, 480, 480], 'de'))).toEqual(['Donaudam-', 'pfschiff'])
+  })
+
+  it('keeps the fewest letters of the language after a break, too', () => {
+    // right 8: the point 9 leaves seven letters, so the line takes the earlier point though the later one fits
+    const strict: Hyphenator = { ...german, right: 8 }
+    expect(texts(lay(tokenize(source, 'de', { hyphen: strict }), [700, 1000, 1000], 'de', state(), strict))[0]).toBe('ein Donau-')
+    expect(texts(lay(tokenize(source, 'de', { hyphen: german }), [700, 1000, 1000], 'de', state(), german))[0]).toBe('ein Donaudamp-')
+  })
+
   it('without a hyphenator nothing hyphenates', () => {
     expect(texts(lay(tokenize(source, 'de'), [600, 1000, 1000], 'de'))[0]).toBe('ein')
   })
@@ -271,6 +295,11 @@ describe('justification', () => {
     expect(ragged.lines[0]!.items.map(it => it.x)).toEqual([0, 100, 125, 225, 250, 350, 375])
     // a line of one word has no space to take it
     expect(placed('aaaa bbbbbbbb', [450, 1000], 'en').lines[0]!.mode).toBe('ragged')
+    // spaceMax is the extra a space may take: 28 more on each space of 25 is within 1.2 of its width, where a width grown to
+    // at most 1.2 of its own would allow 5
+    const extra = placed('aa bb cc dd eeeeeeeeee', [559, 1000], 'en')
+    expect(extra.lines[0]!.mode).toBe('just')
+    expect(extra.lines[0]!.items.map(it => it.x)).toEqual([0, 100, 153, 253, 306, 406, 459])
   })
 
   it('spaces shrink to SPACE_MIN of their width to fit a line, and no more', () => {
@@ -376,6 +405,43 @@ describe('breaks and blocks', () => {
   })
 })
 
+describe('overflow', () => {
+  const ph = { 5: { kind: 'math', segs: [1, 100, 700, 700, 710, 698] } }
+
+  it('is 0 where every line fits: a hung closing mark and a shifted opening mark are not overflow', () => {
+    // the full stop hangs half of itself past the margin of 350
+    expect(lay(tokenize('\u6a21\u578b\u4f7f\u3002\u7528', 'zh'), [350, 350], 'zh').overflow).toBe(0)
+    // the opening mark is 50 wide and drawn back over its blank half: 50 + 100 + 100 in 250
+    const opening = lay(tokenize('\uff08\u6a21\u578b', 'zh'), [250], 'zh', state(1))
+    expect(opening.lines[0]!.items[0]).toMatchObject({ w: 50, shift: -50 })
+    expect(opening.overflow).toBe(0)
+    // spaces at their shortest
+    expect(lay(tokenize('aa bb', 'en'), [220], 'en').overflow).toBe(0)
+    expect(lay(tokenize('', 'en'), [220], 'en').overflow).toBe(0)
+  })
+
+  it('is how far the widest line runs past its slot, in ems of the size, while rest is 0', () => {
+    // a formula of 60 ems in a slot of 3: placed alone, nothing left over, and 57 ems too wide
+    const tokens = tokenize([[0, 'aa '], [1, 5]], 'en', { unit: { ph } })
+    const b = lay(tokens, [300, 300], 'en')
+    expect(b.rest).toBe(0)
+    expect(b.overflow).toBeCloseTo(57, 10)
+    // the same in ems at another size
+    expect(breakLines(tokens, slotsOf([30, 30]), 10, state(), contextOf('en')).overflow).toBeCloseTo(57, 10)
+    // a word of 26 letters that no character of fits a slot of 10: placed whole
+    const word = lay(tokenize('abcdefghijklmnopqrstuvwxyz', 'en'), [10, 10], 'en')
+    expect(word.rest).toBe(0)
+    expect(word.overflow).toBeCloseTo(12.9, 10)
+  })
+
+  it('is the widest of the lines', () => {
+    const tokens = tokenize([[0, 'aa '], [1, 5], [0, ' bb ']], 'en', { unit: { ph } })
+    // the formula's line is 6000 in 4000: 20 ems; the word is no problem
+    expect(lay(tokens, [1000, 4000, 1000], 'en').overflow).toBeCloseTo(20, 10)
+    expect(lay(tokens, [1000, 7000, 1000], 'en').overflow).toBe(0)
+  })
+})
+
 describe('crops and page text', () => {
   const ph = { 5: { kind: 'math', segs: [1, 100, 700, 160, 710, 698] } }
   it('a crop is as wide as its ems times the size, and stays with the word before it', () => {
@@ -429,6 +495,7 @@ describe('properties over random text', () => {
       placeLines(b, SIZE, { rules: layerRulesFor(target), target })
       const label = `${target} ${JSON.stringify(text)}`
       expect(b.rest, label).toBe(0)
+      expect(b.overflow, label).toBe(0)
       const placed = b.lines.flatMap(l => l.items.map(it => it.t)).filter(t => t.kind !== 'space')
       expect(placed, label).toEqual(b.tokens.filter(t => t.kind === 'text' || t.kind === 'ph'))
       for (const line of b.lines) {

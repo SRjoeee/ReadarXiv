@@ -23,6 +23,7 @@ export interface Token {
   punct?: 'open' | 'close'       // a full-width mark (compressible)
   asp?: boolean                  // CJK–Latin autospace before it
   hyph?: string                  // the language a word may hyphenate in
+  word?: boolean                 // an alphabetic word of running text (five letters or more; no URL, nothing in a typewriter face): cut by characters, it draws a hyphen
   ph?: number                    // a placeholder's k; with `mode`
   mode?: 'crop' | 'page-text' | 'kept'
   raised?: boolean

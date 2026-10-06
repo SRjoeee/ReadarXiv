@@ -11,7 +11,7 @@ export interface LayerRules {
   sizeStep: number; sizeFloor: number   // × the original's size
   even: 'size' | 'size-and-lead' | 'unit'
   autospace: number                     // em between CJK and Latin (zh, ja)
-  spaceMax: number                      // word spacing at most, × (Korean, alphabets)
+  spaceMax: number                      // the extra a word space may take when justifying, × its own width (Korean, alphabets)
   hyphenate: string | null              // the patterns' language
 }
 export declare const LAYER_RULES: Readonly<Record<'Hans' | 'Hant' | 'Jpan' | 'Kore' | 'Latn' | 'Cyrl', LayerRules>>

@@ -43,6 +43,7 @@ const LIGATURES = [['---', '\u2014'], ['--', '\u2013'], ['``', '\u201c'], ["''",
 
 const WS = /\s/
 const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u
+const LETTER = /\p{L}/u
 const URL_LIKE = /^(?:https?|ftp):\/\/|^www\./i
 // a URL or a mono run breaks after its separators; a word after its own hyphen or slash, between two letters
 const AFTER_SEPARATOR = /(?<=[/.\-_#?&=])(?=[^/.\-_#?&=])/u
@@ -259,6 +260,9 @@ function build(pieces, o) {
   const cjkBreaking = CJK_BREAKING.has(scriptOf(target))
   const isCjk = ch => { const cp = ch.codePointAt(0); return isCjkCode(cp) || (cjkBreaking && CJK_PUNCT.has(cp)) }
   const cjkToken = t => t.kind === 'text' && t.script === 'cjk'
+  const latinLetter = c => LETTER.test(c) && !isCjk(c)
+  /** a curly apostrophe between two Latin letters ("Newton's") is a letter of the word, not a CJK closing quote */
+  const insideWord = (s, i) => s.codePointAt(i) === 0x2019 && i > 0 && i + 1 < s.length && latinLetter(lastChar(s.slice(0, i))) && latinLetter(firstChar(s.slice(i + 1)))
   const noWords = unit.kind === 'heading' || unit.title === true
 
   const tokens = []
@@ -331,7 +335,11 @@ function build(pieces, o) {
     let off = 0
     parts.forEach((part, i) => {
       const t = textToken(part, script, st, start + off, part.length)
-      if (hyphen && script === 'latin' && st.cls !== 'mono' && !urlLike && !noWords && hyphenCore(part)) t.hyph = hyphen.lang
+      // an alphabetic word of running text: one that is cut by characters draws a hyphen, one of a language with patterns
+      // (and not a heading's) may be hyphenated there
+      const word = script === 'latin' && st.cls !== 'mono' && !urlLike && hyphenCore(part) !== null
+      if (word) t.word = true
+      if (hyphen && word && !noWords) t.hyph = hyphen.lang
       emit(t, i > 0)
       off += part.length
     })
@@ -372,7 +380,7 @@ function build(pieces, o) {
         i += lig[0].length
         continue
       }
-      const cj = isCjk(ch)
+      const cj = isCjk(ch) && !insideWord(s, i)
       if (cjkBreaking && cj) {
         flush()
         single(ch, rawPos + i, ch.length, st)
