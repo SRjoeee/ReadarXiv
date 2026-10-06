@@ -474,8 +474,10 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     // holds (inkMapOf, averaged), runs along it and stands beside nothing; a column rule or a neighbour's text crosses it)
     const [, r0] = px(from, B + 0.55 * z), [, r1] = px(from, B + 0.1 * z)
     const ra = Math.max(0, Math.floor(Math.min(r0, r1) / f)), rb = Math.min(map.h - 1, Math.floor(Math.max(r0, r1) / f))
-    const ownAt = x => own.some(e => x >= e[0] - 0.3 && x <= e[2] + 0.3 && e[1] < top && e[3] > bottom)
     const step = f / (scale * dpr)
+    // (its own ink, a map cell around: the map holds a cell any of whose pixels is inked, so a glyph's ink reaches up to a
+    // cell past its outline's box, which the file's rectangles are)
+    const ownAt = x => own.some(e => x >= e[0] - 0.3 - step && x <= e[2] + 0.3 + step && e[1] < top && e[3] > bottom)
     let x = from
     for (; dir > 0 ? x < limit : x > limit; x += dir * step) {
       const [cx] = px(x + dir * step / 2, B)
