@@ -26,7 +26,7 @@ export function bodyUnits(file, page) {
  * The page's even setting once all its body units are laid: the smallest scale any took, and in 'size-and-lead' the
  * smallest leading (in 'size', the rules' leadBase, from which each unit's own fit starts); null where nothing needs
  * laying again: in 'unit', with no unit, or with every unit already at it. The units above it are laid again with it
- * (layUnit's `maxScale` and `lead`), once.
+ * (layUnit's `maxScale` and `lead`), once; one that comes back unfit keeps its first fit.
  */
 export function evenOf(laid, rules) {
   if (rules.even === 'unit' || !laid.length) return null
