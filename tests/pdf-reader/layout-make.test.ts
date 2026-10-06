@@ -20,7 +20,7 @@ const CH = 0.5
 type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean }
 type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped'; points?: Record<string, [run: number, char: number]>; order?: number[] }
 type Mark = [name: string, page: number, x: number, y: number]
-type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches }
+type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[] }
 
 const FONTS: Record<string, unknown> = {
   F1: { name: 'ABCDEF+CMR10', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false },
@@ -108,7 +108,7 @@ function markedOf(pages: Page[], marks: Mark[]) {
   }
 }
 async function marksOf(w: World, log = '', classes?: MarkClass[]) {
-  return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, units: w.units, OPS, ...(classes ? { classes } : {}) }))))
+  return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, inkless: w.inkless ?? null, units: w.units, OPS, ...(classes ? { classes } : {}) }))))
 }
 const make = async (w: World, log = '', asked: number[] = []) => makeLayout({ units: w.units, marks: await marksOf(w, log), arxiv: arxivOf(w.pages, asked), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
 /** a made file: it parses, and made again it is the same bytes */
@@ -868,5 +868,52 @@ describe('makeLayout, the content stream (Task 6b)', () => {
     const control = await made({ ...w, marked: [{ runs }], pages: [{ runs: runs.map(r => (r.s === '3' ? { ...r, s: '\u0003' } : r)) }] })
     expect(phOf(control.file, 0, 3).slice(5, 8)).toEqual([147, 700, 152])
     expect(control.file.pageText).toEqual([[0, 1, '[1, 2]']])
+  })
+})
+
+describe('makeLayout, the maker round (Fix 1): text symbols and the macros TeX says set no ink', () => {
+  const pt = (f: LayoutFile, id: number, k: number) => f.pageText.find(e => e[0] === id && e[1] === k)?.[2] ?? null
+  it('a \\% glued to its number, which the marking leaves unmarked, is TEXT where its line shows a %; LOST where none', async () => {
+    const runs: Run[] = [{ s: 'error of 3.57% on the test', x: 72, y: 700 }]
+    const w: World = { pages: [{ runs }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700]], units: [unit('para', [text('error of 3.57'), ph('\\%'), text(' on the test')])] }
+    const { file, stats } = await made(w)
+    expect(phOf(file, 0, 1)).toEqual([0, 1, 6, PH_FLAG.TEXT])
+    expect(pt(file, 0, 1)).toBe('%')
+    expect(stats.ph).toMatchObject({ symbols: 1, unmarked: 0 })
+    // the % is the line's: its glyph inside the erase
+    const xs = chunk(rowsOf(file, 0, 'erase'), 5)
+    expect(xs.some(([, x0, , x1]) => x0! <= 72 + 13 * 5 && x1! >= 72 + 14 * 5)).toBe(true)
+    // arXiv's line with no % (another paper's definition): its rendering not found, LOST
+    const other: Run[] = [{ s: 'error of 3.57 on the test', x: 72, y: 700 }]
+    const lost = await made({ ...w, pages: [{ runs: other }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(other[0] as Run), 700]] })
+    expect(phOf(lost.file, 0, 1)).toEqual([0, 1, 6, PH_FLAG.LOST])
+    expect(lost.stats.ph).toMatchObject({ symbols: 0, unmarked: 1 })
+  })
+  it('a \\# at a unit\'s head, before its start mark: its glyph right before the first word is the unit\'s, TEXT', async () => {
+    const runs: Run[] = [{ s: '#', x: 72, y: 700 }, { s: 'layers of the net', x: 78, y: 700 }]
+    const { file } = await made({ pages: [{ runs }], marks: [['0s', 1, 78, 700], ['0e', 1, endOf(runs[1] as Run), 700]], units: [unit('para', [ph('\\#'), text(' layers of the net')])] })
+    expect(phOf(file, 0, 0)).toEqual([0, 0, 6, PH_FLAG.TEXT])
+    // the first line from the # on
+    expect(rowsOf(file, 0, 'lines')[1]).toBe(72)
+  })
+  it('a \\_ that OT1 draws as a rule on the baseline is TEXT, its rule taken into the erase', async () => {
+    const runs: Run[] = [{ s: 'conv2', x: 72, y: 700 }, { s: 'x is the block', x: 100.6, y: 700 }]
+    const { file } = await made({
+      pages: [{ runs, boxes: [[97.6, 700, 100.6, 700.4]] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[1] as Run), 700]],
+      units: [unit('para', [text('conv2'), ph('\\_'), text('x is the block')])],
+    })
+    expect(phOf(file, 0, 1)).toEqual([0, 1, 6, PH_FLAG.TEXT])
+    expect(pt(file, 0, 1)).toBe('_')
+    expect(chunk(rowsOf(file, 0, 'erase'), 5).some(([, x0, y0, x1, y1]) => x0! <= 97.6 && x1! >= 100.6 && y0! <= 700 && y1! >= 700.4)).toBe(true)
+  })
+  it('a macro TeX said sets no ink (marking.inkless) gets no row, marked or not; one TeX did not say so stays LOST at a head', async () => {
+    const runs: Run[] = [{ s: 'Table rows of text', x: 72, y: 700 }]
+    const marks: Mark[] = [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700]]
+    const units = [unit('para', [ph('\\rule{0pt}{2ex}'), text('Table rows of text')])]
+    const said = await made({ pages: [{ runs }], marks, units, inkless: ['\\rule{0pt}{2ex}'] })
+    expect(said.file.ph.find(r => r[0] === 0 && r[1] === 0)).toBeUndefined()
+    const not = await made({ pages: [{ runs }], marks, units })
+    expect(phOf(not.file, 0, 0)).toEqual([0, 0, 6, PH_FLAG.LOST])
   })
 })

@@ -20,7 +20,7 @@ import { displayEdges, plainSource, unitText } from '../mt.mjs'
 import { carrierOf, tokensOfMarks } from './carry.mjs'
 import { encodeLayout, isPageText, LAYOUT, LayoutRefusal, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
 import { pageInk } from './ink.mjs'
-import { classOf, layoutMarking } from './marks.mjs'
+import { classOf, layoutMarking, symbolText } from './marks.mjs'
 import { matcherOf } from './match.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
 
@@ -267,7 +267,7 @@ function blank(units) {
   return {
     lines: { carried: 0, total: 0 },
     units: { located: 0, total: units.length, byKind: {}, unplaced: 0 },
-    ph: { marked: 0, found: 0, empty: 0, lost: 0, byKind: {}, unmarked: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, texts: 0 },
+    ph: { marked: 0, found: 0, empty: 0, lost: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, texts: 0 },
     match: { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0 },
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
     capped: [], timedOut: [], over: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
@@ -486,7 +486,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   // own switch it was compiled with)
   const design = new Map()
   {
-    const { units: copies } = layoutMarking(units, marks.marking.classes, { lines: false, switches: marks.marking.switches })
+    const { units: copies } = layoutMarking(units, marks.marking.classes, { lines: false, switches: marks.marking.switches, inkless: marks.marking.inkless })
     copies.forEach((c, i) => {
       for (const p of c.pieces) {
         const m = p.t === 'ph' && /^\\axtpma?\{[pn](\d+)\.(\d+)([ab])\}$/.exec(p.src ?? '')
@@ -497,6 +497,8 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     })
   }
   const classes = new Set(marks.marking.classes)
+  /** the paper's macros TeX said set no ink (marks.mjs readInkProbe): no row, as an invisible placeholder has none */
+  const inkless = new Set(marks.marking.inkless ?? [])
   const ph = [], kept = new Map() // kept: page → the rectangles erasing leaves out (displays' segments, labels)
   const keep = (p, r) => (kept.get(p) ?? kept.set(p, []).get(p)).push(r)
   const ownInk = new Map(marks.owned.map(e => [e[0], e]))
@@ -532,13 +534,20 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       // every visible piece has its row, found, LOST or EMPTY: no row is a piece that draws nothing (an invisible one, a
       // group's open or close), as the layer reads the file
       const piece = u.pieces[k], cls = classOf(piece)
-      if (!cls) continue
+      if (!cls || (cls === 'macro' && inkless.has(piece.src))) continue
       const kind = PH_KIND.get(cls) ?? PH_KIND.get('other')
       const d = classes.has(cls) ? design.get(`${i}.${k}`) : null
       const lost = why => ph.push({ row: [i, k, kind, PH_FLAG.LOST], cls, state: 'lost', why })
       // a piece the marked original gives no mark (at a unit's head, after a prefix or a control sequence's end, glued
       // to a word): its rendering is not known
-      if (!d?.open) { ph.push({ row: [i, k, kind, PH_FLAG.LOST], cls, state: 'unmarked' }); continue }
+      if (!d?.open) {
+        // a LaTeX text symbol (marks.mjs TEXT_SYMBOLS) is drawn as its character where the unit's lines show it (below)
+        const sym = cls === 'macro' ? symbolText(piece.src) : null
+        const entry = { row: [i, k, kind, PH_FLAG.LOST], cls, state: 'unmarked' }
+        ph.push(entry)
+        if (sym !== null) (one.symbols ??= []).push({ entry, sym })
+        continue
+      }
       const prefix = cls === 'footnote' ? 'n' : 'p', name = `${prefix}${i}.${k}a`, e = ownInk.get(name)
       // its own ink by its points in the marked compile's content stream (layout/stream.mjs), or why none is known
       if (!e) { lost('no own ink known'); continue }
@@ -623,6 +632,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       stats.ph.matched += gs.length + bs.length
       ph.push({ row, cls, state: 'found', inferred: e[1] !== 0, text: PAGE_TEXT.has(cls) ? pageTextOf(gs) : null })
     }
+    if (one.symbols) symbolsOf(one)
   }
   // the bars: an arXiv glyph matched by two found pieces, an owned glyph of a found piece not matched (none, both)
   {
@@ -630,6 +640,69 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     for (const gs of matchedBy.values()) for (const [p, g] of gs) { const key = `${p}|${g}`; seen.set(key, (seen.get(key) ?? 0) + 1) }
     for (const n of seen.values()) if (n > 1) stats.ph.twice++
     stats.ph.unmatched = stats.ph.owned - stats.ph.matched
+  }
+
+  /**
+   * A unit's text symbols the marking gave no mark (glued to the word before, at the unit's head), each drawn as its
+   * character (PH_FLAG.TEXT, its text the file's pageText) where the unit's own lines on arXiv's page hold that
+   * character's ink: its glyphs there, those of no found placeholder of the unit, as many at least as the unit has such
+   * symbols and its text pieces that character. The unit's erase takes the line's glyphs, so the character drawn as text
+   * replaces the original's, once. LaTeX's \_ in OT1 is a rule, not a glyph: an unowned rule on the line's baseline, as
+   * high as a rule of text and an em wide at most, taken into the erase. Any other stays LOST: its rendering not found
+   */
+  function symbolsOf(one) {
+    const { id: i, u, rows } = one
+    const theirs = new Set()
+    for (const [key, gs] of matchedBy) if (key.startsWith(`${i}.`)) for (const [p, g] of gs) theirs.add(`${p}|${g}`)
+    const nf = s => s.normalize('NFKC')
+    const need = new Map()
+    for (const { sym } of one.symbols) need.set(sym, (need.get(sym) ?? 0) + 1)
+    for (const p of u.pieces) if (p.t === 'text') for (const ch of new Set(need.keys())) need.set(ch, need.get(ch) + (nf(p.s).split(nf(ch)).length - 1))
+    const have = new Map(), rules = []
+    rows.forEach((r, j) => {
+      const P = ink[r.page]
+      for (const g of r.gl) if (!theirs.has(`${r.page}|${g}`)) { const c = nf(P.u[g]); have.set(c, (have.get(c) ?? 0) + 1) }
+      P.boxes.forEach((B, b) => {
+        const h = B[3] - B[1], w = B[2] - B[0]
+        if (!P.boxTaken[b] && h > 0 && h <= 0.15 * r.size && w > 0 && w <= r.size && B[1] >= r.base - 0.3 * r.size && B[3] <= r.base + 0.3 * r.size && B[0] >= r.x0 - 0.5 * r.size && B[2] <= r.x1 + 0.5 * r.size) rules.push({ j, b, B })
+      })
+    })
+    // a symbol at the unit's head (passedOver: before its start mark) stands before the first line's first word: an
+    // unowned glyph of it on that line's baseline, right before the line, is the unit's too
+    const head = new Map()
+    for (const x of one.symbols) {
+      const k = x.entry.row[1]
+      if (u.pieces.slice(0, k).every(p => p.t !== 'text' || !/\S/.test(p.s ?? ''))) head.set(x.sym, (head.get(x.sym) ?? 0) + 1)
+    }
+    const r0 = rows[0], P0 = ink[r0.page]
+    for (const [sym, n] of head) {
+      let short = need.get(sym) - (have.get(nf(sym)) ?? 0)
+      if (short <= 0 || short > n) continue
+      const cand = band(P0, r0.base - 0.25 * r0.size, r0.base + 0.25 * r0.size).filter(g => P0.owner[g] === -1 && !P0.taken[g] && nf(P0.u[g]) === nf(sym) && P0.x1[g] <= r0.x0 + 0.05 && P0.x1[g] >= r0.x0 - 1.5 * r0.size).sort((a, b) => P0.x1[b] - P0.x1[a] || a - b)
+      for (const g of cand) {
+        if (short <= 0) break
+        r0.gl.push(g); P0.owner[g] = i; r0.x0 = Math.min(r0.x0, P0.x0[g])
+        have.set(nf(sym), (have.get(nf(sym)) ?? 0) + 1)
+        short--
+      }
+    }
+    let ruleAt = 0
+    for (const [sym, n] of need) {
+      const ok = (have.get(nf(sym)) ?? 0) >= n
+      const asRule = !ok && sym === '_' && rules.length - ruleAt >= one.symbols.filter(x => x.sym === sym).length
+      if (!ok && !asRule) continue
+      for (const x of one.symbols) {
+        if (x.sym !== sym) continue
+        if (asRule) {
+          const { j, b, B } = rules[ruleAt++]
+          ink[rows[j].page].boxTaken[b] = 1
+          one.boxes = (one.boxes ?? []).concat([[j, B]])
+        }
+        x.entry.row[3] = PH_FLAG.TEXT
+        x.entry.state = 'text'
+        x.entry.text = sym
+      }
+    }
   }
 
   /** a page-text placeholder's text (a citation's, a reference's, as the layer may draw it in the page's face): its
@@ -855,6 +928,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   for (const p of ph) {
     if (!kept1.has(p.row[0])) continue
     if (p.state === 'unmarked') { stats.ph.unmarked++; continue }
+    if (p.state === 'text') { stats.ph.symbols++; continue }
     const tally = stats.ph.byKind[p.cls] ??= [0, 0]
     stats.ph.marked++
     tally[1]++

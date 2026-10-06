@@ -20,7 +20,7 @@ import { promisify } from 'node:util'
 import { gzipSync } from 'node:zlib'
 import { getDocument, OPS, version } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { keptFor, openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/live.mjs'
-import { classOf, LAYOUT_CLASSES, encodeLayoutMarks, layoutMarksOf, parseLayoutMarks, probeSamples, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { classOf, LAYOUT_CLASSES, encodeLayoutMarks, inkSamples, layoutMarksOf, parseLayoutMarks, probeSamples, readInkProbe, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { encodeLayout, PH_FLAG } from '../../../src/pdf-reader/engine/layout/file.mjs'
 import { pageInk } from '../../../src/pdf-reader/engine/layout/ink.mjs'
 import { makeLayout } from '../../../src/pdf-reader/engine/layout/make.mjs'
@@ -98,7 +98,7 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
     writeFileSync(probeLog, existsSync(join(pdir, `${stem}.log`)) ? readFileSync(join(pdir, `${stem}.log`), 'latin1') : '', 'latin1')
     rmSync(pdir, { recursive: true, force: true })
   }
-  const switches = readMarkProbe(readFileSync(probeLog, 'latin1'), samples)
+  const switches = readMarkProbe(readFileSync(probeLog, 'latin1'), samples), inkless = readInkProbe(readFileSync(probeLog, 'latin1'), inkSamples(paper.units))
   // the layout compile, cached by what it compiles
   const build = join(dir, 'build'), marksFile = join(dir, 'marks.json'), stamp = join(dir, 'marks.key')
   const cached = key => {
@@ -106,7 +106,7 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
     try { parseLayoutMarks(new Uint8Array(readFileSync(marksFile))); return true } catch { return false }
   }
   let compileMs = null
-  const marked = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches })
+  const marked = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless })
   const key = keyOf(marked)
   if (!cached(key)) {
     rmSync(build, { recursive: true, force: true })
@@ -119,7 +119,7 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
       const log = readFileSync(join(build, `${stem}.log`), 'latin1')
       const task = open(new Uint8Array(readFileSync(pdf)))
       const t1 = performance.now()
-      const made = await layoutMarksOf(await task.promise, log, { engine: paper.meta.compiler, classes: LAYOUT_CLASSES, switches, units: paper.units, OPS })
+      const made = await layoutMarksOf(await task.promise, log, { engine: paper.meta.compiler, classes: LAYOUT_CLASSES, switches, inkless, units: paper.units, OPS })
       marksMs = performance.now() - t1
       await task.destroy()
       writeFileSync(marksFile, encodeLayoutMarks(made))

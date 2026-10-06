@@ -152,7 +152,7 @@ export function heldByNone(pieces, roles) {
  * Why a laid unit may not be drawn, or null; the first of, in this order:
  * - 'lost': a placeholder of the unit is LOST;
  * - 'missing', 'twice': a visible placeholder (a row neither EMPTY nor LOST) is not in the laid unit exactly once by k, as
- *   a crop, as page text, or kept (a display). A crop is drawn from its own page's pixels: one set on a page that is not
+ *   a crop, as page text, as a text symbol's character (TEXT), or kept (a display). A crop is drawn from its own page's pixels: one set on a page that is not
  *   its every segment's has nothing to be drawn from, and counts for none;
  * - 'overlap': two of the unit's placeholders' segments share more than half of the smaller (a page character carried
  *   twice);
@@ -201,7 +201,8 @@ function drawnOnce(unit, laid) {
   const once = k => times.set(k, (times.get(k) ?? 0) + 1)
   for (const line of laid.lines) {
     for (const it of line.items) {
-      if (it.kind === 'text' || it.ph === undefined) continue
+      // a text item that names a k is a text symbol's (PH_FLAG.TEXT): drawn as its character, it counts
+      if (it.ph === undefined) continue
       if (it.kind === 'crop') {
         const segs = unit.ph.get(it.ph)?.segs
         let here = !!segs && segs.length > 0

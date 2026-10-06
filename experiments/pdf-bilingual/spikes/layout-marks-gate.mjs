@@ -50,7 +50,7 @@ import { promisify } from 'node:util'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { latin1, latin1Bytes, MARK_DEF } from '../../../src/pdf-reader/engine/latex-front.mjs'
-import { askedCommands, encodeLayoutMarks, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarksOf, MARK_CLASSES, parseLayoutMarks, probeSamples, readMarkProbe, switchedOf } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { askedCommands, encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarksOf, MARK_CLASSES, parseLayoutMarks, probeSamples, readInkProbe, readMarkProbe, switchedOf } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles, probeFiles, readingsOf } from '../../../src/pdf-reader/engine/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
 import { marksOf } from '../../../src/pdf-reader/engine/typeset/places.mjs'
@@ -185,10 +185,12 @@ async function paperRow(id) {
   const samples = probeSamples(units)
   const probe = await compile(id, withSources(probeFiles(paper, { marks: true })), opts('probe'))
   const answered = readMarkProbe(probe.log ?? '', samples)
-  // --no-switch: the probe not asked (switches null), every mark as LAYOUT_TEX sets it
+  // --no-switch: the probe not asked (switches null), every mark as LAYOUT_TEX sets it; and the paper's macros TeX said
+  // set no ink, which get no mark (readInkProbe)
   const switches = NO_SWITCH ? null : answered
+  const inkless = NO_SWITCH ? null : readInkProbe(probe.log ?? '', inkSamples(units))
   const v1Of = classes => {
-    const files = originalFiles(paper, { lines: true, layout: classes, switches })
+    const files = originalFiles(paper, { lines: true, layout: classes, switches, inkless })
     if (PLANT) for (const p of [project.main, ...[...files.keys()].filter(f => f !== project.main).sort()]) {
       const t = latin1(files.get(p)), at = PLANT_AT ? t.search(new RegExp(`\\\\axt[a-z]*\\{${PLANT_AT.replace(/\./g, '\\.')}\\}`)) : t.search(/\\axtpm\{p\d+\.\d+b\}/)
       if (at < 0) continue
@@ -201,7 +203,7 @@ async function paperRow(id) {
   const v0Files = originalFiles(paper, { lines: true })
   v0Files.set(project.main, latin1Bytes(withFitr(latin1(v0Files.get(project.main)), MARK_DEF, LAYOUT_TEX)))
   const f0 = withSources(v0Files), f1 = v1Of(CLASSES)
-  const [c0, c1] = await Promise.all([compile(id, f0, opts('v0')), compile(id, f1, { ...opts('v1'), marking: { classes: CLASSES, switches, units, OPS } })])
+  const [c0, c1] = await Promise.all([compile(id, f0, opts('v0')), compile(id, f1, { ...opts('v1'), marking: { classes: CLASSES, switches, inkless, units, OPS } })])
   const row = { id, v0: c0.ok ? 'ok' : 'failed' }
   if (!c0.ok) return { row: { ...row, verdict: verdictOf(row) }, detail: { why: c0.why ?? c0.errors?.slice(0, 3) } }
   row.v1 = c1.ok ? 'ok' : 'failed'
@@ -211,7 +213,7 @@ async function paperRow(id) {
   // the asked commands TeX gave no answer for: none of their placeholders is marked (the re-review's m4)
   const unanswered = switches ? [...askedCommands(units)].filter(c => !switches[c]).sort() : []
   if (unanswered.length) row.unanswered = unanswered
-  row.probe = { samples: samples.length, answered: Object.keys(answered).length, ms: probe.ms }
+  row.probe = { samples: samples.length, answered: Object.keys(answered).length, ...(inkless?.length ? { inkless: inkless.length } : {}), ms: probe.ms }
   row.ms = [c0.ms, c1.ms]
   if (!c1.ok) return { row: { ...row, verdict: verdictOf(row) }, detail: { why: c1.why ?? c1.errors?.slice(0, 3) } }
   const a = itemsOf(c0), b = itemsOf(c1), lines = a.map(linesOf)

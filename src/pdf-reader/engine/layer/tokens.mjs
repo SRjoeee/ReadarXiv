@@ -580,6 +580,16 @@ function build(pieces, o) {
     if (row.flags & PH_FLAG.EMPTY) return
     const st = current()
     const [at, len] = span(rawIdx, rawIdx + 1)
+    if (row.flags & PH_FLAG.TEXT) {
+      // a LaTeX text symbol the layout found on the unit's line (\%, \_): its character in the run's style, glued to what
+      // is before it as the source glues it, drawn once by its k
+      const s = typeof row.text === 'string' ? clean(row.text) : ''
+      if (!s) throw UNDRAWABLE
+      const face = faceOf('latin', st)
+      if (!canDraw(s, [face], roles)) throw UNDRAWABLE
+      emit({ kind: 'ph', s, script: 'latin', face, caps: st.caps, w: widthOf(s, face, st.caps), ph: k, mode: 'text', colour: st.colour, at, len }, false)
+      return
+    }
     if (row.kind === 'display') { emitPlain({ kind: 'block', w: 0, ph: k, mode: 'kept', colour: st.colour, at, len }); return }
     const raised = (row.flags & PH_FLAG.RAISED) !== 0
     // a raised mark is the original's own ink: the page text has no size or lift of its own

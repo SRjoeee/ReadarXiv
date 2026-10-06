@@ -96,6 +96,15 @@ const broken = (edit: Edit) => { const f = structuredClone(made()); edit(f); ret
 const row = (n: number, r: number[]) => Array.from({ length: n }, () => r).flat()
 
 describe('a valid file', () => {
+  it('a text symbol (TEXT) parses with its character as its page text, and indexes as a macro of no segments', () => {
+    const f = made()
+    const row = f.ph[5]
+    if (!row) throw new Error('no row 5')
+    row[3] = PH_FLAG.TEXT
+    f.pageText.push([8, 1, '%'])
+    const index = indexLayout(parseLayout(new TextEncoder().encode(encodeLayout(f))))
+    expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.TEXT, segs: new Float64Array(0), text: '%' })
+  })
   it('a valid file parses, round-trips and indexes', () => {
     const f = made()
     const text = encodeLayout(f)
@@ -131,7 +140,7 @@ describe('a valid file', () => {
     expect([...index.unit(3)!.labels]).toEqual([0, 2, 50, 720, 66, 728.5, 717])
     expect([...index.unit(8)!.labels]).toEqual([3, 2, 66, 100, 70, 106, 98])
     expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.LOST, segs: new Float64Array(0), text: null })
-    expect(LAYOUT).toBe('2')
+    expect(LAYOUT).toBe('3')
     expect(PAGE_TEXT_KINDS).toEqual(['cite', 'ref', 'eqref'])
     expect(index.unit(1)).toBeNull()
     expect(index.unit(4)).toBeNull()
@@ -421,7 +430,10 @@ const ROWS: [string, Edit, string][] = [
   ['EMPTY and LOST together', f => { f.ph[4][3] = PH_FLAG.EMPTY | PH_FLAG.LOST }, 'ph[4][3]'],
   ['NUMBERED on a citation', f => { f.ph[1][3] = PH_FLAG.SOURCE_BRACKETS | PH_FLAG.NUMBERED }, 'ph[1][3]'],
   ['a placeholder kind of 10', f => { f.ph[0][2] = 10 }, 'ph[0][2]'],
-  ['placeholder flags of 64', f => { f.ph[0][3] = 64 }, 'ph[0][3]'],
+  ['placeholder flags of 128', f => { f.ph[0][3] = 128 }, 'ph[0][3]'],
+  ['TEXT on a formula', f => { f.ph[0][3] = PH_FLAG.TEXT }, 'ph[0]'],
+  ['TEXT and LOST', f => { f.ph[5][3] = PH_FLAG.TEXT | PH_FLAG.LOST }, 'ph[5]'],
+  ['a TEXT placeholder with no text', f => { f.ph[5][3] = PH_FLAG.TEXT }, 'pageText'],
   ['a placeholder row of 9', f => { f.ph[0].pop() }, 'ph[0]'],
   ['a segment on page 4', f => { f.ph[0][4] = 4 }, 'ph[0][4]'],
   ['a segment of x0 = x1', f => { f.ph[0][7] = f.ph[0][5] }, 'ph[0][7]'],

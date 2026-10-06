@@ -1,7 +1,7 @@
 // file.mjs's types (JavaScript until the engine's port), for the reader and its tests
 export { LayoutRefusal } from './json.mjs'
 /** the maker's version: raised with any change to the layout maker or the schema; it enters no output identity */
-export declare const LAYOUT: '2'
+export declare const LAYOUT: '3'
 /** bytes */
 export declare const LAYOUT_CAP: number
 export declare const LAYOUT_VALUES: number
@@ -11,7 +11,7 @@ export declare const UNIT_KINDS: readonly ['para', 'heading', 'caption', 'footno
 export declare const PH_KINDS: readonly ['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other']
 export declare const LABEL_KINDS: readonly ['number', 'item', 'caption', 'footnote']
 export declare const UNIT_FLAG: { readonly TITLE: 1; readonly FRONT: 2; readonly CENTRED: 4 }
-export declare const PH_FLAG: { readonly SOURCE_BRACKETS: 1; readonly NUMBERED: 2; readonly RAISED: 4; readonly LOWERED: 8; readonly EMPTY: 16; readonly LOST: 32 }
+export declare const PH_FLAG: { readonly SOURCE_BRACKETS: 1; readonly NUMBERED: 2; readonly RAISED: 4; readonly LOWERED: 8; readonly EMPTY: 16; readonly LOST: 32; readonly TEXT: 64 }
 /** the placeholders the layer may draw as text in the page's face, whose own text the file may hold */
 export declare const PAGE_TEXT_KINDS: readonly ['cite', 'ref', 'eqref']
 /** a page text's code units at most, and a file's in all */

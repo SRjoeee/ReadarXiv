@@ -489,7 +489,10 @@ function itemsOf(line, f, state, measure, grid) {
       run = null
       out.push(t.mode === 'page-text'
         ? { kind: 'page-text', x: it.x, w: it.w, text: t.s, face: t.face, caps: !!t.caps, ph: t.ph, colour: t.colour, raised: 0, from: t.at, to: t.at + t.len }
-        : { kind: 'crop', x: it.x, w: it.w, ph: t.ph, colour: t.colour, raised: t.raised ? 1 : 0, from: t.at, to: t.at + t.len })
+        : t.mode === 'text'
+          // a text symbol: text, an item of its own that names its k
+          ? { kind: 'text', x: it.x, w: it.w, text: t.s, face: t.face, caps: !!t.caps, ph: t.ph, colour: t.colour, raised: 0, from: t.at, to: t.at + t.len }
+          : { kind: 'crop', x: it.x, w: it.w, ph: t.ph, colour: t.colour, raised: t.raised ? 1 : 0, from: t.at, to: t.at + t.len })
       continue
     }
     if (t.kind !== 'text') continue

@@ -10,8 +10,10 @@ import { boundedJson, checkPages, checkViews, isInteger, isNumber, isObject, Lay
 export { LayoutRefusal } from './json.mjs'
 
 /** the maker's version: raised with any change to the layout maker or to this schema; it enters no output identity.
- *  2: placeholders found by their own ink in the content stream, and the page text of citations and references */
-export const LAYOUT = '2'
+ *  2: placeholders found by their own ink in the content stream, and the page text of citations and references;
+ *  3: a text symbol the marking could not mark drawn as its character (PH_FLAG.TEXT), and no row for a macro TeX said
+ *  sets no ink */
+export const LAYOUT = '3'
 export const LAYOUT_CAP = 4 * 2 ** 20
 export const LAYOUT_VALUES = 1_000_000
 /** the deepest the file nests: its object, then lines, frames or erase (the arrays of entries), then an entry [id, rows],
@@ -21,7 +23,9 @@ export const UNIT_KINDS = Object.freeze(['para', 'heading', 'caption', 'footnote
 export const PH_KINDS = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other'])
 export const LABEL_KINDS = Object.freeze(['number', 'item', 'caption', 'footnote'])
 export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4 })
-export const PH_FLAG = Object.freeze({ SOURCE_BRACKETS: 1, NUMBERED: 2, RAISED: 4, LOWERED: 8, EMPTY: 16, LOST: 32 })
+/** a placeholder's flags. TEXT: a LaTeX text symbol (\%, \_) drawn as its one character, the file's pageText, where
+ *  the unit's lines on arXiv's page show it (a macro's only, no segments: its ink is the line's, erased with it) */
+export const PH_FLAG = Object.freeze({ SOURCE_BRACKETS: 1, NUMBERED: 2, RAISED: 4, LOWERED: 8, EMPTY: 16, LOST: 32, TEXT: 64 })
 
 const KEYS = ['schema', 'layout', 'pdfjs', 'paper', 'left', 'views', 'fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText']
 /** the placeholders the layer may draw as text in the page's face (Task 9's tokens), whose own text the file may hold */
@@ -52,8 +56,8 @@ const SHARE_MAX = 1000, ERASE_LINE = 16, SEGS_INLINE = 4, SEGS_DISPLAY = 64, LAB
 /** a rectangle lies within its page's view by this, PDF units */
 const SLACK = 1
 const UNIT_BITS = UNIT_FLAG.TITLE | UNIT_FLAG.FRONT | UNIT_FLAG.CENTRED
-const PH_BITS = 63
-const HEADING = UNIT_KINDS.indexOf('heading'), DISPLAY = PH_KINDS.indexOf('display')
+const PH_BITS = 127
+const HEADING = UNIT_KINDS.indexOf('heading'), DISPLAY = PH_KINDS.indexOf('display'), MACRO = PH_KINDS.indexOf('macro')
 const PAGE_TEXT = new Set(PAGE_TEXT_KINDS.map(k => PH_KINDS.indexOf(k)))
 const ID_MAX = Number.MAX_SAFE_INTEGER
 
@@ -249,7 +253,7 @@ export function parseLayout(bytes) {
   }
 
   // placeholders: unit, k, kind, flags, then per segment: page, x0, baseline, x1, top, bottom
-  const ph = array(f.ph, 'ph'), seen = new Set(), pageTexts = new Set()
+  const ph = array(f.ph, 'ph'), seen = new Set(), pageTexts = new Set(), symbols = new Set()
   for (let i = 0; i < ph.length; i++) {
     const r = ph[i]
     if (!Array.isArray(r) || r.length < 4 || (r.length - 4) % 6 !== 0) throw refuse(`ph[${i}]`, `not 4 + 6 × n numbers (${kindOf(r)})`)
@@ -263,14 +267,16 @@ export function parseLayout(bytes) {
     const kind = r[2], flags = r[3]
     if (!isInteger(kind, 0, PH_KINDS.length - 1)) throw refuse(`ph[${i}][2]`, 'not a kind of PH_KINDS')
     if (!isInteger(flags, 0, PH_BITS)) throw refuse(`ph[${i}][3]`, 'not flags of PH_FLAG')
-    const empty = (flags & PH_FLAG.EMPTY) !== 0, lost = (flags & PH_FLAG.LOST) !== 0
+    const empty = (flags & PH_FLAG.EMPTY) !== 0, lost = (flags & PH_FLAG.LOST) !== 0, symbol = (flags & PH_FLAG.TEXT) !== 0
     if (empty && lost) throw refuse(`ph[${i}][3]`, 'EMPTY and LOST together')
+    if (symbol && (empty || lost || kind !== MACRO || r.length !== 4)) throw refuse(`ph[${i}]`, 'TEXT but on a macro alone, with no segments')
     if ((flags & PH_FLAG.NUMBERED) !== 0 && kind !== DISPLAY) throw refuse(`ph[${i}][3]`, 'NUMBERED on a kind not display')
     const segs = (r.length - 4) / 6, most = kind === DISPLAY ? SEGS_DISPLAY : SEGS_INLINE
-    if (empty || lost ? segs !== 0 : segs < 1 || segs > most) throw refuse(`ph[${i}]`, empty || lost ? 'segments on an EMPTY or LOST placeholder' : `not 1 to ${most} segments`)
+    if (empty || lost || symbol ? segs !== 0 : segs < 1 || segs > most) throw refuse(`ph[${i}]`, empty || lost || symbol ? 'segments on an EMPTY, LOST or TEXT placeholder' : `not 1 to ${most} segments`)
     for (let o = 4; o < r.length; o += 6) checkBox(r, o, 1, 3, 2, 4, 5, false, views, pages, 'ph', i, -1)
     zeroes(r)
     if (!empty && !lost && PAGE_TEXT.has(kind)) pageTexts.add(key)
+    if (symbol) { pageTexts.add(key); symbols.add(key) }
   }
 
   // labels: unit, kind, page, x0, baseline, x1, top, bottom, a rectangle as a line's
@@ -310,7 +316,7 @@ export function parseLayout(bytes) {
     if (u === undefined) throw refuse(`pageText[${i}][0]`, 'not a unit of units')
     if (u * (PIECES_MAX + 1) < Math.floor(lastKey / (PIECES_MAX + 1)) * (PIECES_MAX + 1)) throw refuse(`pageText[${i}][0]`, 'not a unit from the last on')
     const key = u * (PIECES_MAX + 1) + e[1]
-    if (!isInteger(e[1], 0, PIECES_MAX) || !pageTexts.has(key)) throw refuse(`pageText[${i}][1]`, 'not a found placeholder of a page-text kind')
+    if (!isInteger(e[1], 0, PIECES_MAX) || !pageTexts.has(key)) throw refuse(`pageText[${i}][1]`, 'not a found placeholder of a page-text kind, nor a TEXT one')
     if (key <= lastKey) throw refuse(`pageText[${i}][1]`, 'not a piece above the last')
     lastKey = key
     const text = e[2]
@@ -318,7 +324,9 @@ export function parseLayout(bytes) {
     all += text.length
     if (all > PAGE_TEXT_ALL) throw refuse('pageText', `more than ${PAGE_TEXT_ALL} code units`)
     if (e[0] === 0) e[0] = 0
+    symbols.delete(key)
   }
+  if (symbols.size) throw refuse('pageText', 'a TEXT placeholder with no text')
   return f
 }
 

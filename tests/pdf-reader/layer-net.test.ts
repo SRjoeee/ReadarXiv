@@ -453,3 +453,23 @@ describe('the net, fix round 1 (the review)', () => {
     expect(netOf(inp, forged, tr([[0, han(5)], [1, 2], [0, han(60)]]))).toBe('missing')
   })
 })
+
+describe('a text symbol (PH_FLAG.TEXT, Fix 1 of the maker round)', () => {
+  // \% glued to a number, which the marking gives no mark: the layout found its character on the unit's line and draws it
+  const SYM: UnitDef = { id: 3, lines: column(2, { top: 500 }), ph: [{ k: 1, kind: 'macro', flags: PH_FLAG.TEXT, text: '%' }], erase: [[0, 72, 497.5, 472, 507], [1, 72, 485.5, 472, 495]] }
+  const pieces: TrPiece[] = [[0, `${han(8)}3.57`], [1, 1], [0, han(12)]]
+  it('is drawn as its character in the run, an item that names its k, glued to the number before it, and the net passes it', () => {
+    const inp = input([SYM])
+    const u = laid(layUnit(inp, 3, tr(pieces)))
+    expect(drawnPh(u)).toEqual([[1, 'text', '%']])
+    const items = u.lines.flatMap(l => l.items)
+    const at = items.findIndex(it => it.ph === 1)
+    // nothing breaks between the number and its sign
+    expect(items[at - 1]?.text?.endsWith('3.57')).toBe(true)
+    expect(netOf(inp, u, tr(pieces))).toBeNull()
+  })
+  it('a translation that drops it leaves the unit the original\'s: missing', () => {
+    const r = layUnit(input([SYM]), 3, tr([[0, `${han(8)}3.57`], [0, han(12)]]))
+    expect(r).toMatchObject({ fit: false, why: 'missing' })
+  })
+})
