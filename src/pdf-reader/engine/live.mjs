@@ -184,8 +184,9 @@ export function probeFiles({ fsys, project }, { width = false, marks = false } =
  *  `layout`, a list of classes (layout/marks.mjs), the layout marks too: the units marked by layoutMarking, each
  *  placeholder of those classes and each cell and heading, and LAYOUT_TEX after MARK_DEF; `spans` names the paper's own
  *  units; `switches`, the paper's own switch (layout/marks.mjs readMarkProbe: TeX's answers to the mark probe), the
- *  marks taken off where TeX said they change what follows. Without `layout`, the bytes as before */
-export function originalFiles({ fsys, project }, { lines = false, spans = null, layout = null, switches = {} } = {}) {
+ *  marks taken off where TeX said they change what follows, and where it gave no answer; without `switches`, the marks
+ *  as before. Without `layout`, the bytes as before */
+export function originalFiles({ fsys, project }, { lines = false, spans = null, layout = null, switches = null } = {}) {
   const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
   const raw = spans ? [] : null
   let out

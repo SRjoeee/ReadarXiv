@@ -119,19 +119,23 @@ export function readProbe(log) {
  * (does the command look at what follows?), with its two layout marks, with its opening mark alone, the boxes compared
  * by width, height, depth and their last node; for `call`, the call before a second one with an opening mark between
  * them or none. One row a sample, `punct <i> <a code a follower>`: 0 every mark as LAYOUT_TEX sets it, 1 no
- * closing mark, 2 no mark (for `call`: 0 a mark may stand between the two calls, 2 none may). Every box starts from the
+ * closing mark, 2 no mark (for `call`: 0 a mark may stand between the two calls, 2 none may); before each box a row
+ * `punct-at <i> <j> <box>`, so that an error TeX logs is that box's (readMarkProbe). Each
+ * box is set into a register voided first, and says whether it closed where it was meant to (\ifinner at its last
+ * statement): a box an error ended early is never the box before it, still in the register (the re-review's I-new:
+ * REVTeX's citeautoscript was answered every mark before `!`, `?` and a word). Every box starts from the
  * same state: the footnote counter as it was (a call's number of two digits is wider than one of one: 2608.27728), and
  * biblatex's citation trackers reset (a second citation of a key may be set short). Every box ends at a space,
  * where each package's lookahead stops (REVTeX's swap takes any token after the citation in a \csname); an empty
  * paragraph after each sample starts TeX's error count again. Writes nothing, ships out nothing
  */
 export function punctuationSection(samples) {
-  const box = (n, body) => `\\axt@qreset\\setbox\\axt@qbox\\hbox{way ${body} \\unskip\\xdef\\axt@qn{\\the\\lastnodetype}}\\xdef\\axt@q${n}{\\the\\wd\\axt@qbox/\\the\\ht\\axt@qbox/\\the\\dp\\axt@qbox/\\axt@qn}`
+  const box = (i, j, n, body) => `${probeRow('punct-at', i, j, n)}\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn{}\\axt@qreset\\setbox\\axt@qbox\\hbox{way ${body} \\unskip\\xdef\\axt@qn{\\the\\lastnodetype\\ifinner\\ifhmode/in\\fi\\fi}}\\xdef\\axt@q${n}{\\the\\wd\\axt@qbox/\\the\\ht\\axt@qbox/\\the\\dp\\axt@qbox/\\axt@qn}`
   const put = d => `\\xdef\\axt@qo{\\axt@qo${d}}`
   const tests = samples.map(({ src, call }, i) => {
     const open = `\\axtpma{q${i}a}`, close = `\\axtpm{q${i}b}`
-    const each = [...PUNCT, ' x'].map(f => `\\begingroup${box('a', `${src}${f}`)}${box('b', `${src}{}${f}`)}${box('c', `${open}${src}${close}${f}`)}${box('d', `${open}${src}${f}`)}\\endgroup\\ifx\\axt@qa\\axt@qb\\ifx\\axt@qa\\axt@qd\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\else${put(2)}\\fi\\else${put(2)}\\fi`).join('')
-    const again = call ? `\\begingroup${box('a', `${src}${src}`)}${box('e', `${src}\\axtpma{q${i}c}${src}`)}\\endgroup\\ifx\\axt@qa\\axt@qe${put(0)}\\else${put(2)}\\fi` : put(0)
+    const each = [...PUNCT, ' x'].map((f, j) => `\\begingroup${box(i, j, 'a', `${src}${f}`)}${box(i, j, 'b', `${src}{}${f}`)}${box(i, j, 'c', `${open}${src}${close}${f}`)}${box(i, j, 'd', `${open}${src}${f}`)}\\endgroup\\ifx\\axt@qa\\axt@qb\\ifx\\axt@qa\\axt@qd\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\else${put(2)}\\fi\\else${put(2)}\\fi`).join('')
+    const again = call ? `\\begingroup${box(i, 7, 'a', `${src}${src}`)}${box(i, 7, 'e', `${src}\\axtpma{q${i}c}${src}`)}\\endgroup\\ifx\\axt@qa\\axt@qe${put(0)}\\else${put(2)}\\fi` : put(0)
     return `${each}${again}${probeRow('punct', i, '\\axt@qo')}\\gdef\\axt@qo{}\\noindent\\par`
   })
   const reset = '\\edef\\axt@qfn{\\ifdefined\\c@footnote\\the\\c@footnote\\else0\\fi}\\def\\axt@qreset{\\ifdefined\\c@footnote\\global\\c@footnote=\\axt@qfn\\relax\\fi\\ifdefined\\citereset\\citereset\\fi}'
@@ -139,20 +143,47 @@ export function punctuationSection(samples) {
 }
 /** the probe document of the layout marks: today its punctuation section alone */
 export const markProbeTex = samples => probeTex([punctuationSection(samples)])
-/** what TeX answered, from the probe's rows (readProbe): per sample's command, its code a follower (FOLLOWERS), for
- *  layoutMarking's `switches`. A sample with no row (the probe stopped short of it), a row of another schema or of
- *  another shape is no answer: its marks are as LAYOUT_TEX sets them */
+/** a line TeX logs for an error: `! …`, or `<file>:<line>: …` under -file-line-error */
+const TEX_ERROR = /^(?:! |[^\s:]+:\d+: )/
+/**
+ * What TeX answered, from the probe's log: per sample's command, its code a follower (FOLLOWERS), for layoutMarking's
+ * `switches`. A box TeX logged an error in (after its `punct-at` row, before the next row) answers nothing: an error in
+ * the box as the paper sets it or with `{}` leaves the follower no answer at all (`x`); in the box with its opening mark,
+ * no mark (2); in the box with both marks, no closing mark (1); in a second call's, none between (2). A sample with no
+ * row (the probe stopped short of it), a row of another schema or another shape is no answer at all. layoutMarking sets
+ * no mark where there is no answer
+ */
 export function readMarkProbe(log, samples) {
-  const out = {}
-  for (const r of readProbe(log)) {
-    if (r.schema !== PROBE_SCHEMA || r.tag !== 'punct' || r.fields.length !== 2) continue
-    const s = samples[Number(r.fields[0])], codes = r.fields[1]
-    if (s && /^[012]+$/.test(codes) && codes.length === FOLLOWERS.length) out[s.command] = codes
+  const out = {}, errored = new Map()
+  let at = null
+  for (const line of (log ?? '').split('\n')) {
+    if (TEX_ERROR.test(line)) { if (at) (errored.get(at[0]) ?? errored.set(at[0], new Set()).get(at[0])).add(at[1]); continue }
+    const [r] = readProbe(line)
+    if (!r || r.schema !== PROBE_SCHEMA) continue
+    if (r.tag === 'punct-at' && r.fields.length === 3) { at = [`${r.fields[0]}:${r.fields[1]}`, r.fields[2]]; continue }
+    at = null
+    if (r.tag !== 'punct' || r.fields.length !== 2) continue
+    const i = r.fields[0], s = samples[Number(i)], codes = r.fields[1]
+    if (!s || !/^[012]+$/.test(codes) || codes.length !== FOLLOWERS.length) continue
+    out[s.command] = [...codes].map((c, j) => {
+      const bad = errored.get(`${i}:${j}`)
+      if (!bad) return c
+      if (bad.has('a') || bad.has('b')) return 'x'
+      if (bad.has('d') || bad.has('e')) return '2'
+      return c === '2' ? '2' : '1'
+    }).join('')
   }
   return out
 }
+/** the commands of the asked classes a paper writes: those an answer is looked for (layoutMarking sets none for one TeX
+ *  did not answer) */
+export function askedCommands(units) {
+  const out = new Set()
+  for (const u of units) for (const p of u.pieces) { const cmd = commandOf(p); if (cmd && ASKED.has(classOf(p))) out.add(cmd) }
+  return out
+}
 /** the commands whose marks TeX's answers take off anywhere but between two calls: the paper's own switch, on */
-export const switchedOf = switches => Object.keys(switches).filter(c => /[12]/.test(switches[c].slice(0, FOLLOWERS.length - 1))).sort()
+export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /[12x]/.test(switches[c].slice(0, FOLLOWERS.length - 1))).sort()
 
 // ---------------------------------------------------------------- the TeX
 /**
@@ -349,18 +380,20 @@ function passedOver(pieces) {
  *   would stand on the next line, a blank one no paragraph's end any more: 2608.08350's `.\` before one) or an
  *   environment's \end
  */
-export function layoutMarking(units, classes, { lines = false, switches = {} } = {}) {
+export function layoutMarking(units, classes, { lines = false, switches = null } = {}) {
   const on = new Set(classes)
-  /** what TeX answered for a piece's command before what follows it: a code of readMarkProbe's, or undefined */
+  /** what TeX answered for a piece's command before what follows it: a code of readMarkProbe's ('x' no answer: no mark
+   *  as '2'); with `switches` and no answer for an asked class's command, '2' too — no mark where TeX did not say one
+   *  is safe (the re-review's m4); with no `switches` at all (the probe not run), undefined: the marks as before */
   const answer = (p, next) => {
+    if (!switches) return undefined
     const codes = switches[commandOf(p)]
-    if (!codes) return undefined
-    if (classOf(next) === 'footnote' && classOf(p) === 'footnote') return codes[7] === '0' ? codes[6] : '1'
-    const j = next?.t === 'text' ? PUNCT.indexOf(next.s[0]) : -1
-    return codes[j >= 0 && next.s[0] ? j : 6]
+    if (!codes) return ASKED.has(classOf(p)) ? '2' : undefined
+    const code = classOf(next) === 'footnote' && classOf(p) === 'footnote' ? (codes[7] === '0' ? codes[6] : codes[7] === 'x' ? 'x' : '1') : codes[next?.t === 'text' && next.s[0] && PUNCT.includes(next.s[0]) ? PUNCT.indexOf(next.s[0]) : 6]
+    return code === 'x' ? '2' : code
   }
   /** whether a piece after one that may look ahead may have its marks: TeX answered so for a footnote's call */
-  const free = (after, p) => classOf(after) === 'footnote' && !!switches[commandOf(after)] && (classOf(p) === 'footnote' ? switches[commandOf(after)][7] === '0' : switches[commandOf(after)][6] === '0')
+  const free = (after, p) => classOf(after) === 'footnote' && !!switches?.[commandOf(after)] && (classOf(p) === 'footnote' ? switches[commandOf(after)][7] === '0' : switches[commandOf(after)][6] === '0')
   const base = markUnits(units)
   const index = new Map(units.map((u, i) => [u, i]))
   const own = u => {

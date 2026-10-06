@@ -6,7 +6,7 @@ import type { UnitLines } from '@/pdf-reader/engine/tex-errors.mjs'
 import { patch } from '@/pdf-reader/engine/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, OWNED_ALL, parseLayoutMarks, POINTS_TEX, FOLLOWERS, markProbeTex, PROBE_SCHEMA, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, OWNED_ALL, parseLayoutMarks, POINTS_TEX, askedCommands, FOLLOWERS, markProbeTex, PROBE_SCHEMA, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/live.mjs'
 import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
 import { marksOf } from '@/pdf-reader/engine/typeset/places.mjs'
@@ -286,8 +286,14 @@ describe('the paper\'s own switch: TeX asked what a mark does before what follow
     expect(tex).toContain('\\hbox{way \\cite{a} x \\unskip')
     expect(tex).toContain('\\hbox{way \\footnote{A note.}\\axtpma{q1c}\\footnote{A note.} \\unskip')
     expect(tex.match(/\\noindent\\par/g)).toHaveLength(2)
-    // every box from the same state: the footnote counter as it was, biblatex's trackers reset
-    expect(tex.match(/\\setbox\\axt@qbox/g)?.length).toBe((tex.match(/\\axt@qreset\\setbox\\axt@qbox/g) ?? []).length)
+    // every box set into a register voided first, from the same state (the footnote counter as it was, biblatex's
+    // trackers reset), saying at its last statement whether it closed where it was meant to
+    const boxes = (tex.match(/\\hbox\{way /g) ?? []).length
+    expect(boxes).toBe(2 * 7 * 4 + 2)
+    expect((tex.match(/\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn\{\}\\axt@qreset\\setbox\\axt@qbox\\hbox\{way /g) ?? []).length).toBe(boxes)
+    expect((tex.match(/\\xdef\\axt@qn\{\\the\\lastnodetype\\ifinner\\ifhmode\/in\\fi\\fi\}/g) ?? []).length).toBe(boxes)
+    // a row before each box, for the errors TeX logs in it
+    expect(tex.match(/\\typeout\{LAYOUT-PROBE 1 punct-at \d+ \d+ [a-e]\}/g)).toHaveLength(boxes)
     expect(tex).toContain('\\global\\c@footnote=\\axt@qfn')
     expect(tex).toContain('\\ifdefined\\citereset\\citereset\\fi')
     // it writes nothing to a file and no line the run takes for a reading
@@ -301,6 +307,11 @@ describe('the paper\'s own switch: TeX asked what a mark does before what follow
     const samples = [{ command: '\\cite' }, { command: '\\autocite' }, { command: '\\footnote' }]
     // another schema's row, a section of another tag, a code cut short, a sample the probe has not: no answer
     expect(readMarkProbe(log, samples)).toEqual({ '\\cite': '00000000', '\\autocite': '22222200' })
+    // an error TeX logged in a box answers nothing: in the box as the paper sets it, no answer (x); with the opening
+    // mark, no mark (2); with both marks alone, no closing mark (1, REVTeX's citeautoscript); one before any row is no
+    // box's
+    const errs = ['! Early.', 'LAYOUT-PROBE 1 punct-at 0 4 a', '! Missing \\endcsname inserted.', 'l.12 ...', 'LAYOUT-PROBE 1 punct-at 0 5 c', './main.tex:12: Extra }, or forgotten $.', 'LAYOUT-PROBE 1 punct-at 0 5 d', 'LAYOUT-PROBE 1 punct-at 0 6 c', '! Argument of \\super@cite@swap has an extra }.', 'LAYOUT-PROBE 1 punct-at 0 6 d', 'LAYOUT-PROBE 1 punct-at 0 2 d', '! Undefined.', 'LAYOUT-PROBE 1 punct 0 00000000'].join('\n')
+    expect(readMarkProbe(errs, samples)).toEqual({ '\\cite': '0020x110' })
     expect(switchedOf({ '\\cite': '00000000', '\\autocite': '22222200', '\\footnote': '00000002' })).toEqual(['\\autocite'])
   })
   it('probeFiles with `marks`: the marks\' TeX first and the probe after the width probe; without it the bytes as before', () => {
@@ -316,22 +327,25 @@ describe('the paper\'s own switch: TeX asked what a mark does before what follow
   })
   it('layoutMarking with `switches`: no mark (2), the opening mark alone (1) or both (0), by the command and what follows it', () => {
     const units = [unit('para', [text('A '), ph('\\cite{c}'), text('. C '), ph('\\cite{d}'), text(' and '), ph('\\cite{e}'), text('? '), ph('\\citet{f}'), text(', '), ph('\\ref{r}'), text('.')])]
-    const switches = { '\\cite': '22220010', '\\citet': '00000000' }
+    const switches = { '\\cite': '22220010', '\\citet': '00000000', '\\ref': '00000000' }
     expect(srcs(layoutMarking(units, MARK_CLASSES, { lines: false, switches }).units[0])).toEqual([
       'text', 'ph \\cite{c}', 'text', 'ph \\axtpma{p0.3a}', 'ph \\cite{d}', 'text', 'ph \\axtpma{p0.5a}', 'ph \\cite{e}', 'ph \\axtpm{p0.5b}', 'text',
       'ph \\axtpma{p0.7a}', 'ph \\citet{f}', 'ph \\axtpm{p0.7b}', 'text', 'ph \\axtpma{p0.9a}', 'ph \\ref{r}', 'ph \\axtpm{p0.9b}', 'text',
     ])
-    // no answer: the marks as before
-    expect(srcs(layoutMarking(units, MARK_CLASSES, { lines: false, switches: {} }).units[0])).toEqual(srcs(layoutMarking(units, MARK_CLASSES, { lines: false }).units[0]))
+    // the probe not run: the marks as before; run, a command it did not answer (\ref here) or answered x gets none
+    expect(srcs(layoutMarking(units, MARK_CLASSES, { lines: false, switches: null }).units[0])).toEqual(srcs(layoutMarking(units, MARK_CLASSES, { lines: false }).units[0]))
+    expect(srcs(layoutMarking(units, MARK_CLASSES, { lines: false, switches: { '\\cite': '22220010', '\\citet': '00000000' } }).units[0]).slice(-3)).toEqual(['text', 'ph \\ref{r}', 'text'])
+    expect(srcs(layoutMarking(units, MARK_CLASSES, { lines: false, switches: { ...switches, '\\citet': 'xxxxxxxx' } }).units[0])).toContain('ph \\citet{f}')
+    expect(srcs(layoutMarking(units, MARK_CLASSES, { lines: false, switches: { ...switches, '\\citet': 'xxxxxxxx' } }).units[0])).not.toContain('ph \\axtpma{p0.7a}')
   })
   it('a footnote\'s call TeX answered for: both marks where they change nothing, none before what fnpct moves; two calls in a row each marked where a mark between them changes nothing', () => {
     const note = (s: string) => unit('footnote', [text(s)], { nested: true } as Partial<SourceUnit>)
     const a = note('One note.'), b = note('Two note.'), c = note('Three note.')
     const call = (n: SourceUnit) => ({ t: 'nested', pre: '\\footnote{', unit: n, post: '}' })
     const units = [a, b, c, unit('para', [text('A'), call(a), call(b), text(' and'), call(c), text('. D')])]
-    const marked = (switches: Record<string, string>) => srcs(layoutMarking(units, MARK_CLASSES, { lines: false, switches }).units[3])
-    // without an answer: C1, the opening mark alone, and nothing on the second call of two
-    expect(marked({})).toEqual(['text', 'ph \\axtpma{n3.1a}', 'nested', 'nested', 'text', 'ph \\axtpma{n3.4a}', 'nested', 'text'])
+    const marked = (switches: Record<string, string> | null) => srcs(layoutMarking(units, MARK_CLASSES, { lines: false, switches }).units[3])
+    // the probe not run: C1, the opening mark alone, and nothing on the second call of two
+    expect(marked(null)).toEqual(['text', 'ph \\axtpma{n3.1a}', 'nested', 'nested', 'text', 'ph \\axtpma{n3.4a}', 'nested', 'text'])
     // fnpct: a call before a full stop gets none; a mark between two calls changes nothing
     expect(marked({ '\\footnote': '22000000' })).toEqual(['text', 'ph \\axtpma{n3.1a}', 'nested', 'ph \\axtpm{n3.1b}', 'ph \\axtpma{n3.2a}', 'nested', 'ph \\axtpm{n3.2b}', 'text', 'nested', 'text'])
     // footmisc's [multiple]: a mark between two calls changes them
@@ -345,9 +359,10 @@ describe('the paper\'s own switch: TeX asked what a mark does before what follow
   })
   it('originalFiles passes `switches` on; without `layout` it changes no byte', () => {
     const p = paperOf('\\documentclass{article}\n\\begin{document}\nA claim \\cite{k}. And \\cite{j} again, see \\ref{t}.\n\\end{document}\n')
-    const v1 = decode(originalFiles(p, { lines: true, layout: MARK_CLASSES, switches: { '\\cite': '22220000' } }))
+    const v1 = decode(originalFiles(p, { lines: true, layout: MARK_CLASSES, switches: { '\\cite': '22220000', '\\ref': '00000000' } }))
     expect(v1).toContain('A claim \\cite{k}. And \\axtpma{p0.3a}\\cite{j}\\axtpm{p0.3b} again')
-    expect(decode(originalFiles(p, { lines: true, layout: MARK_CLASSES, switches: {} }))).toBe(decode(originalFiles(p, { lines: true, layout: MARK_CLASSES })))
+    expect(decode(originalFiles(p, { lines: true, layout: MARK_CLASSES, switches: null }))).toBe(decode(originalFiles(p, { lines: true, layout: MARK_CLASSES })))
+    expect([...askedCommands(p.units)]).toEqual(['\\cite', '\\ref'])
     const t = paperOf(SOURCES.table)
     for (const lines of [false, true]) expect(sha(originalFiles(t, { lines, switches: { '\\cite': '22222222' } }).get('main.tex') as Uint8Array)).toBe(PIN.table?.[lines ? 'lines' : 'plain'])
   })
