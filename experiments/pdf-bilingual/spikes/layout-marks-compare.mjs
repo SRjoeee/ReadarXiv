@@ -145,24 +145,27 @@ const BOX = /^\\[hv]box\(/
  *  kern's) */
 function withoutMarks(node) {
   const children = []
-  // a column body's points: the penalty after its opening one is its own; the glue its closing one takes off the body's
-  // end and puts back after it has lost its name only (layout/marks.mjs POINTS_TEX), so the names of a list's last glue,
-  // kerns and penalties are no difference, either side
-  let opened = false
+  // a column body's points: the penalty after its opening one is its own; the glue, kerns and penalties its closing one
+  // takes off the body's end and puts back after it (layout/marks.mjs POINTS_TEX), each `putBack`, which diffs forgives
+  // a glue's name lost, no more
+  let opened = false, closed = false
   for (const c of node.children) {
     const point = POINT.exec(c.text)
-    if (point) { opened = /^bs\d+$/.test(point[1]); continue }
+    if (point) { opened = /^bs\d+$/.test(point[1]); closed = /^be\d+$/.test(point[1]); continue }
     if (opened && c.text === '\\penalty 10000') { opened = false; continue }
     opened = false
+    closed &&= /^\\(?:glue|kern|penalty)/.test(c.text)
     if (DEST.test(c.text) || /^\\kern ?-?0\.0$/.test(c.text) || /^\\math(?:on|off)$/.test(c.text) || /^\\discretionary\b/.test(c.text)) continue
     const f = withoutMarks(c)
     if (c.text === '\\vadjust' && !f.children.length) continue
     if (/^\\hbox\(0\.0\+0\.0\)x0\.0$/.test(c.text) && c.children.length && !f.children.length) continue
+    if (closed) f.putBack = true
     children.push(f)
   }
-  for (let i = children.length - 1; i >= 0 && /^\\(?:glue|kern|penalty)/.test(children[i].text); i--) children[i].text = children[i].text.replace(/^\\glue\(\\[A-Za-z]+\) /, '\\glue ')
   return { text: node.text.replace(/^\\glue\(\\x?spaceskip\) /, '\\glue ').replace(/^\\kern /, '\\kern'), children, src: node }
 }
+/** a glue a column's closing point put back (withoutMarks): v0's own, its name lost */
+const putBack = (x, y) => !!y.putBack && !x.children.length && !y.children.length && x.text.replace(/^\\glue\(\\[A-Za-z]+\) /, '\\glue ') === y.text
 /** a subtree's hash (cyrb53 of its text and its children's hashes), kept on the node */
 const hashOf = node => {
   if (node.hash !== undefined) return node.hash
@@ -202,6 +205,7 @@ function diffs(a, b, owner, out) {
     const xs = a.slice(i, pi), ys = b.slice(j, pj), beside = b[j - 1] ?? b[pj] ?? owner
     for (let k = 0; k < Math.max(xs.length, ys.length); k++) {
       const x = xs[k], y = ys[k]
+      if (x && y && putBack(x, y)) continue
       if (x && y && (x.text === y.text || (BOX.test(x.text) && x.text.slice(0, 5) === y.text.slice(0, 5)))) {
         if (x.children.length === y.children.length && x.children.every((c, q) => hashOf(c) === hashOf(y.children[q]))) out.push([x, y, y])
         else diffs(x.children, y.children, y, out)

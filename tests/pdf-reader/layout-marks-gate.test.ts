@@ -133,9 +133,17 @@ describe('pageBoxes and boxDiff: TeX\'s own page boxes, the marks taken out', ()
     const v1b = body(['..\\pdfliteral direct{/axt-bs3 ri}', '..\\penalty 10000'], ['..\\pdfliteral direct{/axt-be3 ri}', '..\\glue 6.0 plus 2.0', '..\\penalty 150', '..\\glue 0.0 plus 1.0fil'])
     expect(boxDiff(pageBoxes(logOf(v0)), pageBoxes(logOf(v1b)))).toEqual([])
     expect(boxDiff(pageBoxes(logOf(v0)), pageBoxes(logOf(body(['..\\pdfliteral direct{/axt-p0.1a ri}', '..\\penalty 10000'], v0.slice(-3)))))).toHaveLength(1)
-    // a name lost anywhere but in a list's last run of glue, kerns and penalties is a difference
+    // the run put back after the closing point need not end the list: the footnotes come after it (2608.12333)
+    const notes = ['..\\glue 9.0 plus 4.0 minus 2.0', '..\\kern -3.0', '..\\hbox(0.4+0.0)x50.0']
+    const v0n = body([], ['..\\penalty 0', '..\\glue(\\belowdisplayskip) 11.0 plus 3.0 minus 6.0', ...notes])
+    const v1n = (put: string[]) => body(['..\\pdfliteral direct{/axt-bs4 ri}', '..\\penalty 10000'], ['..\\pdfliteral direct{/axt-be4 ri}', ...put, ...notes])
+    expect(boxDiff(pageBoxes(logOf(v0n)), pageBoxes(logOf(v1n(['..\\penalty 0', '..\\glue 11.0 plus 3.0 minus 6.0']))))).toEqual([])
+    // put back otherwise, it is a difference
+    expect(boxDiff(pageBoxes(logOf(v0n)), pageBoxes(logOf(v1n(['..\\penalty 0', '..\\glue 11.0 plus 3.0 minus 5.0']))))).toHaveLength(1)
+    // a name lost anywhere but in the run a closing point put back is a difference: in a list's middle, at its end
     const mid = (g: string) => body([], [g, '..\\hbox(6.94+2.22)x407.0', '..\\penalty 150'])
     expect(boxDiff(pageBoxes(logOf(mid('..\\glue(\\parskip) 6.0'))), pageBoxes(logOf(mid('..\\glue 6.0'))))).toHaveLength(1)
+    expect(boxDiff(pageBoxes(logOf(body([], ['..\\glue(\\parskip) 6.0']))), pageBoxes(logOf(body([], ['..\\glue 6.0']))))).toHaveLength(1)
   })
   it('a font kern lost beside a heading\'s end mark: the page, and the mark nearest the difference', () => {
     const v1 = [LINE[0] as string, '.\\hbox(6.94+2.22)x407.0, glue set 0.49', ...LINE.slice(2, 6), '..\\pdfdest name{axt-h3e} fitr width 0.0 height 0.0 depth 0.0', '..\\OT1/cmr/m/n/10 .']
