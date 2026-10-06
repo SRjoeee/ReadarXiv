@@ -4,17 +4,35 @@ import type { SourceUnit, UnitMark } from '../latex-front.mjs'
 export type MarkClass = 'math' | 'display' | 'cite' | 'ref' | 'eqref' | 'code' | 'url' | 'footnote' | 'macro'
 /** every class, in this order */
 export declare const MARK_CLASSES: readonly MarkClass[]
-/** the classes the run marks when asked: the global default (Task 2's corpus check); a paper's own switch
- *  (punctuationMovers) takes the marks off the placeholders of a class its punctuation follows */
+/** the classes the run marks when asked: the global default (Task 2's corpus check); the paper's own switch
+ *  (layoutMarking's `switches`) takes marks off where TeX says they change what follows */
 export declare const LAYOUT_CLASSES: readonly MarkClass[]
-type PaperFiles = { fsys: { read(path: string): Uint8Array | null }; project: { main: string } }
-/** whether the paper's citations take the punctuation after them before them (cite.sty's and natbib's super, natmove,
- *  overcite, biblatex's footnote or superscript \autocite): from the preamble the engine reads and `log`, a log of any
- *  compile of the paper's preamble (the font probe's) */
-export declare function superCitations(paper: PaperFiles, log?: string): boolean
-/** the paper's own switch: the classes a package of its moves the punctuation after before (`cite` where superCitations),
- *  for layoutMarking's and originalFiles' `movesPunctuation` */
-export declare function punctuationMovers(paper: PaperFiles, log?: string): MarkClass[]
+/** what TeX answered to the mark probe, per command (`\\cite`): a code a follower (FOLLOWERS) — 0 every mark, 1 no
+ *  closing mark, 2 no mark (for `call`: 0 a mark may stand between two calls, 2 none may) */
+export type Switches = Record<string, string>
+/** what the mark probe sets after a placeholder */
+export declare const FOLLOWERS: readonly string[]
+export declare const PROBE_MAX: number
+/** a piece's leading command, or null */
+export declare const commandOf: (p: unknown) => string | null
+/** each command of the asked classes the paper writes, once, with a source TeX can set in a box */
+export declare function probeSamples(units: readonly SourceUnit[]): { command: string; src: string; call: boolean }[]
+/** the probe's schema: a new section adds rows of a tag of its own */
+export declare const PROBE_SCHEMA: number
+/** the TeX that writes one row `LAYOUT-PROBE <schema> <tag> <fields…>` */
+export declare const probeRow: (tag: string, ...fields: (string | number)[]) => string
+/** the probe document's body: its sections' TeX */
+export declare const probeTex: (sections: readonly string[]) => string
+/** every row of a probe's log */
+export declare function readProbe(log: string): { schema: number; tag: string; fields: string[] }[]
+/** the punctuation section (`punct`) */
+export declare function punctuationSection(samples: readonly { src: string; call: boolean }[]): string
+/** the layout marks' probe document, after \\begin{document} of the font probe */
+export declare function markProbeTex(samples: readonly { src: string; call: boolean }[]): string
+/** TeX's answers from the probe's `punct` rows, per sample's command */
+export declare function readMarkProbe(log: string, samples: readonly { command: string }[]): Switches
+/** the commands whose marks the answers take off anywhere but between two calls */
+export declare const switchedOf: (switches: Switches) => string[]
 /** a placeholder whose rendering is never ink: matched on its leading control sequence */
 export declare const INVISIBLE: RegExp
 /** a displayed formula's source */
@@ -29,8 +47,8 @@ export declare const LAYOUT_TEX: string
 export declare const MARK_NAME: RegExp
 /** the units with their layout marks as pieces of their own (each unit copied; the paper's units untouched), and each
  *  unit's mark for patch(): MARK_DEF's for a marked unit (with \axtlines when `lines`), a cell's and a heading's own;
- *  no mark for a placeholder of a class in `movesPunctuation` (the paper's own switch) the punctuation follows */
-export declare function layoutMarking(units: readonly SourceUnit[], classes: readonly MarkClass[], o: { lines: boolean; movesPunctuation?: readonly MarkClass[] }): { units: SourceUnit[]; mark(u: SourceUnit): UnitMark }
+ *  marks taken off where `switches` (TeX's answers) says they change what follows */
+export declare function layoutMarking(units: readonly SourceUnit[], classes: readonly MarkClass[], o: { lines: boolean; switches?: Switches }): { units: SourceUnit[]; mark(u: SourceUnit): UnitMark }
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {

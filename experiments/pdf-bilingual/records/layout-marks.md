@@ -36,8 +36,12 @@ and v1 whenever each was compiled. An unpinned v0 from the cache against a v1 ma
   of no width, and discretionaries (one left in a shipped box is a break not taken). This catches what items cannot
   show: PDF.js gives a justified line in one font as one item, and the line's glue makes up a kern lost in it. The
   item keeps its start and its width while its words move, and the layout maker reads its words off that item
-  (2608.03063, page 7). Each difference is named by the mark nearest it in v1. The trace compiles are judged only
-  where they are the same documents as the compiles: as many pages, each one shipped out in the log.
+  (2608.03063, page 7). Each difference is named by the mark nearest it in v1, and every one is counted: no cap a page
+  (fix round 1; a cap of 50 had stopped the count of a reflow at 8 lines where 30 were lost). The trace compiles are
+  judged only where they are the same documents as the compiles: as many pages, each one shipped out in the log. A
+  line TeX set otherwise is mapped to the page's line by the marks set in it, and **all** is the union of the three:
+  TeX counts the lines it set otherwise, the items also a line moved down by a change above it, so neither count holds
+  the other (the 5 pt plant on 2608.11761: 30 strict, 11 TeX, 30 all).
 - **unitMarksMoved** counts MARK_DEF's unit marks (each unit's start and end, `axt-<n>s` and `axt-<n>e`; both
   compiles set them as zero-size FitR) that v1 does not set at the same page and place as v0, to 0.01 pt. A unit mark
   moves where TeX, or pdfTeX's output, puts that unit's first or last character elsewhere. A caption's mark the caption
@@ -46,16 +50,53 @@ and v1 whenever each was compiled. An unpinned v0 from the cache against a v1 ma
   placeholder classes plus the units' own marks: `heading`, `cell`, and `unit` (MARK_DEF's). With `--bisect`, where a
   line is lost, the lines each class loses alone (v1 with that class only, against v1 with none), and the lines the
   units' own marks lose (v1 with no class, against v0). The lines TeX sets otherwise are attributed, besides, to the
-  class of the nearest mark (`texLost`).
-- The **verdict**: *clean* (no line lost: no item moved and no line TeX set otherwise); *accepted* (moved, with N
-  layout lines lost); *switched* (the paper's own switch is on); *failed* (v1 does not compile); *passed over* (v0 does
-  not compile). A class whose marks lose more of a paper's lines than they carry is to be switched off for that paper
-  (`switchOff`), and the check fails until it is.
+  class of the nearest mark (`texLost`). A line lost only in TeX's boxes is not carried.
+- The **verdict** (fix round 1: the check can fail):
+  - *failing* where a line is lost and not every loss has an accepted cause, or where v1 does not compile;
+  - *accepted* where every loss has one, read from the evidence, not the paper: items moved while TeX's boxes are the
+    same (a PDF-only offset, ruling 3), or every line TeX set otherwise a heading's lost kern (ruling 2: every
+    difference in the line beside a heading's mark, one of them a kern v0 set and v1 did not);
+  - with no line lost, *switched* where TeX's answers took marks off (the paper's own switch), else *clean*;
+  - *passed over* where v0 does not compile.
+
+  A class whose marks lose more of a paper's lines than they carry is to be switched off for that paper
+  (`switchOff`), and fails.
+- **The check against this record** (the default): a paper whose verdict is worse than its recorded row's, or whose
+  lines lost or unit marks moved grow, fails the run. Only `--write` writes the record. The gate's own test,
+  `--plant=<pt>`, sets a kern after v1's first closing mark: 0.02 pt and 5 pt on 2608.11761 both fail (exit 1).
 
 The aux, toc, lof, lot and out, and the readings (`readingsOf`, compared byte for byte with the marks in name order),
 are still compared. They no longer decide anything, since the layout compile feeds neither.
 
-## The run (2026-10-06)
+## The run (fix round 1, 2026-10-06)
+
+- **The marks measured:** the merge e833483d with fix round 1 (the mark probe as the paper's own switch, a footnote of
+  one letter a call, two calls in a row, `ENDS_IN_NUMBER` gone).
+- **Wall time:** 4,081 s, every compile made again: the font probe with the mark probe, v0, v1, the two traces, and
+  the bisects. The record was then written from the cache (`--bisect --write`, 16 s) with the heading-kern rule
+  refined (below).
+- **The figures, fix round 1 (merged):**
+  - **106 clean (106), 5 accepted (5), 2 switched (2), 0 failing (0)**, none passed over;
+  - lines lost: 5 strict (5), 3 joined (3), 6 by TeX (6), 6 all;
+  - items moved: 13 strict, 6 joined; unit marks moved 5;
+  - no regression against the merged record; `switchOff` empty.
+- **The marks:** 169,448 (169,323). Lines with footnote marks 127 (85): calls of one-letter notes, second calls, and
+  closing marks where TeX answered they change nothing. Macro lines 2,340 (2,344): `\footnote{A}` is a call now.
+  Lines carried, unit 21,964 and heading 3,301 (one fewer each): 2608.03063's page-7 line, lost only in TeX's boxes,
+  is no longer carried.
+- **The switch:** TeX's answers take marks off in the two achemso papers alone (`\cite`: no mark before `.,;:`). Every
+  sample of every paper was answered (no row missing). The other 111 papers' commands answer every mark.
+- **The accepted five, from the evidence:** each of their lines TeX set otherwise holds a kern v0 set beside a
+  heading's mark and v1 did not, and every other difference lies beside a heading's mark or sets the same node again
+  at another stretch. That last clause was added after the run: 2608.25210's line is re-expanded by microtype
+  (glyphs `(+7)` → `(+5)`), four of them beside the next paragraph's start mark, and the first rule (every difference
+  beside a heading's mark) failed it.
+- **The layout compile's own cost:** median +12.2 %, sum +16.6 %, max +114 % (under a load of 15 to 55).
+- **The probe's cost:** the font probe compiled plain and with the mark probe, one after the other, twice each, on 12
+  papers of 2 to 8 commands asked: +57 ms median, +163 ms at most, on a compile of 0.5 to 1.4 s. Timing noise is
+  about ±130 ms: one paper was faster with the probe.
+
+## The run (2026-10-06, before fix round 1)
 
 - **The corpus:** the 113 pdfLaTeX packages of `out/corpus-meta.json`. TeX image
   `sha256:7334b00bf8e7a0996f7ddd65482363aaf7711d372e569f3ea78509619e3083ff`, the typesetting gate's.
@@ -123,65 +164,88 @@ paper, and none loses more lines than it carries.
 
 1. **A closing mark after a number or a dimension** (2608.30640: `.\n\looseness=-1 While`). TeX takes the space
    after a number as the number's end, and reads on for a unit or a `plus`. The closing mark ended the number, so the
-   space became a space: one more glue on page 3. A source that ends in a number or a dimension (`ENDS_IN_NUMBER`) now
-   gets its opening mark alone, as one that ends in a control word does. Task 1's "PDF.js cuts one line into three
-   items" on this paper was that space. Native case: "a number or a dimension set before a word" (`\looseness=-1`,
-   `\linepenalty=100`, `\spaceskip=3pt plus 1pt`, `\hyphenpenalty 50`). Since the merge, C1 gives every paper's macro its
-   opening mark alone, and every number-ending source in the corpus is a macro. `ENDS_IN_NUMBER` is kept for a source
-   of another class that ends in a number.
+   space became a space: one more glue on page 3. Task 1's "PDF.js cuts one line into three items" on this paper was
+   that space. Since the merge, C1 gives every paper's macro its opening mark alone, and only a macro's source can end
+   in a number (the others end in a closing delimiter). The rule that covered it (`ENDS_IN_NUMBER`) could not be
+   reached any more and was deleted in fix round 1; the native case "a number or a dimension set before a word" stays.
 2. **The paper's own switch** (next section).
+3. **A footnote whose note makes no unit** (fix round 1). The scanner makes a unit only of a note with two letters or
+   more, so `\footnote{A}` (or a note that is a link alone) stays a placeholder. It was classed a paper's macro: glued
+   to its word, it got no mark, and the paragraph's call could not be placed. It is now a footnote's call (`classOf`),
+   marked as one; its note, with nothing to translate, stays as it is. The scanner itself is unchanged: a unit of one
+   letter would change the units, and so the bytes, of today's run.
+4. **Two calls in a row** (fix round 1). C1 gives no mark to a piece after one that may look ahead, so the second of
+   `\footnote{One}\footnote{Two}` had none. Where TeX answers that a mark between two calls changes nothing (the
+   probe's `call`), the second is marked too. The committed code marked 4 of the 20 calls in the native case "a
+   footnote of one letter, and two calls in a row"; this marks 20 of 20, and under footmisc's `[multiple]` too (its
+   separator comes from a flag the first call sets, not from a look ahead), with no line moved in either.
 
-## The paper's own switch (rulings 1 and 3 of the controller's change)
+## The paper's own switch: TeX asked (fix round 1)
 
-The switch is decided per paper, by `punctuationMovers(paper, log)`, over `LAYOUT_CLASSES` as the global default:
+The first switch read the preamble for a list of packages. The review found what such a list misses:
+- biblatex scans for `.,;:!?`, not `.,;:` (53 items moved with `\autocite{a}?`);
+- TeX Live's own biblatex styles beyond biblatex's (chem-acs, ext-verbose: 51 and 42 items moved);
+- REVTeX 4.2's superscripts, which swap the punctuation themselves;
+- cite.sty `super` set by a class.
 
-- **`cite`** where the paper's citations take the punctuation after them before them (`superCitations`). That is:
-  cite.sty's `super`/`superscript`, or overcite, unless `nomove`; natmove, which acts on natbib's `super` (achemso loads
-  both); natbib with `super` asked any way (its option, `\setcitestyle`, `\bibpunct`'s fourth argument); biblatex's
-  `autocite=footnote` or `superscript`, or a TeX Live style whose `\autocite` is a footnote (authortitle, -comp, -ibid,
-  -icomp, verbose and verbose-…).
-- **Not `footnote` for fnpct**, which swaps a footnote's call with the full stop or comma after it. Before the merge,
-  the switch took a call's marks off there: fnpct looked past the closing mark (35 items moved in a native case without
-  the switch). Since the merge, C1 gives every call its opening mark alone. fnpct also sets the full stop after a node
-  of its own, so the opening mark parts nothing. Times kerns `y.` by −0.65 pt, yet `way\footnote{N.}.` is 22.46 pt wide
-  with a whatsit before the call or none. A switch would only take marks off, so fnpct gets none. The native case
-  "fnpct in Times, a footnote's call before a full stop or a comma" holds it.
+So the switch now asks TeX, in the paper's own preamble, by the general method the maintainer asks for.
 
-It is read from the preamble the engine reads (the main file up to `\begin{document}`, the files it inputs there, the
-paper's own classes and packages; not a copy of natbib, cite, overcite, natmove or biblatex in the package,
-which is the package's source, not the paper's choice: 2608.30640 ships natbib.sty, whose `\bibstyle@nature` would
-read as `super`). It is also read from a log of the paper's preamble, the font probe's, for what a class of TeX
-Live's loads: natmove or overcite by name (no option is in a log). The class's own options count as every
-package's.
+**The probe** rides on the font probe's compile (`probeFiles(paper, { marks: true })`): the layout marks' TeX first,
+then, after the width probe, one section per question. Each section writes tagged rows, `LAYOUT-PROBE <schema> <tag>
+<fields…>` (`PROBE_SCHEMA` 1), and `readProbe` reads every row; a section added later (a role probe) adds a tag of its
+own and changes no other. The punctuation section (`punct`) takes each command of the paper's citations, references,
+links and footnote calls once, by its own first source (the keys it cites). For each of the followers `.`, `,`, `;`,
+`:`, `!`, `?`, a word, and (for a call) a second call, it sets four boxes after a word:
+- the source as the paper sets it;
+- with `{}` between the source and the follower (does the command look at what follows?);
+- with both layout marks;
+- with the opening mark alone.
 
-**What the switch does:** a placeholder of a switched class **that the punctuation follows gets no mark at all**.
-Every other one keeps its marks. A citation is not a piece that looks ahead (C1), so where the two meet, at a
-citation before punctuation in a super paper, the switch decides, and it comes first in `layoutMarking`. A citation
-right after a paper's macro gets no mark from C1 either way. The first ruling said "no cite closing mark"; the corpus
-says that is not enough (pre-merge figures; C1 changes nothing for a citation):
+The boxes are compared by width, height, depth and their last node. The answer is one code a follower:
+- 0: every mark;
+- 1: no closing mark;
+- 2: no mark (for `call`: 0, a mark may stand between the two calls; 2, none may).
+
+Every box starts from the same state (the footnote counter as it was, biblatex's trackers reset) and ends at a space,
+where each package's lookahead stops. An empty paragraph after each command starts TeX's error count again.
+
+**What the switch does** (`layoutMarking`'s `switches`): a placeholder of an answered command gets the marks TeX's
+answer for what follows it allows. With no answer (no row), its marks are as before. A footnote's call TeX answered for
+may keep its closing mark, and the piece after it its marks, where the answer says a mark there changes nothing.
+Measured on native documents (all now move 0 items):
+
+| Preamble | Answer before `.` `,` `;` `:` `!` `?` |
+|---|---|
+| biblatex `autocite=superscript`, `autocite=footnote`, chem-acs, ext-verbose (`\autocite`) | no mark before all six |
+| natmove (natbib `super`), cite.sty `[super]` | no mark before `.,;:` |
+| fnpct (`\footnote`) | no mark before `.` and `,` (the review's M2: the call's opening mark marked the full stop) |
+| a citation macro ending in `\xspace` | no mark before all six |
+| natbib `[super]` alone, plain cite.sty, biblatex numeric `\cite`, REVTeX 4.2 `aip,jcp` and `aps` | every mark |
+
+REVTeX 4.2 `aip,jcp` answers every mark: there `\@cite` is `\NAT@citesuper` (checked), yet with the paper's own
+`\cite` nothing moves in a preamble-only compile or in the native case (0 items). The review measured 31 items in a
+setup not given. A swap that depends on the aux would not show in the probe; the corpus check would still catch it
+(no corpus paper uses `aip`).
+
+**The corpus with the switch:** see "The run (fix round 1)" below. Both achemso papers stay clean with the switch:
+`\cite` answers no mark before `.,;:`. The pre-merge evidence for "no mark at all" still holds:
 
 | | 2608.23865 (achemso, 520 lines) | 2608.25928 (achemso, 748 lines) |
 |---|---|---|
 | No switch | 46 lines lost | 96 lines lost |
-| No closing mark on any citation (the first ruling, `--literal`) | 12 lost | 9 lost |
-| No mark on a citation the punctuation follows (committed) | 0 lost | 0 lost |
+| No closing mark on any citation (the first ruling) | 12 lost | 9 lost |
+| No mark on a citation the punctuation follows | 0 lost | 0 lost |
 
 natmove sets the full stop against the word before the citation. The opening mark stands between them and loses
-their kern: the 12 and 9 lines, each beside a citation's opening mark in TeX's boxes. That mark also marks the wrong
-place: where the full stop begins, not where the citation does. Its cost: in a superscript paper nearly every
-citation stands before punctuation, 18 of 18 and 34 of 41 here, and those get no mark. The 7 others keep both marks
-and carry all 7 of their lines. The native cases hold the switch under TeX: "cite.sty [super]", "natbib [super] with
-natmove", each a citation before a full stop or a comma (the switch). Without the switch, the same documents move 44
-and 53 items (the notes). The merged native run has 155 documents and 149 checks, all ok.
+their kern. That mark also marks the wrong place: where the full stop begins, not where the citation does. Its cost:
+in a superscript paper nearly every citation stands before punctuation (18 of 18 and 34 of 41 here), and those get
+no mark.
 
 **Limits:**
-
-- cite.sty with `super` from a class of TeX Live's is beyond the preamble and the log.
-- biblatex styles outside TeX Live's standard ones are not read.
-- natbib with `super` alone moves nothing: natbib.sty has no lookahead, natmove does. It is still switched, as the
-  ruling asks.
-- In production, the switch needs the font probe's log before the layout compile is written (achemso's natmove is
-  in no preamble): Task 14.
+- The probe asks what the preamble alone makes of a command. A behaviour set by the aux on a later pass, or by
+  something in the body, is not seen; the corpus check measures it.
+- A command the paper writes only with a source TeX cannot set in a box (a `\verb`, a `%`) is not asked about.
+- In production the layout compile must be written after the font probe's compile returns: Task 14.
 
 ## The compile time, v0 against v1: the layout compile's own cost
 
@@ -212,7 +276,8 @@ The median is 324 KB raw and the largest 1,398 KB (2608.30730), all under `MARKS
 
 ## A row of `layout-marks.json`
 
-`{ id, v0, v1, switched?, ms: [v0, v1], pages: [v0, v1], items, moved: { strict, joined }, lines, lost: { strict,
-joined, tex }, unitMarksMoved, captions: [unit, v0Page, v1Page][], readings, files: { aux, toc, lof, lot, out },
-errors, classes: { <class>: { lines, carried, lost?, texLost? } }, marksFile: { kb, dropped, marks }, traced, cause?:
-'tex' | 'pdf-only', boxes?: [{ page, near, what }], own?: { lost }, switchOff?, verdict }`. `counts` sums them.
+`{ id, v0, v1, switched?: <commands TeX's answers took marks off>, probe: { samples, answered, ms }, ms: [v0, v1],
+pages: [v0, v1], items, moved: { strict, joined }, lines, lost: { strict, joined, tex, all }, unitMarksMoved, captions:
+[unit, v0Page, v1Page][], readings, files: { aux, toc, lof, lot, out }, errors, marksFile: { kb, dropped, marks },
+traced, cause?: 'tex' | 'pdf-only', causes?: { accepted, unexplained }, boxes?: [{ page, near, what }], classes: {
+<class>: { lines, carried, lost?, texLost? } }, own?: { lost }, switchOff?, verdict }`. `counts` sums them.
