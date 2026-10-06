@@ -975,7 +975,7 @@ function resolvePlaceholders(out, ctx, renderingsOf) {
         continue
       }
       if (!g) out.set(p.k, { mode: 'source', text: p.nested ? '*' : texToText2(p.src), math: p.cls === 'other', sup })
-      else out.set(p.k, drawnAs(p, g, cls, sup))
+      else out.set(p.k, drawnAs(p, g, cls, sup, out.lineInfo))
     }
   }
   // each resolution with its placeholder and the gap it took (the checker's)
@@ -994,7 +994,7 @@ function resolvePlaceholders(out, ctx, renderingsOf) {
     if (!inner.some(c => /[\p{L}\p{N}]/u.test(c.ch))) continue
     const ng = { text: inner.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars: inner, of: g.of ?? g, unbracketed: true }
     const cls = p.cls === 'cite' ? 'cite' : p.cls === 'num' ? 'num' : 'other'
-    out.set(p.k, { ...drawnAs(p, ng, cls, r.sup), k: p.k, src: p.src, cls: p.cls, gap: ng, second: r.second })
+    out.set(p.k, { ...drawnAs(p, ng, cls, r.sup, out.lineInfo), k: p.k, src: p.src, cls: p.cls, gap: ng, second: r.second })
   }
   for (const p of phs) {
     const r = out.get(p.k)
@@ -1075,9 +1075,28 @@ function drawnTextOf(res, charsByPage) {
   return `|${parts.join('|')}|`
 }
 
+/**
+ * A crop's baseline without a source that knows its ink (step 3): the baseline its glyphs of its line's text size stand
+ * on, the line's own (its rendering's line: the unit's line that holds most of its characters, `lineInfo`); where it has
+ * none (a fraction, a formula all scripts), that line's baseline where it was measured from its characters (exact) and
+ * stands within 0.6 em; else its largest glyphs' (`main`). By its characters' median size, a crop most of whose glyphs
+ * were a script ("i^{th}": 'i' and two of the script) was set on the script's baseline, 3.96 pt low, and a fraction on
+ * its radical's origin (1706.03762's "1/√dk", 1.2 pt low).
+ */
+export function cropBaselineOf(real, lineInfo, main) {
+  const big = Math.max(...real.map(c => c.size))
+  const n = new Map()
+  for (const c of real) { const k = `${c.page}|${c.rect?.join()}`; n.set(k, (n.get(k) ?? 0) + 1) }
+  const info = lineInfo && real.length ? lineInfo.get([...n].sort((a, b) => b[1] - a[1])[0][0]) : null
+  const atText = real.filter(c => c.size >= 0.85 * (info?.size || big))
+  if (atText.length) return median(atText.map(c => c.yb))
+  const own = median(main.map(c => c.yb))
+  return info?.exact && Math.abs(info.baseline - own) <= 0.6 * big ? info.baseline : own
+}
+
 /** a placeholder drawn from its rendering on the page: as the page's text (a citation, a reference, a macro, a formula
- *  over lines) or as a crop of the page (a formula) */
-function drawnAs(p, g, cls, sup) {
+ *  over lines) or as a crop of the page (a formula); `lineInfo`, the unit's lines' (Prepared's) */
+function drawnAs(p, g, cls, sup, lineInfo = null) {
   const real = g.chars.filter(c => !c.sep && !c.space)
   const lines = new Set(real.map(c => c.rect.join()))
   const lineSize = median(real.map(c => c.size))
@@ -1094,7 +1113,7 @@ function drawnAs(p, g, cls, sup) {
   const broken = box ? box.lines > 1 : lines.size > 1 && !oneLine
   if (cls !== 'other' || broken || p.cls === 'macro' || p.cls === 'umacro') return { mode: 'orig-text', text: g.text, sup: sup || (cls === 'num' && real.length && real.every(c => c.size < lineSize * 0.85)), st: gst }
   const main = real.filter(c => c.size >= lineSize * 0.85)
-  const own = median((main.length ? main : real).map(c => c.yb))
+  const own = cropBaselineOf(real, lineInfo, main.length ? main : real)
   // (with a box: the baseline of the line its ink sits on, where its characters stand on that line, so that a raised or
   // lowered formula keeps its raise, which its characters' own baseline set on the line; and its ink's own extent
   // across, which its characters' places in their items only estimate)
@@ -1182,7 +1201,7 @@ function secondChance(out, phs, gaps, plain, lcs, unit, citeMap, uc) {
     g.taken = true
     const r = out.get(p.k)
     const cls = p.cls === 'cite' ? 'cite' : p.cls === 'num' ? 'num' : 'other'
-    const nr = p.cls === 'display' ? { mode: 'kept', text: '' } : drawnAs(p, g, cls, r.sup)
+    const nr = p.cls === 'display' ? { mode: 'kept', text: '' } : drawnAs(p, g, cls, r.sup, out.lineInfo)
     if (p.cls === 'display') out.keep = [...(out.keep ?? []), ...displayLines(g, uc)]
     out.set(p.k, { ...nr, k: p.k, src: p.src, cls: p.cls, gap: g, second: true })
   }

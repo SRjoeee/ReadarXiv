@@ -154,6 +154,8 @@ export declare function blocks2(rects: readonly Rect[], pageViews: readonly numb
 export declare function inkMapOf(canvas: HTMLCanvasElement | OffscreenCanvas, factor?: number): InkMap
 export declare function freeBelow(map: InkMap | undefined, toDev: ToDev, k: number, x0: number, x1: number, yStart: number, yLimit: number): number
 export declare const setHyphenData: (lang: string, data: Patterns | true | null) => Map<string, Patterns | true | null>
+/** a crop's baseline: its glyphs' at its line's text size, else its line's measured baseline, else its largest glyphs' */
+export declare function cropBaselineOf(real: readonly Char[], lineInfo: Prepared['lineInfo'] | null, main: readonly Char[]): number
 /** a solid-set original's pitch, × its size (TeX's \baselineskip: 1.2 at 10 and 12 pt, 1.24 at 11) */
 export declare const SOLID: number
 /** the unit's leading relative to the original's own pitch: leadBase of a solid line, never closer than the original's */

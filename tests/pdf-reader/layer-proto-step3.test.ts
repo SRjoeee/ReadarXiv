@@ -74,3 +74,18 @@ describe('no unit drawn in part: the text run past a display where the slots aft
     expect(flow.lines.map(l => l.items.filter(it => it.t.s).length)).toEqual([1, 2])
   })
 })
+
+describe("a crop's baseline, without a source that knows its ink: its line's", () => {
+  const ch = (ch: string, yb: number, size: number) => ({ ch, x0: 0, x1: 1, yb, size, item: 0, ix: 0, k: 0, st: {}, page: 3, rect: [10, 440, 200, 452] })
+  const lineInfo = (baseline: number, size: number, exact = true) => new Map([['3|10,440,200,452', { baseline, size, exact }]])
+  it("sets i^{th} on its 'i', the glyph of its line's text size, not on the script most of it is", () => {
+    const real = [ch('i', 442.41, 10.91), ch('t', 446.37, 7.97), ch('h', 446.37, 7.97)]
+    expect(L2.cropBaselineOf(real as never, lineInfo(442.41, 10.91) as never, real as never)).toBeCloseTo(442.41, 2)
+  })
+  it('sets a formula all scripts (a fraction) on its line, measured there; on its own glyphs where its line is not', () => {
+    const real = [ch('√', 180.22, 6.97), ch('1', 182.93, 6.97), ch('d', 174.8, 6.97)]
+    expect(L2.cropBaselineOf(real as never, lineInfo(179.0, 9.96) as never, real as never)).toBe(179.0)
+    expect(L2.cropBaselineOf(real as never, lineInfo(179.0, 9.96, false) as never, real as never)).toBe(180.22)
+    expect(L2.cropBaselineOf(real as never, null, real as never)).toBe(180.22)
+  })
+})
