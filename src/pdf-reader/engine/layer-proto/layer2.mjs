@@ -296,8 +296,8 @@ export function charsOfUnit2(rects, charsByPage, extents, exact = null) {
  * block's right edge. Before, those characters were erased with the line (its erasing reaches the block's edge) though
  * no placeholder held them. Mutates the rectangles.
  */
-export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn, pageViews) {
-  let grown = extendRects(rects, charsByPage, others, src, wordsOfFn, normFn)
+export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn, pageViews, wordChars = charsByPage) {
+  let grown = extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, wordChars)
   const blocks = blocksOf(rects, pageViews)
   const lastOf = new Set(blocks.map(b => b.rects.at(-1).join()))
   const edgeOf = new Map()
@@ -1459,34 +1459,47 @@ export function snapFirstRect2(rects, charsByPage) {
  * line's words out (1706.03762's "‡Work performed while at Google Research." anchored as "Research."), and what they
  * leave out is neither erased nor laid over. Mutates the rectangles; returns how many grew.
  */
-export function extendRects(rects, charsByPage, others, src, wordsOfFn, normFn) {
-  const want = new Set(wordsOfFn([...src].map(ch => ({ ch }))).map(w => w.w))
+export function extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, wordChars = charsByPage) {
+  const srcWords = wordsOfFn([...src].map(ch => ({ ch }))).map(w => w.w)
+  const want = new Set(srcWords)
+  const srcStart = ` ${srcWords.join(' ')} `
   let grown = 0
   for (const r of rects) {
     const page = charsByPage[r[0] - 1] ?? []
     const inside = page.filter(c => c.x0 >= r[1] - 0.5 && c.x1 <= r[3] + 0.5 && c.yb >= r[2] - 0.2 && c.yb <= r[4] && /\S/.test(c.ch))
     if (!inside.length) continue
     const yb = median(inside.map(c => c.yb)), size = median(inside.map(c => c.size))
-    const line = page.filter(c => Math.abs(c.yb - yb) < 0.3 * size && /\S/.test(c.ch)).sort((a, b) => a.x0 - b.x0)
+    const lineIn = chars => chars.filter(c => Math.abs(c.yb - yb) < 0.3 * size && /\S/.test(c.ch)).sort((a, b) => a.x0 - b.x0)
+    const line = lineIn(page)
     const foreign = c => (others[r[0]] ?? []).some(o => c.x0 >= o[1] - 0.5 && c.x1 <= o[3] + 0.5 && c.yb >= o[2] - 0.2 && c.yb <= o[4])
-    const grow = dir => {
+    const grow = (dir, chars = line) => {
       const got = []
       let edge = dir < 0 ? Math.min(...inside.map(c => c.x0)) : Math.max(...inside.map(c => c.x1))
-      const cands = dir < 0 ? line.filter(c => c.x1 <= edge + 0.1).reverse() : line.filter(c => c.x0 >= edge - 0.1)
+      const cands = dir < 0 ? chars.filter(c => c.x1 <= edge + 0.1).reverse() : chars.filter(c => c.x0 >= edge - 0.1)
       for (const c of cands) {
         if (dir < 0 ? edge - c.x1 > 1.2 * size : c.x0 - edge > 1.2 * size) break
-        if (foreign(c) || inside.includes(c)) break
+        if (foreign(c) || inside.some(d => d.item === c.item && d.k === c.k)) break
         got.push(c)
         edge = dir < 0 ? c.x0 : c.x1
       }
       return got
     }
     for (const dir of [-1, 1]) {
-      const got = grow(dir)
-      if (!got.length) continue
-      const text = (dir < 0 ? [...got].reverse() : got).map(c => c.ch).join('')
-      const words = text.split(/[^\p{L}\p{N}]+/u).map(w => normFn(w)).filter(w => w.length > 1)
-      if (!words.some(w => want.has(w))) continue
+      let got = grow(dir)
+      const words = got.length ? (dir < 0 ? [...got].reverse() : got).map(c => c.ch).join('').split(/[^\p{L}\p{N}]+/u).map(w => normFn(w)).filter(w => w.length > 1) : []
+      if (!words.some(w => want.has(w))) {
+        // (step 3: before the unit's first line, the words its source begins with, over the page's whole width on the
+        // line, each word apart: the line's characters are its non-space ones, and joined they read one word that is
+        // none of the source's ("whileatGoogle"), so that 1706.03762's "‡Work performed while at Google Research.",
+        // anchored and located as "Research.", kept its English head unerased, and the translation, "Google Research…",
+        // was laid after it: "Google Google Research")
+        if (dir > 0 || r !== rects[0]) continue
+        got = grow(dir, lineIn(wordChars[r[0] - 1] ?? []))
+        const run = [...got].reverse()
+        const text = run.map((c, n) => (n && (c.x0 - run[n - 1].x1 > 0.12 * c.size || (c.item !== run[n - 1].item && c.x0 - run[n - 1].x1 > 0.05 * c.size)) ? ` ${c.ch}` : c.ch)).join('')
+        const apart = text.split(/[^\p{L}\p{N}]+/u).map(w => normFn(w)).filter(w => w.length > 1)
+        if (apart.length < 2 || !srcStart.startsWith(` ${apart.join(' ')} `)) continue
+      }
       if (dir < 0) r[1] = Math.round(Math.min(...got.map(c => c.x0)) * 100) / 100
       else r[3] = Math.round(Math.max(...got.map(c => c.x1)) * 100) / 100
       grown++

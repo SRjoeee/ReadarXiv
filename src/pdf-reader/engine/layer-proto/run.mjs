@@ -435,17 +435,34 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     if (p.dropped) p.rects = kept
     // iteration 3: the unit's own part of each of its pages (its rectangles' box, 20 pt above and below, 60 pt to
     // either side), one pass over the page, for every search below (each scanned the whole page, rectangle by rectangle)
-    const local = []
+    const local = [], windows = []
     for (const pg of p.pages) {
       const rs = p.rects.filter(r => r[0] === pg)
       const x0 = Math.min(...rs.map(r => r[1])) - 60, x1 = Math.max(...rs.map(r => r[3])) + 60, y0 = Math.min(...rs.map(r => r[2])) - 20, y1 = Math.max(...rs.map(r => r[4])) + 20
+      windows[pg - 1] = [x0, x1, y0, y1]
       local[pg - 1] = (chars2[pg - 1] ?? []).filter(c => c.x1 >= x0 && c.x0 <= x1 && c.yb >= y0 && c.yb <= y1)
     }
     p.local = local
     // iteration 3: a block's far-in first line from its block's edge, and lines over what stands beside them, before the
     // unit is aligned (what they then hold is the unit's)
     if (!fileLines) L2.extendFirstLines(p.rects, geometry.left.pages, others)
-    p.grown = L2.extendRects2(p.rects, local, others, p.unit.src, wordsOf, norm, geometry.left.pages)
+    // (the words its source begins with before its first line over the page's whole width on its lines' bands, step 3:
+    // they may stand further from it than the unit's own part of its page reaches, 60 pt, 1706.03762's "Work performed
+    // while at Google" before "Research.")
+    const bands = []
+    for (const pg of p.pages) {
+      const rs = p.rects.filter(r => r[0] === pg)
+      const y0 = Math.min(...rs.map(r => r[2])) - 20, y1 = Math.max(...rs.map(r => r[4])) + 20
+      bands[pg - 1] = (chars2[pg - 1] ?? []).filter(c => c.yb >= y0 && c.yb <= y1)
+    }
+    p.grown = L2.extendRects2(p.rects, local, others, p.unit.src, wordsOf, norm, geometry.left.pages, bands)
+    // (and the unit's part of its page again where its lines grew past it: what they grew over is the unit's to read and
+    // to account for, or its characters there were put back under the translation)
+    if (p.grown) for (const pg of p.pages) {
+      const rs = p.rects.filter(r => r[0] === pg), [x0, x1, y0, y1] = windows[pg - 1]
+      const gx0 = Math.min(x0, ...rs.map(r => r[1])), gx1 = Math.max(x1, ...rs.map(r => r[3]))
+      if (gx0 < x0 || gx1 > x1) local[pg - 1] = (chars2[pg - 1] ?? []).filter(c => c.x1 >= gx0 && c.x0 <= gx1 && c.yb >= y0 && c.yb <= y1)
+    }
     const inkBefore = fileLines ? undefined : L2.snapFirstRect2(p.rects, local)
     // the hybrid: a unit the file locates whole read with the file's parts
     const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0' }) : null

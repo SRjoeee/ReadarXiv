@@ -89,3 +89,31 @@ describe("a crop's baseline, without a source that knows its ink: its line's", (
     expect(L2.cropBaselineOf(real as never, null, real as never)).toBe(180.22)
   })
 })
+
+describe("a unit's first line grown over the words its source begins with ('Google Google Research')", () => {
+  // characters 4 pt wide from x, a space 2 pt; one item a word, as PDF.js gives a footnote's line
+  const lineOf = (text: string, x: number, yb = 84.55) => {
+    const out: object[] = []
+    let at = x, item = 0
+    for (const w of text.split(' ')) { [...w].forEach((ch, k) => { out.push({ ch, x0: at + 4 * k, x1: at + 4 * (k + 1), yb, size: 9, item, ix: at, k, st: {} }) }); at += 4 * w.length + 2; item++ }
+    return out
+  }
+  it("takes the line's head the anchors and the layout file left out, word by word, past the unit's own part of its page", async () => {
+    const { norm, wordsOf } = await import('@/pdf-reader/engine/layer-proto/layer1.mjs')
+    const page = lineOf('‡Work performed while at Google Research.', 100)
+    const start = (page as { ch: string; x0: number }[]).find(c => c.ch === 'R')?.x0 ?? 0
+    const rect = [1, start, 82.6, start + 40, 90.7]
+    // the unit's own part of its page (60 pt either side) holds only the line's last words; the band holds it all
+    const local = [page.filter(c => (c as { x0: number }).x0 >= start - 60)]
+    L2.extendRects([rect] as never, local as never, [] as never, 'Work performed while at Google Research.', wordsOf as never, norm as never, [page] as never)
+    expect(rect[1]).toBe(100)
+  })
+  it('takes no run that is not where its source begins, nor any on a later line', async () => {
+    const { norm, wordsOf } = await import('@/pdf-reader/engine/layer-proto/layer1.mjs')
+    const page = lineOf('as shown in Google Research.', 100)
+    const start = (page as { ch: string; x0: number }[]).find(c => c.ch === 'R')?.x0 ?? 0
+    const rect = [1, start, 82.6, start + 40, 90.7]
+    L2.extendRects([rect] as never, [page] as never, [] as never, 'Work performed while at Google Research.', wordsOf as never, norm as never)
+    expect(rect[1]).toBe(start)
+  })
+})
