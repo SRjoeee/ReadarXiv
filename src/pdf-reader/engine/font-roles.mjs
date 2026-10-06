@@ -7,8 +7,9 @@
 // - CJK: one family, Source Han Serif (Noto Serif CJK's design), with Harano Aji Mincho, TeX Live's repackaging of its
 //   Japanese, for ja; its static weights follow the paper's English family (Light beside Computer Modern and Garamond,
 //   Regular beside the rest) and its bold is the family's real bold (SemiBold, Bold), headings too: serif bold as the
-//   original's. The Kai stays as today (FandolKai, AR PL KaitiM Big5); Japanese and Korean emphasis stays upright; Korean
-//   stays Un Batang until decision 1d (Source Han Serif K is in the table, in no role).
+//   original's. The Kai stays as today (FandolKai, AR PL KaitiM Big5); Japanese and Korean emphasis stays upright. Korean
+//   is Source Han Serif K (the maintainer, 2026-10-06, in place of Un Batang), its Hangul set at the size of the
+//   family's ideographs (Face.size).
 // - Latin and Cyrillic: the paper's own family, in TeX Live's open versions (faceFor's table).
 //
 // Also the names behind both renderers' reading of a paper's fonts: each design's NFSS family names (the TeX path's
@@ -18,141 +19,168 @@ import { scriptOf } from './layer-rules.mjs'
 
 /**
  * Every face, one row each: its id, its file (as TeX finds it and the subsetter reads it), where the file comes from,
- * its group (our CSS family is `axt-` and the group), its CSS weight and style, its licence (SPDX, or a LicenseRef-) and
- * its web status — `ofl` and `gfl` (GUST) served as their licences let, `notice` served with its licence's notice, `gpl`
- * served with the notice and the full file as the subsets' source, `review` decided by the maintainer for the web (spec
- * §8: served on the maintainer's word of 2026-10-06, as the gpl faces are). scripts/font-roles.py reads this table too:
- * it measures each file (font-coverage.mjs), so keep one row a line, the columns separated by spaces.
+ * its group (our CSS family is `axt-` and the group), its CSS weight and style, its size correction, its licence (an
+ * SPDX expression, or a LicenseRef-) and its web status — `ofl` and `gfl` (GUST) served as their licences let, `notice`
+ * served with its licence's notice, `gpl` served with the notice and the full file as the subsets' source, `review`
+ * decided by the maintainer for the web (spec §8: served on the maintainer's word of 2026-10-06, as the gpl faces are).
+ * scripts/font-roles.py reads this table too: it measures each file (font-coverage.mjs), so keep one row a line, the
+ * columns separated by spaces; the licence is every column between the size and the web status.
+ *
+ * The size correction (× the run's size): a CJK face's script set at the visual size of the family's ideographs beside
+ * the paper's Latin, that is, its median ink height over the Latin body face's cap height equal to Source Han Serif SC's
+ * at the same weight. Source Han Serif K's Hangul (302 syllables, every 37th from U+AC00) against SC's ideographs (510,
+ * every 41st from U+4E00): Light 0.9120 / 0.9535 em, Regular 0.9160 / 0.9550, Medium 0.9230 / 0.9566, SemiBold
+ * 0.9290 / 0.9609, Bold 0.9390 / 0.9642. The cap height is TeX Gyre Termes' 0.662 and Latin Modern's 0.683 em: it
+ * divides both, so the correction is the same beside Times and Computer Modern (Hangul over Termes' cap 1.443 at
+ * Regular, SC's ideographs 1.384). SC is the reference; TC's ideographs are SC's to 0.1 % (TC 1.000), Harano Aji's
+ * Source Han Serif JP's. Matched instead to the face it replaces, Un Batang's Hangul (0.9100 em), K Regular would be
+ * 0.953: the two ways agree within 0.6 %.
  *
  * Licences as each font's own name table or official licence file states them, in SPDX (licence list 3.29.0) where it
  * has an identifier:
  * - Source Han Serif, Harano Aji, EB Garamond, Erewhon, CMU: OFL-1.1, their name tables;
- * - Latin Modern and TeX Gyre: the GUST Font License, their name tables (SPDX has no identifier for it);
- * - Linux Libertine O: the GPL and the OFL-1.1, its name table; Domitian: the OFL-1.1 and the LPPL-1.3c, TeX Live's
- *   catalogue; each served under the OFL;
- * - FandolKai: GPL-3.0 with the GPL font exception, CTAN's fonts/fandol README and COPYING (version 3, no "or later");
- * - Un Batang: GPL-2.0, "with no exception about embedding", CTAN's fonts/unfonts-core README.md and COPYING;
+ * - Latin Modern and TeX Gyre: the GUST Font License, Latin Modern's name tables and CFF notices and TeX Live's
+ *   catalogue (gfl) for both (SPDX has no identifier for it);
+ * - Linux Libertine O and Linux Biolinum O: the GPL and the OFL-1.1, their name tables; Domitian: the OFL-1.1 and the
+ *   LPPL-1.3c, TeX Live's catalogue; each served under the OFL;
+ * - FandolKai: "GPL + GPL font exception", CTAN's fonts/fandol README, which names no version; its COPYING is the GPL's
+ *   version 3. A GPL that names no version lets any be chosen (GPLv3 §14), so version 3 or later, the one shipped; the
+ *   exception is taken to be the FSF's, which the README names but does not quote;
  * - AR PL KaitiM Big5: the Arphic Public License, its name table; XCharter: Bitstream Charter's licence, its copyright
  *   ("based on Bitstream Charter"); DejaVu Sans Mono: Bitstream Vera's, its name table;
  * - PT Mono: the ParaType Free Font License its name table cites, version 1.3 at that address (SPDX's source for it);
  * - Inconsolata zi4: its regular OFL-1.1, its bold Apache-2.0, their name tables;
  * - Tempora: GPL-2.0-or-later with an exception for PostScript and PDF embedding, its name table. SPDX's identifier for
  *   that exception carries URW's AGPL text, so the pair is a LicenseRef;
- * - Nimbus Sans and Nimbus Mono PS (nimbus15, whose files TeX Live names zhv-* and zco-*): AGPL-3.0 with the PS/PDF
- *   font exception of 2017-08-17, ArtifexSoftware/urw-base35-fonts' LICENSE ("Version 3"; the exception SPDX lists
- *   under that LICENSE). The files themselves state no licence, only URW++'s copyright of 2014
+ * - Nimbus Sans and Nimbus Mono PS (nimbus15, whose files TeX Live names zhv-* and zco-*): "AGPL" and no more, in each
+ *   file's CFF, Type 1 and AFM notices ("Copyright 2014 by (URW)++ Design & Development. Copyright 2015 by Michael Sharpe,
+ *   AGPL"); their name tables state none, TeX Live's catalogue says "other-free lppl1.3", and the package's README is not
+ *   in the image. An AGPL that names no version is the FSF's version 3 or later. The PS/PDF embedding exception URW gives
+ *   its own release (ArtifexSoftware/urw-base35-fonts' LICENSE, 2017) is not stated in the files we ship, so it is not
+ *   taken: the TeX path's embedding of them in PDFs (§4.10 row 18) is for the maintainer to review, and GNU FreeFont's
+ *   FreeSans and FreeMono (TeX Live; GPL-3.0-or-later with the FSF font exception in their name tables; URW's Nimbus
+ *   Sans L and Nimbus Mono L designs, with Cyrillic) or today's PT Sans and PT Mono are the faces with an embedding
+ *   grant. TeX Gyre Heros and Cursor have no Cyrillic
  */
 const FACE_TABLE = `
-shs-sc-light            SourceHanSerifSC-Light.otf      hosted   shs-sc       300  normal  OFL-1.1                      ofl
-shs-sc-regular          SourceHanSerifSC-Regular.otf    hosted   shs-sc       400  normal  OFL-1.1                      ofl
-shs-sc-medium           SourceHanSerifSC-Medium.otf     hosted   shs-sc       500  normal  OFL-1.1                      ofl
-shs-sc-semibold         SourceHanSerifSC-SemiBold.otf   hosted   shs-sc       600  normal  OFL-1.1                      ofl
-shs-sc-bold             SourceHanSerifSC-Bold.otf       hosted   shs-sc       700  normal  OFL-1.1                      ofl
-shs-tc-light            SourceHanSerifTC-Light.otf      hosted   shs-tc       300  normal  OFL-1.1                      ofl
-shs-tc-regular          SourceHanSerifTC-Regular.otf    hosted   shs-tc       400  normal  OFL-1.1                      ofl
-shs-tc-medium           SourceHanSerifTC-Medium.otf     hosted   shs-tc       500  normal  OFL-1.1                      ofl
-shs-tc-semibold         SourceHanSerifTC-SemiBold.otf   hosted   shs-tc       600  normal  OFL-1.1                      ofl
-shs-tc-bold             SourceHanSerifTC-Bold.otf       hosted   shs-tc       700  normal  OFL-1.1                      ofl
-shs-k-light             SourceHanSerifK-Light.otf       hosted   shs-k        300  normal  OFL-1.1                      ofl
-shs-k-regular           SourceHanSerifK-Regular.otf     hosted   shs-k        400  normal  OFL-1.1                      ofl
-shs-k-medium            SourceHanSerifK-Medium.otf      hosted   shs-k        500  normal  OFL-1.1                      ofl
-shs-k-semibold          SourceHanSerifK-SemiBold.otf    hosted   shs-k        600  normal  OFL-1.1                      ofl
-shs-k-bold              SourceHanSerifK-Bold.otf        hosted   shs-k        700  normal  OFL-1.1                      ofl
-haranoaji-light         HaranoAjiMincho-Light.otf       texlive  haranoaji    300  normal  OFL-1.1                      ofl
-haranoaji-regular       HaranoAjiMincho-Regular.otf     texlive  haranoaji    400  normal  OFL-1.1                      ofl
-haranoaji-medium        HaranoAjiMincho-Medium.otf      texlive  haranoaji    500  normal  OFL-1.1                      ofl
-haranoaji-semibold      HaranoAjiMincho-SemiBold.otf    texlive  haranoaji    600  normal  OFL-1.1                      ofl
-haranoaji-bold          HaranoAjiMincho-Bold.otf        texlive  haranoaji    700  normal  OFL-1.1                      ofl
-fandolkai               FandolKai-Regular.otf           texlive  fandolkai    400  normal  GPL-3.0-only WITH Font-exception-2.0 gpl
-bkai00mp                bkai00mp.ttf                    texlive  bkai00mp     400  normal  Arphic-1999                  notice
-unbatang                UnBatang.ttf                    texlive  unbatang     400  normal  GPL-2.0-only                 gpl
-unbatang-bold           UnBatangBold.ttf                texlive  unbatang     700  normal  GPL-2.0-only                 gpl
-lm-roman-regular        lmroman10-regular.otf           texlive  lm-roman     400  normal  LicenseRef-GUST-Font-License gfl
-lm-roman-bold           lmroman10-bold.otf              texlive  lm-roman     700  normal  LicenseRef-GUST-Font-License gfl
-lm-roman-italic         lmroman10-italic.otf            texlive  lm-roman     400  italic  LicenseRef-GUST-Font-License gfl
-lm-roman-bolditalic     lmroman10-bolditalic.otf        texlive  lm-roman     700  italic  LicenseRef-GUST-Font-License gfl
-lm-roman-caps           lmromancaps10-regular.otf       texlive  lm-roman-caps 400 normal  LicenseRef-GUST-Font-License gfl
-lm-sans-regular         lmsans10-regular.otf            texlive  lm-sans      400  normal  LicenseRef-GUST-Font-License gfl
-lm-sans-bold            lmsans10-bold.otf               texlive  lm-sans      700  normal  LicenseRef-GUST-Font-License gfl
-lm-sans-italic          lmsans10-oblique.otf            texlive  lm-sans      400  italic  LicenseRef-GUST-Font-License gfl
-lm-mono-regular         lmmono10-regular.otf            texlive  lm-mono      400  normal  LicenseRef-GUST-Font-License gfl
-lm-mono-italic          lmmono10-italic.otf             texlive  lm-mono      400  italic  LicenseRef-GUST-Font-License gfl
-lm-math                 latinmodern-math.otf            texlive  lm-math      400  normal  LicenseRef-GUST-Font-License gfl
-termes-regular          texgyretermes-regular.otf       texlive  termes       400  normal  LicenseRef-GUST-Font-License gfl
-termes-bold             texgyretermes-bold.otf          texlive  termes       700  normal  LicenseRef-GUST-Font-License gfl
-termes-italic           texgyretermes-italic.otf        texlive  termes       400  italic  LicenseRef-GUST-Font-License gfl
-termes-bolditalic       texgyretermes-bolditalic.otf    texlive  termes       700  italic  LicenseRef-GUST-Font-License gfl
-heros-regular           texgyreheros-regular.otf        texlive  heros        400  normal  LicenseRef-GUST-Font-License gfl
-heros-bold              texgyreheros-bold.otf           texlive  heros        700  normal  LicenseRef-GUST-Font-License gfl
-heros-italic            texgyreheros-italic.otf         texlive  heros        400  italic  LicenseRef-GUST-Font-License gfl
-heros-bolditalic        texgyreheros-bolditalic.otf     texlive  heros        700  italic  LicenseRef-GUST-Font-License gfl
-cursor-regular          texgyrecursor-regular.otf       texlive  cursor       400  normal  LicenseRef-GUST-Font-License gfl
-cursor-bold             texgyrecursor-bold.otf          texlive  cursor       700  normal  LicenseRef-GUST-Font-License gfl
-cursor-italic           texgyrecursor-italic.otf        texlive  cursor       400  italic  LicenseRef-GUST-Font-License gfl
-cursor-bolditalic       texgyrecursor-bolditalic.otf    texlive  cursor       700  italic  LicenseRef-GUST-Font-License gfl
-pagella-regular         texgyrepagella-regular.otf      texlive  pagella      400  normal  LicenseRef-GUST-Font-License gfl
-pagella-bold            texgyrepagella-bold.otf         texlive  pagella      700  normal  LicenseRef-GUST-Font-License gfl
-pagella-italic          texgyrepagella-italic.otf       texlive  pagella      400  italic  LicenseRef-GUST-Font-License gfl
-pagella-bolditalic      texgyrepagella-bolditalic.otf   texlive  pagella      700  italic  LicenseRef-GUST-Font-License gfl
-libertine-regular       LinLibertine_R.otf              texlive  libertine    400  normal  OFL-1.1                      ofl
-libertine-bold          LinLibertine_RB.otf             texlive  libertine    700  normal  OFL-1.1                      ofl
-libertine-italic        LinLibertine_RI.otf             texlive  libertine    400  italic  OFL-1.1                      ofl
-libertine-bolditalic    LinLibertine_RBI.otf            texlive  libertine    700  italic  OFL-1.1                      ofl
-xcharter-regular        XCharter-Roman.otf              texlive  xcharter     400  normal  Bitstream-Charter            notice
-xcharter-bold           XCharter-Bold.otf               texlive  xcharter     700  normal  Bitstream-Charter            notice
-xcharter-italic         XCharter-Italic.otf             texlive  xcharter     400  italic  Bitstream-Charter            notice
-xcharter-bolditalic     XCharter-BoldItalic.otf         texlive  xcharter     700  italic  Bitstream-Charter            notice
-ebgaramond-regular      EBGaramond-Regular.otf          texlive  ebgaramond   400  normal  OFL-1.1                      ofl
-ebgaramond-bold         EBGaramond-Bold.otf             texlive  ebgaramond   700  normal  OFL-1.1                      ofl
-ebgaramond-italic       EBGaramond-Italic.otf           texlive  ebgaramond   400  italic  OFL-1.1                      ofl
-ebgaramond-bolditalic   EBGaramond-BoldItalic.otf       texlive  ebgaramond   700  italic  OFL-1.1                      ofl
-erewhon-regular         Erewhon-Regular.otf             texlive  erewhon      400  normal  OFL-1.1                      ofl
-erewhon-bold            Erewhon-Bold.otf                texlive  erewhon      700  normal  OFL-1.1                      ofl
-erewhon-italic          Erewhon-Italic.otf              texlive  erewhon      400  italic  OFL-1.1                      ofl
-erewhon-bolditalic      Erewhon-BoldItalic.otf          texlive  erewhon      700  italic  OFL-1.1                      ofl
-cmun-serif-regular      cmunrm.otf                      texlive  cmun-serif   400  normal  OFL-1.1                      ofl
-cmun-serif-bold         cmunbx.otf                      texlive  cmun-serif   700  normal  OFL-1.1                      ofl
-cmun-serif-italic       cmunti.otf                      texlive  cmun-serif   400  italic  OFL-1.1                      ofl
-cmun-serif-bolditalic   cmunbi.otf                      texlive  cmun-serif   700  italic  OFL-1.1                      ofl
-cmun-sans-regular       cmunss.otf                      texlive  cmun-sans    400  normal  OFL-1.1                      ofl
-cmun-sans-bold          cmunsx.otf                      texlive  cmun-sans    700  normal  OFL-1.1                      ofl
-cmun-sans-italic        cmunsi.otf                      texlive  cmun-sans    400  italic  OFL-1.1                      ofl
-cmun-sans-bolditalic    cmunso.otf                      texlive  cmun-sans    700  italic  OFL-1.1                      ofl
-cmun-mono-regular       cmuntt.otf                      texlive  cmun-mono    400  normal  OFL-1.1                      ofl
-cmun-mono-italic        cmunit.otf                      texlive  cmun-mono    400  italic  OFL-1.1                      ofl
-tempora-regular         Tempora-Regular.otf             texlive  tempora      400  normal  LicenseRef-GPL-2.0-or-later-PS-PDF-font-exception review
-tempora-bold            Tempora-Bold.otf                texlive  tempora      700  normal  LicenseRef-GPL-2.0-or-later-PS-PDF-font-exception review
-tempora-italic          Tempora-Italic.otf              texlive  tempora      400  italic  LicenseRef-GPL-2.0-or-later-PS-PDF-font-exception review
-tempora-bolditalic      Tempora-BoldItalic.otf          texlive  tempora      700  italic  LicenseRef-GPL-2.0-or-later-PS-PDF-font-exception review
-domitian-regular        Domitian-Roman.otf              texlive  domitian     400  normal  OFL-1.1                      ofl
-domitian-bold           Domitian-Bold.otf               texlive  domitian     700  normal  OFL-1.1                      ofl
-domitian-italic         Domitian-Italic.otf             texlive  domitian     400  italic  OFL-1.1                      ofl
-domitian-bolditalic     Domitian-BoldItalic.otf         texlive  domitian     700  italic  OFL-1.1                      ofl
-nimbus-sans-regular     zhv-Reg.otf                     texlive  nimbus-sans  400  normal  AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817 review
-nimbus-sans-bold        zhv-Bol.otf                     texlive  nimbus-sans  700  normal  AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817 review
-nimbus-sans-italic      zhv-RegIta.otf                  texlive  nimbus-sans  400  italic  AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817 review
-nimbus-sans-bolditalic  zhv-BolIta.otf                  texlive  nimbus-sans  700  italic  AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817 review
-nimbus-mono-regular     zco-Regular.otf                 texlive  nimbus-mono  400  normal  AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817 review
-nimbus-mono-bold        zco-Bold.otf                    texlive  nimbus-mono  700  normal  AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817 review
-nimbus-mono-italic      zco-Oblique.otf                 texlive  nimbus-mono  400  italic  AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817 review
-nimbus-mono-bolditalic  zco-BoldOblique.otf             texlive  nimbus-mono  700  italic  AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817 review
-dejavu-mono-regular     DejaVuSansMono.ttf              texlive  dejavu-mono  400  normal  Bitstream-Vera               notice
-dejavu-mono-bold        DejaVuSansMono-Bold.ttf         texlive  dejavu-mono  700  normal  Bitstream-Vera               notice
-inconsolata-regular     Inconsolatazi4-Regular.otf      texlive  inconsolata  400  normal  OFL-1.1                      ofl
-inconsolata-bold        Inconsolatazi4-Bold.otf         texlive  inconsolata  700  normal  Apache-2.0                   notice
-pt-mono-regular         PTM55F.ttf                      texlive  pt-mono      400  normal  ParaType-Free-Font-1.3       notice
-pt-mono-bold            PTM75F.ttf                      texlive  pt-mono      700  normal  ParaType-Free-Font-1.3       notice
+shs-sc-light            SourceHanSerifSC-Light.otf      hosted   shs-sc         300  normal  1      OFL-1.1                                            ofl
+shs-sc-regular          SourceHanSerifSC-Regular.otf    hosted   shs-sc         400  normal  1      OFL-1.1                                            ofl
+shs-sc-medium           SourceHanSerifSC-Medium.otf     hosted   shs-sc         500  normal  1      OFL-1.1                                            ofl
+shs-sc-semibold         SourceHanSerifSC-SemiBold.otf   hosted   shs-sc         600  normal  1      OFL-1.1                                            ofl
+shs-sc-bold             SourceHanSerifSC-Bold.otf       hosted   shs-sc         700  normal  1      OFL-1.1                                            ofl
+shs-tc-light            SourceHanSerifTC-Light.otf      hosted   shs-tc         300  normal  1      OFL-1.1                                            ofl
+shs-tc-regular          SourceHanSerifTC-Regular.otf    hosted   shs-tc         400  normal  1      OFL-1.1                                            ofl
+shs-tc-medium           SourceHanSerifTC-Medium.otf     hosted   shs-tc         500  normal  1      OFL-1.1                                            ofl
+shs-tc-semibold         SourceHanSerifTC-SemiBold.otf   hosted   shs-tc         600  normal  1      OFL-1.1                                            ofl
+shs-tc-bold             SourceHanSerifTC-Bold.otf       hosted   shs-tc         700  normal  1      OFL-1.1                                            ofl
+shs-k-light             SourceHanSerifK-Light.otf       hosted   shs-k          300  normal  0.956  OFL-1.1                                            ofl
+shs-k-regular           SourceHanSerifK-Regular.otf     hosted   shs-k          400  normal  0.959  OFL-1.1                                            ofl
+shs-k-medium            SourceHanSerifK-Medium.otf      hosted   shs-k          500  normal  0.965  OFL-1.1                                            ofl
+shs-k-semibold          SourceHanSerifK-SemiBold.otf    hosted   shs-k          600  normal  0.967  OFL-1.1                                            ofl
+shs-k-bold              SourceHanSerifK-Bold.otf        hosted   shs-k          700  normal  0.974  OFL-1.1                                            ofl
+haranoaji-light         HaranoAjiMincho-Light.otf       texlive  haranoaji      300  normal  1      OFL-1.1                                            ofl
+haranoaji-regular       HaranoAjiMincho-Regular.otf     texlive  haranoaji      400  normal  1      OFL-1.1                                            ofl
+haranoaji-medium        HaranoAjiMincho-Medium.otf      texlive  haranoaji      500  normal  1      OFL-1.1                                            ofl
+haranoaji-semibold      HaranoAjiMincho-SemiBold.otf    texlive  haranoaji      600  normal  1      OFL-1.1                                            ofl
+haranoaji-bold          HaranoAjiMincho-Bold.otf        texlive  haranoaji      700  normal  1      OFL-1.1                                            ofl
+fandolkai               FandolKai-Regular.otf           texlive  fandolkai      400  normal  1      GPL-3.0-or-later WITH Font-exception-2.0           gpl
+bkai00mp                bkai00mp.ttf                    texlive  bkai00mp       400  normal  1      Arphic-1999                                        notice
+lm-roman-regular        lmroman10-regular.otf           texlive  lm-roman       400  normal  1      LicenseRef-GUST-Font-License                       gfl
+lm-roman-bold           lmroman10-bold.otf              texlive  lm-roman       700  normal  1      LicenseRef-GUST-Font-License                       gfl
+lm-roman-italic         lmroman10-italic.otf            texlive  lm-roman       400  italic  1      LicenseRef-GUST-Font-License                       gfl
+lm-roman-bolditalic     lmroman10-bolditalic.otf        texlive  lm-roman       700  italic  1      LicenseRef-GUST-Font-License                       gfl
+lm-roman-caps           lmromancaps10-regular.otf       texlive  lm-roman-caps  400  normal  1      LicenseRef-GUST-Font-License                       gfl
+lm-roman-caps-italic    lmromancaps10-oblique.otf       texlive  lm-roman-caps  400  italic  1      LicenseRef-GUST-Font-License                       gfl
+lm-sans-regular         lmsans10-regular.otf            texlive  lm-sans        400  normal  1      LicenseRef-GUST-Font-License                       gfl
+lm-sans-bold            lmsans10-bold.otf               texlive  lm-sans        700  normal  1      LicenseRef-GUST-Font-License                       gfl
+lm-sans-italic          lmsans10-oblique.otf            texlive  lm-sans        400  italic  1      LicenseRef-GUST-Font-License                       gfl
+lm-sans-bolditalic      lmsans10-boldoblique.otf        texlive  lm-sans        700  italic  1      LicenseRef-GUST-Font-License                       gfl
+lm-mono-regular         lmmono10-regular.otf            texlive  lm-mono        400  normal  1      LicenseRef-GUST-Font-License                       gfl
+lm-mono-italic          lmmono10-italic.otf             texlive  lm-mono        400  italic  1      LicenseRef-GUST-Font-License                       gfl
+lm-math                 latinmodern-math.otf            texlive  lm-math        400  normal  1      LicenseRef-GUST-Font-License                       gfl
+termes-regular          texgyretermes-regular.otf       texlive  termes         400  normal  1      LicenseRef-GUST-Font-License                       gfl
+termes-bold             texgyretermes-bold.otf          texlive  termes         700  normal  1      LicenseRef-GUST-Font-License                       gfl
+termes-italic           texgyretermes-italic.otf        texlive  termes         400  italic  1      LicenseRef-GUST-Font-License                       gfl
+termes-bolditalic       texgyretermes-bolditalic.otf    texlive  termes         700  italic  1      LicenseRef-GUST-Font-License                       gfl
+heros-regular           texgyreheros-regular.otf        texlive  heros          400  normal  1      LicenseRef-GUST-Font-License                       gfl
+heros-bold              texgyreheros-bold.otf           texlive  heros          700  normal  1      LicenseRef-GUST-Font-License                       gfl
+heros-italic            texgyreheros-italic.otf         texlive  heros          400  italic  1      LicenseRef-GUST-Font-License                       gfl
+heros-bolditalic        texgyreheros-bolditalic.otf     texlive  heros          700  italic  1      LicenseRef-GUST-Font-License                       gfl
+cursor-regular          texgyrecursor-regular.otf       texlive  cursor         400  normal  1      LicenseRef-GUST-Font-License                       gfl
+cursor-bold             texgyrecursor-bold.otf          texlive  cursor         700  normal  1      LicenseRef-GUST-Font-License                       gfl
+cursor-italic           texgyrecursor-italic.otf        texlive  cursor         400  italic  1      LicenseRef-GUST-Font-License                       gfl
+cursor-bolditalic       texgyrecursor-bolditalic.otf    texlive  cursor         700  italic  1      LicenseRef-GUST-Font-License                       gfl
+pagella-regular         texgyrepagella-regular.otf      texlive  pagella        400  normal  1      LicenseRef-GUST-Font-License                       gfl
+pagella-bold            texgyrepagella-bold.otf         texlive  pagella        700  normal  1      LicenseRef-GUST-Font-License                       gfl
+pagella-italic          texgyrepagella-italic.otf       texlive  pagella        400  italic  1      LicenseRef-GUST-Font-License                       gfl
+pagella-bolditalic      texgyrepagella-bolditalic.otf   texlive  pagella        700  italic  1      LicenseRef-GUST-Font-License                       gfl
+libertine-regular       LinLibertine_R.otf              texlive  libertine      400  normal  1      OFL-1.1                                            ofl
+libertine-bold          LinLibertine_RB.otf             texlive  libertine      700  normal  1      OFL-1.1                                            ofl
+libertine-italic        LinLibertine_RI.otf             texlive  libertine      400  italic  1      OFL-1.1                                            ofl
+libertine-bolditalic    LinLibertine_RBI.otf            texlive  libertine      700  italic  1      OFL-1.1                                            ofl
+biolinum-regular        LinBiolinum_R.otf               texlive  biolinum       400  normal  1      OFL-1.1                                            ofl
+biolinum-bold           LinBiolinum_RB.otf              texlive  biolinum       700  normal  1      OFL-1.1                                            ofl
+biolinum-italic         LinBiolinum_RI.otf              texlive  biolinum       400  italic  1      OFL-1.1                                            ofl
+biolinum-bolditalic     LinBiolinum_RBO.otf             texlive  biolinum       700  italic  1      OFL-1.1                                            ofl
+xcharter-regular        XCharter-Roman.otf              texlive  xcharter       400  normal  1      Bitstream-Charter                                  notice
+xcharter-bold           XCharter-Bold.otf               texlive  xcharter       700  normal  1      Bitstream-Charter                                  notice
+xcharter-italic         XCharter-Italic.otf             texlive  xcharter       400  italic  1      Bitstream-Charter                                  notice
+xcharter-bolditalic     XCharter-BoldItalic.otf         texlive  xcharter       700  italic  1      Bitstream-Charter                                  notice
+ebgaramond-regular      EBGaramond-Regular.otf          texlive  ebgaramond     400  normal  1      OFL-1.1                                            ofl
+ebgaramond-bold         EBGaramond-Bold.otf             texlive  ebgaramond     700  normal  1      OFL-1.1                                            ofl
+ebgaramond-italic       EBGaramond-Italic.otf           texlive  ebgaramond     400  italic  1      OFL-1.1                                            ofl
+ebgaramond-bolditalic   EBGaramond-BoldItalic.otf       texlive  ebgaramond     700  italic  1      OFL-1.1                                            ofl
+erewhon-regular         Erewhon-Regular.otf             texlive  erewhon        400  normal  1      OFL-1.1                                            ofl
+erewhon-bold            Erewhon-Bold.otf                texlive  erewhon        700  normal  1      OFL-1.1                                            ofl
+erewhon-italic          Erewhon-Italic.otf              texlive  erewhon        400  italic  1      OFL-1.1                                            ofl
+erewhon-bolditalic      Erewhon-BoldItalic.otf          texlive  erewhon        700  italic  1      OFL-1.1                                            ofl
+cmun-serif-regular      cmunrm.otf                      texlive  cmun-serif     400  normal  1      OFL-1.1                                            ofl
+cmun-serif-bold         cmunbx.otf                      texlive  cmun-serif     700  normal  1      OFL-1.1                                            ofl
+cmun-serif-italic       cmunti.otf                      texlive  cmun-serif     400  italic  1      OFL-1.1                                            ofl
+cmun-serif-bolditalic   cmunbi.otf                      texlive  cmun-serif     700  italic  1      OFL-1.1                                            ofl
+cmun-sans-regular       cmunss.otf                      texlive  cmun-sans      400  normal  1      OFL-1.1                                            ofl
+cmun-sans-bold          cmunsx.otf                      texlive  cmun-sans      700  normal  1      OFL-1.1                                            ofl
+cmun-sans-italic        cmunsi.otf                      texlive  cmun-sans      400  italic  1      OFL-1.1                                            ofl
+cmun-sans-bolditalic    cmunso.otf                      texlive  cmun-sans      700  italic  1      OFL-1.1                                            ofl
+cmun-mono-regular       cmuntt.otf                      texlive  cmun-mono      400  normal  1      OFL-1.1                                            ofl
+cmun-mono-bold          cmuntb.otf                      texlive  cmun-mono      700  normal  1      OFL-1.1                                            ofl
+cmun-mono-italic        cmunit.otf                      texlive  cmun-mono      400  italic  1      OFL-1.1                                            ofl
+cmun-mono-bolditalic    cmuntx.otf                      texlive  cmun-mono      700  italic  1      OFL-1.1                                            ofl
+tempora-regular         Tempora-Regular.otf             texlive  tempora        400  normal  1      LicenseRef-GPL-2.0-or-later-PS-PDF-font-exception  review
+tempora-bold            Tempora-Bold.otf                texlive  tempora        700  normal  1      LicenseRef-GPL-2.0-or-later-PS-PDF-font-exception  review
+tempora-italic          Tempora-Italic.otf              texlive  tempora        400  italic  1      LicenseRef-GPL-2.0-or-later-PS-PDF-font-exception  review
+tempora-bolditalic      Tempora-BoldItalic.otf          texlive  tempora        700  italic  1      LicenseRef-GPL-2.0-or-later-PS-PDF-font-exception  review
+domitian-regular        Domitian-Roman.otf              texlive  domitian       400  normal  1      OFL-1.1                                            ofl
+domitian-bold           Domitian-Bold.otf               texlive  domitian       700  normal  1      OFL-1.1                                            ofl
+domitian-italic         Domitian-Italic.otf             texlive  domitian       400  italic  1      OFL-1.1                                            ofl
+domitian-bolditalic     Domitian-BoldItalic.otf         texlive  domitian       700  italic  1      OFL-1.1                                            ofl
+nimbus-sans-regular     zhv-Reg.otf                     texlive  nimbus-sans    400  normal  1      AGPL-3.0-or-later                                  review
+nimbus-sans-bold        zhv-Bol.otf                     texlive  nimbus-sans    700  normal  1      AGPL-3.0-or-later                                  review
+nimbus-sans-italic      zhv-RegIta.otf                  texlive  nimbus-sans    400  italic  1      AGPL-3.0-or-later                                  review
+nimbus-sans-bolditalic  zhv-BolIta.otf                  texlive  nimbus-sans    700  italic  1      AGPL-3.0-or-later                                  review
+nimbus-mono-regular     zco-Regular.otf                 texlive  nimbus-mono    400  normal  1      AGPL-3.0-or-later                                  review
+nimbus-mono-bold        zco-Bold.otf                    texlive  nimbus-mono    700  normal  1      AGPL-3.0-or-later                                  review
+nimbus-mono-italic      zco-Oblique.otf                 texlive  nimbus-mono    400  italic  1      AGPL-3.0-or-later                                  review
+nimbus-mono-bolditalic  zco-BoldOblique.otf             texlive  nimbus-mono    700  italic  1      AGPL-3.0-or-later                                  review
+dejavu-mono-regular     DejaVuSansMono.ttf              texlive  dejavu-mono    400  normal  1      Bitstream-Vera                                     notice
+dejavu-mono-bold        DejaVuSansMono-Bold.ttf         texlive  dejavu-mono    700  normal  1      Bitstream-Vera                                     notice
+dejavu-mono-italic      DejaVuSansMono-Oblique.ttf      texlive  dejavu-mono    400  italic  1      Bitstream-Vera                                     notice
+dejavu-mono-bolditalic  DejaVuSansMono-BoldOblique.ttf  texlive  dejavu-mono    700  italic  1      Bitstream-Vera                                     notice
+inconsolata-regular     Inconsolatazi4-Regular.otf      texlive  inconsolata    400  normal  1      OFL-1.1                                            ofl
+inconsolata-bold        Inconsolatazi4-Bold.otf         texlive  inconsolata    700  normal  1      Apache-2.0                                         notice
+pt-mono-regular         PTM55F.ttf                      texlive  pt-mono        400  normal  1      ParaType-Free-Font-1.3                             notice
+pt-mono-bold            PTM75F.ttf                      texlive  pt-mono        700  normal  1      ParaType-Free-Font-1.3                             notice
 `
 
-// a row's licence is every column between its style and its web status: an SPDX expression may hold spaces (`WITH`)
+// a row's licence is every column between its size and its web status: an SPDX expression may hold spaces (`WITH`)
 export const FACES = Object.freeze(Object.fromEntries(FACE_TABLE.trim().split('\n').map(line => {
   const cols = line.trim().split(/\s+/)
-  const [id, file, source, group, weight, style] = cols, web = cols.at(-1), licence = cols.slice(6, -1).join(' ')
-  return [id, Object.freeze({ id, file, source, family: `axt-${group}`, weight: Number(weight), style, licence, web })]
+  const [id, file, source, group, weight, style, size] = cols, web = cols.at(-1), licence = cols.slice(7, -1).join(' ')
+  return [id, Object.freeze({ id, file, source, family: `axt-${group}`, weight: Number(weight), style, size: Number(size), licence, web })]
 })))
 // a face by its family, weight and style
 const BY_STYLE = new Map(Object.values(FACES).map(f => [`${f.family}|${f.weight}|${f.style}`, f.id]))
-const CJK_GROUPS = /^axt-(shs-|haranoaji|fandolkai|bkai00mp|unbatang)/
+const CJK_GROUPS = /^axt-(shs-|haranoaji|fandolkai|bkai00mp)/
 
 // ---------------------------------------------------------------------------------------------------------------------
 // The names. A design, its class, its NFSS family names (anchored, as \rmdefault and the rest hold them), its PostScript
@@ -172,8 +200,8 @@ const DESIGNS = [
   // sans
   { design: 'helvetica', cls: 'sans', nfss: /^(?:phv|qhv|txss|uhv|zhv|NimbusSans|TeXGyreHeros)/, ps: /^(?:NimbusSanL|NimbusSans|Helvetica|Arial|TeXGyreHeros|zhv-|LiberationSans|FreeSans)/ },
   { design: 'cmss', cls: 'sans', nfss: /^(?:cmss|lmss)$/, ps: /^CMUSansSerif/ },
-  // Biolinum, Libertine's sans: no face of its own, so Latin Modern's sans by its class
-  { design: 'other', cls: 'sans', nfss: /^(?:LinuxBiolinum|fxb|LibertinusSans)/, ps: /^LibertinusSans/ },
+  // Biolinum, Libertine's sans (Libertinus Sans, its fork, drawn in it)
+  { design: 'biolinum', cls: 'sans', nfss: /^(?:LinuxBiolinum|fxb|LibertinusSans)/, ps: /^(?:LibertinusSans|LinBiolinum|LinuxBiolinum)/ },
   // text: the English families
   { design: 'cm', cls: 'serif', nfss: /^(?:cmr|lmr|cmdh|lmdh|cmfib|cmfr)$/, ps: /^CMU(?:Serif|ClassicalSerif)/ },
   { design: 'times', cls: 'serif', nfss: /^(?:ptm|qtm|ntx|txr|utm|ztm|Tempora|TeXGyreTermes|NimbusSerif)/, ps: /^(?:NimbusRomNo9L|NimbusRom|NimbusRoman|Times|TeXGyreTermes|Tempora|ztm-)/ },
@@ -234,13 +262,13 @@ const latinModern = name => {
   const cls = LM_CLASS[m[1]], variant = m[2], style = m[3]
   return fontClass(cls, CM_DESIGN[cls], /Demi/.test(variant) || /Bold/.test(style), /Slant|Unsl/.test(variant) || /Oblique|Italic/.test(style), /Caps/.test(variant), true)
 }
-// Linux Libertine and Biolinum, Type 1 and OpenType: LinLibertineT, LinLibertineTB, LinLibertineOBI; B and Z (semibold)
-// are bold, I italic
+// Linux Libertine and Biolinum, Type 1 and OpenType: LinLibertineT, LinLibertineTB, LinLibertineOBI, LinBiolinumOBO; B
+// and Z (semibold) are bold, I italic and O (Biolinum's) oblique
 const libertine = name => {
   const m = /^Lin(Libertine|Biolinum)[TO]?([A-Z]{0,4})(?:-|$)/.exec(name)
   if (!m) return null
   const serif = m[1] === 'Libertine'
-  return fontClass(serif ? 'serif' : 'sans', serif ? 'libertine' : 'other', /[BZ]/.test(m[2]), m[2].includes('I'), false, true)
+  return fontClass(serif ? 'serif' : 'sans', serif ? 'libertine' : 'biolinum', /[BZ]/.test(m[2]), /[IO]/.test(m[2]), false, true)
 }
 
 /** a PDF font's class, weight, slant, small capitals and design, from its PostScript name (subset tag stripped) */
@@ -290,7 +318,10 @@ export function familyOfFonts(names, weights) {
 
 // CJK: the family and its Kai. Light beside the lightest English families, its bold SemiBold (the same step of 300);
 // Regular and Bold beside the rest (spec §4.4; the sweep chooses between Medium and SemiBold, §4.5)
-const CJK_FAMILY = { Hans: { group: 'shs-sc', kai: 'fandolkai' }, Hant: { group: 'shs-tc', kai: 'bkai00mp' }, Jpan: { group: 'haranoaji', kai: null } }
+const CJK_FAMILY = {
+  Hans: { group: 'shs-sc', kai: 'fandolkai' }, Hant: { group: 'shs-tc', kai: 'bkai00mp' }, Jpan: { group: 'haranoaji', kai: null },
+  Kore: { group: 'shs-k', kai: null },
+}
 const LIGHT = new Set(['cm', 'garamond'])
 const ALPHABETS = new Set(['Latn', 'Cyrl'])
 // every Latin and Cyrillic face's missing symbols from Latin Modern Math
@@ -301,8 +332,7 @@ export function rolesFor(target, family) {
   const script = scriptOf(target)
   let cjk = null
   const fallbacks = { ...LATIN_FALLBACKS }
-  if (script === 'Kore') cjk = { body: 'unbatang', bold: 'unbatang-bold', italic: null, boldItalic: null }
-  else if (Object.hasOwn(CJK_FAMILY, script)) {
+  if (Object.hasOwn(CJK_FAMILY, script)) {
     const { group, kai } = CJK_FAMILY[script]
     const light = LIGHT.has(family)
     cjk = { body: `${group}-${light ? 'light' : 'regular'}`, bold: `${group}-${light ? 'semibold' : 'bold'}`, italic: kai, boldItalic: kai }
@@ -318,17 +348,42 @@ const LATIN_GROUPS = {
   cm: ['lm-roman', 'cmun-serif'], times: ['termes', 'tempora'], libertine: ['libertine', 'libertine'], palatino: ['pagella', 'domitian'],
   charter: ['xcharter', 'xcharter'], garamond: ['ebgaramond', 'ebgaramond'], utopia: ['erewhon', 'erewhon'],
   helvetica: ['heros', 'nimbus-sans'], cmss: ['lm-sans', 'cmun-sans'], courier: ['cursor', 'nimbus-mono'], cmtt: ['lm-mono', 'cmun-mono'],
-  beramono: ['dejavu-mono', 'dejavu-mono'], inconsolata: ['inconsolata', 'pt-mono'],
+  beramono: ['dejavu-mono', 'dejavu-mono'], inconsolata: ['inconsolata', 'pt-mono'], biolinum: ['biolinum', 'biolinum'],
 }
 const OTHER_GROUPS = { serif: LATIN_GROUPS.cm, sans: LATIN_GROUPS.cmss, mono: LATIN_GROUPS.cmtt }
-// the face of a group at a weight and slant; where the group has no such file, its italic upright and its bold regular,
-// as TeX's substitution sets a shape the family lacks
-const styled = (group, bold, italic) => {
+// The letters a target's text is set in: its language's where listed, else its script's (a CJK target's Latin runs are
+// English). A face that lacks one cannot set the target
+const LATIN = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+const CYRILLIC = String.fromCodePoint(...Array.from({ length: 64 }, (_, i) => 0x410 + i))
+const LETTERS = {
+  de: `${LATIN}ÄÖÜäöüß`, fr: `${LATIN}ÀÂÆÇÉÈÊËÎÏÔŒÙÛÜŸàâæçéèêëîïôœùûüÿ`, es: `${LATIN}ÁÉÍÑÓÚÜáéíñóúü¡¿`,
+  pt: `${LATIN}ÃÕÁÂÀÇÉÊÍÓÔÚÜãõáâàçéêíóôúü`, ru: `${CYRILLIC}Ёё`,
+}
+const lettersOf = target => {
+  const language = new Intl.Locale(target).language
+  return Object.hasOwn(LETTERS, language) ? LETTERS[language] : scriptOf(target) === 'Cyrl' ? CYRILLIC : LATIN
+}
+const holdsAll = new Map()
+// whether a face holds every letter (cached: a table's faces by a handful of targets)
+const setsAll = (id, letters) => {
+  const key = `${id}|${letters}`
+  if (!holdsAll.has(key)) holdsAll.set(key, Object.hasOwn(COVERAGE, id) && [...letters].every(ch => holds(COVERAGE[id], ch.codePointAt(0))))
+  return holdsAll.get(key)
+}
+// The face of a group at a weight and slant. Where the group has no such file, or its file lacks the target's letters,
+// the nearest style of the same group that has both — bold italic, then bold, italic, regular — as TeX's substitution
+// sets a shape the family lacks: so Linux Libertine O's bold italic, which has no Cyrillic, sets Russian in its bold,
+// and a unit never stays the original's for a style alone. Where no style of the group has the letters, the nearest
+// that exists, and canDraw then keeps the unit the original's
+const styled = (group, bold, italic, letters) => {
+  let first = null
   for (const [b, i] of [[bold, italic], [bold, false], [false, italic], [false, false]]) {
     const id = BY_STYLE.get(`axt-${group}|${b ? 700 : 400}|${i ? 'italic' : 'normal'}`)
-    if (id) return id
+    if (!id) continue
+    if (setsAll(id, letters)) return id
+    first ??= id
   }
-  return null
+  return first
 }
 
 /** the face a run is drawn in. A CJK run takes its target's CJK family by weight and slant, whatever its class (no
@@ -346,8 +401,9 @@ export function faceFor(roles, run) {
   const cyrillic = scriptOf(roles.target) === 'Cyrl' ? 1 : 0
   const groups = Object.hasOwn(LATIN_GROUPS, run.design) ? LATIN_GROUPS[run.design] : Object.hasOwn(OTHER_GROUPS, run.cls) ? OTHER_GROUPS[run.cls] : OTHER_GROUPS.serif
   const group = groups[cyrillic]
-  if (run.caps && !run.bold && !run.italic && group === 'lm-roman') return 'lm-roman-caps'
-  return styled(group, run.bold, run.italic)
+  // Latin Modern's caps face, upright and oblique; it has no bold
+  if (run.caps && !run.bold && group === 'lm-roman') return run.italic ? 'lm-roman-caps-italic' : 'lm-roman-caps'
+  return styled(group, run.bold, run.italic, lettersOf(roles.target))
 }
 
 // whether a face's coverage holds a code point: ranges start, end (inclusive), sorted and disjoint
@@ -361,9 +417,12 @@ const holds = (ranges, cp) => {
   }
   return false
 }
-const WHITE = /^\s$/u
+// white space, and the characters Unicode marks default ignorable (zero width space and joiners, soft hyphen, variation
+// selectors, byte order mark): invisible, never drawn, as the TeX path drops them (mt.mjs texEscape)
+const SKIPPED = /^(?:\s|\p{Default_Ignorable_Code_Point})$/u
 
-/** whether every character of `text` (but white space) is in one of `faces`' coverage or their fallbacks' */
+/** whether every character of `text` (but white space and the default ignorable) is in one of `faces`' coverage or
+ *  their fallbacks' */
 export function canDraw(text, faces, roles) {
   const seen = new Set(), queue = [...faces]
   while (queue.length) {
@@ -375,7 +434,7 @@ export function canDraw(text, faces, roles) {
   }
   const ranges = [...seen].filter(id => Object.hasOwn(COVERAGE, id)).map(id => COVERAGE[id])
   for (const ch of String(text)) {
-    if (WHITE.test(ch)) continue
+    if (SKIPPED.test(ch)) continue
     const cp = ch.codePointAt(0)
     if (!ranges.some(r => holds(r, cp))) return false
   }

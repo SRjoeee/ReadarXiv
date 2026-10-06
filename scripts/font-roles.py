@@ -40,7 +40,7 @@ def fail(problems):
 
 
 def faces():
-    """FACE_TABLE's rows: id, file, source, group, weight, style, licence, web"""
+    """FACE_TABLE's rows: id, file, source, group, weight, style, size, licence, web"""
     m = re.search(r'const FACE_TABLE = `\n(.*?)`', ROLES.read_text(encoding='utf-8'), re.S)
     if not m:
         fail([f'no FACE_TABLE in {ROLES}'])
@@ -48,12 +48,12 @@ def faces():
     for line in m.group(1).splitlines():
         if line.strip():
             cols = line.split()
-            if len(cols) < 8:
+            if len(cols) < 9:
                 fail([f'a FACE_TABLE row of {len(cols)} columns: {line.strip()}'])
             if cols[2] not in RELEASE_OF:
                 fail([f'{cols[0]}: source {cols[2]!r}, neither texlive nor hosted'])
-            # the licence is every column between the style and the web status (an SPDX expression may hold spaces)
-            rows.append(cols[:6] + [' '.join(cols[6:-1]), cols[-1]])
+            # the licence is every column between the size and the web status (an SPDX expression may hold spaces)
+            rows.append(cols[:7] + [' '.join(cols[7:-1]), cols[-1]])
     return rows
 
 
@@ -65,6 +65,8 @@ def committed(against):
         try:
             text = subprocess.run(['git', 'show', f'HEAD:{COVERAGE_PATH}'], cwd=ROOT, capture_output=True, text=True, check=True).stdout
         except (subprocess.CalledProcessError, FileNotFoundError):
+            print(f'font-roles.py: no committed {COVERAGE_PATH} (not a git checkout, or none at HEAD) and no --against: '
+                  'no digest is checked against binding METRICS', file=sys.stderr)
             return {}, {}
     digests = dict(re.findall(r"'([a-z0-9-]+)': Object\.freeze\(\{ unitsPerEm: [^}]*?sha256: '([0-9a-f]{64})' \}\)", text))
     m = re.search(r'release: Object\.freeze\(\{ (.*?) \}\)', text)
