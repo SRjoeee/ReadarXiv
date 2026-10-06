@@ -41,6 +41,7 @@ import { classifyFont, faceOf, loadRoleFaces, loadWebFaces, styleKey, setRoleFac
 import { loadHyphenation } from './hyph.mjs'
 import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
+import { locatedWhole, texParts, texRects } from './tex.mjs'
 
 /** the prototype's getDocument options beside the host's asset URLs (main.js ASSETS): its canvases on the GPU, the whole
  *  file read at once */
@@ -97,10 +98,15 @@ export const layOrder = (placed, batch = 8) => layGroups(placed, batch).flatMap(
  * in place of layGroups': a recorded run's). `faces`: 'roles' (the role table's) or 'prototype' (the prototype's own).
  * `faceUrl(file)`, `fontUrl(file)`, `hyphUrl(lang)`: where the host serves the role table's faces (by file name), the
  * prototype's Latin Modern (by name) and TeX's patterns. Nothing is drawn until `until(p)` is awaited.
+ * `tex` (the hybrid, tex.mjs): the layout file (`index`, layout/file.mjs indexLayout's), the units file's pieces by unit
+ * (`pieces`), and how its geometry is taken (`use`: 'ph', each placeholder's ink alone; 'lines', the unit's lines,
+ * label too, its blocks v0's rule's over them; `extents`: 'v0' or 'tex', with 'lines'; `texOnly`: with 'lines', the units the file locates whole
+ * that v0's geometry does not hold, but table cells; `symbols`: 'strict' or 'text', locatedWhole's). Each unit the file
+ * locates whole takes them; every other unit is v0's own. Null: v0 alone.
  * `copy`: whether each page's copy is kept at v0's own resolution (`right`), the plane the checker and the gate measure;
  * a view draws the page at its own (drawCopy) and needs none.
  */
-export async function openProto({ doc, geometry, units: all, target: to, pages = 999, scale = 1.25, dpr = 1, params = {}, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, copy = true }) {
+export async function openProto({ doc, geometry, units: all, target: to, pages = 999, scale = 1.25, dpr = 1, params = {}, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, copy = true }) {
   const P = L2.defaultParams(to)
   for (const k of PARAM_KEYS) if (params[k] !== undefined) P[k] = params[k]
   // iteration 2's hyphenation, fetched at once (local, small)
@@ -155,14 +161,61 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   all.forEach((u, id) => {
     if ((u.state === 'whole' || u.state === 'partial') && u.pieces && !inGeometry.has(id)) skipped.push({ id, kind: u.kind, why: 'unanchored', chars: trCharsOf(u) })
   })
+  // the hybrid: whether the layout file locates each unit whole, and so which source its geometry is (sources: each
+  // unit's, with why a unit is v0's)
+  const sources = { tex: [], v0: [], why: {} }
+  const judge = (id, u) => {
+    if (!tex) return null
+    const lu = tex.index.unit(id)
+    const w = locatedWhole(lu, u, tex.pieces.get(id), { symbols: tex.symbols ?? 'text' })
+    return w.ok ? { lu, kOf: w.kOf } : { why: w.why }
+  }
+  const placeOf = (id, stream, rects, u, t, total = rects.length) => {
+    const onPages = rects.filter(r => r[0] <= N)
+    if (!onPages.length) return null
+    // (cut: the unit goes on past the pages shown, so that it has fewer lines here than it has)
+    return { id, stream, rects: onPages, unit: u, blocks: blocksOf(onPages, geometry.left.pages), pages: [...new Set(onPages.map(r => r[0]))], cut: onPages.length < total, tex: t }
+  }
+  /** a unit the file locates whole, placed by its lines in the file (texRects: the rectangles its exact baselines are by) */
+  const placeByFile = (id, stream, u, w) => { const lines = texRects(w.lu, N); return placeOf(id, stream, lines.rects, u, { ...w, lines }, w.lu.lines.length / 8) }
   for (const [id, stream, rects] of geometry.left.units) {
     const u = all[id]
     if (!u?.pieces || (u.state !== 'whole' && u.state !== 'partial')) continue
     if (u.kind === 'author') { skipped.push({ id, kind: u.kind, why: 'author', chars: trCharsOf(u), pages: [...new Set(rects.map(r => r[0]))] }); continue }
-    const onPages = rects.filter(r => r[0] <= N)
-    if (!onPages.length) continue
-    // (cut: the unit goes on past the pages shown, so that it has fewer lines here than it has)
-    placed.push({ id, stream, rects: onPages, unit: u, blocks: blocksOf(onPages, geometry.left.pages), pages: [...new Set(onPages.map(r => r[0]))], cut: onPages.length < rects.length })
+    const w = judge(id, u)
+    let p = null
+    if (w?.lu && tex.use === 'lines') {
+      // the file's lines, frames and label in place of the anchors' rectangles (v0's where the file's lie past the
+      // pages shown and the anchors' do not)
+      p = placeByFile(id, stream, u, w)
+      if (!p && (p = placeOf(id, stream, rects, u, null))) w.why = 'pages'
+    } else p = placeOf(id, stream, rects, u, w?.lu ? w : null)
+    if (!p) continue
+    placed.push(p)
+    if (tex) {
+      if (p.tex) sources.tex.push(id)
+      else { sources.v0.push(id); sources.why[w.why] = (sources.why[w.why] ?? 0) + 1 }
+    }
+  }
+  // (texOnly: the units v0's geometry does not hold that the file locates whole, at their place in the text's stream
+  // after the unit before them; table cells are not among them)
+  if (tex?.texOnly && tex.use === 'lines') {
+    const streamOf = new Map(geometry.left.units.map(([id, stream]) => [id, stream]))
+    for (const id of tex.index.file.units.map(r => r[0])) {
+      const u = all[id]
+      if (inGeometry.has(id) || !u?.pieces || (u.state !== 'whole' && u.state !== 'partial') || u.kind === 'author' || u.kind === 'cell') continue
+      const w = judge(id, u)
+      if (!w.lu) { sources.why[`unanchored, ${w.why}`] = (sources.why[`unanchored, ${w.why}`] ?? 0) + 1; continue }
+      let before = -1
+      for (const [gid, s] of streamOf) if (gid < id && s > before) before = s
+      const p = placeByFile(id, before + 0.5, u, w)
+      if (!p) continue
+      placed.push(p)
+      sources.tex.push(id)
+      sources.texOnly = (sources.texOnly ?? 0) + 1
+      const at = skipped.findIndex(s => s.id === id)
+      if (at >= 0) skipped.splice(at, 1)
+    }
   }
   placed.sort((a, b) => a.stream - b.stream)
   // the lowest unit line of each page: no unit borrows below it (the page's text area)
@@ -242,9 +295,11 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     const centres = rs.map(r => (r[1] + r[3]) / 2)
     return centres.every(c => Math.abs(c - cmid) < 2.5) && rs.every(r => r[3] - r[1] < 0.92 * (cx1 - cx0)) && rs[0][1] > cx0 + 4
   }
-  // every unit's rectangles by page, for growing a unit's lines over what no other unit holds
+  // every unit's rectangles by page, for growing a unit's lines over what no other unit holds (with the file's lines of
+  // the units the hybrid draws that v0's geometry does not hold)
   const rectsByPage = new Map()
   for (const [id, , rects] of geometry.left.units) for (const r of rects) { if (!rectsByPage.has(r[0])) rectsByPage.set(r[0], []); rectsByPage.get(r[0]).push([id, r]) }
+  for (const p of placed) if (!inGeometry.has(p.id)) for (const r of p.rects) { if (!rectsByPage.has(r[0])) rectsByPage.set(r[0], []); rectsByPage.get(r[0]).push([p.id, r]) }
   const textArea = pg => { const rs = (rectsByPage.get(pg) ?? []).map(([, r]) => r); return [Math.min(...rs.map(r => r[1])), Math.max(...rs.map(r => r[3]))] }
   const columnOf = b => {
     const mid = (b.x0 + b.x1) / 2
@@ -288,7 +343,13 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     // 1512.03385 page 3, a paragraph's last lines laid over the next column's): left out, the unit keeping one at least
     const overlap = (a, b) => Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1])) * Math.max(0, Math.min(a[4], b[4]) - Math.max(a[2], b[2]))
     const claimed = r => (others[r[0]] ?? []).some(o => overlap(r, o) > 0.5 * (r[3] - r[1]) * (r[4] - r[2]))
-    const kept = p.rects.filter(r => !claimed(r))
+    // (the file's lines are the unit's own, whole, and its first line starts at the unit's own mark: none of the
+    // anchors' repairs of which lines are the unit's or where it starts; but a line's extent across is its words', as the
+    // anchors' is (the maker's rows are the text layer's word tokens'), and is grown as v0 grows them, over a formula's
+    // tail and a justified line's last glyphs: 1512.03385 page 10's "(mAP @" and "IoU =", whose "@" and "=" were put back
+    // under the translation)
+    const fileLines = !!p.tex?.lines
+    const kept = fileLines ? p.rects : p.rects.filter(r => !claimed(r))
     p.dropped = kept.length && kept.length < p.rects.length ? p.rects.length - kept.length : 0
     // (its pages stay as they were counted: a page it no longer holds lines on is painted with nothing)
     if (p.dropped) p.rects = kept
@@ -303,10 +364,12 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     p.local = local
     // iteration 3: a block's far-in first line from its block's edge, and lines over what stands beside them, before the
     // unit is aligned (what they then hold is the unit's)
-    L2.extendFirstLines(p.rects, geometry.left.pages, others)
+    if (!fileLines) L2.extendFirstLines(p.rects, geometry.left.pages, others)
     p.grown = L2.extendRects2(p.rects, local, others, p.unit.src, wordsOf, norm, geometry.left.pages)
-    const inkBefore = L2.snapFirstRect2(p.rects, local)
-    const prep = L2.prepareUnit(p.unit, p.rects, local, phMode === 'source' ? null : citeMap)
+    const inkBefore = fileLines ? undefined : L2.snapFirstRect2(p.rects, local)
+    // the hybrid: a unit the file locates whole read with the file's parts
+    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0' }) : null
+    const prep = L2.prepareUnit(p.unit, p.rects, local, phMode === 'source' ? null : citeMap, null, parts)
     // iteration 3: each crop over the ink it touches (its page's ink map)
     for (const r of prep.values()) {
       if (r?.mode !== 'crop') continue
@@ -333,12 +396,16 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     const t4 = performance.now()
     p.layout.extents = new Map([...prep.extents].map(([r, e]) => [r.join(), e]))
     if (p.blocks[0] && (prep.label || prep.firstX0 !== undefined || inkBefore !== undefined)) {
-      const r0 = p.blocks[0].rects[0], e = p.layout.extents.get(r0.join()) ?? r0.slice(1)
-      let x0 = prep.firstX0 !== undefined ? Math.min(e[0], prep.firstX0 - 0.2) : e[0]
-      // from right after the ink before it (a label), but never more than 2 pt before the line's own first word
-      if (inkBefore !== undefined) x0 = Math.min(x0, Math.max(inkBefore + 0.5, (prep.firstX0 ?? e[0]) - 2))
-      if (prep.label) x0 = Math.max(x0, prep.label.x1 + 0.6)
-      p.layout.extents.set(r0.join(), [x0, e[1], e[2], e[3]])
+      const r0 = p.blocks[0].rects[0], ext = p.layout.extents.get(r0.join()) ?? r0.slice(1)
+      // (an extent of several boxes, the file's: its first)
+      const multi = Array.isArray(ext[0]), e = multi ? ext[0] : ext
+      if (e) {
+        let x0 = prep.firstX0 !== undefined ? Math.min(e[0], prep.firstX0 - 0.2) : e[0]
+        // from right after the ink before it (a label), but never more than 2 pt before the line's own first word
+        if (inkBefore !== undefined) x0 = Math.min(x0, Math.max(inkBefore + 0.5, (prep.firstX0 ?? e[0]) - 2))
+        if (prep.label) x0 = Math.max(x0, prep.label.x1 + 0.6)
+        p.layout.extents.set(r0.join(), multi ? [[x0, e[1], e[2], e[3]], ...ext.slice(1)] : [x0, e[1], e[2], e[3]])
+      }
     }
     const lines = p.layout.lines.map(l => {
       const b = p.blocks[l.block]
@@ -346,7 +413,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     })
     const drawnTok = new Set(p.layout.lines.flatMap(l => l.items.map(it => it.t)))
     const tr = tokens.filter(t => t.s && !t.ph && !t.sup)
-    record(p, { grown: p.grown, dropped: p.dropped, s, f: p.layout.f, fitScale: p.layout.scale, knob: p.layout.knob, clipped: p.layout.clipped, lostChars: p.layout.lostChars, chars: p.layout.chars, lead: p.layout.state.lead, track: p.layout.state.track || p.layout.state.trackLatin, compress: p.layout.state.compress, borrow: p.layout.state.borrow, free: r1(Math.max(0, ...p.blocks.map(b => b.free))), tried: p.layout.tried, lines, orig, drawnRuns: L2.drawnRuns(tokens), drawnBase: styleKey(tokens.base), trChars: tr.reduce((a, t) => a + [...t.s].length, 0), trDrawn: p.layout.lines.reduce((a, l) => a + l.items.reduce((b, it) => b + (it.t.s && !it.t.ph && !it.t.sup ? [...it.t.s].length - (it.t.hyphenated ? 1 : 0) : 0), 0), 0), modes: modesOf(prep), unused: drawnTok.size, ms: [r1(t1 - t0), r1(t2 - t1), r1(t3 - t2), r1(t4 - t3)], tokens: tokens.length })
+    record(p, { ...(tex ? { source: p.tex ? 'tex' : 'v0' } : {}), grown: p.grown, dropped: p.dropped, s, f: p.layout.f, fitScale: p.layout.scale, knob: p.layout.knob, clipped: p.layout.clipped, lostChars: p.layout.lostChars, chars: p.layout.chars, lead: p.layout.state.lead, track: p.layout.state.track || p.layout.state.trackLatin, compress: p.layout.state.compress, borrow: p.layout.state.borrow, free: r1(Math.max(0, ...p.blocks.map(b => b.free))), tried: p.layout.tried, lines, orig, drawnRuns: L2.drawnRuns(tokens), drawnBase: styleKey(tokens.base), trChars: tr.reduce((a, t) => a + [...t.s].length, 0), trDrawn: p.layout.lines.reduce((a, l) => a + l.items.reduce((b, it) => b + (it.t.s && !it.t.ph && !it.t.sup ? [...it.t.s].length - (it.t.hyphenated ? 1 : 0) : 0), 0), 0), modes: modesOf(prep), unused: drawnTok.size, ms: [r1(t1 - t0), r1(t2 - t1), r1(t3 - t2), r1(t4 - t3)], tokens: tokens.length })
   }
   function record(p, x) {
     const match = x.orig !== undefined ? L2.styleMatch(x.orig, x.drawnRuns, x.drawnBase) : undefined
@@ -470,7 +537,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   const needsCopy = () => { if (!copy) throw new Error("v0's checker reads its copy at its own resolution: open with copy: true") }
 
   return {
-    N, P, rows, placed, skipped, stats, audit, order, ms, pageMs, chars: chars2, views,
+    N, P, rows, placed, skipped, stats, audit, order, ms, pageMs, chars: chars2, views, sources,
     get designs() { return designs },
     /** the page after whose units page `pg` is done */
     doneAt: pg => doneAt[pg],

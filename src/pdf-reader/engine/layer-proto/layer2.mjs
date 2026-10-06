@@ -220,20 +220,27 @@ export function phClass2(src) {
  * "F(x)+x" read as one word, so neither was found). Also: the lines one rectangle holds are kept apart by a space; a
  * size change alone is no word break (small capitals: "A" "N" for "AN", 0.8 pt apart); a tall rectangle is erased only
  * to its own characters' depth.
+ * `exact` (a layout file's lines, tex.mjs): each rectangle's baseline and size, known; a line then holds the characters
+ * within its ink's extent (a point either side, a character's place in its item being an estimate) that stand on its
+ * baseline, scripts and all (within a script's window of it, as the layout maker takes a line's glyphs), each the line's
+ * whose baseline is nearest.
  */
-export function charsOfUnit2(rects, charsByPage, extents) {
+export function charsOfUnit2(rects, charsByPage, extents, exact = null) {
   const out = []
   const yOf = c => c.ybEff ?? c.yb
-  const holds = (r, c) => {
-    const cx = (c.x0 + c.x1) / 2, cy = yOf(c) + c.size * 0.3
-    return cx >= r[1] - (r === rects[0] ? 0.5 : 6) && cx <= r[3] + 6 && cy >= r[2] - 1 && cy <= r[4] + 1
-  }
+  const holds = exact
+    ? (r, c) => { const cx = (c.x0 + c.x1) / 2; return cx >= r[1] - 1 && cx <= r[3] + 1 && Math.abs(yOf(c) - exact.get(r).baseline) < 0.6 * Math.max(c.size, 5) + 1.5 }
+    : (r, c) => {
+        const cx = (c.x0 + c.x1) / 2, cy = yOf(c) + c.size * 0.3
+        return cx >= r[1] - (r === rects[0] ? 0.5 : 6) && cx <= r[3] + 6 && cy >= r[2] - 1 && cy <= r[4] + 1
+      }
   const sizeOf = new Map()
   for (const r of rects) {
+    if (exact) { sizeOf.set(r, exact.get(r).size); continue }
     const cs = (charsByPage[r[0] - 1] ?? []).filter(c => /\S/.test(c.ch) && holds(r, c))
     sizeOf.set(r, cs.length ? median(cs.map(c => c.size)) : (r[4] - r[2]) / 0.894)
   }
-  const dist = (r, c) => { const z = sizeOf.get(r); return Math.min(Math.abs(yOf(c) - (r[2] + 0.22 * z)), Math.abs(yOf(c) - (r[4] - 0.69 * z))) }
+  const dist = exact ? (r, c) => Math.abs(yOf(c) - exact.get(r).baseline) : (r, c) => { const z = sizeOf.get(r); return Math.min(Math.abs(yOf(c) - (r[2] + 0.22 * z)), Math.abs(yOf(c) - (r[4] - 0.69 * z))) }
   const owner = new Map()
   for (const r of rects) for (const c of charsByPage[r[0] - 1] ?? []) {
     if (!holds(r, c)) continue
@@ -1074,13 +1081,24 @@ function drawnAs(p, g, cls, sup) {
   const big = Math.max(...real.map(c => c.size))
   const mainY = median(real.filter(c => c.size >= 0.85 * big).map(c => c.ybEff ?? c.yb))
   const oneLine = real.every(c => Math.abs((c.ybEff ?? c.yb) - mainY) < 0.75 * big)
-  if (cls !== 'other' || (lines.size > 1 && !oneLine) || p.cls === 'macro' || p.cls === 'umacro') return { mode: 'orig-text', text: g.text, sup: sup || (cls === 'num' && real.length && real.every(c => c.size < lineSize * 0.85)), st: gst }
+  // (a rendering whose source knows where its ink is, a layout file's segments, g.box: its lines are its segments)
+  const box = g.box
+  const broken = box ? box.lines > 1 : lines.size > 1 && !oneLine
+  if (cls !== 'other' || broken || p.cls === 'macro' || p.cls === 'umacro') return { mode: 'orig-text', text: g.text, sup: sup || (cls === 'num' && real.length && real.every(c => c.size < lineSize * 0.85)), st: gst }
   const main = real.filter(c => c.size >= lineSize * 0.85)
-  const baseline = median((main.length ? main : real).map(c => c.yb))
+  const own = median((main.length ? main : real).map(c => c.yb))
+  // (with a box: the baseline of the line its ink sits on, where its characters stand on that line, so that a raised or
+  // lowered formula keeps its raise, which its characters' own baseline set on the line; and its ink's own extent
+  // across, which its characters' places in their items only estimate)
+  const baseline = box && Math.abs(box.baseline - own) <= 0.6 * big ? box.baseline : own
   // (a hanging glyph, a radical, from an em below its baseline to just above it: by its baseline, its box reached into
   // the line above, "√dk" taking "nd v." from "…dimension d_v.")
-  const y0 = Math.min(...real.map(c => (c.ybEff !== undefined ? c.yb - c.size : c.yb - c.size * 0.26))), y1 = Math.max(...real.map(c => (c.ybEff !== undefined ? c.yb + c.size * 0.15 : c.yb + c.size * 0.8)))
-  return { mode: 'crop', page: real[0].page, crop: [Math.min(...real.map(c => c.x0)) - 0.4, y0, Math.max(...real.map(c => c.x1)) + 0.4, y1], baseline, text: texToText2(p.src) }
+  let y0 = Math.min(...real.map(c => (c.ybEff !== undefined ? c.yb - c.size : c.yb - c.size * 0.26))), y1 = Math.max(...real.map(c => (c.ybEff !== undefined ? c.yb + c.size * 0.15 : c.yb + c.size * 0.8)))
+  // (with a box, within its glyphs' boxes too: a big operator's origin, which the text layer gives, stands above its
+  // glyph, and the band by it reached into the line above, 1706.03762's footnote's sum)
+  if (box?.top !== undefined) { y0 = Math.max(y0, box.bottom - 0.3); y1 = Math.min(y1, box.top + 0.3) }
+  const x0 = box ? box.x0 : Math.min(...real.map(c => c.x0)), x1 = box ? box.x1 : Math.max(...real.map(c => c.x1))
+  return { mode: 'crop', page: real[0].page, crop: [x0 - 0.4, y0, x1 + 0.4, y1], baseline, text: texToText2(p.src) }
 }
 
 const YEAR = /\b(?:19|20)\d\d[a-z]?\b/
@@ -1240,12 +1258,14 @@ export function growCrop(r, ink, toDev, k, pageChars = []) {
   const colInk = (c, a, b) => { for (let row = a; row <= b; row++) if (at(row, c)) return true; return false }
   // the characters beside it on its line that are not its own: a column on one of them is theirs
   const y0 = r.crop[1], y1 = r.crop[3]
-  // (a math glyph touching it is the formula's own: a fraction's subscript the text layer put outside its gap)
-  const beside = pageChars.filter(c => /\S/.test(c.ch) && !own.has(`${c.item}|${c.k}`) && c.st?.fam !== 'math' && c.yb + 0.7 * c.size > y0 && c.yb - 0.2 * c.size < y1)
+  // (a math glyph touching it is the formula's own: a fraction's subscript the text layer put outside its gap; but not
+  // where the rendering's source knows its ink, a layout file's segments, g.box: every other glyph is another's)
+  const foreignMath = !!r.gap?.box
+  const beside = pageChars.filter(c => /\S/.test(c.ch) && !own.has(`${c.item}|${c.k}`) && (foreignMath || c.st?.fam !== 'math') && c.yb + 0.7 * c.size > y0 && c.yb - 0.2 * c.size < y1)
   const x0 = r.crop[0], x1 = r.crop[2]
   const blocked = (from, to) => beside.some(c => c.x1 > from + 0.2 && c.x0 < to - 0.2)
   // and up or down never into another line's text (a tight footnote's line above: its glyphs touch)
-  const above = pageChars.filter(c => /\S/.test(c.ch) && !own.has(`${c.item}|${c.k}`) && c.st?.fam !== 'math' && c.x1 > x0 && c.x0 < x1 && Math.abs(c.yb - (y0 + y1) / 2) < 2.5 * c.size)
+  const above = pageChars.filter(c => /\S/.test(c.ch) && !own.has(`${c.item}|${c.k}`) && (foreignMath || c.st?.fam !== 'math') && c.x1 > x0 && c.x0 < x1 && Math.abs(c.yb - (y0 + y1) / 2) < 2.5 * c.size)
   const blockedRow = (from, to) => above.some(c => c.yb - 0.22 * c.size < to && c.yb + 0.72 * c.size > from)
   const grown = { top: 0, bottom: 0, left: 0, right: 0 }
   for (let n = 0; n < Math.max(6, maxDown); n++) {
@@ -1652,6 +1672,10 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
     b.sizes = b.rects.map(r => info(r)?.size ?? (r[4] - r[2]) / 0.894)
     const d = b.B.slice(1).map((y, i) => b.B[i] - y).filter(v => v > 0)
     b.pitch0 = d.length ? median(d) : null
+    // (a layout file's baselines, `file`, are written to a hundredth: an evenly set block's pitch is its gaps' mean, which
+    // the rounding does not move, where their median may be off by a few thousandths and its lines' slots so a line off
+    // the last baseline at 1.3 times it: 1512.03385's unit 59)
+    if (d.length > 1 && b.rects.every(r => info(r)?.file) && d.every(v => Math.abs(v - b.pitch0) <= 0.02)) b.pitch0 = d.reduce((a, v) => a + v, 0) / d.length
     b.free = 0
   }
   return blocks

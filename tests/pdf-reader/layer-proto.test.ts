@@ -146,8 +146,8 @@ describe("v0's first lines: never laid over ink a unit does not erase (step 2)",
   const item = (text: string, x: number, yb: number, size: number, n: number, st = serif) => [...text].map((ch, k) => ({ ch, x0: x + 0.5 * size * k, x1: x + 0.5 * size * (k + 1), yb, size, item: n, ix: x, k, st }))
   it('a far-in first line keeps its start, which extendFirstLines left after another unit\'s line', () => {
     const [b] = L2.blocksOf2([[1, 200, 98, 400, 107], [1, 50, 86, 400, 95]] as never, [[0, 0, 612, 792]])
-    expect(b.rects[0][1]).toBe(200)
-    expect(b.indent).toBe(150)
+    expect(b?.rects[0]?.[1]).toBe(200)
+    expect(b?.indent).toBe(150)
   })
   it("a first line that opens with what its source does not write, before its first word, keeps it as a label", () => {
     const page = [...item('Input Representations', 10, 100, 10, 0, { ...serif as object, bold: true } as never), ...item('To make it work', 130, 100, 10, 1)]

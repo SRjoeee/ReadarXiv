@@ -2,11 +2,29 @@
 import type { Audit, CheckResult } from './check.mjs'
 import type { Rect } from './layer1.mjs'
 import type { Block2, Char, DrawOp, DrawSource, Layout, Params, Prepared, Token, Unit } from './layer2.mjs'
+import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
+import type { TexLines, Whole } from './tex.mjs'
 
 /** the made output's geometry (schema 1): the pages' views, each unit's [id, stream, rects] on the original, its kind */
 export interface Geometry { schema: number; kinds: string[]; left: { pages: number[][]; units: [number, number, Rect[]][] }; right?: unknown }
 /** a unit v0 places: its rectangles on the pages shown, its pages, and once laid its reading, tokens, blocks and layout */
-export interface Placed { id: number; stream: number; rects: Rect[]; unit: Unit; pages: number[]; cut: boolean; blocks: Block2[]; prep?: Prepared; tokens?: Token[]; layout?: Layout; s?: number; rec?: Rec; local?: Char[][] }
+export interface Placed { id: number; stream: number; rects: Rect[]; unit: Unit; pages: number[]; cut: boolean; blocks: Block2[]; prep?: Prepared; tokens?: Token[]; layout?: Layout; s?: number; rec?: Rec; local?: Char[][]; tex?: (Whole & { lu: LayoutUnit; lines?: TexLines }) | null }
+/** the hybrid's options (openProto `tex`): the layout file, the units file's pieces by unit id, and how the file's
+ *  geometry is taken */
+export interface HybridOptions {
+  index: LayoutIndex
+  pieces: Map<number, unknown[]>
+  /** 'ph': each placeholder's ink alone; 'lines': the unit's lines and label too */
+  use: 'ph' | 'lines'
+  /** with 'lines': the units the file locates whole that v0's geometry does not hold, but table cells */
+  texOnly?: boolean
+  /** locatedWhole's: 'text' (the default) asks no symbol drawn as text to be found; 'strict' asks it too */
+  symbols?: 'text' | 'strict'
+  /** with 'lines': each line's erase extent from its characters (v0's, the default) or the file's erase rectangles */
+  extents?: 'v0' | 'tex'
+}
+/** which source each placed unit's geometry is (ids), and why the others are v0's (by locatedWhole's why) */
+export interface Sources { tex: number[]; v0: number[]; why: Record<string, number>; texOnly?: number }
 /** a page's canvases at v0's own resolution (the original, its copy where `copy` keeps one), its SVG at `w` × `h` CSS px,
  *  and its drawing as data (every painted unit's operations in turn: drawCopy draws them at any resolution) */
 export interface Row { page: number; left: HTMLCanvasElement; right: HTMLCanvasElement | null; svg: SVGSVGElement; w: number; h: number; base: boolean; ops: DrawOp[]; view?: number[]; released?: boolean }
@@ -35,6 +53,8 @@ export interface ProtoRun {
   chars: Char[][]
   views: { convertToViewportPoint(x: number, y: number): number[]; convertToPdfPoint(x: number, y: number): number[] }[]
   readonly designs: { serif: string; sans: string; mono: string }
+  /** the hybrid's: each unit's source (empty lists where `tex` is null) */
+  sources: Sources
   doneAt(page: number): number
   until(page: number): Promise<void>
   /** a done page's copy at `k` device pixels a PDF unit onto `ctx`, from `source`, the page as PDF.js drew it at k */
@@ -62,4 +82,6 @@ export declare function openProto(o: {
   hyphUrl?: (lang: string) => string
   /** whether each page's copy is kept at v0's own resolution (the checker's and the gate's plane); default true */
   copy?: boolean
+  /** the hybrid (tex.mjs): null, v0 alone */
+  tex?: HybridOptions | null
 }): Promise<ProtoRun>

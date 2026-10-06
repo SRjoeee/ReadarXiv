@@ -30,14 +30,14 @@ export interface Unit { kind: string; src: string; pieces: { t: string; s?: stri
  *  source knows it exactly (drawnAs places a crop by it) */
 export interface Gap { text: string; chars: Char[]; of?: Gap; unbracketed?: boolean; norm?: string; taken?: boolean; box?: RenderingBox }
 /** a rendering's ink as its source knows it: its extent across, the baseline of the line it sits on, its lines */
-export interface RenderingBox { x0: number; x1: number; baseline: number; lines: number }
+export interface RenderingBox { x0: number; x1: number; top?: number; bottom?: number; baseline: number; lines: number }
 /** a placeholder of the unit by its piece index `k` (placeholdersOf): its source, its class (phClass2), whether it is a
  *  paper's own macro, a nested footnote's mark; a citation's keys */
 export interface Placeholder { k: number; src: string; cls: string; unknown?: boolean; nested?: boolean; keys?: string[] }
 /** the paper's citations as learnt in lay order (a key's number), an author-year key's text, a macro's rendering */
 export type CiteMap = Map<string, string | undefined> & { text?: Map<string, string>; macros?: Map<string, string> }
-/** a line's baseline and size: measured from its characters or given exactly (exact), else from its rectangle */
-export interface LineInfo { baseline: number; size: number; exact: boolean }
+/** a line's baseline and size: measured from its characters or given exactly (exact; by a layout file, file), else from its rectangle */
+export interface LineInfo { baseline: number; size: number; exact: boolean; file?: boolean }
 /** a line's erase extent, before the drawing's padding: one box [x0, y0, x1, y1], or several */
 export type Extent = number[] | number[][]
 /** a placeholder's resolution: how it is drawn ('none', 'symbol', 'kept', 'crop', 'orig-text', 'cite-map', 'source'),
@@ -115,7 +115,8 @@ export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (f
 export declare function texToText2(src: string): string
 /** phClass with the paper's own macros told apart: { cls, unknown? } */
 export declare function phClass2(src: string): { cls: string; unknown?: boolean }
-export declare function charsOfUnit2(rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], extents?: Map<Rect, number[]>): Char[]
+/** the unit's characters by its rectangles; `exact`: each rectangle's baseline and size where a layout file gives them */
+export declare function charsOfUnit2(rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], extents?: Map<Rect, number[]>, exact?: ReadonlyMap<Rect, { baseline: number; size: number }> | null): Char[]
 export declare function extendRects2(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, pageViews: readonly number[][]): number
 export declare function extendFirstLines(rects: Rect[], pageViews: readonly number[][], others: readonly (readonly Rect[] | undefined)[]): void
 export declare function blocksOf2(rects: readonly Rect[], pageViews: readonly number[][], keep?: ReadonlySet<string> | null, regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null): Block[]
