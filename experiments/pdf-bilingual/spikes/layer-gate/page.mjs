@@ -371,24 +371,55 @@ window.gate = {
     S.cur.T = T
     const ref = S.ref[p] ?? []
     const m = pixelPage({ k: K, view, W, H, O, C, T, units, kept, items, ref, drawnText })
-    // lost ink at 2x: the copy erased and cropped before the text, against the drawn units' own glyph boxes (the layout's
-    // erase for their lines on the page)
+    // lost ink at 2x: the copy erased and cropped before the text, against what the drawn units account for: their own
+    // source glyphs, which their translation replaces. Those are the layout's glyph boxes (its erase for their lines on
+    // the page), grown over the ink connected to them within the unit's own line bands (0.35 em below each baseline to
+    // 0.95 em above it): a font's declared box is not its ink (a descender the box misses is the glyph's own, the parity
+    // report's §3.3), and erasing it loses nothing of the original. The grown ink never takes a kept rendering (a
+    // display's segment, a label) nor another unit's undrawn line
     const two = await rendered(page, INK_SCALE)
     const copy = new OffscreenCanvas(two.W, two.H), cctx = copy.getContext('2d', { willReadFrequently: true })
     drawCopy(cctx, two.c, two.vp, done.draws, S.composite)
-    const accounted = new Uint8Array(two.W * two.H)
+    const N = two.W * two.H
+    const fill = (mask, x0, y0, x1, y1, v = 1) => {
+      const [x, y, rw, rh] = corners(two.vp, x0, y0, x1, y1)
+      for (let yy = Math.max(0, Math.floor(y)); yy < Math.min(two.H, Math.ceil(y + rh)); yy++) mask.fill(v, yy * two.W + Math.max(0, Math.floor(x)), yy * two.W + Math.min(two.W, Math.ceil(x + rw)))
+    }
+    const accounted = new Uint8Array(N), band = new Uint8Array(N), barred = new Uint8Array(N)
+    const drawnIds = new Set(done.draws.map(d => d.id))
     for (const d of done.draws) {
       const u = S.index.unit(d.id)
       for (let i = 0; i < u.erase.length; i++) {
         if (u.lines[8 * i] !== p) continue
         const r = u.erase[i]
-        for (let e = 0; e + 3 < r.length; e += 4) {
-          const [x, y, rw, rh] = corners(two.vp, r[e], r[e + 1], r[e + 2], r[e + 3])
-          for (let yy = Math.max(0, Math.floor(y)); yy < Math.min(two.H, Math.ceil(y + rh)); yy++) accounted.fill(1, yy * two.W + Math.max(0, Math.floor(x)), yy * two.W + Math.min(two.W, Math.ceil(x + rw)))
-        }
+        for (let e = 0; e + 3 < r.length; e += 4) fill(accounted, r[e], r[e + 1], r[e + 2], r[e + 3])
+        const o = 8 * i, size = u.lines[o + 6], base = u.lines[o + 3]
+        fill(band, u.lines[o + 1] - 0.5, base - 0.35 * size, u.lines[o + 2] + 0.5, base + 0.95 * size)
       }
     }
+    for (const k of kept) fill(barred, k[0] - 0.3, k[1] - 0.3, k[2] + 0.3, k[3] + 0.3)
+    for (const id of S.index.onPage(p)) {
+      if (drawnIds.has(id)) continue
+      const u = S.index.unit(id)
+      for (let i = 0; i < u.erase.length; i++) if (u.lines[8 * i] === p) { const r = u.erase[i]; for (let e = 0; e + 3 < r.length; e += 4) fill(barred, r[e], r[e + 1], r[e + 2], r[e + 3]) }
+    }
     const origData = two.ctx.getImageData(0, 0, two.W, two.H).data, copyData = cctx.getImageData(0, 0, two.W, two.H).data
+    // the grown glyphs: every trace of ink (luminance below 232) reached from one inside a glyph box, 8-connected, within
+    // the bands and off what is barred
+    const trace = i => 0.299 * origData[4 * i] + 0.587 * origData[4 * i + 1] + 0.114 * origData[4 * i + 2] < 232
+    const stack = []
+    for (let i = 0; i < N; i++) if (accounted[i] === 1 && !barred[i] && trace(i)) { accounted[i] = 2; stack.push(i) }
+    while (stack.length) {
+      const i = stack.pop(), x = i % two.W, y = (i - x) / two.W
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx, yy = y + dy
+        if (xx < 0 || yy < 0 || xx >= two.W || yy >= two.H) continue
+        const j = yy * two.W + xx
+        if (accounted[j] === 2 || !band[j] || barred[j] || !trace(j)) continue
+        accounted[j] = 2
+        stack.push(j)
+      }
+    }
     const lost = lostInk({ w: two.W, h: two.H, orig: origData, copy: copyData, accounted, min: INK_MIN, page: p })
     S.lost = { lost, W: two.W, H: two.H, orig: origData, copy: copyData, accounted }
     const [vx0, , , vy1] = view

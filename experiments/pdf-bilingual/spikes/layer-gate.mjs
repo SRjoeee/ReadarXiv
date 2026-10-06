@@ -164,7 +164,8 @@ const inputs = {
   tier: TIER, pages: PAGES ? `the first ${PAGES}` : `the first ${PAGES_OF} of each output, every page of ${[...ALL_PAGES].join(', ')}`, scale: 2.5, inkScale: 2, inkMin: 4, composite: COMPOSITE,
   layouts: LAYOUTS, fixtures: FIXTURES === REFS ? 'data/layer-fixtures' : FIXTURES.startsWith(ROOT) ? FIXTURES.slice(ROOT.length + 1) : FIXTURES, chromium: browser.version(),
   pdfjs: readJson(join(PDFJS, 'package.json')).version, fonts: fontsDigest.slice(0, 16), checker: fileSha(CHECKER).slice(0, 16),
-  measures: sha256(['measure.mjs', 'score.mjs'].map(f => readFileSync(join(GATE, f))).join('\n')).slice(0, 16),
+  // the instrument: the measures, their arithmetic, and the page that draws and accounts (lost ink's own glyphs)
+  measures: sha256(['measure.mjs', 'score.mjs', 'page.mjs'].map(f => readFileSync(join(GATE, f))).join('\n')).slice(0, 16),
 }
 const leaks = []
 const t0 = Date.now()
