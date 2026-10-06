@@ -355,7 +355,19 @@ export const MARKS_VALUES = 2_000_000
 /** the deepest a marks file nests: its object, then marks or lines, then each entry, [name, page, x, y] or [id, count] */
 export const MARKS_DEPTH = 3
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
-const KEYS = ['schema', 'engine', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens']
+const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens']
+const MARKING_KEYS = ['classes', 'movesPunctuation']
+/** a list of classes as the marking takes it: each one of MARK_CLASSES, none twice; else a refusal at `path` */
+function checkClasses(v, path) {
+  if (!Array.isArray(v) || v.length > MARK_CLASSES.length) throw new LayoutRefusal(path, `not an array of at most ${MARK_CLASSES.length} classes`)
+  const seen = new Set()
+  for (let i = 0; i < v.length; i++) {
+    if (!MARK_CLASSES.includes(v[i])) throw new LayoutRefusal(`${path}[${i}]`, 'not a class of MARK_CLASSES')
+    if (seen.has(v[i])) throw new LayoutRefusal(`${path}[${i}]`, 'a class twice')
+    seen.add(v[i])
+  }
+  return v
+}
 const WORDS_MAX = 300_000, WORD_MAX = 200, LINES_MAX = 2000, BOX_MAX = 2000
 const r2 = v => Math.round(v * 100) / 100
 
@@ -372,11 +384,14 @@ const duplicatesIn = log => {
  * TeX pass's log; the caller opens and destroys the document. Every destination MARK_NAME takes, by page (1-based) and
  * place, but one the log reports set twice (`dropped`: TeX kept the first, wherever that was) or off its page's view;
  * each page's view and columns (MARK_DEF's c<n>-<k>); each unit's line count (LINES_TEX's AXT-LINES); the document's
- * text tokens (tokenizeDocument), their words once each. A token whose word is the rest of one given in parts, longer
- * than a word may be, or off its page is left out. Numbers to a hundredth. What it gives, parseLayoutMarks takes
+ * text tokens (tokenizeDocument), their words once each; and what the marked original was marked with (`marking`: the
+ * classes and the paper's own switch it was given to layoutMarking), so that the maker knows which pieces have marks. A
+ * token whose word is the rest of one given in parts, longer than a word may be, or off its page is left out. Numbers to
+ * a hundredth. What it gives, parseLayoutMarks takes
  */
-export async function layoutMarksOf(marked, log, { engine }) {
+export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLASSES, movesPunctuation = [] }) {
   if (!ENGINES.includes(engine)) throw new LayoutRefusal('engine', `not one of ${ENGINES.join(', ')}`)
+  const marking = { classes: [...checkClasses(classes, 'classes')], movesPunctuation: [...checkClasses(movesPunctuation, 'movesPunctuation')] }
   const pdf = marked
   const pages = checkPages(pdf.numPages, 'pages')
   const views = [], text = []
@@ -426,14 +441,14 @@ export async function layoutMarksOf(marked, log, { engine }) {
     }
     tokens.push(t.page, x, y, w, h, k)
   }
-  return { schema: 1, engine, pages, views, columns, marks, dropped, lines, words, tokens }
+  return { schema: 1, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens }
 }
 
 /** the marks file as written: the schema's keys in order, numbers to a hundredth */
 export function encodeLayoutMarks(m) {
-  const { schema, engine, pages, views, columns, marks, dropped, lines, words, tokens } = m
+  const { schema, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens } = m
   return JSON.stringify({
-    schema, engine, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, words,
+    schema, engine, marking: { classes: marking.classes, movesPunctuation: marking.movesPunctuation }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, words,
     tokens: tokens.map((v, i) => (i % 6 === 0 || i % 6 === 5 ? v : r2(v))),
   })
 }
@@ -443,6 +458,9 @@ export function parseLayoutMarks(bytes) {
   const m = checkKeys(boundedJson(bytes, { cap: MARKS_CAP, values: MARKS_VALUES, depth: MARKS_DEPTH }), KEYS, '')
   if (m.schema !== 1) throw new LayoutRefusal('schema', 'not 1')
   if (!ENGINES.includes(m.engine)) throw new LayoutRefusal('engine', `not one of ${ENGINES.join(', ')}`)
+  const marking = checkKeys(m.marking, MARKING_KEYS, 'marking')
+  checkClasses(marking.classes, 'marking.classes')
+  checkClasses(marking.movesPunctuation, 'marking.movesPunctuation')
   const pages = checkPages(m.pages, 'pages')
   const views = checkViews(m.views, pages, 'views')
   if (!Array.isArray(m.columns) || m.columns.length !== pages) throw new LayoutRefusal('columns', `not ${pages} entries`)

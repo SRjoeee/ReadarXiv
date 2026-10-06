@@ -17,7 +17,7 @@ import { promisify } from 'node:util'
 import { gzipSync } from 'node:zlib'
 import { getDocument, OPS, version } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { keptFor, openPaper, originalFiles } from '../../../src/pdf-reader/engine/live.mjs'
-import { LAYOUT_CLASSES, encodeLayoutMarks, layoutMarksOf, parseLayoutMarks } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { LAYOUT_CLASSES, encodeLayoutMarks, layoutMarksOf, parseLayoutMarks, punctuationMovers } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { encodeLayout } from '../../../src/pdf-reader/engine/layout/file.mjs'
 import { makeLayout } from '../../../src/pdf-reader/engine/layout/make.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
@@ -67,29 +67,43 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
   const { files } = await unpackSource(new Uint8Array(readFileSync(join(dir, 'source.gz'))))
   const paper = openPaper(files)
   const main = paper.project.main, stem = main.split('/').pop().replace(/\.[^.]+$/, '')
-  // the layout compile, cached by what it compiles
-  const marked = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES })
-  const hash = createHash('sha256')
-  for (const [p, b] of [...files, ...marked].sort((a, b) => (a[0] < b[0] ? -1 : 1))) hash.update(p).update(b)
-  const key = hash.digest('hex').slice(0, 16)
+  // the layout compile, cached by what it compiles, with the paper's own switch (punctuationMovers): from its preamble
+  // first, then from the compile's log too (the packages a class of TeX Live's loads), compiled again where they differ
   const build = join(dir, 'build'), marksFile = join(dir, 'marks.json'), stamp = join(dir, 'marks.key')
-  let compileMs = null
-  if (!existsSync(marksFile) || !existsSync(stamp) || readFileSync(stamp, 'utf8') !== key) {
+  const keyOf = marked => {
+    const hash = createHash('sha256')
+    for (const [p, b] of [...files, ...marked].sort((a, b) => (a[0] < b[0] ? -1 : 1))) hash.update(p).update(b)
+    return hash.digest('hex').slice(0, 16)
+  }
+  const cached = key => {
+    if (!existsSync(marksFile) || !existsSync(stamp) || readFileSync(stamp, 'utf8') !== key) return false
+    try { parseLayoutMarks(new Uint8Array(readFileSync(marksFile))); return true } catch { return false }
+  }
+  let movers = punctuationMovers(paper, ''), compileMs = null
+  for (let pass = 0; pass < 2; pass++) {
+    const marked = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, movesPunctuation: movers })
+    const key = keyOf(marked)
+    if (cached(key)) break
     rmSync(build, { recursive: true, force: true })
     for (const [p, b] of [...files, ...marked]) { const f = join(build, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
     const t0 = Date.now()
     const flag = { xelatex: '-xelatex', lualatex: '-lualatex' }[paper.meta.compiler] ?? '-pdf'
     await run('docker', ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-v', `${build}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '600', 'latexmk', flag, ...(paper.meta.bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main], { maxBuffer: 1 << 26 }).catch(() => null)
-    compileMs = Date.now() - t0
+    compileMs = (compileMs ?? 0) + Date.now() - t0
     const pdf = join(build, `${stem}.pdf`)
-    if (!existsSync(pdf)) { check(id, 'compile', false, 'no PDF'); continue }
+    if (!existsSync(pdf)) break
+    const log = readFileSync(join(build, `${stem}.log`), 'latin1')
+    const again = punctuationMovers(paper, log)
+    if (pass === 0 && again.join() !== movers.join()) { movers = again; continue }
     const task = open(new Uint8Array(readFileSync(pdf)))
-    const made = await layoutMarksOf(await task.promise, readFileSync(join(build, `${stem}.log`), 'latin1'), { engine: paper.meta.compiler })
+    const made = await layoutMarksOf(await task.promise, log, { engine: paper.meta.compiler, classes: LAYOUT_CLASSES, movesPunctuation: movers })
     await task.destroy()
     writeFileSync(marksFile, encodeLayoutMarks(made))
     writeFileSync(stamp, key)
     rmSync(build, { recursive: true, force: true })
+    break
   }
+  if (!existsSync(marksFile)) { check(id, 'compile', false, 'no PDF'); continue }
   const marks = parseLayoutMarks(new Uint8Array(readFileSync(marksFile)))
   const task = open(new Uint8Array(readFileSync(join(dir, 'arxiv.pdf'))))
   const arxiv = await task.promise
@@ -123,7 +137,7 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
   const kept = keptFor(paper, 'zh'), cells = paper.units.map((u, i) => [u, i]).filter(([u]) => u.kind === 'cell' && !kept.has(u))
   const placedIds = new Set(out.file.units.map(u => u[0]))
   console.log(JSON.stringify({
-    id, engine: paper.meta.compiler, compileMs, pages: out.file.paper.pages,
+    id, engine: paper.meta.compiler, compileMs, marking: marks.marking, pages: out.file.paper.pages,
     lines: S.lines, units: S.units, translatedCells: [cells.filter(([, i]) => placedIds.has(i)).length, cells.length],
     ph: S.ph, labels: S.labels, frames: S.frames, capped: S.capped, timedOut: S.timedOut, over: S.over,
     lastBaselines: `${S.baselines.last.filter(d => d <= BASELINE + 1e-9).length}/${S.baselines.last.length} within ${BASELINE}`,

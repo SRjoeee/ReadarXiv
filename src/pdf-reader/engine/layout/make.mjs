@@ -16,7 +16,7 @@ import { displayEdges, plainSource, plainTranslated, unitText } from '../mt.mjs'
 import { carrierOf, tokensOfMarks } from './carry.mjs'
 import { encodeLayout, LAYOUT, LayoutRefusal, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
 import { pageInk } from './ink.mjs'
-import { classOf, LAYOUT_CLASSES, layoutMarking } from './marks.mjs'
+import { classOf, layoutMarking } from './marks.mjs'
 
 /** the share of the marked original's lines carried, at least, for a file (the researched papers carry 97.5–99.4 %) */
 export const CARRY_MIN = 0.9
@@ -464,9 +464,11 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   }
 
   // ---------------------------------------------------------------- placeholders, by unit and source piece index
+  // which pieces the marked original marks: its marking, as the marks file records it (the classes and the paper's
+  // own switch it was compiled with)
   const design = new Map()
   {
-    const { units: copies } = layoutMarking(units, LAYOUT_CLASSES, { lines: false })
+    const { units: copies } = layoutMarking(units, marks.marking.classes, { lines: false, movesPunctuation: marks.marking.movesPunctuation })
     copies.forEach((c, i) => {
       for (const p of c.pieces) {
         const m = p.t === 'ph' && /^\\axtpma?\{[pn](\d+)\.(\d+)([ab])\}$/.exec(p.src ?? '')
@@ -476,7 +478,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       }
     })
   }
-  const classes = new Set(LAYOUT_CLASSES)
+  const classes = new Set(marks.marking.classes)
   const ph = [], kept = new Map() // kept: page → the rectangles erasing leaves out (displays' segments, labels)
   const keep = (p, r) => (kept.get(p) ?? kept.set(p, []).get(p)).push(r)
   for (const one of placed) {

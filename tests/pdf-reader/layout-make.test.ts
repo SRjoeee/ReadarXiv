@@ -4,7 +4,7 @@ import type { SourceUnit } from '@/pdf-reader/engine/latex-front.mjs'
 import { encodeLayout, type LayoutFile, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { OPS_CAP } from '@/pdf-reader/engine/layout/ink.mjs'
 import { CARRY_MIN, fontName, type LayoutStats, makeLayout, OPS_MS, OPS_PAPER_MS } from '@/pdf-reader/engine/layout/make.mjs'
-import { encodeLayoutMarks, layoutMarksOf, parseLayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
+import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 
 // The layout maker over a fake PDF.js document of arXiv's PDF and a marks file made, as the run makes it, from a fake
 // marked original: each run of text is a text item and the glyphs of an operator list alike, every character half an em
@@ -14,7 +14,7 @@ const CH = 0.5
 type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number }
 type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped' }
 type Mark = [name: string, page: number, x: number, y: number]
-type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[] }
+type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; movers?: MarkClass[] }
 
 const FONTS: Record<string, unknown> = {
   F1: { name: 'ABCDEF+CMR10', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false },
@@ -63,7 +63,7 @@ function markedOf(pages: Page[], marks: Mark[]) {
   }
 }
 async function marksOf(w: World, log = '') {
-  return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex' }))))
+  return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', movesPunctuation: w.movers ?? [] }))))
 }
 const make = async (w: World, log = '', asked: number[] = []) => makeLayout({ units: w.units, marks: await marksOf(w, log), arxiv: arxivOf(w.pages, asked), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
 /** a made file: it parses, and made again it is the same bytes */
@@ -504,6 +504,18 @@ describe('makeLayout, the review of 2026-10-06', () => {
       units: [unit('para', [text('see '), ph('$\\overline{x y}$'), text(' and more')])],
     })
     expect(chunk(rowsOf(rule.file, 0, 'erase'), 5).filter(e => e[1] === 151)).toEqual([[0, 151, 703, 179, 703.01]])
+  })
+
+  it("which pieces were marked is the marks file's: its classes and the paper's switch", async () => {
+    // a citation a full stop follows, on a paper whose package moves it: the switch gave it no mark
+    const runs: Run[] = [{ s: 'as shown', x: 72, y: 700 }, { s: '12', x: 112, y: 703, size: 7 }, { s: '. More words here', x: 119, y: 700 }]
+    const w: World = { pages: [{ runs }], marks: [['0s', 1, 72, 700], ['0e', 1, 204, 700]], units: [unit('para', [text('as shown '), ph('\\cite{a}'), text('. More words here')])] }
+    const switched = await made({ ...w, movers: ['cite'] })
+    expect(phOf(switched.file, 0, 1)).toEqual([0, 1, 2, PH_FLAG.LOST])
+    expect(switched.stats.ph).toMatchObject({ marked: 0, unmarked: 1, lost: 0 })
+    // the same marks file but made with every class marking it: its marks expected, and missing
+    const plain = await made(w)
+    expect(plain.stats.ph).toMatchObject({ marked: 1, unmarked: 0, lost: 1 })
   })
 
   it('units past 512 faces stay the original\'s: a count of fonts never gets the file refused', async () => {

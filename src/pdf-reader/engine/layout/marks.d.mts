@@ -37,6 +37,9 @@ export interface LayoutMarks {
   schema: 1
   /** the engine that compiled it (meta.compiler) */
   engine: string
+  /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (punctuationMovers),
+   *  so that whoever reads the file knows which pieces have marks */
+  marking: { classes: MarkClass[]; movesPunctuation: MarkClass[] }
   pages: number
   /** per page: x0, y0, x1, y1 (stride 4) */
   views: number[]
@@ -57,7 +60,7 @@ export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number
 /** from a PDF.js document of the marked original and its last TeX pass's log; the caller opens and destroys the document */
-export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string }): Promise<LayoutMarks>
+export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; movesPunctuation?: readonly MarkClass[] }): Promise<LayoutMarks>
 export declare function encodeLayoutMarks(m: LayoutMarks): string
 /** bytes, then values, then JSON.parse, then every bound below; throws LayoutRefusal */
 export declare function parseLayoutMarks(bytes: Uint8Array): LayoutMarks
