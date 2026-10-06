@@ -41,6 +41,8 @@ const NEAR = 5
 const PAGE_WORK = 2_000_000, PAPER_WORK = 20_000_000
 /** the lines near a position looked at, at most */
 const SCAN = 64
+/** a position past a line's last word that is the line's still, of its height: a formula ends a line with no word */
+const PAST = 6
 /** a marks file's token box, as tokenizeDocument takes a face that gives no metrics */
 const ASCENT = 0.75, DESCENT = -0.22
 
@@ -264,8 +266,9 @@ export function carrierOf(marked, arxiv) {
     lines,
     over,
     /** the marked line a position stands on — on its page, within half its height of its baseline, from its height
-     *  before its start to twice its height past its end, the nearest by baseline of the SCAN lines nearest it — carried
-     *  as that line was */
+     *  before its start to PAST of its height past its end (a unit's end mark after the formula its line ends with:
+     *  1706's "… by 1/√dk", the formula no word), the nearest across of the SCAN lines nearest it, then by baseline —
+     *  carried as that line was */
     carry(page, x, y) {
       if (!Number.isFinite(x) || !Number.isFinite(y)) return null
       const n = nearby.get(page)
@@ -278,8 +281,8 @@ export function carrierOf(marked, arxiv) {
         const takeB = b < n.ys.length && (a < 0 || n.ys[b] - y <= y - n.ys[a])
         const i = takeB ? b++ : a--
         if (Math.abs(n.ys[i] - y) >= 0.5 * n.h) { if (takeB) b = n.ys.length; else a = -1; continue }
-        const l = n.by[i], d = Math.abs(l.y - y)
-        if (d < 0.5 * l.h && x >= l.x0 - l.h && x <= l.x1 + 2 * l.h && (!on || d < on.d)) on = { l, d }
+        const l = n.by[i], d = Math.abs(l.y - y), dx = x < l.x0 ? l.x0 - x : x > l.x1 ? x - l.x1 : 0
+        if (d < 0.5 * l.h && x >= l.x0 - l.h && x <= l.x1 + PAST * l.h && (!on || dx < on.dx || (dx === on.dx && d < on.d))) on = { l, d, dx }
       }
       const m = on && match.get(on.l)
       return m ? { page: m.page, x: mapX(on.l, m, x), y: y + m.dy, whole: m.whole } : null

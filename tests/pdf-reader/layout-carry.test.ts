@@ -219,6 +219,19 @@ describe('carrierOf', () => {
     expect(carrierOf([], []).lines).toEqual({ total: 0, same: 0, moved: 0, respaced: 0, fuzzy: 0 })
   })
 
+  it('a position past its line\'s last word, a formula ending the line, carries with the line up to 6 of its heights; the line it stands in is taken first', () => {
+    // 1706's "… we scale the dot products by 1/√dk.": the unit's end mark after a formula, which has no word
+    const ws = ['we', 'scale', 'the', 'products', 'by']
+    const c = carrierOf(words(ws, 1, 72, 700), words(ws, 1, 74, 690))
+    const x1 = end(words(ws, 1, 72, 700).at(-1))
+    expect(c.carry(1, x1 + 50, 700)).toMatchObject({ page: 1, x: x1 + 52, y: 690 })
+    expect(c.carry(1, x1 + 6 * H + 1, 700)).toBeNull()
+    // two columns on one baseline: a position in the right one is the right one's, though the left one reaches it
+    const left = words(['left', 'column'], 1, 72, 700), right = words(['right', 'side', 'here'], 1, 140, 700)
+    const two = carrierOf([...left, ...right], [...words(['left', 'column'], 1, 72, 700), ...words(['right', 'side', 'here'], 1, 141, 700)])
+    expect(two.carry(1, 150, 700)?.x).toBe(151)
+  })
+
   it('counts', () => {
     const same = ['same', 'place', 'here'], moved = ['moved', 'down', 'whole'], spaced = ['set', 'at', 'other', 'spaces']
     const fuzzy = [...TEN], lost = ['reflowed', 'away', 'entirely']
