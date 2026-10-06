@@ -40,6 +40,14 @@ describe("v0's displayed formulas: the engine's environments", () => {
     expect(phClass('\\begin {subequations}x\\end{subequations}')).toBe('display')
     expect(phClass('$x = 1$')).toBe('other')
   })
+  it("draws a table's rules and a strut a translation carries as nothing, a rule with a width still looked for", async () => {
+    const { phClass, texToText } = await import('@/pdf-reader/engine/layer-proto/layer1.mjs')
+    for (const src of ['\\specialrule{1pt}{-1pt}{0pt}', '\\rule{0pt}{2.2ex}', '\\rule[-1ex]{0pt}{3ex}', '\\cmidrule(lr){2-3}', '\\arrayrulecolor{gray}']) {
+      expect(phClass(src)).toBe('zero')
+      expect(texToText(src)).toBe('')
+    }
+    expect(phClass('\\rule{1cm}{1pt}')).toBe('other')
+  })
 })
 
 describe('no unit drawn in part: the text run past a display where the slots after it are too few', () => {
