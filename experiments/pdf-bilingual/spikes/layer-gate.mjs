@@ -26,7 +26,7 @@
 //       [--layouts=made|fixed] [--fixtures=<dir>] [--pages=<n>] [--workers=<n>] [--check[=<record>]] [--record[=<record>]] [--label=<short>]
 //       [--composite=source-over|darken] [--no-progress] [--panel-width=<px>] [--freeze[=force]]
 //       [--engine-kind=layer|proto] [--proto-units=fixture|p7] [--progress=<name|path>] [--previous=<name|path>] [--panels-only] [--proto-panels=<dir>]
-//       [--proto-faces=roles|prototype] [--proto-place=<file>] [--proto-order=<file>] [--dump=<dir>]
+//       [--proto-faces=roles|prototype] [--proto-place=<file>] [--proto-order=<file>] [--dump=<dir>] [--write-floor]
 //   --engine     the engine measured: <worktree>/src/pdf-reader/engine served as /engine/ (the checker, layer/check.mjs, is
 //                always this repository's: the instrument is the same for every branch); default this repository
 //   --layouts    made (the default): the layout files the engine's own maker makes from the fixtures' papers (spikes/
@@ -48,6 +48,10 @@
 //                index.html; default the engine's branch
 //   --composite  how crops are drawn on the copy: source-over (the lab's, as Plan 8d draws today) or darken
 //   --freeze     the reference text area of every fixture that has none (=force: made again, a deliberate change)
+//   --write-floor  layer-gate/floor.json from this run: the prototype's floor as this gate measures it, v0 under the
+//                floor's conditions at the gate's own text place (--engine=<exp/layer-proto> --engine-kind=proto
+//                --proto-units=p7 --proto-faces=prototype --tier=pixel, the ten shared outputs); the floor before it kept
+//                beside it as "old"
 //   --engine-kind  layer (the default): the engine's layer entry (layer/layer.mjs) over a layout file; proto: the layer's
 //                v0, the approved prototype ported into the engine (layer-proto/run.mjs), which has no layout file: it
 //                reads the made output's geometry (the prototype's own, layer-gate/ref.mjs PROTO_GEOMETRY, by paper) and a
@@ -351,6 +355,14 @@ if (arg('record')) {
   else if (ONLY || PAGES) { console.log('FAIL --record: a whole run only (no --only, no --pages)'); exit = 1 }
   else writeRecords(recordAt, run, completeness)
 }
+if (arg('write-floor')) {
+  // the prototype's floor as this gate measures it: v0 under the floor's conditions (the prototype's own staging units
+  // and faces) at the gate's own text place, the ten shared outputs, every page asked of them
+  const shared = floor.shared ?? []
+  const why = !PROTO ? 'not v0 (--engine-kind=proto)' : PROTO_UNITS !== 'p7' ? 'not its own units (--proto-units=p7)' : PROTO_FACES !== 'prototype' ? 'not its own faces (--proto-faces=prototype)' : PROTO_PLACE || PROTO_ORDER ? 'not at the gate\'s place and order' : TIER !== 'pixel' ? 'not the pixel tier' : PAGES ? 'not every page asked' : shared.some(n => !run.fixtures[n]) ? `not every shared output (${shared.filter(n => !run.fixtures[n]).join(' ')})` : null
+  if (why) { console.log(`FAIL --write-floor: ${why}`); exit = 1 }
+  else writeFloor(run, shared)
+}
 if (progress) progress.finish(run, verdict)
 process.exit(exit)
 
@@ -455,7 +467,7 @@ function writeRecords(file, run, rows) {
   const tiers = { ...(had?.tiers ?? {}) }
   tiers[KEY] = run
   if (run.tier === 'pixel') delete tiers[KEY.replace(/^pixel/, 'model')]
-  const record = { schema: 1, what: 'the instant layer against the original page, per fixture and page (spikes/layer-gate.mjs)', floor: { what: floor.what, shared: floor.shared, pooled: floor.pooled, byFixture: floor.byFixture }, tiers }
+  const record = { schema: 1, what: 'the instant layer against the original page, per fixture and page (spikes/layer-gate.mjs)', floor: { what: floor.what, measured: floor.measured ?? null, shared: floor.shared, pooled: floor.pooled, byFixture: floor.byFixture, old: floor.old ?? null }, tiers }
   writeFileSync(file, `${JSON.stringify(record, null, 0).replace(/\{"p":/g, '\n{"p":')}\n`)
   writeFileSync(file.replace(/\.json$/, '.md'), fidelityMd(record))
   const gateFile = join(dirname(file), 'layer-gate.json')
@@ -514,9 +526,9 @@ function fidelityMd(record) {
   L.push('# The instant layer against the original: the fidelity record', '')
   L.push(`Written by \`spikes/layer-gate.mjs --record\`. Each run below: the engine at its commit, ${run.inputs.chromium ? `Chromium ${run.inputs.chromium}` : ''}, PDF.js ${run.inputs.pdfjs}; pages: ${run.inputs.pages}; the planes at ${run.inputs.scale} device px a PDF unit, lost ink at ${run.inputs.inkScale}x; crops drawn ${run.inputs.composite}.`, '')
   for (const k of keys) { const r = record.tiers[k]; L.push(`- **${k}**: the engine at \`${r.engine.commit?.slice(0, 8)}\` (${r.engine.branch}${r.engine.dirty ? ', with changes' : ''}), the gate at \`${r.gate.commit?.slice(0, 8)}\`${r.gate.dirty ? ' with changes' : ''}, ${r.made.slice(0, 10)}; ${layoutsOf(r)}; ${r.seconds} s.`) }
-  L.push('', 'Every measure is against arXiv\'s original page, whose own value is the first column. The prototype is the approved prototype\'s floor (the parity run, 2026-10-06, on the ten outputs it shares with the engine, pages 1-12). A defect is its count and, in brackets, its rate per 1,000 translated text cells (the model tier: per 1,000 cells of the drawn units\' frames), which is what the merge rule compares.', '')
+  L.push('', 'Every measure is against arXiv\'s original page, whose own value is the first column. The prototype\'s floor is the approved prototype as this gate measures it (v0, the prototype ported into the engine, under its own units and faces at the gate\'s text place); the parity run\'s floor it replaces stands beside it (measured at the prototype page\'s text place, 0.19 CSS px off, with coverage read from the translation\'s ink). Both are the ten outputs the prototype shares with the engine, pages 1-12. A defect is its count and, in brackets, its rate per 1,000 translated text cells (the model tier: per 1,000 cells of the drawn units\' frames), which is what the merge rule compares.', '')
   const fl = floorTotals(record.floor.pooled)
-  const cols = [['Prototype (floor), shared ten', fl]]
+  const cols = [['Prototype floor (v0, this gate), shared ten', fl], ...(record.floor.old ? [['Prototype floor (the parity run, before), shared ten', floorTotals(record.floor.old.pooled)]] : [])]
   for (const k of keys) { const r = record.tiers[k]; cols.push([`${k}, shared ten`, r.totals.shared], [`${k}, all ${r.totals.all?.outputs ?? ''}`, r.totals.all]) }
   L.push('## Against the original', '', `| measure | Original | ${cols.map(c => c[0]).join(' | ')} |`, `|---|---|${cols.map(() => '---|').join('')}`)
   for (const m of ms) L.push(`| ${m[4]} | ${originalOf(m)} | ${cols.map(c => shown(c[1], m)).join(' | ')} |`)
@@ -529,6 +541,26 @@ function fidelityMd(record) {
   for (const [name, f] of Object.entries(run.fixtures)) L.push(`| ${name} | ${head.map(m => shown(f.totals, m)).join(' | ')} | ${Object.entries(f.totals.left).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ') || '-'} |`)
   L.push('', 'Every measure of every output, and of every page, is in layer-fidelity.json.', '')
   return `${L.join('\n')}\n`
+}
+/** what a floor keeps of a run's totals: the measures the prototype's floor has always had (v0's own checker and its own
+ *  lost-ink accounting are not the engine's, and are left out) */
+function floorOf(t) {
+  const not = ['lostInk', 'lostInkPx', 'missing', 'twice', 'brackets', 'duplicated', 'numbersLost', 'numbersTotal', 'numbersShown', 'wrongPageText', 'droppedPh', 'modelCells', 'rates', 'modelRates', 'style']
+  return Object.fromEntries(Object.entries(t).filter(([k]) => !not.includes(k)))
+}
+/** floor.json from v0's run under the floor's conditions at the gate's place, the floor before it kept beside it */
+function writeFloor(run, shared) {
+  const file = join(GATE, 'floor.json'), had = readJson(file)
+  const old = had.old ?? { what: had.what, pooled: had.pooled, byFixture: had.byFixture }
+  const out = {
+    schema: 2,
+    what: "the approved prototype's floor as this gate measures it: v0 (the prototype ported into the engine, exp/layer-proto) under the floor's conditions (the prototype's own staging units and faces), at the gate's own text place, on the ten outputs it shares with the engine, by the gate's measures (layer-gate.mjs --engine-kind=proto --proto-units=p7 --proto-faces=prototype --write-floor)",
+    measured: { made: run.made, engine: run.engine, gate: run.gate, inputs: run.inputs },
+    shared, pooled: floorOf(run.totals.shared), byFixture: Object.fromEntries(shared.map(n => [n, floorOf(run.fixtures[n].totals)])),
+    old,
+  }
+  writeFileSync(file, `${JSON.stringify(out, null, 1)}\n`)
+  console.log(`the floor: ${file} (the floor before it kept as "old")`)
 }
 /** the prototype's pooled floor with its defects' rates per 1,000 translated text cells */
 function floorTotals(f) {
@@ -609,7 +641,7 @@ function openProgress() {
         for (const m of ms) L.push(`| ${m[4]} | ${originalOf(m)} | ${rows.map(r => shown(r[1], m)).join(' | ')} |`)
         L.push('')
       }
-      table('The ten shared outputs, pages 1-12', [['Prototype (floor)', fl], ...(prevRun ? [[`Previous (${previous.name})`, prevRun.totals.shared]] : []), ['This run', run.totals.shared]])
+      table('The ten shared outputs, pages 1-12', [['Prototype (floor, v0 through this gate)', fl], ...(prevRun ? [[`Previous (${previous.name})`, prevRun.totals.shared]] : []), ['This run', run.totals.shared]])
       table('All outputs', [...(prevRun ? [[`Previous (${previous.name})`, prevRun.totals.all]] : []), ['This run', run.totals.all]])
       if (prevRun) {
         const cmp = compare(prevRun.fixtures, run.fixtures, run.tier)
