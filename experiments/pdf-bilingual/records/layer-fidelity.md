@@ -2,8 +2,8 @@
 
 Written by `spikes/layer-gate.mjs --record`. Each run below: the engine at its commit, Chromium 153.0.8010.12, PDF.js 6.3.289; pages: the first 12 of each output, every page of 2307.16209v1; the planes at 2.5 device px a PDF unit, lost ink at 2x; crops drawn source-over.
 
-- **pixel**: the engine at `9ec391f0` (exp/layer-t12-gate), the gate at `9ec391f0`, 2026-10-06; the engine's own layout files; 51 s.
-- **pixel-fixed**: the engine at `9ec391f0` (exp/layer-t12-gate), the gate at `9ec391f0`, 2026-10-06; the fixtures' layout files, as made for the layer lab; 56.1 s.
+- **pixel**: the engine at `cdee0a92` (exp/layer-t12-gate), the gate at `cdee0a92`, 2026-10-06; the engine's own layout files; 42.3 s.
+- **pixel-fixed**: the engine at `cdee0a92` (exp/layer-t12-gate), the gate at `cdee0a92`, 2026-10-06; the fixtures' layout files, as made for the layer lab; 43.1 s.
 
 Every measure is against arXiv's original page, whose own value is the first column. The prototype is the approved prototype's floor (the parity run, 2026-10-06, on the ten outputs it shares with the engine, pages 1-12). A defect is its count and, in brackets, its rate per 1,000 translated text cells (the model tier: per 1,000 cells of the drawn units' frames), which is what the merge rule compares.
 
