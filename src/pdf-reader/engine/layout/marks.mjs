@@ -35,7 +35,7 @@ export const INVISIBLE = new RegExp(String.raw`^(?:~|\\[\\,;:!/\s-]|\\(?:${[...N
  *  one (aastex's deluxetable between \\startdata and \\enddata), a stray brace, a parameter, a script mark */
 const STRUCTURE = /^[&#^_{}]$/
 /** a displayed formula's source */
-export const DISPLAY = /^(?:\\\[|\$\$|\\begin\s*\{(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray)\*?\})/
+export const DISPLAY = /^(?:\\\[|\$\$|\\begin\s*\{(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray|subequations)\*?\})/
 const MATH = /^(?:\$(?!\$)|\\\(|\\ensuremath(?![A-Za-z@]))/
 const CITE = /^\\(?:[cC]ite[A-Za-z]*|(?:paren|text|auto)cites?)(?![A-Za-z@])/
 const EQREF = /^\\eqref(?![A-Za-z@])/

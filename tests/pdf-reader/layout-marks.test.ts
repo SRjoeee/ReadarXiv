@@ -24,6 +24,10 @@ const srcs = (u: SourceUnit | undefined) => ((u?.pieces ?? []) as Piece[]).map(p
 afterEach(() => { vi.restoreAllMocks() })
 
 describe('the classes', () => {
+  it('subequations is a display, as every display environment of the corpus', () => {
+    for (const env of ['subequations', 'equation', 'equation*', 'align', 'align*', 'gather', 'gather*', 'multline', 'multline*', 'flalign', 'alignat', 'eqnarray', 'eqnarray*', 'displaymath', 'dmath', 'IEEEeqnarray'])
+      expect(classOf({ t: 'ph', src: `\\begin{${env}}a\\end{${env}}` })).toBe('display')
+  })
   it('classOf: each class by its source', () => {
     const cases: [string, string][] = [
       ['$x$', 'math'], ['\\(x\\)', 'math'], ['\\ensuremath{x}', 'math'],
