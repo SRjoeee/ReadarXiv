@@ -113,11 +113,28 @@ describe("a unit's drawing from the layout file's rectangles", () => {
     expect(inside(c.fill, 20, 103)).toBe(true)
     expect(inside(c.fill, 57, 106)).toBe(false)
   })
+  it('keeps clear of a label its reading keeps where the file has no row for it, and leaves it out of the audit', () => {
+    // a list's mark at x 10-13 on the first line, which the file's erase rectangle starts at (1512.03385's p11)
+    const mark = { page: 1, item: 0, k: 0, ch: '+', x0: 10, x1: 13, yb: 100, size: 10, rect: [10, 97.85, 60, 106.83] }
+    const prep = Object.assign(new Map(), { keep: [], uc: [mark], cat: new Map([['1|0|0', 'keep']]), label: { text: '+', chars: [mark], x1: 13 } }) as never
+    const d = fileSwap({ page: 1, lu, kOf: [-1, -1, -1, 3], lines, prep })
+    expect(inside(d.fill, 11.5, 101)).toBe(false)
+    expect(inside(d.fill, 20, 101)).toBe(true)
+    expect(inside(d.lines, 11.5, 101)).toBe(false)
+    expect(inside(d.lines, 20, 101)).toBe(true)
+    // drawn in the target's name, it is replaced with the rest
+    const drawn = Object.assign(new Map(), { keep: [], uc: [mark], cat: new Map([['1|0|0', 'keep']]), label: { text: '+', chars: [mark], x1: 13, drawn: '-' } }) as never
+    expect(inside(fileSwap({ page: 1, lu, kOf: [-1, -1, -1, 3], lines, prep: drawn }).fill, 11.5, 101)).toBe(true)
+  })
   it("the add-on's kept ink under the page's units' rectangles (the manifest's)", () => {
     const index = { onPage: () => [7], unit: () => lu } as never
     // a glyph the plan removes (0.0, on the first line), one it keeps (1.0, under the second's rectangle), one far off
     const ink = inkOf([g('a', 12, 100, 0, 0), g('b', 20, 88, 1, 0), g('c', 200, 300, 2, 0)])
     expect(pageDirty(index, 1, ink, { units: [{ glyphs: [0, 0], paths: [] }] })).toEqual([20, 85.8, 25, 95.5])
+    // a display formula's glyphs under its own rows are kept, and no reader draws over them (2307.16209: 20767 boxes)
+    const shown = { ...(lu as object), erase: [], ph: new Map([[5, { kind: 'display', flags: 0, segs: Float64Array.from([1, 100, 120, 140, 130, 110]), text: null }]]) }
+    const disp = { onPage: () => [7], unit: () => shown } as never
+    expect(pageDirty(disp, 1, inkOf([g('d', 110, 115, 0, 0)]), { units: [] })).toEqual([])
   })
 })
 
@@ -150,7 +167,7 @@ describe('the drawing over the text-removed PDF', () => {
     const px = (x: number, y: number) => [x * 2, (200 - y) * 2] as [number, number]
     const L = { scale: 1, lines: [{ page: 1, baseline: 100, items: [{ x: 20, w: 10, t: { crop: { crop: [40, 50, 50, 60], page: 1, baseline: 52, k: 3 } } }] }] } as never
     const audit: Record<string, unknown>[] = []
-    const clips = new Map([[3, { rects: [[80, 280, 10, 10]], own: [[81, 281, 8, 8]] }]])
+    const clips = new Map([[3, { rects: [[80, 280, 10, 10]], own: [[81, 281, 8, 8]] }]]) as never
     const ops = L2.removalOps(L, 1, { px, k: 2, hasSource: () => true, pxOf: () => px, rects: [[1, 2, 3, 4]], erase: [[5, 6, 7, 8], [9, 10, 11, 12]], clips, lines: [[10, 98, 60, 108]], removed: () => true, audit: audit as never, id: 7 })
     expect(ops).toEqual([{ op: 'swap', page: 1, rects: [[1, 2, 3, 4]] }, { op: 'paper', rects: [[5, 6, 7, 8], [9, 10, 11, 12]] }, { op: 'crop', page: 1, plane: 'O', src: [80, 280, 20, 20], dst: [40, 184, 20, 20], clip: [[80, 280, 10, 10]] }])
     expect(audit.map(a => a.what)).toEqual(['erase', 'crop'])

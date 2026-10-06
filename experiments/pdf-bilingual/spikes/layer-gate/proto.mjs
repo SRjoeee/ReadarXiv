@@ -226,7 +226,11 @@ async function removalMeasures(cur, T) {
     const n = cropForeignPx({ W, H, src, own, colour, box: dev(c.src), rules, clip: xyxy(c.clip), ownBoxes: xyxy(c.own) })
     crops++
     foreignPx += n
-    if (n >= 6) foreign++
+    if (n >= 6) {
+      foreign++
+      // (where: the unit, its piece, which way it was drawn, the pixels)
+      ;((out.at ??= {}).crops ??= []).push([u.id, c.k, S.byId.get(u.id)?.tex ? 'tex' : 'v0', c.clip ? 'clip' : 'box', n])
+    }
   }
   return { ...out, ok, crops, cropForeignInk: foreign, cropForeignInkPx: foreignPx }
 }

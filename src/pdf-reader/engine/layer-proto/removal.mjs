@@ -335,7 +335,7 @@ export function unitRemoval({ id, page, prep, tex, own, charMap, unmapped, ink, 
 
 /**
  * The ink the paper's add-on keeps on a page that meets its units' rectangles (the file's: each line's erase rectangles,
- * each placeholder's segments, each label's box; grown by the swap's pad): every glyph the plan (pagePlan's `units`)
+ * each inline placeholder's segments, each label's box; grown by the swap's pad: those a reader may draw over): every glyph the plan (pagePlan's `units`)
  * does not remove, by its outline's box, and every graphic it does not (a rule, an image, a shading), by its box. Where
  * a unit's rectangle meets one, a fill with paper would take it, and the removed page is swapped in instead. Returns
  * x0, y0, x1, y1 stride 4, rounded to a hundredth, for the manifest (fileSwap's `dirty`).
@@ -353,7 +353,11 @@ export function pageDirty(index, page, ink, plan, pad = SWAP_PAD) {
   for (const id of index.onPage(page)) {
     const u = index.unit(id)
     for (let j = 0; j < u.erase.length; j++) { const e = u.erase[j]; if (!e || u.lines[8 * j] !== page) continue; for (let o = 0; o + 3 < e.length; o += 4) rects.push([e[o] - pad, e[o + 1] - pad, e[o + 2] + pad, e[o + 3] + pad]) }
-    for (const row of u.ph.values()) for (let o = 0; o + 5 < row.segs.length; o += 6) if (row.segs[o] === page) rects.push([row.segs[o + 1] - pad, row.segs[o + 5] - pad, row.segs[o + 3] + pad, row.segs[o + 4] + pad])
+    // (an inline placeholder's: a display's rows are its own, kept, and no reader draws over them; fileSwap's)
+    for (const row of u.ph.values()) {
+      if (row.kind === 'display' || row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY)) continue
+      for (let o = 0; o + 5 < row.segs.length; o += 6) if (row.segs[o] === page) rects.push([row.segs[o + 1] - pad, row.segs[o + 5] - pad, row.segs[o + 3] + pad, row.segs[o + 4] + pad])
+    }
     const lb = u.labels
     for (let o = 0; o + 6 < lb.length; o += 7) if (lb[o + 1] === page) rects.push([lb[o + 2] - pad, lb[o + 6] - pad, lb[o + 4] + pad, lb[o + 5] + pad])
   }
@@ -376,13 +380,17 @@ export function pageDirty(index, page, ink, plan, pad = SWAP_PAD) {
  * page's units' rectangles), and the removed page swapped in where some does. The characters the reading accounts for
  * that the file gives no rectangle (a symbol at a line's end, beside its last word) are erased over their boxes
  * (`extra`). A crop is cut from the original through its placeholder's segments (`clips`, by the piece's index: `rects`
- * grown, `own` as they are). Every box [x0, y0, x1, y1], PDF units, y up; `lines`: the rectangles replaced, for the audit.
+ * grown, `own` as they are). Every box [x0, y0, x1, y1], PDF units, y up; `lines`: the rectangles replaced less what the reading keeps (a
+ * label, a kept formula: never this unit's residue), for the audit.
  */
 export function fileSwap({ page, lu, kOf, lines, prep, others = [], dirty = [], pad = SWAP_PAD }) {
   const keepKeys = new Set(prep.keep ?? [])
   const resolutions = [...prep.values()].filter(r => r && r.k !== undefined)
   const keptK = new Set(resolutions.filter(r => r.mode === 'kept').map(r => kOf[r.k]).filter(k => k >= 0))
-  const mine = [], avoid = [...others]
+  // (kept: what its reading keeps of it, which its audit's boxes leave out as well; avoid: that, other units', and the
+  // characters it accounts for nowhere, which are left showing but are its own residue)
+  const mine = [], kept = [], avoid = [...others]
+  const keep = (...boxes) => { kept.push(...boxes); avoid.push(...boxes) }
   const boxesOf = e => { const out = []; for (let q = 0; q + 3 < (e?.length ?? 0); q += 4) out.push([e[q], e[q + 1], e[q + 2], e[q + 3]]); return out }
   // its lines on the page: their erase rectangles, but those the reading keeps (and its held lines, which have none)
   const bases = []
@@ -392,22 +400,37 @@ export function fileSwap({ page, lu, kOf, lines, prep, others = [], dirty = [], 
     const j = lines.jOf?.[i] ?? lines.lineOf.get(r)
     if (j === undefined) return
     bases.push([lu.lines[8 * j + 3], lu.lines[8 * j + 6]])
-    ;(keepKeys.has(`${r[0]}|${r.slice(1).join()}`) ? avoid : mine).push(...boxesOf(lu.erase[j]))
+    if (keepKeys.has(`${r[0]}|${r.slice(1).join()}`)) keep(...boxesOf(lu.erase[j]))
+    else mine.push(...boxesOf(lu.erase[j]))
   })
   // its inline placeholders' segments: replaced, or kept where the reading keeps them; a display's rows are its own
   for (const [k, row] of lu.ph) {
     if (row.kind === 'display' || row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY)) continue
     const S = row.segs, segs = []
     for (let o = 0; o + 5 < S.length; o += 6) if (S[o] === page) segs.push([S[o + 1], S[o + 5], S[o + 3], S[o + 4]])
-    ;(keptK.has(k) ? avoid : mine).push(...segs)
+    if (keptK.has(k)) keep(...segs)
+    else mine.push(...segs)
   }
   // its label: replaced where the reading draws it in the target's name, else the original's
   const lb = lu.labels
-  for (let o = 0; o + 6 < lb.length; o += 7) if (lb[o + 1] === page) (prep.label?.drawn ? mine : avoid).push([lb[o + 2], lb[o + 6], lb[o + 4], lb[o + 5]])
-  // the characters the reading leaves where they are
+  for (let o = 0; o + 6 < lb.length; o += 7) {
+    if (lb[o + 1] !== page) continue
+    const b = [lb[o + 2], lb[o + 6], lb[o + 4], lb[o + 5]]
+    if (prep.label?.drawn) mine.push(b)
+    else keep(b)
+  }
+  // the characters the reading leaves where they are: those it accounts for nowhere, and those it keeps on a line it
+  // replaces (a label or a placeholder it reads as kept where the file has no row for it: a run-in head, a list's mark)
   const real = c => !c.sep && !c.space && /\S/.test(c.ch)
   const charBox = c => [c.x0, c.yb - 0.22 * c.size, c.x1, c.yb + 0.78 * c.size]
-  for (const c of prep.uc ?? []) if (c.page === page && real(c) && prep.cat?.get(`${page}|${c.item}|${c.k}`) === 'orphan') avoid.push(charBox(c))
+  // (a label it draws in the target's name is replaced, its characters with it)
+  const relabelled = new Set(prep.label?.drawn ? prep.label.chars.map(c => `${c.page}|${c.item}|${c.k}`) : [])
+  for (const c of prep.uc ?? []) {
+    if (c.page !== page || !real(c)) continue
+    const key = `${page}|${c.item}|${c.k}`, cat = prep.cat?.get(key)
+    if (cat === 'orphan') avoid.push(charBox(c))
+    else if (cat === 'keep' && !relabelled.has(key) && !keepKeys.has(`${c.page}|${c.rect.join()}`)) keep(charBox(c))
+  }
   const rects = swapRects(mine, avoid, pad)
   const meets = (r, b) => b[0] < r[2] && b[2] > r[0] && b[1] < r[3] && b[3] > r[1]
   const swap = [], fill = []
@@ -431,7 +454,7 @@ export function fileSwap({ page, lu, kOf, lines, prep, others = [], dirty = [], 
     for (let o = 0; o + 5 < row.segs.length; o += 6) if (row.segs[o] === page) own.push([row.segs[o + 1], row.segs[o + 5], row.segs[o + 3], row.segs[o + 4]])
     if (own.length) clips.set(r.k, { rects: own.map(b => [b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad]), own })
   }
-  return { swap, fill, extra, clips, lines: mine }
+  return { swap, fill, extra, clips, lines: swapRects(mine, kept, 0) }
 }
 
 /** the page's glyphs no text-layer character is carried to (a blank glyph among them) */
