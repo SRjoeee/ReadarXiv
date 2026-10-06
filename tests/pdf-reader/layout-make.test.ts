@@ -994,7 +994,7 @@ describe('makeLayout, an inline placeholder\'s line by its own glyphs\' baseline
     })
     const seg = phOf(file, 0, 1)
     expect(seg[6]).toBe(700)
-    expect(seg[3] & PH_FLAG.LOWERED).toBe(0)
+    expect((seg[3] ?? 0) & PH_FLAG.LOWERED).toBe(0)
   })
   it('a script-led formula sits on the line its largest glyphs do, not by its scripts\' baseline (2307 162.7)', async () => {
     // A^{(i)}: three of its four glyphs are its superscript's, 6 pt up, nearer the line above (11 pt up) than its own
@@ -1014,5 +1014,20 @@ describe('makeLayout, an inline placeholder\'s line by its own glyphs\' baseline
       units: [unit('para', [text('first line of the unit '), ph('$xyz$'), text(' second line of it')])],
     })
     expect(phOf(file, 0, 1)).toEqual([0, 1, 0, PH_FLAG.LOST])
+  })
+})
+
+describe('makeLayout, a note\'s mark the first line begins with (the maker round)', () => {
+  it('is the note\'s label where its start mark stands before it: kept, and the line starts after it; a digit of the source is no label', async () => {
+    // 1706's notes: \u2217 set by the class before the note's text, the note's start mark before it
+    const runs: Run[] = [{ s: '\u2217', x: 72, y: 703, size: 7 }, { s: 'Equal contribution of all', x: 76, y: 700 }]
+    const { file } = await made({ pages: [{ runs }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[1] as Run), 700]], units: [unit('footnote', [text('Equal contribution of all')])] })
+    expect(file.labels).toEqual([[0, 3, 1, 72, 703, 75.5, expect.any(Number), expect.any(Number)]])
+    expect(rowsOf(file, 0, 'lines')[1]).toBe(76)
+    // a paragraph that begins with a number of its own text
+    const own: Run[] = [{ s: '3 layers of the net', x: 72, y: 700 }]
+    const n = await made({ pages: [{ runs: own }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(own[0] as Run), 700]], units: [unit('para', [text('3 layers of the net')])] })
+    expect(n.file.labels).toEqual([])
+    expect(rowsOf(n.file, 0, 'lines')[1]).toBe(72)
   })
 })

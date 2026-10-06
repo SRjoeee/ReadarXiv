@@ -61,6 +61,9 @@ const SHIFT = 0.2
 const CENTRE = 2, SHORT = 0.9
 /** segments a placeholder may have: an inline one, a display */
 const SEGS_INLINE = 4, SEGS_DISPLAY = 64
+/** what a label reads as (the prototype's layer2.js LABEL): a mark of one to three digits or signs, an item's number or
+ *  letter, a float's or a theorem's name and number */
+const LABEL = /^(?:[\d*\u2217\u2020\u2021\u00a7\u00b6\u2022\u25e6\u25aa\u2013\u00b7]{1,3}|\(?[a-z0-9ivx]{1,4}[.)]|(?:Figure|Fig\.|FIGURE|FIG\.|Table|TABLE|Algorithm|ALGORITHM|Listing|Theorem|Lemma|Definition|Proposition|Corollary|Remark|Example|Assumption)[\dIVXL]+(?:\.\d+)?[a-z]?[.:]?)$/
 /** a part of an inline placeholder's line (rowOfPart): its main glyphs those within PART_MAIN of its largest size;
  *  one sits on a line within PART_ON of the line's size of its baseline; with none on one, the line within PART_NEAR of
  *  their middle baseline */
@@ -758,7 +761,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       const cand = band(P0, r0.base - 0.25 * r0.size, r0.base + 0.25 * r0.size).filter(g => P0.owner[g] === -1 && !P0.taken[g] && nf(P0.u[g]) === nf(sym) && P0.x1[g] <= r0.x0 + 0.05 && P0.x1[g] >= r0.x0 - 1.5 * r0.size).sort((a, b) => P0.x1[b] - P0.x1[a] || a - b)
       for (const g of cand) {
         if (short <= 0) break
-        r0.gl.push(g); P0.owner[g] = i; r0.x0 = Math.min(r0.x0, P0.x0[g])
+        r0.gl.push(g); P0.owner[g] = i; r0.x0 = Math.min(r0.x0, P0.x0[g]); (one.headSymbols ??= new Set()).add(g)
         have.set(nf(sym), (have.get(nf(sym)) ?? 0) + 1)
         short--
       }
@@ -892,12 +895,50 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   }
 
   // ---------------------------------------------------------------- labels
+  /**
+   * A label the unit's first line begins with, before the first of its source's words: a footnote's mark, a bullet, an
+   * item's number, set by the class where the unit's start mark stands before it (1706's notes: "∗Equal contribution",
+   * "†Work performed …", erased as the note's text and drawn by nobody). Its glyphs, no found placeholder's and no text
+   * symbol's, read as a label (LABEL: the prototype's, layer2.js), leave the line and are kept as the original's: the
+   * label's row [unit, kind, page, x0, baseline, x1, top, bottom], or null
+   */
+  function headLabel(one) {
+    const { id: i, u, a, rows } = one, r0 = rows[0], P = ink[r0.page]
+    const paired = new Set(a.pairs?.values() ?? [])
+    const words = new Set(tokens(texts[i].text).map(t => t.t))
+    // where its text begins: its first word of the source's (paired, or a word of its text), or its first letter (a mark
+    // glued to the first word in the text layer: "5The final model", one token)
+    let first = Infinity
+    for (const k of r0.ks) { const t = doc[k]; if (t?.t && (paired.has(k) || words.has(t.t))) first = Math.min(first, t.x) }
+    for (const g of r0.gl) if (/\p{L}/u.test(P.u[g])) first = Math.min(first, P.x0[g])
+    if (!Number.isFinite(first)) return null
+    const theirs = new Set()
+    for (const [key, gs] of matchedBy) if (key.startsWith(`${i}.`)) for (const [p, g] of gs) if (p === r0.page) theirs.add(g)
+    const head = r0.gl.filter(g => P.x1[g] <= first + 0.05).sort((x, y) => P.x0[x] - P.x0[y] || x - y)
+    if (!head.length || head.length > 4 || head.some(g => theirs.has(g) || one.headSymbols?.has(g))) return null
+    if (!LABEL.test(head.map(g => P.u[g]).join('').normalize('NFKC').replace(/\s+/g, ''))) return null
+    const out = new Set(head)
+    r0.gl = r0.gl.filter(g => !out.has(g))
+    if (!r0.gl.length) { r0.gl = [...out]; return null }
+    let lx0 = Infinity
+    for (const g of [...r0.gl, ...(r0.extra ?? [])]) lx0 = Math.min(lx0, P.x0[g])
+    r0.x0 = lx0
+    let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
+    for (const g of head) { P.owner[g] = -1; x0 = Math.min(x0, P.ix0[g]); x1 = Math.max(x1, P.ix1[g]); top = Math.max(top, P.top[g]); bottom = Math.min(bottom, P.bottom[g]) }
+    const view = viewAt(r0.page), [la, lc, lb, ld] = solid(view, x0, bottom, x1, top)
+    const base = Math.min(ld, Math.max(lc, baselineOf(P, head, r0.base)))
+    return [i, LABEL_OF[u.kind] ?? 1, r0.page, la, base, lb, ld, lc]
+  }
   const labels = []
   const owned = (p, g, unit) => ink[p].owner[g] !== -1 && ink[p].owner[g] !== unit
   for (const one of placed) {
     const { id: i, u, rows, S } = one
     const r0 = rows[0]
-    if (!S || S.page !== r0.page || Math.abs(S.y - r0.base) >= 0.5 * r0.size) continue
+    const headOf = () => {
+      const head = headLabel(one)
+      if (head) { labels.push(head); keep(head[2], [head[3], head[7], head[5], head[6]]); one.label = true }
+    }
+    if (!S || S.page !== r0.page || Math.abs(S.y - r0.base) >= 0.5 * r0.size) { headOf(); continue }
     one.label = false
     const P = ink[S.page], [cx0] = sideOf(S.page, columnOf(S.page, S.x, S.x))
     const cand = band(P, S.y - 0.35 * P.most, S.y + 0.75 * Math.max(P.most, 6)).filter(g => P.y[g] > S.y - 0.35 * P.size[g] && P.y[g] < S.y + 0.75 * Math.max(P.size[g], 6) && P.x1[g] <= S.x + 0.05 && P.x0[g] >= cx0 - 1 && !owned(S.page, g, -2) && !P.taken[g]).sort((a, b) => P.x0[a] - P.x0[b] || a - b)
@@ -906,7 +947,8 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     for (let q = cand.length - 1; q >= 0; q--) { const g = cand[q]; if (edge - P.x1[g] > LABEL_EM * P.size[g]) break; run.unshift(g); edge = Math.min(edge, P.x0[g]) }
     // wholly left of the unit's first line
     const mine = run.filter(g => P.x1[g] <= r0.x0 + 0.01)
-    if (!mine.length) continue
+    // or the class's own mark that the first line begins with, the unit's start mark set before it
+    if (!mine.length) { headOf(); continue }
     let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
     for (const g of mine) { x0 = Math.min(x0, P.ix0[g]); x1 = Math.max(x1, P.ix1[g]); top = Math.max(top, P.top[g]); bottom = Math.min(bottom, P.bottom[g]) }
     const view = viewAt(S.page), [a, c, b, d] = solid(view, x0, bottom, x1, top)

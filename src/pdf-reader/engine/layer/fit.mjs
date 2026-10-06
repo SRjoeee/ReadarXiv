@@ -97,16 +97,17 @@ export function* statesOf(rules, o) {
 // ---------------------------------------------------------------- the unit's geometry, the same at every state
 
 /**
- * The slot of a heading or a title of one line, widened: to its column's edge or the next text on its baseline, whichever
+ * The slot of a heading, a title or a footnote of one line, widened: to its column's edge or the next text on its baseline, whichever
  * is nearer, and a centred one as far to either side (the prototype's main.js:263-276). A heading is as wide as its
  * column, not as its English words: a translation longer than them keeps its size where the column has room, as a
- * German title does. The column: the page's paragraph lines through the heading's middle, where there are
+ * German title does, and a note of one line whose mark the layout keeps as its label (the widening at the floor of the
+ * layer round, which then erased 1706's "∗" and "†"). The column: the page's paragraph lines through the heading's middle, where there are
  * COLUMN_LINES of them, else every located line of the page; the next text: another unit's line or a label of its own on
  * its baseline, and the page's own text (textIn) between it and the column's edge, where the slot is not widened at all.
  * Null where nothing widens it
  */
 function widenedOf(input, unit, size) {
-  if (unit.lines.length !== 8 || unit.frames.length !== 6 || (unit.kind !== 'heading' && !unit.title)) return null
+  if (unit.lines.length !== 8 || unit.frames.length !== 6 || (unit.kind !== 'heading' && unit.kind !== 'footnote' && !unit.title)) return null
   const L = unit.lines, page = L[0], x0 = L[1], x1 = L[2], b = L[3]
   const mid = (x0 + x1) / 2
   let c0 = Infinity, c1 = -Infinity, cn = 0, a0 = Infinity, a1 = -Infinity, left = -Infinity, right = Infinity
@@ -134,7 +135,15 @@ function widenedOf(input, unit, size) {
   const textIn = input.textIn
   if (right > x1 + EPS && textIn?.(page, x1 + 1, band[0], right, band[1])) right = x1
   if (left < x0 - EPS && textIn?.(page, left, band[0], x0 - 1, band[1])) left = x0
-  if (unit.centred) {
+  // a note whose line the layout holds from inside: page text before it on its baseline, past its label, is a part of
+  // its line the layout did not give it (1706's third note, whose words it shares with the second). Not widened
+  if (unit.kind === 'footnote') {
+    let from = a0
+    for (let o = 0; o + 6 < lb.length; o += 7) if (lb[o + 1] === page && Math.abs(lb[o + 3] - b) < SAME_BASELINE * size && lb[o + 4] <= x0 + EPS) from = Math.max(from, lb[o + 4] + EPS)
+    if (from < x0 - 1 && textIn?.(page, from, band[0], x0 - 1, band[1])) return null
+  }
+  // a note is set from its label on, never centred (one line by its column's middle reads as centred)
+  if (unit.centred && unit.kind !== 'footnote') {
     const half = Math.min(right - mid, mid - left)
     return half > (x1 - x0) / 2 + EPS ? { x0: mid - half, x1: mid + half } : null
   }
@@ -261,7 +270,8 @@ function geometryOf(unit, tokens, size, wide) {
   const first = lines[0], lb = unit.labels
   for (let o = 0; o + 6 < lb.length; o += 7) {
     const page = lb[o + 1], x0 = lb[o + 2], baseline = lb[o + 3], x1 = lb[o + 4]
-    if (page !== first.page || Math.abs(baseline - first.baseline) > 0.5 * size || x0 >= first.sx0) continue
+    // a label before the layout line, wherever a widened slot starts
+    if (page !== first.page || Math.abs(baseline - first.baseline) > 0.5 * size || x0 >= first.x0) continue
     if (x1 + GAP * size > first.sx0) first.sx0 = x1 + GAP * size
   }
   return { lines, frames, displays: counted, centred: unit.centred, upto: j => counted.filter(d => d.frame <= j).length, before: j => counted.filter(d => d.frame < j).length }

@@ -494,3 +494,20 @@ describe('a held line (the layout\'s `held`, Fix 3 of the maker round)', () => {
     expect(u.lines.length).toBeGreaterThan(0)
   })
 })
+
+describe('a note of one line (the maker round: its mark a label)', () => {
+  const line = { x0: 90, x1: 200, baseline: 120 }
+  const NOTE: UnitDef = { id: 7, kind: 'footnote', lines: [line], labels: [{ kind: 'footnote', x0: 80, baseline: 123, x1: 84 }], erase: [[0, 90, 117.5, 200, 127]] }
+  const BODY: UnitDef = { id: 8, lines: column(5, { top: 300, x0: 72, w: 400 }) }
+  it('is as wide as its column, from its label on, never over it', () => {
+    const u = laid(layUnit(input([NOTE, BODY]), 7, tr([[0, han(30)]])))
+    expect(u.lines).toHaveLength(1)
+    expect(u.lines[0]!.x0).toBeGreaterThan(84)
+    expect(u.lines[0]!.x1).toBeGreaterThan(400)
+  })
+  it('is not widened where page text stands before it on its line: the layout holds it from inside', () => {
+    const text = (_p: number, x0: number) => (x0 < 90 && x0 > 84 ? 'Work performed' : null)
+    const r = layUnit(input([NOTE, BODY], text), 7, tr([[0, han(30)]]))
+    expect(r).toMatchObject({ fit: false, why: 'floor' })
+  })
+})
