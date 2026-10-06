@@ -170,14 +170,17 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     const w = locatedWhole(lu, u, tex.pieces.get(id), { symbols: tex.symbols ?? 'text' })
     return w.ok ? { lu, kOf: w.kOf } : { why: w.why }
   }
-  const placeOf = (id, stream, rects, u, t, total = rects.length) => {
+  const placeOf = (id, stream, rects, u, t) => {
     const onPages = rects.filter(r => r[0] <= N)
     if (!onPages.length) return null
-    // (cut: the unit goes on past the pages shown, so that it has fewer lines here than it has)
-    return { id, stream, rects: onPages, unit: u, blocks: blocksOf(onPages, geometry.left.pages), pages: [...new Set(onPages.map(r => r[0]))], cut: onPages.length < total, tex: t }
+    // (cut: the unit goes on past the pages shown. It is laid over all its lines, those past the pages shown too, and
+    // drawn on the pages shown: laid over the lines shown alone, all of its translation was set into them, shrunk to the
+    // floor and the rest clipped, though the reader shows its next page as any other (1810.04805's unit 164 on page 12 of
+    // 12 shown, 200 characters clipped in each alphabet). Its pages are the pages shown: it is laid when they are drawn)
+    return { id, stream, rects, unit: u, blocks: blocksOf(onPages, geometry.left.pages), pages: [...new Set(onPages.map(r => r[0]))], cut: onPages.length < rects.length, tex: t }
   }
   /** a unit the file locates whole, placed by its lines in the file (texRects: the rectangles its exact baselines are by) */
-  const placeByFile = (id, stream, u, w) => { const lines = texRects(w.lu, N); return placeOf(id, stream, lines.rects, u, { ...w, lines }, w.lu.lines.length / 8) }
+  const placeByFile = (id, stream, u, w) => { const lines = texRects(w.lu); return placeOf(id, stream, lines.rects, u, { ...w, lines }) }
   for (const [id, stream, rects] of geometry.left.units) {
     const u = all[id]
     if (!u?.pieces || (u.state !== 'whole' && u.state !== 'partial')) continue
