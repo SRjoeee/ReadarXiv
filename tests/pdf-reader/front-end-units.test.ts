@@ -190,7 +190,7 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
   it('a macro argument a math environment holds is math (2608.23517\'s \\al{…} = \\begin{align}#1\\end{align})', () => {
     expect(texts(project(doc('Before.\n\\al{S &= \\int d^3 \\sigma \\, \\mathcal L_B}\nAfter.', '\\newcommand{\\al}[1]{\\begin{align}{#1}\\end{align}}')))).toEqual(['Before. After.'])
   })
-  it('what LaTeXML reads in code is no text: \\cmidrule(lr){2-5}\'s columns (2608.10091: "2～5" stopped TeX 19 times), inline code, an acronym\'s key', () => {
+  it('what LaTeXML reads in code is no text: \\cmidrule(lr){2-5}\'s columns (2608.10091: "2\uff5e5" stopped TeX 19 times), inline code, an acronym\'s key', () => {
     const p = project(doc('\\begin{table}\\begin{tabular}{lcc}\\toprule\n & \\multicolumn{2}{c}{Variant} \\\\\n\\cmidrule(lr){2-3} \\cmidrule[0.5pt]{1-1}\nModel & Small & Large \\\\\n\\bottomrule\\end{tabular}\\end{table}', '\\usepackage{booktabs}'))
     expect(texts(p)).toEqual(['Variant', 'Model', 'Small', 'Large'])
     expect(units(p).flatMap(u => u.pieces.filter(x => x.t === 'ph').map(x => x.src))).toContain('\\cmidrule(lr){2-3}')
