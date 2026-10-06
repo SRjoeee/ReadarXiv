@@ -124,9 +124,9 @@ const facesFor = (encoding, fonts) => {
  * "Реализация", and the letters it has none at went missing (1512.03385 into ru: four units set in the source for
  * them, the other headings garbled without a word in the log). Where a strategy sets the translation in another
  * encoding than the paper's (T2A under pdfLaTeX, TU under XeLaTeX), each such font that is a text face fontname's scheme
- * names — a base-35 face, Computer Modern — is declared again through NFSS (\DeclareFixedFont) in the document's
- * encoding: its role's family, which the strategy's faces give the alphabet's letters (facesFor, fontspec's), its series
- * and shape by the document's names, its size. One the scheme does not name — a symbol font (astrosym), one of another
+ * names — a base-35 face, Computer Modern — is declared again through NFSS in the document's encoding (namedAgain):
+ * its role's family, which the strategy's faces give the alphabet's letters (facesFor, fontspec's), its weight and
+ * shape by the document's own switches, its size. One the scheme does not name — a symbol font (astrosym), one of another
  * script (wncyr), a size TeX computes (`at\dimen@`) — stays as it is. Found in the paper's own files, a comment's left
  * out (namedFonts); one a class in TeX Live loads is not seen
  */
@@ -163,8 +163,15 @@ export function namedFonts(texts) {
   }
   return [...out.values()]
 }
-/** TeX declaring the fonts namedFonts found again through NFSS, in the encoding the document has at that point */
-const namedAgain = named => (named?.length ? `\\makeatletter\n${named.map(f => `\\DeclareFixedFont{\\${f.cs}}{\\encodingdefault}{\\${f.role}default}{\\${f.bold ? 'bf' : 'md'}default}{\\${f.shape}default}{${f.size}}\n`).join('')}\\makeatother\n` : '')
+/**
+ * TeX declaring the fonts namedFonts found again through NFSS, in the encoding the document has at that point: each
+ * selected by the document's own switches, which apply NFSS's series and shape rules, and the font it lands on taken.
+ * Not by the default names as values (\DeclareFixedFont with \bfdefault, \updefault): no font definition declares the
+ * shape up, and Computer Modern's sans under T2A has bx and no b, so NAACL's bold ruler on a CM paper came out medium,
+ * lass0800 for lasx0800, and every declaration logged its shape undefined (the review of fix/tex-path-errors, I1)
+ */
+const SHAPE_SWITCH = { up: '\\upshape', it: '\\itshape', sl: '\\slshape', sc: '\\scshape' }
+const namedAgain = named => (named?.length ? `\\makeatletter\n${named.map(f => `\\begingroup\\fontencoding{\\encodingdefault}\\fontfamily{\\${f.role}default}\\fontsize{${f.size}}{${f.size}}${f.bold ? '\\bfseries' : '\\mdseries'}${SHAPE_SWITCH[f.shape]}\\selectfont\\global\\expandafter\\let\\expandafter\\${f.cs}\\the\\font\\endgroup\n`).join('')}\\makeatother\n` : '')
 
 /** Under XeLaTeX, the faces for an alphabet whose letters the paper's Latin faces lack: every role, Computer Modern's
  *  design (CMU), the face most arXiv papers are set in */

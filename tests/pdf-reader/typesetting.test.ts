@@ -150,7 +150,8 @@ describe('the last compile\'s references, given to the next', () => {
 
 describe('a font a paper\'s style loads by name, under a strategy that sets another encoding (1512.03385 into ru: "3.4. —åàºŁçàöŁÿ")', () => {
   const CVPR = '\\font\\cvprtenhv  = phvb at 8pt % *** IF THIS FAILS, SEE cvpr.sty ***\n\\font\\elvbf  = ptmb scaled 1100\n%\\font\\elvbf  = ptmb7t scaled 1100\n'
-  const FIXED = '\\DeclareFixedFont{\\elvbf}{\\encodingdefault}{\\rmdefault}{\\bfdefault}{\\updefault}{11}'
+  // selected by the document's own switches, which apply NFSS's series and shape rules, and the font it lands on taken
+  const FIXED = '\\begingroup\\fontencoding{\\encodingdefault}\\fontfamily{\\rmdefault}\\fontsize{11}{11}\\bfseries\\upshape\\selectfont\\global\\expandafter\\let\\expandafter\\elvbf\\the\\font\\endgroup'
   it('reads the text faces fontname\'s scheme names, at their size, and passes over the others', () => {
     expect(namedFonts([CVPR])).toEqual([{ cs: 'cvprtenhv', role: 'sf', bold: true, shape: 'up', size: 8 }, { cs: 'elvbf', role: 'rm', bold: true, shape: 'up', size: 11 }])
     expect(namedFonts(['\\font\\tenit=cmti10 \\font\\big=cmr10 scaled\\magstep2 \\font\\mono=pcrr7t at 9pt'])).toEqual([
@@ -170,14 +171,18 @@ describe('a font a paper\'s style loads by name, under a strategy that sets anot
     const tu = xe?.pre({ rm: 'ptm', sf: 'phv', tt: 'pcr' }, named) ?? ''
     expect(tu.indexOf(FIXED)).toBeGreaterThan(tu.indexOf('\\setmonofont'))
     // the paper's own encoding: its fonts as they are
-    expect(first(META, 'de').pre({ rm: 'ptm' }, named)).not.toContain('DeclareFixedFont')
-    expect(strategiesFor(META, 'zh').map(s => s.pre(null, named)).join('')).not.toContain('DeclareFixedFont')
+    // not the default names as NFSS's values: no font definition declares the shape up, and CM's sans under T2A has bx
+    // and no b (the review of fix/tex-path-errors, I1: NAACL's bold ruler on a CM paper came out medium)
+    for (const pre of [t2a, tu]) expect(pre).not.toMatch(/\\DeclareFixedFont|\\updefault|\{\\bfdefault\}/)
+    expect(t2a).toContain('\\fontfamily{\\sfdefault}\\fontsize{8}{8}\\bfseries\\upshape\\selectfont\\global\\expandafter\\let\\expandafter\\cvprtenhv\\the\\font')
+    expect(first(META, 'de').pre({ rm: 'ptm' }, named)).not.toContain('\\the\\font')
+    expect(strategiesFor(META, 'zh').map(s => s.pre(null, named)).join('')).not.toContain('\\the\\font')
   })
   it('from the paper\'s own files, a style beside the main file\'s', () => {
     const files = new Map([['main.tex', '\\documentclass{article}\\usepackage{cvpr}\\begin{document}\nThe first paragraph of prose.\n\\end{document}\n'], ['cvpr.sty', CVPR]].map(([k, v]) => [k as string, new TextEncoder().encode(v as string)]))
     const p = openPaper(files)
     const main = (lang: string) => new TextDecoder().decode(translationFiles(p, new Map(), { strategy: first({ ...META, ...p.meta }, lang), fonts: null, draft: false, aux: null, bbl: null }).get('main.tex'))
     expect(main('ru')).toContain(FIXED)
-    expect(main('fr')).not.toContain('DeclareFixedFont')
+    expect(main('fr')).not.toContain('\\let\\expandafter\\elvbf')
   })
 })

@@ -109,13 +109,38 @@ if (want('F')) {
   }
   const translate = paper => new Map(paper.units.map(u => [u, [{ t: 'text', tr: true, s: u.kind === 'heading' ? 'Реализация' : 'Слова раздела.' }]]))
   const fonts = { rm: 'ptm', sf: 'phv', tt: 'pcr', body: 'ptm' }
-  const without = tex => tex.replace(/\\makeatletter\n\\DeclareFixedFont[\s\S]*?\\makeatother\n/, '')
+  const without = tex => tex.replace(/\\makeatletter\n\\begingroup\\fontencoding[\s\S]*?\\makeatother\n/, '')
   for (const s of strategiesFor({ compiler: 'pdflatex' }, 'ru')) {
     const fixed = await compile('f-fixed', F, s, { translate, fonts }), bare = await compile('f-bare', F, s, { translate, fonts, alter: without })
     check(`F (${s.name}): a heading in a font the style loads by name has its Russian letters`, fixed.ok && !/Missing character/.test(fixed.log) && fixed.text.includes('Реализация'), fixed.error || (fixed.log.match(/^Missing character.*$/m)?.[0] ?? `the PDF reads ${JSON.stringify(fixed.text.slice(0, 40))}`))
     // the symptom is in the PDF alone: under T2A the raw font sets its own glyphs at T2A's slots, "—åàºŁçàöŁÿ", and
     // logs a missing character only for the slots it has none at; the paragraph, in NFSS's T2A font, has its letters
     check(`F (${s.name}): without it, the heading's letters are not in the PDF, the paragraph's are (as 1512.03385's headings)`, bare.ok && !bare.text.includes('Реализация') && bare.text.includes('Слова раздела'), bare.error || `the PDF reads ${JSON.stringify(bare.text.slice(0, 60))}`)
+  }
+}
+
+// N: a font loaded by name declared again in the document's weight and shape (the review of fix/tex-path-errors, I1):
+// NAACL's ruler, \\font\\naaclhv = phvb at 8pt, and CVPR's \\font\\elvbf = ptmb scaled 1100 are the fonts the document's
+// own \\sffamily\\bfseries and \\rmfamily\\bfseries give at their sizes — asked for in series b and shape up, on a Computer
+// Modern paper under T2A the ruler was CM sans medium, lass0800 for lasx0800 —, and no shape up is undefined on the way
+if (want('N')) {
+  const style = '\\font\\naaclhv = phvb at 8pt\n\\font\\elvbf  = ptmb scaled 1100\n'
+  const probe = '\\AtBeginDocument{{\\fontsize{8}{8}\\sffamily\\bfseries\\upshape\\selectfont\\typeout{AXT-OWN=\\fontname\\font}}{\\fontsize{11}{11}\\rmfamily\\bfseries\\upshape\\selectfont\\typeout{AXT-OWN=\\fontname\\font}}\\typeout{AXT-NAMED=\\fontname\\naaclhv}\\typeout{AXT-NAMED=\\fontname\\elvbf}}\n'
+  const main = times => `\\documentclass{article}\n${times ? '\\usepackage{times}\n' : ''}\\usepackage{style}\n${probe}\\begin{document}\nWords of the paper.\n\\end{document}\n`
+  const translate = paper => new Map(paper.units.map(u => [u, [{ t: 'text', tr: true, s: 'Слова статьи.' }]]))
+  const [own, xe] = strategiesFor({ compiler: 'pdflatex' }, 'ru')
+  // TeX writes its log in lines of 79 characters: an OpenType font's name runs over two
+  const read = (r, what) => [...r.log.replace(/^(.{79})\n/gm, '$1').matchAll(new RegExp(`^AXT-${what}=(.*)$`, 'gm'))].map(m => m[1].trim())
+  const same = r => { const a = read(r, 'NAMED'), b = read(r, 'OWN'); return a.length === 2 && a.every((f, k) => f === b[k]) }
+  const shapeUp = r => r.log.match(/^LaTeX Font Warning: Font shape `[^']*\/up' undefined/m)?.[0] ?? ''
+  const cases = [['a Times paper', own, true], ['a Times paper', xe, true], ['a Computer Modern paper', xe, false]]
+  // under T2A a Computer Modern paper's sans and roman are the LH fonts, METAFONT's
+  if (existsSync(join(METAFONT, 'tfm', 'lasx0800.tfm'))) cases.push(['a Computer Modern paper', own, false])
+  else console.log(`skip N on a Computer Modern paper under T2A: no LH metrics in ${METAFONT} (spikes/make-metafont.mjs)`)
+  for (const [paper, s, times] of cases) {
+    const fonts = times ? { rm: 'ptm', sf: 'phv', tt: 'pcr', body: 'ptm' } : { rm: 'cmr', sf: 'cmss', tt: 'cmtt', body: 'cmr' }
+    const r = await compile('n', { 'main.tex': main(times), 'style.sty': style }, s, { translate, fonts })
+    check(`N (${s.name}, ${paper}): the fonts the style loads by name are the document's own bold sans and roman, no shape up undefined`, r.ok && same(r) && !shapeUp(r), r.error || shapeUp(r) || `${read(r, 'NAMED').join(', ')} against ${read(r, 'OWN').join(', ')}`)
   }
 }
 
