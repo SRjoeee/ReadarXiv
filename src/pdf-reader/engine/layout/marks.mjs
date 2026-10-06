@@ -449,15 +449,17 @@ const CHARS_MAX = 65_536, CHAR_MAX = 32
 const SIZE_MAX = 200
 /** a piece's opening mark: the name its own ink is kept under */
 const OPENING = /^[pn]\d+\.\d+a$/
-/** the paper's own switch as the marking takes it (readMarkProbe): at most PROBE_MAX commands, each a control word, its
- *  answer a code 0, 1 or 2 a follower; else a refusal at `path` */
+/** the paper's own switch as the marking takes it (readMarkProbe): null where the probe was not run (every mark as
+ *  LAYOUT_TEX sets it), else at most PROBE_MAX commands, each a control word, its answer a code 0, 1, 2 or x (no answer)
+ *  a follower; else a refusal at `path` */
 function checkSwitches(v, path) {
-  if (!isObject(v)) throw new LayoutRefusal(path, 'not an object')
+  if (v === null) return null
+  if (!isObject(v)) throw new LayoutRefusal(path, 'not null or an object')
   const keys = Object.keys(v)
   if (keys.length > PROBE_MAX) throw new LayoutRefusal(path, `more than ${PROBE_MAX} commands`)
   for (const k of keys) {
     if (!/^\\[A-Za-z@]{1,63}$/.test(k)) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a control word')
-    if (typeof v[k] !== 'string' || v[k].length !== FOLLOWERS.length || !/^[012]+$/.test(v[k])) throw new LayoutRefusal(`${path}.${told(k)}`, `not ${FOLLOWERS.length} codes of 0, 1 or 2`)
+    if (typeof v[k] !== 'string' || v[k].length !== FOLLOWERS.length || !/^[012x]+$/.test(v[k])) throw new LayoutRefusal(`${path}.${told(k)}`, `not ${FOLLOWERS.length} codes of 0, 1, 2 or x`)
   }
   return v
 }
@@ -513,7 +515,9 @@ function followsOf(units, names) {
  * place, but one the log reports set twice (`dropped`: TeX kept the first, wherever that was) or off its page's view;
  * each page's view and columns (MARK_DEF's c<n>-<k>); each unit's line count (LINES_TEX's AXT-LINES); the document's
  * text tokens (tokenizeDocument), their words once each; what the marked original was marked with (`marking`: the
- * classes and the paper's own switch it was given to layoutMarking), so that the maker knows which pieces have marks;
+ * classes and the paper's own switch it was given to layoutMarking, null where no probe was run: the two mark
+ * differently, layoutMarking setting no mark for an asked command TeX did not answer), so that the maker knows which
+ * pieces have marks;
  * and, given the paper's `units` and PDF.js's operator codes `OPS`, each marked piece's own ink, read from the marked
  * compile's operator lists by its points (layout/stream.mjs ownedOf): `owned`, by its opening mark's name, how it was
  * found (OWNED_HOW) and, where it was, its glyphs (page, origin, baseline, size, a character of `chars`) and its rules
@@ -521,9 +525,10 @@ function followsOf(units, names) {
  * paper, or with ink off its page, is not owned. A token whose word is the rest of one given in parts, longer than a word
  * may be, or off its page is left out. Numbers to a hundredth. What it gives, parseLayoutMarks takes
  */
-export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLASSES, switches = {}, units = null, OPS = null }) {
+export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLASSES, switches = null, units = null, OPS = null }) {
   if (!ENGINES.includes(engine)) throw new LayoutRefusal('engine', `not one of ${ENGINES.join(', ')}`)
-  const marking = { classes: [...checkClasses(classes, 'classes')], switches: { ...checkSwitches(switches, 'switches') } }
+  const sw = checkSwitches(switches, 'switches')
+  const marking = { classes: [...checkClasses(classes, 'classes')], switches: sw === null ? null : { ...sw } }
   const pdf = marked
   const pages = checkPages(pdf.numPages, 'pages')
   const views = [], text = [], stream = []

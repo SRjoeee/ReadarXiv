@@ -64,8 +64,9 @@ export interface LayoutMarks {
   /** the engine that compiled it (meta.compiler) */
   engine: string
   /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (TeX's answers to the
-   *  mark probe, readMarkProbe), so that whoever reads the file knows which pieces have marks */
-  marking: { classes: MarkClass[]; switches: Switches }
+   *  mark probe, readMarkProbe; null where the probe was not run), so that whoever reads the file knows which pieces
+   *  have marks */
+  marking: { classes: MarkClass[]; switches: Switches | null }
   pages: number
   /** per page: x0, y0, x1, y1 (stride 4) */
   views: number[]
@@ -98,7 +99,7 @@ export declare const RULES_PIECE: number
 export declare const OWNED_ALL: number
 /** from a PDF.js document of the marked original and its last TeX pass's log; the caller opens and destroys the
  *  document. With the paper's `units` and PDF.js's operator codes, each marked piece's own ink from its operator lists */
-export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; switches?: Switches; units?: readonly SourceUnit[] | null; OPS?: Record<string, number> | null }): Promise<LayoutMarks>
+export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; switches?: Switches | null; units?: readonly SourceUnit[] | null; OPS?: Record<string, number> | null }): Promise<LayoutMarks>
 export declare function encodeLayoutMarks(m: LayoutMarks): string
 /** bytes, then values, then JSON.parse, then every bound below; throws LayoutRefusal */
 export declare function parseLayoutMarks(bytes: Uint8Array): LayoutMarks

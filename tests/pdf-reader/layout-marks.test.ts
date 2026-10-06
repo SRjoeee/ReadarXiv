@@ -480,10 +480,17 @@ describe('reading the marked original', () => {
   })
   it('layoutMarksOf records the classes and the paper\'s switch the marked original was made with', async () => {
     const doc = fakeDocument([{ view: [0, 0, 612, 792], items: [item('kept', 72, 700)] }], [['axt-0s', 1, 72, 700]])
-    expect((await layoutMarksOf(doc, '', { engine: 'pdflatex' })).marking).toEqual({ classes: [...LAYOUT_CLASSES], switches: {} })
-    const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', classes: ['math', 'cite'], switches: { '\\cite': '22220000' } })
-    expect(m.marking).toEqual({ classes: ['math', 'cite'], switches: { '\\cite': '22220000' } })
+    // no probe run: null, which the maker re-marks as LAYOUT_TEX sets every mark; a probe that answered nothing is {},
+    // which the maker re-marks with no mark for an asked command (Task 2's m4): the two kept apart through the file
+    const plain = await layoutMarksOf(doc, '', { engine: 'pdflatex' })
+    expect(plain.marking).toEqual({ classes: [...LAYOUT_CLASSES], switches: null })
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(plain))).marking.switches).toBeNull()
+    const none = await layoutMarksOf(doc, '', { engine: 'pdflatex', switches: {} })
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(none))).marking.switches).toEqual({})
+    const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', classes: ['math', 'cite'], switches: { '\\cite': '22220000', '\\ref': 'x0000000' } })
+    expect(m.marking).toEqual({ classes: ['math', 'cite'], switches: { '\\cite': '22220000', '\\ref': 'x0000000' } })
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m))).marking).toEqual(m.marking)
+    await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', switches: { '\\cite': '2222000y' } })).rejects.toThrow(LayoutRefusal)
     await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', classes: ['math', 'tikz' as 'math'] })).rejects.toThrow(LayoutRefusal)
     await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', switches: { '\\cite': '2222' } })).rejects.toThrow(LayoutRefusal)
     // no operator list read without the units and PDF.js's operator codes: no piece owns anything

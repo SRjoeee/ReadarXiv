@@ -108,7 +108,7 @@ function markedOf(pages: Page[], marks: Mark[]) {
   }
 }
 async function marksOf(w: World, log = '', classes?: MarkClass[]) {
-  return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? {}, units: w.units, OPS, ...(classes ? { classes } : {}) }))))
+  return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, units: w.units, OPS, ...(classes ? { classes } : {}) }))))
 }
 const make = async (w: World, log = '', asked: number[] = []) => makeLayout({ units: w.units, marks: await marksOf(w, log), arxiv: arxivOf(w.pages, asked), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
 /** a made file: it parses, and made again it is the same bytes */
@@ -577,6 +577,20 @@ describe('makeLayout, the review of 2026-10-06', () => {
     // the same marks file but made with every class marking it: its marks expected, and missing
     const plain = await made(w)
     expect(plain.stats.ph).toMatchObject({ marked: 1, unmarked: 0, lost: 1 })
+  })
+
+  it("the maker marks as the compile was marked: no probe run is every mark; a probe that did not answer a command is none", async () => {
+    // the merge of Task 2's fix round 2 and Task 6b: the marks file said {} for "no probe", which Task 2's layoutMarking
+    // reads as "the probe ran and answered nothing", so the maker took every citation of an unprobed compile for unmarked
+    const runs: Run[] = [{ s: 'as shown', x: 72, y: 700 }, { s: '12', x: 112, y: 703, size: 7 }, { s: '. More words here', x: 119, y: 700 }]
+    const w: World = { pages: [{ runs }], marks: [['0s', 1, 72, 700], ['0e', 1, 204, 700]], units: [unit('para', [text('as shown '), ph('\\cite{a}'), text('. More words here')])] }
+    // no probe: the compile set the citation's marks, and the maker expects them
+    expect((await made(w)).stats.ph).toMatchObject({ marked: 1, unmarked: 0 })
+    // a probe that gave \cite no answer at all, or an x before a full stop: no mark, so unmarked (Task 2's m4)
+    expect((await made({ ...w, switches: {} })).stats.ph).toMatchObject({ marked: 0, unmarked: 1 })
+    expect((await made({ ...w, switches: { '\\cite': 'x0000000' } })).stats.ph).toMatchObject({ marked: 0, unmarked: 1 })
+    // a probe that answered every mark: marked
+    expect((await made({ ...w, switches: { '\\cite': '00000000' } })).stats.ph).toMatchObject({ marked: 1, unmarked: 0 })
   })
 
   it('units past 512 faces stay the original\'s: a count of fonts never gets the file refused', async () => {
