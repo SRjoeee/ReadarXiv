@@ -29,12 +29,14 @@
 // to LAYER_FIXTURES, which may then not be data/layer-fixtures (those are the gate's fixed inputs). --offline sends no
 // request at all: a paper's files must be in data/, and a translation is the record made before (in LAYER_FIXTURES, else
 // the same output's in data/layer-fixtures, for the same cut of the paper's units); an output that would need a request
-// fails. --switch asks TeX for the paper's own switch (the mark probe, marks.mjs readMarkProbe) and marks the layout
-// compile with it; without it, every mark is set as LAYOUT_TEX sets it. The maker (layout/make.mjs) must read the marked
-// original as it was marked: at Task 12's tip it re-marks the units with `movesPunctuation`, which layoutMarking no longer
-// takes, so the switch stays off by default there. An engine whose marks.mjs still has punctuationMovers (before Task 2)
-// is marked as it was then. The compile's marks file is cached by what it compiles, one file a key
-// (data/layout/<id>v<n>/marks-<key>.json), so that branches do not overwrite each other's.
+// fails. --switch asks TeX for the paper's own switch (the mark probe, marks.mjs readMarkProbe), and what each macro sets
+// where the engine asks (readInkProbe, readInkTexts), and marks the layout compile with them; without it, every mark is
+// set as LAYOUT_TEX sets it. The maker (layout/make.mjs) must read the marked original as it was marked: an engine whose
+// marks file carries the switch (marks.mjs MARKS_SCHEMA 2 or more) re-marks with it, and the layer gate asks --switch of
+// those; at Task 12's tip it re-marks with `movesPunctuation`, which layoutMarking no longer takes, so the switch stays
+// off there. An engine whose marks.mjs still has punctuationMovers (before Task 2) is marked as it was then. Every
+// compile is kept by what it compiles (data/layout/<id>v<n>/compiles/<key>.pdf and .log; COMPILES names another folder),
+// and its marks file is read from it again every run by the engine's own reader, units and OPS given.
 // Requests: arXiv (a paper's source and PDF where data/ has neither, 3.2 s apart), staging's public reads (GET only) and
 // Microsoft's endpoint, each with the project's User-Agent and nothing else. Every file written inside the work tree is
 // added to .git/info/exclude as it is written (the 2026-09-21 rule): no paper, nor anything made of one, is committed.
@@ -250,9 +252,22 @@ async function paperFiles(id) {
   }
   return dir
 }
-/** one compile of a paper's files in Docker's TeX Live (no network, 2 CPUs, 3 GB, 600 s), in a folder of its own: its
- *  PDF's bytes and its log, or null where it made no PDF */
-async function compiled(dir, name, files, paper, { passes = null } = {}) {
+/**
+ * One compile of a paper's files in Docker's TeX Live (no network, 2 CPUs, 3 GB, 600 s), in a folder of its own: its PDF's
+ * bytes and its log, or null where it made no PDF. Kept by what it compiles (its name is the files' key) in
+ * <COMPILES, else data/layout/<id>v<n>/compiles>, so that a compile is made once whichever engine reads it: what the
+ * marks file holds is read again from it every run, by the engine's own reader (layoutMarksOf), since another branch's
+ * reader reads the same compile otherwise
+ */
+const COMPILES = process.env.GATE_PDF_CACHE ?? process.env.COMPILES ?? null
+async function compiled(dir, name, files, paper, opts = {}) {
+  const at = COMPILES ? join(COMPILES, dir.split(sep).pop()) : join(dir, 'compiles'), pdfF = join(at, `${name}.pdf`), logF = join(at, `${name}.log`)
+  if (existsSync(logF)) return { pdf: existsSync(pdfF) ? new Uint8Array(readFileSync(pdfF)) : null, log: readFileSync(logF, 'latin1') }
+  const c = await compiledNow(dir, name, files, paper, opts)
+  if (c) { mkdirSync(at, { recursive: true }); if (c.pdf) write(pdfF, c.pdf); write(logF, Buffer.from(c.log, 'latin1')) }
+  return c
+}
+async function compiledNow(dir, name, files, paper, { passes = null } = {}) {
   if (free(dir) < FREE_MIN) throw new Error(`less than 10 GiB free on ${dir}`)
   const main = paper.project.main, stem = main.split('/').pop().replace(/\.[^.]+$/, '')
   const build = join(dir, `build-${name}`)
@@ -303,20 +318,23 @@ async function layoutOf(id, paper, dir) {
       write(marksAt(key), marksBytes)
     }
   } else {
-    // Task 2's: the paper's own switch is TeX's answer to the mark probe (with --switch), set in the font probe's compile
-    let switches = null
+    // Task 2's: the paper's own switch is TeX's answer to the mark probe (with --switch), set in the font probe's compile,
+    // and, where the engine asks (Fix 1 of the maker round), what each macro sets: none (inkless) or which text (texts)
+    let switches = null, inkless = null, texts = null
     if (SWITCH) {
       const probe = LIVE.probeFiles(paper, { marks: true })
       const c = await compiled(dir, `probe-${keyOf(probe)}`, withSource(probe), paper, { passes: 1 })
       switches = MARKS.readMarkProbe(c?.log ?? '', MARKS.probeSamples(paper.units))
       switched = MARKS.switchedOf(switches)
+      if (typeof MARKS.readInkProbe === 'function') { inkless = MARKS.readInkProbe(c?.log ?? '', MARKS.inkSamples(paper.units)); console.log(`${id}: inkless ${inkless.length} of ${MARKS.inkSamples(paper.units).length}: ${inkless.slice(0, 12).join(' ')}`) }
+      if (typeof MARKS.readInkTexts === 'function') { texts = MARKS.readInkTexts(c?.log ?? '', MARKS.inkSamples(paper.units)); console.log(`${id}: texts ${texts.length}: ${texts.slice(0, 12).map(t => t.join('=')).join(' ')}`) }
     }
-    const marked = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches })
+    const marked = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, ...(inkless ? { inkless } : {}) })
     const key = keyOf(marked)
-    if (!(marksBytes = cached(key))) {
-      const c = await compiled(dir, key, withSource(marked), paper)
-      if (c?.pdf) { marksBytes = await marksOf(c, paper, { classes: LAYOUT_CLASSES }); write(marksAt(key), marksBytes) }
-    }
+    // the marks read again from the kept compile every run (the reader is the engine's), with the switch, what the macros
+    // set, and the units and OPS (Task 6b's own ink)
+    const c = await compiled(dir, key, withSource(marked), paper)
+    if (c?.pdf) marksBytes = await marksOf(c, paper, { classes: LAYOUT_CLASSES, switches, ...(inkless ? { inkless } : {}), ...(texts ? { texts } : {}), units: paper.units, OPS })
   }
   if (!marksBytes) return { refused: 'compile', stats: null }
   const marks = parseLayoutMarks(marksBytes)
@@ -324,6 +342,8 @@ async function layoutOf(id, paper, dir) {
   const m = /^(.+)v(\d+)$/.exec(id)
   try {
     const out = await makeLayout({ units: paper.units, marks, arxiv: await task.promise, OPS, paper: { id: m[1], version: Number(m[2]) }, left: '', pdfjs: PDFJS })
+    // GATE_DBG=<dir>: the maker's own diagnostics, where it gives them
+    if (out.stats.dbg && process.env.GATE_DBG) writeFileSync(join(process.env.GATE_DBG, `${id}.json`), JSON.stringify({ dbg: out.stats.dbg, u: out.stats.dbgU }))
     return 'file' in out ? { text: encodeLayout(out.file), stats: out.stats, switched } : { refused: out.refused, stats: out.stats, switched }
   } finally { await task.destroy() }
 }
@@ -397,7 +417,7 @@ for (const [id, target] of asked) {
       const hashes = await Promise.all(paper.units.map(sourceHash))
       papers.set(id, { dir, paper, layout, hashes, ms: Date.now() - t0 })
       const s = layout.stats
-      console.log(`${id}: ${layout.text ? `layout ${layout.text.length} bytes` : `refused (${layout.refused})`}${layout.switched?.length ? `, switched ${layout.switched.join(' ')}` : ''}${s ? `, lines carried ${s.lines.carried}/${s.lines.total}, units located ${s.units.located}/${s.units.total}` : ''} (${Date.now() - t0} ms)`)
+      console.log(`${id}: ${layout.text ? `layout ${layout.text.length} bytes` : `refused (${layout.refused})`}${layout.switched?.length ? `, switched ${layout.switched.join(' ')}` : ''}${s ? `, lines carried ${s.lines.carried}/${s.lines.total}, units located ${s.units.located}/${s.units.total}` : ''}${s ? `, ph ${JSON.stringify({ found: s.ph.found, lost: s.ph.lost, unmarked: s.ph.unmarked, symbols: s.ph.symbols, twice: s.ph.twice, unmatched: s.ph.unmatched, foreign: s.ph.foreign, shared: s.ph.shared })}` : ''} (${Date.now() - t0} ms)`)
     }
     const { dir, paper, layout, hashes } = papers.get(id)
     const m = /^(.+)v(\d+)$/.exec(id)
