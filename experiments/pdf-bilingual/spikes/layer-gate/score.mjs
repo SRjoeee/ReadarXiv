@@ -57,6 +57,9 @@ export const MEASURES = [
   ['rmPOther', 'model', 'defect', 'down', "placeholders' page: other ink or a crop's glyph missing"],
   ['rmMismatched', 'model', 'defect', 'down', "units whose removal is not the plan's"],
   ['rmRefused', 'model', 'defect', 'down', 'pages refused by the remover'],
+  // the consistency measures (the table-groups brief, 2026-10-07): each must be 0
+  ['groupsSplit', 'model', 'count', 'down', 'table groups drawn partly'],
+  ['labelsSource', 'model', 'count', 'down', 'labels left in the source language the final names'],
 ]
 /** recorded beside them, not gated: the pitch is the rules' (CJK's leading is 1.3 by rule), the top a position */
 export const REPORTED = [['pitch', 'pitch ratio'], ['dTop', '|top shift| (pt)'], ['onGrid', 'lines on a layout baseline']]
@@ -92,6 +95,7 @@ export function pageEntry(page, model, pixel) {
     missing: model.check.missing.length, twice: model.check.twice.length, brackets: model.check.brackets.length, duplicated: model.check.duplicated.length,
     clipped: model.check.clipped, numbersTotal: model.check.numbers.total, numbersShown: model.check.numbers.shown, numbersLost: model.check.numbers.total - model.check.numbers.shown,
     where: model.where, style: model.style, drawn: model.drawn,
+    groupsSplit: model.consistency?.groupsSplit ?? 0, labelsSource: model.consistency?.labelsSource ?? 0,
   }
   if (model.removal) Object.assign(e, { rmRefused: model.removal.refused, rmMismatched: model.removal.mismatched, rmUnits: model.removal.units, rmSwapped: model.removal.swapped })
   const ck = model.removalCheck
@@ -126,6 +130,7 @@ export function fixtureTotals(pages, frames, tier) {
     scaleSpread: r(median(frames.map(f => (f.scales.length >= 2 ? Math.max(...f.scales) - Math.min(...f.scales) : null))), 3),
     dTop: r(median(body.map(g => Math.abs(g.dTop))), 2), overRight: r(share(body.filter(g => g.dRight > 1).length, body.length)), onGrid: r(median(body.map(g => g.onGrid)), 3),
     modelCells: sum(pages, p => p.modelCells), numbersTotal: sum(pages, p => p.numbersTotal), numbersShown: sum(pages, p => p.numbersShown),
+    groupsSplit: sum(pages, p => p.groupsSplit), labelsSource: sum(pages, p => p.labelsSource),
     style: [sum(pages, p => p.style?.[0]), sum(pages, p => p.style?.[1])],
   }
   if (tier === 'pixel') {
@@ -171,6 +176,7 @@ export function pooled(list, tier) {
     fill: w('fill', 'fillN'), blankLines: w('blankLines'), framesBlank1: w('framesBlank1'), pitch: w('pitch'), pitchSpread: w('pitchSpread'),
     scale: w('scale'), fullSize: w('fullSize'), scaleSpread: w('scaleSpread'), dTop: w('dTop'), overRight: w('overRight'), onGrid: w('onGrid'),
     modelCells: sum(list, t => t.modelCells), numbersTotal: sum(list, t => t.numbersTotal), numbersShown: sum(list, t => t.numbersShown),
+    groupsSplit: sum(list, t => t.groupsSplit), labelsSource: sum(list, t => t.labelsSource),
     style: [sum(list, t => t.style[0]), sum(list, t => t.style[1])],
   }
   if (tier === 'pixel') {

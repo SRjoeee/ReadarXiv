@@ -111,4 +111,7 @@ export declare function openProto(o: {
   tex?: HybridOptions | null
   /** the text-removed PDF: null, v0's own drawing */
   removal?: RemovalOptions | null
+  /** the target's names of a figure and a table (caption-names.mjs) and which the final names so (live.mjs captionsOf):
+   *  a float's label drawn in the target's name where the final's is; null, every label kept as the original's */
+  labels?: { names: { figure: string; table: string } | null; captions: { figure: 'target' | 'source'; table: 'target' | 'source' } | null } | null
 }): Promise<ProtoRun>

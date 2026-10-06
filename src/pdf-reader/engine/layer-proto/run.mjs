@@ -113,8 +113,12 @@ export const layOrder = (placed, batch = 8) => layGroups(placed, batch).flatMap(
  * says is removed, each unit whose removal is the plan's is drawn by swapping the removed page's pixels in over its own
  * glyphs and cutting its crops from the placeholders' page (layer2.mjs removalOps); every other page and unit is drawn
  * the old way, erased and put back. Null: v0's own drawing.
+ * `labels`: { names, captions }, the target's names of a figure and a table (caption-names.mjs) and which of the two the
+ * final names so (the record's `captions`, live.mjs captionsOf): a float's label is drawn in the target's name where the
+ * final's is (layer2.mjs labelInTarget), else kept as the original's ink. A table's group (each record unit's `group`) is
+ * drawn whole or not at all.
  */
-export async function openProto({ doc, geometry, units: all, target: to, pages = 999, scale = 1.25, dpr = 1, params = {}, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, copy = true, removal = null }) {
+export async function openProto({ doc, geometry, units: all, target: to, pages = 999, scale = 1.25, dpr = 1, params = {}, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, copy = true, removal = null, labels = null }) {
   const P = L2.defaultParams(to)
   for (const k of PARAM_KEYS) if (params[k] !== undefined) P[k] = params[k]
   // iteration 2's hyphenation, fetched at once (local, small)
@@ -226,6 +230,20 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
       const at = skipped.findIndex(s => s.id === id)
       if (at >= 0) skipped.splice(at, 1)
     }
+  }
+  // a table's consistency group drawn whole or not at all (the table-groups brief, 2026-10-07): the record translates
+  // or keeps each group whole (its cells' `group`, cache.mjs unitsOf), and a translated cell that cannot be drawn here —
+  // no lines for it, or none on the pages shown — keeps every cell of its group the original's
+  const groupCells = new Map()
+  all.forEach((u, id) => { if (u?.group && u.pieces && (u.state === 'whole' || u.state === 'partial')) (groupCells.get(u.group) ?? groupCells.set(u.group, []).get(u.group)).push(id) })
+  const placedIds = new Set(placed.map(p => p.id))
+  const split = new Set([...groupCells].filter(([, ids]) => ids.some(id => !placedIds.has(id))).map(([g]) => g))
+  for (let k = placed.length - 1; k >= 0; k--) {
+    const p = placed[k]
+    if (!split.has(p.unit.group)) continue
+    placed.splice(k, 1)
+    skipped.push({ id: p.id, kind: p.unit.kind, why: 'group: a cell not drawn', chars: trCharsOf(p.unit), pages: p.pages })
+    if (tex) for (const list of [sources.tex, sources.v0]) { const at = list.indexOf(p.id); if (at >= 0) list.splice(at, 1) }
   }
   placed.sort((a, b) => a.stream - b.stream)
   for (const p of placed) if (p.tex) fileDrawn.add(p.id)
@@ -486,6 +504,17 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     // the hybrid: a unit the file locates whole read with the file's parts
     const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0' }) : null
     const prep = L2.prepareUnit(p.unit, p.rects, local, phMode === 'source' ? null : citeMap, null, parts)
+    // a float's label in the target's name where the final names it so (labelInTarget): its ink erased and accounted as
+    // the unit's text, and set as the line's start, in its own style, before the translation
+    const relabel = labels ? L2.labelInTarget(prep.label, labels.names, labels.captions, to) : null
+    if (relabel) {
+      prep.label = { ...prep.label, drawn: relabel }
+      for (const c of prep.label.chars) prep.cat?.set(L2.charKey(c), 'acc')
+      // (a file's first line starts at the unit's own mark, after the label the class set before it: the line the label
+      // is now part of starts where the label does)
+      const r0 = p.rects[0], lx0 = Math.min(...prep.label.chars.map(c => c.x0))
+      if (r0 && Number.isFinite(lx0) && lx0 < r0[1] - 0.5 && prep.label.chars.every(c => c.page === r0[0])) p.rects[0] = [r0[0], lx0, r0[2], r0[3], r0[4]]
+    }
     // iteration 3: each crop over the ink it touches (its page's ink map)
     for (const r of prep.values()) {
       if (r?.mode !== 'crop') continue
@@ -503,14 +532,16 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     // the unit's own mark, and so where the original's text does: after a label the file sets apart, at the line's own
     // start; after one it holds (a footnote's mark), where its first word is, never before the label's end (v0's quarter
     // of an em after it set a footnote's text 1.7 pt right of the original's)
-    if (prep.label && p.blocks[0]) {
+    if (prep.label && !prep.label.drawn && p.blocks[0]) {
       const b = p.blocks[0]
       if (!fileLines) b.indent = Math.max(b.indent, prep.label.x1 + 0.25 * s - b.x0)
       else if (prep.label.x1 > p.rects[0][1] + 0.1) b.indent = Math.max(b.indent, (prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s) - b.x0)
     }
     if (P.borrow && p.unit.kind !== 'cell') for (const b of p.blocks) b.freeOf = () => freeFor(b, s)
     const t2 = performance.now()
-    const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P)
+    // (the label's own style: a class's bold or italic label)
+    const lead = prep.label?.drawn ? { text: prep.label.drawn, st: (st => (st && st.fam !== 'math' ? { bold: !!st.bold, italic: !!st.italic } : {}))(prep.label.chars[0]?.st) } : null
+    const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead)
     const t3 = performance.now()
     p.layout = L2.layoutUnit2(tokens, p.blocks, s, P, to)
     p.tokens = tokens
@@ -526,7 +557,9 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
         let x0 = prep.firstX0 !== undefined ? Math.min(e[0], prep.firstX0 - 0.2) : e[0]
         // from right after the ink before it (a label), but never more than 2 pt before the line's own first word
         if (inkBefore !== undefined) x0 = Math.min(x0, Math.max(inkBefore + 0.5, (prep.firstX0 ?? e[0]) - 2))
-        if (prep.label) x0 = Math.max(x0, prep.label.x1 + 0.6)
+        // (a label set in the target's name is the line's: erased from its first glyph)
+        if (prep.label?.drawn) x0 = Math.min(x0, ...prep.label.chars.map(c => c.x0 - 0.2))
+        else if (prep.label) x0 = Math.max(x0, prep.label.x1 + 0.6)
         p.layout.extents.set(r0.join(), multi ? [[x0, e[1], e[2], e[3]], ...ext.slice(1)] : [x0, e[1], e[2], e[3]])
       }
     }
@@ -563,18 +596,43 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     }
   }
   const ms = new Map()
+  // A table group's cells laid, then painted all together or not at all (the table-groups brief): a cell is painted
+  // only once every cell of its group is laid, and none is where one could be set only clipped (its fit past its floor)
+  // — a cell that cannot be drawn whole cannot be drawn —, or where the group's cells lie on more than one page (the
+  // first page's would be painted before the last's are laid). A group not painted is the original's, its records gone
+  const groupLaid = new Map()
+  const withhold = (p, why) => {
+    const at = placed.indexOf(p)
+    if (at >= 0) placed.splice(at, 1)
+    const r = stats.indexOf(p.rec)
+    if (r >= 0) stats.splice(r, 1)
+    skipped.push({ id: p.id, kind: p.unit.kind, why: `group: ${why}`, chars: trCharsOf(p.unit), pages: p.pages })
+  }
+  const settleGroup = g => {
+    const laidCells = groupLaid.get(g)
+    if (!laidCells || laidCells.done || laidCells.list.length < groupCells.get(g).length) return
+    laidCells.done = true
+    const pages = new Set(laidCells.list.flatMap(p => p.pages))
+    const why = pages.size > 1 ? 'on two pages' : laidCells.list.some(p => p.layout.clipped) ? 'a cell clipped' : null
+    if (why) { for (const p of laidCells.list) withhold(p, why); return }
+    for (const p of laidCells.list) for (const pg of p.pages) paint(p, pg)
+  }
   const arrive = p => {
     const t0 = performance.now()
     layout2(p)
+    const g = p.unit.group && groupCells.has(p.unit.group) ? p.unit.group : null
+    if (g) (groupLaid.get(g) ?? groupLaid.set(g, { list: [], done: false }).get(g)).list.push(p)
     if (P.even) {
       for (const pg of p.pages) {
         laid[pg].push(p)
         if (laid[pg].length === expected[pg]) {
           evenPass(pg)
-          for (const u of laid[pg]) paint(u, pg)
+          for (const u of laid[pg]) if (!u.unit.group || !groupCells.has(u.unit.group)) paint(u, pg)
+          for (const gg of new Set(laid[pg].map(u => u.unit.group).filter(x => x && groupCells.has(x)))) settleGroup(gg)
         }
       }
-    } else for (const pg of p.pages) paint(p, pg)
+    } else if (g) settleGroup(g)
+    else for (const pg of p.pages) paint(p, pg)
     ms.set(p.id, performance.now() - t0)
   }
 

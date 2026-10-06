@@ -7,7 +7,7 @@ import { fileOwnership, glyphsOfChars, indicesOf, pageMasks, planOf, type Remova
 // drawing's swap (layer2.mjs drawOps, removalOps)
 
 /** a glyph on a baseline, as pageInk gives it with `indices` */
-const g = (u: string, x0: number, y: number, n: number, k: number, size = 10, x1 = x0 + 0.5 * size): Glyph => ({ u, x0, x1, y, top: y + 0.75 * size, bottom: y - 0.22 * size, size, font: 'F', n, k })
+const g = (u: string, x0: number, y: number, n: number, k: number, size = 10, x1 = x0 + 0.5 * size): Glyph => ({ u, x0, x1, y, top: y + 0.75 * size, bottom: y - 0.22 * size, size, font: 'F', ix0: x0, ix1: x1, n, k })
 const inkOf = (glyphs: Glyph[], paths: [number[], number][] = []): RemovalInk => ({ glyphs, boxes: paths.flatMap(p => p[0]), paths: paths.map(p => p[1]), shows: Math.max(0, ...glyphs.map(x => (x.n ?? 0) + 1)) })
 /** a text item's characters (pageChars2's), each its share of the item */
 const chars = (text: string, x: number, yb: number, item: number, size = 10) => [...text].map((ch, k) => ({ ch, x0: x + 0.5 * size * k, x1: x + 0.5 * size * (k + 1), yb, size, item, ix: x, k, st: {} as never }))

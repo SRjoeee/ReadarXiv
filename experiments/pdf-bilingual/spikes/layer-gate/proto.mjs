@@ -53,12 +53,48 @@ async function itemsOf(page) {
 }
 
 /** the kept renderings of a page as the parity harness read them from the layout file: every display's segments, every
- *  label ([x0, y0, x1, y1]) */
-function keptOf(layout, p) {
+ *  label ([x0, y0, x1, y1]) but those of the units in `relabelled`, whose label is drawn in the target's name and so is
+ *  their text (the table-groups brief: v0's labelInTarget) */
+function keptOf(layout, p, relabelled = new Set()) {
   const out = []
   for (const r of layout.ph) if (PHK[r[2]] === 'display') for (let s = 4; s + 5 < r.length; s += 6) if (r[s] === p) out.push([r[s + 1], r[s + 5], r[s + 3], r[s + 4]])
-  for (const l of layout.labels) if (l[2] === p) out.push([l[3], l[7], l[5], l[6]])
+  for (const l of layout.labels) if (l[2] === p && !relabelled.has(l[0])) out.push([l[3], l[7], l[5], l[6]])
   return out
+}
+/** the units drawn whose float label v0 draws in the target's name */
+const relabelledOf = recs => new Set(recs.filter(r => S.byId.get(r.id)?.prep?.label?.drawn).map(r => r.id))
+
+/**
+ * What the consistency measures read of a fixture (the table-groups brief, 2026-10-07): its table groups, each the
+ * record's translated cells of one `group` (cache.mjs unitsOf; spikes/table-groups.mjs writes the fixtures so), and a
+ * group drawn partly where some of its cells are drawn and some are not, at the first page one is drawn on; and whether
+ * a drawn unit's float label stands in the source language where the final names it in the target's — the record's
+ * `captions` (live.mjs captionsOf: `target` for figures or tables) and the target's names (`names`, caption-names.mjs,
+ * the gate's own) differing from the label's own word, and the unit drawing no label of its own (`prep.label.drawn`)
+ */
+function consistencyOf(record, S, names) {
+  const members = new Map()
+  for (const [id, u] of (record.units ?? []).entries()) if (u?.group && u.pieces && (u.state === 'whole' || u.state === 'partial') && S.translated.has(id)) (members.get(u.group) ?? members.set(u.group, []).get(u.group)).push(id)
+  // (drawn: laid and recorded, run.stats — a unit placed may still be let go with its group, run.mjs settleGroup)
+  const splitOn = p => {
+    const drawn = new Map(S.run.stats.map(r => [r.id, r]))
+    const out = []
+    for (const ids of members.values()) {
+      const here = ids.filter(id => drawn.has(id))
+      if (here.length && here.length < ids.length && Math.min(...here.map(id => drawn.get(id).pages[0])) === p) out.push({ ids })
+    }
+    return out
+  }
+  const captions = record.captions ?? null
+  const labelSource = id => {
+    const label = S.byId.get(id)?.prep?.label
+    const m = label && /^(Figure|Fig\.|FIGURE|FIG\.|Table|TABLE)\s*[0-9IVXL]/.exec(label.text ?? '')
+    if (!m || !names || !captions) return false
+    const kind = /^t/i.test(m[1]) ? 'table' : 'figure'
+    if (captions[kind] !== 'target' || names[kind].toLowerCase() === m[1].toLowerCase()) return false
+    return !label.drawn
+  }
+  return { splitOn, labelSource }
 }
 
 const PDF_ASSETS = { cMapUrl: '/pdfjs/cmaps/', standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/' }
@@ -149,7 +185,7 @@ window.gate = {
    * the pages asked as a plan (removal.mjs, each unit's removal as it would draw it), which the driver makes the add-on
    * from (`plan()`), and the fixture is then opened again over it (openRemoved): answered with `plan: true`
    */
-  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces, tex, removal }) {
+  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces, tex, removal, names = null }) {
     let V
     try { V = await import('/engine/layer-proto/run.mjs') } catch (e) { return { ready: false, why: `layer-proto/run.mjs: ${String(e?.message ?? e).slice(0, 200)}` } }
     const base = `/fixtures/${name}/`
@@ -166,7 +202,7 @@ window.gate = {
       const F = await import('/engine/layout/file.mjs')
       texIn = { ...tex, index: F.indexLayout(F.parseLayout(await bytes(`${base}layout.json`))), pieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])) }
     }
-    const opts = { doc, geometry, units: unitsFile.units, target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(texIn ? { tex: texIn } : {}), faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json` }
+    const opts = { doc, geometry, units: unitsFile.units, target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(texIn ? { tex: texIn } : {}), labels: { names, captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json` }
     // (each run of v0 its own copy of the geometry and the units: v0 grows its units' lines in place, so that a second run
     // over the same objects would start from the first's grown lines)
     const fresh = () => ({ ...opts, geometry: structuredClone(geometry), units: structuredClone(unitsFile.units) })
@@ -177,11 +213,12 @@ window.gate = {
       const planRun = await V.openProto({ ...fresh(), copy: false, removal: { OPS: pdfjs.OPS, mode: 'plan' } })
       const n = Math.min(doc.numPages, pages)
       for (let p = 1; p <= n; p++) { await planRun.until(p); for (let q = 1; q <= p; q++) if (!planRun.rows[q - 1]?.released) planRun.release(q) }
-      S = { plan: planRun.removalPlan(), planStats: planRun.removalStats(), planMs: performance.now() - t0, pending: { opts: fresh(), data, name, ref, geometry, layout, fixtureUnits, place, dump, removal, V, doc } }
+      S = { plan: planRun.removalPlan(), planStats: planRun.removalStats(), planMs: performance.now() - t0, pending: { opts: fresh(), data, name, ref, geometry, layout, fixtureUnits, unitsFile, names, place, dump, removal, V, doc } }
       return { ...info, even: planRun.P.even ?? null, plan: true }
     }
     const run = await V.openProto(opts)
     S = { V, run, doc, geometry, layout, ref, name, target, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: new Map(run.placed.map(p => [p.id, p])), checks: [], place: place ?? null, dump: dump ? [] : null }
+    S.consistency = consistencyOf(unitsFile, S, names)
     return { ...info, even: run.P.even ?? null }
   },
 
@@ -196,13 +233,14 @@ window.gate = {
    * second reading of the add-on drawn by the CPU (`check`), for the exactness check's pixels
    */
   async openRemoved({ url, manifest }) {
-    const { opts, data, name, ref, geometry, layout, fixtureUnits, place, dump, removal, V, doc } = S.pending
+    const { opts, data, name, ref, geometry, layout, fixtureUnits, unitsFile, names, place, dump, removal, V, doc } = S.pending
     const plan = S.plan
     const combined = await bytes(url)
     const rdoc = await pdfjs.getDocument({ data: combined.slice(), ...PDF_ASSETS, ...V.PDF_OPTIONS }).promise
     const cdoc = await pdfjs.getDocument({ data: combined.slice(), ...PDF_ASSETS, ...V.PDF_OPTIONS, enableHWA: false }).promise
     const run = await V.openProto({ ...opts, ...(removal === 'draw' ? { removal: { OPS: pdfjs.OPS, mode: 'draw', doc: rdoc, manifest, plan } } : {}) })
     S = { V, run, doc, geometry, layout, ref, name, target: opts.target, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: new Map(run.placed.map(p => [p.id, p])), checks: [], place: place ?? null, dump: dump ? [] : null, rm: { mode: removal, manifest, plan, rdoc, cdoc, planStats: S.planStats, planMs: S.planMs } }
+    S.consistency = consistencyOf(unitsFile, S, names)
     void data
     return { ready: true }
   },
@@ -230,7 +268,10 @@ window.gate = {
       const mine = S.audit.get(`${r.id}|${p}`) ?? []
       const erase = mine.filter(a => a.what === 'erase').map(a => boxPdf(a.box))
       const crops = mine.filter(a => a.what === 'crop').map(a => ({ k: a.k, src: a.src, dst: boxPdf(a.dst), plane: a.plane ?? 'O', srcPage: a.srcPage, devDst: a.dst }))
-      return { id: r.id, kind: r.kind, drawn: true, why: null, orig: refOf.get(r.id)?.orig ?? [], lines, erase, crops, phs: [], pageText: [] }
+      // (a label drawn in the target's name is the unit's own line too: its glyphs' band, which the erasing may take)
+      const label = S.byId.get(r.id)?.prep?.label, mark = label?.drawn ? label.chars.filter(c => c.page === p) : []
+      const own = mark.length ? [{ baseline: Math.max(...mark.map(c => c.yb)), size: Math.max(...mark.map(c => c.size)), x0: Math.min(...mark.map(c => c.x0)), x1: Math.max(...mark.map(c => c.x1)) }] : []
+      return { id: r.id, kind: r.kind, drawn: true, why: null, orig: refOf.get(r.id)?.orig ?? [], own, lines, erase, crops, phs: [], pageText: [] }
     })
     const drawnIds = new Set(recs.map(r => r.id))
     for (const r of refHere) if (S.translated.has(r.id) && !drawnIds.has(r.id)) units.push({ id: r.id, kind: r.kind, drawn: false, why: S.skipped.get(r.id) ?? 'unanchored', orig: r.orig, lines: [], erase: [], crops: [] })
@@ -254,7 +295,12 @@ window.gate = {
     if (clippedIds.length) where.clipped = clippedIds
     // the style: each unit's base as drawn against the original's (styleMatch's base), on its first page
     const first = recs.filter(r => r.pages[0] === p && r.match?.total)
-    const out = { page: p, ms, model, check, where, style: [first.filter(r => r.match.base).length, first.length], drawn: recs.length, evened: false }
+    // the consistency measures (the table-groups brief): a table group drawn partly, on the page of its first cell drawn;
+    // a float's label left in the source language where the final names it in the target's, on its unit's first page
+    const split = S.consistency.splitOn(p), labels = recs.filter(r => r.pages[0] === p && S.consistency.labelSource(r.id))
+    if (split.length) where.groupsSplit = split.map(x => x.ids[0])
+    if (labels.length) where.labelsSource = labels.map(r => r.id)
+    const out = { page: p, ms, model, check, where, consistency: { groupsSplit: split.length, labelsSource: labels.length }, style: [first.filter(r => r.match.base).length, first.length], drawn: recs.length, evened: false }
     // the text-removed PDF: whether this page is removed, and its units drawn by it or the old way (their removal not the
     // plan's)
     if (S.rm) {
@@ -285,7 +331,7 @@ window.gate = {
       const why = list => list.filter(on).map(e => ({ unit: e.unit, k: e.k, mode: e.mode, why: e.why }))
       S.dump.push({ p, W, H, copy: h.toString(16), svg, check: { missing: why(ck.b.list.missing), duplicated: why(ck.b.list.duplicated), brackets: why(ck.b.list.brackets) } })
     }
-    S.cur = { p, page, W, H, view, O, C, units, kept: keptOf(S.layout, p), items, drawnText, recs }
+    S.cur = { p, page, W, H, view, O, C, units, kept: keptOf(S.layout, p, relabelledOf(recs)), items, drawnText, recs }
     return out
   },
 
@@ -317,6 +363,8 @@ window.gate = {
         if (cat === 'acc') fill(accounted, c.x0, c.yb - 0.3 * c.size, c.x1, c.yb + 0.85 * c.size)
         else if (cat === 'keep') fill(barred, c.x0 - 0.3, c.yb - 0.3 * c.size - 0.3, c.x1 + 0.3, c.yb + 0.85 * c.size + 0.3)
       }
+      // (a label drawn in the target's name: its characters the unit's text, wherever they stand)
+      if (prep.label?.drawn) for (const c of prep.label.chars) if (c.page === p) fill(accounted, c.x0, c.yb - 0.3 * c.size, c.x1, c.yb + 0.85 * c.size)
       for (const rect of u.rects) {
         if (rect[0] !== p) continue
         const info = prep.lineInfo?.get(`${rect[0]}|${rect.slice(1).join()}`)
