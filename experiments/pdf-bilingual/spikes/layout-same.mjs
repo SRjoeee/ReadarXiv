@@ -7,9 +7,6 @@ import { join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { tokenizeDocument } from '../../../src/pdf-reader/engine/anchors.mjs'
 const root = new URL('..', import.meta.url).pathname
-const gate = process.argv[2] && process.argv[2] !== '--pair' ? process.argv[2] : join(root, 'data/runs/gate', readdirSync(join(root, 'data/runs/gate')).sort().at(-1))
-const meta = JSON.parse(readFileSync(join(root, 'out/corpus-meta.json'), 'utf8'))
-const ids = JSON.parse(readFileSync(join(root, 'out/c0-browser-patched-full.json'), 'utf8')).filter(r => r.result === 'pass').map(r => r.id)
 async function tokensOf(file) {
   const pdf = await getDocument({ data: new Uint8Array(readFileSync(file)), verbosity: 0, cMapUrl: `${root}node_modules/pdfjs-dist/cmaps/`, cMapPacked: true, standardFontDataUrl: `${root}node_modules/pdfjs-dist/standard_fonts/` }).promise
   const pages = []
@@ -29,8 +26,12 @@ function agree(a, b) {
   }
   return +(hit / Math.max(1, a.doc.length)).toFixed(4)
 }
-// --pair a.pdf b.pdf: the same measure for two given PDFs (does marking a compile move anything?)
+// --pair a.pdf b.pdf: the same measure for two given PDFs (does marking a compile move anything?), which reads nothing
+// of the gate's, the corpus' or the C0 run's (it once read them first, and threw where the gate's folder was not)
 if (process.argv[2] === '--pair') { const [a, b] = await Promise.all(process.argv.slice(3, 5).map(tokensOf)); console.log(JSON.stringify({ agree: agree(a, b), back: agree(b, a), pages: [a.pages, b.pages] })); process.exit(0) }
+const gate = process.argv[2] ? process.argv[2] : join(root, 'data/runs/gate', readdirSync(join(root, 'data/runs/gate')).sort().at(-1))
+const meta = JSON.parse(readFileSync(join(root, 'out/corpus-meta.json'), 'utf8'))
+const ids = JSON.parse(readFileSync(join(root, 'out/c0-browser-patched-full.json'), 'utf8')).filter(r => r.result === 'pass').map(r => r.id)
 const rows = []
 for (const id of ids) {
   const m = meta.find(x => x.id === id), stem = m.main.split('/').pop().replace(/\.tex$/, '')

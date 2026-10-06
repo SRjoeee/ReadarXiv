@@ -178,13 +178,14 @@ export function probeFiles({ fsys, project }, { width = false } = {}) {
  *  the files as written, worked out when asked — where the paper's own errors stand (runLive's ownErrors). With
  *  `layout`, a list of classes (layout/marks.mjs), the layout marks too: the units marked by layoutMarking, each
  *  placeholder of those classes and each cell and heading, and LAYOUT_TEX after MARK_DEF; `spans` names the paper's own
- *  units. Without it, the bytes as before */
-export function originalFiles({ fsys, project }, { lines = false, spans = null, layout = null } = {}) {
+ *  units; `movesPunctuation`, the paper's own switch (layout/marks.mjs punctuationMovers): no mark for a placeholder of
+ *  those classes the punctuation follows. Without `layout`, the bytes as before */
+export function originalFiles({ fsys, project }, { lines = false, spans = null, layout = null, movesPunctuation = [] } = {}) {
   const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
   const raw = spans ? [] : null
   let out
   if (layout) {
-    const marked = layoutMarking(project.units, layout, { lines }), paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
+    const marked = layoutMarking(project.units, layout, { lines, movesPunctuation }), paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
     out = patch({ ...project, units: marked.units }, new Map(), { mark: marked.mark, spans: raw })
     for (const x of raw ?? []) { x.unit = paperOf.get(x.unit) ?? x.unit; if (x.outer) x.outer = paperOf.get(x.outer) ?? x.outer }
   } else out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw })

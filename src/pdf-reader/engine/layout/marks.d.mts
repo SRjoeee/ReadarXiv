@@ -4,8 +4,17 @@ import type { SourceUnit, UnitMark } from '../latex-front.mjs'
 export type MarkClass = 'math' | 'display' | 'cite' | 'ref' | 'eqref' | 'code' | 'url' | 'footnote' | 'macro'
 /** every class, in this order */
 export declare const MARK_CLASSES: readonly MarkClass[]
-/** the classes the run marks when asked (Task 2 removes any class that moves a line of any paper) */
+/** the classes the run marks when asked: the global default (Task 2's corpus check); a paper's own switch
+ *  (punctuationMovers) takes the marks off the placeholders of a class its punctuation follows */
 export declare const LAYOUT_CLASSES: readonly MarkClass[]
+type PaperFiles = { fsys: { read(path: string): Uint8Array | null }; project: { main: string } }
+/** whether the paper's citations take the punctuation after them before them (cite.sty's and natbib's super, natmove,
+ *  overcite, biblatex's footnote or superscript \autocite): from the preamble the engine reads and `log`, a log of any
+ *  compile of the paper's preamble (the font probe's) */
+export declare function superCitations(paper: PaperFiles, log?: string): boolean
+/** the paper's own switch: the classes a package of its moves the punctuation after before (`cite` where superCitations),
+ *  for layoutMarking's and originalFiles' `movesPunctuation` */
+export declare function punctuationMovers(paper: PaperFiles, log?: string): MarkClass[]
 /** a placeholder whose rendering is never ink: matched on its leading control sequence */
 export declare const INVISIBLE: RegExp
 /** a displayed formula's source */
@@ -19,8 +28,9 @@ export declare const LAYOUT_TEX: string
  *  mark by its unit and source piece index, a draft image frame's corner (g) */
 export declare const MARK_NAME: RegExp
 /** the units with their layout marks as pieces of their own (each unit copied; the paper's units untouched), and each
- *  unit's mark for patch(): MARK_DEF's for a marked unit (with \axtlines when `lines`), a cell's and a heading's own */
-export declare function layoutMarking(units: readonly SourceUnit[], classes: readonly MarkClass[], o: { lines: boolean }): { units: SourceUnit[]; mark(u: SourceUnit): UnitMark }
+ *  unit's mark for patch(): MARK_DEF's for a marked unit (with \axtlines when `lines`), a cell's and a heading's own;
+ *  no mark for a placeholder of a class in `movesPunctuation` (the paper's own switch) the punctuation follows */
+export declare function layoutMarking(units: readonly SourceUnit[], classes: readonly MarkClass[], o: { lines: boolean; movesPunctuation?: readonly MarkClass[] }): { units: SourceUnit[]; mark(u: SourceUnit): UnitMark }
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {
