@@ -205,6 +205,13 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
       if (!p && (p = placeOf(id, stream, rects, u, null))) w.why = 'pages'
     } else p = placeOf(id, stream, rects, u, w?.lu ? w : null)
     if (!p) continue
+    // over the text-removed PDF a table cell is drawn by the removal alone, never erased (an erase takes the table's rules
+    // with its text): a cell the file does not locate whole is not drawn, and its group stays the original's
+    if (removal && u.kind === 'cell' && !p.tex) {
+      skipped.push({ id, kind: u.kind, why: 'cell: not located whole', chars: trCharsOf(u), pages: p.pages })
+      if (tex) sources.why[`cell, ${w?.why ?? 'v0'}`] = (sources.why[`cell, ${w?.why ?? 'v0'}`] ?? 0) + 1
+      continue
+    }
     placed.push(p)
     if (tex) {
       if (p.tex) sources.tex.push(id)
@@ -212,12 +219,13 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     }
   }
   // (texOnly: the units v0's geometry does not hold that the file locates whole, at their place in the text's stream
-  // after the unit before them; table cells are not among them)
+  // after the unit before them, table cells among them: a cell's lines are TeX's, and the text removal takes its glyphs
+  // alone, never its table's rules)
   if (tex?.texOnly && tex.use === 'lines') {
     const streamOf = new Map(geometry.left.units.map(([id, stream]) => [id, stream]))
     for (const id of tex.index.file.units.map(r => r[0])) {
       const u = all[id]
-      if (inGeometry.has(id) || !u?.pieces || (u.state !== 'whole' && u.state !== 'partial') || u.kind === 'author' || u.kind === 'cell') continue
+      if (inGeometry.has(id) || !u?.pieces || (u.state !== 'whole' && u.state !== 'partial') || u.kind === 'author') continue
       const w = judge(id, u)
       if (!w.lu) { sources.why[`unanchored, ${w.why}`] = (sources.why[`unanchored, ${w.why}`] ?? 0) + 1; continue }
       let before = -1
@@ -613,7 +621,8 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     if (!laidCells || laidCells.done || laidCells.list.length < groupCells.get(g).length) return
     laidCells.done = true
     const pages = new Set(laidCells.list.flatMap(p => p.pages))
-    const why = pages.size > 1 ? 'on two pages' : laidCells.list.some(p => p.layout.clipped) ? 'a cell clipped' : null
+    // (and over the text-removed PDF, a cell on a page the remover refused: it could only be erased)
+    const why = pages.size > 1 ? 'on two pages' : laidCells.list.some(p => p.layout.clipped) ? 'a cell clipped' : RM?.mode === 'draw' && [...pages].some(pg => !removedPage(pg)) ? 'its page not removed' : null
     if (why) { for (const p of laidCells.list) withhold(p, why); return }
     for (const p of laidCells.list) for (const pg of p.pages) paint(p, pg)
   }
