@@ -189,12 +189,16 @@ function matchGroup(s, i, open = '{', close = '}') { // s[i] === open; returns i
   }
   return -1
 }
-/** spaces and tabs, and at most one line end: TeX lets an argument follow on the next line, but a blank line is \par */
+/** spaces and tabs, and at most one line end: TeX lets an argument follow on the next line, but a blank line is \par.
+ *  A comment goes with the line end it takes, and an empty line after it is still \par: an argument after
+ *  `\includegraphics[width=\textwidth]%{old.png}` on the next line is the command's (2608.23517's {sqrt.png}, walked as
+ *  text, stopped TeX at "Missing \endcsname") */
 function skipSpaces(s, i) {
-  let lines = 0
+  let lines = 0, fresh = false
   while (i < s.length) {
     if (s[i] === ' ' || s[i] === '\t') i++
-    else if (s[i] === '\n' && lines === 0) { lines++; i++ }
+    else if (s[i] === '%') { const e = s.indexOf('\n', i); if (e < 0) return s.length; i = e + 1; fresh = true }
+    else if (s[i] === '\n' && lines === 0 && !fresh) { lines++; i++; fresh = true }
     else break
   }
   return i
@@ -317,6 +321,10 @@ function paramUse(s, from, to, textual = true, use = { text: new Set(), other: n
     if (c !== '\\') { i++; continue }
     const { name, end } = commandAt(s, i)
     if (NO_ARGS.has(name) || !/^[A-Za-z@]+$/.test(name)) { i = end; continue }
+    // a math environment's body is math (2608.23517's \def\al#1{\begin{align}#1\end{align}}: its displays went out as
+    // prose, and TeX stopped at "Double subscript")
+    const env = name === 'begin' && /^\s*\{([^}]+)\}/.exec(s.slice(end, end + 100))
+    if (env && MATH_ENVS.test(env[1].trim())) { const [bodyEnd, afterEnd] = endOfEnv(s, end + env[0].length, env[1].trim()); paramUse(s, end + env[0].length, Math.min(bodyEnd, to), false, use); i = Math.min(afterEnd, to); continue }
     const { args, end: e, known } = commandArgs(s, end, name)
     const reqs = args.filter(a => a.kind === 'req')
     // typeset as prose: the text of a font command or a box, of a caption or a footnote (2608.06007's
@@ -631,6 +639,8 @@ function walkArgs(s, i, end, walked, b, ctx) {
     from = a.end
   })
 }
+/** the running heads' commands: their text set on every page */
+const RUNNING_HEADS = new Set(['markboth', 'markright'])
 /** the parameters of a theorem-like environment: its title, optional */
 const THEOREM_PARAMS = paramsOf('[t')
 /**
@@ -885,6 +895,16 @@ function walk(s, from, to, b, ctx) {
     // the front matter's commands the role table knows by their hook (FRONT_ROLES: AAAI's \affiliations, amsart's
     // \dedicatory, a \date): their text a unit of what it is
     if (FRONT_ROLES[name]?.[1]) { const e = frontCommand(s, end, name, to, b, ctx); if (e > 0) { endText(); i = e; continue } }
+    // a running head's text, set on every page: a front unit each, with no mark (2608.04322's \markboth{…}%\n{…}, whose
+    // second argument was walked as text only while a comment kept it from the command)
+    if (RUNNING_HEADS.has(name)) {
+      const call = commandArgs(s, end, name, to)
+      if (call.known) {
+        endText(); b.flush()
+        for (const a of call.args) if (a.role === 't' && s[a.start] === '{') { const before = b.units.length, saved = b.kind; b.kind = 'para'; walk(s, a.start + 1, a.end - 1, b, ctx); b.flush(); b.kind = saved; for (const u of b.units.slice(before)) u.front = true }
+        i = call.end; continue
+      }
+    }
     // any other command: its arguments as the role table reads them (commandArgs) — its text and a box's content among
     // them walked (walkArgs), the rest kept with it —, or with every adjacent argument where the table does not know it
     // (some prose stays untranslated, nothing breaks). booktabs' \cmidrule(lr){2-5} and \cmidrule[w](lr){2-5}: a trim

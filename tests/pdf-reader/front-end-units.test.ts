@@ -121,6 +121,18 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     expect(texts(project(doc('It follows from Assumption~\\ref{a}[(i) and (iii)] directly.')))).toEqual(['It follows from Assumption[(i) and (iii)] directly.'])
     expect(texts(project(doc('Before \\url[opts]{some words here} after.')))).toEqual(['Before after.'])
   })
+  it('a comment between a command and its argument goes with its line end, as TeX reads it (2608.23517\'s {sqrt.png}, walked as text, stopped TeX)', () => {
+    expect(texts(project(doc('\\begin{figure}\\includegraphics[width=\\textwidth]%{old.png}\n  {sqrt.png}\\caption{A figure.}\\end{figure}')))).toEqual(['A figure.'])
+    // and an empty line after the comment is still \par: the group after it is no argument, its words the text's
+    expect(texts(project(doc('Words \\url{a}%\n\n{More words here.}')))).toEqual(['Words More words here.'])
+  })
+  it('a running head\'s text, set on every page, is a front unit with no mark (2608.04322\'s \\markboth{…}%\\n{…})', () => {
+    const p = project(doc('\\markboth{Journal Name, Vol. 1}%\n{Author et al.: Short Paper Title}\n\nBody words.'))
+    expect(units(p).map(u => [textOf(u), !!u.front])).toEqual([['Journal Name, Vol. 1', true], ['Author et al.: Short Paper Title', true], ['Body words.', false]])
+  })
+  it('a macro argument a math environment holds is math (2608.23517\'s \\al{…} = \\begin{align}#1\\end{align})', () => {
+    expect(texts(project(doc('Before.\n\\al{S &= \\int d^3 \\sigma \\, \\mathcal L_B}\nAfter.', '\\newcommand{\\al}[1]{\\begin{align}{#1}\\end{align}}')))).toEqual(['Before. After.'])
+  })
   it('a command the table does not know keeps every adjacent group, as before: some prose stays, nothing breaks', () => {
     expect(texts(project(doc('Before \\unknowncmd{some words here}{and more} after.')))).toEqual(['Before after.'])
   })

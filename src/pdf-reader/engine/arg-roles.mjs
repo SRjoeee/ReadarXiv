@@ -57,7 +57,7 @@ const CURATED = {
   DeclareMathOperator: '*s{r{x', newlength: '{r', newcounter: '{n[n', newif: '_r', let: '_r?s_r', def: '_rb{x', gdef: '_rb{x',
   edef: '_rb{x', xdef: '_rb{x',
   // text the reader sees, set apart: a caption outside a float (caption's \captionof), a deluxetable's
-  captionof: '*s{n[t{t', tablecaption: '{t',
+  captionof: '*s{n[t{t', tablecaption: '{t', markboth: '{t{t', markright: '{t',
 }
 /** environments as the front end reads them, where LaTeXML's form is missing or says less: a table's position and
  *  columns (its cells are walked), a box's width, a list's options (enumitem's keys), a theorem's title */
@@ -139,8 +139,18 @@ export const FRONT_ROLES = Object.freeze({ ...Object.fromEntries(Object.entries(
 
 // ---------------------------------------------------------------- reading arguments as TeX takes them
 const isLetter = c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c === '@'
-/** spaces and tabs, and at most one line end: TeX lets an argument follow on the next line, but a blank line is \par */
-const skipSpaces = (s, i) => { let lines = 0; while (i < s.length) { if (s[i] === ' ' || s[i] === '\t') i++; else if (s[i] === '\n' && lines === 0) { lines++; i++ } else break } return i }
+/** spaces and tabs, and at most one line end: TeX lets an argument follow on the next line, but a blank line is \par;
+ *  a comment goes with the line end it takes (latex-front.mjs skipSpaces) */
+const skipSpaces = (s, i) => {
+  let lines = 0, fresh = false
+  while (i < s.length) {
+    if (s[i] === ' ' || s[i] === '\t') i++
+    else if (s[i] === '%') { const e = s.indexOf('\n', i); if (e < 0) return s.length; i = e + 1; fresh = true }
+    else if (s[i] === '\n' && lines === 0 && !fresh) { lines++; i++; fresh = true }
+    else break
+  }
+  return i
+}
 /** the end of a group opening at s[i], past its matching close; -1 where it does not close */
 export function groupEnd(s, i, open = '{', close = '}') {
   let depth = 0
@@ -189,7 +199,7 @@ export function readArgs(s, i, params, to = s.length) {
     if (shape === 'b') { let e = at; while (e < to && s[e] !== '{' && s[e] !== '%') e++; if (e >= to || s[e] !== '{') return { args, end: at, complete: false }; if (e > at) args.push({ shape, role, param, start: at, end: e }); at = e; continue }
     if (shape !== '{' && shape !== '_') return { args, end: at, complete: false }
     // a bracket where a required argument is due is an optional one the table does not know of (a package's): not known
-    if (k >= to || s[k] === '}' || s[k] === '%' || s[k] === '[' || /\n[ \t]*\n/.test(s.slice(at, k + 1))) return { args, end: at, complete: false }
+    if (k >= to || s[k] === '}' || s[k] === '[' || /\n[ \t]*\n/.test(s.slice(at, k + 1).replace(/%[^\n]*\n/g, ''))) return { args, end: at, complete: false }
     // a macro's parameter (#1, in a definition's body) is one token
     const e = s[k] === '{' ? groupEnd(s, k) : s[k] === '#' && /\d/.test(s[k + 1] ?? '') ? k + 2 : tokenEnd(s, k)
     if (e < 0 || e > to) return { args, end: at, complete: false }
