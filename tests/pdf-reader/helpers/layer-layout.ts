@@ -31,7 +31,7 @@ export function layoutOf(units: UnitDef[], pages = 2): LayoutIndex {
   const file: LayoutFile = {
     schema: 1, layout: LAYOUT, pdfjs: '5.4.296', paper: { id: '1512.03385', version: 1, pages }, left: '',
     views: Array.from({ length: pages }, () => [0, 0, 612, 792]).flat(), fonts: ['NimbusRomNo9L-Regu'],
-    units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [],
+    units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [],
   }
   for (const u of units) {
     file.units.push([u.id, UNIT_KINDS.indexOf(u.kind ?? 'para'), u.kind === 'heading' ? 1 : 9, u.flags ?? 0, u.pieces ?? 64])
