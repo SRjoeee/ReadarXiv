@@ -42,10 +42,7 @@ describe('the classes', () => {
       ['\\texttt{x}', 'code'], ['\\verb|x|', 'code'], ['\\verb*+x+', 'code'], ['\\lstinline|x|', 'code'],
       ['\\url{https://x.org}', 'url'], ['\\href{https://x.org}{x}', 'url'],
       ['\\footnotemark', 'footnote'], ['\\footnotemark[2]', 'footnote'],
-      ['\\bert', 'macro'], ['\\bert{}', 'macro'], ['\\includegraphics[width=1em]{x}', 'macro'], ['\\refstepcounter{x}', 'macro'], ['\\citex@y', 'macro'],
-      // the role table's (arg-roles.mjs textless): every argument a dimension, keys, code or a register, so no letters —
-      // a rule's bar is the page's own drawing, a strut nothing (1706.03762's Table 2: nine cells refused as LOST)
-      ['\\rule{1em}{1pt}', null], ['\\rule{0pt}{2.2ex}', null], ['\\specialrule{1pt}{-1pt}{0pt}', null], ['\\addlinespace[2pt]', null], ['\\setlength{\\tabcolsep}{3pt}', null], ['\\fontsize{7.6pt}{1em}', null],
+      ['\\bert', 'macro'], ['\\bert{}', 'macro'], ['\\rule{1em}{1pt}', 'macro'], ['\\includegraphics[width=1em]{x}', 'macro'], ['\\refstepcounter{x}', 'macro'], ['\\citex@y', 'macro'],
     ]
     for (const [src, cls] of cases) expect(classOf({ t: 'ph', src }), src).toBe(cls)
     expect(classOf({ t: 'nested', unit: unit('footnote', []) } as Piece & { t: string })).toBe('footnote')
@@ -373,14 +370,12 @@ describe('the paper\'s own switch: TeX asked what a mark does before what follow
 
 describe('what a paper\'s macro sets: TeX asked (the ink section), and LaTeX\'s text symbols', () => {
   const paperIn = (body: string, pre = '') => openPaper(new Map([['main.tex', new TextEncoder().encode(`\\documentclass{article}\n${pre}\n\\begin{document}\n${body}\n\\end{document}\n`)]]))
-  // (a strut written out, \\rule{0pt}{2ex}, is no sample: the role table says it sets no letters, arg-roles.mjs textless,
-  // and it is never marked; a paper's own \\mystrut is a command no table knows, and only TeX can say it sets no ink)
   it('inkSamples: each macro\'s source once, in order, that a box can hold; no text symbol, no comment or parameter, no environment', () => {
-    const p = paperIn('A \\mystrut b \\fontsize{7pt}{1em}\\selectfont c \\mystrut d 3.57\\% e \\bert{} f \\verb|x| g \\hspace{1pt} h.')
+    const p = paperIn('A \\rule{0pt}{2ex} b \\fontsize{7pt}{1em}\\selectfont c \\rule{0pt}{2ex} d 3.57\\% e \\bert{} f \\verb|x| g \\hspace{1pt} h.')
     const got = inkSamples(p.units)
-    expect(got).toContain('\\mystrut')
-    expect(got.filter(s => s === '\\mystrut')).toHaveLength(1)
-    expect(got.indexOf('\\mystrut')).toBeLessThan(got.indexOf('\\bert{}') === -1 ? Infinity : got.indexOf('\\bert{}'))
+    expect(got).toContain('\\rule{0pt}{2ex}')
+    expect(got.filter(s => s === '\\rule{0pt}{2ex}')).toHaveLength(1)
+    expect(got.indexOf('\\rule{0pt}{2ex}')).toBeLessThan(got.indexOf('\\bert{}') === -1 ? Infinity : got.indexOf('\\bert{}'))
     expect(got).not.toContain('\\%')
     expect(got.some(s => /\\verb/.test(s))).toBe(false)
   })
@@ -453,18 +448,18 @@ describe('what a paper\'s macro sets: TeX asked (the ink section), and LaTeX\'s 
     for (const ch of Object.values(TEXT_SYMBOLS)) expect([...ch]).toHaveLength(1)
   })
   it('layoutMarking: a macro TeX said sets no ink gets no mark, where it would have had one; the rest as before', () => {
-    const p = paperIn('Words \\mystrut more and \\bert{} here, and so on.')
+    const p = paperIn('Words \\fontsize{7pt}{1em} more and \\bert{} here, and so on.')
     const opens = (inkless: string[] | null) => layoutMarking(p.units, MARK_CLASSES, { lines: false, inkless }).units.flatMap(u => srcs(u)).filter(s => /^ph \\axtpma/.test(s))
     expect(opens(null).length).toBeGreaterThan(0)
     const marked = (inkless: string[] | null) => opens(inkless).length
-    expect(marked(['\\mystrut'])).toBe(marked(null) - 1)
+    expect(marked(['\\fontsize{7pt}{1em}'])).toBe(marked(null) - 1)
     expect(marked([])).toBe(marked(null))
   })
   it('probeFiles with the marks asks about the paper\'s macros after its citations', () => {
-    const p = paperIn('A claim \\cite{a} and \\mystrut here.')
+    const p = paperIn('A claim \\cite{a} and \\rule{0pt}{2ex} here.')
     const text = new TextDecoder().decode(probeFiles(p, { marks: true }).get('main.tex'))
     expect(text).toContain('LAYOUT-PROBE 1 ink-at 0')
-    expect(text).toContain('\\hbox{\\mystrut}')
+    expect(text).toContain('\\hbox{\\rule{0pt}{2ex}}')
   })
 })
 

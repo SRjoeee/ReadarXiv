@@ -9,7 +9,6 @@
 // the words and their alignment, the CJK line-break marks. Iteration 1's own measuring, fit and paint (pageChars,
 // resolvePlaceholders, tokensOf, layoutUnit, paintPart) are left out: v0 is iteration 2 and 3 (layer2.mjs), which
 // replaced them.
-import { textArgsOf, textless } from '../arg-roles.mjs'
 
 // ---- the units' blocks
 
@@ -96,9 +95,7 @@ export function texToText(src) {
   if (CITE.test(src)) return '[·]'
   if (/^\\footnotemark\[(\d+)\]/.test(src)) return script(src.match(/\[(\d+)\]/)[1], SUP, '^')
   if (NUM.test(src)) return '?'
-  // what is never text goes before the source is drawn: a rule's sizes, a length, keys, a file (arg-roles.mjs)
-  if (textless(src)) return ''
-  let s = textArgsOf(src).replace(/^\$\$?|\$\$?$/g, '').replace(/^\\\(|\\\)$/g, '').replace(/^\\\[|\\\]$/g, '')
+  let s = src.replace(/^\$\$?|\$\$?$/g, '').replace(/^\\\(|\\\)$/g, '').replace(/^\\\[|\\\]$/g, '')
   s = s.replace(/\\(?:url|texttt|textsf|textrm|textbf|textit|emph|mathrm|mathbf|mathit|mathsf|mathtt|mathcal|mathbb|mathfrak|boldsymbol|bm|ve|vec|operatorname|text|mbox|hbox)\s*\{([^{}]*)\}/g, '\u200b$1\u200b')
   s = s.replace(/\\(?:hat|widehat)\s*\{?(\w)\}?/g, '$1̂').replace(/\\(?:tilde|widetilde)\s*\{?(\w)\}?/g, '$1̃').replace(/\\(?:bar|overline)\s*\{?(\w)\}?/g, '$1̄')
   s = s.replace(/\\frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, '$1/$2').replace(/\\sqrt\s*\{([^{}]*)\}/g, '√($1)')
@@ -111,7 +108,7 @@ export function phClass(src) {
   if (MACROS[src]) return 'macro'
   if (/^\\color\{[^}]*\}$/.test(src)) return 'zero'
   if (SPACE.test(src)) return 'space'
-  if (ZERO.test(src) || textless(src)) return 'zero'
+  if (ZERO.test(src)) return 'zero'
   if (CITE.test(src)) return 'cite'
   if (NUM.test(src)) return 'num'
   if (DISPLAY.test(src)) return 'display'
