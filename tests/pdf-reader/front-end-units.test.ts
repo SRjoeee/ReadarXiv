@@ -111,7 +111,7 @@ describe('the document as TeX finds it (documentBounds): a match of the raw text
     expect(written('', 'Some body words here.\\note{fix this wording please} More words here to finish.')).toMatch(/\\note\{<T\d>\}/)
     expect(written('\\newcommand{\\note}{\\textsuperscript{*}}', 'Some body words here.\\note{} More words here to finish.')).toContain('\\note{}')
     // …and one that opens a paragraph is read as before
-    expect(written('\\newcommand{\\note}[1]{\\todo{#1}}', '\\note{A note at the paragraph start.}\n\nBody words.')).toMatch(/\\note\{<T0>\}\n\n[^]*<T1>/)
+    expect(written('\\newcommand{\\note}[1]{\\todo{#1}}', '\\note{A note at the paragraph start.}\n\nBody words.')).toMatch(/\\note\{<T0>\}\n\n[\s\S]*<T1>/)
   })
   it('what goes before the document goes before the real \\begin{document}, not a commented one in the preamble (live.mjs)', () => {
     const paper = openPaper(new Map([['main.tex', enc('\\documentclass{article}\n% a comment: \\begin{document}\n\\begin{document}\nA paragraph of words.\n\\end{document}\n')]]))
