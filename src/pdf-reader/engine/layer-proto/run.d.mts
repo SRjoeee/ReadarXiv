@@ -63,30 +63,34 @@ export interface ProtoRun {
   release(page: number): void
   checkPage(page: number): CheckResult
   check(): CheckResult
-  /** the text-removed PDF's plan as made (removal mode 'plan') */
-  removalPlan(): RemovalPlan | null
+  /** what a done page's drawing replaces of what the add-on removed (each removed glyph's and rule's box, device pixels,
+   *  and whether it is replaced), and the boxes erased for what the add-on kept; null where the add-on draws nothing */
+  removalTruth(page: number): { items: { box: number[]; replaced: boolean }[]; erase: number[][] } | null
   /** how the removal went */
   removalStats(): RemovalStats | null
   /** a done page's removed page (or placeholders' page) at v0's own resolution (mode 'draw'), until it is released */
   removedCanvas(page: number, plane?: 'R' | 'P'): HTMLCanvasElement | null
 }
-/** how the text-removed PDF went: pages removed, pages drawn the old way, units drawn by it and those whose removal was
- *  not the plan's (drawn the old way), glyphs another unit had, differing pixels no unit reached */
+/** how the text-removed PDF went: pages removed, pages drawn the old way, units drawn by it (swapped) and the old way
+ *  (erased: v0's own units; cells among them never), units whose plan this reading makes otherwise than the add-on's,
+ *  what units replace that the add-on kept (erased over their outlines), glyphs another unit had, the swaps' rectangles,
+ *  the glyphs with an outline box and without */
 export interface RemovalStats {
-  pages: number; refused: number; units: number; swapped: number; mismatched: number; taken: number; notOwned: number; crossing: number; unclaimed: number; differing: number; mismatch: unknown[]
-  byPage: Record<number, { units: number; swapped: number; mismatched: number }>
-  /** the time it took, ms in all: the pages' ink and ownership, the removed pages drawn, read back, the masks */
-  ms: { ink: number; render: number; read: number; masks: number }
+  pages: number; refused: number; units: number; swapped: number; erased: number; cellsErased: number; mismatched: number; extraGlyphs: number; extraUnits: number
+  taken: number; notOwned: number; crossing: number; rects: number; outlined: number; unoutlined: number; mismatch: unknown[]
+  byPage: Record<number, { units: number; swapped: number; erased: number; extra: number }>
+  /** the time it took, ms in all: the pages' ink, ownership and plan, the removed pages drawn, the swaps' rectangles */
+  ms: { ink: number; render: number; swap: number }
 }
 /** the text-removed PDF (removal.mjs, layout/remove.mjs) */
 export interface RemovalOptions {
   OPS: Record<string, number>
-  /** 'plan': each unit's removal kept as the plan, v0's own drawing; 'draw': drawn by the add-on */
-  mode: 'plan' | 'draw'
-  /** with 'draw': arXiv's PDF with the add-on, its manifest, the plan it was made from */
-  doc?: { getPage(n: number): Promise<unknown> }
-  manifest?: RemovalManifest
-  plan?: RemovalPlan
+  /** 'draw': drawn by the add-on */
+  mode: 'draw'
+  /** arXiv's PDF with the paper's add-on, its manifest (with the outline table), the plan it was made from (to check) */
+  doc: { getPage(n: number): Promise<unknown> }
+  manifest: RemovalManifest
+  plan?: RemovalPlan | null
 }
 export declare function openProto(o: {
   doc: { numPages: number; getPage(n: number): Promise<unknown> }

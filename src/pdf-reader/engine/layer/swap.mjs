@@ -1,128 +1,83 @@
 // The swap of the text-removed PDF (layout/remove.mjs; the instant layer's text removal): where the reader puts the
 // removed page's pixels in for a drawn unit. The reader shows arXiv's page (O); its removed page (R) differs from it only
-// where the removed glyphs' ink is. Every pixel where the two differ is the unit's whose removed glyph or rule it lies in,
-// or reaches first over differing pixels (a big operator's tail below its glyph's box), and each unit's share grows a
-// pixel into what does not differ; so a unit's swap never reaches another unit's glyphs (one not drawn yet stays the
-// original's), and a swap anywhere it reaches is exact, R being O there. Drawn at a higher resolution than it was worked
-// out at, its rectangles scaled: their edges lie where O and R are the same.
+// inside the removed glyphs' outlines (the add-on's outline table gives every glyph's: layout/ink.mjs). A unit's swap is
+// the outline boxes of the glyphs and rules it replaces, a little grown for their antialiased edges, less what reaches a
+// removed glyph it does not replace (one a reading keeps, or another unit's, not drawn yet): so a swap never reaches
+// another unit's glyphs, and is exact anywhere else, R being O there. Rectangles alone, in PDF units: drawn at any
+// resolution, no pixel is read (it replaced a mask worked out over the two pages' pixels, 100 ms a page in the browser).
 //
 // Pure: no DOM, no clock. An original module (no port statement), importing nothing, so that the reader's bundle holds it.
 
 /**
- * Each unit's share of where the original page (O) and its removed page (Rm) differ, at v0's own device pixels (W x H,
- * RGBA): every differing pixel goes to the unit whose removed glyph or rule it lies in or reaches first over differing
- * pixels (a big operator's tail below its box), and each unit's share grows by a pixel into what does not differ. `slots`:
- * per unit, its glyphs' and rules' boxes in device pixels ([x0, y0, x1, y1]). Returns per slot the rectangles [x, y, w, h]
- * the removed page's pixels go into, and how many differing pixels no unit reaches (`unclaimed`).
+ * A drawn unit's swap as rectangles, with no pixel read (the add-on gives every glyph's outline box: layout/ink.mjs
+ * outlineTable): the boxes of the glyphs and rules the unit replaces (`mine`), each grown by `pad` for its antialiased
+ * edge, a line's run of them joined where they touch; less, wherever one reaches a removed glyph or rule the unit does
+ * not replace (a line or a placeholder its reading keeps, another unit's), that one's box grown by half as much: what the
+ * add-on removed and this drawing keeps is shown from the original. `avoid`: those boxes, or a function giving those of
+ * them that meet a rectangle (a page's index, built once: avoidIndex). Every box is [x0, y0, x1, y1] in PDF units, y up;
+ * so are the rectangles returned. A glyph's outline is its ink's extremes, so the removed page differs from the original
+ * only inside its grown box: the swap is exact but where two glyphs come within `pad` of each other.
  */
-export function swapMasks(O, Rm, W, H, slots) {
-  const N = W * H
-  const label = new Int32Array(N).fill(-1)
-  const diff = new Uint8Array(N)
-  for (let i = 0, q = 0; i < N; i++, q += 4) if (O[q] !== Rm[q] || O[q + 1] !== Rm[q + 1] || O[q + 2] !== Rm[q + 2]) diff[i] = 1
-  // seeds: the differing pixels inside each unit's own boxes (the smaller box first where two meet)
-  const seeds = []
-  slots.forEach((s, si) => { for (const b of s.boxes) seeds.push([si, b, (b[2] - b[0]) * (b[3] - b[1])]) })
-  seeds.sort((a, b) => a[2] - b[2])
-  let queue = new Int32Array(1024), qn = 0
-  const enqueue = i => { if (qn === queue.length) { const q2 = new Int32Array(queue.length * 2); q2.set(queue); queue = q2 } queue[qn++] = i }
-  for (const [si, b] of seeds) {
-    const x0 = Math.max(0, Math.floor(b[0])), y0 = Math.max(0, Math.floor(b[1])), x1 = Math.min(W, Math.ceil(b[2])), y1 = Math.min(H, Math.ceil(b[3]))
-    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = y * W + x; if (diff[i] && label[i] < 0) { label[i] = si; enqueue(i) } }
+export function swapRects(mine, avoid = [], pad = SWAP_PAD) {
+  // a line's run: boxes on one band, sorted across, joined where they touch (a word's glyphs)
+  const grown = mine.filter(b => b[2] > b[0] && b[3] > b[1]).map(b => [b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad]).sort((a, b) => a[1] - b[1] || a[0] - b[0])
+  const runs = []
+  for (const b of grown) {
+    const r = runs.find(c => b[0] <= c[2] && b[2] >= c[0] && Math.min(b[3], c[3]) - Math.max(b[1], c[1]) > 0.6 * Math.min(b[3] - b[1], c[3] - c[1]))
+    if (r) { r[0] = Math.min(r[0], b[0]); r[1] = Math.min(r[1], b[1]); r[2] = Math.max(r[2], b[2]); r[3] = Math.max(r[3], b[3]) }
+    else runs.push(b.slice())
   }
-  // grown over the differing pixels, breadth first (8-connected): each pixel the unit's that reaches it first
-  for (let h = 0; h < qn; h++) {
-    const i = queue[h], x = i % W, s = label[i]
-    for (let dy = -1; dy <= 1; dy++) {
-      const yy = (i - x) / W + dy
-      if (yy < 0 || yy >= H) continue
-      for (let dx = -1; dx <= 1; dx++) {
-        const xx = x + dx
-        if (xx < 0 || xx >= W) continue
-        const j = yy * W + xx
-        if (diff[j] && label[j] < 0) { label[j] = s; enqueue(j) }
+  const near = typeof avoid === 'function' ? avoid : avoidIndex(avoid)
+  const half = pad / 2
+  const out = []
+  for (const r of runs) {
+    let parts = [r]
+    for (const k of near(r)) {
+      const a = [k[0] - half, k[1] - half, k[2] + half, k[3] + half]
+      parts = parts.flatMap(p => {
+        if (a[0] >= p[2] || a[2] <= p[0] || a[1] >= p[3] || a[3] <= p[1]) return [p]
+        // p less a: what lies below it, above it, and either side of it within its band
+        const left = []
+        if (a[1] > p[1]) left.push([p[0], p[1], p[2], a[1]])
+        if (a[3] < p[3]) left.push([p[0], a[3], p[2], p[3]])
+        const y0 = Math.max(p[1], a[1]), y1 = Math.min(p[3], a[3])
+        if (a[0] > p[0]) left.push([p[0], y0, a[0], y1])
+        if (a[2] < p[2]) left.push([a[2], y0, p[2], y1])
+        return left
+      })
+    }
+    out.push(...parts)
+  }
+  return out
+}
+
+/** the swap's pad, PDF units: a glyph's antialiased edge past its outline, a device pixel and more at the reader's
+ *  resolutions (2.5 device pixels a unit and up) */
+export const SWAP_PAD = 0.6
+
+/**
+ * Boxes ([x0, y0, x1, y1], PDF units) indexed by a coarse grid (20 units a cell): a function giving those that meet a
+ * rectangle, grown by `reach`, each once; `skip(i)` leaves the i-th out (a unit's own)
+ */
+export function avoidIndex(boxes, skip = null, reach = SWAP_PAD) {
+  const CELL = 20, grid = new Map()
+  boxes.forEach((b, i) => {
+    if (!(b[2] >= b[0] && b[3] >= b[1])) return
+    for (let gx = Math.floor((b[0] - reach) / CELL); gx <= Math.floor((b[2] + reach) / CELL); gx++) for (let gy = Math.floor((b[1] - reach) / CELL); gy <= Math.floor((b[3] + reach) / CELL); gy++) {
+      const k = gx * 100003 + gy
+      ;(grid.get(k) ?? grid.set(k, []).get(k)).push(i)
+    }
+  })
+  return r => {
+    const seen = new Set(), out = []
+    for (let gx = Math.floor(r[0] / CELL); gx <= Math.floor(r[2] / CELL); gx++) for (let gy = Math.floor(r[1] / CELL); gy <= Math.floor(r[3] / CELL); gy++) {
+      for (const i of grid.get(gx * 100003 + gy) ?? []) {
+        if (seen.has(i) || skip?.(i)) continue
+        seen.add(i)
+        const b = boxes[i]
+        if (b[0] - reach < r[2] && b[2] + reach > r[0] && b[1] - reach < r[3] && b[3] + reach > r[1]) out.push(b)
       }
     }
+    return out
   }
-  // what no seed reaches over differing pixels is a part of a glyph apart from its body (an i's dot, an accent above its
-  // glyph's declared box): each such run of pixels the unit's whose box is nearest to it, within its box's height
-  const CELL = 32, gw = Math.ceil(W / CELL), grid = new Map()
-  for (const [si, b] of seeds) {
-    const gx0 = Math.max(0, Math.floor(b[0] / CELL) - 1), gx1 = Math.min(gw - 1, Math.floor(b[2] / CELL) + 1), gy0 = Math.max(0, Math.floor(b[1] / CELL) - 1), gy1 = Math.floor(b[3] / CELL) + 1
-    for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) { const k = gy * gw + gx; (grid.get(k) ?? grid.set(k, []).get(k)).push([si, b]) }
-  }
-  const stack = []
-  for (let s0 = 0; s0 < N; s0++) {
-    if (!diff[s0] || label[s0] !== -1) continue
-    // the run (8-connected), its box
-    const run = [s0]
-    label[s0] = -2
-    let x0 = W, y0 = H, x1 = -1, y1 = -1
-    stack.push(s0)
-    while (stack.length) {
-      const i = stack.pop(), x = i % W, y = (i - x) / W
-      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        const xx = x + dx, yy = y + dy
-        if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue
-        const j = yy * W + xx
-        if (diff[j] && label[j] === -1) { label[j] = -2; run.push(j); stack.push(j) }
-      }
-    }
-    let best = -1, gap = Infinity
-    const cx = Math.floor((x0 + x1) / 2 / CELL), cy = Math.floor((y0 + y1) / 2 / CELL)
-    for (let gy = cy - 1; gy <= cy + 1; gy++) for (let gx = cx - 1; gx <= cx + 1; gx++) {
-      for (const [si, b] of grid.get(gy * gw + gx) ?? []) {
-        const dx = Math.max(0, b[0] - x1, x0 - b[2]), dy = Math.max(0, b[1] - y1, y0 - b[3]), d = Math.hypot(dx, dy)
-        if (d <= b[3] - b[1] && d < gap) { gap = d; best = si }
-      }
-    }
-    // (-3: no unit's: left as it is, counted)
-    for (const i of run) label[i] = best >= 0 ? best : -3
-  }
-  let unclaimed = 0
-  for (let i = 0; i < N; i++) if (diff[i] && label[i] < 0) unclaimed++
-  // each unit's pixels, a pixel more into what does not differ (each such pixel the first labelled neighbour's), as
-  // rectangles: runs by row, a run alike on the row below joined to it
-  const out = slots.map(() => [])
-  const dil = new Int32Array(N).fill(-1)
-  let ylo = H, yhi = -1
-  for (let i = 0; i < N; i++) {
-    const s = label[i]
-    if (s < 0) continue
-    dil[i] = s
-    const x = i % W, y = (i - x) / W
-    if (y < ylo) ylo = y
-    if (y > yhi) yhi = y
-    for (let dy = -1; dy <= 1; dy++) {
-      const yy = y + dy
-      if (yy < 0 || yy >= H) continue
-      for (let dx = -1; dx <= 1; dx++) {
-        const xx = x + dx
-        if (xx < 0 || xx >= W) continue
-        const j = yy * W + xx
-        if (!diff[j] && dil[j] === -1) dil[j] = s
-      }
-    }
-  }
-  let open = new Map()
-  for (let y = Math.max(0, ylo - 1); y <= Math.min(H - 1, yhi + 1) + 1; y++) {
-    const next = new Map()
-    if (y < H) {
-      let x = 0
-      while (x < W) {
-        const s = dil[y * W + x]
-        if (s < 0) { x++; continue }
-        let e = x + 1
-        while (e < W && dil[y * W + e] === s) e++
-        const key = `${s}|${x}|${e}`, o = open.get(key)
-        if (o) { o[1][3]++; next.set(key, o) } else next.set(key, [s, [x, y, e - x, 1]])
-        x = e
-      }
-    }
-    for (const [key, o] of open) if (!next.has(key)) out[o[0]].push(o[1])
-    open = next
-  }
-  for (const o of open.values()) out[o[0]].push(o[1])
-  return { rects: out, unclaimed, differing: diff.reduce((a, v) => a + v, 0) }
 }

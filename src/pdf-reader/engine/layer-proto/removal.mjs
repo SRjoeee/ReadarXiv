@@ -1,30 +1,25 @@
 // src/pdf-reader/engine/layer-proto/removal.mjs
-// The layer's side of the text-removed PDF (layout/remove.mjs): which of arXiv's glyphs each drawn unit replaces, and
-// where on the page the removed page's pixels go in for it. The invariant: the glyphs the remover takes out of a page are
-// the glyphs the layer replaces there, exactly, unit by unit:
-// - a unit the layout file locates whole (the hybrid's, tex.mjs) replaces the glyphs the file gives it: those on its
-//   lines (each line's baseline, within a script's window, and its erase rectangles, which are its own glyphs' boxes
-//   merged), its inline placeholders' glyphs and rules by their segments; a display formula, a label and a placeholder the
-//   layer keeps stay, and so does a character the layer shows where it is (its reading's 'keep' and 'orphan');
-// - any other unit (v0's own) replaces the glyphs of the characters its reading accounts for ('acc': its text, and the
-//   renderings it draws elsewhere), the text layer's characters carried to the content stream's glyphs by place and
-//   character; and inside a crop, the glyphs no character of the text layer stands for (a big bracket PDF.js gives a blank
-//   Unicode) and the rules.
+// The layer's side of the text-removed PDF (layout/remove.mjs): which of arXiv's glyphs the paper's add-on removes, which
+// of them each drawn unit replaces, and where on the page the removed page's pixels go in for it.
+// - The add-on is one a paper, whatever the target (pagePlan): every unit the layout file holds has its glyphs removed,
+//   those the file gives it (fileOwnership: on its lines' baselines, within a script's window and its erase rectangles,
+//   its inline placeholders' by their segments), its label's, its placeholders' rules and its lines'; and the
+//   placeholders' page holds each inline placeholder's glyphs and rules.
+// - A drawn unit the file locates whole (the hybrid's, tex.mjs) replaces of them (unitRemoval) what its reading does
+//   not keep: a display formula, a placeholder the layer keeps, a label it keeps and a character it shows where it is
+//   (its reading's 'keep' and 'orphan') stay, shown from the original. What it accounts for that the file gives no unit
+//   it replaces too, erased the old way (the add-on kept it).
+// - Any other unit (v0's own reading) is drawn the old way, erased and put back: its own rule (the text layer's
+//   characters carried to the content stream's glyphs by place and character) is what the old way erases.
 // A glyph is one unit's: the file's owner first, else the first unit painted that accounts for it.
 //
-// The drawing (unitOps' removal path): the original page stays, and over each drawn unit the removed page's pixels go in
-// where the original and the removed page differ and that difference is the unit's (every differing pixel is taken by
-// the removed glyph it touches first, so that a mask never reaches another unit's glyphs, and grows past a glyph's box
-// over the ink it actually has: a big operator's tail), a pixel more around it. The crops are cut from the page holding
-// the placeholders alone. Nothing is erased, nothing put back.
+// Each glyph's box is its outline's (layout/ink.mjs: Node's PDF.js gives it; the browser takes it from the add-on's
+// outline table), so the server and the browser own alike, and a swap is its glyphs' outline boxes (layer/swap.mjs
+// swapRects), no pixel read. The crops are cut from the page holding the placeholders alone.
 //
 // An original module (no port statement), importing only relative modules.
-import { swapMasks } from '../layer/swap.mjs'
 import { PH_FLAG } from '../layout/file.mjs'
 import { pageInk } from '../layout/ink.mjs'
-
-/** each unit's share of where the original and its removed page differ (the reader's own, layer/swap.mjs swapMasks) */
-export const pageMasks = swapMasks
 
 /** a glyph on a line, scripts included: its baseline within this of the line's (the layout maker's SCRIPT) */
 const SCRIPT = size => 0.6 * Math.max(size, 5) + 1.5
@@ -32,10 +27,51 @@ const real = c => !c.sep && !c.space && /\S/.test(c.ch)
 const keyOf = (page, c) => `${page}|${c.item}|${c.k}`
 const norm = s => String(s ?? '').normalize('NFKC').replace(/\s+/g, '')
 
-/** a page's ink as the remover names its glyphs and rules (pageInk with `indices`; every painted glyph, a blank one too) */
-export async function inkOfPage(OPS, page) {
+/** a page's ink as the remover names its glyphs and rules (pageInk with `indices`; every painted glyph, a blank one too),
+ *  each glyph's box its outline's: this reading's where PDF.js gives it (Node), else the paper's outline table's (the
+ *  browser: `outlines`, layout/ink.mjs readOutlines of the add-on's manifest), so that both readings own alike */
+export async function inkOfPage(OPS, page, outlines = null, collect = null) {
   const ops = await page.getOperatorList()
-  return pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, indices: true })
+  return pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, indices: true, outlines, collect })
+}
+
+/**
+ * The paper's removal on a page, from the layout file alone (the add-on is one a paper, whatever the target): every unit
+ * the file holds replaces there every glyph the file gives it (fileOwnership's: its lines' and its placeholders'), the
+ * glyphs of its label (the file's label box: drawn in the target's name where the final names it so), its placeholders'
+ * rules and the rules its lines hold; the placeholders' page holds each inline placeholder's glyphs and rules. What a
+ * target's drawing keeps of these (a line its reading keeps, a placeholder it keeps, a label it keeps) is shown from the
+ * original: its swap leaves them out. Returns { units: [{ id, glyphs: [n, k, …], paths }], crops: [{ id, k, glyphs,
+ * paths }], shows, glyphs } (layout/remove.mjs RemovalPlan's page), and `own`, the ownership it was made from, with
+ * `label` (glyph -> the unit whose label it is, -1).
+ */
+export function pagePlan(index, page, ink, own = fileOwnership(index, page, ink)) {
+  const G = ink.glyphs, n = G.length
+  const label = new Int32Array(n).fill(-1)
+  for (const id of index.onPage(page)) {
+    const lb = index.unit(id).labels
+    for (let o = 0; o + 6 < lb.length; o += 7) {
+      if (lb[o + 1] !== page) continue
+      const x0 = lb[o + 2], x1 = lb[o + 4], top = lb[o + 5], bottom = lb[o + 6]
+      for (let g = 0; g < n; g++) {
+        const x = G[g], mid = (x.x0 + x.x1) / 2, cy = (x.top + x.bottom) / 2
+        if (x.n >= 0 && own.owner[g] === -1 && label[g] === -1 && mid >= x0 - 0.05 && mid <= x1 + 0.05 && cy >= bottom - 0.05 && cy <= top + 0.05) label[g] = id
+      }
+    }
+  }
+  const units = new Map(), crops = new Map()
+  const unitOf = id => units.get(id) ?? units.set(id, { id, glyphs: [], paths: [] }).get(id)
+  const cropOf = (id, k) => crops.get(`${id}.${k}`) ?? crops.set(`${id}.${k}`, { id, k, glyphs: [], paths: [] }).get(`${id}.${k}`)
+  for (let g = 0; g < n; g++) {
+    const x = G[g], id = own.owner[g] >= 0 ? own.owner[g] : label[g]
+    if (id < 0 || x.n < 0) continue
+    unitOf(id).glyphs.push(x.n, x.k)
+    if (own.owner[g] >= 0 && own.ph[g] >= 0) cropOf(id, own.ph[g]).glyphs.push(x.n, x.k)
+  }
+  for (const [b, o] of own.paths) { const m = ink.paths[b]; unitOf(o.id).paths.push(m); cropOf(o.id, o.k).paths.push(m) }
+  for (const [b, id] of own.linePaths) unitOf(id).paths.push(ink.paths[b])
+  const byId = (a, b) => a.id - b.id || (a.k ?? 0) - (b.k ?? 0)
+  return { units: [...units.values()].sort(byId), crops: [...crops.values()].sort(byId), shows: ink.shows, glyphs: n, own: { ...own, label } }
 }
 
 /**
@@ -192,11 +228,16 @@ export function unitRemoval({ id, page, prep, tex, own, charMap, unmapped, ink, 
     // the placeholders the layer keeps where they are
     const keptK = new Set(resolutions.filter(r => r.mode === 'kept').map(r => kOf[r.k]).filter(k => k >= 0))
     for (let g = 0; g < G.length; g++) if (own.owner[g] === id && !keep.has(g) && !(own.ph[g] >= 0 && keptK.has(own.ph[g])) && mine(g)) glyphs.add(g)
-    // and the characters it accounts for that the file gives no unit: a symbol set off by a space at a line's end (the
-    // file's lines are its words', and the layer grows them over what stands beside them, as v0 grows its own: 1512.03385
-    // page 10's "@" and "=")
+    // and the characters it accounts for that the file gives no unit, on one of its lines' own baselines: a symbol set
+    // off by a space at a line's end (the file's lines are its words', and the layer grows them over what stands beside
+    // them, as v0 grows its own: 1512.03385 page 10's "@" and "="); and its drawn label's. Not what only a script's window
+    // of its baseline holds (a big bracket's piece below a table cell's line, 1512.03385's Table 1: its ink no unit's)
+    const L = tex.lu.lines, bases = []
+    for (let o = 0; o + 7 < L.length; o += 8) if (L[o] === page) bases.push([L[o + 3], L[o + 6]])
+    const labelled = new Set(prep.label?.drawn ? prep.label.chars.map(c => keyOf(page, c)) : [])
     for (const c of chars) {
       if (c.page !== page || !real(c) || prep.cat.get(keyOf(page, c)) !== 'acc') continue
+      if (!labelled.has(keyOf(page, c)) && !bases.some(([b, size]) => Math.abs(c.yb - b) < 0.2 * size)) continue
       const g = charMap.get(keyOf(page, c))
       if (g !== undefined && own.owner[g] === -1 && !keep.has(g) && mine(g)) glyphs.add(g)
     }
@@ -216,35 +257,15 @@ export function unitRemoval({ id, page, prep, tex, own, charMap, unmapped, ink, 
       }
       if (replaced && replaced >= left) paths.add(b)
     }
-    // each crop: what the layer cuts is its box, so the placeholders' page holds what lies inside it and is the unit's
-    // (its placeholder's glyphs, and any of the unit's own or nobody's: a fraction's denominator the file sets as a line
-    // of its own, which the reading keeps where it is), never another unit's; and its rules, by their middle. The
-    // removed page loses the same glyphs and rules: a rule that runs past the box (a fraction's bar over a denominator
-    // the file left out of the placeholder) is the crop's, drawn as far as the box reaches; left on the page, the
-    // translation was laid over it
+    // each crop: its placeholder's glyphs and rules, as the file gives them (its segments), which the placeholders'
+    // page holds and the removed page lacks; nothing else inside its box, whoever's (a crop grown over the ink beside it,
+    // a big bracket below a table cell's formula, took that ink away with it: 1512.03385's Table 1)
     for (const r of resolutions) {
       if (r.mode !== 'crop' || r.page !== page || !r.crop) continue
       const k = kOf[r.k]
-      const [bx0, by0, bx1, by1] = r.crop
-      const inBox = (x, y) => x >= bx0 && x <= bx1 && y >= by0 && y <= by1
       const cg = [], cp = []
-      for (let g = 0; g < G.length; g++) {
-        const x = G[g]
-        if (x.n < 0) continue
-        const o = own.owner[g], q = own.ph[g]
-        const ok = q === k ? o === id : inBox((x.x0 + x.x1) / 2, (x.top + x.bottom) / 2) && (o === id || o === -1) && q === -1
-        if (ok && mine(g)) { glyphs.add(g); cg.push(g) }
-      }
-      ink.paths.forEach((m, b) => {
-        if (m < 0) return
-        const [x0, y0, x1, y1] = ink.boxes.slice(4 * b, 4 * b + 4)
-        const o = own.paths.get(b)
-        if (o && (o.id !== id || o.k !== k)) return
-        if (!o && !inBox((x0 + x1) / 2, (y0 + y1) / 2)) return
-        cp.push(b)
-        paths.add(b)
-        if (!o && !(x0 >= bx0 - 0.3 && x1 <= bx1 + 0.3 && y0 >= by0 - 0.3 && y1 <= by1 + 0.3)) crossing++
-      })
+      for (let g = 0; g < G.length; g++) if (G[g].n >= 0 && own.ph[g] === k && own.owner[g] === id && mine(g)) { glyphs.add(g); cg.push(g) }
+      for (const [b, o] of own.paths) if (o.id === id && o.k === k) { cp.push(b); paths.add(b) }
       crops.push({ k: r.k, glyphs: cg, paths: cp })
     }
   } else {

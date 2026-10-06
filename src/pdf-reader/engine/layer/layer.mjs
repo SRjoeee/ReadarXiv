@@ -13,4 +13,4 @@ export { bodyUnits, evenOf } from './page.mjs'
 export { checkPieces } from './net.mjs'
 export { drawUnit, spansOf, unitAt } from './draw.mjs'
 // the text-removed PDF's swap: where the removed page's pixels go in for each drawn unit
-export { swapMasks } from './swap.mjs'
+export { swapRects } from './swap.mjs'

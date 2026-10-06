@@ -8,7 +8,7 @@ export { layUnit } from './fit.mjs'
 export { bodyUnits, evenOf } from './page.mjs'
 export { checkPieces } from './net.mjs'
 export { drawUnit, spansOf, unitAt } from './draw.mjs'
-export { swapMasks } from './swap.mjs'
+export { swapRects } from './swap.mjs'
 // the types the reader names (no value)
 export type { LayoutFile, LayoutIndex, LayoutUnit } from '../layout/file.mjs'
 export type { LayerRules } from '../layer-rules.mjs'

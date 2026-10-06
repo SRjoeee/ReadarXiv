@@ -4,8 +4,8 @@ import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
 import type { Char, Prepared } from './layer2.mjs'
 
 export interface RemovalInk { glyphs: Glyph[]; boxes: number[]; paths: number[]; shows: number }
-/** a page's ink as the remover names its glyphs and rules */
-export declare function inkOfPage(OPS: Record<string, number>, page: unknown): Promise<RemovalInk>
+/** a page's ink as the remover names its glyphs and rules, each glyph its outline's box (this reading's, else `outlines`') */
+export declare function inkOfPage(OPS: Record<string, number>, page: unknown, outlines?: ReadonlyMap<string, number[]> | null, collect?: Map<string, number[]> | null): Promise<RemovalInk>
 /** the text layer's characters on a page carried to its glyphs, by `page|item|k` */
 export declare function glyphsOfChars(chars: readonly Char[], ink: RemovalInk, page: number): Map<string, number>
 /** the layout file's ownership of a page's glyphs (unit id or -1), their placeholders (source k or -1), and rules */
@@ -22,5 +22,8 @@ export declare function unmappedOf(ink: RemovalInk, charMap: Map<string, number>
 export declare function planOf(ink: RemovalInk, glyphs: readonly number[], paths: readonly number[]): { glyphs: number[]; paths: number[] }
 /** a plan's glyphs and rules back to indices into this reading's ink, or null for one it does not hold */
 export declare function indicesOf(ink: RemovalInk, plan: { glyphs: readonly number[]; paths?: readonly number[] }): { glyphs: number[]; paths: number[] } | null
-/** each unit's share of where the original and its removed page differ, as rectangles [x, y, w, h] in device pixels */
-export declare function pageMasks(O: ArrayLike<number>, Rm: ArrayLike<number>, W: number, H: number, slots: readonly { boxes: readonly number[][] }[]): { rects: number[][][]; unclaimed: number; differing: number }
+/** the paper's removal on a page from the layout file alone (the add-on's plan's page), and the ownership it was made from */
+export declare function pagePlan(index: LayoutIndex, page: number, ink: RemovalInk, own?: FileOwnership): {
+  units: { id: number; glyphs: number[]; paths: number[] }[]; crops: { id: number; k: number; glyphs: number[]; paths: number[] }[]
+  shows: number; glyphs: number; own: FileOwnership & { label: Int32Array }
+}

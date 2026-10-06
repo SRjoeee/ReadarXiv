@@ -41,7 +41,9 @@ import { classifyFont, faceOf, loadRoleFaces, loadWebFaces, styleKey, setRoleFac
 import { loadHyphenation } from './hyph.mjs'
 import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
-import { fileOwnership, glyphsOfChars, indicesOf, inkOfPage, pageMasks, planOf, unitRemoval, unmappedOf } from './removal.mjs'
+import { fileOwnership, glyphsOfChars, inkOfPage, pagePlan, unitRemoval, unmappedOf } from './removal.mjs'
+import { avoidIndex, SWAP_PAD, swapRects } from '../layer/swap.mjs'
+import { readOutlines } from '../layout/ink.mjs'
 import { locatedWhole, texParts, texRects } from './tex.mjs'
 
 /** the prototype's getDocument options beside the host's asset URLs (main.js ASSETS): its canvases on the GPU, the whole
@@ -106,13 +108,14 @@ export const layOrder = (placed, batch = 8) => layGroups(placed, batch).flatMap(
  * locates whole takes them; every other unit is v0's own. Null: v0 alone.
  * `copy`: whether each page's copy is kept at v0's own resolution (`right`), the plane the checker and the gate measure;
  * a view draws the page at its own (drawCopy) and needs none.
- * `removal` (the text-removed PDF, removal.mjs and layout/remove.mjs): { OPS (PDF.js's), mode, doc, manifest, plan }.
- * 'plan': each unit's removal is worked out as it is painted (the glyphs it replaces, its crops' glyphs) and kept as the
- * plan (removalPlan()), which the remover makes the add-on from; the drawing is v0's own. 'draw': `doc` is arXiv's PDF
- * with the add-on (its page sets at the manifest's places), `plan` the plan it was made from; on a page the manifest
- * says is removed, each unit whose removal is the plan's is drawn by swapping the removed page's pixels in over its own
- * glyphs and cutting its crops from the placeholders' page (layer2.mjs removalOps); every other page and unit is drawn
- * the old way, erased and put back. Null: v0's own drawing.
+ * `removal` (the text-removed PDF, removal.mjs and layout/remove.mjs): { OPS (PDF.js's), mode: 'draw', doc, manifest,
+ * plan }: `doc` is arXiv's PDF with the paper's add-on (its page sets at the manifest's places), one a paper whatever the
+ * target, made from the layout file alone (removal.mjs pagePlan, `plan` where the host has it, to check this reading
+ * against); the manifest's outline table gives each glyph its outline's box. On a page the manifest says is removed, a
+ * unit the file locates whole is drawn by swapping the removed page's pixels in over the glyphs it replaces (swap.mjs
+ * swapRects, over their outlines: no pixel is read) and cutting its crops from the placeholders' page (layer2.mjs
+ * removalOps); a unit v0 reads on its own (the file's miss) is drawn the old way, erased and put back; a table cell only
+ * the first way, its group the original's otherwise. Every other page is drawn the old way. Null: v0's own drawing.
  * `labels`: { names, captions }, the target's names of a figure and a table (caption-names.mjs) and which of the two the
  * final names so (the record's `captions`, live.mjs captionsOf): a float's label is drawn in the target's name where the
  * final's is (layer2.mjs labelInTarget), else kept as the original's ink. A table's group (each record unit's `group`) is
@@ -313,18 +316,20 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     pageItems[pg] ??= L2.pageItemsOf(chars2[pg - 1] ?? [], pg, pxOf(pg), inks[pg])
     return { items: pageItems[pg].items, cover: pageItems[pg].cover, ink: inks[pg], accounted: acc, kept }
   }
-  // ---- the text-removed PDF: each page's ink as the remover names it, its characters carried to its glyphs, the file's
-  // ownership; the plan made or followed; the removed and placeholders' pages at v0's resolution; each unit's mask
+  // ---- the text-removed PDF (one add-on a paper, made from the layout file: removal.mjs pagePlan): each page's ink as
+  // the remover names it, each glyph's box its outline's (the add-on's outline table), its characters carried to its
+  // glyphs, the file's ownership and the page's plan made again from them (which must be the add-on's); the removed and
+  // placeholders' pages at v0's resolution
   const RM = removal ? {
-    mode: removal.mode, OPS: removal.OPS, ink: [], chars: [], own: [], unmapped: [], claimed: [], removed: [], phOnly: [], masks: [], slots: [],
-    plan: removal.mode === 'plan' ? { pages: {} } : removal.plan, manifest: removal.manifest ?? null,
-    stats: { pages: 0, refused: 0, units: 0, swapped: 0, mismatched: 0, taken: 0, notOwned: 0, crossing: 0, unclaimed: 0, differing: 0, mismatch: [], byPage: {}, ms: { ink: 0, render: 0, read: 0, masks: 0 } },
+    mode: removal.mode, OPS: removal.OPS, ink: [], chars: [], own: [], unmapped: [], claimed: [], removed: [], phOnly: [], plans: [], replaced: [],
+    plan: removal.plan ?? null, manifest: removal.manifest ?? null, outlines: removal.manifest?.outlines ? readOutlines(removal.manifest.outlines) : null,
+    stats: { pages: 0, refused: 0, units: 0, swapped: 0, erased: 0, cellsErased: 0, mismatched: 0, extraGlyphs: 0, extraUnits: 0, taken: 0, notOwned: 0, crossing: 0, rects: 0, outlined: 0, unoutlined: 0, mismatch: [], extras: [], byPage: {}, ms: { ink: 0, render: 0, swap: 0 } },
   } : null
   /** whether page j's text is removed in the add-on (draw mode) */
   const removedPage = j => RM?.mode === 'draw' && !!RM.manifest?.page?.[j]?.ok
   const setOf = name => (RM?.manifest?.sets?.[name] ?? 0)
   const noOwn = n => ({ owner: new Int32Array(n).fill(-1), ph: new Int32Array(n).fill(-1), paths: new Map(), linePaths: new Map() })
-  /** the unit's removal on a page, recorded in the plan (plan mode) */
+  /** the glyphs a drawn unit replaces on a page (its reading's: what it keeps left out), unitRemoval's */
   const removalOf = (p, pg) => {
     const ink = RM.ink[pg]
     if (!ink || !p.prep) return null
@@ -332,37 +337,55 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     RM.stats.taken += r.taken
     RM.stats.notOwned += r.notOwned
     RM.stats.crossing += r.crossing ?? 0
-    if (RM.mode === 'plan') {
-      const pp = (RM.plan.pages[pg] ??= { shows: ink.shows, glyphs: ink.glyphs.length, units: [], crops: [] })
-      pp.units.push({ id: p.id, ...planOf(ink, r.glyphs, r.paths) })
-      for (const c of r.crops) pp.crops.push({ id: p.id, k: c.k, ...planOf(ink, c.glyphs, c.paths) })
-    }
     return r
   }
-  /** each unit's rectangles on page pg (draw mode): its share of where the original and the removed page differ */
-  const masksOf = pg => {
-    if (RM.masks[pg]) return RM.masks[pg]
-    const r = rows[pg - 1], ink = RM.ink[pg], px = pxOf(pg)
-    const W = r.left.width, H = r.left.height
-    let t = performance.now()
-    const O = r.left.getContext('2d').getImageData(0, 0, W, H).data, Rm = RM.removed[pg].getContext('2d').getImageData(0, 0, W, H).data
-    RM.stats.ms.read += performance.now() - t
-    t = performance.now()
-    const dev = b => { const [ax, ay] = px(b[0], b[3]), [bx, by] = px(b[2], b[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)] }
-    const units = RM.plan.pages[pg]?.units ?? []
-    const slots = units.map(u => {
-      const at = indicesOf(ink, u)
-      const boxes = []
-      for (const g of at?.glyphs ?? []) { const x = ink.glyphs[g]; boxes.push(dev([x.x0, x.bottom, x.x1, x.top])) }
-      for (const b of at?.paths ?? []) boxes.push(dev(ink.boxes.slice(4 * b, 4 * b + 4)))
-      return { id: u.id, boxes }
-    })
-    const m = pageMasks(O, Rm, W, H, slots)
-    RM.stats.ms.masks += performance.now() - t
-    RM.stats.unclaimed += m.unclaimed
-    RM.stats.differing += m.differing
-    RM.masks[pg] = new Map(slots.map((s, i) => [s.id, m.rects[i]]))
-    return RM.masks[pg]
+  /** a glyph's or a rule's box on page pg, PDF units (its outline's, layout/ink.mjs; a glyph drawn as nothing: null) */
+  const glyphBox = (ink, g) => { const x = ink.glyphs[g]; return x.ix1 > x.ix0 && x.top > x.bottom ? [x.ix0, x.bottom, x.ix1, x.top] : null }
+  const ruleBox = (ink, b) => ink.boxes.slice(4 * b, 4 * b + 4)
+  /** a unit's swap on page pg: the rectangles (v0's device pixels) the removed page's pixels go into over the glyphs and
+   *  rules it replaces that the add-on removed (swap.mjs swapRects), and what it replaces that the add-on did not
+   *  (`extra`: glyphs and rules, erased the old way) */
+  const swapOf = (p, pg, rm) => {
+    const t = performance.now()
+    const ink = RM.ink[pg], plan = RM.plans[pg], mine = plan.byUnit.get(p.id)
+    const gs = new Set(rm.glyphs), ps = new Set(rm.paths)
+    const own = [], extra = []
+    for (const g of rm.glyphs) {
+      const b = glyphBox(ink, g)
+      if (!b) continue
+      if (mine?.glyphs.has(g)) { own.push(b); continue }
+      extra.push(b)
+      if (RM.stats.extras.length < 40) RM.stats.extras.push([p.id, pg, ink.glyphs[g].u, `${ink.glyphs[g].n}.${ink.glyphs[g].k}`, b.map(v => Math.round(v * 10) / 10)])
+    }
+    for (const b of rm.paths) (mine?.paths.has(b) ? own : extra).push(ruleBox(ink, b))
+    // what the add-on removed that this unit does not replace (the page's index of it, built once): shown from the
+    // original, never swapped
+    plan.items ??= [...plan.glyphs.map(g => ['g', g, glyphBox(ink, g)]), ...plan.paths.map(b => ['r', b, ruleBox(ink, b)])].filter(x => x[2])
+    const items = plan.items, near = avoidIndexOf(plan)
+    const avoid = r => near(r).filter(i => !(items[i][0] === 'g' ? gs.has(items[i][1]) : ps.has(items[i][1]))).map(i => items[i][2])
+    const px = pxOf(pg)
+    const dev = b => { const [ax, ay] = px(b[0], b[3]), [bx, by] = px(b[2], b[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)] }
+    const rects = swapRects(own, avoid).map(dev)
+    // (an extra glyph erased over its outline, a little grown for its antialiased edge)
+    const erase = extra.map(b => dev([b[0] - SWAP_PAD, b[1] - SWAP_PAD, b[2] + SWAP_PAD, b[3] + SWAP_PAD]))
+    // (what the page's drawing replaces, for a check of it: removalTruth)
+    const done = (RM.replaced[pg] ??= { glyphs: new Set(), paths: new Set(), erase: [] })
+    for (const g of rm.glyphs) done.glyphs.add(g)
+    for (const b of rm.paths) done.paths.add(b)
+    done.erase.push(...erase)
+    RM.stats.ms.swap += performance.now() - t
+    RM.stats.rects += rects.length
+    if (extra.length) { RM.stats.extraGlyphs += extra.length; RM.stats.extraUnits++ }
+    return { rects, erase }
+  }
+  /** a page's removed glyphs and rules indexed by place, once (avoidIndex over the plan's items, by item index) */
+  const avoidIndexOf = plan => {
+    if (plan.near) return plan.near
+    const boxes = plan.items.map(x => x[2])
+    const byBox = new Map(boxes.map((b, i) => [b, i]))
+    const index = avoidIndex(boxes)
+    plan.near = r => index(r).map(b => byBox.get(b))
+    return plan.near
   }
   /** a removal's lines on the page (PDF units): across its glyphs on one baseline, up and down its line's own ink band
    *  (0.3 em below the baseline, 0.85 above, as the engine's layer's erase is bounded; a glyph's declared box reaches
@@ -382,12 +405,6 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     for (const b of rm.paths) if (!croppedPaths.has(b)) boxes.push(ink.boxes.slice(4 * b, 4 * b + 4))
     return boxes
   }
-  const sameRemoval = (id, pg, rm) => {
-    const u = RM.plan.pages[pg]?.units.find(u => u.id === id)
-    if (!u) return false
-    const mine = planOf(RM.ink[pg], rm.glyphs, rm.paths)
-    return u.glyphs.join() === mine.glyphs.join() && (u.paths ?? []).join() === mine.paths.join()
-  }
   const sourceOn = (j, plane) => {
     const r = rows[j - 1]
     if (!r?.base) return null
@@ -399,26 +416,24 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     // what no painted unit accounts for)
     const ro = restoreOf(p, pg)
     let ops = null
-    // the text-removed PDF: the unit's removal, the plan's; drawn by it on a page the add-on removed
-    const rm = RM ? removalOf(p, pg) : null
-    if (rm && removedPage(pg)) {
-      const here = (RM.stats.byPage[pg] ??= { units: 0, swapped: 0, mismatched: 0 })
+    // the text-removed PDF, on a page the add-on removed: a unit the layout file locates whole is drawn by it (the removed
+    // page swapped in over the glyphs it replaces, its crops cut from the placeholders' page); any other unit (v0's own
+    // reading, the file's miss) is drawn the old way, erased and put back, the add-on holding nothing of its own
+    if (RM?.mode === 'draw' && removedPage(pg)) {
+      const here = (RM.stats.byPage[pg] ??= { units: 0, swapped: 0, erased: 0, extra: 0 })
       RM.stats.units++
       here.units++
-      if (sameRemoval(p.id, pg, rm)) {
-        ops = L2.removalOps(p.layout, pg, { px: pxOf(pg), k: scale * dpr, hasSource: j => !!rows[j - 1]?.base, pxOf, rects: masksOf(pg).get(p.id) ?? [], lines: removalLines(pg, rm), removed: removedPage, audit, id: p.id })
+      const rm = p.tex ? removalOf(p, pg) : null
+      if (rm) {
+        const sw = swapOf(p, pg, rm)
+        ops = L2.removalOps(p.layout, pg, { px: pxOf(pg), k: scale * dpr, hasSource: j => !!rows[j - 1]?.base, pxOf, rects: sw.rects, erase: sw.erase, lines: removalLines(pg, rm), removed: removedPage, audit, id: p.id })
         RM.stats.swapped++
         here.swapped++
+        if (sw.erase.length) here.extra++
       } else {
-        RM.stats.mismatched++
-        here.mismatched++
-        if (RM.stats.mismatch.length < 20) {
-          // (which of the unit's glyphs and rules the plan and this reading disagree on, as n.k and paths' places)
-          const u = RM.plan.pages[pg]?.units.find(u => u.id === p.id), now = planOf(RM.ink[pg], rm.glyphs, rm.paths)
-          const keys = pl => { const out = new Set(); for (let i = 0; i + 1 < (pl?.glyphs?.length ?? 0); i += 2) out.add(`${pl.glyphs[i]}.${pl.glyphs[i + 1]}`); for (const m of pl?.paths ?? []) out.add(`p${m}`); return out }
-          const a = keys(u), b = keys(now)
-          RM.stats.mismatch.push([p.id, pg, [...a].filter(k => !b.has(k)).slice(0, 6), [...b].filter(k => !a.has(k)).slice(0, 6)])
-        }
+        RM.stats.erased++
+        here.erased++
+        if (p.unit.kind === 'cell') RM.stats.cellsErased++
       }
     }
     // else the unit's drawing as data, and on v0's own copy where it is kept: from the pages drawn now, as v0 drew it
@@ -671,12 +686,37 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     r.right?.getContext('2d').drawImage(r.left, 0, 0)
     r.base = true
     if (RM) {
-      // the page's ink as the remover names it, its characters carried there, the file's ownership of it
+      // the page's ink as the remover names it (each glyph its outline's box, the add-on's table), its characters
+      // carried there, the file's ownership of it, and the page's plan made again from these (the add-on's, exactly)
       const t0 = performance.now()
-      const ink = (RM.ink[i] = await inkOfPage(RM.OPS, page))
+      const ink = (RM.ink[i] = await inkOfPage(RM.OPS, page, RM.outlines))
       RM.chars[i] = glyphsOfChars(chars2[i - 1], ink, i)
       RM.unmapped[i] = unmappedOf(ink, RM.chars[i])
       RM.own[i] = tex ? fileOwnership(tex.index, i, ink) : noOwn(ink.glyphs.length)
+      if (tex && RM.mode === 'draw') {
+        const pl = pagePlan(tex.index, i, ink, RM.own[i])
+        const at = new Map()
+        ink.glyphs.forEach((g, gi) => { if (g.n >= 0) at.set(`${g.n}.${g.k}`, gi) })
+        const byPath = new Map()
+        ink.paths.forEach((m, b) => { if (m >= 0) byPath.set(m, b) })
+        const byUnit = new Map(), glyphs = [], paths = []
+        for (const u of pl.units) {
+          const gs = new Set(), ps = new Set()
+          for (let q = 0; q + 1 < u.glyphs.length; q += 2) { const g = at.get(`${u.glyphs[q]}.${u.glyphs[q + 1]}`); gs.add(g); glyphs.push(g) }
+          for (const m of u.paths) { const b = byPath.get(m); ps.add(b); paths.push(b) }
+          byUnit.set(u.id, { glyphs: gs, paths: ps })
+        }
+        RM.plans[i] = { byUnit, glyphs, paths, crops: pl.crops.length }
+        // (the add-on's plan, the server's reading of the same file: a unit whose removal this reading makes otherwise)
+        const theirs = RM.plan?.pages?.[i]
+        if (theirs) {
+          const key = u => `${u.id}:${u.glyphs.join()}:${u.paths.join()}`
+          const mineKeys = new Set(pl.units.map(key))
+          for (const u of theirs.units) if (!mineKeys.has(key(u))) { RM.stats.mismatched++; if (RM.stats.mismatch.length < 20) RM.stats.mismatch.push([u.id, i]) }
+          if (theirs.units.length !== pl.units.length) RM.stats.mismatched += Math.max(0, pl.units.length - theirs.units.length)
+        }
+        for (const g of ink.glyphs) { if (g.n < 0) continue; if (g.ix1 > g.ix0 || g.top > g.bottom) RM.stats.outlined++; else RM.stats.unoutlined++ }
+      }
       RM.stats.ms.ink += performance.now() - t0
       if (removedPage(i)) {
         // its removed page, and its placeholders' page where the plan crops from it, as v0 draws its own
@@ -691,7 +731,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
           keep[i] = c
         }
         await at('R', RM.removed)
-        if (RM.plan.pages[i]?.crops?.length) await at('P', RM.phOnly)
+        if (RM.plans[i]?.crops) await at('P', RM.phOnly)
         RM.stats.ms.render += performance.now() - t
       } else if (RM.mode === 'draw') RM.stats.refused++
     }
@@ -799,12 +839,26 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
       const r = rows[pg - 1]
       if (!r || drawnTo < doneAt[pg]) return
       for (const c of [r.left, r.right, RM?.removed[pg], RM?.phOnly[pg]]) if (c) { c.width = 0; c.height = 0 }
-      if (RM) for (const k of ['removed', 'phOnly', 'ink', 'chars', 'own', 'unmapped', 'claimed', 'masks']) RM[k][pg] = undefined
+      if (RM) for (const k of ['removed', 'phOnly', 'ink', 'chars', 'own', 'unmapped', 'claimed', 'plans', 'replaced']) RM[k][pg] = undefined
       r.base = false
       r.released = true
     },
-    /** the text-removed PDF's plan as made (plan mode): per page, the units' removals and the crops' glyphs */
-    removalPlan: () => RM?.plan ?? null,
+    /**
+     * What a done page's drawing replaces of what the add-on removed, for a check of it (the gate's truth): each removed
+     * glyph's and rule's box (v0's device pixels; a glyph's its outline's) and whether a drawn unit replaces it, and the
+     * boxes erased for what a unit replaces that the add-on kept. Null for a page not drawn by the add-on
+     */
+    removalTruth(pg) {
+      const plan = RM?.plans[pg], ink = RM?.ink[pg]
+      if (!plan || !ink) return null
+      const done = RM.replaced[pg] ?? { glyphs: new Set(), paths: new Set(), erase: [] }
+      const px = pxOf(pg)
+      const dev = b => { const [ax, ay] = px(b[0], b[3]), [bx, by] = px(b[2], b[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)] }
+      const items = []
+      for (const g of plan.glyphs) { const b = glyphBox(ink, g); if (b) items.push({ box: dev(b), replaced: done.glyphs.has(g) }) }
+      for (const b of plan.paths) items.push({ box: dev(ruleBox(ink, b)), replaced: done.paths.has(b) })
+      return { items, erase: done.erase.map(e => [e[0], e[1], e[0] + e[2], e[1] + e[3]]) }
+    },
     /** how the removal went: pages removed and refused, units swapped and mismatched, glyphs another unit had */
     removalStats: () => RM?.stats ?? null,
     /** a done page's removed page at v0's own resolution (draw mode, until released), for a check */

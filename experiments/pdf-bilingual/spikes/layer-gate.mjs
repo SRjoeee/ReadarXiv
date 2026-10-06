@@ -95,6 +95,7 @@
 import { execFile, execFileSync } from 'node:child_process'
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
+import { gzipSync } from 'node:zlib'
 import { availableParallelism } from 'node:os'
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
 import { chromium } from 'playwright'
@@ -127,10 +128,10 @@ const TEX = PROTO_TEX ? { use: PROTO_TEX, texOnly: PROTO_TEX === 'lines' && arg(
 if (TEX && (!['strict', 'text'].includes(TEX.symbols) || !['v0', 'tex'].includes(TEX.extents))) throw new Error('--proto-symbols=text|strict, --proto-extents=v0|tex')
 const TEX_KEY = TEX ? `-tex-${TEX.use}${TEX.use === 'lines' && !TEX.texOnly ? '-geometry' : ''}${TEX.symbols === 'strict' ? '-strict' : ''}${TEX.extents === 'tex' ? '-erase' : ''}` : ''
 const AGAINST = typeof arg('against') === 'string' ? arg('against') : null
-/** --removal=draw|measure: the text-removed PDF (layout/remove.mjs, layer-proto/removal.mjs), v0 only: v0 is run once to
- *  plan each unit's removal, the add-on made from the plan (cached by arXiv's bytes, the plan and the remover), checked
- *  glyph by glyph by PDF.js's reading, and v0 run again over it: drawing by it (draw), or its own way (measure: the
- *  baseline the new measures are taken of, against the same add-on) */
+/** --removal=draw|measure: the text-removed PDF (layout/remove.mjs, layer-proto/removal.mjs), v0 only: the paper's add-on,
+ *  one a paper whatever the target, its plan made from the layout file alone (removal.mjs pagePlan, in Node; cached by
+ *  arXiv's bytes, the layout file and the remover), checked glyph by glyph by PDF.js's reading, and v0 opened over it:
+ *  drawing by it (draw), or its own way (measure: the baseline the new measures are taken of, against the same add-on) */
 const REMOVAL = typeof arg('removal') === 'string' ? arg('removal') : null
 if (REMOVAL && !['draw', 'measure'].includes(REMOVAL)) throw new Error(`--removal=${REMOVAL}: draw or measure`)
 /** --proto-params=<json>: v0's fit parameters over its defaults (layer2.mjs defaultParams), recorded with the run */
@@ -337,17 +338,12 @@ async function runFixture(page, name, errors) {
     if (!g || !u || !existsSync(u)) { failures.push(name); return { name, ready: false, why: !g ? 'no geometry for v0' : `no ${PROTO_UNITS === 'p7' ? "prototype's units file" : 'record.json'}`, meta } }
     Object.assign(meta, { geometry: fileSha(g).slice(0, 16), protoUnits: fileSha(u).slice(0, 16) })
   }
-  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES, tex: TEX, params: PROTO_PARAMS, names: captionNames(target), removal: REMOVAL })
+  // the text-removed PDF: the paper's add-on, made from its layout file alone (or cached), checked, and v0 opened over it
+  const removal = REMOVAL ? await addonOf(name) : null
+  if (removal) Object.assign(meta, { addon: removal.key })
+  const addon = removal ? { url: `/removal/${name}.pdf`, manifest: removal.manifest, plan: removal.plan } : null
+  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES, tex: TEX, params: PROTO_PARAMS, names: captionNames(target), removal: REMOVAL, addon })
   if (!info.ready) { failures.push(name); return { name, ready: false, why: info.why, meta } }
-  // the text-removed PDF: the plan v0 made, the add-on made from it (or cached) and checked, and v0 opened over it
-  let removal = null
-  if (info.plan) {
-    const planned = await page.evaluate(() => window.gate.plan())
-    removal = await addonOf(name, planned)
-    const opened = await page.evaluate(o => window.gate.openRemoved(o), { url: `/removal/${name}.pdf`, manifest: removal.manifest })
-    if (!opened.ready) { failures.push(name); return { name, ready: false, why: opened.why ?? 'the add-on did not open', meta } }
-    Object.assign(meta, { addon: removal.key, plan: planned.stats })
-  }
   const n = Math.min(info.pages, PAGES ?? (ALL_PAGES.has(paper) ? info.pages : PAGES_OF))
   const pages = [], frames = []
   for (let p = 1; p <= n; p++) {
@@ -374,6 +370,7 @@ async function runFixture(page, name, errors) {
   const summary = await page.evaluate(() => window.gate.summary())
   if (PROTO && DUMP) { mkdirSync(DUMP, { recursive: true }); writeFileSync(join(DUMP, `${name}.json`), JSON.stringify(await page.evaluate(() => window.gate.dump()))) }
   if (errors.length) summary.pageErrors = errors.splice(0).slice(0, 5)
+  if (summary.inputsChanged) { failures.push(name); console.log(`FAIL ${name}: v0 changed its inputs (the geometry or the units) as it drew`) }
   if (removal) {
     summary.removal = { ...removal.summary, draw: await page.evaluate(() => window.gate.removalStats()) }
     // the exactness check's pixels (PDF.js in Node, which draws a page alike every time), each page's
@@ -386,28 +383,37 @@ async function runFixture(page, name, errors) {
   return { name, ready: true, info, meta, pages, totals: fixtureTotals(pages, frames, TIER), summary }
 }
 
-/** the remover's files, digested: a change of them makes every add-on again */
+/** the remover's files, digested: a change of them makes every add-on again (the plan's, removal.mjs pagePlan, too) */
 function removerDigest() {
-  return sha256(['src/pdf-reader/engine/layout/remove.mjs', 'src/pdf-reader/engine/layout/ink.mjs'].map(f => readFileSync(join(ENGINE, f))).join('\n')).slice(0, 16)
+  return sha256(['src/pdf-reader/engine/layout/remove.mjs', 'src/pdf-reader/engine/layout/ink.mjs', 'src/pdf-reader/engine/layout/file.mjs', 'src/pdf-reader/engine/layer-proto/removal.mjs'].map(f => readFileSync(join(ENGINE, f))).join('\n')).slice(0, 16)
 }
 
 /**
- * A fixture's add-on (--removal): made from the plan v0 gave (`planned`: { plan, stats, ms }) by the engine's remover over
- * the fixture's arXiv PDF, with the check's page sets (F, the removed glyphs alone; C, the crops' placeholders coloured),
- * and checked page by page by PDF.js's own reading (layout/remove.mjs checkPage); cached in out/layer-gate/removal/ by
- * arXiv's bytes, the plan and the remover. Returns { key, manifest, check, summary }, and serves the PDF with it.
+ * A paper's add-on (--removal), one a paper whatever the target: its plan made from the paper's layout file alone
+ * (layer-proto/removal.mjs pagePlan over each page's ink as Node's PDF.js reads it, every glyph its outline's box), made
+ * by the engine's remover over arXiv's PDF with the check's page sets (F, the removed glyphs alone; C, the crops'
+ * placeholders coloured), checked page by page by PDF.js's own reading (layout/remove.mjs checkPage); the manifest
+ * carries the paper's outline table (layout/ink.mjs outlineTable), so that the browser's reading owns as this one does.
+ * Cached in out/layer-gate/removal/ by arXiv's bytes, the layout file and the remover, and once a run for the paper's
+ * outputs. Returns { key, manifest, plan, check, summary, pixels }, and serves the PDF with it.
  */
-async function addonOf(name, planned) {
-  const pdfFile = join(FIXTURES, name, 'arxiv.pdf')
+const ADDON_RUNS = new Map()
+function addonOf(name) {
+  const pdfFile = join(FIXTURES, name, 'arxiv.pdf'), layoutFile = join(FIXTURES, name, 'layout.json')
   const bytes = new Uint8Array(readFileSync(pdfFile))
-  const planText = JSON.stringify(planned.plan)
-  const key = sha256([sha256(bytes), sha256(planText), removerDigest()].join('|')).slice(0, 24)
+  const key = sha256([sha256(bytes), fileSha(layoutFile), removerDigest()].join('|')).slice(0, 24)
+  if (!ADDON_RUNS.has(key)) ADDON_RUNS.set(key, makeAddonOf(key, bytes, layoutFile))
+  return ADDON_RUNS.get(key).then(a => { ADDONS.set(name, a.file); return a })
+}
+async function makeAddonOf(key, bytes, layoutFile) {
   const dir = join(ROOT, 'out/layer-gate/removal', key)
   const file = join(dir, 'combined.pdf')
   if (!existsSync(join(dir, 'done.json'))) {
     mkdirSync(dir, { recursive: true })
     const { openRemover, makeAddon, checkPage, SETS, CHECK_SETS } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/remove.mjs'))
-    const { pageInk } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/ink.mjs'))
+    const { pageInk, outlineTable } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/ink.mjs'))
+    const { indexLayout, parseLayout } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/file.mjs'))
+    const { pagePlan } = await import(join(ENGINE, 'src/pdf-reader/engine/layer-proto/removal.mjs'))
     const PL = await import('@cantoo/pdf-lib')
     const { getDocument, OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
     const { deflateSync, inflateSync, inflateRawSync, constants: Z } = await import('node:zlib')
@@ -418,41 +424,60 @@ async function addonOf(name, planned) {
     const R = await openRemover(bytes, { PL, inflate })
     ms.parse = performance.now() - t
     const doc = await open(bytes)
-    const ops = [], inks = []
+    const ops = [], inks = [], collected = new Map()
+    // (the operator lists the layout maker reads already: the server's prepare reads them once for both)
     t = performance.now()
-    for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); ops[p] = await pg.getOperatorList(); inks[p] = pageInk(OPS, ops[p], pg.commonObjs, { rotate: pg.rotate, indices: true, blanks: true }) }
+    for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); ops[p] = await pg.getOperatorList() }
     ms.ops = performance.now() - t
-    const boxesOf = (p, n, k) => { const g = inks[p].glyphs.find(x => x.n === n && x.k === k); return g ? [g.x0, g.bottom, g.x1, g.top] : null }
-    const pathBoxOf = (p, m) => { const b = inks[p].paths.indexOf(m); return b >= 0 ? inks[p].boxes.slice(4 * b, 4 * b + 4) : null }
     t = performance.now()
-    const out = await makeAddon({ R, bytes, OPS, opListOf: async p => ops[p], deflate: b => new Uint8Array(deflateSync(b)), plan: planned.plan, sets: [...SETS, ...CHECK_SETS], boxesOf, pathBoxOf })
+    for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); inks[p] = pageInk(OPS, ops[p], pg.commonObjs, { rotate: pg.rotate, indices: true, collect: collected }) }
+    ms.ink = performance.now() - t
+    // the plan: every unit the layout file holds, page by page
+    t = performance.now()
+    const index = indexLayout(parseLayout(new Uint8Array(readFileSync(layoutFile))))
+    const plan = { pages: {} }
+    for (let p = 1; p <= doc.numPages; p++) {
+      if (inks[p].rotated || inks[p].capped) continue
+      const { own: _own, ...pp } = pagePlan(index, p, inks[p])
+      if (pp.units.length) plan.pages[p] = pp
+    }
+    ms.plan = performance.now() - t
+    t = performance.now()
+    const out = await makeAddon({ R, bytes, OPS, opListOf: async p => ops[p], deflate: b => new Uint8Array(deflateSync(b)), plan, sets: [...SETS, ...CHECK_SETS] })
+    ms.makeWithCheck = performance.now() - t
+    // the shipped add-on's own size (R and P alone), apart from the check's, and the time it takes
+    t = performance.now()
+    const shipped = await makeAddon({ R: await openRemover(bytes, { PL, inflate }), bytes, OPS, opListOf: async p => ops[p], deflate: b => new Uint8Array(deflateSync(b)), plan, sets: SETS })
     ms.make = performance.now() - t
-    // the shipped add-on's own size (R and P alone), apart from the check's
-    t = performance.now()
-    const shipped = await makeAddon({ R: await openRemover(bytes, { PL, inflate }), bytes, OPS, opListOf: async p => ops[p], deflate: b => new Uint8Array(deflateSync(b)), plan: planned.plan, sets: SETS })
-    ms.makeShipped = performance.now() - t
+    const outlines = outlineTable(collected)
+    out.manifest.outlines = outlines
+    shipped.manifest.outlines = outlines
     // the check: each removed page against the original, by PDF.js's reading of the new file
     t = performance.now()
     const comb = await open(out.bytes)
     const check = {}, N = doc.numPages
-    const inkAt = async q => { const pg = await comb.getPage(q); return pageInk(OPS, await pg.getOperatorList(), pg.commonObjs, { rotate: pg.rotate, indices: true, blanks: true }) }
-    for (let p = 1; p <= N; p++) if (out.manifest.page[p]?.ok) check[p] = checkPage({ orig: inks[p], removed: await inkAt(out.manifest.sets.R + p), kept: await inkAt(out.manifest.sets.P + p), entry: planned.plan.pages[p] })
+    const inkAt = async q => { const pg = await comb.getPage(q); return pageInk(OPS, await pg.getOperatorList(), pg.commonObjs, { rotate: pg.rotate, indices: true }) }
+    for (let p = 1; p <= N; p++) if (out.manifest.page[p]?.ok) check[p] = checkPage({ orig: inks[p], removed: await inkAt(out.manifest.sets.R + p), kept: await inkAt(out.manifest.sets.P + p), entry: plan.pages[p] })
     ms.check = performance.now() - t
     for (const d of [doc, comb]) { try { await d.loadingTask.destroy() } catch {} }
     writeFileSync(file, out.bytes)
-    const pagesPlanned = Object.keys(planned.plan.pages).length
-    const summary = { pages: N, planned: pagesPlanned, removed: Object.values(out.manifest.page).filter(x => x.ok).length, refused: Object.entries(out.manifest.page).filter(([, x]) => !x.ok && x.refused !== 'not planned').map(([p, x]) => [Number(p), x.refused]), appended: shipped.appended, appendedWithCheck: out.appended, stats: shipped.manifest.stats, ms: Object.fromEntries(Object.entries(ms).map(([k, v]) => [k, Math.round(v)])), planMs: planned.ms }
+    const shippedManifest = JSON.stringify(shipped.manifest)
+    const summary = {
+      pages: N, planned: Object.keys(plan.pages).length, removed: Object.values(out.manifest.page).filter(x => x.ok).length, refused: Object.entries(out.manifest.page).filter(([, x]) => !x.ok && x.refused !== 'not planned').map(([p, x]) => [Number(p), x.refused]),
+      appended: shipped.appended, appendedWithCheck: out.appended, manifestBytes: shippedManifest.length, manifestGzip: gzipSync(shippedManifest).length, outlines: collected.size,
+      stats: shipped.manifest.stats, ms: Object.fromEntries(Object.entries(ms).map(([k, v]) => [k, Math.round(v)])),
+    }
     writeFileSync(join(dir, 'manifest.json'), JSON.stringify(out.manifest))
+    writeFileSync(join(dir, 'plan.json'), JSON.stringify(plan))
     writeFileSync(join(dir, 'check.json'), JSON.stringify(check))
     writeFileSync(join(dir, 'done.json'), JSON.stringify(summary))
   }
-  ADDONS.set(name, file)
   // the pixels' check, made beside the run (a process of its own) once for the add-on
   const pxFile = join(dir, 'pixels.json')
   const pixels = TIER !== 'pixel' ? null : existsSync(pxFile) ? Promise.resolve(readJson(pxFile)) : new Promise((ok, fail) => {
     execFile(process.execPath, [join(GATE, 'removal-pixels.mjs'), file, join(dir, 'manifest.json'), pxFile], { maxBuffer: 1 << 24 }, e => (e ? fail(e) : ok(readJson(pxFile))))
   })
-  return { key, manifest: readJson(join(dir, 'manifest.json')), check: readJson(join(dir, 'check.json')), summary: readJson(join(dir, 'done.json')), pixels }
+  return { key, file, manifest: readJson(join(dir, 'manifest.json')), plan: readJson(join(dir, 'plan.json')), check: readJson(join(dir, 'check.json')), summary: readJson(join(dir, 'done.json')), pixels }
 }
 
 await Promise.all(Array.from({ length: Math.min(WORKERS, queue.length) }, worker))

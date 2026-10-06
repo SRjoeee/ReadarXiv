@@ -66,7 +66,7 @@ describe("the reader's entry", () => {
       'checkPieces',
       'drawUnit', 'spansOf', 'unitAt',
       // the text-removed PDF's swap: where the removed page's pixels go in for each drawn unit
-      'swapMasks',
+      'swapRects',
     ].sort())
     // each the module's own, not a copy
     const [file, pieces, fit, draw] = await Promise.all([

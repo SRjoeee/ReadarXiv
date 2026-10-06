@@ -182,7 +182,7 @@ export type DrawSource = CanvasImageSource
 export declare function unitOps(L: Layout, blocks: readonly Block2[], page: number, o: { px: ToDev; k: number; hasSource: (page: number) => boolean; pxOf: (page: number) => ToDev; extents?: Map<string, number[]>; audit?: Audit[] | null; id?: number | null; restore?: unknown }): DrawOp[]
 /** the unit on a page whose text the removed PDF has taken out: the removed page's pixels swapped in over its own glyphs
  *  (`rects`), its crops cut from the placeholders' page where `removed` says its source page is removed */
-export declare function removalOps(L: Layout, page: number, o: { px: ToDev; k: number; hasSource: (page: number) => boolean; pxOf: (page: number) => ToDev; rects: DevBox[]; lines?: number[][]; removed: (page: number) => boolean; audit?: Audit[] | null; id?: number | null }): DrawOp[]
+export declare function removalOps(L: Layout, page: number, o: { px: ToDev; k: number; hasSource: (page: number) => boolean; pxOf: (page: number) => ToDev; rects: DevBox[]; erase?: DevBox[]; lines?: number[][]; removed: (page: number) => boolean; audit?: Audit[] | null; id?: number | null }): DrawOp[]
 /** the operations drawn on a copy of the page at `z` times v0's resolution, cut from each page and plane as PDF.js drew it
  *  there */
 export declare function drawOps(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, ops: readonly DrawOp[], z: number, sourceOf: (page: number, plane: Plane) => DrawSource | null | undefined): void

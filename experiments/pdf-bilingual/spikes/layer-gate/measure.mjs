@@ -370,6 +370,53 @@ export function footprintOf(Fw, Fb, W, H) {
 }
 
 /**
+ * The removed glyphs' footprint shared out between them (the gate's instrument, not the drawing's): each footprint pixel
+ * (`foot`, footprintOf's) goes to the removed glyph or rule whose box it lies in (`items`: { box: [x0, y0, x1, y1] in
+ * device pixels, replaced }, the smaller box first where two meet) or reaches first over footprint pixels (breadth first,
+ * 8-connected); what none reaches goes to the box nearest it within that box's height (an i's dot above its outline's
+ * box). Returns the pixels whose glyph or rule the drawing replaces: the part of the removed page a page's drawing must
+ * show, the rest the original's.
+ */
+export function replacedFoot(foot, W, H, items) {
+  const N = W * H, label = new Int32Array(N).fill(-1)
+  const order = items.map((it, i) => [i, (it.box[2] - it.box[0]) * (it.box[3] - it.box[1])]).sort((a, b) => a[1] - b[1])
+  let queue = new Int32Array(1024), qn = 0
+  const enqueue = i => { if (qn === queue.length) { const q2 = new Int32Array(queue.length * 2); q2.set(queue); queue = q2 } queue[qn++] = i }
+  for (const [si] of order) {
+    const b = items[si].box
+    const x0 = Math.max(0, Math.floor(b[0])), y0 = Math.max(0, Math.floor(b[1])), x1 = Math.min(W, Math.ceil(b[2])), y1 = Math.min(H, Math.ceil(b[3]))
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = y * W + x; if (foot[i] && label[i] < 0) { label[i] = si; enqueue(i) } }
+  }
+  for (let h = 0; h < qn; h++) {
+    const i = queue[h], x = i % W, y = (i - x) / W, s = label[i]
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const xx = x + dx, yy = y + dy
+      if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue
+      const j = yy * W + xx
+      if (foot[j] && label[j] < 0) { label[j] = s; enqueue(j) }
+    }
+  }
+  const CELL = 32, gw = Math.ceil(W / CELL), grid = new Map()
+  items.forEach((it, si) => {
+    const b = it.box
+    for (let gy = Math.max(0, Math.floor(b[1] / CELL) - 1); gy <= Math.floor(b[3] / CELL) + 1; gy++) for (let gx = Math.max(0, Math.floor(b[0] / CELL) - 1); gx <= Math.min(gw - 1, Math.floor(b[2] / CELL) + 1); gx++) { const k = gy * gw + gx; (grid.get(k) ?? grid.set(k, []).get(k)).push(si) }
+  })
+  for (let i = 0; i < N; i++) {
+    if (!foot[i] || label[i] >= 0) continue
+    const x = i % W, y = (i - x) / W
+    let best = -1, gap = Infinity
+    for (const si of grid.get(Math.floor(y / CELL) * gw + Math.floor(x / CELL)) ?? []) {
+      const b = items[si].box, d = Math.hypot(Math.max(0, b[0] - x, x - b[2]), Math.max(0, b[1] - y, y - b[3]))
+      if (d <= b[3] - b[1] && d < gap) { gap = d; best = si }
+    }
+    label[i] = best >= 0 ? best : -2
+  }
+  const out = new Uint8Array(N)
+  for (let i = 0; i < N; i++) if (label[i] >= 0 && items[label[i]].replaced) out[i] = 1
+  return out
+}
+
+/**
  * The exactness check's pixels of a page: where the original (O) and its removed page (Rm) differ, and how many of those
  * lie outside the removed glyphs' own ink (`foot`, footprintOf's), which must be none; with the regions' boxes in PDF
  * units. On planes drawn by one renderer that draws a page alike every time (PDF.js in Node: the browser's canvas does

@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { Glyph } from '@/pdf-reader/engine/layout/ink.mjs'
-import { fileOwnership, glyphsOfChars, indicesOf, pageMasks, planOf, type RemovalInk, unitRemoval, unmappedOf } from '@/pdf-reader/engine/layer-proto/removal.mjs'
+import { fileOwnership, glyphsOfChars, indicesOf, pagePlan, planOf, type RemovalInk, unitRemoval, unmappedOf } from '@/pdf-reader/engine/layer-proto/removal.mjs'
+import { swapRects } from '@/pdf-reader/engine/layer/swap.mjs'
 
 // The layer's side of the text-removed PDF (layer-proto/removal.mjs): the text layer's characters carried to glyphs, the
 // layout file's ownership, what a unit replaces, and each unit's share of the pixels the removed page changes; and the
@@ -71,23 +72,35 @@ describe("the layout file's ownership", () => {
   })
 })
 
-describe("each unit's share of the pixels the removed page changes", () => {
-  // a 20 x 10 page: unit 0's glyph box over x 2-5, unit 1's over x 10-13; the removed ink differs at x 3-4 and 11-12, and
-  // unit 0's glyph has a tail below its box (rows 7-8)
-  const W = 20, H = 10
-  const plane = (on: (x: number, y: number) => boolean) => { const d = new Uint8ClampedArray(W * H * 4).fill(255); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (on(x, y)) d.fill(0, 4 * (y * W + x), 4 * (y * W + x) + 3); return d }
-  const O = plane((x, y) => (x >= 3 && x <= 4 && y >= 2 && y <= 8) || (x >= 11 && x <= 12 && y >= 2 && y <= 6) || (x === 17 && y === 5)), R = plane((x, y) => x === 17 && y === 5)
-  it("grows a unit's share over its glyph's ink past its box, a pixel around, never into another's", () => {
-    const m = pageMasks(O, R, W, H, [{ boxes: [[2, 1, 6, 7]] }, { boxes: [[10, 1, 14, 7]] }])
-    expect(m.unclaimed).toBe(0)
-    const cover = (rects: number[][], x: number, y: number) => rects.some(r => x >= r[0]! && x < r[0]! + r[2]! && y >= r[1]! && y < r[1]! + r[3]!)
-    // unit 0: its ink and its tail (row 8), a pixel around; not unit 1's ink, nor the kept dot at 17
-    for (let y = 2; y <= 8; y++) expect(cover(m.rects[0]!, 3, y)).toBe(true)
-    expect(cover(m.rects[0]!, 2, 9)).toBe(true)
-    expect(cover(m.rects[0]!, 11, 3)).toBe(false)
-    expect(cover(m.rects[1]!, 12, 6)).toBe(true)
-    expect(cover(m.rects[1]!, 3, 3)).toBe(false)
-    expect([...m.rects[0]!, ...m.rects[1]!].some(r => cover([r], 17, 5))).toBe(false)
+describe("a unit's swap as rectangles over its glyphs' outlines", () => {
+  const inside = (rects: number[][], x: number, y: number) => rects.some(r => x >= r[0]! && x <= r[2]! && y >= r[1]! && y <= r[3]!)
+  it("covers its glyphs' boxes grown by the pad, a word's run joined, and never a removed glyph it does not replace", () => {
+    // a word of two glyphs on a line (x 10-14 and 14.5-18), a kept glyph right after it (x 18.6-21), a glyph of the line
+    // below whose ascender comes within the pad (y up: its top at 99.5 against the word's bottom at 100)
+    const word = [[10, 100, 14, 107], [14.5, 100, 18, 107]], kept = [[18.6, 100, 21, 107]], below = [[12, 92, 15, 99.5]]
+    const r = swapRects(word, [...kept, ...below], 0.4)
+    expect(inside(r, 9.7, 103)).toBe(true)
+    expect(inside(r, 14.2, 103)).toBe(true)
+    expect(inside(r, 18.3, 103)).toBe(true)
+    // nothing of the kept glyph's box, grown by half the pad, nor of the glyph below
+    expect(inside(r, 18.45, 103)).toBe(false)
+    expect(inside(r, 19, 103)).toBe(false)
+    expect(inside(r, 13, 99.6)).toBe(false)
+    expect(inside(r, 13, 99.85)).toBe(true)
+    // with nothing to avoid, one rectangle a run
+    expect(swapRects(word)).toHaveLength(1)
+  })
+})
+
+describe("the paper's plan, from the layout file alone", () => {
+  it("removes every glyph the file gives a unit and its label's; the placeholders' page holds each placeholder's", () => {
+    // one unit, one line (baseline 100, x 10-60) erased over x 10-60, a placeholder over x 30-40; a label box before it
+    const unit = { lines: Float64Array.from([1, 10, 60, 100, 107, 98, 10, 0]), erase: [Float64Array.from([10, 98, 60, 107])], ph: new Map([[3, { kind: 'math', flags: 0, segs: Float64Array.from([1, 30, 100, 40, 107, 98]), text: null }]]), labels: Float64Array.from([1, 1, 2, 100, 8, 107, 98]) }
+    const index = { onPage: (p: number) => (p === 1 ? [7] : []), unit: () => unit } as never
+    const ink = inkOf([g('L', 3, 100, 0, 0), g('a', 12, 100, 1, 0), g('x', 32, 100, 1, 1), g('b', 50, 100, 1, 2), g('z', 70, 100, 2, 0)])
+    const plan = pagePlan(index, 1, ink)
+    expect(plan.units).toEqual([{ id: 7, glyphs: [0, 0, 1, 0, 1, 1, 1, 2], paths: [] }])
+    expect(plan.crops).toEqual([{ id: 7, k: 3, glyphs: [1, 1], paths: [] }])
   })
 })
 

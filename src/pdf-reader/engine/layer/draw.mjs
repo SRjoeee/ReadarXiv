@@ -157,8 +157,8 @@ function runsOf(line) {
  * What the web draws for a unit on a page, in PDF units (y up):
  * - with the text-removed PDF (`removed`: its manifest's entry for the page, layout/remove.mjs), on a page it removed
  *   where it names the unit: `swap`, the unit's removed glyphs' and rules' boxes (x0, y0, x1, y1, stride 4), over which
- *   the reader puts the removed page's pixels in (swap.mjs swapMasks: each unit its share of where the original and the
- *   removed page differ, grown over its glyphs' real ink), `erase` empty, and `cropsFrom` 'P': the crops cut from the
+ *   the reader puts the removed page's pixels in (swap.mjs swapRects: those boxes grown for their glyphs' antialiased
+ *   edges, less what reaches a removed glyph it does not draw), `erase` empty, and `cropsFrom` 'P': the crops cut from the
  *   page of the placeholders alone, which holds no other line's ink;
  * - else (no add-on, a page it refused, a unit it does not name) `erase`: for the unit's lines on that page, the
  *   layout's erase padded by ERASE_PAD and kept off every other unit's lines and every kept rendering (x0, y0, x1, y1,

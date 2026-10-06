@@ -20,7 +20,7 @@ export interface UnitDraw {
    */
   erase: number[]
   /** with the text-removed PDF, on a page it removed: the unit's removed glyphs' and rules' boxes (x0, y0, x1, y1, stride
-   *  4), over which the reader puts the removed page's pixels in (swap.mjs swapMasks); `erase` is then empty */
+   *  4), over which the reader puts the removed page's pixels in (swap.mjs swapRects); `erase` is then empty */
   swap: number[]
   /** the page the crops are cut from: the original ('O'), or the text-removed PDF's page of the placeholders alone ('P') */
   cropsFrom: 'O' | 'P'

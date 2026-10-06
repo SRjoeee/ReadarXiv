@@ -17,4 +17,10 @@ export interface InkPoint { name: string; glyph: number; box: number }
 /** a page's glyphs and graphics boxes (images, paths: x0, y0, x1, y1) from its operator list, in stream order, every
  *  painted glyph whatever its Unicode; the marked compile's points among them, and each glyph's boxes before it; `capped`
  *  when the walk stopped at OPS_CAP; `rotated` when the page's /Rotate is not 0 (then nothing is returned) */
-export declare function pageInk(OPS: Record<string, number>, ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }, commonObjs: { get(id: string): unknown }, o: { rotate: number; indices?: boolean }): { glyphs: Glyph[]; boxes: number[]; points: InkPoint[]; boxAt: number[]; paths?: number[]; shows?: number; capped: boolean; rotated: boolean }
+export declare function pageInk(OPS: Record<string, number>, ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }, commonObjs: { get(id: string): unknown }, o: { rotate: number; indices?: boolean; outlines?: ReadonlyMap<string, number[]> | null; collect?: Map<string, number[]> | null }): { glyphs: Glyph[]; boxes: number[]; points: InkPoint[]; boxAt: number[]; paths?: number[]; shows?: number; capped: boolean; rotated: boolean }
+/** a glyph's key in an outline table: its font's PostScript name and its character */
+export declare function outlineKey(font: unknown, fontId: string, fontChar: unknown): string
+/** the outline boxes collected (pageInk's `collect`) as the reader is sent them, in thousandths of an em, by font */
+export declare function outlineTable(collected: ReadonlyMap<string, number[]>): Record<string, (string | number)[]>
+/** an outline table back to the Map pageInk's `outlines` takes */
+export declare function readOutlines(table: Record<string, (string | number)[]> | null | undefined): Map<string, number[]>

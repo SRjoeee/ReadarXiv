@@ -74,6 +74,38 @@ export function outlineBox(commonObjs, font, fontChar) {
   return x0 <= x1 ? [x0, y0, x1, y1] : []
 }
 
+/** a glyph's key in an outline table: its font's PostScript name (its subset tag kept: one embedded font) and its
+ *  character, as PDF.js names them alike in Node and in the browser */
+export const outlineKey = (font, fontId, fontChar) => `${typeof font?.name === 'string' && font.name ? font.name : fontId}|${fontChar}`
+
+/**
+ * An outline table as the reader is sent it: { [font]: [char, x0, y0, x1, y1, …] } with each box in thousandths of an em
+ * (a glyph of no outline, [], as four zeros and a flag: x0 > x1), from pageInk's `collect`; and back (readOutlines) to
+ * the Map pageInk's `outlines` takes. Rounded outwards, so that a box never cuts its glyph's ink
+ */
+export function outlineTable(collected) {
+  const out = {}
+  for (const [key, box] of collected) {
+    // (a PostScript name holds no '|'; the character may be one)
+    const at = key.indexOf('|'), font = key.slice(0, at), ch = key.slice(at + 1)
+    const row = (out[font] ??= [])
+    if (box.length === 4) row.push(ch, Math.floor(1000 * box[0]), Math.floor(1000 * box[1]), Math.ceil(1000 * box[2]), Math.ceil(1000 * box[3]))
+    else row.push(ch, 1, 0, 0, 0)
+  }
+  return out
+}
+export function readOutlines(table) {
+  const out = new Map()
+  for (const [font, row] of Object.entries(table ?? {})) {
+    if (!Array.isArray(row)) continue
+    for (let i = 0; i + 4 < row.length; i += 5) {
+      const [x0, y0, x1, y1] = [row[i + 1], row[i + 2], row[i + 3], row[i + 4]].map(v => v / 1000)
+      out.set(`${font}|${row[i]}`, x0 > x1 ? [] : [x0, y0, x1, y1])
+    }
+  }
+  return out
+}
+
 /** a point of the marked compile (layout/marks.mjs LAYOUT_TEX's \\axt@point): a rendering intent, `/axt-<name> ri`,
  *  which PDF.js keeps in the operator list with its name (it drops marked-content points, DP and MP) and which its text
  *  layer passes over. The name: a mark's, or a bracket's (bs, be, fs, fe and a number) */
@@ -99,9 +131,13 @@ const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
  * place among that operation's glyphs, and `blank: true` where its Unicode is blank; and `paths` gives, for each box,
  * its path's place among the page's own painted paths (constructPath), or its kind: -1 a path of an annotation's
  * appearance, -2 a shading, -3 an image, -4 a glyph set rotated or mirrored; and `shows` counts the page's own
- * text-showing operations. Off, the answer is the maker's, unchanged
+ * text-showing operations. Off, the answer is the maker's, unchanged.
+ * `outlines` (the text removal's, the reader's side): the outline boxes of the paper's glyphs by font and character
+ * (outlineTable's, made where PDF.js gives the outlines: in Node), for a glyph whose outline this reading has not (the
+ * browser draws a font as a font face, and gives no outline): its box is then the server's, exactly. `collect`: a Map
+ * this reading's outline boxes are added to, by outlineKey
  */
-export function pageInk(OPS, ops, commonObjs, { rotate, indices = false }) {
+export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null }) {
   const turn = (((Number(rotate) % 360) + 360) % 360)
   if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], ...(indices ? { paths: [], shows: 0 } : {}), capped: false, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
@@ -167,10 +203,15 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false }) {
   /** a glyph shown from text-space x `xa` to `xb` on the current line (the horizontal scale applied), under M = the CTM
    *  × the text matrix; `hs` the horizontal scale with the font's direction */
   const outlines = new Map()
-  /** a glyph's outline box in em (outlineBox), once a font and character */
+  /** a glyph's outline box in em (outlineBox), once a font and character; else the given table's */
   const outlineOf = g => {
     const key = `${s.fontId}|${g.fontChar}`
-    if (!outlines.has(key)) outlines.set(key, outlineBox(commonObjs, s.font, g.fontChar))
+    if (!outlines.has(key)) {
+      let box = outlineBox(commonObjs, s.font, g.fontChar)
+      if (box === null && given) box = given.get(outlineKey(s.font, s.fontId, g.fontChar)) ?? null
+      else if (box !== null && collect) collect.set(outlineKey(s.font, s.fontId, g.fontChar), box)
+      outlines.set(key, box)
+    }
     return outlines.get(key)
   }
   const emit = (g, M, hs, xa, xb, ascent, descent) => {

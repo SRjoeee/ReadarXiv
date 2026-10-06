@@ -2085,15 +2085,18 @@ export function unitOps(L, blocks, page, { px, k, hasSource, pxOf, extents, audi
 
 /**
  * The unit's drawing on a page whose text the removed PDF has taken out (removal.mjs, layout/remove.mjs), as data: the
- * removed page's pixels swapped in over the unit's own glyphs (`rects`, its share of where the original and the removed
- * page differ, pageMasks'), then its crops, each cut from the page holding the placeholders alone (`plane: 'P'`), or
- * from the original where its source page is not removed (`removed(page)` false). Nothing is erased or put back. The
+ * removed page's pixels swapped in over the unit's own glyphs (`rects`, device pixels: layer/swap.mjs swapRects over
+ * their outline boxes), then what it replaces that the add-on kept (`erase`, each an extra glyph's outline erased), then
+ * its crops, each cut from the page holding the placeholders alone (`plane: 'P'`), or from the original where its source
+ * page is not removed (`removed(page)` false). Nothing is put back. The
  * audit has the unit's swapped boxes (as its 'erase', what the gate's residue and bites read) and its crops, as unitOps'.
  * `lines`: the unit's removed glyphs' boxes on the page grouped by line, in PDF units, for the audit.
  */
-export function removalOps(L, page, { px, k, hasSource, pxOf, rects, lines = [], removed, audit = null, id = null }) {
+export function removalOps(L, page, { px, k, hasSource, pxOf, rects, erase = [], lines = [], removed, audit = null, id = null }) {
   const ops = []
   if (rects.length) ops.push({ op: 'swap', page, rects })
+  // (what the unit replaces that the add-on did not remove: erased the old way, each over its own outline)
+  for (const box of erase) ops.push({ op: 'erase', box })
   for (const b of lines) {
     const [ax, ay] = px(b[0], b[3]), [bx, by] = px(b[2], b[1])
     audit?.push({ what: 'erase', unit: id, page, box: [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)], swap: true })
