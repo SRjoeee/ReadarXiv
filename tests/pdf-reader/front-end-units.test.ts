@@ -117,6 +117,10 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     expect(patched(p)).toContain('\\href{https://example.org/p}{<T0>}')
     expect(patched(p)).toContain('{https://osf.io/gjvbs}')
   })
+  it('a bracket after a command\'s arguments is the text\'s; one where a required argument is due is an optional one the table does not know of', () => {
+    expect(texts(project(doc('It follows from Assumption~\\ref{a}[(i) and (iii)] directly.')))).toEqual(['It follows from Assumption[(i) and (iii)] directly.'])
+    expect(texts(project(doc('Before \\url[opts]{some words here} after.')))).toEqual(['Before after.'])
+  })
   it('a command the table does not know keeps every adjacent group, as before: some prose stays, nothing breaks', () => {
     expect(texts(project(doc('Before \\unknowncmd{some words here}{and more} after.')))).toEqual(['Before after.'])
   })

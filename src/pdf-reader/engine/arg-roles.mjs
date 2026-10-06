@@ -188,7 +188,8 @@ export function readArgs(s, i, params, to = s.length) {
     }
     if (shape === 'b') { let e = at; while (e < to && s[e] !== '{' && s[e] !== '%') e++; if (e >= to || s[e] !== '{') return { args, end: at, complete: false }; if (e > at) args.push({ shape, role, param, start: at, end: e }); at = e; continue }
     if (shape !== '{' && shape !== '_') return { args, end: at, complete: false }
-    if (k >= to || s[k] === '}' || s[k] === '%' || /\n[ \t]*\n/.test(s.slice(at, k + 1))) return { args, end: at, complete: false }
+    // a bracket where a required argument is due is an optional one the table does not know of (a package's): not known
+    if (k >= to || s[k] === '}' || s[k] === '%' || s[k] === '[' || /\n[ \t]*\n/.test(s.slice(at, k + 1))) return { args, end: at, complete: false }
     // a macro's parameter (#1, in a definition's body) is one token
     const e = s[k] === '{' ? groupEnd(s, k) : s[k] === '#' && /\d/.test(s[k + 1] ?? '') ? k + 2 : tokenEnd(s, k)
     if (e < 0 || e > to) return { args, end: at, complete: false }

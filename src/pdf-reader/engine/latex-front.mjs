@@ -258,9 +258,9 @@ const paperOf = texts => ({ bindings: bindingsOf(texts), own: new Set(texts.flat
 /**
  * A command's arguments: a citation's every adjacent one, its notes in angle brackets or parentheses with them
  * (citationArgs); one whose parameters the role table knows (arg-roles.mjs), exactly those as TeX takes them — a group
- * or a single token each, an optional one where it is given — and any optional ones after them, which a package may
- * have added; else, a command the table does not know, every adjacent one (some prose stays untranslated, nothing
- * breaks). Taken as every adjacent group, \setlength\tabcolsep{1.0mm}'s {1.0mm} and the group of three tables after it
+ * or a single token each, an optional one where it is given; a bracket after them is the text's (Assumption~\\ref{a}[(i)
+ * and (iii)], 2608.10322), one before a required argument an optional one the table does not know of; else, a command
+ * the table does not know, every adjacent one (some prose stays untranslated, nothing breaks). Taken as every adjacent group, \setlength\tabcolsep{1.0mm}'s {1.0mm} and the group of three tables after it
  * were \tabcolsep's (2307.16209: three captions in English). `known`, read by the table; each argument's `role` and
  * `param` (its parameter's index) then too. A register (\tabcolsep) takes none: TeX's assignment after it is read with it
  */
@@ -271,10 +271,7 @@ function commandArgs(s, i, name, to = s.length) {
     if (params.length === 1 && params[0].shape === '=') return { args: [], end: i, known: true }
     const r = readArgs(s, i, params, to)
     if (r.complete) {
-      const args = r.args.map(a => ({ ...a, kind: a.shape === '[' ? 'opt' : 'req' }))
-      let end = r.end
-      if (params.length) for (;;) { const k = skipSpaces(s, end); if (s[k] !== '[') break; const e = matchGroup(s, k, '[', ']'); if (e < 0 || e > to) break; args.push({ kind: 'opt', shape: '[', role: 'a', start: k, end: e }); end = e }
-      return { args, end, known: true }
+      return { args: r.args.map(a => ({ ...a, kind: a.shape === '[' ? 'opt' : 'req' })), end: r.end, known: true }
     }
   }
   return argsAfter(s, i)
