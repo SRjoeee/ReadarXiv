@@ -8,7 +8,7 @@
 //     a unit mark; v1, the same with the layout marks (LAYOUT_CLASSES, and the paper's own switch, punctuationMovers,
 //     read from its preamble and the font probe's log as the run would) — each compiled natively as spikes/gt-orig.mjs
 //     compiles: latexmk, Docker texlive/texlive:latest, --network none, 2 CPUs, 3 GB, 300 s (but -file-line-error: the
-//     logs are read as the run reads them). A compile is kept by what it was given (the TeX image, the engine, every
+//     logs are read as the run reads them), the date pinned. A compile is kept by what it was given (the TeX image, the engine, every
 //     file), as what it gave (its text items, readings, marks, the files it wrote, errors, time); its PDF is deleted;
 //   - the measure: the text items of v0 not at the same page and place to 0.01 pt in v1, strict (every PDF.js item) and
 //     joined (abutting items as one run: how a line is cut into items is no place of a glyph, and the joined figure must
@@ -69,6 +69,9 @@ const FITR = /\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\ax
 if (!FITR) throw new Error("LAYOUT_TEX's destination definition not found")
 /** what a compile keeps of itself: raised when what is kept changes, so that a kept compile is read again */
 const FORMAT = 3
+/** every compile's date, pinned (pdfTeX's SOURCE_DATE_EPOCH with FORCE_SOURCE_DATE): a paper's \today is the same in v0
+ *  and v1 whenever each was compiled (2608.20159's title page moved a day across midnight UTC) */
+const EPOCH = 1791244800
 
 // ---------------------------------------------------------------- compiles: four at a time, two above a load of 16
 let active = 0
@@ -94,7 +97,7 @@ async function compile(id, files, { main, engine, bbl, kind }) {
   // bibliography (2608.30640's trace was 30 pages, its compile 34)
   const pdftex = kind === 'trace' ? [`-pdflatex=env max_print_line=1000000 ${engine} %O %S`] : []
   const cmd = kind === 'probe' ? [engine, '-interaction=nonstopmode', main] : ['latexmk', { xelatex: '-xelatex', lualatex: '-lualatex' }[engine] ?? '-pdf', ...pdftex, ...(bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main]
-  const hash = createHash('sha256').update(JSON.stringify([FORMAT, image, id, main, engine, !!bbl, kind, cmd]))
+  const hash = createHash('sha256').update(JSON.stringify([FORMAT, image, id, main, engine, !!bbl, kind, cmd, EPOCH]))
   for (const [p, b] of [...files].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) hash.update(p).update(b)
   const key = join(CACHE, hash.digest('hex').slice(0, 32))
   if (existsSync(`${key}.json.gz`)) return unpack(`${key}.json.gz`)
@@ -104,7 +107,7 @@ async function compile(id, files, { main, engine, bbl, kind }) {
     rmSync(dir, { recursive: true, force: true })
     for (const [p, b] of files) { const f = join(dir, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
     const t0 = Date.now()
-    await run('docker', ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '300', ...cmd], { maxBuffer: 1 << 28 }).catch(() => null)
+    await run('docker', ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-e', 'FORCE_SOURCE_DATE=1', '-e', `SOURCE_DATE_EPOCH=${EPOCH}`, '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '300', ...cmd], { maxBuffer: 1 << 28 }).catch(() => null)
     const ms = Date.now() - t0
     const stem = main.split('/').pop().replace(/\.[^./]+$/, ''), at = ext => join(dir, `${stem}.${ext}`)
     const text = ext => (existsSync(at(ext)) ? readFileSync(at(ext), 'latin1') : null)

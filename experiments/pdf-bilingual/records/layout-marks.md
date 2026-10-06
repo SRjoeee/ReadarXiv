@@ -17,8 +17,10 @@ For each paper, **v0** is the marked original as the run makes it today (`origin
 its destinations set as v1 sets its own: LAYOUT_TEX's zero-size FitR in place of MARK_DEF's XYZ, so that a unit mark
 compares with a unit mark. **v1** is the same with the layout marks: `LAYOUT_CLASSES`, and the paper's own switch
 (below). Each is compiled natively, as `spikes/gt-orig.mjs` compiles: latexmk, Docker `texlive/texlive:latest`,
-`--network none`, 2 CPUs, 3 GB, 300 s. The difference is no `-file-line-error`, so that the logs read as the run reads
-them. The figures:
+`--network none`, 2 CPUs, 3 GB, 300 s. The differences: no `-file-line-error`, so that the logs read as the run reads
+them, and the date pinned (`SOURCE_DATE_EPOCH` with `FORCE_SOURCE_DATE`), so that a paper's `\today` is the same in v0
+and v1 whenever each was compiled. An unpinned v0 from the cache against a v1 made after midnight UTC moved
+2608.20159's title page a day. The figures:
 
 - **Items moved**, two ways. *Strict* is the brief's measure: every PDF.js text item of v0 with no item of the same
   string at the same page, place and width in v1, to 0.01 pt. The width is compared too: a kern lost inside an item
@@ -57,15 +59,22 @@ are still compared. They no longer decide anything, since the layout compile fee
 
 - **The corpus:** the 113 pdfLaTeX packages of `out/corpus-meta.json`. TeX image
   `sha256:7334b00bf8e7a0996f7ddd65482363aaf7711d372e569f3ea78509619e3083ff`, the typesetting gate's.
-- **The marks measured:** Task 1's d082fc5e with this task's f50535b6 (the paper's own switch and the number rule,
-  below). Task 1's fix round (ae88a616 to 150faa7b) is not in this branch. Once it is merged,
-  `layout-marks-gate.mjs --bisect` measures it again: v0's compiles are kept, and v1's are made again.
-- **Wall time:** 861 s for the compiles (113 papers: the font probe, v0 and v1, a bisect where a line was lost), then
-  1,453 s for the trace pass (226 compiles with `\tracingoutput`). The pairs ran at most four compiles at a time,
-  while other work kept the machine's load at 10 to 31.
-- **The figures:** 198,875 lines. 105 papers clean, 6 accepted, 2 switched (both clean), none failed, none passed
-  over. Lines lost: 5 strict, 3 joined, 7 by TeX. Items moved: 13 strict, 6 joined. 5 unit marks moved, each on a
-  lost line. Every paper was traced. No class loses more lines than it carries (`switchOff` empty).
+- **The marks measured:** the merge of Task 1's fix round (150faa7b: C1, a paper's macro and a footnote's call get
+  their opening mark alone and the piece after them none; I1, the leaders; I2, XeTeX's italic correction; I5, the key
+  cut; the depth bound) with this task's f50535b6. The pre-merge figures (d082fc5e + f50535b6) are beside them below.
+- **Wall time:** the merged run took 2,523 s for everything: the font probe, v0, v1, the bisects and the traces,
+  every compile made again with the date pinned. The pre-merge run took 861 s of compiles and 1,453 s of traces. Each
+  ran at most four compiles at a time, while other work kept the machine's load at 10 to 31.
+- **The figures, merged (pre-merge):**
+  - 198,875 lines in all;
+  - **106 clean (105), 5 accepted (6), 2 switched, both clean (2), none failed, none passed over;**
+  - lines lost: 5 strict (5), 3 joined (3), 6 by TeX (7);
+  - items moved: 13 strict (13), 6 joined (6);
+  - 5 unit marks moved (5), each on a lost line;
+  - every paper traced; no class loses more lines than it carries (`switchOff` empty).
+- **The marks:** 169,323 in the marks files, against 170,258 before. C1 takes the closing mark off every paper's macro
+  and footnote call, and every mark off the piece after one. 63 names are dropped as set twice, in 8 papers, as
+  before.
 - **What does not decide any more:** aux, toc, lof, lot and out are the same on every paper. The readings are the
   same on 108 papers; on the other 5, a unit mark moved along its lost line. No paper has a new TeX error.
 - **The caption gate:** no corpus paper writes a list of figures or of tables (no `.lof` or `.lot`; 10 write a
@@ -79,7 +88,10 @@ are still compared. They no longer decide anything, since the layout compile fee
 | 2608.03063 | acmart | 1 / 1 / 2 | pages 7 and 10: the same, −1.22 and −0.13 pt. Page 7's line is one PDF.js item that keeps its start and width, so only TeX's boxes show it |
 | 2608.09189 | acmart | 1 / 1 / 1 | page 13: the same, −0.09 pt |
 | 2608.25210 | acmart | 1 / 1 / 1 | page 9: the same; microtype's font expansion then re-expands the whole line (+7 → +5) |
-| 2608.10322 | article | 0 / 0 / 1 | page 12: `\la {addic}` (a `\label` of the paper's) at a paragraph's end, its closing mark before `\@esphack`; a glue of −0.00002 pt (about 1 sp) is left, which moves nothing. Task 1's 4d6595ab (no closing mark after a paper's macro) takes it out |
+
+Before the merge, a sixth paper lost one TeX line. On 2608.10322, `\la {addic}` (a `\label` of the paper's) stood at
+a paragraph's end, its closing mark before `\@esphack`, and left a glue of −0.00002 pt. C1 takes that closing mark
+off, and the paper is clean now.
 
 The five heading lines are the units' own marks: the bisect shows no class alone loses a line, and v1 with no class
 (headings', cells' and MARK_DEF's marks only) loses each one. Ruling 2 accepted acmart's case: no line count, no
@@ -89,20 +101,20 @@ corpus shows a PDF-only offset** (ruling 3's category): where items moved, TeX's
 
 ## Lines carried, by class (the corpus)
 
-| Class | Papers | Lines with its marks | Carried |
+| Class | Papers | Lines with its marks, merged (pre-merge) | Carried, merged |
 |---|---|---|---|
-| math | 110 | 29,553 | 29,552 |
-| unit (MARK_DEF's) | 111 | 21,970 | 21,965 |
-| cite | 109 | 5,192 | 5,192 |
-| cell | 69 | 5,106 | 5,106 |
-| display | 97 | 4,875 | 4,875 |
-| ref | 108 | 4,695 | 4,694 |
-| heading | 112 | 3,307 | 3,302 |
-| macro | 84 | 2,381 | 2,381 |
-| eqref | 54 | 1,715 | 1,715 |
-| code | 35 | 355 | 355 |
-| footnote | 25 | 105 | 105 |
-| url | 28 | 79 | 79 |
+| math | 110 | 29,536 (29,553) | 29,535 |
+| unit (MARK_DEF's) | 111 | 21,970 (21,970) | 21,965 |
+| cite | 109 | 5,177 (5,192) | 5,177 |
+| cell | 69 | 5,106 (5,106) | 5,106 |
+| display | 97 | 4,871 (4,875) | 4,871 |
+| ref | 108 | 4,695 (4,695) | 4,694 |
+| heading | 112 | 3,307 (3,307) | 3,302 |
+| macro | 84 | 2,344 (2,381) | 2,344 |
+| eqref | 54 | 1,715 (1,715) | 1,715 |
+| code | 35 | 355 (355) | 355 |
+| footnote | 24 | 85 (105) | 85 |
+| url | 28 | 79 (79) | 79 |
 
 **The classes on: all nine** (`LAYOUT_CLASSES` unchanged). **Off: none.** No class alone loses a line of any
 paper, and none loses more lines than it carries.
@@ -114,8 +126,9 @@ paper, and none loses more lines than it carries.
    space became a space: one more glue on page 3. A source that ends in a number or a dimension (`ENDS_IN_NUMBER`) now
    gets its opening mark alone, as one that ends in a control word does. Task 1's "PDF.js cuts one line into three
    items" on this paper was that space. Native case: "a number or a dimension set before a word" (`\looseness=-1`,
-   `\linepenalty=100`, `\spaceskip=3pt plus 1pt`, `\hyphenpenalty 50`). Task 1's 4d6595ab gives a paper's macro its
-   opening mark alone anyway; the rule also covers any other class.
+   `\linepenalty=100`, `\spaceskip=3pt plus 1pt`, `\hyphenpenalty 50`). Since the merge, C1 gives every paper's macro its
+   opening mark alone, and every number-ending source in the corpus is a macro. `ENDS_IN_NUMBER` is kept for a source
+   of another class that ends in a number.
 2. **The paper's own switch** (next section).
 
 ## The paper's own switch (rulings 1 and 3 of the controller's change)
@@ -126,19 +139,26 @@ The switch is decided per paper, by `punctuationMovers(paper, log)`, over `LAYOU
   cite.sty's `super`/`superscript`, or overcite, unless `nomove`; natmove, which acts on natbib's `super` (achemso loads
   both); natbib with `super` asked any way (its option, `\setcitestyle`, `\bibpunct`'s fourth argument); biblatex's
   `autocite=footnote` or `superscript`, or a TeX Live style whose `\autocite` is a footnote (authortitle, -comp, -ibid,
-  -icomp, verbose and verbose-…);
-- **`footnote`** where fnpct is loaded. It swaps a footnote's call with the full stop or comma after it.
+  -icomp, verbose and verbose-…).
+- **Not `footnote` for fnpct**, which swaps a footnote's call with the full stop or comma after it. Before the merge,
+  the switch took a call's marks off there: fnpct looked past the closing mark (35 items moved in a native case without
+  the switch). Since the merge, C1 gives every call its opening mark alone. fnpct also sets the full stop after a node
+  of its own, so the opening mark parts nothing. Times kerns `y.` by −0.65 pt, yet `way\footnote{N.}.` is 22.46 pt wide
+  with a whatsit before the call or none. A switch would only take marks off, so fnpct gets none. The native case
+  "fnpct in Times, a footnote's call before a full stop or a comma" holds it.
 
 It is read from the preamble the engine reads (the main file up to `\begin{document}`, the files it inputs there, the
-paper's own classes and packages; not a copy of natbib, cite, overcite, natmove, biblatex or fnpct in the package,
+paper's own classes and packages; not a copy of natbib, cite, overcite, natmove or biblatex in the package,
 which is the package's source, not the paper's choice: 2608.30640 ships natbib.sty, whose `\bibstyle@nature` would
 read as `super`). It is also read from a log of the paper's preamble, the font probe's, for what a class of TeX
-Live's loads: natmove, overcite or fnpct by name (no option is in a log). The class's own options count as every
+Live's loads: natmove or overcite by name (no option is in a log). The class's own options count as every
 package's.
 
 **What the switch does:** a placeholder of a switched class **that the punctuation follows gets no mark at all**.
-Every other placeholder keeps both marks. The first ruling said "no cite closing mark"; the corpus says that is not
-enough:
+Every other one keeps its marks. A citation is not a piece that looks ahead (C1), so where the two meet, at a
+citation before punctuation in a super paper, the switch decides, and it comes first in `layoutMarking`. A citation
+right after a paper's macro gets no mark from C1 either way. The first ruling said "no cite closing mark"; the corpus
+says that is not enough (pre-merge figures; C1 changes nothing for a citation):
 
 | | 2608.23865 (achemso, 520 lines) | 2608.25928 (achemso, 748 lines) |
 |---|---|---|
@@ -151,8 +171,8 @@ their kern: the 12 and 9 lines, each beside a citation's opening mark in TeX's b
 place: where the full stop begins, not where the citation does. Its cost: in a superscript paper nearly every
 citation stands before punctuation, 18 of 18 and 34 of 41 here, and those get no mark. The 7 others keep both marks
 and carry all 7 of their lines. The native cases hold the switch under TeX: "cite.sty [super]", "natbib [super] with
-natmove" and "fnpct", each a citation or a call before a full stop or a comma (the switch). Without the switch the
-same documents move 44, 53 and 35 items (the notes).
+natmove", each a citation before a full stop or a comma (the switch). Without the switch, the same documents move 44
+and 53 items (the notes). The merged native run has 155 documents and 149 checks, all ok.
 
 **Limits:**
 
@@ -163,17 +183,23 @@ same documents move 44, 53 and 35 items (the notes).
 - In production, the switch needs the font probe's log before the layout compile is written (achemso's natmove is
   in no preamble): Task 14.
 
-## The compile time, v0 against v1
+## The compile time, v0 against v1: the layout compile's own cost
 
-v0 and v1 of a paper were compiled at the same time, so each pair met the same load. v1 over v0: median +11.5 %, p10
-+0.1 %, p90 +35.6 %, max +341 % (2608.08903, under a load near 30). Over the corpus, the sum is +15.2 %. The two
-largest, compiled again one after the other and twice each: 2608.08903 from 2.10 to 2.62 s (+25 %), 2608.12606 from
-3.7–4.1 to 4.45 s (+9 to +20 %), each with the same latexmk passes as v0 (2 and 4). The times include about a second
-of Docker's start.
+v0 and v1 of a paper were compiled at the same time, so each pair met the same load. v1 is now the separate layout
+compile, so its time over v0 is that compile's own cost over the readings compile's.
+
+- **Merged run:** median +13.5 %, p10 −0.5 %, p90 +42.6 %, max +87.5 %; summed over the corpus, +17.5 %.
+- **Pre-merge run:** median +11.5 %, p90 +35.6 %, max +341 % (2608.08903, under a load near 30); summed, +15.2 %.
+- **Sequential check (pre-merge):** the two largest, compiled again one after the other and twice each:
+  - 2608.08903, from 2.10 to 2.62 s (+25 %);
+  - 2608.12606, from 3.7–4.1 to 4.45 s (+9 to +20 %);
+  - each with the same latexmk passes as v0 (2 and 4).
+
+The times include about a second of Docker's start.
 
 ## The marks file
 
-The median is 324 KB raw and the largest 1,399 KB (2608.30730), all under `MARKS_CAP`, each parsed by
+The median is 324 KB raw and the largest 1,398 KB (2608.30730), all under `MARKS_CAP`, each parsed by
 `parseLayoutMarks`. 63 names are dropped as set twice, in 8 papers.
 
 ## Not done here

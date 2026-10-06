@@ -17,8 +17,8 @@
  },
  "counts": {
   "papers": 113,
-  "clean": 105,
-  "accepted": 6,
+  "clean": 106,
+  "accepted": 5,
   "switched": 2,
   "failed": 0,
   "passedOver": 0,
@@ -26,7 +26,7 @@
   "lost": {
    "strict": 5,
    "joined": 3,
-   "tex": 7
+   "tex": 6
   },
   "untraced": [],
   "moved": {
@@ -43,8 +43,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3791,
-    6103
+    3667,
+    5858
    ],
    "pages": [
     44,
@@ -105,7 +105,7 @@
    "marksFile": {
     "kb": 575,
     "dropped": 0,
-    "marks": 1535
+    "marks": 1529
    },
    "traced": true,
    "verdict": "clean"
@@ -115,8 +115,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    5526,
-    6281
+    5022,
+    5526
    ],
    "pages": [
     17,
@@ -154,8 +154,8 @@
      "carried": 37
     },
     "footnote": {
-     "lines": 2,
-     "carried": 2
+     "lines": 1,
+     "carried": 1
     },
     "math": {
      "lines": 108,
@@ -189,7 +189,7 @@
    "marksFile": {
     "kb": 244,
     "dropped": 0,
-    "marks": 646
+    "marks": 645
    },
    "traced": true,
    "verdict": "clean"
@@ -199,8 +199,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4424,
-    6026
+    4288,
+    6214
    ],
    "pages": [
     10,
@@ -263,9 +263,9 @@
     }
    },
    "marksFile": {
-    "kb": 234,
+    "kb": 233,
     "dropped": 0,
-    "marks": 575
+    "marks": 569
    },
    "traced": true,
    "verdict": "clean"
@@ -275,8 +275,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4280,
-    4657
+    3737,
+    4195
    ],
    "pages": [
     12,
@@ -314,8 +314,8 @@
      "carried": 23
     },
     "footnote": {
-     "lines": 12,
-     "carried": 12
+     "lines": 7,
+     "carried": 7
     },
     "macro": {
      "lines": 250,
@@ -345,7 +345,7 @@
    "marksFile": {
     "kb": 324,
     "dropped": 0,
-    "marks": 1242
+    "marks": 1228
    },
    "traced": true,
    "verdict": "clean"
@@ -355,8 +355,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    11169,
-    12181
+    10638,
+    11404
    ],
    "pages": [
     19,
@@ -415,9 +415,9 @@
     }
    },
    "marksFile": {
-    "kb": 428,
+    "kb": 426,
     "dropped": 0,
-    "marks": 1038
+    "marks": 965
    },
    "traced": true,
    "verdict": "clean"
@@ -427,8 +427,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    7915,
-    11816
+    7738,
+    11844
    ],
    "pages": [
     20,
@@ -493,7 +493,7 @@
    "marksFile": {
     "kb": 575,
     "dropped": 0,
-    "marks": 2893
+    "marks": 2889
    },
    "traced": true,
    "verdict": "clean"
@@ -503,8 +503,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    9709,
-    10823
+    10853,
+    11846
    ],
    "pages": [
     10,
@@ -546,8 +546,8 @@
      "carried": 4
     },
     "math": {
-     "lines": 72,
-     "carried": 72
+     "lines": 64,
+     "carried": 64
     },
     "ref": {
      "lines": 31,
@@ -566,8 +566,8 @@
      "carried": 4
     },
     "cite": {
-     "lines": 86,
-     "carried": 86
+     "lines": 83,
+     "carried": 83
     },
     "cell": {
      "lines": 17,
@@ -575,9 +575,9 @@
     }
    },
    "marksFile": {
-    "kb": 234,
+    "kb": 233,
     "dropped": 0,
-    "marks": 758
+    "marks": 722
    },
    "traced": true,
    "verdict": "clean"
@@ -587,8 +587,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3459,
-    3876
+    3520,
+    3940
    ],
    "pages": [
     12,
@@ -658,7 +658,7 @@
    "marksFile": {
     "kb": 350,
     "dropped": 0,
-    "marks": 1054
+    "marks": 1041
    },
    "traced": true,
    "cause": "tex",
@@ -679,8 +679,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    11098,
-    13436
+    10745,
+    13535
    ],
    "pages": [
     58,
@@ -718,8 +718,8 @@
      "carried": 74
     },
     "footnote": {
-     "lines": 9,
-     "carried": 9
+     "lines": 6,
+     "carried": 6
     },
     "cite": {
      "lines": 108,
@@ -738,8 +738,8 @@
      "carried": 128
     },
     "display": {
-     "lines": 205,
-     "carried": 205
+     "lines": 203,
+     "carried": 203
     },
     "code": {
      "lines": 20,
@@ -753,7 +753,7 @@
    "marksFile": {
     "kb": 975,
     "dropped": 0,
-    "marks": 3617
+    "marks": 3605
    },
    "traced": true,
    "verdict": "clean"
@@ -763,8 +763,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    2670,
-    3376
+    2778,
+    3544
    ],
    "pages": [
     26,
@@ -831,9 +831,9 @@
     }
    },
    "marksFile": {
-    "kb": 325,
+    "kb": 324,
     "dropped": 0,
-    "marks": 1462
+    "marks": 1458
    },
    "traced": true,
    "verdict": "clean"
@@ -843,8 +843,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4833,
-    5425
+    5410,
+    6190
    ],
    "pages": [
     34,
@@ -910,7 +910,7 @@
    "marksFile": {
     "kb": 708,
     "dropped": 0,
-    "marks": 4079
+    "marks": 4077
    },
    "traced": true,
    "cause": "tex",
@@ -931,8 +931,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    10857,
-    11637
+    10478,
+    11527
    ],
    "pages": [
     14,
@@ -997,7 +997,7 @@
    "marksFile": {
     "kb": 308,
     "dropped": 0,
-    "marks": 874
+    "marks": 867
    },
    "traced": true,
    "verdict": "clean"
@@ -1007,8 +1007,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    6231,
-    7566
+    6444,
+    11595
    ],
    "pages": [
     34,
@@ -1091,8 +1091,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    1641,
-    1948
+    1619,
+    1875
    ],
    "pages": [
     10,
@@ -1165,7 +1165,7 @@
    "marksFile": {
     "kb": 145,
     "dropped": 0,
-    "marks": 719
+    "marks": 716
    },
    "traced": true,
    "verdict": "clean"
@@ -1175,8 +1175,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3895,
-    3949
+    3578,
+    3486
    ],
    "pages": [
     9,
@@ -1247,8 +1247,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    11814,
-    13530
+    28951,
+    33295
    ],
    "pages": [
     14,
@@ -1324,9 +1324,9 @@
     }
    },
    "marksFile": {
-    "kb": 443,
+    "kb": 442,
     "dropped": 0,
-    "marks": 1686
+    "marks": 1675
    },
    "traced": true,
    "cause": "tex",
@@ -1352,8 +1352,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    2151,
-    2348
+    4571,
+    4697
    ],
    "pages": [
     11,
@@ -1424,8 +1424,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    1150,
-    1221
+    3389,
+    1136
    ],
    "pages": [
     15,
@@ -1482,7 +1482,7 @@
    "marksFile": {
     "kb": 212,
     "dropped": 0,
-    "marks": 633
+    "marks": 621
    },
    "traced": true,
    "verdict": "clean"
@@ -1492,8 +1492,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4784,
-    6291
+    4115,
+    5105
    ],
    "pages": [
     15,
@@ -1558,7 +1558,7 @@
    "marksFile": {
     "kb": 328,
     "dropped": 0,
-    "marks": 1466
+    "marks": 1463
    },
    "traced": true,
    "verdict": "clean"
@@ -1568,8 +1568,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3472,
-    3626
+    2756,
+    2875
    ],
    "pages": [
     5,
@@ -1640,8 +1640,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    9303,
-    11097
+    7712,
+    9542
    ],
    "pages": [
     63,
@@ -1722,7 +1722,7 @@
    "marksFile": {
     "kb": 828,
     "dropped": 0,
-    "marks": 4499
+    "marks": 4493
    },
    "traced": true,
    "verdict": "clean"
@@ -1732,8 +1732,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    5461,
-    6467
+    5551,
+    6239
    ],
    "pages": [
     14,
@@ -1795,8 +1795,8 @@
      "carried": 2
     },
     "display": {
-     "lines": 9,
-     "carried": 9
+     "lines": 8,
+     "carried": 8
     },
     "cell": {
      "lines": 16,
@@ -1804,9 +1804,9 @@
     }
    },
    "marksFile": {
-    "kb": 251,
+    "kb": 250,
     "dropped": 0,
-    "marks": 572
+    "marks": 567
    },
    "traced": true,
    "verdict": "clean"
@@ -1816,8 +1816,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    12929,
-    14117
+    11969,
+    12649
    ],
    "pages": [
     33,
@@ -1886,7 +1886,7 @@
    "marksFile": {
     "kb": 544,
     "dropped": 0,
-    "marks": 2333
+    "marks": 2328
    },
    "traced": true,
    "verdict": "clean"
@@ -1896,8 +1896,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    2455,
-    2390
+    2392,
+    2332
    ],
    "pages": [
     13,
@@ -1968,8 +1968,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3799,
-    4176
+    3187,
+    3974
    ],
    "pages": [
     13,
@@ -2036,9 +2036,9 @@
     }
    },
    "marksFile": {
-    "kb": 398,
+    "kb": 397,
     "dropped": 0,
-    "marks": 1029
+    "marks": 1024
    },
    "traced": true,
    "verdict": "clean"
@@ -2048,8 +2048,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4410,
-    5065
+    4345,
+    5168
    ],
    "pages": [
     18,
@@ -2124,8 +2124,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4918,
-    5264
+    4307,
+    4729
    ],
    "pages": [
     17,
@@ -2171,8 +2171,8 @@
      "carried": 67
     },
     "display": {
-     "lines": 132,
-     "carried": 132
+     "lines": 131,
+     "carried": 131
     },
     "cite": {
      "lines": 19,
@@ -2190,7 +2190,7 @@
    "marksFile": {
     "kb": 231,
     "dropped": 0,
-    "marks": 1162
+    "marks": 1159
    },
    "traced": true,
    "verdict": "clean"
@@ -2200,8 +2200,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    5557,
-    5845
+    4033,
+    4184
    ],
    "pages": [
     9,
@@ -2276,8 +2276,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    5853,
-    5841
+    4281,
+    4477
    ],
    "pages": [
     13,
@@ -2344,8 +2344,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3998,
-    17646
+    3338,
+    3927
    ],
    "pages": [
     14,
@@ -2416,8 +2416,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    16886,
-    8189
+    5011,
+    5613
    ],
    "pages": [
     16,
@@ -2455,8 +2455,8 @@
      "carried": 14
     },
     "footnote": {
-     "lines": 10,
-     "carried": 10
+     "lines": 9,
+     "carried": 9
     },
     "math": {
      "lines": 384,
@@ -2490,7 +2490,7 @@
    "marksFile": {
     "kb": 403,
     "dropped": 0,
-    "marks": 1459
+    "marks": 1450
    },
    "traced": true,
    "verdict": "clean"
@@ -2500,8 +2500,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    8137,
-    9378
+    6131,
+    6206
    ],
    "pages": [
     6,
@@ -2566,7 +2566,7 @@
    "marksFile": {
     "kb": 184,
     "dropped": 0,
-    "marks": 562
+    "marks": 559
    },
    "traced": true,
    "verdict": "clean"
@@ -2576,8 +2576,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    2770,
-    2605
+    1872,
+    1804
    ],
    "pages": [
     10,
@@ -2642,7 +2642,7 @@
    "marksFile": {
     "kb": 124,
     "dropped": 0,
-    "marks": 390
+    "marks": 388
    },
    "traced": true,
    "verdict": "clean"
@@ -2652,8 +2652,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4723,
-    5166
+    3231,
+    3221
    ],
    "pages": [
     25,
@@ -2736,8 +2736,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    1950,
-    1984
+    1067,
+    1058
    ],
    "pages": [
     20,
@@ -2792,9 +2792,9 @@
     }
    },
    "marksFile": {
-    "kb": 299,
+    "kb": 298,
     "dropped": 0,
-    "marks": 907
+    "marks": 863
    },
    "traced": true,
    "verdict": "clean"
@@ -2804,8 +2804,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    8489,
-    9984
+    5709,
+    7712
    ],
    "pages": [
     19,
@@ -2847,8 +2847,8 @@
      "carried": 27
     },
     "math": {
-     "lines": 235,
-     "carried": 235
+     "lines": 234,
+     "carried": 234
     },
     "display": {
      "lines": 6,
@@ -2878,7 +2878,7 @@
    "marksFile": {
     "kb": 407,
     "dropped": 0,
-    "marks": 1430
+    "marks": 1423
    },
    "traced": true,
    "verdict": "clean"
@@ -2888,8 +2888,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3917,
-    3823
+    2788,
+    3292
    ],
    "pages": [
     10,
@@ -2960,8 +2960,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    5860,
-    5173
+    3900,
+    3920
    ],
    "pages": [
     9,
@@ -2998,10 +2998,6 @@
      "lines": 26,
      "carried": 26
     },
-    "footnote": {
-     "lines": 2,
-     "carried": 2
-    },
     "macro": {
      "lines": 35,
      "carried": 35
@@ -3034,7 +3030,7 @@
    "marksFile": {
     "kb": 225,
     "dropped": 0,
-    "marks": 520
+    "marks": 518
    },
    "traced": true,
    "verdict": "clean"
@@ -3044,8 +3040,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    7529,
-    8278
+    5319,
+    5894
    ],
    "pages": [
     28,
@@ -3120,8 +3116,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    11224,
-    12062
+    7238,
+    9232
    ],
    "pages": [
     18,
@@ -3204,8 +3200,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    7868,
-    30010
+    5832,
+    6436
    ],
    "pages": [
     20,
@@ -3276,8 +3272,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4580,
-    5080
+    3644,
+    4163
    ],
    "pages": [
     17,
@@ -3346,7 +3342,7 @@
    "marksFile": {
     "kb": 324,
     "dropped": 0,
-    "marks": 2387
+    "marks": 2384
    },
    "traced": true,
    "verdict": "clean"
@@ -3356,8 +3352,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    25813,
-    11072
+    4199,
+    5947
    ],
    "pages": [
     11,
@@ -3424,8 +3420,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    8642,
-    6556
+    4380,
+    5125
    ],
    "pages": [
     9,
@@ -3496,8 +3492,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    6974,
-    8990
+    4321,
+    6107
    ],
    "pages": [
     88,
@@ -3560,9 +3556,9 @@
     }
    },
    "marksFile": {
-    "kb": 1240,
+    "kb": 1239,
     "dropped": 0,
-    "marks": 7257
+    "marks": 7229
    },
    "traced": true,
    "verdict": "clean"
@@ -3572,8 +3568,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    7271,
-    10116
+    4671,
+    6705
    ],
    "pages": [
     18,
@@ -3611,8 +3607,8 @@
      "carried": 48
     },
     "math": {
-     "lines": 211,
-     "carried": 211
+     "lines": 207,
+     "carried": 207
     },
     "macro": {
      "lines": 157,
@@ -3642,7 +3638,7 @@
    "marksFile": {
     "kb": 381,
     "dropped": 0,
-    "marks": 1486
+    "marks": 1465
    },
    "traced": true,
    "verdict": "clean"
@@ -3652,8 +3648,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    5572,
-    6561
+    3542,
+    4233
    ],
    "pages": [
     29,
@@ -3691,8 +3687,8 @@
      "carried": 60
     },
     "macro": {
-     "lines": 60,
-     "carried": 60
+     "lines": 57,
+     "carried": 57
     },
     "ref": {
      "lines": 38,
@@ -3716,9 +3712,9 @@
     }
    },
    "marksFile": {
-    "kb": 382,
+    "kb": 380,
     "dropped": 0,
-    "marks": 1050
+    "marks": 977
    },
    "traced": true,
    "verdict": "clean"
@@ -3728,8 +3724,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3934,
-    4688
+    2980,
+    3590
    ],
    "pages": [
     44,
@@ -3812,8 +3808,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    6673,
-    6803
+    4900,
+    4977
    ],
    "pages": [
     13,
@@ -3892,8 +3888,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    5165,
-    6085
+    4634,
+    5578
    ],
    "pages": [
     13,
@@ -3958,7 +3954,7 @@
    "marksFile": {
     "kb": 212,
     "dropped": 0,
-    "marks": 584
+    "marks": 581
    },
    "traced": true,
    "verdict": "clean"
@@ -3968,8 +3964,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    17986,
-    18038
+    14875,
+    16240
    ],
    "pages": [
     18,
@@ -4012,8 +4008,8 @@
      "carried": 3
     },
     "math": {
-     "lines": 429,
-     "carried": 429
+     "lines": 427,
+     "carried": 427
     },
     "ref": {
      "lines": 92,
@@ -4024,8 +4020,8 @@
      "carried": 47
     },
     "macro": {
-     "lines": 179,
-     "carried": 179
+     "lines": 165,
+     "carried": 165
     },
     "url": {
      "lines": 3,
@@ -4045,9 +4041,9 @@
     }
    },
    "marksFile": {
-    "kb": 677,
+    "kb": 672,
     "dropped": 1,
-    "marks": 2835
+    "marks": 2665
    },
    "traced": true,
    "cause": "tex",
@@ -4073,8 +4069,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4450,
-    5780
+    3596,
+    5696
    ],
    "pages": [
     31,
@@ -4153,8 +4149,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3746,
-    3494
+    3349,
+    3737
    ],
    "pages": [
     18,
@@ -4212,14 +4208,14 @@
      "carried": 41
     },
     "macro": {
-     "lines": 2,
-     "carried": 2
+     "lines": 1,
+     "carried": 1
     }
    },
    "marksFile": {
     "kb": 318,
     "dropped": 0,
-    "marks": 1453
+    "marks": 1452
    },
    "traced": true,
    "verdict": "clean"
@@ -4229,8 +4225,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    5794,
-    7637
+    6271,
+    7586
    ],
    "pages": [
     16,
@@ -4299,7 +4295,7 @@
    "marksFile": {
     "kb": 334,
     "dropped": 0,
-    "marks": 1106
+    "marks": 1105
    },
    "traced": true,
    "verdict": "clean"
@@ -4309,8 +4305,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4635,
-    5628
+    4657,
+    5999
    ],
    "pages": [
     16,
@@ -4371,7 +4367,7 @@
    "marksFile": {
     "kb": 273,
     "dropped": 0,
-    "marks": 888
+    "marks": 887
    },
    "traced": true,
    "verdict": "clean"
@@ -4381,8 +4377,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    5925,
-    7579
+    6295,
+    8273
    ],
    "pages": [
     45,
@@ -4428,8 +4424,8 @@
      "carried": 72
     },
     "cite": {
-     "lines": 81,
-     "carried": 81
+     "lines": 79,
+     "carried": 79
     },
     "display": {
      "lines": 51,
@@ -4444,8 +4440,8 @@
      "carried": 8
     },
     "macro": {
-     "lines": 41,
-     "carried": 41
+     "lines": 34,
+     "carried": 34
     },
     "cell": {
      "lines": 140,
@@ -4453,9 +4449,9 @@
     }
    },
    "marksFile": {
-    "kb": 955,
+    "kb": 954,
     "dropped": 4,
-    "marks": 2516
+    "marks": 2473
    },
    "traced": true,
    "verdict": "clean"
@@ -4465,8 +4461,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3967,
-    4880
+    4392,
+    5052
    ],
    "pages": [
     10,
@@ -4533,9 +4529,9 @@
     }
    },
    "marksFile": {
-    "kb": 192,
+    "kb": 191,
     "dropped": 0,
-    "marks": 327
+    "marks": 325
    },
    "traced": true,
    "verdict": "clean"
@@ -4545,8 +4541,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4295,
-    4434
+    5147,
+    5261
    ],
    "pages": [
     15,
@@ -4623,7 +4619,7 @@
    "marksFile": {
     "kb": 433,
     "dropped": 0,
-    "marks": 1185
+    "marks": 1184
    },
    "traced": true,
    "verdict": "clean"
@@ -4633,8 +4629,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3733,
-    3953
+    4512,
+    4645
    ],
    "pages": [
     10,
@@ -4699,7 +4695,7 @@
    "marksFile": {
     "kb": 263,
     "dropped": 0,
-    "marks": 920
+    "marks": 915
    },
    "traced": true,
    "verdict": "clean"
@@ -4709,8 +4705,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    1590,
-    1891
+    2079,
+    2255
    ],
    "pages": [
     19,
@@ -4779,7 +4775,7 @@
    "marksFile": {
     "kb": 271,
     "dropped": 0,
-    "marks": 2117
+    "marks": 2115
    },
    "traced": true,
    "verdict": "clean"
@@ -4789,8 +4785,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    6527,
-    7463
+    7280,
+    8265
    ],
    "pages": [
     12,
@@ -4865,8 +4861,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4252,
-    4598
+    5290,
+    5568
    ],
    "pages": [
     5,
@@ -4931,7 +4927,7 @@
    "marksFile": {
     "kb": 151,
     "dropped": 0,
-    "marks": 397
+    "marks": 396
    },
    "traced": true,
    "verdict": "clean"
@@ -4941,8 +4937,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3514,
-    3849
+    3649,
+    4248
    ],
    "pages": [
     35,
@@ -5017,8 +5013,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3876,
-    4508
+    3987,
+    4660
    ],
    "pages": [
     9,
@@ -5064,8 +5060,8 @@
      "carried": 67
     },
     "macro": {
-     "lines": 21,
-     "carried": 21
+     "lines": 19,
+     "carried": 19
     },
     "display": {
      "lines": 4,
@@ -5087,7 +5083,7 @@
    "marksFile": {
     "kb": 205,
     "dropped": 0,
-    "marks": 442
+    "marks": 434
    },
    "traced": true,
    "verdict": "clean"
@@ -5097,8 +5093,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3474,
-    5379
+    3257,
+    5076
    ],
    "pages": [
     18,
@@ -5179,7 +5175,7 @@
    "marksFile": {
     "kb": 443,
     "dropped": 0,
-    "marks": 1661
+    "marks": 1659
    },
    "traced": true,
    "verdict": "clean"
@@ -5189,8 +5185,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    2723,
-    2660
+    1980,
+    2585
    ],
    "pages": [
     8,
@@ -5269,8 +5265,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    2198,
-    2276
+    2354,
+    2462
    ],
    "pages": [
     7,
@@ -5341,8 +5337,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    5610,
-    6799
+    5839,
+    7178
    ],
    "pages": [
     60,
@@ -5421,8 +5417,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    2888,
-    4475
+    3584,
+    5222
    ],
    "pages": [
     31,
@@ -5493,8 +5489,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    1693,
-    1804
+    1833,
+    1808
    ],
    "pages": [
     8,
@@ -5573,8 +5569,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    10244,
-    11027
+    10537,
+    11743
    ],
    "pages": [
     20,
@@ -5640,7 +5636,7 @@
    "marksFile": {
     "kb": 516,
     "dropped": 1,
-    "marks": 1373
+    "marks": 1363
    },
    "traced": true,
    "cause": "tex",
@@ -5661,8 +5657,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    22203,
-    25964
+    24267,
+    29216
    ],
    "pages": [
     52,
@@ -5739,7 +5735,7 @@
    "marksFile": {
     "kb": 1364,
     "dropped": 17,
-    "marks": 7518
+    "marks": 7513
    },
    "traced": true,
    "verdict": "clean"
@@ -5749,8 +5745,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    2356,
-    3060
+    2435,
+    3124
    ],
    "pages": [
     27,
@@ -5788,8 +5784,8 @@
      "carried": 19
     },
     "footnote": {
-     "lines": 2,
-     "carried": 2
+     "lines": 1,
+     "carried": 1
     },
     "ref": {
      "lines": 38,
@@ -5819,7 +5815,7 @@
    "marksFile": {
     "kb": 317,
     "dropped": 0,
-    "marks": 1456
+    "marks": 1454
    },
    "traced": true,
    "verdict": "clean"
@@ -5829,8 +5825,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    5962,
-    6646
+    5727,
+    6146
    ],
    "pages": [
     26,
@@ -5899,7 +5895,7 @@
    "marksFile": {
     "kb": 382,
     "dropped": 0,
-    "marks": 1512
+    "marks": 1511
    },
    "traced": true,
    "verdict": "clean"
@@ -5909,8 +5905,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    5820,
-    6148
+    4717,
+    4967
    ],
    "pages": [
     26,
@@ -5925,7 +5921,7 @@
    "lost": {
     "strict": 0,
     "joined": 0,
-    "tex": 1
+    "tex": 0
    },
    "unitMarksMoved": 0,
    "captions": [],
@@ -5948,17 +5944,16 @@
      "carried": 12
     },
     "footnote": {
-     "lines": 2,
-     "carried": 2
+     "lines": 1,
+     "carried": 1
     },
     "math": {
-     "lines": 393,
-     "carried": 393
+     "lines": 392,
+     "carried": 392
     },
     "macro": {
      "lines": 92,
-     "carried": 92,
-     "texLost": 1
+     "carried": 92
     },
     "ref": {
      "lines": 98,
@@ -5976,29 +5971,18 @@
    "marksFile": {
     "kb": 328,
     "dropped": 0,
-    "marks": 1745
+    "marks": 1737
    },
    "traced": true,
-   "cause": "tex",
-   "boxes": [
-    {
-     "page": 12,
-     "near": "p45.10b",
-     "what": "macro"
-    }
-   ],
-   "own": {
-    "lost": 0
-   },
-   "verdict": "accepted"
+   "verdict": "clean"
   },
   {
    "id": "2608.03841",
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    2177,
-    2281
+    2238,
+    1455
    ],
    "pages": [
     7,
@@ -6036,8 +6020,8 @@
      "carried": 5
     },
     "footnote": {
-     "lines": 2,
-     "carried": 2
+     "lines": 1,
+     "carried": 1
     },
     "cite": {
      "lines": 38,
@@ -6063,7 +6047,7 @@
    "marksFile": {
     "kb": 124,
     "dropped": 0,
-    "marks": 605
+    "marks": 604
    },
    "traced": true,
    "verdict": "clean"
@@ -6073,8 +6057,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3971,
-    4023
+    3415,
+    3112
    ],
    "pages": [
     10,
@@ -6120,8 +6104,8 @@
      "carried": 80
     },
     "macro": {
-     "lines": 9,
-     "carried": 9
+     "lines": 8,
+     "carried": 8
     },
     "eqref": {
      "lines": 7,
@@ -6139,7 +6123,7 @@
    "marksFile": {
     "kb": 246,
     "dropped": 0,
-    "marks": 744
+    "marks": 736
    },
    "traced": true,
    "verdict": "clean"
@@ -6149,8 +6133,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3231,
-    4779
+    3067,
+    4272
    ],
    "pages": [
     54,
@@ -6208,8 +6192,8 @@
      "carried": 139
     },
     "macro": {
-     "lines": 36,
-     "carried": 36
+     "lines": 34,
+     "carried": 34
     },
     "eqref": {
      "lines": 3,
@@ -6217,9 +6201,9 @@
     }
    },
    "marksFile": {
-    "kb": 1094,
+    "kb": 1093,
     "dropped": 0,
-    "marks": 7182
+    "marks": 7154
    },
    "traced": true,
    "verdict": "clean"
@@ -6229,8 +6213,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3406,
-    4234
+    3276,
+    4071
    ],
    "pages": [
     12,
@@ -6295,7 +6279,7 @@
    "marksFile": {
     "kb": 224,
     "dropped": 0,
-    "marks": 478
+    "marks": 475
    },
    "traced": true,
    "verdict": "clean"
@@ -6305,8 +6289,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4110,
-    4576
+    4171,
+    5946
    ],
    "pages": [
     16,
@@ -6383,7 +6367,7 @@
    "marksFile": {
     "kb": 424,
     "dropped": 0,
-    "marks": 1515
+    "marks": 1514
    },
    "traced": true,
    "verdict": "clean"
@@ -6393,8 +6377,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    8716,
-    11821
+    8180,
+    9547
    ],
    "pages": [
     40,
@@ -6432,8 +6416,8 @@
      "carried": 20
     },
     "footnote": {
-     "lines": 6,
-     "carried": 6
+     "lines": 5,
+     "carried": 5
     },
     "math": {
      "lines": 263,
@@ -6448,8 +6432,8 @@
      "carried": 97
     },
     "cite": {
-     "lines": 117,
-     "carried": 117
+     "lines": 116,
+     "carried": 116
     },
     "eqref": {
      "lines": 7,
@@ -6457,9 +6441,9 @@
     }
    },
    "marksFile": {
-    "kb": 557,
+    "kb": 556,
     "dropped": 0,
-    "marks": 1420
+    "marks": 1413
    },
    "traced": true,
    "verdict": "clean"
@@ -6469,8 +6453,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4711,
-    5465
+    3652,
+    4128
    ],
    "pages": [
     19,
@@ -6539,7 +6523,7 @@
    "marksFile": {
     "kb": 445,
     "dropped": 0,
-    "marks": 1343
+    "marks": 1340
    },
    "traced": true,
    "verdict": "clean"
@@ -6549,8 +6533,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4617,
-    5228
+    3771,
+    4611
    ],
    "pages": [
     19,
@@ -6625,8 +6609,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3296,
-    4132
+    2997,
+    3880
    ],
    "pages": [
     15,
@@ -6695,7 +6679,7 @@
    "marksFile": {
     "kb": 239,
     "dropped": 0,
-    "marks": 899
+    "marks": 897
    },
    "traced": true,
    "verdict": "clean"
@@ -6708,8 +6692,8 @@
     "cite"
    ],
    "ms": [
-    2371,
-    2418
+    2012,
+    1912
    ],
    "pages": [
     20,
@@ -6747,8 +6731,8 @@
      "carried": 15
     },
     "macro": {
-     "lines": 11,
-     "carried": 11
+     "lines": 9,
+     "carried": 9
     },
     "math": {
      "lines": 71,
@@ -6762,7 +6746,7 @@
    "marksFile": {
     "kb": 170,
     "dropped": 0,
-    "marks": 380
+    "marks": 372
    },
    "traced": true,
    "verdict": "switched"
@@ -6772,8 +6756,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    6018,
-    6923
+    5177,
+    5643
    ],
    "pages": [
     31,
@@ -6842,7 +6826,7 @@
    "marksFile": {
     "kb": 528,
     "dropped": 31,
-    "marks": 2932
+    "marks": 2928
    },
    "traced": true,
    "verdict": "clean"
@@ -6852,8 +6836,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4986,
-    5407
+    4248,
+    4468
    ],
    "pages": [
     8,
@@ -6914,7 +6898,7 @@
    "marksFile": {
     "kb": 171,
     "dropped": 0,
-    "marks": 311
+    "marks": 303
    },
    "traced": true,
    "verdict": "clean"
@@ -6924,8 +6908,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    12715,
-    14754
+    10813,
+    12225
    ],
    "pages": [
     35,
@@ -6975,8 +6959,8 @@
      "carried": 18
     },
     "macro": {
-     "lines": 5,
-     "carried": 5
+     "lines": 4,
+     "carried": 4
     },
     "code": {
      "lines": 4,
@@ -6998,7 +6982,7 @@
    "marksFile": {
     "kb": 698,
     "dropped": 0,
-    "marks": 1251
+    "marks": 1247
    },
    "traced": true,
    "verdict": "clean"
@@ -7008,8 +6992,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    8319,
-    9947
+    7247,
+    8952
    ],
    "pages": [
     23,
@@ -7051,8 +7035,8 @@
      "carried": 120
     },
     "macro": {
-     "lines": 73,
-     "carried": 73
+     "lines": 72,
+     "carried": 72
     },
     "ref": {
      "lines": 31,
@@ -7078,7 +7062,7 @@
    "marksFile": {
     "kb": 404,
     "dropped": 0,
-    "marks": 1558
+    "marks": 1544
    },
    "traced": true,
    "verdict": "clean"
@@ -7088,8 +7072,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    1773,
-    1955
+    1201,
+    1336
    ],
    "pages": [
     11,
@@ -7156,8 +7140,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3145,
-    3389
+    2416,
+    2748
    ],
    "pages": [
     8,
@@ -7222,7 +7206,7 @@
    "marksFile": {
     "kb": 238,
     "dropped": 0,
-    "marks": 371
+    "marks": 370
    },
    "traced": true,
    "verdict": "clean"
@@ -7232,8 +7216,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    19737,
-    20599
+    17871,
+    18539
    ],
    "pages": [
     23,
@@ -7275,8 +7259,8 @@
      "carried": 3
     },
     "math": {
-     "lines": 510,
-     "carried": 510
+     "lines": 509,
+     "carried": 509
     },
     "ref": {
      "lines": 80,
@@ -7304,9 +7288,9 @@
     }
    },
    "marksFile": {
-    "kb": 526,
+    "kb": 525,
     "dropped": 0,
-    "marks": 3091
+    "marks": 3067
    },
    "traced": true,
    "verdict": "clean"
@@ -7316,8 +7300,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    2478,
-    2699
+    1643,
+    2736
    ],
    "pages": [
     9,
@@ -7388,8 +7372,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    15896,
-    23740
+    15307,
+    23764
    ],
    "pages": [
     64,
@@ -7464,9 +7448,9 @@
     }
    },
    "marksFile": {
-    "kb": 1399,
+    "kb": 1398,
     "dropped": 0,
-    "marks": 4727
+    "marks": 4675
    },
    "traced": true,
    "verdict": "clean"
@@ -7476,8 +7460,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4645,
-    4957
+    4642,
+    4950
    ],
    "pages": [
     14,
@@ -7515,8 +7499,8 @@
      "carried": 3
     },
     "footnote": {
-     "lines": 2,
-     "carried": 2
+     "lines": 1,
+     "carried": 1
     },
     "ref": {
      "lines": 34,
@@ -7542,7 +7526,7 @@
    "marksFile": {
     "kb": 254,
     "dropped": 0,
-    "marks": 1828
+    "marks": 1827
    },
    "traced": true,
    "verdict": "clean"
@@ -7552,8 +7536,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    10902,
-    11459
+    9991,
+    11326
    ],
    "pages": [
     40,
@@ -7624,8 +7608,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3338,
-    3314
+    3108,
+    3091
    ],
    "pages": [
     16,
@@ -7675,8 +7659,8 @@
      "carried": 41
     },
     "macro": {
-     "lines": 7,
-     "carried": 7
+     "lines": 6,
+     "carried": 6
     },
     "eqref": {
      "lines": 13,
@@ -7690,7 +7674,7 @@
    "marksFile": {
     "kb": 382,
     "dropped": 0,
-    "marks": 1011
+    "marks": 1004
    },
    "traced": true,
    "verdict": "clean"
@@ -7700,8 +7684,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    2917,
-    4557
+    2322,
+    4353
    ],
    "pages": [
     12,
@@ -7760,7 +7744,7 @@
     }
    },
    "marksFile": {
-    "kb": 328,
+    "kb": 327,
     "dropped": 0,
     "marks": 1163
    },
@@ -7772,8 +7756,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    8903,
-    11339
+    7557,
+    9484
    ],
    "pages": [
     25,
@@ -7842,7 +7826,7 @@
    "marksFile": {
     "kb": 553,
     "dropped": 0,
-    "marks": 1478
+    "marks": 1472
    },
    "traced": true,
    "verdict": "clean"
@@ -7855,8 +7839,8 @@
     "cite"
    ],
    "ms": [
-    4177,
-    4302
+    2966,
+    3542
    ],
    "pages": [
     30,
@@ -7921,7 +7905,7 @@
    "marksFile": {
     "kb": 240,
     "dropped": 0,
-    "marks": 525
+    "marks": 523
    },
    "traced": true,
    "verdict": "switched"
@@ -7931,8 +7915,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    5020,
-    5072
+    3958,
+    4522
    ],
    "pages": [
     2,
@@ -8001,7 +7985,7 @@
    "marksFile": {
     "kb": 62,
     "dropped": 1,
-    "marks": 190
+    "marks": 189
    },
    "traced": true,
    "verdict": "clean"
@@ -8011,8 +7995,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    2730,
-    2835
+    2144,
+    2279
    ],
    "pages": [
     10,
@@ -8077,7 +8061,7 @@
    "marksFile": {
     "kb": 312,
     "dropped": 0,
-    "marks": 1820
+    "marks": 1819
    },
    "traced": true,
    "verdict": "clean"
@@ -8087,8 +8071,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    7084,
-    7094
+    4534,
+    4957
    ],
    "pages": [
     8,
@@ -8159,8 +8143,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    5775,
-    6739
+    4901,
+    5957
    ],
    "pages": [
     40,
@@ -8202,8 +8186,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3769,
-    4090
+    3022,
+    3176
    ],
    "pages": [
     24,
@@ -8268,7 +8252,7 @@
    "marksFile": {
     "kb": 316,
     "dropped": 0,
-    "marks": 1385
+    "marks": 1372
    },
    "traced": true,
    "verdict": "clean"
@@ -8278,8 +8262,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    5100,
-    5371
+    4547,
+    4972
    ],
    "pages": [
     7,
@@ -8354,8 +8338,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    21560,
-    24974
+    22032,
+    24684
    ],
    "pages": [
     24,
@@ -8393,12 +8377,12 @@
      "carried": 21
     },
     "footnote": {
-     "lines": 6,
-     "carried": 6
+     "lines": 3,
+     "carried": 3
     },
     "cite": {
-     "lines": 147,
-     "carried": 147
+     "lines": 138,
+     "carried": 138
     },
     "math": {
      "lines": 542,
@@ -8413,8 +8397,8 @@
      "carried": 116
     },
     "macro": {
-     "lines": 56,
-     "carried": 56
+     "lines": 54,
+     "carried": 54
     },
     "code": {
      "lines": 18,
@@ -8432,7 +8416,7 @@
    "marksFile": {
     "kb": 711,
     "dropped": 0,
-    "marks": 2330
+    "marks": 2305
    },
    "traced": true,
    "verdict": "clean"
@@ -8442,8 +8426,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4042,
-    4847
+    3325,
+    4284
    ],
    "pages": [
     30,
@@ -8508,7 +8492,7 @@
    "marksFile": {
     "kb": 556,
     "dropped": 0,
-    "marks": 2923
+    "marks": 2911
    },
    "traced": true,
    "verdict": "clean"
@@ -8518,8 +8502,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    4992,
-    5789
+    4751,
+    6023
    ],
    "pages": [
     11,
@@ -8590,8 +8574,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    3711,
-    3764
+    3635,
+    3252
    ],
    "pages": [
     11,
@@ -8656,7 +8640,7 @@
    "marksFile": {
     "kb": 275,
     "dropped": 0,
-    "marks": 871
+    "marks": 867
    },
    "traced": true,
    "verdict": "clean"
@@ -8666,8 +8650,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    2788,
-    3123
+    2886,
+    3138
    ],
    "pages": [
     23,
@@ -8742,8 +8726,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    2477,
-    3080
+    2399,
+    2372
    ],
    "pages": [
     20,
@@ -8812,7 +8796,7 @@
    "marksFile": {
     "kb": 346,
     "dropped": 0,
-    "marks": 1044
+    "marks": 1038
    },
    "traced": true,
    "verdict": "clean"
@@ -8822,8 +8806,8 @@
    "v0": "ok",
    "v1": "ok",
    "ms": [
-    7075,
-    7567
+    5357,
+    6426
    ],
    "pages": [
     35,
