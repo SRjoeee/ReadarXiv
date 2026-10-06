@@ -722,7 +722,9 @@ function walk(s, from, to, b, ctx) {
   const startText = () => { if (textStart < 0) textStart = i }
   while (i < to && !ctx.ended) {
     const c = s[i]
-    if (c === '%') { endText(); i = skipComment(s, i) + 1; continue }
+    // a comment takes its line's end with it; a blank line after it is still \\par, as TeX reads it (`text % note`, then
+    // an empty line: two paragraphs, which one unit set as one)
+    if (c === '%') { endText(); i = skipComment(s, i) + 1; let k = i; while (k < to && (s[k] === ' ' || s[k] === '\t')) k++; if (k < to && s[k] === '\n' && b.cur) { b.flush(); i = k + 1 } continue }
     if (c === '\n') {
       // blank line: paragraph break
       let k = i + 1; while (k < to && (s[k] === ' ' || s[k] === '\t')) k++

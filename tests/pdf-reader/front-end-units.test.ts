@@ -163,8 +163,16 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
   })
   it('a comment between a command and its argument goes with its line end, as TeX reads it (2608.23517\'s {sqrt.png}, walked as text, stopped TeX)', () => {
     expect(texts(project(doc('\\begin{figure}\\includegraphics[width=\\textwidth]%{old.png}\n  {sqrt.png}\\caption{A figure.}\\end{figure}')))).toEqual(['A figure.'])
-    // and an empty line after the comment is still \par: the group after it is no argument, its words the text's
-    expect(texts(project(doc('Words \\url{a}%\n\n{More words here.}')))).toEqual(['Words More words here.'])
+    // and an empty line after the comment is still \par: the group after it is no argument, its words the next
+    // paragraph's
+    expect(texts(project(doc('Words \\url{a}%\n\n{More words here.}')))).toEqual(['Words', 'More words here.'])
+  })
+  it('a blank line after a comment line ends the paragraph, as TeX ends it (review concern 3: two paragraphs set as one)', () => {
+    expect(texts(project(doc('The first paragraph ends here. % a note\n\nThe second paragraph.')))).toEqual(['The first paragraph ends here.', 'The second paragraph.'])
+    expect(texts(project(doc('First words.%\n\nSecond words.')))).toEqual(['First words.', 'Second words.'])
+    expect(texts(project(doc('First words.\n% a comment line\n\nSecond words.')))).toEqual(['First words.', 'Second words.'])
+    // a comment line alone inside a paragraph keeps it one
+    expect(texts(project(doc('First words\n% a comment line\nand more words.')))).toEqual(['First words and more words.'])
   })
   it('a running head, set on every page, is kept as it is with its arguments (2608.04322\'s \\markboth{…}%\\n{…})', () => {
     const p = project(doc('\\markboth{Journal Name, Vol. 1}%\n{Author et al.: Short Paper Title}\n\nBody words.'))
