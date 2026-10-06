@@ -6,6 +6,9 @@
 // escapes (the English gate), imports nothing uses left out, and what is named below. The prototype's own description
 // follows.
 //
+// v0's change here: an equation number on a line with a character outside the Basic Multilingual Plane before it is
+// left out where the prototype threw (checkAll, part d).
+//
 // The completeness checker: does the layer show everything the original shows, once? Run in the page after every unit
 // is painted (main.js check=1, which score.mjs sets), from the original page's canvas, the layer's canvas (the copy,
 // erased, with its crops) and what paintBase recorded (each erased box, each crop drawn), with the units' alignments
@@ -301,6 +304,9 @@ export function checkAll({ N, placed, rows, pxOf, toPdf, chars2, audit, cols, ce
       const s = cs.map(c => c.ch).join('')
       for (const m of s.matchAll(/\((\d{1,3}(?:\.\d{1,3})?[a-z]?)\)/g)) {
         const run = cs.slice(m.index, m.index + m[0].length)
+        // (v0: a line with a character outside the Basic Multilingual Plane before it puts the match's string offset past
+        // its characters; the prototype threw there, 2307.16209 page 10, and such a number is left out)
+        if (run.map(c => c.ch).join('') !== m[0]) continue
         const x0 = run[0].x0, x1 = run.at(-1).x1
         const col = C2.find(([a, z]) => x1 <= z + 6 && x1 >= a)
         if (!col || Math.abs(col[1] - x1) > 6) continue
