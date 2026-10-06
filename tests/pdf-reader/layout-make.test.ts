@@ -587,7 +587,7 @@ describe('makeLayout, the re-review of 2026-10-06', () => {
     expect(phOf(file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.NUMBERED, 1, 150, 680, 165, 687.5, 677.5, 1, 247, 680, 267, 687.5, 677.5])
   })
 
-  it("a placeholder's glyphs are those whose middles lie between its marks: a carried mark a few tenths off keeps its base glyph", async () => {
+  it("a placeholder's glyphs begin no more than 0.4 pt before its opening mark and have their middles before its closing mark: a carried mark a few tenths off keeps its base glyph", async () => {
     // the opening mark carried 0.36 pt right of the formula's first glyph (2307.16209's $\Psi_0$, $\ell$)
     const runs: Run[] = [{ s: 'shown by', x: 72, y: 700 }, { s: 'P', x: 117, y: 700 }, { s: '0', x: 122, y: 698, size: 7 }, { s: 'and more', x: 130.5, y: 700 }, { s: 'x', x: 175.5, y: 700 }, { s: ', then', x: 180.5, y: 700 }]
     const { file } = await made({
