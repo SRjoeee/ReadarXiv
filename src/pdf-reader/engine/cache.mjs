@@ -21,7 +21,7 @@ export const figureKeyOf = texts => JSON.stringify(texts)
  * A unit whose source is the record's but for the numbers of its pairs has the record's translation too, numbered as the
  * unit is (renumbered): a pair's id is its place among its file's pairs, and a pair the front end makes earlier in the
  * file — a front matter's unit, an argument it now reads as text — moves every one after it (the front end's round of
- * 2026-10-06: 1,962 units of the corpus's 117 papers the same but for their pairs' numbers)
+ * 2026-10-06: 1,471 units of the corpus's 117 papers the same but for their pairs' numbers)
  */
 const rankOf = u => (u.state === 'whole' ? 2 : u.state === 'partial' ? 1 : 0)
 export async function seedFrom(record, units) {

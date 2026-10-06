@@ -251,7 +251,7 @@ describe('passagesInSource: what a copy holds in the original that it had transl
 
 // A pair's id is its place among its file's pairs: a pair the front end makes earlier in the file (a front matter's
 // unit, an argument it now reads as text) numbers every pair after it anew, and the units' hashes change with them —
-// 1,962 units of the corpus's 117 papers in the front end's round of 2026-10-06 — though their sources are the same
+// 1,471 units of the corpus's 117 papers in the front end's round of 2026-10-06 — though their sources are the same
 describe('a copy\'s translation of a unit whose pairs are numbered anew', () => {
   const zh = async (texts: string[]) => texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' }))
   type P = { t: string; id?: number; unit?: { pieces: P[] } }

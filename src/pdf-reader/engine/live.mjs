@@ -315,14 +315,16 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 //    text —; and an accent inside a word its letter in the word's text, the accent as written wherever the source is
 //    set (latex-front.mjs accentLetter) — El Ni{\~n}o went out as `El Ni @d#@e#@f# o`; 267 units in 40 of the
 //    corpus's 124 papers hold such a word. A copy of 7 carries its other units over (PIPELINE_CARRIES)
-// 9: every piece of typeset body text a unit, as TeX reads the source (the front end's round of 2026-10-06): the
+// 9: every piece of typeset body text a unit, as TeX reads the source (the front end's round of 2026-10-06/07): the
 //    document's bounds as TeX finds them (latex-front.mjs documentBounds — ResNet's appendix C, 2608.11084's and
-//    2608.23517's bodies), the title TeX keeps, the preamble's front matter (frontMatter), arguments read by the role
-//    table (arg-roles.mjs: the group no command takes walked, a command's text and a box's content walked), theorems'
-//    titles, a macro's prose body (storedBodies), a web address a placeholder. Of the 25,097 units of the corpus's 117
-//    papers 1,107 are new or cut anew; 2,103 are the same but for their pairs' numbers, and seedFrom finds their copy's
-//    translation again (cache.mjs). Nothing is sent or read back otherwise: a copy of 8 carries over every unit it holds
-//    the source of (PIPELINE_CARRIES)
+//    2608.23517's bodies — and an \end{document} TeX surely reaches), the title TeX keeps, the preamble's front matter
+//    (frontMatter), arguments read by the role table (arg-roles.mjs: the group no command takes walked, a command's text
+//    and a box's content walked, what LaTeXML reads in code not known, a token register's group its value), theorems'
+//    titles, a macro's prose body (storedBodies), \twocolumn[…]'s content and \footnotetext's text, a web address a
+//    placeholder, a running head kept as it is, a blank line after a comment a paragraph's end. Of the 25,139 units of
+//    the corpus's 117 papers 22,446 keep their hash, 1,222 are new or cut anew, and 1,471 are the same but for their
+//    pairs' numbers, whose copy's translation seedFrom finds again (cache.mjs). Nothing is sent or read back otherwise:
+//    a copy of 8 carries over every unit it holds the source of (PIPELINE_CARRIES)
 export const PIPELINE_VERSION = '9'
 /**
  * The earlier pipelines whose copies carry their translations over into this one, unit by unit (cache.mjs copyReuse),
