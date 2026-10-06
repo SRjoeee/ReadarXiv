@@ -5,6 +5,7 @@
 //   ECHO=1 node spikes/live-node.mjs id — no engine: every text comes back as it went, marked, in the tags format an
 //     LLM gets (the pipeline and the compiles alone, as reader-live's LLM_MOCK checks them in the browser)
 //   TODAY=1 … — without the typesetting rule (no PDF's marks read: the translation set as before it)
+//   PREVIEWS=0 … — no preview compiled (runLive's `previews` false): the original first, then the measure and the final
 import { execFile } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -43,7 +44,7 @@ const asAnswer = text => (text == null ? null : { text, by: null })
 const readMarks = async bytes => { const task = getDocument({ data: new Uint8Array(bytes), verbosity: 0 }); try { return await marksOf(await task.promise) } finally { await task.destroy() } }
 const r = await runLive(paper, {
   // translateUnits takes each text as { text, by } (engine.mjs); this engine has no identity of the background's
-  lang, compile, readMarks: process.env.TODAY ? null : readMarks, ...(process.env.ECHO ? { format: 'tags', translate: async texts => texts.map(echo).map(asAnswer) } : { translate: texts => translateTexts(texts, lang).then(r => r.map(asAnswer)) }),
+  lang, compile, readMarks: process.env.TODAY ? null : readMarks, ...(process.env.PREVIEWS === '0' ? { previews: false } : {}), ...(process.env.ECHO ? { format: 'tags', translate: async texts => texts.map(echo).map(asAnswer) } : { translate: texts => translateTexts(texts, lang).then(r => r.map(asAnswer)) }),
   onUpdate: ({ pdf, texts, translated, final }) => { const f = join(out, final ? 'final.pdf' : `preview-${translated}.pdf`); writeFileSync(f, pdf); if (final) writeFileSync(join(out, 'final-texts.json'), JSON.stringify(texts)); console.log(at(), final ? 'FINAL' : 'preview', translated, 'units →', f.slice(root.length)) },
   onOriginal: ({ pdf }) => { writeFileSync(join(out, 'original-marked.pdf'), pdf); console.log(at(), 'original with marks') },
   note: (event, data) => console.log(at(), event, JSON.stringify(data)),

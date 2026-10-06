@@ -4,6 +4,10 @@ type Piece = { t: string; s?: string; src?: string; tr?: boolean; id?: number }
 export declare function plainSource(u: { pieces: Piece[] }): string
 /** a unit's plain text in its translation, as the compiled PDF shows it */
 export declare function plainTranslated(pieces: Piece[]): string
+/** a text piece as the compiled PDF shows it: a translation's TeX escapes undone, the source's bytes as UTF-8 */
+export declare const shown: (p: Piece) => string
+/** a piece a space never goes before: one that is a space itself (a tie, a control space, a kern), a group's end */
+export declare const SPACING: RegExp
 /** a unit's plain text (the translation's where the pieces are translated) and the offsets in it where a placeholder stood */
 export declare function unitText(pieces: Piece[]): { text: string; gaps?: number[] }
 /** an engine's plain text as TeX sets it: its invisible characters dropped, TeX's special characters escaped */

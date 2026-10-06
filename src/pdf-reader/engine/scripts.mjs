@@ -14,9 +14,12 @@
 // When no strategy sets the translation, the reader keeps what it shows. A script not listed here has no strategy yet:
 // strategiesFor throws, and the reader says it cannot typeset that language (Devin on #294). Every font named is in
 // TeX Live 2026. Measured with spikes/lang-gate.mjs.
+import { scriptOf } from './layer-rules.mjs'
 import { latinFontsFor } from './latex-front.mjs'
 
-export const scriptOf = lang => new Intl.Locale(lang).maximize().script
+// the script of a language, and the instant layer's rules beside this design, in a module of their own that imports
+// nothing: the reader loads them without this module's LaTeX parser
+export { LAYER_DIVERGES, LAYER_RULES, layerRulesFor, scriptOf } from './layer-rules.mjs'
 /**
  * Whether the author block's names and places are translated: where the target's script writes foreign names its own
  * way, the byline reads that way too, the original beside it for the names an engine renders wrong (the owner,
