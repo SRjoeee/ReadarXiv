@@ -241,7 +241,9 @@ const rowsOf = (u, p) => {
   for (let i = 0; i < u.lines.length; i += 8) if (u.lines[i] === p) out.push({ x0: u.lines[i + 1], x1: u.lines[i + 2], baseline: u.lines[i + 3], top: u.lines[i + 4], bottom: u.lines[i + 5], size: u.lines[i + 6] })
   return out
 }
-const BOLD = /Bold|Bd|Semibold|SemiBold|Demi|Black|Heavy|Medi|CMBX|CMB\d|BX\d/i, ITALIC = /Italic|Oblique|Ital|Slant|CMTI|CMSL|CMMI|TI\d|-It\b/i
+/** a PostScript name's weight and slant, its subset prefix (ABCDEF+) off: case matters (QIMBDZ+ is no bold) */
+const BOLD = /Bold|Semibold|SemiBold|Demi|Black|Heavy|Medi|^CMBX|^CMB\d|-Bd\b|^[A-Za-z]+BX\d/, ITALIC = /Italic|Oblique|Ital|Slant|^CMTI|^CMSL|^CMMI|-It\b|^[A-Za-z]+TI\d/
+const styleName = ps => ps.replace(/^[A-Z]{6}\+/, '')
 
 window.gate = {
   /** a fixture opened: the engine's entry, its layout, its translation and arXiv's PDF */
@@ -333,7 +335,7 @@ window.gate = {
       const font = [...fonts].sort((a, b) => b[1] - a[1])[0]?.[0], face = [...faces].sort((a, b) => b[1] - a[1])[0]?.[0]
       const F = face && S.E.FACES[face]
       if (font === undefined || !F) continue
-      const ps = index.font(font)
+      const ps = styleName(index.font(font))
       styleUnits++
       if (BOLD.test(ps) === Number(F.weight) >= 600 && ITALIC.test(ps) === (F.style !== 'normal')) styleMatch++
     }
