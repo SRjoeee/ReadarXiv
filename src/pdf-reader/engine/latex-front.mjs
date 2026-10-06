@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------- files and bytes
 // Node's file system for the spikes; in the page the branch is never taken, and the bundler is told not to follow it
 const nodeFs = typeof process !== 'undefined' && process.versions?.node ? await import(/* @vite-ignore */ 'node:fs') : null
-import { bindingsOf, commandParams, environmentParams, FRONT_ROLES, paramsOf, readArgs } from './arg-roles.mjs'
+import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, paperOf, paperParams, paramsOf, readArgs } from './arg-roles.mjs'
 /** a directory under Node, as a project's file system: { list(): relative paths, read(path): bytes or null } */
 export function folder(dir) {
   const { readdirSync, readFileSync } = nodeFs
@@ -38,7 +38,7 @@ const HEADINGS = new Set(['part', 'chapter', 'section', 'subsection', 'subsubsec
 /** a sectioning command's depth, as LaTeX's article and book classes count it: the reader's contents rank it (outline.ts);
  *  a paragraph heading is not in the contents */
 const DEPTH = { part: -1, chapter: 0, section: 1, subsection: 2, subsubsection: 3 }
-const OWN_UNIT_ARG = new Set(['caption', 'subcaption', 'subcaptionbox', 'captionof', 'tablecaption', 'footnote', 'thanks', 'abstract', 'keywords']) // the argument is a unit of its own
+const OWN_UNIT_ARG = new Set(['caption', 'subcaption', 'subcaptionbox', 'captionof', 'tablecaption', 'footnote', 'footnotetext', 'thanks', 'abstract', 'keywords']) // the argument is a unit of its own
 /** a figure's or a table's caption: caption's \\captionof{figure}{…} outside a float, a deluxetable's \\tablecaption{…}
  *  (their text found by the role table, 2608.24961, 2608.12606) */
 const CAPTIONS = new Set(['caption', 'subcaption', 'subcaptionbox', 'captionof', 'tablecaption'])
@@ -253,12 +253,10 @@ function citationArgs(s, i, name) {
   const rest = notes.length ? argsAfter(s, at) : null
   return rest?.args.some(a => a.kind === 'req') ? { args: [...notes, ...rest.args], end: rest.end } : argsAfter(s, i)
 }
-/** the paper loadProject reads: its LaTeXML bindings (arg-roles.mjs bindingsOf) and the commands its own files define,
+/** the paper loadProject reads (arg-roles.mjs paperOf): its LaTeXML bindings and the commands its own files define,
  *  whose arguments the table cannot know (melba.cls's \\def\\firstname{…}, which LaTeXML's moderncv gives one). Set for
- *  the time a project is read — loadProject is synchronous —, else null: the table's forms every binding agrees on */
+ *  the time a project is read — loadProject is synchronous —, else null: the kernel's forms and those written out */
 let paper = null
-const OWN_COMMANDS = /\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|DeclareMathOperator\*?)\s*\{?\s*\\([A-Za-z@]+)/g
-const paperOf = texts => ({ bindings: bindingsOf(texts), own: new Set(texts.flatMap(t => [...uncommented(t).matchAll(OWN_COMMANDS)].map(m => m[1]))) })
 /**
  * A command's arguments: a citation's every adjacent one, its notes in angle brackets or parentheses with them
  * (citationArgs); one whose parameters the role table knows (arg-roles.mjs), exactly those as TeX takes them — a group
@@ -270,7 +268,7 @@ const paperOf = texts => ({ bindings: bindingsOf(texts), own: new Set(texts.flat
  */
 function commandArgs(s, i, name, to = s.length) {
   if (CITATION.test(name)) return citationArgs(s, i, name)
-  const params = paper?.own.has(name) ? null : commandParams(name, paper?.bindings ?? null)
+  const params = paperParams(name, paper)
   if (params) {
     if (params.length === 1 && params[0].shape === '=') return { args: [], end: i, known: true }
     const r = readArgs(s, i, params, to)
@@ -357,8 +355,9 @@ function paperMacros(files) {
   const out = new Map()
   const re = /\\(?:((?:re)?newcommand|providecommand|DeclareRobustCommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[(\d)\])?|(?:[egx]?def)\s*\\([A-Za-z@]+)\s*((?:#\d\s*)*)(?=\{))/g
   for (const { file, text: t } of files) for (const m of t.matchAll(re)) {
-    if (inComment(t, m.index)) continue
     const name = m[2] ?? m[3] ?? m[5], params = m[1] ? Number(m[4] ?? 0) : (m[6].match(/#\d/g) ?? []).length
+    // (one inside its own call's argument is local to that call: CVPR's \\twocolumn[{\\renewcommand\\twocolumn…}])
+    if (inComment(t, m.index) || inOwnCall(t, m.index, name)) continue
     // \\providecommand defines nothing a definition before it made (2608.16190's \\def\\cpanauthor{…} and its fallback)
     if (m[1] === 'providecommand' && out.has(name)) continue
     let k = skipSpaces(t, m.index + m[0].length), opt = false
@@ -391,7 +390,7 @@ function readsOn(body) {
   if (last < 0) return false
   const { name, end } = commandAt(t, last)
   if (NO_ARGS.has(name)) return false
-  const params = commandParams(name)
+  const params = paperParams(name, paper)
   if (!params) return !/[^\s{}]/.test(t.slice(argsAfter(t, end).end))
   const r = readArgs(t, end, params)
   return !r.complete
@@ -642,18 +641,22 @@ function frontBlock(s, from, to, b, ctx) {
  *  table ends the paragraph before the command and is walked as an environment's body is, the command's own source left
  *  as it stands (\\IfFileExists{…}{\\begin{figure}…}{}, whose caption stayed in English: 2608.28697) */
 function walkArgs(s, i, end, walked, b, ctx) {
-  if (walked.some(a => holdsBlock(s.slice(a.start + 1, a.end - 1)))) { b.flush(); for (const a of walked) { walk(s, a.start + 1, a.end - 1, b, ctx); b.flush() } return }
+  // content given as an optional argument is set apart from the paragraph: \\twocolumn[…], ICML's title block and a
+  // CVPR teaser's figure across the page's top
+  if (walked.some(a => a.shape === '[' || holdsBlock(s.slice(a.start + 1, a.end - 1)))) { b.flush(); for (const a of walked) { walk(s, a.start + 1, a.end - 1, b, ctx); b.flush() } return }
   let from = i
   walked.forEach((a, k) => {
     const id = b.open(s.slice(from, a.start + 1), from)
     walk(s, a.start + 1, a.end - 1, b, ctx)
     const last = k === walked.length - 1
-    b.close(id, last ? s.slice(a.end - 1, end) : '}', last ? end : a.end)
+    b.close(id, last ? s.slice(a.end - 1, end) : s[a.end - 1], last ? end : a.end)
     from = a.end
   })
 }
-/** the running heads' commands: their text set on every page */
-const RUNNING_HEADS = new Set(['markboth', 'markright'])
+/** the running heads' commands: their text, short and set on every page, is kept as it is — a mark in it would be set
+ *  on every page (llncs' \\titlerunning, a token register, made a marked unit with its leading, and 2608.10091's zh final
+ *  two pages longer) */
+const RUNNING_HEADS = new Set(['markboth', 'markright', 'titlerunning', 'authorrunning', 'toctitle', 'tocauthor'])
 /** the parameters of a theorem-like environment: its title, optional */
 const THEOREM_PARAMS = paramsOf('[t')
 /**
@@ -679,17 +682,18 @@ function envArgs(s, at, to, env, ctx) {
  * arguments as they are. Where the table knows its parameters the hook's is found by its index, else it is its n-th
  * required argument or its last. Its end, or -1 where it has no such argument
  */
-function frontCommand(s, end, name, to, b, ctx) {
+function frontCommand(s, end, name, to, b, ctx, { front = false } = {}) {
   const [role, n] = FRONT_ROLES[name]
   const call = commandArgs(s, end, name, to)
   const reqs = call.args.filter(a => a.kind === 'req' && s[a.start] === '{')
   const arg = call.known ? call.args.find(a => a.param === n - 1 && s[a.start] === '{') : reqs[n - 1] ?? reqs.at(-1)
   if (!arg) return -1
   b.flush()
-  const from = arg.start + 1, upTo = arg.end - 1, saved = b.kind
+  const from = arg.start + 1, upTo = arg.end - 1, saved = b.kind, before = b.units.length
   if (role === 'author') frontBlock(s, from, upTo, b, ctx)
-  else if (role === 'note' || role === 'prose') { const before = b.units.length; b.kind = role === 'note' ? 'footnote' : 'para'; walk(s, from, upTo, b, ctx); b.flush(); b.kind = saved; for (const u of b.units.slice(before)) u.front = true }
-  else { b.kind = role === 'abstract' ? 'abstract' : 'heading'; walk(s, from, upTo, b, ctx); b.flush(); b.kind = saved }
+  else if (role === 'note' || role === 'prose') { b.kind = role === 'note' ? 'footnote' : 'para'; walk(s, from, upTo, b, ctx); b.flush(); b.kind = saved; for (const u of b.units.slice(before)) u.front = true }
+  else { b.kind = role === 'abstract' ? 'abstract' : 'heading'; b.title = role === 'title'; walk(s, from, upTo, b, ctx); b.flush(); b.title = false; b.kind = saved }
+  if (front) for (const u of b.units.slice(before)) u.front = true
   return call.end
 }
 function walk(s, from, to, b, ctx) {
@@ -806,7 +810,7 @@ function walk(s, from, to, b, ctx) {
       const req = read?.known ? args.findLast(a => a.kind === 'req' && a.role === 't') : args.find(a => a.kind === 'req')
       if (!req) { endText(); b.ph(s.slice(i, end), i, end); i = end; continue }
       const saved = b.kind
-      if (name === 'footnote' || name === 'thanks') {
+      if (name === 'footnote' || name === 'footnotetext' || name === 'thanks') {
         // the footnote's text is a unit of its own, rendered inside its paragraph's unit so the two ranges never overlap
         endText()
         const parent = b.cur, before = b.units.length
@@ -874,6 +878,10 @@ function walk(s, from, to, b, ctx) {
     // (an accent the paper defines anew as a macro of no argument stays the accent's placeholder with its letter, below)
     const macro = ctx.macros.get(name), own = macro && !(macro.params === 0 && ACCENTS.has(name))
     const call = own && macroArgs(s, end, macro, to)
+    // a front matter command the paper's own class defines, its text handed elsewhere too (icml2024.sty's \\icmltitle:
+    // the running head and the PDF's title): a unit of what it is, with no mark, which would be set wherever the class
+    // sets it (2608.07584 had no title)
+    if (call && !macro.prose && FRONT_ROLES[name]?.[1]) { const e = frontCommand(s, end, name, to, b, ctx, { front: true }); if (e > 0) { endText(); i = e; continue } }
     if (call && macro.prose) {
       const arg = call.reqs[macro.prose - 1 - (macro.opt ? 1 : 0)]
       if (arg?.group && macro.stores) {
@@ -897,6 +905,9 @@ function walk(s, from, to, b, ctx) {
       endText(); b.ph(s.slice(i, e), i, e); i = e; continue
     }
     if (name === 'verb') { const d = s[end]; const e = s.indexOf(d, end + 1); const stop = e < 0 ? end : e + 1; endText(); b.ph(s.slice(i, stop), i, stop); i = stop; continue }
+    // listings' and minted's inline code, read as \verb is: its keys, minted's language, then a brace group or a
+    // delimiter (\lstinline|x = y|, \lstinline{x = y}, \mintinline{py}|x|) — code, never the translator's
+    if (name === 'lstinline' || name === 'mintinline') { const stop = inlineCodeEnd(s, end, name); if (stop > 0 && stop <= to) { endText(); b.ph(s.slice(i, stop), i, stop); i = stop; continue } }
     if (name === 'par') { endText(); b.flush(); i = end; continue }
     // an accent and its letter: the letter itself in its word where it is one every strategy sets (accentLetter), else
     // one opaque piece, \'o, \'{o}, \"\i, \v c. Left as text, the letter would be translated away and the accent put on
@@ -914,16 +925,9 @@ function walk(s, from, to, b, ctx) {
     // the front matter's commands the role table knows by their hook (FRONT_ROLES: AAAI's \affiliations, amsart's
     // \dedicatory, a \date): their text a unit of what it is
     if (FRONT_ROLES[name]?.[1]) { const e = frontCommand(s, end, name, to, b, ctx); if (e > 0) { endText(); i = e; continue } }
-    // a running head's text, set on every page: a front unit each, with no mark (2608.04322's \markboth{…}%\n{…}, whose
-    // second argument was walked as text only while a comment kept it from the command)
-    if (RUNNING_HEADS.has(name)) {
-      const call = commandArgs(s, end, name, to)
-      if (call.known) {
-        endText(); b.flush()
-        for (const a of call.args) if (a.role === 't' && s[a.start] === '{') { const before = b.units.length, saved = b.kind; b.kind = 'para'; walk(s, a.start + 1, a.end - 1, b, ctx); b.flush(); b.kind = saved; for (const u of b.units.slice(before)) u.front = true }
-        i = call.end; continue
-      }
-    }
+    // a running head, kept as it is with its arguments (2608.04322's \markboth{…}%\n{…}, whose second argument was walked
+    // as text only while a comment kept it from the command)
+    if (RUNNING_HEADS.has(name)) { const call = commandArgs(s, end, name, to); endText(); b.ph(s.slice(i, call.end), i, call.end); i = call.end; continue }
     // any other command: its arguments as the role table reads them (commandArgs) — its text and a box's content among
     // them walked (walkArgs), the rest kept with it —, or with every adjacent argument where the table does not know it
     // (some prose stays untranslated, nothing breaks). booktabs' \cmidrule(lr){2-5} and \cmidrule[w](lr){2-5}: a trim
@@ -931,7 +935,7 @@ function walk(s, from, to, b, ctx) {
     let from = end
     if (name === 'cmidrule') { const k0 = skipSpaces(s, argsAfter(s, end, 1).end); if (s[k0] === '(') { const c0 = s.indexOf(')', k0); if (c0 > 0 && c0 < to) from = c0 + 1 } }
     const args = !/^[A-Za-z@]+$/.test(name) || NO_ARGS.has(name) ? null : commandArgs(s, from, name, to)
-    const walked = args?.known ? args.args.filter(a => (a.role === 't' || a.role === 'c') && s[a.start] === '{') : []
+    const walked = args?.known ? args.args.filter(a => (a.role === 't' || a.role === 'c') && (s[a.start] === '{' || a.shape === '[')) : []
     if (walked.length) { endText(); walkArgs(s, i, args.end, walked, b, ctx); i = args.end; continue }
     let { end: e } = !/^[A-Za-z@]+$/.test(name) ? { end } : NO_ARGS.has(name) ? optsAfter(s, from, OPT_ONLY.has(name)) : args
     // an empty group after a command the table knows ends its name, and goes with it (\\LaTeX{} is), as before the table
@@ -943,6 +947,18 @@ function walk(s, from, to, b, ctx) {
     i = e
   }
   endText()
+}
+
+/** where an inline listing that starts at s[at], after its command's name, ends: past its optional keys, minted's
+ *  language, and its code in a brace group or between two of a delimiter; -1 where it does not */
+function inlineCodeEnd(s, at, name) {
+  let k = at
+  if (s[k] === '[') { const e = matchGroup(s, k, '[', ']'); if (e < 0) return -1; k = e }
+  if (name === 'mintinline') { k = skipSpaces(s, k); if (s[k] !== '{') return -1; const e = matchGroup(s, k); if (e < 0) return -1; k = e }
+  if (s[k] === '{') return matchGroup(s, k)
+  if (!s[k] || /\s/.test(s[k])) return -1
+  const e = s.indexOf(s[k], k + 1)
+  return e < 0 || s.slice(k, e).includes('\n') ? -1 : e + 1
 }
 
 // ---------------------------------------------------------------- project

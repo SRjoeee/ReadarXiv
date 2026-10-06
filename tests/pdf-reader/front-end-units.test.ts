@@ -126,12 +126,26 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     // and an empty line after the comment is still \par: the group after it is no argument, its words the text's
     expect(texts(project(doc('Words \\url{a}%\n\n{More words here.}')))).toEqual(['Words More words here.'])
   })
-  it('a running head\'s text, set on every page, is a front unit with no mark (2608.04322\'s \\markboth{…}%\\n{…})', () => {
+  it('a running head, set on every page, is kept as it is with its arguments (2608.04322\'s \\markboth{…}%\\n{…})', () => {
     const p = project(doc('\\markboth{Journal Name, Vol. 1}%\n{Author et al.: Short Paper Title}\n\nBody words.'))
-    expect(units(p).map(u => [textOf(u), !!u.front])).toEqual([['Journal Name, Vol. 1', true], ['Author et al.: Short Paper Title', true], ['Body words.', false]])
+    expect(units(p).map(u => [textOf(u), !!u.front])).toEqual([['Body words.', false]])
+  })
+  it('a token register takes its group as its value, never text: llncs\' \\titlerunning, by LaTeXML\'s Tokens() or the class\'s \\newtoks (2608.10091: marked, two pages longer)', () => {
+    const tex = '\\documentclass{llncs}\n\\begin{document}\n\\title{Signpost Watermarking}\n\\titlerunning{Signpost}\n\\authorrunning{A. Author}\n\\maketitle\nBody words.\n\\end{document}\n'
+    expect(texts(projectOf({ 'main.tex': tex }))).toEqual(['Signpost Watermarking', 'Body words.'])
+    expect(texts(projectOf({ 'main.tex': tex, 'llncs.cls': '\\newtoks\\titlerunning\n\\newtoks\\authorrunning\n' }))).toEqual(['Signpost Watermarking', 'Body words.'])
+    // any token register, as TeX assigns it: an `=` before its group
+    expect(texts(project(doc('\\everypar={\\hangindent 2em}Words of the paragraph.')))).toEqual(['Words of the paragraph.'])
   })
   it('a macro argument a math environment holds is math (2608.23517\'s \\al{…} = \\begin{align}#1\\end{align})', () => {
     expect(texts(project(doc('Before.\n\\al{S &= \\int d^3 \\sigma \\, \\mathcal L_B}\nAfter.', '\\newcommand{\\al}[1]{\\begin{align}{#1}\\end{align}}')))).toEqual(['Before. After.'])
+  })
+  it('what LaTeXML reads in code is no text: \\cmidrule(lr){2-5}\'s columns (2608.10091: "2～5" stopped TeX 19 times), inline code, an acronym\'s key', () => {
+    const p = project(doc('\\begin{table}\\begin{tabular}{lcc}\\toprule\n & \\multicolumn{2}{c}{Variant} \\\\\n\\cmidrule(lr){2-3} \\cmidrule[0.5pt]{1-1}\nModel & Small & Large \\\\\n\\bottomrule\\end{tabular}\\end{table}', '\\usepackage{booktabs}'))
+    expect(texts(p)).toEqual(['Variant', 'Model', 'Small', 'Large'])
+    expect(units(p).flatMap(u => u.pieces.filter(x => x.t === 'ph').map(x => x.src))).toContain('\\cmidrule(lr){2-3}')
+    expect(texts(project(doc('Set \\lstinline{x = y} and \\lstinline[language=C]|a = b| or \\mintinline{py}{f(x)} here.', '\\usepackage{listings}')))).toEqual(['Set and or here.'])
+    expect(texts(project(doc('A \\ac{cnn} and \\acp*{rnn} work.', '\\usepackage{acronym}')))).toEqual(['A and work.'])
   })
   it('a command the table does not know keeps every adjacent group, as before: some prose stays, nothing breaks', () => {
     expect(texts(project(doc('Before \\unknowncmd{some words here}{and more} after.')))).toEqual(['Before after.'])
@@ -178,6 +192,28 @@ describe('a line of names a translation may widen goes into \\axtwide, but not o
     const tex = patched(p)
     expect(tex).toMatch(/\\author\[1\]\{\\axtwide\{<T0>\}\}/)
     expect(tex).toMatch(/\\author\[4\]\{\\authorcr(?:\{\}| )<T1>\}/)
+  })
+})
+
+describe('content set apart from the running text, in an argument LaTeXML leaves untyped', () => {
+  it('\\twocolumn[…]: ICML\'s title block across the page\'s top, its title the paper\'s (2608.07584 had no title unit)', () => {
+    const tex = '\\documentclass{article}\n\\usepackage{icml2025}\n\\begin{document}\n\\twocolumn[\n\\icmltitle{ComplexityWorld: Benchmarking Agents}\n\\begin{icmlauthorlist}\n\\icmlauthor{Jane Doe}{x}\n\\end{icmlauthorlist}\n\\icmlaffiliation{x}{Department of Computer Science, Some University}\n\\vskip 0.3in\n]\nBody words.\n\\end{document}\n'
+    const p = projectOf({ 'main.tex': tex })
+    expect(units(p).map(u => [u.kind, textOf(u), !!u.title])).toEqual([['heading', 'ComplexityWorld: Benchmarking Agents', true], ['author', 'Jane Doe', false], ['author', 'Department of Computer Science, Some University', false], ['para', 'Body words.', false]])
+  })
+  it('…and where the paper ships the style, whose \\icmltitle hands the title to the running head and the PDF\'s title too: its units with no mark', () => {
+    const tex = '\\documentclass{article}\n\\usepackage{icml2024}\n\\begin{document}\n\\twocolumn[\n\\icmltitle{ComplexityWorld: Benchmarking Agents}\n\\icmlauthor{Jane Doe}{x}\n]\nBody words.\n\\end{document}\n'
+    const sty = '\\long\\def\\icmltitle#1{\\gdef\\@icmltitlerunning{#1}\\hypersetup{pdftitle={#1}}\\centerline{\\Large\\bf #1}}\n\\newcommand{\\icmlauthor}[2]{\\hypersetup{pdfauthor={#1}}\\mbox{#1}}\n'
+    const p = projectOf({ 'main.tex': tex, 'icml2024.sty': sty })
+    expect(units(p).map(u => [u.kind, textOf(u), !!u.title, !!u.front])).toEqual([['heading', 'ComplexityWorld: Benchmarking Agents', true, true], ['author', 'Jane Doe', false, true], ['para', 'Body words.', false, false]])
+  })
+  it('a CVPR teaser: \\twocolumn[{\\renewcommand\\twocolumn[1][]{#1}…\\captionof{figure}{…}}], a definition local to the call\'s own argument', () => {
+    const p = project(doc('\\twocolumn[{\\renewcommand\\twocolumn[1][]{#1}\\maketitle\n\\begin{center}\\includegraphics[width=\\linewidth]{teaser.png}\n\\captionof{figure}{Our method turns sketches into scenes.}\n\\end{center}}]\nBody words.'))
+    expect(units(p).map(u => [u.kind, textOf(u)])).toEqual([['caption', 'Our method turns sketches into scenes.'], ['para', 'Body words.']])
+  })
+  it('\\footnotetext{…}, a note apart from its mark: a footnote unit as \\footnote\'s text is (170 words of 5 papers)', () => {
+    const p = project(doc('Text with a mark\\footnotemark{} here.\n\n\\footnotetext{The note\'s own words.}\n\\footnotetext[3]{A numbered note.}'))
+    expect(units(p).map(u => [u.kind, textOf(u)])).toEqual([['para', 'Text with a mark here.'], ['footnote', 'The note\'s own words.'], ['footnote', 'A numbered note.']])
   })
 })
 
