@@ -203,17 +203,17 @@ window.gate = {
       texIn = { ...tex, index: F.indexLayout(F.parseLayout(await bytes(`${base}layout.json`))), pieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])) }
     }
     const opts = { doc, geometry, units: unitsFile.units, target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(texIn ? { tex: texIn } : {}), labels: { names, captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json` }
-    // (each run of v0 its own copy of the geometry and the units: v0 grows its units' lines in place, so that a second run
-    // over the same objects would start from the first's grown lines)
-    const fresh = () => ({ ...opts, geometry: structuredClone(geometry), units: structuredClone(unitsFile.units) })
+    // (both runs over the same objects: v0 leaves its inputs as they were, which the plan run is checked for)
     const info = { ready: true, pages: doc.numPages, units: unitsFile.units.length, located: geometry.left.units.length, family: null }
     if (removal) {
       // the plan: v0 over every page asked, its copy not kept, each page let go once done
       const t0 = performance.now()
-      const planRun = await V.openProto({ ...fresh(), copy: false, removal: { OPS: pdfjs.OPS, mode: 'plan' } })
+      const before = JSON.stringify([geometry, unitsFile.units])
+      const planRun = await V.openProto({ ...opts, copy: false, removal: { OPS: pdfjs.OPS, mode: 'plan' } })
       const n = Math.min(doc.numPages, pages)
       for (let p = 1; p <= n; p++) { await planRun.until(p); for (let q = 1; q <= p; q++) if (!planRun.rows[q - 1]?.released) planRun.release(q) }
-      S = { plan: planRun.removalPlan(), planStats: planRun.removalStats(), planMs: performance.now() - t0, pending: { opts: fresh(), data, name, ref, geometry, layout, fixtureUnits, unitsFile, names, place, dump, removal, V, doc } }
+      if (JSON.stringify([geometry, unitsFile.units]) !== before) return { ready: false, why: "v0 changed its inputs (the geometry or the units) as it drew: a second run would not draw as the first" }
+      S = { plan: planRun.removalPlan(), planStats: planRun.removalStats(), planMs: performance.now() - t0, pending: { opts, data, name, ref, geometry, layout, fixtureUnits, unitsFile, names, place, dump, removal, V, doc } }
       return { ...info, even: planRun.P.even ?? null, plan: true }
     }
     const run = await V.openProto(opts)

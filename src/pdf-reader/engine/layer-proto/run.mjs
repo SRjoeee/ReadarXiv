@@ -168,8 +168,12 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   const chars2 = [], inks = [], views = [], pageBottom = []
   const fontTally = new Map()
 
+  // the geometry's units with v0's own copy of their line rectangles: v0 grows and moves a unit's lines as it lays it,
+  // and every other unit reads them as grown (its others), so the copy is shared by all of v0's reading; the geometry
+  // given stays as it was (a second run over it draws as the first: the text removal's plan run and its drawing)
+  const GU = geometry.left.units.map(([id, stream, rects]) => [id, stream, rects.map(r => r.slice())])
   const placed = [], skipped = []
-  const inGeometry = new Set(geometry.left.units.map(u => u[0]))
+  const inGeometry = new Set(GU.map(u => u[0]))
   all.forEach((u, id) => {
     if ((u.state === 'whole' || u.state === 'partial') && u.pieces && !inGeometry.has(id)) skipped.push({ id, kind: u.kind, why: 'unanchored', chars: trCharsOf(u) })
   })
@@ -192,7 +196,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   }
   /** a unit the file locates whole, placed by its lines in the file (texRects: the rectangles its exact baselines are by) */
   const placeByFile = (id, stream, u, w) => { const lines = texRects(w.lu, N); return placeOf(id, stream, lines.rects, u, { ...w, lines }, w.lu.lines.length / 8) }
-  for (const [id, stream, rects] of geometry.left.units) {
+  for (const [id, stream, rects] of GU) {
     const u = all[id]
     if (!u?.pieces || (u.state !== 'whole' && u.state !== 'partial')) continue
     if (u.kind === 'author') { skipped.push({ id, kind: u.kind, why: 'author', chars: trCharsOf(u), pages: [...new Set(rects.map(r => r[0]))] }); continue }
@@ -222,7 +226,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   // after the unit before them, table cells among them: a cell's lines are TeX's, and the text removal takes its glyphs
   // alone, never its table's rules)
   if (tex?.texOnly && tex.use === 'lines') {
-    const streamOf = new Map(geometry.left.units.map(([id, stream]) => [id, stream]))
+    const streamOf = new Map(GU.map(([id, stream]) => [id, stream]))
     for (const id of tex.index.file.units.map(r => r[0])) {
       const u = all[id]
       if (inGeometry.has(id) || !u?.pieces || (u.state !== 'whole' && u.state !== 'partial') || u.kind === 'author') continue
@@ -256,7 +260,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   placed.sort((a, b) => a.stream - b.stream)
   for (const p of placed) if (p.tex) fileDrawn.add(p.id)
   // the lowest unit line of each page: no unit borrows below it (the page's text area)
-  for (const [, , rects] of geometry.left.units) for (const r of rects) pageBottom[r[0]] = Math.min(pageBottom[r[0]] ?? Infinity, r[2] + 0.24 * (r[4] - r[2]))
+  for (const [, , rects] of GU) for (const r of rects) pageBottom[r[0]] = Math.min(pageBottom[r[0]] ?? Infinity, r[2] + 0.24 * (r[4] - r[2]))
   const expected = Array.from({ length: N + 1 }, () => 0)
   for (const p of placed) for (const pg of p.pages) expected[pg]++
   const stats = []
@@ -427,7 +431,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   // the columns of each page, as its paragraphs' lines span them: a line centred in its column (a caption under its
   // figure, a title over the text) is set centred, whatever the page's own middle
   const cols = []
-  for (const [id, , rects] of geometry.left.units) if (geometry.kinds[id] === 'para') for (const r of rects) (cols[r[0]] ??= []).push([r[1], r[3]])
+  for (const [id, , rects] of GU) if (geometry.kinds[id] === 'para') for (const r of rects) (cols[r[0]] ??= []).push([r[1], r[3]])
   const centredInColumn = b => {
     const rs = b.rects, list = cols[b.page] ?? []
     const mid = (b.x0 + b.x1) / 2
@@ -440,7 +444,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   // every unit's rectangles by page, for growing a unit's lines over what no other unit holds (with the file's lines of
   // the units the hybrid draws that v0's geometry does not hold)
   const rectsByPage = new Map()
-  for (const [id, , rects] of geometry.left.units) for (const r of rects) { if (!rectsByPage.has(r[0])) rectsByPage.set(r[0], []); rectsByPage.get(r[0]).push([id, r]) }
+  for (const [id, , rects] of GU) for (const r of rects) { if (!rectsByPage.has(r[0])) rectsByPage.set(r[0], []); rectsByPage.get(r[0]).push([id, r]) }
   for (const p of placed) if (!inGeometry.has(p.id)) for (const r of p.rects) { if (!rectsByPage.has(r[0])) rectsByPage.set(r[0], []); rectsByPage.get(r[0]).push([p.id, r]) }
   const textArea = pg => { const rs = (rectsByPage.get(pg) ?? []).map(([, r]) => r); return [Math.min(...rs.map(r => r[1])), Math.max(...rs.map(r => r[3]))] }
   const columnOf = b => {
@@ -737,7 +741,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     }
     return out
   }
-  const cellRects = pg => geometry.left.units.filter(([id]) => geometry.kinds[id] === 'cell').flatMap(([, , rs]) => rs.filter(r => r[0] === pg))
+  const cellRects = pg => GU.filter(([id]) => geometry.kinds[id] === 'cell').flatMap(([, , rs]) => rs.filter(r => r[0] === pg))
   const toPdf = (pg, x, y) => views[pg - 1].convertToPdfPoint(x / dpr, y / dpr)
   // a page as PDF.js draws it at k device pixels a PDF unit: drawCopy's source of another page's crop
   const renderAt = async (pg, k, plane = 'O') => {
