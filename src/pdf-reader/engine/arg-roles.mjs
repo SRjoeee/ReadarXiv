@@ -27,7 +27,8 @@ const MAY_BE_TEXT = new Set(['t', 'c', 'a', 'v', 'm'])
  * argument it leaves untyped that is a name or a dimension (\setcounter{}{Number}'s counter, \vspace{}'s length), one
  * that is the text a box or a branch sets, a form it reads in code (\makebox, \resizebox, \captionof, \multicolumn),
  * and a few it has no binding for. Checked by hand against the packages' documentation and source (latex.ltx, graphicx,
- * xcolor, hyperref, booktabs, caption, multirow, makecell, adjustbox, todonotes, url)
+ * xcolor, hyperref, booktabs, caption, multirow, makecell, adjustbox, enumitem, url). Not tabu's environment, whose
+ * `to <width>` before its columns no parameter here reads
  */
 const CURATED = {
   // boxes and colours: the last argument the text they set
@@ -62,8 +63,8 @@ const CURATED = {
 /** environments as the front end reads them, where LaTeXML's form is missing or says less: a table's position and
  *  columns (its cells are walked), a box's width, a list's options (enumitem's keys), a theorem's title */
 const CURATED_ENVS = {
-  tabular: '[n{n', 'tabular*': '{d[n{n', tabularx: '{d[n{n', tabulary: '{d[n{n', tabu: '[d{n', longtable: '[n{n', supertabular: '{n',
-  xtabular: '[n{n', array: '[n{n', minipage: '[n[d[n{d', multicols: '{d[t[d', 'multicols*': '{d[t[d', wrapfigure: '[d{n[d{d',
+  tabular: '[n{n', 'tabular*': '{d[n{n', tabularx: '{d[n{n', tabulary: '{d[n{n', longtable: '[n{n', supertabular: '{n',
+  xtabular: '[n{n', array: '[n{n', minipage: '[n[d[n{d', multicols: '{d[c[d', 'multicols*': '{d[c[d', wrapfigure: '[d{n[d{d',
   wraptable: '[d{n[d{d', subfigure: '[n{d', subtable: '[n{d', adjustbox: '{k', tcolorbox: '[k', mdframed: '[k', enumerate: '[k',
   itemize: '[k', description: '[k', spacing: '{d', figure: '[n', 'figure*': '[n', table: '[n', 'table*': '[n', proof: '[t',
   thebibliography: '{n',
