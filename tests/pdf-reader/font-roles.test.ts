@@ -115,7 +115,7 @@ describe('the roles', () => {
       ['cm', CM_TEXT, 'cmun-serif'], ['other', 'lm-roman', 'cmun-serif'], ['times', 'nimbus-roman', 'nimbus-roman'],
       ['libertine', 'libertine', 'libertine'], ['palatino', 'domitian', 'domitian'], ['charter', 'xcharter', 'xcharter'],
       ['garamond', 'ebgaramond', 'ebgaramond'], ['utopia', 'erewhon', 'erewhon'], ['helvetica', 'nimbus-sans', 'nimbus-sans'],
-      ['cmss', 'lm-sans', 'cmun-sans'], ['courier', 'cursor', 'nimbus-mono'], ['cmtt', 'lm-mono', 'cmun-mono'],
+      ['cmss', 'lm-sans', 'cmun-sans'], ['courier', 'freemono', 'freemono'], ['cmtt', 'lm-mono', 'cmun-mono'],
       ['beramono', 'dejavu-mono', 'dejavu-mono'], ['inconsolata', 'inconsolata', 'pt-mono'], ['biolinum', 'biolinum', 'biolinum'],
     ]
     // a group without a style's file: its italic set upright, its bold set regular, as TeX's substitution does; and a
@@ -203,7 +203,7 @@ describe('the faces', () => {
     const want = [
       ...['shs-sc', 'shs-tc', 'shs-k', 'haranoaji'].flatMap(g => cjk.map(w => `${g}-${w}`)),
       'fandolkai', 'bkai00mp',
-      ...['lm-roman', 'lm-sans', 'nimbus-roman', 'nimbus-sans', 'nimbus-mono', 'cursor', 'libertine', 'biolinum', 'xcharter', 'ebgaramond', 'erewhon', 'cmun-serif', 'cmun-sans', 'cmun-mono', 'domitian', 'dejavu-mono'].flatMap(g => four.map(s => `${g}-${s}`)),
+      ...['lm-roman', 'lm-sans', 'nimbus-roman', 'nimbus-sans', 'freemono', 'libertine', 'biolinum', 'xcharter', 'ebgaramond', 'erewhon', 'cmun-serif', 'cmun-sans', 'cmun-mono', 'domitian', 'dejavu-mono'].flatMap(g => four.map(s => `${g}-${s}`)),
       'lm-roman-caps', 'lm-roman-caps-italic', 'lm-mono-regular', 'lm-mono-italic', 'lm-math',
       'inconsolata-regular', 'inconsolata-bold', 'pt-mono-regular', 'pt-mono-bold',
     ]
@@ -263,10 +263,10 @@ describe('the faces', () => {
     }
     // nothing is left for review: URW's own release carries its embedding exception (the maintainer, 2026-10-06)
     expect(Object.values(FACES).filter(f => f.web === 'review')).toEqual([])
-    expect(new Set(web(/^(lm-|cursor-)/))).toEqual(new Set(['gfl']))
+    expect(new Set(web(/^lm-/))).toEqual(new Set(['gfl']))
     expect(new Set(web(/^(bkai00mp|xcharter-|dejavu-mono-)/))).toEqual(new Set(['notice']))
     expect(Object.values(FACES).filter(f => f.web === 'gpl').map(f => f.id).sort())
-      .toEqual(['fandolkai', ...['nimbus-roman', 'nimbus-sans', 'nimbus-mono'].flatMap(g => ['regular', 'bold', 'italic', 'bolditalic'].map(s => `${g}-${s}`))].sort())
+      .toEqual(['fandolkai', ...['nimbus-roman', 'nimbus-sans', 'freemono'].flatMap(g => ['regular', 'bold', 'italic', 'bolditalic'].map(s => `${g}-${s}`))].sort())
     expect(new Set(web(/^(shs-|haranoaji-|cmun-|domitian-|erewhon-|ebgaramond-|libertine-|biolinum-)/))).toEqual(new Set(['ofl']))
   })
 
@@ -378,10 +378,10 @@ describe('the fixes of the review', () => {
     const BY_GROUP: Record<string, string> = {
       'shs-sc': 'OFL-1.1', 'shs-tc': 'OFL-1.1', 'shs-k': 'OFL-1.1', haranoaji: 'OFL-1.1',
       fandolkai: 'GPL-3.0-or-later WITH Font-exception-2.0', bkai00mp: 'Arphic-1999',
-      'lm-roman': GUST, 'lm-roman-caps': GUST, 'lm-sans': GUST, 'lm-mono': GUST, 'lm-math': GUST, cursor: GUST,
+      'lm-roman': GUST, 'lm-roman-caps': GUST, 'lm-sans': GUST, 'lm-mono': GUST, 'lm-math': GUST, freemono: 'GPL-3.0-or-later WITH Font-exception-2.0',
       libertine: 'OFL-1.1', biolinum: 'OFL-1.1', xcharter: 'Bitstream-Charter', ebgaramond: 'OFL-1.1', erewhon: 'OFL-1.1',
       'cmun-serif': 'OFL-1.1', 'cmun-sans': 'OFL-1.1', 'cmun-mono': 'OFL-1.1', domitian: 'OFL-1.1',
-      'nimbus-roman': URW, 'nimbus-sans': URW, 'nimbus-mono': URW,
+      'nimbus-roman': URW, 'nimbus-sans': URW,
       'dejavu-mono': 'Bitstream-Vera', 'pt-mono': 'ParaType-Free-Font-1.3',
     }
     const BY_FACE: Record<string, string> = { 'inconsolata-regular': 'OFL-1.1', 'inconsolata-bold': 'Apache-2.0' }
@@ -404,11 +404,11 @@ describe('the fixes of the review', () => {
 
   it('the same glyphs and family as the English original, from the cleanest source of them (the maintainer\'s rule)', () => {
     // Times, Helvetica and Palatino papers: one family for every target, URW's own glyphs (urw-base35 20200910; Domitian
-    // for Palatino, P052's glyphs under the OFL); Courier: TeX Gyre Cursor at the original's weight, Nimbus Mono PS for
+    // for Palatino, P052's glyphs under the OFL); Courier: GNU FreeMono, Nimbus Mono L's glyphs at the original's weight, with
     // its Cyrillic
     const want: [Design, FontClass['cls'], string, string][] = [
       ['times', 'serif', 'nimbus-roman', 'nimbus-roman'], ['helvetica', 'sans', 'nimbus-sans', 'nimbus-sans'],
-      ['palatino', 'serif', 'domitian', 'domitian'], ['courier', 'mono', 'cursor', 'nimbus-mono'],
+      ['palatino', 'serif', 'domitian', 'domitian'], ['courier', 'mono', 'freemono', 'freemono'],
     ]
     for (const [design, cls, latn, cyrl] of want) {
       for (const [bold, italic, style] of STYLES) {
@@ -417,7 +417,7 @@ describe('the fixes of the review', () => {
       }
     }
     expect(FACES['nimbus-sans-regular']).toMatchObject({ file: 'NimbusSans-Regular.otf', source: 'hosted', licence: 'AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817', web: 'gpl' })
-    expect(FACES['nimbus-mono-bolditalic']).toMatchObject({ file: 'NimbusMonoPS-BoldItalic.otf', source: 'hosted' })
+    expect(FACES['freemono-bolditalic']).toMatchObject({ file: 'FreeMonoBoldOblique.otf', source: 'texlive', licence: 'GPL-3.0-or-later WITH Font-exception-2.0' })
     // no face of TeX Live's nimbus15 (AGPL with no exception in its files), no Tempora, no TeX Gyre Termes, Heros or Pagella
     expect(Object.values(FACES).filter(f => /^(zhv|zco|Tempora|texgyre(termes|heros|pagella))-/.test(f.file))).toEqual([])
   })

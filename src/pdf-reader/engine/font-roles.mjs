@@ -56,6 +56,8 @@ import { scriptOf } from './layer-rules.mjs'
  *   ("based on Bitstream Charter"); DejaVu Sans Mono: Bitstream Vera's, its name table;
  * - PT Mono: the ParaType Free Font License its name table cites, version 1.3 at that address (SPDX's source for it);
  * - Inconsolata zi4: its regular OFL-1.1, its bold Apache-2.0, their name tables;
+ * - GNU FreeMono: GPL-3.0-or-later with the FSF's font exception, verbatim in its name tables (Courier's design: URW's
+ *   Nimbus Mono L, the original's glyphs, 60, 57, 60 and 32 of 62 in its four styles, at the original's ink);
  * - Nimbus Roman, Nimbus Sans and Nimbus Mono PS: URW's base 35 release, ArtifexSoftware/urw-base35-fonts at tag
  *   20200910, whose LICENSE reads "GNU AFFERO GENERAL PUBLIC LICENSE Version 3 (see the file COPYING), with the
  *   following exemption: As a special exception, permission is granted to include these font programs in a Postscript
@@ -115,14 +117,10 @@ nimbus-sans-regular      NimbusSans-Regular.otf          hosted   nimbus-sans   
 nimbus-sans-bold         NimbusSans-Bold.otf             hosted   nimbus-sans    700  normal  1      AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817  gpl
 nimbus-sans-italic       NimbusSans-Italic.otf           hosted   nimbus-sans    400  italic  1      AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817  gpl
 nimbus-sans-bolditalic   NimbusSans-BoldItalic.otf       hosted   nimbus-sans    700  italic  1      AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817  gpl
-nimbus-mono-regular      NimbusMonoPS-Regular.otf        hosted   nimbus-mono    400  normal  1      AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817  gpl
-nimbus-mono-bold         NimbusMonoPS-Bold.otf           hosted   nimbus-mono    700  normal  1      AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817  gpl
-nimbus-mono-italic       NimbusMonoPS-Italic.otf         hosted   nimbus-mono    400  italic  1      AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817  gpl
-nimbus-mono-bolditalic   NimbusMonoPS-BoldItalic.otf     hosted   nimbus-mono    700  italic  1      AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817  gpl
-cursor-regular           texgyrecursor-regular.otf       texlive  cursor         400  normal  1      LicenseRef-GUST-Font-License                          gfl
-cursor-bold              texgyrecursor-bold.otf          texlive  cursor         700  normal  1      LicenseRef-GUST-Font-License                          gfl
-cursor-italic            texgyrecursor-italic.otf        texlive  cursor         400  italic  1      LicenseRef-GUST-Font-License                          gfl
-cursor-bolditalic        texgyrecursor-bolditalic.otf    texlive  cursor         700  italic  1      LicenseRef-GUST-Font-License                          gfl
+freemono-regular         FreeMono.otf                    texlive  freemono       400  normal  1      GPL-3.0-or-later WITH Font-exception-2.0              gpl
+freemono-bold            FreeMonoBold.otf                texlive  freemono       700  normal  1      GPL-3.0-or-later WITH Font-exception-2.0              gpl
+freemono-italic          FreeMonoOblique.otf             texlive  freemono       400  italic  1      GPL-3.0-or-later WITH Font-exception-2.0              gpl
+freemono-bolditalic      FreeMonoBoldOblique.otf         texlive  freemono       700  italic  1      GPL-3.0-or-later WITH Font-exception-2.0              gpl
 libertine-regular        LinLibertine_R.otf              texlive  libertine      400  normal  1      OFL-1.1                                               ofl
 libertine-bold           LinLibertine_RB.otf             texlive  libertine      700  normal  1      OFL-1.1                                               ofl
 libertine-italic         LinLibertine_RI.otf             texlive  libertine      400  italic  1      OFL-1.1                                               ofl
@@ -349,7 +347,7 @@ const CM_TEXT = { regular: 'cmun-serif', bold: 'cmun-serif', italic: 'cmun-serif
 const LATIN_GROUPS = {
   cm: [CM_TEXT, 'cmun-serif'], times: ['nimbus-roman', 'nimbus-roman'], libertine: ['libertine', 'libertine'], palatino: ['domitian', 'domitian'],
   charter: ['xcharter', 'xcharter'], garamond: ['ebgaramond', 'ebgaramond'], utopia: ['erewhon', 'erewhon'],
-  helvetica: ['nimbus-sans', 'nimbus-sans'], cmss: ['lm-sans', 'cmun-sans'], courier: ['cursor', 'nimbus-mono'], cmtt: ['lm-mono', 'cmun-mono'],
+  helvetica: ['nimbus-sans', 'nimbus-sans'], cmss: ['lm-sans', 'cmun-sans'], courier: ['freemono', 'freemono'], cmtt: ['lm-mono', 'cmun-mono'],
   beramono: ['dejavu-mono', 'dejavu-mono'], inconsolata: ['inconsolata', 'pt-mono'], biolinum: ['biolinum', 'biolinum'],
 }
 // a family of no table: Latin Modern, fontspec's default, as the TeX path sets it
