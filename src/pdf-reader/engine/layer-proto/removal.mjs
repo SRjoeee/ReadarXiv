@@ -176,10 +176,13 @@ export function unitRemoval({ id, page, prep, tex, own, charMap, unmapped, ink, 
   let taken = 0, notOwned = 0, crossing = 0
   const mine = g => { const c = claimed.get(g); if (c !== undefined && c !== id) { taken++; return false } return true }
   const resolutions = [...prep.values()].filter(r => r && r.k !== undefined)
+  // the unit's characters: its lines', and a float label's it draws in the target's name (labelInTarget), which a
+  // file's first line, starting at the unit's own mark, does not hold
+  const chars = prep.label?.drawn ? [...prep.uc, ...prep.label.chars] : prep.uc
   if (tex) {
     const { kOf } = tex
     const keep = new Set()
-    for (const c of prep.uc) {
+    for (const c of chars) {
       if (c.page !== page || !real(c)) continue
       const cat = prep.cat.get(keyOf(page, c))
       const g = charMap.get(keyOf(page, c))
@@ -192,7 +195,7 @@ export function unitRemoval({ id, page, prep, tex, own, charMap, unmapped, ink, 
     // and the characters it accounts for that the file gives no unit: a symbol set off by a space at a line's end (the
     // file's lines are its words', and the layer grows them over what stands beside them, as v0 grows its own: 1512.03385
     // page 10's "@" and "=")
-    for (const c of prep.uc) {
+    for (const c of chars) {
       if (c.page !== page || !real(c) || prep.cat.get(keyOf(page, c)) !== 'acc') continue
       const g = charMap.get(keyOf(page, c))
       if (g !== undefined && own.owner[g] === -1 && !keep.has(g) && mine(g)) glyphs.add(g)
@@ -249,7 +252,7 @@ export function unitRemoval({ id, page, prep, tex, own, charMap, unmapped, ink, 
     // (each text item all of whose characters here it accounts for: the rules inside its box are erased with it, as v0's
     // restore leaves erased the ink such an item covers)
     const items = new Map()
-    for (const c of prep.uc) {
+    for (const c of chars) {
       if (c.page !== page || !real(c)) continue
       const acc = prep.cat.get(keyOf(page, c)) === 'acc'
       const it = items.get(c.item) ?? items.set(c.item, { all: true, x0: Infinity, x1: -Infinity, yb: c.yb, size: c.size }).get(c.item)
