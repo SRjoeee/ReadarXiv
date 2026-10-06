@@ -24,7 +24,7 @@
 //
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/layer-gate.mjs [--tier=model|pixel] [--engine=<worktree>] [--only=<fixture>,…]
 //       [--layouts=made|fixed] [--fixtures=<dir>] [--pages=<n>] [--workers=<n>] [--check[=<record>]] [--record[=<record>]] [--label=<short>]
-//       [--composite=source-over|darken] [--no-progress] [--freeze[=force]]
+//       [--composite=source-over|darken] [--no-progress] [--panel-width=<px>] [--freeze[=force]]
 //   --engine     the engine measured: <worktree>/src/pdf-reader/engine served as /engine/ (the checker, layer/check.mjs, is
 //                always this repository's: the instrument is the same for every branch); default this repository
 //   --layouts    made (the default): the layout files the engine's own maker makes from the fixtures' papers (spikes/
@@ -40,8 +40,10 @@
 //                layer-fidelity.md beside it, and the brief's layer-gate.json and .md (the completeness by output); a whole
 //                run only (no --only, no --pages)
 //   --label      the progress folder's name (pixel tier): /Users/cheongzhiyan/Downloads/readarxiv-test/layer-progress/<NN>-<label>/
-//                (LAYER_PROGRESS names another), with four-panel images (original | prototype | this run | the previous
-//                recorded run), metrics.md and index.html; default the engine's branch
+//                (LAYER_PROGRESS names another): per page of the controller's set an image of four panels in a 2 x 2
+//                grid, each --panel-width wide (1,000 px): the original and the prototype above, this run and the previous
+//                recorded run (of the same layout files where there is one, else the baseline) below; metrics.md and
+//                index.html; default the engine's branch
 //   --composite  how crops are drawn on the copy: source-over (the lab's, as Plan 8d draws today) or darken
 //   --freeze     the reference text area of every fixture that has none (=force: made again, a deliberate change)
 // Exits 1 on any completeness failure (the brief's gate; under --check the merge rule decides, each completeness count
@@ -92,7 +94,8 @@ const DEBUG_LOST = arg('debug-lost')
 const PAGES_OF = 12, ALL_PAGES = new Set(['2307.16209v1'])
 /** the progress images' pages (the controller's set) and their width */
 const PANELS = { '1512.03385v1-zh': [1, 2, 3], '1706.03762v7-ja': [1, 2], '2608.04322v1-de': [2], '1810.04805v2-ru': [2], '2307.16209v1-zh': [10] }
-const PROGRESS_WIDTH = Number(arg('progress-width') ?? 1400), GAP = 8
+/** each panel's width in the progress images' 2 x 2 grid (the controller's: about 1,000 px) */
+const PANEL_WIDTH = Number(arg('panel-width') ?? 1000), GAP = 12
 
 const git = (dir, args) => { try { return execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() } catch { return null } }
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'))
@@ -494,7 +497,9 @@ function openProgress() {
   // the previous recorded run, else the baseline
   const runOf = n => { try { return { name: n, run: readJson(join(PROGRESS, n, 'run.json')) } } catch { return null } }
   const earlier = folders.map(runOf).filter(Boolean)
-  const previous = earlier.filter(e => e.run.recorded).at(-1) ?? earlier.find(e => e.name.startsWith('00-')) ?? null
+  // of those recorded, the last whose layout files were of the same kind as this run's; else the last recorded; else 00
+  const recordedRuns = earlier.filter(e => e.run.recorded)
+  const previous = recordedRuns.filter(e => e.run.inputs?.layouts === LAYOUTS).at(-1) ?? recordedRuns.at(-1) ?? earlier.find(e => e.name.startsWith('00-')) ?? null
   const images = []
   const short = (engineInfo.commit ?? '').slice(0, 8)
   return {
@@ -503,9 +508,8 @@ function openProgress() {
       const file = `${fixture}-p${p}.png`
       const proto = existsSync(join(REFS, fixture, 'proto', `p${p}.png`)) ? `${ORIGIN}/proto/${fixture}/p${p}.png` : null
       const prev = previous && existsSync(join(PROGRESS, previous.name, 'engine', file)) ? `${ORIGIN}/progress/${previous.name}/engine/${file}` : null
-      const pw = Math.floor((PROGRESS_WIDTH - 3 * GAP) / 4)
-      const labels = ['Original', proto ? 'Prototype (approved)' : 'Prototype: none for this output', `Engine ${short}${engineInfo.dirty ? '+' : ''} (this run)`, prev ? `Engine, ${previous.name}` : 'No previous run']
-      const out = await page.evaluate(o => window.gate.panel(o), { pw, gap: GAP, labels, proto, previous: prev })
+      const labels = ['Original', proto ? 'Prototype (approved)' : 'Prototype: none for this output', `This run: ${name}, the engine at ${short}${engineInfo.dirty ? '+' : ''}`, prev ? `Previous: ${previous.name}${previous.run.inputs?.layouts && previous.run.inputs.layouts !== LAYOUTS ? ` (layouts ${previous.run.inputs.layouts})` : ''}` : 'No previous run']
+      const out = await page.evaluate(o => window.gate.panel(o), { pw: PANEL_WIDTH, gap: GAP, labels, proto, previous: prev })
       writeFileSync(join(dir, file), encodePng(Buffer.from(out.rgba, 'base64'), out.w, out.h))
       writeFileSync(join(dir, 'engine', file), encodePng(Buffer.from(out.engine.rgba, 'base64'), out.engine.w, out.engine.h))
       images.push({ file, fixture, p })
@@ -515,7 +519,8 @@ function openProgress() {
       const prevRun = previous?.run ?? null
       writeFileSync(join(dir, 'run.json'), JSON.stringify({ name, recorded, made: run.made, engine: run.engine, inputs: run.inputs, totals: run.totals, fixtures: Object.fromEntries(Object.entries(run.fixtures).map(([n, f]) => [n, { meta: f.meta, totals: f.totals, pages: f.pages }])) }))
       const ms = MEASURES
-      const L = [`# ${name}`, '', `The engine at \`${short}\` (${engineInfo.branch}${engineInfo.dirty ? ', with changes' : ''}), ${run.made.slice(0, 16).replace('T', ' ')} UTC; compared with ${prevRun ? `\`${previous.name}\` (the engine at \`${prevRun.engine.commit?.slice(0, 8)}\`)` : 'no earlier run'}. Every measure is against arXiv's original page. A defect is its count and, in brackets, its rate per 1,000 translated text cells.`, '']
+      const kind = l => (l === 'made' ? "the engine's own layout files" : l === 'fixed' ? "the fixtures' layout files (the layer lab's)" : 'layout files given')
+      const L = [`# ${name}`, '', `The engine at \`${short}\` (${engineInfo.branch}${engineInfo.dirty ? ', with changes' : ''}), on ${kind(LAYOUTS)}, ${run.made.slice(0, 16).replace('T', ' ')} UTC; compared with ${prevRun ? `\`${previous.name}\` (the engine at \`${prevRun.engine.commit?.slice(0, 8)}\`, on ${kind(prevRun.inputs?.layouts)})` : 'no earlier run'}. Every measure is against arXiv's original page. A defect is its count and, in brackets, its rate per 1,000 translated text cells.`, '']
       const fl = floorTotals(floor.pooled)
       const table = (title, rows) => {
         L.push(`## ${title}`, '', '| measure | Original | ' + rows.map(r => r[0]).join(' | ') + ' |', `|---|---|${rows.map(() => '---|').join('')}`)
@@ -534,7 +539,7 @@ function openProgress() {
       if (verdict?.lines?.length) L.push('## The merge rule (--check)', '', '```', ...verdict.lines.map(s => s.trim()), '```', '')
       writeFileSync(join(dir, 'metrics.md'), `${L.join('\n')}\n`)
       const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
-      const figs = images.sort((a, b) => a.file.localeCompare(b.file, 'en', { numeric: true })).map(im => `<figure><img src="${im.file}" alt="${esc(`${im.fixture} page ${im.p}`)}"><figcaption>${esc(`${im.fixture}, page ${im.p}: original | prototype | this run | ${prevRun ? previous.name : 'no previous run'}`)}</figcaption></figure>`)
+      const figs = images.sort((a, b) => a.file.localeCompare(b.file, 'en', { numeric: true })).map(im => `<figure><img src="${im.file}" alt="${esc(`${im.fixture} page ${im.p}`)}"><figcaption>${esc(`${im.fixture}, page ${im.p}. Above: the original, the prototype. Below: this run, ${prevRun ? previous.name : 'no previous run'}.`)}</figcaption></figure>`)
       writeFileSync(join(dir, 'index.html'), `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(name)}</title>\n<style>body{margin:16px;font:14px/1.4 -apple-system,"Helvetica Neue",Arial,sans-serif;color:#222;background:#fff}figure{margin:0 0 28px}img{display:block;max-width:100%;height:auto;border:1px solid #ddd}figcaption{margin-top:6px;color:#555}</style></head>\n<body><h1>${esc(name)}</h1><p>The engine at ${esc(short)} (${esc(engineInfo.branch ?? '')}). The measures are in <a href="metrics.md">metrics.md</a>.</p>\n${figs.join('\n')}\n</body></html>\n`)
       console.log(`progress: ${dir}`)
     },

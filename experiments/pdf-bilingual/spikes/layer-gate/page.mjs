@@ -397,13 +397,14 @@ window.gate = {
   },
 
   /**
-   * The progress image of the page prepared last: four panels side by side at one scale, each `pw` wide, under a caption
-   * line: the original, the prototype (an image, or a blank with its caption), the engine of this run, the engine of the
-   * previous run (an image, or a blank). Returns the image's RGBA and this run's engine panel alone (for the next run)
+   * The progress image of the page prepared last: four panels at one scale, each `pw` wide under its caption, in a 2 x 2
+   * grid: the original and the prototype (an image, or a blank with its caption) above, the engine of this run and the
+   * engine of the previous run (an image, or a blank) below. Returns the image's RGBA and this run's engine panel alone
+   * (for the next run)
    */
   async panel({ pw, gap, labels, proto, previous }) {
     const { W, H, O, C, T } = S.cur
-    const ph = Math.round((pw * H) / W), top = 22, w = 4 * pw + 3 * gap, h = top + ph
+    const ph = Math.round((pw * H) / W), top = 30, cell = top + ph, w = 2 * pw + gap, h = 2 * cell + gap
     const full = new OffscreenCanvas(W, H), fctx = full.getContext('2d')
     const scaled = data => {
       fctx.putImageData(new ImageData(data, W, H), 0, 0)
@@ -419,16 +420,16 @@ window.gate = {
     const out = new OffscreenCanvas(w, h), ctx = out.getContext('2d')
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, w, h)
-    ctx.font = '13px -apple-system, "Helvetica Neue", Arial, sans-serif'
+    ctx.font = '18px -apple-system, "Helvetica Neue", Arial, sans-serif'
     ctx.textBaseline = 'middle'
     panels.forEach((pnl, i) => {
-      const x = i * (pw + gap)
+      const x = (i % 2) * (pw + gap), y = Math.floor(i / 2) * (cell + gap)
       ctx.fillStyle = '#333333'
-      ctx.fillText(labels[i], x + 2, top / 2, pw - 4)
-      if (pnl) { ctx.imageSmoothingQuality = 'high'; ctx.drawImage(pnl, x, top, pw, ph) }
-      else { ctx.fillStyle = '#f2f2f2'; ctx.fillRect(x, top, pw, ph) }
+      ctx.fillText(labels[i], x + 2, y + top / 2, pw - 4)
+      if (pnl) { ctx.imageSmoothingQuality = 'high'; ctx.drawImage(pnl, x, y + top, pw, ph) }
+      else { ctx.fillStyle = '#f2f2f2'; ctx.fillRect(x, y + top, pw, ph) }
       ctx.strokeStyle = '#d0d0d0'
-      ctx.strokeRect(x + 0.5, top + 0.5, pw - 1, ph - 1)
+      ctx.strokeRect(x + 0.5, y + top + 0.5, pw - 1, ph - 1)
     })
     const b64 = c => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let s = ''; for (let i = 0; i < d.length; i += 0x8000) s += String.fromCharCode.apply(null, d.subarray(i, i + 0x8000)); return btoa(s) }
     return { w, h, rgba: b64(out), engine: { w: pw, h: ph, rgba: b64(panels[2]) } }
