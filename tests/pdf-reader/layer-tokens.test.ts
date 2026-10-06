@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { faceFor, rolesFor } from '@/pdf-reader/engine/font-roles.mjs'
+import { type Design, type FontClass, faceFor, rolesFor } from '@/pdf-reader/engine/font-roles.mjs'
 import { layerRulesFor } from '@/pdf-reader/engine/layer-rules.mjs'
 import type { Hyphenator } from '@/pdf-reader/engine/layer/hyphen.mjs'
 import { STYLE, type TrPiece, trText } from '@/pdf-reader/engine/layer/pieces.mjs'
@@ -18,7 +18,7 @@ const MEDIUM = 'NimbusRomNo9L-Medi'
 /** the role table's faces for a Times paper's runs, as the tokens ask for them (font-roles.mjs faceFor): read from the
  *  table, so that a change of the table's faces is not a change of these tests */
 const ROLES = rolesFor('en', 'times')
-const faceOf = (design: string, cls: string, bold = false, italic = false) => faceFor(ROLES, { script: 'latin', cls, design, bold, italic, caps: false })
+const faceOf = (design: Design, cls: FontClass['cls'], bold = false, italic = false) => faceFor(ROLES, { script: 'latin', cls, design, bold, italic, caps: false })
 const F = {
   regular: faceOf('times', 'serif'), italic: faceOf('times', 'serif', false, true), bold: faceOf('times', 'serif', true),
   boldItalic: faceOf('times', 'serif', true, true), mono: faceOf('courier', 'mono'), typewriter: faceOf('cmtt', 'mono'),
