@@ -212,3 +212,31 @@ describe("the remover on untrusted input: every loop advances or refuses", () =>
     expect(await bounded<number>('const r = await R.openRemover(data, { PL }); return r.walkPage(0).events.filter(e => e.kind === "show")[0].codes.length', wide)).toBe(2)
   })
 })
+
+describe("a Type 3 font's advance, as PDF.js draws it", () => {
+  it("keeps a retained glyph where it was when a glyph before it is removed: the font matrix's translation is in the advance", async () => {
+    // Codex's review of PR A, finding 4: PDF.js advances a Type 3 glyph by (w * FontMatrix[0] + FontMatrix[4]) * size;
+    // with [0.001 0 0 0.001 0.1 0], widths 500 and 10 pt, A advances 6 pt, of which the removed A's number gave back 5
+    const proc = '500 0 0 0 500 700 d1 0 0 500 700 re f'
+    const t3 = pdfOf([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F3 5 0 R >> >> /Contents 4 0 R >>',
+      ['', 'BT /F3 10 Tf 20 250 Td (AB) Tj ET'],
+      '<< /Type /Font /Subtype /Type3 /FontBBox [0 0 1000 1000] /FontMatrix [0.001 0 0 0.001 0.1 0] /CharProcs << /A 6 0 R /B 7 0 R >> /Encoding << /Type /Encoding /Differences [65 /A /B] >> /FirstChar 65 /LastChar 66 /Widths [500 500] /Resources << >> >>',
+      ['', proc],
+      ['', proc],
+    ])
+    const { pages, p, out, after } = await removed(t3, ink => ({ pages: { 1: { shows: ink[0]!.shows, units: [{ id: 1, glyphs: [0, 0], paths: [] }], crops: [] } } }))
+    expect(out.manifest.page[1]).toMatchObject({ ok: true })
+    const at = (ink: Ink) => ink.glyphs.filter(g => g.u === 'B').map(g => g.x0)
+    // B at 20 + 6 on the original and on the removed page (R, after arXiv's one page)
+    expect(at(pages[0]!)).toEqual([26])
+    expect(at(after.pages[1]!.ink)[0]).toBeCloseTo(26, 6)
+    expect(checkPage({ orig: pages[0]!, removed: after.pages[1]!.ink, kept: after.pages[2]!.ink, entry: p.pages[1] })).toMatchObject({ removed: 1, missed: 0, moved: 0 })
+    // a matrix of other than six numbers gives no advance the remover could match: the edit, and its page, refused
+    const bad = new TextDecoder('latin1').decode(t3).replace('/FontMatrix [0.001 0 0 0.001 0.1 0]', '/FontMatrix [0.001 0 0 0.001 (x) 0]')
+    const r2 = await removed(new Uint8Array([...bad].map(c => c.charCodeAt(0))), ink => ({ pages: { 1: { shows: ink[0]!.shows, units: [{ id: 1, glyphs: [0, 0], paths: [] }], crops: [] } } }))
+    expect(r2.out.manifest.page[1]).toMatchObject({ ok: false, refused: expect.stringMatching(/Type 3 font without widths/) })
+  })
+})

@@ -2,7 +2,7 @@
 import type { Glyph } from './ink.mjs'
 
 /** the remover's version: it enters the add-on's key */
-export declare const REMOVAL: '2'
+export declare const REMOVAL: '3'
 /** the page sets an add-on holds after arXiv's own N pages: R at N + p */
 export declare const SETS: readonly ['R']
 /** the check's sets after them: P (the placeholders alone), F (the removed glyphs alone), C (P, each crop a colour) */

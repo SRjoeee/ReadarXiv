@@ -20,19 +20,21 @@
 // whole: nothing on it is removed, and the layer draws its units the old way.
 //
 // A removed code becomes a TJ number of its exact advance, -(1000 w0 + 1000 (Tc + Tw') / Tfs), so that nothing after it
-// moves; the width is the font's (/Widths, /W and /DW, a Type 3 font's /Widths through its /FontMatrix). A font that gives
-// none (an embedded CMap's) shows the codes in render mode 3, which advances as painting does. A removed rule's painting
-// operator becomes `n`: the path ends unpainted, a clip it sets kept. Refused, never mishandled: an edit inside a form the
-// page paints more than once, a clipping text mode, a vertical font, a CMap that is neither Identity nor embedded, a Type 3
-// font without widths. A form that is edited is copied for the appended page (copy on write), with every form between it
-// and the page, so that the original page draws as it did.
+// moves; the width is the font's (/Widths, /W and /DW, a Type 3 font's /Widths through its /FontMatrix, its translation
+// too, as PDF.js advances). A font that gives none (an embedded CMap's) shows the codes in render mode 3, which advances
+// as painting does. A removed rule's painting operator becomes `n`: the path ends unpainted, a clip it sets kept.
+// Refused, never mishandled: an edit inside a form the page paints more than once, a clipping text mode, a vertical
+// font, a CMap that is neither Identity nor embedded, a Type 3 font without widths or with a font matrix of other than
+// six numbers. A form that is edited is copied for the appended page (copy on write), with every form between it and the
+// page, so that the original page draws as it did.
 //
 // An original module (no port statement). It imports nothing but the engine's own reading of a page's ink (checkPage's):
 // the PDF object layer (@cantoo/pdf-lib, MIT), deflate and a tolerant inflate are given. It runs where the layout file is
 // made, once a paper.
 
-/** the remover's version: raised with any change to what it writes; it enters the add-on's key (2: compact sets) */
-export const REMOVAL = '2'
+/** the remover's version: raised with any change to what it writes; it enters the add-on's key (2: compact sets; 3: a
+ *  Type 3 glyph's removed advance with its font matrix's translation, an unusable matrix refused) */
+export const REMOVAL = '3'
 /** the page sets an add-on holds, in order after arXiv's own pages: R at N + p, then the check's (P, F, C) */
 export const SETS = Object.freeze(['R'])
 export const CHECK_SETS = Object.freeze(['P', 'F', 'C'])
@@ -230,11 +232,14 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
       const W = get(dict, 'Widths')
       const fd = get(dict, 'FontDescriptor')
       const missing = num(get(fd, 'MissingWidth')) ?? 0
+      // a Type 3 glyph's advance as PDF.js draws it (canvas showType3Text): its width through the font matrix, [w 0]
+      // transformed, its x: w * a + e, the matrix's translation in it (2026-10-07: w * a alone moved the glyphs after a
+      // removed one by e * size). A matrix of other than six numbers gives no width: an edit in the font is refused
       let fm = [0.001, 0, 0, 0.001, 0, 0]
-      if (info.type3) { const m = get(dict, 'FontMatrix'); if (m instanceof PDFArray) fm = m.asArray().map(v => num(look(v))) }
-      if (W instanceof PDFArray && first !== undefined) {
+      if (info.type3) { const m = get(dict, 'FontMatrix'); if (m instanceof PDFArray) { const v = m.asArray().map(x => num(look(x))); fm = v.length === 6 && v.every(Number.isFinite) ? v : null } }
+      if (W instanceof PDFArray && first !== undefined && fm) {
         const ws = W.asArray().map(v => num(look(v)))
-        info.width = code => { const w = code >= first && code < first + ws.length ? ws[code - first] : missing; return info.type3 ? w * fm[0] : w / 1000 }
+        info.width = code => { const w = code >= first && code < first + ws.length ? ws[code - first] : missing; return info.type3 ? w * fm[0] + fm[4] : w / 1000 }
       }
     }
     fontCache.set(key, info)
