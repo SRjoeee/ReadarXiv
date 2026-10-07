@@ -104,6 +104,9 @@ export interface ProtoRun {
   removalStats(): RemovalStats | null
   /** a done page's removed page at v0's own resolution (mode 'draw', with v0's copy), until it is released */
   removedCanvas(page: number): HTMLCanvasElement | null
+  /** the run let go: its sheet removed, every page's canvases released (a page under way, once it ends), nothing drawn
+   *  or laid after; an until under way resolves */
+  dispose(): void
 }
 /** how the text-removed PDF went: pages removed, pages drawn the old way, units drawn by it (tex: the layout file's
  *  rectangles) and the old way (v0: its own reading), the rectangles filled with paper and swapped from the removed page,
@@ -116,7 +119,8 @@ export interface RemovalStats {
 }
 /** the text-removed PDF (removal.mjs, layout/remove.mjs) */
 export interface RemovalOptions {
-  OPS: Record<string, number>
+  /** PDF.js's OPS: read by no drawing (the gate's instrument reads a page's ink with it) */
+  OPS?: Record<string, number>
   /** 'draw': drawn by the add-on */
   mode: 'draw'
   /** arXiv's PDF with the paper's add-on (it may be openProto's `doc` itself, one document), its manifest (arXiv's page

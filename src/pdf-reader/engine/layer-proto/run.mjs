@@ -234,7 +234,8 @@ function needsOf(K, N, passes, fileOnly) {
  * locates whole takes them; every other unit is v0's own. Null: v0 alone.
  * `copy`: whether each page's copy is kept at v0's own resolution (`right`), the plane the checker and the gate measure;
  * a view draws the page at its own (drawCopy) and needs none.
- * `removal` (the text-removed PDF, removal.mjs and layout/remove.mjs): { OPS (PDF.js's), mode: 'draw', doc, manifest }:
+ * `removal` (the text-removed PDF, removal.mjs and layout/remove.mjs): { mode: 'draw', doc, manifest } (and PDF.js's OPS,
+ * which no drawing reads: the gate's instrument reads a page's ink with it):
  * `doc` is arXiv's PDF with the paper's add-on appended (its page sets at the manifest's places), one a paper whatever the
  * target, made from the layout file alone; it may be the `doc` v0 is given, the one document a reader opens (arXiv's own
  * pages the manifest's count). On a page the manifest says is removed, a unit the file locates whole is drawn over the
@@ -1139,10 +1140,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const doneAtOf = pg => (pg >= 1 && pg <= N && plannedTo <= need.done[pg] ? Infinity : doneAt[pg])
   // (until's: waiting for a take or end(); one waiter, until's own chain)
   let wake = null
+  /** whether the run was let go (dispose): nothing is drawn or laid after it */
+  let disposed = false
   const changed = () => { const w = wake; wake = null; w?.() }
   /** the units of the stream up to K[idx] placed, as their rows come */
   const settle = async idx => {
-    while (frontier <= idx && frontier < K.length) {
+    while (!disposed && frontier <= idx && frontier < K.length) {
       // (planned before waiting: doneAt never reads a placement it has not planned)
       if (!settleable(K[frontier])) { if (plannedTo < frontier) plan(); await new Promise(ok => { wake = ok }); continue }
       consume(K[frontier])
@@ -1176,7 +1179,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const t1 = performance.now()
     await settle(need.lay[pg])
     const waited = performance.now() - t1
-    for (const id of groups.get(pg) ?? []) { await yieldNow(); order.push(id); await arrive(byId.get(id)) }
+    for (const id of groups.get(pg) ?? []) { if (disposed) return; await yieldNow(); order.push(id); await arrive(byId.get(id)) }
+    if (disposed) return
     drawnTo = pg
     pageMs[pg] = performance.now() - t0 - waited
   }
@@ -1204,6 +1208,15 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     return c
   }
   const needsCopy = () => { if (!copy) throw new Error("v0's checker reads its copy at its own resolution: open with copy: true") }
+  /** every page's canvases let go, drawn or not, and the removed pages' (dispose) */
+  const letGo = () => {
+    for (const r of rows) {
+      for (const c of [r.left, r.right]) if (c) { c.width = 0; c.height = 0 }
+      r.base = false
+      r.released = true
+    }
+    if (RM) { for (const c of RM.removed) if (c) { c.width = 0; c.height = 0 }; RM.removed = []; RM.others = [] }
+  }
 
   return {
     N, P, rows, placed, skipped, stats, audit, order, ms, pageMs, pageTimes, chars: chars2, views,
@@ -1235,10 +1248,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     until(p) {
       busy = busy.then(async () => {
         const q = Math.min(p, N)
-        while (drawnTo < q) await layNext()
+        while (!disposed && drawnTo < q) await layNext()
         await settle(need.done[q] ?? -1)
         const to = Math.min(N, doneAt[q] ?? p)
-        while (drawnTo < to) await layNext()
+        while (!disposed && drawnTo < to) await layNext()
       })
       return busy
     },
@@ -1305,6 +1318,17 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (RM) for (const k of ['removed', 'others']) RM[k][pg] = undefined
       r.base = false
       r.released = true
+    },
+    /** the run let go: its sheet removed, every page's canvases released (a page under way when it is called, once it ends),
+     *  nothing drawn or laid after; an until under way resolves. Its SVGs and its drawing's operations stay with whoever
+     *  holds them */
+    dispose() {
+      if (disposed) return
+      disposed = true
+      sheet.remove()
+      letGo()
+      changed()
+      busy.then(letGo, letGo)
     },
     /** how the removal went: pages removed and refused, units drawn by it (tex) and the old way (v0), the rectangles filled
      *  and swapped, the pages a swap draws the removed page for */
