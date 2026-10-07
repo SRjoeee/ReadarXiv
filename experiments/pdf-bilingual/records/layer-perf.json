@@ -1,11 +1,11 @@
 {
  "schema": 1,
  "what": "the instant layer's cost budget (spikes/layer-perf.mjs)",
- "made": "2026-10-06T21:32:48.347Z",
+ "made": "2026-10-07T10:05:55.697Z",
  "old": {
   "runs": [
    {
-    "made": "2026-10-06T20:40:52.464Z",
+    "made": "2026-10-07T09:57:24.893Z",
     "engine": {
      "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-old",
      "commit": "f267adb9acb1554421dc0107161a9ea84d6da715",
@@ -14,7 +14,7 @@
     }
    },
    {
-    "made": "2026-10-06T20:42:55.207Z",
+    "made": "2026-10-07T09:59:29.855Z",
     "engine": {
      "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-old",
      "commit": "f267adb9acb1554421dc0107161a9ea84d6da715",
@@ -23,7 +23,7 @@
     }
    },
    {
-    "made": "2026-10-06T20:44:45.693Z",
+    "made": "2026-10-07T10:01:36.738Z",
     "engine": {
      "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-old",
      "commit": "f267adb9acb1554421dc0107161a9ea84d6da715",
@@ -36,12 +36,12 @@
    "fixtures": {
     "1512.03385v1-de": {
      "pages": 12,
-     "firstDraw": 59.6,
-     "zoom": 22.7,
-     "zoomRender": 6.6,
+     "firstDraw": 64.9,
+     "zoom": 23.7,
+     "zoomRender": 7.4,
      "zoomCopy": 16.1,
      "canvasPeak": 26035200,
-     "heapPeak": 74707532,
+     "heapPeak": 36436964,
      "split": {
       "render": null,
       "text": null,
@@ -55,12 +55,12 @@
     },
     "1512.03385v1-es": {
      "pages": 12,
-     "firstDraw": 61.9,
+     "firstDraw": 66.5,
      "zoom": 23.8,
-     "zoomRender": 6.9,
-     "zoomCopy": 16.2,
+     "zoomRender": 7.5,
+     "zoomCopy": 16,
      "canvasPeak": 26035200,
-     "heapPeak": 116369808,
+     "heapPeak": 36226296,
      "split": {
       "render": null,
       "text": null,
@@ -74,12 +74,12 @@
     },
     "1512.03385v1-fr": {
      "pages": 12,
-     "firstDraw": 64.8,
-     "zoom": 23.3,
-     "zoomRender": 6.8,
-     "zoomCopy": 16.5,
+     "firstDraw": 67.4,
+     "zoom": 23.1,
+     "zoomRender": 7.4,
+     "zoomCopy": 15.9,
      "canvasPeak": 26035200,
-     "heapPeak": 131186964,
+     "heapPeak": 36905412,
      "split": {
       "render": null,
       "text": null,
@@ -93,12 +93,12 @@
     },
     "1512.03385v1-ja": {
      "pages": 12,
-     "firstDraw": 65.2,
-     "zoom": 25.5,
-     "zoomRender": 7.1,
-     "zoomCopy": 17.8,
+     "firstDraw": 72.1,
+     "zoom": 24.2,
+     "zoomRender": 7,
+     "zoomCopy": 16.4,
      "canvasPeak": 26035200,
-     "heapPeak": 91338588,
+     "heapPeak": 36975004,
      "split": {
       "render": null,
       "text": null,
@@ -112,12 +112,12 @@
     },
     "1512.03385v1-ko": {
      "pages": 12,
-     "firstDraw": 71.3,
-     "zoom": 23.6,
-     "zoomRender": 6.5,
-     "zoomCopy": 17.1,
+     "firstDraw": 76.5,
+     "zoom": 24,
+     "zoomRender": 7,
+     "zoomCopy": 16.4,
      "canvasPeak": 26035200,
-     "heapPeak": 63636060,
+     "heapPeak": 35038328,
      "split": {
       "render": null,
       "text": null,
@@ -131,12 +131,12 @@
     },
     "1512.03385v1-ru": {
      "pages": 12,
-     "firstDraw": 64.2,
+     "firstDraw": 67.7,
      "zoom": 23.6,
-     "zoomRender": 6.8,
-     "zoomCopy": 16.2,
+     "zoomRender": 7,
+     "zoomCopy": 16.8,
      "canvasPeak": 26035200,
-     "heapPeak": 73420148,
+     "heapPeak": 36267540,
      "split": {
       "render": null,
       "text": null,
@@ -150,12 +150,12 @@
     },
     "1512.03385v1-zh": {
      "pages": 12,
-     "firstDraw": 67.3,
-     "zoom": 24.4,
-     "zoomRender": 6.7,
-     "zoomCopy": 17.7,
+     "firstDraw": 68.5,
+     "zoom": 23.7,
+     "zoomRender": 7,
+     "zoomCopy": 16.6,
      "canvasPeak": 26035200,
-     "heapPeak": 65541312,
+     "heapPeak": 35108864,
      "split": {
       "render": null,
       "text": null,
@@ -169,12 +169,12 @@
     },
     "1706.03762v7-de": {
      "pages": 12,
-     "firstDraw": 58,
-     "zoom": 29.3,
-     "zoomRender": 6.3,
-     "zoomCopy": 21.5,
+     "firstDraw": 61.2,
+     "zoom": 28.9,
+     "zoomRender": 6.1,
+     "zoomCopy": 20.1,
      "canvasPeak": 25675200,
-     "heapPeak": 78284844,
+     "heapPeak": 25045552,
      "split": {
       "render": null,
       "text": null,
@@ -188,12 +188,12 @@
     },
     "1706.03762v7-es": {
      "pages": 12,
-     "firstDraw": 50.7,
+     "firstDraw": 55.9,
      "zoom": 27.2,
      "zoomRender": 6.3,
-     "zoomCopy": 20,
+     "zoomCopy": 19.5,
      "canvasPeak": 25675200,
-     "heapPeak": 61214844,
+     "heapPeak": 24738248,
      "split": {
       "render": null,
       "text": null,
@@ -207,12 +207,12 @@
     },
     "1706.03762v7-fr": {
      "pages": 12,
-     "firstDraw": 52.3,
-     "zoom": 27,
-     "zoomRender": 6.1,
-     "zoomCopy": 20.9,
+     "firstDraw": 60.1,
+     "zoom": 26.1,
+     "zoomRender": 6.3,
+     "zoomCopy": 19.9,
      "canvasPeak": 25675200,
-     "heapPeak": 64529592,
+     "heapPeak": 25263604,
      "split": {
       "render": null,
       "text": null,
@@ -226,12 +226,12 @@
     },
     "1706.03762v7-ja": {
      "pages": 12,
-     "firstDraw": 59.5,
-     "zoom": 26,
+     "firstDraw": 58.6,
+     "zoom": 27.5,
      "zoomRender": 6.2,
-     "zoomCopy": 20.3,
+     "zoomCopy": 20.8,
      "canvasPeak": 25675200,
-     "heapPeak": 61685168,
+     "heapPeak": 25202616,
      "split": {
       "render": null,
       "text": null,
@@ -245,12 +245,12 @@
     },
     "1706.03762v7-ko": {
      "pages": 12,
-     "firstDraw": 56.8,
-     "zoom": 28.5,
+     "firstDraw": 61.4,
+     "zoom": 26.6,
      "zoomRender": 6.2,
-     "zoomCopy": 22,
+     "zoomCopy": 20.3,
      "canvasPeak": 25675200,
-     "heapPeak": 51393676,
+     "heapPeak": 23827404,
      "split": {
       "render": null,
       "text": null,
@@ -264,12 +264,12 @@
     },
     "1706.03762v7-ru": {
      "pages": 12,
-     "firstDraw": 54.9,
-     "zoom": 27.6,
-     "zoomRender": 6.1,
-     "zoomCopy": 21.1,
+     "firstDraw": 60,
+     "zoom": 26.7,
+     "zoomRender": 6.4,
+     "zoomCopy": 20,
      "canvasPeak": 25675200,
-     "heapPeak": 71493220,
+     "heapPeak": 24693556,
      "split": {
       "render": null,
       "text": null,
@@ -283,12 +283,12 @@
     },
     "1706.03762v7-zh": {
      "pages": 12,
-     "firstDraw": 58.7,
-     "zoom": 26.4,
-     "zoomRender": 5.5,
-     "zoomCopy": 20.7,
+     "firstDraw": 59.5,
+     "zoom": 26.8,
+     "zoomRender": 6.5,
+     "zoomCopy": 20.5,
      "canvasPeak": 25675200,
-     "heapPeak": 57032496,
+     "heapPeak": 23958276,
      "split": {
       "render": null,
       "text": null,
@@ -302,12 +302,12 @@
     },
     "1810.04805v2-de": {
      "pages": 12,
-     "firstDraw": 63.9,
-     "zoom": 23.8,
-     "zoomRender": 6.9,
-     "zoomCopy": 16.1,
+     "firstDraw": 60.9,
+     "zoom": 24.5,
+     "zoomRender": 7.1,
+     "zoomCopy": 15,
      "canvasPeak": 26846016,
-     "heapPeak": 72124988,
+     "heapPeak": 32716460,
      "split": {
       "render": null,
       "text": null,
@@ -321,12 +321,12 @@
     },
     "1810.04805v2-es": {
      "pages": 12,
-     "firstDraw": 71.1,
-     "zoom": 29.4,
-     "zoomRender": 7.8,
-     "zoomCopy": 16.9,
+     "firstDraw": 67.7,
+     "zoom": 24.7,
+     "zoomRender": 7.7,
+     "zoomCopy": 15.3,
      "canvasPeak": 26846016,
-     "heapPeak": 73292384,
+     "heapPeak": 32455652,
      "split": {
       "render": null,
       "text": null,
@@ -340,12 +340,12 @@
     },
     "1810.04805v2-fr": {
      "pages": 12,
-     "firstDraw": 67.3,
-     "zoom": 29.5,
-     "zoomRender": 8.6,
-     "zoomCopy": 17.1,
+     "firstDraw": 65.1,
+     "zoom": 24.4,
+     "zoomRender": 7.2,
+     "zoomCopy": 15.1,
      "canvasPeak": 26846016,
-     "heapPeak": 74681256,
+     "heapPeak": 33216564,
      "split": {
       "render": null,
       "text": null,
@@ -359,12 +359,12 @@
     },
     "1810.04805v2-ja": {
      "pages": 12,
-     "firstDraw": 60.8,
-     "zoom": 23.8,
-     "zoomRender": 6.8,
-     "zoomCopy": 14.2,
+     "firstDraw": 69.4,
+     "zoom": 24.4,
+     "zoomRender": 8.2,
+     "zoomCopy": 14.5,
      "canvasPeak": 26846016,
-     "heapPeak": 76619000,
+     "heapPeak": 33148276,
      "split": {
       "render": null,
       "text": null,
@@ -378,12 +378,12 @@
     },
     "1810.04805v2-ko": {
      "pages": 12,
-     "firstDraw": 62.9,
-     "zoom": 24.8,
-     "zoomRender": 7.9,
-     "zoomCopy": 15.1,
+     "firstDraw": 70.1,
+     "zoom": 24.4,
+     "zoomRender": 7.2,
+     "zoomCopy": 15.2,
      "canvasPeak": 26846016,
-     "heapPeak": 73152088,
+     "heapPeak": 31582792,
      "split": {
       "render": null,
       "text": null,
@@ -397,12 +397,12 @@
     },
     "1810.04805v2-ru": {
      "pages": 12,
-     "firstDraw": 59.7,
-     "zoom": 24.1,
-     "zoomRender": 7.1,
-     "zoomCopy": 14.9,
+     "firstDraw": 64.7,
+     "zoom": 23.6,
+     "zoomRender": 7.2,
+     "zoomCopy": 15.1,
      "canvasPeak": 26846016,
-     "heapPeak": 91124620,
+     "heapPeak": 32640424,
      "split": {
       "render": null,
       "text": null,
@@ -416,12 +416,12 @@
     },
     "1810.04805v2-zh": {
      "pages": 12,
-     "firstDraw": 59.8,
-     "zoom": 23.9,
-     "zoomRender": 7,
-     "zoomCopy": 14.4,
+     "firstDraw": 64.7,
+     "zoom": 26,
+     "zoomRender": 7.9,
+     "zoomCopy": 15.3,
      "canvasPeak": 26846016,
-     "heapPeak": 75100584,
+     "heapPeak": 31548240,
      "split": {
       "render": null,
       "text": null,
@@ -435,12 +435,12 @@
     },
     "2307.16209v1-zh": {
      "pages": 12,
-     "firstDraw": 34,
-     "zoom": 18.1,
-     "zoomRender": 6.4,
-     "zoomCopy": 11.2,
+     "firstDraw": 39.3,
+     "zoom": 17.4,
+     "zoomRender": 6.2,
+     "zoomCopy": 11.1,
      "canvasPeak": 26126016,
-     "heapPeak": 39915304,
+     "heapPeak": 25097112,
      "split": {
       "render": null,
       "text": null,
@@ -454,12 +454,12 @@
     },
     "2608.04322v1-de": {
      "pages": 12,
-     "firstDraw": 78.2,
-     "zoom": 24.7,
-     "zoomRender": 6.6,
-     "zoomCopy": 18.4,
+     "firstDraw": 87.4,
+     "zoom": 25.9,
+     "zoomRender": 7.5,
+     "zoomCopy": 17.6,
      "canvasPeak": 26035200,
-     "heapPeak": 91793260,
+     "heapPeak": 43108664,
      "split": {
       "render": null,
       "text": null,
@@ -473,12 +473,12 @@
     },
     "2608.04322v1-es": {
      "pages": 12,
-     "firstDraw": 78.8,
-     "zoom": 25,
-     "zoomRender": 7.2,
-     "zoomCopy": 16.7,
+     "firstDraw": 86.6,
+     "zoom": 27.5,
+     "zoomRender": 7.9,
+     "zoomCopy": 17.8,
      "canvasPeak": 26035200,
-     "heapPeak": 133891984,
+     "heapPeak": 43842432,
      "split": {
       "render": null,
       "text": null,
@@ -492,12 +492,12 @@
     },
     "2608.04322v1-fr": {
      "pages": 12,
-     "firstDraw": 79.7,
-     "zoom": 24.9,
-     "zoomRender": 6.8,
-     "zoomCopy": 17.5,
+     "firstDraw": 86,
+     "zoom": 26.4,
+     "zoomRender": 7.6,
+     "zoomCopy": 17.7,
      "canvasPeak": 26035200,
-     "heapPeak": 86259672,
+     "heapPeak": 44358152,
      "split": {
       "render": null,
       "text": null,
@@ -511,12 +511,12 @@
     },
     "2608.04322v1-ja": {
      "pages": 12,
-     "firstDraw": 80.6,
-     "zoom": 24.2,
-     "zoomRender": 6.5,
-     "zoomCopy": 17.5,
+     "firstDraw": 85.1,
+     "zoom": 25.3,
+     "zoomRender": 7.7,
+     "zoomCopy": 16.8,
      "canvasPeak": 26035200,
-     "heapPeak": 98106664,
+     "heapPeak": 44140968,
      "split": {
       "render": null,
       "text": null,
@@ -530,12 +530,12 @@
     },
     "2608.04322v1-ko": {
      "pages": 12,
-     "firstDraw": 86.5,
-     "zoom": 24.6,
-     "zoomRender": 7.1,
-     "zoomCopy": 17.9,
+     "firstDraw": 94.2,
+     "zoom": 27.3,
+     "zoomRender": 7.6,
+     "zoomCopy": 17.3,
      "canvasPeak": 26035200,
-     "heapPeak": 96194736,
+     "heapPeak": 41920976,
      "split": {
       "render": null,
       "text": null,
@@ -549,12 +549,12 @@
     },
     "2608.04322v1-ru": {
      "pages": 12,
-     "firstDraw": 80,
-     "zoom": 24.5,
-     "zoomRender": 6.9,
-     "zoomCopy": 17.6,
+     "firstDraw": 83.7,
+     "zoom": 25.7,
+     "zoomRender": 7.4,
+     "zoomCopy": 17.4,
      "canvasPeak": 26035200,
-     "heapPeak": 98379376,
+     "heapPeak": 43320916,
      "split": {
       "render": null,
       "text": null,
@@ -568,12 +568,12 @@
     },
     "2608.04322v1-zh": {
      "pages": 12,
-     "firstDraw": 78.6,
-     "zoom": 26.2,
-     "zoomRender": 7,
-     "zoomCopy": 18.3,
+     "firstDraw": 83.8,
+     "zoom": 28.8,
+     "zoomRender": 7.4,
+     "zoomCopy": 18.9,
      "canvasPeak": 26035200,
-     "heapPeak": 83191000,
+     "heapPeak": 41922924,
      "split": {
       "render": null,
       "text": null,
@@ -588,12 +588,12 @@
    },
    "all": {
     "pages": 348,
-    "firstDraw": 65.2,
-    "zoom": 24.9,
-    "zoomRender": 6.6,
-    "zoomCopy": 17.6,
+    "firstDraw": 68,
+    "zoom": 25.3,
+    "zoomRender": 7,
+    "zoomCopy": 16.9,
     "canvasPeak": 26846016,
-    "heapPeak": 133891984,
+    "heapPeak": 44358152,
     "split": {
      "render": null,
      "text": null,
@@ -608,8 +608,8 @@
   },
   "server": {
    "1512.03385v1": {
-    "makerMs": 385,
-    "makerOpsMs": 130,
+    "makerMs": 346,
+    "makerOpsMs": 114,
     "removerMs": 0,
     "remover": null,
     "layoutBytes": 103203,
@@ -619,19 +619,19 @@
     "download": 32256
    },
    "1706.03762v7": {
-    "makerMs": 554,
-    "makerOpsMs": 204,
+    "makerMs": 454,
+    "makerOpsMs": 195,
     "removerMs": 0,
     "remover": null,
-    "layoutBytes": 48647,
-    "layoutGzip": 16401,
+    "layoutBytes": 48561,
+    "layoutGzip": 16359,
     "addonBytes": 0,
     "manifestGzip": 0,
-    "download": 16401
+    "download": 16359
    },
    "1810.04805v2": {
-    "makerMs": 464,
-    "makerOpsMs": 185,
+    "makerMs": 406,
+    "makerOpsMs": 164,
     "removerMs": 0,
     "remover": null,
     "layoutBytes": 119776,
@@ -641,26 +641,26 @@
     "download": 37470
    },
    "2307.16209v1": {
-    "makerMs": 1762,
-    "makerOpsMs": 665,
+    "makerMs": 1712,
+    "makerOpsMs": 633,
     "removerMs": 0,
     "remover": null,
-    "layoutBytes": 503795,
-    "layoutGzip": 160421,
+    "layoutBytes": 501887,
+    "layoutGzip": 159672,
     "addonBytes": 0,
     "manifestGzip": 0,
-    "download": 160421
+    "download": 159672
    },
    "2608.04322v1": {
-    "makerMs": 617,
-    "makerOpsMs": 249,
+    "makerMs": 554,
+    "makerOpsMs": 217,
     "removerMs": 0,
     "remover": null,
-    "layoutBytes": 131426,
-    "layoutGzip": 40145,
+    "layoutBytes": 131355,
+    "layoutGzip": 40114,
     "addonBytes": 0,
     "manifestGzip": 0,
-    "download": 40145
+    "download": 40114
    }
   }
  },
@@ -668,28 +668,28 @@
   "label": "exp/layer",
   "runs": [
    {
-    "made": "2026-10-06T20:41:58.492Z",
+    "made": "2026-10-07T09:58:26.828Z",
     "engine": {
      "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-i01",
-     "commit": "957ca1429e697d1913fff3ec3eeb397518839afd",
+     "commit": "811df8c3047fd12817af7b920e01ddae325e54ce",
      "branch": "HEAD",
      "dirty": false
     }
    },
    {
-    "made": "2026-10-06T20:43:49.448Z",
+    "made": "2026-10-07T10:00:32.624Z",
     "engine": {
      "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-i01",
-     "commit": "957ca1429e697d1913fff3ec3eeb397518839afd",
+     "commit": "811df8c3047fd12817af7b920e01ddae325e54ce",
      "branch": "HEAD",
      "dirty": false
     }
    },
    {
-    "made": "2026-10-06T20:45:45.167Z",
+    "made": "2026-10-07T10:02:38.252Z",
     "engine": {
      "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-i01",
-     "commit": "957ca1429e697d1913fff3ec3eeb397518839afd",
+     "commit": "811df8c3047fd12817af7b920e01ddae325e54ce",
      "branch": "HEAD",
      "dirty": false
     }
@@ -699,551 +699,551 @@
    "fixtures": {
     "1512.03385v1-de": {
      "pages": 12,
-     "firstDraw": 67.6,
-     "zoom": 22.2,
-     "zoomRender": 6.7,
-     "zoomCopy": 15.9,
+     "firstDraw": 72.9,
+     "zoom": 23.5,
+     "zoomRender": 7.6,
+     "zoomCopy": 15.8,
      "canvasPeak": 26035200,
-     "heapPeak": 63042412,
+     "heapPeak": 38660900,
      "split": {
-      "render": 16.6,
-      "text": 15.6,
+      "render": 16.7,
+      "text": 18.2,
       "ink": 0,
       "rp": 0,
-      "lay": 25.2,
-      "ops": 2.6,
+      "lay": 29.2,
+      "ops": 3.6,
       "compose": 0,
-      "svg": 1.5
+      "svg": 1.3
      }
     },
     "1512.03385v1-es": {
      "pages": 12,
-     "firstDraw": 65.9,
-     "zoom": 22,
-     "zoomRender": 6.5,
-     "zoomCopy": 15.3,
+     "firstDraw": 70.4,
+     "zoom": 22.4,
+     "zoomRender": 7.2,
+     "zoomCopy": 14.8,
      "canvasPeak": 26035200,
-     "heapPeak": 91236588,
+     "heapPeak": 38565208,
      "split": {
-      "render": 14.1,
-      "text": 16.1,
+      "render": 18.8,
+      "text": 16.5,
       "ink": 0,
       "rp": 0,
-      "lay": 26.6,
-      "ops": 2.7,
+      "lay": 29.5,
+      "ops": 3.1,
       "compose": 0,
       "svg": 1.7
      }
     },
     "1512.03385v1-fr": {
      "pages": 12,
-     "firstDraw": 68.1,
-     "zoom": 22,
-     "zoomRender": 6.1,
-     "zoomCopy": 15.3,
+     "firstDraw": 75,
+     "zoom": 22.7,
+     "zoomRender": 7.1,
+     "zoomCopy": 15.2,
      "canvasPeak": 26035200,
-     "heapPeak": 100640732,
+     "heapPeak": 39108820,
      "split": {
-      "render": 15.3,
-      "text": 16.3,
+      "render": 20.3,
+      "text": 16.6,
       "ink": 0,
       "rp": 0,
-      "lay": 26.9,
-      "ops": 2.2,
+      "lay": 29.7,
+      "ops": 3.3,
       "compose": 0,
-      "svg": 1.8
+      "svg": 1.9
      }
     },
     "1512.03385v1-ja": {
      "pages": 12,
-     "firstDraw": 77.6,
-     "zoom": 21.6,
-     "zoomRender": 6.2,
-     "zoomCopy": 15.6,
+     "firstDraw": 73.8,
+     "zoom": 22.3,
+     "zoomRender": 6.6,
+     "zoomCopy": 15.3,
      "canvasPeak": 26035200,
-     "heapPeak": 104100720,
+     "heapPeak": 39398928,
      "split": {
-      "render": 17.4,
-      "text": 25.5,
+      "render": 16.5,
+      "text": 26,
       "ink": 0,
       "rp": 0,
-      "lay": 23.9,
-      "ops": 2.4,
-      "compose": 0,
-      "svg": 1.4
-     }
-    },
-    "1512.03385v1-ko": {
-     "pages": 12,
-     "firstDraw": 73.7,
-     "zoom": 21.2,
-     "zoomRender": 6.4,
-     "zoomCopy": 14.7,
-     "canvasPeak": 26035200,
-     "heapPeak": 65840132,
-     "split": {
-      "render": 16.3,
-      "text": 24,
-      "ink": 0,
-      "rp": 0,
-      "lay": 25.7,
-      "ops": 2.4,
-      "compose": 0,
-      "svg": 1.3
-     }
-    },
-    "1512.03385v1-ru": {
-     "pages": 12,
-     "firstDraw": 64.9,
-     "zoom": 22.4,
-     "zoomRender": 6.4,
-     "zoomCopy": 15.8,
-     "canvasPeak": 26035200,
-     "heapPeak": 92705776,
-     "split": {
-      "render": 15,
-      "text": 16.5,
-      "ink": 0,
-      "rp": 0,
-      "lay": 25.6,
-      "ops": 2.3,
-      "compose": 0,
-      "svg": 1.3
-     }
-    },
-    "1512.03385v1-zh": {
-     "pages": 12,
-     "firstDraw": 72.1,
-     "zoom": 23.2,
-     "zoomRender": 6.8,
-     "zoomCopy": 16.4,
-     "canvasPeak": 26035200,
-     "heapPeak": 70893528,
-     "split": {
-      "render": 17.7,
-      "text": 24.8,
-      "ink": 0,
-      "rp": 0,
-      "lay": 24.4,
-      "ops": 2.8,
-      "compose": 0,
-      "svg": 1.3
-     }
-    },
-    "1706.03762v7-de": {
-     "pages": 12,
-     "firstDraw": 52.1,
-     "zoom": 26.4,
-     "zoomRender": 5.9,
-     "zoomCopy": 20.6,
-     "canvasPeak": 25675200,
-     "heapPeak": 73282084,
-     "split": {
-      "render": 8.6,
-      "text": 12.1,
-      "ink": 0,
-      "rp": 0,
-      "lay": 15.5,
-      "ops": 1.7,
-      "compose": 0,
-      "svg": 1
-     }
-    },
-    "1706.03762v7-es": {
-     "pages": 12,
-     "firstDraw": 51.3,
-     "zoom": 25.5,
-     "zoomRender": 5.8,
-     "zoomCopy": 19.5,
-     "canvasPeak": 25675200,
-     "heapPeak": 70287220,
-     "split": {
-      "render": 10.9,
-      "text": 10.3,
-      "ink": 0,
-      "rp": 0,
-      "lay": 16.4,
-      "ops": 1.7,
-      "compose": 0,
-      "svg": 1.1
-     }
-    },
-    "1706.03762v7-fr": {
-     "pages": 12,
-     "firstDraw": 53,
-     "zoom": 25.2,
-     "zoomRender": 5.9,
-     "zoomCopy": 19.6,
-     "canvasPeak": 25675200,
-     "heapPeak": 65724240,
-     "split": {
-      "render": 10.4,
-      "text": 10.6,
-      "ink": 0,
-      "rp": 0,
-      "lay": 16.3,
-      "ops": 1.5,
-      "compose": 0,
-      "svg": 1.2
-     }
-    },
-    "1706.03762v7-ja": {
-     "pages": 12,
-     "firstDraw": 61.7,
-     "zoom": 26.5,
-     "zoomRender": 5.8,
-     "zoomCopy": 20.5,
-     "canvasPeak": 25675200,
-     "heapPeak": 61497972,
-     "split": {
-      "render": 12.1,
-      "text": 16.9,
-      "ink": 0,
-      "rp": 0,
-      "lay": 13.8,
-      "ops": 1.7,
-      "compose": 0,
-      "svg": 0.7
-     }
-    },
-    "1706.03762v7-ko": {
-     "pages": 12,
-     "firstDraw": 59.7,
-     "zoom": 28.8,
-     "zoomRender": 5.5,
-     "zoomCopy": 22.5,
-     "canvasPeak": 25675200,
-     "heapPeak": 60111460,
-     "split": {
-      "render": 11.1,
-      "text": 17.1,
-      "ink": 0,
-      "rp": 0,
-      "lay": 16.2,
-      "ops": 1.9,
-      "compose": 0,
-      "svg": 1
-     }
-    },
-    "1706.03762v7-ru": {
-     "pages": 12,
-     "firstDraw": 53.7,
-     "zoom": 25.2,
-     "zoomRender": 5.6,
-     "zoomCopy": 19.7,
-     "canvasPeak": 25675200,
-     "heapPeak": 65264000,
-     "split": {
-      "render": 9.8,
-      "text": 12.1,
-      "ink": 0,
-      "rp": 0,
-      "lay": 16.5,
-      "ops": 1.7,
-      "compose": 0,
-      "svg": 0.9
-     }
-    },
-    "1706.03762v7-zh": {
-     "pages": 12,
-     "firstDraw": 56.3,
-     "zoom": 25,
-     "zoomRender": 5.6,
-     "zoomCopy": 19.5,
-     "canvasPeak": 25675200,
-     "heapPeak": 55227472,
-     "split": {
-      "render": 8.3,
-      "text": 15.8,
-      "ink": 0,
-      "rp": 0,
-      "lay": 14.4,
-      "ops": 1.7,
-      "compose": 0,
-      "svg": 0.6
-     }
-    },
-    "1810.04805v2-de": {
-     "pages": 12,
-     "firstDraw": 59.9,
-     "zoom": 23.4,
-     "zoomRender": 6.8,
-     "zoomCopy": 14.3,
-     "canvasPeak": 26846016,
-     "heapPeak": 78560340,
-     "split": {
-      "render": 6.4,
-      "text": 16.7,
-      "ink": 0,
-      "rp": 0,
-      "lay": 22.7,
-      "ops": 2.8,
-      "compose": 0,
-      "svg": 1.1
-     }
-    },
-    "1810.04805v2-es": {
-     "pages": 12,
-     "firstDraw": 62.7,
-     "zoom": 22.8,
-     "zoomRender": 7,
-     "zoomCopy": 14.2,
-     "canvasPeak": 26846016,
-     "heapPeak": 66558292,
-     "split": {
-      "render": 6.8,
-      "text": 16.5,
-      "ink": 0,
-      "rp": 0,
-      "lay": 22.1,
-      "ops": 2.4,
-      "compose": 0,
-      "svg": 1.5
-     }
-    },
-    "1810.04805v2-fr": {
-     "pages": 12,
-     "firstDraw": 60.7,
-     "zoom": 22.6,
-     "zoomRender": 7.1,
-     "zoomCopy": 15.4,
-     "canvasPeak": 26846016,
-     "heapPeak": 88874784,
-     "split": {
-      "render": 6.9,
-      "text": 16.2,
-      "ink": 0,
-      "rp": 0,
-      "lay": 22.2,
-      "ops": 2.3,
+      "lay": 26.1,
+      "ops": 4,
       "compose": 0,
       "svg": 1.7
      }
     },
-    "1810.04805v2-ja": {
+    "1512.03385v1-ko": {
      "pages": 12,
-     "firstDraw": 65.4,
-     "zoom": 24.5,
-     "zoomRender": 7.2,
-     "zoomCopy": 14.9,
-     "canvasPeak": 26846016,
-     "heapPeak": 69983444,
+     "firstDraw": 81.6,
+     "zoom": 23.8,
+     "zoomRender": 7.1,
+     "zoomCopy": 16.3,
+     "canvasPeak": 26035200,
+     "heapPeak": 37379540,
      "split": {
-      "render": 7.2,
-      "text": 22.6,
+      "render": 20.1,
+      "text": 26.4,
       "ink": 0,
       "rp": 0,
-      "lay": 20,
-      "ops": 2.4,
+      "lay": 28.4,
+      "ops": 3.2,
       "compose": 0,
-      "svg": 1.3
+      "svg": 1.7
+     }
+    },
+    "1512.03385v1-ru": {
+     "pages": 12,
+     "firstDraw": 77.4,
+     "zoom": 23.4,
+     "zoomRender": 7.3,
+     "zoomCopy": 15.7,
+     "canvasPeak": 26035200,
+     "heapPeak": 38408564,
+     "split": {
+      "render": 19,
+      "text": 17.9,
+      "ink": 0,
+      "rp": 0,
+      "lay": 30.9,
+      "ops": 4,
+      "compose": 0,
+      "svg": 1.7
+     }
+    },
+    "1512.03385v1-zh": {
+     "pages": 12,
+     "firstDraw": 76.6,
+     "zoom": 24.1,
+     "zoomRender": 7.3,
+     "zoomCopy": 16.6,
+     "canvasPeak": 26035200,
+     "heapPeak": 37516476,
+     "split": {
+      "render": 14.9,
+      "text": 27.4,
+      "ink": 0,
+      "rp": 0,
+      "lay": 24.7,
+      "ops": 3.5,
+      "compose": 0,
+      "svg": 1.2
+     }
+    },
+    "1706.03762v7-de": {
+     "pages": 12,
+     "firstDraw": 63.5,
+     "zoom": 26.7,
+     "zoomRender": 6.4,
+     "zoomCopy": 20.3,
+     "canvasPeak": 25675200,
+     "heapPeak": 26429956,
+     "split": {
+      "render": 6.3,
+      "text": 13.4,
+      "ink": 0,
+      "rp": 0,
+      "lay": 19.6,
+      "ops": 2.2,
+      "compose": 0,
+      "svg": 1.2
+     }
+    },
+    "1706.03762v7-es": {
+     "pages": 12,
+     "firstDraw": 65.4,
+     "zoom": 31.9,
+     "zoomRender": 6.8,
+     "zoomCopy": 22.2,
+     "canvasPeak": 25675200,
+     "heapPeak": 26085712,
+     "split": {
+      "render": 6,
+      "text": 13.4,
+      "ink": 0,
+      "rp": 0,
+      "lay": 20.4,
+      "ops": 2.1,
+      "compose": 0,
+      "svg": 1.2
+     }
+    },
+    "1706.03762v7-fr": {
+     "pages": 12,
+     "firstDraw": 69.4,
+     "zoom": 30,
+     "zoomRender": 6.4,
+     "zoomCopy": 22.2,
+     "canvasPeak": 25675200,
+     "heapPeak": 26560480,
+     "split": {
+      "render": 8.6,
+      "text": 13.9,
+      "ink": 0,
+      "rp": 0,
+      "lay": 21.1,
+      "ops": 1.9,
+      "compose": 0,
+      "svg": 1.5
+     }
+    },
+    "1706.03762v7-ja": {
+     "pages": 12,
+     "firstDraw": 64.6,
+     "zoom": 29.4,
+     "zoomRender": 6.4,
+     "zoomCopy": 23,
+     "canvasPeak": 25675200,
+     "heapPeak": 26726760,
+     "split": {
+      "render": 6.8,
+      "text": 19.3,
+      "ink": 0,
+      "rp": 0,
+      "lay": 18.4,
+      "ops": 2.2,
+      "compose": 0,
+      "svg": 1
+     }
+    },
+    "1706.03762v7-ko": {
+     "pages": 12,
+     "firstDraw": 66.3,
+     "zoom": 28.7,
+     "zoomRender": 6.3,
+     "zoomCopy": 22,
+     "canvasPeak": 25675200,
+     "heapPeak": 25413572,
+     "split": {
+      "render": 11.3,
+      "text": 19.2,
+      "ink": 0,
+      "rp": 0,
+      "lay": 19.6,
+      "ops": 2.3,
+      "compose": 0,
+      "svg": 1.2
+     }
+    },
+    "1706.03762v7-ru": {
+     "pages": 12,
+     "firstDraw": 67.3,
+     "zoom": 29.8,
+     "zoomRender": 6.3,
+     "zoomCopy": 20.7,
+     "canvasPeak": 25675200,
+     "heapPeak": 26232596,
+     "split": {
+      "render": 7.3,
+      "text": 13.5,
+      "ink": 0,
+      "rp": 0,
+      "lay": 20.9,
+      "ops": 2.3,
+      "compose": 0,
+      "svg": 1.1
+     }
+    },
+    "1706.03762v7-zh": {
+     "pages": 12,
+     "firstDraw": 60.3,
+     "zoom": 29.1,
+     "zoomRender": 6.1,
+     "zoomCopy": 20.9,
+     "canvasPeak": 25675200,
+     "heapPeak": 25514988,
+     "split": {
+      "render": 7.2,
+      "text": 19.3,
+      "ink": 0,
+      "rp": 0,
+      "lay": 17.2,
+      "ops": 2.1,
+      "compose": 0,
+      "svg": 0.7
+     }
+    },
+    "1810.04805v2-de": {
+     "pages": 12,
+     "firstDraw": 72.2,
+     "zoom": 23.4,
+     "zoomRender": 7.5,
+     "zoomCopy": 14.8,
+     "canvasPeak": 26846016,
+     "heapPeak": 34193908,
+     "split": {
+      "render": 17.2,
+      "text": 16.1,
+      "ink": 0,
+      "rp": 0,
+      "lay": 27.2,
+      "ops": 3.9,
+      "compose": 0,
+      "svg": 1.5
+     }
+    },
+    "1810.04805v2-es": {
+     "pages": 12,
+     "firstDraw": 68.3,
+     "zoom": 23,
+     "zoomRender": 7.2,
+     "zoomCopy": 14.7,
+     "canvasPeak": 26846016,
+     "heapPeak": 33813804,
+     "split": {
+      "render": 12,
+      "text": 15.5,
+      "ink": 0,
+      "rp": 0,
+      "lay": 28.3,
+      "ops": 3.3,
+      "compose": 0,
+      "svg": 2
+     }
+    },
+    "1810.04805v2-fr": {
+     "pages": 12,
+     "firstDraw": 70.5,
+     "zoom": 23.3,
+     "zoomRender": 7.5,
+     "zoomCopy": 14.4,
+     "canvasPeak": 26846016,
+     "heapPeak": 34643640,
+     "split": {
+      "render": 14.7,
+      "text": 14.8,
+      "ink": 0,
+      "rp": 0,
+      "lay": 28,
+      "ops": 3.8,
+      "compose": 0,
+      "svg": 2
+     }
+    },
+    "1810.04805v2-ja": {
+     "pages": 12,
+     "firstDraw": 72,
+     "zoom": 21.1,
+     "zoomRender": 7.1,
+     "zoomCopy": 14.2,
+     "canvasPeak": 26846016,
+     "heapPeak": 34675728,
+     "split": {
+      "render": 12.1,
+      "text": 22.9,
+      "ink": 0,
+      "rp": 0,
+      "lay": 24.4,
+      "ops": 3.3,
+      "compose": 0,
+      "svg": 1.2
      }
     },
     "1810.04805v2-ko": {
      "pages": 12,
-     "firstDraw": 69.1,
-     "zoom": 23.1,
-     "zoomRender": 7.2,
-     "zoomCopy": 15.2,
+     "firstDraw": 76.8,
+     "zoom": 22,
+     "zoomRender": 7.1,
+     "zoomCopy": 15,
      "canvasPeak": 26846016,
-     "heapPeak": 78098600,
+     "heapPeak": 32991916,
      "split": {
-      "render": 7.6,
-      "text": 22.5,
+      "render": 17.6,
+      "text": 22,
       "ink": 0,
       "rp": 0,
-      "lay": 22,
-      "ops": 2.3,
+      "lay": 25.5,
+      "ops": 3.2,
       "compose": 0,
       "svg": 1.4
      }
     },
     "1810.04805v2-ru": {
      "pages": 12,
-     "firstDraw": 59.7,
-     "zoom": 25.8,
-     "zoomRender": 7.2,
-     "zoomCopy": 14.6,
+     "firstDraw": 71.3,
+     "zoom": 23.6,
+     "zoomRender": 7.4,
+     "zoomCopy": 14.8,
      "canvasPeak": 26846016,
-     "heapPeak": 87006640,
+     "heapPeak": 34052312,
      "split": {
-      "render": 6.4,
-      "text": 16.8,
+      "render": 15.1,
+      "text": 15.6,
       "ink": 0,
       "rp": 0,
-      "lay": 21.3,
-      "ops": 2.6,
-      "compose": 0,
-      "svg": 1.5
-     }
-    },
-    "1810.04805v2-zh": {
-     "pages": 12,
-     "firstDraw": 63.3,
-     "zoom": 24.3,
-     "zoomRender": 7.6,
-     "zoomCopy": 15.5,
-     "canvasPeak": 26846016,
-     "heapPeak": 74987732,
-     "split": {
-      "render": 6.9,
-      "text": 23.7,
-      "ink": 0,
-      "rp": 0,
-      "lay": 19.8,
-      "ops": 2.3,
-      "compose": 0,
-      "svg": 1.1
-     }
-    },
-    "2307.16209v1-zh": {
-     "pages": 12,
-     "firstDraw": 38.4,
-     "zoom": 17.6,
-     "zoomRender": 6,
-     "zoomCopy": 11.5,
-     "canvasPeak": 26126016,
-     "heapPeak": 36819012,
-     "split": {
-      "render": 6.2,
-      "text": 12.9,
-      "ink": 0,
-      "rp": 0,
-      "lay": 9.4,
-      "ops": 1.2,
-      "compose": 0,
-      "svg": 0.6
-     }
-    },
-    "2608.04322v1-de": {
-     "pages": 12,
-     "firstDraw": 94.9,
-     "zoom": 31.4,
-     "zoomRender": 9.4,
-     "zoomCopy": 19.8,
-     "canvasPeak": 26035200,
-     "heapPeak": 95106444,
-     "split": {
-      "render": 21,
-      "text": 26.5,
-      "ink": 0,
-      "rp": 0,
-      "lay": 33.1,
-      "ops": 3.7,
-      "compose": 0,
-      "svg": 1.8
-     }
-    },
-    "2608.04322v1-es": {
-     "pages": 12,
-     "firstDraw": 95.7,
-     "zoom": 28.4,
-     "zoomRender": 7.8,
-     "zoomCopy": 20.2,
-     "canvasPeak": 26035200,
-     "heapPeak": 84899000,
-     "split": {
-      "render": 16.5,
-      "text": 27.5,
-      "ink": 0,
-      "rp": 0,
-      "lay": 33.2,
-      "ops": 3.8,
-      "compose": 0,
-      "svg": 2.3
-     }
-    },
-    "2608.04322v1-fr": {
-     "pages": 12,
-     "firstDraw": 80.4,
-     "zoom": 29.1,
-     "zoomRender": 7.7,
-     "zoomCopy": 19.3,
-     "canvasPeak": 26035200,
-     "heapPeak": 94852592,
-     "split": {
-      "render": 15.7,
-      "text": 23.3,
-      "ink": 0,
-      "rp": 0,
-      "lay": 28.2,
-      "ops": 3.2,
-      "compose": 0,
-      "svg": 2
-     }
-    },
-    "2608.04322v1-ja": {
-     "pages": 12,
-     "firstDraw": 85.1,
-     "zoom": 27.2,
-     "zoomRender": 8,
-     "zoomCopy": 18.5,
-     "canvasPeak": 26035200,
-     "heapPeak": 101035632,
-     "split": {
-      "render": 20.6,
-      "text": 31.8,
-      "ink": 0,
-      "rp": 0,
-      "lay": 20.9,
-      "ops": 3.2,
-      "compose": 0,
-      "svg": 1.2
-     }
-    },
-    "2608.04322v1-ko": {
-     "pages": 12,
-     "firstDraw": 101.9,
-     "zoom": 26.4,
-     "zoomRender": 8.3,
-     "zoomCopy": 17.3,
-     "canvasPeak": 26035200,
-     "heapPeak": 98715528,
-     "split": {
-      "render": 18.4,
-      "text": 38.9,
-      "ink": 0,
-      "rp": 0,
-      "lay": 29.6,
-      "ops": 3.3,
+      "lay": 27.1,
+      "ops": 3.5,
       "compose": 0,
       "svg": 1.7
      }
     },
-    "2608.04322v1-ru": {
+    "1810.04805v2-zh": {
      "pages": 12,
-     "firstDraw": 94.3,
-     "zoom": 28.5,
-     "zoomRender": 7.8,
-     "zoomCopy": 18,
-     "canvasPeak": 26035200,
-     "heapPeak": 94884584,
+     "firstDraw": 67.3,
+     "zoom": 22.8,
+     "zoomRender": 7.1,
+     "zoomCopy": 14.7,
+     "canvasPeak": 26846016,
+     "heapPeak": 33064552,
      "split": {
-      "render": 17.2,
-      "text": 23,
+      "render": 7.9,
+      "text": 22,
       "ink": 0,
       "rp": 0,
-      "lay": 31.7,
-      "ops": 3.3,
+      "lay": 21.2,
+      "ops": 2.8,
       "compose": 0,
-      "svg": 1.9
+      "svg": 0.8
+     }
+    },
+    "2307.16209v1-zh": {
+     "pages": 12,
+     "firstDraw": 42.6,
+     "zoom": 17.7,
+     "zoomRender": 5.9,
+     "zoomCopy": 11.3,
+     "canvasPeak": 26126016,
+     "heapPeak": 26627420,
+     "split": {
+      "render": 5.8,
+      "text": 12.6,
+      "ink": 0,
+      "rp": 0,
+      "lay": 8.6,
+      "ops": 1.2,
+      "compose": 0,
+      "svg": 0.5
+     }
+    },
+    "2608.04322v1-de": {
+     "pages": 12,
+     "firstDraw": 85.8,
+     "zoom": 25.2,
+     "zoomRender": 7.5,
+     "zoomCopy": 17.4,
+     "canvasPeak": 26035200,
+     "heapPeak": 44629460,
+     "split": {
+      "render": 16.3,
+      "text": 19,
+      "ink": 0,
+      "rp": 0,
+      "lay": 27.3,
+      "ops": 3.4,
+      "compose": 0,
+      "svg": 1.6
+     }
+    },
+    "2608.04322v1-es": {
+     "pages": 12,
+     "firstDraw": 87.2,
+     "zoom": 26,
+     "zoomRender": 7.7,
+     "zoomCopy": 16.4,
+     "canvasPeak": 26035200,
+     "heapPeak": 45330748,
+     "split": {
+      "render": 17.6,
+      "text": 23.9,
+      "ink": 0,
+      "rp": 0,
+      "lay": 28.6,
+      "ops": 3.7,
+      "compose": 0,
+      "svg": 2.1
+     }
+    },
+    "2608.04322v1-fr": {
+     "pages": 12,
+     "firstDraw": 92.2,
+     "zoom": 25.4,
+     "zoomRender": 7.5,
+     "zoomCopy": 16.2,
+     "canvasPeak": 26035200,
+     "heapPeak": 45843776,
+     "split": {
+      "render": 17,
+      "text": 19.8,
+      "ink": 0,
+      "rp": 0,
+      "lay": 29.8,
+      "ops": 3.6,
+      "compose": 0,
+      "svg": 2.1
+     }
+    },
+    "2608.04322v1-ja": {
+     "pages": 12,
+     "firstDraw": 87.8,
+     "zoom": 25,
+     "zoomRender": 7.7,
+     "zoomCopy": 17.1,
+     "canvasPeak": 26035200,
+     "heapPeak": 45646288,
+     "split": {
+      "render": 20.8,
+      "text": 30.8,
+      "ink": 0,
+      "rp": 0,
+      "lay": 22.5,
+      "ops": 2.9,
+      "compose": 0,
+      "svg": 1.4
+     }
+    },
+    "2608.04322v1-ko": {
+     "pages": 12,
+     "firstDraw": 91.5,
+     "zoom": 25,
+     "zoomRender": 7.6,
+     "zoomCopy": 15,
+     "canvasPeak": 26035200,
+     "heapPeak": 43351212,
+     "split": {
+      "render": 14.8,
+      "text": 29.3,
+      "ink": 0,
+      "rp": 0,
+      "lay": 25.7,
+      "ops": 3,
+      "compose": 0,
+      "svg": 1.6
+     }
+    },
+    "2608.04322v1-ru": {
+     "pages": 12,
+     "firstDraw": 88.3,
+     "zoom": 25.1,
+     "zoomRender": 7.4,
+     "zoomCopy": 16.1,
+     "canvasPeak": 26035200,
+     "heapPeak": 44833064,
+     "split": {
+      "render": 19.8,
+      "text": 18.9,
+      "ink": 0,
+      "rp": 0,
+      "lay": 28.6,
+      "ops": 3.2,
+      "compose": 0,
+      "svg": 1.6
      }
     },
     "2608.04322v1-zh": {
      "pages": 12,
-     "firstDraw": 97.2,
-     "zoom": 31.9,
-     "zoomRender": 8.5,
-     "zoomCopy": 20,
+     "firstDraw": 90.4,
+     "zoom": 24.9,
+     "zoomRender": 7.6,
+     "zoomCopy": 16.9,
      "canvasPeak": 26035200,
-     "heapPeak": 100359584,
+     "heapPeak": 43466480,
      "split": {
-      "render": 18.7,
-      "text": 39.2,
+      "render": 21.5,
+      "text": 28.6,
       "ink": 0,
       "rp": 0,
-      "lay": 26.3,
-      "ops": 3.4,
+      "lay": 22.4,
+      "ops": 2.9,
       "compose": 0,
       "svg": 1.2
      }
@@ -1251,130 +1251,128 @@
    },
    "all": {
     "pages": 348,
-    "firstDraw": 67.6,
-    "zoom": 24.8,
-    "zoomRender": 6.8,
-    "zoomCopy": 17.3,
+    "firstDraw": 73.9,
+    "zoom": 24.3,
+    "zoomRender": 7,
+    "zoomCopy": 16.7,
     "canvasPeak": 26846016,
-    "heapPeak": 104100720,
+    "heapPeak": 45843776,
     "split": {
-     "render": 12,
-     "text": 19.6,
+     "render": 15,
+     "text": 19.5,
      "ink": 0,
      "rp": 0,
-     "lay": 20.3,
-     "ops": 2.4,
+     "lay": 22.7,
+     "ops": 2.9,
      "compose": 0,
-     "svg": 1.2
+     "svg": 1.3
     }
    }
   },
   "server": {
    "1512.03385v1": {
-    "makerMs": 465,
-    "makerOpsMs": 132,
-    "removerMs": 195,
+    "makerMs": 421,
+    "makerOpsMs": 110,
+    "removerMs": 183,
     "remover": {
-     "parse": 38,
+     "parse": 34,
      "ink": 48,
-     "plan": 83,
-     "make": 26,
-     "ops": 135
+     "plan": 77,
+     "make": 24,
+     "ops": 132
     },
-    "layoutBytes": 107152,
-    "layoutGzip": 34425,
+    "layoutBytes": 120860,
+    "layoutGzip": 38697,
     "addonBytes": 2174,
     "manifestGzip": 364,
-    "download": 36963
+    "download": 41235
    },
    "1706.03762v7": {
-    "makerMs": 521,
-    "makerOpsMs": 192,
-    "removerMs": 234,
+    "makerMs": 451,
+    "makerOpsMs": 163,
+    "removerMs": 211,
     "remover": {
-     "parse": 177,
-     "ink": 27,
-     "plan": 21,
+     "parse": 158,
+     "ink": 26,
+     "plan": 18,
      "make": 9,
-     "ops": 218
+     "ops": 202
     },
-    "layoutBytes": 51636,
-    "layoutGzip": 17912,
+    "layoutBytes": 51755,
+    "layoutGzip": 17940,
     "addonBytes": 2569,
-    "manifestGzip": 356,
-    "download": 20837
+    "manifestGzip": 359,
+    "download": 20868
    },
    "1810.04805v2": {
-    "makerMs": 525,
-    "makerOpsMs": 175,
-    "removerMs": 134,
+    "makerMs": 454,
+    "makerOpsMs": 151,
+    "removerMs": 133,
     "remover": {
-     "parse": 36,
-     "ink": 40,
-     "plan": 48,
-     "make": 10,
-     "ops": 150
+     "parse": 40,
+     "ink": 37,
+     "plan": 45,
+     "make": 11,
+     "ops": 119
     },
-    "layoutBytes": 128677,
-    "layoutGzip": 41443,
+    "layoutBytes": 136196,
+    "layoutGzip": 43796,
     "addonBytes": 352,
     "manifestGzip": 197,
-    "download": 41992
+    "download": 44345
    },
    "2307.16209v1": {
-    "makerMs": 2205,
-    "makerOpsMs": 711,
-    "removerMs": 484,
+    "makerMs": 2087,
+    "makerOpsMs": 682,
+    "removerMs": 445,
     "remover": {
-     "parse": 168,
-     "ink": 149,
-     "plan": 106,
-     "make": 61,
-     "ops": 539
+     "parse": 160,
+     "ink": 154,
+     "plan": 72,
+     "make": 59,
+     "ops": 533
     },
-    "layoutBytes": 490227,
-    "layoutGzip": 156672,
+    "layoutBytes": 491623,
+    "layoutGzip": 157032,
     "addonBytes": 32928,
-    "manifestGzip": 1086,
-    "download": 190686
+    "manifestGzip": 1088,
+    "download": 191048
    },
    "2608.04322v1": {
-    "makerMs": 693,
-    "makerOpsMs": 244,
-    "removerMs": 126,
+    "makerMs": 591,
+    "makerOpsMs": 210,
+    "removerMs": 98,
     "remover": {
-     "parse": 22,
-     "ink": 51,
-     "plan": 38,
-     "make": 15,
-     "ops": 232
+     "parse": 18,
+     "ink": 33,
+     "plan": 34,
+     "make": 13,
+     "ops": 178
     },
-    "layoutBytes": 130683,
-    "layoutGzip": 41671,
+    "layoutBytes": 135469,
+    "layoutGzip": 42982,
     "addonBytes": 1769,
     "manifestGzip": 266,
-    "download": 43706
+    "download": 45017
    }
   }
  },
  "over": [
-  "1512.03385v1-de first drawing: 59.6 -> 67.6",
-  "1512.03385v1-ja first drawing: 65.2 -> 77.6",
-  "2307.16209v1-zh first drawing: 34 -> 38.4",
-  "2608.04322v1-de first drawing: 78.2 -> 94.9",
-  "2608.04322v1-de zoom: 24.7 -> 31.4",
-  "2608.04322v1-es first drawing: 78.8 -> 95.7",
-  "2608.04322v1-es zoom: 25 -> 28.4",
-  "2608.04322v1-fr zoom: 24.9 -> 29.1",
-  "2608.04322v1-ja zoom: 24.2 -> 27.2",
-  "2608.04322v1-ko first drawing: 86.5 -> 101.9",
-  "2608.04322v1-ru first drawing: 80 -> 94.3",
-  "2608.04322v1-ru zoom: 24.5 -> 28.5",
-  "2608.04322v1-zh first drawing: 78.6 -> 97.2",
-  "2608.04322v1-zh zoom: 26.2 -> 31.9",
-  "1512.03385v1 maker: 385 -> 465",
-  "1810.04805v2 maker: 464 -> 525",
-  "2307.16209v1 maker: 1762 -> 2205",
-  "2608.04322v1 maker: 617 -> 693"
+  "1512.03385v1-de first drawing: 64.9 -> 72.9",
+  "1512.03385v1-fr first drawing: 67.4 -> 75",
+  "1512.03385v1-ru first drawing: 67.7 -> 77.4",
+  "1512.03385v1-zh first drawing: 68.5 -> 76.6",
+  "1706.03762v7-es first drawing: 55.9 -> 65.4",
+  "1706.03762v7-es zoom: 27.2 -> 31.9",
+  "1706.03762v7-fr first drawing: 60.1 -> 69.4",
+  "1706.03762v7-fr zoom: 26.1 -> 30",
+  "1706.03762v7-ja first drawing: 58.6 -> 64.6",
+  "1706.03762v7-ru first drawing: 60 -> 67.3",
+  "1706.03762v7-ru zoom: 26.7 -> 29.8",
+  "1810.04805v2-de first drawing: 60.9 -> 72.2",
+  "1810.04805v2-ru first drawing: 64.7 -> 71.3",
+  "1512.03385v1 maker: 346 -> 421",
+  "1810.04805v2 maker: 406 -> 454",
+  "2307.16209v1 maker: 1712 -> 2087"
  ]
 }
