@@ -7,7 +7,7 @@ import { constants as zlibConstants, deflateRawSync, deflateSync } from 'node:zl
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
-import { CHECK_SETS, checkPage, lex, makeAddon, openRemover, type RemovalPlan, SETS } from '@/pdf-reader/engine/layout/remove.mjs'
+import { CHECK_SETS, checkPage, lex, makeAddon, openRemover, type RemovalPlan, removePaper, SETS } from '@/pdf-reader/engine/layout/remove.mjs'
 
 // The text remover (layout/remove.mjs) on a PDF written here: two pages, a simple font with widths, a page's own text,
 // a TJ with a kerning number, a rule, a form painted once on page 1 and one painted twice on page 2. Each plan's result
@@ -391,6 +391,21 @@ describe("an edit of a long shown string costs its length, not its square", () =
       const out = await R.makeAddon({ R: await R.openRemover(data, { PL }), bytes: data, OPS: pdfjs.OPS, opListOf: async () => opList, deflate: b => new Uint8Array(deflateSync(b)), plan: { pages: { 1: { units: [{ id: 1, glyphs: [0, 5], paths: [] }], crops: [] } } } })
       return out.manifest.page[1]`
     expect(await bounded<{ ok: boolean }>(body, long, 4000)).toMatchObject({ ok: true })
+  })
+})
+
+describe("the remover's entry for a paper: its add-on, or the paper refused, never a throw", () => {
+  // the isolation contract (the module's head): the caller ships no add-on for a refused paper, and its readers draw it
+  // the old way
+  it('refuses a paper it cannot open, or one whose reading fails midway, and makes the add-on of one it can', async () => {
+    const { pages } = await inksOf(PDF)
+    const base = { PL, OPS, deflate, plan: planOne(pages.map(x => x.ink)) }
+    const good = await removePaper({ ...base, bytes: PDF, opListOf: async q => pages[q - 1]!.opList })
+    expect(good).toMatchObject({ ok: true, manifest: { page: { 1: { ok: true } } } })
+    const unread = await removePaper({ ...base, bytes: enc('not a PDF at all'), opListOf: async q => pages[q - 1]!.opList })
+    expect(unread).toMatchObject({ ok: false, refused: expect.stringMatching(/could not be read/) })
+    const midway = await removePaper({ ...base, bytes: PDF, opListOf: async () => { throw new Error('the operator list was lost') } })
+    expect(midway).toEqual({ ok: false, refused: 'the paper could not be read: the operator list was lost' })
   })
 })
 

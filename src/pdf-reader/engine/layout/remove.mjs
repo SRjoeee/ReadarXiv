@@ -31,6 +31,18 @@
 // An original module (no port statement). It imports nothing but the engine's own reading of a page's ink (checkPage's):
 // the PDF object layer (@cantoo/pdf-lib, MIT), deflate and a tolerant inflate are given. It runs where the layout file is
 // made, once a paper.
+//
+// Isolation, the caller's contract (the coordinator's ruling of 2026-10-07): arXiv's PDF is untrusted, and the hard bound
+// on what it may cost is the process the remover runs in, not this module. Its budgets (WALK_MAX, HELD_MAX, BYTES_MAX,
+// FORM_DEPTH) refuse a page early and softly, the rest of the paper going on; PDF.js, which reads every page before the
+// remover does, and the object layer may still exceed any of them. So:
+//   - run removePaper (or openRemover and makeAddon) in a child process or a worker of its own, under a hard memory limit
+//     (a child: RLIMIT_DATA or a cgroup's memory.max with V8's --max-old-space-size; a worker: resourceLimits) and a wall
+//     clock, one paper at a time;
+//   - removePaper refuses the paper, never throws, on any error of its own reading ({ ok: false, refused });
+//   - on a refusal, a crash, a limit reached or the clock run out, ship no add-on for the paper: its readers draw every
+//     unit the old way, erased from the original page and put back where it is kept (layer-proto/run.mjs with no
+//     `removal`, or a page the manifest refuses), which loses no unit.
 
 /** the remover's version: raised with any change to what it writes; it enters the add-on's key (2: compact sets; 3: a
  *  Type 3 glyph's removed advance with its font matrix's translation, an unusable matrix refused; 4: a hex string read as
@@ -658,6 +670,21 @@ function applyEdits(bytes, list) {
   }
   parts.push(bytes.subarray(at))
   return concat(parts)
+}
+
+/**
+ * The remover's entry for one paper: openRemover then makeAddon over its options (both functions'), as the isolation
+ * contract of the module's head runs it. Returns { ok: true, bytes, appended, manifest }, or { ok: false, refused } for any
+ * error the reading of the paper throws (an object layer that cannot open it, a stream it cannot decode, any fault of
+ * this module's): the paper ships no add-on and its readers draw it the old way. Never throws
+ */
+export async function removePaper({ bytes, PL, inflate = null, walkMax, heldMax, bytesMax, ...addon }) {
+  try {
+    const R = await openRemover(bytes, { PL, inflate, ...(walkMax ? { walkMax } : {}), ...(heldMax ? { heldMax } : {}), ...(bytesMax ? { bytesMax } : {}) })
+    return { ok: true, ...(await makeAddon({ ...addon, R, bytes })) }
+  } catch (e) {
+    return { ok: false, refused: `the paper could not be read: ${String(e?.message ?? e).slice(0, 200)}` }
+  }
 }
 
 /**

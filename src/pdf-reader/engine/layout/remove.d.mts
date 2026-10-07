@@ -59,3 +59,5 @@ export declare function checkPage(o: { orig: Ink; removed: Ink; kept: Ink; entry
   removed: number; missed: number; other: number; moved: number; extra: number; maxMove: number
   rulesRemoved: number; rulesMissed: number; rulesOther: number; pOwn: number; pMissing: number; pOther: number
 }
+/** the remover's entry for one paper, under the module's isolation contract: the add-on, or the paper refused for any error; never throws */
+export declare function removePaper(o: { bytes: Uint8Array; PL: PdfLib; inflate?: ((bytes: Uint8Array, limit: number) => Uint8Array) | null; walkMax?: number; heldMax?: number; bytesMax?: number; OPS: Record<string, number>; opListOf: (page: number) => Promise<{ fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }>; deflate: (bytes: Uint8Array) => Uint8Array; plan: RemovalPlan; sets?: readonly string[]; boxesOf?: ((p: number, n: number, k: number) => number[] | null) | null; pathBoxOf?: ((p: number, m: number) => number[] | null) | null; compact?: boolean }): Promise<({ ok: true } & { bytes: Uint8Array; appended: number; manifest: RemovalManifest }) | { ok: false; refused: string }>
