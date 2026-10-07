@@ -7,10 +7,11 @@
 // over pointer and wheel events — and a React dialog; here the dialog is the platform's `<dialog>`, which also hands
 // the focus back to where it came from, as theirs does not.
 //
-// **Nothing is put into the paper.** The control is a box of ours at the end of `<body>`, and it is **the browser that
-// binds it to the figure**: while it shows, the figure carries one mark, a rule names the figure an anchor by it, and
-// the box is laid out at the figure's top right by CSS anchor positioning — it scrolls with the figure, and what the
-// site raises above its content covers both (see `SPOT` below for what placing it ourselves came to). The figure in
+// **Nothing is put into the paper.** The control is in a box of ours at the end of `<body>`, and it is **the browser
+// that binds it to the figure**: while it shows, the figure carries one mark, a rule names the figure an anchor by it,
+// and the box is laid out as the figure's rectangle by CSS anchor positioning, the control standing in its top right
+// corner — it scrolls with the figure, and what the site raises above its content covers both (see `SPOT` below for
+// what placing it ourselves came to, and for the header a page pins over a figure's top). The figure in
 // the dialog is a **copy**, and an `<object>` moved would load again. The copy is a light
 // child of our host, slotted into the dialog: it stays in the document's tree, so the page's own styles reach it — a
 // TikZ picture's labels are HTML set by arXiv's sheet — and `url(#…)` inside it still finds the paper's definitions
@@ -70,6 +71,8 @@ export const VIEWER_CLASS = 'axt-viewer'
 export const SPOT_CLASS = 'axt-viewer-spot'
 /** The control fades for this long before the figure stops being its anchor, or it would leave at once and never fade */
 const FADE_MS = 150
+/** Anything of ours: every class we inject starts with the prefix (DESIGN §7.1) */
+const OURS = '[class^="axt-"], [class*=" axt-"]'
 /**
  * How the control is bound to the figure under the pointer.
  *
@@ -82,9 +85,21 @@ const FADE_MS = 150
  * binding from outside: the figure is named an anchor, and the box, absolutely positioned in the document, is laid
  * out at its corner. It scrolls with the figure because it is in the same scrolled document; it takes the page's
  * content layer (`z-index: 1`, where our overlays are; arXiv's header is a sticky box at 2), so the header covers
- * it as it covers the figure; and a figure's top out of the window is no case to handle. Measured on Chrome 131 and
- * 153 over a bitmap, an external SVG figure and an inline picture: within a pixel of the corner, under the header
- * with the figure, and an overlay of ours anchored to the same figure by a name of its own holds (image.css).
+ * it as it covers the figure. Measured on Chrome 131 and 153 over a bitmap, an external SVG figure and an inline
+ * picture: within a pixel of the corner, and an overlay of ours anchored to the same figure by a name of its own
+ * holds (image.css).
+ *
+ * **The box is the figure's rectangle, and the control is `position: sticky` inside it** (issue #303). Anchored at
+ * the figure's top corner alone, the control went under the header with the figure's top, hidden where the reader
+ * hovered, and a press there reached the header's own link (on 1706.03762's first figure, "Back to Abstract": the page
+ * left). Nothing declarative follows the scroll: a `max()` against the header, and a `position-try` fallback, are both
+ * decided against the layout as it stood unscrolled and are not decided again as the page scrolls (measured: neither
+ * moved a box whose figure had gone under the window's top, on 131 and on 153). What does follow it is sticky
+ * positioning, by the scroller itself: the control sticks `8px` below the bottom of what the page pins, for as long as
+ * the figure stays under it, and is carried off by the figure's bottom edge, never out of the figure's box. The one
+ * thing only the page knows — how far down it pins something at the control's side — is read when the control shows
+ * (`pinnedBottom`) and handed over as `--axt-viewed-pin`. The box takes no pointer: the figure under it is what the
+ * pointer meets, and only the control does, while it shows.
  *
  * **The name is given by a sheet the document adopts while the control shows**: an anchor name is scoped to the tree
  * it is declared in, so neither a rule nor a box inside our shadow root reaches a figure of the page (measured: the
@@ -96,7 +111,7 @@ const FADE_MS = 150
  * figure's own right edge is then past what the column shows: on 2312.17141 a column ends at 708 px, a picture at
  * 881, and the control stood at 843–873 — over the other column, on the translation's side of a figure of the
  * original's. A child of the frame would be clipped with the figure; a box outside it is not. So the ancestor
- * that clips it sideways on the screen (`frameOf`) is named as well, and the control's right edge is the nearer of the
+ * that clips it sideways on the screen (`frameOf`) is named as well, and the box's sides are the nearer of the
  * two — the larger inset. With no such frame the second anchor is not there and its fallback leaves the figure's edge.
  * Chrome 131 gives a box one scroll compensation, its default anchor's: there, in a frame that is scrolled, the control
  * stands left of the frame's edge by the distance scrolled (measured: 41 px) — inside the frame still; 153 is exact
@@ -104,7 +119,13 @@ const FADE_MS = 150
 const ANCHOR = '--axt-viewed'
 const FRAME_ANCHOR = '--axt-viewed-frame'
 const ANCHORING = `[${VIEWED_ATTR}] { anchor-name: ${ANCHOR}; } [${VIEWED_FRAME_ATTR}] { anchor-name: ${FRAME_ANCHOR}; }`
-const SPOT = `position:absolute;position-anchor:${ANCHOR};top:calc(anchor(top, -100000px) + 8px);right:calc(max(anchor(right, 0px), anchor(${FRAME_ANCHOR} right, 0px)) + 8px);z-index:1;margin:0;`
+/** Where the page's pinned bottom is handed over: written on the control itself, which reads it for its `top` (SHEET) */
+const PIN_VAR = '--axt-viewed-pin'
+const SPOT = `position:absolute;position-anchor:${ANCHOR};top:anchor(top, -100000px);height:anchor-size(height, 0px);left:max(anchor(left, 0px), anchor(${FRAME_ANCHOR} left, 0px));right:max(anchor(right, 0px), anchor(${FRAME_ANCHOR} right, 0px));z-index:1;margin:0;padding:8px;box-sizing:border-box;display:flex;justify-content:flex-end;align-items:flex-start;pointer-events:none;`
+/** How far down the page's pinned bars are followed (a header with a bar under it), and how many rounds that takes at most */
+const PIN_ROUNDS = 3
+/** From the figure's right edge to the middle of the control: its 8 px of padding and half its 30 px (SHEET) */
+const CONTROL_CENTRE_PX = 23
 /**
  * The page held still under the dialog, or closing it would not return the reader where they were. A modal dialog
  * does not hold the document of itself, and a list of keys held in the dialog did not either: ⌘↓ and ⌥↓ passed it,
@@ -135,7 +156,7 @@ ${tokenSheet('host')}
 button { all: unset; box-sizing: border-box; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; cursor: pointer; color: inherit; opacity: 0.7; transition: opacity 0.15s; }
 button:hover, button:focus-visible { opacity: 1; }
 button:focus-visible { outline: 2px solid var(--axt-focus); outline-offset: -2px; }
-.axt-viewer-open { border-radius: 8px; color: var(--axt-ink); background: var(--axt-float-bg); box-shadow: var(--axt-float-shadow); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 0.15s; }
+.axt-viewer-open { position: sticky; top: calc(var(${PIN_VAR}, 0px) + 8px); border-radius: 8px; color: var(--axt-ink); background: var(--axt-float-bg); box-shadow: var(--axt-float-shadow); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 0.15s; }
 .axt-viewer-open[data-axt-shown] { opacity: 0.85; visibility: visible; pointer-events: auto; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s; }
 .axt-viewer-open[data-axt-shown]:hover, .axt-viewer-open[data-axt-shown]:focus-visible { opacity: 1; }
 dialog { box-sizing: border-box; width: 90vw; height: 90vh; max-width: none; max-height: none; margin: auto; padding: 0; border: 0; border-radius: 12px; overflow: hidden; color: var(--axt-ink); background: var(--axt-viewer-paper, #f4f3f2); box-shadow: 0 24px 64px rgb(0 0 0 / 0.35); }
@@ -323,6 +344,37 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
     return frame
   }
   /**
+   * How far down the page pins something over the top of the window **where the control stands** (issue #303): the
+   * bottom of its header, in the window's own coordinates. What is at the top edge there is asked of the browser — the
+   * topmost thing at that point, and whether it is, or lies in, a box the page pins (`fixed` or `sticky`) — rather than
+   * the page's boxes walked for ones that are: a hit test, and the computed style of the few ancestors of one element,
+   * where a walk reads the style of every box on a paper of 59 000 elements. A bar under the bar is asked for again,
+   * from its bottom edge, a few rounds at most. Nothing of ours counts (a floating button docked at the top), and
+   * neither does a box that fills more than half the window — a modal layer is no header, and a control kept below it
+   * would be kept out of the figure. Read before anything is written for the control, in the turn the pointer
+   * arrived, while the layout is as the page left it
+   */
+  const pinnedBottom = (figure: Element): number => {
+    const frame = frameOf(figure)
+    const right = Math.min(figure.getBoundingClientRect().right, frame ? frame.getBoundingClientRect().right : Number.POSITIVE_INFINITY)
+    const x = Math.min(Math.max(right - CONTROL_CENTRE_PX, 0), view.innerWidth - 1)
+    let bottom = 0
+    for (let round = 0; round < PIN_ROUNDS; round++) {
+      const top = doc.elementsFromPoint(x, bottom + 1).find(el => !el.closest(OURS))
+      let pin: Element | null = null
+      for (let up = top ?? null; up && up !== doc.documentElement; up = up.parentElement) {
+        if (/^(?:fixed|sticky)$/.test(view.getComputedStyle(up).position)) {
+          pin = up
+          break
+        }
+      }
+      const edge = pin?.getBoundingClientRect().bottom
+      if (edge === undefined || edge <= bottom || edge > view.innerHeight / 2) break
+      bottom = edge
+    }
+    return bottom
+  }
+  /**
    * The two marks are kept while they stand. Restoring the page strips every mark of ours by its prefix — the rule is
    * the prefix, not a list of names (§7.1) — and the pointer, still on the figure, enters nothing by moving within it:
    * the control stayed shown and anchored to nothing, out of the window until the pointer left and came back (Devin on
@@ -378,6 +430,8 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
     clearTimeout(leaving)
     if (current !== figure) {
       current = figure
+      // Asked first, before this turn writes anything for the control
+      open.style.setProperty(PIN_VAR, `${Math.round(pinnedBottom(figure) * 100) / 100}px`)
       dress()
       label()
     }

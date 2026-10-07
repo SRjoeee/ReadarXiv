@@ -65,6 +65,7 @@ pnpm e2e:local-endpoint  # an http endpoint without CORS headers can translate a
 pnpm e2e:pdf             # arXiv's PDF page: the button is drawn there, it and the popup open the bilingual version
 pnpm e2e:floating        # the floating button on the abstract, PDF and full-text pages: rest, hover, drag, hide, toggle, tick
 pnpm e2e:popup           # the popup: finding a paper, the menus under their rows, the entries, the panel growing
+pnpm e2e:viewer          # the figure viewer's control under a header the page pins, offline (AXT_CHROME=<Chrome 131> for the floor)
 pnpm e2e:image           # image translation, bitmaps read by the recogniser the extension ships
 pnpm e2e:placeholders    # placeholder survival per sentence shape against a live engine (DESIGN §6.3)
 pnpm fixtures:fetch      # download and verify the fixtures the repository may not hold (tests/fixtures/README.md); pnpm test does it too
