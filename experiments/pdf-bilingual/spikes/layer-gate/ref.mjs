@@ -10,13 +10,28 @@
 // own, then the prototype's, so that a unit a later maker locates is measured by its own lines.
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { homedir, tmpdir } from 'node:os'
+import { basename, join, sep } from 'node:path'
 
 export const REF_SCHEMA = 1
 const UNIT_KINDS = ['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author']
 /** the approved prototype's geometry (iteration 2's data, outside the repository); LAYER_GEOMETRY another (the same
  *  carried to another cut of the units: spikes/layer-cut.mjs) */
-export const PROTO_GEOMETRY = process.env.LAYER_GEOMETRY ?? '/Users/cheongzhiyan/Developer/readarxiv-research/2026-10-06-plan8/instant-layer/iteration-2/data'
+export const PROTO_GEOMETRY = process.env.LAYER_GEOMETRY ?? join(homedir(), 'Developer/readarxiv-research/2026-10-06-plan8/instant-layer/iteration-2/data')
+/**
+ * A local path as a record keeps it, with no user's name or machine's directory in it: relative to `base` where under it
+ * ('.' for itself), `<scratch>/<its last name>` under a temporary directory, `~/…` under the home directory, else
+ * `<local>/<its last name>`. Every path the gate and the cost budget write into a record goes through it
+ */
+export function shownPath(p, base = null) {
+  if (typeof p !== 'string' || !p.startsWith('/')) return p
+  const under = dir => p === dir || p.startsWith(dir.endsWith(sep) ? dir : dir + sep)
+  if (base && under(base)) return p === base ? '.' : p.slice(base.length + 1)
+  for (const t of [tmpdir(), '/private/tmp', '/tmp', '/private/var/folders', '/var/folders']) if (under(t)) return `<scratch>/${basename(p)}`
+  const home = homedir()
+  if (under(home)) return p === home ? '~' : `~/${p.slice(home.length + 1)}`
+  return `<local>/${basename(p)}`
+}
 export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
 
 /** a fixture's name as its paper with its version, and its target */

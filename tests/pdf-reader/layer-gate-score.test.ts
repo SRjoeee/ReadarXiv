@@ -135,3 +135,17 @@ describe("TeX's syntax left in a placeholder's rendering (measure.mjs markupResi
   })
 })
 
+
+describe("a local path as the gate's records keep it (layer-gate/ref.mjs shownPath): no user's name, no machine's directory", () => {
+  it("is relative under its base, `~/` under the home directory, `<scratch>/` under a temporary one, `<local>/` elsewhere", async () => {
+    const { homedir, tmpdir } = await import('node:os')
+    const { shownPath } = await import('../../experiments/pdf-bilingual/spikes/layer-gate/ref.mjs')
+    expect(shownPath('/repo', '/repo')).toBe('.')
+    expect(shownPath('/repo/out/layer-gate/fixtures/x', '/repo')).toBe('out/layer-gate/fixtures/x')
+    expect(shownPath(`${homedir()}/Downloads/readarxiv-test`)).toBe('~/Downloads/readarxiv-test')
+    expect(shownPath(`${tmpdir()}/claude-501/session/scratchpad/wt-old`)).toBe('<scratch>/wt-old')
+    expect(shownPath('/private/tmp/claude-501/-Users-someone-x/scratchpad/int/floor-v0')).toBe('<scratch>/floor-v0')
+    expect(shownPath('/opt/elsewhere/checkout')).toBe('<local>/checkout')
+    expect(shownPath('out/relative')).toBe('out/relative')
+  })
+})

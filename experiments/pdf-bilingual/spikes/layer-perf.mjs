@@ -17,6 +17,7 @@
 //   --record  records/layer-perf.json and layer-perf.md (this repository's), the budget table with the runs it was made of
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { shownPath } from './layer-gate/ref.mjs'
 
 const arg = name => { const a = process.argv.find(x => x === `--${name}` || x.startsWith(`--${name}=`)); return a === undefined ? null : a.includes('=') ? a.slice(name.length + 3) : true }
 const files = k => String(arg(k) ?? '').split(',').filter(Boolean).map(f => resolve(f))
@@ -24,6 +25,9 @@ const OLD = files('old').map(f => JSON.parse(readFileSync(f, 'utf8'))), NEW = fi
 if (!OLD.length || !NEW.length) throw new Error('--old=<run.json>,… --new=<run.json>,…: runs of layer-gate.mjs --perf')
 for (const r of [...OLD, ...NEW]) if (!r.perf) throw new Error(`${r.made}: not a --perf run`)
 const TIME_TOLERANCE = 0.1, HEAP_TOLERANCE = 0.1
+/** a run's engine as the record keeps it: its checkout's path with no user's name in it (layer-gate/ref.mjs shownPath) */
+const REPO = resolve(new URL('../../..', import.meta.url).pathname)
+const engineOf = r => ({ ...r.engine, root: shownPath(r.engine?.root, REPO) })
 
 const median = xs => { const s = xs.filter(Number.isFinite).sort((a, b) => a - b); return s.length ? (s[(s.length - 1) >> 1] + s[s.length >> 1]) / 2 : null }
 const r1 = v => (v === null || v === undefined ? null : Math.round(v * 10) / 10)
@@ -111,7 +115,7 @@ L.push('', fails.length ? `## Over the budget (${fails.length})\n\n${fails.map(f
 console.log(L.join('\n'))
 if (arg('record')) {
   const dir = join(new URL('..', import.meta.url).pathname, 'records')
-  writeFileSync(join(dir, 'layer-perf.json'), `${JSON.stringify({ schema: 1, what: 'the instant layer\'s cost budget (spikes/layer-perf.mjs)', made: new Date().toISOString(), old: { runs: OLD.map(r => ({ made: r.made, engine: r.engine })), ...old }, new: { label, runs: NEW.map(r => ({ made: r.made, engine: r.engine })), ...now }, over: fails }, null, 1)}\n`)
+  writeFileSync(join(dir, 'layer-perf.json'), `${JSON.stringify({ schema: 1, what: 'the instant layer\'s cost budget (spikes/layer-perf.mjs)', made: new Date().toISOString(), old: { runs: OLD.map(r => ({ made: r.made, engine: engineOf(r) })), ...old }, new: { label, runs: NEW.map(r => ({ made: r.made, engine: engineOf(r) })), ...now }, over: fails }, null, 1)}\n`)
   writeFileSync(join(dir, 'layer-perf.md'), `${L.join('\n')}\n`)
   console.log(`recorded: ${join(dir, 'layer-perf.json')}, layer-perf.md`)
 }

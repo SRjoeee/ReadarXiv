@@ -49,7 +49,7 @@
 //                run only (no --only, no --pages); --ruling=<file> (with --record): a ruling of the maintainer's the
 //                record is made under, where it stands against the merge rule (a JSON file: { date, by, on, quote, english,
 //                measures, scope, why }), kept in the record with every earlier one and listed in its .md
-//   --label      the progress folder's name (pixel tier): /Users/cheongzhiyan/Downloads/readarxiv-test/layer-progress/<NN>-<label>/
+//   --label      the progress folder's name (pixel tier): ~/Downloads/readarxiv-test/layer-progress/<NN>-<label>/
 //                (LAYER_PROGRESS names another): per page of the controller's set an image of four panels in a 2 x 2
 //                grid, each --panel-width wide (1,000 px): the original and the prototype above, this run and the previous
 //                recorded run (of the same layout files where there is one, else the baseline) below; metrics.md and
@@ -98,12 +98,12 @@ import { execFile, execFileSync } from 'node:child_process'
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { constants as zlibConstants, gzipSync, inflateRawSync, inflateSync } from 'node:zlib'
-import { availableParallelism } from 'node:os'
+import { availableParallelism, homedir } from 'node:os'
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
 import { chromium } from 'playwright'
 import { captionNames } from '../../../src/pdf-reader/engine/caption-names.mjs'
 import { encodePng } from './layer-gate/png.mjs'
-import { geometryFile, nameOf, PROTO_GEOMETRY, refBytesOf, refPages, sha256 } from './layer-gate/ref.mjs'
+import { geometryFile, nameOf, PROTO_GEOMETRY, refBytesOf, refPages, sha256, shownPath } from './layer-gate/ref.mjs'
 import { compare, fixtureTotals, MEASURES, pageEntry, pooled, REPORTED } from './layer-gate/score.mjs'
 
 const here = new URL('.', import.meta.url).pathname
@@ -185,7 +185,7 @@ const FONTS = resolve(join(DATA, 'fonts'))
 const PDFJS = resolve(REPO, 'node_modules/pdfjs-dist')
 const GATE = join(here, 'layer-gate')
 const CHECKER = join(REPO, 'src/pdf-reader/engine/layer/check.mjs')
-const PROGRESS = process.env.LAYER_PROGRESS ?? '/Users/cheongzhiyan/Downloads/readarxiv-test/layer-progress'
+const PROGRESS = process.env.LAYER_PROGRESS ?? join(homedir(), 'Downloads/readarxiv-test/layer-progress')
 const ONLY = typeof arg('only') === 'string' ? arg('only').split(',').filter(Boolean) : null
 const PAGES = typeof arg('pages') === 'string' ? Number(arg('pages')) : null
 const WORKERS = PERF ? 1 : typeof arg('workers') === 'string' ? Number(arg('workers')) : Math.max(1, Math.min(6, Math.floor(availableParallelism() / 2)))
@@ -298,14 +298,14 @@ const ORIGIN = `http://127.0.0.1:${server.address().port}`
 
 // ---------------------------------------------------------------- the run
 const engineInfo = {
-  root: ENGINE === REPO ? '.' : ENGINE, commit: git(ENGINE, ['rev-parse', 'HEAD']), branch: git(ENGINE, ['rev-parse', '--abbrev-ref', 'HEAD']),
+  root: shownPath(ENGINE, REPO), commit: git(ENGINE, ['rev-parse', 'HEAD']), branch: git(ENGINE, ['rev-parse', '--abbrev-ref', 'HEAD']),
   dirty: !!git(ENGINE, ['status', '--porcelain', '--untracked-files=no', '--', 'src/pdf-reader/engine']),
 }
 const fontsDigest = sha256(readdirSync(FONTS).sort().map(f => `${f}:${statSync(join(FONTS, f)).size}`).join('\n'))
 const browser = await chromium.launch()
 const inputs = {
   tier: TIER, pages: PAGES ? `the first ${PAGES}` : `the first ${PAGES_OF} of each output, every page of ${[...ALL_PAGES].join(', ')}`, scale: 2.5, inkScale: 2, inkMin: 4, composite: COMPOSITE,
-  layouts: LAYOUTS, ...(LAYOUTS === 'made' ? { switch: SWITCH } : {}), fixtures: FIXTURES === REFS ? 'data/layer-fixtures' : FIXTURES.startsWith(ROOT) ? FIXTURES.slice(ROOT.length + 1) : FIXTURES, ...(RECORDS ? { records: RECORDS.startsWith(ROOT) ? RECORDS.slice(ROOT.length + 1) : RECORDS } : {}), ...(process.env.LAYER_REFS ? { refs: REFS.startsWith(ROOT) ? REFS.slice(ROOT.length + 1) : REFS } : {}), ...(process.env.LAYER_GEOMETRY ? { geometry: PROTO_GEOMETRY.startsWith(ROOT) ? PROTO_GEOMETRY.slice(ROOT.length + 1) : PROTO_GEOMETRY } : {}), chromium: browser.version(),
+  layouts: LAYOUTS, ...(LAYOUTS === 'made' ? { switch: SWITCH } : {}), fixtures: FIXTURES === REFS ? 'data/layer-fixtures' : shownPath(FIXTURES, ROOT), ...(RECORDS ? { records: shownPath(RECORDS, ROOT) } : {}), ...(process.env.LAYER_REFS ? { refs: shownPath(REFS, ROOT) } : {}), ...(process.env.LAYER_GEOMETRY ? { geometry: shownPath(PROTO_GEOMETRY, ROOT) } : {}), chromium: browser.version(),
   pdfjs: readJson(join(PDFJS, 'package.json')).version, fonts: fontsDigest.slice(0, 16), checker: fileSha(CHECKER).slice(0, 16),
   // the instrument: the measures, their arithmetic, and the page that draws and accounts (lost ink's own glyphs)
   measures: sha256(['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => readFileSync(join(GATE, f))).join('\n')).slice(0, 16),

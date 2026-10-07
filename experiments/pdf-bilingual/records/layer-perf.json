@@ -7,7 +7,7 @@
    {
     "made": "2026-10-07T11:55:41.999Z",
     "engine": {
-     "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-old",
+     "root": "<scratch>/wt-old",
      "commit": "f267adb9acb1554421dc0107161a9ea84d6da715",
      "branch": "HEAD",
      "dirty": false
@@ -16,7 +16,7 @@
    {
     "made": "2026-10-07T11:58:01.895Z",
     "engine": {
-     "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-old",
+     "root": "<scratch>/wt-old",
      "commit": "f267adb9acb1554421dc0107161a9ea84d6da715",
      "branch": "HEAD",
      "dirty": false
@@ -25,7 +25,7 @@
    {
     "made": "2026-10-07T12:00:14.040Z",
     "engine": {
-     "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-old",
+     "root": "<scratch>/wt-old",
      "commit": "f267adb9acb1554421dc0107161a9ea84d6da715",
      "branch": "HEAD",
      "dirty": false
@@ -670,7 +670,7 @@
    {
     "made": "2026-10-07T11:56:54.692Z",
     "engine": {
-     "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-before",
+     "root": "<scratch>/wt-before",
      "commit": "0d666905096e1f06683e488cbb5c3bf4b86d96e3",
      "branch": "HEAD",
      "dirty": false
@@ -679,7 +679,7 @@
    {
     "made": "2026-10-07T11:59:07.043Z",
     "engine": {
-     "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-before",
+     "root": "<scratch>/wt-before",
      "commit": "0d666905096e1f06683e488cbb5c3bf4b86d96e3",
      "branch": "HEAD",
      "dirty": false
@@ -688,7 +688,7 @@
    {
     "made": "2026-10-07T12:01:18.446Z",
     "engine": {
-     "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/wt-before",
+     "root": "<scratch>/wt-before",
      "commit": "0d666905096e1f06683e488cbb5c3bf4b86d96e3",
      "branch": "HEAD",
      "dirty": false

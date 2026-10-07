@@ -4,7 +4,7 @@
  "measured": {
   "made": "2026-10-07T10:25:39.086Z",
   "engine": {
-   "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/int/floor-v0",
+   "root": "<scratch>/floor-v0",
    "commit": "f654c05c7cace7d8ad98669c8bd75c9cb72efe94",
    "branch": "HEAD",
    "dirty": false
@@ -617,7 +617,7 @@
   "measured": {
    "made": "2026-10-06T16:19:35.823Z",
    "engine": {
-    "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/t12/v0-port",
+    "root": "<scratch>/v0-port",
     "commit": "f654c05c7cace7d8ad98669c8bd75c9cb72efe94",
     "branch": "HEAD",
     "dirty": false
@@ -1728,7 +1728,7 @@
    "measured": {
     "made": "2026-10-06T13:40:01.135Z",
     "engine": {
-     "root": "/Users/cheongzhiyan/Developer/ArxivTranslate/.worktrees/layer-proto",
+     "root": "~/Developer/ArxivTranslate/.worktrees/layer-proto",
      "commit": "f654c05c7cace7d8ad98669c8bd75c9cb72efe94",
      "branch": "exp/layer-proto",
      "dirty": false
@@ -2293,7 +2293,7 @@
    "measured": {
     "made": "2026-10-06T16:19:35.823Z",
     "engine": {
-     "root": "/private/tmp/claude-501/-Users-cheongzhiyan-Developer-ArxivTranslate/aae6c377-1e6e-4475-b87f-4d99a86c1a3b/scratchpad/t12/v0-port",
+     "root": "<scratch>/v0-port",
      "commit": "f654c05c7cace7d8ad98669c8bd75c9cb72efe94",
      "branch": "HEAD",
      "dirty": false
