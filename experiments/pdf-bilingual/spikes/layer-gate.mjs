@@ -28,7 +28,7 @@
 //       [--engine-kind=layer|proto] [--proto-units=fixture|p7] [--progress=<name|path>] [--previous=<name|path>] [--panels-only] [--proto-panels=<dir>]
 //       [--proto-faces=roles|prototype] [--proto-place=<file>] [--proto-order=<file>] [--dump=<dir>] [--write-floor]
 //       [--proto-tex=ph|lines] [--proto-tex-only=no] [--proto-symbols=text|strict] [--proto-extents=v0|tex]
-//       [--against=<record key>] [--proto-params=<json>]
+//       [--against=<record key>] [--proto-params=<json>] [--ruling=<file>]
 //   --engine     the engine measured: <worktree>/src/pdf-reader/engine served as /engine/ (the checker, layer/check.mjs, is
 //                always this repository's: the instrument is the same for every branch); default this repository
 //   --layouts    made (the default): the layout files the engine's own maker makes from the fixtures' papers (spikes/
@@ -44,7 +44,9 @@
 //                every page whose measures moved listed; exit 1 on any regression, or where the inputs are not the record's
 //   --record     the run as the record: layer-fidelity.json (per fixture and page, the totals, the prototype's floor) and
 //                layer-fidelity.md beside it, and the brief's layer-gate.json and .md (the completeness by output); a whole
-//                run only (no --only, no --pages)
+//                run only (no --only, no --pages); --ruling=<file> (with --record): a ruling of the maintainer's the
+//                record is made under, where it stands against the merge rule (a JSON file: { date, by, on, quote, english,
+//                measures, scope, why }), kept in the record with every earlier one and listed in its .md
 //   --label      the progress folder's name (pixel tier): /Users/cheongzhiyan/Downloads/readarxiv-test/layer-progress/<NN>-<label>/
 //                (LAYER_PROGRESS names another): per page of the controller's set an image of four panels in a 2 x 2
 //                grid, each --panel-width wide (1,000 px): the original and the prototype above, this run and the previous
@@ -128,6 +130,8 @@ const PROTO_PANELS = typeof arg('proto-panels') === 'string' ? resolve(arg('prot
  *  page digests per fixture, to compare with the live prototype's */
 const PROTO_PLACE = typeof arg('proto-place') === 'string' ? JSON.parse(readFileSync(resolve(arg('proto-place')), 'utf8')) : null
 const DUMP = typeof arg('dump') === 'string' ? resolve(arg('dump')) : null
+/** --ruling=<file>: the maintainer's ruling the record is made under (with --record) */
+const RULING = typeof arg('ruling') === 'string' ? JSON.parse(readFileSync(resolve(arg('ruling')), 'utf8')) : null
 /** --proto-order=<file>: an order to lay each fixture's units in, by page ({ [fixture]: [ids] }: a live run's, where its
  *  race between drawing and streaming went another way) */
 const PROTO_ORDER = typeof arg('proto-order') === 'string' ? JSON.parse(readFileSync(resolve(arg('proto-order')), 'utf8')) : null
@@ -505,8 +509,11 @@ function writeRecords(file, run, rows) {
   const tiers = { ...(had?.tiers ?? {}) }
   tiers[KEY] = run
   if (run.tier === 'pixel') delete tiers[KEY.replace(/^pixel/, 'model')]
-  const record = { schema: 1, what: 'the instant layer against the original page, per fixture and page (spikes/layer-gate.mjs)', floor: { what: floor.what, measured: floor.measured ?? null, shared: floor.shared, pooled: floor.pooled, byFixture: floor.byFixture, old: floor.old ?? null, history: floor.history ?? null }, tiers }
-  writeFileSync(file, `${JSON.stringify(record, null, 0).replace(/\{"p":/g, '\n{"p":')}\n`)
+  // the maintainer's rulings the records were made under, each with the run it was given on, every earlier one kept
+  const rulings = [...(had?.rulings ?? []), ...(RULING ? [{ ...RULING, record: KEY, commit: run.engine.commit?.slice(0, 8) ?? null }] : [])]
+  const record = { schema: 1, what: 'the instant layer against the original page, per fixture and page (spikes/layer-gate.mjs)', floor: { what: floor.what, measured: floor.measured ?? null, shared: floor.shared, pooled: floor.pooled, byFixture: floor.byFixture, old: floor.old ?? null, history: floor.history ?? null }, tiers, ...(rulings.length ? { rulings } : {}) }
+  // (ASCII throughout: a quoted ruling's words as \u escapes, as the English gate asks of a developer's file)
+  writeFileSync(file, `${JSON.stringify(record, null, 0).replace(/\{"p":/g, '\n{"p":').replace(/[\u0080-\uffff]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)}\n`)
   writeFileSync(file.replace(/\.json$/, '.md'), fidelityMd(record))
   const gateFile = join(dirname(file), 'layer-gate.json')
   // the completeness rows are the engine's own layouts' where the record holds them
@@ -582,6 +589,13 @@ function fidelityMd(record) {
   L.push(`## By output (${keys[0]})`, '', `| output | ${head.map(m => m[4]).join(' | ')} | why left |`, `|---|${head.map(() => '---|').join('')}---|`)
   for (const [name, f] of Object.entries(run.fixtures)) L.push(`| ${name} | ${head.map(m => shown(f.totals, m)).join(' | ')} | ${Object.entries(f.totals.left).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ') || '-'} |`)
   L.push('', 'Every measure of every output, and of every page, is in layer-fidelity.json.', '')
+  if (record.rulings?.length) {
+    // (a quote's own words as their \u escapes, the .md being ASCII like the .json)
+    const esc = t => t.replace(/[\u0080-\uffff]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
+    L.push("## The maintainer's rulings", '', 'Where a record stands against the merge rule by the maintainer\'s choice: the ruling, the run it was given on, and the measures it covers.', '')
+    for (const r of record.rulings) L.push(`- **${r.date}, ${r.by ?? 'the maintainer'}${r.on ? `, on ${r.on}` : ''}** (${r.record} at \`${r.commit}\`): "${r.english}"${r.quote ? ` (\`${esc(r.quote)}\`)` : ''}. ${r.measures?.length ? `Over the merge rule for ${r.measures.length > 1 ? `${r.measures.slice(0, -1).join(', ')} and ${r.measures.at(-1)}` : r.measures[0]}${r.scope ? ` ${r.scope}` : ''}.` : ''}${r.why ? ` ${r.why}` : ''}`)
+    L.push('')
+  }
   return `${L.join('\n')}\n`
 }
 /** what a floor keeps of a run's totals: the measures the prototype's floor has always had (v0's own checker and its own
