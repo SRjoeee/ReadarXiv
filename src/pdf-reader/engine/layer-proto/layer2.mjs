@@ -222,6 +222,56 @@ export function phClass2(src) {
 }
 
 /**
+ * A table cell's room between the rules over and under its lines (Round 2 of the integration: a CJK cell's glyphs, taller
+ * than the Latin they replace, reached the rule over 1706.03762's Table 4's header). A CJK script's em box stands 0.88 of
+ * the size over the baseline and 0.12 under, Latin capitals some 0.7 over and descenders 0.22 under: a translation into
+ * one is taller than the original over its baseline and shorter under it. `rulesOf(page)`: the page's rules (x0, y0, x1,
+ * y1 stride 4: the add-on manifest's, removal.mjs pageRules, the PDF's own paths), each counted for a line it crosses
+ * the extent of. Each line's band: from the nearest rule over it less `clear` (or the original's own top, where that is
+ * higher: never held below the original) down to the nearest under it plus `clear`, never past the original's own foot
+ * (its line's band, not the next line's); with no rule over it, its em box's top at the original's baseline. Returns the
+ * largest size every band holds the em box at (`cap`, a share of `s`; never below 0.6, the fit's last floor) and the
+ * bands by block (`bands`: each line's baseline B, lo, hi), or null where no rule is near
+ */
+export function cellBands(blocks, rulesOf, s, clear = 0.5) {
+  let cap = 1
+  const bands = new Map()
+  blocks.forEach((b, bi) => {
+    const R = rulesOf(b.page)
+    if (!R?.length) return
+    b.B.forEach((B, j) => {
+      const r = b.rects[j]
+      if (!r || !Number.isFinite(B)) return
+      let over = Infinity, under = -Infinity
+      for (let q = 0; q + 3 < R.length; q += 4) {
+        if (Math.min(R[q + 2], r[3]) - Math.max(R[q], r[1]) <= 0.5) continue
+        if (R[q + 1] >= B) over = Math.min(over, R[q + 1])
+        else if (R[q + 3] <= B) under = Math.max(under, R[q + 3])
+      }
+      if (over === Infinity && under === -Infinity) return
+      const foot = Math.min(r[2], B - 0.12 * s)
+      const hi = over === Infinity ? B + 0.88 * s : Math.max(r[4], over - clear)
+      const lo = under === -Infinity ? foot : Math.max(foot, under + clear)
+      cap = Math.min(cap, (hi - lo) / s)
+      ;(bands.get(bi) ?? bands.set(bi, []).get(bi)).push({ B, lo, hi })
+    })
+  })
+  return bands.size ? { cap: Math.max(0.6, Math.min(1, Math.floor(cap * 1000) / 1000)), bands } : null
+}
+/**
+ * Each laid line that stands on one of the original's lines (its baseline the original's) moved into that line's band
+ * (cellBands) at the size `f` it is drawn at, by the least that keeps its em box inside. A line the fit set on a pitch of
+ * its own stands on none and is not moved: a band is the original line's (2608.04322's example cells, their translation
+ * run on the script's leading, had their lines pulled onto the original's)
+ */
+export function clearLines(lines, bands, f) {
+  for (const l of lines) {
+    const on = bands.get(l.block)?.find(r => Math.abs(r.B - l.baseline) < 0.01)
+    if (on) l.baseline = Math.min(Math.max(l.baseline, on.lo + 0.12 * f), on.hi - 0.88 * f)
+  }
+}
+
+/**
  * charsOfUnit (layer.js), with each character owned by the rectangle whose line it most likely stands on. A line's
  * baseline is 0.22 em above its rectangle's foot or 0.69 em below its top, whichever of the two the character is
  * nearer: a line with Computer Modern's symbols (CMSY10's descent is 0.96 em) has a rectangle reaching almost a line
@@ -2047,7 +2097,7 @@ function* statesOf(P, blocks, s) {
   // maxScale: a size set from outside (the page's even pass), from which the fit starts
   // (step 3: the CJK runs' tracking from P.trackStart, a face's size correction given back, run.mjs; down from it)
   const t0 = P.cjk ? P.trackStart ?? 0 : 0
-  // (capScale: the most its lines' room before a rule's or a figure's ink leaves it, run.mjs clearScale: never above)
+  // (capScale: the most its lines' room between the rules over and under them leaves it, cellBands: never above)
   const top = Math.min(P.maxScale ?? 1, P.capScale ?? 1)
   const st = { lead: P.leadBase, track: t0, trackLatin: 0, compress: P.compressMax > 0 ? 1 : 0, borrow: 0, scale: top, knob: P.maxScale ? 'even' : P.capScale < 1 ? 'clear' : 'none' }
   yield { ...st }

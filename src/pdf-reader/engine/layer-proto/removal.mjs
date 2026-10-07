@@ -375,7 +375,7 @@ export function pageDirty(index, page, ink, plan, pad = SWAP_PAD) {
  * other: a table's rule, a footnote's, an underline's) that stands above a line of the layout file's, within 1.3 of its
  * size over its baseline, or below it, within 0.8 under, across its extent, and not through its own glyphs' band. Where
  * the reader sets a line's text taller than the original's (a CJK script's em box over Latin capitals), it keeps that
- * text clear of them (run.mjs clearScale); they are the PDF's own geometry, as exact as the file's lines
+ * text clear of them (layer2.mjs cellBands); they are the PDF's own geometry, as exact as the file's lines
  */
 const RULE_THICK = 1.5, RULE_LONG = 2
 export function pageRules(index, page, ink) {

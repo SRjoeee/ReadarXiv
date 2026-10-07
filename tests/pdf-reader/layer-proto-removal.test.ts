@@ -190,7 +190,7 @@ describe('the drawing over the text-removed PDF', () => {
   })
 })
 
-describe("the rules near a page's lines (the manifest's rules, run.mjs clearScale's room)", () => {
+describe("the rules near a page's lines (the manifest's rules, layer2.mjs cellBands)", () => {
   it("a thin path above a line within 1.3 of its size, or below within 0.8, across its extent; not through its band, not off it, not a figure's box", () => {
     // a line at baseline 100, size 10, x 10-60, its glyphs' band 97.8-107.5
     const line = { lines: Float64Array.from([1, 10, 60, 100, 107.5, 97.8, 10, 0]) }

@@ -163,7 +163,7 @@ describe("TeX's control symbols in a source's rendering (texToText2): the charac
   })
 })
 
-describe("the room before a rule (capScale, run.mjs clearScale): the fit's states never above it", () => {
+describe("the room before a rule (capScale, layer2.mjs cellBands): the fit's states never above it", () => {
   const block = { page: 1, rects: [[1, 0, 98, 100, 108], [1, 0, 83, 100, 93]], x0: 0, x1: 100, B: [100, 85], exact: [true, true], sizes: [10, 10], pitch0: 15, free: 0, indent: 0, after: 0, centred: false }
   const words = (n: number, of: number) => Array.from({ length: n }, (_, q) => [...(q ? [{ space: true, w100: 25 }] : []), { s: '\uD55C'.repeat(of), cls: 'cjk', w100: 50 * of, st: {} }]).flat()
   it('starts at the cap, and grows no further than it', () => {
@@ -180,6 +180,42 @@ describe("the room before a rule (capScale, run.mjs clearScale): the fit's state
     const r = L2.layoutUnit2(word as never, [one] as never, 10, { ...P, capScale: 0.956 } as never, 'zh')
     expect(r.clipped).toBe(false)
     expect(r.scale).toBe(0.8)
+  })
+})
+
+describe("a CJK cell's bands between the rules over and under its lines (cellBands, clearLines)", () => {
+  // 1706.03762's Table 4 header: size 9.96, the original's line 6.8 over its baseline and 2.14 under, the rule over it
+  // 7.63 over, the one under it 3.28 under
+  const B = 690.22
+  const cell = (rects: number[][], Bs: number[]) => [{ page: 10, B: Bs, rects }]
+  const rules = [100, B + 7.63, 200, B + 8.03, 100, B - 3.68, 200, B - 3.28]
+  it('holds the em box between the rules less the clearance, never past the original foot: 0.93 of the size', () => {
+    const r = L2.cellBands(cell([[10, 120, B - 2.14, 180, B + 6.8]], [B]), () => rules, 9.96)
+    // the band runs from the original's foot (2.14 under, above the rule under plus 0.5) to the rule over less 0.5
+    expect(r?.cap).toBe(0.93)
+    const band = r?.bands.get(0)?.[0]
+    expect(band?.lo).toBeCloseTo(B - 2.14, 6)
+    expect(band?.hi).toBeCloseTo(B + 7.13, 6)
+    // where the line is drawn at the cap, it moves down by the least that clears the rule over: 1.02 pt
+    const lines = [{ block: 0, baseline: B }]
+    L2.clearLines(lines, r!.bands, 9.96 * 0.93)
+    expect(B - lines[0]!.baseline).toBeCloseTo(1.02, 2)
+    expect(lines[0]!.baseline + 0.88 * 9.96 * 0.93).toBeLessThanOrEqual(B + 7.13 + 1e-9)
+  })
+  it("keeps the original's own top where the rule is nearer, and takes no rule beside the line nor a page without any", () => {
+    const tight = [100, B + 6.9, 200, B + 7.3]
+    expect(L2.cellBands(cell([[10, 120, B - 2.14, 180, B + 6.8]], [B]), () => tight, 9.96)?.bands.get(0)?.[0]?.hi).toBeCloseTo(B + 6.8, 6)
+    expect(L2.cellBands(cell([[10, 220, B - 2.14, 280, B + 6.8]], [B]), () => rules, 9.96)).toBeNull()
+    expect(L2.cellBands(cell([[10, 120, B - 2.14, 180, B + 6.8]], [B]), () => undefined, 9.96)).toBeNull()
+  })
+  it("moves no line set on a pitch of its own, and none a size that clears unmoved", () => {
+    const r = L2.cellBands(cell([[10, 120, B - 2.14, 180, B + 6.8]], [B]), () => rules, 9.96)!
+    const off = [{ block: 0, baseline: B - 4 }]
+    L2.clearLines(off, r.bands, 9.96)
+    expect(off[0]!.baseline).toBe(B - 4)
+    const small = [{ block: 0, baseline: B }]
+    L2.clearLines(small, r.bands, 9.96 * 0.8)
+    expect(small[0]!.baseline).toBe(B)
   })
 })
 

@@ -10,7 +10,7 @@ export interface Params {
   cjk: boolean; leadBase: number; leadFloor: number; trackMin: number; compressMax: number; borrow: number; borrowGap: number
   floor: number; step: number; grid: number; order: string[]; cjkJust: number; spaceMax: number; autospace: number; spaceMin: number
   hyphen: number; even?: number; maxScale?: number; _compress?: number
-  /** the most the unit may be set at: its lines' room before a rule (run.mjs clearScale) */
+  /** the most the unit may be set at: its lines' room between the rules over and under them (cellBands) */
   capScale?: number
   /** step 3: the further steps for a unit the states leave clipped (run.mjs fitFurther), and the size the last goes down to */
   further?: readonly ('widen' | 'flow' | 'shrink')[]; floorMin?: number; refuse?: number; flowPast?: boolean
@@ -211,3 +211,9 @@ export declare function pageItemsOf(chars: readonly Char[], page: number, px: To
 export declare function svgOfUnit(L: Layout, page: number, toPx: (x: number, y: number) => number[], scale: number, id: number): string
 export declare function drawnRuns(tokens: readonly Token[]): { key: string; n: number }[]
 export declare function styleMatch(orig: Prepared['orig'] | undefined, drawn: readonly { key: string; n: number }[], drawnBase?: string): { match: number; total: number; base?: boolean; ob?: string; db?: string }
+/** a line's band between the rules over and under it: its original baseline, and how low and high its em box may reach */
+export interface CellBand { B: number; lo: number; hi: number }
+/** a table cell's room between the rules over and under its lines: the largest size its em boxes fit at, and each line's band by block */
+export declare function cellBands(blocks: readonly { page: number; B: readonly number[]; rects: readonly (readonly number[])[] }[], rulesOf: (page: number) => readonly number[] | undefined, s: number, clear?: number): { cap: number; bands: Map<number, CellBand[]> } | null
+/** each laid line on one of the original's lines moved into that line's band at the size it is drawn at */
+export declare function clearLines(lines: { block: number; baseline: number }[], bands: Map<number, CellBand[]>, f: number): void
