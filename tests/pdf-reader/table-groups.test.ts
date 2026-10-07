@@ -225,6 +225,28 @@ describe("a kept cell's record: what the translator gave it and its sentences, k
     // and nothing to write where it is the same
     expect(decideWrite({ result: { changed: false, settled: true }, cached, units: [{ ...cell, translation: 'partial' }], marks: cached.marks, shown: false })).toBeNull()
   })
+  it("keeps a whole sibling's sentences while its group is kept for another cell given in part (4208105840)", async () => {
+    // "slow training" is taken as it is from a copy, whole and with its sentence cuts; "fast $x$ training" comes back in
+    // part, so the column is kept. Its sentences go with it into the record, for the run that translates the column
+    const tex = doc('\\begin{tabular}{ll}\n\\toprule\nModel & Speed \\\\\n\\midrule\nOmega & fast $x$ training \\\\\nSigma & slow training \\\\\nTau & quick \\\\\n\\bottomrule\n\\end{tabular}', 'Prose.')
+    const translate = async (texts: string[]) => texts.map(text => (/^fast @/.test(text) ? { text: 'fast training', by: 'B' } : text === 'training' ? null : { text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' }))
+    const compile = async (q: { main: string; overrides: Map<string, Uint8Array> }): Promise<Compiled> => {
+      const text = new TextDecoder().decode(q.overrides.get(q.main))
+      return { ok: true, pdf: new Uint8Array([1]), aux: '', bbl: null, log: text.includes('AXT-FONTS') ? 'AXT-FONTS rm=cmr;sf=cmss;tt=cmtt;body=10;\n' : 'AXT-END\n', ms: 1 }
+    }
+    const paper = openPaper(new Map([['main.tex', enc(tex)]]))
+    const slow = paper.units.findIndex(u => plainSource(u) === 'slow training')
+    const sentences = { src: [5], tr: [3] }
+    const seed = new Map([[slow, { pieces: [{ t: 'text', tr: true, s: ' \u8bba\u6587 \u8bba\u6587 ' }], by: 'B', tried: 'B', state: 'whole', sentences, current: true }]])
+    const r = await runLive(paper, { lang: 'zh', compile, translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: null, seed })
+    expect(r.results.get(slow)).toMatchObject({ state: 'kept', translation: 'whole', sentences })
+    const hashes = await Promise.all(paper.units.map(sourceHash))
+    const record = unitsOf(paper.units, keptFor(paper, 'zh'), hashes, r.results)
+    expect(record[slow]).toMatchObject({ state: 'kept', translation: 'whole', sentences })
+    // and the next run's seed has them, as it takes the cell as it is
+    const again = await seedFrom({ units: record }, paper.units)
+    expect(again.seed.get(slow)).toMatchObject({ sentences })
+  })
 })
 
 describe('what names the floats: the target\'s names babel gives, where the final uses them', () => {

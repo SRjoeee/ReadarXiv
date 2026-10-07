@@ -156,7 +156,7 @@ export function copyReuse(cached, { pipeline, format, context, carries = {} }) {
 /**
  * The units a record keeps (src/cache/pdf-record.ts CachedUnit), from a run's results by index: a name kept in the
  * source is `kept`; a cell of a table group kept whole (groups.mjs) is `kept` too, with the translation its group was
- * decided by and its state (`translation`) — no `tr`, since nothing sets it; a unit with no result was not tried, and is `none` with no `tried`, so
+ * decided by, its state (`translation`) and its sentences — no `tr`, since nothing sets it; a unit with no result was not tried, and is `none` with no `tried`, so
  * never current. A cell carries its group (groups.mjs groupOf), which the layer keeps whole as the final does
  */
 export function unitsOf(units, kept, hashes, results) {
@@ -168,7 +168,7 @@ export function unitsOf(units, kept, hashes, results) {
     if (kept.has(u)) return { ...base, state: 'kept' }
     const r = results.get(i)
     if (!r) return { ...base, state: 'none' }
-    if (r.state === 'kept') return { ...base, ...(r.pieces ? { pieces: r.pieces } : {}), ...(r.by !== undefined ? { by: r.by } : {}), tried: r.tried, state: 'kept', ...keptAs(r) }
+    if (r.state === 'kept') return { ...base, ...(r.pieces ? { pieces: r.pieces, ...(r.sentences ? { sentences: r.sentences } : {}) } : {}), ...(r.by !== undefined ? { by: r.by } : {}), tried: r.tried, state: 'kept', ...keptAs(r) }
     // the sentences of the translation kept, which say where each sentence begins in `src` and `tr`
     // and a translation the final set in the source (the author block under CJKutf8): kept, but not what the right side shows
     return { ...base, ...(r.pieces ? { pieces: r.pieces, tr: plainTranslated(r.pieces), ...(r.sentences ? { sentences: r.sentences } : {}) } : {}), ...(r.by !== undefined ? { by: r.by } : {}), tried: r.tried, state: r.state, ...inSourceOf(r) }
