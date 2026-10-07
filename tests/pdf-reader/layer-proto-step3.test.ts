@@ -226,7 +226,7 @@ describe("adaptiveFill (D, the default) keeps a CJK cell clear of its rule (Code
     // a cell of two lines on a loose original (pitch 15 at 10 pt), the rule over its first line 7.63 over its baseline
     const block = { page: 1, rects: [[1, 0, 97.86, 100, 106.8], [1, 0, 82.86, 100, 91.8]], x0: 0, x1: 100, B: [100, 85], exact: [true, true], sizes: [10, 10], pitch0: 15, free: 0, indent: 0, after: 0, centred: false }
     const rules = [0, 107.63, 100, 108.03]
-    const words = (n: number, of: number) => Array.from({ length: n }, (_, q) => [...(q ? [{ space: true, w100: 25 }] : []), { s: '汉'.repeat(of), cls: 'cjk', w100: 50 * of, st: {} }]).flat()
+    const words = (n: number, of: number) => Array.from({ length: n }, (_, q) => [...(q ? [{ space: true, w100: 25 }] : []), { s: '\u6c49'.repeat(of), cls: 'cjk', w100: 50 * of, st: {} }]).flat()
     // as openProto: its parameters with adaptiveFill's defaults, the cell held to its band (capScale), fillable
     const P = { ...L2.defaultParams('zh'), adaptiveFill: { band: 0.05, track: 0.05, size: 1.1 } }
     const clear = L2.cellBands([block] as never, () => rules, 10)!
