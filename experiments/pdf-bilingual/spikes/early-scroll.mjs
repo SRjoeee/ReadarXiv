@@ -57,8 +57,8 @@ const extension = process.env.BUILD ?? BUILD
 const SOURCE_LATE = Number(process.env.LATE ?? 3000)
 // where a side is read, a share of its range: on 2608.02163, a page with prose to level by (0.4 is a page of figures)
 const SHARE = 0.3
-const live = readFileSync(join(root, '../../src/pdf-reader/engine/live.mjs'), 'utf8')
-const [PIPELINE, TYPESETTING] = ['PIPELINE_VERSION', 'TYPESETTING_VERSION'].map(name => live.match(new RegExp(`export const ${name} = '([^']+)'`))[1])
+// (the pipeline's in versions.mjs, which live.mjs re-exports; the typesetting's in live.mjs)
+const [PIPELINE, TYPESETTING] = [['versions.mjs', 'PIPELINE_VERSION'], ['live.mjs', 'TYPESETTING_VERSION']].map(([file, name]) => readFileSync(join(root, '../../src/pdf-reader/engine', file), 'utf8').match(new RegExp(`export const ${name} = '([^']+)'`))[1])
 // ONLY=<rows' numbers, by commas> runs those alone
 const only = process.env.ONLY ? process.env.ONLY.split(',').map(Number) : null
 const wanted = n => !only || only.includes(n)
