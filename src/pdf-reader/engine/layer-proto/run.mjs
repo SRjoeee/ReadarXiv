@@ -41,7 +41,7 @@ import { classifyFont, faceOf, loadRoleFaces, loadWebFaces, styleKey, setRoleFac
 import { loadHyphenation } from './hyph.mjs'
 import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
-import { fileSwap } from './removal.mjs'
+import { fileSwap, protection } from './removal.mjs'
 import { locatedWhole, texParts, texRects } from './tex.mjs'
 
 /** the prototype's getDocument options beside the host's asset URLs (main.js ASSETS): its canvases on the GPU, the whole
@@ -402,24 +402,10 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   /** the kept ink under the paper's units' rectangles on page j, by the manifest (x0, y0, x1, y1 each): where a fill would
    *  take it, the removed page is swapped in instead */
   const dirtyOf = j => { const d = RM.manifest.page[j]?.dirty ?? []; const out = []; for (let q = 0; q + 3 < d.length; q += 4) out.push([d[q], d[q + 1], d[q + 2], d[q + 3]]); return out }
-  /** the rectangles on page j of every unit the layout file holds that no unit drawn by the file's rectangles is (its
-   *  lines' erase, its placeholders' segments, its labels): a unit not translated, kept as the original's, or v0's own,
-   *  whose removed glyphs a swap or a fill keeps clear of. A unit the file's rectangles draw fills its own; two such
-   *  units' rectangles may meet (a footnote's lines 9 pt apart), and neither leaves the other's edge. Once a page */
-  const othersOf = j => {
-    if (RM.others[j]) return RM.others[j]
-    const byFile = new Set(placed.filter(q => q.tex && !q.refused).map(q => q.id))
-    const boxes = []
-    for (const id of tex?.index.onPage(j) ?? []) {
-      if (byFile.has(id)) continue
-      const lu = tex.index.unit(id)
-      for (let l = 0; l < lu.erase.length; l++) { const e = lu.erase[l]; if (!e || lu.lines[8 * l] !== j) continue; for (let o = 0; o + 3 < e.length; o += 4) boxes.push([e[o], e[o + 1], e[o + 2], e[o + 3]]) }
-      for (const row of lu.ph.values()) for (let o = 0; o + 5 < row.segs.length; o += 6) if (row.segs[o] === j) boxes.push([row.segs[o + 1], row.segs[o + 5], row.segs[o + 3], row.segs[o + 4]])
-      const lb = lu.labels
-      for (let o = 0; o + 6 < lb.length; o += 7) if (lb[o + 1] === j) boxes.push([lb[o + 2], lb[o + 6], lb[o + 4], lb[o + 5]])
-    }
-    return (RM.others[j] = boxes)
-  }
+  /** the rectangles on page j of every unit the file's rectangles have not been given to draw (removal.mjs protection:
+   *  each unit taken out as it is painted), kept clear of */
+  const guard = RM && tex ? protection(tex.index) : null
+  const othersOf = j => guard.others(j)
   /**
    * A unit's drawing over the text-removed PDF on page pg, from the layout file's rectangles (removal.mjs fileSwap): the
    * rectangles (v0's device pixels) the removed page is swapped into where kept ink lies under them, those filled with
@@ -446,6 +432,8 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   const paint = (p, pg) => {
     const tOps = performance.now()
     const r = rows[pg - 1]
+    // (drawn by the file's rectangles from now: no longer kept clear of; a unit refused, withheld or still pending is)
+    if (p.tex) guard?.accept(p.id)
     // (what the unit accounts for is counted whichever way it is drawn: a unit drawn the old way after it puts back only
     // what no painted unit accounts for)
     const ro = restoreOf(p, pg)

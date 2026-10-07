@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { Glyph } from '@/pdf-reader/engine/layout/ink.mjs'
-import { fileOwnership, fileSwap, glyphsOfChars, indicesOf, pageDirty, pagePlan, pageRules, planOf, type RemovalInk, unitRemoval, unmappedOf } from '@/pdf-reader/engine/layer-proto/removal.mjs'
+import { fileOwnership, fileSwap, glyphsOfChars, indicesOf, pageDirty, pagePlan, pageRules, planOf, protection, type RemovalInk, unitRemoval, unmappedOf } from '@/pdf-reader/engine/layer-proto/removal.mjs'
 import { swapRects } from '@/pdf-reader/engine/layer/swap.mjs'
 
 // The layer's side of the text-removed PDF (layer-proto/removal.mjs): the text layer's characters carried to glyphs, the
@@ -207,6 +207,34 @@ describe("the rules near a page's table cells' lines (the manifest's rules, laye
     // a line on another page holds none of this page's, nor a paragraph's line any (the reader holds no paragraph to them)
     expect(pageRules({ onPage: () => [4], unit: () => ({ kind: 'cell', lines: Float64Array.from([2, 10, 60, 100, 107.5, 97.8, 10, 0]) }) } as never, 1, ink)).toEqual([])
     expect(pageRules({ onPage: () => [4], unit: () => ({ ...line, kind: 'para' }) } as never, 1, ink)).toEqual([])
+  })
+})
+
+describe("the page's protection for a fill: what the file's rectangles do not draw, as decided when the fill is made", () => {
+  // Codex's review of PR A, finding 1: two table cells on one baseline, A (7) over x 10-60, B (8) over x 60.1-110, and a
+  // paragraph (9) above them. run.mjs's order: the page's paragraph painted first, then its groups settled: A's group
+  // drawn, B's withheld (another of its cells could not be set), so B's text is the original's and must stay
+  const cell = (id: number, x0: number, x1: number, base: number) => ({ id, kind: 'cell', lines: Float64Array.from([1, x0, x1, base, base + 7, base - 2, 10, 0]), erase: [Float64Array.from([x0, base - 2, x1, base + 7])], ph: new Map(), labels: new Float64Array(0) })
+  const units = new Map([[7, cell(7, 10, 60, 100)], [8, cell(8, 60.1, 110, 100)], [9, cell(9, 10, 110, 130)]])
+  const index = { onPage: () => [7, 8, 9], unit: (id: number) => units.get(id) } as never
+  const swapOf = (id: number, others: number[][]) => {
+    const lu = units.get(id)! as never
+    return fileSwap({ page: 1, lu, kOf: [], lines: { rects: [[1, 0, 0, 0, 0]], lineOf: new Map(), jOf: [0] }, prep: Object.assign(new Map(), { keep: [], uc: [], cat: new Map(), label: null }) as never, others })
+  }
+  it("keeps a group withheld after the page's first fill clear of an accepted group's padded fill", () => {
+    const guard = protection(index)
+    const reach = (f: number[][]) => Math.max(...f.filter(r => r[1]! < 107 && r[3]! > 98).map(r => r[2]!))
+    // the paragraph's fill, painted while both groups are pending: it keeps clear of both
+    guard.accept(9)
+    expect(guard.others(1)).toEqual([[10, 98, 60, 107], [60.1, 98, 110, 107]])
+    swapOf(9, guard.others(1))
+    // B's group withheld, A's drawn: A's fill, padded 0.6, stops short of B's text at 60.1
+    guard.accept(7)
+    expect(reach(swapOf(7, guard.others(1)).fill)).toBeLessThanOrEqual(60.1 - 0.3 + 1e-9)
+    // where B's is drawn too, the two meet and neither leaves the other's edge
+    const both = protection(index)
+    for (const id of [9, 7, 8]) both.accept(id)
+    expect(reach(swapOf(7, both.others(1)).fill)).toBeCloseTo(60.6, 6)
   })
 })
 

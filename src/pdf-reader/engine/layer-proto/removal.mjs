@@ -407,6 +407,39 @@ export function pageRules(index, page, ink) {
 }
 
 /**
+ * The rectangles on a page of every unit the layout file holds that the file's rectangles have not been given to draw
+ * there (its lines' erase, its placeholders' segments, its labels), which a swap or a fill keeps clear of (fileSwap's
+ * `others`): a unit not translated, kept as the original's, v0's own, refused, a table cell whose group is withheld, and
+ * one not decided yet (laid later, its group pending). A unit is taken out once it is drawn by them (`accept(id)`, as it
+ * is painted): until then its text may be the original's, and no other unit's padded fill may reach it. Two drawn
+ * units' rectangles may meet (a footnote's lines 9 pt apart), and neither leaves the other's edge. Asked at each fill,
+ * never cached past a decision (Codex's review of PR A: a page's protection read at its first paint, before its groups
+ * were settled, let an accepted group's fill reach 0.5 pt into a withheld group's text). Each unit's boxes on a page are
+ * read once.
+ */
+export function protection(index) {
+  const accepted = new Set(), pages = new Map()
+  const boxesOn = j => {
+    if (pages.has(j)) return pages.get(j)
+    const list = []
+    for (const id of index.onPage(j)) {
+      const lu = index.unit(id), boxes = []
+      for (let l = 0; l < lu.erase.length; l++) { const e = lu.erase[l]; if (!e || lu.lines[8 * l] !== j) continue; for (let o = 0; o + 3 < e.length; o += 4) boxes.push([e[o], e[o + 1], e[o + 2], e[o + 3]]) }
+      for (const row of lu.ph.values()) for (let o = 0; o + 5 < row.segs.length; o += 6) if (row.segs[o] === j) boxes.push([row.segs[o + 1], row.segs[o + 5], row.segs[o + 3], row.segs[o + 4]])
+      const lb = lu.labels
+      for (let o = 0; o + 6 < lb.length; o += 7) if (lb[o + 1] === j) boxes.push([lb[o + 2], lb[o + 6], lb[o + 4], lb[o + 5]])
+      if (boxes.length) list.push([id, boxes])
+    }
+    pages.set(j, list)
+    return list
+  }
+  return {
+    accept: id => { accepted.add(id) },
+    others: j => boxesOn(j).flatMap(([id, boxes]) => (accepted.has(id) ? [] : boxes)),
+  }
+}
+
+/**
  * A unit's drawing over the text-removed PDF from the layout file's rectangles alone: the browser reads none of the page's
  * ink. What the unit replaces is what the add-on removed of it (pagePlan: every glyph the file gives it), but what its
  * reading keeps: its lines' erase rectangles (the file's: its glyphs' outline boxes merged) and its placeholders' segments,
