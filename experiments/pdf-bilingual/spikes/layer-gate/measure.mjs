@@ -25,6 +25,17 @@ const lum = (a, i) => a[i] * 0.299 + a[i + 1] * 0.587 + a[i + 2] * 0.114
 const rd = (v, d) => +v.toFixed(d)
 const INK = 160, TRACE = 232
 /** the kinds whose frames are body text (the scorer's BODY_KINDS, layer/page.mjs EVEN_KINDS) */
+/**
+ * What the wire formats' syntax leaves in a translation's text when it is not read back (mt.mjs; the protector's
+ * src/core/protector/tokens.ts): on the markers wire a marker (`@a#`, MARKER_RE), its `#` alone (the source's text holds
+ * none: TeX's `\#` and a bare `#` are placeholders, so any `#` came from a marker), what a tolerant reading takes for a
+ * marker without its `#` (`@a` before no letter, of an id's length), the escaped `@` (`@@`), an entity the reading did
+ * not decode (`&amp;`, `&#39;`, escape and decode); on the tags wire a tag (`<x id="1"/>`, `<t id="1">`, `</t>`,
+ * TAG_RE's spellings). Returns the matches
+ */
+const RESIDUE = /&(?:amp|lt|gt|quot|apos|nbsp|#\d+|#x[0-9a-f]+);|<\s*\/?\s*[xt](?:\s+id\s*=[^>]*)?\s*\/?\s*>|@@|@[a-z]{1,2}#*(?![a-z])|#+/gi
+export const markerResidueOf = text => [...String(text).matchAll(RESIDUE)].map(m => m[0])
+
 export const BODY = new Set(['para', 'abstract', 'theorem'])
 /** a math font by its name, as fonts are named in TeX's PDFs */
 export const MATH_FONT = /CMMI|CMSY|CMEX|CMBSY|CMMIB|MSAM|MSBM|EUFM|EUSM|RSFS|LMMath|STIX|txsy|txmi|txex|pxsy|pxmi|pxex|rtxmi|rtxsy|MathJax|cmmi|cmsy|cmex|NewCMMath|Asana|Cambria Math/i

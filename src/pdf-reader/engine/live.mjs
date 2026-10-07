@@ -370,7 +370,10 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 //     placeholder, a running head kept as it is, a blank line after a comment a paragraph's end. Of the 25,139 units of
 //     the corpus's 117 papers 22,446 keep their hash, 1,222 are new or cut anew, and 1,471 are the same but for their
 //     pairs' numbers, whose copy's translation seedFrom finds again (cache.mjs). Nothing is sent or read back otherwise:
-//     a copy of 8 or 9 carries over every unit it holds the source of (PIPELINE_CARRIES)
+//     a copy of 8 or 9 carries over every unit it holds the source of (PIPELINE_CARRIES), but one whose translation
+//     holds a `#`: a `#` the reply set outside its markers is a marker's, the source's text holding none, and is no
+//     longer set as text, a pair of brackets that held only it with it (mt.mjs rehydrate: Microsoft's `@f#(#)`, which
+//     drew "[10](#)" in 1706.03762's Japanese)
 export const PIPELINE_VERSION = '10'
 /**
  * The earlier pipelines whose copies carry their translations over into this one, unit by unit (cache.mjs copyReuse),
@@ -384,12 +387,14 @@ export const PIPELINE_VERSION = '10'
  *   (mt.mjs rehydrate); TeX's `#` is never the text's own (`\#` and a bare `#` are placeholders), so a translation whose
  *   text holds no `\#` was read back as this pipeline reads it, its sentences too. Units of 7 that fix 2 or 4 cut anew
  *   (a citation's notes, an accent in a word) have new hashes
- * - 8: everything: what 9 and 10 change comes after the answer (a table's groups, decided again from the copy's
- *   translations) or changes what a unit is, not what is sent for one or made of its answer: every translation of 8 is
- *   one 10 would make of the same pieces
- * - 9: likewise (10 changes what a unit is)
+ * - 8: what 9 and 10 change comes after the answer (a table's groups, decided again from the copy's translations) or
+ *   changes what a unit is, not what is sent for one, and a translation of 8 is one 10 would make of the same pieces but
+ *   where its reply set a marker's `#` as text, which 10 reads as the marker's (dropped): a translation whose text holds
+ *   a `\#` is not carried, as 7's
+ * - 9: likewise
  */
-export const PIPELINE_CARRIES = { 7: pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#')), 8: () => true, 9: () => true }
+const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
+export const PIPELINE_CARRIES = { 7: NO_MARKER_HASH, 8: NO_MARKER_HASH, 9: NO_MARKER_HASH }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a

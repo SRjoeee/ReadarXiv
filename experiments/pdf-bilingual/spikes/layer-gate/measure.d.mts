@@ -17,3 +17,5 @@ export declare function modelPage(o: { units: UnitIn[]; ref: RefUnit[]; items: I
   wrongPageText: number; droppedPh: number; cropForeign: number; modelCells: number
 }
 export declare function pixelPage(o: Record<string, unknown>): Record<string, unknown>
+/** the wire formats' syntax left in a translation's text (a marker, its `#`, an escaped `@`, an entity, a tag): the matches */
+export declare function markerResidueOf(text: string): string[]

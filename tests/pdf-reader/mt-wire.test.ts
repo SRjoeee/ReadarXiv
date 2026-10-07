@@ -92,10 +92,21 @@ describe('rehydrate: a marker\'s `#` doubled or displaced is read with its marke
     expect(back(u, reply, true)).toBe('我们可以用RMSE（$$\\mathrm{RMSE}(t)$$）量化模拟器的预测技能：')
   })
 
-  it('only a marker\'s: an entity\'s `#` stays, and so does a `#` of the reply\'s own where every marker kept its `#`', () => {
+  it('an entity\'s `#` stays; any other is a marker\'s, the source\'s text holding none, and goes wherever the reply set it', () => {
     const u = unit({ t: 'text', s: 'The rule holds for' }, { t: 'ph', src: '$n$' }, { t: 'text', s: ' items, item 3 first.' })
-    // tolerant, `@a` read without its `#`: the first lone `#` after it is its own, the entities' kept
+    // tolerant, `@a` read without its `#`: the lone `#` after it goes, the entities' are kept
     expect(back(u, 'La r&#232;gle vaut pour @a items, l&#39;item #3 d&#39;abord.', true)).toBe("La règle vaut pour $n$ items, l'item 3 d'abord.")
-    expect(back(u, 'Die Regel gilt für @a# Elemente, Element #3 zuerst.')).toBe('Die Regel gilt für $n$ Elemente, Element \\#3 zuerst.')
+    // strict, every marker with its `#`: a `#` the reply set elsewhere is a marker's too (the source wrote "item 3")
+    expect(back(u, 'Die Regel gilt für @a# Elemente, Element #3 zuerst.')).toBe('Die Regel gilt für $n$ Elemente, Element 3 zuerst.')
+  })
+
+  it('a marker\'s `#` echoed in brackets after it, `@f#(#)`, goes with its brackets (1706.03762 into Japanese, unit 21)', () => {
+    const u = unit({ t: 'text', s: 'At each step the model is auto-regressive' }, { t: 'ph', src: '\\citep{graves2013generating}' }, { t: 'text', s: ', consuming the previously generated symbols.' })
+    expect(serialize(u).wire).toBe('At each step the model is auto-regressive @a#, consuming the previously generated symbols.')
+    // Microsoft's reply as it came (2026-10-07): the marker read, `(#)` set as text, "[10](#)" on the page
+    expect(back(u, '\u5404\u30b9\u30c6\u30c3\u30d7\u3067\u30e2\u30c7\u30eb\u306f\u81ea\u5df1\u56de\u5e30\u7684 @a#(#)\u3068\u306a\u308a\u3001\u4ee5\u524d\u306b\u751f\u6210\u3055\u308c\u305f\u30b7\u30f3\u30dc\u30eb\u3092\u6d88\u8cbb\u3057\u307e\u3059\u3002')).toBe('\u5404\u30b9\u30c6\u30c3\u30d7\u3067\u30e2\u30c7\u30eb\u306f\u81ea\u5df1\u56de\u5e30\u7684 \\citep{graves2013generating}\u3068\u306a\u308a\u3001\u4ee5\u524d\u306b\u751f\u6210\u3055\u308c\u305f\u30b7\u30f3\u30dc\u30eb\u3092\u6d88\u8cbb\u3057\u307e\u3059\u3002')
+    // and a full-width pair, or a square one, alike; a pair that holds anything else is the text's
+    expect(back(u, '\u81ea\u5df1\u56de\u5e30\u7684 @a#\uff08#\uff09\u3068\u306a\u308a\u3002')).toBe('\u81ea\u5df1\u56de\u5e30\u7684 \\citep{graves2013generating}\u3068\u306a\u308a\u3002')
+    expect(back(u, '\u81ea\u5df1\u56de\u5e30\u7684 @a# [#] (x)\u3002')).toBe('\u81ea\u5df1\u56de\u5e30\u7684 \\citep{graves2013generating} (x)\u3002')
   })
 })

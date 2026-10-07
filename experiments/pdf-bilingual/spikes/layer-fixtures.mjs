@@ -69,7 +69,7 @@ const { makeLayout } = await engine('layout/make.mjs')
 const MARKS = await engine('layout/marks.mjs')
 const { encodeLayoutMarks, LAYOUT_CLASSES, layoutMarksOf, parseLayoutMarks } = MARKS
 const LIVE = await engine('live.mjs')
-const { keptFor, openPaper, originalFiles, PIPELINE_VERSION, TYPESETTING_VERSION } = LIVE
+const { keptFor, openPaper, originalFiles, PIPELINE_CARRIES, PIPELINE_VERSION, TYPESETTING_VERSION } = LIVE
 const { unpackSource } = await engine('tar.mjs')
 // the translation's modules only where a request may be made (mt.mjs and the rules reach the extension's code by alias)
 const { RULES_VERSION } = OFFLINE ? { RULES_VERSION: null } : await import(pathToFileURL(join(ENGINE, 'src/core/rules/latexml.ts')).href)
@@ -394,17 +394,21 @@ async function microsoftRecord(paper, target, hashes) {
 }
 /**
  * A record of this cut of the paper's units, its translations carried over from records of another cut (`from`: the
- * gate's fixed fixture's, made by an earlier front end): each unit whose source is one of theirs, by its hash or but for
- * its pairs' numbers (cache.mjs seedFrom, as a copy's seed); every other unit the target does not keep sent through
+ * gate's fixed fixture's, made by an earlier front end, with its pipeline): each unit whose source is one of theirs, by
+ * its hash or but for its pairs' numbers (cache.mjs seedFrom, as a copy's seed), and whose translation that pipeline's
+ * carries over into this one (live.mjs PIPELINE_CARRIES: not one holding a marker's `#`); every other unit the target
+ * does not keep sent through
  * Microsoft's endpoint on the markers wire, as microsoftRecord sends a paper's, at its rate. A front end that cuts the
  * units anew (PIPELINE 10's) sends only what it made new
  */
 async function seededRecord(paper, target, hashes, from) {
   const kept = keptFor(paper, target)
   const results = new Map()
-  for (const rec of from) {
+  for (const { record: rec, pipeline } of from) {
+    // (as a copy carries over: the units its pipeline's translations this one reads alike, PIPELINE_CARRIES)
+    const carries = pipeline === PIPELINE_VERSION ? () => true : (PIPELINE_CARRIES[pipeline] ?? (() => false))
     const { seed } = await seedFrom(rec, paper.units)
-    for (const [i, x] of seed) if (!results.has(i) && !kept.has(paper.units[i])) results.set(i, x)
+    for (const [i, x] of seed) if (!results.has(i) && !kept.has(paper.units[i]) && carries(x.pieces)) results.set(i, x)
   }
   const carried = results.size
   const todo = paper.units.filter((u, i) => !kept.has(u) && !results.has(i))
@@ -486,8 +490,8 @@ for (const [id, target] of asked) {
     if (!record) {
       const staged = await stagingRecord(m[1], Number(m[2]), target)
       // (else the gate's fixed fixture's translations carried over where the cut is another, the rest sent)
-      const old = join(REFS, `${id}-${target}`, 'record.json')
-      const made = staged ?? (existsSync(old) ? await seededRecord(paper, target, hashes, [JSON.parse(readFileSync(old, 'utf8'))]) : await microsoftRecord(paper, target, hashes))
+      const old = join(REFS, `${id}-${target}`, 'record.json'), oldMeta = join(REFS, `${id}-${target}`, 'units.json')
+      const made = staged ?? (existsSync(old) ? await seededRecord(paper, target, hashes, [{ record: JSON.parse(readFileSync(old, 'utf8')), pipeline: existsSync(oldMeta) ? JSON.parse(readFileSync(oldMeta, 'utf8')).pipeline : null }]) : await microsoftRecord(paper, target, hashes))
       source = staged ? 'staging' : 'microsoft'
       from = made.from
       write(recordFile, made.record)

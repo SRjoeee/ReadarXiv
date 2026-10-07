@@ -22,7 +22,7 @@
 // kept character, a kept rendering or a line of a unit v0 does not draw.
 import * as pdfjs from 'pdfjs-dist'
 import { lostInk } from '/engine/layer/check.mjs'
-import { cropForeignPx, footprintOf, MATH_FONT, modelPage, pixelPage, removalPage, replacedFoot } from '/gate/measure.mjs'
+import { cropForeignPx, footprintOf, markerResidueOf, MATH_FONT, modelPage, pixelPage, removalPage, replacedFoot } from '/gate/measure.mjs'
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
 /** device pixels a PDF unit: v0's canvases at 1.25 CSS px and dpr 2 (the floor's), and the lost-ink check's 2x floor */
@@ -322,7 +322,17 @@ window.gate = {
     // with no copy of its own, as a reader opens it, and the checker reads that copy)
     const ck = S.perf ? { a: { regions: 0 }, b: { list: { missing: [], duplicated: [], brackets: [] } }, c: { list: [] }, d: { found: 0, ok: 0 } } : run.checkPage(p)
     const on = e => e.page === p
+    // the wire's syntax left in the text drawn from the translation (markerResidueOf): each drawn unit's text tokens on
+    // the page, not a placeholder's rendering nor a label
+    const residue = []
+    for (const r of recs) {
+      const q = S.byId.get(r.id)
+      const text = (q?.layout?.lines ?? []).filter(l => l.page === p).flatMap(l => l.items).filter(it => it.t?.s && !it.t.ph && !it.t.label && !it.t.crop).map(it => it.t.s).join(' ')
+      const found = markerResidueOf(text)
+      if (found.length) residue.push({ unit: r.id, found })
+    }
     const check = {
+      markerResidue: residue.reduce((a, x) => a + x.found.length, 0),
       missing: ck.b.list.missing.filter(on).map(e => e.k), twice: ck.b.list.duplicated.filter(on).map(e => e.k), brackets: ck.b.list.brackets.filter(on).map(e => e.k),
       duplicated: ck.c.list.filter(x => x.by === 'layer' && on(x)).map(x => x.unit),
       numbers: { total: ck.d.found, shown: ck.d.ok },
@@ -334,6 +344,7 @@ window.gate = {
       const ids = [...new Set(list.filter(on).map(e => e.unit))]
       if (ids.length) where[key] = ids
     }
+    if (residue.length) where.markerResidue = residue.map(x => `${x.unit}:${x.found.join(' ')}`)
     const clippedIds = recs.filter(r => r.pages[0] === p && r.lostChars).map(r => r.id)
     if (clippedIds.length) where.clipped = clippedIds
     // the style: each unit's base as drawn against the original's (styleMatch's base), on its first page

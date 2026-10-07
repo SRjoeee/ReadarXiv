@@ -43,6 +43,8 @@ export const MEASURES = [
   ['brackets', 'model', 'defect', 'down', 'doubled brackets'],
   ['duplicated', 'model', 'defect', 'down', 'duplications'],
   ['clipped', 'model', 'defect', 'down', 'clipped characters'],
+  // the wire's syntax left in the drawn translation (measure.mjs markerResidueOf: a marker, its `#`, an entity, a tag)
+  ['markerResidue', 'model', 'defect', 'down', 'marker syntax left in drawn text'],
   ['numbersLost', 'model', 'defect', 'down', 'equation numbers not shown'],
   // the text-removed PDF's (--removal): its removed page the truth of what stays (pdf-remove-report.md §3.1)
   ['trueResidue', 'pixel', 'defect', 'down', 'leftover English (true residue)'],
@@ -93,7 +95,7 @@ export function pageEntry(page, model, pixel) {
     dTop: r(median(body.map(g => Math.abs(g.dTop))), 2), overRight: body.filter(g => g.dRight > 1).length, onGrid: r(median(body.map(g => g.onGrid)), 3),
     cropForeign: m.cropForeign, wrongPageText: m.wrongPageText, droppedPh: m.droppedPh, modelCells: m.modelCells,
     missing: model.check.missing.length, twice: model.check.twice.length, brackets: model.check.brackets.length, duplicated: model.check.duplicated.length,
-    clipped: model.check.clipped, numbersTotal: model.check.numbers.total, numbersShown: model.check.numbers.shown, numbersLost: model.check.numbers.total - model.check.numbers.shown,
+    clipped: model.check.clipped, markerResidue: model.check.markerResidue ?? 0, numbersTotal: model.check.numbers.total, numbersShown: model.check.numbers.shown, numbersLost: model.check.numbers.total - model.check.numbers.shown,
     where: model.where, style: model.style, drawn: model.drawn,
     groupsSplit: model.consistency?.groupsSplit ?? 0, labelsSource: model.consistency?.labelsSource ?? 0,
   }

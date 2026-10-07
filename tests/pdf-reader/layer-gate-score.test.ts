@@ -111,3 +111,14 @@ describe('the merge rule', () => {
     expect(pooled([after.a.totals, after.b.totals], 'model')).toMatchObject({ outputs: 2, unitsLeft: 1, duplicated: 1, textOn: 8 })
   })
 })
+
+describe("the wire's syntax left in drawn text (measure.mjs markerResidueOf): what the protector's formats can leave", () => {
+  it('a marker, its `#` alone (Microsoft\'s `(#)`), a tolerant remains, an escaped `@`, an entity, a tag; none in clean text', async () => {
+    const { markerResidueOf } = await import('../../experiments/pdf-bilingual/spikes/layer-gate/measure.mjs')
+    expect(markerResidueOf('\u81ea\u5df1\u56de\u5e30\u7684 [10] (#)\u3068\u306a\u308a')).toEqual(['#'])
+    expect(markerResidueOf('el modelo @a# y @b, con @@ y &amp; o &#39;')).toEqual(['@a#', '@b', '@@', '&amp;', '&#39;'])
+    expect(markerResidueOf('Wir <x id="2"/> sehen <t id="1">es</t>')).toEqual(['<x id="2"/>', '<t id="1">', '</t>'])
+    // an address keeps its `@` (a letter follows within an id's length), and plain text is clean
+    expect(markerResidueOf('kahe@microsoft.com, Table 2 (top), x (y) z')).toEqual([])
+  })
+})
