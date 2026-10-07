@@ -112,6 +112,9 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   // (the maintainer's ruling of 2026-10-07, on S3-11: the script's leading on the original's own pitch reads more
   // naturally on a loose original than fix 2's relative leading (leadRel), which stays a switch)
   P.leadRel ??= false
+  // (and the maintainer's choice of 2026-10-07 on S3-12, "\u6211\u4EEC\u5C31\u9009\u5B9A D \u7248\u672C\u65B9\u5411": adaptiveFill on a loose
+  // original, as measured there; adaptiveFill: false is B, the script's leading on the original's pitch alone)
+  P.adaptiveFill ??= { band: 0.05, track: 0.05, size: 1.1 }
   // iteration 2's hyphenation, fetched at once (local, small)
   const hyphP = Promise.all([...new Set(['en', to === 'de' ? 'de' : null, to === 'ru' ? 'ru' : null].filter(Boolean))].map(async l => L2.setHyphenData(l, await loadHyphenation(l, hyphUrl(l)))))
   // the target's likely faces loaded meanwhile (Times-like until the paper's own designs are known), and Latin Modern at
@@ -586,7 +589,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     }
   }
   /**
-   * adaptiveFill (D, P.adaptiveFill: { band, track, size }; off by default): the units of a loose original's page that
+   * adaptiveFill (D, P.adaptiveFill: { band, track, size }; the default since 2026-10-07, false for B): the units of a loose original's page that
    * begin on it, each spread over its original paragraph's space, the page's lines kept to one rhythm. Each unit's fill
    * leading is the loosest, between its leading relative to the original's pitch and the script's on it (leadBase),
    * at which its most natural state still sets it whole: its text then reaches its frame's foot. The page's target is
