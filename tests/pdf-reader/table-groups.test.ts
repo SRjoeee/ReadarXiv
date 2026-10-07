@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { copyTexts, reusable, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
+import { copyTexts, decideWrite, reusable, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
 import { decideGroups, groupOf, NAMES_SHARE, unchanged } from '@/pdf-reader/engine/groups.mjs'
 import { inMemory, loadProject, type SourceUnit, tableGrid } from '@/pdf-reader/engine/latex-front.mjs'
 import { CAPTION_NAMES, captionNames } from '@/pdf-reader/engine/caption-names.mjs'
@@ -211,6 +211,19 @@ describe('runLive again: a group kept whole for a cell the translator gave in pa
     expect(finalOf(c2)).toContain('slow training')
     expect(finalOf(c2)).not.toContain('\u8bba\u6587 \u8bba\u6587')
     expect(r2.results.get(cell)).toMatchObject({ state: 'kept', translation: 'partial' })
+  })
+})
+
+describe("a kept cell's record: what the translator gave it and its sentences, kept with it (Codex on #323)", () => {
+  it('writes the record again where a kept cell is given whole on a retry, its pieces the same as before (4208105825)', () => {
+    // a run that changed nothing typeset, its kept cell given whole where the copy holds it given in part: the copy's
+    // provenance is written, so that the next run takes it as it is rather than asking for it again
+    const cell = { kind: 'cell', src: 'fast training', hash: 'h', group: '1:c1', pieces: [{ t: 'text', tr: true, s: 'x' }], by: 'B', tried: 'B', state: 'kept' }
+    const cached = { units: [{ ...cell, translation: 'partial' }], marks: [['1s', {}]] }
+    const how = decideWrite({ result: { changed: false, settled: true }, cached, units: [{ ...cell, translation: 'whole' }], marks: cached.marks, shown: false })
+    expect(how).toBe('provenance')
+    // and nothing to write where it is the same
+    expect(decideWrite({ result: { changed: false, settled: true }, cached, units: [{ ...cell, translation: 'partial' }], marks: cached.marks, shown: false })).toBeNull()
   })
 })
 

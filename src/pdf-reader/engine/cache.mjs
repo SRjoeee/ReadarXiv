@@ -218,8 +218,10 @@ export const knownOriginal = (row, now) => (row && row.pipeline === now.pipeline
 export function decideWrite({ result, cached, units, marks, shown }) {
   if (result.changed) return result.settled && shown ? 'full' : null
   if (!cached) return null
-  // the units compared as a whole, not by hash: repeated paragraphs share one (Devin on #298)
-  const tally = us => us.map(u => `${u.hash}|${u.state}|${u.by}|${u.tried}`).sort().join('\n')
+  // the units compared as a whole, not by hash: repeated paragraphs share one (Devin on #298); a kept cell with what the
+  // translator gave it, which a retry may make whole with the same pieces (Codex on #323: left partial in the copy, it
+  // was asked for again on every run)
+  const tally = us => us.map(u => `${u.hash}|${u.state}|${u.translation ?? ''}|${u.by}|${u.tried}`).sort().join('\n')
   // a provenance write keeps the copy's PDF, so only units that set what it sets — the same text, set in the source or
   // not as there — are written over it: a run that changed nothing against its seed may still hold a translation the
   // copy's PDF does not set (C1 of #309's fix round: a run again seeded with a last run's translation whose final never
