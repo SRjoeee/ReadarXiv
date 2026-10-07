@@ -10,6 +10,11 @@ export declare const BUNDLE: '1'
 /** a bundle's bytes at most, as a reader decodes them, and its values, counted before JSON.parse */
 export declare const BUNDLE_CAP: number
 export declare const BUNDLE_VALUES: number
+/** the reader's contract, `b<BUNDLE>-j<PDFJS>`: what a reader asks by, and the versions it refuses a bundle of another */
+export declare const CTAG: string
+/** the content's, `<CTAG>-p<PIPELINE>-l<LAYOUT>-r<REMOVAL>`: a bundle key's last part; a reader names the maker's
+ *  versions, never compares them */
+export declare const VTAG: string
 /** a unit's flags (KEPT: openPaper's `kept`, nameCells) */
 export declare const UNIT_FLAG_BITS: { readonly TITLE: 1; readonly FRONT: 2; readonly BRACKETED: 4; readonly KEPT: 8 }
 /** a piece as openPaper reads it, positions dropped: a text (with the source as written where it differs, an accent's
@@ -21,7 +26,8 @@ export type BundleUnit = [kind: string, flags: number, depth: number | null, cel
 export type Box = [x0: number, y0: number, x1: number, y1: number]
 /** a located unit of the original's side: its id, its stream index (the text layer's order), its line rectangles */
 export type UnitWire = [id: number, stream: number, rects: [page: number, x0: number, y0: number, x1: number, y1: number][]]
-/** the bundle's versions: the engine's, and the compiler image's name, which no reader checks */
+/** the bundle's versions: the reader's contract (bundle, pdfjs), which a reader compares with its own, and the
+ *  maker's (pipeline, layout, removal) and the compiler image's name, which it reads as tokens alone */
 export interface BundleVersions { bundle: string; pipeline: string; layout: string; removal: string; pdfjs: string; image: string }
 /** the bundle as the file holds it (the layer-only plan §3.1) */
 export interface LayerBundle {
@@ -67,8 +73,9 @@ export declare function bundleUnitsOf(paper: { units: readonly SourceUnit[]; kep
 /** the bundle file's bytes (UTF-8 JSON) from its parts, under the engine's versions; the same parts, the same bytes */
 export declare function writeBundle(parts: BundleParts): Uint8Array
 /** the bundle as received (bytes, or a string), within caps.bytes (BUNDLE_CAP) and caps.values (BUNDLE_VALUES) counted
- *  before JSON.parse, then every check of §3.3; a bad unit dropped, null at its id; throws BundleRefusal */
+ *  before JSON.parse, then every check of §3.3 (of the versions, the contract's compared, the maker's read as tokens); a
+ *  bad unit dropped, null at its id; throws BundleRefusal */
 export declare function readBundle(json: Uint8Array | string, caps?: { bytes?: number; values?: number }): ReadBundle
-/** `layer/<id>v<n>/<vtag>.json`, the vtag `b<BUNDLE>-p<PIPELINE>-l<LAYOUT>-r<REMOVAL>-j<PDFJS>`, an old identifier's
- *  slash written _; throws a RangeError on an identifier or a version that is not one */
+/** `layer/<id>v<n>/<VTAG>.json`, an old identifier's slash written _; throws a RangeError on an identifier or a
+ *  version that is not one */
 export declare function bundleKey(paper: string, version: number): string

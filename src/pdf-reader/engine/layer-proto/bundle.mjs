@@ -40,15 +40,25 @@ const STRING_MAX = 16_000
 const KIND = /^[a-z]{1,32}$/
 /** a heading's depth (latex-front.mjs DEPTH: -1 a \part, 0 a \chapter …), with the readers' margin */
 const DEPTH_MIN = -1, DEPTH_MAX = 9
-/** a PDF's bytes at most; the compiler image's name at most */
-const BASE_MAX = 2 ** 31, IMAGE_MAX = 64
+/** a PDF's bytes at most */
+const BASE_MAX = 2 ** 31
+/** a version a bundle names: a token of letters, digits and points */
+const VERSION = /^[0-9A-Za-z.]{1,32}$/
 const SHA256 = /^[0-9a-f]{64}$/
 const KEYS = ['schema', 'paper', 'base', 'versions', 'units', 'left', 'layout', 'addon']
 const VERSIONS = ['bundle', 'pipeline', 'layout', 'removal', 'pdfjs', 'image']
 const CELL = ['table', 'row', 'col', 'span', 'head']
-/** the engine's versions, as a bundle names them; the image is the bundle's own (an image change rewrites nothing) */
-const ENGINE = [['bundle', BUNDLE], ['pipeline', PIPELINE_VERSION], ['layout', LAYOUT], ['removal', REMOVAL], ['pdfjs', PDFJS]]
-const VTAG = `b${BUNDLE}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}-j${PDFJS}`
+/** the reader's contract: the bundle's format and the PDF.js it reads the geometry with, what a reader asks by. A
+ *  bundle of another is refused */
+export const CTAG = `b${BUNDLE}-j${PDFJS}`
+/** the content's: the contract, then the pipeline, the layout maker and the remover the server made it with (rules as
+ *  data: the reader names its contract, the server the content); a bundle key's last part. A reader reads a bundle of a
+ *  newer maker: those three are named, never compared */
+export const VTAG = `${CTAG}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`
+/** the versions a reader compares with its own */
+const CONTRACT = [['bundle', BUNDLE], ['pdfjs', PDFJS]]
+/** those it reads for their shape alone: the maker's, and the compiler image's (an image change rewrites nothing) */
+const NAMED = ['pipeline', 'layout', 'removal', 'image']
 
 /** a bundle refused, and why: where (a JSON path) and what */
 export class BundleRefusal extends Error {
@@ -70,12 +80,6 @@ function exactKeys(v, keys, path) {
   const own = Object.keys(v)
   if (own.length !== keys.length) for (let i = 0; i < own.length; i++) if (!keys.includes(own[i])) throw fail(path ? `${path}.${told(own[i])}` : told(own[i]), 'not a key of the schema')
   return v
-}
-/** a string of lo to hi characters, each printable ASCII */
-function printable(v, lo, hi) {
-  if (typeof v !== 'string' || v.length < lo || v.length > hi) return false
-  for (let i = 0; i < v.length; i++) { const c = v.charCodeAt(i); if (c < 0x20 || c > 0x7e) return false }
-  return true
 }
 /** the paper version's one path segment, as the web's keys spell it (an old identifier's slash as _) */
 const segmentOf = (id, version) => `${id.replace('/', '_')}v${version}`
@@ -178,8 +182,8 @@ export function writeBundle({ paper, base, image, units, left, layout, addon }) 
   return new TextEncoder().encode(text)
 }
 
-/** a paper version's bundle under this engine's versions: `layer/<id>v<n>/<vtag>.json`, the vtag
- *  `b<BUNDLE>-p<PIPELINE>-l<LAYOUT>-r<REMOVAL>-j<PDFJS>`, an old identifier's slash written _ (the web's keys). Throws a
+/** a paper version's bundle under this engine's versions: `layer/<id>v<n>/<VTAG>.json`, VTAG
+ *  `b<BUNDLE>-j<PDFJS>-p<PIPELINE>-l<LAYOUT>-r<REMOVAL>`, an old identifier's slash written _ (the web's keys). Throws a
  *  RangeError on an identifier or a version that is not one */
 export function bundleKey(paper, version) {
   if (!isPaperId(paper)) throw new RangeError(`not an arXiv identifier (${told(paper)})`)
@@ -273,7 +277,7 @@ function unitStands(u, i, stands, opens) {
 /**
  * The bundle as received, read: bytes (or a string) within `caps.bytes` (BUNDLE_CAP), UTF-8, its values within
  * `caps.values` (BUNDLE_VALUES) and its nesting counted before JSON.parse, then every check of §3.3: its schema; its
- * versions the engine's (the image any short name); its paper; its base's digest 64 hex digits, its bytes 1 to 2^31, its
+ * format and PDF.js the reader's (its contract, CTAG), the maker's versions and the image tokens, never compared; its paper; its base's digest 64 hex digits, its bytes 1 to 2^31, its
  * address our copy's; each unit (unitStands), one that does not dropped; the left's kinds (a unit's each), pages (boxes,
  * the paper's) and units ([id, stream, rects] of the bundle's units, on its pages); the layout by its file's rules
  * (layout/file.mjs checkLayout), of the bundle's paper and units; the add-on's manifest by its own
@@ -293,8 +297,8 @@ export function readBundle(json, caps = {}) {
   exactKeys(b, KEYS, '')
   if (b.schema !== 1) throw fail('schema', 'not 1')
   const versions = exactKeys(b.versions, VERSIONS, 'versions')
-  for (const [k, want] of ENGINE) if (versions[k] !== want) throw fail(`versions.${k}`, `not this engine's '${want}'`)
-  if (!printable(versions.image, 1, IMAGE_MAX)) throw fail('versions.image', `not 1 to ${IMAGE_MAX} printable ASCII characters (${kindOf(versions.image)})`)
+  for (const [k, want] of CONTRACT) if (versions[k] !== want) throw fail(`versions.${k}`, `not this reader's '${want}'`)
+  for (const k of NAMED) if (typeof versions[k] !== 'string' || versions[k].length > 32 || !VERSION.test(versions[k])) throw fail(`versions.${k}`, `not a version, 1 to 32 letters, digits or points (${kindOf(versions[k])})`)
 
   const paper = exactKeys(b.paper, ['id', 'version', 'pages'], 'paper')
   if (!isPaperId(paper.id)) throw fail('paper.id', `not an arXiv identifier (${kindOf(paper.id)})`)

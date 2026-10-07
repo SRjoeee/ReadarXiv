@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/latex-front.mjs'
 import {
-  BUNDLE, BUNDLE_CAP, BUNDLE_VALUES, type BundleParts, type BundleUnit, BundleRefusal, bundleKey, bundleUnitsOf, type ReadBundle, readBundle, UNIT_FLAG_BITS, writeBundle,
+  BUNDLE, BUNDLE_CAP, BUNDLE_VALUES, type BundleParts, type BundleUnit, BundleRefusal, bundleKey, bundleUnitsOf, CTAG, type ReadBundle, readBundle, UNIT_FLAG_BITS, VTAG, writeBundle,
 } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { ADDON_CAP, REMOVAL, type RemovalManifest } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { encodeLayout, LAYOUT, type LayoutFile, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
@@ -113,10 +113,12 @@ describe('the versions a bundle names', () => {
     expect(LIVE_PIPELINE).toBe(PIPELINE_VERSION)
   })
 
-  it('bundleKey is layer/<id>v<n>/<vtag>.json, an old identifier\'s slash written _, each version a vtag token', () => {
+  it('CTAG names the reader\'s contract, VTAG the content, and bundleKey is layer/<id>v<n>/<VTAG>.json, an old identifier\'s slash written _', () => {
     expect(BUNDLE).toBe('1')
-    const vtag = `b${BUNDLE}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}-j${PDFJS}`
-    expect(vtag).toBe('b1-p10-l3-r4-j6.3.289')
+    expect(CTAG).toBe(`b${BUNDLE}-j${PDFJS}`)
+    expect(VTAG).toBe(`${CTAG}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
+    const vtag = VTAG
+    expect(vtag).toBe('b1-j6.3.289-p10-l3-r4')
     expect(bundleKey('1706.03762', 7)).toBe(`layer/1706.03762v7/${vtag}.json`)
     expect(bundleKey('hep-th/9901001', 1)).toBe(`layer/hep-th_9901001v1/${vtag}.json`)
     // (the web's vtag form, src/shared/identity.ts VTAG_FORM, is stricter than a token of letters, digits and points)
@@ -231,12 +233,18 @@ describe('readBundle refuses', () => {
     expect(refusalOf([])?.why).toMatch(/not an object/)
   })
 
-  it('versions other than the engine\'s (the image is not checked: an image change rewrites nothing)', () => {
-    for (const k of ['bundle', 'pipeline', 'layout', 'removal', 'pdfjs']) {
-      expect(refusalOf(broken(b => { b.versions[k] = `${b.versions[k]}0` }))?.why).toMatch(new RegExp(`^versions\\.${k}: not`))
+  it('another bundle format or PDF.js than the reader\'s; a newer maker is read (its pipeline, layout, remover and image named, never compared)', () => {
+    for (const k of ['bundle', 'pdfjs']) expect(refusalOf(broken(b => { b.versions[k] = `${b.versions[k]}0` }))?.why).toMatch(new RegExp(`^versions\\.${k}: not this reader's`))
+    // (the layout file and the manifest name their own versions, which their own rules still check)
+    for (const [k, v] of [['pipeline', '11'], ['layout', '4'], ['removal', '5'], ['image', '2'], ['image', 'sha.0123abc']] as const) {
+      const r = readBundle(bytesOf(broken(b => { b.versions[k] = v })))
+      expect(r.versions[k]).toBe(v)
+      expect(r.dropped).toEqual([])
     }
-    expect(refusalOf(broken(b => { b.versions.image = '2' }))).toBeNull()
-    expect(refusalOf(broken(b => { b.versions.image = 2 }))?.why).toMatch(/^versions\.image/)
+    for (const k of ['pipeline', 'layout', 'removal', 'image']) {
+      for (const v of ['', '1 0', '1-0', 'x'.repeat(33), 10, null]) expect(refusalOf(broken(b => { b.versions[k] = v }))?.why).toMatch(new RegExp(`^versions\\.${k}: not a version`))
+      expect(refusalOf(broken(b => { b.versions[k] = 'x'.repeat(32) }))).toBeNull()
+    }
     expect(refusalOf(broken(b => { delete b.versions.image }))?.why).toMatch(/^versions\.image: missing/)
   })
 
