@@ -12,6 +12,7 @@
 //    their budget (up to 180 seconds a batch).
 import type { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import type { TranslationTransport } from '@/providers/transport'
+import { sessionLine } from '@/shared/diagnostics'
 
 export interface SessionRouter {
   /** The chain this call should use: with a scope, the one it was bound to at its start; without (the settings page's connection test), the current one */
@@ -108,7 +109,17 @@ export interface SessionRouterDeps {
    * not retired (local review). Returns how many requests were cancelled
    */
   cancelScope?: (scope: string) => Promise<number>
+  /**
+   * Where the router's decisions are written down: the diagnostics log (issue #237). Whether the grace period is too
+   * short (a live page loses its batch) or too long (a closed tab keeps paying) can be judged from a reader's report
+   * only if each decision is recorded when it is taken — the grace armed, what the page answered, what was withdrawn
+   * and why (`shared/diagnostics.ts` `sessionLine`). Scope tags, tab numbers and counts; nothing of a page
+   */
+  note?: (line: string) => void
 }
+
+/** Why a session was withdrawn, as the log words it (the shapes in `shared/diagnostics.ts` list exactly these) */
+type DropReason = 'ended' | 'tab closed' | 'left' | 'unconfirmed' | 'superseded'
 
 /**
  * How long a “may have navigated away” is held before withdrawing.
@@ -159,34 +170,38 @@ export function createSessionRouter(deps: SessionRouterDeps): SessionRouter {
    *   answered with another session. A guessed end passes false — if the guess is wrong the page is still alive,
    *   and marking it would pin the rest of the paper on aborted (the reference-list failures of 2026-09-09)
    */
-  const drop = async (scopes: readonly string[], { remember = true }: { remember?: boolean } = {}): Promise<number> => {
+  const drop = async (scopes: readonly string[], { remember = true, why = 'ended' }: { remember?: boolean; why?: DropReason } = {}): Promise<number> => {
     // Mark before anything is awaited: a call suspended on its cache read wakes up to a scope already dead, on
     // this chain or on one built after the drop (DESIGN §8.5)
     if (remember) for (const scope of scopes) deps.cancelled.markScope(scope)
     let cancelled = 0
     for (const scope of scopes) {
-      const bound = sessions.get(scope)
-      // A guessed end does **not** unbind: unbound, the scope's next request looks like a new session and `forCall`
-      // hangs it on the **current** chain — if the reader changed engine, prompt or target language in between, one
-      // page's translation switches chains midway, exactly what §8.0's "a session keeps the chain it started on"
-      // prevents (Codex on #143). Drain, keep the binding: a real navigation clears it with the tab close or the next scope
-      if (remember) sessions.delete(scope)
-      // Whatever else is queued by scope (image OCR) is withdrawn first, without waiting for the chain: building it may hang on Translator.availability() (Codex on #87)
-      cancelled += deps.onDrop?.(scope) ?? 0
-      // Every chain still holding the scope's work, not only the one it is bound to (see `cancelScope`); it
-      // builds no chain and needs no binding — a scope never bound at all (the worker restarted, the binding
-      // lost) may still have work queued somewhere
-      if (deps.cancelScope) {
-        cancelled += await deps.cancelScope(scope)
-        continue
-      }
-      // Without the holder: a session only bound and never translating (bound set, no transport) has no translation
-      // request in this worker, and no chain is built to withdraw it. One never bound is withdrawn too: the worker restarted halfway, the binding is lost, but the queues may still hold this scope's tasks
-      if (bound && !bound.transport) continue
-      const transport = bound?.transport ?? await deps.current()
-      cancelled += await transport.cancel(scope)
+      const tabId = sessions.get(scope)?.tabId
+      const n = await withdraw(scope, remember)
+      cancelled += n
+      deps.note?.(sessionLine(scope, tabId, `dropped (${why}) cancelled=${n}`))
     }
     return cancelled
+  }
+  /** One scope's work taken off every queue it is in; how many requests that was */
+  const withdraw = async (scope: string, remember: boolean): Promise<number> => {
+    const bound = sessions.get(scope)
+    // A guessed end does **not** unbind: unbound, the scope's next request looks like a new session and `forCall`
+    // hangs it on the **current** chain — if the reader changed engine, prompt or target language in between, one
+    // page's translation switches chains midway, exactly what §8.0's "a session keeps the chain it started on"
+    // prevents (Codex on #143). Drain, keep the binding: a real navigation clears it with the tab close or the next scope
+    if (remember) sessions.delete(scope)
+    // Whatever else is queued by scope (image OCR) is withdrawn first, without waiting for the chain: building it may hang on Translator.availability() (Codex on #87)
+    const cancelled = deps.onDrop?.(scope) ?? 0
+    // Every chain still holding the scope's work, not only the one it is bound to (see `cancelScope`); it
+    // builds no chain and needs no binding — a scope never bound at all (the worker restarted, the binding
+    // lost) may still have work queued somewhere
+    if (deps.cancelScope) return cancelled + await deps.cancelScope(scope)
+    // Without the holder: a session only bound and never translating (bound set, no transport) has no translation
+    // request in this worker, and no chain is built to withdraw it. One never bound is withdrawn too: the worker restarted halfway, the binding is lost, but the queues may still hold this scope's tasks
+    if (bound && !bound.transport) return cancelled
+    const transport = bound?.transport ?? await deps.current()
+    return cancelled + await transport.cancel(scope)
   }
 
   /**
@@ -207,19 +222,22 @@ export function createSessionRouter(deps: SessionRouterDeps): SessionRouter {
           ? await Promise.all(scopes.map(s => deps.stillThere!(tabId, s)))
           : scopes.map(() => 'unknown' as const)
         if (probes.get(tabId) !== probe) return // superseded while the page was being asked
+        for (const [i, scope] of scopes.entries()) deps.note?.(sessionLine(scope, tabId, `probe ${answers[i]}`))
         const live = scopes.filter((_, i) => answers[i] === 'same')
         const loading = live.length > 0 && attempt < LOADING_RETRIES && await deps.stillLoading?.(tabId)
         if (probes.get(tabId) !== probe) return
         if (loading) {
+          for (const scope of scopes) deps.note?.(sessionLine(scope, tabId, `grace re-armed round=${attempt + 1}`))
           arm(tabId, scopes, attempt + 1)
           return
         }
+        for (const scope of live) deps.note?.(sessionLine(scope, tabId, 'kept'))
         // Answered, but with another session: the page really left, a certain end, sentenced — otherwise the requests hung
         // on something asynchronous, in no queue yet, would go out as usual once they woke (Codex on #143)
         const confirmed = scopes.filter((_, i) => answers[i] === 'other')
         const unsure = scopes.filter((_, i) => answers[i] === 'unknown')
-        if (confirmed.length > 0) await drop(confirmed)
-        if (unsure.length > 0) await drop(unsure, { remember: false })
+        if (confirmed.length > 0) await drop(confirmed, { why: 'left' })
+        if (unsure.length > 0) await drop(unsure, { remember: false, why: 'unconfirmed' })
       })()
     }, NAVIGATION_GRACE_MS))
   }
@@ -254,7 +272,7 @@ export function createSessionRouter(deps: SessionRouterDeps): SessionRouter {
         const standing = transport && !transport.isRetired?.() ? transport : undefined
         sessions.set(scope, { ...rest, ...(standing ? { transport: standing } : {}), ...(tabId !== undefined ? { tabId } : {}) })
         const stale = tabId !== undefined ? scopesOfTab(tabId).filter(other => other !== scope) : []
-        if (stale.length > 0) await drop(stale)
+        if (stale.length > 0) await drop(stale, { why: 'superseded' })
         if (standing) return standing
       }
       if (!bound && deps.cancelled.has(scope)) {
@@ -273,7 +291,7 @@ export function createSessionRouter(deps: SessionRouterDeps): SessionRouter {
         // dead scope and lets its request out — one paid batch per request suspended here, and the binding
         // stays behind (the local review of DESIGN §8.5 reproduced it; inherited from the MVP)
         sessions.set(scope, tabId !== undefined ? { tabId } : {})
-        if (stale.length > 0) await drop(stale)
+        if (stale.length > 0) await drop(stale, { why: 'superseded' })
       }
       for (;;) {
         const built = await deps.current()
@@ -299,7 +317,7 @@ export function createSessionRouter(deps: SessionRouterDeps): SessionRouter {
       if (sessions.has(scope) || deps.cancelled.has(scope)) return
       if (tabId !== undefined) {
         const stale = supersededOn(tabId, scope)
-        if (stale.length > 0) void drop(stale)
+        if (stale.length > 0) void drop(stale, { why: 'superseded' })
       }
       sessions.set(scope, tabId !== undefined ? { tabId } : {})
     },
@@ -312,17 +330,21 @@ export function createSessionRouter(deps: SessionRouterDeps): SessionRouter {
     drop,
     dropTab: tabId => {
       stayed(tabId)
-      return drop(scopesOfTab(tabId))
+      return drop(scopesOfTab(tabId), { why: 'tab closed' })
     },
     mayHaveLeft(tabId) {
       // The sessions hanging on this tab are taken **as of the hold**: a page's own first load reports loading too, when it
       // has no session yet, and taken at the deadline that would withdraw the session just started in between
-      arm(tabId, scopesOfTab(tabId), 0)
+      const scopes = scopesOfTab(tabId)
+      for (const scope of scopes) deps.note?.(sessionLine(scope, tabId, 'grace armed'))
+      arm(tabId, scopes, 0)
     },
     async rebind(scope) {
       const transport = await deps.current()
       const session = sessions.get(scope)
-      if (session) sessions.set(scope, { ...session, transport })
+      if (!session) return
+      sessions.set(scope, { ...session, transport })
+      deps.note?.(sessionLine(scope, session.tabId, 'rebound (pack)'))
     },
     async dropAndRebindAll() {
       // Stopping the deleted service must not wait for its replacement: a rebuild can hang in an engine probe,
@@ -347,6 +369,7 @@ export function createSessionRouter(deps: SessionRouterDeps): SessionRouter {
         const session = sessions.get(scope)
         if (session && !session.transport) sessions.set(scope, { ...session, transport })
       }
+      deps.note?.(`sessions rebound all (service deleted) cancelled=${cancelled} moved=${taken.length}`)
       return cancelled
     },
     transportFor: scope => sessions.get(scope)?.transport,

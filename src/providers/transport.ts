@@ -105,6 +105,8 @@ export interface LocalTransportDeps extends Pick<TranslateServiceDeps, 'queue' |
   buildChain?: (config: Config) => Promise<{ chain: TranslationProvider[]; renderPath: RenderPath }>
   /** Where the services' warnings go besides the console: the diagnostics log (issue #156) */
   warn?: (line: string) => void
+  /** Where the routine records go: a call's cost, a hand-over's outcome (issue #237; `TranslateServiceDeps.note`) */
+  note?: (line: string) => void
   /** The reader's services whose key the endpoint refused (the service health record): demoted from the start */
   rejected?: ReadonlySet<string>
   /** Told of every failed step, demoted or not — with fallback off the one step never demotes (Codex review, round 1) */
@@ -139,6 +141,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
       cancelled: deps.cancelled,
       retired: isRetired,
       ...(deps.warn ? { warn: deps.warn } : {}),
+      ...(deps.note ? { note: deps.note } : {}),
       ...(deps.cache ? { cache: deps.cache } : {}),
       ...(deps.queue ? { queue: deps.queue } : {}),
       ...(deps.batch ? { batch: deps.batch } : {}),
@@ -149,6 +152,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
   const seeded = chain.filter(engine => deps.rejected?.has(engine.id)).map(engine => ({ id: engine.id, kind: 'auth' as const, message: 'the endpoint refused this key before', status: 401 }))
   const service = createFallbackService(steps, {
     ...(deps.warn ? { warn: deps.warn } : {}),
+    ...(deps.note ? { note: deps.note } : {}),
     ...(seeded.length ? { demoted: seeded } : {}),
     ...(deps.onFailure ? { onFailure: deps.onFailure } : {}),
   })

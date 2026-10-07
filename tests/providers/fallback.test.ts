@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_COOLDOWN_MS, createFallbackService, type DemotedInfo, type FallbackStep } from '@/providers/fallback'
 import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
 import type { ProviderErrorKind, TranslationProvider } from '@/providers/types'
+import { RECORD_SHAPES } from '@/shared/diagnostics'
 
 const provider = (id: string): TranslationProvider => ({
   id,
@@ -270,5 +271,51 @@ describe('partial success along the fallback chain', () => {
     const service = createFallbackService([step('a', [partialFail('network', ['A'])]), step('b', [ok('b')])])
     const res = await service.translate(call)
     expect(res.ok).toBe(true)
+  })
+})
+
+describe('the chain record and the hand-over line (issue #237)', () => {
+  const SCOPE = 'abcdef12-3456-4789-8abc-def012345678'
+  const scoped = { ...call, scope: SCOPE } as TranslateCall
+
+  it('a call that had to go past its first engine says how far it went and who answered', async () => {
+    const notes: string[] = []
+    const service = createFallbackService([step('llm', [fail('auth', 'User not found.')]), step('google-web', [ok('google-web')])], { note: line => notes.push(line) })
+    await service.translate(scoped)
+    expect(notes).toEqual(['chain abcdef12 tried=2 served-by=google-web outcome=ok'])
+  })
+
+  it('and when no engine answered, the kind the last of them failed with', async () => {
+    const notes: string[] = []
+    const service = createFallbackService([step('llm', [fail('timeout')]), step('google-web', [fail('rate-limit')])], { note: line => notes.push(line) })
+    await service.translate(scoped)
+    expect(notes).toEqual(['chain abcdef12 tried=2 served-by=- outcome=failed:rate-limit'])
+  })
+
+  it('says nothing of a call the first engine answered, or a failure that is no reason to hand over', async () => {
+    const notes: string[] = []
+    const answered = createFallbackService([step('llm', [ok('llm')]), step('google-web', [ok('google-web')])], { note: line => notes.push(line) })
+    await answered.translate(scoped)
+    const cancelled = createFallbackService([step('llm', [fail('aborted')]), step('google-web', [ok('google-web')])], { note: line => notes.push(line) })
+    await cancelled.translate(scoped)
+    expect(notes).toEqual([])
+  })
+
+  it('writes its records in the ring\'s grammar', async () => {
+    const notes: string[] = []
+    const service = createFallbackService([step('llm', [fail('no-key')]), step('google-web', [ok('google-web')])], { note: line => notes.push(line) })
+    await service.translate(call)
+    expect(notes).toHaveLength(1)
+    for (const line of notes) expect(RECORD_SHAPES.some(shape => shape.test(line)), line).toBe(true)
+  })
+
+  it('a hand-over line carries the HTTP status the failure had (guarding what already holds: the status crosses the chain on the response)', async () => {
+    const lines: string[] = []
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const refused: TranslateMessageResponse = { ok: false, error: { kind: 'auth', message: 'Unauthorized: key=ZZZ-my-secret', isolatable: false, status: 401 } }
+    const service = createFallbackService([step('llm', [refused]), step('google-web', [ok('google-web')])], { warn: line => lines.push(line) })
+    await service.translate(call)
+    expect(lines).toEqual(['[axt] llm demoted: auth (HTTP 401) — message withheld (31 chars)'])
+    vi.restoreAllMocks()
   })
 })

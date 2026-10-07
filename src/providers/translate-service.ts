@@ -22,7 +22,7 @@ import { type CancelledScopeRegistry, isTranslationCancelledError, TranslationCa
 import { REQUEST_TIMEOUT_ERROR_NAME, RequestQueue, type QueueOptions } from './request/request-queue'
 import { attachRequestErrorMeta , getRequestErrorMeta } from './request/retry-policy'
 import { ProviderError, isPermanentErrorKind, type ProviderErrorKind, type ProviderKind, type TranslatedSegment, type TranslateRequest, type TranslationProvider, type TranslateSegment } from './types'
-import { failureLine } from '@/shared/diagnostics'
+import { batchLine, failureLine } from '@/shared/diagnostics'
 
 /**
  * What one segment's translation carries through the queue. `alignment` is present only when the
@@ -98,6 +98,12 @@ export interface TranslateServiceDeps {
   getProvider: (providerId?: string) => Promise<TranslationProvider>
   /** Where a warning goes besides the console — the background's diagnostics log (issue #156); tests and the chain builder may leave it out */
   warn?: (line: string) => void
+  /**
+   * Where a routine record goes besides the console: the diagnostics log (issue #237). One line for every call that
+   * sent a request or failed, saying what it cost (`shared/diagnostics.ts` `batchLine`) — never a call the cache
+   * answered whole
+   */
+  note?: (line: string) => void
   getModel?: () => Promise<string | undefined>
   cache?: CachePort
   /** Queue parameter overrides (tests): timeoutMs is the base of the batch timeout formula; rate / capacity take provider.rateLimit first, then this, then 8 / 20 */
@@ -183,6 +189,12 @@ interface QueueItem {
   request: Pick<TranslateRequest, 'source' | 'target' | 'context'>
   /** The glossary terms this segment matched (§8.2); undefined without a glossary, exactly as before */
   terms?: readonly GlossaryEntry[]
+  /**
+   * The requests that carried the segments of the call this item belongs to (issue #237): every attempt at the
+   * engine adds one, the queue's retries and the per-item fallback included. Shared by the call's items; a batch that
+   * mixes two calls' segments adds to both
+   */
+  tally: { calls: number }
 }
 
 /**
@@ -331,6 +343,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
     // joiner during a retry backoff — is known to the queue alone, which drains by refcount
     if (deps.retired?.()) throw attachRequestErrorMeta(new TranslationCancelledError(items[0]?.scope), { isRetryable: false })
     const first = items[0]!
+    for (const tally of new Set(items.map(item => item.tally))) tally.calls++
     try {
       const result = await first.provider.translate({
         ...batchRequestOf(items),
@@ -529,6 +542,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
         // segments using different terms could never collect together, and batching would be for nothing
         const batchContext = provider.promptKey ? request.context : undefined
         const batchKey = JSON.stringify([provider.id, model, provider.promptKey ?? '', request.target, cache?.renderPath ?? '', batchContext ?? null])
+        const tally = { calls: 0 }
         const items: QueueItem[] = misses.map(segment => ({
           uid: getRandomUUID(),
           id: segment.id,
@@ -543,6 +557,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
           scheduleAt: now,
           provider,
           request: { source: request.source, target: request.target, context: request.context },
+          tally,
         }))
         /**
          * Recorded on the first reject, not after `allSettled`. One call's segments may be cut into “a full batch + an
@@ -594,8 +609,11 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
           // What was written stays — sound translations under keys derived from their content
           if (refused(scope)) return refusal()
         }
+        // What the call cost, once it has settled (issue #237); a call withdrawn above says nothing
+        const record = (failed?: string) => deps.note?.(batchLine({ ...(scope !== undefined ? { scope } : {}), segments: request.segments.length, cached, calls: tally.calls, done: translated.size, ...(failed !== undefined ? { failed } : {}) }))
         if (failures.length > 0) {
           const error = pickError(failures)
+          record(toErrorInfo(error).kind)
           // The key unset / refused: any further request this round is the same 401. `failQueue` drains only the tasks
           // queued in RequestQueue **at that moment**, and with the concurrency slots full the waiting area is exactly
           // empty — the remaining blocks are still collecting in BatchQueue and dispatch as usual once collected, so a
@@ -615,6 +633,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
             ? { ok: false, error: toErrorInfo(error), partial }
             : { ok: false, error: toErrorInfo(error) }
         }
+        record()
       }
 
       // 4. Merged in the original order

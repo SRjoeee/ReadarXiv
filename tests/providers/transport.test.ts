@@ -9,6 +9,7 @@ import { createSessionRouter } from '@/entrypoints/background/sessions'
 import { CHAIN_CONFIG_FIELDS, VOLATILE_CONFIG_FIELDS, chainConfigChanged, chainRevision } from '@/config/revision'
 import { createLocalTransport } from '@/providers/transport'
 import { translationIdentity } from '@/cache/key'
+import { RECORD_SHAPES } from '@/shared/diagnostics'
 import type { CachePort } from '@/providers/translate-service'
 import { ProviderError, type TranslateRequest, type TranslationProvider } from '@/providers/types'
 
@@ -37,6 +38,23 @@ const portOf = (cache: TranslationCache): CachePort => ({
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
+})
+
+describe('createLocalTransport: the records (issue #237)', () => {
+  it('a hand-over leaves the batch of the engine that failed, the chain\'s outcome and the batch of the one that answered, in that order, all in the ring\'s grammar', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const notes: string[] = []
+    const failing = mockProvider(async () => { throw new ProviderError('auth', 'Unauthorized') }, { id: 'llm' })
+    const free = mockProvider(async r => ({ segments: r.segments.map(s => ({ ...s, text: `\u8bd1:${s.text}` })), provider: 'free' }), { id: 'free', kind: 'mt' })
+    const t = await withChain([failing, free], { note: line => notes.push(line), batch: { maxRetries: 0 } })
+    expect((await t.translate({ request: req, scope: 'abcdef12-3456' })).ok).toBe(true)
+    expect(notes).toEqual([
+      'batch abcdef12 segments=1 cached=0 calls=1 done=0 outcome=failed:auth',
+      'batch abcdef12 segments=1 cached=0 calls=1 done=1 outcome=ok',
+      'chain abcdef12 tried=2 served-by=free outcome=ok',
+    ])
+    for (const line of notes) expect(RECORD_SHAPES.some(shape => shape.test(line)), line).toBe(true)
+  })
 })
 
 describe('createLocalTransport: translation', () => {

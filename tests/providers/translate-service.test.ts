@@ -6,6 +6,7 @@ import type { CachedEntry } from '@/cache/store'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createTranslateService, toErrorInfo, type CacheEntry, type CachePort, type TranslateServiceDeps } from '@/providers/translate-service'
 import { ProviderError, type TranslationProvider } from '@/providers/types'
+import { RECORD_SHAPES } from '@/shared/diagnostics'
 
 const provider = (translate: TranslationProvider['translate'], id = 'mock', extra: Partial<TranslationProvider> = {}): TranslationProvider => ({
   id, kind: 'llm', wireFormats: ['tags'] as const,
@@ -59,6 +60,67 @@ describe('the diagnostics hook (issue #156)', () => {
       expect(line).toContain('auth (HTTP 401)')
       expect(line).not.toContain('my-secret')
       expect(line).not.toContain('Fourier')
+    }
+  })
+})
+
+describe('the batch record (issue #237)', () => {
+  const SCOPE = 'abcdef12-3456-4789-8abc-def012345678'
+  const ok = (calls: { n: number }) => provider(async r => { calls.n++; return { segments: r.segments.map(s => ({ id: s.id, text: `\u8bd1:${s.text}` })), provider: 'mock' } })
+
+  it('says what a call cost: its segments, the cache\'s share, the requests that carried it, how many came through', async () => {
+    const notes: string[] = []
+    const calls = { n: 0 }
+    const { port } = fakePort()
+    const service = build({ getProvider: async () => ok(calls), cache: port, note: line => notes.push(line) })
+    const res = await service.translate({ ...req(['a', 'b', 'c']), scope: SCOPE })
+    expect(res.ok).toBe(true)
+    expect(notes).toEqual(['batch abcdef12 segments=3 cached=0 calls=1 done=3 outcome=ok'])
+    expect(calls.n).toBe(1)
+  })
+
+  it('counts every request, retries and the per-item fallback included: that is the amplification a reader\'s export has to show', async () => {
+    const notes: string[] = []
+    let sent = 0
+    // A broken answer a smaller batch might not repeat: the batch is retried, then each segment goes alone (batch-queue.ts)
+    const broken = provider(async () => { sent++; throw new ProviderError('invalid-response', 'not the shape asked for') })
+    const service = build({ getProvider: async () => broken, note: line => notes.push(line), batch: { maxRetries: 1 }, queue: { maxRetries: 0 } })
+    const res = await service.translate({ ...req(['a', 'b', 'c']), scope: SCOPE })
+    expect(res.ok).toBe(false)
+    // one batch of three, once more, and three alone
+    expect(sent).toBe(1 + 1 + 3)
+    expect(notes).toEqual([`batch abcdef12 segments=3 cached=0 calls=${sent} done=0 outcome=failed:invalid-response`])
+  })
+
+  it('names the kind of a failure and nothing of its message, whatever the message quotes', async () => {
+    const notes: string[] = []
+    const echo = attachRequestErrorMeta(new ProviderError('auth', 'Unauthorized: key=ZZZ-my-secret-shape; request was: the Fourier transform of f'), { statusCode: 401, isRetryable: false })
+    const service = build({ getProvider: async () => provider(async () => { throw echo }), note: line => notes.push(line), batch: { maxRetries: 0 } })
+    await service.translate({ ...req(['a']), scope: SCOPE })
+    expect(notes).toEqual(['batch abcdef12 segments=1 cached=0 calls=1 done=0 outcome=failed:auth'])
+  })
+
+  it('writes no record for a call the cache answered whole: it cost nothing and says nothing', async () => {
+    const notes: string[] = []
+    const calls = { n: 0 }
+    const { port } = fakePort()
+    const service = build({ getProvider: async () => ok(calls), cache: port, note: line => notes.push(line) })
+    await service.translate({ ...req(['a']), scope: SCOPE })
+    notes.length = 0
+    const again = await service.translate({ ...req(['a']), scope: SCOPE })
+    expect(again).toMatchObject({ ok: true, cached: 1 })
+    expect(notes).toEqual([])
+  })
+
+  it('every record it writes is of the ring\'s grammar, and carries nothing of the text', async () => {
+    const notes: string[] = []
+    const service = build({ getProvider: async () => provider(async () => { throw new ProviderError('timeout', 'the Fourier transform of f') }), note: line => notes.push(line), batch: { maxRetries: 0 }, queue: { maxRetries: 0 } })
+    await service.translate({ ...req(['a', 'b']), scope: SCOPE })
+    await service.translate(req(['c']))
+    expect(notes.length).toBe(2)
+    for (const line of notes) {
+      expect(RECORD_SHAPES.some(shape => shape.test(line)), line).toBe(true)
+      expect(line).not.toMatch(/text-|Fourier|2410/)
     }
   })
 })
