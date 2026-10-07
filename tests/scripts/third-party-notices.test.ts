@@ -70,7 +70,10 @@ describe('noticesText', () => {
     // Every file public/ocr holds is accounted for, the one that is not the publisher's own byte for byte included
     for (const file of ['PP-OCRv6_tiny_det.onnx', 'PP-OCRv6_tiny_rec.onnx', 'PP-OCRv6_tiny_dict.txt']) expect(text).toContain(`ocr/${file}`)
     expect(text.split('TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION')).toHaveLength(2)
-    expect(BUNDLED_DATA.every((item: { licence: string }) => item.licence === 'Apache-2.0')).toBe(true)
+    // the Apache ones by the licence appended once; the reader's two glyph outlines (Noto Sans SC) by the OFL's own text
+    expect(BUNDLED_DATA.map((item: { licence: string }) => item.licence).sort()).toEqual(['Apache-2.0', 'OFL-1.1'])
+    expect(text).toContain('Noto Sans SC')
+    expect(text).toContain('SIL OPEN FONT LICENSE Version 1.1')
   })
 
   it('one package installed twice at one version is one entry', () => {

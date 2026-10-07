@@ -63,6 +63,16 @@ describe('isName', () => {
     expect(name('x = y')).toBe(true)
   })
 
+  it('the boxes the PDF reader\'s figures were judged otherwise by (mt.mjs isName, still the pipeline\'s rule for cells) take §15.1\'s answers', () => {
+    // `(a) Llama3` and `x = y`, names, are the two cases above (a panel letter, lone letters)
+    // Capitals, or a word run together, whose letters the prose writes in lower case: words
+    expect(name('INPUT')).toBe(false)
+    expect(name('PRETRAINED MODEL')).toBe(false)
+    expect(name('TimeStep')).toBe(false)
+    // So is the MATH benchmark in a paper that writes "math": what §15.1 says the rule cannot tell
+    expect(isName('MATH', nameEvidence('We solve math problems from MATH and GSM8K.'))).toBe(false)
+  })
+
   it('with no prose to go by only the forms of a name are left: digits, capitals, inner capitals', () => {
     const none = nameEvidence('')
     expect(isName('GSM8K', none)).toBe(true)

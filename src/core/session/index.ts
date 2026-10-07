@@ -7,7 +7,7 @@
 // `alive()`; after `restore()` or a restart, results that arrive late are dropped there.
 import { type RenderPath, wireFormatOf } from '@/cache/key'
 import { type Look, lookOf } from '@/config/appearance'
-import { DEFAULT_CONFIG, type Config } from '@/config/schema'
+import { DEFAULT_CONFIG, MODE_VALUES, type Config } from '@/config/schema'
 import type { Block } from '@/core/extractor'
 import type { PaperContext } from '@/core/extractor/context'
 import { collectImageTargets, startImageTranslation, type ImageBytes, type ImageRun, type ImageTarget } from '@/core/image'
@@ -19,6 +19,7 @@ import {
   startSentenceHighlight,
 } from '@/core/renderer'
 import { translateCall } from '@/core/run/call'
+import { preloadOf } from '@/core/scheduler/lazy'
 import { createSerialQueue } from '@/core/scheduler/serial'
 import { newSessionId } from '@/core/scheduler/session'
 import { translateTitle, type TitleTranslator } from '@/core/scheduler/title'
@@ -354,10 +355,10 @@ export function createPageSession(deps: SessionDeps): PageSession {
       capabilities: { maxBatchChars: status.maxBatchChars, maxBatchItems: status.maxBatchItems, renderPath: status.renderPath },
       transport: request => backend.translate(request),
       scope: session,
-      preload: config.preload,
+      preload: preloadOf(config.preload),
       // A figure's text — the labels inside a picture, blocks like any other (§15.6) — is asked for where the reader
       // has figures translated, the images' gate: refused, a label waits unasked and the gate opening offers it again
-      admit: block => !isFigureText(block.el) || (started.config.image.enabled && started.config.image.modes.includes(started.modes.effective())),
+      admit: block => !isFigureText(block.el) || started.config.image.enabled,
       // The blocks this batch just touched go to the tidy layer: only their containers are touched, no whole-paper re-scan per pass (issue #46)
       onRendered: rendered => {
         if (!alive()) return
@@ -411,17 +412,18 @@ export function createPageSession(deps: SessionDeps): PageSession {
 
   /**
    * Image translation (§15): images are taken by viewport like text blocks, and the page's translation does not wait
-   * for them; with the current mode outside the reader's ticked set, an image entering the viewport parks and is
-   * translated on switching back
+   * for them. A round exists only while image translation is on, and every display shows its overlays (the redesign's
+   * design, §4: configuration v20)
    */
   function startImages(session: LiveSession, config: Config): ImageRound | null {
     // The overlays and the mode gate of the previous round (restarted after a fatal error without a restore) are taken
     // off first: with image translation off or the target language changed, the old ones must not
     // show; the new round replaces them when it reaches the image (Codex on #89)
     setImageModes(doc, [])
-    if (!config.image.enabled || config.image.modes.length === 0) return null
-    // The display gate is a figure's text's too (§15.6), and that needs no round: a paper may hold pictures and not one image
-    setImageModes(doc, config.image.modes)
+    if (!config.image.enabled) return null
+    // The display gate is on while figures are translated, in every display (the redesign's design, §4), and a figure's
+    // text needs it too (§15.6): a paper may hold pictures and not one image
+    setImageModes(doc, MODE_VALUES)
     if (!paper) return null
     const targets = collectImageTargets(doc)
     if (targets.length === 0) return null
@@ -431,11 +433,11 @@ export function createPageSession(deps: SessionDeps): PageSession {
     // Read by callbacks that may fire while the run starts
     let run: ImageRun | null = null
     const traceIdle = createIdleTrace<ImageProgress>({ now, trace }, p => p.requested - p.done - p.failed > 0, (p, ms) => `images idle: ${p.done}/${p.requested} of ${p.total}, ${p.failed} failed, ${ms} ms${waitingNote()}`)
-    /** Names the targets never requested when idle arrives with some left over — the e2e's one nondeterministic check, `5/5 of 6`, needs to say which image and whether it was parked */
+    /** Names the targets never requested when idle arrives with some left over — the e2e's one nondeterministic check, `5/5 of 6`, needs to say which image */
     const waitingNote = () => {
       const left = run?.waiting() ?? []
       if (left.length === 0) return ''
-      const shown = left.slice(0, 8).map(w => `${w.target.id || w.target.kind}${w.parked ? ' (parked)' : ''}`)
+      const shown = left.slice(0, 8).map(t => t.id || t.kind)
       return `; waiting: ${shown.join(', ')}${left.length > 8 ? `, +${left.length - 8}` : ''}; observer holds ${run?.observing() ?? 0}`
     }
     run = startImageTranslation({
@@ -446,15 +448,13 @@ export function createPageSession(deps: SessionDeps): PageSession {
       // The target the session runs on — the chain's, recorded at start (see `running`), not the configuration's
       target: session.running.target,
       scope: session.id,
-      preload: config.preload,
+      preload: preloadOf(config.preload),
       context: session.context,
       names,
       ocr: call => deps.ocr(call),
       translate: request => backend.translate(request),
       onTrace: line => trace(line),
       ...(deps.fetchImage ? { fetchBytes: deps.fetchImage } : {}),
-      // The mode gate, the same for both kinds of image
-      isEnabled: () => config.image.enabled && config.image.modes.includes(session.modes.effective()),
       isCurrent: alive,
       onProgress: p => {
         if (!alive()) return
@@ -467,7 +467,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
         prep.touch(rendered)
       },
     })
-    trace(`images: ${targets.filter(t => t.kind === 'svg').length} SVG + ${targets.filter(t => t.kind === 'raster').length} bitmaps, modes ${config.image.modes.join('/')}`)
+    trace(`images: ${targets.filter(t => t.kind === 'svg').length} SVG + ${targets.filter(t => t.kind === 'raster').length} bitmaps`)
 
     const round: ImageRound = { run, targets, progress: () => progress }
     return round
@@ -491,13 +491,10 @@ export function createPageSession(deps: SessionDeps): PageSession {
   })
 
   /**
-   * The mode in effect moved, or a session started in it: what waited for the mode may go, and the tidy layer enters
-   * or leaves side — what that takes is its own to know (renderer/prep.ts `side`)
+   * The mode in effect moved, or a session started in it: the tidy layer enters or leaves side — what that takes is
+   * its own to know (renderer/prep.ts `side`)
    */
   function enterSide(effective: Mode): void {
-    // The mode gate may have just opened: parked images are released (§15), and the figures' text held with them (§15.6)
-    live?.images?.run.resume()
-    live?.run?.resume()
     prep.side(effective === 'side')
   }
 
@@ -515,7 +512,9 @@ export function createPageSession(deps: SessionDeps): PageSession {
       // be overwritten by the stored mode it carries
       await ready
       const config = await deps.config.get()
-      if (config.mode !== mode) await deps.config.set({ ...config, mode })
+      // A display chosen here is a translated one: the PDF reader's original, if it was left there, goes too — the reader
+      // opens on whatever was chosen last, on either page (the reader's design, §3)
+      if (config.mode !== mode || config.pdfReader.original) await deps.config.set({ ...config, mode, pdfReader: { ...config.pdfReader, original: false } })
       // Recorded once stored. A refused save (the stored settings cannot be read, config/storage.ts) rejects above
       // and leaves the preference as it was: on a translated page the switch holds for the page, on an untranslated
       // one nothing changed, and the caller tells the reader it was not saved
@@ -573,20 +572,17 @@ export function createPageSession(deps: SessionDeps): PageSession {
         live.highlight = null
       }
     }
-    // The preload range (UI.md S-O-50): the whole-paper stop reaches an open paper at once — everything still waiting
-    // for the viewport is handed to both runs now. Any other change applies from the next session: a running
+    // The way to translate (the redesign's design, §6.5): whole reaches an open paper at once — everything still
+    // waiting for the viewport is handed to both runs now. On demand applies from the next session: a running
     // observer's distance cannot be moved, and what was requested cannot be taken back (Devin on #222)
-    if (live?.run && config.preload.margin === 'all' && live.config.preload.margin !== 'all') {
+    if (live?.run && config.preload === 'whole' && live.config.preload !== 'whole') {
       live.run.release()
       live.images?.run.release()
     }
     if (live) live.config = { ...live.config, preload: config.preload }
-    // Image translation, both the switch (popup) and the per-mode list (settings): on starts the
-    // image run for this session, off stops it and hides every overlay through the display gate,
-    // and a change to the modes has to reach both the gate and the run that reads it — otherwise
-    // unticking the current mode leaves the overlays up and keeps requesting (Codex on #157).
-    // The text run is not touched either way
-    if (live?.run && (config.image.enabled !== live.config.image.enabled || config.image.modes.join(' ') !== live.config.image.modes.join(' '))) {
+    // Image translation, the switch (popup): on starts the image run for this session, off stops it
+    // and hides every overlay through the display gate. The text run is not touched either way
+    if (live?.run && config.image.enabled !== live.config.image.enabled) {
       live.config = config
       // The round is replaced whole: stopped, out of the record, its display gate closed — and a new one only when
       // image translation is still on

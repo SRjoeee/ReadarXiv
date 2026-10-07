@@ -266,7 +266,7 @@ for (const [label, button] of [['stack', '上下'], ['side', '左右'], ['only',
   const popup = await context.newPage()
   await popup.goto(popupUrl)
   await page.bringToFront()
-  const control = popup.getByRole('button', { name: button, exact: true })
+  const control = popup.getByRole('radio', { name: button, exact: true })
   await control.waitFor({ timeout: 10_000 })
   await control.click()
   await popup.close()

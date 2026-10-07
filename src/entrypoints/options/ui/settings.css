@@ -1,0 +1,342 @@
+/* The settings page's own sheet (the redesign's design, §6): its frame, the row grammar and the controls only this page
+   has. Every colour a role of src/shared/tokens.ts and every measure settings-2's, the prototype the maintainer agreed.
+   Imported after ui.css; the component rules join its `components` layer, so that a rule here wins a tie with a shared
+   control's. Later tasks append their blocks below this one */
+@layer components {
+  /* §6.2 a card: chrome, radius 10, 4 px in; a hairline and a 1 px shadow in light, a hairline of white 6 % in dark. It
+     is its rows' container: a row's control answers the room the card gives it (the fix round of Task 64, below), which
+     a query on the window cannot tell — at 200 % zoom the column beside the sidebar is as narrow as a 320 px window's */
+  .o-card { position: relative; padding: 4px; border-radius: 10px; background: var(--chrome); box-shadow: var(--card-shadow); container-type: inline-size; }
+  .o-card[data-gap] { margin-top: 8px; }
+  /* a group's heading on the words' edge: 22 px after the card before it, 8 px above its own */
+  .o-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 18px; margin: 22px 14px 8px; }
+  .o-heading h2 { margin: 0; font-size: 13px; font-weight: 600; }
+  .o-aside { color: var(--ink-2); font-size: 12px; }
+  /* a heading with an action (Restore) and, at the styles' cap, the action's reason before it: where the two do not fit
+     beside the title (English at a 320 px window, at 200 % zoom) they go under it together, on the trailing edge (Codex
+     4c). The reason's words end 12 px before the button's (its 10 px padding and the button's 10 less 8); should even
+     their own line be too narrow, the reason goes above the button, its words ending on the button's */
+  .o-heading[data-action] { flex-wrap: wrap; row-gap: 2px; }
+  .o-heading-end { display: inline-flex; flex: 0 1 auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; min-width: 0; margin-inline-start: auto; }
+  .o-heading-end > .o-aside { padding-inline-end: 10px; text-align: end; }
+  .o-heading-end > .o-aside + .btn { margin-inline-start: -8px; }
+  .o-title + .o-heading { margin-top: 0; }
+  /* a row: at least 48 px, 8 × 10 in, radius 6. The edges, from the card's: controls 14 (its 4 + the row's 10), words 42
+     after a leading control (16 + 12), one step of 28 per level; the trailing edge 14. Its end moves under its words
+     whenever they would have less than 12em beside it — in a narrow window (§9: 320 px), and in a narrow column beside
+     the sidebar (200 % zoom), which a query on the window cannot tell apart from a wide one */
+  .o-row { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; box-sizing: border-box; width: 100%; min-height: 48px; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font: inherit; text-align: start; }
+  button.o-row { cursor: pointer; transition: background-color 150ms ease-out; }
+  button.o-row:focus-visible { outline-offset: -2px; }
+  .o-row[data-level="1"] { padding-inline-start: 38px; }
+  .o-row[data-level="2"] { padding-inline-start: 66px; }
+  .o-row[data-press] { cursor: pointer; }
+  /* the hairline between rows, inset 10 px, drawn by the row below; a card's first row has none */
+  .o-row::before { content: ""; position: absolute; inset: 0 10px auto; height: 0.5px; background: var(--chrome-line); transition: opacity 150ms ease-out; }
+  .o-card > .o-row:first-child::before, .o-row[data-first]::before { content: none; }
+  /* the hover: the row's fill to the card's inner edge, radius 6 (the card's 10 less its 4); the separators on either
+     side step aside (Card.tsx marks them) */
+  @media (hover: hover) {
+    .o-row[data-press]:hover { background: color-mix(in oklab, var(--ink) 4%, transparent); }
+    .o-row[data-sep-off]::before { opacity: 0; }
+  }
+  .o-lead { display: inline-flex; flex: none; justify-content: center; width: 16px; color: var(--ink-2); }
+  .o-lead .o-danger { color: var(--danger); }
+  /* at least 12em before the row's end moves under them; a model's id with no break in it breaks rather than paint past its box */
+  .o-words { display: flex; flex: 1 1 12em; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+  .o-label { font-size: 13px; line-height: 1.4; }
+  .o-desc { color: var(--ink-2); font-size: 12px; line-height: 1.4; }
+  /* a style's sample: the translation's sentence written in the style itself */
+  .o-desc[data-sample] { color: var(--ink); font-size: 13px; line-height: 1.5; }
+  .o-row[data-quiet] .o-label, .o-row[data-muted] .o-label { color: var(--ink-2); }
+  .o-row[data-muted] .radio { opacity: 0.45; }
+  /* an add row at its list's cap: its plus and its words in ink-3, as a disabled button's (controls.css), the reason
+     under them in the description's ink-2; no hover, no pointer */
+  button.o-row[aria-disabled="true"] { cursor: default; }
+  button.o-row[aria-disabled="true"] :is(.o-lead, .o-label) { color: var(--ink-3); }
+  /* a radio row: the radio and the words are the control; its keyboard ring runs to the row's leading edge */
+  .o-choice { display: flex; flex: 1 1 calc(12em + 38px); align-items: center; gap: 12px; min-width: 0; margin-block: -8px; margin-inline-start: -10px; padding-block: 8px; padding-inline-start: 10px; border-radius: 6px; outline: none; }
+  /* its basis holds its words' 12em past the radio and its own start (10, 38 or 66 in, 16 + 12 for the radio) */
+  .o-row[data-level="1"] > .o-choice { flex-basis: calc(12em + 66px); margin-inline-start: -38px; padding-inline-start: 38px; }
+  .o-row[data-level="2"] > .o-choice { flex-basis: calc(12em + 94px); margin-inline-start: -66px; padding-inline-start: 66px; }
+  .o-choice:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+  /* on the row's line it ends on the trailing edge; moved under the words, it keeps to that edge */
+  .o-trail { display: inline-flex; flex: none; align-items: center; gap: 12px; margin-inline-start: auto; }
+  .o-value { display: inline-flex; align-items: center; gap: 4px; min-width: 0; color: var(--ink-2); }
+  .o-value svg { flex: none; color: var(--ink-3); }
+  .o-status { display: inline-flex; flex: none; align-items: center; gap: 5px; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .o-status[data-tone="alert"] svg { color: var(--danger); }
+  .o-status[data-tone="ok"] svg { color: var(--success); }
+  /* a trailing icon button: a 28 px square pulled 6 px out, so that its 16 px glyph ends on the trailing edge */
+  .o-icon-button { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 28px; height: 28px; margin-inline-end: -6px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--ink-2); cursor: pointer; transition: opacity 150ms ease-out, background-color 150ms ease-out, scale 150ms ease-out; }
+  @media (hover: hover) { .o-icon-button:hover { background: var(--fill); color: var(--ink); } }
+  .o-icon-button:active { scale: 0.96; }
+  /* a row of one's own carries its actions behind it: shown on the row's hover or the keyboard's focus, always on touch */
+  .o-icon-button[data-on-hover] { opacity: 0; }
+  .o-row:hover .o-icon-button[data-on-hover], .o-icon-button[data-on-hover]:focus-visible, .o-icon-button[data-on-hover][aria-expanded="true"] { opacity: 1; }
+  @media (hover: none) { .o-icon-button[data-on-hover] { opacity: 1; } }
+  /* a small label in the words: a prompt of one's own, O.prompts.mine (and, in Task 63, a prompt's variables) */
+  .o-var { display: inline-flex; align-items: center; height: 19px; padding: 0 6px; border-radius: 5px; background: var(--fill); color: var(--ink-2); font-size: 11.5px; vertical-align: 1px; }
+  .o-tag { margin-inline-start: 6px; }
+  /* a search hit, behind the words and in ink: a description's ink-2 on the mark was 4.29:1 light, 3.27 dark (Task 101) */
+  .o-hit { padding: 0 1px; border-radius: 2px; background: var(--mark); color: var(--ink); }
+  .o-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+/* §8: an icon arriving (connected, cleared) — scale, opacity and blur; a description swapped, with the reader's words-in
+   (Part 3's, in controls.css). A wait turns with Part 3's .spin */
+@keyframes o-icon-in { from { opacity: 0; scale: 0.25; filter: blur(4px); } }
+.o-arrive { animation: o-icon-in 300ms var(--ease); }
+.o-swap { animation: words-in 180ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .o-arrive { animation: none; }
+  .o-swap { animation: none; }
+  .o-row::before, button.o-row, .o-icon-button { transition: none; }
+  .o-icon-button:active { scale: 1; }
+}
+/* forced colours (Windows' contrast themes) drop the fills: a hovered row is outlined */
+@media (forced-colors: active) { .o-row[data-press]:hover { outline: 1px solid Highlight; outline-offset: -1px; } }
+/* forced colours turn ink-3 into ButtonText: an add row at its list's cap is greyed there as the shared Button's disabled
+   state is (controls.css) */
+@media (forced-colors: active) { button.o-row[aria-disabled="true"] :is(.o-lead, .o-label) { color: GrayText; } }
+
+/* ---- Task 51: the undo row, the confirm in place, the model field's list ---- */
+@layer components {
+  .o-row[data-undo] .o-label { color: var(--ink-2); font-size: 12.5px; }
+  /* §6.6: armed, the neutral button's ground turns to the destructive one's and its words to danger */
+  .o-confirm[data-armed] { background: var(--button-danger); color: var(--danger); }
+  /* §6.3: the model list under its field, in the form's flow */
+  .o-combo { position: relative; display: flex; flex-direction: column; }
+  .o-combo-list { margin-top: 6px; padding: 4px; border-radius: 10px; background: var(--chrome); box-shadow: var(--pop-shadow); max-height: 172px; overflow: auto; animation: pop-in 150ms var(--ease); }
+  .o-combo-item { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px 0 8px; border-radius: 7px; font-size: 12.5px; cursor: pointer; }
+  .o-combo-item small { margin-inline-start: auto; color: var(--ink-2); font-size: 11.5px; }
+  .o-combo-item[data-active] { background: var(--fill); }
+  .o-combo-item[data-empty] { color: var(--ink-2); cursor: default; }
+  /* the option the keyboard moves carries the ring a focused control does (the reader's .pop .item) */
+  html:not([data-axt-pointer]) .o-combo:focus-within .o-combo-item[data-active] { outline: 2px solid var(--focus); outline-offset: -2px; }
+}
+/* §8: a row arriving (an undo row, a new row) — opacity and 4 px down */
+@keyframes o-row-in { from { opacity: 0; translate: 0 -4px; } }
+[data-arriving] { animation: o-row-in 260ms var(--ease); }
+@media (prefers-reduced-motion: reduce) { [data-arriving] { animation: none; } }
+
+/* ---- Task 52: the frame (§6.1) ---- */
+@layer components {
+  body { margin: 0; background: var(--page); }
+  /* the sidebar and the column one group, centred in a window wider than the two (the maintainer, 2026-09-28): 232 px,
+     and the column's 680 with the main's 48 on either side; the page's ground (body) fills the window */
+  .o-frame { display: grid; grid-template-columns: 232px minmax(0, 1fr); max-width: calc(232px + 48px + 680px + 48px); min-height: 100vh; margin-inline: auto; color: var(--ink); font: 13px/1.4 var(--font); }
+  /* the sidebar: 232 px on the page's ground; the mark, the search, the sections, the interface language at its foot */
+  .o-side { position: sticky; top: 0; display: flex; flex-direction: column; gap: 2px; box-sizing: border-box; height: 100vh; padding: 18px 12px; overflow: auto; }
+  .o-brand { display: flex; align-items: center; gap: 8px; height: 32px; margin-bottom: 10px; padding: 0 10px; font-weight: 600; }
+  .o-search { display: flex; align-items: center; gap: 8px; height: 32px; margin: 0 0 12px; padding: 0 10px; border-radius: 8px; background: var(--chrome); box-shadow: inset 0 0 0 0.5px var(--chrome-line); color: var(--ink-3); }
+  .o-search:focus-within { box-shadow: inset 0 0 0 1px var(--ink-3); color: var(--ink); }
+  /* the ring is the keyboard's (§9); under the pointer the field's edge says where the focus is */
+  html:not([data-axt-pointer]) .o-search:focus-within { outline: 2px solid var(--focus); outline-offset: 0; }
+  .o-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; }
+  .o-search input:focus, .o-search input:focus-visible { outline: none; }
+  .o-search input::placeholder { color: var(--ink-2); }
+  .o-search-clear { display: inline-flex; padding: 0; border: 0; background: none; color: var(--ink-3); cursor: pointer; }
+  .o-nav { display: flex; flex-direction: column; gap: 2px; }
+  .o-nav-item { display: flex; align-items: center; gap: 10px; box-sizing: border-box; width: 100%; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: none; color: var(--ink-2); font: inherit; text-align: start; cursor: pointer; }
+  .o-nav-item svg { flex: none; color: var(--ink-3); }
+  /* the current section: a raised row */
+  .o-nav-item[aria-current] { background: var(--chrome); box-shadow: var(--raised-shadow); color: var(--ink); }
+  .o-nav-item[aria-current] svg { color: var(--ink); }
+  @media (hover: hover) { .o-nav-item:not([aria-current]):hover { background: color-mix(in oklab, var(--ink) 5%, transparent); color: var(--ink); } }
+  /* the column: up to 680 px, 30 px from the top, 48 px from the sidebar */
+  .o-main { min-width: 0; padding: 30px 48px 40px; }
+  .o-column { max-width: 680px; }
+  .o-title { margin: 0 0 18px; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+  .o-unreadable { margin-bottom: 30px; }
+  /* while searching: every section's matches under its name, its headings and what was not found hidden */
+  [data-searching] .o-title { margin: 18px 0 8px; color: var(--ink-2); font-size: 13px; font-weight: 500; letter-spacing: 0; }
+  [data-searching] [data-heading], [data-searching] [data-miss] { display: none; }
+  /* a card that followed a group heading keeps the card gap from the card before it while the heading is hidden */
+  [data-searching] [data-heading] + .o-card { margin-top: 8px; }
+  .o-empty { display: flex; align-items: center; gap: 8px; padding: 40px 0; color: var(--ink-2); }
+  /* a row reached by a deep link lights once (§8): ink at 9 %, held a moment, gone at 1.4 s */
+  [data-flash]::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: color-mix(in oklab, var(--ink) 9%, transparent); opacity: 0; pointer-events: none; animation: o-flash 1400ms ease-out; }
+  /* §9: below 640 px the sidebar folds above the column, its two rows sized to their content (stretched to the window's
+     height, they opened a gap under the sidebar); the mark with the interface language at its row's end (the
+     maintainer, 2026-09-28), the search, the sections wrapping into a row. The mark's column is its own width (the
+     rows under it span a flexible column and do not widen it); the language takes the rest, and its value gives way */
+  @media (width < 640px) {
+    .o-frame { grid-template-columns: minmax(0, 1fr); align-content: start; }
+    .o-side { position: static; display: grid; grid-template-columns: max-content minmax(0, 1fr); grid-template-areas: "brand lang" "search search" "nav nav"; align-items: start; column-gap: 8px; height: auto; padding: 16px 16px 4px; }
+    .o-brand { grid-area: brand; }
+    .o-search { grid-area: search; }
+    .o-nav { grid-area: nav; flex-flow: row wrap; }
+    .o-nav-item { width: auto; }
+    .o-main { padding: 12px 16px 32px; }
+  }
+}
+@keyframes o-flash { 0%, 30% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .o-nav-item { transition: none; } }
+/* forced colours drop the raised ground: the current section is outlined in the system's Highlight (§9) */
+@media (forced-colors: active) { .o-nav-item[aria-current] { outline: 1px solid Highlight; outline-offset: -1px; } }
+
+/* ---- Task 53: the interface language at the sidebar's foot, its menu opening upward; a popover at a row's end ---- */
+@layer components {
+  .o-lang { margin-top: auto; }
+  .o-lang-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pop.o-lang-menu { margin: 0 0 6px; position-area: top span-right; position-try-fallbacks: top span-left, bottom span-right; transform-origin: bottom left; }
+  .pop.o-end { position-area: bottom span-left; position-try-fallbacks: top span-left; transform-origin: top right; }
+  /* the search's row for it says where it is (Task 104b): of its two sentences the one true at the window's width,
+     the other out of sight and, `display: none`, out of the accessibility tree */
+  .o-narrow { display: none; }
+  /* below 640 px (Task 103b): the same control at the end of the mark's row, as wide as its words, on the frame's
+     trailing edge; its menu opening downward from there */
+  @media (width < 640px) {
+    .o-lang { grid-area: lang; justify-self: end; max-width: 100%; margin-top: 0; }
+    .pop.o-lang-menu { margin: 6px 0 0; position-area: bottom span-left; position-try-fallbacks: top span-left; transform-origin: top right; }
+    .o-wide { display: none; }
+    .o-narrow { display: inline; }
+  }
+}
+
+/* ---- Task 55: swatches (§6.4) ---- */
+@layer components {
+  .o-swatches { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+  /* 20 px, the shared swatch's edge and chosen ring (1.5 px line-strong, 2 px out) */
+  .o-swatch { flex: none; width: 20px; height: 20px; padding: 0; border: 0; cursor: pointer; transition: scale 150ms ease-out; }
+  .o-swatch:active { scale: 0.96; }
+  /* a colour of one's own: the browser's picker drawn as the last swatch, the palette's hues round it */
+  .o-pick { appearance: none; border-radius: 999px; }
+  .o-pick::-webkit-color-swatch-wrapper { padding: 0; }
+  .o-pick::-webkit-color-swatch { border: 0; opacity: 0; }
+  .o-pick[data-pressed]:not(:focus-visible) { outline: 1.5px solid var(--line-strong); outline-offset: 2px; }
+  /* no room for a colour of one's own (the list at its cap): the wheel faded as a disabled radio's mark is, its row saying why */
+  .o-pick[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+  .o-pick[aria-disabled="true"]:active { scale: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .o-swatch { transition: none; } .o-swatch:active { scale: 1; } }
+
+/* ---- Task 56: the style editor, a form's bar (§6.4) ---- */
+@layer components {
+  /* opened under its row: from the words' edge (42) to the trailing edge (14), its lines 14 px apart */
+  .o-editor { display: flex; flex-direction: column; gap: 14px; padding: 8px 10px 14px 38px; }
+  .o-preview { padding: 12px 14px; border-radius: 8px; background: var(--field); line-height: 1.7; }
+  .o-preview-source { color: var(--ink-2); font-size: 12.5px; }
+  /* the blur until hovered, as on the page: the sample's blur is inline (styleSample), so the hover's must outrank it */
+  .o-preview-target[data-blur]:hover { filter: none !important; }
+  .o-line { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 26px; }
+  /* the line's thickness, a sub-line of the underline: one step in */
+  .o-line[data-sub] { padding-inline-start: 28px; }
+  .o-line-words { display: flex; flex-direction: column; gap: 2px; }
+  .o-line-words small { color: var(--ink-2); font-size: 12px; line-height: 1.4; }
+  /* a segmented control at its agreed width (segmentWidth), never wider than its line: the width is the wrapper's, so
+     that it holds inside a trail that takes its content's width */
+  .o-seg { width: var(--w); max-width: 100%; }
+  .o-seg > [role="radiogroup"] { width: 100%; }
+  .o-disclose { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 12.5px; cursor: pointer; }
+  .o-disclose svg { transition: rotate 150ms ease-out; }
+  .o-disclose[aria-expanded="true"] svg { rotate: 90deg; }
+  .o-more { display: flex; flex-direction: column; gap: 12px; padding-top: 2px; }
+  /* the swatch that follows the original's colour: half the ink, half the ground */
+  .o-follow { background: conic-gradient(var(--ink) 0 50%, var(--chrome) 0); }
+  /* a form's bar: its primary, its text buttons, a note beside them */
+  .o-formbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .o-note { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-2); font-size: 12px; }
+  /* the declarations' field is a three-row textarea, not the one-line input .input is sized for (fix round 1, item 5) */
+  .o-css { height: auto; min-height: 74px; padding: 8px 10px; resize: vertical; font: 13px var(--font); }
+}
+@media (prefers-reduced-motion: reduce) { .o-disclose svg { transition: none; } }
+
+/* ---- Task 59: a form in place (§6.3) ---- */
+@layer components {
+  /* under its row: from the words' edge (42) to the trailing edge (14), 12 px above and 14 below, fields 14 px apart */
+  .o-form { display: flex; flex-direction: column; gap: 14px; padding: 12px 10px 14px 38px; }
+  .o-stack { display: flex; flex-direction: column; gap: 6px; }
+  /* the address suggestions: 24 px chips, 6 px apart; a fieldset for its group semantics (Opus review round 1, item 7),
+     its own border and padding reset so it reads as the plain row it always was */
+  .o-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; border: 0; }
+  .o-chip { height: 24px; padding: 0 9px; border: 0; border-radius: 999px; background: var(--button); color: var(--ink-2); font: inherit; font-size: 12px; cursor: pointer; transition: background-color 150ms ease-out, color 150ms ease-out, scale 150ms ease-out; }
+  @media (hover: hover) { .o-chip:hover { background: var(--fill); color: var(--ink); } }
+  .o-chip:active { scale: 0.96; }
+  /* Clear (O.services.apiKeyClear), under the key field it clears */
+  .o-clear-key { align-self: flex-start; margin-top: -8px; }
+  .o-form input:disabled { opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) { .o-chip { transition: none; } .o-chip:active { scale: 1; } }
+
+/* ---- Task 62: the glossary's table (§6.3) ---- */
+@layer components {
+  /* from the words' edge (42) to the trailing edge (14), in the card: its 4 px and 38 / 10 of its own */
+  .o-gloss { margin: 2px 10px 12px 38px; border-radius: 8px; box-shadow: inset 0 0 0 0.5px var(--field-edge); overflow: hidden; }
+  .o-gloss-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px; align-items: center; }
+  .o-gloss-line + .o-gloss-line, .o-gloss-head + .o-gloss-line { box-shadow: inset 0 0.5px 0 var(--chrome-line); }
+  .o-gloss-head { height: 28px; background: var(--field); color: var(--ink-2); font-size: 11.5px; }
+  .o-gloss-head span { padding: 0 10px; }
+  .o-gloss input { box-sizing: border-box; height: 32px; min-width: 0; padding: 0 10px; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13px; }
+  .o-gloss input:focus { outline: none; background: color-mix(in oklab, var(--ink) 4%, transparent); }
+  html:not([data-axt-pointer]) .o-gloss input:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+  .o-gloss input::placeholder { color: var(--ink-2); }
+  /* a row's remove button, on its hover or its focus, always on a touch screen */
+  .o-gloss-remove { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--ink-3); cursor: pointer; opacity: 0; transition: opacity 150ms ease-out; }
+  .o-gloss-line:hover .o-gloss-remove, .o-gloss-line:focus-within .o-gloss-remove { opacity: 1; }
+  @media (hover: none) { .o-gloss-remove { opacity: 1; } }
+  .o-gloss-issue { padding: 0 10px 8px; }
+  /* the over-limits sentence alone, or a refused write's beside its retry (fix round 1, item 1) */
+  .o-gloss-note { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 10px; box-shadow: inset 0 0.5px 0 var(--chrome-line); }
+  .o-gloss-hint { margin: -4px 10px 12px 38px; color: var(--ink-2); font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .o-gloss-remove { transition: none; } }
+
+/* ---- Task 63: the prompts (§6.3) ---- */
+@layer components {
+  /* under the chosen prompt: from 70 (its words' edge) to the trailing edge */
+  .o-prompt { display: flex; flex-direction: column; gap: 10px; margin: 2px 10px 10px 66px; }
+  .o-part { display: flex; flex-direction: column; gap: 6px; }
+  .o-part-title { display: flex; align-items: baseline; gap: 6px; font-size: 12px; }
+  .o-part-title b { font-weight: 600; }
+  .o-part-title span { color: var(--ink-2); }
+  .o-prompt-text { padding: 12px 14px; border-radius: 8px; background: var(--field); color: var(--ink); font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+  /* one's own, being written: a field's edge, 1 px ink-3 on focus, the keyboard's ring (§9) */
+  .o-prompt-text[data-editable] { box-shadow: inset 0 0 0 0.5px var(--field-edge); outline: none; cursor: text; transition: box-shadow 150ms ease-out; }
+  .o-prompt-text[data-editable]:focus { box-shadow: inset 0 0 0 1px var(--ink-3); }
+  html:not([data-axt-pointer]) .o-prompt-text[data-editable]:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
+  .o-vars { display: flex; flex-wrap: wrap; gap: 6px; }
+  .o-var-button { border: 0; font: inherit; font-size: 11.5px; cursor: pointer; transition: color 150ms ease-out, scale 150ms ease-out; }
+  @media (hover: hover) { .o-var-button:hover { color: var(--ink); } }
+  .o-var-button:active { scale: 0.96; }
+  /* the new-prompt row (O.prompts.create): a button inside the row, which also holds Import… and Export… */
+  .o-add { display: flex; flex: 1 1 calc(12em + 28px); align-items: center; gap: 12px; min-width: 0; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; text-align: start; cursor: pointer; }
+}
+@media (prefers-reduced-motion: reduce) { .o-prompt-text[data-editable], .o-var-button { transition: none; } .o-var-button:active { scale: 1; } }
+
+/* ---- Task 64, fix round 1: a card too narrow for the theme control ---- */
+@layer components {
+  /* the theme control with its icons is 286 px wide in Chinese (measured on the built page; 269.5 in English), and its
+     row adds 20 px of padding: a card's content box under 306 px cannot hold it — 312 with 6 px to spare, a 320 px card
+     with its 4 px each side (a 320 px window gives 280, 200 % zoom 304). There its segments keep their words and drop
+     their icons, the words carrying the meaning (the controller's ruling). Of this page's segmented controls only the
+     theme control's segments hold icons */
+  @container (width < 312px) {
+    .o-row .seg > button > svg { display: none; }
+    .o-row .seg > button > svg + span { margin-inline-start: 0; }
+  }
+}
+
+/* ---- Task 65: a list's note at its foot — a refused write's O.saveFailed, the prompts' import ---- */
+@layer components {
+  /* on its rows' words edge: 38 in a card's list (a row's 10 + 16 + 12), a level more (28) in the prompts' list; drawn
+     up 4 px towards the add row above it, 10 px above the card's edge */
+  .o-list-note { margin: -4px 10px 10px 38px; color: var(--ink-2); font-size: 12px; }
+  .o-list-note[data-level="1"] { margin-inline-start: 66px; }
+}
+
+/* ---- the floating button's switch, held until the background answers ---- */
+@layer components {
+  /* the switch keeps its place in the row but is not shown while its state is still unknown (visibility keeps it out
+     of the accessibility tree and the tab order, unlike display: none it does not reflow the row when the answer
+     arrives) */
+  .o-unknown { visibility: hidden; }
+}
+
+/* ---- a switch that is on: the brand's track, the thumb white, as in the popup (the maintainer, 2026-09-28) ---- */
+@layer components {
+  /* every switch of the page; the reader's keeps the shared ink. In the layer, so that the shared sheet's unlayered
+     forced-colours Highlight still draws it there */
+  .o-frame .switch[aria-checked="true"] { background: var(--brand); }
+  .o-frame .switch[aria-checked="true"]::after { background: var(--on-brand); }
+}

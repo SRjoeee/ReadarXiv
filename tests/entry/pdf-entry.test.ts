@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { AUTO_TRANSLATE_HASH } from '@/core/abstract/link'
-import { htmlUrlOf, paperIdFromPdfPath, translatedHtmlUrlOf } from '@/core/pdf/entry'
+import { bilingualPdfOf, htmlUrlOf, htmlVersionOf, paperIdFromPdfPath, pdfUrlOf, readerWanted, sourceKindOf, translatedHtmlUrlOf } from '@/core/pdf/entry'
 
 // The bilingual entry on arXiv's PDF page (issue #169): where it leads. The floating button itself: floating-button.test.ts
 
@@ -35,5 +35,60 @@ describe('the URLs', () => {
     expect(translatedHtmlUrlOf('hep-th/9711200')).toBe(`https://arxiv.org/html/hep-th/9711200${AUTO_TRANSLATE_HASH}`)
     // The content script passes `location.origin`, so an arXiv that answers on another host keeps its own
     expect(htmlUrlOf('2501.07202', 'https://export.arxiv.org')).toBe('https://export.arxiv.org/html/2501.07202')
+  })
+})
+
+describe('the PDF entry (the reader\'s design, §2)', () => {
+  it('asks the PDF address for the reader, translating, an old-style id keeping its slash', () => {
+    expect(pdfUrlOf('1706.03762v7')).toBe('https://arxiv.org/pdf/1706.03762v7#readarxiv')
+    expect(pdfUrlOf('hep-th/9711200')).toBe('https://arxiv.org/pdf/hep-th/9711200#readarxiv')
+  })
+
+  it('reads what a HEAD on /src/ says: gzip is a source, a PDF is a PDF-only submission, anything else says nothing', () => {
+    expect(sourceKindOf('application/gzip')).toBe('source')
+    expect(sourceKindOf('application/x-gzip; charset=binary')).toBe('source')
+    expect(sourceKindOf('application/pdf')).toBe('pdf-only')
+    for (const other of [null, 'text/html', '']) expect(sourceKindOf(other)).toBe('unknown')
+  })
+})
+
+describe('readerWanted: the PDF page and its reader (the reader\'s design, §2)', () => {
+  it('opens the reader when the setting is on, translating only when asked', () => {
+    expect(readerWanted({ enabled: true, hash: '' })).toEqual({ open: true, translate: false })
+    expect(readerWanted({ enabled: true, hash: '#readarxiv' })).toEqual({ open: true, translate: true })
+  })
+
+  it('opens it off the setting only for #readarxiv, an explicit request', () => {
+    expect(readerWanted({ enabled: false, hash: '' })).toEqual({ open: false, translate: false })
+    expect(readerWanted({ enabled: false, hash: '#readarxiv' })).toEqual({ open: true, translate: true })
+  })
+
+  it('reads the hash as the HTML page does, in any capitalisation: the name is written ReadarXiv too (#299, Part 5\'s M4)', () => {
+    for (const hash of ['#ReadarXiv', '#READARXIV']) expect(readerWanted({ enabled: false, hash })).toEqual({ open: true, translate: true })
+    expect(readerWanted({ enabled: false, hash: '#readarxiv-not' })).toEqual({ open: false, translate: false })
+    // 0.4.0's hash as well, the HTML page's rule whole
+    expect(readerWanted({ enabled: false, hash: '#axt-translate' })).toEqual({ open: true, translate: true })
+  })
+})
+
+describe('a paper\'s two entries, checked (the PDF page\'s HEADs, and the popup\'s search: the redesign\'s design, §5.4)', () => {
+  const answering = (status: number, type?: string) => vi.fn(async () => new Response(null, { status, headers: type ? { 'content-type': type } : {} }))
+  const failing = () => vi.fn(async () => { throw new TypeError('Failed to fetch') })
+
+  it('offers the HTML version unless arXiv says there is none: only a 404 or a 410 does', async () => {
+    const fetchFn = answering(200)
+    expect(await htmlVersionOf('2501.07202', fetchFn)).toBe('https://arxiv.org/html/2501.07202#readarxiv')
+    expect(fetchFn).toHaveBeenCalledWith('https://arxiv.org/html/2501.07202', { method: 'HEAD', credentials: 'omit' })
+    for (const status of [404, 410]) expect(await htmlVersionOf('2501.07202', answering(status))).toBeNull()
+    for (const said of [answering(429), answering(503), failing()]) expect(await htmlVersionOf('2501.07202', said)).toBe('https://arxiv.org/html/2501.07202#readarxiv')
+    expect(await htmlVersionOf('hep-th/9711200', answering(200), 'https://export.arxiv.org')).toBe('https://export.arxiv.org/html/hep-th/9711200#readarxiv')
+  })
+
+  it('offers the bilingual PDF unless the source is a PDF-only submission; anything else says nothing', async () => {
+    const fetchFn = answering(200, 'application/gzip')
+    expect(await bilingualPdfOf('2501.07202', fetchFn)).toBe('https://arxiv.org/pdf/2501.07202#readarxiv')
+    expect(fetchFn).toHaveBeenCalledWith('https://arxiv.org/src/2501.07202', { method: 'HEAD', credentials: 'omit' })
+    expect(await bilingualPdfOf('2501.07202', answering(200, 'application/pdf'))).toBeNull()
+    for (const said of [answering(200, 'text/html'), answering(404), answering(503), failing()]) expect(await bilingualPdfOf('2501.07202', said)).toBe('https://arxiv.org/pdf/2501.07202#readarxiv')
   })
 })

@@ -4,10 +4,11 @@
 // cancellation by scope; BatchQueue collects segments of one batch key into a batch, and its dispatch gate makes it
 // collect more and send less under a rate limit. Assembled after Read Frog's background/translation-queues.ts; it runs
 // in the background (§8.0). Independent of the store: the cache comes through a CachePort — the background passes the local Dexie, a test a double.
+import type { Service } from '@/config/services'
 import type { WireFormat } from '@/core/protector'
 import { wireFormatOf } from '@/cache/key'
 import type { CachedEntry } from '@/cache/store'
-import { cacheKeyFor, type RenderPath } from '@/cache/key'
+import { cacheKeyFor, translationIdentity, type RenderPath } from '@/cache/key'
 import { type SentenceAlignment, verifyAlignment } from './alignment'
 import { markSentences, stripMarkers, unmarkSentences, type MarkedText } from './sentence-markers'
 // validate is imported deep rather than through the protector's barrel: serialize / rehydrate touch the DOM and must not enter the background bundle
@@ -52,6 +53,13 @@ export interface CachePort {
 export type TranslateMessageRequest = {
   request: Omit<TranslateRequest, 'signal'>
   providerId?: string
+  /**
+   * A service as the settings page would save it — one not stored yet, or stored with another key (the redesign's
+   * design, §6.3: a service is added, or a key saved, only once it connects). Asked as the call carries it, off the
+   * chain, whatever the chain holds under that id; its id is `providerId`. Carries a key across runtime messaging, as
+   * the stored configuration does across storage: never logged (hard rule 5)
+   */
+  candidate?: Service
   /** Absent, nothing is cached (the settings page's connection test, say) */
   cache?: {
     paper: string
@@ -77,7 +85,14 @@ export type TranslateMessageResponse =
    * (Codex on #163): those translations are already in the cache, but without them here the caller
    * marks every segment failed and the reader is told nothing arrived. Absent when none did.
    */
-  | { ok: false; error: { kind: ProviderErrorKind; message: string; isolatable: boolean }; partial?: TranslatedSegment[] }
+  | { ok: false; error: ErrorInfo; partial?: TranslatedSegment[] }
+
+/**
+ * A failure as it crosses the message boundary. `status` is the HTTP status when the failure had one: `auth` covers
+ * both 401 and 403 (http-errors.ts), and only a 401 says the key was refused — the background marks the service health
+ * record by it (the redesign's design, §4)
+ */
+export interface ErrorInfo { kind: ProviderErrorKind; message: string; isolatable: boolean; status?: number }
 
 export interface TranslateServiceDeps {
   getProvider: (providerId?: string) => Promise<TranslationProvider>
@@ -227,6 +242,19 @@ export async function readWithBudget(store: CachePort, keys: string[], budgetMs:
   return keys.map(() => null)
 }
 
+/** A translation's identity (cache/key.ts translationIdentity), made once per set of parts: one digest per engine, not per call */
+const identities = new Map<string, Promise<string>>()
+function identityOf(parts: Parameters<typeof translationIdentity>[0]): Promise<string> {
+  const key = JSON.stringify(parts)
+  const known = identities.get(key)
+  if (known) return known
+  const made = translationIdentity(parts)
+  identities.set(key, made)
+  return made
+}
+/** A segment with the identity it was translated under, when the call had one */
+const tag = <T extends TranslatedSegment>(segment: T, identity: string | undefined): T => (identity ? { ...segment, identity } : segment)
+
 export function createTranslateService(deps: TranslateServiceDeps): TranslateService {
   const queues = new Map<string, ProviderQueues>()
   /** A call that must not go on: its scope is dead, or this whole chain is */
@@ -269,11 +297,17 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
     if (cuts.length === 0) return { ...plain, marks: { text: segment.text, source: [segment.text.length], ids: [] } }
     const marks = markSentences(segment.text, cuts)
     if (!marks) return plain
-    // **A single item can be over the cap too**: BatchQueue's character cap stops only the *merging*, and an
-    // oversized task is sent all the same (Codex on #137). Over the cap once inserted, nothing is inserted — no alignment is only no highlight, while over the cap is a whole batch failed
-    if (marks.text.length > provider.maxBatchChars) return plain
+    // **Over the cap once inserted, inserted all the same**: BatchQueue's character cap stops only the *merging*, and
+    // a task over it is a batch of its own, sent at once (Codex on #137); no engine on the tags path takes its cap for
+    // a request limit — an LLM's is Read Frog's batching default, Google's a POST body, the built-in translator's one
+    // inference per item. Left unmarked until 2026-10-02 for a failure that does not happen, such a segment lit as its
+    // paragraph (10 of 81 sampled units on the PDF reader with an LLM); its key is set apart (`markedOverCap`)
     return { text: marks.text, source: segment.text, marks }
   }
+  /** whether a segment's request carries markers over its engine's batch cap: sent unmarked before 2026-10-02, its key
+   *  set apart from the entries those requests left (cache/key.ts `markedOverCap`) */
+  const markedOverCap = (provider: TranslationProvider, item: { text: string; marks?: MarkedText }): boolean =>
+    !!item.marks && item.marks.ids.length > 0 && item.text.length > provider.maxBatchChars
 
   /**
    * One prompt per batch, so the terms are the batch's **union**, still in the glossary's own order — the same set of
@@ -431,6 +465,9 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
       const provider = await deps.getProvider(providerId)
       const model = (await deps.getModel?.()) ?? ''
       const store = cache && deps.cache ? deps.cache : null
+      // Who translates this call, on every segment it gives back (types.ts TranslatedSegment.identity). Awaited only
+      // when the answer is put together: awaited here, it changed the order calls reach the batch queue in
+      const identityP = cache ? identityOf({ providerId: provider.cacheId ?? provider.id, model, promptKey: provider.promptKey ?? '', target: request.target, renderPath: cache.renderPath }) : Promise.resolve(undefined)
 
       // Only the glossary terms this segment really uses are sent (§8.2): the whole table in every batch could double
       // the request and sat in the cache key too — one term changed, the whole site's cache void. Matched against **the
@@ -451,12 +488,15 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
         return matched.length > 0 ? { ...request.context, glossary: matched } : { ...request.context, glossary: undefined }
       }
 
+      // Each segment as it is sent: the text, its markers (§8.6) — what its key says too
+      const shaped = new Map(request.segments.map(segment => [segment.id, markedItem(provider, cache?.renderPath, segment)]))
+
       // 1. The cache: every key computed at once, one bulk read
       const keys = new Map<string, string>()
       const translated = new Map<string, TranslationOutcome>()
       if (store && cache) {
         const computed = await Promise.all(request.segments.map(segment =>
-          cacheKeyFor({ providerId: provider.cacheId ?? provider.id, model, promptKey: provider.promptKey ?? '', context: contextFor(segment), target: request.target, renderPath: cache.renderPath, text: segment.text, ...(segment.cuts ? { cuts: segment.cuts } : {}) }),
+          cacheKeyFor({ providerId: provider.cacheId ?? provider.id, model, promptKey: provider.promptKey ?? '', context: contextFor(segment), target: request.target, renderPath: cache.renderPath, text: segment.text, ...(segment.cuts ? { cuts: segment.cuts } : {}), ...(markedOverCap(provider, shaped.get(segment.id)!) ? { markedOverCap: true } : {}) }),
         ))
         request.segments.forEach((segment, i) => {
           keys.set(segment.id, computed[i]!)
@@ -494,7 +534,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
           id: segment.id,
           // **Inserted here, not at dispatch**: batching measures size by `item.text.length`, and inserted at dispatch a
           // batch right at the cap would exceed it once the markers are in (Codex on #137)
-          ...markedItem(provider, cache?.renderPath, segment),
+          ...shaped.get(segment.id)!,
           // The terms this segment uses; at dispatch the batch's union goes into the prompt (see translateItems)
           terms: matcher ? termsFor(segment) : undefined,
           batchKey,
@@ -565,10 +605,11 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
           // missed, and its later batches still go out (Codex on #113). Every caller gets this refusal itself, so recording here misses none.
           // The successful ones go back with the failure: they are in the cache already, but the caller has to **render**
           // them by this, or the reader sees “this batch all failed” and a retry answers them from the cache in a moment (Codex on #163)
+          const identity = await identityP
           const partial = request.segments.flatMap(s => {
             const done = translated.get(s.id)
             if (!done) return []
-            return [done.alignment ? { id: s.id, text: done.text, alignment: done.alignment } : { id: s.id, text: done.text }]
+            return [tag(done.alignment ? { id: s.id, text: done.text, alignment: done.alignment } : { id: s.id, text: done.text }, identity)]
           })
           return partial.length > 0
             ? { ok: false, error: toErrorInfo(error), partial }
@@ -577,9 +618,10 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
       }
 
       // 4. Merged in the original order
+      const identity = await identityP
       const segments = request.segments.map(s => {
         const outcome = translated.get(s.id)
-        return outcome?.alignment ? { id: s.id, text: outcome.text, alignment: outcome.alignment } : { id: s.id, text: outcome?.text ?? '' }
+        return tag(outcome?.alignment ? { id: s.id, text: outcome.text, alignment: outcome.alignment } : { id: s.id, text: outcome?.text ?? '' }, identity)
       })
       return { ok: true, result: { segments, provider: provider.id, kind: provider.kind, model: model || undefined }, cached }
     } catch (e) {
@@ -631,8 +673,11 @@ function pickError(errors: unknown[]): unknown {
  * had long ruled on the same matter (`asBatchError` does not turn a systemic failure into a batch error, Codex on
  * #61). A non-`ProviderError` takes the default by kind, the criterion being `ISOLATABLE_BY_KIND` of types.ts
  */
-export function toErrorInfo(e: unknown): { kind: ProviderErrorKind; message: string; isolatable: boolean } {
-  if (e instanceof ProviderError) return { kind: e.kind, message: e.message, isolatable: e.isolatable }
+export function toErrorInfo(e: unknown): ErrorInfo {
+  if (e instanceof ProviderError) {
+    const status = getRequestErrorMeta(e).statusCode
+    return { kind: e.kind, message: e.message, isolatable: e.isolatable, ...(status !== undefined ? { status } : {}) }
+  }
   if (isTranslationCancelledError(e)) return { kind: 'aborted', message: (e as Error).message, isolatable: false }
   // Recovering from a timeout is the queue's job (a budget by character count, a deadline per batch); splitting again at the content layer multiplies the two — 8 segments measured 15 calls
   if (e instanceof Error && e.name === REQUEST_TIMEOUT_ERROR_NAME) return { kind: 'timeout', message: e.message, isolatable: false }

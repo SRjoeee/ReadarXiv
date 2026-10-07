@@ -1,0 +1,20 @@
+--- a/web/busytex_pipeline.js
++++ b/web/busytex_pipeline.js
+@@ -666,8 +666,16 @@
+         if (exit_code == 0 && bibtex) {
+             if (bib_backend == 'biber' && this.biber != null)
+                 exit_code = await this._run_biber(FS, tex_path, files, verbose_args_for('biber'), logs);
+-            else
++            else {
++                // BibTeX accepts \bibliography{refs.bib} and \bibliographystyle{dir/style.bst}; bibtex8 appends the
++                // extension again and finds nothing. Drop it in the .aux before bibtex8 reads it
++                const aux = this.read_all_text(FS, aux_path);
++                const fixed = aux.replace(/\\bibdata\{([^}]*)\}/g, (m, list) => '\\bibdata{' + list.split(',').map(x => x.trim().replace(/\.bib$/, '')).join(',') + '}')
++                                 .replace(/\\bibstyle\{([^}]*)\}/g, (m, name) => '\\bibstyle{' + name.trim().replace(/\.bst$/, '') + '}');
++                if (fixed != aux)
++                    FS.writeFile(aux_path, fixed);
+                 ({ exit_code } = run(bibtex8_cmd, this.error_messages_fatal));
++            }
+ 
+             if (exit_code == 0 && this.read_all_text(FS, bbl_path).trim() == '') {
+                 this.print('$ # bibtex found no citation commands, skipping extra passes');

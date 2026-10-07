@@ -16,7 +16,7 @@ import { FALLBACK_LOCALE, LOCALES, type Locale, type LocaleCode } from '@/locale
 import type { ProviderErrorKind } from '@/providers/types'
 import { setCoreStrings } from '@/core/strings'
 
-export { PREVIEW_SOURCE, PREVIEW_TARGET } from '@/locales/preview'
+export { PREVIEW_LANG, PREVIEW_SOURCE, PREVIEW_TARGET } from '@/locales/preview'
 
 /**
  * Which set of language names each interface language uses for the target-language menu. A pack
@@ -35,6 +35,8 @@ let current: Locale = LOCALES[FALLBACK_LOCALE]
 export let S: Locale['S'] = current.S
 /** The settings page's words (docs/UI.md §3.2) */
 export let O: Locale['O'] = current.O
+/** The PDF reader's words (the reader's design §15) */
+export let R: Locale['R'] = current.R
 
 /** Swap the pack. Everything already rendered has to be rendered again; see the note above */
 export function setLocale(code: LocaleCode): void {
@@ -42,6 +44,7 @@ export function setLocale(code: LocaleCode): void {
   current = LOCALES[code]
   S = current.S
   O = current.O
+  R = current.R
   installCoreStrings()
 }
 
@@ -119,7 +122,7 @@ export function profileName(profile: { id: string; name: string }, kind: 'styles
 /**
  * The order the three modes are offered in (UI.md S-P-70). “Side by side” comes first: on a wide screen it is
  * the layout most readers stay in. Presentation only — `MODE_VALUES` (config/schema.ts) stays the
- * data order, and both the popup's mode bar and the settings page's image modes read this one
+ * data order, and the popup's mode bar reads this one
  */
 export const MODE_ORDER = ['side', 'stack', 'only'] as const
 

@@ -1,0 +1,2547 @@
+// Reader prototype: arXiv's PDF on the left, the translated PDF on the right, each in PDF.js's own PDFViewer. Every
+// translation unit is located on both sides (anchors.mjs): bounded by the marks of our compiles where they hold — the
+// translation's own named destinations, and on the left the marks of our compile of the original, kept where arXiv's
+// PDF has the same word there — and by text anchoring inside those bounds or, without them, on its own.
+// Scrolling one side moves the other with it; once scrolling stops, the paragraph at the reading line is brought level
+// on both sides. Hovering a paragraph lights its lines on both sides; a click on one side scrolls the other to it.
+// ?progressive=1 plays #292's idea with precompiled stages; ?live=1 does it for real: the paper's source unpacked in
+// the page, translated from the reader's place outwards, compiled on our site's TeX page (an iframe) again and again
+// (live.mjs). Each newer compile is laid out and drawn out of sight, placed so that the paragraph at the reading line
+// stays where it is, then shown in one step.
+// The session module: the prototype's page script, moved into the extension (the reader's design, §11.2). It runs
+// once, at load, after the page has handed it its host (host.mjs): the two panes, the address's parameters and the
+// sink for its events. What the prototype's header controls did, it now exports as commands; what it wrote into the
+// header, it reports as events (session.d.mts). The controller (../controller.ts) is its only caller.
+import { createPdfStore } from '@/cache/pdf-store'
+import { isCurrent, stillUntypeset } from '@/cache/pdf-record'
+import { lookOf } from '@/config/appearance'
+import { toBcp47 } from '@/config/languages'
+import { htmlUrlOf, translatedHtmlUrlOf } from '@/core/pdf/entry'
+import { isTranslatable, linesToBoxes } from '@/core/image/boxes'
+import { appearanceRule } from '@/core/renderer/style-preset'
+import { renderImage, setImageModes } from '@/core/renderer/image'
+import { sendMessage } from '@/shared/messages'
+import { createSurfaceConfig } from '@/shared/surface-config'
+import { R } from '@/ui/strings'
+import { localeStale } from '@/ui/use-surface-config'
+import { ocrCall } from '../ocr'
+import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFViewer, pdfjsLib } from '../pdfjs'
+import { displayOf, figuresShown, followOf, withDisplay } from '../settings'
+import { isName, nameEvidence } from '../../core/names'
+import { whenVisible } from '../visible'
+import { contentsOf, outlineOf } from '../outline'
+import { keepOverlays, pinned } from './overlay.mjs'
+import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from './anchors.mjs'
+import { blockOf, bySentence, clickOf, hitOf, layoutOf, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
+import { measurePane, pointerPath, pointOn } from './pointer.mjs'
+import { allTranslatedBy, copyReuse, copyTexts, decideWrite, digestOf, endOf, figureKeyOf, knownMarks, knownOriginal, labelOf, originalRow, passagesInSource, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from './cache.mjs'
+import { readerAddresses } from './addresses.mjs'
+import { openEngine, paperContext } from './engine.mjs'
+import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
+import { captionFor, floatHitOf, floatOf, floatsAgree, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from './floats.mjs'
+import { hostReady } from './host.mjs'
+import { compilerKeeper, keptFor, openPaper, PIPELINE_CARRIES, PIPELINE_VERSION, runLive, TYPESETTING_VERSION } from './live.mjs'
+import { displayEdges, plainSource, sentencesKept, unitText, WIRE } from './mt.mjs'
+import { texHints } from './hints.mjs'
+import { verified, VERIFIED } from './scripts.mjs'
+import { answerWant, shareLock } from './tex-store.mjs'
+import { marksOf as typesetMarksOf } from './typeset/places.mjs'
+import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
+import { unpackSource } from './tar.mjs'
+
+const host = await hostReady
+const { params } = host
+const paper = params.get('paper') ?? ''
+/** a precompiled demo paper (made locally by spikes/reader-papers.mjs, never in the repository; the probes stage it into
+ *  a copy of the build at pdf-reader/papers/) when one is asked for by `paper` without `live` */
+const DEMO = params.get('live') !== '1' && params.has('paper')
+/** the developer's status line, for the probes (window.__reader.status) and the log; the interface does not show it */
+const status = text => { window.__reader.status = text; host.emit({ type: 'status', text }) }
+const timing = { start: performance.now() }
+window.__reader = { timing, ready: false }
+
+// ---------------------------------------------------------------- the extension's settings, and the display
+// The reader's settings are the extension's (the reader's design, §3, §9.1), read and written as its popup and
+// settings page do and followed as they change there: the display — the HTML page's mode, and whether the reader
+// was last left on the original alone, where nothing is translated or compiled until a translation is shown —, the
+// sync, the highlight, figure text and the target language. The page has one writer, this surface: the interface
+// writes through the controller (patchSettings).
+const MODES = ['original', 'translation', 'bilingual']
+// The extension's settings as its popup and settings page have them (shared/surface-config.ts): each change a patch
+// on what storage holds when its turn comes, one after another, and a configuration that could not be read said so
+// (Codex on #297); a new interface language reloads the page, as it does the popup
+/** the settings as they last landed; null until the first read */
+let config = null
+const surface = createSurfaceConfig({ localeStale, reload: () => location.reload(), onLanded: (next, from) => landed(next, from) })
+await new Promise(resolve => { const off = surface.subscribe(() => { if (surface.state().config) { off(); resolve() } }); surface.start() })
+config = surface.state().config
+// the offline service's language pack, which the surface looks up once the settings have landed: the service menu
+// follows it as it comes (the final review: it was read once, before it came, and the offline service stayed greyed)
+let pack = surface.state().pack ?? null
+surface.subscribe(() => { const now = surface.state().pack ?? null; if (now !== pack) { pack = now; host.emit({ type: 'settings', config, pack }) } })
+/** the display: the one the address names (a probe's page), else the one the settings ask for */
+// asked to translate (#readarxiv on the PDF address, the reader's design, §2): the translated display the settings
+// name, not an original left on — the reader asked for a translation, not for what it last read
+const askTranslate = params.get('ask') === 'translate'
+let mode = MODES.includes(params.get('mode')) ? params.get('mode') : askTranslate ? (config.mode === 'only' ? 'translation' : 'bilingual') : displayOf(config)
+let narrow = false // the window too narrow for two sides (setNarrow)
+function showMode() {
+  document.documentElement.setAttribute('data-axt-pdf-mode', mode)
+  host.emit({ type: 'display', mode })
+}
+showMode()
+/**
+ * The paper's title for the toolbar (the reader's design, §6.1): the PDF's own metadata title; when it carries none,
+ * the abstract page's citation_title, one request to arXiv made only then (the extension may read arxiv.org); a demo's,
+ * its first heading. None found, the toolbar shows the id alone
+ */
+async function reportPaper(doc, fallback = '') {
+  const meta = await doc.getMetadata().catch(() => null)
+  let title = String(meta?.info?.Title ?? '').trim()
+  if (!title && !fallback) title = await abstractTitle()
+  host.emit({ type: 'paper', id: paper, title: title || fallback })
+}
+async function abstractTitle() {
+  try {
+    const res = await fetch(`https://arxiv.org/abs/${paper}`, { credentials: 'omit' })
+    if (!res.ok) return ''
+    return new DOMParser().parseFromString(await res.text(), 'text/html').querySelector('meta[name="citation_title"]')?.getAttribute('content')?.trim() ?? ''
+  } catch {
+    return ''
+  }
+}
+function showSettings() {
+  let sheet = document.getElementById('axt-look')
+  if (!sheet) { sheet = document.createElement('style'); sheet.id = 'axt-look'; document.head.append(sheet) }
+  sheet.textContent = appearanceRule(lookOf(config))
+  pack = surface.state().pack ?? null
+  host.emit({ type: 'settings', config, pack })
+  // the defaults are in effect — the service and its key set on the settings page are not — until they are repaired there
+  host.emit({ type: 'notice', why: surface.state().fallbackReason ?? null })
+}
+showSettings()
+/** this page's writes of the settings, one after another; a new language's reload waits for them. A write the store
+ *  refuses (its stored value cannot be read, config/storage.ts) is dropped: what the reader chose still holds on screen */
+let writes = Promise.resolve()
+const save = change => (writes = writes.then(() => surface.patch(change)).catch(e => console.warn('[settings]', e?.message ?? e)))
+// an original left on is let go when the reader was asked to translate: the next PDF opens as this one does
+if (askTranslate && config.pdfReader.original) void save(c => ({ ...c, pdfReader: { ...c.pdfReader, original: false } }))
+/** a change of the settings from the interface (the controller's patchSettings) */
+export function patchSettings(change) { void save(change) }
+/** true once the translation has started: a new language then means another document, and the page starts again */
+let translating = false
+/** the original held for this visit: the paper or its language cannot be had as a bilingual PDF, and a display chosen
+ *  on another page is not followed into a translation there is none of (the final review) */
+let held = false
+/** why the last translation stopped short, when a retry can mend it: { event, kind }; null otherwise (the reader's design, §8) */
+let stopped = null
+/** the translation under way, and the way to run it again in place, which live() sets once the paper is open; null
+ *  before that and after a crash, when a retry loads the page again */
+let running = null, runAgain = null
+/** a request to run again that came while a run was under way: the network's return, or a change of the services */
+let pending = null
+/** the viewers exist: until then the settings are read as the viewers are made, and there is nothing to follow */
+let viewersMade = false
+/** settings that landed (shared/surface-config.ts Landing): shown, and what changed followed (settings.ts followOf),
+ *  the highlight and figure text as they now are. A refused write lands the defaults, which the reader's own choices on
+ *  screen outlive: nothing is followed, not even a target language the defaults name (Part 2's final review) */
+function landed(next, from) {
+  if (!config || from === 'first') return
+  const prev = config
+  config = next
+  showSettings()
+  if (!viewersMade || from === 'refused') return
+  const follow = followOf(prev, next, from, { translating, held, stopped: !!stopped || !!running, addressDisplay: MODES.includes(params.get('mode')), addressSync: SYNC_MODES.includes(params.get('sync')), display: mode, syncMode })
+  if (follow.reload) { void writes.then(() => location.reload()); return }
+  // a translation that stopped short runs again once the services change (settings.ts followOf)
+  if (follow.retry) {
+    if (running) pending = 'services'
+    else void writes.then(() => runAgain?.())
+  }
+  if (follow.display) changeDisplay(follow.display, false)
+  if (follow.sync) applySync(follow.sync)
+  if (!config.reading.sentenceHighlight) light(null)
+  followFigures()
+}
+let wantTranslation = null
+const translationWanted = new Promise(resolve => { wantTranslation = resolve })
+// a reader in a tab in the background translates once it is shown: what is not seen takes no resources
+if (mode !== 'original') whenVisible(wantTranslation, document, () => mode !== 'original')
+/** the display changed: where the reader is read first, on the side still shown (Codex on #297); written when the
+ *  reader chose it here, not when it follows the settings */
+function changeDisplay(next, write) {
+  if (!MODES.includes(next) || next === mode) return
+  const from = mode
+  const place = from === 'bilingual' ? null : readingPlace(from === 'original' ? left : right)
+  window.__reader.place = place
+  mode = next
+  showMode()
+  if (write) void save(c => withDisplay(c, mode))
+  relayout(from, place)
+  followFigures()
+  if (mode !== 'original') whenVisible(wantTranslation, document, () => mode !== 'original')
+}
+/** the display chosen in the reader */
+export function setDisplay(next) { changeDisplay(next, true) }
+
+// ---------------------------------------------------------------- the two viewers
+function makeSide(container) {
+  const eventBus = new EventBus()
+  // a link out of the paper opens in a new tab: in this frame it would replace the reader, which on arXiv's PDF page is
+  // laid over the page (Devin on #297)
+  const linkService = new PDFLinkService({ eventBus, externalLinkTarget: LinkTarget.BLANK })
+  const viewer = new PDFViewer({ container, eventBus, linkService, textLayerMode: 1, removePageBorders: false })
+  linkService.setViewer(viewer)
+  // figs: each page's figures being laid (paintFigures), and figGen the latest call's number, by page; frames: a draft
+  // preview's frames (pdfFrames), a promise; anchored: the side's units located, a promise, where they come after its pages
+  // fit: the fit the side was last given (page-width, page-fit, page-actual), kept as its pane's width changes; null at a scale
+  // keeper: the overlays PDF.js removes from a page it draws again, put back (overlay.mjs); laid: each page's figures, by
+  // the viewport scale they were laid at
+  // geo: the highlight's geometry (highlight.mjs), made after the side is anchored (makeGeo; layoutWanted: asked for at
+  // once, wantLayout); units: each unit's text as the side was anchored by it (id → { text, sentences? }); starts: where
+  // each unit's sentences after the first begin on it, made with the geometry (findSentences); at, scrollX, scrollY:
+  // where its pane and pages are, kept for the pointer (measure); lit: the highlight's elements painted on it, and shows
+  // what they were painted for (what was lit then, paint); startsFor: the units its starts were found from (findSentences)
+  const side = { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), units: new Map(), geo: null, makeGeo: null, layoutWanted: false, starts: null, startsFor: null, at: null, scrollX: 0, scrollY: 0, lit: [], shows: null, figs: new Map(), figGen: new Map(), frames: null, anchored: null, fit: 'page-width', keeper: keepOverlays('.axt-fig, .axt-hl-layer'), laid: new Map() }
+  // a unit's sentences' starts on this side where they are known on both and its shapes hold its words on both
+  // (highlight.mjs sentencesFit), for the hit test and the paint: else it is lit whole on both (a translation coming in,
+  // laid out out of sight, is the right side's to the left)
+  side.startsOf = id => {
+    const o = side === left ? right : left, mine = side.starts?.get(id), theirs = o.starts?.get(id)
+    if (!mine || !theirs || mine.length !== theirs.length) return null
+    const a = fits(side, id, mine), b = fits(o, id, theirs)
+    if (a === undefined || b === undefined) { wantFit(id); return null }
+    return a && b ? mine : null
+  }
+  /** a page's sentences, by this side's starts alone: what the fit reads (sentencesFit), made as the page is drawn */
+  side.ownStarts = id => side.starts?.get(id) ?? null
+  return side
+}
+/** whether a unit's sentences hold its words on a side, by the starts found there: read from its pages' sentences, made
+ *  as each was drawn (pageSentences); where one of its pages on either side has none yet, a task of its own makes them
+ *  and the pointer, a miss meanwhile, looks again (wantFit) — never in its frame */
+const fitted = new WeakMap()
+const fits = (side, id, starts, now = false) => {
+  let f = fitted.get(starts)
+  if (f === undefined && side.geo) { f = sentencesFit(side.geo, id, starts, !now); if (f !== undefined) fitted.set(starts, f) }
+  return side.geo ? f : false
+}
+const fitsWanted = new Set()
+function wantFit(id) {
+  if (fitsWanted.has(id)) return
+  fitsWanted.add(id)
+  if (fitsWanted.size > 1) return
+  setTimeout(() => {
+    for (const u of fitsWanted) for (const s of sides) { const st = s.starts?.get(u); if (st) fits(s, u, st, true) }
+    // what is lit drawn by them before the pointer is asked again: the pointer lighting the same leaves it as it is
+    const drawn = lit != null && fitsWanted.has(lit.id)
+    fitsWanted.clear()
+    if (drawn) for (const s of sides) paint(s)
+    pointer.again()
+  })
+}
+const left = makeSide(host.left)
+let right = makeSide(host.right)
+const sides = [left, right]
+const other = side => (side === left ? right : left)
+
+async function open(side, url) {
+  // a new document: no page of it laid yet
+  side.laid.clear()
+  side.task = pdfjsLib.getDocument({ url, ...ASSETS })
+  // the paper's PDF coming in, for the progress line under the toolbar (the maintainer, 2026-09-25)
+  if (side === left) side.task.onProgress = ({ loaded, total }) => host.emit({ type: 'loading', loaded, total })
+  const doc = await side.task.promise
+  side.doc = doc
+  side.viewer.setDocument(doc)
+  side.linkService.setDocument(doc)
+  return doc
+}
+
+// ---------------------------------------------------------------- anchors
+async function textPages(doc) {
+  const pages = []
+  for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p), tc = await pg.getTextContent(); pages.push({ page: p, items: tc.items, styles: tc.styles, view: pg.view }) }
+  return pages
+}
+/** the named destinations of our marks (axt-<unit>s / axt-<unit>e) in a PDF, as { page, x, y } */
+async function pdfMarks(doc) {
+  const out = new Map()
+  for (const [name, d] of await doc.getDestinations()) if (/^axt-\d+[se]$/.test(name) && d) out.set(name.slice(4), { page: (await doc.getPageIndex(d[0])) + 1, x: d[2], y: d[3] })
+  return out
+}
+/** the frames our previews set where images go (live.mjs DRAFT): page → [{ n, x0, y0, x1, y1 }] in PDF units, from each
+ *  frame's three marks; marks that make no upright rectangle (a transformed include) are left out */
+async function pdfFrames(doc) {
+  const corners = new Map()
+  for (const [name, d] of await doc.getDestinations()) {
+    const m = /^axt-g(\d+)([abt])$/.exec(name)
+    if (m && d) (corners.get(m[1]) ?? corners.set(m[1], {}).get(m[1]))[m[2]] = { page: (await doc.getPageIndex(d[0])) + 1, x: d[2], y: d[3] }
+  }
+  const out = new Map()
+  for (const [n, { a, b, t }] of corners) {
+    if (!a || !b || !t || a.page !== b.page || b.page !== t.page || Math.abs(a.y - b.y) > 0.5 || Math.abs(b.x - t.x) > 0.5 || b.x - a.x < 1 || t.y - b.y < 1) continue
+    ;(out.get(a.page) ?? out.set(a.page, []).get(a.page)).push({ n: Number(n), x0: a.x, y0: a.y, x1: b.x, y1: t.y })
+  }
+  return out
+}
+function index(side, anchors) {
+  side.anchors = anchors
+  side.groups = null
+}
+
+// ---------------------------------------------------------------- geometry: PDF units ↔ positions in a container
+const pageView = (side, page) => side.viewer.getPageView(page - 1)
+/** a rectangle in PDF units → CSS pixels inside its page's div */
+function toPageBox(side, r) {
+  const vp = pageView(side, r.page).viewport
+  const [ax, ay] = vp.convertToViewportPoint(r.x0, r.y1)
+  const [bx, by] = vp.convertToViewportPoint(r.x1, r.y0)
+  return { left: Math.min(ax, bx), top: Math.min(ay, by), width: Math.abs(bx - ax), height: Math.abs(by - ay) }
+}
+/** the top of a unit's first line, in the container's scroll coordinates */
+function unitTop(side, id) {
+  const a = side.anchors.get(id)
+  if (!a) return null
+  const r = a.rects[0], pv = pageView(side, r.page)
+  const pageRect = pv.div.getBoundingClientRect(), cRect = side.container.getBoundingClientRect()
+  return pageRect.top - cRect.top + side.container.scrollTop + toPageBox(side, r).top
+}
+
+// ---------------------------------------------------------------- highlight
+// What a unit paints and where the pointer lights it are one geometry (highlight.mjs): a block per run of the unit —
+// one page and one column of it — across its rows inside the column's text edges, padded half the leading above and
+// below and PAD beside; a point lights the unit whose block holds it, the smallest where blocks overlap. So a pointer
+// anywhere on what is lit keeps it lit, over a formula as over its words (report-A: 43–50 % of a display unit's wash
+// turned it off). Where the unit's sentences are known on both sides (findSentences), its sentences instead: the
+// sentence under the pointer, its first row from its start, the rows between across the run, its last row to its end,
+// one outline per run (the plan of the highlight, B3). The look is the draft's (round 1 of the highlight, 2026-10-01),
+// multiplied into the page as the HTML page's band is (engine.css)
+/** what is lit: { id, s }, a unit's sentence s, or the whole unit where s is -1; null for nothing */
+let lit = null
+/** how many times each of the right side's pages had its figures laid (paintFigures), for the probes */
+const paints = new Map()
+/** the pad beside a block, in CSS pixels */
+const PAD = 3
+/** how long a pointer that lights nothing keeps what is lit: crossing the space between two paragraphs does not blink
+ *  (the HTML page's MISS_GRACE_MS) */
+const MISS_HOLD = 120
+/** the highlight's layer of a page, over its text layer (engine.css), made on first use and kept through PDF.js's
+ *  redraws (keepOverlays) */
+function layerOf(side, page) {
+  const pv = pageView(side, page)
+  if (!pv?.div) return null
+  let layer = pv.div.querySelector(':scope > .axt-hl-layer')
+  if (!layer) { layer = document.createElement('div'); layer.className = 'axt-hl-layer'; pv.div.append(layer) }
+  return layer
+}
+/** what each element painted draws, in its own box's CSS pixels: for the probes (the harness's litRects) */
+const drawn = new WeakMap()
+/** the lit unit's blocks or the lit sentence's shapes on a side, written only: every number comes from the geometry
+ *  and the pages' viewports. One element a run: a block, or a sentence's single row, as a box with rounded corners; a
+ *  sentence over rows of different reach as one outline (an SVG path) */
+function paint(side) {
+  // a sentence lit whose unit's sentences are not known on both sides now: while what makes them is on its way — the
+  // side's layout, a side's sentences, their fit (a new compile's side, our marked original's marks anchoring the left
+  // again) — what is drawn for it stays, and it is drawn anew when they land (wantFit, wantSentences, makeGeo); else
+  // nothing is drawn for it, and the pointer, asked again, lights what is there. Never the whole paragraph: it was drawn
+  // so, and kept until the pointer moved (the final review of the highlight, I2)
+  const starts = lit != null && lit.s >= 0 && side.geo ? side.startsOf(lit.id) : null
+  const waiting = lit != null && (side.geo ? lit.s >= 0 && !starts && sentencesWaited(lit.id) : !!side.makeGeo)
+  if (waiting && same(side.shows, lit)) return
+  for (const el of side.lit) el.remove()
+  side.lit = []
+  side.shows = null
+  if (lit == null) return
+  if (paintFloat(side)) { side.shows = lit; return }
+  if (!side.geo) { wantLayout(side); return }
+  if (lit.s >= 0 && !starts) return
+  side.shows = lit
+  for (const run of runsOf(side.geo, lit.id)) {
+    const pv = pageView(side, run.page), layer = layerOf(side, run.page)
+    if (!layer) continue
+    const s = pv.viewport.scale
+    // what the run was drawn as when this was last lit at this scale: put back
+    const kept = drawnFor.get(run)?.get(starts ? lit.s : -1)
+    if (kept && kept.scale === s && kept.starts === starts) { layer.append(kept.el); side.lit.push(kept.el); continue }
+    const boxes = (starts ? sentenceOf(side.geo, run, starts, lit.s, PAD / s) : [blockOf(run, PAD / s)]).map(r => toPageBox(side, r))
+    if (!boxes.length) continue
+    let el
+    const X0 = Math.min(...boxes.map(b => b.left)), Y0 = Math.min(...boxes.map(b => b.top))
+    const local = boxes.map(b => ({ x0: b.left - X0, x1: b.left + b.width - X0, y0: b.top - Y0, y1: b.top + b.height - Y0 }))
+    const box = { left: X0, top: Y0, width: Math.max(...local.map(b => b.x1)), height: Math.max(...local.map(b => b.y1)) }
+    if (boxes.length === 1) { el = document.createElement('div'); el.className = 'axt-hl' } else {
+      el = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+      el.setAttribute('class', 'axt-hl axt-hl-shape')
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+      path.setAttribute('d', shapePath(local, RADIUS))
+      el.append(path)
+    }
+    // scaled with the page while a pinch lasts (overlay.mjs pinned)
+    Object.assign(el.style, pinned(box, s))
+    drawn.set(el, { width: box.width, local })
+    layer.append(el)
+    side.lit.push(el)
+    ;(drawnFor.get(run) ?? drawnFor.set(run, new Map()).get(run)).set(starts ? lit.s : -1, { scale: s, starts, el })
+    if (++drawnKept > DRAWN_KEPT) { drawnFor = new WeakMap(); drawnKept = 0 }
+  }
+}
+/** the elements each run's sentences (and its block, -1) were drawn as, by the run, kept to be put back when lit again
+ *  at the same scale and by the same starts: a sweep lights the same few again and again, and the element made each
+ *  time cost a light more than its block did (round 1: 0.2 against 0.1 ms of script); at most DRAWN_KEPT, then anew */
+let drawnFor = new WeakMap(), drawnKept = 0
+const DRAWN_KEPT = 512
+/** a block's and a shape's corners, in CSS pixels (engine.css .axt-hl) */
+const RADIUS = 3
+const same = (a, b) => a === b || (!!a && !!b && a.id === b.id && a.s === b.s)
+function light(target) { if (!config.reading.sentenceHighlight) target = null; if (same(target, lit)) return; lit = target; for (const s of sides) paint(s) }
+/** a side's layout wanted now, where the pointer, a paint or a click met the side without one: made in a task of its
+ *  own at once, never in the frame or the event that asked (the pointer's frame made both sides' there, 25–48 ms, the
+ *  review of B1); when it lands what is lit is painted on it and the pointer looked at again (makeGeo) */
+function wantLayout(side) {
+  if (!side.makeGeo || side.layoutWanted) return
+  side.layoutWanted = true
+  setTimeout(() => { side.layoutWanted = false; if (sides.includes(side)) side.makeGeo?.() })
+}
+
+// The pointer's path (pointer.mjs): its moves taken once a frame, the unit under it found and lit, the pointer's place
+// read before anything is written. Nothing there reads the layout: where each pane and each of its pages is was kept
+// when the layout last changed (measure), and the scroll as its event gives it, so that finding the unit is arithmetic
+// (the draft measured one forced layout in 440 moves when the page's position was read there, one PDF.js's drawing had
+// left). A pointer that lights nothing lets go after MISS_HOLD; one that lights something again before then keeps the
+// wash on without a blink
+const pointer = pointerPath({
+  find: ({ where: side, x, y }) => {
+    if (!config.reading.sentenceHighlight) return null
+    // a side without its layout yet is a miss, its layout asked for
+    if (!side.geo) { wantLayout(side); return null }
+    const at = pointAt(side, x, y), hit = at && withFloats(side, at, hitOf(side.geo, at.page, at.x, at.y, PAD / at.scale, side.startsOf))
+    // a unit whose sentences are not yet worked out on both sides: a miss, until they are (wantFit); and one whose
+    // sentences are known but not yet found while the finding is on its way (sentencesPending); a float lights whole.
+    // The unit lit stays lit as it is drawn meanwhile (paint): a pointer resting on it through a new compile or the
+    // left's marks arriving does not let go after the miss's hold
+    if (!hit) return null
+    if (fitsWanted.has(hit.id) || (hit.s === -1 && !hit.float && sentencesPending(hit.id))) return lit?.id === hit.id ? lit : null
+    return { id: hit.id, s: hit.s ?? -1 }
+  },
+  light,
+  lit: () => lit != null,
+  hold: MISS_HOLD,
+  frame: requestAnimationFrame,
+  later: setTimeout,
+  cancel: clearTimeout,
+})
+/** where a side's pane and pages are on the screen (pointer.mjs measurePane: the pane's place as its layout has it,
+ *  whatever transform draws it moving), read where the layout is known clean: a ResizeObserver's callback runs after
+ *  the layout, whenever the pane or its pages change size — the pages laid, a zoom, a pinch's steps, the window, the
+ *  contents panel, a display of one pane or two. A pointer resting on the pane is looked at again in the next frame, by
+ *  what is kept now: a zoom's or a fit's scroll asked in its own frame, which runs before the new sizes are measured,
+ *  and what it found stayed lit until the pointer moved (Codex on #308) */
+function measure(side) {
+  side.at = measurePane(side.container, side.viewer.viewer, side.viewer._pages ?? [])
+  side.scrollX = side.container.scrollLeft; side.scrollY = side.container.scrollTop
+  pointer.again(side)
+}
+const measuredSide = new WeakMap() // a pane's container and page stack → its side, the one coming in too (replaceRight)
+const measured = new ResizeObserver(entries => { for (const s of new Set(entries.map(e => measuredSide.get(e.target)))) if (s) measure(s) })
+/** What moves a pane, or draws it moving, is on <html>: the panes swapped (their places, not their sizes), the contents
+ *  panel (the document area slid in by a translation, App.tsx), the display of one pane or two, a narrow window's. On
+ *  any of them both sides are measured in the next frame, and again as a slide of a pane's box ends, when its box on
+ *  the screen gives the fraction of a pixel the offsets round away (measurePane). What else was looked at moves no
+ *  pane: the dimmed pages (a filter, drawn in by a view transition over a layout that stays), the fonts coming in (the
+ *  panes are in a fixed box under a toolbar of fixed height), a zoom (PDF.js resizes the pages: the ResizeObserver);
+ *  the browser gate checks the kept places after each */
+function remeasure() {
+  requestAnimationFrame(() => {
+    for (const s of sides) measure(s)
+    for (const a of document.getAnimations()) {
+      const el = a.effect?.target
+      if (el && !a.effect.pseudoElement && sides.some(s => el.contains(s.container))) a.finished.then(() => { for (const s of sides) measure(s) }, () => {})
+    }
+  })
+}
+new MutationObserver(remeasure).observe(document.documentElement, { attributeFilter: ['data-axt-swapped', 'data-axt-contents', 'data-axt-pdf-mode', 'data-axt-narrow'] })
+/** a point of the screen → the page under it and the point in PDF units, from what measure kept; null off the pages.
+ *  A side that follows on the compositor shows its pages shifted from its scroll (glass) */
+function pointAt(side, clientX, clientY) {
+  const shift = glass.side === side ? (glass.kind === 'scroll' ? glass.shift(glass.from.scrollY) : glass.shift()) : 0
+  return pointOn(side.at, side.viewer._pages ?? [], side.scrollX, side.scrollY + shift, clientX, clientY)
+}
+
+// ---------------------------------------------------------------- floats
+// Tables, algorithms and figures light whole with their captions, on both sides (floats.mjs): a table one wash over it
+// and its caption, a figure outlined and its caption washed — a wash multiplied into a figure would change its colours.
+// A float lights by its caption's id, which both sides share; on a side where the float is not found the caption lights
+// alone, and a cell there alone
+/** the id of what is lit, whatever shape it has (a unit's id; { id, s } where a unit lights by sentence) */
+const litId = () => (lit !== null && typeof lit === 'object' ? lit.id : lit)
+/** the lit unit's float on a side — its caption's, or the one holding it (a cell) — painted; false where it is none's,
+ *  or where the side has no layout yet */
+function paintFloat(side) {
+  const f = side.geo && floatOf(side.geo, litId())
+  if (!f) return false
+  const pv = pageView(side, f.page), layer = layerOf(side, f.page)
+  if (!layer) return true
+  const s = pv.viewport.scale
+  for (const shape of floatShapes(side.geo, f, PAD / s)) {
+    const el = document.createElement('div')
+    el.className = shape.frame ? 'axt-hl axt-hl-frame' : 'axt-hl'
+    const box = toPageBox(side, shape)
+    Object.assign(el.style, pinned(box, s))
+    drawn.set(el, { width: box.width, local: [{ x0: 0, x1: box.width, y0: 0, y1: box.height }] })
+    layer.append(el)
+    side.lit.push(el)
+  }
+  return true
+}
+/**
+ * The operator list a page was just drawn by, where PDF.js still holds it: the display intent's on the page's proxy
+ * (PDF.js 6.3.289's PDFPageProxy._intentStates; tests/pdf-reader/pdfjs-pin.test.ts pins the version). Asking the worker
+ * for the list again had it evaluate the page a second time, and the next page's drawing waited behind it: 130–180 ms
+ * more on 2608.06701's pages 7–8, the review of B4. The floats are the same from either list (the display one is
+ * optimised) on the ten papers' 123 pages with captions. Null where PDF.js has let it go: then it is asked for
+ */
+function drawnList(side, p) {
+  for (const st of pageView(side, p)?.pdfPage?._intentStates?.values() ?? []) if (st.displayReadyCapability && st.operatorList?.lastChunk) return st.operatorList
+  return null
+}
+/** what the pointer lights at a point of a page (pointOn's), floats included: `hit` hitOf's there, or a float whose
+ *  painted shape holds the point (floats.mjs floatHitOf: over its caption and its cells, and over a larger block) */
+const withFloats = (side, at, hit) => floatHitOf(side.geo, at.page, at.x, at.y, PAD / at.scale, hit)
+/**
+ * A page's floats, made on its first drawing from what PDF.js draws it by (its figures, its rules and marks), once a
+ * layout; never on the pointer's path. A page without a caption asks for nothing. A drawing cancelled before the page's
+ * operator list came rejects it: the page is asked again at its next drawing (round 1: 2608.06701's page 3 on the left,
+ * at 2x, never got its floats). `error` the drawing's, where it failed (pagerendered's)
+ */
+function floatsFor(side, p, error = null) {
+  const L = side.geo
+  if (!L || !wantsFloats(L, p) || floatsOn(L, p)) return
+  const asked = (L.floatsAsked ??= new Set())
+  if (asked.has(p)) return
+  asked.add(p)
+  // the list the page was just drawn by, else asked for — asked for where its drawing failed (pagerendered's `error`):
+  // PDF.js marks a list whose stream failed complete, and it may have stopped short (the review of B4's fix round); a
+  // draft preview's figures are the frames set where its images go (paintFigures)
+  const shown = error ? null : drawnList(side, p)
+  const ops = shown ? Promise.resolve(shown) : side.doc.getPage(p).then(page => page.getOperatorList({ annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS }))
+  const figures = side.frames ? side.frames.then(f => f.get(p) ?? []) : shown ? ops.then(list => figureRegions(list, pdfjsLib.OPS)) : regionsOf(side, p)
+  Promise.all([figures, ops]).then(([regions, list]) => {
+    if (side.geo !== L) return
+    const t0 = performance.now(), paths = pathsOf(list, pdfjsLib.OPS), t1 = performance.now()
+    pageFloats(L, p, regions, paths)
+    // the main thread's cost, for the probes: reading the page's paths, making its floats (and the page's geometry, for
+    // a page drawn before the side's layout came)
+    ;(timing.floats ??= []).push({ paths: t1 - t0, floats: performance.now() - t1, ops: list.fnArray.length, marks: paths.marks.length })
+    // a float's kind its caption's on both sides, where the other side's is made (floatsAgree)
+    const other = side === left ? right : left, changed = floatsAgree(L, p, other.geo)
+    // what is lit there, and what is under a pointer resting on it, now that the page has its floats; a sentence drawn
+    // before they came may reach under one (highlight.mjs reachAt): what was drawn is let go, a lit sentence drawn again
+    drawnFor = new WeakMap(); drawnKept = 0
+    if (lit != null && lit.s >= 0) for (const s of sides) paint(s)
+    else {
+      if (lit != null && floatOf(L, litId())?.page === p) paint(side)
+      if (lit != null && changed.includes(floatOf(other.geo, litId()))) paint(other)
+    }
+    pointer.again()
+  }).catch(e => {
+    // asked again at the page's next drawing; a drawing cancelled is no fault, anything else is told
+    asked.delete(p)
+    if (!/abort|cancel|destroy/i.test(`${e?.name} ${e?.message}`)) console.warn('[floats]', e)
+  })
+}
+
+// ---------------------------------------------------------------- figure text
+// The HTML mode's image translation, run on the translation's pages: the extension's own modules — lines merged into
+// boxes (core/image/boxes.ts), the overlay and its material (core/renderer/image.ts, styles/image.css), the bitmap
+// recogniser (core/ocr, through the background: ../ocr.ts). What is the PDF's own is the
+// input: where each figure sits and which lines are in it (figures.mjs — the text layer for a vector figure, the
+// recogniser for a bitmap), as normalised lines in the recogniser's shape. Each figure's overlay hangs on an empty
+// <img> laid over it, the anchor the style sheet positions an overlay by.
+/** the paper's title and abstract, with every batch (engine.mjs); in live mode known once the source is read, and the
+ *  figures' text waits for it rather than go out without it and be cached so (Codex on #296) */
+let prose = '', paperCtx = Promise.resolve({})
+/** what the prose says of names (core/names), indexed once for each prose the paper's units give, not once a label */
+let names = { prose: null, evidence: null }
+const namesOf = () => (names.prose === prose ? names : (names = { prose, evidence: nameEvidence(prose) })).evidence
+/** the extension's chain for this page's paper (engine.mjs), opened once: the units' translation and the figures' text */
+let engineP = null
+// its scope is withdrawn when the page goes, whichever mode opened it (engine.mjs)
+const theEngine = () => (engineP ??= openEngine({ paper }))
+/** each unit's kind (para, caption, heading, …), by id: a caption anchors its float's contents (placeAt) */
+let unitKind = new Map()
+/** this machine's copies of compiled translations (src/cache/pdf-store.ts), and the record shown if one was */
+const pdfCache = createPdfStore()
+let cached = null
+/**
+ * The figures' boxes translated, figureKeyOf(their texts) → { key, texts, by }: seeded from a copy and kept in
+ * its record. A copy's own are shown whatever identity made them, and replaced when the current engine's come
+ */
+let figureEntries = new Map()
+let cacheKey = null // { digest, lang } of the paper open, once its PDF is read
+let saveTimer = 0, repaintTimer = 0
+const saveFiguresSoon = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { if (cacheKey) void pdfCache.patchFigures(cacheKey.digest, cacheKey.lang, [...figureEntries.values()]) }, 2000) }
+const repaintFiguresSoon = () => { clearTimeout(repaintTimer); repaintTimer = setTimeout(() => { for (const [n] of right.figs) right.figs.set(n, paintFigures(right, n).catch(e => console.warn('[figures]', e))) }, 300) }
+let figuresOn = figuresShown(config, mode) // figure text, as the settings say for this display (followFigures)
+/** figure text shown or not, as the settings say for the display now shown */
+function followFigures() { const on = figuresShown(config, mode); if (on !== figuresOn) { figuresOn = on; repaintFigures() } }
+document.documentElement.setAttribute('data-axt-on', '')
+document.documentElement.setAttribute('data-axt-mode', 'only')
+setImageModes(document, ['only'])
+/** the figures placed on a page (figures.mjs figureRegions); from the operator list the viewer draws the page by (its
+ *  annotation mode), which PDF.js then builds once for both */
+const regionsOf = perDoc((side, n) => side.doc.getPage(n).then(page => page.getOperatorList({ annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS })).then(ops => figureRegions(ops, pdfjsLib.OPS)))
+/** `make(side, ...args)` once a document and arguments, kept as long as the document is */
+function perDoc(make) {
+  const byDoc = new WeakMap()
+  return (side, ...args) => {
+    let m = byDoc.get(side.doc)
+    if (!m) byDoc.set(side.doc, (m = new Map()))
+    const key = args.join(':')
+    if (!m.has(key)) {
+      const made = make(side, ...args)
+      m.set(key, made)
+      // a failure is not kept: a page whose drawing was cancelled rejects its operator list, and is asked again
+      made?.catch?.(() => { if (m.get(key) === made) m.delete(key) })
+    }
+    return m.get(key)
+  }
+}
+/** the labels in a page's figures (figures.mjs figureLabels), from its text layer */
+const labelsOn = perDoc(async (side, n) => figureLabels((await (await side.doc.getPage(n)).getTextContent()).items, await regionsOf(side, n)))
+/** one figure's lines — a bitmap read by the recogniser, a vector figure's labels: { region, kind, lines } */
+const figureOf = perDoc(async (side, n, k) => {
+  const region = (await regionsOf(side, n))[k]
+  if (region.kind !== 'raster') return { region, kind: region.kind, lines: vectorLines((await labelsOn(side, n)).filter(l => l.figure === k), region) }
+  return { region, kind: 'raster', lines: region.image ? await recognise(await side.doc.getPage(n), region.image) : [] }
+})
+/** a bitmap of the page, by its object id: a copy (PDF.js keeps drawing its own), or null when it is too small to hold text */
+async function bitmapOf(page, id) {
+  const obj = await new Promise(resolve => page.objs.get(id, resolve))
+  let bitmap
+  if (obj?.bitmap) bitmap = await createImageBitmap(obj.bitmap)
+  else if (obj?.data) {
+    const { width, height, data, kind } = obj, rgba = new Uint8ClampedArray(width * height * 4)
+    // PDF.js's kinds: 1 one bit per pixel, 2 RGB, 3 RGBA
+    if (kind === 3) rgba.set(data)
+    else if (kind === 2) for (let i = 0, j = 0; i < width * height; i++, j += 3) rgba.set([data[j], data[j + 1], data[j + 2], 255], i * 4)
+    else return null
+    bitmap = await createImageBitmap(new ImageData(rgba, width, height))
+  } else return null
+  if (bitmap.width < 32 || bitmap.height < 32) { bitmap.close(); return null }
+  return bitmap
+}
+/**
+ * The reader's recognitions, one scope for the page's life: withdrawn when the page goes, since an extension page is no
+ * tab the background watches (shared/messages.ts), and what is not seen must not take the recogniser (final review)
+ */
+const ocrScope = `axt-pdf-ocr-${crypto.randomUUID()}`
+addEventListener('pagehide', () => void sendMessage({ type: 'axt:cancel-scope', scope: ocrScope }).catch(() => {}), { once: true })
+/** a bitmap's lines, read by the extension's recogniser through the background, as the HTML page's are (ocr.ts) */
+async function recognise(page, id) {
+  const bitmap = await bitmapOf(page, id)
+  if (!bitmap) return []
+  const call = await ocrCall(bitmap, paper, ocrScope)
+  if (!call) return []
+  const reply = await sendMessage({ type: 'axt:ocr', ...call }).catch(e => ({ ok: false, error: { message: String(e?.message ?? e) } }))
+  if (!reply.ok) { console.warn('[ocr]', reply.error.message); return [] }
+  return reply.result.lines
+}
+const translated = new Map() // figureKeyOf(boxes' texts) → their translations, a Promise while they are out
+/** a run stopped for the service (the reader's design, §10.3): no figure's text is sent until it runs again */
+let serviceDown = false
+/** the figures' texts the service did not answer (translateBoxes), asked again when the translation runs again */
+const unanswered = new Set()
+/**
+ * A figure's boxes → their translations, null for a box left as it is. A figure's boxes go as one text with a
+ * placeholder between them, in the chain's wire format, so that each is translated in the figure's context (alone, a
+ * box's "Score" came back as 配乐); a text whose placeholders do not come back one for one goes again box by box.
+ * Proposed for the shared module, with the name rule below.
+ */
+async function translateBoxes(boxes) {
+  const todo = boxes.map((b, i) => i).filter(i => isTranslatable(boxes[i].text))
+  const out = boxes.map(() => null)
+  // the engine when one answers; while none does, a copy's own entries are all there is
+  // while the service is down, a copy's entries are all there is, as with no service
+  const engine = serviceDown ? null : await theEngine().catch(() => null)
+  const context = engine ? await paperCtx : null
+  /**
+   * Boxes' texts → their translations, one per box, null where one did not come back. From the entry kept for these
+   * texts, whatever engine or wire format made it, shown until the current engine's replaces it and kept if that
+   * fails (REPORT, eighteenth addendum); else from the engine, by `make` → { texts, by } or null
+   */
+  const ask = (texts, make) => {
+    const key = figureKeyOf(texts), known = figureEntries.get(key)
+    if (known && (!engine || known.by === engine.identity)) return Promise.resolve(known.texts)
+    if (!engine) return Promise.resolve(known?.texts ?? null)
+    if (!translated.has(key)) translated.set(key, make().then(got => {
+      if (!got) { unanswered.add(key); return known?.texts ?? null }
+      figureEntries.set(key, { key, texts: got.texts, by: got.by })
+      saveFiguresSoon()
+      if (known && JSON.stringify(known.texts) !== JSON.stringify(got.texts)) repaintFiguresSoon()
+      return got.texts
+    }).catch(() => { unanswered.add(key); return known?.texts ?? null }))
+    return known ? Promise.resolve(known.texts) : translated.get(key)
+  }
+  const one = wire => engine.translate([wire], context).then(r => r[0])
+  const single = []
+  for (let k = 0; k < todo.length; k += 40) {
+    const chunk = todo.slice(k, k + 40), texts = chunk.map(i => boxes[i].text)
+    if (chunk.length < 2) { single.push(...chunk); continue }
+    const parts = await ask(texts, async () => {
+      const wire = blockWire(texts, engine.format)
+      const got = wire && (await one(wire))
+      const split = got && splitBlock(got.text, chunk.length, engine.format)
+      return split ? { texts: split, by: got.by } : null
+    })
+    if (parts) chunk.forEach((i, j) => { out[i] = parts[j] }); else single.push(...chunk)
+  }
+  await Promise.all(single.map(async i => {
+    const got = await ask([boxes[i].text], async () => {
+      const { run, unrun } = WIRE[engine.format]
+      const r = await one(run(boxes[i].text))
+      return r ? { texts: [unrun(r.text)], by: r.by } : null
+    })
+    out[i] = got?.[0] ?? null
+  }))
+  return out
+}
+// A figure on a translation page — in arXiv's PDF shown there until the first preview, in a preview, in the final — is
+// one of arXiv's (the left's): its text is read and translated once, there, and every translation shows the same
+// overlay. A draft preview sets a frame where an image goes (live.mjs DRAFT), and the left's figure is drawn over it.
+/** the caption next to a figure's rectangle on a side's page (PDF units): a caption located there whose first line lies
+ *  just below the rectangle, else whose last line lies just above it, across its column; the nearest, or null */
+function captionNear(side, page, r) {
+  // the highlight's floats' rule (floats.mjs captionFor): of captions in a row, the one over the figure (a subfigure's
+  // subcaption, the right one of two minipages' figures), else the nearest
+  const caps = []
+  for (const [id, a] of side.anchors) {
+    if (!a || unitKind.get(id) !== 'caption') continue
+    const first = a.rects[0], last = a.rects.at(-1), on = a.rects.filter(q => q.page === page)
+    if (!on.length) continue
+    caps.push({ id, x0: Math.min(...on.map(q => q.x0)), x1: Math.max(...on.map(q => q.x1)), top: first.page === page ? first.y1 : Number.NaN, bottom: last.page === page ? last.y0 : Number.NaN, h: first.y1 - first.y0, col: columnOf(side, page, on[0]) })
+  }
+  return captionFor(r, caps)?.id ?? null
+}
+/** rectangles' indices in reading order: rows from the top, each from the left; a rectangle is in a row when it shares
+ *  half its height with the row's first */
+function readingOrder(rs) {
+  const rest = rs.map((r, i) => i).sort((a, b) => rs[b].y1 - rs[a].y1), out = []
+  while (rest.length) {
+    const top = rs[rest[0]], row = rest.filter(i => Math.min(rs[i].y1, top.y1) - Math.max(rs[i].y0, top.y0) > 0.5 * Math.min(rs[i].y1 - rs[i].y0, top.y1 - top.y0))
+    out.push(...row.sort((a, b) => rs[a].x0 - rs[b].x0))
+    for (const i of row) rest.splice(rest.indexOf(i), 1)
+  }
+  return out
+}
+/**
+ * The figures of the left that rectangles on a translation page stand for (its figures, or a draft preview's frames):
+ * those next to one caption on both sides and of one size, paired in reading order. A float keeps its contents and
+ * their order whatever the language, so two figures can only be confused if they share both; one with no caption, or
+ * found with none on either side, stands for none. Map index in `rects` → { page, k, region } on the left
+ */
+async function leftFor(side, n, rects) {
+  const out = new Map(), groups = new Map()
+  rects.forEach((r, i) => { const c = captionNear(side, n, r); if (c != null) (groups.get(c) ?? groups.set(c, []).get(c)).push(i) })
+  for (const [c, mine] of groups) {
+    const theirs = await leftGroup(c), order = readingOrder(theirs.map(t => t.region)), used = new Set()
+    for (const i of readingOrder(mine.map(i => rects[i])).map(j => mine[j])) {
+      const r = rects[i]
+      const j = order.find(j => !used.has(j) && Math.abs(theirs[j].region.x1 - theirs[j].region.x0 - (r.x1 - r.x0)) < 1.5 && Math.abs(theirs[j].region.y1 - theirs[j].region.y0 - (r.y1 - r.y0)) < 1.5)
+      if (j !== undefined) { used.add(j); out.set(i, theirs[j]) }
+    }
+  }
+  return out
+}
+/** the figures next to a caption on the left, [{ page, k, region }]: kept until the left is located again (index) */
+function leftGroup(c) {
+  left.groups ??= new Map()
+  if (!left.groups.has(c)) left.groups.set(c, (async () => {
+    const out = []
+    for (const p of new Set(left.anchors.get(c)?.rects.map(r => r.page))) (await regionsOf(left, p)).forEach((region, k) => { if (captionNear(left, p, region) === c) out.push({ page: p, k, region }) })
+    return out
+  })())
+  return left.groups.get(c)
+}
+/** a figure of the left drawn at a size in device pixels, for a frame: its page drawn once per figure and size (the
+ *  latest size kept), a copy for each frame; in the viewer's annotation mode, so that PDF.js reads the page once. Kept
+ *  while previews come in (replaceRight empties it for the final: a figure's drawing is megabytes) */
+const copies = new Map() // `${page}:${k}` → { w, h, canvas: Promise<HTMLCanvasElement> }
+async function copyOf({ page, k, region }, w, h) {
+  let c = copies.get(`${page}:${k}`)
+  if (!c || c.w !== w || c.h !== h) copies.set(`${page}:${k}`, (c = { w, h, canvas: (async () => {
+    const pdfPage = await left.doc.getPage(page), viewport = pdfPage.getViewport({ scale: w / (region.x1 - region.x0) })
+    const [x, y] = viewport.convertToViewportPoint(region.x0, region.y1)
+    const canvas = Object.assign(document.createElement('canvas'), { width: w, height: h })
+    await pdfPage.render({ canvas, viewport, transform: [1, 0, 0, 1, -x, -y], annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS }).promise
+    return canvas
+  })() }))
+  const out = Object.assign(document.createElement('canvas'), { width: w, height: h })
+  out.getContext('2d').drawImage(await c.canvas, 0, 0)
+  return out
+}
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+/**
+ * A translation page's figures (any side but the left), each with the overlay of its text: the text of the left's
+ * figure it stands for (leftFor), else its own; on a draft preview, the left's figure drawn over each frame too, and a
+ * frame that stands for none left as it is. The page's overlays are replaced in one step once the new ones are ready,
+ * so that a page drawn again never shows its figures bare in between; a newer call for the page wins.
+ */
+async function paintFigures(side, n) {
+  const pv = pageView(side, n)
+  if (!pv?.div || side === left) return
+  const gen = (side.figGen.get(n) ?? 0) + 1
+  side.figGen.set(n, gen)
+  let laid = []
+  if (figuresOn) {
+    const frames = side.frames && ((await side.frames).get(n) ?? [])
+    const rects = frames ?? (await regionsOf(side, n))
+    // arXiv's PDF itself, shown on the right until the first preview: its figures are the left's, page for page
+    const same = !frames && left.doc && side.doc.fingerprints[0] === left.doc.fingerprints[0]
+    const theirs = same ? new Map(rects.map((region, k) => [k, { page: n, k, region }])) : (await side.anchored, await leftFor(side, n, rects))
+    const vp = pv.viewport, dpr = devicePixelRatio || 1
+    laid = await Promise.all(rects.map(async (r, i) => {
+      const from = theirs.get(i)
+      if (frames && !from) return null
+      const fig = await (from ? figureOf(left, from.page, from.k) : figureOf(side, n, i))
+      // a line that is only a name joins no box and keeps its text (core/names, the HTML page's rule): merged, a legend's
+      // Average / DirectHarm4 / HarmBench / HEx-PHI went as one text and DirectHarm4 came back as 直接伤害 4; alone, the
+      // HTML mode's tick names came back as 地狱之战 (HellaSwag) and 魔法师 (Magicoder)
+      const evidence = namesOf()
+      const boxes = linesToBoxes(fig.lines.filter(l => !isName(l.text, evidence)))
+      const done = boxes.length ? await translateBoxes(boxes) : []
+      const labels = boxes.flatMap((b, j) => (done[j] && done[j] !== b.text ? [{ ...b, source: b.text, text: done[j] }] : []))
+      if (!labels.length && !frames) return null
+      // the figure's place on the page, in CSS pixels; the overlay is laid by the style sheet over the <img> there
+      const [ax, ay] = vp.convertToViewportPoint(r.x0, r.y1), [bx, by] = vp.convertToViewportPoint(r.x1, r.y0)
+      const width = Math.abs(bx - ax), height = Math.abs(by - ay)
+      const holder = Object.assign(document.createElement('div'), { className: 'axt-fig' })
+      Object.assign(holder.style, pinned({ left: Math.min(ax, bx), top: Math.min(ay, by), width, height }, vp.scale))
+      if (frames) {
+        const copy = await copyOf(from, Math.max(1, Math.round(width * dpr)), Math.max(1, Math.round(height * dpr))).catch(e => { console.warn('[figure copy]', e); return null })
+        if (!copy) return null
+        holder.append(copy)
+      }
+      const inner = document.createElement('div'), img = Object.assign(document.createElement('img'), { alt: '', src: BLANK })
+      inner.append(img); holder.append(inner)
+      return { holder, img, labels, id: `p${n}-f${i}`, kind: fig.kind === 'raster' ? 'raster' : 'svg', ratio: width / Math.max(1, height) }
+    }))
+  }
+  if (side.figGen.get(n) !== gen) return
+  pv.div.querySelectorAll(':scope > .axt-fig').forEach(el => side.keeper.drop(el))
+  for (const f of laid) if (f) { pv.div.append(f.holder); if (f.labels.length) renderImage({ id: f.id, el: f.img, kind: f.kind }, f.labels, { ratio: f.ratio }) }
+  side.laid.set(n, pv.viewport.scale)
+  if (side === right) paints.set(n, (paints.get(n) ?? 0) + 1)
+}
+/** every page's figures laid again: the drawn ones now; one not drawn now lets its overlays go (kept through PDF.js's
+ *  reset) and is laid when it is drawn again, in the state the change left (Part 4's final review) */
+function repaintFigures() {
+  for (const pv of right.viewer._pages ?? []) {
+    if (pv.renderingState === 3) right.figs.set(pv.id, paintFigures(right, pv.id).catch(e => console.warn('[figures]', e)))
+    else if (right.laid.delete(pv.id)) pv.div.querySelectorAll(':scope > .axt-fig').forEach(el => right.keeper.drop(el))
+  }
+}
+
+/** a pointer event's place on its page: the page and the point in PDF units, or null off the pages */
+function pointOf(side, event) {
+  const pageDiv = event.target.closest?.('.page')
+  if (!pageDiv) return null
+  const page = Number(pageDiv.dataset.pageNumber), pv = pageView(side, page)
+  // the page's content box: the viewport starts inside its border
+  const box = pageDiv.getBoundingClientRect()
+  const [x, y] = pv.viewport.convertToPdfPoint(event.clientX - box.left - pageDiv.clientLeft, event.clientY - box.top - pageDiv.clientTop)
+  return { page, x, y }
+}
+/** the unit a click is on and the line of it at the click's height (highlight.mjs clickOf: anywhere in what is painted,
+ *  its pads, a display's white space and a sentence's rows too); null off what is painted, or before the side's layout
+ *  is made */
+function hitAt(side, event) {
+  const at = pointOf(side, event)
+  if (!at) return null
+  if (!side.geo) { wantLayout(side); return null }
+  return clickOf(side.geo, at.page, at.x, at.y, PAD / pageView(side, at.page).viewport.scale, side.startsOf)
+}
+
+// ---------------------------------------------------------------- scroll sync
+// Only the side the reader is scrolling drives the other: the one last touched by wheel, touch, keys or a press on
+// its scrollbar. The other side's scroll events never drive back — that echo is what made the panes fight.
+// While scrolling, the other side follows a table of the linked units' tops, measured once per layout (load, zoom,
+// resize) and kept only where it rises on both sides, interpolated between neighbours so that it moves continuously.
+// In two columns no such table holds every paragraph level, so once scrolling stops, the paragraph at the reading
+// line — in the column under the pointer — is brought level on the other side, line for line.
+// The reading line is where on the view the reader is taken to be reading, as a share of its height. It starts a
+// quarter down; a click moves it to the height of what was clicked (alignClick), so that scrolling on keeps the pair
+// the reader chose level instead of pulling it back to a quarter down.
+let readingLine = 0.25
+let driver = null
+let table = null // [[leftTop, rightTop], ...] rising on both sides
+let lines = null // per side, every highlighted line in scroll coordinates
+/**
+ * A page's top in its side's scroller, whatever the stack's transform. A page's offsetTop counts from its offsetParent,
+ * which is the scroller until the follower's `.pdfViewer` carries the compositor's transform (armed at rest too, and
+ * bound while the reader scrolls): the stack is then its pages' offsetParent, and where it stands in the scroller was
+ * missing from every top — 14 px, the first page's margin, which collapses out through the stack's edge (levelOf read
+ * the follower 14 px off level on the compositor, the screen showing it level). offsetTop ignores transforms, the
+ * stack's own included, so its place is added
+ */
+const pageTop = (side, page) => {
+  const div = pageView(side, page).div, stack = side.viewer.viewer
+  return div.offsetTop + div.clientTop + (div.offsetParent === stack ? stack.offsetTop + stack.clientTop : 0)
+}
+function unitDocTop(side, id) {
+  const a = side.anchors.get(id)
+  if (!a) return null
+  const r = a.rects[0]
+  return pageTop(side, r.page) + toPageBox(side, r).top
+}
+function buildTable() {
+  const pairs = []
+  for (const [id, a] of left.anchors) { if (!a || !right.anchors.get(id)) continue; const l = unitDocTop(left, id), r = unitDocTop(right, id); if (l != null && r != null) pairs.push([l, r]) }
+  pairs.sort((a, b) => a[0] - b[0])
+  // the longest run rising on the right too: a unit found out of order on one side would fold the map back
+  const len = pairs.map(() => 1), prev = pairs.map(() => -1)
+  let tail = 0
+  for (let a = 0; a < pairs.length; a++) {
+    for (let b = Math.max(0, a - 60); b < a; b++) if (pairs[b][1] < pairs[a][1] && len[b] + 1 > len[a]) { len[a] = len[b] + 1; prev[a] = b }
+    if (len[a] > len[tail]) tail = a
+  }
+  const rising = []
+  for (let a = tail; a !== -1; a = prev[a]) rising.unshift(pairs[a])
+  table = [[0, 0], ...rising, [left.container.scrollHeight, right.container.scrollHeight]]
+}
+/** a position on one side → the corresponding position on the other, by the table */
+function map(fromLeft, y) {
+  if (!table) buildTable()
+  const [a, b] = fromLeft ? [0, 1] : [1, 0]
+  let lo = 0, hi = table.length - 1
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (table[mid][a] <= y) lo = mid; else hi = mid }
+  const [p, q] = [table[lo], table[hi]]
+  const t = q[a] === p[a] ? 0 : (y - p[a]) / (q[a] - p[a])
+  return p[b] + t * (q[b] - p[b])
+}
+function lineBoxes(side) {
+  const out = []
+  for (const [id, a] of side.anchors) if (a) a.rects.forEach((r, li) => { const box = toPageBox(side, r), top = pageTop(side, r.page) + box.top; out.push({ id, li, n: a.rects.length, page: r.page, top, bottom: top + box.height, x0: r.x0, x1: r.x1 }) })
+  return out
+}
+/** the line at a scroll position in a page's column (x in PDF units): the one there, else the next one below */
+function lineAt(side, y, x) {
+  lines ??= new Map()
+  if (!lines.has(side)) lines.set(side, lineBoxes(side))
+  let hit = null, below = null
+  for (const l of lines.get(side)) {
+    if (x < l.x0 - 6 || x > l.x1 + 6) continue
+    if (y >= l.top - 1 && y <= l.bottom + 1) { if (!hit || l.bottom - l.top < hit.bottom - hit.top) hit = l }
+    else if (l.top > y && l.top - y < side.container.clientHeight * 0.3 && (!below || l.top < below.top)) below = l
+  }
+  return hit ?? below
+}
+let frame = 0, settleTimer = 0, pointerX = null
+
+// How the other side follows, the reader's choice (REPORT, sixteenth and seventeenth addenda): off; the design as it was
+// (a table of unit tops, and a settle 160 ms after the last scroll); or together — while the reader scrolls, the other
+// side moves with it as one sheet, at the same speed or at the speed the two layouts' local ratio asks, and once the
+// scroll has ended (a trackpad's glide included) it glides so that the content the reader's side is levelled by — the
+// top of its view, or the paragraph under the pointer — stands at the same height on both.
+const SYNC_MODES = ['off', 'current', 'same', 'pointer', 'matched']
+let syncMode = SYNC_MODES.includes(params.get('sync')) ? params.get('sync') : config.pdfReader.sync ? 'same' : 'off'
+/** the sync the reader applies, for its switch: not the stored setting, which a refused write or an address may not match */
+const reportSync = () => host.emit({ type: 'sync', on: syncMode !== 'off' })
+reportSync()
+const together = () => syncMode === 'same' || syncMode === 'pointer' || syncMode === 'matched'
+const reduced = matchMedia('(prefers-reduced-motion: reduce)')
+/** a critically damped spring's way from 0 to 1 over its time, k from 0 to 1: no overshoot, no bounce */
+const springAt = k => { const y = t => 1 - (1 + 6.6 * t) * Math.exp(-6.6 * t); return y(Math.min(1, Math.max(0, k))) / y(1) }
+/** the same curve as a CSS easing, for the glide the compositor runs */
+const SPRING = `linear(${Array.from({ length: 41 }, (_, i) => +springAt(i / 40).toFixed(4)).join(', ')})`
+/** how long a glide takes for a distance: 250–450 ms, longer the further; none with reduced motion */
+const glideMs = d => (reduced.matches ? 0 : Math.min(450, 250 + 0.25 * Math.abs(d)))
+/**
+ * The follower as the together modes move it. `pos`: its position, fractional — scrollTop rounds to device pixels, and
+ * steps of the same size must not drift by it; `lastD`: the driver's position last seen, null when it is to be read
+ * afresh (a layout changed); `rest`: the wait after the scroll's end; `spring`: the glide under way; `moving`: the
+ * driver scrolling, from its first step to its scroll's end
+ */
+const follow = { pos: null, lastD: null, rest: 0, spring: 0, moving: false }
+/** the side the reader scrolled while the pair was not located, 'left' or 'right' (syncFrom notes it), or null: the pair
+ *  is levelled by it once it is (levelLocated), and it is gone then */
+let readEarly = null
+/** the side of the reader's last input, 'left' or 'right' (attach, lead, goToPage, goToUnit): a wheel, a touch, a key or a
+ *  press on a pane, a press on its scroll indicator, its page pill, or an entry of the contents; never a hover. Only a scroll of that side is the reader's: PDF.js scrolls a side by
+ *  itself (its pages laid out a margin down, 0 to 14 px; a zoom or a resize keeping its place), and on the compositor a
+ *  hover makes a side the driver */
+let inputOn = null
+const nameOf = side => (side === left ? 'left' : side === right ? 'right' : null)
+/** what the pair was levelled by when last located ('left', 'right' or null), for the test harness */
+let lastLocated
+/** the positions to go on from: the driver's as it is, the follower's as it is — after a click, a glide or a new driver */
+function rebase() {
+  if (!driver) return
+  follow.lastD = driver.container.scrollTop
+  follow.pos = other(driver).container.scrollTop
+}
+/** the map between the two layouts that `matched` takes its speed from, measured once per layout (sync.mjs) */
+let flow = null
+function buildFlow() {
+  // a page is set in two columns where some line starts past its middle; there a line not across the middle is in one
+  const twoColumn = side => {
+    const out = new Set()
+    for (const [, a] of side.anchors) if (a) for (const r of a.rects) { const [x0, , x1] = pageView(side, r.page).pdfPage.view; if (r.x0 > (x0 + x1) / 2 + 1) out.add(r.page) }
+    return out
+  }
+  const geom = (side, a, two) => ({
+    stream: a.tokens[0],
+    lines: a.rects.map(r => {
+      const box = toPageBox(side, r), top = pageTop(side, r.page) + box.top, [x0, , x1] = pageView(side, r.page).pdfPage.view, mid = (x0 + x1) / 2
+      return { top, bot: top + box.height, page: r.page, band: !two.has(r.page) || (r.x0 < mid - 1 && r.x1 > mid + 1) ? 'full' : r.x1 <= mid + 1 ? 'left' : 'right' }
+    }),
+  })
+  const twoL = twoColumn(left), twoR = twoColumn(right), units = []
+  // what is read in order: not a caption, a footnote, a cell or a picture's text, which TeX sets elsewhere
+  for (const [id, a] of left.anchors) { const b = right.anchors.get(id); if (a && b && !FLOATING.has(unitKind.get(id))) units.push({ id, L: geom(left, a, twoL), R: geom(right, b, twoR) }) }
+  units.sort((x, y) => x.id - y.id)
+  const chain = flowChain(units)
+  flow = makeMap(knots(chain, lineTable(chain, 'L'), lineTable(chain, 'R'), { endL: left.container.scrollHeight, endR: right.container.scrollHeight }))
+}
+/**
+ * One frame of the together modes while the driver scrolls: the follower moved by the driver's step — the same step,
+ * or scaled by how much taller one layout is than the other over the driver's view, between 0.6 and 1.6, a ratio that
+ * changes as slowly as the view slides. A glide under way stops, and the follower goes on from where it stands
+ */
+function togetherFrame(side) {
+  if (onCompositor()) {
+    // the compositor moves the follower; PDF.js is asked to draw the pages it now shows (showAt)
+    if (!glass.anim) arm()
+    other(side).viewer.update()
+    return
+  }
+  const tc = other(side).container, D = side.container.scrollTop
+  if (follow.spring) { stopSpring(); follow.pos = tc.scrollTop }
+  if (follow.lastD == null || follow.pos == null) { follow.lastD = D; follow.pos = tc.scrollTop; return }
+  const step = D - follow.lastD
+  follow.lastD = D
+  let ratio = 1
+  if (syncMode === 'matched') {
+    if (!flow) buildFlow()
+    const H = side.container.clientHeight, f = side === left ? flow.ltr : flow.rtl
+    ratio = Math.min(1.6, Math.max(0.6, (f(D + H) - f(D)) / H))
+  }
+  follow.pos = Math.min(tc.scrollHeight - tc.clientHeight, Math.max(0, follow.pos + step * ratio))
+  put(tc, follow.pos)
+}
+/**
+ * The content at the top of a side's view that the other side is levelled by: the first paragraph or heading whose
+ * start shows in the upper half of the view — in the column under the pointer where the page has two — else the first
+ * line whole in view, at its place in its paragraph. { id, at, y }: the unit, the share of it before that point (lines
+ * counted), and the point's height in scroll coordinates
+ */
+function topAnchor(side) {
+  const c = side.container, D = c.scrollTop, H = c.clientHeight
+  let column = null
+  if (pointerX?.side === side) {
+    let page = 1
+    for (let p = 1; p <= side.doc.numPages; p++) if (pageTop(side, p) <= D + H * 0.25) page = p
+    const pv = pageView(side, page), pr = pv.div.getBoundingClientRect(), [x0, , x1] = pv.pdfPage.view
+    const [x] = pv.viewport.convertToPdfPoint(pointerX.x - pr.left - pv.div.clientLeft, 0)
+    const twoCols = linkedLines(side).some(l => l.page === page && l.x0 > (x0 + x1) / 2 + 1)
+    if (twoCols) column = { page, mid: (x0 + x1) / 2, left: x < (x0 + x1) / 2 }
+  }
+  const inColumn = l => !column || l.page !== column.page || (l.x0 < column.mid - 1 && l.x1 > column.mid + 1) || (column.left ? l.x1 <= column.mid + 1 : l.x0 >= column.mid - 1)
+  const shown = linkedLines(side).filter(l => l.top >= D - 0.5 && l.top < D + H && inColumn(l))
+  const start = shown.filter(l => l.li === 0 && l.top < D + H / 2).sort((a, b) => a.top - b.top)[0]
+  if (start) return { id: start.id, at: 0, y: start.top }
+  const first = shown.sort((a, b) => a.top - b.top)[0]
+  return first ? { id: first.id, at: first.li / first.n, y: first.top } : null
+}
+/**
+ * The paragraph or heading under the pointer where it last stood on a side: its first line when that shows in the view,
+ * else the point under the pointer, at its place in the paragraph (lines counted). Off the text — between two
+ * paragraphs, in the margin beside them — the one with the nearest line, within 64 px. Null with the pointer on the
+ * other side or away from the text: the top is taken
+ */
+function pointerAnchor(side) {
+  if (pointerX?.side !== side || pointerX.y == null) return null
+  const c = side.container, D = c.scrollTop, H = c.clientHeight, y = D + pointerX.y - c.getBoundingClientRect().top
+  if (y < D || y > D + H) return null
+  let page = 1
+  for (let p = 1; p <= side.doc.numPages; p++) if (pageTop(side, p) <= y) page = p
+  const pv = pageView(side, page), pr = pv.div.getBoundingClientRect()
+  const [x] = pv.viewport.convertToPdfPoint(pointerX.x - pr.left - pv.div.clientLeft, 0)
+  // how far a line is from the pointer: across (PDF units at the page's scale) and down, in CSS pixels
+  const gap = l => Math.max(0, l.x0 - x, x - l.x1) * pv.viewport.scale + Math.max(0, l.top - y, y - l.bottom)
+  let hit = null
+  for (const l of linkedLines(side)) if (l.page === page && gap(l) < 64 && (!hit || gap(l) < gap(hit))) hit = l
+  if (!hit) return null
+  const first = linkedLines(side).find(l => l.id === hit.id && l.li === 0)
+  if (first && first.top >= D - 0.5) return { id: hit.id, at: 0, y: first.top }
+  const f = Math.min(1, Math.max(0, (y - hit.top) / Math.max(1, hit.bottom - hit.top)))
+  return { id: hit.id, at: (hit.li + f) / hit.n, y: hit.top + f * (hit.bottom - hit.top) }
+}
+/** the scroll ended on the driver: the other side glides so that the content the driver is levelled by stands at the
+ *  same height on both; at either end of the driver's document, the other side goes to the same end */
+function alignTop(side) {
+  if (!together() || !bothShown() || side !== driver || !left.anchors.size || !right.anchors.size) return
+  bake()
+  const to = other(side), dc = side.container, tc = to.container, D = dc.scrollTop
+  const most = tc.scrollHeight - tc.clientHeight
+  let target
+  if (D <= 1) target = 0
+  else if (D >= dc.scrollHeight - dc.clientHeight - 1) target = most
+  else {
+    const a = (syncMode === 'pointer' && pointerAnchor(side)) || topAnchor(side), there = a && spot(to, a.id, a.at)
+    if (there == null) { rebase(); arm(); return }
+    target = there - (a.y - D) + (tc.getBoundingClientRect().top - dc.getBoundingClientRect().top)
+  }
+  target = Math.min(most, Math.max(0, target))
+  if (Math.abs(target - tc.scrollTop) < 1) { rebase(); arm(); return }
+  if (onCompositor()) glideOn(to, target)
+  else springTo(tc, target)
+}
+/**
+ * Both sides just located, where they were not (a first visit's original on both, this machine's copy, a demo): the
+ * sync follows nothing before (syncFrom, alignTop and arm go by the anchors), so a side read before had no step
+ * followed and no rest that levelled, and the pair stood apart until the next scroll's rest (6,393 px on 2608.02163,
+ * spikes/early-scroll.mjs; the website's 5,129 px, readarxiv-web #23). Levelled by the side the reader scrolled
+ * meanwhile (readEarly: a scroll of the side of their last input), as at its rest (alignTop): it stays where the reader
+ * put it. Not by the driver: on the compositor a hover over the other side makes that one the driver, and the side
+ * scrolled was thrown back (2,000 px); nor by a scroll PDF.js made by itself on the side of the driver (a zoom after a
+ * hover threw the side scrolled back too). In the next frame, after the scroll events it brings: a scroll under way is
+ * followed then (syncFrom), and its rest levels the pair itself; a rest waited for since before the locate is called
+ * off. In the probes' Current mode, the other side is settled by it instead (settle). Nothing the reader scrolled:
+ * nothing moves, and the follower is bound as at any rest (arm)
+ */
+function levelLocated() {
+  invalidate()
+  const name = readEarly
+  readEarly = null
+  lastLocated = name
+  // a rest still waited for is a scroll's that ended before the pair was located: the reader's, which the record names,
+  // or a scroll PDF.js made by itself on the driver (the copy put where the original is read, after a hover made the
+  // copy's pane the driver), whose rest would level the pair by it. The record decides (Codex on #322)
+  clearTimeout(follow.rest)
+  follow.rest = 0
+  requestAnimationFrame(() => {
+    const side = name === 'left' ? left : name === 'right' ? right : null
+    if (!side || follow.moving || follow.rest || !bothShown()) return arm()
+    // the probes' Current mode: the other side put at the reading line's place, as after a scroll (settle)
+    if (syncMode === 'current') { take(side); return settle(side) }
+    if (!together()) return arm()
+    take(side)
+    alignTop(side)
+  })
+}
+/** a critically damped spring to a position: no overshoot, no bounce, 250–450 ms as the distance asks; one step with
+ *  reduced motion */
+function springTo(tc, target) {
+  stopSpring()
+  const x0 = tc.scrollTop, d = target - x0, T = glideMs(d), t0 = performance.now()
+  const step = now => {
+    const k = T ? (now - t0) / T : 1
+    if (k >= 1) { put(tc, target); follow.spring = 0; rebase(); return }
+    put(tc, x0 + d * springAt(k))
+    follow.spring = requestAnimationFrame(step)
+  }
+  follow.spring = requestAnimationFrame(step)
+}
+function stopSpring() { if (follow.spring) cancelAnimationFrame(follow.spring); follow.spring = 0 }
+
+// ---------------------------------------------------------------- the follower on the compositor
+// The driver scrolls on the compositor's thread, and stays smooth however busy the page is; a follower set by script
+// each frame moves on the main thread a frame later, and misses frames whenever PDF.js draws the pages coming into view
+// (the scroll-sync research measured up to 97 px behind). So the together modes move the follower's page stack on the
+// compositor too: while the reader scrolls, by a transform a ScrollTimeline on the driver runs, its keyframes the
+// follower's position for every position of the driver; at rest, by a glide the compositor runs on the spring's curve.
+// Its scrollTop stays where it was meanwhile, and takes the position shown — in one task, so no frame shows a jump —
+// whenever something is to read it (bake): the rest's levelling, a new driver, a click, a layout's change. The follower
+// is bound ahead, at rest and when the pointer comes over a side, so that it keeps up from a scroll's first frame: the
+// input events that tell a scroll has begun reach the page after the compositor has taken its first steps.
+const CAN_COMPOSIT = typeof ScrollTimeline === 'function'
+let compositing = CAN_COMPOSIT && params.get('compositor') !== '0' // a probe's page can ask for the follower by script
+const onCompositor = () => compositing && together() && bothShown()
+/** the follower's motion under way: `anim` the transform, `kind` 'scroll' (bound to `from`, the driver) or 'glide',
+ *  `side` the follower, `shift()` how far the transform shows it from its scrollTop, down positive */
+const glass = { anim: null, kind: null, side: null, from: null, shift: null }
+/** PDF.js told a side's position as it shows, not as its scrollTop says: it finds the pages to draw from a scroll
+ *  container's four sizes, and is lent one that adds the transform's shift; null gives it back its own */
+function showAt(side, shift) {
+  if (!shift) { delete side.viewer._getVisiblePages; return }
+  side.viewer._getVisiblePages = function () {
+    const real = this.container
+    this.container = { scrollTop: real.scrollTop + shift(), scrollLeft: real.scrollLeft, clientHeight: real.clientHeight, clientWidth: real.clientWidth }
+    try { return Object.getPrototypeOf(this)._getVisiblePages.call(this) } finally { this.container = real }
+  }
+}
+/**
+ * The motion under way ended where it stands: the transform's shift into the follower's scrollTop, on top of whatever
+ * the reader scrolled it by meanwhile, and the transform gone. The together modes go on from there: the follower's
+ * position, against the driver's as it is (bound) or as it was when the glide began, the driver still since
+ */
+function bake() {
+  if (!glass.anim) return
+  const c = glass.side.container, pos = c.scrollTop + glass.shift(), g = unbind()
+  put(c, pos)
+  if (g.kind === 'scroll') follow.lastD = g.from.container.scrollTop
+  follow.pos = pos
+  g.side.viewer.update()
+}
+/** the motion under way given up, the follower left at its scrollTop */
+function drop() { if (glass.anim) unbind().side.viewer.update() }
+/** the motion under way taken off — its animation, and the container lent to PDF.js — and what it was */
+function unbind() {
+  const g = { ...glass }
+  g.anim.cancel()
+  showAt(g.side, null)
+  Object.assign(glass, { anim: null, kind: null, side: null, from: null, shift: null })
+  return g
+}
+/**
+ * The follower bound to the driver's scroll: for every position of the driver, the follower's — where it stands, plus
+ * the driver's steps since the positions the together modes go on from, the same steps or scaled by the layouts' local
+ * ratio (togetherFrame's), within the follower's ends — as keyframes of a ScrollTimeline on the driver, linear between
+ */
+function arm() {
+  if (!onCompositor() || !driver || glass.anim || !left.anchors.size || !right.anchors.size) return
+  const d = driver, f = other(d), dc = d.container, tc = f.container
+  const Dmax = dc.scrollHeight - dc.clientHeight, Fmax = tc.scrollHeight - tc.clientHeight, F0 = tc.scrollTop
+  if (Dmax < 1 || !dc.clientHeight || !tc.clientHeight) return
+  if (follow.lastD == null || follow.pos == null) rebase()
+  const Db = follow.lastD, Fb = follow.pos, clamp = v => Math.min(Fmax, Math.max(0, v))
+  let pts
+  if (syncMode === 'matched') {
+    if (!flow) buildFlow()
+    const H = dc.clientHeight, m = d === left ? flow.ltr : flow.rtl, ratio = D => Math.min(1.6, Math.max(0.6, (m(D + H) - m(D)) / H)), step = 32
+    const up = [], down = []
+    for (let D = Db, F = Fb; D < Dmax; ) { const n = Math.min(Dmax, D + step); F += (n - D) * ratio(D); D = n; up.push([D, clamp(F)]) }
+    for (let D = Db, F = Fb; D > 0; ) { const n = Math.max(0, D - step); F -= (D - n) * ratio(n); D = n; down.unshift([D, clamp(F)]) }
+    pts = [...down, [Db, clamp(Fb)], ...up]
+  } else {
+    // the same steps: straight, but for where the follower meets one of its ends
+    pts = [0, Db - Fb, Db + Fmax - Fb, Dmax].filter(D => D >= 0 && D <= Dmax).sort((a, b) => a - b).map(D => [D, clamp(Fb + D - Db)])
+  }
+  pts = pts.filter((p, i) => i === 0 || p[0] > pts[i - 1][0])
+  if (pts[0][0] > 0) pts.unshift([0, pts[0][1]])
+  if (pts.at(-1)[0] < Dmax) pts.push([Dmax, pts.at(-1)[1]])
+  // at the driver's position, its scrollTop unless given (the pointer's frame gives the one its scroll event read)
+  const shift = (at = dc.scrollTop) => {
+    const D = Math.min(Dmax, Math.max(0, at))
+    let lo = 0, hi = pts.length - 1
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (pts[mid][0] <= D) lo = mid; else hi = mid }
+    const [a, b] = [pts[lo], pts[hi]], t = b[0] === a[0] ? 0 : (D - a[0]) / (b[0] - a[0])
+    return a[1] + Math.min(1, Math.max(0, t)) * (b[1] - a[1]) - F0
+  }
+  const anim = f.viewer.viewer.animate(pts.map(([D, F]) => ({ offset: D / Dmax, transform: `translateY(${F0 - F}px)` })), { timeline: new ScrollTimeline({ source: dc, axis: 'block' }), fill: 'both' })
+  Object.assign(glass, { anim, kind: 'scroll', side: f, from: d, shift })
+  showAt(f, shift)
+}
+/** the glide at rest on the compositor: the follower's stack moved to `target` on the spring's curve, then baked, and
+ *  bound to the driver again */
+function glideOn(side, target) {
+  const tc = side.container, d = target - tc.scrollTop, T = glideMs(d)
+  if (!T) { put(tc, target); rebase(); arm(); return }
+  const anim = side.viewer.viewer.animate([{ transform: 'translateY(0px)' }, { transform: `translateY(${-d}px)` }], { duration: T, easing: SPRING, fill: 'both' })
+  Object.assign(glass, { anim, kind: 'glide', side, from: null, shift: () => d * springAt((anim.currentTime ?? 0) / T) })
+  showAt(side, glass.shift)
+  const tick = () => { if (glass.anim !== anim) return; side.viewer.update(); requestAnimationFrame(tick) }
+  requestAnimationFrame(tick)
+  anim.onfinish = () => { if (glass.anim !== anim) return; bake(); rebase(); arm() }
+}
+/** a side's position as the screen shows it: its scrollTop, and the transform's shift while it follows on the compositor */
+const shownAt = side => side.container.scrollTop + (glass.side === side ? glass.shift() : 0)
+/** for the harness: what the driver is levelled by at rest, and how far its counterpart stands from level (px) */
+function levelOf(side) {
+  const a = (syncMode === 'pointer' && pointerAnchor(side)) || topAnchor(side), to = other(side)
+  const there = a && spot(to, a.id, a.at)
+  if (there == null) return null
+  const y = a.y - side.container.scrollTop + side.container.getBoundingClientRect().top, ty = there - shownAt(to) + to.container.getBoundingClientRect().top
+  return { id: a.id, at: a.at, error: ty - y }
+}
+/** a side becomes the driver: what moves ends where it stands, and the other side goes on from where it stands */
+function take(side) {
+  if (driver === side) return
+  bake(); driver = side; stopSpring(); clearTimeout(follow.rest); follow.rest = 0; rebase()
+}
+/** the follower on the compositor or by script (REPORT, seventeenth addendum) */
+export function setCompositor(on) {
+  bake(); stopSpring(); clearTimeout(follow.rest)
+  compositing = CAN_COMPOSIT && on
+  rebase(); arm()
+}
+/** how the other side follows (REPORT, sixteenth and seventeenth addenda); the interface's switch is same or off */
+/** a sync mode in effect, nothing written */
+function applySync(next) {
+  bake()
+  syncMode = next
+  reportSync()
+  stopGlide(); stopSpring(); clearTimeout(settleTimer); clearTimeout(follow.rest)
+  rebase(); arm()
+}
+/** how the other side follows (REPORT, sixteenth and seventeenth addenda): the interface's switch is same or off,
+ *  which is written to the settings; a probe's other modes are not */
+export function setSyncMode(next) {
+  if (!SYNC_MODES.includes(next)) return
+  applySync(next)
+  if (next === 'same' || next === 'off') void save(c => ({ ...c, pdfReader: { ...c.pdfReader, sync: next === 'same' } }))
+}
+function syncFrom(side) {
+  const mine = placed.get(side.container)
+  if (mine != null) { placed.delete(side.container); if (Math.abs(mine - side.container.scrollTop) < 1) return }
+  // a side the reader scrolled before both sides are located: nothing follows it yet, and the pair is levelled by it once
+  // they are (levelLocated). A put of ours has returned above; the side of the reader's last input (inputOn), whatever
+  // the driver is: a hover over the other side may have made that one the driver since. A side coming in (replaceRight's,
+  // out of sight) is neither
+  if (nameOf(side) !== null && nameOf(side) === inputOn && (!left.anchors.size || !right.anchors.size)) readEarly = inputOn
+  // the follower scrolled by something else — a link, PDF.js, the find bar: it stands where that put it, and the
+  // together modes go on from there; on the compositor its transform is given up, and it is bound again
+  if (driver && side !== driver) {
+    if (glass.side === side) { drop(); rebase(); arm() } else if (together()) rebase()
+    return
+  }
+  if (syncMode === 'off' || !bothShown() || side !== driver || !left.anchors.size || !right.anchors.size) return
+  // a scroll under way, its rest's wait begun again: here, with the event, since the scroll's end comes in the same
+  // frame as its last step, before a frame's callback would run
+  if (together()) { clearTimeout(follow.rest); follow.rest = 0; follow.moving = true }
+  if (syncMode === 'current') { clearTimeout(settleTimer); settleTimer = setTimeout(() => settle(side), 160) }
+  if (frame) return
+  frame = requestAnimationFrame(() => {
+    frame = 0
+    if (syncMode !== 'current') return togetherFrame(side)
+    const target = other(side), c = side.container
+    const there = map(side === left, c.scrollTop + c.clientHeight * readingLine)
+    target.container.scrollTop = there - target.container.clientHeight * readingLine
+  })
+}
+/** whether a side's pane is in the display: a hidden one has no width, and a page-width scale there comes out negative */
+const shown = side => side.container.clientWidth > 0
+/** both sides are in the display: side by side, the window wide enough for them (setNarrow) */
+const bothShown = () => mode === 'bilingual' && !narrow
+/**
+ * The display changed: the viewers now shown are laid out again at their pane's width, and a side coming into view
+ * opens where the other one was being read, by the table the sync scrolls with
+ */
+/**
+ * Where the reader is on a side, in terms that outlast its layout: the unit at the reading line and the place within it
+ * (its lines counted from 0 to 1), and the place in the whole document for when no unit is located there. Read while
+ * the side is shown: once the display hides it, its scrollTop and its pages' offsets are all 0, and a switch straight
+ * between Original and Translation opened the other side at the paper's top (Codex on #297, measured by
+ * spikes/viewer-faults.mjs)
+ */
+function readingPlace(side) {
+  const c = side.container
+  const doc = c.scrollTop / Math.max(1, c.scrollHeight - c.clientHeight)
+  if (!side.doc || !side.anchors.size || !shown(side)) return { doc }
+  invalidate()
+  const y = c.scrollTop + c.clientHeight * readingLine
+  let page = 1
+  for (let p = 1; p <= side.doc.numPages; p++) if (pageTop(side, p) <= y) page = p
+  // the first column, as the settle takes it with no pointer
+  const pv = pageView(side, page), [x] = pv.viewport.convertToPdfPoint(pv.div.clientWidth * 0.25, 0)
+  const l = lineAt(side, y, x)
+  if (!l) return { doc }
+  const f = Math.min(1, Math.max(0, (y - l.top) / Math.max(1, l.bottom - l.top)))
+  return { doc, id: l.id, at: (l.li + f) / l.n }
+}
+/** CSS px: the widest a page is fitted in a single display (the reader's design, §3), the width the old 1100 px column gave */
+const READING_WIDTH = 1060
+/** the scale that fits a side's pages to its pane, never beyond a reading width while one side alone is shown */
+function fitWidth(side) {
+  const view = side.viewer.getPageView(0)?.pdfPage?.view
+  if (!view || bothShown()) return 'page-width'
+  const cap = READING_WIDTH / ((view[2] - view[0]) * (96 / 72))
+  return side.container.clientWidth - 40 > READING_WIDTH ? cap : 'page-width'
+}
+/** the display changed from `from`: the sides shown laid out to its width, and the side it brought in put at `place` */
+function relayout(from, place = null) {
+  bake()
+  requestAnimationFrame(() => {
+    for (const s of sides) if (s.doc && shown(s)) { s.fit = 'page-width'; s.viewer.currentScaleValue = fitWidth(s); s.viewer.update() }
+    const came = from === 'original' ? right : from === 'translation' ? left : null
+    requestAnimationFrame(() => {
+      if (!came?.doc || !place) return
+      invalidate()
+      const c = came.container, y = place.id != null ? spot(came, place.id, place.at) : null
+      put(c, y != null ? y - c.clientHeight * readingLine : place.doc * (c.scrollHeight - c.clientHeight))
+    })
+  })
+}
+/** the current design's settle: the paragraph at the reading line brought level on the other side, at the same place
+ *  within it, 160 ms after the last scroll */
+function settle(side) {
+  if (syncMode !== 'current' || !bothShown() || side !== driver) return
+  const c = side.container, y = c.scrollTop + c.clientHeight * readingLine
+  // the page at the reading line, and the pointer's place across it (the first column when the pointer is away)
+  let page = 1
+  for (let p = 1; p <= side.doc.numPages; p++) if (pageTop(side, p) <= y) page = p
+  const pv = pageView(side, page), pr = pv.div.getBoundingClientRect()
+  const cx = pointerX?.side === side ? pointerX.x : pr.left + pr.width * 0.25
+  const [x] = pv.viewport.convertToPdfPoint(cx - pr.left - pv.div.clientLeft, 0)
+  const l = lineAt(side, y, x)
+  const b = l && other(side).anchors.get(l.id)
+  if (!b) return
+  const f = Math.min(1, Math.max(0, (y - l.top) / Math.max(1, l.bottom - l.top)))
+  const pos = ((l.li + f) / l.n) * b.rects.length, lj = Math.min(b.rects.length - 1, Math.floor(pos))
+  const t = other(side), r = b.rects[lj], box = toPageBox(t, r)
+  const top = pageTop(t, r.page) + box.top + (pos - lj) * box.height - t.container.clientHeight * readingLine
+  if (Math.abs(top - t.container.scrollTop) > 2) glide(t.container, top)
+}
+/** a unit's lines in the container's scroll coordinates, with their place across the page (PDF units) */
+const linesIn = (side, id) => (side.anchors.get(id)?.rects ?? []).map(r => { const box = toPageBox(side, r), top = pageTop(side, r.page) + box.top; return { top, bottom: top + box.height } })
+/** a place in a unit — its lines counted from 0 to their number, a fraction within a line — in scroll coordinates */
+function spot(side, id, at) {
+  const ls = linesIn(side, id)
+  if (!ls.length) return null
+  const pos = Math.min(1, Math.max(0, at)) * ls.length, j = Math.min(ls.length - 1, Math.floor(pos))
+  return ls[j].top + (pos - j) * (ls[j].bottom - ls[j].top)
+}
+/** every line of the units located on both sides, in scroll coordinates (cached with the layout, as lineAt's) */
+function linkedLines(side) {
+  lines ??= new Map()
+  if (!lines.has(side)) lines.set(side, lineBoxes(side))
+  return lines.get(side).filter(l => other(side).anchors.get(l.id))
+}
+/** a figure region (PDF units, on `page`) in scroll coordinates */
+function regionBox(side, page, r) { const box = toPageBox(side, { page, ...r }); return { top: pageTop(side, page) + box.top, bottom: pageTop(side, page) + box.top + box.height } }
+
+/**
+ * The other side scrolled so that its scroll position `there` shows at height `y` of this side's view, and the reading
+ * line moved to that height. Where the other side cannot scroll that far — near either end of its document — this
+ * side takes up the rest, so that the two still end on one horizontal line
+ */
+function level(from, y, there) {
+  const to = other(from), fc = from.container, tc = to.container
+  const dy = tc.getBoundingClientRect().top - fc.getBoundingClientRect().top
+  const want = there + dy - y
+  // a settle still to come or still gliding would carry the other side off again
+  clearTimeout(settleTimer)
+  stopGlide()
+  put(tc, want)
+  const short = tc.scrollTop - want
+  if (Math.abs(short) > 0.5) put(fc, fc.scrollTop + short)
+  readingLine = Math.min(0.95, Math.max(0.05, (there - tc.scrollTop + dy) / fc.clientHeight))
+  rebase(); arm()
+}
+/** a side's scroll position set by the reader itself, its scroll event not taken for the reader's own scrolling */
+const placed = new WeakMap()
+function put(container, top) {
+  container.scrollTop = top
+  placed.set(container, container.scrollTop)
+}
+/**
+ * The settle's glide to a position, our own frames rather than the browser's smooth scroll: that one runs on the
+ * compositor and a later instant scroll does not stop it — a click levelled a pair while it was still gliding, and the
+ * glide carried the other side on to where it had been going (10 to 50 px off, measured)
+ */
+let gliding = 0
+function glide(container, top) {
+  stopGlide()
+  const start = container.scrollTop, t0 = performance.now(), ms = reduced.matches ? 0 : 220
+  const step = now => {
+    const k = ms ? Math.min(1, (now - t0) / ms) : 1
+    put(container, start + (top - start) * (1 - (1 - k) ** 3))
+    gliding = k < 1 ? requestAnimationFrame(step) : 0
+  }
+  gliding = requestAnimationFrame(step)
+}
+function stopGlide() { if (gliding) cancelAnimationFrame(gliding); gliding = 0 }
+/**
+ * A click brings what was clicked level on both sides, at the height where it stands on the screen: a paragraph's
+ * first line on one horizontal line with its counterpart's (the owner, 2026-09-22 — brought to the reading line, the
+ * counterpart stood at a quarter down whatever the height of the paragraph clicked). With the first line above the
+ * view — a long paragraph clicked far down — the clicked line is levelled, at its place within the other paragraph.
+ * What a click is on is what the highlight paints (hitAt): a click in a block's pads, in the white space beside a
+ * display, or on a float set inside a paragraph's block (a wrapfigure) is the unit's, and levelled by it.
+ * A click on no paragraph linked on both sides — a heading, a figure, a formula, a table — goes by what is around it (placeAt).
+ * A table or figure lit whole (floats.mjs) is levelled so too where the click is off its cells and caption: by its twin
+ * or its distance from its caption, finer than by the caption alone.
+ */
+let lastAlign = null // how the last click was levelled, for the test harness
+async function alignClick(from, event) {
+  // with one document shown there is no other side to level: the hidden one has no scroll range, and the correction
+  // meant for it would move the one being read (Codex on #297)
+  if (!bothShown()) return
+  bake()
+  const to = other(from), c = from.container, y = event.clientY - c.getBoundingClientRect().top
+  const hit = hitAt(from, event)
+  if (hit && to.anchors.get(hit.id)) {
+    const start = unitDocTop(from, hit.id) - c.scrollTop
+    lastAlign = { way: start >= 0 ? 'first line' : 'clicked line', id: hit.id }
+    if (start >= 0) return level(from, start, unitDocTop(to, hit.id))
+    return level(from, y, spot(to, hit.id, (hit.line + hit.f) / from.anchors.get(hit.id).rects.length))
+  }
+  lastAlign = { way: 'around' }
+  const there = await placeAt(from, event, y + c.scrollTop)
+  if (there != null) level(from, y, there)
+}
+/**
+ * Where a click on no linked paragraph lands on the other side (scroll coordinates), for the point Y it was made at.
+ * In a figure, by the caption of its float (figureThere). Elsewhere, by the linked lines above and below it in its
+ * column: in the gap between them at the same share of it — a heading or a formula between two paragraphs — except
+ * next to a caption, whose float may stand elsewhere on the other side: a table under its caption, or a drawing that
+ * is no image above it, keeps its distance from the caption. Distances are scaled by the two sides' zoom.
+ */
+async function placeAt(from, event, Y) {
+  const at = pointOf(from, event)
+  if (!at) return null
+  const to = other(from), k = to.viewer.currentScale / from.viewer.currentScale
+  const region = (await regionsOf(from, at.page)).find(r => at.x >= r.x0 && at.x <= r.x1 && at.y >= r.y0 && at.y <= r.y1)
+  if (region) {
+    const there = await figureThere(from, at.page, region, Y)
+    if (there != null) return there
+    lastAlign = { way: 'figure without a caption' }
+  }
+  let above = null, below = null
+  for (const l of linkedLines(from)) {
+    if (at.x < l.x0 - 6 || at.x > l.x1 + 6) continue
+    if (l.bottom <= Y + 1 && (!above || l.bottom > above.bottom)) above = l
+    if (l.top >= Y - 1 && (!below || l.top < below.top)) below = l
+  }
+  const endOf = l => spot(to, l.id, (l.li + 1) / l.n), startOf = l => spot(to, l.id, l.li / l.n)
+  const caption = l => unitKind.get(l.id) === 'caption'
+  if (above && caption(above) && !(below && caption(below) && below.top - Y < Y - above.bottom)) return endOf(above) + (Y - above.bottom) * k
+  if (below && caption(below)) return startOf(below) - (below.top - Y) * k
+  if (above && below) return endOf(above) + ((Y - above.bottom) / Math.max(1, below.top - above.bottom)) * (startOf(below) - endOf(above))
+  if (above) return endOf(above) + (Y - above.bottom) * k
+  if (below) return startOf(below) - (below.top - Y) * k
+  return null
+}
+/**
+ * A figure on the other side, and the place there of the point Y in it. A float moves with its caption, and the two
+ * sides may place it differently — another page, another column — so the figure is found through its caption: on
+ * this side a linked caption in its column, below it or above it with no other linked line between; on the other side,
+ * on that caption's page and in its column, the figure of the same size at the same distance from it — the same image
+ * laid out by the same float. The caption below is tried first, as captions of figures mostly are, and a caption counts
+ * only if its float's figure is found there: two floats stacked in a column put the upper one's caption between them.
+ * With no figure found, the point keeps its distance from the caption below, else from the one above.
+ */
+async function figureThere(from, page, region, Y) {
+  const to = other(from), k = to.viewer.currentScale / from.viewer.currentScale
+  const box = regionBox(from, page, region)
+  const caption = l => unitKind.get(l.id) === 'caption'
+  const meets = (a, b) => Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0)
+  const mine = columnOf(from, page, region)
+  const col = linkedLines(from).filter(l => l.page === page && meets(l, mine))
+  const clear = (lo, hi) => !col.some(l => !caption(l) && meets(l, region) && l.bottom > lo + 1 && l.top < hi - 1)
+  let below = null, above = null
+  for (const l of col) {
+    if (!caption(l)) continue
+    if (l.li === 0 && l.top >= box.bottom - 2 && clear(box.bottom, l.top) && (!below || l.top < below.top)) below = l
+    if (l.li === l.n - 1 && l.bottom <= box.top + 2 && clear(l.bottom, box.top) && (!above || l.bottom > above.bottom)) above = l
+  }
+  const w = region.x1 - region.x0, h = region.y1 - region.y0
+  for (const [l, isBelow] of [[below, true], [above, false]]) {
+    if (!l) continue
+    // the caption's line next to the figure, on this side and on the other (PDF units), and the gap between
+    const here = from.anchors.get(l.id).rects[isBelow ? 0 : l.n - 1], rects = to.anchors.get(l.id).rects, theirs = rects[isBelow ? 0 : rects.length - 1]
+    const gap = isBelow ? region.y0 - here.y1 : here.y0 - region.y1
+    const column = columnOf(to, theirs.page, theirs)
+    let twin = null
+    for (const q of await regionsOf(to, theirs.page)) {
+      if (Math.abs(q.x1 - q.x0 - w) > 2 || Math.abs(q.y1 - q.y0 - h) > 2 || !meets(q, column)) continue
+      const g = isBelow ? q.y0 - theirs.y1 : theirs.y0 - q.y1
+      if (g < -2 || Math.abs(g - gap) > 12) continue
+      // two of the same size at the same distance (a row of panels): the one at the same place across the column
+      const score = Math.abs(g - gap) + Math.abs(q.x0 - column.x0 - (region.x0 - mine.x0))
+      if (!twin || score < twin.score) twin = { q, score }
+    }
+    if (!twin) continue
+    lastAlign = { way: 'figure, its twin', caption: l.id }
+    const tb = regionBox(to, theirs.page, twin.q)
+    return tb.top + (Y - box.top) * ((tb.bottom - tb.top) / Math.max(1, box.bottom - box.top))
+  }
+  const l = below ?? above
+  if (!l) return null
+  lastAlign = { way: 'figure by its caption', caption: l.id }
+  return l === below ? spot(to, l.id, 0) - (l.top - Y) * k : spot(to, l.id, 1) + (Y - l.bottom) * k
+}
+/**
+ * The column a box stands in, across its page (PDF units): the whole width when it crosses the page's middle — one
+ * column of text, or a float over both — else the half it is in. What a caption and its figure share, however narrow a
+ * short caption set centred under a row of panels is
+ */
+function columnOf(side, page, r) {
+  const [x0, , x1] = pageView(side, page).pdfPage.view, mid = (x0 + x1) / 2
+  return r.x0 < mid - 1 && r.x1 > mid + 1 ? { x0, x1 } : r.x1 <= mid + 1 ? { x0, x1: mid } : { x0: mid, x1 }
+}
+const invalidate = () => { bake(); table = null; lines = null; flow = null; follow.lastD = null }
+addEventListener('resize', invalidate)
+
+function attach(side) {
+  // the scroll as the pointer's frame reads it (pointAt), first: read in the event, the layout is the frame's own; and
+  // what is under a pointer at rest looked at again (a wheel turned under it sends no move: the unit it had left stayed
+  // lit, the review of B1), on either pane, as the other follows
+  side.container.addEventListener('scroll', () => { side.scrollX = side.container.scrollLeft; side.scrollY = side.container.scrollTop; syncFrom(side); pointer.again() }, { passive: true })
+  // a new driver: the other side goes on from where it stands, before the new driver's first step is taken; on the
+  // compositor, a glide under way ends where it stands, and the follower is bound to the driver
+  for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) side.container.addEventListener(type, () => {
+    inputOn = nameOf(side)
+    take(side)
+    if (glass.kind === 'glide') bake()
+    arm()
+  }, { passive: true })
+  // the pointer tells which side the next scroll will move, so on the compositor the follower is bound ahead — but not
+  // while a scroll, its rest's wait or its glide is under way on the other side, which the pointer passing over would cut off
+  side.container.addEventListener('pointermove', e => {
+    pointerX = { side, x: e.clientX, y: e.clientY }
+    if (onCompositor() && driver !== side && !follow.moving && !follow.rest && glass.kind !== 'glide') { take(side); arm() }
+  }, { passive: true })
+  // the scroll's end — a trackpad's glide included — and 150 ms more without a scroll: the together modes level the two
+  side.container.addEventListener('scrollend', () => {
+    if (side !== driver || !together()) return
+    follow.moving = false
+    clearTimeout(follow.rest)
+    follow.rest = setTimeout(() => { follow.rest = 0; alignTop(side) }, 150)
+  }, { passive: true })
+  side.container.addEventListener('mousemove', e => pointer.moved(side, e.clientX, e.clientY))
+  side.container.addEventListener('mouseleave', () => pointer.left(side))
+  // A click, told apart from a drag that selects text, by the pointer's press and release: PDF.js moves its selection
+  // helper (the text layer's endOfContent) under the pointer on the press, and a press whose target moves gets no
+  // click event — a second click on a figure did nothing at all
+  let press = null
+  side.container.addEventListener('pointerdown', e => { press = e.button === 0 ? { x: e.clientX, y: e.clientY, t: e.timeStamp } : null }, { passive: true })
+  side.container.addEventListener('pointerup', e => {
+    const p = press
+    press = null
+    if (!p || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 4 || e.timeStamp - p.t > 600 || !(getSelection()?.isCollapsed ?? true)) return
+    void alignClick(side, e)
+  })
+  // PDF.js re-renders a page's div on zoom and as pages come into view: the highlight and the figures are laid again there
+  side.eventBus.on('pagerendered', ({ pageNumber, error }) => {
+    if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start
+    paint(side)
+    // the page's highlight geometry and its sentences, on its first drawing (a page never drawn never needs it)
+    if (side.geo) pageSentences(side.geo, pageNumber, side.ownStarts)
+    // figures laid once per page: kept through a redraw (keepOverlays), scaled with it (pinned); a draft preview's
+    // copies of the left's figures are bitmaps drawn for one scale, and are drawn again at another
+    const at = side.laid.get(pageNumber)
+    if (side !== left && (at === undefined || (side.frames && at !== pageView(side, pageNumber).viewport.scale))) side.figs.set(pageNumber, paintFigures(side, pageNumber).catch(e => console.warn('[figures]', e)))
+    // its tables and figures, on its first drawing (floatsFor)
+    floatsFor(side, pageNumber, error)
+  })
+  // the overlays outlive a page drawn again (overlay.mjs keepOverlays): each page's div watched from the start
+  side.eventBus.on('pagesinit', () => { for (const pv of side.viewer._pages) side.keeper.observe(pv.div) })
+  // PDF.js names every page region "Page N", in English, in both panes: one name twice over (axe's landmark-unique) and not
+  // the interface's language (docs/UI.md S-R-11a). Each page is named by its side and number from the pack, and its
+  // translation id goes with the name's args: PDF.js's translator would write its own name over ours at the next change.
+  // The left is the original, whatever the display or the panes' order; a side coming in to replace the right is the translation
+  side.eventBus.on('pagesinit', () => {
+    const which = side === left ? 'original' : 'translation'
+    for (const pv of side.viewer._pages) {
+      pv.div.removeAttribute('data-l10n-id')
+      pv.div.removeAttribute('data-l10n-args')
+      pv.div.setAttribute('aria-label', R.pageName(which, pv.id))
+    }
+  })
+  // where the pane and its pages are, for the pointer: again whenever they change size
+  for (const el of [side.container, side.viewer.viewer]) { measuredSide.set(el, side); measured.observe(el) }
+  // a side opened out of the display (the original, while the translation alone is shown) waits at 1 for its width (relayout)
+  side.eventBus.on('pagesinit', () => { const value = side.scale ?? fitWidth(side); side.viewer.currentScaleValue = shown(side) || typeof value === 'number' ? value : 1 })
+  side.eventBus.on('scalechanging', ({ scale }) => { invalidate(); if (shown(side) && (side === left || !shown(left))) host.emit({ type: 'scale', scale }) })
+  side.eventBus.on('pagesinit', invalidate)
+  // each side's page, for its pill; a viewer being laid out out of sight (replaceRight's) reports once it is the right
+  const reportPage = () => { if (side === left || side === right) host.emit({ type: 'page', side: side === left ? 'left' : 'right', page: side.viewer.currentPageNumber, pages: side.viewer.pagesCount }) }
+  // the heading being read follows the reading on the side read
+  side.eventBus.on('updateviewarea', () => { if (side === left || side === right) reportHeading() })
+  side.eventBus.on('pagechanging', reportPage)
+  side.eventBus.on('pagesinit', reportPage)
+}
+for (const side of sides) attach(side)
+viewersMade = true
+/** a side at a fit keeps it as its pane's width changes: the contents opening, the window resized, a narrow window */
+const refit = new ResizeObserver(entries => {
+  for (const { target } of entries) {
+    const s = sides.find(x => x.container === target)
+    if (!s?.doc || !s.fit || !shown(s)) continue
+    invalidate()
+    s.viewer.currentScaleValue = s.fit === 'page-width' ? fitWidth(s) : s.fit
+  }
+})
+for (const s of sides) refit.observe(s.container)
+/** where the original is being read, in PDF.js's terms (its page, and the point at the top left of the view in PDF
+ *  units), as long as it is in view: the same file opens on the right at the same place */
+let readAt = null
+left.eventBus.on('updateviewarea', ({ location }) => { if (shown(left)) readAt = location })
+/** the right opened there; PDF.js's scroll marked as the reader's own (put), so that the sync does not take it for the
+ *  side read's (levelLocated levels the pair by that one) */
+function rightAtReadAt() {
+  if (!readAt) return
+  right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true })
+  placed.set(right.container, right.container.scrollTop)
+}
+/** figure text on or off */
+export function setFigures(on) { void save(c => ({ ...c, image: { ...c.image, enabled: on } })) } // figure text on or off, in the settings; followFigures shows it
+/** the sides shown scaled by a factor, within PDF.js's range */
+export function zoomBy(factor) { for (const s of sides) if (shown(s)) { s.fit = null; s.viewer.currentScale = Math.min(4, Math.max(0.25, s.viewer.currentScale * factor)) } }
+/** the sides shown at a scale or a fit (page-width, page-fit, page-actual); fitting the width keeps to a reading width */
+export function zoomTo(value) { for (const s of sides) if (shown(s)) { s.fit = typeof value === 'string' ? value : null; s.viewer.currentScaleValue = value === 'page-width' ? fitWidth(s) : String(value) } }
+/** a pinch over a side (the reader's design, §6.8): that side about the pointer, the other about its top quarter, both
+ *  by CSS until PDF.js draws them 400 ms after the last step; a fit given up */
+export function pinch(which, factor, origin) {
+  const s = which === 'left' ? left : right
+  if (!s.doc || !shown(s)) return
+  for (const side of sides) {
+    if (!side.doc || !shown(side)) continue
+    side.fit = null
+    const b = side.container.getBoundingClientRect()
+    side.viewer.updateScale({ scaleFactor: factor, origin: side === s ? origin : [b.left + b.width / 2, b.top + b.height / 4], drawingDelay: 400 })
+  }
+}
+/** a side at a page */
+export function goToPage(which, page) {
+  // the reader's input on that side, which scrolls its pane with no event on it (inputOn: its page pill's buttons and its
+  // typed page); before the pair is located, the side read (readEarly). It makes that side the driver, as a press in its
+  // pane does (lead), so that the other follows the jump and is levelled at its rest: from the side that was not the
+  // driver, the jump was taken for the follower scrolled by something else, and the other side stayed where it was
+  const s = which === 'left' ? left : right
+  inputOn = nameOf(s)
+  take(s); arm()
+  if (s.doc) s.viewer.currentPageNumber = page
+}
+/** a side's PDF as it is shown, for the download (the reader's design, §6.1): the original, or the translation on screen */
+export async function pdfBytes(which) {
+  const side = which === 'original' ? left : right
+  return side.doc ? side.doc.getData() : null
+}
+
+// ---------------------------------------------------------------- anchoring one side
+/** the units TeX sets away from where the source has them: a caption with its float, a footnote at the foot of its
+ *  page, a table's cells, a picture's text (anchors.mjs anchorUnits) */
+const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
+/** how many sides are being anchored: the highlight's layouts wait for none to be (makeLayouts) */
+let anchoring = 0
+/** every unit located on a side: `texts` is the unit's text as that PDF has it; `marks` null = read them from the PDF */
+async function anchorSide(side, texts, marks) {
+  // the units' texts and sentences known at once, before the side's text comes: the other side's sentences are found
+  // from them (findSentences), and its layout may be made before this side's is — on a copy shown or a demo the two are
+  // anchored together, and the pointer over the left asked for its layout while the right was still reading its text:
+  // the left found no sentence, and the paper was lit by paragraph for the visit (the review of B3, C1)
+  side.units = new Map(texts.map(t => [t.id, t]))
+  anchoring++
+  try { return await anchorOne(side, texts, marks) } finally { anchoring--; makeLayouts() }
+}
+/** a unit's kind, for a side's layout, which keeps it: a function of the module's, so that the layout keeps nothing of
+ *  the anchoring that made it — an arrow made there kept that scope, and with it the side's tokens, for the visit
+ *  (2608.02459: the heap 31.7 MB against 10.5 once the layouts are made, the final review of the highlight, I3) */
+const kindOfUnit = id => unitKind.get(id)
+async function anchorOne(side, texts, marks) {
+  const pages = await textPages(side.doc)
+  const doc = tokenizeDocument(pages)
+  // the side's tokens, held weakly for the gate (spikes/highlight-gate-browser.mjs): they are let go once its layout is made
+  side.tokens = new WeakRef(doc)
+  // the marks it went by, kept on the side: a cached copy keeps the right side's, which cost a second to read from its PDF
+  side.marks = marks ?? (await pdfMarks(side.doc))
+  const bounds = boundsFromMarks(doc, side.marks)
+  index(side, anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(unitKind.get(id)) }))
+  // the highlight's layout, made in the page's idle time once no side is being anchored (makeLayouts), or at once if
+  // the highlight needs it first (wantLayout): the sides are anchored and shown without waiting for it
+  const views = pages.map(p => p.view), anchors = side.anchors
+  side.geo = null
+  side.starts = null
+  side.makeGeo = () => {
+    const t0 = performance.now()
+    side.geo = layoutOf(doc, views, anchors, kindOfUnit)
+    // the pages drawn before the layout was made: their geometry now, not in the pointer's frame (the review of B3, 4)
+    for (const pv of side.viewer._pages ?? []) if (pv.renderingState === 3) pageSentences(side.geo, pv.id, side.ownStarts)
+    side.makeGeo = null
+    layoutsDue.delete(side)
+    timing[side === left ? 'leftLayout' : 'rightLayout'] = performance.now() - t0
+    // its sentences in an idle period of their own, and the left's again when this is the right; asked for first, so
+    // that a sentence lit is waited for until they come, not drawn as its paragraph (paint)
+    wantSentences(side)
+    // the floats of the pages drawn before it came
+    for (const pv of side.viewer._pages ?? []) if (pv.renderingState === 3) floatsFor(side, pv.id)
+    // what is lit on it, and what is under a pointer resting on it, now that it has its blocks
+    if (lit != null) paint(side)
+    pointer.again(side)
+  }
+  layoutsDue.add(side)
+  return bounds.size
+}
+/**
+ * Where each unit's sentences after the first begin on a side (anchors.mjs sentenceStarts): the sentences of the
+ * translation the right side shows (its units' `sentences`, mt.mjs sentencesOf), their `src` offsets on the left and
+ * `tr` on the right, found in the text the side was anchored by. Made with the side's layout, in idle time, and on the
+ * left again when a new compile replaces the right (replaceRight); a unit lights by sentence only where both sides
+ * found all its starts (makeSide's startsOf)
+ */
+function findSentences(side) {
+  const t0 = performance.now(), on = side === left ? 'src' : 'tr', starts = new Map(), from = (side === left ? right : side).units
+  for (const [id, u] of from) {
+    if (!u.sentences) continue
+    const st = sentenceStarts(side.anchors.get(id), side.units.get(id)?.text ?? '', u.sentences[on])
+    if (st) starts.set(id, st)
+  }
+  side.starts = starts
+  side.startsFor = from
+  // the sentences of the pages already drawn (the rest as each is drawn)
+  if (side.geo) for (const p of side.geo.cache.keys()) pageSentences(side.geo, p, side.ownStarts)
+  timing[side === left ? 'leftSentences' : 'rightSentences'] = performance.now() - t0
+}
+/** the sides whose sentences are to be found, in an idle period after their layout's (the review of B3, 3: the layout,
+ *  the sentences and the drawn pages' made in one task took 17.6 ms a side on 2608.02459): the left's again after the
+ *  right's, whose units it reads, where the left's layout is made */
+const sentencesDue = new Set()
+/** whether a unit of running text has sentences (the translation's) not yet found on both sides while what finds them
+ *  is on its way — a side's anchoring, its layout, its sentences' idle period: the pointer is a miss on it meanwhile, as
+ *  on an unfinished fit (the re-review of B3: a pointer resting from the load lit the paragraph, then the sentence, in
+ *  4 of 6 opens of 02459 and 06701). Where nothing is on its way, the unit is lit whole */
+const sentencesPending = id => !!right.units.get(id)?.sentences && bySentence(unitKind.get(id)) && (sentencesDue.size > 0 || ((!left.starts || !right.starts) && (anchoring > 0 || layoutsDue.size > 0)))
+/** whether a unit's sentences on both sides, or their fit, are on their way: what a sentence lit is drawn by (paint) */
+const sentencesWaited = id => fitsWanted.has(id) || sentencesPending(id)
+/** a side's sentences found in an idle period after its layout's; the left's again after the right's, whose units it
+ *  reads — the right shown, not a compile still coming in (replaceRight finds the left's at its swap), and not where the
+ *  left's were found from those units already */
+function wantSentences(side) {
+  sentencesDue.add(side)
+  if (side === right && left.geo && left.startsFor !== right.units) sentencesDue.add(left)
+  if (sentencesAsked) return
+  sentencesAsked = true
+  requestIdleCallback(() => {
+    sentencesAsked = false
+    for (const s of sentencesDue) if (s.geo) findSentences(s)
+    sentencesDue.clear()
+    if (lit != null) for (const s of sides) paint(s)
+    pointer.again()
+  })
+}
+let sentencesAsked = false
+/** a side coming in, ready for a sentence lit on it at its swap (replaceRight): its layout, then its sentences, each in
+ *  a task of its own, as the idle time would make them a moment after the swap — made before it, and only while a
+ *  sentence is lit (on 2608.02459 the right's layout 10–11 ms, its sentences 2–3 ms). Not in the swap's own task; the
+ *  yield's continuation ahead of the pages' drawing, which a timeout's waited behind (the swap 60–130 ms later) */
+async function sentenceReady(side) {
+  if (side.makeGeo) { await scheduler.yield(); side.makeGeo?.() }
+  if (side.geo && sentencesDue.has(side)) { await scheduler.yield(); if (sentencesDue.delete(side)) findSentences(side) }
+}
+/** the left anchored again by marks it did not have — our marked original's, when it is compiled (onOriginal) —: what is
+ *  lit stays drawn there until its layout and sentences are made again (paint) */
+async function anchorLeft(texts, marks) {
+  const n = await anchorSide(left, texts, marks)
+  invalidate(); paint(left)
+  return n
+}
+/** the sides' layouts still to make, one an idle period, none while a side is being anchored: an idle period comes
+ *  while the other side's text is still on its way from PDF.js's worker, and a layout made there held the worker's
+ *  answer back (2608.02459: 7.7 ms a side, cold) */
+const layoutsDue = new Set()
+let layoutsAsked = false
+function makeLayouts() {
+  if (layoutsAsked) return
+  layoutsAsked = true
+  requestIdleCallback(function next(deadline) {
+    layoutsAsked = false
+    const side = layoutsDue.values().next().value
+    if (!side || anchoring) return
+    if (deadline.timeRemaining() < 10) { layoutsAsked = true; requestIdleCallback(next); return }
+    side.makeGeo()
+    makeLayouts()
+  })
+}
+
+// ---------------------------------------------------------------- replacing the right side (#292)
+/** where the reader is on a side: the line at the reading line (in the column of the pointer, else the first) and how
+ *  far into it, as a place any other layout of the same paragraphs can find again */
+function placeOf(side) {
+  const c = side.container, y = c.scrollTop + c.clientHeight * readingLine
+  let page = 1
+  for (let p = 1; p <= side.doc.numPages; p++) if (pageTop(side, p) <= y) page = p
+  const pv = pageView(side, page), pr = pv.div.getBoundingClientRect()
+  const cx = pointerX?.side === side ? pointerX.x : pr.left + pr.width * 0.25
+  const [x] = pv.viewport.convertToPdfPoint(cx - pr.left - pv.div.clientLeft, 0)
+  const l = lineAt(side, y, x)
+  return l ? { id: l.id, at: (l.li + Math.min(1, Math.max(0, (y - l.top) / Math.max(1, l.bottom - l.top)))) / l.n } : null
+}
+/** the scroll position on a side that puts a place (placeOf) at its reading line */
+function scrollFor(side, place) {
+  const b = place && side.anchors.get(place.id)
+  if (!b) return null
+  const pos = place.at * b.rects.length, lj = Math.min(b.rects.length - 1, Math.floor(pos)), r = b.rects[lj], box = toPageBox(side, r)
+  return pageTop(side, r.page) + box.top + (pos - lj) * box.height - side.container.clientHeight * readingLine
+}
+/** a newer compile on the right: loaded into a second viewer out of sight, anchored, scrolled so that the paragraph at
+ *  the reading line stays put, its visible pages drawn with their figures, then shown in place of the old one. `draft`:
+ *  a preview whose images are frames (live.mjs DRAFT), the left's figures drawn over them (paintFigures) */
+let rightTexts = null // the units' texts on the right as it was last anchored, for the test harness
+/** the paper's headings, as the source (or a stored copy, or a demo's levels) has them: { id, src, depth, title } */
+let headings = []
+/** the contents, each heading by its text on the translation's side and its page there; the original's while it alone is laid */
+function reportOutline() {
+  const texts = new Map((rightTexts ?? []).map(t => [t.id, t.text]))
+  const side = right.anchors?.size ? right : left
+  host.emit({ type: 'outline', entries: outlineOf(headings, id => texts.get(id), id => side.anchors?.get(id)?.rects?.[0]?.page ?? null) })
+  readingHeading = undefined
+  reportHeading()
+}
+/** Retry (the reader's design, §8): the translation again, in place, from the step that failed, only the missing
+ *  paragraphs reaching the service; a page whose paper never opened, or whose session crashed, has nothing on screen
+ *  to keep, and is loaded again */
+export function retry() { if (runAgain) runAgain(); else location.reload() }
+/** a window too narrow for two sides (§5): side by side shows the translation alone, the sync idle while it does */
+export function setNarrow(on) {
+  if (narrow === on) return
+  const place = on ? null : readingPlace(right)
+  bake()
+  narrow = on
+  document.documentElement.toggleAttribute('data-axt-narrow', on)
+  if (mode === 'bilingual') relayout(on ? 'bilingual' : 'translation', place)
+}
+/** a side made the leading one, as a press in its pane makes it: a press on its scroll indicator (the reader's design, §6.5) */
+export function lead(which) { const s = which === 'left' ? left : right; inputOn = nameOf(s); take(s); arm() }
+/** the heading being read: the last one whose top is above the reading line on the side read (the translation's when
+ *  it is shown), told when it changes — as the reading moves (PDF.js's updateviewarea), and as the contents change */
+let readingHeading
+function reportHeading() {
+  const side = shown(right) && right.anchors?.size ? right : left
+  if (!side.anchors?.size) return
+  const y = side.container.scrollTop + side.container.clientHeight * readingLine
+  let id = null
+  for (const h of contentsOf(headings)) {
+    const top = unitDocTop(side, h.id)
+    if (top != null && top <= y + 1) id = h.id
+  }
+  if (id === readingHeading) return
+  readingHeading = id
+  host.emit({ type: 'heading', id })
+}
+/**
+ * A heading, from the contents (the reader's design, §6.3): the side read (the translation's when shown) takes it to its
+ * top, a line of room above it, as a scroll of its own that the sync follows — the other side need not have located the
+ * heading, arXiv's numbered one often has not; with no sync, the other side is put there too, where it has it
+ */
+export function goToUnit(id) {
+  const lead = shown(right) && right.anchors?.size ? right : left
+  invalidate()
+  const top = unitDocTop(lead, id)
+  if (top == null) return
+  // the reader's input on the side read, with no event on its pane (inputOn), as goToPage's
+  inputOn = nameOf(lead)
+  take(lead)
+  lead.container.scrollTop = top - 28
+  const second = other(lead)
+  if (!(bothShown() && together()) && second.doc && shown(second)) {
+    const there = unitDocTop(second, id)
+    if (there != null) put(second.container, there - 28)
+  }
+  reportHeading()
+}
+async function replaceRight(url, texts, { draft = false, hold = 0 } = {}) {
+  const t0 = performance.now()
+  bake()
+  rightTexts = texts
+  const place = placeOf(right)
+  const offset = place && scrollFor(right, place) - right.container.scrollTop // 0 unless the reader is between lines
+  const container = document.createElement('div')
+  container.className = 'viewerContainer axt-incoming'
+  container.append(Object.assign(document.createElement('div'), { className: 'pdfViewer' }))
+  right.container.after(container)
+  const next = makeSide(container)
+  next.scale = right.viewer.currentScale
+  attach(next)
+  const inited = new Promise(r => next.eventBus.on('pagesinit', r, { once: true }))
+  const opened = open(next, url)
+  if (draft) next.frames = opened.then(pdfFrames).catch(() => new Map())
+  next.anchored = opened.then(() => inited).then(() => anchorSide(next, texts))
+  await next.anchored
+  // the test harness's: the swap held back a while, as one waiting for its figures is, the idle periods coming meanwhile
+  if (hold) await new Promise(r => setTimeout(r, hold))
+  const top = scrollFor(next, place)
+  if (top != null) next.container.scrollTop = top - (offset ?? 0)
+  else next.container.scrollTop = right.container.scrollTop
+  // wait for the pages in view to be drawn, then for their figures, a while at most: a figure whose text is still being
+  // read comes in after the swap rather than hold the whole page back
+  await new Promise(resolve => {
+    const want = () => next.viewer._getVisiblePages().views.map(v => v.view).filter(v => v.renderingState !== 3)
+    const check = () => (want().length ? setTimeout(check, 30) : resolve())
+    next.viewer.update(); check()
+  })
+  await Promise.race([Promise.all(next.viewer._getVisiblePages().views.map(v => next.figs.get(v.id))), new Promise(r => setTimeout(r, 1500))])
+  // a sentence lit: the new side's layout and sentences made before the swap, where the idle time has not made them yet
+  // (a new compile drawn at once), so that the sentence is drawn there at the swap itself (sentenceReady)
+  if (lit != null && lit.s >= 0) await sentenceReady(next)
+  if (!draft) copies.clear()
+  paints.clear()
+  bake()
+  const old = right
+  right = next; sides[1] = next
+  next.fit = old.fit; refit.unobserve(old.container); refit.observe(next.container)
+  if (driver === old) driver = next
+  // a pointer resting on the old pane is on the new one, for the highlight and for the sync's column: else it was
+  // looked for on a pane gone, and lit nothing until it moved (the final review of the highlight, I1)
+  pointer.rebind(old, next)
+  if (pointerX?.side === old) pointerX = { ...pointerX, side: next }
+  container.classList.remove('axt-incoming')
+  old.keeper.disconnect()
+  measured.unobserve(old.container); measured.unobserve(old.viewer.viewer)
+  layoutsDue.delete(old)
+  old.container.remove()
+  // the old viewer lets go of its pages (the reader's design, §10.4): its document set to none cancels every page view
+  // and their text layers, which PDF.js otherwise keeps in the one map all its text layers share — a viewer per compile
+  old.viewer.setDocument(null)
+  old.linkService.setDocument(null)
+  old.task.destroy() // the document and its worker-side state; PDF.js 6 destroys through the loading task
+  // the left's sentences are the new translation's: found again where its layout is made (else with it); and what is
+  // under the pointer looked at again — a sentence lit may be one the new translation has not (the review of B3, 8)
+  if (left.geo) findSentences(left)
+  // the sentence lit, worked out on both sides for the new translation now — the fit of its unit alone, its pages'
+  // geometry made where the new side has not drawn them (under 1 ms): a pointer resting on it sees it at the swap
+  // itself, where the new side was blank until a task of its own worked it out (25–217 ms, the re-review of the final
+  // review). The side's layout and sentences are not made in this task (13–20 ms more): sentenceReady made them before
+  if (lit != null && lit.s >= 0) for (const s of sides) { const st = s.geo && s.starts?.get(lit.id); if (st) fits(s, lit.id, st, true) }
+  invalidate(); paint(left); paint(right)
+  pointer.again()
+  // the right is a new viewer: its page and page count, not the old one's
+  host.emit({ type: 'page', side: 'right', page: right.viewer.currentPageNumber, pages: right.viewer.pagesCount })
+  reportOutline()
+  const drift = place ? Math.round(scrollFor(right, place) - right.container.scrollTop - (offset ?? 0)) : null
+  return { ms: Math.round(performance.now() - t0), drift }
+}
+
+// ---------------------------------------------------------------- live (#292)
+/** the failures that say the paper cannot be had as a bilingual PDF (controller.ts CANNOT_BE_HAD) */
+const CANNOT_BE_HAD = new Set(['no source', 'cannot typeset'])
+/**
+ * The paper's HTML version, translating, or null where arXiv says it has none (404, 410); a HEAD, as the PDF page's
+ * own (pdf.content.ts). Anything else, or no answer within 3 s, says nothing about the paper, and the link is offered:
+ * at worst it leads to arXiv's own answer
+ */
+const htmlVersion = () => Promise.race([
+  fetch(htmlUrlOf(paper), { method: 'HEAD', credentials: 'omit' }).then(r => (r.status === 404 || r.status === 410 ? null : translatedHtmlUrlOf(paper)), () => translatedHtmlUrlOf(paper)),
+  new Promise(resolve => setTimeout(resolve, 3000, translatedHtmlUrlOf(paper))),
+])
+/** a message of `type` from `frame`'s page at `origin`: two TeX frames may be loading at once (the marked original has its own) */
+const waitFor = (origin, type, frame) => new Promise(r => addEventListener('message', function h(e) { if (e.origin === origin && e.source === frame.contentWindow && e.data?.type === type) { removeEventListener('message', h); r(e.data) } }))
+/** a compile's unit marks and each page's columns, as the typesetting rule reads them (typeset/places.mjs marksOf): from
+ *  a copy of the bytes, which the reader shows or anchors by too, and PDF.js would take */
+async function typesetMarksOfPdf(bytes) {
+  const task = pdfjsLib.getDocument({ data: bytes.slice(), ...ASSETS })
+  try { return await typesetMarksOf(await task.promise) } finally { task.destroy() }
+}
+/** our compile of the original, with unit marks → each mark with the word it stands by, to carry over to arXiv's PDF */
+async function marksOfPdf(bytes) {
+  const task = pdfjsLib.getDocument({ data: bytes, ...ASSETS })
+  const doc = await task.promise
+  try { return markWords(tokenizeDocument(await textPages(doc)), await pdfMarks(doc)) } finally { task.destroy() }
+}
+/** the test harness's hooks (spikes/*): the sides, the anchoring's and the sync's helpers, the cache's; getters stay live */
+const harness = () => ({ left, get right() { return right },
+  // what is lit and what the pointer's last frame found: the unit, and its sentence (-1: the whole unit)
+  get lit() { return lit?.id ?? null }, get litSentence() { return lit?.s ?? null }, get pointerHit() { return pointer.hit?.id ?? null }, get pointerSentence() { return pointer.hit?.s ?? null },
+  /** a unit, or one of its sentences, lit as the pointer would light it */
+  light: (id, s = -1) => light(id == null ? null : { id, s }),
+  /** a unit's sentences' starts on the left where it lights by sentence, its fit worked out now on both sides if it was
+   *  not yet (as wantFit's task would), else null */
+  sentenced: id => { for (const s of sides) { const st = s.starts?.get(id); if (st) fits(s, id, st, true) } return left.startsOf(id) },
+  /** what is painted, as rectangles in the window's CSS pixels, by side: a shape's rows, a block's one */
+  litRects: () => sides.map(sd => sd.lit.flatMap(el => {
+    const b = el.getBoundingClientRect(), d = drawn.get(el)
+    // scaled with its page while a zoom or a pinch is drawn (overlay.mjs pinned)
+    const k = d ? b.width / d.width : 1
+    return (d?.local ?? []).map(r => ({ x0: b.left + r.x0 * k, x1: b.left + r.x1 * k, y0: b.top + r.y0 * k, y1: b.top + r.y1 * k }))
+  })),
+  pointAt, unitTop, unitDocTop, toPageBox, pageView, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, get lastLocated() { return lastLocated }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()),
+  // the right side replaced by a copy of what it shows, as a new compile replaces it (replaceRight)
+  paintsOf: n => paints.get(n) ?? 0,
+  // a side's floats on a page, once made (floats.mjs)
+  floatsOn: (side, n) => floatsOn(side.geo, n) ?? null,
+  paperContext: () => paperCtx,
+  swapRight: async (hold = 0) => {
+    const url = URL.createObjectURL(new Blob([await right.doc.getData()], { type: 'application/pdf' }))
+    try { return await replaceRight(url, rightTexts ?? [], { hold }) } finally { URL.revokeObjectURL(url) }
+  },
+  // the left anchored again by the marks it has, as our marked original's marks anchor it when they come (onOriginal)
+  reanchorLeft: () => anchorLeft([...left.units.values()], left.marks),
+})
+/**
+ * A copy from this machine shown (REPORT, eighteenth addendum): the paper's state from the record rather than the
+ * source — the figures' context, the prose names are told by, the units' kinds, the figures' entries — then the
+ * translation opened and both sides anchored, as the demo does
+ */
+async function showCached(record, setContext, note = () => {}) {
+  prose = record.units.map(u => u.src).join('\n')
+  unitKind = new Map(record.units.map((u, i) => [i, u.kind]))
+  setContext(record.context)
+  figureEntries = new Map(record.figures.map(f => [f.key, f]))
+  const url = URL.createObjectURL(new Blob([record.pdf], { type: 'application/pdf' }))
+  try {
+    const laid = new Promise(resolve => right.eventBus.on('pagesinit', resolve, { once: true }))
+    await open(right, url)
+    note('cached opened')
+    await laid
+    // shown: its pages laid out and drawing; the anchors, which the highlight and the sync need, follow
+    note('shown cached')
+    rightAtReadAt()
+    headings = record.units.map((u, i) => ({ id: i, src: u.src, depth: u.depth, title: u.title, kind: u.kind })).filter(h => h.kind === 'heading')
+    // the translation's texts made again from the pieces the copy keeps, the source's where the final set it in the
+    // source (cache.mjs copyTexts)
+    rightTexts = copyTexts(record.units)
+    await Promise.all([
+      anchorSide(left, record.units.map((u, i) => ({ id: i, text: u.src, ...displayEdges(u) })), new Map(record.marks)).then(() => note('cached left anchored')),
+      anchorSide(right, rightTexts, record.rightMarks?.length ? new Map(record.rightMarks) : undefined).then(() => note('cached right anchored')),
+    ])
+  } finally { URL.revokeObjectURL(url) }
+  levelLocated(); paint(left); paint(right)
+  reportOutline()
+}
+async function live() {
+  // the TeX page, its file server and the paper's two files: the reader's own, or a server on this machine (addresses.mjs)
+  const { site, endpoint, src: srcUrl, pdf: pdfUrl } = readerAddresses(params, paper)
+  const L = (window.__reader.live = { events: [], t0: performance.now() })
+  let got = 0, total = 0, engine = null, setContext = null, lost = 0, lostWhy = null
+  // this machine's copy on screen, being translated again with the current settings (REPORT, eighteenth addendum)
+  let again = false
+  let compiledOnce = false
+  paperCtx = new Promise(resolve => { setContext = resolve })
+  const note = (event, data = {}) => {
+    if (event === 'translated') { got = data.total; if (data.how?.lost) { lost += data.how.lost; lostWhy = data.how.error } }
+    if (event === 'stopped') serviceDown = true
+    host.emit({ type: 'note', event, data, got, total, lost, again })
+    L.events.push({ t: Math.round(performance.now() - L.t0), event, ...data })
+    if ((event === 'preview' || event === 'final') && data.ok) compiledOnce = true
+    const said = { preview: data.ok ? 'preview compiled' : `compile failed (${data.strategy}): ${data.error ?? ''}`, final: data.ok ? 'final compiled' : `final compile failed (${data.strategy}): ${data.error ?? ''}`, 'next strategy': `trying ${data.strategy}`, done: compiledOnce ? 'done' : cached ? 'done — this machine\'s copy is shown' : 'done — the translation did not compile; the right side still shows the original' }[event] ?? event
+    const by = engine ? ` into ${engine.lang} by ${engine.engine}` : ''
+    // paragraphs the service failed on (a network down, a rate limit) stay in English, and the reader is told
+    const missed = lost ? ` (${lost} not: ${lostWhy})` : ''
+    status(`${again ? 'translating again · ' : ''}${total ? `${got} of ${total} translated${by}${missed}` : 'opening…'} · ${said}${data.ms != null && data.ok !== false ? ` (${(data.ms / 1000).toFixed(1)} s)` : ''}`)
+  }
+  const fail = async (event, text, kind) => {
+    // a failure a retry can mend, and why: the retry, the network's return and a change of the services go by it
+    stopped = ['fetch failed', 'no engine', 'no compiler', 'failed'].includes(event) ? { event, kind: kind ?? 'unknown' } : null
+    // a paper that cannot be had — no source, or none of the ways of setting it worked —: its HTML version is where it
+    // can be read translated, told with the failure so that the capsule comes whole (the maintainer, 2026-09-26)
+    if (CANNOT_BE_HAD.has(event)) host.emit({ type: 'html', url: await htmlVersion() })
+    host.emit({ type: 'fail', event, text, kind })
+    setContext({}); note(event); status(text); L.done = true; L.failed = text
+    // a failure stays in its display: with nothing translated, the card fills the translation's pane (the reader's design,
+    // §8). A language the reader cannot typeset, or a paper that cannot be had, shows the original, for this visit
+    if (event === 'not verified' || CANNOT_BE_HAD.has(event)) { held = true; changeDisplay('original', false) }
+  }
+  // the engine and the language are the extension's settings; asked first, so that a reader with no service set up is
+  // told at once
+  // the original first, in every display; nothing is translated or compiled until a display that shows a translation is chosen
+  status(`Fetching ${paper} from arXiv…`)
+  try { await open(left, pdfUrl) } catch (e) { return fail('fetch failed', `Could not fetch ${paper}'s PDF from arXiv (${e.message ?? e})`, 'network') }
+  note('opened')
+  void reportPaper(left.doc)
+  // the left side's first page drawn (any page: a reading place restored may open elsewhere), two seconds at most
+  const drawnP = Promise.race([new Promise(resolve => left.eventBus.on('pagerendered', resolve, { once: true })), new Promise(resolve => setTimeout(resolve, 2000))])
+  if (mode === 'original') status(`${paper}, the original. Choose Translation or Side by side to translate it`)
+  await translationWanted
+  translating = true
+  // this machine's copy first: it needs no service (REPORT, eighteenth addendum, "Opening a paper"). Its key is arXiv's
+  // whole PDF's digest, read once a translation is wanted and the left side's first page is drawn: getData copies the
+  // whole file (46 MB at most) out of the worker, and the digest reads all of it (final review)
+  await drawnP
+  const digestAt = performance.now()
+  const digest = await left.doc.getData().then(digestOf).then(d => { note('digest', { startedAt: Math.round(digestAt - timing.start), ms: Math.round(performance.now() - digestAt) }); return d }).catch(() => null)
+  const lang0 = config?.targetLanguage ? toBcp47(config.targetLanguage) : null
+  cacheKey = digest && lang0 ? { digest, lang: lang0 } : null
+  // the paper's marked original as a run here read it, whatever the language: with it, no run compiles the original
+  // (cache.mjs knownOriginal; the F2 review's I3)
+  const storedOriginal = digest ? pdfCache.original(digest) : Promise.resolve(undefined)
+  cached = cacheKey ? await pdfCache.get(digest, lang0) : undefined
+  if (cached) {
+    note('cache hit', { engine: cached.engine, pipeline: cached.pipeline, typesetting: cached.typesetting })
+    // opened, whatever follows: the least recently opened go first (a run that writes nothing would not say so)
+    void pdfCache.touch(digest, lang0)
+    // the passages the copy's typesetting left in the original, said with the copy on screen (S-P-60; the re-review's
+    // N-5): whatever follows — current, the service out of reach and the copy not checked, or a run translating again,
+    // whose own count replaces it
+    lost = passagesInSource(cached.units)
+    try { await showCached(cached, setContext, note) } catch (e) {
+      // a copy that cannot be shown is no copy: deleted, and the visit goes on as a miss (final review)
+      lost = 0
+      note('cache unusable', { error: String(e?.message ?? e).slice(0, 200) })
+      void pdfCache.delete(digest, lang0)
+      cached = undefined
+      figureEntries = new Map()
+    }
+  }
+  if (cached) {
+    total = cached.units.filter(u => u.state !== 'kept').length; got = total
+    window.__reader.debug = Object.assign(harness(), { units: cached.units.map((u, i) => ({ i, kind: u.kind, text: u.src })) })
+    window.__reader.ready = true
+  }
+  // What the visit has had, kept from run to run (the reader's design, §8: a retry asks only for what is missing): the
+  // paper's source once read, the compiler once it answers, what the last run made — the next one's seed —, the left
+  // side's marks and the marked original's readings, whether a final has been shown, and whether the last runs made a
+  // translation no PDF on hand sets (`unset`: cache.mjs unsetAfter)
+  let paperP = null, compiler = null, made = null, leftMarks = null, readings = null, finalShown = false, unset = false
+  /** the paper's source, read and anchored: once, kept for a run again; a failure is thrown with the event it is */
+  const readPaper = async () => {
+    // the original on the right too, replaced as the translation comes in; opened where the original was being read, as
+    // a side coming into view does (relayout, which has no document there yet to go by: Codex on #297)
+    status(`Fetching ${paper}'s source from arXiv…`)
+    const rightLaid = new Promise(resolve => right.eventBus.on('pagesinit', resolve, { once: true }))
+    let srcBytes
+    try {
+      ;[srcBytes] = await Promise.all([
+        fetch(srcUrl).then(r => { if (!r.ok) throw new Error(`the source: HTTP ${r.status}`); return r.arrayBuffer() }).then(b => new Uint8Array(b)),
+        // the original on the right until a translation comes, unless this machine's copy (or a run before) put it there
+        cached || right.doc ? Promise.resolve() : open(right, pdfUrl).then(() => rightLaid).then(rightAtReadAt),
+      ])
+    } catch (e) { throw Object.assign(new Error(`Could not fetch ${paper} from arXiv (${e.message ?? e})`), { event: 'fetch failed', kind: 'network' }) }
+    note('source fetched')
+    const { files, pdf: noSource } = await unpackSource(srcBytes)
+    if (noSource) throw Object.assign(new Error(`arXiv has no LaTeX source for ${paper} (a PDF-only submission): nothing to translate this way`), { event: 'no source' })
+    const paperData = openPaper(files), units = paperData.units
+    headings = units.map((u, i) => ({ id: i, src: plainSource(u), depth: u.depth, title: u.title, kind: u.kind })).filter(h => h.kind === 'heading')
+    total = units.length - paperData.kept.size
+    const src = units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
+    const context = paperContext(units)
+    setContext(context)
+    // a failure before this read resolved the figures' context with nothing; a run again has it now (Part 4's final
+    // review: the figures' text went out, and was kept, without the paper's title and abstract)
+    paperCtx = Promise.resolve(context)
+    note('source', { units: units.length, files: files.size })
+    // a copy on screen: the old translation is the run's base, matched by source; its units' indices are this run's
+    // only with the same pipeline, so until the first preview the copy keeps its own anchors and state
+    const sameUnits = cached?.pipeline === PIPELINE_VERSION
+    const { seed, hashes } = cached ? await seedFrom(cached, units) : { seed: null, hashes: await Promise.all(units.map(sourceHash)) }
+    const p = { files, paperData, units, src, context, sameUnits, seed, hashes, leftCurrent: !cached || sameUnits, adoptUnits: () => { prose = src.map(x => x.text).join('\n'); unitKind = new Map(units.map((u, i) => [i, u.kind])) } }
+    if (p.leftCurrent) p.adoptUnits()
+    if (!cached) {
+      await Promise.all([anchorSide(left, src, new Map()), anchorSide(right, src, new Map())])
+      levelLocated()
+    }
+    note('anchored')
+    rightTexts ??= src
+    reportOutline()
+    window.__reader.debug = Object.assign(harness(), { units: units.map((u, i) => ({ i, kind: u.kind, text: src[i].text })) })
+    window.__reader.ready = true
+    return p
+  }
+  /** our site's TeX page in a frame, loaded and ready, with its versions (protocol 2's `ready`: the page's, the engine's,
+   *  the tree's and its index's; '1' for a page of protocol 1): kept until a compiler takes it, so that the versions a
+   *  "cannot typeset" mark is judged by cost no second load */
+  let frameP = null
+  /**
+   * The TeX page in use while this reader typesets into `lang` (tex-store.mjs): the lock shared, so that no warm-up
+   * starts meanwhile, and one running asked through the background to give way — stopped (it keeps what came) when it
+   * is for another language, or its pace says it would outlast the reader's patience (on a slow link the page would
+   * wait minutes for files it may not need), else waited for, since a stop loses the files in flight; and the files a
+   * page of ours asks for — those its own cache lacks: over arXiv's PDF page it has a cache of its own, which the
+   * warm-up could not fill — handed from the extension's store
+   */
+  let pageInUse = null
+  /** the page's versions last told to the background (warmup.ts seen) */
+  let versionTold = null
+  const usePage = lang => {
+    if (pageInUse) return
+    pageInUse = shareLock(undefined, () => void sendMessage({ type: 'axt:tex-give-way', lang }).catch(() => {}))
+    addEventListener('message', e => {
+      if (e.origin !== site || e.data?.type !== 'want' || ![...document.querySelectorAll('iframe')].some(f => f.contentWindow === e.source)) return
+      const page = e.source, id = e.data.id
+      void pageInUse.then(() => answerWant(site, e.data)).then(({ message, transfer }) => page.postMessage(message, site, transfer), () => page.postMessage({ type: 'have', id, files: {} }, site))
+    })
+  }
+  const texFrame = lang => (frameP ??= (async () => {
+    usePage(lang)
+    const frame = Object.assign(document.createElement('iframe'), { src: `${site}/tex.html`, hidden: true })
+    const ready = waitFor(site, 'ready', frame)
+    document.body.append(frame)
+    const said = await Promise.race([ready, new Promise(r => setTimeout(r, 10000, null))])
+    if (!said) {
+      frame.remove()
+      // our site's in a production build; one on this machine (http) is started by hand (addresses.mjs TEX_PAGE)
+      throw Object.assign(new Error(`The TeX page at ${site} did not answer${site.startsWith('http:') ? ': start it with node spikes/serve-live.mjs' : ''}`), { event: 'no compiler' })
+    }
+    const version = said.protocol === 2 ? [said.cv, said.eid, said.tid, said.index].join('/') : '1'
+    // told to the background once a visit: a page deployed since the last warm-up is warmed again at the next start
+    if (version !== versionTold) {
+      versionTold = version
+      void sendMessage({ type: 'axt:tex-seen', versions: version }).catch(() => {})
+    }
+    return { frame, version }
+  })().catch(e => { frameP = null; throw e }))
+  /** the TeX page's versions the compiles were made under: what a "cannot typeset" mark holds for (the S3a review, I5 d) */
+  let compiledUnder = null
+  /**
+   * The TeX page as a compiler, given the paper's project and the visit's language: { compile, close }, closing the page
+   * with its worker (live.mjs compilerKeeper opens one when needed, and a fresh one after a compile the page failed).
+   * Protocol 2's hints (the S3a report; hints.mjs): the engines the visit will use — the paper's own (the font
+   * probe, the marked original) and its first strategy's — and the CJK script whose faces that strategy sets, which the
+   * page fetches ahead, from the extension's store first (`store`: the warm-up's files, tex-store.mjs); a page of
+   * protocol 1 reads the `endpoint` instead, and nothing else. An init the page reports failed is no
+   * compiler: the frame goes, and the failure is retried as a network down is (the S3a report's duties, a). `own`: the
+   * marked original's compiler, which sets the paper as it is, in its own engine alone
+   */
+  const openCompiler = async (p, lang, own = false) => {
+    // the frame taken at once: another compiler opening meanwhile loads one of its own
+    const mine = texFrame(lang)
+    frameP = null
+    const { frame, version } = await mine
+    const initDone = waitFor(site, 'init-done', frame)
+    frame.contentWindow.postMessage({ type: 'init', protocol: 2, ...texHints(p.paperData.meta, lang, own), store: true, endpoint }, site)
+    const done = await initDone
+    if (done.error) {
+      frame.remove()
+      throw Object.assign(new Error(`The TeX page could not start: ${String(done.error).slice(0, 200)}`), { event: 'no compiler', kind: 'network' })
+    }
+    compiledUnder = version
+    note('compiler', { ms: done.ms, version, ...(own ? { own } : {}) })
+    frame.contentWindow.postMessage({ type: 'project', key: paper, files: [...p.files].map(([path, content]) => ({ path, content })) }, site)
+    let seq = 0
+    const compile = req => new Promise(resolve => {
+      const id = ++seq
+      addEventListener('message', function h(e) {
+        // this page's own answer: a fresh compiler numbers its compiles from 1 again
+        if (e.source !== frame.contentWindow || e.origin !== site || e.data?.type !== 'compiled' || e.data.id !== id) return
+        removeEventListener('message', h)
+        resolve({ ...e.data, pdf: e.data.pdf ? new Uint8Array(e.data.pdf) : null })
+      })
+      frame.contentWindow.postMessage({ type: 'compile', id, key: paper, main: req.main, engine: req.engine, rerun: req.rerun, bibtex: req.bibtex, overrides: [...req.overrides].map(([path, content]) => ({ path, content })) }, site)
+    })
+    return { compile, close: () => frame.remove() }
+  }
+  /**
+   * The translation, from asking the extension's service to writing this machine's copy: once a translation is wanted,
+   * and again in place (`retrying`) by a retry, the network's return or a change of the services after it stopped short
+   */
+  async function translation(retrying) {
+    L.done = false
+    status('Asking the extension which service translates…')
+    try { engine = await theEngine() } catch (e) {
+      if (cached && !retrying) { status(`${paper}, this machine's copy (${cached.engine}, ${new Date(cached.createdAt).toLocaleDateString()}) · not checked against the settings: ${e.message ?? e}`); L.done = true; return }
+      return fail('no engine', `Cannot translate: ${e.message ?? e}`, e?.kind ?? 'unknown')
+    }
+    const lang = engine.lang
+    note('engine', { lang, format: engine.format, engine: engine.engine })
+    if (!retrying && cached && isCurrent(cached, { identity: engine.identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION })) {
+      status(`${paper}, this machine's copy · translated into ${lang} by ${cached.engine}`)
+      // the passages the copy's typesetting left in the original are said on this visit too, as on the one that made it
+      // (S-P-60; the review of 2026-10-04, I-6): a copy that sets them so is current, and nothing is compiled again
+      lost = passagesInSource(cached.units)
+      note('cache current')
+      L.done = true
+      return
+    }
+    // a paper none of this pipeline's ways could set, on this machine before: said again, the service and the TeX page
+    // asked for nothing; a new pipeline tries once more (the maintainer, 2026-09-26). Only once the extension has said
+    // which service would translate, and only for the same one: the failure was its translation's, which another
+    // service, model or prompt may not repeat (Codex on #306)
+    // and only for the TeX page's versions it was made under: a page fixed since (its fonts, its tree, its index) may set
+    // it (the S3a review, I5 d) — read from the page loaded for the compiles to come
+    const mark = !cached && cacheKey ? await pdfCache.untypeset(cacheKey.digest, cacheKey.lang) : undefined
+    const page = mark ? await texFrame(lang).then(f => f.version, () => null) : null
+    if (mark && page && stillUntypeset(mark, { identity: engine.identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page })) {
+      // the frame loaded to read the page's versions goes: nothing will compile in it (the F2 review's M4)
+      const loaded = frameP
+      frameP = null
+      void loaded?.then(f => f.frame.remove(), () => {})
+      return fail('cannot typeset', `${paper} could not be typeset into ${lang} by ${engine.engine} on this machine before: the right side shows the original`)
+    }
+    // single language first: a language whose typesetting the gate has not verified is not set (scripts.mjs VERIFIED)
+    if (!verified(lang)) return fail('not verified', `Typesetting ${lang} is not verified yet (issue #295): the reader sets ${VERIFIED.join(', ')} for now; choose one in the extension's settings`)
+    // the decision to translate, the step the controller's phase moves at: a copy on screen is translated again, and
+    // its progress counted from nothing (final review); a run again goes on from what the last one left translated
+    again = !!cached && !retrying
+    if (again) got = 0
+    if (retrying) got = [...(made?.values() ?? [])].filter(r => r.pieces).length
+    lost = 0
+    note('translating')
+    let p, compile
+    try { p = await (paperP ??= readPaper().catch(e => { paperP = null; throw e })) } catch (e) { return fail(e.event ?? 'fetch failed', e.message ?? String(e), e.kind) }
+    compiler ??= compilerKeeper(() => openCompiler(p, lang))
+    try { await compiler.ready() } catch (e) { return fail(e.event ?? 'no compiler', e.message ?? String(e), e.kind) }
+    compile = compiler.compile
+    // the marked original in a TeX frame of its own, beside the translation's compiles from the run's start, and closed
+    // once it is in: its full compile is off the final's path (the F2 review's I2, V1'; the browser holds a second
+    // engine meanwhile, 150–450 MB measured)
+    const originalCompiler = compilerKeeper(() => openCompiler(p, lang, true))
+    const compileOriginal = async req => { try { return await originalCompiler.compile(req) } finally { originalCompiler.close() } }
+    const { paperData, units, src, context, hashes } = p
+    // the author block's names are kept for some languages (live.mjs keptFor): counted by the language now known
+    total = units.length - keptFor(paperData, lang).size
+    // a run again: what the visit's last run made seeds it, over the copy's (cache.mjs seedAgain: with their sentences);
+    // a seed whole, by the identity that answers now and of the wire sent now is taken as it is, never sent again — the
+    // copy's when it was made by this pipeline in this wire format, or unit by unit by one that carries over into it
+    // (cache.mjs copyReuse, reusable) — and the rest are asked again
+    const seed = reusable(seedAgain(p.seed, made), { identity: engine.identity, ...copyReuse(cached, { pipeline: PIPELINE_VERSION, format: engine.format, context, carries: PIPELINE_CARRIES }), made })
+    // one replacement at a time, in the order the compiles came in; the final's bytes once compiled, and whether this
+    // run's own final reached the screen (`shownNow`): a final an earlier run showed sets an earlier translation
+    let swaps = Promise.resolve(), finalPdf = null, shownNow = false
+    // the marked original's readings with the left side's marks: this visit's last run's, else the paper's as a run here
+    // stored them, made by this pipeline, typesetting and TeX page — then the run compiles no original (the F2 review's
+    // I3). The left side anchored by those marks, where nothing has anchored it by marks yet
+    const known = (readings && leftMarks?.length ? { readings, left: leftMarks } : null) ?? knownOriginal(await storedOriginal, { pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page: compiledUnder })
+    let marks = leftMarks ? new Map(leftMarks) : knownMarks(cached, p.sameUnits)
+    if (!marks && known) {
+      leftMarks = known.left
+      marks = new Map(leftMarks)
+      if (p.leftCurrent) swaps = swaps.then(async () => note('left marks', { marks: await anchorLeft(src, new Map(known.left)), kept: true })).catch(e => note('left marks failed', { error: String(e).slice(0, 200) }))
+    }
+    const result = await runLive(paperData, {
+      lang, compile, compileOriginal, note,
+      // the copy's compile current: its pipeline and its typesetting this reader's, or this visit's final on screen —
+      // and no translation the visit's last runs made that none of them sets (cache.mjs pipelineCurrentFor; C1 of #309's
+      // fix round: a run again after a final the TeX page was down for wrote it over the copy's PDF)
+      seed: seed.size ? seed : null, identity: engine.identity, pipelineCurrent: pipelineCurrentFor({ copy: p.sameUnits && cached?.typesetting === TYPESETTING_VERSION, finalShown, unset }),
+      // the typesetting rule: the translation set as near its original's places as the rule can (live.mjs)
+      readMarks: typesetMarksOfPdf,
+      marks, original: known?.readings ?? null,
+      format: engine.format,
+      // with the tags path's sentence cuts (mt.mjs cutsOf), which the service marks (B3b)
+      translate: (texts, cuts) => engine.translate(texts, context, cuts),
+      // nearest the reading line on the page first, what lies ahead before what lies behind; on the side in view, since
+      // the other one, out of the display, does not move with the reader (Codex on #297)
+      rank: i => {
+        const side = shown(left) ? left : right, top = unitDocTop(side, i), c = side.container
+        if (top == null) return 1e9 + i
+        const d = top - (c.scrollTop + c.clientHeight * readingLine)
+        return d >= -c.clientHeight * 0.3 ? Math.abs(d) : 2 * Math.abs(d)
+      },
+      onUpdate: ({ pdf, texts, translated, final }) => { if (final) finalPdf = pdf; (window.__reader.shownTexts ??= []).push({ final, texts }); swaps = swaps.then(async () => { if (!p.leftCurrent) { p.adoptUnits(); await anchorSide(left, src, leftMarks ? new Map(leftMarks) : new Map()); p.leftCurrent = true } const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); if (final) finalShown = shownNow = true; note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
+      onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const marks = await marksOfPdf(pdf); leftMarks = [...marks]; const n = await anchorLeft(src, marks); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
+    }).catch(e => ({ error: e.message ?? String(e), kind: e?.kind }))
+    if (result.results) made = result.results
+    if (result.original) readings = result.original
+    // the engine's kind kept (engine.mjs EngineError), so that a key refused midway is worded as the popup words it
+    if (result.error) return fail('failed', `Could not translate ${paper}: ${result.error}`, result.kind)
+    // the TeX page down, twice for one compile: by the network (its files), or by itself (an engine it could not bring
+    // up, a compile it gave up on) — no compiler, the retry offered, the network's back retrying by itself (the S3a
+    // report's duties, b); nothing written or marked, and what is shown stays
+    if (result.compiler) { await swaps; unset = unsetAfter(unset, result, shownNow); return fail('no compiler', `Could not typeset ${paper}: ${result.compiler.error}`, result.compiler.down === 'network' ? 'network' : 'unknown') }
+    // the paragraphs the service left in the source, not a sum over batches: a seeded one keeps its old translation —
+    // and those translated that TeX could not set, which the compile's safety net set in the source (live.mjs
+    // `inSource`): the reader does not say a passage is translated when it is not (S-P-60; the maintainer, 2026-10-04)
+    lost = (result.missing ?? lost) + (result.inSource ?? 0)
+    // stopped with nothing on screen translated: the card, with the service's reason (the reader's design, §8)
+    if (result.stopped && !result.translated) return fail('failed', `Could not translate ${paper}: ${result.stopped}`, result.stopped)
+    stopped = result.stopped ? { event: 'stopped', kind: result.stopped } : null
+    await swaps
+    unset = unsetAfter(unset, result, shownNow)
+    // every way of setting it tried and failed, a whole translation in hand and nothing on screen (the maintainer,
+    // 2026-09-26). Remembered, so that a visit again asks nothing of the service, only when the paper's own source set
+    // here: a TeX error from a compiler whose files were not there says nothing of the paper, and is tried again (Codex).
+    // With the identity that would answer now, as a copy is written: the mark holds for that service alone (Codex on #306),
+    // and is left only when that service made the whole translation — a run a hand-over mixed is tried again (its final
+    // review)
+    const end = endOf(result, { compiledOnce, finalShown, cached: !!cached })
+    if (end === 'cannot typeset') {
+      if (cacheKey && result.originalOk) {
+        const identity = await engine.now().catch(() => engine.identity)
+        if (allTranslatedBy(result.results, identity) && compiledUnder) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, { identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page: compiledUnder })
+      }
+      note('done', result)
+      return fail('cannot typeset', `None of the ways of typesetting ${paper} into ${lang} worked: the right side shows the original`)
+    }
+    // a preview of this visit on screen and none of the ways able to set the whole: the reader says the translation is
+    // shown in part, with the HTML version where arXiv has one, and keeps the preview and the displays as they are
+    // (S-R-19; the maintainer, 2026-10-04: the first preview stood alone while the progress line said it was done)
+    if (end === 'shown in part') {
+      host.emit({ type: 'html', url: await htmlVersion() })
+      host.emit({ type: 'fail', event: 'shown in part', text: `Only part of ${paper}'s translation could be typeset into ${lang}: the right side shows the last preview` })
+      status(`${paper}: none of the ways of typesetting the whole translation into ${lang} worked; the right side shows the last preview`)
+    }
+    // this machine's copy: the whole record for a final that settled; the units' provenance alone when nothing typeset
+    // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")
+    if (cacheKey) {
+      const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, context, units: unitsOf(units, keptFor(paperData, lang), hashes, result.results), marks: leftMarks ?? (p.sameUnits ? cached.marks : []), rightMarks: [], figures: [...figureEntries.values()] }
+      const how = decideWrite({ result, cached, units: record.units, marks: record.marks, shown: shownNow })
+      // labelled by what set its PDF: this run's final, or the copy's own (cache.mjs labelOf)
+      const label = labelOf(how, { pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, passing: !!result.passing, cached })
+      Object.assign(record, label)
+      const pdf = !label ? null : how === 'full' ? finalPdf : cached.pdf
+      // the right side's marks, as its PDF names them: the final's once it is on screen, else the copy's own
+      record.rightMarks = how === 'full' ? [...(right.marks ?? [])] : (cached?.rightMarks ?? [])
+      if (pdf) {
+        const now = { identity: await engine.now().catch(() => engine.identity), pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION }
+        // the marked original's readings this run made, kept for the paper with whichever copy is stored
+        const original = result.original && result.original !== known?.readings && leftMarks?.length && compiledUnder ? originalRow(result.original, leftMarks, { pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page: compiledUnder }) : undefined
+        const written = await pdfCache.put({ ...record, pdf }, now, original)
+        note('cache write', { how, written })
+        // what this visit wrote is the copy a run again compares with
+        if (written) cached = { ...record, pdf, createdAt: Date.now() }
+      }
+    }
+    note('done', result)
+    // stopped with a translation on screen: it stays readable, and the reason is kept (the controller: reading, the
+    // failure its kind; the card only if the pane has nothing after all) — told once the run has ended, its final on
+    // screen and the count of what is missing the run's own (Part 4's final review)
+    if (result.stopped) host.emit({ type: 'fail', event: 'stopped', text: `Stopped: ${result.stopped}`, kind: result.stopped })
+    L.done = true
+  }
+  // the translation run again in place (the reader's design, §8): the service asked again — a key may be set by then,
+  // or another service chosen —, the figures' text it did not answer asked again, only the missing paragraphs sent
+  /** a run's end: a request to run again that came while it ran is answered now, if it stopped short (Part 4's final
+   *  review: the network's return during the final compile was dropped) */
+  const ended = () => {
+    running = null
+    const want = pending
+    pending = null
+    if (want === 'services' ? stopped : want === 'network' && stopped?.kind === 'network') runAgain()
+  }
+  runAgain = () => {
+    if (running || !stopped) return
+    stopped = null
+    serviceDown = false
+    const was = engineP
+    engineP = null
+    void was?.then(e => e.close(), () => {})
+    for (const key of unanswered) translated.delete(key)
+    unanswered.clear()
+    running = translation(true)
+      .catch(e => { runAgain = null; console.error('[reader]', e); host.emit({ type: 'fail', event: 'crashed', text: String(e?.message ?? e) }) })
+      .finally(() => { repaintFigures(); ended() })
+  }
+  // the network back, as the browser tells it: a translation it stopped goes on by itself (the reader's design, §8);
+  // one still running is asked again when it ends
+  addEventListener('online', () => { if (running) pending ??= 'network'; else if (stopped?.kind === 'network') runAgain() })
+  running = translation(false).finally(ended)
+  await running
+}
+
+// ---------------------------------------------------------------- the precompiled demo
+async function demo() {
+  status('loading…')
+  const base = new URL(`/pdf-reader/papers/${paper}/`, location.href).href
+  // ?only=left|none: for measuring what one document costs
+  const only = params.get('only')
+  if (only === 'none') { window.__reader.ready = true; status('no documents'); return }
+  const progressive = params.get('progressive') === '1'
+  // progressive: the stages of the translation as they would come from the compiler, with how many units each has
+  const stages = progressive ? await fetch(`${base}stages.json`).then(r => r.json()) : null
+  const [units] = await Promise.all([fetch(`${base}units.json`).then(r => r.json()), open(left, `${base}original.pdf`), only === 'left' ? null : open(right, `${base}${stages ? stages[0].file : 'translation.pdf'}`)])
+  void reportPaper(left.doc, units.find(u => u.kind === 'heading')?.src ?? '')
+  if (only === 'left') { window.__reader.ready = true; window.__reader.units = units.length; status('left only'); return }
+  timing.opened = performance.now() - timing.start
+  const t1 = performance.now()
+  // the text each unit has on the right: translated in the stages that have it, the original before
+  // with the displays beyond each unit's marks (displayEdges), where the demo's units carry their letters, and a
+  // translated unit's sentences where the demo's units carry them (spikes/highlight-sentences.mjs)
+  const textsAt = translated => units.map(u => { const s = u.i < translated && sentencesKept(u.sentences, u.src, u.tr); return { id: u.i, text: u.i < translated ? u.tr : u.src, ...displayEdges(u), ...(s ? { sentences: s } : {}) } })
+  // the marks: the translation's own destinations; for arXiv's PDF, those of our compile of the original with the word
+  // each follows, so that only the ones that land on the same word are used
+  prose = units.map(u => u.src).join('\n')
+  unitKind = new Map(units.map(u => [u.i, u.kind]))
+  const lMarks = await fetch(`${base}original-marks.json`).then(r => (r.ok ? r.json() : {})).then(o => new Map(Object.entries(o))).catch(() => new Map())
+  const [marksLeft, marksRight] = await Promise.all([anchorSide(left, units.map(u => ({ id: u.i, text: u.src, ...displayEdges(u) })), lMarks), anchorSide(right, textsAt(stages ? stages[0].translated : Infinity))])
+  levelLocated()
+  Object.assign(timing, { marksLeft, marksRight })
+  // the contents: a demo's units carry no depth, so levels.json holds the source's (made with the demo); its first heading is the title
+  const levels = await fetch(`${base}levels.json`).then(r => (r.ok ? r.json() : {})).catch(() => ({}))
+  headings = units.filter(u => u.kind === 'heading' && (levels[u.i] || u.i === 0)).map(u => ({ id: u.i, src: u.src, depth: levels[u.i], title: u.i === 0 }))
+  rightTexts = textsAt(stages ? stages[0].translated : Infinity)
+  reportOutline()
+  timing.anchors = performance.now() - t1
+  const linked = () => units.filter(u => left.anchors.get(u.i) && right.anchors.get(u.i)).length
+  Object.assign(window.__reader, { ready: true, units: units.length, linked: linked(), leftPages: left.doc.numPages, rightPages: right.doc.numPages })
+  status(`${linked()} of ${units.length} paragraphs linked · text and anchors ${Math.round(timing.anchors)} ms`)
+  // for the test harness
+  window.__reader.debug = harness()
+  // a demo is a translation already made: final, on screen
+  for (const event of ['shown final', 'done']) host.emit({ type: 'note', event, data: { demo: true }, got: units.length, total: units.length, lost: 0, again: false })
+
+  if (stages) {
+    window.__reader.swaps = []
+    for (const stage of stages.slice(1)) {
+      await new Promise(r => setTimeout(r, Number(params.get('every') ?? 3000)))
+      const r = await replaceRight(`${base}${stage.file}`, textsAt(stage.translated)).catch(e => { console.error('[swap] failed', e?.stack ?? e); return { error: String(e) } })
+      window.__reader.swaps.push({ file: stage.file, ...r })
+      status(`${stage.translated >= units.length ? 'translated' : `${stage.translated} of ${units.length} translated`} · ${linked()} linked · last update ${r.ms} ms, moved ${r.drift ?? '–'} px`)
+    }
+    window.__reader.progressDone = true
+  }
+}
+
+/** the run: live, a demo, or nothing without a paper; a crash is a failure the controller hears of */
+export const run = (params.get('live') === '1' ? live() : DEMO ? demo() : Promise.resolve().then(() => { status('no paper'); window.__reader.ready = true }))
+  .catch(e => { runAgain = null; console.error('[reader]', e); host.emit({ type: 'fail', event: 'crashed', text: String(e?.message ?? e) }) })

@@ -25,7 +25,15 @@ export function browserLanguages(): string[] {
  * keep the Chinese it was born with, whatever the interface says (Codex on #161)
  */
 export async function applyLocale(title?: (brand: string) => string): Promise<LocaleCode> {
-  const code = await resolveLocale()
+  return applyPageLocale(await storedChoice(), title)
+}
+
+/**
+ * `applyLocale` from a stored choice already in hand — `undefined` when the settings could not be read, and the
+ * browser's language applies. For a page that reads the settings once for more than its language (./first-paint.ts)
+ */
+export function applyPageLocale(uiLanguage: string | undefined, title?: (brand: string) => string): LocaleCode {
+  const code = pickLocale(uiLanguage, browserLanguages())
   setLocale(code)
   markDocument(code, title)
   return code
@@ -37,13 +45,16 @@ export async function applyLocale(title?: (brand: string) => string): Promise<Lo
  * landed, and applying first and checking afterwards is how the stale snapshot won (Codex on #161)
  */
 export async function resolveLocale(): Promise<LocaleCode> {
-  let chosen: string | undefined
+  return pickLocale(await storedChoice(), browserLanguages())
+}
+
+async function storedChoice(): Promise<string | undefined> {
   try {
-    chosen = (await getConfig()).uiLanguage
+    return (await getConfig()).uiLanguage
   } catch {
     // Unreadable settings must not leave the interface blank: the browser's language still applies
+    return undefined
   }
-  return pickLocale(chosen, browserLanguages())
 }
 
 /** The same choice from a configuration already in hand — the paper's script has just read it */

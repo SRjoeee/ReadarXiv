@@ -8,6 +8,7 @@ import { createChainHolder } from '@/entrypoints/background/chain'
 import { createSessionRouter } from '@/entrypoints/background/sessions'
 import { CHAIN_CONFIG_FIELDS, VOLATILE_CONFIG_FIELDS, chainConfigChanged, chainRevision } from '@/config/revision'
 import { createLocalTransport } from '@/providers/transport'
+import { translationIdentity } from '@/cache/key'
 import type { CachePort } from '@/providers/translate-service'
 import { ProviderError, type TranslateRequest, type TranslationProvider } from '@/providers/types'
 
@@ -118,6 +119,32 @@ describe('createLocalTransport: translation', () => {
   it('naming an engine that is not on the chain: says so, no quiet swap for another', async () => {
     const t = await withChain([mockProvider(async r => ({ segments: r.segments, provider: 'mock' }))])
     expect(await t.translate({ request: req, providerId: 'chrome-builtin' })).toEqual({ ok: false, error: { kind: 'unknown', message: 'engine chrome-builtin is not on the current chain', isolatable: false } })
+  })
+
+  describe('a candidate: the settings page\'s test of a service as it would save it (the redesign\'s design, §6.3)', () => {
+    it('a service not stored yet is asked as the call carries it', async () => {
+      const t = await withChain([{ ...mockProvider(async r => ({ segments: r.segments, provider: SVC.id })), id: SVC.id }])
+      const fresh = { ...SVC, id: 'svc-fresh000', apiKey: '' }
+      expect(await t.translate({ request: req, providerId: fresh.id, candidate: fresh })).toEqual({ ok: false, error: { kind: 'no-key', message: 'no API key configured', isolatable: false } })
+    })
+
+    it('a stored service carried with another key is asked with that key, never through the chain\'s step', async () => {
+      const t = await withChain([{ ...mockProvider(async r => ({ segments: r.segments, provider: SVC.id })), id: SVC.id }])
+      expect((await t.translate({ request: req, providerId: SVC.id })).ok).toBe(true)
+      expect(await t.translate({ request: req, providerId: SVC.id, candidate: { ...SVC, apiKey: '' } })).toMatchObject({ ok: false, error: { kind: 'no-key' } })
+    })
+
+    it('a candidate that is not the service named is refused', async () => {
+      const t = await withChain([mockProvider(async r => ({ segments: r.segments, provider: 'mock' }))])
+      expect(await t.translate({ request: req, providerId: 'svc-other000', candidate: SVC })).toEqual({ ok: false, error: { kind: 'unknown', message: 'the candidate is not the service named', isolatable: false } })
+    })
+
+    it('a candidate with no providerId is refused, never taking the fallback chain', async () => {
+      const chainAsked = vi.fn(async (r: TranslateRequest) => ({ segments: r.segments, provider: 'mock' }))
+      const t = await withChain([mockProvider(chainAsked)])
+      expect(await t.translate({ request: req, candidate: SVC })).toEqual({ ok: false, error: { kind: 'unknown', message: 'the candidate is not the service named', isolatable: false } })
+      expect(chainAsked).not.toHaveBeenCalled()
+    })
   })
 
   it('cancel withdraws the in-flight requests and reports the count withdrawn as it is', async () => {
@@ -590,6 +617,7 @@ describe('createLocalTransport: status', () => {
       chain: [SVC.id, 'google-web'],
       demotions: [],
       engine: { id: SVC.id },
+      identity: expect.stringMatching(/^[0-9a-f]{64}$/),
     })
   })
 
@@ -673,9 +701,11 @@ describe('createLocalTransport: the cache', () => {
     const calls: string[][] = []
     const t = await withChain([echo(calls)], { cache: portOf(cacheOf()) })
     const first = await t.translate({ request: two, cache: withCache })
-    expect(first).toEqual({ ok: true, result: { segments: [{ id: 'a', text: '译:x' }, { id: 'b', text: '译:y' }], provider: 'mock', kind: 'llm' }, cached: 0 })
+    // a call with a cache: each segment carries its identity, a cache hit's included (types.ts TranslatedSegment.identity)
+    const segs = [{ id: 'a', text: '译:x', identity: expect.any(String) }, { id: 'b', text: '译:y', identity: expect.any(String) }]
+    expect(first).toEqual({ ok: true, result: { segments: segs, provider: 'mock', kind: 'llm' }, cached: 0 })
     const second = await t.translate({ request: two, cache: withCache })
-    expect(second).toEqual({ ok: true, result: { segments: [{ id: 'a', text: '译:x' }, { id: 'b', text: '译:y' }], provider: 'mock', kind: 'llm' }, cached: 2 })
+    expect(second).toEqual({ ok: true, result: { segments: segs, provider: 'mock', kind: 'llm' }, cached: 2 })
     expect(calls).toEqual([['a', 'b']])
   })
 
@@ -709,10 +739,10 @@ describe('chainConfigChanged: which configuration changes rebuild the chain', ()
     const base = DEFAULT_CONFIG
     expect(chainConfigChanged(base, { ...base, mode: 'side' })).toBe(false)
     expect(chainConfigChanged(base, { ...base, appearance: { ...base.appearance, activeStyle: 'green' } })).toBe(false)
-    expect(chainConfigChanged(base, { ...base, preload: { margin: 42, threshold: 0.5 } })).toBe(false)
+    expect(chainConfigChanged(base, { ...base, preload: 'whole' })).toBe(false)
     expect(chainConfigChanged(base, { ...base, glossary: [{ term: 'token', translation: '词元' }] })).toBe(false)
-    // The image translation's mode gate (§15) is only a display gate; a reader unticking a mode mid-translation must not clear the queue
-    expect(chainConfigChanged(base, { ...base, image: { enabled: true, modes: ['side'] } })).toBe(false)
+    // The image translation switch (§15) only opens or closes a display gate; flipping it mid-translation must not clear the queue
+    expect(chainConfigChanged(base, { ...base, image: { enabled: false } })).toBe(false)
   })
 
   it('a changed engine, endpoint, model, key, target language, prompt or fallback switch rebuilds', () => {
@@ -763,5 +793,68 @@ describe('chainRevision: the identity of the settings a chain is built from', ()
     for (const field of VOLATILE_CONFIG_FIELDS) {
       expect(await chainRevision({ ...base, [field]: { changed: true } } as unknown as Config), field).toBe(a)
     }
+  })
+})
+
+describe('createLocalTransport: the status identity', () => {
+  it('is the chosen engine\'s while it can answer, and its fallback\'s while it cannot', async () => {
+    const first = mockProvider(async r => ({ segments: r.segments, provider: SVC.id }), { id: SVC.id })
+    const second = mockProvider(async r => ({ segments: r.segments, provider: 'google-web' }), { id: 'google-web', kind: 'mt' })
+    const t = await withChain([first, second])
+    expect((await t.status()).identity).toBe(await translationIdentity({ providerId: SVC.id, model: SVC.model, promptKey: '', target: DEFAULT_CONFIG.targetLanguage, renderPath: 'tags' }))
+    const down = await withChain([mockProvider(first.translate, { id: SVC.id, isAvailable: async () => false }), second])
+    expect((await down.status()).identity).toBe(await translationIdentity({ providerId: 'google-web', model: '', promptKey: '', target: DEFAULT_CONFIG.targetLanguage, renderPath: 'tags' }))
+  })
+  it('follows a demotion: after the chosen engine refuses its key, the fallback that answers is the identity (final review)', async () => {
+    // the chosen service's probe still says available (a key is set); the refusal demotes it for the session
+    const refusing = mockProvider(async () => { throw new ProviderError('auth', '401') }, { id: SVC.id })
+    const fallback = mockProvider(async r => ({ segments: r.segments, provider: 'google-web' }), { id: 'google-web', kind: 'mt' })
+    const t = await withChain([refusing, fallback])
+    const res = await t.translate({ request: { ...req, target: DEFAULT_CONFIG.targetLanguage }, cache: { paper: 'p', renderPath: 'tags' } })
+    expect(res.ok && res.result.provider).toBe('google-web')
+    expect((await t.status()).identity).toBe(res.ok ? res.result.segments[0]!.identity : 'no answer')
+  })
+  it('skips a fallback set aside: the chosen engine unavailable, the first fallback refusing, the second answering (Devin on #298)', async () => {
+    const down = mockProvider(async () => { throw new ProviderError('auth', 'no key') }, { id: SVC.id, isAvailable: async () => false })
+    // its probe says available; its key refused, the chain sets it aside for the session
+    const refusing = mockProvider(async () => { throw new ProviderError('auth', '401') }, { id: 'microsoft', kind: 'mt' })
+    const answering = mockProvider(async r => ({ segments: r.segments, provider: 'google-web' }), { id: 'google-web', kind: 'mt' })
+    const t = await withChain([down, refusing, answering])
+    const res = await t.translate({ request: { ...req, target: DEFAULT_CONFIG.targetLanguage }, cache: { paper: 'p', renderPath: 'tags' } })
+    expect(res.ok && res.result.provider).toBe('google-web')
+    expect((await t.status()).identity).toBe(res.ok ? res.result.segments[0]!.identity : 'no answer')
+  })
+  it('equals the identity on the segments the same engine translates', async () => {
+    const t = await withChain([mockProvider(async r => ({ segments: r.segments, provider: SVC.id }), { id: SVC.id })])
+    // the target the reader sends is the status's own (engine.mjs), as here
+    const res = await t.translate({ request: { ...req, target: DEFAULT_CONFIG.targetLanguage }, cache: { paper: 'p', renderPath: 'tags' } })
+    expect(res.ok && res.result.segments[0]!.identity).toBe((await t.status()).identity)
+  })
+})
+
+describe('createLocalTransport: a refused key (the redesign\'s design, §4)', () => {
+  const engine = (id: string, calls: string[]) => mockProvider(async r => { calls.push(id); return { segments: r.segments, provider: id } }, { id })
+
+  it('passes a refused service over from the first call, and reports it unable to run, the free one taking over', async () => {
+    const calls: string[] = []
+    const t = await withChain([engine(SVC.id, calls), engine('microsoft', calls)], { rejected: new Set([SVC.id]) })
+    expect((await t.translate({ request: req })).ok).toBe(true)
+    expect(calls).toEqual(['microsoft'])
+    const status = await t.status()
+    expect(status.available).toBe(false)
+    expect(status.fallback).toEqual({ id: 'microsoft' })
+    // The seeded demotion names the refused service as the reason, from the first status — not only after a call
+    // has run and set it (Codex review, round 1)
+    expect(status.engine.id).toBe('microsoft')
+    expect(status.engine.demoted?.id).toBe(SVC.id)
+    // the record holds 401s alone, and the hand-over says so: the retranslate cue tells a refused key by it (#299, row 75)
+    expect(status.demotions).toEqual([{ id: SVC.id, kind: 'auth', status: 401 }])
+  })
+
+  it('still reaches it for a call that names it: the settings page asking whether the key works now', async () => {
+    const calls: string[] = []
+    const t = await withChain([engine(SVC.id, calls), engine('microsoft', calls)], { rejected: new Set([SVC.id]) })
+    expect((await t.translate({ request: req, providerId: SVC.id })).ok).toBe(true)
+    expect(calls).toEqual([SVC.id])
   })
 })

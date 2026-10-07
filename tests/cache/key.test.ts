@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCacheKey, cacheKeyFor, normalizeText, ocrCacheKey, wireFormatOf, type CacheIdentity, type RenderPath } from '@/cache/key'
+import { buildCacheKey, cacheKeyFor, normalizeText, ocrCacheKey, translationIdentity, wireFormatOf, type CacheIdentity, type RenderPath } from '@/cache/key'
 import type { WireFormat } from '@/core/protector'
 
 const base: CacheIdentity = {
@@ -124,5 +124,19 @@ describe('why whitespace collapsing had to bump CACHE_KEY_VERSION (#122)', () =>
       cacheKeyFor({ ...identity, text: collapsed }),
     ])
     expect(a).toBe(b)
+  })
+})
+
+describe('translationIdentity', () => {
+  const base = { providerId: 'openai-compat:https://example.com/v1', model: 'm', promptKey: 'default', target: 'zh-CN', renderPath: 'tags' as const }
+  it('is stable for the same parts', async () => {
+    expect(await translationIdentity(base)).toBe(await translationIdentity({ ...base }))
+    expect(await translationIdentity(base)).toMatch(/^[0-9a-f]{64}$/)
+  })
+  it('changes with each part it is made of', async () => {
+    const one = await translationIdentity(base)
+    for (const change of [{ providerId: 'openai-compat:https://other.example/v1' }, { model: 'm2' }, { promptKey: 'custom text' }, { target: 'ja' }, { renderPath: 'markers' as const }]) {
+      expect(await translationIdentity({ ...base, ...change })).not.toBe(one)
+    }
   })
 })

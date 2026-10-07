@@ -1,8 +1,8 @@
 import { cachePortOf, translationCache } from '@/cache'
 import { pickTargetLanguage } from '@/config/first-target'
-import { chooseFirstTarget, getConfig, watchConfig } from '@/config/storage'
+import { chooseFirstTarget, getConfig, watchConfigChange } from '@/config/storage'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
-import { createLocalTransport } from '@/providers/transport'
+import { createLocalTransport, type ProviderStatus } from '@/providers/transport'
 import { type AxtMessage, answerMessages, sendMessage, sendToTab } from '@/shared/messages'
 import { createChainHolder } from './chain'
 import { createHandlers } from './handlers'
@@ -10,13 +10,25 @@ import { createConfigOffers, statusInForce } from './provider-status'
 import { createOcrService } from './ocr'
 import { createRecogniserClient } from './recogniser'
 import { createSessionRouter } from './sessions'
-import { installContextMenu, refreshContextMenu, installToggleCommand, toggleTranslation } from './context-menu'
+import { decideToggle, installContextMenu, refreshContextMenu, installToggleCommand, toggleTranslation } from './context-menu'
 import { getFloatingEntry, patchFloatingEntry } from './floating-entry'
 import { applyLocaleFrom, resolveLocale } from '@/ui/apply-locale'
 import { setLocale } from '@/ui/strings'
-import { savedFromStatus } from '@/shared/page-action'
+import { keyMadeGood, type SavedSettings, savedFromStatus } from '@/shared/page-action'
 import { BUILD_REF } from '@/shared/build'
 import { createDiagnostics } from './diagnostics'
+import { clearRejected, clearRejectedAmong, markRejected, rejectedServices, watchRejected } from '@/shared/service-health'
+import { createHealthKeeper } from './health-guard'
+import { createOffscreenDocument } from './offscreen'
+import { createWarmup, type WarmRecord } from './warmup'
+import { TEX_PAGE } from '@/pdf-reader/engine/addresses.mjs'
+import { LOCK as TEX_LOCK } from '@/pdf-reader/engine/tex-store.mjs'
+
+/**
+ * The saved settings with the status of the chain in force they were read from: one read per press, for the decision
+ * and the cue
+ */
+type SavedRead = SavedSettings & { status: ProviderStatus }
 
 // The background: the engine chain, the queues, the cache and the recogniser, wired together (DESIGN §8.0); what it
 // answers is the table in ./handlers.ts.
@@ -24,10 +36,14 @@ export default defineBackground(() => {
   // A new reader's target language follows the browser's languages, chosen once (config/first-target.ts). Registered
   // at the top, synchronously, as MV3 asks of an event that may be what wakes the worker; an update is not an
   // install, and an installation that already holds a configuration is left as it is (config/storage.ts)
+  // The TeX page's warm-up (./warmup.ts) follows, once the language is chosen: `warmup` is made further down, and an
+  // event is dispatched only after this function has run
   browser.runtime.onInstalled.addListener(details => {
+    if (details.reason === 'update') void warmup.trigger('update')
     if (details.reason !== 'install') return
     void chooseFirstTarget(() => pickTargetLanguage(navigator.languages ?? [], browser.i18n.getUILanguage?.()))
       .catch(e => console.warn(`[axt] the first target language could not be saved (${e instanceof Error ? e.name : typeof e})`))
+      .finally(() => void warmup.trigger('install'))
   })
 
   const cache = cachePortOf(translationCache)
@@ -40,15 +56,38 @@ export default defineBackground(() => {
     save: async entries => { await browser.storage.session.set({ [DIAG_KEY]: entries }).catch(() => undefined) },
   })
   const diag = (line: string) => diagnostics.record('background', line)
+  /** The service health record's writers besides the named call (./health-guard.ts): a chain's refusal, a configuration change */
+  const health = createHealthKeeper({ getConfig, mark: markRejected, clearAmong: clearRejectedAmong, warn: diag })
 
   /** The chain in force, one per worker (./chain.ts): built lazily, rebuilt when the configuration that shapes it changes */
   const chain = createChainHolder({
     load: async config => {
       const resolved = config ?? await getConfig()
-      return { config: resolved, transport: await createLocalTransport(resolved, { cache, cancelled, warn: diag }) }
+      const rejected = await rejectedServices()
+      return {
+        config: resolved,
+        transport: await createLocalTransport(resolved, {
+          cache, cancelled, warn: diag, rejected,
+          // a refused key is remembered across sessions (the redesign's design, §4): a 401 to one of the reader's
+          // services, marked only if the key and the address **this chain** used are still the service's — this chain
+          // may have outlived a key rotation (Codex review, round 2; health-guard.ts)
+          onFailure: info => health.failed(resolved, info),
+        }),
+      }
     },
     // The router is created below; a superseded chain is only ever swept after a build, long after that
     owned: transport => router.sessionsOn(transport) > 0,
+  })
+  /**
+   * Either direction rebuilds the chain in force: a mark added must demote that engine right away — the record
+   * exists but a chain built before it would otherwise go on trying the refused key until some unrelated rebuild —
+   * and a mark cleared brings the engine back (the redesign's design, §4). WXT's own `(newValue, oldValue)` pair
+   * (service-health.ts's `watchRejected`) is compared directly here, so there is no `known` copy of this worker's own
+   * to race the first read of it (Codex review, round 1)
+   */
+  watchRejected((ids, previous) => {
+    const changed = ids.size !== previous.size || [...ids].some(id => !previous.has(id))
+    if (changed) void chain.activate()
   })
   const transportOf = () => chain.current()
   /** The interface language this worker uses, to recognise “the reader changed it” (the context menu's title has to be redrawn) */
@@ -57,14 +96,20 @@ export default defineBackground(() => {
   // The chain learns of a change by reading the store, in order with the popup's `fresh` asks — never from the
   // event's own value, which carries no order (provider-status.ts says why)
   const offers = createConfigOffers({ load: getConfig, chain })
-  watchConfig(next => {
+  watchConfigChange((next, previous) => {
     // A changed interface language redraws the menu: the worker does not restart for it, and unredrawn the title would stay in the old language (Codex on #161)
     if (next.uiLanguage !== uiLanguage) {
       uiLanguage = next.uiLanguage
       applyLocaleFrom(next.uiLanguage)
       refreshContextMenu(menuDeps)
     }
+    // A key or an address changed, or a service deleted: its mark was about a key no longer sent (the redesign's
+    // design, §4). A clear that lands brings the engine back through the record's own watcher above
+    health.configChanged(next, previous)
     void offers.offer()
+    // Another target language: its parts of the TeX page downloaded ahead (./warmup.ts). The first choice, at install,
+    // may come as a change too (from the defaults); the document lets the install's own trigger for it go
+    if (previous && next.targetLanguage !== previous.targetLanguage) void warmup.trigger('language')
   })
 
   /**
@@ -79,13 +124,39 @@ export default defineBackground(() => {
    * The recogniser of image translation (DESIGN §15.3): in an offscreen document, opened when the first bitmap needs
    * reading. Withdrawing a session withdraws its queued recognitions too (the router's onDrop)
    */
+  /** The one offscreen document (./offscreen.ts): the recogniser's, and the TeX page's warm-up's */
+  const offscreen = createOffscreenDocument(browser.offscreen as unknown as Parameters<typeof createOffscreenDocument>[0], browser.runtime.getURL('/ocr.html'))
   const recogniser = createRecogniserClient({
-    offscreen: {
-      has: () => browser.offscreen.hasDocument(),
-      create: () => browser.offscreen.createDocument({ url: browser.runtime.getURL('/ocr.html'), reasons: ['WORKERS'], justification: 'Runs text recognition for figure translation in a WebAssembly worker' }),
-      close: () => browser.offscreen.closeDocument(),
-    },
+    offscreen,
     run: request => sendMessage({ type: 'axt:ocr-run', ...request }),
+    // a figure given up on ends the document's worker alone: a warm-up in the document goes on
+    reset: async () => (await sendMessage({ type: 'axt:ocr-reset' }))?.reset === true,
+  })
+  /**
+   * The TeX page's warm-up (DESIGN §16): the files a first visit in the target language fetches from the page,
+   * downloaded ahead into the extension's store by the offscreen document. The record of the last one in local storage;
+   * whether a reader that typesets is open, from the lock every one of them shares (pdf-reader/engine/tex-store.mjs)
+   */
+  const WARM_KEY = 'axt-tex-warm'
+  const warmup = createWarmup({
+    site: TEX_PAGE,
+    target: async () => (await getConfig()).targetLanguage,
+    saveData: () => (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true,
+    readerOpen: async () => {
+      const state = await navigator.locks?.query().catch(() => null)
+      return !!state && [...(state.held ?? []), ...(state.pending ?? [])].some(lock => lock.name === TEX_LOCK && lock.mode === 'shared')
+    },
+    // sent once more when nobody answered: the document may still be loading its script, or have closed itself
+    start: async request => {
+      const ask = async () => { await offscreen.create(); return sendMessage({ type: 'axt:tex-warm', ...request }).catch(() => undefined) }
+      return ((await ask()) ?? (await ask()))?.started === true
+    },
+    // no document, no warm-up: nothing opened for it
+    stop: async lang => (await offscreen.has().catch(() => false)) && (await sendMessage({ type: 'axt:tex-warm-stop', lang }).catch(() => undefined))?.stopped === true,
+    load: async () => ((await browser.storage.local.get(WARM_KEY))[WARM_KEY] as WarmRecord | undefined) ?? null,
+    save: async record => { await browser.storage.local.set({ [WARM_KEY]: record }) },
+    now: () => Date.now(),
+    log: diag,
   })
   const ocr = createOcrService({ backend: recogniser, cache, cancelled, warn: diag })
   const router = createSessionRouter({
@@ -138,13 +209,26 @@ export default defineBackground(() => {
   // the fallback language first and rebuilt once the pack is read, so the title follows the interface language (UI.md §6)
   /**
    * The saved settings as the toggle decides on them (shared/page-action.ts): their identity, and whether they run —
-   * from the chain in force, which is built from them. The popup decides the same from the settings it holds
+   * from the chain in force, which is built from them. The popup decides the same from the settings it holds. The
+   * status they came from goes with them: the retranslate cue is judged against the same one (`madeGood`)
    */
-  const saved = async () => {
+  const saved = async (): Promise<SavedRead> => {
     // One snapshot: the chain in force, built from what is stored now (offered in order with every other offer),
     // and still in force once its probes have answered
     await offers.offer()
-    return savedFromStatus((await statusInForce(chain)).status)
+    const { status } = await statusInForce(chain)
+    return { ...savedFromStatus(status), status }
+  }
+  /**
+   * The retranslate cue for the toggle (UI.md P6b, shared/page-action.ts keyMadeGood): the page's session's own chain
+   * and the refused-key record, read as the popup reads them, against the chain in force this press's `saved` read —
+   * not read again: one status of it per press, as `savedFromStatus` asks
+   */
+  const madeGood = async (scope: string, read: SavedRead): Promise<boolean> => {
+    const own = router.transportFor(scope)
+    if (!own) return false
+    const [session, rejected] = await Promise.all([own.status(), rejectedServices()])
+    return keyMadeGood(session, rejected, read.status)
   }
   const menuDeps = {
     create: (options: { id: string; title: string; contexts: string[]; documentUrlPatterns: string[] }) =>
@@ -153,6 +237,7 @@ export default defineBackground(() => {
     onClicked: (handler: Parameters<typeof browser.contextMenus.onClicked.addListener>[0]) => browser.contextMenus.onClicked.addListener(handler),
     send: sendToTab,
     saved,
+    madeGood,
   }
   installContextMenu(menuDeps)
   // The reader changed the interface language while this read was out: the watcher has swapped the pack already, and
@@ -170,6 +255,7 @@ export default defineBackground(() => {
     activeTab: async () => (await browser.tabs.query({ active: true, currentWindow: true }))[0],
     send: sendToTab,
     saved,
+    madeGood,
   })
 
   // The floating button undoes the page's zoom (§4.0c): every tab is told when its zoom changes. A tab with none of
@@ -208,7 +294,8 @@ export default defineBackground(() => {
     ocr,
     diagnostics,
     cache: translationCache,
-    toggle: tabId => toggleTranslation({ send: sendToTab, saved }, tabId),
+    toggle: tabId => toggleTranslation({ send: sendToTab, saved, madeGood }, tabId),
+    decide: async tabId => (await decideToggle({ send: sendToTab, saved, madeGood }, tabId))?.decision,
     getConfig,
     getFloatingEntry,
     patchFloatingEntry,
@@ -222,5 +309,11 @@ export default defineBackground(() => {
       browser: navigator.userAgent,
       platform: (await browser.runtime.getPlatformInfo().catch(() => ({ os: 'unknown' }))).os,
     }),
+    health: { reject: markRejected, clear: clearRejected },
+    warmup,
   })))
+
+  // A worker's start: the warm-up looked at again — a day on, another language, a failure a quarter of an hour ago
+  // (./warmup.ts); at once a no-op when the store is the current language's
+  void warmup.trigger('check')
 })

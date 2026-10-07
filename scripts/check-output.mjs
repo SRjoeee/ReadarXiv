@@ -3,7 +3,8 @@
 // Met 2026-09-04: the content side imported @/cache/index by mistake and bundled Dexie, which uses "￿" as a key-range upper bound.
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join, relative, sep } from 'node:path'
+import { contentScriptsRunningOn } from './site-isolation.mjs'
 
 const OUT = '.output/chrome-mv3'
 const CONTENT_DIR = join(OUT, 'content-scripts')
@@ -30,18 +31,67 @@ function scan(path) {
 
 let failed = false
 
+// The website's mark (DESIGN §4.0d): the one content script that runs on the website's own pages, and the only door
+// into this extension for a page that is not arXiv's. It is checked first, and from the built manifest, because a
+// host added here is a permission warning for every installed copy (docs/RELEASE.md) and a script that grew is
+// something more than the mark. The hosts are read from the source that writes the manifest, so the two cannot differ
+// unseen (tests/shared/web-app.test.ts pins the list itself)
+const manifest = JSON.parse(readFileSync(join(OUT, 'manifest.json'), 'utf8'))
+const siteHosts = [...(/WEB_APP_HOSTS[^=]*=\s*\[([^\]]*)\]/.exec(readFileSync('src/shared/web-app.ts', 'utf8'))?.[1] ?? '').matchAll(/'([^']+)'/g)].map(m => m[1])
+const siteMatches = siteHosts.map(host => `https://${host}/*`)
+const SITE_SCRIPT = 'content-scripts/web-app.js'
+const siteEntries = (manifest.content_scripts ?? []).filter(entry => entry.js?.includes(SITE_SCRIPT))
+const siteEntry = siteEntries[0]
+const siteCode = existsSync(join(OUT, SITE_SCRIPT)) ? readFileSync(join(OUT, SITE_SCRIPT), 'utf8') : ''
+// What a script that only marks a page has no use for: a request, a message out, a store, a way to run text. The wrapper WXT puts around every
+// content script announces it with a `postMessage`: that call stays in the file, behind the option that turns it off (`noScriptStartedPostMessage`)
+const NOT_THE_MARK = /\b(sendMessage|sendNativeMessage|connect|fetch|XMLHttpRequest|sendBeacon|WebSocket|localStorage|sessionStorage|indexedDB|eval|innerHTML)\b/
+// Every other script, against every host the website has: a pattern that covers the website without naming it counts (scripts/site-isolation.mjs)
+const intruders = siteHosts.length === 0 ? [] : (manifest.content_scripts ?? []).filter(entry => entry !== siteEntry && siteHosts.some(host => contentScriptsRunningOn([entry], host).length > 0))
+const sameList = (a, b) => a.length === b.length && [...a].sort().every((value, at) => value === [...b].sort()[at])
+
 // The licences that go with every copy (scripts/third-party-notices.mjs): written through a WXT hook, and a hook that
 // stopped being called would leave a package that builds, loads and breaks three licences. React is in every build
 // of this extension, so its entry standing for "the list was written" cannot go stale
 const NOTICES = join(OUT, 'licenses/third-party.txt')
 const notices = existsSync(NOTICES) ? readFileSync(NOTICES, 'utf8') : ''
+
+const filesUnder = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry => (entry.isDirectory() ? filesUnder(join(dir, entry.name)) : [join(dir, entry.name)]))
+// What only a development build may hold (DESIGN §16): this machine's TeX pages, the one spikes/serve-live.mjs runs at
+// 127.0.0.1:8071 and the TeX Live file server a protocol-1 page reads at localhost:8070 (addresses.mjs) — a release
+// naming one would typeset a reader's paper with whatever answers there —, and the TeX page's compiler, BusyTeX in
+// texlyre's build, which runs on the TeX page and never in the extension. Every file of the package is read, as
+// latin1 (the addresses and the names are ASCII, so a binary is read too): the addresses anywhere; the compiler by its
+// files, not by its name in prose — a path naming it, or content naming its package or one of its files (a comment a
+// build keeps may say "the BusyTeX worker" and ships nothing of it)
+const LOOPBACK_TEX = /(?:127\.0\.0\.1|localhost|\[::1\]):(?:8070|8071)(?!\d)/
+const COMPILER_PATH = /busytex|texlyre/i
+const COMPILER_FILES = /texlyre|busytex[\w.-]*\.(?:js|wasm|data)|busytex_pipeline/i
+const loopbackNamed = []
+const compilerNamed = []
+for (const path of filesUnder(OUT)) {
+  const content = readFileSync(path).toString('latin1')
+  if (COMPILER_PATH.test(relative(OUT, path)) || COMPILER_FILES.test(content)) compilerNamed.push(path)
+  if (LOOPBACK_TEX.test(content)) loopbackNamed.push(path)
+}
 for (const [what, ok] of [
+  [`the website's hosts are read from src/shared/web-app.ts: ${siteMatches.join(', ') || 'none found'}`, siteHosts.length > 0 && siteMatches.every(match => /^https:\/\/[a-z0-9.-]+\/\*$/.test(match))],
+  [`one content script runs on the website's pages, and it matches ${siteMatches.join(', ')} exactly`, siteEntries.length === 1 && sameList(siteEntry.matches, siteMatches) && siteEntry.js.length === 1],
+  [`it runs at document_start, in the isolated world, in the top frame, and brings no style sheet`, siteEntry?.run_at === 'document_start' && siteEntry.world === undefined && !siteEntry.all_frames && !siteEntry.css && !siteEntry.match_about_blank && !siteEntry.match_origin_as_fallback],
+  [`no other content script can run on the website${intruders.length > 0 ? ` (${intruders.map(entry => `${entry.js?.join(', ')} matches ${entry.matches.join(', ')}`).join('; ')})` : ''}`, intruders.length === 0],
+  [`the page has no way to speak to the extension: no externally_connectable, and the script is not a web-accessible resource`, manifest.externally_connectable === undefined && !(manifest.web_accessible_resources ?? []).some(entry => entry.resources.some(resource => resource.includes('web-app')))],
+  [`${join(OUT, SITE_SCRIPT)} holds nothing but the mark: its attribute, the version it reads, no request, message or store, WXT's page announcement off, ${siteCode.length} of 8000 bytes`,
+    siteCode.includes('data-readarxiv-extension') && siteCode.includes('getManifest') && !NOT_THE_MARK.test(siteCode) && /noScriptStartedPostMessage:\s*(!0|true)\b/.test(siteCode) && siteCode.length < 8000],
   [`${join(OUT, 'LICENSE')} is the project's licence`, existsSync(join(OUT, 'LICENSE')) && readFileSync(join(OUT, 'LICENSE'), 'utf8').includes('GNU GENERAL PUBLIC LICENSE')],
   [`${NOTICES} lists the bundled packages`, /^react \d[^\n]* — MIT$/m.test(notices)],
   [`${NOTICES} holds Apache-2.0's own text`, notices.includes('TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION')],
   // The recogniser's worker is a build of its own (wxt.config.ts `worker.plugins`): without the plugin there its two
   // packages ship unlisted
   [`${NOTICES} lists what the recogniser's worker bundles`, /^onnxruntime-web \d[^\n]* — MIT$/m.test(notices) && /^esearch-ocr \d[^\n]* — Apache-2\.0$/m.test(notices)],
+  // the dev pages (wxt.config.ts DEV_PAGES) are for development builds: a release holding one would ship a debug page
+  [`${OUT} holds no dev page`, ['gallery.html', 'controls.html', 'capsule.html'].every(page => !existsSync(join(OUT, page)))],
+  [`${OUT} names no loopback TeX page${loopbackNamed.length > 0 ? ` (${loopbackNamed.join(', ')})` : ''}`, loopbackNamed.length === 0],
+  [`${OUT} holds no BusyTeX or texlyre file${compilerNamed.length > 0 ? ` (${compilerNamed.join(', ')})` : ''}`, compilerNamed.length === 0],
 ]) {
   if (ok) console.log(`✓ ${what}`)
   else {
@@ -70,14 +120,24 @@ const MODELS = {
   'ocr/PP-OCRv6_tiny_rec.onnx': '9ef676d6ed3c88256a2d92c640c44f25b0c40947e111b14b8be8f594091563e6',
   'ocr/PP-OCRv6_tiny_dict.txt': 'c5cbe34ef40c29c4df07ed012bf96569cb69a2d2a01a07027e9f13cb832bd9cd',
 }
-const filesUnder = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry => (entry.isDirectory() ? filesUnder(join(dir, entry.name)) : [join(dir, entry.name)]))
-const built = filesUnder(OUT)
+// The PDF reader's data files (`pdf-reader/`, copied by wxt.config.ts: PDF.js's WebAssembly decoders among them) are the
+// reader's, not the recogniser's, and are not counted by the recogniser's rules below. The directory, separator and
+// all: its page, `pdf-reader.html`, and any file whose name begins so are the build's own
+const READER_DATA = join(OUT, 'pdf-reader') + sep
+const built = filesUnder(OUT).filter(path => !path.startsWith(READER_DATA))
+// a build without the directory is reported by the checks below (✗ pdf-reader/pdfjs/ is incomplete), not a stack trace
+const readerData = existsSync(join(OUT, 'pdf-reader')) ? filesUnder(join(OUT, 'pdf-reader')) : []
 const wasm = built.filter(path => path.endsWith('.wasm'))
 const carriers = built.filter(path => path.endsWith('.js') && readFileSync(path, 'utf8').includes('ort-wasm-simd-threaded'))
 for (const [what, ok, detail] of [
   ['the recogniser\'s page is built', existsSync(join(OUT, 'ocr.html')), 'ocr.html is missing'],
   ['one WebAssembly file, ONNX Runtime\'s', wasm.length === 1 && /ort-wasm-simd-threaded/.test(wasm[0]), wasm.join(', ') || 'none'],
   ['only the recogniser\'s worker carries the runtime', carriers.length === 1 && /assets[\\/]worker-/.test(carriers[0]), carriers.join(', ') || 'none'],
+  ['the PDF reader\'s page is built', existsSync(join(OUT, 'pdf-reader.html')), 'pdf-reader.html is missing'],
+  ['PDF.js\'s character maps, fonts and decoders are in the build', ['pdfjs/cmaps/78-EUC-H.bcmap', 'pdfjs/standard_fonts/FoxitSerif.pfb', 'pdfjs/standard_fonts/LICENSE_FOXIT', 'pdfjs/wasm/openjpeg.wasm'].every(file => existsSync(join(OUT, 'pdf-reader', file))), 'pdf-reader/pdfjs/ is incomplete'],
+  // only PDF.js's scripting sandbox loads QuickJS, and the reader loads no sandbox (it runs no script a PDF carries):
+  // its two files are 468 KB of every install for nothing (#299, Part 1)
+  ['PDF.js\'s scripting engine is not shipped', !readerData.some(path => basename(path).startsWith('quickjs')), readerData.filter(path => basename(path).startsWith('quickjs')).join(', ')],
   ...Object.entries(MODELS).map(([file, sha256]) => {
     const path = join(OUT, file)
     const found = existsSync(path) ? createHash('sha256').update(readFileSync(path)).digest('hex') : 'missing'

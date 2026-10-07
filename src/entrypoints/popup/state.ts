@@ -15,30 +15,39 @@
 //   polls would make the poll's stale and the command refused (local review).
 // - A settings change while the page is on restarts it in place, once the background's chain reflects the save; a
 //   choice that cannot run only saves, and the view shows the page as behind the settings.
-import { type Config, DEFAULT_CONFIG, MODE_VALUES } from '@/config/schema'
+import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { isBuiltInService, isLlmChosen } from '@/config/services'
 import type { Mode } from '@/core/renderer'
+import { withDisplay } from '@/pdf-reader/settings'
 import { promptExists } from '@/providers/prompt-library'
 import type { ProviderStatus } from '@/providers/transport'
 import type { AxtMessage, EntryStatus, MessageHandlers, PageStatus, sendMessage, sendToActiveTab } from '@/shared/messages'
 import type { PackState } from '@/shared/pack'
+import { rejectedServices, watchRejected } from '@/shared/service-health'
 import { messageFor } from '@/shared/page-action'
 import { type SurfaceConfig, type SurfaceConfigDeps, createSurfaceConfig } from '@/shared/surface-config'
 import { S } from '@/ui/strings'
+import { offeredQuery, readQuery } from './find'
 import { createProviderAsks } from './provider-asks'
-import { MANAGE_SERVICES, MANAGE_STYLES, type MenuKind, type PopupInput, actionErrorText, runnable, startRefusalText } from './view-model'
+import { MANAGE_PROMPTS, MANAGE_SERVICES, MANAGE_STYLES, type MenuKind, type PopupInput, actionErrorText, runnable, startRefusalText } from './view-model'
 
 export interface PopupActions {
   translate(): void
   /** On an abstract or PDF page: open this paper's HTML version and translate it there */
   openHtml(): void
+  /** An abstract or PDF page: the paper's bilingual PDF, where `reading.openIn` says (the reader's design, §2) */
+  openPdf(): void
+  /** The PDF reader open: show the translation, or the original (`pdfReader.original`; the reader's design, §9.2) */
+  readerTranslate(): void
+  readerOriginal(): void
   /** A new session over the running one, or after a pause: the page follows the saved settings */
   retranslate(): void
   restore(): void
   chooseMode(mode: Mode): void
   retryFailed(): void
   openMenu(kind: MenuKind): void
-  closeMenu(): void
+  /** Closes that menu if it is the one open — two popovers' toggles may arrive in either order — or, with none, whichever is */
+  closeMenu(kind?: MenuKind): void
   /** A service id, a built-in id, or MANAGE_SERVICES */
   chooseService(id: string): void
   chooseLanguage(code: Config['targetLanguage']): void
@@ -48,12 +57,16 @@ export interface PopupActions {
   setHighlight(on: boolean): void
   setImages(on: boolean): void
   downloadPack(): void
-  /** With `section` omitted, opens the settings page on its own default section; with it, straight to that section */
-  openOptions(section?: OptionsSection): void
+  /** P0's field (the redesign's design, §5.4): what it holds now; a paper it names is checked once it has been still */
+  setQuery(text: string): void
+  /** An address of P0's — a paper translating, arXiv's search — opened in a new tab, the popup closing after it */
+  openLink(url: string): void
+  /** With `link` omitted, the settings page on its own default section; with it, straight to that row (§6.1's deep links) */
+  openOptions(link?: OptionsLink): void
 }
 
-/** The settings page's section names, matching SECTIONS in options/App.tsx */
-export type OptionsSection = 'services' | 'reading' | 'prompts' | 'data'
+/** The settings page's rows the popup's Manage… rows open (the redesign's design, §6.1): it opens the section and lights the row */
+export type OptionsLink = 'translate/services' | 'translate/prompts' | 'appearance/styles'
 
 /**
  * What the popup needs of the browser: the seam. Production gives the extension's own (`data.ts`); the tests a page
@@ -79,6 +92,20 @@ export interface PopupHost {
   downloadPack(target: string): Promise<unknown>
   /** The surface configuration's own needs of the page (shared/surface-config.ts) */
   config: Pick<SurfaceConfigDeps, 'localeStale' | 'reload' | 'packState' | 'announce'>
+  /**
+   * The active tab's address, where the extension may read it — arXiv's pages, by its host permission — or null. The
+   * host permissions also reach openrouter.ai, translate-pa.googleapis.com, edge.microsoft.com and any origin the
+   * reader granted, none of which is a tab whose address this reads
+   */
+  tabUrl(): Promise<string | null>
+  /**
+   * P0's two checks of a paper (the redesign's design, §5.4): its HTML version and its bilingual PDF, the address each
+   * opens or null for one ruled out, by the PDF page's own rule (core/pdf/entry.ts)
+   */
+  entriesOf(id: string): Promise<{ html: string | null; pdf: string | null }>
+  /** Whether this browser runs the PDF reader (pdf-reader/support.ts readerRuns): where it does not, P0 offers a pasted
+   *  PDF address as the paper it names (find.ts offeredQuery) */
+  readonly readerRuns: boolean
 }
 
 export interface PopupState {
@@ -94,8 +121,15 @@ export interface PopupState {
 const ASK_EVERY_MS = 500
 /** How many more times a page that does not answer is asked: it may still be loading */
 const ASKS_WHILE_SILENT = 6
+/** How long P0's field must be still before the paper it names is checked (the redesign's design, §5.4): never a keystroke */
+export const STILL_MS = 300
 
-export function createPopupState(host: PopupHost): PopupState {
+/**
+ * `seed.rejected`: the record of refused keys as it was read before the first render, beside the configuration
+ * (main.tsx), so that no state counts a refused service as runnable and then flips (the branch's final review). The
+ * read and the watch below keep it current from there
+ */
+export function createPopupState(host: PopupHost, seed: { rejected?: readonly string[] } = {}): PopupState {
   let page: PageStatus | null = null
   /** What an abstract or PDF page answered; asked only when no full text is there to answer (§4.0b) */
   let entry: EntryStatus | null = null
@@ -103,8 +137,26 @@ export function createPopupState(host: PopupHost): PopupState {
   let session: ProviderStatus | null = null
   let menu: MenuKind | null = null
   let shortcut: string | null = null
+  /** The reader's services whose key was refused (the service health record): read as the popup starts, then followed */
+  let rejected: readonly string[] = seed.rejected ?? []
   let error: string | null = null
   let running = false
+  /**
+   * Whether the start() now current is still the one running, read by a callback about to write state it settled
+   * after: reassigned fresh by every start(), so a callback from a start already stopped stays guarded even once a
+   * later start has set its own flag true (StrictMode's start / stop / start; as `src/ui/use-rejected.ts` guards its
+   * effect with `live`)
+   */
+  let isLive = (): boolean => false
+  /** The active tab's address (host.tabUrl): undefined until it answers */
+  let tabUrl: string | null | undefined
+  /** The first ask about the tab's page has settled: until then nothing is known, and the popup draws its brand row alone */
+  let settled = false
+  /** P0's field, and its checks: each paper's answer by id, each id asked once, and the timer that waits for stillness */
+  let query = ''
+  const checked = new Map<string, { html: string | null; pdf: string | null }>()
+  const checking = new Set<string>()
+  let stillTimer: ReturnType<typeof setTimeout> | null = null
 
   const listeners = new Set<() => void>()
   let snapshot: { input: PopupInput; error: string | null } | null = null
@@ -142,7 +194,13 @@ export function createPopupState(host: PopupHost): PopupState {
   /** The retry while the page is silent, and the poll while it translates: at most one of each */
   let silentTimer: ReturnType<typeof setInterval> | null = null
   let pollTimer: ReturnType<typeof setInterval> | null = null
-  const stopSilent = () => { if (silentTimer !== null) clearInterval(silentTimer); silentTimer = null }
+  const stopSilent = () => {
+    if (silentTimer === null) return
+    clearInterval(silentTimer)
+    silentTimer = null
+    // whether the popup still asks is part of what it shows: an arXiv page still silent is loading, not P0 (§5.4)
+    changed()
+  }
   const stopPoll = () => { if (pollTimer !== null) clearInterval(pollTimer); pollTimer = null }
   /**
    * While the page is still loading the content script is not injected yet (document_idle), so the first ask has no
@@ -155,6 +213,7 @@ export function createPopupState(host: PopupHost): PopupState {
       if (++attempts > ASKS_WHILE_SILENT) return stopSilent()
       refresh()
     }, ASK_EVERY_MS)
+    changed()
   }
 
   /** The page's status landed (or its absence did): what follows from how it differs from the one before */
@@ -190,10 +249,11 @@ export function createPopupState(host: PopupHost): PopupState {
      */
     const askEntry = () => {
       setPage(null)
-      host.toTab({ type: 'axt:entry-status' }).then(answer => { entry = answer ?? null; changed() }).catch(() => { entry = null; changed() })
+      // settled with the entry's answer, not before: the moment between would be drawn as P0 (the redesign's design, §5.4)
+      host.toTab({ type: 'axt:entry-status' }).then(answer => { entry = answer ?? null; settled = true; changed() }).catch(() => { entry = null; settled = true; changed() })
     }
     host.toTab({ type: 'axt:page-status' })
-      .then(status => { if (!status) { askEntry(); return } entry = null; setPage(status) })
+      .then(status => { if (!status) { askEntry(); return } entry = null; settled = true; setPage(status) })
       .catch(askEntry)
   }
 
@@ -225,12 +285,12 @@ export function createPopupState(host: PopupHost): PopupState {
 
 /**
  * Open the settings page. **Without a section, `openOptionsPage`**: it brings the tab already open to the front rather than opening another.
- * With a section only a tab of our own will do — `openOptionsPage` passes no hash, and the settings page tells sections apart by the hash (App.tsx).
+ * With a row only a tab of our own will do — `openOptionsPage` passes no hash, and the settings page tells sections apart by the hash (App.tsx).
  * A reader who clicks “Manage styles…” and lands on “Services” is worse off than one with an extra tab
  */
-  const openOptions = (section?: OptionsSection): void => {
-    if (!section) host.openOptionsPage()
-    else void host.openTab(host.url(`/options.html#${section}`))
+  const openOptions = (link?: OptionsLink): void => {
+    if (!link) host.openOptionsPage()
+    else void host.openTab(host.url(`/options.html#${link}`))
     // The toolbar's popup closes by itself when another tab takes the focus; framed beside the floating button it
     // would still be open when the reader comes back, so it asks to go (embedded.ts)
     if (host.embedded) host.close()
@@ -248,13 +308,24 @@ export function createPopupState(host: PopupHost): PopupState {
   const restartIfOn = async (next: Config, packState: PackState | null) => {
     const status = await host.toTab({ type: 'axt:page-status' }).catch(() => null)
     if (status?.progress.state !== 'on') return
-    if (!runnable(next, packState)) return // the view shows the page as behind the settings
+    if (!runnable(next, packState, rejected)) return // the view shows the page as behind the settings
     // The chain the restart will run on: one built from what was just saved (background/provider-status.ts)
     await asks.saved()
     await host.toTab(messageFor('retranslate', status.epoch) as AxtMessage<'axt:translate-page'>)
   }
 
   const patchConfig = surface.patch
+
+  /** P0's two checks of a paper, once per id (§5.4): the answer kept, the view told — but not once its start has stopped */
+  const check = (id: string) => {
+    checking.add(id)
+    // A late answer is still that paper's answer, kept for a later start (so it is not asked again); only the
+    // notification is withheld once stopped
+    void host.entriesOf(id).then(found => { checked.set(id, found) }, () => undefined).finally(() => {
+      checking.delete(id)
+      if (isLive()) changed()
+    })
+  }
 
   const actions: PopupActions = {
     // The abstract and PDF pages: the page navigates itself to the HTML version, which starts translating on arrival
@@ -269,6 +340,22 @@ export function createPopupState(host: PopupHost): PopupState {
       else {
         const { opened } = await host.toTab({ type: 'axt:open-html' })
         if (!opened) throw new Error(S.note.noHtml)
+      }
+      host.close()
+    }),
+    // The PDF entry: the paper's PDF asking for the reader, translating, opened as the HTML one is — except on the PDF
+    // page itself, where it is this page's: its hash alone changes and the reader opens over it. A second tab of the
+    // paper on screen answers nothing (Part 5's final review)
+    openPdf: () => void guard(async () => {
+      const href = entry?.pdf
+      if (!href) return
+      if (entry?.kind !== 'pdf' && (surface.state().config ?? DEFAULT_CONFIG).reading.openIn === 'new-tab') await host.openTab(href)
+      else if (!(await host.toTab({ type: 'axt:open-pdf' }))?.opened) {
+        // the page could not open it after all — a source that turned out to be a PDF alone, answered after the popup
+        // asked: the popup stays, and asks again, so that the entry greys (Codex on #301)
+        entry = (await host.toTab({ type: 'axt:entry-status' }).catch(() => null)) ?? null
+        changed()
+        return
       }
       host.close()
     }),
@@ -287,19 +374,32 @@ export function createPopupState(host: PopupHost): PopupState {
     }),
     // The full text switches its layout and saves the preference itself (`axt:set-mode`). An abstract or PDF page
     // has no layout to switch and no listener for that message: there the preference is saved here, and the paper
-    // opens in it (Devin on #247: the choice was lost, and the popup reported a failure)
+    // opens in it (Devin on #247: the choice was lost, and the popup reported a failure). A display chosen is a
+    // translated one: the PDF reader's original goes too (its design, §3), and the reader, open or next, follows. The
+    // reader cannot stack: stacked is greyed there, and a call for it does nothing (§9.2). Over the reader the choice is
+    // the reader's own (pdf-reader/settings.ts withDisplay): a stored stacked, shown as side by side there, stays
+    // stacked, as the reader's own switch keeps it (#299, Part 5's M6)
     chooseMode: (mode: Mode) => void guard(async () => {
-      if (entry) await patchConfig(latest => ({ ...latest, mode }))
+      if (entry?.readerOpen && mode === 'stack') return
+      if (entry?.readerOpen) await patchConfig(latest => withDisplay(latest, mode === 'only' ? 'translation' : 'bilingual'))
+      else if (entry) await patchConfig(latest => ({ ...latest, mode, pdfReader: { ...latest.pdfReader, original: false } }))
       else await host.toTab({ type: 'axt:set-mode', mode })
     }),
+    // the PDF reader open: what it shows, through the settings it follows (§9.2)
+    readerTranslate: () => void guard(async () => { await patchConfig(latest => ({ ...latest, pdfReader: { ...latest.pdfReader, original: false } })) }),
+    readerOriginal: () => void guard(async () => { await patchConfig(latest => ({ ...latest, pdfReader: { ...latest.pdfReader, original: true } })) }),
     retryFailed: () => void guard(async () => { await host.toTab({ type: 'axt:retry-failed' }) }),
     openMenu: kind => { menu = kind; changed() },
-    closeMenu: () => { menu = null; changed() },
+    closeMenu: kind => {
+      if (kind !== undefined && menu !== kind) return
+      menu = null
+      changed()
+    },
     chooseService: id => void guard(async () => {
       menu = null
       changed()
       // The last row of the menu is not a service: it opens the page where services are managed
-      if (id === MANAGE_SERVICES) return void openOptions()
+      if (id === MANAGE_SERVICES) return void openOptions('translate/services')
       const next = await patchConfig(latest => (
         // The menu may have been built before another tab deleted this service; storing an id that
         // names nothing would leave the reader looking at a choice nothing honours (Codex on #157)
@@ -319,6 +419,7 @@ export function createPopupState(host: PopupHost): PopupState {
     choosePrompt: id => void guard(async () => {
       menu = null
       changed()
+      if (id === MANAGE_PROMPTS) return void openOptions('translate/prompts')
       // Same as the service and style menus: this list may have been built before another tab deleted the prompt, and
       // an id that names nothing resolves to the default silently (providers/prompt-library.ts)
       const next = await patchConfig(latest => (promptExists(latest.prompts, id) ? { ...latest, prompts: { ...latest.prompts, promptId: id } } : latest))
@@ -331,8 +432,8 @@ export function createPopupState(host: PopupHost): PopupState {
     chooseStyle: id => void guard(async () => {
       menu = null
       changed()
-      // The last row is not a style but the place to manage them (S-P-83). Styles live in the “Reading” section, so the section goes along
-      if (id === MANAGE_STYLES) return void openOptions('reading')
+      // The last row is not a style but the place to manage them (S-P-83). Styles are in the Appearance section, their own row
+      if (id === MANAGE_STYLES) return void openOptions('appearance/styles')
       // Same as the service menu: this list may have been built before another tab deleted the
       // profile, and a dangling id leaves every profile unmarked while the page reads the first
       // one (Codex on #161)
@@ -345,9 +446,7 @@ export function createPopupState(host: PopupHost): PopupState {
       await patchConfig(latest => ({ ...latest, reading: { ...latest.reading, sentenceHighlight: enabled } }))
     }),
     setImages: enabled => void guard(async () => {
-      // A reader who had unticked every mode migrates with an empty list; switching image
-      // translation back on then shows as enabled while no mode can run it (Codex on #157)
-      await patchConfig(latest => ({ ...latest, image: { enabled, modes: enabled && latest.image.modes.length === 0 ? [...MODE_VALUES] : latest.image.modes } }))
+      await patchConfig(latest => ({ ...latest, image: { enabled } }))
     }),
     // From the click itself (shared/pack.ts says why); the menu shows a spinner meanwhile
     downloadPack: () => void guard(async () => {
@@ -361,17 +460,66 @@ export function createPopupState(host: PopupHost): PopupState {
       void asks.saved()
     }),
     openOptions,
+    setQuery: text => {
+      query = text
+      if (stillTimer !== null) clearTimeout(stillTimer)
+      stillTimer = null
+      const named = offeredQuery(readQuery(text), host.readerRuns)
+      if (named.kind === 'paper' && !checked.has(named.id) && !checking.has(named.id)) {
+        stillTimer = setTimeout(() => { stillTimer = null; check(named.id) }, STILL_MS)
+      }
+      changed()
+    },
+    // Everything P0 opens, it opens in a new tab, whatever `reading.openIn` says: that setting is about leaving a
+    // paper's page, and the page under this popup is not one (§5.4). The popup goes once the tab is open
+    openLink: url => void guard(async () => {
+      await host.openTab(url)
+      host.close()
+    }),
+  }
+
+  /**
+   * What the view is given. The session's chain only while the page is on — unknown until it answers, never the saved
+   * chain in its place (Codex on #185) — and the saved settings' chain for what a start would run on; the tab once its
+   * page has been heard from; P0's field with the checks' answer for the paper it names (the redesign's design, §5.4)
+   */
+  const inputNow = (): PopupInput => {
+    const { config, revision: savedRevision, pack } = surface.state()
+    const named = offeredQuery(readQuery(query), host.readerRuns)
+    const answer = named.kind === 'paper' ? checked.get(named.id) : undefined
+    return {
+      page, entry, saved, session: on() ? session : null, config, pack, menu, shortcut, savedRevision, rejected, readerRuns: host.readerRuns,
+      tab: settled && tabUrl !== undefined ? { url: tabUrl, asking: silentTimer !== null } : null,
+      find: { query, entries: named.kind === 'paper' && answer ? { id: named.id, ...answer } : null },
+    }
   }
 
   return {
     start() {
       running = true
+      // This start's own liveness: false once its stop runs below, whether or not a later start has since set its
+      // own back to true (the StrictMode remount this guards against)
+      let live = true
+      isLive = () => live
       const stopSurface = surface.start()
       refresh()
       askWhileSilent()
       // The page is not running until it says so: the saved settings' chain is what a start would run on
       void asks.saved()
-      host.shortcut().then(found => { shortcut = found; changed() }).catch(() => { shortcut = null; changed() })
+      // Guarded like tabUrl below: an answer that lands once this start has stopped must not write or notify
+      host.shortcut().then(found => { if (!live) return; shortcut = found; changed() }).catch(() => { if (!live) return; shortcut = null; changed() })
+      // the tab's address, where the extension may read it: an arXiv paper's page not answering yet is loading (§5.4)
+      host.tabUrl().then(url => { if (!live) return; tabUrl = url; changed() }, () => { if (!live) return; tabUrl = null; changed() })
+      // Subscribed first, read after: an event heard while the read is still out means the read answers a moment
+      // already superseded, and applying it would overwrite what the event just gave (Codex review, round 3)
+      let heardRejected = false
+      // A change of the record asks again what a start would run on: the chain in force is rebuilt by the background on
+      // any such change, and the retranslate cue (view-model.ts) reads it (the branch's final review)
+      const stopRejected = watchRejected(ids => { heardRejected = true; rejected = [...ids]; changed(); void asks.saved() })
+      // A read that fails leaves no mark shown, and the watcher still brings the next change. `live` catches what
+      // `heardRejected` alone cannot: a read still out when this start stopped, answering only once a later start
+      // (StrictMode's start / stop / start) has its own subscription current — this one must not overwrite it
+      void rejectedServices().then(ids => { if (live && !heardRejected) { rejected = [...ids]; changed() } }).catch(() => undefined)
       const stopBroadcasts = host.onBroadcast({
         // A pack downloaded on the settings page: this popup's Download button must not stay over an installed pack
         'axt:pack-changed': message => {
@@ -381,17 +529,17 @@ export function createPopupState(host: PopupHost): PopupState {
       })
       return () => {
         running = false
+        live = false
         stopSurface()
         stopBroadcasts()
         stopSilent()
         stopPoll()
+        stopRejected()
+        if (stillTimer !== null) { clearTimeout(stillTimer); stillTimer = null }
       }
     },
     state() {
-      const { config, revision: savedRevision, pack } = surface.state()
-      // The view gets both: the session's chain only while the page is on — unknown until it answers, never the saved
-      // chain in its place (Codex on #185) — and the saved settings' chain for what a start would run on
-      snapshot ??= { input: { page, entry, saved, session: on() ? session : null, config, pack, menu, shortcut, savedRevision }, error }
+      snapshot ??= { input: inputNow(), error }
       return snapshot
     },
     subscribe(listener) {

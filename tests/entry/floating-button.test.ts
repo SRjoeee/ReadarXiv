@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type DockPlacement, type FloatingButtonOptions, type FloatingButtonStrings, mountFloatingButton } from '@/core/floating/button'
 import { Settings as LucideSettings } from 'lucide'
+import { restore } from '@/core/renderer/page'
+import { tokenSheet } from '@/shared/tokens'
+import { ruleOf, rules, sheet } from '../styles/css-rules'
 
 // The floating button on arXiv's pages (issue #169, DESIGN §4.0c, UI.md S-I-06): Read Frog's frame, resting and opening
 // as Immersive Translate's does. Layout and motion are the real browser's business (tests/e2e/floating-button.mjs);
@@ -16,7 +19,6 @@ const STRINGS: FloatingButtonStrings = {
   hideForNow: 'Hide for now',
   hideAlways: "Don't show again",
 }
-const HREF = 'https://arxiv.org/html/2501.07202v1#readarxiv'
 
 function mount(overrides: Partial<FloatingButtonOptions> = {}) {
   const host = document.createElement('div')
@@ -26,8 +28,7 @@ function mount(overrides: Partial<FloatingButtonOptions> = {}) {
   const onSettings = vi.fn<() => void>()
   const onHide = vi.fn<(scope: 'now' | 'always') => void>()
   const entry = mountFloatingButton(document, host, {
-    main: { kind: 'link', href: HREF },
-    newTab: true,
+    main: { kind: 'toggle', run: () => undefined },
     placement: { side: 'right', position: 0.66, locked: false },
     strings: STRINGS,
     // happy-dom would go and fetch a real address; what the frame shows is the browser's business (e2e)
@@ -82,19 +83,28 @@ describe('the floating button: what it is made of', () => {
     expect([...q('.axt-fb-anchor').children].map(e => e.className)).toEqual(['axt-fb-main', 'axt-fb-control axt-fb-options', 'axt-fb-control axt-fb-lock', 'axt-fb-menu'])
     // Our mark in its disc, inline vector and decorative: the button carries the name, and no image file is fetched
     const mark = q<SVGElement>('.axt-fb-main .axt-fb-disc svg.axt-fb-mark')
-    expect([mark.getAttribute('aria-hidden'), mark.getAttribute('viewBox'), mark.querySelector('circle')?.getAttribute('fill')]).toEqual(['true', '10.6 6.6 47 47', '#fff'])
+    // the view box drawn tight round the circle, 47 across (logo round 7 puts the circle at the origin)
+    expect([mark.getAttribute('aria-hidden'), mark.getAttribute('viewBox'), mark.querySelector('circle')?.getAttribute('fill')]).toEqual(['true', '0 0 47 47', '#fff'])
     expect(root.querySelector('img')).toBeNull()
     expect(q('.axt-fb-main .axt-fb-disc .axt-fb-tick')).not.toBeNull()
   })
 
-  it('on an abstract or PDF page the main button is a link to the bilingual version, in a new tab unless told otherwise', () => {
-    const { entry, q } = mount()
-    const link = q<HTMLAnchorElement>('a.axt-fb-main')
-    expect([link.getAttribute('href'), link.target, link.rel, link.getAttribute('aria-label')]).toEqual([HREF, '_blank', 'noopener', STRINGS.main])
-    entry.retarget(false)
-    expect([link.getAttribute('target'), link.getAttribute('rel')]).toEqual([null, null])
-    entry.retarget(true)
-    expect(link.target).toBe('_blank')
+  it('on an abstract or PDF page the logo opens the control panel, and the column is two: the logo and the settings (the reader\'s design, §2)', () => {
+    const { q, root } = mount({ main: { kind: 'panel' } })
+    expect([...q('.axt-fb-column').children].map(e => e.className)).toEqual(['axt-fb-anchor', 'axt-fb-hidden-button axt-fb-settings'])
+    expect(root.querySelector('.axt-fb-panel')).toBeNull()
+    const main = q<HTMLButtonElement>('button.axt-fb-main')
+    expect([main.type, main.getAttribute('aria-haspopup'), main.getAttribute('aria-expanded'), main.getAttribute('aria-label')]).toEqual(['button', 'dialog', 'false', STRINGS.main])
+    main.dispatchEvent(click())
+    expect([q('.axt-fb-panel-box').hidden, q('.axt-fb-panel-box iframe')?.getAttribute('src'), main.getAttribute('aria-expanded')]).toEqual([false, 'about:blank', 'true'])
+    // The press that makes the second click is on the logo, not elsewhere: it does not close the panel for the click to open it again
+    main.dispatchEvent(pointer('pointerdown', 1000, 569))
+    main.dispatchEvent(click())
+    expect([q('.axt-fb-panel-box').hidden, main.getAttribute('aria-expanded')]).toEqual([true, 'false'])
+    // Escape closes it and gives the focus back to the logo, the control that opened it
+    main.dispatchEvent(click())
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect([q('.axt-fb-panel-box').hidden, root.activeElement]).toEqual([true, main])
   })
 
   it('on the full text the main button is a button that runs the toggle, and the tick says the page is translated', () => {
@@ -109,18 +119,6 @@ describe('the floating button: what it is made of', () => {
     expect([dock.dataset.axtActive, main.getAttribute('aria-label'), q('.axt-fb-main .axt-fb-tip').textContent]).toEqual(['yes', 'Show the original', 'Show the original'])
     entry.activate(false)
     expect(dock.dataset.axtActive).toBe('no')
-    // A link has nothing to retarget here, and says nothing about it
-    entry.retarget(false)
-    expect(main.hasAttribute('target')).toBe(false)
-  })
-
-  it('a paper with no HTML version keeps the button, disabled, its tooltip saying why', () => {
-    const { q } = mount({ main: { kind: 'none' }, strings: { ...STRINGS, main: 'arXiv has no HTML version of this paper' } })
-    const main = q<HTMLButtonElement>('button.axt-fb-main')
-    expect([main.getAttribute('aria-disabled'), main.getAttribute('aria-label'), q('.axt-fb-main .axt-fb-tip').textContent])
-      .toEqual(['true', 'arXiv has no HTML version of this paper', 'arXiv has no HTML version of this paper'])
-    // A click does nothing, and the other two buttons still work
-    expect(() => main.dispatchEvent(click())).not.toThrow()
   })
 
   it('names every control; the tooltips are the same words for the eye only; the settings ask the host', () => {
@@ -633,5 +631,74 @@ describe('the floating button: the close menu', () => {
     entry.remove()
     expect(host.isConnected).toBe(false)
     expect(off.mock.calls.map(([type]) => type).sort()).toEqual(['fullscreenchange', 'keydown', 'pointerdown'])
+  })
+})
+
+
+describe('the floating button: its material (the redesign\'s design, §7)', () => {
+  /** the button's sheet as its shadow root holds it, comments out */
+  const own = () => mount().root.querySelector('style')!.textContent!.replace(/\/\*[\s\S]*?\*\//g, '')
+  /** the shared controls' rules, each role named as a shadow root on arXiv's pages names it */
+  const shared = rules(sheet('../../src/styles/controls.css'))
+  const C = ['@layer components']
+  const axt = (d: Record<string, string>) => Object.fromEntries(Object.entries(d).map(([k, v]) => [k, v.replaceAll('var(--', 'var(--axt-')]))
+  const pick = (d: Record<string, string>, keys: string[]) => Object.fromEntries(keys.map(k => [k, d[k]]))
+
+  it('draws in the extension\'s appearance: its dock marked light or dark, unmarked for the system\'s, a change followed', () => {
+    const { host, dock, entry } = mount({ theme: 'dark' })
+    expect(dock.dataset.axtTheme).toBe('dark')
+    entry.retheme('light')
+    expect(dock.dataset.axtTheme).toBe('light')
+    entry.retheme('system')
+    expect(dock.dataset.axtTheme).toBeUndefined()
+    // anything else a page might be told is the system's, never a mark of its own (Review Focus)
+    entry.retheme('dark')
+    entry.retheme(undefined as unknown as 'system')
+    expect(dock.dataset.axtTheme).toBeUndefined()
+    // the host carries its class alone: arXiv's own sheet styles any [data-theme=dark] (Review Focus)
+    expect(host.getAttributeNames()).toEqual(['class'])
+  })
+
+  it('keeps its appearance through a restore of the page, which strips every data-axt-* of the document\'s own elements (Review Focus)', () => {
+    const { dock } = mount({ theme: 'dark' })
+    // restore walks the document's own tree, never a shadow root's: this holds that, should restore ever reach into ours
+    restore(document)
+    expect(dock.dataset.axtTheme).toBe('dark')
+  })
+
+  it('takes every colour from the host token sheet, written after the host\'s reset; no colour of its own but the mark\'s', () => {
+    const css = own()
+    const tokens = tokenSheet('host')
+    expect(css.trimStart().startsWith(`:host { all: initial }\n${tokens}`)).toBe(true)
+    const rest = css.slice(css.indexOf(tokens) + tokens.length)
+    // a named colour counts too, but not a property's name (`white-space`)
+    expect([...rest.matchAll(/oklch\([^)]*\)|rgba?\([^)]*\)|hsla?\([^)]*\)|#[0-9a-f]{3,8}\b|(?<![\w-])(?:white|black)(?![\w-])/gi)].map(m => m[0]).sort()).toEqual([
+      // the tick's ring and glyph: the disc's white (mark.ts)
+      '#fff', '#fff',
+      // the disc's shadow at rest and lit: the logo's export
+      'rgb(0 0 0 / 0.06)', 'rgb(0 0 0 / 0.16)',
+    ])
+  })
+
+  it('rests on the chrome with a hairline under the floating shadow; the tick in success; the keyboard\'s ring 2 px of the focus ink; the panel\'s frame the popover\'s', () => {
+    const all = rules(own())
+    for (const selector of ['.axt-fb-main', '.axt-fb-hidden-button']) {
+      expect(pick(ruleOf(all, selector, []), ['background', 'border', 'box-shadow'])).toEqual({ background: 'var(--axt-chrome)', border: '1px solid var(--axt-chrome-line)', 'box-shadow': 'var(--axt-float-shadow)' })
+    }
+    expect(ruleOf(all, '.axt-fb-tick', []).background).toBe('var(--axt-success)')
+    expect(ruleOf(all, '.axt-fb-main:focus-visible, .axt-fb-hidden-button:focus-visible, .axt-fb-control:focus-visible', [])).toEqual({ outline: '2px solid var(--axt-focus)', 'outline-offset': '2px' })
+    expect(pick(ruleOf(all, '.axt-fb-panel-box', []), ['border-radius', 'background', 'box-shadow'])).toEqual({ 'border-radius': '12px', background: 'var(--axt-chrome)', 'box-shadow': 'var(--axt-pop-shadow)' })
+  })
+
+  it('opens its close menu as the shared menu and shows its tooltips as the shared tooltip, value for value (controls.css)', () => {
+    const all = rules(own())
+    const MENU = ['padding', 'border-radius', 'background', 'color', 'box-shadow', 'font-size']
+    const ITEM = ['display', 'align-items', 'gap', 'height', 'padding', 'border-radius', 'cursor']
+    const TIP = ['padding', 'border-radius', 'background', 'color', 'font', 'box-shadow']
+    expect(pick(ruleOf(all, '.axt-fb-menu', []), MENU)).toEqual(pick(axt(ruleOf(shared, '.pop', C)), MENU))
+    expect(pick(ruleOf(all, '.axt-fb-menu button', []), ITEM)).toEqual(pick(axt(ruleOf(shared, '.pop .item', C)), ITEM))
+    expect(ruleOf(all, '.axt-fb-menu button:hover, .axt-fb-menu button:focus-visible', [])).toEqual(axt(ruleOf(shared, '.pop .item[data-active]', C)))
+    expect(ruleOf(all, '.axt-fb-menu button:focus-visible', [])).toEqual({ outline: '2px solid var(--axt-focus)', 'outline-offset': '-2px' })
+    expect(pick(ruleOf(all, '.axt-fb-tip', []), TIP)).toEqual(pick(axt(ruleOf(shared, '.tip', C)), TIP))
   })
 })

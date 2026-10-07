@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
-import { answerEntryMessages } from '@/shared/entry-page'
+import { answerEntryMessages, type EntryPage } from '@/shared/entry-page'
 
 // What an abstract or PDF page answers the popup (§4.0b, UI.md S-P-03b)
 
 let assign: ReturnType<typeof vi.spyOn>
+let replace: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
   fakeBrowser.reset()
@@ -14,6 +15,7 @@ beforeEach(() => {
   // A second `spyOn` of the same method hands back the first spy, calls and all, so the history is cleared explicitly
   vi.restoreAllMocks()
   assign = vi.spyOn(globalThis.location, 'assign').mockImplementation(() => undefined)
+  replace = vi.spyOn(globalThis.location, 'replace').mockImplementation(() => undefined)
 })
 
 /**
@@ -34,44 +36,72 @@ async function ask(type: string): Promise<{ reply: unknown; answered: boolean; k
   return { reply, answered, keptChannelOpen: (Array.isArray(kept) ? kept : [kept]).some(k => k === true) }
 }
 
+/** an abstract page's answers, unless a test says otherwise */
+const page = (over: Partial<EntryPage>): EntryPage => ({ kind: 'abs', paper: () => '2501.07202', html: () => null, pdf: () => null, readerOpen: () => false, ...over })
+
 describe('answerEntryMessages', () => {
   it('answers what paper this is and where its HTML version is', async () => {
-    answerEntryMessages({ paper: () => '2501.07202v1', html: () => 'https://arxiv.org/html/2501.07202v1#readarxiv' })
+    answerEntryMessages(page({ paper: () => '2501.07202v1', html: () => 'https://arxiv.org/html/2501.07202v1#readarxiv' }))
     const { reply, keptChannelOpen } = await ask('axt:entry-status')
-    expect(reply).toEqual({ paper: '2501.07202v1', html: 'https://arxiv.org/html/2501.07202v1#readarxiv' })
+    expect(reply).toEqual({ paper: '2501.07202v1', html: 'https://arxiv.org/html/2501.07202v1#readarxiv', kind: 'abs', pdf: null, readerOpen: false })
     // The channel is held open for the asynchronous reply, or the popup receives undefined
     expect(keptChannelOpen).toBe(true)
   })
 
   it('says a paper has no HTML version rather than staying silent: the popup needs the difference', async () => {
-    answerEntryMessages({ paper: () => 'hep-th/9711200', html: () => null })
+    answerEntryMessages(page({ paper: () => 'hep-th/9711200' }))
     const { reply } = await ask('axt:entry-status')
-    expect(reply).toEqual({ paper: 'hep-th/9711200', html: null })
+    expect(reply).toEqual({ paper: 'hep-th/9711200', html: null, kind: 'abs', pdf: null, readerOpen: false })
   })
 
   it('stays silent where the path is not a paper, so the popup shows its “not an arXiv page” screen', async () => {
-    answerEntryMessages({ paper: () => null, html: () => null })
+    answerEntryMessages(page({ paper: () => null }))
     const { answered, keptChannelOpen } = await ask('axt:entry-status')
     expect(answered).toBe(false)
     expect(keptChannelOpen).toBe(false)
   })
 
   it('opens the HTML version itself, so no permission is needed to navigate the tab', async () => {
-    answerEntryMessages({ paper: () => '2501.07202', html: () => 'https://arxiv.org/html/2501.07202#readarxiv' })
+    answerEntryMessages(page({ html: () => 'https://arxiv.org/html/2501.07202#readarxiv' }))
     const { reply } = await ask('axt:open-html')
     expect(assign).toHaveBeenCalledWith('https://arxiv.org/html/2501.07202#readarxiv')
     expect(reply).toEqual({ opened: true })
   })
 
   it('opens nothing when there is nothing to open, and says so', async () => {
-    answerEntryMessages({ paper: () => 'hep-th/9711200', html: () => null })
+    answerEntryMessages(page({ paper: () => 'hep-th/9711200' }))
     const { reply } = await ask('axt:open-html')
     expect(assign).not.toHaveBeenCalled()
     expect(reply).toEqual({ opened: false })
   })
 
+  it('says which page it is, where the PDF entry leads, and whether the reader is open, read as it answers (the reader\'s design, §2, §9.2)', async () => {
+    let open = false
+    answerEntryMessages(page({ kind: 'pdf', pdf: () => 'https://arxiv.org/pdf/2501.07202#readarxiv', readerOpen: () => open }))
+    expect((await ask('axt:entry-status')).reply).toMatchObject({ kind: 'pdf', pdf: 'https://arxiv.org/pdf/2501.07202#readarxiv', readerOpen: false })
+    open = true
+    expect((await ask('axt:entry-status')).reply).toMatchObject({ readerOpen: true })
+  })
+
+  it('from an abstract page the PDF entry is a navigation like the HTML one: Back returns to the abstract (Codex on #301)', async () => {
+    answerEntryMessages(page({ kind: 'abs', pdf: () => 'https://arxiv.org/pdf/2501.07202#readarxiv' }))
+    expect((await ask('axt:open-pdf')).reply).toEqual({ opened: true })
+    expect([assign.mock.calls, replace.mock.calls]).toEqual([[['https://arxiv.org/pdf/2501.07202#readarxiv']], []])
+  })
+
+  it('opens the PDF entry itself, on this page, and nothing when there is none (the reader\'s design, §2)', async () => {
+    answerEntryMessages(page({ kind: 'pdf', pdf: () => 'https://arxiv.org/pdf/2501.07202#readarxiv' }))
+    expect((await ask('axt:open-pdf')).reply).toEqual({ opened: true })
+    // replaced, not pushed: on the PDF page itself the hash is let go once read, and a pushed entry would leave two
+    // alike in the history, the first Back doing nothing (Part 5's final review)
+    expect([replace.mock.calls, assign.mock.calls]).toEqual([[['https://arxiv.org/pdf/2501.07202#readarxiv']], []])
+    fakeBrowser.runtime.onMessage.removeAllListeners()
+    answerEntryMessages(page({ pdf: () => null }))
+    expect((await ask('axt:open-pdf')).reply).toEqual({ opened: false })
+  })
+
   it('leaves every other message to whoever it belongs to', async () => {
-    answerEntryMessages({ paper: () => '2501.07202', html: () => 'https://arxiv.org/html/2501.07202' })
+    answerEntryMessages(page({ html: () => 'https://arxiv.org/html/2501.07202' }))
     const { answered, keptChannelOpen } = await ask('axt:page-status')
     expect(answered).toBe(false)
     expect(keptChannelOpen).toBe(false)

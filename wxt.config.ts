@@ -1,4 +1,7 @@
 import { execSync } from 'node:child_process'
+import { readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'wxt'
 import { readBuildRef } from './scripts/build-ref.mjs'
@@ -17,6 +20,30 @@ function buildRef(): string {
   return stamped
 }
 
+/**
+ * The files PDF.js reads by address rather than by import (the reader's design, §11.2): its character maps, the standard
+ * fonts with their licences, and its WebAssembly decoders, copied from the pinned package as they are into
+ * `pdf-reader/pdfjs/`. The library and its worker are bundled (src/pdf-reader/pdfjs.ts). Not QuickJS (`quickjs-eval.*`,
+ * 468 KB): only PDF.js's scripting sandbox loads it, and the reader's viewer has no scripting manager — it runs no script
+ * a PDF carries (scripts/check-output.mjs holds it out)
+ */
+const PDFJS = fileURLToPath(new URL('./node_modules/pdfjs-dist', import.meta.url))
+function pdfjsFiles(): { absoluteSrc: string; relativeDest: string }[] {
+  return ['cmaps', 'standard_fonts', 'wasm'].flatMap(dir =>
+    readdirSync(join(PDFJS, dir))
+      .filter(name => statSync(join(PDFJS, dir, name)).isFile() && !name.startsWith('quickjs'))
+      .map(name => ({ absoluteSrc: join(PDFJS, dir, name), relativeDest: `pdf-reader/pdfjs/${dir}/${name}` })),
+  )
+}
+
+/**
+ * The pages for development alone — the popup's states (gallery), the shared controls (controls) and the capsule's motion
+ * (capsule): a release must not ship a debug page anyone can open, so a production build leaves them out; `wxt` and
+ * `wxt build --mode development` (tests/e2e/probes/controls.mjs, capsule.mjs) keep them. scripts/check-output.mjs checks
+ * the release
+ */
+const DEV_PAGES = ['gallery', 'controls', 'capsule']
+
 // The WXT project configuration.
 export default defineConfig({
   srcDir: 'src',
@@ -24,18 +51,18 @@ export default defineConfig({
   // In extension pages <link rel="modulepreload" crossorigin> triggers Chrome's "cross-world extension resource mismatch" warning (harmless but noisy); preloading is off
   // The recogniser's worker (entrypoints/ocr) is a build of its own, and what it bundles goes into the same notices
   vite: () => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages()], worker: { format: 'es', plugins: () => [noteBundledPackages()] }, define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()) } }),
-  // The gallery is for `wxt` (serve) only: a release must not ship a debug page anyone can open
   hooks: {
     'entrypoints:found': (wxt, infos) => {
-      if (wxt.config.command !== 'serve') {
-        const at = infos.findIndex(info => info.name === 'gallery')
+      if (wxt.config.mode !== 'production') return
+      for (const name of DEV_PAGES) {
+        const at = infos.findIndex(info => info.name === name)
         if (at >= 0) infos.splice(at, 1)
       }
     },
     // The licences that go with every copy (scripts/third-party-notices.mjs): WXT calls this once every entry point
     // is built, so the list of what was bundled is complete; the project's own licence goes in beside it
     'build:publicAssets': (_wxt, files) => {
-      files.push(...licenceFiles())
+      files.push(...licenceFiles(), ...pdfjsFiles())
     },
   },
   manifest: {
@@ -76,13 +103,16 @@ export default defineConfig({
     // Every network engine has to be here: an MV3 background fetch is still bound by CORS, and without a host permission it can only
     // hope for `Access-Control-Allow-Origin` from the other side. Microsoft does return `*` today (measured), but that is a dependency
     // beyond our control — the day it stops, the whole engine becomes a `network` failure (Codex on #115; the line was missed when the provider was added)
-    host_permissions: ['https://openrouter.ai/*', 'https://translate-pa.googleapis.com/*', 'https://edge.microsoft.com/*'],
+    // arxiv.org, on this experiment branch: the PDF reader's page (entrypoints/pdf-reader) fetches a paper's source and PDF
+    host_permissions: ['https://openrouter.ai/*', 'https://translate-pa.googleapis.com/*', 'https://edge.microsoft.com/*', 'https://arxiv.org/*'],
     // The floating button (DESIGN §4.0c) frames the popup as its control panel, and a page may only load an extension
     // file that is declared here. One file, and only to arXiv. What the popup loads for itself (its script, its
     // style sheet) is asked for by the extension's own origin and needs no entry; the button's mark is inline vector. A page that
     // may frame the popup could try to trick a click on it: the popup shows no key and no paper text, and what a
     // click can do there is what the reader does there anyway — start or undo a translation, pick a mode or a service
-    web_accessible_resources: [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'] }],
+    // On this experiment branch the PDF reader's page too: arXiv's PDF page frames it (entrypoints/pdf.content.ts), and
+    // what that page loads for itself is asked for by the extension's own origin, as the popup's is, and needs no entry
+    web_accessible_resources: [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'] }, { resources: ['pdf-reader.html'], matches: ['https://arxiv.org/*'] }],
     // A custom endpoint may be http on 127.0.0.1 / the LAN (Ollama, LM Studio); with only the localhost literal the request fails outright (Codex on #6).
     // This is only the range that may be requested; the real grant is still asked for per origin on the settings page
     optional_host_permissions: ['https://*/*', 'http://*/*'],

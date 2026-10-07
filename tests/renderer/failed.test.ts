@@ -5,6 +5,8 @@ import { ERROR_CLASS, FOR_ATTR, PARTIAL_ATTR, SPLIT_CLASS, STATE_ATTR } from '@/
 import { REASON_ATTR, relabelFailed, renderFailed } from '@/core/renderer/failed'
 import { restore } from '@/core/renderer/page'
 import { renderPending } from '@/core/renderer/pending'
+import { resolve } from '@/shared/tokens'
+import { ruleOf, rules, sheet } from '../styles/css-rules'
 import { splitFigures } from '@/core/renderer/split-figures'
 import { clearTranslation, markPartial, renderTable } from '@/core/renderer/translation'
 import { docOfChecked, frag } from './helpers'
@@ -14,6 +16,10 @@ import { S, reasonText, setLocale } from '@/ui/strings'
 const docOf = docOfChecked()
 
 const page = '<p class="ltx_p" id="p1">Text.</p>'
+
+/** The family's danger in each theme, and the 60 % of it the retry's edge and the block's hint line draw (§3, §7) */
+const [light, dark] = [resolve('danger', 'light'), resolve('danger', 'dark')]
+const edge = (colour: string) => `color-mix(in oklab, ${colour} 60%, transparent)`
 
 // The failure widget (§7.6): a retry button + a “!” with the reason, inside a Shadow DOM, only the original block's next sibling
 describe('renderFailed', () => {
@@ -50,6 +56,22 @@ describe('renderFailed', () => {
     const root = host.shadowRoot!
     expect(root.querySelector('button')?.textContent).toBe(S.page.retry)
     expect(root.querySelector('.mark')?.getAttribute('title')).toBe(reasonText('auth'))
+  })
+
+  it('draws the retry\'s edge and its mark in the family\'s danger, light or dark by the colour scheme of the page it stands in (the redesign\'s design, §3, §7)', () => {
+    const doc = docOf(page)
+    const host = renderFailed(extract(doc)[0] as TextBlock, 'network: offline', () => undefined)
+    const css = host.shadowRoot!.querySelector('style')!.textContent!
+    expect(css).toContain(`--axt-danger: light-dark(${light}, ${dark});`)
+    expect(css).toContain(`--axt-danger-edge: light-dark(${edge(light)}, ${edge(dark)});`)
+    expect(css).toContain('border: 1px solid var(--axt-danger-edge);')
+    expect(css).toMatch(/\.mark \{[^}]*color: var\(--axt-danger\);/)
+    expect(css).not.toMatch(/rgba?\(|--axt-failed-color/)
+  })
+
+  it('draws the failed block\'s hint line in the same danger at 60 %, by the page: modes.css writes the two values, held here to the tokens (the controller\'s ruling 2)', () => {
+    const line = ruleOf(rules(sheet('../../src/styles/modes.css')), '[data-axt-state="failed"],\n[data-axt-partial],\n[data-axt-partial] + .axt-t', [])
+    expect(line).toEqual({ 'box-shadow': `inset 3px 0 0 light-dark(${edge(light)}, ${edge(dark)})` })
   })
 
   it('clicking Retry calls the callback and disables the button', () => {

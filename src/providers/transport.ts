@@ -5,11 +5,11 @@
 // - createMessageTransport (src/shared/transport.ts): turns every method into a message in content / options.
 // Two files for bundle size: this one pulls in three providers and the AI SDK, which the content script would parse on every paper opened.
 import type { Config } from '@/config/schema'
-import { chosenService, serviceOf } from '@/config/services'
-import type { RenderPath } from '@/cache/key'
+import { chosenService, serviceOf, type Service } from '@/config/services'
+import { translationIdentity, type RenderPath } from '@/cache/key'
 import { buildChain } from '.'
 import { createOpenAICompatProvider } from './openai-compat'
-import { createFallbackService } from './fallback'
+import { createFallbackService, type DemotedInfo } from './fallback'
 import type { CancelledScopeRegistry } from './request/cancellation'
 import { createTranslateService, type CachePort, type TranslateCall, type TranslateMessageResponse, type TranslateService, type TranslateServiceDeps } from './translate-service'
 import type { ProviderErrorKind, TranslationProvider } from './types'
@@ -55,9 +55,15 @@ export interface ProviderStatus {
    * Every hand-over still in force, by engine. The page uses it to ask about **the engine its own
    * session started on**: `engine.demoted` is only the most recent one, so an intermediate free
    * engine failing transiently would hide the permanent one that displaced the reader's service
-   * (Codex on #157)
+   * (Codex on #157). `status` is the failure's HTTP status where it had one: `auth` is a 401 or a 403, and the
+   * retranslate cue reads a refused key by the 401 (shared/page-action.ts keyMadeGood)
    */
-  demotions: { id: string; kind: ProviderErrorKind }[]
+  demotions: { id: string; kind: ProviderErrorKind; status?: number }[]
+  /**
+   * The identity (cache/key.ts translationIdentity) of the engine that would answer now: the first choice, or its
+   * fallback while it cannot. The PDF reader's cached copies are current by it
+   */
+  identity: string
 }
 
 export interface TranslationTransport {
@@ -99,6 +105,10 @@ export interface LocalTransportDeps extends Pick<TranslateServiceDeps, 'queue' |
   buildChain?: (config: Config) => Promise<{ chain: TranslationProvider[]; renderPath: RenderPath }>
   /** Where the services' warnings go besides the console: the diagnostics log (issue #156) */
   warn?: (line: string) => void
+  /** The reader's services whose key the endpoint refused (the service health record): demoted from the start */
+  rejected?: ReadonlySet<string>
+  /** Told of every failed step, demoted or not — with fallback off the one step never demotes (Codex review, round 1) */
+  onFailure?: (info: DemotedInfo) => void
 }
 
 /**
@@ -135,20 +145,35 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
       ...(deps.cacheReadBudgetMs !== undefined ? { cacheReadBudgetMs: deps.cacheReadBudgetMs } : {}),
     }),
   }))
-  const service = createFallbackService(steps, deps.warn ? { warn: deps.warn } : {})
+  // the record holds a 401 alone (background/health-guard.ts), and its hand-over says so
+  const seeded = chain.filter(engine => deps.rejected?.has(engine.id)).map(engine => ({ id: engine.id, kind: 'auth' as const, message: 'the endpoint refused this key before', status: 401 }))
+  const service = createFallbackService(steps, {
+    ...(deps.warn ? { warn: deps.warn } : {}),
+    ...(seeded.length ? { demoted: seeded } : {}),
+    ...(deps.onFailure ? { onFailure: deps.onFailure } : {}),
+  })
 
   /**
    * A service of the reader's that this chain is not built around: the connection test has to answer for the
-   * endpoint named in the drawer, and editing a service no longer makes it the chosen one, so the
-   * one being tested is usually **not** on the chain (Codex on #157). It gets a provider of its own,
-   * with no cache behind it — the question is whether the endpoint answers, and a cached sample
-   * would report success for one that no longer does
+   * endpoint named, and editing a service does not make it the chosen one, so the one tested is usually not on the
+   * chain (Codex on #157) — or it is not stored at all yet (a candidate). It gets a provider of its own, with no
+   * cache behind it: the question is whether the endpoint answers, and a cached sample would report success for
+   * one that no longer does
    */
-  const offChain = (id: string) => {
-    const own = serviceOf(config, id)
-    if (!own) return undefined
+  const offChainFor = (own: Service) => {
     const engine = createOpenAICompatProvider(own, { prompts: config.prompts })
-    return { provider: engine, service: createTranslateService({ getProvider: async () => engine, getModel: async () => own.model, cancelled: deps.cancelled, retired: isRetired, ...(deps.warn ? { warn: deps.warn } : {}) }) }
+    return createTranslateService({ getProvider: async () => engine, getModel: async () => own.model, cancelled: deps.cancelled, retired: isRetired, ...(deps.warn ? { warn: deps.warn } : {}) })
+  }
+  /** Off-chain services with a call inside: built per named call, they are drained and retired with the chain */
+  const offChainLive = new Set<TranslateService>()
+  const askOffChain = async (own: Service, call: TranslateCall): Promise<TranslateMessageResponse> => {
+    const off = offChainFor(own)
+    offChainLive.add(off)
+    try {
+      return await off.translate(call)
+    } finally {
+      offChainLive.delete(off)
+    }
   }
 
   /**
@@ -156,21 +181,18 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
    * I configured work”, and a free fallback on the chain showing as success would be issue #42's “two inconsistent
    * paths” committed the other way round — the reader would think the endpoint fine while the whole page translated through Google
    */
-  /** Off-chain services with a call inside: built per named call, they are drained and retired with the chain */
-  const offChainLive = new Set<TranslateService>()
   const route = async (call: TranslateCall): Promise<TranslateMessageResponse> => {
+    if (call.candidate) {
+      if (call.candidate.id !== call.providerId) return { ok: false, error: { kind: 'unknown', message: 'the candidate is not the service named', isolatable: false } }
+      return askOffChain(call.candidate, call)
+    }
     if (call.providerId === undefined) return service.translate(call)
     const step = steps.find(s => s.provider.id === call.providerId)
     if (step) return step.service.translate(call)
-    const own = offChain(call.providerId)
+    const own = serviceOf(config, call.providerId)
     // This one has nothing to do with the segments; split smaller, the engine is still not on the chain
     if (!own) return { ok: false, error: { kind: 'unknown', message: `engine ${call.providerId} is not on the current chain`, isolatable: false } }
-    offChainLive.add(own.service)
-    try {
-      return await own.service.translate(call)
-    } finally {
-      offChainLive.delete(own.service)
-    }
+    return askOffChain(own, call)
   }
   /** Calls inside this chain right now; `busy()` reports it to the chain holder */
   let inFlight = 0
@@ -184,7 +206,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
   }
 
   const status = async (): Promise<ProviderStatus> => {
-    const available = await primary.isAvailable()
+    const available = !deps.rejected?.has(primary.id) && await primary.isAvailable()
     // The first choice unavailable, look for a usable one on the chain: with one the translation runs as usual, on the fallback engine
     let fallback: ProviderStatus['fallback']
     if (!available) {
@@ -197,6 +219,20 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     }
     const live = service.status()
     const active = chain.find(engine => engine.id === live.activeId) ?? primary
+    // The engine that would answer now: the first on the chain that is not demoted and whose probe says it can — a key
+    // refused demotes an engine for the session, and its probe still says yes (final review; Devin on #298). None, the
+    // chain's own choice
+    const demoted = new Set(live.demotions.map(d => d.id))
+    let serving = active
+    for (const engine of chain) {
+      if (demoted.has(engine.id)) continue
+      if (engine === primary ? available : await engine.isAvailable()) {
+        serving = engine
+        break
+      }
+    }
+    // the same parts the service tags its segments with (translate-service.ts): its model is the chosen service's alone
+    const identity = await translationIdentity({ providerId: serving.cacheId ?? serving.id, model: serving.id === chosen?.id ? (chosen.model ?? '') : '', promptKey: serving.promptKey ?? '', target: config.targetLanguage, renderPath })
     return {
       providerId: primary.id,
       chosen: config.provider,
@@ -210,7 +246,8 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
       targetLanguage: config.targetLanguage,
       promptId: config.prompts.promptId,
       chain: chain.map(engine => engine.id),
-      demotions: live.demotions.map(d => ({ id: d.id, kind: d.kind })),
+      demotions: live.demotions.map(d => ({ id: d.id, kind: d.kind, ...(d.status !== undefined ? { status: d.status } : {}) })),
+      identity,
       engine: {
         id: active.id,
         ...(live.activeId !== live.configuredId && live.demoted

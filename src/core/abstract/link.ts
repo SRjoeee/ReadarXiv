@@ -4,7 +4,7 @@
 // **The URL is the one arXiv gives**, plus `#readarxiv` — the content script starts translating of itself on seeing that hash.
 // Building `arxiv.org/html/<id>` ourselves would point at the wrong version of a paper with several (its href carries the `v7`).
 
-import { HTML_LINK } from '@/core/rules/abstract'
+import { HTML_LINK, SOURCE_LINK } from '@/core/rules/abstract'
 
 /** The line we insert; `restore` leaves the abstract page alone, but the mark is still needed, for recognition and idempotence */
 export const ABS_LINK_CLASS = 'axt-abs-link'
@@ -23,12 +23,9 @@ export function startsTranslation(hash: string): boolean {
   return asked === AUTO_TRANSLATE_HASH || asked === LEGACY_AUTO_TRANSLATE_HASH
 }
 
-/**
- * Insert the bilingual entry; returns whether it was inserted.
- *
- * Nothing happens in three cases: this is not an abstract page, the paper has no HTML version (`HTML_LINK` absent), or it was inserted already.
- * Idempotent because it is cheap: arXiv's abstract page does not re-render, but an assumption that only holds under one DOM shape is not worth relying on.
- */
+/** Whether the abstract page offers the paper's source, which a bilingual PDF is made from (the reader's design, §2) */
+export const sourceOn = (doc: Document): boolean => doc.querySelector(SOURCE_LINK) !== null
+
 /**
  * Where arXiv says this paper's HTML full text is, plus the hash that starts the translation; null when the paper
  * has no HTML version. The popup asks the page for this rather than building a URL: the href carries the version.
@@ -38,6 +35,12 @@ export function htmlHrefOn(doc: Document): string | null {
   return html ? `${html.href}${AUTO_TRANSLATE_HASH}` : null
 }
 
+/**
+ * Insert the bilingual entry; returns whether it was inserted.
+ *
+ * Nothing happens in three cases: this is not an abstract page, the paper has no HTML version (`HTML_LINK` absent), or it was inserted already.
+ * Idempotent because it is cheap: arXiv's abstract page does not re-render, but an assumption that only holds under one DOM shape is not worth relying on.
+ */
 export function injectBilingualLink(doc: Document, label: string, options: { newTab?: boolean } = {}): boolean {
   const html = doc.querySelector<HTMLAnchorElement>(HTML_LINK)
   if (!html) return false

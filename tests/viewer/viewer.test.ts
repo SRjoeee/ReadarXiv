@@ -3,6 +3,9 @@
 import { VIEWED_ATTR, VIEWED_FRAME_ATTR } from '@/core/marks'
 import { afterEach, describe, expect, it } from 'vitest'
 import { installFigureViewer, SPOT_CLASS, type FigureViewer, VIEWER_CLASS } from '@/core/viewer'
+import { restore } from '@/core/renderer/page'
+import { tokenSheet } from '@/shared/tokens'
+import { ruleOf, rules } from '../styles/css-rules'
 
 const OPTIONS = {
   figures: 'img.ltx_graphics, object.ltx_graphics, svg.ltx_picture',
@@ -528,5 +531,42 @@ describe('the dialog', () => {
     expect(document.querySelector(`.${VIEWER_CLASS}`)).toBeNull()
     over(svg)
     expect(control.hasAttribute('data-axt-shown')).toBe(false)
+  })
+})
+
+describe('the control and the dialog\'s bar: the family\'s floating material, light or dark by the page (the redesign\'s design, §3, §7)', () => {
+  const TWO = '<figure class="ltx_figure" id="A"><img class="ltx_graphics" src="a.png"></figure><figure class="ltx_figure" id="B"><img class="ltx_graphics" src="b.png"></figure>'
+  const pick = (d: Record<string, string>, keys: string[]) => Object.fromEntries(keys.map(k => [k, d[k]]))
+  afterEach(() => { document.body.removeAttribute('style') })
+
+  it('takes light or dark from the paper it stands on, whatever the system\'s, marked inside its two shadow roots — which a restore of the page does not reach (Review Focus)', () => {
+    const { control, dialog } = page(TWO)
+    const [a, b] = [...document.querySelectorAll('img')]
+    place(a!, rect(100, 100, 400, 300))
+    place(b!, rect(100, 500, 400, 300))
+    // arXiv's dark paper, #282623
+    document.body.style.backgroundColor = 'rgb(40, 38, 35)'
+    over(a!)
+    expect([control.dataset.axtTheme, dialog.dataset.axtTheme]).toEqual(['dark', 'dark'])
+    // restore walks the document's own tree, never a shadow root's: this holds that, should restore ever reach into ours
+    restore(document)
+    expect([control.dataset.axtTheme, dialog.dataset.axtTheme]).toEqual(['dark', 'dark'])
+    document.body.style.backgroundColor = 'rgb(255, 255, 255)'
+    over(b!)
+    expect([control.dataset.axtTheme, dialog.dataset.axtTheme]).toEqual(['light', 'light'])
+  })
+
+  it('draws the control and the bar on the floating ground under the floating shadow, the control at a radius of 8, the keyboard\'s ring in the focus ink, every colour of the control and the bar from the host token sheet', () => {
+    const { root, spot } = page(PICTURE)
+    for (const shadow of [root, spot.shadowRoot!]) {
+      const css = shadow.querySelector('style')!.textContent!
+      expect(css).toContain(tokenSheet('host'))
+      expect(css).not.toContain('data-axt-dark')
+      const all = rules(css.replace(/\/\*[\s\S]*?\*\//g, ''))
+      expect(pick(ruleOf(all, '.axt-viewer-open', []), ['border-radius', 'color', 'background', 'box-shadow'])).toEqual({ 'border-radius': '8px', color: 'var(--axt-ink)', background: 'var(--axt-float-bg)', 'box-shadow': 'var(--axt-float-shadow)' })
+      expect(pick(ruleOf(all, '.axt-viewer-bar', []), ['border-radius', 'background', 'box-shadow'])).toEqual({ 'border-radius': '8px', background: 'var(--axt-float-bg)', 'box-shadow': 'var(--axt-float-shadow)' })
+      expect(ruleOf(all, 'button:focus-visible', [])).toEqual({ outline: '2px solid var(--axt-focus)', 'outline-offset': '-2px' })
+      expect(ruleOf(all, 'dialog', []).color).toBe('var(--axt-ink)')
+    }
   })
 })

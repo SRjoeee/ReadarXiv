@@ -33,6 +33,12 @@ export async function ensureHostPermission(baseURL: string): Promise<boolean> {
   return true
 }
 
+/** Whether the origin is granted already: the model list loads by itself only then (the redesign's design, §6.3) */
+export async function hasHostPermission(baseURL: string): Promise<boolean> {
+  const origin = originPattern(baseURL)
+  return origin ? browser.permissions.contains({ origins: [origin] }) : false
+}
+
 /** Give back an origin no service uses any more; the ones the manifest asks for are not ours to remove */
 export async function releaseHostPermission(previousURL: string, stillUsed: readonly string[]): Promise<void> {
   const previous = originPattern(previousURL)
