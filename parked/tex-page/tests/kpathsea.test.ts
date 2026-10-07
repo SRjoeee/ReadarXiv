@@ -2,7 +2,7 @@
 // BusyTeX ships it (TeX Live 2026's): the index chooses among files of one name with them, as TeX Live does. The
 // excerpt below is texmf.cnf's own lines for the variables used
 import { describe, expect, it } from 'vitest'
-import { braces, lsrCompare, parseCnf, searchPath } from '../../experiments/pdf-bilingual/tex-page/kpathsea.mjs'
+import { braces, lsrCompare, parseCnf, searchPath } from '../tex-page/kpathsea.mjs'
 
 const CNF = `% texmf.cnf excerpt
 TEXMFROOT = $SELFAUTOPARENT

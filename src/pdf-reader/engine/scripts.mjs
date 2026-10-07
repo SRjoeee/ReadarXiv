@@ -13,7 +13,7 @@
 // Lua-only code fails (none of the corpus's 123 papers is set with LuaLaTeX, so no LuaLaTeX CJK path could be measured).
 // When no strategy sets the translation, the reader keeps what it shows. A script not listed here has no strategy yet:
 // strategiesFor throws, and the reader says it cannot typeset that language (Devin on #294). Every font named is in
-// TeX Live 2026. Measured with spikes/lang-gate.mjs.
+// TeX Live 2026. Measured with parked/lab/spikes/lang-gate.mjs.
 import { scriptOf } from './layer-rules.mjs'
 import { latinFontsFor } from './latex-front.mjs'
 

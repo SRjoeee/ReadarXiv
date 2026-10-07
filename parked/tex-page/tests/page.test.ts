@@ -8,7 +8,7 @@
 // browser in tex-page/measure.mjs, network-check.mjs and xext-check.mjs (another extension's bytes refused)
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { type Build, mayDrive, texPage } from '../../experiments/pdf-bilingual/poc-site/tex-page.mjs'
+import { type Build, mayDrive, texPage } from '../poc-site/tex-page.mjs'
 
 type Msg = Record<string, unknown> & { type?: string }
 

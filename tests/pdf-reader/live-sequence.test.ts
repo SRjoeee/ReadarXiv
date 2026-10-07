@@ -308,7 +308,7 @@ describe('a copy made under pipeline 7, reopened under 8', () => {
   })
 })
 
-// The TeX page's protocol 2 (experiments/pdf-bilingual/poc-site/tex-page.mjs; the S3a report, "what the reader must do",
+// The TeX page's protocol 2 (parked/tex-page/poc-site/tex-page.mjs; the S3a report, "what the reader must do",
 // and its review's I5): files a compile could not fetch for a network reason make it not the paper's; a failure of the
 // page's own (an error, no log) says nothing of the paper either
 describe('a compile the network or the page failed', () => {

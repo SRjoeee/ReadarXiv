@@ -1,4 +1,4 @@
-// The TeX of the rule chosen on 2026-10-01 (records/typesetting.md in experiments/pdf-bilingual): the line probes a
+// The TeX of the rule chosen on 2026-10-01 (parked/lab/records/typesetting.md): the line probes a
 // compile reports each unit's lines with, a unit set at a smaller size or face, a float held to its original's page, and
 // what a typeset plan adds to a compile of the translation (live.mjs translationFiles' `typeset`).
 import { lastTexLog, PARA_END_TEX } from '../latex-front.mjs'
@@ -52,7 +52,7 @@ export const FLOAT_TEX = String.raw`\makeatletter
 
 /**
  * \\axtsizein{<unit>}: a translated table cell, heading or figure text at the same factor, a declaration that its own group —
- * the cell, the heading's — ends, and nothing in a PDF bookmark (records/typesetting.md in experiments/pdf-bilingual).
+ * the cell, the heading's — ends, and nothing in a PDF bookmark (parked/lab/records/typesetting.md).
  * A unit set smaller: \\axtsize@<unit>, when defined, scales the font size (and so the unit's leading, which is × the
  * size) at the unit's start, the size before it back once the unit's own paragraph is over (PARA_END_TEX), at every
  * level between when that paragraph ended in a deeper group (a list opened right after the unit — else the list's own

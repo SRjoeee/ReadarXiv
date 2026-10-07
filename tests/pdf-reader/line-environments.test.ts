@@ -10,7 +10,7 @@ import { DESIGN } from '@/pdf-reader/engine/typeset/type.mjs'
 // `\end{comment}` and nothing more: the line probe written after it, on its line, kept 2608.16117's comment open to the
 // end of its file, and its marked original failed (`\end{comment}\axtlines{14}`). verbatim.sty and fancyvrb drop what
 // follows their \end on its line, comment.sty what follows its \begin. Under TeX the cases are compiled natively by
-// experiments/pdf-bilingual/spikes/line-env-cases.mjs; here, what goes where
+// parked/lab/spikes/line-env-cases.mjs; here, what goes where
 
 type Piece = { t: string; s?: string; tr?: boolean }
 type Unit = { kind: string; pieces: Piece[]; front?: boolean }

@@ -4,8 +4,8 @@ import { mkdirSync, mkdtempSync, renameSync, rmSync, statSync, utimesSync, write
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { parseIndex } from '../../experiments/pdf-bilingual/poc-site/tex-tree.mjs'
-import { hashTree, indexName, indexText, programDependent, treeVersion, versionOf, walk } from '../../experiments/pdf-bilingual/tex-page/tree.mjs'
+import { parseIndex } from '../poc-site/tex-tree.mjs'
+import { hashTree, indexName, indexText, programDependent, treeVersion, versionOf, walk } from '../tex-page/tree.mjs'
 
 describe('indexText', () => {
   it('lists every file, the directories in ls-R\'s order and each one\'s files sorted, after its search paths', () => {

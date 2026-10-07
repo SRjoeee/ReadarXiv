@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { flowType } from '@/pdf-reader/engine/typeset/flow.mjs'
 import { DESIGN, type Design, designFor, heightAtSize, heightRatio, solveType, unitHeights } from '@/pdf-reader/engine/typeset/type.mjs'
 
-// The typesetting rule's type and flow (records/typesetting.md in experiments/pdf-bilingual), on synthetic units: no TeX
+// The typesetting rule's type and flow (parked/lab/records/typesetting.md), on synthetic units: no TeX
 
 type Type = { lead: number; track?: number; scale?: number; size?: number; h?: number }
 type Unit = { i: number; lo: number; bs: number; cap: number; width: (t?: Type) => number }

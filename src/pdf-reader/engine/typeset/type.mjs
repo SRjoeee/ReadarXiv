@@ -1,7 +1,7 @@
-// One set of type for a whole translation, found from predicted lines (records/typesetting.md in
-// experiments/pdf-bilingual). The design table gives each writing system its knobs and their natural ranges; the solver
-// finds, within them, the type at which the translation's predicted height equals the original's. The same for every
-// paper, every class, every language: no compile, no trial, no per-block rule.
+// One set of type for a whole translation, found from predicted lines (parked/lab/records/typesetting.md). The design
+// table gives each writing system its knobs and their natural ranges; the solver finds, within them, the type at which
+// the translation's predicted height equals the original's. The same for every paper, every class, every language: no
+// compile, no trial, no per-block rule.
 import { linesAt } from './density.mjs'
 
 const CJK_DESIGN = (lead, range) => ({ cjk: true, base: { lead, track: 0, scale: 1 }, lead: range, track: [0, 0.05], scale: [0.92, 1] })

@@ -2241,7 +2241,7 @@ async function live() {
     if (!said) {
       frame.remove()
       // our site's in a production build; one on this machine (http) is started by hand (addresses.mjs TEX_PAGE)
-      throw Object.assign(new Error(`The TeX page at ${site} did not answer${site.startsWith('http:') ? ': start it with node spikes/serve-live.mjs' : ''}`), { event: 'no compiler' })
+      throw Object.assign(new Error(`The TeX page at ${site} did not answer${site.startsWith('http:') ? ': start it with node parked/tex-page/spikes/serve-live.mjs' : ''}`), { event: 'no compiler' })
     }
     const version = said.protocol === 2 ? [said.cv, said.eid, said.tid, said.index].join('/') : '1'
     // told to the background once a visit: a page deployed since the last warm-up is warmed again at the next start

@@ -5,7 +5,7 @@ import type { Marks } from '@/pdf-reader/engine/typeset/places.mjs'
 import { finalTypesetting, previewTypesetting } from '@/pdf-reader/engine/typeset/plan.mjs'
 
 // The rule's two steps on a small paper and the logs and marks its compiles would give: what goes in, what comes out.
-// The numbers the rule reaches on real papers are the gate's (experiments/pdf-bilingual/spikes/typeset-gate.mjs)
+// The numbers the rule reaches on real papers are the gate's (parked/lab/spikes/typeset-gate.mjs)
 
 type Piece = { t: string; s?: string; src?: string; tr?: boolean }
 type Unit = { kind: string; pieces: Piece[] }

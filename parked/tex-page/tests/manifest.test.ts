@@ -3,7 +3,7 @@
 // each CJK script, the files only that script's visits fetch (its faces), downloaded only when the reader says it will
 // set that script; and the preloaded tier split by the engines that keep each file
 import { describe, expect, it } from 'vitest'
-import { buildManifest, sharesOf, slimSets, worth } from '../../experiments/pdf-bilingual/tex-page/manifest.mjs'
+import { buildManifest, sharesOf, slimSets, worth } from '../tex-page/manifest.mjs'
 
 const visit = (paper: string, engine: string, script: string, ...keys: string[]) => ({ paper, engine, script, first: true, keys: new Set(keys) })
 const atLeast = (n: number) => (_key: string, share: number) => share >= n

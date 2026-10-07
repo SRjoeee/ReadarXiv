@@ -40,7 +40,7 @@ describe('the log the rule reads', () => {
     expect(LINES_TEX).toContain('\\message{^^JAXT-LINES #1')
   })
   it('reads the last TeX pass of the browser compiler\'s joined log, not its earlier passes or the terminal\'s echo', () => {
-    // one step as BusyTeX's pipeline writes it (poc-site/tex.js): the step's log, then the terminal's output, which
+    // one step as BusyTeX's pipeline writes it (parked/tex-page/poc-site/tex.js): the step's log, then the terminal's output, which
     // repeats every \message — a forced break at one pass's end read before the next pass's first unit invents a break
     const step = (cmd: string, log: string, echo = log) => [`$ ${cmd}`, 'EXITCODE: 0', '', 'TEXMFLOG:', '', '==', 'MISSFONTLOG:', '', '==', 'LOG:', log, '==', 'STDOUT:', echo, '==', 'STDERR:', '', '======'].join('\n')
     const pass = (bs: string) => `AXT-WIDTH 1071.0pt 12 241.0pt\nAXT-SIZE 0.9 900.0pt 1000.0pt\nAXT-LINES 1 2 ${bs}pt 10\nAXT-LINES 2 3 ${bs}pt 10\nAXT-FORCED\n`

@@ -3,8 +3,8 @@
 // wrong bytes, the wrong headers or too little found out
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { brotliWorth, ENTRY, headersOf, IMMUTABLE, listText, parseList } from '../../experiments/pdf-bilingual/tex-page/upload.mjs'
-import { verify } from '../../experiments/pdf-bilingual/tex-page/verify.mjs'
+import { brotliWorth, ENTRY, headersOf, IMMUTABLE, listText, parseList } from '../tex-page/upload.mjs'
+import { verify } from '../tex-page/verify.mjs'
 
 describe('headersOf', () => {
   it('types the page and the engine by extension, the wasm as application/wasm; all immutable but the entry', () => {

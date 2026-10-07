@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const EXP = join(__dirname, '../../experiments/pdf-bilingual')
+const EXP = join(__dirname, '..')
 const SOURCE = join(EXP, 'data/busytex-site/busytex/busytex_pipeline.js')
 
 // biome-ignore lint/suspicious/noExplicitAny: BusyTeX's class, loaded from its script

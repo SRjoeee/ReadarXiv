@@ -920,7 +920,7 @@ is only how it meets the rest of the extension.
 - **Typesetting** runs in a TeX page outside the extension (BusyTeX): our site's, `https://tex.readarxiv.org`, in a
   production build, and one on this machine in development (`addresses.mjs` `TEX_PAGE`, a build setting). No
   reader-facing word names it (UI.md §3.5). The translation is set by the Flow rule (`src/pdf-reader/engine/typeset/`;
-  `experiments/pdf-bilingual/records/typesetting.md`): each unit's leading, the paper's type and the floats' pages
+  `parked/lab/records/typesetting.md`): each unit's leading, the paper's type and the floats' pages
   planned from our marked original's line probes and marks. The original is compiled in full in a TeX frame of its
   own from the run's start, beside the probe and the first preview, which never waits for it, and the frame goes once
   it is in (150–450 MB more meanwhile); what the rule reads of it is kept for the visit and, with the left side's
@@ -1026,7 +1026,7 @@ is only how it meets the rest of the extension.
   Chinese warm-up, 9.9 s with nothing warmed). No new permission, and nothing a reader sees: the diagnostics log says
   what happened, a state that lasts once. Measured (2026-10-02, Chromium 153, partitioning on, the page served on
   this machine over a link like this machine's to tex.readarxiv.org — 13 Mbit/s, 30 ms —, the gate's translations,
-  `spikes/reader-typeset.mjs`), first on the page before the hashes and zlib level 6: the warm-up downloads 39.3 MB in
+  `parked/lab/spikes/reader-typeset.mjs`), first on the page before the hashes and zlib level 6: the warm-up downloads 39.3 MB in
   24.5 s for Chinese (45 requests) and 15.0 MB in 9.5 s for German (11); a first visit over arXiv's PDF page then
   starts its TeX page in 0.89 s instead of 25.0 s and shows its first preview in 6.4 s instead of 30.5 s (Chinese,
   2608.02163), in 0.63 s and 3.6 s instead of 9.9 s and 12.9 s (German, 2608.02785), as the reader open as a tab does;

@@ -9,6 +9,7 @@ Chrome extension (MV3) that translates `https://arxiv.org/html/*` in place: stru
 - `docs/RELEASE.md` — how a version is cut, and the store listing.
 - `docs/THIRD_PARTY.md` — what was ported from which project, under which licence.
 - `CHANGELOG.md` — reader-facing changes.
+- `parked/README.md` — code and records the repository keeps and the product no longer uses (the TeX page program, the typesetting gates): linted by the English gate alone, never built, type-checked or tested, imported by nothing alive.
 - The design's history — the rebuild's charter, checkpoint log, inventory, baseline numbers and one-decision-per-file records — was archived from the tree on 2026-09-17 and stays in the repository's history: `git show d91debb:docs/rebuild/PROGRESS.md`, `git show d91debb:docs/adr/`.
 
 ## Hard rules

@@ -3,8 +3,8 @@
 // answered on the spot, with no request. It answers as kpathsea does (texk/kpathsea, TeX Live 2026): the format's
 // suffixes (tex-file.c), the program's search path for the format (texmf.cnf), and ls-R's order within a path element
 import { describe, expect, it } from 'vitest'
-import { candidates, inElement, parseIndex, resolve, treeFetcher } from '../../experiments/pdf-bilingual/poc-site/tex-tree.mjs'
-import { indexText } from '../../experiments/pdf-bilingual/tex-page/tree.mjs'
+import { candidates, inElement, parseIndex, resolve, treeFetcher } from '../poc-site/tex-tree.mjs'
+import { indexText } from '../tex-page/tree.mjs'
 
 const TEX = 26
 const TFM = 3

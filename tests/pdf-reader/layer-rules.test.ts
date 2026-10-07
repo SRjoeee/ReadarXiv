@@ -78,7 +78,7 @@ describe('the layer\'s per-script rules', () => {
   })
 
   it('scripts.mjs re-exports scriptOf and the layer\'s rules, and layer-rules.mjs imports nothing', () => {
-    // scripts.mjs's importers (typeset/plan.mjs, spikes/lang-gate.mjs, tex-hints.test.ts) get the one function
+    // scripts.mjs's importers (typeset/plan.mjs, parked/lab/spikes/lang-gate.mjs, tex-hints.test.ts) get the one function
     expect(scripts.scriptOf).toBe(rules.scriptOf)
     expect(scripts.LAYER_RULES).toBe(LAYER_RULES)
     expect(scripts.LAYER_DIVERGES).toBe(LAYER_DIVERGES)
