@@ -237,27 +237,37 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
         // (a two-byte code's width by its place: a range is one fill, so that /W costs what its numbers are, not what its
         // ranges span; 20,000 ranges of every code took 22 s as a Map, code by code, against PDF.js's 1.5 s. Read as
         // PDF.js reads it (evaluator's /W): a first code not an integer, or a range's last, ends it; a width not a
-        // number is passed over, the code keeping what it had)
-        const widths = new Float64Array(CODE_MAX + 1).fill(Number.NaN)
+        // number is passed over, the code keeping what it had. The array as wide as the codes /W names, as PDF.js's,
+        // and none for a font without /W: a fixed array of every code was 512 KB a font, outside the heap, kept for
+        // the document, the re-review's 3,000 fonts 1.5 GB)
+        const entries = []
+        let top = -1
         if (W instanceof PDFArray) {
           const a = W.asArray().map(look)
           for (let k = 0; k < a.length;) {
             const start = num(a[k])
             if (!Number.isInteger(start)) break
             if (a[k + 1] instanceof PDFArray) {
-              a[k + 1].asArray().forEach((w, j) => { const c = start + j, v = num(look(w)); if (typeof v === 'number' && c >= 0 && c <= CODE_MAX) widths[c] = v })
+              const ws = a[k + 1].asArray().map(w => num(look(w)))
+              entries.push([start, ws])
+              top = Math.max(top, Math.min(start + ws.length - 1, CODE_MAX))
               k += 2
             } else {
               const end = num(a[k + 1]), w = num(a[k + 2])
               if (!Number.isInteger(end)) break
               k += 3
               if (typeof w !== 'number') continue
-              const first = Math.max(0, start), last = Math.min(end, CODE_MAX)
-              if (last >= first) widths.fill(w, first, last + 1)
+              entries.push([start, end, w])
+              if (end >= start) top = Math.max(top, Math.min(end, CODE_MAX))
             }
           }
         }
-        info.width = code => { const w = code >= 0 && code <= CODE_MAX ? widths[code] : Number.NaN; return (Number.isNaN(w) ? dw : w) / 1000 }
+        const widths = top >= 0 ? new Float64Array(top + 1).fill(Number.NaN) : null
+        for (const e of widths ? entries : []) {
+          if (e.length === 2) e[1].forEach((v, j) => { const c = e[0] + j; if (typeof v === 'number' && c >= 0 && c <= top) widths[c] = v })
+          else { const first = Math.max(0, e[0]), last = Math.min(e[1], top); if (last >= first) widths.fill(e[2], first, last + 1) }
+        }
+        info.width = code => { const w = widths && code >= 0 && code < widths.length ? widths[code] : Number.NaN; return (Number.isNaN(w) ? dw : w) / 1000 }
       }
     } else {
       const first = num(get(dict, 'FirstChar'))

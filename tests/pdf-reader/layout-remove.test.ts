@@ -211,6 +211,22 @@ describe("the remover on untrusted input: every loop advances or refuses", () =>
     ])
     expect(await bounded<number>('const r = await R.openRemover(data, { PL }); return r.walkPage(0).events.filter(e => e.kind === "show")[0].codes.length', wide)).toBe(2)
   })
+  it("holds a CID font's widths only as wide as the codes its /W names: 3,000 fonts without /W hold none", async () => {
+    // the re-review's round 2, R2-I3: an array of every two-byte code for each Identity-H font, outside the heap and kept
+    // for the document, was 512 KB a font: 3,000 fonts set on one page (their descendants empty, which PDF.js gives up
+    // on in 0.25 s) held 1.5 GB of array buffers
+    const n = 3000
+    const fonts = pdfOf([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << ${Array.from({ length: n }, (_, i) => `/F${i} ${6 + i} 0 R`).join(' ')} >> >> /Contents 4 0 R >>`,
+      ['', `BT ${Array.from({ length: n }, (_, i) => `/F${i} 10 Tf <0041> Tj`).join(' ')} ET`],
+      '<< >>',
+      ...Array.from({ length: n }, () => '<< /Type /Font /Subtype /Type0 /BaseFont /X /Encoding /Identity-H /DescendantFonts [5 0 R] >>'),
+    ])
+    const grew = await bounded<number>('const before = process.memoryUsage().arrayBuffers; const r = await R.openRemover(data, { PL }); const w = r.walkPage(0); const after = process.memoryUsage().arrayBuffers; if (w.events.filter(e => e.kind === "show").length !== 3000) throw new Error("shows"); return after - before', fonts, 8000, 256)
+    expect(grew).toBeLessThan(16 * 2 ** 20)
+  })
   it("reads a font's /W in time near its numbers, not the codes its ranges span", async () => {
     // the review of round 3, M1: 20,000 ranges [0 65535 500], each of every code, took 22 s code by code (PDF.js: 1.5 s)
     const many = pdfOf([
