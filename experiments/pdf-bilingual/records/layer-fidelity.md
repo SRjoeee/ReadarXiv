@@ -4,7 +4,7 @@ Written by `spikes/layer-gate.mjs --record`. Each run below: the engine at its c
 
 - **pixel**: the engine at `b3f68afc` (exp/layer-t12-gate), the gate at `b3f68afc`, 2026-10-06; the engine's own layout files; 68.2 s.
 - **pixel-fixed**: the engine at `b3f68afc` (exp/layer-t12-gate), the gate at `b3f68afc`, 2026-10-06; the fixtures' layout files, as made for the layer lab; 73.5 s.
-- **pixel-proto-tex-lines**: the engine at `51e5ee49` (exp/layer-s3), the gate at `51e5ee49`, 2026-10-06; v0 (the prototype in the engine), no layout file: the prototype's geometry and the fixtures' record.json, the role table's faces; the hybrid: each unit the fixture's layout file locates whole takes its lines, label and placeholders from the file, with the units only the file holds (but cells); 67.3 s.
+- **pixel-proto-tex-lines**: the engine at `f8672a0f` (exp/layer-s3), the gate at `f8672a0f`, 2026-10-07; v0 (the prototype in the engine), no layout file: the prototype's geometry and the fixtures' record.json, the role table's faces; the hybrid: each unit the fixture's layout file locates whole takes its lines, label and placeholders from the file, with the units only the file holds (but cells); 61.5 s.
 
 Every measure is against arXiv's original page, whose own value is the first column. The prototype's floor is the approved prototype as this gate measures it (v0, the prototype ported into the engine, under its own units and faces at the gate's text place); the floors it replaces stand beside it: the one before it, and the parity run's (measured at the prototype page's text place, 0.19 CSS px off, with coverage read from the translation's ink). Both are the ten outputs the prototype shares with the engine, pages 1-12. A defect is its count and, in brackets, its rate per 1,000 translated text cells (the model tier: per 1,000 cells of the drawn units' frames), which is what the merge rule compares.
 
@@ -12,30 +12,30 @@ Every measure is against arXiv's original page, whose own value is the first col
 
 | measure | Original | Prototype floor (v0, this gate), shared ten | The floor before it, shared ten | The parity run's floor, shared ten | pixel, shared ten | pixel, all 29 | pixel-fixed, shared ten | pixel-fixed, all 29 | pixel-proto-tex-lines, shared ten | pixel-proto-tex-lines, all 29 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| text translated | 100.0 % | 87.8 % | 87.5 % | 90.7 % | 65.8 % | 60.8 % | 65.8 % | 60.7 % | 88.0 % | 82.9 % |
+| text translated | 100.0 % | 87.8 % | 87.5 % | 90.7 % | 65.8 % | 60.8 % | 65.8 % | 60.7 % | 88.0 % | 84.1 % |
 | text English | 0.0 % | 0.4 % | 0.5 % | 0.5 % | 20.0 % | 22.7 % | 20.0 % | 22.8 % | 0.3 % | 0.9 % |
-| text blank | 0.0 % | 11.9 % | 12.0 % | 8.8 % | 14.2 % | 16.6 % | 14.2 % | 16.5 % | 11.7 % | 16.2 % |
+| text blank | 0.0 % | 11.9 % | 12.0 % | 8.8 % | 14.2 % | 16.6 % | 14.2 % | 16.5 % | 11.7 % | 15.0 % |
 | table cells translated | 100.0 % | 5.8 % | 5.8 % | 6.1 % | 40.5 % | 38.1 % | 40.5 % | 38.1 % | 6.0 % | 7.3 % |
 | text units left English | 0 | 7 / 1194 | 7 / 1194 | 7 / 1194 | 186 / 1194 | 684 / 3979 | 186 / 1194 | 686 / 3979 | 0 / 1194 | 10 / 3979 |
 | cells left English | 0 | 635 / 686 | 635 / 686 | 635 / 686 | 217 / 686 | 499 / 1601 | 217 / 686 | 499 / 1601 | 635 / 686 | 1440 / 1601 |
-| fill (median) | 1 | 0.927 | 0.916 | 0.916 | 0.892 | 0.893 | 0.892 | 0.894 | 0.928 | 0.940 |
-| blank lines / frame | 0 | 0.535 | 0.611 | 0.611 | 0.755 | 0.723 | 0.753 | 0.721 | 0.532 | 0.494 |
-| frames with a blank line | 0.0 % | 24.1 % | 27.0 % | 27.0 % | 34.6 % | 33.0 % | 34.5 % | 32.9 % | 24.3 % | 21.6 % |
-| pitch spread | 0 | 0.071 | 0.088 | 0.088 | 0.044 | 0.057 | 0.044 | 0.071 | 0.070 | 0.147 |
-| size (median) | 1 | 0.978 | 0.978 | 0.978 | 0.957 | 0.941 | 0.957 | 0.941 | 0.981 | 0.972 |
-| full size | 100.0 % | 64.4 % | 64.0 % | 64.0 % | 59.8 % | 47.6 % | 59.8 % | 47.3 % | 64.5 % | 61.0 % |
-| size spread | 0 | 0.067 | 0.069 | 0.069 | 0.038 | 0.019 | 0.038 | 0.019 | 0.068 | 0.068 |
-| frames past the right edge | 0.0 % | 13.2 % | 14.0 % | 14.0 % | 0.0 % | 1.0 % | 0.0 % | 1.0 % | 13.0 % | 11.9 % |
-| overlap regions | 0 | 122 (0.95) | 122 (0.95) | 119 (0.90) | 324 (3.35) | 8391 (25.71) | 326 (3.37) | 8446 (25.91) | 11 (0.09) | 441 (0.99) |
-| stray text | 0 | 49 (0.38) | 62 (0.48) | 62 (0.47) | 2 (0.02) | 8 (0.03) | 2 (0.02) | 8 (0.03) | 28 (0.22) | 141 (0.32) |
-| residue regions | 0 | 589 (4.57) | 591 (4.61) | 587 (4.41) | 31335 (324.14) | 247183 (757.43) | 31361 (324.55) | 246677 (756.68) | 474 (3.67) | 1474 (3.31) |
-| erase bites | 0 | 61 (0.47) | 168 (1.31) | 168 (1.26) | 1880 (19.45) | 5331 (16.34) | 1879 (19.45) | 5447 (16.71) | 149 (1.15) | 833 (1.87) |
-| vanished math | 0 | 13 (0.10) | 13 (0.10) | 13 (0.10) | 261 (2.70) | 684 (2.10) | 261 (2.70) | 752 (2.31) | 9 (0.07) | 707 (1.59) |
-| doubled crops | 0 | 5 (0.04) | 5 (0.04) | 5 (0.04) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 2 (0.01) | 26 (0.06) |
-| lost-ink regions | 0 | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 20 (0.15) | 65 (0.15) |
-| graphics px erased | 0 | 7 (0.05) | 208 (1.62) | 208 (1.56) | 2822 (29.19) | 11483 (35.19) | 2693 (27.87) | 10580 (32.45) | 4 (0.03) | 240 (0.54) |
-| graphics px overdrawn | 0 | 0 (0) | 0 (0) | 0 (0) | 14 (0.14) | 14 (0.04) | 14 (0.14) | 14 (0.04) | 0 (0) | 99 (0.22) |
-| crops with foreign ink | 0 | 11 (0.09) | 11 (0.09) | 11 (0.08) | 135 (1.40) | 247 (0.76) | 135 (1.40) | 248 (0.76) | 6 (0.05) | 26 (0.06) |
+| fill (median) | 1 | 0.927 | 0.916 | 0.916 | 0.892 | 0.893 | 0.892 | 0.894 | 0.928 | 0.952 |
+| blank lines / frame | 0 | 0.535 | 0.611 | 0.611 | 0.755 | 0.723 | 0.753 | 0.721 | 0.532 | 0.446 |
+| frames with a blank line | 0.0 % | 24.1 % | 27.0 % | 27.0 % | 34.6 % | 33.0 % | 34.5 % | 32.9 % | 24.3 % | 19.3 % |
+| pitch spread | 0 | 0.071 | 0.088 | 0.088 | 0.044 | 0.057 | 0.044 | 0.071 | 0.070 | 0.140 |
+| size (median) | 1 | 0.978 | 0.978 | 0.978 | 0.957 | 0.941 | 0.957 | 0.941 | 0.981 | 0.992 |
+| full size | 100.0 % | 64.4 % | 64.0 % | 64.0 % | 59.8 % | 47.6 % | 59.8 % | 47.3 % | 64.5 % | 61.2 % |
+| size spread | 0 | 0.067 | 0.069 | 0.069 | 0.038 | 0.019 | 0.038 | 0.019 | 0.068 | 0.088 |
+| frames past the right edge | 0.0 % | 13.2 % | 14.0 % | 14.0 % | 0.0 % | 1.0 % | 0.0 % | 1.0 % | 13.0 % | 12.6 % |
+| overlap regions | 0 | 122 (0.95) | 122 (0.95) | 119 (0.90) | 324 (3.35) | 8391 (25.71) | 326 (3.37) | 8446 (25.91) | 11 (0.09) | 460 (1.02) |
+| stray text | 0 | 49 (0.38) | 62 (0.48) | 62 (0.47) | 2 (0.02) | 8 (0.03) | 2 (0.02) | 8 (0.03) | 28 (0.22) | 141 (0.31) |
+| residue regions | 0 | 589 (4.57) | 591 (4.61) | 587 (4.41) | 31335 (324.14) | 247183 (757.43) | 31361 (324.55) | 246677 (756.68) | 474 (3.67) | 1486 (3.29) |
+| erase bites | 0 | 61 (0.47) | 168 (1.31) | 168 (1.26) | 1880 (19.45) | 5331 (16.34) | 1879 (19.45) | 5447 (16.71) | 149 (1.15) | 830 (1.84) |
+| vanished math | 0 | 13 (0.10) | 13 (0.10) | 13 (0.10) | 261 (2.70) | 684 (2.10) | 261 (2.70) | 752 (2.31) | 9 (0.07) | 697 (1.54) |
+| doubled crops | 0 | 5 (0.04) | 5 (0.04) | 5 (0.04) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 2 (0.01) | 24 (0.05) |
+| lost-ink regions | 0 | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 20 (0.15) | 65 (0.14) |
+| graphics px erased | 0 | 7 (0.05) | 208 (1.62) | 208 (1.56) | 2822 (29.19) | 11483 (35.19) | 2693 (27.87) | 10580 (32.45) | 4 (0.03) | 240 (0.53) |
+| graphics px overdrawn | 0 | 0 (0) | 0 (0) | 0 (0) | 14 (0.14) | 14 (0.04) | 14 (0.14) | 14 (0.04) | 0 (0) | 72 (0.16) |
+| crops with foreign ink | 0 | 11 (0.09) | 11 (0.09) | 11 (0.08) | 135 (1.40) | 247 (0.76) | 135 (1.40) | 248 (0.76) | 6 (0.05) | 24 (0.05) |
 | wrong page text | 0 | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
 | dropped placeholders | 0 | - | - | - | 0 (0) | 0 (0) | 0 (0) | 2 (0.01) | 0 (0) | 0 (0) |
 | placeholders missing | 0 | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 2 (0.00) |
@@ -44,8 +44,8 @@ Every measure is against arXiv's original page, whose own value is the first col
 | duplications | 0 | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
 | clipped characters | 0 | 99 (0.77) | 99 (0.77) | 99 (0.74) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
 | equation numbers not shown | 0 | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
-| pitch ratio (not gated) | 1 | 1.094 | 1.094 | 1.094 | 1.076 | 1.025 | 1.076 | 1.025 | 1.096 | 1.050 |
-| |top shift| (pt) (not gated) | 0 | 0.185 | 0.186 | 0.184 | 0.322 | 0.454 | 0.322 | 0.454 | 0.167 | 0.227 |
+| pitch ratio (not gated) | 1 | 1.094 | 1.094 | 1.094 | 1.076 | 1.025 | 1.076 | 1.025 | 1.096 | 1.051 |
+| |top shift| (pt) (not gated) | 0 | 0.185 | 0.186 | 0.184 | 0.322 | 0.454 | 0.322 | 0.454 | 0.167 | 0.409 |
 | lines on a layout baseline (not gated) | 100.0 % | 49.3 % | 49.3 % | 49.3 % | 53.3 % | 48.0 % | 54.9 % | 48.5 % | 49.8 % | 48.8 % |
 
 **Below the prototype's floor on the shared ten** (pixel): text translated, text English, text blank, text units left English, fill (median), blank lines / frame, frames with a blank line, size (median), full size, overlap regions, residue regions, erase bites, vanished math, graphics px erased, graphics px overdrawn, crops with foreign ink.
@@ -85,4 +85,10 @@ Every measure is against arXiv's original page, whose own value is the first col
 | 2608.04322v1-zh | 61.5 % | 13.7 % | 24.9 % | 21.8 % | 10 / 134 | 1.397 | 97.9 % | 2 (0.16) | 4703 (379.98) | 372 (30.06) | 74 (5.98) | 1 (0.08) | 0 (0) | 0 (0) | 0 (0) | lost 9, unlocated 1 |
 
 Every measure of every output, and of every page, is in layer-fidelity.json.
+
+## The maintainer's rulings
+
+Where a record stands against the merge rule by the maintainer's choice: the ruling, the run it was given on, and the measures it covers.
+
+- **2026-10-07, the maintainer, on S3-12 (the original beside B, D and C)** (pixel-proto-tex-lines at `f8672a0f`): "We settle on version D's direction. Version D's approach as a whole feels the best for now." (`\u6211\u4eec\u5c31\u9009\u5b9a D \u7248\u672c\u65b9\u5411\u3002\u76ee\u524d D \u7248\u672c\u6574\u4f53\u7684\u65b9\u5f0f\u4f53\u611f\u662f\u6700\u4f18\u7684\u3002`). Over the merge rule for size (median) and size spread on a loose original, where D's adaptive fill may grow a unit's size up to 1.10 to reach its frame's foot (the thesis, 2307.16209v1-zh, against B's record at 51e5ee49: size 1 -> 1.099, size spread 0 -> 0.099; no solid-set output moves). The third measure that moved, frames past the right edge (0.2753 -> 0.3088 on the thesis), is the metric, not ink, and stands: 71 of the 74 new frames end in a hung CJK closing mark (half an em into the margin by rule, its ink a median 5.22 pt inside the frame's edge) and 3 are lines longer than a short original last line the measure takes as its own frame; at high resolution on pages 5, 7, 18, 20 and 27, 17 lines recorded past the edge, none with ink beyond it.
 
