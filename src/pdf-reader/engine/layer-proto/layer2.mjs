@@ -1762,8 +1762,7 @@ export const SOLID = 1.25
  * false (a parameter): leadBase stacked on the original's pitch, as before step 3.
  */
 export function leadOf(blocks, s, P) {
-  // (P.leadRel false: the leading as it was, leadBase on whatever pitch, for comparison: the thesis's fill falls with
-  // the rule, its coverage rises, a visual choice the maintainer is asked)
+  // (P.leadRel false, run.mjs's default since the maintainer's ruling of 2026-10-07: leadBase on whatever pitch)
   if (P.leadRel === false || !(P.leadBase > 1) || !(s > 0)) return P.leadBase
   const pitches = blocks.map(b => b.pitch0).filter(v => v > 0).sort((a, b) => a - b)
   if (!pitches.length) return P.leadBase

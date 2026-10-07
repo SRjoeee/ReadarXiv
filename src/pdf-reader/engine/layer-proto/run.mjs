@@ -48,7 +48,7 @@ import { locatedWhole, texParts, texRects } from './tex.mjs'
  *  file read at once */
 export const PDF_OPTIONS = { cMapPacked: true, enableHWA: true, disableStream: true }
 /** the fit's parameters a host may set (main.js read them from the query), and the page-even pass's units */
-export const PARAM_KEYS = ['leadBase', 'leadFloor', 'trackMin', 'compressMax', 'borrow', 'borrowGap', 'floor', 'step', 'grid', 'cjkJust', 'spaceMax', 'autospace', 'spaceMin', 'hyphen', 'even', 'order', 'further', 'floorMin', 'trackStart', 'leadRel', 'fillSize']
+export const PARAM_KEYS = ['leadBase', 'leadFloor', 'trackMin', 'compressMax', 'borrow', 'borrowGap', 'floor', 'step', 'grid', 'cjkJust', 'spaceMax', 'autospace', 'spaceMin', 'hyphen', 'even', 'order', 'further', 'floorMin', 'trackStart', 'leadRel', 'fillSize', 'adaptiveFill']
 /** the page's body units that the even pass sets alike (a unit on two pages keeps its own fit) */
 const EVEN_KINDS = new Set(['para', 'abstract', 'list', 'item'])
 /** the SVG's own rules (the prototype's index.html): its text set as laid, in the layer's ink */
@@ -123,6 +123,12 @@ export const layOrder = (placed, batch = 8) => layGroups(placed, batch).flatMap(
 export async function openProto({ doc, geometry, units: all, target: to, pages = 999, scale = 1.25, dpr = 1, params = {}, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, copy = true, removal = null, labels = null }) {
   const P = L2.defaultParams(to)
   for (const k of PARAM_KEYS) if (params[k] !== undefined) P[k] = params[k]
+  // (the maintainer's ruling of 2026-10-07, on S3-11: the script's leading on the original's own pitch reads more
+  // naturally on a loose original than fix 2's relative leading (leadRel), which stays a switch)
+  P.leadRel ??= false
+  // (and the maintainer's choice of 2026-10-07 on S3-12, "\u6211\u4EEC\u5C31\u9009\u5B9A D \u7248\u672C\u65B9\u5411": adaptiveFill on a loose
+  // original, as measured there; adaptiveFill: false is B, the script's leading on the original's pitch alone)
+  P.adaptiveFill ??= { band: 0.05, track: 0.05, size: 1.1 }
   // iteration 2's hyphenation, fetched at once (local, small)
   const hyphP = Promise.all([...new Set(['en', to === 'de' ? 'de' : null, to === 'ru' ? 'ru' : null].filter(Boolean))].map(async l => L2.setHyphenData(l, await loadHyphenation(l, hyphUrl(l)))))
   // the target's likely faces loaded meanwhile (Times-like until the paper's own designs are known), and Latin Modern at
@@ -560,6 +566,11 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     const c = faceOf({ fam: 'serif', bold: false, italic: false, caps: false, design: designs.serif }, 'cjk', to).size ?? 1
     return c < 1 ? Math.round((1 - c) * 1000) / 1000 : 0
   }
+  /** a laid unit's lines as its record holds them: page, baseline, target baseline, exact, mode, overflow, x0, x1 */
+  const recLinesOf = p => p.layout.lines.map(l => {
+    const b = p.blocks[l.block]
+    return [l.page, r1(l.baseline), l.target !== null ? r1(b.B[l.target]) : null, l.target !== null ? b.exact[l.target] : false, l.mode, r1(Math.max(0, l.used - l.cap - (l.items.at(-1)?.t.punct === 'close' ? 0.5 * p.layout.f : 0))), r1(l.x0), r1(l.x0 + l.used)]
+  })
   const layout2 = p => {
     const t0 = performance.now()
     // the unit's lines grown over words the anchors left out beside them, then its first line's edge snapped back to
@@ -662,6 +673,19 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     // leading on a loose original, the paragraph is filled by its text's size instead, up to P.fillSize × the
     // original's; a solid-set original keeps the script's leading, and its units are never grown)
     if (P.fillSize > 1 && p.P.leadBase <= P.leadBase - 0.05 + 1e-9) p.P.growTo = P.fillSize
+    // (adaptiveFill, D: a unit on a loose original, where the leading relative to the original's pitch gives up a step or
+    // more of the script's, is laid at that leading here and filled by its page's pass, fillPass)
+    // (a solid-set original's units are not touched: spreading them by a band of leading, page by page or one leading a
+    // page, filled their frames but moved their pages' pitches apart, S3-12)
+    if (P.adaptiveFill) {
+      const rel = L2.leadOf(p.blocks, s, { ...P, leadRel: true })
+      if (rel <= P.leadBase - 0.05 + 1e-9) {
+        p.fillable = true
+        p.fillRange = [rel, P.leadBase]
+        p.P.leadBase = rel
+        p.P.growTo = 0
+      }
+    }
     p.layout = L2.layoutUnit2(tokens, p.blocks, s, p.P, to)
     // (step 3: never drawn in part: given more room where the page has it, else left the original's, whole)
     if (p.layout.clipped) {
@@ -685,10 +709,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
         p.layout.extents.set(r0.join(), multi ? [[x0, e[1], e[2], e[3]], ...ext.slice(1)] : [x0, e[1], e[2], e[3]])
       }
     }
-    const lines = p.layout.lines.map(l => {
-      const b = p.blocks[l.block]
-      return [l.page, r1(l.baseline), l.target !== null ? r1(b.B[l.target]) : null, l.target !== null ? b.exact[l.target] : false, l.mode, r1(Math.max(0, l.used - l.cap - (l.items.at(-1)?.t.punct === 'close' ? 0.5 * p.layout.f : 0))), r1(l.x0), r1(l.x0 + l.used)]
-    })
+    const lines = recLinesOf(p)
     const drawnTok = new Set(p.layout.lines.flatMap(l => l.items.map(it => it.t)))
     const tr = tokens.filter(t => t.s && !t.ph && !t.sup)
     record(p, { ...(tex ? { source: p.tex ? 'tex' : 'v0' } : {}), grown: p.grown, dropped: p.dropped, s, f: p.layout.f, fitScale: p.layout.scale, knob: p.layout.knob, clipped: p.layout.clipped, lostChars: p.layout.lostChars, chars: p.layout.chars, lead: p.layout.state.lead, track: p.layout.state.track || p.layout.state.trackLatin, compress: p.layout.state.compress, borrow: p.layout.state.borrow, free: r1(Math.max(0, ...p.blocks.map(b => b.free))), tried: p.layout.tried, lines, orig, drawnRuns: L2.drawnRuns(tokens), drawnBase: styleKey(tokens.base), trChars: tr.reduce((a, t) => a + [...t.s].length, 0), trDrawn: p.layout.lines.reduce((a, l) => a + l.items.reduce((b, it) => b + (it.t.s && !it.t.ph && !it.t.sup ? [...it.t.s].length - (it.t.hyphenated ? 1 : 0) : 0), 0), 0), modes: modesOf(prep), unused: drawnTok.size, ms: [r1(t1 - t0), r1(t2 - t1), r1(t3 - t2), r1(t4 - t3)], tokens: tokens.length })
@@ -715,7 +736,60 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
       const PU = p.P ?? P
       p.layout = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...PU, maxScale: target, leadBase: Math.min(PU.leadBase, leadTo) }, to)
       p.layout.extents = keep.extents
-      if (p.rec) Object.assign(p.rec, { f: r1(p.layout.f), sizeRatio: r1(p.layout.f / p.s), fitScale: p.layout.scale, knob: p.layout.knob, lead: p.layout.state.lead, lines: p.layout.lines.map(l => [l.page, r1(l.baseline), l.target !== null ? r1(p.blocks[l.block].B[l.target]) : null, l.target !== null ? p.blocks[l.block].exact[l.target] : false, l.mode, 0]) })
+      if (p.rec) Object.assign(p.rec, { f: r1(p.layout.f), sizeRatio: r1(p.layout.f / p.s), fitScale: p.layout.scale, knob: p.layout.knob, lead: p.layout.state.lead, lines: recLinesOf(p) })
+    }
+  }
+  /**
+   * adaptiveFill (D, P.adaptiveFill: { band, track, size }; the default since 2026-10-07, false for B): the units of a loose original's page that
+   * begin on it, each spread over its original paragraph's space, the page's lines kept to one rhythm. Each unit's fill
+   * leading is the loosest, between its leading relative to the original's pitch and the script's on it (leadBase),
+   * at which its most natural state still sets it whole: its text then reaches its frame's foot. The page's target is
+   * the median of its body units' (of all its loose units' where it has none); each unit takes its fill leading, but
+   * never more than `band` over the target, so that neighbouring paragraphs keep one line spacing. A unit the band
+   * stops short of its fill then takes tracking, up to `track` em, and where that is not enough its size, up to `size`
+   * × the original's. A unit that does not fit naturally even at its relative leading keeps its own fit.
+   */
+  const fitsNaturally = (p, PP) => { const l = L2.layoutUnit2(p.tokens, p.blocks, p.s, PP, to); return l.tried === 1 && !l.clipped ? l : null }
+  const fillLeadOf = p => {
+    const [lo, hi] = p.fillRange
+    for (let k = Math.round((hi - lo) / 0.01); k >= 0; k--) {
+      const L = Math.min(hi, Math.round((lo + k * 0.01) * 1000) / 1000)
+      if (fitsNaturally(p, { ...p.P, leadBase: L, growTo: 0 })) return L
+    }
+    return null
+  }
+  const fillPass = pg => {
+    const { band = 0.05, track = 0.05, size = 1.1 } = P.adaptiveFill
+    const loose = laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg)
+    for (const p of loose) if (p.fillLead === undefined) p.fillLead = fillLeadOf(p)
+    const body = loose.filter(p => p.fillLead !== null && EVEN_KINDS.has(p.unit.kind))
+    const leads = (body.length ? body : loose.filter(p => p.fillLead !== null)).map(p => p.fillLead)
+    if (!leads.length) return
+    const target = median(leads)
+    for (const p of loose) {
+      if (p.fillLead === null) continue
+      let PP = { ...p.P, leadBase: Math.min(p.fillLead, Math.round((target + band) * 1000) / 1000), growTo: 0 }
+      let l = fitsNaturally(p, PP)
+      if (!l) continue
+      if (p.fillLead > target + band + 1e-9 || p.fillLead >= p.fillRange[1] - 1e-9) {
+        // short of its fill at the band's edge or at the script's leading: tracking, the most that still sets it
+        // naturally, then the size
+        let t = 0
+        for (let k = Math.round(track / 0.01); k >= 1; k--) {
+          const P2 = { ...PP, trackStart: Math.round(((p.P.trackStart ?? 0) + k * 0.01) * 1000) / 1000 }
+          const l2 = fitsNaturally(p, P2)
+          if (l2) { PP = P2; l = l2; t = k * 0.01; break }
+        }
+        if (t >= track - 1e-9 && size > 1) {
+          const l3 = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...PP, growTo: size }, to)
+          if (!l3.clipped) { PP = { ...PP, growTo: size }; l = l3 }
+        }
+      }
+      const keep = p.layout.extents
+      p.P = PP
+      p.layout = l
+      p.layout.extents = keep
+      if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
     }
   }
   const ms = new Map()
@@ -749,12 +823,15 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     if (p.refused) skipped.push({ id: p.id, kind: p.unit.kind, why: 'unfit', chars: trCharsOf(p.unit), pages: p.pages })
     const g = p.unit.group && groupCells.has(p.unit.group) ? p.unit.group : null
     if (g) (groupLaid.get(g) ?? groupLaid.set(g, { list: [], done: false }).get(g)).list.push(p)
-    if (P.even) {
+    if (P.even || P.adaptiveFill) {
+      // (a page's pass sets the units that begin on it, which are then painted on each of their pages: a unit is never
+      // painted from two layouts; a table's cells with their group, once it is laid whole)
       for (const pg of p.pages) {
         laid[pg].push(p)
         if (laid[pg].length === expected[pg]) {
-          evenPass(pg)
-          for (const u of laid[pg]) if (!u.refused && (!u.unit.group || !groupCells.has(u.unit.group))) paint(u, pg)
+          if (P.even) evenPass(pg)
+          if (P.adaptiveFill) fillPass(pg)
+          for (const u of laid[pg]) if (!u.refused && u.pages[0] === pg && (!u.unit.group || !groupCells.has(u.unit.group))) for (const q of u.pages) paint(u, q)
           for (const gg of new Set(laid[pg].map(u => u.unit.group).filter(x => x && groupCells.has(x)))) settleGroup(gg)
         }
       }
@@ -846,6 +923,9 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   for (const [pg, ids] of groups) for (const id of ids) groupOf.set(id, pg)
   const doneAt = Array.from({ length: N + 1 }, (_, pg) => pg)
   for (const p of placed) for (const pg of p.pages) doneAt[pg] = Math.max(doneAt[pg], groupOf.get(p.id) ?? pg)
+  // (with a page pass, P.even or P.adaptiveFill: a page is done once the first page of each unit on it is, whose pass
+  // sets that unit)
+  if (P.even || P.adaptiveFill) for (let pg = 1; pg <= N; pg++) for (const p of placed) if (p.pages.includes(pg)) doneAt[pg] = Math.max(doneAt[pg], doneAt[p.pages[0]])
   const order = [], pageMs = []
   let drawnTo = 0, busy = Promise.resolve()
   const colsOf = pg => {
