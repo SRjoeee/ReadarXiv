@@ -11,8 +11,15 @@ export declare const CHECK_SETS: readonly ['P', 'F', 'C']
 export declare function lex(bytes: Uint8Array): { op: string; args: unknown[]; s: number; e: number }[]
 /** the PDF object layer's exports the remover reads (@cantoo/pdf-lib) */
 export type PdfLib = Record<string, any>
-export interface Remover { numPages: number; encrypted: boolean; alignPage(pageIndex: number, OPS: Record<string, number>, opList: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }): { ok: boolean; why: string[] } }
-export declare function openRemover(bytes: Uint8Array, o: { PL: PdfLib; inflate?: ((bytes: Uint8Array) => Uint8Array) | null }): Promise<Remover>
+/** the operators a page's walk may visit, its forms' as often as they are painted; past it the page is refused */
+export declare const WALK_MAX: number
+export interface Remover {
+  numPages: number; encrypted: boolean
+  alignPage(pageIndex: number, OPS: Record<string, number>, opList: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }): { ok: boolean; why: string[] }
+  /** a page walked: what could not be walked (`problems`, any one refuses the page) and the operators visited */
+  walkPage(pageIndex: number): { problems: string[]; walked: number; events: { kind: string; codes?: unknown[] }[] }
+}
+export declare function openRemover(bytes: Uint8Array, o: { PL: PdfLib; inflate?: ((bytes: Uint8Array) => Uint8Array) | null; walkMax?: number }): Promise<Remover>
 /** a unit's removal on a page: its glyphs as n, k pairs (pageInk's `indices`) and its rules as painted paths' places */
 export interface PlannedUnit { id: number; glyphs: number[]; paths: number[] }
 /** a crop's glyphs and rules, the placeholders' page's */

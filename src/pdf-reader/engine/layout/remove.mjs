@@ -48,7 +48,9 @@ const enc = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.len
 /**
  * A content stream's operators: { op, args, s, e } (s: the first operand's start, e: the operator's end), each string
  * operand { t: 'str', b: bytes, s, e }, each name { t: 'name', v }, an array as an array, a dictionary as { t: 'dict', v }.
- * An inline image is one operator, BI, from its parameters to its EI.
+ * An inline image is one operator, BI, from its parameters to its EI. Every pass of every loop here advances by a byte
+ * at least or throws (an inline image's parameters holding a delimiter none starts with: `)`, `{`, `}`), so a stream
+ * of n bytes is read in O(n) whatever it holds; a stream that throws is one the walk refuses its page for
  */
 export function lex(b) {
   const ops = []
@@ -117,12 +119,17 @@ export function lex(b) {
     if (t === 'BI') {
       // an inline image: its parameters to ID, its data to EI (white space either side, then an operator or the end)
       const s = start < 0 ? s0 : start
+      // (each pass advances or throws: a comment skipped as anywhere else, 2026-10-07, where a `%` there held the loop on
+      // its byte for ever; a delimiter no parameter starts with refused)
       while (i < n) {
         while (i < n && WS[b[i]]) i++
+        if (i >= n) break
         if (b[i] === 73 && b[i + 1] === 68 && (WS[b[i + 2]] || i + 2 >= n)) { i += 3; break }
+        if (b[i] === 37) { while (i < n && b[i] !== 10 && b[i] !== 13) i++; continue }
         if (b[i] === 47) { i++; while (i < n && !WS[b[i]] && !DL[b[i]]) i++; continue }
         if (b[i] === 40) { let d = 0; do { if (b[i] === 92) i++; else if (b[i] === 40) d++; else if (b[i] === 41) d--; i++ } while (i < n && d > 0); continue }
         if (b[i] === 91 || b[i] === 93 || b[i] === 60 || b[i] === 62) { i++; continue }
+        if (DL[b[i]]) throw new Error(`an inline image's parameters hold "${String.fromCharCode(b[i])}" at ${i}`)
         while (i < n && !WS[b[i]] && !DL[b[i]]) i++
       }
       let e = i
@@ -144,16 +151,22 @@ export function lex(b) {
 const PAINT = new Set(['S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n'])
 /** a form nested deeper than this is not walked: the page is refused */
 const FORM_DEPTH = 12
+/** the operators a page's walk may visit, its forms' as often as they are painted (openRemover's `walkMax`): past it the
+ *  page is refused. Forms that paint each other ten times over, eight deep, are 10^8 paints; the heaviest of the 2,793
+ *  pages of the 124 papers in data/corpus visits 2.09 million (2608.02055 page 28, 0.85 s), the fixtures' 133,000 */
+export const WALK_MAX = 20_000_000
+/** the highest code a font's /W names: a CID font's two-byte codes (a range [0 4294967295 w] was read code by code) */
+const CODE_MAX = 0xffff
 const fmt = x => { if (Math.abs(x) < 5e-7) return '0'; let s = x.toFixed(6); s = s.replace(/0+$/, '').replace(/\.$/, ''); return s === '-0' ? '0' : s }
 const hex = b => `<${[...b].map(v => v.toString(16).padStart(2, '0')).join('')}>`
 const concat = parts => { let n = 0; for (const p of parts) n += p.length; const out = new Uint8Array(n); let o = 0; for (const p of parts) { out.set(p, o); o += p.length } return out }
 
 /**
  * The remover over one document: arXiv's bytes, read by `PL` (@cantoo/pdf-lib's exports), `inflate` (bytes -> bytes,
- * tolerant of a damaged zlib stream, as PDF.js reads one; null: none). Returns { numPages, encrypted, walkPage,
+ * tolerant of a damaged zlib stream, as PDF.js reads one; null: none), `walkMax` (WALK_MAX). Returns { numPages, encrypted, walkPage,
  * alignPage, decode }.
  */
-export async function openRemover(bytes, { PL, inflate = null }) {
+export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MAX }) {
   const { PDFDocument, PDFName, PDFRef, PDFArray, PDFDict, PDFRawStream, PDFNumber, PDFStream, decodePDFRawStream } = PL
   const doc = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false })
   const ctx = doc.context
@@ -207,7 +220,7 @@ export async function openRemover(bytes, { PL, inflate = null }) {
           for (let k = 0; k < a.length;) {
             const c0 = num(a[k])
             if (a[k + 1] instanceof PDFArray) { a[k + 1].asArray().map(look).forEach((w, j) => widths.set(c0 + j, num(w))); k += 2 }
-            else { const c1 = num(a[k + 1]), w = num(a[k + 2]); for (let c = c0; c <= c1; c++) widths.set(c, w); k += 3 }
+            else { const c1 = num(a[k + 1]), w = num(a[k + 2]); for (let c = Math.max(0, c0), last = Math.min(c1, CODE_MAX); c <= last; c++) widths.set(c, w); k += 3 }
           }
         }
         info.width = code => (widths.get(code) ?? dw) / 1000
@@ -247,6 +260,7 @@ export async function openRemover(bytes, { PL, inflate = null }) {
     return out
   }
 
+  const WALKED = 'forms that paint more than the walk allows', SELF = 'a form that paints itself'
   /**
    * A page walked: its containers (the page's content, each form where it is painted: { kind, key, ref, st, pieces,
    * ops, parent, name, res, depth }) and its events in order ({ kind: 'show' | 'paint' | 'image' | 'form', cont, pi, oi,
@@ -263,12 +277,16 @@ export async function openRemover(bytes, { PL, inflate = null }) {
     if (contents instanceof PDFArray) for (const r of contents.asArray()) pieces.push({ ref: r instanceof PDFRef ? r : null, st: look(r) })
     else if (contents) pieces.push({ ref: raw instanceof PDFRef ? raw : null, st: contents })
     const events = [], containers = [], uses = new Map(), problems = []
+    // (bounded: no deeper than FORM_DEPTH, no form within itself, as PDF.js ignores a circular one, and no more than
+    // walkMax operators in all; each stops the walk and refuses the page)
+    let walked = 0
     function run(cont, res, state, depth) {
       if (depth > FORM_DEPTH) { problems.push('forms nested too deep'); return }
       const stack = []
       let s = { ...state }
       for (let pi = 0; pi < cont.pieces.length; pi++) {
         const ops = cont.ops[pi]
+        if ((walked += ops.length) > walkMax) { if (!problems.includes(WALKED)) problems.push(WALKED); return }
         for (let oi = 0; oi < ops.length; oi++) {
           const o = ops[oi], a = o.args
           switch (o.op) {
@@ -294,6 +312,10 @@ export async function openRemover(bytes, { PL, inflate = null }) {
               const xr = get(res, 'XObject')?.get?.(PDFName.of(a[0]?.v))
               const x = look(xr)
               if (x instanceof PDFStream && nameOf(get(x, 'Subtype')) === 'Form') {
+                let within = false
+                for (let c = cont; c && !within; c = c.parent) within = c.st === x
+                if (within) { if (!problems.includes(SELF)) problems.push(SELF); break }
+                if (problems.includes(WALKED)) return
                 uses.set(x, (uses.get(x) ?? 0) + 1)
                 const own = get(x, 'Resources')
                 let ops = []
@@ -327,7 +349,7 @@ export async function openRemover(bytes, { PL, inflate = null }) {
     for (const p of pieces) { try { pc.ops.push(p.st ? lex(decode(p.st)) : []) } catch { problems.push('a content stream that does not decode'); pc.ops.push([]) } }
     containers.unshift(pc)
     run(pc, res, { font: null, size: 0, Tc: 0, Tw: 0, Tr: 0 }, 0)
-    return { page, node, pc, containers, events, uses, problems }
+    return { page, node, pc, containers, events, uses, problems, walked }
   }
 
   /**

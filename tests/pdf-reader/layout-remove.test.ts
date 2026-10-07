@@ -1,4 +1,8 @@
 import * as PL from '@cantoo/pdf-lib'
+import { createRequire } from 'node:module'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { Worker } from 'node:worker_threads'
 import { deflateSync } from 'node:zlib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
@@ -147,5 +151,64 @@ describe('the text remover', () => {
     expect(out.manifest.sets).toEqual({})
     expect(after.pages[2]!.ink.glyphs.map(g => g.u).join('')).not.toContain('Hello')
     expect(after.pages[2]!.ink.glyphs.length).toBe(ink.glyphs.length - 5)
+  })
+})
+
+// Untrusted input must never wedge the remover (Codex's review of PR A, finding 2): each case runs in a worker that is
+// stopped after a few seconds, so that a loop that fails to advance fails the test instead of hanging the suite
+const REMOVE_URL = pathToFileURL(join(process.cwd(), 'src/pdf-reader/engine/layout/remove.mjs')).href
+const PDFLIB_PATH = createRequire(join(process.cwd(), 'package.json')).resolve('@cantoo/pdf-lib')
+/** `body` (an async function's body over R, the remover's module, PL, pdf-lib, and data) run in a worker, at most `ms` */
+function bounded<T>(body: string, data: unknown, ms = 4000): Promise<T> {
+  const code = `const { parentPort, workerData } = require('node:worker_threads'); (async () => { const R = await import(workerData.remove); const PL = require(workerData.pdflib); const f = async (R, PL, data) => { ${body} }; parentPort.postMessage({ ok: await f(R, PL, workerData.data) }) })().catch(e => parentPort.postMessage({ error: String(e?.message ?? e) }))`
+  return new Promise((res, rej) => {
+    const w = new Worker(code, { eval: true, workerData: { remove: REMOVE_URL, pdflib: PDFLIB_PATH, data } })
+    const t = setTimeout(() => { void w.terminate(); rej(new Error(`did not finish in ${ms} ms`)) }, ms)
+    w.once('message', (m: { ok?: T; error?: string }) => { clearTimeout(t); void w.terminate(); if (m.error !== undefined) rej(new Error(m.error)); else res(m.ok as T) })
+    w.once('error', e => { clearTimeout(t); rej(e) })
+  })
+}
+const lexOps = 'try { return { ops: R.lex(new TextEncoder().encode(data)).map(o => o.op) } } catch (e) { return { threw: String(e.message) } }'
+
+describe("the remover on untrusted input: every loop advances or refuses", () => {
+  it("skips a comment in an inline image's parameters, as the lexer does anywhere else", async () => {
+    expect(await bounded(lexOps, 'BI %comment\n /W 1 /H 1 /BPC 8 /CS /G ID x EI Q')).toEqual({ ops: ['BI', 'Q'] })
+    // a comment that runs to the stream's end, with no ID after it: the image runs to the end
+    expect(await bounded(lexOps, 'q BI /W 1 %no end')).toEqual({ ops: ['q', 'BI'] })
+  })
+  it("refuses an inline image whose parameters hold a delimiter no parameter starts with", async () => {
+    for (const d of [')', '{', '}']) expect(await bounded(lexOps, `BI /W 1 ${d} /H 1 ID x EI Q`)).toEqual({ threw: expect.stringMatching(/inline image/) })
+  })
+  it('walks a page whose form paints itself, or whose forms paint each other past the walk budget, to a refusal', async () => {
+    const self = pdfOf([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /XObject << /Fm 5 0 R >> >> /Contents 4 0 R >>',
+      ['', '/Fm Do'],
+      ['/Type /XObject /Subtype /Form /BBox [0 0 300 300] /Resources << /XObject << /Fm 5 0 R >> >>', Array(10).fill('/Fm Do').join(' ')],
+    ])
+    expect(await bounded<string[]>('const r = await R.openRemover(data, { PL }); return r.walkPage(0).problems', self)).toContain('a form that paints itself')
+    // eight forms, each painting the next ten times: 10^8 paints of the last
+    const chain = Array.from({ length: 8 }, (_, k): [string, string] => [`/Type /XObject /Subtype /Form /BBox [0 0 300 300] /Resources << /XObject << /Fm ${k < 7 ? 6 + k : 5} 0 R >> >>`, k < 7 ? Array(10).fill('/Fm Do').join(' ') : '0 0 1 1 re f'])
+    const fan = pdfOf([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /XObject << /Fm 5 0 R >> >> /Contents 4 0 R >>',
+      ['', '/Fm Do'],
+      ...chain,
+    ])
+    // (the budget asked smaller than WALK_MAX, which takes seconds to reach: the same bound)
+    expect(await bounded<string[]>('const r = await R.openRemover(data, { PL, walkMax: 100000 }); return r.walkPage(0).problems', fan)).toContain('forms that paint more than the walk allows')
+  })
+  it("reads a font's /W ranges no further than a code can reach", async () => {
+    const wide = pdfOf([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F0 5 0 R >> >> /Contents 4 0 R >>',
+      ['', 'BT /F0 10 Tf 20 250 Td <00410042> Tj ET'],
+      '<< /Type /Font /Subtype /Type0 /BaseFont /X /Encoding /Identity-H /DescendantFonts [6 0 R] >>',
+      '<< /Type /Font /Subtype /CIDFontType2 /BaseFont /X /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /DW 1000 /W [0 4294967295 500] >>',
+    ])
+    expect(await bounded<number>('const r = await R.openRemover(data, { PL }); return r.walkPage(0).events.filter(e => e.kind === "show")[0].codes.length', wide)).toBe(2)
   })
 })
