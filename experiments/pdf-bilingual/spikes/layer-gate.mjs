@@ -380,6 +380,9 @@ async function runFixture(page, name, errors) {
     entry.ms = Math.round(model.ms)
     if (PERF) {
       entry.perf = await page.evaluate(q => window.gate.perf(q), p)
+      // (the heap live at the page's end, collected first: what is held, not the garbage a collection had not reached yet,
+      // which moved the peak by 80 MB from run to run)
+      try { await page.cdp.send('HeapProfiler.collectGarbage') } catch {}
       const m = await page.cdp.send('Performance.getMetrics')
       entry.perf.jsHeap = m.metrics.find(x => x.name === 'JSHeapUsedSize')?.value ?? null
     }

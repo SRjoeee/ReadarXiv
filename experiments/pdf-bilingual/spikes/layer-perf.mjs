@@ -5,7 +5,8 @@
 // both alike), the medians:
 //   - browser, per page: the first drawing (v0's page step: the original drawn, the units laid and painted, and over the
 //     text-removed PDF its ink read and its removed pages drawn), the drawing again at twice the resolution (the original
-//     drawn there, then drawCopy), the canvases held and the JS heap at their peak; and where the new path's time goes
+//     drawn there, then drawCopy), the canvases held and the JS heap live (after a collection) at their peak; and where
+//     the new path's time goes
 //     (its own split: render, text, ink, removed pages, lay, operations, compose, SVG);
 //   - server, per paper: the layout maker (its operator lists within it, which the remover shares), the remover beyond
 //     them;
