@@ -18,19 +18,47 @@ export const figureKeyOf = texts => JSON.stringify(texts)
  * whose source the record has a translation of, matched by hash. A unit cut differently since has none. Repeated
  * paragraphs (table cells, often) share a hash, and each takes the best translation of their source: whole before partial
  * (Devin on #298). The hashes are kept for the record. `inSource` goes with the translation: the copy's PDF set that
- * translation in the source, and a run that sets no final keeps that PDF (inSourceOf)
+ * translation in the source, and a run that sets no final keeps that PDF (inSourceOf).
+ * A unit whose source is the record's but for the numbers of its pairs has the record's translation too, numbered as the
+ * unit is (renumbered): a pair's id is its place among its file's pairs, and a pair the front end makes earlier in the
+ * file — a front matter's unit, an argument it now reads as text — moves every one after it (the front end's round of
+ * 2026-10-06: 1,471 units of the corpus's 117 papers the same but for their pairs' numbers)
  */
 const rankOf = u => (u.state === 'whole' || (u.state === 'kept' && u.pieces) ? 2 : u.state === 'partial' ? 1 : 0)
 export async function seedFrom(record, units) {
-  const byHash = new Map()
+  const byHash = new Map(), bySrc = new Map()
   for (const u of record.units) if (u.pieces && rankOf(u) >= rankOf(byHash.get(u.hash) ?? { state: '' })) byHash.set(u.hash, u)
+  for (const u of record.units) if (u.pieces && typeof u.src === 'string') (bySrc.get(u.src) ?? bySrc.set(u.src, []).get(u.src)).push(u)
   const hashes = await Promise.all(units.map(sourceHash))
   const seed = new Map()
-  hashes.forEach((h, i) => {
+  const seedOf = (i, u, pieces) => seed.set(i, { pieces: ownNested(units[i], pieces), by: u.by, tried: u.tried, state: u.state, ...(u.sentences ? { sentences: u.sentences } : {}), ...inSourceOf(u) })
+  for (const [i, h] of hashes.entries()) {
     const u = byHash.get(h)
-    if (u) seed.set(i, { pieces: ownNested(units[i], u.pieces), by: u.by, tried: u.tried, state: u.state, ...(u.sentences ? { sentences: u.sentences } : {}), ...inSourceOf(u) })
-  })
+    if (u) { seedOf(i, u, u.pieces); continue }
+    const found = await renumbered(units[i], bySrc.get(plainSource(units[i])) ?? [])
+    if (found) seedOf(i, found.unit, found.pieces)
+  }
   return { seed, hashes }
+}
+/** the ids of the pairs in pieces, a nested unit's too, in the order of their numbers: the order they stand in. A close
+ *  counts as its open does: a cell may end a group an earlier cell opened */
+const pairIds = (pieces, out = new Set()) => { for (const p of pieces) { if (p.t === 'open' || p.t === 'close') out.add(p.id); else if (p.t === 'nested' && p.unit?.pieces) pairIds(p.unit.pieces, out) } return [...out].sort((a, b) => a - b) }
+/** the pieces with each pair's id mapped (`to`), a nested unit's too */
+const renumber = (pieces, to) => pieces.map(p => ((p.t === 'open' || p.t === 'close') && to.has(p.id) ? { ...p, id: to.get(p.id) } : p.t === 'nested' && p.unit?.pieces ? { ...p, unit: { ...p.unit, pieces: renumber(p.unit.pieces, to) } } : p))
+/** the record's translation of a unit whose source is that record unit's but for its pairs' numbers — the unit's pieces
+ *  numbered as the record's were hash to the record's hash, each pair the n-th of both —, numbered as the unit is: the
+ *  best of the record's units with its text, or null */
+async function renumbered(unit, candidates) {
+  const mine = pairIds(unit.pieces)
+  if (!mine.length) return null
+  for (const c of [...candidates].sort((a, b) => rankOf(b) - rankOf(a))) {
+    const theirs = pairIds(c.pieces)
+    if (theirs.length !== mine.length) continue
+    const old = renumber(unit.pieces, new Map(mine.map((id, k) => [id, theirs[k]])))
+    if (hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(old)))) !== c.hash) continue
+    return { unit: c, pieces: renumber(c.pieces, new Map(theirs.map((id, k) => [id, mine[k]]))) }
+  }
+  return null
 }
 /**
  * A record's pieces with each nested piece the unit's own again. A unit nested in another — a footnote in a paragraph,

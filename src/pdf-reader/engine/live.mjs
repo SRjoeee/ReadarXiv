@@ -20,7 +20,7 @@
 // cannot be made, the translation is set as today, and the reason noted
 import { analyze } from './paper-meta.mjs'
 import { inkSamples, LAYOUT_TEX, layoutMarking, markProbeTex, probeSamples } from './layout/marks.mjs'
-import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { BALANCE_DEF, documentBounds, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
 import { passagesInSource } from './cache.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
@@ -78,7 +78,9 @@ const DRAFT = [
   '\\def\\Gin@setfile#1#2#3{\\leavevmode\\global\\advance\\axt@g\\@ne\\axtmark{g\\the\\axt@g a}\\axt@setfile{#1}{#2}{#3}%',
   '\\axtmark{g\\the\\axt@g b}\\rlap{\\raise\\Gin@req@height\\hbox{\\axtmark{g\\the\\axt@g t}}}}}\\makeatother',
 ].join('\n') + '\n'
-const beginDocument = text => text.search(/\\begin\s*\{document\}/)
+/** where the main file's \\begin{document} stands as TeX finds it (latex-front.mjs documentBounds: none in a comment, a
+ *  definition or a filecontents), -1 where it has none: what goes before the document goes there */
+const beginDocument = text => documentBounds(text).begin
 /** a compile the TeX page failed, not TeX: BusyTeX's 180 s given up (the machine was slow), or the page's own failure
  *  (protocol 2's `error`, no log: an engine it could not bring up, a compile before an init that failed). It says
  *  nothing of the paper or of the strategy (the S3a review, I5 b) */
@@ -251,7 +253,9 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   const at = beginDocument(main)
   main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + NO_OVERFLOW + (xe || !evenSpaces ? '' : EVEN_SPACES) + main.slice(at)
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
-  if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
+  // (the \\usepackage TeX acts on, inputencOf: a commented one said utf8 and the source stayed Latin-1)
+  const inputenc = project.inputenc && inputencOf(main)
+  if (inputenc) main = main.slice(0, inputenc.start) + main.slice(inputenc.start, inputenc.end).replace(/\[([^\]]*)\]/, (m, opts) => `[${opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',')}]`) + main.slice(inputenc.end)
   const shim = xe && strategy.engine !== meta.compiler ? XETEX_SHIM + XETEX_SHIM_R1 : ''
   // what the strategy puts before \documentclass (scripts.mjs: a paper's own CJK packages kept from loading under xeCJK)
   const head = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + END_TEX + CAPTIONS_PROBE + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + shim
@@ -357,7 +361,17 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 //    their translation, every cell with its group — the units' kept and translated states change. A copy of 8 carries
 //    every unit over: the cuts, the wire and its reading back are 8's, and its groups are decided again from its
 //    translations
-export const PIPELINE_VERSION = '9'
+// 10: every piece of typeset body text a unit, as TeX reads the source (the front end's round of 2026-10-06/07): the
+//     document's bounds as TeX finds them (latex-front.mjs documentBounds — ResNet's appendix C, 2608.11084's and
+//     2608.23517's bodies — and an \end{document} TeX surely reaches), the title TeX keeps, the preamble's front matter
+//     (frontMatter), arguments read by the role table (arg-roles.mjs: the group no command takes walked, a command's text
+//     and a box's content walked, what LaTeXML reads in code not known, a token register's group its value), theorems'
+//     titles, a macro's prose body (storedBodies), \twocolumn[…]'s content and \footnotetext's text, a web address a
+//     placeholder, a running head kept as it is, a blank line after a comment a paragraph's end. Of the 25,139 units of
+//     the corpus's 117 papers 22,446 keep their hash, 1,222 are new or cut anew, and 1,471 are the same but for their
+//     pairs' numbers, whose copy's translation seedFrom finds again (cache.mjs). Nothing is sent or read back otherwise:
+//     a copy of 8 or 9 carries over every unit it holds the source of (PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '10'
 /**
  * The earlier pipelines whose copies carry their translations over into this one, unit by unit (cache.mjs copyReuse),
  * each with the test a unit's translation, its pieces, must pass: DESIGN §5.5's rule for the HTML page's cache, here per
@@ -370,9 +384,12 @@ export const PIPELINE_VERSION = '9'
  *   (mt.mjs rehydrate); TeX's `#` is never the text's own (`\#` and a bare `#` are placeholders), so a translation whose
  *   text holds no `\#` was read back as this pipeline reads it, its sentences too. Units of 7 that fix 2 or 4 cut anew
  *   (a citation's notes, an accent in a word) have new hashes
- * - 8: everything: what 9 changes comes after the answer (a table's groups, decided again from the copy's translations)
+ * - 8: everything: what 9 and 10 change comes after the answer (a table's groups, decided again from the copy's
+ *   translations) or changes what a unit is, not what is sent for one or made of its answer: every translation of 8 is
+ *   one 10 would make of the same pieces
+ * - 9: likewise (10 changes what a unit is)
  */
-export const PIPELINE_CARRIES = { 7: pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#')), 8: () => true }
+export const PIPELINE_CARRIES = { 7: pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#')), 8: () => true, 9: () => true }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a

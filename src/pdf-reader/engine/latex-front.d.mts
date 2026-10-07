@@ -1,13 +1,17 @@
 // latex-front.mjs's types (JavaScript until the engine's port), for the reader's tests
 /** a table cell's place in its table's grid (tableGrid): its table, row, first column, the columns it spans, and whether its row is the header's */
 export interface CellPlace { table: number; row: number; col: number; span: number; head: boolean }
-export interface SourceUnit { kind: string; title?: boolean; depth?: number; lead?: string; trail?: string; inner?: string; pieces: unknown[]; cell?: CellPlace }
+export interface SourceUnit { kind: string; title?: boolean; depth?: number; lead?: string; trail?: string; inner?: string; front?: boolean; stored?: boolean; bracketed?: boolean; pieces: unknown[]; cell?: CellPlace }
 /** a table's body as its cells lay it out: each cell's stretch of the source, its row, first column and span, and whether its row is the header's */
 export declare function tableGrid(s: string, from: number, to: number): (Omit<CellPlace, 'table'> & { start: number; end: number })[]
 /** a source tree held in memory: path → bytes */
 export declare function inMemory(map: Map<string, Uint8Array>): { list(): string[]; read(path: string): Uint8Array | null }
 /** a paper's source read from its main file: its units, the paper's prose in reading order */
-export declare function loadProject(root: ReturnType<typeof inMemory>, main: string, options?: { tables?: boolean }): { units: SourceUnit[] }
+export declare function loadProject(root: ReturnType<typeof inMemory>, main: string, options?: { tables?: boolean }): { units: SourceUnit[]; inputenc: string | null }
+/** a main file's \begin{document} and \end{document} as TeX finds them: -1 for `begin` and `body` where it has none */
+export declare function documentBounds(text: string, options?: { lineEnvs?: Set<string> | null; ifs?: Set<string>; ifValues?: Map<string, boolean> | null }): { begin: number; body: number; end: number }
+/** the \usepackage[…]{inputenc} TeX acts on: where it stands and its options, or null */
+export declare function inputencOf(text: string, options?: { lineEnvs?: Set<string> | null; ifs?: Set<string>; ifValues?: Map<string, boolean> | null }): { start: number; end: number; options: string } | null
 /** the patched files (path → bytes): each unit's range replaced by its translated pieces, the rest untouched */
 /** what goes around a unit when it is written out (markUnits): `whole` puts it around all of the unit, inside the groups that open and close it */
 export type UnitMark = { start: string; end: string; before?: string; whole?: boolean } | null
