@@ -23,7 +23,7 @@
 import { chainRevision } from '@/config/revision'
 import type { Config } from '@/config/schema'
 import { createSerialQueue } from '@/core/scheduler/serial'
-import { ConfigUnreadableError, type FallbackReason, configFallbackReason, getConfig, resetConfig, setConfig, watchConfig } from '@/config/storage'
+import { ConfigUnreadableError, type FallbackReason, getConfig, readConfig, resetConfig, setConfig, watchConfig } from '@/config/storage'
 import { sendMessage } from './messages'
 import { type PackState, createPackLookup } from './pack'
 
@@ -64,9 +64,10 @@ export interface SurfaceConfig {
   subscribe(listener: () => void): () => void
   /**
    * Change the stored configuration, on top of what storage holds when this write's turn comes. Resolves with what
-   * was stored. While the stored value cannot be read the store refuses (config/storage.ts): the state then shows
-   * what is in effect and why, and this rejects with the `ConfigUnreadableError` — a surface that has a notice for it
-   * catches it, one that reports errors lets it through
+   * was stored: the value `change` returned, the same object — the settings page's lists count a write as landed by
+   * that identity (options/ui/lists.ts). While the stored value cannot be read the store refuses (config/storage.ts):
+   * the state then shows what is in effect and why, and this rejects with the `ConfigUnreadableError` — a surface that
+   * has a notice for it catches it, one that reports errors lets it through
    */
   patch(change: (latest: Config) => Config): Promise<Config>
   /** Replace a stored configuration that cannot be read with the defaults, on the same chain (S-O-02). Resolves with what is in effect after; a refusal by storage shows as `resetFailed` */
@@ -126,9 +127,14 @@ export function createSurfaceConfig(deps: SurfaceConfigDeps): SurfaceConfig {
     settle()
   }
 
-  /** One reading of the store, on the chain: the first, or the one a change saved elsewhere asks for */
+  /**
+   * One reading of the store, on the chain: the first, or the one a change saved elsewhere asks for. Its verdict is
+   * the one returned with it (storage.ts `readConfig`), never another read's: the chain orders this surface's own
+   * reads, not the page's others (the settings page's pack download reads the store too), and one of those finishing
+   * in between would have its verdict published beside this read's value
+   */
   const read = (from: 'first' | 'elsewhere') => queue(async () => {
-    const stored = await getConfig()
+    const { config: stored, fallbackReason: reason } = await readConfig()
     if (deps.localeStale(stored)) {
       // Compared with the locale in use, not with a value recorded here: a change landing between the locale's read
       // and this surface's first one would otherwise pass unnoticed (Codex on #185)
@@ -140,7 +146,6 @@ export function createSurfaceConfig(deps: SurfaceConfigDeps): SurfaceConfig {
     }
     // A valid write elsewhere is the repair of a configuration this surface had to fall back from (Codex on #185); the
     // line about a refused reset goes with it, or it would come back with the next fallback nobody reset
-    const reason = configFallbackReason()
     await land(stored, reason, from, reason === null ? { resetFailed: false } : {})
     void packs.check(stored.targetLanguage)
     return stored
@@ -179,8 +184,8 @@ export function createSurfaceConfig(deps: SurfaceConfigDeps): SurfaceConfig {
         publish({ resetFailed: true })
         return getConfig()
       }
-      const next = await getConfig()
-      await land(next, configFallbackReason(), 'own', { resetFailed: false })
+      const { config: next, fallbackReason } = await readConfig()
+      await land(next, fallbackReason, 'own', { resetFailed: false })
       return next
     }),
     checkPack: packs.check,

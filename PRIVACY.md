@@ -8,6 +8,8 @@ Read arXiv is a Chrome extension that translates arXiv's HTML papers in the page
 
 The extension runs on `arxiv.org` pages: on HTML papers (`arxiv.org/html/…`) it reads the paper's text, structure, identifier and figures so it can translate them. On abstract and PDF pages it reads only the paper's identifier, to offer that paper's bilingual version; on a PDF page it asks arXiv itself, once, whether the paper has an HTML version. On all three it shows a small floating button, which you can hide or turn off in the settings. Nothing is translated until you ask: from that button, the extension's popup, its toolbar button, the right-click menu, the keyboard shortcut, or the link on the abstract page.
 
+The extension also runs on the pages of Read arXiv's own website (`readarxiv.org`). There it reads nothing from the page and sends nothing: it sets one mark on the page, the extension's version, so the website can tell that the extension is installed.
+
 ## Where the text goes
 
 **The services you choose.** When a paper is translated, its passages and the target language are sent from your browser directly to the translation service selected in the settings. Read arXiv runs no server of its own, and nothing passes through one.

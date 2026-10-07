@@ -66,12 +66,6 @@ export interface ImageRunOptions {
   names?: () => NameEvidence
   ocr: (call: OcrCall) => Promise<OcrMessageResponse>
   translate: (call: TranslateCall) => Promise<TranslateMessageResponse>
-  /** The mode in effect is among the ones the reader ticked; otherwise an image entering the viewport parks, translated on resume */
-  /**
-   * May images be translated now: the mode in effect is one the reader ticked, for both kinds of image alike. A
-   * target handed over while it is not stays in parked; `resume()` releases it when that changes
-   */
-  isEnabled: () => boolean
   /** Is the session still the current one (false after a restore / a restart) */
   isCurrent: () => boolean
   /** Test injection: the concurrency cap */
@@ -85,23 +79,21 @@ export interface ImageRunOptions {
 }
 
 export interface ImageRun {
-  /** Why it stopped after a configuration-level error (auth / no-key); once stopped, neither translate nor resume does anything */
+  /** Why it stopped after a configuration-level error (auth / no-key); once stopped, translate does nothing */
   fatal(): string | undefined
   /** Hand targets over by hand (a retry); one already requested is not repeated */
   translate(targets: ImageTarget[]): Promise<void>
-  /** The mode gate opened: release the parked targets */
-  resume(): void
   stop(): void
   failed(): ImageTarget[]
   progress(): ImageProgress
   /**
-   * The targets never requested so far, and whether each is parked behind the mode gate. A diagnostic for
-   * the idle trace: `images idle: 5/5 of 6` says one target never entered the viewport, and only this says which
+   * The targets never requested so far. A diagnostic for the idle trace: `images idle: 5/5 of 6` says one target never
+   * entered the viewport, and only this says which
    */
-  waiting(): { target: ImageTarget; parked: boolean }[]
+  waiting(): ImageTarget[]
   /** How many targets the viewport observer still holds */
   observing(): number
-  /** Every target still waiting for the viewport is taken now (the whole-paper range chosen mid-session, §10); the parked ones stay behind their gate */
+  /** Every target still waiting for the viewport is taken now (the whole-paper choice made mid-session, §10) */
   release(): number
 }
 
@@ -172,9 +164,16 @@ async function defaultFetchBytes(url: string, signal?: AbortSignal): Promise<Ima
   return readImageResponse(res)
 }
 
-/** ArrayBuffer → base64, in chunks to stay under the argument limit of String.fromCharCode */
+/**
+ * ArrayBuffer → base64. The browser's own encoder where it has one (`Uint8Array.prototype.toBase64`, newer than the
+ * extension's floor): the script one held the page's main thread 52 ms for a 2.6 MB PNG and 133 ms for 5.9 MB, the
+ * browser's 0.5 and 1.1 ms (measured 2026-09-25, the PDF reader's Part 1). Below it, in script, in chunks to stay under
+ * the argument limit of String.fromCharCode
+ */
 export function toBase64(bytes: ArrayBuffer): string {
   const view = new Uint8Array(bytes)
+  const native = (view as Uint8Array & { toBase64?: () => string }).toBase64
+  if (typeof native === 'function') return native.call(view)
   let binary = ''
   for (let i = 0; i < view.length; i += 0x8000) binary += String.fromCharCode(...view.subarray(i, i + 0x8000))
   return btoa(binary)
@@ -211,8 +210,6 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
    * aborted fetch does not overwrite the failure's reason with its own
    */
   const aborter = new AbortController()
-  /** Targets that entered the viewport while the mode gate was shut */
-  const parked = new Set<ImageTarget>()
   // The bookkeeping shared with the text run (DESIGN §4.4): outcomes, the permanent-error record, stop, the scheduler
   const ledger = createRunLedger(options.targets, {
     preload: options.preload,
@@ -221,7 +218,6 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
     onFatal: () => aborter.abort(),
     onStop: () => {
       aborter.abort()
-      parked.clear()
       // Those queued but not started are settled at once; their translate() only returns then
       for (const entry of queue.splice(0)) entry.done()
     },
@@ -388,7 +384,6 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
         // neither fetched nor recognised. A configuration-level error (PERMANENT_ERROR_KINDS, the same set as the text
         // pipeline's): stop on the first, rather than letting every image entering the viewport fetch, recognise and hit it again
         if (isPermanentErrorKind(res.error.kind) && ledger.fatal(res.error.kind, res.error.message)) {
-          parked.clear()
           // The claimed but unfinished ones (in flight, queued) are recorded as failed too, so the progress and failed() agree; the queued ones settle at once
           for (const other of ledger.inState('requested')) if (other !== target) fail(other, `stopped on a configuration error: ${res.error.message}`)
           for (const entry of queue.splice(0)) entry.done()
@@ -411,12 +406,9 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
   }
 
   const translate = async (picked: ImageTarget[]): Promise<void> => {
-    // With the gate closed everything handed over parks
-    const { taken: ready, held } = ledger.intake(picked, () => options.isEnabled())
-    for (const t of held) parked.add(t)
-    options.onTrace?.(`images entered: ${picked.map(t => t.id || t.kind).join(', ')} → taken ${ready.length}, parked ${held.length}, unknown ${picked.length - ready.length - held.length}`)
+    const { taken: ready } = ledger.intake(picked)
+    options.onTrace?.(`images entered: ${picked.map(t => t.id || t.kind).join(', ')} → taken ${ready.length}, unknown ${picked.length - ready.length}`)
     if (ready.length === 0) return
-    for (const t of ready) parked.delete(t)
     ledger.request(ready)
     report()
     // Into the run-level queue; the worker pool takes up to the cap (fetch → hash → base64 → OCR in one go, not all at once)
@@ -443,19 +435,11 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
 
   return {
     translate,
-    resume() {
-      // No filtering here: `translate` asks `isEnabled` itself and returns what it may not take to parked as it
-      // was; filtering would save one round trip and add one untestable branch
-      if (parked.size === 0) return
-      const picked = Array.from(parked)
-      parked.clear()
-      void translate(picked)
-    },
     stop: () => ledger.stop(),
     failed: () => ledger.failed(),
     fatal: () => ledger.fatalReason(),
     progress,
-    waiting: () => ledger.inState('waiting').map(target => ({ target, parked: parked.has(target) })),
+    waiting: () => ledger.inState('waiting'),
     observing: () => ledger.observing(),
     release: () => ledger.release(),
   }

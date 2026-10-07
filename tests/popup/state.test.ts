@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
-import { CONFIG_VERSION, type Config, DEFAULT_CONFIG, MODE_VALUES } from '@/config/schema'
+import { CONFIG_VERSION, type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { getConfig, setConfig } from '@/config/storage'
-import { type PopupHost, createPopupState } from '@/entrypoints/popup/state'
-import { MANAGE_SERVICES, MANAGE_STYLES } from '@/entrypoints/popup/view-model'
+import { type PopupHost, STILL_MS, createPopupState } from '@/entrypoints/popup/state'
+import { MANAGE_PROMPTS, MANAGE_SERVICES, MANAGE_STYLES } from '@/entrypoints/popup/view-model'
 import type { ProviderStatus } from '@/providers/transport'
-import { type AxtMessage, type PageStatus, answerMessages } from '@/shared/messages'
+import { type AxtMessage, type EntryStatus, type PageStatus, answerMessages } from '@/shared/messages'
 import type { PackState } from '@/shared/pack'
+import * as serviceHealth from '@/shared/service-health'
+import { markRejected } from '@/shared/service-health'
 import { applyLocaleFrom } from '@/ui/apply-locale'
 
 // What the popup knows and can do (popup/state.ts), through its interface: a page and a background that answer by
@@ -14,7 +16,7 @@ import { applyLocaleFrom } from '@/ui/apply-locale'
 
 const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
 const BASE: Config = { ...DEFAULT_CONFIG, uiLanguage: 'en', services: [SVC] }
-const status = (id: string): ProviderStatus => ({ providerId: id, chosen: id, available: true, maxBatchChars: 1, maxBatchItems: 1, renderPath: 'tags', targetLanguage: 'cmn', promptId: 'default', revision: id, chain: [id], demotions: [], engine: { id } })
+const status = (id: string): ProviderStatus => ({ providerId: id, chosen: id, available: true, maxBatchChars: 1, maxBatchItems: 1, renderPath: 'tags', targetLanguage: 'cmn', promptId: 'default', revision: id, chain: [id], demotions: [], identity: '', engine: { id } })
 const page = (state: 'on' | 'stopped', session: string | null, epoch = 'd#1'): PageStatus => ({ paper: '2401.00001', mode: 'side', preference: 'side', progress: { state, total: 1, requested: 1, done: 1, failed: 0, cached: 0, inFlight: 0 }, session, epoch })
 
 const until = async (done: () => boolean) => {
@@ -24,11 +26,11 @@ const until = async (done: () => boolean) => {
 const flush = async () => { for (let i = 0; i < 25; i++) await new Promise(resolve => setTimeout(resolve, 0)) }
 
 /** A tab and a background that answer by script, and everything the popup asked of them, in order */
-function world() {
+function world(seed: Parameters<typeof createPopupState>[1] = {}) {
   const w = {
     /** What the tab's full text answers `axt:page-status`: a status, `undefined` (a listener that ignores it), or `null` for no listener at all */
     page: null as PageStatus | null | undefined,
-    entry: undefined as { paper: string; html: string | null } | undefined,
+    entry: undefined as ({ paper: string; html: string | null } & Partial<EntryStatus>) | undefined,
     /** The tab's answers to the other messages */
     answers: {} as Record<string, unknown>,
     toTab: [] as AxtMessage[],
@@ -44,14 +46,30 @@ function world() {
     reloads: 0,
     pack: 'available' as PackState,
     embedded: false,
+    /** The active tab's address as the extension may read it: arXiv's, or null */
+    url: null as string | null,
+    /** Every paper P0's field had checked, in order, and what the checks answer for an id */
+    checks: [] as string[],
+    entries: {} as Record<string, { html: string | null; pdf: string | null }>,
+    /** Ids whose check the test holds open, and the way to let each go once it does (§5.4's two checks, item 2) */
+    holdEntries: new Set<string>(),
+    releaseEntry: {} as Record<string, () => void>,
+    /** Held while the test wants to decide when the tab's address answers (writes after stop) */
+    holdTabUrl: false,
+    releaseTabUrl: undefined as ((url: string | null) => void) | undefined,
+    /** Held while the test wants to decide when the shortcut answers (writes after stop) */
+    holdShortcut: false,
+    releaseShortcut: undefined as ((s: string | null) => void) | undefined,
+    /** Whether this browser runs the PDF reader (pdf-reader/support.ts readerRuns) */
+    readerRuns: true,
   }
   const host: PopupHost = {
     toTab: (async (message: AxtMessage) => {
       w.toTab.push(message)
       if (message.type === 'axt:page-status') { if (w.page === null) throw new Error('Could not establish connection'); return w.page }
       if (message.type === 'axt:entry-status') return w.entry
-      // An entry page ignores every message but its own two
-      if (w.entry && message.type !== 'axt:open-html') return undefined
+      // An entry page ignores every message but its own
+      if (w.entry && message.type !== 'axt:open-html' && message.type !== 'axt:open-pdf') return undefined
       return w.answers[message.type] ?? (message.type === 'axt:restore-page' ? { removedNodes: 1 } : { started: true })
     }) as PopupHost['toTab'],
     toBackground: (async (message: AxtMessage) => {
@@ -71,13 +89,21 @@ function world() {
     openTab: async url => { w.opened.push(url) },
     openOptionsPage: () => { w.optionsPages++ },
     url: path => `ext://${path}`,
-    shortcut: async () => '⌥T',
+    shortcut: () => (w.holdShortcut ? new Promise<string | null>(resolve => { w.releaseShortcut = resolve }) : Promise.resolve('⌥T')),
     get embedded() { return w.embedded },
     close: () => { w.closed++ },
     downloadPack: async target => { w.downloads.push(target) },
     config: { localeStale: () => false, reload: () => { w.reloads++ }, packState: async () => w.pack, announce: () => undefined },
+    tabUrl: () => (w.holdTabUrl ? new Promise<string | null>(resolve => { w.releaseTabUrl = resolve }) : Promise.resolve(w.url)),
+    get readerRuns() { return w.readerRuns },
+    entriesOf: id => {
+      w.checks.push(id)
+      const found = w.entries[id] ?? { html: `https://arxiv.org/html/${id}#readarxiv`, pdf: `https://arxiv.org/pdf/${id}#readarxiv` }
+      if (w.holdEntries.has(id)) return new Promise(resolve => { w.releaseEntry[id] = () => resolve(found) })
+      return Promise.resolve(found)
+    },
   }
-  const popup = createPopupState(host)
+  const popup = createPopupState(host, seed)
   const sent = (type: string) => w.toTab.filter(m => m.type === type)
   const asked = (scope?: string) => w.toBackground.filter((m): m is AxtMessage<'axt:provider-status'> => m.type === 'axt:provider-status' && m.scope === scope)
   return { w, popup, sent, asked, input: () => popup.state().input, error: () => popup.state().error }
@@ -374,15 +400,12 @@ describe('the choices the page applies by itself are saved and nothing is sent',
     p.stop()
   })
 
-  it('switching images back on with every mode unticked ticks them all: enabled with no mode to run in shows as on and does nothing (Codex on #157)', async () => {
-    await setConfig({ ...BASE, image: { enabled: false, modes: [] } })
+  it('the image switch writes the switch alone', async () => {
+    await setConfig({ ...BASE, image: { enabled: false } })
     const p = await opened(w => { w.page = page('stopped', null) })
     p.popup.actions.setImages(true)
     await until(() => p.input().config?.image.enabled === true)
-    expect(p.input().config?.image.modes).toEqual([...MODE_VALUES])
-    p.popup.actions.setImages(false)
-    await until(() => p.input().config?.image.enabled === false)
-    expect(p.input().config?.image.modes).toEqual([...MODE_VALUES])
+    expect(p.input().config?.image).toEqual({ enabled: true })
     p.stop()
   })
 
@@ -413,20 +436,42 @@ describe('the choices the page applies by itself are saved and nothing is sent',
 })
 
 describe('the rows that lead elsewhere', () => {
-  it('“Manage services” brings the settings page to the front; “Manage styles” opens its Reading section; framed beside the floating button the popup asks to go', async () => {
+  it('each menu\'s Manage… row opens the settings page at its row, in a tab of its own; the gear brings the page to the front; framed, the popup asks to go (the redesign\'s design, §5.3, §6.1)', async () => {
     const p = await opened(w => { w.page = page('stopped', null) })
     p.popup.actions.chooseService(MANAGE_SERVICES)
     await flush()
-    expect(p.w.optionsPages).toBe(1)
+    p.popup.actions.choosePrompt(MANAGE_PROMPTS)
+    await flush()
     expect(p.w.closed).toBe(0)
     p.w.embedded = true
     p.popup.actions.chooseStyle(MANAGE_STYLES)
     await flush()
-    expect(p.w.opened).toEqual(['ext:///options.html#reading'])
+    expect(p.w.opened).toEqual(['ext:///options.html#translate/services', 'ext:///options.html#translate/prompts', 'ext:///options.html#appearance/styles'])
     expect(p.w.closed).toBe(1)
     p.popup.actions.openOptions()
-    expect(p.w.optionsPages).toBe(2)
+    expect(p.w.optionsPages).toBe(1)
     expect((await getConfig()).provider).toBe(BASE.provider)
+    p.stop()
+  })
+
+  it('P0 opens what it opens in a new tab, and the popup goes (§5.4)', async () => {
+    const p = await opened()
+    p.popup.actions.openLink('https://arxiv.org/search/advanced')
+    await until(() => p.w.closed === 1)
+    expect(p.w.opened).toEqual(['https://arxiv.org/search/advanced'])
+    p.stop()
+  })
+
+  it('closing a menu closes that menu alone: two popovers\' toggles may arrive in either order', async () => {
+    const p = await opened(w => { w.page = page('stopped', null) })
+    p.popup.actions.openMenu('language')
+    p.popup.actions.closeMenu('service')
+    expect(p.input().menu).toBe('language')
+    p.popup.actions.closeMenu('language')
+    expect(p.input().menu).toBeNull()
+    p.popup.actions.openMenu('style')
+    p.popup.actions.closeMenu()
+    expect(p.input().menu).toBeNull()
     p.stop()
   })
 
@@ -451,6 +496,73 @@ describe('the rows that lead elsewhere', () => {
     expect(none.error()).toMatch(/no HTML version/)
     expect(none.w.closed).toBe(0)
     none.stop()
+  })
+
+  it('with the reader open, the primary shows the original or the translation, and a display writes the mode and lets the original go; stacked cannot be chosen (the reader\'s design, §9.2)', async () => {
+    const stored = async (test: (c: Awaited<ReturnType<typeof getConfig>>) => boolean) => { for (let i = 0; i < 100 && !test(await getConfig()); i++) await flush(); return test(await getConfig()) }
+    const p = await opened(w => { w.page = undefined; w.entry = { paper: '2501.07202', html: null, kind: 'pdf', pdf: null, readerOpen: true } })
+    p.popup.actions.readerOriginal()
+    expect(await stored(c => c.pdfReader.original)).toBe(true)
+    p.popup.actions.readerTranslate()
+    expect(await stored(c => !c.pdfReader.original)).toBe(true)
+    await setConfig({ ...(await getConfig()), pdfReader: { ...(await getConfig()).pdfReader, original: true } })
+    p.popup.actions.chooseMode('only')
+    expect(await stored(c => c.mode === 'only' && !c.pdfReader.original)).toBe(true)
+    p.popup.actions.chooseMode('stack')
+    await flush()
+    expect((await getConfig()).mode).toBe('only')
+    p.stop()
+  })
+
+  it('with the reader open, side by side keeps a stored stacked: the reader shows it as side by side, and pressing that choice changes no preference of the HTML page\'s (#299, Part 5\'s M6)', async () => {
+    const stored = async (test: (c: Awaited<ReturnType<typeof getConfig>>) => boolean) => { for (let i = 0; i < 100 && !test(await getConfig()); i++) await flush(); return test(await getConfig()) }
+    await setConfig({ ...(await getConfig()), mode: 'stack', pdfReader: { ...(await getConfig()).pdfReader, original: true } })
+    const p = await opened(w => { w.page = undefined; w.entry = { paper: '2501.07202', html: null, kind: 'pdf', pdf: null, readerOpen: true } })
+    p.popup.actions.chooseMode('side')
+    expect(await stored(c => !c.pdfReader.original)).toBe(true)
+    expect((await getConfig()).mode).toBe('stack')
+    // from the translation alone, side by side is the HTML page's side by side
+    await setConfig({ ...(await getConfig()), mode: 'only' })
+    p.popup.actions.chooseMode('side')
+    expect(await stored(c => c.mode === 'side')).toBe(true)
+    p.stop()
+  })
+
+  it('the PDF entry opens the paper\'s PDF asking for the reader, in a new tab by default or on the page itself, and the popup closes (the reader\'s design, §2)', async () => {
+    const pdf = 'https://arxiv.org/pdf/2501.07202#readarxiv'
+    const p = await opened(w => { w.page = undefined; w.entry = { paper: '2501.07202', html: null, kind: 'abs', pdf, readerOpen: false } })
+    p.popup.actions.openPdf()
+    await until(() => p.w.closed === 1)
+    expect(p.w.opened).toEqual([pdf])
+    await setConfig({ ...(await getConfig()), reading: { ...BASE.reading, openIn: 'same-tab' } })
+    await until(() => p.input().config?.reading.openIn === 'same-tab')
+    p.w.answers['axt:open-pdf'] = { opened: true }
+    p.popup.actions.openPdf()
+    await until(() => p.w.closed === 2)
+    expect(p.sent('axt:open-pdf')).toHaveLength(1)
+    p.stop()
+  })
+
+  it('a PDF entry the page can no longer open (its source turned out PDF-only after the popup asked): the popup stays, and asks again, the entry greyed (Codex on #301)', async () => {
+    const pdf = 'https://arxiv.org/pdf/2608.07562#readarxiv'
+    const p = await opened(w => { w.page = undefined; w.entry = { paper: '2608.07562', html: null, kind: 'pdf', pdf, readerOpen: false }; w.answers['axt:open-pdf'] = { opened: false } })
+    const asked = p.sent('axt:entry-status').length
+    p.w.entry = { paper: '2608.07562', html: null, kind: 'pdf', pdf: null, readerOpen: false }
+    p.popup.actions.openPdf()
+    await until(() => p.sent('axt:entry-status').length > asked)
+    await flush()
+    expect([p.w.closed, p.input().entry?.pdf]).toEqual([0, null])
+    p.stop()
+  })
+
+  it('on a PDF page the PDF entry is this page\'s: its hash alone changes, whatever the setting, and no second tab of the paper opens (Part 5\'s final review)', async () => {
+    const pdf = 'https://arxiv.org/pdf/2501.07202#readarxiv'
+    const p = await opened(w => { w.page = undefined; w.entry = { paper: '2501.07202', html: null, kind: 'pdf', pdf, readerOpen: false }; w.answers['axt:open-pdf'] = { opened: true } })
+    expect(p.input().config?.reading.openIn).toBe('new-tab')
+    p.popup.actions.openPdf()
+    await until(() => p.w.closed === 1)
+    expect([p.w.opened, p.sent('axt:open-pdf').length]).toEqual([[], 1])
+    p.stop()
   })
 })
 
@@ -485,5 +597,254 @@ describe('the offline service\'s pack and the broadcasts', () => {
     expect(p.asked().at(-1)).toEqual({ type: 'axt:provider-status', fresh: true })
     expect(p.w.reloads).toBe(0)
     p.stop()
+  })
+})
+
+describe('the service health record: subscribed first, read after (finding 3, Task 13)', () => {
+  it('a refusal heard before the first read settles is not overwritten by that read\'s older answer', async () => {
+    // The initial `rejectedServices()` is held open past the point where a real watch event lands, so the fix's
+    // "drop a read that answers late" has something to drop
+    let settle: ((ids: Set<string>) => void) | null = null
+    const held = new Promise<Set<string>>(resolve => { settle = resolve })
+    const spy = vi.spyOn(serviceHealth, 'rejectedServices').mockReturnValue(held)
+    const made = world()
+    made.w.page = page('stopped', null)
+    const stop = made.popup.start()
+    await flush()
+    await markRejected('svc-abcd1234')
+    await flush()
+    expect(made.input().rejected).toEqual(['svc-abcd1234'])
+    // The stale read answers now, with what was true before the mark; it must lose to the event already heard
+    settle!(new Set())
+    await flush()
+    expect(made.input().rejected).toEqual(['svc-abcd1234'])
+    spy.mockRestore()
+    stop()
+  })
+
+  it('a first read that fails is no unhandled rejection: the popup goes on with no mark, and a later event still lands', async () => {
+    const spy = vi.spyOn(serviceHealth, 'rejectedServices').mockRejectedValue(new Error('storage gone'))
+    const unhandled: unknown[] = []
+    const listen = (reason: unknown) => { unhandled.push(reason) }
+    process.on('unhandledRejection', listen)
+    try {
+      const made = world()
+      made.w.page = page('stopped', null)
+      const stop = made.popup.start()
+      await flush()
+      expect(unhandled).toEqual([])
+      expect(made.input().rejected).toEqual([])
+      await markRejected('svc-abcd1234')
+      await flush()
+      expect(made.input().rejected).toEqual(['svc-abcd1234'])
+      stop()
+    } finally {
+      process.off('unhandledRejection', listen)
+      spy.mockRestore()
+    }
+  })
+})
+
+describe('the record of refused keys (the branch\'s final review)', () => {
+  it('seeded with the record read before the first render, no state with the settings read shows a refused service as runnable', async () => {
+    await setConfig({ ...BASE, provider: SVC.id })
+    await markRejected(SVC.id)
+    const made = world({ rejected: [SVC.id] })
+    made.w.page = page('stopped', null)
+    expect(made.input().rejected).toEqual([SVC.id])
+    const seen: boolean[] = []
+    const unsubscribe = made.popup.subscribe(() => { const i = made.input(); if (i.config !== null) seen.push(i.rejected.includes(SVC.id)) })
+    const stop = made.popup.start()
+    await until(() => made.input().config !== null && made.input().saved !== null)
+    await flush()
+    expect(seen.length).toBeGreaterThan(0)
+    expect(seen.every(Boolean)).toBe(true)
+    unsubscribe()
+    stop()
+  })
+
+  it('a change of the record asks the saved settings\' chain again: a key made good shows the way back while the popup is open', async () => {
+    const p = await opened(w => { w.page = page('on', 's1') })
+    const before = p.asked().length
+    await markRejected(SVC.id)
+    await until(() => p.input().rejected.includes(SVC.id) && p.asked().length > before)
+    p.stop()
+  })
+})
+
+describe('what the popup knows of the tab (the redesign\'s design, §5.4)', () => {
+  it('nothing until the first ask about its page settles; then its address, and whether the popup still asks', async () => {
+    const made = world()
+    made.w.page = null
+    made.w.url = 'https://arxiv.org/html/2501.07202v1'
+    const stop = made.popup.start()
+    expect(made.input().tab).toBeNull()
+    await until(() => made.input().tab !== null)
+    expect(made.input().tab).toEqual({ url: 'https://arxiv.org/html/2501.07202v1', asking: true })
+    // six more asks 500 ms apart, then the popup gives up asking
+    for (let i = 0; i < 8; i++) { vi.advanceTimersByTime(500); await flush() }
+    expect(made.input().tab).toEqual({ url: 'https://arxiv.org/html/2501.07202v1', asking: false })
+    stop()
+  })
+
+  it('an entry page is known once it has answered, never in between: its moment without a page is not P0', async () => {
+    // `until` alone cannot catch this: the page-status and entry-status answers resolve as microtasks in one, between
+    // which `until`'s macrotask polling never lands. Every notification is recorded instead (as below, §"the record
+    // of refused keys"), so no moment settled (`tab !== null`) with the entry still unanswered goes unseen
+    const made = world()
+    made.w.page = undefined
+    made.w.entry = { paper: '2501.07202', html: 'https://arxiv.org/html/2501.07202#readarxiv' }
+    made.w.url = 'https://arxiv.org/abs/2501.07202'
+    const seen: { tab: unknown; entry: unknown }[] = []
+    const unsubscribe = made.popup.subscribe(() => { const i = made.input(); seen.push({ tab: i.tab, entry: i.entry }) })
+    const stop = made.popup.start()
+    await until(() => made.input().tab !== null)
+    expect(made.input().entry).not.toBeNull()
+    expect(seen.length).toBeGreaterThan(0)
+    expect(seen.every(s => s.tab === null || s.entry !== null)).toBe(true)
+    unsubscribe()
+    stop()
+  })
+
+  it('a page that answers: known, and no longer asked while silent', async () => {
+    const p = await opened(w => { w.page = page('stopped', null); w.url = 'https://arxiv.org/html/2401.00001' })
+    expect(p.input().tab).toEqual({ url: 'https://arxiv.org/html/2401.00001', asking: false })
+    p.stop()
+  })
+})
+
+describe('P0: the field and its checks (the redesign\'s design, §5.4)', () => {
+  // the stillness is a timeout: faked here with the intervals, and the popup opened and settled on the fake clock
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] }) })
+  const settle = async () => { for (let i = 0; i < 25; i++) await vi.advanceTimersByTimeAsync(0) }
+  async function onP0(setup: (w: ReturnType<typeof world>['w']) => void = () => undefined) {
+    const made = world()
+    made.w.page = null
+    setup(made.w)
+    const stop = made.popup.start()
+    await settle()
+    return { ...made, stop }
+  }
+
+  it('an arXiv PDF address is checked as the paper it names where the browser cannot run the reader, and opened as it is where it can (Codex on #306)', async () => {
+    const cannot = await onP0(w => { w.readerRuns = false })
+    cannot.w.entries['2501.07202'] = { html: 'https://arxiv.org/html/2501.07202#readarxiv', pdf: null }
+    cannot.popup.actions.setQuery('https://arxiv.org/pdf/2501.07202')
+    await vi.advanceTimersByTimeAsync(STILL_MS)
+    await settle()
+    expect([cannot.w.checks, cannot.input().readerRuns, cannot.input().find.entries]).toEqual([['2501.07202'], false, { id: '2501.07202', html: 'https://arxiv.org/html/2501.07202#readarxiv', pdf: null }])
+    cannot.stop()
+    const can = await onP0()
+    can.popup.actions.setQuery('https://arxiv.org/pdf/2501.07202')
+    await vi.advanceTimersByTimeAsync(STILL_MS)
+    await settle()
+    expect([can.w.checks, can.input().readerRuns, can.input().find.entries]).toEqual([[], true, null])
+    can.stop()
+  })
+
+  it('a paper is checked once the field has been still for 300 ms, once per id, never per keystroke', async () => {
+    const p = await onP0()
+    // typed key by key, 50 ms apart: `2501.0720` has an id's shape too, and is passed over
+    for (const text of ['2', '25', '2501', '2501.', '2501.0720', '2501.07202']) { p.popup.actions.setQuery(text); await vi.advanceTimersByTimeAsync(50) }
+    expect(p.w.checks).toEqual([])
+    await vi.advanceTimersByTimeAsync(STILL_MS - 51)
+    expect(p.w.checks).toEqual([])
+    await vi.advanceTimersByTimeAsync(1)
+    await settle()
+    expect(p.w.checks).toEqual(['2501.07202'])
+    expect(p.input().find).toEqual({ query: '2501.07202', entries: { id: '2501.07202', html: 'https://arxiv.org/html/2501.07202#readarxiv', pdf: 'https://arxiv.org/pdf/2501.07202#readarxiv' } })
+    // the same paper by its abstract address: answered already, not asked again
+    p.popup.actions.setQuery('https://arxiv.org/abs/2501.07202')
+    await vi.advanceTimersByTimeAsync(STILL_MS)
+    await settle()
+    expect(p.w.checks).toEqual(['2501.07202'])
+    expect(p.input().find.entries?.id).toBe('2501.07202')
+    // another paper: its own check
+    p.w.entries['hep-th/9711200'] = { html: null, pdf: 'https://arxiv.org/pdf/hep-th/9711200#readarxiv' }
+    p.popup.actions.setQuery('hep-th/9711200')
+    await vi.advanceTimersByTimeAsync(STILL_MS)
+    await settle()
+    expect(p.w.checks).toEqual(['2501.07202', 'hep-th/9711200'])
+    expect(p.input().find.entries).toEqual({ id: 'hep-th/9711200', html: null, pdf: 'https://arxiv.org/pdf/hep-th/9711200#readarxiv' })
+    p.stop()
+  })
+
+  it('a check held open for one paper, while the field moves to another: the newer paper\'s view never shows the older one\'s answer', async () => {
+    const p = await onP0()
+    p.w.holdEntries.add('2501.07202')
+    p.popup.actions.setQuery('2501.07202')
+    await vi.advanceTimersByTimeAsync(STILL_MS)
+    await settle()
+    expect(p.w.checks).toEqual(['2501.07202'])
+    // still checking: no answer for it yet
+    expect(p.input().find.entries).toBeNull()
+    // the field moves to another paper before the first check answers
+    p.w.entries['hep-th/9711200'] = { html: null, pdf: 'https://arxiv.org/pdf/hep-th/9711200#readarxiv' }
+    p.popup.actions.setQuery('hep-th/9711200')
+    await vi.advanceTimersByTimeAsync(STILL_MS)
+    await settle()
+    expect(p.w.checks).toEqual(['2501.07202', 'hep-th/9711200'])
+    expect(p.input().find).toEqual({ query: 'hep-th/9711200', entries: { id: 'hep-th/9711200', html: null, pdf: 'https://arxiv.org/pdf/hep-th/9711200#readarxiv' } })
+    // the held check now answers: kept for its own id, never shown under the paper the field names now
+    p.w.releaseEntry['2501.07202']!()
+    await settle()
+    expect(p.input().find).toEqual({ query: 'hep-th/9711200', entries: { id: 'hep-th/9711200', html: null, pdf: 'https://arxiv.org/pdf/hep-th/9711200#readarxiv' } })
+    p.stop()
+  })
+
+  it('an address that opens a page, words and a link elsewhere are never checked', async () => {
+    const p = await onP0()
+    for (const text of ['https://arxiv.org/pdf/2501.07202', 'attention is all you need', 'https://www.nature.com/articles/x']) {
+      p.popup.actions.setQuery(text)
+      await vi.advanceTimersByTimeAsync(1000)
+    }
+    await settle()
+    expect(p.w.checks).toEqual([])
+    expect(p.input().find).toEqual({ query: 'https://www.nature.com/articles/x', entries: null })
+    p.stop()
+  })
+
+  it('stopped, a check still waiting for stillness is not made', async () => {
+    const p = await onP0()
+    p.popup.actions.setQuery('2501.07202')
+    p.stop()
+    await vi.advanceTimersByTimeAsync(STILL_MS * 2)
+    expect(p.w.checks).toEqual([])
+  })
+})
+
+describe('writes after the popup stops', () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] }) })
+  const settle = async () => { for (let i = 0; i < 25; i++) await vi.advanceTimersByTimeAsync(0) }
+
+  it('a late shortcut, tab address, paper check and refused-key read all find nothing to write once stopped', async () => {
+    let releaseRejected!: (ids: Set<string>) => void
+    const spy = vi.spyOn(serviceHealth, 'rejectedServices').mockReturnValue(new Promise(resolve => { releaseRejected = resolve }))
+    const made = world()
+    made.w.page = null
+    made.w.holdTabUrl = true
+    made.w.holdEntries.add('2501.07202')
+    made.w.holdShortcut = true
+    const stop = made.popup.start()
+    made.popup.actions.setQuery('2501.07202')
+    await vi.advanceTimersByTimeAsync(STILL_MS)
+    await settle()
+    expect(made.w.checks).toEqual(['2501.07202'])
+    // stopping while the silent timer still runs notifies once, of its own accord (whether the popup still asks is
+    // part of the view); that is not what this test is about, so the recording starts once stop() has returned
+    stop()
+    const after = made.popup.state()
+    const seen: unknown[] = []
+    const unsubscribe = made.popup.subscribe(() => seen.push(made.popup.state()))
+    // four answers that land only once the popup has stopped
+    made.w.releaseShortcut?.('⌥T')
+    made.w.releaseTabUrl?.('https://arxiv.org/abs/2501.07202')
+    made.w.releaseEntry['2501.07202']!()
+    releaseRejected(new Set(['svc-late']))
+    await settle()
+    expect(seen).toEqual([])
+    expect(made.popup.state()).toBe(after)
+    unsubscribe()
+    spy.mockRestore()
   })
 })

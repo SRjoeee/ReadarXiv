@@ -1,0 +1,289 @@
+/* The PDF reader's page (the reader's design, §4, §5, §11.5): the extension's tokens and shared controls (tokens.css,
+   controls.css) and not the pages' ui.css, with Tailwind's theme and utilities and **without Preflight**, whose resets
+   would reach inside PDF.js's viewers: their layout assumes the browser's defaults (a box-sizing of ours once shifted
+   the highlight, 2026-09-22). The chrome — every control the page draws — takes its own small base under the class
+   `chrome`; the viewers keep theirs */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+/* the utilities of the reader's own sources: Tailwind's scan of the whole tree brought the settings page's in, a :has()
+   among them (Part 3's final review; tests/styles/no-has.test.ts) */
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "./";
+@source "../../pdf-reader/";
+/* not the engine's modules: they draw no utility, and Tailwind reads comments, which had put `.table { display: table }`
+   into this sheet from one of theirs (the redesign's Part 3) */
+@source not "../../pdf-reader/engine/";
+/* the menu rows moved there (src/ui/controls/MenuList.tsx) draw the utilities they drew here (the redesign's Part 3).
+   That one file, not the directory: Tailwind reads comments as well as class lists, and the directory brought in `.grow`
+   from two comments; a word such as hidden or table in another control's comment would restyle PDF.js's own classes */
+@source "../../ui/controls/MenuList.tsx";
+
+/* the extension's tokens (the redesign's design, §2.1): the ramp, the roles and their dark values, generated from
+   src/shared/tokens.ts; the reader's own layout values stay below */
+@import "../../styles/tokens.css";
+@import "../../styles/controls.css";
+
+/* the reader's own layout (§5); every colour, shadow, the font and the ease come from tokens.css */
+:root {
+  --bar: 44px;
+  --side: 236px;
+  /* the capsule's motion (§6.6; the web's round 4, approved 2026-10-04), improve-animations' strong curves: the words
+     entering and leaving, the box closing, and the box opening on a softer ease-in-out that does not rush its middle.
+     capsule-motion.ts starts its animations on the same three (tests/pdf-reader/ui/capsule.test.ts holds them equal) */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-soft: cubic-bezier(0.65, 0, 0.35, 1);
+}
+@theme inline {
+  --color-canvas: var(--canvas); --color-chrome: var(--chrome); --color-line: var(--chrome-line); --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink); --color-ink-2: var(--ink-2); --color-ink-3: var(--ink-3);
+  --color-fill: var(--fill); --color-well: var(--well); --color-lift: var(--lift); --color-float: var(--float-bg);
+  --color-danger: var(--danger); --color-focus: var(--focus);
+  --font-sans: var(--font);
+  --ease-reader: cubic-bezier(0.2, 0, 0, 1);
+  --shadow-float: var(--float-shadow); --shadow-pop: var(--pop-shadow);
+}
+
+@layer base {
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: var(--canvas); color: var(--ink); font: 13px/1.4 var(--font); -webkit-font-smoothing: antialiased; }
+  [hidden] { display: none !important; }
+  /* the chrome: border-box and bare controls; PDF.js's viewers keep the browser's defaults (the note at the top) */
+  .chrome, .chrome * { box-sizing: border-box; }
+  .chrome button, .chrome input { font: inherit; color: inherit; margin: 0; }
+  .chrome button { background: none; border: 0; padding: 0; cursor: pointer; }
+  .chrome button:disabled, .chrome [aria-disabled="true"] { cursor: default; }
+  .chrome :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  /* a field's ring hugs it, so that it crosses no word beside it (the page's "/ 15") nor its popover's edge */
+  .chrome input:focus-visible { outline-offset: 0; }
+  /* the ring is the keyboard's: a text field matches :focus-visible after a press too (the browser's rule, since typing
+     follows), and with the pointer its caret and its fill say where the focus is (modality.ts; better-accessibility) */
+  html[data-axt-pointer] .chrome input:focus-visible { outline: none; }
+  kbd { font: inherit; }
+}
+
+/* ----- §5: the toolbar fixed at the top, three zones; the document area under it, moved by the contents ----- */
+header.bar {
+  position: fixed; inset: 0 0 auto 0; z-index: 20; height: var(--bar);
+  /* the trail keeps its width and the lead gives way: squeezed, the switch moves off the centre rather than being drawn
+     over, and nothing is pushed past the window's edge (Part 6's interface review: overlaps from 500 to 1210 px) */
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr); align-items: center; gap: 16px;
+  padding-inline: 8px; background: var(--chrome); box-shadow: 0 0.5px 0 var(--chrome-line); color: var(--ink);
+}
+/* the lead's width is the grid's, which the trail narrows: the title leaves when there is too little of it to read
+   (PaperTitle measures the id against it), whatever the window's width (the interface review) */
+[data-zone="lead"] { container: lead / inline-size; }
+/* the contents move the document area at once, so that each side is refitted once to its new width; it is drawn sliding
+   there by a transform (App.tsx), on the compositor: a transition of `left` refitted both sides on every frame (the
+   final review: 12 scale changes a toggle) */
+.doc { position: fixed; inset: var(--bar) 0 0 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 8px; }
+html[data-axt-contents] .doc { left: var(--side); }
+.pane { position: relative; min-width: 0; overflow: hidden; timeline-scope: --pane-y; }
+.pane .viewerContainer { scroll-timeline: --pane-y block; scrollbar-width: none; }
+/* one display alone, or side by side in a narrow window: the scroller spans the window, the page centred in it (§3) */
+html[data-axt-pdf-mode="original"] .doc, html[data-axt-pdf-mode="translation"] .doc, html[data-axt-narrow] .doc { grid-template-columns: minmax(0, 1fr); column-gap: 0; }
+html[data-axt-pdf-mode="original"] .pane[data-side="right"],
+html[data-axt-pdf-mode="translation"] .pane[data-side="left"],
+html[data-axt-pdf-mode="bilingual"][data-axt-narrow] .pane[data-side="left"] { display: none; }
+html[data-axt-pdf-mode="bilingual"][data-axt-swapped] .pane[data-side="left"] { order: 2; }
+
+/* ----- PDF.js's pages: a hairline and a soft shadow, 14 px apart (§4.1); PDF.js's own border and its margin, whose
+   foot is negative, give way (as in the harness the maintainer approved) ----- */
+.pdfViewer .page { border: 0 !important; margin-block: 14px !important; box-shadow: var(--page-shadow); }
+/* dark pages (§4.3): the canvas alone inverted, a page not drawn yet already its colour, so nothing flashes white; the
+   highlight and the figures keep their colours, the band screened over the dark page as it is multiplied over a white one */
+html[data-axt-dim] .pdfViewer .page { background-color: rgb(29 29 29) !important; }
+html[data-axt-dim] .pdfViewer .page canvas { filter: invert(88.8%) hue-rotate(180deg); }
+html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
+/* the appearance changes as one crossfade of the whole page (the View Transitions API) */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 260ms; animation-timing-function: var(--ease); }
+/* ----- the controls (§6, §7): component classes, the layout around them in utilities ----- */
+@layer components {
+  .tbtn { position: relative; height: 30px; min-width: 30px; flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border-radius: 7px; color: var(--ink-2); transition: background-color 150ms ease-out, color 150ms ease-out, scale 150ms ease-out; }
+  .tbtn::before { content: ""; position: absolute; inset: -7px -2px; }
+  /* the zoom's three sit side by side: grown across, each would take the edge of its neighbour */
+  [data-zoom] > .tbtn::before { inset-inline: 0; }
+  .tbtn[aria-expanded="true"], .tbtn[aria-pressed="true"] { background: var(--fill); color: var(--ink); }
+  /* a hover's look only where a pointer hovers: on a touch screen :hover latches after a tap and reads as a state stuck
+     on (the interface review); every :hover below is held the same way (tests/styles/reader-sheet.test.ts) */
+  @media (hover: hover) { .tbtn:hover { background: var(--fill); color: var(--ink); } }
+  .chrome a.tbtn { text-decoration: none; }
+  .tbtn:active { scale: 0.96; }
+  .tbtn[aria-disabled="true"] { background: none; color: var(--ink-3); opacity: 0.55; }
+  .tbtn[aria-disabled="true"]:active { scale: 1; }
+  .divider { width: 0.5px; height: 18px; margin-inline: 6px; flex: none; background: var(--chrome-line); }
+
+  .seg.display > button { width: 40px; padding: 0; }
+  /* 17 px, whole, as the capsule's words: on the 16.8 px line it inherited (12 px at 1.4) Chromium set its words 0.91 px
+     off the bar's centre line, where Firefox and WebKit set them on it (the web's measure, wave 2 Task 16; the drafts'
+     round 4 had this line) */
+  .arxiv-id { display: inline-flex; flex: none; align-items: center; gap: 2px; margin: -2px -4px; padding: 2px 4px; border-radius: 5px; color: var(--ink-2); font-size: 12px; line-height: 17px; font-variant-numeric: tabular-nums; text-decoration: none; transition: color 150ms, background-color 150ms; }
+  .arxiv-id svg { opacity: 0; translate: -2px 2px; transition: opacity 150ms, translate 150ms ease-out; }
+  .arxiv-id:focus-visible { color: var(--ink); background: var(--fill); }
+  .arxiv-id:focus-visible svg { opacity: 1; translate: 0 0; }
+  @media (hover: hover) { .arxiv-id:hover { color: var(--ink); background: var(--fill); } .arxiv-id:hover svg { opacity: 1; translate: 0 0; } }
+  @container lead (width < 320px) { .paper-title [data-title] { display: none; } }
+  .paper-title[data-cramped] [data-arxiv] { display: none; }
+  .menu-btn { padding-inline: 8px 6px; color: var(--ink); font-size: 12.5px; font-weight: 500; }
+  /* a name longer than the bar can give (a service's is up to 40 characters) is cut short; the tooltip holds it whole */
+  .menu-btn > span { min-width: 0; max-width: 11em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .zoom-value { padding-inline: 6px; color: var(--ink); font-size: 12.5px; }
+  /* a value whose digits come and go (the zoom's 99 % → 100 %) keeps the width of its widest, drawn hidden in the same
+     cell, its figures at the trailing edge: the bar shifts nothing as it changes, in any face (better-typography: a
+     changing value moves no layout; tabular figures make every value of the widest's length as wide). A min-width
+     tuned to one face had held two digits, not three: 60 → 63 px, and 3.1 px to the left of it */
+  .tbtn .fit { display: inline-grid; justify-items: end; }
+  .tbtn .fit > * { grid-area: 1 / 1; }
+  .tbtn .fit > [data-widest] { visibility: hidden; }
+  /* below 900 px the language and service menus leave the toolbar for the reading options' first rows (§5); as specific
+     as the rows and separators they are, and after them, so that they stay hidden above it */
+  .pop .narrow-only, .pop .narrowest-only { display: none; }
+  /* a switch's row is a label (ReadingOptions): a press on its words turns the switch, and the pointer says so */
+  .pop label.row { cursor: pointer; }
+  /* the contents (§6.3): `toc`, since Tailwind's `contents` is display: contents */
+  .toc { position: fixed; z-index: 15; inset: var(--bar) auto 0 0; width: var(--side); display: flex; flex-direction: column; background: var(--chrome); box-shadow: 0.5px 0 0 var(--chrome-line); translate: -100% 0; visibility: hidden; transition: translate 200ms var(--ease), visibility 0s linear 200ms; }
+  html[data-axt-contents] .toc { translate: 0 0; visibility: visible; transition: translate 200ms var(--ease), visibility 0s; }
+  .toc-h { display: flex; align-items: center; height: 36px; padding: 0 12px 0 14px; flex: none; color: var(--ink-2); font-size: 11.5px; font-weight: 600; }
+  .toc-list { flex: 1; margin: 0; padding: 0 6px 16px; overflow: auto; list-style: none; overscroll-behavior: contain; scrollbar-width: thin; }
+  .toc-list li[hidden] { display: none; }
+  .entry { display: flex; align-items: center; gap: 2px; height: 28px; padding-inline: 0 8px; border-radius: 6px; }
+  .entry[aria-current="true"] { background: var(--fill); }
+  @media (hover: hover) { .entry:hover { background: var(--fill); } }
+  /* the link is the row from top to bottom: the row is lit as a whole, and pressed as a whole (the interface review) */
+  .entry a { display: flex; flex: 1; min-width: 0; align-items: baseline; gap: 8px; padding-block: 5px; color: inherit; text-decoration: none; }
+  .entry .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 500; }
+  .entry[aria-current="true"] .t { font-weight: 600; }
+  .entry .p { flex: none; color: var(--ink-2); font-size: 11px; font-variant-numeric: tabular-nums; }
+  [data-level="2"] > .entry { padding-inline-start: 14px; }
+  [data-level="3"] > .entry { padding-inline-start: 28px; }
+  :is([data-level="2"], [data-level="3"]) .t { font-size: 12px; font-weight: 400; color: var(--ink-2); }
+  .fold { position: relative; display: inline-flex; flex: none; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; color: var(--ink-3); }
+  /* its target 24 × 24 (WCAG 2.5.8), its drawing 18: grown up, down and away from its link, never toward it (#299;
+     Part 6's interface review). A leaf's is hidden with it */
+  .fold::before { content: ""; position: absolute; inset: -3px 0 -3px -6px; }
+  .fold svg { transition: rotate 150ms ease-out; }
+  .fold[aria-expanded="true"] svg { rotate: 90deg; }
+  .fold.leaf { visibility: hidden; }
+  /* a pane's page pill (§6.4): its bottom centre, 16 px up; shown while the pane scrolls, hovered or focused */
+  .pill { position: absolute; z-index: 5; inset-block-end: 16px; inset-inline-start: 50%; translate: -50% 0; display: flex; align-items: center; height: 30px; padding: 0 3px; border-radius: 999px;
+    background: var(--float-bg); backdrop-filter: blur(16px) saturate(1.5); box-shadow: var(--float-shadow); color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums;
+    opacity: 0; pointer-events: none; transition: opacity 200ms ease-out; }
+  .pill[data-live], .pill:focus-within { opacity: 1; pointer-events: auto; }
+  @media (hover: hover) { .pill:hover { opacity: 1; pointer-events: auto; } }
+  .pill button { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; color: var(--ink-3); transition: background-color 150ms, color 150ms; }
+  @media (hover: hover) { .pill button:hover { background: var(--fill); color: var(--ink); } }
+  .pill input { width: 3.2ch; height: 22px; border: 0; border-radius: 6px; background: none; color: var(--ink); font-weight: 500; text-align: end; }
+  @media (hover: hover) { .pill input:hover { background: var(--fill); } }
+  /* being edited: the fill stays, the field's own sign of the focus under the pointer, where it has no ring */
+  .pill input:focus { background: var(--fill); }
+  .pill .of { padding-inline: 3px 5px; }
+  /* a pane's scroll indicator (§6.5): its right edge; the thumb's place a scroll-driven animation on the pane's timeline */
+  .indicator { position: absolute; z-index: 4; inset-block: 6px; inset-inline-end: 0; width: 14px; display: flex; justify-content: center; opacity: 0; transition: opacity 300ms ease-out; }
+  .indicator[data-live], .indicator[data-drag] { opacity: 1; transition-duration: 120ms; }
+  @media (hover: hover) { .indicator:hover { opacity: 1; transition-duration: 120ms; } }
+  .indicator i { position: absolute; top: 0; width: 4px; height: var(--thumb, 40px); border-radius: 999px; background: color-mix(in oklab, var(--ink) 30%, transparent); transition: width 150ms ease-out, background-color 150ms; animation: thumb linear both; animation-timeline: --pane-y; }
+  .indicator[data-drag] i { width: 7px; background: color-mix(in oklab, var(--ink) 45%, transparent); cursor: grab; }
+  @media (hover: hover) { .indicator:hover i { width: 7px; background: color-mix(in oklab, var(--ink) 45%, transparent); cursor: grab; } }
+  .indicator[data-drag] i { cursor: grabbing; }
+  /* the progress line (§6.6): along the toolbar's foot, 2 px of quiet ink, its length the share done, grown by a
+     transform; it fades in and out, at the length it reached (ProgressLine). 80 % of ink-3, 2.67:1 on the chrome: the
+     maintainer kept the quieter line over a graphic's 3:1 after trying both (2026-10-02) */
+  .progress-line { position: absolute; inset: auto 0 0 0; height: 2px; background: color-mix(in oklab, var(--ink-3) 80%, transparent); transform-origin: 0 50%; scale: var(--p, 0) 1; opacity: 0; pointer-events: none; transition: scale 400ms var(--ease), opacity 240ms ease-out; }
+  .progress-line[data-on] { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .progress-line { transition: opacity 240ms ease-out; } }
+  /* the status capsule (§6.6): fixed over the document area, above the pills, moved with it by the contents */
+  .capsule-slot { position: fixed; z-index: 7; inset: auto 0 58px 0; display: flex; justify-content: center; pointer-events: none; transition: left 200ms var(--ease); }
+  html[data-axt-contents] .capsule-slot { left: var(--side); }
+  /* --capsule-margin: the room kept each side in its slot, which capsule-motion.ts reads to know when a sentence must
+     wrap; --capsule-end: its end's padding, where what follows the words is pinned on one line */
+  .capsule { --capsule-margin: 12px; --capsule-end: 6px; position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 8px; min-height: 34px; max-width: calc(100% - 2 * var(--capsule-margin)); padding-block: 0; padding-inline: 12px var(--capsule-end); overflow: hidden; border-radius: 999px; pointer-events: auto;
+    background: var(--float-bg); backdrop-filter: blur(16px) saturate(1.5); box-shadow: var(--float-shadow); color: var(--ink); font-size: 12.5px; animation: capsule-in 240ms var(--ease); }
+  .capsule[data-alone] { padding-inline-end: 14px; }
+  /* the capsule that leaves by itself is a stop of its own (StatusCapsule): the keyboard's ring, as the chrome's controls */
+  .capsule:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .capsule[data-out] { animation: capsule-out 160ms ease-out forwards; pointer-events: none; }
+  .capsule svg { color: var(--ink-2); }
+  /* the words' cell (Capsule, capsule-motion.ts): hidden from assistive technology, which is told the words whole in a
+     line of its own. A change's old and new words share its one grid cell, the old taken out of the flow where they
+     stand, so that the cell is the new words' width and nothing is laid out side by side.
+     17 px, whole: 1.35 of 12.5 px is 16.875, which Chromium shares out unevenly, and the words sat 0.94 px above the
+     capsule's middle (the web's round-1 drafts, measured at 200 %; the maintainer, 2026-10-04) */
+  .capsule .words { position: relative; display: grid; justify-items: start; flex: none; padding-block: 8px; line-height: 17px; }
+  .capsule .words > .line { grid-area: 1 / 1; white-space: nowrap; }
+  .capsule .words > .line[data-state="out"] { position: absolute; inset-block-start: 0; inset-inline-start: 0; }
+  /* one line wherever it fits, the box's width the motion's, and what follows the words pinned to its end, so that it
+     travels with the end as the box opens and closes; in a window too narrow for the sentence the words wrap, balanced,
+     the box's width its own, and the icon and the actions keep their size (Part 6's interface review: at 320 px the
+     English capsules ran past both edges, their action with them) */
+  .capsule .after { display: inline-flex; flex: none; align-items: center; gap: 8px; width: max-content; }
+  .capsule:not([data-wrap]) > .after, .capsule > .after[data-state="out"] { position: absolute; inset-block: 0; inset-inline-end: var(--capsule-end); }
+  .capsule > .after[data-state="out"] { pointer-events: none; }
+  .capsule[data-wrap] .words { flex: 0 1 auto; min-width: 0; }
+  .capsule[data-wrap] .words > .line { white-space: normal; text-wrap: balance; }
+  /* the count: tabular figures, each digit over a hidden 0 that holds its width, so that a changed digit cross-fades in
+     place; a digit gained opens a cell of its own as the box widens */
+  .capsule .num { display: inline-flex; font-variant-numeric: tabular-nums; }
+  .capsule .dg { display: inline-grid; justify-items: center; }
+  .capsule .dg > * { grid-area: 1 / 1; }
+  .capsule .dg > .gh { visibility: hidden; }
+  .capsule .dg:is([data-grow], [data-close]) { overflow: hidden; }
+  /* the moving end: while the box resizes, the words reaching it fade into the capsule's own ground over 16 px, never a cut */
+  .capsule::after { content: ""; position: absolute; z-index: 1; inset-block: 0; inset-inline-end: 0; width: 16px; pointer-events: none; background: linear-gradient(to right, transparent, var(--float-bg) 80%); opacity: 0; transition: opacity 150ms var(--ease-out); }
+  .capsule:dir(rtl)::after { background: linear-gradient(to left, transparent, var(--float-bg) 80%); }
+  .capsule[data-resizing]::after { opacity: 1; }
+  .capsule > svg, .capsule .chip, .capsule .close { flex: none; }
+  .capsule .chip { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; color: inherit; text-decoration: none; border-radius: 999px; background: var(--fill); font-size: 12px; font-weight: 500; transition: scale 150ms; }
+  .capsule .chip:active { scale: 0.96; }
+  .capsule .close { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; color: var(--ink-3); }
+  @media (hover: hover) { .capsule .close:hover { background: var(--fill); color: var(--ink); } }
+  /* the card (§6.6): centred in the translation's pane, which it covers (the pane marks itself: no relational selector in the sheet, §12) */
+  .pane[data-card] .viewerContainer { visibility: hidden; }
+  .card { position: absolute; z-index: 6; inset-block-start: 42%; inset-inline-start: 50%; translate: -50% -50%; width: min(300px, calc(100% - 48px)); padding: 22px 20px 18px; border-radius: 14px;
+    display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; background: var(--chrome); color: var(--ink); box-shadow: var(--pop-shadow); }
+  .card svg { color: var(--danger); }
+  .card p { margin: 0; font-size: 13px; font-weight: 500; text-wrap: balance; }
+  .card button { height: 30px; padding: 0 16px; border-radius: 8px; background: var(--ink); color: var(--chrome); font-weight: 500; transition: scale 150ms ease-out; }
+  .card button:active { scale: 0.96; }
+}
+@media (prefers-reduced-motion: reduce) { .tbtn, .tbtn:active { transition: none; scale: 1; } }
+@media (width < 900px) { .pop .row.narrow-only { display: flex; } .pop .sep.narrow-only { display: block; } [data-zone="trail"] > .menu-btn { display: none; } }
+/* a narrow window shows one side: swap and sync, greyed there, give their room */
+@media (width < 900px) { [data-zone="trail"] > [data-side-by-side] { display: none; } }
+/* below 500 px the download, the settings and the way back are the reading options' first rows, and the zoom keeps its
+   value's menu, − and + giving way (⌘± and the pinch stay): the bar holds at 320 px, a window at 400 % (the maintainer,
+   2026-09-26; the interface review: past 413 px the trail ran out of the window) */
+@media (width < 500px) {
+  .pop .row.narrowest-only { display: flex; } .pop .sep.narrowest-only { display: block; }
+  [data-zone="trail"] > [data-wide], [data-zoom] > .tbtn:not(.zoom-value) { display: none; }
+}
+/* narrower still, the bar's three zones close up, 8 px apart below 400 px and 6 px below 360 px, where the trail's last
+   divider goes too: the bar holds at 320 px with a control more in its lead (the web's home, round 1 of its drafts;
+   the maintainer, 2026-10-04) */
+@media (width < 400px) { header.bar { gap: 8px; } }
+@media (width < 360px) { header.bar { gap: 6px; } [data-zone="trail"] > .divider { display: none; } }
+/* forced colours (Windows' contrast themes) drop the fills and the rings: a pressed button takes the system's
+   Highlight, as a selection does (the interface review) */
+@media (forced-colors: active) {
+  .tbtn[aria-pressed="true"]:not([aria-disabled="true"]) { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .tbtn[aria-disabled="true"] { color: GrayText; }
+}
+@keyframes thumb { from { translate: 0 0; } to { translate: 0 calc(var(--track, 100px) - var(--thumb, 40px)); } }
+@media (prefers-reduced-motion: reduce) { .pill, .indicator { transition: none; } }
+@keyframes capsule-in { from { opacity: 0; translate: 0 10px; scale: 0.96; } }
+@keyframes capsule-out { to { opacity: 0; translate: 0 6px; } }
+@media (prefers-reduced-motion: reduce) {
+  @keyframes capsule-in { from { opacity: 0; } }
+  @keyframes capsule-out { to { opacity: 0; } }
+}
+/* the rest of the chrome's movements, each a fade or nothing when the reader asks for less motion (§4.2; Part 6's
+   accessibility audit): the contents slide in at once, the capsule does not travel with them, the link's arrow does
+   not nudge, the disclosure does not turn, the switch's knob and the indicator's thumb do not glide or widen, the
+   card's button and the capsule's chip are not pressed in */
+@media (prefers-reduced-motion: reduce) {
+  .toc, html[data-axt-contents] .toc { transition: visibility 0s; }
+  .capsule-slot { transition: none; }
+  .arxiv-id svg { translate: none; transition: opacity 150ms; }
+  .fold svg { transition: none; }
+  .indicator i { transition: background-color 150ms; }
+  .card button, .card button:active, .capsule .chip, .capsule .chip:active { transition: none; scale: 1; }
+}

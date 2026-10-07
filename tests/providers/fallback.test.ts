@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { DEFAULT_COOLDOWN_MS, createFallbackService, type FallbackStep } from '@/providers/fallback'
+import { DEFAULT_COOLDOWN_MS, createFallbackService, type DemotedInfo, type FallbackStep } from '@/providers/fallback'
 import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
 import type { ProviderErrorKind, TranslationProvider } from '@/providers/types'
 
@@ -85,8 +85,37 @@ describe('createFallbackService', () => {
     const back = await service.translate(call)
     expect(back.ok && back.result.provider).toBe('llm')
     expect(service.status().activeId).toBe('llm')
-    // Success clears the record: demoted only remains as the most recent reason for display
-    expect(service.status().demoted?.kind).toBe('network')
+    // Success clears the record, and a recovered engine is no longer reported as put aside (#304)
+    expect(service.status().demoted).toBeUndefined()
+  })
+
+  it('reports as put aside the most recent hand-over still in force: an engine whose cool-down ended and that answers again is not named, the refused key under it is (#304)', async () => {
+    let clock = 0
+    const first = step('svc-abcd1234', [fail('auth', 'bad key')])
+    const second = step('microsoft', [fail('network', 'reset'), ok('microsoft')])
+    const third = step('google-web', [ok('google-web')])
+    const service = createFallbackService([first, second, third], { cooldownMs: 1000, now: () => clock })
+    await service.translate(call)
+    expect(service.status()).toMatchObject({ activeId: 'google-web', demoted: { id: 'microsoft', kind: 'network' } })
+    // the cool-down over, Microsoft answers again and serves: the reason shown is the key's, which still holds
+    clock = 1000
+    const back = await service.translate(call)
+    expect(back.ok && back.result.provider).toBe('microsoft')
+    expect(service.status()).toMatchObject({ activeId: 'microsoft', demoted: { id: 'svc-abcd1234', kind: 'auth' } })
+    // an expired cool-down, not yet tried again, is not reported either
+    const lapsed = createFallbackService([step('llm', [fail('network', 'reset')]), step('google-web', [ok('google-web')])], { cooldownMs: 1000, now: () => clock })
+    await lapsed.translate(call)
+    clock = 2000
+    expect(lapsed.status().demoted).toBeUndefined()
+  })
+
+  it('a hand-over keeps the failure\'s HTTP status: a refused key (401) is told from a refusal that is not the key\'s (403) (#299, row 75)', async () => {
+    const refusal = (status: number): TranslateMessageResponse => ({ ok: false, error: { kind: 'auth', message: `HTTP ${status}`, isolatable: true, status } })
+    for (const status of [401, 403]) {
+      const service = createFallbackService([step('svc-abcd1234', [refusal(status)]), step('microsoft', [ok('microsoft')])])
+      await service.translate(call)
+      expect(service.status().demotions).toEqual([{ id: 'svc-abcd1234', kind: 'auth', message: `HTTP ${status}`, status }])
+    }
   })
 
   it('aborted neither demotes nor switches engines: a session cancellation is not the engine\'s fault', async () => {
@@ -158,6 +187,50 @@ describe('createFallbackService', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('demoted'))
     warn.mockRestore()
   })
+
+  it('starts with the demotions it is given, for good: a service whose key was refused is passed over from the first call (the redesign\'s design, §4)', async () => {
+    const first = step('svc-abcd1234', [ok('svc-abcd1234')])
+    const second = step('microsoft', [ok('microsoft')])
+    const seededInfo = { id: 'svc-abcd1234', kind: 'auth' as const, message: 'refused before' }
+    const service = createFallbackService([first, second], { demoted: [seededInfo] })
+    const res = await service.translate(call)
+    expect(res.ok && res.result.provider).toBe('microsoft')
+    expect(first.calls).toBe(0)
+    expect(service.status().demotions.map(d => d.id)).toEqual(['svc-abcd1234'])
+    // The seeded demotion is also the popup's reason to show, even before a call: without it `engine.demoted` would
+    // stay empty and the popup would name the free engine with no explanation (Codex review, round 1)
+    expect(service.status().demoted).toEqual(seededInfo)
+  })
+
+  it('tells whoever asked of every failed step, with its kind', async () => {
+    const seen: string[] = []
+    const service = createFallbackService([step('svc-abcd1234', [fail('auth', 'bad key')]), step('microsoft', [ok('microsoft')])], { onFailure: info => seen.push(`${info.id}:${info.kind}`) })
+    await service.translate(call)
+    expect(seen).toEqual(['svc-abcd1234:auth'])
+  })
+
+  it('reports a single step\'s failure too, though a lone step never demotes: fallback off must not silence an auth refusal (the redesign\'s design, §4)', async () => {
+    const seen: DemotedInfo[] = []
+    const only = step('svc-abcd1234', [fail('auth', 'bad key')])
+    const service = createFallbackService([only], { onFailure: info => seen.push(info) })
+    const res = await service.translate(call)
+    expect(res.ok).toBe(false)
+    expect(seen).toEqual([{ id: 'svc-abcd1234', kind: 'auth', message: 'bad key' }])
+    // No next step to hand over to: demote() never runs, and the record carries no demotion
+    expect(service.status().demotions).toEqual([])
+  })
+
+  it('carries the failure\'s HTTP status to whoever asked: only a 401 means the key was refused (the redesign\'s design, §4)', async () => {
+    const seen: DemotedInfo[] = []
+    const withStatus = (status: number): TranslateMessageResponse => ({ ok: false, error: { kind: 'auth', message: 'refused', isolatable: false, status } })
+    const service = createFallbackService([step('svc-abcd1234', [withStatus(401), withStatus(403)])], { onFailure: info => seen.push(info) })
+    await service.translate(call)
+    await service.translate(call)
+    expect(seen).toEqual([
+      { id: 'svc-abcd1234', kind: 'auth', message: 'refused', status: 401 },
+      { id: 'svc-abcd1234', kind: 'auth', message: 'refused', status: 403 },
+    ])
+  })
 })
 
 // Codex on #163: every step of the chain resends the whole call, and the cache key carries the provider,
@@ -170,6 +243,13 @@ describe('partial success along the fallback chain', () => {
     const res = await service.translate(call)
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.partial?.map(p => p.id).sort()).toEqual(['A', 'B'])
+  })
+
+  it('a gathered answer keeps each segment\'s identity, from the engine that translated it', async () => {
+    const first = step('llm', [{ ok: false, error: { kind: 'rate-limit', message: '429', isolatable: false }, partial: [{ id: 'a', text: 'A', identity: 'id-llm' }] }])
+    const second = step('google-web', [{ ok: false, error: { kind: 'network', message: 'down', isolatable: false }, partial: [{ id: 'b', text: 'B', identity: 'id-google' }] }])
+    const res = await createFallbackService([first, second]).translate(call)
+    expect(!res.ok && res.partial).toEqual([{ id: 'a', text: 'A', identity: 'id-llm' }, { id: 'b', text: 'B', identity: 'id-google' }])
   })
 
   it('a later step translating the same segment wins: that is the newer result', async () => {

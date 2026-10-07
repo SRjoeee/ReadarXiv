@@ -56,7 +56,7 @@ function setup(markup: string | null, extra: Partial<ImageRunOptions> = {}) {
     doc, targets: targets.filter(t => t.kind === 'svg'), paper: '2609.03768', target: 'cmn', scope: 's1',
     renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
     fetchBytes: async () => { throw new Error('the SVG path must not fetch bytes') },
-    ocr, translate, isEnabled: () => true, isCurrent: () => true,
+    ocr, translate, isCurrent: () => true,
     ...extra,
   }
   return { doc, targets, run: startImageTranslation(options), ocr, translate }
@@ -137,7 +137,7 @@ describe('SVG figures in the image pipeline (§15.5)', () => {
       doc, targets, paper: 'p', target: 'cmn', scope: 's', renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
       fetchBytes: async () => { throw new Error('must not fetch bytes') },
       ocr: vi.fn(async () => ({ ok: true as const, result: { width: 1, height: 1, lines: [] }, cached: false })),
-      translate, isEnabled: () => true, isCurrent: () => true,
+      translate, isCurrent: () => true,
     })
     const pending = run.translate(targets)
     // The content exists only after loading, then the load event is dispatched
@@ -175,7 +175,7 @@ describe('SVG figures in the image pipeline (§15.5)', () => {
       doc, targets, paper: 'p', target: 'cmn', scope: 's', renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
       fetchBytes: async () => { throw new Error('must not fetch bytes') },
       ocr: vi.fn(async () => ({ ok: true as const, result: { width: 1, height: 1, lines: [] }, cached: false })),
-      translate, isEnabled: () => true, isCurrent: () => true,
+      translate, isCurrent: () => true,
     })
     const pending = run.translate(targets)
     loading = false

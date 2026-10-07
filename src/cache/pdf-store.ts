@@ -1,0 +1,282 @@
+// The PDF reader's cache of compiled translations (experiments/pdf-bilingual/REPORT.md, eighteenth addendum): one record
+// per paper version and target language. The PDF is encrypted under a key the page cannot export — not DRM: it keeps a
+// file from being copied out of the profile. Beyond a cap, the least recently opened go first. Every failure of the
+// reader's reads and writes is a miss, as in the translation cache (./store.ts); the settings page's count and clear
+// report theirs. Its own database, so that neither's schema or migrations touch the other's.
+import Dexie, { type DexieOptions, type Table } from 'dexie'
+import { atLeastAsGood, mergeFigures, type FigureEntry, type Now, type OriginalReadings, type PdfRecord, type PdfRecordBody, type UntypesetMark } from './pdf-record'
+
+/** The small row eviction reads: no PDF, no units */
+interface Entry {
+  digest: string
+  lang: string
+  paper: string
+  engine: string
+  bytes: number
+  createdAt: number
+  openedAt: number
+}
+/** The record's body: what a copy is judged by, and what the figures' patches change */
+interface Body {
+  digest: string
+  lang: string
+  body: PdfRecordBody
+}
+/**
+ * The encrypted PDF, in a table of its own: in one row with the body, a figures patch rewrote the whole PDF (up to about
+ * 55 MB) and a write read it just to compare bodies (final review)
+ */
+interface Pdf {
+  digest: string
+  lang: string
+  iv: Uint8Array<ArrayBuffer>
+  data: ArrayBuffer
+}
+
+class PdfDatabase extends Dexie {
+  entries!: Table<Entry, [string, string]>
+  bodies!: Table<Body, [string, string]>
+  pdfs!: Table<Pdf, [string, string]>
+  keys!: Table<{ id: string; key: CryptoKey }, string>
+  /** the papers no typesetting strategy could set, by version and language, with the pipeline that tried and the
+   *  identity whose translation it was (pdf-record.ts UntypesetMark: not indexed, so no new version) */
+  untypeset!: Table<{ digest: string; lang: string } & UntypesetMark, [string, string]>
+  /** the marked original's readings, one per paper version (pdf-record.ts OriginalReadings): kept while any record of
+   *  the paper is, gone with the last */
+  originals!: Table<{ digest: string } & OriginalReadings, string>
+
+  constructor(name = 'axt-pdf', options?: DexieOptions) {
+    super(name, options)
+    this.version(1).stores({ entries: '[digest+lang], openedAt', bodies: '[digest+lang]', pdfs: '[digest+lang]', keys: 'id' })
+    // 2: a paper that could not be typeset is remembered, so that a revisit asks the service for nothing (the
+    // maintainer, 2026-09-26); the records are untouched
+    this.version(2).stores({ untypeset: '[digest+lang]' })
+    // 3: the marked original's readings, so that a revisit, another language or a run again compiles no original (the F2
+    // review's I3, 2026-10-02); the records are untouched
+    this.version(3).stores({ originals: 'digest' })
+  }
+}
+
+export function createPdfDb(name?: string, options?: DexieOptions): PdfDatabase {
+  return new PdfDatabase(name, options)
+}
+
+/** About a hundred papers at the corpus's mean (REPORT, eighteenth addendum) */
+export const PDF_CACHE_MAX_BYTES = 500 * 1024 * 1024
+
+export interface PdfStore {
+  get(digest: string, lang: string): Promise<PdfRecord | undefined>
+  /** Written if at least as good as the stored copy (pdf-record.ts atLeastAsGood); whether it was. `original`, the
+   *  paper's marked original as this run read it, is kept beside whichever copy is stored */
+  put(record: PdfRecordBody & { pdf: Uint8Array<ArrayBuffer> }, now: Now, original?: OriginalReadings): Promise<boolean>
+  /** The paper's marked original as a run read it, by its PDF's digest, or undefined; a failure reads as undefined */
+  original(digest: string): Promise<OriginalReadings | undefined>
+  /** The figures' entries merged into the stored record's by key (pdf-record.ts mergeFigures), the PDF untouched */
+  patchFigures(digest: string, lang: string, figures: FigureEntry[]): Promise<void>
+  touch(digest: string, lang: string): Promise<void>
+  delete(digest: string, lang: string): Promise<void>
+  /** The mark left when no strategy could typeset this paper in this language (the pipeline, the identity), or
+   *  undefined; a failure reads as undefined (the paper is tried). Whether it still answers: pdf-record.ts stillUntypeset */
+  untypeset(digest: string, lang: string): Promise<UntypesetMark | undefined>
+  markUntypeset(digest: string, lang: string, mark: Now): Promise<void>
+  /** These two reject on a failure: the settings page reports a store it cannot read or empty, rather than show it empty.
+   *  Clearing forgets the untypeset papers too: a way to have them tried again */
+  clear(): Promise<void>
+  /** how many papers (their versions and languages one), and the bytes every record takes */
+  usage(): Promise<{ count: number; bytes: number }>
+}
+
+/** Whether two IVs are the same bytes: a fresh one is drawn for every write, so it tells one version of a record from the next */
+const sameBytes = (a: Uint8Array, b: Uint8Array) => a.byteLength === b.byteLength && a.every((x, i) => x === b[i])
+
+/** A record's size as stored: the ciphertext, and its body's text as UTF-8 */
+const sizeOf = (dataBytes: number, body: PdfRecordBody) => dataBytes + new TextEncoder().encode(JSON.stringify(body)).byteLength
+
+export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; clock?: () => number; warn?: (line: string) => void } = {}): PdfStore {
+  const db = options.db ?? createPdfDb()
+  const maxBytes = options.maxBytes ?? PDF_CACHE_MAX_BYTES
+  const clock = options.clock ?? Date.now
+  const warn = options.warn ?? ((line: string) => console.warn(line))
+
+  /** The one key, made on first use: two pages making one at once, the first stored is the one both use */
+  let keyP: Promise<CryptoKey> | null = null
+  const theKey = () =>
+    (keyP ??= (async () => {
+      const stored = await db.keys.get('pdf')
+      if (stored) return stored.key
+      const made = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
+      await db.keys.add({ id: 'pdf', key: made }).catch(() => undefined)
+      return (await db.keys.get('pdf'))!.key
+    })().catch(e => {
+      keyP = null
+      throw e
+    }))
+
+  /** the tables a record's rows are in, and the paper's original's readings, which go with its last record */
+  const RECORD = [db.entries, db.bodies, db.pdfs, db.originals]
+  /** A record's rows removed together; the paper's original's readings with its last record */
+  const remove = (digest: string, lang: string) =>
+    db.transaction('rw', RECORD, async () => {
+      await db.entries.delete([digest, lang])
+      await db.bodies.delete([digest, lang])
+      await db.pdfs.delete([digest, lang])
+      if (!(await db.entries.where('[digest+lang]').between([digest, Dexie.minKey], [digest, Dexie.maxKey]).count())) await db.originals.delete(digest)
+    })
+
+  /**
+   * Beyond the cap, the least recently opened first; the record just written stays even alone over it. Run inside the
+   * write's transaction: two tabs evicting apart, each protecting its own record, could each remove the other's (Devin
+   * on #298)
+   */
+  async function evict(keep: [string, string]) {
+    const entries = await db.entries.orderBy('openedAt').toArray()
+    let total = entries.reduce((sum, e) => sum + e.bytes, 0)
+    for (const e of entries) {
+      if (total <= maxBytes) break
+      if (e.digest === keep[0] && e.lang === keep[1]) continue
+      await remove(e.digest, e.lang)
+      total -= e.bytes
+    }
+  }
+
+  return {
+    async get(digest, lang) {
+      try {
+        const [entry, row, pdf] = await Promise.all([db.entries.get([digest, lang]), db.bodies.get([digest, lang]), db.pdfs.get([digest, lang])])
+        if (!entry || !row || !pdf) return undefined
+        // the key read before the decryption's try: a key that cannot be read is a miss, not a record that does not
+        // decrypt, which is deleted (final review)
+        const key = await theKey()
+        try {
+          const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: pdf.iv }, key, pdf.data)
+          return { ...row.body, pdf: new Uint8Array(plain), createdAt: entry.createdAt, openedAt: entry.openedAt }
+        } catch (e) {
+          // A record that does not decrypt (a torn write, its key gone with the site's data) is no copy. Deleted only if
+          // it is still the one read: another tab may have replaced it while this one decrypted (Devin on #298)
+          warn(`[axt-pdf] a record did not decrypt and was deleted: ${(e as Error).message}`)
+          await db
+            .transaction('rw', RECORD, async () => {
+              const current = await db.pdfs.get([digest, lang])
+              if (current && sameBytes(current.iv, pdf.iv)) await remove(digest, lang)
+            })
+            .catch(() => undefined)
+          return undefined
+        }
+      } catch (e) {
+        warn(`[axt-pdf] read failed: ${(e as Error).message}`)
+        return undefined
+      }
+    },
+
+    async put(record, now, original) {
+      try {
+        const { pdf, ...candidate } = record
+        const iv = crypto.getRandomValues(new Uint8Array(12))
+        const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await theKey(), pdf)
+        const t = clock()
+        const written = await db.transaction('rw', RECORD, async () => {
+          const stored = await db.bodies.get([candidate.digest, candidate.lang])
+          // the paper's, whichever copy stays: a record of the paper is stored either way
+          if (original) await db.originals.put({ ...original, digest: candidate.digest })
+          if (stored && !atLeastAsGood(candidate, stored.body, now)) return false
+          // the figures another tab saved and this one did not see are kept
+          const body = stored ? { ...candidate, figures: mergeFigures(stored.body.figures, candidate.figures) } : candidate
+          const createdAt = (await db.entries.get([body.digest, body.lang]))?.createdAt ?? t
+          await db.entries.put({ digest: body.digest, lang: body.lang, paper: body.paper, engine: body.engine, bytes: sizeOf(data.byteLength, body), createdAt, openedAt: t })
+          await db.bodies.put({ digest: body.digest, lang: body.lang, body })
+          await db.pdfs.put({ digest: body.digest, lang: body.lang, iv, data })
+          await evict([body.digest, body.lang])
+          return true
+        })
+        return written
+      } catch (e) {
+        warn(`[axt-pdf] write failed: ${(e as Error).message}`)
+        return false
+      }
+    },
+
+    async patchFigures(digest, lang, figures) {
+      try {
+        // the pdfs and originals tables in scope for the eviction alone: the patch reads and writes neither
+        await db.transaction('rw', RECORD, async () => {
+          const row = await db.bodies.get([digest, lang])
+          const entry = await db.entries.get([digest, lang])
+          if (!row || !entry) return
+          const body = { ...row.body, figures: mergeFigures(row.body.figures, figures) }
+          await db.bodies.put({ ...row, body })
+          // the size less the old body, plus the new: the ciphertext's is unchanged
+          const bytes = entry.bytes - sizeOf(0, row.body) + sizeOf(0, body)
+          await db.entries.put({ ...entry, bytes })
+          // grown past the cap, the least recently opened go, as after a write (Devin on #298)
+          if (bytes > entry.bytes) await evict([digest, lang])
+        })
+      } catch (e) {
+        warn(`[axt-pdf] figures not saved: ${(e as Error).message}`)
+      }
+    },
+
+    async touch(digest, lang) {
+      try {
+        await db.entries.update([digest, lang], { openedAt: clock() })
+      } catch (e) {
+        warn(`[axt-pdf] touch failed: ${(e as Error).message}`)
+      }
+    },
+
+    async original(digest) {
+      try {
+        const row = await db.originals.get(digest)
+        if (!row) return undefined
+        const { digest: _d, ...readings } = row
+        return readings
+      } catch {
+        return undefined
+      }
+    },
+
+    async delete(digest, lang) {
+      try {
+        await remove(digest, lang)
+      } catch (e) {
+        warn(`[axt-pdf] delete failed: ${(e as Error).message}`)
+      }
+    },
+
+    async untypeset(digest, lang) {
+      try {
+        const row = await db.untypeset.get([digest, lang])
+        if (!row) return undefined
+        const { digest: _d, lang: _l, ...mark } = row
+        return mark
+      } catch {
+        return undefined
+      }
+    },
+
+    async markUntypeset(digest, lang, mark) {
+      try {
+        await db.untypeset.put({ digest, lang, ...mark })
+      } catch (e) {
+        warn(`[axt-pdf] untypeset mark failed: ${(e as Error).message}`)
+      }
+    },
+
+    async clear() {
+      await db.transaction('rw', [...RECORD, db.untypeset], async () => {
+        await db.entries.clear()
+        await db.bodies.clear()
+        await db.pdfs.clear()
+        await db.originals.clear()
+        await db.untypeset.clear()
+      })
+    },
+
+    async usage() {
+      const entries = await db.entries.toArray()
+      // papers, as the settings page's line says (UI.md S-O-73), not records: a paper is kept once per version and
+      // language, and its versions are one paper (#299, Part 5's M12)
+      const papers = new Set(entries.map(e => e.paper.replace(/v\d+$/, '')))
+      return { count: papers.size, bytes: entries.reduce((sum, e) => sum + e.bytes, 0) }
+    },
+  }
+}

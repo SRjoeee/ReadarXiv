@@ -126,7 +126,7 @@ await page.evaluate(({ down, line }) => {
 await sleep(800)
 
 const main = await page.evaluate(() => { const r = document.querySelector('.axt-floating').shadowRoot.querySelector('.axt-fb-main').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } })
-const mode = name => async () => { await popup.getByRole('button', { name, exact: true }).click() }
+const mode = name => async () => { await popup.getByRole('radio', { name, exact: true }).click() }
 const steps = [
   ['translate (side by side)', () => page.mouse.click(main.x, main.y), 6000],
   ['→ stacked', mode('上下'), 2500],

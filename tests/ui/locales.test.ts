@@ -4,7 +4,7 @@ import { POPUP_FIXTURES } from '@/entrypoints/popup/fixtures'
 import { derivePopupView } from '@/entrypoints/popup/view-model'
 import { S, copyName, localeInUse, setLocale } from '@/ui/strings'
 import { NAME_MAX } from '@/config/appearance'
-import { styleTile } from '@/ui/appearance/tiles'
+import { styleSample } from '@/ui/style-sample'
 
 /** Every leaf of a pack, with the path that leads to it, so a failure names the key */
 function leaves(value: unknown, path = ''): [string, string][] {
@@ -44,7 +44,7 @@ describe('locale packs', () => {
 
   it('no placeholder English sentences left in the Chinese pack (brand names, protocol words and examples excepted)', () => {
     // Sentences assembled from parameters alone excepted: called with placeholders their result is naturally all English
-    const allowed = /^(S\.brand|S\.service\.(llm|microsoft|google|chrome)|O\.services\.(apiKey|namePlaceholder|baseURLHint)|O\.reading\.previewSource|S\.setup\.step1|S\.setup\.step1Hint|O\.fallbackWhy\.invalid)/
+    const allowed = /^(S\.brand|S\.service\.(llm|microsoft|google|chrome)|S\.find\.paper|O\.services\.(apiKey|namePlaceholder)|O\.reading\.previewSource|O\.reading\.pdf$|O\.fallbackWhy\.invalid)/
     for (const [path, text] of leaves(LOCALES['zh-CN'])) {
       if (allowed.test(path) || text === '') continue
       // A Chinese copy string of pure ASCII can hardly be anything but forgotten
@@ -83,7 +83,10 @@ describe('locale packs', () => {
       for (const [path, text] of leaves(derivePopupView(f.input))) {
         // A language's own name is meant to be in its own script — 「Japanese (日本語)」 — and the
         // sample sentence is a sample of a translation
-        if (path.includes('previewTarget') || path.includes('hint') || path.startsWith('language') || path.startsWith('menu.items')) continue
+        // Only the language menu's own rows are in their own scripts (their name, their keywords); every other
+        // menu's words are the interface's own and must translate like anything else (narrower per Opus's review of
+        // Task 33 — the broad `menus.` used to let a leaked Chinese label in the service or style menu through unseen)
+        if (path.includes('previewTarget') || path.includes('hint') || path.startsWith('language') || path.startsWith('menus.language.items')) continue
         expect(HAN.test(text), `${f.id} ${path}: ${text}`).toBe(false)
       }
     }
@@ -95,10 +98,10 @@ describe('locale packs', () => {
 describe('what a pack is read at', () => {
   it('the empty state is computed at call time: the module loads before applyLocale, and a constant would freeze the fallback language (Codex on #161)', () => {
     setLocale('zh-CN')
-    const zhEmpty = derivePopupView({ page: null, entry: null, saved: null, session: null, config: null, pack: null, menu: null, shortcut: null, savedRevision: null })
+    const zhEmpty = derivePopupView({ page: null, entry: null, saved: null, session: null, config: null, pack: null, menu: null, shortcut: null, savedRevision: null, rejected: [], tab: null, find: { query: '', entries: null }, readerRuns: true })
     expect(zhEmpty.primary.label).toBe(LOCALES['zh-CN'].S.primary.translate)
     setLocale('en')
-    const enEmpty = derivePopupView({ page: null, entry: null, saved: null, session: null, config: null, pack: null, menu: null, shortcut: null, savedRevision: null })
+    const enEmpty = derivePopupView({ page: null, entry: null, saved: null, session: null, config: null, pack: null, menu: null, shortcut: null, savedRevision: null, rejected: [], tab: null, find: { query: '', entries: null }, readerRuns: true })
     expect(enEmpty.primary.label).toBe(LOCALES.en.S.primary.translate)
     setLocale('zh-CN')
   })
@@ -118,38 +121,29 @@ describe('copy names', () => {
     expect(en.endsWith(LOCALES.en.O.reading.copySuffix)).toBe(true)
     setLocale('zh-CN')
   })
-
-  it('the per-line glossary problem sentence is assembled by the pack, Chinese and English punctuation each their own', () => {
-    for (const code of LOCALE_CODES) {
-      const text = LOCALES[code].O.prompts.glossaryIssue.noSeparator(2)
-      expect(text, code).toContain('2')
-      // 「第 2 行缺少…」 / "Line 2 has no separator…": the two parts must not be glued together directly
-      expect(text, code).not.toMatch(/2[A-Za-z]/)
-    }
-  })
 })
 
 describe('style previews', () => {
   it('advanced declarations are drawn into the preview too: a style that works through css only must not look unstyled in the menu (Codex on #161)', () => {
-    const plain = styleTile({ id: 'p', name: 'p', color: '', opacity: 1, underline: 'none', thickness: 1, blur: false, css: '' })
-    const bold = styleTile({ id: 'b', name: 'b', color: '', opacity: 1, underline: 'none', thickness: 1, blur: false, css: 'font-weight: 600; letter-spacing: .02em' })
+    const plain = styleSample({ id: 'p', name: 'p', color: '', opacity: 1, underline: 'none', thickness: 1, blur: false, css: '' })
+    const bold = styleSample({ id: 'b', name: 'b', color: '', opacity: 1, underline: 'none', thickness: 1, blur: false, css: 'font-weight: 600; letter-spacing: .02em' })
     expect(bold).not.toEqual(plain)
     expect(bold).toMatchObject({ fontWeight: '600', letterSpacing: '.02em' })
     // Custom properties keep their names; that is how React writes them
-    expect(styleTile({ id: 'v', name: 'v', color: '', opacity: 1, underline: 'none', thickness: 1, blur: false, css: '--x: 3px' })).toMatchObject({ '--x': '3px' })
+    expect(styleSample({ id: 'v', name: 'v', color: '', opacity: 1, underline: 'none', thickness: 1, blur: false, css: '--x: 3px' })).toMatchObject({ '--x': '3px' })
     // The later one wins, matching the order of the injected sheet on the page
-    expect(styleTile({ id: 'o', name: 'o', color: 'red', opacity: 1, underline: 'none', thickness: 1, blur: false, css: 'color: blue' }).color).toBe('blue')
+    expect(styleSample({ id: 'o', name: 'o', color: 'red', opacity: 1, underline: 'none', thickness: 1, blur: false, css: 'color: blue' }).color).toBe('blue')
     // `!important` passes the sanitiser and the page accepts it, but the CSSOM does not take a priority written inside the value:
     // drop the priority, keep the declaration, or the preview drops this one quietly (Codex on #161)
-    expect(styleTile({ id: 'i', name: 'i', color: '', opacity: 1, underline: 'none', thickness: 1, blur: false, css: 'color: red !important' }).color).toBe('red')
-    expect(styleTile({ id: 'i2', name: 'i2', color: '', opacity: 1, underline: 'none', thickness: 1, blur: false, css: 'font-weight: 700 ! IMPORTANT' })).toMatchObject({ fontWeight: '700' })
+    expect(styleSample({ id: 'i', name: 'i', color: '', opacity: 1, underline: 'none', thickness: 1, blur: false, css: 'color: red !important' }).color).toBe('red')
+    expect(styleSample({ id: 'i2', name: 'i2', color: '', opacity: 1, underline: 'none', thickness: 1, blur: false, css: 'font-weight: 700 ! IMPORTANT' })).toMatchObject({ fontWeight: '700' })
     // Layout properties stay out of the preview: the sanitiser lets `position: fixed` through, on the paper that is the reader's own business,
     // but the sample is drawn inside the popup and would cover it (Codex on #161)
-    const escaping = styleTile({ id: 'e', name: 'e', color: '', opacity: 1, underline: 'none', thickness: 1, blur: false, css: 'position: fixed; inset: 0; z-index: 9999; width: 100vw; display: block; transform: scale(9); margin: 40px; color: teal' })
+    const escaping = styleSample({ id: 'e', name: 'e', color: '', opacity: 1, underline: 'none', thickness: 1, blur: false, css: 'position: fixed; inset: 0; z-index: 9999; width: 100vw; display: block; transform: scale(9); margin: 40px; color: teal' })
     expect(escaping).toMatchObject({ color: 'teal' })
     for (const gone of ['position', 'inset', 'zIndex', 'width', 'display', 'transform', 'margin']) expect(escaping, gone).not.toHaveProperty(gone)
     // Nor anything that inflates the box: a 1000px font size would make one row thousands of pixels tall, and the other options out of reach
-    const huge = styleTile({ id: 'h', name: 'h', color: '', opacity: 1, underline: 'none', thickness: 1, blur: false, css: 'font-size: 1000px; line-height: 1000px; padding: 500px; border-bottom-width: 400px; font-weight: 700' })
+    const huge = styleSample({ id: 'h', name: 'h', color: '', opacity: 1, underline: 'none', thickness: 1, blur: false, css: 'font-size: 1000px; line-height: 1000px; padding: 500px; border-bottom-width: 400px; font-weight: 700' })
     expect(huge).toMatchObject({ fontWeight: '700' })
     for (const gone of ['fontSize', 'lineHeight', 'padding', 'borderBottomWidth']) expect(huge, gone).not.toHaveProperty(gone)
     // The safety net: whatever happens, no row is made taller

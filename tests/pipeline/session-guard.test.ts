@@ -4,6 +4,7 @@ import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { extract } from '@/core/extractor'
 import { startTranslation } from '@/core/pipeline'
 import { restore } from '@/core/renderer/page'
+import { preloadOf } from '@/core/scheduler/lazy'
 import { createOpenAICompatProvider } from '@/providers/openai-compat'
 import { cacheKeyFor } from '@/cache/key'
 import type { CachePort } from '@/providers/translate-service'
@@ -29,7 +30,7 @@ describe('restoring the original during start-up (issue #45, experiment 1)', () 
       mode: 'stack',
       paper: '0000.00000',
       capabilities: { maxBatchChars: 1000, maxBatchItems: 4, renderPath: 'tags' },
-      preload: { margin: 1000, threshold: 0 },
+      preload: preloadOf('on-demand'),
       transport: async () => ({ ok: false, error: { kind: 'aborted', message: 'no request should be sent', isolatable: false } }),
     })
     // The reader restores at once. The marking used to be sliced, and a slice after the restore wrote its marks onto
@@ -182,7 +183,7 @@ describe('cancellation crosses the message boundary (issue #42)', () => {
       mode: 'stack',
       paper: '0000.00000',
       capabilities: { maxBatchChars: 1000, maxBatchItems: 10, renderPath: 'tags' },
-      preload: { margin: 1000, threshold: 0 },
+      preload: preloadOf('on-demand'),
       scope: 'session-1',
       transport: call => transport.translate(call),
     })

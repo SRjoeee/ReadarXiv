@@ -1,12 +1,18 @@
 import '@/styles/ui.css'
+// the settings page's own sheet (the redesign's design, §6), after the shared one so that its rules win a tie
+import './ui/settings.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { applyLocale } from '@/ui/apply-locale'
+import { prepareFirstPaint } from '@/ui/first-paint'
+import { trackModality } from '@/ui/controls/modality'
 import { O } from '@/ui/strings'
 import { App } from './App'
 
-// The pack first, then the first paint: see ui/apply-locale.ts
-await applyLocale(brand => `${brand} · ${O.title}`)
+// The pack and the extension's appearance before the first paint, from one read of the settings: see ui/first-paint.ts
+await prepareFirstPaint(document.documentElement, brand => `${brand} · ${O.title}`)
+// the pointer's turn and the keyboard's, from the first paint (the pages' base, Part 3): the new controls' text fields
+// are ringed for the keyboard alone
+trackModality()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

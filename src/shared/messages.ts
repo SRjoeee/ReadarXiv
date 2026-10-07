@@ -8,6 +8,8 @@ import type { TranslateCall, TranslateMessageResponse } from '@/providers/transl
 import type { EntrySettings, FloatingEntryState } from '@/shared/entry-settings'
 import type { ImageProgress, OcrCall, OcrMessageResponse, OcrRunResponse } from './ocr'
 import type { DiagnosticSource, DiagnosticsExport } from '@/shared/diagnostics'
+import type { PageDecision } from '@/shared/page-action'
+import type { TexWarmRequest, TexWarmResult } from './tex-warm'
 
 /** What an abstract or PDF page answers the popup (§4.0b) */
 export interface EntryStatus {
@@ -15,6 +17,13 @@ export interface EntryStatus {
   paper: string
   /** Where its HTML full text is, already carrying `#readarxiv`; null when the paper has no HTML version */
   html: string | null
+  /** Which entry page: the abstract, or the PDF */
+  kind: 'abs' | 'pdf'
+  /** The PDF address asking for the reader (`#readarxiv`); null when the paper cannot be had as a bilingual PDF, or
+   *  the browser cannot run the reader (pdf-reader/support.ts) */
+  pdf: string | null
+  /** On a PDF page: the reader is laid over it */
+  readerOpen: boolean
 }
 
 export interface PageStatus {
@@ -78,6 +87,7 @@ export interface AxtMessages {
   'axt:entry-status': { request: Record<never, never>; response: EntryStatus }
   /** popup → content, on those pages: go to the HTML version and translate it. The page navigates itself, so no tabs permission is involved */
   'axt:open-html': { request: Record<never, never>; response: { opened: boolean } }
+  'axt:open-pdf': { request: Record<never, never>; response: { opened: boolean } }
   /**
    * content → background: the floating button's main button on the full text (§4.0c). The background decides as it
    * does for the keyboard command and the context menu — one toggle, four doors — and tells this tab what to do.
@@ -85,9 +95,15 @@ export interface AxtMessages {
    */
   'axt:toggle': { request: Record<never, never>; response: { acted: boolean } }
   /**
+   * content → background: what that toggle would do in this tab now, decided as a press decides and not acted on — the
+   * floating button's words say it, in the popup's primary button's words for the action (UI.md S-I-06). `decision` is
+   * null when the page answered nothing to decide on
+   */
+  'axt:toggle-decision': { request: Record<never, never>; response: { decision: PageDecision | null } }
+  /**
    * content / options → background: what a page needs of the settings, read once and validated by the background
-   * (shared/entry-settings.ts): the interface language, where a translation opens, this tab's zoom, the floating
-   * button's state
+   * (shared/entry-settings.ts): the interface language, where a translation opens, this tab's zoom, the PDF reader's
+   * switch, the extension's appearance, the floating button's state
    */
   'axt:entry-settings': { request: Record<never, never>; response: EntrySettings }
   /** background → content: the reader changed this tab's zoom (`tabs.onZoomChange`) */
@@ -157,6 +173,23 @@ export interface AxtMessages {
   'axt:ocr': { request: OcrCall; response: OcrMessageResponse }
   /** background → the offscreen document: recognise these bytes (§15.3). Answered by that page alone */
   'axt:ocr-run': { request: { image: string; mime: string }; response: OcrRunResponse }
+  /** background → the offscreen document: a figure was given up on, the recogniser's worker is ended (the figure in it
+   *  answered as failed) and the next figure starts a new one; the document stays, for the TeX page's warm-up */
+  'axt:ocr-reset': { request: Record<never, never>; response: { reset: true } }
+  /** background → the offscreen document: the TeX page's warm-up for a language (DESIGN §16). Answered at once: started,
+   *  or not while one of its own runs */
+  'axt:tex-warm': { request: TexWarmRequest; response: { started: boolean } }
+  /** the offscreen document → background: how a warm-up ended */
+  'axt:tex-warmed': { request: { result: TexWarmResult }; response: { ok: true } }
+  /** background → the offscreen document: a reader that typesets into `lang` (BCP 47) needs the TeX page — the warm-up
+   *  running is stopped unless it is for that language and will be done within the reader's patience (ocr/tex-warm.ts)
+   *  → whether one was stopped */
+  'axt:tex-warm-stop': { request: { lang: string }; response: { stopped: boolean } }
+  /** the PDF reader → background: it needs the TeX page for `lang` (BCP 47) and a warm-up holds it (the store's lock),
+   *  which is stopped unless it is for that language and nearly done */
+  'axt:tex-give-way': { request: { lang: string }; response: { ok: true } }
+  /** the PDF reader → background: the versions its TeX page said (`ready`), against the last warm-up's */
+  'axt:tex-seen': { request: { versions: string }; response: { ok: true } }
 }
 
 export type AxtMessageType = keyof AxtMessages
@@ -199,6 +232,16 @@ export interface MessageSender {
 }
 
 /**
+ * The tab a message came from, for a content script only. Chrome gives `sender.tab` to an extension page opened in a
+ * tab as well (the PDF reader, the settings page), but that tab is not a page the handlers act on or watch: a scope
+ * bound to it would be withdrawn by the tab's first status change, since the check behind that asks the tab's content
+ * script, which such a page does not have. The extension's own pages are told apart by their URL, on this context's origin
+ */
+function tabOf(sender: { tab?: { id?: number }; url?: string }): number | undefined {
+  return sender.url?.startsWith(`${globalThis.location?.origin}/`) ? undefined : sender.tab?.id
+}
+
+/**
  * The handlers of one listener, by message type, each typed by the table above: a request that does not match its
  * type, or an answer that does not match its response, does not compile. A handler answers with a promise, or with
  * `undefined` for a message nobody waits on
@@ -216,13 +259,13 @@ export type MessageHandlers = {
  * throws before it has a promise is answered the same way
  */
 export function answerMessages(handlers: MessageHandlers) {
-  return (message: unknown, sender: { tab?: { id?: number } }, sendResponse: (reply: unknown) => void): true | undefined => {
+  return (message: unknown, sender: { tab?: { id?: number }; url?: string }, sendResponse: (reply: unknown) => void): true | undefined => {
     if (!isAxtMessage(message)) return undefined
     const handler = handlers[message.type] as ((message: AxtMessage, sender: MessageSender) => Promise<unknown> | undefined) | undefined
     if (!handler) return undefined
     let answer: Promise<unknown> | undefined
     try {
-      answer = handler(message, { tabId: sender.tab?.id })
+      answer = handler(message, { tabId: tabOf(sender) })
     } catch (error) {
       answer = Promise.reject(error)
     }
