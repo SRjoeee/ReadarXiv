@@ -67,6 +67,62 @@ describe("v0's reading of a placeholder's source", () => {
   })
 })
 
+describe("v0's CJK class: a character is CJK by its code point", () => {
+  let L2: typeof import('@/pdf-reader/engine/layer-proto/layer2.mjs')
+  beforeAll(async () => {
+    const g = globalThis as { OffscreenCanvas?: unknown }
+    g.OffscreenCanvas ??= class { getContext() { return { font: '', measureText: (s: string) => ({ width: 50 * s.length }) } } }
+    L2 = await import('@/pdf-reader/engine/layer-proto/layer2.mjs')
+  })
+  // the class as it was before astral characters were told apart: a non-`u` class, so that a surrogate half is a code unit
+  // of the BMP and every character outside it fell in the range a lone high surrogate does
+  const WAS = (to: string) => (to === 'ko'
+    ? /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/
+    : /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u201C\u201D\u2018\u2019\u2014\u2026\u00B7]/)
+  const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
+  const DESIGNS = { serif: 'times', sans: 'helvetica', mono: 'courier' }
+  const PARAMS = { autospace: false, compressMax: -1, hyphen: false }
+  /** the class (`cjk` or `latin`) each of `chars` is set in for a target, one character a token */
+  const classes = (chars: string[], to: string) => {
+    const unit = { kind: 'para', pieces: [{ t: 'text', s: chars.join(' ') }] }
+    const tokens = L2.tokensOf2(unit as never, new Map() as never, to, BASE as never, DESIGNS, PARAMS as never, null, () => 0).filter(t => !t.space)
+    expect(tokens.map(t => t.s)).toEqual(chars)
+    return tokens.map(t => t.cls)
+  }
+
+  it('keeps every character of the BMP in the class it had, for a Korean target and for the others', () => {
+    // (white space is a gap between tokens, never classed; a lone surrogate half is a code point of its own to a `u` class)
+    const bmp: string[] = []
+    for (let cp = 0; cp < 0x10000; cp++) { const ch = String.fromCharCode(cp); if (!/\s/.test(ch)) bmp.push(ch) }
+    for (const to of ['zh', 'ko']) {
+      const got = classes(bmp, to)
+      const was = bmp.map(ch => (WAS(to).test(ch) ? 'cjk' : 'latin'))
+      expect(got.filter((c, i) => c !== was[i]).length, to).toBe(0)
+      // (a sanity check on the comparison itself: both classes are populated)
+      expect(got.filter(c => c === 'cjk').length).toBeGreaterThan(50000)
+      expect(got.filter(c => c === 'latin').length).toBeGreaterThan(10000)
+    }
+  })
+
+  it('classes an astral character as CJK only in the ideographic planes', () => {
+    const cjk = [0x20000, 0x2a6df, 0x2f800, 0x2fa1d, 0x30000, 0x3134a, 0x323af, 0x323b0]
+    const other = [
+      0x1d44e, 0x1d7d8, 0x1d6fd, 0x1d714, // Mathematical Alphanumeric Symbols: an italic a, a double-struck 8, a bold beta, an italic omega
+      0x1f600, 0x10400, 0x1e900, 0x10fffd, // an emoji, Deseret, Adlam, a private use character
+    ]
+    for (const to of ['zh', 'zh-TW', 'ja', 'ko', 'en']) {
+      expect(classes(cjk.map(cp => String.fromCodePoint(cp)), to), to).toEqual(cjk.map(() => 'cjk'))
+      expect(classes(other.map(cp => String.fromCodePoint(cp)), to), to).toEqual(other.map(() => 'latin'))
+    }
+  })
+
+  it("a Chinese word holding a math letter breaks between its CJK characters only: the letter stays with the Latin run it is in", () => {
+    const unit = { kind: 'para', pieces: [{ t: 'text', s: '\u6c49\u5b57\u{1D44E}\u{1D44F}\u6c49' }] }
+    const tokens = L2.tokensOf2(unit as never, new Map() as never, 'zh', BASE as never, DESIGNS, PARAMS as never, null, () => 0)
+    expect(tokens.map(t => [t.s, t.cls])).toEqual([['\u6c49', 'cjk'], ['\u5b57', 'cjk'], ['\u{1D44E}\u{1D44F}', 'latin'], ['\u6c49', 'cjk']])
+  })
+})
+
 describe("v0's drawing as data: recorded in its own device pixels, drawn at any resolution from the page drawn there", () => {
   let L2: typeof import('@/pdf-reader/engine/layer-proto/layer2.mjs')
   beforeAll(async () => {

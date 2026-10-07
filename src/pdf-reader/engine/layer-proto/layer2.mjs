@@ -1593,8 +1593,11 @@ export function extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, 
 const PUNCT_CLOSE = /^[\u3001\u3002\uFF0C\uFF0E\uFF1A\uFF1B\uFF01\uFF1F\uFF09\u300D\u300F\u3011\u3015\u3009\u300B\u3019\u3017”’]$/
 const PUNCT_OPEN = /^[\uFF08\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3016“‘]$/
 /** the characters a CJK run takes: CJK, full-width forms, and in Chinese and Japanese the curly quotes and dashes, which
- *  xeCJK sets full width there (Korean sets them as its Western punctuation) */
-const cjkClassRe = to => (to === 'ko' ? /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/ : /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F“”‘’—…·]/)
+ *  xeCJK sets full width there (Korean sets them as its Western punctuation). Tested a code point at a time (`u`): a
+ *  character outside the BMP is CJK only in the two ideographic planes, U+20000 to U+3FFFF (the CJK extensions B to J and
+ *  the compatibility supplement), where a non-`u` class took every astral character for CJK through its surrogates and
+ *  sent Mathematical Alphanumeric Symbols, which the body face lacks, to it */
+const cjkClassRe = to => (to === 'ko' ? /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u{20000}-\u{3FFFF}]/u : /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F“”‘’—…·\u{20000}-\u{3FFFF}]/u)
 const STYLE_CMDS = [
   [/^\\(?:textbf|bf|bfseries|mathbf|boldsymbol)\b/, (s) => ({ ...s, bold: true })],
   [/^\\(?:textmd|mdseries)\b/, s => ({ ...s, bold: false })],

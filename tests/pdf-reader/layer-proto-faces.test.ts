@@ -207,6 +207,44 @@ describe('a character in no served slice', () => {
   })
 })
 
+describe('an astral math letter in a Chinese unit', () => {
+  // U+1D44E, a mathematical italic a, is in Latin Modern Math and in no other face: a Latin run reaches it through its
+  // fallback. It was classed CJK (layer2.mjs cjkClassRe), set in the Chinese body, which has no fallback to it, and so its
+  // unit was left the original's
+  const paras: [string, string][] = [['Alpha beta gamma', '\u6c49\u5b57 \u{1D44E}\u{1D44F} \u6c49'], ['Delta epsilon zeta', '\u6c49\u5b57']]
+  const cp = 0x1d44e
+
+  const ways: [string, { faceSources?: typeof slicesOfAll }][] = [['served in slices', { faceSources: slicesOfAll }], ['whole files', {}]]
+  it.each(ways)('is drawn, in the math face, with %s', async (_, o) => {
+    expect(flatHas(COVERAGE['lm-math'] as unknown as number[], cp)).toBe(true)
+    for (const id of Object.keys(FACES)) if (id !== 'lm-math') expect(flatHas(COVERAGE[id] as unknown as number[] ?? [], cp), id).toBe(false)
+    const run = await open(paras, o)
+    await run.until(1)
+    expect(run.skipped).toEqual([])
+    expect(run.stats.map(r => r.id).sort()).toEqual([0, 1])
+    expect(run.rows[0]!.svg.innerHTML).toContain('\u{1D44E}\u{1D44F}')
+    // the letters were asked of a run set in a Latin face whose family list reaches the math face, which was fetched
+    const asked = fontLoads.filter(l => l.text.includes('\u{1D44E}'))
+    expect(asked.length).toBeGreaterThan(0)
+    for (const l of asked) {
+      const families = parseFont(l.font).families
+      expect(families[0]).not.toBe(FACES['shs-sc-regular']!.family)
+      expect(families).toContain(FACES['lm-math']!.family)
+    }
+    expect(faceLoads.some(u => (o.faceSources ? u.includes('lm-math-1d') : u.includes(FACES['lm-math']!.file)))).toBe(true)
+    expect(early).toEqual([])
+  })
+
+  it('leaves the unit the original where the math face is not served', async () => {
+    const src = async (id: string) => (id === 'lm-math' ? null : slicesOfAll(id))
+    const run = await open(paras, { faceSources: src })
+    await run.until(1)
+    expect(run.skipped.map(s => `${s.id}:${s.why}`)).toEqual(['0:served'])
+    expect(run.skipped[0]).toMatchObject({ missing: [0x1d44e, 0x1d44f] })
+    expect(run.stats.map(r => r.id)).toEqual([1])
+  })
+})
+
 describe('a face not served', () => {
   it('leaves the units of the runs set in it the original, though a fallback holds their characters', async () => {
     // Latin Modern Math holds the letters of "abc"; Nimbus Roman, the face a Latin run is set in, is not served
