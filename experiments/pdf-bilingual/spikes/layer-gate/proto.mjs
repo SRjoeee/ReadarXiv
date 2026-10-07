@@ -293,17 +293,19 @@ window.gate = {
       texIn = { ...tex, index: F.indexLayout(F.parseLayout(await bytes(`${base}layout.json`))), pieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])) }
     }
     // (--parts: v0 opened with no unit, the record's rows taken as a live run's deltas give them, by the delta rule or n
-    // a part, the hybrid's pieces read from their k by take)
-    let parts = null
+    // a part, the hybrid's pieces read from their k by take; each unit's table group given at open, as the paper's
+    // bundle gives the reader's host)
+    let parts = null, tableGroups = null
     if (cut) {
       const tr = new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), rowsK = []
       unitsFile.units.forEach((u, id) => { if (u) rowsK.push([id, withK(u, tr.get(id))]) })
+      tableGroups = new Map(rowsK.filter(([, u]) => u.group).map(([id, u]) => [id, u.group]))
       parts = cut === 'delta' ? await deltaParts(rowsK) : Array.from({ length: Math.ceil(rowsK.length / cut) }, (_, i) => rowsK.slice(cut * i, cut * i + cut))
       if (texIn) texIn.pieces = new Map()
     }
     const texIndex = texIn?.index ?? null
     // (--perf: no copy of v0's own, as a reader opens it: the page's drawing is drawCopy's, at a view's resolution)
-    const opts = { doc, geometry, units: parts ? [] : unitsFile.units, ...(parts ? { expect: parts.flat().map(([id]) => id) } : {}), target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(texIn ? { tex: texIn } : {}), labels: { names, captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`, ...(perf ? { copy: false } : {}) }
+    const opts = { doc, geometry, units: parts ? [] : unitsFile.units, ...(parts ? { expect: parts.flat().map(([id]) => id), groups: tableGroups } : {}), target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(texIn ? { tex: texIn } : {}), labels: { names, captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`, ...(perf ? { copy: false } : {}) }
     let rm = null
     if (one) {
       rm = { mode: removal, manifest: addon.manifest, plan: { pages: {} }, rdoc: doc, cdoc: null }

@@ -89,9 +89,9 @@
 //                prototype's own page put it (its floor was measured there: the text's anti-aliasing at a fraction of a
 //                pixel), each fixture's units in a live run's order, and v0's records, audit and page digests written out
 //   --parts      v0 (--engine-kind=proto) fed its units as a live run's deltas give them (never recorded): opened with
-//                none, each fixture's record rows, each non-text piece with its k (the units file's), taken a part a
-//                macrotask beside the pages asked for, then end() (layer-proto/run.mjs take, end); the parts cut in id order
-//                by the delta rule (a part closed once its rows' JSON reaches 384 KiB or 96,000 values, 32 parts at most)
+//                none and each unit's table group (the record's), each fixture's record rows, each non-text piece with its
+//                k (the units file's), taken a part a macrotask beside the pages asked for, then end() (layer-proto/
+//                run.mjs take, end); the parts cut in id order by the delta rule (a part closed once its rows' JSON reaches 384 KiB or 96,000 values, 32 parts at most)
 //                or n units a part (--parts=<n>). Each page must draw as the open over every unit does (--dump, --check);
 //                a fixture fails where a row came late, where take's pieces are not the units file's, or where a unit's
 //                why left was read before its row came
