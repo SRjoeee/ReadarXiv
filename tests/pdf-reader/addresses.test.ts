@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readerAddresses, TEX_PAGE } from '@/pdf-reader/engine/addresses.mjs'
+import { FILE_SERVER, readerAddresses, TEX_PAGE } from '@/pdf-reader/engine/addresses.mjs'
 
 // Where the live reader fetches the paper and sends its typesetting (the reader's design, §2): its own addresses, or,
 // for the probes, servers on this machine. A page that frames the reader chooses none of them (Devin on #301)
@@ -26,6 +26,12 @@ describe('readerAddresses', () => {
     expect(TEX_PAGE).toBe(DEFAULTS.site)
     const site = (query: Record<string, string>) => readerAddresses(new URLSearchParams(query), '1706.03762', 'https://tex.readarxiv.org').site
     expect([site({}), site({ site: 'http://127.0.0.1:18072' }), site({ site: 'https://evil.example' })]).toEqual(['https://tex.readarxiv.org', 'http://127.0.0.1:18072', 'https://tex.readarxiv.org'])
+  })
+
+  it('the file server is a build setting too: this machine\'s in development, none in production, where a server on this machine still gives one', () => {
+    expect(FILE_SERVER).toBe(DEFAULTS.endpoint)
+    const endpoint = (query: Record<string, string>) => readerAddresses(new URLSearchParams(query), '1706.03762', 'https://tex.readarxiv.org', null).endpoint
+    expect([endpoint({}), endpoint({ endpoint: 'http://localhost:18070' }), endpoint({ endpoint: 'https://evil.example' })]).toEqual([null, 'http://localhost:18070', null])
   })
 
   it('refuses anything else: another host, a lookalike, credentials before the host, another scheme, a malformed value', () => {
