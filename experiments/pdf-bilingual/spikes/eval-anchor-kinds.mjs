@@ -7,8 +7,8 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 const { anchorUnits, boundsFromMarks, lineRects, markWords, tokenizeDocument } = await import(process.env.ANCHORS ?? '../../../src/pdf-reader/engine/anchors.mjs')
-import { loadProject } from '../../../src/pdf-reader/engine/latex-front.mjs'
-import { analyze } from '../../../src/pdf-reader/engine/paper-meta.mjs'
+import { loadProject } from './latex-front.mjs'
+import { analyze } from './paper-meta.mjs'
 import { plainSource } from '../../../src/pdf-reader/engine/mt.mjs'
 const root = new URL('..', import.meta.url).pathname
 const label = process.argv[2] ?? 'run'

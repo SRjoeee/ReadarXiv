@@ -332,20 +332,17 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
 
 describe('the door reaches no server-only module', () => {
   it('walks every module reader.mjs imports and re-exports: none of the server\'s, no node: specifier, no package', () => {
-    // (one known exception: latex-front.mjs, which the rows' translation reaches through mt.mjs and scripts.mjs, reads
-    // Node's file system for the spikes behind a guard no browser passes, `process.versions.node`, by a dynamic import its
-    // bundler is told not to follow; a browser never loads it, and any other node: specifier fails here)
-    const KNOWN = [`${resolve('src/pdf-reader/engine/latex-front.mjs')}|node:fs`]
     const SERVER = ['live.mjs', 'layout/remove.mjs', 'layout/addon.mjs', 'layout/make.mjs', 'layout/marks.mjs', 'layout/carry.mjs', 'layer/check.mjs'].map(f => resolve('src/pdf-reader/engine', f))
     // (static import and export … from, relative and the repository's @/ alias; a module of the alias is TypeScript)
     const SPEC = /(?:^|[\n;])\s*(?:import|export)\s+(?:type\s+)?(?:[^'";]*?\s+from\s+)?['"]([^'"]+)['"]/g
     const DYNAMIC = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g
+    const TOP_AWAIT = /^(?:(?:export\s+)?(?:const|let|var)\s[^=\n]*=\s*)?(?:\(\s*)?await\b.*$/gm
     const fileOf = (from: string, spec: string) => {
       const base = spec.startsWith('@/') ? resolve('src', spec.slice(2)) : resolve(dirname(from), spec)
       for (const f of [base, `${base}.ts`, join(base, 'index.ts')]) { try { readFileSync(f); return f } catch {} }
       throw new Error(`${from}: ${spec} resolves to no file`)
     }
-    const seenFiles = new Set<string>(), others = new Set<string>(), dynamic: string[] = []
+    const seenFiles = new Set<string>(), others = new Set<string>(), dynamic: string[] = [], awaiting: string[] = []
     const todo = [resolve('src/pdf-reader/engine/layer-proto/reader.mjs')]
     while (todo.length) {
       const f = todo.pop()!
@@ -358,9 +355,12 @@ describe('the door reaches no server-only module', () => {
         else others.add(spec)
       }
       for (const m of text.matchAll(DYNAMIC)) dynamic.push(`${f}|${m[1]}`)
+      // (a statement at the column of the module's own: `await …`, `const x = await …`)
+      for (const m of text.matchAll(TOP_AWAIT)) awaiting.push(`${f}|${m[0].trim().slice(0, 60)}`)
     }
-    // (no module of the walk loads another at run time, but the known guard)
-    expect(dynamic).toEqual(KNOWN)
+    // (no module of the walk loads another at run time, nor awaits at its top level)
+    expect(dynamic).toEqual([])
+    expect(awaiting).toEqual([])
     expect(seenFiles.size).toBeGreaterThan(20)
     for (const f of SERVER) expect(seenFiles.has(f), f).toBe(false)
     expect([...others]).toEqual([])

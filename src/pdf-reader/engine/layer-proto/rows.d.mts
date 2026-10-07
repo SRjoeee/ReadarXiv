@@ -24,7 +24,8 @@ export type RowSourceUnit = SourceUnit & { pieces: SourcePiece[] }
 /** the bundle's units as the unit objects mt.mjs and groups.mjs work on, one per bundle unit and the same objects on every
  *  call (each piece carries its index `k`); null where the reader dropped a unit */
 export declare function sourceUnitsOf(bundle: RowsBundle): (RowSourceUnit | null)[]
-/** a unit's result as its row; a `none` row where it cannot be one. Every string a row holds is within §4.1's reader bound
+/** a unit's result as its row; a `none` row where it cannot be one (a piece with no source piece, a string past 16,000 code
+ *  units, a result of no shape, a unit the bundle has not). Every string a row holds is within §4.1's reader bound
  *  (no C0 control but \n and \t, none of U+007F to U+009F, none of the bidirectional controls): a CRLF source's carriage
  *  returns are written as line feeds and any other control as a space, and the white space the engine puts back at a
  *  unit's ends as the Unicode its source bytes hold. So the hybrid's pieces unitOf gives are those of the result, up to

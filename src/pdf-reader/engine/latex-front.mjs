@@ -3,22 +3,13 @@
 // second addendum): patch source ranges in place, mask math, citations, references and unknown commands, send whole
 // paragraphs. Not a parser: a scanner that knows which constructs carry prose and treats everything else as opaque.
 // Runs the same in Node (the spikes) and in the browser (the reader): a project's files come as a file system of two
-// operations (`folder` for a directory under Node, `inMemory` for an unpacked source), and bytes are Uint8Arrays.
+// operations (`inMemory` for an unpacked source; node-files.mjs `folder`, which only Node loads, for a directory), and bytes
+// are Uint8Arrays.
 
 // ---------------------------------------------------------------- files and bytes
-// Node's file system for the spikes; in the page the branch is never taken, and the bundler is told not to follow it
-const nodeFs = typeof process !== 'undefined' && process.versions?.node ? await import(/* @vite-ignore */ 'node:fs') : null
 import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, paperOf, paperParams, paramsOf, readArgs } from './arg-roles.mjs'
-/** a directory under Node, as a project's file system: { list(): relative paths, read(path): bytes or null } */
-export function folder(dir) {
-  const { readdirSync, readFileSync } = nodeFs
-  const walk = rel => readdirSync(rel ? `${dir}/${rel}` : dir, { withFileTypes: true }).flatMap(e => { const p = rel ? `${rel}/${e.name}` : e.name; return e.isDirectory() ? walk(p) : [p] })
-  let names = null
-  return { list: () => (names ??= walk('')), read: p => { try { return readFileSync(`${dir}/${p}`) } catch { return null } } }
-}
 /** unpacked files (a Map of relative path → bytes) as a project's file system */
 export function inMemory(map) { return { list: () => [...map.keys()], read: p => map.get(p) ?? null } }
-const asFiles = root => (typeof root === 'string' ? folder(root) : root)
 /** a/./b/../c → a/c: a file as the package holds it (tar.mjs untar names each so) and as TeX's file system has it,
  *  whatever spelling named it — one name for one file, so that a file written back replaces it rather than sitting
  *  beside it (2608.08350's \input{./sections/a.tex}: the compile set the English over the translation) */
@@ -1329,9 +1320,8 @@ function storedBodies(calls, { ctx, files, units, own }) {
   }
 }
 
-/** `root`: a directory (Node) or a file system (folder, inMemory) */
-export function loadProject(root, main, { tables = false } = {}) {
-  const fsys = asFiles(root)
+/** `fsys`: a file system (inMemory, or node-files.mjs folder under Node) */
+export function loadProject(fsys, main, { tables = false } = {}) {
   // each file's text read once: the package's TeX (.tex, .sty, .cls) is read by several of the passes below
   const texts = new Map(), sourceText = f => texts.get(f) ?? texts.set(f, latin1(fsys.read(f))).get(f)
   const own = fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(f => ({ file: f, text: sourceText(f) }))

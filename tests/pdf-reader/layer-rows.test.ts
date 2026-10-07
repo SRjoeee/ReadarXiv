@@ -159,6 +159,18 @@ describe('rowOf', () => {
     const u = unitOf(b, row) as unknown as { pieces: never[] }
     expect(trPiecesOf(u.pieces, p => (p as { k: number }).k)).toEqual(trPiecesOf(r.pieces as never[], kOfSource(unit.pieces)))
   })
+  it('writes a none row, no throw, where a string it would write is past 16,000 code units (§4.1\'s bound): at the limit it is a row', () => {
+    const b = bundleOf([['para', 0, null, null, null, [[0, 'a'], [1, '$x$'], [0, 'b']]]])
+    const at = rowOf(b, 0, { state: 'whole', pieces: [{ t: 'text', tr: true, s: 'x'.repeat(16000) }] })
+    expect(at[2]).toBe('whole')
+    expect(at[1][0]).toHaveLength(16000)
+    const long = [{ t: 'text', tr: true, s: 'x'.repeat(16001) }, { t: 'text', s: ' '.repeat(16001) }, { t: 'text', tr: true, s: `${'y'.repeat(15999)}\u{1f600}` }]
+    for (const piece of long) expect(rowOf(b, 0, { state: 'whole', pieces: [{ t: 'text', tr: true, s: 'short' }, piece], by: 'B', sentences: { src: [1], tr: [2] } })).toEqual([0, [], 'none', null, null])
+    // (counted after the white space is written as a row writes it: a carriage return pair is one code unit fewer)
+    expect(rowOf(b, 0, { state: 'whole', pieces: [{ t: 'text', tr: true, s: '\r\n'.repeat(8000) }] })[2]).toBe('whole')
+    expect(rowOf(b, 0, { state: 'whole', pieces: [{ t: 'text', tr: true, s: '\r\n'.repeat(8001) }] })[2]).toBe('whole')
+    expect(rowOf(b, 0, { state: 'whole', pieces: [{ t: 'text', tr: true, s: '\n'.repeat(16001) }] })[2]).toBe('none')
+  })
   it('writes a text the runs path left untouched (the unit\'s own source object) as its index', async () => {
     const b = bundleOf([['para', 0, null, null, null, [[0, 'Alpha beta '], [1, '$x$'], [0, '1'], [1, '\\ref{a}']]]])
     const unit = sourceUnitsOf(b)[0] as RowSourceUnit
