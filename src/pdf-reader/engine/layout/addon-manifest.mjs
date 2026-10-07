@@ -5,8 +5,9 @@
 // its shape and every number with plain loops. A refusal is of the whole manifest, names its path and describes a value
 // by its type; the reader then draws every unit the old way, as with no add-on. Two forms are read: the shipped one
 // (compact: only the pages it removes, each named by its entry's `at`) and the check's (every set's page p at its fixed
-// place, with the gate's outline table and the crops' colours). Imports json.mjs alone, and no PDF object layer: the
-// reader's door loads it, and the layer bundle's reader (layer-proto/bundle.mjs) checks the manifest it holds with it.
+// place, with the gate's outline table and the crops' colours); the layer bundle's reader (layer-proto/bundle.mjs) reads
+// the manifest a bundle holds in the shipped form alone. No key of an object read names a prototype. Imports json.mjs
+// alone, and no PDF object layer: the reader's door loads it.
 import { boundedJson, COORD_MAX, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
 
 /** the remover's version: raised with any change to what it writes; it enters the add-on's key (2: compact sets; 3: a
@@ -14,7 +15,8 @@ import { boundedJson, COORD_MAX, isInteger, isNumber, isObject, LayoutRefusal, t
  *  PDF.js reads it, and a page refused past its budgets: what it holds by kind, what it decodes). Defined here, beside
  *  the manifest that names it, so that a reader checks a manifest without loading the remover (which re-exports it) */
 export const REMOVAL = '4'
-/** the add-on's bytes at most (the bytes after arXiv's: 32 KB for the 147-page thesis), its manifest's bytes and values */
+/** the add-on's bytes at most (the bytes after arXiv's: 32 KB for the 147-page thesis), its manifest's bytes and
+ *  values */
 export const ADDON_CAP = 4 * 2 ** 20
 export const ADDON_MANIFEST_CAP = 256 * 1024
 export const ADDON_MANIFEST_VALUES = 100_000
@@ -22,13 +24,16 @@ export const ADDON_MANIFEST_VALUES = 100_000
 const DEPTH = 5
 /** a refused page's reason at most, in code units (the maker cuts its own to it) */
 const REFUSED_MAX = 200
-/** the page sets an add-on may hold after arXiv's own pages, in their order (remove.mjs SETS and CHECK_SETS) */
-const SET_NAMES = ['R', 'P', 'F', 'C']
+/** the page sets an add-on may hold after arXiv's own pages, in their order (remove.mjs SETS and CHECK_SETS), and those
+ *  the shipped add-on holds (SETS) */
+const SET_NAMES = ['R', 'P', 'F', 'C'], SHIPPED_SETS = ['R']
 const TOP = ['schema', 'removal', 'pages', 'sets', 'page', 'appended', 'stats'], TOP_CHECK = ['colours', 'outlines']
 const ENTRY = ['refused', 'units', 'at', 'dirty', 'rules']
 /** a PDF's bytes at most (a manifest's `appended`), and a count's (its stats) */
 const BYTES_MAX = 2 ** 31
 const STATS_MAX = 32, STAT_NAME = /^[a-z]{1,32}$/
+/** the names an object's own key may not take, so that no copy of what is read is given another prototype */
+const NOT_NAMES = ['__proto__', 'constructor', 'prototype']
 /** a page as a key of `page` (read as a number once it is one), a unit's id as a key of a page's `units`, a crop's
  *  colour by page and crop, a font of the outline table */
 const PAGE_KEY = /^[1-9]\d{0,4}$/, UNIT_KEY = /^(?:0|[1-9]\d{0,8})$/, COLOUR_KEY = /^([1-9]\d{0,4})\.(?:0|[1-9]\d{0,5})$/
@@ -50,9 +55,9 @@ function keysOf(v, required, optional, path) {
 }
 
 /**
- * Boxes x0, y0, x1, y1 (stride 4) on page `page`: finite numbers, each box not empty (x0 < x1, y0 < y1), within the page's
- * view by SLACK where `views` is given (4 × pages numbers, the layout file's form), else within ±COORD_MAX. Refused at the
- * number that breaks it
+ * Boxes x0, y0, x1, y1 (stride 4) on page `page`: finite numbers, each box not empty (x0 < x1, y0 < y1), within the
+ * page's view by SLACK where `views` is given (4 × pages numbers, the layout file's form), else within ±COORD_MAX.
+ * Refused at the number that breaks it
  */
 function boxes(v, page, views, path) {
   if (!Array.isArray(v) || v.length % 4 !== 0) throw refuse(path, `not boxes of 4 numbers (${kindOf(v)})`)
@@ -68,22 +73,24 @@ function boxes(v, page, views, path) {
 }
 
 /**
- * A manifest already parsed (the layer bundle holds one): every bound parseAddonManifest checks past JSON.parse, `pages`
- * the paper's. Its schema and remover; `sets`, none (compact) or each in SET_NAMES' order at (i + 1) × pages; an entry for
- * exactly each page 1 to `pages`: `ok`, a refused page's reason (1 to REFUSED_MAX code units) and nothing removed on it, a
+ * A manifest already parsed (the layer bundle holds one): every bound parseAddonManifest checks past JSON.parse,
+ * `pages` the paper's; `shipped`, the shipped add-on's alone (no check's set, outline table nor colours: a bundle's).
+ * Its schema and remover; `sets`, none (compact) or each in SET_NAMES' order at (i + 1) × pages; an entry for exactly
+ * each page 1 to `pages`: `ok`, a refused page's reason (1 to REFUSED_MAX code units) and nothing removed on it, a
  * removed page's `units` (boxes by unit id) and `at` (its pages in the add-on's document by set, each past arXiv's own,
  * within the document's pages — arXiv's, each set's, and one for each `at` — and each named once), and either's `dirty`
  * and `rules` (boxes); `appended` and `stats`, counts; the check's crops' `colours` (rgb by page and crop) and outline
  * table (a font's characters and their boxes in thousandths of an em, stride 5). Returns the manifest as it is; throws
  * LayoutRefusal
  */
-export function checkAddonManifest(m, { pages, views = null }) {
-  keysOf(m, TOP, TOP_CHECK, '')
+export function checkAddonManifest(m, { pages, views = null, shipped = false }) {
+  const setNames = shipped ? SHIPPED_SETS : SET_NAMES
+  keysOf(m, TOP, shipped ? [] : TOP_CHECK, '')
   if (m.schema !== 1) throw refuse('schema', 'not 1')
   if (m.removal !== REMOVAL) throw refuse('removal', `not '${REMOVAL}'`)
   if (m.pages !== pages) throw refuse('pages', `not the paper's ${pages}`)
 
-  const sets = keysOf(m.sets, [], SET_NAMES, 'sets'), names = Object.keys(sets)
+  const sets = keysOf(m.sets, [], setNames, 'sets'), names = Object.keys(sets)
   for (let i = 0; i < names.length; i++) {
     // (the remover writes them in SET_NAMES' order, each a block of `pages` after the one before)
     if (names[i] !== SET_NAMES[i] || sets[names[i]] !== (i + 1) * pages) throw refuse(`sets.${names[i]}`, `not ${SET_NAMES[i]} at ${(i + 1) * pages}`)
@@ -119,7 +126,7 @@ export function checkAddonManifest(m, { pages, views = null }) {
       }
     }
     if (Object.hasOwn(e, 'at')) {
-      const at = keysOf(e.at, [], SET_NAMES, `${path}.at`)
+      const at = keysOf(e.at, [], setNames, `${path}.at`)
       for (const s of Object.keys(at)) { ats.push(at[s]); atPaths.push(`${path}.at.${s}`) }
     }
     if (Object.hasOwn(e, 'dirty')) boxes(e.dirty, p, views, `${path}.dirty`)
@@ -139,7 +146,7 @@ export function checkAddonManifest(m, { pages, views = null }) {
   const counted = Object.keys(stats)
   if (counted.length > STATS_MAX) throw refuse('stats', `more than ${STATS_MAX} counts`)
   for (const k of counted) {
-    if (!STAT_NAME.test(k)) throw refuse(`stats.${told(k)}`, 'not a count\'s name')
+    if (!STAT_NAME.test(k) || NOT_NAMES.includes(k)) throw refuse(`stats.${told(k)}`, 'not a count\'s name')
     if (!isInteger(stats[k], 0, Number.MAX_SAFE_INTEGER)) throw refuse(`stats.${k}`, 'not a count')
   }
 
@@ -157,7 +164,7 @@ export function checkAddonManifest(m, { pages, views = null }) {
     if (!isObject(outlines)) throw refuse('outlines', `not an object (${kindOf(outlines)})`)
     for (const font of Object.keys(outlines)) {
       const row = outlines[font], path = `outlines.${told(font)}`
-      if (font.length < 1 || font.length > FONT_MAX) throw refuse(path, `not a font's name of 1 to ${FONT_MAX} code units`)
+      if (font.length < 1 || font.length > FONT_MAX || NOT_NAMES.includes(font)) throw refuse(path, `not a font's name of 1 to ${FONT_MAX} code units`)
       if (!Array.isArray(row) || row.length % 5 !== 0) throw refuse(path, `not characters of a key and 4 numbers (${kindOf(row)})`)
       for (let j = 0; j < row.length; j += 5) {
         if (typeof row[j] !== 'string' || row[j].length < 1 || row[j].length > CHAR_MAX) throw refuse(`${path}[${j}]`, `not a character's key of 1 to ${CHAR_MAX} code units (${kindOf(row[j])})`)

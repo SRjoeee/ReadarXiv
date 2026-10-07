@@ -18,8 +18,9 @@ export interface RemovalManifest {
   outlines?: Record<string, (string | number)[]>
 }
 /** a manifest already parsed, by every bound parseAddonManifest checks past JSON.parse; `pages` the paper's, `views`
- *  (where given) each page's x0, y0, x1, y1, a box then within its page's. Returns it as it is; throws LayoutRefusal */
-export declare function checkAddonManifest(manifest: unknown, o: { pages: number; views?: readonly number[] | null }): RemovalManifest
+ *  (where given) each page's x0, y0, x1, y1, a box then within its page's; `shipped`, the shipped add-on's form alone (no
+ *  check's set, outline table nor colours). Returns it as it is; throws LayoutRefusal */
+export declare function checkAddonManifest(manifest: unknown, o: { pages: number; views?: readonly number[] | null; shipped?: boolean }): RemovalManifest
 /** the manifest read within bounds: schema 1, removal REMOVAL, pages the layout file's, sets, each page's entry (ok,
  *  refused at most 200 characters, at within the add-on's pages, dirty and rules finite numbers stride 4 within the
  *  page's view, units' boxes likewise); values counted before JSON.parse; throws LayoutRefusal */

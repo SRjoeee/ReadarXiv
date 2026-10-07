@@ -7,9 +7,9 @@
 // A reader receives it from the network, so it is untrusted and read within bounds before anything is used: its bytes
 // (BUNDLE_CAP), its UTF-8, its values and nesting counted before JSON.parse (BUNDLE_VALUES), then every check of §3.3 by
 // plain loops, a value of the wrong type named by its type and never converted. A refusal is of the whole file
-// (BundleRefusal: the reader shows the original, with no layer), but for a unit: one whose shape is wrong (a bad piece, a
-// close of no earlier open, a nested piece naming no unit before it) is dropped, null at its id, and the rest stand. The
-// layout and the add-on's manifest are checked by their own modules' rules (layout/file.mjs, layout/addon-manifest.mjs).
+// (BundleRefusal: the reader shows the original, with no layer), but for a unit: one whose shape is wrong (a bad piece,
+// a nested piece naming no unit before it) is dropped, null at its id, and the rest stand. The layout and the add-on's
+// manifest are checked by their own modules' rules (layout/file.mjs, layout/addon-manifest.mjs).
 //
 // Imports the layout's parsers and the engine's versions alone: never the run (live.mjs), the remover, the layout's
 // maker nor the front end, which a reader does not load. bundleUnitsOf, the writer's, reads openPaper's units and
@@ -169,11 +169,11 @@ export function bundleUnitsOf(paper) {
 }
 
 /**
- * The bundle file's bytes (UTF-8 JSON) from its parts: `paper` { id, version, pages }; `base` { bytes, sha256, url }, arXiv's
- * PDF it was made over and our copy's address; `image`, the compiler image's name; `units`, bundleUnitsOf's; `left`
- * { kinds, pages, units }, the original's side; `layout`, the layout file (written as its file is, encodeLayout) or null;
- * `addon` { manifest, tail: the bytes after arXiv's } or null. The versions are the engine's, with the image. The same
- * parts give the same bytes: every object of the bundle's own written in one order
+ * The bundle file's bytes (UTF-8 JSON) from its parts: `paper` { id, version, pages }; `base` { bytes, sha256, url },
+ * arXiv's PDF it was made over and our copy's address; `image`, the compiler image's name; `units`, bundleUnitsOf's;
+ * `left` { kinds, pages, units }, the original's side; `layout`, the layout file (written as its file is, encodeLayout)
+ * or null; `addon` { manifest, tail: the bytes after arXiv's } or null. The versions are the engine's, with the image.
+ * The same parts give the same bytes: every object of the bundle's own written in one order
  */
 export function writeBundle({ paper, base, image, units, left, layout, addon }) {
   const J = JSON.stringify
@@ -219,12 +219,13 @@ const isText = s => typeof s === 'string' && s.length <= STRING_MAX
 
 /**
  * Whether unit `u` (the bundle's `units[i]`) stands: its shape [kind, flags, depth, cell, edges, pieces], its kind a
- * lower-case word, every string within STRING_MAX, each piece one of the six of its tag's shape; a close's id an earlier
- * open's (`opens`: those of the units that stand before it, then its own; an open with no close stands, as the front end
- * makes `\multirow{`, whose close the next cell holds); a nested piece's unit one before it that stands (`stands`), so
- * that no unit nests itself. A unit that stands adds its opens to `opens`
+ * lower-case word, every string within STRING_MAX, each piece one of the six of its tag's shape; a nested piece's unit
+ * one before it that stands (`stands`), so that no unit nests itself. A group's open and close are not paired: the front
+ * end makes an open with no close (`\multirow{`, whose close the next cell holds) and a close with no open before it (a
+ * part with no text dropped with its open: the corpus's 2212.06817, 2608.03063, 2608.15761), and every reader of a unit
+ * takes either alone (mt.mjs serialize)
  */
-function unitStands(u, i, stands, opens) {
+function unitStands(u, i, stands) {
   if (!Array.isArray(u) || u.length !== 6) return false
   const kind = u[0], flags = u[1], depth = u[2], cell = u[3], edges = u[4], pieces = u[5]
   if (typeof kind !== 'string' || kind.length > 32 || !KIND.test(kind)) return false
@@ -245,7 +246,6 @@ function unitStands(u, i, stands, opens) {
     for (let k = 0; k < own.length; k++) if (!EDGES.includes(own[k]) || !isText(edges[own[k]])) return false
   }
   if (!Array.isArray(pieces)) return false
-  const mine = new Set()
   for (let k = 0; k < pieces.length; k++) {
     const p = pieces[k]
     if (!Array.isArray(p)) return false
@@ -257,11 +257,8 @@ function unitStands(u, i, stands, opens) {
         if (!(p.length === 2 && isText(p[1]))) return false
         break
       case OPEN:
-        if (!(p.length === 3 && isInteger(p[1], 0, Number.MAX_SAFE_INTEGER) && isText(p[2]))) return false
-        mine.add(p[1])
-        break
       case CLOSE:
-        if (!(p.length === 3 && isInteger(p[1], 0, Number.MAX_SAFE_INTEGER) && isText(p[2]) && (mine.has(p[1]) || opens.has(p[1])))) return false
+        if (!(p.length === 3 && isInteger(p[1], 0, Number.MAX_SAFE_INTEGER) && isText(p[2]))) return false
         break
       case NESTED:
         if (!(p.length === 4 && isText(p[1]) && isInteger(p[2], 0, i - 1) && stands[p[2]] && isText(p[3]))) return false
@@ -270,20 +267,20 @@ function unitStands(u, i, stands, opens) {
         return false
     }
   }
-  for (const id of mine) opens.add(id)
   return true
 }
 
 /**
  * The bundle as received, read: bytes (or a string) within `caps.bytes` (BUNDLE_CAP), UTF-8, its values within
  * `caps.values` (BUNDLE_VALUES) and its nesting counted before JSON.parse, then every check of §3.3: its schema; its
- * format and PDF.js the reader's (its contract, CTAG), the maker's versions and the image tokens, never compared; its paper; its base's digest 64 hex digits, its bytes 1 to 2^31, its
- * address our copy's; each unit (unitStands), one that does not dropped; the left's kinds (a unit's each), pages (boxes,
- * the paper's) and units ([id, stream, rects] of the bundle's units, on its pages); the layout by its file's rules
- * (layout/file.mjs checkLayout), of the bundle's paper and units; the add-on's manifest by its own
- * (layout/addon-manifest.mjs checkAddonManifest, the paper's pages, each box within its page's view as the left gives
- * it), its tail decoded from base64 within ADDON_CAP, the manifest's `appended` bytes. Returns the bundle with each unit
- * dropped null at its id and `dropped` those ids rising, and the tail as bytes; throws BundleRefusal
+ * format and PDF.js the reader's (its contract, CTAG), the maker's versions and the image tokens, never compared; its
+ * paper; its base's digest 64 hex digits, its bytes 1 to 2^31, its address our copy's; each unit (unitStands), one that
+ * does not dropped; the left's kinds (a unit's each), pages (boxes, the paper's) and units ([id, stream, rects] of the
+ * bundle's units, on its pages); the layout by its file's rules (layout/file.mjs checkLayout), of the bundle's paper and
+ * units; the add-on's manifest by its own (layout/addon-manifest.mjs checkAddonManifest: the shipped add-on's, the
+ * paper's pages, each box within its page's view as the left gives it), its tail decoded from base64 within ADDON_CAP,
+ * the manifest's `appended` bytes. Returns the bundle with each unit dropped null at its id and `dropped` those ids
+ * rising, and the tail as bytes; throws BundleRefusal
  */
 export function readBundle(json, caps = {}) {
   const cap = caps.bytes ?? BUNDLE_CAP, most = caps.values ?? BUNDLE_VALUES
@@ -312,9 +309,9 @@ export function readBundle(json, caps = {}) {
 
   const units = b.units
   if (!Array.isArray(units)) throw fail('units', `not an array (${kindOf(units)})`)
-  const stands = new Uint8Array(units.length), opens = new Set(), dropped = []
+  const stands = new Uint8Array(units.length), dropped = []
   for (let i = 0; i < units.length; i++) {
-    if (unitStands(units[i], i, stands, opens)) stands[i] = 1
+    if (unitStands(units[i], i, stands)) stands[i] = 1
     else { units[i] = null; dropped.push(i) }
   }
 
@@ -377,7 +374,7 @@ export function readBundle(json, caps = {}) {
   if (b.addon !== null) {
     const a = exactKeys(b.addon, ['manifest', 'tail'], 'addon')
     let manifest
-    try { manifest = checkAddonManifest(a.manifest, { pages, views }) } catch (e) { throw within('addon.manifest', e) }
+    try { manifest = checkAddonManifest(a.manifest, { pages, views, shipped: true }) } catch (e) { throw within('addon.manifest', e) }
     const tail = fromBase64(a.tail, ADDON_CAP, 'addon.tail')
     if (tail.length !== manifest.appended) throw fail('addon.tail', `not the manifest's ${manifest.appended} bytes`)
     addon = { manifest, tail }

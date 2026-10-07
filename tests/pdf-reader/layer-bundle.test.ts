@@ -293,6 +293,23 @@ describe('readBundle refuses', () => {
     expect(refusalOf(broken(b => { b.addon.more = 1 }))?.why).toMatch(/^addon\.more/)
   })
 
+  it('a manifest of the check\'s form (its outline table, its colours, a set past the shipped ones), or a key naming a prototype', () => {
+    expect(refusalOf(broken(b => { b.addon.manifest.outlines = { CMR10: ['a', 1, 0, 2, 3] } }))?.why).toBe('addon.manifest.outlines: not a key of the schema')
+    expect(refusalOf(broken(b => { b.addon.manifest.colours = { '1.0': [255, 0, 0] } }))?.why).toBe('addon.manifest.colours: not a key of the schema')
+    expect(refusalOf(broken(b => { b.addon.manifest.sets = { R: 2, P: 4 } }))?.why).toMatch(/^addon\.manifest\.sets\.P: not a key/)
+    expect(refusalOf(broken(b => { b.addon.manifest.page[1].at = { R: 3, P: 4 } }))?.why).toMatch(/^addon\.manifest\.page\.1\.at\.P: not a key/)
+    // (the shipped add-on's sets: none, compact, or R at its fixed place)
+    expect(refusalOf(broken(b => { b.addon.manifest.sets = { R: 2 }; delete b.addon.manifest.page[1].at }))).toBeNull()
+    for (const k of ['constructor', 'prototype']) expect(refusalOf(broken(b => { b.addon.manifest.stats[k] = 1 }))?.why).toMatch(new RegExp(`^addon\\.manifest\\.stats\\.${k}: not a count's name`))
+    const text = JSON.stringify(written()).replace('"stats":{', '"stats":{"__proto__":1,')
+    expect(refusalOf(text)?.why).toBe('addon.manifest.stats.__proto__: not a count\'s name')
+    // and nowhere else may an object read take one
+    for (const [at, key] of [['"versions":{', '__proto__'], ['"paper":{', 'constructor'], ['"left":{', 'prototype'], ['"addon":{', '__proto__'], ['"layout":{', '__proto__']] as const) {
+      expect(refusalOf(JSON.stringify(written()).replace(at, `${at}"${key}":1,`))?.why).toMatch(/not a key of the schema/)
+    }
+    expect(readBundle(JSON.stringify(written()).replace('{"trail":"xy"}', '{"trail":"xy","__proto__":"x"}')).dropped).toEqual([2])
+  })
+
   it('a tail past ADDON_CAP (which a bundle within BUNDLE_CAP cannot hold: its base64 is past it)', () => {
     const b = written()
     b.addon.tail = 'A'.repeat(4 * Math.ceil((ADDON_CAP + 1) / 3))
@@ -313,18 +330,21 @@ describe('a bad unit is dropped and counted, the rest standing, ids their indice
   const withUnit = (i: number, edit: (u: any) => void) => readBundle(bytesOf(broken(b => { edit(b.units[i]) })))
   const droppedBy = (i: number, edit: (u: unknown[]) => void) => { const r = withUnit(i, edit); return { dropped: r.dropped, unit: r.units[i], others: r.units.filter((_, j) => j !== i) } }
 
-  it('an open with no close is read; a close of an unknown id drops its unit', () => {
+  it('an open with no close is read, and a close with no open', () => {
     const r = readBundle(writeBundle(partsOf()))
     // cell 4 opens 58 and 59 and closes neither; cell 5 closes both, the earlier unit's
     expect([r.units[4], r.units[5]]).toEqual([UNITS[4], UNITS[5]])
-    const d = droppedBy(5, u => { (u[5] as unknown[]).push([3, 77, '}']) })
-    expect([d.dropped, d.unit]).toEqual([[5], null])
-    expect(d.others).toEqual(UNITS.filter((_, j) => j !== 5))
-    // a close before its open, in the same unit
-    expect(droppedBy(2, u => { (u[5] as unknown[]).unshift([3, 2, '}'], [2, 2, '{']) }).dropped).toEqual([2])
-    // an open of a unit dropped opens nothing: the unit that closes it is dropped too
-    const r2 = readBundle(bytesOf(broken(b => { b.units[4][0] = 'Cell' })))
-    expect(r2.dropped).toEqual([4, 5])
+    // a close no unit opens (the front end drops a part with no text with its open), or one before its open, stands
+    // (on the author, a unit the layout file does not locate, whose pieces it does not count)
+    for (const edit of [(u: unknown[]) => { (u[5] as unknown[]).push([3, 77, '}']) }, (u: unknown[]) => { (u[5] as unknown[]).unshift([3, 2, '}'], [2, 2, '{']) }]) {
+      const d = droppedBy(7, edit)
+      expect(d.dropped).toEqual([])
+      expect(d.others).toEqual(UNITS.filter((_, j) => j !== 7))
+    }
+    // the unit that opens a group dropped, the one that closes it stands
+    expect(readBundle(bytesOf(broken(b => { b.units[4][0] = 'Cell' }))).dropped).toEqual([4])
+    // a close of another shape is a bad piece
+    for (const p of [[3, 1.5, '}'], [3, -1, '}'], [3, 1], [3, 1, 7], [3, 1, '}', 'x']]) expect(droppedBy(7, u => { (u[5] as unknown[]).push(p) }).dropped).toEqual([7])
   })
 
   it('a kind not a lower-case word of 1 to 32 letters', () => {
@@ -380,6 +400,12 @@ describe('10,000 seeded hostile mutations of a valid bundle', () => {
   }
   const POOL: unknown[] = [null, true, false, 0, -1, 1, 2, 3, 4, 1.5, -0.25, 2 ** 31 + 1, 1e300, -1e300, '', 'x', 'Para', 'para', '\u202e', 'x'.repeat(16_001), [], {}, [0], [0, 'x'], [3, 1, '}'], [4, 'a', 99, 'b'], { lead: 1 }, [1, 0, 0, 1, 1]]
   const pick = <T>(r: () => number, a: readonly T[]): T => a[Math.floor(r() * a.length)] as T
+  /** every own key of every object in v (the tail's bytes passed over) */
+  const ownKeys = (v: unknown, out: string[] = []): string[] => {
+    if (Array.isArray(v)) for (const x of v) ownKeys(x, out)
+    else if (v !== null && typeof v === 'object' && !(v instanceof Uint8Array)) for (const k of Object.keys(v)) { out.push(k); ownKeys((v as Record<string, unknown>)[k], out) }
+    return out
+  }
   /** every node's path in v */
   const nodes = (v: unknown, path: (string | number)[] = [], out: (string | number)[][] = []) => {
     out.push(path)
@@ -409,6 +435,8 @@ describe('10,000 seeded hostile mutations of a valid bundle', () => {
       let json = JSON.stringify(b)
       // and now and then the text itself: cut short, or a character put in
       if (r() < 0.1) json = r() < 0.5 ? json.slice(0, Math.floor(r() * json.length)) : (i => json.slice(0, i) + pick(r, ['{', '}', '[', ']', ',', ':', '"', '\\', '0', 'x']) + json.slice(i))(Math.floor(r() * json.length))
+      // or an object given a key that names a prototype
+      if (r() < 0.05) { const opens = [...json.matchAll(/\{/g)].map(m => m.index); const i = pick(r, opens) + 1; json = `${json.slice(0, i)}"${pick(r, ['__proto__', 'constructor', 'prototype'])}":${pick(r, ['0', '{}', '[]', '"x"'])},${json.slice(i)}` }
       let read: ReadBundle | null = null
       try { read = readBundle(utf8(json)) } catch (e) {
         if (!(e instanceof BundleRefusal)) throw new Error(`mutation ${n}: ${e instanceof Error ? `${e.name}: ${e.message}` : String(e)}`)
@@ -420,6 +448,7 @@ describe('10,000 seeded hostile mutations of a valid bundle', () => {
       // ids are indices: a unit null exactly where it was dropped, the dropped rising
       expect(read.dropped).toEqual([...read.dropped].sort((x, y) => x - y))
       read.units.forEach((u, i) => { expect(u === null).toBe(read.dropped.includes(i)) })
+      expect(ownKeys(read).filter(k => k === '__proto__' || k === 'constructor' || k === 'prototype')).toEqual([])
     }
     expect(text).toBe(JSON.stringify(written()))
     // (each outcome reached)

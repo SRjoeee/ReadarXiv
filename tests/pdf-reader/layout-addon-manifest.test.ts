@@ -49,7 +49,8 @@ function refusalOf(m: unknown, o: { pages: number; views?: number[] } = { pages:
 }
 /** the shipped manifest with `edit` made to a copy */
 // biome-ignore lint/suspicious/noExplicitAny: a test breaks the manifest's types on purpose
-const edited = (edit: (m: any) => void, base: () => unknown = shipped) => { const m = structuredClone(base()); edit(m); return m }
+type Loose = any
+const edited = (edit: (m: Loose) => void, base: () => unknown = shipped) => { const m = structuredClone(base()); edit(m); return m }
 
 describe('parseAddonManifest', () => {
   it('reads the shipped manifest and the check\'s, every field as it was written', () => {
@@ -132,6 +133,29 @@ describe('parseAddonManifest', () => {
     expect(refusalOf(edited(m => { m.colours['1.0'] = [256, 0, 0] }, check))?.path).toBe('colours.1.0')
     expect(refusalOf([])?.path).toBe('')
     expect(() => parseAddonManifest('{}' as unknown as Uint8Array, { pages: 3 })).toThrow('not bytes')
+  })
+
+  it('refuses a key that names a prototype, where a key is the manifest\'s own name', () => {
+    for (const k of ['constructor', 'prototype']) {
+      expect(refusalOf(edited(m => { m.stats[k] = 1 }))?.path).toBe(`stats.${k}`)
+      expect(refusalOf(edited(m => { m.outlines[k] = ['a', 1, 0, 2, 3] }, check))?.path).toBe(`outlines.${k}`)
+    }
+    for (const [base, at] of [[shipped, '"stats":{'], [check, '"outlines":{']] as const) {
+      const text = JSON.stringify(base()).replace(at, `${at}"__proto__":${at.startsWith('"stats') ? '1' : '["a",1,0,2,3]'},`)
+      expect(() => parseAddonManifest(utf8(text), { pages: 3 })).toThrow(/__proto__/)
+    }
+  })
+
+  it('reads the shipped add-on\'s form alone where asked (a bundle\'s): no check\'s set, outline table nor colours', () => {
+    expect(checkAddonManifest(shipped(), { pages: 3, shipped: true })).toEqual(shipped())
+    expect(() => checkAddonManifest(check(), { pages: 3, shipped: true })).toThrow(LayoutRefusal)
+    for (const [edit, path] of [
+      [(m: Loose) => { m.outlines = {} }, 'outlines'], [(m: Loose) => { m.colours = {} }, 'colours'],
+      [(m: Loose) => { m.sets = { R: 3, P: 6 } }, 'sets.P'], [(m: Loose) => { m.page[1].at = { R: 4, F: 5 } }, 'page.1.at.F'],
+    ] as const) {
+      try { checkAddonManifest(edited(edit), { pages: 3, shipped: true }); expect.unreachable() } catch (e) { expect((e as LayoutRefusal).path).toBe(path) }
+    }
+    expect(checkAddonManifest(edited(m => { m.sets = { R: 3 }; delete m.page[1].at }), { pages: 3, shipped: true }).sets).toEqual({ R: 3 })
   })
 
   it('checkAddonManifest reads a manifest already parsed by the same rules', () => {
