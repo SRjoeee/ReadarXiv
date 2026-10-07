@@ -1,7 +1,7 @@
 // latex-front.mjs's types (JavaScript until the engine's port), for the reader's tests
 /** a table cell's place in its table's grid (tableGrid): its table, row, first column, the columns it spans, and whether its row is the header's */
 export interface CellPlace { table: number; row: number; col: number; span: number; head: boolean }
-export interface SourceUnit { kind: string; title?: boolean; depth?: number; lead?: string; trail?: string; inner?: string; front?: boolean; stored?: boolean; bracketed?: boolean; pieces: unknown[]; cell?: CellPlace }
+export interface SourceUnit { kind: string; title?: boolean; depth?: number; lead?: string; trail?: string; inner?: string; front?: boolean; stored?: boolean; bracketed?: boolean; rowLead?: string[]; rowTrail?: string[]; pieces: unknown[]; cell?: CellPlace }
 /** a table's body as its cells lay it out: each cell's stretch of the source, its row, first column and span, and whether its row is the header's */
 export declare function tableGrid(s: string, from: number, to: number): (Omit<CellPlace, 'table'> & { start: number; end: number })[]
 /** a source tree held in memory: path → bytes */

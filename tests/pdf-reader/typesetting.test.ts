@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { keptFor, openPaper, translationFiles } from '@/pdf-reader/engine/live.mjs'
-import { authorsTranslated, strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
+import { authorsTranslated, namedFonts, strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
 
 // How a translation is typeset around its text: the leading of translated units and the hyphenation of the English left
 
@@ -145,5 +145,84 @@ describe('the last compile\'s references, given to the next', () => {
     const brings = (at: string) => openPaper(new Map([['latex/arxiv.tex', new TextEncoder().encode(SOURCE)], [at, bbl]])).meta.bbl
     expect(brings('arxiv.bbl')).toBe(true)
     expect(brings('latex/arxiv.bbl')).toBe(false)
+  })
+})
+
+describe('a font a paper\'s style loads by name, under a strategy that sets another encoding (1512.03385 into ru: "3.4. —åàºŁçàöŁÿ")', () => {
+  const CVPR = '\\font\\cvprtenhv  = phvb at 8pt % *** IF THIS FAILS, SEE cvpr.sty ***\n\\font\\elvbf  = ptmb scaled 1100\n%\\font\\elvbf  = ptmb7t scaled 1100\n'
+  // selected by the document's own switches, which apply NFSS's series and shape rules, and the font it lands on taken
+  const FIXED = '\\begingroup\\fontencoding{\\encodingdefault}\\fontfamily{\\rmdefault}\\fontsize{11}{11}\\bfseries\\upshape\\selectfont\\global\\expandafter\\let\\expandafter\\elvbf\\the\\font\\endgroup'
+  it('reads the text faces fontname\'s scheme names, at their size, and passes over the others', () => {
+    expect(namedFonts([CVPR])).toEqual([{ cs: 'cvprtenhv', role: 'sf', bold: true, shape: 'up', size: 8 }, { cs: 'elvbf', role: 'rm', bold: true, shape: 'up', size: 11 }])
+    expect(namedFonts(['\\font\\tenit=cmti10 \\font\\big=cmr10 scaled\\magstep2 \\font\\mono=pcrr7t at 9pt'])).toEqual([
+      { cs: 'tenit', role: 'rm', bold: false, shape: 'it', size: 10 },
+      { cs: 'big', role: 'rm', bold: false, shape: 'up', size: 14.4 },
+      { cs: 'mono', role: 'tt', bold: false, shape: 'up', size: 9 },
+    ])
+    // in a text encoding only: not TS1's symbols nor a math encoding's (the review of fix/tex-path-errors, M4)
+    expect(namedFonts(['\\font\\tc=ptmr8c \\font\\mi=ptmri7m \\font\\sy=ptmr7y \\font\\ot=ptmb7t at 9pt']).map(f => f.cs)).toEqual(['ot'])
+    // where TeX reads it as the file is read: not in a macro's body, nor in a conditional the file opens at its top (aastex631's
+    // \iftwelvepoint, acl.sty's \ifacl@linenumbers: M5); a macro of the name that takes its branches (etoolbox's \iftoggle,
+    // wacv.sty's) is no conditional, nor are \newif's and \let's names
+    expect(namedFonts(['\\newif\\iftwelvepoint\n\\def\\x{\\font\\inbody=ptmb}\n\\iftwelvepoint \\font\\foo=cmr12 \\else \\font\\foo=cmr10\\fi\n\\iftoggle{final}{\\relax}{}\n\\let\\ifq\\iftrue\n\\font\\elvbf = ptmb scaled 1100\n']).map(f => f.cs)).toEqual(['elvbf'])
+    // a symbol font, another script's, a size TeX computes, a font TeX names at the time
+    expect(namedFonts(['\\font\\astro@font=astrosym at 7pt \\font\\cyr=wncyr10 \\font\\bighelv=phvr at #1 \\font\\@IEEEPARstartfont\\fontname\\font\\space at 3pt'])).toEqual([])
+  })
+  it('declares them again in the document\'s encoding where the strategy sets another than the paper\'s: T2A under pdfLaTeX, TU under XeLaTeX', () => {
+    const [own, xe] = strategiesFor(META, 'ru')
+    const named = namedFonts([CVPR])
+    const t2a = own?.pre({ rm: 'ptm', sf: 'phv', tt: 'pcr' }, named) ?? ''
+    expect(t2a.indexOf(FIXED)).toBeGreaterThan(t2a.indexOf('\\__axt_substitute:nnnn {T2A} {ptm}'))
+    expect(t2a.indexOf(FIXED)).toBeLessThan(t2a.indexOf('\\babelprovide'))
+    const tu = xe?.pre({ rm: 'ptm', sf: 'phv', tt: 'pcr' }, named) ?? ''
+    expect(tu.indexOf(FIXED)).toBeGreaterThan(tu.indexOf('\\setmonofont'))
+    // the paper's own encoding: its fonts as they are
+    // not the default names as NFSS's values: no font definition declares the shape up, and CM's sans under T2A has bx
+    // and no b (the review of fix/tex-path-errors, I1: NAACL's bold ruler on a CM paper came out medium)
+    for (const pre of [t2a, tu]) expect(pre).not.toMatch(/\\DeclareFixedFont|\\updefault|\{\\bfdefault\}/)
+    expect(t2a).toContain('\\fontfamily{\\sfdefault}\\fontsize{8}{8}\\bfseries\\upshape\\selectfont\\global\\expandafter\\let\\expandafter\\cvprtenhv\\the\\font')
+    expect(first(META, 'de').pre({ rm: 'ptm' }, named)).not.toContain('\\the\\font')
+    expect(strategiesFor(META, 'zh').map(s => s.pre(null, named)).join('')).not.toContain('\\the\\font')
+  })
+  it('from the paper\'s own files, a style beside the main file\'s', () => {
+    const files = new Map([['main.tex', '\\documentclass{article}\\usepackage{cvpr}\\begin{document}\nThe first paragraph of prose.\n\\end{document}\n'], ['cvpr.sty', CVPR]].map(([k, v]) => [k as string, new TextEncoder().encode(v as string)]))
+    const p = openPaper(files)
+    const main = (lang: string) => new TextDecoder().decode(translationFiles(p, new Map(), { strategy: first({ ...META, ...p.meta }, lang), fonts: null, draft: false, aux: null, bbl: null }).get('main.tex'))
+    expect(main('ru')).toContain(FIXED)
+    expect(main('fr')).not.toContain('\\let\\expandafter\\elvbf')
+  })
+  it('from every file TeX may read, as TeX finds it: a preamble\'s \\input, a package by its path, a file a style \\inputs (the re-review, N1)', () => {
+    const FONT = '\\font\\elvbf  = ptmb scaled 1100\n'
+    const ru = (files: Record<string, string>) => {
+      const p = openPaper(new Map(Object.entries(files).map(([k, v]) => [k, new TextEncoder().encode(v)])))
+      return new TextDecoder().decode(translationFiles(p, new Map(), { strategy: first({ ...META, ...p.meta }, 'ru'), fonts: null, draft: false, aux: null, bbl: null }).get('main.tex'))
+    }
+    const main = (preamble: string) => `\\documentclass{article}${preamble}\\begin{document}\nThe first paragraph of prose.\n\\end{document}\n`
+    const read: [string, Record<string, string>][] = [
+      ['\\input{fonts}', { 'main.tex': main('\\input{fonts}'), 'fonts.tex': FONT }],
+      ['\\input{fonts.tex}', { 'main.tex': main('\\input{fonts.tex}'), 'fonts.tex': FONT }],
+      ['\\input fonts', { 'main.tex': main('\\input fonts\n'), 'fonts.tex': FONT }],
+      ['\\usepackage{sty/cvpr}', { 'main.tex': main('\\usepackage{sty/cvpr}'), 'sty/cvpr.sty': FONT }],
+      ['\\usepackage{./cvpr}', { 'main.tex': main('\\usepackage{./cvpr}'), 'cvpr.sty': FONT }],
+      ['a style\'s \\input{fontsdef}', { 'main.tex': main('\\usepackage{outer}'), 'outer.sty': '\\input{fontsdef}\n', 'fontsdef.tex': FONT }],
+      ['a style\'s \\input{sub/fonts}', { 'main.tex': main('\\usepackage{cvpr}'), 'cvpr.sty': '\\input{sub/fonts}\n', 'sub/fonts.tex': FONT }],
+      ['an \\input in a macro TeX runs', { 'main.tex': main('\\newcommand\\setupfonts{\\input{fonts}}\\setupfonts'), 'fonts.tex': FONT }],
+      ['a name TeX makes, \\input{\\jobname-fonts}: any file', { 'main.tex': main('\\input{\\jobname-fonts}'), 'main-fonts.tex': FONT }],
+    ]
+    for (const [how, files] of read) expect(ru(files), how).toContain(FIXED)
+    // a file no load names, and one named in a comment alone, TeX does not read
+    expect(ru({ 'main.tex': main('% \\usepackage{cvpr}\n'), 'cvpr.sty': FONT, 'stray.tex': FONT })).not.toContain('\\let\\expandafter\\elvbf')
+  })
+  it('from the files TeX reads alone: a style loaded by one the paper loads, not one it never loads (M5)', () => {
+    const files = new Map([
+      ['main.tex', '\\documentclass{article}\\usepackage{outer}\\begin{document}\nThe first paragraph of prose.\n\\end{document}\n'],
+      ['outer.sty', '\\RequirePackage{inner}\n'],
+      ['inner.sty', '\\font\\elvbf  = ptmb scaled 1100\n'],
+      ['unused.sty', '\\font\\stray = phvb at 8pt\n'],
+    ].map(([k, v]) => [k as string, new TextEncoder().encode(v as string)]))
+    const p = openPaper(files)
+    const tex = new TextDecoder().decode(translationFiles(p, new Map(), { strategy: first({ ...META, ...p.meta }, 'ru'), fonts: null, draft: false, aux: null, bbl: null }).get('main.tex'))
+    expect(tex).toContain(FIXED)
+    expect(tex).not.toContain('\\stray')
   })
 })

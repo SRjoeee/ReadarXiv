@@ -20,8 +20,8 @@
 // cannot be made, the translation is set as today, and the reason noted
 import { analyze } from './paper-meta.mjs'
 import { inkSamples, LAYOUT_TEX, layoutMarking, markProbeTex, probeSamples } from './layout/marks.mjs'
-import { BALANCE_DEF, documentBounds, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
-import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
+import { BALANCE_DEF, documentBounds, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, normalizePath, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { authorsTranslated, namedFonts, strategiesFor, typesetBy } from './scripts.mjs'
 import { passagesInSource, translationOf } from './cache.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
 import { decideGroups, groupOf } from './groups.mjs'
@@ -229,6 +229,51 @@ export function originalFiles({ fsys, project }, { lines = false, spans = null, 
   return out
 }
 
+/**
+ * The text of each of the paper's own files TeX may read: the main file, preamble and all, and every file of the paper's
+ * a text reached names as TeX loads files — \\input (with braces or without), \\include, \\InputIfFileExists,
+ * \\subfile, \\import and \\subimport, a style by \\usepackage or \\RequirePackage, a class by \\documentclass or
+ * \\LoadClass —, found by its path as TeX finds it (`.tex`, `.sty`, `.cls` added) and else by its name in any directory.
+ * Named anywhere in a file but a comment, in a macro's body or a conditional too: where it is not known whether TeX
+ * reads a file, it is read. A name TeX makes (\\input{\\jobname-x}) could be any file: every file then. Walked by
+ * loadProject alone, a preamble's \\input, a package named by its path and a file a style \\inputs were missed, and
+ * the fonts in them never declared again (the re-review of fix/tex-path-errors, N1)
+ */
+const LOADS = [
+  [/\\(?:@@?)?input(?![A-Za-z@])\s*(?:\{([^{}]*)\}|([^\s{}%\\]+))/g, '.tex'],
+  [/\\(?:include|InputIfFileExists|subfile)\s*\{([^{}]*)\}/g, '.tex'],
+  [/\\(?:sub)?import\*?\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, '.tex', true],
+  [/\\(?:usepackage|RequirePackage(?:WithOptions)?)\s*(?:\[[^\]]*\]\s*)?\{([^{}]*)\}/g, '.sty', false, true],
+  [/\\(?:documentclass|LoadClass(?:WithOptions)?)\s*(?:\[[^\]]*\]\s*)?\{([^{}]*)\}/g, '.cls'],
+]
+function readByTeX(fsys, project) {
+  const sources = fsys.list().filter(f => /\.(tex|sty|cls|ltx|def|cfg)$/i.test(f)), here = new Set(sources), byName = new Map()
+  for (const f of sources) { const k = f.split('/').pop().toLowerCase(); byName.set(k, [...(byName.get(k) ?? []), f]) }
+  /** the paper's files a name in a load stands for: by its path (with the extension TeX adds), else by its name */
+  const resolve = (name, ext) => {
+    const path = normalizePath(name.trim().replace(/^"|"$/g, ''))
+    for (const c of [path, `${path}${ext}`]) if (here.has(c)) return [c]
+    const base = path.split('/').pop().toLowerCase()
+    return byName.get(base) ?? byName.get(`${base}${ext}`) ?? []
+  }
+  const read = new Set([project.main, ...(project.files?.keys() ?? [])].filter(f => here.has(f))), queue = [...read]
+  while (queue.length) {
+    const text = latin1(fsys.read(queue.pop())).replace(/(^|[^\\])%.*$/gm, '$1')
+    for (const [re, ext, pair, list] of LOADS) {
+      for (const m of text.matchAll(re)) {
+        const names = pair ? [`${m[1]}/${m[2]}`] : list ? m[1].split(',') : [m[1] ?? m[2]]
+        // a name TeX makes: any file
+        if (names.some(n => /[\\#]/.test(n))) return sources.map(f => latin1(fsys.read(f)))
+        for (const f of names.flatMap(n => resolve(n, ext))) if (!read.has(f)) { read.add(f); queue.push(f) }
+      }
+    }
+  }
+  return [...read].map(f => latin1(fsys.read(f)))
+}
+/** the fonts the paper's own files load by name where TeX reads them (scripts.mjs namedFonts), read once a paper */
+const namedOf = new WeakMap()
+const fontsByName = (fsys, project) => { let named = namedOf.get(fsys); if (!named) namedOf.set(fsys, (named = namedFonts(readByTeX(fsys, project)))); return named }
+
 /** the translation so far, with unit marks, set by one of strategiesFor (scripts.mjs); a strategy's `leading` sets the
  *  translated units' own paragraphs, and those alone, at that factor of the paper's spacing (latex-front unitLeadTex).
  *  `typeset`, the typesetting rule's (typeset/plan.mjs previewTypesetting, finalTypesetting): the strategy it sets the
@@ -251,7 +296,7 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   const patched = spans ? new Map(out) : null
   let main = latin1(out.get(project.main))
   const at = beginDocument(main)
-  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + NO_OVERFLOW + (xe || !evenSpaces ? '' : EVEN_SPACES) + main.slice(at)
+  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts, fontsByName(fsys, project)) + NO_OVERFLOW + (xe || !evenSpaces ? '' : EVEN_SPACES) + main.slice(at)
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
   // (the \\usepackage TeX acts on, inputencOf: a commented one said utf8 and the source stayed Latin-1)
   const inputenc = project.inputenc && inputencOf(main)
@@ -418,7 +463,13 @@ export const PIPELINE_CARRIES = { 7: NO_MARKER_HASH, 8: NO_MARKER_HASH, 9: NO_MA
 //    apacite and babel on a revisit, and that paper's record, which none of the ways could set, is tried again. With
 //    them the tables fitted since 5 (2a346741: what stands in a TeX comment; 9cc9cd2d: a starred environment read by
 //    lines), whose \axtfit decisions changed under it
-export const TYPESETTING_VERSION = '6'
+// 7: the halts the layer lab's finals met when compiled as BusyTeX compiles (2026-10-06): a cell's row commands written
+//    where the row has them (latex-front.mjs rowsKept) — a copy of 6 set by a compiler that went past "Misplaced
+//    \noalign" lacks the rule —; a font a style loads by name declared again in the target's encoding (scripts.mjs
+//    namedFonts) — 6's Russian headings in CVPR's \elvbf were the raw font's glyphs —; graphicx's sizes in px given in
+//    bp under XeTeX (latex-front.mjs XETEX_SHIM), siunitx 3.6.2's misnamed locale file passed over and CJKutf8's bytes
+//    protected from LaTeX's case changing (scripts.mjs): papers none of the ways could set are tried again
+export const TYPESETTING_VERSION = '7'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };

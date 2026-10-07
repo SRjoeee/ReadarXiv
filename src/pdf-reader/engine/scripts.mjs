@@ -120,6 +120,96 @@ const facesFor = (encoding, fonts) => {
   }).join('')
   return calls ? `${SUBSTITUTE}${calls}\\ExplSyntaxOff\n` : ''
 }
+/**
+ * A font a paper's style loads by name — \font\elvbf = ptmb scaled 1100, CVPR's and WACV's subsection headings; ICLR's,
+ * ACL's and COLM's line numbers in phvb — is outside NFSS, and has its own fixed encoding, which the strategy's never
+ * reaches: under T2A the Russian headings set in it came out as its glyphs at T2A's slots, "3.4. —åàºŁçàöŁÿ" for
+ * "Реализация", and the letters it has none at went missing (1512.03385 into ru: four units set in the source for
+ * them, the other headings garbled without a word in the log). Where a strategy sets the translation in another
+ * encoding than the paper's (T2A under pdfLaTeX, TU under XeLaTeX), each such font that is a text face fontname's scheme
+ * names — a base-35 face, Computer Modern — is declared again through NFSS in the document's encoding (namedAgain):
+ * its role's family, which the strategy's faces give the alphabet's letters (facesFor, fontspec's), its weight and
+ * shape by the document's own switches, its size. One the scheme does not name — a symbol font (astrosym), one of another
+ * script (wncyr), a size TeX computes (`at\dimen@`) — stays as it is. Found in the paper's own files, a comment's left
+ * out (namedFonts); one a class in TeX Live loads is not seen
+ */
+const NAMED = /\\font\s*\\([A-Za-z@]+)\s*=?\s*([A-Za-z][A-Za-z0-9-]*)(?![A-Za-z0-9-])/g
+const UNIT_PT = { pt: 1, bp: 72.27 / 72, mm: 72.27 / 25.4, cm: 72.27 / 2.54, in: 72.27, pc: 12, dd: 1238 / 1157, cc: 12 * 1238 / 1157 }
+/** a font's file name in fontname's scheme → its role, bold or not, its shape and its design size, or null */
+const faceOf = name => {
+  // in a text encoding, or the raw font: not TS1's symbols (ptmr8c) nor a math encoding's (7m, 7y)
+  const ps = /^[pu](tm|bk|nc|pl|hv|ag|cr)([a-z])([a-z]*?)(?:7t|8t|8r|8a|8y)?$/.exec(name)
+  if (ps) {
+    const [, face, weight, variant] = ps
+    return { role: face === 'cr' ? 'tt' : face === 'hv' || face === 'ag' ? 'sf' : 'rm', bold: /[bdsxhc]/.test(weight), shape: variant.includes('c') ? 'sc' : variant.includes('i') ? 'it' : variant.includes('o') ? 'sl' : 'up', design: 10 }
+  }
+  const cm = /^cm(r|b|bx|ti|sl|csc|u|bxti|bxsl|ss|ssbx|ssdc|ssi|tt|sltt|itt|tcsc|vtt)(\d+)$/.exec(name)
+  if (!cm) return null
+  const [, v, size] = cm
+  return { role: /^ss/.test(v) ? 'sf' : /tt$|^tcsc$/.test(v) ? 'tt' : 'rm', bold: /^(b|bx|bxti|bxsl|ssbx|ssdc)$/.test(v), shape: /^(ti|bxti|itt|u)$/.test(v) ? 'it' : /^(sl|bxsl|ssi|sltt)$/.test(v) ? 'sl' : /csc$/.test(v) ? 'sc' : 'up', design: size === '17' ? 17.28 : Number(size) }
+}
+/**
+ * Where in a file's text TeX reads it as the file is read: 1 at each character not inside a brace group (a macro's
+ * body, a local group) nor inside a conditional the file opens at its top (aastex631's \iftwelvepoint \font\foo=cmr12
+ * \else \font\foo=cmr10\fi, acl.sty's \ifacl@linenumbers: which branch runs is an option's; the review of
+ * fix/tex-path-errors, M5). \newif's and \let's names are not conditionals opened
+ */
+const skipSpaces = (text, k) => { while (k < text.length && /\s/.test(text[k])) k++; return k }
+function topLevel(plain) {
+  const out = new Uint8Array(plain.length)
+  let depth = 0, conds = 0, names = 0
+  for (let i = 0; i < plain.length; i++) {
+    const c = plain[i]
+    if (c === '\\') {
+      const token = /^\\(?:[A-Za-z@]+|.)/s.exec(plain.slice(i, i + 80))?.[0] ?? '\\', name = token.slice(1)
+      if (depth === 0) {
+        if (names) names--
+        else if (name === 'newif') names = 1
+        else if (name === 'let') names = 2
+        // a TeX conditional; not a macro of the name that takes its branches as arguments (etoolbox's \iftoggle{…}{…}{…},
+        // which wacv.sty sets its fonts after: no \fi closes it), nor \iff
+        else if (/^if[A-Za-z@]*$/.test(name) && name !== 'iff' && plain[skipSpaces(plain, i + token.length)] !== '{') conds++
+        else if (name === 'fi' && conds) conds--
+      }
+      out.fill(depth === 0 && conds === 0 ? 1 : 0, i, i + token.length)
+      i += token.length - 1
+      continue
+    }
+    if (c === '{') depth++
+    else if (c === '}' && depth) depth--
+    out[i] = depth === 0 && conds === 0 ? 1 : 0
+  }
+  return out
+}
+/** the fonts a paper's own files load by name where TeX reads them (`texts`, the text of each file TeX reads: topLevel)
+ *  that NFSS can load again: { cs, role, bold, shape, size } each, in pt, the last declaration of a name winning */
+export function namedFonts(texts) {
+  const out = new Map()
+  for (const text of texts) {
+    const plain = text.replace(/(^|[^\\])%.*$/gm, '$1'), top = topLevel(plain)
+    for (const m of plain.matchAll(NAMED)) {
+      const face = faceOf(m[2])
+      if (!face || !top[m.index]) continue
+      const rest = plain.slice(m.index + m[0].length, m.index + m[0].length + 40)
+      const at = /^\s*at\s*(\d*\.?\d+)\s*(pt|bp|mm|cm|in|pc|dd|cc)(?![A-Za-z])/.exec(rest), scaled = /^\s*scaled\s*(?:(\d+)|\\magstep\s*(\d|half)(?![A-Za-z]))/.exec(rest)
+      // a size TeX would compute is not known here
+      if (!at && !scaled && /^\s*(?:at|scaled)(?![A-Za-z])/.test(rest)) continue
+      const size = at ? Number(at[1]) * UNIT_PT[at[2]] : scaled ? face.design * (scaled[1] ? Number(scaled[1]) / 1000 : scaled[2] === 'half' ? Math.sqrt(1.2) : 1.2 ** Number(scaled[2])) : face.design
+      out.set(m[1], { cs: m[1], role: face.role, bold: face.bold, shape: face.shape, size: Math.round(size * 100) / 100 })
+    }
+  }
+  return [...out.values()]
+}
+/**
+ * TeX declaring the fonts namedFonts found again through NFSS, in the encoding the document has at that point: each
+ * selected by the document's own switches, which apply NFSS's series and shape rules, and the font it lands on taken.
+ * Not by the default names as values (\DeclareFixedFont with \bfdefault, \updefault): no font definition declares the
+ * shape up, and Computer Modern's sans under T2A has bx and no b, so NAACL's bold ruler on a CM paper came out medium,
+ * lass0800 for lasx0800, and every declaration logged its shape undefined (the review of fix/tex-path-errors, I1)
+ */
+const SHAPE_SWITCH = { up: '\\upshape', it: '\\itshape', sl: '\\slshape', sc: '\\scshape' }
+const namedAgain = named => (named?.length ? `\\makeatletter\n${named.map(f => `\\begingroup\\fontencoding{\\encodingdefault}\\fontfamily{\\${f.role}default}\\fontsize{${f.size}}{${f.size}}${f.bold ? '\\bfseries' : '\\mdseries'}${SHAPE_SWITCH[f.shape]}\\selectfont\\global\\expandafter\\let\\expandafter\\${f.cs}\\the\\font\\endgroup\n`).join('')}\\makeatother\n` : '')
+
 /** Under XeLaTeX, the faces for an alphabet whose letters the paper's Latin faces lack: every role, Computer Modern's
  *  design (CMU), the face most arXiv papers are set in */
 const FACES = {
@@ -141,7 +231,28 @@ const FACES = {
  *  (2608.12333). The source is English in v1 (TranslateRequest.source) */
 export const babelTags = lang => { const l = new Intl.Locale(lang); return [...new Set([lang, `${l.language}-${l.maximize().script}`, l.language])] }
 const provide = ([tag, ...rest], opts) => (rest.length ? `\\IfFileExists{babel-${tag}.ini}{\\babelprovide[import=${tag},main${opts}]{axttarget}}{${provide(rest, opts)}}` : `\\babelprovide[import=${tag},main${opts}]{axttarget}`)
-const babel = (lang, hyphenrules) => `\\IfPackageLoadedTF{polyglossia}{}{\\IfPackageLoadedTF{babel}{}{\\usepackage[safe=none]{babel}}${provide(babelTags(lang), hyphenrules ? `,hyphenrules=${hyphenrules}` : '')}}\n`
+const babel = (lang, hyphenrules) => `\\IfPackageLoadedTF{polyglossia}{}{\\IfPackageLoadedTF{babel}{}{\\usepackage[safe=none]{babel}}${provide(babelTags(lang), hyphenrules ? `,hyphenrules=${hyphenrules}` : '')}}\n${SIUNITX_LOCALE}`
+/**
+ * With the target's locale the document's: siunitx 3.6.2 (2026-09-18) reads the locale's decimal marker from babel's ini
+ * file at \begin{document}, and where babel-<language>-<script>.ini is there it opens babel-<script>-<region>.ini, which
+ * no locale has — Chinese is babel-zh-Hans.ini and babel-zh-Hant.ini, and a paper that loads siunitx stopped at "File
+ * 'babel-Hans-.ini' not found" in zh and zh-Hant (2307.16209 in TeX Live's image; josephwright/siunitx#891, fixed in
+ * 3.6.3 on 2026-09-28; the TeX page's tree has 3.4.14, without the lookup). A file the lookup names that is not there is
+ * passed over: siunitx's own default, the full stop, is the decimal marker of both Chinese files, as 3.6.3 reads them.
+ * In 3.6.2 alone, dated 2026-09-18 (the review of fix/tex-path-errors, M3): a later siunitx that kept the function's
+ * name and gave it something else than a file would lose its comma for de, fr, es and ru without a word
+ */
+const SIUNITX_LOCALE = String.raw`\ExplSyntaxOn
+\IfPackageAtLeastTF { siunitx } { 2026-09-18 } { \IfPackageAtLeastTF { siunitx } { 2026-09-19 } { } { \cs_if_exist:NT \__siunitx_locale_setup:n
+  {
+    \cs_if_exist:NF \__axt_siunitx_locale_setup:n
+      {
+        \cs_new_eq:NN \__axt_siunitx_locale_setup:n \__siunitx_locale_setup:n
+        \cs_set_protected:Npn \__siunitx_locale_setup:n #1 { \file_if_exist:nT {#1} { \__axt_siunitx_locale_setup:n {#1} } }
+      }
+  } } } { }
+\ExplSyntaxOff
+`
 /** After fontspec: the fonts declared from here on carry exactly the features given them. A paper's class may set
  *  fontspec's defaults for its own faces — newtxtext, which AAAI's style loads, sets Extension=.otf under XeTeX — and
  *  every font declared later inherits them: a .ttf face (bsmi00lp, ipaexm, UnBatang) is then looked for as .otf and
@@ -211,6 +322,28 @@ const MT_SLOT = String.raw`\makeatletter\ExplSyntaxOn
 \ExplSyntaxOff\makeatother
 `
 
+/**
+ * Under CJKutf8 a translated character is a run of active bytes, its first a macro that reads the others. LaTeX's case
+ * changing (\MakeUppercase, \MakeLowercase: the kernel's \text_expand:n) expands every active character but a protected
+ * one or one of inputenc's own (\UTFviii@…octets), and CJK's are neither: a class that uppercases a translated heading
+ * or running head stopped TeX at "Extra \else" (2307.16209's abntex2, its running heads; the standard book and report,
+ * memoir and acmart uppercase theirs too). In the CJK environment each first byte is made protected, its meaning as CJK
+ * gave it: the case changers pass it by, the character is set as before, and the PDF's text, its bookmarks and its
+ * contents lists come out as they did (spikes/tex-path-cases.mjs). The \lccode the loop borrows is given back
+ */
+const CJK_PROTECTED = String.raw`\makeatletter\ExplSyntaxOn
+\cs_gset_protected:Npn \__axt_cjk_protect:N #1
+  {
+    \bool_lazy_and:nnT { \token_if_macro_p:N #1 } { ! \token_if_protected_macro_p:N #1 }
+      { \tl_if_empty:eT { \cs_parameter_spec:N #1 } { \exp_args:NNo \cs_set_protected_nopar:Npn #1 {#1} } }
+  }
+\cs_gset_eq:NN \axt@cjk@protect \__axt_cjk_protect:N
+\ExplSyntaxOff
+\begingroup\catcode126=13
+\gdef\axtcjkprotect{\@tempcnta\lccode126 \count@"C2 \loop\lccode126=\count@\lowercase{\axt@cjk@protect~}\advance\count@\@ne\ifnum\count@<"F5 \repeat\lccode126=\@tempcnta}
+\endgroup\makeatother
+`
+
 /** the strategies to try for a paper, in order: { name, engine, xe, pre(fonts) → the preamble's addition, front → what
  *  goes before \documentclass (absent for nothing), leading — the factor on the paper's spacing inside translated units,
  *  absent for 1 } */
@@ -224,19 +357,20 @@ export function strategiesFor(meta, lang) {
     if (EIGHT_BIT.has(meta.compiler)) {
       // the floats still held at \\end{document} are set inside the CJK environment, before it closes: set after it, a
       // translated table held to the end had every character "not set up for use with LaTeX" (2608.25210)
-      const cjkutf8 = `\\usepackage{CJKutf8}\n\\AtBeginDocument{\\begin{CJK}{UTF8}{${cjk.cjkutf8}}}\n\\AtEndDocument{\\clearpage\\end{CJK}}\n`
+      const cjkutf8 = `\\usepackage{CJKutf8}\n${CJK_PROTECTED}\\AtBeginDocument{\\begin{CJK}{UTF8}{${cjk.cjkutf8}}\\axtcjkprotect}\n\\AtEndDocument{\\clearpage\\end{CJK}}\n`
       out.push({ name: 'pdfLaTeX + CJKutf8', engine: meta.compiler, xe: false, authors: false, ...lead, pre: () => cjkutf8 })
     }
     return out
   }
   if (script === 'Latn' || FACES[script]) {
     // a Unicode engine's faces: the alphabet's own, or the paper's Latin faces in their OpenType form
-    const faces = fonts => `${NO_MATH}\\usepackage{fontspec}\n${OWN_FEATURES}${FACES[script] ?? latinFontsFor(fonts)}`
-    if (!EIGHT_BIT.has(meta.compiler)) return [{ name: 'own engine', engine: meta.compiler, xe: true, pre: fonts => (FACES[script] ? faces(fonts) : '') + babel(lang) }]
+    // (each in the encoding it sets, the fonts the paper loads by name declared again in it: namedAgain)
+    const faces = (fonts, named) => `${NO_MATH}\\usepackage{fontspec}\n${OWN_FEATURES}${FACES[script] ?? latinFontsFor(fonts)}${namedAgain(named)}`
+    if (!EIGHT_BIT.has(meta.compiler)) return [{ name: 'own engine', engine: meta.compiler, xe: true, pre: (fonts, named) => (FACES[script] ? faces(fonts, named) : '') + babel(lang) }]
     const encoding = ENCODING[script]
     return [
-      { name: 'own engine', engine: meta.compiler, xe: false, pre: fonts => (encoding ? `\\usepackage[${encoding}]{fontenc}\n${facesFor(encoding, fonts)}` : '') + babel(lang) },
-      { name: 'XeLaTeX', engine: 'xelatex', xe: true, pre: fonts => faces(fonts) + babel(lang) },
+      { name: 'own engine', engine: meta.compiler, xe: false, pre: (fonts, named) => (encoding ? `\\usepackage[${encoding}]{fontenc}\n${facesFor(encoding, fonts)}${namedAgain(named)}` : '') + babel(lang) },
+      { name: 'XeLaTeX', engine: 'xelatex', xe: true, pre: (fonts, named) => faces(fonts, named) + babel(lang) },
     ]
   }
   throw new Error(`no typesetting for ${lang} (script ${script}) yet`)
