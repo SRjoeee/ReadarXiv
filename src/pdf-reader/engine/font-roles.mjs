@@ -209,7 +209,8 @@ const DESIGNS = [
   { design: 'palatino', cls: 'serif', nfss: /^(?:ppl|qpl|npx|zpl|Domitian|TeXGyrePagella)/, ps: /^(?:URWPalladioL|Palatino|TeXGyrePagella|P052|Domitian|Palladio|BookAntiqua|Pazo(?!Math))/ },
   { design: 'charter', cls: 'serif', nfss: /^(?:bch|mdbch|XCharter|Charter)/, ps: /^(?:XCharter|CharterBT|BitstreamCharter|Charter|CharisSIL)/ },
   { design: 'garamond', cls: 'serif', nfss: /^(?:ebg|EBGaramond|ugm|mdugm|zgm|GaramondLibre|garamondx)/, ps: /^(?:EBGaramond|AGaramond|AdobeGaramond|Garamond|URWGaramond)/ },
-  { design: 'utopia', cls: 'serif', nfss: /^(?:put|mdput|fut|Erewhon|Utopia)/, ps: /^(?:Utopia|Erewhon)/ },
+  // erewhon's NFSS families are erewhon-TLF, erewhon-LF and the rest (its .fd files), its PostScript names Erewhon-…
+  { design: 'utopia', cls: 'serif', nfss: /^(?:put|mdput|fut|[Ee]rewhon|Utopia)/, ps: /^(?:Utopia|Erewhon)/ },
 ]
 const ENGLISH = ['cm', 'times', 'libertine', 'palatino', 'charter', 'garamond', 'utopia', 'other']
 const SERIF_DESIGN = new Set(ENGLISH)
@@ -294,6 +295,14 @@ export function familyOfProbe(probe) {
     if (row?.cls === 'serif') return row.design
   }
   return 'other'
+}
+
+/** an NFSS family name's design and class (a role's family in the font probe: \rmdefault, \sfdefault, \ttdefault), or
+ *  null for a name of no design: the TeX path sets each role in the faces the table gives that design (faceFor) */
+export function designOfNfss(name) {
+  const s = String(name ?? '')
+  const row = s.length <= NAME_MAX ? DESIGNS.find(d => d.nfss?.test(s)) : null
+  return row ? { design: row.design, cls: row.cls } : null
 }
 
 /** the paper's body family, from the layout file's fonts weighted by the lines each sets: the text family that sets the

@@ -4,18 +4,24 @@
 // captions (Figure as Abbildung, Figura, Рис.), the hyphenation patterns and the direction for every language babel has an
 // ini file for. So all languages of one script are set alike, and a change made for one script reaches no other.
 //
-// An alphabet stays with the paper's own engine: pdfLaTeX sets it once its letters' font encoding is the document's
-// default, and the paper's families fall back to that encoding's own where they have none — as a Russian author's
-// pdfLaTeX paper does. That keeps the paper's fonts, microtype and every package that works only under pdfTeX
-// (switched to XeLaTeX, one paper of 24 lost its math fonts in every language). CJK goes to XeLaTeX with xeCJK. When an
-// engine cannot set a letter it says so (`unsettable` in live.mjs), and the chain moves on. A paper the author set with
-// XeLaTeX keeps its engine; so does a LuaLaTeX one for an alphabet, while for CJK it goes to XeLaTeX with xeCJK, where
-// Lua-only code fails (none of the corpus's 123 papers is set with LuaLaTeX, so no LuaLaTeX CJK path could be measured).
-// When no strategy sets the translation, the reader keeps what it shows. A script not listed here has no strategy yet:
-// strategiesFor throws, and the reader says it cannot typeset that language (Devin on #294). Every font named is in
-// TeX Live 2026. Measured with spikes/lang-gate.mjs.
+// The faces are the font role table's (font-roles.mjs), the files the instant layer draws in: one paper, one set of font
+// files in both renderers (the maintainer's font rulings of 2026-10-06). Latin stays with the paper's own engine:
+// pdfLaTeX sets it in T1 with the paper's own Type 1 fonts — the glyphs the table's faces were chosen to match, URW's
+// 1999 cuts of the designs its OpenType files are the 2017 cuts of —, which keeps microtype and every package that
+// works only under pdfTeX. Cyrillic goes to XeLaTeX with fontspec, every role in the table's Cyrillic face for the
+// paper's family: pdfTeX's T2A cannot load those files (Nimbus Roman and Sans, FreeMono and CMU are OpenType alone in
+// the tree, and TeX Live's nimbus15 Type 1 files grant the AGPL alone), and the paper's math stays its own (fontspec's
+// no-math). The paper's own pdfLaTeX in T2A comes second, for the papers XeLaTeX cannot set. CJK goes to XeLaTeX with
+// xeCJK. When an engine cannot set a letter it says so (`unsettable` in live.mjs), and the chain moves on. A paper the
+// author set with XeLaTeX keeps its engine; so does a LuaLaTeX one for an alphabet, while for CJK it goes to XeLaTeX
+// with xeCJK, where Lua-only code fails (none of the corpus's 123 papers is set with LuaLaTeX, so no LuaLaTeX CJK path
+// could be measured). When no strategy sets the translation, the reader keeps what it shows. A script not listed here
+// has no strategy yet: strategiesFor throws, and the reader says it cannot typeset that language (Devin on #294). Every
+// font named is TeX Live 2026's but Source Han Serif's and URW's base 35 (FACES `hosted`), which the TeX page's tree
+// serves beside it (records/fonts-upload-list.md). Measured with spikes/lang-gate.mjs and spikes/fonts-cases.mjs.
+import { FACES as FACE_FILES, familyOfProbe, rolesFor } from './font-roles.mjs'
 import { scriptOf } from './layer-rules.mjs'
-import { latinFontsFor } from './latex-front.mjs'
+import { latinFontsFor, roleFontsFor } from './latex-front.mjs'
 
 // the script of a language, and the instant layer's rules beside this design, in a module of their own that imports
 // nothing: the reader loads them without this module's LaTeX parser
@@ -26,8 +32,8 @@ export { LAYER_DIVERGES, LAYER_RULES, layerRulesFor, scriptOf } from './layer-ru
  * 2026-09-28); a language in the Latin script keeps them as the paper writes them. And only where a Unicode engine
  * sets the translation: a class runs its own macros over the author block — uppercasing, key-value parsing, the PDF's
  * metadata — which 8-bit text does not survive (2608.12096's CEUR class under CJKutf8: "Extra \\else"). So the CJK
- * scripts, set by XeLaTeX; Russian, set by pdfLaTeX in T2A, keeps them for now, and a CJK translation that falls back
- * to CJKutf8 sets them as the paper has them (`authors: false`, translationFiles)
+ * scripts, set by XeLaTeX; Russian keeps them for now (its fallback, pdfLaTeX in T2A, could not take them), and a CJK
+ * translation that falls back to CJKutf8 sets them as the paper has them (`authors: false`, translationFiles)
  */
 export const authorsTranslated = lang => Boolean(CJK[scriptOf(lang)])
 /** the translation a strategy sets: without the author block's names and places under one that cannot take them */
@@ -40,9 +46,9 @@ export { VERIFIED, verified } from './verified.mjs'
 const EIGHT_BIT = new Set(['pdflatex', 'latex'])
 
 /**
- * CJK. xeCJK sets the script in a family of its own, leaves the paper's Latin faces (latinFontsFor) to everything
- * else, breaks lines between characters and keeps punctuation off a line's start; a script that spaces its words
- * (Hangul) keeps the spaces. CJKutf8 under the paper's own pdfLaTeX takes the papers XeLaTeX cannot (the chain took
+ * CJK. xeCJK sets the script in a family of its own, the role table's (cjkFont), leaves the Latin runs to the table's
+ * Latin faces for the paper's family (latinFontsFor), breaks lines between characters and keeps punctuation off a
+ * line's start; a script that spaces its words (Hangul) keeps the spaces. CJKutf8 under the paper's own pdfLaTeX takes the papers XeLaTeX cannot (the chain took
  * Chinese from 98 to 106 of 113, REPORT fourth addendum); babel has no CJK captions under pdfTeX, so there they stay
  * the paper's.
  *
@@ -58,20 +64,53 @@ const EIGHT_BIT = new Set(['pdflatex', 'latex'])
  * 1.00, 22 of 24). Which face, size and spacing suit each language beside the paper's Latin text is open (#295).
  */
 export const CJK = {
-  Hans: { font: '[BoldFont=FandolSong-Bold.otf,ItalicFont=FandolKai-Regular.otf]{FandolSong-Regular.otf}', cjkutf8: 'gbsn', leading: 1.3 },
-  Hant: { font: '[AutoFakeBold=2.5,ItalicFont=bkai00mp.ttf]{bsmi00lp.ttf}', cjkutf8: 'bsmi', leading: 1.3 },
-  Jpan: { font: '[AutoFakeBold=2.5]{ipaexm.ttf}', cjkutf8: 'ipxm', leading: 1 },
-  Kore: { font: '[BoldFont=UnBatangBold.ttf]{UnBatang.ttf}', cjkutf8: 'mj', spaced: true, leading: 1 },
+  Hans: { cjkutf8: 'gbsn', leading: 1.3 },
+  Hant: { cjkutf8: 'bsmi', leading: 1.3 },
+  Jpan: { cjkutf8: 'ipxm', leading: 1 },
+  Kore: { cjkutf8: 'mj', spaced: true, leading: 1 },
+}
+/**
+ * xeCJK's CJK family for a target, the role table's for the paper's English family (rolesFor): Source Han Serif SC, TC
+ * and K, Harano Aji Mincho for Japanese — Light with its SemiBold beside Computer Modern and Garamond, Regular with its
+ * Bold beside the rest —, the family's real bold for bold and headings (no AutoFakeBold), and for italics the Kai where
+ * the target has one (FandolKai, AR PL KaitiM Big5), else the upright. Each face at its size (Face.size: Korean's Hangul
+ * at the visual size of the family's ideographs), as xeCJK's Scale, which a typeset plan's own multiplies (typeset/tex.mjs)
+ */
+const SCALE = size => `Scale=${size.toFixed(4)}`
+const cjkFont = (lang, fonts) => {
+  const { cjk } = rolesFor(lang, familyOfProbe(fonts))
+  const body = FACE_FILES[cjk.body], bold = FACE_FILES[cjk.bold], italic = cjk.italic && FACE_FILES[cjk.italic]
+  const options = [
+    body.size !== 1 ? SCALE(body.size) : '',
+    `BoldFont=${bold.file}`, bold.size !== body.size ? `BoldFeatures={${SCALE(bold.size)}}` : '',
+    italic ? `ItalicFont=${italic.file}` : '', italic && italic.size !== body.size ? `ItalicFeatures={${SCALE(italic.size)}}` : '',
+  ]
+  return `[${options.filter(Boolean).join(',')}]{${body.file}}`
 }
 
 /**
- * The font encoding that holds an alphabet's letters under pdfLaTeX, made the document's default (loaded last); Latin
- * needs none. Loaded among others with babel choosing, it is not enough: babel switches the running text but not the
- * moving arguments (headings, captions). T2A also sets the Latin letters of the paper's own names (Mądry, Kępa). Not
+ * The font encoding that holds an alphabet's letters under pdfLaTeX, made the document's default (loaded last): T1 for
+ * Latin, T2A for Cyrillic (its fallback). Loaded among others with babel choosing, it is not enough: babel switches the
+ * running text but not the moving arguments (headings, captions). T2A also sets the Latin letters of the paper's own
+ * names (Mądry, Kępa). Under OT1, LaTeX's default, an accented letter is a letter and an accent put together, and TeX
+ * hyphenates no word that holds one (Übersetzungsqualität broke nowhere); in T1 each is a glyph of its own. Not
  * Vietnamese: its encoding, T5, lacks T1's ogonek, and a reference's Mądry lost it with T5 as the default — its letters
  * go on to XeLaTeX, like any letter no encoding holds
  */
-const ENCODING = { Cyrl: 'T2A' }
+const ENCODING = { Latn: 'T1', Cyrl: 'T2A' }
+/**
+ * An OT1 paper's Computer Modern under T1: Latin Modern, the role table's face for CM's other styles (and its OpenType
+ * files' design), each of the roles in CM's families, before T1 is loaded — CM's own T1 faces are cm-super's, which the
+ * table does not take, and CMU has no pdfTeX metrics in the tree. Only those roles: a Times paper's Times stays (T1 has
+ * it), its CM typewriter goes to Latin Modern's; and the paper's math is its own (lmodern.sty would take it to Latin
+ * Modern's too). A paper already in T1 chose its faces, and keeps them
+ */
+const LATIN_MODERN = { cmr: 'lmr', cmss: 'lmss', cmtt: 'lmtt', cmdh: 'lmdh', cmvtt: 'lmvtt' }
+const latinModernFor = fonts => {
+  if (fonts?.enc !== 'OT1') return ''
+  const set = ['rm', 'sf', 'tt'].filter(r => Object.hasOwn(LATIN_MODERN, fonts[r] ?? '')).map(r => `\\renewcommand\\${r}default{${LATIN_MODERN[fonts[r]]}}`)
+  return set.length ? `${set.join('')}\n` : ''
+}
 /**
  * With the alphabet's encoding the default, every role (text, sans, mono) needs a face that has it, or LaTeX falls back
  * to its one default, Computer Modern's roman: a Times paper came out in CM roman throughout, its tables wider (CM is
@@ -126,7 +165,7 @@ const facesFor = (encoding, fonts) => {
  * reaches: under T2A the Russian headings set in it came out as its glyphs at T2A's slots, "3.4. —åàºŁçàöŁÿ" for
  * "Реализация", and the letters it has none at went missing (1512.03385 into ru: four units set in the source for
  * them, the other headings garbled without a word in the log). Where a strategy sets the translation in another
- * encoding than the paper's (T2A under pdfLaTeX, TU under XeLaTeX), each such font that is a text face fontname's scheme
+ * encoding than the paper's (T1 or T2A under pdfLaTeX, TU under XeLaTeX), each such font that is a text face fontname's scheme
  * names — a base-35 face, Computer Modern — is declared again through NFSS in the document's encoding (namedAgain):
  * its role's family, which the strategy's faces give the alphabet's letters (facesFor, fontspec's), its weight and
  * shape by the document's own switches, its size. One the scheme does not name — a symbol font (astrosym), one of another
@@ -210,11 +249,6 @@ export function namedFonts(texts) {
 const SHAPE_SWITCH = { up: '\\upshape', it: '\\itshape', sl: '\\slshape', sc: '\\scshape' }
 const namedAgain = named => (named?.length ? `\\makeatletter\n${named.map(f => `\\begingroup\\fontencoding{\\encodingdefault}\\fontfamily{\\${f.role}default}\\fontsize{${f.size}}{${f.size}}${f.bold ? '\\bfseries' : '\\mdseries'}${SHAPE_SWITCH[f.shape]}\\selectfont\\global\\expandafter\\let\\expandafter\\${f.cs}\\the\\font\\endgroup\n`).join('')}\\makeatother\n` : '')
 
-/** Under XeLaTeX, the faces for an alphabet whose letters the paper's Latin faces lack: every role, Computer Modern's
- *  design (CMU), the face most arXiv papers are set in */
-const FACES = {
-  Cyrl: '\\setmainfont[BoldFont=cmunbx.otf,ItalicFont=cmunti.otf,BoldItalicFont=cmunbi.otf]{cmunrm.otf}\n\\setsansfont[BoldFont=cmunsx.otf,ItalicFont=cmunsi.otf,BoldItalicFont=cmunso.otf]{cmunss.otf}\n\\setmonofont[ItalicFont=cmunit.otf]{cmuntt.otf}\n',
-}
 
 /** The target language as the document's language: captions, hyphenation, direction. Loaded here only when the paper
  *  does not load babel itself, and then without its \cite and \ref rewriting (safe=none): coming after the cite
@@ -351,9 +385,9 @@ export function strategiesFor(meta, lang) {
   const script = scriptOf(lang)
   const cjk = CJK[script]
   if (cjk) {
-    const xeCJK = `${NO_MATH}\\usepackage{xeCJK}\n${CJK_GROUPS}${MT_SLOT}${OWN_FEATURES}${cjk.spaced ? '\\xeCJKsetup{CJKspace=true}\n' : ''}\\setCJKmainfont${cjk.font}\n`
+    const xeCJK = fonts => `${NO_MATH}\\usepackage{xeCJK}\n${CJK_GROUPS}${MT_SLOT}${OWN_FEATURES}${cjk.spaced ? '\\xeCJKsetup{CJKspace=true}\n' : ''}\\setCJKmainfont${cjkFont(lang, fonts)}\n`
     const lead = cjk.leading === 1 ? {} : { leading: cjk.leading }
-    const out = [{ name: 'XeLaTeX + xeCJK', engine: 'xelatex', xe: true, ...lead, front: CJK_FRONT, pre: fonts => xeCJK + latinFontsFor(fonts) + TU_AGAIN + babel(lang, 'english') }]
+    const out = [{ name: 'XeLaTeX + xeCJK', engine: 'xelatex', xe: true, ...lead, front: CJK_FRONT, pre: fonts => xeCJK(fonts) + latinFontsFor(fonts) + TU_AGAIN + babel(lang, 'english') }]
     if (EIGHT_BIT.has(meta.compiler)) {
       // the floats still held at \\end{document} are set inside the CJK environment, before it closes: set after it, a
       // translated table held to the end had every character "not set up for use with LaTeX" (2608.25210)
@@ -362,14 +396,26 @@ export function strategiesFor(meta, lang) {
     }
     return out
   }
-  if (script === 'Latn' || FACES[script]) {
-    // a Unicode engine's faces: the alphabet's own, or the paper's Latin faces in their OpenType form
-    // (each in the encoding it sets, the fonts the paper loads by name declared again in it: namedAgain)
-    const faces = (fonts, named) => `${NO_MATH}\\usepackage{fontspec}\n${OWN_FEATURES}${FACES[script] ?? latinFontsFor(fonts)}${namedAgain(named)}`
-    if (!EIGHT_BIT.has(meta.compiler)) return [{ name: 'own engine', engine: meta.compiler, xe: true, pre: (fonts, named) => (FACES[script] ? faces(fonts, named) : '') + babel(lang) }]
+  if (script === 'Latn' || script === 'Cyrl') {
+    // a Unicode engine's faces: the role table's for the paper's family and the target (roleFontsFor), each in the
+    // encoding it sets, the fonts the paper loads by name declared again in it (namedAgain)
+    const faces = (fonts, named) => `${NO_MATH}\\usepackage{fontspec}\n${OWN_FEATURES}${roleFontsFor(fonts, lang)}${namedAgain(named)}`
     const encoding = ENCODING[script]
+    if (script === 'Cyrl') {
+      // the table's faces under XeLaTeX, TU the default should the paper load T1 (TU_AGAIN); a paper set by a Unicode
+      // engine keeps it. The paper's own pdfLaTeX in T2A second: its families in T2A where they have it, else one of
+      // the same design (facesFor)
+      const xe = { name: 'XeLaTeX', engine: 'xelatex', xe: true, pre: (fonts, named) => faces(fonts, named) + TU_AGAIN + babel(lang) }
+      if (!EIGHT_BIT.has(meta.compiler)) return [{ ...xe, name: 'own engine', engine: meta.compiler }]
+      return [xe, { name: 'own engine', engine: meta.compiler, xe: false, pre: (fonts, named) => `\\usepackage[${encoding}]{fontenc}\n${facesFor(encoding, fonts)}${namedAgain(named)}${babel(lang)}` }]
+    }
+    // Latin: a paper set by a Unicode engine keeps its faces and its encoding
+    if (!EIGHT_BIT.has(meta.compiler)) return [{ name: 'own engine', engine: meta.compiler, xe: true, pre: () => babel(lang) }]
+    // the paper's own Type 1 fonts in T1 (an OT1 paper's Computer Modern in Latin Modern), and the fonts the paper loads
+    // by name declared again in T1 where the paper's encoding was another
+    const own = (fonts, named) => `${latinModernFor(fonts)}\\usepackage[${encoding}]{fontenc}\n${fonts?.enc === encoding ? '' : namedAgain(named)}${babel(lang)}`
     return [
-      { name: 'own engine', engine: meta.compiler, xe: false, pre: (fonts, named) => (encoding ? `\\usepackage[${encoding}]{fontenc}\n${facesFor(encoding, fonts)}${namedAgain(named)}` : '') + babel(lang) },
+      { name: 'own engine', engine: meta.compiler, xe: false, pre: own },
       { name: 'XeLaTeX', engine: 'xelatex', xe: true, pre: (fonts, named) => faces(fonts, named) + babel(lang) },
     ]
   }

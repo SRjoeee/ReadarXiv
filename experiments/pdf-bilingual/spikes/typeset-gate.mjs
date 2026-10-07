@@ -62,6 +62,7 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { originalFiles as originalHere } from '../../../src/pdf-reader/engine/live.mjs'
 import { alignment, columnOf, marksOf } from '../../../src/pdf-reader/engine/typeset/places.mjs'
 import { readLines } from '../../../src/pdf-reader/engine/typeset/tex.mjs'
+import { hostedFontsDockerArgs } from './faithful.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
 
 const run = promisify(execFile)
@@ -109,6 +110,8 @@ let active = 0
 const limit = () => (loadavg()[0] > 12 ? 1 : 2)
 async function slot() { while (active >= limit()) await new Promise(r => setTimeout(r, 3000)); active++ }
 const METAFONT = existsSync(join(DATA, 'metafont')) ? realpathSync(join(DATA, 'metafont')) : null
+// the hosted faces from the data folder where it holds them, else the experiment's
+const HOSTED = hostedFontsDockerArgs(existsSync(join(DATA, 'fonts')) ? join(DATA, 'fonts') : join(root, 'data/fonts'))
 async function compile(id, sources, overrides, { main, engine, rerun, bbl }) {
   const hash = createHash('sha256').update(JSON.stringify([image, id, main, engine, rerun, !!bbl]))
   for (const [p, b] of [...overrides].sort(([a], [b]) => a.localeCompare(b))) hash.update(p).update(b)
@@ -120,7 +123,8 @@ async function compile(id, sources, overrides, { main, engine, rerun, bbl }) {
   try {
     rmSync(dir, { recursive: true, force: true })
     for (const [p, b] of [...sources, ...overrides]) { const f = join(dir, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
-    const tex = METAFONT ? ['-e', 'MKTEXTFM=0', '-e', 'MKTEXPK=0', '-e', 'MKTEXMF=0', '-v', `${METAFONT}:/axt-metafont:ro`, '-e', 'TFMFONTS=/axt-metafont//:'] : []
+    // the faces the TeX page's tree serves beside TeX Live's (Source Han Serif, URW's base 35: faithful.mjs)
+    const tex = [...(METAFONT ? ['-e', 'MKTEXTFM=0', '-e', 'MKTEXPK=0', '-e', 'MKTEXMF=0', '-v', `${METAFONT}:/axt-metafont:ro`, '-e', 'TFMFONTS=/axt-metafont//:'] : []), ...HOSTED]
     const docker = cmd => run('docker', ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', ...tex, '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '300', ...cmd], { maxBuffer: 1 << 26 }).catch(() => null)
     // TeX writes its output where it runs, whichever folder the main file is in
     const stem = main.split('/').pop().replace(/\.[^./]+$/, '')

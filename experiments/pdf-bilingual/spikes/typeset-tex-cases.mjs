@@ -14,6 +14,9 @@ import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
 import { marksOf as marksOfPdf } from '../../../src/pdf-reader/engine/typeset/places.mjs'
 import { DESIGN } from '../../../src/pdf-reader/engine/typeset/type.mjs'
 import { completeLog, FLOAT_TEX, LINES_TEX, readForced, readLines, SIZE_TEX, typesetting } from '../../../src/pdf-reader/engine/typeset/tex.mjs'
+import { hostedFontsDockerArgs } from './faithful.mjs'
+// the faces the TeX page's tree serves beside TeX Live's (Source Han Serif, URW's base 35: faithful.mjs)
+const HOSTED = hostedFontsDockerArgs(new URL('../data/fonts', import.meta.url).pathname)
 
 /** a unit's own leading at `em` times its size, as the rule sets it */
 const unitLeadTex = em => engineUnitLeadTex(`${em}\\dimexpr\\f@size pt\\relax`)
@@ -22,7 +25,7 @@ let failed = 0
 const dir = mkdtempSync(join(tmpdir(), 'typeset-tex-cases-'))
 const tex = (name, src, engine = 'pdflatex') => {
   writeFileSync(join(dir, `${name}.tex`), src)
-  try { execFileSync('docker', ['run', '--rm', '--network', 'none', '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', engine, '-interaction=nonstopmode', `${name}.tex`], { stdio: 'ignore' }) } catch {}
+  try { execFileSync('docker', ['run', '--rm', '--network', 'none', ...HOSTED, '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', engine, '-interaction=nonstopmode', `${name}.tex`], { stdio: 'ignore' }) } catch {}
   return readFileSync(join(dir, `${name}.log`), 'latin1')
 }
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }

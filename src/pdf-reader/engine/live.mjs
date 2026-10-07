@@ -468,7 +468,13 @@ export const PIPELINE_CARRIES = { 7: NO_MARKER_HASH, 8: NO_MARKER_HASH, 9: NO_MA
 //    \noalign" lacks the rule —; a font a style loads by name declared again in the target's encoding (scripts.mjs
 //    namedFonts) — 6's Russian headings in CVPR's \elvbf were the raw font's glyphs —; graphicx's sizes in px given in
 //    bp under XeTeX (latex-front.mjs XETEX_SHIM), siunitx 3.6.2's misnamed locale file passed over and CJKutf8's bytes
-//    protected from LaTeX's case changing (scripts.mjs): papers none of the ways could set are tried again
+//    protected from LaTeX's case changing (scripts.mjs): papers none of the ways could set are tried again. And the faces
+//    every final embeds, the font role table's files (font-roles.mjs; the maintainer's font rulings of 2026-10-06), in
+//    the same version: CJK in Source Han Serif SC, TC and K and Harano Aji Mincho at the paper's family's weights, their
+//    real bold for bold and headings (no AutoFakeBold), Korean's Hangul at its size; a CJK target's Latin runs in the
+//    table's Latin faces (latex-front.mjs latinFontsFor: Nimbus, FreeMono, CMU, Domitian and each family's own, no TeX
+//    Gyre); Cyrillic under XeLaTeX in the table's Cyrillic faces for the paper's family, pdfLaTeX's T2A second; a Latin
+//    target in T1 (an OT1 paper's Computer Modern in Latin Modern), its accented words hyphenated
 export const TYPESETTING_VERSION = '7'
 
 /**

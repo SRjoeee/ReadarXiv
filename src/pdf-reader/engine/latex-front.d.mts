@@ -30,3 +30,12 @@ export declare const lastTexLog: (log: string | null | undefined) => string
 export declare const NO_ARG_COMMANDS: ReadonlySet<string>
 /** TeX for the unit marks (\axtmark, \axtend) and each page's columns as named destinations */
 export declare const MARK_DEF: string
+/** the font probe the original's own compile is given before \begin{document}: the roles' families and the default encoding */
+export declare const FONT_PROBE: string
+/** the font probe's reading of a log: the roles' NFSS families, the body's, and the default encoding where the probe gave it */
+export interface FontProbe { rm: string; sf: string; tt: string; body: string; enc?: string }
+export declare function readFontProbe(log: string): FontProbe | null
+/** fontspec's \setmainfont, \setsansfont and \setmonofont for a target: each role in the role table's faces for its family */
+export declare function roleFontsFor(probe: Partial<FontProbe> | null | undefined, target: string): string
+/** after xeCJK: each role in the role table's Latin faces for the paper's family (every family of the table with an OpenType form) */
+export declare function latinFontsFor(probe: Partial<FontProbe> | null | undefined): string

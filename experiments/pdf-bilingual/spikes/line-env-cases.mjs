@@ -14,6 +14,9 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { hostedFontsDockerArgs } from './faithful.mjs'
+// the faces the TeX page's tree serves beside TeX Live's (Source Han Serif, URW's base 35: faithful.mjs)
+const HOSTED = hostedFontsDockerArgs(new URL('../data/fonts', import.meta.url).pathname)
 
 const ENGINE = resolve(process.env.ENGINE ?? new URL('../../../src/pdf-reader/engine', import.meta.url).pathname)
 const { openPaper, originalFiles, translationFiles } = await import(join(ENGINE, 'live.mjs'))
@@ -32,7 +35,7 @@ function compile(files, overrides, { engine = 'pdflatex', full = true } = {}) {
   const dir = join(root, `c${++n}`)
   for (const [p, b] of [...files, ...overrides]) { const f = join(dir, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
   const cmd = full ? ['latexmk', engine === 'xelatex' ? '-xelatex' : '-pdf', '-interaction=nonstopmode', '-f', 'main.tex'] : [engine, '-interaction=nonstopmode', 'main.tex']
-  try { execFileSync('docker', ['run', '--rm', '--init', '--network', 'none', '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '300', ...cmd], { stdio: 'ignore' }) } catch {}
+  try { execFileSync('docker', ['run', '--rm', '--init', '--network', 'none', ...HOSTED, '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '300', ...cmd], { stdio: 'ignore' }) } catch {}
   const read = (f, how) => { try { return readFileSync(join(dir, f), how) } catch { return null } }
   // a draft under XeTeX writes the xdv alone when asked once; its stop or its end is in the log either way
   return { log: read('main.log', 'latin1') ?? '', pdf: read('main.pdf') }

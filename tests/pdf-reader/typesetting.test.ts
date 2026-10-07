@@ -52,7 +52,7 @@ describe('strategies: CJK leading as a factor for translated units, English hyph
 
   it('every strategy that loads fontspec leaves the paper\'s math as it is (2608.24503, amsart\'s abstract)', () => {
     for (const lang of ['zh', 'ja', 'ko']) expect(first(META, lang).pre(null)).toMatch(/^\\PassOptionsToPackage\{no-math\}\{fontspec\}\n\\usepackage\{xeCJK\}/)
-    const [, xe] = strategiesFor(META, 'ru')
+    const [xe] = strategiesFor(META, 'ru')
     expect(xe?.pre(null)).toMatch(/^\\PassOptionsToPackage\{no-math\}\{fontspec\}\n\\usepackage\{fontspec\}/)
   })
 
@@ -168,8 +168,8 @@ describe('a font a paper\'s style loads by name, under a strategy that sets anot
     // a symbol font, another script's, a size TeX computes, a font TeX names at the time
     expect(namedFonts(['\\font\\astro@font=astrosym at 7pt \\font\\cyr=wncyr10 \\font\\bighelv=phvr at #1 \\font\\@IEEEPARstartfont\\fontname\\font\\space at 3pt'])).toEqual([])
   })
-  it('declares them again in the document\'s encoding where the strategy sets another than the paper\'s: T2A under pdfLaTeX, TU under XeLaTeX', () => {
-    const [own, xe] = strategiesFor(META, 'ru')
+  it('declares them again in the document\'s encoding where the strategy sets another than the paper\'s: T1 and T2A under pdfLaTeX, TU under XeLaTeX', () => {
+    const [xe, own] = strategiesFor(META, 'ru')
     const named = namedFonts([CVPR])
     const t2a = own?.pre({ rm: 'ptm', sf: 'phv', tt: 'pcr' }, named) ?? ''
     expect(t2a.indexOf(FIXED)).toBeGreaterThan(t2a.indexOf('\\__axt_substitute:nnnn {T2A} {ptm}'))
@@ -181,7 +181,9 @@ describe('a font a paper\'s style loads by name, under a strategy that sets anot
     // and no b (the review of fix/tex-path-errors, I1: NAACL's bold ruler on a CM paper came out medium)
     for (const pre of [t2a, tu]) expect(pre).not.toMatch(/\\DeclareFixedFont|\\updefault|\{\\bfdefault\}/)
     expect(t2a).toContain('\\fontfamily{\\sfdefault}\\fontsize{8}{8}\\bfseries\\upshape\\selectfont\\global\\expandafter\\let\\expandafter\\cvprtenhv\\the\\font')
-    expect(first(META, 'de').pre({ rm: 'ptm' }, named)).not.toContain('\\the\\font')
+    // a Latin target's T1: declared again for a paper in OT1 (or of no probe: LaTeX's default), not for one already in T1
+    expect(first(META, 'de').pre({ rm: 'ptm', enc: 'OT1' }, named)).toContain(FIXED)
+    expect(first(META, 'de').pre({ rm: 'ptm', enc: 'T1' }, named)).not.toContain('\\the\\font')
     expect(strategiesFor(META, 'zh').map(s => s.pre(null, named)).join('')).not.toContain('\\the\\font')
   })
   it('from the paper\'s own files, a style beside the main file\'s', () => {
@@ -189,7 +191,8 @@ describe('a font a paper\'s style loads by name, under a strategy that sets anot
     const p = openPaper(files)
     const main = (lang: string) => new TextDecoder().decode(translationFiles(p, new Map(), { strategy: first({ ...META, ...p.meta }, lang), fonts: null, draft: false, aux: null, bbl: null }).get('main.tex'))
     expect(main('ru')).toContain(FIXED)
-    expect(main('fr')).not.toContain('\\let\\expandafter\\elvbf')
+    expect(main('fr')).toContain(FIXED)
+    expect(main('zh')).not.toContain('\\let\\expandafter\\elvbf')
   })
   it('from every file TeX may read, as TeX finds it: a preamble\'s \\input, a package by its path, a file a style \\inputs (the re-review, N1)', () => {
     const FONT = '\\font\\elvbf  = ptmb scaled 1100\n'

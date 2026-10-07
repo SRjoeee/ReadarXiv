@@ -88,3 +88,43 @@ describe('2307.16209 into zh: siunitx 3.6.2\'s locale file, and a heading upperc
     expect(xe?.pre(null)).not.toContain('axtcjkprotect')
   })
 })
+
+// The faces every final embeds, from the font role table (font-roles.mjs, spec §4.10 rows 11-16; the maintainer's font
+// rulings of 2026-10-06): the TeX path sets the files the instant layer draws in. Checked natively by
+// experiments/pdf-bilingual/spikes/fonts-cases.mjs (the PDF's fonts are those files at those weights)
+describe('the CJK faces, the role table\'s files at the paper\'s family\'s weights', () => {
+  const CM = { rm: 'cmr', sf: 'cmss', tt: 'cmtt', body: 'cmr' }, TIMES = { rm: 'ptm', sf: 'phv', tt: 'pcr', body: 'ptm' }
+  const xeOf = (lang: string) => {
+    const [xe] = strategiesFor({ compiler: 'pdflatex' }, lang)
+    if (!xe) throw new Error(`no strategy for ${lang}`)
+    return xe
+  }
+  it('zh-Hans sets Source Han Serif SC at the family\'s weights, its real bold, FandolKai for italics', () => {
+    // Light and its SemiBold beside Computer Modern and Garamond; Regular and its Bold beside the rest
+    expect(xeOf('zh').pre(CM)).toContain('\\setCJKmainfont[BoldFont=SourceHanSerifSC-SemiBold.otf,ItalicFont=FandolKai-Regular.otf]{SourceHanSerifSC-Light.otf}\n')
+    expect(xeOf('zh').pre(TIMES)).toContain('\\setCJKmainfont[BoldFont=SourceHanSerifSC-Bold.otf,ItalicFont=FandolKai-Regular.otf]{SourceHanSerifSC-Regular.otf}\n')
+    expect(xeOf('zh').pre({ ...TIMES, rm: 'EBGaramond-TLF', body: 'EBGaramond-TLF' })).toContain('{SourceHanSerifSC-Light.otf}')
+    // no probe: a family of no table, Regular
+    expect(xeOf('zh').pre(null)).toContain('{SourceHanSerifSC-Regular.otf}')
+  })
+  it('zh-Hant sets Source Han Serif TC, its real bold, AR PL KaitiM Big5 for italics; Japanese Harano Aji Mincho, upright for italics', () => {
+    expect(xeOf('zh-Hant').pre(TIMES)).toContain('\\setCJKmainfont[BoldFont=SourceHanSerifTC-Bold.otf,ItalicFont=bkai00mp.ttf]{SourceHanSerifTC-Regular.otf}\n')
+    expect(xeOf('zh-TW').pre(CM)).toContain('\\setCJKmainfont[BoldFont=SourceHanSerifTC-SemiBold.otf,ItalicFont=bkai00mp.ttf]{SourceHanSerifTC-Light.otf}\n')
+    expect(xeOf('ja').pre(TIMES)).toContain('\\setCJKmainfont[BoldFont=HaranoAjiMincho-Bold.otf]{HaranoAjiMincho-Regular.otf}\n')
+    expect(xeOf('ja').pre(CM)).toContain('\\setCJKmainfont[BoldFont=HaranoAjiMincho-SemiBold.otf]{HaranoAjiMincho-Light.otf}\n')
+  })
+  it('ko sets Source Han Serif K at the table\'s weights and size, no Un Batang in the xeCJK strategy', () => {
+    // each face at its size (Face.size): Korean's Hangul at the visual size of the family's ideographs
+    expect(xeOf('ko').pre(TIMES)).toContain('\\setCJKmainfont[Scale=0.9590,BoldFont=SourceHanSerifK-Bold.otf,BoldFeatures={Scale=0.9740}]{SourceHanSerifK-Regular.otf}\n')
+    expect(xeOf('ko').pre(CM)).toContain('\\setCJKmainfont[Scale=0.9560,BoldFont=SourceHanSerifK-SemiBold.otf,BoldFeatures={Scale=0.9670}]{SourceHanSerifK-Light.otf}\n')
+    expect(xeOf('ko').pre(CM)).toContain('CJKspace=true')
+    expect(xeOf('ko').pre(CM)).not.toMatch(/UnBatang/)
+    // the pdfLaTeX fallback, CJKutf8, as today
+    expect(strategiesFor({ compiler: 'pdflatex' }, 'ko')[1]?.pre(null)).toContain('\\begin{CJK}{UTF8}{mj}')
+  })
+  it('no AutoFakeBold for Hans, Hant and Jpan, nor any face of the fonts they replace', () => {
+    for (const lang of ['zh', 'zh-Hant', 'ja', 'ko']) for (const fonts of [CM, TIMES, null]) {
+      expect(xeOf(lang).pre(fonts), lang).not.toMatch(/AutoFakeBold|FandolSong|bsmi00lp|ipaexm|UnBatang/)
+    }
+  })
+})

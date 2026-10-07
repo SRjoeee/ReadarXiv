@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { lastTexLog, MARK_DEF } from '@/pdf-reader/engine/latex-front.mjs'
+import { FACES } from '@/pdf-reader/engine/font-roles.mjs'
+import { FONT_PROBE, lastTexLog, latinFontsFor, MARK_DEF, readFontProbe } from '@/pdf-reader/engine/latex-front.mjs'
 import { openPaper, originalFiles, probeFiles, translationFiles } from '@/pdf-reader/engine/live.mjs'
 import { readSizeProbe, readWidthProbe } from '@/pdf-reader/engine/typeset/density.mjs'
-import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
+import { strategiesFor, VERIFIED } from '@/pdf-reader/engine/scripts.mjs'
 import { FLOAT_TEX, LINES_TEX, readForced, readLines, SIZE_TEX, typesetting } from '@/pdf-reader/engine/typeset/tex.mjs'
 import { DESIGN, designFor } from '@/pdf-reader/engine/typeset/type.mjs'
 
@@ -149,5 +150,134 @@ describe('the probes the rule needs', () => {
     const lined = text(originalFiles(p, { lines: true }))
     expect(lined).toContain(LINES_TEX)
     expect(lined).toContain(`\\axtlines{${para}}`)
+  })
+})
+
+// The faces every final embeds, from the font role table (font-roles.mjs; spec §4.10 rows 18-20, the maintainer's font
+// rulings of 2026-10-06): the TeX path sets the files the instant layer draws in, by file name. Checked natively by
+// experiments/pdf-bilingual/spikes/fonts-cases.mjs (the PDF's fonts by name)
+const probeOf = (rm: string, sf = 'cmss', tt = 'cmtt', enc?: string) => ({ rm, sf, tt, body: rm, ...(enc ? { enc } : {}) })
+/** fontspec's line for a role in the four files the table gives its styles: regular, bold, italic, bold italic */
+const faces = (cmd: string, [up, bold, italic, boldItalic]: string[], more = '') => `\\${cmd}[BoldFont=${bold},ItalicFont=${italic},BoldItalicFont=${boldItalic}${more}]{${up}}\n`
+const NIMBUS_ROMAN = ['NimbusRoman-Regular.otf', 'NimbusRoman-Bold.otf', 'NimbusRoman-Italic.otf', 'NimbusRoman-BoldItalic.otf']
+const NIMBUS_SANS = ['NimbusSans-Regular.otf', 'NimbusSans-Bold.otf', 'NimbusSans-Italic.otf', 'NimbusSans-BoldItalic.otf']
+const FREEMONO = ['FreeMono.otf', 'FreeMonoBold.otf', 'FreeMonoOblique.otf', 'FreeMonoBoldOblique.otf']
+const DOMITIAN = ['Domitian-Roman.otf', 'Domitian-Bold.otf', 'Domitian-Italic.otf', 'Domitian-BoldItalic.otf']
+const EREWHON = ['Erewhon-Regular.otf', 'Erewhon-Bold.otf', 'Erewhon-Italic.otf', 'Erewhon-BoldItalic.otf']
+const DEJAVU_MONO = ['DejaVuSansMono.ttf', 'DejaVuSansMono-Bold.ttf', 'DejaVuSansMono-Oblique.ttf', 'DejaVuSansMono-BoldOblique.ttf']
+
+describe('the Cyrillic target in the role table\'s faces', () => {
+  const [xe, t2a] = strategiesFor({ compiler: 'pdflatex' }, 'ru')
+  if (!xe || !t2a) throw new Error('no strategies for ru')
+  it('a pdfLaTeX paper is set by XeLaTeX first, the paper\'s math kept, and today\'s pdfLaTeX in T2A second', () => {
+    expect([xe.name, xe.engine, xe.xe, t2a.name, t2a.engine, t2a.xe]).toEqual(['XeLaTeX', 'xelatex', true, 'own engine', 'pdflatex', false])
+    expect(xe.pre(null)).toMatch(/^\\PassOptionsToPackage\{no-math\}\{fontspec\}\n\\usepackage\{fontspec\}\n\\defaultfontfeatures\{\}\n/)
+    // each face in an encoding it has, should the paper load T1 (TU_AGAIN), and babel\'s Russian
+    expect(xe.pre(null)).toContain('\\renewcommand\\encodingdefault{TU}')
+    expect(xe.pre(null)).toContain('\\babelprovide[import=ru,main]{axttarget}')
+    // the fallback\'s faces as today: the paper\'s families in T2A where they have it, else one of the same design
+    expect(t2a.pre(probeOf('ptm', 'phv', 'pcr'))).toContain('\\__axt_substitute:nnnn {T2A} {ptm} {Tempora-TLF} {t2aptm.fd}')
+    expect(t2a.pre(probeOf('ptm', 'phv', 'pcr'))).toContain('\\__axt_substitute:nnnn {T2A} {pcr} {PTMono-TLF} {t2apcr.fd}')
+    // a XeLaTeX paper keeps its engine, in the table\'s faces
+    const [own] = strategiesFor({ compiler: 'xelatex' }, 'ru')
+    expect([own?.name, own?.engine, own?.pre(probeOf('ptm', 'phv', 'pcr')).includes(faces('setmainfont', NIMBUS_ROMAN))]).toEqual(['own engine', 'xelatex', true])
+  })
+  it('ru maps Times to Nimbus Roman, Helvetica to Nimbus Sans, Courier to FreeMono, CM to CMU, Palatino to Domitian, Bera Mono to DejaVu Sans Mono, Utopia to Erewhon (the table\'s files)', () => {
+    const times = xe.pre(probeOf('ptm', 'phv', 'pcr'))
+    expect(times).toContain(faces('setmainfont', NIMBUS_ROMAN))
+    expect(times).toContain(faces('setsansfont', NIMBUS_SANS))
+    expect(times).toContain(faces('setmonofont', FREEMONO))
+    const cm = xe.pre(probeOf('cmr'))
+    expect(cm).toContain(faces('setmainfont', ['cmunrm.otf', 'cmunbx.otf', 'cmunti.otf', 'cmunbi.otf']))
+    expect(cm).toContain(faces('setsansfont', ['cmunss.otf', 'cmunsx.otf', 'cmunsi.otf', 'cmunso.otf']))
+    expect(cm).toContain(faces('setmonofont', ['cmuntt.otf', 'cmuntb.otf', 'cmunit.otf', 'cmuntx.otf']))
+    expect(xe.pre(probeOf('pplx', 'phv', 'fvm'))).toContain(faces('setmainfont', DOMITIAN))
+    expect(xe.pre(probeOf('pplx', 'phv', 'fvm'))).toContain(faces('setmonofont', DEJAVU_MONO))
+    expect(xe.pre(probeOf('erewhon-TLF'))).toContain(faces('setmainfont', EREWHON))
+    expect(xe.pre(probeOf('put'))).toContain(faces('setmainfont', EREWHON))
+    // newtx\'s and txfonts\' names for Times and Helvetica; Libertine\'s bold italic has no Cyrillic: its bold; Inconsolata: PT Mono
+    expect(xe.pre(probeOf('ntxtlf', 'txss', 'txtt'))).toContain(faces('setsansfont', NIMBUS_SANS))
+    expect(xe.pre(probeOf('LinuxLibertineT-TLF', 'LinuxBiolinumT-TLF', 'zi4'))).toContain(faces('setmainfont', ['LinLibertine_R.otf', 'LinLibertine_RB.otf', 'LinLibertine_RI.otf', 'LinLibertine_RB.otf']))
+    expect(xe.pre(probeOf('LinuxLibertineT-TLF', 'LinuxBiolinumT-TLF', 'zi4'))).toContain(faces('setmonofont', ['PTM55F.ttf', 'PTM75F.ttf', 'PTM55F.ttf', 'PTM75F.ttf']))
+    // a family of no table, and no probe: CMU, the table\'s face for it
+    expect(xe.pre(probeOf('pbk', 'pag', 'pcr'))).toContain(faces('setmainfont', ['cmunrm.otf', 'cmunbx.otf', 'cmunti.otf', 'cmunbi.otf']))
+    expect(xe.pre(null)).toContain(faces('setsansfont', ['cmunss.otf', 'cmunsx.otf', 'cmunsi.otf', 'cmunso.otf']))
+  })
+})
+
+describe('a Latin script\'s faces: the role table\'s Latin column, T1 under the paper\'s pdfLaTeX', () => {
+  it('latinFontsFor maps XCharter, Erewhon, EB Garamond, Libertine and Inconsolata', () => {
+    expect(latinFontsFor(probeOf('XCharter-TLF'))).toContain(faces('setmainfont', ['XCharter-Roman.otf', 'XCharter-Bold.otf', 'XCharter-Italic.otf', 'XCharter-BoldItalic.otf']))
+    expect(latinFontsFor(probeOf('bch'))).toContain('{XCharter-Roman.otf}')
+    expect(latinFontsFor(probeOf('erewhon-TLF'))).toContain(faces('setmainfont', EREWHON))
+    expect(latinFontsFor(probeOf('EBGaramond-TLF'))).toContain(faces('setmainfont', ['EBGaramond-Regular.otf', 'EBGaramond-Bold.otf', 'EBGaramond-Italic.otf', 'EBGaramond-BoldItalic.otf']))
+    const libertine = latinFontsFor(probeOf('LinuxLibertineT-TLF', 'LinuxBiolinumT-TLF', 'zi4'))
+    expect(libertine).toContain(faces('setmainfont', ['LinLibertine_R.otf', 'LinLibertine_RB.otf', 'LinLibertine_RI.otf', 'LinLibertine_RBI.otf']))
+    expect(libertine).toContain(faces('setsansfont', ['LinBiolinum_R.otf', 'LinBiolinum_RB.otf', 'LinBiolinum_RI.otf', 'LinBiolinum_RBO.otf']))
+    // Inconsolata has no italic: its upright, as the layer draws it
+    expect(libertine).toContain(faces('setmonofont', ['Inconsolatazi4-Regular.otf', 'Inconsolatazi4-Bold.otf', 'Inconsolatazi4-Regular.otf', 'Inconsolatazi4-Bold.otf']))
+  })
+  it('and URW\'s base 35 families in the table\'s files, CM in CMU with Latin Modern\'s bold italic and small capitals; no TeX Gyre', () => {
+    const times = latinFontsFor(probeOf('ptm', 'phv', 'pcr'))
+    expect(times).toBe(faces('setmainfont', NIMBUS_ROMAN) + faces('setsansfont', NIMBUS_SANS) + faces('setmonofont', FREEMONO))
+    expect(latinFontsFor(probeOf('zplTLF', 'phv', 'fvm'))).toContain(faces('setmainfont', DOMITIAN))
+    const cm = latinFontsFor(probeOf('cmr'))
+    expect(cm).toContain(faces('setmainfont', ['cmunrm.otf', 'cmunbx.otf', 'cmunti.otf', 'lmroman10-bolditalic.otf'], ',SmallCapsFont=lmromancaps10-regular.otf,ItalicFeatures={SmallCapsFont=lmromancaps10-oblique.otf}'))
+    // CM\'s sans and typewriter: Latin Modern\'s, which has no bold typewriter (its upright, as the layer draws it)
+    expect(cm).toContain(faces('setsansfont', ['lmsans10-regular.otf', 'lmsans10-bold.otf', 'lmsans10-oblique.otf', 'lmsans10-boldoblique.otf']))
+    expect(cm).toContain(faces('setmonofont', ['lmmono10-regular.otf', 'lmmono10-regular.otf', 'lmmono10-italic.otf', 'lmmono10-italic.otf']))
+    for (const rm of ['ptm', 'ppl', 'pcr', 'phv']) expect(latinFontsFor(probeOf(rm, 'phv', 'pcr'))).not.toMatch(/texgyre|Extension=/i)
+    // a family of no table (Bookman, Schoolbook, Avant Garde: none in the corpus) keeps fontspec\'s default, Latin Modern
+    expect(latinFontsFor(probeOf('pbk', 'pag', 'pnc'))).toBe('')
+    expect(latinFontsFor(null)).toBe('')
+  })
+  it('a Latin target sets T1, and lmodern for an OT1 CM paper', () => {
+    const [de] = strategiesFor({ compiler: 'pdflatex' }, 'de')
+    if (!de) throw new Error('no strategy for de')
+    // the accented letters of the translation are glyphs of their own, which TeX hyphenates around: T1, before babel
+    const cm = de.pre(probeOf('cmr', 'cmss', 'cmtt', 'OT1'))
+    expect(cm).toMatch(/^\\renewcommand\\rmdefault\{lmr\}\\renewcommand\\sfdefault\{lmss\}\\renewcommand\\ttdefault\{lmtt\}\n\\usepackage\[T1\]\{fontenc\}\n/)
+    expect(cm.indexOf('\\usepackage[T1]{fontenc}')).toBeLessThan(cm.indexOf('\\babelprovide'))
+    // Computer Modern\'s roles alone: a Times paper\'s Times stays, its CM typewriter goes to Latin Modern
+    const times = de.pre(probeOf('ptm', 'phv', 'cmtt', 'OT1'))
+    expect(times).toMatch(/^\\renewcommand\\ttdefault\{lmtt\}\n\\usepackage\[T1\]\{fontenc\}\n/)
+    // a paper already in T1 keeps its families; no probe, T1 alone
+    expect(de.pre(probeOf('cmr', 'cmss', 'cmtt', 'T1'))).toMatch(/^\\usepackage\[T1\]\{fontenc\}\n/)
+    expect(de.pre(null)).toMatch(/^\\usepackage\[T1\]\{fontenc\}\n/)
+    for (const lang of ['es', 'fr', 'pt']) expect(strategiesFor({ compiler: 'pdflatex' }, lang)[0]?.pre(null), lang).toContain('\\usepackage[T1]{fontenc}\n')
+    // a paper set by a Unicode engine keeps its encoding
+    expect(strategiesFor({ compiler: 'xelatex' }, 'de')[0]?.pre(null)).not.toContain('fontenc')
+  })
+  it('readFontProbe reads enc', () => {
+    expect(FONT_PROBE).toContain('body=\\familydefault;enc=\\encodingdefault;}}')
+    expect(readFontProbe('x\nAXT-FONTS rm=cmr;sf=cmss;tt=cmtt;body=cmr;enc=OT1;\ny')).toEqual({ rm: 'cmr', sf: 'cmss', tt: 'cmtt', body: 'cmr', enc: 'OT1' })
+    // a log line TeX wrapped, and a probe of before
+    expect(readFontProbe('AXT-FONTS rm=ptm;sf=phv;tt=pcr;body=ptm;en\nc=T1;')?.enc).toBe('T1')
+    expect(readFontProbe('AXT-FONTS rm=ptm;sf=phv;tt=pcr;body=ptm;')).toEqual({ rm: 'ptm', sf: 'phv', tt: 'pcr', body: 'ptm' })
+  })
+})
+
+describe('one table: the TeX path and the layer set a paper in the same files', () => {
+  it('every face a strategy names is in FACES', () => {
+    const files = new Set(Object.values(FACES).map(f => f.file))
+    const probes = [null, probeOf('cmr', 'cmss', 'cmtt', 'OT1'), probeOf('ptm', 'phv', 'pcr'), probeOf('ntxtlf', 'txss', 'txtt'), probeOf('pplx', 'phv', 'fvm'), probeOf('erewhon-TLF'), probeOf('XCharter-TLF'), probeOf('EBGaramond-TLF'), probeOf('LinuxLibertineT-TLF', 'LinuxBiolinumT-TLF', 'zi4'), probeOf('pbk', 'pag', 'pnc')]
+    const named = new Set<string>()
+    for (const lang of VERIFIED) for (const compiler of ['pdflatex', 'xelatex']) for (const s of strategiesFor({ compiler }, lang)) for (const fonts of probes) {
+      for (const m of s.pre(fonts).matchAll(/[\w-]+\.(?:otf|ttf)/g)) named.add(m[0])
+    }
+    expect([...named].filter(f => !files.has(f))).toEqual([])
+    // the CJK faces, the Cyrillic and Latin columns all reached
+    for (const f of ['SourceHanSerifSC-Light.otf', 'SourceHanSerifTC-Bold.otf', 'SourceHanSerifK-SemiBold.otf', 'HaranoAjiMincho-Regular.otf', 'NimbusSans-BoldItalic.otf', 'FreeMono.otf', 'cmunbi.otf', 'lmroman10-bolditalic.otf']) expect(named, f).toContain(f)
+  })
+  it('a CJK type\'s scale multiplies the face\'s own: Korean\'s Hangul at its size, then at the plan\'s', () => {
+    const p = paper(), units = p.units as Unit[], para = units.findIndex(u => u.kind === 'para')
+    const [ko] = strategiesFor({ compiler: 'pdflatex' }, 'ko')
+    if (!ko) throw new Error('no strategy for ko')
+    const typeset = typesetting(p.units, { design: DESIGN.Kore, strategy: ko.name, type: { lead: 1, track: 0, scale: 0.97 }, leads: new Map([[para, 1]]), sizes: new Map(), floatsAt: new Map(), tableMin: 0.85 })
+    expect(typeset.strategy(ko).pre(probeOf('ptm', 'phv', 'pcr'))).toContain('\\setCJKmainfont[Scale=0.9302,BoldFont=SourceHanSerifK-Bold.otf,BoldFeatures={Scale=0.9448}]{SourceHanSerifK-Regular.otf}')
+    const [zh] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
+    if (!zh) throw new Error('no strategy for zh')
+    const zhTypeset = typesetting(p.units, { design: DESIGN.Hans, strategy: zh.name, type: { lead: 1.3, track: 0, scale: 0.97 }, leads: new Map([[para, 1]]), sizes: new Map(), floatsAt: new Map(), tableMin: 0.85 })
+    expect(zhTypeset.strategy(zh).pre(probeOf('ptm', 'phv', 'pcr'))).toContain('\\setCJKmainfont[Scale=0.9700,BoldFont=SourceHanSerifSC-Bold.otf,ItalicFont=FandolKai-Regular.otf]{SourceHanSerifSC-Regular.otf}')
   })
 })

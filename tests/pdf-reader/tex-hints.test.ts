@@ -14,9 +14,10 @@ describe('texHints', () => {
     expect(texHints({ compiler: 'xelatex' }, 'ko')).toEqual({ engines: ['xelatex'], fonts: ['Kore'] })
   })
 
-  it('an alphabet: the paper\'s own engine, no faces', () => {
+  it('Latin: the paper\'s own engine, no faces; Cyrillic: XeLaTeX from pdfLaTeX (the role table\'s faces), a Unicode engine its own', () => {
     expect(texHints({ compiler: 'pdflatex' }, 'de')).toEqual({ engines: ['pdflatex'], fonts: [] })
-    expect(texHints({ compiler: 'pdflatex' }, 'ru')).toEqual({ engines: ['pdflatex'], fonts: [] })
+    expect(texHints({ compiler: 'pdflatex' }, 'ru')).toEqual({ engines: ['pdflatex', 'xelatex'], fonts: [] })
+    expect(texHints({ compiler: 'lualatex' }, 'ru')).toEqual({ engines: ['lualatex'], fonts: [] })
     expect(texHints({ compiler: 'xelatex' }, 'fr')).toEqual({ engines: ['xelatex'], fonts: [] })
   })
 

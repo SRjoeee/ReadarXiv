@@ -98,6 +98,10 @@ export const readLines = log => new Map([...lastTexLog(log).matchAll(/^AXT-LINES
 const ROLES = new Set(['cell', 'heading', 'figure'])
 const def = (name, i, v) => `\\expandafter\\def\\csname ${name}${i}\\endcsname{${v}}`
 
+/** a CJK type's scale on xeCJK's face (scripts.mjs cjkFont), multiplying each scale the face has of its own — Korean's
+ *  Hangul at its size, its bold at the bold's — or the scale of all of it where it has none */
+const scaleCJK = (pre, k) => pre.replace(/\\setCJKmainfont\[([^\n]*)\]\{/, (m, opts) => `\\setCJKmainfont[${/(?:^|,)Scale=/.test(opts) ? opts.replace(/Scale=(\d*\.?\d+)/g, (x, v) => `Scale=${(Number(v) * k).toFixed(4)}`) : `Scale=${k.toFixed(4)},${opts}`}]{`)
+
 /**
  * What a typeset plan (plan.mjs) adds to a compile of the translation, for live.mjs translationFiles: the strategy it
  * sets the type of, the one it was solved for (CJK under xeCJK: the leading, the tracking as xeCJK's glue and the scale
@@ -115,7 +119,7 @@ export function typesetting(units, plan) {
   const index = new Map(units.map((u, i) => [u, i]))
   const strategy = s => {
     if (s.name !== plan.strategy) return s
-    if (design.cjk) return { ...s, leading: type.lead, pre: (fonts, named) => s.pre(fonts, named).replace('\\setCJKmainfont[', `\\setCJKmainfont[Scale=${type.scale.toFixed(4)},`) + (type.track > 0.0005 ? `\\xeCJKsetup{CJKglue={\\hskip ${type.track.toFixed(4)}em plus 0.08\\baselineskip}}\n` : '') }
+    if (design.cjk) return { ...s, leading: type.lead, pre: (fonts, named) => scaleCJK(s.pre(fonts, named), type.scale) + (type.track > 0.0005 ? `\\xeCJKsetup{CJKglue={\\hskip ${type.track.toFixed(4)}em plus 0.08\\baselineskip}}\n` : '') }
     return { ...s, leading: type.lead }
   }
   /** with each unit's line probe (LINES_TEX) where a compile is read, the previews and the measures; without, the final,

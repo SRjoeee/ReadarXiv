@@ -14,6 +14,9 @@ import { dirname, join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { openPaper, translationFiles } from '../../../src/pdf-reader/engine/live.mjs'
 import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
+import { hostedFontsDockerArgs } from './faithful.mjs'
+// the faces the TeX page's tree serves beside TeX Live's (Source Han Serif, URW's base 35: faithful.mjs)
+const HOSTED = hostedFontsDockerArgs(new URL('../data/fonts', import.meta.url).pathname)
 
 const dir = mkdtempSync(join(tmpdir(), 'tex-path-cases-'))
 const named = process.argv.slice(2), want = c => !named.length || named.includes(c)
@@ -39,7 +42,7 @@ async function compile(name, files, strategy, { translate = () => new Map(), und
   mkdirSync(at, { recursive: true })
   for (const [p, b] of out) { mkdirSync(dirname(join(at, p)), { recursive: true }); writeFileSync(join(at, p), alter && p === 'main.tex' ? Buffer.from(alter(Buffer.from(b).toString('latin1')), 'latin1') : b) }
   let ok = true
-  try { execFileSync('docker', ['run', '--rm', '--network', 'none', ...faithful, '-v', `${at}:/work`, '-w', '/work', 'texlive/texlive:latest', strategy.engine, '-interaction=nonstopmode', '-halt-on-error', 'main.tex'], { stdio: 'ignore' }) } catch { ok = false }
+  try { execFileSync('docker', ['run', '--rm', '--network', 'none', ...faithful, ...HOSTED, '-v', `${at}:/work`, '-w', '/work', 'texlive/texlive:latest', strategy.engine, '-interaction=nonstopmode', '-halt-on-error', 'main.tex'], { stdio: 'ignore' }) } catch { ok = false }
   const log = existsSync(join(at, 'main.log')) ? readFileSync(join(at, 'main.log'), 'latin1') : ''
   if (ok && strategy.engine === 'xelatex') ok = existsSync(join(at, 'main.pdf'))
   let text = ''

@@ -12,6 +12,9 @@ import { dirname, join } from 'node:path'
 import { citationLines, openPaper, translationFiles } from '../../../src/pdf-reader/engine/live.mjs'
 import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
 import { texErrors, unitsAtErrors } from '../../../src/pdf-reader/engine/tex-errors.mjs'
+import { hostedFontsDockerArgs } from './faithful.mjs'
+// the faces the TeX page's tree serves beside TeX Live's (Source Han Serif, URW's base 35: faithful.mjs)
+const HOSTED = hostedFontsDockerArgs(new URL('../data/fonts', import.meta.url).pathname)
 
 const dir = mkdtempSync(join(tmpdir(), 'compile-resilience-cases-'))
 let failed = 0
@@ -25,7 +28,7 @@ function compile(name, files, { engine, main = 'main.tex', halt }) {
   const at = join(dir, name)
   for (const [p, b] of files) { const f = join(at, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
   const cmd = halt ? [engine, '-interaction=nonstopmode', '-halt-on-error', main] : ['latexmk', engine === 'xelatex' ? '-xelatex' : '-pdf', '-interaction=nonstopmode', '-f', main]
-  try { execFileSync('docker', ['run', '--rm', '--init', '--network', 'none', '-v', `${at}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '300', ...cmd], { stdio: 'ignore' }) } catch {}
+  try { execFileSync('docker', ['run', '--rm', '--init', '--network', 'none', ...HOSTED, '-v', `${at}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '300', ...cmd], { stdio: 'ignore' }) } catch {}
   const log = join(at, main.replace(/\.tex$/, '.log'))
   return existsSync(log) ? readFileSync(log, 'latin1') : ''
 }

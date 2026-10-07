@@ -9,6 +9,8 @@
 // Node's file system for the spikes; in the page the branch is never taken, and the bundler is told not to follow it
 const nodeFs = typeof process !== 'undefined' && process.versions?.node ? await import(/* @vite-ignore */ 'node:fs') : null
 import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, paperOf, paperParams, paramsOf, readArgs } from './arg-roles.mjs'
+import { designOfNfss, FACES, faceFor, familyOfProbe, rolesFor } from './font-roles.mjs'
+import { scriptOf } from './layer-rules.mjs'
 /** a directory under Node, as a project's file system: { list(): relative paths, read(path): bytes or null } */
 export function folder(dir) {
   const { readdirSync, readFileSync } = nodeFs
@@ -1914,8 +1916,9 @@ const AUTHOR_WIDE = { start: '\\axtwide{', end: '}', whole: true }
 const fitsWide = u => !u.pieces.some(p => p.t === 'nested' || (p.t === 'ph' && /\\(?:\\|newline|linebreak|par|thanks|footnote|footnotemark|and|And|AND|authorcr|cr|crcr|tabularnewline)(?![A-Za-z@])|^\\\\/.test(p.src ?? '')))
 
 /** Goes before \\begin{document} of the original's own compile: the log then says which font families the document set
- *  for its roles, however it set them (its class, a package, a conference style) */
-export const FONT_PROBE = '\\AtEndDocument{\\typeout{AXT-FONTS rm=\\rmdefault;sf=\\sfdefault;tt=\\ttdefault;body=\\familydefault;}}\n'
+ *  for its roles, however it set them (its class, a package, a conference style), and its default encoding — an OT1 paper's
+ *  Computer Modern has no T1 face of its own in the tree (scripts.mjs: a Latin target's T1) */
+export const FONT_PROBE = '\\AtEndDocument{\\typeout{AXT-FONTS rm=\\rmdefault;sf=\\sfdefault;tt=\\ttdefault;body=\\familydefault;enc=\\encodingdefault;}}\n'
 /** The TeX log of a compile's last pass. The browser's compiler (poc-site/tex.js) joins each step's log with its terminal
  *  output — `$ <command>`, then `LOG:` … `==` `STDOUT:` — and the terminal output repeats the errors; the last TeX step's
  *  log is taken, as the one that made the PDF, whatever the earlier passes' logs hold (BusyTeX's pipeline empties them
@@ -1928,33 +1931,41 @@ export const lastTexLog = log => {
   const steps = [...log.matchAll(/^\$ (\S+)[^\n]*\n[\s\S]*?^LOG:\n([\s\S]*?)\n==\nSTDOUT:/gm)]
   return steps.filter(m => !/^(?:bibtex|biber|makeindex|xdvipdfmx)/.test(m[1])).at(-1)?.[2] ?? ''
 }
-/** the roles' families from a log written with FONT_PROBE, or null */
+/** the roles' families from a log written with FONT_PROBE, and its encoding where the probe gave it, or null */
 export function readFontProbe(log) {
-  const m = /AXT-FONTS rm=([^;]*);sf=([^;]*);tt=([^;]*);body=([^;]*);/.exec(log.replace(/\n/g, ''))
-  return m ? { rm: m[1], sf: m[2], tt: m[3], body: m[4] } : null
+  const m = /AXT-FONTS rm=([^;]*);sf=([^;]*);tt=([^;]*);body=([^;]*);(?:enc=([^;]*);)?/.exec(log.replace(/\n/g, ''))
+  return m ? { rm: m[1], sf: m[2], tt: m[3], body: m[4], ...(m[5] ? { enc: m[5] } : {}) } : null
 }
-// the URW base-35 families by their NFSS names, and the OpenType fonts TeX Gyre made of them (the same designs and
-// metrics), by file name: XeTeX finds a font by name through fontconfig, which the browser's TeX does not have, and by
-// file name through its own file search. Computer Modern needs nothing: fontspec's default, Latin Modern, is its
-// OpenType form
-// (NFSS names of the same designs from other packages too: newtx and txfonts for Times, mathpazo and newpx for
-// Palatino)
-const GYRE = [
-  [/^(ptm|qtm|ntx|txr|Tempora)/, 'texgyretermes'], [/^(phv|qhv|txss)/, 'texgyreheros'], [/^(pcr|qcr|txtt)/, 'texgyrecursor'],
-  [/^(ppl|qpl|npx|zpl)/, 'texgyrepagella'], [/^(pbk|qbk)/, 'texgyrebonum'], [/^(pnc|qcs)/, 'texgyreschola'], [/^(pag|qag)/, 'texgyreadventor'],
-]
-const GYRE_FACES = '[Extension=.otf,UprightFont=*-regular,BoldFont=*-bold,ItalicFont=*-italic,BoldItalicFont=*-bolditalic]'
-/** Goes after xeCJK (which loads fontspec, whose default face is Latin Modern): each role back in the document's own
- *  face where it has an OpenType form, so widths, line breaks and pages stay the original's */
-export function latinFontsFor(probe) {
-  if (!probe) return ''
-  const face = f => GYRE.find(([re]) => re.test(String(f)))?.[1]
-  const out = []
-  if (face(probe.rm)) out.push(`\\setmainfont{${face(probe.rm)}}${GYRE_FACES}`)
-  if (face(probe.sf)) out.push(`\\setsansfont{${face(probe.sf)}}${GYRE_FACES}`)
-  if (face(probe.tt)) out.push(`\\setmonofont{${face(probe.tt)}}${GYRE_FACES}`)
-  return out.length ? out.join('\n') + '\n' : ''
+// The roles' faces under fontspec, from the font role table (font-roles.mjs): the files the instant layer draws a paper's
+// runs in, so that the final and the layer set one paper in the same files. Each role (\\rmdefault, \\sfdefault,
+// \\ttdefault) in the faces the table gives its family's design at each style (faceFor), by file name: XeTeX finds a font
+// by name through fontconfig, which the browser's TeX does not have, and by file name through its own file search.
+const ROLES = [['rm', 'serif', 'setmainfont'], ['sf', 'sans', 'setsansfont'], ['tt', 'mono', 'setmonofont']]
+const fileOf = id => FACES[id].file
+/**
+ * fontspec's \\setmainfont, \\setsansfont and \\setmonofont for a target, from the font probe's families: each role's
+ * upright, bold, italic and bold italic the table's (a style the family lacks its nearest, as the layer draws it), and
+ * small capitals where the table gives them a face of their own (Latin Modern's, for Computer Modern). A role whose family
+ * the table does not know takes the table's face for its class: under a Cyrillic target CMU's, written out, since
+ * fontspec's default (Latin Modern) has no Cyrillic; for Latin runs none, fontspec's default being that face (the
+ * table's OTHER_GROUPS)
+ */
+export function roleFontsFor(probe, target) {
+  const roles = rolesFor(target, familyOfProbe(probe)), cyrillic = scriptOf(target) === 'Cyrl'
+  return ROLES.map(([role, cls, cmd]) => {
+    const known = designOfNfss(probe?.[role])
+    if (!known && !cyrillic) return ''
+    const run = (bold, italic, caps = false) => ({ script: 'latin', cls: known?.cls ?? cls, design: known?.design ?? 'other', bold, italic, caps })
+    const [up, bold, italic, boldItalic] = [[false, false], [true, false], [false, true], [true, true]].map(([b, i]) => fileOf(faceFor(roles, run(b, i))))
+    const caps = fileOf(faceFor(roles, run(false, false, true))), capsItalic = fileOf(faceFor(roles, run(false, true, true)))
+    const sc = (caps !== up ? `,SmallCapsFont=${caps}` : '') + (capsItalic !== italic ? `,ItalicFeatures={SmallCapsFont=${capsItalic}}` : '')
+    return `\\${cmd}[BoldFont=${bold},ItalicFont=${italic},BoldItalicFont=${boldItalic}${sc}]{${up}}\n`
+  }).join('')
 }
+/** Goes after xeCJK (which loads fontspec, whose default face is Latin Modern): each role in the face the role table
+ *  gives the document's family for Latin runs — the original's own design, its same glyphs where a source has them —
+ *  so widths, line breaks and pages stay the original's */
+export const latinFontsFor = probe => roleFontsFor(probe, 'en')
 
 /** pdfTeX-only primitives that arXiv sources use outside any \\ifpdf, made harmless under XeTeX. Goes first in the main file */
 export const XETEX_SHIM = [

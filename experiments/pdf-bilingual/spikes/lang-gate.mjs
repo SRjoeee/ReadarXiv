@@ -20,7 +20,7 @@ import { promisify } from 'node:util'
 import { pseudoTranslate, readFontProbe } from '../../../src/pdf-reader/engine/latex-front.mjs'
 import { lostIn, openPaper, originalFiles, probeFiles, translationFiles, unsettable } from '../../../src/pdf-reader/engine/live.mjs'
 import { CJK, scriptOf, strategiesFor, VERIFIED } from '../../../src/pdf-reader/engine/scripts.mjs'
-import { faithfulDockerArgs } from './faithful.mjs'
+import { faithfulDockerArgs, hostedFontsDockerArgs } from './faithful.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
 
 const run = promisify(execFile)
@@ -64,7 +64,8 @@ const LETTERS = {
 }
 const lettersIn = (text, lang) => (text.normalize('NFKC').match(LETTERS[scriptOf(lang)]) ?? []).length
 
-const FAITHFUL = faithfulDockerArgs(root)
+// TeX as BusyTeX can run it, and the faces the TeX page's tree serves beside TeX Live's (Source Han Serif, URW's base 35)
+const FAITHFUL = [...faithfulDockerArgs(root), ...hostedFontsDockerArgs(join(root, 'data/fonts'))]
 const sh = (cmd, args) => { try { return execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'ignore'] }) } catch { return null } }
 /** a compile in TeX Live 2026 (Docker), as the browser's BusyTeX can run it (faithful.mjs): the source, the pipeline's
  *  files over it, latexmk to the end or one pass — and halting on TeX's first error, as BusyTeX runs every pass

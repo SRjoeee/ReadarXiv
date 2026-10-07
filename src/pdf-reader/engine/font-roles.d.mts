@@ -7,6 +7,8 @@ export declare function classifyFont(postScript: string): FontClass
 /** the paper's body family: from the font probe's NFSS names (the TeX path), or from the layout file's fonts weighted by
  *  the lines each sets (the layer) — one table of names behind both */
 export declare function familyOfProbe(probe: { rm: string; sf: string; tt: string; body: string } | null): EnglishFamily
+/** an NFSS family name's design and class (a role's family in the font probe), or null for a name of no design */
+export declare function designOfNfss(name: string | null | undefined): { design: Design; cls: FontClass['cls'] } | null
 export declare function familyOfFonts(names: readonly string[], weights: readonly number[]): EnglishFamily
 export type FaceId = string
 export interface Face {

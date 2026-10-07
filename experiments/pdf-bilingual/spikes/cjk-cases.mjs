@@ -13,6 +13,9 @@ import { dirname, join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { openPaper, translationFiles } from '../../../src/pdf-reader/engine/live.mjs'
 import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
+import { hostedFontsDockerArgs } from './faithful.mjs'
+// the faces the TeX page's tree serves beside TeX Live's (Source Han Serif, URW's base 35: faithful.mjs)
+const HOSTED = hostedFontsDockerArgs(new URL('../data/fonts', import.meta.url).pathname)
 
 const dir = mkdtempSync(join(tmpdir(), 'cjk-cases-'))
 // PDF.js's character maps: without them a CJK PDF's text is not read
@@ -28,7 +31,7 @@ async function compile(name, source, strategy, sub = '') {
   mkdirSync(at, { recursive: true })
   writeFileSync(join(at, `${name}.tex`), main)
   let ok = true
-  try { execFileSync('docker', ['run', '--rm', '--network', 'none', '-v', `${at}:/work`, '-w', '/work', 'texlive/texlive:latest', 'xelatex', '-interaction=nonstopmode', '-halt-on-error', `${name}.tex`], { stdio: 'ignore' }) } catch { ok = false }
+  try { execFileSync('docker', ['run', '--rm', '--network', 'none', ...HOSTED, '-v', `${at}:/work`, '-w', '/work', 'texlive/texlive:latest', 'xelatex', '-interaction=nonstopmode', '-halt-on-error', `${name}.tex`], { stdio: 'ignore' }) } catch { ok = false }
   const log = existsSync(join(at, `${name}.log`)) ? readFileSync(join(at, `${name}.log`), 'latin1') : ''
   let text = ''
   if (ok && existsSync(join(at, `${name}.pdf`))) {
