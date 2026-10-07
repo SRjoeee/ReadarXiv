@@ -420,9 +420,10 @@ async function runFixture(page, name, errors) {
   return { name, ready: true, info, meta, pages, totals: fixtureTotals(pages, frames, TIER), summary }
 }
 
-/** the remover's files, digested: a change of them makes every add-on again (the plan's, removal.mjs pagePlan, too) */
+/** the remover's files, digested: a change of them makes every add-on again (the plan's, removal.mjs pagePlan, too; the
+ *  manifest's reader, which holds REMOVAL and the bounds the maker checks its manifest by, and the maker, addon.mjs) */
 function removerDigest() {
-  return sha256(['src/pdf-reader/engine/layout/remove.mjs', 'src/pdf-reader/engine/layout/ink.mjs', 'src/pdf-reader/engine/layout/file.mjs', 'src/pdf-reader/engine/layer-proto/removal.mjs'].map(f => readFileSync(join(ENGINE, f))).join('\n')).slice(0, 16)
+  return sha256(['src/pdf-reader/engine/layout/remove.mjs', 'src/pdf-reader/engine/layout/ink.mjs', 'src/pdf-reader/engine/layout/file.mjs', 'src/pdf-reader/engine/layout/addon-manifest.mjs', 'src/pdf-reader/engine/layout/addon.mjs', 'src/pdf-reader/engine/layer-proto/removal.mjs'].map(f => readFileSync(join(ENGINE, f))).join('\n')).slice(0, 16)
 }
 
 /**
@@ -443,70 +444,57 @@ function addonOf(name) {
   return ADDON_RUNS.get(key).then(a => { ADDONS.set(name, PERF ? a.shippedFile : a.file); return a })
 }
 /**
- * The paper's add-on made in memory (the server's step, after the layout maker): its plan from the layout file, the
- * add-on (`shipped`: R and P; `out`: with the check's sets too, where `check`), the outline table; and each step's time,
- * ms: the remover's parse of arXiv's PDF, the operator lists (the maker reads them already: shared), the ink walk with
- * the remover's indices and outlines, the plan, the add-on made
+ * The paper's add-on made in memory (the server's step, after the layout maker). The shipped half is the engine's own
+ * (layout/addon.mjs paperAddon: the plan from the layout file, R only where kept ink lies under a unit, `dirty` and
+ * `rules`), the code the server's remover child runs; `shipped` is arXiv's PDF with its tail, and its manifest. With
+ * `check`, the gate's own half too: the plan of every page with every unit (`plan`), the add-on made with the check's sets
+ * (`out`: R, P, F and C of every planned page, its manifest carrying `dirty`, `rules` and the outline table), and the
+ * inks and outline boxes the check reads. ms: the shipped half's (the remover's parse of arXiv's PDF, the operator lists
+ * and the ink walk it reads, the plan, the add-on made), and with `check` the check's reading of the pages and its make
  */
 async function buildAddon(bytes, layoutFile, { check = true } = {}) {
-  const { openRemover, makeAddon, SETS, CHECK_SETS } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/remove.mjs'))
-  const { pageInk, outlineTable } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/ink.mjs'))
+  const { paperAddon } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/addon.mjs'))
   const { indexLayout, parseLayout } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/file.mjs'))
-  const { pagePlan, pageDirty, pageRules } = await import(join(ENGINE, 'src/pdf-reader/engine/layer-proto/removal.mjs'))
   const PL = await import('@cantoo/pdf-lib')
   const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
   const { deflateSync } = await import('node:zlib')
-  const ms = {}
-  let t = performance.now()
-  const R = await openRemover(bytes, { PL, inflate: inflateTolerant })
-  ms.parse = performance.now() - t
+  const deflate = b => new Uint8Array(deflateSync(b))
   const doc = await openNode(bytes)
-  const ops = [], inks = [], collected = new Map()
-  // (the operator lists the layout maker reads already: the server's prepare reads them once for both)
-  t = performance.now()
-  for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); ops[p] = await pg.getOperatorList() }
-  ms.ops = performance.now() - t
-  t = performance.now()
-  for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); inks[p] = pageInk(OPS, ops[p], pg.commonObjs, { rotate: pg.rotate, indices: true, collect: collected }) }
-  ms.ink = performance.now() - t
-  // the plan: every unit the layout file holds, page by page
-  t = performance.now()
   const index = indexLayout(parseLayout(new Uint8Array(readFileSync(layoutFile))))
+  const made = await paperAddon({ bytes, index, doc, OPS, PL, deflate, inflate: inflateTolerant })
+  if (!made.ok) throw new Error(`the shipped add-on was refused: ${made.refused}`)
+  const whole = new Uint8Array(bytes.length + made.tail.length)
+  whole.set(bytes)
+  whole.set(made.tail, bytes.length)
+  const shipped = { bytes: whole, appended: made.tail.length, manifest: made.manifest }
+  const ms = { ...made.ms }
+  if (!check) return { doc, shipped, ms }
+
+  const { openRemover, makeAddon, SETS, CHECK_SETS } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/remove.mjs'))
+  const { pageInk, outlineTable } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/ink.mjs'))
+  const { pagePlan } = await import(join(ENGINE, 'src/pdf-reader/engine/layer-proto/removal.mjs'))
+  const ops = [], inks = [], collected = new Map()
+  // (the pages' operator lists and ink again, every glyph its outline's box and the boxes collected into the outline table)
+  let t = performance.now()
+  for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); ops[p] = await pg.getOperatorList() }
+  for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); inks[p] = pageInk(OPS, ops[p], pg.commonObjs, { rotate: pg.rotate, indices: true, collect: collected }) }
+  // the plan: every unit the layout file holds, page by page
   const plan = { pages: {} }
   for (let p = 1; p <= doc.numPages; p++) {
     if (inks[p].rotated || inks[p].capped) continue
     const { own: _own, ...pp } = pagePlan(index, p, inks[p])
     if (pp.units.length) plan.pages[p] = pp
   }
-  ms.plan = performance.now() - t
-  const outlines = outlineTable(collected)
-  // the shipped add-on, and the time it takes: each page's kept ink under its units' rectangles (pageDirty, the
-  // manifest's `dirty`: where the reader swaps the removed page in), and the removed page, R, only where there is some.
-  // A page with none is filled with paper over the file's rectangles alone: it needs no removed page, only the
-  // manifest's word that the page is drawn so (ok, no dirty)
+  ms.checkRead = performance.now() - t
   t = performance.now()
-  const dirty = {}
-  for (const [p, pp] of Object.entries(plan.pages)) { const d = pageDirty(index, Number(p), inks[p], pp); if (d.length) dirty[p] = d }
-  const swapped = { pages: Object.fromEntries(Object.entries(plan.pages).filter(([p]) => dirty[p])) }
-  const shipped = await makeAddon({ R, bytes, OPS, opListOf: async p => ops[p], deflate: b => new Uint8Array(deflateSync(b)), plan: swapped, sets: SETS, compact: true })
-  for (const [p, d] of Object.entries(dirty)) if (shipped.manifest.page[p]?.ok) shipped.manifest.page[p].dirty = d
-  for (const p of Object.keys(plan.pages)) if (!dirty[p]) shipped.manifest.page[p] = { ok: true }
-  // (and the rules near its units' lines, which a taller script's text keeps clear of: pageRules; where the engine has it)
-  const rules = {}
-  if (pageRules) for (const p of Object.keys(plan.pages)) { const r = pageRules(index, Number(p), inks[p]); if (r.length) rules[p] = r }
-  for (const [p, r] of Object.entries(rules)) if (shipped.manifest.page[p]) shipped.manifest.page[p].rules = r
-  ms.make = performance.now() - t
-  let out = null
-  if (check) {
-    t = performance.now()
-    out = await makeAddon({ R: await openRemover(bytes, { PL, inflate: inflateTolerant }), bytes, OPS, opListOf: async p => ops[p], deflate: b => new Uint8Array(deflateSync(b)), plan, sets: [...SETS, ...CHECK_SETS] })
-    ms.makeWithCheck = performance.now() - t
-    // (the check's manifest: the gate's own reading of the page's ink boxes each glyph by the outline table, as Node does)
-    out.manifest.outlines = outlines
-    for (const [p, d] of Object.entries(dirty)) if (out.manifest.page[p]?.ok) out.manifest.page[p].dirty = d
-    for (const [p, r] of Object.entries(rules)) if (out.manifest.page[p]) out.manifest.page[p].rules = r
-    // (the pages drawn by the add-on are the check's, every set of it made: the truth reads its planes)
-    for (const p of Object.keys(plan.pages)) if (!out.manifest.page[p]?.ok) shipped.manifest.page[p] = { ok: false, refused: out.manifest.page[p]?.refused ?? 'refused' }
+  const out = await makeAddon({ R: await openRemover(bytes, { PL, inflate: inflateTolerant }), bytes, OPS, opListOf: async p => ops[p], deflate, plan, sets: [...SETS, ...CHECK_SETS] })
+  ms.makeWithCheck = performance.now() - t
+  // (the check's manifest: the gate's own reading of the page's ink boxes each glyph by the outline table, as Node does;
+  // the shipped half's `dirty` and `rules`, which the draw reads)
+  out.manifest.outlines = outlineTable(collected)
+  for (const [p, e] of Object.entries(made.manifest.page)) {
+    if (e.dirty && out.manifest.page[p]?.ok) out.manifest.page[p].dirty = e.dirty
+    if (e.rules && out.manifest.page[p]) out.manifest.page[p].rules = e.rules
   }
   return { doc, inks, plan, shipped, out, collected, ms }
 }
@@ -542,6 +530,8 @@ async function makeAddonOf(key, bytes, layoutFile) {
     const summary = {
       pages: N, planned: Object.keys(plan.pages).length, removed: Object.values(out.manifest.page).filter(x => x.ok).length, refused: Object.entries(out.manifest.page).filter(([, x]) => !x.ok && x.refused !== 'not planned').map(([p, x]) => [Number(p), x.refused]),
       appended: shipped.appended, appendedWithCheck: out.appended, manifestBytes: shippedManifest.length, manifestGzip: gzipSync(shippedManifest).length, outlines: collected.size,
+      // (the planned pages whose word the shipped manifest and the check's differ in: the maker never reads a clean page and makes R alone, the check makes every set; none on the five papers)
+      shippedApart: Object.keys(plan.pages).filter(p => !!shipped.manifest.page[p]?.ok !== !!out.manifest.page[p]?.ok).map(Number),
       stats: shipped.manifest.stats, ms: Object.fromEntries(Object.entries(ms).map(([k, v]) => [k, Math.round(v)])),
     }
     writeFileSync(join(dir, 'manifest.json'), JSON.stringify(out.manifest))
