@@ -3,10 +3,12 @@
 //   - every repository path the documents put in backticks is a file or a directory of the tree, or lies under the
 //     ignored data/ and out/ of a lab (the machine's own data, never in the repository);
 //   - no tracked file names the old experiment directory, but as an archive pointer into the freeze's tag
-//     (`git show exp-freeze-2026-10-07:<path>`), which is how its plans and report are read now;
+//     (`git show exp-freeze-2026-10-07:<path>`), which is how its plans and report are read now. Two exemptions, each
+//     stated where it is made: all of parked/, whose files keep the spelling they ran under (parked/README.md, Roots), and
+//     five lines of the layer gate's hashed instrument;
 //   - nothing under src/ imports from lab/: the extension never depends on a measurement.
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -98,24 +100,27 @@ describe('the old experiment directory', () => {
   /** an archive pointer: a path read out of the freeze's tag, `git show exp-freeze-2026-10-07:<path>` */
   const POINTER = new RegExp(`exp-freeze-\\d{4}-\\d{2}-\\d{2}:${OLD}`, 'g')
 
-  it('is not in the tree', () => {
-    expect(existsSync(join(ROOT, 'experiments'))).toBe(false)
+  // the tree, not the working directory: the ignored data/, out/ and node_modules/ of an older checkout may survive under it
+  it('has no tracked file', () => {
+    expect(tracked.filter(file => file.startsWith('experiments/'))).toEqual([])
   })
 
   /** the files whose bytes the layer gate hashes into every run it records (`measures`, layer-gate.mjs): one changed byte
-   *  makes the record "not comparable", so their first line still names the directory they were made in */
+   *  makes the record "not comparable", so these lines, and no others, still name the directory they were made in:
+   *  the first line of each, and the fifth of page.mjs (the layer lab's path) */
   const HASHED = ['measure.mjs', 'score.mjs', 'page.mjs', 'proto.mjs'].map(file => `lab/pdf/spikes/layer-gate/${file}`)
+  const EXEMPT = [...HASHED.map(file => `${file}:1:`), 'lab/pdf/spikes/layer-gate/page.mjs:5:']
 
   it('is named by no tracked file but as an archive pointer (parked/ keeps the spelling it ran under, parked/README.md, Roots)', () => {
     let hits = ''
     try { hits = git('grep', '-I', '-n', '-F', OLD, '--', '.', ':!parked') } catch { /* git grep exits 1 for no match */ }
     const named = hits.split('\n').filter(Boolean)
-      .filter(hit => !HASHED.some(file => hit.startsWith(`${file}:`)))
+      .filter(hit => !EXEMPT.some(at => hit.startsWith(at)))
       .filter(hit => hit.replace(POINTER, '').includes(OLD))
     expect(named).toEqual([])
   })
 
-  it('leaves the old spelling only in the files the layer gate hashes, which it names itself', () => {
+  it('leaves the old spelling only on the lines of the files the layer gate hashes, which it names itself', () => {
     expect(readFileSync(join(ROOT, 'lab/pdf/spikes/layer-gate.mjs'), 'utf8')).toContain("['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => readFileSync(join(GATE, f)))")
     for (const file of HASHED) expect([file, FILES.has(file)]).toEqual([file, true])
   })
