@@ -1,11 +1,14 @@
 import { cachePortOf, translationCache } from '@/cache'
 import { pickTargetLanguage } from '@/config/first-target'
-import { chooseFirstTarget, getConfig, watchConfigChange } from '@/config/storage'
+import { manifestOrigins } from '@/config/origins'
+import { chooseFirstTarget, getConfig, readConfig, watchConfigChange } from '@/config/storage'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport, type ProviderStatus } from '@/providers/transport'
 import { type AxtMessage, answerMessages, sendMessage, sendToTab } from '@/shared/messages'
 import { createChainHolder } from './chain'
+import { engineReady } from './engine-ready'
 import { createHandlers } from './handlers'
+import { createOriginKeeper } from './origin-keeper'
 import { createConfigOffers, statusInForce } from './provider-status'
 import { createOcrService } from './ocr'
 import { createRecogniserClient } from './recogniser'
@@ -106,6 +109,9 @@ export default defineBackground(() => {
     // A key or an address changed, or a service deleted: its mark was about a key no longer sent (the redesign's
     // design, §4). A clear that lands brings the engine back through the record's own watcher above
     health.configChanged(next, previous)
+    // A service deleted: watched until no page holds its undo, then its sessions moved off and its origin given back —
+    // the page's own clean-up, for a page closed before it ran (./origin-keeper.ts)
+    origins.configChanged(next, previous)
     void offers.offer()
     // Another target language: its parts of the TeX page downloaded ahead (./warmup.ts). The first choice, at install,
     // may come as a change too (from the defaults); the document lets the install's own trigger for it go
@@ -193,6 +199,28 @@ export default defineBackground(() => {
       }
     },
   })
+
+  /**
+   * The services' host permissions (./origin-keeper.ts): the pages hold an origin under a Web Lock while a form or an
+   * undo uses it, and every lock of the extension's contexts is one manager's to list; the manifest is read as the
+   * browser has it, so a host it gains is never given back. A worker's start gives back what a page closed or a
+   * worker gone left granted: no chain is around yet, and a session's next request binds the chain built from what is
+   * stored (./sessions.ts)
+   */
+  const origins = createOriginKeeper({
+    granted: async () => (await browser.permissions.getAll()).origins ?? [],
+    remove: origin => browser.permissions.remove({ origins: [origin] }),
+    manifest: () => manifestOrigins(browser.runtime.getManifest()),
+    read: readConfig,
+    holds: async () => {
+      const state = await navigator.locks.query()
+      return [...(state.held ?? []), ...(state.pending ?? [])].flatMap(lock => lock.name ?? [])
+    },
+    chains: () => chain.configs(),
+    moveAll: id => engineReady(chain, router, { id, rebindAll: true }),
+    warn: diag,
+  })
+  void origins.sweep()
 
   // Both lifecycle hooks give only tabId / status, needing no "tabs" permission
   const dropTab = (tabId: number, why: string) => {
@@ -311,6 +339,7 @@ export default defineBackground(() => {
     }),
     health: { reject: markRejected, clear: clearRejected },
     warmup,
+    origins,
   })))
 
   // A worker's start: the warm-up looked at again — a day on, another language, a failure a quarter of an hour ago

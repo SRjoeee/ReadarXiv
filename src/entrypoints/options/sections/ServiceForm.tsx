@@ -8,8 +8,8 @@
 import { ChevronRight } from 'lucide'
 import { type RefObject, useCallback, useEffect, useRef, useState } from 'react'
 import type { LangCode } from '@/config/languages'
+import { originOf as patternOf } from '@/config/origins'
 import { NAME_MAX, type Service, defaultServiceName, isLoopback, newServiceId } from '@/config/services'
-import { readConfig } from '@/config/storage'
 import { Button } from '@/ui/controls/Button'
 import { Field, TextInput } from '@/ui/controls/Field'
 import { Icon } from '@/ui/controls/Icon'
@@ -19,7 +19,7 @@ import { drafts } from '@/ui/drafts'
 import { O } from '@/ui/strings'
 import { type ServiceField, connectService } from '../connect'
 import { type ModelOption, listModels } from '../models'
-import { PermissionError, ensureHostPermission, hasHostPermission, releaseHostPermission } from '../permissions'
+import { type Hold, PermissionError, ensureHostPermission, giveBackUnneeded, hasHostPermission, holdOrigin } from '../permissions'
 import { Combobox } from '../ui/Combobox'
 import { Status } from '../ui/Row'
 
@@ -78,12 +78,10 @@ function useModels(url: string, key: string, ready: boolean) {
   return { list, load }
 }
 
-export function ServiceForm({ service, target, stored, onConnected, onCancel }: {
+export function ServiceForm({ service, target, onConnected, onCancel }: {
   /** the service edited; absent, a new one */
   service?: Service
   target: LangCode
-  /** the stored services' addresses: an origin one of them uses is not given back */
-  stored: readonly string[]
   onConnected: (saved: Service, ms: number) => Promise<void>
   onCancel: () => void
 }) {
@@ -115,14 +113,36 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
   /** A suggestion's field may still be disabled at the click that asks for it (e.g. the model field, before `ready`
    * catches up); the focus goes there once a later render lifts that (Opus review round 1, item 4) */
   const [focusAfter, setFocusAfter] = useState<'apiKey' | 'model' | null>(null)
-  /** origins this form asked for: given back if it closes with nothing saved (permissions.ts: the granted list must not grow with every try) */
-  const granted = useRef(new Set<string>())
+  /**
+   * The origins this form holds, by pattern: the ones it asked for, and the one it connects with. Held, no give-back
+   * anywhere takes them — a deletion's commit on this page or another among them (#299 F2c); let go once the form
+   * closes with nothing saved, or once the service it saved is stored, and the background then gives back what
+   * nothing needs (permissions.ts: the granted list must not grow with every try)
+   */
+  const holds = useRef(new Map<string, Hold>())
   const handedOver = useRef(false)
   /** Cancel means "stop, save nothing": a connection already in flight must not hand itself over once pressed, nor
    * once the form is gone for any other reason (Opus review round 1, item 1) */
   const cancelled = useRef(false)
-  const storedNow = useRef(stored)
-  storedNow.current = stored
+  /** Hold the origin of `url` unless this form holds it already; whether this call is what took the hold */
+  const hold = (url: string): boolean => {
+    const key = patternOf(url)
+    if (!key || holds.current.has(key)) return false
+    holds.current.set(key, holdOrigin(url))
+    return true
+  }
+  /** Let go of these origins — every one, by default — and ask for whatever nothing needs any more to be given back.
+   * One function for the form's life: the clean-up below calls it, and it reads nothing but the ref */
+  const letGo = useRef(async (urls?: readonly string[]) => {
+    const keys = urls ? urls.flatMap(u => patternOf(u) ?? []) : [...holds.current.keys()]
+    const released = keys.map(key => {
+      const held = holds.current.get(key)
+      holds.current.delete(key)
+      return held?.release()
+    })
+    await Promise.all(released)
+    await giveBackUnneeded()
+  }).current
   /** The saved key rides along only while the address still points at the service it was saved for; changed to
    * another origin, it counts as absent — a secret must never reach an address the reader never gave it to (Opus
    * review round 1, item 2) */
@@ -145,39 +165,36 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
   }, [focusAfter])
   // Live from here, gone at the clean-up. The setup says so again: StrictMode's dev double run cleans up once and sets
   // up again, and a mark left by that clean-up counted a live form as cancelled — no Connect handed over, every grant
-  // given back at once (round 3, item 1). What the clean-up gave back leaves `granted`, so a second clean-up has
-  // nothing of it to give back again; `handedOver` is the connection's, set by nothing here
+  // given back at once (round 3, item 1). What the clean-up let go leaves `holds`, so a second clean-up has nothing of
+  // it to let go again; `handedOver` is the connection's, set by nothing here. A page that closes runs no clean-up:
+  // the browser lets its holds go, and the background gives back what nothing needs (origin-keeper.ts)
   useEffect(() => {
     cancelled.current = false
     return () => {
       cancelled.current = true
-      if (handedOver.current) return
-      for (const u of granted.current) void releaseHostPermission(u, storedNow.current).catch(() => undefined)
-      granted.current.clear()
+      if (handedOver.current || holds.current.size === 0) return
+      void letGo()
     }
-  }, [])
+  }, [letGo])
 
   const clearError = (field: ServiceField) => setErrors(x => ({ ...x, [field]: undefined }))
   /**
-   * The endpoint's origin, asked for from the gesture that called this. Granted only after the form was cancelled or
-   * gone (the browser's prompt open meanwhile), it goes back at once, kept if a stored service uses it: the clean-up
-   * that gives back what `granted` holds may already have run, and nothing here will use the origin (Task 65)
+   * The endpoint's origin, held, then asked for from the gesture that called this. Granted only after the form was
+   * cancelled or gone (the browser's prompt open meanwhile), it is asked to go back at once: the clean-up that let go
+   * of the holds ran before the grant landed, and nothing here will use the origin (Task 65). An origin already
+   * granted answers at once, and a form gone by then has nothing to load (round 2, item 3)
    */
   const ask = async (to: string): Promise<boolean> => {
+    hold(to)
     try {
-      if (await ensureHostPermission(to)) {
-        if (cancelled.current) {
-          await releaseHostPermission(to, storedNow.current).catch(() => undefined)
-          return false
-        }
-        granted.current.add(to)
-      }
-      // an origin already granted answers at once, and a form gone by then has nothing to load (round 2, item 3)
-      return !cancelled.current
+      await ensureHostPermission(to)
     } catch (e) {
       setErrors(x => ({ ...x, baseURL: deniedWords(e) }))
       return false
     }
+    if (!cancelled.current) return true
+    void letGo()
+    return false
   }
   const suggest = (to: string) => {
     setUrl(to)
@@ -192,16 +209,6 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
   const cancel = () => {
     cancelled.current = true
     onCancel()
-  }
-  /** Origins a chip or the model field asked for, but that the reader moved past before connecting: given back once
-   * the service that runs is saved, exactly as an unused one is on cancel (Opus review round 1, item 9) */
-  const releaseUnused = async (keptURL: string) => {
-    const kept = originOf(keptURL)
-    for (const u of granted.current) {
-      if (originOf(u) === kept) continue
-      granted.current.delete(u)
-      await releaseHostPermission(u, storedNow.current).catch(() => undefined)
-    }
   }
   const connect = async () => {
     const found: Partial<Record<ServiceField, string>> = {}
@@ -219,42 +226,45 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
       id, kind: 'openai-compat', baseURL: url.trim(), apiKey: keyInEffect, model: model.trim(), thinking: thinking ? 'enabled' : 'disabled',
       name: (name.trim() || modelName || defaultServiceName(model.trim())).slice(0, NAME_MAX),
     }
+    // The origin it connects with is held from here until the service is stored or the attempt is given up: a
+    // give-back meanwhile — a deletion committed inside its undo window, on this page or another — must not take it
+    // (#299 F2c). `fresh`: held for this attempt alone, not already for a suggestion or the model list
+    const fresh = hold(candidate.baseURL)
     setBusy(true)
     const res = await connectService(candidate, target)
     if (cancelled.current) {
-      // Cancel was pressed while this attempt was in flight: nothing is handed over, and a success still granted the
-      // candidate's origin, which is not this form's `granted` (connectService asks for it itself) — give it back
-      // (fix round 2, item 1). A caller that keeps the form mounted past Cancel must find Connect pressable again,
-      // not stuck busy (fix round 2, item 3)
-      if (res.ok) await releaseHostPermission(candidate.baseURL, storedNow.current).catch(() => undefined)
+      // Cancel was pressed while this attempt was in flight: nothing is handed over, and what the form held goes —
+      // the clean-up may have let go before connectService's grant landed (fix round 2, item 1). A caller that keeps
+      // the form mounted past Cancel must find Connect pressable again, not stuck busy (fix round 2, item 3)
       setBusy(false)
+      void letGo()
       return
     }
     if (!res.ok) {
       setBusy(false)
       setResult(res.reason)
       if (res.field) fields[res.field].current?.focus()
+      // the origin taken for this attempt goes back; one a suggestion or the model list asked for stays with the form
+      if (fresh) void letGo([candidate.baseURL])
       return
     }
     handedOver.current = true
     try {
       await onConnected(candidate, res.ms)
-      await releaseUnused(candidate.baseURL)
+      // stored now, the origin it uses is the stored service's; the ones a suggestion or the model field asked for and
+      // the reader moved past go back, as an unused one does on cancel (Opus review round 1, item 9)
+      void letGo()
     } catch {
       // the save itself refused (the schema's limit of services, storage, a write that did not land): nothing stored,
       // the form stays, and the origin this attempt tested goes back — it was never put to use (Opus review round 1,
-      // item 3). The form gone meanwhile, its clean-up ran while the service was handed over and gave nothing back:
-      // what it asked for goes back here too — the page takes its sections away once the stored value cannot be read,
-      // before the refused write's answer comes (App.tsx; Task 107)
+      // item 3). The form gone meanwhile, its clean-up ran while the service was handed over and let nothing go: every
+      // hold goes here — the page takes its sections away once the stored value cannot be read, before the refused
+      // write's answer comes (App.tsx; Task 107). While the stored value cannot be read the background gives back
+      // none, by its own read's verdict: which stored services share an origin is unknown (config/origins.ts)
       handedOver.current = false
       setResult(O.saveFailed)
-      const unused = cancelled.current ? [candidate.baseURL, ...granted.current] : [candidate.baseURL]
-      if (cancelled.current) granted.current.clear()
-      // No origin goes back while the stored value cannot be read, as a deletion's gives none back: which stored
-      // services share one is unknown, and a permission kept a while is the safer failure. The verdict is this read's,
-      // never a snapshot's; a read that fails says nothing either (Task 107)
-      const readable = await readConfig().then(r => r.fallbackReason === null, () => false)
-      if (readable) for (const u of unused) await releaseHostPermission(u, storedNow.current).catch(() => undefined)
+      if (cancelled.current) void letGo()
+      else if (fresh) void letGo([candidate.baseURL])
     } finally {
       setBusy(false)
     }

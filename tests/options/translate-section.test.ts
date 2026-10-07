@@ -6,20 +6,22 @@
 // Task 65: a deletion is committed only once its own write lands, and one storage refused leaves its row, takes back
 // the focus and says so; an origin is given back only when no service may still use it; an undo storage refused
 // brings its undo row back, or, answered after the section went, commits the deletion itself; while the stored value
-// cannot be read, a commit gives no origin back (round 4), by its own read's verdict (round 5). Task 107: a service
-// added, edited or given a new key is connected only once its own write lands
+// cannot be read, a commit gives no origin back (round 4). Task 107: a service added, edited or given a new key is
+// connected only once its own write lands. The origins (#299 F2): a deletion holds its service's origin while its undo
+// may bring it back, and its commit gives back only what no stored service and no open form needs
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Fragment, createElement as h, useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { originOf } from '@/config/origins'
 import { type Config, DEFAULT_CONFIG, configSchema } from '@/config/schema'
 import type { Service } from '@/config/services'
-import type { FallbackReason } from '@/config/storage'
 import type { PackState } from '@/shared/pack'
 import type { OptionsData } from '@/entrypoints/options/data'
 import { stubPopovers } from '../pdf-reader/ui/popover-stub'
 import { deferred, mountElement } from '../ui/render-hook'
+import { origins } from './origin-wire'
 
 vi.mock('wxt/browser', () => ({ browser: { runtime: { id: 'test-extension', getURL: (path: string) => path } } }))
 const wire = vi.hoisted(() => ({
@@ -32,38 +34,28 @@ const wire = vi.hoisted(() => ({
    * data layer resolves with the configuration in effect, the defaults (surface-config.ts, data.ts; round 2, item 1)
    */
   unreadable: false,
-  /** another read of the page, run once, finishing after the next read has its verdict and before that read answers (round 5) */
-  during: null as (() => Promise<unknown>) | null,
 }))
 vi.mock('@/shared/messages', () => ({ sendMessage: vi.fn(async (m: { type: string; id?: string; rebindAll?: boolean }) => { wire.log.push(`send ${m.type} ${m.id}${m.rebindAll ? ' all' : ''}`); return { reset: true } }) }))
-// as storage.ts: a value it cannot read is answered with the defaults, and `readConfig` with its read's verdict
-vi.mock('@/config/storage', async () => {
-  const { DEFAULT_CONFIG: defaults } = await import('@/config/schema')
-  const take = (): { config: Config; fallbackReason: FallbackReason | null } =>
-    wire.unreadable ? { config: defaults, fallbackReason: { kind: 'unknown' } } : { config: wire.stored as Config, fallbackReason: null }
-  const between = async () => {
-    const other = wire.during
-    wire.during = null
-    await other?.()
-  }
+// the holds and the background's give-back, as the page's model of them runs the real rule (origin-wire.ts)
+vi.mock('@/entrypoints/options/permissions', async () => {
+  const { origins: model } = await import('./origin-wire')
   return {
-    readConfig: async () => { const reading = take(); await between(); return reading },
-    getConfig: async () => { const reading = take(); await between(); return reading.config },
+    PermissionError: class extends Error {}, ensureHostPermission: async () => undefined, hasHostPermission: async () => false,
+    holdOrigin: (url: string, service?: string) => model.holdOrigin(url, service),
+    giveBackUnneeded: () => model.giveBackUnneeded(),
   }
 })
-vi.mock('@/entrypoints/options/permissions', () => ({
-  PermissionError: class extends Error {}, ensureHostPermission: async () => false, hasHostPermission: async () => false,
-  // as permissions.ts decides: an origin a still-used address shares is kept
-  releaseHostPermission: vi.fn(async (url: string, stillUsed: readonly string[]) => {
-    const origin = new URL(url).origin
-    wire.log.push(`${stillUsed.some(u => new URL(u).origin === origin) ? 'keep' : 'release'} ${url}`)
-  }),
-}))
-vi.mock('@/entrypoints/options/connect', () => ({ connectService: vi.fn(async (c: Service) => { wire.log.push(`connect ${c.id}`); return wire.connect }) }))
+// as connect.ts: the candidate's origin asked for, then the endpoint tested
+vi.mock('@/entrypoints/options/connect', async () => {
+  const { origins: model } = await import('./origin-wire')
+  const { originOf } = await import('@/config/origins')
+  return { connectService: vi.fn(async (c: Service) => { model.granted.add(originOf(c.baseURL)!); wire.log.push(`connect ${c.id}`); return wire.connect }) }
+})
 vi.mock('@/entrypoints/options/models', () => ({ listModels: async () => [] }))
 vi.mock('@/ui/use-rejected', () => ({ useRejected: () => wire.rejected }))
 
-import { getConfig } from '@/config/storage'
+import { connectService } from '@/entrypoints/options/connect'
+import type { ConnectResult } from '@/entrypoints/options/connect'
 import { Translate } from '@/entrypoints/options/sections/Translate'
 import { UNDO_MS } from '@/entrypoints/options/ui/UndoRow'
 import { O, S, setLocale } from '@/ui/strings'
@@ -79,7 +71,11 @@ const OTHER: Service = { ...MINE, id: 'svc-othr0000', name: 'Other', baseURL: 'h
  * render. The log marks the section's going and the answer
  */
 function Harness({ start, pack = null, checks = [], app = false }: { start: Config; pack?: PackState | null; checks?: string[]; app?: boolean }) {
-  const [config, setConfig] = useState(start)
+  // a stored service's origin is granted: it was asked for when the service was added
+  const [config, setConfig] = useState(() => {
+    for (const s of start.services) origins.granted.add(originOf(s.baseURL)!)
+    return start
+  })
   const [fallback, setFallback] = useState(false)
   wire.stored = config
   const data: OptionsData = {
@@ -120,7 +116,7 @@ const type = (input: HTMLInputElement, value: string) => {
 }
 const submit = (form: HTMLFormElement) => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
 const menuItem = (row: HTMLElement, name: string) => [...row.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(i => i.textContent === name)!
-const committed = () => wire.log.filter(l => /^(send|release|keep) /.test(l))
+const committed = () => wire.log.filter(l => /^(send|remove) /.test(l))
 const radioNamed = (c: HTMLElement, name: string) => radios(c).find(r => nameOf(r) === name)!
 const undoHolds = () => document.activeElement?.closest('[data-undo]') != null
 const OPTIONS = join(import.meta.dirname, '../../src/entrypoints/options')
@@ -131,7 +127,11 @@ describe('the translation services (§6.3)', () => {
   beforeEach(() => {
     setLocale('en')
     vi.useFakeTimers({ shouldAdvanceTime: true })
-    Object.assign(wire, { log: [], rejected: [], connect: { ok: true, ms: 42 }, gate: null, unreadable: false, during: null })
+    Object.assign(wire, { log: [], rejected: [], connect: { ok: true, ms: 42 }, gate: null, unreadable: false })
+    // the give-backs go into the log, in order with the page's own lines; the harness grants what it starts with stored
+    origins.reset(wire.log)
+    origins.stored = () => wire.stored as Config
+    origins.readable = () => !wire.unreadable
     restore = stubPopovers()
   })
   afterEach(() => { vi.useRealTimers(); restore() })
@@ -393,7 +393,7 @@ describe('the translation services (§6.3)', () => {
     expect(form.closest('[inert]')).toBeNull()
     expect(form.querySelector('.o-note')!.textContent).toBe(O.saveFailed)
     expect(stored().services).toEqual([])
-    expect(committed()).toEqual(['release http://127.0.0.1:9/v1'])
+    expect(committed()).toEqual(['remove http://127.0.0.1:9/*'])
     await m.unmount()
   })
 
@@ -471,7 +471,7 @@ describe('the translation services (§6.3)', () => {
     await m.flush()
     await m.flush()
     // the record is not the page's: the deletion stored at once, the background's watcher cleared the mark then
-    expect(wire.log).toEqual(['patch', `send axt:engine-ready ${MINE.id} all`, `release ${MINE.baseURL}`])
+    expect(wire.log).toEqual(['patch', `send axt:engine-ready ${MINE.id} all`, 'remove https://api.example.com/*'])
     expect(card(m.container).querySelector('[data-undo]')).toBeNull()
     await m.unmount()
   })
@@ -543,7 +543,7 @@ describe('the translation services (§6.3)', () => {
     write.resolve()
     await m.flush()
     await m.flush()
-    expect(wire.log).toEqual(['patch', `send axt:engine-ready ${MINE.id} all`, `release ${MINE.baseURL}`])
+    expect(wire.log).toEqual(['patch', `send axt:engine-ready ${MINE.id} all`, 'remove https://api.example.com/*'])
     await m.unmount()
   })
 
@@ -559,7 +559,7 @@ describe('the translation services (§6.3)', () => {
     write.resolve()
     await m.flush()
     await m.flush()
-    expect(wire.log).toEqual(['patch', `send axt:engine-ready ${MINE.id} all`, `release ${MINE.baseURL}`])
+    expect(wire.log).toEqual(['patch', `send axt:engine-ready ${MINE.id} all`, 'remove https://api.example.com/*'])
   })
 
   it('a deletion whose write rejects: the row stays and takes back the focus its undo row held, the list\'s foot says so; nothing is committed, and the next write that lands takes the line away (Task 65; round 2, item 2)', async () => {
@@ -638,7 +638,7 @@ describe('the translation services (§6.3)', () => {
     await m.flush()
     await m.flush()
     expect(card(m.container).querySelector('[data-undo]')).toBeNull()
-    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`, `release ${MINE.baseURL}`])
+    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`, 'remove https://api.example.com/*'])
     await m.unmount()
   })
 
@@ -668,26 +668,6 @@ describe('the translation services (§6.3)', () => {
     await m.flush()
     await m.flush()
     expect(card(m.container).querySelector('[data-undo]')).toBeNull()
-    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`])
-    await m.unmount()
-    await m.flush()
-    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`])
-  })
-
-  it('a commit whose own read finds the stored value unreadable gives no origin back, even when a read that finds it readable finishes before the commit looks: the verdict is its read\'s, not the latest (round 5)', async () => {
-    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: OTHER.id } }))
-    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
-    await m.flush()
-    expect(stored().services.map(s => s.id)).toEqual([OTHER.id])
-    wire.unreadable = true
-    // the value repaired elsewhere while the commit's read answers, and another read of the page (another list's
-    // write) finding it readable in that gap
-    wire.during = async () => { wire.unreadable = false; await getConfig() }
-    await vi.advanceTimersByTimeAsync(UNDO_MS)
-    await m.flush()
-    await m.flush()
-    // the premise: the other read ran inside the commit's, finding the value readable
-    expect(wire.during).toBeNull()
     expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`])
     await m.unmount()
     await m.flush()
@@ -726,14 +706,14 @@ describe('the translation services (§6.3)', () => {
     await vi.advanceTimersByTimeAsync(UNDO_MS - 1000)
     await m.flush()
     await m.flush()
-    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`, `keep ${MINE.baseURL}`])
+    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`])
     const undoRow = [...card(m.container).querySelectorAll<HTMLElement>('[data-undo]')].find(r => r.textContent?.includes('Same'))!
     ;[...undoRow.querySelectorAll('button')].find(b => b.textContent === O.undo.undo)!.click()
     await m.flush()
     expect(stored().services.map(s => s.id)).toEqual([same.id, OTHER.id])
     await m.unmount()
     await m.flush()
-    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`, `keep ${MINE.baseURL}`])
+    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`])
   })
 
   it('an origin is kept for a service undone while another on it is committed, until the undo\'s own write lands (round 2, item 4)', async () => {
@@ -753,11 +733,62 @@ describe('the translation services (§6.3)', () => {
     await vi.advanceTimersByTimeAsync(UNDO_MS - 1000)
     await m.flush()
     await m.flush()
-    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`, `keep ${MINE.baseURL}`])
+    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`])
     write.resolve()
     await m.flush()
     wire.gate = null
     expect(stored().services.map(s => s.id)).toEqual([same.id, OTHER.id])
+    await m.unmount()
+  })
+
+  it('a deletion holds its service\'s origin under its id while the undo may bring it back — the background leaves the service\'s sessions alone meanwhile — and lets go once committed or undone (#299 rows 116, 119)', async () => {
+    const held = `axt-origin https://api.example.com/* ${MINE.id}`
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: OTHER.id } }))
+    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
+    await m.flush()
+    expect(origins.holds).toEqual([held])
+    ;[...card(m.container).querySelector<HTMLElement>('[data-undo]')!.querySelectorAll('button')].find(b => b.textContent === O.undo.undo)!.click()
+    await m.flush()
+    expect(origins.holds).toEqual([])
+    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
+    await m.flush()
+    expect(origins.holds).toEqual([held])
+    await vi.advanceTimersByTimeAsync(UNDO_MS)
+    await m.flush()
+    await m.flush()
+    expect(origins.holds).toEqual([])
+    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`, 'remove https://api.example.com/*'])
+    await m.unmount()
+  })
+
+  it('a deletion\'s commit inside the undo window keeps an origin a form is connecting with: the service deleted, its address added again (#299 F2c)', async () => {
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: OTHER.id } }))
+    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
+    await m.flush()
+    ;[...card(m.container).querySelectorAll<HTMLButtonElement>('button[data-srow]')].find(b => b.textContent === O.services.add)!.click()
+    await m.flush()
+    const form = m.container.querySelector<HTMLFormElement>('form[data-form="service"]')!
+    const [address, key, model] = [...form.querySelectorAll<HTMLInputElement>('input')]
+    type(address!, MINE.baseURL)
+    type(key!, 'sk-again')
+    type(model!, 'm-2')
+    let answer: (r: ConnectResult) => void = () => {}
+    vi.mocked(connectService).mockImplementationOnce(() => new Promise<ConnectResult>(resolve => { answer = resolve }))
+    submit(form)
+    await m.flush()
+    // the undo runs out while the connection test is in flight: the sessions move off, the origin stays
+    await vi.advanceTimersByTimeAsync(UNDO_MS)
+    await m.flush()
+    await m.flush()
+    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`])
+    expect(origins.granted.has('https://api.example.com/*')).toBe(true)
+    answer({ ok: true, ms: 9 })
+    await m.flush()
+    await m.flush()
+    expect(stored().services.map(s => s.baseURL)).toEqual([OTHER.baseURL, MINE.baseURL])
+    // stored again, under the service just added: kept
+    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`])
+    expect(origins.holds).toEqual([])
     await m.unmount()
   })
 

@@ -167,6 +167,12 @@ export interface AxtMessages {
    * - neither — rebuild only. Later sessions see the new chain; the ones translating keep theirs.
    */
   'axt:engine-ready': { request: { id: string; scope?: string; rebindAll?: boolean }; response: { reset: boolean } }
+  /**
+   * options → background: this page let go of an origin it held — a form closed or saved, a connection that failed, a
+   * deletion committed — so give back every host permission nothing needs (background/origin-keeper.ts). The page holds
+   * and asks; the background decides, knowing the chains still serving sessions (DESIGN §9). How many went
+   */
+  'axt:origins-reconcile': { request: Record<never, never>; response: { removed: number } }
   /** popup ↔ options: a download of this language pack ended on one surface; the other looks it up again */
   'axt:pack-changed': { request: { target: string }; response: undefined }
   /** content → background: OCR one bitmap; the result is cached by imageHash (§15.2) */

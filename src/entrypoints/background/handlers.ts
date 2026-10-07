@@ -19,6 +19,7 @@ import type { Diagnostics } from './diagnostics'
 import { engineReady } from './engine-ready'
 import { isRefusal, shouldMarkRefusal, testsStoredKey } from './health-guard'
 import type { OcrService } from './ocr'
+import type { OriginKeeper } from './origin-keeper'
 import { type ConfigOffers, providerStatus } from './provider-status'
 import type { SessionRouter } from './sessions'
 
@@ -48,6 +49,8 @@ export interface HandlerDeps {
   /** The TeX page's warm-up (./warmup.ts): told how one ended, which versions a reader's page said, and that a reader
    *  needs the page now, for its language */
   warmup: { done(result: TexWarmResult): Promise<void>; seen(versions: string): Promise<void>; giveWay(lang: string): Promise<void> }
+  /** The one place a service's host permission is given back (./origin-keeper.ts) */
+  origins: Pick<OriginKeeper, 'sweep'>
 }
 
 const messageOf = (e: unknown): string => e instanceof Error ? e.message : String(e)
@@ -106,6 +109,10 @@ export function createHandlers(deps: HandlerDeps): MessageHandlers {
     // Rebuild and move whom the sender says (./engine-ready.ts): a downloaded language pack moves one tab, a
     // deleted service moves everyone and retires its chain — the movers act on the chain in force
     'axt:engine-ready': message => engineReady(deps.chain, deps.router, message),
+
+    // A page let go of an origin it held: the keeper gives back what nothing needs — never on the page's word alone,
+    // since only this worker knows the chains a session may still be translating on (DESIGN §9). The sweep never rejects
+    'axt:origins-reconcile': () => deps.origins.sweep().then(removed => ({ removed })),
 
     // With IndexedDB unavailable an answer still goes back (Codex on #7), and a failure is reported as it is:
     // swallowing the exception into { removed: 0 } would let the reader believe the cache cleared when IndexedDB is

@@ -4,46 +4,71 @@
 // with a stable id; editing keeps the saved key unless one is typed or it is cleared; the refused key's form. Task 65:
 // a permission the browser grants only after the form is gone is given back, and a form gone loads no list; both
 // forms are live after StrictMode's double run of their effects, as the settings page renders them. Task 107: a save
-// refused after the form is gone gives back what the form asked for, and nothing while the stored value cannot be read
+// refused after the form is gone gives back what the form asked for, and nothing while the stored value cannot be read.
+// The origins (#299 F2): a form holds what it asked for and what it connects with, and a give-back — this form's or
+// any other's — takes none of it; let go, an origin goes back only if no stored service and no other open form needs it
 import { StrictMode, createElement as h, useEffect } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { originOf } from '@/config/origins'
+import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { Service } from '@/config/services'
 import { deferred, mountElement } from '../ui/render-hook'
+import { origins } from './origin-wire'
 
 vi.mock('wxt/browser', () => ({ browser: { runtime: { id: 'test-extension', getURL: (path: string) => path } } }))
 const wire = vi.hoisted(() => ({
-  granted: new Set<string>(), asked: [] as string[], released: [] as string[], listed: [] as string[], candidates: [] as Service[],
+  asked: [] as string[], removed: [] as string[], listed: [] as string[], candidates: [] as Service[],
   connect: { ok: true, ms: 42 } as { ok: true; ms: number } | { ok: false; field: 'apiKey' | null; reason: string },
-  /** the stored value unreadable: a read answers with the defaults and why (config/storage.ts `readConfig`) */
+  /** what is stored: a saved service joins it (the form's caller saves, Translate.tsx) */
+  stored: null as unknown as Config,
+  /** the stored value unreadable: the background's read says so, and gives back nothing (config/origins.ts) */
   unreadable: false,
 }))
-// as storage.ts: the verdict comes with the read
-vi.mock('@/config/storage', async () => {
-  const { DEFAULT_CONFIG: defaults } = await import('@/config/schema')
-  return { readConfig: async () => ({ config: defaults, fallbackReason: wire.unreadable ? { kind: 'unknown' } : null }) }
+// the browser grants by pattern; the holds and the give-back are the page's model of them (origin-wire.ts)
+vi.mock('@/entrypoints/options/permissions', async () => {
+  const { origins: model } = await import('./origin-wire')
+  const { originOf: patternOf } = await import('@/config/origins')
+  return {
+    PermissionError: class extends Error {},
+    hasHostPermission: vi.fn(async (url: string) => model.granted.has(patternOf(url)!)),
+    ensureHostPermission: vi.fn(async (url: string) => {
+      wire.asked.push(url)
+      model.granted.add(patternOf(url)!)
+    }),
+    holdOrigin: vi.fn((url: string, service?: string) => model.holdOrigin(url, service)),
+    giveBackUnneeded: vi.fn(() => model.giveBackUnneeded()),
+  }
 })
-vi.mock('@/entrypoints/options/permissions', () => ({
-  PermissionError: class extends Error {},
-  hasHostPermission: vi.fn(async (url: string) => wire.granted.has(new URL(url).origin)),
-  ensureHostPermission: vi.fn(async (url: string) => {
-    wire.asked.push(url)
-    const origin = new URL(url).origin
-    if (wire.granted.has(origin)) return false
-    wire.granted.add(origin)
-    return true
-  }),
-  releaseHostPermission: vi.fn(async (url: string) => { wire.released.push(url) }),
-}))
 vi.mock('@/entrypoints/options/models', () => ({
   listModels: vi.fn(async (url: string) => { wire.listed.push(url); return [{ id: 'deepseek/deepseek-v4-flash', name: 'DeepSeek V4 Flash' }, { id: 'qwen/qwen3' }] }),
 }))
-vi.mock('@/entrypoints/options/connect', () => ({ connectService: vi.fn(async (candidate: Service) => { wire.candidates.push(candidate); return wire.connect }) }))
+// as connect.ts: the candidate's origin asked for, then the endpoint tested
+vi.mock('@/entrypoints/options/connect', async () => {
+  const { origins: model } = await import('./origin-wire')
+  const { originOf: patternOf } = await import('@/config/origins')
+  return { connectService: vi.fn(async (candidate: Service) => { model.granted.add(patternOf(candidate.baseURL)!); wire.candidates.push(candidate); return wire.connect }) }
+})
 
 import { type ConnectResult, connectService } from '@/entrypoints/options/connect'
 import { listModels } from '@/entrypoints/options/models'
-import { ensureHostPermission, releaseHostPermission } from '@/entrypoints/options/permissions'
+import { ensureHostPermission } from '@/entrypoints/options/permissions'
 import { KeyForm, STILL_MS, ServiceForm } from '@/entrypoints/options/sections/ServiceForm'
 import { O, setLocale } from '@/ui/strings'
+
+/** OpenRouter's origin is the manifest's own; the others are granted as a form asks */
+const START = ['https://openrouter.ai/*']
+const reset = () => {
+  Object.assign(wire, { asked: [], removed: [], listed: [], candidates: [], connect: { ok: true, ms: 42 }, stored: DEFAULT_CONFIG, unreadable: false })
+  origins.reset(wire.removed, START)
+  origins.stored = () => wire.stored
+  origins.readable = () => !wire.unreadable
+}
+/** what the stored services use, granted: a stored service's origin is its own */
+const store = (...services: Service[]) => {
+  wire.stored = { ...DEFAULT_CONFIG, services }
+  for (const s of services) origins.granted.add(originOf(s.baseURL)!)
+}
+const removed = () => wire.removed.map(line => line.replace(/^remove /, ''))
 
 const SVC: Service = { id: 'svc-abcd1234', kind: 'openai-compat', name: 'Mine', baseURL: 'https://api.example.com/v1', apiKey: 'sk-saved', model: 'm-1', thinking: 'disabled' }
 const inputs = (c: HTMLElement) => [...c.querySelectorAll<HTMLInputElement>('form input')]
@@ -58,12 +83,13 @@ describe('ServiceForm (§6.3)', () => {
   beforeEach(() => {
     setLocale('en')
     vi.useFakeTimers({ shouldAdvanceTime: true })
-    Object.assign(wire, { granted: new Set(['https://openrouter.ai']), asked: [], released: [], listed: [], candidates: [], connect: { ok: true, ms: 42 }, unreadable: false })
+    reset()
   })
   afterEach(() => { vi.useRealTimers() })
+  /** connected, the service is stored, as the settings page's caller stores it before the form lets go */
   const form = (over: Partial<Parameters<typeof ServiceForm>[0]> = {}) => {
     const done: [Service, number][] = []
-    const props = { target: 'cmn' as const, stored: [], onConnected: async (s: Service, ms: number) => { done.push([s, ms]) }, onCancel: () => {}, ...over }
+    const props = { target: 'cmn' as const, onConnected: async (s: Service, ms: number) => { done.push([s, ms]); wire.stored = { ...wire.stored, services: [...wire.stored.services, s] } }, onCancel: () => {}, ...over }
     return { done, element: h(ServiceForm, props) }
   }
 
@@ -115,7 +141,7 @@ describe('ServiceForm (§6.3)', () => {
   })
 
   it('a local address needs no key: its label says so, and the list may load without one', async () => {
-    wire.granted.add('http://localhost:11434')
+    origins.granted.add('http://localhost:11434/*')
     const { element } = form()
     const m = await mountElement(element)
     type(inputs(m.container)[0]!, 'http://localhost:11434/v1')
@@ -193,6 +219,7 @@ describe('ServiceForm (§6.3)', () => {
     let answer: (r: ConnectResult) => void = () => {}
     vi.mocked(connectService).mockImplementationOnce((candidate: Service) => {
       wire.candidates.push(candidate)
+      origins.granted.add(originOf(candidate.baseURL)!)
       return new Promise<ConnectResult>(resolve => { answer = resolve })
     })
     submit(m.container)
@@ -254,35 +281,36 @@ describe('ServiceForm (§6.3)', () => {
     await m.flush()
     await m.unmount()
     await vi.advanceTimersByTimeAsync(0)
-    expect(wire.released).toEqual(['https://api.deepseek.com/v1'])
+    expect(removed()).toEqual(['https://api.deepseek.com/*'])
   })
 
-  it('a suggestion\'s permission granted only after the form is gone is given back at once, with the stored addresses that keep an origin in use (Task 65, item 3)', async () => {
-    let answer: (granted: boolean) => void = () => {}
+  it('a suggestion\'s permission granted only after the form is gone is given back at once, a stored service\'s origin kept (Task 65, item 3)', async () => {
+    let answer: () => void = () => {}
     vi.mocked(ensureHostPermission).mockImplementationOnce((url: string) => {
       wire.asked.push(url)
-      return new Promise<boolean>(resolve => { answer = resolve })
+      return new Promise<void>(resolve => { answer = () => { origins.granted.add(originOf(url)!); resolve() } })
     })
-    const { element } = form({ stored: ['https://other.example.com/v1'] })
+    store({ ...SVC, baseURL: 'https://other.example.com/v1' })
+    const { element } = form()
     const m = await mountElement(element)
     button(m.container, 'DeepSeek').click()
     await m.flush()
-    // the browser's prompt is still open as the form goes: its clean-up has nothing to give back yet
+    // the browser's prompt is still open as the form goes: its clean-up has nothing granted to give back yet
     await m.unmount()
     await m.flush()
     expect(wire.asked).toEqual(['https://api.deepseek.com/v1'])
-    expect(wire.released).toEqual([])
-    answer(true)
+    expect(removed()).toEqual([])
+    answer()
     await m.flush()
-    expect(wire.released).toEqual(['https://api.deepseek.com/v1'])
-    expect(vi.mocked(releaseHostPermission)).toHaveBeenLastCalledWith('https://api.deepseek.com/v1', ['https://other.example.com/v1'])
+    expect(removed()).toEqual(['https://api.deepseek.com/*'])
+    expect(origins.granted.has('https://other.example.com/*')).toBe(true)
   })
 
   it('a press on the model field whose permission answers only after the form is gone loads no list (Task 65, round 2, item 3)', async () => {
-    let answer: (granted: boolean) => void = () => {}
+    let answer: () => void = () => {}
     vi.mocked(ensureHostPermission).mockImplementationOnce((url: string) => {
       wire.asked.push(url)
-      return new Promise<boolean>(resolve => { answer = resolve })
+      return new Promise<void>(resolve => { answer = resolve })
     })
     const { element } = form()
     const m = await mountElement(element)
@@ -294,11 +322,11 @@ describe('ServiceForm (§6.3)', () => {
     await m.flush()
     expect(wire.asked).toEqual(['https://api.deepseek.com/v1'])
     await m.unmount()
-    // granted already, not by this ask: the answer comes at once, and there is no form left to fill
-    answer(false)
+    // the answer comes once the form is gone: there is no form left to fill
+    answer()
     await m.flush()
     expect(wire.listed).toEqual([])
-    expect(wire.released).toEqual([])
+    expect(removed()).toEqual([])
   })
 
   // Fix round 1 (Opus review), item 1: Cancel means "stop, save nothing" even once a connection is already in flight
@@ -312,6 +340,7 @@ describe('ServiceForm (§6.3)', () => {
     let answer: (r: ConnectResult) => void = () => {}
     vi.mocked(connectService).mockImplementationOnce((candidate: Service) => {
       wire.candidates.push(candidate)
+      origins.granted.add(originOf(candidate.baseURL)!)
       return new Promise<ConnectResult>(resolve => { answer = resolve })
     })
     submit(m.container)
@@ -322,13 +351,14 @@ describe('ServiceForm (§6.3)', () => {
     await m.flush()
     expect(done).toEqual([])
     // Fix round 2, item 1: a cancelled success still gives back the permission it used
-    expect(wire.released).toEqual(['https://api.example.com/v1'])
+    expect(removed()).toEqual(['https://api.example.com/*'])
     await m.unmount()
   })
 
   // Fix round 2, item 1: a stored service using the same origin keeps it granted
-  it('a cancelled connect that goes on to succeed asks the helper to keep an origin a stored service still uses', async () => {
-    const { element } = form({ stored: ['https://api.example.com/v1'] })
+  it('a cancelled connect that goes on to succeed keeps an origin a stored service still uses', async () => {
+    store(SVC)
+    const { element } = form()
     const m = await mountElement(element)
     const [address, key, model] = inputs(m.container)
     type(address!, 'https://api.example.com/v1')
@@ -337,6 +367,7 @@ describe('ServiceForm (§6.3)', () => {
     let answer: (r: ConnectResult) => void = () => {}
     vi.mocked(connectService).mockImplementationOnce((candidate: Service) => {
       wire.candidates.push(candidate)
+      origins.granted.add(originOf(candidate.baseURL)!)
       return new Promise<ConnectResult>(resolve => { answer = resolve })
     })
     submit(m.container)
@@ -345,7 +376,8 @@ describe('ServiceForm (§6.3)', () => {
     answer({ ok: true, ms: 5 })
     await m.flush()
     await m.flush()
-    expect(vi.mocked(releaseHostPermission)).toHaveBeenCalledWith('https://api.example.com/v1', ['https://api.example.com/v1'])
+    expect(removed()).toEqual([])
+    expect(origins.granted.has('https://api.example.com/*')).toBe(true)
     await m.unmount()
   })
 
@@ -361,6 +393,7 @@ describe('ServiceForm (§6.3)', () => {
     let answer: (r: ConnectResult) => void = () => {}
     vi.mocked(connectService).mockImplementationOnce((candidate: Service) => {
       wire.candidates.push(candidate)
+      origins.granted.add(originOf(candidate.baseURL)!)
       return new Promise<ConnectResult>(resolve => { answer = resolve })
     })
     submit(m.container)
@@ -405,7 +438,7 @@ describe('ServiceForm (§6.3)', () => {
     await m.flush()
     await m.flush()
     expect(m.container.querySelector('.o-note')!.textContent).toBe(O.saveFailed)
-    expect(wire.released).toEqual(['https://api.newhost.example/v1'])
+    expect(removed()).toEqual(['https://api.newhost.example/*'])
     await m.unmount()
   })
 
@@ -413,19 +446,20 @@ describe('ServiceForm (§6.3)', () => {
   // once the stored value cannot be read — and its clean-up then ran while the service was handed over, giving nothing back
   const goneBeforeTheAnswer = async () => {
     const answer = deferred<void>()
-    const { element } = form({ stored: ['https://other.example.com/v1'], onConnected: () => answer.promise })
+    store({ ...SVC, baseURL: 'https://other.example.com/v1' })
+    const { element } = form({ onConnected: () => answer.promise })
     const m = await mountElement(element)
     const [address, key, model] = inputs(m.container)
     button(m.container, 'DeepSeek').click()
     await m.flush()
-    type(address!, 'https://openrouter.ai/api/v1')
-    type(key!, 'sk-or-1')
+    type(address!, 'https://api.newhost.example/v1')
+    type(key!, 'sk-1')
     type(model!, 'm-2')
     submit(m.container)
     await m.flush()
     await m.unmount()
     await m.flush()
-    expect(wire.released).toEqual([])
+    expect(removed()).toEqual([])
     return { answer, flush: m.flush }
   }
 
@@ -433,8 +467,8 @@ describe('ServiceForm (§6.3)', () => {
     const { answer, flush } = await goneBeforeTheAnswer()
     answer.reject(new Error('refused'))
     await flush()
-    expect(wire.released).toEqual(['https://openrouter.ai/api/v1', 'https://api.deepseek.com/v1'])
-    expect(vi.mocked(releaseHostPermission)).toHaveBeenLastCalledWith('https://api.deepseek.com/v1', ['https://other.example.com/v1'])
+    expect(removed().sort()).toEqual(['https://api.deepseek.com/*', 'https://api.newhost.example/*'])
+    expect(origins.granted.has('https://other.example.com/*')).toBe(true)
   })
 
   it('a save refused while the stored value cannot be read, the form gone before the answer, gives back no origin: which stored services share one is unknown (Task 107)', async () => {
@@ -442,7 +476,8 @@ describe('ServiceForm (§6.3)', () => {
     wire.unreadable = true
     answer.reject(new Error('refused'))
     await flush()
-    expect(wire.released).toEqual([])
+    expect(removed()).toEqual([])
+    expect(origins.holds).toEqual([])
   })
 
   // Fix round 1, item 4: the model field may still be disabled at the click that asks for it; the focus catches up
@@ -527,15 +562,103 @@ describe('ServiceForm (§6.3)', () => {
     await m.flush()
     await m.flush()
     expect(done).toHaveLength(1)
-    expect(wire.released).toEqual(['https://api.deepseek.com/v1'])
+    expect(removed()).toEqual(['https://api.deepseek.com/*'])
     await m.unmount()
+  })
+
+  it('a form\'s Cancel gives back only the origins no stored service and no other open form needs (#299 F2b)', async () => {
+    store(SVC)
+    // another form, open on this page or another settings tab, holds an origin of its own
+    const other = origins.holdOrigin('https://shared.example.com/v1')
+    origins.granted.add('https://shared.example.com/*')
+    const cancelled: string[] = []
+    const { element } = form({ onCancel: () => { cancelled.push('cancel') } })
+    const m = await mountElement(element)
+    const [address, key, model] = inputs(m.container)
+    button(m.container, 'DeepSeek').click()
+    await m.flush()
+    // the model field asks for the address typed: the shared one, then the stored service's own
+    type(key!, 'sk-1')
+    for (const url of ['https://shared.example.com/v1', SVC.baseURL]) {
+      type(address!, url)
+      await m.flush()
+      model!.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      await m.flush()
+      await m.flush()
+    }
+    expect(wire.asked).toEqual(['https://api.deepseek.com/v1', 'https://shared.example.com/v1', SVC.baseURL])
+    button(m.container, O.services.cancel).click()
+    await m.unmount()
+    await m.flush()
+    expect(cancelled).toEqual(['cancel'])
+    expect(removed()).toEqual(['https://api.deepseek.com/*'])
+    // the other form closes in turn: now nothing needs its origin
+    await other.release()
+    await origins.giveBackUnneeded()
+    expect(removed()).toEqual(['https://api.deepseek.com/*', 'https://shared.example.com/*'])
+    expect(origins.granted.has(originOf(SVC.baseURL)!)).toBe(true)
+  })
+
+  it('while a form connects, its origin is held: a give-back elsewhere — a deletion\'s commit inside its undo window — does not take it, and once saved the stored service keeps it (#299 F2c)', async () => {
+    const { element, done } = form()
+    const m = await mountElement(element)
+    const [address, key, model] = inputs(m.container)
+    type(address!, SVC.baseURL)
+    type(key!, 'sk-1')
+    type(model!, 'm-2')
+    let answer: (r: ConnectResult) => void = () => {}
+    vi.mocked(connectService).mockImplementationOnce((candidate: Service) => {
+      origins.granted.add(originOf(candidate.baseURL)!)
+      return new Promise<ConnectResult>(resolve => { answer = resolve })
+    })
+    submit(m.container)
+    await m.flush()
+    expect(origins.holds).toEqual(['axt-origin https://api.example.com/*'])
+    // the deletion of a service on this address, committed while the test is in flight
+    await origins.giveBackUnneeded()
+    expect(removed()).toEqual([])
+    answer({ ok: true, ms: 5 })
+    await m.flush()
+    await m.flush()
+    expect(done).toHaveLength(1)
+    expect(origins.holds).toEqual([])
+    expect(removed()).toEqual([])
+    expect(origins.granted.has('https://api.example.com/*')).toBe(true)
+    await m.unmount()
+  })
+
+  it('a failed connection gives back the origin taken for that attempt alone; one a suggestion asked for stays with the form until it closes', async () => {
+    wire.connect = { ok: false, field: 'apiKey', reason: 'no' }
+    const { element } = form()
+    const m = await mountElement(element)
+    const [address, key, model] = inputs(m.container)
+    type(address!, 'https://api.newhost.example/v1')
+    type(key!, 'sk-1')
+    type(model!, 'm-2')
+    submit(m.container)
+    await m.flush()
+    await m.flush()
+    expect(removed()).toEqual(['https://api.newhost.example/*'])
+    button(m.container, 'DeepSeek').click()
+    await m.flush()
+    type(key!, 'sk-2')
+    type(model!, 'm-2')
+    submit(m.container)
+    await m.flush()
+    await m.flush()
+    expect(removed()).toEqual(['https://api.newhost.example/*'])
+    expect(origins.granted.has('https://api.deepseek.com/*')).toBe(true)
+    await m.unmount()
+    await m.flush()
+    expect(removed()).toEqual(['https://api.newhost.example/*', 'https://api.deepseek.com/*'])
   })
 })
 
 describe('KeyForm (§6.3)', () => {
   beforeEach(() => {
     setLocale('en')
-    Object.assign(wire, { candidates: [], connect: { ok: true, ms: 7 } })
+    reset()
+    wire.connect = { ok: true, ms: 7 }
   })
 
   it('a refused key: the sentence, a new key, Update and connect; checked when submitted; connected, the service handed back with the key', async () => {
@@ -609,7 +732,7 @@ describe('the forms under StrictMode, as the settings page renders them (main.ts
   beforeEach(() => {
     setLocale('en')
     vi.useFakeTimers({ shouldAdvanceTime: true })
-    Object.assign(wire, { granted: new Set(['https://openrouter.ai']), asked: [], released: [], listed: [], candidates: [], connect: { ok: true, ms: 42 }, unreadable: false })
+    reset()
   })
   afterEach(() => { vi.useRealTimers() })
   const strict = (child: ReturnType<typeof h>) => h(StrictMode, null, child)
@@ -627,11 +750,12 @@ describe('the forms under StrictMode, as the settings page renders them (main.ts
 
   it('ServiceForm: a suggestion\'s grant is kept for the form, not given back at once; Connect hands the service over', async () => {
     const done: [Service, number][] = []
-    const m = await mountElement(strict(h(ServiceForm, { target: 'cmn', stored: [], onConnected: async (s: Service, ms: number) => { done.push([s, ms]) }, onCancel: () => {} })))
+    const m = await mountElement(strict(h(ServiceForm, { target: 'cmn', onConnected: async (s: Service, ms: number) => { done.push([s, ms]); store(s) }, onCancel: () => {} })))
     button(m.container, 'DeepSeek').click()
     await m.flush()
     expect(wire.asked).toEqual(['https://api.deepseek.com/v1'])
-    expect(wire.released).toEqual([])
+    expect(removed()).toEqual([])
+    expect(origins.holds).toEqual(['axt-origin https://api.deepseek.com/*'])
     const [, key, model] = inputs(m.container)
     type(key!, 'sk-1')
     type(model!, 'm-2')
@@ -640,18 +764,19 @@ describe('the forms under StrictMode, as the settings page renders them (main.ts
     await m.flush()
     expect(done.map(([s]) => s.baseURL)).toEqual(['https://api.deepseek.com/v1'])
     // the origin the saved service uses stays granted
-    expect(wire.released).toEqual([])
+    expect(removed()).toEqual([])
+    expect(origins.granted.has('https://api.deepseek.com/*')).toBe(true)
     await m.unmount()
   })
 
   it('ServiceForm closed with nothing saved still gives back what it asked for', async () => {
-    const m = await mountElement(strict(h(ServiceForm, { target: 'cmn', stored: [], onConnected: async () => {}, onCancel: () => {} })))
+    const m = await mountElement(strict(h(ServiceForm, { target: 'cmn', onConnected: async () => {}, onCancel: () => {} })))
     button(m.container, 'DeepSeek').click()
     await m.flush()
-    expect(wire.released).toEqual([])
+    expect(removed()).toEqual([])
     await m.unmount()
     await m.flush()
-    expect(wire.released).toEqual(['https://api.deepseek.com/v1'])
+    expect(removed()).toEqual(['https://api.deepseek.com/*'])
   })
 
   it('KeyForm: a new key that connects is handed over', async () => {
