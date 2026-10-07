@@ -540,14 +540,17 @@ async function serverPerf(name) {
   const { paper, target } = nameOf(name)
   const dir = join(ROOT, 'out/layer-gate/perf-make', `${process.pid}-${name}`)
   mkdirSync(dir, { recursive: true })
-  let maker = null
+  let maker = null, out = ''
   try {
-    const out = execFileSync(join(REPO, 'node_modules/.bin/tsx'), [MAKER, '--offline', ...(SWITCH ? ['--switch'] : []), `--engine=${ENGINE}`, `--only=${paper}:${target}`], { env: { ...process.env, LAYER_FIXTURES: dir }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
-    const m = /maker (\d+) ms, its operator lists (\d+) ms/.exec(out)
-    if (m) maker = { ms: Number(m[1]), opsMs: Number(m[2]) }
-  } catch {}
-  rmSync(dir, { recursive: true, force: true })
-  const layoutFile = join(FIXTURES, name, 'layout.json')
+    out = execFileSync(join(REPO, 'node_modules/.bin/tsx'), [MAKER, '--offline', ...(SWITCH ? ['--switch'] : []), `--engine=${ENGINE}`, `--only=${paper}:${target}`], { env: { ...process.env, LAYER_FIXTURES: dir }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+  } catch (e) { out = String(e?.stdout ?? '') }
+  // (the maker times itself before the output's translation is looked for: an output whose cut the fixtures hold no
+  // translation of, offline, still has its layout file made and timed)
+  const m = /maker (\d+) ms, its operator lists (\d+) ms/.exec(out)
+  if (m) maker = { ms: Number(m[1]), opsMs: Number(m[2]) }
+  // the layout file the server sends: this maker's own, where it made one, else the fixtures'
+  const made = join(dir, name, 'layout.json')
+  const layoutFile = existsSync(made) ? made : join(FIXTURES, name, 'layout.json')
   const layoutBytes = statSync(layoutFile).size, layoutGzip = gzipSync(readFileSync(layoutFile)).length
   let remover = null, addonBytes = 0, manifestGzip = 0
   if (REMOVAL) {
@@ -557,7 +560,8 @@ async function serverPerf(name) {
     addonBytes = built.shipped.appended
     manifestGzip = gzipSync(JSON.stringify(built.shipped.manifest)).length
   }
-  return { maker, remover, layoutBytes, layoutGzip, addonBytes, manifestGzip, download: layoutGzip + addonBytes + manifestGzip }
+  rmSync(dir, { recursive: true, force: true })
+  return { maker, remover, layoutBytes, layoutGzip, addonBytes, manifestGzip, download: layoutGzip + addonBytes + manifestGzip, layoutOf: layoutFile === made ? 'made' : 'fixtures' }
 }
 
 await Promise.all(Array.from({ length: Math.min(WORKERS, queue.length) }, worker))
