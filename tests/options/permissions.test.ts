@@ -27,15 +27,18 @@ vi.mock('@/shared/messages', () => ({
 
 import { PermissionError, ensureHostPermission, giveBackUnneeded, hasHostPermission, holdOrigin } from '@/entrypoints/options/permissions'
 
-/** One lock manager, as every context of the extension shares it: what is held, and what is let go */
-function fakeLocks() {
+/** One lock manager, as every context of the extension shares it: what is held, and what is let go. `late`: a grant
+ * waits for it, as one served after the page has moved on */
+function fakeLocks(late: Promise<void> | null = null) {
   const held: string[] = []
   return {
     held,
-    request: vi.fn((name: string, options: { mode: string }, callback: () => Promise<void>) => {
+    request: vi.fn(async (name: string, options: { mode: string }, callback: () => Promise<void>) => {
       expect(options.mode).toBe('shared')
+      if (late) await late
       held.push(name)
-      return callback().then(() => { held.splice(held.indexOf(name), 1) })
+      await callback()
+      held.splice(held.indexOf(name), 1)
     }),
   }
 }
@@ -81,7 +84,32 @@ describe('the settings page\'s host permissions', () => {
   it('an address with no origin holds nothing', async () => {
     const none = holdOrigin('nonsense')
     expect(locks.request).not.toHaveBeenCalled()
+    await expect(none.ready).resolves.toBeUndefined()
     await expect(none.release()).resolves.toBeUndefined()
+  })
+
+  it('`ready` settles once the lock manager has granted the hold, so a write awaiting it is never served before the hold is (I1)', async () => {
+    let grant = () => {}
+    locks = fakeLocks(new Promise<void>(resolve => { grant = resolve }))
+    vi.stubGlobal('navigator', { ...navigator, locks })
+    const hold = holdOrigin('https://api.example.com/v1', 'svc-mine0000')
+    let ready = false
+    void hold.ready.then(() => { ready = true })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect([ready, locks.held]).toEqual([false, []])
+    grant()
+    await hold.ready
+    expect(locks.held).toEqual(['axt-origin https://api.example.com/* svc-mine0000'])
+    await hold.release()
+    expect(locks.held).toEqual([])
+  })
+
+  it('a lock manager that refuses settles `ready` all the same: a write is never held up for good', async () => {
+    vi.stubGlobal('navigator', { ...navigator, locks: { request: vi.fn(async () => { throw new Error('refused') }) } })
+    const hold = holdOrigin('https://api.example.com/v1')
+    await expect(hold.ready).resolves.toBeUndefined()
+    await expect(hold.release()).resolves.toBeUndefined()
   })
 
   it('the page gives nothing back itself: it asks the background, and an ask that does not arrive fails nothing', async () => {

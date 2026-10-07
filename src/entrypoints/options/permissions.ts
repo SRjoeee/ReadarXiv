@@ -33,8 +33,15 @@ export async function hasHostPermission(baseURL: string): Promise<boolean> {
   return origin ? browser.permissions.contains({ origins: [origin] }) : false
 }
 
-/** One origin held by this page; `release` resolves once the lock is let go, so the ask that follows finds it gone */
+/** One origin held by this page */
 export interface Hold {
+  /**
+   * Settles once the lock manager has granted the hold — at once when nothing is held, and on a refusal too. The lock's
+   * request and a storage write go over separate channels: a write the hold must cover waits for this, or a sweep
+   * could read the write before the hold (the Task 14 review, I1)
+   */
+  ready: Promise<void>
+  /** Resolves once the lock is let go, so the ask that follows finds it gone */
   release(): Promise<void>
 }
 
@@ -47,11 +54,14 @@ export interface Hold {
 export function holdOrigin(url: string, service?: string): Hold {
   const name = originHold(url, service)
   const locks = globalThis.navigator?.locks
-  if (!name || !locks) return { release: async () => {} }
+  if (!name || !locks) return { ready: Promise.resolve(), release: async () => {} }
+  let granted = () => {}
   let letGo = () => {}
+  const ready = new Promise<void>(resolve => { granted = resolve })
   const held = new Promise<void>(resolve => { letGo = resolve })
-  const done = locks.request(name, { mode: 'shared' }, () => held).then(() => undefined, () => undefined)
-  return { release: () => { letGo(); return done } }
+  const done = locks.request(name, { mode: 'shared' }, () => { granted(); return held }).then(() => undefined, () => undefined)
+  void done.then(granted)
+  return { ready, release: () => { letGo(); return done } }
 }
 
 /**

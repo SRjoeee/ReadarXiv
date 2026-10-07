@@ -761,6 +761,28 @@ describe('the translation services (§6.3)', () => {
     await m.unmount()
   })
 
+  it('the deletion is written only once its hold is granted, and an undo pressed before that is written after it: the background, hearing of the deletion, always finds the undo held (I1)', async () => {
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: OTHER.id } }))
+    const granted = deferred<void>()
+    origins.grantedLate = granted.promise
+    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
+    await m.flush()
+    // the lock manager has not answered: nothing written yet
+    expect(wire.log).toEqual([])
+    expect(stored().services.map(s => s.id)).toEqual([MINE.id, OTHER.id])
+    ;[...card(m.container).querySelector<HTMLElement>('[data-undo]')!.querySelectorAll('button')].find(b => b.textContent === O.undo.undo)!.click()
+    await m.flush()
+    expect(wire.log).toEqual([])
+    granted.resolve()
+    await m.flush()
+    await m.flush()
+    // the deletion, then its undo: the service is back where it was
+    expect(wire.log).toEqual(['patch', 'patch'])
+    expect(stored().services.map(s => s.id)).toEqual([MINE.id, OTHER.id])
+    expect(origins.holds).toEqual([])
+    await m.unmount()
+  })
+
   it('a deletion\'s commit inside the undo window keeps an origin a form is connecting with: the service deleted, its address added again (#299 F2c)', async () => {
     const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: OTHER.id } }))
     menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()

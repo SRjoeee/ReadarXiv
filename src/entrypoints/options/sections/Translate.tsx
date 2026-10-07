@@ -269,9 +269,9 @@ function useDeletions(config: Config, writes: ListWrites<Config>, focusOn: { now
     }
   }, [commit])
   const remove = (service: Service, focus: boolean) => {
-    // held before the write: the background, hearing of the deletion, finds the undo open
+    // written only once the hold is granted: the background, hearing of the deletion, finds the undo held (I1)
     const hold = holdOrigin(service.baseURL, service.id)
-    const stored = writes.attempt(latest => ({ ...latest, services: latest.services.filter(s => s.id !== service.id), provider: latest.provider === service.id ? 'microsoft' : latest.provider }))
+    const stored = hold.ready.then(() => writes.attempt(latest => ({ ...latest, services: latest.services.filter(s => s.id !== service.id), provider: latest.provider === service.id ? 'microsoft' : latest.provider })))
     const g: Gone = { service, index: config.services.findIndex(s => s.id === service.id), chosen: config.provider === service.id, focus, stored, hold }
     pending.current.add(g)
     setGone(x => [...x, g])
@@ -288,8 +288,9 @@ function useDeletions(config: Config, writes: ListWrites<Config>, focusOn: { now
   const undo = (g: Gone) => {
     pending.current.delete(g)
     setGone(x => x.filter(y => y !== g))
-    void writes.attempt(latest => (latest.services.some(s => s.id === g.service.id) ? latest
-      : { ...latest, services: insertAt(latest.services, g.index, g.service), provider: g.chosen && latest.provider === 'microsoft' ? g.service.id : latest.provider }))
+    // after the same grant the deletion's write waits for, so an undo pressed before it is written after the deletion
+    void g.hold.ready.then(() => writes.attempt(latest => (latest.services.some(s => s.id === g.service.id) ? latest
+      : { ...latest, services: insertAt(latest.services, g.index, g.service), provider: g.chosen && latest.provider === 'microsoft' ? g.service.id : latest.provider })))
       .then(done => {
         // the focus goes to the service's radio once its row is drawn again, as the styles and the prompts lists do: a
         // frame after the press, or after the write, may find no row yet, and the focus falls to the page (Part 7's

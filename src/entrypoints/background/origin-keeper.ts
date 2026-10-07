@@ -48,13 +48,25 @@ export interface OriginKeeper {
   configChanged(next: Config, previous: Config | null): void
 }
 
+/**
+ * The three reads of a sweep are served over separate channels — the browser's permissions, its lock manager, extension
+ * storage — and each answers with the state at the moment it is served, so asked together one may be served long after
+ * another. A page takes its hold before the grant or the write it covers, and lets it go only once its write has landed
+ * (options/permissions.ts). So the sweep reads **the grants, then the holds, then the settings**, each once the one
+ * before has answered: an origin granted after the grants were read is not among them; one whose hold was let go
+ * before the holds were read was stored before the settings were read. Asked together, a save that lands and lets go in
+ * between would find its origin in neither and lose it (the Task 14 review, I1). A departure's look reads the holds
+ * before the settings for the same reason: an undo that lands and lets go in between is then stored
+ */
 export function createOriginKeeper(deps: OriginKeeperDeps): OriginKeeper {
   const sweep = async (): Promise<number> => {
     let granted: readonly string[]
     let holds: readonly string[]
     let reading: ConfigReading
     try {
-      ;[granted, holds, reading] = await Promise.all([deps.granted(), deps.holds(), deps.read()])
+      granted = await deps.granted()
+      holds = await deps.holds()
+      reading = await deps.read()
     } catch {
       // a hold that cannot be read may be a form asking for any origin: nothing goes back on a guess
       deps.warn('[axt] host permissions: the grants, the holds or the settings could not be read, nothing given back')
@@ -92,10 +104,12 @@ export function createOriginKeeper(deps: OriginKeeperDeps): OriginKeeper {
     }, DEPARTURE_CHECK_MS))
   }
   const look = async (id: string, left: number): Promise<void> => {
-    let reading: ConfigReading
     let holds: readonly string[]
+    let reading: ConfigReading
     try {
-      ;[reading, holds] = await Promise.all([deps.read(), deps.holds()])
+      // the holds first, the settings after: see the order above
+      holds = await deps.holds()
+      reading = await deps.read()
     } catch {
       if (left > 0) watch(id, left - 1)
       return

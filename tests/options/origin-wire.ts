@@ -18,19 +18,23 @@ export const origins = {
   readable: (): boolean => true,
   /** where the give-backs are written, in order with the test's own lines */
   log: [] as string[],
+  /** set, the next holds are granted only once it settles: the lock manager answering late */
+  grantedLate: null as Promise<void> | null,
   reset(log: string[], granted: readonly string[] = []) {
     this.granted = new Set(granted)
     this.holds = []
     this.stored = () => DEFAULT_CONFIG
     this.readable = () => true
     this.log = log
+    this.grantedLate = null
   },
   holdOrigin(url: string, service?: string) {
     const name = originHold(url, service)
-    if (!name) return { release: async () => {} }
+    if (!name) return { ready: Promise.resolve(), release: async () => {} }
     origins.holds.push(name)
     let held = true
     return {
+      ready: origins.grantedLate ?? Promise.resolve(),
       release: async () => {
         if (!held) return
         held = false

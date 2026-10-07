@@ -199,6 +199,84 @@ describe('the origin keeper', () => {
     expect(w.log).toEqual([expect.stringMatching(/^warn /), 'remove https://b.example.com/*'])
   })
 
+  /**
+   * Each read answers with the state at the moment it is served, and the three are served over separate channels (the
+   * browser's permissions, its lock manager, extension storage): asked together, one may be served long after another.
+   * A page takes a hold before its grant or its write and lets it go only once the write has landed, so only a sweep
+   * that reads the grants, then the holds, then the settings — each after the one before has answered — always sees
+   * an origin in use in one of them (Task 14 review, I1)
+   */
+  const racing = () => {
+    const state = { granted: ['https://api.example.com/*'], holds: [] as string[], stored: { ...DEFAULT_CONFIG, services: [] as Service[] } as Config, chains: [] as Config[] }
+    const served: string[] = []
+    let late: (() => void) | null = null
+    /** this read is served only once `release()` is called; the others at once */
+    const slow = new Set<string>()
+    const serve = <T,>(name: string, value: () => T): Promise<T> => {
+      if (!slow.has(name)) { served.push(name); return Promise.resolve(value()) }
+      return new Promise(resolve => { late = () => { served.push(name); resolve(value()) } })
+    }
+    const log: string[] = []
+    const keeper = createOriginKeeper({
+      granted: () => serve('granted', () => [...state.granted]),
+      remove: async origin => { log.push(`remove ${origin}`) },
+      manifest: () => [],
+      read: () => serve('read', () => ({ config: state.stored, fallbackReason: null })),
+      holds: () => serve('holds', () => [...state.holds]),
+      chains: () => state.chains,
+      moveAll: async id => { log.push(`move ${id}`) },
+      warn: line => log.push(`warn ${line}`),
+    })
+    return { state, served, slow, release: () => late?.(), keeper, log }
+  }
+
+  it('a sweep reads the holds only once the grants have answered, and the settings only once the holds have: a save that lands and lets its hold go in between keeps its origin (I1)', async () => {
+    const r = racing()
+    // a form connecting with the address holds it; the sweep's lock query is served late
+    r.state.holds = [originHold(MINE.baseURL)!]
+    r.slow.add('holds')
+    const sweep = r.keeper.sweep()
+    await vi.advanceTimersByTimeAsync(0)
+    // the form's save lands, and it lets go of its hold
+    r.state.stored = { ...DEFAULT_CONFIG, services: [MINE] }
+    r.state.holds = []
+    r.release()
+    expect(await sweep).toBe(0)
+    expect(r.log).toEqual([])
+    expect(r.served).toEqual(['granted', 'holds', 'read'])
+  })
+
+  it('a sweep reads the grants before the holds: a hold taken and an origin granted in between are not taken for unneeded (I1)', async () => {
+    const r = racing()
+    r.state.granted = []
+    r.slow.add('granted')
+    const sweep = r.keeper.sweep()
+    await vi.advanceTimersByTimeAsync(0)
+    // a form holds an address, then the browser grants it
+    r.state.holds = [originHold(MINE.baseURL)!]
+    r.state.granted = ['https://api.example.com/*']
+    r.release()
+    expect(await sweep).toBe(0)
+    expect(r.log).toEqual([])
+  })
+
+  it('a departure\'s look reads the holds before the settings: an undo that lands and lets its hold go in between moves nothing (I1)', async () => {
+    const r = racing()
+    r.state.holds = [originHold(MINE.baseURL, MINE.id)!]
+    // a page still translates on the chain built before the deletion
+    r.state.chains = [BEFORE]
+    r.keeper.configChanged(r.state.stored, { ...DEFAULT_CONFIG, services: [MINE] })
+    r.slow.add('holds')
+    await vi.advanceTimersByTimeAsync(DEPARTURE_CHECK_MS)
+    // the undo's write lands, the service is stored again, and the page lets its hold go
+    r.state.stored = { ...DEFAULT_CONFIG, services: [MINE] }
+    r.state.holds = []
+    r.slow.clear()
+    r.release()
+    await vi.advanceTimersByTimeAsync(DEPARTURE_CHECK_MS * 3)
+    expect(r.log).toEqual([])
+  })
+
   it('holds that cannot be read give back nothing: a form may be asking for any of them', async () => {
     const w = world({ ...DEFAULT_CONFIG, services: [] })
     const keeper = createOriginKeeper({
