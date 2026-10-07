@@ -1,9 +1,9 @@
-// The indexed name rule (src/pdf-reader/engine/names.mjs) against the rule it would replace (isName with capitals the prose writes
+// The indexed name rule (src/core/names.ts) against the rule it would replace (isName with capitals the prose writes
 // in lower case taken as words, eval-names3.mjs), on the same boxes and the same hand verdicts: per language, the boxes
 // each keeps that the engine changed — saves (names) and spoils (words) — and the boxes the two disagree on.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { nameEvidence, isName } from '../../../src/pdf-reader/engine/names.mjs'
+import { isName, nameEvidence } from '../../../src/core/names'
 import { capsCommon, WORDS } from './eval-names3.mjs'
 const root = new URL('..', import.meta.url).pathname
 const papers = new Map(JSON.parse(readFileSync(join(root, 'out/eval-labels.json'), 'utf8')).map(p => [p.id, p.prose]))

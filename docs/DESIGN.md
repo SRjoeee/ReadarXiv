@@ -888,7 +888,9 @@ is only how it meets the rest of the extension.
   reader reads and writes them through the surface configuration, as the popup does, and follows a change made anywhere.
 - **Translation** goes through the background's chain (§8.0), whose segment cache answers what it already knows. The
   figures' text goes through the same image pipeline and recogniser (§15). A vector figure's labels are read from
-  PDF.js's text rather than recognised. On the markers wire (§6.2, the free engines'), a reply is read back with one
+  PDF.js's text rather than recognised. A label that is only a name by §15.1's test (`core/names.ts`, the prose being
+  the paper's units, indexed once) is sent to no engine and keeps its text; the cells and figure units a compile leaves
+  as they are keep the pipeline's own test (`mt.mjs` `nameCells`) until a pipeline version moves. On the markers wire (§6.2, the free engines'), a reply is read back with one
   forgiveness more (`mt.mjs` `rehydrate`): a marker's `#` the engine set twice, `@e##` or `@e# #`, is the marker's,
   and so is the first stray `#` after a marker read without its own — the wire's text holds no `#` of its own, TeX's
   `\#` being a placeholder — where Microsoft's Chinese for 2610.02069 had set the second as text ("El Ni ñ#",

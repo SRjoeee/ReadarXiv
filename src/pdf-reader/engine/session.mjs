@@ -27,6 +27,7 @@ import { localeStale } from '@/ui/use-surface-config'
 import { ocrCall } from '../ocr'
 import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFViewer, pdfjsLib } from '../pdfjs'
 import { displayOf, figuresShown, followOf, withDisplay } from '../settings'
+import { isName, nameEvidence } from '../../core/names'
 import { whenVisible } from '../visible'
 import { contentsOf, outlineOf } from '../outline'
 import { keepOverlays, pinned } from './overlay.mjs'
@@ -40,7 +41,7 @@ import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from 
 import { captionFor, floatHitOf, floatOf, floatsAgree, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from './floats.mjs'
 import { hostReady } from './host.mjs'
 import { compilerKeeper, keptFor, openPaper, PIPELINE_CARRIES, PIPELINE_VERSION, runLive, TYPESETTING_VERSION } from './live.mjs'
-import { displayEdges, isName, plainSource, sentencesKept, unitText, WIRE } from './mt.mjs'
+import { displayEdges, plainSource, sentencesKept, unitText, WIRE } from './mt.mjs'
 import { texHints } from './hints.mjs'
 import { verified, VERIFIED } from './scripts.mjs'
 import { answerWant, shareLock } from './tex-store.mjs'
@@ -560,6 +561,9 @@ function floatsFor(side, p, error = null) {
 /** the paper's title and abstract, with every batch (engine.mjs); in live mode known once the source is read, and the
  *  figures' text waits for it rather than go out without it and be cached so (Codex on #296) */
 let prose = '', paperCtx = Promise.resolve({})
+/** what the prose says of names (core/names), indexed once for each prose the paper's units give, not once a label */
+let names = { prose: null, evidence: null }
+const namesOf = () => (names.prose === prose ? names : (names = { prose, evidence: nameEvidence(prose) })).evidence
 /** the extension's chain for this page's paper (engine.mjs), opened once: the units' translation and the figures' text */
 let engineP = null
 // its scope is withdrawn when the page goes, whichever mode opened it (engine.mjs)
@@ -800,10 +804,11 @@ async function paintFigures(side, n) {
       const from = theirs.get(i)
       if (frames && !from) return null
       const fig = await (from ? figureOf(left, from.page, from.k) : figureOf(side, n, i))
-      // a line that is only a name joins no box and keeps its text (mt.mjs isName): merged, a legend's
+      // a line that is only a name joins no box and keeps its text (core/names, the HTML page's rule): merged, a legend's
       // Average / DirectHarm4 / HarmBench / HEx-PHI went as one text and DirectHarm4 came back as 直接伤害 4; alone, the
-      // HTML mode's tick names came back as 地狱之战 (HellaSwag) and 魔法师 (Magicoder). Proposed for the shared module
-      const boxes = linesToBoxes(fig.lines.filter(l => !isName(l.text, prose)))
+      // HTML mode's tick names came back as 地狱之战 (HellaSwag) and 魔法师 (Magicoder)
+      const evidence = namesOf()
+      const boxes = linesToBoxes(fig.lines.filter(l => !isName(l.text, evidence)))
       const done = boxes.length ? await translateBoxes(boxes) : []
       const labels = boxes.flatMap((b, j) => (done[j] && done[j] !== b.text ? [{ ...b, source: b.text, text: done[j] }] : []))
       if (!labels.length && !frames) return null
