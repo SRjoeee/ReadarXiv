@@ -325,14 +325,27 @@ async function layoutOf(id, paper, dir) {
       write(marksAt(key), marksBytes)
     }
   } else {
-    // E5's: the engine makes the marks in one call (layout/paper.mjs); the compiles are this file's, kept by what they compile
+    // E5's: the engine makes the marks in one call (layout/paper.mjs); the compiles are this file's, kept by what they compile.
+    // The call turns whatever its compile throws into a refusal, which is a paper the maker cannot lay out; a fault of this
+    // file's own (the disk guard, a full disk) is not that, so it is kept and thrown again: the run fails and writes nothing
     const { layoutMarksOfPaper } = await engine('layout/paper.mjs')
+    let fault = null
     const compile = async req => {
-      const probe = !req.rerun
-      const c = await compiled(dir, `${probe ? 'probe-' : ''}${keyOf(req.overrides)}`, withSource(req.overrides), paper, { passes: probe ? 1 : null })
-      return c ? { ok: !!c.pdf?.length, pdf: c.pdf, log: c.log } : { ok: false, error: 'no log' }
+      try {
+        const probe = !req.rerun
+        const c = await compiled(dir, `${probe ? 'probe-' : ''}${keyOf(req.overrides)}`, withSource(req.overrides), paper, { passes: probe ? 1 : null })
+        return c ? { ok: !!c.pdf?.length, pdf: c.pdf, log: c.log } : { ok: false, error: 'no log' }
+      } catch (e) { fault = e; throw e }
     }
-    const made = await layoutMarksOfPaper(paper, { compile, open: async bytes => { const task = open(bytes); return { doc: await task.promise, close: () => task.destroy() } }, OPS })
+    const made = await layoutMarksOfPaper(paper, {
+      compile,
+      open: async bytes => {
+        const task = open(bytes)
+        try { return { doc: await task.promise, close: () => task.destroy() } } catch (e) { await task.destroy().catch(() => {}); throw e }
+      },
+      OPS,
+    })
+    if (fault) throw fault
     if (!('marks' in made)) return { refused: made.refused, stats: null }
     marksBytes = Buffer.from(made.marks)
     asked = true

@@ -72,14 +72,17 @@ async function dockerCompile(dir, name, files, paper, { once, bibtex }) {
 async function kept(at, dir, name, files, paper, how, make) {
   const pdfF = join(at, `${name}.pdf`), logF = join(at, `${name}.log`)
   if (existsSync(logF)) return { pdf: existsSync(pdfF) ? new Uint8Array(readFileSync(pdfF)) : null, log: readFileSync(logF, 'latin1'), seconds: null }
-  if (!make) throw new Error(`${name}: not in ${at} (layer-fixtures.mjs --switch makes it)`)
+  if (!make) throw new Error(`${name}: not in ${at} (layer-fixtures.mjs makes it)`)
   const c = await dockerCompile(dir, name, files, paper, how)
   if (c) { mkdirSync(at, { recursive: true }); if (c.pdf) writeFileSync(pdfF, c.pdf); writeFileSync(logF, Buffer.from(c.log, 'latin1')) }
   return c
 }
 
 /** a PDF.js document of the bytes, with the close the call asks for */
-const opened = async bytes => { const task = open(bytes); return { doc: await task.promise, close: () => task.destroy() } }
+const opened = async bytes => {
+  const task = open(bytes)
+  try { return { doc: await task.promise, close: () => task.destroy() } } catch (e) { await task.destroy().catch(() => {}); throw e }
+}
 
 /**
  * The reference: the sequence layer-fixtures.mjs --switch had before E5 (its layoutOf), unchanged — the probe's compile
