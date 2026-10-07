@@ -22,8 +22,8 @@ export const ADDON_MANIFEST_CAP = 256 * 1024
 export const ADDON_MANIFEST_VALUES = 100_000
 /** the deepest the manifest nests: its object, `page`, a page's entry, its `units`, a unit's boxes */
 const DEPTH = 5
-/** a refused page's reason at most, in code units (the maker cuts its own to it) */
-const REFUSED_MAX = 200
+/** a refused page's reason at most, in code units (the maker, layout/addon.mjs, cuts its own to it) */
+export const REFUSED_MAX = 200
 /** the page sets an add-on may hold after arXiv's own pages, in their order (remove.mjs SETS and CHECK_SETS), and those
  *  the shipped add-on holds (SETS) */
 const SET_NAMES = ['R', 'P', 'F', 'C'], SHIPPED_SETS = ['R']

@@ -5,6 +5,8 @@ export declare const REMOVAL: '4'
 export declare const ADDON_CAP: number
 export declare const ADDON_MANIFEST_CAP: number
 export declare const ADDON_MANIFEST_VALUES: number
+/** a refused page's reason at most, in code units */
+export declare const REFUSED_MAX: number
 /** the add-on's manifest: per page whether it is removed (`ok`) or why not, and each unit's removed boxes (x0, y0, x1, y1
  *  stride 4, PDF units); the sets' places (each its page p at offset + p), or, compact, each page's own (`at`, the
  *  combined document's page by set); the kept ink under the page's units' rectangles (`dirty`, x0, y0, x1, y1 stride 4);
