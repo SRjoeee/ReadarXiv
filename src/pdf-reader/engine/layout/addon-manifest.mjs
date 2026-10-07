@@ -57,9 +57,10 @@ function keysOf(v, required, optional, path) {
 /**
  * Boxes x0, y0, x1, y1 (stride 4) on page `page`: finite numbers, each box not empty (x0 < x1, y0 < y1), within the
  * page's view by SLACK where `views` is given (4 × pages numbers, the layout file's form), else within ±COORD_MAX.
- * Refused at the number that breaks it
+ * Refused at the number that breaks it, a LayoutRefusal. The maker (layout/addon.mjs) asks it of a page's boxes before it
+ * writes them, so that one page the manifest cannot hold costs that page and not the paper
  */
-function boxes(v, page, views, path) {
+export function checkBoxes(v, page, views, path) {
   if (!Array.isArray(v) || v.length % 4 !== 0) throw refuse(path, `not boxes of 4 numbers (${kindOf(v)})`)
   const o = 4 * (page - 1)
   const xlo = views ? views[o] - SLACK : -COORD_MAX, ylo = views ? views[o + 1] - SLACK : -COORD_MAX
@@ -122,15 +123,15 @@ export function checkAddonManifest(m, { pages, views = null, shipped = false }) 
       if (!isObject(units)) throw refuse(`${path}.units`, `not an object (${kindOf(units)})`)
       for (const id of Object.keys(units)) {
         if (!UNIT_KEY.test(id)) throw refuse(`${path}.units.${told(id)}`, 'not a unit\'s id')
-        boxes(units[id], p, views, `${path}.units.${id}`)
+        checkBoxes(units[id], p, views, `${path}.units.${id}`)
       }
     }
     if (Object.hasOwn(e, 'at')) {
       const at = keysOf(e.at, [], setNames, `${path}.at`)
       for (const s of Object.keys(at)) { ats.push(at[s]); atPaths.push(`${path}.at.${s}`) }
     }
-    if (Object.hasOwn(e, 'dirty')) boxes(e.dirty, p, views, `${path}.dirty`)
-    if (Object.hasOwn(e, 'rules')) boxes(e.rules, p, views, `${path}.rules`)
+    if (Object.hasOwn(e, 'dirty')) checkBoxes(e.dirty, p, views, `${path}.dirty`)
+    if (Object.hasOwn(e, 'rules')) checkBoxes(e.rules, p, views, `${path}.rules`)
   }
   // the add-on's document: arXiv's pages, each set's block of them, and the pages named by `at`
   const total = pages * (1 + names.length) + ats.length, seen = new Set()

@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { Worker } from 'node:worker_threads'
 import { constants as zlibConstants, deflateRawSync, deflateSync, inflateRawSync, inflateSync } from 'node:zlib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { readBundle, writeBundle } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { paperAddon } from '@/pdf-reader/engine/layout/addon.mjs'
 import { ADDON_CAP, parseAddonManifest, REFUSED_MAX, REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
@@ -188,16 +188,24 @@ describe('paperAddon: the shipped add-on of a paper', () => {
     }
   })
 
-  it('refuses an add-on past what a reader takes, and a manifest outside the reader\'s bounds', async () => {
+  it('refuses an add-on past what a reader takes, and a throw with no message to read is a reason too', async () => {
     const index = layoutOf(UNITS, 4)
     // every stream the update holds 5 MiB (ADDON_CAP is 4)
     const big = await made(PAPER, index, { deflate: () => new Uint8Array(5 * 2 ** 20) })
     expect(big).toMatchObject({ ok: false, refused: expect.stringContaining(String(ADDON_CAP)) })
-    // ink the layout file's page view lies beside (the page is 100 units wide to the file): the box is past its view
-    const narrow = layoutOf(UNITS, 4)
-    const file = { ...narrow.file, views: narrow.file.views.map((v, i) => (i % 4 === 2 ? 100 : v)) }
-    const r = await made(PAPER, { ...narrow, file } as LayoutIndex)
-    expect(r).toMatchObject({ ok: false, refused: expect.stringMatching(/^the manifest/) })
+    // (an object with no prototype has no message, and String() of it throws)
+    const nothing = { numPages: 4, getPage: async () => { throw Object.create(null) } }
+    expect(await made(PAPER, index, { doc: nothing })).toEqual({ ok: false, refused: 'the add-on could not be made: an error that cannot be read' })
+  })
+
+  it('a manifest the reader would refuse past the pages\' own checks is the paper\'s refusal, whole: the backstop', async () => {
+    // (the manifest's JSON stands in as one past the reader's 256 KiB: the pages' own checks keep a real one within it)
+    const real = JSON.stringify as (...a: unknown[]) => string
+    const index = layoutOf(UNITS, 4)
+    const spy = vi.spyOn(JSON, 'stringify').mockImplementation(((v: unknown, ...a: unknown[]) => ((v as { removal?: string } | null)?.removal === REMOVAL ? 'x'.repeat(300_000) : real(v, ...a))) as never)
+    try {
+      expect(await made(PAPER, index)).toMatchObject({ ok: false, refused: expect.stringMatching(/^the manifest is outside the reader's bounds: .*more than/) })
+    } finally { spy.mockRestore() }
   })
 
   it('imports nothing but the engine\'s own relative modules: no node:*, so a Node child and a browser worker run it', () => {
@@ -206,6 +214,60 @@ describe('paperAddon: the shipped add-on of a paper', () => {
     expect(specs.length).toBeGreaterThan(0)
     for (const s of specs) expect(s, s).toMatch(/^\.\.?\//)
     expect(src).not.toMatch(/\brequire\s*\(|\bprocess\./)
+  })
+})
+
+describe('paperAddon: one page the manifest cannot hold costs that page, not the paper', () => {
+  // page 1 as PAPER's (a unit's line and a kept glyph under its rectangle: removed, R at 3); page 2 a unit's line and `extra`
+  // in the page's content, kept ink meeting the unit's rectangle that the manifest cannot hold
+  const twoPages = (extra: string) => pdfOf([
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
+    page(5),
+    page(6),
+    ['', 'BT /F1 10 Tf 72 700 Td (Hello world) Tj ET\nBT /F1 10 Tf 100 688 Td (K) Tj ET'],
+    ['', `BT /F1 10 Tf 72 700 Td (Clean text) Tj ET\n${extra}`],
+    font,
+  ])
+  const TWO = [UNITS[0] as UnitDef, UNITS[1] as UnitDef]
+  const cases: [string, string, RegExp][] = [
+    // (thin rules sticking out of a unit's rectangle on both sides: 80,000 numbers, 360 KB, past what the manifest's share holds)
+    ['20,000 thin rectangles sticking out of a unit', Array.from({ length: 20000 }, (_, i) => `${(70 + (i % 600) * 0.1).toFixed(1)} ${(685 + (i % 7) * 0.1).toFixed(1)} 0.3 30 re f`).join('\n'), /more than the manifest has left/],
+    ['a fill running past the page\'s view by more than 1 unit', 'q 700 0 0 50 -50 690 cm 1 0 0 rg 0 0 1 1 re f Q', /cannot be written: dirty\[0\]: not a number within its page's view/],
+    ['a zero-width fill', '80 690 0 20 re f', /cannot be written: dirty\[2\]: an empty box/],
+  ]
+  for (const [what, extra, why] of cases) {
+    it(`${what}: that page is refused and left out of R, the other page's removal kept, the manifest readable`, async () => {
+      const bytes = twoPages(extra)
+      const r = addonOf(await made(bytes, layoutOf(TWO, 2)))
+      expect(r.manifest.page[1]).toMatchObject({ ok: true, at: { R: 3 } })
+      expect(r.manifest.page[2]).toEqual({ ok: false, refused: expect.stringMatching(why) })
+      expect(r.manifest.page[2]?.refused?.length).toBeLessThanOrEqual(REFUSED_MAX)
+      // no R page the manifest does not name: arXiv's two pages and page 1's R
+      expect((await open(concat(bytes, r.tail))).numPages).toBe(3)
+      expect(r.manifest.stats).toMatchObject({ streams: 1 })
+      expect(parseAddonManifest(utf8(JSON.stringify(r.manifest)), { pages: 2, shipped: true })).toEqual(r.manifest)
+    })
+  }
+
+  it('rules the manifest cannot hold refuse their page too, a clean one with them', async () => {
+    // a thin rule above a cell's line, 2 units past the page's right edge (the cell's line ends within it)
+    const bytes = pdfOf(['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>', page(4).replace('/F1 7 0 R', '/F1 5 0 R'), ['', 'BT /F1 10 Tf 72 700 Td (Clean text) Tj ET\n600 660 14 0.5 re f'], font])
+    const cell: UnitDef = { id: 3, kind: 'cell', lines: [{ page: 1, x0: 590, x1: 611, baseline: 650 }] }
+    const r = addonOf(await made(bytes, layoutOf([para(2, 1, 122, [[0, 70, 693, 125, 710]]), cell], 1)))
+    expect(r.manifest.page[1]).toEqual({ ok: false, refused: expect.stringMatching(/^its kept ink or rules cannot be written: rules\[2\]/) })
+    expect(r.tail.length).toBeGreaterThan(0)
+  })
+
+  it('a layout file\'s page view narrower than the ink refuses the pages whose boxes it does not hold, and the others stand', async () => {
+    const narrow = layoutOf(UNITS, 4)
+    const file = { ...narrow.file, views: narrow.file.views.map((v, i) => (i % 4 === 2 ? 100 : v)) }
+    const r = addonOf(await made(PAPER, { ...narrow, file } as LayoutIndex))
+    // (the kept glyph of page 1 ends past 101, the rule of page 2 too; page 4 is the remover's)
+    expect(r.manifest.page[1]).toEqual({ ok: false, refused: expect.stringMatching(/^its kept ink or rules cannot be written/) })
+    expect(r.manifest.page[2]).toEqual({ ok: false, refused: expect.stringMatching(/^its kept ink or rules cannot be written/) })
+    expect(r.manifest.page[4]).toMatchObject({ ok: false, refused: expect.stringMatching(/painted more than once/) })
+    expect(parseAddonManifest(utf8(JSON.stringify(r.manifest)), { pages: 4, shipped: true })).toEqual(r.manifest)
   })
 })
 

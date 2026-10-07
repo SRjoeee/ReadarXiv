@@ -21,7 +21,9 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 const ROOT = new URL('..', import.meta.url).pathname, REPO = new URL('../../..', import.meta.url).pathname
 const ENGINE = join(REPO, 'src/pdf-reader/engine')
 const arg = name => process.argv.find(x => x.startsWith(`--${name}=`))?.slice(name.length + 3)
-/** the commit whose remover made the cached add-ons (the gate digests the remover's files into the cache's key): the tree this branch was cut from */
+/** the commit whose remover made the cached add-ons (the gate digests the remover's files into the cache's key): the tree this
+ *  branch was cut from. The default lives as long as those caches (out/layer-gate/removal/ keyed by that digest); once
+ *  they are gone, name the commit whose caches are held */
 const BASE = arg('base') ?? '2dadca7e'
 const FIXTURES = join(ROOT, 'out/layer-gate/fixtures', arg('fixtures') ?? '41795914c3c84238'), REMOVALS = join(ROOT, 'out/layer-gate/removal')
 const PAPERS = ['1512.03385v1', '1706.03762v7', '1810.04805v2', '2307.16209v1', '2608.04322v1']
@@ -83,7 +85,7 @@ for (const name of PAPERS) {
   }
   const checkKeys = ['outlines', 'colours'].filter(k => k in r.manifest)
   if (checkKeys.length || Object.keys(r.manifest.sets).length) problems.push(`the manifest holds the check's: ${checkKeys.join(', ')} ${Object.keys(r.manifest.sets).join(', ')}`)
-  try { if (JSON.stringify(parseAddonManifest(new TextEncoder().encode(text), { pages: index.file.paper.pages, views: index.file.views })) !== text) problems.push('parseAddonManifest read another manifest') } catch (e) { problems.push(`parseAddonManifest refused it: ${e.message}`) }
+  try { if (JSON.stringify(parseAddonManifest(new TextEncoder().encode(text), { pages: index.file.paper.pages, views: index.file.views, shipped: true })) !== text) problems.push('parseAddonManifest read another manifest') } catch (e) { problems.push(`parseAddonManifest refused it: ${e.message}`) }
 
   if (problems.length) failed++
   const pages = Object.values(r.manifest.page)

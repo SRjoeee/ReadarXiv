@@ -471,6 +471,7 @@ async function buildAddon(bytes, layoutFile, { check = true } = {}) {
   const doc = await openNode(bytes)
   const index = indexLayout(parseLayout(new Uint8Array(readFileSync(layoutFile))))
   const made = await paperAddon({ bytes, index, doc, OPS, PL, deflate, inflate: inflateTolerant })
+  // (a paper the maker refuses ends its fixture here, though the check half would run on: the server ships no add-on for such a paper, and the gate draws nothing it would not ship. None of the five papers is refused)
   if (!made.ok) throw new Error(`the shipped add-on was refused: ${made.refused}`)
   const whole = new Uint8Array(bytes.length + made.tail.length)
   whole.set(bytes)

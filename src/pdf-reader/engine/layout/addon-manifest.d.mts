@@ -26,4 +26,7 @@ export declare function checkAddonManifest(manifest: unknown, o: { pages: number
 /** the manifest read within bounds: schema 1, removal REMOVAL, pages the layout file's, sets, each page's entry (ok,
  *  refused at most 200 characters, at within the add-on's pages, dirty and rules finite numbers stride 4 within the
  *  page's view, units' boxes likewise); values counted before JSON.parse; throws LayoutRefusal */
-export declare function parseAddonManifest(bytes: Uint8Array, o: { pages: number; views?: readonly number[] | null }): RemovalManifest
+export declare function parseAddonManifest(bytes: Uint8Array, o: { pages: number; views?: readonly number[] | null; shipped?: boolean }): RemovalManifest
+/** boxes x0, y0, x1, y1 (stride 4) on page `page` (1-based): finite, none empty, within the page's view by 1 where `views` is given (4 × pages numbers),
+ *  else within the coordinate bound; throws LayoutRefusal at the number that breaks it */
+export declare function checkBoxes(boxes: unknown, page: number, views: readonly number[] | null, path: string): number[]
