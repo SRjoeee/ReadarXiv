@@ -36,6 +36,9 @@ const CAPTIONS = Object.freeze({ figure: 'target', table: 'target' })
 
 /** what a value is, for a refusal: its type, never its text */
 const kindOf = v => (v === null ? 'null' : Array.isArray(v) ? 'an array' : typeof v)
+/** the layer open in this realm, from its open to its dispose: v0's faces are the page's (fonts.mjs setRoleFaces holds one
+ *  target's and one family's roles for every run), so that a second layer open at once would set the first's faces */
+let opened = null
 
 /**
  * The face a host asks for first, at the open, before the paper's English family is known: the target's CJK body face,
@@ -65,7 +68,8 @@ function shapesOf(units) {
  * (toTranslate), each table cell's group from the bundle's cells, the target's caption names on every float (L7), the
  * host's served faces (`faceSources`) and hyphenation patterns (`hyphUrl`), at scale 2.5 and a device pixel ratio of 1,
  * no copy kept at v0's own resolution: one set of choices on every device. Each choice made for the target is the
- * rules' (target-rules.mjs), none a host's. Its rows are taken as they come.
+ * rules' (target-rules.mjs), none a host's. Its rows are taken as they come. One layer is open a page (a realm) at a time:
+ * v0's faces are the page's, and a second open before the first's dispose throws.
  *
  *   take(rows)           each row as v0's unit (rows.mjs unitOf), into the run: the pages newly complete. A row that is no
  *                        unit of the bundle's is skipped and counted (stats().dropped)
@@ -90,6 +94,14 @@ export async function openLayer({ bundle, doc, target, faceSources, hyphUrl } = 
   if (typeof target !== 'string') throw new TypeError(`target: a language tag, not ${kindOf(target)}`)
   if (typeof faceSources !== 'function') throw new TypeError(`faceSources: a function, not ${kindOf(faceSources)}`)
   if (typeof hyphUrl !== 'function') throw new TypeError(`hyphUrl: a function, not ${kindOf(hyphUrl)}`)
+  if (opened) throw new Error('openLayer: one open layer a page; dispose the open one first')
+  // (taken before the open's first await: two opens at once are refused alike)
+  const token = {}
+  opened = token
+  try { return await openOne({ bundle, doc, target, faceSources, hyphUrl }, token) } catch (e) { if (opened === token) opened = null; throw e }
+}
+
+async function openOne({ bundle, doc, target, faceSources, hyphUrl }, token) {
   const rules = rulesFor(target)
   const expect = toTranslate(bundle, target)
   // (each cell's group as the bundle's cells give it: a group is read once its own cells' rows are in)
@@ -108,12 +120,15 @@ export async function openLayer({ bundle, doc, target, faceSources, hyphUrl } = 
   let dropped = 0, disposed = false, shapes = null
   const live = () => { if (disposed) throw new Error('openLayer: the layer was let go (dispose)') }
   const pageIn = page => { if (!Number.isSafeInteger(page) || page < 1 || page > run.N) throw new RangeError(`page: 1 to ${run.N}, not ${typeof page === 'number' ? page : kindOf(page)}`) }
+  /** the last page whose step has ended (its units laid): each page's time is written as it does, page after page */
+  const laidTo = () => { let p = 0; while (p < run.N && run.pageMs[p + 1] !== undefined) p++; return p }
   /** the page done, and every page up to it done let go: the order the gate asks for pages in, a page let go before the
-   *  units of the next are laid (v0 draws no crop from a page let go) */
+   *  units of the next are laid (v0 draws no crop from a page let go). A page done already waits for nothing: not behind
+   *  the pages another call is laying (a zoom on page 1 while page 30 is laid) */
   const done = async page => {
     live()
     pageIn(page)
-    await run.until(page)
+    if (run.doneAt(page) > laidTo()) await run.until(page)
     live()
     for (let q = 1; q <= page; q++) if (!run.rows[q - 1].released) run.release(q)
   }
@@ -159,12 +174,9 @@ export async function openLayer({ bundle, doc, target, faceSources, hyphUrl } = 
       return best
     },
     stats() {
-      // (the pages laid: each page's step ends once its units are laid, pageMs, page after page)
-      let laidTo = 0
-      while (laidTo < run.N && run.pageMs[laidTo + 1] !== undefined) laidTo++
-      const pages = [], pageMs = {}
+      const to = laidTo(), pages = [], pageMs = {}
       for (let p = 1; p <= run.N; p++) {
-        if (run.doneAt(p) <= laidTo) pages.push(p)
+        if (run.doneAt(p) <= to) pages.push(p)
         if (run.pageMs[p] !== undefined) pageMs[p] = run.pageMs[p]
       }
       let slowestTaskMs = 0
@@ -175,6 +187,7 @@ export async function openLayer({ bundle, doc, target, faceSources, hyphUrl } = 
       if (disposed) return
       disposed = true
       run.dispose()
+      if (opened === token) opened = null
     },
   }
 }

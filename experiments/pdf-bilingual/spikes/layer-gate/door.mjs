@@ -93,9 +93,9 @@ window.door = {
       for (let q = 1; q < p; q++) if (!run.rows[q - 1].released) run.release(q)
       await run.until(p)
       const row = run.rows[p - 1]
-      // (and the original as v0 drew it, for the door's copy to be drawn over: PDF.js's first drawing of a page in a document
-      // may differ from its later ones, 2608.04322's page 3 by a few pixel rows from run to run)
-      // (each unit's record of its lay, timings aside, of the units on the page)
+      // (each unit's record of its lay, timings aside, of the units on the page; and the original as v0 drew it, for the
+      // door's copy to be drawn over: PDF.js's first drawing of a page in a document may differ from its later ones,
+      // 2608.04322's page 3 by a few pixel rows from run to run)
       const recs = JSON.stringify(run.stats.filter(r => r.pages.includes(p)).map(({ ms: _, ...r }) => r))
       out.push({ p, svg: row.svg.outerHTML, w: row.w, h: row.h, recs: await digest(new TextEncoder().encode(recs)), o: await pixelsOf(row.left), c: await pixelsOf(row.right), ...(png ? { png: await pngOf(row.left) } : {}) })
     }
@@ -127,6 +127,7 @@ window.door = {
       markup.removeAttribute('lang')
       const page = await doc.getPage(p)
       const viewport = page.getViewport({ scale: K })
+      // (sized as v0 sizes its own original, which it is compared with: drawCopy's pages of its own round up)
       const source = document.createElement('canvas')
       source.width = Math.floor(viewport.width)
       source.height = Math.floor(viewport.height)
@@ -142,7 +143,6 @@ window.door = {
     const stats = layer.stats()
     layer.dispose()
     await doc.loadingTask.destroy()
-    // (the sheets of the page before the open and after dispose: the run's own removed)
     // (the sheets before the open and after dispose: the run's own gone)
     return { pages: out, stats: { ...stats, pageMs: undefined }, complete: complete.length, rows: rows.length, sheets: [sheets, ownSheets().length] }
   },

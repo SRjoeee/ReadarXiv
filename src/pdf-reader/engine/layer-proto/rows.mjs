@@ -15,14 +15,12 @@ import { decideGroups, groupOf } from '../groups.mjs'
 import { kOfSource } from '../layer/pieces.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource, translateUnits, utf8 } from '../mt.mjs'
 import { authorsTranslated } from '../scripts.mjs'
-import { UNIT_FLAG_BITS } from './bundle.mjs'
+import { STRING_MAX, UNIT_FLAG_BITS } from './bundle.mjs'
 
 /** the states of a row, and those a translation gives (a kept one is a table cell held whole in its source) */
 const STATES = new Set(['whole', 'partial', 'none', 'lost', 'kept'])
 const GIVEN = new Set(['whole', 'partial', 'none', 'lost'])
 const EDGES = ['lead', 'trail', 'inner']
-/** a string a row holds at most, in code units (§4.1's reader bound; the bundle's own strings are held to it too) */
-const STRING_MAX = 16_000
 
 /**
  * A string a row holds, within §4.1's reader bound (no C0 control but \n and \t, none of U+007F to U+009F, none of the
@@ -135,9 +133,9 @@ const isObject = v => v !== null && typeof v === 'object'
  * send) is its index too; any other text — a translation, the white space the wire cut off the unit's ends — is written
  * out, as a string within §4.1's reader bound (`clean`: a CRLF source's carriage returns are line feeds, any other control
  * a space), so the row's text is the result's up to that, and the hybrid's pieces unitOf gives are trPiecesOf(result.pieces)
- * up to it. Only a whole or partial result has pieces. A piece with no source piece in its unit, a string past 16,000 code
- * units (§4.1's limit, which the web's reader drops a row for), a result of no shape, a unit
- * the reader dropped or the bundle has not: a `none` row with no pieces, never a throw (the layer shows the original)
+ * up to it. Only a whole or partial result has pieces. A piece with no source piece in its unit, a string past
+ * STRING_MAX (bundle.mjs: §4.1's limit, for which the web's reader drops a row), a result of no shape, a unit the reader
+ * dropped or the bundle has not: a `none` row with no pieces, never a throw (the layer shows the original)
  */
 export function rowOf(bundle, id, result) {
   const s = sourceOf(bundle), src = Number.isInteger(id) ? s.units[id] : null

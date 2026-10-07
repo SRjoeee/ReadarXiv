@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { captionNames } from '@/pdf-reader/engine/caption-names.mjs'
 import { rolesFor } from '@/pdf-reader/engine/font-roles.mjs'
 import type { SourceUnit } from '@/pdf-reader/engine/latex-front.mjs'
-import { type BundleParts, bundleUnitsOf, type ReadBundle, readBundle, writeBundle } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import { layerRows, type Row, toTranslate, unitOf } from '@/pdf-reader/engine/layer-proto/rows.mjs'
+import { type BundleParts, bundleUnitsOf, type ReadBundle, readBundle, STRING_MAX, writeBundle } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
+import { layerRows, type Row, rowOf, toTranslate, unitOf } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { LAYOUT, type LayoutFile, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
@@ -328,6 +328,73 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect(run.rows.every(r => r.released && !r.base && r.left.width === 0 && r.right!.width === 0)).toBe(true)
     expect(run.stats).toEqual([])
   })
+
+  it('a run let go during the yield before a unit lays that unit neither', async () => {
+    const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const bundle = bundleOf(), rows = rowsOf(bundle)
+    const units: unknown[] = []
+    for (const r of rows) units[r[0]] = unitOf(bundle, r)
+    const run = await openProto({ doc: docOf(), geometry: { schema: 1, kinds: bundle.left.kinds, left: { pages: bundle.left.pages, units: bundle.left.units } } as never, units: units as never, target: 'zh', scale: 2.5, dpr: 1, copy: false, faceSources, hyphUrl })
+    // (the host's dispose in the yield v0 makes before the first unit it lays: not those its faces' warming makes)
+    let yields = 0
+    const g = globalThis as { scheduler?: unknown }
+    g.scheduler = { yield: () => { if (!/warmFaces/.test(new Error().stack ?? '') && yields++ === 0) run.dispose(); return new Promise(ok => setTimeout(ok, 0)) } }
+    try { await run.until(2) } finally { delete g.scheduler }
+    expect(yields).toBe(1)
+    expect(run.order).toEqual([])
+    expect(run.stats).toEqual([])
+  })
+
+  it('one open layer a page: a second open before the first is let go is refused, one after it opens, and a failed open frees the page', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const o = () => ({ bundle: bundleOf(), doc: docOf(), target: 'zh', faceSources, hyphUrl })
+    const first = await openLayer(o())
+    await expect(openLayer(o())).rejects.toThrow(/one open layer a page/)
+    first.dispose()
+    // (two opens at once: the first open's, the second refused)
+    const [a, b] = await Promise.allSettled([openLayer(o()), openLayer(o())])
+    expect([a.status, b.status]).toEqual(['fulfilled', 'rejected'])
+    ;(a as PromiseFulfilledResult<Awaited<ReturnType<typeof openLayer>>>).value.dispose()
+    // (an open v0 refuses, its left's units no list: the page is free again)
+    const bad = bundleOf()
+    await expect(openLayer({ ...o(), bundle: { ...bad, left: { ...bad.left, units: null as never } } })).rejects.toThrow(TypeError)
+    const again = await openLayer(o())
+    again.dispose()
+  })
+
+  it('pageOf and copyOf of a page done already wait for no other page being laid (a zoom on page 1 while page 2 waits for its rows)', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const bundle = bundleOf(), rows = rowsOf(bundle)
+    const layer = await openLayer({ bundle, doc: docOf(), target: 'zh', faceSources, hyphUrl })
+    // (page 1's units' rows alone: page 1 laid, page 2 waits)
+    layer.take(rows.filter(r => r[0] <= 3))
+    await layer.pageOf(1, { lang: 'zh' })
+    let second = false
+    const p2 = layer.pageOf(2, { lang: 'zh' }).then(() => { second = true })
+    await tick()
+    await tick()
+    expect(second).toBe(false)
+    const source = document.createElement('canvas')
+    source.width = 750
+    source.height = 750
+    const late = <T,>(p: Promise<T>) => Promise.race([p, new Promise<string>(ok => setTimeout(() => ok('waited'), 300))])
+    expect(await late(layer.copyOf(1, source, 2.5))).toBeInstanceOf(HTMLCanvasElement)
+    expect(await late(layer.pageOf(1, { lang: 'zh' }).then(r => r.svg))).toBeInstanceOf(SVGSVGElement)
+    expect(second).toBe(false)
+    layer.take(rows.filter(r => r[0] > 3))
+    layer.end()
+    await p2
+    expect(second).toBe(true)
+    layer.dispose()
+  })
+
+  it('one string bound: the bundle\'s STRING_MAX, 16,000 code units, is the rows\' too', () => {
+    expect(STRING_MAX).toBe(16_000)
+    const bundle = bundleOf()
+    const row = (n: number) => rowOf(bundle, 0, { state: 'whole', pieces: [{ t: 'text', tr: true, s: 'x'.repeat(n) }] })
+    expect(row(STRING_MAX)[2]).toBe('whole')
+    expect(row(STRING_MAX + 1)[2]).toBe('none')
+  })
 })
 
 describe('the door reaches no server-only module', () => {
@@ -335,7 +402,8 @@ describe('the door reaches no server-only module', () => {
     const SERVER = ['live.mjs', 'layout/remove.mjs', 'layout/addon.mjs', 'layout/make.mjs', 'layout/marks.mjs', 'layout/carry.mjs', 'layer/check.mjs'].map(f => resolve('src/pdf-reader/engine', f))
     // (static import and export … from, relative and the repository's @/ alias; a module of the alias is TypeScript)
     const SPEC = /(?:^|[\n;])\s*(?:import|export)\s+(?:type\s+)?(?:[^'";]*?\s+from\s+)?['"]([^'"]+)['"]/g
-    const DYNAMIC = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g
+    // (any import( of code: a literal's or a computed specifier's)
+    const DYNAMIC = /\bimport\s*\(/g
     const TOP_AWAIT = /^(?:(?:export\s+)?(?:const|let|var)\s[^=\n]*=\s*)?(?:\(\s*)?await\b.*$/gm
     const fileOf = (from: string, spec: string) => {
       const base = spec.startsWith('@/') ? resolve('src', spec.slice(2)) : resolve(dirname(from), spec)
@@ -354,7 +422,7 @@ describe('the door reaches no server-only module', () => {
         if (spec.startsWith('.') || spec.startsWith('@/')) todo.push(fileOf(f, spec))
         else others.add(spec)
       }
-      for (const m of text.matchAll(DYNAMIC)) dynamic.push(`${f}|${m[1]}`)
+      for (const m of text.matchAll(DYNAMIC)) dynamic.push(`${f}|${text.slice(m.index, m.index + 40)}`)
       // (a statement at the column of the module's own: `await …`, `const x = await …`)
       for (const m of text.matchAll(TOP_AWAIT)) awaiting.push(`${f}|${m[0].trim().slice(0, 60)}`)
     }

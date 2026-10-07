@@ -46,11 +46,11 @@ export interface Layer {
   take(rows: readonly Row[]): { complete: number[] }
   /** no more rows: every page is complete with what it holds */
   end(): void
-  /** the page done (every page up to it drawn and laid, those done let go), as the run set it: its own SVG element at the
-   *  run's scale with its lang set, and its size in CSS px */
+  /** the page done (every page up to it drawn and laid, those done let go; a page done already waits for nothing), as the
+   *  run set it: its own SVG element at the run's scale with its lang set, and its size in CSS px */
   pageOf(page: number, o: { lang: string }): Promise<{ svg: SVGSVGElement; w: number; h: number }>
   /** the done page's copy at a view's resolution: a canvas of `source`'s size, `source` (the page as PDF.js drew it at k
-   *  device pixels a PDF unit) under v0's drawing scaled to k */
+   *  device pixels a PDF unit) under v0's drawing scaled to k; a page done already waits for no other page being laid */
   copyOf(page: number, source: CanvasImageSource & { width: number; height: number }, k: number): Promise<HTMLCanvasElement>
   /** the unit at a point of a page (the left's shapes, PDF units: the identity map), the smallest shape where several
    *  hold it; null where none (the reading line) */
@@ -62,7 +62,8 @@ export interface Layer {
 }
 /** the layer of one paper and target, as either reader shows it: v0 opened over the composed document with the bundle's
  *  left, layout and add-on, the target's caption names on every float (L7), the served faces and hyphenation, at scale 2.5
- *  and dpr 1 (one set of choices on every device); its rows taken as they come */
+ *  and dpr 1 (one set of choices on every device); its rows taken as they come. One open layer per page: v0's faces are
+ *  the page's, and a second open before the first's dispose throws */
 export declare function openLayer(o: { bundle: ReadBundle; doc: LayerDocument; target: string; faceSources: FaceSources; hyphUrl: (lang: string) => string }): Promise<Layer>
 /** the face a host asks for first, at the open, before the paper's family is known: the target's CJK body face (light
  *  where its rules say so beside the family v0 opens with), else null */

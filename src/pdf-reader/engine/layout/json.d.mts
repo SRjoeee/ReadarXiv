@@ -14,6 +14,8 @@ export declare function utf8Strict(bytes: Uint8Array): string
 export declare function boundedJson(bytes: Uint8Array, o: { cap: number; values: number; depth?: number }): unknown
 export declare const PAGES_MAX: number
 export declare const COORD_MAX: number
+/** a string at most, in code units, of what a reader takes of a paper's text: a bundle's unit, a row, a text piece */
+export declare const STRING_MAX: 16000
 export declare const isObject: (v: unknown) => v is Record<string, unknown>
 export declare const isNumber: (v: unknown) => v is number
 export declare const isInteger: (v: unknown, lo: number, hi: number) => v is number

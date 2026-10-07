@@ -1179,7 +1179,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const t1 = performance.now()
     await settle(need.lay[pg])
     const waited = performance.now() - t1
-    for (const id of groups.get(pg) ?? []) { if (disposed) return; await yieldNow(); order.push(id); await arrive(byId.get(id)) }
+    // (let go during the yield before a unit, as a host's dispose usually is: that unit is not laid either)
+    for (const id of groups.get(pg) ?? []) { if (disposed) return; await yieldNow(); if (disposed) return; order.push(id); await arrive(byId.get(id)) }
     if (disposed) return
     drawnTo = pg
     pageMs[pg] = performance.now() - t0 - waited

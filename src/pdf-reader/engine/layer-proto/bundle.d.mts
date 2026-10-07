@@ -10,6 +10,8 @@ export declare const BUNDLE: '1'
 /** a bundle's bytes at most, as a reader decodes them, and its values, counted before JSON.parse */
 export declare const BUNDLE_CAP: number
 export declare const BUNDLE_VALUES: number
+/** a string at most, in code units, of a unit and of a row (§4.1's reader bound; layout/json.mjs's) */
+export { STRING_MAX } from '../layout/json.mjs'
 /** the reader's contract, `b<BUNDLE>-j<PDFJS>`: what a reader asks by, and the versions it refuses a bundle of another */
 export declare const CTAG: string
 /** the content's, `<CTAG>-p<PIPELINE>-l<LAYOUT>-r<REMOVAL>`: a bundle key's last part; a reader names the maker's

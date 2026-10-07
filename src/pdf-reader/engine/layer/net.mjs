@@ -12,13 +12,14 @@
 // modules, so that the reader's bundle holds it.
 import { canDraw, faceFor } from '../font-roles.mjs'
 import { PH_FLAG } from '../layout/file.mjs'
+import { STRING_MAX } from '../layout/json.mjs'
 import { COLOUR_SHIFT, LAYER_COLOURS, STYLE } from './pieces.mjs'
 import { BRACKETED, beside, bracketPairs, CLOSES, echoesOf, faceSize, OPENS, ownText, pageTextOf } from './tokens.mjs'
 
 /** the most pieces a translated unit may have */
 export const PIECES_MAX = 20_000
-/** the most code units a text piece may have */
-const TEXT_MAX = 16_000
+/** the most code units a text piece may have: the bound every string a reader takes is held to (layout/json.mjs) */
+const TEXT_MAX = STRING_MAX
 /** a style's flags: STYLE's bits below COLOUR_SHIFT, a colour's index + 1 in LAYER_COLOURS above it */
 const STYLE_END = (LAYER_COLOURS.length + 1) << COLOUR_SHIFT
 /**

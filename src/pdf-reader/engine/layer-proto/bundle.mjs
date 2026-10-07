@@ -16,7 +16,7 @@
 // nothing more.
 import { ADDON_CAP, checkAddonManifest, REMOVAL } from '../layout/addon-manifest.mjs'
 import { checkLayout, encodeLayout, isPaperId, LAYOUT, UNIT_KINDS, VERSION_MAX } from '../layout/file.mjs'
-import { COORD_MAX, countValues, isInteger, isNumber, isObject, LayoutRefusal, PAGES_MAX, told, utf8Strict } from '../layout/json.mjs'
+import { COORD_MAX, countValues, isInteger, isNumber, isObject, LayoutRefusal, PAGES_MAX, STRING_MAX, told, utf8Strict } from '../layout/json.mjs'
 import { PDFJS, PIPELINE_VERSION } from '../versions.mjs'
 
 /** the bundle's format: raised with any change to what it holds (the left's tokens and spans, with the highlight) */
@@ -35,8 +35,9 @@ const EDGES = ['lead', 'trail', 'inner']
 /** the deepest the bundle nests: its object, `addon`, the manifest, its `page`, a page's entry, its `units`, a unit's
  *  boxes (a unit's piece, the left's rectangle and the layout's rows are no deeper) */
 const DEPTH = 7
-/** a unit's string at most, in code units; a unit's kind, a lower-case word */
-const STRING_MAX = 16_000
+/** a unit's string at most, in code units: layout/json.mjs's, the rows' and the text pieces' too */
+export { STRING_MAX }
+/** a unit's kind, a lower-case word */
 const KIND = /^[a-z]{1,32}$/
 /** a heading's depth (latex-front.mjs DEPTH: -1 a \part, 0 a \chapter …), with the readers' margin */
 const DEPTH_MIN = -1, DEPTH_MAX = 9
