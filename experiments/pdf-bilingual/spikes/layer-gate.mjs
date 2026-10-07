@@ -28,7 +28,7 @@
 //       [--engine-kind=layer|proto] [--proto-units=fixture|p7] [--progress=<name|path>] [--previous=<name|path>] [--panels-only] [--proto-panels=<dir>]
 //       [--proto-faces=roles|prototype] [--proto-place=<file>] [--proto-order=<file>] [--dump=<dir>] [--write-floor]
 //       [--proto-tex=ph|lines] [--proto-tex-only=no] [--proto-symbols=text|strict] [--proto-extents=v0|tex]
-//       [--against=<record key>] [--proto-params=<json>] [--ruling=<file>] [--parts[=<n>]]
+//       [--against=<record key>] [--proto-params=<json>] [--ruling=<file>] [--parts[=<n>]] [--slices[=blocks|alphabet]]
 //   --engine     the engine measured: <worktree>/src/pdf-reader/engine served as /engine/ (the checker, layer/check.mjs, is
 //                always this repository's: the instrument is the same for every branch); default this repository
 //   --layouts    made (the default): the layout files the engine's own maker makes from the fixtures' papers (spikes/
@@ -95,6 +95,11 @@
 //                or n units a part (--parts=<n>). Each page must draw as the open over every unit does (--dump, --check);
 //                a fixture fails where a row came late, where take's pieces are not the units file's, or where a unit's
 //                why left was read before its row came
+//   --slices     v0 (--engine-kind=proto) given its role table faces as slices (faceSources), never recorded: each face's coverage
+//                cut into slices of the one file, the CJK Unified Ideographs in 8 and every other Unicode block of it its own
+//                (blocks, the default), or with the blocks whose letters are kerned together in one (alphabet); every slice the
+//                whole file at a URL of its own that the browser draws within the slice's unicode-range (layer-gate/proto.mjs
+//                sliceTable). With --dump, the dump is to equal the whole-file run's, lines and widths
 // The consistency measures (the table-groups brief, 2026-10-07), checked with the completeness ones and each to be 0: a
 // table group drawn partly (the record's translated cells of one `group`, some drawn and some not) and a float's label
 // left in the source language where the final names it in the target's (the record's `captions`, caption-names.mjs's
@@ -160,6 +165,10 @@ const DUMP = typeof arg('dump') === 'string' ? resolve(arg('dump')) : null
 const PARTS = arg('parts') === true ? 'delta' : typeof arg('parts') === 'string' ? Number(arg('parts')) : null
 if (PARTS !== null && PARTS !== 'delta' && !(Number.isInteger(PARTS) && PARTS > 0)) throw new Error(`--parts=${arg('parts')}: a count of units a part`)
 if (PARTS && (KIND !== 'proto' || arg('record'))) throw new Error('--parts: v0 only (--engine-kind=proto), and never a record (no --record)')
+/** --slices: v0's role table faces served in slices (a proof, as --dump is: never recorded) */
+const SLICES = arg('slices') === true ? 'blocks' : typeof arg('slices') === 'string' ? arg('slices') : null
+if (SLICES && (KIND !== 'proto' || arg('record'))) throw new Error('--slices: v0 only (--engine-kind=proto), and never a record (no --record)')
+if (SLICES && !['blocks', 'alphabet'].includes(SLICES)) throw new Error(`--slices=${SLICES}: blocks or alphabet`)
 /** --ruling=<file>: the maintainer's ruling the record is made under (with --record) */
 const RULING = typeof arg('ruling') === 'string' ? JSON.parse(readFileSync(resolve(arg('ruling')), 'utf8')) : null
 /** --proto-order=<file>: an order to lay each fixture's units in, by page ({ [fixture]: [ids] }: a live run's, where its
@@ -368,7 +377,7 @@ async function runFixture(page, name, errors) {
   if (removal) Object.assign(meta, { addon: removal.key })
   // (--perf: what a reader is sent, the R set and its manifest, no plan)
   const addon = removal ? (PERF ? { url: `/removal/${name}.pdf`, manifest: removal.shippedManifest, plan: null } : { url: `/removal/${name}.pdf`, manifest: removal.manifest, plan: removal.plan }) : null
-  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES, tex: TEX, params: PROTO_PARAMS, names: captionNames(target), removal: REMOVAL, addon, perf: PERF, parts: PARTS })
+  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES, tex: TEX, params: PROTO_PARAMS, names: captionNames(target), removal: REMOVAL, addon, perf: PERF, parts: PARTS, slices: SLICES })
   if (!info.ready) { failures.push(name); return { name, ready: false, why: info.why, meta } }
   const n = Math.min(info.pages, PAGES ?? (ALL_PAGES.has(paper) ? info.pages : PAGES_OF))
   const pages = [], frames = []

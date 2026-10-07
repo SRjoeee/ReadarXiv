@@ -434,6 +434,18 @@ const holds = (ranges, cp) => {
 // selectors, byte order mark): invisible, never drawn, as the TeX path drops them (mt.mjs texEscape)
 const SKIPPED = /^(?:\s|\p{Default_Ignorable_Code_Point})$/u
 
+/** whether every character of `text` (but white space and the default ignorable) is in one of `ranges`: a list of range
+ *  lists, each sorted and disjoint as COVERAGE's are (a face's coverage, or the code points of one slice of it that is
+ *  served). The served form of canDraw: a face is drawn only in what its host serves of it */
+export function canDrawIn(text, ranges) {
+  for (const ch of String(text)) {
+    if (SKIPPED.test(ch)) continue
+    const cp = ch.codePointAt(0)
+    if (!ranges.some(r => holds(r, cp))) return false
+  }
+  return true
+}
+
 /** whether every character of `text` (but white space and the default ignorable) is in one of `faces`' coverage or
  *  their fallbacks' */
 export function canDraw(text, faces, roles) {
@@ -445,11 +457,5 @@ export function canDraw(text, faces, roles) {
     const next = roles?.fallbacks && Object.hasOwn(roles.fallbacks, id) ? roles.fallbacks[id] : []
     queue.push(...next)
   }
-  const ranges = [...seen].filter(id => Object.hasOwn(COVERAGE, id)).map(id => COVERAGE[id])
-  for (const ch of String(text)) {
-    if (SKIPPED.test(ch)) continue
-    const cp = ch.codePointAt(0)
-    if (!ranges.some(r => holds(r, cp))) return false
-  }
-  return true
+  return canDrawIn(text, [...seen].filter(id => Object.hasOwn(COVERAGE, id)).map(id => COVERAGE[id]))
 }

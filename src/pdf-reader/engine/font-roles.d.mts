@@ -33,3 +33,7 @@ export declare function faceFor(roles: RoleSet, run: { script: 'cjk' | 'latin'; 
 /** whether every character of `text` (but white space and the default ignorable) is in one of `faces`' coverage or
  *  their fallbacks' */
 export declare function canDraw(text: string, faces: readonly FaceId[], roles: RoleSet): boolean
+/** whether every character of `text` (but white space and the default ignorable) is in one of `ranges`: a list of range
+ *  lists, each [start, end, …] (inclusive), sorted and disjoint as COVERAGE's are. canDraw over what a host serves of the
+ *  faces, a slice's code points a list each */
+export declare function canDrawIn(text: string, ranges: readonly (readonly number[])[]): boolean

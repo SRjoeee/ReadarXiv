@@ -166,13 +166,15 @@ export declare function snapFirstRect(rects: Rect[], charsByPage: readonly (read
 export declare function snapFirstRect2(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[]): number | undefined
 /** wordChars: the page's characters the first line may grow over the words its source begins with (step 3) */
 export declare function extendRects(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, wordChars?: readonly (readonly Char[] | undefined)[]): number
-/** a unit's translation as tokens; `.base` is its base style */
-export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, baseIn: Style, designs: { serif: string; sans: string; mono: string }, P: Params, lead?: { text: string; st: Partial<Style> } | null): Token[] & { base: Style }
+/** a unit's translation as tokens; `.base` is its base style. `measure(s, face)`: a run's width at 100 px (the canvas's, cached,
+ *  by default); a host reading the tokens' faces and texts before the faces are loaded passes a measure that takes none */
+export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, baseIn: Style, designs: { serif: string; sans: string; mono: string }, P: Params, lead?: { text: string; st: Partial<Style> } | null, measure?: (s: string, face: Face) => number): Token[] & { base: Style }
 /** a float's label as the final sets it in the target: the target's name (capitals where the original's are), a space,
  *  the original's number and punctuation; null where the final keeps the paper's name or the name is the original's */
 export declare function labelInTarget(label: { text?: string; chars?: { ch: string }[] } | null | undefined, names: { figure: string; table: string } | null | undefined, captions: { figure?: string; table?: string } | null | undefined, to: string): string | null
-/** the target's likely faces measured once each, a task apart */
-export declare function warmFaces(to: string, designs: { serif: string }, yieldNow: () => Promise<unknown>): Promise<void>
+/** the target's likely faces measured once each, a task apart; `ready(face, text)` is awaited before each measure (a face
+ *  served in slices has the slice of the text by then) */
+export declare function warmFaces(to: string, designs: { serif: string }, yieldNow: () => Promise<unknown>, ready?: (face: Face, text: string) => Promise<unknown>): Promise<void>
 export declare function blocks2(rects: readonly Rect[], pageViews: readonly number[][], keep: ReadonlySet<string> | null, lineInfo: Prepared['lineInfo'], regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null): Block2[]
 export declare function inkMapOf(canvas: HTMLCanvasElement | OffscreenCanvas, factor?: number): InkMap
 export declare function freeBelow(map: InkMap | undefined, toDev: ToDev, k: number, x0: number, x1: number, yStart: number, yLimit: number): number

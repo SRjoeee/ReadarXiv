@@ -1656,9 +1656,11 @@ function w100(s, face) {
  * asp (CJK–Latin autospace before it), hyph (a language to hyphenate it in) }, { space }, { crop }, { sup }. `base`: the
  * unit's style ({ fam, bold, italic, caps, design }); `designs`: the paper's serif, sans and mono designs. `lead`: text
  * set before the unit's own, in its own style ({ text, st }: a float's label in the target's name, labelInTarget), a
- * space after it
+ * space after it. `measure(s, face)`: a run's width at 100 px (the canvas's, cached); a host passes its own to read the
+ * tokens (their faces and texts) before any face is loaded, without a width entering the cache that a face not yet there
+ * would give
  */
-export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null) {
+export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, measure = w100) {
   const tokens = []
   const base = baseOf(unit, baseIn)
   const stack = [{ ...base }]
@@ -1688,7 +1690,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null) {
     for (const m of s.matchAll(/\s+|\S+/g)) {
       const chunk = m[0]
       if (/^\s+$/.test(chunk)) {
-        if (tokens.length && !lastIsSpace()) tokens.push({ space: true, st, face: faceOf(st, 'latin', to), w100: w100(' ', faceOf(st, 'latin', to)) })
+        if (tokens.length && !lastIsSpace()) tokens.push({ space: true, st, face: faceOf(st, 'latin', to), w100: measure(' ', faceOf(st, 'latin', to)) })
         continue
       }
       // the chunk by class: CJK characters, and the runs between them
@@ -1707,7 +1709,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null) {
         const pieces = p.cls !== 'latin' ? [p.s] : st.fam === 'mono' || /^(?:https?:|www\.)/.test(p.s) ? p.s.split(/(?<=[/.\-_#?&=])(?=[^/.\-_#?&=])/) : !extra.ph ? p.s.split(/(?<=[A-Za-zÀ-ɏЀ-ӿ][-/])(?=[A-Za-zÀ-ɏЀ-ӿ])/) : [p.s]
         pieces.forEach((s, q) => {
           const face = faceOf(st, p.cls, to)
-          const t = { s, st, face, cls: p.cls, w100: w100(s, face), ...extra, ...(q > 0 ? { brk: true } : {}) }
+          const t = { s, st, face, cls: p.cls, w100: measure(s, face), ...extra, ...(q > 0 ? { brk: true } : {}) }
           // within a chunk, parts stand together (no break), but Chinese and Japanese break before and after a CJK
           // character, and a word may break after its own hyphen
           if (q === 0 && n > 0 && !(!keepAll && (p.cls === 'cjk' || parts[n - 1].cls === 'cjk'))) t.glue = true
@@ -1763,7 +1765,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null) {
     const st = r.math ? { ...style(), italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3 } : r.mode === 'orig-text' && r.st && r.st.fam !== 'math' ? { ...style(), fam: r.st.fam === 'mono' ? 'mono' : style().fam, design: r.st.fam === 'mono' ? designs.mono : style().design } : style()
     if (r.sup) {
       const face = faceOf(st, 'latin', to)
-      tokens.push({ s: r.text, st, face, cls: 'latin', w100: w100(r.text, face) * 0.62, sup: true, glue: true, ph: r.mode, k })
+      tokens.push({ s: r.text, st, face, cls: 'latin', w100: measure(r.text, face) * 0.62, sup: true, glue: true, ph: r.mode, k })
     } else pushText(r.text, st, { ph: r.mode, k, ...(r.math ? { math: true } : {}) })
   })
   while (tokens.at(-1)?.space) tokens.pop()
@@ -1773,12 +1775,16 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null) {
 }
 
 /** the faces a target will most likely need, each measured once in a task of its own (a system CJK face loads on
- *  its first use, 10–40 ms, which would otherwise fall in the first unit's layout) */
-export async function warmFaces(to, designs, yieldNow) {
+ *  its first use, 10–40 ms, which would otherwise fall in the first unit's layout). `ready(face, text)`: awaited before
+ *  each measure, so that a face served in slices has the slice of the text it is measured with (resolves with the face
+ *  usable, or not: the measure is taken either way) */
+export async function warmFaces(to, designs, yieldNow, ready = async () => {}) {
   const cjkT = CJK_TARGETS.has(to)
   const sts = [{ bold: false, italic: false }, { bold: true, italic: false }, { bold: false, italic: true }].map(x => ({ fam: 'serif', caps: false, design: designs.serif, ...x }))
   for (const st of sts) for (const cls of cjkT ? ['cjk', 'latin'] : ['latin']) {
-    w100(cls === 'cjk' ? '\u6C38' : 'a', faceOf(st, cls, to))
+    const face = faceOf(st, cls, to), text = cls === 'cjk' ? '\u6C38' : 'a'
+    await ready(face, text)
+    w100(text, face)
     await yieldNow()
   }
 }

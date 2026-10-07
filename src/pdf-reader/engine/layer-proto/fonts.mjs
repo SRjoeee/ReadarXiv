@@ -23,8 +23,12 @@
 // paper's families, every face a file we serve) in place of the prototype's system faces once setRoleFaces is called:
 // faceOf then names the face faceFor gives, with its fallbacks (and, for a Latin run of a CJK target, the target's
 // body, as the prototype's tail), at its own weight and its size correction (a Hangul face's), Japanese and Korean
-// emphasis upright, and loadRoleFaces loads the files.
-import { FACES, faceFor, rolesFor } from '../font-roles.mjs'
+// emphasis upright, and roleFaceSet serves the files: each face as its host gives it (slices, each a FontFace over a file
+// restricted to its code points, or the whole file), a unit drawn only in what is served of its runs' faces, never in a
+// face the reader's device holds: no source of a face but its URL, no font rule written here, no generic family. A
+// character no served slice holds keeps its unit the original's.
+import { COVERAGE } from '../font-coverage.mjs'
+import { canDrawIn, FACES, faceFor, rolesFor } from '../font-roles.mjs'
 
 /** the PostScript name without its subset tag */
 const bare = name => String(name ?? '').replace(/^[A-Z]{6}\+/, '')
@@ -71,17 +75,185 @@ function roleFaceOf(st, cls) {
   const kai = cls === 'cjk' && st.italic && !!roles.cjk?.italic
   return { family: [...new Set(ids.map(f => `"${FACES[f].family}"`))].join(', '), weight: F.weight, style: F.style, oblique: 0, stand: st.italic ? (cls === 'cjk' ? (kai ? 'kai' : '') : 'italic') : '', caps: !!st.caps && cls !== 'cjk', size: F.size ?? 1, id, ids }
 }
-const roleLoaded = new Map()
-/** the role table's faces by id, loaded once each from `urlOf(file)`; resolves when they can be measured */
-export function loadRoleFaces(ids, urlOf = file => `/fonts/${encodeURIComponent(file)}`) {
-  return Promise.all([...new Set(ids)].filter(id => FACES[id]).map(id => {
-    if (!roleLoaded.has(id)) {
-      const F = FACES[id], f = new FontFace(F.family, `url("${urlOf(F.file)}")`, { weight: String(F.weight), style: F.style })
-      document.fonts.add(f)
-      roleLoaded.set(id, f.load().catch(() => null))
+// ---- the role table's faces as the host serves them
+
+/** a value's kind, for a refusal: its type, never its text */
+const kindOf = v => (v === null ? 'null' : Array.isArray(v) ? 'an array' : typeof v)
+/** a slice's file: the characters of a plain URL, none of which can end the quoted url() it is written in */
+const SLICE_URL = /^[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+$/
+/** the FontFaces added to document.fonts, once each, by face, file and code points: every run over the same page, or the
+ *  next paper's, finds them there (the browser keeps what they loaded) */
+const added = new Map()
+const hex = n => n.toString(16).toUpperCase()
+/** a slice's unicode-range descriptor from its [start, end] pairs */
+const unicodeRangeOf = ranges => {
+  const out = []
+  for (let i = 0; i + 1 < ranges.length; i += 2) out.push(ranges[i] === ranges[i + 1] ? `U+${hex(ranges[i])}` : `U+${hex(ranges[i])}-${hex(ranges[i + 1])}`)
+  return out.join(', ')
+}
+/** several sorted, disjoint range lists as one */
+function mergeRanges(lists) {
+  const all = []
+  for (const r of lists) for (let i = 0; i + 1 < r.length; i += 2) all.push([r[i], r[i + 1]])
+  all.sort((a, b) => a[0] - b[0])
+  const out = []
+  for (const [a, z] of all) {
+    if (out.length && a <= out.at(-1) + 1) out[out.length - 1] = Math.max(out.at(-1), z)
+    else out.push(a, z)
+  }
+  return out
+}
+/** what a host gave for a face (faceSources), checked: null (not served), or its slices, each { url, ranges } with a plain
+ *  URL and its code points as [start, end] pairs, ascending and apart; a slice with none is left out. A wrong shape is
+ *  named by its type, never converted */
+function slicesOf(id, v) {
+  if (v === null) return null
+  if (!Array.isArray(v)) throw new TypeError(`faceSources(${id}): the slices or null, not ${kindOf(v)}`)
+  const out = []
+  v.forEach((s, n) => {
+    if (s === null || typeof s !== 'object') throw new TypeError(`faceSources(${id})[${n}]: a slice { url, ranges }, not ${kindOf(s)}`)
+    const { url, ranges } = s
+    if (typeof url !== 'string' || !SLICE_URL.test(url)) throw new TypeError(`faceSources(${id})[${n}].url: a plain URL string, not ${typeof url === 'string' ? 'a string with other characters' : kindOf(url)}`)
+    if (!Array.isArray(ranges) || ranges.length % 2) throw new TypeError(`faceSources(${id})[${n}].ranges: [start, end] pairs, not ${Array.isArray(ranges) ? 'an odd count' : kindOf(ranges)}`)
+    let after = -1
+    for (let i = 0; i < ranges.length; i += 2) {
+      const a = ranges[i], z = ranges[i + 1]
+      if (!Number.isInteger(a) || !Number.isInteger(z) || a <= after || z < a || z > 0x10ffff) throw new TypeError(`faceSources(${id})[${n}].ranges: code points ascending and apart`)
+      after = z
     }
-    return roleLoaded.get(id)
-  }))
+    if (ranges.length) out.push({ url, ranges })
+  })
+  return out
+}
+/** one slice as one FontFace, added to document.fonts once. A whole file (the default, `ranges` null) is declared with no
+ *  unicode-range; a slice with its own */
+function sliceFace(F, url, ranges) {
+  const unicodeRange = ranges ? unicodeRangeOf(ranges) : ''
+  const key = `${F.id}|${url}|${unicodeRange}`
+  let f = added.get(key)
+  if (!f) {
+    f = new FontFace(F.family, `url("${url}")`, { weight: String(F.weight), style: F.style, ...(ranges ? { unicodeRange } : {}) })
+    document.fonts.add(f)
+    added.set(key, f)
+  }
+  return f
+}
+/** the FontFaces whose load failed let go, so that an open declares them afresh (a failed FontFace stays failed: it is
+ *  kept for the run it failed in, whose units it leaves the original's, and let go before the next) */
+function forgetFailed() {
+  for (const [key, f] of added) if (f.status === 'error') { document.fonts.delete(f); added.delete(key) }
+}
+
+/**
+ * The role table's faces as one run is given them. `faceSources(id)`: a promise of the face's slices (each
+ * { url, ranges }: its file on the host's origin and its code points as [start, end] pairs), null where the host does not
+ * serve the face, rejected where it could not say; absent, each face is its whole file at `faceUrl(file)`, covering
+ * COVERAGE[id]. A face's table is asked the first time a run needs it and awaited: a face asked before its table has
+ * loaded is never read as not served.
+ *
+ *   check(runs)        why a unit whose runs are `runs` (runsOfTokens) cannot be drawn: 'served' (a character in no slice
+ *                      of its runs' faces and their fallbacks, or a run's own face not served), 'face' (a table or a slice
+ *                      failed), else null, the slices its characters are in loaded. No other face is tried
+ *   ready(face, text)  the slices of `face` that hold `text` loaded, as far as they can be (a measure is taken at once)
+ *   warm(id)           the face's table asked and its first slice fetched, at once, not awaited
+ */
+export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}` } = {}) {
+  forgetFailed()
+  const tables = new Map()
+  /** a face's table: null (not served) or { lists (its served ranges, as one sorted list), faces (its FontFaces) } */
+  const table = id => {
+    let t = tables.get(id)
+    if (!t) {
+      t = (async () => {
+        const F = FACES[id]
+        if (!faceSources) return { lists: [COVERAGE[id]], faces: [sliceFace(F, faceUrl(F.file), null)] }
+        const slices = slicesOf(id, await faceSources(id))
+        return slices && { lists: [mergeRanges(slices.map(sl => sl.ranges))], faces: slices.map(sl => sliceFace(F, sl.url, sl.ranges)) }
+      })()
+      tables.set(id, t)
+    }
+    return t
+  }
+  /** the tables of a face's ids, in order; null where one could not be had */
+  const tablesOf = async ids => {
+    const got = await Promise.allSettled(ids.map(table))
+    return got.some(g => g.status === 'rejected') ? null : got.map(g => g.value)
+  }
+  const drawn = new Map(), seen = new Map()
+  const setOf = (m, font) => m.get(font) ?? m.set(font, new Set()).get(font)
+  /** the characters of `text` a font has not drawn yet */
+  const freshOf = (m, font, text) => {
+    const done = setOf(m, font)
+    let out = ''
+    for (const ch of new Set(text)) if (!done.has(ch)) out += ch
+    return out
+  }
+  const glyphs = text => [...text].filter(ch => !canDrawIn(ch, []))
+  /** a run's verdict before anything is fetched: a refusal, or the characters of its text not yet loaded (none: nothing
+   *  to ask). White space is loaded with the rest, its width is measured in the face, but asks no glyph of it */
+  const prepare = async ({ face, text }) => {
+    const font = fontString(face, 100), fresh = freshOf(drawn, font, text)
+    if (!fresh) return { fresh }
+    const got = await tablesOf(face.ids)
+    if (!got) return { why: 'face' }
+    const need = glyphs(fresh)
+    if (need.length) {
+      // (the run's own face must be served: its fallbacks alone would draw it in glyphs it was not set in)
+      if (!got[0]?.faces.length) return { why: 'served', missing: need.slice(0, 8).map(ch => ch.codePointAt(0)) }
+      const lists = got.flatMap(t => (t ? t.lists : []))
+      const missing = need.filter(ch => !canDrawIn(ch, lists))
+      if (missing.length) return { why: 'served', missing: missing.slice(0, 8).map(ch => ch.codePointAt(0)) }
+    }
+    return { font, fresh }
+  }
+  return {
+    async check(runs) {
+      const plan = []
+      for (const r of runs) {
+        const v = await prepare(r)
+        if (v.why) return v.why === 'served' ? { why: 'served', missing: v.missing } : { why: 'face' }
+        if (v.fresh) plan.push(v)
+      }
+      const results = await Promise.allSettled(plan.map(async v => document.fonts.load(v.font, v.fresh)))
+      let failed = false
+      results.forEach((r, n) => {
+        if (r.status === 'fulfilled') for (const ch of plan[n].fresh) setOf(drawn, plan[n].font).add(ch)
+        else failed = true
+      })
+      return failed ? { why: 'face' } : null
+    },
+    async ready(face, text) {
+      const font = fontString(face, 100), fresh = freshOf(seen, font, text)
+      if (!fresh) return
+      await tablesOf(face.ids)
+      try { await document.fonts.load(font, fresh) } catch { return }
+      for (const ch of fresh) setOf(seen, font).add(ch)
+    },
+    warm(id) {
+      if (FACES[id]) table(id).then(t => t?.faces[0]?.load()).catch(() => {})
+    },
+  }
+}
+
+/** the faces a unit's tokens are measured and drawn in, each with the characters it is set with: [{ face, text }]. A space
+ *  is measured in its face (layer2.mjs tokensOf2), a hyphenated word is cut with a hyphen of its own, in the word's face */
+export function runsOfTokens(tokens) {
+  const by = new Map()
+  for (const t of tokens) {
+    if (!t.face?.ids || !(t.s || t.space)) continue
+    const font = fontString(t.face, 100)
+    let r = by.get(font)
+    if (!r) by.set(font, (r = { face: t.face, chars: new Set() }))
+    for (const ch of t.s ?? ' ') r.chars.add(ch)
+    if (t.hyph) r.chars.add('-')
+  }
+  return [...by.values()].map(r => ({ face: r.face, text: [...r.chars].join('') }))
+}
+/** the id of the face a target's body text is drawn in: its CJK body where it has one, else its serif at Times (the
+ *  paper's own family is read from its first page). Call after setRoleFaces */
+export function bodyFaceId() {
+  const roles = ROLES
+  return roles.cjk ? roles.cjk.body : faceFor(roles, { script: 'latin', cls: 'serif', design: 'times', bold: false, italic: false, caps: false })
 }
 
 /** a style's key: what the style match rate compares (class, weight, slant) */

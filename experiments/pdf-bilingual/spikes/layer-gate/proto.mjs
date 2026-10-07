@@ -99,6 +99,43 @@ function consistencyOf(record, S, names) {
 
 const PDF_ASSETS = { cMapUrl: '/pdfjs/cmaps/', standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/' }
 
+/** the first code points of the Unicode blocks (fontTools 4.62.1, unicodedata Blocks, up to U+31350), for --slices */
+const BLOCK_STARTS = '0 80 100 180 250 2b0 300 370 400 500 530 590 600 700 750 780 7c0 800 840 860 870 8a0 900 980 a00 a80 b00 b80 c00 c80 d00 d80 e00 e80 f00 1000 10a0 1100 1200 1380 13a0 1400 1680 16a0 1700 1720 1740 1760 1780 1800 18b0 1900 1950 1980 19e0 1a00 1a20 1ab0 1b00 1b80 1bc0 1c00 1c50 1c80 1c90 1cc0 1cd0 1d00 1d80 1dc0 1e00 1f00 2000 2070 20a0 20d0 2100 2150 2190 2200 2300 2400 2440 2460 2500 2580 25a0 2600 2700 27c0 27f0 2800 2900 2980 2a00 2b00 2c00 2c60 2c80 2d00 2d30 2d80 2de0 2e00 2e80 2f00 2fe0 2ff0 3000 3040 30a0 3100 3130 3190 31a0 31c0 31f0 3200 3300 3400 4dc0 4e00 a000 a490 a4d0 a500 a640 a6a0 a700 a720 a800 a830 a840 a880 a8e0 a900 a930 a960 a980 a9e0 aa00 aa60 aa80 aae0 ab00 ab30 ab70 abc0 ac00 d7b0 d800 db80 dc00 e000 f900 fb00 fb50 fe00 fe10 fe20 fe30 fe50 fe70 ff00 fff0 10000 10080 10100 10140 10190 101d0 10200 10280 102a0 102e0 10300 10330 10350 10380 103a0 103e0 10400 10450 10480 104b0 10500 10530 10570 105c0 10600 10780 107c0 10800 10840 10860 10880 108b0 108e0 10900 10920 10940 10960 10980 109a0 10a00 10a60 10a80 10aa0 10ac0 10b00 10b40 10b60 10b80 10bb0 10c00 10c50 10c80 10d00 10d40 10d90 10e60 10e80 10ec0 10f00 10f30 10f70 10fb0 10fe0 11000 11080 110d0 11100 11150 11180 111e0 11200 11250 11280 112b0 11300 11380 11400 11480 114e0 11580 11600 11660 11680 116d0 11700 11750 11800 11850 118a0 11900 11960 119a0 11a00 11a50 11ab0 11ac0 11b00 11b60 11b80 11bc0 11c00 11c70 11cc0 11d00 11d60 11db0 11df0 11ee0 11f00 11f60 11fb0 11fc0 12000 12400 12480 12550 12f90 13000 13430 13460 14400 14680 16100 16140 16800 16a40 16a70 16ad0 16b00 16b90 16d40 16d80 16e40 16ea0 16ee0 16f00 16fa0 16fe0 17000 18800 18b00 18d00 18d80 18e00 1aff0 1b000 1b100 1b130 1b170 1b300 1bc00 1bca0 1bcb0 1cc00 1cec0 1cf00 1cfd0 1d000 1d100 1d200 1d250 1d2c0 1d2e0 1d300 1d360 1d380 1d400 1d800 1dab0 1df00 1e000 1e030 1e090 1e100 1e150 1e290 1e2c0 1e300 1e4d0 1e500 1e5d0 1e600 1e6c0 1e700 1e7e0 1e800 1e8e0 1e900 1e960 1ec70 1ecc0 1ed00 1ed50 1ee00 1ef00 1f000 1f030 1f0a0 1f100 1f200 1f300 1f600 1f650 1f680 1f700 1f780 1f800 1f900 1fa00 1fa70 1fb00 1fc00 20000 2a6e0 2a700 2b740 2b820 2ceb0 2ebf0 2ee60 2f800 2fa20 30000 31350'.split(' ').map(h => Number.parseInt(h, 16))
+/** CJK Unified Ideographs, which --slices cuts in 8 of equal size */
+const CJK_FROM = 0x4e00, CJK_STEP = 0xa40
+/** --slices=alphabet: the blocks one slice holds, whose letters, accents, quotes and spaces are kerned with each other (a
+ *  canvas shapes a run of two faces of a family as two runs, so that no pair across them is kerned): Basic Latin, Latin-1
+ *  Supplement, Latin Extended-A, Cyrillic and General Punctuation. On the 29 outputs each is needed (Latin-1: de, es, fr;
+ *  Extended-A: fr's "œ"; Cyrillic: ru; General Punctuation: the curly apostrophe of fr and ko) and together they are enough */
+const ALPHABET = new Set([0x0, 0x80, 0x100, 0x400, 0x2000])
+/**
+ * --slices: a face's coverage cut into slices of the one file, as a host's slice plan cuts it for the engine to load
+ * (faceSources): the CJK Unified Ideographs in 8, every other Unicode block of the coverage its own (`blocks`); with
+ * `alphabet`, ALPHABET's blocks together in one. Every slice is the whole file at a URL of its own (the query tells them
+ * apart; the server ignores it), so that the browser draws what the slice's unicode-range allows of it, as a cut file would
+ * be drawn. Ascending ranges within a slice, slices by their place
+ */
+function sliceTable(F, coverage, rule) {
+  const by = new Map()
+  for (let i = 0; i + 1 < coverage.length; i += 2) {
+    for (let a = coverage[i]; a <= coverage[i + 1];) {
+      let b = BLOCK_STARTS.length - 1
+      while (BLOCK_STARTS[b] > a) b--
+      let z = Math.min(coverage[i + 1], (BLOCK_STARTS[b + 1] ?? 0x110000) - 1)
+      let key = rule === 'alphabet' && ALPHABET.has(BLOCK_STARTS[b]) ? -1 : b * 8
+      if (BLOCK_STARTS[b] === CJK_FROM) {
+        const k = Math.min(7, Math.floor((a - CJK_FROM) / CJK_STEP))
+        key += k
+        if (k < 7) z = Math.min(z, CJK_FROM + (k + 1) * CJK_STEP - 1)
+      }
+      if (!by.has(key)) by.set(key, [])
+      by.get(key).push(a, z)
+      a = z + 1
+    }
+  }
+  return [...by].sort((x, y) => x[0] - y[0]).map(([, ranges], n) => ({ url: `/fonts/${encodeURIComponent(F.file)}?slice=${n}`, ranges }))
+}
+
 /** the web's deltas of a live run's rows (the plan's delta rule): a part closed once its rows' JSON reaches 384 KiB or
  *  96,000 values (layout/json.mjs countValues), 32 parts at most, the 32nd taking the rest */
 const DELTA_BYTES = 384 * 1024, DELTA_VALUES = 96_000, DELTA_PARTS = 32
@@ -271,7 +308,7 @@ window.gate = {
    * the driver's: arXiv's PDF with it at `url`, its manifest, the plan it was made from), v0 is opened over it, and a
    * second reading of the add-on drawn by the CPU is kept for the exactness check's and the truth's planes
    */
-  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces, tex, removal, addon = null, names = null, perf = false, parts: cut = null }) {
+  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces, tex, removal, addon = null, names = null, perf = false, parts: cut = null, slices = null }) {
     let V
     try { V = await import('/engine/layer-proto/run.mjs') } catch (e) { return { ready: false, why: `layer-proto/run.mjs: ${String(e?.message ?? e).slice(0, 200)}` } }
     const base = `/fixtures/${name}/`
@@ -304,8 +341,14 @@ window.gate = {
       if (texIn) texIn.pieces = new Map()
     }
     const texIndex = texIn?.index ?? null
+    // (--slices: the role table's faces served in slices of one file each, sliceTable's cut, for the engine to ask of)
+    let faceSources = null
+    if (slices) {
+      const [{ FACES }, { COVERAGE }] = await Promise.all([import('/engine/font-roles.mjs'), import('/engine/font-coverage.mjs')])
+      faceSources = async id => sliceTable(FACES[id], COVERAGE[id], slices)
+    }
     // (--perf: no copy of v0's own, as a reader opens it: the page's drawing is drawCopy's, at a view's resolution)
-    const opts = { doc, geometry, units: parts ? [] : unitsFile.units, ...(parts ? { expect: parts.flat().map(([id]) => id), groups: tableGroups } : {}), target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(texIn ? { tex: texIn } : {}), labels: { names, captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`, ...(perf ? { copy: false } : {}) }
+    const opts = { doc, geometry, units: parts ? [] : unitsFile.units, ...(parts ? { expect: parts.flat().map(([id]) => id), groups: tableGroups } : {}), target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(faceSources ? { faceSources } : {}), ...(texIn ? { tex: texIn } : {}), labels: { names, captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`, ...(perf ? { copy: false } : {}) }
     let rm = null
     if (one) {
       rm = { mode: removal, manifest: addon.manifest, plan: { pages: {} }, rdoc: doc, cdoc: null }
@@ -574,7 +617,7 @@ window.gate = {
     const { run } = S
     // (each laid unit's resolutions, for a look at what a source made of it)
     const units = run.placed.filter(p => p.prep).map(p => ({ id: p.id, source: p.tex ? 'tex' : 'v0', rects: p.rects, label: p.prep.label?.text, labelChars: p.prep.label?.chars.map(c => [c.ch, Math.round(c.x0 * 100) / 100, Math.round(c.x1 * 100) / 100, Math.round(c.yb * 100) / 100, Math.round(c.size * 100) / 100]), keep: p.prep.keep, res: [...p.prep.values()].map(r => ({ k: r.k, mode: r.mode, src: r.src?.slice(0, 60), text: r.text, crop: r.crop, baseline: r.baseline, gap: r.gap?.text, chars: r.gap?.chars.filter(c => !c.sep && !c.space).map(c => [c.ch, Math.round(c.x0 * 100) / 100, Math.round(c.yb * 100) / 100, Math.round(c.size * 100) / 100]) })) }))
-    return { order: run.order, stats: run.stats.map(({ ms, ...r }) => r), audit: run.audit, pages: (S.dump ?? []).map(({ check, ...d }) => d), checks: (S.dump ?? []).map(d => ({ p: d.p, ...d.check })), units }
+    return { order: run.order, stats: run.stats.map(({ ms, ...r }) => r), skipped: run.skipped, audit: run.audit, pages: (S.dump ?? []).map(({ check, ...d }) => d), checks: (S.dump ?? []).map(d => ({ p: d.p, ...d.check })), units }
   },
 
   /** the fixture's laid units, counted: v0 lays every unit it places (past its floor it clips), by its fit's knob */

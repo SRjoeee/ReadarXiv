@@ -34,13 +34,16 @@
 // - The prototype's host is the caller's: the PDF.js document (opened with PDF_OPTIONS, the prototype's), where the
 //   faces and the hyphenation patterns are served (fontUrl, hyphUrl).
 // - The faces are the role table's (faces: 'roles', the default since the maintainer's ruling of 2026-10-06; fonts.mjs
-//   setRoleFaces): each page's fonts' faces loaded before its characters are measured in them, the target's CJK faces and
-//   the paper's designs' at the first page, the paper's family read from its first page's fonts as the engine reads a
-//   layout file's (font-roles.mjs familyOfFonts). faces: 'prototype' draws in the prototype's own system faces and Latin
-//   Modern, as the approved prototype did (its floor's numbers).
+//   setRoleFaces), and only they: files we serve, in slices (`faceSources`) or whole (`faceUrl`), never a face the
+//   reader's device holds. Each page's characters are measured in their fonts' faces only once the slices that hold them
+//   are loaded, and so is each unit's, from the faces its tokens are set in; a unit with a character in no served slice
+//   of those faces (and their fallbacks) is left the original's (`served`), as is one whose slice failed to load (`face`).
+//   The paper's family is read from its first page's fonts as the engine reads a layout file's (font-roles.mjs
+//   familyOfFonts). faces: 'prototype' draws in the prototype's own system faces and Latin Modern, as the approved
+//   prototype did (its floor's numbers).
 import { checkAll } from './check.mjs'
 import { familyOfFonts } from '../font-roles.mjs'
-import { classifyFont, faceOf, loadRoleFaces, loadWebFaces, styleKey, setRoleFaces } from './fonts.mjs'
+import { bodyFaceId, classifyFont, faceOf, fontString, loadWebFaces, roleFaceSet, runsOfTokens, styleKey, setRoleFaces } from './fonts.mjs'
 import { loadHyphenation } from './hyph.mjs'
 import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
@@ -55,8 +58,9 @@ export const PDF_OPTIONS = { cMapPacked: true, enableHWA: true, disableStream: t
 export const PARAM_KEYS = ['leadBase', 'leadFloor', 'trackMin', 'compressMax', 'borrow', 'borrowGap', 'floor', 'step', 'grid', 'cjkJust', 'spaceMax', 'autospace', 'spaceMin', 'hyphen', 'even', 'order', 'further', 'floorMin', 'trackStart', 'leadRel', 'fillSize', 'adaptiveFill']
 /** the page's body units that the even pass sets alike (a unit on two pages keeps its own fit) */
 const EVEN_KINDS = new Set(['para', 'abstract', 'list', 'item'])
-/** the SVG's own rules (the prototype's index.html): its text set as laid, in the layer's ink */
-const SVG_RULES = ['.tl{position:absolute;left:0;top:0;overflow:visible}', '.tl text{white-space:pre;fill:#141414}']
+/** the SVG's own rules (the prototype's index.html): its text set as laid, in the layer's ink, in the faces it was
+ *  measured in and no style made up of a face that has none (a bold or an oblique the family lacks stays regular) */
+const SVG_RULES = ['.tl{position:absolute;left:0;top:0;overflow:visible;font-synthesis:none}', '.tl text{white-space:pre;fill:#141414}']
 const r1 = x => Math.round(x * 100) / 100
 const yieldNow = () => (globalThis.scheduler?.yield ? globalThis.scheduler.yield() : new Promise(ok => setTimeout(ok, 0)))
 
@@ -214,6 +218,12 @@ function needsOf(K, N, passes, fileOnly) {
  * PDF unit), `dpr`, `params` (layer2.mjs defaultParams' overrides), `batch`, `phMode` ('auto' or 'source'),
  * `restoring`, `order` (ids whose order a page's units are laid in, in place of layGroups': a recorded run's). `faces`:
  * 'roles' (the role table's) or 'prototype' (the prototype's own).
+ * `faceSources(id)`: a promise of the slices the host serves of a role table face, each { url, ranges } (its file on the
+ * host's origin and its code points as [start, end] pairs), null where the face is not served, rejected where the host
+ * could not say; a face is asked the first time a unit needs it and awaited before the unit is laid. Each slice is one
+ * FontFace; a unit whose text has a character in no served slice of its runs' faces and their fallbacks is left the
+ * original's, skipped with the why `served`, and one whose slice does not load, `face`. Absent: each face is its whole file at
+ * `faceUrl(file)`, covering the face's COVERAGE. The target's body face's first slice is fetched at the open.
  * `faceUrl(file)`, `fontUrl(file)`, `hyphUrl(lang)`: where the host serves the role table's faces (by file name), the
  * prototype's Latin Modern (by name) and TeX's patterns. Nothing is drawn until `until(p)` is awaited.
  * `tex` (the hybrid, tex.mjs): the layout file (`index`, layout/file.mjs indexLayout's), the units file's pieces by unit
@@ -237,9 +247,10 @@ function needsOf(K, N, passes, fileOnly) {
  * final's is (layer2.mjs labelInTarget), else kept as the original's ink. A table's group (each record unit's `group`) is
  * drawn whole or not at all.
  */
-export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, params = {}, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, copy = true, removal = null, labels = null }) {
+export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, params = {}, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, copy = true, removal = null, labels = null }) {
   if (expect !== null && (!Array.isArray(expect) || !expect.every(id => Number.isSafeInteger(id) && id >= 0))) throw new TypeError(`expect: ids of units or null, not ${kindOf(expect)}`)
   if (tableGroups !== null && !(tableGroups instanceof Map)) throw new TypeError(`groups: a Map of ids to groups or null, not ${kindOf(tableGroups)}`)
+  if (faceSources !== null && typeof faceSources !== 'function') throw new TypeError(`faceSources: a function or null, not ${kindOf(faceSources)}`)
   const P = L2.defaultParams(to)
   for (const k of PARAM_KEYS) if (params[k] !== undefined) P[k] = params[k]
   // (the maintainer's ruling of 2026-10-07, on S3-11: the script's leading on the original's own pitch reads more
@@ -258,10 +269,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   setRoleFaces(roles ? to : null, 'times')
   const warmP = roles ? null : L2.warmFaces(to, { serif: 'times' }, yieldNow)
   const lmP = roles ? null : loadWebFaces(['cm', 'cmss', 'cmtt'], fontUrl)
-  // the role table's faces of a style in each weight and slant (a translation's run of the design may be bold where the
-  // original's is not), and of the CJK runs
-  const STYLES = [[false, false], [true, false], [false, true], [true, true]]
-  const roleIdsOf = (st, cls) => STYLES.flatMap(([bold, italic]) => faceOf({ ...st, fam: st.fam === 'math' ? 'serif' : st.fam, bold, italic }, cls, to).ids)
+  // the role table's faces as the host serves them, each asked when a page or a unit first needs it and loaded for the
+  // text it is measured and drawn with; the target's body face's first slice is fetched now, to overlap the host's other
+  // fetches
+  const FS = roles ? roleFaceSet({ faceSources, faceUrl }) : null
+  FS?.warm(bodyFaceId())
   // (arXiv's own pages: `doc` may be the paper with its add-on appended, one document a reader opens, whose sets follow
   // them: the manifest's count)
   const N = Math.min(removal?.manifest?.pages ?? doc.numPages, doc.numPages, pages)
@@ -733,8 +745,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const b = p.blocks[l.block]
     return [l.page, r1(l.baseline), l.target !== null ? r1(b.B[l.target]) : null, l.target !== null ? b.exact[l.target] : false, l.mode, r1(Math.max(0, l.used - l.cap - (l.items.at(-1)?.t.punct === 'close' ? 0.5 * p.layout.f : 0))), r1(l.x0), r1(l.x0 + l.used)]
   })
-  const layout2 = p => {
-    const t0 = performance.now()
+  // (the time the font waits of the unit in hand took, so that its timings are its own work's: lap())
+  let fontWait = 0
+  const lap = () => performance.now() - fontWait
+  const layout2 = async p => {
+    const t0 = lap()
     // the unit's lines grown over words the anchors left out beside them, then its first line's edge snapped back to
     // its first word's start
     const others = []
@@ -803,7 +818,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (r?.mode !== 'crop') continue
       L2.growCrop(r, inkOf(r.page), pxOf(r.page), scale * dpr, local[r.page - 1] ?? chars2[r.page - 1])
     }
-    const t1 = performance.now()
+    const t1 = lap()
     const orig = prep.orig
     const s = orig?.size ?? median(p.rects.map(r => r[4] - r[2])) / 0.894
     const base = orig && orig.st.fam !== 'math' ? { ...orig.st } : { fam: 'serif', bold: p.unit.kind === 'heading', italic: false, caps: false, design: designs.serif }
@@ -821,11 +836,20 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       else if (prep.label.x1 > p.rects[0][1] + 0.1) b.indent = Math.max(b.indent, (prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s) - b.x0)
     }
     if (P.borrow && p.unit.kind !== 'cell') for (const b of p.blocks) b.freeOf = () => freeFor(b, s)
-    const t2 = performance.now()
+    const t2 = lap()
     // (the label's own style: a class's bold or italic label)
     const lead = prep.label?.drawn ? { text: prep.label.drawn, st: (st => (st && st.fam !== 'math' ? { bold: !!st.bold, italic: !!st.italic } : {}))(prep.label.chars[0]?.st) } : null
+    // the faces the unit's runs are set in, served and loaded before a width is taken in any of them (one taken before its
+    // slice is there would stay in the cache): the tokens read once with no measure, their faces and texts checked; a
+    // unit with a character no served slice holds, or a slice that does not load, stays the original's
+    if (FS) {
+      const tFonts = performance.now()
+      const no = await FS.check(runsOfTokens(L2.tokensOf2(p.unit, prep, to, base, designs, P, lead, () => 0)))
+      fontWait += performance.now() - tFonts
+      if (no) { p.refused = true; p.why = no.why; p.missing = no.missing; return }
+    }
     const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead)
-    const t3 = performance.now()
+    const t3 = lap()
     // (the unit's leading relative to the original's own pitch, step 3: leadOf)
     p.tokens = tokens
     p.prep = prep
@@ -859,7 +883,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       else { p.refused = true; return }
     }
     settleLayout(p)
-    const t4 = performance.now()
+    const t4 = lap()
     p.layout.extents = new Map([...prep.extents].map(([r, e]) => [r.join(), e]))
     if (p.blocks[0] && (prep.label || prep.firstX0 !== undefined || inkBefore !== undefined)) {
       const r0 = p.blocks[0].rects[0], ext = p.layout.extents.get(r0.join()) ?? r0.slice(1)
@@ -934,12 +958,16 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (why) { for (const p of laidCells.list) withhold(p, why); return }
     for (const p of laidCells.list) for (const pg of p.pages) paint(p, pg)
   }
-  const arrive = p => {
+  const arrive = async p => {
+    fontWait = 0
     const t0 = performance.now()
-    layout2(p)
-    timesOf(p.pages[0]).lay += performance.now() - t0
-    // (a unit no step fits is the original's: neither erased nor drawn, nor checked)
-    if (p.refused) skipped.push({ id: p.id, kind: p.unit.kind, why: 'unfit', chars: trCharsOf(p.unit), pages: p.pages })
+    await layout2(p)
+    // (the faces it waited for apart from its laying: no task of v0's)
+    timesOf(p.pages[0]).lay += performance.now() - t0 - fontWait
+    timesOf(p.pages[0]).fonts += fontWait
+    // (a unit no step fits is the original's: neither erased nor drawn, nor checked; nor one whose characters no served
+    // slice holds (`served`) or whose slice did not load (`face`))
+    if (p.refused) skipped.push({ id: p.id, kind: p.unit.kind, why: p.why ?? 'unfit', ...(p.missing ? { missing: p.missing } : {}), chars: trCharsOf(p.unit), pages: p.pages })
     const g = p.unit.group && groupCells.has(p.unit.group) ? p.unit.group : null
     if (g) (groupLaid.get(g) ?? groupLaid.set(g, { list: [], done: false }).get(g)).list.push(p)
     if (P.even || P.adaptiveFill) {
@@ -956,16 +984,16 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       }
     } else if (g) settleGroup(g)
     else if (!p.refused) for (const pg of p.pages) paint(p, pg)
-    ms.set(p.id, performance.now() - t0)
+    ms.set(p.id, performance.now() - t0 - fontWait)
   }
 
   // a page drawn: its characters read, its copy made and its ink mapped; the paper's designs from the first
   // each page's costs, ms (the gate's --perf): its original drawn (render), its text read (text), the removal's reading of
   // its ink and its plan (ink), its removed page drawn for v0's copy (rp); its units laid (lay: a unit's on its first
-  // page) and painted, their operations made (ops: the erase and its put-back, or the swap's rectangles), drawn on the
-  // copy (compose) and set as SVG (svg)
+  // page, less the faces it waited for, fonts) and painted, their operations made (ops: the erase and its put-back, or
+  // the swap's rectangles), drawn on the copy (compose) and set as SVG (svg)
   const pageTimes = []
-  const timesOf = pg => (pageTimes[pg] ??= { render: 0, text: 0, ink: 0, rp: 0, lay: 0, ops: 0, compose: 0, svg: 0 })
+  const timesOf = pg => (pageTimes[pg] ??= { render: 0, text: 0, ink: 0, rp: 0, lay: 0, fonts: 0, ops: 0, compose: 0, svg: 0 })
   const drawPage = async i => {
     const tPage = performance.now()
     const page = await doc.getPage(i)
@@ -983,8 +1011,19 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const tc = await textP
     if (i === 1 && lmP) await lmP
     const fontOf = fontOfPage(page, tc.styles)
-    // the role table's faces of the page's fonts, before its characters are measured in them
-    if (roles) await loadRoleFaces([...new Set(tc.items.map(it => it.fontName))].map(fontOf).filter(st => st?.known).flatMap(st => roleIdsOf(st, 'latin')), faceUrl)
+    // the slices of the role table's faces that hold the page's characters, before they are measured in them (layer2.mjs
+    // wDesign measures a character in its font's design, as upright or slanted as the font is)
+    if (FS) {
+      const byFace = new Map()
+      for (const it of tc.items) {
+        const st = it.str ? fontOf(it.fontName) : null
+        if (!st?.known) continue
+        const face = faceOf({ ...st, fam: st.fam === 'math' ? 'serif' : st.fam }, 'latin', 'en'), key = fontString(face, 100)
+        const e = byFace.get(key) ?? byFace.set(key, { face, text: '' }).get(key)
+        e.text += it.str
+      }
+      await Promise.all([...byFace.values()].map(e => FS.ready(e.face, e.text)))
+    }
     chars2[i - 1] = L2.pageChars2(tc, fontOf)
     timesOf(i).text += performance.now() - tRendered
     for (const c of chars2[i - 1]) if (c.st.fam !== 'math') { const key = `${c.st.fam}:${c.st.design}`; fontTally.set(key, (fontTally.get(key) ?? 0) + 1) }
@@ -1016,15 +1055,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const serif = pick('serif') ?? 'times'
       designs = { serif, sans: pick('sans') ?? (serif === 'cm' ? 'cmss' : 'helvetica'), mono: pick('mono') ?? (serif === 'cm' ? 'cmtt' : 'courier') }
       if (roles) {
-        // the paper's family from the first page's fonts, weighted by their characters; then the target's CJK faces and
-        // the designs' Latin faces, and each measured once
+        // the paper's family from the first page's fonts, weighted by their characters; then the target's likely faces,
+        // each measured once
         const weight = new Map()
         for (const c of chars2[0]) if (c.st?.name) weight.set(c.st.name, (weight.get(c.st.name) ?? 0) + 1)
         setRoleFaces(to, familyOfFonts([...weight.keys()], [...weight.values()]))
-        const st = fam => ({ fam, design: designs[fam], caps: false })
-        await loadRoleFaces([...roleIdsOf(st('serif'), 'cjk'), ...roleIdsOf(st('serif'), 'latin'), ...roleIdsOf(st('sans'), 'latin'), ...roleIdsOf(st('mono'), 'latin')], faceUrl)
         await hyphP
-        await L2.warmFaces(to, designs, yieldNow)
+        await L2.warmFaces(to, designs, yieldNow, (face, text) => FS.ready(face, text))
       } else {
         await loadWebFaces([designs.serif, designs.sans, designs.mono], fontUrl)
         await hyphP
@@ -1135,7 +1172,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const t1 = performance.now()
     await settle(need.lay[pg])
     const waited = performance.now() - t1
-    for (const id of groups.get(pg) ?? []) { await yieldNow(); order.push(id); arrive(byId.get(id)) }
+    for (const id of groups.get(pg) ?? []) { await yieldNow(); order.push(id); await arrive(byId.get(id)) }
     drawnTo = pg
     pageMs[pg] = performance.now() - t0 - waited
   }

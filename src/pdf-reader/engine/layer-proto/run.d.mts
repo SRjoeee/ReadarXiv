@@ -5,6 +5,7 @@ import type { Block2, Char, DrawOp, DrawSource, Layout, Params, Prepared, Token,
 import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
 import type { TexLines, Whole } from './tex.mjs'
 import type { RemovalManifest } from '../layout/remove.mjs'
+import type { FaceSources } from './fonts.mjs'
 
 /** a unit as the units record holds it (a row): its kind, source and state; its translation's pieces, none where it has
  *  none, each non-text one with its k (the layout file's index of its source piece: E6's row); its title, its table's
@@ -16,7 +17,7 @@ export interface Captions { figure: 'target' | 'source'; table: 'target' | 'sour
 export interface Geometry { schema: number; kinds: string[]; left: { pages: number[][]; units: [number, number, Rect[]][] }; right?: unknown }
 /** a unit v0 places: its rectangles (all of them: a unit cut by the pages shown is laid over its lines past them too), the
  *  pages shown it has lines on (`cut`: it has more past them), and once laid its reading, tokens, blocks and layout */
-export interface Placed { id: number; stream: number; rects: Rect[]; unit: LaidUnit; pages: number[]; cut: boolean; blocks: Block2[]; prep?: Prepared; tokens?: Token[]; layout?: Layout; s?: number; rec?: Rec; local?: Char[][]; refused?: boolean; tex?: (Whole & { lu: LayoutUnit; lines?: TexLines }) | null }
+export interface Placed { id: number; stream: number; rects: Rect[]; unit: LaidUnit; pages: number[]; cut: boolean; blocks: Block2[]; prep?: Prepared; tokens?: Token[]; layout?: Layout; s?: number; rec?: Rec; local?: Char[][]; refused?: boolean; why?: string; missing?: number[]; tex?: (Whole & { lu: LayoutUnit; lines?: TexLines }) | null }
 /** the hybrid's options (openProto `tex`): the layout file, the units file's pieces by unit id, and how the file's
  *  geometry is taken */
 export interface HybridOptions {
@@ -56,15 +57,19 @@ export interface ProtoRun {
   P: Params
   rows: Row[]
   placed: Placed[]
-  skipped: { id: number; kind: string; why: string; chars: number; pages?: number[] }[]
+  /** the units left the original's and why: `unanchored`, `author`, `unfit`, `group: …`, and, in the role table's faces, `served`
+   *  (a character in no served slice of its runs' faces and their fallbacks, or a run's own face not served: `missing`, the
+   *  first code points) and `face` (a table or a slice that failed) */
+  skipped: { id: number; kind: string; why: string; chars: number; pages?: number[]; missing?: number[] }[]
   stats: Rec[]
   audit: Audit[]
   order: number[]
   ms: Map<number, number>
   pageMs: number[]
   /** each page's costs, ms: its original drawn, its text read, the removal's ink reading and plan, its removed and
-   *  placeholders' pages drawn, its units laid, their operations made, drawn on the copy and set as SVG */
-  pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; ops: number; compose: number; svg: number }[]
+   *  placeholders' pages drawn, its units laid (less the faces they waited for, `fonts`), their operations made, drawn on the
+   *  copy and set as SVG */
+  pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number }[]
   chars: Char[][]
   views: { convertToViewportPoint(x: number, y: number): number[]; convertToPdfPoint(x: number, y: number): number[] }[]
   readonly designs: { serif: string; sans: string; mono: string }
@@ -137,6 +142,11 @@ export declare function openProto(o: {
   restoring?: boolean
   order?: number[] | null
   faces?: 'roles' | 'prototype'
+  /** what the host serves of each role table face, asynchronously: its slices (each { url, ranges }), null where it is not
+   *  served. A face is asked the first time a unit needs it and awaited; a unit with a character in no served slice of its
+   *  runs' faces and their fallbacks is left the original's (`served`), one whose slice fails to load too (`face`). Absent:
+   *  each face's whole file at `faceUrl(file)`, covering its COVERAGE. With faces 'roles' only */
+  faceSources?: FaceSources | null
   faceUrl?: (file: string) => string
   fontUrl?: (file: string) => string
   hyphUrl?: (lang: string) => string

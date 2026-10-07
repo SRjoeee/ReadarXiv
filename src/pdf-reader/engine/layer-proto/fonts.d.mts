@@ -1,4 +1,5 @@
 // fonts.mjs's types: the original's fonts and the faces v0 draws in (ported from the prototype at 9e56fca)
+import type { FaceId } from '../font-roles.mjs'
 
 /** a PDF font's class as its PostScript name tells it */
 export interface FontClass {
@@ -33,5 +34,28 @@ export declare function loadWebFaces(designs: readonly string[], urlOf?: (file: 
 export declare function setRoleFaces(target: string | null, family: string): void
 /** the role set v0 draws in, or null for the prototype's faces */
 export declare const roleFaces: () => import('../font-roles.mjs').RoleSet | null
-/** the role table's faces by id, loaded once each from `urlOf(file)` */
-export declare function loadRoleFaces(ids: readonly string[], urlOf?: (file: string) => string): Promise<unknown>
+/** one slice of a face a host serves: its file on the host's origin (a plain URL) and its code points as [start, end]
+ *  pairs (inclusive, ascending, apart) */
+export interface FaceSlice { url: string; ranges: readonly number[] }
+/** a face's slices as a host gives them: a promise, resolved with null where the host does not serve the face, rejected
+ *  where it could not say (a table not yet loaded is awaited, never read as not served) */
+export type FaceSources = (id: FaceId) => Promise<readonly FaceSlice[] | null>
+/** a unit's run: a face and the distinct characters the unit draws in it */
+export interface FaceRun { face: Face; text: string }
+/** why a unit cannot be drawn in what is served: `served`, a character in no slice of its runs' faces and their fallbacks (the
+ *  code points, eight at most), or a run's own face not served; `face`, a table or a slice that failed */
+export type FaceRefusal = { why: 'served'; missing: number[] } | { why: 'face' }
+export interface RoleFaceSet {
+  /** why the unit whose runs these are cannot be drawn, else null with the slices its characters are in loaded */
+  check(runs: readonly FaceRun[]): Promise<FaceRefusal | null>
+  /** the slices of `face` that hold `text` loaded, as far as they can be; never rejects */
+  ready(face: Face, text: string): Promise<void>
+  /** the face's table asked and its first slice fetched, at once, not awaited */
+  warm(id: FaceId): void
+}
+/** the role table's faces as one run is given them: `faceSources`, or each face's whole file at `faceUrl(file)` */
+export declare function roleFaceSet(o?: { faceSources?: FaceSources | null; faceUrl?: (file: string) => string }): RoleFaceSet
+/** the faces a unit's tokens are drawn in, each with its characters */
+export declare function runsOfTokens(tokens: readonly { face?: Face; s?: string; hyph?: string }[]): FaceRun[]
+/** the id of the face a target's body text is drawn in (after setRoleFaces) */
+export declare function bodyFaceId(): FaceId

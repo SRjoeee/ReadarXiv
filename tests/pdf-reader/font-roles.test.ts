@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { COVERAGE, COVERAGE_SOURCE, METRICS } from '@/pdf-reader/engine/font-coverage.mjs'
-import { canDraw, classifyFont, type Design, FACES, type FaceId, type FontClass, faceFor, familyOfFonts, familyOfProbe, rolesFor } from '@/pdf-reader/engine/font-roles.mjs'
+import { canDraw, canDrawIn, classifyFont, type Design, FACES, type FaceId, type FontClass, faceFor, familyOfFonts, familyOfProbe, rolesFor } from '@/pdf-reader/engine/font-roles.mjs'
 
 const cls = (name: string) => { const c = classifyFont(name); return { cls: c.cls, bold: c.bold, italic: c.italic, caps: c.caps, design: c.design, known: c.known } }
 const covers = (id: FaceId, cp: number) => {
@@ -337,6 +337,31 @@ describe('the fixes of the review', () => {
     pt: `${LATIN}ÃÕÁÂÀÇÉÊÍÓÔÚÜãõáâàçéêíóôúü`, ru: 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя', zh: LATIN,
   }
   const DESIGNS: Design[] = ['cm', 'other', 'times', 'libertine', 'palatino', 'charter', 'garamond', 'utopia', 'helvetica', 'cmss', 'courier', 'cmtt', 'beramono', 'inconsolata', 'biolinum']
+
+  it('E2: canDrawIn is canDraw over the ranges a host serves: a character in none of them is not drawable', () => {
+    // a face's whole coverage is canDraw's own check
+    const tw = rolesFor('de', 'times')
+    for (const text of ['Hello, world', 'caf\u00e9', '\u03b1\u03b2', '\u4e2d\u6587', '\ue000', '\u{1F600}']) {
+      expect(canDrawIn(text, [COVERAGE['nimbus-roman-regular']!, COVERAGE['lm-math']!]), text).toBe(canDraw(text, ['nimbus-roman-regular'], tw))
+    }
+    // slices: ranges cut from a face's coverage, each its own list; a character is drawable when any slice holds it
+    const ascii = [0x20, 0x7e], latin1 = [0xa0, 0xff]
+    expect(canDrawIn('abc', [ascii])).toBe(true)
+    expect(canDrawIn('caf\u00e9', [ascii])).toBe(false)
+    expect(canDrawIn('caf\u00e9', [ascii, latin1])).toBe(true)
+    // the ends are inclusive, the lists are searched apart (a slice's ranges are its own, sorted and disjoint)
+    expect(canDrawIn('\u0020\u007e', [ascii])).toBe(true)
+    expect(canDrawIn('\u007f', [ascii])).toBe(false)
+    expect(canDrawIn('a\u00e9z', [[0x61, 0x7a], [0xe9, 0xe9]])).toBe(true)
+    expect(canDrawIn('a\u00e8z', [[0x61, 0x7a], [0xe9, 0xe9]])).toBe(false)
+    expect(canDrawIn('ab', [[0x41, 0x5a, 0x61, 0x7a]])).toBe(true)
+    expect(canDrawIn('a1', [[0x41, 0x5a, 0x61, 0x7a]])).toBe(false)
+    // white space and the default ignorable need no glyph: no list holds a text of nothing else, and none a visible one
+    expect(canDrawIn(' \t\n\u00a0\u3000\u200b\u00ad\ufe00', [])).toBe(true)
+    expect(canDrawIn('', [])).toBe(true)
+    expect(canDrawIn('a', [])).toBe(false)
+    expect(canDrawIn('a\u200bb', [ascii])).toBe(true)
+  })
 
   it('I2: canDraw skips the invisible characters, as the TeX path drops them', () => {
     const zh = rolesFor('zh', 'cm'), ja = rolesFor('ja', 'cm'), ko = rolesFor('ko', 'cm')
