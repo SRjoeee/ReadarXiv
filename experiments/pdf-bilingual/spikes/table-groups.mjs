@@ -24,7 +24,9 @@
 // fixture's other files; and units.json, the translation as the layer takes it, where the engine has the layer's
 // pieces (layer/pieces.mjs): the layer gate's --fixtures folder. Every file it writes is outside the repository's
 // tracked files (out/ is git-ignored).
-//   pnpm exec tsx experiments/pdf-bilingual/spikes/table-groups.mjs [--threshold=<share>] [--show=…] [--captions] [--write=<dir>] [--engine=<worktree>]
+// --of=<folder> decides another folder's fixtures (a new cut's, made by spikes/layer-fixtures.mjs with --engine), their
+// sources read by the engine given (--engine), and links to that folder's files.
+//   pnpm exec tsx experiments/pdf-bilingual/spikes/table-groups.mjs [--threshold=<share>] [--show=…] [--captions] [--write=<dir>] [--engine=<worktree>] [--of=<folder>]
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -44,7 +46,9 @@ const { plainSource, plainTranslated, rehydrate, serialize, texEscape } = await 
 const G = await engine('groups.mjs')
 const pieces = existsSync(join(ENGINE, 'src/pdf-reader/engine/layer/pieces.mjs')) ? await engine('layer/pieces.mjs') : null
 const DATA = process.env.AXT_DATA ?? join(root, 'data')
-const FIXTURES = join(DATA, 'layer-fixtures')
+/** the fixtures whose records are decided: the gate's fixed ones, or --of=<folder> (a cut's made fixtures, whose
+ *  records are of that cut: spikes/layer-fixtures.mjs into another folder) */
+const FIXTURES = argOf('of') ? resolve(argOf('of')) : join(DATA, 'layer-fixtures')
 const OUT = join(root, 'out/table-groups')
 const THRESHOLD = argOf('threshold') === null ? G.NAMES_SHARE : Number(argOf('threshold'))
 const SHOW = new Set((argOf('show') ?? '').split(',').filter(Boolean))

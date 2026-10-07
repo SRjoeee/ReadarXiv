@@ -14,8 +14,9 @@ import { basename, join } from 'node:path'
 
 export const REF_SCHEMA = 1
 const UNIT_KINDS = ['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author']
-/** the approved prototype's geometry (iteration 2's data, outside the repository) */
-export const PROTO_GEOMETRY = '/Users/cheongzhiyan/Developer/readarxiv-research/2026-10-06-plan8/instant-layer/iteration-2/data'
+/** the approved prototype's geometry (iteration 2's data, outside the repository); LAYER_GEOMETRY another (the same
+ *  carried to another cut of the units: spikes/layer-cut.mjs) */
+export const PROTO_GEOMETRY = process.env.LAYER_GEOMETRY ?? '/Users/cheongzhiyan/Developer/readarxiv-research/2026-10-06-plan8/instant-layer/iteration-2/data'
 export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
 
 /** a fixture's name as its paper with its version, and its target */

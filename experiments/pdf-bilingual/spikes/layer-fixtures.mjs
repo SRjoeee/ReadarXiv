@@ -17,7 +17,10 @@
 // else Microsoft's free endpoint as spikes/live-node.mjs calls it (mt.mjs translateTexts and translateUnits, the markers
 // wire, every unit the target does not keep), with the sentence lengths the endpoint answers (sentLen) kept as the
 // extension's service keeps them, so that its units have sentences as staging's do. A record already made for the same
-// cut of the paper's units is taken again, never sent twice (--fresh: made anew).
+// cut of the paper's units is taken again, never sent twice (--fresh: made anew): the output's own folder's, then the
+// translations made for that cut before (out/layer-gate/translations/<output>/<cut>/, wherever their fixtures went), then
+// the gate's fixed fixture's. Where none is of this cut and staging holds none, the fixed fixture's record of another cut
+// (an earlier front end's) seeds every unit whose source is one of its (cache.mjs seedFrom), and only the rest is sent.
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/layer-fixtures.mjs [--only=<paper>[:<target>],…] [--targets=<t>,…] [--fresh] [--list]
 //       [--of=<fixtures folder>] [--engine=<worktree>] [--offline] [--switch]
 // With no option, Task 12's 21 outputs (OUTPUTS below, with the table-heavy, footnote-heavy and XeLaTeX papers found by
@@ -75,6 +78,10 @@ const DATA = process.env.AXT_DATA ?? join(root, 'data')
 const OUT = resolve(process.env.LAYER_FIXTURES ?? join(DATA, 'layer-fixtures'))
 /** the fixtures the gate holds fixed, whose records an --offline run may take again */
 const REFS = resolve(join(DATA, 'layer-fixtures'))
+/** each output's translations by the cut of its paper's units they were made for (out/layer-gate/translations/<output>/
+ *  <cut>/: record.json and meta.json), wherever its fixtures are made to: a cut is translated once */
+const TRANSLATIONS = join(root, 'out/layer-gate/translations')
+const cutOf = hashes => createHash('sha256').update(hashes.join('\n')).digest('hex').slice(0, 16)
 if (ENGINE !== REPO && OUT === REFS) throw new Error(`--engine: give LAYER_FIXTURES another folder than ${REFS} (the gate's fixed inputs)`)
 const UA = 'ReadarXiv/0.1 (+https://readarxiv.org; research)'
 const STAGING = 'https://app-staging.readarxiv.org'
@@ -385,6 +392,32 @@ async function microsoftRecord(paper, target, hashes) {
   const record = Buffer.from(JSON.stringify({ units: unitsOf(paper.units, kept, hashes, results) }))
   return { record, from: { endpoint: 'edge.microsoft.com/translate/translatetext', how, ms: Date.now() - t0 } }
 }
+/**
+ * A record of this cut of the paper's units, its translations carried over from records of another cut (`from`: the
+ * gate's fixed fixture's, made by an earlier front end): each unit whose source is one of theirs, by its hash or but for
+ * its pairs' numbers (cache.mjs seedFrom, as a copy's seed); every other unit the target does not keep sent through
+ * Microsoft's endpoint on the markers wire, as microsoftRecord sends a paper's, at its rate. A front end that cuts the
+ * units anew (PIPELINE 10's) sends only what it made new
+ */
+async function seededRecord(paper, target, hashes, from) {
+  const kept = keptFor(paper, target)
+  const results = new Map()
+  for (const rec of from) {
+    const { seed } = await seedFrom(rec, paper.units)
+    for (const [i, x] of seed) if (!results.has(i) && !kept.has(paper.units[i])) results.set(i, x)
+  }
+  const carried = results.size
+  const todo = paper.units.filter((u, i) => !kept.has(u) && !results.has(i))
+  const t0 = Date.now()
+  let how = null
+  if (todo.length) {
+    const r = await translateUnits(todo, texts => translateTexts(texts, target, { parallel: 2, send: microsoft }), 'markers')
+    how = r.how
+    paper.units.forEach((u, i) => { const x = r.results.get(u); if (x) results.set(i, { ...x, tried: 'microsoft' }) })
+  }
+  const record = Buffer.from(JSON.stringify({ units: unitsOf(paper.units, kept, hashes, results) }))
+  return { record, from: { carried, sent: todo.length, endpoint: 'edge.microsoft.com/translate/translatetext', how, ms: Date.now() - t0 } }
+}
 /** the record's units as the layer takes them: each unit's pieces as TrPiece by its source pieces' indices */
 async function layerUnits(paper, record) {
   const { seed } = await seedFrom(record, paper.units)
@@ -443,13 +476,24 @@ for (const [id, target] of asked) {
         if (d !== out) write(recordFile, readFileSync(rf))
       }
     }
+    // (the translations made for this cut before, whatever folder they were made into)
+    const cache = join(TRANSLATIONS, `${id}-${target}`, cutOf(hashes))
+    if (!record && !flag('fresh') && existsSync(join(cache, 'record.json'))) {
+      const meta = JSON.parse(readFileSync(join(cache, 'meta.json'), 'utf8'))
+      record = JSON.parse(readFileSync(join(cache, 'record.json'), 'utf8')); from = meta.from; source = meta.source
+      write(recordFile, readFileSync(join(cache, 'record.json')))
+    }
     if (!record) {
       const staged = await stagingRecord(m[1], Number(m[2]), target)
-      const made = staged ?? (await microsoftRecord(paper, target, hashes))
+      // (else the gate's fixed fixture's translations carried over where the cut is another, the rest sent)
+      const old = join(REFS, `${id}-${target}`, 'record.json')
+      const made = staged ?? (existsSync(old) ? await seededRecord(paper, target, hashes, [JSON.parse(readFileSync(old, 'utf8'))]) : await microsoftRecord(paper, target, hashes))
       source = staged ? 'staging' : 'microsoft'
       from = made.from
       write(recordFile, made.record)
       record = JSON.parse(Buffer.from(made.record).toString('utf8'))
+      write(join(cache, 'record.json'), made.record)
+      write(join(cache, 'meta.json'), JSON.stringify({ source, from, pipeline: PIPELINE_VERSION, made: new Date().toISOString() }))
     }
     const { units, unread } = await layerUnits(paper, record)
     const states = {}
