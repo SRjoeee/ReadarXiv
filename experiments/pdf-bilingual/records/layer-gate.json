@@ -1,10 +1,10 @@
 {
  "schema": 1,
  "tier": "pixel",
- "made": "2026-10-06T21:32:12.919Z",
+ "made": "2026-10-07T11:43:02.095Z",
  "engine": {
   "root": ".",
-  "commit": "957ca1429e697d1913fff3ec3eeb397518839afd",
+  "commit": "149ecee7e38a5d13f6e6c46a032a416684b37a3d",
   "branch": "exp/layer",
   "dirty": false
  },
@@ -17,13 +17,15 @@
   "composite": "darken",
   "layouts": "made",
   "switch": true,
-  "fixtures": "out/layer-gate/fixtures/18e2cf462929724e",
-  "records": "out/layer-int/records",
+  "fixtures": "out/layer-gate/fixtures/41795914c3c84238",
+  "records": "out/layer-gate/cut-p10/records",
+  "refs": "out/layer-gate/cut-p10/refs",
+  "geometry": "out/layer-gate/cut-p10/geometry",
   "chromium": "153.0.8010.12",
   "pdfjs": "6.3.289",
   "fonts": "7aa6ebe2c491a740",
   "checker": "3497d4d5c8282447",
-  "measures": "c73b815f2bd198e3",
+  "measures": "b8838f1156faeb71",
   "kind": "proto",
   "protoUnits": "fixture",
   "place": "the gate's",
@@ -33,7 +35,7 @@
   "params": "none",
   "hyphenation": "7804b689a5987c36",
   "removal": "draw",
-  "remover": "1b3d42b72a28a6be"
+  "remover": "1983456dd2401269"
  },
  "rows": [
   {
@@ -477,15 +479,15 @@
      ],
      [
       127,
-      431
+      434
      ],
      [
       129,
-      432
+      435
      ],
      [
       134,
-      439
+      442
      ]
     ],
     "missing": [
@@ -643,16 +645,16 @@
  ],
  "summaries": {
   "1512.03385v1-de": {
-   "fullSize": 0.331,
+   "fullSize": 0.346,
    "medianScale": 0.925,
    "style": [
-    161,
-    166
+    180,
+    185
    ],
    "onGrid": 0.2,
    "unfit": [
     0,
-    166
+    185
    ],
    "unfitShare": 0,
    "bar": 0.03,
@@ -661,20 +663,20 @@
     "unfit": 2,
     "group: a cell unfit": 46
    },
-   "page1Ms": 213,
-   "slowestUnitMs": 16
+   "page1Ms": 198,
+   "slowestUnitMs": 18
   },
   "1512.03385v1-es": {
-   "fullSize": 0.388,
+   "fullSize": 0.38,
    "medianScale": 0.95,
    "style": [
-    155,
-    160
+    174,
+    179
    ],
    "onGrid": 0.2,
    "unfit": [
     0,
-    160
+    179
    ],
    "unfitShare": 0,
    "bar": 0.03,
@@ -683,20 +685,20 @@
     "unfit": 3,
     "group: a cell unfit": 47
    },
-   "page1Ms": 212,
-   "slowestUnitMs": 16
+   "page1Ms": 204,
+   "slowestUnitMs": 19
   },
   "1512.03385v1-fr": {
-   "fullSize": 0.366,
+   "fullSize": 0.364,
    "medianScale": 0.925,
    "style": [
-    200,
-    205
+    215,
+    220
    ],
    "onGrid": 0.22,
    "unfit": [
     0,
-    205
+    220
    ],
    "unfitShare": 0,
    "bar": 0.03,
@@ -705,43 +707,43 @@
     "unfit": 1,
     "group: a cell unfit": 1
    },
-   "page1Ms": 214,
-   "slowestUnitMs": 15
+   "page1Ms": 203,
+   "slowestUnitMs": 19
   },
   "1512.03385v1-ja": {
-   "fullSize": 0.685,
+   "fullSize": 0.672,
    "medianScale": 1,
    "style": [
-    157,
-    162
+    172,
+    177
    ],
    "onGrid": 1,
    "unfit": [
     0,
-    162
+    177
    ],
    "unfitShare": 0,
    "bar": 0.02,
    "overBar": false,
    "why": {
     "author": 1,
-    "unfit": 9,
-    "group: a cell unfit": 47
+    "unfit": 13,
+    "group: a cell unfit": 51
    },
-   "page1Ms": 340,
-   "slowestUnitMs": 15
+   "page1Ms": 339,
+   "slowestUnitMs": 18
   },
   "1512.03385v1-ko": {
-   "fullSize": 0.88,
+   "fullSize": 0.887,
    "medianScale": 1,
    "style": [
-    162,
-    167
+    181,
+    186
    ],
    "onGrid": 1,
    "unfit": [
     0,
-    167
+    186
    ],
    "unfitShare": 0,
    "bar": 0.02,
@@ -751,42 +753,42 @@
     "unfit": 2,
     "group: a cell unfit": 46
    },
-   "page1Ms": 686,
-   "slowestUnitMs": 15
+   "page1Ms": 689,
+   "slowestUnitMs": 19
   },
   "1512.03385v1-ru": {
-   "fullSize": 0.39,
+   "fullSize": 0.384,
    "medianScale": 0.925,
    "style": [
-    149,
-    154
+    167,
+    172
    ],
    "onGrid": 0.22,
    "unfit": [
     0,
-    154
+    172
    ],
    "unfitShare": 0,
    "bar": 0.03,
    "overBar": false,
    "why": {
-    "unfit": 8,
-    "group: a cell unfit": 52
+    "unfit": 9,
+    "group: a cell unfit": 53
    },
-   "page1Ms": 398,
-   "slowestUnitMs": 14
+   "page1Ms": 193,
+   "slowestUnitMs": 19
   },
   "1512.03385v1-zh": {
-   "fullSize": 0.909,
+   "fullSize": 0.917,
    "medianScale": 1,
    "style": [
-    204,
-    209
+    223,
+    228
    ],
-   "onGrid": 0.225,
+   "onGrid": 0.2,
    "unfit": [
     0,
-    209
+    228
    ],
    "unfitShare": 0,
    "bar": 0.01,
@@ -796,39 +798,39 @@
     "unfit": 1,
     "group: a cell unfit": 4
    },
-   "page1Ms": 968,
+   "page1Ms": 941,
    "slowestUnitMs": 17
   },
   "1706.03762v7-de": {
-   "fullSize": 0.674,
+   "fullSize": 0.669,
    "medianScale": 1,
    "style": [
-    138,
-    138
+    139,
+    139
    ],
    "onGrid": 0.8,
    "unfit": [
     0,
-    138
+    139
    ],
    "unfitShare": 0,
    "bar": 0.03,
    "overBar": false,
    "why": {},
-   "page1Ms": 144,
-   "slowestUnitMs": 10
+   "page1Ms": 158,
+   "slowestUnitMs": 15
   },
   "1706.03762v7-es": {
-   "fullSize": 0.641,
+   "fullSize": 0.636,
    "medianScale": 1,
    "style": [
-    131,
-    131
+    132,
+    132
    ],
    "onGrid": 1,
    "unfit": [
     0,
-    131
+    132
    ],
    "unfitShare": 0,
    "bar": 0.03,
@@ -837,39 +839,39 @@
     "unfit": 1,
     "group: a cell unfit": 5
    },
-   "page1Ms": 144,
-   "slowestUnitMs": 10
+   "page1Ms": 147,
+   "slowestUnitMs": 18
   },
   "1706.03762v7-fr": {
-   "fullSize": 0.654,
+   "fullSize": 0.65,
    "medianScale": 1,
    "style": [
-    136,
-    136
+    137,
+    137
    ],
-   "onGrid": 0.83,
+   "onGrid": 0.815,
    "unfit": [
     0,
-    136
+    137
    ],
    "unfitShare": 0,
    "bar": 0.03,
    "overBar": false,
    "why": {},
-   "page1Ms": 156,
-   "slowestUnitMs": 11
+   "page1Ms": 142,
+   "slowestUnitMs": 16
   },
   "1706.03762v7-ja": {
-   "fullSize": 0.902,
+   "fullSize": 0.84,
    "medianScale": 1,
    "style": [
-    143,
-    143
+    144,
+    144
    ],
    "onGrid": 1,
    "unfit": [
     0,
-    143
+    144
    ],
    "unfitShare": 0,
    "bar": 0.02,
@@ -880,20 +882,20 @@
     "unfit": 3,
     "group: a cell unfit": 7
    },
-   "page1Ms": 434,
-   "slowestUnitMs": 11
+   "page1Ms": 396,
+   "slowestUnitMs": 15
   },
   "1706.03762v7-ko": {
-   "fullSize": 0.953,
+   "fullSize": 0.881,
    "medianScale": 1,
    "style": [
-    150,
-    150
+    151,
+    151
    ],
    "onGrid": 1,
    "unfit": [
     0,
-    150
+    151
    ],
    "unfitShare": 0,
    "bar": 0.02,
@@ -902,20 +904,20 @@
     "unanchored": 1,
     "author": 2
    },
-   "page1Ms": 671,
-   "slowestUnitMs": 11
+   "page1Ms": 664,
+   "slowestUnitMs": 16
   },
   "1706.03762v7-ru": {
-   "fullSize": 0.63,
+   "fullSize": 0.626,
    "medianScale": 1,
    "style": [
-    138,
-    138
+    139,
+    139
    ],
-   "onGrid": 0.88,
+   "onGrid": 0.87,
    "unfit": [
     0,
-    138
+    139
    ],
    "unfitShare": 0,
    "bar": 0.03,
@@ -924,20 +926,20 @@
     "unfit": 4,
     "group: a cell unfit": 12
    },
-   "page1Ms": 140,
-   "slowestUnitMs": 10
+   "page1Ms": 131,
+   "slowestUnitMs": 18
   },
   "1706.03762v7-zh": {
-   "fullSize": 0.958,
+   "fullSize": 0.896,
    "medianScale": 1,
    "style": [
-    143,
-    143
+    144,
+    144
    ],
    "onGrid": 0.33,
    "unfit": [
     0,
-    143
+    144
    ],
    "unfitShare": 0,
    "bar": 0.01,
@@ -948,348 +950,348 @@
     "unfit": 3,
     "group: a cell unfit": 7
    },
-   "page1Ms": 802,
-   "slowestUnitMs": 11
+   "page1Ms": 847,
+   "slowestUnitMs": 15
   },
   "1810.04805v2-de": {
-   "fullSize": 0.424,
+   "fullSize": 0.447,
    "medianScale": 0.95,
    "style": [
-    139,
-    139
+    152,
+    152
    ],
    "onGrid": 0.225,
    "unfit": [
     0,
-    139
+    152
    ],
    "unfitShare": 0,
    "bar": 0.03,
    "overBar": false,
    "why": {
-    "unanchored": 1,
-    "unfit": 1,
-    "group: a cell unfit": 2
+    "unanchored": 7,
+    "unfit": 2,
+    "group: a cell unfit": 4
    },
-   "page1Ms": 176,
-   "slowestUnitMs": 15
+   "page1Ms": 207,
+   "slowestUnitMs": 20
   },
   "1810.04805v2-es": {
-   "fullSize": 0.403,
+   "fullSize": 0.388,
    "medianScale": 0.95,
    "style": [
-    139,
-    139
+    170,
+    170
    ],
    "onGrid": 0.225,
    "unfit": [
     0,
-    139
+    170
    ],
    "unfitShare": 0,
    "bar": 0.03,
    "overBar": false,
    "why": {
-    "unanchored": 1
+    "unanchored": 7
    },
-   "page1Ms": 349,
-   "slowestUnitMs": 14
+   "page1Ms": 177,
+   "slowestUnitMs": 24
   },
   "1810.04805v2-fr": {
-   "fullSize": 0.37,
+   "fullSize": 0.369,
    "medianScale": 0.95,
    "style": [
-    135,
-    135
+    149,
+    149
    ],
    "onGrid": 0.215,
    "unfit": [
     0,
-    135
+    149
    ],
    "unfitShare": 0,
    "bar": 0.03,
    "overBar": false,
    "why": {
-    "unanchored": 1,
-    "unfit": 1,
-    "group: a cell unfit": 6
+    "unanchored": 7,
+    "unfit": 2,
+    "group: a cell unfit": 7
    },
-   "page1Ms": 217,
-   "slowestUnitMs": 14
+   "page1Ms": 153,
+   "slowestUnitMs": 21
   },
   "1810.04805v2-ja": {
-   "fullSize": 0.733,
+   "fullSize": 0.699,
    "medianScale": 1,
    "style": [
-    135,
-    135
+    163,
+    163
    ],
    "onGrid": 1,
    "unfit": [
     0,
-    135
+    163
    ],
    "unfitShare": 0,
    "bar": 0.02,
    "overBar": false,
    "why": {
-    "unanchored": 1,
+    "unanchored": 7,
     "author": 1,
-    "unfit": 4,
-    "group: a cell unfit": 6
+    "unfit": 6,
+    "group: a cell unfit": 9
    },
-   "page1Ms": 488,
-   "slowestUnitMs": 15
+   "page1Ms": 422,
+   "slowestUnitMs": 17
   },
   "1810.04805v2-ko": {
-   "fullSize": 0.901,
+   "fullSize": 0.849,
    "medianScale": 1,
    "style": [
-    141,
-    141
+    172,
+    172
    ],
    "onGrid": 1,
    "unfit": [
     0,
-    141
+    172
    ],
    "unfitShare": 0,
    "bar": 0.02,
    "overBar": false,
    "why": {
-    "unanchored": 1,
+    "unanchored": 8,
     "author": 1
    },
-   "page1Ms": 826,
-   "slowestUnitMs": 14
+   "page1Ms": 751,
+   "slowestUnitMs": 19
   },
   "1810.04805v2-ru": {
-   "fullSize": 0.362,
+   "fullSize": 0.38,
    "medianScale": 0.925,
    "style": [
-    141,
-    141
+    171,
+    171
    ],
    "onGrid": 0.215,
    "unfit": [
     0,
-    141
+    171
    ],
    "unfitShare": 0,
    "bar": 0.03,
    "overBar": false,
    "why": {
-    "unanchored": 1
+    "unanchored": 7
    },
-   "page1Ms": 138,
-   "slowestUnitMs": 15
+   "page1Ms": 140,
+   "slowestUnitMs": 19
   },
   "1810.04805v2-zh": {
-   "fullSize": 0.978,
+   "fullSize": 0.923,
    "medianScale": 1,
    "style": [
-    139,
-    139
+    168,
+    168
    ],
    "onGrid": 0.2,
    "unfit": [
     0,
-    139
+    168
    ],
    "unfitShare": 0,
    "bar": 0.01,
    "overBar": false,
    "why": {
-    "unanchored": 1,
+    "unanchored": 7,
     "author": 1,
-    "unfit": 2,
-    "group: a cell unfit": 2
+    "unfit": 3,
+    "group: a cell unfit": 4
    },
-   "page1Ms": 1100,
-   "slowestUnitMs": 14
+   "page1Ms": 594,
+   "slowestUnitMs": 17
   },
   "2307.16209v1-zh": {
-   "fullSize": 0.98,
-   "medianScale": 1,
+   "fullSize": 0.977,
+   "medianScale": 1.025,
    "style": [
-    420,
-    441
+    422,
+    443
    ],
    "onGrid": 0.33,
    "unfit": [
     0,
-    441
+    443
    ],
    "unfitShare": 0,
    "bar": 0.01,
    "overBar": false,
    "why": {
-    "unanchored": 5,
+    "unanchored": 6,
     "unfit": 1
    },
-   "page1Ms": 533,
-   "slowestUnitMs": 349
+   "page1Ms": 528,
+   "slowestUnitMs": 364
   },
   "2608.04322v1-de": {
-   "fullSize": 0.468,
+   "fullSize": 0.442,
    "medianScale": 0.975,
    "style": [
-    133,
-    141
+    145,
+    165
    ],
    "onGrid": 0.25,
    "unfit": [
     0,
-    141
+    165
    ],
    "unfitShare": 0,
    "bar": 0.03,
    "overBar": false,
    "why": {
-    "unanchored": 2,
+    "unanchored": 1,
     "unfit": 4,
     "group: a cell unfit": 13
    },
-   "page1Ms": 317,
-   "slowestUnitMs": 18
+   "page1Ms": 177,
+   "slowestUnitMs": 23
   },
   "2608.04322v1-es": {
-   "fullSize": 0.441,
-   "medianScale": 0.975,
+   "fullSize": 0.515,
+   "medianScale": 1,
    "style": [
-    137,
-    143
+    149,
+    167
    ],
    "onGrid": 0.25,
    "unfit": [
     0,
-    143
+    167
    ],
    "unfitShare": 0,
    "bar": 0.03,
    "overBar": false,
    "why": {
-    "unanchored": 2,
+    "unanchored": 1,
     "unfit": 5,
     "group: a cell unfit": 11
    },
-   "page1Ms": 238,
-   "slowestUnitMs": 18
+   "page1Ms": 384,
+   "slowestUnitMs": 27
   },
   "2608.04322v1-fr": {
-   "fullSize": 0.443,
+   "fullSize": 0.434,
    "medianScale": 0.95,
    "style": [
-    137,
-    149
+    149,
+    173
    ],
    "onGrid": 0.25,
    "unfit": [
     0,
-    149
+    173
    ],
    "unfitShare": 0,
    "bar": 0.03,
    "overBar": false,
    "why": {
-    "unanchored": 2,
+    "unanchored": 1,
     "unfit": 2,
     "group: a cell unfit": 5
    },
-   "page1Ms": 842,
-   "slowestUnitMs": 18
+   "page1Ms": 386,
+   "slowestUnitMs": 27
   },
   "2608.04322v1-ja": {
-   "fullSize": 0.868,
+   "fullSize": 0.881,
    "medianScale": 1,
    "style": [
-    140,
-    152
+    152,
+    176
    ],
    "onGrid": 1,
    "unfit": [
     0,
-    152
+    176
    ],
    "unfitShare": 0,
    "bar": 0.02,
    "overBar": false,
    "why": {
-    "unanchored": 2,
+    "unanchored": 1,
     "author": 1,
     "unfit": 1,
     "group: a cell unfit": 2
    },
-   "page1Ms": 435,
-   "slowestUnitMs": 20
+   "page1Ms": 413,
+   "slowestUnitMs": 21
   },
   "2608.04322v1-ko": {
-   "fullSize": 0.968,
+   "fullSize": 0.972,
    "medianScale": 1,
    "style": [
-    140,
-    154
+    152,
+    178
    ],
    "onGrid": 1,
    "unfit": [
     0,
-    154
+    178
    ],
    "unfitShare": 0,
    "bar": 0.02,
    "overBar": false,
    "why": {
-    "unanchored": 2,
+    "unanchored": 1,
     "author": 1
    },
-   "page1Ms": 1021,
-   "slowestUnitMs": 20
+   "page1Ms": 664,
+   "slowestUnitMs": 24
   },
   "2608.04322v1-ru": {
-   "fullSize": 0.464,
-   "medianScale": 0.975,
+   "fullSize": 0.5,
+   "medianScale": 1,
    "style": [
-    130,
-    138
+    142,
+    162
    ],
    "onGrid": 0.22,
    "unfit": [
     0,
-    138
+    162
    ],
    "unfitShare": 0,
    "bar": 0.03,
    "overBar": false,
    "why": {
-    "unanchored": 2,
+    "unanchored": 1,
     "unfit": 5,
     "group: a cell unfit": 16
    },
-   "page1Ms": 221,
-   "slowestUnitMs": 19
+   "page1Ms": 220,
+   "slowestUnitMs": 25
   },
   "2608.04322v1-zh": {
    "fullSize": 1,
    "medianScale": 1,
    "style": [
-    140,
-    154
+    152,
+    178
    ],
    "onGrid": 0.25,
    "unfit": [
     0,
-    154
+    178
    ],
    "unfitShare": 0,
    "bar": 0.01,
    "overBar": false,
    "why": {
-    "unanchored": 2,
+    "unanchored": 1,
     "author": 1
    },
-   "page1Ms": 645,
-   "slowestUnitMs": 19
+   "page1Ms": 564,
+   "slowestUnitMs": 20
   }
  }
 }
