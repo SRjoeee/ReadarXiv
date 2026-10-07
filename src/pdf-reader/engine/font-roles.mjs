@@ -327,19 +327,30 @@ const CJK_FAMILY = {
   Hans: { group: 'shs-sc', kai: 'fandolkai' }, Hant: { group: 'shs-tc', kai: 'bkai00mp' }, Jpan: { group: 'haranoaji', kai: null },
   Kore: { group: 'shs-k', kai: null },
 }
-const LIGHT = new Set(['cm', 'garamond'])
+const LIGHT = Object.freeze(['cm', 'garamond'])
 const ALPHABETS = new Set(['Latn', 'Cyrl'])
 // every Latin and Cyrillic face's missing symbols from Latin Modern Math
 const LATIN_FALLBACKS = Object.fromEntries(Object.values(FACES).filter(f => !CJK_GROUPS.test(f.family) && f.id !== 'lm-math').map(f => [f.id, Object.freeze(['lm-math'])]))
 
-/** what a target draws in, for a paper's English family */
-export function rolesFor(target, family) {
+/** the CJK faces a target's script takes as this table has them: its group, its Kai (null: emphasis upright) and the
+ *  English designs beside which it takes the light weights; null for a script with none. A layout rule, not a fact about
+ *  the files: the instant layer asks for it through its one per-target call (layer-proto/target-rules.mjs), where a rule
+ *  set read as data will give it instead, and hands it back to rolesFor */
+export function cjkFacesOf(target) {
+  const script = scriptOf(target)
+  if (!Object.hasOwn(CJK_FAMILY, script)) return null
+  const { group, kai } = CJK_FAMILY[script]
+  return { group, kai, light: LIGHT }
+}
+
+/** what a target draws in, for a paper's English family; its CJK faces this table's own (cjkFacesOf) unless given */
+export function rolesFor(target, family, cjkFaces = cjkFacesOf(target)) {
   const script = scriptOf(target)
   let cjk = null
   const fallbacks = { ...LATIN_FALLBACKS }
-  if (Object.hasOwn(CJK_FAMILY, script)) {
-    const { group, kai } = CJK_FAMILY[script]
-    const light = LIGHT.has(family)
+  if (cjkFaces) {
+    const { group, kai } = cjkFaces
+    const light = cjkFaces.light.includes(family)
     cjk = { body: `${group}-${light ? 'light' : 'regular'}`, bold: `${group}-${light ? 'semibold' : 'bold'}`, italic: kai, boldItalic: kai }
     // Traditional Chinese's characters Source Han Serif TC lacks, from SC at the same weight; the Kai's, from the body
     if (script === 'Hant') for (const w of ['light', 'regular', 'medium', 'semibold', 'bold']) fallbacks[`shs-tc-${w}`] = Object.freeze([`shs-sc-${w}`])

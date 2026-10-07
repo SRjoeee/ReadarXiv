@@ -60,11 +60,15 @@ export function classifyFont(name, fallbackFamily) {
   return { fam, bold, italic, caps, design, known, name: n }
 }
 
+/** the English family v0's role table faces are set for at its open, until the paper's own is read from its first page
+ *  (Times-like: the target's likely faces) */
+export const OPEN_FAMILY = 'times'
 /** the role table's roles v0 draws in (setRoleFaces), or null: the prototype's own faces */
 let ROLES = null
-/** v0 drawn in the role table's faces for a target and the paper's English family (font-roles.mjs familyOfFonts); a
- *  falsy target goes back to the prototype's faces */
-export function setRoleFaces(target, family) { ROLES = target ? rolesFor(target, family) : null }
+/** v0 drawn in the role table's faces for a target and the paper's English family (font-roles.mjs familyOfFonts), its CJK
+ *  faces the run's rules' (target-rules.mjs; the role table's own where not given); a falsy target goes back to the
+ *  prototype's faces */
+export function setRoleFaces(target, family, cjkFaces) { ROLES = target ? rolesFor(target, family, cjkFaces) : null }
 export const roleFaces = () => ROLES
 /** the role table's face of a run: faceFor's, as faceOf's object, with the ids of its faces and fallbacks (`ids`) */
 function roleFaceOf(st, cls) {

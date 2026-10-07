@@ -55,6 +55,8 @@ export declare function fillPage(loose: unknown[], P: Params & { adaptiveFill: {
 export interface ProtoRun {
   N: number
   P: Params
+  /** the rules the run was opened with (target-rules.mjs): the built-in set's schema and version */
+  readonly rules: { schema: 1; version: number }
   rows: Row[]
   placed: Placed[]
   /** the units left the original's and why: `unanchored`, `author`, `unfit`, `group: …`, and, in the role table's faces, `served`

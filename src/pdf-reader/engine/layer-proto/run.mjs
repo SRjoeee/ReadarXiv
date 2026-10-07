@@ -43,11 +43,12 @@
 //   prototype did (its floor's numbers).
 import { checkAll } from './check.mjs'
 import { familyOfFonts } from '../font-roles.mjs'
-import { bodyFaceId, classifyFont, faceOf, fontString, loadWebFaces, roleFaceSet, runsOfTokens, styleKey, setRoleFaces } from './fonts.mjs'
+import { bodyFaceId, classifyFont, faceOf, fontString, loadWebFaces, OPEN_FAMILY, roleFaceSet, runsOfTokens, styleKey, setRoleFaces } from './fonts.mjs'
 import { loadHyphenation } from './hyph.mjs'
 import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
 import { fileSwap, protection } from './removal.mjs'
+import { rulesFor } from './target-rules.mjs'
 import { locatedWhole, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
 
@@ -215,7 +216,7 @@ function needsOf(K, N, passes, fileOnly) {
  * (a hole a unit not yet arrived), each page laid once every unit it reads has come; null (today's call): every unit is
  * in `units`. `groups`: each unit's table group, known at open (the paper's bundle, groups.mjs groupOf), so that a
  * group is read once its own cells' rows are in; null: once every row is. Options as main.js's query: `scale` (CSS px a
- * PDF unit), `dpr`, `params` (layer2.mjs defaultParams' overrides), `batch`, `phMode` ('auto' or 'source'),
+ * PDF unit), `dpr`, `params` (overrides of the fit's parameters the target's rules give, target-rules.mjs), `batch`, `phMode` ('auto' or 'source'),
  * `restoring`, `order` (ids whose order a page's units are laid in, in place of layGroups': a recorded run's). `faces`:
  * 'roles' (the role table's) or 'prototype' (the prototype's own).
  * `faceSources(id)`: a promise of the slices the host serves of a role table face, each { url, ranges } (its file on the
@@ -251,22 +252,25 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   if (expect !== null && (!Array.isArray(expect) || !expect.every(id => Number.isSafeInteger(id) && id >= 0))) throw new TypeError(`expect: ids of units or null, not ${kindOf(expect)}`)
   if (tableGroups !== null && !(tableGroups instanceof Map)) throw new TypeError(`groups: a Map of ids to groups or null, not ${kindOf(tableGroups)}`)
   if (faceSources !== null && typeof faceSources !== 'function') throw new TypeError(`faceSources: a function or null, not ${kindOf(faceSources)}`)
-  const P = L2.defaultParams(to)
+  // every choice made for the target, in one call (target-rules.mjs): the fit's parameters, the hyphenation patterns, the
+  // CJK family
+  const R = rulesFor(to)
+  const P = { ...R.params }
   for (const k of PARAM_KEYS) if (params[k] !== undefined) P[k] = params[k]
   // (the maintainer's ruling of 2026-10-07, on S3-11: the script's leading on the original's own pitch reads more
   // naturally on a loose original than fix 2's relative leading (leadRel), which stays a switch)
-  P.leadRel ??= false
+  P.leadRel ??= R.params.leadRel
   // (and the maintainer's choice of 2026-10-07 on S3-12, "\u6211\u4EEC\u5C31\u9009\u5B9A D \u7248\u672C\u65B9\u5411": adaptiveFill on a loose
   // original, as measured there; adaptiveFill: false is B, the script's leading on the original's pitch alone)
-  P.adaptiveFill ??= { band: 0.05, track: 0.05, size: 1.1 }
+  P.adaptiveFill ??= R.params.adaptiveFill
   // iteration 2's hyphenation, fetched at once (local, small)
-  const hyphP = Promise.all([...new Set(['en', to === 'de' ? 'de' : null, to === 'ru' ? 'ru' : null].filter(Boolean))].map(async l => L2.setHyphenData(l, await loadHyphenation(l, hyphUrl(l)))))
+  const hyphP = Promise.all(R.patterns.map(async l => L2.setHyphenData(l, await loadHyphenation(l, hyphUrl(l)))))
   // the target's likely faces loaded meanwhile (Times-like until the paper's own designs are known), and Latin Modern at
   // once: the page's characters are measured in their own designs
   const roles = faces === 'roles'
   // (the role table's faces: the paper's family is known from its first page; until then its Latin faces, which no
   // family changes)
-  setRoleFaces(roles ? to : null, 'times')
+  setRoleFaces(roles ? to : null, OPEN_FAMILY, R.cjkFaces)
   const warmP = roles ? null : L2.warmFaces(to, { serif: 'times' }, yieldNow)
   const lmP = roles ? null : loadWebFaces(['cm', 'cmss', 'cmtt'], fontUrl)
   // the role table's faces as the host serves them, each asked when a page or a unit first needs it and loaded for the
@@ -1059,7 +1063,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         // each measured once
         const weight = new Map()
         for (const c of chars2[0]) if (c.st?.name) weight.set(c.st.name, (weight.get(c.st.name) ?? 0) + 1)
-        setRoleFaces(to, familyOfFonts([...weight.keys()], [...weight.values()]))
+        setRoleFaces(to, familyOfFonts([...weight.keys()], [...weight.values()]), R.cjkFaces)
         await hyphP
         await L2.warmFaces(to, designs, yieldNow, (face, text) => FS.ready(face, text))
       } else {
@@ -1203,6 +1207,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
 
   return {
     N, P, rows, placed, skipped, stats, audit, order, ms, pageMs, pageTimes, chars: chars2, views,
+    /** the rules the run was opened with (target-rules.mjs): the built-in set's schema and version */
+    rules: { schema: R.schema, version: R.version },
     get designs() { return designs },
     /** the hybrid's: each placed unit's source, in the order of the geometry's units then the file's alone, and why the
      *  units placed by v0's geometry are (and those only the file holds it does not locate whole) */
