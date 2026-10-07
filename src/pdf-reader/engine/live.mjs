@@ -27,6 +27,7 @@ import { texErrors, unitsAtErrors } from './tex-errors.mjs'
 import { decideGroups, groupOf } from './groups.mjs'
 import { nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
 import { kOfSource, trPiecesOf } from './layer/pieces.mjs'
+import { batchOf, FIRST_BATCH, NEXT_BATCH } from './layer-proto/rows.mjs'
 import { WIDTH_PROBE } from './typeset/density.mjs'
 import { finalTypesetting, previewTypesetting } from './typeset/plan.mjs'
 import { completeLog, END_TEX, LINES_TEX } from './typeset/tex.mjs'
@@ -470,19 +471,15 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
    *  those of a group kept whole and of one waiting on a cell, by index — the layer draws none of them */
   const indexOfUnit = new Map(units.map((u, i) => [u, i]))
   const held = () => { const d = decideGroups(units, u => { const r = results.get(indexOfUnit.get(u)); return r && { state: r.state, pieces: translated.get(u) } }, kept); return [...d.keep, ...d.wait].map(u => indexOfUnit.get(u)).sort((a, b) => a - b) }
-  const nextBatch = maxChars => {
-    const order = nearest([...todo])
-    const batch = []
-    let chars = 0
-    for (const i of order) { const n = plainSource(units[i]).length; if (batch.length && chars + n > maxChars) break; batch.push(i); chars += n }
-    return batch
-  }
+  /** the next batch: the units nearest the reader that hold `maxChars` characters of plain source (rows.mjs batchOf, the
+   *  rule the readers' batchesOf and runRows cut theirs by) */
+  const nextBatch = maxChars => batchOf(nearest([...todo]), i => plainSource(units[i]).length, maxChars)
   const mt = (async () => {
     try {
     // the seeds taken as they are, once, before the first batch is asked
     if (onBatch && taken.size) onBatch({ seeded: true, units: nearest([...taken]).map(reported), held: held() })
     for (let first = true; todo.size && !stopped; first = false) {
-      const batch = nextBatch(first ? 2500 : 12000)
+      const batch = nextBatch(first ? FIRST_BATCH : NEXT_BATCH)
       batch.forEach(i => todo.delete(i))
       const t0 = Date.now()
       let got, how
