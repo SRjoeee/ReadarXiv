@@ -889,18 +889,20 @@ is only how it meets the rest of the extension.
 - **Translation** goes through the background's chain (§8.0), whose segment cache answers what it already knows. The
   figures' text goes through the same image pipeline and recogniser (§15). A vector figure's labels are read from
   PDF.js's text rather than recognised. A label that is only a name by §15.1's test (`core/names.ts`, the prose being
-  the paper's units, indexed once) is sent to no engine and keeps its text; the cells and figure units a compile leaves
-  as they are keep the pipeline's own test (`mt.mjs` `nameCells`) until a pipeline version moves. On the markers wire (§6.2, the free engines'), a reply is read back with one
-  forgiveness more (`mt.mjs` `rehydrate`): a marker's `#` the engine set twice, `@e##` or `@e# #`, is the marker's,
-  and so is the first stray `#` after a marker read without its own — the wire's text holds no `#` of its own, TeX's
-  `\#` being a placeholder — where Microsoft's Chinese for 2610.02069 had set the second as text ("El Ni ñ#",
-  "Figure 10#"). And an accent inside a word goes as the letter it makes (`latex-front.mjs` `accentLetter`: ten text
-  accents, `\~n`, `\'{e}`, `{\"o}`, `\v c`, `\'\i` …), so that the engine reads the word whole, where `El Ni{\~n}o`
-  had gone out as `El Ni @d#@e#@f# o` and come back without the word's end; wherever the source is set — the marked
-  original, a unit left as it is or set in the source — the accent is written as the source has it. Only a letter
-  every strategy sets: LaTeX's UTF-8 table declares it (pdfLaTeX sets it as the accent, in OT1, T1, T2A and CJKutf8)
-  and Latin Modern, TeX Gyre and CMU hold it in every face (XeLaTeX), 145 letters measured on TL 2026; any other, and
-  an accent the paper defines anew (`\def\v{\varphi}`), stays a placeholder.
+  the paper's units, indexed once) is held back from every engine before the call and keeps its text, where the HTML
+  page (§15.1) sends every box and keeps names only from an engine that read each box alone: a known difference,
+  deferred to the debt issue. The cells and figure units a compile leaves as they are keep the pipeline's own test
+  (`mt.mjs` `nameCells`) until a pipeline version moves. On the markers wire (§6.2, the free engines'), a reply is
+  read back with one forgiveness more (`mt.mjs` `rehydrate`): a marker's `#` the engine set twice, `@e##` or `@e# #`,
+  is the marker's, and so is the first stray `#` after a marker read without its own — the wire's text holds no `#` of
+  its own, TeX's `\#` being a placeholder — where Microsoft's Chinese for 2610.02069 had set the second as text ("El
+  Ni ñ#", "Figure 10#"). And an accent inside a word goes as the letter it makes (`latex-front.mjs` `accentLetter`:
+  ten text accents, `\~n`, `\'{e}`, `{\"o}`, `\v c`, `\'\i` …), so that the engine reads the word whole, where `El
+  Ni{\~n}o` had gone out as `El Ni @d#@e#@f# o` and come back without the word's end; wherever the source is set — the
+  marked original, a unit left as it is or set in the source — the accent is written as the source has it. Only a
+  letter every strategy sets: LaTeX's UTF-8 table declares it (pdfLaTeX sets it as the accent, in OT1, T1, T2A and
+  CJKutf8) and Latin Modern, TeX Gyre and CMU hold it in every face (XeLaTeX), 145 letters measured on TL 2026; any
+  other, and an accent the paper defines anew (`\def\v{\varphi}`), stays a placeholder.
 - **Its store**: the compiled translations (with each unit's sentences, where its engine gave them), one record per paper version and target language, encrypted, in an
   IndexedDB of their own (`src/cache/pdf-store.ts`), capped at 500 MB with the least recently opened going first. A
   copy's units always describe its own PDF: a run that typesets nothing writes only who made and tried each unit, and

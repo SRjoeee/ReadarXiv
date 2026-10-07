@@ -64,9 +64,7 @@ describe('isName', () => {
   })
 
   it('the boxes the PDF reader\'s figures were judged otherwise by (mt.mjs isName, still the pipeline\'s rule for cells) take §15.1\'s answers', () => {
-    // A panel letter beside a name, and an expression of lone letters: names
-    expect(name('(a) Llama3')).toBe(true)
-    expect(name('x = y')).toBe(true)
+    // `(a) Llama3` and `x = y`, names, are the two cases above (a panel letter, lone letters)
     // Capitals, or a word run together, whose letters the prose writes in lower case: words
     expect(name('INPUT')).toBe(false)
     expect(name('PRETRAINED MODEL')).toBe(false)

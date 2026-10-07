@@ -1,6 +1,7 @@
 // The indexed name rule (src/core/names.ts) against the rule it would replace (isName with capitals the prose writes
 // in lower case taken as words, eval-names3.mjs), on the same boxes and the same hand verdicts: per language, the boxes
 // each keeps that the engine changed — saves (names) and spoils (words) — and the boxes the two disagree on.
+//   pnpm exec tsx experiments/pdf-bilingual/spikes/eval-names4.mjs
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { isName, nameEvidence } from '../../../src/core/names'
