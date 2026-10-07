@@ -197,6 +197,17 @@ describe('the faces', () => {
     }
   })
 
+  it('no family carries a Reserved Font Name (OFL §3: a modified subset may not)', () => {
+    // the four groups whose fonts reserve theirs are declared under neutral names; the face ids and files stay
+    const RESERVED = /harano|biolinum|erewhon|pt-?mono/i
+    for (const [id, face] of Object.entries(FACES)) expect(face.family, id).not.toMatch(RESERVED)
+    expect(Object.values(FACES).filter(f => /^(haranoaji|biolinum|erewhon|pt-mono)-/.test(f.id))).toHaveLength(15)
+    expect(new Set(Object.values(FACES).filter(f => /^haranoaji-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-mincho']))
+    expect(new Set(Object.values(FACES).filter(f => /^biolinum-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-humanist-sans']))
+    expect(new Set(Object.values(FACES).filter(f => /^erewhon-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-transitional']))
+    expect(new Set(Object.values(FACES).filter(f => /^pt-mono-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-slab-mono']))
+  })
+
   it('the table\'s faces are the plan\'s', () => {
     const cjk = ['light', 'regular', 'medium', 'semibold', 'bold']
     const four = ['regular', 'bold', 'italic', 'bolditalic']
@@ -209,12 +220,12 @@ describe('the faces', () => {
     ]
     expect(Object.keys(FACES).sort()).toEqual(want.sort())
     expect(FACES['shs-sc-light']).toMatchObject({ file: 'SourceHanSerifSC-Light.otf', family: 'axt-shs-sc', weight: 300, style: 'normal', source: 'hosted' })
-    expect(FACES['haranoaji-semibold']).toMatchObject({ file: 'HaranoAjiMincho-SemiBold.otf', family: 'axt-haranoaji', weight: 600, source: 'texlive' })
+    expect(FACES['haranoaji-semibold']).toMatchObject({ file: 'HaranoAjiMincho-SemiBold.otf', family: 'axt-mincho', weight: 600, source: 'texlive' })
     expect(FACES['lm-sans-bolditalic']).toMatchObject({ file: 'lmsans10-boldoblique.otf', family: 'axt-lm-sans', weight: 700, style: 'italic' })
     expect(FACES['lm-roman-caps-italic']).toMatchObject({ file: 'lmromancaps10-oblique.otf', family: 'axt-lm-roman-caps', weight: 400, style: 'italic' })
     expect(FACES['cmun-mono-bolditalic']).toMatchObject({ file: 'cmuntx.otf', family: 'axt-cmun-mono', weight: 700, style: 'italic' })
     expect(FACES['dejavu-mono-italic']).toMatchObject({ file: 'DejaVuSansMono-Oblique.ttf', family: 'axt-dejavu-mono', weight: 400, style: 'italic' })
-    expect(FACES['biolinum-bolditalic']).toMatchObject({ file: 'LinBiolinum_RBO.otf', family: 'axt-biolinum', weight: 700, style: 'italic' })
+    expect(FACES['biolinum-bolditalic']).toMatchObject({ file: 'LinBiolinum_RBO.otf', family: 'axt-humanist-sans', weight: 700, style: 'italic' })
     expect(FACES['lm-sans-italic']).toMatchObject({ file: 'lmsans10-oblique.otf', family: 'axt-lm-sans', weight: 400, style: 'italic' })
     expect(FACES['nimbus-roman-bolditalic']).toMatchObject({ file: 'NimbusRoman-BoldItalic.otf', family: 'axt-nimbus-roman', weight: 700, style: 'italic', source: 'hosted' })
     expect(FACES['lm-roman-caps']).toMatchObject({ file: 'lmromancaps10-regular.otf', family: 'axt-lm-roman-caps' })
@@ -376,13 +387,13 @@ describe('the fixes of the review', () => {
   it('M6 (with M1 and M2): every face\'s licence identifier, as its name table or licence file states it', () => {
     const GUST = 'LicenseRef-GUST-Font-License', URW = 'AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817'
     const BY_GROUP: Record<string, string> = {
-      'shs-sc': 'OFL-1.1', 'shs-tc': 'OFL-1.1', 'shs-k': 'OFL-1.1', haranoaji: 'OFL-1.1',
+      'shs-sc': 'OFL-1.1', 'shs-tc': 'OFL-1.1', 'shs-k': 'OFL-1.1', mincho: 'OFL-1.1',
       fandolkai: 'GPL-3.0-or-later WITH Font-exception-2.0', bkai00mp: 'Arphic-1999',
       'lm-roman': GUST, 'lm-roman-caps': GUST, 'lm-sans': GUST, 'lm-mono': GUST, 'lm-math': GUST, freemono: 'GPL-3.0-or-later WITH Font-exception-2.0',
-      libertine: 'OFL-1.1', biolinum: 'OFL-1.1', xcharter: 'Bitstream-Charter', ebgaramond: 'OFL-1.1', erewhon: 'OFL-1.1',
+      libertine: 'OFL-1.1', 'humanist-sans': 'OFL-1.1', xcharter: 'Bitstream-Charter', ebgaramond: 'OFL-1.1', transitional: 'OFL-1.1',
       'cmun-serif': 'OFL-1.1', 'cmun-sans': 'OFL-1.1', 'cmun-mono': 'OFL-1.1', domitian: 'OFL-1.1',
       'nimbus-roman': URW, 'nimbus-sans': URW,
-      'dejavu-mono': 'Bitstream-Vera', 'pt-mono': 'ParaType-Free-Font-1.3',
+      'dejavu-mono': 'Bitstream-Vera', 'slab-mono': 'ParaType-Free-Font-1.3',
     }
     const BY_FACE: Record<string, string> = { 'inconsolata-regular': 'OFL-1.1', 'inconsolata-bold': 'Apache-2.0' }
     for (const f of Object.values(FACES)) expect(f.licence, f.id).toBe(BY_FACE[f.id] ?? BY_GROUP[f.family.slice('axt-'.length)])
