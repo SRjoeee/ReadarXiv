@@ -28,7 +28,7 @@
 //       [--engine-kind=layer|proto] [--proto-units=fixture|p7] [--progress=<name|path>] [--previous=<name|path>] [--panels-only] [--proto-panels=<dir>]
 //       [--proto-faces=roles|prototype] [--proto-place=<file>] [--proto-order=<file>] [--dump=<dir>] [--write-floor]
 //       [--proto-tex=ph|lines] [--proto-tex-only=no] [--proto-symbols=text|strict] [--proto-extents=v0|tex]
-//       [--against=<record key>] [--proto-params=<json>] [--ruling=<file>]
+//       [--against=<record key>] [--proto-params=<json>] [--ruling=<file>] [--parts[=<n>]]
 //   --engine     the engine measured: <worktree>/src/pdf-reader/engine served as /engine/ (the checker, layer/check.mjs, is
 //                always this repository's: the instrument is the same for every branch); default this repository
 //   --layouts    made (the default): the layout files the engine's own maker makes from the fixtures' papers (spikes/
@@ -88,6 +88,13 @@
 //   --proto-place, --proto-order, --dump  v0 against the live prototype (never recorded): each page's text where the
 //                prototype's own page put it (its floor was measured there: the text's anti-aliasing at a fraction of a
 //                pixel), each fixture's units in a live run's order, and v0's records, audit and page digests written out
+//   --parts      v0 (--engine-kind=proto) fed its units as a live run's deltas give them (never recorded): opened with
+//                none, each fixture's record rows, each non-text piece with its k (the units file's), taken a part a
+//                macrotask beside the pages asked for, then end() (layer-proto/run.mjs take, end); the parts cut in id order
+//                by the delta rule (a part closed once its rows' JSON reaches 384 KiB or 96,000 values, 32 parts at most)
+//                or n units a part (--parts=<n>). Each page must draw as the open over every unit does (--dump, --check);
+//                a fixture fails where a row came late, where take's pieces are not the units file's, or where a unit's
+//                why left was read before its row came
 // The consistency measures (the table-groups brief, 2026-10-07), checked with the completeness ones and each to be 0: a
 // table group drawn partly (the record's translated cells of one `group`, some drawn and some not) and a float's label
 // left in the source language where the final names it in the target's (the record's `captions`, caption-names.mjs's
@@ -149,6 +156,10 @@ const PROTO_PANELS = typeof arg('proto-panels') === 'string' ? resolve(arg('prot
  *  page digests per fixture, to compare with the live prototype's */
 const PROTO_PLACE = typeof arg('proto-place') === 'string' ? JSON.parse(readFileSync(resolve(arg('proto-place')), 'utf8')) : null
 const DUMP = typeof arg('dump') === 'string' ? resolve(arg('dump')) : null
+/** --parts[=<n>]: v0 fed its units in parts, by the delta rule or n a part (a proof, as --dump is: never recorded) */
+const PARTS = arg('parts') === true ? 'delta' : typeof arg('parts') === 'string' ? Number(arg('parts')) : null
+if (PARTS !== null && PARTS !== 'delta' && !(Number.isInteger(PARTS) && PARTS > 0)) throw new Error(`--parts=${arg('parts')}: a count of units a part`)
+if (PARTS && (KIND !== 'proto' || arg('record'))) throw new Error('--parts: v0 only (--engine-kind=proto), and never a record (no --record)')
 /** --ruling=<file>: the maintainer's ruling the record is made under (with --record) */
 const RULING = typeof arg('ruling') === 'string' ? JSON.parse(readFileSync(resolve(arg('ruling')), 'utf8')) : null
 /** --proto-order=<file>: an order to lay each fixture's units in, by page ({ [fixture]: [ids] }: a live run's, where its
@@ -309,6 +320,7 @@ const inputs = {
   pdfjs: readJson(join(PDFJS, 'package.json')).version, fonts: fontsDigest.slice(0, 16), checker: fileSha(CHECKER).slice(0, 16),
   // the instrument: the measures, their arithmetic, and the page that draws and accounts (lost ink's own glyphs)
   measures: sha256(['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => readFileSync(join(GATE, f))).join('\n')).slice(0, 16),
+  ...(PARTS ? { parts: String(PARTS) } : {}),
   ...(PROTO ? { kind: 'proto', protoUnits: PROTO_UNITS, place: PROTO_PLACE ? 'the prototype page\'s' : 'the gate\'s', order: PROTO_ORDER ? 'given' : 'layGroups', faces: PROTO_FACES ?? 'the engine\'s default', tex: TEX ? JSON.stringify(TEX) : 'none', params: PROTO_PARAMS ? JSON.stringify(PROTO_PARAMS) : 'none', hyphenation: sha256([...HYPH].map(([l, j]) => `${l}:${j}`).join('\n')).slice(0, 16), removal: REMOVAL ?? 'none', ...(REMOVAL ? { remover: removerDigest() } : {}) } : {}),
 }
 const leaks = []
@@ -334,7 +346,7 @@ async function worker() {
       const tf = Date.now()
       try { results.set(name, await runFixture(page, name, errors)) } catch (e) { failures.push(name); console.log(`FAIL ${name}: ${String(e?.stack ?? e).slice(0, 400)}`) }
       const r = results.get(name)
-      if (r) console.log(`${r.ready ? 'ok  ' : 'FAIL'} ${name}: ${r.ready ? `${r.pages.length} pages, ${r.totals.textDrawn}/${r.totals.textOn} text units drawn` : r.why} (${((Date.now() - tf) / 1000).toFixed(1)} s)`)
+      if (r) console.log(`${r.ready ? 'ok  ' : 'FAIL'} ${name}: ${r.ready ? `${r.pages.length} pages, ${r.totals.textDrawn}/${r.totals.textOn} text units drawn${r.summary.parts ? `, in ${r.summary.parts.count} parts` : ''}` : r.why} (${((Date.now() - tf) / 1000).toFixed(1)} s)`)
     }
   } finally { await ctx.close() }
 }
@@ -356,7 +368,7 @@ async function runFixture(page, name, errors) {
   if (removal) Object.assign(meta, { addon: removal.key })
   // (--perf: what a reader is sent, the R set and its manifest, no plan)
   const addon = removal ? (PERF ? { url: `/removal/${name}.pdf`, manifest: removal.shippedManifest, plan: null } : { url: `/removal/${name}.pdf`, manifest: removal.manifest, plan: removal.plan }) : null
-  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES, tex: TEX, params: PROTO_PARAMS, names: captionNames(target), removal: REMOVAL, addon, perf: PERF })
+  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES, tex: TEX, params: PROTO_PARAMS, names: captionNames(target), removal: REMOVAL, addon, perf: PERF, parts: PARTS })
   if (!info.ready) { failures.push(name); return { name, ready: false, why: info.why, meta } }
   const n = Math.min(info.pages, PAGES ?? (ALL_PAGES.has(paper) ? info.pages : PAGES_OF))
   const pages = [], frames = []
@@ -393,6 +405,9 @@ async function runFixture(page, name, errors) {
   if (PROTO && DUMP) { mkdirSync(DUMP, { recursive: true }); writeFileSync(join(DUMP, `${name}.json`), JSON.stringify(await page.evaluate(() => window.gate.dump()))) }
   if (errors.length) summary.pageErrors = errors.splice(0).slice(0, 5)
   if (summary.inputsChanged) { failures.push(name); console.log(`FAIL ${name}: v0 changed its inputs (the geometry or the units) as it drew`) }
+  // (--parts: every row taken in time, take's pieces the units file's, no unit's why left read before its row came)
+  const pt = summary.parts
+  if (pt && (pt.late.length || pt.pieces.length || pt.whys.length)) { failures.push(name); console.log(`FAIL ${name}: in ${pt.count} parts, ${pt.late.length} rows late (${pt.late.slice(0, 8).join(' ')}), ${pt.pieces.length} units' pieces not the units file's (${pt.pieces.slice(0, 8).join(' ')}), ${pt.whys.length} whys read early (${pt.whys.slice(0, 4).map(w => w.join(':')).join(' ')})`) }
   if (removal) {
     summary.removal = { ...removal.summary, draw: await page.evaluate(() => window.gate.removalStats()) }
     // the exactness check's pixels (PDF.js in Node, which draws a page alike every time), each page's

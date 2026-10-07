@@ -99,6 +99,35 @@ function consistencyOf(record, S, names) {
 
 const PDF_ASSETS = { cMapUrl: '/pdfjs/cmaps/', standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/' }
 
+/** the web's deltas of a live run's rows (the plan's delta rule): a part closed once its rows' JSON reaches 384 KiB or
+ *  96,000 values (layout/json.mjs countValues), 32 parts at most, the 32nd taking the rest */
+const DELTA_BYTES = 384 * 1024, DELTA_VALUES = 96_000, DELTA_PARTS = 32
+async function deltaParts(rows) {
+  const { countValues } = await import('/engine/layout/json.mjs')
+  const enc = new TextEncoder(), parts = []
+  let cur = [], bytes = 2, values = 1
+  for (const r of rows) {
+    const text = JSON.stringify(r)
+    bytes += enc.encode(text).length + (cur.length ? 1 : 0)
+    values += countValues(text)
+    cur.push(r)
+    if (parts.length < DELTA_PARTS - 1 && (bytes >= DELTA_BYTES || values >= DELTA_VALUES)) { parts.push(cur); cur = []; bytes = 2; values = 1 }
+  }
+  if (cur.length) parts.push(cur)
+  return parts
+}
+/** a record's row as a live run gives it (E6's): each non-text piece with its k, the units file's TrPiece's at the same
+ *  index (trPiecesOf gives one a piece), a piece TrPiece writes as text (a break, a space) the least k no other piece of
+ *  the unit takes (one of its source's pieces, as a live run's: past the largest, 605 of the fixtures' 1,810 such pieces
+ *  lay past their unit's pieces in the layout file); a row the units file holds no translation of as the record has it */
+function withK(u, tr) {
+  if (!u.pieces || !tr) return u
+  const taken = new Set(tr.filter(t => t[0] !== 0).map(t => t[1]))
+  let next = 0
+  const fresh = () => { while (taken.has(next)) next++; taken.add(next); return next }
+  return { ...u, pieces: u.pieces.map((q, i) => (q.t === 'text' ? q : { ...q, k: tr[i][0] !== 0 ? tr[i][1] : fresh() })) }
+}
+
 /** a page of a document drawn by the CPU at the gate's resolution on `bg` (the exactness check's and the truth's planes,
  *  so that a figure's antialiasing is the same in each) */
 async function cpuPlane(doc, n, bg = '#ffffff') {
@@ -242,7 +271,7 @@ window.gate = {
    * the driver's: arXiv's PDF with it at `url`, its manifest, the plan it was made from), v0 is opened over it, and a
    * second reading of the add-on drawn by the CPU is kept for the exactness check's and the truth's planes
    */
-  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces, tex, removal, addon = null, names = null, perf = false }) {
+  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces, tex, removal, addon = null, names = null, perf = false, parts: cut = null }) {
     let V
     try { V = await import('/engine/layer-proto/run.mjs') } catch (e) { return { ready: false, why: `layer-proto/run.mjs: ${String(e?.message ?? e).slice(0, 200)}` } }
     const base = `/fixtures/${name}/`
@@ -263,9 +292,18 @@ window.gate = {
       const F = await import('/engine/layout/file.mjs')
       texIn = { ...tex, index: F.indexLayout(F.parseLayout(await bytes(`${base}layout.json`))), pieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])) }
     }
+    // (--parts: v0 opened with no unit, the record's rows taken as a live run's deltas give them, by the delta rule or n
+    // a part, the hybrid's pieces read from their k by take)
+    let parts = null
+    if (cut) {
+      const tr = new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), rowsK = []
+      unitsFile.units.forEach((u, id) => { if (u) rowsK.push([id, withK(u, tr.get(id))]) })
+      parts = cut === 'delta' ? await deltaParts(rowsK) : Array.from({ length: Math.ceil(rowsK.length / cut) }, (_, i) => rowsK.slice(cut * i, cut * i + cut))
+      if (texIn) texIn.pieces = new Map()
+    }
     const texIndex = texIn?.index ?? null
     // (--perf: no copy of v0's own, as a reader opens it: the page's drawing is drawCopy's, at a view's resolution)
-    const opts = { doc, geometry, units: unitsFile.units, target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(texIn ? { tex: texIn } : {}), labels: { names, captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`, ...(perf ? { copy: false } : {}) }
+    const opts = { doc, geometry, units: parts ? [] : unitsFile.units, ...(parts ? { expect: parts.flat().map(([id]) => id) } : {}), target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(texIn ? { tex: texIn } : {}), labels: { names, captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`, ...(perf ? { copy: false } : {}) }
     let rm = null
     if (one) {
       rm = { mode: removal, manifest: addon.manifest, plan: { pages: {} }, rdoc: doc, cdoc: null }
@@ -277,11 +315,21 @@ window.gate = {
       if (removal === 'draw') opts.removal = { OPS: pdfjs.OPS, mode: 'draw', doc: rdoc, manifest: addon.manifest }
     }
     // (v0 leaves its inputs as they were: checked when the fixture is done, summary's inputsChanged)
-    const before = JSON.stringify([geometry, unitsFile.units])
+    const inputs = () => JSON.stringify([geometry, unitsFile.units, parts])
+    const before = inputs()
     const run = await V.openProto(opts)
-    S = { V, run, doc, geometry, layout, ref, name, target, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: new Map(run.placed.map(p => [p.id, p])), checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: () => JSON.stringify([geometry, unitsFile.units]) }, perf, texIndex }
+    S = { V, run, doc, geometry, layout, ref, name, target, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: new Map(run.placed.map(p => [p.id, p])), checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: inputs }, perf, texIndex }
     S.consistency = consistencyOf(unitsFile, S, names)
-    return { ready: true, pages: one ? run.N : doc.numPages, units: unitsFile.units.length, located: geometry.left.units.length, family: null, even: run.P.even ?? null }
+    if (parts) {
+      // one part a macrotask from the open on, beside the driver's pages (until), then end()
+      S.parts = { count: parts.length, pieces: texIn?.pieces ?? null, want: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), whys: [] }
+      S.parts.fed = (async () => {
+        for (const part of parts) { await new Promise(ok => setTimeout(ok, 0)); run.take(new Map(part)) }
+        await new Promise(ok => setTimeout(ok, 0))
+        run.end()
+      })()
+    }
+    return { ready: true, pages: one ? run.N : doc.numPages, units: unitsFile.units.length, located: geometry.left.units.length, family: null, even: run.P.even ?? null, ...(parts ? { parts: parts.length } : {}) }
   },
 
   /** how the run drew by the add-on (draw): pages removed and refused, units swapped and drawn the old way */
@@ -295,6 +343,13 @@ window.gate = {
     const t0 = performance.now()
     await run.until(p)
     const ms = performance.now() - t0
+    // (--parts: what the open read of the run at once, as far as the units have come: those placed, and why each unit
+    // placed nowhere is left, never a laid unit's)
+    if (S.parts) {
+      for (const q of run.placed) S.byId.set(q.id, q)
+      const laid = new Set(run.order)
+      for (const x of run.skipped) if (!laid.has(x.id)) S.skipped.set(x.id, x.why)
+    }
     // the audit by unit and page, as the drawing adds to it
     for (; S.audited < run.audit.length; S.audited++) { const a = run.audit[S.audited], k = `${a.unit}|${a.page}`; if (!S.audit.has(k)) S.audit.set(k, []); S.audit.get(k).push(a) }
     const page = await doc.getPage(p)
@@ -317,6 +372,7 @@ window.gate = {
     })
     const drawnIds = new Set(recs.map(r => r.id))
     for (const r of refHere) if (S.translated.has(r.id) && !drawnIds.has(r.id)) units.push({ id: r.id, kind: r.kind, drawn: false, why: S.skipped.get(r.id) ?? 'unanchored', orig: r.orig, lines: [], erase: [], crops: [] })
+    if (S.parts) for (const u of units) if (!u.drawn) S.parts.whys.push([p, u.id, u.why])
     const model = modelPage({ units, ref: refHere, items, translated: S.translated })
     // the prototype's own checker on the page: what it finds there, by the unit it is in (none for --perf: v0 is opened
     // with no copy of its own, as a reader opens it, and the checker reads that copy)
@@ -382,13 +438,15 @@ window.gate = {
     await document.fonts.ready
     const drawnText = (row.svg.textContent ?? '').replace(/\s+/g, '')
     if (S.dump) {
-      // what the live prototype's page is compared by (--dump): the copy's pixels and the SVG's markup, digested
+      // what the live prototype's page is compared by (--dump): the copy's pixels, the SVG's markup and the drawing's
+      // operations, digested
       let h = 0x811c9dc5
       for (let i = 0; i < C.length; i++) { h ^= C[i]; h = Math.imul(h, 0x01000193) >>> 0 }
-      const svg = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(row.svg.innerHTML)))].map(b => b.toString(16).padStart(2, '0')).join('')
+      const digest = async text => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map(b => b.toString(16).padStart(2, '0')).join('')
+      const svg = await digest(row.svg.innerHTML), ops = await digest(JSON.stringify(row.ops))
       // (and what the checker found on the page, with its reasons)
       const why = list => list.filter(on).map(e => ({ unit: e.unit, k: e.k, mode: e.mode, why: e.why }))
-      S.dump.push({ p, W, H, copy: h.toString(16), svg, check: { missing: why(ck.b.list.missing), duplicated: why(ck.b.list.duplicated), brackets: why(ck.b.list.brackets) } })
+      S.dump.push({ p, W, H, copy: h.toString(16), svg, ops, check: { missing: why(ck.b.list.missing), duplicated: why(ck.b.list.duplicated), brackets: why(ck.b.list.brackets) } })
     }
     S.cur = { p, page, W, H, view, O, C, units, kept: keptOf(S.layout, p, relabelledOf(recs)), items, drawnText, recs }
     return out
@@ -556,8 +614,19 @@ window.gate = {
     return { firstDraw: r1((run.pageMs[p] ?? 0) + copyMs), step: r1(run.pageMs[p] ?? 0), copy: r1(copyMs), times, zoomRender: r1(zoomRender), zoomCopy: r1(zoomCopy), canvasBytes, heap: performance.memory?.usedJSHeapSize ?? null }
   },
 
-  summary() {
+  async summary() {
     const { run } = S
+    // (--parts: every part taken and end(); then the hybrid's pieces take read from the rows' k against the units file's,
+    // the rows that came late, and each unit left whose why was read before its row was)
+    let parts = null
+    if (S.parts) {
+      await S.parts.fed
+      const got = S.parts.pieces, want = S.parts.want
+      const pieces = got ? [...new Set([...got.keys(), ...want.keys()])].filter(id => JSON.stringify(got.get(id)) !== JSON.stringify(want.get(id))) : []
+      const laid = new Set(run.order), final = new Map(run.skipped.filter(x => !laid.has(x.id)).map(x => [x.id, x.why]))
+      const whys = S.parts.whys.filter(([, id, why]) => (final.get(id) ?? 'unanchored') !== why)
+      parts = { count: S.parts.count, late: run.late(), pieces, whys }
+    }
     const knob = {}, scales = []
     for (const r of run.stats) { knob[r.knob] = (knob[r.knob] ?? 0) + 1; scales.push(r.fitScale) }
     scales.sort((a, b) => a - b)
@@ -576,6 +645,7 @@ window.gate = {
       ...(run.sources?.tex.length || run.sources?.v0.length ? { sources: { tex: run.sources.tex.length, v0: run.sources.v0.length, texOnly: run.sources.texOnly ?? 0, why: run.sources.why, texIds: run.sources.tex } } : {}),
       // whether v0 left its inputs (the geometry and the units) as they were given
       inputsChanged: S.inputs.of() !== S.inputs.before,
+      ...(parts ? { parts } : {}),
     }
   },
 }
