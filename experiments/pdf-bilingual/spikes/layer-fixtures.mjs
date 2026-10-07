@@ -2,11 +2,13 @@
 // The instant layer's fixture outputs (Plan 8b, Task 12; the layer lab reads the same): for each output, a paper into a
 // target, what the layer needs to draw it over arXiv's page, in <LAYER_FIXTURES, else data/layer-fixtures>/<id>v<n>-<target>/:
 //   arxiv.pdf    arXiv's PDF of that version, which the layer draws over;
-//   layout.json  the paper's layout file (layout/make.mjs makeLayout, Task 6) over its layout compile: the marked original
-//                with the layout marks of LAYOUT_CLASSES and the paper's own switch (layout/marks.mjs, Task 1), compiled
-//                natively as spikes/layout-make.mjs compiles it (latexmk in Docker's texlive/texlive:latest, no network),
-//                its marks file cached by what it compiles in data/layout/<id>v<n>/; refusal.json in its place where the
-//                maker refuses the paper (the reader then runs as Plan 5's there);
+//   layout.json  the paper's layout file (layout/make.mjs makeLayout, Task 6) over its marks (layout/paper.mjs
+//                layoutMarksOfPaper: the mark probe, then the marked original with the layout marks of LAYOUT_CLASSES and
+//                the paper's own switch, layout/marks.mjs), both compiled natively as spikes/layout-make.mjs compiles them
+//                (latexmk in Docker's texlive/texlive:latest, no network), each compile kept by what it compiles in
+//                data/layout/<id>v<n>/compiles/; refusal.json in its place where the maker refuses the paper, or a
+//                stage of the marks fails (`refused`: probe, compile, marks or the maker's own; the reader then runs as
+//                Plan 5's there);
 //   units.json   the translation as the layer takes it: `units`, each unit with a translation, its pieces as TrPiece by
 //                kOfSource (layer/pieces.mjs), its sentence starts in trText (mt.mjs sentencesOf's `tr`, null where the
 //                engine gave none), its state and engine; and where it came from;
@@ -22,7 +24,7 @@
 // the gate's fixed fixture's. Where none is of this cut and staging holds none, the fixed fixture's record of another cut
 // (an earlier front end's) seeds every unit whose source is one of its (cache.mjs seedFrom), and only the rest is sent.
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/layer-fixtures.mjs [--only=<paper>[:<target>],…] [--targets=<t>,…] [--fresh] [--list]
-//       [--of=<fixtures folder>] [--engine=<worktree>] [--offline] [--switch]
+//       [--of=<fixtures folder>] [--engine=<worktree>] [--offline]
 // With no option, Task 12's 21 outputs (OUTPUTS below, with the table-heavy, footnote-heavy and XeLaTeX papers found by
 // their rules). --only names the outputs to make: <id>v<n>:<target>, or <id>:<target> for a paper whose version the list
 // knows; a paper named without a target is made into each of --targets. --targets alone makes every paper of the list
@@ -32,14 +34,12 @@
 // to LAYER_FIXTURES, which may then not be data/layer-fixtures (those are the gate's fixed inputs). --offline sends no
 // request at all: a paper's files must be in data/, and a translation is the record made before (in LAYER_FIXTURES, else
 // the same output's in data/layer-fixtures, for the same cut of the paper's units); an output that would need a request
-// fails. --switch asks TeX for the paper's own switch (the mark probe, marks.mjs readMarkProbe), and what each macro sets
-// where the engine asks (readInkProbe, readInkTexts), and marks the layout compile with them; without it, every mark is
-// set as LAYOUT_TEX sets it. The maker (layout/make.mjs) must read the marked original as it was marked: an engine whose
-// marks file carries the switch (marks.mjs MARKS_SCHEMA 2 or more) re-marks with it, and the layer gate asks --switch of
-// those; at Task 12's tip it re-marks with `movesPunctuation`, which layoutMarking no longer takes, so the switch stays
-// off there. An engine whose marks.mjs still has punctuationMovers (before Task 2) is marked as it was then. Every
-// compile is kept by what it compiles (data/layout/<id>v<n>/compiles/<key>.pdf and .log; COMPILES names another folder),
-// and its marks file is read from it again every run by the engine's own reader, units and OPS given.
+// fails. The marks are the engine's (layout/paper.mjs, which asks TeX for the paper's own switch, what each macro sets
+// and marks the layout compile with them; the maker, layout/make.mjs, must read the marked original as it was marked), so
+// an engine of this file's has it: one of E5 on, or one whose marks.mjs still has punctuationMovers (before Task 2), which
+// is marked as it was then. (The gate's `--switch` is no option any more: the switch is always asked.) Every compile is
+// kept by what it compiles (data/layout/<id>v<n>/compiles/<key>.pdf and .log; COMPILES names another folder), and its
+// marks file is read from it again every run by the engine's own reader, units and OPS given.
 // Requests: arXiv (a paper's source and PDF where data/ has neither, 3.2 s apart), staging's public reads (GET only) and
 // Microsoft's endpoint, each with the project's User-Agent and nothing else. Every file written inside the work tree is
 // added to .git/info/exclude as it is written (the 2026-09-21 rule): no paper, nor anything made of one, is committed.
@@ -58,7 +58,7 @@ const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname
 const REPO = resolve(root, '../..')
 const argOf = name => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? null
-const OFFLINE = process.argv.includes('--offline'), SWITCH = process.argv.includes('--switch')
+const OFFLINE = process.argv.includes('--offline')
 /** the engine the outputs are made with: this repository's, or another worktree's (--engine) */
 const ENGINE = resolve(argOf('engine') ?? REPO)
 const engine = path => import(pathToFileURL(join(ENGINE, 'src/pdf-reader/engine', path)).href)
@@ -307,7 +307,7 @@ async function layoutOf(id, paper, dir) {
     }
     return null
   }
-  let marksBytes = null, switched = null
+  let marksBytes = null, switched = null, asked = false
   const withSource = marked => { const all = new Map(source); for (const [p, b] of marked) all.set(p, b); return all }
   if (typeof MARKS.punctuationMovers === 'function') {
     // an engine of before Task 2: the paper's own switch from its preamble, then from the compile's log too, compiled
@@ -325,26 +325,26 @@ async function layoutOf(id, paper, dir) {
       write(marksAt(key), marksBytes)
     }
   } else {
-    // Task 2's: the paper's own switch is TeX's answer to the mark probe (with --switch), set in the font probe's compile,
-    // and, where the engine asks (Fix 1 of the maker round), what each macro sets: none (inkless) or which text (texts)
-    let switches = null, inkless = null, texts = null
-    if (SWITCH) {
-      const probe = LIVE.probeFiles(paper, { marks: true })
-      const c = await compiled(dir, `probe-${keyOf(probe)}`, withSource(probe), paper, { passes: 1 })
-      switches = MARKS.readMarkProbe(c?.log ?? '', MARKS.probeSamples(paper.units))
-      switched = MARKS.switchedOf(switches)
-      if (typeof MARKS.readInkProbe === 'function') { inkless = MARKS.readInkProbe(c?.log ?? '', MARKS.inkSamples(paper.units)); console.log(`${id}: inkless ${inkless.length} of ${MARKS.inkSamples(paper.units).length}: ${inkless.slice(0, 12).join(' ')}`) }
-      if (typeof MARKS.readInkTexts === 'function') { texts = MARKS.readInkTexts(c?.log ?? '', MARKS.inkSamples(paper.units)); console.log(`${id}: texts ${texts.length}: ${texts.slice(0, 12).map(t => t.join('=')).join(' ')}`) }
+    // E5's: the engine makes the marks in one call (layout/paper.mjs); the compiles are this file's, kept by what they compile
+    const { layoutMarksOfPaper } = await engine('layout/paper.mjs')
+    const compile = async req => {
+      const probe = !req.rerun
+      const c = await compiled(dir, `${probe ? 'probe-' : ''}${keyOf(req.overrides)}`, withSource(req.overrides), paper, { passes: probe ? 1 : null })
+      return c ? { ok: !!c.pdf?.length, pdf: c.pdf, log: c.log } : { ok: false, error: 'no log' }
     }
-    const marked = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, ...(inkless ? { inkless } : {}) })
-    const key = keyOf(marked)
-    // the marks read again from the kept compile every run (the reader is the engine's), with the switch, what the macros
-    // set, and the units and OPS (Task 6b's own ink)
-    const c = await compiled(dir, key, withSource(marked), paper)
-    if (c?.pdf) marksBytes = await marksOf(c, paper, { classes: LAYOUT_CLASSES, switches, ...(inkless ? { inkless } : {}), ...(texts ? { texts } : {}), units: paper.units, OPS })
+    const made = await layoutMarksOfPaper(paper, { compile, open: async bytes => { const task = open(bytes); return { doc: await task.promise, close: () => task.destroy() } }, OPS })
+    if (!('marks' in made)) return { refused: made.refused, stats: null }
+    marksBytes = Buffer.from(made.marks)
+    asked = true
   }
   if (!marksBytes) return { refused: 'compile', stats: null }
   const marks = parseLayoutMarks(marksBytes)
+  if (asked) {
+    const { switches, inkless, texts } = marks.marking
+    switched = MARKS.switchedOf(switches)
+    console.log(`${id}: inkless ${inkless.length} of ${MARKS.inkSamples(paper.units).length}: ${inkless.slice(0, 12).join(' ')}`)
+    console.log(`${id}: texts ${texts.length / 2}: ${Array.from({ length: Math.min(12, texts.length / 2) }, (_, i) => `${texts[2 * i]}=${texts[2 * i + 1]}`).join(' ')}`)
+  }
   const task = open(new Uint8Array(readFileSync(join(dir, 'arxiv.pdf'))))
   const m = /^(.+)v(\d+)$/.exec(id)
   try {
