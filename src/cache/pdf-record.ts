@@ -2,7 +2,9 @@
 // REPORT.md, eighteenth addendum) — when a copy is current, and which of two copies is kept. Pure, so that the store
 // and the reader share them.
 
-/** What became of a unit in the runs that made the copy */
+/** What became of a unit in the runs that made the copy. `kept`: set as the source has it on purpose — a name the
+ *  reader keeps without asking, or a cell of a table group kept whole (pdf-reader/engine/groups.mjs), which keeps the
+ *  translation its group was decided by in `pieces` and has no `tr` */
 export type UnitState = 'whole' | 'partial' | 'none' | 'lost' | 'kept'
 
 /** `by` when a unit's pieces came from more than one identity: never current */
@@ -24,6 +26,10 @@ export interface CachedUnit {
   /** the identity the unit was last tried under */
   tried?: string
   state: UnitState
+  /** a cell of a table group kept whole: what the translator gave it (its `pieces`), apart from what is shown — whole,
+   *  or partial, none, lost, which is asked for again; absent for a name kept without asking, and in a copy made before
+   *  kept cells kept it, which is asked for again on a run of it but leaves the copy current as it was */
+  translation?: Exclude<UnitState, 'kept'>
   /** the displays the unit sets before its first words, or after its last — outside its marks, which the reader's
    *  anchors take them from beyond — as their letters (latex-front's displayOutside); absent in a copy made before they
    *  did, anchored as then */
@@ -40,6 +46,10 @@ export interface CachedUnit {
   /** translated, but the final set it in the source — the author block under a strategy that sets it as the paper has
    *  it (CJKutf8): its translation seeds the next run, and the right side is anchored by the source */
   inSource?: true
+  /** a table cell's consistency group (pdf-reader/engine/groups.mjs groupOf: the table's header, or a column), which
+   *  is translated whole or kept whole: the layer draws a group whole or not at all, as the final sets it; absent for
+   *  every other unit, and in a copy made before groups were read */
+  group?: string
 }
 
 /**
@@ -122,10 +132,12 @@ export interface Now {
   page?: string
 }
 
-/** A unit to translate is current when its translation was made, or it was settled, under the identity that would answer now */
+/** A unit to translate is current when its translation was made, or it was settled, under the identity that would answer
+ *  now; a cell of a table group kept whole by its translation's own state (`translation`) */
 export function unitIsCurrent(u: CachedUnit, identity: string): boolean {
-  if (u.state === 'whole') return u.by === identity
-  if (u.state === 'partial' || u.state === 'none') return u.tried === identity
+  const state = u.state === 'kept' ? u.translation : u.state
+  if (state === 'whole') return u.by === identity
+  if (state === 'partial' || state === 'none') return u.tried === identity
   return false
 }
 
@@ -133,7 +145,7 @@ export function unitIsCurrent(u: CachedUnit, identity: string): boolean {
  *  none to translate. A copy of another typesetting alone is set again from its translation, which asks the service
  *  nothing (pdf-reader/engine/cache.mjs reusable) */
 export function isCurrent(record: PdfRecordBody, now: Now): boolean {
-  return record.pipeline === now.pipeline && record.typesetting === now.typesetting && record.units.every(u => u.state === 'kept' || unitIsCurrent(u, now.identity))
+  return record.pipeline === now.pipeline && record.typesetting === now.typesetting && record.units.every(u => (u.state === 'kept' && u.translation === undefined) || unitIsCurrent(u, now.identity))
 }
 
 /**

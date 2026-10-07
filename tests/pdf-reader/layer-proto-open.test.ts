@@ -1,0 +1,161 @@
+import { beforeAll, describe, expect, it } from 'vitest'
+import { indexLayout, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
+import { REMOVAL } from '@/pdf-reader/engine/layout/remove.mjs'
+
+// v0 opened whole (layer-proto/run.mjs openProto) over a page of its own making: a PDF.js document's shape (its text
+// layer, its views; nothing drawn), a layout file and a record, the text-removed PDF's manifest. What the page's drawing
+// is made of is then read from its rows' operations, as the gate reads the copy's pixels
+
+/** a canvas context that draws nothing and reads a white page */
+const ctxStub = (canvas?: { width: number; height: number }) => new Proxy({} as Record<string | symbol, unknown>, {
+  get(t, k) {
+    if (k in t) return t[k]
+    // (an em a CJK character, half one any other, at the context's font size)
+    if (k === 'measureText') return (s: string) => { const px = Number(/(\d+(?:\.\d+)?)px/.exec(String(t.font ?? ''))?.[1] ?? 10); return { width: [...s].reduce((w, ch) => w + (/[\u3000-\u9fff]/.test(ch) ? px : px / 2), 0), actualBoundingBoxAscent: 0.7 * px, actualBoundingBoxDescent: 0.2 * px } }
+    if (k === 'getImageData') return (_x: number, _y: number, w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(1, w * h) * 4).fill(255) })
+    if (k === 'createImageData') return (w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(1, w * h) * 4) })
+    if (k === 'canvas') return canvas
+    return () => {}
+  },
+  set(t, k, v) { t[k] = v; return true },
+})
+
+beforeAll(() => {
+  const g = globalThis as Record<string, unknown>
+  g.OffscreenCanvas = class { width = 8; height = 8; getContext() { return ctxStub(this) } }
+  ;(HTMLCanvasElement.prototype as unknown as { getContext: () => unknown }).getContext = function (this: HTMLCanvasElement) { return ctxStub(this) }
+  g.FontFace = class { family: string; constructor(family: string) { this.family = family } load() { return Promise.resolve(this) } }
+  Object.defineProperty(document, 'fonts', { configurable: true, value: { add() {}, delete() {}, load: async () => [], check: () => true, ready: Promise.resolve() } })
+  // no hyphenation patterns: none is needed for these lines
+  g.fetch = async () => ({ ok: false, json: async () => null })
+})
+
+/** a page of 300 x 300 PDF units, its text layer the given words (each [text, x, baseline, width], 10 pt) */
+function docOf(words: [string, number, number, number][]) {
+  const H = 300
+  const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
+  const items = words.map(([str, x, y, width]) => ({ str, transform: [10, 0, 0, 10, x, y], width, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false }))
+  const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {} }
+  return { numPages: 1, getPage: async () => page }
+}
+
+describe("a table group withheld beside one drawn, the whole run (openProto): the drawn group's fill keeps clear of the withheld text", () => {
+  // Codex's review of PR A, finding 1, and the re-review's I2: three cells, A over x 10-40 in its column's group, B beside
+  // it from x 40.1 and C under B in the next column's. C's translation cannot be set in its cell, so its group is
+  // withheld and B keeps the original's text. Read once at the page's first paint, the protection counted B as drawn,
+  // and A's fill, padded 0.6, reached x 40.6 into it. Each order the paper may hold the two groups in
+  for (const first of ['A', 'B'] as const) {
+    it(`stops A's padded fill short of B's text, ${first === 'A' ? "A's group" : "B's group"} first in the paper`, async () => {
+      const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+      const named: [string, string, number, number, number, string][] = [['A', 'Alpha', 10, 40, 100, 'T:c0'], ['B', 'Betas', 40.1, 70, 100, 'T:c1'], ['C', 'Gamma', 40.1, 70, 80, 'T:c1']]
+      const order = first === 'A' ? named : [named[1]!, named[2]!, named[0]!]
+      const cells = order.map(([name, src, x0, x1, b, group], id) => ({ id, name, src, x0, x1, b, group }))
+      const layout = {
+        schema: 1, layout: '3', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['F1'],
+        units: cells.map(c => [c.id, 4, 9, 0, 1]),
+        lines: cells.map(c => [c.id, [1, c.x0, c.x1, c.b, c.b + 7, c.b - 2, 10, 0]]),
+        frames: cells.map(c => [c.id, [1, 0, 0, 1, -1, 0]]),
+        erase: cells.map(c => [c.id, [0, c.x0, c.b - 2, c.x1, c.b + 7]]),
+        ph: [], labels: [], headings: [], pageText: [], held: [],
+      }
+      const index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(layout))))
+      const units = cells.map(c => ({ kind: 'cell', src: c.src, state: 'whole', group: c.group, pieces: [{ t: 'text', tr: true, s: c.name === 'C' ? '\u5f88'.repeat(400) : '\u6c49\u5b57' }] }))
+      const doc = docOf(cells.map(c => [c.src, c.x0, c.b, c.x1 - c.x0]))
+      const run = await openProto({
+        doc, target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false,
+        geometry: { schema: 1, kinds: cells.map(() => 'cell'), left: { pages: [[0, 0, 300, 300]], units: [] } },
+        units,
+        tex: { index, pieces: new Map(cells.map(c => [c.id, [[0]]])), use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
+        removal: { OPS: {}, mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: 1, sets: {}, page: { 1: { ok: true } } } },
+      } as never)
+      await run.until(1)
+      const idOf = (name: string) => cells.find(c => c.name === name)!.id
+      // C could not be set, and its group with it; A is drawn by the file's rectangles
+      expect(run.skipped.map((x: { id: number; why: string }) => `${x.id}:${x.why}`)).toEqual(expect.arrayContaining([`${idOf('C')}:unfit`, `${idOf('B')}:group: a cell unfit`]))
+      expect(run.placed.map((p: { id: number }) => p.id)).toEqual([idOf('A')])
+      // A's fill (device pixels at 1 a unit, y down) on its band: from its 0.6 pad, short of B's text at 40.1
+      const paper = (run.rows[0]!.ops as unknown as { op: string; rects?: number[][] }[]).filter(o => o.op === 'paper').flatMap(o => o.rects ?? [])
+      const band = paper.filter((r: number[]) => r[1]! < 300 - 98 && r[1]! + r[3]! > 300 - 107)
+      expect(Math.min(...band.map((r: number[]) => r[0]!))).toBeCloseTo(9.4, 6)
+      expect(Math.max(...band.map((r: number[]) => r[0]! + r[2]!))).toBeLessThanOrEqual(40.1 - 0.3 + 1e-6)
+    })
+  }
+})
+
+describe("a cell widened over the paper beside it, the whole run (openProto): held to a rule over the part it was widened onto", () => {
+  it("lays the widened cell's line under the rule, its bands read again over the widened blocks", async () => {
+    // the re-review of round 3, M4: cell X's rectangle over x 10-40 cannot hold its translation, so the fit widens it over
+    // the paper to its right, to the text area's edge (cell Y's, x 200); a table's rule runs over x 60-120 just above X's
+    // line. Its bands were read from the rectangle alone, which no rule is over: the widened line stood over the rule
+    const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const cells = [{ id: 0, src: 'Delta', x0: 10, x1: 40, b: 100, tr: '\u6c49'.repeat(9) }, { id: 1, src: 'Omega', x0: 150, x1: 200, b: 60, tr: '\u6c49\u5b57' }]
+    const layout = {
+      schema: 1, layout: '3', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['F1'],
+      units: cells.map(c => [c.id, 4, 9, 0, 1]),
+      lines: cells.map(c => [c.id, [1, c.x0, c.x1, c.b, c.b + 6.8, c.b - 2.14, 10, 0]]),
+      frames: cells.map(c => [c.id, [1, 0, 0, 1, -1, 0]]),
+      erase: cells.map(c => [c.id, [0, c.x0, c.b - 2.14, c.x1, c.b + 6.8]]),
+      ph: [], labels: [], headings: [], pageText: [], held: [],
+    }
+    const index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(layout))))
+    const units = cells.map(c => ({ kind: 'cell', src: c.src, state: 'whole', pieces: [{ t: 'text', tr: true, s: c.tr }] }))
+    const doc = docOf(cells.map(c => [c.src, c.x0, c.b, c.x1 - c.x0]))
+    const run = await openProto({
+      doc, target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false,
+      geometry: { schema: 1, kinds: cells.map(() => 'cell'), left: { pages: [[0, 0, 300, 300]], units: [] } },
+      units,
+      tex: { index, pieces: new Map(cells.map(c => [c.id, [[0]]])), use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
+      removal: { OPS: {}, mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: 1, sets: {}, page: { 1: { ok: true, rules: [60, 107.63, 120, 108.03] } } } },
+    } as never)
+    await run.until(1)
+    const x = run.placed.find((p: { id: number }) => p.id === 0) as unknown as { layout: { knob: string; scale: number; lines: { baseline: number; x1: number }[] } }
+    expect(x.layout.knob).toBe('widen')
+    expect(x.layout.lines).toHaveLength(1)
+    // its em box under the rule less the half point: a CJK em 0.88 of the size over the baseline
+    const line = x.layout.lines[0]!
+    expect(line.baseline + 0.88 * 10 * x.layout.scale).toBeLessThanOrEqual(107.63 - 0.5 + 1e-6)
+  })
+})
+
+describe("a paper whose add-on is refused, the whole run (openProto): every unit drawn the old way, none lost", () => {
+  // the remover's isolation contract (layout/remove.mjs's head): a paper the remover refuses, or whose remover crashed
+  // or ran out of its limits, ships no add-on, and its readers draw every unit erased from the original page and put
+  // back where it is kept; so does a page the add-on's manifest refuses
+  const open = async (removal: (doc: unknown) => unknown) => {
+    const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const cells = [{ id: 0, src: 'Alpha', x0: 10, x1: 40, b: 100 }, { id: 1, src: 'Betas', x0: 60, x1: 90, b: 100 }]
+    const layout = {
+      schema: 1, layout: '3', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['F1'],
+      units: cells.map(c => [c.id, 4, 9, 0, 1]),
+      lines: cells.map(c => [c.id, [1, c.x0, c.x1, c.b, c.b + 7, c.b - 2, 10, 0]]),
+      frames: cells.map(c => [c.id, [1, 0, 0, 1, -1, 0]]),
+      erase: cells.map(c => [c.id, [0, c.x0, c.b - 2, c.x1, c.b + 7]]),
+      ph: [], labels: [], headings: [], pageText: [], held: [],
+    }
+    const index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(layout))))
+    const doc = docOf(cells.map(c => [c.src, c.x0, c.b, c.x1 - c.x0]))
+    const run = await openProto({
+      doc, target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false,
+      geometry: { schema: 1, kinds: cells.map(() => 'cell'), left: { pages: [[0, 0, 300, 300]], units: [] } },
+      units: cells.map(c => ({ kind: 'cell', src: c.src, state: 'whole', pieces: [{ t: 'text', tr: true, s: '\u6c49\u5b57' }] })),
+      tex: { index, pieces: new Map(cells.map(c => [c.id, [[0]]])), use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
+      removal: removal(doc),
+    } as never)
+    await run.until(1)
+    const ops = run.rows[0]!.ops as unknown as { op: string }[]
+    return { placed: run.placed.map((p: { id: number }) => p.id), skipped: run.skipped.length, kinds: [...new Set(ops.map(o => o.op))].sort(), svg: run.rows[0]!.svg.innerHTML }
+  }
+  it('draws each unit of a paper with no add-on, or a page its manifest refuses, by erase and put back: the units of the paper with one', async () => {
+    const withAddon = await open(doc => ({ OPS: {}, mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: 1, sets: {}, page: { 1: { ok: true } } } }))
+    expect(withAddon).toMatchObject({ placed: [0, 1], skipped: 0, kinds: ['paper'] })
+    for (const refused of [() => null, (doc: unknown) => ({ OPS: {}, mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: 1, sets: {}, page: { 1: { ok: false, refused: 'the paper could not be read' } } } })]) {
+      const old = await open(refused)
+      expect(old.placed).toEqual(withAddon.placed)
+      expect(old.skipped).toBe(0)
+      expect(old.kinds).toEqual(['erase'])
+      // each unit's translation is set over its page as with the add-on
+      expect(old.svg).toBe(withAddon.svg)
+    }
+  })
+})
+

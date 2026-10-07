@@ -67,18 +67,21 @@ const STOP_SPACE = /(?<=[.\u3002\uff0e\u0964\u0965\u06d4\u0589\u1362\u104b\u0f0d
  *  after a number (the evaluation of the typesetting rule, 2026-10-01). A word's space (#254) stays the engine's — a
  *  letter, or a combining mark ending a word, before a marker: the common case, whose space was always kept */
 const NUMBER_SPACE = /(?<=\p{N})[ \t\n\f\r]+$/u, NUMBER_LEAD = /^[ \t\n\f\r]+(?=\p{N})/u
-/** a piece a space never goes before: one that is a space itself (a tie, a control space, a kern), a group's end */
-const SPACING = /^(?:~|\\[ ,;:]|\\(?:q?quad|enspace|thinspace|nobreakspace)(?![A-Za-z])|\\hspace\*?\{|\}$)/
+/** a piece a space never goes before: one that is a space itself (a tie, a control space, a kern), a group's end.
+ *  layer/pieces.mjs writes it again (the reader's layer may not import this module); a test holds the two equal */
+export const SPACING = /^(?:~|\\[ ,;:]|\\(?:q?quad|enspace|thinspace|nobreakspace)(?![A-Za-z])|\\hspace\*?\{|\}$)/
 /** a run of `#` the reply holds outside its markers, not an entity's (`&#39;`): the source's text holds none — TeX's
- *  `\#` and a bare `#` are placeholders (latex-front.mjs walk) —, so on the wire a `#` is a marker's */
+ *  `\#` and a bare `#` are placeholders (latex-front.mjs walk) —, so on the wire a `#` is a marker's, and is dropped
+ *  wherever the reply set it; with it a pair of brackets that held nothing else (Microsoft's Japanese wrote 1706.03762's
+ *  `auto-regressive @f#, consuming` back as `... @f#(#)...`, its marker read and `(#)` set as text) */
 const STRAY = /(?<!&)#+/g
+const STRAY_PAIR = /[ \t]*[([\uff08\u3010]\s*(?<!&)#+\s*[)\]\uff09\u3011]/g
 export function rehydrate(text, { slots, lead, trail, stops, numbers, numbersAfter }, tolerant = false) {
   const pieces = [], seen = new Map()
-  // `displaced`: the markers read without their `#` (tolerant), each owed one `#` the reply set after it
-  let last = 0, afterNumber = false, displaced = 0
+  let last = 0, afterNumber = false
   // a text between two markers, the wire's spaces off it: after the one before it, before the one after it (`before`)
   const pushText = (s, before = null) => {
-    if (displaced) s = s.replace(STRAY, c => (displaced ? (displaced--, '') : c))
+    s = s.replace(STRAY_PAIR, '').replace(STRAY, '')
     if (before) s = s.replace(before, '')
     s = decode(s)
     if (afterNumber) s = s.replace(NUMBER_LEAD, '')
@@ -88,8 +91,8 @@ export function rehydrate(text, { slots, lead, trail, stops, numbers, numbersAft
   // be a marker's remains, because a literal @ went out as @@; accepted only when no letter follows, never inside a word.
   // And a marker's `#` doubled is its own, read either way, a space between them or none: Microsoft wrote 2610.02069's
   // `@e#` back as `@e##` and set the second `#` as text ("El Ni ñ#", and "Figure 10#" in its Chinese), and `@d#` as
-  // `@d# #` in its Japanese. One read without its `#` owes the first run of stray `#` after it, dropped with it (that
-  // paper's unit 47 in Chinese: `@a` in the middle of the reply, a lone `#` at its end)
+  // `@d# #` in its Japanese. One read without its `#` leaves it where the reply set it (that paper's unit 47 in Chinese:
+  // `@a` in the middle of the reply, a lone `#` at its end), dropped there as any stray `#` is (STRAY)
   const L = toAlpha(Math.max(1, slots.length)).length
   const re = tolerant ? new RegExp(`@@|@([a-z]{1,${L}})#(?:[ \t]*#)*|@([a-z]{1,${L}})(?![a-z#])`, 'g') : /@@|@([a-z]+)#(?:[ \t]*#)*/g
   let m, buf = ''
@@ -103,7 +106,6 @@ export function rehydrate(text, { slots, lead, trail, stops, numbers, numbersAft
     pushText(buf, wires && (SPACING.test(slots[id - 1].src ?? '') ? SPACE : wires)); buf = ''
     seen.set(id, pieces.length); pieces.push(slots[id - 1])
     afterNumber = !!numbersAfter?.has(id)
-    if (m[2]) displaced++
   }
   buf += text.slice(last); pushText(buf)
   if (seen.size !== slots.length) return { error: 'lost marker' }
@@ -445,8 +447,9 @@ export async function translateUnits(units, send, format = 'markers') {
   return { results, how }
 }
 
-/** a text piece as the compiled PDF shows it: a translation's TeX escapes undone, the source's bytes as UTF-8 */
-const shown = p => (p.tr ? p.s.replace(/\\(textbackslash|textasciitilde|textasciicircum)\{\}/g, ' ').replace(/\\([#$%&_{}])/g, '$1') : utf8(p.s))
+/** a text piece as the compiled PDF shows it: a translation's TeX escapes undone, the source's bytes as UTF-8.
+ *  layer/pieces.mjs writes it again (the reader's layer may not import this module); a test holds the two equal */
+export const shown = p => (p.tr ? p.s.replace(/\\(textbackslash|textasciitilde|textasciicircum)\{\}/g, ' ').replace(/\\([#$%&_{}])/g, '$1') : utf8(p.s))
 const plain = (pieces, textOf) => pieces.map(p => (p.t === 'text' ? textOf(p) : ' ')).join('').replace(/\s+/g, ' ').trim()
 /** a unit's plain text in the source (placeholders dropped: anchors are found from text alone) */
 export const plainSource = u => plain(u.pieces, p => utf8(p.s))

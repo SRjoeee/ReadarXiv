@@ -2,6 +2,7 @@
 // again starts from, the units a record keeps, when a run writes, the figures' keys. The store itself is the
 // extension's (src/cache/pdf-store.ts). Pure but for the hash, so that experiments/pdf-bilingual/spikes/cache-cases.mjs
 // runs it in Node.
+import { groupOf } from './groups.mjs'
 import { displayEdges, plainSource, plainTranslated, sentencesKept, unitText } from './mt.mjs'
 
 const hex = buf => Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('')
@@ -17,19 +18,55 @@ export const figureKeyOf = texts => JSON.stringify(texts)
  * whose source the record has a translation of, matched by hash. A unit cut differently since has none. Repeated
  * paragraphs (table cells, often) share a hash, and each takes the best translation of their source: whole before partial
  * (Devin on #298). The hashes are kept for the record. `inSource` goes with the translation: the copy's PDF set that
- * translation in the source, and a run that sets no final keeps that PDF (inSourceOf)
+ * translation in the source, and a run that sets no final keeps that PDF (inSourceOf).
+ * A unit whose source is the record's but for the numbers of its pairs has the record's translation too, numbered as the
+ * unit is (renumbered): a pair's id is its place among its file's pairs, and a pair the front end makes earlier in the
+ * file — a front matter's unit, an argument it now reads as text — moves every one after it (the front end's round of
+ * 2026-10-06: 1,471 units of the corpus's 117 papers the same but for their pairs' numbers)
  */
-const rankOf = u => (u.state === 'whole' ? 2 : u.state === 'partial' ? 1 : 0)
+/**
+ * The state of a unit's translation, whatever is shown of it: a cell of a table group kept whole (groups.mjs) is shown in
+ * the source (`kept`) but keeps what the translator gave it (`translation`: whole, partial, none or lost), which decides
+ * whether it is taken again as it is; undefined for a name kept without asking, and for a kept cell of a copy made
+ * before kept cells kept it (Codex's review of PR A: a partial cell recorded `kept` was taken as whole on the next run)
+ */
+export const translationOf = u => (u?.state === 'kept' ? u.translation : u?.state)
+const keptAs = u => (u?.state === 'kept' && u.translation ? { translation: u.translation } : {})
+const rankOf = u => { const t = translationOf(u); return t === 'whole' && u.pieces ? 2 : t === 'partial' ? 1 : 0 }
 export async function seedFrom(record, units) {
-  const byHash = new Map()
+  const byHash = new Map(), bySrc = new Map()
   for (const u of record.units) if (u.pieces && rankOf(u) >= rankOf(byHash.get(u.hash) ?? { state: '' })) byHash.set(u.hash, u)
+  for (const u of record.units) if (u.pieces && typeof u.src === 'string') (bySrc.get(u.src) ?? bySrc.set(u.src, []).get(u.src)).push(u)
   const hashes = await Promise.all(units.map(sourceHash))
   const seed = new Map()
-  hashes.forEach((h, i) => {
+  const seedOf = (i, u, pieces) => seed.set(i, { pieces: ownNested(units[i], pieces), by: u.by, tried: u.tried, state: u.state, ...keptAs(u), ...(u.sentences ? { sentences: u.sentences } : {}), ...inSourceOf(u) })
+  for (const [i, h] of hashes.entries()) {
     const u = byHash.get(h)
-    if (u) seed.set(i, { pieces: ownNested(units[i], u.pieces), by: u.by, tried: u.tried, state: u.state, ...(u.sentences ? { sentences: u.sentences } : {}), ...inSourceOf(u) })
-  })
+    if (u) { seedOf(i, u, u.pieces); continue }
+    const found = await renumbered(units[i], bySrc.get(plainSource(units[i])) ?? [])
+    if (found) seedOf(i, found.unit, found.pieces)
+  }
   return { seed, hashes }
+}
+/** the ids of the pairs in pieces, a nested unit's too, in the order of their numbers: the order they stand in. A close
+ *  counts as its open does: a cell may end a group an earlier cell opened */
+const pairIds = (pieces, out = new Set()) => { for (const p of pieces) { if (p.t === 'open' || p.t === 'close') out.add(p.id); else if (p.t === 'nested' && p.unit?.pieces) pairIds(p.unit.pieces, out) } return [...out].sort((a, b) => a - b) }
+/** the pieces with each pair's id mapped (`to`), a nested unit's too */
+const renumber = (pieces, to) => pieces.map(p => ((p.t === 'open' || p.t === 'close') && to.has(p.id) ? { ...p, id: to.get(p.id) } : p.t === 'nested' && p.unit?.pieces ? { ...p, unit: { ...p.unit, pieces: renumber(p.unit.pieces, to) } } : p))
+/** the record's translation of a unit whose source is that record unit's but for its pairs' numbers — the unit's pieces
+ *  numbered as the record's were hash to the record's hash, each pair the n-th of both —, numbered as the unit is: the
+ *  best of the record's units with its text, or null */
+async function renumbered(unit, candidates) {
+  const mine = pairIds(unit.pieces)
+  if (!mine.length) return null
+  for (const c of [...candidates].sort((a, b) => rankOf(b) - rankOf(a))) {
+    const theirs = pairIds(c.pieces)
+    if (theirs.length !== mine.length) continue
+    const old = renumber(unit.pieces, new Map(mine.map((id, k) => [id, theirs[k]])))
+    if (hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(old)))) !== c.hash) continue
+    return { unit: c, pieces: renumber(c.pieces, new Map(theirs.map((id, k) => [id, mine[k]]))) }
+  }
+  return null
 }
 /**
  * A record's pieces with each nested piece the unit's own again. A unit nested in another — a footnote in a paragraph,
@@ -78,7 +115,7 @@ export const passagesInSource = units => units.filter(u => u?.inSource && u.kind
  */
 export function seedAgain(seed, made) {
   const out = new Map(seed ?? [])
-  for (const [i, r] of made ?? []) if (r.pieces) out.set(i, { pieces: r.pieces, by: r.by, tried: r.tried, state: r.state, ...(r.sentences ? { sentences: r.sentences } : {}), ...inSourceOf(r) })
+  for (const [i, r] of made ?? []) if (r.pieces) out.set(i, { pieces: r.pieces, by: r.by, tried: r.tried, state: r.state, ...keptAs(r), ...(r.sentences ? { sentences: r.sentences } : {}), ...inSourceOf(r) })
   return out
 }
 
@@ -92,7 +129,9 @@ export function seedAgain(seed, made) {
  */
 export function reusable(seed, { identity, copyWire, carry = null, made = null }) {
   const out = new Map()
-  for (const [i, s] of seed ?? []) out.set(i, { ...s, current: s.state === 'whole' && !!s.pieces && s.by === identity && (copyWire || !!carry?.(s.pieces) || !!made?.get(i)?.pieces) })
+  // (a cell of a table group kept whole is taken by its translation: whole as the translator gave it; one given in part,
+  // or of a copy that did not keep which, is asked for again)
+  for (const [i, s] of seed ?? []) out.set(i, { ...s, current: translationOf(s) === 'whole' && !!s.pieces && s.by === identity && (copyWire || !!carry?.(s.pieces) || !!made?.get(i)?.pieces) })
   return out
 }
 
@@ -116,16 +155,20 @@ export function copyReuse(cached, { pipeline, format, context, carries = {} }) {
 
 /**
  * The units a record keeps (src/cache/pdf-record.ts CachedUnit), from a run's results by index: a name kept in the
- * source is `kept`; a unit with no result was not tried, and is `none` with no `tried`, so never current
+ * source is `kept`; a cell of a table group kept whole (groups.mjs) is `kept` too, with the translation its group was
+ * decided by and its state (`translation`) — no `tr`, since nothing sets it; a unit with no result was not tried, and is `none` with no `tried`, so
+ * never current. A cell carries its group (groups.mjs groupOf), which the layer keeps whole as the final does
  */
 export function unitsOf(units, kept, hashes, results) {
   return units.map((u, i) => {
     // a heading's depth, and whether it is the title, for the contents a stored copy lists (outline.ts)
     // and its displays beyond its marks, which the anchors take on either side (displayEdges)
-    const base = { kind: u.kind, src: plainSource(u), hash: hashes[i], ...(u.title ? { title: true } : {}), ...(u.depth !== undefined ? { depth: u.depth } : {}), ...displayEdges(u) }
+    const group = groupOf(u)
+    const base = { kind: u.kind, src: plainSource(u), hash: hashes[i], ...(u.title ? { title: true } : {}), ...(u.depth !== undefined ? { depth: u.depth } : {}), ...displayEdges(u), ...(group ? { group } : {}) }
     if (kept.has(u)) return { ...base, state: 'kept' }
     const r = results.get(i)
     if (!r) return { ...base, state: 'none' }
+    if (r.state === 'kept') return { ...base, ...(r.pieces ? { pieces: r.pieces } : {}), ...(r.by !== undefined ? { by: r.by } : {}), tried: r.tried, state: 'kept', ...keptAs(r) }
     // the sentences of the translation kept, which say where each sentence begins in `src` and `tr`
     // and a translation the final set in the source (the author block under CJKutf8): kept, but not what the right side shows
     return { ...base, ...(r.pieces ? { pieces: r.pieces, tr: plainTranslated(r.pieces), ...(r.sentences ? { sentences: r.sentences } : {}) } : {}), ...(r.by !== undefined ? { by: r.by } : {}), tried: r.tried, state: r.state, ...inSourceOf(r) }
@@ -141,7 +184,7 @@ export function unitsOf(units, kept, hashes, results) {
  * were counted in (the review of B3, minor 5: a malformed field took the highlight off a side)
  */
 export const copyTexts = units => units.map((u, i) => {
-  const t = u.pieces && !u.inSource ? unitText(u.pieces) : { text: u.src }, s = u.pieces && u.tr === t.text ? sentencesKept(u.sentences, u.src, t.text) : null
+  const t = u.pieces && !u.inSource && u.state !== 'kept' ? unitText(u.pieces) : { text: u.src }, s = u.pieces && u.tr === t.text ? sentencesKept(u.sentences, u.src, t.text) : null
   return { id: i, ...t, ...displayEdges(u), ...(s ? { sentences: s } : {}) }
 })
 
@@ -237,9 +280,10 @@ export function labelOf(how, { pipeline, typesetting, passing, cached }) {
  * - A run a hand-over or a demotion mixed — the reader's key refused midway and the free service finishing — leaves
  *   none: the service that would answer then never translated the whole paper (the final review of Codex 1 on #306).
  * - A run with nothing tried leaves none: its failure was not a translation's.
- * - Names kept in the source (nameCells) are never sent (live.mjs `todo`), so they have no result and do not block.
+ * - Names kept in the source (nameCells) are never sent (live.mjs `todo`), so they have no result and do not block; a
+ *   cell of a table group kept whole (groups.mjs) was sent, and counts by what came back (translationOf).
  */
 export function allTranslatedBy(results, identity) {
   const tried = [...results.values()]
-  return tried.length > 0 && tried.every(r => r.state === 'whole' && r.by === identity)
+  return tried.length > 0 && tried.every(r => translationOf(r) === 'whole' && !!r.pieces && r.by === identity)
 }

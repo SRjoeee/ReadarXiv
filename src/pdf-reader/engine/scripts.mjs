@@ -14,9 +14,12 @@
 // When no strategy sets the translation, the reader keeps what it shows. A script not listed here has no strategy yet:
 // strategiesFor throws, and the reader says it cannot typeset that language (Devin on #294). Every font named is in
 // TeX Live 2026. Measured with spikes/lang-gate.mjs.
+import { scriptOf } from './layer-rules.mjs'
 import { latinFontsFor } from './latex-front.mjs'
 
-export const scriptOf = lang => new Intl.Locale(lang).maximize().script
+// the script of a language, and the instant layer's rules beside this design, in a module of their own that imports
+// nothing: the reader loads them without this module's LaTeX parser
+export { LAYER_DIVERGES, LAYER_RULES, layerRulesFor, scriptOf } from './layer-rules.mjs'
 /**
  * Whether the author block's names and places are translated: where the target's script writes foreign names its own
  * way, the byline reads that way too, the original beside it for the names an engine renders wrong (the owner,
@@ -136,7 +139,7 @@ const FACES = {
  *  patterns and broke only at hyphens of their own: the references' lines ended in one less than half as often
  *  (2608.06701: 5 % against 12 %), their word spaces a fifth wider, and underfull lines went from 10 to 70
  *  (2608.12333). The source is English in v1 (TranslateRequest.source) */
-const babelTags = lang => { const l = new Intl.Locale(lang); return [...new Set([lang, `${l.language}-${l.maximize().script}`, l.language])] }
+export const babelTags = lang => { const l = new Intl.Locale(lang); return [...new Set([lang, `${l.language}-${l.maximize().script}`, l.language])] }
 const provide = ([tag, ...rest], opts) => (rest.length ? `\\IfFileExists{babel-${tag}.ini}{\\babelprovide[import=${tag},main${opts}]{axttarget}}{${provide(rest, opts)}}` : `\\babelprovide[import=${tag},main${opts}]{axttarget}`)
 const babel = (lang, hyphenrules) => `\\IfPackageLoadedTF{polyglossia}{}{\\IfPackageLoadedTF{babel}{}{\\usepackage[safe=none]{babel}}${provide(babelTags(lang), hyphenrules ? `,hyphenrules=${hyphenrules}` : '')}}\n`
 /** After fontspec: the fonts declared from here on carry exactly the features given them. A paper's class may set

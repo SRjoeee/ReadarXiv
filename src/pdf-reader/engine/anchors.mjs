@@ -217,17 +217,25 @@ let shared = new Float64Array(256)
 
 
 // ---------------------------------------------------------------- marks
+/** a token whose baseline is within this share of its height of a mark's stands on the mark's own baseline */
+const ON_BASE = 0.1
 /** the token a mark sits right after, on the mark's baseline: for a start mark the word whose box is nearest it, for
- *  an end mark the last word that begins before it (boxes are approximate, see tokenizeDocument) */
-function tokenAtMark(doc, byPage, mk, start) {
-  let best = null
+ *  an end mark the last word that begins before it (boxes are approximate, see tokenizeDocument), of the words within
+ *  0.4 of their height of the mark's baseline — those on its own baseline (ON_BASE) first: a figure's label set large
+ *  4.7 pt above a heading's baseline begins after the heading's last word and is no word of its line (1706's
+ *  "Attention Visualizations" and the "Layer5" beside it) */
+export function tokenAtMark(doc, byPage, mk, start) {
+  let best = null, on = null
+  const better = (cur, k, d) => !cur || (start ? d < cur.d : doc[k].x > doc[cur.k].x)
   for (const k of byPage.get(mk.page) ?? []) {
-    const t = doc[k]
-    if (Math.abs(t.y - mk.y) > t.h * 0.4) continue
-    if (start) { const d = mk.x < t.x ? t.x - mk.x : mk.x > t.x + t.w ? mk.x - t.x - t.w : 0; if (d < 8 && (!best || d < best.d)) best = { k, d } }
-    else if (t.x < mk.x + 1 && (!best || t.x > doc[best.k].x)) best = { k }
+    const t = doc[k], dy = Math.abs(t.y - mk.y)
+    if (dy > t.h * 0.4) continue
+    let d = 0
+    if (start) { d = mk.x < t.x ? t.x - mk.x : mk.x > t.x + t.w ? mk.x - t.x - t.w : 0; if (d >= 8) continue } else if (!(t.x < mk.x + 1)) continue
+    if (better(best, k, d)) best = { k, d }
+    if (dy <= ON_BASE * t.h && better(on, k, d)) on = { k, d }
   }
-  return best?.k ?? null
+  return (on ?? best)?.k ?? null
 }
 
 /** each mark with the word it follows in `doc`, the document the marks were recorded in: { page, x, y, t } */

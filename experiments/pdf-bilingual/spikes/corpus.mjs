@@ -8,7 +8,8 @@ import { join } from 'node:path'
 
 const COUNT = Number(process.argv[2] ?? 130)
 const MAX_ID = 31132
-const UA = 'ReadarXiv-research/0.1 (compile-rate sample; github.com/SRjoeee/ReadarXiv issue 290)'
+// the project's User-Agent, as every request of the experiment's sends it (spikes/layer-fixtures.mjs, layout-make.mjs)
+const UA = 'ReadarXiv/0.1 (+https://readarxiv.org; research)'
 const root = new URL('..', import.meta.url).pathname
 const dataDir = join(root, 'data/corpus')
 const outFile = join(root, 'out/corpus.json')

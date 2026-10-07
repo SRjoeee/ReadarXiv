@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { copyReuse, copyTexts, decideWrite, passagesInSource, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from '@/pdf-reader/engine/cache.mjs'
-import { citationLines, type Compiled, compilerKeeper, keptFor, openPaper, originalFiles, PIPELINE_CARRIES, PIPELINE_VERSION, runLive, stoppedShort } from '@/pdf-reader/engine/live.mjs'
+import { kOfSource, trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
+import { type BatchReport, citationLines, type Compiled, compilerKeeper, keptFor, openPaper, originalFiles, PIPELINE_CARRIES, PIPELINE_VERSION, runLive, stoppedShort } from '@/pdf-reader/engine/live.mjs'
 import type { Marks } from '@/pdf-reader/engine/typeset/places.mjs'
 import { END_TEX } from '@/pdf-reader/engine/typeset/tex.mjs'
 
@@ -1622,5 +1623,243 @@ describe('the remedies in their order, wherever a compile fails', () => {
     const t2 = translator(), c2 = compiler(n, { on: k => { if (k === 'original') t2.release() }, fail: (k, q) => k === 'final' || (k === 'preview' && text(q).includes(`${T} 11 ${T}`)) })
     const part = await run({ compiler: c2, translate: t2.translate })
     expect([part.r.exhausted, part.r.previews, (part.r as { shownPartial?: boolean | null }).shownPartial]).toEqual([true, 1, true])
+  })
+})
+
+// The layer's part of the run (Plan 8b, Task 3; the spec's §4.6 and §4.10, row 10): each batch's translated units
+// reported to the caller as the layer takes them, and a run that compiles no preview
+describe('each batch reported', () => {
+  /** twelve paragraphs with placeholders, $x$ twice in each: two batches */
+  const placed = (paras = PARAS) => openPaper(new Map([['main.tex', new TextEncoder().encode(`\\documentclass{article}\\begin{document}\n${Array.from({ length: paras }, (_, k) => `Paragraph ${k} with $x$ and \\textbf{bold words} of the paper, ${'with words that run on for a line or two of prose '.repeat(4)}and $x$ at an end. A second sentence \\cite{a}.\n`).join('\n')}\\end{document}\n`)]]))
+  /** Chinese for every English word, with each text's two sentences aligned, as Microsoft's own lengths are; the second
+   *  batch held until released; each ask and answer said in `order` */
+  function aligned(order: string[]) {
+    let release: () => void = () => {}
+    const held = new Promise<void>(r => { release = r })
+    let batches = 0
+    const translate = async (texts: string[]) => {
+      const b = ++batches
+      order.push(`ask ${b}`)
+      if (b > 1) await held
+      const out = texts.map(text => {
+        const reply = text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), a = text.indexOf('. ') + 2, c = reply.indexOf('. ') + 2
+        return { text: reply, by: 'B', ...(a > 1 && c > 1 ? { alignment: { source: [a, text.length - a], target: [c, reply.length - c] } } : {}) }
+      })
+      order.push(`got ${b}`)
+      return out
+    }
+    return { translate, release: () => release() }
+  }
+  type Result = { pieces?: { t: string }[]; state: string; by?: string | null; sentences?: { src: number[]; tr: number[] } }
+
+  it('each batch is reported once, after its results, before the next batch is asked', async () => {
+    const p = placed(), n = p.units.length, order: string[] = [], t = aligned(order), reports: BatchReport[] = []
+    const c = compiler(n, { on: k => { if (k === 'original') t.release() } })
+    // the last unit nearest the reader: the batches in that order
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), rank: i => n - i, onBatch: b => { order.push(`batch ${b.seeded}`); reports.push(b) } })
+    expect(order).toEqual(['ask 1', 'got 1', 'batch false', 'ask 2', 'got 2', 'batch false'])
+    expect(reports.flatMap(b => b.units.map(u => u.id))).toEqual(p.units.map((_, i) => n - 1 - i))
+    expect(reports[0]?.units.length).toBeLessThan(n)
+    let sentences = 0
+    for (const u of reports.flatMap(b => b.units)) {
+      const res = r.results.get(u.id) as Result, source = p.units[u.id]?.pieces ?? []
+      expect(u.pieces).toEqual(trPiecesOf(res.pieces ?? [], kOfSource(source)))
+      // each non-text piece by its own source object: the two $x$ apart
+      const ks = u.pieces.filter(q => q[0] !== 0).map(q => q[1] as number), objects = (res.pieces ?? []).filter(q => q.t !== 'text')
+      expect(ks).toHaveLength(5)
+      ks.forEach((k, j) => { expect(source[k]).toBe(objects[j]) })
+      expect(new Set(ks).size).toBe(5)
+      expect([u.sentences, u.state, u.by]).toEqual([res.sentences ?? null, res.state, res.by ?? null])
+      if (u.sentences) sentences++
+    }
+    expect(sentences).toBe(n)
+  })
+
+  it('seeds taken as they are are reported first, once', async () => {
+    const p = placed(4), n = p.units.length, order: string[] = [], t = aligned(order), reports: BatchReport[] = []
+    t.release()
+    const pieces = (i: number) => (p.units[i]?.pieces ?? []).map(q => ((q as { t: string }).t === 'text' ? { ...(q as object), tr: true } : q))
+    // as a copy keeps them: through JSON; every unit but the last taken as it is
+    const seed = new Map(p.units.map((_, i) => [i, JSON.parse(JSON.stringify({ pieces: pieces(i), state: 'whole', by: 'A', tried: 'B', current: i < n - 1, ...(i === 0 ? { sentences: { src: [3], tr: [3] } } : {}) }))]))
+    await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', seed, pipelineCurrent: false, readMarks: async () => MARKS(n), onBatch: b => { order.push(`batch ${b.seeded}`); reports.push(b) } })
+    expect(order).toEqual(['batch true', 'ask 1', 'got 1', 'batch false'])
+    expect(reports.map(b => b.units.map(u => u.id))).toEqual([p.units.slice(0, -1).map((_, i) => i), [n - 1]])
+    const first = reports[0]?.units ?? []
+    first.forEach(u => {
+      expect(u.pieces).toEqual(trPiecesOf(seed.get(u.id).pieces, kOfSource(p.units[u.id]?.pieces ?? [])))
+      expect(u.pieces.filter(q => q[0] !== 0).map(q => q[1])).toEqual((p.units[u.id]?.pieces ?? []).flatMap((q, k) => ((q as { t: string }).t === 'text' ? [] : [k])))
+      expect([u.state, u.by]).toEqual(['whole', 'A'])
+    })
+    expect(first.map(u => u.sentences)).toEqual([{ src: [3], tr: [3] }, null, null])
+  })
+
+  it('a unit with no pieces is reported with none', async () => {
+    const p = placed(2), n = p.units.length, reports: BatchReport[] = []
+    // the engine answers nothing for the first unit, nor for its runs after
+    let calls = 0
+    await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: async texts => { calls++; return texts.map(text => (calls > 1 || text.startsWith('Paragraph 0') ? null : { text, by: 'B' })) }, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), onBatch: b => reports.push(b) })
+    expect(reports.flatMap(b => b.units).map(u => [u.id, u.state, u.pieces.length > 0, u.by])).toEqual([[0, 'none', false, null], [1, 'whole', true, 'B']])
+  })
+
+  it('the report changes nothing', async () => {
+    const go = async (onBatch?: (b: BatchReport) => void) => {
+      const p = placed(), n = p.units.length, t = aligned([]), given: string[] = []
+      const c = compiler(n, { on: k => { if (k === 'original') t.release() } }), base = c.compile
+      c.compile = async (q: Req) => { given.push(JSON.stringify([q.main, q.engine, q.rerun, q.bibtex, [...q.overrides].map(([k, v]) => [k, new TextDecoder('latin1').decode(v)])])); return base(q) }
+      const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), ...(onBatch ? { onBatch } : {}) })
+      return { given, results: JSON.stringify([...r.results]), previews: r.previews }
+    }
+    const reports: BatchReport[] = []
+    const [without, with_] = [await go(), await go(b => reports.push(b))]
+    expect(reports).toHaveLength(2)
+    expect(with_.given).toEqual(without.given)
+    expect(with_.results).toBe(without.results)
+    expect(with_.previews).toBe(2)
+  })
+})
+
+describe('a run with no previews', () => {
+  const COMPILES = ['fonts', 'original', 'preview', 'measure', 'final']
+  /** the compiles a run noted, in order: the probe as `fonts` */
+  const compiled = (notes: string[]) => notes.filter(e => COMPILES.includes(e))
+  const go = async ({ held = false, ...options }: Partial<Parameters<typeof runLive>[1]> & { held?: boolean } = {}) => {
+    const p = paper(), n = p.units.length, t = translator(), notes: string[] = [], updates: boolean[] = []
+    if (!held) t.release()
+    const c = compiler(n, { on: k => { if (k === 'original') t.release() } })
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), note: e => notes.push(e), onUpdate: u => updates.push(u.final), ...options })
+    return { r, notes: compiled(notes), calls: c.calls.map(q => `${q.kind}${q.ruled ? '+rule' : ''}`), updates, p }
+  }
+
+  it('previews false with the rule: the original first, no preview shown, a draft measures, the final the only update', async () => {
+    const { r, notes, calls, updates } = await go({ previews: false })
+    expect(notes).toEqual(['fonts', 'original', 'measure', 'final'])
+    expect(calls).toEqual(['probe', 'original', 'preview+rule', 'final+rule'])
+    expect(updates).toEqual([true])
+    expect([r.settled, r.previews]).toEqual([true, 0])
+  })
+
+  it('previews false with the second batch late: still nothing compiled before the whole translation but the original', async () => {
+    // the second batch comes once the original is asked for, as in the sequence above: no preview of the first
+    const { notes, updates } = await go({ previews: false, held: true })
+    expect(notes).toEqual(['fonts', 'original', 'measure', 'final'])
+    expect(updates).toEqual([true])
+  })
+
+  it('previews false with the original known: no original compiled; probe, measure, final', async () => {
+    const first = await go()
+    const { r, notes, calls, updates } = await go({ previews: false, marks: new Map([['0s', {}]]), original: first.r.original })
+    expect(notes).toEqual(['fonts', 'measure', 'final'])
+    expect(calls).toEqual(['probe', 'preview+rule', 'final+rule'])
+    expect([updates, r.settled, r.original]).toEqual([[true], true, first.r.original])
+  })
+
+  it('previews false without the rule: probe, original, final', async () => {
+    const { notes, calls, updates } = await go({ previews: false, readMarks: null, marks: null })
+    expect(notes).toEqual(['fonts', 'original', 'final'])
+    expect(calls).toEqual(['probe', 'original', 'final'])
+    expect(updates).toEqual([true])
+  })
+
+  it('previews false without the rule, the left side\'s marks known: nothing compiled but the probe and the final', async () => {
+    const { notes } = await go({ previews: false, readMarks: null })
+    expect(notes).toEqual(['fonts', 'final'])
+  })
+
+  it('previews false with a compiler of its own for the original: the original there from the start; probe, measure, final', async () => {
+    const p = paper(), n = p.units.length, t = translator(), own = compiler(n), main = compiler(n), order: string[] = []
+    t.release()
+    const ownCompile = own.compile, mainCompile = main.compile
+    await runLive(p, { lang: 'zh', compile: async q => { order.push(`main:${kindOf(q)}`); return mainCompile(q) }, compileOriginal: async q => { order.push(`own:${kindOf(q)}`); return ownCompile(q) }, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), previews: false })
+    expect(order).toEqual(['main:probe', 'own:original', 'main:preview', 'main:final'])
+  })
+
+  it('a failure under the rule goes through the remedies as ever: the measure without the rule, then the final', async () => {
+    const p = paper(), n = p.units.length, t = translator(), notes: string[] = []
+    t.release()
+    const c = compiler(n, { fail: (k, q) => k === 'preview' && ruled(q) })
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), previews: false, note: e => notes.push(e) })
+    expect(c.calls.map(q => `${q.kind}${q.ruled ? '+rule' : ''}`)).toEqual(['probe', 'original', 'preview+rule', 'preview', 'final'])
+    expect(notes).toContain('typeset failed')
+    expect(r.settled).toBe(true)
+  })
+
+  it("onOriginal gets the original's log", async () => {
+    const got: { pdf: Uint8Array; log: string }[] = []
+    await go({ onOriginal: o => got.push(o) })
+    expect(got).toHaveLength(1)
+    expect(got[0]?.pdf).toBeInstanceOf(Uint8Array)
+    expect(got[0]?.log).toContain('AXT-LINES 0 4 12.0pt 10')
+    expect(got[0]?.log).toContain('AXT-END')
+  })
+
+  it("onOriginal's log is the last TeX pass's", async () => {
+    const p = paper(4), n = p.units.length, t = translator(), got: string[] = []
+    t.release()
+    // latexmk's record of its steps: the last pass's log, not BibTeX's
+    const steps = `$ pdflatex main\nLOG:\nfirst pass\n==\nSTDOUT:\n\n$ pdflatex main\nLOG:\n${linesLog(n)}\n==\nSTDOUT:\n\n$ bibtex main\nLOG:\nbibtex's\n==\nSTDOUT:\n`
+    const c = compiler(n, { log: k => (k === 'original' ? steps : null) })
+    await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), onOriginal: o => got.push(o.log) })
+    expect(got).toEqual([linesLog(n)])
+  })
+
+  it('previews default: true is today\'s, the same requests as without the option', async () => {
+    const requests = async (previews?: boolean) => {
+      const p = paper(), n = p.units.length, t = translator(), given: string[] = []
+      const c = compiler(n, { on: k => { if (k === 'original') t.release() } }), base = c.compile
+      c.compile = async (q: Req) => { given.push(JSON.stringify([q.rerun, q.bibtex, [...q.overrides].map(([k, v]) => [k, new TextDecoder('latin1').decode(v)])])); return base(q) }
+      await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), ...(previews === undefined ? {} : { previews }) })
+      return given
+    }
+    const today = await requests()
+    expect(today).toHaveLength(5)
+    expect(await requests(true)).toEqual(today)
+  })
+})
+
+// The flag decided by the run's caller once the original is in (the pre-flight's K7): a paper whose layout file cannot
+// be made keeps its previews
+describe('previews as a function of the original', () => {
+  it('is asked once, after the original, with its PDF and its log; true, previews as ever from then on', async () => {
+    // one batch: the translation whole by the first preview
+    const p = paper(4), n = p.units.length, t = translator(), order: string[] = [], asked: ({ pdf: Uint8Array; log: string } | null)[] = []
+    t.release()
+    const c = compiler(n, { on: k => order.push(k) })
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), previews: async o => { order.push('asked'); asked.push(o); return true } })
+    expect(order).toEqual(['probe', 'original', 'asked', 'preview', 'final'])
+    expect(asked).toHaveLength(1)
+    expect(asked[0]?.pdf).toBeInstanceOf(Uint8Array)
+    expect(asked[0]?.log).toContain('AXT-END')
+    // the original in, the first preview is planned: it measures the final
+    expect(c.calls.map(q => `${q.kind}${q.ruled ? '+rule' : ''}`)).toEqual(['probe', 'original', 'preview+rule', 'final+rule'])
+    expect([r.previews, r.settled]).toEqual([1, true])
+  })
+
+  it('false: as previews false', async () => {
+    const p = paper(), n = p.units.length, t = translator(), notes: string[] = [], updates: boolean[] = []
+    t.release()
+    await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), previews: () => false, note: e => notes.push(e), onUpdate: u => updates.push(u.final) })
+    expect(notes.filter(e => ['fonts', 'original', 'preview', 'measure', 'final'].includes(e))).toEqual(['fonts', 'original', 'measure', 'final'])
+    expect(updates).toEqual([true])
+  })
+
+  it('with the original known, asked at once with none', async () => {
+    const p = paper(4), n = p.units.length, first = translator()
+    first.release()
+    const r1 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: first.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const t = translator(), c = compiler(n), asked: unknown[] = []
+    t.release()
+    await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map([['0s', {}]]), original: r1.original, identity: 'B', readMarks: async () => MARKS(n), previews: o => { asked.push(o); return true } })
+    expect(asked).toEqual([null])
+    expect(c.calls.map(q => `${q.kind}${q.ruled ? '+rule' : ''}`)).toEqual(['probe', 'preview+rule', 'final+rule'])
+  })
+
+  it('an original that did not set: asked with none', async () => {
+    const p = paper(4), n = p.units.length, t = translator(), asked: unknown[] = []
+    t.release()
+    const c = compiler(n, { fail: k => k === 'original' })
+    await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), previews: o => { asked.push(o); return false } })
+    expect(asked).toEqual([null])
+    // no plan without the original: the final as today, no measure
+    expect(c.calls.map(q => q.kind)).toEqual(['probe', 'original', 'final'])
   })
 })

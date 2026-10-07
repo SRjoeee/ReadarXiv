@@ -19,11 +19,14 @@
 // first preview is set as today, and never waits for the original: nothing is known to plan it from yet. Where a plan
 // cannot be made, the translation is set as today, and the reason noted
 import { analyze } from './paper-meta.mjs'
-import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { inkSamples, LAYOUT_TEX, layoutMarking, markProbeTex, probeSamples } from './layout/marks.mjs'
+import { BALANCE_DEF, documentBounds, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
-import { passagesInSource } from './cache.mjs'
+import { passagesInSource, translationOf } from './cache.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
+import { decideGroups, groupOf } from './groups.mjs'
 import { nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
+import { kOfSource, trPiecesOf } from './layer/pieces.mjs'
 import { WIDTH_PROBE } from './typeset/density.mjs'
 import { finalTypesetting, previewTypesetting } from './typeset/plan.mjs'
 import { completeLog, END_TEX, LINES_TEX } from './typeset/tex.mjs'
@@ -75,7 +78,9 @@ const DRAFT = [
   '\\def\\Gin@setfile#1#2#3{\\leavevmode\\global\\advance\\axt@g\\@ne\\axtmark{g\\the\\axt@g a}\\axt@setfile{#1}{#2}{#3}%',
   '\\axtmark{g\\the\\axt@g b}\\rlap{\\raise\\Gin@req@height\\hbox{\\axtmark{g\\the\\axt@g t}}}}}\\makeatother',
 ].join('\n') + '\n'
-const beginDocument = text => text.search(/\\begin\s*\{document\}/)
+/** where the main file's \\begin{document} stands as TeX finds it (latex-front.mjs documentBounds: none in a comment, a
+ *  definition or a filecontents), -1 where it has none: what goes before the document goes there */
+const beginDocument = text => documentBounds(text).begin
 /** a compile the TeX page failed, not TeX: BusyTeX's 180 s given up (the machine was slow), or the page's own failure
  *  (protocol 2's `error`, no log: an engine it could not bring up, a compile before an init that failed). It says
  *  nothing of the paper or of the strategy (the S3a review, I5 b) */
@@ -114,6 +119,28 @@ export const citationLines = aux => {
   const all = (aux ?? '').split('\n').filter(closed), keys = new Set()
   for (const l of all) { const m = /^\\(?:citation|bibcite)\{([^}]*)\}/.exec(l); if (m) for (const k of m[1].split(',')) keys.add(k.trim()) }
   return all.filter(l => { const m = /^\\([A-Za-z@]+)\{([^{}]*)\}/.exec(l); return !!m && m[1] !== 'citation' && m[1] !== 'newlabel' && keys.has(m[2].trim()) }).join('\n')
+}
+/**
+ * What names a translation's floats (the table-groups brief, Problem 2): at the document's end, each float's label as
+ * the class defines it (\fnum@figure, \fnum@table, one level of it) and the meaning of its name (\figurename,
+ * \tablename), written to the log for captionsOf. Whether the final labels a figure with the name babel gives the
+ * target (scripts.mjs, \babelprovide{axttarget}; caption-names.mjs holds those names) is the paper's as much as the
+ * target's: a class that writes its own word into the label (naaclhlt2019.sty's \fnum@figure, "Figure \thefigure"),
+ * a paper that selects another language in its body (2307.16209's \selectlanguage{english}), polyglossia (babel not
+ * loaded), and CJKutf8 (no babel) keep the paper's names. Read, never expanded: nothing in it can fail a compile
+ */
+export const CAPTIONS_PROBE = String.raw`\makeatletter\AtEndDocument{\typeout{AXT-CAPTIONS figure=\ifdefined\fnum@figure\detokenize\expandafter{\fnum@figure}\fi|\ifdefined\figurename\meaning\figurename\fi|table=\ifdefined\fnum@table\detokenize\expandafter{\fnum@table}\fi|\ifdefined\tablename\meaning\tablename\fi|}}\makeatother` + '\n'
+/**
+ * Whether a compile labelled its figures and its tables with the target's names (CAPTIONS_PROBE's line): `target` where
+ * the name is babel's for the target (its meaning babel's for axttarget) and the label is made of the name — it names
+ * \figurename, or writes no word of its own (a wrapper around the class's own definition) —, `source` otherwise; null
+ * where the log has no such line (a compile before the probe, or one that did not reach the document's end)
+ */
+export function captionsOf(log) {
+  const m = /^AXT-CAPTIONS figure=(.*?)\|(.*?)\|table=(.*?)\|(.*?)\|/m.exec(unwrapped(lastTexLog(log ?? '')))
+  if (!m) return null
+  const named = (fnum, meaning, name) => /axttarget/.test(meaning) && (fnum.includes(`\\${name}`) || !/(?<![\\A-Za-z@])[A-Za-z]{3,}/.test(fnum))
+  return { figure: named(m[1], m[2], 'figurename') ? 'target' : 'source', table: named(m[3], m[4], 'tablename') ? 'target' : 'source' }
 }
 /** a compile's references as a draft is given them: its citation lines, its labels (\newlabel), its bibliography */
 const referencesOf = o => ({ cites: citationLines(o.aux), labels: auxLines(o.aux, 'newlabel'), bbl: o.bbl ?? null })
@@ -164,23 +191,39 @@ export function openPaper(files) {
 }
 
 /** the preamble alone, closed at once: its log names the document's font families; with `width`, also how wide the
- *  body face sets and at what sizes (typeset/density.mjs WIDTH_PROBE), which the typesetting rule measures text by */
-export function probeFiles({ fsys, project }, { width = false } = {}) {
+ *  body face sets and at what sizes (typeset/density.mjs WIDTH_PROBE), which the typesetting rule measures text by;
+ *  with `marks`, the layout marks' TeX (MARK_DEF, LAYOUT_TEX) first and, after the width probe, the mark probe
+ *  (layout/marks.mjs markProbeTex: what the paper's own citation and footnote commands do with a mark and with what
+ *  follows them), whose answers (readMarkProbe, over `probeSamples(paper.units)`) are the paper's own switch, and what
+ *  each of its macros sets (readInkProbe, over `inkSamples(paper.units)`). Without it, the bytes as before */
+export function probeFiles({ fsys, project }, { width = false, marks = false } = {}) {
   const text = latin1(fsys.read(project.main))
   const at = beginDocument(text)
-  return new Map([[project.main, latin1Bytes(`${END_TEX}${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}\\end{document}\n`)]])
+  const head = marks ? MARK_DEF + LAYOUT_TEX : '', probe = marks ? markProbeTex(probeSamples(project.units), inkSamples(project.units)) : ''
+  return new Map([[project.main, latin1Bytes(`${head}${END_TEX}${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}${probe}\\end{document}\n`)]])
 }
 
 /** the original with unit marks, as its own engine sets it (images as frames change no place on the page); with
  *  `lines`, each unit's lines and the forced breaks in its log (typeset/tex.mjs LINES_TEX), which the typesetting rule
  *  takes the original's flow from. `spans`, an object, gets `lines()` as translationFiles' does: each unit's lines in
- *  the files as written, worked out when asked — where the paper's own errors stand (runLive's ownErrors) */
-export function originalFiles({ fsys, project }, { lines = false, spans = null } = {}) {
+ *  the files as written, worked out when asked — where the paper's own errors stand (runLive's ownErrors). With
+ *  `layout`, a list of classes (layout/marks.mjs), the layout marks too: the units marked by layoutMarking, each
+ *  placeholder of those classes and each cell and heading, and LAYOUT_TEX after MARK_DEF; `spans` names the paper's own
+ *  units; `switches`, the paper's own switch (layout/marks.mjs readMarkProbe: TeX's answers to the mark probe), the
+ *  marks taken off where TeX said they change what follows, and where it gave no answer; without `switches`, the marks
+ *  as before; `inkless`, the paper's macros TeX said set no ink (readInkProbe), given no mark. Without `layout`, the
+ *  bytes as before */
+export function originalFiles({ fsys, project }, { lines = false, spans = null, layout = null, switches = null, inkless = null } = {}) {
   const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
   const raw = spans ? [] : null
-  const out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw })
+  let out
+  if (layout) {
+    const marked = layoutMarking(project.units, layout, { lines, switches, inkless }), paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
+    out = patch({ ...project, units: marked.units }, new Map(), { mark: marked.mark, spans: raw })
+    for (const x of raw ?? []) { x.unit = paperOf.get(x.unit) ?? x.unit; if (x.outer) x.outer = paperOf.get(x.outer) ?? x.outer }
+  } else out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw })
   const patched = spans ? new Map(out) : null
-  const head = DRAFT + MARK_DEF + END_TEX + (lines ? LINES_TEX : '')
+  const head = DRAFT + MARK_DEF + (layout ? LAYOUT_TEX : '') + END_TEX + (lines ? LINES_TEX : '')
   out.set(project.main, latin1Bytes(head + latin1(out.get(project.main))))
   if (spans) { let found = null; spans.lines = () => (found ??= unitLines(raw, patched, out, project.main, head.length)) }
   return out
@@ -210,10 +253,12 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   const at = beginDocument(main)
   main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + NO_OVERFLOW + (xe || !evenSpaces ? '' : EVEN_SPACES) + main.slice(at)
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
-  if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
+  // (the \\usepackage TeX acts on, inputencOf: a commented one said utf8 and the source stayed Latin-1)
+  const inputenc = project.inputenc && inputencOf(main)
+  if (inputenc) main = main.slice(0, inputenc.start) + main.slice(inputenc.start, inputenc.end).replace(/\[([^\]]*)\]/, (m, opts) => `[${opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',')}]`) + main.slice(inputenc.end)
   const shim = xe && strategy.engine !== meta.compiler ? XETEX_SHIM + XETEX_SHIM_R1 : ''
   // what the strategy puts before \documentclass (scripts.mjs: a paper's own CJK packages kept from loading under xeCJK)
-  const head = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + END_TEX + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + shim
+  const head = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + END_TEX + CAPTIONS_PROBE + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + shim
   main = head + (shim ? stripPdftexOption(main) : main)
   out.set(project.main, latin1Bytes(main))
   if (xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = stripPdftexOption(t); if (u !== t) out.set(f, latin1Bytes(u)) }
@@ -311,7 +356,25 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 //    text —; and an accent inside a word its letter in the word's text, the accent as written wherever the source is
 //    set (latex-front.mjs accentLetter) — El Ni{\~n}o went out as `El Ni @d#@e#@f# o`; 267 units in 40 of the
 //    corpus's 124 papers hold such a word. A copy of 7 carries its other units over (PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '8'
+// 9: a table's cells are decided by their group after translation, translated whole or kept whole (groups.mjs, the
+//    table-groups brief of 2026-10-07): a column of names kept in the source whole, its cells `kept` in the record with
+//    their translation, every cell with its group — the units' kept and translated states change. A copy of 8 carries
+//    every unit over: the cuts, the wire and its reading back are 8's, and its groups are decided again from its
+//    translations
+// 10: every piece of typeset body text a unit, as TeX reads the source (the front end's round of 2026-10-06/07): the
+//     document's bounds as TeX finds them (latex-front.mjs documentBounds — ResNet's appendix C, 2608.11084's and
+//     2608.23517's bodies — and an \end{document} TeX surely reaches), the title TeX keeps, the preamble's front matter
+//     (frontMatter), arguments read by the role table (arg-roles.mjs: the group no command takes walked, a command's text
+//     and a box's content walked, what LaTeXML reads in code not known, a token register's group its value), theorems'
+//     titles, a macro's prose body (storedBodies), \twocolumn[…]'s content and \footnotetext's text, a web address a
+//     placeholder, a running head kept as it is, a blank line after a comment a paragraph's end. Of the 25,139 units of
+//     the corpus's 117 papers 22,446 keep their hash, 1,222 are new or cut anew, and 1,471 are the same but for their
+//     pairs' numbers, whose copy's translation seedFrom finds again (cache.mjs). Nothing is sent or read back otherwise:
+//     a copy of 8 or 9 carries over every unit it holds the source of (PIPELINE_CARRIES), but one whose translation
+//     holds a `#`: a `#` the reply set outside its markers is a marker's, the source's text holding none, and is no
+//     longer set as text, a pair of brackets that held only it with it (mt.mjs rehydrate: Microsoft's `@f#(#)`, which
+//     drew "[10](#)" in 1706.03762's Japanese)
+export const PIPELINE_VERSION = '10'
 /**
  * The earlier pipelines whose copies carry their translations over into this one, unit by unit (cache.mjs copyReuse),
  * each with the test a unit's translation, its pieces, must pass: DESIGN §5.5's rule for the HTML page's cache, here per
@@ -324,8 +387,14 @@ export const PIPELINE_VERSION = '8'
  *   (mt.mjs rehydrate); TeX's `#` is never the text's own (`\#` and a bare `#` are placeholders), so a translation whose
  *   text holds no `\#` was read back as this pipeline reads it, its sentences too. Units of 7 that fix 2 or 4 cut anew
  *   (a citation's notes, an accent in a word) have new hashes
+ * - 8: what 9 and 10 change comes after the answer (a table's groups, decided again from the copy's translations) or
+ *   changes what a unit is, not what is sent for one, and a translation of 8 is one 10 would make of the same pieces but
+ *   where its reply set a marker's `#` as text, which 10 reads as the marker's (dropped): a translation whose text holds
+ *   a `\#` is not carried, as 7's
+ * - 9: likewise
  */
-export const PIPELINE_CARRIES = { 7: pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#')) }
+const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
+export const PIPELINE_CARRIES = { 7: NO_MARKER_HASH, 8: NO_MARKER_HASH, 9: NO_MARKER_HASH }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a
@@ -357,10 +426,16 @@ export const TYPESETTING_VERSION = '6'
  * sentence cuts on the tags path, mt.mjs translateUnits); `rank(i)` → how
  * far unit i is from the reader's place (lower comes first);
  * `onUpdate({ pdf,
- * texts, translated, final })` gets each compiled translation; `onOriginal({ pdf })` the marked original; `note(event,
- * data)` every step, for the timeline. A translation made again from a cached copy (REPORT, eighteenth addendum):
- * `seed`, index → the old translation { pieces, by, tried, state, current }, fills the run at the start, and one
- * `current` (cache.mjs reusable) is not sent again; `marks`, the left
+ * texts, translated, final })` gets each compiled translation; `onOriginal({ pdf, log })` the marked original, with its
+ * last TeX pass's log (lastTexLog); `onBatch({ seeded, units })` each batch's translated units, once their results are set
+ * and before the next batch is asked — and once, before the first batch, the seeds taken as they are (`seeded`) —, as
+ * the layer takes them (layer/pieces.mjs: each piece by its source index), which changes nothing the run does;
+ * `note(event, data)` every step, for the timeline. `previews` false compiles no preview: the original first, where
+ * the run compiles it, the measure and the final after the whole translation, the final the one update; a function of
+ * the original (`{ pdf, log }`, null where the run compiles none or it did not set) says which, once, as soon as it is in
+ * and before any compile of the translation; true, the default, is the run as before the flag. A translation made again
+ * from a cached copy (REPORT, eighteenth addendum): `seed`, index → the old translation { pieces, by, tried, state,
+ * current }, fills the run at the start, and one `current` (cache.mjs reusable) is not sent again; `marks`, the left
  * side's marks when known, skips the marked original (but where the typesetting rule needs its readings); `original`,
  * the original's readings (readingsOf) as a run before gave them, taken with `marks` known: no original is compiled,
  * and every preview is planned from the first;
@@ -373,7 +448,7 @@ export const TYPESETTING_VERSION = '6'
  * marksOf on a PDF.js document of the bytes, which it must not take: the reader shows them too): with it the
  * translation is set by the typesetting rule, without as today.
  */
-export async function runLive(paper, { lang, compile, compileOriginal = null, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, note = () => {}, seed = null, marks = null, original: knownReadings = null, identity = null, pipelineCurrent = false, readMarks = null }) {
+export async function runLive(paper, { lang, compile, compileOriginal = null, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, onBatch = null, note = () => {}, seed = null, marks = null, original: knownReadings = null, identity = null, pipelineCurrent = false, readMarks = null, previews: previewsOption = true }) {
   const { units, meta, project } = paper
   const kept = keptFor(paper, lang)
   // the chain: a compile that gives no PDF moves on to the next strategy, which is tried at once
@@ -427,8 +502,24 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
   // 2. translation nearest the reader first, asked afresh for every batch: the reader may have moved
   const todo = new Set(units.map((u, i) => i).filter(i => !kept.has(units[i]) && !taken.has(i)))
   if (taken.size) note('translated', { units: 0, taken: taken.size, total: translated.size })
+  /** units nearest the reader first, as `rank` has them now */
+  const nearest = ids => ids.map(i => [i, rank(i)]).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(([i]) => i)
+  /**
+   * A unit as the run's results have it, for the layer (onBatch): its pieces as the layer takes them (layer/pieces.mjs
+   * trPiecesOf, each non-text piece by its source index — a run's pieces are the unit's own objects, a seed's are found
+   * by their equals), none where it has none (none, lost; also where a piece has no source, which no run makes), its
+   * sentences, state and engine. Copies: the report reads the run, never changes it
+   */
+  const reported = i => {
+    const r = results.get(i), s = r?.sentences, group = groupOf(units[i])
+    return { id: i, pieces: (r?.pieces && trPiecesOf(r.pieces, kOfSource(units[i].pieces))) || [], sentences: Array.isArray(s?.src) && Array.isArray(s?.tr) ? { src: [...s.src], tr: [...s.tr] } : null, state: r?.state ?? 'none', by: r?.by ?? null, ...(group ? { group } : {}) }
+  }
+  /** the table cells held in the source as the translation stands (groups.mjs decideGroups, as a compile decides them):
+   *  those of a group kept whole and of one waiting on a cell, by index — the layer draws none of them */
+  const indexOfUnit = new Map(units.map((u, i) => [u, i]))
+  const held = () => { const d = decideGroups(units, u => { const r = results.get(indexOfUnit.get(u)); return r && { state: r.state, pieces: translated.get(u) } }, kept); return [...d.keep, ...d.wait].map(u => indexOfUnit.get(u)).sort((a, b) => a - b) }
   const nextBatch = maxChars => {
-    const order = [...todo].map(i => [i, rank(i)]).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(([i]) => i)
+    const order = nearest([...todo])
     const batch = []
     let chars = 0
     for (const i of order) { const n = plainSource(units[i]).length; if (batch.length && chars + n > maxChars) break; batch.push(i); chars += n }
@@ -436,6 +527,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
   }
   const mt = (async () => {
     try {
+    // the seeds taken as they are, once, before the first batch is asked
+    if (onBatch && taken.size) onBatch({ seeded: true, units: nearest([...taken]).map(reported), held: held() })
     for (let first = true; todo.size && !stopped; first = false) {
       const batch = nextBatch(first ? 2500 : 12000)
       batch.forEach(i => todo.delete(i))
@@ -463,6 +556,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
           results.set(i, { pieces: r.pieces, state: r.state, by: r.by, tried: identity, ...(r.sentences ? { sentences: r.sentences } : {}), ...(same && old.inSource ? { inSource: true } : {}) })
         } else results.set(i, { ...seeded(old), state: r.state, tried: identity })
       }
+      // the batch's units, in its order, before the next batch is asked
+      if (onBatch) onBatch({ seeded: false, units: batch.filter(i => results.has(i)).map(reported), held: held() })
       note('translated', { units: batch.length, how, ms: Date.now() - t0, total: translated.size })
       // a failure of the service, not of these texts (engine.mjs EngineError's lost): the batches after it would fail
       // the same way, each after the background's retries (the reader's design, §10.3)
@@ -488,6 +583,10 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
    *  be read. Known from a run before only with the left side's marks, which only a compile of it gives otherwise */
   const known = marks && knownReadings
   let readings = known ?? null
+  // whether previews are compiled and shown (the flag, `previews`): null until a function of the original says, once
+  let showing = typeof previewsOption === 'function' ? null : previewsOption !== false
+  // whether the run compiles the marked original: not where it is known; without the rule, only for the left side's marks
+  const compilesOriginal = !known && (!!readMarks || !marks)
   // a passing failure kept the rule from the final — a PDF's marks that could not be read —: the final is not this
   // typesetting's, and the record says so, so that the next visit sets it again (the F2 review's M3)
   let passing = false
@@ -529,7 +628,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       originalIn = o
       note('original', { ok: o.ok, ms: o.ms, error: whyFailed(o) })
       if (o.ok) {
-        onOriginal?.({ pdf: o.pdf })
+        onOriginal?.({ pdf: o.pdf, log: lastTexLog(o.log) })
         originalRefs = referencesOf(o)
         if (readMarks) readings = await readMarks(o.pdf).then(m => readingsOf(o, m), e => { passing = true; note('typeset', { missing: `the original's marks (${String(e?.message ?? e).slice(0, 120)})` }); return null })
       } else if (timedOut(o)) passing = true
@@ -546,6 +645,15 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     // I2): off the final's path when the translation comes quickly. Its failure is met where it is awaited
     if (readMarks && compileOriginal) original().catch(() => {})
     const { fonts, log: fontLog } = await fontsP
+    // the preview flag (the instant layer's spec, §4.10 row 10): previews off, or not yet known, the original comes first
+    // where the run compiles it — the compiler is free while the translation comes in, and nothing else is compiled
+    // before it is whole —, and with the rule a draft of the whole translation measures the final (finalTypeset), as a
+    // re-set's does. A function of the original says, once
+    if (showing !== true) {
+      const o = compilesOriginal ? await original() : null
+      if (showing === null) showing = !!(await previewsOption(o?.ok ? { pdf: o.pdf, log: lastTexLog(o.log) } : null))
+      note('previews', { shown: showing })
+    }
     // the rule's plans, one per compile, made for the strategy the compile sets: none until the original is read, and
     // none where an input is missing or partial (plan.mjs previewTypesetting) — the translation is set as today then,
     // and the reason noted once
@@ -585,8 +693,33 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     // nested in it, which its source holds as written (a footnote, an author's note)
     const inSource = new Set(), indexOf = new Map(units.map((u, i) => [u, i]))
     const withNested = u => [u, ...u.pieces.filter(p => p.t === 'nested').flatMap(p => withNested(p.unit))]
-    /** a snapshot as a compile sets it: the units set in the source left out */
-    const setting = snapshot => { if (!inSource.size) return snapshot; const m = new Map(snapshot); for (const u of inSource) m.delete(u); return m }
+    /**
+     * A snapshot's table groups decided (groups.mjs, the table-groups brief): each cell's result as the run has it and
+     * its pieces as the snapshot does. `keep`, the cells of the groups kept whole in the source — a column of names, or
+     * one with a cell the translator could not take —, `wait` those of the groups with a cell not yet in, or lost to the
+     * service. Decided once per snapshot, so that every reading of one compile — its files, its plan, its anchors' texts
+     * — sets the same
+     */
+    const decidedFor = new WeakMap()
+    const decided = snapshot => {
+      let d = decidedFor.get(snapshot)
+      if (!d) { d = decideGroups(units, u => { const r = results.get(indexOf.get(u)); return r && { state: translationOf(r), pieces: snapshot.get(u) } }, kept); decidedFor.set(snapshot, d) }
+      return d
+    }
+    /** a snapshot as a compile sets it: the units set in the source left out, and the table groups not translated whole */
+    const setting = snapshot => {
+      const { keep, wait } = decided(snapshot)
+      if (!inSource.size && !keep.size && !wait.size) return snapshot
+      const m = new Map(snapshot)
+      for (const set of [inSource, keep, wait]) for (const u of set) m.delete(u)
+      return m
+    }
+    /** whether a compile of the snapshot shows every unit translated: the names kept and the groups kept whole are */
+    const shownWhole = snapshot => { const set = setting(snapshot), { keep } = decided(snapshot); return units.every(u => kept.has(u) || keep.has(u) || set.has(u)) }
+    /** the run's results with the table groups kept whole marked so (`kept`, their translation with them: the next run's
+     *  seed, which decides them again), for the record (cache.mjs unitsOf): what is shown apart from what the translator
+     *  gave (`translation`), so that a cell given in part is asked for again rather than taken as whole */
+    const markKept = snapshot => { for (const u of decided(snapshot).keep) { const i = indexOf.get(u), r = results.get(i); if (r?.pieces) { const { inSource: _, sentences: __, ...rest } = r; results.set(i, { ...rest, state: 'kept', translation: translationOf(r) }) } } }
     // the last compile of the translation: the files it was given, its units' lines in them (worked out when asked) and
     // the units it set translated — what the safety net places a failure by
     let last = null
@@ -795,6 +928,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     // null where it showed none: a run whose finals all fail says it shows the translation in part only then (cache.mjs
     // endOf; the review of 2026-10-04, M-2: a whole preview on screen is no part)
     let shownPartial = null
+    /** what names the floats of the translation last shown (captionsOf): the layer labels them so too */
+    let captions = null
     const passagesShown = snapshot => [...inSource].filter(u => snapshot.has(u) && u.kind !== 'author').length
     const planFor = snapshot => {
       if (!readings || ruleFailed.has(strategy().name)) return null
@@ -828,6 +963,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
      */
     const bibtexFor = () => !meta.bbl && !bblAt() && !(readMarks && !previews) && !off('references')
     while (true) {
+      // no previews: a batch in asks for none
+      if (!showing) dirty = false
       // with the rule, the original right after the first preview: every plan after it is made from it
       if (readMarks && previews && !originalP) { await original(); continue }
       // a seeded run shows a preview only once no unit it would show in the source is left
@@ -859,8 +996,9 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
           previews++
           measuring = plan && whole(snapshot) ? { plan, strategy: strategy().name, r } : null
           shownInSource = passagesShown(snapshot)
-          shownPartial = !whole(setting(snapshot))
-          onUpdate?.({ pdf: r.pdf, texts: texts(setting(snapshot)), translated: snapshot.size, final: false })
+          shownPartial = !shownWhole(snapshot)
+          captions = captionsOf(r.log) ?? captions
+          onUpdate?.({ pdf: r.pdf, texts: texts(setting(snapshot)), translated: snapshot.size, final: false, captions })
         } else if (timedOut(r)) {
           // the machine slow: nothing changed, the next batch or the final goes on
         } else if (await remedy(r, !!plan, req)) dirty = true
@@ -886,6 +1024,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       // the copy's PDF stays, and the passages it holds in the original with it (cache.mjs passagesInSource: the seeds
       // carry their mark)
       const inSourceKept = passagesInSource([...results].map(([i, r]) => ({ kind: units[i].kind, inSource: r.inSource })))
+      // the copy's PDF sets the groups its run kept whole, decided again from the same translations
+      markKept(new Map(translated))
       return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing(), inSource: inSourceKept, original: readings, passing }
     }
     const all = new Map(translated), t0 = Date.now()
@@ -998,22 +1138,24 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     }
     if (ok) {
       shownInSource = passagesShown(all)
-      shownPartial = !whole(setting(all))
-      onUpdate?.({ pdf: r.pdf, texts: texts(setting(all)), translated: all.size, final: true })
+      shownPartial = !shownWhole(all)
+      captions = captionsOf(r.log) ?? captions
+      onUpdate?.({ pdf: r.pdf, texts: texts(setting(all)), translated: all.size, final: true, captions })
       // the units the final set in the source though translated, for the record: their translation stays the next run's.
       // Said anew for every unit it set, a seed's mark included: it set them all again — those the safety net set in the
-      // source among them
-      const set = typesetBy(setting(all), strategy())
+      // source among them, and a table group waiting on a cell lost to the service. A group kept whole is kept (markKept)
+      const set = typesetBy(setting(all), strategy()), { keep } = decided(all)
       units.forEach((u, i) => {
         const r = results.get(i)
-        if (!r || !all.has(u)) return
+        if (!r || !all.has(u) || keep.has(u)) return
         const { inSource, ...rest } = r
         results.set(i, set.has(u) ? rest : { ...rest, inSource: true })
       })
+      markKept(all)
     }
     // marks known come only from a compile of the paper's own source that set (onOriginal)
     const own = marks && !originalP ? null : await original()
-    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing(), inSource: shownInSource, shownPartial, original: readings, passing }
+    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing(), inSource: shownInSource, shownPartial, captions, original: readings, passing }
   }
   try { return await compiles() } catch (e) {
     if (!e?.compilerDown) throw e
