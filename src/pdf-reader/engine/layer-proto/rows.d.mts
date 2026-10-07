@@ -17,12 +17,6 @@ export type Row = [id: number, pieces: (string | number)[], state: RowState, by:
 /** one unit's entry of translateUnits' results */
 export interface TranslateResult { pieces?: readonly unknown[]; state: string; by?: string | null; sentences?: { src: number[]; tr: number[] } | null }
 
-/** the characters of plain source a batch holds at most: the first, then the rest */
-export declare const FIRST_BATCH: 2500
-export declare const NEXT_BATCH: 12000
-/** a batch from the front of `order`: units as many as hold `max` characters (`sizeOf(i)` each), a unit never split, a
- *  batch never empty */
-export declare function batchOf(order: Iterable<number>, sizeOf: (id: number) => number, max: number): number[]
 /** a source piece as the bundle's gives it, with its index `k` among its unit's pieces; a nested piece names its unit */
 export interface SourcePiece { t: string; k: number; s?: string; src?: string; id?: number; pre?: string; post?: string; unit?: SourceUnit }
 /** a bundle unit as the unit object mt.mjs and groups.mjs work on */
@@ -30,7 +24,11 @@ export type RowSourceUnit = SourceUnit & { pieces: SourcePiece[] }
 /** the bundle's units as the unit objects mt.mjs and groups.mjs work on, one per bundle unit and the same objects on every
  *  call (each piece carries its index `k`); null where the reader dropped a unit */
 export declare function sourceUnitsOf(bundle: RowsBundle): (RowSourceUnit | null)[]
-/** a unit's result as its row; a `none` row where it cannot be one */
+/** a unit's result as its row; a `none` row where it cannot be one. Every string a row holds is within §4.1's reader bound
+ *  (no C0 control but \n and \t, none of U+007F to U+009F, none of the bidirectional controls): a CRLF source's carriage
+ *  returns are written as line feeds and any other control as a space, and the white space the engine puts back at a
+ *  unit's ends as the Unicode its source bytes hold. So the hybrid's pieces unitOf gives are those of the result, up to
+ *  that normalisation of white space and controls */
 export declare function rowOf(bundle: RowsBundle, id: number, result: TranslateResult): Row
 /** v0's unit of a row (kind, src = plainSource, title, group, pieces rebuilt, state): the source pieces by identity, each
  *  carrying its k, so that kOfSource and trPiecesOf give the hybrid's TrPiece; null where the row is no unit of the bundle's */
@@ -55,5 +53,7 @@ export interface RunRowsOptions {
 }
 /** the whole run for the extension: batchesOf's batches (the unit nearest the reading place first where `rank` is
  *  given), translateUnits per batch, layerRows over every result so far; the final rows by id, the units lost to the
- *  service (and, after a refusal, never asked), and why it stopped (a refusal's kind, 'aborted') or null */
+ *  service (and, after a refusal, never asked), and why it stopped (a refusal's kind, 'aborted') or null. The signal is
+ *  checked before each batch only: `onRows` may be called once more after the abort, for the batch under way, and a caller
+ *  that has abandoned the run ignores that call */
 export declare function runRows(bundle: RowsBundle, o: RunRowsOptions): Promise<{ rows: Map<number, Row>; lost: number; stopped: string | null }>

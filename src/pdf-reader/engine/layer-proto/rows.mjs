@@ -13,35 +13,24 @@
 // shape is no row, and neither throws.
 import { decideGroups, groupOf } from '../groups.mjs'
 import { kOfSource } from '../layer/pieces.mjs'
-import { plainSource, translateUnits } from '../mt.mjs'
+import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource, translateUnits, utf8 } from '../mt.mjs'
 import { authorsTranslated } from '../scripts.mjs'
 import { UNIT_FLAG_BITS } from './bundle.mjs'
 
-/** the characters of plain source a batch holds at most: the first small, so that it comes back soon, then larger (runLive
- *  sends the same) */
-export const FIRST_BATCH = 2500
-export const NEXT_BATCH = 12000
 /** the states of a row, and those a translation gives (a kept one is a table cell held whole in its source) */
 const STATES = new Set(['whole', 'partial', 'none', 'lost', 'kept'])
 const GIVEN = new Set(['whole', 'partial', 'none', 'lost'])
 const EDGES = ['lead', 'trail', 'inner']
 
 /**
- * A batch: units from the front of `order`, as many as hold `max` characters (`sizeOf(i)` each), a unit never split and a
- * batch never empty (a unit over the limit goes alone). One rule for the extension's run (runLive's batches) and for
- * batchesOf
+ * A string a row holds, within §4.1's reader bound (no C0 control but \n and \t, none of U+007F to U+009F, none of the
+ * bidirectional controls U+202A to U+202E and U+2066 to U+2069), whatever the source's white space was: a source from a
+ * CRLF machine puts \r\n in the white space the engine writes (the ends the wire cut off, the translated run's own
+ * margins), which a row writes as \n; a vertical tab, a form feed and any other control are a space (v0 collapses white
+ * space anyway); the bidirectional controls, which the engine drops from a translation already, are dropped. The row's
+ * text is the result's up to this
  */
-export function batchOf(order, sizeOf, max) {
-  const batch = []
-  let chars = 0
-  for (const i of order) {
-    const n = sizeOf(i)
-    if (batch.length && chars + n > max) break
-    batch.push(i)
-    chars += n
-  }
-  return batch
-}
+const clean = s => s.replace(/\r\n?/g, '\n').replace(/\p{Cc}/gu, c => (c === '\n' || c === '\t' ? c : ' ')).replace(/[\u202a-\u202e\u2066-\u2069]/g, '')
 
 // ---------------------------------------------------------------- the bundle's source units
 /** a piece as openPaper makes it, from the bundle's: the piece carries its index `k` among its unit's pieces, the one a
@@ -142,7 +131,9 @@ const isObject = v => v !== null && typeof v === 'object'
  * text the string the engine holds, every other piece its source piece's index in the bundle unit (kOfSource: the same
  * object, or an equal one). A text piece that is the unit's own source object (the runs path leaves the text it did not
  * send) is its index too; any other text — a translation, the white space the wire cut off the unit's ends — is written
- * out. Only a whole or partial result has pieces. A piece with no source piece in its unit, a result of no shape, a unit
+ * out, as a string within §4.1's reader bound (`clean`: a CRLF source's carriage returns are line feeds, any other control
+ * a space), so the row's text is the result's up to that, and the hybrid's pieces unitOf gives are trPiecesOf(result.pieces)
+ * up to it. Only a whole or partial result has pieces. A piece with no source piece in its unit, a result of no shape, a unit
  * the reader dropped or the bundle has not: a `none` row with no pieces, never a throw (the layer shows the original)
  */
 export function rowOf(bundle, id, result) {
@@ -157,7 +148,9 @@ export function rowOf(bundle, id, result) {
     if (!isObject(p)) return none
     if (p.t === 'text') {
       if (typeof p.s !== 'string') return none
-      pieces.push(Number.isInteger(p.k) && src.pieces[p.k] === p ? p.k : p.s)
+      // (a translated string holds Unicode; the white space the engine puts back at a unit's ends holds the source's bytes,
+      // which a row writes as the Unicode they are, as a translated string would)
+      pieces.push(Number.isInteger(p.k) && src.pieces[p.k] === p ? p.k : clean(p.tr === true ? p.s : utf8(p.s)))
       continue
     }
     const k = kOf(p)
@@ -235,7 +228,8 @@ export function layerRows(bundle, results, lang) {
  * reading place first where `rank` says (rank(id): lower comes first, asked afresh for every batch; the source's order
  * where it is not given), each by translateUnits(units, send, format); after each, layerRows over every result so far, and
  * `onRows(rows, held)` gets the rows not given before or changed since, with the cells held now. The abort signal stops
- * the run before the next batch. A refusal for good — an error of the service with a `kind` (engine.mjs EngineError) —
+ * the run before the next batch: it is not asked again once `translateUnits` has returned, so a batch under way when the
+ * signal aborts still ends in an `onRows` call, the last. A refusal for good — an error of the service with a `kind` (engine.mjs EngineError) —
  * stops it with what it has, as runLive's does, and so does a batch part of which the service lost (translateUnits'
  * `error`); any other error is a bug and is thrown. Resolves with the final rows by id, `lost` (the units the service
  * lost, and, after a refusal, those never asked) and `stopped` (the refusal's kind, 'aborted', or null)

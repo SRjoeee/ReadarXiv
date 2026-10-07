@@ -18,28 +18,33 @@
 //      decideGroups does over the paper's own units and the same results (the records carry no group decision: they
 //      predate it, every translated cell whole; the groups decided now otherwise are listed);
 //   6. runRows over a send that gives the wire back runs the paper to its end: its rows are layerRows' over the results
-//      asked for at once, and what onRows was given put together.
+//      asked for at once, and what onRows was given put together;
+//   7. over every paper of the corpus (data/corpus/*/source.gz; --no-corpus leaves it out), every unit the language
+//      translates, translated on the markers path and on the runs path by a send that changes the words: each string a row
+//      holds passes §4.1's reader bound (no C0 control but \n and \t, none of U+007F to U+009F, none of the bidirectional
+//      controls, at most 16,000 code units), unitOf gives a unit, and its hybrid pieces are the result's up to the white
+//      space a row writes as the bound asks (a carriage return a line feed, any other control a space).
 // The bundle is the units alone (the rows read nothing else of it), as a reader holds them: bundleUnitsOf's, through JSON.
 // Prints each paper's line and the rows' size against the record's. Exits 1 where a check fails.
-//   pnpm exec tsx experiments/pdf-bilingual/spikes/rows-check.mjs [--no-runlive]
-import { readFileSync } from 'node:fs'
+//   pnpm exec tsx experiments/pdf-bilingual/spikes/rows-check.mjs [--no-runlive] [--no-corpus]
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 
 const ROOT = new URL('..', import.meta.url).pathname, REPO = new URL('../../..', import.meta.url).pathname
 const ENGINE = join(REPO, 'src/pdf-reader/engine')
 const { bundleUnitsOf } = await import(join(ENGINE, 'layer-proto/bundle.mjs'))
-const { batchesOf, FIRST_BATCH, layerRows, NEXT_BATCH, rowOf, runRows, sourceUnitsOf, toTranslate, unitOf } = await import(join(ENGINE, 'layer-proto/rows.mjs'))
+const { batchesOf, layerRows, rowOf, runRows, sourceUnitsOf, toTranslate, unitOf } = await import(join(ENGINE, 'layer-proto/rows.mjs'))
 const { kOfSource, trPiecesOf } = await import(join(ENGINE, 'layer/pieces.mjs'))
 const { keptFor, openPaper, runLive } = await import(join(ENGINE, 'live.mjs'))
-const { plainSource, serialize, serializeTags, translateUnits } = await import(join(ENGINE, 'mt.mjs'))
+const { FIRST_BATCH, NEXT_BATCH, plainSource, serialize, serializeTags, translateUnits } = await import(join(ENGINE, 'mt.mjs'))
 const { decideGroups, groupOf } = await import(join(ENGINE, 'groups.mjs'))
 const { unpackSource } = await import(join(ENGINE, 'tar.mjs'))
 
 const FIXTURES = join(ROOT, 'out/layer-gate/fixtures/41795914c3c84238')
 const CASES = [['1512.03385v1', 'zh'], ['1706.03762v7', 'zh'], ['1810.04805v2', 'zh'], ['2307.16209v1', 'zh'], ['2608.04322v1', 'zh'], ['1706.03762v7', 'de'], ['1706.03762v7', 'ja']]
 const LANGS = ['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru']
-const RUNLIVE = !process.argv.includes('--no-runlive')
+const RUNLIVE = !process.argv.includes('--no-runlive'), CORPUS = !process.argv.includes('--no-corpus')
 const J = JSON.stringify
 
 let failed = 0
@@ -242,6 +247,47 @@ for (const [name, lang] of CASES) {
   console.log(`${mine.length ? 'FAIL' : 'ok  '} ${label}: ${record.units.length} units, ${results.size} with rows (${tally.whole} whole, ${tally.partial} partial, ${tally.none} none, ${tally.lost} lost; ${tally.kept} names kept; ${tally.grouped} in table groups; ${keptWhole} kept whole by layerRows), ${tally.hybrid} hybrid pieces equal the units file's, ${nonText} non-text pieces by k; runRows in ${wires.length} batches (${calls.length - wires.length} calls more for runs), ${ran.rows.size} rows${flips.length ? `; ${flips.length} table groups decided now otherwise than the record has them: ${flips.slice(0, 5).join(', ')}` : ''}`)
 }
 console.log(`rows ${(rowBytes / 1024).toFixed(0)} KB of JSON for the ${CASES.length} outputs, their records ${(recordBytes / 1024).toFixed(0)} KB (${(100 * rowBytes / recordBytes).toFixed(1)} %)`)
+
+// ---------------------------------------------------------------- every corpus paper, both ways of reading a translation back
+if (CORPUS) {
+  const dir = join(ROOT, 'data/corpus')
+  /** §4.1's string bound, as the web's reader holds it */
+  const inBound = str => str.length <= 16000 && !/[\p{Cc}\u202a-\u202e\u2066-\u2069]/u.test(str.replace(/[\n\t]/g, ''))
+  /** a result's text as a row writes it: carriage returns line feeds, any other control a space, bidirectional controls out */
+  const asRow = str => str.replace(/\r\n?/g, '\n').replace(/\p{Cc}/gu, c => (c === '\n' || c === '\t' ? c : ' ')).replace(/[\u202a-\u202e\u2066-\u2069]/g, '')
+  const words = text => text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, 'word')
+  const tally = { papers: 0, units: 0, rows: 0, strings: 0, crPapers: new Set(), crStrings: 0, crPieces: 0, unread: [], bad: [] }
+  for (const folder of readdirSync(dir).sort()) {
+    const source = join(dir, folder, 'source.gz')
+    if (!existsSync(source)) continue
+    let paper
+    try { paper = openPaper((await unpackSource(new Uint8Array(readFileSync(source)))).files) } catch { tally.unread.push(folder); continue }
+    const bundle = { units: JSON.parse(J(bundleUnitsOf(paper))) }, all = sourceUnitsOf(bundle)
+    const ids = toTranslate(bundle, 'zh'), units = ids.map(id => all[id])
+    tally.papers++
+    tally.units += ids.length
+    for (const format of ['markers', 'runs']) {
+      const { results } = await translateUnits(units, async texts => texts.map(text => ({ text: words(text), by: 'w' })), format)
+      for (const [n, id] of ids.entries()) {
+        const result = results.get(units[n]), row = rowOf(bundle, id, result), unit = unitOf(bundle, row)
+        tally.rows++
+        if (!unit) { tally.bad.push(`${folder} #${id} ${format}: no unit of its row`); continue }
+        if (row[2] !== result.state) tally.bad.push(`${folder} #${id} ${format}: the row is ${row[2]}, the result ${result.state}`)
+        for (const piece of row[1]) if (typeof piece === 'string') { tally.strings++; if (!inBound(piece)) tally.bad.push(`${folder} #${id} ${format}: a string out of the bound ${J(piece).slice(0, 40)}`) }
+        if (row[2] !== 'whole' && row[2] !== 'partial') continue
+        for (const p of result.pieces) if (p.t === 'text' && /\r/.test(p.s)) { tally.crPieces++; tally.crPapers.add(folder) }
+        for (const piece of row[1]) if (typeof piece === 'string' && /\r/.test(piece)) tally.crStrings++
+        // (a text the unit left untouched is the source's own piece in both, with its carriage returns: the same on either reader)
+        const flat = pieces => pieces.map(p => (p[0] === 0 ? [0, asRow(p[1])] : p))
+        if (!isDeepStrictEqual(flat(trPiecesOf(unit.pieces, p => p.k)), flat(trPiecesOf(result.pieces, kOfSource(all[id].pieces))))) tally.bad.push(`${folder} #${id} ${format}: the hybrid's pieces are not the result's`)
+      }
+    }
+  }
+  const bad = tally.bad.length
+  if (bad) failed++
+  for (const m of tally.bad.slice(0, 12)) note('corpus', m)
+  console.log(`${bad ? 'FAIL' : 'ok  '} the corpus: ${tally.papers} papers, ${tally.units} units each way (markers, runs), ${tally.rows} rows, ${tally.strings} strings all within §4.1's bound, hybrid pieces the results' up to white space; ${tally.crPieces} result pieces with a carriage return in ${tally.crPapers.size} papers (${[...tally.crPapers].join(' ')}), ${tally.crStrings} row strings with one${tally.unread.length ? `; ${tally.unread.length} not opened: ${tally.unread.join(' ')}` : ''}${bad ? `; ${bad} problems` : ''}`)
+}
 for (const p of problems) console.log(`  ${p}`)
 console.log(failed ? `FAIL ${failed} checks failed` : 'ok   all checks hold')
 process.exit(failed ? 1 : 0)

@@ -371,6 +371,27 @@ export function cutsOf(u, ser = serializeTags(u)) {
   return sentenceCuts(ser.wire, 'tags', splitContextOf(ser.slots))
 }
 
+/** the characters of plain source a batch of units holds at most: the first small, so that it comes back soon, then larger.
+ *  One rule for every run that sends a paper's units (live.mjs runLive's, layer-proto/rows.mjs batchesOf and runRows): a
+ *  change to it changes the bytes a run sends */
+export const FIRST_BATCH = 2500
+export const NEXT_BATCH = 12000
+/**
+ * A batch: units from the front of `order`, as many as hold `max` characters (`sizeOf(i)` each), a unit never split and a
+ * batch never empty (a unit over the limit goes alone)
+ */
+export function batchOf(order, sizeOf, max) {
+  const batch = []
+  let chars = 0
+  for (const i of order) {
+    const n = sizeOf(i)
+    if (batch.length && chars + n > max) break
+    batch.push(i)
+    chars += n
+  }
+  return batch
+}
+
 /**
  * Units → Map unit → translated pieces. `send(texts, cuts)` returns the translations of a list of wire texts in `format`
  * (WIRE), `{ text, by, alignment? }` (engine.mjs); on the tags path the sentence cuts of each whole unit that may light

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { type BundleUnit, bundleUnitsOf, type ReadBundle, UNIT_FLAG_BITS } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import {
-  batchesOf, batchOf, FIRST_BATCH, layerRows, NEXT_BATCH, type Row, rowOf, type RowSourceUnit, runRows, sourceUnitsOf, toTranslate, type TranslateResult, unitOf,
+  batchesOf, layerRows, type Row, rowOf, type RowSourceUnit, runRows, sourceUnitsOf, toTranslate, type TranslateResult, unitOf,
 } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { kOfSource, trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { type BatchReport, type Compiled, keptFor, openPaper, runLive } from '@/pdf-reader/engine/live.mjs'
-import { plainSource, translateUnits } from '@/pdf-reader/engine/mt.mjs'
+import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource, translateUnits } from '@/pdf-reader/engine/mt.mjs'
 
 // The rows (the layer-only plan §4.1, A2's E6): one unit of one language as the engine's translateUnits gave it, with each
 // piece the translated text or the index of the bundle unit's source piece; v0's unit made of a row again; the rows a
@@ -95,6 +95,67 @@ describe('rowOf', () => {
     expect(r.pieces?.[0]).toEqual({ t: 'text', s: '\n  ' })
     const row = rowOf(b, 0, r)
     expect(row[1]).toEqual(['\n  ', 'word word word ', 1, ' word word', ' \n'])
+    const u = unitOf(b, row) as unknown as { pieces: never[] }
+    expect(trPiecesOf(u.pieces, p => (p as { k: number }).k)).toEqual(trPiecesOf(r.pieces as never[], kOfSource(unit.pieces)))
+  })
+  /** §4.1's bound on a string piece, as the web's reader holds it: at most 16,000 code units, no C0 control but \n and \t,
+   *  none of U+007F to U+009F, none of the bidirectional controls U+202A to U+202E and U+2066 to U+2069 */
+  const inBound = (s: string) => s.length <= 16000 && !/[\p{Cc}\u202a-\u202e\u2066-\u2069]/u.test(s.replace(/[\n\t]/g, ''))
+  /** a result's TrPiece as a row's pieces give them: a text's carriage returns written as the line feeds a row holds */
+  const crToLf = (pieces: ReturnType<typeof trPiecesOf>) => (pieces ?? []).map(p => (p[0] === 0 ? [0, p[1].replace(/\r\n?/g, '\n')] : p))
+  const words = (t: string) => t.replace(/(?<![@a-z])[A-Za-z]{2,}/g, 'word')
+
+  it('writes the white space of a CRLF source as line feeds, on the markers path: a row holds no carriage return', async () => {
+    const b = bundleOf([['para', 0, null, null, null, [[0, '\r\n  Alpha beta\r\ngamma '], [1, '$x$'], [0, ' delta epsilon\r\n\r\n']]]])
+    const unit = sourceUnitsOf(b)[0] as RowSourceUnit
+    const { results } = await translateUnits([unit], async texts => texts.map(t => ({ text: words(t), by: 'B' })))
+    const r = results.get(unit) as TranslateResult
+    // (the wire cut the ends off; the engine puts them back as pieces of their own, raw)
+    expect(((r.pieces as { s: string }[])[0] as { s: string }).s).toBe('\r\n  ')
+    const row = rowOf(b, 0, r)
+    expect(row[1].filter(p => typeof p === 'string').every(p => inBound(p as string))).toBe(true)
+    expect(row[1][0]).toBe('\n  ')
+    expect(row[1].at(-1)).toBe('\n\n')
+    // the hybrid's pieces are the result's up to the carriage returns
+    const u = unitOf(b, row) as unknown as { pieces: never[] }
+    expect(trPiecesOf(u.pieces, p => (p as { k: number }).k)).toEqual(crToLf(trPiecesOf(r.pieces as never[], kOfSource(unit.pieces))))
+  })
+  it('writes the white space of a CRLF source as line feeds, on the runs path too: the translated string carries the unit\'s own', async () => {
+    const b = bundleOf([['para', 0, null, null, null, [[0, '\r\nAlpha beta '], [1, '$x$'], [0, ' delta\r\n']]]])
+    const unit = sourceUnitsOf(b)[0] as RowSourceUnit
+    const { results } = await translateUnits([unit], async texts => texts.map(() => ({ text: 'ONLY RUNS', by: 'B' })), 'runs')
+    const r = results.get(unit) as TranslateResult
+    expect(((r.pieces as { s: string }[])[0] as { s: string }).s).toBe('\r\nONLY RUNS ')
+    const row = rowOf(b, 0, r)
+    expect(row[1]).toEqual(['\nONLY RUNS ', 1, ' ONLY RUNS\n'])
+    const u = unitOf(b, row) as unknown as { pieces: never[] }
+    expect(trPiecesOf(u.pieces, p => (p as { k: number }).k)).toEqual(crToLf(trPiecesOf(r.pieces as never[], kOfSource(unit.pieces))))
+  })
+  it('writes only strings that pass §4.1\'s bound, whatever control a text holds: a property over every C0, DEL and C1 code and the bidirectional controls', () => {
+    const b = bundleOf([['para', 0, null, null, null, [[0, 'a'], [1, '$x$'], [0, 'b']]]])
+    const codes = [...Array.from({ length: 0xa0 }, (_, i) => i), 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069]
+    for (const c of codes) {
+      const ch = String.fromCharCode(c)
+      for (const tr of [true, false]) {
+        const row = rowOf(b, 0, { state: 'whole', pieces: [{ t: 'text', ...(tr ? { tr: true } : {}), s: `x${ch}y${ch}${ch}` }, { t: 'text', tr, s: `\r${ch}\r\n${ch}` }] })
+        expect(row[2]).toBe('whole')
+        for (const p of row[1]) expect(typeof p === 'string' && inBound(p), `U+${c.toString(16)} tr=${tr}: ${JSON.stringify(p)}`).toBe(true)
+        // (a tab and a line feed are kept, a carriage return is a line feed, any other control a space)
+        if (c === 9 || c === 10) expect(row[1][0]).toBe(`x${ch}y${ch}${ch}`)
+        if (c === 13) expect(row[1][0]).toBe('x\ny\n\n')
+        if (c === 11 || c === 12 || c === 0 || c === 0x7f || (tr && c === 0x85)) expect(row[1][0]).toBe('x y  ')
+      }
+    }
+  })
+  it('writes a white-space piece the engine put back as the Unicode its source bytes hold: a unit ending in a letter whose UTF-8 ends in 0xA0 round-trips exactly', async () => {
+    // "caf" and a-grave, as the source holds its bytes (C3 A0): the engine reads the lone A0 as the white space it cuts off
+    const b = bundleOf([['para', 0, null, null, null, [[0, 'caf\u00c3\u00a0']]]])
+    const unit = sourceUnitsOf(b)[0] as RowSourceUnit
+    const { results } = await translateUnits([unit], async () => [{ text: 'kaffee', by: 'B' }])
+    const r = results.get(unit) as TranslateResult
+    expect(r.pieces?.map(p => (p as { s: string }).s)).toEqual(['kaffee', '\u00a0'])
+    const row = rowOf(b, 0, r)
+    expect(row[1]).toEqual(['kaffee', '\ufffd'])
     const u = unitOf(b, row) as unknown as { pieces: never[] }
     expect(trPiecesOf(u.pieces, p => (p as { k: number }).k)).toEqual(trPiecesOf(r.pieces as never[], kOfSource(unit.pieces)))
   })
