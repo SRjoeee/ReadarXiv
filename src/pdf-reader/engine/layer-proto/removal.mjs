@@ -370,18 +370,20 @@ export function pageDirty(index, page, ink, plan, pad = SWAP_PAD) {
 }
 
 /**
- * The rules on a page near its units' lines (the manifest's `rules`: x0, y0, x1, y1 stride 4, rounded to a hundredth):
- * each painted path the page's ink holds as a thin box (no more than RULE_THICK across one way, RULE_LONG or more the
- * other: a table's rule, a footnote's, an underline's) that stands above a line of the layout file's, within 1.3 of its
- * size over its baseline, or below it, within 0.8 under, across its extent, and not through its own glyphs' band. Where
- * the reader sets a line's text taller than the original's (a CJK script's em box over Latin capitals), it keeps that
- * text clear of them (layer2.mjs cellBands); they are the PDF's own geometry, as exact as the file's lines
+ * The rules on a page near its table cells' lines (the manifest's `rules`: x0, y0, x1, y1 stride 4, rounded to a
+ * hundredth): each painted path the page's ink holds as a thin box (no more than RULE_THICK across one way, RULE_LONG or
+ * more the other: a table's rule) that stands above a cell's line in the layout file, within 1.3 of its size over its
+ * baseline, or below it, within 0.8 under, across its extent, and not through its own glyphs' band. Where the reader
+ * sets a cell's text taller than the original's (a CJK script's em box over Latin capitals), it keeps that text clear of
+ * them (layer2.mjs cellBands); they are the PDF's own geometry, as exact as the file's lines. A cell's only: the reader
+ * holds no other unit to them, and every unit's took 2307.16209's manifest from 1,088 bytes gzipped to 7,650
  */
 const RULE_THICK = 1.5, RULE_LONG = 2
 export function pageRules(index, page, ink) {
   const lines = []
   for (const id of index.onPage(page)) {
     const u = index.unit(id)
+    if (u?.kind !== 'cell') continue
     for (let j = 0; 8 * j + 7 < u.lines.length; j++) {
       const L = u.lines.subarray ? u.lines.subarray(8 * j, 8 * j + 8) : u.lines.slice(8 * j, 8 * j + 8)
       if (L[0] === page) lines.push(L)

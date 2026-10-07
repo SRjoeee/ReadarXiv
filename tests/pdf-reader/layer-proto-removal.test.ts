@@ -190,10 +190,10 @@ describe('the drawing over the text-removed PDF', () => {
   })
 })
 
-describe("the rules near a page's lines (the manifest's rules, layer2.mjs cellBands)", () => {
+describe("the rules near a page's table cells' lines (the manifest's rules, layer2.mjs cellBands)", () => {
   it("a thin path above a line within 1.3 of its size, or below within 0.8, across its extent; not through its band, not off it, not a figure's box", () => {
     // a line at baseline 100, size 10, x 10-60, its glyphs' band 97.8-107.5
-    const line = { lines: Float64Array.from([1, 10, 60, 100, 107.5, 97.8, 10, 0]) }
+    const line = { kind: 'cell', lines: Float64Array.from([1, 10, 60, 100, 107.5, 97.8, 10, 0]) }
     const index = { onPage: () => [4], unit: () => line } as never
     const ink = inkOf([], [
       [[0, 110, 80, 110.4], 0], // a table's rule over the line: kept
@@ -204,8 +204,9 @@ describe("the rules near a page's lines (the manifest's rules, layer2.mjs cellBa
       [[20, 109, 30, 119], 5], // a figure's box, not thin
     ])
     expect(pageRules(index, 1, ink)).toEqual([0, 110, 80, 110.4, 0, 93, 80, 93.4])
-    // a line on another page holds none of this page's
-    expect(pageRules({ onPage: () => [4], unit: () => ({ lines: Float64Array.from([2, 10, 60, 100, 107.5, 97.8, 10, 0]) }) } as never, 1, ink)).toEqual([])
+    // a line on another page holds none of this page's, nor a paragraph's line any (the reader holds no paragraph to them)
+    expect(pageRules({ onPage: () => [4], unit: () => ({ kind: 'cell', lines: Float64Array.from([2, 10, 60, 100, 107.5, 97.8, 10, 0]) }) } as never, 1, ink)).toEqual([])
+    expect(pageRules({ onPage: () => [4], unit: () => ({ ...line, kind: 'para' }) } as never, 1, ink)).toEqual([])
   })
 })
 
