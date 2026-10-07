@@ -769,8 +769,9 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     const shownWhole = snapshot => { const set = setting(snapshot), { keep } = decided(snapshot); return units.every(u => kept.has(u) || keep.has(u) || set.has(u)) }
     /** the run's results with the table groups kept whole marked so (`kept`, their translation with them: the next run's
      *  seed, which decides them again), for the record (cache.mjs unitsOf): what is shown apart from what the translator
-     *  gave (`translation`), so that a cell given in part is asked for again rather than taken as whole */
-    const markKept = snapshot => { for (const u of decided(snapshot).keep) { const i = indexOf.get(u), r = results.get(i); if (r?.pieces) { const { inSource: _, sentences: __, ...rest } = r; results.set(i, { ...rest, state: 'kept', translation: translationOf(r) }) } } }
+     *  gave (`translation`), so that a cell given in part is asked for again rather than taken as whole; and its sentence
+     *  cuts, which a whole cell taken as it is when its group is translated has from no other request (Codex on #323) */
+    const markKept = snapshot => { for (const u of decided(snapshot).keep) { const i = indexOf.get(u), r = results.get(i); if (r?.pieces) { const { inSource: _, ...rest } = r; results.set(i, { ...rest, state: 'kept', translation: translationOf(r) }) } } }
     // the last compile of the translation: the files it was given, its units' lines in them (worked out when asked) and
     // the units it set translated — what the safety net places a failure by
     let last = null

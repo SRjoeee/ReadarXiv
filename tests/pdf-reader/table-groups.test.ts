@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { copyTexts, reusable, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
+import { copyTexts, decideWrite, reusable, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
 import { decideGroups, groupOf, NAMES_SHARE, unchanged } from '@/pdf-reader/engine/groups.mjs'
 import { inMemory, loadProject, type SourceUnit, tableGrid } from '@/pdf-reader/engine/latex-front.mjs'
 import { CAPTION_NAMES, captionNames } from '@/pdf-reader/engine/caption-names.mjs'
@@ -211,6 +211,41 @@ describe('runLive again: a group kept whole for a cell the translator gave in pa
     expect(finalOf(c2)).toContain('slow training')
     expect(finalOf(c2)).not.toContain('\u8bba\u6587 \u8bba\u6587')
     expect(r2.results.get(cell)).toMatchObject({ state: 'kept', translation: 'partial' })
+  })
+})
+
+describe("a kept cell's record: what the translator gave it and its sentences, kept with it (Codex on #323)", () => {
+  it('writes the record again where a kept cell is given whole on a retry, its pieces the same as before (4208105825)', () => {
+    // a run that changed nothing typeset, its kept cell given whole where the copy holds it given in part: the copy's
+    // provenance is written, so that the next run takes it as it is rather than asking for it again
+    const cell = { kind: 'cell', src: 'fast training', hash: 'h', group: '1:c1', pieces: [{ t: 'text', tr: true, s: 'x' }], by: 'B', tried: 'B', state: 'kept' }
+    const cached = { units: [{ ...cell, translation: 'partial' }], marks: [['1s', {}]] }
+    const how = decideWrite({ result: { changed: false, settled: true }, cached, units: [{ ...cell, translation: 'whole' }], marks: cached.marks, shown: false })
+    expect(how).toBe('provenance')
+    // and nothing to write where it is the same
+    expect(decideWrite({ result: { changed: false, settled: true }, cached, units: [{ ...cell, translation: 'partial' }], marks: cached.marks, shown: false })).toBeNull()
+  })
+  it("keeps a whole sibling's sentences while its group is kept for another cell given in part (4208105840)", async () => {
+    // "slow training" is taken as it is from a copy, whole and with its sentence cuts; "fast $x$ training" comes back in
+    // part, so the column is kept. Its sentences go with it into the record, for the run that translates the column
+    const tex = doc('\\begin{tabular}{ll}\n\\toprule\nModel & Speed \\\\\n\\midrule\nOmega & fast $x$ training \\\\\nSigma & slow training \\\\\nTau & quick \\\\\n\\bottomrule\n\\end{tabular}', 'Prose.')
+    const translate = async (texts: string[]) => texts.map(text => (/^fast @/.test(text) ? { text: 'fast training', by: 'B' } : text === 'training' ? null : { text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' }))
+    const compile = async (q: { main: string; overrides: Map<string, Uint8Array> }): Promise<Compiled> => {
+      const text = new TextDecoder().decode(q.overrides.get(q.main))
+      return { ok: true, pdf: new Uint8Array([1]), aux: '', bbl: null, log: text.includes('AXT-FONTS') ? 'AXT-FONTS rm=cmr;sf=cmss;tt=cmtt;body=10;\n' : 'AXT-END\n', ms: 1 }
+    }
+    const paper = openPaper(new Map([['main.tex', enc(tex)]]))
+    const slow = paper.units.findIndex(u => plainSource(u) === 'slow training')
+    const sentences = { src: [5], tr: [3] }
+    const seed = new Map([[slow, { pieces: [{ t: 'text', tr: true, s: ' \u8bba\u6587 \u8bba\u6587 ' }], by: 'B', tried: 'B', state: 'whole', sentences, current: true }]])
+    const r = await runLive(paper, { lang: 'zh', compile, translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: null, seed })
+    expect(r.results.get(slow)).toMatchObject({ state: 'kept', translation: 'whole', sentences })
+    const hashes = await Promise.all(paper.units.map(sourceHash))
+    const record = unitsOf(paper.units, keptFor(paper, 'zh'), hashes, r.results)
+    expect(record[slow]).toMatchObject({ state: 'kept', translation: 'whole', sentences })
+    // and the next run's seed has them, as it takes the cell as it is
+    const again = await seedFrom({ units: record }, paper.units)
+    expect(again.seed.get(slow)).toMatchObject({ sentences })
   })
 })
 
