@@ -402,10 +402,9 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   /** the kept ink under the paper's units' rectangles on page j, by the manifest (x0, y0, x1, y1 each): where a fill would
    *  take it, the removed page is swapped in instead */
   const dirtyOf = j => { const d = RM.manifest.page[j]?.dirty ?? []; const out = []; for (let q = 0; q + 3 < d.length; q += 4) out.push([d[q], d[q + 1], d[q + 2], d[q + 3]]); return out }
-  /** the rectangles on page j of every unit the file's rectangles have not been given to draw (removal.mjs protection:
-   *  each unit taken out as it is painted), kept clear of */
+  /** what a unit's fill on a page keeps clear of (removal.mjs protection): every other unit's rectangles until it is
+   *  drawn there, then those it keeps */
   const guard = RM && tex ? protection(tex.index) : null
-  const othersOf = j => guard.others(j)
   /**
    * A unit's drawing over the text-removed PDF on page pg, from the layout file's rectangles (removal.mjs fileSwap): the
    * rectangles (v0's device pixels) the removed page is swapped into where kept ink lies under them, those filled with
@@ -414,7 +413,9 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
    */
   const swapOf = (p, pg) => {
     const t = performance.now()
-    const sw = fileSwap({ page: pg, lu: p.tex.lu, kOf: p.tex.kOf, lines: p.tex.lines, prep: p.prep, others: othersOf(pg), dirty: dirtyOf(pg) })
+    const sw = fileSwap({ page: pg, lu: p.tex.lu, kOf: p.tex.kOf, lines: p.tex.lines, prep: p.prep, others: guard.others(pg, p.id), dirty: dirtyOf(pg) })
+    // (drawn there from now: what it replaces no longer kept clear of, what it keeps still)
+    guard.accept(p.id, pg, sw.kept)
     const px = pxOf(pg)
     const dev = b => { const [ax, ay] = px(b[0], b[3]), [bx, by] = px(b[2], b[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)] }
     const clips = new Map([...sw.clips].map(([k, c]) => [k, { rects: c.rects.map(dev), own: c.own.map(dev) }]))
@@ -432,8 +433,6 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
   const paint = (p, pg) => {
     const tOps = performance.now()
     const r = rows[pg - 1]
-    // (drawn by the file's rectangles from now: no longer kept clear of; a unit refused, withheld or still pending is)
-    if (p.tex) guard?.accept(p.id)
     // (what the unit accounts for is counted whichever way it is drawn: a unit drawn the old way after it puts back only
     // what no painted unit accounts for)
     const ro = restoreOf(p, pg)

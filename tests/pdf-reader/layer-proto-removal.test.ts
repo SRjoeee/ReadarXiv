@@ -221,20 +221,52 @@ describe("the page's protection for a fill: what the file's rectangles do not dr
     const lu = units.get(id)! as never
     return fileSwap({ page: 1, lu, kOf: [], lines: { rects: [[1, 0, 0, 0, 0]], lineOf: new Map(), jOf: [0] }, prep: Object.assign(new Map(), { keep: [], uc: [], cat: new Map(), label: null }) as never, others })
   }
+  // a unit painted as run.mjs paints it: its fill keeps clear of the page's protection less its own, then it is drawn
+  const paintOf = (guard: ReturnType<typeof protection>, id: number) => { const sw = swapOf(id, guard.others(1, id)); guard.accept(id, 1, sw.kept); return sw }
   it("keeps a group withheld after the page's first fill clear of an accepted group's padded fill", () => {
     const guard = protection(index)
     const reach = (f: number[][]) => Math.max(...f.filter(r => r[1]! < 107 && r[3]! > 98).map(r => r[2]!))
     // the paragraph's fill, painted while both groups are pending: it keeps clear of both
-    guard.accept(9)
-    expect(guard.others(1)).toEqual([[10, 98, 60, 107], [60.1, 98, 110, 107]])
-    swapOf(9, guard.others(1))
+    expect(guard.others(1, 9)).toEqual([[10, 98, 60, 107], [60.1, 98, 110, 107]])
+    paintOf(guard, 9)
     // B's group withheld, A's drawn: A's fill, padded 0.6, stops short of B's text at 60.1
-    guard.accept(7)
-    expect(reach(swapOf(7, guard.others(1)).fill)).toBeLessThanOrEqual(60.1 - 0.3 + 1e-9)
+    expect(reach(paintOf(guard, 7).fill)).toBeLessThanOrEqual(60.1 - 0.3 + 1e-9)
     // where B's is drawn too, the two meet and neither leaves the other's edge
     const both = protection(index)
-    for (const id of [9, 7, 8]) both.accept(id)
-    expect(reach(swapOf(7, both.others(1)).fill)).toBeCloseTo(60.6, 6)
+    paintOf(both, 9)
+    paintOf(both, 8)
+    expect(reach(paintOf(both, 7).fill)).toBeCloseTo(60.6, 6)
   })
+})
+
+describe("a drawn unit's kept parts stay in the page's protection, whatever the order the page paints in", () => {
+  // the re-review of round 3, I3: cell A (7) replaces its words over x 10-50 and keeps its inline formula over x 52-60 as
+  // the original's; cell B (8) is over x 60.1-110 on the same baseline; both groups drawn. Accepting A dropped its
+  // formula's box with the rest, and B, painted after it, filled 0.5 pt into the formula
+  const A = { id: 7, kind: 'cell', lines: Float64Array.from([1, 10, 60, 100, 107, 98, 10, 0]), erase: [Float64Array.from([10, 98, 50, 107])], ph: new Map([[2, { kind: 'math', flags: 0, segs: Float64Array.from([1, 52, 100, 60, 107, 98]), text: null }]]), labels: new Float64Array(0) }
+  const B = { id: 8, kind: 'cell', lines: Float64Array.from([1, 60.1, 110, 100, 107, 98, 10, 0]), erase: [Float64Array.from([60.1, 98, 110, 107])], ph: new Map(), labels: new Float64Array(0) }
+  const units = new Map([[7, A], [8, B]])
+  const index = { onPage: () => [7, 8], unit: (id: number) => units.get(id) } as never
+  const lines = { rects: [[1, 0, 0, 0, 0]], lineOf: new Map(), jOf: [0] }
+  // A's reading keeps its formula (resolution 2, the file's placeholder 2)
+  const prepOf = (kept: number[]) => Object.assign(new Map(kept.map(k => [k, { k, mode: 'kept' }])), { keep: [], uc: [], cat: new Map(), label: null }) as never
+  const paint = (guard: ReturnType<typeof protection>, id: number) => {
+    const sw = fileSwap({ page: 1, lu: units.get(id) as never, kOf: [-1, -1, 2], lines, prep: prepOf(id === 7 ? [2] : []), others: guard.others(1, id) })
+    guard.accept(id, 1, sw.kept)
+    return sw
+  }
+  const into = (fill: number[][], box: number[]) => fill.some(r => r[0]! < box[2]! && r[2]! > box[0]! && r[1]! < box[3]! && r[3]! > box[1]!)
+  const formula = [52, 98, 60, 107]
+  for (const order of [[7, 8], [8, 7]]) {
+    it(`A's kept formula is filled by neither unit, painted ${order.join(' then ')}`, () => {
+      const guard = protection(index)
+      const fills = new Map(order.map(id => [id, paint(guard, id).fill]))
+      expect(into(fills.get(8)!, formula)).toBe(false)
+      expect(into(fills.get(7)!, formula)).toBe(false)
+      // A's words are filled, and B's text from its own start on
+      expect(into(fills.get(7)!, [10, 98, 50, 107])).toBe(true)
+      expect(into(fills.get(8)!, [61, 98, 110, 107])).toBe(true)
+    })
+  }
 })
 

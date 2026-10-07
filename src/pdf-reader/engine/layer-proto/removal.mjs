@@ -407,18 +407,20 @@ export function pageRules(index, page, ink) {
 }
 
 /**
- * The rectangles on a page of every unit the layout file holds that the file's rectangles have not been given to draw
- * there (its lines' erase, its placeholders' segments, its labels), which a swap or a fill keeps clear of (fileSwap's
- * `others`): a unit not translated, kept as the original's, v0's own, refused, a table cell whose group is withheld, and
- * one not decided yet (laid later, its group pending). A unit is taken out once it is drawn by them (`accept(id)`, as it
- * is painted): until then its text may be the original's, and no other unit's padded fill may reach it. Two drawn
- * units' rectangles may meet (a footnote's lines 9 pt apart), and neither leaves the other's edge. Asked at each fill,
- * never cached past a decision (Codex's review of PR A: a page's protection read at its first paint, before its groups
- * were settled, let an accepted group's fill reach 0.5 pt into a withheld group's text). Each unit's boxes on a page are
- * read once.
+ * The rectangles on a page that a swap or a fill keeps clear of (fileSwap's `others`): every unit's the layout file holds
+ * there (its lines' erase, its placeholders' segments, its labels) until the file's rectangles draw it there, and then
+ * still those it keeps as the original's (fileSwap's `kept`: a line, a formula, a label its reading keeps). So a unit not
+ * translated, kept as the original's, v0's own, refused, a table cell whose group is withheld, or one not decided yet
+ * (laid later, its group pending) is kept clear of whole; one drawn, in what it keeps. `others(j, id)`: what unit `id`'s
+ * fill on page j keeps clear of (its own rectangles not among them: what it keeps is its own fileSwap's); `accept(id, j,
+ * kept)`, once it is drawn there. Asked at each fill, never cached past a decision (Codex's review of PR A: a page's
+ * protection read at its first paint, before its groups were settled, let an accepted group's fill reach 0.5 pt into a
+ * withheld group's text; and its re-review: a drawn unit's kept formula lost its protection whole, so that a neighbour
+ * painted after it filled 0.5 pt into it). Two drawn units' replaced rectangles may meet (a footnote's lines 9 pt
+ * apart), and neither leaves the other's edge. Each unit's boxes on a page are read once.
  */
 export function protection(index) {
-  const accepted = new Set(), pages = new Map()
+  const pages = new Map(), drawn = new Map()
   const boxesOn = j => {
     if (pages.has(j)) return pages.get(j)
     const list = []
@@ -434,8 +436,16 @@ export function protection(index) {
     return list
   }
   return {
-    accept: id => { accepted.add(id) },
-    others: j => boxesOn(j).flatMap(([id, boxes]) => (accepted.has(id) ? [] : boxes)),
+    accept: (id, j, kept = []) => { drawn.set(`${id}|${j}`, kept) },
+    others: (j, self = null) => {
+      const out = []
+      for (const [id, boxes] of boxesOn(j)) {
+        if (id === self) continue
+        const kept = drawn.get(`${id}|${j}`)
+        for (const b of kept ?? boxes) out.push(b)
+      }
+      return out
+    },
   }
 }
 
@@ -524,7 +534,7 @@ export function fileSwap({ page, lu, kOf, lines, prep, others = [], dirty = [], 
     for (let o = 0; o + 5 < row.segs.length; o += 6) if (row.segs[o] === page) own.push([row.segs[o + 1], row.segs[o + 5], row.segs[o + 3], row.segs[o + 4]])
     if (own.length) clips.set(r.k, { rects: own.map(b => [b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad]), own })
   }
-  return { swap, fill, extra, clips, lines: swapRects(mine, kept, 0) }
+  return { swap, fill, extra, clips, kept, lines: swapRects(mine, kept, 0) }
 }
 
 /** the page's glyphs no text-layer character is carried to (a blank glyph among them) */
