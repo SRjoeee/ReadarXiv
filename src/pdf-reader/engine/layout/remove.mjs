@@ -52,14 +52,16 @@ const enc = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.len
  * operand { t: 'str', b: bytes, s, e }, each name { t: 'name', v }, an array as an array, a dictionary as { t: 'dict', v }.
  * An inline image is one operator, BI, from its parameters to its EI. Every pass of every loop here advances by a byte
  * at least or throws (an inline image's parameters holding a delimiter none starts with: `)`, `{`, `}`), so a stream
- * of n bytes is read in O(n) whatever it holds; a stream that throws is one the walk refuses its page for
+ * of n bytes is read in O(n) whatever it holds; a stream that throws is one the walk refuses its page for. `limit`: the
+ * most tokens (operators and operands) it may hold, past which it throws LexLimit; the operators' `tokens`, how many
  */
-export function lex(b) {
+export function lex(b, limit = Infinity) {
   const ops = []
   const n = b.length
-  let i = 0, stack = [], start = -1
+  let i = 0, stack = [], start = -1, tokens = 0
   const marks = []
-  const push = (v, s) => { if (start < 0) start = s; if (marks.length) marks.at(-1).items.push(v); else stack.push(v) }
+  const count = () => { if (++tokens > limit) throw new LexLimit(limit) }
+  const push = (v, s) => { count(); if (start < 0) start = s; if (marks.length) marks.at(-1).items.push(v); else stack.push(v) }
   while (i < n) {
     const c = b[i]
     if (WS[c]) { i++; continue }
@@ -117,7 +119,7 @@ export function lex(b) {
     if (!t) { i++; continue }
     if (isNumTok(t)) { push(Number(t), s0); continue }
     if (t === 'true' || t === 'false' || t === 'null') { push(t === 'true' ? true : t === 'false' ? false : null, s0); continue }
-    if (marks.length) { marks.at(-1).items.push({ t: 'kw', v: t }); continue }
+    if (marks.length) { count(); marks.at(-1).items.push({ t: 'kw', v: t }); continue }
     if (t === 'BI') {
       // an inline image: its parameters to ID, its data to EI (white space either side, then an operator or the end)
       const s = start < 0 ? s0 : start
@@ -140,15 +142,20 @@ export function lex(b) {
         e++
       }
       i = Math.min(n, e + 2)
+      count()
       ops.push({ op: 'BI', args: [], s, e: i })
       stack = []; start = -1
       continue
     }
+    count()
     ops.push({ op: t, args: stack, s: start < 0 ? s0 : start, e: i })
     stack = []; start = -1
   }
+  ops.tokens = tokens
   return ops
 }
+/** lex's refusal of a stream that holds more than it was allowed: the walk refuses its page */
+export class LexLimit extends Error { constructor(limit) { super(`a content stream of more than ${limit} tokens`); this.limit = limit } }
 
 const PAINT = new Set(['S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n'])
 /** a form nested deeper than this is not walked: the page is refused */
@@ -157,6 +164,12 @@ const FORM_DEPTH = 12
  *  page is refused. Forms that paint each other ten times over, eight deep, are 10^8 paints; the heaviest of the 2,793
  *  pages of the 124 papers in data/corpus visits 2.09 million (2608.02055 page 28, 0.85 s), the fixtures' 133,000 */
 export const WALK_MAX = 20_000_000
+/** what a page's walk may hold, its streams each lexed once however often they are painted (openRemover's `heldMax` and
+ *  `bytesMax`): the tokens of their operators (some 90 bytes of heap each), and their decoded bytes. Past either the page
+ *  is refused, never the paper: the walk's memory is these, not what it visits (three PDFs of 0.9-30 KB held 2.5 GB, a
+ *  stream lexed again at each paint, the review of round 3). The heaviest of the corpus's 2,793 pages holds 6.54 million
+ *  tokens (591 MB of heap) and 34.8 MB (2608.02055 page 28): 8 million, about 720 MB, under the engine's 1,536 MiB */
+export const HELD_MAX = 8_000_000, BYTES_MAX = 64 * 1024 * 1024
 /** the highest code a font's /W names: a CID font's two-byte codes (a range [0 4294967295 w] was read code by code) */
 const CODE_MAX = 0xffff
 const fmt = x => { if (Math.abs(x) < 5e-7) return '0'; let s = x.toFixed(6); s = s.replace(/0+$/, '').replace(/\.$/, ''); return s === '-0' ? '0' : s }
@@ -165,10 +178,11 @@ const concat = parts => { let n = 0; for (const p of parts) n += p.length; const
 
 /**
  * The remover over one document: arXiv's bytes, read by `PL` (@cantoo/pdf-lib's exports), `inflate` (bytes -> bytes,
- * tolerant of a damaged zlib stream, as PDF.js reads one; null: none), `walkMax` (WALK_MAX). Returns { numPages, encrypted, walkPage,
+ * tolerant of a damaged zlib stream, as PDF.js reads one; null: none), `walkMax` (WALK_MAX), `heldMax` and `bytesMax`
+ * (HELD_MAX, BYTES_MAX). Returns { numPages, encrypted, walkPage,
  * alignPage, decode }.
  */
-export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MAX }) {
+export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MAX, heldMax = HELD_MAX, bytesMax = BYTES_MAX }) {
   const { PDFDocument, PDFName, PDFRef, PDFArray, PDFDict, PDFRawStream, PDFNumber, PDFStream, decodePDFRawStream } = PL
   const doc = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false })
   const ctx = doc.context
@@ -177,7 +191,10 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
   const get = (d, k) => { if (!(d instanceof PDFDict) && !(d instanceof PDFStream)) return undefined; const dict = d instanceof PDFStream ? d.dict : d; return look(dict.get(PDFName.of(k))) }
   const num = v => (v instanceof PDFNumber ? v.asNumber() : typeof v === 'number' ? v : undefined)
   const nameOf = v => (v instanceof PDFName ? v.decodeText?.() ?? v.asString().slice(1) : undefined)
+  // (the decoded streams kept for the document, at most 4 bytesMax: past that a stream is decoded again when asked, so
+  // that pages refused at their budget do not pile up)
   const decoded = new Map()
+  let decodedBytes = 0
   const decode = st => {
     if (decoded.has(st)) return decoded.get(st)
     let out
@@ -190,7 +207,7 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
         out = inflate(st.contents)
       }
     } else out = st.getContents()
-    decoded.set(st, out)
+    if ((decodedBytes += out.length) <= 4 * bytesMax) decoded.set(st, out)
     return out
   }
   const pages = doc.getPages()
@@ -265,7 +282,7 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
     return out
   }
 
-  const WALKED = 'forms that paint more than the walk allows', SELF = 'a form that paints itself'
+  const WALKED = 'forms that paint more than the walk allows', SELF = 'a form that paints itself', HELD = 'streams that hold more than the walk allows'
   /**
    * A page walked: its containers (the page's content, each form where it is painted: { kind, key, ref, st, pieces,
    * ops, parent, name, res, depth }) and its events in order ({ kind: 'show' | 'paint' | 'image' | 'form', cont, pi, oi,
@@ -285,6 +302,22 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
     // (bounded: no deeper than FORM_DEPTH, no form within itself, as PDF.js ignores a circular one, and no more than
     // walkMax operators in all; each stops the walk and refuses the page)
     let walked = 0
+    // each stream's operators once, however often the page or its forms paint it (read only: an edit in a form painted
+    // more than once is refused), within heldMax tokens and bytesMax decoded bytes for the page
+    const lexed = new Map()
+    let held = 0, bytesHeld = 0
+    const opsOf = st => {
+      let got = lexed.get(st)
+      if (got) return got
+      try {
+        const b = decode(st)
+        if ((bytesHeld += b.length) > bytesMax) got = { refused: true }
+        else { const ops = lex(b, heldMax - held); held += ops.tokens; got = { ops } }
+      } catch (e) { got = e instanceof LexLimit ? { refused: true } : { failed: true } }
+      if (got.refused && !problems.includes(HELD)) problems.push(HELD)
+      lexed.set(st, got)
+      return got
+    }
     function run(cont, res, state, depth) {
       if (depth > FORM_DEPTH) { problems.push('forms nested too deep'); return }
       const stack = []
@@ -320,11 +353,13 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
                 let within = false
                 for (let c = cont; c && !within; c = c.parent) within = c.st === x
                 if (within) { if (!problems.includes(SELF)) problems.push(SELF); break }
-                if (problems.includes(WALKED)) return
+                if (problems.includes(WALKED) || problems.includes(HELD)) return
                 uses.set(x, (uses.get(x) ?? 0) + 1)
                 const own = get(x, 'Resources')
-                let ops = []
-                try { ops = lex(decode(x)) } catch { problems.push('a form that does not decode') }
+                const got = opsOf(x)
+                if (got.refused) return
+                if (got.failed) problems.push('a form that does not decode')
+                const ops = got.ops ?? []
                 const fc = { kind: 'form', key: xr instanceof PDFRef ? xr.toString() : `direct${containers.length}`, ref: xr instanceof PDFRef ? xr : null, st: x, pieces: [{ ref: xr instanceof PDFRef ? xr : null, st: x }], ops: [ops], parent: cont, name: a[0]?.v, res: own ?? res, ownRes: !!own, depth: depth + 1 }
                 containers.push(fc)
                 events.push({ kind: 'form', cont, pi, oi, child: fc })
@@ -351,10 +386,14 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
       }
     }
     const pc = { kind: 'page', key: `page${pageIndex + 1}`, ref: null, st: null, pieces, ops: [], parent: null, name: null, res, ownRes: true, depth: 0 }
-    for (const p of pieces) { try { pc.ops.push(p.st ? lex(decode(p.st)) : []) } catch { problems.push('a content stream that does not decode'); pc.ops.push([]) } }
+    for (const p of pieces) {
+      const got = p.st ? opsOf(p.st) : { ops: [] }
+      if (got.failed) problems.push('a content stream that does not decode')
+      pc.ops.push(got.ops ?? [])
+    }
     containers.unshift(pc)
-    run(pc, res, { font: null, size: 0, Tc: 0, Tw: 0, Tr: 0 }, 0)
-    return { page, node, pc, containers, events, uses, problems, walked }
+    if (!problems.includes(HELD)) run(pc, res, { font: null, size: 0, Tc: 0, Tw: 0, Tr: 0 }, 0)
+    return { page, node, pc, containers, events, uses, problems, walked, held, bytes: bytesHeld }
   }
 
   /**

@@ -159,10 +159,10 @@ describe('the text remover', () => {
 const REMOVE_URL = pathToFileURL(join(process.cwd(), 'src/pdf-reader/engine/layout/remove.mjs')).href
 const PDFLIB_PATH = createRequire(join(process.cwd(), 'package.json')).resolve('@cantoo/pdf-lib')
 /** `body` (an async function's body over R, the remover's module, PL, pdf-lib, and data) run in a worker, at most `ms` */
-function bounded<T>(body: string, data: unknown, ms = 4000): Promise<T> {
+function bounded<T>(body: string, data: unknown, ms = 4000, heapMb?: number): Promise<T> {
   const code = `const { parentPort, workerData } = require('node:worker_threads'); (async () => { const R = await import(workerData.remove); const PL = require(workerData.pdflib); const f = async (R, PL, data) => { ${body} }; parentPort.postMessage({ ok: await f(R, PL, workerData.data) }) })().catch(e => parentPort.postMessage({ error: String(e?.message ?? e) }))`
   return new Promise((res, rej) => {
-    const w = new Worker(code, { eval: true, workerData: { remove: REMOVE_URL, pdflib: PDFLIB_PATH, data } })
+    const w = new Worker(code, { eval: true, workerData: { remove: REMOVE_URL, pdflib: PDFLIB_PATH, data }, ...(heapMb ? { resourceLimits: { maxOldGenerationSizeMb: heapMb } } : {}) })
     const t = setTimeout(() => { void w.terminate(); rej(new Error(`did not finish in ${ms} ms`)) }, ms)
     w.once('message', (m: { ok?: T; error?: string }) => { clearTimeout(t); void w.terminate(); if (m.error !== undefined) rej(new Error(m.error)); else res(m.ok as T) })
     w.once('error', e => { clearTimeout(t); rej(e) })
@@ -210,6 +210,52 @@ describe("the remover on untrusted input: every loop advances or refuses", () =>
       '<< /Type /Font /Subtype /CIDFontType2 /BaseFont /X /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /DW 1000 /W [0 4294967295 500] >>',
     ])
     expect(await bounded<number>('const r = await R.openRemover(data, { PL }); return r.walkPage(0).events.filter(e => e.kind === "show")[0].codes.length', wide)).toBe(2)
+  })
+})
+
+describe("the remover's walk bounded in memory: each stream lexed once, what a page holds within its budget", () => {
+  // the review of round 3, I1: three PDFs of 0.9-30 KB that PDF.js reads in two seconds held 2.5 GB in the walk (a form
+  // lexed again at each paint, a page's every content piece lexed before the walk's budget was read); each runs here in
+  // a worker of a 64 MB heap, the walk's budget 2 million operators
+  const fanOut = (leaf: string) => pdfOf([
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /XObject << /A 5 0 R >> >> /Contents 4 0 R >>',
+    ['', Array(10).fill('/A Do').join(' ')],
+    ['/Type /XObject /Subtype /Form /BBox [0 0 300 300] /Resources << /XObject << /B 6 0 R >> >>', Array(1000).fill('/B Do').join(' ')],
+    ['/Type /XObject /Subtype /Form /BBox [0 0 300 300]', leaf],
+  ])
+  const pieces = pdfOf([
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents [${Array(5000).fill('4 0 R').join(' ')}] >>`,
+    ['', Array(4000).fill('zz').join(' ')],
+  ])
+  const walk = 'const r = await R.openRemover(data, { PL, walkMax: 2000000 }); const w = r.walkPage(0); return { problems: w.problems, held: w.held }'
+  for (const [what, bytes] of [
+    ['forms of 2,000 keywords PDF.js drops, painted 10,000 times', fanOut(Array(2000).fill('zz').join(' '))],
+    ['forms of a 2,000-segment path, painted 10,000 times', fanOut(`0 0 m ${Array(2000).fill('1 1 l').join(' ')} S`)],
+    ['one stream of 4,000 keywords 5,000 times in /Contents', pieces],
+  ] as const) {
+    it(`refuses the page within a 64 MB heap, holding each stream once: ${what}`, async () => {
+      const r = await bounded<{ problems: string[]; held: number }>(walk, bytes, 6000, 64)
+      expect(r.problems).toContain('forms that paint more than the walk allows')
+      expect(r.held).toBeLessThan(25000)
+    })
+  }
+  it('refuses a page whose streams hold more tokens, or more decoded bytes, than its budget: never the paper', async () => {
+    const big = pdfOf([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents 4 0 R >>',
+      ['', Array(4000).fill('zz').join(' ')],
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents 6 0 R >>',
+      ['', '0 0 1 1 re f'],
+    ])
+    const r = await bounded<string[][]>('const a = await R.openRemover(data, { PL, heldMax: 1000 }); const b = await R.openRemover(data, { PL, bytesMax: 1000 }); return [a.walkPage(0).problems, b.walkPage(0).problems, a.walkPage(1).problems]', big)
+    expect(r[0]).toContain('streams that hold more than the walk allows')
+    expect(r[1]).toContain('streams that hold more than the walk allows')
+    expect(r[2]).toEqual([])
   })
 })
 

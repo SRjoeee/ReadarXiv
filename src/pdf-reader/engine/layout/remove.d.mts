@@ -7,8 +7,13 @@ export declare const REMOVAL: '3'
 export declare const SETS: readonly ['R']
 /** the check's sets after them: P (the placeholders alone), F (the removed glyphs alone), C (P, each crop a colour) */
 export declare const CHECK_SETS: readonly ['P', 'F', 'C']
-/** a content stream's operators */
-export declare function lex(bytes: Uint8Array): { op: string; args: unknown[]; s: number; e: number }[]
+/** a content stream's operators, at most `limit` tokens (operators and operands; past it LexLimit), with how many */
+export declare function lex(bytes: Uint8Array, limit?: number): { op: string; args: unknown[]; s: number; e: number }[] & { tokens: number }
+/** lex's refusal of a stream holding more tokens than it was allowed */
+export declare class LexLimit extends Error { limit: number }
+/** what a page's walk may hold: its streams' tokens, each stream lexed once, and their decoded bytes */
+export declare const HELD_MAX: number
+export declare const BYTES_MAX: number
 /** the PDF object layer's exports the remover reads (@cantoo/pdf-lib) */
 export type PdfLib = Record<string, any>
 /** the operators a page's walk may visit, its forms' as often as they are painted; past it the page is refused */
@@ -17,9 +22,9 @@ export interface Remover {
   numPages: number; encrypted: boolean
   alignPage(pageIndex: number, OPS: Record<string, number>, opList: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }): { ok: boolean; why: string[] }
   /** a page walked: what could not be walked (`problems`, any one refuses the page) and the operators visited */
-  walkPage(pageIndex: number): { problems: string[]; walked: number; events: { kind: string; codes?: unknown[] }[] }
+  walkPage(pageIndex: number): { problems: string[]; walked: number; held: number; bytes: number; events: { kind: string; codes?: unknown[] }[] }
 }
-export declare function openRemover(bytes: Uint8Array, o: { PL: PdfLib; inflate?: ((bytes: Uint8Array) => Uint8Array) | null; walkMax?: number }): Promise<Remover>
+export declare function openRemover(bytes: Uint8Array, o: { PL: PdfLib; inflate?: ((bytes: Uint8Array) => Uint8Array) | null; walkMax?: number; heldMax?: number; bytesMax?: number }): Promise<Remover>
 /** a unit's removal on a page: its glyphs as n, k pairs (pageInk's `indices`) and its rules as painted paths' places */
 export interface PlannedUnit { id: number; glyphs: number[]; paths: number[] }
 /** a crop's glyphs and rules, the placeholders' page's */
