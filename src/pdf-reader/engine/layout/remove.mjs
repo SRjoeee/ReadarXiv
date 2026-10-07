@@ -44,82 +44,130 @@ for (const c of [0, 9, 10, 12, 13, 32]) WS[c] = 1
 const DL = new Uint8Array(256)
 for (const c of '()<>[]{}/%') DL[c.charCodeAt(0)] = 1
 const isNumTok = t => /^[+-]?(\d+\.?\d*|\.\d+)$/.test(t)
+/** a hex digit's value by its byte, -1 for any other */
+const DIGIT = new Int8Array(256).fill(-1)
+for (let c = 0; c < 10; c++) DIGIT[48 + c] = c
+for (let c = 0; c < 6; c++) { DIGIT[65 + c] = 10 + c; DIGIT[97 + c] = 10 + c }
 const td = new TextDecoder('latin1')
+/** bytes as the characters of their codes (ISO 8859-1, which TextDecoder's 'latin1', windows-1252, is not) */
+const latin1 = u8 => { let out = ''; for (let k = 0; k < u8.length; k += 8192) out += String.fromCharCode.apply(null, u8.subarray(k, k + 8192)); return out }
 const enc = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 255; return b }
+
+/**
+ * The heap a lexed token, and an event the walk records, is held in, in bytes, by its kind: each at least what 1 million
+ * of it hold after a full collection (measured with this lexer: an operator 98, a number 10, a name 50 and its length, a
+ * string 250 and a hex string 282 with their bytes, an array 42, a dictionary 81, a keyword in an array 74; the
+ * re-review's round 2 measured the old lexer's strings at 271 with their bytes in JS arrays). An array or a dictionary is
+ * counted as it opens, so that one never closed counts too. What the walk holds is these summed (lex's `bytes`, the
+ * walk's `held`), never what it visits.
+ */
+export const COST = Object.freeze({ op: 128, num: 16, name: 64, str: 320, mark: 96, kw: 128, atom: 8, event: 160, code: 64 })
+/** the operators the walk reads: every other one is lexed and let go with its operands */
+const WALK_OPS = new Set(['q', 'Q', 'Tf', 'Tc', 'Tw', 'Tr', 'gs', 'Do', 'Tj', 'TJ', "'", '"', 'BI', 'sh', 'S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n'])
+/** a token longer than this is no operator, number or keyword PDF.js knows: it is read as an unknown one, not kept whole */
+const TOKEN_MAX = 255
 
 /**
  * A content stream's operators: { op, args, s, e } (s: the first operand's start, e: the operator's end), each string
  * operand { t: 'str', b: bytes, s, e }, each name { t: 'name', v }, an array as an array, a dictionary as { t: 'dict', v }.
  * An inline image is one operator, BI, from its parameters to its EI. Every pass of every loop here advances by a byte
  * at least or throws (an inline image's parameters holding a delimiter none starts with: `)`, `{`, `}`), so a stream
- * of n bytes is read in O(n) whatever it holds; a stream that throws is one the walk refuses its page for. `limit`: the
- * most tokens (operators and operands) it may hold, past which it throws LexLimit; the operators' `tokens`, how many
+ * of n bytes is read in O(n) whatever it holds; a stream that throws is one the walk refuses its page for.
+ * `limit`: the most bytes (COST) it may hold, past which it throws LexLimit, counted as each token is read (the
+ * operands waiting for their operator too); the operators' `bytes`, what it holds. `keep`: the operators it keeps (the
+ * walk's), every other one read and let go with its operands; null, every one.
  */
-export function lex(b, limit = Infinity) {
+export function lex(b, limit = Infinity, keep = null) {
   const ops = []
   const n = b.length
-  let i = 0, stack = [], start = -1, tokens = 0
+  let i = 0, stack = [], start = -1, held = 0, pending = 0
   const marks = []
-  const count = () => { if (++tokens > limit) throw new LexLimit(limit) }
-  const push = (v, s) => { count(); if (start < 0) start = s; if (marks.length) marks.at(-1).items.push(v); else stack.push(v) }
+  const take = cost => { pending += cost; if (held + pending > limit) throw new LexLimit(limit) }
+  const push = (v, s, cost) => { take(cost); if (start < 0) start = s; if (marks.length) marks.at(-1).items.push(v); else stack.push(v) }
+  const operator = (op, s, e) => {
+    if (!keep || keep.has(op)) {
+      held += pending + COST.op
+      if (held > limit) throw new LexLimit(limit)
+      ops.push({ op, args: stack, s, e })
+    }
+    stack = []; start = -1; pending = 0
+  }
+  const tokenEnd = from => { let j = from; while (j < n && !WS[b[j]] && !DL[b[j]]) j++; return j }
   while (i < n) {
     const c = b[i]
     if (WS[c]) { i++; continue }
     if (c === 37) { while (i < n && b[i] !== 10 && b[i] !== 13) i++; continue }
     const s0 = i
     if (c === 40) {
-      const out = []
-      let depth = 1
+      // (its end first, the paren that balances it, then its bytes into an array of at most that many)
+      let j = i + 1, depth = 1
+      while (j < n && depth > 0) { const d = b[j]; if (d === 92) { j += 2; continue } if (d === 40) depth++; else if (d === 41) depth--; j++ }
+      j = Math.min(j, n)
+      take(COST.str + (j - i))
+      const out = new Uint8Array(Math.max(0, j - i))
+      let o = 0
+      depth = 1
       i++
       while (i < n && depth > 0) {
         const d = b[i]
         if (d === 92) {
           const e = b[i + 1]
           i += 2
-          if (e === 110) out.push(10); else if (e === 114) out.push(13); else if (e === 116) out.push(9); else if (e === 98) out.push(8); else if (e === 102) out.push(12)
-          else if (e === 40 || e === 41 || e === 92) out.push(e)
-          else if (e >= 48 && e <= 55) { let v = e - 48; for (let k = 0; k < 2 && b[i] >= 48 && b[i] <= 55; k++, i++) v = v * 8 + b[i] - 48; out.push(v & 255) }
-          else if (e === 13) { if (b[i] === 10) i++ } else if (e === 10) { /* a line continued */ } else if (e !== undefined) out.push(e)
+          if (e === 110) out[o++] = 10; else if (e === 114) out[o++] = 13; else if (e === 116) out[o++] = 9; else if (e === 98) out[o++] = 8; else if (e === 102) out[o++] = 12
+          else if (e === 40 || e === 41 || e === 92) out[o++] = e
+          else if (e >= 48 && e <= 55) { let v = e - 48; for (let k = 0; k < 2 && b[i] >= 48 && b[i] <= 55; k++, i++) v = v * 8 + b[i] - 48; out[o++] = v & 255 }
+          else if (e === 13) { if (b[i] === 10) i++ } else if (e === 10) { /* a line continued */ } else if (e !== undefined) out[o++] = e
           continue
         }
         if (d === 40) depth++
         if (d === 41) { depth--; if (depth === 0) { i++; break } }
-        if (d === 13) { out.push(10); i++; if (b[i] === 10) i++; continue }
-        out.push(d)
+        if (d === 13) { out[o++] = 10; i++; if (b[i] === 10) i++; continue }
+        out[o++] = d
         i++
       }
-      push({ t: 'str', b: Uint8Array.from(out), s: s0, e: i }, s0)
+      if (start < 0) start = s0
+      const v = { t: 'str', b: out.subarray(0, o), s: s0, e: i }
+      if (marks.length) marks.at(-1).items.push(v); else stack.push(v)
       continue
     }
     if (c === 60 && b[i + 1] !== 60) {
-      i++
-      let hex = ''
-      while (i < n && b[i] !== 62) { if (!WS[b[i]]) hex += String.fromCharCode(b[i]); i++ }
-      i++
-      if (hex.length % 2) hex += '0'
-      const out = new Uint8Array(hex.length / 2)
-      for (let k = 0; k < out.length; k++) out[k] = parseInt(hex.slice(2 * k, 2 * k + 2), 16)
-      push({ t: 'str', b: out, s: s0, e: i, hex: true }, s0)
+      // (its digits straight into bytes, as PDF.js reads them: white space and a character not a digit passed over, an
+      // odd last digit its byte's high half)
+      let j = i + 1, digits = 0
+      while (j < n && b[j] !== 62) { if (DIGIT[b[j]] >= 0) digits++; j++ }
+      take(COST.str + ((digits + 1) >> 1))
+      const out = new Uint8Array((digits + 1) >> 1)
+      let k = 0
+      for (let q = i + 1; q < j; q++) { const h = DIGIT[b[q]]; if (h < 0) continue; if (k % 2 === 0) out[k >> 1] = h << 4; else out[k >> 1] |= h; k++ }
+      i = j + 1
+      if (start < 0) start = s0
+      const v = { t: 'str', b: out, s: s0, e: i, hex: true }
+      if (marks.length) marks.at(-1).items.push(v); else stack.push(v)
       continue
     }
-    if (c === 60) { i += 2; if (start < 0) start = s0; marks.push({ items: [], s: s0 }); continue }
-    if (c === 62 && b[i + 1] === 62) { i += 2; const m = marks.pop(); const v = { t: 'dict', v: m ? m.items : [] }; if (marks.length) marks.at(-1).items.push(v); else stack.push(v); continue }
-    if (c === 91) { i++; if (start < 0) start = s0; marks.push({ items: [], s: s0 }); continue }
-    if (c === 93) { i++; const m = marks.pop(); const v = m ? m.items : []; if (marks.length) marks.at(-1).items.push(v); else stack.push(v); continue }
+    if (c === 60) { i += 2; take(COST.mark); if (start < 0) start = s0; marks.push({ items: [], s: s0 }); continue }
+    if (c === 62 && b[i + 1] === 62) { i += 2; const m = marks.pop(); if (!m) take(COST.mark); const v = { t: 'dict', v: m ? m.items : [] }; if (marks.length) marks.at(-1).items.push(v); else stack.push(v); continue }
+    if (c === 91) { i++; take(COST.mark); if (start < 0) start = s0; marks.push({ items: [], s: s0 }); continue }
+    if (c === 93) { i++; const m = marks.pop(); if (!m) take(COST.mark); const v = m ? m.items : []; if (marks.length) marks.at(-1).items.push(v); else stack.push(v); continue }
     if (c === 47) {
-      i++
-      let v = ''
-      while (i < n && !WS[b[i]] && !DL[b[i]]) { v += String.fromCharCode(b[i]); i++ }
-      push({ t: 'name', v: v.replace(/#([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16))) }, s0)
+      const j = tokenEnd(i + 1)
+      take(COST.name + (j - i))
+      const raw = latin1(b.subarray(i + 1, j))
+      i = j
+      if (start < 0) start = s0
+      const v = { t: 'name', v: raw.includes('#') ? raw.replace(/#([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16))) : raw }
+      if (marks.length) marks.at(-1).items.push(v); else stack.push(v)
       continue
     }
     if (c === 123 || c === 125) { i++; continue }
-    let t = ''
-    while (i < n && !WS[b[i]] && !DL[b[i]]) { t += String.fromCharCode(b[i]); i++ }
-    if (!t) { i++; continue }
-    if (isNumTok(t)) { push(Number(t), s0); continue }
-    if (t === 'true' || t === 'false' || t === 'null') { push(t === 'true' ? true : t === 'false' ? false : null, s0); continue }
-    if (marks.length) { count(); marks.at(-1).items.push({ t: 'kw', v: t }); continue }
+    const j = tokenEnd(i)
+    if (j === i) { i++; continue }
+    // (a token too long for any operator or number is an unknown one: not read whole)
+    const t = j - i > TOKEN_MAX ? '?' : latin1(b.subarray(i, j))
+    i = j
+    if (t !== '?' && isNumTok(t)) { push(Number(t), s0, COST.num); continue }
+    if (t === 'true' || t === 'false' || t === 'null') { push(t === 'true' ? true : t === 'false' ? false : null, s0, COST.atom); continue }
+    if (marks.length) { take(COST.kw); marks.at(-1).items.push({ t: 'kw', v: t }); continue }
     if (t === 'BI') {
       // an inline image: its parameters to ID, its data to EI (white space either side, then an operator or the end)
       const s = start < 0 ? s0 : start
@@ -142,34 +190,32 @@ export function lex(b, limit = Infinity) {
         e++
       }
       i = Math.min(n, e + 2)
-      count()
-      ops.push({ op: 'BI', args: [], s, e: i })
-      stack = []; start = -1
+      stack = []; pending = 0
+      operator('BI', s, i)
       continue
     }
-    count()
-    ops.push({ op: t, args: stack, s: start < 0 ? s0 : start, e: i })
-    stack = []; start = -1
+    operator(t, start < 0 ? s0 : start, i)
   }
-  ops.tokens = tokens
+  ops.bytes = held
   return ops
 }
 /** lex's refusal of a stream that holds more than it was allowed: the walk refuses its page */
-export class LexLimit extends Error { constructor(limit) { super(`a content stream of more than ${limit} tokens`); this.limit = limit } }
+export class LexLimit extends Error { constructor(limit) { super(`a content stream holding more than ${limit} bytes`); this.limit = limit } }
 
 const PAINT = new Set(['S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n'])
 /** a form nested deeper than this is not walked: the page is refused */
 const FORM_DEPTH = 12
-/** the operators a page's walk may visit, its forms' as often as they are painted (openRemover's `walkMax`): past it the
- *  page is refused. Forms that paint each other ten times over, eight deep, are 10^8 paints; the heaviest of the 2,793
- *  pages of the 124 papers in data/corpus visits 2.09 million (2608.02055 page 28, 0.85 s), the fixtures' 133,000 */
-export const WALK_MAX = 20_000_000
+/** the operators a page's walk may visit, its forms' as often as they are painted (openRemover's `walkMax`), of those it
+ *  keeps (WALK_OPS): past it the page is refused. Forms that paint each other ten times over, eight deep, are 10^8
+ *  paints; the heaviest of the 2,793 pages of the 124 papers in data/corpus visits 66,344 (2608.27728 page 15) */
+export const WALK_MAX = 2_000_000
 /** what a page's walk may hold, its streams each lexed once however often they are painted (openRemover's `heldMax` and
- *  `bytesMax`): the tokens of their operators (some 90 bytes of heap each), and their decoded bytes. Past either the page
- *  is refused, never the paper: the walk's memory is these, not what it visits (three PDFs of 0.9-30 KB held 2.5 GB, a
- *  stream lexed again at each paint, the review of round 3). The heaviest of the corpus's 2,793 pages holds 6.54 million
- *  tokens (591 MB of heap) and 34.8 MB (2608.02055 page 28): 8 million, about 720 MB, under the engine's 1,536 MiB */
-export const HELD_MAX = 8_000_000, BYTES_MAX = 64 * 1024 * 1024
+ *  `bytesMax`): its operators and their operands, and the events it records, by their heap (COST), and its streams'
+ *  decoded bytes. Past either the page is refused, never the paper. A soft, early refusal: the hard bound on hostile
+ *  input is the process the remover runs in (the module's head). The heaviest of the corpus's 2,793 pages holds 12.5 MB
+ *  by COST (2608.12606 page 5; 2608.27728 page 15's 12.2 MB measured 8.2 MB of heap) and 34.8 MB decoded (2608.02055 page
+ *  28): 64 MiB, and 48 MiB */
+export const HELD_MAX = 64 * 1024 * 1024, BYTES_MAX = 48 * 1024 * 1024
 /** the highest code a font's /W names: a CID font's two-byte codes (a range [0 4294967295 w] was read code by code) */
 const CODE_MAX = 0xffff
 const fmt = x => { if (Math.abs(x) < 5e-7) return '0'; let s = x.toFixed(6); s = s.replace(/0+$/, '').replace(/\.$/, ''); return s === '-0' ? '0' : s }
@@ -346,11 +392,18 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
       try {
         const b = decode(st)
         if ((bytesHeld += b.length) > bytesMax) got = { refused: true }
-        else { const ops = lex(b, heldMax - held); held += ops.tokens; got = { ops } }
+        else { const ops = lex(b, heldMax - held, WALK_OPS); held += ops.bytes; got = { ops } }
       } catch (e) { got = e instanceof LexLimit ? { refused: true } : { failed: true } }
       if (got.refused && !problems.includes(HELD)) problems.push(HELD)
       lexed.set(st, got)
       return got
+    }
+    // (each event the walk records counts in what it holds: an event per visit of a painting operator, a show or a
+    // form, which the re-review's round 2 fanned out to 20 million fontless shows of a 980 B page)
+    const record = cost => {
+      if ((held += cost) <= heldMax) return true
+      if (!problems.includes(HELD)) problems.push(HELD)
+      return false
     }
     function run(cont, res, state, depth) {
       if (depth > FORM_DEPTH) { problems.push('forms nested too deep'); return }
@@ -395,26 +448,33 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
                 if (got.failed) problems.push('a form that does not decode')
                 const ops = got.ops ?? []
                 const fc = { kind: 'form', key: xr instanceof PDFRef ? xr.toString() : `direct${containers.length}`, ref: xr instanceof PDFRef ? xr : null, st: x, pieces: [{ ref: xr instanceof PDFRef ? xr : null, st: x }], ops: [ops], parent: cont, name: a[0]?.v, res: own ?? res, ownRes: !!own, depth: depth + 1 }
+                if (!record(COST.event + COST.op)) return
                 containers.push(fc)
                 events.push({ kind: 'form', cont, pi, oi, child: fc })
                 stack.push({ ...s })
                 run(fc, own ?? res, s, depth + 1)
                 s = stack.pop()
-              } else events.push({ kind: 'image', cont, pi, oi })
+              } else {
+                if (!record(COST.event)) return
+                events.push({ kind: 'image', cont, pi, oi })
+              }
               break
             }
             case 'Tj': case 'TJ': case "'": case '"': {
               if (o.op === '"') { s.Tw = typeof a[0] === 'number' ? a[0] : 0; s.Tc = typeof a[1] === 'number' ? a[1] : 0 }
               const arr = o.op === 'TJ' ? a[0] : [a[o.op === '"' ? 2 : 0]]
-              if (!s.font) { events.push({ kind: 'show', cont, pi, oi, codes: [], nofont: true }); break }
+              // (a show with no font set is PDF.js's to drop, and the walk's: no event, nothing to align or edit)
+              if (!s.font) break
               const codes = []
               ;(Array.isArray(arr) ? arr : []).forEach((el, ei) => { if (el?.t === 'str') for (const [cs, ce, v] of codesOf(s.font, el.b)) codes.push({ ei, cs, ce, v }) })
+              if (!record(COST.event + COST.code * codes.length)) return
               events.push({ kind: 'show', cont, pi, oi, codes, state: { ...s } })
               break
             }
             default:
-              if (PAINT.has(o.op)) events.push({ kind: 'paint', cont, pi, oi })
-              else if (o.op === 'BI' || o.op === 'sh') events.push({ kind: 'image', cont, pi, oi })
+              if (!PAINT.has(o.op) && o.op !== 'BI' && o.op !== 'sh') break
+              if (!record(COST.event)) return
+              events.push({ kind: PAINT.has(o.op) ? 'paint' : 'image', cont, pi, oi })
           }
         }
       }
@@ -440,7 +500,7 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
     const walk = walkPage(pageIndex)
     const why = [...walk.problems]
     if (encrypted) why.push('an encrypted file')
-    const shows = walk.events.filter(e => e.kind === 'show' && !e.nofont), paints = walk.events.filter(e => e.kind === 'paint')
+    const shows = walk.events.filter(e => e.kind === 'show'), paints = walk.events.filter(e => e.kind === 'paint')
     const { fnArray, argsArray } = opList
     const listShows = [], listPaths = []
     let inAnnot = 0
@@ -706,7 +766,7 @@ export async function makeAddon({ R, bytes, OPS, opListOf, deflate, plan, sets =
       for (const e of [...keep.keys(), ...keepPaints]) if (keep.get(e)?.size || keepPaints.has(e)) for (let x = e.cont; x; x = x.parent) holds.add(x)
       for (const e of al.walk.events) {
         if (e.cont.kind === 'form' && !holds.has(e.cont)) continue
-        if (e.kind === 'show' && !e.nofont) { const k = keep.get(e) ?? new Set(), off = new Set(); e.codes.forEach((_, i) => { if (!k.has(i)) off.add(i) }); if (off.size || colourOf) codes.set(e, off) }
+        if (e.kind === 'show') { const k = keep.get(e) ?? new Set(), off = new Set(); e.codes.forEach((_, i) => { if (!k.has(i)) off.add(i) }); if (off.size || colourOf) codes.set(e, off) }
         else if (e.kind === 'paint' && !keepPaints.has(e)) paints.add(e)
         else if (e.kind === 'image') drop.push(e)
         else if (e.kind === 'form' && !holds.has(e.child)) drop.push(e)

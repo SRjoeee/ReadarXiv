@@ -7,11 +7,13 @@ export declare const REMOVAL: '3'
 export declare const SETS: readonly ['R']
 /** the check's sets after them: P (the placeholders alone), F (the removed glyphs alone), C (P, each crop a colour) */
 export declare const CHECK_SETS: readonly ['P', 'F', 'C']
-/** a content stream's operators, at most `limit` tokens (operators and operands; past it LexLimit), with how many */
-export declare function lex(bytes: Uint8Array, limit?: number): { op: string; args: unknown[]; s: number; e: number }[] & { tokens: number }
-/** lex's refusal of a stream holding more tokens than it was allowed */
+/** a content stream's operators (those of `keep`, null: every one), holding at most `limit` bytes by COST (past it LexLimit), with what they hold */
+export declare function lex(bytes: Uint8Array, limit?: number, keep?: ReadonlySet<string> | null): { op: string; args: unknown[]; s: number; e: number }[] & { bytes: number }
+/** lex's refusal of a stream holding more than it was allowed */
 export declare class LexLimit extends Error { limit: number }
-/** what a page's walk may hold: its streams' tokens, each stream lexed once, and their decoded bytes */
+/** the heap a lexed token, and a recorded event, is held in, by its kind */
+export declare const COST: Readonly<Record<'op' | 'num' | 'name' | 'str' | 'mark' | 'kw' | 'atom' | 'event' | 'code', number>>
+/** what a page's walk may hold: its streams' operators and its events by COST, each stream lexed once, and their decoded bytes */
 export declare const HELD_MAX: number
 export declare const BYTES_MAX: number
 /** the PDF object layer's exports the remover reads (@cantoo/pdf-lib) */

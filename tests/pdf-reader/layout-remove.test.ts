@@ -28,6 +28,19 @@ function pdfOf(objects: (string | [string, string])[]): Uint8Array {
   out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${at}\n%%EOF\n`
   return enc(out)
 }
+/** pdfOf with its streams' bytes as they are (each character a byte: a deflated stream) */
+function pdfBin(objects: (string | [string, string])[]): Uint8Array {
+  let out = '%PDF-1.7\n'
+  const offsets: number[] = []
+  objects.forEach((o, i) => {
+    offsets.push(out.length)
+    out += Array.isArray(o) ? `${i + 1} 0 obj\n<< ${o[0]} /Length ${o[1].length} >>\nstream\n${o[1]}\nendstream\nendobj\n` : `${i + 1} 0 obj\n${o}\nendobj\n`
+  })
+  const at = out.length
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f\r\n${offsets.map(o => `${String(o).padStart(10, '0')} 00000 n\r\n`).join('')}`
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${at}\n%%EOF\n`
+  return new Uint8Array(Buffer.from(out, 'latin1'))
+}
 const font = `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /FirstChar 32 /LastChar 126 /Widths [${Array(95).fill(500).join(' ')}] >>`
 const form = (text: string, y: number): [string, string] => ['/Type /XObject /Subtype /Form /BBox [0 0 300 300] /Resources << /Font << /F1 4 0 R >> >>', `BT /F1 10 Tf 20 ${y} Td (${text}) Tj ET`]
 const PDF = pdfOf([
@@ -279,24 +292,27 @@ describe("the remover's walk bounded in memory: each stream lexed once, what a p
     `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents [${Array(5000).fill('4 0 R').join(' ')}] >>`,
     ['', Array(4000).fill('zz').join(' ')],
   ])
-  const walk = 'const r = await R.openRemover(data, { PL, walkMax: 2000000 }); const w = r.walkPage(0); return { problems: w.problems, held: w.held }'
-  for (const [what, bytes] of [
-    ['forms of 2,000 keywords PDF.js drops, painted 10,000 times', fanOut(Array(2000).fill('zz').join(' '))],
-    ['forms of a 2,000-segment path, painted 10,000 times', fanOut(`0 0 m ${Array(2000).fill('1 1 l').join(' ')} S`)],
-    ['one stream of 4,000 keywords 5,000 times in /Contents', pieces],
+  // (each stream held once, and only the operators the walk reads with their operands: the keywords and the path's
+  // segments are let go as they are lexed, and each stream's painting operator is an event a paint)
+  const walk = 'const r = await R.openRemover(data, { PL }); const w = r.walkPage(0); return { problems: w.problems, held: w.held }'
+  for (const [what, bytes, most] of [
+    // (10,000 paints of a form: an event each, some 3 MB; the path's painting operator an event more each)
+    ['forms of 2,000 keywords PDF.js drops, painted 10,000 times', fanOut(Array(2000).fill('zz').join(' ')), 4e6],
+    ['forms of a 2,000-segment path, painted 10,000 times', fanOut(`0 0 m ${Array(2000).fill('1 1 l').join(' ')} S`), 6e6],
+    ['one stream of 4,000 keywords 5,000 times in /Contents', pieces, 10000],
   ] as const) {
-    it(`refuses the page within a 64 MB heap, holding each stream once: ${what}`, async () => {
+    it(`walks it within a 64 MB heap, holding each stream once and what the walk reads of it: ${what}`, async () => {
       const r = await bounded<{ problems: string[]; held: number }>(walk, bytes, 6000, 64)
-      expect(r.problems).toContain('forms that paint more than the walk allows')
-      expect(r.held).toBeLessThan(25000)
+      expect(r.problems).toEqual([])
+      expect(r.held).toBeLessThan(most)
     })
   }
-  it('refuses a page whose streams hold more tokens, or more decoded bytes, than its budget: never the paper', async () => {
+  it('refuses a page whose streams hold more bytes, or more decoded bytes, than its budget: never the paper', async () => {
     const big = pdfOf([
       '<< /Type /Catalog /Pages 2 0 R >>',
       '<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>',
       '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents 4 0 R >>',
-      ['', Array(4000).fill('zz').join(' ')],
+      ['', `${Array(4000).fill('(a)').join(' ')} n`],
       '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents 6 0 R >>',
       ['', '0 0 1 1 re f'],
     ])
@@ -304,6 +320,40 @@ describe("the remover's walk bounded in memory: each stream lexed once, what a p
     expect(r[0]).toContain('streams that hold more than the walk allows')
     expect(r[1]).toContain('streams that hold more than the walk allows')
     expect(r[2]).toEqual([])
+  })
+})
+
+describe("the walk's budget against the re-review's probes, each under a 256 MB heap", () => {
+  // the re-review's round 2, R2-I1 and R2-I2: what each token and each event holds, by its kind, not a count of tokens;
+  // each content stream below is one Flate stream of a file of some 23-60 KB, which PDF.js reads in under a second
+  const flate = (content: string) => pdfBin([
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents 4 0 R >>',
+    ['/Filter /FlateDecode', Buffer.from(deflateSync(Buffer.from(content, 'latin1'))).toString('latin1')],
+  ])
+  const walk = 'const r = await R.openRemover(data, { PL }); return r.walkPage(0).problems'
+  const HELD = 'streams that hold more than the walk allows'
+  for (const [what, content, why] of [
+    ['60 MB of "["', '['.repeat(60_000_000), HELD],
+    ['7.9 million "(a)" and a painting operator', `${'(a) '.repeat(7_900_000)}n`, HELD],
+    ['7.9 million "<61>" and a painting operator', `${'<61> '.repeat(7_900_000)}n`, HELD],
+    ['one hex string of 60 MB', `<${'6'.repeat(60_000_000)}> Tj`, HELD],
+  ] as const) {
+    it(`refuses the page, never running out of memory: ${what}`, async () => {
+      expect(await bounded<string[]>(walk, flate(content), 20000, 256)).toEqual([why])
+    }, 30000)
+  }
+  it('refuses a page of 980 B whose forms show 20 million times with no font set: no event recorded, the visits bounded', async () => {
+    const fontless = pdfOf([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /XObject << /A 5 0 R >> >> /Contents 4 0 R >>',
+      ['', '/A Do'],
+      ['/Type /XObject /Subtype /Form /BBox [0 0 300 300] /Resources << /XObject << /B 6 0 R >> >>', Array(4000).fill('/B Do').join(' ')],
+      ['/Type /XObject /Subtype /Form /BBox [0 0 300 300]', Array(4990).fill('(x) Tj').join(' ')],
+    ])
+    expect(await bounded<string[]>('const r = await R.openRemover(data, { PL }); const w = r.walkPage(0); return [...w.problems, String(w.events.filter(e => e.kind === "show").length)]', fontless, 8000, 256)).toEqual(['forms that paint more than the walk allows', '0'])
   })
 })
 
