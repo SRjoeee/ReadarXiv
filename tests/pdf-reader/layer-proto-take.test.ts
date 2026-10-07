@@ -12,7 +12,7 @@ const ctxStub = (canvas?: { width: number; height: number }) => new Proxy({} as 
   get(t, k) {
     if (k in t) return t[k]
     // (an em a CJK character, half one any other, at the context's font size)
-    if (k === 'measureText') return (s: string) => { const px = Number(/(\d+(?:\.\d+)?)px/.exec(String(t.font ?? ''))?.[1] ?? 10); return { width: [...s].reduce((w, ch) => w + (/[　-鿿]/.test(ch) ? px : px / 2), 0), actualBoundingBoxAscent: 0.7 * px, actualBoundingBoxDescent: 0.2 * px } }
+    if (k === 'measureText') return (s: string) => { const px = Number(/(\d+(?:\.\d+)?)px/.exec(String(t.font ?? ''))?.[1] ?? 10); return { width: [...s].reduce((w, ch) => w + (/[\u3000-\u9fff]/.test(ch) ? px : px / 2), 0), actualBoundingBoxAscent: 0.7 * px, actualBoundingBoxDescent: 0.2 * px } }
     if (k === 'getImageData') return (_x: number, _y: number, w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(1, w * h) * 4).fill(255) })
     if (k === 'createImageData') return (w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(1, w * h) * 4) })
     if (k === 'canvas') return canvas
@@ -100,8 +100,11 @@ function paper(specs = SPECS) {
 }
 
 type Run = Awaited<ReturnType<typeof import('@/pdf-reader/engine/layer-proto/run.mjs').openProto>>
-/** v0 over the paper: every unit at once (today's call), or none, the record's ids expected (taken later) */
-async function open(P: ReturnType<typeof paper>, how: 'whole' | 'parts') {
+/** each unit's table group, as the paper's bundle gives it (the open's `groups`) */
+const groupsOf = () => new Map(SPECS.filter(s => s.group).map(s => [s.id, s.group!]))
+/** v0 over the paper: every unit at once (today's call), or none, the record's ids expected (taken later); `groups`,
+ *  each unit's table group given at open */
+async function open(P: ReturnType<typeof paper>, how: 'whole' | 'parts', { groups = null as Map<number, string> | null } = {}) {
   const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
   const units: unknown[] = []
   if (how === 'whole') for (const [id, r] of P.rows) units[id] = r
@@ -111,6 +114,7 @@ async function open(P: ReturnType<typeof paper>, how: 'whole' | 'parts') {
   return openProto({
     doc: P.doc, target: 'zh', pages: 3, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units,
     ...(how === 'parts' ? { expect: [...P.rows.keys()] } : {}),
+    ...(groups ? { groups } : {}),
     tex: { index: P.index, pieces, use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
   } as never) as Promise<Run>
 }
@@ -173,16 +177,16 @@ describe('v0 fed its units as they arrive (take, end)', () => {
       'one part': [ids], 'a row a part': partsOf(ids, 1), 'three a part': partsOf(ids, 3), 'the last first': partsOf(ids.slice().reverse(), 1),
       'shuffled, two a part': partsOf(shuffled(ids), 2), 'page 3, then 2, then 1': [onPage(3), onPage(2), onPage(1)],
     }
-    for (const [way, parts] of Object.entries(ways)) {
-      const P = paper()
-      const run = await open(P, 'parts')
+    for (const [way, parts] of Object.entries(ways)) for (const groups of [null, groupsOf()]) {
+      const P = paper(), as = `${way}${groups ? ', each unit\'s group given' : ''}`
+      const run = await open(P, 'parts', { groups })
       const fed = feed(run, P, parts)
       for (const p of [1, 2, 3]) await run.until(p)
       await fed
-      expect(drawing(run), way).toEqual(want)
-      expect(run.placed.map(p => p.id), way).toEqual(whole.placed.map(p => p.id))
-      expect(run.sources, way).toEqual(whole.sources)
-      expect(run.late(), way).toEqual([])
+      expect(drawing(run), as).toEqual(want)
+      expect(run.placed.map(p => p.id), as).toEqual(whole.placed.map(p => p.id))
+      expect(run.sources, as).toEqual(whole.sources)
+      expect(run.late(), as).toEqual([])
     }
   })
 
@@ -226,21 +230,59 @@ describe('v0 fed its units as they arrive (take, end)', () => {
   })
 
   it('until(p) never lays page p before p − 1', async () => {
+    // (each unit's table group given: a page is laid once its own units have come)
     const { want } = await wholeDrawing()
     const P = paper()
-    const run = await open(P, 'parts')
+    const run = await open(P, 'parts', { groups: groupsOf() })
+    const onPage = (p: number) => SPECS.filter(s => s.lines[0]![0] === p).map(s => s.id)
     const laid = run.until(3)
-    // page 3's rows, then page 2's: nothing drawn or laid while page 1's are not in
-    for (const p of [3, 2]) {
-      run.take(rowsOf(P, SPECS.filter(s => s.lines[0]![0] === p).map(s => s.id)))
-      await ticks()
-      expect(run.order).toEqual([])
-      expect(P.doc.asked).toEqual([])
-    }
-    run.take(rowsOf(P, SPECS.filter(s => s.lines[0]![0] === 1).map(s => s.id)))
+    await ticks()
+    // page 1 drawn, its units awaited
+    expect(P.doc.asked).toEqual([1])
+    expect(run.order).toEqual([])
+    // page 1's rows: its units laid while the later rows are missing, page 2 drawn and its units awaited
+    run.take(rowsOf(P, onPage(1)))
+    await ticks()
+    expect(run.order).toEqual(want.order.slice(0, 2))
+    expect(P.doc.asked).toEqual([1, 2])
+    // page 3's rows: nothing more while page 2's are missing
+    run.take(rowsOf(P, onPage(3)))
+    await ticks()
+    expect(run.order).toEqual(want.order.slice(0, 2))
+    expect(P.doc.asked).toEqual([1, 2])
+    // page 2's: page 2 laid, then page 3
+    run.take(rowsOf(P, onPage(2)))
     await laid
     expect(P.doc.asked).toEqual([1, 2, 3])
     expect(drawing(run)).toEqual(want)
+  })
+
+  it('draws the pages whose units have come while a later page\'s rows are still missing', async () => {
+    const { want } = await wholeDrawing()
+    const early = SPECS.filter(s => s.lines[0]![0] <= 2).map(s => s.id)
+    // each unit's table group given: the table on page 2 is read once its own cells are in
+    const P = paper()
+    const run = await open(P, 'parts', { groups: groupsOf() })
+    expect(run.take(rowsOf(P, early)).complete).toEqual([1, 2])
+    expect([1, 2, 3].map(p => run.complete(p))).toEqual([true, true, false])
+    await run.until(2)
+    expect(run.order).toEqual(want.order.slice(0, 6))
+    expect(drawing(run).pages.slice(0, 2)).toEqual(want.pages.slice(0, 2))
+    expect(run.complete(3)).toBe(false)
+    // a paper without tables: no group to read
+    const flat = SPECS.filter(s => !s.group)
+    const { want: wantFlat } = await wholeDrawing(flat)
+    const F = paper(flat)
+    const plain = await open(F, 'parts')
+    plain.take(rowsOf(F, flat.filter(s => s.lines[0]![0] <= 2).map(s => s.id)))
+    expect([1, 2, 3].map(p => plain.complete(p))).toEqual([true, true, false])
+    await plain.until(2)
+    expect(drawing(plain).pages.slice(0, 2)).toEqual(wantFlat.pages.slice(0, 2))
+    // without the groups, a table cell waits for every row: page 2 is not complete, nor page 1, done after it
+    const Q = paper()
+    const slow = await open(Q, 'parts')
+    slow.take(rowsOf(Q, early))
+    expect([1, 2].map(p => slow.complete(p))).toEqual([false, false])
   })
 
   it("one unit a task: no task holds two units' lays", async () => {
@@ -256,6 +298,16 @@ describe('v0 fed its units as they arrive (take, end)', () => {
     g.scheduler = { yield: () => Promise.resolve() }
     const { want } = await wholeDrawing()
     expect(drawing(run)).toEqual(want)
+  })
+
+  it('lets no page go before it is drawn and its units laid', async () => {
+    // (page 1 holds no unit: its doneAt is the page itself from the open on, and no release lets it go undrawn)
+    const specs = SPECS.filter(s => s.lines[0]![0] !== 1)
+    const P = paper(specs)
+    const run = await open(P, 'parts')
+    expect(run.doneAt(1)).toBe(1)
+    run.release(1)
+    expect(run.rows[0]!.released).toBeUndefined()
   })
 
   it('a row after its page was laid is counted late and draws nothing', async () => {
@@ -287,20 +339,24 @@ describe('rows that parse but are no unit of this paper (take)', () => {
   // (the web's rows pass parseAnswersDelta's shapes; one that does not fit the paper's own files is left the original's,
   // its why in v0's skipped list, and the rest of the paper is drawn as ever: as one open over the same rows draws it,
   // and as if that unit were not translated)
-  const hostile: [string, number, (P: ReturnType<typeof paper>) => Row, string][] = [
+  const hostile: [string, number, (P: ReturnType<typeof paper>) => Row, string, boolean?][] = [
     ["a piece's k past its unit's pieces in the layout file", 0, P => ({ ...P.rows.get(0)!, pieces: [{ t: 'text', tr: true, s: CJK(3) }, { t: 'ph', src: '\\cite{a}', k: 5 }] }), "row: a k not its source's"],
     ['an id neither the geometry nor the layout file holds', 30, () => ({ kind: 'para', src: 'Nowhere', state: 'whole', pieces: [{ t: 'text', tr: true, s: CJK(3) }] }), 'unanchored'],
     ['a kind the layout file does not give its id', 14, P => ({ ...P.rows.get(14)!, kind: 'cell' }), 'row: another kind'],
+    ['a table group the open was not given for its id', 9, P => ({ ...P.rows.get(9)!, group: 'T:c1' }), 'row: another group', true],
+    ['pieces that are not a list', 15, P => ({ ...P.rows.get(15)!, pieces: 'pieces' }) as unknown as Row, "row: not a unit's shape"],
+    ['a piece that is not a piece', 16, P => ({ ...P.rows.get(16)!, pieces: [null] }) as unknown as Row, "row: not a unit's shape"],
   ]
-  for (const [what, id, rowOfIt, why] of hostile) {
+  for (const [what, id, rowOfIt, why, given = false] of hostile) {
     it(`skips a row with ${what}, and draws the rest`, async () => {
       const W = paper()
       W.rows.set(id, rowOfIt(W))
-      const whole = await open(W, 'whole')
+      const groups = given ? groupsOf() : null
+      const whole = await open(W, 'whole', { groups })
       await whole.until(3)
       const P = paper()
       P.rows.set(id, rowOfIt(P))
-      const run = await open(P, 'parts')
+      const run = await open(P, 'parts', { groups })
       const fed = feed(run, P, partsOf([...P.rows.keys()], 1))
       for (const p of [1, 2, 3]) await run.until(p)
       await fed
@@ -311,7 +367,7 @@ describe('rows that parse but are no unit of this paper (take)', () => {
       // the unit not translated: the same pages, the same order
       const N = paper()
       if (N.rows.has(id)) N.rows.set(id, { ...N.rows.get(id)!, state: 'none', pieces: undefined })
-      const plain = await open(N, 'whole')
+      const plain = await open(N, 'whole', { groups })
       await plain.until(3)
       const want = drawing(plain)
       expect({ pages: d.pages, order: d.order, stats: d.stats }).toEqual({ pages: want.pages, order: want.order, stats: want.stats })

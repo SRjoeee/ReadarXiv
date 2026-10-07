@@ -209,9 +209,11 @@ function needsOf(K, N, passes, fileOnly) {
  * output's geometry (schema 1); `units`: its units file's units (each { kind, src, pieces, state }); `target`: the
  * language; `expect`: the ids of the units the run will report that are still to come (take, end), `units` then sparse
  * (a hole a unit not yet arrived), each page laid once every unit it reads has come; null (today's call): every unit is
- * in `units`. Options as main.js's query: `scale` (CSS px a PDF unit), `dpr`, `params` (layer2.mjs defaultParams'
- * overrides), `batch`, `phMode` ('auto' or 'source'), `restoring`, `order` (ids whose order a page's units are laid in,
- * in place of layGroups': a recorded run's). `faces`: 'roles' (the role table's) or 'prototype' (the prototype's own).
+ * in `units`. `groups`: each unit's table group, known at open (the paper's bundle, groups.mjs groupOf), so that a
+ * group is read once its own cells' rows are in; null: once every row is. Options as main.js's query: `scale` (CSS px a
+ * PDF unit), `dpr`, `params` (layer2.mjs defaultParams' overrides), `batch`, `phMode` ('auto' or 'source'),
+ * `restoring`, `order` (ids whose order a page's units are laid in, in place of layGroups': a recorded run's). `faces`:
+ * 'roles' (the role table's) or 'prototype' (the prototype's own).
  * `faceUrl(file)`, `fontUrl(file)`, `hyphUrl(lang)`: where the host serves the role table's faces (by file name), the
  * prototype's Latin Modern (by name) and TeX's patterns. Nothing is drawn until `until(p)` is awaited.
  * `tex` (the hybrid, tex.mjs): the layout file (`index`, layout/file.mjs indexLayout's), the units file's pieces by unit
@@ -235,8 +237,9 @@ function needsOf(K, N, passes, fileOnly) {
  * final's is (layer2.mjs labelInTarget), else kept as the original's ink. A table's group (each record unit's `group`) is
  * drawn whole or not at all.
  */
-export async function openProto({ doc, geometry, units: given, expect = null, target: to, pages = 999, scale = 1.25, dpr = 1, params = {}, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, copy = true, removal = null, labels = null }) {
+export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, params = {}, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, copy = true, removal = null, labels = null }) {
   if (expect !== null && (!Array.isArray(expect) || !expect.every(id => Number.isSafeInteger(id) && id >= 0))) throw new TypeError(`expect: ids of units or null, not ${kindOf(expect)}`)
+  if (tableGroups !== null && !(tableGroups instanceof Map)) throw new TypeError(`groups: a Map of ids to groups or null, not ${kindOf(tableGroups)}`)
   const P = L2.defaultParams(to)
   for (const k of PARAM_KEYS) if (params[k] !== undefined) P[k] = params[k]
   // (the maintainer's ruling of 2026-10-07, on S3-11: the script's leading on the original's own pitch reads more
@@ -306,6 +309,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, ta
   given.forEach((u, id) => U.set(id, u))
   const awaited = new Set(expect ?? [])
   const pending = new Set([...awaited].filter(id => U.get(id) === undefined))
+  // each unit's table group as the paper's own bundle gives it (groups.mjs groupOf), where the host knows it: a group is
+  // then read once its own cells' rows are in, not every row
+  const membersOf = new Map()
+  if (tableGroups) for (const [id, g] of tableGroups) (membersOf.get(g) ?? membersOf.set(g, []).get(g)).push(id)
   const judge = (id, u) => {
     if (!tex) return null
     const lu = tex.index.unit(id)
@@ -350,15 +357,22 @@ export async function openProto({ doc, geometry, units: given, expect = null, ta
     c.lists = from.map(shownOf).filter(l => l.length)
     c.reach = new Set(from.flatMap(rs => rs.map(r => r[0])))
   }
-  /** why a row is no unit of this paper's, though it parses (the web's rows: parseAnswersDelta), or null: its kind not the
-   *  one the layout file or the geometry gives its id, or a piece's k not one of its source's pieces (the layout file's
-   *  count). Its unit is left the original's, the rest of the paper drawn as ever */
+  /** whether a translated row holds what v0 reads of a unit, of the types it reads them as: its kind and source, and
+   *  pieces, each a text with its string or a placeholder, an open, a close or a nested footnote with its source's */
+  const shapely = u => typeof u.kind === 'string' && typeof u.src === 'string' && Array.isArray(u.pieces) && u.pieces.every(q => q !== null && typeof q === 'object' && (q.t === 'text' ? typeof q.s === 'string' : q.t === 'ph' || q.t === 'open' ? typeof q.src === 'string' : (q.t === 'close' || q.t === 'nested') && (q.src === undefined || typeof q.src === 'string')))
+  /** why a translated row is no unit of this paper's, though it parses (the web's rows: parseAnswersDelta), or null: not a
+   *  unit's shape; its kind not the one the layout file or the geometry gives its id; its table group not the one the
+   *  open was given (`groups`); a piece's k not one of its source's pieces (the layout file's count). Its unit is left
+   *  the original's, in no table group, the rest of the paper drawn as ever */
   const refusalOf = (id, u) => {
+    if (!shapely(u)) return "row: not a unit's shape"
     const lu = tex ? tex.index.unit(id) : null, kind = geometry.kinds?.[id]
     if ((lu && u.kind !== lu.kind) || (kind !== undefined && u.kind !== kind)) return 'row: another kind'
-    if (lu && u.pieces.some(q => q?.t !== 'text' && q?.k !== undefined && !(Number.isInteger(q.k) && q.k >= 0 && q.k < lu.pieces))) return "row: a k not its source's"
+    if (tableGroups && (u.group ?? null) !== (tableGroups.get(id) ?? null)) return 'row: another group'
+    if (lu && u.pieces.some(q => q.t !== 'text' && q.k !== undefined && !(Number.isInteger(q.k) && q.k >= 0 && q.k < lu.pieces))) return "row: a k not its source's"
     return null
   }
+  const refusedOf = (id, u, why) => ({ id, kind: u.kind, why, chars: shapely(u) ? trCharsOf(u) : 0 })
   /**
    * What v0 makes of a unit once its row is in, before its table's group is read: placed (with the pages it is drawn
    * on and which source its geometry is), or not, and why it is left (`skip`); the hybrid's why a unit placed is v0's
@@ -367,7 +381,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, ta
   const decide = (c, u) => {
     if (!translated(u)) return { p: null }
     const no = refusalOf(c.id, u)
-    if (no) return { p: null, skip: { id: c.id, kind: u.kind, why: no, chars: trCharsOf(u) } }
+    if (no) return { p: null, skip: refusedOf(c.id, u, no) }
     if (c.rects) {
       if (u.kind === 'author') return { p: null, skip: { id: c.id, kind: u.kind, why: 'author', chars: trCharsOf(u), pages: [...new Set(c.rects.map(r => r[0]))] } }
       const w = judge(c.id, u)
@@ -398,14 +412,26 @@ export async function openProto({ doc, geometry, units: given, expect = null, ta
   // a table's consistency group drawn whole or not at all (the table-groups brief, 2026-10-07): the record translates
   // or keeps each group whole (its cells' `group`, cache.mjs unitsOf), and a translated cell that cannot be drawn here —
   // no lines for it, or none on the pages shown — keeps every cell of its group the original's. A group's cells may be
-  // anywhere in the paper, so it is read once every row is in (or end()), and every row is fixed then
-  const groupCells = new Map(), split = new Set()
+  // anywhere in the paper: it is read once its own cells' rows are in where the open is given each unit's group
+  // (`groups`), else once every row is (or end()), every row fixed then; the rows it reads are fixed from then on
+  const groupCells = new Map(), split = new Set(), read = new Set()
   let frozenAll = false
+  const member = (id, u) => !!u?.group && translated(u) && !refusalOf(id, u)
+  /** group g read from the rows of `ids`, its own cells among them */
+  const readGroup = (g, ids) => {
+    read.add(g)
+    const cells = ids.filter(id => member(id, U.get(id)) && U.get(id).group === g)
+    for (const id of ids) fixed.add(id)
+    if (!cells.length) return
+    groupCells.set(g, cells)
+    if (cells.some(id => !(candOf.has(id) && decisionOf(candOf.get(id)).p))) split.add(g)
+  }
   const freezeAll = () => {
     if (frozenAll) return
     frozenAll = true
-    U.forEach((u, id) => { if (u?.group && translated(u)) (groupCells.get(u.group) ?? groupCells.set(u.group, []).get(u.group)).push(id) })
-    for (const [g, ids] of groupCells) if (ids.some(id => !(candOf.has(id) && decisionOf(candOf.get(id)).p))) split.add(g)
+    const unread = new Map()
+    U.forEach((u, id) => { if (member(id, u) && !read.has(u.group)) (unread.get(u.group) ?? unread.set(u.group, []).get(u.group)).push(id) })
+    for (const [g, ids] of unread) readGroup(g, ids)
   }
   // the lowest unit line of each page: no unit borrows below it (the page's text area)
   for (const [, , rects] of GU) for (const r of rects) pageBottom[r[0]] = Math.min(pageBottom[r[0]] ?? Infinity, r[2] + 0.24 * (r[4] - r[2]))
@@ -1026,7 +1052,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, ta
     if (!c.lists.length || frozenAll) return true
     if (pending.has(c.id)) return false
     const u = U.get(c.id)
-    return !u?.group || !translated(u) || !pending.size || !decisionOf(c).p
+    if (!u?.group || !translated(u) || !pending.size || read.has(u.group)) return true
+    // (a cell placed waits for its group: its own cells' rows where the open was given them, else every row)
+    if (tableGroups && (membersOf.get(u.group) ?? []).every(id => !pending.has(id))) return true
+    return !decisionOf(c).p
   }
   /** the next unit in the stream placed, or not and why */
   const consume = c => {
@@ -1038,7 +1067,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, ta
     if (d.skip) skipped.push(d.skip)
     let p = d.p
     if (p && u.group) {
-      freezeAll()
+      if (!tableGroups) freezeAll()
+      else if (!read.has(u.group)) readGroup(u.group, membersOf.get(u.group) ?? [])
       if (split.has(u.group)) { skipped.push({ id: p.id, kind: u.kind, why: 'group: a cell not drawn', chars: trCharsOf(u), pages: p.pages }); p = null }
     }
     if (!p) return
@@ -1052,8 +1082,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, ta
   // the page after whose units a page is done: the last that lays a unit with lines on it; over the units placed so far
   // (their pages', where need says so)
   const rank = orderIn ? new Map(orderIn.map((id, i) => [id, i])) : null
-  let groups = new Map(), doneAt = []
+  let groups = new Map(), doneAt = Array.from({ length: N + 1 }, (_, pg) => pg), plannedTo = 0
   const plan = () => {
+    plannedTo = frontier
     groups = new Map(layGroups(laidOut, batch).map(([pg, ids]) => [pg, rank ? ids.slice().sort((a, b) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity)) : ids]))
     const groupOf = new Map()
     for (const [pg, ids] of groups) for (const id of ids) groupOf.set(id, pg)
@@ -1063,20 +1094,19 @@ export async function openProto({ doc, geometry, units: given, expect = null, ta
     // sets that unit)
     if (P.even || P.adaptiveFill) for (let pg = 1; pg <= N; pg++) for (const p of laidOut) if (p.pages.includes(pg)) doneAt[pg] = Math.max(doneAt[pg], doneAt[p.pages[0]])
   }
-  /** page pg's doneAt once the units it reads are placed, else Infinity */
-  const doneAtOf = pg => (pg >= 1 && pg <= N && frontier <= need.done[pg] ? Infinity : doneAt[pg])
+  /** page pg's doneAt once the units it reads are placed and planned, else Infinity */
+  const doneAtOf = pg => (pg >= 1 && pg <= N && plannedTo <= need.done[pg] ? Infinity : doneAt[pg])
   // (until's: waiting for a take or end(); one waiter, until's own chain)
   let wake = null
   const changed = () => { const w = wake; wake = null; w?.() }
   /** the units of the stream up to K[idx] placed, as their rows come */
   const settle = async idx => {
-    let moved = false
     while (frontier <= idx && frontier < K.length) {
-      if (!settleable(K[frontier])) { await new Promise(ok => { wake = ok }); continue }
+      // (planned before waiting: doneAt never reads a placement it has not planned)
+      if (!settleable(K[frontier])) { if (plannedTo < frontier) plan(); await new Promise(ok => { wake = ok }); continue }
       consume(K[frontier])
-      moved = true
     }
-    if (moved) plan()
+    if (plannedTo < frontier) plan()
   }
   /** every unit placed with what is in, and why each one left is left: the units no page shows, and those v0 neither
    *  holds nor the file alone locates */
@@ -1085,7 +1115,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, ta
     freezeAll()
     while (frontier < K.length) consume(K[frontier])
     for (const c of deferred.splice(0)) { fixed.add(c.id); const d = decisionOf(c); if (d.skip) skipped.push(d.skip) }
-    U.forEach((u, id) => { if (translated(u) && !candOf.has(id)) skipped.push(unanchoredOf(id, u)) })
+    U.forEach((u, id) => { if (!translated(u) || candOf.has(id)) return; const no = refusalOf(id, u); skipped.push(no ? refusedOf(id, u, no) : unanchoredOf(id, u)) })
     plan()
   }
   /** how far into the stream every unit's row decides what it is */
@@ -1096,6 +1126,19 @@ export async function openProto({ doc, geometry, units: given, expect = null, ta
   if (!pending.size) settleAll()
   const order = [], pageMs = []
   let drawnTo = 0, busy = Promise.resolve()
+  /** the next page drawn, then the units its drawing lays laid once they have come, a yield before each (no task lays
+   *  two; the page's passes run with the unit that completes it) */
+  const layNext = async () => {
+    const pg = drawnTo + 1
+    const t0 = performance.now()
+    await drawPage(pg)
+    const t1 = performance.now()
+    await settle(need.lay[pg])
+    const waited = performance.now() - t1
+    for (const id of groups.get(pg) ?? []) { await yieldNow(); order.push(id); arrive(byId.get(id)) }
+    drawnTo = pg
+    pageMs[pg] = performance.now() - t0 - waited
+  }
   const colsOf = pg => {
     // the page's columns: its paragraphs' lines' left and right edges, clustered
     const list = (cols[pg] ?? []).slice().sort((a, b) => a[0] - b[0])
@@ -1143,33 +1186,24 @@ export async function openProto({ doc, geometry, units: given, expect = null, ta
     },
     /** the page after whose units page `pg` is done (Infinity until the units it reads have come) */
     doneAt: doneAtOf,
-    /** every page up to the one that finishes page `p` drawn, and the units each lays laid and painted, a unit a task,
-     *  each page once its units have come (complete) */
+    /** every page up to the one that finishes page `p` drawn, and the units each lays laid and painted, a unit a task:
+     *  page after page, each once the units it lays have come, up to p, then on to the page that finishes it (doneAt,
+     *  once the units on it have come) */
     until(p) {
       busy = busy.then(async () => {
         const q = Math.min(p, N)
+        while (drawnTo < q) await layNext()
         await settle(need.done[q] ?? -1)
         const to = Math.min(N, doneAt[q] ?? p)
-        while (drawnTo < to) {
-          const pg = drawnTo + 1
-          const t0 = performance.now()
-          await drawPage(pg)
-          const t1 = performance.now()
-          await settle(need.lay[pg])
-          const waited = performance.now() - t1
-          // (a yield before each unit's lay: no task lays two, the page's passes running with the unit that completes it)
-          for (const id of groups.get(pg) ?? []) { await yieldNow(); order.push(id); arrive(byId.get(id)) }
-          drawnTo = pg
-          pageMs[pg] = performance.now() - t0 - waited
-        }
+        while (drawnTo < to) await layNext()
       })
       return busy
     },
     /**
      * Units as they arrive (rows: id → its row, the units record's): each awaited unit's row, which wins over one taken
      * before it until the unit is placed; a translated row's pieces' k read into the hybrid's pieces (trPiecesOf: the
-     * units file's TrPiece). A row for a unit already placed, after end(), or for an id not awaited changes nothing and
-     * is late; one no unit of this paper's is left the original's (refusalOf). Returns the pages now complete.
+     * units file's TrPiece). A row that can no longer change the drawing is late (late()); one no unit of this paper's
+     * is left the original's (refusalOf). Returns the pages newly complete: those not reported complete before.
      */
     take(rows) {
       const list = [...rows]
@@ -1193,9 +1227,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, ta
       settleAll()
       changed()
     },
-    /** whether every unit page `pg`'s laying reads has come (or end()): until(pg) then waits for no take */
+    /** whether every unit page `pg`'s laying reads has come (or end()): until(pg) then waits for no take. It turns false
+     *  again only where a table cell's row is taken again before its group is read */
     complete: pg => isComplete(pg),
-    /** the ids taken that changed nothing: their unit placed already, after end(), or never awaited */
+    /** the ids of every row taken that could no longer change the drawing, and changed nothing: its unit placed already
+     *  (its page may not be laid yet), its rows fixed by a table group read, taken after end(), or never expected. Not a
+     *  page to draw again: no laid page ever changes */
     late: () => [...late],
     /**
      * Page `pg`'s copy at a view's own resolution, `k` device pixels a PDF unit (its CSS px a unit × its device pixel

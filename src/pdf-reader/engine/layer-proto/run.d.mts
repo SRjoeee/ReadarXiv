@@ -75,14 +75,18 @@ export interface ProtoRun {
   /** every page up to the one that finishes page `page` drawn and its units laid, a unit a task, once they have come */
   until(page: number): Promise<void>
   /** units as they arrive (id → row): a row wins over one taken before it until its unit is placed; the hybrid's pieces
-   *  read from each translated row's pieces' k; a row no unit of this paper's (its kind not the layout file's or the
-   *  geometry's, a k past its source's pieces) left the original's, in `skipped`. The pages now complete */
+   *  read from each translated row's pieces' k; a row no unit of this paper's (not a unit's shape, its kind not the
+   *  layout file's or the geometry's, its group not the open's `groups`, a k past its source's pieces) left the
+   *  original's, in `skipped`. The pages newly complete: those not reported complete before */
   take(rows: ReadonlyMap<number, Unit>): { complete: number[] }
   /** no more units: every page is complete with what it holds */
   end(): void
-  /** whether every unit laying page `page` reads has come (or end()): until(page) waits for no take */
+  /** whether every unit laying page `page` reads has come (or end()): until(page) waits for no take. It turns false
+   *  again only where a table cell's row is taken again before its group is read */
   complete(page: number): boolean
-  /** the ids taken that changed nothing: their unit placed already, taken after end(), or not expected */
+  /** every id taken whose row could no longer change the drawing, and changed nothing: its unit placed already (its
+   *  page perhaps not laid yet), its row fixed by a table group read, taken after end(), or never expected. Never a
+   *  page to draw again: no laid page changes */
   late(): number[]
   /** a done page's copy at `k` device pixels a PDF unit onto `ctx`, from `source`, the page as PDF.js drew it at k */
   drawCopy(page: number, ctx: CanvasRenderingContext2D, source: DrawSource, k: number): Promise<void>
@@ -120,6 +124,9 @@ export declare function openProto(o: {
   units: readonly (Unit | undefined)[]
   /** the ids of the units the run will report, taken as they arrive; null (the default): every unit is in `units` */
   expect?: readonly number[] | null
+  /** each unit's table group (groups.mjs groupOf), known at open: a group is read once its own cells' rows are in, and a
+   *  row whose group is another is no unit of this paper's; null (the default): a group waits for every row */
+  groups?: ReadonlyMap<number, string> | null
   target: string
   pages?: number
   scale?: number
