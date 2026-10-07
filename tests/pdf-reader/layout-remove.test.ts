@@ -273,6 +273,27 @@ describe("the remover's walk bounded in memory: each stream lexed once, what a p
   })
 })
 
+describe("an edit of a long shown string costs its length, not its square", () => {
+  it('takes one glyph out of a string of 800,000 codes within seconds', async () => {
+    // the review of round 3, M3: each kept code was joined onto the bytes before it, 172 s for 1.28 million codes (about
+    // 9 s for these; now some 150 ms)
+    const long = pdfOf([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+      ['', `BT /F1 1 Tf 20 250 Td (${'A'.repeat(800000)}) Tj ET`],
+      font,
+    ])
+    const PDFJS = pathToFileURL(join(process.cwd(), 'node_modules/pdfjs-dist/legacy/build/pdf.mjs')).href
+    const body = `const pdfjs = await import(${JSON.stringify(PDFJS)}); const { deflateSync } = require('node:zlib')
+      const doc = await pdfjs.getDocument({ data: data.slice(), verbosity: 0 }).promise
+      const opList = await (await doc.getPage(1)).getOperatorList()
+      const out = await R.makeAddon({ R: await R.openRemover(data, { PL }), bytes: data, OPS: pdfjs.OPS, opListOf: async () => opList, deflate: b => new Uint8Array(deflateSync(b)), plan: { pages: { 1: { units: [{ id: 1, glyphs: [0, 5], paths: [] }], crops: [] } } } })
+      return out.manifest.page[1]`
+    expect(await bounded<{ ok: boolean }>(body, long, 4000)).toMatchObject({ ok: true })
+  })
+})
+
 describe("a Type 3 font's advance, as PDF.js draws it", () => {
   it("keeps a retained glyph where it was when a glyph before it is removed: the font matrix's translation is in the advance", async () => {
     // Codex's review of PR A, finding 4: PDF.js advances a Type 3 glyph by (w * FontMatrix[0] + FontMatrix[4]) * size;

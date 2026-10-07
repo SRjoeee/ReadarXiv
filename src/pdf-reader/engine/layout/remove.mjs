@@ -173,7 +173,8 @@ export const HELD_MAX = 8_000_000, BYTES_MAX = 64 * 1024 * 1024
 /** the highest code a font's /W names: a CID font's two-byte codes (a range [0 4294967295 w] was read code by code) */
 const CODE_MAX = 0xffff
 const fmt = x => { if (Math.abs(x) < 5e-7) return '0'; let s = x.toFixed(6); s = s.replace(/0+$/, '').replace(/\.$/, ''); return s === '-0' ? '0' : s }
-const hex = b => `<${[...b].map(v => v.toString(16).padStart(2, '0')).join('')}>`
+const HEX = Array.from({ length: 256 }, (_, v) => v.toString(16).padStart(2, '0'))
+const hex = b => { let s = '<'; for (let i = 0; i < b.length; i++) s += HEX[b[i]]; return `${s}>` }
 const concat = parts => { let n = 0; for (const p of parts) n += p.length; const out = new Uint8Array(n); let o = 0; for (const p of parts) { out.set(p, o); o += p.length } return out }
 
 /**
@@ -476,8 +477,10 @@ function editsOf(walk, { codes, paints, drop = [], colourOf = null, mode = 'cut'
     if (m === 'cut') {
       const segs = [{ colour: null, out: [] }]
       let out = segs[0].out
+      // (a run of kept codes collected, then joined once: joined code by code it cost the square of the string's length,
+      // 172 s for 1.28 million codes, the review of round 3)
       const pushNum = v => { const l = out.at(-1); if (l && l.num !== undefined) l.num += v; else out.push({ num: v }) }
-      const pushB = b => { const l = out.at(-1); if (l?.b) l.b = concat([l.b, b]); else out.push({ b: Uint8Array.from(b) }) }
+      const pushB = b => { const l = out.at(-1); if (l?.parts) l.parts.push(b); else out.push({ parts: [b] }) }
       for (const it of items) {
         if (it.num !== undefined) pushNum(it.num)
         else if (it.off) {
@@ -490,7 +493,7 @@ function editsOf(walk, { codes, paints, drop = [], colourOf = null, mode = 'cut'
           pushB(it.b)
         }
       }
-      text += segs.filter(g => g.out.length).map(g => `${g.colour ? `${g.colour} rg ${g.colour} RG ` : ''}[${g.out.map(x => (x.b ? hex(x.b) : fmt(x.num))).join(' ')}] TJ`).join(' ')
+      text += segs.filter(g => g.out.length).map(g => `${g.colour ? `${g.colour} rg ${g.colour} RG ` : ''}[${g.out.map(x => (x.parts ? hex(concat(x.parts)) : fmt(x.num))).join(' ')}] TJ`).join(' ')
     } else {
       const chunks = []
       for (const it of items) {
@@ -501,8 +504,8 @@ function editsOf(walk, { codes, paints, drop = [], colourOf = null, mode = 'cut'
       }
       const body = c => {
         const out = []
-        for (const it of c.items) { const l = out.at(-1); if (it.num !== undefined) { if (l && l.num !== undefined) l.num += it.num; else out.push({ num: it.num }) } else if (l?.b) l.b = concat([l.b, it.b]); else out.push({ b: Uint8Array.from(it.b) }) }
-        return `[${out.map(x => (x.b ? hex(x.b) : fmt(x.num))).join(' ')}] TJ`
+        for (const it of c.items) { const l = out.at(-1); if (it.num !== undefined) { if (l && l.num !== undefined) l.num += it.num; else out.push({ num: it.num }) } else if (l?.parts) l.parts.push(it.b); else out.push({ parts: [it.b] }) }
+        return `[${out.map(x => (x.parts ? hex(concat(x.parts)) : fmt(x.num))).join(' ')}] TJ`
       }
       text += chunks.map(c => (c.hid ? `3 Tr ${body(c)} ${fmt(s.Tr)} Tr` : body(c))).join(' ')
     }
