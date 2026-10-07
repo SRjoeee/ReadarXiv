@@ -211,6 +211,20 @@ describe("the remover on untrusted input: every loop advances or refuses", () =>
     ])
     expect(await bounded<number>('const r = await R.openRemover(data, { PL }); return r.walkPage(0).events.filter(e => e.kind === "show")[0].codes.length', wide)).toBe(2)
   })
+  it("reads a font's /W in time near its numbers, not the codes its ranges span", async () => {
+    // the review of round 3, M1: 20,000 ranges [0 65535 500], each of every code, took 22 s code by code (PDF.js: 1.5 s)
+    const many = pdfOf([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F0 5 0 R >> >> /Contents 4 0 R >>',
+      ['', 'BT /F0 10 Tf 20 250 Td <00410042> Tj ET'],
+      '<< /Type /Font /Subtype /Type0 /BaseFont /X /Encoding /Identity-H /DescendantFonts [6 0 R] >>',
+      `<< /Type /Font /Subtype /CIDFontType2 /BaseFont /X /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /DW 1000 /W [${Array(20000).fill('0 65535 500').join(' ')} 66 [250]] >>`,
+    ])
+    // the codes' widths as the last entry for each gives them: 0x41 by the ranges, 0x42 by the array after them
+    const widths = await bounded<number[]>('const r = await R.openRemover(data, { PL }); const e = r.walkPage(0).events.filter(e => e.kind === "show")[0]; return e.codes.map(c => e.state.font.width(c.v))', many, 3000)
+    expect(widths).toEqual([0.5, 0.25])
+  })
 })
 
 describe("the remover's walk bounded in memory: each stream lexed once, what a page holds within its budget", () => {

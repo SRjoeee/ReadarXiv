@@ -233,16 +233,25 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
       if (desc && en === 'Identity-H') {
         const dw = num(get(desc, 'DW')) ?? 1000
         const W = get(desc, 'W')
-        const widths = new Map()
+        // (a two-byte code's width by its place: a range is one fill, so that /W costs what its numbers are, not what its
+        // ranges span; 20,000 ranges of every code took 22 s as a Map, code by code, against PDF.js's 1.5 s)
+        const widths = new Float64Array(CODE_MAX + 1).fill(Number.NaN)
         if (W instanceof PDFArray) {
           const a = W.asArray().map(look)
           for (let k = 0; k < a.length;) {
             const c0 = num(a[k])
-            if (a[k + 1] instanceof PDFArray) { a[k + 1].asArray().map(look).forEach((w, j) => widths.set(c0 + j, num(w))); k += 2 }
-            else { const c1 = num(a[k + 1]), w = num(a[k + 2]); for (let c = Math.max(0, c0), last = Math.min(c1, CODE_MAX); c <= last; c++) widths.set(c, w); k += 3 }
+            if (a[k + 1] instanceof PDFArray) {
+              a[k + 1].asArray().forEach((w, j) => { const c = c0 + j; if (c >= 0 && c <= CODE_MAX) widths[c] = num(look(w)) ?? Number.NaN })
+              k += 2
+            } else {
+              const c1 = num(a[k + 1]), w = num(a[k + 2])
+              const first = Math.max(0, Math.ceil(c0)), last = Math.min(Math.floor(c1), CODE_MAX)
+              if (Number.isFinite(first) && Number.isFinite(last) && last >= first) widths.fill(w ?? Number.NaN, first, last + 1)
+              k += 3
+            }
           }
         }
-        info.width = code => (widths.get(code) ?? dw) / 1000
+        info.width = code => { const w = code >= 0 && code <= CODE_MAX ? widths[code] : Number.NaN; return (Number.isNaN(w) ? dw : w) / 1000 }
       }
     } else {
       const first = num(get(dict, 'FirstChar'))
