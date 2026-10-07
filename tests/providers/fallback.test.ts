@@ -13,7 +13,7 @@ const provider = (id: string): TranslationProvider => ({
   translate: async () => ({ segments: [], provider: id }),
 })
 
-const ok = (id: string): TranslateMessageResponse => ({ ok: true, result: { segments: [{ id: 's1', text: `${id} 译文` }], provider: id }, cached: 0 })
+const ok = (id: string): TranslateMessageResponse => ({ ok: true, result: { segments: [{ id: 's1', text: `${id} 译文` }], provider: id, kind: 'mt' }, cached: 0 })
 const fail = (kind: ProviderErrorKind, message: string = kind): TranslateMessageResponse => ({ ok: false, error: { kind, message, isolatable: true } })
 
 /** Returns the preset results one per call; once used up, repeats the last */

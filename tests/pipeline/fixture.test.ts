@@ -16,7 +16,7 @@ describe('pipeline × fixture', () => {
     let calls = 0
     const transport: Transport = async req => {
       calls++
-      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock' }, cached: 0 }
+      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock', kind: 'mt' }, cached: 0 }
     }
     const t0 = performance.now()
     const run = startTranslation({ doc, blocks, target: 'zh-CN', mode: 'stack', paper: '2410.00260', transport, capabilities: { maxBatchChars: 1000, maxBatchItems: 4, renderPath: 'tags' }, preload: DEFAULT_PRELOAD })

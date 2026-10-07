@@ -11,20 +11,27 @@
  * or a page that frames the reader says (the F2 review's I1: the test build met the protocol-1 page at 8071)
  */
 export const TEX_PAGE = import.meta.env?.PROD ? 'https://tex.readarxiv.org' : 'http://127.0.0.1:8071'
+/**
+ * The TeX Live file server a protocol-1 page reads, a build setting too: in development the one spikes/serve-live.mjs
+ * runs on this machine; a production build names none, since our site's page reads its own tree and ignores an init's
+ * endpoint (poc-site/tex-page.mjs), and a release names no address on this machine (scripts/check-output.mjs)
+ */
+export const FILE_SERVER = import.meta.env?.PROD ? null : 'http://localhost:8070'
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]'])
 const parse = value => { try { return value ? new URL(value) : null } catch { return null } }
 const local = u => (u.protocol === 'http:' || u.protocol === 'https:') && LOOPBACK.has(u.hostname) && !u.username && !u.password
 
-/** { site, endpoint, src, pdf }: the TeX page's origin, its file server's origin (a protocol-1 page's alone), the paper's
- *  source and its PDF; `texPage` the build's (TEX_PAGE) */
-export function readerAddresses(params, paper, texPage = TEX_PAGE) {
+/** { site, endpoint, src, pdf }: the TeX page's origin, its file server's origin (a protocol-1 page's alone; none by
+ *  default in a production build), the paper's source and its PDF; `texPage` and `fileServer` the build's (TEX_PAGE,
+ *  FILE_SERVER) */
+export function readerAddresses(params, paper, texPage = TEX_PAGE, fileServer = FILE_SERVER) {
   const origin = (name, fallback) => { const u = parse(params.get(name)); return u && local(u) ? u.origin : fallback }
   const address = (name, fallback) => { const u = parse(params.get(name)); return u && (local(u) || (u.origin === 'https://arxiv.org' && !u.username && !u.password)) ? u.href : fallback }
   return {
     // our TeX page; in development, and the TeX Live file server a protocol-1 page reads, as spikes/serve-live.mjs starts
     // them on this machine
     site: origin('site', texPage),
-    endpoint: origin('endpoint', 'http://localhost:8070'),
+    endpoint: origin('endpoint', fileServer),
     src: address('src', `https://arxiv.org/src/${paper}`),
     pdf: address('pdf', `https://arxiv.org/pdf/${paper}`),
   }

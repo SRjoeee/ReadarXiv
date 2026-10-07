@@ -313,6 +313,7 @@ export async function translateTexts(texts, to, { parallel = 4, send = translate
 }
 
 // ---------------------------------------------------------------- names
+// The pipeline's cell rule (nameCells), kept apart from src/core/names.ts until a pipeline version moves
 /**
  * Whether a short text (a table cell, a figure label) is only a name — a dataset, a model, a method — which, sent
  * alone and with no context, comes back as words (HellaSwag → 地狱之战, Magicoder → 魔法师), while the prose keeps

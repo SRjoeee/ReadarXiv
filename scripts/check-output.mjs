@@ -3,7 +3,7 @@
 // Met 2026-09-04: the content side imported @/cache/index by mistake and bundled Dexie, which uses "￿" as a key-range upper bound.
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { basename, join, sep } from 'node:path'
+import { basename, join, relative, sep } from 'node:path'
 import { contentScriptsRunningOn } from './site-isolation.mjs'
 
 const OUT = '.output/chrome-mv3'
@@ -55,6 +55,25 @@ const sameList = (a, b) => a.length === b.length && [...a].sort().every((value, 
 // of this extension, so its entry standing for "the list was written" cannot go stale
 const NOTICES = join(OUT, 'licenses/third-party.txt')
 const notices = existsSync(NOTICES) ? readFileSync(NOTICES, 'utf8') : ''
+
+const filesUnder = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry => (entry.isDirectory() ? filesUnder(join(dir, entry.name)) : [join(dir, entry.name)]))
+// What only a development build may hold (DESIGN §16): this machine's TeX pages, the one spikes/serve-live.mjs runs at
+// 127.0.0.1:8071 and the TeX Live file server a protocol-1 page reads at localhost:8070 (addresses.mjs) — a release
+// naming one would typeset a reader's paper with whatever answers there —, and the TeX page's compiler, BusyTeX in
+// texlyre's build, which runs on the TeX page and never in the extension. Every file of the package is read, as
+// latin1 (the addresses and the names are ASCII, so a binary is read too): the addresses anywhere; the compiler by its
+// files, not by its name in prose — a path naming it, or content naming its package or one of its files (a comment a
+// build keeps may say "the BusyTeX worker" and ships nothing of it)
+const LOOPBACK_TEX = /(?:127\.0\.0\.1|localhost|\[::1\]):(?:8070|8071)(?!\d)/
+const COMPILER_PATH = /busytex|texlyre/i
+const COMPILER_FILES = /texlyre|busytex[\w.-]*\.(?:js|wasm|data)|busytex_pipeline/i
+const loopbackNamed = []
+const compilerNamed = []
+for (const path of filesUnder(OUT)) {
+  const content = readFileSync(path).toString('latin1')
+  if (COMPILER_PATH.test(relative(OUT, path)) || COMPILER_FILES.test(content)) compilerNamed.push(path)
+  if (LOOPBACK_TEX.test(content)) loopbackNamed.push(path)
+}
 for (const [what, ok] of [
   [`the website's hosts are read from src/shared/web-app.ts: ${siteMatches.join(', ') || 'none found'}`, siteHosts.length > 0 && siteMatches.every(match => /^https:\/\/[a-z0-9.-]+\/\*$/.test(match))],
   [`one content script runs on the website's pages, and it matches ${siteMatches.join(', ')} exactly`, siteEntries.length === 1 && sameList(siteEntry.matches, siteMatches) && siteEntry.js.length === 1],
@@ -71,6 +90,8 @@ for (const [what, ok] of [
   [`${NOTICES} lists what the recogniser's worker bundles`, /^onnxruntime-web \d[^\n]* — MIT$/m.test(notices) && /^esearch-ocr \d[^\n]* — Apache-2\.0$/m.test(notices)],
   // the dev pages (wxt.config.ts DEV_PAGES) are for development builds: a release holding one would ship a debug page
   [`${OUT} holds no dev page`, ['gallery.html', 'controls.html', 'capsule.html'].every(page => !existsSync(join(OUT, page)))],
+  [`${OUT} names no loopback TeX page${loopbackNamed.length > 0 ? ` (${loopbackNamed.join(', ')})` : ''}`, loopbackNamed.length === 0],
+  [`${OUT} holds no BusyTeX or texlyre file${compilerNamed.length > 0 ? ` (${compilerNamed.join(', ')})` : ''}`, compilerNamed.length === 0],
 ]) {
   if (ok) console.log(`✓ ${what}`)
   else {
@@ -99,7 +120,6 @@ const MODELS = {
   'ocr/PP-OCRv6_tiny_rec.onnx': '9ef676d6ed3c88256a2d92c640c44f25b0c40947e111b14b8be8f594091563e6',
   'ocr/PP-OCRv6_tiny_dict.txt': 'c5cbe34ef40c29c4df07ed012bf96569cb69a2d2a01a07027e9f13cb832bd9cd',
 }
-const filesUnder = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry => (entry.isDirectory() ? filesUnder(join(dir, entry.name)) : [join(dir, entry.name)]))
 // The PDF reader's data files (`pdf-reader/`, copied by wxt.config.ts: PDF.js's WebAssembly decoders among them) are the
 // reader's, not the recogniser's, and are not counted by the recogniser's rules below. The directory, separator and
 // all: its page, `pdf-reader.html`, and any file whose name begins so are the build's own

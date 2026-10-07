@@ -35,7 +35,7 @@ function makeTransport(mutate?: (req: TranslateCall, seg: { id: string; text: st
       }
       segments.push({ id: seg.id, text: typeof out === 'string' ? out : seg.text })
     }
-    return { ok: true, result: { segments, provider: 'mock' }, cached: 1 }
+    return { ok: true, result: { segments, provider: 'mock', kind: 'mt' }, cached: 1 }
   }
   return { transport, requests }
 }
@@ -58,7 +58,7 @@ describe('startTranslation', () => {
     const transport: Transport = async req => {
       calls++
       const provider = calls <= 1 ? 'llm' : 'free'
-      return { ok: true, result: { segments: req.request.segments.map(seg => ({ id: seg.id, text: seg.text })), provider }, cached: 0 }
+      return { ok: true, result: { segments: req.request.segments.map(seg => ({ id: seg.id, text: seg.text })), provider, kind: calls <= 1 ? 'llm' : 'mt' }, cached: 0 }
     }
     const seen: string[] = []
     const run = await start(doc, blocks, transport, { onProvider: id => seen.push(id) })
@@ -111,7 +111,7 @@ describe('startTranslation', () => {
     const gate = new Promise<void>(resolve => { release = resolve })
     const transport: Transport = async req => {
       await gate
-      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock' }, cached: 0 }
+      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock', kind: 'mt' }, cached: 0 }
     }
     const seen: Progress[] = []
     const run = await start(doc, blocks, transport, { onProgress: p => seen.push(p) })
@@ -355,7 +355,7 @@ describe('startTranslation', () => {
     const gate = new Promise<void>(resolve => { release = resolve })
     const transport: Transport = async req => {
       await gate
-      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock' }, cached: 0 }
+      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock', kind: 'mt' }, cached: 0 }
     }
     const seen: Progress[] = []
     const run = await start(doc, blocks, transport, { onProgress: p => seen.push(p) })
@@ -522,7 +522,7 @@ describe('onRendered: hands over the blocks whose DOM just changed, for each bat
     const gate = new Promise<void>(r => { release = r })
     const transport: Transport = async req => {
       await gate
-      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock' }, cached: 0 }
+      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock', kind: 'mt' }, cached: 0 }
     }
     const seen: Block[][] = []
     const run = await start(doc, blocks, transport, { onRendered: b => seen.push(b) })

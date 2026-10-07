@@ -104,7 +104,10 @@ function makeTracker(format: WireFormat, parts: string[], spans: WireSpan[], spa
    * with such a join — 9 % of all text blocks: headings, the word before a footnote mark or a citation, an
    * affiliation after its label, a caption after its tag — the word came back in English in **330 of 330** as sent
    * and in 26 of 330 with the space (names, mostly), with the markers intact in 400 and 401 of 404. Google loses the
-   * marker itself on `@b#th` and keeps it with the space.
+   * marker itself on `@b#th` and keeps it with the space. **So is one right after a period**: `word.@a#` — a footnote
+   * mark or a citation after a sentence, as physics papers set them — left the word in English in 13 of the 17 such
+   * blocks of the fixtures as sent (Chinese and Japanese alike, one marker split from its `#` besides) and in none with
+   * the space (2026-09-28). Of nine marks of punctuation only the period does it.
    *
    * The space is the wire's, not the page's: it maps to no character of the DOM (an anchor of its text run says so),
    * and `rehydrate` takes the space on that side of that marker off the translation. `last` is the last character
@@ -126,8 +129,8 @@ function makeTracker(format: WireFormat, parts: string[], spans: WireSpan[], spa
      */
     raw(s: string, node: Node, role: 'void' | 'open' | 'close', apart?: number) {
       // `apart` is the marker's id when it may be set apart from a word. The space before it belongs to the text
-      // run that ended in the word — the last span, since a placeholder never ends in a letter
-      if (apart !== undefined && WORD.test(last)) {
+      // run that ended in the word or its period — the last span, since a placeholder never ends in either
+      if (apart !== undefined && (WORD.test(last) || last === '.')) {
         const run = spans[spans.length - 1]!
         parts.push(' ')
         run.to += 1

@@ -77,6 +77,14 @@ describe('a marker that touches a word is set apart from it on the wire', () => 
     expect(b.spaced.get(1)).toEqual({ before: true, after: false })
   })
 
+  it('a marker right after a period: a space before it too, taken off as the translation is filled back', () => {
+    // `models.@a#` is one token to the engine, as `models@a#` is: the word came back in English (2401.00596)
+    const b = wire(`<p class="ltx_p">useful tools for calibrating theoretical models.${MARK} However, this</p>`)
+    expect(b.text).toBe('useful tools for calibrating theoretical models. @a# However, this')
+    expect(b.spaced.get(1)).toEqual({ before: true, after: false })
+    expect(htmlOf(rehydrate(`${ZH.title}. @a# ${ZH.plain[0]}`, b, document))).toBe(`${ZH.title}.${MARK} ${ZH.plain[0]}`)
+  })
+
   it('both sides, digits included; and a marker between two markers or against punctuation is left alone', () => {
     expect(wire('<p class="ltx_p">resized to 256<math class="ltx_Math"><mo>×</mo></math>256 pixels</p>').text).toBe('resized to 256 @a# 256 pixels')
     const b = wire('<p class="ltx_p">follows (<a class="ltx_ref" href="#E3">3</a>)–(<a class="ltx_ref" href="#E4">4</a>), so <math class="ltx_Math"><mi>u</mi></math><math class="ltx_Math"><mi>v</mi></math> holds</p>')
