@@ -12,10 +12,12 @@
 // Checked: readBundle(writeBundle(parts)) gives every part back (bytes and string alike, no unit dropped, the layout
 // written as its file is, arXiv's bytes then the tail the cached add-on), and the same parts give the same bytes. And
 // every cached manifest (out/layer-gate/removal/*/shipped-manifest.json and manifest.json) read by parseAddonManifest:
-// those of this REMOVAL parse; the others are refused by their `removal` (or their bytes), their shape the reader's.
+// those of this REMOVAL parse; the others are refused by their `removal` (or their bytes), their shape the reader's. And
+// the units of every paper of the corpus (data/corpus/*/source.gz), openPaper's through bundleUnitsOf, in a bundle of
+// their own (no layout, no add-on) read back: none dropped.
 // Recorded (records/layer-bundle.md, sizes alone, no paper text): each part's bytes raw and gzipped (level 9), the
 // bundle's raw, gzipped and brotli (quality 11), its values, and readBundle's time (the median of 5, a reading). Exits 1
-// where a paper's identity fails.
+// where a paper's identity fails, a cached manifest of this REMOVAL is refused, or a corpus paper's unit is dropped.
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/bundle-check.mjs [--no-record]
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -34,7 +36,7 @@ const { unpackSource } = await import(join(ENGINE, 'tar.mjs'))
 
 const PAPERS = [['1512.03385v1', 'zh'], ['1706.03762v7', 'zh'], ['1810.04805v2', 'zh'], ['2307.16209v1', 'de'], ['2608.04322v1', 'zh']]
 const FIXTURES = join(ROOT, 'out/layer-gate/fixtures/41795914c3c84238'), GEOMETRY = join(ROOT, 'out/layer-gate/cut-p10/geometry')
-const REMOVALS = join(ROOT, 'out/layer-gate/removal')
+const REMOVALS = join(ROOT, 'out/layer-gate/removal'), CORPUS = join(ROOT, 'data/corpus')
 /** the compiler image's name the web's prepare names (container/image.json) */
 const IMAGE = '1'
 const RECORD = !process.argv.includes('--no-record')
@@ -45,6 +47,7 @@ const gz = b => gzipSync(b, { level: 9 }).length
 const br = b => brotliCompressSync(b, { params: { [constants.BROTLI_PARAM_QUALITY]: 11, [constants.BROTLI_PARAM_SIZE_HINT]: b.length } }).length
 const kb = n => (n / 1024).toFixed(1)
 const same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i])
+const n0 = v => v.toLocaleString('en-US')
 const median = xs => { const s = [...xs].sort((a, b) => a - b); return (s[(s.length - 1) >> 1] + s[s.length >> 1]) / 2 }
 
 /** the newest cached compact add-on of this REMOVAL whose first bytes are arXiv's: its tail, manifest and folder */
@@ -134,6 +137,27 @@ const manifests = [...tally].sort(([a], [b]) => a.localeCompare(b))
 for (const [k, n] of manifests) console.log(`${String(n).padStart(3)} ${k}`)
 if (manifests.some(([k]) => k.includes(`REMOVAL ${REMOVAL}: refused`))) { console.log(`FAIL a manifest of REMOVAL ${REMOVAL} refused`); failed++ }
 
+// every corpus paper's units, in a bundle of their own, read back: a unit the reader drops is one the writer wrote
+const corpus = { papers: 0, units: 0, unread: [], dropped: [] }
+for (const folder of readdirSync(CORPUS).sort()) {
+  const source = join(CORPUS, folder, 'source.gz')
+  if (!existsSync(source)) continue
+  const [, id, v] = /^(.+?)(?:v(\d+))?$/.exec(folder)
+  const version = Number(v ?? 1)
+  let units
+  try { units = bundleUnitsOf(openPaper((await unpackSource(new Uint8Array(readFileSync(source)))).files)) } catch (e) { corpus.unread.push(`${folder} (${String(e?.message ?? e).slice(0, 60)})`); continue }
+  const bytes = writeBundle({
+    paper: { id, version, pages: 1 }, base: { bytes: 1, sha256: '0'.repeat(64), url: `/api/v1/original/${id.replace('/', '_')}v${version}` }, image: IMAGE,
+    units, left: { kinds: units.map(u => u[0]), pages: [[0, 0, 612, 792]], units: [] }, layout: null, addon: null,
+  })
+  const r = readBundle(bytes)
+  corpus.papers++
+  corpus.units += units.length
+  for (const i of r.dropped) corpus.dropped.push(`${folder} #${i}`)
+}
+console.log(`${corpus.dropped.length ? 'FAIL' : 'ok  '} the corpus: ${corpus.papers} papers, ${n0(corpus.units)} units read back, ${corpus.dropped.length} dropped${corpus.dropped.length ? ` (${corpus.dropped.join(', ')})` : ''}${corpus.unread.length ? `; ${corpus.unread.length} not opened: ${corpus.unread.join('; ')}` : ''}`)
+if (corpus.dropped.length) failed++
+
 if (RECORD) {
   const commit = execFileSync('git', ['-C', REPO, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
   const n = v => v.toLocaleString('en-US')
@@ -145,6 +169,8 @@ if (RECORD) {
     '| Paper | Pages | Units | units KB raw / gz | layout | left | tail KB (base64) | manifest KB | **bundle raw** | **gzip** | **brotli** | values | read ms |',
     '|---|---|---|---|---|---|---|---|---|---|---|---|---|',
     ...rows.map(r => `| ${r.name} | ${r.pages} | ${r.units} | ${kb(r.unitsSize[0])} / ${kb(r.unitsSize[1])} | ${kb(r.layoutSize[0])} / ${kb(r.layoutSize[1])} | ${kb(r.leftSize[0])} / ${kb(r.leftSize[1])} | ${kb(r.tail)} (${kb(r.tail64)}) | ${kb(r.manifest)} | ${n(Number(kb(r.raw)))} | ${kb(r.gzip)} | **${kb(r.brotli)}** | ${n(r.values)} | ${r.readMs.toFixed(1)} |`),
+    '',
+    `Every corpus paper's units (\`data/corpus/*/source.gz\`, ${corpus.papers} papers, ${n0(corpus.units)} units), in a bundle of their own, read back: ${corpus.dropped.length} dropped${corpus.unread.length ? ` (${corpus.unread.length} papers not opened)` : ''}.`,
     '',
     '## Every cached add-on manifest, read by `parseAddonManifest`',
     '',
