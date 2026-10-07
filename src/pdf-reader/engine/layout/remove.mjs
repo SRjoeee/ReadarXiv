@@ -235,20 +235,25 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
         const dw = num(get(desc, 'DW')) ?? 1000
         const W = get(desc, 'W')
         // (a two-byte code's width by its place: a range is one fill, so that /W costs what its numbers are, not what its
-        // ranges span; 20,000 ranges of every code took 22 s as a Map, code by code, against PDF.js's 1.5 s)
+        // ranges span; 20,000 ranges of every code took 22 s as a Map, code by code, against PDF.js's 1.5 s. Read as
+        // PDF.js reads it (evaluator's /W): a first code not an integer, or a range's last, ends it; a width not a
+        // number is passed over, the code keeping what it had)
         const widths = new Float64Array(CODE_MAX + 1).fill(Number.NaN)
         if (W instanceof PDFArray) {
           const a = W.asArray().map(look)
           for (let k = 0; k < a.length;) {
-            const c0 = num(a[k])
+            const start = num(a[k])
+            if (!Number.isInteger(start)) break
             if (a[k + 1] instanceof PDFArray) {
-              a[k + 1].asArray().forEach((w, j) => { const c = c0 + j; if (c >= 0 && c <= CODE_MAX) widths[c] = num(look(w)) ?? Number.NaN })
+              a[k + 1].asArray().forEach((w, j) => { const c = start + j, v = num(look(w)); if (typeof v === 'number' && c >= 0 && c <= CODE_MAX) widths[c] = v })
               k += 2
             } else {
-              const c1 = num(a[k + 1]), w = num(a[k + 2])
-              const first = Math.max(0, Math.ceil(c0)), last = Math.min(Math.floor(c1), CODE_MAX)
-              if (Number.isFinite(first) && Number.isFinite(last) && last >= first) widths.fill(w ?? Number.NaN, first, last + 1)
+              const end = num(a[k + 1]), w = num(a[k + 2])
+              if (!Number.isInteger(end)) break
               k += 3
+              if (typeof w !== 'number') continue
+              const first = Math.max(0, start), last = Math.min(end, CODE_MAX)
+              if (last >= first) widths.fill(w, first, last + 1)
             }
           }
         }

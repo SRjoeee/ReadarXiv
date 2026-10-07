@@ -219,9 +219,10 @@ describe("the remover on untrusted input: every loop advances or refuses", () =>
       '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F0 5 0 R >> >> /Contents 4 0 R >>',
       ['', 'BT /F0 10 Tf 20 250 Td <00410042> Tj ET'],
       '<< /Type /Font /Subtype /Type0 /BaseFont /X /Encoding /Identity-H /DescendantFonts [6 0 R] >>',
-      `<< /Type /Font /Subtype /CIDFontType2 /BaseFont /X /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /DW 1000 /W [${Array(20000).fill('0 65535 500').join(' ')} 66 [250]] >>`,
+      `<< /Type /Font /Subtype /CIDFontType2 /BaseFont /X /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /DW 1000 /W [${Array(20000).fill('0 65535 500').join(' ')} 66 [250] 66 [/X] 1.5 [100]] >>`,
     ])
-    // the codes' widths as the last entry for each gives them: 0x41 by the ranges, 0x42 by the array after them
+    // the codes' widths as the last entry for each gives them, as PDF.js reads /W: 0x41 by the ranges, 0x42 by the array
+    // after them (a name for a width passed over, a first code not an integer ending the array)
     const widths = await bounded<number[]>('const r = await R.openRemover(data, { PL }); const e = r.walkPage(0).events.filter(e => e.kind === "show")[0]; return e.codes.map(c => e.state.font.width(c.v))', many, 3000)
     expect(widths).toEqual([0.5, 0.25])
   })
