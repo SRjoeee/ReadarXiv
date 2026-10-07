@@ -383,6 +383,8 @@ interface ProtectedBlock {
 
 A translation passes when the set of void ids equals the source's exactly, each once; paired tags are matched and legally nested; and no id absent from the source appears. The expectations are derived from the request text itself (`expectationsFromText`) — after escaping, every `<x>` / `<t>` in it is necessarily a real placeholder — so the check sits right beside the cache write in the background (§9) and needs no callback across the message boundary.
 
+On the `markers` wire a marker is found only with its `#`. Microsoft drops the `#` now and then before CJK text (`@b` and a Han character, #291), and such a reply fails as `missing`; reading `@x` before a CJK character or mark as the marker was measured and not adopted. Over Microsoft's recorded Chinese answers for the PDF reader's units (3 466 replies, 2 571 with markers, 180 failing as `missing`) it would take 111, and 3 of them would show a `#`: displaced before its marker (`#…@c`), or left beside a fragment the engine wrote twice; over 170 Japanese answers, 1 of the 16 it would take. It changes none of the 2 391 that pass. Such a reply is handled as any failure below; the PDF reader, whose wire holds no `#`, reads it so and drops every stray `#` (§16).
+
 Failure handling: the single block is sent again with the prompt's emphasis on keeping placeholders (`cache.bypass`, so a bad entry written before is neither read nor kept), then the block falls back to the runs path, then it is marked failed with the reason (§7.6).
 
 **The survival rate is measured, not assumed.** `pnpm e2e:placeholders` feeds a synthetic paper — 12 sentence shapes × a placeholder at the start, middle and end, against punctuation, two adjacent, inside a number, three in one sentence, a citation, a cross-reference, paired tags, seven in one sentence — to real engines and judges by counting `math` / `.ltx_cite` / `.ltx_ref` in the translation; the page fakes an arXiv URL with `page.route` and runs the whole pipeline. Google (`tags`) and Microsoft (`markers`) × Chinese, Arabic and Japanese: 60/60 came back as they went, including the one loss shape Read Frog ever saw (`256×256`). The LLM path needs a key of one's own; the tool takes an engine name.
@@ -390,6 +392,7 @@ Failure handling: the single block is sent again with the prompt's emphasis on k
 ### 6.4 Rehydration
 
 - A placeholder is replaced by a **clone** of the node in `slots` (`cloneNode(true)`); the clone loses every `id` (duplicate anchors) and every `data-axt-*` attribute.
+- **A marker's `#` set twice is the marker's** (#320): Microsoft writes a closer twice now and then, `@e##`, or with a space between, `@d# #`, and read strictly the second `#` stood in the translation ("Figure 10#"). A reply is read with the markers wire's one reader, the PDF reader's too (`protector/tokens.ts` `markerReader`, §16): a run of `#` after a marker's own, spaces or tabs between, is the marker's, inside its wire interval. Only where the block's text holds no `#` of its own (`isHashFree`): 20 of the fixtures' 5 999 blocks do (`F#`, `#nodes`), and there a `#` beside a marker may be the paper's, moved, so they keep the strict reading. The run holds only `#`, spaces and tabs, none of which begins a marker, so the set of markers — validation, §6.3 — is the same either way; the cache holds the engine's reply (§9), and a cached `@e##` is read anew.
 - **A clone carries no behaviour**: `stripInjected` (`core/marks.ts`) also removes `on*` attributes and script-running URLs (`javascript:`, `data:text/html`) from `href` / `src` / `action`, judged after normalising by the URL standard — tabs and newlines removed anywhere, controls and spaces stripped from the front — so `java&#10;script:` cannot slip past. `data:image/…` stays. arXiv emits no such attributes today; this pins the invariant rather than fixing a fault.
 - All three modes use the clone; the original node is never touched — only mode hides the original block, it does not move it.
 - **Refused when the page changed under the block** (#212): the slots are references to live nodes. At fill-back time the block is serialised again and compared — the text must be the same and each slot must still be the same node in the same order — and on a mismatch `rehydrate` and the runs path throw `PlaceholderIntegrityError('stale')`; the pipeline marks the block failed with the reason, sends nothing again, and the retry serialises it afresh (§10). Nothing on arXiv trips it today (its scripts never touch the body); it turns a silent wrong fill into a visible failure.
@@ -894,11 +897,13 @@ is only how it meets the rest of the extension.
   page (§15.1) sends every box and keeps names only from an engine that read each box alone: a known difference,
   deferred to the debt issue. The cells and figure units a compile leaves as they are keep the pipeline's own test
   (`mt.mjs` `nameCells`) until a pipeline version moves. On the markers wire (§6.2, the free engines'), a reply is
-  read back with one forgiveness more (`mt.mjs` `rehydrate`): a marker's `#` the engine set twice, `@e##` or `@e# #`,
-  is the marker's, and so is the first stray `#` after a marker read without its own — the wire's text holds no `#` of
-  its own, TeX's `\#` being a placeholder — where Microsoft's Chinese for 2610.02069 had set the second as text ("El
-  Ni ñ#", "Figure 10#"). And an accent inside a word goes as the letter it makes (`latex-front.mjs` `accentLetter`:
-  ten text accents, `\~n`, `\'{e}`, `{\"o}`, `\v c`, `\'\i` …), so that the engine reads the word whole, where `El
+  read back by the HTML page's reader (`protector/tokens.ts` `markerReader`, §6.4; `mt.mjs` `rehydrate`): a marker's
+  `#` the engine set twice, `@e##` or `@e# #`, is the marker's, where Microsoft's Chinese for 2610.02069 had set the
+  second as text ("El Ni ñ#", "Figure 10#"). Here alone, the wire's text holding no `#` of its own (TeX's `\#` being a
+  placeholder), a reply short of a marker is read once more with a marker without its `#` (§6.3, #291), and every
+  stray `#` is dropped, the first after such a marker included. And an accent inside a word goes as the letter it
+  makes (`latex-front.mjs` `accentLetter`: ten text accents, `\~n`, `\'{e}`, `{\"o}`, `\v c`, `\'\i` …), so that
+  the engine reads the word whole, where `El
   Ni{\~n}o` had gone out as `El Ni @d#@e#@f# o` and come back without the word's end; wherever the source is set — the
   marked original, a unit left as it is or set in the source — the accent is written as the source has it. Only a
   letter every strategy sets: LaTeX's UTF-8 table declares it (pdfLaTeX sets it as the accent, in OT1, T1, T2A and
