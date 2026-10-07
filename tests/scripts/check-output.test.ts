@@ -42,13 +42,18 @@ describe('a production build fails check-output when', () => {
 
   it('a production package names a loopback TeX page (`127.0.0.1:8071`, `localhost:8070`)', () => {
     expect(verdict(LOOPBACK)).toBe('✓')
-    for (const address of ['http://127.0.0.1:8071', 'http://localhost:8070']) {
+    for (const address of ['http://127.0.0.1:8071', 'http://localhost:8070', 'http://[::1]:8071']) {
       put(`${OUT}/chunks/session.js`, `const site = '${address}'\n`)
       expect(verdict(LOOPBACK)).toBe('✗')
     }
-    // in any text file of the package, not only a script
-    put(`${OUT}/chunks/session.js`, "const site = 'https://tex.readarxiv.org'\n")
+    // a port alone, or another port on this machine, names no TeX page
+    put(`${OUT}/chunks/session.js`, "const port = 8071; const ollama = 'http://localhost:11434/v1'; const far = 'http://127.0.0.1:80710'\n")
+    expect(verdict(LOOPBACK)).toBe('✓')
+    // in any file of the package, not only a script: a page, and a file that is not UTF-8
     put(`${OUT}/pdf-reader.html`, '<iframe src="http://127.0.0.1:8071/"></iframe>\n')
+    expect(verdict(LOOPBACK)).toBe('✗')
+    rmSync(join(root, OUT, 'pdf-reader.html'))
+    put(`${OUT}/assets/engine.wasm`, new Uint8Array([0, 0x61, 0x73, 0x6d, 0xff, 0xfe, ...Buffer.from('http://localhost:8070'), 0xff]))
     expect(verdict(LOOPBACK)).toBe('✗')
   })
 
@@ -59,12 +64,19 @@ describe('a production build fails check-output when', () => {
     expect(verdict(TEX)).toBe('✗')
     rmSync(join(root, OUT, 'tex'), { recursive: true })
     expect(verdict(TEX)).toBe('✓')
-    // by what a file holds, whatever its name: a bundled module, or a binary carrying the name
+    // by what a file holds, whatever its name: a bundled module of the package, a reference to one of its files, a
+    // binary carrying one
     put(`${OUT}/chunks/compile.js`, 'import { BusyTex } from "texlyre-busytex"\n')
     expect(verdict(TEX)).toBe('✗')
-    rmSync(join(root, OUT, 'chunks/compile.js'))
-    put(`${OUT}/assets/engine.wasm`, new Uint8Array([0, 0x61, 0x73, 0x6d, ...Buffer.from('busytex_main'), 0xff]))
+    put(`${OUT}/chunks/compile.js`, "const worker = new Worker('/busytex/busytex_pipeline.js')\n")
     expect(verdict(TEX)).toBe('✗')
+    rmSync(join(root, OUT, 'chunks/compile.js'))
+    put(`${OUT}/assets/engine.wasm`, new Uint8Array([0, 0x61, 0x73, 0x6d, 0xff, ...Buffer.from('busytex.data'), 0xff]))
+    expect(verdict(TEX)).toBe('✗')
+    rmSync(join(root, OUT, 'assets/engine.wasm'))
+    // the name in prose is none of its files: a comment a build keeps
+    put(`${OUT}/chunks/live.js`, '/*! a compile the TeX page failed: the BusyTeX worker gave up after 180 s (BusyTeX\'s own limit) */\n')
+    expect(verdict(TEX)).toBe('✓')
   })
 
   it('a production package holds a development page', () => {

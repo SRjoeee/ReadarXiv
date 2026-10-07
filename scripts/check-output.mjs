@@ -60,21 +60,19 @@ const filesUnder = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entr
 // What only a development build may hold (DESIGN §16): this machine's TeX pages, the one spikes/serve-live.mjs runs at
 // 127.0.0.1:8071 and the TeX Live file server a protocol-1 page reads at localhost:8070 (addresses.mjs) — a release
 // naming one would typeset a reader's paper with whatever answers there —, and the TeX page's compiler, BusyTeX in
-// texlyre's build, which runs on the TeX page and never in the extension. Every file of the package is read: the
-// addresses in any text file, the compiler's name in any path and in any file's bytes (a bundled module, or a binary
-// that carries it)
-const LOOPBACK_TEX = /(?:127\.0\.0\.1|localhost|\[::1\]):807[01](?!\d)/
-const TEX_COMPILER = /busytex|texlyre/i
+// texlyre's build, which runs on the TeX page and never in the extension. Every file of the package is read, as
+// latin1 (the addresses and the names are ASCII, so a binary is read too): the addresses anywhere; the compiler by its
+// files, not by its name in prose — a path naming it, or content naming its package or one of its files (a comment a
+// build keeps may say "the BusyTeX worker" and ships nothing of it)
+const LOOPBACK_TEX = /(?:127\.0\.0\.1|localhost|\[::1\]):(?:8070|8071)(?!\d)/
+const COMPILER_PATH = /busytex|texlyre/i
+const COMPILER_FILES = /texlyre|busytex[\w.-]*\.(?:js|wasm|data)|busytex_pipeline/i
 const loopbackNamed = []
 const compilerNamed = []
 for (const path of filesUnder(OUT)) {
-  const bytes = readFileSync(path)
-  if (TEX_COMPILER.test(relative(OUT, path)) || TEX_COMPILER.test(bytes.toString('latin1'))) compilerNamed.push(path)
-  let text = null
-  try {
-    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
-  } catch {}
-  if (text !== null && LOOPBACK_TEX.test(text)) loopbackNamed.push(path)
+  const content = readFileSync(path).toString('latin1')
+  if (COMPILER_PATH.test(relative(OUT, path)) || COMPILER_FILES.test(content)) compilerNamed.push(path)
+  if (LOOPBACK_TEX.test(content)) loopbackNamed.push(path)
 }
 for (const [what, ok] of [
   [`the website's hosts are read from src/shared/web-app.ts: ${siteMatches.join(', ') || 'none found'}`, siteHosts.length > 0 && siteMatches.every(match => /^https:\/\/[a-z0-9.-]+\/\*$/.test(match))],
