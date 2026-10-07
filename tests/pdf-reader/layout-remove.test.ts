@@ -227,6 +227,23 @@ describe("the remover on untrusted input: every loop advances or refuses", () =>
     const grew = await bounded<number>('const before = process.memoryUsage().arrayBuffers; const r = await R.openRemover(data, { PL }); const w = r.walkPage(0); const after = process.memoryUsage().arrayBuffers; if (w.events.filter(e => e.kind === "show").length !== 3000) throw new Error("shows"); return after - before', fonts, 8000, 256)
     expect(grew).toBeLessThan(16 * 2 ** 20)
   })
+  it("reads an embedded CMap's codespaces in one pass, however many open with no close", async () => {
+    // the re-review's round 2, R2-I4: each of 120,000 openings with no close ran the pattern to the text's end, 22 s for
+    // a CMap of 13.6 KB (PDF.js: 0.29 s); a codespace read, and the codes it splits, are as before
+    const cmap = (body: string) => pdfOf([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F0 5 0 R >> >> /Contents 4 0 R >>',
+      ['', 'BT /F0 10 Tf <0041> Tj ET'],
+      '<< /Type /Font /Subtype /Type0 /BaseFont /X /Encoding 6 0 R /DescendantFonts [7 0 R] >>',
+      ['/Type /CMap /CMapName /X', body],
+      '<< /Type /Font /Subtype /CIDFontType0 /BaseFont /X /CIDSystemInfo << /Registry (Adobe) /Ordering (X) /Supplement 0 >> >>',
+    ])
+    const codes = 'const r = await R.openRemover(data, { PL }); const w = r.walkPage(0); return { problems: w.problems, codes: w.events.filter(e => e.kind === "show").map(e => e.codes.length) }'
+    // (no codespace read: the font is refused for an edit, its codes read a byte each)
+    expect(await bounded(codes, cmap('begincodespacerange '.repeat(120000)), 3000)).toEqual({ problems: [], codes: [2] })
+    expect(await bounded(codes, cmap('1 begincodespacerange <0000> <ffff> endcodespacerange begincodespacerange'), 3000)).toEqual({ problems: [], codes: [1] })
+  })
   it("reads a font's /W in time near its numbers, not the codes its ranges span", async () => {
     // the review of round 3, M1: 20,000 ranges [0 65535 500], each of every code, took 22 s code by code (PDF.js: 1.5 s)
     const many = pdfOf([

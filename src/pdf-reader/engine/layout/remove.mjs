@@ -226,8 +226,17 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
       if (en === 'Identity-H' || en === 'Identity-V') { info.bytes = 2; info.vertical = en === 'Identity-V' }
       else if (encv instanceof PDFStream) {
         const txt = td.decode(decode(encv))
+        // (each codespace from its opening to the next close, in one pass: the lazy pattern ran to the text's end from
+        // every opening with no close after it, the square of their count, 22 s for a 13.6 KB CMap of 120,000)
         const ranges = []
-        for (const m of txt.matchAll(/begincodespacerange([\s\S]*?)endcodespacerange/g)) for (const r of m[1].matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g)) ranges.push([r[1].length / 2, parseInt(r[1], 16), parseInt(r[2], 16)])
+        for (let at = 0; ;) {
+          const open = txt.indexOf('begincodespacerange', at)
+          if (open < 0) break
+          const close = txt.indexOf('endcodespacerange', open)
+          if (close < 0) break
+          for (const r of txt.slice(open + 19, close).matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g)) ranges.push([r[1].length / 2, parseInt(r[1], 16), parseInt(r[2], 16)])
+          at = close + 17
+        }
         if (ranges.length) info.ranges = ranges; else info.refused = 'a CMap without a codespace'
         if (/\/WMode\s+1/.test(txt)) info.vertical = true
       } else info.refused = `the CMap ${en ?? '(none)'}`
