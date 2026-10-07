@@ -219,3 +219,28 @@ describe("a CJK cell's bands between the rules over and under its lines (cellBan
   })
 })
 
+
+describe("adaptiveFill (D, the default) keeps a CJK cell clear of its rule (Codex's review of PR A, finding 5)", () => {
+  it("re-lays a fillable cell at its fill leading and settles it in its band: its em box under the rule over it", async () => {
+    const { fillPage, settleLayout } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    // a cell of two lines on a loose original (pitch 15 at 10 pt), the rule over its first line 7.63 over its baseline
+    const block = { page: 1, rects: [[1, 0, 97.86, 100, 106.8], [1, 0, 82.86, 100, 91.8]], x0: 0, x1: 100, B: [100, 85], exact: [true, true], sizes: [10, 10], pitch0: 15, free: 0, indent: 0, after: 0, centred: false }
+    const rules = [0, 107.63, 100, 108.03]
+    const words = (n: number, of: number) => Array.from({ length: n }, (_, q) => [...(q ? [{ space: true, w100: 25 }] : []), { s: '汉'.repeat(of), cls: 'cjk', w100: 50 * of, st: {} }]).flat()
+    // as openProto: its parameters with adaptiveFill's defaults, the cell held to its band (capScale), fillable
+    const P = { ...L2.defaultParams('zh'), adaptiveFill: { band: 0.05, track: 0.05, size: 1.1 } }
+    const clear = L2.cellBands([block] as never, () => rules, 10)!
+    const rel = L2.leadOf([block] as never, 10, { ...P, leadRel: true } as never)
+    expect(rel).toBeLessThanOrEqual(P.leadBase - 0.05)
+    const p = { id: 1, unit: { kind: 'cell' }, pages: [1], tokens: words(2, 10), blocks: [block], s: 10, clear, fillRange: [rel, P.leadBase], P: { ...P, leadBase: rel, growTo: 0, capScale: clear.cap } as Record<string, unknown>, layout: null as never as { lines: { block: number; baseline: number }[]; scale: number } }
+    p.layout = L2.layoutUnit2(p.tokens as never, p.blocks as never, 10, p.P as never, 'zh') as never
+    settleLayout(p)
+    const clearOf = () => p.layout.lines[0]!.baseline + 0.88 * 10 * p.layout.scale
+    expect(clearOf()).toBeLessThanOrEqual(107.13 + 1e-9)
+    // the page's fill pass lays it anew: still clear
+    let filled = false
+    fillPage([p] as never, P as never, 'zh', () => { filled = true })
+    expect(filled).toBe(true)
+    expect(clearOf()).toBeLessThanOrEqual(107.13 + 1e-9)
+  })
+})

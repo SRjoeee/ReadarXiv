@@ -92,6 +92,74 @@ export function layGroups(placed, batch = 8) {
 export const layOrder = (placed, batch = 8) => layGroups(placed, batch).flatMap(([, ids]) => ids)
 
 /**
+ * A unit's layout made final: a CJK cell's lines moved into their bands between the rules over and under them
+ * (layer2.mjs cellBands, clearLines) at the size it is drawn at. Every step that lays a unit anew (its fit, the page's
+ * even pass, adaptiveFill's) ends here, before the unit is recorded or painted.
+ */
+export function settleLayout(p) {
+  if (p.clear) L2.clearLines(p.layout.lines ?? [], p.clear.bands, p.s * (p.layout.scale ?? 1))
+}
+
+/**
+ * adaptiveFill (D, P.adaptiveFill: { band, track, size }; the default since 2026-10-07, false for B): the units of a
+ * loose original's page that begin on it (`loose`, each laid already: tokens, blocks, s, P, fillRange), each spread over
+ * its original paragraph's space, the page's lines kept to one rhythm. Each unit's fill leading is the loosest, between
+ * its leading relative to the original's pitch and the script's on it (leadBase), at which its most natural state still
+ * sets it whole: its text then reaches its frame's foot. The page's target is the median of its body units' (of all its
+ * loose units' where it has none); each unit takes its fill leading, but never more than `band` over the target, so
+ * that neighbouring paragraphs keep one line spacing. A unit the band stops short of its fill then takes tracking, up to
+ * `track` em, and where that is not enough its size, up to `size` x the original's. A unit that does not fit naturally
+ * even at its relative leading keeps its own fit. Each unit filled is laid anew in place (p.P, p.layout, its extents
+ * kept), then `onFilled(p, target)`.
+ */
+export function fillPage(loose, P, to, onFilled = () => {}) {
+  const { band = 0.05, track = 0.05, size = 1.1 } = P.adaptiveFill
+  const fitsNaturally = (p, PP) => { const l = L2.layoutUnit2(p.tokens, p.blocks, p.s, PP, to); return l.tried === 1 && !l.clipped ? l : null }
+  const fillLeadOf = p => {
+    const [lo, hi] = p.fillRange
+    for (let k = Math.round((hi - lo) / 0.01); k >= 0; k--) {
+      const L = Math.min(hi, Math.round((lo + k * 0.01) * 1000) / 1000)
+      if (fitsNaturally(p, { ...p.P, leadBase: L, growTo: 0 })) return L
+    }
+    return null
+  }
+  for (const p of loose) if (p.fillLead === undefined) p.fillLead = fillLeadOf(p)
+  const body = loose.filter(p => p.fillLead !== null && EVEN_KINDS.has(p.unit.kind))
+  const leads = (body.length ? body : loose.filter(p => p.fillLead !== null)).map(p => p.fillLead)
+  if (!leads.length) return null
+  const target = median(leads)
+  for (const p of loose) {
+    if (p.fillLead === null) continue
+    let PP = { ...p.P, leadBase: Math.min(p.fillLead, Math.round((target + band) * 1000) / 1000), growTo: 0 }
+    let l = fitsNaturally(p, PP)
+    if (!l) continue
+    if (p.fillLead > target + band + 1e-9 || p.fillLead >= p.fillRange[1] - 1e-9) {
+      // short of its fill at the band's edge or at the script's leading: tracking, the most that still sets it
+      // naturally, then the size
+      let t = 0
+      for (let k = Math.round(track / 0.01); k >= 1; k--) {
+        const P2 = { ...PP, trackStart: Math.round(((p.P.trackStart ?? 0) + k * 0.01) * 1000) / 1000 }
+        const l2 = fitsNaturally(p, P2)
+        if (l2) { PP = P2; l = l2; t = k * 0.01; break }
+      }
+      if (t >= track - 1e-9 && size > 1) {
+        const l3 = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...PP, growTo: size }, to)
+        if (!l3.clipped) { PP = { ...PP, growTo: size }; l = l3 }
+      }
+    }
+    const keep = p.layout.extents
+    p.P = PP
+    p.layout = l
+    p.layout.extents = keep
+    // (laid anew: its clearance at its new size, before it is recorded or painted; the pass put a cleared CJK cell's
+    // first line back on the original's baseline, over its rule, 2026-10-07)
+    settleLayout(p)
+    onFilled(p, target)
+  }
+  return target
+}
+
+/**
  * v0 over a paper's first `pages` pages. `doc`: the original opened by PDF.js (with PDF_OPTIONS); `geometry`: the made
  * output's geometry (schema 1); `units`: its units file's units (each { kind, src, pieces, state }); `target`: the
  * language. Options as main.js's query: `scale` (CSS px a PDF unit), `dpr`, `params` (layer2.mjs defaultParams'
@@ -699,7 +767,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
       if (further) { p.layout = further.layout; p.blocks = further.blocks }
       else { p.refused = true; return }
     }
-    if (p.clear) L2.clearLines(p.layout.lines ?? [], p.clear.bands, s * (p.layout.scale ?? 1))
+    settleLayout(p)
     const t4 = performance.now()
     p.layout.extents = new Map([...prep.extents].map(([r, e]) => [r.join(), e]))
     if (p.blocks[0] && (prep.label || prep.firstX0 !== undefined || inkBefore !== undefined)) {
@@ -743,62 +811,15 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
       const PU = p.P ?? P
       p.layout = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...PU, maxScale: target, leadBase: Math.min(PU.leadBase, leadTo) }, to)
       p.layout.extents = keep.extents
+      settleLayout(p)
       if (p.rec) Object.assign(p.rec, { f: r1(p.layout.f), sizeRatio: r1(p.layout.f / p.s), fitScale: p.layout.scale, knob: p.layout.knob, lead: p.layout.state.lead, lines: recLinesOf(p) })
     }
   }
-  /**
-   * adaptiveFill (D, P.adaptiveFill: { band, track, size }; the default since 2026-10-07, false for B): the units of a loose original's page that
-   * begin on it, each spread over its original paragraph's space, the page's lines kept to one rhythm. Each unit's fill
-   * leading is the loosest, between its leading relative to the original's pitch and the script's on it (leadBase),
-   * at which its most natural state still sets it whole: its text then reaches its frame's foot. The page's target is
-   * the median of its body units' (of all its loose units' where it has none); each unit takes its fill leading, but
-   * never more than `band` over the target, so that neighbouring paragraphs keep one line spacing. A unit the band
-   * stops short of its fill then takes tracking, up to `track` em, and where that is not enough its size, up to `size`
-   * × the original's. A unit that does not fit naturally even at its relative leading keeps its own fit.
-   */
-  const fitsNaturally = (p, PP) => { const l = L2.layoutUnit2(p.tokens, p.blocks, p.s, PP, to); return l.tried === 1 && !l.clipped ? l : null }
-  const fillLeadOf = p => {
-    const [lo, hi] = p.fillRange
-    for (let k = Math.round((hi - lo) / 0.01); k >= 0; k--) {
-      const L = Math.min(hi, Math.round((lo + k * 0.01) * 1000) / 1000)
-      if (fitsNaturally(p, { ...p.P, leadBase: L, growTo: 0 })) return L
-    }
-    return null
-  }
-  const fillPass = pg => {
-    const { band = 0.05, track = 0.05, size = 1.1 } = P.adaptiveFill
-    const loose = laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg)
-    for (const p of loose) if (p.fillLead === undefined) p.fillLead = fillLeadOf(p)
-    const body = loose.filter(p => p.fillLead !== null && EVEN_KINDS.has(p.unit.kind))
-    const leads = (body.length ? body : loose.filter(p => p.fillLead !== null)).map(p => p.fillLead)
-    if (!leads.length) return
-    const target = median(leads)
-    for (const p of loose) {
-      if (p.fillLead === null) continue
-      let PP = { ...p.P, leadBase: Math.min(p.fillLead, Math.round((target + band) * 1000) / 1000), growTo: 0 }
-      let l = fitsNaturally(p, PP)
-      if (!l) continue
-      if (p.fillLead > target + band + 1e-9 || p.fillLead >= p.fillRange[1] - 1e-9) {
-        // short of its fill at the band's edge or at the script's leading: tracking, the most that still sets it
-        // naturally, then the size
-        let t = 0
-        for (let k = Math.round(track / 0.01); k >= 1; k--) {
-          const P2 = { ...PP, trackStart: Math.round(((p.P.trackStart ?? 0) + k * 0.01) * 1000) / 1000 }
-          const l2 = fitsNaturally(p, P2)
-          if (l2) { PP = P2; l = l2; t = k * 0.01; break }
-        }
-        if (t >= track - 1e-9 && size > 1) {
-          const l3 = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...PP, growTo: size }, to)
-          if (!l3.clipped) { PP = { ...PP, growTo: size }; l = l3 }
-        }
-      }
-      const keep = p.layout.extents
-      p.P = PP
-      p.layout = l
-      p.layout.extents = keep
-      if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
-    }
-  }
+  // adaptiveFill's pass over a page's units that begin on it (fillPage), each filled unit's record updated
+  const fillPass = pg => fillPage(laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg), P, to, (p, target) => {
+    const l = p.layout
+    if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
+  })
   const ms = new Map()
   // A table group's cells laid, then painted all together or not at all (the table-groups brief): a cell is painted
   // only once every cell of its group is laid, and none is where one could be set only clipped (its fit past its floor)

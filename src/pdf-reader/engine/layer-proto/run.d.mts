@@ -41,6 +41,10 @@ export declare const PARAM_KEYS: readonly string[]
 /** main.js's lay order, by the page whose drawing lays each unit: [page, ids] */
 export declare function layGroups(placed: readonly { id: number; pages: readonly number[] }[], batch?: number): [number, number[]][]
 export declare const layOrder: (placed: readonly { id: number; pages: readonly number[] }[], batch?: number) => number[]
+/** a unit's layout made final: a CJK cell's lines moved into their bands between the rules at the size it is drawn at */
+export declare function settleLayout(p: { clear?: { bands: Map<number, import('./layer2.mjs').CellBand[]> } | null; layout: { lines?: { block: number; baseline: number }[]; scale?: number }; s: number }): void
+/** adaptiveFill's pass over a page's loose units: each filled unit laid anew in place and settled, then onFilled; the target leading, or null */
+export declare function fillPage(loose: unknown[], P: Params & { adaptiveFill: { band?: number; track?: number; size?: number } }, to: string, onFilled?: (p: Placed, target: number) => void): number | null
 export interface ProtoRun {
   N: number
   P: Params
