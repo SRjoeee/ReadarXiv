@@ -1,16 +1,22 @@
 // run.mjs's types: the layer v0's driver, the prototype's page (main.js, ported at 9e56fca)
 import type { Audit, CheckResult } from './check.mjs'
 import type { Rect } from './layer1.mjs'
-import type { Block2, Char, DrawOp, DrawSource, Layout, Params, Prepared, Token, Unit } from './layer2.mjs'
+import type { Block2, Char, DrawOp, DrawSource, Layout, Params, Prepared, Token, Unit as LaidUnit } from './layer2.mjs'
 import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
 import type { TexLines, Whole } from './tex.mjs'
 import type { RemovalManifest } from '../layout/remove.mjs'
 
+/** a unit as the units record holds it (a row): its kind, source and state; its translation's pieces, none where it has
+ *  none, each non-text one with its k (the layout file's index of its source piece: E6's row); its title, its table's
+ *  consistency group */
+export interface Unit { kind: string; src: string; pieces?: { t: string; s?: string; src?: string; k?: number }[]; state: string; title?: boolean; group?: string }
+/** which floats the final names in the target's language (live.mjs captionsOf) */
+export interface Captions { figure: 'target' | 'source'; table: 'target' | 'source' }
 /** the made output's geometry (schema 1): the pages' views, each unit's [id, stream, rects] on the original, its kind */
 export interface Geometry { schema: number; kinds: string[]; left: { pages: number[][]; units: [number, number, Rect[]][] }; right?: unknown }
 /** a unit v0 places: its rectangles (all of them: a unit cut by the pages shown is laid over its lines past them too), the
  *  pages shown it has lines on (`cut`: it has more past them), and once laid its reading, tokens, blocks and layout */
-export interface Placed { id: number; stream: number; rects: Rect[]; unit: Unit; pages: number[]; cut: boolean; blocks: Block2[]; prep?: Prepared; tokens?: Token[]; layout?: Layout; s?: number; rec?: Rec; local?: Char[][]; refused?: boolean; tex?: (Whole & { lu: LayoutUnit; lines?: TexLines }) | null }
+export interface Placed { id: number; stream: number; rects: Rect[]; unit: LaidUnit; pages: number[]; cut: boolean; blocks: Block2[]; prep?: Prepared; tokens?: Token[]; layout?: Layout; s?: number; rec?: Rec; local?: Char[][]; refused?: boolean; tex?: (Whole & { lu: LayoutUnit; lines?: TexLines }) | null }
 /** the hybrid's options (openProto `tex`): the layout file, the units file's pieces by unit id, and how the file's
  *  geometry is taken */
 export interface HybridOptions {
@@ -62,10 +68,22 @@ export interface ProtoRun {
   chars: Char[][]
   views: { convertToViewportPoint(x: number, y: number): number[]; convertToPdfPoint(x: number, y: number): number[] }[]
   readonly designs: { serif: string; sans: string; mono: string }
-  /** the hybrid's: each unit's source (empty lists where `tex` is null) */
-  sources: Sources
+  /** the hybrid's: each placed unit's source (empty lists where `tex` is null) */
+  readonly sources: Sources
+  /** the page after whose units page `page` is done; Infinity until the units it reads have come */
   doneAt(page: number): number
+  /** every page up to the one that finishes page `page` drawn and its units laid, a unit a task, once they have come */
   until(page: number): Promise<void>
+  /** units as they arrive (id → row): a row wins over one taken before it until its unit is placed; the hybrid's pieces
+   *  read from each translated row's pieces' k; a row no unit of this paper's (its kind not the layout file's or the
+   *  geometry's, a k past its source's pieces) left the original's, in `skipped`. The pages now complete */
+  take(rows: ReadonlyMap<number, Unit>): { complete: number[] }
+  /** no more units: every page is complete with what it holds */
+  end(): void
+  /** whether every unit laying page `page` reads has come (or end()): until(page) waits for no take */
+  complete(page: number): boolean
+  /** the ids taken that changed nothing: their unit placed already, taken after end(), or not expected */
+  late(): number[]
   /** a done page's copy at `k` device pixels a PDF unit onto `ctx`, from `source`, the page as PDF.js drew it at k */
   drawCopy(page: number, ctx: CanvasRenderingContext2D, source: DrawSource, k: number): Promise<void>
   release(page: number): void
@@ -98,7 +116,10 @@ export interface RemovalOptions {
 export declare function openProto(o: {
   doc: { numPages: number; getPage(n: number): Promise<unknown> }
   geometry: Geometry
-  units: Unit[]
+  /** the units by id; sparse where `expect` names units still to come (take) */
+  units: readonly (Unit | undefined)[]
+  /** the ids of the units the run will report, taken as they arrive; null (the default): every unit is in `units` */
+  expect?: readonly number[] | null
   target: string
   pages?: number
   scale?: number
@@ -120,5 +141,5 @@ export declare function openProto(o: {
   removal?: RemovalOptions | null
   /** the target's names of a figure and a table (caption-names.mjs) and which the final names so (live.mjs captionsOf):
    *  a float's label drawn in the target's name where the final's is; null, every label kept as the original's */
-  labels?: { names: { figure: string; table: string } | null; captions: { figure: 'target' | 'source'; table: 'target' | 'source' } | null } | null
+  labels?: { names: { figure: string; table: string } | null; captions: Captions | null } | null
 }): Promise<ProtoRun>
