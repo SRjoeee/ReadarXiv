@@ -60,7 +60,7 @@ pnpm build               # wxt build + scripts/check-output.mjs
 pnpm exec wxt build --mode development   # the dev pages too: the gallery (every popup state) and the controls sheet
 pnpm e2e                 # real Chromium with the extension (pnpm build first; once: npx playwright install chromium)
 pnpm e2e:layout          # side-mode layout contract in a real browser
-pnpm e2e:a11y            # A/B axe audit: only differences the extension introduces
+pnpm e2e:a11y            # A/B axe audit, offline (fixture + vendored arXiv sheets + echo endpoint): only differences the extension introduces
 pnpm e2e:local-endpoint  # an http endpoint without CORS headers can translate a whole page
 pnpm e2e:pdf             # arXiv's PDF page: the button is drawn there, it and the popup open the bilingual version
 pnpm e2e:floating        # the floating button on the abstract, PDF and full-text pages: rest, hover, drag, hide, toggle, tick

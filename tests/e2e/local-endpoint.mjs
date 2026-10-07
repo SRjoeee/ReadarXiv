@@ -10,11 +10,11 @@
 //
 // Usage: pnpm build && pnpm e2e:local-endpoint     (first time: npx playwright install chromium)
 // Environment: AXT_PAPER picks the paper; AXT_HEADED=1 watches it run.
-import { createServer } from 'node:http'
 import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { copyWithGrants } from './ext-copy.mjs'
+import { startEchoEndpoint } from './lib/echo-endpoint.mjs'
 import { addService, openOptions, openSection } from './options-page.mjs'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
@@ -33,67 +33,8 @@ const check = (name, ok, detail) => {
 }
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-// ── The fake endpoint: OpenAI-compatible, **deliberately sends no CORS header**, every preflight 405 ───────────
-const seen = { post: 0, options: 0, origins: new Set() }
-
-/** The user message carries JSON.stringify(segments) (src/providers/prompt.ts); try the longest valid array from the end backwards */
-function segmentsFrom(prompt) {
-  const start = prompt.indexOf('[{"id":')
-  if (start < 0) return null
-  const ends = []
-  for (let i = prompt.indexOf(']', start); i >= 0; i = prompt.indexOf(']', i + 1)) ends.push(i + 1)
-  for (const end of ends.reverse()) {
-    try {
-      const parsed = JSON.parse(prompt.slice(start, end))
-      if (Array.isArray(parsed) && parsed.every(s => typeof s?.id === 'string' && typeof s?.text === 'string')) return parsed
-    } catch {
-      // This closing bracket is inside a string; try a shorter one
-    }
-  }
-  return null
-}
-
-const server = createServer((req, res) => {
-  const origin = req.headers.origin ?? '(none)'
-  seen.origins.add(origin)
-  if (req.method === 'OPTIONS') {
-    seen.options++
-    res.writeHead(405).end()
-    return
-  }
-  // the model list (the redesign's design, §6.3): the settings page's form lists this endpoint's one model
-  if (req.method === 'GET' && req.url === '/v1/models') {
-    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ object: 'list', data: [{ id: 'local-echo', object: 'model' }] }))
-    return
-  }
-  let body = ''
-  req.on('data', chunk => { body += chunk })
-  req.on('end', () => {
-    seen.post++
-    let segments = null
-    try {
-      const parsed = JSON.parse(body)
-      const user = [...(parsed.messages ?? [])].reverse().find(m => m.role === 'user')
-      segments = segmentsFrom(typeof user?.content === 'string' ? user.content : '')
-    } catch {
-      // Left to the 400 below
-    }
-    if (!segments) {
-      res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { message: 'segments not recognised' } }))
-      return
-    }
-    // Echo as it is with the prefix: placeholders untouched, so validation must pass; the prefix lets the DOM show the translation came from the local endpoint
-    const content = JSON.stringify({ segments: segments.map(s => ({ id: s.id, text: `${MARK}${s.text}` })) })
-    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({
-      id: 'chatcmpl-local', object: 'chat.completion', created: 0, model: 'local-echo',
-      choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }],
-      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
-    }))
-  })
-})
-await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
-const PORT = server.address().port
-const BASE_URL = `http://127.0.0.1:${PORT}/v1`
+// ── The fake endpoint: OpenAI-compatible, **deliberately sends no CORS header**, every preflight 405 (lib/echo-endpoint.mjs) ───────────
+const { port: PORT, baseURL: BASE_URL, seen, close: closeEndpoint } = await startEchoEndpoint({ mark: MARK })
 console.log(`fake endpoint at ${BASE_URL} (no CORS headers, preflight 405)`)
 
 // ── Installing the extension: a copy of the build, given the localhost host permission only ──────────────────────
@@ -166,7 +107,7 @@ check('the page itself sent not one request (the old architecture had requests b
 await page.screenshot({ path: `${SHOTS}/local-endpoint-paper.png` })
 
 await context.close()
-server.close()
+closeEndpoint()
 const pass = results.filter(r => r.ok).length
 console.log(`\n${pass}/${results.length} passed; screenshots in ${SHOTS}`)
 process.exit(pass === results.length ? 0 : 1)

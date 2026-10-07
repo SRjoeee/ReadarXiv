@@ -52,6 +52,16 @@ The extension bundles code from npm packages under MIT, ISC and Apache-2.0. All 
 - **The recogniser's models are data no package manifest names**: PP-OCRv6 tiny's detection and recognition models (`public/ocr`, PaddleOCR, Apache-2.0), the two `.onnx` files byte for byte the publisher's and the character list written out of the package's `inference.yml`. The notices name them after the packages and say which file was changed how (Apache-2.0 §4(b)); `scripts/check-output.mjs` pins their SHA-256.
 - To read the current list: `pnpm build`, then `.output/chrome-mv3/licenses/third-party.txt`.
 
+## Test data under their own licence
+
+Not in the built extension, and not GPL-licensed: files the tests and the browser suites read, kept with the notice their licence asks for.
+
+| Files | Source | Fetched | Licence |
+|---|---|---|---|
+| `tests/e2e/fixtures/arxiv-css/` — the four style sheets arXiv serves under `/static/` for its HTML papers (ar5iv's, arXiv's theme, the header and footer), for the offline accessibility audit (`pnpm e2e:a11y`) | https://github.com/arXiv/arxiv-browse (`browse/static/css/`) and https://github.com/arXiv/arxiv-base (`arxiv/base/static/css/`), as served by https://arxiv.org/static/ | 2026-10-08 | MIT, Copyright (c) 2026 arXiv, Inc. (earlier contributions Cornell University); both licence texts kept in the directory; its README says how to refresh them |
+
+The papers in `tests/fixtures/` have their own table (`tests/fixtures/README.md`).
+
 ## The borrowing boundary and the licence
 
 The project is GPL-3.0, the licence of the three extensions it ports from, so porting is direct. GPL §5 requires notices kept and modifications marked: a ported file's header reads `// Ported from reference/<repo>/<path>@<commit> (GPL-3.0), <YYYY-MM-DD>, modified: …` — the modification statement carries its date — and the file is registered in the table above; a file rewritten beyond recognition is registered all the same. `reference/` (the snapshots) is git-ignored and read-only.

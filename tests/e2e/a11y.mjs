@@ -5,25 +5,41 @@
 // Why this is automated: a colleague's earlier audit charged four of arXiv / LaTeXML's own problems to the extension,
 // and only a manual comparison against “the same page without the extension” sorted out who owned what. Auditing any injecting extension repeats that confusion.
 //
-// Usage: pnpm build && pnpm e2e:a11y   (first time: npx playwright install chromium)
-// Environment: AXT_PAPER picks the paper; AXT_HEADED=1 watches it run.
+// **Offline (issue #100).** Nothing leaves this machine: the paper is a fixture of the repository served from 127.0.0.1 (lib/offline-arxiv.mjs) with arXiv's own
+// style sheets vendored beside it (fixtures/arxiv-css/README.md — without them axe's contrast rules would judge an unstyled page), the translations come from the
+// echo endpoint the local-endpoint suite uses (lib/echo-endpoint.mjs), and every request to another host is refused. The extension is a copy of the build whose
+// manifest also matches 127.0.0.1 (ext-copy.mjs), so the build in .output is the one a reader installs, bar that one line. The modes are switched by the message
+// the popup sends: the popup answers on arxiv.org's addresses alone, and is audited by its own probe (probes/pages-a11y.mjs).
+//
+// **The audit is checked to fire.** After the three modes, one deliberate defect — the translation's ink lightened to a contrast axe refuses — is put on the page,
+// and the audit must report it as introduced by the extension. A difference that is empty is only worth something while an audit that finds a defect would not be.
+//
+// Usage: pnpm build && pnpm e2e:a11y   (first time: npx playwright install chromium; `pnpm fixtures:fetch` for a paper that is not in the repository)
+// Environment: AXT_PAPER picks the paper (a fixture of tests/fixtures/arxiv); AXT_HEADED=1 watches it run.
 // Changing the paper is worth a run: 2401.00596 (references with links + unlabelled <object>) is what caught the mirror missing inert in the first place.
 import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import AxeBuilder from '@axe-core/playwright'
 import { chromium } from 'playwright'
-import { chooseBuiltIn, openOptions } from './options-page.mjs'
+import { copyWithGrants } from './ext-copy.mjs'
+import { startEchoEndpoint } from './lib/echo-endpoint.mjs'
+import { serveOffline } from './lib/offline-arxiv.mjs'
+import { addService, openOptions } from './options-page.mjs'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
-const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
+const SRC = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
+const EXT = `${HERE}.ext-a11y`
 const PROFILE = `${HERE}.profile-a11y`
 const BASE_PROFILE = `${HERE}.profile-a11y-base`
 const SHOTS = `${HERE}.shots`
 /** The one §7.4b measured by hand back then: 1 h6, 1 h5, 0 main, 8 of 12 tables without th */
 const PAPER = process.env.AXT_PAPER ?? '2410.00260'
-const PAPER_URL = `https://arxiv.org/html/${PAPER}`
 const IDLE = /session idle: (\d+)\/(\d+) requested of (\d+), (\d+) failed, (\d+) cached/
 const LAUNCH = { channel: 'chromium', headless: !process.env.AXT_HEADED, viewport: { width: 1440, height: 900 } }
+/** What the echo endpoint puts before a translation: it is ASCII, so the page's text keeps its language while the translation is told from the original */
+const MARK = '[echo] '
+/** The defect the mutation check puts on the page: the translation's ink at a contrast of about 1.6 to a white ground (axe asks for 4.5) */
+const MUTATION = '.axt-t, .axt-t * { color: #c8c8c8 !important; }'
 
 /**
  * Document-level rules: **which** element they hit depends on the sibling structure — for a rule like “page content is not wrapped in a landmark”, axe reports
@@ -211,15 +227,34 @@ async function waitSettled(page, logs) {
   return { ok, idle, text: last ?? '(no idle line)' }
 }
 
+/**
+ * The pages stay on this machine: a request to any other host is refused, and counted so the run can say what it refused (the fixture's web font, arXiv's
+ * header script). The service worker's own requests are not seen by a context route; the extension makes none of its own on this page but to the echo endpoint
+ */
+async function keepOffline(context, refused) {
+  await context.route('**/*', route => {
+    const { protocol, hostname } = new URL(route.request().url())
+    if (hostname === '127.0.0.1' || !/^https?:$/.test(protocol)) return route.continue()
+    refused.add(hostname)
+    return route.abort()
+  })
+}
+
 rmSync(PROFILE, { recursive: true, force: true })
 rmSync(BASE_PROFILE, { recursive: true, force: true })
 mkdirSync(SHOTS, { recursive: true })
+const refused = new Set()
+const site = await serveOffline()
+const endpoint = await startEchoEndpoint({ mark: MARK })
+const PAPER_URL = `${site.origin}/html/${PAPER}`
+console.log(`${PAPER_URL} and the echo endpoint at ${endpoint.baseURL}: nothing leaves this machine`)
 
 // ── The baseline: the same paper, no extension ────────────────────────────────
 const baseContext = await chromium.launchPersistentContext(BASE_PROFILE, LAUNCH)
+await keepOffline(baseContext, refused)
 const basePage = await baseContext.newPage()
 await basePage.goto(PAPER_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-await sleep(2_000) // let arXiv's own scripts (theme, ToC, reading mode) finish before auditing
+await basePage.waitForLoadState('load')
 const baseline = await audit(basePage)
 await basePage.screenshot({ path: `${SHOTS}/a11y-baseline.png` })
 await baseContext.close()
@@ -230,22 +265,27 @@ const baseRules = [...baseRuleSet].sort()
 // The baseline itself must find something: none at all most likely means axe did not run, and “the difference is empty” would be an empty assertion
 check('the baseline (no extension) really finds the host page\'s own problems', baseline.length > 0,
   `${baseline.length} violations, ${baseRules.length} rules: ${baseRules.join(' / ')}`)
+// The vendored style sheets are what styles the page: all four of the sheets the fixture links, and what they import, were asked for and served
+const sheets = [...site.served.css].sort()
+check('arXiv\'s own style sheets, vendored, style the page', sheets.length >= 4 && ![...site.served.missing].some(path => path.endsWith('.css')),
+  `${sheets.length} served: ${sheets.map(path => path.split('/').pop()).join(', ')}${[...site.served.missing].filter(path => path.endsWith('.css')).map(path => `; MISSING ${path}`).join('')}`)
 
 // ── The treatment: with the extension, one audit per mode ────────────────────────────────
+// A copy of the build that also matches 127.0.0.1 and may talk to the echo endpoint: the real build is for arxiv.org and asks for an endpoint's host at run time (ext-copy.mjs)
+copyWithGrants(SRC, EXT, { hostPermissions: ['http://127.0.0.1/*'], contentMatches: { 'https://arxiv.org/html/*': ['http://127.0.0.1/html/*'] } })
 const context = await chromium.launchPersistentContext(PROFILE, {
   ...LAUNCH,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
 })
-
-// Navigation to a real paper gets ample time: Playwright's default is 30 s, and arXiv slows down markedly after dozens of consecutive runs
-// (measured: curl on the same paper took 26 s). No assertion's own wait is loosened; only the “get the page” step is
+await keepOffline(context, refused)
 context.setDefaultNavigationTimeout(90_000)
 let [worker] = context.serviceWorkers()
 if (!worker) worker = await context.waitForEvent('serviceworker')
 const extId = worker.url().split('/')[2]
 
 const options = await openOptions(context, extId)
-await chooseBuiltIn(options, 'Google 翻译') // the free service, costs nothing
+const connected = await addService(options, { name: 'echo', baseURL: endpoint.baseURL, model: 'local-echo' })
+check('the echo endpoint is the translation service', /已连接/.test(connected), connected)
 await options.close()
 
 const logs = []
@@ -257,48 +297,68 @@ await scrollThrough(page)
 const settled = await waitSettled(page, logs)
 check('audit after the whole paper is translated: settled, every requested block done, zero failures', settled.ok,
   `${settled.idle ? `${settled.idle.requested}/${settled.idle.total} blocks requested; ` : ''}${settled.text}`)
+check('every translation came from the echo endpoint, whose requests left the extension\'s background and nothing else did',
+  endpoint.seen.post > 0 && endpoint.seen.options === 0 && !endpoint.seen.origins.has(site.origin),
+  `${endpoint.seen.post} requests, ${endpoint.seen.options} preflights, origins ${[...endpoint.seen.origins].join(', ')}`)
 
-// The popup takes the status from the **active tab**: with the paper page not in front it renders another UI, and the mode buttons never appear.
-// So after goto the paper page must be brought to the front before waiting for the buttons, and the popup must never be brought to the front (the order image.mjs uses)
-const popupUrl = `chrome-extension://${extId}/popup.html`
+/** The mode the popup's radio sets: the same message, to the paper's tab (the popup answers on arxiv.org's addresses alone) */
+const setMode = mode => worker.evaluate(async mode => {
+  const [tab] = await chrome.tabs.query({ url: 'http://127.0.0.1/*' })
+  return chrome.tabs.sendMessage(tab.id, { type: 'axt:set-mode', mode })
+}, mode)
 
-for (const [label, button] of [['stack', '上下'], ['side', '左右'], ['only', '仅译文']]) {
-  const popup = await context.newPage()
-  await popup.goto(popupUrl)
-  await page.bringToFront()
-  const control = popup.getByRole('radio', { name: button, exact: true })
-  await control.waitFor({ timeout: 10_000 })
-  await control.click()
-  await popup.close()
-  await sleep(2_000) // side splits figures and mirrors; give the layout a moment to settle
-  const withExt = await audit(page)
+/** What the extension introduced: a violation absent from the baseline, a document rule absent from it, minus what is measured keyboard-reachable on the spot */
+async function introducedBy(withExt) {
   const isNew = i => (DOCUMENT_RULES.has(i.rule) ? !baseRuleSet.has(i.rule) : !baseKeys.has(i.key))
   const candidates = withExt.filter(i => isNew(i) && VERIFY_KEYBOARD.has(i.rule))
   const reachable = await keyboardReachable(page, candidates.map(i => i.target[0]))
-  const excused = candidates.filter((_, n) => reachable[n])
-  const introduced = [
-    ...withExt.filter(i => isNew(i) && !VERIFY_KEYBOARD.has(i.rule)),
-    ...candidates.filter((_, n) => !reachable[n]), // measured as unreachable by keyboard: not excused
-  ]
-  await page.screenshot({ path: `${SHOTS}/a11y-${label}.png` })
+  return {
+    excused: candidates.filter((_, n) => reachable[n]),
+    introduced: [
+      ...withExt.filter(i => isNew(i) && !VERIFY_KEYBOARD.has(i.rule)),
+      ...candidates.filter((_, n) => !reachable[n]), // measured as unreachable by keyboard: not excused
+    ],
+  }
+}
+const show = (items, mark) => {
+  for (const item of items.slice(0, 12)) {
+    console.log(`    ${mark} ${item.impact.padEnd(8)} ${item.rule}  [${item.origin}]  ${item.key}`)
+    console.log(`               ${item.html}`)
+  }
+  if (items.length > 12) console.log(`    … ${items.length - 12} more`)
+}
+
+for (const mode of ['stack', 'side', 'only']) {
+  const answer = await setMode(mode)
+  check(`${mode} mode is set`, answer?.mode === mode, JSON.stringify(answer))
+  await sleep(2_000) // side splits figures and mirrors; give the layout a moment to settle
+  const withExt = await audit(page)
+  const { introduced, excused } = await introducedBy(withExt)
+  await page.screenshot({ path: `${SHOTS}/a11y-${mode}.png` })
   const byRule = [...new Set(introduced.map(i => i.rule))].sort()
   const tail = excused.length > 0 ? `; ${excused.length} more of ${[...new Set(excused.map(i => i.rule))].join(' / ')} measured keyboard-reachable on the spot and excused` : ''
-  check(`${label} mode: no accessibility problem introduced by the extension`, introduced.length === 0,
+  check(`${mode} mode: no accessibility problem introduced by the extension`, introduced.length === 0,
     (introduced.length === 0
       ? `${withExt.length} in all, every one already in the baseline (the host page's own)`
       : `${introduced.length} new, ${byRule.length} rules: ${byRule.join(' / ')}`) + tail)
-  const show = (items, mark) => {
-    for (const item of items.slice(0, 12)) {
-      console.log(`    ${mark} ${item.impact.padEnd(8)} ${item.rule}  [${item.origin}]  ${item.key}`)
-      console.log(`               ${item.html}`)
-    }
-    if (items.length > 12) console.log(`    … ${items.length - 12} more`)
-  }
   show(introduced, '✗')
   show(excused, '·') // the excused are printed too, so they cannot grow quietly
 }
 
+// ── The audit is checked to fire: the last mode's page, with one defect put on it ────────────────────────────────
+const defect = await page.addStyleTag({ content: MUTATION })
+const mutated = await introducedBy(await audit(page))
+const contrast = mutated.introduced.filter(i => i.rule === 'color-contrast')
+check('the audit fires: a translation lightened to a contrast of 1.6 is reported as introduced by the extension', contrast.length > 0,
+  `${contrast.length} color-contrast violations among ${mutated.introduced.length} introduced`)
+await defect.evaluate(node => node.remove())
+
+// Not a check — a route can only count what it refuses: the pages asked these hosts for something and were told no
+console.log(`\nrefused as offline: ${refused.size > 0 ? [...refused].sort().join(', ') : 'nothing was asked of another host'}`)
+
 await context.close()
+await Promise.all([site.close(), endpoint.close()])
+rmSync(EXT, { recursive: true, force: true })
 const pass = results.filter(r => r.ok).length
 console.log(`\n${pass}/${results.length} passed; screenshots in ${SHOTS}`)
 process.exit(pass === results.length ? 0 : 1)
