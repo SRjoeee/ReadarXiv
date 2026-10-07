@@ -1,5 +1,5 @@
 // C1 front end, spike: a LaTeX project → prose units with byte ranges and placeholders → the same project with each unit's
-// range replaced by its translation, everything else byte for byte. The approach the evidence favours (REPORT §4 and the
+// range replaced by its translation, everything else byte for byte. The approach the evidence favours (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md §4 and the
 // second addendum): patch source ranges in place, mask math, citations, references and unknown commands, send whole
 // paragraphs. Not a parser: a scanner that knows which constructs carry prose and treats everything else as opaque.
 // Runs the same in Node (the spikes) and in the browser (the reader): a project's files come as a file system of two

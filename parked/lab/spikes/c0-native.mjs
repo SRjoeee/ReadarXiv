@@ -6,7 +6,7 @@ import { execFile, execFileSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { analyze } from './paper-meta.mjs'
+import { analyze } from '../../../lab/pdf/spikes/paper-meta.mjs'
 
 const run = promisify(execFile)
 const PARALLEL = Number(process.argv[2] ?? 6)

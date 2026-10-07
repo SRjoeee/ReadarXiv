@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { modelPage, type OrigLine, pixelPage, type UnitIn } from '../../experiments/pdf-bilingual/spikes/layer-gate/measure.mjs'
-import { compare, fixtureTotals, type Measure, MEASURES, pageEntry, pooled, type Totals, worse } from '../../experiments/pdf-bilingual/spikes/layer-gate/score.mjs'
+import { modelPage, type OrigLine, pixelPage, type UnitIn } from '../../lab/pdf/spikes/layer-gate/measure.mjs'
+import { compare, fixtureTotals, type Measure, MEASURES, pageEntry, pooled, type Totals, worse } from '../../lab/pdf/spikes/layer-gate/score.mjs'
 
-// The layer gate's arithmetic (experiments/pdf-bilingual/spikes/layer-gate.mjs, Plan 8b Task 12): a page's model measures
+// The layer gate's arithmetic (lab/pdf/spikes/layer-gate.mjs, Plan 8b Task 12): a page's model measures
 // against the original, a fixture's totals, and the merge rule against a recorded run — shares within 0.2 points, ratios
 // within 0.02, unit counts not at all, defects as rates per 1,000 translated text cells
 
@@ -114,7 +114,7 @@ describe('the merge rule', () => {
 
 describe("the wire's syntax left in drawn text (measure.mjs markerResidueOf): what the protector's formats can leave", () => {
   it('a marker, its `#` alone (Microsoft\'s `(#)`), a tolerant remains, an escaped `@`, an entity, a tag; none in clean text', async () => {
-    const { markerResidueOf } = await import('../../experiments/pdf-bilingual/spikes/layer-gate/measure.mjs')
+    const { markerResidueOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
     expect(markerResidueOf('\u81ea\u5df1\u56de\u5e30\u7684 [10] (#)\u3068\u306a\u308a')).toEqual(['#'])
     expect(markerResidueOf('el modelo @a# y @b, con @@ y &amp; o &#39;')).toEqual(['@a#', '@b', '@@', '&amp;', '&#39;'])
     expect(markerResidueOf('Wir <x id="2"/> sehen <t id="1">es</t>')).toEqual(['<x id="2"/>', '<t id="1">', '</t>'])
@@ -125,7 +125,7 @@ describe("the wire's syntax left in drawn text (measure.mjs markerResidueOf): wh
 
 describe("TeX's syntax left in a placeholder's rendering (measure.mjs markupResidueOf): beyond what its source escapes", () => {
   it("a control symbol's backslash, a math shift, a grouping brace; the escaped characters the source asks for are none", async () => {
-    const { markupResidueOf } = await import('../../experiments/pdf-bilingual/spikes/layer-gate/measure.mjs')
+    const { markupResidueOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
     expect(markupResidueOf('\\', '\\&')).toEqual(['\\'])
     expect(markupResidueOf('D=l^\u03bc,\\', '$D=l^{{\\mu}},\\ \\Delta$')).toEqual(['\\'])
     expect(markupResidueOf('{a}$', '$\\mathbf{a}$')).toEqual(['{', '}', '$'])
@@ -139,7 +139,7 @@ describe("TeX's syntax left in a placeholder's rendering (measure.mjs markupResi
 describe("a local path as the gate's records keep it (layer-gate/ref.mjs shownPath): no user's name, no machine's directory", () => {
   it("is relative under its base, `~/` under the home directory, `<scratch>/` under a temporary one, `<local>/` elsewhere", async () => {
     const { homedir, tmpdir } = await import('node:os')
-    const { shownPath } = await import('../../experiments/pdf-bilingual/spikes/layer-gate/ref.mjs')
+    const { shownPath } = await import('../../lab/pdf/spikes/layer-gate/ref.mjs')
     expect(shownPath('/repo', '/repo')).toBe('.')
     expect(shownPath('/repo/out/layer-gate/fixtures/x', '/repo')).toBe('out/layer-gate/fixtures/x')
     expect(shownPath(`${homedir()}/Downloads/readarxiv-test`)).toBe('~/Downloads/readarxiv-test')

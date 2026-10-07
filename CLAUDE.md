@@ -6,6 +6,7 @@ Chrome extension (MV3) that translates `https://arxiv.org/html/*` in place: stru
 
 - `docs/DESIGN.md` — the current design: what the extension does, how it is built, why each non-obvious choice was made, with the measurements beside the decisions. Cite it by section (`DESIGN §7.2`). A decision that changes goes into its section in the same pull request as the code.
 - `docs/UI.md` — the interface contract: every control and string of the popup and the settings page, by id (`S-P-80`), with the reasons behind them.
+- `docs/PDF-READER.md` — the PDF reader's interface design: every control, state and motion with the reason behind it, the maintainer's words where a decision rests on them, and the measurements; §17 is the highlight. The reader's engine is held by the gates of `lab/pdf/README.md`; the experiment it grew in (its running record and plans) is read from the tag: `git show exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md`, `git show exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/<file>`.
 - `docs/RELEASE.md` — how a version is cut, and the store listing.
 - `docs/THIRD_PARTY.md` — what was ported from which project, under which licence.
 - `CHANGELOG.md` — reader-facing changes.
@@ -70,9 +71,9 @@ pnpm fixtures:fetch      # download and verify the fixtures the repository may n
 pnpm fixtures:stats      # rule coverage audit over the fixtures
 pnpm zip                 # the store archive; pnpm icons regenerates the icons
 pnpm tokens              # src/styles/tokens.css from src/shared/tokens.ts; a test fails while the two differ
-pnpm exec tsx experiments/pdf-bilingual/spikes/highlight-gate.mjs     # the PDF reader's highlight in Node, on this machine's data (never in the repository): the ten papers' runs and the ground truth (data/runs/highlight-ten, highlight-gt), their sources and arXiv's PDFs (data/corpus), and the Microsoft answers their sentences are made again from (out/highlight/B3/ms-cache-zh-auto.json, ms-cache-zh-en.json; a set missing fails the gate); WRITE_BASELINE=1 records a change meant
-pnpm exec tsx experiments/pdf-bilingual/spikes/highlight-papers.mjs experiments/pdf-bilingual/out/highlight/papers   # the browser gate's demo papers, their units carrying their sentences
-node experiments/pdf-bilingual/spikes/highlight-gate-browser.mjs checks  # the highlight in a real browser (pnpm build first; PAPERS defaults to those demo papers); floats, resting, tokens: those checks alone; costs: BASE_BUILD=<a build to compare with>
+pnpm exec tsx lab/pdf/spikes/highlight-gate.mjs     # the PDF reader's highlight in Node, on this machine's data (lab/pdf/data and lab/pdf/out, never in the repository): the ten papers' runs and the ground truth (data/runs/highlight-ten, highlight-gt), their sources and arXiv's PDFs (data/corpus), and the Microsoft answers their sentences are made again from (out/highlight/B3/ms-cache-zh-auto.json, ms-cache-zh-en.json; a set missing fails the gate); WRITE_BASELINE=1 records a change meant; the lab's other gates: lab/pdf/README.md
+pnpm exec tsx lab/pdf/spikes/highlight-papers.mjs lab/pdf/out/highlight/papers   # the browser gate's demo papers, their units carrying their sentences
+node lab/pdf/spikes/highlight-gate-browser.mjs checks  # the highlight in a real browser (pnpm build first; PAPERS defaults to those demo papers); floats, resting, tokens: those checks alone; costs: BASE_BUILD=<a build to compare with>
 AXT_MEASURE=1 pnpm vitest run tests/perf       # the cost measurements (readings, not assertions)
 AXT_CHROME=<binary> pnpm e2e                   # the e2e suite on a chosen Chrome; probes live in tests/e2e/probes/
 ```
@@ -89,4 +90,4 @@ The five default triage labels, each label string equal to its role's name. See 
 
 ### Domain docs
 
-Single-context, and the context is `docs/DESIGN.md`: §3 is the glossary, the sections hold the decisions; no `CONTEXT.md`, no `docs/adr/`. See `docs/agents/domain.md`.
+Single-context, and the context is `docs/DESIGN.md`: §3 is the glossary, the sections hold the decisions; no `CONTEXT.md`, and no directory of decision records. See `docs/agents/domain.md`.

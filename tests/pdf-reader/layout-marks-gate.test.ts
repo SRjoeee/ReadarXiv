@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { Item, Readings, Row } from '../../experiments/pdf-bilingual/spikes/layout-marks-compare.mjs'
-import { attribute, boxDiff, causesOf, classOfMark, compareReadings, fileStates, joinRuns, lineAt, linesOf, lostLines, pageBoxes, regressions, strictMoves, switchOffOf, traced, verdictOf, withFitr } from '../../experiments/pdf-bilingual/spikes/layout-marks-compare.mjs'
+import type { Item, Readings, Row } from '../../lab/pdf/spikes/layout-marks-compare.mjs'
+import { attribute, boxDiff, causesOf, classOfMark, compareReadings, fileStates, joinRuns, lineAt, linesOf, lostLines, pageBoxes, regressions, strictMoves, switchOffOf, traced, verdictOf, withFitr } from '../../lab/pdf/spikes/layout-marks-compare.mjs'
 
-// The corpus check's comparisons (experiments/pdf-bilingual/spikes/layout-marks-gate.mjs): v0 against v1 of a paper, the
+// The corpus check's comparisons (lab/pdf/spikes/layout-marks-gate.mjs): v0 against v1 of a paper, the
 // text items to 0.01 pt, the lines, the files TeX writes, the readings, and TeX's own page boxes where the PDF's items
 // moved. What the compiles give is the script's; these are the judgements it makes of them
 

@@ -1,6 +1,6 @@
-// The PDF reader's cached copy of a compiled translation: the rules that touch no storage (experiments/pdf-bilingual/
-// REPORT.md, eighteenth addendum) — when a copy is current, and which of two copies is kept. Pure, so that the store
-// and the reader share them.
+// The PDF reader's cached copy of a compiled translation: the rules that touch no storage
+// (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum) — when a copy is current, and which of
+// two copies is kept. Pure, so that the store and the reader share them.
 
 /** What became of a unit in the runs that made the copy. `kept`: set as the source has it on purpose — a name the
  *  reader keeps without asking, or a cell of a table group kept whole (pdf-reader/engine/groups.mjs), which keeps the

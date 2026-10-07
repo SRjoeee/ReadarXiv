@@ -17,7 +17,7 @@
 	},
 	"overrides": [
 		{
-			"includes": ["experiments/**", "src/pdf-reader/engine/**"],
+			"includes": ["lab/**", "src/pdf-reader/engine/**"],
 			"linter": {
 				"rules": {
 					"complexity": { "noCommaOperator": "off" },

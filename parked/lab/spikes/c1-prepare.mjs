@@ -2,8 +2,8 @@
 // through the front end and a CJK strategy injected, written to a folder of its own. Images are hard-linked.
 import { existsSync, linkSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
-import { FORBIDDEN_TO_WARNING, latinFontsFor, loadProject, patch, pseudoTranslate, stripPdftexOption, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
-import { analyze } from './paper-meta.mjs'
+import { FORBIDDEN_TO_WARNING, latinFontsFor, loadProject, patch, pseudoTranslate, stripPdftexOption, XETEX_SHIM, XETEX_SHIM_R1 } from '../../../lab/pdf/spikes/latex-front.mjs'
+import { analyze } from '../../../lab/pdf/spikes/paper-meta.mjs'
 
 // ---------------------------------------------------------------- strategies
 export const STRATEGIES = {

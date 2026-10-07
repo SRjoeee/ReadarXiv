@@ -240,7 +240,7 @@ await sleep(2000)
 {
   // A tab of its own: once popupOver has sized a popup's page (setViewportSize, a device-metrics emulation), the frames
   // of the tab under it hear no pointer in Playwright's Chromium (measured in the pre-flight: no pointerdown reached the
-  // panel's popup; entries.mjs meets the same with the reader's frame)
+  // panel's popup; the reader's frame met the same in the entry checks of the lab, since removed)
   const tab = await context.newPage()
   await tab.goto(`https://arxiv.org/abs/${PAPER}`, { waitUntil: 'load' })
   await sleep(2000)

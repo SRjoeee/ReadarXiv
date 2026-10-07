@@ -2,8 +2,8 @@
 # points as ranges (start, end, inclusive; its cmap's, but controls and private use: drawn below) and its metrics (units per em, hhea's ascent and descent, whether GSUB has small
 # capitals, the file's SHA-256), and each source's release. The faces are font-roles.mjs's FACE_TABLE, read here as text so
 # that one table names them for both. Prints the module, or writes it with --out (only on success):
-#   python3 scripts/font-roles.py experiments/pdf-bilingual/data/fonts > src/pdf-reader/engine/font-coverage.mjs
-#   python3 scripts/font-roles.py experiments/pdf-bilingual/data/fonts --out src/pdf-reader/engine/font-coverage.mjs
+#   python3 scripts/font-roles.py lab/pdf/data/fonts > src/pdf-reader/engine/font-coverage.mjs
+#   python3 scripts/font-roles.py lab/pdf/data/fonts --out src/pdf-reader/engine/font-coverage.mjs
 # The fonts folder (git-ignored: no font file is committed) holds every face's file under its table name, and
 # releases.json, which names each source's release: {"source-han-serif": "<the GitHub release's tag>",
 # "urw-base35-fonts": "<the tag>", "texlive": "texlive/texlive@sha256:<the image's digest>"}. Gathering it: Source Han

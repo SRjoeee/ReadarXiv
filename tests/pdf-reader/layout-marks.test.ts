@@ -13,7 +13,7 @@ import { marksOf } from '@/pdf-reader/engine/typeset/places.mjs'
 
 // The layout marks as text: which placeholder gets which mark, the units' own marks, the TeX that goes with them, the
 // marks file and its bounds. What the TeX does under TeX — that no line moves, that nothing written to a file changes —
-// is checked natively by experiments/pdf-bilingual/spikes/layout-marks-cases.mjs
+// is checked natively by lab/pdf/spikes/layout-marks-cases.mjs
 
 type Piece = { t: string; s?: string; src?: string; id?: number; unit?: unknown; pre?: string; post?: string }
 const text = (s: string): Piece => ({ t: 'text', s })

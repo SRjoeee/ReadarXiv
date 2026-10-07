@@ -5,7 +5,7 @@
 // 400 % — a 1280 px window is 640 and 320 CSS px wide there — the floating button at rest and open, its close menu, its
 // panel with the popup inside, and the figure viewer's control, dialog and bar, in both themes: every part inside the
 // window, the popup in the panel not scrolling sideways, the bar inside its dialog and its buttons apart. The shots, in
-// experiments/pdf-bilingual/out/reflow/, are for reading at full size. Needs the network (arXiv).
+// lab/pdf/out/reflow/, are for reading at full size. Needs the network (arXiv).
 //   pnpm build && node tests/e2e/probes/reflow-shots.mjs
 // Environment: AXT_EXT_DIR another build; AXT_PAPER another paper; AXT_CHROME another Chrome.
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -15,7 +15,7 @@ import { chromium } from 'playwright'
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
-const OUT = fileURLToPath(new URL('../../../experiments/pdf-bilingual/out/reflow/', import.meta.url))
+const OUT = fileURLToPath(new URL('../../../lab/pdf/out/reflow/', import.meta.url))
 const PROFILE = `${E2E}.profile-reflow-shots`
 const PAPER = process.env.AXT_PAPER ?? '1706.03762'
 const [WIDTH, HEIGHT] = [1280, 860]

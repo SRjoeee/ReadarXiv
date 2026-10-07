@@ -23,7 +23,7 @@ import { plainSource, plainTranslated } from './mt.mjs'
 /**
  * The share of a column's cells that must come back from the translator as they went for the column to be read as
  * names and kept. Measured on the 29 layer-lab fixtures and six corpus papers whose tables Microsoft had answered
- * (experiments/pdf-bilingual/spikes/table-groups.mjs, 2026-10-07): of 331 and 84 decided columns, 115 and 51 came back
+ * (lab/pdf/spikes/table-groups.mjs, 2026-10-07): of 331 and 84 decided columns, 115 and 51 came back
  * all changed and 121 and 20 all as they went; between 0.3 and 0.7 stand 21 distinct columns, read one by one. Columns
  * of names of models and methods stand at 0.40–0.46 — 1706.03762's Model column in Chinese, Japanese and Korean
  * (ByteNet, … "Transformer (big)" in katakana), 2608.04322's selection methods (Paraphrase, Longest), 2608.12502's

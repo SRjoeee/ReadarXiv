@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
-const OUT = fileURLToPath(new URL('../../../experiments/pdf-bilingual/out/popup-first-paint/', import.meta.url))
+const OUT = fileURLToPath(new URL('../../../lab/pdf/out/popup-first-paint/', import.meta.url))
 const BASELINE = join(OUT, 'baseline.json')
 const RUNS = 10
 /** an abstract page, where the floating button's main button opens the panel */

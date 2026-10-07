@@ -5,7 +5,7 @@ import { type BatchReport, citationLines, type Compiled, compilerKeeper, keptFor
 import type { Marks } from '@/pdf-reader/engine/typeset/places.mjs'
 import { END_TEX } from '@/pdf-reader/engine/typeset/tex.mjs'
 
-// The reader's compiles with the typesetting rule (experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md,
+// The reader's compiles with the typesetting rule (exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md,
 // "The compile sequence"; the evaluation's rulings in the F2 brief): the font probe with its width probe; the first
 // preview as today; the marked original in full, with its line probes, right after it; later previews planned on their
 // snapshot; the last preview of the whole translation, complete, measures the final — else a draft one-pass of it does;

@@ -7,7 +7,7 @@ import { FLOAT_TEX, LINES_TEX, readForced, readLines, SIZE_TEX, typesetting } fr
 import { DESIGN, designFor } from '@/pdf-reader/engine/typeset/type.mjs'
 
 // What the typesetting rule writes into a compile and reads back from its log. The macros' behaviour under TeX is checked
-// natively by experiments/pdf-bilingual/spikes/typeset-check.mjs; here, what goes where
+// natively by the typesetting gate's cases (parked/lab/spikes/typeset-tex-cases.mjs); here, what goes where
 
 type Piece = { t: string; s?: string; tr?: boolean }
 type Unit = { kind: string; pieces: Piece[]; front?: boolean }

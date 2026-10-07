@@ -8,9 +8,9 @@ import { execFile, execFileSync } from 'node:child_process'
 import { existsSync, linkSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { promisify } from 'node:util'
-import { latinFontsFor, loadProject, MARK_DEF, markUnits, patch, XETEX_SHIM } from './latex-front.mjs'
+import { latinFontsFor, loadProject, MARK_DEF, markUnits, patch, XETEX_SHIM } from '../../../lab/pdf/spikes/latex-front.mjs'
 import { decode, escape, nameCells, plainSource, plainTranslated, rehydrate, rehydrateTags, serialize, serializeTags, texEscape, translateMicrosoft, utf8 } from '../../../src/pdf-reader/engine/mt.mjs'
-import { analyze } from './paper-meta.mjs'
+import { analyze } from '../../../lab/pdf/spikes/paper-meta.mjs'
 
 const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname

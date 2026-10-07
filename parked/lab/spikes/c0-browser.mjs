@@ -9,7 +9,7 @@ import { createServer } from 'node:http'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { extname, join, relative } from 'node:path'
 import { createRequire } from 'node:module'
-import { analyze } from './paper-meta.mjs'
+import { analyze } from '../../../lab/pdf/spikes/paper-meta.mjs'
 const require = createRequire(new URL('../../../', import.meta.url))
 const { chromium } = require('playwright')
 

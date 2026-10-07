@@ -1,4 +1,4 @@
-// The PDF reader's cache of compiled translations (experiments/pdf-bilingual/REPORT.md, eighteenth addendum): one record
+// The PDF reader's cache of compiled translations (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum): one record
 // per paper version and target language. The PDF is encrypted under a key the page cannot export — not DRM: it keeps a
 // file from being copied out of the profile. Beyond a cap, the least recently opened go first. Every failure of the
 // reader's reads and writes is a miss, as in the translation cache (./store.ts); the settings page's count and clear
@@ -61,7 +61,7 @@ export function createPdfDb(name?: string, options?: DexieOptions): PdfDatabase 
   return new PdfDatabase(name, options)
 }
 
-/** About a hundred papers at the corpus's mean (REPORT, eighteenth addendum) */
+/** About a hundred papers at the corpus's mean (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum) */
 export const PDF_CACHE_MAX_BYTES = 500 * 1024 * 1024
 
 export interface PdfStore {

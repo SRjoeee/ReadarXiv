@@ -1,7 +1,7 @@
 // The translation as it comes in (#292): a paper's source → translated PDFs, each one more complete than the last,
 // then the final one. Runs in Node and in the browser alike; the compiler and the translator are passed in.
 //
-// Order of work, all of it measured in REPORT's sixth and seventh addenda:
+// Order of work, all of it measured in exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, sixth and seventh addenda:
 //  1. the preamble alone, compiled in the paper's own engine, says which font families the document sets (FONT_PROBE);
 //  2. units are translated nearest the reader first (as the page shows them, not in source order: a float's units sit
 //     where the float was written), the first batch small so that it comes back soon;
@@ -10,7 +10,7 @@
 //  4. the original itself with unit marks, for exact places on arXiv's PDF — when the compiler would otherwise wait,
 //     or after the final compile: the translation comes first;
 //  5. when every unit is in, the final compile: every pass, the images themselves.
-// With the typesetting rule (typeset/plan.mjs; experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md,
+// With the typesetting rule (typeset/plan.mjs; exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md,
 // "The compile sequence"), where the reader can read a PDF's marks (`readMarks`): the font probe measures the body face
 // too (1); the original, in full with its line probes (4), since every plan is made from it — from the run's start in a
 // compiler of its own where the reader gives one (`compileOriginal`), beside the probe and the first preview, else right
@@ -318,7 +318,7 @@ function unitLines(raw, patched, out, main, skip) {
 export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : new Set([...paper.kept, ...paper.units.filter(u => u.kind === 'author')]))
 
 /**
- * The reader's versions (REPORT, eighteenth addendum), apart since 2026-10-02 so that a change to the typesetting never
+ * The reader's versions (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum), apart since 2026-10-02 so that a change to the typesetting never
  * asks the service again (the evaluation's ruling 4):
  * - PIPELINE_VERSION, the translation's: raised with any change to what a unit is or what is sent for it and made of
  *   the answer — the units' cutting, kinds and texts (latex-front), the wire and its reading back (mt), paperContext(),
@@ -434,7 +434,7 @@ export const TYPESETTING_VERSION = '6'
  * the run compiles it, the measure and the final after the whole translation, the final the one update; a function of
  * the original (`{ pdf, log }`, null where the run compiles none or it did not set) says which, once, as soon as it is in
  * and before any compile of the translation; true, the default, is the run as before the flag. A translation made again
- * from a cached copy (REPORT, eighteenth addendum): `seed`, index → the old translation { pieces, by, tried, state,
+ * from a cached copy (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum): `seed`, index → the old translation { pieces, by, tried, state,
  * current }, fills the run at the start, and one `current` (cache.mjs reusable) is not sent again; `marks`, the left
  * side's marks when known, skips the marked original (but where the typesetting rule needs its readings); `original`,
  * the original's readings (readingsOf) as a run before gave them, taken with `marks` known: no original is compiled,
@@ -474,7 +474,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
   // why the run stopped short: the service's failure (engine.mjs's kinds), after which nothing more is sent (§10.3)
   let stopped = null
   // every unit to translate has a translation, seeded or new: a seeded run shows no preview before, or a paragraph the
-  // copy had translated would be shown in the source (REPORT, eighteenth addendum)
+  // copy had translated would be shown in the source (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum)
   const complete = () => units.every(u => kept.has(u) || translated.has(u))
   let dirty = false, mtDone = false, wake = null
   const signal = () => { const w = wake; wake = null; w?.() }

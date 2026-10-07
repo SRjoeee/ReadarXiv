@@ -3,7 +3,7 @@
 // side — in both languages. Each row's items on the row's centre line within 0.5 px; the popup's blocks at 12 px from
 // both edges, the group's words at 24 and its values ending 24 from the trailing edge, the gear's glyph ending at 12;
 // then the rows hovered and measured again, and each menu opened and measured against its row and its popup. Every
-// fixture is shot at 2x (200 %) into experiments/pdf-bilingual/out/popup/, the menus open too. Prints what is off and
+// fixture is shot at 2x (200 %) into lab/pdf/out/popup/, the menus open too. Prints what is off and
 // exits 1 if anything is. The gallery is in development builds only (wxt.config.ts DEV_PAGES):
 //   pnpm exec wxt build --mode development && node tests/e2e/probes/popup-align.mjs
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -14,7 +14,7 @@ import { chromium } from 'playwright'
 import { edges, offCentre, shootEach } from './align.mjs'
 
 const EXT = fileURLToPath(new URL('../../../.output/chrome-mv3-dev', import.meta.url))
-const OUT = fileURLToPath(new URL('../../../experiments/pdf-bilingual/out/popup/', import.meta.url))
+const OUT = fileURLToPath(new URL('../../../lab/pdf/out/popup/', import.meta.url))
 const GALLERY = join(EXT, 'gallery.html')
 // a dev server's build loads its scripts from localhost, and is no use without the server
 if (!existsSync(GALLERY) || readFileSync(GALLERY, 'utf8').includes('localhost')) throw new Error('no gallery: pnpm exec wxt build --mode development first')

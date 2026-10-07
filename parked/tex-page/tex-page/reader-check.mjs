@@ -12,7 +12,7 @@ import { createServer } from 'node:http'
 import { join } from 'node:path'
 import { copyWithGrants } from '../../../tests/e2e/ext-copy.mjs'
 import { addService, openOptions } from '../../../tests/e2e/options-page.mjs'
-import { BUILD, launchWithReader } from '../spikes/extension.mjs'
+import { BUILD, launchWithReader } from '../../../tests/e2e/lib/extension.mjs'
 import { serveTexSite } from './serve.mjs'
 
 const EXP = new URL('..', import.meta.url).pathname

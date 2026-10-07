@@ -37,7 +37,7 @@ import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
 import { alignment, marksOf } from '../../../src/pdf-reader/engine/typeset/places.mjs'
 import { copyWithGrants } from '../../../tests/e2e/ext-copy.mjs'
 import { openOptions, seedService } from '../../../tests/e2e/options-page.mjs'
-import { BUILD, launchWithReader } from './extension.mjs'
+import { BUILD, launchWithReader } from '../../../tests/e2e/lib/extension.mjs'
 
 const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname

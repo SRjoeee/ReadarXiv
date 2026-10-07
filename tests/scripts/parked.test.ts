@@ -4,7 +4,7 @@
 //   - nothing that ships or is kept up imports from parked/ (a kept file reaching into parked/ would make it half alive);
 //   - the TeX page's published versions carry an offer of their source (AGPL, DESIGN §16), made by tex-page/build.mjs
 //     from the files its SOURCE list names, and parked/tex-page/ must still hold every one of them;
-//   - each parked part names the commit where it last ran, so that reviving it starts from something that worked.
+//   - each parked part names the tag or commit where it last ran, so that reviving it starts from something that worked.
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -54,7 +54,7 @@ describe('what imports from parked/', () => {
       at('src/a/url.mjs', `const u = new URL(${to('d.json')}, import.meta.url)`)
       at('src/a/require.cjs', `const r = require(${to('e.cjs')})`)
       at('src/a/clean.mjs', "import y from './sibling.mjs'", `// see ${to('f.md')} for why`, "const s = 'parked/g.md'")
-      at('src/a/elsewhere.mjs', "import z from '../../experiments/h.mjs'")
+      at('src/a/elsewhere.mjs', "import z from '../../lab/h.mjs'")
       const files = ['static', 'reexport', 'dynamic', 'url', 'clean', 'elsewhere'].map(name => `src/a/${name}.mjs`).concat('src/a/require.cjs')
       expect(importingParked(root, files)).toEqual(['src/a/static.mjs', 'src/a/reexport.mjs', 'src/a/dynamic.mjs', 'src/a/url.mjs', 'src/a/require.cjs'])
     } finally {
@@ -62,8 +62,8 @@ describe('what imports from parked/', () => {
     }
   })
 
-  it('is no file under src/, tests/, scripts/, lab/ or experiments/, nor the build configuration', () => {
-    const files = [...['src', 'tests', 'scripts', 'lab', 'experiments'].flatMap(codeUnder), 'wxt.config.ts']
+  it('is no file under src/, tests/, scripts/ or lab/, nor the build configuration', () => {
+    const files = [...['src', 'tests', 'scripts', 'lab'].flatMap(codeUnder), 'wxt.config.ts']
     // a scan that reads nothing would pass for the wrong reason
     expect(files.length).toBeGreaterThan(200)
     expect(importingParked(ROOT, files)).toEqual([])
@@ -94,9 +94,9 @@ describe('parked/tex-page/ and the source offer of the published TeX page', () =
     expect(existsSync(join(ROOT, 'LICENSE'))).toBe(true)
   })
 
-  it('took the programs out of experiments/ and tests/, so that nothing is left in two places', () => {
-    for (const gone of ['poc-site', 'tex-page', 'busytex', 'upstream', 'setup.mjs', 'spikes/make-metafont.mjs', 'spikes/serve-live.mjs']) {
-      expect([gone, existsSync(join(ROOT, 'experiments/pdf-bilingual', gone))]).toEqual([gone, false])
+  it('took the programs out of the lab and tests/, so that nothing is left in two places', () => {
+    for (const gone of ['poc-site', 'tex-page', 'busytex', 'upstream', 'setup.mjs', 'spikes/make-metafont.mjs', 'spikes/serve-live.mjs', 'spikes/live-site.mjs']) {
+      expect([gone, existsSync(join(ROOT, 'lab/pdf', gone))]).toEqual([gone, false])
     }
     expect(existsSync(join(ROOT, 'tests/tex-page'))).toBe(false)
     expect(readdirSync(join(PARKED, 'tex-page/tests')).filter(name => name.endsWith('.test.ts')).length).toBeGreaterThan(0)
@@ -106,28 +106,32 @@ describe('parked/tex-page/ and the source offer of the published TeX page', () =
 describe('parked/README.md', () => {
   const readme = () => readFileSync(join(PARKED, 'README.md'), 'utf8')
   const parts = () => readdirSync(PARKED, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name)
-  /** the commit a part's section names: "commit `<hex>`" under a heading that names the part's directory */
-  const commitOf = (part: string): string | undefined => {
+  /** what a part's section names as where it ran: "tag `<name>`" or "commit `<hex>`", under a heading that names the part's directory */
+  const refsOf = (part: string): string[] => {
     const section = readme().split(/^## /m).find(s => s.split('\n')[0]!.includes(`parked/${part}/`))
-    return section && /commit `([0-9a-f]+)`/.exec(section)?.[1]
+    return section ? [...section.matchAll(/\b(?:tag|commit)\s+`([^`]+)`/g)].map(m => m[1]!) : []
   }
+  /** the freeze's tag (exp-freeze-<date>) or a commit (7 to 40 hex digits) */
+  const REF = /^(?:exp-freeze-\d{4}-\d{2}-\d{2}|[0-9a-f]{7,40})$/
 
-  it('has a section for each parked part, and in it a commit (7 to 40 hex digits)', () => {
+  it('has a section for each parked part, and in it a tag or a commit (7 to 40 hex digits)', () => {
     expect(parts().sort()).toEqual(['lab', 'tex-page'])
     for (const part of parts()) {
-      const commit = commitOf(part)
-      expect([part, commit]).toEqual([part, expect.stringMatching(/^[0-9a-f]{7,40}$/)])
+      const refs = refsOf(part)
+      expect([part, refs.length > 0]).toEqual([part, true])
+      expect([part, refs.filter(ref => !REF.test(ref))]).toEqual([part, []])
     }
   })
 
-  // CI checks out one commit deep: there the history is cut, and a commit that is real is not found
+  // CI checks out one commit deep, with no tags: there the history is cut, and a ref that is real is not found
   const shallow = git('rev-parse', '--is-shallow-repository') === 'true'
-  it.skipIf(shallow)('names commits that HEAD descends from (not checked in a shallow clone, where the history is cut)', () => {
+  it.skipIf(shallow)('names refs that HEAD descends from (not checked in a shallow clone, where the history and the tags are cut)', () => {
     for (const part of parts()) {
-      const commit = commitOf(part)!
-      let reachable = true
-      try { git('merge-base', '--is-ancestor', commit, 'HEAD') } catch { reachable = false }
-      expect([part, commit, reachable]).toEqual([part, commit, true])
+      for (const ref of refsOf(part)) {
+        let reachable = true
+        try { git('merge-base', '--is-ancestor', ref, 'HEAD') } catch { reachable = false }
+        expect([part, ref, reachable]).toEqual([part, ref, true])
+      }
     }
   })
 })

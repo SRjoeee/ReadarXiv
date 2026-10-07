@@ -1,6 +1,6 @@
 // The typesetting rule chosen on 2026-10-01 — Flow, even, with option A in steps for CJK — as two steps a reader's
 // compiles go through (parked/lab/records/typesetting.md; the engineers' notes in
-// experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md):
+// exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md):
 //   previewTypesetting — from the original's probes and the translation's text: one type for the paper, each unit's
 //     leading along the original's flow, each float held to its original's page; the preview compile is set with it;
 //   finalTypesetting — from what that preview measured: the preview's type kept, each unit's leading set again from its

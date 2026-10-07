@@ -7,7 +7,7 @@
 // reader-papers.mjs made it), at 390, 500 and 700 px.
 // Build first (`pnpm build`). BUILD=<dir> another build. Exits non-zero on a FAIL.
 //   node tests/e2e/probes/title-first-frame.mjs
-import { BUILD, launchWithReader } from '../../../experiments/pdf-bilingual/spikes/extension.mjs'
+import { BUILD, launchWithReader } from '../lib/extension.mjs'
 
 const paper = process.env.PAPER ?? '2608.02163'
 const extension = process.env.BUILD ?? BUILD

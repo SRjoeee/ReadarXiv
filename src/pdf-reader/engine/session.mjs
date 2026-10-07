@@ -668,7 +668,7 @@ async function translateBoxes(boxes) {
   /**
    * Boxes' texts → their translations, one per box, null where one did not come back. From the entry kept for these
    * texts, whatever engine or wire format made it, shown until the current engine's replaces it and kept if that
-   * fails (REPORT, eighteenth addendum); else from the engine, by `make` → { texts, by } or null
+   * fails (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum); else from the engine, by `make` → { texts, by } or null
    */
   const ask = (texts, make) => {
     const key = figureKeyOf(texts), known = figureEntries.get(key)
@@ -938,7 +938,7 @@ function lineAt(side, y, x) {
 }
 let frame = 0, settleTimer = 0, pointerX = null
 
-// How the other side follows, the reader's choice (REPORT, sixteenth and seventeenth addenda): off; the design as it was
+// How the other side follows, the reader's choice (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, sixteenth and seventeenth addenda): off; the design as it was
 // (a table of unit tops, and a settle 160 ms after the last scroll); or together — while the reader scrolls, the other
 // side moves with it as one sheet, at the same speed or at the speed the two layouts' local ratio asks, and once the
 // scroll has ended (a trackpad's glide included) it glides so that the content the reader's side is levelled by — the
@@ -1260,13 +1260,13 @@ function take(side) {
   if (driver === side) return
   bake(); driver = side; stopSpring(); clearTimeout(follow.rest); follow.rest = 0; rebase()
 }
-/** the follower on the compositor or by script (REPORT, seventeenth addendum) */
+/** the follower on the compositor or by script (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, seventeenth addendum) */
 export function setCompositor(on) {
   bake(); stopSpring(); clearTimeout(follow.rest)
   compositing = CAN_COMPOSIT && on
   rebase(); arm()
 }
-/** how the other side follows (REPORT, sixteenth and seventeenth addenda); the interface's switch is same or off */
+/** how the other side follows (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, sixteenth and seventeenth addenda); the interface's switch is same or off */
 /** a sync mode in effect, nothing written */
 function applySync(next) {
   bake()
@@ -1275,7 +1275,7 @@ function applySync(next) {
   stopGlide(); stopSpring(); clearTimeout(settleTimer); clearTimeout(follow.rest)
   rebase(); arm()
 }
-/** how the other side follows (REPORT, sixteenth and seventeenth addenda): the interface's switch is same or off,
+/** how the other side follows (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, sixteenth and seventeenth addenda): the interface's switch is same or off,
  *  which is written to the settings; a probe's other modes are not */
 export function setSyncMode(next) {
   if (!SYNC_MODES.includes(next)) return
@@ -1323,7 +1323,7 @@ const bothShown = () => mode === 'bilingual' && !narrow
  * (its lines counted from 0 to 1), and the place in the whole document for when no unit is located there. Read while
  * the side is shown: once the display hides it, its scrollTop and its pages' offsets are all 0, and a switch straight
  * between Original and Translation opened the other side at the paper's top (Codex on #297, measured by
- * spikes/viewer-faults.mjs)
+ * parked/lab/spikes/viewer-faults.mjs)
  */
 function readingPlace(side) {
   const c = side.container
@@ -2050,7 +2050,7 @@ const harness = () => ({ left, get right() { return right },
   reanchorLeft: () => anchorLeft([...left.units.values()], left.marks),
 })
 /**
- * A copy from this machine shown (REPORT, eighteenth addendum): the paper's state from the record rather than the
+ * A copy from this machine shown (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum): the paper's state from the record rather than the
  * source — the figures' context, the prose names are told by, the units' kinds, the figures' entries — then the
  * translation opened and both sides anchored, as the demo does
  */
@@ -2085,7 +2085,7 @@ async function live() {
   const { site, endpoint, src: srcUrl, pdf: pdfUrl } = readerAddresses(params, paper)
   const L = (window.__reader.live = { events: [], t0: performance.now() })
   let got = 0, total = 0, engine = null, setContext = null, lost = 0, lostWhy = null
-  // this machine's copy on screen, being translated again with the current settings (REPORT, eighteenth addendum)
+  // this machine's copy on screen, being translated again with the current settings (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum)
   let again = false
   let compiledOnce = false
   paperCtx = new Promise(resolve => { setContext = resolve })
@@ -2125,7 +2125,7 @@ async function live() {
   if (mode === 'original') status(`${paper}, the original. Choose Translation or Side by side to translate it`)
   await translationWanted
   translating = true
-  // this machine's copy first: it needs no service (REPORT, eighteenth addendum, "Opening a paper"). Its key is arXiv's
+  // this machine's copy first: it needs no service (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum, "Opening a paper"). Its key is arXiv's
   // whole PDF's digest, read once a translation is wanted and the left side's first page is drawn: getData copies the
   // whole file (46 MB at most) out of the worker, and the digest reads all of it (final review)
   await drawnP
@@ -2432,7 +2432,7 @@ async function live() {
       status(`${paper}: none of the ways of typesetting the whole translation into ${lang} worked; the right side shows the last preview`)
     }
     // this machine's copy: the whole record for a final that settled; the units' provenance alone when nothing typeset
-    // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")
+    // changed but what was tried did (cache.mjs decideWrite); nothing else (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum, "Writing")
     if (cacheKey) {
       const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, context, units: unitsOf(units, keptFor(paperData, lang), hashes, result.results), marks: leftMarks ?? (p.sameUnits ? cached.marks : []), rightMarks: [], figures: [...figureEntries.values()] }
       const how = decideWrite({ result, cached, units: record.units, marks: record.marks, shown: shownNow })

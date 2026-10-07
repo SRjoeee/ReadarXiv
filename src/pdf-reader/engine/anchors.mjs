@@ -3,7 +3,7 @@
 // Two sources of truth, the better one first:
 //  - marks: when we compiled the PDF ourselves, every unit's first word and last character carry a named destination
 //    (latex-front.mjs, patch's `mark`). They bound the unit exactly; `boundsFromMarks` turns them into token ranges.
-//  - text alone (REPORT §2, spike A): 3-gram anchors, the longest chain rising in both texts, a bounded fill between
+//  - text alone (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md §2, spike A): 3-gram anchors, the longest chain rising in both texts, a bounded fill between
 //    anchors. Used inside the bounds when there are marks, on its own when there are none.
 
 // CJK: unified ideographs with extension A, compatibility ideographs, kana, Hangul syllables. Written as escapes: typed as
