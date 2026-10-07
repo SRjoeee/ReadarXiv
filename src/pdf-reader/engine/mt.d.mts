@@ -2,6 +2,8 @@
 type Piece = { t: string; s?: string; src?: string; tr?: boolean; id?: number }
 /** a unit's plain text in the source, placeholders dropped */
 export declare function plainSource(u: { pieces: Piece[] }): string
+/** the unit's displays beyond its marks and between its words (`lead`, `trail`, `inner`): those it has, as strings */
+export declare function displayEdges(u: { lead?: unknown; trail?: unknown; inner?: unknown }): { lead?: string; trail?: string; inner?: string }
 /** a unit's plain text in its translation, as the compiled PDF shows it */
 export declare function plainTranslated(pieces: Piece[]): string
 /** a text piece as the compiled PDF shows it: a translation's TeX escapes undone, the source's bytes as UTF-8 */

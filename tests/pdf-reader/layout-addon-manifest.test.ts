@@ -37,7 +37,7 @@ function check(): RemovalManifest & { outlines: Record<string, (string | number)
     },
     appended: 32402, stats: { removed: 12, rules: 1, cut: 12, hidden: 0, refused: 1, forms: 2, streams: 3 },
     colours: { '1.0': [255, 0, 0], '1.1': [0, 160, 0] },
-    outlines: { 'QIMBDZ+NimbusRomNo9L-Regu': ['|389000', 9, -15, 371, 663, 'a|500000', 1, 0, 0, 0] },
+    outlines: { 'QIMBDZ+NimbusRomNo9L-Regu': ['\ue022|389000', 9, -15, 371, 663, 'a|500000', 1, 0, 0, 0] },
   }
 }
 const VIEWS = [0, 0, 612, 792, 0, 0, 612, 792, 0, 0, 612, 792]
