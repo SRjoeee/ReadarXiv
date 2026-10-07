@@ -227,7 +227,7 @@ export function phClass2(src) {
  * the size over the baseline and 0.12 under, Latin capitals some 0.7 over and descenders 0.22 under: a translation into
  * one is taller than the original over its baseline and shorter under it. `rulesOf(page)`: the page's rules (x0, y0, x1,
  * y1 stride 4: the add-on manifest's, removal.mjs pageRules, the PDF's own paths), each counted for a line it crosses
- * the extent of. Each line's band: from the nearest rule over it less `clear` (or the original's own top, where that is
+ * the extent of as it is laid (its rectangle, or its block's x0 to x1 where that is wider: a line widened). Each line's band: from the nearest rule over it less `clear` (or the original's own top, where that is
  * higher: never held below the original) down to the nearest under it plus `clear`, never past the original's own foot
  * (its line's band, not the next line's); with no rule over it, its em box's top at the original's baseline. Returns the
  * largest size every band holds the em box at (`cap`, a share of `s`; never below 0.6, the fit's last floor) and the
@@ -243,8 +243,11 @@ export function cellBands(blocks, rulesOf, s, clear = 0.5) {
       const r = b.rects[j]
       if (!r || !Number.isFinite(B)) return
       let over = Infinity, under = -Infinity
+      // (across the line as it is laid, its block's: a line widened over the paper beside it reaches past its rectangle,
+      // and a rule over that part is its too, the re-review of round 3)
+      const lx0 = Math.min(r[1], b.x0 ?? r[1]), lx1 = Math.max(r[3], b.x1 ?? r[3])
       for (let q = 0; q + 3 < R.length; q += 4) {
-        if (Math.min(R[q + 2], r[3]) - Math.max(R[q], r[1]) <= 0.5) continue
+        if (Math.min(R[q + 2], lx1) - Math.max(R[q], lx0) <= 0.5) continue
         if (R[q + 1] >= B) over = Math.min(over, R[q + 1])
         else if (R[q + 3] <= B) under = Math.max(under, R[q + 3])
       }

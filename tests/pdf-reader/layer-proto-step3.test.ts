@@ -208,6 +208,13 @@ describe("a CJK cell's bands between the rules over and under its lines (cellBan
     expect(L2.cellBands(cell([[10, 220, B - 2.14, 280, B + 6.8]], [B]), () => rules, 9.96)).toBeNull()
     expect(L2.cellBands(cell([[10, 120, B - 2.14, 180, B + 6.8]], [B]), () => undefined, 9.96)).toBeNull()
   })
+  it("holds a line widened over the paper beside it to a rule over the part it was widened onto", () => {
+    // the re-review of round 3, M4: a cell's rectangle over x 10-40, its block widened to x 80; the rule over x 50-80
+    const wide = [{ page: 10, B: [B], rects: [[10, 10, B - 2.14, 40, B + 6.8]], x0: 10, x1: 80 }]
+    const over = [50, B + 7.63, 80, B + 8.03]
+    expect(L2.cellBands(wide as never, () => over, 9.96)?.bands.get(0)?.[0]?.hi).toBeCloseTo(B + 7.13, 6)
+    expect(L2.cellBands([{ ...wide[0]!, x1: 40 }] as never, () => over, 9.96)).toBeNull()
+  })
   it("moves no line set on a pitch of its own, and none a size that clears unmoved", () => {
     const r = L2.cellBands(cell([[10, 120, B - 2.14, 180, B + 6.8]], [B]), () => rules, 9.96)!
     const off = [{ block: 0, baseline: B - 4 }]

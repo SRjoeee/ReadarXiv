@@ -593,15 +593,20 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
    * over the paper beside them (widenOverPaper), the fit run again in them; 'flow', the text run past a display where the
    * slots after it are too few (layoutUnit2's P.flowPast: out of the translation's order, but all of it shown, as v0's
    * own last pass already ran text on past a display); 'shrink', the size's steps on below the fit's floor, to
-   * P.floorMin. Returns the first layout that sets every token, with the blocks it was laid in, or null.
+   * P.floorMin. Returns the first layout that sets every token, with the blocks it was laid in (widened: with their
+   * bands between the rules, `clear`, and the parameters they hold it to, `P`), or null.
    */
   const fitFurther = (p, tokens, s) => {
     for (const step of P.further ?? []) {
       if (step === 'widen') {
         const wide = widenOverPaper(p)
         if (!wide) continue
-        const l = L2.layoutUnit2(tokens, wide, s, p.P, to)
-        if (!l.clipped) return { layout: { ...l, knob: 'widen' }, blocks: wide }
+        // (its bands again, over its widened lines: a rule over the part a line is widened onto holds it too)
+        const clear = clearanceOf({ ...p, blocks: wide }, s)
+        const { capScale: _, ...rest } = p.P
+        const PW = clear && clear.cap < 1 ? { ...rest, capScale: clear.cap } : rest
+        const l = L2.layoutUnit2(tokens, wide, s, PW, to)
+        if (!l.clipped) return { layout: { ...l, knob: 'widen' }, blocks: wide, P: PW, clear }
       } else if (step === 'shrink' && P.floorMin < P.floor - 1e-9) {
         const l = L2.layoutUnit2(tokens, p.blocks, s, { ...p.P, floor: P.floorMin }, to)
         if (!l.clipped) return { layout: { ...l, knob: 'below-floor' }, blocks: p.blocks }
@@ -751,7 +756,7 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     // (step 3: never drawn in part: given more room where the page has it, else left the original's, whole)
     if (p.layout.clipped) {
       const further = fitFurther(p, tokens, s)
-      if (further) { p.layout = further.layout; p.blocks = further.blocks }
+      if (further) { p.layout = further.layout; p.blocks = further.blocks; if (further.P) { p.P = further.P; p.clear = further.clear } }
       else { p.refused = true; return }
     }
     settleLayout(p)

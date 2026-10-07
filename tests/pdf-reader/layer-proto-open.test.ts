@@ -9,7 +9,8 @@ import { indexLayout, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
 const ctxStub = (canvas?: { width: number; height: number }) => new Proxy({} as Record<string | symbol, unknown>, {
   get(t, k) {
     if (k in t) return t[k]
-    if (k === 'measureText') return (s: string) => ({ width: 5 * [...s].length, actualBoundingBoxAscent: 7, actualBoundingBoxDescent: 2 })
+    // (an em a CJK character, half one any other, at the context's font size)
+    if (k === 'measureText') return (s: string) => { const px = Number(/(\d+(?:\.\d+)?)px/.exec(String(t.font ?? ''))?.[1] ?? 10); return { width: [...s].reduce((w, ch) => w + (/[\u3000-\u9fff]/.test(ch) ? px : px / 2), 0), actualBoundingBoxAscent: 0.7 * px, actualBoundingBoxDescent: 0.2 * px } }
     if (k === 'getImageData') return (_x: number, _y: number, w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(1, w * h) * 4).fill(255) })
     if (k === 'createImageData') return (w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(1, w * h) * 4) })
     if (k === 'canvas') return canvas
@@ -79,3 +80,39 @@ describe("a table group withheld beside one drawn, the whole run (openProto): th
     })
   }
 })
+
+describe("a cell widened over the paper beside it, the whole run (openProto): held to a rule over the part it was widened onto", () => {
+  it("lays the widened cell's line under the rule, its bands read again over the widened blocks", async () => {
+    // the re-review of round 3, M4: cell X's rectangle over x 10-40 cannot hold its translation, so the fit widens it over
+    // the paper to its right, to the text area's edge (cell Y's, x 200); a table's rule runs over x 60-120 just above X's
+    // line. Its bands were read from the rectangle alone, which no rule is over: the widened line stood over the rule
+    const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const cells = [{ id: 0, src: 'Delta', x0: 10, x1: 40, b: 100, tr: '\u6c49'.repeat(9) }, { id: 1, src: 'Omega', x0: 150, x1: 200, b: 60, tr: '\u6c49\u5b57' }]
+    const layout = {
+      schema: 1, layout: '3', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['F1'],
+      units: cells.map(c => [c.id, 4, 9, 0, 1]),
+      lines: cells.map(c => [c.id, [1, c.x0, c.x1, c.b, c.b + 6.8, c.b - 2.14, 10, 0]]),
+      frames: cells.map(c => [c.id, [1, 0, 0, 1, -1, 0]]),
+      erase: cells.map(c => [c.id, [0, c.x0, c.b - 2.14, c.x1, c.b + 6.8]]),
+      ph: [], labels: [], headings: [], pageText: [], held: [],
+    }
+    const index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(layout))))
+    const units = cells.map(c => ({ kind: 'cell', src: c.src, state: 'whole', pieces: [{ t: 'text', tr: true, s: c.tr }] }))
+    const doc = docOf(cells.map(c => [c.src, c.x0, c.b, c.x1 - c.x0]))
+    const run = await openProto({
+      doc, target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false,
+      geometry: { schema: 1, kinds: cells.map(() => 'cell'), left: { pages: [[0, 0, 300, 300]], units: [] } },
+      units,
+      tex: { index, pieces: new Map(cells.map(c => [c.id, [[0]]])), use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
+      removal: { OPS: {}, mode: 'draw', doc, manifest: { schema: 1, removal: '3', pages: 1, sets: {}, page: { 1: { ok: true, rules: [60, 107.63, 120, 108.03] } } } },
+    } as never)
+    await run.until(1)
+    const x = run.placed.find((p: { id: number }) => p.id === 0) as unknown as { layout: { knob: string; scale: number; lines: { baseline: number; x1: number }[] } }
+    expect(x.layout.knob).toBe('widen')
+    expect(x.layout.lines).toHaveLength(1)
+    // its em box under the rule less the half point: a CJK em 0.88 of the size over the baseline
+    const line = x.layout.lines[0]!
+    expect(line.baseline + 0.88 * 10 * x.layout.scale).toBeLessThanOrEqual(107.63 - 0.5 + 1e-6)
+  })
+})
+
