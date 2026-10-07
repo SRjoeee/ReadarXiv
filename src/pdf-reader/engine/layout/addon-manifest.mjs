@@ -29,8 +29,9 @@ const ENTRY = ['refused', 'units', 'at', 'dirty', 'rules']
 /** a PDF's bytes at most (a manifest's `appended`), and a count's (its stats) */
 const BYTES_MAX = 2 ** 31
 const STATS_MAX = 32, STAT_NAME = /^[a-z]{1,32}$/
-/** a unit's id as a key of a page's `units`, a crop's colour by page and crop, a font of the outline table */
-const UNIT_KEY = /^(?:0|[1-9]\d{0,8})$/, COLOUR_KEY = /^([1-9]\d{0,4})\.(?:0|[1-9]\d{0,5})$/
+/** a page as a key of `page` (read as a number once it is one), a unit's id as a key of a page's `units`, a crop's
+ *  colour by page and crop, a font of the outline table */
+const PAGE_KEY = /^[1-9]\d{0,4}$/, UNIT_KEY = /^(?:0|[1-9]\d{0,8})$/, COLOUR_KEY = /^([1-9]\d{0,4})\.(?:0|[1-9]\d{0,5})$/
 const FONT_MAX = 128, CHAR_MAX = 256, OUTLINE_MAX = 2 ** 31
 /** a box lies within its page's view by this, PDF units (the layout file's slack) */
 const SLACK = 1
@@ -92,14 +93,15 @@ export function checkAddonManifest(m, { pages, views = null }) {
   if (!isObject(page)) throw refuse('page', `not an object (${kindOf(page)})`)
   const keys = Object.keys(page)
   if (keys.length !== pages) {
-    for (let i = 0; i < keys.length; i++) if (!/^[1-9]\d{0,4}$/.test(keys[i]) || Number(keys[i]) > pages) throw refuse(`page.${told(keys[i])}`, `not a page 1 to ${pages}`)
+    for (let i = 0; i < keys.length; i++) if (!PAGE_KEY.test(keys[i]) || Number(keys[i]) > pages) throw refuse(`page.${told(keys[i])}`, `not a page 1 to ${pages}`)
     throw refuse('page', `not an entry for each of ${pages} pages`)
   }
   // each `at`, checked against the document's pages once every entry is read
   const ats = [], atPaths = []
   for (let i = 0; i < keys.length; i++) {
-    const k = keys[i], p = Number(k), path = `page.${told(k)}`
-    if (!/^[1-9]\d{0,4}$/.test(k) || p > pages) throw refuse(path, `not a page 1 to ${pages}`)
+    const k = keys[i], path = `page.${told(k)}`
+    if (!PAGE_KEY.test(k) || Number(k) > pages) throw refuse(path, `not a page 1 to ${pages}`)
+    const p = Number(k)
     const e = keysOf(page[k], ['ok'], ENTRY, path)
     if (typeof e.ok !== 'boolean') throw refuse(`${path}.ok`, `not a boolean (${kindOf(e.ok)})`)
     if (e.ok) {
