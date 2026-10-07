@@ -448,6 +448,34 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
       if (half > (r[3] - r[1]) / 2) { b.x0 = mid - half; b.x1 = mid + half }
     } else if (right > b.x1) b.x1 = right
   }
+  /**
+   * The largest size a table cell's text keeps clear of the rules above its lines at (Round 2: a CJK cell's glyphs,
+   * taller than the Latin they replace, reached the rule over 1706.03762's Table 4's header): a CJK script's em box
+   * reaches 0.88 of the size over the baseline, Latin capitals some 0.7, so a translation into one may stand taller than
+   * the original it replaces. The rules are the manifest's near the layout file's lines (removal.mjs pageRules, the PDF's
+   * own paths), each across a line's extent; the translation's top may reach the nearest less CLEAR, or the original's own
+   * top where that is higher (it is never held below the original). A script no taller than Latin (or a cell's text
+   * below its baseline, CJK's 0.12 against Latin's 0.22) is not held; nor is a paragraph, whose lines stand under a rule
+   * only by chance. 1 where none is near or the page has none named; never below 0.6, the fit's last floor
+   */
+  const CLEAR = 0.5
+  const clearScale = (p, s) => {
+    if (!P.cjk || p.unit.kind !== 'cell') return 1
+    let cap = 1
+    for (const b of p.blocks) {
+      const R = RM?.manifest?.page?.[b.page]?.rules
+      if (!R?.length) continue
+      b.B.forEach((B, j) => {
+        const r = b.rects[j]
+        if (!r || !Number.isFinite(B)) return
+        for (let q = 0; q + 3 < R.length; q += 4) {
+          if (R[q + 1] < B || Math.min(R[q + 2], r[3]) - Math.max(R[q], r[1]) <= 0.5) continue
+          cap = Math.min(cap, Math.max(r[4] - B, R[q + 1] - B - CLEAR) / (0.88 * s))
+        }
+      })
+    }
+    return Math.max(0.6, Math.min(1, Math.floor(cap * 1000) / 1000))
+  }
   // the free space below a block, down to the first ink in its column or the page's lowest unit line
   const freeFor = (b, s) => {
     const map = inkOf(b.page)
@@ -669,6 +697,9 @@ export async function openProto({ doc, geometry, units: all, target: to, pages =
     p.prep = prep
     p.s = s
     p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P), trackStart: P.trackStart ?? cjkAdvance() }
+    // (no larger than its lines' room before the rules above and below them leaves its script's glyphs: clearScale)
+    const cap = clearScale(p, s)
+    if (cap < 1) p.P.capScale = cap
     // (fillBySize, P.fillSize, off by default: where the leading rule gave up a step (0.05) or more of the script's
     // leading on a loose original, the paragraph is filled by its text's size instead, up to P.fillSize × the
     // original's; a solid-set original keeps the script's leading, and its units are never grown)

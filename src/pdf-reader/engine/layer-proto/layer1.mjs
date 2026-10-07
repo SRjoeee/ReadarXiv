@@ -110,13 +110,18 @@ export function texToText(src) {
   // (textArgsOf: a rule's sizes, keys, a file, a label go). A \rule is v0's own (ZERO): a strut nothing, a bar in a
   // line looked for on the page and cropped, as the layout maker asks TeX about it (layout/marks.mjs RULE)
   if (textless(src) && !RULE.test(src)) return ''
-  let s = textArgsOf(src).replace(/^\$\$?|\$\$?$/g, '').replace(/^\\\(|\\\)$/g, '').replace(/^\\\[|\\\]$/g, '')
+  // a math shift at either end goes, not an escaped dollar ending the source (\$ drew as "\": 2026-10-07)
+  let s = textArgsOf(src).replace(/^\$\$?|(?<!\\)\$\$?$/g, '').replace(/^\\\(|\\\)$/g, '').replace(/^\\\[|\\\]$/g, '')
+  // TeX's spacing inside a source, a space or nothing: a control space, a thin, medium or thick space, a tie, a line
+  // break (a source's "D=l^μ∂_μ,\ Δ" drew its "\": 2307.16209)
+  s = s.replace(/\\\\(?:\[[^\]]*\])?|\\[ ,;:]|(?<!\\)~/g, ' ').replace(/\\!/g, '')
   s = s.replace(/\\(?:url|texttt|textsf|textrm|textbf|textit|emph|mathrm|mathbf|mathit|mathsf|mathtt|mathcal|mathbb|mathfrak|boldsymbol|bm|ve|vec|operatorname|text|mbox|hbox)\s*\{([^{}]*)\}/g, '\u200b$1\u200b')
   s = s.replace(/\\(?:hat|widehat)\s*\{?(\w)\}?/g, '$1̂').replace(/\\(?:tilde|widetilde)\s*\{?(\w)\}?/g, '$1̃').replace(/\\(?:bar|overline)\s*\{?(\w)\}?/g, '$1̄')
   s = s.replace(/\\frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, '$1/$2').replace(/\\sqrt\s*\{([^{}]*)\}/g, '√($1)')
-  s = s.replace(/\\([A-Za-z]+|[%&#_${}])/g, (_, name) => GREEK[name] ?? SYMBOLS[name] ?? '')
+  // an escaped brace is the page's brace, kept from the grouping braces that go below (\{a\} drew as "a")
+  s = s.replace(/\\([A-Za-z]+|[%&#_${}])/g, (_, name) => (name === '{' ? '\uE000' : name === '}' ? '\uE001' : GREEK[name] ?? SYMBOLS[name] ?? ''))
   s = s.replace(/\^\{([^{}]*)\}|\^(\S)/g, (_, a, b) => script(a ?? b, SUP, '^')).replace(/_\{([^{}]*)\}|_(\S)/g, (_, a, b) => script(a ?? b, SUB, '_'))
-  return s.replace(/[{}\u200b]/g, '').replace(/\s+/g, ' ').trim()
+  return s.replace(/[{}\u200b]/g, '').replace(/\uE000/g, '{').replace(/\uE001/g, '}').replace(/\s+/g, ' ').trim()
 }
 /** what a placeholder draws as on the original page: nothing, a space, symbols only, or something a reader reads there */
 export function phClass(src) {

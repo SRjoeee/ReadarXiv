@@ -150,3 +150,36 @@ describe('the thesis pitch, switchable: the leading rule off, and fillBySize', (
     expect(grown.clipped).toBe(false)
   })
 })
+
+describe("TeX's control symbols in a source's rendering (texToText2): the character, never their syntax", () => {
+  it('an escaped special is its character, an alignment tab and a control space are spaces, an escaped brace is kept', () => {
+    // "Vinyals \& Kaiser" drew as "Vinyals \ Kaiser" (1706.03762's Table 4), "\$" as "\", "\{a\}" as "a"
+    expect(['\\&', '\\%', '\\#', '\\$', '\\_', '\\{', '\\}'].map(s => L2.texToText2(s))).toEqual(['&', '%', '#', '$', '_', '{', '}'])
+    expect(L2.texToText2('$\\{\\theta\\}_{\\text{Ang}}$')).toBe('{\u03b8}_(Ang)')
+    // 2307.16209: "D=l^\u03bc\u2202_\u03bc,\\ \u0394" drew its control space's backslash
+    expect(L2.texToText2('$D=l^{{\\mu}}\\partial_{{\\mu}},\\ \\Delta =n^{{\\mu}}$')).toBe('D=l^\u03bc\u2202_\u03bc, \u0394 =n^\u03bc')
+    expect(L2.texToText2('$a\\,b\\;c\\!d~e$')).toBe('a b cd e')
+    expect(L2.texToText2('a & b \\\\ c & d')).toBe('a b c d')
+  })
+})
+
+describe("the room before a rule (capScale, run.mjs clearScale): the fit's states never above it", () => {
+  const block = { page: 1, rects: [[1, 0, 98, 100, 108], [1, 0, 83, 100, 93]], x0: 0, x1: 100, B: [100, 85], exact: [true, true], sizes: [10, 10], pitch0: 15, free: 0, indent: 0, after: 0, centred: false }
+  const words = (n: number, of: number) => Array.from({ length: n }, (_, q) => [...(q ? [{ space: true, w100: 25 }] : []), { s: '\uD55C'.repeat(of), cls: 'cjk', w100: 50 * of, st: {} }]).flat()
+  it('starts at the cap, and grows no further than it', () => {
+    const P = { ...L2.defaultParams('zh'), leadBase: 1, borrow: 0 }
+    expect(L2.layoutUnit2(words(2, 13) as never, [block] as never, 10, { ...P, capScale: 0.92 } as never, 'zh').scale).toBeLessThanOrEqual(0.92)
+    expect(L2.layoutUnit2(words(2, 13) as never, [block] as never, 10, { ...P, growTo: 1.1, capScale: 1 } as never, 'zh').scale).toBe(1)
+  })
+  it("shrinks on the uncapped steps under the cap, down to the floor: a cap of 0.956 still reaches 0.8", () => {
+    // one line of 100 pt and two words of 124.5 pt at size 10, their space not shrinking: they fit at 0.8, not at 0.806
+    // (0.956 less three steps)
+    const one = { ...block, rects: [[1, 0, 98, 100, 108]], B: [100], exact: [true], sizes: [10] }
+    const word = [{ s: 'W', cls: 'latin', w100: 600, st: {} }, { space: true, w100: 25 }, { s: 'W', cls: 'latin', w100: 620, st: {} }]
+    const P = { ...L2.defaultParams('zh'), leadBase: 1, borrow: 0, order: ['shrink'], floor: 0.8, step: 0.05, trackMin: 0, compressMax: 0, hyphen: 0, spaceMin: 1 }
+    const r = L2.layoutUnit2(word as never, [one] as never, 10, { ...P, capScale: 0.956 } as never, 'zh')
+    expect(r.clipped).toBe(false)
+    expect(r.scale).toBe(0.8)
+  })
+})
+

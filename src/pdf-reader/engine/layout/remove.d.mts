@@ -21,10 +21,11 @@ export interface PlannedCrop { id?: number; k?: number; glyphs: number[]; paths:
 export interface RemovalPlan { pages: Record<number, { units: PlannedUnit[]; crops: PlannedCrop[]; shows?: number; glyphs?: number }> }
 /** the add-on's manifest: per page whether it is removed (`ok`) or why not, and each unit's removed boxes (x0, y0, x1, y1
  *  stride 4, PDF units); the sets' places (each its page p at offset + p), or, compact, each page's own (`at`, the
- *  combined document's page by set); the kept ink under the page's units' rectangles (`dirty`, x0, y0, x1, y1 stride 4) */
+ *  combined document's page by set); the kept ink under the page's units' rectangles (`dirty`, x0, y0, x1, y1 stride 4);
+ *  the rules near the layout file's lines (`rules`, the same: layer-proto/removal.mjs pageRules) */
 export interface RemovalManifest {
   schema: 1; removal: string; pages: number; sets: Record<string, number>
-  page: Record<number, { ok: boolean; refused?: string; units?: Record<number, number[]>; at?: Record<string, number>; dirty?: number[] }>
+  page: Record<number, { ok: boolean; refused?: string; units?: Record<number, number[]>; at?: Record<string, number>; dirty?: number[]; rules?: number[] }>
   appended: number; stats: Record<string, number>; colours?: Record<string, number[]>
 }
 /** arXiv's bytes with the sets appended as one incremental update */

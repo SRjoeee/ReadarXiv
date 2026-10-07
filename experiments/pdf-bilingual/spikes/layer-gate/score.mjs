@@ -35,6 +35,8 @@ export const MEASURES = [
   ['lostInk', 'pixel', 'defect', 'down', 'lost-ink regions'],
   ['graphicsErased', 'pixel', 'defect', 'down', 'graphics px erased'],
   ['graphicsOverdrawn', 'pixel', 'defect', 'down', 'graphics px overdrawn'],
+  // the translation's text on or a pixel from a rule's or a figure's ink (measure.mjs pixelPage graphics.touched)
+  ['graphicsTouched', 'pixel', 'defect', 'down', 'text touching a rule or a figure'],
   ['cropForeign', 'model', 'defect', 'down', 'crops with foreign ink'],
   ['wrongPageText', 'model', 'defect', 'down', 'wrong page text'],
   ['droppedPh', 'model', 'defect', 'down', 'dropped placeholders'],
@@ -43,8 +45,9 @@ export const MEASURES = [
   ['brackets', 'model', 'defect', 'down', 'doubled brackets'],
   ['duplicated', 'model', 'defect', 'down', 'duplications'],
   ['clipped', 'model', 'defect', 'down', 'clipped characters'],
-  // the wire's syntax left in the drawn translation (measure.mjs markerResidueOf: a marker, its `#`, an entity, a tag)
-  ['markerResidue', 'model', 'defect', 'down', 'marker syntax left in drawn text'],
+  // the wire's syntax left in the drawn translation, and TeX's in a placeholder's rendering from its source (measure.mjs
+  // markerResidueOf: a marker, its `#`, an entity, a tag; markupResidueOf: a backslash, a math shift, a brace)
+  ['markerResidue', 'model', 'defect', 'down', 'marker or markup syntax left in drawn text'],
   ['numbersLost', 'model', 'defect', 'down', 'equation numbers not shown'],
   // the text-removed PDF's (--removal): its removed page the truth of what stays (pdf-remove-report.md §3.1)
   ['trueResidue', 'pixel', 'defect', 'down', 'leftover English (true residue)'],
@@ -107,7 +110,7 @@ export function pageEntry(page, model, pixel) {
       textCells: pixel.coverage.text.cells, textTranslatedCells: pixel.coverage.text.translated, textEnglishCells: pixel.coverage.text.english, textBlankCells: pixel.coverage.text.blank,
       cellCells: pixel.coverage.cells.cells, cellTranslatedCells: pixel.coverage.cells.translated, neutral: pixel.neutral,
       overlap: pixel.overlap, overlapPx: pixel.overlapPx, stray: pixel.stray, residue: pixel.residue, residuePx: pixel.residuePx, bites: pixel.bites, bitePx: pixel.bitePx,
-      vanished: pixel.vanished, doubled: pixel.doubled, graphicsPx: pixel.graphics.px, graphicsErased: pixel.graphics.erased, graphicsOverdrawn: pixel.graphics.overdrawn,
+      vanished: pixel.vanished, doubled: pixel.doubled, graphicsPx: pixel.graphics.px, graphicsErased: pixel.graphics.erased, graphicsOverdrawn: pixel.graphics.overdrawn, graphicsTouched: pixel.graphics.touched,
       lostInk: pixel.lostInk.regions, lostInkPx: pixel.lostInk.px, lostBoxes: pixel.lostInk.boxes, regionsAt: pixel.regionsAt,
     })
     const rm = pixel.removal

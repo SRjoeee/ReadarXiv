@@ -19,3 +19,5 @@ export declare function modelPage(o: { units: UnitIn[]; ref: RefUnit[]; items: I
 export declare function pixelPage(o: Record<string, unknown>): Record<string, unknown>
 /** the wire formats' syntax left in a translation's text (a marker, its `#`, an escaped `@`, an entity, a tag): the matches */
 export declare function markerResidueOf(text: string): string[]
+/** TeX's syntax a placeholder's rendering `text` left of its source `src`: each special character beyond the source's escapes of it */
+export declare function markupResidueOf(text: string, src: string): string[]

@@ -22,7 +22,7 @@
 // kept character, a kept rendering or a line of a unit v0 does not draw.
 import * as pdfjs from 'pdfjs-dist'
 import { lostInk } from '/engine/layer/check.mjs'
-import { cropForeignPx, footprintOf, markerResidueOf, MATH_FONT, modelPage, pixelPage, removalPage, replacedFoot } from '/gate/measure.mjs'
+import { cropForeignPx, footprintOf, markerResidueOf, markupResidueOf, MATH_FONT, modelPage, pixelPage, removalPage, replacedFoot } from '/gate/measure.mjs'
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
 /** device pixels a PDF unit: v0's canvases at 1.25 CSS px and dpr 2 (the floor's), and the lost-ink check's 2x floor */
@@ -322,13 +322,18 @@ window.gate = {
     // with no copy of its own, as a reader opens it, and the checker reads that copy)
     const ck = S.perf ? { a: { regions: 0 }, b: { list: { missing: [], duplicated: [], brackets: [] } }, c: { list: [] }, d: { found: 0, ok: 0 } } : run.checkPage(p)
     const on = e => e.page === p
-    // the wire's syntax left in the text drawn from the translation (markerResidueOf): each drawn unit's text tokens on
-    // the page, not a placeholder's rendering nor a label
+    // the wire's syntax left in the text drawn from the translation (markerResidueOf: each drawn unit's text tokens on the
+    // page, not a placeholder's rendering nor a label), and TeX's in what a placeholder drawn from its source shows
+    // (markupResidueOf: each placeholder's tokens against its source; a placeholder drawn as the page's own characters,
+    // orig-text, shows the original's)
     const residue = []
     for (const r of recs) {
       const q = S.byId.get(r.id)
-      const text = (q?.layout?.lines ?? []).filter(l => l.page === p).flatMap(l => l.items).filter(it => it.t?.s && !it.t.ph && !it.t.label && !it.t.crop).map(it => it.t.s).join(' ')
-      const found = markerResidueOf(text)
+      const items = (q?.layout?.lines ?? []).filter(l => l.page === p).flatMap(l => l.items).filter(it => it.t?.s && !it.t.label && !it.t.crop)
+      const found = markerResidueOf(items.filter(it => !it.t.ph).map(it => it.t.s).join(' '))
+      const byK = new Map()
+      for (const it of items) if (it.t.ph && it.t.ph !== 'orig-text') byK.set(it.t.k, `${byK.get(it.t.k) ?? ''}${it.t.s}`)
+      for (const [k, text] of byK) found.push(...markupResidueOf(text, q?.unit?.pieces?.[k]?.src ?? ''))
       if (found.length) residue.push({ unit: r.id, found })
     }
     const check = {

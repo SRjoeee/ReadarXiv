@@ -122,3 +122,16 @@ describe("the wire's syntax left in drawn text (measure.mjs markerResidueOf): wh
     expect(markerResidueOf('kahe@microsoft.com, Table 2 (top), x (y) z')).toEqual([])
   })
 })
+
+describe("TeX's syntax left in a placeholder's rendering (measure.mjs markupResidueOf): beyond what its source escapes", () => {
+  it("a control symbol's backslash, a math shift, a grouping brace; the escaped characters the source asks for are none", async () => {
+    const { markupResidueOf } = await import('../../experiments/pdf-bilingual/spikes/layer-gate/measure.mjs')
+    expect(markupResidueOf('\\', '\\&')).toEqual(['\\'])
+    expect(markupResidueOf('D=l^\u03bc,\\', '$D=l^{{\\mu}},\\ \\Delta$')).toEqual(['\\'])
+    expect(markupResidueOf('{a}$', '$\\mathbf{a}$')).toEqual(['{', '}', '$'])
+    expect(markupResidueOf('&', '\\&')).toEqual([])
+    expect(markupResidueOf('{\u03b8}', '$\\{\\theta\\}$')).toEqual([])
+    expect(markupResidueOf('5%', '$5\\%$')).toEqual([])
+  })
+})
+

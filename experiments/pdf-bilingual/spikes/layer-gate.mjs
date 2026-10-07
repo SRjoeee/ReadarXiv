@@ -437,7 +437,7 @@ async function buildAddon(bytes, layoutFile, { check = true } = {}) {
   const { openRemover, makeAddon, SETS, CHECK_SETS } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/remove.mjs'))
   const { pageInk, outlineTable } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/ink.mjs'))
   const { indexLayout, parseLayout } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/file.mjs'))
-  const { pagePlan, pageDirty } = await import(join(ENGINE, 'src/pdf-reader/engine/layer-proto/removal.mjs'))
+  const { pagePlan, pageDirty, pageRules } = await import(join(ENGINE, 'src/pdf-reader/engine/layer-proto/removal.mjs'))
   const PL = await import('@cantoo/pdf-lib')
   const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
   const { deflateSync } = await import('node:zlib')
@@ -476,6 +476,10 @@ async function buildAddon(bytes, layoutFile, { check = true } = {}) {
   const shipped = await makeAddon({ R, bytes, OPS, opListOf: async p => ops[p], deflate: b => new Uint8Array(deflateSync(b)), plan: swapped, sets: SETS, compact: true })
   for (const [p, d] of Object.entries(dirty)) if (shipped.manifest.page[p]?.ok) shipped.manifest.page[p].dirty = d
   for (const p of Object.keys(plan.pages)) if (!dirty[p]) shipped.manifest.page[p] = { ok: true }
+  // (and the rules near its units' lines, which a taller script's text keeps clear of: pageRules; where the engine has it)
+  const rules = {}
+  if (pageRules) for (const p of Object.keys(plan.pages)) { const r = pageRules(index, Number(p), inks[p]); if (r.length) rules[p] = r }
+  for (const [p, r] of Object.entries(rules)) if (shipped.manifest.page[p]) shipped.manifest.page[p].rules = r
   ms.make = performance.now() - t
   let out = null
   if (check) {
@@ -485,6 +489,7 @@ async function buildAddon(bytes, layoutFile, { check = true } = {}) {
     // (the check's manifest: the gate's own reading of the page's ink boxes each glyph by the outline table, as Node does)
     out.manifest.outlines = outlines
     for (const [p, d] of Object.entries(dirty)) if (out.manifest.page[p]?.ok) out.manifest.page[p].dirty = d
+    for (const [p, r] of Object.entries(rules)) if (out.manifest.page[p]) out.manifest.page[p].rules = r
     // (the pages drawn by the add-on are the check's, every set of it made: the truth reads its planes)
     for (const p of Object.keys(plan.pages)) if (!out.manifest.page[p]?.ok) shipped.manifest.page[p] = { ok: false, refused: out.manifest.page[p]?.refused ?? 'refused' }
   }

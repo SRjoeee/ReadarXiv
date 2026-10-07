@@ -35,6 +35,29 @@ const INK = 160, TRACE = 232
  */
 const RESIDUE = /&(?:amp|lt|gt|quot|apos|nbsp|#\d+|#x[0-9a-f]+);|<\s*\/?\s*[xt](?:\s+id\s*=[^>]*)?\s*\/?\s*>|@@|@[a-z]{1,2}#*(?![a-z])|#+/gi
 export const markerResidueOf = text => [...String(text).matchAll(RESIDUE)].map(m => m[0])
+/** TeX's special characters, each with the source's escapes of it: a placeholder drawn from its source (layer2.mjs
+ *  texToText2: 'source', 'symbol', a citation's map) shows one only as its source escapes it (\& is "&", \{ is "{"); any
+ *  other is markup the rendering left (a control symbol's backslash, a math shift, a grouping brace, an alignment tab) */
+const SPECIALS = [
+  ['\\', /\\(?:textbackslash|backslash)(?![A-Za-z])/g],
+  ['{', /\\(?:\{|lbrace(?![A-Za-z])|textbraceleft(?![A-Za-z]))/g],
+  ['}', /\\(?:\}|rbrace(?![A-Za-z])|textbraceright(?![A-Za-z]))/g],
+  ['$', /\\(?:\$|textdollar(?![A-Za-z]))/g],
+  ['&', /\\&/g],
+  ['#', /\\#/g],
+  ['%', /\\%/g],
+  ['~', /\\textasciitilde(?![A-Za-z])/g],
+]
+/** TeX's syntax a placeholder's rendering `text` left of its source `src`: each special character beyond the source's
+ *  escapes of it, as often as it is left */
+export const markupResidueOf = (text, src) => {
+  const out = []
+  for (const [c, escaped] of SPECIALS) {
+    const left = String(text).split(c).length - 1 - (String(src).match(escaped)?.length ?? 0)
+    for (let i = 0; i < left; i++) out.push(c)
+  }
+  return out
+}
 
 export const BODY = new Set(['para', 'abstract', 'theorem'])
 /** a math font by its name, as fonts are named in TeX's PDFs */
@@ -332,13 +355,24 @@ export function pixelPage({ k, view, W, H, O, C, T, units, kept, items, ref, dra
   const textM = mask()
   for (const it of items) paint(textM, [it.x0, it.y0, it.x1, it.y1], 1)
   for (const r of ref) for (const l of r.orig) paint(textM, [l.x0, l.bottom, l.x1, l.top], 1)
-  const graphics = { px: 0, erased: 0, overdrawn: 0 }
+  const graphics = { px: 0, erased: 0, overdrawn: 0, touched: 0 }
+  const graphicsM = mask()
   for (let i = 0; i < W * H; i++) {
     if (textM[i] || !inkO(i)) continue
     graphics.px++
+    graphicsM[i] = 1
     if (!traceC(i)) graphics.erased++
     if (inkT(i)) graphics.overdrawn++
   }
+  // the translation's text against them: its ink on a rule's or a figure's, or a pixel from it (a table's rule a CJK
+  // cell's taller glyphs reach), as regions
+  const touch = mask()
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const i = y * W + x
+    if (!inkT(i)) continue
+    if (graphicsM[i] || graphicsM[i - 1] || graphicsM[i + 1] || graphicsM[i - W] || graphicsM[i + W] || graphicsM[i - W - 1] || graphicsM[i - W + 1] || graphicsM[i + W - 1] || graphicsM[i + W + 1]) touch[i] = 1
+  }
+  graphics.touched = components(touch, W, H, 3, (where.touched = []))
 
   // (the regions' boxes in PDF units, for a look)
   const pdfBox = b => [view[0] + b[0] / k, view[3] - b[3] / k, view[0] + b[2] / k, view[3] - b[1] / k].map(v => Math.round(v * 10) / 10).concat(b[4])

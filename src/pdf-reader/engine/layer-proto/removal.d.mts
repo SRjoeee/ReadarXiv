@@ -29,6 +29,8 @@ export declare function pagePlan(index: LayoutIndex, page: number, ink: RemovalI
 }
 /** the ink the add-on keeps on a page that meets its units' rectangles (the manifest's `dirty`: x0, y0, x1, y1 stride 4) */
 export declare function pageDirty(index: LayoutIndex, page: number, ink: RemovalInk, plan: { units: { glyphs: number[]; paths: number[] }[] } | undefined, pad?: number): number[]
+/** the rules on a page near its units' lines (the manifest's `rules`: x0, y0, x1, y1 stride 4), its paths' thin boxes */
+export declare function pageRules(index: LayoutIndex, page: number, ink: RemovalInk): number[]
 /** a unit's drawing over the text-removed PDF from the layout file's rectangles: swapped, filled with paper, erased extra,
  *  its crops' clips; PDF units */
 export declare function fileSwap(o: {

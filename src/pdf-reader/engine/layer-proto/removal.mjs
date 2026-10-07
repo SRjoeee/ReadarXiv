@@ -370,6 +370,41 @@ export function pageDirty(index, page, ink, plan, pad = SWAP_PAD) {
 }
 
 /**
+ * The rules on a page near its units' lines (the manifest's `rules`: x0, y0, x1, y1 stride 4, rounded to a hundredth):
+ * each painted path the page's ink holds as a thin box (no more than RULE_THICK across one way, RULE_LONG or more the
+ * other: a table's rule, a footnote's, an underline's) that stands above a line of the layout file's, within 1.3 of its
+ * size over its baseline, or below it, within 0.8 under, across its extent, and not through its own glyphs' band. Where
+ * the reader sets a line's text taller than the original's (a CJK script's em box over Latin capitals), it keeps that
+ * text clear of them (run.mjs clearScale); they are the PDF's own geometry, as exact as the file's lines
+ */
+const RULE_THICK = 1.5, RULE_LONG = 2
+export function pageRules(index, page, ink) {
+  const lines = []
+  for (const id of index.onPage(page)) {
+    const u = index.unit(id)
+    for (let j = 0; 8 * j + 7 < u.lines.length; j++) {
+      const L = u.lines.subarray ? u.lines.subarray(8 * j, 8 * j + 8) : u.lines.slice(8 * j, 8 * j + 8)
+      if (L[0] === page) lines.push(L)
+    }
+  }
+  const out = []
+  for (let b = 0; 4 * b + 3 < ink.boxes.length; b++) {
+    if (!(ink.paths[b] >= 0)) continue
+    const [x0, y0, x1, y1] = [ink.boxes[4 * b], ink.boxes[4 * b + 1], ink.boxes[4 * b + 2], ink.boxes[4 * b + 3]]
+    const w = x1 - x0, h = y1 - y0
+    if (Math.min(w, h) > RULE_THICK || Math.max(w, h) < RULE_LONG) continue
+    const near = lines.some(L => {
+      const [, lx0, lx1, base, top, bottom, size] = L
+      if (Math.min(x1, lx1) - Math.max(x0, lx0) <= 0.5) return false
+      if (y0 < top && y1 > bottom) return false
+      return (y0 >= base && y0 <= base + 1.3 * size) || (y1 <= base && y1 >= base - 0.8 * size)
+    })
+    if (near) out.push(...[x0, y0, x1, y1].map(v => Math.round(v * 100) / 100))
+  }
+  return out
+}
+
+/**
  * A unit's drawing over the text-removed PDF from the layout file's rectangles alone: the browser reads none of the page's
  * ink. What the unit replaces is what the add-on removed of it (pagePlan: every glyph the file gives it), but what its
  * reading keeps: its lines' erase rectangles (the file's: its glyphs' outline boxes merged) and its placeholders' segments,

@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { Glyph } from '@/pdf-reader/engine/layout/ink.mjs'
-import { fileOwnership, fileSwap, glyphsOfChars, indicesOf, pageDirty, pagePlan, planOf, type RemovalInk, unitRemoval, unmappedOf } from '@/pdf-reader/engine/layer-proto/removal.mjs'
+import { fileOwnership, fileSwap, glyphsOfChars, indicesOf, pageDirty, pagePlan, pageRules, planOf, type RemovalInk, unitRemoval, unmappedOf } from '@/pdf-reader/engine/layer-proto/removal.mjs'
 import { swapRects } from '@/pdf-reader/engine/layer/swap.mjs'
 
 // The layer's side of the text-removed PDF (layer-proto/removal.mjs): the text layer's characters carried to glyphs, the
@@ -189,3 +189,23 @@ describe('the drawing over the text-removed PDF', () => {
     ])
   })
 })
+
+describe("the rules near a page's lines (the manifest's rules, run.mjs clearScale's room)", () => {
+  it("a thin path above a line within 1.3 of its size, or below within 0.8, across its extent; not through its band, not off it, not a figure's box", () => {
+    // a line at baseline 100, size 10, x 10-60, its glyphs' band 97.8-107.5
+    const line = { lines: Float64Array.from([1, 10, 60, 100, 107.5, 97.8, 10, 0]) }
+    const index = { onPage: () => [4], unit: () => line } as never
+    const ink = inkOf([], [
+      [[0, 110, 80, 110.4], 0], // a table's rule over the line: kept
+      [[0, 93, 80, 93.4], 1], // one under it: kept
+      [[0, 150, 80, 150.4], 2], // far above: not near
+      [[20, 99, 50, 99.4], 3], // through the glyphs' band (a strike-out): not a rule the text stands clear of
+      [[70, 110, 90, 110.4], 4], // beside the line's extent
+      [[20, 109, 30, 119], 5], // a figure's box, not thin
+    ])
+    expect(pageRules(index, 1, ink)).toEqual([0, 110, 80, 110.4, 0, 93, 80, 93.4])
+    // a line on another page holds none of this page's
+    expect(pageRules({ onPage: () => [4], unit: () => ({ lines: Float64Array.from([2, 10, 60, 100, 107.5, 97.8, 10, 0]) }) } as never, 1, ink)).toEqual([])
+  })
+})
+
