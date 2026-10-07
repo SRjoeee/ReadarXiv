@@ -254,8 +254,8 @@ describe("the remover on untrusted input: every loop advances or refuses", () =>
     ])
     const codes = 'const r = await R.openRemover(data, { PL }); const w = r.walkPage(0); return { problems: w.problems, codes: w.events.filter(e => e.kind === "show").map(e => e.codes.length) }'
     // (no codespace read: the font is refused for an edit, its codes read a byte each)
-    expect(await bounded(codes, cmap('begincodespacerange '.repeat(120000)), 3000)).toEqual({ problems: [], codes: [2] })
-    expect(await bounded(codes, cmap('1 begincodespacerange <0000> <ffff> endcodespacerange begincodespacerange'), 3000)).toEqual({ problems: [], codes: [1] })
+    expect(await bounded(codes, cmap('begincodespacerange '.repeat(120000)), 3000, 256)).toEqual({ problems: [], codes: [2] })
+    expect(await bounded(codes, cmap('1 begincodespacerange <0000> <ffff> endcodespacerange begincodespacerange'), 3000, 256)).toEqual({ problems: [], codes: [1] })
   })
   it("reads a font's /W in time near its numbers, not the codes its ranges span", async () => {
     // the review of round 3, M1: 20,000 ranges [0 65535 500], each of every code, took 22 s code by code (PDF.js: 1.5 s)
@@ -360,6 +360,17 @@ describe("the walk's budget against the re-review's probes, each under a 256 MB 
     expect(r.problems).toEqual([DECODED])
     expect(r.grew).toBeLessThan(160 * 2 ** 20)
   }, 30000)
+  it('refuses a page whose forms paint an XObject it does not have 20 million times: each an event, in its budget', async () => {
+    const missing = pdfOf([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /XObject << /A 5 0 R >> >> /Contents 4 0 R >>',
+      ['', '/A Do'],
+      ['/Type /XObject /Subtype /Form /BBox [0 0 300 300] /Resources << /XObject << /B 6 0 R >> >>', Array(4000).fill('/B Do').join(' ')],
+      ['/Type /XObject /Subtype /Form /BBox [0 0 300 300]', Array(4990).fill('/Z Do').join(' ')],
+    ])
+    expect(await bounded<string[]>(walk, missing, 8000, 256)).toEqual([HELD])
+  })
   it('refuses a page of 980 B whose forms show 20 million times with no font set: no event recorded, the visits bounded', async () => {
     const fontless = pdfOf([
       '<< /Type /Catalog /Pages 2 0 R >>',
