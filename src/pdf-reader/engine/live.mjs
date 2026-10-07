@@ -22,7 +22,7 @@ import { analyze } from './paper-meta.mjs'
 import { inkSamples, LAYOUT_TEX, layoutMarking, markProbeTex, probeSamples } from './layout/marks.mjs'
 import { BALANCE_DEF, documentBounds, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
-import { passagesInSource } from './cache.mjs'
+import { passagesInSource, translationOf } from './cache.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
 import { decideGroups, groupOf } from './groups.mjs'
 import { nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
@@ -703,7 +703,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     const decidedFor = new WeakMap()
     const decided = snapshot => {
       let d = decidedFor.get(snapshot)
-      if (!d) { d = decideGroups(units, u => { const r = results.get(indexOf.get(u)); return r && { state: r.state, pieces: snapshot.get(u) } }, kept); decidedFor.set(snapshot, d) }
+      if (!d) { d = decideGroups(units, u => { const r = results.get(indexOf.get(u)); return r && { state: translationOf(r), pieces: snapshot.get(u) } }, kept); decidedFor.set(snapshot, d) }
       return d
     }
     /** a snapshot as a compile sets it: the units set in the source left out, and the table groups not translated whole */
@@ -717,8 +717,9 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     /** whether a compile of the snapshot shows every unit translated: the names kept and the groups kept whole are */
     const shownWhole = snapshot => { const set = setting(snapshot), { keep } = decided(snapshot); return units.every(u => kept.has(u) || keep.has(u) || set.has(u)) }
     /** the run's results with the table groups kept whole marked so (`kept`, their translation with them: the next run's
-     *  seed, which decides them again), for the record (cache.mjs unitsOf) */
-    const markKept = snapshot => { for (const u of decided(snapshot).keep) { const i = indexOf.get(u), r = results.get(i); if (r?.pieces) { const { inSource: _, sentences: __, ...rest } = r; results.set(i, { ...rest, state: 'kept' }) } } }
+     *  seed, which decides them again), for the record (cache.mjs unitsOf): what is shown apart from what the translator
+     *  gave (`translation`), so that a cell given in part is asked for again rather than taken as whole */
+    const markKept = snapshot => { for (const u of decided(snapshot).keep) { const i = indexOf.get(u), r = results.get(i); if (r?.pieces) { const { inSource: _, sentences: __, ...rest } = r; results.set(i, { ...rest, state: 'kept', translation: translationOf(r) }) } } }
     // the last compile of the translation: the files it was given, its units' lines in them (worked out when asked) and
     // the units it set translated — what the safety net places a failure by
     let last = null

@@ -167,6 +167,53 @@ describe('runLive: the final and the record read the same decision', () => {
   })
 })
 
+describe('runLive again: a group kept whole for a cell the translator gave in part asks for that cell again', () => {
+  // Codex's review of PR A, finding 3: the cell "fast $x$ training" comes back with its marker lost, and of its two runs
+  // only "fast": partial, so its column is kept whole in the source. Recorded as kept, the next run took it as current,
+  // made it whole and set the column translated, the cell half in the source; the missing run was never asked again
+  const tex = doc('\\begin{tabular}{ll}\n\\toprule\nModel & Speed \\\\\n\\midrule\nOmega & fast $x$ training \\\\\nSigma & slow training \\\\\nTau & quick \\\\\n\\bottomrule\n\\end{tabular}', 'Prose.')
+  const calls: string[][] = []
+  const translate = async (texts: string[]) => {
+    calls.push(texts)
+    return texts.map(text => (/^fast @/.test(text) ? { text: 'fast training', by: 'B' } : text === 'training' ? null : { text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' }))
+  }
+  type Req = { main: string; rerun: boolean; overrides: Map<string, Uint8Array> }
+  const compileAll = () => {
+    const mains: { rerun: boolean; text: string }[] = []
+    const compile = async (q: Req): Promise<Compiled> => {
+      const text = new TextDecoder().decode(q.overrides.get(q.main))
+      mains.push({ rerun: q.rerun, text })
+      return { ok: true, pdf: new Uint8Array([mains.length]), aux: '', bbl: null, log: text.includes('AXT-FONTS') ? 'AXT-FONTS rm=cmr;sf=cmss;tt=cmtt;body=10;\n' : 'AXT-END\n', ms: 1 }
+    }
+    return { mains, compile }
+  }
+  const finalOf = (c: ReturnType<typeof compileAll>) => /\\axtfit\{([\s\S]*?\\end\{tabular\})\}\{/.exec(c.mains.filter(m => m.rerun).at(-1)?.text ?? '')?.[1] ?? ''
+  it('keeps the column in the source, records the cell as given in part, and asks for it again on the next run', async () => {
+    const paper = openPaper(new Map([['main.tex', enc(tex)]]))
+    const kept = keptFor(paper, 'zh')
+    const cell = paper.units.findIndex(u => plainSource(u) === 'fast training')
+    expect(cell).toBeGreaterThanOrEqual(0)
+    const c1 = compileAll()
+    const r1 = await runLive(paper, { lang: 'zh', compile: c1.compile, translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: null })
+    expect(finalOf(c1)).toContain('slow training')
+    const hashes = await Promise.all(paper.units.map(sourceHash))
+    const record = unitsOf(paper.units, kept, hashes, r1.results)
+    expect(record[cell]).toMatchObject({ state: 'kept', translation: 'partial' })
+    // a run again (another typesetting): the cell is not taken as it is, and is asked for again
+    const { seed } = await seedFrom({ units: record }, paper.units)
+    const seeds = reusable(seed, { identity: 'B', copyWire: true })
+    expect(seeds.get(cell)?.current).toBe(false)
+    calls.length = 0
+    const c2 = compileAll()
+    const r2 = await runLive(paper, { lang: 'zh', compile: c2.compile, translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: null, seed: seeds })
+    expect(calls.flat().some(t => /^fast @/.test(t))).toBe(true)
+    // given in part again, its column stays whole in the source: never a cell half translated beside translated ones
+    expect(finalOf(c2)).toContain('slow training')
+    expect(finalOf(c2)).not.toContain('\u8bba\u6587 \u8bba\u6587')
+    expect(r2.results.get(cell)).toMatchObject({ state: 'kept', translation: 'partial' })
+  })
+})
+
 describe('what names the floats: the target\'s names babel gives, where the final uses them', () => {
   it('the table holds each target the reader typesets, found by the tags the final\'s babel tries', () => {
     for (const lang of [...VERIFIED, 'zh-TW']) {

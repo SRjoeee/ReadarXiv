@@ -17,6 +17,13 @@ describe('unitIsCurrent', () => {
     expect(unitIsCurrent(unit({ state: 'none', tried: 'A' }), 'B')).toBe(false)
   })
   it('a lost unit never', () => expect(unitIsCurrent(unit({ state: 'lost' }), 'B')).toBe(false))
+  it("a cell of a table group kept whole by what the translator gave it, apart from its being shown in the source", () => {
+    // (Codex's review of PR A: a cell given in part and recorded kept was current as a whole one)
+    expect(unitIsCurrent(unit({ state: 'kept', translation: 'whole' }), 'B')).toBe(true)
+    expect(unitIsCurrent(unit({ state: 'kept', translation: 'whole', by: 'A' }), 'B')).toBe(false)
+    expect(unitIsCurrent(unit({ state: 'kept', translation: 'partial', by: 'B', tried: 'B' }), 'B')).toBe(true)
+    expect(unitIsCurrent(unit({ state: 'kept', translation: 'lost' }), 'B')).toBe(false)
+  })
 })
 
 describe('isCurrent', () => {
@@ -24,6 +31,9 @@ describe('isCurrent', () => {
     expect(isCurrent(record([unit({}), unit({ state: 'kept', by: undefined, tried: undefined })]), now)).toBe(true)
     expect(isCurrent(record([unit({})], { pipeline: '1' }), now)).toBe(false)
     expect(isCurrent(record([unit({}), unit({ by: 'A' })]), now)).toBe(false)
+    // a kept cell with what the translator gave it counts by that; one of a copy made before kept cells kept it, as before
+    expect(isCurrent(record([unit({}), unit({ state: 'kept', translation: 'lost' })]), now)).toBe(false)
+    expect(isCurrent(record([unit({}), unit({ state: 'kept' })]), now)).toBe(true)
   })
   it('and the current typesetting: a copy set by another is compiled again — its translation taken as it is (live.mjs)', () => {
     const at = { ...now, typesetting: '2' }

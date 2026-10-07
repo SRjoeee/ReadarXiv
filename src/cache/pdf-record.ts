@@ -26,6 +26,10 @@ export interface CachedUnit {
   /** the identity the unit was last tried under */
   tried?: string
   state: UnitState
+  /** a cell of a table group kept whole: what the translator gave it (its `pieces`), apart from what is shown — whole,
+   *  or partial, none, lost, which is asked for again; absent for a name kept without asking, and in a copy made before
+   *  kept cells kept it, which is asked for again on a run of it but leaves the copy current as it was */
+  translation?: Exclude<UnitState, 'kept'>
   /** the displays the unit sets before its first words, or after its last — outside its marks, which the reader's
    *  anchors take them from beyond — as their letters (latex-front's displayOutside); absent in a copy made before they
    *  did, anchored as then */
@@ -128,10 +132,12 @@ export interface Now {
   page?: string
 }
 
-/** A unit to translate is current when its translation was made, or it was settled, under the identity that would answer now */
+/** A unit to translate is current when its translation was made, or it was settled, under the identity that would answer
+ *  now; a cell of a table group kept whole by its translation's own state (`translation`) */
 export function unitIsCurrent(u: CachedUnit, identity: string): boolean {
-  if (u.state === 'whole') return u.by === identity
-  if (u.state === 'partial' || u.state === 'none') return u.tried === identity
+  const state = u.state === 'kept' ? u.translation : u.state
+  if (state === 'whole') return u.by === identity
+  if (state === 'partial' || state === 'none') return u.tried === identity
   return false
 }
 
@@ -139,7 +145,7 @@ export function unitIsCurrent(u: CachedUnit, identity: string): boolean {
  *  none to translate. A copy of another typesetting alone is set again from its translation, which asks the service
  *  nothing (pdf-reader/engine/cache.mjs reusable) */
 export function isCurrent(record: PdfRecordBody, now: Now): boolean {
-  return record.pipeline === now.pipeline && record.typesetting === now.typesetting && record.units.every(u => u.state === 'kept' || unitIsCurrent(u, now.identity))
+  return record.pipeline === now.pipeline && record.typesetting === now.typesetting && record.units.every(u => (u.state === 'kept' && u.translation === undefined) || unitIsCurrent(u, now.identity))
 }
 
 /**
