@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Worker } from 'node:worker_threads'
-import { deflateSync } from 'node:zlib'
+import { constants as zlibConstants, deflateRawSync, deflateSync } from 'node:zlib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
@@ -318,7 +318,7 @@ describe("the remover's walk bounded in memory: each stream lexed once, what a p
     ])
     const r = await bounded<string[][]>('const a = await R.openRemover(data, { PL, heldMax: 1000 }); const b = await R.openRemover(data, { PL, bytesMax: 1000 }); return [a.walkPage(0).problems, b.walkPage(0).problems, a.walkPage(1).problems]', big)
     expect(r[0]).toContain('streams that hold more than the walk allows')
-    expect(r[1]).toContain('streams that hold more than the walk allows')
+    expect(r[1]).toContain('streams that decode to more than the walk allows')
     expect(r[2]).toEqual([])
   })
 })
@@ -333,17 +333,33 @@ describe("the walk's budget against the re-review's probes, each under a 256 MB 
     ['/Filter /FlateDecode', Buffer.from(deflateSync(Buffer.from(content, 'latin1'))).toString('latin1')],
   ])
   const walk = 'const r = await R.openRemover(data, { PL }); return r.walkPage(0).problems'
-  const HELD = 'streams that hold more than the walk allows'
+  const HELD = 'streams that hold more than the walk allows', DECODED = 'streams that decode to more than the walk allows'
+  // (a stream decoding past BYTES_MAX, 48 MiB, is refused as it decodes; one under it by what its tokens hold)
   for (const [what, content, why] of [
-    ['60 MB of "["', '['.repeat(60_000_000), HELD],
+    ['60 MB of "["', '['.repeat(60_000_000), DECODED],
+    ['40 MB of "["', '['.repeat(40_000_000), HELD],
     ['7.9 million "(a)" and a painting operator', `${'(a) '.repeat(7_900_000)}n`, HELD],
     ['7.9 million "<61>" and a painting operator', `${'<61> '.repeat(7_900_000)}n`, HELD],
-    ['one hex string of 60 MB', `<${'6'.repeat(60_000_000)}> Tj`, HELD],
+    ['one hex string of 60 MB', `<${'6'.repeat(60_000_000)}> Tj`, DECODED],
   ] as const) {
     it(`refuses the page, never running out of memory: ${what}`, async () => {
       expect(await bounded<string[]>(walk, flate(content), 20000, 256)).toEqual([why])
     }, 30000)
   }
+  it('refuses a page whose Flate stream decodes to 2 GB as it decodes, reading no further than its budget', async () => {
+    // a zlib stream of 32 blocks of 64 MB of spaces, each flushed whole (so that its bytes repeat): 2 MB of file
+    const block = deflateRawSync(Buffer.alloc(64 * 2 ** 20, 32), { finishFlush: zlibConstants.Z_FULL_FLUSH })
+    const bomb = Buffer.concat([Buffer.from([0x78, 0x9c]), ...Array(32).fill(block), Buffer.from([0x03, 0x00])]).toString('latin1')
+    const pdf = pdfBin([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents 4 0 R >>',
+      ['/Filter /FlateDecode', bomb],
+    ])
+    const r = await bounded<{ problems: string[]; grew: number }>('const before = process.memoryUsage().arrayBuffers; const r = await R.openRemover(data, { PL }); const problems = r.walkPage(0).problems; return { problems, grew: process.memoryUsage().arrayBuffers - before }', pdf, 8000, 256)
+    expect(r.problems).toEqual([DECODED])
+    expect(r.grew).toBeLessThan(160 * 2 ** 20)
+  }, 30000)
   it('refuses a page of 980 B whose forms show 20 million times with no font set: no event recorded, the visits bounded', async () => {
     const fontless = pdfOf([
       '<< /Type /Catalog /Pages 2 0 R >>',

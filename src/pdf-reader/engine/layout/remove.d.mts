@@ -2,7 +2,7 @@
 import type { Glyph } from './ink.mjs'
 
 /** the remover's version: it enters the add-on's key */
-export declare const REMOVAL: '3'
+export declare const REMOVAL: '4'
 /** the page sets an add-on holds after arXiv's own N pages: R at N + p */
 export declare const SETS: readonly ['R']
 /** the check's sets after them: P (the placeholders alone), F (the removed glyphs alone), C (P, each crop a colour) */
@@ -11,6 +11,8 @@ export declare const CHECK_SETS: readonly ['P', 'F', 'C']
 export declare function lex(bytes: Uint8Array, limit?: number, keep?: ReadonlySet<string> | null): { op: string; args: unknown[]; s: number; e: number }[] & { bytes: number }
 /** lex's refusal of a stream holding more than it was allowed */
 export declare class LexLimit extends Error { limit: number }
+/** decode's refusal of a stream decoding to more than it was allowed */
+export declare class DecodeLimit extends Error { limit: number }
 /** the heap a lexed token, and a recorded event, is held in, by its kind */
 export declare const COST: Readonly<Record<'op' | 'num' | 'name' | 'str' | 'mark' | 'kw' | 'atom' | 'event' | 'code', number>>
 /** what a page's walk may hold: its streams' operators and its events by COST, each stream lexed once, and their decoded bytes */
@@ -26,7 +28,7 @@ export interface Remover {
   /** a page walked: what could not be walked (`problems`, any one refuses the page) and the operators visited */
   walkPage(pageIndex: number): { problems: string[]; walked: number; held: number; bytes: number; events: { kind: string; codes?: unknown[] }[] }
 }
-export declare function openRemover(bytes: Uint8Array, o: { PL: PdfLib; inflate?: ((bytes: Uint8Array) => Uint8Array) | null; walkMax?: number; heldMax?: number; bytesMax?: number }): Promise<Remover>
+export declare function openRemover(bytes: Uint8Array, o: { PL: PdfLib; inflate?: ((bytes: Uint8Array, limit: number) => Uint8Array) | null; walkMax?: number; heldMax?: number; bytesMax?: number }): Promise<Remover>
 /** a unit's removal on a page: its glyphs as n, k pairs (pageInk's `indices`) and its rules as painted paths' places */
 export interface PlannedUnit { id: number; glyphs: number[]; paths: number[] }
 /** a crop's glyphs and rules, the placeholders' page's */

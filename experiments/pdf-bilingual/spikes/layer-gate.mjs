@@ -495,7 +495,11 @@ async function buildAddon(bytes, layoutFile, { check = true } = {}) {
   }
   return { doc, inks, plan, shipped, out, collected, ms }
 }
-const inflateTolerant = b => { try { return new Uint8Array(inflateSync(b, { finishFlush: zlibConstants.Z_SYNC_FLUSH })) } catch { return new Uint8Array(inflateRawSync(b.subarray(2), { finishFlush: zlibConstants.Z_SYNC_FLUSH })) } }
+// (no more than limit + 1 bytes out, or a throw: the remover's contract, its page refused either way)
+const inflateTolerant = (b, limit = Infinity) => {
+  const o = { finishFlush: zlibConstants.Z_SYNC_FLUSH, ...(Number.isFinite(limit) ? { maxOutputLength: limit + 1 } : {}) }
+  try { return new Uint8Array(inflateSync(b, o)) } catch (e) { if (e?.code === 'ERR_BUFFER_TOO_LARGE') throw e; return new Uint8Array(inflateRawSync(b.subarray(2), o)) }
+}
 const openNode = async data => (await import('pdfjs-dist/legacy/build/pdf.mjs')).getDocument({ data: data.slice(), verbosity: 0, cMapUrl: `${PDFJS}/cmaps/`, cMapPacked: true, standardFontDataUrl: `${PDFJS}/standard_fonts/`, useSystemFonts: false }).promise
 
 async function makeAddonOf(key, bytes, layoutFile) {
