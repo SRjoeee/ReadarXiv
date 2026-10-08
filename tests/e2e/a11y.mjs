@@ -11,6 +11,13 @@
 // manifest also matches 127.0.0.1 (ext-copy.mjs), so the build in .output is the one a reader installs, bar that one line. The modes are switched by the message
 // the popup sends: the popup answers on arxiv.org's addresses alone, and is audited by its own probe (probes/pages-a11y.mjs).
 //
+// **Nothing but the echo endpoint translates, and the run proves it** (Codex on #329). A context route sees the pages'
+// requests and not the service worker's, and the fallback chain is on by default: an echo endpoint that began to fail
+// after its connection test would have the free engines translate the rest from the network, with the run green and
+// auditing their translations. So the fallback is switched off for this profile (a failing endpoint then fails the
+// blocks, which the settled check refuses), and every rendered translation must carry the endpoint's mark — a page with one
+// translation lacking it is shown to fail, as the audit is shown to fire.
+//
 // **The audit is checked to fire.** After the three modes, one deliberate defect — the translation's ink lightened to a contrast axe refuses — is put on the page,
 // and the audit must report it as introduced by the extension. A difference that is empty is only worth something while an audit that finds a defect would not be.
 //
@@ -24,7 +31,7 @@ import { chromium } from 'playwright'
 import { copyWithGrants } from './ext-copy.mjs'
 import { startEchoEndpoint } from './lib/echo-endpoint.mjs'
 import { serveOffline } from './lib/offline-arxiv.mjs'
-import { addService, openOptions } from './options-page.mjs'
+import { addService, openOptions, setSwitch } from './options-page.mjs'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const SRC = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
@@ -38,6 +45,10 @@ const IDLE = /session idle: (\d+)\/(\d+) requested of (\d+), (\d+) failed, (\d+)
 const LAUNCH = { channel: 'chromium', headless: !process.env.AXT_HEADED, viewport: { width: 1440, height: 900 } }
 /** What the echo endpoint puts before a translation: it is ASCII, so the page's text keeps its language while the translation is told from the original */
 const MARK = '[echo] '
+/** The switch of the settings page that puts the free services behind the chosen one; found by the name a reader sees */
+const FALLBACK_SWITCH = '出问题时自动改用免费服务'
+/** What is a rendered translation: a translation node of the paper, not a skeleton, a failure widget, or a copy side mode makes (a copy of one carries its mark) */
+const RENDERED = '.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)'
 /** The defect the mutation check puts on the page: the translation's ink at a contrast of about 1.6 to a white ground (axe asks for 4.5) */
 const MUTATION = '.axt-t, .axt-t * { color: #c8c8c8 !important; }'
 
@@ -91,6 +102,13 @@ const check = (name, ok, detail) => {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name} — ${detail}`)
 }
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+/** In the page: how many translations are rendered, and which of them (a few, by the block they translate) lack the endpoint's mark */
+const renderedWithoutMark = ([selector, mark]) => {
+  const nodes = [...document.querySelectorAll(selector)]
+  const lacking = nodes.filter(node => !node.textContent.includes(mark))
+  return { total: nodes.length, lacking: lacking.length, sample: lacking.slice(0, 4).map(node => node.getAttribute('data-axt-for') ?? node.className) }
+}
 
 /** axe's result flattened into “this node broke this rule” entries */
 const flatten = result => result.violations.flatMap(v =>
@@ -286,6 +304,10 @@ const extId = worker.url().split('/')[2]
 const options = await openOptions(context, extId)
 const connected = await addService(options, { name: 'echo', baseURL: endpoint.baseURL, model: 'local-echo' })
 check('the echo endpoint is the translation service', /已连接/.test(connected), connected)
+// The free services behind it are put away for this profile: the service worker's requests are outside the route that keeps the pages offline
+await setSwitch(options, FALLBACK_SWITCH, false)
+check('the fallback chain is off: no free service can stand in for the echo endpoint',
+  await options.getByRole('switch', { name: FALLBACK_SWITCH, exact: true }).getAttribute('aria-checked') === 'false', 'the switch is off')
 await options.close()
 
 const logs = []
@@ -297,9 +319,27 @@ await scrollThrough(page)
 const settled = await waitSettled(page, logs)
 check('audit after the whole paper is translated: settled, every requested block done, zero failures', settled.ok,
   `${settled.idle ? `${settled.idle.requested}/${settled.idle.total} blocks requested; ` : ''}${settled.text}`)
-check('every translation came from the echo endpoint, whose requests left the extension\'s background and nothing else did',
+check('the echo endpoint\'s requests left the extension\'s background and nothing else did',
   endpoint.seen.post > 0 && endpoint.seen.options === 0 && !endpoint.seen.origins.has(site.origin),
   `${endpoint.seen.post} requests, ${endpoint.seen.options} preflights, origins ${[...endpoint.seen.origins].join(', ')}`)
+// Every rendered translation carries the endpoint's mark: a translation that did not come from it would not
+const rendered = await page.evaluate(renderedWithoutMark, [RENDERED, MARK.trim()])
+check('every rendered translation carries the echo endpoint\'s mark: none came from anywhere else', rendered.total > 0 && rendered.lacking === 0,
+  `${rendered.total} translations, ${rendered.lacking} without the mark${rendered.lacking ? `: ${rendered.sample.join(', ')}` : ''}`)
+// A positive control: one translation without the mark is found. Put on the page and taken off in one turn
+const planted = await page.evaluate(`(() => {
+  const check = ${renderedWithoutMark}
+  const node = document.querySelector(${JSON.stringify(RENDERED)})
+  const foreign = node.cloneNode(false)
+  foreign.className = node.className
+  foreign.textContent = 'a translation from another service'
+  node.after(foreign)
+  const found = check([${JSON.stringify(RENDERED)}, ${JSON.stringify(MARK.trim())}])
+  foreign.remove()
+  return found
+})()`)
+check('the mark check fires: one translation without the mark is reported', planted.lacking === 1 && planted.total === rendered.total + 1,
+  `${planted.lacking} of ${planted.total} lacking`)
 
 /** The mode the popup's radio sets: the same message, to the paper's tab (the popup answers on arxiv.org's addresses alone) */
 const setMode = mode => worker.evaluate(async mode => {
