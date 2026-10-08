@@ -95,8 +95,7 @@ describe('what an engine file may import', () => {
     expect(violationsOf("const s = require('@/ui/strings')\n")).toEqual(['@/ui/strings'])
     expect(violationsOf("import '@/ui/strings'\n")).toEqual(['@/ui/strings'])
   })
-  it('lets a type-only import through (it compiles away) and reads a comment that names an import as no import', () => {
-    expect(violationsOf("import type { Provider } from '@/providers/types'\nexport type { Row } from '@/shared/messages'\n")).toEqual([])
+  it('reads a comment that names an import as no import', () => {
     expect(violationsOf("// import { S } from '@/ui/strings'\n/* import x from '@/shared/messages' */\nexport const a = 1\n")).toEqual([])
   })
   it('reads quoted data that the tolerant import matcher takes for a specifier as no import', () => {
@@ -106,6 +105,61 @@ describe('what an engine file may import', () => {
   it('judges the engine alone: a file outside it is none of this rule\'s', () => {
     const t = tree({ 'src/core/x.ts': "import { S } from '@/ui/strings'\n", 'src/pdf-reader/session/y.mjs': "import { S } from '@/ui/strings'\n" })
     expect(engineViolations(['src/core/x.ts', 'src/pdf-reader/session/y.mjs'], { root: t.root })).toEqual([])
+  })
+})
+
+describe('every way a module is named is judged: the rule is a whitelist', () => {
+  it('refuses a specifier that is not a relative path, a node: module or an allowed package: a build setting\'s, a root-absolute path, a URL', () => {
+    expect(violationsOf("import { browser } from '#imports'\n")).toEqual(['#imports'])
+    expect(violationsOf("import { S } from '/src/ui/strings.ts'\n")).toEqual(['/src/ui/strings.ts'])
+    expect(violationsOf("import { x } from 'https://example.com/x.js'\n")).toEqual(['https://example.com/x.js'])
+    expect(violationsOf("export * from '#imports'\n")).toEqual(['#imports'])
+    expect(violationsOf("import '#imports'\n")).toEqual(['#imports'])
+    expect(violationsOf("const m = await import('/src/ui/strings.ts')\n")).toEqual(['/src/ui/strings.ts'])
+  })
+  it('judges a dynamic import written as a template literal, and refuses one whose specifier is computed', () => {
+    expect(violationsOf("const m = await import(`../../../ui/strings.ts`)\n")).toEqual(['../../../ui/strings.ts'])
+    expect(violationsOf("const m = await import(`./a.mjs`)\n")).toEqual([])
+    expect(violationsOf("const m = await import(`./${name}.mjs`)\n")).toEqual(['import(`./${name}.mjs`)'])
+    expect(violationsOf("const m = await import(name)\n")).toEqual(['import(name)'])
+    expect(violationsOf("const m = require(path)\n")).toEqual(['require(path)'])
+    expect(violationsOf("const m = await import(  'node:fs'  )\n")).toEqual([])
+  })
+  it('judges new URL(…, import.meta.url): it must stay inside the engine, and its path must be a literal', () => {
+    expect(violationsOf("const u = new URL('../../../ui/strings.ts', import.meta.url)\n")).toEqual(['../../../ui/strings.ts'])
+    expect(violationsOf("const u = new URL('./layout-rules.json', import.meta.url)\n", `${E}/rules/layout.mjs`)).toEqual([])
+    expect(violationsOf("const u = new URL(path, import.meta.url)\n")).toEqual(['new URL(path, import.meta.url)'])
+    // (a URL that is not made of the module's own address is the host's business, not a way into the engine)
+    expect(violationsOf("const u = new URL(value)\nconst v = new URL(url, site)\n")).toEqual([])
+  })
+  it('judges a type-only import and a type-only export as it judges a value one: a consumer\'s build resolves it', () => {
+    expect(violationsOf("import type { Provider } from '@/providers/types'\n")).toEqual(['@/providers/types'])
+    expect(violationsOf("export type { Row } from '@/shared/messages'\n")).toEqual(['@/shared/messages'])
+    expect(violationsOf("import type { S } from '../../../ui/strings'\n")).toEqual(['../../../ui/strings'])
+    expect(violationsOf("import { type S } from '../../../ui/strings'\n")).toEqual(['../../../ui/strings'])
+    expect(violationsOf("type T = import('@/ui/strings').S\n")).toEqual(['@/ui/strings'])
+    expect(violationsOf("type T = typeof import('../../../ui/strings.ts')\n")).toEqual(['../../../ui/strings.ts'])
+    expect(violationsOf("import type { A } from './a.mjs'\nexport type { B } from '../layout/b.mjs'\n")).toEqual([])
+  })
+  it('judges the declaration files and the TypeScript files of the engine as it judges its modules', () => {
+    expect(violationsOf("import type { S } from '@/ui/strings'\n", `${E}/pipeline/x.d.mts`)).toEqual(['@/ui/strings'])
+    expect(violationsOf("export { S } from '../../../ui/strings'\n", `${E}/pipeline/x.d.mts`)).toEqual(['../../../ui/strings'])
+    expect(violationsOf("import type { A } from './a.mjs'\nexport declare const x: number\n", `${E}/pipeline/x.d.mts`)).toEqual([])
+    expect(violationsOf("import type { ZodMiniType } from 'zod/mini'\n", `${E}/rules/layout.d.mts`)).toEqual([])
+    expect(violationsOf("import type { ZodMiniType } from 'zod/mini'\n", `${E}/pipeline/x.d.mts`)).toEqual(['zod/mini'])
+    expect(violationsOf("import { S } from '@/ui/strings'\n", `${E}/view/outline.ts`)).toEqual(['@/ui/strings'])
+    expect(violationsOf("import { S } from '@/ui/strings'\n", `${E}/view/x.tsx`)).toEqual(['@/ui/strings'])
+  })
+  it('reads the form a statement has, not any text that holds `from` and a quote (a table\'s data is no import)', () => {
+    expect(violationsOf("export const NAMES = [\n  ['title', 'comes from', true],\n  ['author', false],\n]\n")).toEqual([])
+    expect(violationsOf("import {\n  a,\n  b,\n} from './ab.mjs'\nimport x, { y } from './xy.mjs'\nimport z, * as w from './zw.mjs'\nimport def from './def.mjs'\n")).toEqual([])
+    expect(violationsOf("import{S}from'@/ui/strings'\nexport*from'#imports'\n")).toEqual(['@/ui/strings', '#imports'])
+  })
+  it('names every file of the repository\'s engine, the declaration files included', () => {
+    const files = engineFiles() as string[]
+    expect(files.some(f => f.endsWith('.d.mts'))).toBe(true)
+    expect(files.some(f => f.endsWith('.ts') && !f.endsWith('.d.mts'))).toBe(true)
+    expect(files.some(f => f.endsWith('.mjs'))).toBe(true)
   })
 })
 

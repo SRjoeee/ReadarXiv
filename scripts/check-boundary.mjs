@@ -117,10 +117,11 @@ export function platformImportsOf(file, text) {
 
 /** The reader's engine (src/pdf-reader/engine) is the contract the web imports. The web's build loads it through its pin, a
  *  plain browser page loads it as it stands and plain node loads its server and translation entries, so an engine file
- *  imports the engine, three modules of the core and nothing else, by relative path: no alias, which only a bundler's
- *  configuration resolves; no package but the layout rules' validator (rules/); no module of the extension. A destination is
- *  judged as the core's are (`@/ui/strings` and `../../ui/strings` are one module), and an alias is refused for its spelling
- *  besides. `node:` modules and type-only imports are none of this rule's (the second compile away). */
+ *  names a module by relative path to the engine's own files or to three modules of the core, or by `node:`, or, in rules/,
+ *  by the layout rules' validator, and in no other way: not by an alias, which only a bundler's configuration resolves, nor
+ *  a build setting's name, a root-absolute path or a URL, nor a package out of place, nor a computed specifier. It is a
+ *  whitelist over every file of the engine (modules, TypeScript and declaration files) and every form that names a module,
+ *  a type-only import included: a consumer's build resolves a type as it resolves a value. */
 export const ENGINE = /^src\/pdf-reader\/engine\//
 
 /** The three modules of the core an engine file may import, by their path with no extension or index file (the
@@ -162,18 +163,6 @@ function packageOf(spec) {
   return spec.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
 }
 
-/** The packages this engine file imports (for their values) that its directory may not hold; empty when it is clean */
-export function enginePackagesOf(file, text) {
-  if (!ENGINE.test(file)) return []
-  const out = []
-  for (const spec of valueImportsOf(text)) {
-    const name = packageOf(spec)
-    if (name === null) continue
-    if (!ENGINE_PACKAGES.some(p => p.name === name && file.startsWith(p.under))) out.push({ spec, name, why: 'a package in the engine, but the layout rules\' validator in rules/' })
-  }
-  return out
-}
-
 /** the `?inline` / `#hash` a bundler reads off a specifier */
 const QUERY = /[?#].*$/s
 const CODE = /\.(m|c)?[jt]sx?$/
@@ -181,21 +170,82 @@ const DECLARATION = /\.d\.(m|c)?ts$/
 const EXTENSIONS = ['.ts', '.tsx', '.mts', '.mjs', '.js', '/index.ts', '/index.tsx', '/index.mjs', '/index.js']
 const isFile = (root, path) => { try { return statSync(resolve(root, path)).isFile() } catch { return false } }
 
-/** What the engine files among `files` import that the engine may not: a package its directory may not hold, a module that
- *  is neither in the engine nor one of ENGINE_ALLOW, or any module by an alias. Every file is read from `root` (the
- *  repository, by default) */
+/** a call's first argument as written, from just after its `(` to the first `,` or `)` outside any string and bracket */
+function firstArgument(text, from) {
+  let depth = 0
+  for (let i = from; i < text.length; i++) {
+    const ch = text[i]
+    if (ch === '"' || ch === "'" || ch === '`') {
+      for (i++; i < text.length && text[i] !== ch; i++) if (text[i] === '\\') i++
+    } else if (ch === '(' || ch === '[' || ch === '{') depth++
+    else if (ch === ')' || ch === ']' || ch === '}') { if (depth === 0) return text.slice(from, i); depth-- }
+    else if (ch === ',' && depth === 0) return text.slice(from, i)
+  }
+  return text.slice(from)
+}
+/** the string a literal argument is (a quoted one, or a template with nothing computed in it), else null */
+const literalOf = arg => { const m = /^\s*(?:'([^'\n]*)'|"([^"\n]*)"|`([^`$\n]*)`)\s*$/.exec(arg); return m ? (m[1] ?? m[2] ?? m[3]) : null }
+
+// the statements that name a module, whatever they carry (a value, a type, nothing): `from` follows a clause of one of these shapes
+const NAMED = [
+  /(?:^|[\n;}])\s*(?:import|export)\s*(?:type\s*)?\{[^}]*\}\s*from\s*(['"])([^'"\n]+)\1/g,
+  /(?:^|[\n;}])\s*(?:import|export)\s*(?:type\s*)?\*(?:\s*as\s+[\w$]+)?\s*from\s*(['"])([^'"\n]+)\1/g,
+  /(?:^|[\n;}])\s*import\s+(?:type\s+)?[\w$]+(?:\s*,\s*(?:\*\s*as\s+[\w$]+|\{[^}]*\}))?\s*from\s*(['"])([^'"\n]+)\1/g,
+  /(?:^|[\n;}])\s*import\s*(['"])([^'"\n]+)\1/g,
+]
+
+/** Every module a file names, in any form and whether it carries a value or only a type: its `import` and `export … from`
+ *  statements, `import(…)` and `require(…)` wherever they stand (a type position too), and `new URL(…, import.meta.url)`.
+ *  Each is { spec, display }: a literal's text, or, for a call whose argument is computed, `spec` null and the call as
+ *  written. `url` marks a path taken from the module's own address, which needs no `./` */
+export function namedModulesOf(text) {
+  const src = withoutComments(text)
+  const out = []
+  for (const re of NAMED) for (const m of src.matchAll(re)) out.push({ at: m.index, spec: m[2] })
+  for (const m of src.matchAll(/\b(import|require)\s*\(\s*/g)) {
+    const arg = firstArgument(src, m.index + m[0].length), lit = literalOf(arg)
+    out.push(lit === null ? { at: m.index, spec: null, display: `${m[1]}(${arg.trim()})` } : { at: m.index, spec: lit })
+  }
+  for (const m of src.matchAll(/\bimport\.meta\.(glob|resolve)\s*\(\s*/g)) out.push({ at: m.index, spec: null, display: `import.meta.${m[1]}(${firstArgument(src, m.index + m[0].length).trim()})` })
+  for (const m of src.matchAll(/\bnew\s+URL\s*\(\s*/g)) {
+    const arg = firstArgument(src, m.index + m[0].length)
+    // (only a URL made of the module's own address names a file beside it)
+    if (!/^\s*,\s*import\.meta\.url\s*[,)]/.test(src.slice(m.index + m[0].length + arg.length, m.index + m[0].length + arg.length + 40))) continue
+    const lit = literalOf(arg)
+    out.push(lit === null ? { at: m.index, spec: null, display: `new URL(${arg.trim()}, import.meta.url)` } : { at: m.index, spec: /^(?:[a-z][a-z0-9+.-]*:|\/|\.)/i.test(lit) ? lit : `./${lit}` })
+  }
+  return out.sort((a, b) => a.at - b.at).map(({ spec, display }) => ({ spec, display }))
+}
+
+/** Why an engine file may not name a module so, or null: it is a `node:` module, a relative path that stays inside the
+ *  engine or reaches one of ENGINE_ALLOW, or a package ENGINE_PACKAGES lets its directory hold. Anything else is refused:
+ *  an alias, a build setting's name (`#imports`), a root-absolute path, a URL, a package out of place */
+function whyRefused(file, spec) {
+  if (spec.startsWith('node:')) return null
+  if (spec.startsWith('./') || spec.startsWith('../')) {
+    const target = dropExtension(norm(relative('.', resolve(dirname(file), spec.replace(QUERY, '')))))
+    return ENGINE.test(`${target}/`) || ENGINE_ALLOW.includes(target) ? null : `a module outside the engine, and not one of ${ENGINE_ALLOW.join(', ')}`
+  }
+  if (ALIASES.some(([prefix]) => spec.startsWith(prefix)) || EXACT.has(spec)) return 'an alias: an engine file imports by relative path, which the web\'s pin, a plain page and plain node all resolve'
+  const name = packageOf(spec)
+  if (name === null) return 'neither a relative path, a node: module nor a package: the engine names a module by one of those alone'
+  return ENGINE_PACKAGES.some(p => p.name === name && file.startsWith(p.under)) ? null : 'a package in the engine, but the layout rules\' validator in rules/'
+}
+const norm = p => p.split('\\').join('/')
+
+/** What the engine files among `files` name that the engine may not. A whitelist: every module a file of the engine names,
+ *  in a value import or a type one, in a module, a TypeScript file or a declaration file, by a statement, a call or a
+ *  `new URL(…, import.meta.url)`, is a relative path inside the engine or to ENGINE_ALLOW, a `node:` module or an
+ *  ENGINE_PACKAGES package under its directory; a module named by a computed specifier is refused, since nothing can say
+ *  where it leads. Every file is read from `root` (the repository, by default) */
 export function engineViolations(files, { root = '.' } = {}) {
   const out = []
   for (const file of files) {
-    if (!ENGINE.test(file)) continue
-    const text = readFileSync(resolve(root, file), 'utf8')
-    for (const { spec, why } of enginePackagesOf(file, text)) out.push({ file, spec, why })
-    for (const spec of valueImportsOf(text)) {
-      const local = localPath(file, spec.replace(QUERY, ''))
-      if (local === null) continue
-      const target = dropExtension(local)
-      if (!ENGINE.test(`${target}/`) && !ENGINE_ALLOW.includes(target)) out.push({ file, spec, why: `a module outside the engine, and not one of ${ENGINE_ALLOW.join(', ')}` })
-      else if (!spec.startsWith('.')) out.push({ file, spec, why: 'an alias: an engine file imports by relative path, which the web\'s pin, a plain page and plain node all resolve' })
+    if (!ENGINE.test(file) || !CODE.test(file)) continue
+    for (const { spec, display } of namedModulesOf(readFileSync(resolve(root, file), 'utf8'))) {
+      if (spec === null) { out.push({ file, spec: display, why: 'a module named by a computed specifier: the engine\'s imports are literal, so that where they lead can be told' }); continue }
+      const why = whyRefused(file, spec)
+      if (why !== null) out.push({ file, spec, why })
     }
   }
   return out
@@ -250,8 +300,10 @@ const OUTSIDE = /^(?:src|lab)\//
 export const trackedFiles = (root = '.') => execFileSync('git', ['-C', root, 'ls-files', '-z'], { encoding: 'utf8', maxBuffer: 1 << 26 }).split('\0').filter(Boolean)
 
 /** The engine's modules (code files, no declaration files) that nothing live reaches: neither the closure of the entries, nor
- *  that of the gates, nor that of any file outside the engine, in src/ or lab/, that imports an engine module (the shipped
- *  extension, the lab's gates and bench). Tests and scripts are not roots: a module only they reach is parked with its tests.
+ *  that of the gates, nor that of any file outside the engine, in src/ or lab/, that imports an engine module. That is the
+ *  shipped extension and EVERY file of the lab, its bench and its spikes as well as its kept gates: wider than Ruling 33a's
+ *  "kept lab gates", since a spike that imports a module keeps it alive for as long as the spike is in the tree. Tests and
+ *  scripts are not roots: a module only they reach is parked with its tests.
  *  `files` is the repository's files, by default the ones git tracks. Throws for an entry or a gate the repository does not
  *  hold, so that a typo is not everything unreached */
 export function unreached(entries, gates, { root = '.', files = trackedFiles(root) } = {}) {
@@ -267,7 +319,7 @@ export const coreFiles = () => execFileSync('git', ['ls-files', '-z', 'src'], { 
 
 export const engineFiles = () => execFileSync('git', ['ls-files', '-z', 'src/pdf-reader/engine'], { encoding: 'utf8' })
   .split('\0')
-  .filter(f => f && CODE.test(f) && !DECLARATION.test(f))
+  .filter(f => f && CODE.test(f))
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const files = coreFiles()
