@@ -47,6 +47,8 @@ const FINALS = resolve(process.env.LAYER_FINALS ?? LAB_FIXTURES)
 const FONTS = resolve(join(DATA, 'fonts'))
 const ENGINE = resolve(REPO, 'src/pdf-reader/engine')
 const PDFJS = resolve(REPO, 'node_modules/pdfjs-dist')
+/** the layout rules' validator (zod, the mini build), served at /zod/ for the page's import map */
+const ZOD = resolve(REPO, 'node_modules/zod')
 const ENTRY = process.env.LAYER_ENTRY ? resolve(process.env.LAYER_ENTRY) : null
 const PORT = Number(process.argv.find(a => a.startsWith('--port='))?.slice(7) ?? 8093)
 const PAGE_FILES = new Set(['index.html', 'lab.mjs', 'lab.css', 'strings.mjs', 'layer.mjs', 'proto.mjs'])
@@ -209,6 +211,7 @@ const server = createServer((req, res) => {
     if (ENTRY && r === 'layer/layer.mjs') return sendFile(res, ENTRY)
     return sendFile(res, /\.(m?js|json)$/.test(r) ? under(ENGINE, r) : null)
   }
+  if (path.startsWith('/zod/')) return sendFile(res, /^\/zod\/(?:mini|v4)\/[\w./-]+\.js$/.test(path) ? under(ZOD, path.slice('/zod/'.length)) : null, 'max-age=3600')
   if (path.startsWith('/pdfjs/')) {
     const r = path.slice('/pdfjs/'.length)
     return sendFile(res, /^(build|cmaps|standard_fonts|wasm|iccs)\//.test(r) ? under(PDFJS, r) : null, 'max-age=3600')

@@ -103,7 +103,9 @@ export class LayerRun {
     for (const [, rows] of file.lines) for (let i = 7; i < rows.length; i += 8) weights[rows[i]] = (weights[rows[i]] ?? 0) + 1
     const rules = E.layerRulesFor(target)
     const family = E.familyOfFonts(file.fonts, weights)
-    const roles = E.rolesFor(target, family)
+    // (the role table's CJK family for the target: the layout rules' built-in set's, which v0 draws by)
+    const { BUILTIN_RULES, resolveRules } = await import(`${ENGINE}rules/layout.mjs`)
+    const roles = E.rolesFor(target, family, resolveRules(BUILTIN_RULES, target).cjkFaces)
     const hyphen = rules.hyphenate ? await E.loadHyphenator(rules.hyphenate) : null
     run.faces = new Faces(E.FACES)
     run.text = new Map()

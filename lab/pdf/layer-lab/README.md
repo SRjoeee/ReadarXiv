@@ -61,14 +61,16 @@ the foot of the settings); the target languages are always named in their own la
   - the hybrid: the layout file's geometry where it locates a unit whole (`v0tex`), else v0 alone;
   - over the paper's add-on (`v0rm`), else erased and put back;
   - the prototype's own faces (`v0=prototype`), else the role table's;
-  - Fill: D, adaptive (`fill=D`, the engine's default), or B (`fill=B`, `adaptiveFill: false`: the script's leading on
-    the original's pitch alone);
+  - Fill: D, adaptive (`fill=D`, the built-in rule set's), or B (`fill=B`, an `adaptiveFill` of null: the script's leading
+    on the original's pitch alone);
   - D's parameters:
     - `band`: how far a unit's fill leading may stand above its page's median, default 0.05;
     - `track`: the tracking a unit stopped short of its fill may take, in em, default 0.05;
     - `size`: then its size, up to this times the original's, default 1.1.
 
-    A slider left at its default is not passed, so the engine's own default holds; one applies once it rests.
+    The quick view is opened with the layout rule set (`src/pdf-reader/engine/rules/layout-rules.json`): the lab takes a
+    copy of the built-in set and writes the fill's choice into every script's `adaptiveFill`. A slider left at its default
+    leaves the set's own value; one applies once it rests.
 - **The page summary:** each page's units by geometry, the removal, the fit, and the first drawing's time: v0's step
   (render, text, lay, ops, svg) plus the pane's drawing at its resolution. Clicking a unit shows v0's record of it.
 

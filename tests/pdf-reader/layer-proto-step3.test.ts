@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
+import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // Step 3 of the layer's new direction (2026-10-07): v0's (and the hybrid's) weak spots, each fixed at its root and
 // measured by the layer gate (--engine-kind=proto --proto-tex=lines); these are the fixes' pure rules.
@@ -11,6 +12,8 @@ beforeAll(async () => {
   g.OffscreenCanvas ??= class { getContext() { return { font: '', measureText: (s: string) => ({ width: 50 * s.length }) } } }
   L2 = await import('@/pdf-reader/engine/layer-proto/layer2.mjs')
 })
+/** a target's parameters, the layout rules' built-in ones (what a run is opened with), a fresh object each call */
+const params = (to: string) => resolveRules(BUILTIN_RULES, to).params
 
 describe("the leading, relative to the original's own pitch", () => {
   const zh = { leadBase: 1.3 }
@@ -55,14 +58,14 @@ describe('no unit drawn in part: the text run past a display where the slots aft
   const word = (n: number) => ({ s: 'x'.repeat(n), cls: 'latin', w100: 50 * n, st: {} })
   const space = { space: true, w100: 25 }
   const block = (B: number[], after: number) => ({ page: 1, rects: B.map(b => [1, 0, b - 2, 100, b + 8]), x0: 0, x1: 100, B, exact: B.map(() => true), sizes: B.map(() => 10), pitch0: 12, free: 0, indent: 0, after, centred: false })
-  const P = () => ({ ...L2.defaultParams('de'), borrow: 0 })
+  const P = () => ({ ...params('de'), borrow: 0 })
   // one line of text before a display, three after it, which leaves the original one line below it and three above it
   const blocks = [block([500, 488, 476, 464], 0), block([300], 1)]
   const after = [word(18), space, word(18), space, word(18)]
   it("is clipped in the translation's order, and set whole once the text may run on into the lines above the display", () => {
     const tokens = [word(18), { blockTo: 0, w100: 0 }, ...after]
-    expect(L2.layoutUnit2(tokens as never, blocks as never, 10, P() as never, 'de').clipped).toBe(true)
-    const flow = L2.layoutUnit2(tokens as never, blocks as never, 10, { ...P(), flowPast: true } as never, 'de')
+    expect(L2.layoutUnit2(tokens as never, blocks as never, 10, P() as never).clipped).toBe(true)
+    const flow = L2.layoutUnit2(tokens as never, blocks as never, 10, { ...P(), flowPast: true } as never)
     expect(flow.clipped).toBe(false)
     expect(flow.scale).toBe(1)
     // the display breaks the line once: its text after it starts on the next line, above the display
@@ -70,7 +73,7 @@ describe('no unit drawn in part: the text run past a display where the slots aft
   })
   it("breaks the line once a region: a placeholder kept in the display's lines after it is no second break", () => {
     const tokens = [word(18), { blockTo: 0, w100: 0 }, word(4), { blockTo: 0, w100: 0 }, word(4)]
-    const flow = L2.layoutUnit2(tokens as never, blocks as never, 10, { ...P(), flowPast: true } as never, 'de')
+    const flow = L2.layoutUnit2(tokens as never, blocks as never, 10, { ...P(), flowPast: true } as never)
     expect(flow.lines.map(l => l.items.filter(it => it.t.s).length)).toEqual([1, 2])
   })
 })
@@ -123,11 +126,11 @@ describe("Hangul's advance given back: the fit's tracking starts where its face'
   // Korean words of syllables 5 pt wide at size 10, a space 2.5 pt (it may shrink to 0.8 of it)
   const words = (n: number, of: number) => Array.from({ length: n }, (_, q) => [...(q ? [{ space: true, w100: 25 }] : []), { s: '\uD55C'.repeat(of), cls: 'cjk', w100: 50 * of, st: {} }]).flat()
   it('sets the first state at trackStart, and tightens from it down to trackMin where the text needs it', () => {
-    const P = { ...L2.defaultParams('ko'), trackStart: 0.04, borrow: 0 }
+    const P = { ...params('ko'), trackStart: 0.04, borrow: 0 }
     // 16 syllables: 80 pt, 6.4 pt of tracking, 7.5 of spaces; 18: 90 pt, which fits once the tracking is down to 0.03
-    expect(L2.layoutUnit2(words(4, 4) as never, [block] as never, 10, P as never, 'ko').state.track).toBeCloseTo(0.04, 6)
-    expect(L2.layoutUnit2(words(3, 6) as never, [block] as never, 10, P as never, 'ko').state.track).toBeCloseTo(0.03, 6)
-    expect(L2.layoutUnit2(words(4, 4) as never, [block] as never, 10, { ...P, trackStart: 0 } as never, 'ko').state.track).toBe(0)
+    expect(L2.layoutUnit2(words(4, 4) as never, [block] as never, 10, P as never).state.track).toBeCloseTo(0.04, 6)
+    expect(L2.layoutUnit2(words(3, 6) as never, [block] as never, 10, P as never).state.track).toBeCloseTo(0.03, 6)
+    expect(L2.layoutUnit2(words(4, 4) as never, [block] as never, 10, { ...P, trackStart: 0 } as never).state.track).toBe(0)
   })
 })
 
@@ -140,10 +143,10 @@ describe('the thesis pitch, switchable: the leading rule off, and fillBySize', (
     // still fit a line each at 1.1 (71.5 pt), the lines on the original's baselines
     const block = { page: 1, rects: [[1, 0, 98, 100, 108], [1, 0, 83, 100, 93]], x0: 0, x1: 100, B: [100, 85], exact: [true, true], sizes: [10, 10], pitch0: 15, free: 0, indent: 0, after: 0, centred: false }
     const words = (n: number, of: number) => Array.from({ length: n }, (_, q) => [...(q ? [{ space: true, w100: 25 }] : []), { s: '한'.repeat(of), cls: 'cjk', w100: 50 * of, st: {} }]).flat()
-    const P = { ...L2.defaultParams('zh'), leadBase: 1, borrow: 0 }
-    const natural = L2.layoutUnit2(words(2, 13) as never, [block] as never, 10, P as never, 'zh')
+    const P = { ...params('zh'), leadBase: 1, borrow: 0 }
+    const natural = L2.layoutUnit2(words(2, 13) as never, [block] as never, 10, P as never)
     expect(natural.scale).toBe(1)
-    const grown = L2.layoutUnit2(words(2, 13) as never, [block] as never, 10, { ...P, growTo: 1.1 } as never, 'zh')
+    const grown = L2.layoutUnit2(words(2, 13) as never, [block] as never, 10, { ...P, growTo: 1.1 } as never)
     expect(grown.scale).toBeGreaterThan(1)
     expect(grown.scale).toBeLessThanOrEqual(1.1)
     expect(grown.lines.map(l => l.baseline)).toEqual([100, 85])
@@ -167,17 +170,17 @@ describe("the room before a rule (capScale, layer2.mjs cellBands): the fit's sta
   const block = { page: 1, rects: [[1, 0, 98, 100, 108], [1, 0, 83, 100, 93]], x0: 0, x1: 100, B: [100, 85], exact: [true, true], sizes: [10, 10], pitch0: 15, free: 0, indent: 0, after: 0, centred: false }
   const words = (n: number, of: number) => Array.from({ length: n }, (_, q) => [...(q ? [{ space: true, w100: 25 }] : []), { s: '\uD55C'.repeat(of), cls: 'cjk', w100: 50 * of, st: {} }]).flat()
   it('starts at the cap, and grows no further than it', () => {
-    const P = { ...L2.defaultParams('zh'), leadBase: 1, borrow: 0 }
-    expect(L2.layoutUnit2(words(2, 13) as never, [block] as never, 10, { ...P, capScale: 0.92 } as never, 'zh').scale).toBeLessThanOrEqual(0.92)
-    expect(L2.layoutUnit2(words(2, 13) as never, [block] as never, 10, { ...P, growTo: 1.1, capScale: 1 } as never, 'zh').scale).toBe(1)
+    const P = { ...params('zh'), leadBase: 1, borrow: 0 }
+    expect(L2.layoutUnit2(words(2, 13) as never, [block] as never, 10, { ...P, capScale: 0.92 } as never).scale).toBeLessThanOrEqual(0.92)
+    expect(L2.layoutUnit2(words(2, 13) as never, [block] as never, 10, { ...P, growTo: 1.1, capScale: 1 } as never).scale).toBe(1)
   })
   it("shrinks on the uncapped steps under the cap, down to the floor: a cap of 0.956 still reaches 0.8", () => {
     // one line of 100 pt and two words of 124.5 pt at size 10, their space not shrinking: they fit at 0.8, not at 0.806
     // (0.956 less three steps)
     const one = { ...block, rects: [[1, 0, 98, 100, 108]], B: [100], exact: [true], sizes: [10] }
     const word = [{ s: 'W', cls: 'latin', w100: 600, st: {} }, { space: true, w100: 25 }, { s: 'W', cls: 'latin', w100: 620, st: {} }]
-    const P = { ...L2.defaultParams('zh'), leadBase: 1, borrow: 0, order: ['shrink'], floor: 0.8, step: 0.05, trackMin: 0, compressMax: 0, hyphen: 0, spaceMin: 1 }
-    const r = L2.layoutUnit2(word as never, [one] as never, 10, { ...P, capScale: 0.956 } as never, 'zh')
+    const P = { ...params('zh'), leadBase: 1, borrow: 0, order: ['shrink'], floor: 0.8, step: 0.05, trackMin: 0, compressMax: 0, hyphen: 0, spaceMin: 1 }
+    const r = L2.layoutUnit2(word as never, [one] as never, 10, { ...P, capScale: 0.956 } as never)
     expect(r.clipped).toBe(false)
     expect(r.scale).toBe(0.8)
   })
@@ -190,7 +193,7 @@ describe("a CJK cell's bands between the rules over and under its lines (cellBan
   const cell = (rects: number[][], Bs: number[]) => [{ page: 10, B: Bs, rects }]
   const rules = [100, B + 7.63, 200, B + 8.03, 100, B - 3.68, 200, B - 3.28]
   it('holds the em box between the rules less the clearance, never past the original foot: 0.93 of the size', () => {
-    const r = L2.cellBands(cell([[10, 120, B - 2.14, 180, B + 6.8]], [B]), () => rules, 9.96)
+    const r = L2.cellBands(cell([[10, 120, B - 2.14, 180, B + 6.8]], [B]), () => rules, 9.96, params('zh'))
     // the band runs from the original's foot (2.14 under, above the rule under plus 0.5) to the rule over less 0.5
     expect(r?.cap).toBe(0.93)
     const band = r?.bands.get(0)?.[0]
@@ -202,21 +205,30 @@ describe("a CJK cell's bands between the rules over and under its lines (cellBan
     expect(B - lines[0]!.baseline).toBeCloseTo(1.02, 2)
     expect(lines[0]!.baseline + 0.88 * 9.96 * 0.93).toBeLessThanOrEqual(B + 7.13 + 1e-9)
   })
+  it("reads the room kept to a rule and the floor of the cap from the rules' cellClear and cellCapMin", () => {
+    const at = (o: object) => L2.cellBands(cell([[10, 120, B - 2.14, 180, B + 6.8]], [B]), () => rules, 9.96, { ...params('zh'), ...o })
+    expect(at({})?.cap).toBe(0.93)
+    // a wider clearance narrows the band: the rule over less 1 pt is below the original's own top, which holds it (6.8 over)
+    expect(at({ cellClear: 1 })?.cap).toBe(0.897)
+    // and the cap never falls below the rules' floor, however little room there is
+    expect(at({ cellClear: 1, cellCapMin: 0.95 })?.cap).toBe(0.95)
+    expect(at({ cellCapMin: 0.3 })?.cap).toBe(0.93)
+  })
   it("keeps the original's own top where the rule is nearer, and takes no rule beside the line nor a page without any", () => {
     const tight = [100, B + 6.9, 200, B + 7.3]
-    expect(L2.cellBands(cell([[10, 120, B - 2.14, 180, B + 6.8]], [B]), () => tight, 9.96)?.bands.get(0)?.[0]?.hi).toBeCloseTo(B + 6.8, 6)
-    expect(L2.cellBands(cell([[10, 220, B - 2.14, 280, B + 6.8]], [B]), () => rules, 9.96)).toBeNull()
-    expect(L2.cellBands(cell([[10, 120, B - 2.14, 180, B + 6.8]], [B]), () => undefined, 9.96)).toBeNull()
+    expect(L2.cellBands(cell([[10, 120, B - 2.14, 180, B + 6.8]], [B]), () => tight, 9.96, params('zh'))?.bands.get(0)?.[0]?.hi).toBeCloseTo(B + 6.8, 6)
+    expect(L2.cellBands(cell([[10, 220, B - 2.14, 280, B + 6.8]], [B]), () => rules, 9.96, params('zh'))).toBeNull()
+    expect(L2.cellBands(cell([[10, 120, B - 2.14, 180, B + 6.8]], [B]), () => undefined, 9.96, params('zh'))).toBeNull()
   })
   it("holds a line widened over the paper beside it to a rule over the part it was widened onto", () => {
     // the re-review of round 3, M4: a cell's rectangle over x 10-40, its block widened to x 80; the rule over x 50-80
     const wide = [{ page: 10, B: [B], rects: [[10, 10, B - 2.14, 40, B + 6.8]], x0: 10, x1: 80 }]
     const over = [50, B + 7.63, 80, B + 8.03]
-    expect(L2.cellBands(wide as never, () => over, 9.96)?.bands.get(0)?.[0]?.hi).toBeCloseTo(B + 7.13, 6)
-    expect(L2.cellBands([{ ...wide[0]!, x1: 40 }] as never, () => over, 9.96)).toBeNull()
+    expect(L2.cellBands(wide as never, () => over, 9.96, params('zh'))?.bands.get(0)?.[0]?.hi).toBeCloseTo(B + 7.13, 6)
+    expect(L2.cellBands([{ ...wide[0]!, x1: 40 }] as never, () => over, 9.96, params('zh'))).toBeNull()
   })
   it("moves no line set on a pitch of its own, and none a size that clears unmoved", () => {
-    const r = L2.cellBands(cell([[10, 120, B - 2.14, 180, B + 6.8]], [B]), () => rules, 9.96)!
+    const r = L2.cellBands(cell([[10, 120, B - 2.14, 180, B + 6.8]], [B]), () => rules, 9.96, params('zh'))!
     const off = [{ block: 0, baseline: B - 4 }]
     L2.clearLines(off, r.bands, 9.96)
     expect(off[0]!.baseline).toBe(B - 4)
@@ -235,18 +247,18 @@ describe("adaptiveFill (D, the default) keeps a CJK cell clear of its rule (Code
     const rules = [0, 107.63, 100, 108.03]
     const words = (n: number, of: number) => Array.from({ length: n }, (_, q) => [...(q ? [{ space: true, w100: 25 }] : []), { s: '\u6c49'.repeat(of), cls: 'cjk', w100: 50 * of, st: {} }]).flat()
     // as openProto: its parameters with adaptiveFill's defaults, the cell held to its band (capScale), fillable
-    const P = { ...L2.defaultParams('zh'), adaptiveFill: { band: 0.05, track: 0.05, size: 1.1 } }
-    const clear = L2.cellBands([block] as never, () => rules, 10)!
+    const P = { ...params('zh'), adaptiveFill: { band: 0.05, track: 0.05, size: 1.1 } }
+    const clear = L2.cellBands([block] as never, () => rules, 10, params('zh'))!
     const rel = L2.leadOf([block] as never, 10, { ...P, leadRel: true } as never)
     expect(rel).toBeLessThanOrEqual(P.leadBase - 0.05)
     const p = { id: 1, unit: { kind: 'cell' }, pages: [1], tokens: words(2, 10), blocks: [block], s: 10, clear, fillRange: [rel, P.leadBase], P: { ...P, leadBase: rel, growTo: 0, capScale: clear.cap } as Record<string, unknown>, layout: null as never as { lines: { block: number; baseline: number }[]; scale: number } }
-    p.layout = L2.layoutUnit2(p.tokens as never, p.blocks as never, 10, p.P as never, 'zh') as never
+    p.layout = L2.layoutUnit2(p.tokens as never, p.blocks as never, 10, p.P as never) as never
     settleLayout(p)
     const clearOf = () => p.layout.lines[0]!.baseline + 0.88 * 10 * p.layout.scale
     expect(clearOf()).toBeLessThanOrEqual(107.13 + 1e-9)
     // the page's fill pass lays it anew: still clear
     let filled = false
-    fillPage([p] as never, P as never, 'zh', () => { filled = true })
+    fillPage([p] as never, P as never, () => { filled = true })
     expect(filled).toBe(true)
     expect(clearOf()).toBeLessThanOrEqual(107.13 + 1e-9)
   })

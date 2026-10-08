@@ -6,6 +6,7 @@ import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
 import type { TexLines, Whole } from './tex.mjs'
 import type { RemovalManifest } from '../layout/remove.mjs'
 import type { FaceSources } from './fonts.mjs'
+import type { RuleSet } from '../rules/layout.mjs'
 
 /** a unit as the units record holds it (a row): its kind, source and state; its translation's pieces, none where it has
  *  none, each non-text one with its k (the layout file's index of its source piece: E6's row); its title, its table's
@@ -44,18 +45,17 @@ export interface Rec {
   sizeRatio?: number; modes: Record<string, number>; [more: string]: unknown
 }
 export declare const PDF_OPTIONS: { cMapPacked: true; enableHWA: true; disableStream: true }
-export declare const PARAM_KEYS: readonly string[]
 /** main.js's lay order, by the page whose drawing lays each unit: [page, ids] */
 export declare function layGroups(placed: readonly { id: number; pages: readonly number[] }[], batch?: number): [number, number[]][]
 export declare const layOrder: (placed: readonly { id: number; pages: readonly number[] }[], batch?: number) => number[]
 /** a unit's layout made final: a CJK cell's lines moved into their bands between the rules at the size it is drawn at */
 export declare function settleLayout(p: { clear?: { bands: Map<number, import('./layer2.mjs').CellBand[]> } | null; layout: { lines?: { block: number; baseline: number }[]; scale?: number }; s: number }): void
 /** adaptiveFill's pass over a page's loose units: each filled unit laid anew in place and settled, then onFilled; the target leading, or null */
-export declare function fillPage(loose: unknown[], P: Params & { adaptiveFill: { band?: number; track?: number; size?: number } }, to: string, onFilled?: (p: Placed, target: number) => void): number | null
+export declare function fillPage(loose: unknown[], P: Params & { adaptiveFill: { band: number; track: number; size: number } }, onFilled?: (p: Placed, target: number) => void): number | null
 export interface ProtoRun {
   N: number
   P: Params
-  /** the rules the run was opened with (target-rules.mjs): the built-in set's schema and version */
+  /** the layout rule set the run was opened with (rules/layout.mjs): its schema and version */
   readonly rules: { schema: 1; version: number }
   rows: Row[]
   placed: Placed[]
@@ -142,7 +142,6 @@ export declare function openProto(o: {
   pages?: number
   scale?: number
   dpr?: number
-  params?: Partial<Params>
   batch?: number
   phMode?: 'auto' | 'source'
   restoring?: boolean
@@ -162,7 +161,9 @@ export declare function openProto(o: {
   tex?: HybridOptions | null
   /** the text-removed PDF: null, v0's own drawing */
   removal?: RemovalOptions | null
-  /** the target's names of a figure and a table (caption-names.mjs) and which the final names so (live.mjs captionsOf):
-   *  a float's label drawn in the target's name where the final's is; null, every label kept as the original's */
-  labels?: { names: { figure: string; table: string } | null; captions: Captions | null } | null
+  /** which floats the final names in the target's language (live.mjs captionsOf): a float's label is drawn in the target's
+   *  name for it, which the rule set gives, where the final's is; null, every label kept as the original's */
+  labels?: { captions: Captions | null } | null
+  /** the layout rule set every choice made for the target is read from, resolved once at the open (absent: BUILTIN_RULES) */
+  rules?: RuleSet
 }): Promise<ProtoRun>

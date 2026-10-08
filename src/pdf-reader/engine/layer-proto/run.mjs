@@ -48,15 +48,13 @@ import { loadHyphenation } from './hyph.mjs'
 import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
 import { fileSwap, protection } from './removal.mjs'
-import { rulesFor } from './target-rules.mjs'
 import { locatedWhole, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
+import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
 
 /** the prototype's getDocument options beside the host's asset URLs (main.js ASSETS): its canvases on the GPU, the whole
  *  file read at once */
 export const PDF_OPTIONS = { cMapPacked: true, enableHWA: true, disableStream: true }
-/** the fit's parameters a host may set (main.js read them from the query), and the page-even pass's units */
-export const PARAM_KEYS = ['leadBase', 'leadFloor', 'trackMin', 'compressMax', 'borrow', 'borrowGap', 'floor', 'step', 'grid', 'cjkJust', 'spaceMax', 'autospace', 'spaceMin', 'hyphen', 'even', 'order', 'further', 'floorMin', 'trackStart', 'leadRel', 'fillSize', 'adaptiveFill']
 /** the page's body units that the even pass sets alike (a unit on two pages keeps its own fit) */
 const EVEN_KINDS = new Set(['para', 'abstract', 'list', 'item'])
 /** the SVG's own rules (the prototype's index.html): its text set as laid, in the layer's ink, in the faces it was
@@ -110,7 +108,7 @@ export function settleLayout(p) {
 }
 
 /**
- * adaptiveFill (D, P.adaptiveFill: { band, track, size }; the default since 2026-10-07, false for B): the units of a
+ * adaptiveFill (D, P.adaptiveFill: { band, track, size }; the default since 2026-10-07, null for B): the units of a
  * loose original's page that begin on it (`loose`, each laid already: tokens, blocks, s, P, fillRange), each spread over
  * its original paragraph's space, the page's lines kept to one rhythm. Each unit's fill leading is the loosest, between
  * its leading relative to the original's pitch and the script's on it (leadBase), at which its most natural state still
@@ -121,9 +119,9 @@ export function settleLayout(p) {
  * even at its relative leading keeps its own fit. Each unit filled is laid anew in place (p.P, p.layout, its extents
  * kept), then `onFilled(p, target)`.
  */
-export function fillPage(loose, P, to, onFilled = () => {}) {
-  const { band = 0.05, track = 0.05, size = 1.1 } = P.adaptiveFill
-  const fitsNaturally = (p, PP) => { const l = L2.layoutUnit2(p.tokens, p.blocks, p.s, PP, to); return l.tried === 1 && !l.clipped ? l : null }
+export function fillPage(loose, P, onFilled = () => {}) {
+  const { band, track, size } = P.adaptiveFill
+  const fitsNaturally = (p, PP) => { const l = L2.layoutUnit2(p.tokens, p.blocks, p.s, PP); return l.tried === 1 && !l.clipped ? l : null }
   const fillLeadOf = p => {
     const [lo, hi] = p.fillRange
     for (let k = Math.round((hi - lo) / 0.01); k >= 0; k--) {
@@ -152,7 +150,7 @@ export function fillPage(loose, P, to, onFilled = () => {}) {
         if (l2) { PP = P2; l = l2; t = k * 0.01; break }
       }
       if (t >= track - 1e-9 && size > 1) {
-        const l3 = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...PP, growTo: size }, to)
+        const l3 = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...PP, growTo: size })
         if (!l3.clipped) { PP = { ...PP, growTo: size }; l = l3 }
       }
     }
@@ -216,7 +214,7 @@ function needsOf(K, N, passes, fileOnly) {
  * (a hole a unit not yet arrived), each page laid once every unit it reads has come; null (today's call): every unit is
  * in `units`. `groups`: each unit's table group, known at open (the paper's bundle, groups.mjs groupOf), so that a
  * group is read once its own cells' rows are in; null: once every row is. Options as main.js's query: `scale` (CSS px a
- * PDF unit), `dpr`, `params` (overrides of the fit's parameters the target's rules give, target-rules.mjs), `batch`, `phMode` ('auto' or 'source'),
+ * PDF unit), `dpr`, `batch`, `phMode` ('auto' or 'source'),
  * `restoring`, `order` (ids whose order a page's units are laid in, in place of layGroups': a recorded run's). `faces`:
  * 'roles' (the role table's) or 'prototype' (the prototype's own).
  * `faceSources(id)`: a promise of the slices the host serves of a role table face, each { url, ranges } (its file on the
@@ -244,26 +242,23 @@ function needsOf(K, N, passes, fileOnly) {
  * manifest's `dirty` boxes say kept ink lies under them; its crops are cut from the original through their placeholders'
  * segments (layer2.mjs removalOps). No ink is read and no pixel. A unit v0 reads on its own (the file's miss) is drawn
  * the old way, erased and put back, as on a page the add-on did not remove. Null: v0's own drawing.
- * `labels`: { names, captions }, the target's names of a figure and a table (caption-names.mjs) and which of the two the
- * final names so (the record's `captions`, live.mjs captionsOf): a float's label is drawn in the target's name where the
- * final's is (layer2.mjs labelInTarget), else kept as the original's ink. A table's group (each record unit's `group`) is
- * drawn whole or not at all.
+ * `labels`: { captions }, which of the two floats, figures and tables, the final names in the target's language (the
+ * record's `captions`, live.mjs captionsOf): a float's label is drawn in the target's name for it, which the layout rules
+ * give (`rules`), where the final's is (layer2.mjs labelInTarget), else kept as the original's ink. A table's group (each
+ * record unit's `group`) is drawn whole or not at all.
+ * `rules`: the layout rule set (rules/layout.mjs RuleSet) every choice made for the target is read from, resolved once at
+ * the open and fixed for the run: the fit's parameters (leading, tracking, floor, adaptive fill and the rest), how a line
+ * breaks, the hyphenation patterns and their minimums, the CJK family, the names of a float. Absent: BUILTIN_RULES. A
+ * host passes the set it loaded (readRules); there is no per-field override.
  */
-export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, params = {}, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, copy = true, removal = null, labels = null }) {
+export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, copy = true, removal = null, labels = null, rules = BUILTIN_RULES }) {
   if (expect !== null && (!Array.isArray(expect) || !expect.every(id => Number.isSafeInteger(id) && id >= 0))) throw new TypeError(`expect: ids of units or null, not ${kindOf(expect)}`)
   if (tableGroups !== null && !(tableGroups instanceof Map)) throw new TypeError(`groups: a Map of ids to groups or null, not ${kindOf(tableGroups)}`)
   if (faceSources !== null && typeof faceSources !== 'function') throw new TypeError(`faceSources: a function or null, not ${kindOf(faceSources)}`)
-  // every choice made for the target, in one call (target-rules.mjs): the fit's parameters, the hyphenation patterns, the
-  // CJK family
-  const R = rulesFor(to)
-  const P = { ...R.params }
-  for (const k of PARAM_KEYS) if (params[k] !== undefined) P[k] = params[k]
-  // (the maintainer's ruling of 2026-10-07, on S3-11: the script's leading on the original's own pitch reads more
-  // naturally on a loose original than fix 2's relative leading (leadRel), which stays a switch)
-  P.leadRel ??= R.params.leadRel
-  // (and the maintainer's choice of 2026-10-07 on S3-12, "\u6211\u4EEC\u5C31\u9009\u5B9A D \u7248\u672C\u65B9\u5411": adaptiveFill on a loose
-  // original, as measured there; adaptiveFill: false is B, the script's leading on the original's pitch alone)
-  P.adaptiveFill ??= R.params.adaptiveFill
+  // every choice made for the target, in one call: the layout rules' (rules/layout.mjs resolveRules), the built-in set's or
+  // the host's: the fit's parameters, the hyphenation patterns, the CJK family, the float labels' names
+  const R = resolveRules(rules, to)
+  const P = R.params
   // iteration 2's hyphenation, fetched at once (local, small)
   const hyphP = Promise.all(R.patterns.map(async l => L2.setHyphenData(l, await loadHyphenation(l, hyphUrl(l)))))
   // the target's likely faces loaded meanwhile (Times-like until the paper's own designs are known), and Latin Modern at
@@ -272,7 +267,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // (the role table's faces: the paper's family is known from its first page; until then its Latin faces, which no
   // family changes)
   setRoleFaces(roles ? to : null, OPEN_FAMILY, R.cjkFaces)
-  const warmP = roles ? null : L2.warmFaces(to, { serif: 'times' }, yieldNow)
+  const warmP = roles ? null : L2.warmFaces(to, P.cjk, { serif: 'times' }, yieldNow)
   const lmP = roles ? null : loadWebFaces(['cm', 'cmss', 'cmtt'], fontUrl)
   // the role table's faces as the host serves them, each asked when a page or a unit first needs it and loaded for the
   // text it is measured and drawn with; the target's body face's first slice is fetched now, to overlap the host's other
@@ -626,7 +621,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   }
   /** a CJK table cell's bands between the rules near its lines (layer2.mjs cellBands: the manifest's rules), or null; a
    *  script no taller than Latin is not held, nor a paragraph, whose lines stand by a rule only by chance */
-  const clearanceOf = (p, s) => (P.cjk && p.unit.kind === 'cell' ? L2.cellBands(p.blocks, pg => RM?.manifest?.page?.[pg]?.rules, s) : null)
+  const clearanceOf = (p, s) => (P.cjk && p.unit.kind === 'cell' ? L2.cellBands(p.blocks, pg => RM?.manifest?.page?.[pg]?.rules, s, P) : null)
   // the free space below a block, down to the first ink in its column or the page's lowest unit line
   const freeFor = (b, s) => {
     const map = inkOf(b.page)
@@ -726,13 +721,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         const clear = clearanceOf({ ...p, blocks: wide }, s)
         const { capScale: _, ...rest } = p.P
         const PW = clear && clear.cap < 1 ? { ...rest, capScale: clear.cap } : rest
-        const l = L2.layoutUnit2(tokens, wide, s, PW, to)
+        const l = L2.layoutUnit2(tokens, wide, s, PW)
         if (!l.clipped) return { layout: { ...l, knob: 'widen' }, blocks: wide, P: PW, clear }
       } else if (step === 'shrink' && P.floorMin < P.floor - 1e-9) {
-        const l = L2.layoutUnit2(tokens, p.blocks, s, { ...p.P, floor: P.floorMin }, to)
+        const l = L2.layoutUnit2(tokens, p.blocks, s, { ...p.P, floor: P.floorMin })
         if (!l.clipped) return { layout: { ...l, knob: 'below-floor' }, blocks: p.blocks }
       } else if (step === 'flow') {
-        const l = L2.layoutUnit2(tokens, p.blocks, s, { ...p.P, flowPast: true }, to)
+        const l = L2.layoutUnit2(tokens, p.blocks, s, { ...p.P, flowPast: true })
         if (!l.clipped) return { layout: { ...l, knob: 'flow' }, blocks: p.blocks }
       }
     }
@@ -814,7 +809,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const prep = L2.prepareUnit(p.unit, p.rects, local, phMode === 'source' ? null : citeMap, null, parts)
     // a float's label in the target's name where the final names it so (labelInTarget): its ink erased and accounted as
     // the unit's text, and set as the line's start, in its own style, before the translation
-    const relabel = labels ? L2.labelInTarget(prep.label, labels.names, labels.captions, to) : null
+    const relabel = labels ? L2.labelInTarget(prep.label, R.labels, labels.captions, to) : null
     if (relabel) {
       prep.label = { ...prep.label, drawn: relabel }
       for (const c of prep.label.chars) prep.cat?.set(L2.charKey(c), 'acc')
@@ -887,7 +882,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         p.P.growTo = 0
       }
     }
-    p.layout = L2.layoutUnit2(tokens, p.blocks, s, p.P, to)
+    p.layout = L2.layoutUnit2(tokens, p.blocks, s, p.P)
     // (step 3: never drawn in part: given more room where the page has it, else left the original's, whole)
     if (p.layout.clipped) {
       const further = fitFurther(p, tokens, s)
@@ -936,14 +931,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (p.layout.scale <= target + 1e-9 && p.layout.state.lead <= leadTo + 1e-9) continue
       const keep = { extents: p.layout.extents, rec: p.rec }
       const PU = p.P ?? P
-      p.layout = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...PU, maxScale: target, leadBase: Math.min(PU.leadBase, leadTo) }, to)
+      p.layout = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...PU, maxScale: target, leadBase: Math.min(PU.leadBase, leadTo) })
       p.layout.extents = keep.extents
       settleLayout(p)
       if (p.rec) Object.assign(p.rec, { f: r1(p.layout.f), sizeRatio: r1(p.layout.f / p.s), fitScale: p.layout.scale, knob: p.layout.knob, lead: p.layout.state.lead, lines: recLinesOf(p) })
     }
   }
   // adaptiveFill's pass over a page's units that begin on it (fillPage), each filled unit's record updated
-  const fillPass = pg => fillPage(laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg), P, to, (p, target) => {
+  const fillPass = pg => fillPage(laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg), P, (p, target) => {
     const l = p.layout
     if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
   })
@@ -1078,7 +1073,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         setRoleFaces(to, familyOfFonts([...weight.keys()], [...weight.values()]), R.cjkFaces)
         await hyphP
         if (disposed) return
-        await L2.warmFaces(to, designs, yieldNow, (face, text) => FS.ready(face, text))
+        await L2.warmFaces(to, P.cjk, designs, yieldNow, (face, text) => FS.ready(face, text))
       } else {
         await loadWebFaces([designs.serif, designs.sans, designs.mono], fontUrl)
         await hyphP
@@ -1233,8 +1228,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
 
   return {
     N, P, rows, placed, skipped, stats, audit, order, ms, pageMs, pageTimes, chars: chars2, views,
-    /** the rules the run was opened with (target-rules.mjs): the built-in set's schema and version */
-    rules: { schema: R.schema, version: R.version },
+    /** the layout rule set the run was opened with (rules/layout.mjs): its schema and version */
+    rules: { schema: RULES_SCHEMA, version: R.version },
     get designs() { return designs },
     /** the hybrid's: each placed unit's source, in the order of the geometry's units then the file's alone, and why the
      *  units placed by v0's geometry are (and those only the file holds it does not locate whole) */

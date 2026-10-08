@@ -20,8 +20,6 @@ export interface Face { family: string; weight: number; style: 'normal' | 'itali
 export declare function classifyFont(name: string, fallbackFamily?: string): FontClass
 /** class, weight and slant: what the style match compares */
 export declare const styleKey: (s: Style) => string
-export declare const CJK_TARGETS: ReadonlySet<string>
-export declare const scriptOfTarget: (to: string) => string
 export declare const OBLIQUE_DEG: number
 /** a run's face by its style, its class ('cjk' or 'latin') and the target */
 export declare function faceOf(st: Style, cls: 'cjk' | 'latin', to: string): Face
@@ -32,8 +30,8 @@ export declare function loadWebFaces(designs: readonly string[], urlOf?: (file: 
 /** the English family v0's role table faces are set for at its open, until the paper's own is read */
 export declare const OPEN_FAMILY: 'times'
 /** v0 in the role table's faces (font-roles.mjs) for a target and the paper's English family, its CJK faces `cjkFaces`
- *  (the role table's own where undefined); a falsy target: the prototype's own faces again */
-export declare function setRoleFaces(target: string | null, family: string, cjkFaces?: import('../font-roles.mjs').CjkFaces | null): void
+ *  the layout rules' (null for an alphabet); a falsy target: the prototype's own faces again */
+export declare function setRoleFaces(target: string | null, family: string, cjkFaces: import('../font-roles.mjs').CjkFaces | null): void
 /** the role set v0 draws in, or null for the prototype's faces */
 export declare const roleFaces: () => import('../font-roles.mjs').RoleSet | null
 /** one slice of a face a host serves: its file on the host's origin (a plain URL) and its code points as [start, end]

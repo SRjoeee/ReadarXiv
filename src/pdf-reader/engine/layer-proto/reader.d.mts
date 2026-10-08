@@ -3,6 +3,7 @@ import type { FaceId } from '../font-roles.mjs'
 import type { ReadBundle } from './bundle.mjs'
 import type { FaceSources } from './fonts.mjs'
 import type { Row } from './rows.mjs'
+import type { RuleSet } from '../rules/layout.mjs'
 
 export { PDF_OPTIONS } from './run.mjs'
 export { BUNDLE, BUNDLE_CAP, BUNDLE_VALUES, BundleRefusal, bundleKey, CTAG, readBundle, VTAG } from './bundle.mjs'
@@ -36,7 +37,7 @@ export interface LayerStats {
   pageMs: Readonly<Record<number, number>>
   /** the rows skipped as no unit of the bundle's (unitOf's null) */
   dropped: number
-  /** the rules the layer was opened with: the built-in set's schema and version */
+  /** the layout rule set the layer was opened with: its schema and version */
   rules: { schema: 1; version: number }
 }
 /** the layer of one paper and target, open */
@@ -64,7 +65,8 @@ export interface Layer {
  *  left, layout and add-on, the target's caption names on every float (L7), the served faces and hyphenation, at scale 2.5
  *  and dpr 1 (one set of choices on every device); its rows taken as they come. One open layer per page: v0's faces are
  *  the page's, and a second open before the first's dispose throws */
-export declare function openLayer(o: { bundle: ReadBundle; doc: LayerDocument; target: string; faceSources: FaceSources; hyphUrl: (lang: string) => string }): Promise<Layer>
+export declare function openLayer(o: { bundle: ReadBundle; doc: LayerDocument; target: string; faceSources: FaceSources; hyphUrl: (lang: string) => string; rules?: RuleSet }): Promise<Layer>
 /** the face a host asks for first, at the open, before the paper's family is known: the target's CJK body face (light
- *  where its rules say so beside the family v0 opens with), else null */
-export declare function firstFaceOf(target: string): FaceId | null
+ *  where the rule set says so beside the family v0 opens with), else null; `rules`: the set the layer is opened with
+ *  (absent: the built-in one) */
+export declare function firstFaceOf(target: string, rules?: RuleSet): FaceId | null

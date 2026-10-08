@@ -8,7 +8,8 @@
 // Hyphenation for the layer's alphabetic runs: Liang's patterns (TeX's own: Knuth's hyphen.tex for English, dehyphn.tex
 // for German, served by serve.mjs from TinyTeX as /hyph/<lang>.json), and for Russian, which TinyTeX lacks, the
 // rule-based syllable split of Khmelev (vowel/consonant classes), which is what light-weight Russian hyphenators use.
-// Min lengths as TeX's babel sets them: English 2 and 3, German 2 and 2, Russian 2 and 2.
+// Min lengths as TeX's babel sets them (English 2 and 3, German 2 and 2) are the layout rules' (rules/layout.mjs
+// hyphenation), given with each call; Russian's rules hold their own.
 //
 // v0's changes: loadHyphenation takes its URL from its host, and the prototype host's reading of a TeX pattern file
 // (serve.mjs hyphenation()) is here as patternsOfTex, so that any host serves the same patterns.
@@ -39,7 +40,6 @@ export function patternsOfTex(latin1) {
 }
 
 const tries = new Map()
-const MINS = { en: [2, 3], de: [2, 2], ru: [2, 2] }
 
 /** the patterns of a language, fetched once (from `url`, patternsOfTex's JSON); null where there are none */
 export function loadHyphenation(lang, url = `/hyph/${lang}.json`) {
@@ -67,19 +67,20 @@ export function loadHyphenation(lang, url = `/hyph/${lang}.json`) {
 }
 
 const cache = new Map()
-/** the positions (character offsets into `word`) where `word` may break, for a language whose patterns are loaded */
-export function breakPoints(word, lang, data) {
-  const key = `${lang}|${word}`
+/** the positions (character offsets into `word`) where `word` may break, for a language whose patterns are loaded.
+ *  `mins`: the fewest letters left before and after a break ({ left, right }, the layout rules' for the language); Russian's
+ *  rules need none */
+export function breakPoints(word, lang, data, mins) {
+  const key = lang === 'ru' ? `ru|${word}` : `${lang}|${mins.left}|${mins.right}|${word}`
   let out = cache.get(key)
   if (out) return out
-  out = lang === 'ru' ? russian(word) : liang(word, lang, data)
+  out = lang === 'ru' ? russian(word) : liang(word, data, mins)
   cache.set(key, out)
   return out
 }
 
-function liang(word, lang, data) {
+function liang(word, data, { left: lmin, right: rmin }) {
   if (!data) return []
-  const [lmin, rmin] = MINS[lang] ?? [2, 3]
   const w = word.toLowerCase()
   if (w.length < lmin + rmin) return []
   const ex = data.exceptions.get(w)

@@ -4,8 +4,9 @@
 // --engine-kind=proto --proto-tex=lines --removal=draw): v0's geometry of the paper (its anchors' line rectangles, the
 // cut's), the fixture's record.json (the translation the units file carries), the hybrid (each unit the fixture's layout
 // file locates whole takes the file's lines, label and placeholders: use 'lines', texOnly, symbols 'text', extents
-// 'v0'), the labels in the target's names where the final names them so (caption-names.mjs, the record's captions), the
-// role table's faces, and the fit's parameters (D, adaptive fill, the engine's default; B with adaptiveFill false).
+// 'v0'), the labels in the target's names where the final names them so (the rule set's labels, the record's captions), the
+// role table's faces, and every choice made for the target: the layout rule set (rules/layout.mjs; D, adaptive fill, is its
+// default, B an adaptiveFill of null).
 // The text-removed PDF (the default): the paper's add-on (serve.mjs, the gate's), opened as a reader opens it, arXiv's
 // pages and the add-on's in one document with its manifest; a unit the file locates whole is drawn over the file's own
 // rectangles, filled with paper, or the removed page swapped in where the manifest says kept ink lies under them; no
@@ -24,11 +25,11 @@ const bytes = async url => { const r = await fetch(url); if (!r.ok) throw new Er
 /** the hybrid's choices, the gate's (--proto-tex=lines) */
 const TEX = { use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' }
 
-/** v0's driver and the target's caption names, or why they are not there */
+/** v0's driver and the layout rule set's module (the built-in set, and the reading of a target's rules), or why they are not there */
 export async function loadProto() {
   try {
-    const [V, C] = await Promise.all([import('/proto-engine/layer-proto/run.mjs'), import('/proto-engine/caption-names.mjs')])
-    return { ready: true, V, captionNames: C.captionNames }
+    const [V, R] = await Promise.all([import('/proto-engine/layer-proto/run.mjs'), import('/proto-engine/rules/layout.mjs')])
+    return { ready: true, V, R }
   } catch (e) { return { ready: false, why: `no v0 engine: ${String(e?.message ?? e).slice(0, 200)}` } }
 }
 
@@ -36,7 +37,7 @@ export async function loadProto() {
  *  resolution. `status` is told what the run waits on, by key ('addon': the paper's add-on is being read), for the
  *  page to say in its own language */
 export class ProtoRun {
-  static async open({ V, captionNames, name, target, faces, removal = true, tex = true, params = {}, status = () => {} }) {
+  static async open({ V, rules = null, name, target, faces, removal = true, tex = true, status = () => {} }) {
     const base = `/fixtures/${encodeURIComponent(name)}/`
     const [geometry, record, units, layout] = await Promise.all([json(`${base}geometry.json`), json(`${base}record.json`), tex ? json(`${base}units.json`) : null, tex ? bytes(`${base}layout.json`) : null])
     // the hybrid: the layout file read by the engine's own reader, the units file's pieces by unit
@@ -54,12 +55,12 @@ export class ProtoRun {
     } else doc = await pdfjs.getDocument({ data: await bytes(`${base}arxiv.pdf`), ...ASSETS, ...V.PDF_OPTIONS }).promise
     const t0 = performance.now()
     const run = await V.openProto({
-      doc, geometry, units: record.units, target, scale: 1.25, dpr: devicePixelRatio, params, faces, copy: false,
+      doc, geometry, units: record.units, target, scale: 1.25, dpr: devicePixelRatio, ...(rules ? { rules } : {}), faces, copy: false,
       ...(texIn ? { tex: texIn } : {}), ...(addon ? { removal: { OPS: pdfjs.OPS, mode: 'draw', doc, manifest: addon.manifest } } : {}),
-      labels: { names: captionNames(target), captions: record.captions ?? null },
+      labels: { captions: record.captions ?? null },
       faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`,
     })
-    return new ProtoRun(run, doc, { faces, addon, params, openMs: performance.now() - t0, tex: !!texIn })
+    return new ProtoRun(run, doc, { faces, addon, rules: run.rules, openMs: performance.now() - t0, tex: !!texIn })
   }
   constructor(run, doc, meta) { this.run = run; this.doc = doc; this.meta = meta; this.done = new Map() }
   /** the run let go (its sheet out of the page, its canvases freed, nothing drawn or laid after), then its document */

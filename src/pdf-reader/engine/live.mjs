@@ -124,7 +124,7 @@ export const citationLines = aux => {
  * What names a translation's floats (the table-groups brief, Problem 2): at the document's end, each float's label as
  * the class defines it (\fnum@figure, \fnum@table, one level of it) and the meaning of its name (\figurename,
  * \tablename), written to the log for captionsOf. Whether the final labels a figure with the name babel gives the
- * target (scripts.mjs, \babelprovide{axttarget}; caption-names.mjs holds those names) is the paper's as much as the
+ * target (scripts.mjs, \babelprovide{axttarget}; the layout rules' labels, rules/layout-rules.json, hold those names) is the paper's as much as the
  * target's: a class that writes its own word into the label (naaclhlt2019.sty's \fnum@figure, "Figure \thefigure"),
  * a paper that selects another language in its body (2307.16209's \selectlanguage{english}), polyglossia (babel not
  * loaded), and CJKutf8 (no babel) keep the paper's names. Read, never expanded: nothing in it can fail a compile

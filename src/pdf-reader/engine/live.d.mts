@@ -79,7 +79,7 @@ export interface BatchReport {
    *  (groups.mjs decideGroups): the layer draws none of them, as the final sets none translated */
   held: number[]
 }
-/** what names a compile's figures and tables: the target's names babel gives (caption-names.mjs), or the paper's own */
+/** what names a compile's figures and tables: the target's names babel gives (the layout rules' labels, rules/layout-rules.json), or the paper's own */
 export interface Captions { figure: 'target' | 'source'; table: 'target' | 'source' }
 /** the TeX that writes what names the floats to the log, at the document's end, in every compile of the translation */
 export declare const CAPTIONS_PROBE: string

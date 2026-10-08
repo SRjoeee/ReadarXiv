@@ -111,9 +111,41 @@ export function platformImportsOf(file, text) {
   return out
 }
 
+/** The reader's engine (src/pdf-reader/engine): modules the web's build loads through its pin and a plain browser page loads
+ *  as they are, so each imports relative paths alone. The one package it may hold is the layout rules' validator, imported
+ *  by the rules' module and by no other (the rules-as-data plan, §2.1); the allowance is by package and by directory */
+export const ENGINE = /^src\/pdf-reader\/engine\//
+export const ENGINE_PACKAGES = [{ name: 'zod', under: 'src/pdf-reader/engine/rules/' }]
+
+/** a bare specifier's package: its first segment, or its first two when it is scoped; null for a relative path, an alias or `node:` */
+function packageOf(spec) {
+  // (the tolerant import matcher also reads quoted data that follows an `import … from`-shaped stretch of text: only a
+  // specifier that is shaped as a package's is one)
+  if (!/^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*(?:\/[\w.-]+)*$/i.test(spec)) return null
+  if (spec.startsWith('.') || spec.startsWith('node:') || ALIASES.some(([prefix]) => spec.startsWith(prefix)) || EXACT.has(spec)) return null
+  const parts = spec.split('/')
+  return spec.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
+}
+
+/** The packages this engine file imports (for their values) that its directory may not hold; empty when it is clean */
+export function enginePackagesOf(file, text) {
+  if (!ENGINE.test(file)) return []
+  const out = []
+  for (const spec of valueImportsOf(text)) {
+    const name = packageOf(spec)
+    if (name === null) continue
+    if (!ENGINE_PACKAGES.some(p => p.name === name && file.startsWith(p.under))) out.push({ spec, name, why: 'a package in the engine, but the layout rules\' validator in rules/' })
+  }
+  return out
+}
+
 export const coreFiles = () => execFileSync('git', ['ls-files', '-z', 'src'], { encoding: 'utf8' })
   .split('\0')
   .filter(f => f && /\.(m|c)?tsx?$/.test(f) && CORE.some(re => re.test(f)))
+
+export const engineFiles = () => execFileSync('git', ['ls-files', '-z', 'src/pdf-reader/engine'], { encoding: 'utf8' })
+  .split('\0')
+  .filter(f => f && /\.(m|c)?[jt]sx?$/.test(f) && !/\.d\.(m|c)?ts$/.test(f))
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const files = coreFiles()
@@ -124,4 +156,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1)
   }
   console.log(`boundary check: ${files.length} core files import no platform module`)
+  const engine = engineFiles()
+  const packages = engine.flatMap(file => enginePackagesOf(file, readFileSync(file, 'utf8')).map(({ spec, why }) => `${file}: imports ${spec} (${why})`))
+  if (packages.length > 0) {
+    console.error('The engine imports a package outside the layout rules (a module the web loads through its pin takes relative paths alone):')
+    for (const p of packages) console.error(`  ${p}`)
+    process.exit(1)
+  }
+  console.log(`boundary check: ${engine.length} engine files import no package but the layout rules' validator, in rules/`)
 }

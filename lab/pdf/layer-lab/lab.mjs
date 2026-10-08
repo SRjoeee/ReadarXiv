@@ -80,7 +80,7 @@ const state = {
   v0removal: (hash.v0rm ?? saved.v0removal ?? '1') !== '0',
   /** the v0 view as the hybrid, each unit the layout file locates whole by its geometry (#v0tex=0: v0 alone) */
   v0tex: (hash.v0tex ?? saved.v0tex ?? '1') !== '0',
-  /** v0's fill: D, adaptive fill (the engine's default), or B (#fill=B: adaptiveFill false, the script's leading on the
+  /** v0's fill: D, adaptive fill (the built-in rule set's), or B (#fill=B: an adaptiveFill of null, the script's leading on the
    *  original's pitch alone) */
   v0fill: (hash.fill ?? saved.v0fill) === 'B' ? 'B' : 'D',
   /** D's parameters over the engine's defaults (null: its default) */
@@ -90,11 +90,14 @@ const state = {
   panel: (hash.panel ?? saved.panel ?? '1') !== '0',
 }
 L = STRINGS[state.ui]
-/** the fit's parameters v0 is opened with: {} is the engine's own default (D at its defaults) */
-function v0Params() {
-  if (state.v0fill === 'B') return { adaptiveFill: false }
+/** the layout rule set v0 is opened with: a copy of the engine's built-in one, its adaptive fill (every script's) the
+ *  panel's choice: B (none), or D with the sliders' parameters over its own. Null while the engine is not there */
+function v0Rules() {
+  if (!proto?.ready) return null
+  const set = structuredClone(proto.R.BUILTIN_RULES)
   const over = Object.fromEntries(Object.entries(state.v0d).filter(([, v]) => v != null))
-  return Object.keys(over).length ? { adaptiveFill: over } : {}
+  for (const rules of Object.values(set.scripts)) rules.adaptiveFill = state.v0fill === 'B' ? null : { ...rules.adaptiveFill, ...over }
+  return set
 }
 function remember() {
   store.set('layer-lab:ui', { fixture: state.fixture, a: state.views[0], b: state.views[1], zoom: state.zoom, scroll: state.scroll, sync: state.sync, v0faces: state.v0faces, v0removal: state.v0removal ? '1' : '0', v0tex: state.v0tex ? '1' : '0', v0fill: state.v0fill, v0d: state.v0d, ui: state.ui, panel: state.panel ? '1' : '0' })
@@ -360,7 +363,7 @@ async function protoPage(p, source, vp, token, div, renderMs) {
   status(t('drawing', p))
   let done, run
   const at = open
-  const runP = (open.proto ??= ProtoRun.open({ V: proto.V, captionNames: proto.captionNames, name: open.f.name, target: open.f.target, faces: state.v0faces, removal: state.v0removal && open.f.files.includes('layout.json'), tex: state.v0tex && open.f.files.includes('layout.json'), params: v0Params(), status: k => status(t(k)) }))
+  const runP = (open.proto ??= ProtoRun.open({ V: proto.V, rules: v0Rules(), name: open.f.name, target: open.f.target, faces: state.v0faces, removal: state.v0removal && open.f.files.includes('layout.json'), tex: state.v0tex && open.f.files.includes('layout.json'), status: k => status(t(k)) }))
   try {
     run = await runP
     if (at.proto === runP) at.protoRun = run
