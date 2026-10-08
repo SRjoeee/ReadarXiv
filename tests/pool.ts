@@ -9,6 +9,16 @@ const RUNNER_MB = 500
 /** The share of the machine's memory the suite may take; the rest is the system's and the reader's own work */
 const SHARE = 0.6
 
+/**
+ * The memory the suite may use, in MB: the host's, or the limit the process is held to when that is lower (a container's
+ * cgroup; `os.totalmem()` reports the host's whatever the container allows, and workers sized by it are killed for
+ * memory — Devin on #329). `process.constrainedMemory()` is 0 where nothing constrains the process (macOS, an unlimited
+ * container), and may report a number past any memory for a cgroup without a limit, hence "below the host's"
+ */
+export function availableMemoryMB(hostBytes: number, constrainedBytes: number = process.constrainedMemory()): number {
+  return (constrainedBytes > 0 && constrainedBytes < hostBytes ? constrainedBytes : hostBytes) / 1024 ** 2
+}
+
 export function workersFor({ cores, totalMemoryMB }: { cores: number; totalMemoryMB: number }): number {
   const byMemory = Math.floor((totalMemoryMB * SHARE - RUNNER_MB) / WORKER_MB)
   return Math.max(1, Math.min(cores - 1, byMemory))

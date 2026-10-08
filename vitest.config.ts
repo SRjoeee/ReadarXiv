@@ -1,7 +1,7 @@
 import { availableParallelism, totalmem } from 'node:os'
 import { configDefaults, defineConfig } from 'vitest/config'
 import { WxtVitest } from 'wxt/testing/vitest-plugin'
-import { workersFor } from './tests/pool'
+import { availableMemoryMB, workersFor } from './tests/pool'
 
 // WxtVitest: in-memory browser extension APIs, auto-imports, the @/ alias
 export default defineConfig({
@@ -46,9 +46,9 @@ export default defineConfig({
     //
     // So the heap is capped at 2 GiB — what V8 itself would take on an 8 GB machine, now the same on every machine, and
     // the bound on a worker's RSS (2.15 GB measured at the peak) — and the workers by what the memory holds (tests/pool.ts:
-    // 1.5 GB a worker and 0.5 for the runner, out of 60 % of the memory): 2 on an 8 GB machine, 3 on a four-core CI runner,
+    // 1.5 GB a worker and 0.5 for the runner, out of 60 % of the memory — the container's limit where that is lower than the host's): 2 on an 8 GB machine, 3 on a four-core CI runner,
     // 13 here. `--expose-gc` is tests/setup/memory.test.ts's: it asks whether a parsed paper is really collected
-    maxWorkers: workersFor({ cores: availableParallelism(), totalMemoryMB: totalmem() / 1024 ** 2 }),
+    maxWorkers: workersFor({ cores: availableParallelism(), totalMemoryMB: availableMemoryMB(totalmem()) }),
     execArgv: ['--expose-gc', '--max-old-space-size=2048'],
   },
 })
