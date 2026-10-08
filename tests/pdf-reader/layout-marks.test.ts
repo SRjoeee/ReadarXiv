@@ -538,6 +538,8 @@ describe("babel's names (D1a)", () => {
     expect(NAMES_TEX).toContain('\\AddToHook{begindocument/end}{\\global\\axt@nmontrue\\axt@nmall}')
     expect(NAMES_TEX).toContain('\\AddBabelHook{axtnames}{afterextras}{\\axt@nmall}')
     expect(NAMES_TEX).toContain('\\ifdefined\\@captype')
+    // a blank name is left as it is: a class may test it for emptiness (REVTeX's jcp style, an empty \refname)
+    expect(NAMES_TEX).toContain('{!\\tl_if_blank_p:o{#1}}')
     // a case change keeps their keys; a PDF string gobbles them
     expect(LAYOUT_TEX).toContain('\\axt@hm\\axtnma\\axtnmb\\axt@nma\\axt@nmb}')
     expect(LAYOUT_TEX).toContain('\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble')

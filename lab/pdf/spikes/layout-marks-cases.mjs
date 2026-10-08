@@ -545,7 +545,7 @@ for (const [name, , engine] of stays) {
   const n = lofPaper.units.findIndex(u => u.kind === 'caption')
   const zebra = lof?.pages.flatMap((p, i) => p.filter(it => it.str.startsWith('Zebra')).map(it => ({ ...it, page: i + 1 }))).find(it => it.page === 2)
   const s = lof?.dests.get(`${n}s`)
-  const onList = [...(lof?.dests ?? [])].filter(([k, d]) => d.page === 1 && !/^c[12]-/.test(k)).map(([k]) => k)
+  const onList = [...(lof?.dests ?? [])].filter(([k, d]) => d.page === 1 && !/^c[12]-/.test(k) && !/^n\d+\.[a-z]+\.[se]$/.test(k)).map(([k]) => k)
   check('a caption in the list of figures makes no mark there', !!zebra && near(s, 2, zebra.x, zebra.y, 2) && !onList.length, JSON.stringify({ mark: s, glyph: zebra, onList }))
 }
 {
