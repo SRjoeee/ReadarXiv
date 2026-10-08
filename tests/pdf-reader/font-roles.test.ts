@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { COVERAGE, COVERAGE_SOURCE, METRICS } from '@/pdf-reader/engine/font-coverage.mjs'
-import { canDraw, classifyFont, type Design, FACES, type FaceId, type FontClass, faceFor, familyOfFonts, familyOfProbe, rolesFor } from '@/pdf-reader/engine/font-roles.mjs'
+import { canDraw, canDrawIn, classifyFont, type Design, FACES, type FaceId, type FontClass, faceFor, familyOfFonts, familyOfProbe, rolesFor } from '@/pdf-reader/engine/font-roles.mjs'
 
 const cls = (name: string) => { const c = classifyFont(name); return { cls: c.cls, bold: c.bold, italic: c.italic, caps: c.caps, design: c.design, known: c.known } }
 const covers = (id: FaceId, cp: number) => {
@@ -197,6 +197,17 @@ describe('the faces', () => {
     }
   })
 
+  it('no family carries a Reserved Font Name (OFL §3: a modified subset may not)', () => {
+    // the four groups whose fonts reserve theirs are declared under neutral names; the face ids and files stay
+    const RESERVED = /harano|biolinum|erewhon|pt-?mono/i
+    for (const [id, face] of Object.entries(FACES)) expect(face.family, id).not.toMatch(RESERVED)
+    expect(Object.values(FACES).filter(f => /^(haranoaji|biolinum|erewhon|pt-mono)-/.test(f.id))).toHaveLength(15)
+    expect(new Set(Object.values(FACES).filter(f => /^haranoaji-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-mincho']))
+    expect(new Set(Object.values(FACES).filter(f => /^biolinum-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-humanist-sans']))
+    expect(new Set(Object.values(FACES).filter(f => /^erewhon-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-transitional']))
+    expect(new Set(Object.values(FACES).filter(f => /^pt-mono-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-slab-mono']))
+  })
+
   it('the table\'s faces are the plan\'s', () => {
     const cjk = ['light', 'regular', 'medium', 'semibold', 'bold']
     const four = ['regular', 'bold', 'italic', 'bolditalic']
@@ -209,12 +220,12 @@ describe('the faces', () => {
     ]
     expect(Object.keys(FACES).sort()).toEqual(want.sort())
     expect(FACES['shs-sc-light']).toMatchObject({ file: 'SourceHanSerifSC-Light.otf', family: 'axt-shs-sc', weight: 300, style: 'normal', source: 'hosted' })
-    expect(FACES['haranoaji-semibold']).toMatchObject({ file: 'HaranoAjiMincho-SemiBold.otf', family: 'axt-haranoaji', weight: 600, source: 'texlive' })
+    expect(FACES['haranoaji-semibold']).toMatchObject({ file: 'HaranoAjiMincho-SemiBold.otf', family: 'axt-mincho', weight: 600, source: 'texlive' })
     expect(FACES['lm-sans-bolditalic']).toMatchObject({ file: 'lmsans10-boldoblique.otf', family: 'axt-lm-sans', weight: 700, style: 'italic' })
     expect(FACES['lm-roman-caps-italic']).toMatchObject({ file: 'lmromancaps10-oblique.otf', family: 'axt-lm-roman-caps', weight: 400, style: 'italic' })
     expect(FACES['cmun-mono-bolditalic']).toMatchObject({ file: 'cmuntx.otf', family: 'axt-cmun-mono', weight: 700, style: 'italic' })
     expect(FACES['dejavu-mono-italic']).toMatchObject({ file: 'DejaVuSansMono-Oblique.ttf', family: 'axt-dejavu-mono', weight: 400, style: 'italic' })
-    expect(FACES['biolinum-bolditalic']).toMatchObject({ file: 'LinBiolinum_RBO.otf', family: 'axt-biolinum', weight: 700, style: 'italic' })
+    expect(FACES['biolinum-bolditalic']).toMatchObject({ file: 'LinBiolinum_RBO.otf', family: 'axt-humanist-sans', weight: 700, style: 'italic' })
     expect(FACES['lm-sans-italic']).toMatchObject({ file: 'lmsans10-oblique.otf', family: 'axt-lm-sans', weight: 400, style: 'italic' })
     expect(FACES['nimbus-roman-bolditalic']).toMatchObject({ file: 'NimbusRoman-BoldItalic.otf', family: 'axt-nimbus-roman', weight: 700, style: 'italic', source: 'hosted' })
     expect(FACES['lm-roman-caps']).toMatchObject({ file: 'lmromancaps10-regular.otf', family: 'axt-lm-roman-caps' })
@@ -327,6 +338,31 @@ describe('the fixes of the review', () => {
   }
   const DESIGNS: Design[] = ['cm', 'other', 'times', 'libertine', 'palatino', 'charter', 'garamond', 'utopia', 'helvetica', 'cmss', 'courier', 'cmtt', 'beramono', 'inconsolata', 'biolinum']
 
+  it('E2: canDrawIn is canDraw over the ranges a host serves: a character in none of them is not drawable', () => {
+    // a face's whole coverage is canDraw's own check
+    const tw = rolesFor('de', 'times')
+    for (const text of ['Hello, world', 'caf\u00e9', '\u03b1\u03b2', '\u4e2d\u6587', '\ue000', '\u{1F600}']) {
+      expect(canDrawIn(text, [COVERAGE['nimbus-roman-regular']!, COVERAGE['lm-math']!]), text).toBe(canDraw(text, ['nimbus-roman-regular'], tw))
+    }
+    // slices: ranges cut from a face's coverage, each its own list; a character is drawable when any slice holds it
+    const ascii = [0x20, 0x7e], latin1 = [0xa0, 0xff]
+    expect(canDrawIn('abc', [ascii])).toBe(true)
+    expect(canDrawIn('caf\u00e9', [ascii])).toBe(false)
+    expect(canDrawIn('caf\u00e9', [ascii, latin1])).toBe(true)
+    // the ends are inclusive, the lists are searched apart (a slice's ranges are its own, sorted and disjoint)
+    expect(canDrawIn('\u0020\u007e', [ascii])).toBe(true)
+    expect(canDrawIn('\u007f', [ascii])).toBe(false)
+    expect(canDrawIn('a\u00e9z', [[0x61, 0x7a], [0xe9, 0xe9]])).toBe(true)
+    expect(canDrawIn('a\u00e8z', [[0x61, 0x7a], [0xe9, 0xe9]])).toBe(false)
+    expect(canDrawIn('ab', [[0x41, 0x5a, 0x61, 0x7a]])).toBe(true)
+    expect(canDrawIn('a1', [[0x41, 0x5a, 0x61, 0x7a]])).toBe(false)
+    // white space and the default ignorable need no glyph: no list holds a text of nothing else, and none a visible one
+    expect(canDrawIn(' \t\n\u00a0\u3000\u200b\u00ad\ufe00', [])).toBe(true)
+    expect(canDrawIn('', [])).toBe(true)
+    expect(canDrawIn('a', [])).toBe(false)
+    expect(canDrawIn('a\u200bb', [ascii])).toBe(true)
+  })
+
   it('I2: canDraw skips the invisible characters, as the TeX path drops them', () => {
     const zh = rolesFor('zh', 'cm'), ja = rolesFor('ja', 'cm'), ko = rolesFor('ko', 'cm')
     // a zero width space, non-joiner, joiner, word joiner, byte order mark, soft hyphen, variation selector
@@ -376,13 +412,13 @@ describe('the fixes of the review', () => {
   it('M6 (with M1 and M2): every face\'s licence identifier, as its name table or licence file states it', () => {
     const GUST = 'LicenseRef-GUST-Font-License', URW = 'AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817'
     const BY_GROUP: Record<string, string> = {
-      'shs-sc': 'OFL-1.1', 'shs-tc': 'OFL-1.1', 'shs-k': 'OFL-1.1', haranoaji: 'OFL-1.1',
+      'shs-sc': 'OFL-1.1', 'shs-tc': 'OFL-1.1', 'shs-k': 'OFL-1.1', mincho: 'OFL-1.1',
       fandolkai: 'GPL-3.0-or-later WITH Font-exception-2.0', bkai00mp: 'Arphic-1999',
       'lm-roman': GUST, 'lm-roman-caps': GUST, 'lm-sans': GUST, 'lm-mono': GUST, 'lm-math': GUST, freemono: 'GPL-3.0-or-later WITH Font-exception-2.0',
-      libertine: 'OFL-1.1', biolinum: 'OFL-1.1', xcharter: 'Bitstream-Charter', ebgaramond: 'OFL-1.1', erewhon: 'OFL-1.1',
+      libertine: 'OFL-1.1', 'humanist-sans': 'OFL-1.1', xcharter: 'Bitstream-Charter', ebgaramond: 'OFL-1.1', transitional: 'OFL-1.1',
       'cmun-serif': 'OFL-1.1', 'cmun-sans': 'OFL-1.1', 'cmun-mono': 'OFL-1.1', domitian: 'OFL-1.1',
       'nimbus-roman': URW, 'nimbus-sans': URW,
-      'dejavu-mono': 'Bitstream-Vera', 'pt-mono': 'ParaType-Free-Font-1.3',
+      'dejavu-mono': 'Bitstream-Vera', 'slab-mono': 'ParaType-Free-Font-1.3',
     }
     const BY_FACE: Record<string, string> = { 'inconsolata-regular': 'OFL-1.1', 'inconsolata-bold': 'Apache-2.0' }
     for (const f of Object.values(FACES)) expect(f.licence, f.id).toBe(BY_FACE[f.id] ?? BY_GROUP[f.family.slice('axt-'.length)])

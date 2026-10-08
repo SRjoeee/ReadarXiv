@@ -28,7 +28,7 @@
 //       [--engine-kind=layer|proto] [--proto-units=fixture|p7] [--progress=<name|path>] [--previous=<name|path>] [--panels-only] [--proto-panels=<dir>]
 //       [--proto-faces=roles|prototype] [--proto-place=<file>] [--proto-order=<file>] [--dump=<dir>] [--write-floor]
 //       [--proto-tex=ph|lines] [--proto-tex-only=no] [--proto-symbols=text|strict] [--proto-extents=v0|tex]
-//       [--against=<record key>] [--proto-params=<json>] [--ruling=<file>]
+//       [--against=<record key>] [--proto-params=<json>] [--ruling=<file>] [--parts[=<n>]] [--slices[=blocks|alphabet]] [--door[=<n>]]
 //   --engine     the engine measured: <worktree>/src/pdf-reader/engine served as /engine/ (the checker, layer/check.mjs, is
 //                always this repository's: the instrument is the same for every branch); default this repository
 //   --layouts    made (the default): the layout files the engine's own maker makes from the fixtures' papers (spikes/
@@ -88,6 +88,27 @@
 //   --proto-place, --proto-order, --dump  v0 against the live prototype (never recorded): each page's text where the
 //                prototype's own page put it (its floor was measured there: the text's anti-aliasing at a fraction of a
 //                pixel), each fixture's units in a live run's order, and v0's records, audit and page digests written out
+//   --parts      v0 (--engine-kind=proto) fed its units as a live run's deltas give them (never recorded): opened with
+//                none and each unit's table group (the record's), each fixture's record rows, each non-text piece with its
+//                k (the units file's), taken a part a macrotask beside the pages asked for, then end() (layer-proto/
+//                run.mjs take, end); the parts cut in id order by the delta rule (a part closed once its rows' JSON reaches 384 KiB or 96,000 values, 32 parts at most)
+//                or n units a part (--parts=<n>). Each page must draw as the open over every unit does (--dump, --check);
+//                a fixture fails where a row came late, where take's pieces are not the units file's, or where a unit's
+//                why left was read before its row came
+//   --slices     v0 (--engine-kind=proto) given its role table faces as slices (faceSources), never recorded: each face's coverage
+//                cut into slices of the one file, the CJK Unified Ideographs in 8 and every other Unicode block of it its own
+//                (blocks, the default), or with the blocks whose letters are kerned together in one (alphabet); every slice the
+//                whole file at a URL of its own that the browser draws within the slice's unicode-range (layer-gate/proto.mjs
+//                sliceTable). With --dump, the dump is to equal the whole-file run's, lines and widths
+//   --door       the reader's door (layer-proto/reader.mjs openLayer) against the gate's own v0 page, a proof as --parts is
+//                (never recorded; --engine-kind=proto --proto-tex=lines --removal=draw, the door's choices): each fixture's
+//                bundle made from its parts (writeBundle: the paper's units, openPaper's over its source; the geometry; the
+//                layout file; the shipped add-on and its manifest) and its rows from its record (rows.mjs rowOf), and each page
+//                drawn twice, each in a page load of its own (layer-gate/door.mjs): by the gate's own call of openProto with
+//                the door's inputs, and by openLayer with the rows taken n a part (16 by default) as they come. Each page's
+//                SVG markup (pageOf's, its lang aside) must equal the run's, the page PDF.js draws at 2.5 device pixels a unit
+//                v0's own original, and copyOf(page, that page, 2.5)'s pixels the run's copy plane; a fixture fails where
+//                one does not, and the run is written to out/layer-gate/door-<commit>-<time>.json
 // The consistency measures (the table-groups brief, 2026-10-07), checked with the completeness ones and each to be 0: a
 // table group drawn partly (the record's translated cells of one `group`, some drawn and some not) and a float's label
 // left in the source language where the final names it in the target's (the record's `captions`, caption-names.mjs's
@@ -95,7 +116,8 @@
 // Exits 1 on any completeness failure (the brief's gate; under --check the merge rule decides, each completeness count
 // being one of its measures), on a regression under --check, or where a fixture could not be run.
 import { execFile, execFileSync } from 'node:child_process'
-import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { createServer } from 'node:http'
 import { constants as zlibConstants, gzipSync, inflateRawSync, inflateSync } from 'node:zlib'
 import { availableParallelism, homedir } from 'node:os'
@@ -149,6 +171,22 @@ const PROTO_PANELS = typeof arg('proto-panels') === 'string' ? resolve(arg('prot
  *  page digests per fixture, to compare with the live prototype's */
 const PROTO_PLACE = typeof arg('proto-place') === 'string' ? JSON.parse(readFileSync(resolve(arg('proto-place')), 'utf8')) : null
 const DUMP = typeof arg('dump') === 'string' ? resolve(arg('dump')) : null
+/** --parts[=<n>]: v0 fed its units in parts, by the delta rule or n a part (a proof, as --dump is: never recorded) */
+const PARTS = arg('parts') === true ? 'delta' : typeof arg('parts') === 'string' ? Number(arg('parts')) : null
+if (PARTS !== null && PARTS !== 'delta' && !(Number.isInteger(PARTS) && PARTS > 0)) throw new Error(`--parts=${arg('parts')}: a count of units a part`)
+if (PARTS && (KIND !== 'proto' || arg('record'))) throw new Error('--parts: v0 only (--engine-kind=proto), and never a record (no --record)')
+/** --slices: v0's role table faces served in slices (a proof, as --dump is: never recorded) */
+const SLICES = arg('slices') === true ? 'blocks' : typeof arg('slices') === 'string' ? arg('slices') : null
+if (SLICES && (KIND !== 'proto' || arg('record'))) throw new Error('--slices: v0 only (--engine-kind=proto), and never a record (no --record)')
+if (SLICES && !['blocks', 'alphabet'].includes(SLICES)) throw new Error(`--slices=${SLICES}: blocks or alphabet`)
+/** --door[=<n>]: the reader's door against the gate's own page, its rows taken n a part (a proof: never recorded) */
+const DOOR = arg('door') === true ? 16 : typeof arg('door') === 'string' ? Number(arg('door')) : null
+if (DOOR !== null && !(Number.isInteger(DOOR) && DOOR > 0)) throw new Error(`--door=${arg('door')}: a count of rows a part`)
+if (DOOR !== null && (KIND !== 'proto' || TEX?.use !== 'lines' || !TEX.texOnly || TEX.symbols !== 'text' || TEX.extents !== 'v0' || REMOVAL !== 'draw')) throw new Error("--door: the door's choices, --engine-kind=proto --proto-tex=lines --removal=draw")
+if (DOOR !== null && (arg('record') || PARTS || SLICES || PERF || DUMP || TIER !== 'model')) throw new Error('--door: a proof of its own, the model tier, never a record, nor with --parts, --slices, --perf or --dump')
+/** a TypeScript transform for the repository's own modules the door's closure names by the @/ alias (--door): esbuild, as
+ *  tsx (this script's runner) has it; the repository's TypeScript 7 has no API to call */
+const ESBUILD = DOOR !== null ? createRequire(realpathSync(join(REPO, 'node_modules/tsx/package.json')))('esbuild') : null
 /** --ruling=<file>: the maintainer's ruling the record is made under (with --record) */
 const RULING = typeof arg('ruling') === 'string' ? JSON.parse(readFileSync(resolve(arg('ruling')), 'utf8')) : null
 /** --proto-order=<file>: an order to lay each fixture's units in, by page ({ [fixture]: [ids] }: a live run's, where its
@@ -251,7 +289,7 @@ if (PROTO) {
   for (const [lang, rel] of Object.entries(TEX_PATTERN_FILES)) if (existsSync(join(TEXMF, rel))) HYPH.set(lang, JSON.stringify(patternsOfTex(readFileSync(join(TEXMF, rel), 'latin1'))))
 }
 function fileFor(path) {
-  if (path.startsWith('/gate/')) return ['page.html', 'page.mjs', 'proto.mjs', 'measure.mjs'].includes(path.slice(6)) ? join(GATE, path.slice(6)) : null
+  if (path.startsWith('/gate/')) return ['page.html', 'page.mjs', 'proto.mjs', 'measure.mjs', ...(DOOR !== null ? ['door.mjs'] : [])].includes(path.slice(6)) ? join(GATE, path.slice(6)) : null
   if (path.startsWith('/proto-fonts/')) return /^\/proto-fonts\/lm(?:roman|sans|mono)10-[a-z]+\.otf$/.test(path) ? join(TEXMF, 'fonts/opentype/public/lm', path.slice(13)) : null
   if (path === '/engine/layer/check.mjs') return CHECKER
   if (path.startsWith('/engine/')) return /\.(m?js|json)$/.test(path) ? under(join(ENGINE, 'src/pdf-reader/engine'), path.slice(8)) : null
@@ -279,6 +317,8 @@ function fileFor(path) {
 }
 /** each fixture's arXiv PDF with its add-on (--removal), as made or cached: fixture -> file */
 const ADDONS = new Map()
+/** --door: each fixture's bundle and rows, by the path the page asks for them at */
+const DOOR_FILES = new Map()
 const server = createServer((req, res) => {
   let path
   try { path = decodeURIComponent(new URL(req.url, 'http://127.0.0.1').pathname) } catch { res.writeHead(400); return res.end() }
@@ -287,6 +327,21 @@ const server = createServer((req, res) => {
     if (!HYPH.has(hy[1])) { res.writeHead(404, { 'content-type': 'text/plain' }); return res.end('not found') }
     res.writeHead(200, { 'content-type': TYPES['.json'], 'cache-control': 'no-store' })
     return res.end(HYPH.get(hy[1]))
+  }
+  // (--door: each fixture's bundle and rows as the driver made them, and the repository's modules under src/, TypeScript
+  // transpiled as it is served: a directory's module redirected to its index, so that its own imports resolve beside it)
+  if (DOOR !== null && DOOR_FILES.has(path)) {
+    res.writeHead(200, { 'content-type': TYPES[extname(path)] ?? TYPES['.json'], 'cache-control': 'no-store' })
+    return res.end(DOOR_FILES.get(path))
+  }
+  if (DOOR !== null && path.startsWith('/src/')) {
+    const at = under(join(REPO, 'src'), path.slice(5)), isFile = f => existsSync(f) && statSync(f).isFile()
+    const found = at && [at, `${at}.ts`].find(f => /\.(ts|mjs|js)$/.test(f) && isFile(f))
+    if (!found && at && isFile(join(at, 'index.ts'))) { res.writeHead(302, { location: `${path.replace(/\/+$/, '')}/index.ts` }); return res.end() }
+    if (!found) { res.writeHead(404, { 'content-type': 'text/plain' }); return res.end('not found') }
+    const code = readFileSync(found, 'utf8')
+    res.writeHead(200, { 'content-type': TYPES['.mjs'], 'cache-control': 'no-store' })
+    return res.end(found.endsWith('.ts') ? ESBUILD.transformSync(code, { loader: 'ts', format: 'esm', target: 'es2022', sourcefile: found }).code : code)
   }
   const file = fileFor(path)
   if (!file || !existsSync(file) || !statSync(file).isFile()) { res.writeHead(404, { 'content-type': 'text/plain' }); return res.end('not found') }
@@ -309,6 +364,7 @@ const inputs = {
   pdfjs: readJson(join(PDFJS, 'package.json')).version, fonts: fontsDigest.slice(0, 16), checker: fileSha(CHECKER).slice(0, 16),
   // the instrument: the measures, their arithmetic, and the page that draws and accounts (lost ink's own glyphs)
   measures: sha256(['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => readFileSync(join(GATE, f))).join('\n')).slice(0, 16),
+  ...(PARTS ? { parts: String(PARTS) } : {}),
   ...(PROTO ? { kind: 'proto', protoUnits: PROTO_UNITS, place: PROTO_PLACE ? 'the prototype page\'s' : 'the gate\'s', order: PROTO_ORDER ? 'given' : 'layGroups', faces: PROTO_FACES ?? 'the engine\'s default', tex: TEX ? JSON.stringify(TEX) : 'none', params: PROTO_PARAMS ? JSON.stringify(PROTO_PARAMS) : 'none', hyphenation: sha256([...HYPH].map(([l, j]) => `${l}:${j}`).join('\n')).slice(0, 16), removal: REMOVAL ?? 'none', ...(REMOVAL ? { remover: removerDigest() } : {}) } : {}),
 }
 const leaks = []
@@ -334,12 +390,14 @@ async function worker() {
       const tf = Date.now()
       try { results.set(name, await runFixture(page, name, errors)) } catch (e) { failures.push(name); console.log(`FAIL ${name}: ${String(e?.stack ?? e).slice(0, 400)}`) }
       const r = results.get(name)
-      if (r) console.log(`${r.ready ? 'ok  ' : 'FAIL'} ${name}: ${r.ready ? `${r.pages.length} pages, ${r.totals.textDrawn}/${r.totals.textOn} text units drawn` : r.why} (${((Date.now() - tf) / 1000).toFixed(1)} s)`)
+      if (r?.door) console.log(`${r.ok ? 'ok  ' : 'FAIL'} ${name}: ${r.line} (${((Date.now() - tf) / 1000).toFixed(1)} s)`)
+      else if (r) console.log(`${r.ready ? 'ok  ' : 'FAIL'} ${name}: ${r.ready ? `${r.pages.length} pages, ${r.totals.textDrawn}/${r.totals.textOn} text units drawn${r.summary.parts ? `, in ${r.summary.parts.count} parts` : ''}` : r.why} (${((Date.now() - tf) / 1000).toFixed(1)} s)`)
     }
   } finally { await ctx.close() }
 }
 
 async function runFixture(page, name, errors) {
+  if (DOOR !== null) return doorFixture(page, name, errors)
   const { paper, target } = nameOf(name)
   const refFile = join(REFS, name, 'ref.json')
   const ref = readJson(refFile)
@@ -356,7 +414,7 @@ async function runFixture(page, name, errors) {
   if (removal) Object.assign(meta, { addon: removal.key })
   // (--perf: what a reader is sent, the R set and its manifest, no plan)
   const addon = removal ? (PERF ? { url: `/removal/${name}.pdf`, manifest: removal.shippedManifest, plan: null } : { url: `/removal/${name}.pdf`, manifest: removal.manifest, plan: removal.plan }) : null
-  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES, tex: TEX, params: PROTO_PARAMS, names: captionNames(target), removal: REMOVAL, addon, perf: PERF })
+  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES, tex: TEX, params: PROTO_PARAMS, names: captionNames(target), removal: REMOVAL, addon, perf: PERF, parts: PARTS, slices: SLICES })
   if (!info.ready) { failures.push(name); return { name, ready: false, why: info.why, meta } }
   const n = Math.min(info.pages, PAGES ?? (ALL_PAGES.has(paper) ? info.pages : PAGES_OF))
   const pages = [], frames = []
@@ -393,6 +451,9 @@ async function runFixture(page, name, errors) {
   if (PROTO && DUMP) { mkdirSync(DUMP, { recursive: true }); writeFileSync(join(DUMP, `${name}.json`), JSON.stringify(await page.evaluate(() => window.gate.dump()))) }
   if (errors.length) summary.pageErrors = errors.splice(0).slice(0, 5)
   if (summary.inputsChanged) { failures.push(name); console.log(`FAIL ${name}: v0 changed its inputs (the geometry or the units) as it drew`) }
+  // (--parts: every row taken in time, take's pieces the units file's, no unit's why left read before its row came)
+  const pt = summary.parts
+  if (pt && (pt.late.length || pt.pieces.length || pt.whys.length)) { failures.push(name); console.log(`FAIL ${name}: in ${pt.count} parts, ${pt.late.length} rows late (${pt.late.slice(0, 8).join(' ')}), ${pt.pieces.length} units' pieces not the units file's (${pt.pieces.slice(0, 8).join(' ')}), ${pt.whys.length} whys read early (${pt.whys.slice(0, 4).map(w => w.join(':')).join(' ')})`) }
   if (removal) {
     summary.removal = { ...removal.summary, draw: await page.evaluate(() => window.gate.removalStats()) }
     // the exactness check's pixels (PDF.js in Node, which draws a page alike every time), each page's
@@ -405,9 +466,111 @@ async function runFixture(page, name, errors) {
   return { name, ready: true, info, meta, pages, totals: fixtureTotals(pages, frames, TIER), summary }
 }
 
-/** the remover's files, digested: a change of them makes every add-on again (the plan's, removal.mjs pagePlan, too) */
+/**
+ * --door: a fixture checked through the reader's door (layer-gate/door.mjs). Its bundle and rows made here from the
+ * fixture's parts (doorBundleOf), then its pages drawn twice, each in a page load of its own: by the gate's own call of
+ * openProto with the door's inputs, and by openLayer over the bundle, its rows taken DOOR a part. Each page compared: the
+ * SVG markup, the page PDF.js draws for the door against v0's own original, copyOf's pixels against the run's copy plane
+ * (where two differ, the pixel rows that do)
+ */
+async function doorFixture(page, name, errors) {
+  const { paper, target } = nameOf(name)
+  const removal = await addonOf(name)
+  const made = await doorBundleOf(name, removal)
+  DOOR_FILES.set(`/door/${name}/bundle.json`, made.bytes)
+  DOOR_FILES.set(`/door/${name}/rows.json`, JSON.stringify(made.rows))
+  const o = { name, target, names: captionNames(target), pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), part: DOOR }
+  const open = async () => { await page.goto(`${ORIGIN}/gate/page.html?kind=proto&door=1`); await page.waitForFunction(() => window.gateReady === true) }
+  await open()
+  const gate = await page.evaluate(x => window.door.gate(x), o)
+  for (const g of gate.pages) { DOOR_FILES.set(`/door/${name}/o${g.p}.png`, Buffer.from(g.png, 'base64')); delete g.png }
+  await open()
+  const door = await page.evaluate(x => window.door.door(x), o)
+  const rowsApart = (a, b) => { const out = []; for (let y = 0; y < Math.max(a.rows.length, b.rows.length); y++) if (a.rows[y] !== b.rows[y]) out.push(y); return out }
+  for (const g of gate.pages) DOOR_FILES.delete(`/door/${name}/o${g.p}.png`)
+  // (and the gate's own run at its recorded runs' resolution, 1.25 CSS px a unit at dpr 2, the same 2.5 device pixels:
+  // whether the door's choice of 2.5 at dpr 1 lays and draws as the gate measures)
+  await open()
+  const gated = await page.evaluate(x => window.door.gate(x), { ...o, scale: 1.25, dpr: 2, png: false })
+  const pages = door.pages.map((d, i) => {
+    const g = gate.pages[i]
+    const e = { p: d.p, svg: d.svg === g.svg, lang: d.lang === target, size: d.w === g.w && d.h === g.h, source: d.source.sha === g.o.sha, original: d.original.sha === g.o.sha, copy: d.copy.sha === g.c.sha, laid: gated.pages[i]?.recs === g.recs, drawn: gated.pages[i]?.c.sha === g.c.sha, read: gated.pages[i]?.o.sha === g.o.sha }
+    if (!e.source) e.sourceRows = rowsApart(d.source, g.o).length
+    if (!e.copy) { const ys = rowsApart(d.copy, g.c); e.copyRows = [ys.length, ys[0] ?? null, ys.at(-1) ?? null] }
+    if (!e.svg) {
+      // the page's two markups, to look at (never in the repository: they hold the paper's translation)
+      const dir = join(ROOT, 'out/layer-gate/door-diff')
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, `${name}-p${d.p}-gate.svg`), g.svg)
+      writeFileSync(join(dir, `${name}-p${d.p}-door.svg`), d.svg)
+    }
+    return e
+  })
+  const all = key => pages.every(e => e[key])
+  const ok = pages.length === gate.pages.length && pages.length > 0 && all('svg') && all('lang') && all('size') && all('original') && all('copy') && door.sheets[0] === door.sheets[1] && !errors.length
+  if (!ok) failures.push(name)
+  const n = key => pages.filter(e => e[key]).length
+  const line = `${pages.length} pages: SVG ${n('svg')}/${pages.length} equal, copy ${n('copy')}, this load's PDF.js page v0's original on ${n('source')}; at 1.25 x 2 records ${n('laid')}, copy ${n('drawn')}, original ${n('read')}; rows ${made.meta.rows} (${made.meta.unexpected} not the target's) taken ${DOOR} a part, ${door.stats.dropped} dropped, ${door.stats.drawn} units drawn (the gate's run ${gate.summary.laid}); bundle ${made.meta.bytes} bytes, ${made.meta.dropped} units dropped${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
+  return { name, door: true, ok, ready: true, line, pages, made: made.meta, gate: gate.summary, stats: door.stats, sheets: door.sheets }
+}
+
+/** a record piece as a result's piece (spikes/rows-check.mjs resultOf): a text it translated stays itself, one it left is
+ *  the unit's own text piece, white space the wire cut off a piece of its own; any other piece the unit's source piece the
+ *  key rule finds (kOfSource), else what it is */
+function resultOf(rec, src, kOfSource) {
+  const kOf = kOfSource(src.pieces), used = new Set()
+  const pieces = rec.pieces.map(p => {
+    if (p.t === 'text') {
+      if (p.tr) return { ...p }
+      const k = src.pieces.findIndex((q, i) => q.t === 'text' && q.s === p.s && (q.src ?? null) === (p.src ?? null) && !used.has(i))
+      if (k >= 0) { used.add(k); return src.pieces[k] }
+      return { ...p }
+    }
+    const k = kOf(p)
+    return k >= 0 ? src.pieces[k] : p
+  })
+  return { pieces, state: rec.state, by: rec.by, ...(rec.sentences ? { sentences: rec.sentences } : {}) }
+}
+/** each paper's bundle units (openPaper's over its source, bundleUnitsOf), once a paper */
+const PAPER_UNITS = new Map()
+/**
+ * --door: a fixture's bundle, written by the engine from the parts a paper's prepare has (bundle-check.mjs's): its units
+ * (openPaper over data/layout/<paper>/source.gz), the geometry the gate gives v0 as its left, the fixture's layout file,
+ * the paper's shipped add-on (arXiv's PDF followed by its tail) and its manifest, arXiv's bytes as its base; and the rows
+ * of the fixture's record over the bundle as a reader reads it (rows.mjs rowOf; a cell of a group kept whole its `kept` row,
+ * as layerRows gives it; a name or author the pipeline keeps, no row)
+ */
+async function doorBundleOf(name, removal) {
+  const { paper, target } = nameOf(name)
+  const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
+  const [{ bundleUnitsOf, readBundle, writeBundle }, { rowOf, sourceUnitsOf, toTranslate }, { openPaper }, { unpackSource }, { kOfSource }, { parseLayout }] = await Promise.all(['layer-proto/bundle.mjs', 'layer-proto/rows.mjs', 'live.mjs', 'tar.mjs', 'layer/pieces.mjs', 'layout/file.mjs'].map(f => import(E(f))))
+  if (!PAPER_UNITS.has(paper)) PAPER_UNITS.set(paper, bundleUnitsOf(openPaper((await unpackSource(new Uint8Array(readFileSync(join(DATA, 'layout', paper, 'source.gz'))))).files)))
+  const arxiv = new Uint8Array(readFileSync(join(FIXTURES, name, 'arxiv.pdf'))), shipped = new Uint8Array(readFileSync(removal.shippedFile))
+  if (shipped.length <= arxiv.length || !arxiv.every((b, i) => shipped[i] === b)) throw new Error(`${name}: the shipped add-on does not begin with arXiv's bytes`)
+  const layout = parseLayout(new Uint8Array(readFileSync(join(FIXTURES, name, 'layout.json'))))
+  const g = readJson(geometryFile(name))
+  const [, id, version] = /^(.+)v(\d+)$/.exec(paper)
+  const bytes = writeBundle({
+    paper: { id, version: Number(version), pages: layout.paper.pages },
+    base: { bytes: arxiv.length, sha256: sha256(arxiv), url: `/api/v1/original/${id.replace('/', '_')}v${version}` },
+    image: '1', units: PAPER_UNITS.get(paper), left: { kinds: g.kinds, pages: g.left.pages, units: g.left.units }, layout,
+    addon: { manifest: removal.shippedManifest, tail: shipped.subarray(arxiv.length) },
+  })
+  const bundle = readBundle(bytes), src = sourceUnitsOf(bundle), wanted = new Set(toTranslate(bundle, target))
+  const record = readJson(trFile(name, 'record.json'))
+  const rows = []
+  record.units.forEach((rec, i) => {
+    if (!rec || (rec.state === 'kept' && !rec.translation)) return
+    if (rec.state === 'kept') rows.push([i, [], 'kept', rec.by ?? null, null, rec.translation])
+    else rows.push(rowOf(bundle, i, (rec.state === 'whole' || rec.state === 'partial') && src[i] ? resultOf(rec, src[i], kOfSource) : { state: rec.state, by: rec.by }))
+  })
+  return { bytes: Buffer.from(bytes), rows, meta: { bytes: bytes.length, units: bundle.units.length, dropped: bundle.dropped.length, rows: rows.length, unexpected: rows.filter(r => !wanted.has(r[0])).length } }
+}
+
+/** the remover's files, digested: a change of them makes every add-on again (the plan's, removal.mjs pagePlan, too; the
+ *  manifest's reader, which holds REMOVAL and the bounds the maker checks its manifest by, and the maker, addon.mjs) */
 function removerDigest() {
-  return sha256(['src/pdf-reader/engine/layout/remove.mjs', 'src/pdf-reader/engine/layout/ink.mjs', 'src/pdf-reader/engine/layout/file.mjs', 'src/pdf-reader/engine/layer-proto/removal.mjs'].map(f => readFileSync(join(ENGINE, f))).join('\n')).slice(0, 16)
+  return sha256(['src/pdf-reader/engine/layout/remove.mjs', 'src/pdf-reader/engine/layout/ink.mjs', 'src/pdf-reader/engine/layout/file.mjs', 'src/pdf-reader/engine/layout/addon-manifest.mjs', 'src/pdf-reader/engine/layout/addon.mjs', 'src/pdf-reader/engine/layer-proto/removal.mjs'].map(f => readFileSync(join(ENGINE, f))).join('\n')).slice(0, 16)
 }
 
 /**
@@ -428,70 +591,58 @@ function addonOf(name) {
   return ADDON_RUNS.get(key).then(a => { ADDONS.set(name, PERF ? a.shippedFile : a.file); return a })
 }
 /**
- * The paper's add-on made in memory (the server's step, after the layout maker): its plan from the layout file, the
- * add-on (`shipped`: R and P; `out`: with the check's sets too, where `check`), the outline table; and each step's time,
- * ms: the remover's parse of arXiv's PDF, the operator lists (the maker reads them already: shared), the ink walk with
- * the remover's indices and outlines, the plan, the add-on made
+ * The paper's add-on made in memory (the server's step, after the layout maker). The shipped half is the engine's own
+ * (layout/addon.mjs paperAddon: the plan from the layout file, R only where kept ink lies under a unit, `dirty` and
+ * `rules`), the code the server's remover child runs; `shipped` is arXiv's PDF with its tail, and its manifest. With
+ * `check`, the gate's own half too: the plan of every page with every unit (`plan`), the add-on made with the check's sets
+ * (`out`: R, P, F and C of every planned page, its manifest carrying `dirty`, `rules` and the outline table), and the
+ * inks and outline boxes the check reads. ms: the shipped half's (the remover's parse of arXiv's PDF, the operator lists
+ * and the ink walk it reads, the plan, the add-on made), and with `check` the check's reading of the pages and its make
  */
 async function buildAddon(bytes, layoutFile, { check = true } = {}) {
-  const { openRemover, makeAddon, SETS, CHECK_SETS } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/remove.mjs'))
-  const { pageInk, outlineTable } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/ink.mjs'))
+  const { paperAddon } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/addon.mjs'))
   const { indexLayout, parseLayout } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/file.mjs'))
-  const { pagePlan, pageDirty, pageRules } = await import(join(ENGINE, 'src/pdf-reader/engine/layer-proto/removal.mjs'))
   const PL = await import('@cantoo/pdf-lib')
   const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
   const { deflateSync } = await import('node:zlib')
-  const ms = {}
-  let t = performance.now()
-  const R = await openRemover(bytes, { PL, inflate: inflateTolerant })
-  ms.parse = performance.now() - t
+  const deflate = b => new Uint8Array(deflateSync(b))
   const doc = await openNode(bytes)
-  const ops = [], inks = [], collected = new Map()
-  // (the operator lists the layout maker reads already: the server's prepare reads them once for both)
-  t = performance.now()
-  for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); ops[p] = await pg.getOperatorList() }
-  ms.ops = performance.now() - t
-  t = performance.now()
-  for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); inks[p] = pageInk(OPS, ops[p], pg.commonObjs, { rotate: pg.rotate, indices: true, collect: collected }) }
-  ms.ink = performance.now() - t
-  // the plan: every unit the layout file holds, page by page
-  t = performance.now()
   const index = indexLayout(parseLayout(new Uint8Array(readFileSync(layoutFile))))
+  const made = await paperAddon({ bytes, index, doc, OPS, PL, deflate, inflate: inflateTolerant })
+  // (a paper the maker refuses ends its fixture here, though the check half would run on: the server ships no add-on for such a paper, and the gate draws nothing it would not ship. None of the five papers is refused)
+  if (!made.ok) throw new Error(`the shipped add-on was refused: ${made.refused}`)
+  const whole = new Uint8Array(bytes.length + made.tail.length)
+  whole.set(bytes)
+  whole.set(made.tail, bytes.length)
+  const shipped = { bytes: whole, appended: made.tail.length, manifest: made.manifest }
+  const ms = { ...made.ms }
+  if (!check) return { doc, shipped, ms }
+
+  const { openRemover, makeAddon, SETS, CHECK_SETS } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/remove.mjs'))
+  const { pageInk, outlineTable } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/ink.mjs'))
+  const { pagePlan } = await import(join(ENGINE, 'src/pdf-reader/engine/layer-proto/removal.mjs'))
+  const ops = [], inks = [], collected = new Map()
+  // (the pages' operator lists and ink again, every glyph its outline's box and the boxes collected into the outline table)
+  let t = performance.now()
+  for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); ops[p] = await pg.getOperatorList() }
+  for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); inks[p] = pageInk(OPS, ops[p], pg.commonObjs, { rotate: pg.rotate, indices: true, collect: collected }) }
+  // the plan: every unit the layout file holds, page by page
   const plan = { pages: {} }
   for (let p = 1; p <= doc.numPages; p++) {
     if (inks[p].rotated || inks[p].capped) continue
     const { own: _own, ...pp } = pagePlan(index, p, inks[p])
     if (pp.units.length) plan.pages[p] = pp
   }
-  ms.plan = performance.now() - t
-  const outlines = outlineTable(collected)
-  // the shipped add-on, and the time it takes: each page's kept ink under its units' rectangles (pageDirty, the
-  // manifest's `dirty`: where the reader swaps the removed page in), and the removed page, R, only where there is some.
-  // A page with none is filled with paper over the file's rectangles alone: it needs no removed page, only the
-  // manifest's word that the page is drawn so (ok, no dirty)
+  ms.checkRead = performance.now() - t
   t = performance.now()
-  const dirty = {}
-  for (const [p, pp] of Object.entries(plan.pages)) { const d = pageDirty(index, Number(p), inks[p], pp); if (d.length) dirty[p] = d }
-  const swapped = { pages: Object.fromEntries(Object.entries(plan.pages).filter(([p]) => dirty[p])) }
-  const shipped = await makeAddon({ R, bytes, OPS, opListOf: async p => ops[p], deflate: b => new Uint8Array(deflateSync(b)), plan: swapped, sets: SETS, compact: true })
-  for (const [p, d] of Object.entries(dirty)) if (shipped.manifest.page[p]?.ok) shipped.manifest.page[p].dirty = d
-  for (const p of Object.keys(plan.pages)) if (!dirty[p]) shipped.manifest.page[p] = { ok: true }
-  // (and the rules near its units' lines, which a taller script's text keeps clear of: pageRules; where the engine has it)
-  const rules = {}
-  if (pageRules) for (const p of Object.keys(plan.pages)) { const r = pageRules(index, Number(p), inks[p]); if (r.length) rules[p] = r }
-  for (const [p, r] of Object.entries(rules)) if (shipped.manifest.page[p]) shipped.manifest.page[p].rules = r
-  ms.make = performance.now() - t
-  let out = null
-  if (check) {
-    t = performance.now()
-    out = await makeAddon({ R: await openRemover(bytes, { PL, inflate: inflateTolerant }), bytes, OPS, opListOf: async p => ops[p], deflate: b => new Uint8Array(deflateSync(b)), plan, sets: [...SETS, ...CHECK_SETS] })
-    ms.makeWithCheck = performance.now() - t
-    // (the check's manifest: the gate's own reading of the page's ink boxes each glyph by the outline table, as Node does)
-    out.manifest.outlines = outlines
-    for (const [p, d] of Object.entries(dirty)) if (out.manifest.page[p]?.ok) out.manifest.page[p].dirty = d
-    for (const [p, r] of Object.entries(rules)) if (out.manifest.page[p]) out.manifest.page[p].rules = r
-    // (the pages drawn by the add-on are the check's, every set of it made: the truth reads its planes)
-    for (const p of Object.keys(plan.pages)) if (!out.manifest.page[p]?.ok) shipped.manifest.page[p] = { ok: false, refused: out.manifest.page[p]?.refused ?? 'refused' }
+  const out = await makeAddon({ R: await openRemover(bytes, { PL, inflate: inflateTolerant }), bytes, OPS, opListOf: async p => ops[p], deflate, plan, sets: [...SETS, ...CHECK_SETS] })
+  ms.makeWithCheck = performance.now() - t
+  // (the check's manifest: the gate's own reading of the page's ink boxes each glyph by the outline table, as Node does;
+  // the shipped half's `dirty` and `rules`, which the draw reads)
+  out.manifest.outlines = outlineTable(collected)
+  for (const [p, e] of Object.entries(made.manifest.page)) {
+    if (e.dirty && out.manifest.page[p]?.ok) out.manifest.page[p].dirty = e.dirty
+    if (e.rules && out.manifest.page[p]) out.manifest.page[p].rules = e.rules
   }
   return { doc, inks, plan, shipped, out, collected, ms }
 }
@@ -527,6 +678,8 @@ async function makeAddonOf(key, bytes, layoutFile) {
     const summary = {
       pages: N, planned: Object.keys(plan.pages).length, removed: Object.values(out.manifest.page).filter(x => x.ok).length, refused: Object.entries(out.manifest.page).filter(([, x]) => !x.ok && x.refused !== 'not planned').map(([p, x]) => [Number(p), x.refused]),
       appended: shipped.appended, appendedWithCheck: out.appended, manifestBytes: shippedManifest.length, manifestGzip: gzipSync(shippedManifest).length, outlines: collected.size,
+      // (the planned pages whose word the shipped manifest and the check's differ in: the maker never reads a clean page and makes R alone, the check makes every set; none on the five papers)
+      shippedApart: Object.keys(plan.pages).filter(p => !!shipped.manifest.page[p]?.ok !== !!out.manifest.page[p]?.ok).map(Number),
       stats: shipped.manifest.stats, ms: Object.fromEntries(Object.entries(ms).map(([k, v]) => [k, Math.round(v)])),
     }
     writeFileSync(join(dir, 'manifest.json'), JSON.stringify(out.manifest))
@@ -581,6 +734,16 @@ await browser.close()
 server.close()
 const seconds = Math.round((Date.now() - t0) / 100) / 10
 if (leaks.length) { console.log(`FAIL requests that would have left the machine: ${leaks.slice(0, 5).join(' ')}`); failures.push('network') }
+if (DOOR !== null) {
+  const ran = [...results.values()].sort((a, b) => a.name.localeCompare(b.name))
+  const all = ran.flatMap(r => r.pages ?? [])
+  const count = key => all.filter(e => e[key]).length
+  const made = new Date().toISOString()
+  const file = join(ROOT, 'out/layer-gate', `door-${(engineInfo.commit ?? 'none').slice(0, 8)}${engineInfo.dirty ? '+' : ''}-${made.replace(/[:.]/g, '-')}.json`)
+  writeFileSync(file, JSON.stringify({ schema: 1, made, seconds, engine: engineInfo, inputs: { ...inputs, door: DOOR }, fixtures: Object.fromEntries(ran.map(r => [r.name, r])) }))
+  console.log(`\ndoor: ${ran.length} outputs, ${all.length} pages: SVG markup equal on ${count('svg')}, copyOf's pixels the copy plane on ${count('copy')} (drawn over v0's original, whose PNG read back is it on ${count('original')}), the page this load's PDF.js draws v0's original on ${count('source')}; the gate's own run at 1.25 CSS px a unit and dpr 2 against it at 2.5 and dpr 1: the units' records equal on ${count('laid')} pages, the copy planes on ${count('drawn')}, the originals on ${count('read')}; ${failures.length ? `${failures.length} failed (${failures.join(' ')})` : 'none failed'}, in ${seconds} s; the run in ${file}`)
+  process.exit(failures.length || ran.length !== asked.length ? 1 : 0)
+}
 
 // ---------------------------------------------------------------- the totals, the record, the rule
 const floor = readJson(join(GATE, 'floor.json'))

@@ -9,7 +9,6 @@ import { type CSSProperties, Fragment, useEffect, useRef, useState } from 'react
 import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME, type LangCode } from '@/config/languages'
 import { type Config, SERVICES_MAX } from '@/config/schema'
 import { type Service, isLlmChosen, serviceRuns } from '@/config/services'
-import { readConfig } from '@/config/storage'
 import { supportsTarget } from '@/providers/microsoft'
 import { sendMessage } from '@/shared/messages'
 import type { PackState } from '@/shared/pack'
@@ -23,7 +22,7 @@ import { Switch } from '@/ui/controls/Switch'
 import { O, S, languageLabel, languageName } from '@/ui/strings'
 import { useRejected } from '@/ui/use-rejected'
 import type { OptionsData } from '../data'
-import { releaseHostPermission } from '../permissions'
+import { type Hold, giveBackUnneeded, holdOrigin } from '../permissions'
 import { Card, GroupHeading } from '../ui/Card'
 import { type ListWrites, focusLost, insertAt, shut, undoHasFocus, useFocusWhenDrawn, useLinger, useListWrites, withUndo } from '../ui/lists'
 import { IconButton, Row, Status, Value } from '../ui/Row'
@@ -70,8 +69,12 @@ export function Translate({ data }: { data: OptionsData }) {
   )
 }
 
-/** `stored`: whether storage came to hold the deletion, its write's answer (Task 65) */
-interface Gone { service: Service; index: number; chosen: boolean; focus: boolean; stored: Promise<boolean> }
+/**
+ * `stored`: whether storage came to hold the deletion, its write's answer (Task 65). `hold`: the service's origin, held
+ * under its id from before the write until the deletion is committed or undone and stored again — no give-back takes
+ * the origin while the undo may still bring the service back, and the background leaves its sessions alone meanwhile
+ */
+interface Gone { service: Service; index: number; chosen: boolean; focus: boolean; stored: Promise<boolean>; hold: Hold }
 type Form = { kind: 'add' } | { kind: 'edit'; id: string }
 
 function Services({ data }: { data: OptionsData }) {
@@ -109,7 +112,6 @@ function Services({ data }: { data: OptionsData }) {
   }
   const keys = radioKeys(ids, config.provider, can, id => choose(id, 'key'), i => radios.current.get(ids[i]!)?.focus())
   const radioRef = (id: string) => (el: HTMLElement | null) => { if (el) radios.current.set(id, el); else radios.current.delete(id) }
-  const stored = config.services.map(s => s.baseURL)
   /** at the schema's cap the add row is greyed and says why: a service connected there could not be stored (Codex 4) */
   const full = config.services.length >= SERVICES_MAX
 
@@ -158,7 +160,7 @@ function Services({ data }: { data: OptionsData }) {
         </Reveal>
         <Reveal open={editingId === s.id}>
           {drawnForm?.kind === 'edit' && drawnForm.id === s.id && (
-            <ServiceForm service={s} target={config.targetLanguage} stored={stored} onConnected={saved} onCancel={() => { setForm(null); focusDrawn(s.id) }} />
+            <ServiceForm service={s} target={config.targetLanguage} onConnected={saved} onCancel={() => { setForm(null); focusDrawn(s.id) }} />
           )}
         </Reveal>
       </Fragment>
@@ -195,7 +197,7 @@ function Services({ data }: { data: OptionsData }) {
         expanded={form?.kind === 'add'} buttonProps={{ ref: addRow }}
         onPress={() => setForm(f => (f?.kind === 'add' ? null : { kind: 'add' }))} />
       <Reveal open={form?.kind === 'add'}>
-        {drawnForm?.kind === 'add' && <ServiceForm target={config.targetLanguage} stored={stored} onConnected={added} onCancel={() => { setForm(null); addRow.current?.focus() }} />}
+        {drawnForm?.kind === 'add' && <ServiceForm target={config.targetLanguage} onConnected={added} onCancel={() => { setForm(null); addRow.current?.focus() }} />}
       </Reveal>
       {writes.failed && <p className="o-list-note" role="status"><Status tone="alert">{O.saveFailed}</Status></p>}
     </Card>
@@ -228,43 +230,33 @@ function ServiceMenu({ service, onEdit, onDelete }: { service: Service; onEdit: 
  * service (S-O-21) — at once, and what cannot be taken back waits for the undo to pass: every session moved off the
  * service, and only then its origin given back (a request still in flight would break) — the old drawer's order. Its
  * mark in the refused-key record is the background's to clear, on the deletion being stored (ruling 17). Undone, it
- * comes back at its place, chosen again if it was and nothing else was chosen since. Leaving the page ends every undo
- * (best effort: the tab may close before the clean-up lands, as it could before). The clean-up waits for the
- * deletion's own write, as the old drawer's did: a rebind sent before storage holds the deletion has the background
- * rebuild from the old configuration and bind every session back to the service, and the configuration's later change
- * moves no one (Task 65). A deletion storage refused commits nothing: its row stays, as stored, and takes back the
- * focus its undo row held (round 2, item 2). An origin is given back only when no service may still use it: none
- * stored, none whose deletion may still be undone, none undone and not yet stored again (round 2, item 4). An undo
- * storage refused leaves the service deleted: its undo row comes back at its place with a fresh 5 s, and the
- * clean-up waits on it again (round 3, item 3) — unless the section is gone by then: the page draws its data section
- * alone once the stored value cannot be read (App.tsx), so the refusal's own answer finds the section's flush already
- * run, and the deletion is committed at once (round 4, item 1). While the stored value cannot be read, a commit moves
- * every session off but gives no origin back: the read answers with the defaults, so the addresses stored are unknown,
- * and a permission kept a while is the safer failure than one taken from a service still stored (round 4, addendum) —
- * by the verdict of the commit's own read, which comes back with its value (round 5)
+ * comes back at its place, chosen again if it was and nothing else was chosen since. Leaving the page ends every undo;
+ * a tab that closes before the clean-up lands lets its holds go with it, and the background finishes the clean-up —
+ * the sessions moved off, the origin given back (background/origin-keeper.ts; #299 rows 116, 119). The clean-up waits
+ * for the deletion's own write, as the old drawer's did: a rebind sent before storage holds the deletion has the
+ * background rebuild from the old configuration and bind every session back to the service, and the configuration's
+ * later change moves no one (Task 65). A deletion storage refused commits nothing: its row stays, as stored, and takes
+ * back the focus its undo row held (round 2, item 2). The origin stays held while the service may still come back —
+ * its undo open, or undone and not yet stored again (round 2, item 4) — and goes back, once let go, only if nothing
+ * needs it: no service stored, no hold of any page — a form connecting with the same address among them (#299 F2c) —
+ * and none at all while the stored value cannot be read (the background's verdict, config/origins.ts). An undo storage
+ * refused leaves the service deleted: its undo row comes back at its place with a fresh 5 s, and the clean-up waits on
+ * it again (round 3, item 3) — unless the section is gone by then: the page draws its data section alone once the
+ * stored value cannot be read (App.tsx), so the refusal's own answer finds the section's flush already run, and the
+ * deletion is committed at once (round 4, item 1)
  */
 function useDeletions(config: Config, writes: ListWrites<Config>, focusOn: { now: (id: string) => void; drawn: (id: string) => void }) {
   const [gone, setGone] = useState<Gone[]>([])
   const pending = useRef(new Set<Gone>())
-  /** undone, their write not yet landed */
-  const undoing = useRef(new Set<Gone>())
   /** mounted, its flush still to come: set by the flush effect's setup (StrictMode's second run sets it again), cleared by its clean-up */
   const live = useRef(false)
   const commit = useRef(async (g: Gone) => {
     if (!pending.current.delete(g)) return
     if (!(await g.stored)) return
+    // the sessions first, the undo let go after: the background leaves a held service's sessions to this page
     await sendMessage({ type: 'axt:engine-ready', id: g.service.id, rebindAll: true }).catch(() => undefined)
-    // taken before the stored list is read: an undo that lands in between is then in one or the other
-    const waiting = [...pending.current, ...undoing.current].map(x => x.service.baseURL)
-    // the verdict of this read, returned with its value, not guessed from the defaults it answers with (round 4,
-    // addendum) and never another read's: another read of this page — another list's write, the watcher's re-read, a
-    // second commit — can finish between this read and the line after it, and hand this commit its own verdict
-    // (round 5). The value unreadable, the addresses it holds are unknown, and an origin kept a while is the safer
-    // failure
-    const { config: latest, fallbackReason } = await readConfig()
-    if (fallbackReason !== null) return
-    const inUse = [...latest.services.map(s => s.baseURL), ...waiting]
-    await releaseHostPermission(g.service.baseURL, inUse).catch(() => undefined)
+    await g.hold.release()
+    await giveBackUnneeded()
   }).current
   useEffect(() => {
     live.current = true
@@ -277,13 +269,17 @@ function useDeletions(config: Config, writes: ListWrites<Config>, focusOn: { now
     }
   }, [commit])
   const remove = (service: Service, focus: boolean) => {
-    const stored = writes.attempt(latest => ({ ...latest, services: latest.services.filter(s => s.id !== service.id), provider: latest.provider === service.id ? 'microsoft' : latest.provider }))
-    const g: Gone = { service, index: config.services.findIndex(s => s.id === service.id), chosen: config.provider === service.id, focus, stored }
+    // written only once the hold is granted: the background, hearing of the deletion, finds the undo held (I1)
+    const hold = holdOrigin(service.baseURL, service.id)
+    const stored = hold.ready.then(() => writes.attempt(latest => ({ ...latest, services: latest.services.filter(s => s.id !== service.id), provider: latest.provider === service.id ? 'microsoft' : latest.provider })))
+    const g: Gone = { service, index: config.services.findIndex(s => s.id === service.id), chosen: config.provider === service.id, focus, stored, hold }
     pending.current.add(g)
     setGone(x => [...x, g])
     void stored.then(done => {
       if (done) return
       pending.current.delete(g)
+      // refused: the service is stored as it was, and its own entry keeps the origin
+      void hold.release()
       // the row is drawn beside its undo row while the write is on its way: the focus goes there before the undo row does
       if (undoHasFocus(service.id)) focusOn.now(service.id)
       setGone(x => x.filter(y => y !== g))
@@ -291,16 +287,16 @@ function useDeletions(config: Config, writes: ListWrites<Config>, focusOn: { now
   }
   const undo = (g: Gone) => {
     pending.current.delete(g)
-    undoing.current.add(g)
     setGone(x => x.filter(y => y !== g))
-    void writes.attempt(latest => (latest.services.some(s => s.id === g.service.id) ? latest
-      : { ...latest, services: insertAt(latest.services, g.index, g.service), provider: g.chosen && latest.provider === 'microsoft' ? g.service.id : latest.provider }))
+    // after the same grant the deletion's write waits for, so an undo pressed before it is written after the deletion
+    void g.hold.ready.then(() => writes.attempt(latest => (latest.services.some(s => s.id === g.service.id) ? latest
+      : { ...latest, services: insertAt(latest.services, g.index, g.service), provider: g.chosen && latest.provider === 'microsoft' ? g.service.id : latest.provider })))
       .then(done => {
-        undoing.current.delete(g)
         // the focus goes to the service's radio once its row is drawn again, as the styles and the prompts lists do: a
         // frame after the press, or after the write, may find no row yet, and the focus falls to the page (Part 7's
-        // final review)
+        // final review). Stored again, the service's own entry keeps its origin; refused, the hold goes on with the undo
         if (done) {
+          void g.hold.release()
           focusOn.drawn(g.service.id)
           return
         }

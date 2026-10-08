@@ -99,6 +99,72 @@ function consistencyOf(record, S, names) {
 
 const PDF_ASSETS = { cMapUrl: '/pdfjs/cmaps/', standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/' }
 
+/** the first code points of the Unicode blocks (fontTools 4.62.1, unicodedata Blocks, up to U+31350), for --slices */
+const BLOCK_STARTS = '0 80 100 180 250 2b0 300 370 400 500 530 590 600 700 750 780 7c0 800 840 860 870 8a0 900 980 a00 a80 b00 b80 c00 c80 d00 d80 e00 e80 f00 1000 10a0 1100 1200 1380 13a0 1400 1680 16a0 1700 1720 1740 1760 1780 1800 18b0 1900 1950 1980 19e0 1a00 1a20 1ab0 1b00 1b80 1bc0 1c00 1c50 1c80 1c90 1cc0 1cd0 1d00 1d80 1dc0 1e00 1f00 2000 2070 20a0 20d0 2100 2150 2190 2200 2300 2400 2440 2460 2500 2580 25a0 2600 2700 27c0 27f0 2800 2900 2980 2a00 2b00 2c00 2c60 2c80 2d00 2d30 2d80 2de0 2e00 2e80 2f00 2fe0 2ff0 3000 3040 30a0 3100 3130 3190 31a0 31c0 31f0 3200 3300 3400 4dc0 4e00 a000 a490 a4d0 a500 a640 a6a0 a700 a720 a800 a830 a840 a880 a8e0 a900 a930 a960 a980 a9e0 aa00 aa60 aa80 aae0 ab00 ab30 ab70 abc0 ac00 d7b0 d800 db80 dc00 e000 f900 fb00 fb50 fe00 fe10 fe20 fe30 fe50 fe70 ff00 fff0 10000 10080 10100 10140 10190 101d0 10200 10280 102a0 102e0 10300 10330 10350 10380 103a0 103e0 10400 10450 10480 104b0 10500 10530 10570 105c0 10600 10780 107c0 10800 10840 10860 10880 108b0 108e0 10900 10920 10940 10960 10980 109a0 10a00 10a60 10a80 10aa0 10ac0 10b00 10b40 10b60 10b80 10bb0 10c00 10c50 10c80 10d00 10d40 10d90 10e60 10e80 10ec0 10f00 10f30 10f70 10fb0 10fe0 11000 11080 110d0 11100 11150 11180 111e0 11200 11250 11280 112b0 11300 11380 11400 11480 114e0 11580 11600 11660 11680 116d0 11700 11750 11800 11850 118a0 11900 11960 119a0 11a00 11a50 11ab0 11ac0 11b00 11b60 11b80 11bc0 11c00 11c70 11cc0 11d00 11d60 11db0 11df0 11ee0 11f00 11f60 11fb0 11fc0 12000 12400 12480 12550 12f90 13000 13430 13460 14400 14680 16100 16140 16800 16a40 16a70 16ad0 16b00 16b90 16d40 16d80 16e40 16ea0 16ee0 16f00 16fa0 16fe0 17000 18800 18b00 18d00 18d80 18e00 1aff0 1b000 1b100 1b130 1b170 1b300 1bc00 1bca0 1bcb0 1cc00 1cec0 1cf00 1cfd0 1d000 1d100 1d200 1d250 1d2c0 1d2e0 1d300 1d360 1d380 1d400 1d800 1dab0 1df00 1e000 1e030 1e090 1e100 1e150 1e290 1e2c0 1e300 1e4d0 1e500 1e5d0 1e600 1e6c0 1e700 1e7e0 1e800 1e8e0 1e900 1e960 1ec70 1ecc0 1ed00 1ed50 1ee00 1ef00 1f000 1f030 1f0a0 1f100 1f200 1f300 1f600 1f650 1f680 1f700 1f780 1f800 1f900 1fa00 1fa70 1fb00 1fc00 20000 2a6e0 2a700 2b740 2b820 2ceb0 2ebf0 2ee60 2f800 2fa20 30000 31350'.split(' ').map(h => Number.parseInt(h, 16))
+/** CJK Unified Ideographs, which --slices cuts in 8 of equal size */
+const CJK_FROM = 0x4e00, CJK_STEP = 0xa40
+/** --slices=alphabet: the blocks one slice holds, whose letters, accents, quotes and spaces are kerned with each other (a
+ *  canvas shapes a run of two faces of a family as two runs, so that no pair across them is kerned): Basic Latin, Latin-1
+ *  Supplement, Latin Extended-A, Cyrillic and General Punctuation. On the 29 outputs each is needed (Latin-1: de, es, fr;
+ *  Extended-A: fr's "œ"; Cyrillic: ru; General Punctuation: the curly apostrophe of fr and ko) and together they are enough */
+const ALPHABET = new Set([0x0, 0x80, 0x100, 0x400, 0x2000])
+/**
+ * --slices: a face's coverage cut into slices of the one file, as a host's slice plan cuts it for the engine to load
+ * (faceSources): the CJK Unified Ideographs in 8, every other Unicode block of the coverage its own (`blocks`); with
+ * `alphabet`, ALPHABET's blocks together in one. Every slice is the whole file at a URL of its own (the query tells them
+ * apart; the server ignores it), so that the browser draws what the slice's unicode-range allows of it, as a cut file would
+ * be drawn. Ascending ranges within a slice, slices by their place
+ */
+function sliceTable(F, coverage, rule) {
+  const by = new Map()
+  for (let i = 0; i + 1 < coverage.length; i += 2) {
+    for (let a = coverage[i]; a <= coverage[i + 1];) {
+      let b = BLOCK_STARTS.length - 1
+      while (BLOCK_STARTS[b] > a) b--
+      let z = Math.min(coverage[i + 1], (BLOCK_STARTS[b + 1] ?? 0x110000) - 1)
+      let key = rule === 'alphabet' && ALPHABET.has(BLOCK_STARTS[b]) ? -1 : b * 8
+      if (BLOCK_STARTS[b] === CJK_FROM) {
+        const k = Math.min(7, Math.floor((a - CJK_FROM) / CJK_STEP))
+        key += k
+        if (k < 7) z = Math.min(z, CJK_FROM + (k + 1) * CJK_STEP - 1)
+      }
+      if (!by.has(key)) by.set(key, [])
+      by.get(key).push(a, z)
+      a = z + 1
+    }
+  }
+  return [...by].sort((x, y) => x[0] - y[0]).map(([, ranges], n) => ({ url: `/fonts/${encodeURIComponent(F.file)}?slice=${n}`, ranges }))
+}
+
+/** the web's deltas of a live run's rows (the plan's delta rule): a part closed once its rows' JSON reaches 384 KiB or
+ *  96,000 values (layout/json.mjs countValues), 32 parts at most, the 32nd taking the rest */
+const DELTA_BYTES = 384 * 1024, DELTA_VALUES = 96_000, DELTA_PARTS = 32
+async function deltaParts(rows) {
+  const { countValues } = await import('/engine/layout/json.mjs')
+  const enc = new TextEncoder(), parts = []
+  let cur = [], bytes = 2, values = 1
+  for (const r of rows) {
+    const text = JSON.stringify(r)
+    bytes += enc.encode(text).length + (cur.length ? 1 : 0)
+    values += countValues(text)
+    cur.push(r)
+    if (parts.length < DELTA_PARTS - 1 && (bytes >= DELTA_BYTES || values >= DELTA_VALUES)) { parts.push(cur); cur = []; bytes = 2; values = 1 }
+  }
+  if (cur.length) parts.push(cur)
+  return parts
+}
+/** a record's row as a live run gives it (E6's): each non-text piece with its k, the units file's TrPiece's at the same
+ *  index (trPiecesOf gives one a piece), a piece TrPiece writes as text (a break, a space) the least k no other piece of
+ *  the unit takes (one of its source's pieces, as a live run's: past the largest, 605 of the fixtures' 1,810 such pieces
+ *  lay past their unit's pieces in the layout file); a row the units file holds no translation of as the record has it */
+function withK(u, tr) {
+  if (!u.pieces || !tr) return u
+  const taken = new Set(tr.filter(t => t[0] !== 0).map(t => t[1]))
+  let next = 0
+  const fresh = () => { while (taken.has(next)) next++; taken.add(next); return next }
+  return { ...u, pieces: u.pieces.map((q, i) => (q.t === 'text' ? q : { ...q, k: tr[i][0] !== 0 ? tr[i][1] : fresh() })) }
+}
+
 /** a page of a document drawn by the CPU at the gate's resolution on `bg` (the exactness check's and the truth's planes,
  *  so that a figure's antialiasing is the same in each) */
 async function cpuPlane(doc, n, bg = '#ffffff') {
@@ -242,7 +308,7 @@ window.gate = {
    * the driver's: arXiv's PDF with it at `url`, its manifest, the plan it was made from), v0 is opened over it, and a
    * second reading of the add-on drawn by the CPU is kept for the exactness check's and the truth's planes
    */
-  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces, tex, removal, addon = null, names = null, perf = false }) {
+  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces, tex, removal, addon = null, names = null, perf = false, parts: cut = null, slices = null }) {
     let V
     try { V = await import('/engine/layer-proto/run.mjs') } catch (e) { return { ready: false, why: `layer-proto/run.mjs: ${String(e?.message ?? e).slice(0, 200)}` } }
     const base = `/fixtures/${name}/`
@@ -263,9 +329,26 @@ window.gate = {
       const F = await import('/engine/layout/file.mjs')
       texIn = { ...tex, index: F.indexLayout(F.parseLayout(await bytes(`${base}layout.json`))), pieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])) }
     }
+    // (--parts: v0 opened with no unit, the record's rows taken as a live run's deltas give them, by the delta rule or n
+    // a part, the hybrid's pieces read from their k by take; each unit's table group given at open, as the paper's
+    // bundle gives the reader's host)
+    let parts = null, tableGroups = null
+    if (cut) {
+      const tr = new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), rowsK = []
+      unitsFile.units.forEach((u, id) => { if (u) rowsK.push([id, withK(u, tr.get(id))]) })
+      tableGroups = new Map(rowsK.filter(([, u]) => u.group).map(([id, u]) => [id, u.group]))
+      parts = cut === 'delta' ? await deltaParts(rowsK) : Array.from({ length: Math.ceil(rowsK.length / cut) }, (_, i) => rowsK.slice(cut * i, cut * i + cut))
+      if (texIn) texIn.pieces = new Map()
+    }
     const texIndex = texIn?.index ?? null
+    // (--slices: the role table's faces served in slices of one file each, sliceTable's cut, for the engine to ask of)
+    let faceSources = null
+    if (slices) {
+      const [{ FACES }, { COVERAGE }] = await Promise.all([import('/engine/font-roles.mjs'), import('/engine/font-coverage.mjs')])
+      faceSources = async id => sliceTable(FACES[id], COVERAGE[id], slices)
+    }
     // (--perf: no copy of v0's own, as a reader opens it: the page's drawing is drawCopy's, at a view's resolution)
-    const opts = { doc, geometry, units: unitsFile.units, target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(texIn ? { tex: texIn } : {}), labels: { names, captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`, ...(perf ? { copy: false } : {}) }
+    const opts = { doc, geometry, units: parts ? [] : unitsFile.units, ...(parts ? { expect: parts.flat().map(([id]) => id), groups: tableGroups } : {}), target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(faceSources ? { faceSources } : {}), ...(texIn ? { tex: texIn } : {}), labels: { names, captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`, ...(perf ? { copy: false } : {}) }
     let rm = null
     if (one) {
       rm = { mode: removal, manifest: addon.manifest, plan: { pages: {} }, rdoc: doc, cdoc: null }
@@ -277,11 +360,21 @@ window.gate = {
       if (removal === 'draw') opts.removal = { OPS: pdfjs.OPS, mode: 'draw', doc: rdoc, manifest: addon.manifest }
     }
     // (v0 leaves its inputs as they were: checked when the fixture is done, summary's inputsChanged)
-    const before = JSON.stringify([geometry, unitsFile.units])
+    const inputs = () => JSON.stringify([geometry, unitsFile.units, parts])
+    const before = inputs()
     const run = await V.openProto(opts)
-    S = { V, run, doc, geometry, layout, ref, name, target, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: new Map(run.placed.map(p => [p.id, p])), checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: () => JSON.stringify([geometry, unitsFile.units]) }, perf, texIndex }
+    S = { V, run, doc, geometry, layout, ref, name, target, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: new Map(run.placed.map(p => [p.id, p])), checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: inputs }, perf, texIndex }
     S.consistency = consistencyOf(unitsFile, S, names)
-    return { ready: true, pages: one ? run.N : doc.numPages, units: unitsFile.units.length, located: geometry.left.units.length, family: null, even: run.P.even ?? null }
+    if (parts) {
+      // one part a macrotask from the open on, beside the driver's pages (until), then end()
+      S.parts = { count: parts.length, pieces: texIn?.pieces ?? null, want: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), whys: [] }
+      S.parts.fed = (async () => {
+        for (const part of parts) { await new Promise(ok => setTimeout(ok, 0)); run.take(new Map(part)) }
+        await new Promise(ok => setTimeout(ok, 0))
+        run.end()
+      })()
+    }
+    return { ready: true, pages: one ? run.N : doc.numPages, units: unitsFile.units.length, located: geometry.left.units.length, family: null, even: run.P.even ?? null, ...(parts ? { parts: parts.length } : {}) }
   },
 
   /** how the run drew by the add-on (draw): pages removed and refused, units swapped and drawn the old way */
@@ -295,6 +388,13 @@ window.gate = {
     const t0 = performance.now()
     await run.until(p)
     const ms = performance.now() - t0
+    // (--parts: what the open read of the run at once, as far as the units have come: those placed, and why each unit
+    // placed nowhere is left, never a laid unit's)
+    if (S.parts) {
+      for (const q of run.placed) S.byId.set(q.id, q)
+      const laid = new Set(run.order)
+      for (const x of run.skipped) if (!laid.has(x.id)) S.skipped.set(x.id, x.why)
+    }
     // the audit by unit and page, as the drawing adds to it
     for (; S.audited < run.audit.length; S.audited++) { const a = run.audit[S.audited], k = `${a.unit}|${a.page}`; if (!S.audit.has(k)) S.audit.set(k, []); S.audit.get(k).push(a) }
     const page = await doc.getPage(p)
@@ -317,6 +417,7 @@ window.gate = {
     })
     const drawnIds = new Set(recs.map(r => r.id))
     for (const r of refHere) if (S.translated.has(r.id) && !drawnIds.has(r.id)) units.push({ id: r.id, kind: r.kind, drawn: false, why: S.skipped.get(r.id) ?? 'unanchored', orig: r.orig, lines: [], erase: [], crops: [] })
+    if (S.parts) for (const u of units) if (!u.drawn) S.parts.whys.push([p, u.id, u.why])
     const model = modelPage({ units, ref: refHere, items, translated: S.translated })
     // the prototype's own checker on the page: what it finds there, by the unit it is in (none for --perf: v0 is opened
     // with no copy of its own, as a reader opens it, and the checker reads that copy)
@@ -382,13 +483,15 @@ window.gate = {
     await document.fonts.ready
     const drawnText = (row.svg.textContent ?? '').replace(/\s+/g, '')
     if (S.dump) {
-      // what the live prototype's page is compared by (--dump): the copy's pixels and the SVG's markup, digested
+      // what the live prototype's page is compared by (--dump): the copy's pixels, the SVG's markup and the drawing's
+      // operations, digested
       let h = 0x811c9dc5
       for (let i = 0; i < C.length; i++) { h ^= C[i]; h = Math.imul(h, 0x01000193) >>> 0 }
-      const svg = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(row.svg.innerHTML)))].map(b => b.toString(16).padStart(2, '0')).join('')
+      const digest = async text => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map(b => b.toString(16).padStart(2, '0')).join('')
+      const svg = await digest(row.svg.innerHTML), ops = await digest(JSON.stringify(row.ops))
       // (and what the checker found on the page, with its reasons)
       const why = list => list.filter(on).map(e => ({ unit: e.unit, k: e.k, mode: e.mode, why: e.why }))
-      S.dump.push({ p, W, H, copy: h.toString(16), svg, check: { missing: why(ck.b.list.missing), duplicated: why(ck.b.list.duplicated), brackets: why(ck.b.list.brackets) } })
+      S.dump.push({ p, W, H, copy: h.toString(16), svg, ops, check: { missing: why(ck.b.list.missing), duplicated: why(ck.b.list.duplicated), brackets: why(ck.b.list.brackets) } })
     }
     S.cur = { p, page, W, H, view, O, C, units, kept: keptOf(S.layout, p, relabelledOf(recs)), items, drawnText, recs }
     return out
@@ -514,7 +617,7 @@ window.gate = {
     const { run } = S
     // (each laid unit's resolutions, for a look at what a source made of it)
     const units = run.placed.filter(p => p.prep).map(p => ({ id: p.id, source: p.tex ? 'tex' : 'v0', rects: p.rects, label: p.prep.label?.text, labelChars: p.prep.label?.chars.map(c => [c.ch, Math.round(c.x0 * 100) / 100, Math.round(c.x1 * 100) / 100, Math.round(c.yb * 100) / 100, Math.round(c.size * 100) / 100]), keep: p.prep.keep, res: [...p.prep.values()].map(r => ({ k: r.k, mode: r.mode, src: r.src?.slice(0, 60), text: r.text, crop: r.crop, baseline: r.baseline, gap: r.gap?.text, chars: r.gap?.chars.filter(c => !c.sep && !c.space).map(c => [c.ch, Math.round(c.x0 * 100) / 100, Math.round(c.yb * 100) / 100, Math.round(c.size * 100) / 100]) })) }))
-    return { order: run.order, stats: run.stats.map(({ ms, ...r }) => r), audit: run.audit, pages: (S.dump ?? []).map(({ check, ...d }) => d), checks: (S.dump ?? []).map(d => ({ p: d.p, ...d.check })), units }
+    return { order: run.order, stats: run.stats.map(({ ms, ...r }) => r), skipped: run.skipped, audit: run.audit, pages: (S.dump ?? []).map(({ check, ...d }) => d), checks: (S.dump ?? []).map(d => ({ p: d.p, ...d.check })), units }
   },
 
   /** the fixture's laid units, counted: v0 lays every unit it places (past its floor it clips), by its fit's knob */
@@ -556,8 +659,19 @@ window.gate = {
     return { firstDraw: r1((run.pageMs[p] ?? 0) + copyMs), step: r1(run.pageMs[p] ?? 0), copy: r1(copyMs), times, zoomRender: r1(zoomRender), zoomCopy: r1(zoomCopy), canvasBytes, heap: performance.memory?.usedJSHeapSize ?? null }
   },
 
-  summary() {
+  async summary() {
     const { run } = S
+    // (--parts: every part taken and end(); then the hybrid's pieces take read from the rows' k against the units file's,
+    // the rows that came late, and each unit left whose why was read before its row was)
+    let parts = null
+    if (S.parts) {
+      await S.parts.fed
+      const got = S.parts.pieces, want = S.parts.want
+      const pieces = got ? [...new Set([...got.keys(), ...want.keys()])].filter(id => JSON.stringify(got.get(id)) !== JSON.stringify(want.get(id))) : []
+      const laid = new Set(run.order), final = new Map(run.skipped.filter(x => !laid.has(x.id)).map(x => [x.id, x.why]))
+      const whys = S.parts.whys.filter(([, id, why]) => (final.get(id) ?? 'unanchored') !== why)
+      parts = { count: S.parts.count, late: run.late(), pieces, whys }
+    }
     const knob = {}, scales = []
     for (const r of run.stats) { knob[r.knob] = (knob[r.knob] ?? 0) + 1; scales.push(r.fitScale) }
     scales.sort((a, b) => a - b)
@@ -576,6 +690,7 @@ window.gate = {
       ...(run.sources?.tex.length || run.sources?.v0.length ? { sources: { tex: run.sources.tex.length, v0: run.sources.v0.length, texOnly: run.sources.texOnly ?? 0, why: run.sources.why, texIds: run.sources.tex } } : {}),
       // whether v0 left its inputs (the geometry and the units) as they were given
       inputsChanged: S.inputs.of() !== S.inputs.before,
+      ...(parts ? { parts } : {}),
     }
   },
 }

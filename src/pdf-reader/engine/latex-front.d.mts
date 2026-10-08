@@ -7,7 +7,7 @@ export declare function tableGrid(s: string, from: number, to: number): (Omit<Ce
 /** a source tree held in memory: path → bytes */
 export declare function inMemory(map: Map<string, Uint8Array>): { list(): string[]; read(path: string): Uint8Array | null }
 /** a paper's source read from its main file: its units, the paper's prose in reading order */
-export declare function loadProject(root: ReturnType<typeof inMemory>, main: string, options?: { tables?: boolean }): { units: SourceUnit[]; inputenc: string | null }
+export declare function loadProject(fsys: ReturnType<typeof inMemory>, main: string, options?: { tables?: boolean }): { units: SourceUnit[]; inputenc: string | null }
 /** a main file's \begin{document} and \end{document} as TeX finds them: -1 for `begin` and `body` where it has none */
 export declare function documentBounds(text: string, options?: { lineEnvs?: Set<string> | null; ifs?: Set<string>; ifValues?: Map<string, boolean> | null }): { begin: number; body: number; end: number }
 /** the \usepackage[…]{inputenc} TeX acts on: where it stands and its options, or null */

@@ -29,7 +29,7 @@ import { scriptOf } from './layer-rules.mjs'
 
 /**
  * Every face, one row each: its id, its file (as TeX finds it and the subsetter reads it), where the file comes from,
- * its group (our CSS family is `axt-` and the group), its CSS weight and style, its size correction, its licence (an
+ * its group (our CSS family is `axt-` and the group, but for the four FAMILY_NAME renames), its CSS weight and style, its size correction, its licence (an
  * SPDX expression, or a LicenseRef-) and its web status — `ofl` and `gfl` (GUST) served as their licences let, `notice`
  * served with its licence's notice, `gpl` served with the notice and the full file as the subsets' source, `review`
  * decided by the maintainer for the web (spec §8: served on the maintainer's word of 2026-10-06, as the gpl faces are).
@@ -172,15 +172,20 @@ pt-mono-regular          PTM55F.ttf                      texlive  pt-mono       
 pt-mono-bold             PTM75F.ttf                      texlive  pt-mono        700  normal  1      ParaType-Free-Font-1.3                                notice
 `
 
+// Four groups are served under a neutral family name, not their own: the OFL (§3) lets a modified subset carry no
+// Reserved Font Name, and Harano Aji, Linux Biolinum, Erewhon and PT Mono each reserve theirs. The group stays the
+// handle of the table (a face's id, the roles below); only the CSS family a face is declared and drawn in is renamed
+const FAMILY_NAME = { haranoaji: 'mincho', biolinum: 'humanist-sans', erewhon: 'transitional', 'pt-mono': 'slab-mono' }
+const familyOf = group => `axt-${FAMILY_NAME[group] ?? group}`
 // a row's licence is every column between its size and its web status: an SPDX expression may hold spaces (`WITH`)
 export const FACES = Object.freeze(Object.fromEntries(FACE_TABLE.trim().split('\n').map(line => {
   const cols = line.trim().split(/\s+/)
   const [id, file, source, group, weight, style, size] = cols, web = cols.at(-1), licence = cols.slice(7, -1).join(' ')
-  return [id, Object.freeze({ id, file, source, family: `axt-${group}`, weight: Number(weight), style, size: Number(size), licence, web })]
+  return [id, Object.freeze({ id, file, source, family: familyOf(group), weight: Number(weight), style, size: Number(size), licence, web })]
 })))
 // a face by its family, weight and style
 const BY_STYLE = new Map(Object.values(FACES).map(f => [`${f.family}|${f.weight}|${f.style}`, f.id]))
-const CJK_GROUPS = /^axt-(shs-|haranoaji|fandolkai|bkai00mp)/
+const CJK_GROUPS = /^axt-(shs-|mincho|fandolkai|bkai00mp)/
 
 // ---------------------------------------------------------------------------------------------------------------------
 // The names. A design, its class, its NFSS family names (anchored, as \rmdefault and the rest hold them), its PostScript
@@ -322,19 +327,30 @@ const CJK_FAMILY = {
   Hans: { group: 'shs-sc', kai: 'fandolkai' }, Hant: { group: 'shs-tc', kai: 'bkai00mp' }, Jpan: { group: 'haranoaji', kai: null },
   Kore: { group: 'shs-k', kai: null },
 }
-const LIGHT = new Set(['cm', 'garamond'])
+const LIGHT = Object.freeze(['cm', 'garamond'])
 const ALPHABETS = new Set(['Latn', 'Cyrl'])
 // every Latin and Cyrillic face's missing symbols from Latin Modern Math
 const LATIN_FALLBACKS = Object.fromEntries(Object.values(FACES).filter(f => !CJK_GROUPS.test(f.family) && f.id !== 'lm-math').map(f => [f.id, Object.freeze(['lm-math'])]))
 
-/** what a target draws in, for a paper's English family */
-export function rolesFor(target, family) {
+/** the CJK faces a target's script takes as this table has them: its group, its Kai (null: emphasis upright) and the
+ *  English designs beside which it takes the light weights; null for a script with none. A layout rule, not a fact about
+ *  the files: the instant layer asks for it through its one per-target call (layer-proto/target-rules.mjs), where a rule
+ *  set read as data will give it instead, and hands it back to rolesFor */
+export function cjkFacesOf(target) {
+  const script = scriptOf(target)
+  if (!Object.hasOwn(CJK_FAMILY, script)) return null
+  const { group, kai } = CJK_FAMILY[script]
+  return { group, kai, light: LIGHT }
+}
+
+/** what a target draws in, for a paper's English family; its CJK faces this table's own (cjkFacesOf) unless given */
+export function rolesFor(target, family, cjkFaces = cjkFacesOf(target)) {
   const script = scriptOf(target)
   let cjk = null
   const fallbacks = { ...LATIN_FALLBACKS }
-  if (Object.hasOwn(CJK_FAMILY, script)) {
-    const { group, kai } = CJK_FAMILY[script]
-    const light = LIGHT.has(family)
+  if (cjkFaces) {
+    const { group, kai } = cjkFaces
+    const light = cjkFaces.light.includes(family)
     cjk = { body: `${group}-${light ? 'light' : 'regular'}`, bold: `${group}-${light ? 'semibold' : 'bold'}`, italic: kai, boldItalic: kai }
     // Traditional Chinese's characters Source Han Serif TC lacks, from SC at the same weight; the Kai's, from the body
     if (script === 'Hant') for (const w of ['light', 'regular', 'medium', 'semibold', 'bold']) fallbacks[`shs-tc-${w}`] = Object.freeze([`shs-sc-${w}`])
@@ -385,7 +401,7 @@ const setsAll = (id, letters) => {
 const styled = (group, bold, italic, letters) => {
   let first = null
   for (const [b, i] of [[bold, italic], [bold, false], [false, italic], [false, false]]) {
-    const id = BY_STYLE.get(`axt-${group}|${b ? 700 : 400}|${i ? 'italic' : 'normal'}`)
+    const id = BY_STYLE.get(`${familyOf(group)}|${b ? 700 : 400}|${i ? 'italic' : 'normal'}`)
     if (!id) continue
     if (setsAll(id, letters)) return id
     first ??= id
@@ -429,6 +445,18 @@ const holds = (ranges, cp) => {
 // selectors, byte order mark): invisible, never drawn, as the TeX path drops them (mt.mjs texEscape)
 const SKIPPED = /^(?:\s|\p{Default_Ignorable_Code_Point})$/u
 
+/** whether every character of `text` (but white space and the default ignorable) is in one of `ranges`: a list of range
+ *  lists, each sorted and disjoint as COVERAGE's are (a face's coverage, or the code points of one slice of it that is
+ *  served). The served form of canDraw: a face is drawn only in what its host serves of it */
+export function canDrawIn(text, ranges) {
+  for (const ch of String(text)) {
+    if (SKIPPED.test(ch)) continue
+    const cp = ch.codePointAt(0)
+    if (!ranges.some(r => holds(r, cp))) return false
+  }
+  return true
+}
+
 /** whether every character of `text` (but white space and the default ignorable) is in one of `faces`' coverage or
  *  their fallbacks' */
 export function canDraw(text, faces, roles) {
@@ -440,11 +468,5 @@ export function canDraw(text, faces, roles) {
     const next = roles?.fallbacks && Object.hasOwn(roles.fallbacks, id) ? roles.fallbacks[id] : []
     queue.push(...next)
   }
-  const ranges = [...seen].filter(id => Object.hasOwn(COVERAGE, id)).map(id => COVERAGE[id])
-  for (const ch of String(text)) {
-    if (SKIPPED.test(ch)) continue
-    const cp = ch.codePointAt(0)
-    if (!ranges.some(r => holds(r, cp))) return false
-  }
-  return true
+  return canDrawIn(text, [...seen].filter(id => Object.hasOwn(COVERAGE, id)).map(id => COVERAGE[id]))
 }

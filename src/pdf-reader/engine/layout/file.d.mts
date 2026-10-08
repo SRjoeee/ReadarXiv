@@ -2,6 +2,10 @@
 export { LayoutRefusal } from './json.mjs'
 /** the maker's version: raised with any change to the layout maker or the schema; it enters no output identity */
 export declare const LAYOUT: '3'
+/** a new-style arXiv identifier, or an old one (archive, subject class, a slash and 7 digits); never a version suffix */
+export declare const isPaperId: (id: unknown) => id is string
+/** a paper's version at most */
+export declare const VERSION_MAX: number
 /** bytes */
 export declare const LAYOUT_CAP: number
 export declare const LAYOUT_VALUES: number
@@ -43,6 +47,9 @@ export interface LayoutFile {
 }
 /** bytes, then UTF-8, then values and nesting counted, then JSON.parse, then every bound; throws LayoutRefusal */
 export declare function parseLayout(bytes: Uint8Array): LayoutFile
+/** a file already parsed, within the bounds of what holds it (a layer bundle): every bound parseLayout checks past
+ *  JSON.parse; returns the value itself, its -0s written 0; throws LayoutRefusal */
+export declare function checkLayout(value: unknown): LayoutFile
 /** the file as written: keys in the schema's order, numbers to a hundredth, no white space */
 export declare function encodeLayout(file: LayoutFile): string
 /** one located unit as the layer reads it */

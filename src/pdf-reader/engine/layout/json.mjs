@@ -87,6 +87,12 @@ export function boundedJson(bytes, { cap, values, depth = Infinity }) {
 export const PAGES_MAX = 10000
 /** a coordinate's bound either way, PDF units: 200 inches, PDF's largest page (ISO 32000-1, annex C) */
 export const COORD_MAX = 14400
+/** a string at most, in code units, of what a reader takes of a paper's text: a bundle's unit, a row, a text piece (the
+ *  layer-only plan §3.3, §4.1). One bound for all of them, so that what one reader takes the other does */
+export const STRING_MAX = 16_000
+/** a translated unit's pieces at most, of what a reader takes (an answer's, layer/net.mjs checkPieces; a row's,
+ *  layer-proto/rows.mjs unitOf): one bound, held here beside the strings' so that no reader's closure grows for it */
+export const PIECES_MAX = 20_000
 
 export const isObject = v => typeof v === 'object' && v !== null && !Array.isArray(v)
 /** a finite number (JSON has no NaN, and a number written 1e400 is Infinity once parsed) */
