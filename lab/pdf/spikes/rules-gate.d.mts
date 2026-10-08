@@ -10,7 +10,8 @@ export declare function parseRuling(json: unknown, name: string): Ruling
 /** a ruling file read: the ruling, or the sentence for the comment (`problem`) and the parser's own words for a private log (`detail`) */
 export declare function loadRuling(file: string, o?: { read?: (file: string, encoding: string) => string }): { ruling?: Ruling; problem?: string; detail?: string }
 /** the rulings of the tree at a commit: lab/pdf/rulings/ and the record's that name their targets */
-export declare function rulingsAt(commit: string, o?: { git?: (...args: string[]) => string }): { rulings: Ruling[]; problems: string[]; untargeted: number }
+export declare function rulingsAt(commit: string, o?: { git?: (...args: string[]) => string }): { rulings: (Ruling & { version: number })[]; problems: string[] }
+export declare function rulingsFor<R extends { version: number }>(rulings: R[], from: number, to: number): R[]
 
 /** a run file of the layer gate as the verdict reads it: the totals and pages of each output, and the inputs that make two runs one instrument */
 export interface Run {

@@ -410,13 +410,15 @@ export function parseEngines(json) {
 
 const git = (...args) => execFileSync('git', args, { cwd: REPO, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 26 })
 
+/** the rule set's file, which a ruling is bound to by the version it held where the ruling came in */
+const RULES_FILE = 'src/pdf-reader/engine/rules/layout-rules.json'
 /**
- * The rulings the live-engines check honours: the pull request gate's, as they stand in the tree at `commit` (the set's). That
- * gate takes the files its pull request adds to lab/pdf/rulings/; by the time a set is published those are in the tree, with the
- * earlier ones, and the set published for an engine can be several versions behind, so every ruling since counts: the files of
- * lab/pdf/rulings/ and the rulings the layer gate's record carries (lab/pdf/records/layer-fidelity.json) that name their targets
- * (a ruling given to `--record` keeps all its fields; the older ones name none, and cover nothing here). Returns { rulings,
- * problems (fixed sentences, safe for a public log), untargeted }. A file that is no ruling accepts nothing.
+ * The rulings the live-engines check may honour: the pull request gate's files of lab/pdf/rulings/ in the tree at `commit` (the
+ * set's), each bound to the rule set it came in with. That gate takes only the files its pull request adds, so a ruling accepts the
+ * change of one pull request; here each file carries `version`, the set's version at the first-parent commit that added it (the
+ * merge of its pull request), and the check honours a ruling only for an engine whose published set is older than that version,
+ * since that is the change it accepted (rulingsFor). The layer gate's record's rulings are history and accept nothing here.
+ * Returns { rulings, problems (fixed sentences, safe for a public log) }. A file that is no ruling accepts nothing.
  */
 export function rulingsAt(commit, { git: gitFn = git } = {}) {
   const rulings = [], problems = []
@@ -426,18 +428,21 @@ export function rulingsAt(commit, { git: gitFn = git } = {}) {
     let text = null
     try { text = gitFn('show', `${commit}:${n}`) } catch { /* listed and unreadable: the same as not valid */ }
     const r = loadRuling(n, { read: () => { if (text === null) throw new Error('unreadable'); return text } })
-    if (r.ruling) rulings.push(r.ruling); else problems.push(r.problem)
+    if (!r.ruling) { problems.push(r.problem); continue }
+    let version = null
+    try {
+      const added = gitFn('log', '--first-parent', '--diff-filter=A', '--format=%H', '-1', commit, '--', n).trim() || commit
+      version = Number(JSON.parse(gitFn('show', `${added}:${RULES_FILE}`)).version)
+    } catch { /* no set where it came in */ }
+    if (!Number.isInteger(version)) { problems.push(`the ruling file \`${r.ruling.name}\` came in where no rule set was: it accepts nothing`); continue }
+    rulings.push({ ...r.ruling, version })
   }
-  let untargeted = 0
-  try {
-    const record = JSON.parse(gitFn('show', `${commit}:lab/pdf/records/layer-fidelity.json`))
-    for (const [i, entry] of (Array.isArray(record?.rulings) ? record.rulings : []).entries()) {
-      if (!Array.isArray(entry?.targets)) { untargeted++; continue }
-      try { rulings.push(parseRuling(entry, `layer-fidelity-${i + 1}`)) } catch (e) { problems.push(`the record's ruling ${i + 1}: ${String(e?.message ?? e).replace(/^ruling [^:]*: /, '')}`) }
-    }
-  } catch { /* no record at that commit */ }
-  return { rulings, problems, untargeted }
+  return { rulings, problems }
 }
+
+/** the rulings that accept a change from the set at version `from` (an engine's published set) to the set at version `to`: those
+ *  that came in with a version after `from`, up to `to` */
+export const rulingsFor = (rulings, from, to) => rulings.filter(r => r.version > from && r.version <= to)
 
 /** how many strings of the fixtures' translations a public text carries, and how many windows of the rulings' own words are in them */
 function leakCount(text, rulings, strings) {
@@ -460,9 +465,9 @@ export async function engines(argv, { run = runGate, git: gitFn = git, fetchImpl
   // the same rulings as the pull request gate, those of the tree at head's commit; the second lock as in compare, since their words
   // go to the run's summary, which is public
   const headSha = gitFn('rev-parse', 'HEAD').trim()
-  const { rulings, problems: rulingProblems, untargeted } = rulingsAt(headSha, { git: gitFn })
+  const { rulings: all, problems: rulingProblems } = rulingsAt(headSha, { git: gitFn })
   const strings = packStrings(join(pack, 'fixtures'))
-  console.log(`rulings at ${headSha.slice(0, 8)}: ${rulings.length} honoured${untargeted ? `, ${untargeted} of the record name no target and cover nothing here` : ''}`)
+  console.log(`rulings at ${headSha.slice(0, 8)}: ${all.length}, each honoured for an engine whose published set is older than the one it came in with`)
   for (const p of rulingProblems) console.log(`ignored: ${p}`)
   const failures = []
   const work = join(tmpdir(), `rules-engines-${process.pid}`)
@@ -484,7 +489,10 @@ export async function engines(argv, { run = runGate, git: gitFn = git, fetchImpl
         if (res.ok) { published = join(out, `${basename(dir)}-published.json`); writeFileSync(published, Buffer.from(await res.arrayBuffer())); from = 'the published set' }
         else if (res.status !== 404) throw new Error(`${url}: HTTP ${res.status}`)
       }
-      console.log(`${e.name} (${e.ref}): head's set against ${from}`)
+      const fromVersion = Number(JSON.parse(readFileSync(published, 'utf8')).version)
+      if (!Number.isInteger(fromVersion)) throw new Error(`${from} has no version`)
+      const rulings = rulingsFor(all, fromVersion, headSet.version)
+      console.log(`${e.name} (${e.ref}): head's set (version ${headSet.version}) against ${from} (version ${fromVersion}); ${rulings.length} ruling${rulings.length === 1 ? '' : 's'} of the versions between`)
       const base = JSON.parse(readFileSync(await run({ engine: dir, rules: published, pack, log: join(out, `${basename(dir)}-base.log`) }), 'utf8'))
       const next = JSON.parse(readFileSync(await run({ engine: dir, rules: headFile, pack, log: join(out, `${basename(dir)}-head.log`) }), 'utf8'))
       const report = judge(base, next, { outputs, rulings })
