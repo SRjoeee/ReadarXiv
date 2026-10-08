@@ -38,11 +38,15 @@ jobs:
           cache: pnpm
       # (no install scripts: a job that holds a secret runs none of a dependency's)
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      # The newest set only: the publish reads next as it is now and stands down where next holds a newer version, whose own run
+      # publishes it (lab/pdf/README.md, "The rules gate in CI"). Read just before the write, whatever the queue held it for
+      - name: Fetch next
+        run: git fetch --no-tags --depth=1 origin +refs/heads/next:refs/remotes/origin/next
       - name: Publish to staging and point it at the set
         env:
           RULES_PUBLISH_SECRET: ${{ secrets.RULES_PUBLISH_SECRET }}
           RULES_URL: ${{ vars.RULES_STAGING_URL }}
-        run: node lab/pdf/spikes/rules-publish.mjs publish --url="$RULES_URL"
+        run: node lab/pdf/spikes/rules-publish.mjs publish --url="$RULES_URL" --next=origin/next
 
   # Before production: the set as the gate measures it on each engine a reader runs now, against the set published for that
   # engine. lab/pdf/live-engines.json names them; while it names none there is nothing to measure and this job does nothing.
@@ -115,8 +119,11 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      # (after the click, which may be days after the merge: a set that waited for it and is not the newest stands down)
+      - name: Fetch next
+        run: git fetch --no-tags --depth=1 origin +refs/heads/next:refs/remotes/origin/next
       - name: Publish to production and point it at the set
         env:
           RULES_PUBLISH_SECRET: ${{ secrets.RULES_PUBLISH_SECRET }}
           RULES_URL: ${{ vars.RULES_PRODUCTION_URL }}
-        run: node lab/pdf/spikes/rules-publish.mjs publish --url="$RULES_URL"
+        run: node lab/pdf/spikes/rules-publish.mjs publish --url="$RULES_URL" --next=origin/next

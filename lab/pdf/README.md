@@ -79,7 +79,7 @@ its comment is numbers, fixture names and links that open the layer lab on the m
 | `.github/workflows/rules-publish.yml` | On a push to `next` that changes `layout-rules.json`: publish to staging (environment `rules-staging`, automatic) and move its pointer; then the set measured on each live engine (below); then production (environment `rules-production`, whose required reviewer is the maintainer: one click), which stays off until the repository variable `RULES_PRODUCTION` is `on`. |
 | `.github/workflows/rules-point.yml` | By hand: move a pointer to a version already published, on staging or on production (the same reviewer): the rollback. A production one first cancels the publishes that wait for the click (below). |
 | `lab/pdf/spikes/rules-gate.mjs` | `run` (the gate's model tier in the production configuration, from the pack alone), `compare` (the verdict and the comment) and `engines` (the live-engines check). `tests/scripts/rules-gate.test.ts` holds its arithmetic on synthetic runs of numbers. |
-| `lab/pdf/spikes/rules-publish.mjs` | The two writes of the web Worker's rules routes: publish the file, move the pointer. The secret goes into one request header and is never printed. |
+| `lab/pdf/spikes/rules-publish.mjs` | The two writes of the web Worker's rules routes: publish the file (unless `--next=<ref>` holds a newer version), move the pointer. The secret goes into one request header and is never printed. |
 | `lab/pdf/spikes/gate-pack.mjs`, `lab/pdf/gate-pack.json` | The fixture pack: made, restored by digest, verified. The JSON is its committed manifest. |
 | `lab/pdf/live-engines.json` | The engines readers run now. |
 | `lab/pdf/rulings/README.md` | How a regression that is meant is accepted. |
@@ -143,6 +143,15 @@ two writes of a pointer never interleave. A production rollback begins by cancel
 for its production approval (`gh run list --workflow rules-publish.yml --status waiting`, then `gh run cancel`), in the one job
 of the three workflows that holds `actions: write`, which has no secret and no environment; the rollback is not made where that
 job failed. Without it a publish approved after the rollback would move the pointer back over it.
+
+**The newest set only.** A queue of publishes can run out of order, and GitHub replaces a pending job when a third arrives, so
+a publish does not write what it was queued with. Before it writes, each staging and production publish fetches `origin/next`
+and compares the `version` of `layout-rules.json` there with its own (`rules-publish.mjs publish --next=origin/next`; the
+check is `supersededBy`). Where next's is newer the job prints `superseded by version <n>; its own run publishes it` and exits 0
+without writing. A set is a whole file, so a version skipped loses nothing; with the queue above, the pointer only ever moves
+to the newest merged set, except by a rollback. A production publish read next after its click, which may be days after the
+merge, so one that waited and is not the newest stands down. Where the newest set's own run fails, run that one again from its
+page: the older ones have stood down for it. A job that cannot read next fails and writes nothing.
 
 **Live engines.** Before production, `rules-gate.mjs engines` runs the model tier of head's set on each engine
 `lab/pdf/live-engines.json` names (the released extension's tag and the web's production pin, each a git ref of this

@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { originOf, point, publish } from '../../lab/pdf/spikes/rules-publish.mjs'
+import { originOf, point, publish, RULES_FILE, supersededBy, versionOn } from '../../lab/pdf/spikes/rules-publish.mjs'
 import { BUILTIN_RULES, readRules, writeRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // The two writes of the web Worker's rules routes (lab/pdf/spikes/rules-publish.mjs, Task R6): the set published and the
@@ -64,6 +64,55 @@ describe('publishing a rule set', () => {
     expect(w.seen).toHaveLength(0)
     const messages = await Promise.all([404, 409, 401, 500].map(status => fails(publish({ url: ORIGIN, file: file(), secret: SECRET, fetchImpl: worker({ publish: { status } }).fetchImpl, engine: { readRules } }))))
     expect(messages.join('\n')).not.toContain(SECRET)
+  })
+})
+
+describe('the newest set only', () => {
+  // a queue of publishes can run out of order, and GitHub replaces a pending job when a third arrives: each publish reads next
+  // just before it writes, and stands down where next holds a newer version (its own run publishes that one)
+  it('knows a newer version on next from an equal one and an older one', () => {
+    expect(supersededBy(3, 4)).toBe(4)
+    expect(supersededBy(3, 9)).toBe(9)
+    expect(supersededBy(3, 3)).toBeNull()
+    expect(supersededBy(3, 2)).toBeNull()
+    // a ref with no version to compare is no reason to stand down
+    expect(supersededBy(3, null)).toBeNull()
+    expect(supersededBy(3, Number.NaN)).toBeNull()
+    expect(supersededBy(3, undefined)).toBeNull()
+  })
+
+  it('writes nothing where next holds a newer version, and says so', async () => {
+    const w = worker({ publish: { status: 201 }, point: { status: 200 } })
+    const lines = await publish({ url: ORIGIN, file: file(3), secret: SECRET, fetchImpl: w.fetchImpl, engine: { readRules }, onNext: 5 })
+    expect(lines).toEqual(['superseded by version 5; its own run publishes it'])
+    expect(w.seen).toHaveLength(0)
+  })
+
+  it('publishes its own set where next holds the same version or an older one', async () => {
+    for (const onNext of [3, 2, null]) {
+      const w = worker({ publish: { status: 201 }, point: { status: 200 } })
+      const lines = await publish({ url: ORIGIN, file: file(3), secret: SECRET, fetchImpl: w.fetchImpl, engine: { readRules }, onNext })
+      expect(lines[0], String(onNext)).toMatch(/published s1 version 3/)
+      expect(w.seen.map(r => r.url.slice(r.url.lastIndexOf('/') + 1))).toEqual(['publish', 'point'])
+    }
+  })
+
+  it('still refuses a file the engine refuses, though next is newer, and needs its secret', async () => {
+    const bad = join(mkdtempSync(join(tmpdir(), 'rules-publish-')), 'bad.json')
+    writeFileSync(bad, '{"schema":1}')
+    await expect(publish({ url: ORIGIN, file: bad, secret: SECRET, fetchImpl: worker({}).fetchImpl, engine: { readRules }, onNext: 9 })).rejects.toThrow()
+    await expect(publish({ url: ORIGIN, file: file(3), secret: undefined, fetchImpl: worker({}).fetchImpl, engine: { readRules }, onNext: 9 })).rejects.toThrow('RULES_PUBLISH_SECRET is not set')
+  })
+
+  it('reads the version of the set on a ref through git, and does not guess where it cannot', () => {
+    const shown: string[] = []
+    const show = (ref: string, path: string) => { shown.push(`${ref}:${path}`); return JSON.stringify({ schema: 1, version: 7, note: 'x' }) }
+    expect(versionOn('origin/next', { show })).toBe(7)
+    expect(shown).toEqual([`origin/next:${RULES_FILE}`])
+    expect(versionOn('origin/next', { show: () => '{"schema":1}' })).toBeNull()
+    expect(versionOn('origin/next', { show: () => 'not json' })).toBeNull()
+    expect(() => versionOn('origin/next', { show: () => { throw new Error('fatal: invalid object name') } })).toThrow(/cannot read .* on origin\/next: was it fetched\?/)
+    for (const ref of ['', '-x', '--output=/tmp/x', 'a b', 'a;b', 'x'.repeat(101)]) expect(() => versionOn(ref, { show }), ref).toThrow(/git ref/)
   })
 })
 

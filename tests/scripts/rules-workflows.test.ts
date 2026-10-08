@@ -153,6 +153,19 @@ describe('the publish', () => {
   })
 })
 
+describe('the newest set only', () => {
+  const yml = text('rules-publish.yml')
+  it('has each publish read next just before its write, and ask the script to stand down where next is newer', () => {
+    for (const environment of ['staging', 'production']) {
+      const steps = yml.slice(yml.indexOf(`name: Publish to ${environment} and point it at the set`) - 400).split(/\n {6}- /)
+      const at = steps.findIndex(s => s.startsWith(`name: Publish to ${environment}`))
+      expect(steps[at - 1], environment).toMatch(/^name: Fetch next\n\s+run: git fetch --no-tags --depth=1 origin \+refs\/heads\/next:refs\/remotes\/origin\/next/)
+      expect(steps[at], environment).toContain('rules-publish.mjs publish --url="$RULES_URL" --next=origin/next')
+    }
+    expect(yml.match(/--next=origin\/next/g)).toHaveLength(2)
+  })
+})
+
 describe('the rollback', () => {
   const yml = text('rules-point.yml')
   it('is a dispatch with a schema, a version and a choice of two environments, and production waits for its reviewer', () => {
