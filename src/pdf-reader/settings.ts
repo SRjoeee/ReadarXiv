@@ -1,9 +1,32 @@
 // The reader's settings are the extension's (the reader's design, §3, §9.1): these say which display they ask for,
 // what a display chosen in the reader writes back, and whether figure text shows in a display
 import { chainConfigChanged } from '@/config/revision'
-import type { Config } from '@/config/schema'
-import type { Landing } from '@/shared/surface-config'
+import { type Config, DEFAULT_CONFIG } from '@/config/schema'
+import type { ConfigReading, FallbackReason } from '@/config/storage'
+import type { Landing, SurfaceConfig } from '@/shared/surface-config'
 import type { EngineDisplay } from './engine/session.mjs'
+
+/**
+ * The session's first configuration, which is never waited on for ever. The page has already read the settings once
+ * before its first paint, bounded (`reading`, ui/first-read.ts), and the session starts on that reading at once — its
+ * configuration, and its reason where it fell back — while the surface goes on reading behind it: the landing that comes
+ * is followed as any change of the settings is (session.mjs `landed`). A second read that stalls or is refused, which
+ * the surface answers with nothing at all, costs the PDF nothing, and says nothing against settings that were read.
+ * Without a reading (`null`: the page's read did not answer in its time; `undefined`: a host that made none), the
+ * surface's landing is waited for — not at all for `null`, whose time is spent, and for the clock `giveUp` otherwise —
+ * and the defaults stand in if it has not come, said to be provisional. A configuration that landed is never thrown away
+ */
+export async function firstConfig(
+  surface: Pick<SurfaceConfig, 'state' | 'subscribe' | 'start'>,
+  reading: ConfigReading | null | undefined,
+  giveUp: Promise<void>,
+): Promise<{ config: Config; provisional: { why: FallbackReason | null } | null }> {
+  const landing = new Promise<void>(resolve => { const off = surface.subscribe(() => { if (surface.state().config) { off(); resolve() } }); surface.start() })
+  if (reading && !surface.state().config) return { config: reading.config, provisional: { why: reading.fallbackReason } }
+  await Promise.race([landing, reading === null ? Promise.resolve() : giveUp])
+  const config = surface.state().config
+  return config ? { config, provisional: null } : { config: DEFAULT_CONFIG, provisional: { why: { kind: 'unknown' } } }
+}
 
 /** the display the settings ask for: the HTML page's mode, unless the reader was last left on the original alone */
 export function displayOf(config: Config): EngineDisplay {

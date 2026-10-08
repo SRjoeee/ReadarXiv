@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { extract } from '@/core/extractor'
 import { nodeOffsetAt, rangesOf, serialize, spanAt, type WireSpan } from '@/core/protector'
 import { el } from './helpers'
+import { turn } from '../turn'
 
 const FIXTURE_DIR = join(import.meta.dirname, '../fixtures/arxiv')
 
@@ -56,12 +57,13 @@ function boundaryCalls(root: Element, spans: readonly WireSpan[], from: number, 
 
 describe('wire offsets to DOM (#105)', () => {
   // As above: the whole fixture set × two formats, CPU-bound, racing the global 30 s margin
-  it('emits byte-identical wire text on both paths across every fixture and format', { timeout: 120_000 }, () => {
+  it('emits byte-identical wire text on both paths across every fixture and format', { timeout: 120_000 }, async () => {
     // The two paths are deliberately separate: the default one escapes the whole string at once and
     // collapses once, touching not one extra character; only the tracked one walks per character so
     // it can record anchors. This is the single guard against them drifting apart.
     let blocks = 0
     for (const f of readdirSync(FIXTURE_DIR).filter(n => n.endsWith('.html'))) {
+      await turn()
       const d = new DOMParser().parseFromString(readFileSync(join(FIXTURE_DIR, f), 'utf8'), 'text/html')
       for (const b of extract(d)) {
         if (b.kind !== 'text') continue

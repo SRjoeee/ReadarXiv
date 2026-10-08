@@ -179,10 +179,10 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 **Lead**
 
 - 目录 (Lucide `panel-left`, pressed while open).
-- The title: 600 13 px, one line, truncating first; the whole title in the tooltip.
+- The title: 600 13 px, one line, truncating first; the whole title in the tooltip. It is the page's heading (`h1`) at every width: below the lead's 320 px it is hidden to the eye, not removed, so that it stays in the accessibility tree; until it is known the heading is the product's name, said and not drawn (UI.md S-R-03).
 - The arXiv id: `arXiv:2608.02163` in ink-2 12 px tabular figures, a link to the abstract page in a new tab (the
   maintainer: 「改成可以点，点击打开abs页」); on hover or focus it takes the fill and a small `arrow-up-right` slides in
-  beside it. Tooltip 在 arXiv 打开摘要页.
+  beside it. Tooltip 在 arXiv 打开摘要页, which the link's name carries too, after what is on it (UI.md S-R-03).
 
 **Centre**: the display switch (§6.2).
 
@@ -263,8 +263,8 @@ maintainer removed them, 2026-09-26). A display that cannot be had (§8) is `ari
   chevron (12 px, rotating 90° in 150 ms) before every entry that has children; a leaf keeps the chevron's slot, so every
   title starts on one edge. Compact, after PDFSlick's folding outline and alphaXiv's hierarchy (the maintainer:
   「空间占用有点太大……两者都更紧凑简洁」).
-- Each row: the **translated title**, one line, truncating; the original title in its tooltip; the page number at the end
-  (11 px, tabular, ink-2 — §4.1).
+- Each row: the **translated title**, one line, truncating, in the language it is in (`lang`); the original title in its tooltip; the page number at the end
+  (11 px, tabular, ink-2 — §4.1). A fold's tooltip says 展开 or 收起, to its right; the fold is named by the section (UI.md S-R-02a).
 - The section being read is marked (the fill, 600) and its branch expanded; the mark follows the reading as it scrolls.
   A row jumps both sides to the heading.
 - The headings and their levels come from the paper's source as the engine reads it: the source parser
@@ -281,7 +281,7 @@ capsule on the floating surface: ‹ · the page number (an input, 3.2 ch, selec
   way of the pointer. Updated from PDF.js's `pagechanging`, never read ahead of it (the harness's first pill lagged a
   page behind for that reason).
 - Typing a number and Enter goes there; the arrows step a page.
-- Named 原文页码 and 译文页码; the buttons 上一页 and 下一页.
+- Named 原文页码 and 译文页码; the buttons 上一页 and 下一页, whose tooltips stand above them (the pill is at the pane's foot).
 
 ### 6.5 The scroll indicators
 
@@ -344,7 +344,8 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
   status words; the maintainer asked for the line back, 2026-09-25 — the status words were what had to leave the
   header, not the line — and then for no capsule while it runs: the line says it.)
 - The paragraphs that failed are told once the run has ended, not while it runs.
-- **A notice** carries a chip action and a close button; closing it is remembered for this paper's visit.
+- **A notice** carries a chip action and a close button, whose tooltip stands above it; closing it is remembered for this paper's visit, each notice apart — the partial one's close does not close the count of failed passages it stood before (#314).
+- **Two notes that are not a notice**: settings that cannot be read stand for as long as it is so, with a link to the settings page and no close (UI.md S-R-21); a write storage refused is told with the settings page's sentence until it is closed or a later write of this page goes through (S-R-22).
 - **When the translation's pane has nothing to show**, the same anatomy is a card centred in that pane (300 px, 14 px
   radius, the popover shadow), with a filled action; the capsule is not shown as well.
 
@@ -390,6 +391,8 @@ No state that tells the reader nothing is shown (no "done").
 | Language not supported | the shared target language is not one of the nine | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the nine translates |
 | Nothing translated | a service failure with no paragraph done | card in the translation's pane: the reason (网络连接失败, API Key 无效或已过期, 尚未配置 API Key, …) · 重试, or 设置 when the reason is a key (opening the settings page at the services) |
 | Cannot be had | the paper has no source, or none of the ways of typesetting it worked (every one tried, none for want of time) | 对照 and 译文 greyed in the switch; the reader shows 原文, with the capsule: 这篇论文暂不支持 PDF 翻译, and 改用 HTML 翻译 where arXiv has an HTML version (opened where `reading.openIn` says); no close. Remembered on this machine by paper version, language and pipeline, when the paper's own source set there: a visit again asks nothing of the service, a new pipeline tries once more (the maintainer, 2026-09-26; the words first had none) |
+| No paper | the address names none (a hand-typed one) | the phase is ready, not loading; 对照 and 译文 greyed and 原文 selected whatever the saved display; a card in the document area: 找不到这篇论文 · 前往 arXiv (a link, opened where `reading.openIn` says) |
+| Settings cannot be read | storage did not answer in a page's first 1,500 ms, or its value cannot be used | the defaults in use and the PDF opened on them, not held for the storage; capsule: 设置读取失败，当前使用默认设置 · 设置, for as long as it is so, beside an address with no paper's card too; the controls that write the settings greyed, with the reason in their tooltips; the menus keep their places |
 | Narrow window | 对照 chosen, the document area under 840 px (§5) | the translation alone; capsule, once: 窗口较窄，暂只显示译文 |
 
 - Recovery is automatic where it can be: when the network comes back the translation goes on by itself; 重试 asks only

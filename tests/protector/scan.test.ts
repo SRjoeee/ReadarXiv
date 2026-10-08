@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { extract } from '@/core/extractor'
 import { decodeText, indexSpans, nodeOffsetAt, rehydrate, scanTokens, serialize, tokenize, wireOffsetAt, type PositionedToken } from '@/core/protector'
 import { el } from './helpers'
+import { turn } from '../turn'
 
 const FIXTURE_DIR = join(import.meta.dirname, '../fixtures/arxiv')
 
@@ -21,12 +22,13 @@ const asRehydrated = (wire: string, fmt: 'tags' | 'markers') =>
 describe('positioned token scan (#105)', () => {
   // Scanning the whole fixture set × two formats is a CPU-bound pass; at full load it competes with the other hundred-odd test files for workers,
   // measured to hang on the global 30 s (5 s idle, 31–38 s concurrent). This is unrelated to product behaviour, so it gets a margin of its own
-  it('agrees with tokenize across every fixture in both formats', { timeout: 120_000 }, () => {
+  it('agrees with tokenize across every fixture in both formats', { timeout: 120_000 }, async () => {
     // The scan mirrors tokenize rather than changing it, because tokenize is the protector's
     // hottest path and its markers branch has already turned `@@` back into `@`. Mirroring only
     // works while the two agree, so this is the guard that says they do.
     let blocks = 0
     for (const f of readdirSync(FIXTURE_DIR).filter(n => n.endsWith('.html'))) {
+      await turn()
       const d = new DOMParser().parseFromString(readFileSync(join(FIXTURE_DIR, f), 'utf8'), 'text/html')
       for (const b of extract(d)) {
         if (b.kind !== 'text') continue

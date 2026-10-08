@@ -8,6 +8,7 @@ import { pairAt, registerSentences, sentenceAt, sentenceMapAt, sentenceMapOf } f
 import { splitFigures } from '@/core/renderer/split-figures'
 import { docOf } from './helpers'
 import { splitSentences } from '../sentences/lengths'
+import { turn } from '../turn'
 import { verifyAlignment } from '@/providers/alignment'
 
 const FIXTURE_DIR = join(import.meta.dirname, '../fixtures/arxiv')
@@ -355,7 +356,7 @@ describe('sentence lookup round trip (#105)', () => {
    * translation: that yields a genuine alignment (the same partition on both sides) with no engine,
    * and exercises exactly the path the renderer will.
    */
-  it('the sentence found for a character has boundaries that cover it, across fixtures', () => {
+  it('the sentence found for a character has boundaries that cover it, across fixtures', async () => {
     // Violations are collected rather than asserted per character: an `expect` per character means
     // over a million assertion objects, which costs seven times what the work itself does (906ms of
     // real work, measured). Reporting them together also shows how widespread a break is instead of
@@ -364,6 +365,7 @@ describe('sentence lookup round trip (#105)', () => {
     let chars = 0
     let blocks = 0
     for (const f of readdirSync(FIXTURE_DIR).filter(n => n.endsWith('.html')).slice(0, 3)) {
+      await turn()
       const d = new DOMParser().parseFromString(readFileSync(join(FIXTURE_DIR, f), 'utf8'), 'text/html')
       for (const b of extract(d)) {
         if (b.kind !== 'text') continue

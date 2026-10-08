@@ -70,7 +70,7 @@ export default defineBackground(() => {
       return {
         config: resolved,
         transport: await createLocalTransport(resolved, {
-          cache, cancelled, warn: diag, rejected,
+          cache, cancelled, warn: diag, note: diag, rejected,
           // a refused key is remembered across sessions (the redesign's design, §4): a 401 to one of the reader's
           // services, marked only if the key and the address **this chain** used are still the service's — this chain
           // may have outlived a key rotation (Codex review, round 2; health-guard.ts)
@@ -171,6 +171,7 @@ export default defineBackground(() => {
     retireOthers: () => chain.retireOthers(),
     cancelScope: scope => chain.cancelScope(scope),
     onDrop: scope => ocr.cancel(scope),
+    note: diag,
     /**
      * Is that tab still the page it was: ask it.
      *

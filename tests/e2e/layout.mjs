@@ -514,16 +514,18 @@ async function measureFrame(page) {
     underRestore.open && underRestore.labels >= 4 && !restored.open && restored.emptied && !restored.on && restored.unlocked,
     JSON.stringify({ underRestore, restored }))
   // The control is bound to the figure by the browser (CSS anchor positioning), not placed by us: at the figure's top
-  // right within a pixel, and — scrolled until that corner lies under arXiv's sticky header — still there, with the
-  // header over it. It was a fixed box above everything, kept inside the window: it stood ON the header (reported
-  // 2026-09-21). Asked on the restored page: the viewer is there untranslated too, and nothing of ours may stay behind
+  // right within a pixel, and — scrolled until that corner lies under arXiv's sticky header — held just under the
+  // header's edge, still in the figure and what a press finds (issue #303: it stood under the header, hidden, and a
+  // press there reached the header's link; before that a fixed box above everything stood ON the header, reported
+  // 2026-09-21). The spot is the figure's rectangle now and the control sticks inside it, so the control is what is
+  // measured. Asked on the restored page: the viewer is there untranslated too, and nothing of ours may stay behind
   {
     const SPOT = () => {
-      const spot = document.querySelector('.axt-viewer-spot').getBoundingClientRect()
+      const spot = document.querySelector('.axt-viewer-spot').shadowRoot.querySelector('.axt-viewer-open').getBoundingClientRect()
       const figure = document.querySelector('[data-axt-viewed]')?.getBoundingClientRect()
       const header = document.querySelector('header.arxiv-html-header').getBoundingClientRect()
       const there = document.elementFromPoint(spot.left + 15, spot.top + 15)
-      return { attached: !!figure && Math.abs(figure.right - 8 - spot.right) < 1 && Math.abs(figure.top + 8 - spot.top) < 1, top: Math.round(spot.top), figureTop: figure ? Math.round(figure.top) : null, headerBottom: Math.round(header.bottom), there: there ? `${there.tagName.toLowerCase()}.${String(there.className).split(' ')[0]}` : null }
+      return { attached: !!figure && Math.abs(figure.right - 8 - spot.right) < 1 && Math.abs(figure.top + 8 - spot.top) < 1, atRight: !!figure && Math.abs(figure.right - 8 - spot.right) < 1, top: Math.round(spot.top), figureTop: figure ? Math.round(figure.top) : null, headerBottom: Math.round(header.bottom), there: there ? `${there.tagName.toLowerCase()}.${String(there.className).split(' ')[0]}` : null }
     }
     const at = await page.evaluate(() => {
       const picture = [...document.querySelectorAll('svg.ltx_picture')].find(el => el.getBoundingClientRect().width > 300 && el.getBoundingClientRect().height > 250)
@@ -565,7 +567,7 @@ async function measureFrame(page) {
     await page.mouse.move(narrowed.x, narrowed.y, { steps: 3 })
     await sleep(400)
     const kept = await page.evaluate(() => {
-      const spot = document.querySelector('.axt-viewer-spot').getBoundingClientRect()
+      const spot = document.querySelector('.axt-viewer-spot').shadowRoot.querySelector('.axt-viewer-open').getBoundingClientRect()
       const frame = document.querySelector('[data-axt-viewed-frame]')?.getBoundingClientRect()
       const figure = document.querySelector('[data-axt-viewed]')?.getBoundingClientRect()
       const out = { controlRight: Math.round(spot.right), frameRight: frame ? Math.round(frame.right) : null, figureRight: figure ? Math.round(figure.right) : null }
@@ -582,8 +584,8 @@ async function measureFrame(page) {
     await page.mouse.move(3, 400)
     await sleep(500)
     const gone = await page.evaluate(() => ({ named: document.querySelectorAll('[data-axt-viewed], [data-axt-viewed-frame]').length, sheets: document.adoptedStyleSheets.length }))
-    check('the figure viewer\'s control is bound to the figure: at its top right, under the site\'s header when that corner is, and the pointer gone nothing of it is left on the page',
-      bound.attached && bound.there === 'div.axt-viewer-spot' && covered.attached && covered.top < covered.headerBottom && covered.there === 'header.arxiv-html-header' && gone.named === 0 && gone.sheets === 0,
+    check('the figure viewer\'s control is bound to the figure: at its top right, held just under the site\'s header when that corner is under it and still what is found there, and the pointer gone nothing of it is left on the page',
+      bound.attached && bound.there === 'div.axt-viewer-spot' && covered.atRight && covered.figureTop < covered.headerBottom && covered.top >= covered.headerBottom && covered.top <= covered.headerBottom + 10 && covered.there === 'div.axt-viewer-spot' && gone.named === 0 && gone.sheets === 0,
       `on the page ${JSON.stringify(bound)}; scrolled under the header ${JSON.stringify(covered)}; the pointer gone ${JSON.stringify(gone)}`)
   }
   if (!process.env.AXT_E2E_IMAGES) {

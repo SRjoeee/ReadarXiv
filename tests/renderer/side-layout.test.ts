@@ -11,6 +11,7 @@ import { T_CLASS } from '@/core/marks'
 import { extract, markBlocks, PAIRS_ATTR } from '@/core/extractor'
 import { MULTI_PANEL_FLEX, SIDE_CONTAINER, SIDE_DENY, SIDE_DENY_SUBTREE_CSS, SIDE_ORIGINAL, SIDE_STACK, isSideContainer, markStructure } from '@/core/renderer/side-layout'
 import { docOf } from './helpers'
+import { turn } from '../turn'
 
 const FIXTURE_DIR = join(import.meta.dirname, '../fixtures/arxiv')
 const CSS = readFileSync(join(import.meta.dirname, '../../src/styles/modes.css'), 'utf8')
@@ -89,15 +90,16 @@ describe('side mode\'s container coverage', () => {
     }
   })
 
-  it('a multi-panel figure is not taken over, a single-column flex figure is: only whether the cells are full-column counts (ltx_flex_size_1)', () => {
+  it('a multi-panel figure is not taken over, a single-column flex figure is: only whether the cells are full-column counts (ltx_flex_size_1)', async () => {
     // ar5iv uses flex to put panels side by side; taken over as a grid, each panel takes a row of its own and fills the article column (measured on 2410.00260);
     // but the cells of a single-column flex figure, all size_1, are full-column wide, and excluding it would only stack tables and footnotes vertically (measured on 2609.03768v1's Table 1)
     let multi = 0
     let single = 0
     for (const file of files) {
       const html = readFileSync(join(FIXTURE_DIR, file), 'utf8')
-      // Fixtures without a flex figure are not parsed: parsing all 12 blows the worker's heap (measured: OOM after 4.4 GB RSS)
+      // Fixtures without a flex figure are not parsed — there is nothing in them to look at (once, each parsed paper stayed in memory and parsing all 12 blew the worker's heap: issue #234)
       if (!html.includes('ltx_flex_figure')) continue
+      await turn()
       const doc = new DOMParser().parseFromString(html, 'text/html')
       const root = doc.querySelector(DOCUMENT_ROOT)
       if (!root) continue

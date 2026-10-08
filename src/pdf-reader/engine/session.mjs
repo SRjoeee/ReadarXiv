@@ -23,10 +23,11 @@ import { renderImage, setImageModes } from '@/core/renderer/image'
 import { sendMessage } from '@/shared/messages'
 import { createSurfaceConfig } from '@/shared/surface-config'
 import { R } from '@/ui/strings'
+import { firstReadTime } from '@/ui/first-read'
 import { localeStale } from '@/ui/use-surface-config'
 import { ocrCall } from '../ocr'
 import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFViewer, pdfjsLib } from '../pdfjs'
-import { displayOf, figuresShown, followOf, withDisplay } from '../settings'
+import { displayOf, figuresShown, firstConfig, followOf, withDisplay } from '../settings'
 import { isName, nameEvidence } from '../../core/names'
 import { whenVisible } from '../visible'
 import { contentsOf, outlineOf } from '../outline'
@@ -53,12 +54,13 @@ const host = await hostReady
 const { params } = host
 const paper = params.get('paper') ?? ''
 /** a precompiled demo paper (made locally by spikes/reader-papers.mjs, never in the repository; the probes stage it into
- *  a copy of the build at pdf-reader/papers/) when one is asked for by `paper` without `live` */
-const DEMO = params.get('live') !== '1' && params.has('paper')
+ *  a copy of the build at pdf-reader/papers/) when `live` is not asked for */
+const DEMO = params.get('live') !== '1'
 /** the developer's status line, for the probes (window.__reader.status) and the log; the interface does not show it */
 const status = text => { window.__reader.status = text; host.emit({ type: 'status', text }) }
 const timing = { start: performance.now() }
-window.__reader = { timing, ready: false }
+// the probes' hooks: `host` lets a browser check put the interface in a state the demo paper never reaches, by the events a run would send (lab/pdf/spikes/reader-ui.mjs)
+window.__reader = { timing, ready: false, host }
 
 // ---------------------------------------------------------------- the extension's settings, and the display
 // The reader's settings are the extension's (the reader's design, §3, §9.1), read and written as its popup and
@@ -73,8 +75,13 @@ const MODES = ['original', 'translation', 'bilingual']
 /** the settings as they last landed; null until the first read */
 let config = null
 const surface = createSurfaceConfig({ localeStale, reload: () => location.reload(), onLanded: (next, from) => landed(next, from) })
-await new Promise(resolve => { const off = surface.subscribe(() => { if (surface.state().config) { off(); resolve() } }); surface.start() })
-config = surface.state().config
+// The first landing is not waited on for ever: storage that is silent or refuses a read would hold the session, and the
+// PDF with it. The page has read the settings once already, bounded (main.tsx): the session starts on that reading at
+// once, with its reason if it fell back, and the surface reads on behind it; one the page got no answer to (`null`) is
+// not waited on again, the defaults standing in. Either way `provisional` stands until a landing of the surface, which
+// is then followed as a change of the settings (settings.ts firstConfig, `landed`)
+let provisional
+;({ config, provisional } = await firstConfig(surface, host.reading, host.reading === undefined ? firstReadTime() : Promise.resolve()))
 // the offline service's language pack, which the surface looks up once the settings have landed: the service menu
 // follows it as it comes (the final review: it was read once, before it came, and the offline service stayed greyed)
 let pack = surface.state().pack ?? null
@@ -83,7 +90,7 @@ surface.subscribe(() => { const now = surface.state().pack ?? null; if (now !== 
 // asked to translate (#readarxiv on the PDF address, the reader's design, §2): the translated display the settings
 // name, not an original left on — the reader asked for a translation, not for what it last read
 const askTranslate = params.get('ask') === 'translate'
-let mode = MODES.includes(params.get('mode')) ? params.get('mode') : askTranslate ? (config.mode === 'only' ? 'translation' : 'bilingual') : displayOf(config)
+let mode = !paper ? 'original' : MODES.includes(params.get('mode')) ? params.get('mode') : askTranslate ? (config.mode === 'only' ? 'translation' : 'bilingual') : displayOf(config)
 let narrow = false // the window too narrow for two sides (setNarrow)
 function showMode() {
   document.documentElement.setAttribute('data-axt-pdf-mode', mode)
@@ -116,14 +123,16 @@ function showSettings() {
   sheet.textContent = appearanceRule(lookOf(config))
   pack = surface.state().pack ?? null
   host.emit({ type: 'settings', config, pack })
-  // the defaults are in effect — the service and its key set on the settings page are not — until they are repaired there
-  host.emit({ type: 'notice', why: surface.state().fallbackReason ?? null })
+  // the defaults are in effect — the service and its key set on the settings page are not — until they are repaired there,
+  // or until storage answers, if the first read was given up on: what the page's own read said stands till the surface's
+  host.emit({ type: 'notice', why: surface.state().fallbackReason ?? provisional?.why ?? null })
 }
 showSettings()
 /** this page's writes of the settings, one after another; a new language's reload waits for them. A write the store
- *  refuses (its stored value cannot be read, config/storage.ts) is dropped: what the reader chose still holds on screen */
+ *  refuses (its stored value cannot be read, config/storage.ts, or storage itself fails) is dropped: what the reader
+ *  chose still holds on screen, and the interface is told (S-R-22) */
 let writes = Promise.resolve()
-const save = change => (writes = writes.then(() => surface.patch(change)).catch(e => console.warn('[settings]', e?.message ?? e)))
+const save = change => (writes = writes.then(() => surface.patch(change)).then(() => host.emit({ type: 'saved' }), e => { console.warn('[settings]', e?.message ?? e); host.emit({ type: 'refused' }) }))
 // an original left on is let go when the reader was asked to translate: the next PDF opens as this one does
 if (askTranslate && config.pdfReader.original) void save(c => ({ ...c, pdfReader: { ...c.pdfReader, original: false } }))
 /** a change of the settings from the interface (the controller's patchSettings) */
@@ -132,7 +141,7 @@ export function patchSettings(change) { void save(change) }
 let translating = false
 /** the original held for this visit: the paper or its language cannot be had as a bilingual PDF, and a display chosen
  *  on another page is not followed into a translation there is none of (the final review) */
-let held = false
+let held = !paper
 /** why the last translation stopped short, when a retry can mend it: { event, kind }; null otherwise (the reader's design, §8) */
 let stopped = null
 /** the translation under way, and the way to run it again in place, which live() sets once the paper is open; null
@@ -146,7 +155,11 @@ let viewersMade = false
  *  the highlight and figure text as they now are. A refused write lands the defaults, which the reader's own choices on
  *  screen outlive: nothing is followed, not even a target language the defaults name (Part 2's final review) */
 function landed(next, from) {
-  if (!config || from === 'first') return
+  if (!config) return
+  // the first landing, once the reader has started on the page's reading or the defaults, is a change of the settings
+  // like any other: the display, the sync, the language and the services it brings are followed
+  if (from === 'first') { if (!provisional) return; from = 'elsewhere' }
+  provisional = null
   const prev = config
   config = next
   showSettings()
@@ -2542,6 +2555,7 @@ async function demo() {
   }
 }
 
-/** the run: live, a demo, or nothing without a paper; a crash is a failure the controller hears of */
-export const run = (params.get('live') === '1' ? live() : DEMO ? demo() : Promise.resolve().then(() => { status('no paper'); window.__reader.ready = true }))
+/** the run: nothing without a paper (the controller knows it from the address, and the interface says it: S-R-20), else
+ *  live or a demo; a crash is a failure the controller hears of */
+export const run = (!paper ? Promise.resolve().then(() => { status('no paper'); window.__reader.ready = true }) : DEMO ? demo() : live())
   .catch(e => { runAgain = null; console.error('[reader]', e); host.emit({ type: 'fail', event: 'crashed', text: String(e?.message ?? e) }) })

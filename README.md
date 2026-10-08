@@ -175,7 +175,7 @@ pnpm build
 
 pnpm e2e                 # real Chromium with the extension loaded
 pnpm e2e:layout          # side-mode layout contracts
-pnpm e2e:a11y            # A/B axe audit: only what the extension introduces
+pnpm e2e:a11y            # A/B axe audit, offline: only what the extension introduces
 pnpm e2e:image           # figure translation, bitmaps read by the built-in recogniser
 pnpm e2e:placeholders    # placeholder survival through the real services
 pnpm fixtures:stats      # rule coverage across the fixture papers

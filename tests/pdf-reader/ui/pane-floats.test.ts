@@ -2,10 +2,10 @@ import { act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { PagePill } from '@/pdf-reader/ui/PagePill'
 import { thumbSize } from '@/pdf-reader/ui/ScrollIndicator'
-import { setLocale } from '@/ui/strings'
+import { R, setLocale } from '@/ui/strings'
 import { mountElement } from '../../ui/render-hook'
 import { fakeController } from './fake-controller'
-import { stubPopovers } from './popover-stub'
+import { isOpen, stubPopovers } from './popover-stub'
 
 let restore = () => {}
 // the interface's words as the maintainer reads them: the controls are found by them
@@ -23,7 +23,19 @@ describe('a pane\'s page pill (the reader\'s design, §6.4)', () => {
   it('shows the side\'s page and its count, named for its side', async () => {
     const { container } = await mount()
     const input = container.querySelector('input')!
-    expect([input.value, input.getAttribute('aria-label'), container.textContent]).toEqual(['4', '译文页码', '/ 26'])
+    expect([input.value, input.getAttribute('aria-label'), container.querySelector('.of')?.textContent]).toEqual(['4', R.pill.translation, '/ 26'])
+  })
+
+  it('names its arrows in tooltips, shown above them: the pill stands at the pane\'s foot (P3-M11)', async () => {
+    const { container } = await mount()
+    const [prev, next] = [...container.querySelectorAll<HTMLButtonElement>('button')]
+    for (const [button, words] of [[prev!, R.pill.previous], [next!, R.pill.next]] as const) {
+      const tip = button.nextElementSibling!
+      expect([button.getAttribute('aria-label'), tip.matches('.tip[popover]'), tip.textContent, tip.getAttribute('data-side'), tip.getAttribute('aria-hidden')]).toEqual([words, true, words, 'top', 'true'])
+    }
+    // at once on the keyboard\'s focus, as every tip of the bar
+    await act(async () => { prev!.focus() })
+    expect(isOpen(prev!.nextElementSibling)).toBe(true)
   })
 
   it('goes to a page typed and entered, not to one out of range; the arrows step a page', async () => {

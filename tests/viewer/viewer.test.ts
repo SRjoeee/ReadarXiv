@@ -1,7 +1,7 @@
 // The figure viewer (DESIGN §15.7): a figure opened large in a dialog, from a control over it. happy-dom lays nothing
 // out, so the rectangles a figure has on the page, and whether a node shows, are given to the elements here
 import { VIEWED_ATTR, VIEWED_FRAME_ATTR } from '@/core/marks'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { installFigureViewer, SPOT_CLASS, type FigureViewer, VIEWER_CLASS } from '@/core/viewer'
 import { restore } from '@/core/renderer/page'
 import { tokenSheet } from '@/shared/tokens'
@@ -30,10 +30,15 @@ const over = (target: Element, x = 0, y = 0): void => {
 }
 
 let viewer: FigureViewer | null = null
+// happy-dom lays nothing out and has no hit test: nothing is on top of anything unless a case says so
+beforeEach(() => {
+  Object.defineProperty(document, 'elementsFromPoint', { configurable: true, value: () => [] })
+})
 afterEach(() => {
   viewer?.remove()
   viewer = null
   document.body.innerHTML = ''
+  delete (document as unknown as Record<string, unknown>).elementsFromPoint
 })
 
 function page(html: string): { root: ShadowRoot; control: HTMLButtonElement; dialog: HTMLDialogElement; host: HTMLElement; spot: HTMLElement } {
@@ -81,12 +86,18 @@ describe('the control over a figure', () => {
     const laid = spot.getAttribute('style') ?? ''
     expect(laid).toContain('position:absolute')
     expect(laid).toContain('position-anchor:--axt-viewed')
-    expect(laid).toMatch(/top:calc\(anchor\(top,[^)]*\) \+ 8px\)/)
-    expect(laid).toMatch(/right:calc\(max\(anchor\(right, 0px\), [^;]*\) \+ 8px\)/)
+    // The box is the figure's rectangle, laid out by the same anchor; the control inside it is what stands in the corner
+    expect(laid).toMatch(/top:anchor\(top,[^)]*\)/)
+    expect(laid).toMatch(/height:anchor-size\(height,[^)]*\)/)
+    expect(laid).toMatch(/left:max\(anchor\(left, 0px\), [^;]*\)/)
+    expect(laid).toMatch(/right:max\(anchor\(right, 0px\), [^;]*\)/)
+    expect(laid).toContain('padding:8px')
+    // It lies over the figure and takes no pointer of its own: only the control does, and only while it shows
+    expect(laid).toContain('pointer-events:none')
     // The page's content layer, where our overlays are: arXiv's header is at 2
     expect(laid).toContain('z-index:1')
     expect(laid).not.toContain('fixed')
-    // Nothing of where it stands is written by us: a figure's top above the window is no case to handle
+    // Nothing of where it stands is written by us
     expect(control.style.top).toBe('')
     expect(control.style.left).toBe('')
     // Gone from the figure, the name goes once the control has faded, and the sheet with it
@@ -114,10 +125,79 @@ describe('the control over a figure', () => {
     const rules = document.adoptedStyleSheets.map(sheet => Array.from(sheet.cssRules, rule => rule.cssText).join(' ')).join(' ')
     expect(rules).toMatch(/\[data-axt-viewed-frame\] \{ anchor-name: --axt-viewed-frame; \}/)
     // The larger inset is the edge further in: the figure's, or the frame's where the figure runs past it
-    expect(document.querySelector(`.${SPOT_CLASS}`)!.getAttribute('style')).toMatch(/right:calc\(max\(anchor\(right, 0px\), anchor\(--axt-viewed-frame right, 0px\)\) \+ 8px\)/)
+    const laid = document.querySelector(`.${SPOT_CLASS}`)!.getAttribute('style')
+    expect(laid).toContain('right:max(anchor(right, 0px), anchor(--axt-viewed-frame right, 0px))')
+    expect(laid).toContain('left:max(anchor(left, 0px), anchor(--axt-viewed-frame left, 0px))')
     over(document.querySelector('article')!)
     await new Promise(resolve => setTimeout(resolve, 400))
     expect(frame.hasAttribute(VIEWED_FRAME_ATTR)).toBe(false)
+  })
+
+  it('stands in the visible part of its figure under a header the page pins: it is sticky inside the figure\'s box, below the bottom of what the page pins where the control is, measured when it shows (issue #303)', () => {
+    // A figure whose top is under arXiv's sticky header had its control under the header too: nothing showed where the
+    // reader hovered, and a click there reached the header's link. A declarative cure does not exist — the clamp and
+    // `position-try` are both decided against the layout as it stood unscrolled (measured on Chrome 131 and 153) — so
+    // the control is `position: sticky` in a box that is the figure's rectangle, and the one thing the page alone
+    // knows, how far down it pins something at the control's side, is read from the page once, when the control shows
+    const { control, spot } = page(PICTURE)
+    const css = spot.shadowRoot!.querySelector('style')!.textContent!.replace(/\/\*[\s\S]*?\*\//g, '')
+    const stuck = ruleOf(rules(css), '.axt-viewer-open', [])
+    expect(stuck.position).toBe('sticky')
+    expect(stuck.top).toBe('calc(var(--axt-viewed-pin, 0px) + 8px)')
+    const svg = document.querySelector('svg')!
+    const header = document.createElement('header')
+    header.style.position = 'sticky'
+    const link = document.createElement('a')
+    header.append(link)
+    document.body.prepend(header)
+    place(header, rect(0, 0, 1280, 64))
+    place(svg, rect(100, -40, 400, 300))
+    const asked: [number, number][] = []
+    Object.defineProperty(document, 'elementsFromPoint', {
+      configurable: true,
+      value: (x: number, y: number) => {
+        asked.push([x, y])
+        return [y < 64 ? link : svg, document.body, document.documentElement]
+      },
+    })
+    over(svg)
+    // Where the control stands, at the figure's right edge and the top of the window: found the page's header there, 64 px down
+    expect(asked[0]).toEqual([477, 1])
+    expect(control.style.getPropertyValue('--axt-viewed-pin')).toBe('64px')
+    expect(control.hasAttribute('data-axt-shown')).toBe(true)
+  })
+
+  it('reads no pin where the page pins nothing, or a layer that covers the window; and a stack of bars one under another is one pin', async () => {
+    const { control } = page(PICTURE)
+    const svg = document.querySelector('svg')!
+    place(svg, rect(100, -40, 400, 300))
+    const bar = (top: number, bottom: number, position = 'fixed') => {
+      const el = document.createElement('div')
+      el.style.position = position
+      document.body.append(el)
+      place(el, rect(0, top, 1280, bottom - top))
+      return el
+    }
+    /** The pointer off the figure for the grace the control waits, so the next arrival is a new one */
+    const leave = async () => { over(document.body); await new Promise(resolve => setTimeout(resolve, 200)) }
+    const stack = (...layers: Element[][]) => Object.defineProperty(document, 'elementsFromPoint', { configurable: true, value: (_x: number, y: number) => layers.find((_, i) => y <= [60, 100, 140][i]!) ?? [svg] })
+    // nothing pinned: the figure is what is at the top of the window there
+    stack()
+    over(svg)
+    expect(control.style.getPropertyValue('--axt-viewed-pin')).toBe('0px')
+    // a header and a bar under it: the pin is the bottom of the lower
+    const header = bar(0, 60)
+    const under = bar(60, 100, 'sticky')
+    stack([header], [under])
+    await leave()
+    over(svg)
+    expect(control.style.getPropertyValue('--axt-viewed-pin')).toBe('100px')
+    // a modal layer over the whole window is no header
+    const modal = bar(0, 860)
+    stack([modal])
+    await leave()
+    over(svg)
+    expect(control.style.getPropertyValue('--axt-viewed-pin')).toBe('0px')
   })
 
   it('one figure is named at a time; and a name swept off while the control shows — restoring the page strips every mark of ours by its prefix — is written back without the pointer moving onto anything', async () => {

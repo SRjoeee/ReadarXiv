@@ -1,5 +1,6 @@
 // The session's types (session.mjs is JavaScript until the engine's port): what it reports, and what it takes
 import type { Config } from '@/config/schema'
+import type { ConfigReading } from '@/config/storage'
 import type { PackState } from '@/shared/pack'
 import type { OutlineEntry } from '../outline'
 
@@ -8,8 +9,12 @@ export type SyncMode = 'off' | 'current' | 'same' | 'pointer' | 'matched'
 export type SessionEvent =
   /** the developer's status line, English; the interface does not show it */
   | { type: 'status'; text: string }
+  /** a write of the settings by this page that went through (session.mjs `save`): a refusal before it is mended */
+  | { type: 'saved' }
   /** why the extension's settings could not be read (config/storage.ts FallbackReason), or null when they could */
   | { type: 'notice'; why: unknown }
+  /** a write of the settings that storage refused or could not make (session.mjs `save`), after the notice of settings that cannot be read when that is why */
+  | { type: 'refused' }
   /** the contents: the paper's headings, each by its text and page on the translation's side (outline.ts) */
   | { type: 'outline'; entries: OutlineEntry[] }
   /** the heading being read: the last one above the reading line on the side read (the translation's when shown) */
@@ -37,6 +42,11 @@ export interface SessionHost {
   right: HTMLElement
   params: URLSearchParams
   emit(event: SessionEvent): void
+  /** the page's own first read of the settings, bounded (ui/first-read.ts): the session starts on it at once, with its
+   *  reason if it fell back, and its own read goes on behind it, its landing followed as a change; `null` when it did not
+   *  answer in its time — the session then opens on the defaults at once, not waiting on a storage that is silent;
+   *  absent, the session waits on its own read for as long as that clock allows */
+  reading?: ConfigReading | null
 }
 export declare function setDisplay(mode: EngineDisplay): void
 export declare function setSyncMode(mode: SyncMode): void

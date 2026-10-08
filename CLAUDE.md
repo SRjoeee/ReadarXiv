@@ -60,12 +60,13 @@ pnpm build               # wxt build + scripts/check-output.mjs
 pnpm exec wxt build --mode development   # the dev pages too: the gallery (every popup state) and the controls sheet
 pnpm e2e                 # real Chromium with the extension (pnpm build first; once: npx playwright install chromium)
 pnpm e2e:layout          # side-mode layout contract in a real browser
-pnpm e2e:a11y            # A/B axe audit: only differences the extension introduces
+pnpm e2e:a11y            # A/B axe audit, offline (fixture + vendored arXiv sheets + echo endpoint): only differences the extension introduces
 pnpm e2e:local-endpoint  # an http endpoint without CORS headers can translate a whole page
 pnpm e2e:pdf             # arXiv's PDF page: the button is drawn there, it and the popup open the bilingual version
 pnpm e2e:reader          # the PDF reader on a paper of our own, no network: a route table guards every request; the stand-in of the layer API serves the sample's bundle (tests/fixtures/pdf/sample-1/; pnpm build first)
 pnpm e2e:floating        # the floating button on the abstract, PDF and full-text pages: rest, hover, drag, hide, toggle, tick
 pnpm e2e:popup           # the popup: finding a paper, the menus under their rows, the entries, the panel growing
+pnpm e2e:viewer          # the figure viewer's control under a header the page pins, offline (AXT_CHROME=<Chrome 131> for the floor)
 pnpm e2e:image           # image translation, bitmaps read by the recogniser the extension ships
 pnpm e2e:placeholders    # placeholder survival per sentence shape against a live engine (DESIGN §6.3)
 pnpm fixtures:fetch      # download and verify the fixtures the repository may not hold (tests/fixtures/README.md); pnpm test does it too

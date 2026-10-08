@@ -174,7 +174,11 @@ export function createPopupState(host: PopupHost, seed: { rejected?: readonly st
     ...host.config,
     onLanded: (_, from) => { if (from === 'own' || from === 'elsewhere') void asks.saved() },
   })
-  surface.subscribe(changed)
+  // Told only while the popup runs: the first landing is made of two waits (the store's read, the digest of the chain
+  // settings) that can still be out when stop() runs, and a landing that notified a popup that had stopped was the one
+  // write the others' `live` guards did not cover. A start that runs again after a stop (StrictMode) is `running` again,
+  // and is told when it lands
+  surface.subscribe(() => { if (running) changed() })
 
   /**
    * Service availability. Re-queried after a pack download and after every config change, or the translate button

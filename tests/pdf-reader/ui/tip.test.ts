@@ -1,6 +1,8 @@
 import { act, createElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TippedButton } from '@/pdf-reader/ui/TippedButton'
 import { ToolbarButton } from '@/pdf-reader/ui/ToolbarButton'
+import { R } from '@/ui/strings'
 import { mountElement } from '../../ui/render-hook'
 import { isOpen, stubPopovers } from './popover-stub'
 
@@ -57,6 +59,14 @@ describe('a toolbar button and its tooltip (the reader\'s design, §6.1, §13)',
       shown.push(isOpen(container.querySelector('.tip')))
     }
     expect(shown).toEqual([true, false])
+  })
+
+  it('a small icon button of the reader is named in a tooltip beside it, below by default and above or aside where it stands at the foot of the page or in the sidebar', async () => {
+    for (const [side, expected] of [[undefined, 'bottom'], ['top', 'top'], ['right', 'right']] as const) {
+      const { container } = await mountElement(createElement(TippedButton, { label: R.status.close, side, onClick: () => {} }, 'x'))
+      const button = container.querySelector('button')!
+      expect([button.getAttribute('aria-label'), button.nextElementSibling?.matches('.tip[popover]'), button.nextElementSibling?.textContent, button.nextElementSibling?.getAttribute('data-side')]).toEqual([R.status.close, true, R.status.close, expected])
+    }
   })
 
   it('does nothing when disabled, and says so', async () => {

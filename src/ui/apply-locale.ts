@@ -6,6 +6,7 @@
 import { browser } from 'wxt/browser'
 import { getConfig } from '@/config/storage'
 import { type LocaleCode, pickLocale } from '@/locales'
+import { answeredBy, firstReadTime } from './first-read'
 import { S, setLocale } from './strings'
 
 /**
@@ -24,8 +25,8 @@ export function browserLanguages(): string[] {
  * `title` names the page, in the language just chosen — the tab of the settings page would otherwise
  * keep the Chinese it was born with, whatever the interface says (Codex on #161)
  */
-export async function applyLocale(title?: (brand: string) => string): Promise<LocaleCode> {
-  return applyPageLocale(await storedChoice(), title)
+export async function applyLocale(title?: (brand: string) => string, time: Promise<void> = firstReadTime()): Promise<LocaleCode> {
+  return applyPageLocale(await storedChoice(time), title)
 }
 
 /**
@@ -48,13 +49,12 @@ export async function resolveLocale(): Promise<LocaleCode> {
   return pickLocale(await storedChoice(), browserLanguages())
 }
 
-async function storedChoice(): Promise<string | undefined> {
-  try {
-    return (await getConfig()).uiLanguage
-  } catch {
-    // Unreadable settings must not leave the interface blank: the browser's language still applies
-    return undefined
-  }
+async function storedChoice(time?: Promise<void>): Promise<string | undefined> {
+  // Settings that cannot be read, or that do not answer in `time` (a page's first paint, first-read.ts), must not leave
+  // the interface blank: the browser's language still applies. Without a `time` the read is waited for, as the
+  // background's startup needs (it decides whether to apply a pack at all)
+  const read = getConfig()
+  return (await (time ? answeredBy(read, time) : read.catch(() => undefined)))?.uiLanguage
 }
 
 /** The same choice from a configuration already in hand — the paper's script has just read it */
