@@ -1,6 +1,9 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cacheKeyFor } from '@/cache/key'
+import { translateCall } from '@/core/run/call'
+import type { TranslateCall } from '@/providers/translate-service'
 import { bundleKey, CTAG, VTAG } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { parseAddonManifest } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { LAYOUT, LayoutRefusal, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
@@ -60,15 +63,13 @@ describe('the per-text cache key (rules as data, §9.1)', () => {
     vi.resetModules()
     vi.doMock('@/core/rules/latexml', () => ({ RULES_VERSION: rules }))
     const { cacheKeyFor } = await import('@/cache/key')
-    return { html: await cacheKeyFor(identity), htmlNamed: await cacheKeyFor({ ...identity, source: 'html' }), pdf: await cacheKeyFor({ ...identity, source: 'pdf' }) }
+    return { html: await cacheKeyFor({ ...identity, source: 'html' }), pdf: await cacheKeyFor({ ...identity, source: 'pdf' }) }
   }
 
   it("a PDF text's key does not move when RULES_VERSION moves; an HTML block's does", async () => {
     const before = await keysUnder('0.11.0'), after = await keysUnder('0.12.0')
     expect(after.pdf).toBe(before.pdf)
     expect(after.html).not.toBe(before.html)
-    // the HTML page is the default: a caller that says nothing keeps its rules in the key
-    expect(after.htmlNamed).toBe(after.html)
     expect(before.pdf).not.toBe(before.html)
     expect(before.pdf).toMatch(/^[0-9a-f]{64}$/)
   })
@@ -82,10 +83,21 @@ describe('the per-text cache key (rules as data, §9.1)', () => {
     }
   })
 
-  it('CACHE_KEY_VERSION is 7: the slot of a PDF text changed with it, and the entries of 6 are left behind', async () => {
+  it('CACHE_KEY_VERSION stays 6: no HTML key changes meaning, and the PDF texts\' old entries (a rules string in the slot) orphan themselves', async () => {
     vi.resetModules()
     const { CACHE_KEY_VERSION } = await import('@/cache/key')
-    expect(CACHE_KEY_VERSION).toBe(7)
+    expect(CACHE_KEY_VERSION).toBe(6)
+  })
+
+  it('a key and a cache descriptor name their source: a caller that leaves it out does not type-check, and the HTML page\'s says html', () => {
+    // (pnpm typecheck holds these two: an unused @ts-expect-error is an error)
+    // @ts-expect-error source is required
+    void cacheKeyFor({ ...identity })
+    // @ts-expect-error source is required
+    const unnamed: TranslateCall['cache'] = { paper: 'p', renderPath: 'tags' }
+    void unnamed
+    const call = translateCall({ target: 'zh-CN', paper: '2608.04322' }, [{ id: 'a', text: 'x' }], 'tags')
+    expect(call.cache).toEqual({ paper: '2608.04322', renderPath: 'tags', source: 'html' })
   })
 })
 

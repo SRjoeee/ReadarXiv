@@ -88,7 +88,7 @@ describe('renderPath enters the key (#104)', () => {
   // The batch key uses the same field (translate-service's batchKey), so segments of the two formats are not gathered into one batch
   it('the same placeholder-free source gives three different keys on the three paths', async () => {
     const base = { providerId: 'p', model: 'm', promptKey: '', target: 'zh-CN', text: 'Hello world.' }
-    const keys = await Promise.all((['tags', 'markers', 'runs'] as const).map(renderPath => cacheKeyFor({ ...base, renderPath })))
+    const keys = await Promise.all((['tags', 'markers', 'runs'] as const).map(renderPath => cacheKeyFor({ ...base, renderPath, source: 'html' })))
     expect(new Set(keys).size).toBe(3)
   })
 
@@ -118,7 +118,7 @@ describe('why whitespace collapsing had to bump CACHE_KEY_VERSION (#122)', () =>
     const withNewlines = 'Automatic verification faces state\nexplosion due to\nthe interleavings.'
     const collapsed = withNewlines.replace(/[\t\n\f\r ]+/g, ' ')
     expect(withNewlines).not.toBe(collapsed)
-    const identity = { providerId: 'microsoft', model: '', promptKey: '', target: 'cmn', renderPath: 'markers' as const }
+    const identity = { providerId: 'microsoft', model: '', promptKey: '', target: 'cmn', renderPath: 'markers' as const, source: 'html' as const }
     const [a, b] = await Promise.all([
       cacheKeyFor({ ...identity, text: withNewlines }),
       cacheKeyFor({ ...identity, text: collapsed }),

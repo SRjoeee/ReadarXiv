@@ -63,7 +63,7 @@ describe('the wait budget of cache reads: no CachePort can drag it down (issue #
     })
     return { service, calls }
   }
-  const call = { request: { segments: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], source: 'en' as const, target: 'cmn' }, cache: { paper: '0000.00000', renderPath: 'tags' as const } }
+  const call = { request: { segments: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], source: 'en' as const, target: 'cmn' }, cache: { paper: '0000.00000', renderPath: 'tags' as const, source: 'html' as const } }
 
   it('a normal return is unaffected by the budget, and the segments hit are no longer sent to the provider', async () => {
     const { service, calls } = await serviceWith({ getMany: async keys => keys.map((_, i) => (i === 0 ? { translation: '甲' } : null)), putMany: async () => undefined })
@@ -106,6 +106,7 @@ describe('the cache identity includes the endpoint (issue #45, experiment 3)', (
     target: 'cmn',
     renderPath: 'tags',
     text: 'Hello',
+    source: 'html',
   })
 
   it('the same model name with different base URLs must not hit the same cache entry', async () => {
@@ -230,7 +231,7 @@ describe('no cache write after a drop (Codex on #33)', () => {
     })
     const pending = service.translate({
       request: { segments: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], source: 'en', target: 'cmn' },
-      cache: { paper: '0000.00000', renderPath: 'tags' },
+      cache: { paper: '0000.00000', renderPath: 'tags', source: 'html' as const },
       scope: 'session-1',
     })
     // Wait for a's batch to land, then drop the scope the way the router does — mark, then drain — and release b

@@ -83,12 +83,13 @@ export interface CacheIdentity {
  * sent changed** — the same text now goes out with `<x id="N"/>` boundary markers — so an old entry no longer
  * describes the same request. Unbumped, every paper translated within the 30-day TTL would hit the old entries
  * without alignment, and the highlight would stay dark on those pages (Codex on #137).
- * 7: a PDF text's key stopped carrying RULES_VERSION (CacheSource: the slot is the caller's, null for a PDF) — the
- * PDF reader's texts had moved with the HTML page's rule file, which cuts none of them. The entries of 6 are left behind.
+ * The rules slot became the caller's (CacheSource: RULES_VERSION for the HTML page, null for a PDF) and this number did
+ * not move: no HTML key changes, and the PDF texts' old entries, which held RULES_VERSION in the slot, are no key of
+ * the new ones and orphan themselves — a bump would have voided every HTML reader's cache for nothing.
  * The thinking switch of a service did not move this number: it entered that provider's own identity with both states
  * named (`cacheId`, providers/openai-compat.ts), which retires the ambiguous entries of that provider alone.
  */
-export const CACHE_KEY_VERSION = 7
+export const CACHE_KEY_VERSION = 6
 
 /** NFC + runs of whitespace collapsed to one space + trimmed. For the key only; the text sent for translation is untouched */
 export function normalizeText(text: string): string {
@@ -120,8 +121,9 @@ export async function buildCacheKey(identity: CacheIdentity): Promise<string> {
  */
 export type CacheSource = 'html' | 'pdf'
 
-/** Compute the key with PROMPT_VERSION filled into the identity, and RULES_VERSION where the text is the HTML page's (the default) */
-export function cacheKeyFor(identity: Omit<CacheIdentity, 'promptVersion' | 'rulesVersion'> & { source?: CacheSource }): Promise<string> {
+/** Compute the key with PROMPT_VERSION filled into the identity, and RULES_VERSION where the text is the HTML page's. The
+ *  source is named, never defaulted: a PDF caller that forgot it would put RULES_VERSION back into its keys */
+export function cacheKeyFor(identity: Omit<CacheIdentity, 'promptVersion' | 'rulesVersion'> & { source: CacheSource }): Promise<string> {
   const { source, ...rest } = identity
   return buildCacheKey({ ...rest, promptVersion: PROMPT_VERSION, rulesVersion: source === 'pdf' ? null : RULES_VERSION })
 }

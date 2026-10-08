@@ -926,7 +926,7 @@ The edge cases, decided:
 | `TYPESETTING_VERSION` (`live.mjs`) | parked | the compile path | parked records | none |
 
 - **The web's translation identity** is `axt-tr/2|<paper>|v<version>|<target>|<chain>|p<PIPELINE>|t<TRANSLATE>|b<BUNDLE>`, with no `r<RULES>`: the rules of the HTML page cut none of a PDF's units.
-- **The background's per-text key** keeps `RULES_VERSION` for the HTML page's blocks only; a PDF text's key holds none (`cache/key.ts` `CacheSource`, `CACHE_KEY_VERSION` 7). The cache holds the translator's raw answer to a text, which no rule of reading changes.
+- **The background's per-text key** keeps `RULES_VERSION` for the HTML page's blocks only; a PDF text's key holds none (`cache/key.ts` `CacheSource`, named by every cache descriptor and `CACHE_KEY_VERSION` still 6: no HTML key changed, and a PDF text's old entries are no key of the new ones). The cache holds the translator's raw answer to a text, which no rule of reading changes.
 - **Until the extension's rows cache replaces `session.mjs`'s copies** (the extension's stage 5, task 10), a copy is judged by `PIPELINE_VERSION` alone, so a change of the translation rules that must void copies raises both.
 - **A file is refused by its schema, never by its maker.** `parseLayout` refuses a layout file whose `schema` is not 1 and `checkAddonManifest` a manifest whose `schema` is not 1; the file's `layout` and the manifest's `removal` are read for their shape (a version token) and never compared, so a reader opens what a newer maker or remover wrote. A change of either file's fields, bounds or meaning raises its `schema` and `BUNDLE`, not `LAYOUT` or `REMOVAL`.
 

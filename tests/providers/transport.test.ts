@@ -191,7 +191,7 @@ describe('createLocalTransport: translation', () => {
     }
     const registry = new CancelledScopeRegistry()
     const t = await withChain([mockProvider(async r => { calls.push('call'); return { segments: r.segments, provider: 'mock' } })], { cache, cancelled: registry })
-    const pending = t.translate({ request: req, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags' } })
+    const pending = t.translate({ request: req, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const } })
     await reached
     t.retire!()
     release()
@@ -246,7 +246,7 @@ describe('createLocalTransport: translation', () => {
     let entered: () => void = () => {}
     const atEndpoint = new Promise<void>(resolve => { entered = resolve })
     const t = await withChain([mockProvider(async r => { entered(); await held; return { segments: r.segments, provider: 'mock' } })], { cache })
-    const pending = t.translate({ request: req, cache: { paper: '2410.00260', renderPath: 'tags' } })
+    const pending = t.translate({ request: req, cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const } })
     await atEndpoint // real timers: the request is at the endpoint
     t.retire!()
     release()
@@ -264,8 +264,8 @@ describe('createLocalTransport: translation', () => {
     const atEndpoint = new Promise<void>(resolve => { entered = resolve })
     const cache: CachePort = { getMany: async keys => keys.map(() => null), putMany: async entries => { writes.push(entries) } }
     const t = await withChain([mockProvider(async r => { entered(); await held; return { segments: r.segments, provider: 'mock' } })], { cache })
-    const scoped = t.translate({ request: req, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags' } })
-    const unscoped = t.translate({ request: req, cache: { paper: '2410.00260', renderPath: 'tags' } })
+    const scoped = t.translate({ request: req, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const } })
+    const unscoped = t.translate({ request: req, cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const } })
     await atEndpoint
     t.retire!()
     release()
@@ -284,7 +284,7 @@ describe('createLocalTransport: translation', () => {
     const writes: unknown[] = []
     const cache: CachePort = { getMany: async keys => keys.map(() => null), putMany: async entries => { writes.push(entries) } }
     const t = await withChain([mockProvider(async r => { if (++calls === 2) { entered(); await held } return { segments: r.segments, provider: 'mock' } }, { maxBatchItems: 1 })], { cache })
-    const pending = t.translate({ request: { segments: [{ id: 'a', text: 'x' }, { id: 'b', text: 'y' }], source: 'en', target: 'zh-CN' }, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags' } })
+    const pending = t.translate({ request: { segments: [{ id: 'a', text: 'x' }, { id: 'b', text: 'y' }], source: 'en', target: 'zh-CN' }, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const } })
     await second // the second batch is at the endpoint
     await new Promise(resolve => setTimeout(resolve, 0)) // and the first has settled in the queue: only the second is drained
     t.retire!()
@@ -304,7 +304,7 @@ describe('createLocalTransport: translation', () => {
     const writeStarted = new Promise<void>(resolve => { atWrite = resolve })
     const cache: CachePort = { getMany: async keys => keys.map(() => null), putMany: async () => { atWrite(); await writing } }
     const t = await withChain([mockProvider(async r => ({ segments: r.segments, provider: 'mock' }))], { cache })
-    const pending = t.translate({ request: req, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags' } })
+    const pending = t.translate({ request: req, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const } })
     await writeStarted
     t.retire!()
     releaseWrite()
@@ -319,7 +319,7 @@ describe('createLocalTransport: translation', () => {
     const cache: CachePort = { getMany: async keys => keys.map(() => null), putMany: async () => { atWrite(); await writing } }
     const registry = new CancelledScopeRegistry()
     const t = await withChain([mockProvider(async r => ({ segments: r.segments, provider: 'mock' }))], { cache, cancelled: registry })
-    const pending = t.translate({ request: req, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags' } })
+    const pending = t.translate({ request: req, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const } })
     await writeStarted
     registry.markScope('live') // the router's drop: mark, then drain
     await t.cancel('live')
@@ -482,7 +482,7 @@ describe('createLocalTransport: translation', () => {
     const blocking = new Promise<void>(resolve => { releaseBlocker = resolve })
     const registry = new CancelledScopeRegistry()
     const cache: CachePort = { getMany: async keys => keys.map(() => null), putMany: async () => undefined }
-    const paper = { paper: '2410.00260', renderPath: 'tags' as const }
+    const paper = { paper: '2410.00260', renderPath: 'tags' as const, source: 'html' as const }
     let calls = 0
     const t = await withChain([mockProvider(async r => { calls++; if (r.segments[0]?.id === 'blocker') await blocking; return { segments: r.segments, provider: 'mock' } }, { maxConcurrent: 1, maxBatchItems: 1 })], { cancelled: registry, cache })
     const blocker = t.translate({ request: { segments: [{ id: 'blocker', text: 'hold' }], source: 'en', target: 'zh-CN' }, scope: 'x', cache: paper })
@@ -506,7 +506,7 @@ describe('createLocalTransport: translation', () => {
     // the second attempt the task survived on the dead A and a third attempt reached the endpoint for nobody
     const registry = new CancelledScopeRegistry()
     const cache: CachePort = { getMany: async keys => keys.map(() => null), putMany: async () => undefined }
-    const paper = { paper: '2410.00260', renderPath: 'tags' as const }
+    const paper = { paper: '2410.00260', renderPath: 'tags' as const, source: 'html' as const }
     const gates: { entered: () => void; release: () => void }[] = []
     const attempt = (n: number) => new Promise<void>(resolve => { gates[n] = { entered: resolve, release: () => undefined } })
     const first = attempt(1)
@@ -694,7 +694,7 @@ describe('createLocalTransport: the cache', () => {
     calls.push(r.segments.map(s => s.id))
     return { segments: r.segments.map(s => ({ ...s, text: `译:${s.text}` })), provider: 'mock', model: 'm' }
   })
-  const withCache = { paper: '2410.00260', renderPath: 'tags' as const }
+  const withCache = { paper: '2410.00260', renderPath: 'tags' as const, source: 'html' as const }
   const two: TranslateRequest = { segments: [{ id: 'a', text: 'x' }, { id: 'b', text: 'y' }], source: 'en', target: 'zh-CN' }
 
   it('the first time all miss and are written to the cache; the second time all hit and the provider is not called', async () => {
@@ -810,7 +810,7 @@ describe('createLocalTransport: the status identity', () => {
     const refusing = mockProvider(async () => { throw new ProviderError('auth', '401') }, { id: SVC.id })
     const fallback = mockProvider(async r => ({ segments: r.segments, provider: 'google-web' }), { id: 'google-web', kind: 'mt' })
     const t = await withChain([refusing, fallback])
-    const res = await t.translate({ request: { ...req, target: DEFAULT_CONFIG.targetLanguage }, cache: { paper: 'p', renderPath: 'tags' } })
+    const res = await t.translate({ request: { ...req, target: DEFAULT_CONFIG.targetLanguage }, cache: { paper: 'p', renderPath: 'tags', source: 'html' as const } })
     expect(res.ok && res.result.provider).toBe('google-web')
     expect((await t.status()).identity).toBe(res.ok ? res.result.segments[0]!.identity : 'no answer')
   })
@@ -820,14 +820,14 @@ describe('createLocalTransport: the status identity', () => {
     const refusing = mockProvider(async () => { throw new ProviderError('auth', '401') }, { id: 'microsoft', kind: 'mt' })
     const answering = mockProvider(async r => ({ segments: r.segments, provider: 'google-web' }), { id: 'google-web', kind: 'mt' })
     const t = await withChain([down, refusing, answering])
-    const res = await t.translate({ request: { ...req, target: DEFAULT_CONFIG.targetLanguage }, cache: { paper: 'p', renderPath: 'tags' } })
+    const res = await t.translate({ request: { ...req, target: DEFAULT_CONFIG.targetLanguage }, cache: { paper: 'p', renderPath: 'tags', source: 'html' as const } })
     expect(res.ok && res.result.provider).toBe('google-web')
     expect((await t.status()).identity).toBe(res.ok ? res.result.segments[0]!.identity : 'no answer')
   })
   it('equals the identity on the segments the same engine translates', async () => {
     const t = await withChain([mockProvider(async r => ({ segments: r.segments, provider: SVC.id }), { id: SVC.id })])
     // the target the reader sends is the status's own (engine.mjs), as here
-    const res = await t.translate({ request: { ...req, target: DEFAULT_CONFIG.targetLanguage }, cache: { paper: 'p', renderPath: 'tags' } })
+    const res = await t.translate({ request: { ...req, target: DEFAULT_CONFIG.targetLanguage }, cache: { paper: 'p', renderPath: 'tags', source: 'html' as const } })
     expect(res.ok && res.result.segments[0]!.identity).toBe((await t.status()).identity)
   })
 })

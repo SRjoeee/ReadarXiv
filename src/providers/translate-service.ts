@@ -66,8 +66,8 @@ export type TranslateMessageRequest = {
     renderPath: RenderPath
     /** Write only, no read: the resend after a failed placeholder validation must not get that bad translation back (§6.3) */
     bypass?: boolean
-    /** Where the texts were read from; absent, the HTML page. The key holds the HTML page's rules only for its own blocks (cache/key.ts CacheSource) */
-    source?: CacheSource
+    /** Where the texts were read from, named by every caller: the key holds the HTML page's rules only for its own blocks (cache/key.ts CacheSource) */
+    source: CacheSource
   }
 }
 
@@ -498,7 +498,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
       const translated = new Map<string, TranslationOutcome>()
       if (store && cache) {
         const computed = await Promise.all(request.segments.map(segment =>
-          cacheKeyFor({ providerId: provider.cacheId ?? provider.id, model, promptKey: provider.promptKey ?? '', context: contextFor(segment), target: request.target, renderPath: cache.renderPath, text: segment.text, ...(cache.source ? { source: cache.source } : {}), ...(segment.cuts ? { cuts: segment.cuts } : {}), ...(markedOverCap(provider, shaped.get(segment.id)!) ? { markedOverCap: true } : {}) }),
+          cacheKeyFor({ providerId: provider.cacheId ?? provider.id, model, promptKey: provider.promptKey ?? '', context: contextFor(segment), target: request.target, renderPath: cache.renderPath, text: segment.text, source: cache.source, ...(segment.cuts ? { cuts: segment.cuts } : {}), ...(markedOverCap(provider, shaped.get(segment.id)!) ? { markedOverCap: true } : {}) }),
         ))
         request.segments.forEach((segment, i) => {
           keys.set(segment.id, computed[i]!)

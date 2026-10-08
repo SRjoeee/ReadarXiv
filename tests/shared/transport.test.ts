@@ -18,14 +18,14 @@ describe('createMessageTransport', () => {
     const transport = createMessageTransport(send)
     const res = await transport.translate({
       request: { segments: [{ id: 'a', text: 'A' }], source: 'en', target: 'cmn' },
-      cache: { paper: '2410.00260', renderPath: 'tags' },
+      cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const },
       scope: 'session-1',
     })
     expect(res.ok).toBe(true)
     expect(sent).toEqual([{
       type: 'axt:translate',
       request: { segments: [{ id: 'a', text: 'A' }], source: 'en', target: 'cmn' },
-      cache: { paper: '2410.00260', renderPath: 'tags' },
+      cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const },
       scope: 'session-1',
     }])
   })
