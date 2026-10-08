@@ -167,7 +167,10 @@ export function ServiceForm({ service, target, onConnected, onCancel }: {
   // up again, and a mark left by that clean-up counted a live form as cancelled — no Connect handed over, every grant
   // given back at once (round 3, item 1). What the clean-up let go leaves `holds`, so a second clean-up has nothing of
   // it to let go again; `handedOver` is the connection's, set by nothing here. A page that closes runs no clean-up:
-  // the browser lets its holds go, and the background gives back what nothing needs (origin-keeper.ts)
+  // the browser lets its holds go, and nothing is sent. What the form asked for goes back only because its granted
+  // ask told the background (`ask` below), which then looks every second, for a minute, while a page's hold alone keeps
+  // an origin (origin-keeper.ts); a tab closed later than that, or while the worker sleeps, leaves the origin to the
+  // next sweep — a worker's start or any page's ask
   useEffect(() => {
     cancelled.current = false
     return () => {
@@ -182,7 +185,9 @@ export function ServiceForm({ service, target, onConnected, onCancel }: {
    * The endpoint's origin, held, then asked for from the gesture that called this. Granted only after the form was
    * cancelled or gone (the browser's prompt open meanwhile), it is asked to go back at once: the clean-up that let go
    * of the holds ran before the grant landed, and nothing here will use the origin (Task 65). An origin already
-   * granted answers at once, and a form gone by then has nothing to load (round 2, item 3)
+   * granted answers at once, and a form gone by then has nothing to load (round 2, item 3). Granted to a form still
+   * open, the background is told once the hold is in place: it sees an origin kept by a page's hold alone and watches
+   * it, so a tab closed with the form open still gives it back (ruling 26)
    */
   const ask = async (to: string): Promise<boolean> => {
     hold(to)
@@ -192,7 +197,11 @@ export function ServiceForm({ service, target, onConnected, onCancel }: {
       setErrors(x => ({ ...x, baseURL: deniedWords(e) }))
       return false
     }
-    if (!cancelled.current) return true
+    if (!cancelled.current) {
+      const key = patternOf(to)
+      void (key ? holds.current.get(key)?.ready : undefined)?.then(giveBackUnneeded)
+      return true
+    }
     void letGo()
     return false
   }

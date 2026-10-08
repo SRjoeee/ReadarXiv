@@ -20,6 +20,8 @@ export const origins = {
   log: [] as string[],
   /** set, the next holds are granted only once it settles: the lock manager answering late */
   grantedLate: null as Promise<void> | null,
+  /** set, a page's ask goes to it — a real keeper over this state — instead of the rule run in place */
+  background: null as (() => Promise<unknown>) | null,
   reset(log: string[], granted: readonly string[] = []) {
     this.granted = new Set(granted)
     this.holds = []
@@ -27,6 +29,7 @@ export const origins = {
     this.readable = () => true
     this.log = log
     this.grantedLate = null
+    this.background = null
   },
   holdOrigin(url: string, service?: string) {
     const name = originHold(url, service)
@@ -38,12 +41,17 @@ export const origins = {
       release: async () => {
         if (!held) return
         held = false
-        origins.holds.splice(origins.holds.indexOf(name), 1)
+        const at = origins.holds.indexOf(name)
+        if (at >= 0) origins.holds.splice(at, 1)
       },
     }
   },
   /** The background's sweep, as origin-keeper.ts runs it: the real rule over the grants, the holds and the stored value */
   async giveBackUnneeded() {
+    if (origins.background) {
+      await origins.background()
+      return
+    }
     const needed = originsNeeded(origins.stored(), origins.holds.map(name => readHold(name)!.origin))
     const { remove } = reconcileOrigins({ granted: [...origins.granted], needed, settingsReadable: origins.readable(), manifest: MANIFEST })
     for (const origin of remove) {

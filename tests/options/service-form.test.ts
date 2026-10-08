@@ -9,7 +9,7 @@
 // any other's — takes none of it; let go, an origin goes back only if no stored service and no other open form needs it
 import { StrictMode, createElement as h, useEffect } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { originOf } from '@/config/origins'
+import { manifestOrigins, originOf } from '@/config/origins'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { Service } from '@/config/services'
 import { deferred, mountElement } from '../ui/render-hook'
@@ -51,6 +51,7 @@ vi.mock('@/entrypoints/options/connect', async () => {
 
 import { type ConnectResult, connectService } from '@/entrypoints/options/connect'
 import { listModels } from '@/entrypoints/options/models'
+import { DEPARTURE_CHECK_MS, createOriginKeeper } from '@/entrypoints/background/origin-keeper'
 import { ensureHostPermission } from '@/entrypoints/options/permissions'
 import { KeyForm, STILL_MS, ServiceForm } from '@/entrypoints/options/sections/ServiceForm'
 import { O, setLocale } from '@/ui/strings'
@@ -624,6 +625,34 @@ describe('ServiceForm (§6.3)', () => {
     expect(origins.holds).toEqual([])
     expect(removed()).toEqual([])
     expect(origins.granted.has('https://api.example.com/*')).toBe(true)
+    await m.unmount()
+  })
+
+  it('a form whose ask is granted tells the background, which watches the origin it holds: the tab closed with the form open — its lock gone, no clean-up, no message — still gives the origin back within the watch (ruling 26)', async () => {
+    // the background's keeper, reading this page's model: the grants, every page's holds, the stored value
+    const keeper = createOriginKeeper({
+      granted: async () => [...origins.granted],
+      remove: async origin => { origins.granted.delete(origin); wire.removed.push(`remove ${origin}`) },
+      manifest: () => manifestOrigins({ host_permissions: ['https://openrouter.ai/*'] }),
+      read: async () => ({ config: wire.stored, fallbackReason: null }),
+      holds: async () => [...origins.holds],
+      chains: () => [],
+      moveAll: async () => undefined,
+      warn: () => {},
+    })
+    origins.background = () => keeper.sweep()
+    const { element } = form()
+    const m = await mountElement(element)
+    button(m.container, 'DeepSeek').click()
+    await m.flush()
+    await m.flush()
+    expect(origins.granted.has('https://api.deepseek.com/*')).toBe(true)
+    await vi.advanceTimersByTimeAsync(DEPARTURE_CHECK_MS * 2)
+    expect(removed()).toEqual([])
+    // the tab closes: the browser lets the page's lock go, and the form's clean-up never runs
+    origins.holds.length = 0
+    await vi.advanceTimersByTimeAsync(DEPARTURE_CHECK_MS)
+    expect(removed()).toEqual(['https://api.deepseek.com/*'])
     await m.unmount()
   })
 
