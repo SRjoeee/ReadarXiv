@@ -153,4 +153,53 @@ window.door = {
     return { pages: out, stats: { ...stats, pageMs: undefined }, complete: complete.length, rows: rows.length, sheets: [sheets, ownSheets().length] }
   },
 }
+
+window.door.memory = async function memory({ name, target, rules, scenario, pages: asked, every = 10 }) {
+  // every canvas element the page makes from now on, held weakly: what it holds is the sum of those with pixels
+  const made = new Set()
+  const create = document.createElement.bind(document)
+  document.createElement = (tag, options) => {
+    const el = create(tag, options)
+    if (typeof tag === 'string' && tag.toLowerCase() === 'canvas') made.add(new WeakRef(el))
+    return el
+  }
+  const R = await import('/engine/layer-proto/reader.mjs')
+  const [bundleBytes, rows] = await Promise.all([bytes(`/door/${name}/bundle.json`), json(`/door/${name}/rows.json`)])
+  const bundle = R.readBundle(bundleBytes)
+  const doc = await pdfjs.getDocument({ data: await composedOf(name, bundle), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
+  // (the jump asks for the page after the last one laid: a paper needs a page more than a sample's span, and the span is the
+  // paper's at most; its page count is the bundle's, the composed document holding the removed pages too)
+  const N = bundle.paper.pages
+  if (N <= every) throw new Error(`${name}: ${N} pages, and the memory probe samples every ${every}`)
+  const pages = Math.min(asked, N - 1)
+  const ruleSet = await ruleSetOf(rules)
+  const samples = []
+  const sample = async laid => {
+    window.gc()
+    let canvases = 0, canvasBytes = 0
+    for (const ref of made) {
+      const c = ref.deref()
+      if (!c) { made.delete(ref); continue }
+      if (c.width * c.height > 0) { canvases++; canvasBytes += 4 * c.width * c.height }
+    }
+    samples.push({ laid, canvases, canvasBytes, heap: performance.memory.usedJSHeapSize, rss: await window.axtRss() })
+  }
+  // a jump: the engine stopped as it asks for the page after each tenth, when that many are laid and the host has let none go
+  if (scenario === 'jump') {
+    const getPage = doc.getPage.bind(doc)
+    doc.getPage = async n => { if (n - 1 >= every && (n - 1) % every === 0 && n - 1 <= pages) await sample(n - 1); return getPage(n) }
+  }
+  const layer = await R.openLayer({ bundle, doc, target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl })
+  layer.take(rows)
+  layer.end()
+  // (the jump is to the page after the last one sampled, whose drawing the engine stops before: `pages` laid, none let go)
+  if (scenario === 'jump') await layer.pageOf(pages + 1, { lang: target })
+  else for (let p = 1; p <= pages; p++) { await layer.pageOf(p, { lang: target }); if (p % every === 0) await sample(p) }
+  // (the host is done with the page: every page up to it let go; then the run let go)
+  if (scenario === 'jump') await sample(pages + 1)
+  layer.dispose()
+  await doc.loadingTask.destroy()
+  await sample('let go')
+  return samples
+}
 window.gateReady = true

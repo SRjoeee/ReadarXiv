@@ -29,6 +29,7 @@
 //       [--proto-faces=roles|prototype] [--proto-place=<file>] [--proto-order=<file>] [--dump=<dir>] [--write-floor]
 //       [--proto-tex=ph|lines] [--proto-tex-only=no] [--proto-symbols=text|strict] [--proto-extents=v0|tex]
 //       [--against=<record key>] [--rules=<file>] [--ruling=<file>] [--parts[=<n>]] [--slices[=blocks|alphabet]] [--door[=<n>]]
+//       [--door-memory[=<pages>]]
 //   --engine     the engine measured: <worktree>/src/pdf-reader/engine served as /engine/ (the checker, layer/check.mjs, is
 //                always this repository's: the instrument is the same for every branch); default this repository
 //   --layouts    made (the default): the layout files the engine's own maker makes from the fixtures' papers (spikes/
@@ -112,6 +113,12 @@
 //                SVG markup (pageOf's, its lang aside) must equal the run's, the page PDF.js draws at 2.5 device pixels a unit
 //                v0's own original, and copyOf(page, that page, 2.5)'s pixels the run's copy plane; a fixture fails where
 //                one does not, and the run is written to out/layer-gate/door-<commit>-<time>.json
+//   --door-memory  what the reader's door holds while it lays a paper (a measurement of its own, never recorded; the door's
+//                choices as --door has them, and --only for the paper): the door asked for the page after <pages> (40 by
+//                default) at once, as a reader that jumps does, then for each page up to <pages> in turn. At every 10th page
+//                laid, the engine stopped before the next page's drawing: the canvases the page holds (count and bytes),
+//                its JS heap after a collection and the browser's resident memory. Written to
+//                out/layer-gate/memory-<commit>-<time>.json
 // The consistency measures (the table-groups brief, 2026-10-07), checked with the completeness ones and each to be 0: a
 // table group drawn partly (the record's translated cells of one `group`, some drawn and some not) and a float's label
 // left in the source language where the final names it in the target's (the record's `captions`, the layout rules' labels'
@@ -189,8 +196,11 @@ if (PARTS && (KIND !== 'proto' || arg('record'))) throw new Error('--parts: v0 o
 const SLICES = arg('slices') === true ? 'blocks' : typeof arg('slices') === 'string' ? arg('slices') : null
 if (SLICES && (KIND !== 'proto' || arg('record'))) throw new Error('--slices: v0 only (--engine-kind=proto), and never a record (no --record)')
 if (SLICES && !['blocks', 'alphabet'].includes(SLICES)) throw new Error(`--slices=${SLICES}: blocks or alphabet`)
+/** --door-memory[=<pages>]: the memory the door holds as it lays that many pages (a measurement: never recorded) */
+const MEMORY = arg('door-memory') === true ? 40 : typeof arg('door-memory') === 'string' ? Number(arg('door-memory')) : null
+if (MEMORY !== null && !(Number.isInteger(MEMORY) && MEMORY >= 10)) throw new Error(`--door-memory=${arg('door-memory')}: a count of pages, 10 or more`)
 /** --door[=<n>]: the reader's door against the gate's own page, its rows taken n a part (a proof: never recorded) */
-const DOOR = arg('door') === true ? 16 : typeof arg('door') === 'string' ? Number(arg('door')) : null
+const DOOR = arg('door') === true || (MEMORY !== null && arg('door') === null) ? 16 : typeof arg('door') === 'string' ? Number(arg('door')) : null
 if (DOOR !== null && !(Number.isInteger(DOOR) && DOOR > 0)) throw new Error(`--door=${arg('door')}: a count of rows a part`)
 if (DOOR !== null && (KIND !== 'proto' || TEX?.use !== 'lines' || !TEX.texOnly || TEX.symbols !== 'text' || TEX.extents !== 'v0' || REMOVAL !== 'draw')) throw new Error("--door: the door's choices, --engine-kind=proto --proto-tex=lines --removal=draw")
 if (DOOR !== null && (arg('record') || PARTS || SLICES || PERF || DUMP || TIER !== 'model')) throw new Error('--door: a proof of its own, the model tier, never a record, nor with --parts, --slices, --perf or --dump')
@@ -238,7 +248,8 @@ const CHECKER = join(REPO, 'src/pdf-reader/engine/layer/check.mjs')
 const PROGRESS = process.env.LAYER_PROGRESS ?? join(homedir(), 'Downloads/readarxiv-test/layer-progress')
 const ONLY = typeof arg('only') === 'string' ? arg('only').split(',').filter(Boolean) : null
 const PAGES = typeof arg('pages') === 'string' ? Number(arg('pages')) : null
-const WORKERS = PERF ? 1 : typeof arg('workers') === 'string' ? Number(arg('workers')) : Math.max(1, Math.min(6, Math.floor(availableParallelism() / 2)))
+// (--perf and --door-memory: one worker, so that a reading is the fixture's own and not its neighbours' in the one browser)
+const WORKERS = PERF || MEMORY !== null ? 1 : typeof arg('workers') === 'string' ? Number(arg('workers')) : Math.max(1, Math.min(6, Math.floor(availableParallelism() / 2)))
 /** crops darkened in (the prototype's drawing, and the reader's since the layer round's fixes), or pasted source-over */
 const COMPOSITE = arg('composite') ?? 'darken'
 if (!['source-over', 'darken'].includes(COMPOSITE)) throw new Error(`--composite=${COMPOSITE}: source-over or darken`)
@@ -387,7 +398,10 @@ const engineInfo = {
   dirty: !!git(ENGINE, ['status', '--porcelain', '--untracked-files=no', '--', 'src/pdf-reader/engine']),
 }
 const fontsDigest = sha256(readdirSync(FONTS).sort().map(f => `${f}:${statSync(join(FONTS, f)).size}`).join('\n'))
-const browser = await chromium.launch()
+// (--door-memory: the JS heap read precisely, a collection to ask for, and a mark on the command line by which the browser's
+// processes are found)
+const MEMORY_MARK = `--axt-gate-memory=${process.pid}-${Date.now()}`
+const browser = await chromium.launch(MEMORY !== null ? { args: ['--js-flags=--expose-gc', '--enable-precise-memory-info', MEMORY_MARK] } : undefined)
 const inputs = {
   tier: TIER, pages: PAGES ? `the first ${PAGES}` : `the first ${PAGES_OF} of each output, every page of ${[...ALL_PAGES].join(', ')}`, scale: 2.5, inkScale: 2, inkMin: 4, composite: COMPOSITE,
   layouts: LAYOUTS, ...(LAYOUTS === 'made' ? { switch: SWITCH } : {}), fixtures: FIXTURES === REFS ? 'data/layer-fixtures' : shownPath(FIXTURES, ROOT), ...(RECORDS ? { records: shownPath(RECORDS, ROOT) } : {}), ...(process.env.LAYER_REFS ? { refs: shownPath(REFS, ROOT) } : {}), ...(process.env.LAYER_GEOMETRY ? { geometry: shownPath(PROTO_GEOMETRY, ROOT) } : {}), chromium: browser.version(),
@@ -420,13 +434,15 @@ async function worker() {
       const tf = Date.now()
       try { results.set(name, await runFixture(page, name, errors)) } catch (e) { failures.push(name); console.log(`FAIL ${name}: ${String(e?.stack ?? e).slice(0, 400)}`) }
       const r = results.get(name)
-      if (r?.door) console.log(`${r.ok ? 'ok  ' : 'FAIL'} ${name}: ${r.line} (${((Date.now() - tf) / 1000).toFixed(1)} s)`)
+      if (r?.memory) console.log(`${r.ok ? 'ok  ' : 'FAIL'} ${name}: measured to page ${MEMORY} (${((Date.now() - tf) / 1000).toFixed(1)} s)`)
+      else if (r?.door) console.log(`${r.ok ? 'ok  ' : 'FAIL'} ${name}: ${r.line} (${((Date.now() - tf) / 1000).toFixed(1)} s)`)
       else if (r) console.log(`${r.ready ? 'ok  ' : 'FAIL'} ${name}: ${r.ready ? `${r.pages.length} pages, ${r.totals.textDrawn}/${r.totals.textOn} text units drawn${r.summary.parts ? `, in ${r.summary.parts.count} parts` : ''}` : r.why} (${((Date.now() - tf) / 1000).toFixed(1)} s)`)
     }
   } finally { await ctx.close() }
 }
 
 async function runFixture(page, name, errors) {
+  if (MEMORY !== null) return memoryFixture(page, name, errors)
   if (DOOR !== null) return doorFixture(page, name, errors)
   const { paper, target } = nameOf(name)
   const refFile = join(REFS, name, 'ref.json')
@@ -494,6 +510,40 @@ async function runFixture(page, name, errors) {
     }
   }
   return { name, ready: true, info, meta, pages, totals: fixtureTotals(pages, frames, TIER), summary }
+}
+
+/** the browser's resident memory, KB: the process launched with MEMORY_MARK on its command line and every process under it */
+function rssKb() {
+  const rows = execFileSync('ps', ['-axo', 'pid=,ppid=,rss=,command='], { encoding: 'utf8', maxBuffer: 1 << 26 }).split('\n').map(l => /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/.exec(l)).filter(Boolean).map(m => [Number(m[1]), Number(m[2]), Number(m[3]), m[4]])
+  const root = rows.find(r => r[3].includes(MEMORY_MARK) && !r[3].includes('--type='))?.[0]
+  if (root === undefined) return null
+  const tree = new Set([root])
+  for (let grew = true; grew; ) { grew = false; for (const [pid, ppid] of rows) if (tree.has(ppid) && !tree.has(pid)) { tree.add(pid); grew = true } }
+  return rows.filter(r => tree.has(r[0])).reduce((a, r) => a + r[2], 0)
+}
+
+/**
+ * --door-memory: a fixture's bundle and rows made as --door makes them, then the door asked for page MEMORY at once and for
+ * each page in turn, each in a page load of its own (layer-gate/door.mjs memory): what the page holds every 10th page laid
+ */
+const RSS_BOUND = new WeakSet()
+async function memoryFixture(page, name, errors) {
+  const { target } = nameOf(name)
+  const removal = await addonOf(name)
+  const made = await doorBundleOf(name, removal)
+  DOOR_FILES.set(`/door/${name}/bundle.json`, made.bytes)
+  DOOR_FILES.set(`/door/${name}/rows.json`, JSON.stringify(made.rows))
+  // (once a page: a worker's page is the next fixture's too, and Playwright refuses a name bound twice)
+  if (!RSS_BOUND.has(page)) { await page.exposeFunction('axtRss', () => rssKb()); RSS_BOUND.add(page) }
+  const o = { name, target, rules: '/rules/layout-rules.json', pages: MEMORY }
+  const out = { name, memory: true, ready: true, scenarios: {} }
+  for (const scenario of ['jump', 'steps']) {
+    await page.goto(`${ORIGIN}/gate/page.html?kind=proto&door=1`)
+    await page.waitForFunction(() => window.gateReady === true)
+    out.scenarios[scenario] = await page.evaluate(x => window.door.memory(x), { ...o, scenario })
+  }
+  out.ok = !errors.length
+  return out
 }
 
 /**
@@ -764,6 +814,20 @@ await browser.close()
 server.close()
 const seconds = Math.round((Date.now() - t0) / 100) / 10
 if (leaks.length) { console.log(`FAIL requests that would have left the machine: ${leaks.slice(0, 5).join(' ')}`); failures.push('network') }
+if (MEMORY !== null) {
+  const ran = [...results.values()].sort((a, b) => a.name.localeCompare(b.name))
+  const made = new Date().toISOString()
+  const mb = v => (v === null || v === undefined ? '-' : (v / 2 ** 20).toFixed(1))
+  for (const r of ran) for (const [scenario, samples] of Object.entries(r.scenarios)) {
+    console.log(`\n${r.name}, ${scenario === 'jump' ? `page ${MEMORY + 1} (or the paper's last) asked for at once` : 'each page in turn'}:\n  pages laid | canvases held | canvas MB | JS heap MB | browser RSS MB`)
+    for (const x of samples) console.log(`  ${String(x.laid).padStart(10)} | ${String(x.canvases).padStart(13)} | ${mb(x.canvasBytes).padStart(9)} | ${mb(x.heap).padStart(10)} | ${mb(x.rss === null ? null : x.rss * 1024).padStart(14)}`)
+  }
+  const file = join(ROOT, 'out/layer-gate', `memory-${(engineInfo.commit ?? 'none').slice(0, 8)}${engineInfo.dirty ? '+' : ''}-${made.replace(/[:.]/g, '-')}.json`)
+  writeFileSync(file, JSON.stringify({ schema: 1, made, seconds, engine: engineInfo, inputs: { ...inputs, door: DOOR, memory: MEMORY }, fixtures: Object.fromEntries(ran.map(r => [r.name, r])) }))
+  console.log(`\nmemory: ${ran.length} outputs, to page ${MEMORY}, in ${seconds} s; the run in ${file}`)
+  // (a fixture whose page raised an error is a failed reading, though it returned one)
+  process.exit(failures.length || ran.length !== asked.length || ran.some(r => !r.ok) ? 1 : 0)
+}
 if (DOOR !== null) {
   const ran = [...results.values()].sort((a, b) => a.name.localeCompare(b.name))
   const all = ran.flatMap(r => r.pages ?? [])

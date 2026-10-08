@@ -37,8 +37,10 @@ export interface HybridOptions {
 /** which source each placed unit's geometry is (ids), and why the others are v0's (by locatedWhole's why) */
 export interface Sources { tex: number[]; v0: number[]; why: Record<string, number>; texOnly?: number }
 /** a page's canvases at v0's own resolution (the original, its copy where `copy` keeps one), its SVG at `w` × `h` CSS px,
- *  and its drawing as data (every painted unit's operations in turn: drawCopy draws them at any resolution) */
-export interface Row { page: number; left: HTMLCanvasElement; right: HTMLCanvasElement | null; svg: SVGSVGElement; w: number; h: number; base: boolean; ops: DrawOp[]; view?: number[]; released?: boolean }
+ *  and its drawing as data (every painted unit's operations in turn: drawCopy draws them at any resolution). Where `copy`
+ *  keeps none, the original is let go as soon as the page is drawn and its ink read: `left` is null from then on. `base`:
+ *  the page is drawn, and a crop may be cut from it, until the page is released */
+export interface Row { page: number; left: HTMLCanvasElement | null; right: HTMLCanvasElement | null; svg: SVGSVGElement; w: number; h: number; base: boolean; ops: DrawOp[]; view?: number[]; released?: boolean }
 /** a laid unit's record, as main.js kept it (each line: page, baseline, target baseline, exact, mode, overflow, x0, x1) */
 export interface Rec {
   id: number; kind: string; v: 2; pages: number[]; cut: boolean; s?: number; f?: number; fitScale: number; knob: string; clipped: boolean
