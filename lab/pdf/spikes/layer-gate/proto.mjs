@@ -633,14 +633,16 @@ window.gate = {
   async perf(p) {
     const { run, doc } = S
     const page = await doc.getPage(p)
-    // the page's drawing at the gate's own resolution, from v0's drawing of the original (its first drawing's last step,
-    // as a reader draws its view: v0 keeps no copy)
-    const r0 = run.rows[p - 1], first = document.createElement('canvas')
-    first.width = r0.left.width; first.height = r0.left.height
+    // the page's drawing at the gate's own resolution, over the page as PDF.js draws it there, as a reader draws its view
+    // (v0 keeps no copy, and lets its original go once the page's ink is read: only the drawing is timed, not the render)
+    const vp1 = page.getViewport({ scale: K })
+    const first = document.createElement('canvas'), source = document.createElement('canvas')
+    for (const c of [first, source]) { c.width = Math.floor(vp1.width); c.height = Math.floor(vp1.height) }
+    await page.render({ canvas: source, canvasContext: source.getContext('2d'), viewport: vp1 }).promise
     let t = performance.now()
-    await run.drawCopy(p, first.getContext('2d'), r0.left, K)
+    await run.drawCopy(p, first.getContext('2d'), source, K)
     const copyMs = performance.now() - t
-    first.width = 0; first.height = 0
+    for (const c of [first, source]) { c.width = 0; c.height = 0 }
     const zoomK = 2 * K
     const vp = page.getViewport({ scale: zoomK })
     const src = document.createElement('canvas'), dst = document.createElement('canvas')
