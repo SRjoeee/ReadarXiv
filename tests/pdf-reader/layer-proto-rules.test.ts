@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { openProto } from '@/pdf-reader/engine/layer-proto/run.mjs'
-import { BUILTIN_RULES, resolveRules, TARGETS } from '@/pdf-reader/engine/rules/layout.mjs'
+import { BUILTIN_RULES, type RuleSet, resolveRules, TARGETS } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // v0's open reads every choice made for its target from the layout rule set it is given (layer-proto/run.mjs `rules`,
 // rules/layout.mjs): none from the target's name. These are the wiring tests: a set passed changes the drawing, no set is
@@ -33,9 +33,8 @@ const asked = vi.hoisted(() => {
 })
 beforeEach(() => { asked.length = 0 })
 
-type RuleSetShape = typeof BUILTIN_RULES
 /** a set to edit: the built-in one, copied */
-const editable = () => structuredClone(BUILTIN_RULES) as unknown as { version: number; scripts: Record<string, Record<string, unknown>>; languages: Record<string, Record<string, unknown>> } & RuleSetShape
+const editable = () => structuredClone(BUILTIN_RULES) as unknown as { version: number; scripts: Record<string, Record<string, unknown>>; languages: Record<string, Record<string, unknown>> } & RuleSet
 
 /** one page of 300 x 300 PDF units: the items of Times text at 10 pt, [text, x, width, row] each, on a 12 pt pitch from y = 200
  *  (the row each stands on, the next line by default); the unit's source is their text, or `src` where the page holds more

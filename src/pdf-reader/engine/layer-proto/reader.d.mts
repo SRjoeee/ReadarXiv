@@ -3,7 +3,7 @@ import type { FaceId } from '../font-roles.mjs'
 import type { ReadBundle } from './bundle.mjs'
 import type { FaceSources } from './fonts.mjs'
 import type { Row } from './rows.mjs'
-import type { RuleSet } from '../rules/layout.mjs'
+import type { FrozenRuleSet } from '../rules/layout.mjs'
 
 export { PDF_OPTIONS } from './run.mjs'
 export { BUNDLE, BUNDLE_CAP, BUNDLE_VALUES, BundleRefusal, bundleKey, CTAG, readBundle, VTAG } from './bundle.mjs'
@@ -64,9 +64,11 @@ export interface Layer {
 /** the layer of one paper and target, as either reader shows it: v0 opened over the composed document with the bundle's
  *  left, layout and add-on, the target's caption names on every float (L7), the served faces and hyphenation, at scale 2.5
  *  and dpr 1 (one set of choices on every device); its rows taken as they come. One open layer per page: v0's faces are
- *  the page's, and a second open before the first's dispose throws */
-export declare function openLayer(o: { bundle: ReadBundle; doc: LayerDocument; target: string; faceSources: FaceSources; hyphUrl: (lang: string) => string; rules?: RuleSet }): Promise<Layer>
+ *  the page's, and a second open before the first's dispose throws. `rules`: the layout rule set every choice for the target
+ *  is read from (absent: the built-in one); it must be a set `readRules` or `parseRules` returned, or `BUILTIN_RULES`: the
+ *  door checks only its shape (an object holding `scripts` and `languages`, else a TypeError), not its values */
+export declare function openLayer(o: { bundle: ReadBundle; doc: LayerDocument; target: string; faceSources: FaceSources; hyphUrl: (lang: string) => string; rules?: FrozenRuleSet }): Promise<Layer>
 /** the face a host asks for first, at the open, before the paper's family is known: the target's CJK body face (light
  *  where the rule set says so beside the family v0 opens with), else null; `rules`: the set the layer is opened with
  *  (absent: the built-in one) */
-export declare function firstFaceOf(target: string, rules?: RuleSet): FaceId | null
+export declare function firstFaceOf(target: string, rules?: FrozenRuleSet): FaceId | null

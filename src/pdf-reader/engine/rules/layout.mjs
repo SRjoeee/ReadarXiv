@@ -265,7 +265,8 @@ export function parseRules(json) {
 const hex = bytes => Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
 /**
  * A set's bytes as the set and their SHA-256 (lowercase hex), in the order of refusal: more than RULES_CAP bytes, an `etag`
- * (the server's strong "<sha256>") that is not the bytes' digest, malformed UTF-8, more than RULES_VALUES values (or nested
+ * (the server's "<sha256>", or W/"<sha256>": a CDN may weaken a strong tag when it recodes the body, and the digest is
+ * of the decoded body either way) that is not the bytes' digest, malformed UTF-8, more than RULES_VALUES values (or nested
  * deeper than a set goes) counted before JSON.parse is called, text that is not JSON, then parseRules'. A refused set is
  * never partly used
  */
@@ -275,7 +276,7 @@ export async function readRules(bytes, { etag = null } = {}) {
   const subtle = globalThis.crypto?.subtle
   if (!subtle) throw new RulesRefusal('etag', 'no Web Crypto to take the digest with')
   const sha256 = hex(new Uint8Array(await subtle.digest('SHA-256', bytes)))
-  if (etag !== null && etag !== undefined && !(typeof etag === 'string' && etag.toLowerCase() === `"${sha256}"`)) throw new RulesRefusal('etag', "not the bytes' digest")
+  if (etag !== null && etag !== undefined && !(typeof etag === 'string' && (etag === `W/"${sha256}"` || etag.toLowerCase() === `"${sha256}"`))) throw new RulesRefusal('etag', "not the bytes' digest")
   let source
   try { source = new TextDecoder('utf-8', { fatal: true }).decode(bytes) } catch { throw new RulesRefusal('utf8', 'malformed UTF-8') }
   let values

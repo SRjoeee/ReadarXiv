@@ -7,7 +7,7 @@ import type { TranslateCall } from '@/providers/translate-service'
 import { bundleKey, CTAG, VTAG } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { parseAddonManifest } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { LAYOUT, LayoutRefusal, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
-import { RULES_FIELDS } from '@/pdf-reader/engine/rules/layout.mjs'
+import { type RuleField, RULES_FIELDS } from '@/pdf-reader/engine/rules/layout.mjs'
 import { CJK } from '@/pdf-reader/engine/scripts.mjs'
 import { scriptOf } from '@/pdf-reader/engine/layer-rules.mjs'
 
@@ -180,6 +180,23 @@ function sectionOf(heading: string): string[] {
 /** the code names of a table's first column */
 const firstColumn = (lines: string[]) => lines.filter(l => l.startsWith('|')).map(l => (l.split('|')[1] ?? '')).flatMap(cell => [...cell.matchAll(/`([^`]+)`/g)].map(m => m[1] as string))
 
+/** the cells of a table's rows (the header and its rule left out), trimmed */
+const tableOf = (lines: string[]) => lines.filter(l => l.startsWith('|')).slice(2).map(l => l.split('|').slice(1, -1).map(c => c.trim()))
+/** how §18.5 writes a field's "Range or values" from the field itself */
+function rangeCell(f: RuleField): string {
+  const none = f.nullable ? ', or none' : ''
+  switch (f.kind) {
+    case 'number': return `${f.min} to ${f.max}, step ${f.step}${none}`
+    case 'integer': return `${f.min} to ${f.max}${none}`
+    case 'boolean': return 'yes or no'
+    case 'enum': return (f.values ?? []).map(v => `\`${v}\``).join(', ')
+    case 'order': return `an ordering of ${(f.values ?? []).join(', ')}`
+    case 'subset': return `some of ${(f.values ?? []).join(', ')}, in that order`
+    case 'chars': return 'a list of characters'
+    case 'object': return `${(f.members ?? []).map(m => m.key).join(', ')}${f.nullable ? '; or none' : ''}`
+  }
+}
+
 describe("docs/PDF-READER.md: the table of identities (rules as data, §9.4)", () => {
   const rows = firstColumn(sectionOf('### 18.2'))
 
@@ -197,8 +214,12 @@ describe("docs/PDF-READER.md: the table of identities (rules as data, §9.4)", (
     }
   })
 
-  it("lists every field of the rule set (RULES_FIELDS) with its words", () => {
-    const listed = firstColumn(sectionOf('### 18.5'))
-    for (const field of RULES_FIELDS) expect(listed, field.path).toContain(field.path)
+  it('lists every field of the rule set (RULES_FIELDS) with its scope, group, range and words, and no other', () => {
+    const table = tableOf(sectionOf('### 18.5'))
+    expect(table.map(r => r[0]?.replaceAll('`', ''))).toEqual(RULES_FIELDS.map(f => f.path))
+    for (const [i, field] of RULES_FIELDS.entries()) {
+      // (a range is a change of schema: the cell is derived from the field's bounds, so that the two cannot drift)
+      expect(table[i]?.slice(1), field.path).toEqual([field.scope, field.group, rangeCell(field), field.words])
+    }
   })
 })

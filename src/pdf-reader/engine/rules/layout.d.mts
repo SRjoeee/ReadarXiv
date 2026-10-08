@@ -66,6 +66,10 @@ export interface RuleSet {
   /** BCP 47 tags; every TARGETS member present, others allowed (the language wave) */
   languages: Record<string, LanguageRules>
 }
+/** a type read-only at every depth; a plain RuleSet is assignable to its frozen form */
+type Frozen<T> = T extends object ? { readonly [K in keyof T]: Frozen<T[K]> } : T
+/** a set that is not to be written: what BUILTIN_RULES is, and what every reader of a set takes */
+export type FrozenRuleSet = Frozen<RuleSet>
 /** one target's rules as v0 reads them */
 export interface TargetRules {
   target: string
@@ -98,8 +102,9 @@ export interface RuleField {
 
 /** the schema, strict at every level */
 export declare const RULE_SET: ZodMiniType<RuleSet>
-/** layout-rules.json, parsed (and refused if it is not a set) at import, frozen */
-export declare const BUILTIN_RULES: RuleSet
+/** layout-rules.json, parsed (and refused if it is not a set) at import, frozen to every depth: a write throws, so it is
+ *  typed read-only; `structuredClone` makes a set to edit */
+export declare const BUILTIN_RULES: FrozenRuleSet
 export declare const RULES_FIELDS: readonly RuleField[]
 /** a set refused: the field (a dotted path in the set, or bytes, utf8, values, etag, json) and why */
 export declare class RulesRefusal extends Error {
@@ -108,11 +113,11 @@ export declare class RulesRefusal extends Error {
   readonly why: string
 }
 /** bytes → a set, with their SHA-256 (lowercase hex): the cap, the etag, UTF-8, the values counted before JSON.parse,
- *  JSON.parse, RULE_SET, then the cross-checks. `etag`: the server's `"<sha256>"`, compared with the bytes' digest where given */
+ *  JSON.parse, RULE_SET, then the cross-checks. `etag`: the server's `"<sha256>"` or its weak form `W/"<sha256>"`, compared with the bytes' digest where given */
 export declare function readRules(bytes: Uint8Array, o?: { etag?: string | null }): Promise<{ set: RuleSet; sha256: string }>
 /** parsed JSON as a set: RULE_SET and the cross-checks; throws RulesRefusal */
 export declare function parseRules(json: unknown): RuleSet
 /** a language's fields over its script's (scriptOf: Intl.Locale maximize); throws for a target `languages` lacks */
-export declare function resolveRules(set: RuleSet, target: string): TargetRules
+export declare function resolveRules(set: FrozenRuleSet, target: string): TargetRules
 /** the canonical text: keys in RULE_SET's order, one field a line, LF, a final newline. The file is always in this form */
-export declare function writeRules(set: RuleSet): string
+export declare function writeRules(set: FrozenRuleSet): string

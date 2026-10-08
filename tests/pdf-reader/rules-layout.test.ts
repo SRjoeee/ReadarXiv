@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { ENGLISH_FAMILIES, FACES, rolesFor } from '@/pdf-reader/engine/font-roles.mjs'
 import { scriptOf } from '@/pdf-reader/engine/layer-rules.mjs'
-import { BUILTIN_RULES, parseRules, RULES_CAP, RULES_FIELDS, RULES_SCHEMA, RULES_VALUES, RulesRefusal, readRules, resolveRules, SCRIPTS, TARGETS, writeRules } from '@/pdf-reader/engine/rules/layout.mjs'
+import { BUILTIN_RULES, type FrozenRuleSet, parseRules, RULES_CAP, RULES_FIELDS, RULES_SCHEMA, RULES_VALUES, RulesRefusal, readRules, resolveRules, SCRIPTS, TARGETS, writeRules } from '@/pdf-reader/engine/rules/layout.mjs'
 import { babelTags, VERIFIED } from '@/pdf-reader/engine/scripts.mjs'
 
 // The layout rule set (rules/layout.mjs, the rules-as-data plan §2): its built-in copy, its resolution to the fields v0 reads,
@@ -57,6 +57,15 @@ describe('the built-in set', () => {
     expect(Object.isFrozen(BUILTIN_RULES.scripts.Hans.order)).toBe(true)
     expect(Object.isFrozen(BUILTIN_RULES.scripts.Hans.adaptiveFill)).toBe(true)
     expect(Object.isFrozen(BUILTIN_RULES.languages.de)).toBe(true)
+  })
+
+  it('is typed read-only to every depth, as it is frozen: a write is a type error, and throws', () => {
+    // @ts-expect-error a field of the frozen set is read-only
+    expect(() => { BUILTIN_RULES.scripts.Hans.leadBase = 9 }).toThrow(TypeError)
+    // @ts-expect-error so is an array in it
+    expect(() => BUILTIN_RULES.scripts.Hans.order.push('lead')).toThrow(TypeError)
+    // (a set read from bytes is a RuleSet, which every reader of a set takes as well)
+    expectTypeOf(V1).toMatchTypeOf<FrozenRuleSet>()
   })
 
   it('holds every target and every script, and the languages beside them the language wave will add to', () => {
@@ -257,11 +266,13 @@ describe('reading a set from bytes (readRules)', () => {
     expect(set).toEqual(BUILTIN_RULES)
   })
 
-  it('compares the server\'s etag with that digest: a differing etag is refused, a strong one of the digest is read', async () => {
+  it('compares the server\'s etag with that digest: a differing etag is refused, a strong or a weak one of the digest is read', async () => {
     const bytes = bytesOf(text(V1_FILE))
-    expect((await readRules(bytes, { etag: `"${sha(bytes)}"` })).sha256).toBe(sha(bytes))
-    expect((await readRules(bytes, { etag: null })).sha256).toBe(sha(bytes))
-    for (const etag of [`"${'0'.repeat(64)}"`, sha(bytes), `W/"${sha(bytes)}"`, '', '"x"']) expect((await refusalOfBytes(bytes, { etag })).field, etag).toBe('etag')
+    // (a CDN weakens a strong tag as it recodes the body; the digest is of the decoded body either way)
+    for (const etag of [`"${sha(bytes)}"`, `W/"${sha(bytes)}"`, null]) expect((await readRules(bytes, { etag })).sha256, String(etag)).toBe(sha(bytes))
+    for (const etag of [`"${'0'.repeat(64)}"`, `W/"${'0'.repeat(64)}"`, sha(bytes), `W/${sha(bytes)}`, `w/"${sha(bytes)}"`, `W/W/"${sha(bytes)}"`, `W/"${sha(bytes)}`, 'W/""', 'W/', '', '"x"', 'W/"x"']) {
+      expect((await refusalOfBytes(bytes, { etag })).field, etag).toBe('etag')
+    }
   })
 
   it('refuses more than RULES_CAP bytes before it decodes them', async () => {

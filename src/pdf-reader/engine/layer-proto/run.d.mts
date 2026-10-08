@@ -6,7 +6,7 @@ import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
 import type { TexLines, Whole } from './tex.mjs'
 import type { RemovalManifest } from '../layout/remove.mjs'
 import type { FaceSources } from './fonts.mjs'
-import type { RuleSet } from '../rules/layout.mjs'
+import type { FrozenRuleSet } from '../rules/layout.mjs'
 
 /** a unit as the units record holds it (a row): its kind, source and state; its translation's pieces, none where it has
  *  none, each non-text one with its k (the layout file's index of its source piece: E6's row); its title, its table's
@@ -165,5 +165,5 @@ export declare function openProto(o: {
    *  name for it, which the rule set gives, where the final's is; null, every label kept as the original's */
   labels?: { captions: Captions | null } | null
   /** the layout rule set every choice made for the target is read from, resolved once at the open (absent: BUILTIN_RULES) */
-  rules?: RuleSet
+  rules?: FrozenRuleSet
 }): Promise<ProtoRun>

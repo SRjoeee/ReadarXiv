@@ -1002,3 +1002,15 @@ The rule set is one schema-validated file, `rules/layout-rules.json`: configurat
 | `hyphenation.en.right` | set | hyphenation | 1 to 6 | The fewest letters English leaves after a hyphen. |
 | `hyphenation.de.left` | set | hyphenation | 1 to 6 | The fewest letters German leaves before a hyphen. |
 | `hyphenation.de.right` | set | hyphenation | 1 to 6 | The fewest letters German leaves after a hyphen. |
+
+### 18.6 Hosts: opening a layer with a rule set
+
+What a host (the web's door, the extension's session, the gate, the lab) calls. Each host owns its fetch and its cache; the engine owns the reading.
+
+- **`openLayer({ …, rules? })`** (`layer-proto/reader.mjs`) and **`openProto({ …, rules? })`** (`layer-proto/run.mjs`, v0's open, which the gate and the lab call) take the set that every choice made for the target is read from, resolved once at the open. Absent: `BUILTIN_RULES`, the engine's copy of the published file. Neither takes a single rule as an argument.
+- **`firstFaceOf(target, rules?)`** is the host's early face request, made before the paper's family is known: the CJK body face the set names for the target, else `null`. Pass it the set the layer will be opened with (absent: the built-in).
+- **`stats().rules`** is `{ schema, version }` of the set the layer was opened with (`ProtoRun.rules` likewise). While no set was passed it is the built-in's. A host records it.
+- **`readRules(bytes, { etag })`** (`rules/layout.mjs`) reads an answer's body as a set and returns `{ set, sha256 }`. It refuses, naming the field, a body of more than `RULES_CAP` (65,536) bytes, a body of malformed UTF-8, more JSON values than `RULES_VALUES`, text that is not JSON, and a set that fails the schema or a cross-check; a refused set is never partly used.
+  - **`etag`** is the answer's `ETag` header, given where there is one. It is compared with the SHA-256 of the bytes given to `readRules`, the body decoded of any content coding, and a different one is refused with the field `etag`. Two forms are read: the strong `"<sha256>"` and the weak `W/"<sha256>"`, which a CDN may put in the strong one's place when it recodes the body. Any other form is refused. A host passes the header as it came, or `null`.
+- **The reader's choice** is the same in both readers: the server's answer, when one comes and is read; else the last read answer the reader cached; else the built-in. The server is the authority, so a lower version is taken like any other. A refused answer is ignored and counted, and the reader keeps what it had. The set is chosen when the composed document is ready, and an answer that has not come by then serves the next open: a rule-set fetch never delays a page.
+- **A `rules` must come from `readRules` or `parseRules`**, or be `BUILTIN_RULES`. The door checks only a set's shape (an object holding `scripts` and `languages`, else a `TypeError`), not its values; a set built by hand can fail to resolve a target, or draw badly. `BUILTIN_RULES` is frozen to every depth and typed read-only, so a set to edit is `structuredClone(BUILTIN_RULES)`.
