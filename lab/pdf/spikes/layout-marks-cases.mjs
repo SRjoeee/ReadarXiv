@@ -14,12 +14,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { lastTexLog, latin1, latin1Bytes } from '../../../src/pdf-reader/engine/latex-front.mjs'
+import { lastTexLog, latin1, latin1Bytes } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
 import { pageInk } from '../../../src/pdf-reader/engine/layout/ink.mjs'
 import { classOf, encodeLayoutMarks, layoutMarking, layoutMarksOf, MARK_CLASSES, POINTS_TEX, probeSamples, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { OWNED, OWNED_HOW } from '../../../src/pdf-reader/engine/layout/stream.mjs'
 import { boxDiff, pageBoxes } from './layout-marks-compare.mjs'
-import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/live.mjs'
+import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 
 let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }

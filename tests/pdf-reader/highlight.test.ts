@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { type Anchor, type DocToken, inkEdges, lineRects, tokenizeDocument } from '@/pdf-reader/engine/anchors.mjs'
-import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from '@/pdf-reader/engine/highlight.mjs'
+import { type Anchor, type DocToken, inkEdges, lineRects, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
+import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from '@/pdf-reader/engine/view/highlight.mjs'
 
 // What a unit paints on a side and where the pointer lights it (highlight.mjs): the pages given as PDF.js's text items,
 // each unit's tokens as anchorUnits would give them. A page is 600 wide; body text is 10 high on lines 12 apart, its

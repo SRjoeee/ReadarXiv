@@ -1,12 +1,12 @@
-// The reader's side of its cache (src/pdf-reader/engine/cache.mjs): when a run whose translation none of the ways could
+// The reader's side of its cache (src/pdf-reader/engine/pipeline/cache.mjs): when a run whose translation none of the ways could
 // set may leave the untypeset mark. The mark answers the next visit on its identity alone (pdf-record.ts stillUntypeset),
 // so it is written only for a translation that one identity made whole — as a copy is current only when every unit is
 // (the final review of Codex 1 on #306)
 import { describe, expect, it } from 'vitest'
-import { allTranslatedBy, endOf, knownOriginal, labelOf, originalRow, passagesInSource, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
-import { openPaper, translationFiles } from '@/pdf-reader/engine/live.mjs'
-import { translateUnits } from '@/pdf-reader/engine/mt.mjs'
-import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
+import { allTranslatedBy, endOf, knownOriginal, labelOf, originalRow, passagesInSource, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/pipeline/cache.mjs'
+import { openPaper, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { translateUnits } from '@/pdf-reader/engine/translate/mt.mjs'
+import { strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
 
 /** a run's results as live.mjs keeps them: index → { pieces, state, by, tried } */
 const results = (...rows: { by?: string; state?: string; pieces?: boolean }[]) =>

@@ -14,8 +14,8 @@
 //      paper's units and PDF.js's operator codes, so that each marked piece's own ink is read from its operator lists
 // The compile and the opening are the caller's (a native TeX Live and PDF.js in Node, the TeX page and a worker in a
 // browser), so that this imports neither PDF.js nor a `node:*` module.
-import { lastTexLog } from '../latex-front.mjs'
-import { originalFiles, probeFiles } from '../live.mjs'
+import { lastTexLog } from '../source/latex-front.mjs'
+import { originalFiles, probeFiles } from '../pipeline/live.mjs'
 import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, layoutMarksOf, probeSamples, readInkProbe, readInkTexts, readMarkProbe } from './marks.mjs'
 
 /**

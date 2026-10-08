@@ -1,15 +1,15 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { rolesFor } from '@/pdf-reader/engine/font-roles.mjs'
-import type { SourceUnit } from '@/pdf-reader/engine/latex-front.mjs'
+import { rolesFor } from '@/pdf-reader/engine/rules/font-roles.mjs'
+import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { type BundleParts, bundleUnitsOf, type ReadBundle, readBundle, STRING_MAX, writeBundle } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { layerRows, type Row, rowOf, toTranslate, unitOf } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { LAYOUT, type LayoutFile, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
-import { PDFJS } from '@/pdf-reader/engine/versions.mjs'
+import { PDFJS } from '@/pdf-reader/engine/pipeline/versions.mjs'
 
 // The reader's door (layer-proto/reader.mjs, A2's E4): both readers open the instant layer through openLayer, over a
 // paper's read bundle, the composed document and a target, and never write v0's host. Over a paper of this file's own
@@ -458,7 +458,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
 
 describe('the door reaches no server-only module', () => {
   it('walks every module reader.mjs imports and re-exports: none of the server\'s, no node: specifier, no package but zod, in rules/ alone', () => {
-    const SERVER = ['live.mjs', 'layout/remove.mjs', 'layout/addon.mjs', 'layout/make.mjs', 'layout/marks.mjs', 'layout/carry.mjs', 'layer/check.mjs'].map(f => resolve('src/pdf-reader/engine', f))
+    const SERVER = ['pipeline/live.mjs', 'layout/remove.mjs', 'layout/addon.mjs', 'layout/make.mjs', 'layout/marks.mjs', 'layout/carry.mjs', 'layer/check.mjs'].map(f => resolve('src/pdf-reader/engine', f))
     // (static import and export … from, relative and the repository's @/ alias; a module of the alias is TypeScript)
     const SPEC = /(?:^|[\n;])\s*(?:import|export)\s+(?:type\s+)?(?:[^'";]*?\s+from\s+)?['"]([^'"]+)['"]/g
     // (any import( of code: a literal's or a computed specifier's)
@@ -495,7 +495,7 @@ describe('the door reaches no server-only module', () => {
     expect([...others.keys()]).toEqual(['zod/mini'])
     expect(others.get('zod/mini')!.map(f => f.slice(resolve('src/pdf-reader/engine').length + 1))).toEqual(['rules/layout.mjs'])
     // (the walk reaches what it should: the run, the rows, the bundle, the translation)
-    for (const f of ['layer-proto/run.mjs', 'layer-proto/rows.mjs', 'layer-proto/bundle.mjs', 'mt.mjs', 'layer-proto/check.mjs']) expect(seenFiles.has(resolve('src/pdf-reader/engine', f)), f).toBe(true)
+    for (const f of ['layer-proto/run.mjs', 'layer-proto/rows.mjs', 'layer-proto/bundle.mjs', 'translate/mt.mjs', 'layer-proto/check.mjs']) expect(seenFiles.has(resolve('src/pdf-reader/engine', f)), f).toBe(true)
   })
 
   it('exports what the hosts take, and not the role table\'s or v0\'s own calls', async () => {

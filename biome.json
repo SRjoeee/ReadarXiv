@@ -17,7 +17,7 @@
 	},
 	"overrides": [
 		{
-			"includes": ["lab/**", "src/pdf-reader/engine/**"],
+			"includes": ["lab/**", "src/pdf-reader/engine/**", "src/pdf-reader/session/**", "src/pdf-reader/addresses.mjs"],
 			"linter": {
 				"rules": {
 					"complexity": { "noCommaOperator": "off" },

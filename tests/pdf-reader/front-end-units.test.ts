@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { documentBounds, inMemory, inputencOf, loadProject, markUnits, patch } from '@/pdf-reader/engine/latex-front.mjs'
-import { openPaper, probeFiles, translationFiles } from '@/pdf-reader/engine/live.mjs'
-import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
+import { documentBounds, inMemory, inputencOf, loadProject, markUnits, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { openPaper, probeFiles, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
 
 // The front end's round of 2026-10-06: every piece of typeset body text a unit, no TeX argument drawn as text (the
 // missing-units research: ResNet's appendix C, 37 of 117 papers missing some text)

@@ -18,7 +18,7 @@ import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
 import { loadavg, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { readFontProbe } from '../../../src/pdf-reader/engine/latex-front.mjs'
+import { readFontProbe } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
 import { hintsFor, paperJobs, TODAY } from './jobs.mjs'
 import { certificateSpki, serveTexSite } from './serve.mjs'
 

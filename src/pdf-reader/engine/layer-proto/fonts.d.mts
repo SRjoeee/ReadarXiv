@@ -1,5 +1,5 @@
 // fonts.mjs's types: the original's fonts and the faces v0 draws in (ported from the prototype at 9e56fca)
-import type { FaceId } from '../font-roles.mjs'
+import type { FaceId } from '../rules/font-roles.mjs'
 
 /** a PDF font's class as its PostScript name tells it */
 export interface FontClass {
@@ -31,9 +31,9 @@ export declare function loadWebFaces(designs: readonly string[], urlOf?: (file: 
 export declare const OPEN_FAMILY: 'times'
 /** v0 in the role table's faces (font-roles.mjs) for a target and the paper's English family, its CJK faces `cjkFaces`
  *  the layout rules' (null for an alphabet); a falsy target: the prototype's own faces again */
-export declare function setRoleFaces(target: string | null, family: string, cjkFaces: import('../font-roles.mjs').CjkFaces | null): void
+export declare function setRoleFaces(target: string | null, family: string, cjkFaces: import('../rules/font-roles.mjs').CjkFaces | null): void
 /** the role set v0 draws in, or null for the prototype's faces */
-export declare const roleFaces: () => import('../font-roles.mjs').RoleSet | null
+export declare const roleFaces: () => import('../rules/font-roles.mjs').RoleSet | null
 /** one slice of a face a host serves: its file on the host's origin (a plain URL) and its code points as [start, end]
  *  pairs (inclusive, ascending, apart) */
 export interface FaceSlice { url: string; ranges: readonly number[] }

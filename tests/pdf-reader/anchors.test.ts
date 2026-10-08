@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anchorUnits, boundsFromMarks, type DocToken, inkEdges, markWords, sentenceStarts, type TextPage, tokenizeDocument, tokens, type UnitText } from '@/pdf-reader/engine/anchors.mjs'
+import { anchorUnits, boundsFromMarks, type DocToken, inkEdges, markWords, sentenceStarts, type TextPage, tokenizeDocument, tokens, type UnitText } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 
 // Where each unit sits in a PDF, found from the text layer (anchors.mjs): the page given as PDF.js's text items, the
 // units as the reader passes them. Heights are 10 PDF units, lines 12 apart down from y = 700

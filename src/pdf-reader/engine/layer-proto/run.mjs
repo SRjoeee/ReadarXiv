@@ -42,7 +42,7 @@
 //   familyOfFonts). faces: 'prototype' draws in the prototype's own system faces and Latin Modern, as the approved
 //   prototype did (its floor's numbers).
 import { checkAll } from './check.mjs'
-import { familyOfFonts } from '../font-roles.mjs'
+import { familyOfFonts } from '../rules/font-roles.mjs'
 import { bodyFaceId, classifyFont, faceOf, fontString, loadWebFaces, OPEN_FAMILY, roleFaceSet, runsOfTokens, styleKey, setRoleFaces } from './fonts.mjs'
 import { loadHyphenation } from './hyph.mjs'
 import { blocksOf, median, norm, wordsOf } from './layer1.mjs'

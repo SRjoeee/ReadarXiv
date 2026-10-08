@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { createController, INITIAL, reduce, type Session } from '@/pdf-reader/controller'
-import type { SessionEvent, SessionHost } from '@/pdf-reader/engine/session.mjs'
+import type { SessionEvent, SessionHost } from '@/pdf-reader/session/session.mjs'
 
 const note = (event: string, counts: Partial<{ got: number; total: number; lost: number; again: boolean }> = {}): SessionEvent => ({ type: 'note', event, data: {}, got: 0, total: 0, lost: 0, again: false, ...counts })
 const fold = (events: SessionEvent[], from = INITIAL) => events.reduce(reduce, from)

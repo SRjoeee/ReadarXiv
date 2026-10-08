@@ -1,5 +1,5 @@
 // lab/pdf/spikes/table-groups.mjs
-// The table groups' decision (src/pdf-reader/engine/groups.mjs) over translations already made, nothing sent: the 29
+// The table groups' decision (src/pdf-reader/engine/translate/groups.mjs) over translations already made, nothing sent: the 29
 // layer-lab fixtures' records (data/layer-fixtures/<id>v<n>-<target>/record.json, each of its paper's source in
 // data/layout/<id>v<n>/source.gz) and a corpus sample — the corpus's papers whose table cells Microsoft has answered
 // in earlier runs on this machine (data/runs/geometry-lock/<id>/microsoft.json, the units by index; out/highlight/
@@ -37,13 +37,13 @@ const REPO = resolve(root, '../..')
 const argOf = name => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? null
 const ENGINE = resolve(argOf('engine') ?? REPO)
 const engine = path => import(pathToFileURL(join(ENGINE, 'src/pdf-reader/engine', path)).href)
-const { sourceHash, unitsOf, seedFrom } = await engine('cache.mjs')
-const { captionsOf, openPaper, translationFiles } = await engine('live.mjs')
-const { strategiesFor } = await engine('scripts.mjs')
+const { sourceHash, unitsOf, seedFrom } = await engine('pipeline/cache.mjs')
+const { captionsOf, openPaper, translationFiles } = await engine('pipeline/live.mjs')
+const { strategiesFor } = await engine('pipeline/scripts.mjs')
 const { BUILTIN_RULES, resolveRules } = await engine('rules/layout.mjs')
-const { unpackSource } = await engine('tar.mjs')
-const { plainSource, plainTranslated, rehydrate, serialize, texEscape } = await engine('mt.mjs')
-const G = await engine('groups.mjs')
+const { unpackSource } = await engine('source/tar.mjs')
+const { plainSource, plainTranslated, rehydrate, serialize, texEscape } = await engine('translate/mt.mjs')
+const G = await engine('translate/groups.mjs')
 const pieces = existsSync(join(ENGINE, 'src/pdf-reader/engine/layer/pieces.mjs')) ? await engine('layer/pieces.mjs') : null
 const DATA = process.env.AXT_DATA ?? join(root, 'data')
 /** the fixtures whose records are decided: the gate's fixed ones, or --of=<folder> (a cut's made fixtures, whose

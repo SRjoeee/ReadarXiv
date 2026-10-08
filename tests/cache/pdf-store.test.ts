@@ -1,7 +1,7 @@
 import { IDBKeyRange, indexedDB } from 'fake-indexeddb'
 import { describe, expect, it, vi } from 'vitest'
 import { createPdfDb, createPdfStore } from '@/cache/pdf-store'
-import type { PdfRecordBody } from '@/cache/pdf-record'
+import type { PdfRecordBody } from '@/pdf-reader/engine/pipeline/record'
 
 let n = 0
 const dbOf = () => createPdfDb(`axt-pdf-test-${++n}`, { indexedDB, IDBKeyRange })

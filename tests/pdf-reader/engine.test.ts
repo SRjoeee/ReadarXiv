@@ -9,7 +9,7 @@ let answer: unknown
 // the translate calls the background was sent
 const sent: { request: { segments: { id: string; text: string; cuts?: number[] }[] }; cache?: { paper: string; renderPath: string; source?: string } }[] = []
 vi.mock('@/shared/transport', () => ({ createMessageTransport: () => ({ status: async () => status, cancel, translate: vi.fn(async (call: (typeof sent)[number]) => { sent.push(call); return answer }) }) }))
-const { openEngine } = await import('@/pdf-reader/engine/engine.mjs')
+const { openEngine } = await import('@/pdf-reader/session/translate.mjs')
 
 const unavailable = (over: Partial<ProviderStatus>): Partial<ProviderStatus> => ({ available: false, providerId: 'my-llm', chosen: 'my-llm', demotions: [], ...over })
 

@@ -15,7 +15,7 @@
 // Erring strict: named imports that are all `type`-marked individually still count, because writing
 // `import type { … }` says the same thing and reads better.
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
 
 /** The directories whose files must stay platform-free */
@@ -39,16 +39,20 @@ const EXACT = new Map([['@', 'src'], ['~', 'src'], ['@@', '.'], ['~~', '.']])
 
 const dropExtension = p => p.replace(/\.(m|c)?[jt]sx?$/, '').replace(/\/index$/, '')
 
-/** A specifier as the compiler resolves it: a repo-relative module path inside the repository, the bare name otherwise */
-export function resolveSpecifier(fromFile, spec) {
+/** A specifier's path inside the repository, before any extension or index file is read off it: the alias and relative
+ *  forms; null for a package, a `node:` module and anything else */
+function localPath(fromFile, spec) {
   if (EXACT.has(spec)) return EXACT.get(spec)
   for (const [prefix, to] of ALIASES) {
-    if (spec.startsWith(prefix)) return dropExtension(`${to}${spec.slice(prefix.length)}`)
+    if (spec.startsWith(prefix)) return `${to}${spec.slice(prefix.length)}`
   }
-  if (spec.startsWith('./') || spec.startsWith('../')) {
-    return dropExtension(relative('.', resolve(dirname(fromFile), spec)).split('\\').join('/'))
-  }
-  return dropExtension(spec)
+  if (spec.startsWith('./') || spec.startsWith('../')) return relative('.', resolve(dirname(fromFile), spec)).split('\\').join('/')
+  return null
+}
+
+/** A specifier as the compiler resolves it: a repo-relative module path inside the repository, the bare name otherwise */
+export function resolveSpecifier(fromFile, spec) {
+  return dropExtension(localPath(fromFile, spec) ?? spec)
 }
 
 /** The source with comments blanked out, so a specifier mentioned in prose is not read as an import */
@@ -111,11 +115,44 @@ export function platformImportsOf(file, text) {
   return out
 }
 
-/** The reader's engine (src/pdf-reader/engine): modules the web's build loads through its pin and a plain browser page loads
- *  as they are, so each imports relative paths alone. The one package it may hold is the layout rules' validator, imported
- *  by the rules' module and by no other (the rules-as-data plan, §2.1); the allowance is by package and by directory */
+/** The reader's engine (src/pdf-reader/engine) is the contract the web imports. The web's build loads it through its pin, a
+ *  plain browser page loads it as it stands and plain node loads its server and translation entries, so an engine file
+ *  names a module by relative path to the engine's own files or to three modules of the core, or by `node:`, or, in rules/,
+ *  by the layout rules' validator, and in no other way: not by an alias, which only a bundler's configuration resolves, nor
+ *  a build setting's name, a root-absolute path or a URL, nor a package out of place, nor a computed specifier. It is a
+ *  whitelist over every file of the engine (modules, TypeScript and declaration files, stylesheets) and every form that names
+ *  a module or a file, a type-only import and a triple-slash reference included: a consumer's build resolves a type as it
+ *  resolves a value. */
 export const ENGINE = /^src\/pdf-reader\/engine\//
+
+/** The three modules of the core an engine file may import, by their path with no extension or index file (the
+ *  placeholder wire's tokens, the sentence splitter, the figure-name test). Nothing deeper in the core: a sibling of one of
+ *  them is another module. The closure of each holds those three alone, by relative path (a test holds it), so the web's pin,
+ *  a plain page and plain node load it as the engine's own files */
+export const ENGINE_ALLOW = ['src/core/sentences', 'src/core/protector/tokens', 'src/core/names']
+
+/** The packages an engine file may import, by name and under which directory. The engine imports no PDF library: the
+ *  layout maker is handed it (`PL`) */
 export const ENGINE_PACKAGES = [{ name: 'zod', under: 'src/pdf-reader/engine/rules/' }]
+
+/** Files of the engine that belong to the extension alone and so import what the rule forbids, and modules outside the
+ *  engine that move into it, each named so that the lint stays green until the move lands and the list is the work left.
+ *  Both are empty since Stage 5, Task 4 moved session.mjs and engine.mjs out of the engine and src/cache/pdf-record.ts in
+ *  (as pipeline/record.ts); a test holds any entry to still being a violation, and the lint fails on one that is not listed */
+export const ENGINE_MOVE_OUT = []
+export const ENGINE_MOVE_IN = []
+
+/** Whether a violation is one that a move named in ENGINE_MOVE_OUT or ENGINE_MOVE_IN removes */
+export const movesPending = v => ENGINE_MOVE_OUT.includes(v.file) || ENGINE_MOVE_IN.includes(resolveSpecifier(v.file, v.spec))
+
+/** What a file states of its origin, the web's rule for its bundles: the words saying it was taken from a reference
+ *  project or a scoped package, followed by the source's path. Matched against the text with its line-leading comment
+ *  markers off and every run of white space made one space, so that a statement wrapped across comment lines, set mid-file,
+ *  below a directive or with a double space is found too. A false positive is cured by rephrasing the prose */
+export const PORT_STATEMENT = /\bported\s+from\s+(?:reference\/|@[a-z0-9][\w.-]*\/)/i
+const normalise = text => text.replace(/^[ \t]*(?:\/\/+|\/\*+|\*+\/?)/gm, '').replace(/\s+/g, ' ')
+/** Whether this text states that it is ported */
+export const statesPort = text => PORT_STATEMENT.test(normalise(text))
 
 /** a bare specifier's package: its first segment, or its first two when it is scoped; null for a relative path, an alias or `node:` */
 function packageOf(spec) {
@@ -127,16 +164,176 @@ function packageOf(spec) {
   return spec.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
 }
 
-/** The packages this engine file imports (for their values) that its directory may not hold; empty when it is clean */
-export function enginePackagesOf(file, text) {
-  if (!ENGINE.test(file)) return []
+/** the `?inline` / `#hash` a bundler reads off a specifier */
+const QUERY = /[?#].*$/s
+const CODE = /\.(m|c)?[jt]sx?$/
+const STYLESHEET = /\.css$/
+const DECLARATION = /\.d\.(m|c)?ts$/
+const EXTENSIONS = ['.ts', '.tsx', '.mts', '.mjs', '.js', '/index.ts', '/index.tsx', '/index.mjs', '/index.js']
+const isFile = (root, path) => { try { return statSync(resolve(root, path)).isFile() } catch { return false } }
+
+/** a call's first argument as written, from just after its `(` to the first `,` or `)` outside any string and bracket */
+function firstArgument(text, from) {
+  let depth = 0
+  for (let i = from; i < text.length; i++) {
+    const ch = text[i]
+    if (ch === '"' || ch === "'" || ch === '`') {
+      for (i++; i < text.length && text[i] !== ch; i++) if (text[i] === '\\') i++
+    } else if (ch === '(' || ch === '[' || ch === '{') depth++
+    else if (ch === ')' || ch === ']' || ch === '}') { if (depth === 0) return text.slice(from, i); depth-- }
+    else if (ch === ',' && depth === 0) return text.slice(from, i)
+  }
+  return text.slice(from)
+}
+/** the string a literal argument is (a quoted one, or a template with nothing computed in it), else null */
+const literalOf = arg => { const m = /^\s*(?:'([^'\n]*)'|"([^"\n]*)"|`([^`$\n]*)`)\s*$/.exec(arg); return m ? (m[1] ?? m[2] ?? m[3]) : null }
+
+// the statements that name a module, whatever they carry (a value, a type, nothing): `from` follows a clause of one of these shapes
+const NAMED = [
+  /(?:^|[\n;}])\s*(?:import|export)\s*(?:type\s*)?\{[^}]*\}\s*from\s*(['"])([^'"\n]+)\1/g,
+  /(?:^|[\n;}])\s*(?:import|export)\s*(?:type\s*)?\*(?:\s*as\s+[\w$]+)?\s*from\s*(['"])([^'"\n]+)\1/g,
+  /(?:^|[\n;}])\s*import\s+(?:type\s+)?[\w$]+(?:\s*,\s*(?:\*\s*as\s+[\w$]+|\{[^}]*\}))?\s*from\s*(['"])([^'"\n]+)\1/g,
+  /(?:^|[\n;}])\s*import\s*(['"])([^'"\n]+)\1/g,
+]
+
+/** Every module a file names, in any form and whether it carries a value or only a type: its `import` and `export … from`
+ *  statements, `import(…)` and `require(…)` wherever they stand (a type position too), and `new URL(…, import.meta.url)`.
+ *  Each is { spec, display }: a literal's text, or, for a call whose argument is computed, `spec` null and the call as
+ *  written. `url` marks a path taken from the module's own address, which needs no `./` */
+export function namedModulesOf(text) {
+  const src = withoutComments(text)
   const out = []
-  for (const spec of valueImportsOf(text)) {
-    const name = packageOf(spec)
-    if (name === null) continue
-    if (!ENGINE_PACKAGES.some(p => p.name === name && file.startsWith(p.under))) out.push({ spec, name, why: 'a package in the engine, but the layout rules\' validator in rules/' })
+  // triple-slash reference directives are comments to the scanner above and statements to the compiler: read apart. A `path` is
+  // a file beside the module, judged like a specifier; `types`, `lib` and `no-default-lib` pull in declarations no import names
+  for (const m of text.matchAll(/^[ \t]*\/\/\/[ \t]*<reference\s+(path|types|lib|no-default-lib)\s*=\s*(['"])([^'"\n]*)\2[^\n]*$/gm)) {
+    const at = m.index - 1e9
+    if (m[1] === 'path') out.push({ at, spec: /^(?:[a-z][a-z0-9+.-]*:|\/|\.)/i.test(m[3]) ? m[3] : `./${m[3]}` })
+    else out.push({ at, spec: null, display: m[0].trim(), why: 'a reference directive that loads declarations no import names: the engine\'s types come by its relative imports' })
+  }
+  for (const re of NAMED) for (const m of src.matchAll(re)) out.push({ at: m.index, spec: m[2] })
+  for (const m of src.matchAll(/\b(import|require)\s*\(\s*/g)) {
+    const arg = firstArgument(src, m.index + m[0].length), lit = literalOf(arg)
+    out.push(lit === null ? { at: m.index, spec: null, display: `${m[1]}(${arg.trim()})` } : { at: m.index, spec: lit })
+  }
+  for (const m of src.matchAll(/\bimport\.meta\.(glob|resolve)\s*\(\s*/g)) out.push({ at: m.index, spec: null, display: `import.meta.${m[1]}(${firstArgument(src, m.index + m[0].length).trim()})` })
+  for (const m of src.matchAll(/\bnew\s+URL\s*\(\s*/g)) {
+    const arg = firstArgument(src, m.index + m[0].length)
+    // (only a URL made of the module's own address names a file beside it)
+    if (!/^\s*,\s*import\.meta\.url\s*[,)]/.test(src.slice(m.index + m[0].length + arg.length, m.index + m[0].length + arg.length + 40))) continue
+    const lit = literalOf(arg)
+    out.push(lit === null ? { at: m.index, spec: null, display: `new URL(${arg.trim()}, import.meta.url)` } : { at: m.index, spec: /^(?:[a-z][a-z0-9+.-]*:|\/|\.)/i.test(lit) ? lit : `./${lit}` })
+  }
+  return out.sort((a, b) => a.at - b.at).map(({ spec, display, why }) => ({ spec, display, why }))
+}
+
+/** Every file a stylesheet names: `@import` and `url(…)`, outside comments. A data URL holds its own bytes and a fragment
+ *  (`url(#blur)`) names an element of the document; neither reaches a file. Same shape as namedModulesOf's */
+export function stylesheetModulesOf(text) {
+  const css = text.replace(/\/\*[\s\S]*?\*\//g, match => match.replace(/[^\n]/g, ' '))
+  const found = []
+  const imports = []
+  for (const m of css.matchAll(/@import\s+(?:url\(\s*)?(?:'([^'\n]*)'|"([^"\n]*)"|([^\s'")]+))/g)) { found.push({ at: m.index, spec: m[1] ?? m[2] ?? m[3] }); imports.push([m.index, m.index + m[0].length]) }
+  // (an @import's own url( is that import, not a second file)
+  for (const m of css.matchAll(/\burl\(\s*(?:'([^'\n]*)'|"([^"\n]*)"|([^\s'")]*))\s*\)/g)) if (!imports.some(([a, b]) => m.index >= a && m.index < b)) found.push({ at: m.index, spec: m[1] ?? m[2] ?? m[3] })
+  return found.filter(f => f.spec && !/^(?:data:|#)/i.test(f.spec)).sort((a, b) => a.at - b.at)
+    .map(({ spec }) => ({ spec: /^(?:[a-z][a-z0-9+.-]*:|\/|\.)/i.test(spec) ? spec : `./${spec}` }))
+}
+
+/** Why an engine file may not name a module so, or null: it is a `node:` module, a relative path that stays inside the
+ *  engine or reaches one of ENGINE_ALLOW, or a package ENGINE_PACKAGES lets its directory hold. Anything else is refused:
+ *  an alias, a build setting's name (`#imports`), a root-absolute path, a URL, a package out of place */
+function whyRefused(file, spec) {
+  if (spec.startsWith('node:')) return null
+  if (spec.startsWith('./') || spec.startsWith('../')) {
+    const target = dropExtension(norm(relative('.', resolve(dirname(file), spec.replace(QUERY, '')))))
+    return ENGINE.test(`${target}/`) || ENGINE_ALLOW.includes(target) ? null : `a module outside the engine, and not one of ${ENGINE_ALLOW.join(', ')}`
+  }
+  if (ALIASES.some(([prefix]) => spec.startsWith(prefix)) || EXACT.has(spec)) return 'an alias: an engine file imports by relative path, which the web\'s pin, a plain page and plain node all resolve'
+  const name = packageOf(spec)
+  if (name === null) return 'neither a relative path, a node: module nor a package: the engine names a module by one of those alone'
+  return ENGINE_PACKAGES.some(p => p.name === name && file.startsWith(p.under)) ? null : 'a package in the engine, but the layout rules\' validator in rules/'
+}
+const norm = p => p.split('\\').join('/')
+
+/** What the engine files among `files` name that the engine may not. A whitelist: every module a file of the engine names,
+ *  in a value import or a type one, in a module, a TypeScript file or a declaration file, by a statement, a call or a
+ *  `new URL(…, import.meta.url)`, is a relative path inside the engine or to ENGINE_ALLOW, a `node:` module or an
+ *  ENGINE_PACKAGES package under its directory; a module named by a computed specifier is refused, since nothing can say
+ *  where it leads. Every file is read from `root` (the repository, by default) */
+export function engineViolations(files, { root = '.' } = {}) {
+  const out = []
+  for (const file of files) {
+    if (!ENGINE.test(file) || !(CODE.test(file) || STYLESHEET.test(file))) continue
+    const text = readFileSync(resolve(root, file), 'utf8')
+    for (const { spec, display, why: given } of STYLESHEET.test(file) ? stylesheetModulesOf(text) : namedModulesOf(text)) {
+      if (spec === null) { out.push({ file, spec: display, why: given ?? 'a module named by a computed specifier: the engine\'s imports are literal, so that where they lead can be told' }); continue }
+      const why = whyRefused(file, spec)
+      if (why !== null) out.push({ file, spec, why })
+    }
   }
   return out
+}
+
+/** The file a repository path names as the compiler finds it: the path itself, an extension added, an index file, a
+ *  TypeScript source behind a `.js` name; null where there is none */
+function sourceOf(path, root) {
+  const bare = path.replace(QUERY, '')
+  const twins = /\.m?js$/.test(bare) ? [bare.replace(/\.js$/, '.ts'), bare.replace(/\.js$/, '.tsx'), bare.replace(/\.mjs$/, '.mts')] : []
+  return [bare, ...EXTENSIONS.map(e => bare + e), ...twins].find(c => isFile(root, c)) ?? null
+}
+
+/** The files `file` imports for their values that the repository holds: aliases and relative paths, no package */
+function importsOf(file, root) {
+  let text
+  try { text = readFileSync(resolve(root, file), 'utf8') } catch { return [] }
+  const out = []
+  for (const spec of valueImportsOf(text)) {
+    const local = localPath(file, spec.replace(QUERY, ''))
+    const found = local === null ? null : sourceOf(local, root)
+    if (found !== null) out.push(found)
+  }
+  return out
+}
+
+/** The entries and every file their value imports reach, once each. A stylesheet or a data file reached is in the closure
+ *  and imports nothing; a package and a `node:` module are not in it. Throws for an entry the repository does not hold */
+export function closureOf(entries, { root = '.' } = {}) {
+  const seen = new Set()
+  const todo = entries.map(entry => {
+    const found = sourceOf(entry, root)
+    if (found === null) throw new Error(`${entry}: no such file`)
+    return found
+  })
+  while (todo.length > 0) {
+    const file = todo.pop()
+    if (seen.has(file)) continue
+    seen.add(file)
+    if (CODE.test(file)) todo.push(...importsOf(file, root))
+  }
+  return seen
+}
+
+/** The files in the closure of the entries that state they are ported (PORT_STATEMENT), sorted: the licence gate of what a
+ *  reader's build would carry */
+export function portedInClosure(entries, { root = '.' } = {}) {
+  return [...closureOf(entries, { root })].filter(file => statesPort(readFileSync(resolve(root, file), 'utf8'))).sort()
+}
+
+const OUTSIDE = /^(?:src|lab)\//
+export const trackedFiles = (root = '.') => execFileSync('git', ['-C', root, 'ls-files', '-z'], { encoding: 'utf8', maxBuffer: 1 << 26 }).split('\0').filter(Boolean)
+
+/** The engine's modules (code files, no declaration files) that nothing live reaches: neither the closure of the entries, nor
+ *  that of the gates, nor that of any file outside the engine, in src/ or lab/, that imports an engine module. That is the
+ *  shipped extension and EVERY file of the lab, its bench and its spikes as well as its kept gates: wider than Ruling 33a's
+ *  "kept lab gates", since a spike that imports a module keeps it alive for as long as the spike is in the tree. Tests and
+ *  scripts are not roots: a module only they reach is parked with its tests.
+ *  `files` is the repository's files, by default the ones git tracks. Throws for an entry or a gate the repository does not
+ *  hold, so that a typo is not everything unreached */
+export function unreached(entries, gates, { root = '.', files = trackedFiles(root) } = {}) {
+  const modules = files.filter(f => ENGINE.test(f) && CODE.test(f) && !DECLARATION.test(f))
+  const importers = files.filter(f => OUTSIDE.test(f) && !ENGINE.test(f) && CODE.test(f) && !DECLARATION.test(f) && importsOf(f, root).some(g => ENGINE.test(g)))
+  const reached = closureOf([...entries, ...gates, ...importers], { root })
+  return modules.filter(m => !reached.has(m)).sort()
 }
 
 export const coreFiles = () => execFileSync('git', ['ls-files', '-z', 'src'], { encoding: 'utf8' })
@@ -145,7 +342,7 @@ export const coreFiles = () => execFileSync('git', ['ls-files', '-z', 'src'], { 
 
 export const engineFiles = () => execFileSync('git', ['ls-files', '-z', 'src/pdf-reader/engine'], { encoding: 'utf8' })
   .split('\0')
-  .filter(f => f && /\.(m|c)?[jt]sx?$/.test(f) && !/\.d\.(m|c)?ts$/.test(f))
+  .filter(f => f && (CODE.test(f) || STYLESHEET.test(f)))
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const files = coreFiles()
@@ -157,11 +354,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   console.log(`boundary check: ${files.length} core files import no platform module`)
   const engine = engineFiles()
-  const packages = engine.flatMap(file => enginePackagesOf(file, readFileSync(file, 'utf8')).map(({ spec, why }) => `${file}: imports ${spec} (${why})`))
-  if (packages.length > 0) {
-    console.error('The engine imports a package outside the layout rules (a module the web loads through its pin takes relative paths alone):')
-    for (const p of packages) console.error(`  ${p}`)
+  const found = engineViolations(engine)
+  const unexpected = found.filter(v => !movesPending(v))
+  if (unexpected.length > 0) {
+    console.error(`The engine imports what it may not (an engine file imports the engine, ${ENGINE_ALLOW.join(', ')}, node: modules and, in rules/, the layout rules' validator):`)
+    for (const v of unexpected) console.error(`  ${v.file}: imports ${v.spec} (${v.why})`)
     process.exit(1)
   }
-  console.log(`boundary check: ${engine.length} engine files import no package but the layout rules' validator, in rules/`)
+  const tolerated = found.length > 0 ? ` (${found.length} imports tolerated until ${[...ENGINE_MOVE_OUT.map(f => `${f} leaves`), ...ENGINE_MOVE_IN.map(m => `${m} enters`)].join(', ')})` : ''
+  console.log(`boundary check: ${engine.length} engine files import only the engine, ${ENGINE_ALLOW.length} core modules and the layout rules' validator, by relative path${tolerated}`)
 }

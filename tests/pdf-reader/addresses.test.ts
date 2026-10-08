@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FILE_SERVER, readerAddresses, TEX_PAGE } from '@/pdf-reader/engine/addresses.mjs'
+import { FILE_SERVER, readerAddresses, TEX_PAGE } from '@/pdf-reader/addresses.mjs'
 
 // Where the live reader fetches the paper and sends its typesetting (the reader's design, §2): its own addresses, or,
 // for the probes, servers on this machine. A page that frames the reader chooses none of them (Devin on #301)

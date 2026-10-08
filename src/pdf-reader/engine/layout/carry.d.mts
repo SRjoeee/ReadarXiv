@@ -1,5 +1,5 @@
 // carry.mjs's types (JavaScript until the engine's port), for the layout maker and its tests
-import type { DocToken } from '../anchors.mjs'
+import type { DocToken } from '../pipeline/anchors.mjs'
 import type { LayoutMarks } from './marks.mjs'
 
 /** a line of words on one baseline: its page, baseline, extent and words (anchors.mjs tokens on it) */

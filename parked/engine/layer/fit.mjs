@@ -1,0 +1,649 @@
+// The instant layer's fit (Plan 8b, Task 10; the instant layer's spec §4.5): a unit's translation set into the original's
+// own frames, on the original's lines, giving up as little as it must to fit, in the maintainer's order: tracking, then
+// the space below, then leading, then size. A unit that does not fit at the floor stays the original's, whole: nothing is
+// clipped, dropped or drawn in part.
+//
+// - Slots from the layout file: each frame's lines in order, on the layout's own baselines at leading 1 (CJK at any
+//   size, alphabets at full size), else from the frame's first baseline at the scaled pitch. A display's lines are no
+//   slots: the text before it fills the lines above it, the text after it starts below it.
+// - A split unit (more than one frame) flows through its frames' lines in order, as one text, at one size and leading.
+//   Only where the flow would take a crop off its own page (a crop is drawn from its page's pixels) is it cut instead, at
+//   the translation's sentence start nearest each frame's share of the source, each part laid in its own frame; a part
+//   that does not fit gives a sentence to the roomier frame before the fit moves on.
+// - The completeness net (net.mjs) is on both sides: the pieces are refused within bounds before anything reads them, a
+//   unit whose layout lost a placeholder is refused before it is laid, and the laid unit is checked before it is returned.
+//   No unit the net refuses leaves here: it stays the original's, neither erased nor drawn.
+//
+// Pure, as the layer is: no DOM, no clock, no randomness; text is measured only through the function it is given, and
+// sizes and positions are PDF units, which no zoom changes. An original module (no port statement), importing only
+// relative modules, so that the reader's bundle holds it.
+import { scriptOf } from '../rules/layer-rules.mjs'
+import { breakLines, placeLines } from './breaks.mjs'
+import { checkPieces, heldByNone, lostIn, netOf } from './net.mjs'
+import { linesOn } from './page.mjs'
+import { trText } from '../../../src/pdf-reader/engine/layer/pieces.mjs'
+import { faceSize, tokensOf } from './tokens.mjs'
+
+/** a split part's sentence start is taken within this share of the translation's length from its frame's share */
+export const SPLIT_NEAR = 0.2
+
+// a width or a baseline within this of a bound is on it: a hundredth of a PDF unit, as the files hold them
+const EPS = 0.01
+const TRACK_STEP = 0.01, LEAD_STEP = 0.05, BORROW_LINES = 6
+/** em at the current size: a line narrower holds no text */
+const NARROW = 1.5
+/** of the pitch: no two lines stand closer */
+const CLOSEST = 0.7
+/** × the size: the pitch of a unit with no two lines in a frame */
+const PITCH_OF_SIZE = 1.2
+/** of a line's width: a display segment over as much of it holds the line */
+const HOLDS = 1 / 3
+/** em at the unit's size: the gap kept beside a display's segment that does not hold its line, and after a label */
+const GAP = 0.25
+/** em at the unit's size: a widened heading keeps this clear of the next text on its baseline (the prototype's) */
+const WIDEN_GAP = 0.5
+/** of the unit's size: another line within this of a heading's baseline is on it */
+const SAME_BASELINE = 0.4
+/** a heading's column is the paragraphs' lines through its middle where there are this many, else the page's text */
+const COLUMN_LINES = 3
+// the scripts whose lines keep the layout's baselines at any size (their leading is × the pitch alone), and those that
+// are cut by characters where a split has no sentence start near its share
+const GRID = new Set(['Hans', 'Hant', 'Jpan', 'Kore'])
+const BY_CHARACTER = new Set(['Hans', 'Hant', 'Jpan'])
+
+const r2 = v => Math.round(v * 100) / 100
+const r3 = v => Math.round(v * 1000) / 1000
+const median = xs => { const s = xs.slice().sort((a, b) => a - b); return (s[(s.length - 1) >> 1] + s[s.length >> 1]) / 2 }
+const cpLength = s => { let n = 0; for (let i = 0; i < s.length; i++) if ((s.charCodeAt(i) & 0xfc00) !== 0xdc00) n++; return n }
+const content = t => t.kind === 'text' || t.kind === 'ph'
+
+/** a face's size correction (tokens.mjs's), here for the drawing */
+export { faceSize }
+
+/**
+ * The fit's states in order, from the most natural, each knob taken to its bound before the next (spec §4.5's order):
+ * 1. tracking: full-width punctuation compressed to 2 where the rules give 2, then tracking (CJK) or letter spacing
+ *    (alphabets) in steps of 0.01 em to its bound;
+ * 2. the space below the last frame: 1 to 6 lines of `pitch`, then all of `below` × borrowMax (PDF units);
+ * 3. leading: in steps of 0.05 down to leadFloor, then leadFloor itself;
+ * 4. size: in steps of sizeStep down to sizeFloor.
+ * The first state is leadBase, no tracking, compression 1 where the rules compress, no borrowing, and scale 1 (or
+ * `maxScale`): 'even' where page-even set it.
+ */
+export function* statesOf(rules, o) {
+  const st = {
+    scale: o.maxScale ?? 1, lead: rules.leadBase, track: 0, letter: 0, compress: rules.compress > 0 ? 1 : 0, borrow: 0,
+    knob: o.maxScale !== undefined ? 'even' : 'none',
+  }
+  yield { ...st }
+  st.knob = 'track'
+  if (rules.compress >= 2) { st.compress = 2; yield { ...st } }
+  for (let k = 1; -k * TRACK_STEP >= rules.trackMin - 1e-9; k++) { st.track = r2(-k * TRACK_STEP); yield { ...st } }
+  for (let k = 1; -k * TRACK_STEP >= rules.letterMin - 1e-9; k++) { st.letter = r2(-k * TRACK_STEP); yield { ...st } }
+  st.knob = 'borrow'
+  const pitch = Number.isFinite(o.pitch) && o.pitch > 0 ? o.pitch : 0
+  const room = Number.isFinite(o.below) && o.below > 0 ? o.below * rules.borrowMax : 0
+  for (let j = 1; pitch > 0 && j <= BORROW_LINES && j * pitch <= room + 1e-9; j++) { st.borrow = j * pitch; yield { ...st } }
+  if (room > st.borrow + 1e-9) { st.borrow = room; yield { ...st } }
+  st.knob = 'lead'
+  const lead = st.lead
+  for (let k = 1; r3(lead - k * LEAD_STEP) >= rules.leadFloor - 1e-9; k++) { st.lead = r3(lead - k * LEAD_STEP); yield { ...st } }
+  if (st.lead > rules.leadFloor + 1e-9) { st.lead = rules.leadFloor; yield { ...st } }
+  st.knob = 'shrink'
+  const scale = st.scale
+  for (let k = 1; r3(scale - k * rules.sizeStep) >= rules.sizeFloor - 1e-9; k++) { st.scale = r3(scale - k * rules.sizeStep); yield { ...st } }
+}
+
+// ---------------------------------------------------------------- the unit's geometry, the same at every state
+
+/**
+ * The slot of a heading, a title or a footnote of one line, widened: to its column's edge or the next text on its baseline, whichever
+ * is nearer, and a centred one as far to either side (the prototype's main.js:263-276). A heading is as wide as its
+ * column, not as its English words: a translation longer than them keeps its size where the column has room, as a
+ * German title does, and a note of one line whose mark the layout keeps as its label (the widening at the floor of the
+ * layer round, which then erased 1706's "∗" and "†"). The column: the page's paragraph lines through the heading's middle, where there are
+ * COLUMN_LINES of them, else every located line of the page; the next text: another unit's line or a label of its own on
+ * its baseline, and the page's own text (textIn) between it and the column's edge, where the slot is not widened at all.
+ * Null where nothing widens it
+ */
+function widenedOf(input, unit, size) {
+  if (unit.lines.length !== 8 || unit.frames.length !== 6 || (unit.kind !== 'heading' && unit.kind !== 'footnote' && !unit.title)) return null
+  const L = unit.lines, page = L[0], x0 = L[1], x1 = L[2], b = L[3]
+  const mid = (x0 + x1) / 2
+  let c0 = Infinity, c1 = -Infinity, cn = 0, a0 = Infinity, a1 = -Infinity, left = -Infinity, right = Infinity
+  for (const l of linesOn(input.file, page).list) {
+    if (l.id === unit.id) continue
+    a0 = Math.min(a0, l.x0)
+    a1 = Math.max(a1, l.x1)
+    if (l.kind === 'para' && l.x0 <= mid && l.x1 >= mid) { cn++; c0 = Math.min(c0, l.x0); c1 = Math.max(c1, l.x1) }
+    if (Math.abs(l.b - b) >= SAME_BASELINE * size) continue
+    if (l.x0 >= x1 - EPS) right = Math.min(right, l.x0 - WIDEN_GAP * size)
+    else if (l.x1 <= x0 + EPS) left = Math.max(left, l.x1 + WIDEN_GAP * size)
+  }
+  // its own labels on the line (a section number) are kept where they are: the text stays clear of them
+  const lb = unit.labels
+  for (let o = 0; o + 6 < lb.length; o += 7) {
+    if (lb[o + 1] !== page || Math.abs(lb[o + 3] - b) >= SAME_BASELINE * size) continue
+    if (lb[o + 2] >= x1 - EPS) right = Math.min(right, lb[o + 2] - GAP * size)
+    else if (lb[o + 4] <= x0 + EPS) left = Math.max(left, lb[o + 4] + GAP * size)
+  }
+  if (cn >= COLUMN_LINES) { a0 = c0; a1 = c1 }
+  right = Math.min(right, a1)
+  left = Math.max(left, a0)
+  // the page's own text beside the line, a running head or a figure's word no unit holds: no room taken there
+  const band = [b - 0.3 * size, b + 0.7 * size]
+  const textIn = input.textIn
+  if (right > x1 + EPS && textIn?.(page, x1 + 1, band[0], right, band[1])) right = x1
+  if (left < x0 - EPS && textIn?.(page, left, band[0], x0 - 1, band[1])) left = x0
+  // a note whose line the layout holds from inside: page text before it on its baseline, past its label, is a part of
+  // its line the layout did not give it (1706's third note, whose words it shares with the second). Not widened
+  if (unit.kind === 'footnote') {
+    let from = a0
+    for (let o = 0; o + 6 < lb.length; o += 7) if (lb[o + 1] === page && Math.abs(lb[o + 3] - b) < SAME_BASELINE * size && lb[o + 4] <= x0 + EPS) from = Math.max(from, lb[o + 4] + EPS)
+    if (from < x0 - 1 && textIn?.(page, from, band[0], x0 - 1, band[1])) return null
+  }
+  // a note is set from its label on, never centred (one line by its column's middle reads as centred)
+  if (unit.centred && unit.kind !== 'footnote') {
+    const half = Math.min(right - mid, mid - left)
+    return half > (x1 - x0) / 2 + EPS ? { x0: mid - half, x1: mid + half } : null
+  }
+  return right > x1 + EPS ? { x0, x1: right } : null
+}
+
+/** the unit's lines, frames and displays as the fit reads them; null where they do not make a located unit. `wide`: a
+ *  heading's one line widened (widenedOf) */
+function geometryOf(unit, tokens, size, wide) {
+  const L = unit.lines, n = L.length / 8
+  const lines = new Array(n)
+  for (let i = 0; i < n; i++) {
+    const o = 8 * i
+    lines[i] = { i, page: L[o], x0: L[o + 1], x1: L[o + 2], baseline: L[o + 3], top: L[o + 4], bottom: L[o + 5], frame: -1, held: false, sx0: wide?.x0 ?? L[o + 1], sx1: wide?.x1 ?? L[o + 2], beside: [] }
+  }
+  const F = unit.frames, frames = []
+  for (let o = 0; o + 5 < F.length; o += 6) {
+    const fr = { page: F[o], first: F[o + 2], count: F[o + 3], share: F[o + 4], below: F[o + 5], pitch: 0, runs: [], endsHeld: false, tailBottom: 0, bx0: 0, bx1: 0, gaps: [] }
+    if (fr.first < 0 || fr.count < 1 || fr.first + fr.count > n) return null
+    for (let i = fr.first; i < fr.first + fr.count; i++) lines[i].frame = frames.length
+    frames.push(fr)
+  }
+  if (!frames.length || lines.some(l => l.frame < 0)) return null
+  // the lines the unit's source does not write (the layout's `held`): no slot, never erased (a display it does not hold
+  // stays where it is, and the text flows round it)
+  for (const i of unit.held ?? []) if (lines[i]) lines[i].held = true
+
+  // displays: the lines a segment holds by a third of their width or more are no slots; a segment beside a line keeps
+  // the line clear of it. Each display is placed in reading order by the first line it holds, else the first line of its
+  // frame below it, else its frame's end
+  const blocks = new Set()
+  for (const t of tokens) if (t.kind === 'block') blocks.add(t.ph)
+  const displays = []
+  for (const [k, row] of unit.ph) {
+    if (row.kind !== 'display' || row.segs.length < 6) continue
+    const segs = []
+    for (let s = 0; s + 5 < row.segs.length; s += 6) segs.push({ page: row.segs[s], x0: row.segs[s + 1], baseline: row.segs[s + 2], x1: row.segs[s + 3], top: row.segs[s + 4], bottom: row.segs[s + 5] })
+    displays.push({ k, segs, at: -1, frame: -1, counted: blocks.has(k) })
+  }
+  for (const d of displays) {
+    for (const s of d.segs) {
+      for (const line of lines) {
+        if (line.page !== s.page) continue
+        const on = (line.baseline >= s.bottom - EPS && line.baseline <= s.top + EPS) || (s.baseline >= line.bottom - EPS && s.baseline <= line.top + EPS)
+        const over = Math.min(line.x1, s.x1) - Math.max(line.x0, s.x0)
+        if (!on || over <= 0) continue
+        if (over >= HOLDS * (line.x1 - line.x0) - EPS) {
+          line.held = true
+          if (d.at < 0 || line.i < d.at) d.at = line.i
+        } else line.beside.push(s)
+      }
+    }
+    if (d.at >= 0) { d.frame = lines[d.at].frame; continue }
+    // a display that holds no line: in the frame on its page its segments overlap the most, after that frame's lines above it
+    const s0 = d.segs[0]
+    let best = -1, most = 0
+    frames.forEach((fr, j) => {
+      if (fr.page !== s0.page) return
+      let over = 0
+      for (let i = fr.first; i < fr.first + fr.count; i++) over = Math.max(over, Math.min(lines[i].x1, s0.x1) - Math.max(lines[i].x0, s0.x0))
+      if (over > most) { most = over; best = j }
+    })
+    if (best < 0) { d.frame = frames.length - 1; d.at = n; continue }
+    const fr = frames[best], low = Math.min(...d.segs.filter(s => s.page === fr.page).map(s => s.bottom))
+    d.frame = best
+    d.at = fr.first + fr.count
+    for (let i = fr.first; i < fr.first + fr.count; i++) if (lines[i].baseline < low) { d.at = i; break }
+  }
+  const counted = displays.filter(d => d.counted)
+  /** the displays of the translation above a line of frame j, in reading order */
+  const afterOf = (i, j) => { let a = 0; for (const d of counted) if (d.frame < j || (d.frame === j && d.at <= i)) a++; return a }
+
+  // each frame's runs of lines between displays (a display that holds no line still ends the run above it), its pitch,
+  // and its lines' extents
+  const starts = new Set(counted.map(d => d.at))
+  for (const [j, fr] of frames.entries()) {
+    let run = null
+    for (let i = fr.first; i < fr.first + fr.count; i++) {
+      if (lines[i].held) { run = null; continue }
+      if (!run || starts.has(i)) fr.runs.push(run = { lines: [], after: afterOf(i, j) })
+      run.lines.push(i)
+    }
+    const end = fr.first + fr.count - 1
+    fr.endsHeld = lines[end].held
+    if (fr.endsHeld) {
+      let bottom = Infinity
+      for (let i = end; i >= fr.first && lines[i].held; i--) bottom = Math.min(bottom, lines[i].bottom)
+      for (const d of displays) for (const s of d.segs) if (d.frame === j && s.page === fr.page) bottom = Math.min(bottom, s.bottom)
+      fr.tailBottom = bottom
+    }
+    for (let i = fr.first; i < end; i++) {
+      if (lines[i].held || lines[i + 1].held) continue
+      const gap = lines[i].baseline - lines[i + 1].baseline
+      if (gap > EPS) fr.gaps.push(gap)
+    }
+    // a line that ends a run ends where the text did, not at the frame's edge: it is set as wide as the line above it in
+    // the run (the frame's widest where the run has one line), so never over what narrows the lines beside it, a figure
+    // the text wraps around
+    let lo = Infinity, hi = -Infinity, body = Infinity
+    for (const r of fr.runs) for (const i of r.lines) { lo = Math.min(lo, lines[i].x0); hi = Math.max(hi, lines[i].x1); if (i > 0) body = Math.min(body, lines[i].x0) }
+    if (!Number.isFinite(lo)) for (let i = fr.first; i <= end; i++) { lo = Math.min(lo, lines[i].x0); hi = Math.max(hi, lines[i].x1) }
+    for (const r of fr.runs) {
+      const k = r.lines.length, last = lines[r.lines[k - 1]], above = k > 1 ? lines[r.lines[k - 2]] : null
+      last.sx1 = Math.max(last.sx1, above ? above.x1 : hi)
+      if (unit.centred) last.sx0 = Math.min(last.sx0, above ? above.x0 : lo)
+    }
+    // a line borrowed below the frame is as wide as the frame's last line: no wider than the lines it continues
+    const tail = fr.runs.length ? lines[fr.runs[fr.runs.length - 1].lines.at(-1)] : null
+    fr.bx0 = tail && tail.i > 0 ? tail.sx0 : Number.isFinite(body) ? body : lo
+    fr.bx1 = tail ? tail.sx1 : hi
+  }
+  const all = frames.flatMap(fr => fr.gaps)
+  const unitPitch = all.length ? median(all) : PITCH_OF_SIZE * size
+  for (const fr of frames) fr.pitch = fr.gaps.length ? median(fr.gaps) : unitPitch
+
+  // a display's segment beside a line: the line keeps to the side of it with the more room
+  for (const line of lines) {
+    for (const s of line.beside) {
+      if ((s.x0 + s.x1) / 2 > (line.sx0 + line.sx1) / 2) line.sx1 = Math.min(line.sx1, s.x0 - GAP * size)
+      else line.sx0 = Math.max(line.sx0, s.x1 + GAP * size)
+    }
+  }
+  // the first line starts at its layout line's x0, right of its label
+  const first = lines[0], lb = unit.labels
+  for (let o = 0; o + 6 < lb.length; o += 7) {
+    const page = lb[o + 1], x0 = lb[o + 2], baseline = lb[o + 3], x1 = lb[o + 4]
+    // a label before the layout line, wherever a widened slot starts
+    if (page !== first.page || Math.abs(baseline - first.baseline) > 0.5 * size || x0 >= first.x0) continue
+    if (x1 + GAP * size > first.sx0) first.sx0 = x1 + GAP * size
+  }
+  return { lines, frames, displays: counted, centred: unit.centred, upto: j => counted.filter(d => d.frame <= j).length, before: j => counted.filter(d => d.frame < j).length }
+}
+
+/**
+ * Frame j's slots at a state: the leading's multiple of the pitch is `m` (lead, × scale for alphabets), the size `f`;
+ * `borrow` the space below the frame its last lines may take (the last frame's alone); `base` the displays in the frames
+ * before it, which a part laid alone has not met.
+ */
+function slotsOf(geo, j, m, f, borrow, base) {
+  const { lines, frames } = geo
+  const fr = frames[j], pitch = fr.pitch, step = pitch * m
+  const onGrid = Math.abs(m - 1) < 1e-9
+  const narrow = NARROW * f
+  const out = []
+  let prev = Infinity
+  /** a line at baseline b, unless it falls below `low`: never closer than CLOSEST of the pitch to the line above it */
+  const place = (b, x0, x1, after, low) => {
+    const y = Math.min(b, prev - CLOSEST * pitch)
+    if (y < low) return false
+    prev = y
+    if (x1 - x0 >= narrow - EPS) out.push({ frame: j, page: fr.page, x0, x1, baseline: y, centred: geo.centred, after: after - base })
+    return true
+  }
+  for (let ri = 0; ri < fr.runs.length; ri++) {
+    const run = fr.runs[ri]
+    const first = lines[run.lines[0]], last = lines[run.lines[run.lines.length - 1]]
+    const tail = borrow > 0 && ri === fr.runs.length - 1 && !fr.endsHeld
+    const own = last.baseline - EPS, low = tail ? last.baseline - borrow - EPS : own
+    if (onGrid) {
+      for (const i of run.lines) if (!place(lines[i].baseline, lines[i].sx0, lines[i].sx1, run.after, own)) break
+      if (tail) for (let q = 1; place(last.baseline - q * step, fr.bx0, fr.bx1, run.after, low); q++);
+    } else {
+      for (let q = 0; ; q++) {
+        const b = first.baseline - q * step
+        let src = null
+        if (b >= own) {
+          // its layout line: the run's line nearest it
+          let d = Infinity
+          for (const i of run.lines) { const e = Math.abs(lines[i].baseline - b); if (e < d) { d = e; src = lines[i] } }
+        }
+        if (!place(b, src ? src.sx0 : fr.bx0, src ? src.sx1 : fr.bx1, run.after, low)) break
+      }
+    }
+  }
+  if (borrow > 0 && fr.endsHeld) {
+    // below a display that ends the frame: the text after it starts below its ink
+    const last = lines[fr.first + fr.count - 1], low = last.baseline - borrow - EPS
+    for (let b = Math.min(last.baseline - step, fr.tailBottom - CLOSEST * pitch); place(b, fr.bx0, fr.bx1, geo.upto(j), low); b -= step);
+  }
+  return out
+}
+
+// ---------------------------------------------------------------- the cuts of a split unit
+
+/** where a split may cut the tokens without a sentence: before a character (CJK) or a word (alphabets) that may begin a
+ *  line, as offsets in trText */
+function boundariesOf(tokens, byCharacter) {
+  const out = []
+  for (let i = 1; i < tokens.length; i++) {
+    const t = tokens[i]
+    if (!content(t) || t.glue) continue
+    if (byCharacter || tokens[i - 1].kind === 'space') out.push(t.at)
+  }
+  return out
+}
+
+/** the nearest of `xs` to x, the earlier on a tie; undefined where xs is empty */
+function nearest(xs, x) {
+  let best, d = Infinity
+  for (const v of xs) { const e = Math.abs(v - x); if (e < d - 1e-9) { d = e; best = v } }
+  return best
+}
+
+// ---------------------------------------------------------------- laying
+
+/** the page a crop's segments are on, or 0 where they are on two (a formula over a page break: no page holds it whole) */
+function cropPage(segs) {
+  let page = 0
+  for (let s = 0; segs && s + 5 < segs.length; s += 6) {
+    if (page && segs[s] !== page) return 0
+    page = segs[s]
+  }
+  return page
+}
+
+/** each part's tokens: those starting at or after its cut and before the next */
+function partsOf(tokens, cuts) {
+  const parts = cuts.map(() => [])
+  parts.push([])
+  let p = 0
+  for (const t of tokens) {
+    while (p < cuts.length && t.at >= cuts[p]) p++
+    parts[p].push(t)
+  }
+  return parts
+}
+
+/** whether a placeholder stands in two of the lines' items */
+function split(b) {
+  const seen = new Set()
+  for (const line of b.lines) for (const it of line.items) {
+    if (it.t.kind !== 'ph') continue
+    if (seen.has(it.t.ph)) return true
+    seen.add(it.t.ph)
+  }
+  return false
+}
+
+/** a part laid in frame j at a state: its lines, whether it fits whole, and its frame's free lines */
+function layPart(geo, part, j, state, f, m, ctx) {
+  const last = j === geo.frames.length - 1
+  const slots = slotsOf(geo, j, m, f, last ? state.borrow : 0, geo.before(j))
+  const b = breakLines(part, slots, f, state, ctx)
+  // every token placed, no line past its slot (the breaker's overflow), and no placeholder in two pieces (the breaker cuts
+  // only text; this holds whatever it does): a clipped character or a placeholder drawn twice is never a fit
+  const fits = b.rest === 0 && !(b.overflow > 0) && !split(b)
+  return { b, fits, free: fits ? slots.length - b.lines.length : -1 }
+}
+
+/** whether every crop of the laid lines is on a line of its own page: a crop is drawn from its own page's pixels */
+function cropsHome(b, unit) {
+  for (const line of b.lines) {
+    for (const it of line.items) {
+      if (it.t.kind === 'ph' && it.t.mode === 'crop' && cropPage(unit.ph.get(it.t.ph)?.segs) !== line.slot.page) return false
+    }
+  }
+  return true
+}
+
+/** where flowed text moves on to each frame after the first, as an offset in trText: its first line's first offset; the
+ *  text's end for a frame it does not reach */
+function startsOf(b, n, end) {
+  const out = []
+  for (let j = 1; j < n; j++) {
+    const line = b.lines.find(l => l.slot.frame >= j)
+    out.push(line ? line.items[0].t.at : end)
+  }
+  return out
+}
+
+/**
+ * The unit laid at a state, or null where it does not fit. A split unit flows through its frames' slots in order as one
+ * text (the parity report's fix 5: floors 26 to 16 on the 10 shared outputs, as the prototype flows it); only where the
+ * flow takes a crop off its own page is it laid at its first cuts instead, and where a part does not fit, the cut beside
+ * it gives one sentence to the roomier frame (one whose part fits, the one with more free lines of two) before the state
+ * moves on; a cut moves one way only at a state (a move back would return to cuts that failed), and never empties a
+ * frame. A flow that does not fit is no fit: no cut holds more than the flow does.
+ */
+function layAt(geo, tokens, cut0, sentences, limits, state, size, ctx) {
+  const f = size * state.scale
+  const m = state.lead * (ctx.grid ? 1 : state.scale)
+  const n = geo.frames.length
+  if (n === 1) {
+    const r = layPart(geo, tokens, 0, state, f, m, ctx)
+    return r.fits ? { parts: [r], cuts: [], f } : null
+  }
+  const slots = []
+  for (let j = 0; j < n; j++) for (const s of slotsOf(geo, j, m, f, j === n - 1 ? state.borrow : 0, 0)) slots.push(s)
+  const flow = breakLines(tokens, slots, f, state, ctx)
+  if (flow.rest !== 0 || flow.overflow > 0 || split(flow)) return null
+  if (cropsHome(flow, ctx.unit)) return { parts: [{ b: flow, fits: true, free: slots.length - flow.lines.length }], cuts: startsOf(flow, n, ctx.len), f }
+  const cuts = cut0.slice(), moved = new Int8Array(cuts.length)
+  // each cut moves one way at a state, a sentence a time: at most every cut past every sentence
+  for (let guard = 0; guard <= cuts.length * sentences.length; guard++) {
+    const parts = partsOf(tokens, cuts)
+    const laid = parts.map((part, j) => layPart(geo, part, j, state, f, m, ctx))
+    if (laid.every(r => r.fits)) return { parts: laid, cuts, f }
+    let done = false
+    for (let j = 0; j < n && !done; j++) {
+      if (laid[j].fits) continue
+      const sides = []
+      // the roomier side: a neighbour with more free lines than this part, which has fewer than none (its last line may
+      // still hold a sentence where it has none to spare); the roomier of two first
+      if (j + 1 < n && laid[j + 1].fits) sides.push({ c: j, dir: -1, free: laid[j + 1].free })
+      if (j > 0 && laid[j - 1].fits) sides.push({ c: j - 1, dir: 1, free: laid[j - 1].free })
+      sides.sort((a, b) => b.free - a.free)
+      for (const { c, dir } of sides) {
+        if (moved[c] === -dir) continue
+        const lo = Math.max(c > 0 ? cuts[c - 1] : 0, limits[c][0]), hi = Math.min(c + 1 < cuts.length ? cuts[c + 1] : Infinity, limits[c][1])
+        let to
+        if (dir < 0) { for (const s of sentences) if (s < cuts[c] && s > lo) to = s }
+        else for (const s of sentences) if (s > cuts[c] && s < hi) { to = s; break }
+        if (to === undefined) continue
+        cuts[c] = to
+        moved[c] = dir
+        done = true
+        break
+      }
+    }
+    if (!done) return null
+  }
+  return null
+}
+
+/** the line's items as drawn: runs of one face where the line's letter and word spacing give each its place exactly */
+function itemsOf(line, f, state, measure, grid) {
+  const its = line.items, n = its.length
+  // the gaps placeLines put after each item: perGap after every item, perSpace more after a space
+  let perGap = null, perSpace = 0
+  const extra = q => its[q + 1].x - its[q + 1].shift - its[q + 1].asp - (its[q].x - its[q].shift + its[q].w)
+  for (let q = 0; q + 1 < n && perGap === null; q++) if (its[q].t.kind !== 'space') perGap = extra(q)
+  perGap ??= 0
+  for (let q = 0; q + 1 < n; q++) if (its[q].t.kind === 'space') { perSpace = extra(q) - perGap; break }
+  const letterSpacing = state.letter * f
+  // a run of Latin words (or Hangul words where the tracking is the letter spacing) shares one item; a CJK character
+  // where the target breaks between characters is one
+  const spaced = t => t.kind === 'text' && (t.script === 'latin' || (!grid.byCharacter && state.track === state.letter))
+  const out = []
+  let run = null
+  const textItem = (t, x, w, s, at, to) => ({ kind: 'text', x, w, text: s, face: t.face, caps: !!t.caps, colour: t.colour, raised: 0, from: at, to })
+  for (let q = 0; q < n; q++) {
+    const it = its[q], t = it.t
+    if (t.kind === 'space') {
+      // a space joins the run before it where the word after it follows on in the same face, at the run's spacing
+      const next = its[q + 1]
+      if (run && next && spaced(next.t) && next.t.face === run.face && !!next.t.caps === run.caps && next.t.colour === run.colour && t.face === run.face && !!t.caps === run.caps && next.asp === 0 && next.shift === 0 && Math.abs(perGap) < 1e-9) {
+        run.text += ' '
+        continue
+      }
+      // a space between two items: the item before it says so, for the drawing to write it there and nowhere else
+      if (out.length) out[out.length - 1].space = 1
+      run = null
+      continue
+    }
+    if (t.kind === 'ph') {
+      run = null
+      out.push(t.mode === 'page-text'
+        ? { kind: 'page-text', x: it.x, w: it.w, text: t.s, face: t.face, caps: !!t.caps, ph: t.ph, colour: t.colour, raised: 0, from: t.at, to: t.at + t.len }
+        : t.mode === 'text'
+          // a text symbol: text, an item of its own that names its k
+          ? { kind: 'text', x: it.x, w: it.w, text: t.s, face: t.face, caps: !!t.caps, ph: t.ph, colour: t.colour, raised: 0, from: t.at, to: t.at + t.len }
+          : { kind: 'crop', x: it.x, w: it.w, ph: t.ph, colour: t.colour, raised: t.raised ? 1 : 0, from: t.at, to: t.at + t.len })
+      continue
+    }
+    if (t.kind !== 'text') continue
+    const prev = q > 0 ? its[q - 1] : null
+    if (run && spaced(t) && t.face === run.face && !!t.caps === run.caps && t.colour === run.colour && it.asp === 0 && it.shift === 0 && Math.abs(perGap) < 1e-9 && (run.text.endsWith(' ') || (prev && prev.t === run.lastToken))) {
+      run.text += t.s
+      run.w = it.x + it.w - run.x
+      run.to = t.at + t.len
+      run.lastToken = t
+      continue
+    }
+    run = null
+    if (t.script === 'cjk' && cpLength(t.s) > 1 && state.track !== state.letter) {
+      // tracked CJK text the line's letter spacing does not carry: a character an item, each at its own place
+      let off = 0, chars = 0
+      for (const ch of t.s) {
+        const x = it.x + (measure(t.s.slice(0, off), t.face, !!t.caps) / 100) * f + state.track * f * chars
+        const w = (measure(ch, t.face, !!t.caps) / 100) * f + state.track * f
+        const exact = t.s.length === t.len
+        out.push(textItem(t, x, w, ch, exact ? t.at + off : t.at, exact ? t.at + off + ch.length : t.at + t.len))
+        off += ch.length
+        chars++
+      }
+      continue
+    }
+    const item = textItem(t, it.x, it.w, t.s, t.at, t.at + t.len)
+    out.push(item)
+    if (spaced(t)) run = Object.defineProperty(item, 'lastToken', { value: t, enumerable: false, writable: true })
+  }
+  return { items: out, wordSpacing: perSpace - letterSpacing, letterSpacing }
+}
+
+/** a laid part's lines as the unit's */
+function linesOf(b, f, state, measure, grid) {
+  const out = []
+  for (const line of b.lines) {
+    const { items, wordSpacing, letterSpacing } = itemsOf(line, f, state, measure, grid)
+    const { slot } = line
+    let from = Infinity, to = -Infinity
+    for (const it of items) { from = Math.min(from, it.from); to = Math.max(to, it.to) }
+    if (!items.length) from = to = 0
+    out.push({ page: slot.page, frame: slot.frame, x0: slot.x0, x1: slot.x1, baseline: slot.baseline, size: f, mode: line.mode, items, wordSpacing, letterSpacing, from, to })
+  }
+  return out
+}
+
+const unfit = (id, why) => ({ id, fit: false, why })
+
+/**
+ * A unit laid into its frames at the first state of the fit at which every token is placed and no line runs past its
+ * slot, and which the completeness net passes; or why it stays the original's, the first of:
+ * - 'located': no such unit, or no lines or frames;
+ * - 'pieces': the pieces are not a translation of the unit (checkPieces);
+ * - 'lost': the layout lost a placeholder of the unit;
+ * - 'glyph': a text holds a character no face of the role set has; 'tokens': tokensOf gave none for any other reason, or the
+ *   translation has nothing to draw;
+ * - 'floor': no state fits;
+ * - the net's on the laid unit (netOf): 'missing', 'twice', 'overlap', 'erase', 'glyph', 'brackets'.
+ */
+export function layUnit(input, id, tr, o = {}) {
+  const unit = input.file.unit(id)
+  if (!unit) return unfit(id, 'located')
+  // the names and places of a paper's authors stay the original's, as the approved prototype keeps them (main.js): the
+  // layer cannot set a block of names in its columns, and what a translation makes of a name or an address (an e-mail's
+  // user names translated, the names run together) is no longer the original's
+  if (unit.kind === 'author') return unfit(id, 'author')
+  const pieces = checkPieces(tr?.pieces, unit)
+  if (!pieces) return unfit(id, 'pieces')
+  if (unit.lines.length < 8 || unit.frames.length < 6) return unfit(id, 'located')
+  if (lostIn(unit)) return unfit(id, 'lost')
+  const { measure: raw, rules, target, hyphen } = input
+  const measure = (text, face, caps) => raw(text, face, caps) * faceSize(face)
+  const tokens = tokensOf(pieces, { unit, file: input.file, target, rules, roles: input.roles, measure, hyphen, textIn: input.textIn })
+  if (!tokens) return unfit(id, heldByNone(pieces, input.roles) ? 'glyph' : 'tokens')
+  // nothing to draw: the unit's text would be erased and nothing set in its place
+  if (!tokens.some(t => content(t) || t.kind === 'block')) return unfit(id, 'tokens')
+
+  const sizes = []
+  for (let i = 6; i < unit.lines.length; i += 8) sizes.push(unit.lines[i])
+  const size = median(sizes)
+  const geo = geometryOf(unit, tokens, size, widenedOf(input, unit, size))
+  if (!geo) return unfit(id, 'located')
+  const script = scriptOf(target)
+  const grid = { grid: GRID.has(script), byCharacter: BY_CHARACTER.has(script) }
+  const text = trText(pieces), len = text.length
+  const ctx = { rules, target, measure, hyphen, grid: grid.grid, unit, len }
+
+  // where the flow takes a crop off its page, a split unit's first cuts: at the sentence start nearest each frame's share,
+  // else at the nearest character or word
+  const sentences = []
+  if (Array.isArray(tr.sentences)) for (const s of tr.sentences) if (Number.isInteger(s) && s > 0 && s < len && s > (sentences.at(-1) ?? 0)) sentences.push(s)
+  const frames = geo.frames, cuts = [], limits = []
+  if (frames.length > 1) {
+    const bounds = boundariesOf(tokens, grid.byCharacter)
+    const blockAt = tokens.filter(t => t.kind === 'block').map(t => t.at)
+    for (let j = 1; j < frames.length; j++) {
+      // the part of frame j holds the displays of frame j: its cut after those before it, at or before its own first
+      const d = geo.before(j)
+      limits.push([d > 0 ? (blockAt[d - 1] ?? -1) + 1 : 0, blockAt[d] ?? len])
+    }
+    // a crop is drawn from its own page's pixels: it goes in a part whose frame is on that page, so the cut before the
+    // first such frame is at or before it and the cut after the last one past it. Where no cut can keep every crop on its
+    // page, the cuts are what they can be, and the net refuses the unit
+    for (const t of tokens) {
+      if (t.kind !== 'ph' || t.mode !== 'crop') continue
+      const page = cropPage(unit.ph.get(t.ph)?.segs)
+      let ja = -1, jb = -1
+      for (let j = 0; j < frames.length; j++) if (frames[j].page === page) { if (ja < 0) ja = j; jb = j }
+      if (ja < 0) continue
+      if (ja > 0) limits[ja - 1][1] = Math.min(limits[ja - 1][1], t.at)
+      if (jb < frames.length - 1) limits[jb][0] = Math.max(limits[jb][0], t.at + 1)
+    }
+    for (let j = 1; j < frames.length; j++) {
+      const [lo, hi] = limits[j - 1]
+      const at = (Math.max(0, frames[j].share) / 1000) * len
+      const near = sentences.filter(s => Math.abs(s - at) <= SPLIT_NEAR * len + 1e-9)
+      let c = nearest(near, at) ?? nearest(bounds, at) ?? Math.round(at)
+      const prev = cuts.length ? cuts[cuts.length - 1] : 0
+      c = Math.min(Math.max(c, lo), hi)
+      if (c <= prev) c = bounds.find(b => b > prev && b <= hi) ?? c
+      cuts.push(c)
+    }
+  }
+
+  const last = frames[frames.length - 1]
+  for (const state of statesOf(rules, { below: last.below, pitch: last.pitch, maxScale: o.maxScale })) {
+    const got = layAt(geo, tokens, cuts, sentences, limits, state, size, ctx)
+    if (!got) continue
+    const lines = [], drawn = new Map()
+    for (const r of got.parts) {
+      placeLines(r.b, got.f, { rules, target })
+      lines.push(...linesOf(r.b, got.f, state, measure, grid))
+      for (const t of r.b.tokens) if (t.kind === 'ph' || t.kind === 'block') drawn.set(t.ph, t.mode)
+    }
+    const laid = { id, fit: true, state, size: got.f, lines, cuts: got.cuts.slice(), drawn }
+    // the first state that fits is the unit's: one the net refuses stays the original's, whatever a later state would give
+    const why = netOf(input, laid, { pieces, sentences: tr.sentences })
+    return why ? unfit(id, why) : laid
+  }
+  return unfit(id, 'floor')
+}

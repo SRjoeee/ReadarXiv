@@ -11,11 +11,11 @@ import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { MARK_DEF } from '../../../src/pdf-reader/engine/latex-front.mjs'
-import { openPaper, translationFiles } from '../../../src/pdf-reader/engine/live.mjs'
-import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
-import { texErrors, unitsAtErrors } from '../../../src/pdf-reader/engine/tex-errors.mjs'
-import { marksOf } from '../../../src/pdf-reader/engine/typeset/places.mjs'
+import { MARK_DEF } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
+import { openPaper, translationFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
+import { strategiesFor } from '../../../src/pdf-reader/engine/pipeline/scripts.mjs'
+import { texErrors, unitsAtErrors } from '../../../src/pdf-reader/engine/pipeline/tex-errors.mjs'
+import { marksOf } from '../../../src/pdf-reader/engine/pipeline/typeset/places.mjs'
 
 const { chromium } = createRequire(new URL('../../../', import.meta.url))('playwright')
 const root = new URL('..', import.meta.url).pathname

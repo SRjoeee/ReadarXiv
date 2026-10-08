@@ -4,7 +4,7 @@
 // framed here. It closes itself once nothing has been asked of it for a while — the models and the runtime hold some
 // 120 MB, and the background's own timers die with its worker —, and at once after a warm-up when no figure has been
 // read in it.
-import { texHints } from '@/pdf-reader/engine/hints.mjs'
+import { texHints } from '@/pdf-reader/session/hints.mjs'
 import { onMessages, sendMessage } from '@/shared/messages'
 import type { OcrWorkerReply } from './protocol'
 import { READER_PATIENCE_MS, type TexFrame, warmSlot, warmTexPage } from './tex-warm'

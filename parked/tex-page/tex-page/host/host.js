@@ -1,4 +1,4 @@
-// An extension page that frames the TeX page and talks to it as the reader does (src/pdf-reader/engine/session.mjs
+// An extension page that frames the TeX page and talks to it as the reader does (src/pdf-reader/session/session.mjs
 // openCompiler): the page accepts messages from extension pages only. measure.mjs drives it through window.texHost.
 // Every message from the frame is kept with its arrival time (performance.now()), so that a run can be timed from here.
 ;(() => {

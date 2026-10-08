@@ -3,8 +3,9 @@
 // visit's compiles ask for; and the rule kept equal to the typesetting's own (scripts.mjs strategiesFor), which the
 // offscreen document cannot load
 import { describe, expect, it } from 'vitest'
-import { CJK_SCRIPTS, texHints } from '@/pdf-reader/engine/hints.mjs'
-import { CJK, scriptOf, strategiesFor, VERIFIED } from '@/pdf-reader/engine/scripts.mjs'
+import { CJK_SCRIPTS, texHints } from '@/pdf-reader/session/hints.mjs'
+import { CJK, scriptOf, strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
+import { VERIFIED } from '@/pdf-reader/session/verified.mjs'
 
 describe('texHints', () => {
   it('a CJK language: the paper\'s engine and XeLaTeX (its first strategy, xeCJK), and the script\'s faces', () => {

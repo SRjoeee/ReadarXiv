@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { figureRegions } from '@/pdf-reader/engine/figures.mjs'
+import { figureRegions } from '@/pdf-reader/engine/view/figures.mjs'
 
 // A page's figures from PDF.js's operator list (figures.mjs figureRegions): each form drawn at the page's level, and
 // each image, a rectangle in PDF units

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { unitsOf } from '@/pdf-reader/engine/cache.mjs'
-import { inMemory, loadProject } from '@/pdf-reader/engine/latex-front.mjs'
-import { contentsOf, outlineOf } from '@/pdf-reader/outline'
+import { unitsOf } from '@/pdf-reader/engine/pipeline/cache.mjs'
+import { inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { contentsOf, outlineOf } from '@/pdf-reader/engine/view/outline'
 
 const project = (tex: string) => loadProject(inMemory(new Map([['main.tex', new TextEncoder().encode(tex)]])), 'main.tex')
 const TEX = '\\documentclass{article}\\begin{document}\\title{The Paper}\\maketitle\n\\section{Introduction}Words here.\n\\subsection{Setting up}More words.\n\\subsubsection{Details}Yet more.\n\\paragraph{Aside}An aside.\n\\section{Results}The end.\\end{document}'

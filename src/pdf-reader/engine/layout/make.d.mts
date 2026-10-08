@@ -1,5 +1,5 @@
 // make.mjs's types (JavaScript until the engine's port), for the container's prepare and the maker's tests
-import type { SourceUnit } from '../latex-front.mjs'
+import type { SourceUnit } from '../source/latex-front.mjs'
 import type { LayoutFile } from './file.mjs'
 import type { LayoutMarks } from './marks.mjs'
 

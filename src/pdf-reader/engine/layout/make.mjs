@@ -15,8 +15,8 @@
 // is refused where too few lines are carried, where arXiv's page count is out of bounds, and where its own parser refuses
 // it: a file the parser refuses is never returned.
 // Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes.
-import { anchorUnits, boundsFromMarks, markWords, tokenAtMark, tokenizeDocument, tokens } from '../anchors.mjs'
-import { displayEdges, plainSource, unitText } from '../mt.mjs'
+import { anchorUnits, boundsFromMarks, markWords, tokenAtMark, tokenizeDocument, tokens } from '../pipeline/anchors.mjs'
+import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
 import { carrierOf, tokensOfMarks } from './carry.mjs'
 import { encodeLayout, isPageText, LAYOUT, LayoutRefusal, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
 import { pageInk } from './ink.mjs'

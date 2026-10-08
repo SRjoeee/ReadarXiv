@@ -1,4 +1,4 @@
-// Generates src/pdf-reader/engine/latexml-args.mjs: each control sequence's and environment's arguments as LaTeXML's
+// Generates src/pdf-reader/engine/rules/latexml-args.mjs: each control sequence's and environment's arguments as LaTeXML's
 // bindings declare them, by type (its prototypes: \rule[Dimension]{Dimension}{Dimension}, \setlength{Variable}{Dimension},
 // \IfFileExists{}{}{}), and the front matter's commands, by the hook their expansion hands their text to
 // (\lx@add@affiliation, \lx@add@contact[role=dedicatory]{#1} …). The engine reads it through arg-roles.mjs.
@@ -15,7 +15,7 @@ import { join, resolve as resolvePath } from 'node:path'
 
 const root = process.argv[2]
 if (!root) { console.error('usage: node scripts/latexml-args.mjs <LaTeXML checkout> [out]'); process.exit(2) }
-const out = process.argv[3] ?? new URL('../src/pdf-reader/engine/latexml-args.mjs', import.meta.url).pathname
+const out = process.argv[3] ?? new URL('../src/pdf-reader/engine/rules/latexml-args.mjs', import.meta.url).pathname
 const lib = join(root, 'lib/LaTeXML')
 let commit = 'unknown'
 try { commit = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD']).toString().trim() } catch {}

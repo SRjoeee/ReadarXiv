@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { openPaper, translationFiles } from '@/pdf-reader/engine/live.mjs'
-import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
+import { openPaper, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
 
 // What the CJK strategies under XeLaTeX add for papers that fail there as they stand (the investigation of XeLaTeX under
 // BusyTeX, 2026-10-01: causes A and E). Their TeX is checked natively by parked/lab/spikes/cjk-cases.mjs

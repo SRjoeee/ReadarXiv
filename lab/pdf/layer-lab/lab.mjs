@@ -666,7 +666,7 @@ protoCommit = info.proto?.commit ? `${info.proto.commit.slice(0, 8)}${info.proto
 if (proto.ready) {
   let catalog = { groups: [], faces: [], families: [] }
   try {
-    const { FACES, ENGLISH_FAMILIES } = await import('/proto-engine/font-roles.mjs')
+    const { FACES, ENGLISH_FAMILIES } = await import('/proto-engine/rules/font-roles.mjs')
     const ids = Object.keys(FACES)
     catalog = { groups: ids.filter(id => id.endsWith('-light')).map(id => id.slice(0, -6)).filter(g => ['light', 'regular', 'semibold', 'bold'].every(w => ids.includes(`${g}-${w}`))), faces: ids, families: [...ENGLISH_FAMILIES] }
   } catch {}

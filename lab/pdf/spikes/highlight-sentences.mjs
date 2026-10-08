@@ -15,8 +15,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { verifyAlignment } from '../../../src/providers/alignment'
-import { plainTranslated, rehydrate, sentencesOf, serialize } from '../../../src/pdf-reader/engine/mt.mjs'
-import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
+import { plainTranslated, rehydrate, sentencesOf, serialize } from '../../../src/pdf-reader/engine/translate/mt.mjs'
+import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { runPaper, samePieces } from './highlight-runs.mjs'
 
 const root = new URL('..', import.meta.url).pathname

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { type DocToken, tokenizeDocument } from '@/pdf-reader/engine/anchors.mjs'
+import { type DocToken, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { carrierOf, linesOf, tokensOfMarks } from '@/pdf-reader/engine/layout/carry.mjs'
 import { encodeLayoutMarks, layoutMarksOf, parseLayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 

@@ -12,7 +12,7 @@ import { paperAddon } from '@/pdf-reader/engine/layout/addon.mjs'
 import { ADDON_CAP, parseAddonManifest, REFUSED_MAX, REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { encodeLayout, type LayoutIndex } from '@/pdf-reader/engine/layout/file.mjs'
 import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
-import { layoutOf, type UnitDef } from './helpers/layer-layout'
+import { layoutOf, type UnitDef } from './helpers/layout-of'
 
 // The paper's shipped add-on (layout/addon.mjs; Plan 8's layer bundle holds it): a four-page PDF written here, one page of
 // each kind the maker tells apart, and its layout file. The paper's own add-on, made from the five papers, is checked
