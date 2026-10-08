@@ -1704,7 +1704,9 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     for (const m of s.matchAll(/\s+|\S+/g)) {
       const chunk = m[0]
       if (/^\s+$/.test(chunk)) {
-        if (tokens.length && !lastIsSpace()) tokens.push({ space: true, st, face: faceOf(st, 'latin', to), w100: measure(' ', faceOf(st, 'latin', to)) })
+        // (none right after a lead whose glue is the original's: the unit's text begins after it, its own white space
+        // TeX's to skip)
+        if (tokens.length && !lastIsSpace() && !tokens.at(-1).leadEnd) tokens.push({ space: true, st, face: faceOf(st, 'latin', to), w100: measure(' ', faceOf(st, 'latin', to)) })
         continue
       }
       // the chunk by class: CJK characters, and the runs between them
@@ -1742,7 +1744,11 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     for (const part of lead.parts) pushText(part.text, { ...base, ...part.st }, { label: true })
     const st = { ...base, ...lead.parts.at(-1).st }
     if (lead.gap === undefined) pushText(' ', st)
-    else if (lead.gap > 0 && tokens.length) { const t = tokens[tokens.length - 1]; t.w100 += 100 * lead.gap; t.kern = true }
+    else if (tokens.length) {
+      const t = tokens[tokens.length - 1]
+      t.leadEnd = true
+      if (lead.gap > 0) { t.w100 += 100 * lead.gap; t.kern = true }
+    }
   }
   unit.pieces.forEach((p, k) => {
     if (p.t === 'text') {

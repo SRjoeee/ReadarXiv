@@ -114,7 +114,8 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     await own.until(1)
     expect(own.rows[0]!.svg.textContent?.replace(/\s+/g, '')).toContain('\u6458\u8981\u2014\u6c49\u5b57')
     // de's, wider than its own room (75 against 40): not shrunk, and no space after the dash, as the original has none
-    const de = await open({ target: 'de' }, paper({ runIn: true, text: 'Tiefe Netze' }))
+    // (the unit's text begins with the source's white space after \begin{abstract}, which TeX skips)
+    const de = await open({ target: 'de' }, paper({ runIn: true, text: ' Tiefe Netze' }))
     await de.until(1)
     expect(de.names[0]).toMatchObject({ drawn: true, why: null, text: 'Zusammenfassung', unit: 0, size: 10, x: 20 })
     const line = [...(de.rows[0]!.svg.querySelectorAll('text') ?? [])].map(t => t.textContent).join('|')
