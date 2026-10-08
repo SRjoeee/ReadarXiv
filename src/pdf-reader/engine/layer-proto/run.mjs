@@ -123,15 +123,15 @@ export function settleLayout(p) {
  * preference; anchored on the fullest page, not the first, which a title page's few lines made the thesis's, holding
  * its pages a fifth of a pitch under their own). Each unit takes its fill leading, but never more than `band` over the
  * target, so that neighbouring paragraphs keep one line spacing. A CJK unit the band or its fill leading's top stops
- * short of its fill then takes tracking, up to `track` em; and the page's body units take one size: the largest, from
- * the smallest any was fitted at up to `size` x the original's, at which every one of them is still set whole, a unit
- * the fit shrank holding the others to it, above 1 only where none is full yet: one size a page, never a unit's own
- * (D grew each unit apart, and a page mixed 1.0 and 1.1; the reviews of PR #335 found two units fitted at 0.925 and
- * 0.85 left apart). A unit its fitted state does not set again (the text run past a display) keeps its own fit. Each
- * unit filled is laid anew in place (p.P, p.layout, its extents kept), then `onFilled(p, target)`. Returns the page's
- * target, its own (`own`, before it is held), whether its body units told it (`body`), and, for the anchor, the
- * original's lines of every body unit on the page (`lines`) and their fill leadings' median (`anchor`); a page whose
- * units begun on it tell none answers its lines and anchor alone (`target` null), and null where nothing tells.
+ * short of its fill then takes tracking, up to `track` em; and where every body unit of the page is still short with
+ * all of it, the page's body units take one size, the largest up to `size` x the original's at which every one of them
+ * is still set whole: one size a page where it grows, never a unit's own (D grew each unit apart, and a page mixed 1.0
+ * and 1.1); a unit the fit had to shrink keeps its own largest fitting size. A unit its fitted state does not set again
+ * (the text run past a display) keeps its own fit. Each unit filled is laid anew in place (p.P, p.layout, its extents
+ * kept), then `onFilled(p, target)`. Returns the page's target, its own (`own`, before it is held), whether its body
+ * units told it (`body`), and, for the anchor, the original's lines of every body unit on the page (`lines`) and their
+ * fill leadings' median (`anchor`); a page whose units begun on it tell none answers its lines and anchor alone
+ * (`target` null), and null where nothing tells.
  */
 export function fillPage(units, P, held = null, onFilled = () => {}, { page = units[0]?.pages[0] ?? null, continuing = [] } = {}) {
   const { band, track, size } = P.adaptiveFill
@@ -194,39 +194,24 @@ export function fillPage(units, P, held = null, onFilled = () => {}, { page = un
     }
     filled.push({ p, st, l, full })
   }
-  // the page's body at one size (the reviews of PR #335: a unit its fit shrank set beside one it did not): the largest, on
-  // the fit's size steps from the smallest the page's body units were fitted at up to `size`, at which every one of them
-  // is still set whole at its state, below 1 as above it; above 1 only where none is full. By halving: a larger size sets
-  // no more (in practice, as the leading's: where the smallest does not set every one, each keeps its own)
+  // the page's one size where it grows: every body unit's, where none is full yet; the largest at which every one is still
+  // set whole, by halving (a larger size sets no more), a unit that fails ending the try. A unit the fit had to shrink
+  // keeps its own largest fitting size: setting the page's other body units at it (PR #335's reviews) left the alphabets'
+  // and Japanese's units short of their frames, the alphabets unable to spread past the original's pitch (paraGap 1.255
+  // -> 1.708, as before D6; full size 0.25 -> 0; Japanese 1.011 -> 1.289), the coordinator's ruling of 2026-10-09
   const grown = filled.filter(f => EVEN_KINDS.has(f.p.unit.kind))
-  if (grown.length) {
-    const scaleOf = k => r3(1 + k * P.step), kOf = sc => Math.round((sc - 1) / P.step)
-    // (above 1 only where none is full yet: a unit its fill or its fit's tracking already sets to its frame's foot is not
-    // grown, however tight that tracking would let it)
-    const up = size > 1 && grown.every(f => !f.full) ? Math.round((size - 1) / P.step) : 0
-    const lo = Math.min(...grown.map(f => kOf(f.st.scale))), hi = Math.max(lo, up)
-    const all = k => {
-      const ls = []
-      for (const f of grown) {
-        const sc = scaleOf(k)
-        const l = Math.abs(sc - f.st.scale) < 1e-9 ? f.l : at(f.p, { ...f.st, scale: sc, knob: k > 0 ? 'grow' : 'even' })
-        if (!l) return null
-        ls.push(l)
-      }
-      return ls
-    }
-    let best = all(lo), ok = lo, no = hi + 1
-    if (best) {
-      while (no - ok > 1) { const k = (ok + no) >> 1, ls = all(k); if (ls) { ok = k; best = ls } else no = k }
-      grown.forEach((f, i) => { if (best[i] !== f.l) { f.st = { ...f.st, scale: scaleOf(ok), knob: ok > 0 ? 'grow' : 'even' }; f.l = best[i] } })
-    }
+  if (size > 1 && grown.length && grown.every(f => !f.full)) {
+    const scaleOf = k => r3(1 + k * P.step)
+    const all = k => { const ls = []; for (const f of grown) { const l = at(f.p, { ...f.st, scale: scaleOf(k), knob: 'grow' }); if (!l) return null; ls.push(l) } return ls }
+    let ok = 0, no = Math.round((size - 1) / P.step) + 1, best = null
+    while (no - ok > 1) { const k = (ok + no) >> 1, ls = all(k); if (ls) { ok = k; best = ls } else no = k }
+    if (ok) grown.forEach((f, i) => { f.st = { ...f.st, scale: scaleOf(ok), knob: 'grow' }; f.l = best[i] })
   }
   for (const { p, st, l } of filled) {
     const keep = p.layout.extents
     p.P = { ...p.P, leadBase: st.lead }
-    // (its fit's knob kept, a step past its states among them (widen, below-floor), but the page's size, grown or set
-    // alike)
-    if (st.knob !== 'grow' && st.knob !== 'even') l.knob = p.layout.knob
+    // (its fit's knob kept, a step past its states among them (widen, below-floor), but the page's size grown)
+    if (st.knob !== 'grow') l.knob = p.layout.knob
     p.layout = l
     p.layout.extents = keep
     // (laid anew: its clearance at its new size, before it is recorded or painted; the pass put a cleared CJK cell's
