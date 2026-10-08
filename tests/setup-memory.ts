@@ -20,22 +20,26 @@ import { hooksOf, idEntryOf } from './happy-dom-hooks'
 
 type Internal = Record<symbol, unknown>
 
-// happy-dom's private parts, looked for before anything is patched: what is not there is an Error naming the version
-// and the part (tests/happy-dom-hooks.ts), not a patch that quietly does nothing
-const hooks = hooksOf(PropertySymbol as unknown as Record<string, unknown>, Element.prototype)
+// Only where there is a happy-dom to patch: a test file that asks for the node environment (`// @vitest-environment node`,
+// tests/e2e/lib/layer-api.test.ts) has no `Element`, and parses no paper
+if (typeof Element !== 'undefined') {
+  // happy-dom's private parts, looked for before anything is patched: what is not there is an Error naming the version
+  // and the part (tests/happy-dom-hooks.ts), not a patch that quietly does nothing
+  const hooks = hooksOf(PropertySymbol as unknown as Record<string, unknown>, Element.prototype)
 
-;(Element.prototype as unknown as Record<symbol, unknown>)[hooks.addIdentifier] = function (this: Internal, id: string): void {
-  hooks.original.call(this, id)
-  const owner = this[hooks.ownerDocument] as Internal
-  const window = this[hooks.window] as Record<string, unknown>
-  if (!id || owner === window.document) return
-  // What the call just wrote: the element, or the collection of those sharing the id
-  const entry = idEntryOf(owner, hooks.elementIdMap, id)
-  if (entry && (window[id] === entry.htmlCollection || entry.elements.includes(window[id]))) delete window[id]
+  ;(Element.prototype as unknown as Record<symbol, unknown>)[hooks.addIdentifier] = function (this: Internal, id: string): void {
+    hooks.original.call(this, id)
+    const owner = this[hooks.ownerDocument] as Internal
+    const window = this[hooks.window] as Record<string, unknown>
+    if (!id || owner === window.document) return
+    // What the call just wrote: the element, or the collection of those sharing the id
+    const entry = idEntryOf(owner, hooks.elementIdMap, id)
+    if (entry && (window[id] === entry.htmlCollection || entry.elements.includes(window[id]))) delete window[id]
+  }
+
+  // Once, now: a layout the hook cannot read fails here, in every file's setup, and not at the first element with an id
+  // some test happens to make. Parsed after the patch, so that it leaves nothing on the window either
+  new DOMParser().parseFromString('<!doctype html><html><body><p id="axt-hook-probe"></p></body></html>', 'text/html')
 }
-
-// Once, now: a layout the hook cannot read fails here, in every file's setup, and not at the first element with an id
-// some test happens to make. Parsed after the patch, so that it leaves nothing on the window either
-new DOMParser().parseFromString('<!doctype html><html><body><p id="axt-hook-probe"></p></body></html>', 'text/html')
 
 afterEach(() => new Promise<void>(resolve => setImmediate(resolve)))
