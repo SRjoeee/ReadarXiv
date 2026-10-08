@@ -541,9 +541,11 @@ export const POINTS_TEX = [
  *   name's last letter, the glue, penalties and kerns after it taken off and put back (\axt@set, as a placeholder's
  *   closing mark); the end only where its start was set, so that an occurrence is never named by the one before it. A start in vertical mode (a
  *   chapter's title, `\Huge\bfseries #1`, which the name's first letter begins) waits for the paragraph that begins next
- *   (LaTeX's para/begin hook, once), where it is set after the paragraph's indentation as it would be in horizontal mode,
- *   unless the name's end comes first (an empty name). A figure's or a table's name only outside a float (\@captype
- *   undefined): a caption's label is the label path's (run.mjs labelInTarget).
+ *   (LaTeX's para/begin hook, once), unless the name's end comes first (an empty name). The hook runs before LaTeX puts
+ *   the paragraph's indentation box back (ltpara: para/begin, then the indent), so the point lies a \parindent left of
+ *   the name's first glyph: the maker's row is the glyphs' between the carried marks, which the indent holds none of.
+ *   A figure's or a table's name only outside a float (\@captype undefined): a caption's label is the label path's
+ *   (run.mjs labelInTarget); longtable's captions define no \@captype, and the maker leaves out a name leading a caption.
  * - **Written through.** Written to a file or into a mark (\protect not \@typeset@protect) they write themselves, so that
  *   a name copied into the contents or a running head is still a name there (the lists' and the heads' occurrences, a
  *   later step's); a case change leaves their keys (l3text's exclusion list: \MakeUppercase\refname); in a PDF string,
