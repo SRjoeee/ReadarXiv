@@ -38,5 +38,7 @@ export declare function protection(index: LayoutIndex): { accept(id: number | st
  *  its crops' clips; PDF units */
 export declare function fileSwap(o: {
   page: number; lu: LayoutUnit; kOf: readonly number[]; lines: { rects: number[][]; lineOf: Map<number[], number>; jOf?: number[] }; prep: Prepared
-  others?: number[][]; dirty?: number[][]; pad?: number
+  others?: number[][]; dirty?: number[][]
+  /** boxes it replaces besides its own (a babel name set as its first line's start) */
+  also?: number[][]; pad?: number
 }): { swap: number[][]; fill: number[][]; extra: number[][]; clips: Map<number, { rects: number[][]; own: number[][] }>; kept: number[][]; lines: number[][] }

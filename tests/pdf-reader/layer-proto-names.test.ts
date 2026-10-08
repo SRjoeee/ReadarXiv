@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { indexLayout, NAME_FLAG, NAME_KEYS, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
+import { indexLayout, NAME_FLAG, NAME_KEYS, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { openProto } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { nameInTarget } from '@/pdf-reader/engine/layer-proto/layer2.mjs'
 
@@ -30,21 +30,24 @@ vi.hoisted(() => {
 
 const H = 300
 /** the page: the heading `name` at x on y = 230 (its item `width` wide), whatever stands right of it on its line
- *  (`beside`), and a paragraph's line at y = 200; the layout file locating the heading as babel's `key`, `flags` its */
-function paper({ name = 'Abstract', x = 20, width = 40, beside = null as [string, number, number] | null, key = 'abstract', flags = 0 } = {}) {
+ *  (`beside`), and a paragraph's line at y = 200; the layout file locating the heading as babel's `key`, `flags` its.
+ *  `runIn`: the paragraph's line is the heading's, starting at 64 (IEEEtran's "Abstract—Deep …"), and the file locates
+ *  it; `bare`: no unit at all, the paragraph's line text no unit holds (a page of references alone) */
+function paper({ name = 'Abstract', x = 20, width = 40, beside = null as [string, number, number] | null, key = 'abstract', flags = 0, runIn = false, bare = false, text = '\u6c49\u5b57\u6c49\u5b57' } = {}) {
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (px: number, py: number) => [px * scale, (H - py) * scale], convertToPdfPoint: (px: number, py: number) => [px / scale, H - py / scale] })
   const item = (str: string, ix: number, w: number, y: number) => ({ str, transform: [10, 0, 0, 10, ix, y], width: w, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false })
-  const items = [item(name, x, width, 230), ...(beside ? [item(beside[0], beside[1], beside[2], 230)] : []), item('Alpha beta gamma', 20, 100, 200)]
+  const items = [item(name, x, width, 230), ...(beside ? [item(beside[0], beside[1], beside[2], 230)] : []), runIn ? item('Alpha beta gamma', 64, 100, 230) : item('Alpha beta gamma', 20, 100, 200)]
   const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), cleanup() {}, commonObjs: { get: () => ({ name: 'NimbusRomNo9L-Regu' }) } }
   const file = {
     schema: 2, layout: '4', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['NimbusRomNo9L-Regu'],
-    units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [],
+    units: runIn ? [[0, UNIT_KINDS.indexOf('para'), 9, 0, 1]] : [], lines: runIn ? [[0, [1, 64, 164, 230, 237, 227.5, 10, 0]]] : [], frames: runIn ? [[0, [1, 0, 0, 1, -1, 0]]] : [],
+    erase: [], ph: [], labels: [], headings: [], pageText: [], held: [],
     names: [[1, NAME_KEYS.indexOf(key as never), 1, x, 230, x + width, 237, 228, 10, 0, flags]],
   }
   return {
     doc: { numPages: 1, getPage: async () => page },
-    geometry: { schema: 1, kinds: ['para'], left: { pages: [[0, 0, 300, 300]], units: [[0, 0, [[1, 20, 197.85, 120, 206.83]]]] } },
-    units: [{ kind: 'para', src: 'Alpha beta gamma', state: 'whole', pieces: [{ t: 'text', tr: true, s: '\u6c49\u5b57\u6c49\u5b57' }] }],
+    geometry: { schema: 1, kinds: bare ? [] : ['para'], left: { pages: [[0, 0, 300, 300]], units: bare ? [] : [[0, 0, [runIn ? [1, 64, 227.85, 164, 236.83] : [1, 20, 197.85, 120, 206.83]]]] } },
+    units: bare ? [] : [{ kind: 'para', src: 'Alpha beta gamma', state: 'whole', pieces: [{ t: 'text', tr: true, s: text }] }],
     tex: { use: 'lines', texOnly: true, index: indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(file)))), pieces: new Map() },
   }
 }
@@ -93,6 +96,27 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     const fits = await open({ target: 'fr' }, paper({ beside: ['text', 64, 20] }))
     await fits.until(1)
     expect(fits.names[0]).toMatchObject({ drawn: true, text: 'Résumé', size: 10 })
+  })
+
+  it("sets a run-in name past its room as its unit's line start, and gives a name on a page no unit holds the page's text", async () => {
+    // "Abstract" right before the abstract's first line (64): "Zusammenfassung" (75 wide) has 41.5 before it, below the
+    // floor, and is set as the line's start, the translation after it, the line starting where the name did
+    const runIn = await open({ target: 'de' }, paper({ runIn: true, text: 'Tiefe Netze' }))
+    await runIn.until(1)
+    expect(runIn.names[0]).toMatchObject({ drawn: true, why: null, text: 'Zusammenfassung', unit: 0, size: 10, x: 20 })
+    const svg = runIn.rows[0]!.svg
+    expect(svg.querySelector('[data-n]')).toBeNull()
+    expect(svg.textContent).toContain('Zusammenfassung')
+    expect(runIn.names[0]!.chars.map(c => c.ch).join('')).toBe('Abstract')
+    // its unit left the original's (a character no served face holds): the name with it
+    const left = await open({ target: 'de' }, paper({ runIn: true }))
+    await left.until(1)
+    expect(left.names[0]).toMatchObject({ drawn: false, why: 'inline: served', unit: 0 })
+    expect(left.rows[0]!.svg.textContent).not.toContain('Zusammenfassung')
+    // no unit on the page: its room the page's text (20 to 120), not its own box
+    const bare = await open({ target: 'de' }, paper({ bare: true }))
+    await bare.until(1)
+    expect(bare.names[0]).toMatchObject({ drawn: true, text: 'Zusammenfassung', size: 10, x: 20 })
   })
 
   it('nameInTarget: the word, capitals by the target\'s locale, none for an empty word, a `source` answer or the original\'s own word', () => {

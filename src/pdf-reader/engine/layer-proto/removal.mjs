@@ -477,11 +477,12 @@ export function protection(index) {
  * filled with paper where no kept ink lies under them (`dirty`, the manifest's: the ink the add-on keeps that meets the
  * page's units' rectangles), and the removed page swapped in where some does. The characters the reading accounts for
  * that the file gives no rectangle (a symbol at a line's end, beside its last word) are erased over their boxes
- * (`extra`). A crop is cut from the original through its placeholder's segments (`clips`, by the piece's index: `rects`
+ * (`extra`). `also`: boxes it replaces besides its own (a babel name its first line now starts with). A crop is cut from
+ * the original through its placeholder's segments (`clips`, by the piece's index: `rects`
  * grown, `own` as they are). Every box [x0, y0, x1, y1], PDF units, y up; `lines`: the rectangles replaced less what the reading keeps (a
  * label, a kept formula: never this unit's residue), for the audit.
  */
-export function fileSwap({ page, lu, kOf, lines, prep, others = [], dirty = [], pad = SWAP_PAD }) {
+export function fileSwap({ page, lu, kOf, lines, prep, others = [], dirty = [], also = [], pad = SWAP_PAD }) {
   const keepKeys = new Set(prep.keep ?? [])
   const resolutions = [...prep.values()].filter(r => r && r.k !== undefined)
   const keptK = new Set(resolutions.filter(r => r.mode === 'kept').map(r => kOf[r.k]).filter(k => k >= 0))
@@ -501,6 +502,8 @@ export function fileSwap({ page, lu, kOf, lines, prep, others = [], dirty = [], 
     if (keepKeys.has(`${r[0]}|${r.slice(1).join()}`)) keep(...boxesOf(lu.erase[j]))
     else mine.push(...boxesOf(lu.erase[j]))
   })
+  // what it replaces besides (a babel name set as its first line's start: run.mjs layout2)
+  mine.push(...also)
   // its inline placeholders' segments: replaced, or kept where the reading keeps them; a display's rows are its own
   for (const [k, row] of lu.ph) {
     if (row.kind === 'display' || row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY)) continue

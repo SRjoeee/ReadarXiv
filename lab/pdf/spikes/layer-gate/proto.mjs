@@ -505,15 +505,17 @@ window.gate = {
       const why = list => list.filter(on).map(e => ({ unit: e.unit, k: e.k, mode: e.mode, why: e.why }))
       S.dump.push({ p, W, H, copy: h.toString(16), svg, ops, check: { missing: why(ck.b.list.missing), duplicated: why(ck.b.list.duplicated), brackets: why(ck.b.list.brackets) } })
     }
-    // the names drawn, as the pixel measures read them: the original's line, the line drawn, the box erased (D1a)
-    const named = drawnNames.map(n => ({ orig: [n.box], lines: [{ baseline: n.box.baseline, size: n.size, x0: n.x, x1: n.x + n.w }], erase: [[n.box.x0 - 0.3, n.box.bottom - 0.5, n.box.x1 + 0.3, n.box.top + 0.5]], chars: n.chars }))
-    S.cur = { p, page, W, H, view, O, C, units, named, kept: keptOf(S.layout, p, relabelledOf(recs)), items, drawnText, recs }
+    // the names drawn, as the pixel measures read them: the original's line, the line drawn, the box erased (D1a); one set
+    // as a unit's line start (`unit`) is that unit's line, its characters and band alone its own
+    const named = drawnNames.filter(n => n.unit === undefined).map(n => ({ orig: [n.box], lines: [{ baseline: n.box.baseline, size: n.size, x0: n.x, x1: n.x + n.w }], erase: [[n.box.x0 - 0.3, n.box.bottom - 0.5, n.box.x1 + 0.3, n.box.top + 0.5]], chars: n.chars }))
+    const namedInk = drawnNames.map(n => ({ orig: [n.box], chars: n.chars }))
+    S.cur = { p, page, W, H, view, O, C, units, named, namedInk, kept: keptOf(S.layout, p, relabelledOf(recs)), items, drawnText, recs }
     return out
   },
 
   /** the pixel tier's measures of the page prepared last, its T plane the driver's screenshot (PNG, base64) */
   async analyse(b64) {
-    const { p, W, H, view, O, C, units, named, kept, items, drawnText, recs } = S.cur
+    const { p, W, H, view, O, C, units, named, namedInk, kept, items, drawnText, recs } = S.cur
     const bmp = await createImageBitmap(await (await fetch(`data:image/png;base64,${b64}`)).blob())
     const tc = new OffscreenCanvas(W, H).getContext('2d', { willReadFrequently: true })
     tc.fillStyle = '#ffffff'
@@ -550,7 +552,7 @@ window.gate = {
     }
     for (const a of S.run.audit) if (a.what === 'crop' && a.srcPage === p) fill(accounted, a.src[0] - 0.3, a.src[1] - 0.3, a.src[2] + 0.3, a.src[3] + 0.3)
     // (a babel name drawn in the target's word: its characters its own text, its line's band its own, D1a)
-    for (const n of named) {
+    for (const n of namedInk) {
       for (const c of n.chars) fill(accounted, c.x0, c.yb - 0.3 * c.size, c.x1, c.yb + 0.85 * c.size)
       for (const o of n.orig) fill(band, o.x0 - 0.5, o.baseline - 0.35 * o.size, o.x1 + 0.5, o.baseline + 0.95 * o.size)
     }
@@ -636,7 +638,9 @@ window.gate = {
     const { run } = S
     // (each laid unit's resolutions, for a look at what a source made of it)
     const units = run.placed.filter(p => p.prep).map(p => ({ id: p.id, source: p.tex ? 'tex' : 'v0', rects: p.rects, label: p.prep.label?.text, labelChars: p.prep.label?.chars.map(c => [c.ch, Math.round(c.x0 * 100) / 100, Math.round(c.x1 * 100) / 100, Math.round(c.yb * 100) / 100, Math.round(c.size * 100) / 100]), keep: p.prep.keep, res: [...p.prep.values()].map(r => ({ k: r.k, mode: r.mode, src: r.src?.slice(0, 60), text: r.text, crop: r.crop, baseline: r.baseline, gap: r.gap?.text, chars: r.gap?.chars.filter(c => !c.sep && !c.space).map(c => [c.ch, Math.round(c.x0 * 100) / 100, Math.round(c.yb * 100) / 100, Math.round(c.size * 100) / 100]) })) }))
-    return { order: run.order, stats: run.stats.map(({ ms, ...r }) => r), skipped: run.skipped, audit: run.audit, pages: (S.dump ?? []).map(({ check, ...d }) => d), checks: (S.dump ?? []).map(d => ({ p: d.p, ...d.check })), units }
+    // (the babel names, drawn or why not, without their characters: D1a)
+    const names = (run.names ?? []).map(({ chars, ...n }) => n)
+    return { order: run.order, stats: run.stats.map(({ ms, ...r }) => r), skipped: run.skipped, audit: run.audit, pages: (S.dump ?? []).map(({ check, ...d }) => d), checks: (S.dump ?? []).map(d => ({ p: d.p, ...d.check })), units, names }
   },
 
   /** the fixture's laid units, counted: v0 lays every unit it places (past its floor it clips), by its fit's knob */

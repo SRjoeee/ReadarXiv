@@ -690,7 +690,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    */
   const swapOf = (p, pg) => {
     const t = performance.now()
-    const sw = fileSwap({ page: pg, lu: p.tex.lu, kOf: p.tex.kOf, lines: p.tex.lines, prep: p.prep, others: guard.others(pg, p.id), dirty: dirtyOf(pg) })
+    // (a name set as its first line's start is its own: replaced with it, and kept clear of no more)
+    const nm = p.inlineName?.nm.page === pg ? p.inlineName.nm : null
+    if (nm) guard.accept(`name:${nm.occurrence}`, pg, [])
+    const sw = fileSwap({ page: pg, lu: p.tex.lu, kOf: p.tex.kOf, lines: p.tex.lines, prep: p.prep, others: guard.others(pg, p.id), dirty: dirtyOf(pg), also: nm ? [[nm.x0, nm.bottom, nm.x1, nm.top]] : [] })
     // (drawn there from now: what it replaces no longer kept clear of, what it keeps still)
     guard.accept(p.id, pg, sw.kept)
     const px = pxOf(pg)
@@ -749,8 +752,24 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // back; over the text-removed page, its box filled with paper or the removed page swapped in where kept ink lies under
   // it, clear of every unit's rectangles), its word set at the original's size, weight and slant, its left edge kept or,
   // centred, its centre, shrunk into the room on its line (its neighbours' characters, its column) to the script's last
-  // floor at most (P.floorMin), else left the original's (`unfit`). `names`: each name of the pages laid, drawn or why not
+  // floor at most (P.floorMin); past that floor, a name a unit's first line starts right after (IEEEtran's run-in
+  // "Abstract—") is set as that line's start, the translation after it (`inline`, the unit's: layout2), else left the
+  // original's (`unfit`). Its room, on a page no unit's lines give a column (a page of references alone), is the page's
+  // text. `names`: each name of the pages laid, drawn or why not
   const names = []
+  /** the names set as a unit's line start, by the unit: { nm, rec, text, own, chars } */
+  const inlineFor = new Map()
+  /** the unit whose first line starts right after the name on its baseline (its label's start, else its line's), or null */
+  const inlineUnitOf = (nm, pg) => {
+    for (const id of tex.index.onPage(pg)) {
+      const lu = tex.index.unit(id)
+      if (!lu || lu.lines[0] !== pg || Math.abs(lu.lines[3] - nm.baseline) >= 0.3 * nm.size) continue
+      let start = lu.lines[1]
+      for (let o = 0; o + 6 < lu.labels.length; o += 7) if (lu.labels[o + 1] === pg && Math.abs(lu.labels[o + 3] - nm.baseline) < 0.3 * nm.size) start = Math.min(start, lu.labels[o + 2])
+      if (start >= nm.x1 - 0.5 && start <= nm.x1 + 0.6 * nm.size) return id
+    }
+    return null
+  }
   const paintNames = async pg => {
     if (!tex || !labels) return
     for (const nm of tex.index.names(pg)) {
@@ -775,6 +794,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       // em clear), never narrower than its own box
       const mineSet = new Set(mine)
       let [left, right] = columnOf({ page: pg, x0: nm.x0, x1: nm.x1 })
+      if (!(right > left)) {
+        const real = (chars2[pg - 1] ?? []).filter(c => /\S/.test(c.ch))
+        if (real.length) { left = Math.min(...real.map(c => c.x0)); right = Math.max(...real.map(c => c.x1)) }
+      }
       for (const c of chars2[pg - 1] ?? []) {
         if (mineSet.has(c) || !/\S/.test(c.ch) || Math.abs(c.yb - nm.baseline) >= 0.4 * nm.size) continue
         if (c.x1 <= nm.x0 + 0.1) left = Math.max(left, c.x1 + 0.25 * nm.size)
@@ -784,7 +807,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const w = L2.widthOf(text, face) * nm.size, mid = (nm.x0 + nm.x1) / 2
       const room = nm.centred ? 2 * Math.min(mid - left, right - mid) : right - nm.x0
       const k = w > room ? room / w : 1
-      if (k < P.floorMin - 1e-9) { rec.why = 'unfit'; continue }
+      if (k < P.floorMin - 1e-9) {
+        const unit = inlineUnitOf(nm, pg)
+        Object.assign(rec, { why: unit === null ? 'unfit' : 'inline', text, w: r1(w), room: r1(room), ...(unit === null ? {} : { unit }) })
+        if (unit !== null) inlineFor.set(unit, { nm, rec, text, own: mine.map(c => c.ch).join(''), chars: mine.map(c => ({ ...c, page: pg })) })
+        continue
+      }
       const size = nm.size * k, x = nm.centred ? mid - (w * k) / 2 : nm.x0
       // its ink erased: its characters the unit-like text it is, accounted on the page before any unit is painted there
       const keys = mine.map(c => `${pg}|${c.item}|${c.k}`)
@@ -993,6 +1021,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // (the time the font waits of the unit in hand took, so that its timings are its own work's: lap())
   let fontWait = 0
   const lap = () => performance.now() - fontWait
+  /** a unit that set a name as its line's start left the original's after all: the name with it */
+  const unlead = p => {
+    if (!p.inlineName) return
+    const { rec } = p.inlineName
+    delete rec.size; delete rec.x
+    Object.assign(rec, { drawn: false, why: `inline: ${p.why ?? 'its unit unfit'}`, chars: [] })
+    p.inlineName = null
+  }
   const layout2 = async p => {
     const t0 = lap()
     // the unit's lines grown over words the anchors left out beside them, then its first line's edge snapped back to
@@ -1058,6 +1094,18 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const r0 = p.rects[0], lx0 = Math.min(...prep.label.chars.map(c => c.x0))
       if (r0 && Number.isFinite(lx0) && lx0 < r0[1] - 0.5 && prep.label.chars.every(c => c.page === r0[0])) p.rects[0] = [r0[0], lx0, r0[2], r0[3], r0[4]]
     }
+    // a babel name its first line starts right after, too wide for its own room (paintNames: `inline`): set as the line's
+    // start in its own style with the label after it, the translation after both, its characters the unit's text
+    const inl = inlineFor.get(p.id)
+    if (inl && p.rects[0]?.[0] === inl.nm.page) {
+      const own = prep.label
+      prep.label = { x1: Math.max(inl.nm.x1, own?.x1 ?? -Infinity), text: inl.own + (own?.text ?? ''), chars: [...inl.chars, ...(own?.chars ?? [])], drawn: inl.text + (own ? (own.drawn ?? own.text ?? '') : '') }
+      for (const c of prep.label.chars) prep.cat?.set(L2.charKey(c), 'acc')
+      const r0 = p.rects[0]
+      if (inl.nm.x0 < r0[1] - 0.5) p.rects[0] = [r0[0], inl.nm.x0, r0[2], r0[3], r0[4]]
+      p.inlineName = inl
+      Object.assign(inl.rec, { drawn: true, why: null, size: r1(inl.nm.size), x: r1(inl.nm.x0), chars: inl.chars })
+    }
     // iteration 3: each crop over the ink it touches (its page's ink map)
     for (const r of prep.values()) {
       if (r?.mode !== 'crop') continue
@@ -1093,7 +1141,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       fontWait += performance.now() - tFonts
       // (let go while its faces loaded: nothing more of it, not even its measures, in roles a newer layer may have set)
       if (disposed) return
-      if (no) { p.refused = true; p.why = no.why; p.missing = no.missing; return }
+      if (no) { p.refused = true; p.why = no.why; p.missing = no.missing; unlead(p); return }
     }
     const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead)
     const t3 = lap()
@@ -1123,7 +1171,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (p.layout.clipped) {
       const further = fitFurther(p, tokens, s)
       if (further) { p.layout = further.layout; p.blocks = further.blocks; if (further.P) { p.P = further.P; p.clear = further.clear } }
-      else { p.refused = true; return }
+      else { p.refused = true; unlead(p); return }
     }
     settleLayout(p)
     const t4 = lap()
@@ -1194,6 +1242,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     for (const p of laid[pg]) {
       if (p.refused || p.unit.kind === 'cell' || !p.prep?.cat) continue
       for (const c of p.prep.uc ?? []) if (c.page === pg && !c.sep && !c.space && p.prep.cat.get(L2.charKey(c)) === 'acc') accounted.push([c.x0, c.yb - 0.25 * c.size, c.x1, c.yb + 0.88 * c.size])
+      for (const c of p.inlineName?.chars ?? []) if (c.page === pg) accounted.push([c.x0, c.yb - 0.25 * c.size, c.x1, c.yb + 0.88 * c.size])
     }
     const stays = map ? stayingInk({ map, toDev: dev, toPdf: (x, y) => vw.convertToPdfPoint(x / dpr, y / dpr), accounted, dirty: removedPage(pg) ? dirtyOf(pg) : [] }) : () => -Infinity
     const moved = packPage(pg, laid[pg], rectsByPage.get(pg) ?? [], chars2[pg - 1] ?? [], stays, P.borrowGap)

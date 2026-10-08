@@ -66,8 +66,10 @@ export interface NameDrawn {
   occurrence: number; key: string; page: number; drawn: boolean; why: string | null; chars: (Char & { page: number })[]
   /** the original's line box (the layout file's) */
   box: { x0: number; x1: number; baseline: number; top: number; bottom: number; size: number }
-  /** where drawn: its word, size, left edge and width */
-  text?: string; size?: number; x?: number; w?: number
+  /** where drawn: its word, size, left edge and width (unfit: its word, its width at the original's size and the room) */
+  text?: string; size?: number; x?: number; w?: number; room?: number
+  /** set as the start of this unit's first line (`inline`: a run-in name past its own room), drawn with the unit */
+  unit?: number
 }
 export interface ProtoRun {
   N: number
