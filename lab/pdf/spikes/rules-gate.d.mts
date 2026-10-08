@@ -7,6 +7,10 @@ export declare function labLink(fixture: string, page: number, sha: string): str
 
 export interface Ruling { name: string; date: string | null; by: string; on: string | null; quote: string; english: string | null; scope: string | null; why: string; measures: Set<string>; targets: Set<string> }
 export declare function parseRuling(json: unknown, name: string): Ruling
+/** a ruling file read: the ruling, or the sentence for the comment (`problem`) and the parser's own words for a private log (`detail`) */
+export declare function loadRuling(file: string, o?: { read?: (file: string, encoding: string) => string }): { ruling?: Ruling; problem?: string; detail?: string }
+/** the rulings of the tree at a commit: lab/pdf/rulings/ and the record's that name their targets */
+export declare function rulingsAt(commit: string, o?: { git?: (...args: string[]) => string }): { rulings: Ruling[]; problems: string[]; untargeted: number }
 
 /** a run file of the layer gate as the verdict reads it: the totals and pages of each output, and the inputs that make two runs one instrument */
 export interface Run {
@@ -14,6 +18,8 @@ export interface Run {
   engine?: { commit?: string | null }
   inputs?: Record<string, unknown>
   failed?: { name: string; why?: string }[]
+  /** what made the gate exit 1 and left no other trace: output names and the word 'network' */
+  failures?: string[]
   fixtures: Record<string, { totals: Totals; pages?: { p: number; [key: string]: unknown }[] }>
 }
 export interface Row { key: string; label: string; cls: string; base: number | null; head: number | null; baseRate: number | null; headRate: number | null; moved: 'worse' | 'better' | null }
@@ -27,7 +33,10 @@ export interface Verdict {
   perFixture: { regressions: { fixture: string; measure: string; label: string }[]; improvements: number }
   rulesFile?: RulesFileCheck
 }
-export declare function judge(base: Run, head: Run, o?: { rulings?: Ruling[] }): Verdict
+/** `outputs`: the pack's, which both runs must hold exactly (null: none to hold them to) */
+export declare function judge(base: Run, head: Run, o?: { rulings?: Ruling[]; outputs?: string[] | null }): Verdict
+export declare function outputsOfPack(pack: { files?: { path?: string }[] } | null | undefined): string[]
+export declare function wholeness(side: string, run: Run, outputs: string[] | null): string[]
 
 export interface RulesFileCheck { changed: boolean; problems: string[]; from?: number | null; to?: number | null }
 export declare function checkRulesFile(baseBytes: Uint8Array | null, headBytes: Uint8Array, engine: { readRules(bytes: Uint8Array): Promise<{ set: { version: number; note: string } }>; writeRules(set: never): string }): Promise<RulesFileCheck>
@@ -45,6 +54,7 @@ export declare function gateArgs(o: { engine: string; rules: string; pack: strin
 export declare function publicLine(line: string): string | null
 export declare function codeSpan(text: string, max?: number): string
 export declare function runGate(o: { engine: string; rules: string; pack: string; out?: string; log?: string; workers?: number }): Promise<string>
+export declare function engines(argv: string[], deps?: { run?: typeof runGate; git?: (...args: string[]) => string; fetchImpl?: (url: string, init: { headers: Record<string, string> }) => Promise<{ ok: boolean; status: number; arrayBuffer(): Promise<ArrayBuffer> }> }): Promise<number>
 
 export declare function schemaOf(source: string): number | null
 export declare function parseEngines(json: unknown): { name: string; ref: string }[]
