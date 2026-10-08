@@ -53,7 +53,7 @@ async function canvasOfPng(url) {
 const pixelsOf = async c => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; return { W: c.width, H: c.height, sha: await digest(d), rows: rowHashes(d, c.width, c.height) } }
 /** one slice a face: its whole file over its coverage (the host's faceSources, the simplest plan) */
 async function faceSourcesOf() {
-  const [{ FACES }, { COVERAGE }] = await Promise.all([import('/engine/font-roles.mjs'), import('/engine/font-coverage.mjs')])
+  const [{ FACES }, { COVERAGE }] = await Promise.all([import('/engine/rules/font-roles.mjs'), import('/engine/rules/font-coverage.mjs')])
   return async id => (FACES[id] && COVERAGE[id] ? [{ url: `/fonts/${encodeURIComponent(FACES[id].file)}`, ranges: COVERAGE[id] }] : null)
 }
 const hyphUrl = lang => `/hyph/${lang}.json`

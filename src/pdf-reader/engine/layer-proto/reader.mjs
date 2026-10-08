@@ -7,8 +7,8 @@
 // rows, the layout file's and the add-on manifest's readers, the role table's faces and the face to ask for first, and
 // the translation loop the extension runs itself. It reaches none of the server's modules (live.mjs, the remover, the
 // layout maker and its marks) and no node: specifier: a test walks its imports.
-import { groupOf } from '../groups.mjs'
-import { rolesFor } from '../font-roles.mjs'
+import { groupOf } from '../translate/groups.mjs'
+import { rolesFor } from '../rules/font-roles.mjs'
 import { indexLayout } from '../layout/file.mjs'
 import { OPEN_FAMILY } from './fonts.mjs'
 import { sourceUnitsOf, toTranslate, unitOf } from './rows.mjs'
@@ -21,8 +21,8 @@ export { batchesOf, layerRows, rowOf, runRows, toTranslate, unitOf } from './row
 export { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, parseAddonManifest } from '../layout/addon-manifest.mjs'
 export { indexLayout, LAYOUT, LAYOUT_CAP, LAYOUT_VALUES, LayoutRefusal, parseLayout } from '../layout/file.mjs'
 export { trPiecesOf } from '../layer/pieces.mjs'
-export { FACES } from '../font-roles.mjs'
-export { translateUnits } from '../mt.mjs'
+export { FACES } from '../rules/font-roles.mjs'
+export { translateUnits } from '../translate/mt.mjs'
 
 /** the hybrid's choices, the layer gate's (--proto-tex=lines): each unit the layout file locates whole drawn by the file's
  *  lines, label and placeholders, the units only the file holds drawn too (but table cells), no symbol drawn as text

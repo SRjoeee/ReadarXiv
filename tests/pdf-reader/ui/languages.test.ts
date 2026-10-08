@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { LANG_CODES, toBcp47 } from '@/config/languages'
-import { verified } from '@/pdf-reader/engine/scripts.mjs'
+import { verified } from '@/pdf-reader/session/verified.mjs'
 import { languageItems, READER_LANGUAGES } from '@/pdf-reader/ui/languages'
 
 describe('the languages the reader typesets (the reader\'s design, §6.7)', () => {

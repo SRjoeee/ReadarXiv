@@ -97,7 +97,7 @@ describe('the style sheets built in TypeScript', () => {
 // in `has-disabled:`
 describe('the PDF reader\'s style sheets', () => {
   const READER = join(import.meta.dirname, '../../src/entrypoints/pdf-reader/reader.css')
-  const ENGINE = join(import.meta.dirname, '../../src/pdf-reader/engine/engine.css')
+  const ENGINE = join(import.meta.dirname, '../../src/pdf-reader/engine/view/engine.css')
   const sources = (path: string): string[] => (statSync(path).isDirectory() ? readdirSync(path, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? sources(join(path, e.name)) : /\.(tsx?|mjs)$/.test(e.name) ? [join(path, e.name)] : [])) : [path])
 
   it('carry no :has() outside comments', () => {

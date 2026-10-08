@@ -3,7 +3,7 @@
 // browser against the built page it runs in parked/lab/spikes/reader-typeset.mjs (WARM=1)
 import { describe, expect, it, vi } from 'vitest'
 import { type TexFrame, warmPace, warmSlot, warmTexPage } from '@/entrypoints/ocr/tex-warm'
-import { LOCK, STORE } from '@/pdf-reader/engine/tex-store.mjs'
+import { LOCK, STORE } from '@/pdf-reader/session/tex-store.mjs'
 import type { TexWarmResult } from '@/shared/tex-warm'
 
 const SITE = 'https://tex.readarxiv.org'

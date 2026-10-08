@@ -19,12 +19,12 @@ import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { gzipSync } from 'node:zlib'
 import { getDocument, OPS, version } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { keptFor, openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/live.mjs'
+import { keptFor, openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { classOf, LAYOUT_CLASSES, encodeLayoutMarks, inkSamples, layoutMarksOf, parseLayoutMarks, probeSamples, readInkProbe, readInkTexts, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { encodeLayout, PH_FLAG } from '../../../src/pdf-reader/engine/layout/file.mjs'
 import { pageInk } from '../../../src/pdf-reader/engine/layout/ink.mjs'
 import { makeLayout } from '../../../src/pdf-reader/engine/layout/make.mjs'
-import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
+import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 
 const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname

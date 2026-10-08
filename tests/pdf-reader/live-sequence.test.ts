@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { copyReuse, copyTexts, decideWrite, passagesInSource, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from '@/pdf-reader/engine/cache.mjs'
+import { copyReuse, copyTexts, decideWrite, passagesInSource, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from '@/pdf-reader/engine/pipeline/cache.mjs'
 import { kOfSource, trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
-import { type BatchReport, citationLines, type Compiled, compilerKeeper, keptFor, openPaper, originalFiles, PIPELINE_CARRIES, PIPELINE_VERSION, runLive, stoppedShort } from '@/pdf-reader/engine/live.mjs'
-import type { Marks } from '@/pdf-reader/engine/typeset/places.mjs'
-import { END_TEX } from '@/pdf-reader/engine/typeset/tex.mjs'
+import { type BatchReport, citationLines, type Compiled, compilerKeeper, keptFor, openPaper, originalFiles, PIPELINE_CARRIES, PIPELINE_VERSION, runLive, stoppedShort } from '@/pdf-reader/engine/pipeline/live.mjs'
+import type { Marks } from '@/pdf-reader/engine/pipeline/typeset/places.mjs'
+import { END_TEX } from '@/pdf-reader/engine/pipeline/typeset/tex.mjs'
 
 // The reader's compiles with the typesetting rule (exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md,
 // "The compile sequence"; the evaluation's rulings in the F2 brief): the font probe with its width probe; the first

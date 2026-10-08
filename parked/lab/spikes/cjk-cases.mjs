@@ -11,8 +11,8 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { openPaper, translationFiles } from '../../../src/pdf-reader/engine/live.mjs'
-import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
+import { openPaper, translationFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
+import { strategiesFor } from '../../../src/pdf-reader/engine/pipeline/scripts.mjs'
 
 const dir = mkdtempSync(join(tmpdir(), 'cjk-cases-'))
 // PDF.js's character maps: without them a CJK PDF's text is not read

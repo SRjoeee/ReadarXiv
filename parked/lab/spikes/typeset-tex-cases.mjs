@@ -1,5 +1,5 @@
 // experiments/pdf-bilingual/spikes/typeset-tex-cases.mjs
-// The typesetting rule's TeX under TeX (src/pdf-reader/engine/typeset/tex.mjs, latex-front.mjs unitLeadTex and FIT_DEF):
+// The typesetting rule's TeX under TeX (src/pdf-reader/engine/pipeline/typeset/tex.mjs, latex-front.mjs unitLeadTex and FIT_DEF):
 // small documents compiled natively in Docker, each case one behaviour a paper of the evaluation round broke before it
 // was fixed. The reader compiles with BusyTeX; these cases are its reference. Exits non-zero on a failure.
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/typeset-tex-cases.mjs
@@ -8,12 +8,12 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { FIT_DEF, latin1Bytes, MARK_DEF, NO_OVERFLOW, unitLeadTex as engineUnitLeadTex } from '../../../src/pdf-reader/engine/latex-front.mjs'
-import { openPaper, translationFiles } from '../../../src/pdf-reader/engine/live.mjs'
-import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
-import { marksOf as marksOfPdf } from '../../../src/pdf-reader/engine/typeset/places.mjs'
-import { DESIGN } from '../../../src/pdf-reader/engine/typeset/type.mjs'
-import { completeLog, FLOAT_TEX, LINES_TEX, readForced, readLines, SIZE_TEX, typesetting } from '../../../src/pdf-reader/engine/typeset/tex.mjs'
+import { FIT_DEF, latin1Bytes, MARK_DEF, NO_OVERFLOW, unitLeadTex as engineUnitLeadTex } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
+import { openPaper, translationFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
+import { strategiesFor } from '../../../src/pdf-reader/engine/pipeline/scripts.mjs'
+import { marksOf as marksOfPdf } from '../../../src/pdf-reader/engine/pipeline/typeset/places.mjs'
+import { DESIGN } from '../../../src/pdf-reader/engine/pipeline/typeset/type.mjs'
+import { completeLog, FLOAT_TEX, LINES_TEX, readForced, readLines, SIZE_TEX, typesetting } from '../../../src/pdf-reader/engine/pipeline/typeset/tex.mjs'
 
 /** a unit's own leading at `em` times its size, as the rule sets it */
 const unitLeadTex = em => engineUnitLeadTex(`${em}\\dimexpr\\f@size pt\\relax`)

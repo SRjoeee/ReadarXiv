@@ -66,7 +66,7 @@ describe('the gate runs when what it loads changes', () => {
     expect(gate.filter(f => !covered(patterns, f))).toEqual([])
     // and not the rest of the repository
     expect(covered(patterns, 'src/core/rules/latexml.ts')).toBe(false)
-    expect(covered(patterns, 'src/pdf-reader/engine/live.mjs')).toBe(false)
+    expect(covered(patterns, 'src/pdf-reader/engine/pipeline/live.mjs')).toBe(false)
   })
   it('publishes when the set changes, on next, and on nothing else', () => {
     const yml = text('rules-publish.yml')

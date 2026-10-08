@@ -21,8 +21,8 @@ import { promisify } from 'node:util'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { layoutMarksOfPaper } from '../../../src/pdf-reader/engine/layout/paper.mjs'
 import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, layoutMarksOf, probeSamples, readInkProbe, readInkTexts, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
-import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/live.mjs'
-import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
+import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
+import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 
 const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname

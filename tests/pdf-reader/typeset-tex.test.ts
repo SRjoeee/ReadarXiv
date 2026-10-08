@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { lastTexLog, MARK_DEF } from '@/pdf-reader/engine/latex-front.mjs'
-import { openPaper, originalFiles, probeFiles, translationFiles } from '@/pdf-reader/engine/live.mjs'
-import { readSizeProbe, readWidthProbe } from '@/pdf-reader/engine/typeset/density.mjs'
-import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
-import { FLOAT_TEX, LINES_TEX, readForced, readLines, SIZE_TEX, typesetting } from '@/pdf-reader/engine/typeset/tex.mjs'
-import { DESIGN, designFor } from '@/pdf-reader/engine/typeset/type.mjs'
+import { lastTexLog, MARK_DEF } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { openPaper, originalFiles, probeFiles, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { readSizeProbe, readWidthProbe } from '@/pdf-reader/engine/pipeline/typeset/density.mjs'
+import { strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
+import { FLOAT_TEX, LINES_TEX, readForced, readLines, SIZE_TEX, typesetting } from '@/pdf-reader/engine/pipeline/typeset/tex.mjs'
+import { DESIGN, designFor } from '@/pdf-reader/engine/pipeline/typeset/type.mjs'
 
 // What the typesetting rule writes into a compile and reads back from its log. The macros' behaviour under TeX is checked
 // natively by the typesetting gate's cases (parked/lab/spikes/typeset-tex-cases.mjs); here, what goes where

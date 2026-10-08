@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { COVERAGE } from '@/pdf-reader/engine/font-coverage.mjs'
-import { FACES } from '@/pdf-reader/engine/font-roles.mjs'
+import { COVERAGE } from '@/pdf-reader/engine/rules/font-coverage.mjs'
+import { FACES } from '@/pdf-reader/engine/rules/font-roles.mjs'
 
 // v0's faces (layer-proto/fonts.mjs roleFaceSet, run.mjs openProto's `faceSources`): the role table's files, served in
 // slices or whole, and nothing else. A PDF.js document of its own making (one page of paragraphs, nothing drawn), fonts

@@ -62,18 +62,18 @@ const OFFLINE = process.argv.includes('--offline')
 /** the engine the outputs are made with: this repository's, or another worktree's (--engine) */
 const ENGINE = resolve(argOf('engine') ?? REPO)
 const engine = path => import(pathToFileURL(join(ENGINE, 'src/pdf-reader/engine', path)).href)
-const { sourceHash, seedFrom, unitsOf } = await engine('cache.mjs')
+const { sourceHash, seedFrom, unitsOf } = await engine('pipeline/cache.mjs')
 const { kOfSource, trPiecesOf } = await engine('layer/pieces.mjs')
 const { encodeLayout, LAYOUT } = await engine('layout/file.mjs')
 const { makeLayout } = await engine('layout/make.mjs')
 const MARKS = await engine('layout/marks.mjs')
 const { encodeLayoutMarks, LAYOUT_CLASSES, layoutMarksOf, parseLayoutMarks } = MARKS
-const LIVE = await engine('live.mjs')
+const LIVE = await engine('pipeline/live.mjs')
 const { keptFor, openPaper, originalFiles, PIPELINE_CARRIES, PIPELINE_VERSION, TYPESETTING_VERSION } = LIVE
-const { unpackSource } = await engine('tar.mjs')
+const { unpackSource } = await engine('source/tar.mjs')
 // the translation's modules only where a request may be made (mt.mjs and the rules reach the extension's code by alias)
 const { RULES_VERSION } = OFFLINE ? { RULES_VERSION: null } : await import(pathToFileURL(join(ENGINE, 'src/core/rules/latexml.ts')).href)
-const { MICROSOFT_LANG, translateTexts, translateUnits } = OFFLINE ? { MICROSOFT_LANG: {} } : await engine('mt.mjs')
+const { MICROSOFT_LANG, translateTexts, translateUnits } = OFFLINE ? { MICROSOFT_LANG: {} } : await engine('translate/mt.mjs')
 const DATA = process.env.AXT_DATA ?? join(root, 'data')
 const OUT = resolve(process.env.LAYER_FIXTURES ?? join(DATA, 'layer-fixtures'))
 /** the fixtures the gate holds fixed, whose records an --offline run may take again */

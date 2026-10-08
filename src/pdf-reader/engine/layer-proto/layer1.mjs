@@ -9,7 +9,7 @@
 // the words and their alignment, the CJK line-break marks. Iteration 1's own measuring, fit and paint (pageChars,
 // resolvePlaceholders, tokensOf, layoutUnit, paintPart) are left out: v0 is iteration 2 and 3 (layer2.mjs), which
 // replaced them.
-import { textArgsOf, textless } from '../arg-roles.mjs'
+import { textArgsOf, textless } from '../rules/arg-roles.mjs'
 
 // ---- the units' blocks
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { type Box, measurePane, pointerPath, pointOn, type Viewport } from '@/pdf-reader/engine/pointer.mjs'
+import { type Box, measurePane, pointerPath, pointOn, type Viewport } from '@/pdf-reader/engine/view/pointer.mjs'
 
 // The highlight's pointer path (pointer.mjs), without a browser: elements as the parts of them it reads, the frames and
 // the timers as queues run by hand.

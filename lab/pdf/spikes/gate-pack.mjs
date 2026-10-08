@@ -33,7 +33,7 @@ export const PACK_SCHEMA = 1
 export const BUCKET = 'readarxiv-ci'
 /** the pack's objects in the bucket: gate-pack/<sha256> */
 export const KEY_PREFIX = 'gate-pack/'
-/** the weights a CJK group's roles are built from (font-roles.mjs rolesFor): the body, the bold, and the lights and semibolds
+/** the weights a CJK group's roles are built from (rules/font-roles.mjs rolesFor): the body, the bold, and the lights and semibolds
  *  the rule `cjkFaces.light` switches between */
 export const ROLE_WEIGHTS = ['light', 'regular', 'semibold', 'bold']
 
@@ -285,7 +285,7 @@ async function main(argv) {
   if (command === 'make') {
     const engine = resolve(typeof arg('engine', argv) === 'string' ? arg('engine', argv) : REPO)
     const E = f => import(pathToFileURL(join(engine, ENGINE, f)).href)
-    const [{ FACES }, { BUILTIN_RULES, resolveRules, SCRIPTS }, { TEX_PATTERN_FILES }] = await Promise.all([E('font-roles.mjs'), E('rules/layout.mjs'), E('layer-proto/hyph.mjs')])
+    const [{ FACES }, { BUILTIN_RULES, resolveRules, SCRIPTS }, { TEX_PATTERN_FILES }] = await Promise.all([E('rules/font-roles.mjs'), E('rules/layout.mjs'), E('layer-proto/hyph.mjs')])
     const fixtures = where(argv, 'fixtures'), records = where(argv, 'records')
     const names = outputsOf(fixtures)
     const targets = [...new Set(names.map(n => nameOf(n).target))].sort()

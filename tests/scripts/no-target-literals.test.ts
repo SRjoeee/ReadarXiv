@@ -36,12 +36,12 @@ function codeLines(text: string): string[] {
 }
 const violations = (file: string, text: string) => codeLines(text).flatMap((line, i) => (COMPARES.test(line) || BY_NAME.test(line) ? [`${file}:${i + 1}: ${line.trim().slice(0, 120)}`] : []))
 
-const modules = [...readdirSync(join(ENGINE, 'layer-proto')).filter(f => f.endsWith('.mjs')).map(f => join('layer-proto', f)), 'font-roles.mjs']
+const modules = [...readdirSync(join(ENGINE, 'layer-proto')).filter(f => f.endsWith('.mjs')).map(f => join('layer-proto', f)), 'rules/font-roles.mjs']
 
 describe('no drawing module names a target', () => {
-  it('layer-proto/ and font-roles.mjs compare no target with a string literal and tell no script or CJK-ness by a language\'s name', () => {
+  it('layer-proto/ and rules/font-roles.mjs compare no target with a string literal and tell no script or CJK-ness by a language\'s name', () => {
     expect(modules.length).toBeGreaterThan(8)
-    for (const m of ['layer-proto/layer2.mjs', 'layer-proto/run.mjs', 'layer-proto/layer1.mjs', 'layer-proto/hyph.mjs', 'layer-proto/fonts.mjs', 'font-roles.mjs']) expect(modules, m).toContain(m)
+    for (const m of ['layer-proto/layer2.mjs', 'layer-proto/run.mjs', 'layer-proto/layer1.mjs', 'layer-proto/hyph.mjs', 'layer-proto/fonts.mjs', 'rules/font-roles.mjs']) expect(modules, m).toContain(m)
     const found = modules.flatMap(m => violations(m, readFileSync(join(ENGINE, m), 'utf8')))
     expect(found).toEqual([])
   })

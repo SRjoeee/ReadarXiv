@@ -11,7 +11,8 @@
  *   `translateUnits` (a unit that fails is sent again as runs);
  * - which units a language sends (keptFor, `authorsTranslated` in kept.mjs) and how a table's cells are decided after the
  *   answer (groups.mjs `decideGroups`, `NAMES_SHARE`), which batches are made (rows.mjs `batchesOf`), and the paper's
- *   context sent with every batch (engine.mjs `paperContext`).
+ *   context sent with every batch, which each reader builds (the extension's `paperContext`, session/translate.mjs; the web's
+ *   own: it cuts the abstract as the HTML page does, which the engine does not hold).
  *
  * It enters the web's translation identity and the extension's rows cache, so that rows made under another are
  * translated again on open; it enters no bundle's key (bundle.mjs VTAG): a bundle holds the units, which none of this

@@ -29,7 +29,7 @@ export async function loadEngine() {
   const missing = NEEDED.filter(name => !(name in E))
   if (missing.length) return { ready: false, why: `layer/layer.mjs does not export ${missing.join(', ')} yet`, E }
   const optional = async path => { try { return await import(`${ENGINE}${path}`) } catch { return null } }
-  const [check, pieces, coverage] = await Promise.all([optional('layer/check.mjs'), optional('layer/pieces.mjs'), optional('font-coverage.mjs')])
+  const [check, pieces, coverage] = await Promise.all([optional('layer/check.mjs'), optional('layer/pieces.mjs'), optional('rules/font-coverage.mjs')])
   COLOURS = E.LAYER_COLOURS ?? pieces?.LAYER_COLOURS ?? []
   return { ready: true, E, check, metrics: coverage?.METRICS ?? null }
 }

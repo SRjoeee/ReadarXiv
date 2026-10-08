@@ -1,7 +1,7 @@
 // The highlight's gate (plans/2026-10-01-pdf-highlight.md, B1; B2–B5 run it after each of their tasks). On the ten papers
 // of the highlight's investigation (report-A: arXiv's PDF on the left, our Chinese typesetting on the right), each side
 // anchored as the reader anchors it (session.mjs anchorSide, today's front end's hints), the geometry the reader paints
-// and hit-tests by (src/pdf-reader/engine/highlight.mjs), measured per side and per kind of unit:
+// and hit-tests by (src/pdf-reader/engine/view/highlight.mjs), measured per side and per kind of unit:
 //  - anchored and lit: units located on the side, units painted there (one run at least), and on both sides
 //  - holes: points on a 1.5-unit grid inside every painted block where the hit test lights nothing; where it lights
 //    another unit painted over it, smaller (a heading run into its paragraph), counted apart
@@ -118,11 +118,11 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { floatsOfPaper, floatsVerdict } from './highlight-gate-floats.mjs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from '../../../src/pdf-reader/engine/anchors.mjs'
-import { floatHitOf, floatShapes } from '../../../src/pdf-reader/engine/floats.mjs'
-import { blockOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, sentencesFit } from '../../../src/pdf-reader/engine/highlight.mjs'
-import { displayEdges, plainTranslated, serialize, unitText } from '../../../src/pdf-reader/engine/mt.mjs'
-import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
+import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from '../../../src/pdf-reader/engine/pipeline/anchors.mjs'
+import { floatHitOf, floatShapes } from '../../../src/pdf-reader/engine/view/floats.mjs'
+import { blockOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, sentencesFit } from '../../../src/pdf-reader/engine/view/highlight.mjs'
+import { displayEdges, plainTranslated, serialize, unitText } from '../../../src/pdf-reader/engine/translate/mt.mjs'
+import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { runPaper, samePieces } from './highlight-runs.mjs'
 import { sentencesThroughEngine } from './sentences-path.mjs'
 

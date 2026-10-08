@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { flowType } from '@/pdf-reader/engine/typeset/flow.mjs'
-import { DESIGN, type Design, designFor, heightAtSize, heightRatio, solveType, unitHeights } from '@/pdf-reader/engine/typeset/type.mjs'
+import { flowType } from '@/pdf-reader/engine/pipeline/typeset/flow.mjs'
+import { DESIGN, type Design, designFor, heightAtSize, heightRatio, solveType, unitHeights } from '@/pdf-reader/engine/pipeline/typeset/type.mjs'
 
 // The typesetting rule's type and flow (parked/lab/records/typesetting.md), on synthetic units: no TeX
 

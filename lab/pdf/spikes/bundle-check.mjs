@@ -32,8 +32,8 @@ const { bundleKey, bundleUnitsOf, readBundle, writeBundle, BUNDLE_VALUES } = awa
 const { parseAddonManifest, REMOVAL } = await import(join(ENGINE, 'layout/addon-manifest.mjs'))
 const { encodeLayout, parseLayout } = await import(join(ENGINE, 'layout/file.mjs'))
 const { countValues } = await import(join(ENGINE, 'layout/json.mjs'))
-const { openPaper } = await import(join(ENGINE, 'live.mjs'))
-const { unpackSource } = await import(join(ENGINE, 'tar.mjs'))
+const { openPaper } = await import(join(ENGINE, 'pipeline/live.mjs'))
+const { unpackSource } = await import(join(ENGINE, 'source/tar.mjs'))
 
 const PAPERS = [['1512.03385v1', 'zh'], ['1706.03762v7', 'zh'], ['1810.04805v2', 'zh'], ['2307.16209v1', 'de'], ['2608.04322v1', 'zh']]
 const FIXTURES = join(ROOT, 'out/layer-gate/fixtures/41795914c3c84238'), GEOMETRY = join(ROOT, 'out/layer-gate/cut-p10/geometry')

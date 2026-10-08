@@ -1,5 +1,5 @@
 // experiments/pdf-bilingual/spikes/typeset-gate.mjs
-// The typesetting rule's gate (src/pdf-reader/engine/typeset/): the maintainer's three goals, today's setting against
+// The typesetting rule's gate (src/pdf-reader/engine/pipeline/typeset/): the maintainer's three goals, today's setting against
 // the rule's, natively in Docker as the evaluation of 2026-10-01 ran them — and a failure where any paper falls behind
 // its stored record.
 //   (1) each block's space and place: where each unit starts against its original (drift, in columns, the paper's
@@ -59,10 +59,10 @@ import { loadavg } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { originalFiles as originalHere } from '../../../src/pdf-reader/engine/live.mjs'
-import { alignment, columnOf, marksOf } from '../../../src/pdf-reader/engine/typeset/places.mjs'
-import { readLines } from '../../../src/pdf-reader/engine/typeset/tex.mjs'
-import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
+import { originalFiles as originalHere } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
+import { alignment, columnOf, marksOf } from '../../../src/pdf-reader/engine/pipeline/typeset/places.mjs'
+import { readLines } from '../../../src/pdf-reader/engine/pipeline/typeset/tex.mjs'
+import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 
 const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname

@@ -1,5 +1,5 @@
 // marks.mjs's types (JavaScript until the engine's port), for the reader's tests
-import type { SourceUnit, UnitMark } from '../latex-front.mjs'
+import type { SourceUnit, UnitMark } from '../source/latex-front.mjs'
 
 export type MarkClass = 'math' | 'display' | 'cite' | 'ref' | 'eqref' | 'code' | 'url' | 'footnote' | 'macro'
 /** every class, in this order */
@@ -124,3 +124,5 @@ export declare function layoutMarksOf(marked: unknown, log: string, o: { engine:
 export declare function encodeLayoutMarks(m: LayoutMarks): string
 /** bytes, then values, then JSON.parse, then every bound below; throws LayoutRefusal */
 export declare function parseLayoutMarks(bytes: Uint8Array): LayoutMarks
+/** \\rule's call: what TeX's ink section measures, not the role table (a strut, \\rule{0pt}{2ex}, none; a bar, ink) */
+export declare const RULE: RegExp

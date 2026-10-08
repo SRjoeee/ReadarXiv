@@ -19,8 +19,8 @@ let answer = null
 globalThis.chrome ??= { runtime: { id: 'sentences-path', sendMessage: async message => answer(message) } }
 globalThis.addEventListener ??= () => {}
 globalThis.removeEventListener ??= () => {}
-const { openEngine } = await import('../../../src/pdf-reader/engine/engine.mjs')
-const { translateUnits } = await import('../../../src/pdf-reader/engine/mt.mjs')
+const { openEngine } = await import('../../../src/pdf-reader/session/translate.mjs')
+const { translateUnits } = await import('../../../src/pdf-reader/engine/translate/mt.mjs')
 
 const STATUS = { available: true, providerId: 'microsoft', chosen: 'microsoft', targetLanguage: 'cmn', renderPath: 'markers', maxBatchChars: 2000, maxBatchItems: 100, identity: 'microsoft' }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { labelInTarget } from '@/pdf-reader/engine/layer-proto/layer2.mjs'
-import { type BatchReport, type Compiled, openPaper, runLive } from '@/pdf-reader/engine/live.mjs'
+import { type BatchReport, type Compiled, openPaper, runLive } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // The layer and the final read the same decisions (the table-groups brief, 2026-10-07): a float's label in the target's

@@ -12,11 +12,11 @@
 // aux, the lists and the bookmarks are byte for byte the paper's. The native cases (lab/pdf/spikes/
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) measures the layout
 // lines they carry and lose, and fails on a loss of no accepted cause.
-import { markUnits, NO_ARG_COMMANDS } from '../latex-front.mjs'
-import { textless } from '../arg-roles.mjs'
-import { tokenizeDocument } from '../anchors.mjs'
-import { plainTranslated } from '../mt.mjs'
-import { readLines } from '../typeset/tex.mjs'
+import { markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
+import { textless } from '../rules/arg-roles.mjs'
+import { tokenizeDocument } from '../pipeline/anchors.mjs'
+import { plainTranslated } from '../translate/mt.mjs'
+import { readLines } from '../pipeline/typeset/tex.mjs'
 import { pageInk } from './ink.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
 import { OWNED, OWNED_HOW, ownedOf, WANT } from './stream.mjs'

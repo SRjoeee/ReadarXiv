@@ -12,11 +12,6 @@ on:
     paths:
       - 'src/pdf-reader/engine/rules/**'
       - 'src/pdf-reader/engine/layer-proto/**'
-      - 'src/pdf-reader/engine/font-roles.mjs'
-      - 'src/pdf-reader/engine/font-coverage.mjs'
-      - 'src/pdf-reader/engine/layer-rules.mjs'
-      - 'src/pdf-reader/engine/arg-roles.mjs'
-      - 'src/pdf-reader/engine/latexml-args.mjs'
       - 'src/pdf-reader/engine/layer/check.mjs'
       - 'src/pdf-reader/engine/layer/pieces.mjs'
       - 'src/pdf-reader/engine/layer/swap.mjs'

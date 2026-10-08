@@ -1,7 +1,7 @@
 // The units a translation into a language leaves as they are (the rules-as-data plan, §1: a translation rule, since it
 // decides what a target is sent). Apart from scripts.mjs, which parks with the TeX path, and importing nothing but the
 // script of a language, so that a reader loads it without the TeX path's LaTeX parser.
-import { scriptOf } from '../layer-rules.mjs'
+import { scriptOf } from '../rules/script.mjs'
 
 /** the scripts whose targets are set by XeLaTeX with xeCJK on the TeX path (scripts.mjs CJK: a test holds the two) */
 const AUTHORS_TRANSLATED = new Set(['Hans', 'Hant', 'Jpan', 'Kore'])

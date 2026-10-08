@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { inMemory, loadProject, patch } from '@/pdf-reader/engine/latex-front.mjs'
-import { openPaper, originalFiles, translationFiles } from '@/pdf-reader/engine/live.mjs'
-import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
-import { typesetting } from '@/pdf-reader/engine/typeset/tex.mjs'
-import { DESIGN } from '@/pdf-reader/engine/typeset/type.mjs'
+import { inMemory, loadProject, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { openPaper, originalFiles, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
+import { typesetting } from '@/pdf-reader/engine/pipeline/typeset/tex.mjs'
+import { DESIGN } from '@/pdf-reader/engine/pipeline/typeset/type.mjs'
 
 // Environments TeX reads line by line until a line holding their \end — verbatim's kind and comment.sty's — and what
 // the reader writes into a paper's lines around them. comment.sty ends its environment only at a line that is

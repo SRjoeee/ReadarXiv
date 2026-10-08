@@ -12,9 +12,9 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { markWords, tokenizeDocument } from '../../../src/pdf-reader/engine/anchors.mjs'
-import { displayEdges, plainSource, unitText } from '../../../src/pdf-reader/engine/mt.mjs'
-import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
+import { markWords, tokenizeDocument } from '../../../src/pdf-reader/engine/pipeline/anchors.mjs'
+import { displayEdges, plainSource, unitText } from '../../../src/pdf-reader/engine/translate/mt.mjs'
+import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { runPaper } from './highlight-runs.mjs'
 
 const root = new URL('..', import.meta.url).pathname

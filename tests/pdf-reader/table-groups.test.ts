@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { copyTexts, decideWrite, reusable, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
-import { decideGroups, groupOf, NAMES_SHARE, unchanged } from '@/pdf-reader/engine/groups.mjs'
-import { inMemory, loadProject, type SourceUnit, tableGrid } from '@/pdf-reader/engine/latex-front.mjs'
-import { CAPTIONS_PROBE, captionsOf, type Compiled, keptFor, openPaper, runLive, translationFiles } from '@/pdf-reader/engine/live.mjs'
-import { plainSource as plainOf } from '@/pdf-reader/engine/mt.mjs'
+import { copyTexts, decideWrite, reusable, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/pipeline/cache.mjs'
+import { decideGroups, groupOf, NAMES_SHARE, unchanged } from '@/pdf-reader/engine/translate/groups.mjs'
+import { inMemory, loadProject, type SourceUnit, tableGrid } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { CAPTIONS_PROBE, captionsOf, type Compiled, keptFor, openPaper, runLive, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { plainSource as plainOf } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // A table's consistency groups (the table-groups brief, 2026-10-07): the grid the TeX front end reads, each cell's
 // group, the decision over what came back, and the run that sets the final and keeps the record by it
