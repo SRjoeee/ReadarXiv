@@ -335,15 +335,99 @@ describe('v0 fed its units as they arrive (take, end)', () => {
   })
 })
 
+describe('a run let go while it waits (dispose)', () => {
+  // (the faces every run shares are the module's, fonts.mjs setRoleFaces: a newer layer sets its own once this one is let
+  // go, and nothing of this one may write or read them after)
+  const fonts = () => document.fonts as unknown as { load: (font: string, text?: string) => Promise<unknown> }
+  it("while a unit's faces load: that unit is neither recorded nor painted, nor counted, once they have loaded", async () => {
+    const P = paper()
+    // (unit 0's translation holds a character no other text asks a face for: its own load is held)
+    P.rows.set(0, { ...P.rows.get(0)!, pieces: [{ t: 'text', tr: true, s: `\u9f98${CJK(5)}` }] })
+    const was = fonts().load
+    let hit = () => {}, go = () => {}
+    const asked = new Promise<void>(ok => { hit = ok }), held = new Promise(ok => { go = () => ok([]) })
+    fonts().load = async (_font, text) => { if (text?.includes('\u9f98')) { hit(); await held } return [] }
+    try {
+      const run = await open(P, 'whole')
+      const under = run.until(3)
+      await asked
+      run.dispose()
+      go()
+      await under
+      expect(run.order).toEqual([0])
+      expect(run.stats).toEqual([])
+      expect(run.skipped.filter(x => x.id === 0)).toEqual([])
+      expect(run.rows.every(r => r.ops.length === 0 && r.svg.innerHTML === '')).toBe(true)
+    } finally { fonts().load = was }
+  })
+  it("while its first page is drawn: a newer layer's roles stand once the page is", async () => {
+    const { roleFaces, setRoleFaces } = await import('@/pdf-reader/engine/layer-proto/fonts.mjs')
+    const P = paper(), getPage = P.doc.getPage
+    let go = () => {}
+    const held = new Promise<void>(ok => { go = ok })
+    P.doc.getPage = async (n: number) => { await held; return getPage(n) }
+    const run = await open(P, 'whole')
+    const under = run.until(1)
+    await tick()
+    run.dispose()
+    // (the newer layer's, set at its open)
+    setRoleFaces('ja', 'times')
+    const newer = roleFaces()
+    go()
+    await under
+    await tick()
+    expect(roleFaces()).toBe(newer)
+    expect(run.order).toEqual([])
+  })
+})
+
+describe("a table group with a cell whose row never came, each unit's group given", () => {
+  it("keeps the group the original's where the cell was expected (end() before its row)", async () => {
+    // (cell 9 of T:c0 expected and never sent: cell 10, its group-mate, is the original's too, as if neither were
+    // translated)
+    const P = paper()
+    const run = await open(P, 'parts', { groups: groupsOf() })
+    run.take(rowsOf(P, [...P.rows.keys()].filter(id => id !== 9)))
+    run.end()
+    await run.until(3)
+    const d = drawing(run)
+    expect(d.skipped).toContain('10:group: a cell not drawn')
+    expect(d.order).not.toContain(10)
+    const N = paper()
+    for (const u of [9, 10]) N.rows.set(u, { ...N.rows.get(u)!, state: 'none', pieces: undefined })
+    const plain = await open(N, 'whole', { groups: groupsOf() })
+    await plain.until(3)
+    const want = drawing(plain)
+    expect({ pages: d.pages, order: d.order, stats: d.stats }).toEqual({ pages: want.pages, order: want.order, stats: want.stats })
+  })
+  it('draws the group where the cell was never expected (kept as a name), as one open over the same rows does', async () => {
+    const P = paper()
+    P.rows.delete(9)
+    const run = await open(P, 'parts', { groups: groupsOf() })
+    run.take(rowsOf(P, [...P.rows.keys()]))
+    await run.until(3)
+    const d = drawing(run)
+    expect(d.order).toContain(10)
+    const W = paper()
+    W.rows.delete(9)
+    const whole = await open(W, 'whole', { groups: groupsOf() })
+    await whole.until(3)
+    expect(d).toEqual(drawing(whole))
+  })
+})
+
 describe('rows that parse but are no unit of this paper (take)', () => {
   // (the web's rows pass parseAnswersDelta's shapes; one that does not fit the paper's own files is left the original's,
   // its why in v0's skipped list, and the rest of the paper is drawn as ever: as one open over the same rows draws it,
-  // and as if that unit were not translated)
+  // and as if that unit were not translated; a table cell with every cell of its group, a translated cell that cannot
+  // be drawn: ruling P28)
   const hostile: [string, number, (P: ReturnType<typeof paper>) => Row, string, boolean?][] = [
     ["a piece's k past its unit's pieces in the layout file", 0, P => ({ ...P.rows.get(0)!, pieces: [{ t: 'text', tr: true, s: CJK(3) }, { t: 'ph', src: '\\cite{a}', k: 5 }] }), "row: a k not its source's"],
     ['an id neither the geometry nor the layout file holds', 30, () => ({ kind: 'para', src: 'Nowhere', state: 'whole', pieces: [{ t: 'text', tr: true, s: CJK(3) }] }), 'unanchored'],
     ['a kind the layout file does not give its id', 14, P => ({ ...P.rows.get(14)!, kind: 'cell' }), 'row: another kind'],
     ['a table group the open was not given for its id', 9, P => ({ ...P.rows.get(9)!, group: 'T:c1' }), 'row: another group', true],
+    ["a cell's kind the layout file does not give its id", 9, P => ({ ...P.rows.get(9)!, kind: 'para' }), 'row: another kind'],
+    ["a cell's kind the layout file does not give its id, each unit's group given", 9, P => ({ ...P.rows.get(9)!, kind: 'para' }), 'row: another kind', true],
     ['pieces that are not a list', 15, P => ({ ...P.rows.get(15)!, pieces: 'pieces' }) as unknown as Row, "row: not a unit's shape"],
     ['a piece that is not a piece', 16, P => ({ ...P.rows.get(16)!, pieces: [null] }) as unknown as Row, "row: not a unit's shape"],
   ]
@@ -364,9 +448,12 @@ describe('rows that parse but are no unit of this paper (take)', () => {
       expect(d).toEqual(drawing(whole))
       expect(d.skipped).toContain(`${id}:${why}`)
       expect(d.order).not.toContain(id)
-      // the unit not translated: the same pages, the same order
+      // (a cell's group-mates left with it)
+      const mates = SPECS.filter(s => s.group && s.group === SPECS[id]?.group && s.id !== id).map(s => s.id)
+      for (const m of mates) expect(d.skipped).toContain(`${m}:group: a cell not drawn`)
+      // the unit not translated, and its group with it: the same pages, the same order
       const N = paper()
-      if (N.rows.has(id)) N.rows.set(id, { ...N.rows.get(id)!, state: 'none', pieces: undefined })
+      for (const u of [id, ...mates]) if (N.rows.has(u)) N.rows.set(u, { ...N.rows.get(u)!, state: 'none', pieces: undefined })
       const plain = await open(N, 'whole', { groups })
       await plain.until(3)
       const want = drawing(plain)

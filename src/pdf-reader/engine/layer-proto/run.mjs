@@ -380,7 +380,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** why a translated row is no unit of this paper's, though it parses (the web's rows: parseAnswersDelta), or null: not a
    *  unit's shape; its kind not the one the layout file or the geometry gives its id; its table group not the one the
    *  open was given (`groups`); a piece's k not one of its source's pieces (the layout file's count). Its unit is left
-   *  the original's, in no table group, the rest of the paper drawn as ever */
+   *  the original's, the rest of the paper drawn as ever; a cell's group is the original's with it (a translated cell
+   *  that cannot be drawn: readGroup) */
   const refusalOf = (id, u) => {
     if (!shapely(u)) return "row: not a unit's shape"
     const lu = tex ? tex.index.unit(id) : null, kind = geometry.kinds?.[id]
@@ -428,26 +429,30 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   }
   // a table's consistency group drawn whole or not at all (the table-groups brief, 2026-10-07): the record translates
   // or keeps each group whole (its cells' `group`, cache.mjs unitsOf), and a translated cell that cannot be drawn here —
-  // no lines for it, or none on the pages shown — keeps every cell of its group the original's. A group's cells may be
-  // anywhere in the paper: it is read once its own cells' rows are in where the open is given each unit's group
-  // (`groups`), else once every row is (or end()), every row fixed then; the rows it reads are fixed from then on
+  // no lines for it, none on the pages shown, a row refused (refusalOf) — keeps every cell of its group the original's.
+  // A group's cells may be anywhere in the paper: it is read once its own cells' rows are in where the open is given each
+  // unit's group (`groups`), else once every row is (or end()), every row fixed then; the rows it reads are fixed from
+  // then on. Given each unit's group, a group's cells are the units given it whose rows are translated, whatever group
+  // a row names, and one given it and expected whose row never came (end()) keeps the group the original's as well: it
+  // was to be translated with the rest (ruling P28); one not expected (kept as a name: rows.mjs toTranslate) never has a
+  // row, and is the original's in a group drawn
   const groupCells = new Map(), split = new Set(), read = new Set()
   let frozenAll = false
-  const member = (id, u) => !!u?.group && translated(u) && !refusalOf(id, u)
-  /** group g read from the rows of `ids`, its own cells among them */
+  /** group g read from the rows of `ids` (its own cells: the units the open gave it, else the rows naming it) */
   const readGroup = (g, ids) => {
     read.add(g)
-    const cells = ids.filter(id => member(id, U.get(id)) && U.get(id).group === g)
     for (const id of ids) fixed.add(id)
+    const cells = ids.filter(id => translated(U.get(id)))
     if (!cells.length) return
     groupCells.set(g, cells)
-    if (cells.some(id => !(candOf.has(id) && decisionOf(candOf.get(id)).p))) split.add(g)
+    if ((tableGroups && ids.some(id => awaited.has(id) && U.get(id) === undefined)) || cells.some(id => !(candOf.has(id) && decisionOf(candOf.get(id)).p))) split.add(g)
   }
   const freezeAll = () => {
     if (frozenAll) return
     frozenAll = true
+    if (tableGroups) { for (const [g, ids] of membersOf) if (!read.has(g)) readGroup(g, ids); return }
     const unread = new Map()
-    U.forEach((u, id) => { if (member(id, u) && !read.has(u.group)) (unread.get(u.group) ?? unread.set(u.group, []).get(u.group)).push(id) })
+    U.forEach((u, id) => { if (u?.group && translated(u) && !read.has(u.group)) (unread.get(u.group) ?? unread.set(u.group, []).get(u.group)).push(id) })
     for (const [g, ids] of unread) readGroup(g, ids)
   }
   // the lowest unit line of each page: no unit borrows below it (the page's text area)
@@ -851,6 +856,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const tFonts = performance.now()
       const no = await FS.check(runsOfTokens(L2.tokensOf2(p.unit, prep, to, base, designs, P, lead, () => 0)))
       fontWait += performance.now() - tFonts
+      // (let go while its faces loaded: nothing more of it, not even its measures, in roles a newer layer may have set)
+      if (disposed) return
       if (no) { p.refused = true; p.why = no.why; p.missing = no.missing; return }
     }
     const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead)
@@ -967,6 +974,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     fontWait = 0
     const t0 = performance.now()
     await layout2(p)
+    // (let go while it was laid: neither recorded, nor painted, nor counted)
+    if (disposed) return
     // (the faces it waited for apart from its laying: no task of v0's)
     timesOf(p.pages[0]).lay += performance.now() - t0 - fontWait
     timesOf(p.pages[0]).fonts += fontWait
@@ -1054,6 +1063,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       } else if (RM.mode === 'draw') RM.stats.refused++
     }
     if (P.borrow) inkOf(i)
+    // (let go while the page was drawn: the roles and faces every run shares are a newer layer's to set)
+    if (disposed) return
     if (i === 1) {
       // the paper's designs from its first page: the serif with most characters, and its sans and mono
       const pick = fam => [...fontTally].filter(([k]) => k.startsWith(`${fam}:`)).sort((a, b) => b[1] - a[1])[0]?.[0].split(':')[1]
@@ -1066,6 +1077,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         for (const c of chars2[0]) if (c.st?.name) weight.set(c.st.name, (weight.get(c.st.name) ?? 0) + 1)
         setRoleFaces(to, familyOfFonts([...weight.keys()], [...weight.values()]), R.cjkFaces)
         await hyphP
+        if (disposed) return
         await L2.warmFaces(to, designs, yieldNow, (face, text) => FS.ready(face, text))
       } else {
         await loadWebFaces([designs.serif, designs.sans, designs.mono], fontUrl)
