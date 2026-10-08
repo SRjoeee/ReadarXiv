@@ -134,7 +134,11 @@ export function entriesOf(o) {
 
 /** the PIPELINE the translations of the outputs were made under: the one `pipeline` every units.json names */
 export function pipelineOf(records, names) {
-  const seen = new Set(names.map(n => String(readJson(join(records, n, 'units.json')).pipeline)))
+  const seen = new Set(names.map(n => {
+    const p = readJson(join(records, n, 'units.json')).pipeline
+    if ((typeof p !== 'string' || !/^\d+$/.test(p)) && !Number.isInteger(p)) throw new Error(`${n}: units.json names no PIPELINE version`)
+    return String(p)
+  }))
   if (seen.size !== 1) throw new Error(`the translations are of ${seen.size === 0 ? 'no' : 'several'} PIPELINE version${seen.size === 1 ? '' : 's'} (${[...seen].join(', ')})`)
   return [...seen][0]
 }

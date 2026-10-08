@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { entriesOf, fontFiles, listingDigest, makePack, objectsOf, objectUrl, outputsOf, packJsonOf, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
+import { entriesOf, fontFiles, listingDigest, makePack, objectsOf, objectUrl, outputsOf, packJsonOf, pipelineOf, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
 
 // The rules gate's fixture pack (lab/pdf/spikes/gate-pack.mjs, Task R6): made the same on every make, restored by digest
 // from a private bucket, and checked before the gate reads it. The inputs here are small synthetic files.
@@ -256,5 +256,20 @@ describe('the pack is restored by digest from the bucket', () => {
     const problems = verifyPack({ pack: b.pack, dir })
     expect(problems.join('\n')).toMatch(/data\/fonts\/A\.otf: not the manifest's bytes/)
     expect(problems.join('\n')).toMatch(/extra\.json: not in the manifest/)
+  })
+})
+
+describe('the PIPELINE the pack is made under', () => {
+  it('is the one version every units.json names, and a units.json that names none stops the make', () => {
+    const dir = tmp()
+    const put = (name: string, units: unknown) => { mkdirSync(join(dir, name), { recursive: true }); writeFileSync(join(dir, name, 'units.json'), JSON.stringify(units)) }
+    put('a-zh', { pipeline: '10', units: [] })
+    put('b-ja', { pipeline: '10', units: [] })
+    expect(pipelineOf(dir, ['a-zh', 'b-ja'])).toBe('10')
+    put('c-ko', { units: [] })
+    expect(() => pipelineOf(dir, ['a-zh', 'b-ja', 'c-ko'])).toThrow(/c-ko: units\.json names no PIPELINE version/)
+    put('d-de', { pipeline: 'undefined', units: [] })
+    expect(() => pipelineOf(dir, ['a-zh', 'd-de'])).toThrow(/d-de/)
+    rmSync(dir, { recursive: true, force: true })
   })
 })
