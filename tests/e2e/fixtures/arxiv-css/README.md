@@ -22,14 +22,22 @@ repository's own files, byte for byte: the same bytes as arXiv/arxiv-browse's `b
 
 ## Licence
 
-MIT, as the two repositories they come from: **Copyright (c) 2026 arXiv, Inc.**, and for contributions made on or before
-2026-06-30 Copyright (c) 2017-2025 Cornell University (Library). Redistribution is allowed with the notice kept, which
-is why the licence texts of both repositories sit here unchanged: `LICENSE-arxiv-browse` (the `browse/` sheets) and
-`LICENSE-arxiv-base` (the header and footer). Read from `https://github.com/arXiv/arxiv-browse/blob/develop/LICENSE` and
-`https://github.com/arXiv/arxiv-base/blob/develop/LICENSE` on 2026-10-08. The ar5iv sheet is dginev/ar5iv-css (MIT) as
-arXiv builds it. Nothing here is in the built extension, and the files are never GPL-licensed: they are test data under
-their own licence. A sheet whose licence ever stops allowing this is removed, and the audit goes back to reading the page
-from arxiv.org.
+MIT, as the repositories they come from, and MIT asks that each copyright notice accompany every copy, so the licence texts
+sit here unchanged, one for each holder:
+
+- `LICENSE-arxiv-browse` (the `browse/` sheets: the wrapper and the theme): **Copyright (c) 2026 arXiv, Inc.**, and for
+  contributions made on or before 2026-06-30 Copyright (c) 2017-2025 Cornell University (Library). Read from
+  `https://github.com/arXiv/arxiv-browse/blob/develop/LICENSE` on 2026-10-08.
+- `LICENSE-arxiv-base` (the header and footer): the same holders. Read from
+  `https://github.com/arXiv/arxiv-base/blob/develop/LICENSE` on 2026-10-08.
+- `LICENSE-ar5iv-css` (`ar5iv.0.9.1.min.css`, which carries no banner of its own): **Copyright (c) 2021 Deyan Ginev**, the
+  author of dginev/ar5iv-css, whose sheet arXiv serves under its own name. Read from
+  `https://raw.githubusercontent.com/dginev/ar5iv-css/main/LICENSE` on 2026-10-08, with `User-Agent: ReadarXiv/0.1
+  (+https://readarxiv.org; research)`.
+
+Nothing here is in the built extension, and the files are never GPL-licensed: they are test data under their own
+licence. A sheet whose licence ever stops allowing this is removed, and the audit goes back to reading the page from
+arxiv.org.
 
 ## When the names move
 
@@ -47,7 +55,7 @@ links. Then:
 
 1. Run `pnpm test` (the test above) and `pnpm e2e:a11y`: a changed sheet can move the baseline, and the difference must
    still be empty and the forced-contrast check still fire.
-2. Check the licences of both repositories once more (the two links above) and replace the `LICENSE-*` files if they changed.
+2. Check the licences of the three repositories once more (the links above) and replace the `LICENSE-*` files if they changed.
 3. Write the new date and hashes into the table above (`shasum -a 256 static/*/*/css/*.css`) and the date in the first paragraph of "What is here".
 
 A refresh of an unchanged tree is a no-op. A new fixture whose sheets differ from the others' is a reason to refresh from

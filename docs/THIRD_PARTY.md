@@ -58,7 +58,7 @@ Not in the built extension, and not GPL-licensed: files the tests and the browse
 
 | Files | Source | Fetched | Licence |
 |---|---|---|---|
-| `tests/e2e/fixtures/arxiv-css/` — the four style sheets arXiv serves under `/static/` for its HTML papers (ar5iv's, arXiv's theme, the header and footer), for the offline accessibility audit (`pnpm e2e:a11y`) | https://github.com/arXiv/arxiv-browse (`browse/static/css/`) and https://github.com/arXiv/arxiv-base (`arxiv/base/static/css/`), as served by https://arxiv.org/static/ | 2026-10-08 | MIT, Copyright (c) 2026 arXiv, Inc. (earlier contributions Cornell University); both licence texts kept in the directory; its README says how to refresh them |
+| `tests/e2e/fixtures/arxiv-css/` — the four style sheets arXiv serves under `/static/` for its HTML papers (ar5iv's, arXiv's theme, the header and footer), for the offline accessibility audit (`pnpm e2e:a11y`) | https://github.com/arXiv/arxiv-browse (`browse/static/css/`) and https://github.com/arXiv/arxiv-base (`arxiv/base/static/css/`), as served by https://arxiv.org/static/ | 2026-10-08 | MIT: Copyright (c) 2026 arXiv, Inc. (earlier contributions Cornell University) for the `browse/` and header/footer sheets, and Copyright (c) 2021 Deyan Ginev for `ar5iv.0.9.1.min.css` (dginev/ar5iv-css, https://github.com/dginev/ar5iv-css, the sheet arXiv serves under its own name); the three licence texts are kept in the directory; its README says how to refresh them |
 
 The papers in `tests/fixtures/` have their own table (`tests/fixtures/README.md`).
 

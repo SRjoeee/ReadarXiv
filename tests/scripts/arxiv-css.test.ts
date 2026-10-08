@@ -52,8 +52,10 @@ describe('the vendored style sheets', () => {
   })
 
   it('carry the licence of the repository they come from', () => {
-    for (const name of ['LICENSE-arxiv-browse', 'LICENSE-arxiv-base']) {
-      expect(readFileSync(join(VENDORED, name), 'utf8')).toContain('Permission is hereby granted, free of charge')
+    for (const [name, holder] of [['LICENSE-arxiv-browse', 'arXiv, Inc.'], ['LICENSE-arxiv-base', 'arXiv, Inc.'], ['LICENSE-ar5iv-css', 'Deyan Ginev']] as const) {
+      const text = readFileSync(join(VENDORED, name), 'utf8')
+      expect(text, name).toContain('Permission is hereby granted, free of charge')
+      expect(text, name).toContain(holder)
     }
   })
 })
