@@ -51,7 +51,7 @@ export const ScrollIndicator = forwardRef<HTMLDivElement, { controller: ReaderCo
     const y0 = e.clientY, top0 = c.scrollTop, per = (c.scrollHeight - c.clientHeight) / Math.max(1, t.clientHeight - thumb.offsetHeight)
     const move = (ev: PointerEvent) => { c.scrollTop = top0 + (ev.clientY - y0) * per }
     // the drag ends however the pointer goes: released, cancelled by the system, or its capture lost (a tab switch,
-    // the pane hidden) — or the thumb would stay grabbed (Codex on #301)
+    // the pane hidden) — or the thumb would stay grabbed
     const up = () => {
       t.removeAttribute('data-drag')
       t.removeEventListener('pointermove', move)

@@ -1,14 +1,14 @@
 // Where the live reader fetches the paper and sends its typesetting (the reader's design, §2). Its own addresses unless
 // told otherwise by its URL — and the only other addresses it takes are a server on this machine (the probes run
 // theirs) and, for the paper itself, arXiv. The reader is a page arXiv's pages may frame, so its URL is not the
-// reader's to trust: a page that frames it must not point its requests, or the paper's project, anywhere else (Devin
-// on #301).
+// reader's to trust: a page that frames it must not point its requests, or the paper's project, anywhere else (PDF-READER
+// §11.1).
 
 /**
  * The TeX page the reader typesets with (the S3a report's protocol 2), a build setting: our site's in a production build —
  * `pnpm build`, the one a reader or the maintainer's test gets —, and in development (`pnpm dev`, `wxt build --mode
  * development`, the unit tests) the one parked/tex-page/spikes/serve-live.mjs runs on this machine. Chosen by nothing a paper, a service
- * or a page that frames the reader says (the F2 review's I1: the test build met the protocol-1 page at 8071)
+ * or a page that frames the reader says (the test build once met the protocol-1 page at 8071)
  */
 export const TEX_PAGE = import.meta.env?.PROD ? 'https://tex.readarxiv.org' : 'http://127.0.0.1:8071'
 /**

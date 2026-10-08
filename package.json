@@ -30,9 +30,10 @@
     "e2e:viewer": "node tests/e2e/viewer-control.mjs",
     "e2e:image": "node tests/e2e/image.mjs",
     "e2e:placeholders": "node tests/e2e/placeholders.mjs",
-    "lint": "biome lint . && node scripts/check-english.mjs && node scripts/check-boundary.mjs",
+    "lint": "biome lint . && node scripts/check-english.mjs && node scripts/check-boundary.mjs && node scripts/check-review-citations.mjs",
     "check:boundary": "node scripts/check-boundary.mjs",
     "check:english": "node scripts/check-english.mjs",
+    "check:citations": "node scripts/check-review-citations.mjs",
     "lint:fix": "biome lint --write ."
   },
   "devDependencies": {

@@ -417,7 +417,7 @@ export async function translateUnits(units, send, format = 'markers') {
   const results = new Map(), how = { whole: 0, tolerant: 0, runs: 0, untranslated: 0, lost: 0 }, failed = []
   // what came back, when some texts did not for a reason not theirs (engine.mjs, EngineError's `lost`): those stay in
   // the source language, counted, and the failure is kept — sent again piece by piece they would only fail again, as
-  // many times over as they have pieces (Codex on #296)
+  // many times over as they have pieces (PDF-READER §10.3)
   const ask = async (texts, cuts) => {
     try { return { texts: await (cuts ? send(texts, cuts) : send(texts)), lost: null } } catch (e) {
       if (!e?.partial) throw e
