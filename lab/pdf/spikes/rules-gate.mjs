@@ -8,7 +8,8 @@
 //            target's outputs pooled over the model-tier measures and held to the merge rule's thresholds (layer-gate/score.mjs
 //            compare), the pages that moved, the checks of a changed layout-rules.json, the one comment (<!-- rules-gate -->)
 //            and the numbers (rules-gate.json). Exit 1 where the run cannot pass
-//   engines  the same verdict for head's set on each engine lab/pdf/live-engines.json names, against the set published for it
+//   engines  the same verdict for head's set on each engine lab/pdf/live-engines.json names, against the set published for it,
+//            under the same rulings (those in the tree at head's commit)
 //
 //   node lab/pdf/spikes/rules-gate.mjs run --engine=<worktree> --rules=<file> --pack=<dir> [--out=<run.json>] [--log=<file>] [--workers=4]
 //   node lab/pdf/spikes/rules-gate.mjs compare --base=<run.json> --head=<run.json> --out=<dir> [--base-sha=<sha>] [--head-sha=<sha>]
@@ -409,7 +410,44 @@ export function parseEngines(json) {
 
 const git = (...args) => execFileSync('git', args, { cwd: REPO, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 26 })
 
-async function engines(argv) {
+/**
+ * The rulings the live-engines check honours: the pull request gate's, as they stand in the tree at `commit` (the set's). That
+ * gate takes the files its pull request adds to lab/pdf/rulings/; by the time a set is published those are in the tree, with the
+ * earlier ones, and the set published for an engine can be several versions behind, so every ruling since counts: the files of
+ * lab/pdf/rulings/ and the rulings the layer gate's record carries (lab/pdf/records/layer-fidelity.json) that name their targets
+ * (a ruling given to `--record` keeps all its fields; the older ones name none, and cover nothing here). Returns { rulings,
+ * problems (fixed sentences, safe for a public log), untargeted }. A file that is no ruling accepts nothing.
+ */
+export function rulingsAt(commit, { git: gitFn = git } = {}) {
+  const rulings = [], problems = []
+  let names = []
+  try { names = gitFn('ls-tree', '--name-only', commit, 'lab/pdf/rulings/').split('\n').filter(n => /^lab\/pdf\/rulings\/[^/]+\.json$/.test(n)).sort(byName) } catch { /* a commit before the directory */ }
+  for (const n of names) {
+    let text = null
+    try { text = gitFn('show', `${commit}:${n}`) } catch { /* listed and unreadable: the same as not valid */ }
+    const r = loadRuling(n, { read: () => { if (text === null) throw new Error('unreadable'); return text } })
+    if (r.ruling) rulings.push(r.ruling); else problems.push(r.problem)
+  }
+  let untargeted = 0
+  try {
+    const record = JSON.parse(gitFn('show', `${commit}:lab/pdf/records/layer-fidelity.json`))
+    for (const [i, entry] of (Array.isArray(record?.rulings) ? record.rulings : []).entries()) {
+      if (!Array.isArray(entry?.targets)) { untargeted++; continue }
+      try { rulings.push(parseRuling(entry, `layer-fidelity-${i + 1}`)) } catch (e) { problems.push(`the record's ruling ${i + 1}: ${String(e?.message ?? e).replace(/^ruling [^:]*: /, '')}`) }
+    }
+  } catch { /* no record at that commit */ }
+  return { rulings, problems, untargeted }
+}
+
+/** how many strings of the fixtures' translations a public text carries, and how many windows of the rulings' own words are in them */
+function leakCount(text, rulings, strings) {
+  const haystack = [...strings].join('\u0000')
+  const free = rulings.flatMap(r => [r.by, r.on, r.quote, r.english, r.scope, r.why].filter(Boolean))
+  return leaksIn(text, strings) + free.reduce((n, t) => n + fragmentsIn(t, haystack), 0)
+}
+
+/** `deps`: the gate's run, git and the two uses of the network, so that a test runs the whole command on fakes */
+export async function engines(argv, { run = runGate, git: gitFn = git, fetchImpl = fetch } = {}) {
   const arg = n => option(argv, n)
   const list = parseEngines(JSON.parse(readFileSync(resolve(arg('list')), 'utf8')))
   if (!list.length) { console.log('no live engine is named in live-engines.json: nothing to check'); return 0 }
@@ -419,39 +457,49 @@ async function engines(argv) {
   const { set: headSet } = await head.readRules(new Uint8Array(readFileSync(headFile)))
   // (the pack the job verified is the committed manifest's: its outputs are what each run must hold)
   const outputs = outputsOfPack(readJson(typeof arg('pack-json') === 'string' ? resolve(arg('pack-json')) : join(REPO, 'lab/pdf/gate-pack.json')))
+  // the same rulings as the pull request gate, those of the tree at head's commit; the second lock as in compare, since their words
+  // go to the run's summary, which is public
+  const headSha = gitFn('rev-parse', 'HEAD').trim()
+  const { rulings, problems: rulingProblems, untargeted } = rulingsAt(headSha, { git: gitFn })
+  const strings = packStrings(join(pack, 'fixtures'))
+  console.log(`rulings at ${headSha.slice(0, 8)}: ${rulings.length} honoured${untargeted ? `, ${untargeted} of the record name no target and cover nothing here` : ''}`)
+  for (const p of rulingProblems) console.log(`ignored: ${p}`)
   const failures = []
   const work = join(tmpdir(), `rules-engines-${process.pid}`)
   for (const e of list) {
-    const sha = git('rev-parse', '--verify', '--end-of-options', `${e.ref}^{commit}`).trim()
+    const sha = gitFn('rev-parse', '--verify', '--end-of-options', `${e.ref}^{commit}`).trim()
     let source = null
-    try { source = git('show', `${sha}:${ENGINE}/rules/layout.mjs`) } catch { /* an engine before the rule set */ }
+    try { source = gitFn('show', `${sha}:${ENGINE}/rules/layout.mjs`) } catch { /* an engine before the rule set */ }
     const schema = source === null ? null : schemaOf(source)
     if (schema !== headSet.schema) { console.log(`skip ${e.name} (${e.ref}): ${schema === null ? 'it predates the rule set' : `RULES_SCHEMA ${schema}, head's is ${headSet.schema}`}`); continue }
     const dir = join(work, e.name.replace(/[^A-Za-z0-9._-]+/g, '-'))
-    git('worktree', 'add', '--detach', dir, sha)
+    gitFn('worktree', 'add', '--detach', dir, sha)
     try {
       symlinkSync(join(REPO, 'node_modules'), join(dir, 'node_modules'))
       // the set published for this engine: what a reader of its schema takes now; none yet, the engine's own built-in
       let published = join(dir, ENGINE, 'rules/layout-rules.json'), from = 'the built-in set (none is published)'
       if (arg('published')) {
         const url = `${arg('published').replace(/\/+$/, '')}/api/v1/rules/s${schema}`
-        const res = await fetch(url, { headers: { 'user-agent': 'readarxiv-rules-ci' } })
+        const res = await fetchImpl(url, { headers: { 'user-agent': 'readarxiv-rules-ci' } })
         if (res.ok) { published = join(out, `${basename(dir)}-published.json`); writeFileSync(published, Buffer.from(await res.arrayBuffer())); from = 'the published set' }
         else if (res.status !== 404) throw new Error(`${url}: HTTP ${res.status}`)
       }
       console.log(`${e.name} (${e.ref}): head's set against ${from}`)
-      const base = JSON.parse(readFileSync(await runGate({ engine: dir, rules: published, pack, log: join(out, `${basename(dir)}-base.log`) }), 'utf8'))
-      const next = JSON.parse(readFileSync(await runGate({ engine: dir, rules: headFile, pack, log: join(out, `${basename(dir)}-head.log`) }), 'utf8'))
-      const report = judge(base, next, { outputs })
-      const md = commentOf(report, { headSha: git('rev-parse', 'HEAD').trim(), baseSha: sha, label: `engine ${e.name}` }).replace(MARK, `<!-- rules-gate engine ${basename(dir)} -->`)
+      const base = JSON.parse(readFileSync(await run({ engine: dir, rules: published, pack, log: join(out, `${basename(dir)}-base.log`) }), 'utf8'))
+      const next = JSON.parse(readFileSync(await run({ engine: dir, rules: headFile, pack, log: join(out, `${basename(dir)}-head.log`) }), 'utf8'))
+      const report = judge(base, next, { outputs, rulings })
+      const md = commentOf(report, { headSha, baseSha: sha, label: `engine ${e.name}`, rulings }).replace(MARK, `<!-- rules-gate engine ${basename(dir)} -->`)
+      const json = `${JSON.stringify(reportJson(report), null, 1)}\n`
+      const leaks = leakCount(md + json, rulings, strings)
+      if (leaks) { failures.push(`${e.name} (${e.ref}): the verdict would carry ${leaks} string${leaks === 1 ? '' : 's'} of the fixtures' translations: withheld`); continue }
       writeFileSync(join(out, `${basename(dir)}.md`), md)
-      writeFileSync(join(out, `${basename(dir)}.json`), `${JSON.stringify(reportJson(report), null, 1)}\n`)
+      writeFileSync(join(out, `${basename(dir)}.json`), json)
       if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${md}\n`)
       if (!report.ok) failures.push(`${e.name} (${e.ref}): ${[...report.regressions.filter(r => !r.ruling).map(r => `${r.target} ${r.label}`), ...report.problems].join('; ')}`)
     } catch (err) {
       // an engine the gate could not run is a failure to name, not the end of the others
       failures.push(`${e.name} (${e.ref}): the gate did not run: ${String(err?.message ?? err).split('\n')[0].slice(0, 200)}`)
-    } finally { git('worktree', 'remove', '--force', dir) }
+    } finally { gitFn('worktree', 'remove', '--force', dir) }
   }
   rmSync(work, { recursive: true, force: true })
   for (const f of failures) console.log(`FAIL on engine ${f}`)
@@ -514,9 +562,7 @@ async function compareCommand(argv) {
   for (const t of report.targets) console.log(`${t.target.padEnd(6)} ${String(t.outputs.length)} outputs: ${t.worse} worse, ${t.better} better`)
   for (const r of report.regressions) console.log(`  regression ${r.target} ${r.label}: ${r.from} -> ${r.to}${r.ruling ? ` (ruling ${r.ruling})` : ''}`)
   if (typeof arg('records') === 'string') {
-    const strings = packStrings(resolve(arg('records'))), haystack = [...strings].join('\u0000')
-    const free = rulings.flatMap(r => [r.by, r.on, r.quote, r.english, r.scope, r.why].filter(Boolean))
-    const leaks = leaksIn(text + json, strings) + free.reduce((n, t) => n + fragmentsIn(t, haystack), 0)
+    const leaks = leakCount(text + json, rulings, packStrings(resolve(arg('records'))))
     if (leaks) {
       writeFileSync(join(out, 'rules-gate.md'), `${MARK}\n## Rules gate: withheld\n\nThe comment held text of a paper and was not written. The numbers are in the job log.\n`)
       console.log(`FAIL the comment would carry ${leaks} string${leaks === 1 ? '' : 's'} of the fixtures' translations: withheld`)

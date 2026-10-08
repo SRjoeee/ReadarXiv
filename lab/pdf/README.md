@@ -159,7 +159,11 @@ page: the older ones have stood down for it. A job that cannot read next fails a
 `lab/pdf/live-engines.json` names (the released extension's tag and the web's production pin, each a git ref of this
 repository) whose `RULES_SCHEMA` is the set's, and compares it with the set now published for that engine (production's
 `/api/v1/rules/s<schema>`, else the engine's own built-in set where none is published). A regression stops the publish and
-names the engine. While the file names no engine nothing is measured.
+names the engine, unless a ruling accepts it, in the same way as on the pull request: the check reads the rulings of the tree at
+the set's commit, every file of `lab/pdf/rulings/` (not only those one pull request added: the set published for an engine can
+be several versions behind) and the rulings of `lab/pdf/records/layer-fidelity.json` that name their `targets`, and its summary
+goes through the same search for the translations' strings (`--records`' lock) before it is written. Each run it holds is
+whole, as on the pull request. While the file names no engine nothing is measured.
 
 **What the repository needs**, set by the maintainer (no value is in the repository):
 

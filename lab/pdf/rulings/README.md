@@ -23,7 +23,10 @@ form of the layer gate's `--ruling` (`lab/pdf/spikes/layer-gate.mjs`), with the 
   (`pitch spread`, `text units left English`) or by its key (`pitchSpread`, `unitsLeft`); a target by its tag (`zh`, `ja`).
 - A ruling covers a regression when it names the regression's measure and its target. A regression it does not name still
   fails the run.
-- Only a file the pull request **adds** counts: a ruling on the branch's base is history, and accepts nothing new.
+- Only a file the pull request **adds** counts: a ruling on the branch's base is history, and accepts nothing new. The
+  live-engines check of the publish (`rules-publish.yml`) runs after the merge, against the set published for each engine, which
+  can be several versions behind: it takes every file of this directory at the set's commit, and the rulings of
+  `lab/pdf/records/layer-fidelity.json` that name their `targets`, and accepts a regression in the same way.
 - The comment quotes `english` (else `quote`) and `why`, which are the only free text in it, each as a code span (nothing in
   them becomes an image, a mention or HTML); the gate refuses to write a comment that carries a stretch of a paper. A ruling's
   file name is letters, digits, dots, dashes and underscores. A file that is not valid JSON fails the run with a sentence of the
