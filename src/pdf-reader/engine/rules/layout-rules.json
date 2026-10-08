@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "version": 2,
-  "note": "D6: every script's lines on the original's pitch while the size shrinks, the alphabets shrinking before they lead closer; every original filled to one rhythm, what it leaves over at each unit's foot",
+  "note": "D6: every script's lines on the original's pitch while the size shrinks, the alphabets shrinking before they lead closer; every original filled to one rhythm, Chinese to 2 em, what it leaves over at each unit's foot",
   "hyphenation": {
     "minWord": 5,
     "en": { "left": 2, "right": 3 },
@@ -30,7 +30,7 @@
       "even": 0,
       "fillSize": 0,
       "adaptiveFill": { "band": 0.05, "track": 0.05, "size": 1.1 },
-      "fillLead": 1.8,
+      "fillLead": 2,
       "leftover": "foot",
       "keepAll": false,
       "cjkQuotes": true,
@@ -64,7 +64,7 @@
       "even": 0,
       "fillSize": 0,
       "adaptiveFill": { "band": 0.05, "track": 0.05, "size": 1.1 },
-      "fillLead": 1.8,
+      "fillLead": 2,
       "leftover": "foot",
       "keepAll": false,
       "cjkQuotes": true,

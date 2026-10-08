@@ -302,7 +302,8 @@ describe("the page fill (adaptiveFill, D6's F6b): every original's units spread 
   const block = (n = 6) => { const B = Array.from({ length: n }, (_, k) => 500 - 12 * k); return { page: 1, rects: B.map(b => [1, 0, b - 2, 100, b + 8]), x0: 0, x1: 100, B, exact: B.map(() => true), sizes: B.map(() => 10), pitch0: 12, free: 0, indent: 0, after: 0, centred: false } }
   const chars = (n: number) => Array.from({ length: n }, () => ({ s: '\u6c49', cls: 'cjk', w100: 100, st: {} }))
   type Unit = { id: number; unit: { kind: string }; pages: number[]; tokens: unknown[]; blocks: unknown[]; s: number; P: Record<string, unknown>; layout: { lines: { baseline: number }[]; scale: number; state: { lead: number; scale: number; track: number } }; fillLead?: number | null }
-  const P = (o: Record<string, unknown> = {}) => ({ ...params('zh'), borrow: 0, adaptiveFill: { band: 0.05, track: 0, size: 1.1 }, ...o })
+  // (the fill's top at 1.8 em, the mechanism's numbers: the built-in Chinese one is 2, as the next test holds)
+  const P = (o: Record<string, unknown> = {}) => ({ ...params('zh'), borrow: 0, fillLead: 1.8, adaptiveFill: { band: 0.05, track: 0, size: 1.1 }, ...o })
   /** a unit laid as openProto lays it before its page's pass: at the script's leading on a solid-set original */
   const laid = (id: number, n: number, PP = P(), kind = 'para'): Unit => {
     const p = { id, unit: { kind }, pages: [1], tokens: chars(n), blocks: [block()], s: 10, P: { ...PP, growTo: 0 } } as unknown as Unit
@@ -311,6 +312,10 @@ describe("the page fill (adaptiveFill, D6's F6b): every original's units spread 
   }
   const fill = async (units: Unit[], PP = P(), running: number | null = null) => (await import('@/pdf-reader/engine/layer-proto/run.mjs')).fillPage(units as never, PP as never, running)
   const baselines = (p: Unit) => p.layout.lines.map(l => l.baseline)
+
+  it('builds in a top of 2 em for Chinese, 1.7 for Japanese and Korean, and the original\'s own pitch for the alphabets', () => {
+    expect(['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'pt', 'ru'].map(t => params(t).fillLead)).toEqual([2, 2, 1.7, 1.7, null, null, null, null, null])
+  })
 
   it("spreads a unit up to fillLead em of its drawn size: 1.8 em over a pitch of 1.2 em is 1.5 of it, 3 em sets its last line on the original's", async () => {
     // (no size grown: the leading alone)
