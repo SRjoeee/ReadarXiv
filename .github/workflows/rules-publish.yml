@@ -18,6 +18,8 @@ permissions:
 jobs:
   staging:
     name: Staging
+    # off until the web's staging Worker serves the rules routes (the variable RULES_STAGING_URL is set): the jobs after it wait on it
+    if: vars.RULES_STAGING_URL != ''
     runs-on: ubuntu-latest
     environment: rules-staging
     timeout-minutes: 10

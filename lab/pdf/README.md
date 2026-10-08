@@ -147,6 +147,10 @@ names the engine. While the file names no engine nothing is measured.
 | Environment `rules-production` | secret `RULES_PUBLISH_SECRET`; the maintainer as required reviewer | the production Worker's publish secret |
 | Repository variables | `CF_ACCOUNT_ID`, `RULES_STAGING_URL`, `RULES_PRODUCTION_URL`, `RULES_PRODUCTION` | the account id; the staging and production origins (`https://…`, no path); `on` once production exists |
 
+The two variables also switch the jobs on: the gate is skipped while `CF_ACCOUNT_ID` is unset (set it once the pack is in
+the bucket and the token is made), and the publish while `RULES_STAGING_URL` is unset (set it once staging's Worker serves
+the rules routes).
+
 Locally, the same two runs and the verdict: `node lab/pdf/spikes/rules-gate.mjs run --engine=<worktree> --rules=<file> --pack=lab/pdf/out/gate-pack --out=<run.json>`
 for each side, then `node lab/pdf/spikes/rules-gate.mjs compare --base=<run.json> --head=<run.json> --out=<dir>`.
 

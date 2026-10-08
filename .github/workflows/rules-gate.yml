@@ -39,8 +39,9 @@ concurrency:
 jobs:
   gate:
     name: Rules gate
-    # a pull request from a fork has no secrets, and so no pack
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # a pull request from a fork has no secrets, and so no pack; nor is there one before the bucket is set up (the variable
+    # CF_ACCOUNT_ID, lab/pdf/README.md): until then the job is skipped
+    if: github.event.pull_request.head.repo.full_name == github.repository && vars.CF_ACCOUNT_ID != ''
     runs-on: ubuntu-latest
     environment: rules-gate
     timeout-minutes: 15

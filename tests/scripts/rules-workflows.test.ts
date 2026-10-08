@@ -116,10 +116,10 @@ describe('the pack\'s cache', () => {
 
 describe('the pull request gate', () => {
   const yml = text('rules-gate.yml')
-  it('holds the permissions the plan names, runs in its environment, skips a fork, and keeps to its budget', () => {
+  it('holds the permissions the plan names, runs in its environment, skips a fork and an unset bucket, and keeps to its budget', () => {
     expect(/^permissions:\n {2}contents: read\n {2}pull-requests: write\n/m.test(yml)).toBe(true)
     expect(yml).toContain('environment: rules-gate')
-    expect(yml).toContain('if: github.event.pull_request.head.repo.full_name == github.repository')
+    expect(yml).toContain("if: github.event.pull_request.head.repo.full_name == github.repository && vars.CF_ACCOUNT_ID != ''")
     expect(yml).toContain('timeout-minutes: 15')
     // biome-ignore lint/suspicious/noTemplateCurlyInString: a GitHub expression, not a template
     expect(yml).toContain('ref: ${{ github.event.pull_request.head.sha }}')
@@ -137,8 +137,8 @@ describe('the pull request gate', () => {
 
 describe('the publish', () => {
   const yml = text('rules-publish.yml')
-  it('goes to staging by itself, past the live engines, to production only when it is on and its reviewer says so', () => {
-    expect(/\n {2}staging:\n(?:.*\n)*?\s+environment: rules-staging\n/.test(yml)).toBe(true)
+  it('goes to staging by itself once staging exists, past the live engines, to production only when it is on and its reviewer says so', () => {
+    expect(/\n {2}staging:\n\s+name: Staging\n(?:\s+#.*\n)*\s+if: vars\.RULES_STAGING_URL != ''\n(?:.*\n)*?\s+environment: rules-staging\n/.test(yml)).toBe(true)
     expect(/\n {2}engines:\n\s+name: Live engines\n\s+needs: staging\n(?:.*\n)*?\s+environment: rules-gate\n/.test(yml)).toBe(true)
     expect(/\n {2}production:\n\s+name: Production\n\s+if: vars\.RULES_PRODUCTION == 'on'\n\s+needs: \[staging, engines\]\n(?:.*\n)*?\s+environment: rules-production\n/.test(yml)).toBe(true)
   })
