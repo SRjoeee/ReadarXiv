@@ -226,7 +226,8 @@ describe('resolving a target (resolveRules)', () => {
     }
     expect(() => resolveRules(BUILTIN_RULES, undefined as never)).toThrow(RulesRefusal)
     try { resolveRules(BUILTIN_RULES, 'xx') } catch (e) { expect((e as RulesRefusal).field).toBe('languages.xx') }
-    // (a language of a script the set lacks: a set can omit none of SCRIPTS, so the edit is made on the parsed object)
+    // (a language of a script the set lacks is refused when a set is read; resolveRules still refuses one built by hand: the edit
+    // is made on the parsed object)
     const odd = structuredClone(V1) as Edit
     odd.languages.el = { labels: null }
     delete odd.scripts.Latn
@@ -419,6 +420,18 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     ['a CJK group in a language that is no group', s => { s.languages.ja.cjkFaces = { group: 'nope', kai: null, light: [] } }, 'languages.ja.cjkFaces.group'],
     ['a CJK script without its CJK faces', s => { s.scripts.Kore.cjkFaces = null }, 'scripts.Kore.cjkFaces'],
     ['a CJK language without its CJK faces', s => { s.languages.zh.cjkFaces = null }, 'languages.zh.cjkFaces'],
+    // an alphabetic script, and a language of one, takes no CJK faces: firstFaceOf('de', set) can never be a CJK face
+    ['a Latin script with CJK faces', s => { s.scripts.Latn.cjkFaces = { group: 'shs-sc', kai: null, light: [] } }, 'scripts.Latn.cjkFaces'],
+    ['a Cyrillic script with CJK faces', s => { s.scripts.Cyrl.cjkFaces = { group: 'haranoaji', kai: null, light: ['cm'] } }, 'scripts.Cyrl.cjkFaces'],
+    ['a language of the Latin script with CJK faces', s => { s.languages.de.cjkFaces = { group: 'shs-sc', kai: 'fandolkai', light: [] } }, 'languages.de.cjkFaces'],
+    ['a language of the Cyrillic script with CJK faces', s => { s.languages.ru.cjkFaces = { group: 'shs-k', kai: null, light: [] } }, 'languages.ru.cjkFaces'],
+    ['a language of the Latin script (Serbian in Latin) with CJK faces', s => { s.languages['sr-Latn'] = { labels: null, cjkFaces: { group: 'shs-sc', kai: null, light: [] } } }, 'languages.sr-Latn.cjkFaces'],
+    // every language is a tag with rules: its script is one of the set's (a set read is refused here, not when a target is resolved)
+    ['a language no script is known for', s => { s.languages.xx = { labels: null } }, 'languages.xx'],
+    ['a language of Arabic script', s => { s.languages.ar = { labels: null } }, 'languages.ar'],
+    ['a language of Greek script', s => { s.languages.el = { labels: { figure: 'Eikona', table: 'Pinakas' } } }, 'languages.el'],
+    ['a language of Devanagari script', s => { s.languages.hi = { labels: null } }, 'languages.hi'],
+    ['a tag Intl.Locale does not read', s => { s.languages['de-DE-DE'] = { labels: null } }, 'languages.de-DE-DE'],
     ...TARGETS.map((t): [string, (s: Edit) => void, string] => [`a set without ${t}`, s => { delete s.languages[t] }, `languages.${t}`]),
   ]
 
@@ -440,6 +453,16 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     expect(refusal(hostile).field).toBe('languages.__proto__')
     expect(({} as Record<string, unknown>).labels).toBeUndefined()
     for (const tag of ['x', 'toolong-tag-subtag-subtag-subtag-subtag', 'de_DE', 'de ', 'Intl.Locale']) expect(refusal(v1(s => { s.languages[tag] = { labels: null } })).field, tag).toBe(`languages.${tag.slice(0, 20)}`)
+  })
+
+  it('reads the languages of the alphabets and of the CJK scripts the set has rules for, by the script their tag maximizes to', () => {
+    const wave = ['it', 'nl', 'pt-BR', 'sr', 'sr-Latn', 'zh-Hans-CN', 'zh-Hant-HK', 'ja-JP', 'ko-KR', 'uk', 'bg', 'de-AT']
+    const set = parseRules(v1(s => { for (const t of wave) s.languages[t] = { labels: null } }))
+    expect(Object.keys(set.languages)).toEqual(expect.arrayContaining(wave))
+    for (const t of wave) expect(resolveRules(set, t).script, t).toBe(scriptOf(t))
+    // (a CJK language may name its own CJK faces; an alphabetic one may only say none)
+    expect(() => parseRules(v1(s => { s.languages['zh-Hant-HK'] = { labels: null, cjkFaces: { group: 'shs-tc', kai: 'bkai00mp', light: ['cm'] } } }))).not.toThrow()
+    expect(() => parseRules(v1(s => { s.languages.de.cjkFaces = null }))).not.toThrow()
   })
 
   it('a set without ru or without pt (the extension\'s reader typesets it) is refused; a set with pt-BR besides is read', () => {

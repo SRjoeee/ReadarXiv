@@ -228,14 +228,17 @@ function refusalOf(issue, json) {
   return new RulesRefusal(path.join('.') || 'set', whyOf(issue, json))
 }
 
-/** the cross-checks a shape cannot make: the faces a rule names are the catalog's, every CJK script names its faces, every
- *  target resolves */
+/** the cross-checks a shape cannot make: the faces a rule names are the catalog's; a CJK script (and a language of one) names
+ *  its CJK faces and an alphabetic one takes none, so that no alphabetic target is ever drawn in a CJK face; every target
+ *  resolves; and every language is a tag whose script is one the set has rules for, so that a set is refused when it is read
+ *  and never when a target is resolved */
 function crossChecks(set) {
   const checkFaces = (faces, at, cjk) => {
     if (faces === null) {
       if (cjk) throw new RulesRefusal(`${at}.cjkFaces`, 'a CJK script names its CJK faces')
       return
     }
+    if (!cjk) throw new RulesRefusal(`${at}.cjkFaces`, 'an alphabetic script takes no CJK faces')
     if (!GROUP_WEIGHTS.every(w => Object.hasOwn(FACES, `${faces.group}-${w}`))) throw new RulesRefusal(`${at}.cjkFaces.group`, 'not a group of the face catalog')
     if (faces.kai !== null && !Object.hasOwn(FACES, faces.kai)) throw new RulesRefusal(`${at}.cjkFaces.kai`, 'not a face of the catalog')
     faces.light.forEach((design, i) => { if (!ENGLISH_FAMILIES.includes(design)) throw new RulesRefusal(`${at}.cjkFaces.light.${i}`, 'not an English design') })
@@ -243,10 +246,11 @@ function crossChecks(set) {
   for (const script of SCRIPTS) checkFaces(set.scripts[script].cjkFaces, `scripts.${script}`, CJK_SCRIPTS.has(script))
   for (const target of TARGETS) if (!Object.hasOwn(set.languages, target)) throw new RulesRefusal(`languages.${target}`, 'missing: a target every reader offers')
   for (const [tag, lang] of Object.entries(set.languages)) {
-    if (!Object.hasOwn(lang, 'cjkFaces')) continue
-    let script = null
-    try { script = scriptOf(tag) } catch { throw new RulesRefusal(`languages.${told(tag)}`, 'not a language tag') }
-    checkFaces(lang.cjkFaces, `languages.${told(tag)}`, CJK_SCRIPTS.has(script))
+    const at = `languages.${told(tag)}`
+    let script
+    try { script = scriptOf(tag) } catch { throw new RulesRefusal(at, 'not a language tag') }
+    if (!SCRIPTS.includes(script)) throw new RulesRefusal(at, 'a language of a script the set has no rules for')
+    if (Object.hasOwn(lang, 'cjkFaces')) checkFaces(lang.cjkFaces, at, CJK_SCRIPTS.has(script))
   }
 }
 
