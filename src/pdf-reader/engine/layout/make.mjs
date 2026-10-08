@@ -536,8 +536,8 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
    * not (the probe's answer: a case change, which the target's name takes too), and its TeX column's text edges (the
    * room it has: edgesOf, the pages like it where its own has no unit; else its column's side of the page).
    * A name TeX sets right before a unit on that unit's first line (IEEEtran's "Abstract—Task…", amsthm's "Proof. The…")
-   * leads it (RUN_IN, the unit in its row): the unit's start mark is the first after the name's end on that line in our
-   * compile, and carried on that line after the name's carried end on arXiv's page. Its joint, what TeX set between the
+   * leads it (RUN_IN, the unit in its row): the unit's start mark is the first after the name's end on that line (in its
+   * column) in our compile, and carried on that line after the name's carried end on arXiv's page. Its joint, what TeX set between the
    * two (IEEEtran's dash), is the unit's label; its glue, the space after the joint before the unit's text (the unit's
    * carried start less the joint's last advance, none within the carry's 0.05 pt). A figure's or a table's name leading a
    * caption is its label (longtable's, whose captions set no \@captype), the label path's: no row
@@ -565,13 +565,15 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       if (letters(gs.slice().sort((g, h) => P.x0[g] - P.x0[h] || g - h).map(g => P.u[g]).join('')) !== want) { why("not arXiv's glyphs there"); continue }
       const row = rowOf(P, gs, S.page, [], S.y)
       if (!(r2(row.size) > 0 && row.size <= SIZE_MAX)) { why('no size'); continue }
-      // the unit it leads: the first unit start after its end on its line in our compile, carried after it on that line
+      // the unit it leads: the first unit start after its end on its line (its column's: the other column's first line
+      // may share its baseline) in our compile, carried after it on that line
+      const colAt = m => columnOf(m.page, m.x, m.x)
       let lead = -1, leadX = Infinity
-      for (const [k, m] of unitMarks) if (k.endsWith('s') && m.page === b.page && Math.abs(m.y - b.y) <= 0.5 && m.x >= b.x - 0.05 && m.x < leadX) { lead = Number(k.slice(0, -1)); leadX = m.x }
+      for (const [k, m] of unitMarks) if (k.endsWith('s') && m.page === b.page && Math.abs(m.y - b.y) <= 0.5 && m.x >= b.x - 0.05 && colAt(m) === colAt(b) && m.x < leadX) { lead = Number(k.slice(0, -1)); leadX = m.x }
       let glue = 0
       if (lead >= 0) {
         const L = carriedUnit.get(`${lead}s`)
-        if (!L || L.page !== E.page || Math.abs(L.y - E.y) > 1 || L.x < E.x - 0.05) { why('leading a unit, not carried'); continue }
+        if (!L || L.page !== E.page || Math.abs(L.y - E.y) > 1 || L.x < E.x - 0.05 || colAt(L) !== colAt(E)) { why('leading a unit, not carried'); continue }
         if ((x[2] === 'figure' || x[2] === 'table') && units[lead].kind === 'caption') { why("a caption's label"); continue }
         // its joint's last advance (IEEEtran's dash), else its own end; the glue past it to the unit's text
         let end = E.x

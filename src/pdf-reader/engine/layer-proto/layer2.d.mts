@@ -127,7 +127,7 @@ export interface UnitParts {
   renderings?: (ctx: RenderingsContext) => Renderings
 }
 /** a token of a unit's translation */
-export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; [more: string]: unknown }
+export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it
 /** a laid line: its slot, and its items at their places */
 export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number }[]; [more: string]: unknown }
 /** layoutUnit2's answer */
@@ -179,7 +179,7 @@ export declare function extendRects(rects: Rect[], charsByPage: readonly (readon
 /** a unit's translation as tokens; `.base` is its base style. `measure(s, face)`: a run's width at 100 px (the canvas's, cached,
  *  by default); a host reading the tokens' faces and texts before the faces are loaded passes a measure that takes none */
 /** what a unit's first line starts with before its own text: each part in its own style, then a space (`gap`
- *  undefined) or that many em of the unit's size (0: none) */
+ *  undefined) or that many em of the unit's size after its last character, no place to break (0: none) */
 export interface Lead { parts: { text: string; st: Partial<Style> }[]; gap?: number }
 export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, baseIn: Style, designs: { serif: string; sans: string; mono: string }, P: Params, lead?: Lead | null, measure?: (s: string, face: Face) => number): Token[] & { base: Style }
 /** a float's label as the final sets it in the target: the target's name (capitals where the original's are), a space,

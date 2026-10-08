@@ -1205,6 +1205,12 @@ describe("makeLayout, babel's names (D1a)", () => {
     expect(touching.stats.names.runIn).toBe(1)
     // a space after the joint (amsthm's \labelsep): its width
     expect((await lead(3)).file.names.map(r => [r[10], r[11], r[12]])).toEqual([[NAME_FLAG.RUN_IN, 0, 3]])
+    // the other column's first line on its baseline leads nothing: a heading over the left column, the right one's text
+    // beside it (ACL's centred Abstract at the top of a page of two columns)
+    const name: Run = { s: 'Abstract', x: 120, y: 700 }, right: Run = { s: 'we show a model of it', x: 320, y: 700 }
+    const left: Run[] = [0, 1, 2].map(j => ({ s: 'one two three four five six', x: 60, y: 680 - 12 * j }))
+    const two = await made({ pages: [{ runs: [name, right, ...left] }], marks: [COLS2(1), ['0s', 1, 60, 680], ['0e', 1, endOf(left[2] as Run), 656], ['1s', 1, right.x, 700], ['1e', 1, endOf(right), 700], ...nameMarks(name)], units: [para, unit('para', [text('we show a model of it')])] })
+    expect(two.file.names.map(r => [(r[10] as number) & NAME_FLAG.RUN_IN, r[11], r[12]])).toEqual([[0, -1, 0]])
   })
 
   it("is a caption's label where a figure's or a table's name leads a caption (longtable's, no \\@captype): no row", async () => {

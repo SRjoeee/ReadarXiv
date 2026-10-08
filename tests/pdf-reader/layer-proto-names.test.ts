@@ -119,10 +119,14 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     expect(de.names[0]).toMatchObject({ drawn: true, why: null, text: 'Zusammenfassung', unit: 0, size: 10, x: 20 })
     const line = [...(de.rows[0]!.svg.querySelectorAll('text') ?? [])].map(t => t.textContent).join('|')
     expect(line).toContain('Zusammenfassung\u2014Tiefe')
-    // the original's glue after the joint kept (amsthm's \labelsep: 3 pt)
+    // the original's glue after the joint kept, no place to break (amsthm's \labelsep: 3 pt at the original's 10): the
+    // translation set that many ems after the dash's end (the stub's half an em), at whatever size the unit is drawn
     const glued = await open({ target: 'de' }, paper({ runIn: true, glue: 3, text: 'Tiefe Netze' }))
     await glued.until(1)
-    expect([...(glued.rows[0]!.svg.querySelectorAll('text') ?? [])].map(t => t.textContent).join('|')).not.toContain('\u2014Tiefe')
+    const spans = [...(glued.rows[0]!.svg.querySelectorAll('tspan') ?? [])]
+    const dash = spans.find(t => t.textContent === '\u2014'), after = spans.find(t => t.textContent?.startsWith('Tiefe'))
+    const size = Number(dash?.getAttribute('font-size'))
+    expect(Number(after?.getAttribute('x')) - (Number(dash?.getAttribute('x')) + 0.5 * size)).toBeCloseTo(0.3 * size, 1)
     // its unit left the original's (a character no served face holds): the name with it
     const left = await open({ target: 'de' }, paper({ runIn: true }))
     await left.until(1)

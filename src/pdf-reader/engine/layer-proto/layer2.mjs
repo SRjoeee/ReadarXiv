@@ -1669,8 +1669,8 @@ function w100(s, face) {
  * unit's style ({ fam, bold, italic, caps, design }); `designs`: the paper's serif, sans and mono designs. `lead`: what
  * the unit's first line starts with before its own text, each part in its own style ({ parts: [{ text, st }], gap }: a
  * float's label in the target's name, labelInTarget; a run-in heading and the joint TeX set after it, run.mjs), then
- * `gap`: a space where it is undefined, else that many em of the unit's size (0: none, IEEEtran's dash against the
- * text). `measure(s, face)`: a run's width at 100 px (the canvas's, cached); a host passes its own to read the
+ * `gap`: a space where it is undefined, else that many em of the unit's size after the lead's last character, no place
+ * to break (the original's: TeX's \labelsep after amsthm's "Proof.", none after IEEEtran's dash). `measure(s, face)`: a run's width at 100 px (the canvas's, cached); a host passes its own to read the
  * tokens (their faces and texts) before any face is loaded, without a width entering the cache that a face not yet there
  * would give
  */
@@ -1742,7 +1742,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     for (const part of lead.parts) pushText(part.text, { ...base, ...part.st }, { label: true })
     const st = { ...base, ...lead.parts.at(-1).st }
     if (lead.gap === undefined) pushText(' ', st)
-    else if (lead.gap > 0) tokens.push({ space: true, st, face: faceOf(st, 'latin', to), w100: 100 * lead.gap })
+    else if (lead.gap > 0 && tokens.length) { const t = tokens[tokens.length - 1]; t.w100 += 100 * lead.gap; t.kern = true }
   }
   unit.pieces.forEach((p, k) => {
     if (p.t === 'text') {
@@ -2547,7 +2547,8 @@ export function svgOfUnit(L, page, toPx, scale, id) {
       } else {
         // a word (Latin, or a Hangul word) flows in its face from its own place; words glued to it with no space
         // between flow on in the same run
-        const glued = run && !run.chars && sameFace && !line.items[n - 1]?.t.space && line.items[n - 1]?.t.cls === t.cls && !t.brk
+        // (not after a lead's kern, whose width the run would not keep: TeX's \labelsep after a run-in name's joint)
+        const glued = run && !run.chars && sameFace && !line.items[n - 1]?.t.space && !line.items[n - 1]?.t.kern && line.items[n - 1]?.t.cls === t.cls && !t.brk
         if (!glued) {
           flush()
           run = { face: t.face, chars: false, sup: !!t.sup, color: t.st?.color, text: '', xs: [x], track: t.sup ? 0 : t.cls === 'cjk' ? L.state.track : L.state.trackLatin }
