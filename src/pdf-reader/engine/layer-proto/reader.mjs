@@ -160,6 +160,9 @@ async function openOne({ bundle, doc, target, faceSources, hyphUrl }, token) {
       canvas.width = w
       canvas.height = h
       await run.drawCopy(page, canvas.getContext('2d'), source, k)
+      // (let go while it was drawn: no canvas after dispose, as no page)
+      if (disposed) { canvas.width = 0; canvas.height = 0 }
+      live()
       return canvas
     },
     unitAt(page, x, y) {

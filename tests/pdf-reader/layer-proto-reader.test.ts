@@ -329,6 +329,29 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect(run.stats).toEqual([])
   })
 
+  it("copyOf let go while it draws gives no canvas, as nothing is given after dispose", async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const bundle = bundleOf()
+    const layer = await openLayer({ bundle, doc: docOf(), target: 'zh', faceSources, hyphUrl })
+    layer.take(rowsOf(bundle))
+    layer.end()
+    await layer.pageOf(1, { lang: 'zh' })
+    // (the run's drawing of the copy held until the layer is let go)
+    const run = seen.runs.at(-1) as Run & { drawCopy: (...a: unknown[]) => Promise<void> }
+    const draw = run.drawCopy
+    let go = () => {}
+    const held = new Promise<void>(ok => { go = ok })
+    run.drawCopy = async (...a: unknown[]) => { await held; return draw(...a) }
+    const source = document.createElement('canvas')
+    source.width = 10
+    source.height = 10
+    const copy = layer.copyOf(1, source, 2.5)
+    await tick()
+    layer.dispose()
+    go()
+    await expect(copy).rejects.toThrow(/let go/)
+  })
+
   it('a run let go during the yield before a unit lays that unit neither', async () => {
     const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
     const bundle = bundleOf(), rows = rowsOf(bundle)
