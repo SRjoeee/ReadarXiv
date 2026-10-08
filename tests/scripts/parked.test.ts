@@ -106,31 +106,40 @@ describe('parked/tex-page/ and the source offer of the published TeX page', () =
 describe('parked/README.md', () => {
   const readme = () => readFileSync(join(PARKED, 'README.md'), 'utf8')
   const parts = () => readdirSync(PARKED, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name)
-  /** what a part's section names as where it ran: "tag `<name>`" or "commit `<hex>`", under a heading that names the part's directory */
-  const refsOf = (part: string): string[] => {
-    const section = readme().split(/^## /m).find(s => s.split('\n')[0]!.includes(`parked/${part}/`))
-    return section ? [...section.matchAll(/\b(?:tag|commit)\s+`([^`]+)`/g)].map(m => m[1]!) : []
+  /** what a part's section names as where it ran, under a heading that names the part's directory: "tag `<name>`" and "commit `<hex>`" */
+  const refsOf = (part: string): { tags: string[]; commits: string[] } => {
+    const section = readme().split(/^## /m).find(s => s.split('\n')[0]!.includes(`parked/${part}/`)) ?? ''
+    const named = (kind: string) => [...section.matchAll(new RegExp(`\\b${kind}\\s+\`([^\`]+)\``, 'g'))].map(m => m[1]!)
+    return { tags: named('tag'), commits: named('commit') }
   }
-  /** the freeze's tag (exp-freeze-<date>) or a commit (7 to 40 hex digits) */
-  const REF = /^(?:exp-freeze-\d{4}-\d{2}-\d{2}|[0-9a-f]{7,40})$/
+  const TAG = /^exp-freeze-\d{4}-\d{2}-\d{2}$/
+  const COMMIT = /^[0-9a-f]{7,40}$/
 
-  it('has a section for each parked part, and in it a tag or a commit (7 to 40 hex digits)', () => {
+  it('has a section for each parked part, and in it the freeze tag and a commit of 12 to 40 hex digits', () => {
     expect(parts().sort()).toEqual(['lab', 'tex-page'])
     for (const part of parts()) {
-      const refs = refsOf(part)
-      expect([part, refs.length > 0]).toEqual([part, true])
-      expect([part, refs.filter(ref => !REF.test(ref))]).toEqual([part, []])
+      const { tags, commits } = refsOf(part)
+      expect([part, tags.length > 0, tags.filter(tag => !TAG.test(tag))]).toEqual([part, true, []])
+      expect([part, commits.filter(commit => !COMMIT.test(commit))]).toEqual([part, []])
+      expect([part, commits.some(commit => commit.length >= 12)]).toEqual([part, true])
     }
   })
 
-  // CI checks out one commit deep, with no tags: there the history is cut, and a ref that is real is not found
+  // A shallow clone (CI) has the history cut: a commit that is real is not found, so nothing here is checked there.
   const shallow = git('rev-parse', '--is-shallow-repository') === 'true'
-  it.skipIf(shallow)('names refs that HEAD descends from (not checked in a shallow clone, where the history and the tags are cut)', () => {
+  it.skipIf(shallow)('names commits that HEAD descends from, and tags that name them where the tag is fetched (skipped in a shallow clone: its history is cut)', () => {
     for (const part of parts()) {
-      for (const ref of refsOf(part)) {
+      const { tags, commits } = refsOf(part)
+      for (const commit of commits) {
         let reachable = true
-        try { git('merge-base', '--is-ancestor', ref, 'HEAD') } catch { reachable = false }
-        expect([part, ref, reachable]).toEqual([part, ref, true])
+        try { git('merge-base', '--is-ancestor', commit, 'HEAD') } catch { reachable = false }
+        expect([part, commit, reachable]).toEqual([part, commit, true])
+      }
+      // a clone made without tags has no tag to check; the commit above is what it can hold the README to
+      for (const tag of tags) {
+        let at: string | null = null
+        try { at = git('rev-parse', '--verify', '--quiet', `${tag}^{commit}`) } catch { /* the tag is not here */ }
+        if (at !== null) expect([part, tag, commits.some(commit => at!.startsWith(commit))]).toEqual([part, tag, true])
       }
     }
   })

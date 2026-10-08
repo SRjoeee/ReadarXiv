@@ -34,8 +34,8 @@ fetched ahead, the upload list and `verify.mjs`, the timing, identity and networ
 (`busytex/*.diff`), the same fixes as filed upstream with reproductions (`upstream/`), `setup.mjs`, `spikes/` (the
 METAFONT outputs TeX Live does not ship, and the local server of the page) and the unit tests of the page (`tests/`).
 
-Last ran at the freeze, the tag `exp-freeze-2026-10-07`. The files of this part are unchanged since commit
-`086d9009`, and the published site, content version `24335c65c173`, was built from these files.
+Last ran at the freeze: the tag `exp-freeze-2026-10-07`, which names commit `a2267b287b2c7cb87dfdb70481a3832d140b8eb8`.
+The files of this part are unchanged since commit `086d9009`, and the published site, content version `24335c65c173`, was built from these files.
 
 **The source offer.** BusyTeX is under the GNU AGPL, version 3 or later, and runs with our page as one program. Every
 version of the site that stays served at `tex.readarxiv.org` carries an offer of its source under `c/<version>/legal/`,
@@ -67,7 +67,8 @@ TeX the engine writes (`typeset-tex-cases.mjs`, `typeset-busytex-cases.mjs`, `co
 rule in `src/pdf-reader/engine/typeset/` cites, `typeset-gate.json` (each paper's record the gate holds a change to) and
 `round-34.json` (the round of 34 papers the rule was chosen on).
 
-Last ran at the freeze, the tag `exp-freeze-2026-10-07`, reachable from `next` through pull request #325, which merged it.
+Last ran at the freeze: the tag `exp-freeze-2026-10-07`, which names commit `a2267b287b2c7cb87dfdb70481a3832d140b8eb8`,
+reachable from `next` through pull request #325, which merged it.
 
 **The eleven browser checks that need the TeX page** are not run. The reader's own end-to-end check, `e2e:reader`
 (Stage 5, Task 6), is to take over the assertions that still apply to the instant layer, by reading them here. By the
