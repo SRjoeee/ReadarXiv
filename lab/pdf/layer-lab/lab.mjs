@@ -9,7 +9,9 @@
 // v0tex, v0rm, v0=roles|prototype, rules=<git ref> (the rule set read from that commit or branch); the page's: ui=en,
 // panel=0) so that a view can be reopened or scripted. Unsaved edits to the rule set are not in the address.
 import * as pdfjs from 'pdfjs-dist'
+import { createDocLoads } from './doc-loads.mjs'
 import { CAPS_SCALE, drawCopy, drawText, LayerRun, loadEngine, loadLayout, svgOf } from './layer.mjs'
+import { createNoteSaver } from './notes.mjs'
 import { loadProto, ProtoRun } from './proto.mjs'
 import { createRulesPanel } from './rules-panel.mjs'
 import { ENDONYMS, missingKeys, STRINGS, UI_LANGS } from './strings.mjs'
@@ -107,42 +109,50 @@ $('g-v0').hidden = !state.views.includes('v0')
 $('g-rules').hidden = true
 
 // ---- what is open: the fixture, its documents, its layout and its layer
-let engine = null, proto = null, protoCommit = null, rules = null, fixtures = [], open = null, opening = 0
+let engine = null, proto = null, protoCommit = null, rules = null, fixtures = [], open = null
 const fetchBytes = async url => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return new Uint8Array(await r.arrayBuffer()) }
 /** a document closed: PDF.js 6 closes it through its loading task */
 const closeDoc = doc => { doc?.loadingTask.destroy() }
 const fetchJson = async url => { const r = await fetch(url); return r.ok ? r.json() : null }
-async function docOf(url) { const task = pdfjs.getDocument({ data: await fetchBytes(url), ...ASSETS }); return task.promise }
+/** the documents a fixture load opens, which a load that a newer one replaces, or that fails, closes (doc-loads.mjs) */
+const docLoads = createDocLoads({ getDocument: bytes => pdfjs.getDocument({ data: bytes, ...ASSETS }), fetchBytes })
 async function sizesOf(doc) {
   return Promise.all(Array.from({ length: doc.numPages }, async (_, i) => { const v = (await doc.getPage(i + 1)).view; return [v[2] - v[0], v[3] - v[1]] }))
 }
 
 async function openFixture(name) {
-  const mine = ++opening
   const f = fixtures.find(x => x.name === name)
   if (!f) return
+  const load = docLoads.begin()
   status(t('opening', `${f.paper}v${f.version} · ${ENDONYMS[f.target] ?? f.target}`))
   if (open) for (const d of Object.values(open.docs)) closeDoc(d)
   if (open?.proto) open.proto.then(r => r?.close()).catch(() => {})
   open = null
   const base = `/fixtures/${encodeURIComponent(name)}/`
   const has = file => f.files.includes(file)
-  const [arxiv, final, units, refusal] = await Promise.all([
-    docOf(`${base}arxiv.pdf`), has('final.pdf') ? docOf(`${base}final.pdf`).catch(() => null) : null,
-    has('units.json') ? fetchJson(`${base}units.json`) : null, has('refusal.json') ? fetchJson(`${base}refusal.json`) : null,
-  ])
-  let layout = null, layoutError = null
-  if (has('layout.json')) { try { layout = await loadLayout(await fetchBytes(`${base}layout.json`)) } catch (e) { layoutError = String(e?.message ?? e) } }
-  const sizes = { arxiv: await sizesOf(arxiv), final: final ? await sizesOf(final) : null }
-  // (the early engine is started only for a pane an old link opened on it)
-  let layer = null, layerWhy = null
-  if (!state.views.includes('layer')) layerWhy = null
-  else if (!engine.ready) layerWhy = ['layerNotReady', engine.why]
-  else if (refusal) layerWhy = ['layerRefused', refusal.refused]
-  else if (!layout) layerWhy = ['layerNoLayout', layoutError]
-  else if (!units) layerWhy = ['layerNoUnits']
-  else { try { layer = await LayerRun.open({ engine, layout, units: units.units, target: f.target, doc: arxiv }) } catch (e) { layerWhy = ['layerCouldNotStart', String(e?.message ?? e).slice(0, 300)] } }
-  if (mine !== opening) { closeDoc(arxiv); closeDoc(final); return }
+  let arxiv, final, units, refusal, layout = null, layoutError = null, sizes, layer = null, layerWhy = null
+  try {
+    ;[arxiv, final, units, refusal] = await Promise.all([
+      load.open(`${base}arxiv.pdf`), has('final.pdf') ? load.open(`${base}final.pdf`).catch(() => null) : null,
+      has('units.json') ? fetchJson(`${base}units.json`) : null, has('refusal.json') ? fetchJson(`${base}refusal.json`) : null,
+    ])
+    if (has('layout.json')) { try { layout = await loadLayout(await fetchBytes(`${base}layout.json`)) } catch (e) { layoutError = String(e?.message ?? e) } }
+    sizes = { arxiv: await sizesOf(arxiv), final: final ? await sizesOf(final) : null }
+    // (the early engine is started only for a pane an old link opened on it)
+    if (!state.views.includes('layer')) layerWhy = null
+    else if (!engine.ready) layerWhy = ['layerNotReady', engine.why]
+    else if (refusal) layerWhy = ['layerRefused', refusal.refused]
+    else if (!layout) layerWhy = ['layerNoLayout', layoutError]
+    else if (!units) layerWhy = ['layerNoUnits']
+    else { try { layer = await LayerRun.open({ engine, layout, units: units.units, target: f.target, doc: arxiv }) } catch (e) { layerWhy = ['layerCouldNotStart', String(e?.message ?? e).slice(0, 300)] } }
+    // (a newer load began meanwhile: this one's documents are closed, and it shows nothing)
+    if (!load.keep()) return
+  } catch (e) {
+    // (a failure closes what the load opened; one that a newer load has replaced is that load's to report, not this one's)
+    load.close()
+    if (load.stale()) return
+    throw e
+  }
   open = { f, docs: { arxiv, final }, sizes, units, layout, refusal, layer, layerWhy, proto: null, inspected: null }
   state.fixture = name
   showInfo()
@@ -152,6 +162,8 @@ async function openFixture(name) {
   loadNotes()
   showInspect()
   await Promise.all(panes.map((p, i) => p.show(state.views[i])))
+  // (a newer load replaced this one while its panes drew: it closed the documents, and shows its own)
+  if (load.stale()) return
   showPageCount()
   goTo(Math.min(state.page, arxiv.numPages), 0)
   remember()
@@ -516,9 +528,17 @@ function v0Of(id) {
 let trTextOf = pieces => pieces.map(p => (p[0] === 0 ? p[1] : ' ')).join('').replace(/\s+/g, ' ').trim()
 
 // ---- notes: one per fixture, in this browser; exported as JSON
-let noteTimer = null
 const clock = iso => new Date(iso).toLocaleString(t('htmlLang'), { hour: '2-digit', minute: '2-digit', ...(iso.slice(0, 10) === new Date().toISOString().slice(0, 10) ? {} : { month: 'numeric', day: 'numeric' }) })
+/** a note is kept for the fixture and with the text it was typed with, not those of the moment it is kept (notes.mjs) */
+const noteSaver = createNoteSaver({
+  save(fixture, text) {
+    store.set(`${NOTES}${fixture}`, { text, updated: new Date().toISOString() })
+    if (fixture === state.fixture) showSaved()
+  },
+})
 function loadNotes() {
+  // (a note typed for the fixture just left is kept before the box shows the next one's)
+  noteSaver.flush()
   $('notes').value = store.get(`${NOTES}${state.fixture}`, null)?.text ?? ''
   showSaved()
 }
@@ -526,15 +546,10 @@ function showSaved() {
   const n = store.get(`${NOTES}${state.fixture}`, null)
   $('saved').textContent = n?.updated ? t('saved', clock(n.updated)) : ''
 }
-$('notes').addEventListener('input', () => {
-  clearTimeout(noteTimer)
-  noteTimer = setTimeout(() => {
-    const updated = new Date().toISOString()
-    store.set(`${NOTES}${state.fixture}`, { text: $('notes').value, updated })
-    showSaved()
-  }, 400)
-})
+$('notes').addEventListener('input', () => { if (state.fixture) noteSaver.type(state.fixture, $('notes').value) })
+addEventListener('pagehide', () => noteSaver.flush())
 $('export').addEventListener('click', () => {
+  noteSaver.flush()
   const notes = {}
   try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k?.startsWith(NOTES)) notes[k.slice(NOTES.length)] = JSON.parse(localStorage.getItem(k)) } } catch {}
   const blob = new Blob([JSON.stringify({ exported: new Date().toISOString(), commit: info.commit, notes }, null, 1)], { type: 'application/json' })
