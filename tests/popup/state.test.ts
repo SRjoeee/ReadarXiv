@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
 import { CONFIG_VERSION, type Config, DEFAULT_CONFIG } from '@/config/schema'
+import * as configRevision from '@/config/revision'
+import * as configStorage from '@/config/storage'
 import { getConfig, setConfig } from '@/config/storage'
 import { type PopupHost, STILL_MS, createPopupState } from '@/entrypoints/popup/state'
 import { MANAGE_PROMPTS, MANAGE_SERVICES, MANAGE_STYLES } from '@/entrypoints/popup/view-model'
@@ -845,6 +847,52 @@ describe('writes after the popup stops', () => {
     expect(seen).toEqual([])
     expect(made.popup.state()).toBe(after)
     unsubscribe()
+    spy.mockRestore()
+  })
+
+  // The first landing of the settings is made of two waits the fake clock cannot move: the store's read, and the digest of
+  // the chain settings (`crypto.subtle`, which the thread pool answers). Either can still be out when stop() runs, and on
+  // a slow runner it is: the landing then notified a popup that had stopped (CI, #329). Held here, deterministically
+  it('the first read of the settings still out when the popup stops lands without notifying anyone, whichever of its two waits is the late one', async () => {
+    for (const late of ['the read', 'the digest'] as const) {
+      let release!: () => void
+      const held = new Promise<void>(resolve => { release = resolve })
+      const spy = late === 'the read'
+        ? vi.spyOn(configStorage, 'readConfig').mockImplementation(async () => { await held; return { config: BASE, fallbackReason: null } })
+        : vi.spyOn(configRevision, 'chainRevision').mockImplementation(async () => { await held; return 'late' })
+      const made = world()
+      made.w.page = null
+      const stop = made.popup.start()
+      await settle()
+      stop()
+      const after = made.popup.state()
+      const seen: unknown[] = []
+      const unsubscribe = made.popup.subscribe(() => seen.push(made.popup.state()))
+      release()
+      await settle()
+      expect(seen, late).toEqual([])
+      expect(made.popup.state(), late).toBe(after)
+      unsubscribe()
+      spy.mockRestore()
+    }
+  })
+
+  it('…but a start that runs again after a stop (StrictMode) is told when that first read lands: only a popup that is stopped is left alone', async () => {
+    let release!: () => void
+    const held = new Promise<void>(resolve => { release = resolve })
+    const spy = vi.spyOn(configStorage, 'readConfig').mockImplementation(async () => { await held; return { config: BASE, fallbackReason: null } })
+    const made = world()
+    made.w.page = null
+    made.popup.start()()
+    const stop = made.popup.start()
+    const seen: unknown[] = []
+    const unsubscribe = made.popup.subscribe(() => seen.push(made.popup.state()))
+    release()
+    await settle()
+    expect(seen.length).toBeGreaterThan(0)
+    expect(made.popup.state().input.config).not.toBeNull()
+    unsubscribe()
+    stop()
     spy.mockRestore()
   })
 })
