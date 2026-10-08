@@ -399,10 +399,10 @@ const styled = (group, bold, italic, letters) => {
 }
 
 /** the face a run is drawn in. A CJK run takes its target's CJK family by weight and slant, whatever its class (no
- *  sans, no fangsong: §4.4); emphasis is the Kai, or upright where the target has none; and weight wins over slant: a
- *  bold italic run (IEEEtran's bold italic "Abstract", a heading's emphasis) is the bold serif, the original's serif bold,
- *  which the Kai, having no bold, would set lighter than the heading it is (the coordinator's ruling on D1a's Q5, under
- *  the maintainer's rule that a heading keeps the original's form). A Latin run takes its design's
+ *  sans, no fangsong: §4.4); emphasis is the Kai, or upright where the target has none; and weight wins over slant: every
+ *  bold italic run, a heading's or the text's, is the bold serif, as a compile of the translation sets it (ctex's fontsets
+ *  give no bold italic face, and NFSS substitutes b/n for b/it), where the Kai, having no bold, would set it lighter than
+ *  the text's own bold (docs/PDF-READER.md §18.1, the font roles). A Latin run takes its design's
  *  group (math the math face); small capitals take Latin Modern's caps face, and elsewhere stay the face's: the drawing
  *  sets them by its smcp feature where METRICS says it has one, else as capitals at 0.8 of the size. A CJK run of a
  *  target with no CJK roles is set as a Latin run, and canDraw then finds what its face cannot draw */
