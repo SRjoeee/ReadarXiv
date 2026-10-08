@@ -276,10 +276,20 @@ describe('unitOf', () => {
     for (const state of ['none', 'lost', 'kept'] as const) expect(unitOf(b, [0, ['x'], state, null, null])).toEqual({ kind: 'heading', src: 'A Title', title: true, state })
     expect(unitOf(b, [0, ['x'], 'partial', null, null])).toMatchObject({ state: 'partial', pieces: [{ t: 'text', tr: true, s: 'x' }] })
   })
-  it('gives a hostile string as the text it is', () => {
+  it('gives a hostile string within §4.1\'s bound as the text it is', () => {
     const b = base()
-    const evil = '</script><svg onload=alert(1)> \\input{/etc/passwd} \u202e'
+    const evil = '</script><svg onload=alert(1)> \\input{/etc/passwd} \n\t'
     expect(unitOf(b, [0, [evil], 'whole', null, null])).toMatchObject({ pieces: [{ t: 'text', tr: true, s: evil }] })
+  })
+  it('is null for a string past §4.1\'s bound, as rowOf makes it none: past 16,000 code units, or holding a control but \\n and \\t, U+007F to U+009F, or a bidirectional control', () => {
+    // (a host handing v0 rows the web's readRows never read: what the bound refuses is the original's here too)
+    const b = base()
+    const unit = (s: string) => unitOf(b, [0, [s], 'whole', null, null])
+    expect(unit('x'.repeat(16_000))).not.toBeNull()
+    expect(unit('x'.repeat(16_001))).toBeNull()
+    const refused = [...Array.from({ length: 0x20 }, (_, c) => c).filter(c => c !== 0x0a && c !== 0x09), ...Array.from({ length: 0x21 }, (_, i) => 0x7f + i), 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069]
+    for (const c of refused) expect(unit(`a${String.fromCharCode(c)}b`), `U+${c.toString(16)}`).toBeNull()
+    for (const c of [0x09, 0x0a, 0x20, 0xa0, 0x2029, 0x2065, 0x206a]) expect(unit(`a${String.fromCharCode(c)}b`), `U+${c.toString(16)}`).not.toBeNull()
   })
   it('is null, never a throw, for a row that is no unit of the bundle\'s: an id past it, a dropped unit, a k past the unit, a shape', () => {
     const b = bundleOf([BASE[0] as BundleUnit, null, BASE[1] as BundleUnit])

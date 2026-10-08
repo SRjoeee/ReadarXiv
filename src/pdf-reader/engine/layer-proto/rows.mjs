@@ -31,6 +31,16 @@ const EDGES = ['lead', 'trail', 'inner']
  * text is the result's up to this
  */
 const clean = s => s.replace(/\r\n?/g, '\n').replace(/\p{Cc}/gu, c => (c === '\n' || c === '\t' ? c : ' ')).replace(/[\u202a-\u202e\u2066-\u2069]/g, '')
+/** whether a row's string is within §4.1's reader bound: STRING_MAX code units at most, no C0 control but \n and \t,
+ *  none of U+007F to U+009F, no bidirectional control (what clean writes, and the web's readRows reads) */
+const inBound = s => {
+  if (s.length > STRING_MAX) return false
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i)
+    if ((c < 0x20 && c !== 0x0a && c !== 0x09) || (c >= 0x7f && c <= 0x9f) || (c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069)) return false
+  }
+  return true
+}
 
 // ---------------------------------------------------------------- the bundle's source units
 /** a piece as openPaper makes it, from the bundle's: the piece carries its index `k` among its unit's pieces, the one a
@@ -174,8 +184,9 @@ export function rowOf(bundle, id, result) {
  * `k` —, so that v0's take, which reads the hybrid's pieces by `trPiecesOf(unit.pieces, p => p.k)`, and kOfSource over
  * the source's pieces give the same TrPiece (a copy would be found by its equals, and a placeholder twice by the
  * order). The units of the other states have no pieces. Null where the row is no unit of the bundle's — a shape not a
- * row's, an id the bundle has not or dropped, a state not of the five, a piece that is neither a string nor a `k` of the
- * unit's source pieces: the layer leaves that unit the original's
+ * row's, an id the bundle has not or dropped, a state not of the five, a piece that is neither a string within §4.1's
+ * bound (inBound: a row rowOf would have made `none`) nor a `k` of the unit's source pieces: the layer leaves that unit the
+ * original's, whoever handed it the row (the web reads its rows within the bound already)
  */
 export function unitOf(bundle, row) {
   if (!Array.isArray(row) || row.length < 3) return null
@@ -188,7 +199,7 @@ export function unitOf(bundle, row) {
   if (!Array.isArray(pieces)) return null
   const out = []
   for (const p of pieces) {
-    if (typeof p === 'string') out.push({ t: 'text', tr: true, s: p })
+    if (typeof p === 'string') { if (!inBound(p)) return null; out.push({ t: 'text', tr: true, s: p }) }
     else if (Number.isInteger(p) && p >= 0 && p < src.pieces.length) out.push(src.pieces[p])
     else return null
   }
