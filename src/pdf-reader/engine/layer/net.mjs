@@ -10,7 +10,7 @@
 //
 // Pure, as the layer is: no DOM, no clock, no randomness. An original module (no port statement), importing only relative
 // modules, so that the reader's bundle holds it.
-import { canDraw, faceFor } from '../font-roles.mjs'
+import { canDraw, faceFor } from '../rules/font-roles.mjs'
 import { PH_FLAG } from '../layout/file.mjs'
 import { PIECES_MAX, STRING_MAX } from '../layout/json.mjs'
 import { COLOUR_SHIFT, LAYER_COLOURS, STYLE } from './pieces.mjs'

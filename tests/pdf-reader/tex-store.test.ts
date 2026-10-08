@@ -1,9 +1,9 @@
-// The extension's store of the TeX page's files (src/pdf-reader/engine/tex-store.mjs): what the warm-up keeps and the
+// The extension's store of the TeX page's files (src/pdf-reader/session/tex-store.mjs): what the warm-up keeps and the
 // reader hands to its TeX page (the page's `store: true`, tex-page.mjs on exp/tex-page), and the lock that keeps the
 // two from downloading a file twice. Cache Storage and the lock manager are fakes; tex-warm.test.ts and the warm-up's
 // browser check run them for real
 import { describe, expect, it } from 'vitest'
-import { answerWant, keepFile, LOCK, pruneStore, STORE, shareLock } from '@/pdf-reader/engine/tex-store.mjs'
+import { answerWant, keepFile, LOCK, pruneStore, STORE, shareLock } from '@/pdf-reader/session/tex-store.mjs'
 
 const SITE = 'https://tex.readarxiv.org'
 

@@ -31,7 +31,7 @@ import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
 import { loadavg, tmpdir } from 'node:os'
 import { extname, join } from 'node:path'
-import { readFontProbe } from '../../../src/pdf-reader/engine/latex-front.mjs'
+import { readFontProbe } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
 import { corpus, hintsFor, paperJobs, TODAY } from './jobs.mjs'
 
 const EXP = new URL('..', import.meta.url).pathname

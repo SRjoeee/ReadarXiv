@@ -2,18 +2,18 @@
 // wire text with its opaque pieces as markers (DESIGN §6: `@a#`, `@@` for a literal @), comes back as pieces again;
 // the engine's slips are forgiven where they are unambiguous, and what still fails goes as runs — each stretch of text
 // between opaque pieces on its own — so that nothing is left untranslated.
-import { tokens } from './anchors.mjs'
-import { bySentence } from './highlight.mjs'
-import { latin1Bytes } from './latex-front.mjs'
-import { MIXED } from '@/cache/pdf-record'
-import { fromAlpha, MARKER_CLOSER, markerReader, TAG_RE, toAlpha } from '../../core/protector/tokens'
-import { sentenceCuts } from '@/core/sentences'
+import { tokens } from '../pipeline/anchors.mjs'
+import { bySentence } from '../view/highlight.mjs'
+import { latin1Bytes } from '../source/latex-front.mjs'
+import { MIXED } from './mixed.mjs'
+import { fromAlpha, MARKER_CLOSER, markerReader, TAG_RE, toAlpha } from '../../../core/protector/tokens.ts'
+import { sentenceCuts } from '../../../core/sentences/index.ts'
 
 // This file is the translation's: the wire a unit goes out as, and the reading back of a reply. A change here that alters
 // what is sent for a unit or what its reply is read as raises TRANSLATE_VERSION, the identity of the translation rules
 // (translate/version.mjs holds what it covers); one that alters a unit's cutting or text raises PIPELINE_VERSION
 // (versions.mjs) too.
-export { TRANSLATE_VERSION } from './translate/version.mjs'
+export { TRANSLATE_VERSION } from './version.mjs'
 
 // ---------------------------------------------------------------- markers wire format
 export { fromAlpha, toAlpha }

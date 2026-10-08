@@ -3,11 +3,11 @@
 // final, built with the reader's own pipeline functions and pseudo-translations. Shared by measure.mjs and speed.mjs.
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { pseudoTranslate } from '../../../src/pdf-reader/engine/latex-front.mjs'
-import { openPaper, originalFiles, probeFiles, translationFiles } from '../../../src/pdf-reader/engine/live.mjs'
-import { plainSource } from '../../../src/pdf-reader/engine/mt.mjs'
-import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
-import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
+import { pseudoTranslate } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
+import { openPaper, originalFiles, probeFiles, translationFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
+import { plainSource } from '../../../src/pdf-reader/engine/translate/mt.mjs'
+import { strategiesFor } from '../../../src/pdf-reader/engine/pipeline/scripts.mjs'
+import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 
 const EXP = new URL('..', import.meta.url).pathname
 /** today's page: the commit this stage started from */

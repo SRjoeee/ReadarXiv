@@ -6,8 +6,8 @@ import {
 import { PIECES_MAX as NET_PIECES_MAX } from '@/pdf-reader/engine/layer/net.mjs'
 import { kOfSource, trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { PIECES_MAX } from '@/pdf-reader/engine/layout/json.mjs'
-import { type BatchReport, type Compiled, keptFor, openPaper, runLive } from '@/pdf-reader/engine/live.mjs'
-import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource, translateUnits } from '@/pdf-reader/engine/mt.mjs'
+import { type BatchReport, type Compiled, keptFor, openPaper, runLive } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource, translateUnits } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The rows (the layer-only plan §4.1, A2's E6): one unit of one language as the engine's translateUnits gave it, with each
 // piece the translated text or the index of the bundle unit's source piece; v0's unit made of a row again; the rows a

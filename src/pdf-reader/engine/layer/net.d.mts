@@ -1,5 +1,5 @@
 // net.mjs's types: the instant layer's completeness net
-import type { RoleSet } from '../font-roles.mjs'
+import type { RoleSet } from '../rules/font-roles.mjs'
 import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
 import type { LayerInput, LaidUnit, Tr, Unfit } from './fit.mjs'
 import type { TrPiece } from './pieces.mjs'

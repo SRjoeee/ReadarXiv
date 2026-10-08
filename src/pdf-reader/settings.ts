@@ -4,7 +4,7 @@ import { chainConfigChanged } from '@/config/revision'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { ConfigReading, FallbackReason } from '@/config/storage'
 import type { Landing, SurfaceConfig } from '@/shared/surface-config'
-import type { EngineDisplay } from './engine/session.mjs'
+import type { EngineDisplay } from './session/session.mjs'
 
 /**
  * The session's first configuration, which is never waited on for ever. The page has already read the settings once

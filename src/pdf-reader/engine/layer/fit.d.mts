@@ -1,6 +1,6 @@
 // fit.mjs's types: a unit's translation set into the original's frames
-import type { FaceId, RoleSet } from '../font-roles.mjs'
-import type { LayerRules } from '../layer-rules.mjs'
+import type { FaceId, RoleSet } from '../rules/font-roles.mjs'
+import type { LayerRules } from '../rules/layer-rules.mjs'
 import type { LayoutIndex } from '../layout/file.mjs'
 import type { Hyphenator } from './hyphen.mjs'
 import type { TrPiece } from './pieces.mjs'

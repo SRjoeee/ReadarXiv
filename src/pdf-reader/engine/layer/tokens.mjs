@@ -7,8 +7,8 @@
 //
 // Pure, as the layer is: no DOM, no clock; text is measured only through the function it is given. An original module (no
 // port statement), importing only relative modules, so that the reader's bundle holds it.
-import { canDraw, classifyFont, FACES, faceFor } from '../font-roles.mjs'
-import { scriptOf } from '../layer-rules.mjs'
+import { canDraw, classifyFont, FACES, faceFor } from '../rules/font-roles.mjs'
+import { scriptOf } from '../rules/layer-rules.mjs'
 import { PH_FLAG } from '../layout/file.mjs'
 import { COLOUR_SHIFT, STYLE } from './pieces.mjs'
 

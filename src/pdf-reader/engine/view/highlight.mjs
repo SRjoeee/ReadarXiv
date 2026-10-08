@@ -16,7 +16,7 @@
 // sentences on one row meeting halfway through the space between them — one outline per run, the hit test the same
 // shapes.
 
-import { inkEdges } from './anchors.mjs'
+import { inkEdges } from '../pipeline/anchors.mjs'
 // floats.mjs imports this module's geometry; its shapes are read here only when a sentence is drawn (reachAt)
 import { floatShapes } from './floats.mjs'
 

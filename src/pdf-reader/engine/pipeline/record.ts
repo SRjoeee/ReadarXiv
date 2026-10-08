@@ -2,13 +2,15 @@
 // (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum) — when a copy is current, and which of
 // two copies is kept. Pure, so that the store and the reader share them.
 
+import { MIXED } from '../translate/mixed.mjs'
+
 /** What became of a unit in the runs that made the copy. `kept`: set as the source has it on purpose — a name the
- *  reader keeps without asking, or a cell of a table group kept whole (pdf-reader/engine/groups.mjs), which keeps the
+ *  reader keeps without asking, or a cell of a table group kept whole (pdf-reader/engine/translate/groups.mjs), which keeps the
  *  translation its group was decided by in `pieces` and has no `tr` */
 export type UnitState = 'whole' | 'partial' | 'none' | 'lost' | 'kept'
 
-/** `by` when a unit's pieces came from more than one identity: never current */
-export const MIXED = 'mixed'
+/** `by` when a unit's pieces came from more than one identity: never current (translate/mixed.mjs, which the wire sets it in) */
+export { MIXED }
 
 export interface CachedUnit {
   /** para, caption, heading, … (latex-front's kinds) */
@@ -46,7 +48,7 @@ export interface CachedUnit {
   /** translated, but the final set it in the source — the author block under a strategy that sets it as the paper has
    *  it (CJKutf8): its translation seeds the next run, and the right side is anchored by the source */
   inSource?: true
-  /** a table cell's consistency group (pdf-reader/engine/groups.mjs groupOf: the table's header, or a column), which
+  /** a table cell's consistency group (pdf-reader/engine/translate/groups.mjs groupOf: the table's header, or a column), which
    *  is translated whole or kept whole: the layer draws a group whole or not at all, as the final sets it; absent for
    *  every other unit, and in a copy made before groups were read */
   group?: string
@@ -103,7 +105,7 @@ export interface PdfRecord extends PdfRecordBody {
  * the typesetting rule's handoff, "What to cache"): what the rule plans every compile from — the lines of the original's
  * last TeX pass that are read (each unit's lines, the forced breaks, the document's end, the letters it could not set),
  * its marks with every page's columns, its citations, labels and bibliography — and the left side's marks, under the
- * versions that made them: a run with them compiles no original (pdf-reader/engine/cache.mjs originalRow, knownOriginal)
+ * versions that made them: a run with them compiles no original (pdf-reader/engine/pipeline/cache.mjs originalRow, knownOriginal)
  */
 export interface OriginalReadings {
   pipeline: string
@@ -143,7 +145,7 @@ export function unitIsCurrent(u: CachedUnit, identity: string): boolean {
 
 /** A copy is current with the current pipeline and typesetting and every unit to translate current; the kept names are
  *  none to translate. A copy of another typesetting alone is set again from its translation, which asks the service
- *  nothing (pdf-reader/engine/cache.mjs reusable) */
+ *  nothing (pdf-reader/engine/pipeline/cache.mjs reusable) */
 export function isCurrent(record: PdfRecordBody, now: Now): boolean {
   return record.pipeline === now.pipeline && record.typesetting === now.typesetting && record.units.every(u => (u.state === 'kept' && u.translation === undefined) || unitIsCurrent(u, now.identity))
 }
@@ -167,7 +169,7 @@ export interface UntypesetMark {
  * service or the TeX page (the maintainer, 2026-09-26): only under the same pipeline and the same identity — the same
  * service asked again for the same translation, judged as a copy is (`isCurrent`). The failure is the translated text's,
  * which another service, model or prompt may not repeat; a mark with no identity is tried again (Codex on #306). The
- * reader leaves a mark only for one identity's whole translation (pdf-reader/engine/cache.mjs allTranslatedBy)
+ * reader leaves a mark only for one identity's whole translation (pdf-reader/engine/pipeline/cache.mjs allTranslatedBy)
  */
 export function stillUntypeset(mark: UntypesetMark | undefined, now: Now): boolean {
   return mark !== undefined && mark.pipeline === now.pipeline && mark.typesetting === now.typesetting && mark.page === now.page && mark.identity !== undefined && mark.identity === now.identity

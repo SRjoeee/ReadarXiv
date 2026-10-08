@@ -1,5 +1,5 @@
 // breaks.mjs's types: tokens into lines in the original's slots
-import type { LayerRules } from '../layer-rules.mjs'
+import type { LayerRules } from '../rules/layer-rules.mjs'
 import type { Hyphenator } from './hyphen.mjs'
 import type { Measure, Token } from './tokens.mjs'
 

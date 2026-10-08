@@ -1,5 +1,5 @@
 // page.mjs's types: page-even
-import type { LayerRules } from '../layer-rules.mjs'
+import type { LayerRules } from '../rules/layer-rules.mjs'
 import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
 import type { LaidUnit } from './fit.mjs'
 

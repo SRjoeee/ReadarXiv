@@ -1,6 +1,6 @@
 import { rolesFor } from './roles'
 import type { LayerInput } from '@/pdf-reader/engine/layer/fit.mjs'
-import { layerRulesFor } from '@/pdf-reader/engine/layer-rules.mjs'
+import { layerRulesFor } from '@/pdf-reader/engine/rules/layer-rules.mjs'
 import {
   encodeLayout, indexLayout, LABEL_KINDS, LAYOUT, type LayoutFile, type LayoutIndex, PH_KINDS, parseLayout, UNIT_KINDS,
 } from '@/pdf-reader/engine/layout/file.mjs'

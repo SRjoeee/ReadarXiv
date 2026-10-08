@@ -7,7 +7,7 @@
 // are Uint8Arrays.
 
 // ---------------------------------------------------------------- files and bytes
-import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, paperOf, paperParams, paramsOf, readArgs } from './arg-roles.mjs'
+import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, paperOf, paperParams, paramsOf, readArgs } from '../rules/arg-roles.mjs'
 /** unpacked files (a Map of relative path → bytes) as a project's file system */
 export function inMemory(map) { return { list: () => [...map.keys()], read: p => map.get(p) ?? null } }
 /** a/./b/../c → a/c: a file as the package holds it (tar.mjs untar names each so) and as TeX's file system has it,

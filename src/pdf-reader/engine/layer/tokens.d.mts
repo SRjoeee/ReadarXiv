@@ -1,6 +1,6 @@
 // tokens.mjs's types: a unit's translation as the tokens the line breaker places
-import type { FaceId, RoleSet } from '../font-roles.mjs'
-import type { LayerRules } from '../layer-rules.mjs'
+import type { FaceId, RoleSet } from '../rules/font-roles.mjs'
+import type { LayerRules } from '../rules/layer-rules.mjs'
 import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
 import type { Hyphenator } from './hyphen.mjs'
 import type { TrPiece } from './pieces.mjs'

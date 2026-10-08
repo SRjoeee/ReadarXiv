@@ -1,7 +1,7 @@
 // rows.mjs's types: the rows a language's translation travels as (the layer-only plan §4.1; the web mirrors Row in its
 // src/shared/rows.ts)
-import type { SourceUnit } from '../latex-front.mjs'
-import type { translateUnits } from '../mt.mjs'
+import type { SourceUnit } from '../source/latex-front.mjs'
+import type { translateUnits } from '../translate/mt.mjs'
 import type { ReadBundle } from './bundle.mjs'
 import type { Unit } from './run.mjs'
 

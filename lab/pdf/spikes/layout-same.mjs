@@ -5,7 +5,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { tokenizeDocument } from '../../../src/pdf-reader/engine/anchors.mjs'
+import { tokenizeDocument } from '../../../src/pdf-reader/engine/pipeline/anchors.mjs'
 const root = new URL('..', import.meta.url).pathname
 async function tokensOf(file) {
   const pdf = await getDocument({ data: new Uint8Array(readFileSync(file)), verbosity: 0, cMapUrl: `${root}node_modules/pdfjs-dist/cmaps/`, cMapPacked: true, standardFontDataUrl: `${root}node_modules/pdfjs-dist/standard_fonts/` }).promise

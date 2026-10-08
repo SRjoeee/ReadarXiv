@@ -4,11 +4,9 @@
 // 2026-10-06); the sweep (§6.2 step 5) changes them as data, not code. A rule both renderers hold means the same in both:
 // it equals the TeX path's, or LAYER_DIVERGES says why it does not.
 //
-// A module of its own, importing nothing, as verified.mjs is: the reader loads the layer's rules without scripts.mjs'
-// LaTeX parser, and scripts.mjs re-exports them (and scriptOf, which moved here) so that every existing import holds.
-
-/** the script a BCP 47 tag is written in: its likely script (zh-TW → Hant, sr → Cyrl) */
-export const scriptOf = lang => new Intl.Locale(lang).maximize().script
+// A module of its own, importing only the script of a tag (script.mjs, where scriptOf moved from here).
+import { scriptOf } from './script.mjs'
+export { scriptOf }
 
 const freeze = rules => Object.freeze(rules)
 // CJK: the leading from the TeX path's base down to the original's own; tracking tightened to −0.05 em; full-width

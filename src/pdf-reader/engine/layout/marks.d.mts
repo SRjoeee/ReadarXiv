@@ -1,5 +1,5 @@
 // marks.mjs's types (JavaScript until the engine's port), for the reader's tests
-import type { SourceUnit, UnitMark } from '../latex-front.mjs'
+import type { SourceUnit, UnitMark } from '../source/latex-front.mjs'
 
 export type MarkClass = 'math' | 'display' | 'cite' | 'ref' | 'eqref' | 'code' | 'url' | 'footnote' | 'macro'
 /** every class, in this order */

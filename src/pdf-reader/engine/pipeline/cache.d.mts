@@ -1,5 +1,5 @@
 // cache.mjs's types (JavaScript until the engine's port), for the reader's tests
-import type { SourceUnit } from './latex-front.mjs'
+import type { SourceUnit } from '../source/latex-front.mjs'
 
 /** a stored copy's units: each unit's kind, source text and hash, a heading's depth and whether it is the title, and what the run made of it */
 export declare function unitsOf(units: SourceUnit[], kept: Set<SourceUnit>, hashes: string[], results: Map<number, unknown>): { kind: string; src: string; hash: string; title?: boolean; depth?: number; lead?: string; trail?: string; inner?: string; pieces?: unknown[]; tr?: string; sentences?: { src: number[]; tr: number[] }; by?: string; tried?: string; state: string; translation?: string; inSource?: true; group?: string }[]
@@ -39,6 +39,6 @@ export declare function labelOf(how: 'full' | 'provenance' | null, options: { pi
 /** the marked original's readings as a run gives them (live.mjs readingsOf) */
 export interface Readings { log: string; cites: string; labels: string; bbl: string | null; marks: import('./typeset/places.mjs').Marks }
 /** the readings as the store keeps them, one per paper, with the left side's marks and the versions that made them */
-export declare function originalRow(readings: Readings, left: [string, unknown][], made: { pipeline: string; typesetting: string; page: string }): import('@/cache/pdf-record').OriginalReadings
+export declare function originalRow(readings: Readings, left: [string, unknown][], made: { pipeline: string; typesetting: string; page: string }): import('./record').OriginalReadings
 /** a stored original's readings and left marks under these versions, or null */
-export declare function knownOriginal(row: import('@/cache/pdf-record').OriginalReadings | undefined, now: { pipeline: string; typesetting: string; page: string }): { readings: Readings; left: [string, unknown][] } | null
+export declare function knownOriginal(row: import('./record').OriginalReadings | undefined, now: { pipeline: string; typesetting: string; page: string }): { readings: Readings; left: [string, unknown][] } | null

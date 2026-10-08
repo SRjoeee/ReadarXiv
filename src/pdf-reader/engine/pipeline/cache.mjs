@@ -2,8 +2,8 @@
 // again starts from, the units a record keeps, when a run writes, the figures' keys. The store itself is the
 // extension's (src/cache/pdf-store.ts). Pure but for the hash, so that parked/lab/spikes/cache-cases.mjs
 // runs it in Node.
-import { groupOf } from './groups.mjs'
-import { displayEdges, plainSource, plainTranslated, sentencesKept, unitText } from './mt.mjs'
+import { groupOf } from '../translate/groups.mjs'
+import { displayEdges, plainSource, plainTranslated, sentencesKept, unitText } from '../translate/mt.mjs'
 
 const hex = buf => Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('')
 /** SHA-256 hex of bytes: arXiv's PDF, the key of its record */
@@ -154,7 +154,7 @@ export function copyReuse(cached, { pipeline, format, context, carries = {} }) {
 }
 
 /**
- * The units a record keeps (src/cache/pdf-record.ts CachedUnit), from a run's results by index: a name kept in the
+ * The units a record keeps (src/pdf-reader/engine/pipeline/record.ts CachedUnit), from a run's results by index: a name kept in the
  * source is `kept`; a cell of a table group kept whole (groups.mjs) is `kept` too, with the translation its group was
  * decided by, its state (`translation`) and its sentences — no `tr`, since nothing sets it; a unit with no result was not tried, and is `none` with no `tried`, so
  * never current. A cell carries its group (groups.mjs groupOf), which the layer keeps whole as the final does
@@ -196,7 +196,7 @@ export const copyTexts = units => units.map((u, i) => {
 export const knownMarks = (cached, samePipeline) => (samePipeline && cached?.marks?.length ? new Map(cached.marks) : null)
 
 /**
- * The marked original's readings (live.mjs readingsOf) as the store keeps them, one per paper (src/cache/pdf-record.ts
+ * The marked original's readings (live.mjs readingsOf) as the store keeps them, one per paper (src/pdf-reader/engine/pipeline/record.ts
  * OriginalReadings), with the left side's marks, under the versions `made` { pipeline, typesetting, page } that made
  * them: JSON, the marks' Map as its entries
  */
@@ -273,7 +273,7 @@ export function labelOf(how, { pipeline, typesetting, passing, cached }) {
 /**
  * Whether a run whose translation none of the ways could set may leave the untypeset mark under `identity`, the one that
  * would answer now: only when every unit the run tried came back whole from it, and there is one. The mark answers the
- * next visit on that identity alone (src/cache/pdf-record.ts stillUntypeset), so it must stand for that service's whole
+ * next visit on that identity alone (src/pdf-reader/engine/pipeline/record.ts stillUntypeset), so it must stand for that service's whole
  * translation, as a copy is current only when every unit is (unitIsCurrent). The rule errs toward asking again: a retry
  * wasted is cheaper than a wrong "cannot typeset", which the visits after it would never question.
  * - A unit left `none` or `lost`, or `partial`, leaves none: the run did not make the whole translation, and another

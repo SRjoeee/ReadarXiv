@@ -7,9 +7,9 @@
 //   AXT_DATA=<data> pnpm exec tsx experiments/pdf-bilingual/spikes/typeset-translate.mjs <lang>/<id>...
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { keptFor, openPaper } from '../../../src/pdf-reader/engine/live.mjs'
-import { translateTexts, translateUnits } from '../../../src/pdf-reader/engine/mt.mjs'
-import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
+import { keptFor, openPaper } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
+import { translateTexts, translateUnits } from '../../../src/pdf-reader/engine/translate/mt.mjs'
+import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 
 const DATA = process.env.AXT_DATA ?? join(new URL('..', import.meta.url).pathname, 'data')
 // a unit as the cache keys it: its kind and its source, pieces by kind and text, pair ids aside (visual-eval.mjs)

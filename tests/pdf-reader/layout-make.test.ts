@@ -1,6 +1,6 @@
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SourceUnit } from '@/pdf-reader/engine/latex-front.mjs'
+import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { encodeLayout, type LayoutFile, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { OPS_CAP } from '@/pdf-reader/engine/layout/ink.mjs'
 import { CARRY_MIN, fontName, type LayoutStats, makeLayout, OPS_MS, OPS_PAPER_MS } from '@/pdf-reader/engine/layout/make.mjs'

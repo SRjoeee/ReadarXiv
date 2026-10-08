@@ -1,10 +1,10 @@
 // live.mjs's types (JavaScript until the engine's port), for the reader's tests
-import type { inMemory, SourceUnit } from './latex-front.mjs'
-import type { analyze } from './paper-meta.mjs'
+import type { inMemory, SourceUnit } from '../source/latex-front.mjs'
+import type { analyze } from '../source/paper-meta.mjs'
 import type { Strategy } from './scripts.mjs'
 import type { Typeset } from './typeset/tex.mjs'
 import type { Readings } from './cache.mjs'
-import type { TrPiece } from './layer/pieces.mjs'
+import type { TrPiece } from '../layer/pieces.mjs'
 
 /** a paper's files (path → bytes) → what the pipeline works on */
 export interface Paper { fsys: ReturnType<typeof inMemory>; meta: ReturnType<typeof analyze>; project: { main: string; units: SourceUnit[] }; units: SourceUnit[]; kept: Set<SourceUnit> }
@@ -25,7 +25,7 @@ export declare function probeFiles(paper: Paper, options?: { width?: boolean; ma
  *  3cb5a733; else the units marked by layoutMarking (layout/marks.mjs) with those classes, and LAYOUT_TEX after MARK_DEF;
  *  `switches` (with `layout` only), the paper's own switch (readMarkProbe): marks off where TeX said they change what
  *  follows; `inkless` (with `layout` only), the macros TeX said set no ink (readInkProbe): no mark */
-export declare function originalFiles(paper: Paper, options?: { lines?: boolean; spans?: { lines?: () => import('./tex-errors.mjs').UnitLines<SourceUnit>[] } | null; layout?: readonly import('./layout/marks.mjs').MarkClass[] | null; switches?: import('./layout/marks.mjs').Switches | null; inkless?: readonly string[] | null }): Map<string, Uint8Array>
+export declare function originalFiles(paper: Paper, options?: { lines?: boolean; spans?: { lines?: () => import('./tex-errors.mjs').UnitLines<SourceUnit>[] } | null; layout?: readonly import('../layout/marks.mjs').MarkClass[] | null; switches?: import('../layout/marks.mjs').Switches | null; inkless?: readonly string[] | null }): Map<string, Uint8Array>
 /** the units a translation into `lang` leaves as they are */
 export declare function keptFor(paper: Paper, lang: string): Set<SourceUnit>
 /** whether a compile's last TeX pass stopped short of the document's end (a fatal error), whatever PDF it left: such a

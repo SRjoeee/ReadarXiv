@@ -4,8 +4,8 @@
 // punctuation, spaces and the glue beside Latin (measured under XeLaTeX with the reader's Fandol, IPAex and UnBatang).
 // Atoms — inline math, citations, references, a paper's name macros — are the same in the original and the
 // translation, so only roughly. No compile, no font file: tables and arithmetic.
-import { lastTexLog } from '../latex-front.mjs'
-import { utf8 } from '../mt.mjs'
+import { lastTexLog } from '../../source/latex-front.mjs'
+import { utf8 } from '../../translate/mt.mjs'
 import { FACES } from './faces.mjs'
 
 const TIMES = /^(ptm|qtm|ntx|txr|tempora|nimbus|times)/i

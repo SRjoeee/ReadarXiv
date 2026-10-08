@@ -1,5 +1,5 @@
 // plan.mjs's types (JavaScript until the engine's port), for the reader's tests
-import type { SourceUnit } from '../latex-front.mjs'
+import type { SourceUnit } from '../../source/latex-front.mjs'
 import type { Strategy } from '../scripts.mjs'
 import type { Paper } from '../live.mjs'
 import type { FlowStep } from './flow.mjs'

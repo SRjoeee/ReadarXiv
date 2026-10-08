@@ -25,7 +25,7 @@
 // Also the names behind both renderers' reading of a paper's fonts: each design's NFSS family names (the TeX path's
 // font probe, familyOfProbe) and its PostScript names (a PDF's fonts, classifyFont and familyOfFonts), in one table.
 import { COVERAGE } from './font-coverage.mjs'
-import { scriptOf } from './layer-rules.mjs'
+import { scriptOf } from './script.mjs'
 
 /**
  * Every face, one row each: its id, its file (as TeX finds it and the subsetter reads it), where the file comes from,

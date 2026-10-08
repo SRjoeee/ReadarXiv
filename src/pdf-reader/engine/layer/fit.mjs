@@ -17,7 +17,7 @@
 // Pure, as the layer is: no DOM, no clock, no randomness; text is measured only through the function it is given, and
 // sizes and positions are PDF units, which no zoom changes. An original module (no port statement), importing only
 // relative modules, so that the reader's bundle holds it.
-import { scriptOf } from '../layer-rules.mjs'
+import { scriptOf } from '../rules/layer-rules.mjs'
 import { breakLines, placeLines } from './breaks.mjs'
 import { checkPieces, heldByNone, lostIn, netOf } from './net.mjs'
 import { linesOn } from './page.mjs'

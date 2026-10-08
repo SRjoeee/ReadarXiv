@@ -1,4 +1,4 @@
-// The live pipeline (src/pdf-reader/engine/live.mjs) end to end in Node: Microsoft's free endpoint for the translation, native
+// The live pipeline (src/pdf-reader/engine/pipeline/live.mjs) end to end in Node: Microsoft's free endpoint for the translation, native
 // TeX Live in Docker for the compiles (one pass = the engine once, then BibTeX when asked; every pass = latexmk).
 // Prints the timeline and keeps each PDF, to check the pipeline's logic before the browser runs it.
 //   node spikes/live-node.mjs id [lang]
@@ -10,11 +10,11 @@ import { execFile } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
-import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
-import { marksOf } from '../../../src/pdf-reader/engine/typeset/places.mjs'
+import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
+import { marksOf } from '../../../src/pdf-reader/engine/pipeline/typeset/places.mjs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { openPaper, runLive } from '../../../src/pdf-reader/engine/live.mjs'
-import { translateTexts } from '../../../src/pdf-reader/engine/mt.mjs'
+import { openPaper, runLive } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
+import { translateTexts } from '../../../src/pdf-reader/engine/translate/mt.mjs'
 import { faithfulDockerArgs } from './faithful.mjs'
 const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname

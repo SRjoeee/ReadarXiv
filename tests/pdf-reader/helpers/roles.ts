@@ -1,5 +1,5 @@
-import { type EnglishFamily, type RoleSet, rolesFor as roleTable } from '@/pdf-reader/engine/font-roles.mjs'
-import { scriptOf } from '@/pdf-reader/engine/layer-rules.mjs'
+import { type EnglishFamily, type RoleSet, rolesFor as roleTable } from '@/pdf-reader/engine/rules/font-roles.mjs'
+import { scriptOf } from '@/pdf-reader/engine/rules/script.mjs'
 import { BUILTIN_RULES, type Script } from '@/pdf-reader/engine/rules/layout.mjs'
 
 /** a target's CJK faces as the built-in layout rules give them: its language's where it names them, else its script's

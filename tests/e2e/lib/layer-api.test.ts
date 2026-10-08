@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { BUNDLE, readBundle, VTAG } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { LAYOUT } from '@/pdf-reader/engine/layout/file.mjs'
-import { PDFJS, PIPELINE_VERSION } from '@/pdf-reader/engine/versions.mjs'
+import { PDFJS, PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
 import { type Answer, layerApi, loadSample, mode, serves, WHY } from './layer-api.mjs'
 
 // The stand-in of the layer API (tests/e2e/lib/layer-api.mjs) holds to the contract the web's API gives the reader, and

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { type Anchor, type DocToken, lineRects, tokenizeDocument } from '@/pdf-reader/engine/anchors.mjs'
-import { type Box, captionFor, floatHitOf, floatOf, floatsAgree, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from '@/pdf-reader/engine/floats.mjs'
-import { inkEdges } from '@/pdf-reader/engine/anchors.mjs'
-import { blockOf, hitOf, layoutOf, runsOf, sentenceOf } from '@/pdf-reader/engine/highlight.mjs'
+import { type Anchor, type DocToken, lineRects, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
+import { type Box, captionFor, floatHitOf, floatOf, floatsAgree, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from '@/pdf-reader/engine/view/floats.mjs'
+import { inkEdges } from '@/pdf-reader/engine/pipeline/anchors.mjs'
+import { blockOf, hitOf, layoutOf, runsOf, sentenceOf } from '@/pdf-reader/engine/view/highlight.mjs'
 
 // A page's floats (floats.mjs): tables, algorithms and figures lit whole with their captions. Pages as PDF.js's text
 // items, as highlight.test.ts has them: 600 × 800, body text 10 high on lines 12 apart, its glyphs from 2.2 under the

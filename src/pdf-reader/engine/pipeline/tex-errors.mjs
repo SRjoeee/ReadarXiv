@@ -3,7 +3,7 @@
 // Task 2). The same for native nonstop latexmk, which logs every error, and for the TeX page's BusyTeX, which halts on
 // the first: TeX writes each as `! <message>`, the levels of input it was reading, and at the base level `l.<n>`, the
 // line of the file it was reading and the text of that line before and after its place
-import { lastTexLog } from './latex-front.mjs'
+import { lastTexLog } from '../source/latex-front.mjs'
 
 /**
  * TeX's errors in a compile's last pass, each with the line of input TeX was reading and the text around its place:

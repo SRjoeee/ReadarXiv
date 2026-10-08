@@ -1,7 +1,7 @@
 // The TeX of the rule chosen on 2026-10-01 (parked/lab/records/typesetting.md): the line probes a
 // compile reports each unit's lines with, a unit set at a smaller size or face, a float held to its original's page, and
 // what a typeset plan adds to a compile of the translation (live.mjs translationFiles' `typeset`).
-import { lastTexLog, PARA_END_TEX } from '../latex-front.mjs'
+import { lastTexLog, PARA_END_TEX } from '../../source/latex-front.mjs'
 
 /** Once the last page is out, AXT-END in the log: the pass reached the document's end (completeLog). Every compile
  *  carries it (live.mjs: the probe, the marked original, the translation), and the line probes too (LINES_TEX), set

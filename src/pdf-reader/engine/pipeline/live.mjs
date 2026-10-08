@@ -18,16 +18,16 @@
 // complete, measures the final — else a draft one-pass of it does — and the final is set from that measure (5). The
 // first preview is set as today, and never waits for the original: nothing is known to plan it from yet. Where a plan
 // cannot be made, the translation is set as today, and the reason noted
-import { analyze } from './paper-meta.mjs'
-import { inkSamples, LAYOUT_TEX, layoutMarking, markProbeTex, probeSamples } from './layout/marks.mjs'
-import { BALANCE_DEF, documentBounds, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { analyze } from '../source/paper-meta.mjs'
+import { inkSamples, LAYOUT_TEX, layoutMarking, markProbeTex, probeSamples } from '../layout/marks.mjs'
+import { BALANCE_DEF, documentBounds, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from '../source/latex-front.mjs'
 import { strategiesFor, typesetBy } from './scripts.mjs'
-import { authorsTranslated } from './translate/kept.mjs'
+import { authorsTranslated } from '../translate/kept.mjs'
 import { passagesInSource, translationOf } from './cache.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
-import { decideGroups, groupOf } from './groups.mjs'
-import { batchOf, FIRST_BATCH, NEXT_BATCH, nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
-import { kOfSource, trPiecesOf } from './layer/pieces.mjs'
+import { decideGroups, groupOf } from '../translate/groups.mjs'
+import { batchOf, FIRST_BATCH, NEXT_BATCH, nameCells, plainSource, textsShown, translateUnits } from '../translate/mt.mjs'
+import { kOfSource, trPiecesOf } from '../layer/pieces.mjs'
 import { WIDTH_PROBE } from './typeset/density.mjs'
 import { finalTypesetting, previewTypesetting } from './typeset/plan.mjs'
 import { completeLog, END_TEX, LINES_TEX } from './typeset/tex.mjs'

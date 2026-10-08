@@ -3,8 +3,8 @@
 // marks, the layout maker, the pixel checker): tests/pdf-reader/layer-entry.test.ts walks its imports. An original module
 // (no port statement), importing only relative modules.
 export { indexLayout, LAYOUT, LAYOUT_CAP, LAYOUT_VALUES, LayoutRefusal, parseLayout } from '../layout/file.mjs'
-export { layerRulesFor } from '../layer-rules.mjs'
-export { FACES, familyOfFonts, rolesFor } from '../font-roles.mjs'
+export { layerRulesFor } from '../rules/layer-rules.mjs'
+export { FACES, familyOfFonts, rolesFor } from '../rules/font-roles.mjs'
 export { loadHyphenator } from './hyphen.mjs'
 // LAYER_COLOURS: the closed colour table a run's `colour` indexes, so that the reader copies none
 export { kOfSource, LAYER_COLOURS, trPiecesOf, trText } from './pieces.mjs'

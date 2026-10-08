@@ -1,5 +1,5 @@
 // highlight.mjs's types (JavaScript until the engine's port), for the reader's tests
-import type { Anchor, DocToken } from './anchors.mjs'
+import type { Anchor, DocToken } from '../pipeline/anchors.mjs'
 
 /** a run's row: lines merged where they overlap, and the unit's reach across them (PDF units); lo, hi: its glyphs' */
 export interface Row { y0: number; y1: number; x0: number; x1: number; lo: number; hi: number; r0: number | null; r1: number | null }

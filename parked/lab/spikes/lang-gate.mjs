@@ -17,11 +17,11 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
-import { pseudoTranslate, readFontProbe } from '../../../src/pdf-reader/engine/latex-front.mjs'
-import { lostIn, openPaper, originalFiles, probeFiles, translationFiles, unsettable } from '../../../src/pdf-reader/engine/live.mjs'
-import { CJK, scriptOf, strategiesFor, VERIFIED } from '../../../src/pdf-reader/engine/scripts.mjs'
+import { pseudoTranslate, readFontProbe } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
+import { lostIn, openPaper, originalFiles, probeFiles, translationFiles, unsettable } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
+import { CJK, scriptOf, strategiesFor, VERIFIED } from '../../../src/pdf-reader/engine/pipeline/scripts.mjs'
 import { faithfulDockerArgs } from '../../../lab/pdf/spikes/faithful.mjs'
-import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
+import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 
 const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname

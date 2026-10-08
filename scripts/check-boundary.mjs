@@ -115,30 +115,32 @@ export function platformImportsOf(file, text) {
   return out
 }
 
-/** The reader's engine (src/pdf-reader/engine) is the contract the web imports. The web's build loads it through its pin, and
- *  a plain browser page loads it as it stands, so an engine file imports the engine, three modules of the core and
- *  nothing else: no package but the layout rules' validator (rules/), no module of the extension. Imports are judged by
- *  their destination, as the core's are: `@/core/sentences` and `../../core/sentences` are one module. `node:` modules and
- *  type-only imports are none of this rule's (the second compile away). */
+/** The reader's engine (src/pdf-reader/engine) is the contract the web imports. The web's build loads it through its pin, a
+ *  plain browser page loads it as it stands and plain node loads its server and translation entries, so an engine file
+ *  imports the engine, three modules of the core and nothing else, by relative path: no alias, which only a bundler's
+ *  configuration resolves; no package but the layout rules' validator (rules/); no module of the extension. A destination is
+ *  judged as the core's are (`@/ui/strings` and `../../ui/strings` are one module), and an alias is refused for its spelling
+ *  besides. `node:` modules and type-only imports are none of this rule's (the second compile away). */
 export const ENGINE = /^src\/pdf-reader\/engine\//
 
 /** The three modules of the core an engine file may import, by their path with no extension or index file (the
  *  placeholder wire's tokens, the sentence splitter, the figure-name test). Nothing deeper in the core: a sibling of one of
- *  them is another module. The closure of each is alias-free (a test holds it), so the web's pin and a plain page
- *  load it as the engine's own files */
+ *  them is another module. The closure of each holds those three alone, by relative path (a test holds it), so the web's pin,
+ *  a plain page and plain node load it as the engine's own files */
 export const ENGINE_ALLOW = ['src/core/sentences', 'src/core/protector/tokens', 'src/core/names']
 
 /** The packages an engine file may import, by name and under which directory. The engine imports no PDF library: the
  *  layout maker is handed it (`PL`) */
 export const ENGINE_PACKAGES = [{ name: 'zod', under: 'src/pdf-reader/engine/rules/' }]
 
-/** The files of the engine that belong to the extension alone (Stage 5, Task 4b moves them out of the engine) and so still
- *  import what the rule forbids, and the modules outside it that Task 4b moves in; named, so that the lint stays green
- *  until then and the list is the work left. A test holds each entry to still being a violation: 4b empties both */
-export const ENGINE_MOVE_OUT = ['src/pdf-reader/engine/session.mjs', 'src/pdf-reader/engine/engine.mjs']
-export const ENGINE_MOVE_IN = ['src/cache/pdf-record']
+/** Files of the engine that belong to the extension alone and so import what the rule forbids, and modules outside the
+ *  engine that move into it, each named so that the lint stays green until the move lands and the list is the work left.
+ *  Both are empty since Stage 5, Task 4 moved session.mjs and engine.mjs out of the engine and src/cache/pdf-record.ts in
+ *  (as pipeline/record.ts); a test holds any entry to still being a violation, and the lint fails on one that is not listed */
+export const ENGINE_MOVE_OUT = []
+export const ENGINE_MOVE_IN = []
 
-/** Whether a violation is one that Task 4b's moves remove: a file of ENGINE_MOVE_OUT, or an import of ENGINE_MOVE_IN */
+/** Whether a violation is one that a move named in ENGINE_MOVE_OUT or ENGINE_MOVE_IN removes */
 export const movesPending = v => ENGINE_MOVE_OUT.includes(v.file) || ENGINE_MOVE_IN.includes(resolveSpecifier(v.file, v.spec))
 
 /** What a file states of its origin, the web's rule for its bundles: the words saying it was taken from a reference
@@ -179,8 +181,9 @@ const DECLARATION = /\.d\.(m|c)?ts$/
 const EXTENSIONS = ['.ts', '.tsx', '.mts', '.mjs', '.js', '/index.ts', '/index.tsx', '/index.mjs', '/index.js']
 const isFile = (root, path) => { try { return statSync(resolve(root, path)).isFile() } catch { return false } }
 
-/** What the engine files among `files` import that the engine may not: a package its directory may not hold, or a module
- *  that is neither in the engine nor one of ENGINE_ALLOW. Every file is read from `root` (the repository, by default) */
+/** What the engine files among `files` import that the engine may not: a package its directory may not hold, a module that
+ *  is neither in the engine nor one of ENGINE_ALLOW, or any module by an alias. Every file is read from `root` (the
+ *  repository, by default) */
 export function engineViolations(files, { root = '.' } = {}) {
   const out = []
   for (const file of files) {
@@ -191,8 +194,8 @@ export function engineViolations(files, { root = '.' } = {}) {
       const local = localPath(file, spec.replace(QUERY, ''))
       if (local === null) continue
       const target = dropExtension(local)
-      if (ENGINE.test(`${target}/`) || ENGINE_ALLOW.includes(target)) continue
-      out.push({ file, spec, why: `a module outside the engine, and not one of ${ENGINE_ALLOW.join(', ')}` })
+      if (!ENGINE.test(`${target}/`) && !ENGINE_ALLOW.includes(target)) out.push({ file, spec, why: `a module outside the engine, and not one of ${ENGINE_ALLOW.join(', ')}` })
+      else if (!spec.startsWith('.')) out.push({ file, spec, why: 'an alias: an engine file imports by relative path, which the web\'s pin, a plain page and plain node all resolve' })
     }
   }
   return out
@@ -243,13 +246,14 @@ export function portedInClosure(entries, { root = '.' } = {}) {
   return [...closureOf(entries, { root })].filter(file => statesPort(readFileSync(resolve(root, file), 'utf8'))).sort()
 }
 
-const OUTSIDE = /^(?:src|tests|scripts|lab)\//
+const OUTSIDE = /^(?:src|lab)\//
 export const trackedFiles = (root = '.') => execFileSync('git', ['-C', root, 'ls-files', '-z'], { encoding: 'utf8', maxBuffer: 1 << 26 }).split('\0').filter(Boolean)
 
-/** The engine's modules (code files, no declaration files) that nothing reaches: neither the closure of the entries, nor
- *  that of the gates, nor that of any file outside the engine, in src/, tests/, scripts/ or lab/, that imports an engine
- *  module (the extension's session, the labs' spikes, the tests). `files` is the repository's files, by default the ones git
- *  tracks. Throws for an entry or a gate the repository does not hold, so that a typo is not everything unreached */
+/** The engine's modules (code files, no declaration files) that nothing live reaches: neither the closure of the entries, nor
+ *  that of the gates, nor that of any file outside the engine, in src/ or lab/, that imports an engine module (the shipped
+ *  extension, the lab's gates and bench). Tests and scripts are not roots: a module only they reach is parked with its tests.
+ *  `files` is the repository's files, by default the ones git tracks. Throws for an entry or a gate the repository does not
+ *  hold, so that a typo is not everything unreached */
 export function unreached(entries, gates, { root = '.', files = trackedFiles(root) } = {}) {
   const modules = files.filter(f => ENGINE.test(f) && CODE.test(f) && !DECLARATION.test(f))
   const importers = files.filter(f => OUTSIDE.test(f) && !ENGINE.test(f) && CODE.test(f) && !DECLARATION.test(f) && importsOf(f, root).some(g => ENGINE.test(g)))
@@ -282,5 +286,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     for (const v of unexpected) console.error(`  ${v.file}: imports ${v.spec} (${v.why})`)
     process.exit(1)
   }
-  console.log(`boundary check: ${engine.length} engine files import only the engine, ${ENGINE_ALLOW.length} core modules and the layout rules' validator (${found.length} imports tolerated until Task 4b moves ${ENGINE_MOVE_OUT.map(f => f.split('/').pop()).join(', ')} out of the engine and ${ENGINE_MOVE_IN.join(', ')} into it)`)
+  const tolerated = found.length > 0 ? ` (${found.length} imports tolerated until ${[...ENGINE_MOVE_OUT.map(f => `${f} leaves`), ...ENGINE_MOVE_IN.map(m => `${m} enters`)].join(', ')})` : ''
+  console.log(`boundary check: ${engine.length} engine files import only the engine, ${ENGINE_ALLOW.length} core modules and the layout rules' validator, by relative path${tolerated}`)
 }

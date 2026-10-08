@@ -932,7 +932,7 @@ extension.
   where every one had been. The settings page counts them and clears them (UI.md S-O-73).
 - **Typesetting** runs in a TeX page outside the extension (BusyTeX): our site's, `https://tex.readarxiv.org`, in a
   production build, and one on this machine in development (`addresses.mjs` `TEX_PAGE`, a build setting). No
-  reader-facing word names it (UI.md §3.5). The translation is set by the Flow rule (`src/pdf-reader/engine/typeset/`;
+  reader-facing word names it (UI.md §3.5). The translation is set by the Flow rule (`src/pdf-reader/engine/pipeline/typeset/`;
   `parked/lab/records/typesetting.md`): each unit's leading, the paper's type and the floats' pages
   planned from our marked original's line probes and marks. The original is compiled in full in a TeX frame of its
   own from the run's start, beside the probe and the first preview, which never waits for it, and the frame goes once

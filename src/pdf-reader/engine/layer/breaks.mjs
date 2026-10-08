@@ -8,7 +8,7 @@
 // width; a closing mark hangs its blank half in the margin; a word longer than its line is hyphenated where a hyphenator
 // allows, else cut by characters, with a hyphen drawn at the cut where it is a word of running text (a CJK or Korean word, a
 // URL and a typewriter run are cut without one). An original module (no port statement), importing only relative modules.
-import { scriptOf } from '../layer-rules.mjs'
+import { scriptOf } from '../rules/layer-rules.mjs'
 import { hyphenCore } from './tokens.mjs'
 
 /** a space may shrink to this share of its width */

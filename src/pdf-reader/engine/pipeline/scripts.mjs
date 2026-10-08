@@ -14,17 +14,13 @@
 // When no strategy sets the translation, the reader keeps what it shows. A script not listed here has no strategy yet:
 // strategiesFor throws, and the reader says it cannot typeset that language (Devin on #294). Every font named is in
 // TeX Live 2026. Measured with parked/lab/spikes/lang-gate.mjs.
-import { scriptOf } from './layer-rules.mjs'
-import { latinFontsFor } from './latex-front.mjs'
+import { scriptOf } from '../rules/script.mjs'
+import { latinFontsFor } from '../source/latex-front.mjs'
 
-// the script of a language, and the instant layer's rules beside this design, in a module of their own that imports
-// nothing: the reader loads them without this module's LaTeX parser
-export { LAYER_DIVERGES, LAYER_RULES, layerRulesFor, scriptOf } from './layer-rules.mjs'
+// the script of a language, in a module of its own that imports nothing: the reader loads it without this module's LaTeX parser
+export { scriptOf }
 /** the translation a strategy sets: without the author block's names and places under one that cannot take them */
 export const typesetBy = (translated, strategy) => (strategy.authors === false ? new Map([...translated].filter(([u]) => u.kind !== 'author')) : translated)
-// the languages the reader typesets, in a module of their own: the background reads them too (its warm-up), and a
-// service worker's bundle cannot carry this module's LaTeX parser
-export { VERIFIED, verified } from './verified.mjs'
 /** the engines whose fonts are 8-bit: an alphabet needs its encoding under them, CJK its CJKutf8 (classic LaTeX, which the
  *  browser compiles with pdfLaTeX, is one: Devin and Codex on #294) */
 const EIGHT_BIT = new Set(['pdflatex', 'latex'])

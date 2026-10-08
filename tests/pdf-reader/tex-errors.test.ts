@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { texErrors, unitsAtErrors } from '@/pdf-reader/engine/tex-errors.mjs'
+import { texErrors, unitsAtErrors } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
 
 // A compile's TeX errors and the units they stand in (plans/2026-10-04-compile-resilience.md, Task 2): the safety net
 // that sets a unit TeX cannot set in the source, so that the rest of the paper is set translated

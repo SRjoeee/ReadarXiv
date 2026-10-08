@@ -1,5 +1,5 @@
 // tex.mjs's types (JavaScript until the engine's port), for the reader's tests
-import type { SourceUnit, UnitMark } from '../latex-front.mjs'
+import type { SourceUnit, UnitMark } from '../../source/latex-front.mjs'
 import type { Strategy } from '../scripts.mjs'
 import type { AlphabetDesign, CjkDesign, Type } from './type.mjs'
 

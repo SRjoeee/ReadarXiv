@@ -1,10 +1,10 @@
 // bundle.mjs's types: the layer bundle as the engine writes it and both readers read it (the web mirrors them in its
 // src/shared/bundle.ts)
-import type { CellPlace, SourceUnit } from '../latex-front.mjs'
+import type { CellPlace, SourceUnit } from '../source/latex-front.mjs'
 import type { RemovalManifest } from '../layout/addon-manifest.mjs'
 import type { LayoutFile } from '../layout/file.mjs'
 
-export type { CellPlace } from '../latex-front.mjs'
+export type { CellPlace } from '../source/latex-front.mjs'
 /** the bundle's format */
 export declare const BUNDLE: '1'
 /** a bundle's bytes at most, as a reader decodes them, and its values, counted before JSON.parse */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { layerRulesFor } from '@/pdf-reader/engine/layer-rules.mjs'
+import { layerRulesFor } from '@/pdf-reader/engine/rules/layer-rules.mjs'
 import { type Broken, breakLines, CJK_JUST_MAX, placeLines, SPACE_MIN } from '@/pdf-reader/engine/layer/breaks.mjs'
 import { type Hyphenator, loadHyphenator } from '@/pdf-reader/engine/layer/hyphen.mjs'
 import { STYLE } from '@/pdf-reader/engine/layer/pieces.mjs'

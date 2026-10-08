@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cutsOf, plainTranslated, translateUnits } from '@/pdf-reader/engine/mt.mjs'
+import { cutsOf, plainTranslated, translateUnits } from '@/pdf-reader/engine/translate/mt.mjs'
 import { verifyAlignment } from '@/providers/alignment'
 import { markSentences, stripMarkers, unmarkSentences } from '@/providers/sentence-markers'
 

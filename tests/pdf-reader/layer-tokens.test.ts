@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { type Design, type FontClass, faceFor } from '@/pdf-reader/engine/font-roles.mjs'
-import { layerRulesFor } from '@/pdf-reader/engine/layer-rules.mjs'
+import { type Design, type FontClass, faceFor } from '@/pdf-reader/engine/rules/font-roles.mjs'
+import { layerRulesFor } from '@/pdf-reader/engine/rules/layer-rules.mjs'
 import type { Hyphenator } from '@/pdf-reader/engine/layer/hyphen.mjs'
 import { STYLE, type TrPiece, trText } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { COMPRESS_CLOSE, COMPRESS_OPEN, hyphenCore, NO_END, NO_START, type TextIn, type Token, tokensOf } from '@/pdf-reader/engine/layer/tokens.mjs'

@@ -23,7 +23,7 @@
 
 // (relative, and from the tokens module alone: the reader's engine imports this module, so its closure stays alias-free and
 // reaches nothing else of the protector; scripts/check-boundary.mjs, ENGINE_ALLOW)
-import { fromAlpha, type WireFormat } from '../protector/tokens'
+import { fromAlpha, type WireFormat } from '../protector/tokens.ts'
 
 /**
  * A period after one of these does not end a sentence. Single capitals cover initials (`A. Turing`)

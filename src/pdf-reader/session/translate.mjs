@@ -8,7 +8,7 @@ import { isBuiltInService } from '@/config/services'
 import { ABSTRACT_MAX_CHARS } from '@/core/extractor/context'
 import { isPermanentErrorKind } from '@/providers/types'
 import { createMessageTransport } from '@/shared/transport'
-import { plainSource } from './mt.mjs'
+import { plainSource } from '../engine/translate/mt.mjs'
 
 /** the paper's title and abstract for an LLM's prompt, the abstract cut as the HTML page cuts it (src/core/extractor/context.ts) */
 export function paperContext(units) {

@@ -2,7 +2,7 @@
 import type { Config } from '@/config/schema'
 import type { ConfigReading } from '@/config/storage'
 import type { PackState } from '@/shared/pack'
-import type { OutlineEntry } from '../outline'
+import type { OutlineEntry } from '../engine/view/outline'
 
 export type EngineDisplay = 'original' | 'translation' | 'bilingual'
 export type SyncMode = 'off' | 'current' | 'same' | 'pointer' | 'matched'

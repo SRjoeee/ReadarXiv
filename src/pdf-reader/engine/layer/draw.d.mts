@@ -1,5 +1,5 @@
 // draw.mjs's types: what the web draws for a laid unit, as data
-import type { FaceId } from '../font-roles.mjs'
+import type { FaceId } from '../rules/font-roles.mjs'
 import type { LayerInput, LaidUnit } from './fit.mjs'
 
 /** PDF units each of the layout's erase rectangles grows by, within its line's own ink band (0.3 em below its baseline,

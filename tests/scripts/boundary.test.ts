@@ -93,7 +93,7 @@ describe('the engine imports no package but the layout rules\' validator, in rul
     expect(packages('src/pdf-reader/engine/rules/layout.mjs', "import * as z from 'zod/mini'\n")).toEqual([])
     expect(packages('src/pdf-reader/engine/rules/layout.mjs', "import { z } from 'zod'\n")).toEqual([])
     expect(packages('src/pdf-reader/engine/layer-proto/run.mjs', "import * as z from 'zod/mini'\n")).toEqual(['zod/mini'])
-    expect(packages('src/pdf-reader/engine/font-roles.mjs', "import { z } from 'zod'\n")).toEqual(['zod'])
+    expect(packages('src/pdf-reader/engine/source/latex-front.mjs', "import { z } from 'zod'\n")).toEqual(['zod'])
     expect(packages('src/pdf-reader/engine/rulesx/layout.mjs', "import { z } from 'zod'\n")).toEqual(['zod'])
   })
   it('refuses any other package, scoped or not, even in rules/, and a dynamic or required one', () => {

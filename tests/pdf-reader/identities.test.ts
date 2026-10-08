@@ -8,8 +8,8 @@ import { bundleKey, CTAG, VTAG } from '@/pdf-reader/engine/layer-proto/bundle.mj
 import { parseAddonManifest } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { LAYOUT, LayoutRefusal, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
 import { type RuleField, RULES_FIELDS } from '@/pdf-reader/engine/rules/layout.mjs'
-import { CJK } from '@/pdf-reader/engine/scripts.mjs'
-import { scriptOf } from '@/pdf-reader/engine/layer-rules.mjs'
+import { CJK } from '@/pdf-reader/engine/pipeline/scripts.mjs'
+import { scriptOf } from '@/pdf-reader/engine/rules/script.mjs'
 
 // The three kinds of rule and their identities (the rules-as-data plan, §1 and §9): extraction, layout and translation
 // each name their own change, and nothing names another's. The reader's refusals follow the identities: a layout file
@@ -30,7 +30,7 @@ describe('TRANSLATE_VERSION', () => {
     expect(TRANSLATE_VERSION).toBe('1')
     // (a token of the form the web's identity and a bundle's versions take)
     expect(TRANSLATE_VERSION).toMatch(/^[0-9a-z.]{1,16}$/)
-    const mt = await import('@/pdf-reader/engine/mt.mjs')
+    const mt = await import('@/pdf-reader/engine/translate/mt.mjs')
     expect(mt.TRANSLATE_VERSION).toBe(TRANSLATE_VERSION)
   })
 
@@ -52,7 +52,7 @@ describe('the kept rule lives in translate/', () => {
     // the rule is the translation's and no longer reads the TeX path's table; a script added to that table is a decision
     // about whether its authors are translated, taken here (and a change of TRANSLATE_VERSION)
     expect(['zh', 'zh-TW', 'ja', 'ko'].map(scriptOf).sort()).toEqual(Object.keys(CJK).sort())
-    expect(await import('@/pdf-reader/engine/scripts.mjs')).not.toHaveProperty('authorsTranslated')
+    expect(await import('@/pdf-reader/engine/pipeline/scripts.mjs')).not.toHaveProperty('authorsTranslated')
   })
 })
 

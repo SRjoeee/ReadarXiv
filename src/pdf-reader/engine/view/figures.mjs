@@ -2,8 +2,8 @@
 // form for a vector figure, an image for a bitmap — placed by the page's content stream), and which of the page's text
 // lies inside it. Whatever class or package set the paper, an included figure is one of those two, so this needs
 // nothing from the source. Pure: PDF.js's operator list and text items in, rectangles and labels out.
-import { decode, escape, fromAlpha, toAlpha, WIRE } from './mt.mjs'
-import { TAG_RE } from '@/core/protector/tokens'
+import { decode, escape, fromAlpha, toAlpha, WIRE } from '../translate/mt.mjs'
+import { TAG_RE } from '../../../core/protector/tokens.ts'
 
 const mul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]]
 const apply = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]]

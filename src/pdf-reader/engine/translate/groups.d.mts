@@ -1,5 +1,5 @@
 // groups.mjs's types (JavaScript until the engine's port), for the reader's tests
-import type { SourceUnit } from './latex-front.mjs'
+import type { SourceUnit } from '../source/latex-front.mjs'
 
 /** the share of a column's cells that must come back as they went for the column to be kept as names */
 export declare const NAMES_SHARE: number

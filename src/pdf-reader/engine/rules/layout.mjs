@@ -27,8 +27,8 @@
 // Only this directory imports a package (zod, the mini build): the readers' bundles take the validator once, here. The
 // engine's drawing modules import resolveRules' answers, never the schema.
 import * as z from 'zod/mini'
-import { ENGLISH_FAMILIES, FACES } from '../font-roles.mjs'
-import { scriptOf } from '../layer-rules.mjs'
+import { ENGLISH_FAMILIES, FACES } from './font-roles.mjs'
+import { scriptOf } from './script.mjs'
 import { countValues, LayoutRefusal, told } from '../layout/json.mjs'
 import BUILTIN_JSON from './layout-rules.json' with { type: 'json' }
 

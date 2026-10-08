@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FACES } from '@/pdf-reader/engine/font-roles.mjs'
+import { FACES } from '@/pdf-reader/engine/rules/font-roles.mjs'
 import { type DrawRun, drawUnit, ERASE_PAD, spansOf, unitAt } from '@/pdf-reader/engine/layer/draw.mjs'
 import { type Laid, type LaidUnit, layUnit, type Tr } from '@/pdf-reader/engine/layer/fit.mjs'
 import { STYLE, type TrPiece, trText } from '@/pdf-reader/engine/layer/pieces.mjs'

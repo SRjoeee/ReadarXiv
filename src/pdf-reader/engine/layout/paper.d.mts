@@ -1,5 +1,5 @@
 // paper.mjs's types: a paper's layout marks in one call, for the server's prepare child, the extension's reader and the layer gate's maker
-import type { Compiled, CompileRequest, Paper } from '../live.mjs'
+import type { Compiled, CompileRequest, Paper } from '../pipeline/live.mjs'
 
 /**
  * a paper's layout marks: the mark probe compiled (probeFiles(paper, { marks: true }), one pass) and its answers read

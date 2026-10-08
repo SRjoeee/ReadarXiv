@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cutsOf, plainSource, plainTranslated, rehydrate, rehydrateTags, sentencesKept, sentencesOf, serialize, serializeTags, texEscape, textsShown, translateUnits, unitText } from '@/pdf-reader/engine/mt.mjs'
+import { cutsOf, plainSource, plainTranslated, rehydrate, rehydrateTags, sentencesKept, sentencesOf, serialize, serializeTags, texEscape, textsShown, translateUnits, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // A unit's plain text as the PDF shows it, which the reader locates it by (anchors.mjs)
 

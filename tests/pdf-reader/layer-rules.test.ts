@@ -3,10 +3,10 @@
 // hyphenation filled in, and the module the reader loads free of imports (scripts.mjs re-exports it)
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import * as rules from '@/pdf-reader/engine/layer-rules.mjs'
-import { LAYER_DIVERGES, LAYER_RULES, type LayerRules, layerRulesFor } from '@/pdf-reader/engine/layer-rules.mjs'
-import * as scripts from '@/pdf-reader/engine/scripts.mjs'
-import { DESIGN } from '@/pdf-reader/engine/typeset/type.mjs'
+import * as rules from '@/pdf-reader/engine/rules/layer-rules.mjs'
+import { LAYER_DIVERGES, LAYER_RULES, type LayerRules, layerRulesFor } from '@/pdf-reader/engine/rules/layer-rules.mjs'
+import * as scripts from '@/pdf-reader/engine/pipeline/scripts.mjs'
+import { DESIGN } from '@/pdf-reader/engine/pipeline/typeset/type.mjs'
 
 type Script = keyof typeof LAYER_RULES
 const SCRIPTS: Script[] = ['Hans', 'Hant', 'Jpan', 'Kore', 'Latn', 'Cyrl']
@@ -85,7 +85,7 @@ describe('the layer\'s per-script rules', () => {
     expect(scripts.layerRulesFor).toBe(layerRulesFor)
     expect(rules.scriptOf('zh-TW')).toBe('Hant')
     expect(rules.scriptOf('sr')).toBe('Cyrl')
-    const source = readFileSync('src/pdf-reader/engine/layer-rules.mjs', 'utf8')
+    const source = readFileSync('src/pdf-reader/engine/rules/layer-rules.mjs', 'utf8')
     // no static import, no re-export from another module, no dynamic import, no require
     expect(source).not.toMatch(/^\s*import\b/m)
     expect(source).not.toMatch(/\bexport\s[^\n;]*\bfrom\s*['"]/)

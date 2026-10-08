@@ -2,10 +2,11 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
-import { ENGLISH_FAMILIES, FACES, rolesFor } from '@/pdf-reader/engine/font-roles.mjs'
-import { scriptOf } from '@/pdf-reader/engine/layer-rules.mjs'
+import { ENGLISH_FAMILIES, FACES, rolesFor } from '@/pdf-reader/engine/rules/font-roles.mjs'
+import { scriptOf } from '@/pdf-reader/engine/rules/script.mjs'
 import { BUILTIN_RULES, type FrozenRuleSet, parseRules, RULES_CAP, RULES_FIELDS, RULES_SCHEMA, RULES_VALUES, RulesRefusal, readRules, resolveRules, SCRIPTS, TARGETS, writeRules } from '@/pdf-reader/engine/rules/layout.mjs'
-import { babelTags, VERIFIED } from '@/pdf-reader/engine/scripts.mjs'
+import { babelTags } from '@/pdf-reader/engine/pipeline/scripts.mjs'
+import { VERIFIED } from '@/pdf-reader/session/verified.mjs'
 
 // The layout rule set (rules/layout.mjs, the rules-as-data plan §2): its built-in copy, its resolution to the fields v0 reads,
 // and the refusals of a set read as data. Every value the migration moved out of the engine's code is held here against the

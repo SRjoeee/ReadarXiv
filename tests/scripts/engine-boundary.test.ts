@@ -64,8 +64,14 @@ describe('what an engine file may import', () => {
     expect(violationsOf("import { toAlpha } from '../../../core/protector/tokens'\nimport { n } from '../../../core/protector/tokens.ts'\n")).toEqual([])
     expect(violationsOf("import { isName } from '../../../core/names'\nexport * from '../../../core/names.ts'\n")).toEqual([])
   })
-  it('judges the destination, not the spelling: the alias of an allowed module is allowed, a relative path to a forbidden one is not', () => {
-    expect(violationsOf("import { toAlpha } from '@/core/protector/tokens'\n")).toEqual([])
+  it('refuses an alias for its spelling, even to a module the engine may import or to the engine itself: only a bundler resolves it', () => {
+    expect(violationsOf("import { toAlpha } from '@/core/protector/tokens'\n")).toEqual(['@/core/protector/tokens'])
+    expect(violationsOf("import { toAlpha } from '~/core/protector/tokens.ts'\n")).toEqual(['~/core/protector/tokens.ts'])
+    expect(violationsOf("import { a } from '@/pdf-reader/engine/layout/file.mjs'\n")).toEqual(['@/pdf-reader/engine/layout/file.mjs'])
+    const t = tree({ [`${E}/x.mjs`]: "import { a } from '@/pdf-reader/engine/layout/file.mjs'\n" })
+    expect((engineViolations([`${E}/x.mjs`], { root: t.root }) as Violation[])[0]?.why).toMatch(/alias/)
+  })
+  it('judges the destination of a relative path: a forbidden module is refused, however it is spelled', () => {
     expect(violationsOf("import { serialize } from '../../../core/protector/serialize'\n")).toEqual(['../../../core/protector/serialize'])
     expect(violationsOf("import { serialize } from '@/core/protector'\n")).toEqual(['@/core/protector'])
   })
@@ -233,14 +239,16 @@ describe('unreached: the engine modules no entry and no gate reaches', () => {
     expect(unreached([`${E}/view.mjs`], ['lab/pdf/spikes/gate.mjs'], { root: t.root, files })).not.toContain(`${E}/layout/gated.mjs`)
     expect(unreached([`${E}/view.mjs`], [], { root: t.root, files })).toContain(`${E}/layout/gated.mjs`)
   })
-  it('takes every file outside the engine, in src/, tests/, scripts/ and lab/, that imports an engine module as a root too (ruling 33)', () => {
+  it('takes every file outside the engine, in src/ and lab/, that imports an engine module as a root too, and no test, script or parked file', () => {
     const t = engineTree({
       'src/pdf-reader/session/session.mjs': "import { used } from '../engine/layout/used.mjs'\nexport const s = used\n",
+      'lab/pdf/layer-lab/lab.mjs': "import { orphan } from '../../../src/pdf-reader/engine/view/orphan.mjs'\nexport const l = orphan\n",
       'tests/pdf-reader/typed.test.ts': "import { typed } from '@/pdf-reader/engine/layout/typed.mjs'\nexport const t = typed\n",
-      'parked/engine/x.mjs': "import { orphan } from '../../src/pdf-reader/engine/view/orphan.mjs'\nexport const x = orphan\n",
+      'scripts/make.mjs': "import { typed } from '../src/pdf-reader/engine/layout/typed.mjs'\nexport const m = typed\n",
+      'parked/engine/x.mjs': "import { typed } from '../../src/pdf-reader/engine/layout/typed.mjs'\nexport const x = typed\n",
     })
-    // (parked/ is none of the four: what lies there reaches nothing)
-    expect(unreached([`${E}/view.mjs`], ['lab/pdf/spikes/gate.mjs'], listing(t))).toEqual([`${E}/view/orphan.mjs`])
+    // (a module only a test, a script or parked code reaches is parked with its tests: unreached)
+    expect(unreached([`${E}/view.mjs`], ['lab/pdf/spikes/gate.mjs'], listing(t))).toEqual([`${E}/layout/typed.mjs`])
   })
   it('follows an importer outside the engine to the engine modules it reaches in turn', () => {
     const t = engineTree({

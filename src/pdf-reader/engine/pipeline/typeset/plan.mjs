@@ -8,7 +8,7 @@
 //     stretch at a smaller face; the final compile is set with it.
 // Pure: no compile, no file, no clock. Each returns `typeset`, which live.mjs translationFiles takes with the strategy
 // the plan was made for (type.mjs designFor: a strategy sets the knobs it has; the chain moving on makes the plan again).
-import { latin1 } from '../latex-front.mjs'
+import { latin1 } from '../../source/latex-front.mjs'
 import { scriptOf } from '../scripts.mjs'
 import { citeStyleOf, measureUnits, readSizeProbe, readWidthProbe } from './density.mjs'
 import { flowType } from './flow.mjs'

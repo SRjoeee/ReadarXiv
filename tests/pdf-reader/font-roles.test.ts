@@ -4,8 +4,8 @@
 // text is drawable from the served faces alone. No face is the reader's own: one rendering on every device
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { COVERAGE, COVERAGE_SOURCE, METRICS } from '@/pdf-reader/engine/font-coverage.mjs'
-import { canDraw, canDrawIn, classifyFont, type Design, FACES, type FaceId, type FontClass, faceFor, familyOfFonts, familyOfProbe } from '@/pdf-reader/engine/font-roles.mjs'
+import { COVERAGE, COVERAGE_SOURCE, METRICS } from '@/pdf-reader/engine/rules/font-coverage.mjs'
+import { canDraw, canDrawIn, classifyFont, type Design, FACES, type FaceId, type FontClass, faceFor, familyOfFonts, familyOfProbe } from '@/pdf-reader/engine/rules/font-roles.mjs'
 import { rolesFor } from './helpers/roles'
 
 const cls = (name: string) => { const c = classifyFont(name); return { cls: c.cls, bold: c.bold, italic: c.italic, caps: c.caps, design: c.design, known: c.known } }
@@ -193,7 +193,7 @@ describe('the faces', () => {
     expect(new Set(files).size).toBe(files.length)
     const keys = Object.values(FACES).map(f => `${f.family}|${f.weight}|${f.style}`)
     expect(new Set(keys).size).toBe(keys.length)
-    for (const file of ['src/pdf-reader/engine/font-roles.mjs', 'src/pdf-reader/engine/font-coverage.mjs']) {
+    for (const file of ['src/pdf-reader/engine/rules/font-roles.mjs', 'src/pdf-reader/engine/rules/font-coverage.mjs']) {
       expect(readFileSync(file, 'utf8'), file).not.toMatch(/local\(/)
     }
   })

@@ -60,7 +60,7 @@ missing or drawn twice, and the fidelity measures against the original page, no 
 | `lab/pdf/spikes/layer-fixtures.mjs` | To make a fixture's outputs: a paper into a target, with the layout compile and the translation (staging's record where it holds one, else Microsoft's free endpoint). | `data/` for the papers and compiles it caches, Docker, the network only where `--offline` is not given. |
 | `lab/pdf/spikes/layer-cut.mjs` | After the front end cuts the units anew, to carry the gate's fixed inputs to the new cut's ids. | The old and the made fixtures. |
 | `lab/pdf/spikes/layer-perf.mjs` | To hold the layer to its cost budget: runs of `layer-gate.mjs --perf` against the old path's. `--record` writes `records/layer-perf.*`. | The runs' JSON files. |
-| `lab/pdf/spikes/table-groups.mjs` | To measure the table groups' decision (`src/pdf-reader/engine/groups.mjs`) over translations already made; `--write` makes the gate's decided records. | The fixtures' records, the corpus sample, Microsoft's kept answers; Docker for the captions. |
+| `lab/pdf/spikes/table-groups.mjs` | To measure the table groups' decision (`src/pdf-reader/engine/translate/groups.mjs`) over translations already made; `--write` makes the gate's decided records. | The fixtures' records, the corpus sample, Microsoft's kept answers; Docker for the captions. |
 
 Records: `lab/pdf/records/layer-fidelity.md`, `lab/pdf/records/layer-gate.md`, `lab/pdf/records/layer-perf.md`.
 
@@ -98,7 +98,7 @@ Records: `lab/pdf/records/layout-marks.md`, `lab/pdf/records/layout-maker.md`.
 
 | File | When to run it | What it needs |
 |---|---|---|
-| `lab/pdf/spikes/front-gate.mjs` | After any change to `src/pdf-reader/engine/latex-front.mjs`: units, letters and files per paper against a stored snapshot (`out/front-gate.json`); a paper that moves by more than 5 % is listed. `--accept` stores the current state. | The corpus and `out/c0-browser-patched-full.json` (which papers compiled cleanly). |
+| `lab/pdf/spikes/front-gate.mjs` | After any change to `src/pdf-reader/engine/source/latex-front.mjs`: units, letters and files per paper against a stored snapshot (`out/front-gate.json`); a paper that moves by more than 5 % is listed. `--accept` stores the current state. | The corpus and `out/c0-browser-patched-full.json` (which papers compiled cleanly). |
 | `lab/pdf/spikes/front-peek.mjs` | To look at what the front end takes from one paper, by eye. | The corpus. |
 | `lab/pdf/spikes/latex-front.mjs`, `paper-meta.mjs` | Shims onto the engine's modules, for the Node spikes. | — |
 | `lab/pdf/spikes/corpus.mjs`, `corpus-summary.mjs` | To make the corpus (a seeded random draw of a month's submissions: each source and arXiv's PDF, one request every 3.2 s) and its summary, `out/corpus-meta.json`. | The network. |

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MIXED, atLeastAsGood, isCurrent, stillUntypeset, unitIsCurrent, type CachedUnit, type PdfRecordBody } from '@/cache/pdf-record'
+import { MIXED, atLeastAsGood, isCurrent, stillUntypeset, unitIsCurrent, type CachedUnit, type PdfRecordBody } from '@/pdf-reader/engine/pipeline/record'
 
 const now = { identity: 'B', pipeline: '2' }
 const unit = (u: Partial<CachedUnit>): CachedUnit => ({ kind: 'para', src: 's', hash: 'h', state: 'whole', by: 'B', tried: 'B', ...u })
