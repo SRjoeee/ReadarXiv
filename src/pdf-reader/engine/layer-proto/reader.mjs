@@ -75,7 +75,8 @@ function shapesOf(units) {
  * add-on's manifest as the text removal's (the old way where there is none), the units to come the target's
  * (toTranslate), each table cell's group from the bundle's cells, the target's caption names on every float (L7), the
  * host's served faces (`faceSources`) and hyphenation patterns (`hyphUrl`), at scale 2.5 and a device pixel ratio of 1,
- * no copy kept at v0's own resolution: one set of choices on every device. Each choice made for the target is the
+ * no copy kept at v0's own resolution (so a page's original canvas is let go as soon as its ink is read, not when the
+ * page is done): one set of choices on every device. Each choice made for the target is the
  * layout rules' (`rules`, the set a host loaded with readRules; the built-in set where none), none a host's own. Its rows
  * are taken as they come. One layer is open a page (a realm) at a time: v0's faces are the page's, and a second open
  * before the first's dispose throws.

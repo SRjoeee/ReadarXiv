@@ -231,7 +231,9 @@ function needsOf(K, N, passes, fileOnly) {
  * that v0's geometry does not hold, but table cells; `symbols`: 'strict' or 'text', locatedWhole's). Each unit the file
  * locates whole takes them; every other unit is v0's own. Null: v0 alone.
  * `copy`: whether each page's copy is kept at v0's own resolution (`right`), the plane the checker and the gate measure;
- * a view draws the page at its own (drawCopy) and needs none.
+ * a view draws the page at its own (drawCopy) and needs none. Without it the original (`left`) is read once, for the page's
+ * ink, and its canvas let go as the page is drawn (`left` is null): nothing else reads it, and the checker, which does, is
+ * refused.
  * `removal` (the text-removed PDF, removal.mjs and layout/remove.mjs): { mode: 'draw', doc, manifest } (and PDF.js's OPS,
  * which no drawing reads: the gate's instrument reads a page's ink with it):
  * `doc` is arXiv's PDF with the paper's add-on appended (its page sets at the manifest's places), one a paper whatever the
@@ -466,10 +468,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const vw = views[i - 1]
     return (x, y) => vw.convertToViewportPoint(x, y)
   }
-  const inkOf = pg => {
-    if (!inks[pg] && rows[pg - 1]?.base) inks[pg] = L2.inkMapOf(rows[pg - 1].left)
-    return inks[pg]
-  }
+  // each page's ink map, read once as the page is drawn (drawPage) and kept for the run: it is all the engine takes from the
+  // original's pixels, so that with no copy the canvas is let go right after (a lazy read would need it for as long)
+  const inkOf = pg => inks[pg]
   // each page's characters that a painted unit accounts for (its text, its placeholders drawn elsewhere), and its items
   const accounted = [], keptOf = [], pageItems = []
   const restoreOf = (p, pg) => {
@@ -1057,9 +1058,21 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         }
       } else if (RM.mode === 'draw') RM.stats.refused++
     }
-    if (P.borrow) inkOf(i)
-    // (let go while the page was drawn: the roles and faces every run shares are a newer layer's to set)
+    // (let go while the page was drawn: its canvases are gone, so there is no ink to read, and the roles and faces every run
+    // shares are a newer layer's to set)
     if (disposed) return
+    // the page's ink, read now whatever the rules are: units that borrow below, widen over paper and grow a crop read it, on
+    // their own page and, for a crop, on the page it is cut from
+    inks[i] = L2.inkMapOf(r.left)
+    // with no copy, nothing else reads the original's canvas: the drawing is made as data (ops), a view draws it over the
+    // page it renders itself (drawCopy), and the checker, which reads this canvas, needs a copy. So it goes now, not when the
+    // host is done with the page: a host that jumps to page p holds the canvases of all p pages until then, 12.5 MB each.
+    // `base` stays: the page is drawn, and a crop may still be cut from it
+    if (!copy) {
+      r.left.width = 0
+      r.left.height = 0
+      r.left = null
+    }
     if (i === 1) {
       // the paper's designs from its first page: the serif with most characters, and its sans and mono
       const pick = fam => [...fontTally].filter(([k]) => k.startsWith(`${fam}:`)).sort((a, b) => b[1] - a[1])[0]?.[0].split(':')[1]

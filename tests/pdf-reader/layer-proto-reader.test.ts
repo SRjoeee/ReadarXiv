@@ -361,7 +361,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     await under
     await tick()
     expect(styles()).toBe(before - 1)
-    expect(run.rows.every(r => r.released && !r.base && r.left.width === 0 && r.right!.width === 0)).toBe(true)
+    expect(run.rows.every(r => r.released && !r.base && r.left!.width === 0 && r.right!.width === 0)).toBe(true)
     expect(run.stats).toEqual([])
   })
 
@@ -453,6 +453,108 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     const row = (n: number) => rowOf(bundle, 0, { state: 'whole', pieces: [{ t: 'text', tr: true, s: 'x'.repeat(n) }] })
     expect(row(STRING_MAX)[2]).toBe('whole')
     expect(row(STRING_MAX + 1)[2]).toBe('none')
+  })
+})
+
+describe("the original's canvas with no copy kept (openProto copy: false): read once for the page's ink, then let go", () => {
+  // the reader's memory: a host that jumps to page p lays pages 1 to p before it is done with any, and each page's original
+  // is a canvas of 12.5 MB on A4. With no copy nothing reads it but the ink map (drawCopy takes the page from the host), so
+  // it goes as the page is drawn, not when the host releases the page
+  /** v0 over the paper as the door opens it, every unit at once, the copy kept or not */
+  const open = async (copy: boolean, rules?: unknown) => {
+    const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const { indexLayout } = await import('@/pdf-reader/engine/layout/file.mjs')
+    const bundle = bundleOf(), rows = rowsOf(bundle)
+    const units: unknown[] = []
+    const pieces = new Map<number, unknown>()
+    for (const r of rows) { const u = unitOf(bundle, r)!; units[r[0]] = u; if (u.pieces && (u.state === 'whole' || u.state === 'partial')) pieces.set(r[0], trPiecesOf(u.pieces, (p: unknown) => (p as { k: number }).k)) }
+    return openProto({
+      doc: docOf(), geometry: { schema: 1, kinds: bundle.left.kinds, left: { pages: bundle.left.pages, units: bundle.left.units } } as never, units: units as never, target: 'zh',
+      pages: Number.POSITIVE_INFINITY, scale: 2.5, dpr: 1, copy, faceSources, hyphUrl, ...(rules ? { rules: rules as never } : {}),
+      tex: { use: 'lines', texOnly: true, symbols: 'text', extents: 'v0', index: indexLayout(bundle.layout!), pieces: pieces as never },
+      removal: { mode: 'draw', doc: docOf(), manifest: bundle.addon!.manifest },
+      labels: { captions: { figure: 'target', table: 'target' } },
+    })
+  }
+  const drawing = (run: Run) => run.rows.map(r => ({ svg: r.svg.outerHTML, ops: JSON.stringify(r.ops) }))
+
+  it('lets each canvas go before the host is done with the page, keeps base and released as they were, and draws what the same open with a copy draws', async () => {
+    const kept = await open(true)
+    await kept.until(2)
+    const want = drawing(kept)
+    // (a drawing worth comparing: text set on both pages, units whited out and one erased and put back)
+    expect(want.every(w => w.svg.includes('<tspan') && w.ops.includes('paper'))).toBe(true)
+    expect(want[0]!.ops).toContain('erase')
+    // (a copy kept, as the gate and the lab open: the original whole until the page is released)
+    expect(kept.rows.map(r => [r.left!.width, r.left!.height, r.right!.width])).toEqual([[750, 750, 750], [750, 750, 750]])
+    expect(kept.rows.map(r => [r.base, !!r.released])).toEqual([[true, false], [true, false]])
+    kept.dispose()
+
+    const run = await open(false)
+    const canvases = run.rows.map(r => r.left!)
+    expect(canvases.every(c => c instanceof HTMLCanvasElement)).toBe(true)
+    await run.until(2)
+    // (both pages laid, none released: the canvas gone, its reference dropped, the page still drawn for a crop)
+    expect(run.rows.map(r => r.left)).toEqual([null, null])
+    expect(canvases.map(c => [c.width, c.height])).toEqual([[0, 0], [0, 0]])
+    expect(run.rows.map(r => [r.base, !!r.released])).toEqual([[true, false], [true, false]])
+    expect(drawing(run)).toEqual(want)
+    // (the host is done: released once, again, and the run let go after: nothing reads a canvas that is not there)
+    run.release(1)
+    run.release(1)
+    run.release(2)
+    expect(run.rows.map(r => [r.base, r.released])).toEqual([[false, true], [false, true]])
+    run.dispose()
+    run.dispose()
+    expect(run.rows.map(r => r.left)).toEqual([null, null])
+  })
+
+  it("reads the page's ink from the canvas while it is whole, on every page, whatever the rules say of borrowing", async () => {
+    const g = globalThis as unknown as { OffscreenCanvas: new () => { getContext(...a: unknown[]): unknown } }
+    const Real = g.OffscreenCanvas
+    const reads: number[] = []
+    // (what inkMapOf draws from: the page's canvas, its width read as it is drawn)
+    g.OffscreenCanvas = class extends Real {
+      override getContext(...a: unknown[]) {
+        const ctx = super.getContext(...a) as object
+        return new Proxy(ctx, { get: (t, k) => (k === 'drawImage' ? (src: { width: number }) => { reads.push(src.width) } : Reflect.get(t, k)) })
+      }
+    }
+    try {
+      for (const borrow of [1, 0]) {
+        reads.length = 0
+        const rules = structuredClone(BUILTIN_RULES) as unknown as { scripts: Record<string, { borrow: number }> }
+        rules.scripts.Hans!.borrow = borrow
+        const run = await open(false, rules)
+        expect(run.P.borrow).toBe(borrow)
+        await run.until(2)
+        expect(reads).toEqual([750, 750])
+        expect(run.rows.map(r => r.left)).toEqual([null, null])
+        run.dispose()
+      }
+    } finally { g.OffscreenCanvas = Real }
+  })
+
+  it('a jump through the door holds no canvas on the way, and every call after it (the same page, an earlier one, a copy, the end) is safe', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const bundle = bundleOf()
+    const layer = await openLayer({ bundle, doc: docOf(), target: 'zh', faceSources, hyphUrl })
+    layer.take(rowsOf(bundle))
+    layer.end()
+    const run = seen.runs.at(-1) as Run
+    const canvases = run.rows.map(r => r.left!)
+    // (page 2 asked for first: page 1 is laid on the way and its canvas never outlives its ink)
+    const jump = await layer.pageOf(2, { lang: 'zh' })
+    expect(canvases.map(c => c.width)).toEqual([0, 0])
+    expect(run.rows.map(r => [r.left, r.base, r.released])).toEqual([[null, false, true], [null, false, true]])
+    expect((await layer.pageOf(2, { lang: 'zh' })).svg).toBe(jump.svg)
+    expect((await layer.pageOf(1, { lang: 'zh' })).svg).toBe(run.rows[0]!.svg)
+    const source = document.createElement('canvas')
+    source.width = 750
+    source.height = 750
+    expect((await layer.copyOf(1, source, 2.5)).width).toBe(750)
+    layer.dispose()
+    layer.dispose()
   })
 })
 
