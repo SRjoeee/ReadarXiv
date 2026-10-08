@@ -34,7 +34,7 @@ import BUILTIN_JSON from './layout-rules.json' with { type: 'json' }
 
 /** the schema's number: the shape and how the engine reads it. 2 (D6, 2026-10-08): `grid` gone (every script's lines on the
  *  original's pitch while the size shrinks); `adaptiveFill` read for every original, its page's target held near the last
- *  page's and one size a page; `fillLead` added */
+ *  page's and one size a page; `fillLead` and `leftover` added */
 export const RULES_SCHEMA = 2
 /** a set's bytes at most, as received (the migrated set is about 8 KB) */
 export const RULES_CAP = 65_536
@@ -51,6 +51,7 @@ export const SCRIPTS = Object.freeze(['Hans', 'Hant', 'Jpan', 'Kore', 'Latn', 'C
 const CJK_SCRIPTS = new Set(['Hans', 'Hant', 'Jpan', 'Kore'])
 const ORDER = Object.freeze(['track', 'borrow', 'lead', 'shrink'])
 const FURTHER = Object.freeze(['widen', 'flow', 'shrink'])
+const LEFTOVER = Object.freeze(['foot', 'pack'])
 /** the weights of a CJK group the role table builds its roles from (font-roles.mjs rolesFor) */
 const GROUP_WEIGHTS = Object.freeze(['light', 'regular', 'semibold', 'bold'])
 const NOTE_MAX = 1000
@@ -141,6 +142,8 @@ const SCRIPT_FIELDS = [
   // (D6's F6b, 2026-10-08: the top of a unit's fill leading, which replaced the script's leading on the original's pitch;
   // in em of the size drawn, so that a shrunk unit is spread no looser for its size than one set at the full size)
   { key: 'fillLead', group: 'fit', kind: 'number', nullable: true, min: 1, max: 3, step: 0.05, words: "The loosest line pitch the fill spreads a unit's lines to, in em of the size it is drawn at; empty: the original's own pitch.", schema: () => z.nullable(range(1, 3)) },
+  // (D6's F6c, 2026-10-08: built switchable, for the maintainer to decide by looking; 'foot' is what the fill left before)
+  { key: 'leftover', group: 'fit', kind: 'enum', values: LEFTOVER, words: "Where what the fill leaves over goes: at each paragraph's foot, or packed to the end of its run of paragraphs, each keeping the original's gap to the one above it.", schema: () => z.literal([...LEFTOVER]) },
   // breaking (layer2.mjs tokensOf2, placeItems; layer1.mjs kinsokuOf)
   { key: 'keepAll', group: 'breaking', kind: 'boolean', words: 'Whether lines break only at spaces (Korean and the alphabets) rather than between any two CJK characters.', schema: () => z.boolean() },
   { key: 'cjkQuotes', group: 'breaking', kind: 'boolean', words: 'Whether curly quotes, dashes, the ellipsis and the middle dot are set as CJK characters.', schema: () => z.boolean() },

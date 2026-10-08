@@ -52,6 +52,8 @@ export declare const layOrder: (placed: readonly { id: number; pages: readonly n
 export declare function settleLayout(p: { clear?: { bands: Map<number, import('./layer2.mjs').CellBand[]> } | null; layout: { lines?: { block: number; baseline: number }[]; scale?: number }; s: number }): void
 /** adaptiveFill's pass over a page's loose units: each filled unit laid anew in place and settled, then onFilled; the target leading, or null */
 export declare function fillPage(units: unknown[], P: Params & { adaptiveFill: { band: number; track: number; size: number } }, running?: number | null, onFilled?: (p: Placed, target: number) => void): { target: number; body: boolean } | null
+/** the leftover packed (P.leftover 'pack'): a page's body units of one block moved up to keep the original's gap to the one above, the moves by id (PDF units up). `rects`: every unit's rectangles on the page, [id, [page, x0, y0, x1, y1]]; `chars`: the page's characters */
+export declare function packPage(page: number, units: unknown[], rects: readonly [number, readonly number[]][], chars: readonly { ch: string; x0: number; x1: number; yb: number; size: number }[]): Map<number, number>
 export interface ProtoRun {
   N: number
   P: Params

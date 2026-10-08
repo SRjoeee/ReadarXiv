@@ -24,6 +24,8 @@ export interface Params {
    *  body units held to one leading and one size; and the loosest pitch it spreads to, in em of the size drawn (null: the
    *  original's own) */
   adaptiveFill: { band: number; track: number; size: number } | null; fillLead: number | null
+  /** what the fill leaves over: at each unit's foot, or packed to the end of its run of paragraphs (run.mjs packPage) */
+  leftover: 'foot' | 'pack'
   /** breaking: lines break only at spaces, which quotes are CJK's, centred punctuation, the characters no line starts or
    *  ends with, and the hyphenation patterns of a Latin word */
   keepAll: boolean; cjkQuotes: boolean; centredPunct: boolean; noStart: string; noEnd: string; latinPatterns: 'en' | 'de'

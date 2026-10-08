@@ -200,6 +200,59 @@ export function fillPage(units, P, running = null, onFilled = () => {}) {
 }
 
 /**
+ * The leftover packed (P.leftover 'pack', D6's F6c, the maintainer's experiment of 2026-10-08; 'foot' keeps it at each
+ * unit's foot): a page's body units (`units`, laid and filled: blocks, layout, s) moved up so that each paragraph keeps
+ * the original's gap to the one above it, and what its fill leaves over gathers at the end of the run of paragraphs, before
+ * the next fixed thing. A unit moves where it is a body unit of one block, on this page alone, below another body unit of
+ * the page in its column with nothing between them: no other unit's line (`rects`, every unit's rectangles on the page:
+ * [id, [page, x0, y0, x1, y1]]), no character of the page (`chars`: a display, a label), and no more than three of the
+ * upper's pitches of the original's (a figure's room). A heading, a display, a float, a unit drawn on two pages or one
+ * left the original's is fixed: a run ends at it. Its first line is then set as far under the upper's last drawn line as
+ * the original's are apart, never lower than it was, its lines moved together; the units are taken from the top, so that
+ * a run's moves add up. The cost: a paragraph's top leaves its original's line.
+ * Returns the moves by unit id (PDF units up), the units that moved in the order they were taken.
+ */
+export function packPage(pg, units, rects, chars) {
+  const lastOf = p => { let i = -1; p.blocks.forEach((b, j) => { if (b.page === pg) i = j }); return i }
+  const linesOf = (p, bi) => p.layout.lines.filter(l => l.page === pg && l.block === bi)
+  const body = units.filter(p => EVEN_KINDS.has(p.unit.kind) && !p.refused && p.layout)
+  const movable = body.filter(p => p.pages.length === 1 && p.pages[0] === pg && p.blocks.length === 1 && p.blocks[0].page === pg && linesOf(p, 0).length)
+    .sort((a, b) => b.blocks[0].B[0] - a.blocks[0].B[0])
+  const moves = new Map()
+  for (const q of movable) {
+    const b = q.blocks[0], top = b.B[0] + 0.75 * (b.sizes[0] ?? q.s)
+    let upper = null
+    for (const p of body) {
+      if (p === q) continue
+      const ai = lastOf(p)
+      if (ai < 0 || !linesOf(p, ai).length) continue
+      const a = p.blocks[ai]
+      const span = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)
+      if (span < 0.5 * Math.min(a.x1 - a.x0, b.x1 - b.x0) || !(a.B.at(-1) > b.B[0])) continue
+      // (the nearest above it: the lowest last line over its first)
+      if (!upper || a.B.at(-1) < upper.a.B.at(-1)) upper = { p, a, ai }
+    }
+    if (!upper) continue
+    const { p, a, ai } = upper
+    const foot = a.B.at(-1) - 0.22 * (a.sizes.at(-1) ?? p.s), g0 = foot - top
+    if (!(g0 > 0) || g0 > 3 * (a.pitch0 ?? 1.2 * p.s)) continue
+    const x0 = Math.max(a.x0, b.x0), x1 = Math.min(a.x1, b.x1)
+    const across = (l, r) => Math.min(x1, r) - Math.max(x0, l) > 1
+    if (rects.some(([id, r]) => id !== p.id && id !== q.id && r[0] === pg && across(r[1], r[3]) && r[4] > top + 0.1 && r[2] < foot - 0.1)) continue
+    if (chars.some(c => /\S/.test(c.ch) && across(c.x0, c.x1) && c.yb + 0.28 * c.size > top && c.yb + 0.28 * c.size < foot)) continue
+    // (by baselines: the upper's last drawn line as it now stands, a unit above it that moved having moved it, above its
+    // original's last by what its fill left; the lower's first as far from it as the original's are. A size smaller than the
+    // original's is not made up for: its glyphs' smaller ascent is no blank line, and its lines stay on the original's pitch)
+    const own = linesOf(q, 0), up = linesOf(p, ai)
+    const d = Math.round(((Math.min(...up.map(l => l.baseline)) - a.B.at(-1)) - (Math.max(...own.map(l => l.baseline)) - b.B[0])) * 1000) / 1000
+    if (d <= 0) continue
+    for (const l of q.layout.lines) l.baseline += d
+    moves.set(q.id, d)
+  }
+  return moves
+}
+
+/**
  * What laying a paper's pages reads of its units' rows, by page: the index into the units v0 may place, in the stream's
  * order (`K`: each with `lists`, the pages each of its sources would draw it on, and `reach`, every page their lines are
  * on), up to which every unit must be in and decided. `lay[g]`, to lay the units page g's drawing lays: layGroups'
@@ -292,6 +345,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // the host's: the fit's parameters, the hyphenation patterns, the CJK family, the float labels' names
   const R = resolveRules(rules, to)
   const P = R.params
+  /** whether a page's units are set together once all are laid (the even pass, the page fill, the leftover packed) */
+  const PASSES = !!(P.even || P.adaptiveFill || P.leftover === 'pack')
   // iteration 2's hyphenation, fetched at once (local, small)
   const hyphP = Promise.all(R.patterns.map(async l => L2.setHyphenData(l, await loadHyphenation(l, hyphUrl(l)))))
   // the target's likely faces loaded meanwhile (Times-like until the paper's own designs are known), and Latin Modern at
@@ -977,6 +1032,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     })
     if (r?.body) running = r.target
   }
+  // the leftover packed (packPage) over a page's units laid, each moved unit's record updated
+  const packPass = pg => {
+    const moved = packPage(pg, laid[pg], rectsByPage.get(pg) ?? [], chars2[pg - 1] ?? [])
+    for (const [id, d] of moved) { const p = byId.get(id); if (p?.rec) Object.assign(p.rec, { lines: recLinesOf(p), pack: r1(d) }) }
+    return moved
+  }
   const ms = new Map()
   // A table group's cells laid, then painted all together or not at all (the table-groups brief): a cell is painted
   // only once every cell of its group is laid, and none is where one could be set only clipped (its fit past its floor)
@@ -1014,7 +1075,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (p.refused) skipped.push({ id: p.id, kind: p.unit.kind, why: p.why ?? 'unfit', ...(p.missing ? { missing: p.missing } : {}), chars: trCharsOf(p.unit), pages: p.pages })
     const g = p.unit.group && groupCells.has(p.unit.group) ? p.unit.group : null
     if (g) (groupLaid.get(g) ?? groupLaid.set(g, { list: [], done: false }).get(g)).list.push(p)
-    if (P.even || P.adaptiveFill) {
+    if (PASSES) {
       // (a page's pass sets the units that begin on it, which are then painted on each of their pages: a unit is never
       // painted from two layouts; a table's cells with their group, once it is laid whole)
       for (const pg of p.pages) {
@@ -1022,7 +1083,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         if (laid[pg].length === expected[pg]) {
           if (P.even) evenPass(pg)
           if (P.adaptiveFill) fillPass(pg)
-          for (const u of laid[pg]) if (!u.refused && u.pages[0] === pg && (!u.unit.group || !groupCells.has(u.unit.group))) for (const q of u.pages) paint(u, q)
+          // (the leftover packed: the units moved are painted after the others, from the top, so that no erasing of the
+          // unit above takes what they draw over its foot)
+          const moved = P.leftover === 'pack' ? packPass(pg) : null
+          const order = moved?.size ? [...laid[pg].filter(u => !moved.has(u.id)), ...laid[pg].filter(u => moved.has(u.id)).sort((a, b) => b.blocks[0].B[0] - a.blocks[0].B[0])] : laid[pg]
+          for (const u of order) if (!u.refused && u.pages[0] === pg && (!u.unit.group || !groupCells.has(u.unit.group))) for (const q of u.pages) paint(u, q)
           for (const gg of new Set(laid[pg].map(u => u.unit.group).filter(x => x && groupCells.has(x)))) settleGroup(gg)
         }
       }
@@ -1125,7 +1190,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // open's (a unit not translated, an author, a cell whose group is withheld, the file's lines in place of the geometry's
   // decide which units are placed, and so the batches). A unit's row is fixed once it is placed (a row taken for it
   // later is late), and every row once a table's group is read
-  const need = needsOf(K, N, !!(P.even || P.adaptiveFill), c => !c.rects)
+  const need = needsOf(K, N, PASSES, c => !c.rects)
   /** the units placed, in the stream's order, as layGroups and doneAt read them (`placed` is the same less each table
    *  group withheld as its cells are laid), and by id */
   const laidOut = [], byId = new Map()
@@ -1174,9 +1239,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     for (const [pg, ids] of groups) for (const id of ids) groupOf.set(id, pg)
     doneAt = Array.from({ length: N + 1 }, (_, pg) => pg)
     for (const p of laidOut) for (const pg of p.pages) doneAt[pg] = Math.max(doneAt[pg], groupOf.get(p.id) ?? pg)
-    // (with a page pass, P.even or P.adaptiveFill: a page is done once the first page of each unit on it is, whose pass
-    // sets that unit)
-    if (P.even || P.adaptiveFill) for (let pg = 1; pg <= N; pg++) for (const p of laidOut) if (p.pages.includes(pg)) doneAt[pg] = Math.max(doneAt[pg], doneAt[p.pages[0]])
+    // (with a page pass, PASSES (the even pass, the page fill, the leftover packed): a page is done once the first page
+    // of each unit on it is, whose pass sets that unit)
+    if (PASSES) for (let pg = 1; pg <= N; pg++) for (const p of laidOut) if (p.pages.includes(pg)) doneAt[pg] = Math.max(doneAt[pg], doneAt[p.pages[0]])
   }
   /** page pg's doneAt once the units it reads are placed and planned, else Infinity */
   const doneAtOf = pg => (pg >= 1 && pg <= N && plannedTo <= need.done[pg] ? Infinity : doneAt[pg])

@@ -67,6 +67,19 @@ describe('the gaps between paragraphs (paraGap, D6): the drawn gap against the o
     expect(gapsOf({ lower: lines(4, 600) })).toEqual([])
   })
 
+  it("takes a paragraph's lines moved above its frame as its frame's (the leftover packed): its top's shift, its gap kept", () => {
+    // (A ends two lines short; B moved up 24 under it: the original's gap, B's top 24 above its own)
+    const m = modelPage({
+      units: [unit({ id: 1, orig: A, lines: drawnOn(A, 3) }), unit({ id: 2, orig: B, lines: drawnOn(B).map(l => ({ ...l, baseline: l.baseline + 24 })) })],
+      ref: [{ id: 1, kind: 'para', orig: A }, { id: 2, kind: 'para', orig: B }], items: [], translated: new Set([1, 2]),
+    })
+    expect(m.gaps).toHaveLength(1)
+    expect(m.gaps[0]!.ratio).toBeCloseTo(1, 6)
+    const geoB = m.geo.find(g => g.id === 2)!
+    expect(geoB.dTop).toBeCloseTo(24, 6)
+    expect(geoB.blank).toBeCloseTo(2, 6)
+  })
+
   it('pairs frames of one column only', () => {
     const right = B.map(l => ({ ...l, x0: 320, x1: 540 }))
     const left = A.map(l => ({ ...l, x1: 300 }))

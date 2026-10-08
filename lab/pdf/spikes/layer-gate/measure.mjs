@@ -81,7 +81,19 @@ export function frameGroups(orig) {
 }
 const framesOf = orig => frameGroups(orig).map(f => [f.x0, f.bottom, f.x1, f.top])
 /** a frame's drawn lines: those of the unit within its band and columns */
-const linesIn = (u, fr) => u.lines.filter(l => l.baseline <= fr.top + 2 && l.baseline >= fr.bottom - 6 * fr.size && l.x0 < fr.x1 - 2 && l.x1 > fr.x0 + 2)
+const inBand = (l, fr) => l.baseline <= fr.top + 2 && l.baseline >= fr.bottom - 6 * fr.size && l.x0 < fr.x1 - 2 && l.x1 > fr.x0 + 2
+/** each frame's drawn lines (inBand), and a line in no frame's band but above one in its column, within ten of its
+ *  pitches, that frame's nearest (a unit moved up by the leftover packed, D6's F6c, its top off its original's line) */
+function linesOfFrames(u, frames) {
+  const out = frames.map(fr => u.lines.filter(l => inBand(l, fr)))
+  for (const l of u.lines) {
+    if (frames.some(fr => inBand(l, fr))) continue
+    let at = -1
+    frames.forEach((fr, i) => { if (l.x0 < fr.x1 - 2 && l.x1 > fr.x0 + 2 && l.baseline > fr.top && l.baseline - fr.top <= 10 * fr.pitch && (at < 0 || fr.top > frames[at].top)) at = i })
+    if (at >= 0) out[at].push(l)
+  }
+  return out
+}
 
 /** the grid the coverage counts in: per frame, cells one pitch high and one em wide over its lines */
 function* cellsOf(orig) {
@@ -119,8 +131,9 @@ export function modelPage({ units, ref, items, translated }) {
   // original's
   const fills = [], geo = []
   for (const u of drawn) {
-    for (const fr of frameGroups(u.orig)) {
-      const mine = linesIn(u, fr).sort((a, b) => b.baseline - a.baseline)
+    const frames = frameGroups(u.orig), framed = linesOfFrames(u, frames)
+    for (const [fi, fr] of frames.entries()) {
+      const mine = framed[fi].sort((a, b) => b.baseline - a.baseline)
       if (!mine.length) { fills.push({ kind: u.kind, n: fr.n, fill: 0 }); continue }
       const f = mine[0].size, dLast = mine.at(-1).baseline
       const top = fr.first + 0.75 * fr.size, bottom = fr.last - 0.25 * fr.size
@@ -180,8 +193,9 @@ export function paraGapsOf(drawn, ref, items) {
   const body = []
   for (const u of drawn) {
     if (!BODY.has(u.kind)) continue
-    frameGroups(u.orig).forEach((fr, i) => {
-      const mine = linesIn(u, fr).sort((a, b) => b.baseline - a.baseline)
+    const frames = frameGroups(u.orig), framed = linesOfFrames(u, frames)
+    frames.forEach((fr, i) => {
+      const mine = framed[i].sort((a, b) => b.baseline - a.baseline)
       if (!mine.length) return
       body.push({ key: `${u.id}|${i}`, x0: fr.x0, x1: fr.x1, pitch: fr.pitch, top: fr.first + 0.75 * fr.size, foot: fr.last - 0.22 * fr.size, dTop: mine[0].baseline + 0.75 * mine[0].size, dFoot: mine.at(-1).baseline - 0.22 * mine.at(-1).size })
     })

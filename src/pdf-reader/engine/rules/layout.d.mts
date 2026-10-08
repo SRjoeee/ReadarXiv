@@ -37,6 +37,8 @@ export interface ScriptRules {
   adaptiveFill: { band: number; track: number; size: number } | null
   /** em of the size drawn: the loosest pitch the fill spreads a unit to; null: the original's own pitch */
   fillLead: number | null
+  /** what the fill leaves over: at each unit's foot, or packed to its run's end */
+  leftover: 'foot' | 'pack'
   // breaking (layer2.mjs tokensOf2, layer1.mjs kinsokuOf)
   /** break only at spaces (Korean, the alphabets) */
   keepAll: boolean

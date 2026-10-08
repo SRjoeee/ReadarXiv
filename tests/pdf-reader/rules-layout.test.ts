@@ -24,8 +24,8 @@ const bytesOf = (s: string) => new TextEncoder().encode(s)
 // biome-ignore lint/suspicious/noExplicitAny: a set under edit has no fixed shape
 type Edit = any
 /** the fields each schema since the first removed and added (schema 2, D6: `grid` gone, every script's lines on the
- *  original's pitch while the size shrinks; `fillLead`, the page fill's top) */
-const REMOVED = ['grid'], ADDED = ['fillLead']
+ *  original's pitch while the size shrinks; `fillLead`, the page fill's top; `leftover`, where what it leaves goes) */
+const REMOVED = ['grid'], ADDED = ['fillLead', 'leftover']
 /** the frozen first version lifted to the current schema: its values as they were, less the fields removed since, the fields
  *  added since at the built-in set's values for each script */
 const lift = (s: Edit): Edit => {
@@ -591,7 +591,7 @@ describe('the fields the lab shows (RULES_FIELDS)', () => {
     const by = Object.fromEntries(RULES_FIELDS.map(f => [f.path, f]))
     expect(by.order!.values).toEqual(['track', 'borrow', 'lead', 'shrink'])
     expect(by.further!.values).toEqual(['widen', 'flow', 'shrink'])
-    for (const [path, ok] of [['compressMax', [0, 1, 2]], ['even', [0, 1, 2]], ['hyphen', [0, 1]], ['borrow', [0, 1]], ['latinPatterns', ['en', 'de']]] as const) {
+    for (const [path, ok] of [['leftover', ['foot', 'pack']], ['compressMax', [0, 1, 2]], ['even', [0, 1, 2]], ['hyphen', [0, 1]], ['borrow', [0, 1]], ['latinPatterns', ['en', 'de']]] as const) {
       expect(by[path]!.values, path).toEqual(ok)
       for (const v of ok) expect(() => parseRules(v1(s => { s.scripts.Hans[path] = v })), `${path} = ${v}`).not.toThrow()
     }

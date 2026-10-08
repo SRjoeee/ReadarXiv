@@ -369,3 +369,45 @@ describe("the page fill (adaptiveFill, D6's F6b): every original's units spread 
     expect([e.layout.scale, cap.layout.scale]).toEqual([1.1, 1])
   })
 })
+
+describe("the leftover packed (P.leftover 'pack', D6's F6c): each paragraph keeps the original's gap to the one above", () => {
+  // three paragraphs of a column, 12 pt apart at size 10: A's four lines from 500, B's three from 440, C's two from 400
+  const unitOf = (id: number, B: number[], drawn: number[], o: { kind?: string; pages?: number[]; blocks?: number } = {}) => {
+    const block = { page: 1, x0: 0, x1: 200, B, sizes: B.map(() => 10), pitch0: 12 }
+    return { id, unit: { kind: o.kind ?? 'para' }, pages: o.pages ?? [1], s: 10, blocks: Array.from({ length: o.blocks ?? 1 }, () => block), layout: { f: 10, lines: drawn.map(baseline => ({ page: 1, block: 0, baseline })) } }
+  }
+  const run = () => [unitOf(1, [500, 488, 476, 464], [500, 485]), unitOf(2, [440, 428, 416], [440, 428]), unitOf(3, [400, 388], [400, 388])]
+  const pack = async (units: ReturnType<typeof unitOf>[], rects: [number, number[]][] = [], chars: { ch: string; x0: number; x1: number; yb: number; size: number }[] = []) =>
+    (await import('@/pdf-reader/engine/layer-proto/run.mjs')).packPage(1, units as never, rects, chars)
+  const gap = (a: ReturnType<typeof unitOf>, b: ReturnType<typeof unitOf>) => Math.min(...a.layout.lines.map(l => l.baseline)) - 2.2 - (Math.max(...b.layout.lines.map(l => l.baseline)) + 7.5)
+
+  it("moves each paragraph up to the original's gap under the one above, the moves adding up to the run's end", async () => {
+    const [a, b, c] = run()
+    const moves = await pack([a!, b!, c!])
+    // (A ends two lines and three points short: B rises 21, and C, under B a line short, 33)
+    expect([...moves]).toEqual([[2, 21], [3, 33]])
+    expect(b!.layout.lines.map(l => l.baseline)).toEqual([461, 449])
+    expect(gap(a!, b!)).toBeCloseTo(461.8 - 447.5, 6)
+    expect(gap(b!, c!)).toBeCloseTo(413.8 - 407.5, 6)
+  })
+
+  it('moves nothing past a fixed thing: another unit\'s line, a character of the page between them, or a figure\'s room', async () => {
+    const [a, b, c] = run()
+    // (a heading's line between A and B: B stays, and C rises under B alone, a line)
+    const moves = await pack([a!, b!, c!], [[9, [1, 0, 450, 100, 458]]])
+    expect([...moves]).toEqual([[3, 12]])
+    const [a2, b2, c2] = run()
+    expect([...(await pack([a2!, b2!, c2!], [], [{ ch: 'x', x0: 50, x1: 55, yb: 452, size: 10 }]))]).toEqual([[3, 12]])
+    const far = [unitOf(1, [500, 488, 476, 464], [500, 485]), unitOf(2, [400, 388], [400, 388])]
+    expect((await pack(far)).size).toBe(0)
+  })
+
+  it("moves no unit of two blocks, on two pages or not of the body, and none drawn to its frame's foot", async () => {
+    for (const o of [{ blocks: 2 }, { pages: [1, 2] }, { kind: 'caption' }]) {
+      const [a, , c] = run()
+      expect((await pack([a!, unitOf(2, [440, 428, 416], [440, 428], o), c!])).has(2), JSON.stringify(o)).toBe(false)
+    }
+    const full = [unitOf(1, [500, 488, 476, 464], [500, 488, 476, 464]), unitOf(2, [440, 428, 416], [440, 428, 416])]
+    expect((await pack(full)).size).toBe(0)
+  })
+})
