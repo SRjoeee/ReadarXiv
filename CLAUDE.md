@@ -63,6 +63,7 @@ pnpm e2e:layout          # side-mode layout contract in a real browser
 pnpm e2e:a11y            # A/B axe audit, offline (fixture + vendored arXiv sheets + echo endpoint): only differences the extension introduces
 pnpm e2e:local-endpoint  # an http endpoint without CORS headers can translate a whole page
 pnpm e2e:pdf             # arXiv's PDF page: the button is drawn there, it and the popup open the bilingual version
+pnpm e2e:reader          # the PDF reader on a paper of our own, no network: a route table guards every request; the stand-in of the layer API serves the sample's bundle (tests/fixtures/pdf/sample-1/; pnpm build first)
 pnpm e2e:floating        # the floating button on the abstract, PDF and full-text pages: rest, hover, drag, hide, toggle, tick
 pnpm e2e:popup           # the popup: finding a paper, the menus under their rows, the entries, the panel growing
 pnpm e2e:viewer          # the figure viewer's control under a header the page pins, offline (AXT_CHROME=<Chrome 131> for the floor)
