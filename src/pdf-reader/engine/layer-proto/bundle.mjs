@@ -291,9 +291,9 @@ function unitStands(u, i, stands) {
  * paper; its base's digest 64 hex digits, its bytes 1 to 2^31, its address our copy's; each unit (unitStands), one that
  * does not dropped; the left's kinds (a unit's each), pages (boxes, the paper's) and units ([id, stream, rects] of the
  * bundle's units, each rectangle a box within its page's view, as the layout file's are); the layout by its file's
- * rules (layout/file.mjs checkLayout), of the bundle's paper and units, its pages' views the left's; the add-on's
- * manifest by its own (layout/addon-manifest.mjs checkAddonManifest: the shipped add-on's, the paper's pages, each box
- * within its page's view as the left gives it), its tail decoded from base64 within ADDON_CAP, the manifest's
+ * rules (layout/file.mjs checkLayout), of the bundle's paper, PDF.js and units, its pages' views the left's; the
+ * add-on's manifest by its own (layout/addon-manifest.mjs checkAddonManifest: the shipped add-on's, the paper's pages,
+ * each box within its page's view as the left gives it), its tail decoded from base64 within ADDON_CAP, the manifest's
  * `appended` bytes. Returns the bundle with each unit dropped null at its id and `dropped` those ids rising, and the
  * tail as bytes; throws BundleRefusal
  */
@@ -381,6 +381,8 @@ export function readBundle(json, caps = {}) {
     try { layout = checkLayout(b.layout) } catch (e) { throw within('layout', e) }
     const lp = layout.paper
     if (lp.id !== paper.id || lp.version !== paper.version || lp.pages !== pages) throw fail('layout.paper', 'not the bundle\'s paper')
+    // (its geometry read by the PDF.js the bundle names, the reader's own)
+    if (layout.pdfjs !== versions.pdfjs) throw fail('layout.pdfjs', `not the bundle's PDF.js '${versions.pdfjs}'`)
     // (its pages' views the left's, by the point a box may lie past them: the two sides read one page)
     for (let i = 0; i < views.length; i++) if (Math.abs(layout.views[i] - views[i]) > SLACK) throw fail(`layout.views[${i}]`, `not the left's page ${Math.floor(i / 4) + 1} within ${SLACK} pt`)
     // its units the bundle's: each one's kind and pieces, where it stands, those the layout file located
