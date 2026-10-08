@@ -77,7 +77,7 @@ its comment is numbers, fixture names and links that open the layer lab on the m
 |---|---|
 | `.github/workflows/rules-gate.yml` | On a pull request (not from a fork) that touches the drawing closure, the gate or the pack: the pack restored, then the layer gate's model tier twice on one runner, the merge base's engine with its own built-in set and the pull request's with its own, then the verdict as one comment (`<!-- rules-gate -->`, edited in place) and its numbers as an artifact. Environment `rules-gate`, 15 minutes. This is a measurement, not an end-to-end suite: Chromium runs on these paths alone. |
 | `.github/workflows/rules-publish.yml` | On a push to `next` that changes `layout-rules.json`: publish to staging (environment `rules-staging`, automatic) and move its pointer; then the set measured on each live engine (below); then production (environment `rules-production`, whose required reviewer is the maintainer: one click), which stays off until the repository variable `RULES_PRODUCTION` is `on`. |
-| `.github/workflows/rules-point.yml` | By hand: move a pointer to a version already published, on staging or on production (the same reviewer): the rollback. |
+| `.github/workflows/rules-point.yml` | By hand: move a pointer to a version already published, on staging or on production (the same reviewer): the rollback. A production one first cancels the publishes that wait for the click (below). |
 | `lab/pdf/spikes/rules-gate.mjs` | `run` (the gate's model tier in the production configuration, from the pack alone), `compare` (the verdict and the comment) and `engines` (the live-engines check). `tests/scripts/rules-gate.test.ts` holds its arithmetic on synthetic runs of numbers. |
 | `lab/pdf/spikes/rules-publish.mjs` | The two writes of the web Worker's rules routes: publish the file, move the pointer. The secret goes into one request header and is never printed. |
 | `lab/pdf/spikes/gate-pack.mjs`, `lab/pdf/gate-pack.json` | The fixture pack: made, restored by digest, verified. The JSON is its committed manifest. |
@@ -136,6 +136,13 @@ and echoes only the lines that are names and numbers (an output's `ok` line, the
 cut after the output's name). The comment and the numbers are searched for the translations' strings before they are written
 (`--records`), and a ruling's words are shown in code spans. The runner has no pnpm action of a third party's: `corepack enable`
 gives the version `package.json` names.
+
+**One pointer, one queue.** Every job that writes a pointer is in the one concurrency group of its environment,
+`rules-pointer-staging` or `rules-pointer-production`: the publish job and the rollback share it, queued and never cancelled, so
+two writes of a pointer never interleave. A production rollback begins by cancelling every `rules-publish.yml` run that waits
+for its production approval (`gh run list --workflow rules-publish.yml --status waiting`, then `gh run cancel`), in the one job
+of the three workflows that holds `actions: write`, which has no secret and no environment; the rollback is not made where that
+job failed. Without it a publish approved after the rollback would move the pointer back over it.
 
 **Live engines.** Before production, `rules-gate.mjs engines` runs the model tier of head's set on each engine
 `lab/pdf/live-engines.json` names (the released extension's tag and the web's production pin, each a git ref of this

@@ -163,6 +163,57 @@ describe('the rollback', () => {
   })
 })
 
+describe('one pointer, one queue', () => {
+  /** a workflow's jobs by name, each with its text (the comments before the next job's name stay with the one above it) */
+  const jobsOf = (yml: string) => new Map(yml.slice(yml.indexOf('\njobs:\n') + 7).split(/\n(?= {2}[a-z][a-z-]*:\n)/).flatMap(part => { const name = /^ {2}([a-z][a-z-]*):/m.exec(part)?.[1]; return name ? [[name, part] as [string, string]] : [] }))
+  const concurrencyOf = (job: string) => /\n {4}concurrency:\n {6}group: (.*)\n {6}cancel-in-progress: (.*)\n/.exec(job)?.slice(1) ?? null
+  const publish = jobsOf(text('rules-publish.yml')), point = jobsOf(text('rules-point.yml'))
+
+  it('puts every write of a pointer in the one group of its environment, queued and never cancelled', () => {
+    expect(concurrencyOf(publish.get('staging')!)).toEqual(['rules-pointer-staging', 'false'])
+    expect(concurrencyOf(publish.get('production')!)).toEqual(['rules-pointer-production', 'false'])
+    // the rollback's group is an expression of the environment, which is one of two: it comes to the same two groups
+    const options = [...(/options:\n((?:\s+- \w+\n)+)/.exec(text('rules-point.yml'))?.[1] ?? '').matchAll(/- (\w+)/g)].map(m => m[1]!)
+    expect(options).toEqual(['staging', 'production'])
+    const rollback = concurrencyOf(point.get('point')!)!
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: a GitHub expression, not a template
+    expect(rollback[0]).toBe('rules-pointer-${{ inputs.environment }}')
+    expect(options.map(o => rollback[0]!.replace('${{ inputs.environment }}', o))).toEqual(['rules-pointer-staging', 'rules-pointer-production'])
+    expect(rollback[1]).toBe('false')
+  })
+  it('lets no job that writes a pointer go without one, in any of the workflows', () => {
+    for (const name of WORKFLOWS) {
+      for (const [job, body] of jobsOf(text(name))) {
+        if (!/rules-publish\.mjs (publish|point)/.test(body)) continue
+        expect(concurrencyOf(body)?.[0], `${name}: ${job}`).toMatch(/^rules-pointer-/)
+      }
+    }
+    // the group of the live-engines check is nobody's: it writes no pointer
+    expect(concurrencyOf(publish.get('engines')!)).toBeNull()
+  })
+  it('cancels the publishes waiting for their approval before a production rollback, with the one write permission there is, and no secret', () => {
+    const cancel = point.get('cancel-waiting')!
+    expect(cancel).toContain("if: inputs.environment == 'production'")
+    expect(cancel).toMatch(/\n {4}permissions:\n {6}actions: write\n/)
+    expect(cancel).not.toMatch(/secrets\.|environment:/)
+    const body = runBodies(cancel).join('\n')
+    expect(body).toContain('gh run list --workflow rules-publish.yml --status waiting')
+    expect(body).toContain('gh run cancel "$id"')
+    // that job alone holds a write permission; the workflows' own are read
+    for (const name of WORKFLOWS) {
+      const yml = text(name)
+      expect(/^permissions:\n {2}contents: read\n/m.test(yml), name).toBe(true)
+      const writes = [...yml.matchAll(/\n( +)(\w[\w-]*): write\n/g)].map(m => `${m[2]}`)
+      expect(writes.filter(w => w === 'actions'), name).toHaveLength(name === 'rules-point.yml' ? 1 : 0)
+    }
+    // the rollback follows it, and is not made where it failed (a skipped one is staging's)
+    const rollback = point.get('point')!
+    expect(rollback).toContain('needs: cancel-waiting')
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: a GitHub expression, not a template
+    expect(rollback).toContain("if: ${{ !cancelled() && (needs.cancel-waiting.result == 'success' || needs.cancel-waiting.result == 'skipped') }}")
+  })
+})
+
 describe('the scripts a workflow runs', () => {
   it('are files of the tree, and every flag a workflow gives one is a flag it reads', () => {
     for (const name of WORKFLOWS) {

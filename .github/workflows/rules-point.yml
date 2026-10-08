@@ -3,6 +3,10 @@ name: Rules point
 # Moves the rule set's pointer to a version already published: the rollback. Staging's is a click; production's waits for the
 # maintainer, the required reviewer of the environment rules-production. Nothing is published here, and nothing is built: the
 # script reads no dependency.
+#
+# One pointer, one queue: this job and the publish job of the same environment (rules-publish.yml) write the same pointer, so they
+# share a concurrency group (rules-pointer-staging, rules-pointer-production) and never run together. A production rollback also
+# cancels the publishes that wait for the maintainer's approval first: one approved after it would move the pointer back over it.
 
 on:
   workflow_dispatch:
@@ -27,16 +31,38 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: rules-point-${{ inputs.environment }}
-  cancel-in-progress: false
-
 jobs:
+  # (no environment: cancelling a run is what anyone who may dispatch this workflow may do by hand, and the rollback itself still
+  # waits for the reviewer below. It holds the only write permission of the three workflows, and no secret.)
+  cancel-waiting:
+    name: Cancel the publishes waiting for production
+    if: inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Cancel
+        run: |
+          for id in $(gh run list --workflow rules-publish.yml --status waiting --limit 100 --json databaseId --jq '.[].databaseId'); do
+            gh run cancel "$id"
+            echo "cancelled run $id, which was waiting for its production approval"
+          done
+
   point:
     name: Point ${{ inputs.environment }} to version ${{ inputs.version }}
+    # a rollback that could not cancel the waiting publishes is not made: one approved later would undo it
+    needs: cancel-waiting
+    if: ${{ !cancelled() && (needs.cancel-waiting.result == 'success' || needs.cancel-waiting.result == 'skipped') }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment == 'production' && 'rules-production' || 'rules-staging' }}
     timeout-minutes: 5
+    concurrency:
+      group: rules-pointer-${{ inputs.environment }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:

@@ -23,9 +23,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: rules-staging
     timeout-minutes: 10
-    # one publish to staging at a time, in the order of the merges
+    # one write to staging's pointer at a time: the group is the rollback's too (rules-point.yml)
     concurrency:
-      group: rules-publish-staging
+      group: rules-pointer-staging
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
@@ -100,9 +100,10 @@ jobs:
     runs-on: ubuntu-latest
     environment: rules-production
     timeout-minutes: 10
-    # in the order of the merges: a set that waits for a click is not overtaken by a later one
+    # one write to production's pointer at a time: the group is the rollback's too (rules-point.yml), which cancels the publishes
+    # that wait for the click before it moves the pointer
     concurrency:
-      group: rules-publish-production
+      group: rules-pointer-production
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
