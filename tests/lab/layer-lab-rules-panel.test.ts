@@ -10,6 +10,8 @@ import * as R from '@/pdf-reader/engine/rules/layout.mjs'
 // set it sent
 
 const FILE = readFileSync(resolve('src/pdf-reader/engine/rules/layout-rules.json'))
+/** the built-in set's version: the file's before any save */
+const V = (JSON.parse(FILE.toString('utf8')) as { version: number }).version
 
 const h = (tag: string, attrs: Record<string, unknown> = {}, ...kids: (Node | string | null | undefined)[]) => {
   const e = document.createElement(tag)
@@ -57,7 +59,7 @@ beforeEach(() => {
       return new Promise(done => posts.push({
         body: String(init.body),
         headers: init.headers ?? {},
-        answer: (version = 2) => done({ ok: true, status: 200, json: async () => ({ ok: true, version, sha256: 'f'.repeat(64), bytes: 1, changed: [] }) }),
+        answer: (version = V + 1) => done({ ok: true, status: 200, json: async () => ({ ok: true, version, sha256: 'f'.repeat(64), bytes: 1, changed: [] }) }),
         refuse: (status, body) => done({ ok: false, status, json: async () => body }),
       }))
     }
@@ -134,7 +136,7 @@ describe('the save', () => {
       const post = posts.pop()!
       const { set } = await R.readRules(new TextEncoder().encode(post.body))
       expect(set.note, JSON.stringify(typed)).toBe(sent)
-      post.answer(2)
+      post.answer(V + 1)
       await settle()
     }
   })
@@ -155,7 +157,7 @@ describe('the save', () => {
     expect(posts).toHaveLength(1)
     // (the answer has not come: a second edit)
     flip('cjkQuotes')
-    posts[0]!.answer(2)
+    posts[0]!.answer(V + 1)
     await settle()
     const sent = JSON.parse(posts[0]!.body)
     expect(sent.languages.zh.keepAll).toBe(true)
@@ -163,7 +165,7 @@ describe('the save', () => {
     // the second edit is still the working set's, and is not in what the file now holds
     expect(p.dirty()).toBe(true)
     expect(p.set()!.languages.zh!.cjkQuotes).toBe(false)
-    expect(p.set()!.version).toBe(2)
+    expect(p.set()!.version).toBe(V + 1)
     expect((root.querySelector('#rules-save') as HTMLButtonElement).disabled).toBe(true)
     writeNote('and the quotes')
     expect((root.querySelector('#rules-save') as HTMLButtonElement).disabled).toBe(false)
@@ -175,10 +177,10 @@ describe('the save', () => {
     writeNote('keep all')
     save()
     await settle()
-    posts[0]!.answer(2)
+    posts[0]!.answer(V + 1)
     await settle()
     expect(p.dirty()).toBe(false)
-    expect(p.set()!.version).toBe(2)
+    expect(p.set()!.version).toBe(V + 1)
     expect(p.set()!.note).toBe('keep all')
   })
 
@@ -192,7 +194,7 @@ describe('the save', () => {
     writeNote('keep all')
     save()
     await settle()
-    expect(JSON.parse(posts[0]!.body).version).toBe(1)
+    expect(JSON.parse(posts[0]!.body).version).toBe(V)
   })
 
   it('names the file it was built on by the digest the file came with (If-Match), then by the digest the last save wrote', async () => {
@@ -202,7 +204,7 @@ describe('the save', () => {
     save()
     await settle()
     expect(posts[0]!.headers['if-match']).toBe(`"${shaOf(FILE)}"`)
-    posts[0]!.answer(2)
+    posts[0]!.answer(V + 1)
     await settle()
     flip('cjkQuotes')
     writeNote('and the quotes')
@@ -218,13 +220,13 @@ describe('the save', () => {
     writeNote('keep all')
     save()
     await settle()
-    posts[0]!.answer(2)
+    posts[0]!.answer(V + 1)
     await settle()
     flip('cjkQuotes')
     writeNote('and the quotes')
     save()
     await settle()
-    expect(JSON.parse(posts[1]!.body).version).toBe(2)
+    expect(JSON.parse(posts[1]!.body).version).toBe(V + 1)
   })
 
   it('on a stale file says so and offers to load it, changing nothing on its own', async () => {
@@ -233,20 +235,20 @@ describe('the save', () => {
     writeNote('keep all')
     save()
     await settle()
-    posts[0]!.refuse(409, { ok: false, error: 'stale', why: 'the file moved', version: 3 })
+    posts[0]!.refuse(409, { ok: false, error: 'stale', why: 'the file moved', version: V + 1 })
     await settle()
     const message = root.querySelector('p.note[role="status"]') as HTMLElement
     expect(message.hidden).toBe(false)
-    expect(message.textContent).toContain('rules.stale 1 3')
+    expect(message.textContent).toContain(`rules.stale ${V} ${V + 1}`)
     // (the edit is still there, unsaved; nothing was taken from the file)
     expect(p.dirty()).toBe(true)
     expect(p.set()!.languages.zh!.keepAll).toBe(true)
     // (the reader asks for the file: it replaces the edit, after the question every load asks)
-    served = bytesOf(s => { s.version = 3; s.scripts.Hans.leadBase = 1.31 })
+    served = bytesOf(s => { s.version = V + 1; s.scripts.Hans.leadBase = 1.31 })
     const load = message.querySelector('button') as HTMLButtonElement
     expect(load.textContent).toBe('rules.staleLoad')
     load.click()
-    await vi.waitFor(() => expect(p.set()!.version).toBe(3))
+    await vi.waitFor(() => expect(p.set()!.version).toBe(V + 1))
     expect(p.set()!.scripts.Hans!.leadBase).toBe(1.31)
     expect(p.set()!.languages.zh!.keepAll).not.toBe(true)
     expect(p.dirty()).toBe(false)
@@ -259,9 +261,9 @@ describe('the save', () => {
     writeNote('keep all')
     save()
     await settle()
-    posts[0]!.refuse(409, { ok: false, error: 'stale', why: 'the file changed', version: 1, sha256: 'a'.repeat(64) })
+    posts[0]!.refuse(409, { ok: false, error: 'stale', why: 'the file changed', version: V, sha256: 'a'.repeat(64) })
     await settle()
-    expect(message().textContent).toContain('rules.stale 1 1')
+    expect(message().textContent).toContain(`rules.stale ${V} ${V}`)
     expect(message().querySelector('button')!.textContent).toBe('rules.staleLoad')
   })
 
@@ -275,7 +277,7 @@ describe('the save', () => {
     ofRef = bytesOf(s => { s.version = 5; s.scripts.Hans.leadBase = 1.31 })
     await loadRef('feature')
     expect(p.from()!.kind).toBe('ref')
-    posts[0]!.answer(2)
+    posts[0]!.answer(V + 1)
     await settle()
     // the set shown is the one loaded, with its own version, base and origin
     expect(p.from()!.kind).toBe('ref')
@@ -283,14 +285,14 @@ describe('the save', () => {
     expect(p.set()!.scripts.Hans!.leadBase).toBe(1.31)
     expect(p.set()!.languages.zh!.keepAll).not.toBe(true)
     expect(p.dirty()).toBe(false)
-    // and the file is what the save wrote: version 2, which the shown set is compared with and the next save is built on
-    expect(root.querySelector('#rules-compare')!.textContent).toContain('rules.vsFile 2')
+    // and the file is what the save wrote: the next version, which the shown set is compared with and the next save is built on
+    expect(root.querySelector('#rules-compare')!.textContent).toContain(`rules.vsFile ${V + 1}`)
     flip('cjkQuotes')
     writeNote('next')
-    expect((root.querySelector('#rules-save-hint') as HTMLElement).textContent).toContain('rules.saveHint 3')
+    expect((root.querySelector('#rules-save-hint') as HTMLElement).textContent).toContain(`rules.saveHint ${V + 2}`)
     save()
     await settle()
-    expect(JSON.parse(posts[1]!.body).version).toBe(2)
+    expect(JSON.parse(posts[1]!.body).version).toBe(V + 1)
   })
 
   it('shows the set that was asked for last when the answer to an earlier request comes after it', async () => {

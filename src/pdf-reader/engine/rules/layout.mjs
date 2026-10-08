@@ -32,8 +32,9 @@ import { scriptOf } from '../layer-rules.mjs'
 import { countValues, LayoutRefusal, told } from '../layout/json.mjs'
 import BUILTIN_JSON from './layout-rules.json' with { type: 'json' }
 
-/** the schema's number: the shape and how the engine reads it */
-export const RULES_SCHEMA = 1
+/** the schema's number: the shape and how the engine reads it. 2 (D6, 2026-10-08): `grid` gone (every script's lines on the
+ *  original's pitch while the size shrinks) */
+export const RULES_SCHEMA = 2
 /** a set's bytes at most, as received (the migrated set is about 8 KB) */
 export const RULES_CAP = 65_536
 /** a set's JSON values at most, counted before JSON.parse (layout/json.mjs countValues) */
@@ -102,13 +103,12 @@ const SCRIPT_FIELDS = [
   // the fit (layer2.mjs layoutUnit2, statesOf; run.mjs fitFurther, fillPage). Each value is a prior from the public
   // repo's typesetting research, swept on the layer. Step 3's further steps took the gate's 29 outputs' clipped
   // characters from 943 to 140 (widen 100, flow 138, the size 465), most of them below the floor, at 0.775
-  { key: 'order', group: 'fit', kind: 'order', values: ORDER, words: 'The knobs the fit turns when a translation does not fit, in order: tracking, borrowing free space below, the leading, then the size.', schema: () => z.array(z.enum(ORDER)).check(z.refine(isPermutation, 'not an ordering of the four knobs')) },
+  { key: 'order', group: 'fit', kind: 'order', values: ORDER, words: 'The order in which the fit turns its knobs when a translation does not fit: tracking, borrowing free space below, the leading, the size.', schema: () => z.array(z.enum(ORDER)).check(z.refine(isPermutation, 'not an ordering of the four knobs')) },
   { key: 'leadBase', group: 'fit', kind: 'number', min: 0.8, max: 2, step: 0.05, words: "The translation's line pitch, × the original's line pitch.", schema: () => range(0.8, 2) },
   { key: 'leadFloor', group: 'fit', kind: 'number', min: 0.8, max: 2, step: 0.05, words: 'The tightest line pitch the fit falls back to, × the original\'s.', schema: () => range(0.8, 2) },
   // (leadRel false: the maintainer's ruling of 2026-10-07 on S3-11, the script's leading on the original's own pitch, which
   // reads more naturally on a loose original than the relative leading that stays a switch)
   { key: 'leadRel', group: 'fit', kind: 'boolean', words: "Whether the leading is taken relative to the original's own pitch (never stacked on a loose original's) or applied as it is.", schema: () => z.boolean() },
-  { key: 'grid', group: 'fit', kind: 'enum', values: [0, 1], words: "Whether the lines stay on the original's baseline grid while the size shrinks (1) or not (0).", schema: () => z.literal([0, 1]) },
   { key: 'trackMin', group: 'fit', kind: 'number', min: -0.3, max: 0, step: 0.005, words: 'The tightest letter spacing the fit uses, in em (zero or less).', schema: () => range(-0.3, 0) },
   { key: 'trackStart', group: 'fit', kind: 'number', nullable: true, min: -0.3, max: 0.3, step: 0.005, words: "The letter spacing the fit starts from, in em; empty gives back the face's size correction.", schema: () => z.nullable(range(-0.3, 0.3)) },
   { key: 'compressMax', group: 'fit', kind: 'enum', values: [0, 1, 2], words: "How far full-width punctuation is compressed: 0 not at all, 1 at a line's start and between two marks, 2 every mark.", schema: () => z.literal([0, 1, 2]) },

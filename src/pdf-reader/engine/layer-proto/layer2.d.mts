@@ -9,7 +9,7 @@ import type { Block, Rect } from './layer1.mjs'
  *  v0's own. `maxScale`, `capScale`, `growTo`, `flowPast`, `refuse` and `_compress` are the run's own, set unit by unit */
 export interface Params {
   cjk: boolean; leadBase: number; leadFloor: number; trackMin: number; compressMax: 0 | 1 | 2; borrow: 0 | 1; borrowGap: number
-  floor: number; step: number; grid: 0 | 1; order: ('track' | 'borrow' | 'lead' | 'shrink')[]; cjkJust: number; spaceMax: number; autospace: number; spaceMin: number
+  floor: number; step: number; order: ('track' | 'borrow' | 'lead' | 'shrink')[]; cjkJust: number; spaceMax: number; autospace: number; spaceMin: number
   hyphen: 0 | 1; even: 0 | 1 | 2; maxScale?: number; _compress?: number
   /** the most the unit may be set at: its lines' room between the rules over and under them (cellBands) */
   capScale?: number

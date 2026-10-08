@@ -1,7 +1,7 @@
 {
-  "schema": 1,
-  "version": 1,
-  "note": "migrated from the engine's code",
+  "schema": 2,
+  "version": 2,
+  "note": "D6: every script's lines on the original's pitch while the size shrinks; the alphabets shrink before they lead closer",
   "hyphenation": {
     "minWord": 5,
     "en": { "left": 2, "right": 3 },
@@ -13,7 +13,6 @@
       "leadBase": 1.3,
       "leadFloor": 1,
       "leadRel": false,
-      "grid": 1,
       "trackMin": -0.03,
       "trackStart": null,
       "compressMax": 2,
@@ -46,7 +45,6 @@
       "leadBase": 1.3,
       "leadFloor": 1,
       "leadRel": false,
-      "grid": 1,
       "trackMin": -0.03,
       "trackStart": null,
       "compressMax": 0,
@@ -79,7 +77,6 @@
       "leadBase": 1,
       "leadFloor": 1,
       "leadRel": false,
-      "grid": 1,
       "trackMin": -0.03,
       "trackStart": null,
       "compressMax": 2,
@@ -112,7 +109,6 @@
       "leadBase": 1,
       "leadFloor": 1,
       "leadRel": false,
-      "grid": 1,
       "trackMin": -0.03,
       "trackStart": null,
       "compressMax": 2,
@@ -141,11 +137,10 @@
       "cjkFaces": { "group": "shs-k", "kai": null, "light": ["cm", "garamond"] }
     },
     "Latn": {
-      "order": ["track", "borrow", "lead", "shrink"],
+      "order": ["track", "borrow", "shrink", "lead"],
       "leadBase": 1,
       "leadFloor": 0.95,
       "leadRel": false,
-      "grid": 0,
       "trackMin": 0,
       "trackStart": null,
       "compressMax": 0,
@@ -174,11 +169,10 @@
       "cjkFaces": null
     },
     "Cyrl": {
-      "order": ["track", "borrow", "lead", "shrink"],
+      "order": ["track", "borrow", "shrink", "lead"],
       "leadBase": 1,
       "leadFloor": 0.95,
       "leadRel": false,
-      "grid": 0,
       "trackMin": 0,
       "trackStart": null,
       "compressMax": 0,

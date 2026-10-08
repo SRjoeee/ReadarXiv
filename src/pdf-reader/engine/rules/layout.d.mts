@@ -4,7 +4,7 @@ import type { CjkFaces } from '../font-roles.mjs'
 import type { Params } from '../layer-proto/layer2.mjs'
 
 /** the schema's number: the shape and how the engine reads it */
-export declare const RULES_SCHEMA: 1
+export declare const RULES_SCHEMA: 2
 /** a set's bytes at most, as received */
 export declare const RULES_CAP: 65536
 /** a set's JSON values at most, counted before JSON.parse */
@@ -19,7 +19,7 @@ export type Script = (typeof SCRIPTS)[number]
 export interface ScriptRules {
   // the fit (layer2.mjs layoutUnit2; run.mjs fitFurther, fillPage)
   order: ('track' | 'borrow' | 'lead' | 'shrink')[]
-  leadBase: number; leadFloor: number; leadRel: boolean; grid: 0 | 1
+  leadBase: number; leadFloor: number; leadRel: boolean
   trackMin: number
   /** em; null: the face's size correction given back (run.mjs cjkAdvance) */
   trackStart: number | null
@@ -56,7 +56,7 @@ export type LanguageRules = Partial<ScriptRules> & {
   labels: { figure: string; table: string } | null
 }
 export interface RuleSet {
-  schema: 1
+  schema: 2
   /** an integer ≥ 1, one more than the set it replaces */
   version: number
   /** at most 1,000 characters: what changed and why */

@@ -923,7 +923,7 @@ The edge cases, decided:
 | `PIPELINE_VERSION` | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or `paperContext` | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT`, `REMOVAL` | extraction | the layout maker, the remover | the R2 key | bundles made again lazily |
 | `TRANSLATE_VERSION` (`translate/version.mjs`, `'1'`) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, `paperContext` | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
-| `RULES_SCHEMA` (`rules/layout.mjs`, `1`) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
+| `RULES_SCHEMA` (`rules/layout.mjs`, `2`) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
 | the set's `version` | layout | the values | its immutable URL | readers take it on their next load |
 | `RULES_VERSION` (`src/core/rules/latexml.ts`) | HTML extraction | the HTML page's rule file | the HTML page's per-text key only | as DESIGN §5.5 |
 | `TYPESETTING_VERSION` (`live.mjs`) | parked | the compile path | parked records | none |
@@ -968,11 +968,10 @@ The rule set is one schema-validated file, `rules/layout-rules.json`: configurat
 
 | Field | Scope | Group | Range or values | What it does |
 |---|---|---|---|---|
-| `order` | script | fit | an ordering of track, borrow, lead, shrink | The knobs the fit turns when a translation does not fit, in order: tracking, borrowing free space below, the leading, then the size. |
+| `order` | script | fit | an ordering of track, borrow, lead, shrink | The order in which the fit turns its knobs when a translation does not fit: tracking, borrowing free space below, the leading, the size. |
 | `leadBase` | script | fit | 0.8 to 2, step 0.05 | The translation's line pitch, × the original's line pitch. |
 | `leadFloor` | script | fit | 0.8 to 2, step 0.05 | The tightest line pitch the fit falls back to, × the original's. |
 | `leadRel` | script | fit | yes or no | Whether the leading is taken relative to the original's own pitch (never stacked on a loose original's) or applied as it is. |
-| `grid` | script | fit | `0`, `1` | Whether the lines stay on the original's baseline grid while the size shrinks (1) or not (0). |
 | `trackMin` | script | fit | -0.3 to 0, step 0.005 | The tightest letter spacing the fit uses, in em (zero or less). |
 | `trackStart` | script | fit | -0.3 to 0.3, step 0.005, or none | The letter spacing the fit starts from, in em; empty gives back the face's size correction. |
 | `compressMax` | script | fit | `0`, `1`, `2` | How far full-width punctuation is compressed: 0 not at all, 1 at a line's start and between two marks, 2 every mark. |

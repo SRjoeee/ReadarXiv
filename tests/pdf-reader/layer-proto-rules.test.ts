@@ -92,10 +92,10 @@ describe("v0's open takes every choice for its target from the rule set it is gi
 
   it('reports the set it was opened with: its schema and version', async () => {
     const run = await open()
-    expect(run.rules).toEqual({ schema: 1, version: 1 })
+    expect(run.rules).toEqual({ schema: 2, version: BUILTIN_RULES.version })
     const set = editable()
     set.version = 4
-    expect((await open({ rules: set })).rules).toEqual({ schema: 1, version: 4 })
+    expect((await open({ rules: set })).rules).toEqual({ schema: 2, version: 4 })
   })
 
   it('takes no params option: a host sets a field in the rule set, not on the open (a type test)', () => {

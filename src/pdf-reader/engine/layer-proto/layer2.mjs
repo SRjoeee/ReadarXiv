@@ -1861,13 +1861,16 @@ export function freeBelow(map, toDev, k, x0, x1, yStart, yLimit) {
 const hyphenData = new Map()
 export const setHyphenData = (lang, data) => hyphenData.set(lang, data)
 
-/** the slots (lines) a unit's blocks hold at a state: each { block, page, x0, x1, baseline, target, centred } */
+/** the slots (lines) a unit's blocks hold at a state: each { block, page, x0, x1, baseline, target, centred }. The pitch is
+ *  the original's times the leading, whatever the size (D6's F6a, 2026-10-08: a Latin line shrunk with its size sat on none
+ *  of the original's baselines and its unit ended a fraction of a line short, the blank added to the gap below it; every
+ *  script's lines now stay on the original's baselines while the size shrinks, as CJK's did) */
 function slotsAt(blocks, st, P, s) {
   const out = []
   for (const [bi, b] of blocks.entries()) {
     const p0 = b.pitch0 ?? 1.2 * s
-    const pitch = p0 * st.lead * (P.grid ? 1 : st.scale)
-    const onGrid = Math.abs(st.lead - 1) < 1e-6 && (P.grid || Math.abs(st.scale - 1) < 1e-6)
+    const pitch = p0 * st.lead
+    const onGrid = Math.abs(st.lead - 1) < 1e-6
     const borrowPt = Math.min(b.free, st.borrow * p0)
     const low = b.B.at(-1) - borrowPt
     for (let k = 0; k < 400; k++) {
