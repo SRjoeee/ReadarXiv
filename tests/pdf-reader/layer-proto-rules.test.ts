@@ -61,9 +61,13 @@ describe("v0's open takes every choice for its target from the rule set it is gi
   it('lays a unit at the set\'s leading: zh at 1.5 stands apart from zh at 1.3', async () => {
     // three lines of the original on a 12 pt pitch and a translation of two lines: the first state of the fit holds it,
     // its lines the set's leading apart
+    // (the page fill off in both: it spreads each to its frame's foot)
     const three = paper([['Alpha beta', 20, 200], ['gamma delta', 20, 200], ['epsilon zeta', 20, 200]], '\u6c49'.repeat(30))
-    const tight = await open({}, three)
+    const unfilled = editable()
+    unfilled.scripts.Hans!.adaptiveFill = null
+    const tight = await open({ rules: unfilled }, three)
     const set = editable()
+    set.scripts.Hans!.adaptiveFill = null
     set.scripts.Hans!.leadBase = 1.5
     const loose = await open({ rules: set }, paper([['Alpha beta', 20, 200], ['gamma delta', 20, 200], ['epsilon zeta', 20, 200]], '\u6c49'.repeat(30)))
     await Promise.all([tight.until(1), loose.until(1)])

@@ -108,54 +108,87 @@ export function settleLayout(p) {
 }
 
 /**
- * adaptiveFill (D, P.adaptiveFill: { band, track, size }; the default since 2026-10-07, null for B): the units of a
- * loose original's page that begin on it (`loose`, each laid already: tokens, blocks, s, P, fillRange), each spread over
- * its original paragraph's space, the page's lines kept to one rhythm. Each unit's fill leading is the loosest, between
- * its leading relative to the original's pitch and the script's on it (leadBase), at which its most natural state still
- * sets it whole: its text then reaches its frame's foot. The page's target is the median of its body units' (of all its
- * loose units' where it has none); each unit takes its fill leading, but never more than `band` over the target, so
- * that neighbouring paragraphs keep one line spacing. A unit the band stops short of its fill then takes tracking, up to
- * `track` em, and where that is not enough its size, up to `size` x the original's. A unit that does not fit naturally
- * even at its relative leading keeps its own fit. Each unit filled is laid anew in place (p.P, p.layout, its extents
- * kept), then `onFilled(p, target)`.
+ * adaptiveFill (P.adaptiveFill: { band, track, size }; D since 2026-10-07, generalised by D6's F6b on 2026-10-08; null for
+ * B): the units that begin on a page (`units`, each laid already: tokens, blocks, s, P, layout), each spread over its
+ * original's frame, the page's lines kept to one rhythm. A unit is filled at the state its fit set it at, its leading
+ * apart: its fill leading is the loosest, from its fitted leading up to P.fillLead em of the size it is drawn at (null: the
+ * original's own pitch), at which that state still sets it whole, so that its text reaches its frame's foot. The page's
+ * target is the median of its body units' fill leadings (of all its units' where it has no body unit; a unit of one line
+ * has no leading to tell, and tells only where no unit has more), held within `band` of `running`, the target of the last
+ * page before it whose body units told it
+ * (null: none), so that a page's rhythm moves from the last page's by no more than the band. Each unit takes its fill
+ * leading, but never more than `band` over the target, so that neighbouring paragraphs keep one line spacing. A CJK unit
+ * the band or its fill leading's top stops short of its fill then takes tracking, up to `track` em; and where every body
+ * unit of the page is still short with all of it, the page's body units take one size, the largest up to `size` x the
+ * original's at which every one of them is still set whole: one size a page, never a unit's own (D grew each unit apart,
+ * and a page mixed 1.0 and 1.1). A unit its fitted state does not set again (the text run past a display) keeps its own
+ * fit. Each unit filled is laid anew in place (p.P, p.layout, its extents kept), then `onFilled(p, target)`. Returns the
+ * page's target and whether its body units told it (`body`), or null where no unit has a fill leading.
  */
-export function fillPage(loose, P, onFilled = () => {}) {
+export function fillPage(units, P, running = null, onFilled = () => {}) {
   const { band, track, size } = P.adaptiveFill
-  const fitsNaturally = (p, PP) => { const l = L2.layoutUnit2(p.tokens, p.blocks, p.s, PP); return l.tried === 1 && !l.clipped ? l : null }
-  const fillLeadOf = p => {
-    const [lo, hi] = p.fillRange
-    for (let k = Math.round((hi - lo) / 0.01); k >= 0; k--) {
-      const L = Math.min(hi, Math.round((lo + k * 0.01) * 1000) / 1000)
-      if (fitsNaturally(p, { ...p.P, leadBase: L, growTo: 0 })) return L
-    }
-    return null
+  const r3 = x => Math.round(x * 1000) / 1000
+  const at = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); return l.clipped ? null : l }
+  /** the loosest leading P.fillLead allows a unit at the size it is set at, × its original's pitch */
+  const topOf = p => {
+    if (P.fillLead === null) return 1
+    const pitches = p.blocks.map(b => b.pitch0).filter(v => v > 0).sort((a, b) => a - b)
+    const p0 = pitches.length ? pitches[pitches.length >> 1] : 1.2 * p.s
+    return r3((P.fillLead * p.s * p.layout.state.scale) / p0)
   }
-  for (const p of loose) if (p.fillLead === undefined) p.fillLead = fillLeadOf(p)
-  const body = loose.filter(p => p.fillLead !== null && EVEN_KINDS.has(p.unit.kind))
-  const leads = (body.length ? body : loose.filter(p => p.fillLead !== null)).map(p => p.fillLead)
+  // (a looser leading holds no more lines than a closer one: the loosest that sets the unit is found by halving, a few
+  // layouts a unit where trying each hundredth from the top took up to forty)
+  const fillLeadOf = p => {
+    const st = p.layout.state
+    if (!at(p, st)) return null
+    const lo = st.lead, hi = p.fillTop, L = k => Math.min(hi, r3(lo + k * 0.01))
+    let ok = 0, no = Math.round((hi - lo) / 0.01) + 1
+    while (no - ok > 1) { const k = (ok + no) >> 1; if (at(p, { ...st, lead: L(k) })) ok = k; else no = k }
+    return ok ? L(ok) : lo
+  }
+  for (const p of units) if (p.fillLead === undefined) { p.fillTop = topOf(p); p.fillLead = fillLeadOf(p) }
+  const withLead = units.filter(p => p.fillLead !== null)
+  const telling = withLead.filter(p => p.layout.lines.length >= 2)
+  const body = telling.filter(p => EVEN_KINDS.has(p.unit.kind))
+  const leads = (body.length ? body : telling.length ? telling : withLead).map(p => p.fillLead)
   if (!leads.length) return null
-  const target = median(leads)
-  for (const p of loose) {
+  const own = median(leads)
+  const target = r3(running === null ? own : Math.min(running + band, Math.max(running - band, own)))
+  const filled = []
+  for (const p of units) {
     if (p.fillLead === null) continue
-    let PP = { ...p.P, leadBase: Math.min(p.fillLead, Math.round((target + band) * 1000) / 1000), growTo: 0 }
-    let l = fitsNaturally(p, PP)
+    let st = { ...p.layout.state, lead: Math.min(p.fillLead, r3(target + band)) }
+    let l = at(p, st)
     if (!l) continue
-    if (p.fillLead > target + band + 1e-9 || p.fillLead >= p.fillRange[1] - 1e-9) {
-      // short of its fill at the band's edge or at the script's leading: tracking, the most that still sets it
-      // naturally, then the size
+    // short of its fill at the band's edge or at its fill leading's top: tracking, the most that still sets it, then the
+    // page's size
+    const short = p.fillLead > target + band + 1e-9 || p.fillLead >= p.fillTop - 1e-9
+    let full = !short
+    if (short && P.cjk) {
       let t = 0
       for (let k = Math.round(track / 0.01); k >= 1; k--) {
-        const P2 = { ...PP, trackStart: Math.round(((p.P.trackStart ?? 0) + k * 0.01) * 1000) / 1000 }
-        const l2 = fitsNaturally(p, P2)
-        if (l2) { PP = P2; l = l2; t = k * 0.01; break }
+        const st2 = { ...st, track: r3(st.track + k * 0.01) }
+        const l2 = at(p, st2)
+        if (l2) { st = st2; l = l2; t = k * 0.01; break }
       }
-      if (t >= track - 1e-9 && size > 1) {
-        const l3 = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...PP, growTo: size })
-        if (!l3.clipped) { PP = { ...PP, growTo: size }; l = l3 }
-      }
+      full = t < track - 1e-9
     }
+    filled.push({ p, st, l, full })
+  }
+  // the page's one size: every body unit's, where none is full yet
+  const grown = filled.filter(f => EVEN_KINDS.has(f.p.unit.kind))
+  if (size > 1 && grown.length && grown.every(f => !f.full)) {
+    for (let k = Math.round((size - 1) / P.step); k >= 1; k--) {
+      const scale = r3(1 + k * P.step)
+      const ls = grown.map(f => at(f.p, { ...f.st, scale, knob: 'grow' }))
+      if (ls.every(Boolean)) { grown.forEach((f, i) => { f.st = { ...f.st, scale, knob: 'grow' }; f.l = ls[i] }); break }
+    }
+  }
+  for (const { p, st, l } of filled) {
     const keep = p.layout.extents
-    p.P = PP
+    p.P = { ...p.P, leadBase: st.lead }
+    // (its fit's knob kept, a step past its states among them (widen, below-floor), but the page's size grown)
+    if (st.knob !== 'grow') l.knob = p.layout.knob
     p.layout = l
     p.layout.extents = keep
     // (laid anew: its clearance at its new size, before it is recorded or painted; the pass put a cleared CJK cell's
@@ -163,7 +196,7 @@ export function fillPage(loose, P, onFilled = () => {}) {
     settleLayout(p)
     onFilled(p, target)
   }
-  return target
+  return { target, body: body.length > 0 }
 }
 
 /**
@@ -869,18 +902,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // leading on a loose original, the paragraph is filled by its text's size instead, up to P.fillSize × the
     // original's; a solid-set original keeps the script's leading, and its units are never grown)
     if (P.fillSize > 1 && p.P.leadBase <= P.leadBase - 0.05 + 1e-9) p.P.growTo = P.fillSize
-    // (adaptiveFill, D: a unit on a loose original, where the leading relative to the original's pitch gives up a step or
-    // more of the script's, is laid at that leading here and filled by its page's pass, fillPass)
-    // (a solid-set original's units are not touched: spreading them by a band of leading, page by page or one leading a
-    // page, filled their frames but moved their pages' pitches apart, S3-12)
+    // (adaptiveFill: every unit is laid at its leading relative to the original's own pitch, the script's own on a solid-set
+    // original, and filled by its page's pass, fillPass. D filled a loose original's units alone (S3-12, against a band of
+    // leading page by page moving the pages' pitches apart); D6's F6b fills every original's, its page's target held within
+    // the band of the last page's)
     if (P.adaptiveFill) {
-      const rel = L2.leadOf(p.blocks, s, { ...P, leadRel: true })
-      if (rel <= P.leadBase - 0.05 + 1e-9) {
-        p.fillable = true
-        p.fillRange = [rel, P.leadBase]
-        p.P.leadBase = rel
-        p.P.growTo = 0
-      }
+      p.fillable = true
+      p.P.leadBase = L2.leadOf(p.blocks, s, { ...P, leadRel: true })
+      p.P.growTo = 0
     }
     p.layout = L2.layoutUnit2(tokens, p.blocks, s, p.P)
     // (step 3: never drawn in part: given more room where the page has it, else left the original's, whole)
@@ -937,11 +966,17 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (p.rec) Object.assign(p.rec, { f: r1(p.layout.f), sizeRatio: r1(p.layout.f / p.s), fitScale: p.layout.scale, knob: p.layout.knob, lead: p.layout.state.lead, lines: recLinesOf(p) })
     }
   }
-  // adaptiveFill's pass over a page's units that begin on it (fillPage), each filled unit's record updated
-  const fillPass = pg => fillPage(laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg), P, (p, target) => {
-    const l = p.layout
-    if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
-  })
+  // adaptiveFill's pass over a page's units that begin on it (fillPage), each filled unit's record updated; the paper's
+  // running target, the last target a page's body units told, in the order the pages' passes run (the units' laying
+  // order, the same whether the rows come at once or in parts: no page waits for a later one)
+  let running = null
+  const fillPass = pg => {
+    const r = fillPage(laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg), P, running, (p, target) => {
+      const l = p.layout
+      if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
+    })
+    if (r?.body) running = r.target
+  }
   const ms = new Map()
   // A table group's cells laid, then painted all together or not at all (the table-groups brief): a cell is painted
   // only once every cell of its group is laid, and none is where one could be set only clipped (its fit past its floor)

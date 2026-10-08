@@ -33,8 +33,10 @@ export interface ScriptRules {
   even: 0 | 1 | 2
   /** 0: off */
   fillSize: number
-  /** D; null: B */
+  /** the page fill (D6); null: B */
   adaptiveFill: { band: number; track: number; size: number } | null
+  /** em of the size drawn: the loosest pitch the fill spreads a unit to; null: the original's own pitch */
+  fillLead: number | null
   // breaking (layer2.mjs tokensOf2, layer1.mjs kinsokuOf)
   /** break only at spaces (Korean, the alphabets) */
   keepAll: boolean

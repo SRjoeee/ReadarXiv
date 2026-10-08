@@ -35,6 +35,39 @@ describe("the leading, relative to the original's own pitch", () => {
   })
 })
 
+describe("a shrunk line keeps the original's pitch, and the alphabets shrink before they lead closer (D6, F6a)", () => {
+  // a block of n lines 12 pt apart from 500, 100 pt wide, at size 10; words of three letters, 15 pt at size 10 and a space of
+  // 2.5 (it may shrink to 0.8 of it): six words a line at the full size, seven from 0.85
+  const block = (n: number) => { const B = Array.from({ length: n }, (_, k) => 500 - 12 * k); return { page: 1, rects: B.map(b => [1, 0, b - 2, 100, b + 8]), x0: 0, x1: 100, B, exact: B.map(() => true), sizes: B.map(() => 10), pitch0: 12, free: 0, indent: 0, after: 0, centred: false } }
+  const words = (n: number) => Array.from({ length: n }, (_, q) => [...(q ? [{ space: true, w100: 25 }] : []), { s: 'xxx', cls: 'latin', w100: 150, st: {} }]).flat()
+  const P = (o: object = {}) => ({ ...params('de'), borrow: 0, hyphen: 0, ...o })
+  it("sets every line of a shrunk unit on the original's own baselines: the pitch is the original's whatever the size", () => {
+    const b = block(4)
+    const l = L2.layoutUnit2(words(27) as never, [b] as never, 10, P() as never)
+    expect(l.clipped).toBe(false)
+    expect(l.scale).toBeLessThan(1)
+    expect(l.state.lead).toBe(1)
+    expect(l.lines.map(x => x.baseline)).toEqual(b.B)
+  })
+  it('shrinks before it leads closer: 123 words take 0.85 on the original\'s pitch, not the full size at 0.95 of it', () => {
+    // (at the full size 20 lines hold 120 words, and at a leading of 0.95 21 lines hold 126: the order of today's alphabets
+    // took that; theirs since D6 shrinks to 0.85 first, seven words a line)
+    expect(params('de').order).toEqual(['track', 'borrow', 'shrink', 'lead'])
+    const l = L2.layoutUnit2(words(123) as never, [block(20)] as never, 10, P() as never)
+    expect([l.scale, l.state.lead, l.clipped]).toEqual([0.85, 1, false])
+    const before = L2.layoutUnit2(words(123) as never, [block(20)] as never, 10, P({ order: ['track', 'borrow', 'lead', 'shrink'] }) as never)
+    expect([before.scale, before.state.lead]).toEqual([1, 0.95])
+  })
+  it('leads closer than the original only at the size floor: 145 words take 0.8 at 0.95 of its pitch', () => {
+    const l = L2.layoutUnit2(words(145) as never, [block(20)] as never, 10, P() as never)
+    expect([l.scale, l.state.lead, l.clipped]).toEqual([0.8, 0.95, false])
+  })
+  it("keeps CJK's order: the leading down to the original's pitch first, then the size", () => {
+    for (const t of ['zh', 'zh-TW', 'ja', 'ko']) expect(params(t).order, t).toEqual(['track', 'borrow', 'lead', 'shrink'])
+    for (const t of ['de', 'fr', 'es', 'pt', 'ru']) expect(params(t).order, t).toEqual(['track', 'borrow', 'shrink', 'lead'])
+  })
+})
+
 describe("v0's displayed formulas: the engine's environments", () => {
   it('reads subequations, alignat, flalign, dmath and IEEEeqnarray as displays, not as inline formulas', async () => {
     const { phClass } = await import('@/pdf-reader/engine/layer-proto/layer1.mjs')
@@ -258,8 +291,81 @@ describe("adaptiveFill (D, the default) keeps a CJK cell clear of its rule (Code
     expect(clearOf()).toBeLessThanOrEqual(107.13 + 1e-9)
     // the page's fill pass lays it anew: still clear
     let filled = false
-    fillPage([p] as never, P as never, () => { filled = true })
+    fillPage([p] as never, P as never, null, () => { filled = true })
     expect(filled).toBe(true)
     expect(clearOf()).toBeLessThanOrEqual(107.13 + 1e-9)
+  })
+})
+
+describe("the page fill (adaptiveFill, D6's F6b): every original's units spread over their frames, to one rhythm a page", () => {
+  // blocks of six lines 12 pt apart from 500, 100 pt wide, at size 10; CJK characters 10 pt wide at size 10, ten a line
+  const block = (n = 6) => { const B = Array.from({ length: n }, (_, k) => 500 - 12 * k); return { page: 1, rects: B.map(b => [1, 0, b - 2, 100, b + 8]), x0: 0, x1: 100, B, exact: B.map(() => true), sizes: B.map(() => 10), pitch0: 12, free: 0, indent: 0, after: 0, centred: false } }
+  const chars = (n: number) => Array.from({ length: n }, () => ({ s: '\u6c49', cls: 'cjk', w100: 100, st: {} }))
+  type Unit = { id: number; unit: { kind: string }; pages: number[]; tokens: unknown[]; blocks: unknown[]; s: number; P: Record<string, unknown>; layout: { lines: { baseline: number }[]; scale: number; state: { lead: number; scale: number; track: number } }; fillLead?: number | null }
+  const P = (o: Record<string, unknown> = {}) => ({ ...params('zh'), borrow: 0, adaptiveFill: { band: 0.05, track: 0, size: 1.1 }, ...o })
+  /** a unit laid as openProto lays it before its page's pass: at the script's leading on a solid-set original */
+  const laid = (id: number, n: number, PP = P(), kind = 'para'): Unit => {
+    const p = { id, unit: { kind }, pages: [1], tokens: chars(n), blocks: [block()], s: 10, P: { ...PP, growTo: 0 } } as unknown as Unit
+    p.layout = L2.layoutUnit2(p.tokens as never, p.blocks as never, 10, p.P as never) as never
+    return p
+  }
+  const fill = async (units: Unit[], PP = P(), running: number | null = null) => (await import('@/pdf-reader/engine/layer-proto/run.mjs')).fillPage(units as never, PP as never, running)
+  const baselines = (p: Unit) => p.layout.lines.map(l => l.baseline)
+
+  it("spreads a unit up to fillLead em of its drawn size: 1.8 em over a pitch of 1.2 em is 1.5 of it, 3 em sets its last line on the original's", async () => {
+    // (no size grown: the leading alone)
+    const PP = P({ adaptiveFill: { band: 0.05, track: 0, size: 1 } })
+    const two = laid(1, 20, PP)
+    expect(two.layout.state.lead).toBe(1.3)
+    expect(await fill([two], PP)).toEqual({ target: 1.5, body: true })
+    expect(baselines(two)).toEqual([500, 482])
+    const P3 = { ...PP, fillLead: 3 }
+    const three = laid(2, 30, P3)
+    await fill([three], P3)
+    expect(three.fillLead).toBe(2.5)
+    expect(baselines(three)).toEqual([500, 470, 440])
+  })
+
+  it("holds the page's target within the band of the running one, and each unit within the band over the target", async () => {
+    const PP = P({ fillLead: 3 })
+    const a = laid(1, 30, PP), b = laid(2, 30, PP)
+    expect(await fill([a, b], PP, 2)).toEqual({ target: 2.05, body: true })
+    expect([a.layout.state.lead, b.layout.state.lead]).toEqual([2.1, 2.1])
+  })
+
+  it("leaves the original's pitch alone where fillLead is empty (the alphabets): a unit is not spread past it", async () => {
+    const PP = { ...params('de'), borrow: 0, adaptiveFill: { band: 0.05, track: 0, size: 1 } }
+    expect(PP.fillLead).toBeNull()
+    const de = laid(1, 20, PP as never)
+    await fill([de], PP)
+    expect(de.fillLead).toBe(1)
+    expect(baselines(de)).toEqual([500, 488])
+  })
+
+  it('sets a unit whose fit took a closer leading at it: its fill leading is the loosest that still sets it, from its own', async () => {
+    // (50 characters: four lines at 1.3 hold 40; the fit takes 1.25, five lines; at 1.26 four)
+    const b = laid(1, 50)
+    expect(b.layout.state.lead).toBe(1.25)
+    await fill([b])
+    expect(b.fillLead).toBe(1.25)
+    expect(b.layout.lines).toHaveLength(5)
+  })
+
+  it("grows the page's body units to one size where each is still short, and none where one cannot grow: never a size a unit", async () => {
+    const alone = laid(1, 20)
+    await fill([alone])
+    expect(alone.layout.scale).toBe(1.1)
+    // (38 characters take four lines at the full size, five past it: it cannot grow, and the page's other unit neither)
+    const a = laid(1, 20), b = laid(2, 38)
+    await fill([a, b])
+    expect([a.layout.scale, b.layout.scale]).toEqual([1, 1])
+    // (nor where a body unit is full: the five-line unit at 1.25)
+    const c = laid(1, 20), d = laid(2, 50)
+    await fill([c, d])
+    expect([c.layout.scale, d.layout.scale]).toEqual([1, 1])
+    // (a unit not of the body takes its leading and tracking, never the page's size)
+    const e = laid(1, 20), cap = laid(2, 20, P(), 'caption')
+    await fill([e, cap])
+    expect([e.layout.scale, cap.layout.scale]).toEqual([1.1, 1])
   })
 })

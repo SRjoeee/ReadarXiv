@@ -2179,7 +2179,11 @@ export function layoutUnit2(tokens, blocks, s, P) {
       if (r.rest >= r.total) { last = { r, st, f }; break }
     }
   }
-  const { r, st, f } = last
+  return laidOut(last, s, P, tried)
+}
+
+/** a fit's breaking at its state made a layout: its lines placed, and what it set and lost counted */
+function laidOut({ r, st, f }, s, P, tried) {
   const clipped = r.rest < r.total
   P._compress = st.compress
   placeItems(r.lines, f, P)
@@ -2187,6 +2191,15 @@ export function layoutUnit2(tokens, blocks, s, P) {
   const allChars = r.tokens.reduce((a, t) => a + count(t), 0)
   const drawn = r.lines.reduce((a, l) => a + l.items.reduce((b, it) => b + count(it.t), 0), 0)
   return { lines: r.lines, f, s, scale: st.scale, state: st, knob: clipped ? 'clip' : st.knob, clipped, lostChars: Math.max(0, allChars - drawn), chars: allChars, tried, spilled: !!r.spilled }
+}
+
+/**
+ * A unit laid at one state of the fit, with no search (D6's page fill, run.mjs fillPage: a unit's fitted state at another
+ * leading, tracking or size): layoutUnit2's answer, clipped where the state does not set every token in the text's order
+ */
+export function layoutAt(tokens, blocks, s, P, st) {
+  const f = s * st.scale
+  return laidOut({ r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale), st, f }, s, P, 1)
 }
 
 // ---- drawing: the layer as data (erasing, restoring, crops), drawn on a copy of the page at any resolution; the SVG text

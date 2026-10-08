@@ -24,8 +24,8 @@ const bytesOf = (s: string) => new TextEncoder().encode(s)
 // biome-ignore lint/suspicious/noExplicitAny: a set under edit has no fixed shape
 type Edit = any
 /** the fields each schema since the first removed and added (schema 2, D6: `grid` gone, every script's lines on the
- *  original's pitch while the size shrinks) */
-const REMOVED = ['grid'], ADDED: string[] = []
+ *  original's pitch while the size shrinks; `fillLead`, the page fill's top) */
+const REMOVED = ['grid'], ADDED = ['fillLead']
 /** the frozen first version lifted to the current schema: its values as they were, less the fields removed since, the fields
  *  added since at the built-in set's values for each script */
 const lift = (s: Edit): Edit => {
@@ -64,7 +64,10 @@ describe('the built-in set', () => {
     expect(parseRules(JSON.parse(text(BUILTIN_FILE)))).toEqual(BUILTIN_RULES)
     // (the frozen first version is schema 1's, refused by its schema; lifted to this one it is canonical, and its version 1)
     expect(refusal(JSON.parse(text(V1_FILE))).field).toBe('schema')
-    expect(writeRules(V1)).toBe(text(V1_FILE).replace('"schema": 1,', `"schema": ${RULES_SCHEMA},`).split('\n').filter(l => !REMOVED.some(k => l.trim().startsWith(`"${k}":`))).join('\n'))
+    const kept = text(V1_FILE).split('\n').filter(l => !l.startsWith('  "schema"') && !REMOVED.some(k => l.trim().startsWith(`"${k}":`)))
+    const lifted = writeRules(V1).split('\n')
+    expect(lifted.filter(l => !kept.includes(l)).map(l => l.trim().split(':')[0]).sort()).toEqual(['"schema"', ...ADDED.flatMap(k => Object.keys(V1.scripts).map(() => `"${k}"`))].sort())
+    expect(kept.every(l => lifted.includes(l))).toBe(true)
     expect(V1.version).toBe(1)
     expect(V1.note).toBe('migrated from the engine\'s code')
   })
