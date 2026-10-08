@@ -41,6 +41,7 @@ import { extname, join, normalize, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { deflateSync, inflateRawSync, inflateSync, constants as Z } from 'node:zlib'
 import { geometryFile, PROTO_GEOMETRY } from '../spikes/layer-gate/ref.mjs'
+import { isOwnHost } from './own-host.mjs'
 import { createRulesApi, RULES_PATH } from './rules-api.mjs'
 
 const here = new URL('.', import.meta.url).pathname
@@ -205,6 +206,8 @@ const info = () => ({
 
 const rulesApi = createRulesApi({ root: REPO, origin: () => `http://127.0.0.1:${server.address().port}`, rules: await import(pathToFileURL(join(ENGINE, 'rules/layout.mjs')).href), published: PUBLISHED })
 const server = createServer((req, res) => {
+  // before anything is read or written: a request that names another host reached this server through a rebound name
+  if (!isOwnHost(req.headers.host, server.address().port)) return send(res, 403, 'forbidden')
   let path
   try { path = decodeURIComponent(new URL(req.url, 'http://127.0.0.1').pathname) } catch { return send(res, 400, 'bad path') }
   // the rules routes: a save is the one POST the lab takes

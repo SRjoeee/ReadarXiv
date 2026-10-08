@@ -109,7 +109,9 @@ worktree's file):
 | `GET /api/rules/published?env=staging\|production` | the published current set, fetched from the URL the lab was given (below); 404 where none was given or the route says 404, 502 where it is unreachable or answers an error |
 | `POST /api/rules` | a save. Refused (writing nothing) unless `Content-Type` is `application/json` and `Origin` is exactly the lab's own (`http://127.0.0.1:<its port>`); the body is the set, at most `RULES_CAP` bytes; its `note` is required; one save at a time |
 
-The server listens on 127.0.0.1 only. The published sets are read from the web's current-set route, whose URL the lab is
+The server listens on 127.0.0.1 only, and answers 403, reading and writing nothing, to any request whose `Host` is not exactly
+`127.0.0.1:<its port>` (`own-host.mjs`, the guard against a rebound name: a page of another site could otherwise read the
+fixtures and records, which are not to be published). The published sets are read from the web's current-set route, whose URL the lab is
 given: `LAYER_RULES_STAGING` and `LAYER_RULES_PRODUCTION` (for example `https://…/api/v1/rules/s1`). Without one, or where the
 route answers 404 or is not there, the panel shows the set as unavailable; the lab asks nothing else of the network, and the
 request carries a project user agent and nothing about the maintainer.

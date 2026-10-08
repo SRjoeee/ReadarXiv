@@ -20,6 +20,9 @@ const REST_MS = 350
 const LISTED = 40
 const decimals = step => (String(step).split('.')[1] ?? '').length
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+/** a note as one line of text: each run of white space, controls and bidirectional controls (which a set refuses in a string,
+ *  and a textarea lets through as a newline or a tab) becomes one space */
+const oneLine = text => text.replace(/[\s\p{Cc}\p{Bidi_Control}]+/gu, ' ').trim()
 /** a value on one line, cut at `max` characters */
 const flat = (v, max = 72) => {
   const s = v === undefined ? '-' : JSON.stringify(v)
@@ -180,11 +183,13 @@ export function createRulesPanel({ root, h, icon, t, R, names, catalog, onChange
   }
 
   async function save() {
-    const note = S.note.trim()
+    const note = oneLine(S.note)
+    // the set as it is sent, copied before the answer is waited for: the file then holds this, whatever is edited meanwhile
+    const sent = { ...structuredClone(S.working), note }
     ui.save.disabled = true
     let r, body
     try {
-      r = await fetch('/api/rules', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...S.working, note }) })
+      r = await fetch('/api/rules', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sent) })
       body = await r.json()
     } catch (e) { say('warn', t('rules.failed', t('rules.save'), String(e?.message ?? e).slice(0, 200))); refreshAll(); return }
     if (!r.ok) {
@@ -192,10 +197,11 @@ export function createRulesPanel({ root, h, icon, t, R, names, catalog, onChange
       refreshAll()
       return
     }
-    const written = { ...S.working, version: body.version, note }
+    const written = { ...sent, version: body.version }
     S.file = { set: structuredClone(written), sha256: body.sha256 }
     S.base = structuredClone(written)
-    S.working = structuredClone(written)
+    // (an edit made while the save was in flight is not in the file: it stays an unsaved edit, over the version and note now there)
+    S.working = { ...S.working, version: body.version, note }
     S.from = { kind: 'file', label: t('rules.from.file'), version: body.version, sha256: body.sha256 }
     S.saved = { version: body.version, changed: body.changed }
     S.note = ''
@@ -473,7 +479,7 @@ export function createRulesPanel({ root, h, icon, t, R, names, catalog, onChange
   function refreshSave() {
     if (!ui.save) return
     const changes = S.file && S.working ? diffRules(S.file.set, S.working).length : 0
-    const noted = S.note.trim() !== ''
+    const noted = oneLine(S.note) !== ''
     ui.save.disabled = !(S.file && changes && noted)
     ui.saveHint.textContent = !S.file ? t('rules.saveNoFile') : !changes ? t('rules.saveNoChange') : !noted ? t('rules.saveNeedsNote') : t('rules.saveHint', S.file.set.version + 1, changes)
     ui.noteBox.value = S.note
