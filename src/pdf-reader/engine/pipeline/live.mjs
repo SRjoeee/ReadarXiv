@@ -19,7 +19,7 @@
 // first preview is set as today, and never waits for the original: nothing is known to plan it from yet. Where a plan
 // cannot be made, the translation is set as today, and the reason noted
 import { analyze } from '../source/paper-meta.mjs'
-import { inkSamples, LAYOUT_TEX, layoutMarking, markProbeTex, probeSamples } from '../layout/marks.mjs'
+import { inkSamples, LAYOUT_TEX, layoutMarking, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
 import { BALANCE_DEF, documentBounds, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from '../source/latex-front.mjs'
 import { strategiesFor, typesetBy } from './scripts.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
@@ -121,27 +121,53 @@ export const citationLines = aux => {
   for (const l of all) { const m = /^\\(?:citation|bibcite)\{([^}]*)\}/.exec(l); if (m) for (const k of m[1].split(',')) keys.add(k.trim()) }
   return all.filter(l => { const m = /^\\([A-Za-z@]+)\{([^{}]*)\}/.exec(l); return !!m && m[1] !== 'citation' && m[1] !== 'newlabel' && keys.has(m[2].trim()) }).join('\n')
 }
+/** what a final names by each babel name, by key (layout/names.mjs NAME_KEYS): the name's macro, and the construct made
+ *  of it, by its own definition (a float's label, \fnum@figure, one level of it; else the meaning of the environment or
+ *  the command that sets the name, or none where no standard one does) */
+const CAPTION_OF = Object.freeze({
+  figure: ['figurename', 'fnum@figure'], table: ['tablename', 'fnum@table'], abstract: ['abstractname', 'abstract'], ref: ['refname', 'thebibliography'],
+  bib: ['bibname', 'thebibliography'], contents: ['contentsname', 'tableofcontents'], listfigure: ['listfigurename', 'listoffigures'],
+  listtable: ['listtablename', 'listoftables'], appendix: ['appendixname', 'appendix'], index: ['indexname', 'theindex'], proof: ['proofname', 'proof'],
+  preface: ['prefacename', null], glossary: ['glossaryname', 'printglossary'],
+})
 /**
- * What names a translation's floats (the table-groups brief, Problem 2): at the document's end, each float's label as
- * the class defines it (\fnum@figure, \fnum@table, one level of it) and the meaning of its name (\figurename,
- * \tablename), written to the log for captionsOf. Whether the final labels a figure with the name babel gives the
- * target (scripts.mjs, \babelprovide{axttarget}; the layout rules' labels, rules/layout-rules.json, hold those names) is the paper's as much as the
- * target's: a class that writes its own word into the label (naaclhlt2019.sty's \fnum@figure, "Figure \thefigure"),
- * a paper that selects another language in its body (2307.16209's \selectlanguage{english}), polyglossia (babel not
- * loaded), and CJKutf8 (no babel) keep the paper's names. Read, never expanded: nothing in it can fail a compile
+ * What names a translation's floats and its generated headings (the table-groups brief, Problem 2; D1a): at the
+ * document's end, for each babel name, the construct made of it as the class defines it (a float's label, \fnum@figure,
+ * one level of it; an environment's or a command's meaning) and the meaning of its name (\figurename, \refname, …), two
+ * rows a key, each closed by AXT-CAPTION-END (never END_TEX's AXT-END, which a row TeX wraps could leave on a line of its
+ * own), written to the log for captionsOf. Whether the final names a float or a heading in
+ * the target's words, the name babel gives the target (scripts.mjs, \babelprovide{axttarget}; the layout rules' labels,
+ * rules/layout-rules.json, hold those names), is the paper's as much as the target's: a class that writes its own word
+ * into the construct (naaclhlt2019.sty's \fnum@figure, "Figure \thefigure"; nips_2017.sty's abstract, "Abstract"), a paper
+ * that selects another language in its body (2307.16209's \selectlanguage{english}), polyglossia (babel not loaded), and
+ * CJKutf8 (no babel) keep the paper's names. Read, never expanded but a float's label: nothing in it can fail a compile
  */
-export const CAPTIONS_PROBE = String.raw`\makeatletter\AtEndDocument{\typeout{AXT-CAPTIONS figure=\ifdefined\fnum@figure\detokenize\expandafter{\fnum@figure}\fi|\ifdefined\figurename\meaning\figurename\fi|table=\ifdefined\fnum@table\detokenize\expandafter{\fnum@table}\fi|\ifdefined\tablename\meaning\tablename\fi|}}\makeatother` + '\n'
+export const CAPTIONS_PROBE = `\\makeatletter\\AtEndDocument{${Object.entries(CAPTION_OF).map(([key, [name, made]]) => {
+  const construct = made === null ? '' : made.startsWith('fnum@') ? `\\ifdefined\\${made}\\detokenize\\expandafter{\\${made}}\\fi` : `\\ifdefined\\${made}\\meaning\\${made}\\fi`
+  return `\\typeout{AXT-CAPTION ${key} made ${construct}\\space AXT-CAPTION-END}\\typeout{AXT-CAPTION ${key} name \\ifdefined\\${name}\\meaning\\${name}\\fi\\space AXT-CAPTION-END}`
+}).join('')}}\\makeatother\n`
 /**
- * Whether a compile labelled its figures and its tables with the target's names (CAPTIONS_PROBE's line): `target` where
- * the name is babel's for the target (its meaning babel's for axttarget) and the label is made of the name — it names
- * \figurename, or writes no word of its own (a wrapper around the class's own definition) —, `source` otherwise; null
- * where the log has no such line (a compile before the probe, or one that did not reach the document's end)
+ * Whether a compile named each float and each generated heading with the target's names (CAPTIONS_PROBE's rows): for each
+ * key, `target` where the name is babel's for the target (its meaning babel's for axttarget) and the construct is made of
+ * the name — it names the macro; or, a float's label, it writes no word of its own (a wrapper around the class's own
+ * definition); or, a heading's construct, it writes no word of the name's English (layout/marks.mjs NAME_ENGLISH: nips's
+ * abstract writes "Abstract", memoir's \tableofcontents hands the work to its own macros) —, `source` otherwise; a key
+ * whose rows the log lacks is left out. Null where the log has no such row at all (a compile before the probe, or one that
+ * did not reach the document's end)
  */
 export function captionsOf(log) {
-  const m = /^AXT-CAPTIONS figure=(.*?)\|(.*?)\|table=(.*?)\|(.*?)\|/m.exec(unwrapped(lastTexLog(log ?? '')))
-  if (!m) return null
-  const named = (fnum, meaning, name) => /axttarget/.test(meaning) && (fnum.includes(`\\${name}`) || !/(?<![\\A-Za-z@])[A-Za-z]{3,}/.test(fnum))
-  return { figure: named(m[1], m[2], 'figurename') ? 'target' : 'source', table: named(m[3], m[4], 'tablename') ? 'target' : 'source' }
+  const text = unwrapped(lastTexLog(log ?? '')), rows = {}
+  for (const m of text.matchAll(/AXT-CAPTION ([a-z]+) (made|name) (.*?) ?AXT-CAPTION-END/g)) (rows[m[1]] ??= {})[m[2]] = m[3]
+  const out = {}
+  for (const [key, [name]] of Object.entries(CAPTION_OF)) {
+    const r = rows[key]
+    if (r?.made === undefined || r?.name === undefined) continue
+    // (a macro's meaning, its prefixes and parameter text left out: `\long macro:#1->` is no word of the construct's)
+    const made = r.made.replace(/^(?:\\[a-z]+ )*macro:.*?->/, '')
+    const own = key === 'figure' || key === 'table' ? /(?<![\\A-Za-z@])[A-Za-z]{3,}/ : new RegExp(String.raw`(?<![\\A-Za-z@])${NAME_ENGLISH[key].split(' ').join(String.raw`\s+`)}(?![A-Za-z@])`)
+    out[key] = /axttarget/.test(r.name) && (made.includes(`\\${name}`) || !own.test(made)) ? 'target' : 'source'
+  }
+  return Object.keys(out).length ? out : null
 }
 /** a compile's references as a draft is given them: its citation lines, its labels (\newlabel), its bibliography */
 const referencesOf = o => ({ cites: citationLines(o.aux), labels: auxLines(o.aux, 'newlabel'), bbl: o.bbl ?? null })
@@ -212,8 +238,9 @@ export function probeFiles({ fsys, project }, { width = false, marks = false } =
  *  placeholder of those classes and each cell and heading, and LAYOUT_TEX after MARK_DEF; `spans` names the paper's own
  *  units; `switches`, the paper's own switch (layout/marks.mjs readMarkProbe: TeX's answers to the mark probe), the
  *  marks taken off where TeX said they change what follows, and where it gave no answer; without `switches`, the marks
- *  as before; `inkless`, the paper's macros TeX said set no ink (readInkProbe), given no mark. Without `layout`, the
- *  bytes as before */
+ *  as before; `inkless`, the paper's macros TeX said set no ink (readInkProbe), given no mark; and a babel name a style
+ *  writes literally wrapped as the macro's text is (layout/marks.mjs literalNames). Without `layout`, the bytes as
+ *  before */
 export function originalFiles({ fsys, project }, { lines = false, spans = null, layout = null, switches = null, inkless = null } = {}) {
   const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
   const raw = spans ? [] : null
@@ -222,6 +249,17 @@ export function originalFiles({ fsys, project }, { lines = false, spans = null, 
     const marked = layoutMarking(project.units, layout, { lines, switches, inkless }), paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
     out = patch({ ...project, units: marked.units }, new Map(), { mark: marked.mark, spans: raw })
     for (const x of raw ?? []) { x.unit = paperOf.get(x.unit) ?? x.unit; if (x.outer) x.outer = paperOf.get(x.outer) ?? x.outer }
+    // a babel name a style writes literally in the construct its macro names (marks.mjs literalNames), in any of the
+    // package's style, class and source files (the main file's preamble), wrapped as the macro's own text is: no line
+    // of any file gains or loses a line
+    for (const path of fsys.list()) {
+      if (!/\.(?:sty|cls|tex|ltx)$/i.test(path)) continue
+      const bytes = out.get(path) ?? fsys.read(path)
+      if (!bytes) continue
+      const text = latin1(bytes), at = path === project.main ? beginDocument(text) : text.length
+      const wrapped = literalNames(text.slice(0, at))
+      if (wrapped !== text.slice(0, at)) out.set(path, latin1Bytes(wrapped + text.slice(at)))
+    }
   } else out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw })
   const patched = spans ? new Map(out) : null
   const head = DRAFT + MARK_DEF + (layout ? LAYOUT_TEX : '') + END_TEX + (lines ? LINES_TEX : '')

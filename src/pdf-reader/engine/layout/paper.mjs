@@ -4,8 +4,9 @@
 //
 // The order, and why:
 //   1. the mark probe (live.mjs probeFiles `marks`), compiled in one pass: its log holds the paper's own switch (TeX's
-//      answers to the mark probe, readMarkProbe), the macros that set no ink (readInkProbe) and the text the others set
-//      (readInkTexts). Read as runLive reads the font probe, from its log alone: the probe has no body and so no pages,
+//      answers to the mark probe, readMarkProbe), the macros that set no ink (readInkProbe), the text the others set
+//      (readInkTexts) and whether each babel name's own text holds a lowercase letter (readNameProbe). Read as runLive
+//      reads the font probe, from its log alone: the probe has no body and so no pages,
 //      and a compiler need not call that a success
 //   2. the marked original (live.mjs originalFiles with `lines` and the layout marks of every class), marked with those
 //      answers, compiled in full: its marks are where each marked piece stands, so it must be marked as the maker will
@@ -16,7 +17,7 @@
 // browser), so that this imports neither PDF.js nor a `node:*` module.
 import { lastTexLog } from '../source/latex-front.mjs'
 import { originalFiles, probeFiles } from '../pipeline/live.mjs'
-import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, layoutMarksOf, probeSamples, readInkProbe, readInkTexts, readMarkProbe } from './marks.mjs'
+import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, layoutMarksOf, probeSamples, readInkProbe, readInkTexts, readMarkProbe, readNameProbe } from './marks.mjs'
 
 /**
  * A paper's layout marks (paper.d.mts): the marks file's bytes, with each stage's time, or the stage that failed with the
@@ -37,10 +38,10 @@ export async function layoutMarksOfPaper(paper, { compile, open, OPS }) {
     const log = lastTexLog(c?.log)
     if (!log) return null
     const ink = inkSamples(paper.units)
-    return { switches: readMarkProbe(log, probeSamples(paper.units)), inkless: readInkProbe(log, ink), texts: readInkTexts(log, ink) }
+    return { switches: readMarkProbe(log, probeSamples(paper.units)), inkless: readInkProbe(log, ink), texts: readInkTexts(log, ink), names: readNameProbe(log) }
   })
   if (!probe) return { refused: 'probe', ms }
-  const { switches, inkless, texts } = probe
+  const { switches, inkless, texts, names } = probe
   const marked = await stage('compile', async () => {
     // (runLive's request for the marked original)
     const c = await compile({ main, engine, rerun: true, bibtex: paper.meta.bbl ? false : null, overrides: originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless }) })
@@ -50,7 +51,7 @@ export async function layoutMarksOfPaper(paper, { compile, open, OPS }) {
   const marks = await stage('marks', async () => {
     const opened = await open(marked.pdf)
     try {
-      return new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(opened.doc, lastTexLog(marked.log), { engine, classes: LAYOUT_CLASSES, switches, inkless, texts, units: paper.units, OPS })))
+      return new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(opened.doc, lastTexLog(marked.log), { engine, classes: LAYOUT_CLASSES, switches, inkless, texts, names, units: paper.units, OPS })))
     } finally {
       // (a failing close loses nothing: the marks are read)
       try { await opened.close() } catch {}

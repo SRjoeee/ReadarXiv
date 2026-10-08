@@ -8,8 +8,9 @@
 // it, the space and tie after that word put back (cite.sty's \unskip and its penalty test see them as before); none is
 // set in a contents list, a list of figures or the output routine's running heads (the gate); none goes after a paper's
 // macro or a footnote's call, which may look at what follows, nor after a control word, whose following spaces TeX
-// skips; and none is written to a file or a PDF string, so the
-// aux, the lists and the bookmarks are byte for byte the paper's. The native cases (lab/pdf/spikes/
+// skips; and none is written to a file or a PDF string, so that the aux, the lists and the bookmarks are byte for byte
+// the paper's, but a babel name's (NAMES_TEX), which writes itself into the lists and the running heads it is copied
+// into, and sets nothing there. The native cases (lab/pdf/spikes/
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) measures the layout
 // lines they carry and lose, and fails on a loss of no accepted cause.
 import { markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
@@ -18,6 +19,7 @@ import { tokenizeDocument } from '../pipeline/anchors.mjs'
 import { plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
 import { pageInk } from './ink.mjs'
+import { NAME_KEYS } from './names.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
 import { OWNED, OWNED_HOW, ownedOf, WANT } from './stream.mjs'
 
@@ -183,8 +185,8 @@ export function inkSection(samples) {
   const tests = samples.map((src, i) => `${probeRow('ink-at', i)}\\begingroup\\global\\setbox\\axt@ibox\\box\\voidb@x\\setbox\\axt@ibox\\hbox{${src}}${show}\\endgroup${probeRow('ink-end', i)}\\noindent\\par`)
   return `\\begingroup\\newbox\\axt@ibox${tests.join('\n')}\\endgroup`
 }
-/** the probe document of the layout marks: its punctuation section, then its ink section */
-export const markProbeTex = (samples, ink = []) => probeTex([punctuationSection(samples), ...(ink.length ? [inkSection(ink)] : [])])
+/** the probe document of the layout marks: its punctuation section, then its ink section, then its name section */
+export const markProbeTex = (samples, ink = []) => probeTex([punctuationSection(samples), ...(ink.length ? [inkSection(ink)] : []), nameSection()])
 /** a node TeX lists that sets no ink: glue, a kern, a penalty, a math switch, a box (its own nodes listed below it), a
  *  mark, a colour stack, a write, a destination, a saved or restored matrix, an adjust's or a discretionary's head
  *  (theirs below), leaders' head (their box or rule below) */
@@ -263,6 +265,133 @@ export function readInkTexts(log, samples) {
     if (c) { text += c[1]; continue }
     if (TEXT_PASS.test(line) || line === '') continue
     bad = true
+  }
+  return out
+}
+
+// ---- babel's names: what each one's own text is, TeX asked
+/** each name's macro, by key (file.mjs NAME_KEYS): babel's [captions], which a class defines as well */
+export const NAME_MACROS = Object.freeze({ abstract: 'abstractname', ref: 'refname', bib: 'bibname', contents: 'contentsname', listfigure: 'listfigurename', listtable: 'listtablename', appendix: 'appendixname', index: 'indexname', proof: 'proofname', preface: 'prefacename', glossary: 'glossaryname', figure: 'figurename', table: 'tablename' })
+/** each name's English value, babel's en [captions] (the layout rules' pinned locale files): what a style that writes a
+ *  name literally writes (literalNames) */
+export const NAME_ENGLISH = Object.freeze({ abstract: 'Abstract', ref: 'References', bib: 'Bibliography', contents: 'Contents', listfigure: 'List of Figures', listtable: 'List of Tables', appendix: 'Appendix', index: 'Index', proof: 'Proof', preface: 'Preface', glossary: 'Glossary', figure: 'Figure', table: 'Table' })
+/**
+ * The name section of the probe (`name`): for each name the wrapper wrapped as the document began (NAMES_TEX keeps the
+ * macro as it was, \axt@nmt@<key>), a row `name <key> <0 or 1>`: 1 where its own text, as a \protected@edef expands it,
+ * holds a letter \uppercase changes, 0 where it holds none (a class's capitals, or no cased letter). The layout maker
+ * takes a name's glyphs set in capitals as a case change only where its own text is not (NAME_FLAG.CAPITALS). Writes
+ * nothing, ships out nothing (readNameProbe)
+ */
+export function nameSection() {
+  return NAME_KEYS.map(k => `\\ifcsname axt@nmt@${k}\\endcsname\\begingroup\\protected@edef\\axt@qa{\\csname axt@nmt@${k}\\endcsname}\\uppercase\\expandafter{\\expandafter\\def\\expandafter\\axt@qb\\expandafter{\\axt@qa}}\\ifx\\axt@qa\\axt@qb${probeRow('name', k, 0)}\\else${probeRow('name', k, 1)}\\fi\\endgroup\\fi`).join('')
+}
+/** each name's answer from the probe's log (nameSection): { key: 1 its own text holds a lowercase letter, 0 not }, the
+ *  keys TeX answered for; a row of another schema, shape or key is passed over */
+export function readNameProbe(log) {
+  const out = {}
+  for (const r of readProbe(log)) if (r.schema === PROBE_SCHEMA && r.tag === 'name' && r.fields.length === 2 && NAME_KEYS.includes(r.fields[0]) && /^[01]$/.test(r.fields[1])) out[r.fields[0]] = Number(r.fields[1])
+  return out
+}
+
+/** the constructs a style may write a babel name literally in, by the environment or command defined, and the keys of
+ *  the names it would be made of */
+const LITERAL_IN = Object.freeze({ abstract: ['abstract'], endabstract: ['abstract'], thebibliography: ['ref', 'bib'], tableofcontents: ['contents'], listoffigures: ['listfigure'], listoftables: ['listtable'], theindex: ['index'], proof: ['proof'] })
+const CONSTRUCT = Object.keys(LITERAL_IN).join('|')
+/** a construct's definition, its head: an environment's (LaTeX's, xparse's), a command's (LaTeX's, xparse's), a \def's */
+const DEFINITION = new RegExp(String.raw`\\(?:(?:re)?newenvironment\*?\s*\{(${CONSTRUCT})\}|(?:New|Renew|Declare|Provide)DocumentEnvironment\s*\{(${CONSTRUCT})\}|(?:(?:renew|new|provide)command|DeclareRobustCommand)\*?\s*\{?\s*\\(${CONSTRUCT})(?![A-Za-z@])\s*\}?|(?:New|Renew|Declare|Provide)DocumentCommand\s*\{?\s*\\(${CONSTRUCT})(?![A-Za-z@])\s*\}?|[gex]?def\s*\\(${CONSTRUCT})(?![A-Za-z@]))`, 'g')
+/** the commands whose arguments a literal there is no text set on the page in: a label, a reference, a message, a
+ *  destination's name, a counter, an environment's name, a test; and \csname to its \endcsname */
+const NOT_TEXT = /\\(?:label|ref|pageref|eqref|nameref|autoref|cite[A-Za-z]*|nocite|typeout|message|wlog|write|hypertarget|hyperdef|hyperlink|pdfbookmark|@namedef|@nameuse|@ifundefined|@ifpackageloaded|@ifclassloaded|ifthenelse|setcounter|addtocounter|newcounter|usecounter|refstepcounter|stepcounter|begin|end|(?:Package|Class|Generic)(?:Warning|WarningNoLine|Info|Error))(?![A-Za-z@])|\\csname(?![A-Za-z@])/g
+/** past white space and comments from i */
+const skipBlank = (t, i) => { for (;;) { while (i < t.length && /\s/.test(t[i])) i++; if (t[i] !== '%') return i; while (i < t.length && t[i] !== '\n') i++ } }
+/** the end (one past its closing brace) of the brace group opening at i, escapes and comments skipped; -1 if unclosed */
+function groupEnd(t, i) {
+  if (t[i] !== '{') return -1
+  let d = 0
+  for (let j = i; j < t.length; j++) {
+    const c = t[j]
+    if (c === '\\') { j++; continue }
+    if (c === '%') { while (j < t.length && t[j] !== '\n') j++; continue }
+    if (c === '{') d++
+    else if (c === '}' && --d === 0) return j + 1
+  }
+  return -1
+}
+/** past an optional argument's brackets at i (at the brace depth they open), or i itself */
+function optionalEnd(t, i) {
+  if (t[i] !== '[') return i
+  let d = 0
+  for (let j = i; j < t.length; j++) {
+    const c = t[j]
+    if (c === '\\') { j++; continue }
+    if (c === '{') d++
+    else if (c === '}') d--
+    else if (c === ']' && d === 0) return j + 1
+  }
+  return i
+}
+/**
+ * A babel name a style writes literally, in the definition of the very construct the name's macro would name (nips's
+ * abstract environment, `{\large\bf Abstract}`; cvpr's and naacl's \abstract; naacl's thebibliography, `References`):
+ * each such literal, where it equals the name's English value (NAME_ENGLISH), wrapped as the macro's own text is
+ * (\axtnma{<key>}…\axtnmb{<key>}), in the definition's bodies, but in a command's arguments that are no text set on the
+ * page (NOT_TEXT). The identity is the definition's, never the page's; what TeX prints is unchanged, so the carry is.
+ * Returns the text, the same where it holds none
+ */
+export function literalNames(text) {
+  const edits = []
+  for (const m of text.matchAll(DEFINITION)) {
+    const name = m[1] ?? m[2] ?? m[3] ?? m[4] ?? m[5], keys = LITERAL_IN[name]
+    // its bodies: an environment's two (xparse's after its argument specification), a command's one (after its
+    // optional arguments, or xparse's specification), a \def's one (after its parameter text)
+    let i = m.index + m[0].length, bodies = []
+    const xparse = /Document(?:Environment|Command)/.test(m[0]), env = m[1] !== undefined || m[2] !== undefined
+    if (m[5] !== undefined) {
+      // (a parameter text holds no brace: #1, a delimiter)
+      for (const end = Math.min(text.length, i + 200); i < end && text[i] !== '{';) i++
+    } else {
+      i = skipBlank(text, i)
+      if (xparse) { const e = groupEnd(text, i); if (e < 0) continue; i = skipBlank(text, e) }
+      else for (let n = 0; n < 2; n++) i = skipBlank(text, optionalEnd(text, i))
+    }
+    for (let n = 0; n < (env ? 2 : 1); n++) {
+      i = skipBlank(text, i)
+      const e = groupEnd(text, i)
+      if (e < 0) break
+      bodies.push([i + 1, e - 1])
+      i = e
+    }
+    for (const [a, b] of bodies) {
+      const body = text.slice(a, b)
+      // the spans of the body no literal is wrapped in
+      const off = []
+      for (const x of body.matchAll(NOT_TEXT)) {
+        let j = x.index + x[0].length
+        if (x[0] === '\\csname') { const e = body.indexOf('\\endcsname', j); off.push([x.index, e < 0 ? body.length : e]); continue }
+        for (let n = 0; n < 2; n++) {
+          j = skipBlank(body, optionalEnd(body, skipBlank(body, j)))
+          const e = groupEnd(body, j)
+          if (e < 0) break
+          off.push([x.index, e])
+          j = e
+        }
+      }
+      for (const key of keys) {
+        const words = NAME_ENGLISH[key].split(' ').join(String.raw`\s+`)
+        for (const l of body.matchAll(new RegExp(String.raw`(?<![\\A-Za-z@])${words}(?![A-Za-z@])`, 'g'))) {
+          if (off.some(([s, e]) => l.index >= s && l.index < e)) continue
+          edits.push([a + l.index, a + l.index + l[0].length, key])
+        }
+      }
+    }
+  }
+  if (!edits.length) return text
+  edits.sort((x, y) => y[0] - x[0])
+  let out = text, last = Infinity
+  for (const [s, e, key] of edits) {
+    if (e > last) continue
+    out = `${out.slice(0, s)}\\axtnma{${key}}${out.slice(s, e)}\\axtnmb{${key}}${out.slice(e)}`
+    last = s
   }
   return out
 }
@@ -403,6 +532,46 @@ export const POINTS_TEX = [
   '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
 ].join('')
 
+/**
+ * The names (LAYOUT_TEX's, before its points): \axtnma{<key>} before a babel name's own text and \axtnmb{<key>} after it,
+ * each a destination and a point named n<occurrence>.<key>.s and .e, the occurrence a count kept in a macro (no register).
+ * - **Where.** In horizontal mode only, its glue, penalties and kerns taken off and put back (\axt@set, as a
+ *   placeholder's closing mark), never while the gate is off (a contents list, the output routine); the end mark only
+ *   where its start was set, so that an occurrence is never named by the one before it. A start in vertical mode (a
+ *   chapter's title, `\Huge\bfseries #1`, which the name's first letter begins) waits for the paragraph that begins next
+ *   (LaTeX's para/begin hook, once), where it is set after the paragraph's indentation as it would be in horizontal mode,
+ *   unless the name's end comes first (an empty name). A figure's or a table's name only outside a float (\@captype
+ *   undefined): a caption's label is the label path's (run.mjs labelInTarget).
+ * - **Written through.** Written to a file or into a mark (\protect not \@typeset@protect) they write themselves, so that
+ *   a name copied into the contents or a running head is still a name there (the lists' and the heads' occurrences, a
+ *   later step's); a case change leaves their keys (l3text's exclusion list: \MakeUppercase\refname); in a PDF string,
+ *   and in nameref's and gettitlestring's titles, they are taken out.
+ * - **The wrapper.** At \begin{document}, after every \AtBeginDocument (begindocument/end), and after every language
+ *   switch babel makes once it has (its afterextras hook): each name macro the document defines, as a macro of no
+ *   parameter and not \protected, set to \axtnma{<key>}<its own text>\axtnmb{<key>}; the macro as it was kept
+ *   (\axt@nmt@<key>, the probe's: nameSection) and the macro wrapped (\axt@nmd@<key>), so that one wrapped already is
+ *   left as it is. Local, as babel's own captions are. polyglossia's switches are not followed (no paper of the corpus's
+ *   five sets names through it)
+ */
+export const NAMES_TEX = [
+  '\\gdef\\axt@nmn{0}\\global\\let\\axt@nmopen\\@empty\\global\\let\\axt@nmwait\\@empty\\newif\\ifaxt@nmon\\newif\\ifaxt@nmgo\\def\\axt@nmfigure{figure}\\def\\axt@nmtable{table}',
+  '\\def\\axt@nmok#1{\\axt@nmgotrue\\ifdefined\\@captype\\def\\axt@nmt{#1}\\ifx\\axt@nmt\\axt@nmfigure\\axt@nmgofalse\\fi\\ifx\\axt@nmt\\axt@nmtable\\axt@nmgofalse\\fi\\fi}',
+  '\\def\\axt@nmstart#1{\\xdef\\axt@nmn{\\the\\numexpr\\axt@nmn+1\\relax}\\xdef\\axt@nmopen{#1}\\axt@set{n\\axt@nmn.#1.s}}',
+  '\\def\\axt@nmlate{\\ifx\\axt@nmwait\\@empty\\else\\ifaxt@off\\else\\ifhmode\\expandafter\\axt@nmstart\\expandafter{\\axt@nmwait}\\fi\\fi\\global\\let\\axt@nmwait\\@empty\\fi}',
+  '\\protected\\def\\axt@nma#1{\\ifaxt@off\\else\\axt@nmok{#1}\\ifaxt@nmgo\\ifhmode\\axt@nmstart{#1}\\else\\ifvmode\\ifdefined\\AddToHookNext\\xdef\\axt@nmwait{#1}\\AddToHookNext{para/begin}{\\axt@nmlate}\\fi\\fi\\fi\\fi\\fi}',
+  '\\protected\\def\\axt@nmb#1{\\global\\let\\axt@nmwait\\@empty\\ifaxt@off\\else\\ifhmode\\def\\axt@nmt{#1}\\ifx\\axt@nmt\\axt@nmopen\\global\\let\\axt@nmopen\\@empty\\axt@set{n\\axt@nmn.#1.e}\\fi\\fi\\fi}',
+  '\\def\\axtnma{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@nma\\else\\protect\\axtnma\\fi}',
+  '\\def\\axtnmb{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@nmb\\else\\protect\\axtnmb\\fi}',
+  '\\ifdefined\\ExplSyntaxOn\\ExplSyntaxOn',
+  '\\cs_new_protected:Npn\\axt@nmw#1#2{\\cs_if_eq:NcF#1{axt@nmd@#2}{\\bool_lazy_all:nT{{\\token_if_macro_p:N#1}{!\\token_if_protected_macro_p:N#1}{!\\token_if_protected_long_macro_p:N#1}{\\str_if_eq_p:ee{\\cs_parameter_spec:N#1}{}}}{\\cs_set_eq:cN{axt@nmt@#2}#1\\cs_set:Npx#1{\\exp_not:N\\axtnma{#2}\\exp_not:o{#1}\\exp_not:N\\axtnmb{#2}}\\cs_set_eq:cN{axt@nmd@#2}#1}}}',
+  '\\cs_new_protected:Npn\\axt@nmwrap#1#2{\\cs_if_exist:cT{#2}{\\exp_args:Nc\\axt@nmw{#2}{#1}}}',
+  '\\ExplSyntaxOff',
+  `\\def\\axt@nmall{\\ifaxt@nmon${NAME_KEYS.map(k => `\\axt@nmwrap{${k}}{${NAME_MACROS[k]}}`).join('')}\\fi}`,
+  '\\AddToHook{begindocument/end}{\\global\\axt@nmontrue\\axt@nmall}\\AddToHook{package/babel/after}{\\AddBabelHook{axtnames}{afterextras}{\\axt@nmall}}',
+  '\\AddToHook{package/gettitlestring/after}{\\ifdefined\\GetTitleStringDisableCommands\\GetTitleStringDisableCommands{\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble}\\fi}',
+  '\\fi',
+].join('')
+
 export const LAYOUT_TEX = [
   '\\makeatletter\\newif\\ifaxt@off\\global\\let\\axt@pend\\@empty\\let\\axt@icr\\/\\def\\axt@icv{0pt}\\newif\\ifaxt@sig',
   '\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax}\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax\\fi}\\fi\\fi\\fi',
@@ -436,17 +605,19 @@ export const LAYOUT_TEX = [
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@starttoc/before}{\\global\\axt@offtrue}\\AddToHook{cmd/@starttoc/after}{\\global\\axt@offfalse}\\AddToHook{cmd/@outputpage/before}{\\axt@offtrue}',
   '\\AddToHook{package/gettitlestring/after}{\\let\\axt@title@of\\GetTitleString\\long\\def\\GetTitleString#1{\\def\\axt@title{#1}\\axt@unmark\\axt@title\\expandafter\\axt@title@of\\expandafter{\\axt@title}}}',
   '\\AddToHook{package/nameref/after}{\\ifdefined\\NR@sanitize@labelname\\let\\axt@NRsanitize\\NR@sanitize@labelname\\def\\NR@sanitize@labelname{\\axt@unmark\\@currentlabelname\\axt@NRsanitize}\\fi}\\fi',
-  '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtpma\\@gobble\\let\\axtpm\\@gobble\\let\\axthmark\\@gobble}\\fi}',
-  '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axt@pma\\axt@pm\\axt@hm}\\fi',
-  '\\ifdefined\\ExplSyntaxOn\\ExplSyntaxOn\\regex_const:Nn\\c__axt_marks_regex{\\c{axtpma|axtpm|axthmark}\\cB.\\c[^BE].*\\cE.}\\cs_new_protected:Npn\\axt@unmark#1{\\regex_replace_all:NnN\\c__axt_marks_regex{}#1}\\ExplSyntaxOff\\fi',
+  '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtpma\\@gobble\\let\\axtpm\\@gobble\\let\\axthmark\\@gobble\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble\\let\\axt@nma\\@gobble\\let\\axt@nmb\\@gobble}\\fi}',
+  '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axt@pma\\axt@pm\\axt@hm\\axtnma\\axtnmb\\axt@nma\\axt@nmb}\\fi',
+  '\\ifdefined\\ExplSyntaxOn\\ExplSyntaxOn\\regex_const:Nn\\c__axt_marks_regex{\\c{axtpma|axtpm|axthmark|axtnma|axtnmb}\\cB.\\c[^BE].*\\cE.}\\cs_new_protected:Npn\\axt@unmark#1{\\regex_replace_all:NnN\\c__axt_marks_regex{}#1}\\ExplSyntaxOff\\fi',
+  NAMES_TEX,
   POINTS_TEX,
   '\\makeatother',
 ].join('')
 
 /** every destination name the marked original may hold (without its 'axt-'): a unit's start or end (MARK_DEF), a page's
  *  columns, a cell's (t) or a heading's (h) start or end, a placeholder's (p) or a footnote call's (n) opening or closing
- *  mark by its unit and source piece index, a draft image frame's corner (g) */
-export const MARK_NAME = /^(?:\d+[se]|c[12]-\d+|[th]\d+[se]|[pn]\d+\.\d+[ab]|g\d+[abt])$/
+ *  mark by its unit and source piece index, a draft image frame's corner (g), a babel name's start or end by its
+ *  occurrence and key (n<occurrence>.<key>.s, NAMES_TEX) */
+export const MARK_NAME = /^(?:\d+[se]|c[12]-\d+|[th]\d+[se]|[pn]\d+\.\d+[ab]|g\d+[abt]|n\d+\.[a-z]{1,16}\.[se])$/
 
 // ---------------------------------------------------------------- the marking
 /** patch's own test of the pieces that are always set on the line, where a unit's start mark goes before one that opens
@@ -584,11 +755,12 @@ export const MARKS_VALUES = 2_000_000
 export const MARKS_DEPTH = 3
 /** the marks file's schema: 2 holds each piece's own ink (`chars`, `owned`) and the switch TeX answered; 3 the switch
  *  null where no probe ran, the macros TeX said set no ink (`marking.inkless`) and the texts it showed they set
- *  (`marking.texts`), and the rest of a word given in parts (a token of word -1) */
-export const MARKS_SCHEMA = 3
+ *  (`marking.texts`), and the rest of a word given in parts (a token of word -1); 4 the babel names' marks (MARK_NAME's
+ *  n<occurrence>.<key>) and whether each name's own text holds a lowercase letter (`marking.names`) */
+export const MARKS_SCHEMA = 4
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
 const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens', 'chars', 'owned']
-const MARKING_KEYS = ['classes', 'switches', 'inkless', 'texts']
+const MARKING_KEYS = ['classes', 'switches', 'inkless', 'texts', 'names']
 /** a piece's own ink at most: its glyphs, its rules; and a paper's in all (each 5 values) */
 export const GLYPHS_PIECE = 20_000, RULES_PIECE = 2_000, OWNED_ALL = 250_000
 /** the distinct characters of the owned glyphs at most, and the code units of one */
@@ -635,6 +807,17 @@ function checkTexts(v, path) {
     if (typeof src !== 'string' || src.length < 1 || src.length > INK_SRC_MAX || seen.has(src)) throw new LayoutRefusal(`${path}[${i}]`, `not a source of 1 to ${INK_SRC_MAX} code units, once`)
     if (typeof text !== 'string' || !/^[A-Za-z0-9]+$/.test(text) || text.length > INK_TEXT_MAX) throw new LayoutRefusal(`${path}[${i + 1}]`, `not 1 to ${INK_TEXT_MAX} letters and digits`)
     seen.add(src)
+  }
+  return v
+}
+/** the names' answers the probe gave (readNameProbe), as the maker takes them: null where no probe ran, else an object
+ *  of keys of NAME_KEYS, each 0 or 1; else a refusal at `path` */
+function checkNames(v, path) {
+  if (v === null) return null
+  if (!isObject(v)) throw new LayoutRefusal(path, 'not null or an object')
+  for (const k of Object.keys(v)) {
+    if (!NAME_KEYS.includes(k)) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a key of NAME_KEYS')
+    if (v[k] !== 0 && v[k] !== 1) throw new LayoutRefusal(`${path}.${k}`, 'not 0 or 1')
   }
   return v
 }
@@ -703,11 +886,12 @@ function followsOf(units, names) {
  * line holds nothing else holds its end mark (layout/carry.mjs); a token longer than a word may be, or off its page, is
  * left out, and its rests with it. Numbers to a hundredth. What it gives, parseLayoutMarks takes
  */
-export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLASSES, switches = null, inkless = null, texts = null, units = null, OPS = null }) {
+export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLASSES, switches = null, inkless = null, texts = null, names = null, units = null, OPS = null }) {
   if (!ENGINES.includes(engine)) throw new LayoutRefusal('engine', `not one of ${ENGINES.join(', ')}`)
   const sw = checkSwitches(switches, 'switches'), none = checkInkless(inkless, 'inkless')
   const said = texts === null ? null : checkTexts(Array.isArray(texts) ? texts.flat() : texts, 'texts')
-  const marking = { classes: [...checkClasses(classes, 'classes')], switches: sw === null ? null : { ...sw }, inkless: none === null ? null : [...none], texts: said === null ? null : [...said] }
+  const cased = checkNames(names, 'names')
+  const marking = { classes: [...checkClasses(classes, 'classes')], switches: sw === null ? null : { ...sw }, inkless: none === null ? null : [...none], texts: said === null ? null : [...said], names: cased === null ? null : Object.fromEntries(NAME_KEYS.filter(k => Object.hasOwn(cased, k)).map(k => [k, cased[k]])) }
   const pdf = marked
   const pages = checkPages(pdf.numPages, 'pages')
   const views = [], text = [], stream = []
@@ -826,7 +1010,7 @@ function fitted(m) {
 export function encodeLayoutMarks(m) {
   const { schema, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens, chars, owned } = m
   return JSON.stringify({
-    schema, engine, marking: { classes: marking.classes, switches: marking.switches, inkless: marking.inkless, texts: marking.texts }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, words,
+    schema, engine, marking: { classes: marking.classes, switches: marking.switches, inkless: marking.inkless, texts: marking.texts, names: marking.names }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, words,
     tokens: tokens.map((v, i) => (i % 6 === 0 || i % 6 === 5 ? v : r2(v))), chars,
     owned: owned.map(ownedRow),
   })
@@ -844,6 +1028,7 @@ export function parseLayoutMarks(bytes) {
   checkSwitches(marking.switches, 'marking.switches')
   checkInkless(marking.inkless, 'marking.inkless')
   checkTexts(marking.texts, 'marking.texts')
+  checkNames(marking.names, 'marking.names')
   const pages = checkPages(m.pages, 'pages')
   const views = checkViews(m.views, pages, 'views')
   if (!Array.isArray(m.columns) || m.columns.length !== pages) throw new LayoutRefusal('columns', `not ${pages} entries`)

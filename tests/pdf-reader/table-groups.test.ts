@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { copyTexts, decideWrite, reusable, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/pipeline/cache.mjs'
 import { decideGroups, groupOf, NAMES_SHARE, unchanged } from '@/pdf-reader/engine/translate/groups.mjs'
 import { inMemory, loadProject, type SourceUnit, tableGrid } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
 import { CAPTIONS_PROBE, captionsOf, type Compiled, keptFor, openPaper, runLive, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { plainSource as plainOf } from '@/pdf-reader/engine/translate/mt.mjs'
 
@@ -247,20 +248,31 @@ describe("a kept cell's record: what the translator gave it and its sentences, k
   })
 })
 
-describe('what names the floats: the target\'s names babel gives, where the final uses them', () => {
-  it('every compile of the translation writes what names its floats; captionsOf reads it, wrapped as TeX wraps its log', () => {
+describe('what names the floats and the headings: the target\'s names babel gives, where the final uses them', () => {
+  it('every compile of the translation writes what names its floats and its headings; captionsOf reads it, wrapped as TeX wraps its log', () => {
     const paper = openPaper(new Map([['main.tex', enc(doc('Some prose.'))]]))
     const files = translationFiles(paper, new Map(), { strategy: { name: 'x', engine: 'pdflatex', xe: false, pre: () => '' }, fonts: {} })
     expect(new TextDecoder().decode(files.get('main.tex'))).toContain(CAPTIONS_PROBE.trim())
+    for (const k of NAME_KEYS) expect(CAPTIONS_PROBE).toContain(`AXT-CAPTION ${k} made`)
     const wrap = (line: string) => line.match(/.{1,79}/g)?.join('\n') ?? ''
-    const log = (fig: string, figName: string) => `${wrap(`AXT-CAPTIONS figure=${fig}|${figName}|table=\\tablename \\nobreakspace \\thetable |macro:->\\bbl@ensure@axttarget {\\axttargettablename }|`)}\nAXT-END\n`
+    const row = (key: string, made: string, name: string) => `${wrap(`AXT-CAPTION ${key} made ${made} AXT-CAPTION-END`)}\n${wrap(`AXT-CAPTION ${key} name ${name} AXT-CAPTION-END`)}\n`
+    const babel = (k: string) => `macro:->\\bbl@ensure@axttarget {\\axttarget${k} }`
+    const log = (fig: string, figName: string, more = '') => `${row('figure', fig, figName)}${row('table', '\\tablename \\nobreakspace \\thetable ', babel('tablename'))}${more}AXT-END\n`
     // the kernel's label of babel's name
-    expect(captionsOf(log('\\figurename \\nobreakspace \\thefigure ', 'macro:->\\bbl@ensure@axttarget {\\axttargetfigurename }'))).toEqual({ figure: 'target', table: 'target' })
+    expect(captionsOf(log('\\figurename \\nobreakspace \\thefigure ', babel('figurename')))).toEqual({ figure: 'target', table: 'target' })
     // a class that writes its own word into the label (naaclhlt2019.sty)
-    expect(captionsOf(log('\\figcapfont Figure \\thefigure ', 'macro:->\\bbl@ensure@axttarget {\\axttargetfigurename }'))?.figure).toBe('source')
+    expect(captionsOf(log('\\figcapfont Figure \\thefigure ', babel('figurename')))?.figure).toBe('source')
     // a wrapper around the class's own definition, and a name another language set (2307.16209's \selectlanguage{english})
-    expect(captionsOf(log('{\\ifFBfrench \\FBfigtabshape \\fi \\fnum@figureORI }', 'macro:->\\bbl@ensure@axttarget {\\axttargetfigurename }'))?.figure).toBe('target')
+    expect(captionsOf(log('{\\ifFBfrench \\FBfigtabshape \\fi \\fnum@figureORI }', babel('figurename')))?.figure).toBe('target')
     expect(captionsOf(log('{\\ifFBfrench \\FBfigtabshape \\fi \\fnum@figureORI }', 'macro:->Figure'))?.figure).toBe('source')
+    // the headings: article's bibliography names \refname (its meaning's parameter text no word of its own), nips_2017's
+    // abstract writes its word, a construct the class does not define names nothing
+    const headings = row('ref', '\\long macro:#1->\\section *{\\refname \\@mkboth {\\MakeUppercase \\refname }{\\MakeUppercase \\refname }}\\list {\\@biblabel {\\@arabic \\c@enumiv }}{\\usecounter {enumiv}}', babel('refname'))
+      + row('abstract', 'macro:->\\vskip .075in\\centerline {\\large \\bf Abstract}\\vspace {0.5ex}\\begin {quote}', babel('abstractname'))
+      + row('contents', 'macro:->\\@ifstar {\\@nameuse {mem@tableofcontents}{01}}{\\@nameuse {mem@tableofcontents}{00}}', babel('contentsname'))
+      + row('bib', '', '')
+    expect(captionsOf(log('\\figurename \\nobreakspace \\thefigure ', babel('figurename'), headings))).toEqual({ figure: 'target', table: 'target', ref: 'target', abstract: 'source', contents: 'target', bib: 'source' })
+    // a final that never reached the probe: no answer at all; an END_TEX line is no row's
     expect(captionsOf('AXT-END\n')).toBeNull()
   })
 })
