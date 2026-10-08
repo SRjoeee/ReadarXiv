@@ -200,6 +200,33 @@ export function fillPage(units, P, running = null, onFilled = () => {}) {
 }
 
 /**
+ * The ink of a page that stays visible where a unit's lines would move to (E3 for the leftover packed, packPage): the
+ * page's ink map (layer2.mjs inkMapOf, of the original page as PDF.js draws it: text, rules, images and vector paths
+ * alike), less the glyphs the drawing takes away (`accounted`: the boxes of the characters the page's painted units
+ * account for, erased with them or removed by the add-on, each grown by a map cell, as the map holds a cell any of whose
+ * pixels is inked), and the add-on's `dirty` boxes (kept ink under the units' rectangles, where the removed page is swapped
+ * in). Boxes are [x0, y0, x1, y1] in PDF units; `toDev` and `toPdf` map between them and the map's canvas. Returns
+ * foot(x0, x1, y0, y1): the PDF y of the lowest staying ink's foot in that box, or null where it holds none.
+ */
+export function stayingInk({ map, toDev, toPdf, accounted = [], dirty = [] }) {
+  const { w, h, factor: f } = map
+  const cells = (x0, y0, x1, y1, pad) => {
+    const [ax, ay] = toDev(x0, y1), [bx, by] = toDev(x1, y0)
+    return [Math.max(0, Math.floor(Math.min(ax, bx) / f) - pad), Math.max(0, Math.floor(Math.min(ay, by) / f) - pad), Math.min(w - 1, Math.floor(Math.max(ax, bx) / f) + pad), Math.min(h - 1, Math.floor(Math.max(ay, by) / f) + pad)]
+  }
+  const stay = map.ink.slice()
+  const fill = (b, pad, v) => { const [c0, r0, c1, r1] = cells(b[0], b[1], b[2], b[3], pad); for (let r = r0; r <= r1; r++) stay.fill(v, r * w + c0, r * w + c1 + 1) }
+  for (const b of accounted) fill(b, 1, 0)
+  for (const b of dirty) fill(b, 0, 1)
+  return (x0, x1, y0, y1) => {
+    if (!(y1 > y0) || !(x1 > x0)) return null
+    const [c0, r0, c1, r1] = cells(x0, y0, x1, y1, 0)
+    for (let r = r1; r >= r0; r--) for (let c = c0; c <= c1; c++) if (stay[r * w + c]) return toPdf((c + 0.5) * f, (r + 1) * f)[1]
+    return null
+  }
+}
+
+/**
  * The leftover packed (P.leftover 'pack', D6's F6c, the maintainer's experiment of 2026-10-08; 'foot' keeps it at each
  * unit's foot): a page's body units (`units`, laid and filled: blocks, layout, s) moved up so that each paragraph keeps
  * the original's gap to the one above it, and what its fill leaves over gathers at the end of the run of paragraphs, before
@@ -211,9 +238,14 @@ export function fillPage(units, P, running = null, onFilled = () => {}) {
  * pages or one left the original's is fixed: a run ends at it. Its first line is then set as far under the upper's last drawn line as
  * the original's are apart, never lower than it was, its lines moved together; the units are taken from the top, so that
  * a run's moves add up. The cost: a paragraph's top leaves its original's line.
+ * And it moves over no ink that stays (E3, by construction): `stays(x0, x1, y0, y1)`, the foot (PDF y) of the lowest ink in
+ * a box that the drawing leaves visible, or null (stayingInk: the page's ink but the glyphs its painted units take away,
+ * and the add-on's dirty boxes). A unit whose own lines' band holds such ink does not move; one that would rise into it
+ * stops short of its foot by `gap` of its pitch (P.borrowGap: the room a unit's borrowed lines keep above ink below
+ * them). Null: no ink is read (the tests of the rest).
  * Returns the moves by unit id (PDF units up), the units that moved in the order they were taken.
  */
-export function packPage(pg, units, rects, chars) {
+export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
   const lastOf = p => { let i = -1; p.blocks.forEach((b, j) => { if (b.page === pg) i = j }); return i }
   const linesOf = (p, bi) => p.layout.lines.filter(l => l.page === pg && l.block === bi)
   const body = units.filter(p => EVEN_KINDS.has(p.unit.kind) && !p.refused && p.layout)
@@ -249,8 +281,18 @@ export function packPage(pg, units, rects, chars) {
     // original's last by what its fill left; the lower's first as far from it as the original's are. A size smaller than the
     // original's is not made up for: its glyphs' smaller ascent is no blank line, and its lines stay on the original's pitch)
     const own = linesOf(q, 0), up = linesOf(p, ai)
-    const d = Math.round(((Math.min(...up.map(l => l.baseline)) - a.B.at(-1)) - (Math.max(...own.map(l => l.baseline)) - b.B[0])) * 1000) / 1000
+    let d = Math.round(((Math.min(...up.map(l => l.baseline)) - a.B.at(-1)) - (Math.max(...own.map(l => l.baseline)) - b.B[0])) * 1000) / 1000
     if (d <= 0) continue
+    // (over no ink that stays: its glyphs' band as drawn, a CJK em over the baseline to a descender under it, must hold
+    // none, and the band it rises into is held clear of the lowest by the clearance)
+    if (stays) {
+      const f = q.layout.f, clearance = gap * (b.pitch0 ?? 1.2 * q.s)
+      const top = Math.max(...own.map(l => l.baseline)) + 0.88 * f, low = Math.min(...own.map(l => l.baseline)) - 0.25 * f
+      if (stays(b.x0, b.x1, low, top) !== null) continue
+      const ink = stays(b.x0, b.x1, top, top + d + clearance)
+      if (ink !== null) d = Math.round((ink - clearance - top) * 1000) / 1000
+      if (d <= 0) continue
+    }
     for (const l of q.layout.lines) l.baseline += d
     moves.set(q.id, d)
   }
@@ -1039,7 +1081,16 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   }
   // the leftover packed (packPage) over a page's units laid, each moved unit's record updated
   const packPass = pg => {
-    const moved = packPage(pg, laid[pg], rectsByPage.get(pg) ?? [], chars2[pg - 1] ?? [])
+    // (the ink that stays, by the page's ink map: no move is made on a page whose map is not read)
+    const map = inkOf(pg), dev = pxOf(pg), vw = views[pg - 1]
+    const accounted = []
+    // (a table's cell may be withheld with its group after this pass: its glyphs are not taken as gone)
+    for (const p of laid[pg]) {
+      if (p.refused || p.unit.kind === 'cell' || !p.prep?.cat) continue
+      for (const c of p.prep.uc ?? []) if (c.page === pg && !c.sep && !c.space && p.prep.cat.get(L2.charKey(c)) === 'acc') accounted.push([c.x0, c.yb - 0.25 * c.size, c.x1, c.yb + 0.88 * c.size])
+    }
+    const stays = map ? stayingInk({ map, toDev: dev, toPdf: (x, y) => vw.convertToPdfPoint(x / dpr, y / dpr), accounted, dirty: removedPage(pg) ? dirtyOf(pg) : [] }) : () => -Infinity
+    const moved = packPage(pg, laid[pg], rectsByPage.get(pg) ?? [], chars2[pg - 1] ?? [], stays, P.borrowGap)
     for (const [id, d] of moved) { const p = byId.get(id); if (p?.rec) Object.assign(p.rec, { lines: recLinesOf(p), pack: r1(d) }) }
     return moved
   }

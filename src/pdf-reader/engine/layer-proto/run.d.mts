@@ -53,7 +53,9 @@ export declare function settleLayout(p: { clear?: { bands: Map<number, import('.
 /** adaptiveFill's pass over a page's loose units: each filled unit laid anew in place and settled, then onFilled; the target leading, or null */
 export declare function fillPage(units: unknown[], P: Params & { adaptiveFill: { band: number; track: number; size: number } }, running?: number | null, onFilled?: (p: Placed, target: number) => void): { target: number; body: boolean } | null
 /** the leftover packed (P.leftover 'pack'): a page's body units of one block moved up to keep the original's gap to the one above, the moves by id (PDF units up). `rects`: every unit's rectangles on the page, [id, [page, x0, y0, x1, y1]]; `chars`: the page's characters */
-export declare function packPage(page: number, units: unknown[], rects: readonly [number, readonly number[]][], chars: readonly { ch: string; x0: number; x1: number; yb: number; size: number }[]): Map<number, number>
+export declare function packPage(page: number, units: unknown[], rects: readonly [number, readonly number[]][], chars: readonly { ch: string; x0: number; x1: number; yb: number; size: number }[], stays?: ((x0: number, x1: number, y0: number, y1: number) => number | null) | null, gap?: number): Map<number, number>
+/** the ink of a page that stays visible: its ink map less the glyphs the drawing takes away, and the add-on's dirty boxes; foot(x0, x1, y0, y1) gives the PDF y of the lowest such ink's foot in a box, or null */
+export declare function stayingInk(o: { map: { w: number; h: number; ink: Uint8Array; factor: number }; toDev: (x: number, y: number) => number[]; toPdf: (x: number, y: number) => number[]; accounted?: readonly number[][]; dirty?: readonly number[][] }): (x0: number, x1: number, y0: number, y1: number) => number | null
 export interface ProtoRun {
   N: number
   P: Params

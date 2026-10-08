@@ -408,6 +408,29 @@ describe("the leftover packed (P.leftover 'pack', D6's F6c): each paragraph keep
     expect([...(await pack([a4!, b4!, c4!], [], [{ ch: 'B', x0: 2, x1: 30, yb: 440, size: 10 }]))]).toEqual([[3, 12]])
   })
 
+  it('moves over no ink that stays: it stops the clearance short of a rule or a kept box it would rise into, and stays for one in its own band', async () => {
+    // (ink that stays, as boxes [x0, y0, x1, y1]: the lowest foot among those a box meets; the clearance 0.35 of the pitch, 4.2)
+    const inkOf = (boxes: [number, number, number, number][]) => (x0: number, x1: number, y0: number, y1: number) => {
+      const met = boxes.filter(([bx0, by0, bx1, by1]) => bx0 < x1 && bx1 > x0 && by0 < y1 && by1 > y0)
+      return met.length ? Math.min(...met.map(([, by0]) => by0)) : null
+    }
+    const packWith = async (boxes: [number, number, number, number][]) => {
+      const units = run()
+      const moves = await (await import('@/pdf-reader/engine/layer-proto/run.mjs')).packPage(1, units as never, [], [], inkOf(boxes), 0.35)
+      return { moves, units }
+    }
+    // (none: B rises its 21, C its 33)
+    expect([...(await packWith([])).moves]).toEqual([[2, 21], [3, 33]])
+    // a rule between A and B, at 454.5 to 455.5: B's top (440 + 8.8) rises to 4.2 under it, 1.5
+    const rule = await packWith([[0, 454.5, 200, 455.5]])
+    expect(rule.moves.get(2)).toBeCloseTo(1.5, 6)
+    expect(Math.max(...rule.units[1]!.layout.lines.map(l => l.baseline)) + 8.8).toBeLessThanOrEqual(454.5 - 4.2 + 1e-9)
+    // a kept box in A's frame's blank, at 469 to 471: B rises 16
+    expect((await packWith([[50, 469, 60, 471]])).moves.get(2)).toBeCloseTo(16, 6)
+    // ink that stays in B's own band (a kept glyph among its lines): B does not move
+    expect((await packWith([[50, 430, 55, 436]])).moves.has(2)).toBe(false)
+  })
+
   it("moves no unit of two blocks, on two pages or not of the body, and none drawn to its frame's foot", async () => {
     for (const o of [{ blocks: 2 }, { pages: [1, 2] }, { kind: 'caption' }]) {
       const [a, , c] = run()
@@ -415,5 +438,29 @@ describe("the leftover packed (P.leftover 'pack', D6's F6c): each paragraph keep
     }
     const full = [unitOf(1, [500, 488, 476, 464], [500, 488, 476, 464]), unitOf(2, [440, 428, 416], [440, 428, 416])]
     expect((await pack(full)).size).toBe(0)
+  })
+})
+
+describe('the ink that stays (stayingInk): the page\'s ink but the glyphs the drawing takes away, and the dirty boxes', () => {
+  // a map of 100 x 100 cells at one device pixel a cell and a PDF unit, PDF y up: a rule at row 40 (PDF y 59 to 60) across x
+  // 10-90, a glyph at rows 70-72 and x 20-24 (PDF y 27 to 30)
+  const map = () => {
+    const ink = new Uint8Array(100 * 100)
+    for (let c = 10; c <= 90; c++) ink[40 * 100 + c] = 1
+    for (let r = 70; r <= 72; r++) for (let c = 20; c <= 24; c++) ink[r * 100 + c] = 1
+    return { w: 100, h: 100, ink, factor: 1 }
+  }
+  const io = { toDev: (x: number, y: number) => [x, 100 - y], toPdf: (x: number, y: number) => [x, 100 - y] }
+  it('finds a rule as text does, the lowest ink first, and none past a glyph the drawing takes away', async () => {
+    const { stayingInk } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const all = stayingInk({ map: map(), ...io })
+    expect(all(0, 100, 50, 70)).toBe(59)
+    expect(all(0, 100, 20, 70)).toBe(27)
+    expect(all(30, 100, 20, 50)).toBeNull()
+    const taken = stayingInk({ map: map(), ...io, accounted: [[20, 27.5, 25, 30]] })
+    expect(taken(0, 100, 20, 50)).toBeNull()
+    expect(taken(0, 100, 20, 70)).toBe(59)
+    // (a dirty box: the add-on's kept ink under a unit's rectangle, ink whatever the map says)
+    expect(stayingInk({ map: map(), ...io, dirty: [[50, 10, 60, 20]] })(40, 70, 0, 30)).toBe(9)
   })
 })
