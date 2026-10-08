@@ -206,6 +206,9 @@ describe('a regression fails the run unless a ruling covers its measure and its 
     for (const missing of ['by', 'quote', 'measures', 'targets', 'why']) expect(() => parseRuling({ ...whole, [missing]: undefined }, 'a.json')).toThrow(new RegExp(`a\\.json.*${missing}`))
     expect(() => parseRuling({ ...whole, measures: [] }, 'a.json')).toThrow(/measures/)
     expect(() => parseRuling({ ...whole, targets: 'ja' }, 'a.json')).toThrow(/targets/)
+    // the date is shown and not searched for a paper's words: a calendar date or nothing
+    expect(() => parseRuling({ ...whole, date: undefined }, 'a.json')).not.toThrow()
+    for (const date of ['8 Oct', '2026-10-08 the caption reads', 20261008]) expect(() => parseRuling({ ...whole, date }, 'a.json')).toThrow(/date is not a date/)
   })
 })
 
@@ -289,7 +292,7 @@ describe('the live-engines check honours the rulings, as the pull request gate d
 
   /** a tree at head's commit as { path: text }; the engine's own file is the schema line `engines` reads */
   /** `versions`: the set's version at the merge that added each ruling file (by default the head's, 2: the change under check) */
-  function fakeGit(tree: Record<string, string>, versions: Record<string, number> = {}) {
+  function fakeGit(tree: Record<string, string>, versions: Record<string, number> = {}, asAdded: Record<string, string> = {}) {
     const calls: string[][] = []
     const paths = Object.keys(tree)
     const git = (...args: string[]) => {
@@ -305,6 +308,9 @@ describe('the live-engines check honours the rulings, as the pull request gate d
         if (rest[0] === `${ENGINE_SHA}:src/pdf-reader/engine/rules/layout.mjs`) return `export const RULES_SCHEMA = ${BUILTIN_RULES.schema}\n`
         const merge = /^merge-(\d+):src\/pdf-reader\/engine\/rules\/layout-rules\.json$/.exec(rest[0]!)
         if (merge) return JSON.stringify({ version: versions[paths[Number(merge[1])]!] ?? 2 })
+        // a ruling file as the merge that added it holds it
+        const at = /^merge-\d+:(.*)$/.exec(rest[0]!)
+        if (at && at[1]! in tree) return asAdded[at[1]!] ?? tree[at[1]!]!
         const path = rest[0]!.slice(HEAD.length + 1)
         if (rest[0]!.startsWith(`${HEAD}:`) && path in tree) return tree[path]!
       }
@@ -314,7 +320,7 @@ describe('the live-engines check honours the rulings, as the pull request gate d
   }
 
   /** the command on a regressed head (ja: a unit left English) against its base, with a tree */
-  async function check(tree: Record<string, string>, { regress = true, record = '', versions = {} as Record<string, number> } = {}) {
+  async function check(tree: Record<string, string>, { regress = true, record = '', versions = {} as Record<string, number>, asAdded = {} as Record<string, string> } = {}) {
     const dir = mkdtempSync(join(tmpdir(), 'rules-gate-engines-'))
     const write = (name: string, content: unknown) => { mkdirSync(join(dir, name, '..'), { recursive: true }); writeFileSync(join(dir, name), typeof content === 'string' ? content : JSON.stringify(content)); return join(dir, name) }
     const names = Object.keys(base())
@@ -324,7 +330,7 @@ describe('the live-engines check honours the rulings, as the pull request gate d
     const argv = [`--list=${write('live-engines.json', { schema: 1, engines: [{ name: 'v0.4.1', ref: 'v0.4.1' }] })}`, `--head-rules=${headRules}`, `--pack=${join(dir, 'pack')}`, `--out=${join(dir, 'out')}`, `--pack-json=${write('gate-pack.json', { files: names.map(n => ({ path: `refs/${n}/ref.json` })) })}`]
     const t = { ...tree }
     if (record) t[RECORD] = record
-    const fake = fakeGit(t, versions)
+    const fake = fakeGit(t, versions, asAdded)
     const runFake = async (o: { rules: string }) => (o.rules === headRules ? headRun : baseRun)
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
     const code = await engines(argv, { run: runFake as never, git: fake.git as never, fetchImpl: (async () => { throw new Error('no network') }) as never })
@@ -362,6 +368,13 @@ describe('the live-engines check honours the rulings, as the pull request gate d
     expect((await check(fileOf(), { versions: { [path]: 3 } })).code).toBe(1)
     expect((await check(fileOf(), { versions: { [path]: 2 } })).code).toBe(0)
     expect(rulingsFor([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }], 1, 3).map(r => r.version)).toEqual([2, 3])
+  })
+  it('reads a ruling as it came in: a later edit that widens it accepts nothing', async () => {
+    const path = `${RULINGS}ja-unit.json`
+    // the tree's file names ja, the merge that added it named zh: the zh ruling is the one the pull request gate saw
+    const r = await check(fileOf(), { asAdded: { [path]: JSON.stringify(accepted({ targets: ['zh'] })) } })
+    expect(r.code).toBe(1)
+    expect(r.files.calls.some(c => c[0] === 'show' && c[1] === `merge-0:${path}`)).toBe(true)
   })
   it('does not accept a regression for another target or another measure, or a file that is no ruling', async () => {
     expect((await check(fileOf({ targets: ['zh'] }))).code).toBe(1)

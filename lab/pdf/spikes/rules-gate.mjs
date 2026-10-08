@@ -69,6 +69,8 @@ export function parseRuling(json, name) {
   if (json === null || typeof json !== 'object' || Array.isArray(json)) throw new Error(`ruling ${name}: not an object`)
   for (const f of ['by', 'quote', 'why']) if (typeof json[f] !== 'string' || !json[f].trim()) fail(f)
   for (const f of ['measures', 'targets']) if (!Array.isArray(json[f]) || !json[f].length || json[f].some(x => typeof x !== 'string' || !x)) fail(f)
+  // the date is shown and is not searched for a paper's words, so it is a date and nothing else
+  if (json.date !== undefined && (typeof json.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(json.date))) throw new Error(`ruling ${name}: date is not a date (YYYY-MM-DD)`)
   const text = v => (typeof v === 'string' ? v : null)
   return { name, date: text(json.date), by: json.by, on: text(json.on), quote: json.quote, english: text(json.english), scope: text(json.scope), why: json.why, measures: new Set(json.measures), targets: new Set(json.targets) }
 }
@@ -416,7 +418,8 @@ const RULES_FILE = 'src/pdf-reader/engine/rules/layout-rules.json'
  * The rulings the live-engines check may honour: the pull request gate's files of lab/pdf/rulings/ in the tree at `commit` (the
  * set's), each bound to the rule set it came in with. That gate takes only the files its pull request adds, so a ruling accepts the
  * change of one pull request; here each file carries `version`, the set's version at the first-parent commit that added it (the
- * merge of its pull request), and the check honours a ruling only for an engine whose published set is older than that version,
+ * merge of its pull request), read as it was there (a later edit changes nothing), and the check honours a ruling only for an
+ * engine whose published set is older than that version,
  * since that is the change it accepted (rulingsFor). The layer gate's record's rulings are history and accept nothing here.
  * Returns { rulings, problems (fixed sentences, safe for a public log) }. A file that is no ruling accepts nothing.
  */
@@ -425,15 +428,15 @@ export function rulingsAt(commit, { git: gitFn = git } = {}) {
   let names = []
   try { names = gitFn('ls-tree', '--name-only', commit, 'lab/pdf/rulings/').split('\n').filter(n => /^lab\/pdf\/rulings\/[^/]+\.json$/.test(n)).sort(byName) } catch { /* a commit before the directory */ }
   for (const n of names) {
+    // the ruling as it came in, with the set it came in with: an edit made later was never the pull request gate's, and changes nothing
+    let added = commit
+    try { added = gitFn('log', '--first-parent', '--diff-filter=A', '--format=%H', '-1', commit, '--', n).trim() || commit } catch { /* no history: the tree's */ }
     let text = null
-    try { text = gitFn('show', `${commit}:${n}`) } catch { /* listed and unreadable: the same as not valid */ }
+    try { text = gitFn('show', `${added}:${n}`) } catch { /* listed and unreadable: the same as not valid */ }
     const r = loadRuling(n, { read: () => { if (text === null) throw new Error('unreadable'); return text } })
     if (!r.ruling) { problems.push(r.problem); continue }
     let version = null
-    try {
-      const added = gitFn('log', '--first-parent', '--diff-filter=A', '--format=%H', '-1', commit, '--', n).trim() || commit
-      version = Number(JSON.parse(gitFn('show', `${added}:${RULES_FILE}`)).version)
-    } catch { /* no set where it came in */ }
+    try { version = Number(JSON.parse(gitFn('show', `${added}:${RULES_FILE}`)).version) } catch { /* no set where it came in */ }
     if (!Number.isInteger(version)) { problems.push(`the ruling file \`${r.ruling.name}\` came in where no rule set was: it accepts nothing`); continue }
     rulings.push({ ...r.ruling, version })
   }
