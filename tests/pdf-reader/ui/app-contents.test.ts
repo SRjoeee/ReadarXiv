@@ -54,6 +54,33 @@ describe('an address with no paper (D1)', () => {
   })
 })
 
+describe('an address with no paper: what the keyboard reaches (Codex on #329)', () => {
+  /** every control a pane draws for the pager: the page pill's arrows and field, the scroll indicator */
+  const pagers = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>('.pane .pill button, .pane .pill input, .pane .indicator')]
+  const inert = (el: Element) => el.closest('[inert]') !== null
+
+  it('the panes are inert, so that no invisible pager (a "1 / 0" with arrows that do nothing) stands in the Tab order before the card\'s link; the link itself is not', async () => {
+    const missing = fakeController({ phase: 'ready', noPaper: true, available: false, display: 'original' })
+    const m = await mountElement(createElement(App, { controller: missing.controller, embedded: false }))
+    const found = pagers(m.container)
+    // a pill's three controls and an indicator, in each of the two panes: all of them there, none of them reachable
+    expect(found.length).toBe(8)
+    expect(found.filter(el => !inert(el))).toEqual([])
+    expect([...m.container.querySelectorAll('.pane')].map(p => p.hasAttribute('inert'))).toEqual([true, true])
+    const link = m.container.querySelector('main .card a')!
+    expect([inert(link), link.closest('header, aside')]).toEqual([false, null])
+    await m.unmount()
+  })
+
+  it('a paper named leaves its panes as they were: reachable', async () => {
+    const named = fakeController({ phase: 'ready' })
+    const m = await mountElement(createElement(App, { controller: named.controller, embedded: false }))
+    expect([...m.container.querySelectorAll('.pane')].map(p => p.hasAttribute('inert'))).toEqual([false, false])
+    expect(pagers(m.container).filter(inert)).toEqual([])
+    await m.unmount()
+  })
+})
+
 describe('the contents\' slide (the reader\'s design, §5)', () => {
   it('under StrictMode, nothing slides as the page mounts; each press of the contents slides the document area once', async () => {
     const { controller } = fakeController()

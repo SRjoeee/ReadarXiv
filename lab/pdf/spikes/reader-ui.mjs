@@ -753,6 +753,17 @@ const OPTIONS_BUTTON = 'header button[aria-haspopup="dialog"]'
   check('no paper: the phase leaves loading, and the reader is ready', s.phase === 'ready' && s.noPaper && (await page.evaluate(() => window.__reader.ready)), JSON.stringify({ phase: s.phase, noPaper: s.noPaper }))
   check('no paper: a card in the document area with a link to arXiv, centred, inside the window', card.parent === 'MAIN' && card.reason.length > 0 && card.href === 'https://arxiv.org/' && card.target === '_blank' && card.centre.every(v => Math.abs(v) <= 1) && card.inside, JSON.stringify(card))
   check('no paper: the translated displays are out of reach, the original is not', JSON.stringify(card.translated) === '[null,"true","true"]', JSON.stringify(card.translated))
+  // the keyboard from the page's start (Codex on #329): the toolbar, then the card's link — no pager of an empty pane in between
+  await page.evaluate(() => document.activeElement?.blur())
+  const visited = []
+  for (let i = 0; i < 40; i++) {
+    await page.keyboard.press('Tab')
+    const at = await page.evaluate(() => { const a = document.activeElement; return { tag: a?.tagName, inPane: !!a?.closest('.pane'), inBar: !!a?.closest('header'), card: !!a?.closest('.card') } })
+    visited.push(at)
+    if (at.card) break
+  }
+  const reached = visited.at(-1)?.card === true
+  check('no paper: Tab from the page start reaches the card\'s link, through the toolbar alone — no pager control of an empty pane in between', reached && visited.every(v => !v.inPane) && visited.slice(0, -1).every(v => v.inBar) && visited.at(-1).tag === 'A', JSON.stringify({ tabs: visited.length, panes: visited.filter(v => v.inPane).length, last: visited.at(-1) }))
   await shot(page, 's5-13-no-paper')
   await page.close()
 }
