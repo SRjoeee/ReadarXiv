@@ -30,3 +30,5 @@ export declare const lastTexLog: (log: string | null | undefined) => string
 export declare const NO_ARG_COMMANDS: ReadonlySet<string>
 /** TeX for the unit marks (\axtmark, \axtend) and each page's columns as named destinations */
 export declare const MARK_DEF: string
+/** a string's code units as bytes, each its low eight bits (source text is read byte for byte) */
+export declare const latin1Bytes: (s: string) => Uint8Array

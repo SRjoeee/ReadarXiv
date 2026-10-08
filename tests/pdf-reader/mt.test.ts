@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { cutsOf, plainSource, plainTranslated, rehydrate, rehydrateTags, sentencesKept, sentencesOf, serialize, serializeTags, texEscape, textsShown, translateUnits, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
+import { latin1Bytes } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { cutsOf, plainSource, plainTranslated, rehydrate, rehydrateTags, sentencesKept, sentencesOf, serialize, serializeTags, texEscape, textsShown, translateUnits, unitText, utf8 } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // A unit's plain text as the PDF shows it, which the reader locates it by (anchors.mjs)
 
@@ -266,5 +267,13 @@ describe('textsShown: each unit\'s text as a compile has it, with the sentences 
     const pa = [{ t: 'text', tr: true, s: 'Eins. Zwei.' }]
     const sentences = new WeakMap<object, { src: number[]; tr: number[] }>([[pa, { src: [5], tr: [6] }]])
     expect(textsShown([a, b], new Map([[a, pa]]), p => sentences.get(p))).toEqual([{ id: 0, text: 'Eins. Zwei.', sentences: { src: [5], tr: [6] } }, { id: 1, text: 'Three.' }])
+  })
+})
+
+describe('utf8: the source\'s bytes as the front end reads them', () => {
+  it('is the front end\'s latin1Bytes decoded as UTF-8, for every byte and for a character past the first plane', () => {
+    const all = String.fromCharCode(...Array.from({ length: 256 }, (_, i) => i))
+    for (const s of ['caf\u00c3\u00a9', 'plain', all, 'a\u{1F600}b']) expect(utf8(s)).toBe(new TextDecoder().decode(latin1Bytes(s)))
+    expect(utf8('caf\u00c3\u00a9')).toBe('caf\u00e9')
   })
 })

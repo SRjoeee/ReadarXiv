@@ -100,6 +100,23 @@ describe('the engine\'s imports', () => {
   })
 })
 
+describe('what the translation, the rules and the browser load', () => {
+  // the server's modules: the front end and the files it reads, the compile path and the paper's pipeline, the layout maker,
+  // the marks, the remover and the add-on's maker, and the pixel checker. The anchors and the versions are the pipeline's too,
+  // and leaves that every reader takes
+  const server = (f: string) => f.startsWith(`${ENGINE}/source/`)
+    || (f.startsWith(`${ENGINE}/pipeline/`) && !/\/pipeline\/(?:anchors|versions)\.mjs$/.test(f))
+    || /\/layout\/(?:make|marks|paper|remove|addon|carry|match|stream)\.mjs$/.test(f)
+    || f.endsWith('/layer/check.mjs')
+  for (const name of ['translate', 'rules', 'layer', 'view'] as const) {
+    it(`reach none of the server's modules from ${name}`, () => {
+      const closure = [...closureOf([entryFile(name)])] as string[]
+      expect(closure.length).toBeGreaterThan(5)
+      expect(closure.filter(server)).toEqual([])
+    })
+  }
+})
+
 describe('the licence of what a reader loads', () => {
   const tracked: string[] = trackedFiles()
   const code = (f: string) => /\.(?:[cm]?[jt]sx?)$/.test(f) && !/\.d\.[cm]?ts$/.test(f)

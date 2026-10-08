@@ -43,3 +43,5 @@ export declare const NEXT_BATCH: 12000
 /** a batch from the front of `order`: units as many as hold `max` characters (`sizeOf(i)` each), a unit never split, a
  *  batch never empty (a unit over the limit goes alone) */
 export declare function batchOf(order: Iterable<number>, sizeOf: (id: number) => number, max: number): number[]
+/** source text is read byte for byte (latin1); its characters are UTF-8 */
+export declare const utf8: (s: string) => string

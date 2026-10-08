@@ -4,7 +4,6 @@
 // between opaque pieces on its own — so that nothing is left untranslated.
 import { tokens } from '../pipeline/anchors.mjs'
 import { bySentence } from '../view/highlight.mjs'
-import { latin1Bytes } from '../source/latex-front.mjs'
 import { MIXED } from './mixed.mjs'
 import { fromAlpha, MARKER_CLOSER, markerReader, TAG_RE, toAlpha } from '../../../core/protector/tokens.ts'
 import { sentenceCuts } from '../../../core/sentences/index.ts'
@@ -19,6 +18,9 @@ export { TRANSLATE_VERSION } from './version.mjs'
 export { fromAlpha, toAlpha }
 export const escape = s => s.replace(/@/g, '@@').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 export const decode = s => s.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (m, b) => b[0] === '#' ? String.fromCodePoint(b[1].toLowerCase() === 'x' ? parseInt(b.slice(2), 16) : parseInt(b.slice(1), 10)) : { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }[b.toLowerCase()])
+// (the same function as the front end's latin1Bytes: loading a paper's front end, and the argument tables it reads, for this
+// one line would put them in every reader that translates; a test holds the two equal)
+const latin1Bytes = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff; return b }
 /** source text is read byte for byte (latin1); its characters are UTF-8 */
 export const utf8 = s => new TextDecoder().decode(latin1Bytes(s))
 // the engine's text is plain text: TeX's special characters in it (a % for "percent", a # for "number") are escaped,
