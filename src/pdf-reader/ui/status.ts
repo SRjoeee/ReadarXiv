@@ -39,7 +39,7 @@ const running = (state: ReaderState) => state.phase === 'translating' || state.p
 /**
  * What the reader has done with the notices this visit (StatusCapsule keeps it). The two closable notices are closed
  * apart: one stood before the other, so a close of the partial one that also closed the count of failed passages kept
- * the count from ever being told (Devin on #314). `refusalsSeen`: the refused writes closed
+ * the count from ever being told. `refusalsSeen`: the refused writes closed
  */
 export interface Seen { partialClosed: boolean; noticeClosed: boolean; narrowShown: boolean; refusalsSeen: number }
 
@@ -57,7 +57,7 @@ export function capsuleOf(state: ReaderState, seen: Seen): Capsule | null {
   if (!state.available) return state.htmlVersion ? { kind: 'unavailable', words: plain(R.status.noPdf), href: state.htmlVersion } : { kind: 'unavailable', words: plain(R.status.noPdf) }
   if (!state.languageSupported && state.settings) {
     // the language named by its own name, and drawn in its own language: the name a part with the target's tag as its
-    // `lang` (Devin on #313)
+    // `lang`
     const code = state.settings.targetLanguage, name = ownName(code)
     return { kind: 'unsupported', words: withPart(R.status.unsupported(name), { text: name, lang: toBcp47(code) }), action: 'language' }
   }

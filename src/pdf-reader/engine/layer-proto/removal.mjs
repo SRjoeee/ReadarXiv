@@ -413,11 +413,11 @@ export function pageRules(index, page, ink) {
  * translated, kept as the original's, v0's own, refused, a table cell whose group is withheld, or one not decided yet
  * (laid later, its group pending) is kept clear of whole; one drawn, in what it keeps. `others(j, id)`: what unit `id`'s
  * fill on page j keeps clear of (its own rectangles not among them: what it keeps is its own fileSwap's); `accept(id, j,
- * kept)`, once it is drawn there. Asked at each fill, never cached past a decision (Codex's review of PR A: a page's
- * protection read at its first paint, before its groups were settled, let an accepted group's fill reach 0.5 pt into a
- * withheld group's text; and its re-review: a drawn unit's kept formula lost its protection whole, so that a neighbour
- * painted after it filled 0.5 pt into it). Two drawn units' replaced rectangles may meet (a footnote's lines 9 pt
- * apart), and neither leaves the other's edge. Each unit's boxes on a page are read once.
+ * kept)`, once it is drawn there. Asked at each fill, never cached past a decision: a page's protection read at its first
+ * paint, before its groups were settled, let an accepted group's fill reach 0.5 pt into a withheld group's text, and a
+ * drawn unit's kept formula that lost its protection whole let a neighbour painted after it fill 0.5 pt into it. Two
+ * drawn units' replaced rectangles may meet (a footnote's lines 9 pt apart), and neither leaves the other's edge. Each
+ * unit's boxes on a page are read once.
  */
 export function protection(index) {
   const pages = new Map(), drawn = new Map()

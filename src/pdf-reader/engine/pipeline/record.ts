@@ -168,7 +168,7 @@ export interface UntypesetMark {
  * Whether a mark still answers for a visit, which then says again that the paper cannot be typeset without asking the
  * service or the TeX page (the maintainer, 2026-09-26): only under the same pipeline and the same identity — the same
  * service asked again for the same translation, judged as a copy is (`isCurrent`). The failure is the translated text's,
- * which another service, model or prompt may not repeat; a mark with no identity is tried again (Codex on #306). The
+ * which another service, model or prompt may not repeat; a mark with no identity is tried again. The
  * reader leaves a mark only for one identity's whole translation (pdf-reader/engine/pipeline/cache.mjs allTranslatedBy)
  */
 export function stillUntypeset(mark: UntypesetMark | undefined, now: Now): boolean {

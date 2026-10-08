@@ -977,7 +977,11 @@ extension.
   a TeX error in set in the source — the error's `l.<n>` line and the text around its place, found in a unit of the
   files the compile was given, the innermost, a footnote rather than its paragraph where the context stands in the
   footnote or ends at its closing brace (TeX logs an error in an argument where the argument ends); the paper's own
-  errors, its original's in the same unit, left out, read only once the original is in and never waited for. Letters a strategy's fonts lack are the strategy's: the chain moves on
+  errors, its original's in the same unit, left out, read only once the original is in and never waited for. A letter a font lacks counts against a translation only
+  if the paper's own compile set it (the original lacks the others too, and a translation that loses no more of a letter
+  than the original does is no worse), which only the original's full compile tells: the font probe has no body, so the
+  original is asked for ahead of its turn, and only when a translation leaves a letter out at all (`live.mjs`
+  `unsettable`). Letters a strategy's fonts lack are the strategy's: the chain moves on
   from them first, and only once no strategy is left that sets them are the units holding them set in the source,
   under the first strategy that lost them, the run going back to it once (a letter lost with no error to place it made
   one by a pass with `\tracinglostchars=3`, made where the units holding the letters by their own text are few). A

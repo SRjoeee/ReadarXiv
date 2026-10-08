@@ -70,8 +70,8 @@ window.__reader = { timing, ready: false, host }
 // writes through the controller (patchSettings).
 const MODES = ['original', 'translation', 'bilingual']
 // The extension's settings as its popup and settings page have them (shared/surface-config.ts): each change a patch
-// on what storage holds when its turn comes, one after another, and a configuration that could not be read said so
-// (Codex on #297); a new interface language reloads the page, as it does the popup
+// on what storage holds when its turn comes, one after another, and a configuration that could not be read said so;
+// a new interface language reloads the page, as it does the popup
 /** the settings as they last landed; null until the first read */
 let config = null
 const surface = createSurfaceConfig({ localeStale, reload: () => location.reload(), onLanded: (next, from) => landed(next, from) })
@@ -180,7 +180,7 @@ let wantTranslation = null
 const translationWanted = new Promise(resolve => { wantTranslation = resolve })
 // a reader in a tab in the background translates once it is shown: what is not seen takes no resources
 if (mode !== 'original') whenVisible(wantTranslation, document, () => mode !== 'original')
-/** the display changed: where the reader is read first, on the side still shown (Codex on #297); written when the
+/** the display changed: where the reader is read first, on the side still shown; written when the
  *  reader chose it here, not when it follows the settings */
 function changeDisplay(next, write) {
   if (!MODES.includes(next) || next === mode) return
@@ -201,7 +201,7 @@ export function setDisplay(next) { changeDisplay(next, true) }
 function makeSide(container) {
   const eventBus = new EventBus()
   // a link out of the paper opens in a new tab: in this frame it would replace the reader, which on arXiv's PDF page is
-  // laid over the page (Devin on #297)
+  // laid over the page
   const linkService = new PDFLinkService({ eventBus, externalLinkTarget: LinkTarget.BLANK })
   const viewer = new PDFViewer({ container, eventBus, linkService, textLayerMode: 1, removePageBorders: false })
   linkService.setViewer(viewer)
@@ -449,7 +449,7 @@ const pointer = pointerPath({
  *  the layout, whenever the pane or its pages change size — the pages laid, a zoom, a pinch's steps, the window, the
  *  contents panel, a display of one pane or two. A pointer resting on the pane is looked at again in the next frame, by
  *  what is kept now: a zoom's or a fit's scroll asked in its own frame, which runs before the new sizes are measured,
- *  and what it found stayed lit until the pointer moved (Codex on #308) */
+ *  and what it found stayed lit until the pointer moved */
 function measure(side) {
   side.at = measurePane(side.container, side.viewer.viewer, side.viewer._pages ?? [])
   side.scrollX = side.container.scrollLeft; side.scrollY = side.container.scrollTop
@@ -572,7 +572,7 @@ function floatsFor(side, p, error = null) {
 // recogniser for a bitmap), as normalised lines in the recogniser's shape. Each figure's overlay hangs on an empty
 // <img> laid over it, the anchor the style sheet positions an overlay by.
 /** the paper's title and abstract, with every batch (engine.mjs); in live mode known once the source is read, and the
- *  figures' text waits for it rather than go out without it and be cached so (Codex on #296) */
+ *  figures' text waits for it rather than go out without it and be cached so */
 let prose = '', paperCtx = Promise.resolve({})
 /** what the prose says of names (core/names), indexed once for each prose the paper's units give, not once a label */
 let names = { prose: null, evidence: null }
@@ -1130,7 +1130,7 @@ function levelLocated() {
   lastLocated = name
   // a rest still waited for is a scroll's that ended before the pair was located: the reader's, which the record names,
   // or a scroll PDF.js made by itself on the driver (the copy put where the original is read, after a hover made the
-  // copy's pane the driver), whose rest would level the pair by it. The record decides (Codex on #322)
+  // copy's pane the driver), whose rest would level the pair by it. The record decides
   clearTimeout(follow.rest)
   follow.rest = 0
   requestAnimationFrame(() => {
@@ -1335,7 +1335,7 @@ const bothShown = () => mode === 'bilingual' && !narrow
  * Where the reader is on a side, in terms that outlast its layout: the unit at the reading line and the place within it
  * (its lines counted from 0 to 1), and the place in the whole document for when no unit is located there. Read while
  * the side is shown: once the display hides it, its scrollTop and its pages' offsets are all 0, and a switch straight
- * between Original and Translation opened the other side at the paper's top (Codex on #297, measured by
+ * between Original and Translation opened the other side at the paper's top (measured by
  * parked/lab/spikes/viewer-faults.mjs)
  */
 function readingPlace(side) {
@@ -1469,7 +1469,7 @@ function stopGlide() { if (gliding) cancelAnimationFrame(gliding); gliding = 0 }
 let lastAlign = null // how the last click was levelled, for the test harness
 async function alignClick(from, event) {
   // with one document shown there is no other side to level: the hidden one has no scroll range, and the correction
-  // meant for it would move the one being read (Codex on #297)
+  // meant for it would move the one being read
   if (!bothShown()) return
   bake()
   const to = other(from), c = from.container, y = event.clientY - c.getBoundingClientRect().top
@@ -2180,7 +2180,7 @@ async function live() {
   /** the paper's source, read and anchored: once, kept for a run again; a failure is thrown with the event it is */
   const readPaper = async () => {
     // the original on the right too, replaced as the translation comes in; opened where the original was being read, as
-    // a side coming into view does (relayout, which has no document there yet to go by: Codex on #297)
+    // a side coming into view does (relayout, which has no document there yet to go by)
     status(`Fetching ${paper}'s source from arXiv…`)
     const rightLaid = new Promise(resolve => right.eventBus.on('pagesinit', resolve, { once: true }))
     let srcBytes
@@ -2329,13 +2329,13 @@ async function live() {
     // a paper none of this pipeline's ways could set, on this machine before: said again, the service and the TeX page
     // asked for nothing; a new pipeline tries once more (the maintainer, 2026-09-26). Only once the extension has said
     // which service would translate, and only for the same one: the failure was its translation's, which another
-    // service, model or prompt may not repeat (Codex on #306)
+    // service, model or prompt may not repeat
     // and only for the TeX page's versions it was made under: a page fixed since (its fonts, its tree, its index) may set
-    // it (the S3a review, I5 d) — read from the page loaded for the compiles to come
+    // it — read from the page loaded for the compiles to come
     const mark = !cached && cacheKey ? await pdfCache.untypeset(cacheKey.digest, cacheKey.lang) : undefined
     const page = mark ? await texFrame(lang).then(f => f.version, () => null) : null
     if (mark && page && stillUntypeset(mark, { identity: engine.identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page })) {
-      // the frame loaded to read the page's versions goes: nothing will compile in it (the F2 review's M4)
+      // the frame loaded to read the page's versions goes: nothing will compile in it
       const loaded = frameP
       frameP = null
       void loaded?.then(f => f.frame.remove(), () => {})
@@ -2384,8 +2384,8 @@ async function live() {
     const result = await runLive(paperData, {
       lang, compile, compileOriginal, note,
       // the copy's compile current: its pipeline and its typesetting this reader's, or this visit's final on screen —
-      // and no translation the visit's last runs made that none of them sets (cache.mjs pipelineCurrentFor; C1 of #309's
-      // fix round: a run again after a final the TeX page was down for wrote it over the copy's PDF)
+      // and no translation the visit's last runs made that none of them sets (cache.mjs pipelineCurrentFor: a run again
+      // after a final the TeX page was down for would write it over the copy's PDF)
       seed: seed.size ? seed : null, identity: engine.identity, pipelineCurrent: pipelineCurrentFor({ copy: p.sameUnits && cached?.typesetting === TYPESETTING_VERSION, finalShown, unset }),
       // the typesetting rule: the translation set as near its original's places as the rule can (live.mjs)
       readMarks: typesetMarksOfPdf,
@@ -2394,7 +2394,7 @@ async function live() {
       // with the tags path's sentence cuts (mt.mjs cutsOf), which the service marks (B3b)
       translate: (texts, cuts) => engine.translate(texts, context, cuts),
       // nearest the reading line on the page first, what lies ahead before what lies behind; on the side in view, since
-      // the other one, out of the display, does not move with the reader (Codex on #297)
+      // the other one, out of the display, does not move with the reader
       rank: i => {
         const side = shown(left) ? left : right, top = unitDocTop(side, i), c = side.container
         if (top == null) return 1e9 + i
@@ -2423,10 +2423,9 @@ async function live() {
     unset = unsetAfter(unset, result, shownNow)
     // every way of setting it tried and failed, a whole translation in hand and nothing on screen (the maintainer,
     // 2026-09-26). Remembered, so that a visit again asks nothing of the service, only when the paper's own source set
-    // here: a TeX error from a compiler whose files were not there says nothing of the paper, and is tried again (Codex).
-    // With the identity that would answer now, as a copy is written: the mark holds for that service alone (Codex on #306),
-    // and is left only when that service made the whole translation — a run a hand-over mixed is tried again (its final
-    // review)
+    // here: a TeX error from a compiler whose files were not there says nothing of the paper, and is tried again.
+    // With the identity that would answer now, as a copy is written: the mark holds for that service alone, and is left
+    // only when that service made the whole translation — a run a hand-over mixed is tried again
     const end = endOf(result, { compiledOnce, finalShown, cached: !!cached })
     if (end === 'cannot typeset') {
       if (cacheKey && result.originalOk) {

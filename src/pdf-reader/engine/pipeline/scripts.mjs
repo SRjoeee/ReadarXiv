@@ -12,7 +12,7 @@
 // XeLaTeX keeps its engine; so does a LuaLaTeX one for an alphabet, while for CJK it goes to XeLaTeX with xeCJK, where
 // Lua-only code fails (none of the corpus's 123 papers is set with LuaLaTeX, so no LuaLaTeX CJK path could be measured).
 // When no strategy sets the translation, the reader keeps what it shows. A script not listed here has no strategy yet:
-// strategiesFor throws, and the reader says it cannot typeset that language (Devin on #294). Every font named is in
+// strategiesFor throws, and the reader says it cannot typeset that language. Every font named is in
 // TeX Live 2026. Measured with parked/lab/spikes/lang-gate.mjs.
 import { scriptOf } from '../rules/script.mjs'
 import { latinFontsFor } from '../source/latex-front.mjs'
@@ -22,7 +22,7 @@ export { scriptOf }
 /** the translation a strategy sets: without the author block's names and places under one that cannot take them */
 export const typesetBy = (translated, strategy) => (strategy.authors === false ? new Map([...translated].filter(([u]) => u.kind !== 'author')) : translated)
 /** the engines whose fonts are 8-bit: an alphabet needs its encoding under them, CJK its CJKutf8 (classic LaTeX, which the
- *  browser compiles with pdfLaTeX, is one: Devin and Codex on #294) */
+ *  browser compiles with pdfLaTeX, is one) */
 const EIGHT_BIT = new Set(['pdflatex', 'latex'])
 
 /**
@@ -116,7 +116,7 @@ const FACES = {
  *  does not load babel itself, and then without its \cite and \ref rewriting (safe=none): coming after the cite
  *  package, that rewriting takes cite's \@citex for the kernel's and breaks every citation; a language imported from its
  *  ini file makes no character active, which is all the rewriting guards against. Not at all where polyglossia manages
- *  the paper's languages, since the two do not work together: its captions then stay the paper's (Codex on #294). The
+ *  the paper's languages, since the two do not work together: its captions then stay the paper's. The
  *  locale imported is the first babel has an ini file for, which TeX checks at compile time: the language's own tag,
  *  then its language and script, then its language alone. The extension names Traditional Chinese zh-TW, which babel has
  *  no file for, while it has zh-Hant; without the check its captions stayed English, with three errors.
