@@ -1114,7 +1114,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       }
       joint.sort((a, b) => a.x0 - b.x0)
       const jText = joint.map(c => c.ch).join('')
-      prep.lead = { parts: [{ text: ld.text, st: ld.st }, ...(jText ? [{ text: jText, st: styleOfChars(joint) }] : [])], gap: ld.nm.glue / ld.nm.size }
+      // (the glue in em of the unit's own size, its first line's in the file: tokensOf2 sets it at the size the unit is drawn)
+      const size0 = tex.index.unit(p.id)?.lines[6] ?? ld.nm.size
+      prep.lead = { parts: [{ text: ld.text, st: ld.st }, ...(jText ? [{ text: jText, st: styleOfChars(joint) }] : [])], gap: ld.nm.glue / size0 }
       prep.label = { x1: Math.max(ld.nm.x1, ...joint.map(c => c.x1)), text: ld.chars.map(c => c.ch).join('') + jText, chars: [...ld.chars, ...joint], drawn: ld.text + jText }
       for (const c of prep.label.chars) prep.cat?.set(L2.charKey(c), 'acc')
       const r0 = p.rects[0]
