@@ -59,7 +59,43 @@ export interface OriginKeeper {
  * before the settings for the same reason: an undo that lands and lets go in between is then stored
  */
 export function createOriginKeeper(deps: OriginKeeperDeps): OriginKeeper {
-  const sweep = async (): Promise<number> => {
+  const live = () => deps.chains().flatMap(config => config.services.map(s => s.baseURL))
+  /**
+   * One more look right before an origin goes: the holds, then the settings, then the holds again, each once the one
+   * before has answered. A form that took its hold and found the origin granted after the sweep's own reads — an
+   * earlier removal in flight meanwhile — or a deletion whose hold came after the sweep read the holds and whose write
+   * before it read the settings, is in one of them; an origin any of them needs stays (PR #327, Devin and the re-review).
+   * What remains is the removal itself, one browser call
+   */
+  const stillUnneeded = async (origin: string): Promise<boolean> => {
+    try {
+      const before = await deps.holds()
+      const reading = await deps.read()
+      const after = await deps.holds()
+      const held = [...before, ...after].flatMap(name => readHold(name)?.origin ?? [])
+      const settingsReadable = reading.fallbackReason === null
+      return reconcileOrigins({ granted: [origin], needed: originsNeeded(reading.config, [...held, ...live()]), settingsReadable, manifest: deps.manifest() }).remove.length === 1
+    } catch {
+      return false
+    }
+  }
+  /**
+   * An origin kept only because a page holds it: a page that closes lets its lock go and sends nothing — a settings tab
+   * closed with a form open runs no clean-up (PR #327, Codex). So the keeper sweeps again every second while such an
+   * origin is kept, for as long as a departure is watched; a sweep asked for anew gives it that long again
+   */
+  let heldLooks = 0
+  let heldTimer: ReturnType<typeof setTimeout> | undefined
+  const watchHolds = (fresh: boolean) => {
+    if (fresh) heldLooks = DEPARTURE_CHECKS
+    if (heldTimer !== undefined || heldLooks <= 0) return
+    heldLooks--
+    heldTimer = setTimeout(() => {
+      heldTimer = undefined
+      void run(false)
+    }, DEPARTURE_CHECK_MS)
+  }
+  const run = async (fresh: boolean): Promise<number> => {
     let granted: readonly string[]
     let holds: readonly string[]
     let reading: ConfigReading
@@ -73,22 +109,26 @@ export function createOriginKeeper(deps: OriginKeeperDeps): OriginKeeper {
       return 0
     }
     const held = holds.flatMap(name => readHold(name)?.origin ?? [])
-    const live = deps.chains().flatMap(config => config.services.map(s => s.baseURL))
-    const { remove } = reconcileOrigins({
-      granted,
-      needed: originsNeeded(reading.config, [...held, ...live]),
-      settingsReadable: reading.fallbackReason === null,
-      manifest: deps.manifest(),
-    })
+    const settingsReadable = reading.fallbackReason === null
+    const manifest = [...deps.manifest()]
+    const { remove } = reconcileOrigins({ granted, needed: originsNeeded(reading.config, [...held, ...live()]), settingsReadable, manifest })
+    // what would go but for a page's hold: looked at again until the hold is gone
+    let heldOnly = reconcileOrigins({ granted, needed: originsNeeded(reading.config, live()), settingsReadable, manifest }).remove.some(o => !remove.includes(o))
     let removed = 0
     for (const origin of remove) {
+      if (!(await stillUnneeded(origin))) {
+        heldOnly = true
+        continue
+      }
       await deps.remove(origin).then(
         () => { removed++ },
         () => deps.warn('[axt] host permissions: the browser refused to give one back'),
       )
     }
+    if (heldOnly) watchHolds(fresh)
     return removed
   }
+  const sweep = () => run(true)
 
   /** The services that left, each with its next look */
   const watching = new Map<string, ReturnType<typeof setTimeout>>()
@@ -134,12 +174,16 @@ export function createOriginKeeper(deps: OriginKeeperDeps): OriginKeeper {
     sweep,
     configChanged(next, previous) {
       for (const s of next.services) forget(s.id)
-      // readable again after a value that was not: what went unneeded meanwhile goes now (#299 row 120)
+      const gone = (s: { id: string }) => !next.services.some(n => n.id === s.id)
+      // readable again after a value that was not: what went unneeded meanwhile goes now (#299 row 120). The services it
+      // held are unknown, but a chain still around was built from them: one the new value lacks left, as a deletion's
+      // service does, and its sessions are moved off it the same way (PR #327, Codex and Devin)
       if (previous === null) {
         void sweep()
+        for (const id of new Set(deps.chains().flatMap(config => config.services.filter(gone).map(s => s.id)))) watch(id, DEPARTURE_CHECKS)
         return
       }
-      for (const s of previous.services) if (!next.services.some(n => n.id === s.id)) watch(s.id, DEPARTURE_CHECKS)
+      for (const s of previous.services) if (gone(s)) watch(s.id, DEPARTURE_CHECKS)
     },
   }
 }

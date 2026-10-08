@@ -277,6 +277,108 @@ describe('the origin keeper', () => {
     expect(r.log).toEqual([])
   })
 
+  it('a configuration reset out of an unreadable one: a service in a chain still around that the new one lacks is a departure — its sessions move to the next engine and its origin goes back once nothing holds it (PR #327, Codex and Devin)', async () => {
+    const start: Config = { ...DEFAULT_CONFIG, services: [MINE], provider: MINE.id }
+    const w = world(start)
+    w.state.granted.delete('https://other.example.com/*')
+    await w.router.forCall('s1', 1)
+    expect(await leadOf(w.router.transportFor('s1'))).toBe(MINE.id)
+    // the stored value turned unreadable — the watcher hears nothing of a value that does not parse — and is reset:
+    // the change comes with no value before it
+    w.state.stored = DEFAULT_CONFIG
+    w.holder.onConfig(DEFAULT_CONFIG)
+    w.state.holds = [originHold(MINE.baseURL)!]
+    w.keeper.configChanged(DEFAULT_CONFIG, null)
+    await vi.advanceTimersByTimeAsync(DEPARTURE_CHECK_MS * 2)
+    // a page still holds the origin: the sessions move, the origin stays
+    expect(await leadOf(w.router.transportFor('s1'))).toBe('microsoft')
+    expect(w.log).toEqual([`move ${MINE.id}`, 'retire build-1', 'retire build-2'])
+    w.state.holds = []
+    await vi.advanceTimersByTimeAsync(DEPARTURE_CHECK_MS)
+    expect(w.log).toEqual([`move ${MINE.id}`, 'retire build-1', 'retire build-2', 'remove https://api.example.com/*'])
+  })
+
+  /** Deps whose next call of a read can be served late, and whose removal of one origin can be held */
+  const delayed = () => {
+    const state = { granted: [] as string[], holds: [] as string[], stored: DEFAULT_CONFIG as Config }
+    const log: string[] = []
+    const late = new Map<string, () => void>()
+    const slowNext = new Set<string>()
+    const serve = <T,>(name: string, value: () => T): Promise<T> => {
+      if (!slowNext.delete(name)) return Promise.resolve(value())
+      return new Promise(resolve => { late.set(name, () => resolve(value())) })
+    }
+    let holdRemoval: string | null = null
+    let removal = () => {}
+    const keeper = createOriginKeeper({
+      granted: () => serve('granted', () => [...state.granted]),
+      remove: async origin => {
+        if (origin === holdRemoval) await new Promise<void>(resolve => { removal = resolve })
+        state.granted = state.granted.filter(o => o !== origin)
+        log.push(`remove ${origin}`)
+      },
+      manifest: () => [],
+      read: () => serve('read', () => ({ config: state.stored, fallbackReason: null })),
+      holds: () => serve('holds', () => [...state.holds]),
+      chains: () => [],
+      moveAll: async () => undefined,
+      warn: line => log.push(`warn ${line}`),
+    })
+    return { state, log, keeper, slowNext, serveLate: (name: string) => late.get(name)?.(), holdRemovalOf: (o: string) => { holdRemoval = o }, letRemovalGo: () => removal() }
+  }
+
+  it('a last look right before each removal: a form that takes its hold and saves while an earlier removal is in flight keeps its new service\'s grant (PR #327, Devin)', async () => {
+    const d = delayed()
+    d.state.granted = ['https://a.example.com/*', 'https://api.example.com/*']
+    d.holdRemovalOf('https://a.example.com/*')
+    const sweep = d.keeper.sweep()
+    await vi.advanceTimersByTimeAsync(0)
+    // the first removal is in flight; a form holds the second origin, finds it granted, connects and saves
+    d.state.holds = [originHold(MINE.baseURL)!]
+    d.state.stored = { ...DEFAULT_CONFIG, services: [MINE] }
+    d.state.holds = []
+    d.letRemovalGo()
+    expect(await sweep).toBe(1)
+    expect(d.log).toEqual(['remove https://a.example.com/*'])
+    expect(d.state.granted).toEqual(['https://api.example.com/*'])
+  })
+
+  it('a last look right before removing: a sweep that read the holds before a deletion\'s hold and the settings after its write keeps the origin, and the undone service still has it (PR #327, the re-review\'s mirror case)', async () => {
+    const d = delayed()
+    d.state.granted = ['https://api.example.com/*']
+    d.state.stored = { ...DEFAULT_CONFIG, services: [MINE] }
+    d.slowNext.add('read')
+    const sweep = d.keeper.sweep()
+    await vi.advanceTimersByTimeAsync(0)
+    // the holds were read (none); the page deletes the service — its hold, then its write — before the settings are read
+    d.state.holds = [originHold(MINE.baseURL, MINE.id)!]
+    d.state.stored = DEFAULT_CONFIG
+    d.serveLate('read')
+    expect(await sweep).toBe(0)
+    // undone: stored again, the hold let go
+    d.state.stored = { ...DEFAULT_CONFIG, services: [MINE] }
+    d.state.holds = []
+    await d.keeper.sweep()
+    expect(d.log).toEqual([])
+    expect(d.state.granted).toEqual(['https://api.example.com/*'])
+  })
+
+  it('an origin kept only because a page holds it is looked at again: a settings tab closed with a form open — its lock gone, no message — still gives the origin back (PR #327, Codex)', async () => {
+    const d = delayed()
+    d.state.granted = ['https://api.example.com/*']
+    d.state.holds = [originHold(MINE.baseURL)!]
+    expect(await d.keeper.sweep()).toBe(0)
+    await vi.advanceTimersByTimeAsync(DEPARTURE_CHECK_MS * 3)
+    expect(d.log).toEqual([])
+    // the tab closes: the browser lets the lock go, and the page sends nothing
+    d.state.holds = []
+    await vi.advanceTimersByTimeAsync(DEPARTURE_CHECK_MS)
+    expect(d.log).toEqual(['remove https://api.example.com/*'])
+    // nothing more to look at: no further sweeps
+    await vi.advanceTimersByTimeAsync(DEPARTURE_CHECK_MS * 5)
+    expect(d.log).toEqual(['remove https://api.example.com/*'])
+  })
+
   it('holds that cannot be read give back nothing: a form may be asking for any of them', async () => {
     const w = world({ ...DEFAULT_CONFIG, services: [] })
     const keeper = createOriginKeeper({
