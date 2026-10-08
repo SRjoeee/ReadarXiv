@@ -11,13 +11,16 @@
 // failure that says so, not a silent skip.
 //
 // The newest set only: with `--next=<ref>` a publish first reads the set on that ref (origin/next, fetched by the workflow just
-// before) and, where its version is newer than the file's own, writes nothing and says so. A set is a whole file, so a version
-// skipped loses nothing, and the run of the newer one publishes it; the pointer then only ever moves to the newest merged set,
-// except by a rollback.
+// before) and, where it is not the file's own (a newer version, or other bytes under the same version: a change merged since),
+// writes nothing and says so. A set is a whole file, so a version skipped loses nothing, and the run of the newer one publishes
+// it; the pointer then only ever moves to the newest merged set, except by a rollback. Two pull requests that raise the version
+// from one base both merge cleanly with one version: the second's publish then meets the first's bytes under it (409) and fails,
+// asking for a new version.
 //
 //   RULES_PUBLISH_SECRET=… node lab/pdf/spikes/rules-publish.mjs publish --url=<origin> [--file=src/pdf-reader/engine/rules/layout-rules.json] [--next=origin/next]
 //   RULES_PUBLISH_SECRET=… node lab/pdf/spikes/rules-publish.mjs point --url=<origin> --schema=1 --version=3
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -36,22 +39,32 @@ export function originOf(text) {
   return u.origin
 }
 
+const digestOf = bytes => createHash('sha256').update(bytes).digest('hex')
+
 /**
- * The version of the set on another ref when it is newer than the one this run would publish, else null: an equal version is this
- * run's own (or the same run again, which the Worker takes as done), and an older one is no reason to stand down. `onNext` is null
- * where there is no ref to hold the run to, or the file there names no version.
+ * Why this run stands down, or null where it publishes: `own` and `onNext` are { version, sha256 } of the file this run would
+ * publish and of the set on next. A newer version on next is its own run's to publish; the same version with other bytes is a
+ * change merged since (two pull requests that raised the version from one base), which that change's run publishes. The same
+ * bytes are this run's own (or the same run again, which the Worker takes as done), and an older version is no reason to stand
+ * down. `onNext` is null where there is no ref to hold the run to, or the file there names no version.
  */
 export function supersededBy(own, onNext) {
-  return Number.isInteger(own) && Number.isInteger(onNext) && onNext > own ? onNext : null
+  if (!onNext || !Number.isInteger(onNext.version) || !Number.isInteger(own?.version)) return null
+  if (onNext.version > own.version) return `superseded by version ${onNext.version}; its own run publishes it`
+  if (onNext.version === own.version && onNext.sha256 !== own.sha256) return `next holds other bytes under version ${own.version}, a change merged since; its own run publishes it`
+  return null
 }
 
-/** the version the set on a git ref names (`origin/next`), or null where the file there is no JSON with one; throws where the
- *  ref cannot be read, so that a publish that cannot tell whether it is the newest does not guess. `show` is git's, for a test. */
-export function versionOn(ref, { show = (r, file) => execFileSync('git', ['show', `${r}:${file}`], { cwd: REPO, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 24 }) } = {}) {
+/** the set on a git ref (`origin/next`): { version (null where the file there is no JSON with one), sha256 of its bytes }; throws
+ *  where the ref cannot be read, so that a publish that cannot tell whether it is the newest does not guess. `show` is git's, for
+ *  a test, and gives the file's bytes */
+export function setOn(ref, { show = (r, file) => execFileSync('git', ['show', `${r}:${file}`], { cwd: REPO, stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 24 }) } = {}) {
   if (!/^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$/.test(String(ref))) throw new Error('--next is a git ref')
-  let text
-  try { text = show(ref, RULES_FILE) } catch { throw new Error(`cannot read ${RULES_FILE} on ${ref}: was it fetched?`) }
-  try { const v = JSON.parse(text)?.version; return Number.isInteger(v) ? v : null } catch { return null }
+  let bytes
+  try { bytes = Buffer.from(show(ref, RULES_FILE)) } catch { throw new Error(`cannot read ${RULES_FILE} on ${ref}: was it fetched?`) }
+  let version = null
+  try { const v = JSON.parse(bytes.toString('utf8'))?.version; version = Number.isInteger(v) ? v : null } catch { /* no JSON: no version */ }
+  return { version, sha256: digestOf(bytes) }
 }
 
 /** a Worker's answer in a few words: its status, and its `why` where it is a short word of its own */
@@ -78,16 +91,16 @@ export async function point({ url, schema, version, secret, fetchImpl = fetch })
   throw new Error(`${origin}: the pointer was not moved (${await told(res)})`)
 }
 
-/** the file published and the pointer moved to it; returns the lines to print. `onNext`: the version of the set on the branch
- *  that publishes (`versionOn`), where one is newer than the file's own nothing is written */
+/** the file published and the pointer moved to it; returns the lines to print. `onNext`: the set on the branch that publishes
+ *  (`setOn`); where it is not the file's own (supersededBy) nothing is written */
 export async function publish({ url, file, secret, fetchImpl = fetch, engine, onNext = null }) {
   if (!secret) throw new Error('RULES_PUBLISH_SECRET is not set')
   const origin = originOf(url)
   const bytes = new Uint8Array(readFileSync(file))
   const E = engine ?? await import(pathToFileURL(resolve(REPO, 'src/pdf-reader/engine/rules/layout.mjs')).href)
   const { set, sha256 } = await E.readRules(bytes)
-  const newer = supersededBy(set.version, onNext)
-  if (newer !== null) return [`superseded by version ${newer}; its own run publishes it`]
+  const standDown = supersededBy({ version: set.version, sha256: digestOf(bytes) }, onNext)
+  if (standDown !== null) return [standDown]
   const res = await call(fetchImpl, origin, 'publish', secret, bytes)
   const lines = []
   if (res.status === 201) lines.push(`published s${set.schema} version ${set.version} (${sha256.slice(0, 12)}) to ${origin}`)
@@ -105,7 +118,7 @@ const arg = (argv, name) => { const a = argv.find(x => x.startsWith(`--${name}=`
 async function main(argv) {
   const [command] = argv
   const secret = process.env.RULES_PUBLISH_SECRET, url = arg(argv, 'url')
-  if (command === 'publish') for (const line of await publish({ url, file: resolve(arg(argv, 'file') ?? RULES_FILE), secret, onNext: arg(argv, 'next') ? versionOn(arg(argv, 'next')) : null })) console.log(line)
+  if (command === 'publish') for (const line of await publish({ url, file: resolve(arg(argv, 'file') ?? RULES_FILE), secret, onNext: arg(argv, 'next') ? setOn(arg(argv, 'next')) : null })) console.log(line)
   else if (command === 'point') console.log(await point({ url, schema: Number(arg(argv, 'schema')), version: Number(arg(argv, 'version')), secret }))
   else throw new Error('usage: rules-publish.mjs publish | point')
 }

@@ -150,9 +150,12 @@ job failed. Without it a publish approved after the rollback would move the poin
 
 **The newest set only.** A queue of publishes can run out of order, and GitHub replaces a pending job when a third arrives, so
 a publish does not write what it was queued with. Before it writes, each staging and production publish fetches `origin/next`
-and compares the `version` of `layout-rules.json` there with its own (`rules-publish.mjs publish --next=origin/next`; the
-check is `supersededBy`). Where next's is newer the job prints `superseded by version <n>; its own run publishes it` and exits 0
-without writing. A set is a whole file, so a version skipped loses nothing; with the queue above, the pointer only ever moves
+and compares `layout-rules.json` there with its own, both the `version` and the bytes (`rules-publish.mjs publish
+--next=origin/next`; the check is `supersededBy`). Where next's version is newer, the job prints `superseded by version <n>; its
+own run publishes it` and exits 0 without writing. It does the same where next holds other bytes under the same version, which
+happens when two pull requests raised the version from one base and both merged cleanly: the later merge's run publishes the
+later bytes. If the earlier one was already published, that run meets them under the version (409) and fails, asking for a
+new version. A set is a whole file, so a version skipped loses nothing; with the queue above, the pointer only ever moves
 to the newest merged set, except by a rollback. A production publish read next after its click, which may be days after the
 merge, so one that waited and is not the newest stands down. Where the newest set's own run fails, run that one again from its
 page: the older ones have stood down for it. A job that cannot read next fails and writes nothing.
