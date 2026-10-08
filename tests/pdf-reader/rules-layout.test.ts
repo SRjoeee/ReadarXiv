@@ -25,8 +25,10 @@ const bytesOf = (s: string) => new TextEncoder().encode(s)
 // biome-ignore lint/suspicious/noExplicitAny: a set under edit has no fixed shape
 type Edit = any
 /** the fields each schema since the first removed and added (schema 2, D6: `grid` gone, every script's lines on the
- *  original's pitch while the size shrinks; `fillLead`, the page fill's top; `leftover`, where what it leaves goes) */
+ *  original's pitch while the size shrinks; `fillLead`, the page fill's top; `leftover`, where what it leaves goes); and
+ *  the labels schema 3 added (D1a: every babel name, at the built-in set's words) */
 const REMOVED = ['grid'], ADDED = ['fillLead', 'leftover']
+const LABELS_ADDED = ['abstract', 'ref', 'bib', 'contents', 'listfigure', 'listtable', 'appendix', 'index', 'proof', 'preface', 'glossary']
 /** the frozen first version lifted to the current schema: its values as they were, less the fields removed since, the fields
  *  added since at the built-in set's values for each script */
 const lift = (s: Edit): Edit => {
@@ -35,6 +37,9 @@ const lift = (s: Edit): Edit => {
   for (const [script, r] of Object.entries(s.scripts) as [keyof typeof BUILTIN_RULES.scripts, Record<string, unknown>][]) for (const k of ADDED) r[k] = structuredClone((BUILTIN_RULES.scripts[script] as Record<string, unknown>)[k])
   // (in the schema's field order, as the frozen file has it)
   for (const [script, r] of Object.entries(s.scripts)) s.scripts[script] = Object.fromEntries(RULES_FIELDS.filter(f => f.scope === 'script').map(f => [f.path, (r as Record<string, unknown>)[f.path]]))
+  for (const [tag, l] of Object.entries(s.languages) as [string, { labels: Record<string, string> | null }][]) {
+    if (l.labels) l.labels = { ...l.labels, ...Object.fromEntries(LABELS_ADDED.map(k => [k, (BUILTIN_RULES.languages[tag]?.labels as Record<string, string> | null)?.[k] ?? ''])) }
+  }
   return s
 }
 const v1 = (edit?: (s: Edit) => void): Edit => { const s = lift(JSON.parse(text(V1_FILE))); edit?.(s); return s }
@@ -57,8 +62,8 @@ afterEach(() => { vi.restoreAllMocks() })
 
 describe('the built-in set', () => {
   it('parses, is canonical (writeRules gives the file\'s bytes) and has a version of at least 1', () => {
-    expect(RULES_SCHEMA).toBe(2)
-    expect(BUILTIN_RULES.schema).toBe(2)
+    expect(RULES_SCHEMA).toBe(3)
+    expect(BUILTIN_RULES.schema).toBe(3)
     expect(BUILTIN_RULES.version).toBeGreaterThanOrEqual(1)
     expect(BUILTIN_RULES.note.length).toBeGreaterThan(0)
     expect(writeRules(BUILTIN_RULES)).toBe(text(BUILTIN_FILE))
@@ -67,8 +72,10 @@ describe('the built-in set', () => {
     expect(refusal(JSON.parse(text(V1_FILE))).field).toBe('schema')
     const kept = text(V1_FILE).split('\n').filter(l => !l.startsWith('  "schema"') && !REMOVED.some(k => l.trim().startsWith(`"${k}":`)))
     const lifted = writeRules(V1).split('\n')
-    expect(lifted.filter(l => !kept.includes(l)).map(l => l.trim().split(':')[0]).sort()).toEqual(['"schema"', ...ADDED.flatMap(k => Object.keys(V1.scripts).map(() => `"${k}"`))].sort())
-    expect(kept.every(l => lifted.includes(l))).toBe(true)
+    const labelled = Object.values(V1.languages).filter(l => l.labels).length
+    expect(lifted.filter(l => !kept.includes(l)).map(l => l.trim().split(':')[0]).sort()).toEqual(['"schema"', ...ADDED.flatMap(k => Object.keys(V1.scripts).map(() => `"${k}"`)), ...Array.from({ length: labelled }, () => '"labels"')].sort())
+    // (every line of the frozen file kept but its labels, which schema 3 lengthened)
+    expect(kept.filter(l => !l.trim().startsWith('"labels":')).every(l => lifted.includes(l))).toBe(true)
     expect(V1.version).toBe(1)
     expect(V1.note).toBe('migrated from the engine\'s code')
   })
@@ -201,7 +208,7 @@ describe('resolving a target (resolveRules)', () => {
     expect(resolveRules(wave, 'it').params.spaceMax).toBe(1.5)
     expect(resolveRules(wave, 'it').labels).toBeNull()
     expect(resolveRules(wave, 'it').params.keepAll).toBe(true)
-    expect(resolveRules(wave, 'pt').labels).toEqual({ figure: 'Figura', table: 'Tabela' })
+    expect(resolveRules(wave, 'pt').labels).toMatchObject({ figure: 'Figura', table: 'Tabela' })
   })
 
   it('an object field is replaced whole, never merged: languages.zh.adaptiveFill, cjkFaces and labels', () => {
@@ -209,14 +216,14 @@ describe('resolving a target (resolveRules)', () => {
       s.languages.zh.adaptiveFill = { band: 0.2, track: 0, size: 1 }
       s.languages.zh.cjkFaces = { group: 'shs-tc', kai: null, light: [] }
       s.languages.ja.adaptiveFill = null
-      s.languages.ko.labels = { figure: 'Fig', table: 'Tab' }
+      s.languages.ko.labels = { ...s.languages.ko.labels, figure: 'Fig', table: 'Tab' }
     }))
     const zh = resolveRules(edited, 'zh')
     expect(zh.params.adaptiveFill).toEqual({ band: 0.2, track: 0, size: 1 })
     expect(zh.cjkFaces).toEqual({ group: 'shs-tc', kai: null, light: [] })
-    expect(zh.labels).toEqual({ figure: '\u56fe', table: '\u8868' })
+    expect(zh.labels).toMatchObject({ figure: '\u56fe', table: '\u8868' })
     expect(resolveRules(edited, 'ja').params.adaptiveFill).toBeNull()
-    expect(resolveRules(edited, 'ko').labels).toEqual({ figure: 'Fig', table: 'Tab' })
+    expect(resolveRules(edited, 'ko').labels).toMatchObject({ figure: 'Fig', table: 'Tab', abstract: '\uc694 \uc57d' })
     // (an object over a script's null, and a null over a script's object, are the language's alone: nothing is merged in)
     const over = parseRules(v1(s => { s.scripts.Hans.adaptiveFill = null; s.languages.zh.adaptiveFill = { band: 0.1, track: 0.1, size: 1.2 }; s.scripts.Hans.cjkFaces.kai = null }))
     expect(resolveRules(over, 'zh').params.adaptiveFill).toEqual({ band: 0.1, track: 0.1, size: 1.2 })
@@ -258,19 +265,20 @@ describe('resolving a target (resolveRules)', () => {
   })
 })
 
-describe('the float labels (babel 26.12\'s [captions])', () => {
-  /** babel's tags as they were held in caption-names.mjs: each float's name, as \u escapes */
+describe('the labels: babel 26.12\'s [captions], the floats\' and the generated headings\'', () => {
+  /** babel's [captions] of the locale each target's \\babelprovide imports (its pinned ini files: zh, zh-Hant, ja, ko, de,
+   *  es, fr, pt, ru), as \\u escapes; empty where babel's is */
   const BABEL = {
-    zh: { figure: '\u56fe', table: '\u8868' },
-    'zh-Hant': { figure: '\u5716', table: '\u8868' },
-    ja: { figure: '\u56f3', table: '\u8868' },
-    ko: { figure: '\uadf8\ub9bc', table: '\ud45c' },
-    de: { figure: 'Abbildung', table: 'Tabelle' },
-    es: { figure: 'Figura', table: 'Cuadro' },
-    fr: { figure: 'Figure', table: 'Table' },
-    pt: { figure: 'Figura', table: 'Tabela' },
-    ru: { figure: '\u0420\u0438\u0441.', table: '\u0422\u0430\u0431\u043b\u0438\u0446\u0430' },
-  } as Record<string, { figure: string; table: string }>
+    zh: { figure: '\u56fe', table: '\u8868', abstract: '\u6458\u8981', ref: '\u53c2\u8003\u6587\u732e', bib: '\u53c2\u8003\u6587\u732e', contents: '\u76ee\u5f55', listfigure: '\u63d2\u56fe', listtable: '\u8868\u683c', appendix: '\u9644\u5f55', index: '\u7d22\u5f15', proof: '\u8bc1\u660e', preface: '', glossary: '' },
+    'zh-Hant': { figure: '\u5716', table: '\u8868', abstract: '\u6458 \u8981', ref: '\u53c3 \u8003 \u8cc7 \u6599', bib: '\u6587 \u737b', contents: '\u76ee \u9304', listfigure: '\u5716 \u76ee \u9304', listtable: '\u8868 \u76ee \u9304', appendix: '\u9644 \u9304', index: '\u7d22 \u5f15', proof: '', preface: '', glossary: '' },
+    ja: { figure: '\u56f3', table: '\u8868', abstract: '\u6982\u8981', ref: '\u53c2\u8003\u6587\u732e', bib: '\u53c2\u8003\u6587\u732e', contents: '\u76ee\u6b21', listfigure: '\u56f3\u76ee\u6b21', listtable: '\u8868\u76ee\u6b21', appendix: '\u4ed8\u9332', index: '\u7d22\u5f15', proof: '\u8a3c\u660e', preface: '\u524d\u66f8\u304d', glossary: '\u7528\u8a9e\u96c6' },
+    ko: { figure: '\uadf8\ub9bc', table: '\ud45c', abstract: '\uc694 \uc57d', ref: '\ucc38\uace0 \ubb38\ud5cc', bib: '\ucc38\uace0 \ubb38\ud5cc', contents: '\ucc28 \ub840', listfigure: '\uadf8\ub9bc \ucc28\ub840', listtable: '\ud45c \ucc28\ub840', appendix: '\ubd80\ub85d', index: '\ucc3e\uc544\ubcf4\uae30', proof: '\uc99d\uba85', preface: '\uc11c\ubb38', glossary: '\uc6a9\uc5b4\uc9d1' },
+    de: { figure: 'Abbildung', table: 'Tabelle', abstract: 'Zusammenfassung', ref: 'Literatur', bib: 'Literaturverzeichnis', contents: 'Inhaltsverzeichnis', listfigure: 'Abbildungsverzeichnis', listtable: 'Tabellenverzeichnis', appendix: 'Anhang', index: 'Index', proof: 'Beweis', preface: 'Vorwort', glossary: 'Glossar' },
+    es: { figure: 'Figura', table: 'Cuadro', abstract: 'Resumen', ref: 'Referencias', bib: 'Bibliograf\u00eda', contents: '\u00cdndice', listfigure: '\u00cdndice de figuras', listtable: '\u00cdndice de cuadros', appendix: 'Ap\u00e9ndice', index: '\u00cdndice alfab\u00e9tico', proof: 'Demostraci\u00f3n', preface: 'Prefacio', glossary: 'Glosario' },
+    fr: { figure: 'Figure', table: 'Table', abstract: 'R\u00e9sum\u00e9', ref: 'R\u00e9f\u00e9rences', bib: 'Bibliographie', contents: 'Table des mati\u00e8res', listfigure: 'Table des figures', listtable: 'Liste des tableaux', appendix: 'Annexe', index: 'Index', proof: 'D\u00e9monstration', preface: 'Pr\u00e9face', glossary: 'Glossaire' },
+    pt: { figure: 'Figura', table: 'Tabela', abstract: 'Resumo', ref: 'Refer\u00eancias', bib: 'Bibliografia', contents: '\u00cdndice', listfigure: 'Lista de Figuras', listtable: 'Lista de Tabelas', appendix: 'Ap\u00eandice', index: '\u00cdndice Remissivo', proof: 'Demonstra\u00e7\u00e3o', preface: 'Pref\u00e1cio', glossary: 'Gloss\u00e1rio' },
+    ru: { figure: '\u0420\u0438\u0441.', table: '\u0422\u0430\u0431\u043b\u0438\u0446\u0430', abstract: '\u0410\u043d\u043d\u043e\u0442\u0430\u0446\u0438\u044f', ref: '\u0421\u043f\u0438\u0441\u043e\u043a \u043b\u0438\u0442\u0435\u0440\u0430\u0442\u0443\u0440\u044b', bib: '\u041b\u0438\u0442\u0435\u0440\u0430\u0442\u0443\u0440\u0430', contents: '\u0421\u043e\u0434\u0435\u0440\u0436\u0430\u043d\u0438\u0435', listfigure: '\u0421\u043f\u0438\u0441\u043e\u043a \u0438\u043b\u043b\u044e\u0441\u0442\u0440\u0430\u0446\u0438\u0439', listtable: '\u0421\u043f\u0438\u0441\u043e\u043a \u0442\u0430\u0431\u043b\u0438\u0446', appendix: '\u041f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0435', index: '\u041f\u0440\u0435\u0434\u043c\u0435\u0442\u043d\u044b\u0439 \u0443\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u044c', proof: '\u0414\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e', preface: '\u041f\u0440\u0435\u0434\u0438\u0441\u043b\u043e\u0432\u0438\u0435', glossary: '\u0421\u043b\u043e\u0432\u0430\u0440\u044c \u0442\u0435\u0440\u043c\u0438\u043d\u043e\u0432' },
+  } as Record<string, Record<string, string>>
 
   it('every target the reader typesets has the names babel gives it, found by the tags the final\'s babel tries', () => {
     // (the TeX path's own tag for Traditional Chinese, zh-Hant, is the reader's target zh-TW: the set keeps its names there)
@@ -281,9 +289,9 @@ describe('the float labels (babel 26.12\'s [captions])', () => {
       expect(tag, lang).toBeDefined()
       expect(labels, lang).toEqual(BABEL[tag!])
     }
-    expect(resolveRules(BUILTIN_RULES, 'zh-TW').labels).toEqual({ figure: '\u5716', table: '\u8868' })
-    expect(resolveRules(BUILTIN_RULES, 'ja').labels).toEqual({ figure: '\u56f3', table: '\u8868' })
-    expect(resolveRules(BUILTIN_RULES, 'es').labels).toEqual({ figure: 'Figura', table: 'Cuadro' })
+    expect(resolveRules(BUILTIN_RULES, 'zh-TW').labels).toMatchObject({ figure: '\u5716', table: '\u8868', proof: '' })
+    expect(resolveRules(BUILTIN_RULES, 'ja').labels).toMatchObject({ figure: '\u56f3', table: '\u8868', abstract: '\u6982\u8981' })
+    expect(resolveRules(BUILTIN_RULES, 'es').labels).toMatchObject({ figure: 'Figura', table: 'Cuadro', ref: 'Referencias' })
     expect(resolveRules(BUILTIN_RULES, 'ru').labels!.figure).toBe('\u0420\u0438\u0441.')
   })
 
@@ -378,8 +386,10 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     ['a field of a script missing', s => { delete s.scripts.Latn.leadBase }, 'scripts.Latn.leadBase'],
     ['a language without its labels', s => { delete s.languages.de.labels }, 'languages.de.labels'],
     ['schema 1 (a set before D6)', s => { s.schema = 1 }, 'schema'],
-    ['schema not 2', s => { s.schema = 3 }, 'schema'],
-    ['schema a string', s => { s.schema = '2' }, 'schema'],
+    ['schema 2 (a set before D1a)', s => { s.schema = 2 }, 'schema'],
+    ['schema not 3', s => { s.schema = 4 }, 'schema'],
+    ['schema a string', s => { s.schema = '3' }, 'schema'],
+    ['labels without a heading\'s name (a schema-2 set\'s labels)', s => { s.languages.de.labels = { figure: 'Abbildung', table: 'Tabelle' } }, 'languages.de.labels.abstract'],
     ['version 0', s => { s.version = 0 }, 'version'],
     ['version not an integer', s => { s.version = 1.5 }, 'version'],
     ['version a string', s => { s.version = '1' }, 'version'],
@@ -452,7 +462,7 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     // every language is a tag with rules: its script is one of the set's (a set read is refused here, not when a target is resolved)
     ['a language no script is known for', s => { s.languages.xx = { labels: null } }, 'languages.xx'],
     ['a language of Arabic script', s => { s.languages.ar = { labels: null } }, 'languages.ar'],
-    ['a language of Greek script', s => { s.languages.el = { labels: { figure: 'Eikona', table: 'Pinakas' } } }, 'languages.el'],
+    ['a language of Greek script', s => { s.languages.el = { labels: null } }, 'languages.el'],
     ['a language of Devanagari script', s => { s.languages.hi = { labels: null } }, 'languages.hi'],
     ['a tag Intl.Locale does not read', s => { s.languages['de-DE-DE'] = { labels: null } }, 'languages.de-DE-DE'],
     ...TARGETS.map((t): [string, (s: Edit) => void, string] => [`a set without ${t}`, s => { delete s.languages[t] }, `languages.${t}`]),
@@ -492,7 +502,8 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     expect(refusal(v1(s => { delete s.languages.ru })).field).toBe('languages.ru')
     expect(refusal(v1(s => { delete s.languages.pt })).field).toBe('languages.pt')
     expect(Object.keys(V1.languages)).toContain('pt')
-    expect(parseRules(v1(s => { s.languages['pt-BR'] = { labels: { figure: 'Figura', table: 'Tabela' } } })).languages['pt-BR']).toEqual({ labels: { figure: 'Figura', table: 'Tabela' } })
+    const pt = structuredClone(V1.languages.pt!.labels)
+    expect(parseRules(v1(s => { s.languages['pt-BR'] = { labels: pt } })).languages['pt-BR']).toEqual({ labels: pt })
   })
 
   it('refuses every bidirectional control character of Unicode, and lets the other invisible characters of a text through', () => {
@@ -622,7 +633,7 @@ describe('writing a set (writeRules)', () => {
     expect(Object.keys(JSON.parse(canon).languages)).toEqual([...Object.keys(JSON.parse(canon).languages)].sort())
     // (against the frozen file: the lines that are new are the version's and the one value's)
     const before = writeRules(V1).split('\n')
-    expect(canon.split('\n').filter(l => !before.includes(l))).toEqual(['  "version": 2,', '      "labels": { "figure": "Figure", "table": "Table" },', '      "leadBase": 1.1'])
+    expect(canon.split('\n').filter(l => !before.includes(l))).toEqual(['  "version": 2,', '      "labels": { "figure": "Figure", "table": "Table", "abstract": "R\u00e9sum\u00e9", "ref": "R\u00e9f\u00e9rences", "bib": "Bibliographie", "contents": "Table des mati\u00e8res", "listfigure": "Table des figures", "listtable": "Liste des tableaux", "appendix": "Annexe", "index": "Index", "proof": "D\u00e9monstration", "preface": "Pr\u00e9face", "glossary": "Glossaire" },', '      "leadBase": 1.1'])
   })
 
   it('writes a language\'s overrides in the script\'s field order, after its labels, and an unset object field as null', () => {
@@ -630,7 +641,7 @@ describe('writing a set (writeRules)', () => {
     const zh = out.slice(out.indexOf('    "zh": {'), out.indexOf('    "zh-TW"'))
     expect(zh.split('\n').map(l => l.trim()).filter(Boolean)).toEqual([
       '"zh": {',
-      '"labels": { "figure": "\u56fe", "table": "\u8868" },',
+      '"labels": { "figure": "\u56fe", "table": "\u8868", "abstract": "\u6458\u8981", "ref": "\u53c2\u8003\u6587\u732e", "bib": "\u53c2\u8003\u6587\u732e", "contents": "\u76ee\u5f55", "listfigure": "\u63d2\u56fe", "listtable": "\u8868\u683c", "appendix": "\u9644\u5f55", "index": "\u7d22\u5f15", "proof": "\u8bc1\u660e", "preface": "", "glossary": "" },',
       '"leadBase": 1.4,',
       '"adaptiveFill": null,',
       '"latinPatterns": "de"',

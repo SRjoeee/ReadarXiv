@@ -24,7 +24,7 @@ export declare const FACES: Readonly<Record<FaceId, Face>>
 /** what a target draws in, for a paper's English family */
 export interface RoleSet {
   target: string; family: EnglishFamily
-  cjk: { body: FaceId; bold: FaceId; italic: FaceId | null; boldItalic: FaceId | null } | null   // italic null: upright
+  cjk: { body: FaceId; bold: FaceId; italic: FaceId | null } | null   // italic null: upright; bold italic is the bold
   fallbacks: Readonly<Record<FaceId, readonly FaceId[]>>
 }
 /** a script's CJK faces: its group, its Kai (null: emphasis upright), the English designs beside which it is light */

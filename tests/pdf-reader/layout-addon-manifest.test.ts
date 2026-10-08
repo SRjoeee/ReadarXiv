@@ -61,7 +61,7 @@ describe('parseAddonManifest', () => {
   })
 
   it('REMOVAL is one constant, the remover\'s (layout/remove.mjs re-exports it)', () => {
-    expect(REMOVAL).toBe('4')
+    expect(REMOVAL).toBe('5')
     expect(REMOVER_REMOVAL).toBe(REMOVAL)
     expect([ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES]).toEqual([4 * 2 ** 20, 256 * 1024, 100_000])
   })

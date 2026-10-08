@@ -6,7 +6,7 @@ import type { LayoutFile } from '../layout/file.mjs'
 
 export type { CellPlace } from '../source/latex-front.mjs'
 /** the bundle's format */
-export declare const BUNDLE: '1'
+export declare const BUNDLE: '2'
 /** a bundle's bytes at most, as a reader decodes them, and its values, counted before JSON.parse */
 export declare const BUNDLE_CAP: number
 export declare const BUNDLE_VALUES: number

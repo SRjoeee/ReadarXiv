@@ -85,12 +85,12 @@ function paper(specs = SPECS) {
   const doc = { numPages: 3, asked, getPage: async (n: number) => { asked.push(n); return pageOf(n) } }
   const file = specs.filter(s => s.from === 'file')
   const layout = {
-    schema: 1, layout: '3', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 3 }, left: '', views: pages.flatMap(() => VIEW), fonts: ['F1'],
+    schema: 2, layout: '4', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 3 }, left: '', views: pages.flatMap(() => VIEW), fonts: ['F1'],
     units: file.map(s => [s.id, KINDS.indexOf(s.kind), 9, 0, s.cite ? 2 : 1]),
     lines: file.map(s => [s.id, s.lines.flatMap(([p, x0, x1, b]) => [p, x0, x1, b, b + 7, b - 2, 10, 0])]),
     frames: file.map(s => [s.id, s.lines.flatMap(([p], j) => [p, 0, j, 1, j ? 0 : -1, 0])]),
     erase: file.map(s => [s.id, s.lines.flatMap(([, x0, x1, b], j) => [j, x0, b - 2, x1, b + 7])]),
-    ph: [], labels: [], headings: [], pageText: [], held: [],
+    ph: [], labels: [], headings: [], pageText: [], held: [], names: [],
   }
   const index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(layout))))
   const geometry = {

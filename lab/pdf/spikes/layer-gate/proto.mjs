@@ -228,6 +228,9 @@ async function truthOf(p, page) {
   const fileDrawn = new Set(run.placed.filter(q => q.tex).map(q => q.id)), claimed = new Map()
   const drawnHere = new Set(run.stats.filter(r => r.pages.includes(p)).map(r => r.id))
   const done = new Set(), doneP = new Set(), extraG = []
+  // (a babel name's glyphs, D1a: removed, and replaced where the run drew the name in the target's word)
+  const namesDrawn = new Set((run.names ?? []).filter(n => n.page === p && n.drawn).map(n => n.occurrence))
+  for (const nm of plan.names ?? []) for (let q = 0; q + 1 < nm.glyphs.length; q += 2) { const g = at.get(`${nm.glyphs[q]}.${nm.glyphs[q + 1]}`); removed.add(g); if (namesDrawn.has(nm.occurrence)) done.add(g) }
   for (const q of run.placed) {
     if (!q.tex || !q.prep || q.refused || !drawnHere.has(q.id) || !q.pages.includes(p)) continue
     const rm = R.unitRemoval({ id: q.id, page: p, prep: q.prep, tex: { lu: q.tex.lu, kOf: q.tex.kOf }, own, charMap, unmapped, ink, claimed, fileDrawn })
@@ -266,6 +269,8 @@ async function removalMeasures(cur, T) {
   const drawn = units.filter(u => u.drawn)
   // (the units drawn the old way, v0's own readings: their erase is the gate's erase measures', not the truth's)
   const oldWay = drawn.filter(u => !S.byId.get(u.id)?.tex).flatMap(u => (S.audit.get(`${u.id}|${p}`) ?? []).filter(a => a.what === 'erase' && !a.swap).map(a => a.box))
+  // (and a babel name drawn the old way, erased and put back: D1a)
+  for (const a of S.run.audit) if (a.what === 'erase' && a.name !== undefined && a.page === p && !a.swap) oldWay.push(a.box)
   const out = removalPage({ k: K, view, W, H, O, Rm, C, T, crops: drawn.flatMap(u => u.crops.map(c => c.devDst)), kept, excluded: oldWay })
   // each crop's foreign ink, from the plane it was cut from
   const planes = new Map()
@@ -462,7 +467,12 @@ window.gate = {
     const split = S.consistency.splitOn(p), labels = recs.filter(r => r.pages[0] === p && S.consistency.labelSource(r.id))
     if (split.length) where.groupsSplit = split.map(x => x.ids[0])
     if (labels.length) where.labelsSource = labels.map(r => r.id)
-    const out = { page: p, ms, model, check, where, consistency: { groupsSplit: split.length, labelsSource: labels.length }, style: [first.filter(r => r.match.base).length, first.length], drawn: recs.length, evened: false }
+    // generated text left (D1a): the reference's babel names on the page that no name the run drew stands on (by its box:
+    // the reference is the engine's made layout's, a run of another engine draws by its own, or none)
+    const drawnNames = (run.names ?? []).filter(n => n.page === p && n.drawn)
+    const namesLeft = refHere.filter(r => r.kind === 'name' && !drawnNames.some(n => r.orig.some(o => Math.abs(n.box.x0 - o.x0) < 1 && Math.abs(n.box.baseline - o.baseline) < 1)))
+    if (namesLeft.length) where.generatedLeft = namesLeft.map(r => r.id)
+    const out = { page: p, ms, model, check, where, consistency: { groupsSplit: split.length, labelsSource: labels.length }, generated: { name: namesLeft.length }, style: [first.filter(r => r.match.base).length, first.length], drawn: recs.length, evened: false }
     // the text-removed PDF: whether this page is removed, and its units drawn by it or the old way (their removal not the
     // plan's)
     if (S.rm) {
@@ -495,13 +505,17 @@ window.gate = {
       const why = list => list.filter(on).map(e => ({ unit: e.unit, k: e.k, mode: e.mode, why: e.why }))
       S.dump.push({ p, W, H, copy: h.toString(16), svg, ops, check: { missing: why(ck.b.list.missing), duplicated: why(ck.b.list.duplicated), brackets: why(ck.b.list.brackets) } })
     }
-    S.cur = { p, page, W, H, view, O, C, units, kept: keptOf(S.layout, p, relabelledOf(recs)), items, drawnText, recs }
+    // the names drawn, as the pixel measures read them: the original's line, the line drawn, the box erased (D1a); one set
+    // as a unit's line start (`unit`) is that unit's line, its characters and band alone its own
+    const named = drawnNames.filter(n => n.unit === undefined).map(n => ({ orig: [n.box], lines: [{ baseline: n.box.baseline, size: n.size, x0: n.x, x1: n.x + n.w }], erase: [[n.box.x0 - 0.3, n.box.bottom - 0.5, n.box.x1 + 0.3, n.box.top + 0.5]], chars: n.chars }))
+    const namedInk = drawnNames.map(n => ({ orig: [n.box], chars: n.chars }))
+    S.cur = { p, page, W, H, view, O, C, units, named, namedInk, kept: keptOf(S.layout, p, relabelledOf(recs)), items, drawnText, recs }
     return out
   },
 
   /** the pixel tier's measures of the page prepared last, its T plane the driver's screenshot (PNG, base64) */
   async analyse(b64) {
-    const { p, W, H, view, O, C, units, kept, items, drawnText, recs } = S.cur
+    const { p, W, H, view, O, C, units, named, namedInk, kept, items, drawnText, recs } = S.cur
     const bmp = await createImageBitmap(await (await fetch(`data:image/png;base64,${b64}`)).blob())
     const tc = new OffscreenCanvas(W, H).getContext('2d', { willReadFrequently: true })
     tc.fillStyle = '#ffffff'
@@ -510,7 +524,7 @@ window.gate = {
     const T = tc.getImageData(0, 0, W, H).data
     S.cur.T = T
     const ref = S.ref[p] ?? []
-    const m = pixelPage({ k: K, view, W, H, O, C, T, units, kept, items, ref, drawnText })
+    const m = pixelPage({ k: K, view, W, H, O, C, T, units, names: named, kept, items, ref, drawnText })
     // lost ink against what v0 accounts for
     const toPx = (x, y) => [(x - view[0]) * K, (view[3] - y) * K]
     const fill = (mask, x0, y0, x1, y1) => {
@@ -537,6 +551,11 @@ window.gate = {
       }
     }
     for (const a of S.run.audit) if (a.what === 'crop' && a.srcPage === p) fill(accounted, a.src[0] - 0.3, a.src[1] - 0.3, a.src[2] + 0.3, a.src[3] + 0.3)
+    // (a babel name drawn in the target's word: its characters its own text, its line's band its own, D1a)
+    for (const n of namedInk) {
+      for (const c of n.chars) fill(accounted, c.x0, c.yb - 0.3 * c.size, c.x1, c.yb + 0.85 * c.size)
+      for (const o of n.orig) fill(band, o.x0 - 0.5, o.baseline - 0.35 * o.size, o.x1 + 0.5, o.baseline + 0.95 * o.size)
+    }
     for (const k of kept) fill(barred, k[0] - 0.3, k[1] - 0.3, k[2] + 0.3, k[3] + 0.3)
     const drawn = new Set(recs.map(r => r.id))
     for (const [id, , rects] of S.geometry.left.units) if (!drawn.has(id)) for (const r of rects) if (r[0] === p) fill(barred, r[1], r[2], r[3], r[4])
@@ -619,7 +638,9 @@ window.gate = {
     const { run } = S
     // (each laid unit's resolutions, for a look at what a source made of it)
     const units = run.placed.filter(p => p.prep).map(p => ({ id: p.id, source: p.tex ? 'tex' : 'v0', rects: p.rects, label: p.prep.label?.text, labelChars: p.prep.label?.chars.map(c => [c.ch, Math.round(c.x0 * 100) / 100, Math.round(c.x1 * 100) / 100, Math.round(c.yb * 100) / 100, Math.round(c.size * 100) / 100]), keep: p.prep.keep, res: [...p.prep.values()].map(r => ({ k: r.k, mode: r.mode, src: r.src?.slice(0, 60), text: r.text, crop: r.crop, baseline: r.baseline, gap: r.gap?.text, chars: r.gap?.chars.filter(c => !c.sep && !c.space).map(c => [c.ch, Math.round(c.x0 * 100) / 100, Math.round(c.yb * 100) / 100, Math.round(c.size * 100) / 100]) })) }))
-    return { order: run.order, stats: run.stats.map(({ ms, ...r }) => r), skipped: run.skipped, audit: run.audit, pages: (S.dump ?? []).map(({ check, ...d }) => d), checks: (S.dump ?? []).map(d => ({ p: d.p, ...d.check })), units }
+    // (the babel names, drawn or why not, without their characters: D1a)
+    const names = (run.names ?? []).map(({ chars, ...n }) => n)
+    return { order: run.order, stats: run.stats.map(({ ms, ...r }) => r), skipped: run.skipped, audit: run.audit, pages: (S.dump ?? []).map(({ check, ...d }) => d), checks: (S.dump ?? []).map(d => ({ p: d.p, ...d.check })), units, names }
   },
 
   /** the fixture's laid units, counted: v0 lays every unit it places (past its floor it clips), by its fit's knob */

@@ -78,18 +78,18 @@ describe('the family of a paper', () => {
 
 describe('the roles', () => {
   it('the CJK roles follow the rulings', () => {
-    expect(rolesFor('zh', 'cm').cjk).toEqual({ body: 'shs-sc-light', bold: 'shs-sc-semibold', italic: 'fandolkai', boldItalic: 'fandolkai' })
-    expect(rolesFor('zh', 'garamond').cjk).toEqual({ body: 'shs-sc-light', bold: 'shs-sc-semibold', italic: 'fandolkai', boldItalic: 'fandolkai' })
+    expect(rolesFor('zh', 'cm').cjk).toEqual({ body: 'shs-sc-light', bold: 'shs-sc-semibold', italic: 'fandolkai' })
+    expect(rolesFor('zh', 'garamond').cjk).toEqual({ body: 'shs-sc-light', bold: 'shs-sc-semibold', italic: 'fandolkai' })
     for (const family of ['times', 'libertine', 'palatino', 'charter', 'utopia', 'other'] as const) {
-      expect(rolesFor('zh', family).cjk, family).toEqual({ body: 'shs-sc-regular', bold: 'shs-sc-bold', italic: 'fandolkai', boldItalic: 'fandolkai' })
+      expect(rolesFor('zh', family).cjk, family).toEqual({ body: 'shs-sc-regular', bold: 'shs-sc-bold', italic: 'fandolkai' })
     }
-    expect(rolesFor('zh-TW', 'cm').cjk).toEqual({ body: 'shs-tc-light', bold: 'shs-tc-semibold', italic: 'bkai00mp', boldItalic: 'bkai00mp' })
-    expect(rolesFor('zh-Hant', 'times').cjk).toEqual({ body: 'shs-tc-regular', bold: 'shs-tc-bold', italic: 'bkai00mp', boldItalic: 'bkai00mp' })
-    expect(rolesFor('ja', 'cm').cjk).toEqual({ body: 'haranoaji-light', bold: 'haranoaji-semibold', italic: null, boldItalic: null })
-    expect(rolesFor('ja', 'times').cjk).toEqual({ body: 'haranoaji-regular', bold: 'haranoaji-bold', italic: null, boldItalic: null })
+    expect(rolesFor('zh-TW', 'cm').cjk).toEqual({ body: 'shs-tc-light', bold: 'shs-tc-semibold', italic: 'bkai00mp' })
+    expect(rolesFor('zh-Hant', 'times').cjk).toEqual({ body: 'shs-tc-regular', bold: 'shs-tc-bold', italic: 'bkai00mp' })
+    expect(rolesFor('ja', 'cm').cjk).toEqual({ body: 'haranoaji-light', bold: 'haranoaji-semibold', italic: null })
+    expect(rolesFor('ja', 'times').cjk).toEqual({ body: 'haranoaji-regular', bold: 'haranoaji-bold', italic: null })
     // Korean: Source Han Serif K, as SC and TC (the maintainer, 2026-10-06), its emphasis upright
-    expect(rolesFor('ko', 'cm').cjk).toEqual({ body: 'shs-k-light', bold: 'shs-k-semibold', italic: null, boldItalic: null })
-    expect(rolesFor('ko', 'times').cjk).toEqual({ body: 'shs-k-regular', bold: 'shs-k-bold', italic: null, boldItalic: null })
+    expect(rolesFor('ko', 'cm').cjk).toEqual({ body: 'shs-k-light', bold: 'shs-k-semibold', italic: null })
+    expect(rolesFor('ko', 'times').cjk).toEqual({ body: 'shs-k-regular', bold: 'shs-k-bold', italic: null })
     for (const lang of ['de', 'fr', 'ru']) expect(rolesFor(lang, 'cm').cjk, lang).toBeNull()
     expect(rolesFor('zh', 'cm')).toMatchObject({ target: 'zh', family: 'cm' })
     expect(() => rolesFor('ar', 'cm')).toThrow()
@@ -164,7 +164,11 @@ describe('the roles', () => {
     expect(faceFor(zh, run({ script: 'cjk', cls: 'mono', design: 'cmtt' }))).toBe('shs-sc-light')
     expect(faceFor(zh, run({ script: 'cjk', cls: 'sans', design: 'helvetica', bold: true }))).toBe('shs-sc-semibold')
     expect(faceFor(zh, run({ script: 'cjk', italic: true }))).toBe('fandolkai')
-    expect(faceFor(zh, run({ script: 'cjk', bold: true, italic: true }))).toBe('fandolkai')
+    // weight wins over slant: a bold italic run (a heading's emphasis, IEEEtran's bold italic Abstract) is the bold serif,
+    // not the Kai, which has no bold (the ruling on D1a's Q5)
+    expect(faceFor(zh, run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-sc-semibold')
+    expect(faceFor(rolesFor('zh', 'times'), run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-sc-bold')
+    expect(faceFor(rolesFor('zh-TW', 'times'), run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-tc-bold')
     const ja = rolesFor('ja', 'times')
     expect(faceFor(ja, run({ script: 'cjk', italic: true }))).toBe('haranoaji-regular')
     expect(faceFor(ja, run({ script: 'cjk', bold: true, italic: true }))).toBe('haranoaji-bold')

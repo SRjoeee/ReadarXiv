@@ -1,7 +1,7 @@
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { encodeLayout, type LayoutFile, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
+import { encodeLayout, type LayoutFile, NAME_FLAG, NAME_KEYS, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { OPS_CAP } from '@/pdf-reader/engine/layout/ink.mjs'
 import { CARRY_MIN, fontName, type LayoutStats, makeLayout, OPS_MS, OPS_PAPER_MS } from '@/pdf-reader/engine/layout/make.mjs'
 import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks, type Switches } from '@/pdf-reader/engine/layout/marks.mjs'
@@ -20,7 +20,7 @@ const CH = 0.5
 type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean; eol?: boolean }
 type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped'; points?: Record<string, [run: number, char: number]>; order?: number[] }
 type Mark = [name: string, page: number, x: number, y: number]
-type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[]; texts?: [string, string][] }
+type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[]; texts?: [string, string][]; names?: Record<string, 0 | 1> }
 
 const FONTS: Record<string, unknown> = {
   F1: { name: 'ABCDEF+CMR10', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false },
@@ -110,7 +110,7 @@ function markedOf(pages: Page[], marks: Mark[]) {
   }
 }
 async function marksOf(w: World, log = '', classes?: MarkClass[]) {
-  return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, inkless: w.inkless ?? null, texts: w.texts ?? null, units: w.units, OPS, ...(classes ? { classes } : {}) }))))
+  return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, inkless: w.inkless ?? null, texts: w.texts ?? null, names: w.names ?? null, units: w.units, OPS, ...(classes ? { classes } : {}) }))))
 }
 const make = async (w: World, log = '', asked: number[] = []) => makeLayout({ units: w.units, marks: await marksOf(w, log), arxiv: arxivOf(w.pages, asked), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
 /** a made file: it parses, and made again it is the same bytes */
@@ -1135,5 +1135,98 @@ describe('makeLayout, a line by its words (the maker round)', () => {
       units: [unit('para', [text('we scale it by xy.')])],
     })
     expect(rowsOf(file, 0, 'lines')[2]).toBeCloseTo(162, 1)
+  })
+})
+
+describe("makeLayout, babel's names (D1a)", () => {
+  /** a paragraph of three lines of one length (its column's edges: 72 to 207), and a heading over it no unit holds */
+  const body: Run[] = [0, 1, 2].map(j => ({ s: 'one two three four five six', x: 72, y: 680 - 12 * j }))
+  const para = unit('para', [text(body.map(r => r.s).join(' '))])
+  const bodyMarks: Mark[] = [['0s', 1, 72, 680], ['0e', 1, endOf(body[2] as Run), 656]]
+  const heading = (s: string, x: number): Run => ({ s, x, y: 700 })
+  const nameMarks = (r: Run, key = 'abstract', n = 1): Mark[] => [[`n${n}.${key}.s`, 1, r.x, r.y], [`n${n}.${key}.e`, 1, endOf(r), r.y]]
+
+  it('locates an occurrence by its two marks and the text between them: its line box, size, font, centred in its column', async () => {
+    const h = heading('Abstract', 119.5)
+    const { file, stats } = await made({ pages: [{ runs: [h, ...body] }], marks: [...bodyMarks, ...nameMarks(h)], units: [para] })
+    // (leading no unit: -1 and no glue; its room its TeX column's text edges, the paragraph's 72 to 207)
+    expect(file.names).toEqual([[1, NAME_KEYS.indexOf('abstract'), 1, 119.5, 700, endOf(h), 707.5, 697.5, 10, 0, NAME_FLAG.CENTRED, -1, 0, 72, endOf(body[0] as Run)]])
+    expect(stats.names).toEqual({ marked: 1, located: 1, runIn: 0, why: {} })
+    // (left where it stands: its left edge kept, no flag)
+    const l = heading('Abstract', 72)
+    expect((await made({ pages: [{ runs: [l, ...body] }], marks: [...bodyMarks, ...nameMarks(l)], units: [para] })).file.names[0]?.[10]).toBe(0)
+  })
+
+  it("is in capitals where its glyphs are and its macro's own text is not (the probe's answer), never otherwise", async () => {
+    const h = heading('REFERENCES', 72)
+    const world = (names: Record<string, 0 | 1> | undefined) => ({ pages: [{ runs: [h, ...body] }], marks: [...bodyMarks, ...nameMarks(h, 'ref')], units: [para], names })
+    expect((await made(world({ ref: 1 }))).file.names[0]?.[10]).toBe(NAME_FLAG.CAPITALS)
+    // (a class's own capitals: its macro's text holds no lowercase letter)
+    expect((await made(world({ ref: 0 }))).file.names[0]?.[10]).toBe(0)
+    // (no probe: not known)
+    expect((await made(world(undefined))).file.names[0]?.[10]).toBe(0)
+  })
+
+  it("is left out where arXiv's text between the carried marks is not our compile's, or a mark is missing", async () => {
+    const ours = heading('Abstract', 72), theirs = heading('Summary', 72)
+    // (ten lines of the paragraph: the line the two compiles set otherwise is one the carry may lose)
+    const long: Run[] = Array.from({ length: 10 }, (_, j) => ({ s: 'one two three four five six', x: 72, y: 680 - 12 * j }))
+    const marks: Mark[] = [['0s', 1, 72, 680], ['0e', 1, endOf(long[9] as Run), 572], ...nameMarks(ours)]
+    const other = await made({ pages: [{ runs: [theirs, ...long] }], marked: [{ runs: [ours, ...long] }], marks, units: [unit('para', [text(long.map(r => r.s).join(' '))])] })
+    expect(other.file.names).toEqual([])
+    // (the line of another text is not carried, and its marks with it; what is carried is checked by its words as well)
+    expect(other.stats.names.why).toEqual({ 'not carried': 1 })
+    const half = await made({ pages: [{ runs: [ours, ...body] }], marks: [...bodyMarks, nameMarks(ours)[0] as Mark], units: [para] })
+    expect(half.file.names).toEqual([])
+    expect(half.stats.names.why).toEqual({ 'a mark not set, or set twice': 1 })
+  })
+
+  it("is no unit's label: IEEEtran's \\textit{\\abstractname}— before the abstract's start mark leaves the label its dash", async () => {
+    const name: Run = { s: 'Abstract', x: 72, y: 700 }, dash: Run = { s: '\u2014', x: endOf(name), y: 700 }, first: Run = { s: 'we show a model of it', x: endOf(dash) + 1, y: 700 }
+    const second: Run = { s: 'and more words here', x: 72, y: 688 }
+    const runs = [name, dash, first, second]
+    const marks: Mark[] = [['0s', 1, first.x, 700], ['0e', 1, endOf(second), 688], ...nameMarks(name)]
+    const { file } = await made({ pages: [{ runs }], marks, units: [unit('abstract', [text('we show a model of it and more words here')])] })
+    expect(file.names.map(r => r.slice(0, 6))).toEqual([[1, NAME_KEYS.indexOf('abstract'), 1, 72, 700, endOf(name)]])
+    // the label: the dash alone, never the name's glyphs
+    expect(file.labels.map(l => [l[0], l[3], l[5]])).toEqual([[0, dash.x, endOf(dash)]])
+  })
+
+  it("leads the unit TeX sets right after it on that unit's first line (RUN_IN), with the original's glue after its joint", async () => {
+    const lead = async (gap: number) => {
+      const name: Run = { s: 'Abstract', x: 72, y: 700 }, dash: Run = { s: '\u2014', x: endOf(name), y: 700 }, first: Run = { s: 'we show a model of it', x: endOf(dash) + gap, y: 700 }
+      const second: Run = { s: 'and more words here', x: 72, y: 688 }
+      const marks: Mark[] = [['0s', 1, first.x, 700], ['0e', 1, endOf(second), 688], ...nameMarks(name)]
+      return made({ pages: [{ runs: [name, dash, first, second] }], marks, units: [unit('abstract', [text('we show a model of it and more words here')])] })
+    }
+    // IEEEtran's dash touching the text: no glue
+    const touching = await lead(0)
+    expect(touching.file.names.map(r => [r[10], r[11], r[12]])).toEqual([[NAME_FLAG.RUN_IN, 0, 0]])
+    expect(touching.stats.names.runIn).toBe(1)
+    // a space after the joint (amsthm's \labelsep): its width
+    expect((await lead(3)).file.names.map(r => [r[10], r[11], r[12]])).toEqual([[NAME_FLAG.RUN_IN, 0, 3]])
+    // the other column's first line on its baseline leads nothing: a heading over the left column, the right one's text
+    // beside it (ACL's centred Abstract at the top of a page of two columns)
+    const name: Run = { s: 'Abstract', x: 120, y: 700 }, right: Run = { s: 'we show a model of it', x: 320, y: 700 }
+    const left: Run[] = [0, 1, 2].map(j => ({ s: 'one two three four five six', x: 60, y: 680 - 12 * j }))
+    const two = await made({ pages: [{ runs: [name, right, ...left] }], marks: [COLS2(1), ['0s', 1, 60, 680], ['0e', 1, endOf(left[2] as Run), 656], ['1s', 1, right.x, 700], ['1e', 1, endOf(right), 700], ...nameMarks(name)], units: [para, unit('para', [text('we show a model of it')])] })
+    expect(two.file.names.map(r => [(r[10] as number) & NAME_FLAG.RUN_IN, r[11], r[12]])).toEqual([[0, -1, 0]])
+  })
+
+  it("is a caption's label where a figure's or a table's name leads a caption (longtable's, no \\@captype): no row", async () => {
+    const name: Run = { s: 'Table', x: 72, y: 700 }, first: Run = { s: '1: the results of it', x: endOf(name) + 3, y: 700 }
+    const marks: Mark[] = [['0s', 1, first.x, 700], ['0e', 1, endOf(first), 700], ...nameMarks(name, 'table')]
+    const { file, stats } = await made({ pages: [{ runs: [name, first, ...body] }], marks: [...marks, ['1s', 1, 72, 680], ['1e', 1, endOf(body[2] as Run), 656]], units: [unit('caption', [text('1: the results of it')]), para] })
+    expect(file.names).toEqual([])
+    expect(stats.names.why).toEqual({ "a caption's label": 1 })
+  })
+
+  it("takes its column's edges from the pages like its own where its page has no unit (a page of references alone)", async () => {
+    const h = heading('References', 72)
+    const { file } = await made({ pages: [{ runs: body }, { runs: [h] }], marks: [...bodyMarks, [`n1.ref.s`, 2, h.x, h.y], [`n1.ref.e`, 2, endOf(h), h.y]], units: [para] })
+    expect(file.names.map(r => [r[2], r[13], r[14]])).toEqual([[2, 72, endOf(body[0] as Run)]])
+    // no page with a body line of its kind of column: its own box (no room past it is known), never the page's half
+    const alone = await made({ pages: [{ runs: [h] }], marks: [[`n1.ref.s`, 1, h.x, h.y], [`n1.ref.e`, 1, endOf(h), h.y]], units: [] })
+    expect(alone.file.names.map(r => [r[3], r[5], r[13], r[14]])).toEqual([[72, endOf(h), 72, endOf(h)]])
   })
 })

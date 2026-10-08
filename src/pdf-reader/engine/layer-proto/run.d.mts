@@ -13,7 +13,8 @@ import type { FrozenRuleSet, RULES_SCHEMA } from '../rules/layout.mjs'
  *  consistency group */
 export interface Unit { kind: string; src: string; pieces?: { t: string; s?: string; src?: string; k?: number }[]; state: string; title?: boolean; group?: string }
 /** which floats the final names in the target's language (live.mjs captionsOf) */
-export interface Captions { figure: 'target' | 'source'; table: 'target' | 'source' }
+export type { Captions } from '../layout/names.mjs'
+import type { Captions } from '../layout/names.mjs'
 /** the made output's geometry (schema 1): the pages' views, each unit's [id, stream, rects] on the original, its kind */
 export interface Geometry { schema: number; kinds: string[]; left: { pages: number[][]; units: [number, number, Rect[]][] }; right?: unknown }
 /** a unit v0 places: its rectangles (all of them: a unit cut by the pages shown is laid over its lines past them too), the
@@ -64,6 +65,17 @@ export declare function nextHeld(held: Held | null, r: Filled | null): Held | nu
 export declare function packPage(page: number, units: unknown[], rects: readonly [number, readonly number[]][], chars: readonly { ch: string; x0: number; x1: number; yb: number; size: number }[], stays?: ((x0: number, x1: number, y0: number, y1: number) => number | null) | null, gap?: number): Map<number, number>
 /** the ink of a page that stays visible: its ink map less the glyphs the drawing takes away, and the add-on's dirty boxes; foot(x0, x1, y0, y1) gives the PDF y of the lowest such ink's foot in a box, or null */
 export declare function stayingInk(o: { map: { w: number; h: number; ink: Uint8Array; factor: number }; toDev: (x: number, y: number) => number[]; toPdf: (x: number, y: number) => number[]; accounted?: readonly number[][]; dirty?: readonly number[][] }): (x0: number, x1: number, y0: number, y1: number) => number | null
+/** a babel name of a page laid (D1a) */
+export interface NameDrawn {
+  occurrence: number; key: string; page: number; drawn: boolean; why: string | null; chars: (Char & { page: number })[]
+  /** the original's line box (the layout file's) */
+  box: { x0: number; x1: number; baseline: number; top: number; bottom: number; size: number }
+  /** where drawn: its word, size, left edge and width (unfit: its word, its width at the original's size and the room) */
+  text?: string; size?: number; x?: number; w?: number; room?: number
+  /** the unit it leads (the file's RUN_IN): set as the start of that unit's first line, drawn with it (`inline: <why>`
+   *  where the unit is left the original's) */
+  unit?: number
+}
 export interface ProtoRun {
   N: number
   P: Params
@@ -86,6 +98,9 @@ export interface ProtoRun {
   pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number }[]
   chars: Char[][]
   views: { convertToViewportPoint(x: number, y: number): number[]; convertToPdfPoint(x: number, y: number): number[] }[]
+  /** babel's names of the pages laid (D1a, the layout file's `names`): drawn in the target's word, or why not (`no word`,
+   *  `source`, `same`, `unread`, `unfit`, `served`, `face`); a drawn one's characters, text, size and left edge */
+  names: NameDrawn[]
   readonly designs: { serif: string; sans: string; mono: string }
   /** the hybrid's: each placed unit's source (empty lists where `tex` is null) */
   readonly sources: Sources
@@ -174,7 +189,8 @@ export declare function openProto(o: {
   /** the text-removed PDF: null, v0's own drawing */
   removal?: RemovalOptions | null
   /** which floats the final names in the target's language (live.mjs captionsOf): a float's label is drawn in the target's
-   *  name for it, which the rule set gives, where the final's is; null, every label kept as the original's */
+   *  name for it, which the rule set gives, where the final's is, and every babel name in the target's word whatever the
+   *  captions say; null, every label and name kept as the original's */
   labels?: { captions: Captions | null } | null
   /** the layout rule set every choice made for the target is read from, resolved once at the open (absent: BUILTIN_RULES) */
   rules?: FrozenRuleSet

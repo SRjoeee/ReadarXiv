@@ -20,6 +20,7 @@ on:
       - 'src/pdf-reader/engine/layout/file.mjs'
       - 'src/pdf-reader/engine/layout/ink.mjs'
       - 'src/pdf-reader/engine/layout/json.mjs'
+      - 'src/pdf-reader/engine/layout/names.mjs'
       - 'src/pdf-reader/engine/layout/remove.mjs'
       - 'lab/pdf/spikes/layer-gate.mjs'
       - 'lab/pdf/spikes/layer-gate/**'

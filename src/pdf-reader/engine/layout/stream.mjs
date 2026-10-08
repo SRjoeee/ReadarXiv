@@ -35,6 +35,8 @@ export const OWNED = 4
 const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i]))
 /** a bracket's point: a column's body (b) or a float's box (f), its start (s) or end (e), by a number */
 const BRACKET = /^([bf])([se])\d+$/
+/** a babel name's point (marks.mjs NAMES_TEX): no piece's next mark, its text no unit's */
+const NAME_POINT = /^n\d+\.[^.]+\.[se]$/
 /** a piece's opening point: a placeholder's (p) or a footnote call's (n), by its unit and source piece index */
 const OPENING = /^([pn])(\d+)\.(\d+)a$/
 /** a unit's start mark: MARK_DEF's, a cell's, a heading's */
@@ -98,12 +100,12 @@ function regionsOf(page) {
 export function ownedOf(pages, { follows, dropped = [] }) {
   const twice = new Set(dropped)
   const regions = pages.map(regionsOf)
-  // every point by its name, in stream order: [page, index]; the mark points in stream order (brackets apart)
+  // every point by its name, in stream order: [page, index]; the mark points in stream order (brackets and names apart)
   const where = new Map(), seq = []
   pages.forEach((p, i) => p.points.forEach((pt, q) => {
     const list = where.get(pt.name)
     if (list) list.push([i + 1, q]); else where.set(pt.name, [[i + 1, q]])
-    if (!BRACKET.test(pt.name)) seq.push([i + 1, q])
+    if (!BRACKET.test(pt.name) && !NAME_POINT.test(pt.name)) seq.push([i + 1, q])
   }))
   const rank = new Map()
   seq.forEach(([p, q], r) => rank.set(`${p}|${q}`, r))

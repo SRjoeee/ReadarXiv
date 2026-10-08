@@ -1,5 +1,6 @@
 // marks.mjs's types (JavaScript until the engine's port), for the reader's tests
 import type { SourceUnit, UnitMark } from '../source/latex-front.mjs'
+import type { NameKey } from './names.mjs'
 
 export type MarkClass = 'math' | 'display' | 'cite' | 'ref' | 'eqref' | 'code' | 'url' | 'footnote' | 'macro'
 /** every class, in this order */
@@ -43,6 +44,17 @@ export declare function readInkProbe(log: string, samples: readonly string[]): s
 export declare const INK_TEXT_MAX: number
 /** each sample's text, where the probe showed it sets letters and digits of text fonts alone: [source, text] */
 export declare function readInkTexts(log: string, samples: readonly string[]): [string, string][]
+/** each babel name's macro, by key (\\refname's `ref`) */
+export declare const NAME_MACROS: Readonly<Record<NameKey, string>>
+/** each babel name's English value (babel's en [captions]) */
+export declare const NAME_ENGLISH: Readonly<Record<NameKey, string>>
+/** the name section of the probe (`name`): each wrapped name, whether its own text holds a lowercase letter */
+export declare function nameSection(): string
+/** the name section's answers: 1 a name's own text holds a lowercase letter, 0 not, by key */
+export declare function readNameProbe(log: string): Partial<Record<NameKey, 0 | 1>>
+/** a babel name a style writes literally in the definition of the construct its macro names, wrapped as the macro's
+ *  own text is; the text unchanged where it holds none */
+export declare function literalNames(text: string): string
 /** where a unit's start mark goes, as patch places it: the first piece at or after it, from `from` */
 export declare function headEnd(pieces: readonly unknown[], from?: number): number
 /** LaTeX's text symbols, each the one character it sets */
@@ -61,8 +73,10 @@ export declare const INVISIBLE: RegExp
 export declare const DISPLAY: RegExp
 /** a piece's class, or null where it is not marked (text, a group's open or close, an invisible placeholder) */
 export declare function classOf(piece: { t: string; src?: string }): MarkClass | null
-/** the TeX that goes after MARK_DEF in the marked original: the gate and the marks' macros, the points last */
+/** the TeX that goes after MARK_DEF in the marked original: the gate and the marks' macros, the names, the points last */
 export declare const LAYOUT_TEX: string
+/** LAYOUT_TEX's names: \\axtnma{<key>} and \\axtnmb{<key>} around each babel name macro's own text */
+export declare const NAMES_TEX: string
 /** LAYOUT_TEX's last part: a point (`/axt-<name> ri`) beside each destination, around each column's body and each
  *  float's box */
 export declare const POINTS_TEX: string
@@ -70,7 +84,7 @@ export declare const POINTS_TEX: string
 export declare const asSet: (s: string) => string
 /** every destination name the marked original may hold (without its 'axt-'): a unit's start or end (MARK_DEF), a page's
  *  columns, a cell's (t) or a heading's (h) start or end, a placeholder's (p) or a footnote call's (n) opening or closing
- *  mark by its unit and source piece index, a draft image frame's corner (g) */
+ *  mark by its unit and source piece index, a draft image frame's corner (g), a babel name's start or end (n<occurrence>.<key>.s) */
 export declare const MARK_NAME: RegExp
 /** the units with their layout marks as pieces of their own (each unit copied; the paper's units untouched), and each
  *  unit's mark for patch(): MARK_DEF's for a marked unit (with \axtlines when `lines`), a cell's and a heading's own;
@@ -79,14 +93,15 @@ export declare function layoutMarking(units: readonly SourceUnit[], classes: rea
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {
-  schema: 3
+  schema: 4
   /** the engine that compiled it (meta.compiler) */
   engine: string
   /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (TeX's answers to the
    *  mark probe, readMarkProbe; null where the probe was not run), so that whoever reads the file knows which pieces
    *  have marks */
   /** `texts`: the probe's texts, flat (source, text, source, text, …), null where no probe ran */
-  marking: { classes: MarkClass[]; switches: Switches | null; inkless: string[] | null; texts: string[] | null }
+  /** `names`: whether each babel name's own text holds a lowercase letter (readNameProbe), null where no probe ran */
+  marking: { classes: MarkClass[]; switches: Switches | null; inkless: string[] | null; texts: string[] | null; names: Partial<Record<NameKey, 0 | 1>> | null }
   pages: number
   /** per page: x0, y0, x1, y1 (stride 4) */
   views: number[]
@@ -113,14 +128,14 @@ export interface LayoutMarks {
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number
-export declare const MARKS_SCHEMA: 3
+export declare const MARKS_SCHEMA: 4
 /** a piece's own ink at most, its glyphs and its rules; and a paper's in all */
 export declare const GLYPHS_PIECE: number
 export declare const RULES_PIECE: number
 export declare const OWNED_ALL: number
 /** from a PDF.js document of the marked original and its last TeX pass's log; the caller opens and destroys the
  *  document. With the paper's `units` and PDF.js's operator codes, each marked piece's own ink from its operator lists */
-export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; switches?: Switches | null; inkless?: readonly string[] | null; texts?: readonly (readonly [string, string])[] | readonly string[] | null; units?: readonly SourceUnit[] | null; OPS?: Record<string, number> | null }): Promise<LayoutMarks>
+export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; switches?: Switches | null; inkless?: readonly string[] | null; texts?: readonly (readonly [string, string])[] | readonly string[] | null; names?: Partial<Record<NameKey, 0 | 1>> | null; units?: readonly SourceUnit[] | null; OPS?: Record<string, number> | null }): Promise<LayoutMarks>
 export declare function encodeLayoutMarks(m: LayoutMarks): string
 /** bytes, then values, then JSON.parse, then every bound below; throws LayoutRefusal */
 export declare function parseLayoutMarks(bytes: Uint8Array): LayoutMarks

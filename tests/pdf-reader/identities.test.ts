@@ -103,17 +103,20 @@ describe('the per-text cache key (rules as data, §9.1)', () => {
 
 /** an empty layout file of one page, as a maker of `layout` writes it */
 const layoutFile = (over: Record<string, unknown> = {}) => ({
-  schema: 1, layout: LAYOUT, pdfjs: '6.3.289', paper: { id: '2608.04322', version: 1, pages: 1 }, left: '', views: [0, 0, 612, 792], fonts: [],
-  units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], ...over,
+  schema: 2, layout: LAYOUT, pdfjs: '6.3.289', paper: { id: '2608.04322', version: 1, pages: 1 }, left: '', views: [0, 0, 612, 792], fonts: [],
+  units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [], ...over,
 })
 const manifest = (over: Record<string, unknown> = {}) => ({ schema: 1, removal: '4', pages: 1, sets: {}, page: { 1: { ok: true } }, appended: 0, stats: {}, ...over })
 
 describe('a layout file is refused by its schema, not by its maker (decision 4)', () => {
-  it('reads a schema-1 file whose `layout` is a newer maker\'s, and refuses a schema-2 file', () => {
-    expect(parseLayout(bytesOf(layoutFile({ layout: '4' }))).layout).toBe('4')
+  it('reads a schema-2 file whose `layout` is a newer maker\'s, and refuses a schema-1 or a schema-3 file', () => {
+    expect(parseLayout(bytesOf(layoutFile({ layout: '5' }))).layout).toBe('5')
     expect(parseLayout(bytesOf(layoutFile({ layout: '1' }))).layout).toBe('1')
-    expect(() => parseLayout(bytesOf(layoutFile({ schema: 2 })))).toThrow(LayoutRefusal)
-    expect(() => parseLayout(bytesOf(layoutFile({ schema: 2, layout: '4' })))).toThrow(/schema/)
+    expect(() => parseLayout(bytesOf(layoutFile({ schema: 3 })))).toThrow(LayoutRefusal)
+    expect(() => parseLayout(bytesOf(layoutFile({ schema: 3, layout: '5' })))).toThrow(/schema/)
+    // (a file before the names: refused by its schema, as no reader holds an older one's meaning)
+    const { names: _, ...old } = layoutFile({ schema: 1 })
+    expect(() => parseLayout(bytesOf(old))).toThrow(/^schema/)
   })
 
   it('still reads `layout` for its shape: a version token of 1 to 32 letters, digits or points, as a bundle names one', () => {

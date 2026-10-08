@@ -690,8 +690,8 @@ export async function removePaper({ bytes, PL, inflate = null, walkMax, heldMax,
 /**
  * The add-on: arXiv's bytes with the sets appended as one incremental update. `R` is the remover (openRemover's);
  * `opListOf(p)` PDF.js's operator list of page p (1-based) of arXiv's PDF; `OPS` PDF.js's; `deflate` bytes -> zlib
- * bytes. `plan.pages[p]`: { units: [{ id, glyphs: [n, k, …], paths: [m, …] }], crops: [{ glyphs, paths }], shows?,
- * glyphs? } (shows and glyphs: the page's text-showing operations and its ink's glyphs as the planner read them, which
+ * bytes. `plan.pages[p]`: { units: [{ id, glyphs: [n, k, …], paths: [m, …] }], names?: [{ occurrence, glyphs }],
+ * crops: [{ glyphs, paths }], shows?, glyphs? } (a name's glyphs removed as a unit's are, but named in no manifest entry) (shows and glyphs: the page's text-showing operations and its ink's glyphs as the planner read them, which
  * this reading must give too). `sets`: SETS, and CHECK_SETS for a check. `boxesOf(p, n, k)` and `pathBoxOf(p, m)`:
  * each glyph's and path's box on the page (the manifest's units), or null.
  * Returns { bytes, appended, manifest } where the manifest says, per page, whether it is removed (`ok`) or refused and
@@ -807,6 +807,13 @@ export async function makeAddon({ R, bytes, OPS, opListOf, deflate, plan, sets =
           if (b) boxes.push(...b)
         }
         units[u.id] = boxes.map(v => Math.round(v * 100) / 100)
+      }
+      for (const nm of entry.names ?? []) {
+        for (let i = 0; i + 1 < nm.glyphs.length; i += 2) {
+          const n = nm.glyphs[i], k = nm.glyphs[i + 1], e = glyphOf(n, k)
+          if (!e) { why.push(`name ${nm.occurrence}: no glyph ${n}.${k}`); break }
+          add(removeR, e, k); add(keepF, e, k)
+        }
       }
       ;(entry.crops ?? []).forEach((c, ci) => {
         for (let i = 0; i + 1 < c.glyphs.length; i += 2) {
@@ -927,7 +934,7 @@ export async function makeAddon({ R, bytes, OPS, opListOf, deflate, plan, sets =
 export function checkPage({ orig, removed, kept, entry }) {
   const key = g => `${g.n}.${g.k}`
   const planned = new Set(), plannedPaths = new Set(), crop = new Set(), cropPaths = new Set()
-  for (const u of entry?.units ?? []) { for (let i = 0; i + 1 < u.glyphs.length; i += 2) planned.add(`${u.glyphs[i]}.${u.glyphs[i + 1]}`); for (const m of u.paths ?? []) plannedPaths.add(m) }
+  for (const u of [...(entry?.units ?? []), ...(entry?.names ?? [])]) { for (let i = 0; i + 1 < u.glyphs.length; i += 2) planned.add(`${u.glyphs[i]}.${u.glyphs[i + 1]}`); for (const m of u.paths ?? []) plannedPaths.add(m) }
   for (const c of entry?.crops ?? []) { for (let i = 0; i + 1 < c.glyphs.length; i += 2) crop.add(`${c.glyphs[i]}.${c.glyphs[i + 1]}`); for (const m of c.paths ?? []) cropPaths.add(m) }
   const same = (x, y) => y && x.u === y.u && x.font === y.font && Math.abs(x.y - y.y) < 1e-6 && Math.abs(x.x0 - y.x0) < 0.01
   const out = { removed: 0, missed: 0, other: 0, moved: 0, extra: 0, maxMove: 0, rulesRemoved: 0, rulesMissed: 0, rulesOther: 0, pOwn: 0, pMissing: 0, pOther: 0 }

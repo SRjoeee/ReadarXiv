@@ -66,6 +66,9 @@ export const MEASURES = [
   ['rmPOther', 'model', 'defect', 'down', "placeholders' page: other ink or a crop's glyph missing"],
   ['rmMismatched', 'model', 'defect', 'down', "units whose removal is not the plan's"],
   ['rmRefused', 'model', 'defect', 'down', 'pages refused by the remover'],
+  // generated text left in the source language (D1a): the babel names the frozen reference holds (a generated heading:
+  // Abstract, References, Contents, …) not drawn in the target's word, by kind (`generated`: `name`, the only kind yet)
+  ['generatedLeft', 'model', 'count', 'down', 'generated text left in the source language (babel names)'],
   // the consistency measures (the table-groups brief, 2026-10-07): each must be 0
   ['groupsSplit', 'model', 'count', 'down', 'table groups drawn partly'],
   ['labelsSource', 'model', 'count', 'down', 'labels left in the source language the final names'],
@@ -112,6 +115,7 @@ export function pageEntry(page, model, pixel) {
     where: model.where, style: model.style, drawn: model.drawn,
     groupsSplit: model.consistency?.groupsSplit ?? 0, labelsSource: model.consistency?.labelsSource ?? 0,
     paraGaps: gaps.length, paraGap: r(median(gaps.map(g => g.ratio)), 3), paraGapWide: gaps.filter(g => g.extra >= 1).length,
+    generated: model.generated ?? {}, generatedLeft: Object.values(model.generated ?? {}).reduce((a, n) => a + n, 0),
   }
   if (model.removal) Object.assign(e, { rmRefused: model.removal.refused, rmMismatched: model.removal.mismatched, rmUnits: model.removal.units, rmSwapped: model.removal.swapped })
   const ck = model.removalCheck
@@ -150,6 +154,7 @@ export function fixtureTotals(pages, frames, tier) {
     style: [sum(pages, p => p.style?.[0]), sum(pages, p => p.style?.[1])],
     paraGapN: gaps.length, paraGap: r(median(gaps.map(g => g.ratio)), 3), paraGapWide: r(share(gaps.filter(g => g.extra >= 1).length, gaps.length)),
     pageDrift: driftOf(pages.map(p => p.rhythm)),
+    generated: kindsOf(pages), generatedLeft: sum(pages, p => p.generatedLeft),
   }
   if (tier === 'pixel') {
     const tc = sum(pages, p => p.textCells), cc = sum(pages, p => p.cellCells)
@@ -168,6 +173,9 @@ export function fixtureTotals(pages, frames, tier) {
   t.modelRates = ratesOf(t, 'model')
   return t
 }
+
+/** generated text left, by kind, summed over pages (or fixtures) */
+const kindsOf = list => { const out = {}; for (const x of list) for (const [k, n] of Object.entries(x.generated ?? {})) out[k] = (out[k] ?? 0) + n; return out }
 
 /** the defects per 1,000 translated text cells (pixel), or per 1,000 cells of the drawn units' frames (model) */
 export function ratesOf(t, tier) {
@@ -198,6 +206,7 @@ export function pooled(list, tier) {
     style: [sum(list, t => t.style[0]), sum(list, t => t.style[1])],
     paraGapN: sum(list, t => t.paraGapN), paraGap: w('paraGap', 'paraGapN'), paraGapWide: w('paraGapWide', 'paraGapN'),
     pageDrift: list.some(t => t.pageDrift !== null && t.pageDrift !== undefined) ? Math.max(...list.map(t => t.pageDrift ?? 0)) : null,
+    generated: kindsOf(list), generatedLeft: sum(list, t => t.generatedLeft),
   }
   if (tier === 'pixel') {
     const tc = sum(list, t => t.textCells), cc = sum(list, t => t.cellCells)
@@ -236,7 +245,7 @@ function pageView(p, tier) {
     unitsLeft: p.textOn - p.textDrawn, cellsLeft: p.cellsOn - p.cellsDrawn, fill: p.fill, blankLines: p.blankLines,
     framesBlank1: p.frames ? p.framesBlank1 / p.frames : null, pitchSpread: p.pitchSpread, scale: p.scale, fullSize: p.frames ? p.fullSize / p.frames : null,
     scaleSpread: p.scaleSpread, overRight: p.frames ? p.overRight / p.frames : null, modelCells: p.modelCells, textTranslatedCells: p.textTranslatedCells,
-    paraGap: p.paraGap ?? null, paraGapWide: p.paraGaps ? p.paraGapWide / p.paraGaps : null,
+    paraGap: p.paraGap ?? null, paraGapWide: p.paraGaps ? p.paraGapWide / p.paraGaps : null, generatedLeft: p.generatedLeft ?? 0,
   }
   if (tier === 'pixel') Object.assign(v, { textTranslated: share(p.textTranslatedCells, p.textCells), textEnglish: share(p.textEnglishCells, p.textCells), textBlank: share(p.textBlankCells, p.textCells), cellsTranslated: share(p.cellTranslatedCells, p.cellCells) })
   for (const d of DEFECTS) if (p[d] !== undefined) v[d] = p[d]

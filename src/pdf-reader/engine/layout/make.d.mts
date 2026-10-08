@@ -34,6 +34,9 @@ export interface LayoutStats {
   /** the matcher's matches by kind (the same character, another Unicode at the place, loosely on the line, by a vote),
    *  those it rejected off their run, its work, and the pieces past its bound */
   match: { same: number; recoded: number; loose: number; vote: number; rejected: number; work: number; over: number }
+  /** babel's names: the occurrences the marked original marks, those the file locates (and of them those leading a unit:
+   *  RUN_IN), and why each other is not */
+  names: { marked: number; located: number; runIn: number; why: Record<string, number> }
   /** by the unit's kind: the units with a label, of the located units whose start mark was carried to their first line */
   labels: Record<string, [found: number, units: number]>
   frames: { units: number; split: number; lineCountChecked: number; lineCountEqual: number }

@@ -51,12 +51,12 @@ describe("a table group withheld beside one drawn, the whole run (openProto): th
       const order = first === 'A' ? named : [named[1]!, named[2]!, named[0]!]
       const cells = order.map(([name, src, x0, x1, b, group], id) => ({ id, name, src, x0, x1, b, group }))
       const layout = {
-        schema: 1, layout: '3', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['F1'],
+        schema: 2, layout: '4', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['F1'],
         units: cells.map(c => [c.id, 4, 9, 0, 1]),
         lines: cells.map(c => [c.id, [1, c.x0, c.x1, c.b, c.b + 7, c.b - 2, 10, 0]]),
         frames: cells.map(c => [c.id, [1, 0, 0, 1, -1, 0]]),
         erase: cells.map(c => [c.id, [0, c.x0, c.b - 2, c.x1, c.b + 7]]),
-        ph: [], labels: [], headings: [], pageText: [], held: [],
+        ph: [], labels: [], headings: [], pageText: [], held: [], names: [],
       }
       const index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(layout))))
       const units = cells.map(c => ({ kind: 'cell', src: c.src, state: 'whole', group: c.group, pieces: [{ t: 'text', tr: true, s: c.name === 'C' ? '\u5f88'.repeat(400) : '\u6c49\u5b57' }] }))
@@ -90,12 +90,12 @@ describe("a cell widened over the paper beside it, the whole run (openProto): he
     const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
     const cells = [{ id: 0, src: 'Delta', x0: 10, x1: 40, b: 100, tr: '\u6c49'.repeat(9) }, { id: 1, src: 'Omega', x0: 150, x1: 200, b: 60, tr: '\u6c49\u5b57' }]
     const layout = {
-      schema: 1, layout: '3', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['F1'],
+      schema: 2, layout: '4', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['F1'],
       units: cells.map(c => [c.id, 4, 9, 0, 1]),
       lines: cells.map(c => [c.id, [1, c.x0, c.x1, c.b, c.b + 6.8, c.b - 2.14, 10, 0]]),
       frames: cells.map(c => [c.id, [1, 0, 0, 1, -1, 0]]),
       erase: cells.map(c => [c.id, [0, c.x0, c.b - 2.14, c.x1, c.b + 6.8]]),
-      ph: [], labels: [], headings: [], pageText: [], held: [],
+      ph: [], labels: [], headings: [], pageText: [], held: [], names: [],
     }
     const index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(layout))))
     const units = cells.map(c => ({ kind: 'cell', src: c.src, state: 'whole', pieces: [{ t: 'text', tr: true, s: c.tr }] }))
@@ -125,12 +125,12 @@ describe("a paper whose add-on is refused, the whole run (openProto): every unit
     const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
     const cells = [{ id: 0, src: 'Alpha', x0: 10, x1: 40, b: 100 }, { id: 1, src: 'Betas', x0: 60, x1: 90, b: 100 }]
     const layout = {
-      schema: 1, layout: '3', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['F1'],
+      schema: 2, layout: '4', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['F1'],
       units: cells.map(c => [c.id, 4, 9, 0, 1]),
       lines: cells.map(c => [c.id, [1, c.x0, c.x1, c.b, c.b + 7, c.b - 2, 10, 0]]),
       frames: cells.map(c => [c.id, [1, 0, 0, 1, -1, 0]]),
       erase: cells.map(c => [c.id, [0, c.x0, c.b - 2, c.x1, c.b + 7]]),
-      ph: [], labels: [], headings: [], pageText: [], held: [],
+      ph: [], labels: [], headings: [], pageText: [], held: [], names: [],
     }
     const index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(layout))))
     const doc = docOf(cells.map(c => [c.src, c.x0, c.b, c.x1 - c.x0]))

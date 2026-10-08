@@ -35,8 +35,10 @@ export declare function openRemover(bytes: Uint8Array, o: { PL: PdfLib; inflate?
 export interface PlannedUnit { id: number; glyphs: number[]; paths: number[] }
 /** a crop's glyphs and rules, the placeholders' page's */
 export interface PlannedCrop { id?: number; k?: number; glyphs: number[]; paths: number[] }
-/** the plan: per page (1-based), its units' removals and its crops, and what the planner read of the page */
-export interface RemovalPlan { pages: Record<number, { units: PlannedUnit[]; crops: PlannedCrop[]; shows?: number; glyphs?: number }> }
+/** a babel name's removal on a page (D1a): its glyphs as n, k pairs */
+export interface PlannedName { occurrence: number; glyphs: number[] }
+/** the plan: per page (1-based), its units' removals, its names', its crops, and what the planner read of the page */
+export interface RemovalPlan { pages: Record<number, { units: PlannedUnit[]; names?: PlannedName[]; crops: PlannedCrop[]; shows?: number; glyphs?: number }> }
 /** arXiv's bytes with the sets appended as one incremental update */
 export declare function makeAddon(o: {
   R: Remover; bytes: Uint8Array; OPS: Record<string, number>; opListOf(page: number): Promise<{ fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }>

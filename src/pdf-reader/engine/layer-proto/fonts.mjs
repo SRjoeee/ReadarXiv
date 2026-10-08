@@ -76,7 +76,7 @@ function roleFaceOf(st, cls) {
   const id = faceFor(roles, { script: cls, cls: st.fam === 'math' ? 'serif' : st.fam, design: st.design ?? 'times', bold: !!st.bold, italic: !!st.italic, caps: !!st.caps })
   const F = FACES[id]
   const ids = [...new Set([id, ...(roles.fallbacks[id] ?? []), ...(cls !== 'cjk' && roles.cjk ? [roles.cjk.body] : [])])].filter(f => FACES[f])
-  const kai = cls === 'cjk' && st.italic && !!roles.cjk?.italic
+  const kai = cls === 'cjk' && !!roles.cjk?.italic && id === roles.cjk.italic
   return { family: [...new Set(ids.map(f => `"${FACES[f].family}"`))].join(', '), weight: F.weight, style: F.style, oblique: 0, stand: st.italic ? (cls === 'cjk' ? (kai ? 'kai' : '') : 'italic') : '', caps: !!st.caps && cls !== 'cjk', size: F.size ?? 1, id, ids }
 }
 // ---- the role table's faces as the host serves them

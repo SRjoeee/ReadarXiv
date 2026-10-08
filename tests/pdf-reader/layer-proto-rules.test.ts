@@ -96,10 +96,10 @@ describe("v0's open takes every choice for its target from the rule set it is gi
 
   it('reports the set it was opened with: its schema and version', async () => {
     const run = await open()
-    expect(run.rules).toEqual({ schema: 2, version: BUILTIN_RULES.version })
+    expect(run.rules).toEqual({ schema: 3, version: BUILTIN_RULES.version })
     const set = editable()
     set.version = 4
-    expect((await open({ rules: set })).rules).toEqual({ schema: 2, version: 4 })
+    expect((await open({ rules: set })).rules).toEqual({ schema: 3, version: 4 })
   })
 
   it('takes no params option: a host sets a field in the rule set, not on the open (a type test)', () => {
@@ -147,7 +147,7 @@ describe("v0's open takes every choice for its target from the rule set it is gi
     // "Figure 1:" at the start of the unit's first line, which its source does not write: the label the final names in
     // the target's language
     const set = editable()
-    set.languages.zh = { ...set.languages.zh!, labels: { figure: '<img src=x onerror=alert(1)>', table: '\u8868' } }
+    set.languages.zh = { ...set.languages.zh!, labels: { ...set.languages.zh!.labels!, figure: '<img src=x onerror=alert(1)>', table: '\u8868' } }
     const run = await open({ rules: set, labels: { captions: { figure: 'target', table: 'target' } } }, LABELLED())
     await run.until(1)
     const svg = run.rows[0]!.svg

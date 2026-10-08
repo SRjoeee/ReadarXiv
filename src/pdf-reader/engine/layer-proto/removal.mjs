@@ -3,8 +3,9 @@
 // of them each drawn unit replaces, and where on the page the removed page's pixels go in for it.
 // - The add-on is one a paper, whatever the target (pagePlan): every unit the layout file holds has its glyphs removed,
 //   those the file gives it (fileOwnership: on its lines' baselines, within a script's window and its erase rectangles,
-//   its inline placeholders' by their segments), its label's, its placeholders' rules and its lines'; and the
-//   placeholders' page holds each inline placeholder's glyphs and rules.
+//   its inline placeholders' by their segments), its label's, its placeholders' rules and its lines'; every babel name
+//   the file locates its glyphs (D1a: a generated heading the layer may set in the target's word); and the placeholders'
+//   page holds each inline placeholder's glyphs and rules.
 // - A drawn unit the file locates whole (the hybrid's, tex.mjs) replaces of them (unitRemoval) what its reading does
 //   not keep: a display formula, a placeholder the layer keeps, a label it keeps and a character it shows where it is
 //   (its reading's 'keep' and 'orphan') stay, shown from the original. What it accounts for that the file gives no unit
@@ -43,9 +44,11 @@ export async function inkOfPage(OPS, page, outlines = null, collect = null) {
  * rules and the rules its lines hold; the placeholders' page holds each inline placeholder's glyphs and rules, and the
  * ink no unit's text is (`id` -1: a crop of what the file does not find is cut from it, through its own boxes). What a
  * target's drawing keeps of these (a line its reading keeps, a placeholder it keeps, a label it keeps) is shown from the
- * original: its swap leaves them out. Returns { units: [{ id, glyphs: [n, k, …], paths }], crops: [{ id, k, glyphs,
- * paths }], shows, glyphs } (layout/remove.mjs RemovalPlan's page), and `own`, the ownership it was made from, with
- * `label` (glyph -> the unit whose label it is, -1).
+ * original: its swap leaves them out. Each babel name the file locates on the page has the glyphs no unit and no label
+ * takes inside its box removed too (`names`, by occurrence: the layer draws a name in the target's word or not, by the
+ * target, and the add-on is the target's whatever it is). Returns { units: [{ id, glyphs: [n, k, …], paths }], names:
+ * [{ occurrence, glyphs }], crops: [{ id, k, glyphs, paths }], shows, glyphs } (layout/remove.mjs RemovalPlan's page), and
+ * `own`, the ownership it was made from, with `label` (glyph -> the unit whose label it is, -1).
  */
 export function pagePlan(index, page, ink, own = fileOwnership(index, page, ink)) {
   const G = ink.glyphs, n = G.length
@@ -58,6 +61,17 @@ export function pagePlan(index, page, ink, own = fileOwnership(index, page, ink)
       for (let g = 0; g < n; g++) {
         const x = G[g], mid = (x.x0 + x.x1) / 2, cy = (x.top + x.bottom) / 2
         if (x.n >= 0 && own.owner[g] === -1 && label[g] === -1 && mid >= x0 - 0.05 && mid <= x1 + 0.05 && cy >= bottom - 0.05 && cy <= top + 0.05) label[g] = id
+      }
+    }
+  }
+  // (each babel name's glyphs: in its box, no line's and no label's)
+  const named = new Int32Array(n).fill(-1), byName = new Map()
+  for (const nm of index.names?.(page) ?? []) {
+    for (let g = 0; g < n; g++) {
+      const x = G[g], mid = (x.x0 + x.x1) / 2, cy = (x.top + x.bottom) / 2
+      if (x.n >= 0 && own.owner[g] === -1 && label[g] === -1 && named[g] === -1 && mid >= nm.x0 - 0.05 && mid <= nm.x1 + 0.05 && cy >= nm.bottom - 0.05 && cy <= nm.top + 0.05) {
+        named[g] = nm.occurrence
+        ;(byName.get(nm.occurrence) ?? byName.set(nm.occurrence, { occurrence: nm.occurrence, glyphs: [] }).get(nm.occurrence)).glyphs.push(x.n, x.k)
       }
     }
   }
@@ -76,10 +90,10 @@ export function pagePlan(index, page, ink, own = fileOwnership(index, page, ink)
   // of what the file does not find (a placeholder v0 reads on its own, LOST to the file) is cut from it as well, each
   // through its own ink's boxes, never another line's
   const free = { id: -1, k: -1, glyphs: [], paths: [] }
-  for (let g = 0; g < n; g++) if (G[g].n >= 0 && own.owner[g] === -1 && label[g] === -1) free.glyphs.push(G[g].n, G[g].k)
+  for (let g = 0; g < n; g++) if (G[g].n >= 0 && own.owner[g] === -1 && label[g] === -1 && named[g] === -1) free.glyphs.push(G[g].n, G[g].k)
   ink.paths.forEach((m, b) => { if (m >= 0 && !own.paths.has(b) && !own.linePaths.has(b)) free.paths.push(m) })
   const byId = (a, b) => a.id - b.id || (a.k ?? 0) - (b.k ?? 0)
-  return { units: [...units.values()].sort(byId), crops: [...crops.values(), ...(free.glyphs.length || free.paths.length ? [free] : [])].sort(byId), shows: ink.shows, glyphs: n, own: { ...own, label } }
+  return { units: [...units.values()].sort(byId), names: [...byName.values()].sort((a, b) => a.occurrence - b.occurrence), crops: [...crops.values(), ...(free.glyphs.length || free.paths.length ? [free] : [])].sort(byId), shows: ink.shows, glyphs: n, own: { ...own, label } }
 }
 
 /**
@@ -335,7 +349,8 @@ export function unitRemoval({ id, page, prep, tex, own, charMap, unmapped, ink, 
 
 /**
  * The ink the paper's add-on keeps on a page that meets its units' rectangles (the file's: each line's erase rectangles,
- * each inline placeholder's segments, each label's box; grown by the swap's pad: those a reader may draw over): every glyph the plan (pagePlan's `units`)
+ * each inline placeholder's segments, each label's box, each babel name's box; grown by the swap's pad: those a reader
+ * may draw over): every glyph the plan (pagePlan's `units` and `names`)
  * does not remove, by its outline's box, and every graphic it does not (a rule, an image, a shading), by its box. Where
  * a unit's rectangle meets one, a fill with paper would take it, and the removed page is swapped in instead. Returns
  * x0, y0, x1, y1 stride 4, rounded to a hundredth, for the manifest (fileSwap's `dirty`).
@@ -345,7 +360,7 @@ export function pageDirty(index, page, ink, plan, pad = SWAP_PAD) {
   ink.glyphs.forEach((g, i) => { if (g.n >= 0) at.set(`${g.n}.${g.k}`, i) })
   ink.paths.forEach((m, b) => { if (m >= 0) byPath.set(m, b) })
   const gone = new Set(), goneP = new Set()
-  for (const u of plan?.units ?? []) {
+  for (const u of [...(plan?.units ?? []), ...(plan?.names ?? [])]) {
     for (let q = 0; q + 1 < u.glyphs.length; q += 2) gone.add(at.get(`${u.glyphs[q]}.${u.glyphs[q + 1]}`))
     for (const m of u.paths ?? []) goneP.add(byPath.get(m))
   }
@@ -361,6 +376,7 @@ export function pageDirty(index, page, ink, plan, pad = SWAP_PAD) {
     const lb = u.labels
     for (let o = 0; o + 6 < lb.length; o += 7) if (lb[o + 1] === page) rects.push([lb[o + 2] - pad, lb[o + 6] - pad, lb[o + 4] + pad, lb[o + 5] + pad])
   }
+  for (const nm of index.names?.(page) ?? []) rects.push([nm.x0 - pad, nm.bottom - pad, nm.x1 + pad, nm.top + pad])
   const meets = b => rects.some(r => b[0] < r[2] && b[2] > r[0] && b[1] < r[3] && b[3] > r[1])
   const out = []
   const add = b => { if (meets(b)) out.push(...b.map(v => Math.round(v * 100) / 100)) }
@@ -413,11 +429,12 @@ export function pageRules(index, page, ink) {
  * translated, kept as the original's, v0's own, refused, a table cell whose group is withheld, or one not decided yet
  * (laid later, its group pending) is kept clear of whole; one drawn, in what it keeps. `others(j, id)`: what unit `id`'s
  * fill on page j keeps clear of (its own rectangles not among them: what it keeps is its own fileSwap's); `accept(id, j,
- * kept)`, once it is drawn there. Asked at each fill, never cached past a decision: a page's protection read at its first
- * paint, before its groups were settled, let an accepted group's fill reach 0.5 pt into a withheld group's text, and a
- * drawn unit's kept formula that lost its protection whole let a neighbour painted after it fill 0.5 pt into it. Two
- * drawn units' replaced rectangles may meet (a footnote's lines 9 pt apart), and neither leaves the other's edge. Each
- * unit's boxes on a page are read once.
+ * kept)`, once it is drawn there. A babel name's box is kept clear of the same way, under the id `name:<occurrence>`
+ * (run.mjs paintNames accepts one it draws, and a unit the name leads, its own). Asked at each fill, never cached past
+ * a decision: a page's protection read at its first paint, before its groups were settled, let an accepted group's fill
+ * reach 0.5 pt into a withheld group's text, and a drawn unit's kept formula that lost its protection whole let a
+ * neighbour painted after it fill 0.5 pt into it. Two drawn units' replaced rectangles may meet (a footnote's lines 9 pt
+ * apart), and neither leaves the other's edge. Each unit's boxes on a page are read once.
  */
 export function protection(index) {
   const pages = new Map(), drawn = new Map()
@@ -432,6 +449,7 @@ export function protection(index) {
       for (let o = 0; o + 6 < lb.length; o += 7) if (lb[o + 1] === j) boxes.push([lb[o + 2], lb[o + 6], lb[o + 4], lb[o + 5]])
       if (boxes.length) list.push([id, boxes])
     }
+    for (const nm of index.names?.(j) ?? []) list.push([`name:${nm.occurrence}`, [[nm.x0, nm.bottom, nm.x1, nm.top]]])
     pages.set(j, list)
     return list
   }
@@ -459,11 +477,12 @@ export function protection(index) {
  * filled with paper where no kept ink lies under them (`dirty`, the manifest's: the ink the add-on keeps that meets the
  * page's units' rectangles), and the removed page swapped in where some does. The characters the reading accounts for
  * that the file gives no rectangle (a symbol at a line's end, beside its last word) are erased over their boxes
- * (`extra`). A crop is cut from the original through its placeholder's segments (`clips`, by the piece's index: `rects`
+ * (`extra`). `also`: boxes it replaces besides its own (a babel name its first line now starts with). A crop is cut from
+ * the original through its placeholder's segments (`clips`, by the piece's index: `rects`
  * grown, `own` as they are). Every box [x0, y0, x1, y1], PDF units, y up; `lines`: the rectangles replaced less what the reading keeps (a
  * label, a kept formula: never this unit's residue), for the audit.
  */
-export function fileSwap({ page, lu, kOf, lines, prep, others = [], dirty = [], pad = SWAP_PAD }) {
+export function fileSwap({ page, lu, kOf, lines, prep, others = [], dirty = [], also = [], pad = SWAP_PAD }) {
   const keepKeys = new Set(prep.keep ?? [])
   const resolutions = [...prep.values()].filter(r => r && r.k !== undefined)
   const keptK = new Set(resolutions.filter(r => r.mode === 'kept').map(r => kOf[r.k]).filter(k => k >= 0))
@@ -483,6 +502,8 @@ export function fileSwap({ page, lu, kOf, lines, prep, others = [], dirty = [], 
     if (keepKeys.has(`${r[0]}|${r.slice(1).join()}`)) keep(...boxesOf(lu.erase[j]))
     else mine.push(...boxesOf(lu.erase[j]))
   })
+  // what it replaces besides (a babel name set as its first line's start: run.mjs layout2)
+  mine.push(...also)
   // its inline placeholders' segments: replaced, or kept where the reading keeps them; a display's rows are its own
   for (const [k, row] of lu.ph) {
     if (row.kind === 'display' || row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY)) continue

@@ -157,6 +157,29 @@ describe("the coverage of the original's text area", () => {
     expect(measure({ C: paper, T: paper, drawn: true, x1: 30 })).toEqual({ cells: 4, translated: 2, english: 0, blank: 2 })
     expect(measure({ C: O, T: paper, drawn: false })).toEqual({ cells: 4, translated: 0, english: 4, blank: 0 })
   })
+
+  it("a babel name's reference row is text: drawn in the target's word (names) translated, left in place English (D1a)", () => {
+    const named = [{ id: 'name:1', kind: 'name', orig: ref[0]!.orig }]
+    const of = (C: Uint8ClampedArray, names: { orig: typeof ref[0]['orig']; lines: { baseline: number; size: number; x0: number; x1: number }[]; erase: number[][] }[]) => (pixelPage({ k: 1, view: [0, 0, W, H], W, H, O, C, T: paper, units: [], names, kept: [], items: [], ref: named, drawnText: '' }) as { coverage: { text: Record<string, number> } }).coverage.text
+    expect(of(paper, [{ orig: ref[0]!.orig, lines: [{ baseline: 20, size: 10, x0: 10, x1: 50 }], erase: [[10, 17.5, 50, 27]] }])).toEqual({ cells: 4, translated: 4, english: 0, blank: 0 })
+    expect(of(O, [])).toEqual({ cells: 4, translated: 0, english: 4, blank: 0 })
+  })
+})
+
+describe('generated text left (D1a)', () => {
+  it("counts a page's names left by kind, sums them a fixture and a pool, and gates them down", () => {
+    const page = (p: number, generated: Record<string, number>) => pageEntry(p, {
+      model: { units: { textOn: 1, textDrawn: 1, cellsOn: 0, cellsDrawn: 0, left: {} }, fills: [], geo: [], gaps: [], wrongPageText: 0, droppedPh: 0, cropForeign: 0, modelCells: 100 },
+      check: { missing: [], twice: [], brackets: [], duplicated: [], numbers: { shown: 0, total: 0 }, clipped: 0 }, where: {}, style: [0, 0], drawn: 1, generated,
+    }, null)
+    const es = [page(1, { name: 2 }), page(2, {}), page(3, { name: 1 })]
+    expect(es.map(e => e.entry.generatedLeft)).toEqual([2, 0, 1])
+    const t = fixtureTotals(es.map(e => e.entry), es.map(e => e.frames), 'model')
+    expect(t).toMatchObject({ generatedLeft: 3, generated: { name: 3 } })
+    expect(pooled([t, t], 'model')).toMatchObject({ generatedLeft: 6, generated: { name: 6 } })
+    expect(worse(measure('generatedLeft'), { generatedLeft: 2 }, { generatedLeft: 0 })?.better).toBe(true)
+    expect(worse(measure('generatedLeft'), { generatedLeft: 0 }, { generatedLeft: 1 })?.worse).toBe(true)
+  })
 })
 
 describe('the merge rule', () => {
@@ -241,5 +264,39 @@ describe("a local path as the gate's records keep it (layer-gate/ref.mjs shownPa
     expect(shownPath(['', 'private', 'tmp', 'claude-501', 'session', 'scratchpad', 'floor-v0'].join('/'))).toBe('<scratch>/floor-v0')
     expect(shownPath('/opt/elsewhere/checkout')).toBe('<local>/checkout')
     expect(shownPath('out/relative')).toBe('out/relative')
+  })
+})
+
+describe("the frozen references' babel names (layer-gate/ref.mjs makeRef, withNames: D1a)", () => {
+  // two makers' layout files of one paper: the old one locates units 0 and 2 and no name, the new one its own lines of
+  // them and two names (the abstract's on page 1, the references' on page 2)
+  const unitsOf = () => [[0, 0, 9, 0, 4], [2, 0, 9, 0, 4]]
+  const nameAt = (occ: number, key: number, page: number, x0: number) => [occ, key, page, x0, 700, x0 + 40, 707, 697.5, 10, 0, 0, -1, 0, 72, 540]
+  const old = { units: unitsOf(), lines: [[0, [1, 72, 300, 680, 687, 677.5, 10, 0, 1, 72, 300, 668, 675, 665.5, 10, 0]], [2, [2, 72, 200, 650, 657, 647.5, 10, 0]]], names: [] }
+  const later = (names: number[][]) => ({ units: unitsOf(), lines: [[0, [1, 72, 301, 680, 687, 677.5, 10, 0]], [2, [2, 72, 201, 650, 657, 647.5, 10, 0]]], names })
+  const bytes = (o: object) => new TextEncoder().encode(JSON.stringify(o))
+
+  it("makeRef: the units' rows by id, then the names by occurrence, the names from the first file that locates any", async () => {
+    const { makeRef } = await import('../../lab/pdf/spikes/layer-gate/ref.mjs')
+    const ref = makeRef([bytes(later([nameAt(1, 0, 1, 120), nameAt(3, 1, 2, 72)])), bytes(old)], null)
+    expect(ref.pages['1']).toEqual([[0, 'para', [72, 301, 680, 687, 677.5, 10]], ['name:1', 'name', [120, 160, 700, 707, 697.5, 10]]])
+    expect(ref.pages['2']).toEqual([[2, 'para', [72, 201, 650, 657, 647.5, 10]], ['name:3', 'name', [72, 112, 700, 707, 697.5, 10]]])
+    expect(ref.from.names).toBe(2)
+  })
+
+  it("withNames: every unit's rows byte for byte as they were, the later maker's names after them, earlier names replaced", async () => {
+    const { makeRef, withNames } = await import('../../lab/pdf/spikes/layer-gate/ref.mjs')
+    const ref = makeRef(bytes(old), null)
+    const first = withNames(ref, [bytes(later([nameAt(1, 0, 1, 120), nameAt(3, 1, 2, 72)]))])
+    const units = (r: { pages: Record<string, unknown[][]> }) => Object.fromEntries(Object.entries(r.pages).map(([p, l]) => [p, l.filter(x => x[1] !== 'name')]))
+    expect(JSON.stringify(units(first))).toBe(JSON.stringify(ref.pages))
+    expect(first.pages['1']?.map(r => r[0])).toEqual([0, 'name:1'])
+    expect(first.pages['2']?.map(r => r[0])).toEqual([2, 'name:3'])
+    // again with other names: those replace the first's, the units' rows still the same
+    const again = withNames(first, [bytes(later([nameAt(2, 1, 2, 80)]))])
+    expect(JSON.stringify(units(again))).toBe(JSON.stringify(ref.pages))
+    expect(again.pages['1']?.map(r => r[0])).toEqual([0])
+    expect(again.pages['2']?.map(r => r[0])).toEqual([2, 'name:2'])
+    expect(again.from.names).toBe(1)
   })
 })

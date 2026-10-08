@@ -8,7 +8,11 @@
 // pdfLaTeX and XeLaTeX (and one under LuaLaTeX, a note): every glyph, box and destination where it was, the marks file
 // the same but for its new fields, and each named piece's own ink by its points (layout/stream.mjs), checked by its
 // characters and rules.
-//   pnpm exec tsx lab/pdf/spikes/layout-marks-cases.mjs            (ONLY=stream: the stream's cases alone)
+// The names' cases (D1a): babel's named headings marked (marks.mjs NAMES_TEX, literalNames), each under pdfLaTeX and
+// XeLaTeX, with hyperref and without: every text item where v0 has it, the log the run reads unchanged, and each name's
+// two marks on its glyphs.
+//   pnpm exec tsx lab/pdf/spikes/layout-marks-cases.mjs            (ONLY=stream: the stream's cases alone; ONLY=names:
+//                                                                  the names' alone)
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,7 +20,8 @@ import { join } from 'node:path'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { lastTexLog, latin1, latin1Bytes } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
 import { pageInk } from '../../../src/pdf-reader/engine/layout/ink.mjs'
-import { classOf, encodeLayoutMarks, layoutMarking, layoutMarksOf, MARK_CLASSES, POINTS_TEX, probeSamples, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { NAME_KEYS } from '../../../src/pdf-reader/engine/layout/names.mjs'
+import { classOf, encodeLayoutMarks, layoutMarking, layoutMarksOf, MARK_CLASSES, POINTS_TEX, probeSamples, readMarkProbe, readNameProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { OWNED, OWNED_HOW } from '../../../src/pdf-reader/engine/layout/stream.mjs'
 import { boxDiff, pageBoxes } from './layout-marks-compare.mjs'
 import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
@@ -25,6 +30,8 @@ let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
 /** the stream's own cases alone */
 const STREAM_ONLY = process.env.ONLY === 'stream'
+/** the names' cases alone */
+const NAMES_ONLY = process.env.ONLY === 'names'
 const dir = mkdtempSync(join(tmpdir(), 'layout-marks-cases-'))
 
 // ---------------------------------------------------------------- the documents
@@ -127,24 +134,28 @@ function compileAll(jobs) {
 }
 const jobs = [], queued = []
 /** the source as v0 and v1 of a job, queued: written once the mark probes have answered (prepare) */
-function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', 'v1'], own = true, trace = false } = {}) {
-  const paper = openPaper(new Map([['main.tex', new TextEncoder().encode(src)]]))
-  if (STREAM_ONLY && !name.startsWith('stream-')) return paper
-  queued.push({ name, paper, engine, passes, variants, own, trace })
+function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', 'v1'], own = true, trace = false, files = {} } = {}) {
+  const all = new Map([['main.tex', new TextEncoder().encode(src)], ...Object.entries(files).map(([f, t]) => [f, new TextEncoder().encode(t)])])
+  const paper = openPaper(all)
+  if ((STREAM_ONLY && !name.startsWith('stream-')) || (NAMES_ONLY && !name.startsWith('names-'))) return paper
+  queued.push({ name, paper, engine, passes, variants, own, trace, files: all })
   return paper
 }
 /** v1 with the paper's own switch as the run gets it: the mark probe compiled first, one pass in the paper's engine (the
  *  font probe's compile, `marks`), its answers read; then every job's files written */
 function prepare() {
   const probes = queued.filter(q => q.own && q.variants.includes('v1'))
-  for (const q of probes) { const d = join(dir, `${q.name}-probe`); mkdirSync(d, { recursive: true }); for (const [path, bytes] of probeFiles(q.paper, { marks: true })) writeFileSync(join(d, path), bytes) }
+  for (const q of probes) { const d = join(dir, `${q.name}-probe`); mkdirSync(d, { recursive: true }); for (const [path, bytes] of q.files) writeFileSync(join(d, path), bytes); for (const [path, bytes] of probeFiles(q.paper, { marks: true })) writeFileSync(join(d, path), bytes) }
   compileAll(probes.map(q => ({ name: `${q.name}-probe`, engine: q.engine === 'xelatex' ? 'xelatex -no-pdf' : q.engine, passes: 1, probe: true })))
   for (const q of queued) {
     const switches = q.own ? readMarkProbe(read(`${q.name}-probe`, 'log', 'latin1') ?? '', probeSamples(q.paper.units)) : null
     q.switches = switches
+    q.names = q.own ? readNameProbe(read(`${q.name}-probe`, 'log', 'latin1') ?? '') : null
     for (const v of q.variants) {
       const d = join(dir, `${q.name}-${v}`)
       mkdirSync(d, { recursive: true })
+      // (the paper's own files first: a style the marks rewrite is written over its own)
+      for (const [path, bytes] of q.files) writeFileSync(join(d, path), bytes)
       // v1np: v1 with no points, LAYOUT_TEX as it was before them
       for (const [path, bytes] of originalFiles(q.paper, v === 'v0' ? { lines: true } : { lines: true, layout: MARK_CLASSES, switches })) writeFileSync(join(d, path), v === 'v1np' && path === 'main.tex' ? latin1Bytes(latin1(bytes).replace(POINTS_TEX, '')) : bytes)
       jobs.push({ name: `${q.name}-${v}`, engine: q.engine, passes: q.passes, trace: q.trace })
@@ -221,6 +232,35 @@ queue('twice-xe', twiceSrc, { engine: 'xelatex', variants: ['v1'] })
 queue('twice-lua', twiceSrc, { engine: 'lualatex', variants: ['v1'] })
 // a heading set in capitals keeps its marks' names (a case change leaves them)
 const capsPaper = queue('caps', doc('\\makeatletter\\renewcommand\\section{\\@startsection{section}{1}{\\z@}{3ex}{2ex}{\\normalfont\\bfseries\\MakeUppercase}}\\makeatother', `\\section{Capital $x$ heading}\n${prose(6, () => '')}`), { variants: ['v1'] })
+// the names' cases (D1a): babel's names marked where TeX sets them, each with the keys it must mark and the probe's
+// answer (1: its own text holds a lowercase letter), under pdfLaTeX and XeLaTeX, with hyperref and without
+const NAME_PROSE = Array.from({ length: 3 }, () => prose(14, () => '')).join('\n\n')
+const NAME_BIB = String.raw`\begin{thebibliography}{9}
+\bibitem{a} A. Author. A title of a paper. 2020.
+\end{thebibliography}`
+const NAMES = {
+  // babel's headings: \abstractname in article's abstract, \refname in its bibliography
+  'a babel heading (article: abstract, references)': { src: doc('\\usepackage[english]{babel}', `\\begin{abstract}${prose(12, () => '')}\\end{abstract}\n\\section{One}\n${NAME_PROSE}\n${NAME_BIB}`), keys: ['abstract', 'ref'] },
+  // report's: \contentsname in \tableofcontents, \bibname in its bibliography
+  'a babel heading (report: contents, bibliography)': { src: doc('\\usepackage[english]{babel}', `\\tableofcontents\n\\chapter{One}\n${NAME_PROSE}\n\\section{Two}\n${NAME_PROSE}\n${NAME_BIB}`, '\\documentclass{report}'), keys: ['contents', 'bib'], passes: 3 },
+  // a case change: \MakeUppercase\refname as a heading and in the running heads (the heads' name is the gate's: none)
+  '\\MakeUppercase\\refname': { src: doc('\\makeatletter\\renewenvironment{thebibliography}[1]{\\section*{\\MakeUppercase\\refname}\\@mkboth{\\MakeUppercase\\refname}{\\MakeUppercase\\refname}\\list{\\@biblabel{\\@arabic\\c@enumiv}}{\\settowidth\\labelwidth{\\@biblabel{#1}}\\leftmargin\\labelwidth\\advance\\leftmargin\\labelsep\\usecounter{enumiv}}}{\\endlist}\\makeatother\\pagestyle{headings}', `\\section{One}\n${Array.from({ length: 8 }, () => NAME_PROSE).join('\n\n')}\n${NAME_BIB}\n\\clearpage\n${NAME_PROSE}`), keys: ['ref'] },
+  // a language switch: German's names after \selectlanguage, babel's afterextras
+  'a \\selectlanguage switch': { src: doc('\\usepackage[german,english]{babel}', `\\selectlanguage{german}\n\\begin{abstract}${prose(12, () => '')}\\end{abstract}\n\\section{One}\n${NAME_PROSE}\n${NAME_BIB}`), keys: ['abstract', 'ref'] },
+  // a style writing the name literally in the construct (nips_2017.sty's abstract, naacl's bibliography)
+  'a literal Abstract and References in a style': { src: doc('\\usepackage{literal}', `\\begin{abstract}${prose(12, () => '')}\\end{abstract}\n\\section{One}\n${NAME_PROSE}\n${NAME_BIB}`), keys: ['abstract', 'ref'], files: { 'literal.sty': String.raw`\ProvidesPackage{literal}
+\renewenvironment{abstract}{\vskip .075in\centerline{\large\bf Abstract}\vspace{0.5ex}\begin{quote}}{\par\end{quote}\vskip 1ex}
+\makeatletter
+\def\thebibliography#1{\section*{References\@mkboth{References}{References}}\list{[\arabic{enumi}]}{\settowidth\labelwidth{[#1]}\leftmargin\labelwidth\advance\leftmargin\labelsep\usecounter{enumi}}}
+\def\endthebibliography{\endlist}
+\makeatother
+` } },
+}
+const nameKey = (name, engine, hyper) => `names-${name.replace(/[^A-Za-z0-9]+/g, '-')}-${engine}${hyper ? '-hyperref' : ''}`
+const nameJobs = Object.entries(NAMES).flatMap(([name, c]) => ['pdflatex', 'xelatex'].flatMap(engine => [false, true].map(hyper => {
+  const key = nameKey(name, engine, hyper), src = hyper ? c.src.replace('\n\\begin{document}', '\n\\usepackage{hyperref}\n\\begin{document}') : c.src
+  return { key, name, engine, hyper, c, paper: queue(key, src, { engine, passes: c.passes ?? 2, files: c.files ?? {} }) }
+})))
 // a finding, what the paper's own switch keeps from moving: cite.sty's [super] moves a full stop after a citation before
 // its number, looking past the closing mark (v1 here without the switch)
 queue('super-stop', doc('\\usepackage[super]{cite}', `${prose(12, i => (i % 2 ? ' \\cite{a}.' : ' \\cite{b},'))}\n\n${BIB}`), { own: false })
@@ -471,7 +511,7 @@ console.log(`compiling ${jobs.length} documents in ${dir}, after ${queued.filter
 compileAll(jobs)
 
 // ---------------------------------------------------------------- the checks
-if (!STREAM_ONLY) {
+if (!STREAM_ONLY && !NAMES_ONLY) {
 for (const [name, , engine] of stays) {
   for (const hyper of [false, true]) {
     const key = `${stayKey(name, engine)}${hyper ? '-hyperref' : ''}`
@@ -480,7 +520,7 @@ for (const [name, , engine] of stays) {
     if (!a || !b) { check(label, false, `no PDF (${a ? 'v1' : 'v0'})`); continue }
     const m = moved(a, b), newErrors = errorsOf(`${key}-v1`).filter(e => !errorsOf(`${key}-v0`).includes(e))
     const logA = readLog(`${key}-v0`), logB = readLog(`${key}-v1`)
-    const marks = [...b.dests.keys()].filter(k => /^[pnth]\d/.test(k)).length
+    const marks = [...b.dests.keys()].filter(k => /^(?:[pth]\d|n\d+\.\d+[ab])/.test(k)).length
     check(label, !m.length && !newErrors.length && marks > 0, JSON.stringify({ moved: m.slice(0, 6), newErrors, layoutMarks: marks }))
     check(`${label}: the log the run reads and LaTeX's warnings unchanged`, JSON.stringify(logA) === JSON.stringify(logB), JSON.stringify(logB.filter(l => !logA.includes(l)).slice(0, 4)))
   }
@@ -505,7 +545,7 @@ for (const [name, , engine] of stays) {
   const n = lofPaper.units.findIndex(u => u.kind === 'caption')
   const zebra = lof?.pages.flatMap((p, i) => p.filter(it => it.str.startsWith('Zebra')).map(it => ({ ...it, page: i + 1 }))).find(it => it.page === 2)
   const s = lof?.dests.get(`${n}s`)
-  const onList = [...(lof?.dests ?? [])].filter(([k, d]) => d.page === 1 && !/^c[12]-/.test(k)).map(([k]) => k)
+  const onList = [...(lof?.dests ?? [])].filter(([k, d]) => d.page === 1 && !/^c[12]-/.test(k) && !/^n\d+\.[a-z]+\.[se]$/.test(k)).map(([k]) => k)
   check('a caption in the list of figures makes no mark there', !!zebra && near(s, 2, zebra.x, zebra.y, 2) && !onList.length, JSON.stringify({ mark: s, glyph: zebra, onList }))
 }
 {
@@ -593,6 +633,37 @@ for (const [job, label] of [['natmove-stop', "natbib [super] with natmove, a cit
 
 }
 
+// ---------------------------------------------------------------- the names' checks
+if (!STREAM_ONLY) {
+  for (const j of nameJobs) {
+    const label = `a babel name: ${j.name} (${j.engine}${j.hyper ? ', with hyperref' : ''})`
+    const [a, b] = [await pdfOf(`${j.key}-v0`), await pdfOf(`${j.key}-v1`)]
+    if (!a || !b) { check(label, false, `no PDF (${a ? 'v1' : 'v0'})`); continue }
+    const m = moved(a, b), newErrors = errorsOf(`${j.key}-v1`).filter(e => !errorsOf(`${j.key}-v0`).includes(e))
+    check(`${label}: no line moves`, !m.length && !newErrors.length, JSON.stringify({ moved: m.slice(0, 6), newErrors }))
+    const logA = readLog(`${j.key}-v0`), logB = readLog(`${j.key}-v1`)
+    check(`${label}: the log the run reads and LaTeX's warnings unchanged`, JSON.stringify(logA) === JSON.stringify(logB), JSON.stringify(logB.filter(l => !logA.includes(l)).slice(0, 4)))
+    // each key's occurrences, both marks set, the start at its first glyph and the end at its last (2 pt), its names in
+    // lower case whatever the glyphs' case, and none on a contents page or in a running head
+    const bad = [], found = {}
+    for (const [n, d] of b.dests) {
+      const x = /^n(\d+)\.([a-z]+)\.s$/.exec(n)
+      if (!x) { if (/^n\d+\.[^.]+\.[se]$/.test(n) && !/^n\d+\.[a-z]+\.[se]$/.test(n)) bad.push({ n, why: 'a key not in lower case' }); continue }
+      const e = b.dests.get(`n${x[1]}.${x[2]}.e`)
+      if (!e) { bad.push({ n, why: 'no end mark' }); continue }
+      const items = b.pages[d.page - 1].filter(it => Math.abs(it.y - d.y) < 2 && it.x >= d.x - 2 && it.x <= e.x + 0.5)
+      const text = items.map(it => it.str).join('').replace(/\s+/g, '')
+      if (!items.length || e.page !== d.page || Math.abs(e.y - d.y) > 0.5 || Math.abs(items[0].x - d.x) > 2) { bad.push({ n, d, e, text, why: 'not on its glyphs' }); continue }
+      found[x[2]] = (found[x[2]] ?? 0) + 1
+    }
+    const missing = j.c.keys.filter(k => !found[k])
+    check(`${label}: each name's marks on its glyphs`, !bad.length && !missing.length, JSON.stringify({ bad: bad.slice(0, 4), missing, found }))
+    // (the probe: each key marked holds a lowercase letter, \MakeUppercase's too: its own text is "References")
+    const q = queued.find(x => x.name === j.key), probe = q?.names ?? {}
+    check(`${label}: the probe's answer for each name marked, 1`, j.c.keys.every(k => probe[k] === 1) && Object.keys(probe).every(k => NAME_KEYS.includes(k)), JSON.stringify(probe))
+  }
+}
+
 // ---------------------------------------------------------------- the stream's checks
 /** a compile's ink by its operator lists (pageInk, the points among it) and its axt- destinations, its document kept */
 async function inkOf(name) {
@@ -655,7 +726,7 @@ const OWN = {
   C: [['$\\phi$', '\u03d5'], ['$', glyphsOf], ['\\cite{one}', '[1]'], ['call:Note ', null], ['\\begin{align}', (src, nth) => rowsOf(src.trim(), [1, 9, 21, 37][nth])]],
   D: [['$b_', glyphsOf], ['$', null]],
 }
-for (const s of [...streams, luaStream]) {
+for (const s of NAMES_ONLY ? [] : [...streams, luaStream]) {
   const label = `the stream, ${s.name} (${s.engine})`
   const [a, b] = [await inkOf(`${s.key}-v1`), await inkOf(`${s.key}-v1np`)]
   if (!a || !b) { check(`${label}: compiled`, false, `no PDF (${a ? 'v1np' : 'v1'})`); continue }
@@ -728,7 +799,7 @@ for (const s of [...streams, luaStream]) {
 }
 
 // TeX's own boxes: the points' nodes out (the corpus check's comparison), nothing else different
-for (const name of Object.keys(TRACED)) {
+for (const name of NAMES_ONLY ? [] : Object.keys(TRACED)) {
   const boxesOf = v => { const log = read(`${traceKey(name)}-${v}`, 'log', 'latin1') ?? ''; const out = [], lines = log.split('\n'); for (let i = 0; i < lines.length; i++) if (/^Completed box being shipped out \[/.test(lines[i])) { const at = i; while (i < lines.length && lines[i] !== '') i++; out.push(...lines.slice(at, i), '') } return pageBoxes(out.join('\n')) }
   const [a, b] = [boxesOf('v1np'), boxesOf('v1')], d = boxDiff(a, b)
   check(`the stream, TeX's boxes with the points and without them the same: ${name}`, a.length > 0 && a.length === b.length && !d.length, JSON.stringify({ pages: [a.length, b.length], differences: d.length, first: d.slice(0, 3).map(x => [x.page, x.v0, x.v1]) }))

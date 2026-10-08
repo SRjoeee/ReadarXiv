@@ -14,7 +14,7 @@ describe('the browser entries', () => {
     const layer = await import('@/pdf-reader/engine/layer.mjs')
     expect(typeof layer.openLayer).toBe('function')
     expect(typeof layer.readBundle).toBe('function')
-    expect(layer.BUNDLE).toBe('1')
+    expect(layer.BUNDLE).toBe('2')
   })
   it('view imports, and holds what the reading view needs', async () => {
     const view = await import('@/pdf-reader/engine/view.mjs')

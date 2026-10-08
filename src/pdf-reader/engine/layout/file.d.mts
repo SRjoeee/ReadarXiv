@@ -2,7 +2,9 @@
 export { LayoutRefusal } from './json.mjs'
 /** the maker's version: raised with any change to what the maker writes under the schema; it enters a bundle's key, and a file
  *  names it as `layout`, which a reader reads for its shape alone: a file is refused by its `schema` (§9.3 of the plan) */
-export declare const LAYOUT: '3'
+export declare const LAYOUT: '4'
+/** the file's schema: 2 holds `names` */
+export declare const LAYOUT_SCHEMA: 2
 /** a new-style arXiv identifier, or an old one (archive, subject class, a slash and 7 digits); never a version suffix */
 export declare const isPaperId: (id: unknown) => id is string
 /** a paper's version at most */
@@ -16,6 +18,12 @@ export declare const UNIT_KINDS: readonly ['para', 'heading', 'caption', 'footno
 export declare const PH_KINDS: readonly ['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other']
 export declare const LABEL_KINDS: readonly ['number', 'item', 'caption', 'footnote']
 export declare const UNIT_FLAG: { readonly TITLE: 1; readonly FRONT: 2; readonly CENTRED: 4 }
+export { NAME_KEYS, type NameKey } from './names.mjs'
+import type { NameKey } from './names.mjs'
+/** a name's flags: centred in its column; its glyphs capitals where its macro's own text is not */
+export declare const NAME_FLAG: { readonly CENTRED: 1; readonly CAPITALS: 2; readonly RUN_IN: 4 }
+/** a file's names at most */
+export declare const NAMES_MAX: number
 export declare const PH_FLAG: { readonly SOURCE_BRACKETS: 1; readonly NUMBERED: 2; readonly RAISED: 4; readonly LOWERED: 8; readonly EMPTY: 16; readonly LOST: 32; readonly TEXT: 64 }
 /** the placeholders the layer may draw as text in the page's face, whose own text the file may hold */
 export declare const PAGE_TEXT_KINDS: readonly ['cite', 'ref', 'eqref']
@@ -27,7 +35,7 @@ export declare const PAGE_TEXT_ALL: number
 export declare function isPageText(s: unknown): s is string
 /** prep/<mid>/layout-<sha256>.json (spec §4.2). arXiv's PDF units, each page unrotated, y up, pages 1-based */
 export interface LayoutFile {
-  schema: 1
+  schema: 2
   layout: string
   pdfjs: string
   paper: { id: string; version: number; pages: number }
@@ -45,6 +53,10 @@ export interface LayoutFile {
   pageText: [id: number, k: number, text: string][]
   /** per unit, the lines its source does not write, by index rising: held (no slot, never erased) */
   held: [id: number, lines: number[]][]
+  /** each occurrence of a babel name TeX set (marks.mjs's name marks), by occurrence rising: occurrence, key (NAME_KEYS),
+   *  page, x0, baseline, x1, top, bottom, size, font, flags (NAME_FLAG), unit (the unit a RUN_IN name leads, else -1),
+   *  glue (the original's space between its joint and that unit's text, 0 where not RUN_IN), its TeX column's x0 and x1 */
+  names: number[][]
 }
 /** bytes, then UTF-8, then values and nesting counted, then JSON.parse, then every bound; a file of another `schema` is
  *  refused, one of another maker's `layout` is read; throws LayoutRefusal */
@@ -66,11 +78,24 @@ export interface LayoutUnit {
   /** the lines its source does not write: no slot, never erased (rising, never its first) */
   held: readonly number[]
 }
+/** a name's occurrence as the layer reads it */
+export interface LayoutName {
+  occurrence: number; key: NameKey; page: number; x0: number; baseline: number; x1: number; top: number; bottom: number; size: number; font: number
+  centred: boolean; capitals: boolean
+  /** the unit whose first line it leads (RUN_IN: set right before it on that line), else -1 */
+  unit: number
+  /** RUN_IN: the original's space after its joint, before the unit's text (PDF units, 0 for none) */
+  glue: number
+  /** its TeX column's text edges: the room it has on its line */
+  cx0: number; cx1: number
+}
 export interface LayoutIndex {
   readonly file: LayoutFile
   unit(id: number): LayoutUnit | null
   /** the located units with a frame on the page, ids rising */
   onPage(page: number): readonly number[]
+  /** the names on the page, in the file's order */
+  names(page: number): readonly LayoutName[]
   /** throws a RangeError for a page not of the file */
   view(page: number): readonly [number, number, number, number]
   /** throws a RangeError for an index not of `fonts` */

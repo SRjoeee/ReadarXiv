@@ -48,6 +48,7 @@ import { loadHyphenation } from './hyph.mjs'
 import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
 import { fileSwap, protection } from './removal.mjs'
+import { SWAP_PAD, swapRects } from '../layer/swap.mjs'
 import { locatedWhole, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
@@ -415,8 +416,10 @@ function needsOf(K, N, passes, fileOnly) {
  * the old way, erased and put back, as on a page the add-on did not remove. Null: v0's own drawing.
  * `labels`: { captions }, which of the two floats, figures and tables, the final names in the target's language (the
  * record's `captions`, live.mjs captionsOf): a float's label is drawn in the target's name for it, which the layout rules
- * give (`rules`), where the final's is (layer2.mjs labelInTarget), else kept as the original's ink. A table's group (each
- * record unit's `group`) is drawn whole or not at all.
+ * give (`rules`), where the final's is (layer2.mjs labelInTarget), else kept as the original's ink; and each babel name
+ * the layout file locates (a generated heading: Abstract, References, Contents, …) in the target's word for it, unless the
+ * target has none: the captions do not decide for a name TeX identified (layer2.mjs nameInTarget; paintNames). A table's group
+ * (each record unit's `group`) is drawn whole or not at all.
  * `rules`: the layout rule set (rules/layout.mjs RuleSet) every choice made for the target is read from, resolved once at
  * the open and fixed for the run: the fit's parameters (leading, tracking, floor, adaptive fill and the rest), how a line
  * breaks, the hyphenation patterns and their minimums, the CJK family, the names of a float. Absent: BUILTIN_RULES. A
@@ -701,7 +704,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    */
   const swapOf = (p, pg) => {
     const t = performance.now()
-    const sw = fileSwap({ page: pg, lu: p.tex.lu, kOf: p.tex.kOf, lines: p.tex.lines, prep: p.prep, others: guard.others(pg, p.id), dirty: dirtyOf(pg) })
+    // (a name set as its first line's start is its own: replaced with it, and kept clear of no more)
+    const nm = p.lead?.nm.page === pg ? p.lead.nm : null
+    if (nm) guard.accept(`name:${nm.occurrence}`, pg, [])
+    const sw = fileSwap({ page: pg, lu: p.tex.lu, kOf: p.tex.kOf, lines: p.tex.lines, prep: p.prep, others: guard.others(pg, p.id), dirty: dirtyOf(pg), also: nm ? [[nm.x0, nm.bottom, nm.x1, nm.top]] : [] })
     // (drawn there from now: what it replaces no longer kept clear of, what it keeps still)
     guard.accept(p.id, pg, sw.kept)
     const px = pxOf(pg)
@@ -751,6 +757,101 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     T.ops += tCompose - tOps
     T.compose += tSvg - tCompose
     T.svg += performance.now() - tSvg
+  }
+
+  // ---- babel's names (D1a): each generated heading the layout file locates on a page (layout/file.mjs `names`: Abstract,
+  // References, Contents, …), set in the target's word for it wherever TeX identified the heading and the target has a
+  // word (layer2.mjs nameInTarget), painted as its page is drawn and before the page's units, so that a unit's put-back
+  // never returns a name's characters: its ink erased as a label's is (its characters accounted, what else its box covers
+  // put back; over the text-removed page, its box filled with paper or the removed page swapped in where kept ink lies
+  // under it, clear of every unit's rectangles), its word set at the original's size, weight and slant, its left edge kept
+  // or, centred, its centre, shrunk into the room on its line (its TeX column's text edges, the file's, and its neighbours'
+  // characters) to the script's last floor at most (P.floorMin), else left the original's (`unfit`). A name that leads a
+  // unit (RUN_IN: IEEEtran's "Abstract—…") is that unit's lead: set as the start of its first line whatever its width, the
+  // original's joint and glue after it and the translation after both (layout2), and left the original's with its unit.
+  // `names`: each name of the pages laid, drawn or why not
+  const names = []
+  /** a run's style from its characters (the first not a formula's): a class's bold or italic heading, small capitals; its
+   *  design the paper's */
+  const styleOfChars = cs => {
+    const s0 = cs.find(c => c.st?.fam !== 'math')?.st ?? cs[0]?.st ?? {}
+    return { fam: s0.fam === 'math' || !s0.fam ? 'serif' : s0.fam, bold: !!s0.bold, italic: !!s0.italic, caps: !!s0.caps, design: s0.design ?? designs.serif }
+  }
+  /** each unit's lead, by the unit: the name RUN_IN before its first line, its record, its word, style and characters */
+  const leadsOf = new Map()
+  const paintNames = async pg => {
+    if (!tex || !labels) return
+    for (const nm of tex.index.names(pg)) {
+      const rec = { occurrence: nm.occurrence, key: nm.key, page: pg, drawn: false, why: null, chars: [], box: { x0: nm.x0, x1: nm.x1, baseline: nm.baseline, top: nm.top, bottom: nm.bottom, size: nm.size } }
+      names.push(rec)
+      const mine = (chars2[pg - 1] ?? []).filter(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 >= nm.x0 - 0.5 && (c.x0 + c.x1) / 2 <= nm.x1 + 0.5 && Math.abs(c.yb - nm.baseline) < 0.3 * nm.size)
+      if (!mine.length) { rec.why = 'unread'; continue }
+      const text = L2.nameInTarget(nm, mine.map(c => c.ch).join(''), R.labels, to)
+      if (text === null) { rec.why = !R.labels?.[nm.key] ? 'no word' : 'same'; continue }
+      // its style: its characters' (a class's bold or italic heading, small capitals), its design the paper's
+      const st = styleOfChars(mine)
+      // (leading a unit: that unit's, once it is laid)
+      if (nm.unit >= 0) {
+        Object.assign(rec, { why: 'inline: its unit not drawn', text, unit: nm.unit })
+        leadsOf.set(nm.unit, { nm, rec, text, st, chars: mine.map(c => ({ ...c, page: pg })) })
+        continue
+      }
+      const face = faceOf(st, /[\u2e80-\u9fff\uac00-\ud7af\u3040-\u30ff\uf900-\ufaff]/.test(text) ? 'cjk' : 'latin', to)
+      if (FS) {
+        const tFonts = performance.now()
+        const no = await FS.check([{ face, text }])
+        fontWait += performance.now() - tFonts
+        if (disposed) return
+        if (no) { rec.why = no.why; continue }
+      }
+      // its room on its line: its TeX column's text edges (the file's), or the next characters of the line either side
+      // (a quarter of an em clear), never narrower than its own box
+      const mineSet = new Set(mine)
+      let left = nm.cx0, right = nm.cx1
+      for (const c of chars2[pg - 1] ?? []) {
+        if (mineSet.has(c) || !/\S/.test(c.ch) || Math.abs(c.yb - nm.baseline) >= 0.4 * nm.size) continue
+        if (c.x1 <= nm.x0 + 0.1) left = Math.max(left, c.x1 + 0.25 * nm.size)
+        else if (c.x0 >= nm.x1 - 0.1) right = Math.min(right, c.x0 - 0.25 * nm.size)
+      }
+      left = Math.min(left, nm.x0); right = Math.max(right, nm.x1)
+      const w = L2.widthOf(text, face) * nm.size, mid = (nm.x0 + nm.x1) / 2
+      const room = nm.centred ? 2 * Math.min(mid - left, right - mid) : right - nm.x0
+      const k = w > room ? room / w : 1
+      if (k < P.floorMin - 1e-9) { Object.assign(rec, { why: 'unfit', text, w: r1(w), room: r1(room) }); continue }
+      const size = nm.size * k, x = nm.centred ? mid - (w * k) / 2 : nm.x0
+      // its ink erased: its characters the unit-like text it is, accounted on the page before any unit is painted there
+      const keys = mine.map(c => `${pg}|${c.item}|${c.k}`)
+      if (!accounted[pg]) accounted[pg] = new Set()
+      for (const key of keys) accounted[pg].add(key)
+      const r = rows[pg - 1], px = pxOf(pg), box = [nm.x0, nm.bottom, nm.x1, nm.top], ops = []
+      const dev = b => { const [ax, ay] = px(b[0], b[3]), [bx, by] = px(b[2], b[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)] }
+      if (RM?.mode === 'draw' && removedPage(pg) && guard) {
+        const self = `name:${nm.occurrence}`, dirty = dirtyOf(pg)
+        const meets = (q, d) => d[0] < q[2] && d[2] > q[0] && d[1] < q[3] && d[3] > q[1]
+        const swap = [], fill = []
+        for (const q of swapRects([box], guard.others(pg, self), SWAP_PAD)) (dirty.some(d => meets(q, d)) ? swap : fill).push(q)
+        guard.accept(self, pg, [])
+        if (swap.length) ops.push({ op: 'swap', page: pg, rects: swap.map(dev) })
+        if (fill.length) ops.push({ op: 'paper', rects: fill.map(dev) })
+        const [ax, ay, aw, ah] = dev(box)
+        audit.push({ what: 'erase', unit: -1, name: nm.occurrence, page: pg, box: [ax, ay, ax + aw, ay + ah], swap: true })
+      } else {
+        const [ax, ay, aw, ah] = dev([nm.x0 - 0.3, nm.bottom - 0.5, nm.x1 + 0.3, nm.top + 0.5])
+        ops.push({ op: 'erase', box: [ax, ay, aw, ah] })
+        audit.push({ what: 'erase', unit: -1, name: nm.occurrence, page: pg, box: [ax, ay, ax + aw, ay + ah] })
+        if (restoring) {
+          if (!keptOf[pg]) keptOf[pg] = { keys: new Set(), hulls: [] }
+          inkOf(pg)
+          pageItems[pg] ??= L2.pageItemsOf(chars2[pg - 1] ?? [], pg, px, inks[pg])
+          const back = L2.restoreUnaccounted([[ax, ay, ax + aw, ay + ah]], px, { items: pageItems[pg].items, cover: pageItems[pg].cover, ink: inks[pg], accounted: accounted[pg], kept: keptOf[pg] }, audit, -1, pg)
+          if (back) ops.push(back)
+        }
+      }
+      for (const o of ops) r.ops.push(o)
+      if (r.right) L2.drawOps(r.right.getContext('2d'), ops, 1, sourceOn)
+      r.svg.insertAdjacentHTML('beforeend', L2.svgOfName({ occurrence: nm.occurrence, text, x, baseline: nm.baseline, size, face }, cssOf(pg), scale))
+      Object.assign(rec, { drawn: true, text, size: r1(size), x: r1(x), w: r1(w * k), chars: mine.map(c => ({ ...c, page: pg })) })
+    }
   }
 
   // the columns of each page, as its paragraphs' lines span them: a line centred in its column (a caption under its
@@ -926,6 +1027,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // (the time the font waits of the unit in hand took, so that its timings are its own work's: lap())
   let fontWait = 0
   const lap = () => performance.now() - fontWait
+  /** a unit whose first line a name leads, left the original's after all: the name with it */
+  const unlead = p => {
+    if (!p.lead) return
+    const { rec } = p.lead
+    delete rec.size; delete rec.x
+    Object.assign(rec, { drawn: false, why: `inline: ${p.why ?? 'its unit unfit'}`, chars: [] })
+    p.lead = null
+  }
   const layout2 = async p => {
     const t0 = lap()
     // the unit's lines grown over words the anchors left out beside them, then its first line's edge snapped back to
@@ -991,6 +1100,31 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const r0 = p.rects[0], lx0 = Math.min(...prep.label.chars.map(c => c.x0))
       if (r0 && Number.isFinite(lx0) && lx0 < r0[1] - 0.5 && prep.label.chars.every(c => c.page === r0[0])) p.rects[0] = [r0[0], lx0, r0[2], r0[3], r0[4]]
     }
+    // its lead (paintNames: a name RUN_IN before its first line): the name's word in its own style, then the original's
+    // joint as TeX set it (the characters between the name and the unit's text: the file's label of the unit, whichever
+    // geometry v0 lays it by) and its glue, the translation after both; the line starting where the name does, their
+    // characters the unit's text. The same lead a float's label in the target's name is
+    const ld = leadsOf.get(p.id)
+    if (ld && p.rects[0]?.[0] === ld.nm.page) {
+      const nameKeys = new Set(ld.chars.map(L2.charKey)), lb = tex.index.unit(p.id)?.labels ?? [], pg = ld.nm.page
+      const joint = []
+      for (let o = 0; o + 6 < lb.length; o += 7) {
+        if (lb[o + 1] !== pg) continue
+        const x0 = lb[o + 2], x1 = lb[o + 4], top = lb[o + 5], bottom = lb[o + 6]
+        for (const c of chars2[pg - 1] ?? []) if (/\S/.test(c.ch) && (c.x0 + c.x1) / 2 >= x0 - 0.5 && (c.x0 + c.x1) / 2 <= x1 + 0.5 && c.yb >= bottom - 0.5 && c.yb <= top + 0.5 && !nameKeys.has(L2.charKey({ ...c, page: pg }))) joint.push({ ...c, page: pg })
+      }
+      joint.sort((a, b) => a.x0 - b.x0)
+      const jText = joint.map(c => c.ch).join('')
+      // (the glue in em of the unit's own size, its first line's in the file: tokensOf2 sets it at the size the unit is drawn)
+      const size0 = tex.index.unit(p.id)?.lines[6] ?? ld.nm.size
+      prep.lead = { parts: [{ text: ld.text, st: ld.st }, ...(jText ? [{ text: jText, st: styleOfChars(joint) }] : [])], gap: ld.nm.glue / size0 }
+      prep.label = { x1: Math.max(ld.nm.x1, ...joint.map(c => c.x1)), text: ld.chars.map(c => c.ch).join('') + jText, chars: [...ld.chars, ...joint], drawn: ld.text + jText }
+      for (const c of prep.label.chars) prep.cat?.set(L2.charKey(c), 'acc')
+      const r0 = p.rects[0]
+      if (ld.nm.x0 < r0[1]) p.rects[0] = [r0[0], ld.nm.x0, r0[2], r0[3], r0[4]]
+      p.lead = ld
+      Object.assign(ld.rec, { drawn: true, why: null, size: r1(ld.nm.size), x: r1(ld.nm.x0), chars: ld.chars })
+    }
     // iteration 3: each crop over the ink it touches (its page's ink map)
     for (const r of prep.values()) {
       if (r?.mode !== 'crop') continue
@@ -1016,7 +1150,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (P.borrow && p.unit.kind !== 'cell') for (const b of p.blocks) b.freeOf = () => freeFor(b, s)
     const t2 = lap()
     // (the label's own style: a class's bold or italic label)
-    const lead = prep.label?.drawn ? { text: prep.label.drawn, st: (st => (st && st.fam !== 'math' ? { bold: !!st.bold, italic: !!st.italic } : {}))(prep.label.chars[0]?.st) } : null
+    const lead = prep.lead ?? (prep.label?.drawn ? { parts: [{ text: prep.label.drawn, st: (st => (st && st.fam !== 'math' ? { bold: !!st.bold, italic: !!st.italic } : {}))(prep.label.chars[0]?.st) }] } : null)
     // the faces the unit's runs are set in, served and loaded before a width is taken in any of them (one taken before its
     // slice is there would stay in the cache): the tokens read once with no measure, their faces and texts checked; a
     // unit with a character no served slice holds, or a slice that does not load, stays the original's
@@ -1026,7 +1160,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       fontWait += performance.now() - tFonts
       // (let go while its faces loaded: nothing more of it, not even its measures, in roles a newer layer may have set)
       if (disposed) return
-      if (no) { p.refused = true; p.why = no.why; p.missing = no.missing; return }
+      if (no) { p.refused = true; p.why = no.why; p.missing = no.missing; unlead(p); return }
     }
     const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead)
     const t3 = lap()
@@ -1056,7 +1190,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (p.layout.clipped) {
       const further = fitFurther(p, tokens, s)
       if (further) { p.layout = further.layout; p.blocks = further.blocks; if (further.P) { p.P = further.P; p.clear = further.clear } }
-      else { p.refused = true; return }
+      else { p.refused = true; unlead(p); return }
     }
     settleLayout(p)
     const t4 = lap()
@@ -1127,6 +1261,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     for (const p of laid[pg]) {
       if (p.refused || p.unit.kind === 'cell' || !p.prep?.cat) continue
       for (const c of p.prep.uc ?? []) if (c.page === pg && !c.sep && !c.space && p.prep.cat.get(L2.charKey(c)) === 'acc') accounted.push([c.x0, c.yb - 0.25 * c.size, c.x1, c.yb + 0.88 * c.size])
+      for (const c of p.lead?.chars ?? []) if (c.page === pg) accounted.push([c.x0, c.yb - 0.25 * c.size, c.x1, c.yb + 0.88 * c.size])
     }
     const stays = map ? stayingInk({ map, toDev: dev, toPdf: (x, y) => vw.convertToPdfPoint(x / dpr, y / dpr), accounted, dirty: removedPage(pg) ? dirtyOf(pg) : [] }) : () => -Infinity
     const moved = packPage(pg, laid[pg], rectsByPage.get(pg) ?? [], chars2[pg - 1] ?? [], stays, P.borrowGap)
@@ -1390,6 +1525,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const pg = drawnTo + 1
     const t0 = performance.now()
     await drawPage(pg)
+    // (the page's names, before its units: layer2.mjs nameInTarget)
+    if (!disposed) await paintNames(pg)
     const t1 = performance.now()
     await settle(need.lay[pg])
     const waited = performance.now() - t1
@@ -1435,6 +1572,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
 
   return {
     N, P, rows, placed, skipped, stats, audit, order, ms, pageMs, pageTimes, chars: chars2, views,
+    /** babel's names of the pages laid (D1a): each { occurrence, key, page, drawn, why, chars, box (the original's), and
+     *  where drawn its text, size, x and width } */
+    names,
     /** the layout rule set the run was opened with (rules/layout.mjs): its schema and version */
     rules: { schema: RULES_SCHEMA, version: R.version },
     get designs() { return designs },
@@ -1556,12 +1696,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       needsCopy()
       const here = placed.filter(p => p.pages.includes(pg) && !p.refused)
       const only = rows.map((r, i) => (i === pg - 1 ? r : { ...r, base: false }))
-      return checkAll({ N, placed: here, rows: only, pxOf, toPdf, chars2, audit, cols: colsOf, cellRects })
+      return checkAll({ N, placed: here, rows: only, pxOf, toPdf, chars2, audit, cols: colsOf, cellRects, named: names.filter(n => n.drawn && n.page === pg) })
     },
     /** the prototype's completeness checker over every page still held (main.js check=1's window.__result.check) */
     check() {
       needsCopy()
-      return checkAll({ N, placed: placed.filter(p => !p.refused), rows, pxOf, toPdf, chars2, audit, cols: colsOf, cellRects })
+      return checkAll({ N, placed: placed.filter(p => !p.refused), rows, pxOf, toPdf, chars2, audit, cols: colsOf, cellRects, named: names.filter(n => n.drawn) })
     },
   }
 }

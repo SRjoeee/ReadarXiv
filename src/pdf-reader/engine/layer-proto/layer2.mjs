@@ -772,6 +772,24 @@ export function labelInTarget(label, names, captions, to) {
   const punct = m[3] || ((label.chars ?? []).map(c => c.ch).join('').match(/[.:]$/)?.[0] ?? '')
   return `${name} ${m[2]}${punct}`
 }
+/**
+ * A babel name (D1a: a generated heading the layout file locates, layout/file.mjs `names`) as the layer sets it in the
+ * target: the target's word for its key (the layout rules' labels: babel's [captions]), in capitals where the original's
+ * glyphs are and its macro's own text is not (`capitals`: a class's case change, which the target's word takes too).
+ * Wherever TeX identified the heading (its macro, a style's literal by the definition it sits in, a name after the
+ * paper's own \selectlanguage): what a compile of the translation sets there (live.mjs captionsOf) does not decide, as
+ * it does a float's label (the coordinator's ruling on D1a's I4; PDF-READER §18.1). Null where the target has no word for
+ * it (an empty one keeps the original's) or the word is the original's already (`own`, its characters)
+ */
+export function nameInTarget(name, own, labels, to) {
+  const word = labels?.[name.key]
+  if (!word) return null
+  const text = name.capitals ? word.toLocaleUpperCase(to) : word
+  return text.replace(/\s+/g, '') === String(own ?? '').replace(/\s+/g, '') ? null : text
+}
+/** a text's width at size 1 in a face (its run's at 100 px over 100: the canvas's, cached), for a name's room */
+export const widthOf = (s, face) => w100(s, face) / 100
+
 /** what a label reads as: a number, a mark, an item's, or a float's or a theorem's name and number */
 const LABEL = /^(?:[\d*†‡§¶•◦▪–·]{1,3}|\(?[a-z0-9ivx]{1,4}[.)]|(?:Figure|Fig\.|FIGURE|FIG\.|Table|TABLE|Algorithm|ALGORITHM|Listing|Theorem|Lemma|Definition|Proposition|Corollary|Remark|Example|Assumption)\s*[\dIVXL]+(?:\.\d+)?[a-z]?[.:]?)$/
 
@@ -1648,9 +1666,11 @@ function w100(s, face) {
 /**
  * A unit's pieces as tokens: { s, st, face, cls ('cjk'|'latin'), w100, glue (no break before), punct ('open'|'close'),
  * asp (CJK–Latin autospace before it), hyph (a language to hyphenate it in) }, { space }, { crop }, { sup }. `base`: the
- * unit's style ({ fam, bold, italic, caps, design }); `designs`: the paper's serif, sans and mono designs. `lead`: text
- * set before the unit's own, in its own style ({ text, st }: a float's label in the target's name, labelInTarget), a
- * space after it. `measure(s, face)`: a run's width at 100 px (the canvas's, cached); a host passes its own to read the
+ * unit's style ({ fam, bold, italic, caps, design }); `designs`: the paper's serif, sans and mono designs. `lead`: what
+ * the unit's first line starts with before its own text, each part in its own style ({ parts: [{ text, st }], gap }: a
+ * float's label in the target's name, labelInTarget; a run-in heading and the joint TeX set after it, run.mjs), then
+ * `gap`: a space where it is undefined, else that many em of the unit's size after the lead's last character, no place
+ * to break (the original's: TeX's \labelsep after amsthm's "Proof.", none after IEEEtran's dash). `measure(s, face)`: a run's width at 100 px (the canvas's, cached); a host passes its own to read the
  * tokens (their faces and texts) before any face is loaded, without a width entering the cache that a face not yet there
  * would give
  */
@@ -1684,7 +1704,9 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     for (const m of s.matchAll(/\s+|\S+/g)) {
       const chunk = m[0]
       if (/^\s+$/.test(chunk)) {
-        if (tokens.length && !lastIsSpace()) tokens.push({ space: true, st, face: faceOf(st, 'latin', to), w100: measure(' ', faceOf(st, 'latin', to)) })
+        // (none right after a lead whose glue is the original's: the unit's text begins after it, its own white space
+        // TeX's to skip)
+        if (tokens.length && !lastIsSpace() && !tokens.at(-1).leadEnd) tokens.push({ space: true, st, face: faceOf(st, 'latin', to), w100: measure(' ', faceOf(st, 'latin', to)) })
         continue
       }
       // the chunk by class: CJK characters, and the runs between them
@@ -1718,7 +1740,16 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       })
     }
   }
-  if (lead?.text) { pushText(lead.text, { ...base, ...lead.st }, { label: true }); pushText(' ', { ...base, ...lead.st }) }
+  if (lead?.parts?.length) {
+    for (const part of lead.parts) pushText(part.text, { ...base, ...part.st }, { label: true })
+    const st = { ...base, ...lead.parts.at(-1).st }
+    if (lead.gap === undefined) pushText(' ', st)
+    else if (tokens.length) {
+      const t = tokens[tokens.length - 1]
+      t.leadEnd = true
+      if (lead.gap > 0) { t.w100 += 100 * lead.gap; t.kern = true }
+    }
+  }
   unit.pieces.forEach((p, k) => {
     if (p.t === 'text') {
       pushText(p.s.replace(/\n/g, ' ').replace(/---/g, '—').replace(/--/g, '–').replace(/``/g, '“').replace(/''/g, '”'), style())
@@ -2362,7 +2393,7 @@ export function drawOps(ctx, ops, z, sourceOf) {
  * `restore`: { items ([{ chars, keys }] of the page), accounted (Set), kept, ink, cover }. Returns the restore operation
  * (unitOps'), its boxes in whole device pixels as v0 drew them, or null.
  */
-function restoreUnaccounted(erased, px, { items, accounted, kept, ink, cover }, audit, id, page) {
+export function restoreUnaccounted(erased, px, { items, accounted, kept, ink, cover }, audit, id, page) {
   const boxes = []
   // the erased boxes' own extent first: most of the page's items are nowhere near them
   const ex0 = Math.min(...erased.map(e => e[0])), ex1 = Math.max(...erased.map(e => e[2])), ey0 = Math.min(...erased.map(e => e[1])), ey1 = Math.max(...erased.map(e => e[3]))
@@ -2522,7 +2553,8 @@ export function svgOfUnit(L, page, toPx, scale, id) {
       } else {
         // a word (Latin, or a Hangul word) flows in its face from its own place; words glued to it with no space
         // between flow on in the same run
-        const glued = run && !run.chars && sameFace && !line.items[n - 1]?.t.space && line.items[n - 1]?.t.cls === t.cls && !t.brk
+        // (not after a lead's kern, whose width the run would not keep: TeX's \labelsep after a run-in name's joint)
+        const glued = run && !run.chars && sameFace && !line.items[n - 1]?.t.space && !line.items[n - 1]?.t.kern && line.items[n - 1]?.t.cls === t.cls && !t.brk
         if (!glued) {
           flush()
           run = { face: t.face, chars: false, sup: !!t.sup, color: t.st?.color, text: '', xs: [x], track: t.sup ? 0 : t.cls === 'cjk' ? L.state.track : L.state.trackLatin }
@@ -2536,6 +2568,18 @@ export function svgOfUnit(L, page, toPx, scale, id) {
     out += `<text y="${n2(by)}">${body}</text>${oblique}`
   }
   return `${out}</g>`
+}
+
+/**
+ * A babel name drawn in the target's word (run.mjs paintNames) as SVG: one <text> at its baseline (`baseline`, from `x`,
+ * PDF units), its word in `face` at `size`, the face's own size correction applied, an oblique face skewed about its
+ * baseline as a unit's run is (svgOfUnit). `toPx(x, y)`: PDF to the SVG's CSS pixels; `scale`: CSS pixels per PDF unit
+ */
+export function svgOfName({ occurrence, text, x, baseline, size, face }, toPx, scale) {
+  const [px, py] = toPx(x, baseline)
+  const span = `<tspan class="${faceClass(face)}" x="${n2(px)}" y="${n2(py)}" font-size="${n2(size * scale * (face.size ?? 1))}">${esc(text)}</tspan>`
+  const line = face.oblique ? `<text transform="translate(${n2(px)} ${n2(py)}) skewX(${-OBLIQUE_DEG}) translate(${-n2(px)} ${-n2(py)})">${span}</text>` : `<text y="${n2(py)}">${span}</text>`
+  return `<g data-n="${occurrence}">${line}</g>`
 }
 
 // ---- the scorer's view of a laid-out unit

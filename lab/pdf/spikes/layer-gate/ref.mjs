@@ -7,7 +7,10 @@
 // anchors' rectangles, as the parity harness read them: a rectangle's baseline 0.24 of its height above its foot, its size
 // its height over 0.894). A new reference is a deliberate act: `layer-gate.mjs --freeze` writes one only where none is;
 // `--freeze=force --ref-layouts=<a later maker's fixtures>` refreshes it, that maker's lines first, then the fixture's
-// own, then the prototype's, so that a unit a later maker locates is measured by its own lines.
+// own, then the prototype's, so that a unit a later maker locates is measured by its own lines. The babel names a layout
+// file locates (D1a: generated headings, its `names`) are rows of their own, of kind `name` and id `name:<occurrence>`,
+// from the first file that holds any: text of the original's that no unit is. `--freeze=names --ref-layouts=<…>` adds a
+// later maker's names to each reference as it stands (withNames), every unit's rows as they were.
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
@@ -50,7 +53,7 @@ export function geometryFile(fixture, dir = PROTO_GEOMETRY) {
 
 /**
  * The reference of a fixture: { schema, from, pages: { [page]: [[id, kind, lines]] } }, each line six numbers (x0, x1,
- * baseline, top, bottom, size). `layouts`: layout files' bytes (one, or several in order: a unit's lines are the first's
+ * baseline, top, bottom, size); the units by id, then the names (`name:<occurrence>`, kind `name`) by occurrence. `layouts`: layout files' bytes (one, or several in order: a unit's lines are the first's
  * that locates it, so that a later maker that locates more of the original refreshes the reference with what it finds);
  * `geometry`: the prototype's file's, for the units none of them locates, or null
  */
@@ -75,6 +78,9 @@ export function makeRef(layouts, geometry, from = {}) {
     for (const [id] of L.lines) if (kinds.has(id)) taken.add(id)
     bySource.push(n)
   }
+  // the names, from the first file that locates any (a later maker's)
+  const named = files.find(L => Array.isArray(L.names) && L.names.length)
+  for (const r of named?.names ?? []) add(...nameRow(r))
   let extra = 0
   if (geometry) {
     const g = JSON.parse(Buffer.from(geometry).toString('utf8'))
@@ -87,9 +93,30 @@ export function makeRef(layouts, geometry, from = {}) {
       }
     }
   }
-  for (const list of Object.values(pages)) list.sort((a, b) => a[0] - b[0])
+  for (const list of Object.values(pages)) list.sort(byId)
   const shas = (Array.isArray(layouts) ? layouts : [layouts]).map(b => sha256(b))
-  return { schema: REF_SCHEMA, from: { ...from, layout: shas.at(-1), ...(shas.length > 1 ? { layouts: shas, units: bySource } : {}), extraUnits: extra }, pages }
+  return { schema: REF_SCHEMA, from: { ...from, layout: shas.at(-1), ...(shas.length > 1 ? { layouts: shas, units: bySource } : {}), extraUnits: extra, ...(named ? { names: named.names.length } : {}) }, pages }
+}
+
+/** a layout file's name row ([occurrence, key, page, x0, baseline, x1, top, bottom, size, font, flags]) as a reference's:
+ *  its page, its id, its kind and its line */
+const nameRow = r => [r[2], `name:${r[0]}`, 'name', [r[3], r[5], r[4], r[6], r[7], r[8]]]
+/** a reference's rows in order: the units by id, then the names by occurrence */
+const byId = (a, b) => { const o = id => (typeof id === 'number' ? [0, id] : [1, Number(String(id).slice(5))]), x = o(a[0]), y = o(b[0]); return x[0] - y[0] || x[1] - y[1] }
+/** a frozen reference with the names of the first of `layouts` (layout files' bytes, a later maker's first) that locates
+ *  any, its own names first taken out: every unit's rows as they were */
+export function withNames(ref, layouts) {
+  const files = layouts.map(b => JSON.parse(Buffer.from(b).toString('utf8')))
+  const L = files.find(f => Array.isArray(f.names) && f.names.length)
+  const pages = {}
+  for (const [p, list] of Object.entries(ref.pages)) pages[p] = list.filter(r => r[1] !== 'name').map(r => [r[0], r[1], [...r[2]]])
+  for (const r of L?.names ?? []) {
+    const [p, id, kind, line] = nameRow(r)
+    ;(pages[p] ??= []).push([id, kind, line])
+  }
+  for (const list of Object.values(pages)) list.sort(byId)
+  const { names: _, ...from } = ref.from
+  return { ...ref, from: { ...from, ...(L ? { names: L.names.length, namesFrom: sha256(layouts[files.indexOf(L)]) } : {}) }, pages }
 }
 
 /** the reference made from a fixture's folder and the prototype's geometry, as the bytes ref.json holds; `newer`: folders

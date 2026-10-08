@@ -59,7 +59,8 @@
 //                the layer round's) or source-over (the lab's at first)
 //   --freeze     the reference text area of every fixture that has none (=force: made again, a deliberate change;
 //                --ref-layouts=<dir>,…: a later maker's fixtures' layout files first, the fixture's own, then the
-//                prototype's geometry for the units none locates)
+//                prototype's geometry for the units none locates; =names, with --ref-layouts: each reference as it stands
+//                with the babel names of the first of those layout files that holds any, every unit's rows unchanged)
 //   --write-floor  layer-gate/floor.json from this run: the prototype's floor as this gate measures it, v0 under the
 //                floor's conditions at the gate's own text place (--engine=<exp/layer-proto> --engine-kind=proto
 //                --proto-units=p7 --proto-faces=prototype --tier=pixel, the ten shared outputs; v0 at its port,
@@ -134,7 +135,7 @@ import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
 import { chromium } from 'playwright'
 import { engineKindOf } from './layer-gate/kind.mjs'
 import { encodePng } from './layer-gate/png.mjs'
-import { geometryFile, nameOf, PROTO_GEOMETRY, refBytesOf, refPages, sha256, shownPath } from './layer-gate/ref.mjs'
+import { geometryFile, nameOf, PROTO_GEOMETRY, refBytesOf, refPages, sha256, shownPath, withNames } from './layer-gate/ref.mjs'
 import { compare, fixtureTotals, MEASURES, pageEntry, pooled, REPORTED } from './layer-gate/score.mjs'
 
 const here = new URL('.', import.meta.url).pathname
@@ -284,6 +285,15 @@ if (FREEZE) {
   let made = 0
   for (const name of readdirSync(REFS).filter(n => existsSync(join(REFS, n, 'layout.json'))).sort()) {
     const file = join(REFS, name, 'ref.json')
+    // (=names: the reference as it stands, with a later maker's babel names added, D1a)
+    if (FREEZE === 'names') {
+      const layouts = REF_LAYOUTS.map(d => join(d, name, 'layout.json')).filter(f => existsSync(f)).map(f => readFileSync(f))
+      if (!existsSync(file) || !layouts.length) continue
+      writeFileSync(file, Buffer.from(JSON.stringify(withNames(readJson(file), layouts))))
+      made++
+      console.log(`ref  ${name}: ${fileSha(file).slice(0, 12)} (names)`)
+      continue
+    }
     if (existsSync(file) && FREEZE !== 'force') continue
     writeFileSync(file, refBytesOf(join(REFS, name), name, undefined, REF_LAYOUTS))
     made++
@@ -701,7 +711,7 @@ async function buildAddon(bytes, layoutFile, { check = true } = {}) {
   for (let p = 1; p <= doc.numPages; p++) {
     if (inks[p].rotated || inks[p].capped) continue
     const { own: _own, ...pp } = pagePlan(index, p, inks[p])
-    if (pp.units.length) plan.pages[p] = pp
+    if (pp.units.length || pp.names?.length) plan.pages[p] = pp
   }
   ms.checkRead = performance.now() - t
   t = performance.now()

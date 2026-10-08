@@ -16,7 +16,7 @@ are facts about them and not their words.
 | `main.tex` | The paper: title, abstract, seven sections and a subsection; inline and display mathematics (numbered, and an `align`); a lemma, a theorem and their proofs, and a definition; a footnote; a TikZ figure (vector, no image file); a table (`booktabs`); a list; citations from `refs.bib`; an external link (to `example.invalid`, which resolves nowhere). Its table's numbers are right: the two methods the paper describes agree on every blocked set of at most three cells on grids of up to six columns and rows (84,854 cases, checked when it was written). |
 | `refs.bib`, `main.bbl` | The bibliography and what BibTeX made of it, as an arXiv source carries both. |
 | `sample-1.pdf` | The stand-in for arXiv's PDF: `main.tex` compiled, with no mark in it. Four pages, US letter, 212,737 bytes. |
-| `bundle.json` | The layer bundle (`src/pdf-reader/engine/layer-proto/bundle.mjs`): the paper's 45 units, the original's side (41 of them located), the layout file (43 located) and the add-on, under the engine's versions. 33,515 bytes. |
+| `bundle.json` | The layer bundle (`src/pdf-reader/engine/layer-proto/bundle.mjs`): the paper's 45 units, the original's side (41 of them located), the layout file (43 located, and four babel names: the abstract's, two proofs' leading their text and the references') and the add-on, under the engine's versions. 33,795 bytes. |
 
 The paper is `2600.00001` version 1: an identifier no arXiv paper has (there is no month 00), so that a request that
 escapes a test cannot meet a real one. The bundle's `base.url` is `/api/v1/original/2600.00001v1`, where the stand-in of

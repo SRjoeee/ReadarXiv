@@ -6,7 +6,8 @@ import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
 import { patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, OWNED_ALL, parseLayoutMarks, POINTS_TEX, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
+import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
 import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
 import { marksOf } from '@/pdf-reader/engine/pipeline/typeset/places.mjs'
@@ -515,8 +516,89 @@ describe('LAYOUT_TEX', () => {
 
 describe('the mark names', () => {
   it('MARK_NAME takes each grammar and nothing else', () => {
-    for (const name of ['12s', '0e', 'c2-7', 'c1-1', 't4e', 'h0s', 'p3.14a', 'n3.2b', 'g9t', 'g1a']) expect(MARK_NAME.test(name), name).toBe(true)
-    for (const name of ['12x', 'c3-1', 'p3a', 'axt-12s', '12s ', 'h3', 't4a', 'p3.14', 'g9s', 'P3.1A', '']) expect(MARK_NAME.test(name), name).toBe(false)
+    for (const name of ['12s', '0e', 'c2-7', 'c1-1', 't4e', 'h0s', 'p3.14a', 'n3.2b', 'g9t', 'g1a', 'n1.ref.s', 'n12.listfigure.e']) expect(MARK_NAME.test(name), name).toBe(true)
+    for (const name of ['12x', 'c3-1', 'p3a', 'axt-12s', '12s ', 'h3', 't4a', 'p3.14', 'g9s', 'P3.1A', '', 'n1.Ref.s', 'n1.ref.a', 'n.ref.s', 'n1.ref', 'n1.ref.s.e']) expect(MARK_NAME.test(name), name).toBe(false)
+  })
+})
+
+describe("babel's names (D1a)", () => {
+  it('NAMES_TEX wraps each key\'s macro, writes its marks through, and LAYOUT_TEX holds it before the points', () => {
+    expect(Object.keys(NAME_MACROS)).toEqual([...NAME_KEYS])
+    expect(Object.keys(NAME_ENGLISH)).toEqual([...NAME_KEYS])
+    for (const k of NAME_KEYS) expect(NAMES_TEX).toContain(`\\axt@nmwrap{${k}}{${NAME_MACROS[k]}}`)
+    // written through: \protect\axtnma where \protect is not \@typeset@protect, never gobbled
+    expect(NAMES_TEX).toContain('\\def\\axtnma{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@nma\\else\\protect\\axtnma\\fi}')
+    expect(NAMES_TEX).toContain('\\def\\axtnmb{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@nmb\\else\\protect\\axtnmb\\fi}')
+    // gated, hmode only, glue put back (\axt@set), the start waiting for a paragraph from vertical mode
+    expect(NAMES_TEX).toMatch(/\\protected\\def\\axt@nma#1\{\\ifaxt@off\\else/)
+    expect(NAMES_TEX).toContain('\\relax\\axt@put{n\\axt@nmn.#1.s}')
+    expect(NAMES_TEX).toContain('\\axt@set{n\\axt@nmn.#1.e}')
+    expect(NAMES_TEX).toContain('\\AddToHookNext{para/begin}{\\axt@nmlate}')
+    // at \begin{document} and after babel's switches; the names kept off a float's label
+    expect(NAMES_TEX).toContain('\\AddToHook{begindocument/end}{\\global\\axt@nmontrue\\axt@nmall}')
+    expect(NAMES_TEX).toContain('\\AddBabelHook{axtnames}{afterextras}{\\axt@nmall}')
+    expect(NAMES_TEX).toContain('\\ifdefined\\@captype')
+    // a blank name is left as it is: a class may test it for emptiness (REVTeX's jcp style, an empty \refname)
+    expect(NAMES_TEX).toContain('{!\\tl_if_blank_p:o{#1}}')
+    // a case change keeps their keys; a PDF string gobbles them
+    expect(LAYOUT_TEX).toContain('\\axt@hm\\axtnma\\axtnmb\\axt@nma\\axt@nmb}')
+    expect(LAYOUT_TEX).toContain('\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble')
+    expect(LAYOUT_TEX.indexOf(NAMES_TEX)).toBeGreaterThan(0)
+    expect(LAYOUT_TEX.indexOf(NAMES_TEX)).toBeLessThan(LAYOUT_TEX.indexOf(POINTS_TEX))
+    // no register, nothing logged, one line
+    for (const word of ['\\newcount', '\\newdimen', '\\newskip', '\\typeout', '\\message', '\n', '%']) expect(NAMES_TEX).not.toContain(word)
+  })
+
+  it('literalNames wraps a name a style writes literally in the construct its macro names, and nothing else', () => {
+    // nips_2017.sty's, cvpr.sty's and naaclhlt2019.sty's forms
+    const nips = String.raw`\renewenvironment{abstract}{\vskip .075in\centerline{\large\bf Abstract}\vspace{0.5ex}\begin{quote}}{\par\end{quote}\vskip 1ex}`
+    expect(literalNames(nips)).toBe(String.raw`\renewenvironment{abstract}{\vskip .075in\centerline{\large\bf \axtnma{abstract}Abstract\axtnmb{abstract}}\vspace{0.5ex}\begin{quote}}{\par\end{quote}\vskip 1ex}`)
+    expect(literalNames(String.raw`\def\abstract{\centerline{\large\bf Abstract}\vspace*{12pt}\it}`)).toBe(String.raw`\def\abstract{\centerline{\large\bf \axtnma{abstract}Abstract\axtnmb{abstract}}\vspace*{12pt}\it}`)
+    expect(literalNames(String.raw`\def\thebibliography#1{\section*{References\@mkboth{References}{References}}\list{}{}}`)).toBe(String.raw`\def\thebibliography#1{\section*{\axtnma{ref}References\axtnmb{ref}\@mkboth{\axtnma{ref}References\axtnmb{ref}}{\axtnma{ref}References\axtnmb{ref}}}\list{}{}}`)
+    // \renewcommand's forms, a name over two lines, a report's Bibliography
+    const two = String.raw`\renewcommand{\listoffigures}[1][x]{\chapter*{List of
+ Figures}}`
+    expect(literalNames(two)).toBe(String.raw`\renewcommand{\listoffigures}[1][x]{\chapter*{\axtnma{listfigure}List of
+ Figures\axtnmb{listfigure}}}`)
+    expect(literalNames(String.raw`\renewenvironment{thebibliography}[1]{\chapter*{Bibliography}}{}`)).toBe(String.raw`\renewenvironment{thebibliography}[1]{\chapter*{\axtnma{bib}Bibliography\axtnmb{bib}}}{}`)
+    // not in a label, a reference, a message, a \csname, nor a word of which it is a part, nor in another case
+    const kept = [
+      String.raw`\renewcommand\tableofcontents{\label{Contents}\PackageWarning{x}{Contents here}\csname Contents\endcsname\section*{Contentsx CONTENTS contents}}`,
+      String.raw`\renewcommand\tableofcontents{\hypertarget{Contents}{}\typeout{Contents}}`,
+    ]
+    for (const t of kept) expect(literalNames(t), t).toBe(t)
+    // outside the construct's definition, or in another construct's: as it is
+    for (const t of [String.raw`\def\other{Abstract}`, String.raw`\newcommand{\Abstract}{Abstract}`, 'Abstract', String.raw`\section*{References}`, String.raw`\def\abstract{References}`]) expect(literalNames(t), t).toBe(t)
+    // what it adds is the marks alone: taken out, the style is as it was
+    const all = [nips, String.raw`\def\thebibliography#1{\section*{References\@mkboth{References}{References}}\list{}{}}`].join('\n')
+    expect(literalNames(all).replace(/\\axtnm[ab]\{[a-z]+\}/g, '')).toBe(all)
+  })
+
+  it('originalFiles with the layout marks wraps a style\'s literal names, every file of the package; without, the bytes as before', () => {
+    const style = String.raw`\ProvidesPackage{lit}\renewenvironment{abstract}{\centerline{\bf Abstract}}{}`
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode(String.raw`\documentclass{article}\usepackage{lit}\renewcommand\tableofcontents{\section*{Contents}}
+\begin{document}
+\begin{abstract}We show a model.\end{abstract}
+\section*{Contents}
+\end{document}
+`)], ['lit.sty', new TextEncoder().encode(style)]]))
+    const v1 = originalFiles(p, { lines: true, layout: MARK_CLASSES })
+    expect(decode(new Map([['main.tex', v1.get('lit.sty') as Uint8Array]]))).toBe(String.raw`\ProvidesPackage{lit}\renewenvironment{abstract}{\centerline{\bf \axtnma{abstract}Abstract\axtnmb{abstract}}}{}`)
+    const main = decode(v1)
+    // the main file's preamble, never its body (a heading the paper writes is its own)
+    expect(main).toContain(String.raw`\renewcommand\tableofcontents{\section*{\axtnma{contents}Contents\axtnmb{contents}}}`)
+    expect(main.slice(main.indexOf('\\begin{document}'))).not.toContain('\\axtnma')
+    expect([...originalFiles(p, { lines: true }).keys()]).toEqual(['main.tex'])
+  })
+
+  it('the name section asks, for each key wrapped, whether its own text holds a lowercase letter; readNameProbe reads its rows', () => {
+    const tex = nameSection()
+    for (const k of NAME_KEYS) expect(tex).toContain(`\\ifcsname axt@nmt@${k}\\endcsname`)
+    expect(tex).toContain(probeRow('name', 'ref', 1))
+    expect(markProbeTex([], [])).toContain(tex)
+    const log = ['LAYOUT-PROBE 1 name abstract 1', 'LAYOUT-PROBE 1 name ref 0', 'LAYOUT-PROBE 1 name chapter 1', 'LAYOUT-PROBE 2 name bib 1', 'LAYOUT-PROBE 1 name contents 2', 'LAYOUT-PROBE 1 name index'].join('\n')
+    expect(readNameProbe(log)).toEqual({ abstract: 1, ref: 0 })
+    expect(readNameProbe('')).toEqual({})
   })
 })
 
@@ -603,12 +685,18 @@ describe('reading the marked original', () => {
     // no probe run: null, which the maker re-marks as LAYOUT_TEX sets every mark; a probe that answered nothing is {},
     // which the maker re-marks with no mark for an asked command (Task 2's m4): the two kept apart through the file
     const plain = await layoutMarksOf(doc, '', { engine: 'pdflatex' })
-    expect(plain.marking).toEqual({ classes: [...LAYOUT_CLASSES], switches: null, inkless: null, texts: null })
+    expect(plain.marking).toEqual({ classes: [...LAYOUT_CLASSES], switches: null, inkless: null, texts: null, names: null })
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(plain))).marking.switches).toBeNull()
     const none = await layoutMarksOf(doc, '', { engine: 'pdflatex', switches: {} })
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(none))).marking.switches).toEqual({})
     const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', classes: ['math', 'cite'], switches: { '\\cite': '22220000', '\\ref': 'x0000000' } })
-    expect(m.marking).toEqual({ classes: ['math', 'cite'], switches: { '\\cite': '22220000', '\\ref': 'x0000000' }, inkless: null, texts: null })
+    expect(m.marking).toEqual({ classes: ['math', 'cite'], switches: { '\\cite': '22220000', '\\ref': 'x0000000' }, inkless: null, texts: null, names: null })
+    // the names' answers (readNameProbe), in NAME_KEYS' order; a key of none, or a value not 0 or 1, refused
+    const cased = await layoutMarksOf(doc, '', { engine: 'pdflatex', names: { ref: 0, abstract: 1 } })
+    expect(Object.keys(cased.marking.names ?? {})).toEqual(['abstract', 'ref'])
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(cased))).marking.names).toEqual({ abstract: 1, ref: 0 })
+    await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', names: { chapter: 1 } as never })).rejects.toThrow(LayoutRefusal)
+    await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', names: { ref: 2 } as never })).rejects.toThrow(LayoutRefusal)
     // the probe's texts, as readInkTexts gives them, written flat (the file nests no deeper)
     const said = await layoutMarksOf(doc, '', { engine: 'pdflatex', texts: [['\\bert', 'BERT'], ['\\ours', 'OURS']] })
     expect(said.marking.texts).toEqual(['\\bert', 'BERT', '\\ours', 'OURS'])
@@ -739,7 +827,7 @@ describe('reading the marked original', () => {
 
 /** a made-up marks file of two pages, every field used */
 const valid = (): LayoutMarks => ({
-  schema: 3, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], switches: { '\\cite': '22220000', '\\footnote': '00000012' }, inkless: ['\\rule{0pt}{2ex}', '\\fontsize{7.6pt}{1em}'], texts: ['\\bert', 'BERT'] }, pages: 2,
+  schema: 4, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], switches: { '\\cite': '22220000', '\\footnote': '00000012' }, inkless: ['\\rule{0pt}{2ex}', '\\fontsize{7.6pt}{1em}'], texts: ['\\bert', 'BERT'], names: { abstract: 1, ref: 0 } }, pages: 2,
   views: [0, 0, 612, 792, 0, 0, 612, 792],
   columns: [1, 2],
   marks: [['0s', 1, 72, 700], ['0e', 1, 300.5, 650.25], ['c1-1', 1, 0, 0], ['c2-2', 2, 0, 0], ['p0.3a', 1, 100, 700], ['p0.3b', 1, 120.75, 700], ['h1s', 2, 72, 720], ['t2s', 2, 80, 500], ['n0.5a', 1, 200, 680], ['g1t', 2, 300, 400]],
@@ -783,8 +871,9 @@ describe('the marks file', () => {
     parse.mockRestore()
     expect(refusal(new Uint8Array([0x7b, 0xc3, 0x28, 0x7d]))).toBe('')
     const rows: [string, (m: LayoutMarks & Record<string, unknown>) => void, string][] = [
-      ['schema 1, a file before the stream', m => { m.schema = 1 as 3 }, 'schema'],
-      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 3 }, 'schema'],
+      ['schema 1, a file before the stream', m => { m.schema = 1 as 4 }, 'schema'],
+      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 4 }, 'schema'],
+      ['schema 3, a file before the babel names', m => { m.schema = 3 as 4 }, 'schema'],
       ['engine context', m => { m.engine = 'context' }, 'engine'],
       ['marking not an object', m => { (m as Record<string, unknown>).marking = ['math'] }, 'marking'],
       ['marking with a key of no schema', m => { (m.marking as Record<string, unknown>).extra = [] }, 'marking.extra'],
