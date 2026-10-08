@@ -114,18 +114,20 @@ export function settleLayout(p) {
  * apart: its fill leading is the loosest, from its fitted leading up to P.fillLead em of the size it is drawn at (null: the
  * original's own pitch), at which that state still sets it whole, so that its text reaches its frame's foot. The page's
  * target is the median of its body units' fill leadings (of all its units' where it has no body unit; a unit of one line
- * has no leading to tell, and tells only where no unit has more), held within `band` of `running`, the target of the last
- * page before it whose body units told it
- * (null: none), so that a page's rhythm moves from the last page's by no more than the band. Each unit takes its fill
- * leading, but never more than `band` over the target, so that neighbouring paragraphs keep one line spacing. A CJK unit
- * the band or its fill leading's top stops short of its fill then takes tracking, up to `track` em; and where every body
+ * has no leading to tell, and tells only where no unit has more), held within `band` of `held.last`, the target of the
+ * last page before it whose body units told it, and within `band` of `held.first`, the first page's that did (null: no
+ * page has): a page's rhythm moves from the last page's by no more than the band, and the paper's stays within a band of
+ * its first page's, however many pages it runs to (the coordinator's ruling of 2026-10-08: one rhythm across the paper,
+ * the maintainer's standing preference). Each unit takes its fill leading, but never more than `band` over the target, so
+ * that neighbouring paragraphs keep one line spacing. A CJK unit the band or its fill leading's top stops short of its
+ * fill then takes tracking, up to `track` em; and where every body
  * unit of the page is still short with all of it, the page's body units take one size, the largest up to `size` x the
  * original's at which every one of them is still set whole: one size a page, never a unit's own (D grew each unit apart,
  * and a page mixed 1.0 and 1.1). A unit its fitted state does not set again (the text run past a display) keeps its own
  * fit. Each unit filled is laid anew in place (p.P, p.layout, its extents kept), then `onFilled(p, target)`. Returns the
  * page's target and whether its body units told it (`body`), or null where no unit has a fill leading.
  */
-export function fillPage(units, P, running = null, onFilled = () => {}) {
+export function fillPage(units, P, held = null, onFilled = () => {}) {
   const { band, track, size } = P.adaptiveFill
   const r3 = x => Math.round(x * 1000) / 1000
   const at = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); return l.clipped ? null : l }
@@ -137,7 +139,9 @@ export function fillPage(units, P, running = null, onFilled = () => {}) {
     return r3((P.fillLead * p.s * p.layout.state.scale) / p0)
   }
   // (a looser leading holds no more lines than a closer one: the loosest that sets the unit is found by halving, a few
-  // layouts a unit where trying each hundredth from the top took up to forty)
+  // layouts a unit where trying each hundredth from the top took up to forty. Monotone in practice, not by construction:
+  // the greedy breaking's kinsoku and hanging marks could make a looser value set a unit a closer one does not; the linear
+  // search from the top is the reference, and the halving drew the same on every fixture. So for the tracking and size)
   const fillLeadOf = p => {
     const st = p.layout.state
     if (!at(p, st)) return null
@@ -153,7 +157,8 @@ export function fillPage(units, P, running = null, onFilled = () => {}) {
   const leads = (body.length ? body : telling.length ? telling : withLead).map(p => p.fillLead)
   if (!leads.length) return null
   const own = median(leads)
-  const target = r3(running === null ? own : Math.min(running + band, Math.max(running - band, own)))
+  const hold = (v, at) => Math.min(at + band, Math.max(at - band, v))
+  const target = r3(held === null ? own : hold(hold(own, held.last), held.first))
   const filled = []
   for (const p of units) {
     if (p.fillLead === null) continue
@@ -1069,15 +1074,15 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
   }
   // adaptiveFill's pass over a page's units that begin on it (fillPage), each filled unit's record updated; the paper's
-  // running target, the last target a page's body units told, in the order the pages' passes run (the units' laying
-  // order, the same whether the rows come at once or in parts: no page waits for a later one)
-  let running = null
+  // targets a page is held to, the last and the first a page's body units told, in the order the pages' passes run (the
+  // units' laying order, the same whether the rows come at once or in parts: no page waits for a later one)
+  let held = null
   const fillPass = pg => {
-    const r = fillPage(laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg), P, running, (p, target) => {
+    const r = fillPage(laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg), P, held, (p, target) => {
       const l = p.layout
       if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
     })
-    if (r?.body) running = r.target
+    if (r?.body) held = { last: r.target, first: held?.first ?? r.target }
   }
   // the leftover packed (packPage) over a page's units laid, each moved unit's record updated
   const packPass = pg => {

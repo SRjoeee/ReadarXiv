@@ -284,7 +284,7 @@ describe("adaptiveFill (D, the default) keeps a CJK cell clear of its rule (Code
     const clear = L2.cellBands([block] as never, () => rules, 10, params('zh'))!
     const rel = L2.leadOf([block] as never, 10, { ...P, leadRel: true } as never)
     expect(rel).toBeLessThanOrEqual(P.leadBase - 0.05)
-    const p = { id: 1, unit: { kind: 'cell' }, pages: [1], tokens: words(2, 10), blocks: [block], s: 10, clear, fillRange: [rel, P.leadBase], P: { ...P, leadBase: rel, growTo: 0, capScale: clear.cap } as Record<string, unknown>, layout: null as never as { lines: { block: number; baseline: number }[]; scale: number } }
+    const p = { id: 1, unit: { kind: 'cell' }, pages: [1], tokens: words(2, 10), blocks: [block], s: 10, clear, P: { ...P, leadBase: rel, growTo: 0, capScale: clear.cap } as Record<string, unknown>, layout: null as never as { lines: { block: number; baseline: number }[]; scale: number } }
     p.layout = L2.layoutUnit2(p.tokens as never, p.blocks as never, 10, p.P as never) as never
     settleLayout(p)
     const clearOf = () => p.layout.lines[0]!.baseline + 0.88 * 10 * p.layout.scale
@@ -310,7 +310,7 @@ describe("the page fill (adaptiveFill, D6's F6b): every original's units spread 
     p.layout = L2.layoutUnit2(p.tokens as never, p.blocks as never, 10, p.P as never) as never
     return p
   }
-  const fill = async (units: Unit[], PP: Record<string, unknown> = P(), running: number | null = null) => (await import('@/pdf-reader/engine/layer-proto/run.mjs')).fillPage(units as never, PP as never, running)
+  const fill = async (units: Unit[], PP: Record<string, unknown> = P(), held: { last: number; first: number } | null = null) => (await import('@/pdf-reader/engine/layer-proto/run.mjs')).fillPage(units as never, PP as never, held)
   const baselines = (p: Unit) => p.layout.lines.map(l => l.baseline)
 
   it('builds in a top of 2 em for Chinese, 1.7 for Japanese and Korean, and the original\'s own pitch for the alphabets', () => {
@@ -331,10 +331,31 @@ describe("the page fill (adaptiveFill, D6's F6b): every original's units spread 
     expect(baselines(three)).toEqual([500, 470, 440])
   })
 
+  it("holds a long paper's targets within a band of its first page's, however steadily they climb", async () => {
+    // (forty pages, each of a unit whose own fill leading is 0.03 above the last page's, from 1.3: the first page's target
+    // 1.3, every later one within 0.05 of it and of the page before)
+    const PP = P({ fillLead: 3 })
+    let held: { last: number; first: number } | null = null
+    const targets: number[] = []
+    for (let k = 0; k < 40; k++) {
+      const u = laid(k, 20, PP)
+      u.fillLead = Math.round((1.3 + 0.03 * k) * 1000) / 1000
+      ;(u as unknown as { fillTop: number }).fillTop = 3
+      const r: { target: number; body: boolean } = (await fill([u], PP, held))!
+      targets.push(r.target)
+      const first: number = held === null ? r.target : (held as { first: number }).first
+      held = { last: r.target, first }
+    }
+    expect(targets[0]).toBe(1.3)
+    expect(Math.max(...targets)).toBeCloseTo(1.35, 6)
+    expect(Math.min(...targets)).toBe(1.3)
+    for (let k = 1; k < 40; k++) expect(Math.abs(targets[k]! - targets[k - 1]!)).toBeLessThanOrEqual(0.05 + 1e-9)
+  })
+
   it("holds the page's target within the band of the running one, and each unit within the band over the target", async () => {
     const PP = P({ fillLead: 3 })
     const a = laid(1, 30, PP), b = laid(2, 30, PP)
-    expect(await fill([a, b], PP, 2)).toEqual({ target: 2.05, body: true })
+    expect(await fill([a, b], PP, { last: 2, first: 2 })).toEqual({ target: 2.05, body: true })
     expect([a.layout.state.lead, b.layout.state.lead]).toEqual([2.1, 2.1])
   })
 

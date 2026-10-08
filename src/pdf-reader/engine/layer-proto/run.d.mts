@@ -6,7 +6,7 @@ import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
 import type { TexLines, Whole } from './tex.mjs'
 import type { RemovalManifest } from '../layout/remove.mjs'
 import type { FaceSources } from './fonts.mjs'
-import type { FrozenRuleSet } from '../rules/layout.mjs'
+import type { FrozenRuleSet, RULES_SCHEMA } from '../rules/layout.mjs'
 
 /** a unit as the units record holds it (a row): its kind, source and state; its translation's pieces, none where it has
  *  none, each non-text one with its k (the layout file's index of its source piece: E6's row); its title, its table's
@@ -50,8 +50,8 @@ export declare function layGroups(placed: readonly { id: number; pages: readonly
 export declare const layOrder: (placed: readonly { id: number; pages: readonly number[] }[], batch?: number) => number[]
 /** a unit's layout made final: a CJK cell's lines moved into their bands between the rules at the size it is drawn at */
 export declare function settleLayout(p: { clear?: { bands: Map<number, import('./layer2.mjs').CellBand[]> } | null; layout: { lines?: { block: number; baseline: number }[]; scale?: number }; s: number }): void
-/** adaptiveFill's pass over a page's loose units: each filled unit laid anew in place and settled, then onFilled; the target leading, or null */
-export declare function fillPage(units: unknown[], P: Params & { adaptiveFill: { band: number; track: number; size: number } }, running?: number | null, onFilled?: (p: Placed, target: number) => void): { target: number; body: boolean } | null
+/** the page fill (adaptiveFill) over the units that begin on a page: each spread over its frame at its fitted state, the page's target held within the band of the last and the first page's (`held`, null for none), each filled unit laid anew in place and settled, then onFilled; the page's target and whether its body units told it, or null where no unit has a fill leading */
+export declare function fillPage(units: unknown[], P: Params & { adaptiveFill: { band: number; track: number; size: number } }, held?: { last: number; first: number } | null, onFilled?: (p: Placed, target: number) => void): { target: number; body: boolean } | null
 /** the leftover packed (P.leftover 'pack'): a page's body units of one block moved up to keep the original's gap to the one above, the moves by id (PDF units up). `rects`: every unit's rectangles on the page, [id, [page, x0, y0, x1, y1]]; `chars`: the page's characters */
 export declare function packPage(page: number, units: unknown[], rects: readonly [number, readonly number[]][], chars: readonly { ch: string; x0: number; x1: number; yb: number; size: number }[], stays?: ((x0: number, x1: number, y0: number, y1: number) => number | null) | null, gap?: number): Map<number, number>
 /** the ink of a page that stays visible: its ink map less the glyphs the drawing takes away, and the add-on's dirty boxes; foot(x0, x1, y0, y1) gives the PDF y of the lowest such ink's foot in a box, or null */
@@ -60,7 +60,7 @@ export interface ProtoRun {
   N: number
   P: Params
   /** the layout rule set the run was opened with (rules/layout.mjs): its schema and version */
-  readonly rules: { schema: 1; version: number }
+  readonly rules: { schema: typeof RULES_SCHEMA; version: number }
   rows: Row[]
   placed: Placed[]
   /** the units left the original's and why: `unanchored`, `author`, `unfit`, `group: …`, and, in the role table's faces, `served`
