@@ -70,12 +70,12 @@ const sourceUnits = (): { units: SourceUnit[]; kept: Set<SourceUnit> } => ({ uni
 function layoutOf(): LayoutFile {
   const file = SPECS.map((s, id) => ({ ...s, id })).filter(s => s.file)
   return {
-    schema: 1, layout: LAYOUT, pdfjs: PDFJS, paper: { id: '2610.00001', version: 1, pages: 2 }, left: '', views: [...VIEW, ...VIEW], fonts: ['F1'],
+    schema: 2, layout: LAYOUT, pdfjs: PDFJS, paper: { id: '2610.00001', version: 1, pages: 2 }, left: '', views: [...VIEW, ...VIEW], fonts: ['F1'],
     units: file.map(s => [s.id, UNIT_KINDS.indexOf(s.kind as never), 9, 0, 1]),
     lines: file.map(s => [s.id, s.lines.flatMap(([p, x0, x1, b]) => [p, x0, x1, b, b + 7, b - 2, 10, 0])]),
     frames: file.map(s => [s.id, s.lines.flatMap(([p], j) => [p, 0, j, 1, j ? 0 : -1, 0])]),
     erase: file.map(s => [s.id, s.lines.flatMap(([, x0, x1, b], j) => [j, x0, b - 2, x1, b + 7])]),
-    ph: [], labels: [], headings: [], pageText: [], held: [],
+    ph: [], labels: [], headings: [], pageText: [], held: [], names: [],
   } as never
 }
 /** the bundle's parts: the units, the left (the units v0's anchors hold), the layout file, the add-on */
@@ -178,14 +178,14 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     const layer = await openLayer({ bundle: bundleOf(), doc: docOf(), target: 'zh', faceSources, hyphUrl, rules: set as never })
     const o = seen.opens.at(-1) as unknown as Opened
     expect(o.rules).toBe(set)
-    expect(layer.stats().rules).toEqual({ schema: 2, version: 7 })
+    expect(layer.stats().rules).toEqual({ schema: 3, version: 7 })
     // (the face asked first is the set's: light beside Times, which the built-in set does not say)
     expect(facesAsked[0]).toBe('shs-sc-light')
     expect(firstFaceOf('zh', set as never)).toBe('shs-sc-light')
     expect(firstFaceOf('zh')).toBe('shs-sc-regular')
     layer.dispose()
     const built = await openLayer({ bundle: bundleOf(), doc: docOf(), target: 'zh', faceSources, hyphUrl })
-    expect(built.stats().rules).toEqual({ schema: 2, version: BUILTIN_RULES.version })
+    expect(built.stats().rules).toEqual({ schema: 3, version: BUILTIN_RULES.version })
     built.dispose()
   })
 
@@ -252,7 +252,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect(layer.unitAt(3, 100, 262)).toBeNull()
     expect(layer.unitAt(1, Number.NaN, 262)).toBeNull()
     const s = layer.stats()
-    expect(s).toMatchObject({ units: toTranslate(bundle, 'zh').length, drawn: whole.stats.length, pages: [1, 2], dropped: 0, rules: { schema: 2, version: BUILTIN_RULES.version } })
+    expect(s).toMatchObject({ units: toTranslate(bundle, 'zh').length, drawn: whole.stats.length, pages: [1, 2], dropped: 0, rules: { schema: 3, version: BUILTIN_RULES.version } })
     expect(Object.keys(s.pageMs)).toEqual(['1', '2'])
     expect(s.slowestTaskMs).toBeGreaterThanOrEqual(0)
     layer.dispose()
@@ -340,7 +340,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     source.height = 10
     await expect(layer.copyOf(1, source, 2.5)).rejects.toThrow(/let go/)
     expect(layer.take(rowsOf(bundle))).toEqual({ complete: [] })
-    expect(layer.stats().rules).toEqual({ schema: 2, version: BUILTIN_RULES.version })
+    expect(layer.stats().rules).toEqual({ schema: 3, version: BUILTIN_RULES.version })
     expect(layer.unitAt(1, 100, 262)).toBe(0)
   })
 

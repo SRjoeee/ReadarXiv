@@ -2,9 +2,10 @@
 import type { ZodMiniType } from 'zod/mini'
 import type { CjkFaces } from './font-roles.mjs'
 import type { Params } from '../layer-proto/layer2.mjs'
+import type { NameKey } from '../layout/names.mjs'
 
 /** the schema's number: the shape and how the engine reads it */
-export declare const RULES_SCHEMA: 2
+export declare const RULES_SCHEMA: 3
 /** a set's bytes at most, as received */
 export declare const RULES_CAP: 65536
 /** a set's JSON values at most, counted before JSON.parse */
@@ -54,13 +55,16 @@ export interface ScriptRules {
   // faces (font-roles.mjs rolesFor): the CJK group, its Kai, the English designs beside which it takes light weights
   cjkFaces: CjkFaces | null
 }
+/** a language's babel names: a float's label (figure, table) and each generated heading's (abstract, ref, …); an empty
+ *  word keeps the original's */
+export type Labels = Record<NameKey, string>
 /** a language: any field of its script's overridden, and what only a language has */
 export type LanguageRules = Partial<ScriptRules> & {
-  /** a float's label in the target's names; null: the original's kept */
-  labels: { figure: string; table: string } | null
+  /** the target's babel names; null: every original's kept */
+  labels: Labels | null
 }
 export interface RuleSet {
-  schema: 2
+  schema: 3
   /** an integer ≥ 1, one more than the set it replaces */
   version: number
   /** at most 1,000 characters: what changed and why */
@@ -80,7 +84,7 @@ export interface TargetRules {
   script: Script
   /** v0's own: every ScriptRules fit, breaking and cell field, `cjk` from the script, and the set's hyphenation */
   params: Params
-  labels: { figure: string; table: string } | null
+  labels: Labels | null
   /** the patterns to load: en, latinPatterns, and ru for Cyrl */
   patterns: readonly ('en' | 'de' | 'ru')[]
   hyphenation: RuleSet['hyphenation']

@@ -1,7 +1,7 @@
 {
-  "schema": 2,
-  "version": 2,
-  "note": "D6: every script's lines on the original's pitch while the size shrinks, the alphabets shrinking before they lead closer; every original filled to one rhythm, Chinese to 2 em, what it leaves over at each unit's foot",
+  "schema": 3,
+  "version": 3,
+  "note": "D1a: each language's labels name every generated heading babel names, its [captions] (Abstract, References, Contents, ...), as well as the floats",
   "hyphenation": {
     "minWord": 5,
     "en": { "left": 2, "right": 3 },
@@ -215,32 +215,32 @@
   },
   "languages": {
     "de": {
-      "labels": { "figure": "Abbildung", "table": "Tabelle" },
+      "labels": { "figure": "Abbildung", "table": "Tabelle", "abstract": "Zusammenfassung", "ref": "Literatur", "bib": "Literaturverzeichnis", "contents": "Inhaltsverzeichnis", "listfigure": "Abbildungsverzeichnis", "listtable": "Tabellenverzeichnis", "appendix": "Anhang", "index": "Index", "proof": "Beweis", "preface": "Vorwort", "glossary": "Glossar" },
       "latinPatterns": "de"
     },
     "es": {
-      "labels": { "figure": "Figura", "table": "Cuadro" }
+      "labels": { "figure": "Figura", "table": "Cuadro", "abstract": "Resumen", "ref": "Referencias", "bib": "Bibliografía", "contents": "Índice", "listfigure": "Índice de figuras", "listtable": "Índice de cuadros", "appendix": "Apéndice", "index": "Índice alfabético", "proof": "Demostración", "preface": "Prefacio", "glossary": "Glosario" }
     },
     "fr": {
-      "labels": { "figure": "Figure", "table": "Table" }
+      "labels": { "figure": "Figure", "table": "Table", "abstract": "Résumé", "ref": "Références", "bib": "Bibliographie", "contents": "Table des matières", "listfigure": "Table des figures", "listtable": "Liste des tableaux", "appendix": "Annexe", "index": "Index", "proof": "Démonstration", "preface": "Préface", "glossary": "Glossaire" }
     },
     "ja": {
-      "labels": { "figure": "図", "table": "表" }
+      "labels": { "figure": "図", "table": "表", "abstract": "概要", "ref": "参考文献", "bib": "参考文献", "contents": "目次", "listfigure": "図目次", "listtable": "表目次", "appendix": "付録", "index": "索引", "proof": "証明", "preface": "前書き", "glossary": "用語集" }
     },
     "ko": {
-      "labels": { "figure": "그림", "table": "표" }
+      "labels": { "figure": "그림", "table": "표", "abstract": "요 약", "ref": "참고 문헌", "bib": "참고 문헌", "contents": "차 례", "listfigure": "그림 차례", "listtable": "표 차례", "appendix": "부록", "index": "찾아보기", "proof": "증명", "preface": "서문", "glossary": "용어집" }
     },
     "pt": {
-      "labels": { "figure": "Figura", "table": "Tabela" }
+      "labels": { "figure": "Figura", "table": "Tabela", "abstract": "Resumo", "ref": "Referências", "bib": "Bibliografia", "contents": "Índice", "listfigure": "Lista de Figuras", "listtable": "Lista de Tabelas", "appendix": "Apêndice", "index": "Índice Remissivo", "proof": "Demonstração", "preface": "Prefácio", "glossary": "Glossário" }
     },
     "ru": {
-      "labels": { "figure": "Рис.", "table": "Таблица" }
+      "labels": { "figure": "Рис.", "table": "Таблица", "abstract": "Аннотация", "ref": "Список литературы", "bib": "Литература", "contents": "Содержание", "listfigure": "Список иллюстраций", "listtable": "Список таблиц", "appendix": "Приложение", "index": "Предметный указатель", "proof": "Доказательство", "preface": "Предисловие", "glossary": "Словарь терминов" }
     },
     "zh": {
-      "labels": { "figure": "图", "table": "表" }
+      "labels": { "figure": "图", "table": "表", "abstract": "摘要", "ref": "参考文献", "bib": "参考文献", "contents": "目录", "listfigure": "插图", "listtable": "表格", "appendix": "附录", "index": "索引", "proof": "证明", "preface": "", "glossary": "" }
     },
     "zh-TW": {
-      "labels": { "figure": "圖", "table": "表" }
+      "labels": { "figure": "圖", "table": "表", "abstract": "摘 要", "ref": "參 考 資 料", "bib": "文 獻", "contents": "目 錄", "listfigure": "圖 目 錄", "listtable": "表 目 錄", "appendix": "附 錄", "index": "索 引", "proof": "", "preface": "", "glossary": "" }
     }
   }
 }

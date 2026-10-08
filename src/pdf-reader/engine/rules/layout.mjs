@@ -20,9 +20,10 @@
 // policies by unit kind. A face must exist as served slices before any rule can name it.
 //
 // The built-in set is the file beside this module. Its first version is the engine's own values as they were before the
-// migration, unchanged; the float labels are babel's [captions] (babel 26.12, TeX Live's locale files in
-// texlive/texlive:latest, sha256:7334b00bf8e7a0996f7ddd65482363aaf7711d372e569f3ea78509619e3083ff): the \figurename and
-// \tablename the final's \babelprovide prints, zh-TW's from babel's zh-Hant.
+// migration, unchanged; the float labels and the names of the generated headings are babel's [captions] (babel 26.12,
+// TeX Live's locale files in texlive/texlive:latest, sha256:7334b00bf8e7a0996f7ddd65482363aaf7711d372e569f3ea78509619e3083ff):
+// the \figurename, \tablename, \abstractname, \refname and the rest the final's \babelprovide prints, zh-TW's from
+// babel's zh-Hant; an empty value where babel's is (zh's preface, zh-Hant's proof), which keeps the original's.
 //
 // Only this directory imports a package (zod, the mini build): the readers' bundles take the validator once, here. The
 // engine's drawing modules import resolveRules' answers, never the schema.
@@ -30,12 +31,14 @@ import * as z from 'zod/mini'
 import { ENGLISH_FAMILIES, FACES } from './font-roles.mjs'
 import { scriptOf } from './script.mjs'
 import { countValues, LayoutRefusal, told } from '../layout/json.mjs'
+import { NAME_KEYS } from '../layout/names.mjs'
 import BUILTIN_JSON from './layout-rules.json' with { type: 'json' }
 
 /** the schema's number: the shape and how the engine reads it. 2 (D6, 2026-10-08): `grid` gone (every script's lines on the
  *  original's pitch while the size shrinks); `adaptiveFill` read for every original, its page's target held near the last
- *  page's and one size a page; `fillLead` and `leftover` added */
-export const RULES_SCHEMA = 2
+ *  page's and one size a page; `fillLead` and `leftover` added. 3 (D1a, 2026-10-08): `labels` holds every babel name
+ *  (layout/names.mjs NAME_KEYS), the generated headings' as well as the floats' */
+export const RULES_SCHEMA = 3
 /** a set's bytes at most, as received (the migrated set is about 8 KB) */
 export const RULES_CAP = 65_536
 /** a set's JSON values at most, counted before JSON.parse (layout/json.mjs countValues) */
@@ -168,7 +171,12 @@ const SCRIPT_FIELDS = [
 ]
 const SCRIPT_KEYS = Object.freeze(SCRIPT_FIELDS.map(f => f.key))
 
-const LABELS = z.nullable(z.strictObject({ figure: text(LABEL_MAX), table: text(LABEL_MAX) }))
+/** a language's labels: a float's (figure, table) and each generated heading's babel names (abstract, ref, …), in
+ *  NAME_KEYS' order but the floats' first; each the words its babel prints, empty to keep the original's */
+const LABEL_KEYS = Object.freeze(['figure', 'table', ...NAME_KEYS.filter(k => k !== 'figure' && k !== 'table')])
+/** what each label names, for the lab */
+const LABEL_WORDS = { figure: "a figure's name", table: "a table's name", abstract: "the abstract's heading", ref: "the references' heading (an article's)", bib: "the bibliography's heading (a book's or a report's)", contents: "the contents' heading", listfigure: "the list of figures' heading", listtable: "the list of tables' heading", appendix: "an appendix's name", index: "the index's heading", proof: "a proof's name", preface: "the preface's heading", glossary: "the glossary's heading" }
+const LABELS = z.nullable(z.strictObject(Object.fromEntries(LABEL_KEYS.map(k => [k, text(LABEL_MAX)]))))
 const SCRIPT_RULES = z.strictObject(Object.fromEntries(SCRIPT_FIELDS.map(f => [f.key, f.schema()])))
 const LANGUAGE_RULES = z.strictObject({ labels: LABELS, ...Object.fromEntries(SCRIPT_FIELDS.map(f => [f.key, z.optional(f.schema())])) })
 const SIDES = z.strictObject({ left: integer(1, 6), right: integer(1, 6) })
@@ -191,7 +199,7 @@ export const RULE_SET = z.strictObject({
  */
 export const RULES_FIELDS = Object.freeze([
   ...SCRIPT_FIELDS.map(({ key, schema: _, ...f }) => Object.freeze({ path: key, scope: 'script', ...f })),
-  Object.freeze({ path: 'labels', scope: 'language', group: 'labels', kind: 'object', nullable: true, members: Object.freeze([{ key: 'figure', kind: 'text', words: "a figure's name" }, { key: 'table', kind: 'text', words: "a table's name" }]), words: "A float's label in this language's words; empty keeps each label as the original's." }),
+  Object.freeze({ path: 'labels', scope: 'language', group: 'labels', kind: 'object', nullable: true, members: Object.freeze(LABEL_KEYS.map(key => ({ key, kind: 'text', words: LABEL_WORDS[key] }))), words: "A float's label and each generated heading babel names (Abstract, References, Contents, …) in this language's words; an empty word, or none, keeps the original's." }),
   Object.freeze({ path: 'hyphenation.minWord', scope: 'set', group: 'hyphenation', kind: 'integer', min: 2, max: 20, step: 1, words: 'The shortest word, in letters, that is hyphenated.' }),
   Object.freeze({ path: 'hyphenation.en.left', scope: 'set', group: 'hyphenation', kind: 'integer', min: 1, max: 6, step: 1, words: 'The fewest letters English leaves before a hyphen.' }),
   Object.freeze({ path: 'hyphenation.en.right', scope: 'set', group: 'hyphenation', kind: 'integer', min: 1, max: 6, step: 1, words: 'The fewest letters English leaves after a hyphen.' }),
@@ -337,7 +345,7 @@ export function resolveRules(set, target) {
 const flat = v => (Array.isArray(v) ? `[${v.map(flat).join(', ')}]` : v !== null && typeof v === 'object' ? `{ ${Object.entries(v).map(([k, x]) => `${JSON.stringify(k)}: ${flat(x)}`).join(', ')} }` : JSON.stringify(v))
 const inOrder = (obj, keys) => Object.fromEntries(keys.filter(k => Object.hasOwn(obj, k)).map(k => [k, obj[k]]))
 /** the members of an object field, in the order the file writes them */
-const MEMBERS = Object.fromEntries([...SCRIPT_FIELDS, { key: 'labels', members: [{ key: 'figure' }, { key: 'table' }] }].filter(f => f.members).map(f => [f.key, f.members.map(m => m.key)]))
+const MEMBERS = Object.fromEntries([...SCRIPT_FIELDS, { key: 'labels', members: LABEL_KEYS.map(key => ({ key })) }].filter(f => f.members).map(f => [f.key, f.members.map(m => m.key)]))
 /**
  * The canonical bytes of a set, as text: keys in RULE_SET's order (the languages by tag), one field a line, LF, a final
  * newline. The file is always in this form, so that a changed value is one line of a diff. A field holding an object

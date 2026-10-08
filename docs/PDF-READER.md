@@ -909,7 +909,7 @@ The edge cases, decided:
 
 - **`NAMES_SHARE` (a table's groups)** is a translation rule. The workflow decides groups, and the rows a reader gets hold the decision (`state: 'kept'`), not the cells' translations. Making it a layout rule would mean rows that carry every kept cell's translation, for a threshold measured once.
 - **`authorsTranslated`** decides which units a target sends, so it is a translation rule and lives in `translate/kept.mjs`, apart from the TeX path's `scripts.mjs`.
-- **Float labels** (the names a language gives a figure or a table, and whether to use them) are layout: one language's choice at draw time. **Hyphenation** (which patterns a target uses, and their minimums) is layout; the pattern files are assets the host serves, and the algorithms are code.
+- **Float labels and babel's names** (the names a language gives a figure, a table and each generated heading: Abstract, References, Contents, …, and whether to use them) are layout: one language's choice at draw time. Where each name stands is extraction: the layout marks wrap the name macros' text and the layout file locates each occurrence (D1a). **Hyphenation** (which patterns a target uses, and their minimums) is layout; the pattern files are assets the host serves, and the algorithms are code.
 - **The font roles** (which CJK family, Kai and weights a script takes) are layout. The face catalog (files, licences, size corrections, coverage) and the Latin design table are facts about files and stay code.
 - **`textless`** is extraction, but v0 also applies it at draw time to a unit's source (only the alignment fallback reads it). A reader applying an extraction rule to a bundle's content is a defect class; it is listed for the debt pass.
 - **Cell membership** (`groupOf`, from `tableGrid`) is extraction: the bundle carries each cell's place.
@@ -918,12 +918,12 @@ The edge cases, decided:
 
 | Identity | Kind | Covers | Enters | A bump means |
 |---|---|---|---|---|
-| `BUNDLE` (web `'1'`, engine `'1'`) | reader contract | everything a reader parses: the bundle's shape, the units' tuple, kinds and flags, the layout file's schema, the manifest's schema, the left geometry | the request (§18.4) and the R2 key | readers older than it get `unknown-versions` until they update |
+| `BUNDLE` (web `'1'`, engine `'2'`: the layout file's schema 2, D1a) | reader contract | everything a reader parses: the bundle's shape, the units' tuple, kinds and flags, the layout file's schema, the manifest's schema, the left geometry | the request (§18.4) and the R2 key | readers older than it get `unknown-versions` until they update |
 | `PDFJS` | reader contract | the PDF.js whose reading the layout and the manifest are made against | as `BUNDLE` | as `BUNDLE` |
 | `PIPELINE_VERSION` | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT`, `REMOVAL` | extraction | the layout maker, the remover | the R2 key | bundles made again lazily |
 | `TRANSLATE_VERSION` (`translate/version.mjs`, `'1'`) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
-| `RULES_SCHEMA` (`rules/layout.mjs`, `2`) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
+| `RULES_SCHEMA` (`rules/layout.mjs`, `3`) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
 | the set's `version` | layout | the values | its immutable URL | readers take it on their next load |
 | `RULES_VERSION` (`src/core/rules/latexml.ts`) | HTML extraction | the HTML page's rule file | the HTML page's per-text key only | as DESIGN §5.5 |
 | `TYPESETTING_VERSION` (`live.mjs`) | parked | the compile path | parked records | none |
@@ -931,7 +931,7 @@ The edge cases, decided:
 - **The web's translation identity** is `axt-tr/2|<paper>|v<version>|<target>|<chain>|p<PIPELINE>|t<TRANSLATE>|b<BUNDLE>`, with no `r<RULES>`: the rules of the HTML page cut none of a PDF's units.
 - **The background's per-text key** keeps `RULES_VERSION` for the HTML page's blocks only; a PDF text's key holds none (`cache/key.ts` `CacheSource`, named by every cache descriptor and `CACHE_KEY_VERSION` still 6: no HTML key changed, and a PDF text's old entries are no key of the new ones). The cache holds the translator's raw answer to a text, which no rule of reading changes.
 - **Until the extension's rows cache replaces `session/session.mjs`'s copies** (the extension's stage 5, task 10), a copy is judged by `PIPELINE_VERSION` alone, so a change of the translation rules that must void copies raises both.
-- **A file is refused by its schema, never by its maker.** `parseLayout` refuses a layout file whose `schema` is not 1 and `checkAddonManifest` a manifest whose `schema` is not 1; the file's `layout` and the manifest's `removal` are read for their shape (a version token) and never compared, so a reader opens what a newer maker or remover wrote. A change of either file's fields, bounds or meaning raises its `schema` and `BUNDLE`, not `LAYOUT` or `REMOVAL`.
+- **A file is refused by its schema, never by its maker.** `parseLayout` refuses a layout file whose `schema` is not 2 (1 before the babel names, D1a) and `checkAddonManifest` a manifest whose `schema` is not 1; the file's `layout` and the manifest's `removal` are read for their shape (a version token) and never compared, so a reader opens what a newer maker or remover wrote. A change of either file's fields, bounds or meaning raises its `schema` and `BUNDLE`, not `LAYOUT` or `REMOVAL`.
 
 ### 18.3 Bump rules
 
@@ -1000,7 +1000,7 @@ The rule set is one schema-validated file, `rules/layout-rules.json`: configurat
 | `cellClear` | script | cells | 0 to 5, step 0.1 | The room kept between a table cell's text and a rule over or under it, in PDF units. |
 | `cellCapMin` | script | cells | 0.3 to 1, step 0.05 | The smallest share of the size a cell's text may be capped to between its rules. |
 | `cjkFaces` | script | faces | group, kai, light; or none | The CJK family the script is drawn in; empty for an alphabet. |
-| `labels` | language | labels | figure, table; or none | A float's label in this language's words; empty keeps each label as the original's. |
+| `labels` | language | labels | figure, table, abstract, ref, bib, contents, listfigure, listtable, appendix, index, proof, preface, glossary; or none | A float's label and each generated heading babel names (Abstract, References, Contents, …) in this language's words; an empty word, or none, keeps the original's. |
 | `hyphenation.minWord` | set | hyphenation | 2 to 20 | The shortest word, in letters, that is hyphenated. |
 | `hyphenation.en.left` | set | hyphenation | 1 to 6 | The fewest letters English leaves before a hyphen. |
 | `hyphenation.en.right` | set | hyphenation | 1 to 6 | The fewest letters English leaves after a hyphen. |
