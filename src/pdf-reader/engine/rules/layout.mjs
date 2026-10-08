@@ -40,8 +40,10 @@ export const RULES_CAP = 65_536
 export const RULES_VALUES = 20_000
 /** a set nests at most this deep (its deepest field: scripts.<script>.cjkFaces.light) */
 const DEPTH_MAX = 8
-/** the readers' targets: every one must resolve, or the set is refused */
-export const TARGETS = Object.freeze(['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru'])
+/** the targets either reader offers, each of which must resolve or the set is refused: the web's eight and Portuguese, which the
+ *  extension's reader also typesets (scripts.mjs VERIFIED, compared by language and script: the extension's tag for Traditional
+ *  Chinese is zh-TW). A test holds that every VERIFIED language is here */
+export const TARGETS = Object.freeze(['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru', 'pt'])
 export const SCRIPTS = Object.freeze(['Hans', 'Hant', 'Jpan', 'Kore', 'Latn', 'Cyrl'])
 /** the scripts whose text is set by CJK rules (cjk in the fit's parameters); each must name its CJK faces */
 const CJK_SCRIPTS = new Set(['Hans', 'Hant', 'Jpan', 'Kore'])

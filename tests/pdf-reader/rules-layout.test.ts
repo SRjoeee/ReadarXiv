@@ -24,6 +24,8 @@ type Edit = any
 const v1 = (edit?: (s: Edit) => void): Edit => { const s = JSON.parse(text(V1_FILE)); edit?.(s); return s }
 const V1 = parseRules(v1())
 const PARAMS_V1 = JSON.parse(text(resolve('tests/pdf-reader/rules/params-v1.json'))) as Record<string, Record<string, unknown>>
+/** the targets the engine had before the migration, which params-v1.json holds the Params of (the web's eight) */
+const MIGRATED = ['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru']
 
 /** the refusal parseRules gives a set, or a failure where it is read */
 function refusal(json: unknown): RulesRefusal {
@@ -69,7 +71,7 @@ describe('the built-in set', () => {
   })
 
   it('holds every target and every script, and the languages beside them the language wave will add to', () => {
-    expect(TARGETS).toEqual(['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru'])
+    expect(TARGETS).toEqual([...MIGRATED, 'pt'])
     expect(SCRIPTS).toEqual(['Hans', 'Hant', 'Jpan', 'Kore', 'Latn', 'Cyrl'])
     expect(RULES_CAP).toBe(65_536)
     expect(RULES_VALUES).toBe(20_000)
@@ -78,11 +80,24 @@ describe('the built-in set', () => {
     // (the file is about 8 KB: well within the cap, with room for the language wave)
     expect(text(BUILTIN_FILE).length).toBeLessThan(RULES_CAP / 4)
   })
+
+  it('requires every target either reader offers: every language the extension\'s reader typesets (VERIFIED) is one of TARGETS', () => {
+    // (compared by language and script, as scripts.mjs verified does: VERIFIED says zh-Hant where the extension's tag, and the
+    // set's, is zh-TW)
+    const key = (tag: string) => { const l = new Intl.Locale(tag).maximize(); return `${l.language}-${l.script}` }
+    const required = new Set(TARGETS.map(key))
+    for (const v of VERIFIED) expect(required.has(key(v)), `${v} is verified but a set may omit it`).toBe(true)
+    // (and a set without one of them is refused, named, as a reader would find it when that language's run opened)
+    for (const v of VERIFIED) {
+      const tag = TARGETS.find(t => key(t) === key(v))!
+      expect(refusal(v1(s => { delete s.languages[tag] })).field, v).toBe(`languages.${tag}`)
+    }
+  })
 })
 
 describe('resolving a target (resolveRules)', () => {
   it('gives the Params the engine made before the migration, for every target: the resolver keeps today\'s meaning', () => {
-    for (const t of TARGETS) {
+    for (const t of MIGRATED) {
       const params = resolveRules(V1, t).params as unknown as Record<string, unknown>
       const old = PARAMS_V1[t]!
       expect(Object.keys(old).length, t).toBeGreaterThan(15)
@@ -427,11 +442,11 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     for (const tag of ['x', 'toolong-tag-subtag-subtag-subtag-subtag', 'de_DE', 'de ', 'Intl.Locale']) expect(refusal(v1(s => { s.languages[tag] = { labels: null } })).field, tag).toBe(`languages.${tag.slice(0, 20)}`)
   })
 
-  it('a set without ru is refused; a set with pt besides is read', () => {
+  it('a set without ru or without pt (the extension\'s reader typesets it) is refused; a set with pt-BR besides is read', () => {
     expect(refusal(v1(s => { delete s.languages.ru })).field).toBe('languages.ru')
+    expect(refusal(v1(s => { delete s.languages.pt })).field).toBe('languages.pt')
     expect(Object.keys(V1.languages)).toContain('pt')
     expect(parseRules(v1(s => { s.languages['pt-BR'] = { labels: { figure: 'Figura', table: 'Tabela' } } })).languages['pt-BR']).toEqual({ labels: { figure: 'Figura', table: 'Tabela' } })
-    expect(parseRules(v1(s => { delete s.languages.pt })).languages.pt).toBeUndefined()
   })
 
   it('refuses every bidirectional control character of Unicode, and lets the other invisible characters of a text through', () => {

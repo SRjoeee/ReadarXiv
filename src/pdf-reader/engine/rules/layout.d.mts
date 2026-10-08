@@ -9,8 +9,8 @@ export declare const RULES_SCHEMA: 1
 export declare const RULES_CAP: 65536
 /** a set's JSON values at most, counted before JSON.parse */
 export declare const RULES_VALUES: 20000
-/** the readers' targets: every one must resolve, or the set is refused */
-export declare const TARGETS: readonly ['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru']
+/** the targets either reader offers (the web's eight and the extension's Portuguese): every one must resolve, or the set is refused */
+export declare const TARGETS: readonly ['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru', 'pt']
 export declare const SCRIPTS: readonly ['Hans', 'Hant', 'Jpan', 'Kore', 'Latn', 'Cyrl']
 export type Script = (typeof SCRIPTS)[number]
 
