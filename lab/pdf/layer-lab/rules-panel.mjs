@@ -57,6 +57,11 @@ export function createRulesPanel({ root, h, icon, t, R, names, catalog, onChange
   /** which loaded set the working set is: counted up each time one is loaded, so that an answer that comes late (a save sent
    *  before another set was loaded) can tell whether it still belongs to the set shown */
   let generation = 0
+  /** the newest load begun (a file, a picked file, a ref, a published set to load), and the newest published set fetched to compare
+   *  with: a load answers only if no later one has begun, so that the slower of two overlapping requests cannot replace the
+   *  set the reader chose last, nor say how it went */
+  let loading = 0
+  let comparing = 0
   let ui = null
   let rest = null
   const fields = R.RULES_FIELDS
@@ -105,12 +110,15 @@ export function createRulesPanel({ root, h, icon, t, R, names, catalog, onChange
 
   async function loadFile({ quiet = false } = {}) {
     if (!quiet && !proceed()) return
+    const mine = ++loading
     try {
       const loaded = await fetchSet('/api/rules')
+      if (mine !== loading) return
       S.file = { set: loaded.set, sha256: loaded.sha256 }
       adopt(loaded, { kind: 'file', label: t('rules.from.file') })
       if (!quiet) say('ok', t('rules.loaded', t('rules.from.file'), loaded.set.version))
     } catch (e) {
+      if (mine !== loading) return
       // (no file to read: the engine's built-in set, so that the quick view still draws)
       if (!S.working) { S.file = null; adopt({ set: structuredClone(R.BUILTIN_RULES), sha256: null }, { kind: 'builtin', label: t('rules.from.builtin') }) }
       say('warn', said(e, t('rules.from.file')))
@@ -118,27 +126,39 @@ export function createRulesPanel({ root, h, icon, t, R, names, catalog, onChange
   }
   async function loadPicked(picked) {
     if (!picked || !proceed()) return
+    const mine = ++loading
     try {
       if (picked.size > R.RULES_CAP) throw Object.assign(new Error('too large'), { name: 'RulesRefusal', field: 'bytes', why: `${picked.size} bytes, more than ${R.RULES_CAP}` })
       const loaded = await R.readRules(new Uint8Array(await picked.arrayBuffer()))
+      if (mine !== loading) return
       adopt(loaded, { kind: 'picked', label: picked.name })
       say('ok', t('rules.loaded', picked.name, loaded.set.version))
-    } catch (e) { say('warn', said(e, picked.name)) }
+    } catch (e) { if (mine === loading) say('warn', said(e, picked.name)) }
   }
   async function loadRef(ref, { quiet = false } = {}) {
     ref = ref.trim()
     if (!ref || (!quiet && !proceed())) return false
+    const mine = ++loading
     try {
       const loaded = await fetchSet(`/api/rules?ref=${encodeURIComponent(ref)}`)
+      if (mine !== loading) return false
       const label = loaded.commit ? `${ref} (${loaded.commit.slice(0, 8)})` : ref
       adopt(loaded, { kind: 'ref', label, ref })
       say('ok', t('rules.loaded', label, loaded.set.version))
       return true
-    } catch (e) { say('warn', e?.status ? t('rules.refFailed', ref, e.message) : said(e, ref)); return false }
+    } catch (e) {
+      if (mine === loading) say('warn', e?.status ? t('rules.refFailed', ref, e.message) : said(e, ref))
+      return false
+    }
   }
-  /** the published current set of an environment, or why it is not there */
-  async function publishedSet(env) {
-    try { return await fetchSet(`/api/rules/published?env=${env}`) } catch (e) {
+  /** the published current set of an environment, or why it is not there. `live` says whether the request is still the newest
+   *  of its kind: a set that comes after it is not is let go, and a failure then is not told */
+  async function publishedSet(env, live) {
+    try {
+      const loaded = await fetchSet(`/api/rules/published?env=${env}`)
+      return live() ? loaded : null
+    } catch (e) {
+      if (!live()) return null
       if (e?.unreachable || e?.status === 404 || e?.status === 502 || e?.status === 504) say('warn', t('rules.unavailable', t(`rules.env.${env}`), e.message))
       else say('warn', said(e, t(`rules.env.${env}`)))
       return null
@@ -146,14 +166,16 @@ export function createRulesPanel({ root, h, icon, t, R, names, catalog, onChange
   }
   async function loadPublished(env) {
     if (!proceed()) return
-    const loaded = await publishedSet(env)
+    const mine = ++loading
+    const loaded = await publishedSet(env, () => mine === loading)
     if (!loaded) return
     S.published = { env, set: loaded.set, version: loaded.set.version }
     adopt(loaded, { kind: env, label: t(`rules.env.${env}`) })
     say('ok', t('rules.loaded', t(`rules.env.${env}`), loaded.set.version))
   }
   async function fetchPublished(env) {
-    const loaded = await publishedSet(env)
+    const mine = ++comparing
+    const loaded = await publishedSet(env, () => mine === comparing)
     if (!loaded) return
     S.published = { env, set: loaded.set, version: loaded.set.version }
     say('ok', t('rules.fetched', t(`rules.env.${env}`), loaded.set.version))

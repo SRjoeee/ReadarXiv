@@ -41,11 +41,14 @@ let root: HTMLElement
 /** what GET /api/rules answers (the worktree's file), and what a ref's route does */
 let served: Buffer
 let ofRef: Buffer
+/** answers that wait for the test, by URL: { bytes, or the status to fail with } and the gate that lets them out */
+let held: Map<string, { answer: () => Promise<unknown>; gate: Promise<void> }>
 
 beforeEach(() => {
   posts = []
   served = FILE
   ofRef = FILE
+  held = new Map()
   root = document.createElement('div')
   document.body.replaceChildren(root)
   vi.stubGlobal('confirm', () => true)
@@ -57,6 +60,8 @@ beforeEach(() => {
         refuse: (status, body) => done({ ok: false, status, json: async () => body }),
       }))
     }
+    const waiting = held.get(url)
+    if (waiting) return waiting.gate.then(waiting.answer)
     if (url === '/api/rules') return answerWith(served)
     if (url.startsWith('/api/rules?ref=')) return answerWith(ofRef)
     throw new Error(url)
@@ -80,6 +85,26 @@ const writeNote = (text: string) => {
 }
 /** let the click's promise chain run */
 const settle = () => new Promise<void>(done => setTimeout(done, 0))
+/** an answer to a URL that waits until the returned function is called: with a rule set's bytes, or with a failure */
+const hold = (url: string, answer: Buffer | { status: number; why: string }) => {
+  let release!: () => void
+  const gate = new Promise<void>(done => { release = done })
+  held.set(url, {
+    gate,
+    answer: () => (Buffer.isBuffer(answer) ? answerWith(answer) : Promise.resolve({ ok: false, status: answer.status, json: async () => ({ ok: false, why: answer.why }) })),
+  })
+  return release
+}
+/** a ref typed and loaded, without waiting for the answer */
+const askRef = (ref: string) => {
+  const input = root.querySelector('.ref-row input') as HTMLInputElement
+  input.value = ref
+  input.dispatchEvent(new Event('input'))
+  ;(root.querySelector('.ref-row button') as HTMLButtonElement).click()
+}
+const message = () => root.querySelector('p.note[role="status"]') as HTMLElement
+/** time for answers that are let go to have come (a set is read with a digest, which has no event to wait for) */
+const later = (ms = 100) => new Promise<void>(done => setTimeout(done, ms))
 /** a set loaded from a git ref, through the loads row */
 const loadRef = async (ref: string) => {
   const input = root.querySelector('.ref-row input') as HTMLInputElement
@@ -236,5 +261,55 @@ describe('the save', () => {
     save()
     await settle()
     expect(JSON.parse(posts[1]!.body).version).toBe(2)
+  })
+
+  it('shows the set that was asked for last when the answer to an earlier request comes after it', async () => {
+    const p = await panel()
+    const slowRelease = hold('/api/rules?ref=older', bytesOf(s => { s.version = 4; s.scripts.Hans.leadBase = 1.31 }))
+    const fastRelease = hold('/api/rules?ref=newer', bytesOf(s => { s.version = 5; s.scripts.Hans.leadBase = 1.32 }))
+    askRef('older')
+    askRef('newer')
+    fastRelease()
+    await vi.waitFor(() => expect(p.from()?.kind).toBe('ref'))
+    expect(p.from()!.ref).toBe('newer')
+    // (the earlier request is answered last: it changes nothing)
+    slowRelease()
+    await later()
+    expect(p.from()!.ref).toBe('newer')
+    expect(p.set()!.version).toBe(5)
+    expect(p.set()!.scripts.Hans!.leadBase).toBe(1.32)
+    expect(message().textContent).toContain('newer')
+  })
+
+  it('says nothing of a request that failed after a later one was asked for', async () => {
+    const p = await panel()
+    const failRelease = hold('/api/rules?ref=gone', { status: 404, why: 'no such branch' })
+    const goodRelease = hold('/api/rules?ref=there', bytesOf(s => { s.version = 5 }))
+    askRef('gone')
+    askRef('there')
+    goodRelease()
+    await vi.waitFor(() => expect(p.from()?.ref).toBe('there'))
+    failRelease()
+    await later()
+    expect(p.from()!.ref).toBe('there')
+    expect(message().textContent).toContain('rules.loaded')
+    expect(message().textContent).not.toContain('rules.refFailed')
+  })
+
+  it('lets the last of two published sets asked for win, in whichever order they come', async () => {
+    const p = await panel()
+    const stagingRelease = hold('/api/rules/published?env=staging', bytesOf(s => { s.version = 4; s.scripts.Hans.leadBase = 1.31 }))
+    const productionRelease = hold('/api/rules/published?env=production', bytesOf(s => { s.version = 3; s.scripts.Hans.leadBase = 1.32 }))
+    const click = (label: string) => [...root.querySelectorAll('.load-buttons button')].find(b => b.textContent === label) as HTMLButtonElement
+    click('rules.env.production').click()
+    click('rules.env.staging').click()
+    // (production, asked for first, is the one the reader gave up for staging, and it answers last)
+    stagingRelease()
+    await vi.waitFor(() => expect(p.from()?.kind).toBe('staging'))
+    productionRelease()
+    await later()
+    expect(p.from()!.kind).toBe('staging')
+    expect(p.set()!.version).toBe(4)
+    expect(p.set()!.scripts.Hans!.leadBase).toBe(1.31)
   })
 })
