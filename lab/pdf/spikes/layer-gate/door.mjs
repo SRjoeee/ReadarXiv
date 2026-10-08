@@ -154,7 +154,7 @@ window.door = {
   },
 }
 
-window.door.memory = async function memory({ name, target, rules, scenario, pages, every = 10 }) {
+window.door.memory = async function memory({ name, target, rules, scenario, pages: asked, every = 10 }) {
   // every canvas element the page makes from now on, held weakly: what it holds is the sum of those with pixels
   const made = new Set()
   const create = document.createElement.bind(document)
@@ -167,6 +167,11 @@ window.door.memory = async function memory({ name, target, rules, scenario, page
   const [bundleBytes, rows] = await Promise.all([bytes(`/door/${name}/bundle.json`), json(`/door/${name}/rows.json`)])
   const bundle = R.readBundle(bundleBytes)
   const doc = await pdfjs.getDocument({ data: await composedOf(name, bundle), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
+  // (the jump asks for the page after the last one laid: a paper needs a page more than a sample's span, and the span is the
+  // paper's at most; its page count is the bundle's, the composed document holding the removed pages too)
+  const N = bundle.paper.pages
+  if (N <= every) throw new Error(`${name}: ${N} pages, and the memory probe samples every ${every}`)
+  const pages = Math.min(asked, N - 1)
   const ruleSet = await ruleSetOf(rules)
   const samples = []
   const sample = async laid => {

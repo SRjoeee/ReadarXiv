@@ -247,7 +247,8 @@ const CHECKER = join(REPO, 'src/pdf-reader/engine/layer/check.mjs')
 const PROGRESS = process.env.LAYER_PROGRESS ?? join(homedir(), 'Downloads/readarxiv-test/layer-progress')
 const ONLY = typeof arg('only') === 'string' ? arg('only').split(',').filter(Boolean) : null
 const PAGES = typeof arg('pages') === 'string' ? Number(arg('pages')) : null
-const WORKERS = PERF ? 1 : typeof arg('workers') === 'string' ? Number(arg('workers')) : Math.max(1, Math.min(6, Math.floor(availableParallelism() / 2)))
+// (--perf and --door-memory: one worker, so that a reading is the fixture's own and not its neighbours' in the one browser)
+const WORKERS = PERF || MEMORY !== null ? 1 : typeof arg('workers') === 'string' ? Number(arg('workers')) : Math.max(1, Math.min(6, Math.floor(availableParallelism() / 2)))
 /** crops darkened in (the prototype's drawing, and the reader's since the layer round's fixes), or pasted source-over */
 const COMPOSITE = arg('composite') ?? 'darken'
 if (!['source-over', 'darken'].includes(COMPOSITE)) throw new Error(`--composite=${COMPOSITE}: source-over or darken`)
@@ -515,13 +516,15 @@ function rssKb() {
  * --door-memory: a fixture's bundle and rows made as --door makes them, then the door asked for page MEMORY at once and for
  * each page in turn, each in a page load of its own (layer-gate/door.mjs memory): what the page holds every 10th page laid
  */
+const RSS_BOUND = new WeakSet()
 async function memoryFixture(page, name, errors) {
   const { target } = nameOf(name)
   const removal = await addonOf(name)
   const made = await doorBundleOf(name, removal)
   DOOR_FILES.set(`/door/${name}/bundle.json`, made.bytes)
   DOOR_FILES.set(`/door/${name}/rows.json`, JSON.stringify(made.rows))
-  await page.exposeFunction('axtRss', () => rssKb())
+  // (once a page: a worker's page is the next fixture's too, and Playwright refuses a name bound twice)
+  if (!RSS_BOUND.has(page)) { await page.exposeFunction('axtRss', () => rssKb()); RSS_BOUND.add(page) }
   const o = { name, target, rules: '/rules/layout-rules.json', pages: MEMORY }
   const out = { name, memory: true, ready: true, scenarios: {} }
   for (const scenario of ['jump', 'steps']) {
@@ -806,13 +809,14 @@ if (MEMORY !== null) {
   const made = new Date().toISOString()
   const mb = v => (v === null || v === undefined ? '-' : (v / 2 ** 20).toFixed(1))
   for (const r of ran) for (const [scenario, samples] of Object.entries(r.scenarios)) {
-    console.log(`\n${r.name}, ${scenario === 'jump' ? `page ${MEMORY + 1} asked for at once` : 'each page in turn'}:\n  pages laid | canvases held | canvas MB | JS heap MB | browser RSS MB`)
+    console.log(`\n${r.name}, ${scenario === 'jump' ? `page ${MEMORY + 1} (or the paper's last) asked for at once` : 'each page in turn'}:\n  pages laid | canvases held | canvas MB | JS heap MB | browser RSS MB`)
     for (const x of samples) console.log(`  ${String(x.laid).padStart(10)} | ${String(x.canvases).padStart(13)} | ${mb(x.canvasBytes).padStart(9)} | ${mb(x.heap).padStart(10)} | ${mb(x.rss === null ? null : x.rss * 1024).padStart(14)}`)
   }
   const file = join(ROOT, 'out/layer-gate', `memory-${(engineInfo.commit ?? 'none').slice(0, 8)}${engineInfo.dirty ? '+' : ''}-${made.replace(/[:.]/g, '-')}.json`)
   writeFileSync(file, JSON.stringify({ schema: 1, made, seconds, engine: engineInfo, inputs: { ...inputs, door: DOOR, memory: MEMORY }, fixtures: Object.fromEntries(ran.map(r => [r.name, r])) }))
   console.log(`\nmemory: ${ran.length} outputs, to page ${MEMORY}, in ${seconds} s; the run in ${file}`)
-  process.exit(failures.length || ran.length !== asked.length ? 1 : 0)
+  // (a fixture whose page raised an error is a failed reading, though it returned one)
+  process.exit(failures.length || ran.length !== asked.length || ran.some(r => !r.ok) ? 1 : 0)
 }
 if (DOOR !== null) {
   const ran = [...results.values()].sort((a, b) => a.name.localeCompare(b.name))
