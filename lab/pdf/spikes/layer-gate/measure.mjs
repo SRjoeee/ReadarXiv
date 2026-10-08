@@ -162,7 +162,51 @@ export function modelPage({ units, ref, items, translated }) {
   // the drawn text area in cells: the model tier's denominator for its defect rates
   let modelCells = 0
   for (const u of drawn) if (u.kind !== 'cell' && u.kind !== 'author' && u.kind !== 'figure') for (const _ of cellsOf(u.orig)) modelCells++
-  return { units: counts, fills, geo, wrongPageText, droppedPh, cropForeign, modelCells }
+  return { units: counts, fills, geo, gaps: paraGapsOf(drawn, ref, items), wrongPageText, droppedPh, cropForeign, modelCells }
+}
+
+/**
+ * The gaps between paragraphs (D6, 2026-10-08): for two drawn body frames one above the other in a column, with nothing
+ * between them, the gap drawn from the upper's foot to the lower's top against the original's. A foot is its frame's last
+ * baseline less 0.22 of its size, a top its first plus 0.75 (geo's own). Nothing between: no other frame of the page's
+ * reference, no text item (a display), and no more than three of the upper's pitches of the original's (a graphic's room).
+ * Each gap's `ratio`, drawn ÷ original, and its `extra`, the drawn gap's excess in the upper frame's original pitches.
+ * A frame drawn short of its original's last line adds its blank to the gap below it, which no frame measure sees
+ */
+export function paraGapsOf(drawn, ref, items) {
+  const span = (a, b) => [Math.max(a.x0, b.x0), Math.min(a.x1, b.x1)]
+  const all = []
+  for (const r of ref) frameGroups(r.orig).forEach((f, i) => all.push({ key: `${r.id}|${i}`, x0: f.x0, x1: f.x1, top: f.first + 0.75 * f.size, foot: f.last - 0.22 * f.size }))
+  const body = []
+  for (const u of drawn) {
+    if (!BODY.has(u.kind)) continue
+    frameGroups(u.orig).forEach((fr, i) => {
+      const mine = linesIn(u, fr).sort((a, b) => b.baseline - a.baseline)
+      if (!mine.length) return
+      body.push({ key: `${u.id}|${i}`, x0: fr.x0, x1: fr.x1, pitch: fr.pitch, top: fr.first + 0.75 * fr.size, foot: fr.last - 0.22 * fr.size, dTop: mine[0].baseline + 0.75 * mine[0].size, dFoot: mine.at(-1).baseline - 0.22 * mine.at(-1).size })
+    })
+  }
+  const out = []
+  for (const a of body) {
+    // the nearest drawn body frame below it in its column (overlapping half the narrower's width)
+    let b = null
+    for (const c of body) {
+      if (c === a || c.top >= a.foot) continue
+      const [x0, x1] = span(a, c)
+      if (x1 - x0 < 0.5 * Math.min(a.x1 - a.x0, c.x1 - c.x0)) continue
+      if (!b || c.top > b.top) b = c
+    }
+    if (!b) continue
+    const g0 = a.foot - b.top
+    if (!(g0 > 0) || g0 > 3 * a.pitch) continue
+    const [x0, x1] = span(a, b)
+    const between = all.some(f => f.key !== a.key && f.key !== b.key && Math.min(x1, f.x1) - Math.max(x0, f.x0) > 1 && f.foot < a.foot && f.top > b.top)
+      || items.some(it => { const cy = (it.y0 + it.y1) / 2; return Math.min(x1, it.x1) - Math.max(x0, it.x0) > 1 && cy < a.foot && cy > b.top })
+    if (between) continue
+    const g = a.dFoot - b.dTop
+    out.push({ ratio: rd(g / g0, 3), extra: rd((g - g0) / a.pitch, 3) })
+  }
+  return out
 }
 
 /** 4-connected components of a mask, counted by size: their count; with `boxes`, the first BOXES regions' device-pixel

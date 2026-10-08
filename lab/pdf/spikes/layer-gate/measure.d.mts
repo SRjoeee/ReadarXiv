@@ -14,8 +14,13 @@ export declare function modelPage(o: { units: UnitIn[]; ref: RefUnit[]; items: I
   units: { textOn: number; textDrawn: number; cellsOn: number; cellsDrawn: number; left: Record<string, number> }
   fills: { kind: string; n: number; fill: number }[]
   geo: { id: number; kind: string; n: number; dTop: number; blank: number; dRight: number; pitch: number | null; onGrid: number; scale: number }[]
+  gaps: ParaGap[]
   wrongPageText: number; droppedPh: number; cropForeign: number; modelCells: number
 }
+/** a gap between two drawn body frames of a column with nothing between them: drawn ÷ original, and the drawn gap's excess
+ *  in the upper frame's original pitches */
+export interface ParaGap { ratio: number; extra: number }
+export declare function paraGapsOf(drawn: UnitIn[], ref: RefUnit[], items: Item[]): ParaGap[]
 export declare function pixelPage(o: Record<string, unknown>): Record<string, unknown>
 /** the wire formats' syntax left in a translation's text (a marker, its `#`, an escaped `@`, an entity, a tag): the matches */
 export declare function markerResidueOf(text: string): string[]

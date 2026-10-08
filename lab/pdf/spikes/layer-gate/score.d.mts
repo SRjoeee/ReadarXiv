@@ -7,7 +7,7 @@ export declare const TOLERANCE: { share: number; ratio: number; count: number; d
 /** a fixture's (or a page's) values: measures by key, and the defects' rates */
 export type Totals = Record<string, unknown> & { rates?: Record<string, number>; modelRates?: Record<string, number> }
 export interface PageEntry { p: number; [key: string]: unknown }
-export interface Frames { body: unknown[]; fills: number[]; pitches: number[]; scales: number[] }
+export interface Frames { body: unknown[]; fills: number[]; pitches: number[]; scales: number[]; gaps: { ratio: number; extra: number }[] }
 export declare function pageEntry(page: number, model: unknown, pixel: unknown): { entry: PageEntry; frames: Frames }
 export declare function fixtureTotals(pages: PageEntry[], frames: Frames[], tier: Tier): Totals
 export declare function ratesOf(t: Totals, tier: Tier): Record<string, number>
