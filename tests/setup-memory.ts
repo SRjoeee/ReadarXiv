@@ -16,22 +16,26 @@
 // tests/setup/memory.test.ts holds both
 import { PropertySymbol } from 'happy-dom'
 import { afterEach } from 'vitest'
+import { hooksOf, idEntryOf } from './happy-dom-hooks'
 
-/** The parts of happy-dom's internals this reads: the id table of a document, and the window an element belongs to */
-type IdTable = Map<string, { elements: unknown[]; htmlCollection: unknown }>
 type Internal = Record<symbol, unknown>
 
-const proto = Element.prototype as unknown as Record<symbol, (this: Internal, id: string) => void>
-const addIdentifier = proto[PropertySymbol.addIdentifierToWindow]!
+// happy-dom's private parts, looked for before anything is patched: what is not there is an Error naming the version
+// and the part (tests/happy-dom-hooks.ts), not a patch that quietly does nothing
+const hooks = hooksOf(PropertySymbol as unknown as Record<string, unknown>, Element.prototype)
 
-proto[PropertySymbol.addIdentifierToWindow] = function (this: Internal, id: string): void {
-  addIdentifier.call(this, id)
-  const owner = this[PropertySymbol.ownerDocument] as Internal
-  const window = this[PropertySymbol.window] as Record<string, unknown>
+;(Element.prototype as unknown as Record<symbol, unknown>)[hooks.addIdentifier] = function (this: Internal, id: string): void {
+  hooks.original.call(this, id)
+  const owner = this[hooks.ownerDocument] as Internal
+  const window = this[hooks.window] as Record<string, unknown>
   if (!id || owner === window.document) return
   // What the call just wrote: the element, or the collection of those sharing the id
-  const entry = (owner[PropertySymbol.elementIdMap] as IdTable).get(id)
+  const entry = idEntryOf(owner, hooks.elementIdMap, id)
   if (entry && (window[id] === entry.htmlCollection || entry.elements.includes(window[id]))) delete window[id]
 }
+
+// Once, now: a layout the hook cannot read fails here, in every file's setup, and not at the first element with an id
+// some test happens to make. Parsed after the patch, so that it leaves nothing on the window either
+new DOMParser().parseFromString('<!doctype html><html><body><p id="axt-hook-probe"></p></body></html>', 'text/html')
 
 afterEach(() => new Promise<void>(resolve => setImmediate(resolve)))
