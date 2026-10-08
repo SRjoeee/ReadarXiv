@@ -21,7 +21,9 @@
 // larger list removes 5 cuts and adds none, and all 5 are journal abbreviations in bibliographies
 // (`Theor. Comput. Sci.`, `J. Fac. Sci. Univ. Tokyo`, `Sci. Rep. 14`).
 
-import { fromAlpha, type WireFormat } from '@/core/protector'
+// (relative, and from the tokens module alone: the reader's engine imports this module, so its closure stays alias-free and
+// reaches nothing else of the protector; scripts/check-boundary.mjs, ENGINE_ALLOW)
+import { fromAlpha, type WireFormat } from '../protector/tokens'
 
 /**
  * A period after one of these does not end a sentence. Single capitals cover initials (`A. Turing`)
