@@ -162,57 +162,77 @@ describe("v0's open takes every choice for its target from the rule set it is gi
   })
 })
 
-describe("the leftover switch over a whole run (openProto, D6's F6c): 'pack' moves a paragraph up under a short one and paints it last; 'foot' moves nothing", () => {
-  /** units in one column of a 300 x 300 page, each { kind, rows (its lines, 12 pt apart from y 200), tr }: every line 200
-   *  pt wide in words of Times at 10 pt, the unit's source their text */
-  function column(units: { kind: string; rows: number[]; tr: string }[]) {
-    const H = 300
-    const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
-    const words = (u: number, r: number) => `unit${u} line${r} alpha beta gamma delta`
-    const items = units.flatMap((u, ui) => u.rows.map(r => ({ str: words(ui, r), transform: [10, 0, 0, 10, 20, 200 - 12 * r], width: 200, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false })))
-    const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), cleanup() {}, commonObjs: { get: () => ({ name: 'NimbusRomNo9L-Regu' }) } }
-    return {
-      doc: { numPages: 1, getPage: async () => page },
-      geometry: { schema: 1, kinds: units.map(u => u.kind), left: { pages: [[0, 0, 300, 300]], units: units.map((u, i) => [i, i, u.rows.map(r => [1, 20, 197.85 - 12 * r, 220, 206.83 - 12 * r])]) } },
-      units: units.map((u, ui) => ({ kind: u.kind, src: u.rows.map(r => words(ui, r)).join(' '), state: 'whole', pieces: [{ t: 'text', tr: true, s: u.tr }] })),
-    }
+/** a column of units on a 300 x 300 page, each { kind, rows (its lines, 12 pt apart from y 200), tr }: every line 200 pt
+ *  wide in words of Times at 10 pt, the unit's source their text (the leftover switch's page, below) */
+function column(units: { kind: string; rows: number[]; tr: string }[]) {
+  const H = 300
+  const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
+  const words = (u: number, r: number) => `unit${u} line${r} alpha beta gamma delta`
+  const items = units.flatMap((u, ui) => u.rows.map(r => ({ str: words(ui, r), transform: [10, 0, 0, 10, 20, 200 - 12 * r], width: 200, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false })))
+  const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), cleanup() {}, commonObjs: { get: () => ({ name: 'NimbusRomNo9L-Regu' }) } }
+  return {
+    doc: { numPages: 1, getPage: async () => page },
+    geometry: { schema: 1, kinds: units.map(u => u.kind), left: { pages: [[0, 0, 300, 300]], units: units.map((u, i) => [i, i, u.rows.map(r => [1, 20, 197.85 - 12 * r, 220, 206.83 - 12 * r])]) } },
+    units: units.map((u, ui) => ({ kind: u.kind, src: u.rows.map(r => words(ui, r)).join(' '), state: 'whole', pieces: [{ t: 'text', tr: true, s: u.tr }] })),
   }
-  // A, six lines, translated in two (thirty characters, twenty a line): filled to 2 em of 10 pt over a pitch of 12, 1.667,
-  // its last line at 180, 40 over its original's last (140); B, two lines under it, translated in one; C, a caption below
-  const page = () => column([{ kind: 'para', rows: [0, 1, 2, 3, 4, 5], tr: '\u6c49'.repeat(30) }, { kind: 'para', rows: [6, 7], tr: '\u5b57'.repeat(20) }, { kind: 'caption', rows: [9], tr: '\u56fe'.repeat(10) }])
+}
+// A, six lines, translated in two (thirty characters, twenty a line): filled to 2 em of 10 pt over a pitch of 12, 1.667,
+// its last line at 180, 40 over its original's last (140); B and C, two lines each, under it, each translated in one; D, a
+// caption below them
+const SWITCH_PAGE = () => column([
+  { kind: 'para', rows: [0, 1, 2, 3, 4, 5], tr: '\u6c49'.repeat(30) },
+  { kind: 'para', rows: [6, 7], tr: '\u5b57'.repeat(20) },
+  { kind: 'para', rows: [8, 9], tr: '\u5b57'.repeat(20) },
+  { kind: 'caption', rows: [11], tr: '\u56fe'.repeat(10) },
+])
+/** a page's drawing, its SVG and its operations, as one SHA-256 */
+const drawingOf = async (run: Awaited<ReturnType<typeof open>>) => {
+  const bytes = new TextEncoder().encode(`${run.rows[0]!.svg.outerHTML}\n${JSON.stringify(run.rows[0]!.ops)}`)
+  return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('')
+}
+/** SWITCH_PAGE's drawing by the engine before the leftover switch (0be9390d, D6's F6b, built in a scratch directory from
+ *  `git archive 0be9390d src`), opened with its built-in set but Chinese's fill top at 2 em as the set is now: what 'foot'
+ *  must still draw */
+const BEFORE_THE_SWITCH = '8bbac5fa00176badb835aa6e10bb614e4d00860ad954641f8ae0cec5d8d7a4b6'
+
+describe("the leftover switch over a whole run (openProto, D6's F6c): 'pack' moves the paragraphs up under a short one and paints them last, from the top; 'foot' draws as before the switch", () => {
   const packed = () => { const set = editable(); set.scripts.Hans!.leftover = 'pack'; return set }
   type Laid = { id: number; layout: { lines: { baseline: number }[] } }
   const linesOf = (run: Awaited<ReturnType<typeof open>>, id: number) => (run.placed.find((p: { id: number }) => p.id === id) as unknown as Laid).layout.lines.map(l => l.baseline)
   /** the units in the order their drawing was made on the page (the audit's first entry of each) */
   const painted = (run: Awaited<ReturnType<typeof open>>) => [...new Set(run.audit.map((a: { unit: number }) => a.unit))]
+  const packOf = (run: Awaited<ReturnType<typeof open>>, id: number) => (run.stats.find(r => r.id === id) as unknown as { pack?: number }).pack
 
-  it("with 'pack', B rises the 40 A leaves, its record says so, and it is painted after the others, top first", async () => {
-    const run = await open({ rules: packed() }, page())
+  it("with 'pack', B rises what A leaves and C what B then leaves, each recorded, painted after the others, top first", async () => {
+    const run = await open({ rules: packed() }, SWITCH_PAGE())
     await run.until(1)
     const [a0, a1] = linesOf(run, 0)
     expect([a0, a1!]).toEqual([200, expect.closeTo(180, 2)])
-    const [b0] = linesOf(run, 1)
-    // (it rises exactly what A's last line stands over A's original last: the original's distance between them kept)
+    // (B keeps the original's distance under A's last drawn line: it rises what A's last line stands over A's original last)
+    const [b0] = linesOf(run, 1), [c0] = linesOf(run, 2)
     expect(b0! - 128).toBeCloseTo(a1! - 140, 6)
-    expect(b0! - 128).toBeCloseTo(40, 1)
-    expect((run.stats.find(r => r.id === 1) as unknown as { pack: number }).pack).toBeCloseTo(40, 1)
-    expect(run.stats.find(r => r.id === 0)).not.toHaveProperty('pack')
-    // (the caption is no paragraph: it stays, and is painted before the unit that moved)
-    expect(linesOf(run, 2)).toEqual([92])
-    expect(painted(run)).toEqual([0, 2, 1])
+    // (and C, under B's one line, what B's line then stands over B's original last, 116)
+    expect(c0! - 104).toBeCloseTo(b0! - 116, 6)
+    expect(packOf(run, 1)).toBeCloseTo(40, 1)
+    expect(packOf(run, 2)).toBeCloseTo(52, 1)
+    expect(packOf(run, 0)).toBeUndefined()
+    // (the caption is no paragraph: it stays; the two that moved are painted last, the upper first)
+    expect(linesOf(run, 3)).toEqual([68])
+    expect(painted(run)).toEqual([0, 3, 1, 2])
+    run.dispose()
   })
 
-  it("with 'foot', nothing moves, and the drawing is the built-in set's: the same SVG and the same operations", async () => {
+  it("with 'foot', nothing moves, the units are painted in their laying order, and the drawing is the one before the switch", async () => {
     const set = editable()
     expect(set.scripts.Hans!.leftover).toBe('foot')
-    const foot = await open({ rules: set }, page()), built = await open({}, page()), pack = await open({ rules: packed() }, page())
+    const foot = await open({ rules: set }, SWITCH_PAGE()), built = await open({}, SWITCH_PAGE()), pack = await open({ rules: packed() }, SWITCH_PAGE())
     await Promise.all([foot.until(1), built.until(1), pack.until(1)])
-    expect(linesOf(foot, 1)).toEqual([128])
+    expect([linesOf(foot, 1), linesOf(foot, 2)]).toEqual([[128], [104]])
     expect(foot.stats.some(r => 'pack' in r)).toBe(false)
-    expect(painted(foot)).toEqual([0, 1, 2])
-    expect(foot.rows[0]!.svg.outerHTML).toBe(built.rows[0]!.svg.outerHTML)
-    expect(foot.rows[0]!.ops).toEqual(built.rows[0]!.ops)
-    expect(pack.rows[0]!.svg.outerHTML).not.toBe(foot.rows[0]!.svg.outerHTML)
+    expect(painted(foot)).toEqual([0, 1, 2, 3])
+    expect(await drawingOf(foot)).toBe(BEFORE_THE_SWITCH)
+    expect(await drawingOf(built)).toBe(BEFORE_THE_SWITCH)
+    expect(await drawingOf(pack)).not.toBe(BEFORE_THE_SWITCH)
     for (const r of [foot, built, pack]) r.dispose()
   })
 })
