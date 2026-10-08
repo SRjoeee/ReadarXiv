@@ -3,7 +3,6 @@ import { type BundleUnit, bundleUnitsOf, type ReadBundle, UNIT_FLAG_BITS } from 
 import {
   batchesOf, layerRows, type Row, rowOf, type RowSourceUnit, runRows, sourceUnitsOf, toTranslate, type TranslateResult, unitOf,
 } from '@/pdf-reader/engine/layer-proto/rows.mjs'
-import { PIECES_MAX as NET_PIECES_MAX } from '@/pdf-reader/engine/layer/net.mjs'
 import { kOfSource, trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { PIECES_MAX } from '@/pdf-reader/engine/layout/json.mjs'
 import { type BatchReport, type Compiled, keptFor, openPaper, runLive } from '@/pdf-reader/engine/pipeline/live.mjs'
@@ -293,9 +292,8 @@ describe('unitOf', () => {
     for (const c of refused) expect(unit(`a${String.fromCharCode(c)}b`), `U+${c.toString(16)}`).toBeNull()
     for (const c of [0x09, 0x0a, 0x20, 0xa0, 0x2029, 0x2065, 0x206a]) expect(unit(`a${String.fromCharCode(c)}b`), `U+${c.toString(16)}`).not.toBeNull()
   })
-  it("is null for a row of more pieces than an answer may have (PIECES_MAX, layer/net.mjs's): one k repeated makes no unit of it", () => {
+  it("is null for a row of more pieces than an answer may have (PIECES_MAX, layout/json.mjs's): one k repeated makes no unit of it", () => {
     const b = base()
-    expect(PIECES_MAX).toBe(NET_PIECES_MAX)
     const row = (n: number, piece: number | string) => [0, Array.from({ length: n }, () => piece), 'whole', null, null] as never
     expect((unitOf(b, row(PIECES_MAX, 0)) as { pieces: unknown[] }).pieces).toHaveLength(PIECES_MAX)
     expect(unitOf(b, row(PIECES_MAX + 1, 0))).toBeNull()

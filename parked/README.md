@@ -84,6 +84,24 @@ engine from `src/pdf-reader/engine/`, and the siblings that stayed alive from `l
 their own location (`out/…`, `data/…`, `new URL('..', import.meta.url)`) name the experiment's layout, which a part's
 root is, not the lab's.
 
+## parked/engine/ — the first instant layer (v1) and its tests
+
+The engine's first layer, `layer/{breaks,draw,fit,hyphen,layer,net,page,tokens}.mjs` (with their `.d.mts`): the unit-by-unit fit
+into the layout file's frames, the line breaker, the net that refused a failing unit, the page-even pass and the entry that
+joined them (`layer/layer.mjs`), and `rules/layer-rules.mjs`, its per-script rules. The drawn layer is v0, `layer-proto/`,
+opened through the reader's door (`layer-proto/reader.mjs`); nothing in an entry or in a kept gate imports these any more.
+`tests/` holds their unit tests and the two helpers they share (`helpers/layer-fixtures.ts`, `helpers/layer-layout.ts`; the
+layout builder the live tests use is `tests/pdf-reader/helpers/layout-of.ts`). The checker `layer/check.mjs` stayed in the engine,
+since the layer gate's instrument imports it by its address; its test, which sets units with the fit, is here.
+
+Last ran at the freeze: the tag `exp-freeze-2026-10-07`, which names commit `a2267b287b2c7cb87dfdb70481a3832d140b8eb8`, and
+with the engine's tests at commit `010c578996e1d0764337f1f42f9e22a40d722d37` (`next` after pull request #331).
+
+**Reviving it needs** that commit's tree around it: the files import the live engine from `src/pdf-reader/engine/` (the font
+roles, the layout file's parser, the pieces) by relative paths, and `scriptOf`, which `layer-rules.mjs` re-exports, is now
+`rules/script.mjs`'s. The layer gate's default kind (`--engine-kind=layer`) and the layer lab's v1 view load `layer/layer.mjs`
+and report that it is not there; the gate measures v0 (`--engine-kind=proto`, `--door`).
+
 ## Still to come
 
 The extension's own compile client — the final compile in the reader's session and the store of compiled PDFs under

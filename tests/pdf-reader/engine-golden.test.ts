@@ -17,7 +17,7 @@ import { rehydrate, serialize, serializeTags, translateUnits } from '@/pdf-reade
 import { strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
 import { typesetting } from '@/pdf-reader/engine/pipeline/typeset/tex.mjs'
 import { DESIGN } from '@/pdf-reader/engine/pipeline/typeset/type.mjs'
-import { column, layoutOf } from './helpers/layer-layout'
+import { column, layoutOf } from './helpers/layout-of'
 
 // The reader's engine, locked by what it makes before its files move (Stage 5, Task 4): every output below is SHA-256
 // of a canonical JSON of what the engine gives for an input this repository holds and wrote itself (the sources that

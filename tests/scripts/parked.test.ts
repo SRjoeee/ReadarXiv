@@ -116,7 +116,7 @@ describe('parked/README.md', () => {
   const COMMIT = /^[0-9a-f]{7,40}$/
 
   it('has a section for each parked part, and in it the freeze tag and a commit of 12 to 40 hex digits', () => {
-    expect(parts().sort()).toEqual(['lab', 'tex-page'])
+    expect(parts().sort()).toEqual(['engine', 'lab', 'tex-page'])
     for (const part of parts()) {
       const { tags, commits } = refsOf(part)
       expect([part, tags.length > 0, tags.filter(tag => !TAG.test(tag))]).toEqual([part, true, []])
