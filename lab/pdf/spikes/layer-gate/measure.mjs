@@ -142,12 +142,19 @@ export function modelPage({ units, ref, items, translated }) {
       const dTop = mine[0].baseline + 0.75 * f, dBottom = dLast - 0.22 * f
       const gaps = mine.slice(1).map((l, i) => mine[i].baseline - l.baseline).filter(g => g > 0.1).sort((a, b) => a - b)
       const dPitch = gaps.length ? gaps[gaps.length >> 1] : null
+      // (the rhythm a reader sees, pageDrift's: the drawn gaps between consecutive lines of one flow segment, never across a
+      // held block, a display between two, against the original's gaps of no more than half again its closest, which a
+      // display's room is not)
+      const seg = mine.slice(1).map((l, i) => (l.block !== undefined && l.block === mine[i].block ? mine[i].baseline - l.baseline : null)).filter(g => g !== null && g > 0.1).sort((a, b) => a - b)
+      const og = fr.lines.slice(1).map((l, i) => fr.lines[i].baseline - l.baseline).filter(g => g > 0.1)
+      const oLine = og.length ? og.filter(g => g <= 1.5 * Math.min(...og)).sort((a, b) => a - b) : []
       // rounded as the parity harness rounded them (its floor was taken so): a frame 0.996 lines short is one line short
       geo.push({
         id: u.id, kind: u.kind, n: fr.n,
         dTop: rd(dTop - oTop, 2), blank: rd((dBottom - oBottom) / fr.pitch, 2),
         dRight: rd(Math.max(...mine.map(l => l.x1)) - fr.x1, 2),
         pitch: dPitch && fr.n > 1 ? rd(dPitch / fr.pitch, 3) : null,
+        rhythm: seg.length && oLine.length ? rd(seg[seg.length >> 1] / oLine[oLine.length >> 1], 3) : null,
         onGrid: rd(mine.filter(l => fr.lines.some(o => Math.abs(o.baseline - l.baseline) < 0.5)).length / mine.length, 2),
         scale: rd(f / fr.size, 3),
       })

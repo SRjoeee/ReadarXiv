@@ -71,8 +71,8 @@ export const MEASURES = [
   ['labelsSource', 'model', 'count', 'down', 'labels left in the source language the final names'],
 ]
 /** recorded beside them, not gated: the pitch is the rules' (CJK's leading is 1.3 by rule), the top a position, and the
- *  most a page's drawn rhythm (its body frames' median pitch against the original's) moves from the last page before it
- *  that has one (D6: the rhythm a reader sees, page to page) */
+ *  most a page's drawn rhythm (its body frames' median line gap within a flow segment against the original's, measure.mjs
+ *  rhythm) moves from the last page before it that has one (D6: the rhythm a reader sees, page to page) */
 export const REPORTED = [['pitch', 'pitch ratio'], ['dTop', '|top shift| (pt)'], ['onGrid', 'lines on a layout baseline'], ['pageDrift', "page pitch's drift (most)"]]
 export const TOLERANCE = { share: 0.002, ratio: 0.02, count: 0, defect: 0 }
 /** the defects that are counts of things (their rates compared), and the counts each sums from a page */
@@ -95,6 +95,7 @@ export function pageEntry(page, model, pixel) {
   const body = m.geo.filter(g => ['para', 'abstract', 'theorem'].includes(g.kind))
   const fills = m.fills.filter(f => ['para', 'abstract', 'theorem'].includes(f.kind) && f.n >= 3).map(f => f.fill)
   const pitches = body.map(g => g.pitch).filter(x => x)
+  const rhythms = body.map(g => g.rhythm).filter(x => x)
   const scales = body.map(g => g.scale)
   const blanks = body.map(g => Math.max(0, g.blank))
   const gaps = m.gaps ?? []
@@ -102,7 +103,7 @@ export function pageEntry(page, model, pixel) {
     p: page,
     textOn: m.units.textOn, textDrawn: m.units.textDrawn, cellsOn: m.units.cellsOn, cellsDrawn: m.units.cellsDrawn, left: m.units.left,
     frames: body.length, fills: fills.length, fill: r(median(fills), 3), blankLines: r(blanks.length ? sum(blanks, x => x) / blanks.length : null, 3),
-    framesBlank1: blanks.filter(b => b >= 1).length, pitch: r(median(pitches), 3), pitchSpread: pitches.length >= 2 ? r(Math.max(...pitches) - Math.min(...pitches), 3) : null,
+    framesBlank1: blanks.filter(b => b >= 1).length, pitch: r(median(pitches), 3), rhythm: r(median(rhythms), 3), pitchSpread: pitches.length >= 2 ? r(Math.max(...pitches) - Math.min(...pitches), 3) : null,
     scale: r(median(scales), 3), fullSize: scales.filter(s => s >= 0.999).length, scaleSpread: scales.length >= 2 ? r(Math.max(...scales) - Math.min(...scales), 3) : null,
     dTop: r(median(body.map(g => Math.abs(g.dTop))), 2), overRight: body.filter(g => g.dRight > 1).length, onGrid: r(median(body.map(g => g.onGrid)), 3),
     cropForeign: m.cropForeign, wrongPageText: m.wrongPageText, droppedPh: m.droppedPh, modelCells: m.modelCells,
@@ -148,7 +149,7 @@ export function fixtureTotals(pages, frames, tier) {
     groupsSplit: sum(pages, p => p.groupsSplit), labelsSource: sum(pages, p => p.labelsSource),
     style: [sum(pages, p => p.style?.[0]), sum(pages, p => p.style?.[1])],
     paraGapN: gaps.length, paraGap: r(median(gaps.map(g => g.ratio)), 3), paraGapWide: r(share(gaps.filter(g => g.extra >= 1).length, gaps.length)),
-    pageDrift: driftOf(pages.map(p => p.pitch)),
+    pageDrift: driftOf(pages.map(p => p.rhythm)),
   }
   if (tier === 'pixel') {
     const tc = sum(pages, p => p.textCells), cc = sum(pages, p => p.cellCells)

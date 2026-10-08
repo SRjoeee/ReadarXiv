@@ -408,7 +408,7 @@ window.gate = {
     const refOf = new Map(refHere.map(r => [r.id, r]))
     const recs = run.stats.filter(r => r.pages.includes(p))
     const units = recs.map(r => {
-      const lines = (r.lines ?? []).filter(l => l[0] === p).map(l => ({ baseline: l[1], size: r.f, x0: l[6], x1: l[7] })).filter(l => Number.isFinite(l.x0) && Number.isFinite(l.x1))
+      const lines = (r.lines ?? []).filter(l => l[0] === p).map(l => ({ baseline: l[1], size: r.f, x0: l[6], x1: l[7], block: l[8] })).filter(l => Number.isFinite(l.x0) && Number.isFinite(l.x1))
       const mine = S.audit.get(`${r.id}|${p}`) ?? []
       const erase = mine.filter(a => a.what === 'erase').map(a => boxPdf(a.box))
       const crops = mine.filter(a => a.what === 'crop').map(a => ({ k: a.k, src: a.src, dst: boxPdf(a.dst), plane: a.plane ?? 'O', srcPage: a.srcPage, devDst: a.dst, clip: a.clip ?? null, own: a.own ?? null }))
