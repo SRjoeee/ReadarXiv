@@ -67,6 +67,8 @@ jobs:
     concurrency:
       group: rules-pointer-${{ inputs.environment }}
       cancel-in-progress: false
+      # every writer waits its turn: the default queue keeps one pending job and cancels it for the next
+      queue: max
     steps:
       - uses: actions/checkout@v4
         with:

@@ -141,7 +141,8 @@ gives the version `package.json` names.
 
 **One pointer, one queue.** Every job that writes a pointer is in the one concurrency group of its environment,
 `rules-pointer-staging` or `rules-pointer-production`: the publish job and the rollback share it, queued and never cancelled, so
-two writes of a pointer never interleave. A production rollback begins by cancelling every `rules-publish.yml` run that has not
+two writes of a pointer never interleave. The group keeps every pending job in order (`queue: max`): GitHub's default keeps one
+and cancels it for the next, which could drop a rollback that waits behind a publish. (actionlint 1.7.12 does not know the key yet.) A production rollback begins by cancelling every `rules-publish.yml` run that has not
 finished, whether it is still measuring the live engines or waiting for its production approval (`gh run list` for each
 unfinished status, then `gh run cancel`), in the one job
 of the three workflows that holds `actions: write`, which has no secret and no environment; the rollback is not made where that
@@ -161,8 +162,9 @@ page: the older ones have stood down for it. A job that cannot read next fails a
 repository) whose `RULES_SCHEMA` is the set's, and compares it with the set now published for that engine (production's
 `/api/v1/rules/s<schema>`, else the engine's own built-in set where none is published). A regression stops the publish and
 names the engine, unless a ruling accepts it, in the same way as on the pull request: the check reads the rulings of the tree at
-the set's commit, every file of `lab/pdf/rulings/` (not only those one pull request added: the set published for an engine can
-be several versions behind) and the rulings of `lab/pdf/records/layer-fidelity.json` that name their `targets`, and its summary
+the set's commit, each bound to the set it came in with (the set's version at the merge that added it). It honours, for an
+engine, only the rulings that came in after the set published for that engine, up to the set being published, which are the
+changes between the two. The layer gate's record's rulings are history and accept nothing there. Its summary
 goes through the same search for the translations' strings (`--records`' lock) before it is written. Each run it holds is
 whole, as on the pull request. While the file names no engine nothing is measured.
 

@@ -27,6 +27,8 @@ jobs:
     concurrency:
       group: rules-pointer-staging
       cancel-in-progress: false
+      # every writer waits its turn: the default queue keeps one pending job and cancels it for the next
+      queue: max
     steps:
       - uses: actions/checkout@v4
         with:
@@ -109,6 +111,8 @@ jobs:
     concurrency:
       group: rules-pointer-production
       cancel-in-progress: false
+      # every writer waits its turn: the default queue keeps one pending job and cancels it for the next
+      queue: max
     steps:
       - uses: actions/checkout@v4
         with:

@@ -179,12 +179,14 @@ describe('the rollback', () => {
 describe('one pointer, one queue', () => {
   /** a workflow's jobs by name, each with its text (the comments before the next job's name stay with the one above it) */
   const jobsOf = (yml: string) => new Map(yml.slice(yml.indexOf('\njobs:\n') + 7).split(/\n(?= {2}[a-z][a-z-]*:\n)/).flatMap(part => { const name = /^ {2}([a-z][a-z-]*):/m.exec(part)?.[1]; return name ? [[name, part] as [string, string]] : [] }))
-  const concurrencyOf = (job: string) => /\n {4}concurrency:\n {6}group: (.*)\n {6}cancel-in-progress: (.*)\n/.exec(job)?.slice(1) ?? null
+  // [group, cancel-in-progress, queue]: the queue is GitHub's `queue: max`, which keeps every pending job in order (the default keeps one
+  // and cancels it for the next, so a rollback pending behind a publish would vanish)
+  const concurrencyOf = (job: string) => /\n {4}concurrency:\n {6}group: (.*)\n {6}cancel-in-progress: (.*)\n(?: {6}#.*\n)* {6}queue: (.*)\n/.exec(job)?.slice(1) ?? null
   const publish = jobsOf(text('rules-publish.yml')), point = jobsOf(text('rules-point.yml'))
 
   it('puts every write of a pointer in the one group of its environment, queued and never cancelled', () => {
-    expect(concurrencyOf(publish.get('staging')!)).toEqual(['rules-pointer-staging', 'false'])
-    expect(concurrencyOf(publish.get('production')!)).toEqual(['rules-pointer-production', 'false'])
+    expect(concurrencyOf(publish.get('staging')!)).toEqual(['rules-pointer-staging', 'false', 'max'])
+    expect(concurrencyOf(publish.get('production')!)).toEqual(['rules-pointer-production', 'false', 'max'])
     // the rollback's group is an expression of the environment, which is one of two: it comes to the same two groups
     const options = [...(/options:\n((?:\s+- \w+\n)+)/.exec(text('rules-point.yml'))?.[1] ?? '').matchAll(/- (\w+)/g)].map(m => m[1]!)
     expect(options).toEqual(['staging', 'production'])
@@ -193,6 +195,7 @@ describe('one pointer, one queue', () => {
     expect(rollback[0]).toBe('rules-pointer-${{ inputs.environment }}')
     expect(options.map(o => rollback[0]!.replace('${{ inputs.environment }}', o))).toEqual(['rules-pointer-staging', 'rules-pointer-production'])
     expect(rollback[1]).toBe('false')
+    expect(rollback[2]).toBe('max')
   })
   it('lets no job that writes a pointer go without one, in any of the workflows', () => {
     for (const name of WORKFLOWS) {
