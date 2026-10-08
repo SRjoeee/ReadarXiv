@@ -40,6 +40,20 @@ describe('the page\'s landmarks', () => {
   })
 })
 
+describe('an address with no paper (D1)', () => {
+  it('the card stands in the document area, not in a pane the display may hide; a failure\'s card stays in the translation\'s pane', async () => {
+    const missing = fakeController({ phase: 'ready', noPaper: true, available: false, display: 'original' })
+    const m = await mountElement(createElement(App, { controller: missing.controller, embedded: false }))
+    const card = m.container.querySelector('.card')!
+    expect([card.parentElement?.tagName, card.closest('.pane'), m.container.querySelector('.pane[data-card]')]).toEqual(['MAIN', null, null])
+    await m.unmount()
+    const failed = fakeController({ phase: 'failed', failure: 'network', display: 'bilingual' })
+    const f = await mountElement(createElement(App, { controller: failed.controller, embedded: false }))
+    expect(f.container.querySelector('.card')!.closest('.pane')?.getAttribute('data-side')).toBe('right')
+    expect(f.container.querySelector('.pane[data-card]')).not.toBeNull()
+  })
+})
+
 describe('the contents\' slide (the reader\'s design, §5)', () => {
   it('under StrictMode, nothing slides as the page mounts; each press of the contents slides the document area once', async () => {
     const { controller } = fakeController()

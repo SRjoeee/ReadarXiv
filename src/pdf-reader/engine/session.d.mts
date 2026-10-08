@@ -10,6 +10,8 @@ export type SessionEvent =
   | { type: 'status'; text: string }
   /** why the extension's settings could not be read (config/storage.ts FallbackReason), or null when they could */
   | { type: 'notice'; why: unknown }
+  /** a write of the settings that storage refused or could not make (session.mjs `save`), after the notice of settings that cannot be read when that is why */
+  | { type: 'refused' }
   /** the contents: the paper's headings, each by its text and page on the translation's side (outline.ts) */
   | { type: 'outline'; entries: OutlineEntry[] }
   /** the heading being read: the last one above the reading line on the side read (the translation's when shown) */

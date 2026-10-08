@@ -2,7 +2,8 @@
 // folded into a state the interface subscribes to, and the interface's commands passed on to the session. pdfslick's
 // per-viewer store, adopted: the engine's events drive the store, and nothing reads the viewers back
 import { toBcp47 } from '@/config/languages'
-import type { Config } from '@/config/schema'
+import { type Config, DEFAULT_CONFIG } from '@/config/schema'
+import type { ConfigReading } from '@/config/storage'
 import type { PackState } from '@/shared/pack'
 import type { OutlineEntry } from './outline'
 import { PROVIDER_ERROR_KINDS, type ProviderErrorKind } from '@/providers/types'
@@ -42,12 +43,22 @@ export interface ReaderState {
   finalReady: boolean
   scale: number
   sides: Record<Side, { page: number; pages: number }>
-  /** the extension's settings could not be read, and their defaults are in use */
+  /** the extension's settings could not be read, or did not answer in the time the page gave them (first-read.ts), and
+   *  their defaults are in use: what writes them is out of reach (S-R-21) */
   settingsUnreadable: boolean
+  /** the writes of the settings that storage refused, counted: each is told until it is closed or mended (S-R-22). Not
+   *  those refused for the settings being unreadable, which `settingsUnreadable` says */
+  refusals: number
+  /** the refusals there were when the settings last landed: a landing proves storage takes a write, so a refusal before
+   *  it is told no more (a retry that succeeds leaves no stale "couldn't save") */
+  mended: number
   /** the extension's settings as they last landed; null before the first read */
   settings: Config | null
   /** the paper: its id from the address, its title once known ('' until then, or when there is none) */
   paper: { id: string; title: string }
+  /** the address names no paper (a hand-typed one): known from the address, before any session: nothing to load, and
+   *  the card says it cannot be found (S-R-20) */
+  noPaper: boolean
   /** the window too narrow for two sides: side by side shows the translation alone (setNarrow) */
   narrow: boolean
   /** the contents (outline.ts) */
@@ -79,8 +90,11 @@ export const INITIAL: ReaderState = {
   scale: 1,
   sides: { left: { page: 1, pages: 0 }, right: { page: 1, pages: 0 } },
   settingsUnreadable: false,
+  refusals: 0,
+  mended: 0,
   settings: null,
   paper: { id: '', title: '' },
+  noPaper: false,
   narrow: false,
   sync: true,
   outline: [],
@@ -125,6 +139,9 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     }
     case 'notice':
       return (event.why != null) === state.settingsUnreadable ? state : { ...state, settingsUnreadable: event.why != null }
+    // the session tells of unreadable settings before the refusal that follows from them: that one is the notice's
+    case 'refused':
+      return state.settingsUnreadable ? state : { ...state, refusals: state.refusals + 1 }
     case 'heading':
       return event.id === state.currentHeading ? state : { ...state, currentHeading: event.id }
     case 'outline':
@@ -136,7 +153,7 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     case 'html':
       return event.url === state.htmlVersion ? state : { ...state, htmlVersion: event.url }
     case 'settings':
-      return event.config === state.settings && event.pack === state.pack ? state : { ...state, settings: event.config, pack: event.pack }
+      return event.config === state.settings && event.pack === state.pack && state.mended === state.refusals ? state : { ...state, settings: event.config, pack: event.pack, mended: state.refusals }
     case 'fail':
       if (CANNOT_BE_HAD.has(event.event)) return { ...state, available: false, phase: 'ready' }
       // the translation shown in part: said, the preview kept, the displays as they are; the run's end follows
@@ -207,8 +224,25 @@ export interface ReaderController {
   download(which: 'translation' | 'original'): Promise<void>
 }
 
-export function createController({ open, params }: { open: (host: SessionHost) => Promise<Session>; params: URLSearchParams }): ReaderController {
-  let state: ReaderState = { ...INITIAL, paper: { id: params.get('paper') ?? '', title: '' } }
+/** what an address with no paper starts from: nothing is loading, and no translated display can be had */
+const NO_PAPER: Partial<ReaderState> = { noPaper: true, phase: 'ready', available: false }
+
+/**
+ * `reading`: the page's own first read of the settings (main.tsx, ui/first-read.ts), made before the first paint and not
+ * waiting for the session, which is a heavy module that reads them again: the chrome is drawn with what storage holds
+ * from its first frame. A read that did not answer in the time the page gave it (`null`) paints the defaults, and so does
+ * one whose value cannot be read (its `fallbackReason`): both said to be unreadable (S-R-21). The session shows the
+ * settings as it reads them, and the page is itself again if they come. Without `reading` nothing is known until the
+ * session says
+ */
+export function createController({ open, params, reading }: { open: (host: SessionHost) => Promise<Session>; params: URLSearchParams; reading?: ConfigReading | null }): ReaderController {
+  const id = params.get('paper') ?? ''
+  let state: ReaderState = {
+    ...INITIAL,
+    paper: { id, title: '' },
+    ...(id ? {} : NO_PAPER),
+    ...(reading === undefined ? {} : { settings: reading?.config ?? DEFAULT_CONFIG, settingsUnreadable: !reading || reading.fallbackReason !== null }),
+  }
   const listeners = new Set<() => void>()
   let session: Promise<Session> | null = null
   const emit = (event: SessionEvent) => {

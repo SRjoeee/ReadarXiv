@@ -4,7 +4,7 @@
 // language's own name drawn in that language
 import { toBcp47 } from '@/config/languages'
 import type { ProviderErrorKind } from '@/providers/types'
-import { R, S, reasonText } from '@/ui/strings'
+import { O, R, S, reasonText } from '@/ui/strings'
 import type { ReaderState } from '../controller'
 import { type CapsuleWords, plain, withCount, withPart } from './capsule-words'
 import { ownName } from './languages'
@@ -21,7 +21,14 @@ export type Capsule =
   | { kind: 'notice'; words: CapsuleWords; action: 'retry' | null }
   | { kind: 'unsupported'; words: CapsuleWords; action: 'language' }
   | { kind: 'narrow'; words: CapsuleWords }
-export interface Card { reason: string; action: 'retry' | 'settings' }
+  /** the settings could not be read, or did not answer in time, and the defaults are in use (S-R-21): said for as long
+   *  as it is so, with the way to the settings page; not closable */
+  | { kind: 'unreadable'; words: CapsuleWords }
+  /** a write of the settings that storage refused (S-R-22): the settings page's one sentence for a failed save, until it
+   *  is closed, or a later write lands; closable */
+  | { kind: 'saveFailed'; words: CapsuleWords }
+/** `arxiv`: a link to arXiv, for an address that names no paper (S-R-20) */
+export interface Card { reason: string; action: 'retry' | 'settings' | 'arxiv' }
 
 /** the reasons a key settles: the settings are where it is fixed (the popup's rule) */
 const KEYS: ReadonlySet<ProviderErrorKind> = new Set(['no-key', 'auth'])
@@ -29,7 +36,22 @@ const KEYS: ReadonlySet<ProviderErrorKind> = new Set(['no-key', 'auth'])
 /** a translation under way: the progress line shows it, and no capsule does (the maintainer, 2026-09-25) */
 const running = (state: ReaderState) => state.phase === 'translating' || state.phase === 'retranslating'
 
-export function capsuleOf(state: ReaderState, seen: { closed: boolean; narrowShown: boolean }): Capsule | null {
+/**
+ * What the reader has done with the notices this visit (StatusCapsule keeps it). The two closable notices are closed
+ * apart: one stood before the other, so a close of the partial one that also closed the count of failed passages kept
+ * the count from ever being told (Devin on #314). `refusalsSeen`: the refused writes closed
+ */
+export interface Seen { partialClosed: boolean; noticeClosed: boolean; narrowShown: boolean; refusalsSeen: number }
+
+export function capsuleOf(state: ReaderState, seen: Seen): Capsule | null {
+  // no paper: its card says that much, and nothing else on the page is true of it
+  if (state.noPaper) return null
+  // what the reader just did or cannot do, over a load too (its controls are in reach then), but not beside a failure's
+  // card, which is the pane's whole answer: the unreadable settings first, since they are why a write is refused
+  if (state.phase !== 'failed') {
+    if (state.settingsUnreadable) return { kind: 'unreadable', words: plain(R.status.unreadable) }
+    if (state.refusals > Math.max(seen.refusalsSeen, state.mended)) return { kind: 'saveFailed', words: plain(O.saveFailed) }
+  }
   if (state.phase === 'failed' || state.phase === 'loading') return null
   // before anything else: it says why the translated displays are greyed (the maintainer, 2026-09-26)
   if (!state.available) return state.htmlVersion ? { kind: 'unavailable', words: plain(R.status.noPdf), href: state.htmlVersion } : { kind: 'unavailable', words: plain(R.status.noPdf) }
@@ -40,9 +62,9 @@ export function capsuleOf(state: ReaderState, seen: { closed: boolean; narrowSho
     return { kind: 'unsupported', words: withPart(R.status.unsupported(name), { text: name, lang: toBcp47(code) }), action: 'language' }
   }
   // before the notice of passages that failed: the passages left in the original are more than those
-  if (!running(state) && state.partial && !seen.closed) return state.htmlVersion ? { kind: 'partial', words: plain(R.status.partial), href: state.htmlVersion } : { kind: 'partial', words: plain(R.status.partial) }
+  if (!running(state) && state.partial && !seen.partialClosed) return state.htmlVersion ? { kind: 'partial', words: plain(R.status.partial), href: state.htmlVersion } : { kind: 'partial', words: plain(R.status.partial) }
   // the paragraphs that failed are told once the run has ended, with its retry where a stop is there to resume
-  if (!running(state) && state.failedUnits > 0 && !seen.closed) return { kind: 'notice', words: withCount(S.failed.text(state.failedUnits), state.failedUnits), action: state.failure ? 'retry' : null }
+  if (!running(state) && state.failedUnits > 0 && !seen.noticeClosed) return { kind: 'notice', words: withCount(S.failed.text(state.failedUnits), state.failedUnits), action: state.failure ? 'retry' : null }
   if (state.narrow && state.display === 'bilingual' && !seen.narrowShown) return { kind: 'narrow', words: plain(R.status.narrow) }
   return null
 }
@@ -73,6 +95,7 @@ export function lineOf(state: ReaderState): Line {
 }
 
 export function cardOf(state: ReaderState): Card | null {
+  if (state.noPaper) return { reason: R.status.noPaper, action: 'arxiv' }
   if (state.phase !== 'failed' || state.failure === 'aborted') return null
   const kind = state.failure ?? 'unknown'
   // the chain's own words for a rate limit promise a retry by itself; a stopped run here waits for the reader's

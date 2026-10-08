@@ -77,6 +77,43 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
     expect(written().pdfReader.dimPages).toBe(false)
   })
 
+  describe('out of reach while the settings are not read (P3-M14, P3-M16, C3-2; S-R-21)', () => {
+    async function mountWith(over: Parameters<typeof fakeController>[0]) {
+      const fake = fakeController(over)
+      const mounted = await mountElement(createElement(ReadingOptions, { controller: fake.controller }))
+      await act(async () => { mounted.container.querySelector<HTMLElement>('[popover="auto"]')!.showPopover() })
+      return { ...mounted, ...fake }
+    }
+    const controls = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>('[role="switch"], [data-swatch], [role="radio"]')]
+
+    it('settings that cannot be read: every control that writes them is greyed and writes nothing; its tooltip tells why, and the button that opens them is where it was', async () => {
+      const { container, controller } = await mountWith({ settingsUnreadable: true })
+      expect(container.querySelector('button[popovertarget]')).not.toBeNull()
+      const found = controls(container)
+      // three switches, the swatches, three appearances: each greyed, and none a button the browser disables (it would take its tooltip away)
+      expect(found.length).toBe(3 + DEFAULT_CONFIG.appearance.highlights.length + 3)
+      for (const el of found) expect([el.getAttribute('aria-disabled'), el.hasAttribute('disabled')], el.getAttribute('aria-label') ?? '').toEqual(['true', false])
+      for (const el of found) el.click()
+      container.querySelector<HTMLElement>('label.row')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      expect(controller.patchSettings).not.toHaveBeenCalled()
+      // the tip beside each, hidden from assistive technology as every tip is, holds the control\'s name and the reason
+      for (const el of found) expect(el.nextElementSibling?.textContent, el.getAttribute('aria-label') ?? '').toContain(R.status.unreadableHint)
+      // …and the reason is each one's description, for assistive technology, to which the tip is hidden
+      for (const el of found) expect(el.getAttribute('aria-description'), el.getAttribute('aria-label') ?? '').toBe(R.status.unreadableHint)
+    })
+
+    it('before the settings land the same controls stand in their places, greyed, and tell no reason; once they land they write', async () => {
+      const { container, controller, set } = await mountWith({ settings: null })
+      const found = controls(container)
+      expect(found.length).toBe(3 + DEFAULT_CONFIG.appearance.highlights.length + 3)
+      for (const el of found) expect([el.getAttribute('aria-disabled'), el.nextElementSibling?.textContent?.includes(R.status.unreadableHint) ?? false]).toEqual(['true', false])
+      await act(async () => set({ settings: DEFAULT_CONFIG }))
+      for (const el of controls(container)) expect(el.hasAttribute('aria-disabled'), el.getAttribute('aria-label') ?? '').toBe(false)
+      container.querySelector<HTMLElement>(`[role="switch"][aria-label="${S.rows.highlight}"]`)!.click()
+      expect(controller.patchSettings).toHaveBeenCalledOnce()
+    })
+  })
+
   it('a switch\'s row is its target, words and all, as the popup\'s are: a press on the words turns it (#299, Part 6\'s interface review)', async () => {
     const { container, controller, written } = await open()
     for (const [words, read] of [[S.rows.highlight, (c: Config) => c.reading.sentenceHighlight], [S.rows.images, (c: Config) => c.image.enabled], [R.options.dim, (c: Config) => c.pdfReader.dimPages]] as const) {

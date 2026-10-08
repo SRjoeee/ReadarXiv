@@ -2,25 +2,32 @@
 // region present from the first paint, so that what it says later is announced; it rises in (240 ms) and leaves lighter
 // (160 ms); a new state of the same kind changes its words in place, moving with its box (Capsule, capsule-motion.ts).
 // A load or a translation under way has no capsule: the progress line under the toolbar shows it (ProgressLine), and its
-// words are said here. A notice has a close, remembered for the visit, and its retry chip where the run stopped for a
-// reason a retry mends (status.ts capsuleOf); the narrow window's words leave by themselves after 5 s of being read,
-// waiting while the pointer is over them or they hold the focus (the maintainer, 2026-10-01). A paper that
-// cannot be had as a bilingual PDF has no close: its HTML version is a link, opened where the settings say — a new tab,
-// or this one, the reader's own or the PDF page it lies over (`_top`; a click lets a frame navigate its page). A
-// failure never takes the focus; the card's reason is said in this region
+// words are said here. A notice has a close of its own, remembered for the visit (the partial notice's does not close the
+// count of failed passages it stood before), and its retry chip where the run stopped for a reason a retry mends
+// (status.ts capsuleOf); the sentence for a write storage refused (S-R-22) is one of them, an error that stays until it
+// is closed or a later write lands. The narrow window's words leave by themselves after 5 s of being read, waiting while
+// the pointer is over them or they hold the focus (the maintainer, 2026-10-01). Settings that cannot be read are said
+// for as long as it is so, with the way to the settings page and no close (S-R-21). A paper that cannot be had as a bilingual PDF has no close: its HTML version is a link, opened where
+// the settings say — a new tab, or this one, the reader's own or the PDF page it lies over (`_top`; a click lets a frame
+// navigate its page). A failure never takes the focus; the card's reason is said in this region
 import { Info, X } from 'lucide'
 import { type FocusEvent, type HTMLAttributes, useEffect, useId, useRef, useState } from 'react'
 import { R, S } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import { Icon } from '@/ui/controls/Icon'
 import { Capsule as Drawn } from './Capsule'
+import { settingsUrl } from './links'
+import { TippedButton } from './TippedButton'
 import { type Capsule, capsuleOf, cardOf, spokenOf } from './status'
 import { useReader } from './use-reader'
 
 export function StatusCapsule({ controller, onChooseLanguage }: { controller: ReaderController; onChooseLanguage: () => void }) {
-  const [closed, setClosed] = useState(false)
+  // each closable notice is closed apart (status.ts Seen)
+  const [closed, setClosed] = useState({ partial: false, notice: false })
   const [narrowShown, setNarrowShown] = useState(false)
-  const now = useReader(controller, s => capsuleOf(s, { closed, narrowShown }))
+  // the refused writes closed: a new refusal is told again
+  const [refusalsSeen, setRefusalsSeen] = useState(0)
+  const now = useReader(controller, s => capsuleOf(s, { partialClosed: closed.partial, noticeClosed: closed.notice, narrowShown, refusalsSeen }))
   // the card fills the translation's pane and takes no focus: its reason is said here, where it is announced
   const card = useReader(controller, cardOf)
   // a load or a translation under way: said here, shown by the progress line alone
@@ -57,17 +64,18 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
       {capsule && (
         <Drawn key={capsule.kind} kind={capsule.kind} icon={Info} words={capsule.words} wordsId={words} alone={alone} out={now === null} {...timed} {...linger}
           // what follows the words, named by what it holds: another brings it in with the motion
-          afterKey={`${link ? 'link' : ''}|${capsule.kind === 'notice' ? capsule.action : ''}`}
+          afterKey={`${link ? 'link' : ''}|${capsule.kind === 'notice' ? capsule.action : capsule.kind === 'unreadable' ? 'settings' : ''}`}
           after={
             capsule.kind === 'narrow' || (capsule.kind === 'unavailable' && !link) ? null : (
               <>
+                {capsule.kind === 'unreadable' && <a data-action className="chip" href={settingsUrl()} target="_blank" rel="noopener">{S.settings}</a>}
                 {capsule.kind === 'notice' && capsule.action === 'retry' && <button type="button" data-action className="chip" onClick={controller.retry}>{S.failed.retry}</button>}
                 {link && <a data-action className="chip" href={link} target={sameTab ? '_top' : '_blank'} rel="noopener">{R.status.useHtml}</a>}
                 {capsule.kind === 'unsupported' && <button type="button" data-action className="chip" onClick={onChooseLanguage}>{R.status.chooseLanguage}</button>}
-                {(capsule.kind === 'notice' || capsule.kind === 'partial') && (
-                  <button type="button" aria-label={R.status.close} className="close" onClick={() => setClosed(true)}>
+                {(capsule.kind === 'notice' || capsule.kind === 'partial' || capsule.kind === 'saveFailed') && (
+                  <TippedButton label={R.status.close} side="top" className="close" onClick={() => (capsule.kind === 'saveFailed' ? setRefusalsSeen(controller.getState().refusals) : setClosed(c => ({ ...c, [capsule.kind === 'partial' ? 'partial' : 'notice']: true })))}>
                     <Icon node={X} size={13} />
-                  </button>
+                  </TippedButton>
                 )}
               </>
             )

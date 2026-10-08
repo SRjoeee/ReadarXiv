@@ -53,12 +53,13 @@ const host = await hostReady
 const { params } = host
 const paper = params.get('paper') ?? ''
 /** a precompiled demo paper (made locally by spikes/reader-papers.mjs, never in the repository; the probes stage it into
- *  a copy of the build at pdf-reader/papers/) when one is asked for by `paper` without `live` */
-const DEMO = params.get('live') !== '1' && params.has('paper')
+ *  a copy of the build at pdf-reader/papers/) when `live` is not asked for */
+const DEMO = params.get('live') !== '1'
 /** the developer's status line, for the probes (window.__reader.status) and the log; the interface does not show it */
 const status = text => { window.__reader.status = text; host.emit({ type: 'status', text }) }
 const timing = { start: performance.now() }
-window.__reader = { timing, ready: false }
+// the probes' hooks: `host` lets a browser check put the interface in a state the demo paper never reaches, by the events a run would send (lab/pdf/spikes/reader-ui.mjs)
+window.__reader = { timing, ready: false, host }
 
 // ---------------------------------------------------------------- the extension's settings, and the display
 // The reader's settings are the extension's (the reader's design, §3, §9.1), read and written as its popup and
@@ -121,9 +122,10 @@ function showSettings() {
 }
 showSettings()
 /** this page's writes of the settings, one after another; a new language's reload waits for them. A write the store
- *  refuses (its stored value cannot be read, config/storage.ts) is dropped: what the reader chose still holds on screen */
+ *  refuses (its stored value cannot be read, config/storage.ts, or storage itself fails) is dropped: what the reader
+ *  chose still holds on screen, and the interface is told (S-R-22) */
 let writes = Promise.resolve()
-const save = change => (writes = writes.then(() => surface.patch(change)).catch(e => console.warn('[settings]', e?.message ?? e)))
+const save = change => (writes = writes.then(() => surface.patch(change)).catch(e => { console.warn('[settings]', e?.message ?? e); host.emit({ type: 'refused' }) }))
 // an original left on is let go when the reader was asked to translate: the next PDF opens as this one does
 if (askTranslate && config.pdfReader.original) void save(c => ({ ...c, pdfReader: { ...c.pdfReader, original: false } }))
 /** a change of the settings from the interface (the controller's patchSettings) */
@@ -2542,6 +2544,7 @@ async function demo() {
   }
 }
 
-/** the run: live, a demo, or nothing without a paper; a crash is a failure the controller hears of */
-export const run = (params.get('live') === '1' ? live() : DEMO ? demo() : Promise.resolve().then(() => { status('no paper'); window.__reader.ready = true }))
+/** the run: nothing without a paper (the controller knows it from the address, and the interface says it: S-R-20), else
+ *  live or a demo; a crash is a failure the controller hears of */
+export const run = (!paper ? Promise.resolve().then(() => { status('no paper'); window.__reader.ready = true }) : DEMO ? demo() : live())
   .catch(e => { runAgain = null; console.error('[reader]', e); host.emit({ type: 'fail', event: 'crashed', text: String(e?.message ?? e) }) })

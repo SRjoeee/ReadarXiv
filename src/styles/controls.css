@@ -8,6 +8,8 @@
     white-space: nowrap; display: none; gap: 10px; box-shadow: var(--tip-shadow); pointer-events: none; overflow: visible; }
   .tip:popover-open { display: flex; animation: tip-in 120ms ease-out; }
   .tip[data-side="right"] { margin: 0 0 0 8px; position-area: right; position-try-fallbacks: none; }
+  /* above: for what stands at the foot of the page (the reader's pill and capsule), where below has no room */
+  .tip[data-side="top"] { margin: 0 0 8px; position-area: top; position-try-fallbacks: top span-right, top span-left; }
   .tip kbd { color: var(--tip-ink-2); }
   /* a segmented control: equal segments in a well, the chosen one on a lifted thumb that slides */
   .seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; height: 30px; padding: 2px; border-radius: 9px; background: var(--well); --i: 0; }
@@ -43,6 +45,8 @@
   .switch[aria-checked="true"] { background: var(--ink); }
   .switch[aria-checked="true"]::after { translate: 11px 0; background: var(--chrome); }
   .swatch { width: 16px; height: 16px; border-radius: 999px; box-shadow: inset 0 0 0 0.5px oklch(0 0 0 / 0.15); }
+  /* out of reach (the reader's settings that cannot be read): greyed, and the pointer says nothing is there to press */
+  .switch[aria-disabled="true"], .swatch[aria-disabled="true"] { opacity: 0.45; cursor: default; }
   .swatch[aria-pressed="true"]:not(:focus-visible) { outline: 1.5px solid var(--line-strong); outline-offset: 2px; }
 }
 /* The controls the pages add (the redesign's design, §2.1, §5, §6, §8; Part 3's interfaces), every measure the

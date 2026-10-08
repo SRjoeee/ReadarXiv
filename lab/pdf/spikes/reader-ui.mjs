@@ -5,12 +5,13 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { launchWithReader } from '../../../tests/e2e/lib/extension.mjs'
+import { openOptions, openSection } from '../../../tests/e2e/options-page.mjs'
 
 const root = new URL('..', import.meta.url).pathname
 const out = join(root, 'out/reader-ui')
 mkdirSync(out, { recursive: true })
 const paper = '2608.02163'
-const { context, readerUrl } = await launchWithReader({ profile: 'reader-ui', demos: true, viewport: { width: 1440, height: 900 } })
+const { context, id, readerUrl } = await launchWithReader({ profile: 'reader-ui', demos: true, viewport: { width: 1440, height: 900 } })
 let failed = 0
 const check = (what, ok, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}${detail ? ` — ${detail}` : ''}`); if (!ok) failed++ }
 async function open(query = {}, viewport) {
@@ -723,6 +724,274 @@ for (const embedded of ['1', '0']) {
   check('a contents row is its link from top to bottom: no dead band above and below', entry.link === entry.row, JSON.stringify(entry))
   await page.click('header [aria-label="目录"]')
   await page.close()
+}
+
+// ---------------------------------------------------------------- stage 5, Task 13: the open interface rows (#299)
+// Controls are found by their place and their roles, not by the pack's words, which the unit tests hold (tests/pdf-reader/ui)
+/** storage that does not answer until released (window.__release), as the first read of the settings meets it */
+const HANG_STORAGE = `(() => {
+  const area = chrome.storage.local, get = area.get.bind(area), held = []
+  window.__hold = true
+  area.get = (...args) => (window.__hold ? new Promise(resolve => held.push(() => resolve(get(...args)))) : get(...args))
+  window.__release = () => { window.__hold = false; for (const go of held.splice(0)) go() }
+})()`
+const ofHost = (page, event) => page.evaluate(e => window.__reader.host.emit(e), event)
+const OPTIONS_BUTTON = 'header button[aria-haspopup="dialog"]'
+
+// D1: an address with no paper shows a card with a link to arXiv, and the phase leaves loading
+{
+  const page = await context.newPage()
+  page.on('pageerror', e => check('no page error', false, e.message))
+  await page.goto(readerUrl({}))
+  await page.waitForSelector('.card a', { timeout: 15000 })
+  await page.waitForTimeout(400)
+  const s = await state(page)
+  const card = await page.evaluate(() => {
+    const c = document.querySelector('.card'), a = c.querySelector('a'), r = c.getBoundingClientRect(), d = document.querySelector('.doc').getBoundingClientRect()
+    return { parent: c.parentElement.tagName, reason: c.querySelector('p').textContent, link: a.textContent, href: a.href, target: a.target, centre: [Math.round(r.x + r.width / 2 - (d.x + d.width / 2)), Math.round(r.y + r.height / 2 - (d.y + d.height * 0.42))], inside: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, translated: [...document.querySelectorAll('.seg.display [role="radio"]')].map(b => b.getAttribute('aria-disabled')) }
+  })
+  check('no paper: the phase leaves loading, and the reader is ready', s.phase === 'ready' && s.noPaper && (await page.evaluate(() => window.__reader.ready)), JSON.stringify({ phase: s.phase, noPaper: s.noPaper }))
+  check('no paper: a card in the document area with a link to arXiv, centred, inside the window', card.parent === 'MAIN' && card.reason.length > 0 && card.href === 'https://arxiv.org/' && card.target === '_blank' && card.centre.every(v => Math.abs(v) <= 1) && card.inside, JSON.stringify(card))
+  check('no paper: the translated displays are out of reach, the original is not', JSON.stringify(card.translated) === '[null,"true","true"]', JSON.stringify(card.translated))
+  await shot(page, 's5-13-no-paper')
+  await page.close()
+}
+
+// D6: a healthy read draws the chrome with the settings from its first frame, before the session (a heavy module) has loaded:
+// the language and service menus are in reach, with their own values, the first time they are drawn
+{
+  const page = await context.newPage()
+  page.on('pageerror', e => check('no page error', false, e.message))
+  await page.goto(readerUrl({ paper, mode: 'bilingual' }), { waitUntil: 'commit' })
+  await page.waitForSelector('header .menu-btn', { timeout: 15000 })
+  const early = await page.evaluate(() => ({ menus: [...document.querySelectorAll('header .menu-btn')].map(b => [b.getAttribute('aria-disabled'), b.hasAttribute('popovertarget'), b.querySelector('[data-value]')?.textContent.length > 0]), sessionLoaded: window.__reader !== undefined, note: document.querySelector('.capsule[data-kind="unreadable"]') !== null }))
+  check('the chrome is drawn from the first read of the settings: the menus in reach with their values at their first frame, no note', early.menus.length >= 2 && early.menus.every(m => m[0] === null && m[1] === true && m[2] === true) && !early.note, JSON.stringify(early))
+  await page.close()
+}
+
+// D2a: a first read of the settings that does not answer is given 1,500 ms, then the defaults are painted with the note
+// that they could not be read; the controls that write them are greyed with the reason; the bar does not move when the
+// real settings come (P3-M16). The popup and the settings page are painted by then too (R100, P2)
+{
+  const page = await context.newPage()
+  page.on('pageerror', e => check('no page error', false, e.message))
+  await page.addInitScript(HANG_STORAGE)
+  const t0 = Date.now()
+  await page.goto(readerUrl({ paper, mode: 'bilingual' }), { waitUntil: 'commit' })
+  await page.waitForSelector('.capsule[data-kind="unreadable"]', { timeout: 10000 })
+  const painted = Date.now() - t0
+  await page.waitForTimeout(500)
+  const geometry = () => page.evaluate(() => ({ trail: Math.round(document.querySelector('[data-zone="trail"]').getBoundingClientRect().left * 10) / 10, lead: Math.round(document.querySelector('[data-zone="lead"]').getBoundingClientRect().width * 10) / 10 }))
+  const during = await geometry()
+  const unread = await page.evaluate(() => {
+    const need = ['.menu-btn', 'button[data-side-by-side]'].flatMap(q => [...document.querySelectorAll(`header ${q}`)])
+    return { settings: document.querySelector('.capsule[data-kind="unreadable"]') !== null, disabled: need.map(b => b.getAttribute('aria-disabled')), opens: need.map(b => b.hasAttribute('popovertarget')), options: document.querySelector('header button[aria-haspopup="dialog"]')?.hasAttribute('popovertarget'), link: document.querySelector('.capsule[data-kind="unreadable"] a')?.href }
+  })
+  check('a first read that does not answer: the defaults and the note by 1,500 ms (+ the page\'s own start)', painted >= 1400 && painted < 3500, `${painted} ms`)
+  check('…the controls that write the settings greyed and opening nothing, the reading options still opening, the note linking to the settings page', unread.settings && unread.disabled.length >= 3 && unread.disabled.every(v => v === 'true') && unread.opens.every(v => v === false) && unread.options === true && /options\.html#reading\/pdf$/.test(unread.link ?? ''), JSON.stringify(unread))
+  // the tip of a greyed control says why
+  await page.locator('header .menu-btn').first().hover()
+  await page.waitForTimeout(800)
+  const tip = await page.evaluate(() => { const t = [...document.querySelectorAll('.tip')].find(x => x.matches(':popover-open')); const r = t?.getBoundingClientRect(); return t && { text: t.textContent, kbd: t.querySelector('kbd')?.textContent, oneLine: r.height < 30, inside: r.left >= 0 && r.right <= innerWidth } })
+  check('…and its tooltip names the reason', !!tip && !!tip.kbd && tip.oneLine && tip.inside, JSON.stringify(tip))
+  await shot(page, 's5-13-unreadable')
+  // the settings come at last: the note goes, the controls are in reach, and the bar moved by nothing
+  await page.evaluate(() => window.__release())
+  await page.waitForFunction(() => window.__reader?.ready && window.__reader?.controller?.getState().settingsUnreadable === false, null, { timeout: 90000 })
+  await page.waitForTimeout(700)
+  const after = await geometry()
+  const back = await page.evaluate(() => ({ note: document.querySelector('.capsule[data-kind="unreadable"]:not([data-out])') !== null, disabled: [...document.querySelectorAll('header .menu-btn, header button[data-side-by-side]')].filter(b => b.getAttribute('aria-disabled') === 'true').length, opens: [...document.querySelectorAll('header .menu-btn')].every(b => b.hasAttribute('popovertarget')) }))
+  check('…the real settings replace them: the note gone, the menus open again', !back.note && back.opens, JSON.stringify(back))
+  check('…and the bar does not reflow when they come (defaults stood in their places)', Math.abs(during.trail - after.trail) <= 0.5 && Math.abs(during.lead - after.lead) <= 0.5, JSON.stringify({ during, after }))
+  await page.close()
+  // the other two pages meet the same silence and still paint
+  for (const name of ['popup', 'options']) {
+    const other = await context.newPage()
+    await other.addInitScript(HANG_STORAGE)
+    const t = Date.now()
+    await other.goto(`chrome-extension://${id}/${name}.html`, { waitUntil: 'commit' })
+    await other.waitForFunction(() => document.getElementById('root')?.childElementCount > 0 && document.documentElement.lang, null, { timeout: 10000 })
+    check(`the ${name} page paints without the settings that do not answer`, true, `${Date.now() - t} ms`)
+    await other.close()
+  }
+}
+
+// D2b: a write storage refuses says so in the reader, in the settings page's sentence, until it is closed or a later write
+// lands, and the control keeps its value
+{
+  const page = await open({ mode: 'bilingual' })
+  await page.evaluate(() => { window.__set = chrome.storage.local.set; chrome.storage.local.set = () => Promise.reject(new Error('quota')) })
+  await page.click(OPTIONS_BUTTON)
+  await page.waitForTimeout(400)
+  const images = page.locator('.pop [role="switch"]').nth(1)
+  const was = await images.getAttribute('aria-checked')
+  await images.click()
+  await page.waitForSelector('.capsule[data-kind="saveFailed"]', { timeout: 5000 })
+  const told = await page.evaluate(() => ({ refusals: window.__reader.controller.getState().refusals, text: document.querySelector('.capsule[data-kind="saveFailed"] .sr-only').textContent, close: document.querySelector('.capsule[data-kind="saveFailed"] .close') !== null }))
+  await page.keyboard.press('Escape')
+  check('a write refused: counted, the settings page\'s sentence in a capsule with a close', told.refusals === 1 && told.text.length > 0 && told.close, JSON.stringify(told))
+  check('…the switch still shows the value stored', (await images.getAttribute('aria-checked')) === was)
+  await page.waitForTimeout(6500)
+  check('…the error is not timed out: it stands 6.5 s later', (await page.locator('.capsule[data-kind="saveFailed"]:not([data-out])').count()) === 1)
+  await page.locator('.capsule[data-kind="saveFailed"] .close').click()
+  await page.waitForTimeout(500)
+  check('…its close closes it', (await page.locator('.capsule:not([data-out])').count()) === 0)
+  // refused again, then storage takes a write: the sentence goes with no word of its own
+  await page.click(OPTIONS_BUTTON)
+  await page.waitForTimeout(400)
+  await images.click()
+  await page.waitForSelector('.capsule[data-kind="saveFailed"]', { timeout: 5000 })
+  await page.evaluate(() => { chrome.storage.local.set = window.__set })
+  await images.click()
+  await page.waitForFunction(() => !document.querySelector('.capsule[data-kind="saveFailed"]:not([data-out])'), null, { timeout: 5000 })
+  check('…and a later write that lands mends it', (await page.evaluate(() => window.__reader.controller.getState().refusals)) === 2)
+  await images.click()
+  await page.keyboard.press('Escape')
+  await page.close()
+}
+
+// D3: the page's heading at every width, the arXiv link's purpose, the landmarks, the contents' languages
+{
+  const page = await open({ mode: 'bilingual' })
+  const h1 = () => page.evaluate(() => { const h = document.querySelector('h1'), r = h.getBoundingClientRect(); return { count: document.querySelectorAll('h1').length, w: Math.round(r.width), text: h.textContent.length, lead: Math.round(document.querySelector('[data-zone="lead"]').getBoundingClientRect().width) } })
+  const wide = await h1()
+  check('the title is the page\'s heading, drawn at 1440 px', wide.count === 1 && wide.w > 100 && wide.text > 10, JSON.stringify(wide))
+  const seen = {}
+  for (const w of [1300, 1250, 1200, 1150, 1100, 1050, 1000, 800, 500, 320]) {
+    await page.setViewportSize({ width: w, height: 900 })
+    await page.waitForTimeout(350)
+    seen[w] = await h1()
+  }
+  const found = await page.getByRole('heading', { level: 1 }).count()
+  check('…and in the page at every width, drawn or not: one heading in the accessibility tree at 320 px', found === 1 && Object.values(seen).every(x => x.count === 1), JSON.stringify(seen))
+  const hiddenBelow = Object.entries(seen).filter(([, x]) => x.w <= 1).map(([w]) => Number(w)).sort((a, b) => b - a)[0]
+  const drawnAbove = Object.entries(seen).filter(([, x]) => x.w > 1).map(([w]) => Number(w)).sort((a, b) => a - b)[0]
+  console.log(`     the title leaves the eye between ${drawnAbove} px (drawn) and ${hiddenBelow} px (hidden)`)
+  // the lead's room decides, not the window's width alone (a longer language or service name narrows it): the title is
+  // drawn while the lead holds 320 px, which this bar (the Chinese pack, bilingual) reaches between 1,000 and 1,050 px
+  check('…hidden to the eye once the lead is under 320 px: drawn at 1,050 px and above, hidden at 1,000 px and below', drawnAbove >= 1000 && drawnAbove <= 1150 && hiddenBelow < drawnAbove && seen[drawnAbove].lead >= 320 && seen[hiddenBelow].lead < 320, `${drawnAbove} / ${hiddenBelow}`)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.waitForTimeout(400)
+  const names = await page.evaluate(() => {
+    const a = document.querySelector('a[data-arxiv]'), ids = a.getAttribute('aria-labelledby').split(' ')
+    return { name: ids.map(i => document.getElementById(i).textContent).join(' '), seen: a.textContent, banner: document.querySelectorAll('header').length, tipHidden: a.parentElement.querySelector('.tip').getAttribute('aria-hidden') }
+  })
+  check('the arXiv link\'s name starts with what is seen and says what it does', names.name.startsWith(names.seen) && names.name.length > names.seen.length + 4 && names.tipHidden === 'true', JSON.stringify(names))
+  check('the toolbar is the page\'s banner and the document area its main', (await page.getByRole('banner').count()) === 1 && (await page.getByRole('main').count()) === 1)
+  // the browser's own computation of the link's name (Playwright's role query): what is seen, then what it does
+  check('the arXiv link is found by its name, what is seen first and then what it does', (await page.getByRole('link', { name: /^arXiv:2608\.02163\s.+/ }).count()) === 1 && (await page.getByRole('link', { name: 'arXiv:2608.02163', exact: true }).count()) === 0)
+  // the contents: each title in the language it is in; the folds tipped
+  await page.click('header button[aria-controls="axt-contents"]')
+  await page.waitForTimeout(600)
+  const langs = await page.evaluate(() => [...document.querySelectorAll('.toc .t')].map(t => t.getAttribute('lang')))
+  check('the contents\' titles carry the language they are in: the target\'s tag, or the paper\'s for a heading not yet translated', langs.length > 0 && langs.every(l => l === 'zh' || l === 'en'), JSON.stringify(langs.slice(0, 6)))
+  const fold = page.locator('.toc .fold:not(.leaf)').first()
+  if (await fold.count()) {
+    await fold.hover()
+    await page.waitForTimeout(800)
+    const t = await page.evaluate(() => { const f = document.querySelector('.toc .fold:not(.leaf)'), tip = [...document.querySelectorAll('.tip')].find(x => x.matches(':popover-open')), a = f.getBoundingClientRect(), b = tip?.getBoundingClientRect(); return tip && { text: tip.textContent, right: b.left >= a.right, midline: Math.abs((b.top + b.bottom) / 2 - (a.top + a.bottom) / 2) } })
+    check('a fold\'s tooltip says what a press does, to its right, on its midline (≤ 0.5 px)', !!t && t.text.length > 0 && t.right && t.midline <= 0.5, JSON.stringify(t))
+  }
+  await page.click('header button[aria-controls="axt-contents"]')
+  await page.mouse.move(700, 500)
+  // the pill's arrows: shown while the pane scrolls, their tooltips above them
+  await page.evaluate(() => document.querySelector('#right').scrollBy(0, 40))
+  await page.waitForTimeout(300)
+  const arrow = page.locator('.pane[data-side="right"] .pill > button').first()
+  await arrow.hover()
+  await page.waitForTimeout(800)
+  const pill = await page.evaluate(() => { const b = document.querySelector('.pane[data-side="right"] .pill > button'), tip = [...document.querySelectorAll('.tip')].find(x => x.matches(':popover-open')), a = b.getBoundingClientRect(), r = tip?.getBoundingClientRect(); return tip && { text: tip.textContent, above: r.bottom <= a.top, centre: Math.abs((r.left + r.right) / 2 - (a.left + a.right) / 2), inside: r.top >= 0 } })
+  check('a page arrow\'s tooltip stands above it, centred on it (≤ 0.5 px)', !!pill && pill.text.length > 0 && pill.above && pill.centre <= 0.5 && pill.inside, JSON.stringify(pill))
+  await shot(page, 's5-13-pill-tip')
+  await page.close()
+}
+
+// the new notes in the narrowest window, in the longer pack: inside the window, their words whole, their chip and close in
+{
+  const setup = await open({ mode: 'original' })
+  await patch(setup, { uiLanguage: 'en' })
+  await setup.waitForTimeout(800)
+  await setup.close()
+  const page = await open({ mode: 'bilingual' }, { width: 320, height: 800 })
+  const inside = () => page.evaluate(() => {
+    const c = document.querySelector('.capsule:not([data-out])'), w = c?.querySelector('.words')
+    if (!c || !w) return null
+    const r = c.getBoundingClientRect(), t = w.getBoundingClientRect(), tail = [...c.querySelectorAll('.after > *')].map(e => e.getBoundingClientRect()).filter(x => x.width > 0)
+    return { kind: c.dataset.kind, text: w.textContent, capsule: [r.left, r.right].map(Math.round), words: [t.left, t.right].map(Math.round), tail: tail.map(x => [x.left, x.right].map(Math.round)), vw: innerWidth, lines: w.querySelectorAll('.line').length }
+  })
+  const fits = x => !!x && x.capsule[0] >= 0 && x.capsule[1] <= x.vw && x.words[0] >= x.capsule[0] && x.words[1] <= x.capsule[1] && x.tail.every(t => t[0] >= x.capsule[0] && t[1] <= x.capsule[1])
+  await ofHost(page, { type: 'notice', why: { kind: 'unknown' } })
+  await page.waitForSelector('.capsule[data-kind="unreadable"]:not([data-out])')
+  await page.waitForTimeout(700)
+  const unreadable = await inside()
+  check('the unreadable-settings note in the narrowest window, in English: inside the window, its words and its link inside it', fits(unreadable) && unreadable.kind === 'unreadable', JSON.stringify(unreadable))
+  await shot(page, 's5-13-unreadable-320-en')
+  await ofHost(page, { type: 'notice', why: null })
+  await page.waitForTimeout(600)
+  await ofHost(page, { type: 'refused' })
+  await page.waitForSelector('.capsule[data-kind="saveFailed"]:not([data-out])')
+  await page.waitForTimeout(700)
+  const refused = await inside()
+  check('the refused-write sentence in the narrowest window, in English: inside the window, its words and its close inside it', fits(refused) && refused.kind === 'saveFailed', JSON.stringify(refused))
+  await shot(page, 's5-13-refused-320-en')
+  await patch(page, { uiLanguage: 'auto' })
+  await page.waitForTimeout(800)
+  await page.close()
+}
+
+// D3/D4: the notices — a close's tooltip above it; each notice closed apart (#314)
+{
+  const page = await open({ mode: 'bilingual' })
+  await ofHost(page, { type: 'fail', event: 'shown in part', text: '' })
+  await ofHost(page, { type: 'note', event: 'shown cached', data: {}, got: 0, total: 0, lost: 2, again: false })
+  await page.waitForSelector('.capsule[data-kind="partial"]:not([data-out])', { timeout: 5000 })
+  await page.waitForTimeout(600)
+  await shot(page, 's5-13-partial')
+  await page.locator('.capsule[data-kind="partial"] .close').hover()
+  await page.waitForTimeout(800)
+  const close = await page.evaluate(() => { const b = document.querySelector('.capsule[data-kind="partial"] .close'), tip = [...document.querySelectorAll('.tip')].find(x => x.matches(':popover-open')), a = b.getBoundingClientRect(), r = tip?.getBoundingClientRect(); return tip && { text: tip.textContent, above: r.bottom <= a.top, centre: Math.abs((r.left + r.right) / 2 - (a.left + a.right) / 2), inside: r.top >= 0 && r.right <= innerWidth } })
+  check('a notice\'s close: its tooltip above it, centred on it (≤ 0.5 px), inside the window', !!close && close.text.length > 0 && close.above && close.centre <= 0.5 && close.inside, JSON.stringify(close))
+  await page.locator('.capsule[data-kind="partial"] .close').click()
+  await page.waitForSelector('.capsule[data-kind="notice"]:not([data-out])', { timeout: 5000 })
+  const counted = await page.evaluate(() => document.querySelector('.capsule[data-kind="notice"] .sr-only').textContent)
+  check('closing the partial notice tells the count of failed passages it stood before (#314)', /2/.test(counted), counted)
+  await page.locator('.capsule[data-kind="notice"] .close').click()
+  await page.waitForTimeout(500)
+  check('…whose close is its own', (await page.locator('.capsule:not([data-out])').count()) === 0)
+  await page.close()
+}
+
+// D3: the narrow window's words: 5 s of being read, waiting while the pointer is over them (S-R-14)
+{
+  const page = await open({ mode: 'bilingual' }, { width: 800, height: 900 })
+  const here = () => page.locator('.capsule[data-kind="narrow"]:not([data-out])').count()
+  const t0 = Date.now()
+  check('the narrow window\'s capsule is shown', (await here()) === 1)
+  const box = await page.locator('.capsule[data-kind="narrow"]').boundingBox()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.waitForTimeout(6500)
+  check('…it waits while the pointer is over it (6.5 s)', (await here()) === 1)
+  await page.mouse.move(10, 300)
+  const left = Date.now()
+  await page.waitForFunction(() => !document.querySelector('.capsule[data-kind="narrow"]:not([data-out])'), null, { timeout: 8000 })
+  const ran = Date.now() - left
+  console.log(`     it ran out ${ran} ms after the pointer left (${Math.round((Date.now() - t0) / 100) / 10} s after it came)`)
+  check('…and runs out the rest of its 5 s once the pointer leaves', ran > 800 && ran < 5500, `${ran} ms`)
+  await page.close()
+}
+
+// D4: Escape turns an armed confirm back (R82), on the settings page
+{
+  const options = await openOptions(context, id)
+  await openSection(options, 'data')
+  const confirm = options.locator('.o-confirm').first()
+  await confirm.click()
+  await options.waitForTimeout(150)
+  const armed = await confirm.getAttribute('data-armed')
+  await options.keyboard.press('Escape')
+  await options.waitForTimeout(150)
+  check('Escape turns an armed confirm back at once', armed !== null && (await confirm.getAttribute('data-armed')) === null)
+  await options.close()
 }
 
 console.log(failed ? `${failed} failed` : 'all passed')

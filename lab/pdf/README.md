@@ -108,11 +108,11 @@ These open the reader on the demo papers and need no TeX page. `pnpm build` firs
 
 | File | What it checks |
 |---|---|
-| `lab/pdf/spikes/reader-ui.mjs` | The reader's interface (`docs/PDF-READER.md` §4–§8, §13): the controls, the menus, the states, the keyboard; screenshots in `out/reader-ui/`. |
+| `lab/pdf/spikes/reader-ui.mjs` | The reader's interface (`docs/PDF-READER.md` §4–§8, §13): the controls, the menus, the states, the keyboard; screenshots in `out/reader-ui/`; the states a demo paper never reaches are put on screen by the events a run would send (`window.__reader.host`). |
 | `lab/pdf/spikes/reader-settings.mjs` | The reader and the extension's settings (§3, §9.1): the display opened in, written back, followed from another tab. |
 | `lab/pdf/spikes/reader-perf.mjs` | The performance gates of §12: the backdrop blur, dark pages, the scroll listeners, the animations. |
 | `lab/pdf/spikes/pinch-overlays.mjs` | The overlays through a pinch (§10.1–§10.2): drift, cost, the redraw. |
-| `lab/pdf/spikes/reader-pixels.mjs` | The reader's pixels and tokens against a recorded baseline (`--baseline` records) (§4.1). |
+| `lab/pdf/spikes/reader-pixels.mjs` | The reader's pixels and tokens against a recorded baseline (`--baseline` records) (§4.1): the toolbar, its menus and tooltip, the status capsule and the cards. The baseline is kept in `out/reader-pixels/`, which the repository does not hold: record it on the build before a change, compare on the build after. |
 | `lab/pdf/spikes/level-on-screen.mjs`, `early-scroll.mjs` | What the sync calls level against what the screen shows, and a side read before the pair is located. |
 | `lab/pdf/spikes/reader-papers.mjs` | Makes the demo papers into `lab/pdf/poc-reader/papers/`. |
 

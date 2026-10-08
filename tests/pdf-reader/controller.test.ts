@@ -138,6 +138,19 @@ describe('reduce: the session events folded into the reader state', () => {
     expect(fold([{ type: 'notice', why: { kind: 'tooNew' } }, { type: 'notice', why: null }]).settingsUnreadable).toBe(false)
   })
 
+  it('counts the writes of the settings that were refused, except while the settings cannot be read, which the notice says; a landing of the settings mends the refusals before it (D2)', () => {
+    expect(INITIAL).toMatchObject({ refusals: 0, mended: 0 })
+    expect(fold([{ type: 'refused' }, { type: 'refused' }])).toMatchObject({ refusals: 2, mended: 0 })
+    // the session tells of the unreadable settings before the refusal that follows from them
+    expect(fold([{ type: 'notice', why: { kind: 'tooNew' } }, { type: 'refused' }]).refusals).toBe(0)
+    // the settings land: storage took a write, and a refusal after is a new one
+    const mended = fold([{ type: 'refused' }, { type: 'settings', config: DEFAULT_CONFIG, pack: null }])
+    expect(mended).toMatchObject({ refusals: 1, mended: 1 })
+    expect(fold([{ type: 'refused' }], mended)).toMatchObject({ refusals: 2, mended: 1 })
+    // the same settings again, with nothing refused, change nothing
+    expect(reduce(mended, { type: 'settings', config: DEFAULT_CONFIG, pack: null })).toBe(mended)
+  })
+
   it('knows the paper and its title', () => {
     expect(fold([{ type: 'paper', id: '2608.02163', title: 'A Title' }]).paper).toEqual({ id: '2608.02163', title: 'A Title' })
   })
@@ -268,6 +281,44 @@ describe('createController', () => {
   it('knows the paper\'s id from the address before the session says anything', () => {
     const controller = createController({ open: async () => fakeSession(), params: new URLSearchParams('paper=hep-th/9711200') })
     expect(controller.getState().paper).toEqual({ id: 'hep-th/9711200', title: '' })
+  })
+
+  it('an address with no paper is known from the address alone: nothing is loading, and the translated displays are out of reach (D1)', () => {
+    const none = createController({ open: async () => fakeSession(), params: new URLSearchParams() }).getState()
+    expect(none).toMatchObject({ noPaper: true, phase: 'ready', available: false, paper: { id: '', title: '' } })
+    // an empty id is no paper either, with or without the live run asked for
+    for (const query of ['paper=', 'live=1', 'live=1&paper=']) expect(createController({ open: async () => fakeSession(), params: new URLSearchParams(query) }).getState().noPaper, query).toBe(true)
+    // a paper named: the reader loads it as before
+    expect(createController({ open: async () => fakeSession(), params: new URLSearchParams('paper=2608.02163') }).getState()).toMatchObject({ noPaper: false, phase: 'loading', available: true })
+    expect(INITIAL.noPaper).toBe(false)
+  })
+
+  describe('the page\'s first read of the settings is drawn from the first frame, whatever it found (D2)', () => {
+    const later = (config = { ...DEFAULT_CONFIG, targetLanguage: 'jpn' as const }): SessionEvent => ({ type: 'settings', config, pack: null })
+    let host!: SessionHost
+    const made = (reading: Parameters<typeof createController>[0]['reading'], params = 'paper=2608.02163') => createController({ open: async h => { host = h; return fakeSession() }, params: new URLSearchParams(params), reading })
+
+    it('a read that answered: its settings are the state before any session says anything, readable', () => {
+      const config = { ...DEFAULT_CONFIG, targetLanguage: 'jpn' as const }
+      expect(made({ config, fallbackReason: null }).getState()).toMatchObject({ settings: config, settingsUnreadable: false })
+    })
+
+    it('a value that cannot be read, or a read that did not answer in time (null): the defaults, said to be unreadable; the session\'s settings replace them when they come', async () => {
+      const unreadable = made({ config: DEFAULT_CONFIG, fallbackReason: { kind: 'tooNew', stored: 99, supported: 20 } })
+      expect(unreadable.getState()).toMatchObject({ settings: DEFAULT_CONFIG, settingsUnreadable: true })
+      const silent = made(null)
+      expect(silent.getState()).toMatchObject({ settings: DEFAULT_CONFIG, settingsUnreadable: true })
+      // storage answers at last: the session shows them, and the reader is itself again
+      await silent.attach(panes())
+      host.emit(later())
+      host.emit({ type: 'notice', why: null })
+      expect(silent.getState()).toMatchObject({ settings: { targetLanguage: 'jpn' }, settingsUnreadable: false })
+    })
+
+    it('no first read: nothing is known until the session says, and an address with no paper says it too', () => {
+      expect(made(undefined).getState()).toMatchObject({ settings: null, settingsUnreadable: false })
+      expect(made(null, '').getState()).toMatchObject({ settings: DEFAULT_CONFIG, settingsUnreadable: true, noPaper: true })
+    })
   })
 
   it('remembers the zoom chosen from the menu, and forgets it on a step', async () => {

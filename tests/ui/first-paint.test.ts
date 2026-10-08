@@ -3,6 +3,7 @@ import { fakeBrowser } from 'wxt/testing/fake-browser'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import * as configStorage from '@/config/storage'
 import { setConfig } from '@/config/storage'
+import { applyLocale } from '@/ui/apply-locale'
 import { prepareFirstPaint } from '@/ui/first-paint'
 import { localeInUse } from '@/ui/strings'
 
@@ -35,6 +36,26 @@ describe('what the extension\'s pages set before their first paint', () => {
     await new Promise(r => setTimeout(r, 0))
     expect(document.documentElement.dataset.theme).toBe('light')
     stop()
+  })
+
+  it('a read that does not answer within its time paints the browser\'s language and the system\'s theme too, and the late answer changes neither (D2)', async () => {
+    let answer!: (c: typeof DEFAULT_CONFIG) => void
+    vi.spyOn(configStorage, 'getConfig').mockReturnValueOnce(new Promise(r => { answer = r }))
+    document.documentElement.dataset.theme = 'dark'
+    const time = Promise.resolve()
+    const stop = await prepareFirstPaint(document.documentElement, undefined, time)
+    expect(localeInUse()).toBe('zh-CN')
+    expect(document.documentElement.dataset.theme).toBeUndefined()
+    answer({ ...DEFAULT_CONFIG, uiLanguage: 'en', theme: 'dark' })
+    await new Promise(r => setTimeout(r, 0))
+    expect([localeInUse(), document.documentElement.lang, document.documentElement.dataset.theme]).toEqual(['zh-CN', 'zh-CN', undefined])
+    stop()
+  })
+
+  it('the reader\'s pack is chosen the same way: a stored choice that does not answer in time leaves the browser\'s language (D2)', async () => {
+    vi.spyOn(configStorage, 'getConfig').mockReturnValueOnce(new Promise(() => {}))
+    await expect(applyLocale(undefined, Promise.resolve())).resolves.toBe('zh-CN')
+    expect(document.documentElement.lang).toBe('zh-CN')
   })
 
   it('a read that fails paints the browser\'s language and the system\'s theme, and still follows the theme', async () => {

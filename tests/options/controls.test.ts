@@ -66,6 +66,29 @@ describe('ConfirmButton (§6.6)', () => {
     await m.unmount()
   })
 
+  it('Escape turns an armed one back at once, wherever the focus is, and does nothing to one at rest (R82)', async () => {
+    let confirmed = 0
+    const m = await mountElement(h(ConfirmButton, { label: 'Clear…', confirmLabel: 'Clear now', onConfirm: () => { confirmed++ } }))
+    const pressEscape = () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    pressEscape()
+    await m.flush()
+    expect(byText(m.container, 'Clear…')).toBeDefined()
+    byText(m.container, 'Clear…')!.click()
+    await m.flush()
+    expect(byText(m.container, 'Clear now')).toBeDefined()
+    // the pointer resting on it holds the 3 s timer; Escape does not wait for it
+    byText(m.container, 'Clear now')!.dispatchEvent(new Event('pointerover', { bubbles: true }))
+    pressEscape()
+    await m.flush()
+    expect(byText(m.container, 'Clear now')).toBeUndefined()
+    expect(byText(m.container, 'Clear…')).toBeDefined()
+    // disarmed means a press arms again, and confirms nothing
+    byText(m.container, 'Clear…')!.click()
+    await m.flush()
+    expect(confirmed).toBe(0)
+    await m.unmount()
+  })
+
   it('does not turn back while the pointer rests on it', async () => {
     const m = await mountElement(h(ConfirmButton, { label: 'Clear…', confirmLabel: 'Clear now', onConfirm: () => {} }))
     const button = byText(m.container, 'Clear…')!

@@ -20,7 +20,7 @@ export function App({ controller, embedded }: { controller: ReaderController; em
   const left = useRef<HTMLDivElement>(null)
   const right = useRef<HTMLDivElement>(null)
   // what the page itself shows; each part below takes its own (use-reader.ts)
-  const state = useReader(controller, s => ({ appearance: s.settings?.theme, dimPages: s.settings?.pdfReader.dimPages, swapped: s.settings?.pdfReader.swapped ?? false, title: s.paper.title, card: cardOf(s) !== null }))
+  const state = useReader(controller, s => ({ appearance: s.settings?.theme, dimPages: s.settings?.pdfReader.dimPages, swapped: s.settings?.pdfReader.swapped ?? false, title: s.paper.title, card: cardOf(s) !== null && !s.noPaper, noPaper: s.noPaper }))
   const doc = useRef<HTMLElement>(null)
   usePinch(controller, doc)
   // a document area under 840 px shows the translation alone in side by side (the design, §5); the session applies it
@@ -72,6 +72,8 @@ export function App({ controller, embedded }: { controller: ReaderController; em
       <main className="doc" ref={doc}>
         <Pane controller={controller} side="left" scroller={left} />
         <Pane controller={controller} side="right" scroller={right} card={state.card} />
+        {/* an address with no paper: its card is the page's, not a pane's (the display may hide the pane) */}
+        {state.noPaper && <FailureCard controller={controller} of="page" />}
       </main>
       <StatusCapsule controller={controller} onChooseLanguage={chooseLanguage} />
     </>
