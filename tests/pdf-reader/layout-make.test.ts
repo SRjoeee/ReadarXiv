@@ -1225,5 +1225,8 @@ describe("makeLayout, babel's names (D1a)", () => {
     const h = heading('References', 72)
     const { file } = await made({ pages: [{ runs: body }, { runs: [h] }], marks: [...bodyMarks, [`n1.ref.s`, 2, h.x, h.y], [`n1.ref.e`, 2, endOf(h), h.y]], units: [para] })
     expect(file.names.map(r => [r[2], r[13], r[14]])).toEqual([[2, 72, endOf(body[0] as Run)]])
+    // no page with a body line of its kind of column: its own box (no room past it is known), never the page's half
+    const alone = await made({ pages: [{ runs: [h] }], marks: [[`n1.ref.s`, 1, h.x, h.y], [`n1.ref.e`, 1, endOf(h), h.y]], units: [] })
+    expect(alone.file.names.map(r => [r[3], r[5], r[13], r[14]])).toEqual([[72, endOf(h), 72, endOf(h)]])
   })
 })
