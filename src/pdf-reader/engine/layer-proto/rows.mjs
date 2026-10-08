@@ -15,6 +15,7 @@ import { decideGroups, groupOf } from '../groups.mjs'
 import { kOfSource } from '../layer/pieces.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource, translateUnits, utf8 } from '../mt.mjs'
 import { authorsTranslated } from '../scripts.mjs'
+import { PIECES_MAX } from '../layout/json.mjs'
 import { STRING_MAX, UNIT_FLAG_BITS } from './bundle.mjs'
 
 /** the states of a row, and those a translation gives (a kept one is a table cell held whole in its source) */
@@ -184,7 +185,8 @@ export function rowOf(bundle, id, result) {
  * `k` —, so that v0's take, which reads the hybrid's pieces by `trPiecesOf(unit.pieces, p => p.k)`, and kOfSource over
  * the source's pieces give the same TrPiece (a copy would be found by its equals, and a placeholder twice by the
  * order). The units of the other states have no pieces. Null where the row is no unit of the bundle's — a shape not a
- * row's, an id the bundle has not or dropped, a state not of the five, a piece that is neither a string within §4.1's
+ * row's, an id the bundle has not or dropped, a state not of the five, more pieces than PIECES_MAX (counted before
+ * any is read: a row repeating a k does not make a unit of it), a piece that is neither a string within §4.1's
  * bound (inBound: a row rowOf would have made `none`) nor a `k` of the unit's source pieces: the layer leaves that unit the
  * original's, whoever handed it the row (the web reads its rows within the bound already)
  */
@@ -196,7 +198,7 @@ export function unitOf(bundle, row) {
   const group = groupOf(src)
   const unit = { kind: src.kind, src: plainOf(s, id), state, ...(src.title ? { title: true } : {}), ...(group ? { group } : {}) }
   if (state !== 'whole' && state !== 'partial') return unit
-  if (!Array.isArray(pieces)) return null
+  if (!Array.isArray(pieces) || pieces.length > PIECES_MAX) return null
   const out = []
   for (const p of pieces) {
     if (typeof p === 'string') { if (!inBound(p)) return null; out.push({ t: 'text', tr: true, s: p }) }

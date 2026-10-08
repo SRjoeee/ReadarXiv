@@ -3,7 +3,9 @@ import { type BundleUnit, bundleUnitsOf, type ReadBundle, UNIT_FLAG_BITS } from 
 import {
   batchesOf, layerRows, type Row, rowOf, type RowSourceUnit, runRows, sourceUnitsOf, toTranslate, type TranslateResult, unitOf,
 } from '@/pdf-reader/engine/layer-proto/rows.mjs'
+import { PIECES_MAX as NET_PIECES_MAX } from '@/pdf-reader/engine/layer/net.mjs'
 import { kOfSource, trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
+import { PIECES_MAX } from '@/pdf-reader/engine/layout/json.mjs'
 import { type BatchReport, type Compiled, keptFor, openPaper, runLive } from '@/pdf-reader/engine/live.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource, translateUnits } from '@/pdf-reader/engine/mt.mjs'
 
@@ -290,6 +292,14 @@ describe('unitOf', () => {
     const refused = [...Array.from({ length: 0x20 }, (_, c) => c).filter(c => c !== 0x0a && c !== 0x09), ...Array.from({ length: 0x21 }, (_, i) => 0x7f + i), 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069]
     for (const c of refused) expect(unit(`a${String.fromCharCode(c)}b`), `U+${c.toString(16)}`).toBeNull()
     for (const c of [0x09, 0x0a, 0x20, 0xa0, 0x2029, 0x2065, 0x206a]) expect(unit(`a${String.fromCharCode(c)}b`), `U+${c.toString(16)}`).not.toBeNull()
+  })
+  it("is null for a row of more pieces than an answer may have (PIECES_MAX, layer/net.mjs's): one k repeated makes no unit of it", () => {
+    const b = base()
+    expect(PIECES_MAX).toBe(NET_PIECES_MAX)
+    const row = (n: number, piece: number | string) => [0, Array.from({ length: n }, () => piece), 'whole', null, null] as never
+    expect((unitOf(b, row(PIECES_MAX, 0)) as { pieces: unknown[] }).pieces).toHaveLength(PIECES_MAX)
+    expect(unitOf(b, row(PIECES_MAX + 1, 0))).toBeNull()
+    expect(unitOf(b, row(PIECES_MAX + 1, 'x'))).toBeNull()
   })
   it('is null, never a throw, for a row that is no unit of the bundle\'s: an id past it, a dropped unit, a k past the unit, a shape', () => {
     const b = bundleOf([BASE[0] as BundleUnit, null, BASE[1] as BundleUnit])
