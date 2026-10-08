@@ -89,6 +89,11 @@ describe('the gaps between paragraphs (paraGap, D6): the drawn gap against the o
     expect(m.geo).toHaveLength(1)
     expect(m.geo[0]!.rhythm).toBeCloseTo(15 / 12, 6)
     expect(m.geo[0]!.pitch).toBeCloseTo(39 / 12, 3)
+    // (a display of two stacked baselines 8.5 apart among the original's lines: the rhythm stays against the frame's own
+    // pitch, 12, not the closest gap)
+    const stacked = [700, 688, 676, 650, 641.5, 620, 608].map(b => ({ x0: 72, x1: 472, baseline: b, top: b + 7, bottom: b - 2.5, size: 10 }))
+    const m2 = modelPage({ units: [unit({ id: 1, orig: stacked, lines: drawn })], ref: [{ id: 1, kind: 'para', orig: stacked }], items: [], translated: new Set([1]) })
+    expect(m2.geo[0]!.rhythm).toBeCloseTo(15 / 12, 6)
   })
 
   it('pairs frames of one column only', () => {
