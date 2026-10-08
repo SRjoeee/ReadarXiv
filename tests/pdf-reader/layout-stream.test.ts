@@ -135,6 +135,13 @@ describe('ownedOf', () => {
     expect(owned([next], { 'p7.2a': open('', ['7e']) })).toEqual({ 'p7.2a': "open, the next mark not its unit's" })
   })
 
+  it("a babel name's points are no piece's next mark, whatever case its key is in (a primitive \\uppercase's capitals)", () => {
+    for (const key of ['ref', 'REF']) {
+      const page = pageOf(['define ', { at: 'p0.1a' }, '\na=b', { at: `n1.${key}.s` }, { at: `n1.${key}.e` }, '(1)', { at: '0e' }])
+      expect(owned([page], { 'p0.1a': open('', ['0e']) }), key).toEqual({ 'p0.1a': ['a=b(1)', 0] })
+    }
+  })
+
   it('an opening point alone with no text after it ends at its unit\'s next mark, and no other', () => {
     const display = pageOf(['define ', { at: 'p0.1a' }, '\na=b(1)', { rule: [100, 680, 110, 680.4] }, { at: '0e' }, '\n', { at: '1s' }, 'Next unit'])
     expect(owned([display], { 'p0.1a': open('', ['0e']) })).toEqual({ 'p0.1a': ['a=b(1)', 1] })
