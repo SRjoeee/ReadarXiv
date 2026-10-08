@@ -284,6 +284,12 @@ describe('readBundle refuses', () => {
     expect(refusalOf(broken(b => { b.left.units[1][2][0][3] = 612.5; b.left.units[1][2][0][1] = -0.5 }))).toBeNull()
   })
 
+  it("a layout whose pages' views are not the left's, by more than the point", () => {
+    expect(refusalOf(broken(b => { b.layout.views[2] = 614 }))?.why).toBe("layout.views[2]: not the left's page 1 within 1 pt")
+    expect(refusalOf(broken(b => { b.left.pages[1] = [0, 0, 600, 792] }))?.why).toBe("layout.views[6]: not the left's page 2 within 1 pt")
+    expect(refusalOf(broken(b => { b.layout.views[3] = 791.25 }))).toBeNull()
+  })
+
   it('a layout refused by the layout file\'s own rules, or of another paper or other units', () => {
     expect(refusalOf(broken(b => { b.layout.schema = 2 }))?.why).toMatch(/^layout\.schema/)
     expect(refusalOf(broken(b => { b.layout.lines[1][1][0] = 3 }))?.why).toMatch(/^layout\.lines\[1\]\[1\]\[0\]/)
