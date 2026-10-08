@@ -156,6 +156,19 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     plain.dispose()
   })
 
+  it('refuses a rule set that is none with a TypeError of its own, before it takes the page\'s one open, like the door\'s other arguments', async () => {
+    const { firstFaceOf, openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const o = { bundle: bundleOf(), doc: docOf(), target: 'zh', faceSources, hyphUrl }
+    for (const rules of [null, 7, 'set', true, [], {}, { schema: 1 }, { ...structuredClone(BUILTIN_RULES), languages: null }, { ...structuredClone(BUILTIN_RULES), scripts: 3 }]) {
+      const refused = { name: 'TypeError', message: expect.stringMatching(/^rules: a rule set \(readRules's\), not /) }
+      await expect(openLayer({ ...o, rules } as never), JSON.stringify(rules)).rejects.toMatchObject(refused)
+      expect(() => firstFaceOf('zh', rules as never), JSON.stringify(rules)).toThrow(expect.objectContaining(refused))
+    }
+    // (no open was begun by any of them: the next, with a set, is the page's one)
+    const layer = await openLayer({ ...o, rules: structuredClone(BUILTIN_RULES) })
+    layer.dispose()
+  })
+
   it('opens v0 with the rule set a host passes, and says which in its stats; the built-in one where it passes none', async () => {
     const { firstFaceOf, openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const set = structuredClone(BUILTIN_RULES) as unknown as { version: number; scripts: Record<string, { leadBase: number; cjkFaces: { light: string[] } }> }

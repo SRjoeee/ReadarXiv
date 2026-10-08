@@ -68,9 +68,10 @@ export function loadHyphenation(lang, url = `/hyph/${lang}.json`) {
 
 const cache = new Map()
 /** the positions (character offsets into `word`) where `word` may break, for a language whose patterns are loaded.
- *  `mins`: the fewest letters left before and after a break ({ left, right }, the layout rules' for the language); Russian's
- *  rules need none */
+ *  `mins`: the fewest letters left before and after a break ({ left, right }, the layout rules' for the language), required
+ *  for a language of patterns (a TypeError without them); Russian's rules need none */
 export function breakPoints(word, lang, data, mins) {
+  if (lang !== 'ru' && (typeof mins?.left !== 'number' || typeof mins.right !== 'number')) throw new TypeError(`breakPoints: mins ({ left, right }), the fewest letters before and after a break, for ${lang}'s patterns`)
   const key = lang === 'ru' ? `ru|${word}` : `${lang}|${mins.left}|${mins.right}|${word}`
   let out = cache.get(key)
   if (out) return out

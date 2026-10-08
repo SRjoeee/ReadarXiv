@@ -368,6 +368,11 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     ['a label with U+202E (right-to-left override)', s => { s.languages.de.labels.figure = 'Abb\u202e' }, 'languages.de.labels.figure'],
     ['a label with U+2066 (left-to-right isolate)', s => { s.languages.de.labels.figure = '\u2066Abb' }, 'languages.de.labels.figure'],
     ['a label with U+2069 (pop directional isolate)', s => { s.languages.de.labels.figure = 'Abb\u2069' }, 'languages.de.labels.figure'],
+    ['a label with U+061C (Arabic letter mark)', s => { s.languages.de.labels.figure = 'Abb\u061c' }, 'languages.de.labels.figure'],
+    ['a label with U+200E (left-to-right mark)', s => { s.languages.de.labels.table = '\u200eTab' }, 'languages.de.labels.table'],
+    ['a label with U+200F (right-to-left mark)', s => { s.languages.de.labels.table = 'Tab\u200f' }, 'languages.de.labels.table'],
+    ['a note with U+200F (right-to-left mark)', s => { s.note = 'a\u200fb' }, 'note'],
+    ['noStart with U+200E (left-to-right mark)', s => { s.scripts.Latn.noStart = '.\u200e' }, 'scripts.Latn.noStart'],
     ['a label of 33 code units', s => { s.languages.de.labels.figure = 'x'.repeat(33) }, 'languages.de.labels.figure'],
     ['a label that is not a string', s => { s.languages.de.labels.figure = ['Abb'] }, 'languages.de.labels.figure'],
     ['labels that are not an object', s => { s.languages.de.labels = 'Abbildung' }, 'languages.de.labels'],
@@ -418,6 +423,16 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     expect(parseRules(v1(s => { delete s.languages.pt })).languages.pt).toBeUndefined()
   })
 
+  it('refuses every bidirectional control character of Unicode, and lets the other invisible characters of a text through', () => {
+    // (the property itself, not a list: U+061C, U+200E, U+200F, U+202A to U+202E and U+2066 to U+2069, all in the BMP)
+    const bidi = [] as number[]
+    for (let c = 0; c < 0x10000; c++) if (/\p{Bidi_Control}/u.test(String.fromCodePoint(c))) bidi.push(c)
+    expect(bidi).toEqual([0x61c, 0x200e, 0x200f, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069])
+    for (const c of bidi) expect(refusal(v1(s => { s.languages.de.labels.figure = `a${String.fromCodePoint(c)}` })).field, c.toString(16)).toBe('languages.de.labels.figure')
+    // (a zero width joiner and a soft hyphen are not bidirectional controls: a name may hold them)
+    for (const c of ['\u200b', '\u200c', '\u200d', '\u00ad']) expect(() => parseRules(v1(s => { s.languages.de.labels.figure = `Ab${c}b` })), c).not.toThrow()
+  })
+
   it('names a wrong type by its type and converts nothing', () => {
     expect(refusal(v1(s => { s.scripts.Hans.leadBase = '1.3' })).why).toBe('number, not string')
     expect(refusal(v1(s => { s.scripts.Hans.leadBase = null })).why).toBe('number, not null')
@@ -435,6 +450,17 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     expect(refusal(v1(s => { s.scripts.Hans.grid = 2 })).why).toBe('not one of 0, 1')
     expect(refusal(v1(s => { s.languages.de.labels.figure = 'x'.repeat(40) })).why).toBe('more than 32 characters')
     expect(refusal(v1(s => { s.scripts.Hans.leadBase = '<img src=x onerror=alert(1)>' })).why).not.toContain('onerror')
+  })
+
+  it('words the bound of an integer as a bound of a number: zod reports it with the origin `int`, and no value is a count of characters', () => {
+    // (the safe-integer bound, past which a version or a count is no integer a reader can hold)
+    expect(refusal(v1(s => { s.version = 1e300 })).why).toBe('above 9007199254740991')
+    expect(refusal(v1(s => { s.version = 2 ** 53 })).why).toBe('above 9007199254740991')
+    expect(refusal(v1(s => { s.version = -1e300 })).why).toBe('below -9007199254740991')
+    expect(refusal(v1(s => { s.version = 0 })).why).toBe('below 1')
+    expect(refusal(v1(s => { s.hyphenation.minWord = 1e300 })).why).toBe('above 9007199254740991')
+    expect(refusal(v1(s => { s.hyphenation.en.left = -1e300 })).why).toBe('below -9007199254740991')
+    for (const [edit, field] of [[(s: Edit) => { s.version = 1e300 }, 'version'], [(s: Edit) => { s.hyphenation.minWord = 1e300 }, 'hyphenation.minWord']] as const) expect(refusal(v1(edit)).field).toBe(field)
   })
 
   it('shows a key of the file\'s own only escaped and cut: a hostile key is no line break and no override', () => {

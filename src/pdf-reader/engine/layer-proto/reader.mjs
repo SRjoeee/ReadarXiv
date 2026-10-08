@@ -36,6 +36,13 @@ const CAPTIONS = Object.freeze({ figure: 'target', table: 'target' })
 
 /** what a value is, for a refusal: its type, never its text */
 const kindOf = v => (v === null ? 'null' : Array.isArray(v) ? 'an array' : typeof v)
+/** a rule set a host passes (rules/layout.mjs RuleSet, as readRules reads it): an object holding the schema's scripts and
+ *  languages, or a TypeError like the door's other arguments */
+function checkRules(rules) {
+  const isObject = v => v !== null && typeof v === 'object' && !Array.isArray(v)
+  if (!isObject(rules) || !isObject(rules.scripts) || !isObject(rules.languages)) throw new TypeError(`rules: a rule set (readRules's), not ${isObject(rules) ? 'an object that holds none' : kindOf(rules)}`)
+  return rules
+}
 /** the layer open in this realm, from its open to its dispose: v0's faces are the page's (fonts.mjs setRoleFaces holds one
  *  target's and one family's roles for every run), so that a second layer open at once would set the first's faces */
 let opened = null
@@ -47,7 +54,7 @@ let opened = null
  * none) rather than the role table, so that no host decides a face.
  */
 export function firstFaceOf(target, rules = BUILTIN_RULES) {
-  const { cjkFaces } = resolveRules(rules, target)
+  const { cjkFaces } = resolveRules(checkRules(rules), target)
   return cjkFaces ? rolesFor(target, OPEN_FAMILY, cjkFaces).cjk.body : null
 }
 
@@ -96,6 +103,7 @@ export async function openLayer({ bundle, doc, target, faceSources, hyphUrl, rul
   if (typeof target !== 'string') throw new TypeError(`target: a language tag, not ${kindOf(target)}`)
   if (typeof faceSources !== 'function') throw new TypeError(`faceSources: a function, not ${kindOf(faceSources)}`)
   if (typeof hyphUrl !== 'function') throw new TypeError(`hyphUrl: a function, not ${kindOf(hyphUrl)}`)
+  checkRules(rules)
   if (opened) throw new Error('openLayer: one open layer a page; dispose the open one first')
   // (taken before the open's first await: two opens at once are refused alike)
   const token = {}

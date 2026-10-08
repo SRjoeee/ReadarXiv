@@ -10,5 +10,6 @@ export declare function patternsOfTex(latin1: string): { patterns: string[]; exc
  *  (its rules need none) */
 export declare function loadHyphenation(lang: string, url?: string): Promise<Patterns | true | null>
 /** where `word` may break: offsets into it. `mins`: the fewest letters left before and after a break, the layout rules'
- *  (rules/layout.mjs hyphenation) for the language; Russian's rules need none */
-export declare function breakPoints(word: string, lang: string, data: Patterns | true | null | undefined, mins?: { left: number; right: number }): number[]
+ *  (rules/layout.mjs hyphenation) for the language, required for a language of patterns; Russian's rules need none */
+export declare function breakPoints(word: string, lang: 'ru', data: Patterns | true | null | undefined, mins?: { left: number; right: number }): number[]
+export declare function breakPoints(word: string, lang: string, data: Patterns | true | null | undefined, mins: { left: number; right: number }): number[]

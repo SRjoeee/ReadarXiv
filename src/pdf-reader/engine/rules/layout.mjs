@@ -66,8 +66,9 @@ export class RulesRefusal extends Error {
 
 // ---- the schema
 
-/** a C0 or C1 control (general category Cc), or a bidirectional control: a string a reader draws or a rule names is text */
-const CONTROL = /\p{Cc}|[\u202a-\u202e\u2066-\u2069]/u
+/** a C0 or C1 control (general category Cc), or a bidirectional control (U+061C, U+200E, U+200F, U+202A to U+202E, U+2066
+ *  to U+2069: Unicode's property, not a list): a string a reader draws or a rule names is text */
+const CONTROL = /\p{Cc}|\p{Bidi_Control}/u
 /** a letter or a digit, but the kana, their iteration marks and the prolonged sound mark (letters by Unicode and kinsoku's
  *  own characters): a line may start and end with every other letter, so none is listed */
 const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u
@@ -191,6 +192,8 @@ export const RULES_FIELDS = Object.freeze([
 
 // ---- reading
 
+/** the origins of a zod issue that are bounds of a number */
+const NUMERIC = new Set(['number', 'int'])
 /** what a value is, as a refusal names it: its type, never the value */
 const kindOf = v => (v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v === 'number' && Number.isNaN(v) ? 'NaN' : typeof v)
 /** the value at an issue's path in the JSON it was found in (undefined where the path leads nowhere) */
@@ -207,8 +210,9 @@ function valueAt(json, path) {
 function whyOf(issue, json) {
   switch (issue.code) {
     case 'invalid_type': { const v = valueAt(json, issue.path); return v === undefined ? `${issue.expected} missing` : `${issue.expected}, not ${kindOf(v)}` }
-    case 'too_small': return issue.origin === 'number' ? `below ${issue.minimum}` : issue.origin === 'array' ? `fewer than ${issue.minimum} items` : `shorter than ${issue.minimum}`
-    case 'too_big': return issue.origin === 'number' ? `above ${issue.maximum}` : issue.origin === 'array' ? `more than ${issue.maximum} items` : `more than ${issue.maximum} characters`
+    // (an integer's bound is reported with the origin `int`: it is a bound of a number all the same, never of a length)
+    case 'too_small': return NUMERIC.has(issue.origin) ? `below ${issue.minimum}` : issue.origin === 'array' ? `fewer than ${issue.minimum} items` : `shorter than ${issue.minimum}`
+    case 'too_big': return NUMERIC.has(issue.origin) ? `above ${issue.maximum}` : issue.origin === 'array' ? `more than ${issue.maximum} items` : `more than ${issue.maximum} characters`
     case 'invalid_value': return `not one of ${issue.values.map(v => JSON.stringify(v)).join(', ')}`
     case 'invalid_key': return 'not a key the schema allows (a language is a BCP 47 tag)'
     case 'unrecognized_keys': return 'not a key of the schema'

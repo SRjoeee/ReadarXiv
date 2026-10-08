@@ -47,7 +47,12 @@ describe("v0's hyphenation: TeX's pattern files read as the prototype's host rea
     // (a minimum is part of the answer: the same word under another is not the cached one)
     expect(breakPoints('xxabxx', 'de', data, { left: 4, right: 2 })).toEqual([])
     expect(breakPoints('xxabxx', 'de', data, { left: 2, right: 2 })).toEqual([3])
-    // Russian by its rules: never a single letter left
+    // the minimums are required for a language of patterns (a type error to leave out, and a refusal named by what is missing)
+    // @ts-expect-error — mins is required for 'en'
+    expect(() => breakPoints('table', 'en', data)).toThrow(/mins/)
+    expect(() => breakPoints('table', 'de', data, undefined as never)).toThrow(TypeError)
+    expect(() => breakPoints('table', 'en', data, { left: 2 } as never)).toThrow(/mins/)
+    // Russian by its rules: never a single letter left (and needs no minimums)
     for (const at of breakPoints('\u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u0430', 'ru', true)) expect(at >= 2 && at <= 7).toBe(true)
   })
 })
