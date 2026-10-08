@@ -1,0 +1,50 @@
+name: Rules point
+
+# Moves the rule set's pointer to a version already published: the rollback. Staging's is a click; production's waits for the
+# maintainer, the required reviewer of the environment rules-production. Nothing is published here, and nothing is built: the
+# script reads no dependency.
+
+on:
+  workflow_dispatch:
+    inputs:
+      schema:
+        description: 'The rule set schema (RULES_SCHEMA), a positive integer'
+        required: true
+        default: '1'
+        type: string
+      version:
+        description: 'The published version to point to, a positive integer'
+        required: true
+        type: string
+      environment:
+        description: 'Where to move the pointer'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rules-point-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  point:
+    name: Point ${{ inputs.environment }} to version ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment == 'production' && 'rules-production' || 'rules-staging' }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Move the pointer
+        env:
+          RULES_PUBLISH_SECRET: ${{ secrets.RULES_PUBLISH_SECRET }}
+          RULES_URL: ${{ inputs.environment == 'production' && vars.RULES_PRODUCTION_URL || vars.RULES_STAGING_URL }}
+          SCHEMA: ${{ inputs.schema }}
+          VERSION: ${{ inputs.version }}
+        run: node lab/pdf/spikes/rules-publish.mjs point --url="$RULES_URL" --schema="$SCHEMA" --version="$VERSION"

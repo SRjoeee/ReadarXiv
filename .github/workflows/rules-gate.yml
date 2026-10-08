@@ -1,0 +1,155 @@
+name: Rules gate
+
+# A change to the layout rule set, or to the drawing code that reads it, is measured on the fixtures: the layer gate's model
+# tier on the merge base and on the pull request, both on this runner, and the verdict is one comment. The fixtures are
+# arXiv's papers and what is made from them, so they are not in the repository: a private bucket holds them as a pack,
+# restored by digest (lab/pdf/README.md, "The rules gate in CI"). This is a measurement, not an end-to-end suite: Chromium
+# runs on these paths alone (rules-as-data plan, decision 5).
+
+on:
+  pull_request:
+    # the drawing closure: the engine files the gate loads (a test holds this list to the gate's own reads), the gate and its pack
+    paths:
+      - 'src/pdf-reader/engine/rules/**'
+      - 'src/pdf-reader/engine/layer-proto/**'
+      - 'src/pdf-reader/engine/font-roles.mjs'
+      - 'src/pdf-reader/engine/font-coverage.mjs'
+      - 'src/pdf-reader/engine/layer-rules.mjs'
+      - 'src/pdf-reader/engine/arg-roles.mjs'
+      - 'src/pdf-reader/engine/latexml-args.mjs'
+      - 'src/pdf-reader/engine/layer/check.mjs'
+      - 'src/pdf-reader/engine/layer/pieces.mjs'
+      - 'src/pdf-reader/engine/layer/swap.mjs'
+      - 'src/pdf-reader/engine/layout/addon-manifest.mjs'
+      - 'src/pdf-reader/engine/layout/addon.mjs'
+      - 'src/pdf-reader/engine/layout/file.mjs'
+      - 'src/pdf-reader/engine/layout/ink.mjs'
+      - 'src/pdf-reader/engine/layout/json.mjs'
+      - 'src/pdf-reader/engine/layout/remove.mjs'
+      - 'lab/pdf/spikes/layer-gate.mjs'
+      - 'lab/pdf/spikes/layer-gate/**'
+      - 'lab/pdf/spikes/rules-gate.mjs'
+      - 'lab/pdf/spikes/gate-pack.mjs'
+      - 'lab/pdf/gate-pack.json'
+      - '.github/workflows/rules-gate.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: rules-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Rules gate
+    # a pull request from a fork has no secrets, and so no pack
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    environment: rules-gate
+    timeout-minutes: 15
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      # the pull request's own commit, not the merge: its sha is the one the lab links open
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # The pack: from the cache by its digest, else from the bucket with the read-only token, which only this step holds
+      - name: Pack digest
+        id: pack
+        run: echo "digest=$(node lab/pdf/spikes/gate-pack.mjs digest)" >> "$GITHUB_OUTPUT"
+      - name: Pack from the cache
+        id: pack-cache
+        uses: actions/cache/restore@v4
+        with:
+          key: gate-pack-${{ steps.pack.outputs.digest }}
+          path: lab/pdf/out/gate-pack
+      - name: Pack from the bucket
+        if: steps.pack-cache.outputs.cache-hit != 'true'
+        env:
+          READARXIV_CI_TOKEN: ${{ secrets.READARXIV_CI_TOKEN }}
+          CF_ACCOUNT_ID: ${{ vars.CF_ACCOUNT_ID }}
+        run: node lab/pdf/spikes/gate-pack.mjs restore
+      - name: Keep the pack
+        if: steps.pack-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          key: gate-pack-${{ steps.pack.outputs.digest }}
+          path: lab/pdf/out/gate-pack
+      - name: Check the pack
+        run: node lab/pdf/spikes/gate-pack.mjs verify
+
+      # Two runs on this runner: the merge base's engine with its own built-in set, the pull request's with its own. The
+      # instrument (the gate's scripts) is the pull request's for both, so that the two runs differ in the engine alone
+      - name: Merge base
+        run: |
+          base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          echo "BASE_COMMIT=$base" >> "$GITHUB_ENV"
+          git worktree add --detach "$RUNNER_TEMP/base" "$base"
+          ln -s "$PWD/node_modules" "$RUNNER_TEMP/base/node_modules"
+      - name: Gate on the merge base
+        run: node lab/pdf/spikes/rules-gate.mjs run --engine="$RUNNER_TEMP/base" --rules="$RUNNER_TEMP/base/src/pdf-reader/engine/rules/layout-rules.json" --pack=lab/pdf/out/gate-pack --out="$RUNNER_TEMP/base-run.json"
+      - name: Gate on the pull request
+        run: node lab/pdf/spikes/rules-gate.mjs run --engine="$PWD" --rules="$PWD/src/pdf-reader/engine/rules/layout-rules.json" --pack=lab/pdf/out/gate-pack --out="$RUNNER_TEMP/head-run.json"
+
+      # The verdict: a regression fails the run unless the pull request adds a ruling file (lab/pdf/rulings/README.md)
+      - name: Verdict
+        id: verdict
+        run: |
+          git diff --name-only --diff-filter=A "$BASE_COMMIT" "$HEAD_SHA" -- 'lab/pdf/rulings/*.json' > "$RUNNER_TEMP/rulings.txt"
+          rulings=()
+          while IFS= read -r file; do
+            if [ -n "$file" ]; then rulings+=("--ruling=$file"); fi
+          done < "$RUNNER_TEMP/rulings.txt"
+          set +e
+          node lab/pdf/spikes/rules-gate.mjs compare \
+            --base="$RUNNER_TEMP/base-run.json" --head="$RUNNER_TEMP/head-run.json" --out="$RUNNER_TEMP/verdict" \
+            --base-sha="$BASE_COMMIT" --head-sha="$HEAD_SHA" \
+            --base-rules="$RUNNER_TEMP/base/src/pdf-reader/engine/rules/layout-rules.json" --head-rules=src/pdf-reader/engine/rules/layout-rules.json \
+            --pack=lab/pdf/gate-pack.json --records=lab/pdf/out/gate-pack/fixtures "${rulings[@]}"
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+
+      # One comment, found again by its marker and edited in place. Numbers, names and links: no image and no text of a paper
+      - name: Comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body="$RUNNER_TEMP/verdict/rules-gate.md"
+          if [ ! -s "$body" ]; then
+            mkdir -p "$RUNNER_TEMP/verdict"
+            printf '<!-- rules-gate -->\n## Rules gate: did not finish\n\nThe job stopped before it had a verdict: %s/%s/actions/runs/%s\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > "$body"
+          fi
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- rules-gate -->"))) | .id' | head -n 1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$body" > /dev/null
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@"$body" > /dev/null
+          fi
+      - name: Numbers
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rules-gate
+          path: ${{ runner.temp }}/verdict/rules-gate.json
+          if-no-files-found: ignore
+      - name: Fail on a regression
+        if: steps.verdict.outputs.code != '' && steps.verdict.outputs.code != '0'
+        run: |
+          echo "the rules gate does not pass: see the comment on the pull request"
+          exit 1

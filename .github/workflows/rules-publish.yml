@@ -1,0 +1,133 @@
+name: Rules publish
+
+# A rule set merged to next is published: to staging at once, to production after the gate's model tier has run it on each
+# engine that is live and the maintainer has said yes (the required reviewer of the environment rules-production). The set is a
+# file of the repository (src/pdf-reader/engine/rules/layout-rules.json); publishing writes it, as it is, to the web Worker's
+# rules routes, and moves the pointer readers take it by (lab/pdf/README.md, "The rules gate in CI"). A rollback is rules-point.yml.
+
+on:
+  push:
+    branches:
+      - next
+    paths:
+      - 'src/pdf-reader/engine/rules/layout-rules.json'
+
+permissions:
+  contents: read
+
+jobs:
+  staging:
+    name: Staging
+    runs-on: ubuntu-latest
+    environment: rules-staging
+    timeout-minutes: 10
+    # one publish to staging at a time, in the order of the merges
+    concurrency:
+      group: rules-publish-staging
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # (no install scripts: a job that holds a secret runs none of a dependency's)
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Publish to staging and point it at the set
+        env:
+          RULES_PUBLISH_SECRET: ${{ secrets.RULES_PUBLISH_SECRET }}
+          RULES_URL: ${{ vars.RULES_STAGING_URL }}
+        run: node lab/pdf/spikes/rules-publish.mjs publish --url="$RULES_URL"
+
+  # Before production: the set as the gate measures it on each engine a reader runs now, against the set published for that
+  # engine. lab/pdf/live-engines.json names them; while it names none there is nothing to measure and this job does nothing.
+  engines:
+    name: Live engines
+    needs: staging
+    runs-on: ubuntu-latest
+    environment: rules-gate
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - name: Engines to check
+        id: list
+        run: echo "count=$(node -p "require('./lab/pdf/live-engines.json').engines.length")" >> "$GITHUB_OUTPUT"
+      - if: steps.list.outputs.count != '0'
+        uses: pnpm/action-setup@v4
+      - if: steps.list.outputs.count != '0'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - if: steps.list.outputs.count != '0'
+        run: pnpm install --frozen-lockfile
+      - name: Chromium
+        if: steps.list.outputs.count != '0'
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Pack digest
+        if: steps.list.outputs.count != '0'
+        id: pack
+        run: echo "digest=$(node lab/pdf/spikes/gate-pack.mjs digest)" >> "$GITHUB_OUTPUT"
+      - name: Pack from the cache
+        if: steps.list.outputs.count != '0'
+        id: pack-cache
+        uses: actions/cache/restore@v4
+        with:
+          key: gate-pack-${{ steps.pack.outputs.digest }}
+          path: lab/pdf/out/gate-pack
+      - name: Pack from the bucket
+        if: steps.list.outputs.count != '0' && steps.pack-cache.outputs.cache-hit != 'true'
+        env:
+          READARXIV_CI_TOKEN: ${{ secrets.READARXIV_CI_TOKEN }}
+          CF_ACCOUNT_ID: ${{ vars.CF_ACCOUNT_ID }}
+        run: node lab/pdf/spikes/gate-pack.mjs restore
+      - name: Keep the pack
+        if: steps.list.outputs.count != '0' && steps.pack-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          key: gate-pack-${{ steps.pack.outputs.digest }}
+          path: lab/pdf/out/gate-pack
+      - name: Check the pack
+        if: steps.list.outputs.count != '0'
+        run: node lab/pdf/spikes/gate-pack.mjs verify
+      - name: The set on each live engine
+        if: steps.list.outputs.count != '0'
+        env:
+          PRODUCTION_URL: ${{ vars.RULES_PRODUCTION_URL }}
+        run: node lab/pdf/spikes/rules-gate.mjs engines --list=lab/pdf/live-engines.json --head-rules=src/pdf-reader/engine/rules/layout-rules.json --pack=lab/pdf/out/gate-pack --published="$PRODUCTION_URL" --out="$RUNNER_TEMP/engines"
+
+  # Off until the web's production exists (the repository variable RULES_PRODUCTION is 'on'). It waits for the maintainer: the
+  # environment names him its required reviewer.
+  production:
+    name: Production
+    if: vars.RULES_PRODUCTION == 'on'
+    needs: [staging, engines]
+    runs-on: ubuntu-latest
+    environment: rules-production
+    timeout-minutes: 10
+    # in the order of the merges: a set that waits for a click is not overtaken by a later one
+    concurrency:
+      group: rules-publish-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Publish to production and point it at the set
+        env:
+          RULES_PUBLISH_SECRET: ${{ secrets.RULES_PUBLISH_SECRET }}
+          RULES_URL: ${{ vars.RULES_PRODUCTION_URL }}
+        run: node lab/pdf/spikes/rules-publish.mjs publish --url="$RULES_URL"

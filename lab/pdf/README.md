@@ -64,6 +64,76 @@ missing or drawn twice, and the fidelity measures against the original page, no 
 
 Records: `lab/pdf/records/layer-fidelity.md`, `lab/pdf/records/layer-gate.md`, `lab/pdf/records/layer-perf.md`.
 
+### The rules gate in CI
+
+A change to the layout rule set (`src/pdf-reader/engine/rules/layout-rules.json`), or to the drawing code that reads it, is
+measured on the fixtures when its pull request opens, and the set is published when it merges. The papers the fixtures are
+made from are under arXiv's licence, so the CI job reads them from a private bucket and shows no page and no text of any:
+its comment is numbers, fixture names and links that open the layer lab on the maintainer's machine.
+
+| File | What it is |
+|---|---|
+| `.github/workflows/rules-gate.yml` | On a pull request (not from a fork) that touches the drawing closure, the gate or the pack: the pack restored, then the layer gate's model tier twice on one runner, the merge base's engine with its own built-in set and the pull request's with its own, then the verdict as one comment (`<!-- rules-gate -->`, edited in place) and its numbers as an artifact. Environment `rules-gate`, 15 minutes. This is a measurement, not an end-to-end suite: Chromium runs on these paths alone. |
+| `.github/workflows/rules-publish.yml` | On a push to `next` that changes `layout-rules.json`: publish to staging (environment `rules-staging`, automatic) and move its pointer; then the set measured on each live engine (below); then production (environment `rules-production`, whose required reviewer is the maintainer: one click), which stays off until the repository variable `RULES_PRODUCTION` is `on`. |
+| `.github/workflows/rules-point.yml` | By hand: move a pointer to a version already published, on staging or on production (the same reviewer): the rollback. |
+| `lab/pdf/spikes/rules-gate.mjs` | `run` (the gate's model tier in the production configuration, from the pack alone), `compare` (the verdict and the comment) and `engines` (the live-engines check). `tests/scripts/rules-gate.test.ts` holds its arithmetic on synthetic runs of numbers. |
+| `lab/pdf/spikes/rules-publish.mjs` | The two writes of the web Worker's rules routes: publish the file, move the pointer. The secret goes into one request header and is never printed. |
+| `lab/pdf/spikes/gate-pack.mjs`, `lab/pdf/gate-pack.json` | The fixture pack: made, restored by digest, verified. The JSON is its committed manifest. |
+| `lab/pdf/live-engines.json` | The engines readers run now. |
+| `lab/pdf/rulings/README.md` | How a regression that is meant is accepted. |
+
+**The verdict.** Each target's outputs (zh five, the others four) are pooled over the model tier's measures and held to the
+merge rule's thresholds (`layer-gate/score.mjs` `compare`: a share by 0.2 points, a ratio by 0.02, a count at all, a defect
+as a rate per 1,000 cells at all). The run fails on a regression no ruling accepts; on a changed `layout-rules.json` whose
+`version` is not the base's plus one, whose `note` is the base's, or whose bytes are not the canonical form (`writeRules`);
+and on two runs that are not one instrument (the gate's inputs differ) or an output that did not run. The comment lists the
+pages that moved, each as a lab link, `http://127.0.0.1:8093/#f=<fixture>&p=<page>&rules=<head sha>` (start the lab as
+`lab/pdf/layer-lab/README.md` says; the link loads the pull request's set). A target with no fixture (zh-TW, pt) is named as
+unmeasured. The comparison is of two runs on the same runner, so the platform stays out of every delta; no baseline from
+another machine is compared.
+
+**The pack** is everything the model tier reads for the 29 outputs and nothing else: arXiv's PDFs, the layout files
+(`layout.json`), the PIPELINE translations (`units.json`, `record.json`), the frozen reference text areas and the kept layouts
+(`refs/`), the geometry, the faces (every non-CJK face of the role table, and of each CJK group the outputs' targets use its
+Kai and the four weights the roles are built from), and the en and de hyphenation patterns. It is a file set laid out so that
+the gate's own flags and variables read it: `--fixtures=<pack>/fixtures`, `LAYER_REFS`, `LAYER_GEOMETRY`, `AXT_DATA`
+(`<pack>/data`, which holds `fonts/`) and `TEXMF_DIST`; `rules-gate.mjs run` sets them. Its manifest lists each file by path,
+digest and size; its **digest** is that of the sorted listing, the same on every make (the clock is not in it, and every file
+is written with its mtime at the epoch).
+
+Remaking it, on the machine that holds the data (after the fixtures are made again, a PIPELINE moves, or the faces change;
+`rules-gate.mjs compare` warns when the engine's PIPELINE is not the pack's):
+
+```
+node lab/pdf/spikes/gate-pack.mjs make        # lab/pdf/out/gate-pack/, and lab/pdf/gate-pack.json (the defaults are the record's run:
+                                              # the made fixtures, the PIPELINE 10 cut's translations, references and geometry)
+node lab/pdf/spikes/gate-pack.mjs objects     # the objects to upload, once each: key, size, digest, local path
+```
+
+The objects are content-addressed (`gate-pack/<sha256>` in the bucket `readarxiv-ci`, which has no public access), so the
+outputs of one paper share one, and an upload is each distinct digest once. In CI `gate-pack.mjs restore` reads each from
+Cloudflare's REST API with the read-only token (`READARXIV_CI_TOKEN`, a Cloudflare API token with *Workers R2 Storage Bucket
+Item Read* on that bucket alone), checks it against the manifest and writes it; the directory is cached by the pack's digest,
+and `verify` checks every file again before the gate reads any. A fork's pull request has no token and runs no job.
+
+**Live engines.** Before production, `rules-gate.mjs engines` runs the model tier of head's set on each engine
+`lab/pdf/live-engines.json` names (the released extension's tag and the web's production pin, each a git ref of this
+repository) whose `RULES_SCHEMA` is the set's, and compares it with the set now published for that engine (production's
+`/api/v1/rules/s<schema>`, else the engine's own built-in set where none is published). A regression stops the publish and
+names the engine. While the file names no engine nothing is measured.
+
+**What the repository needs**, set by the maintainer (no value is in the repository):
+
+| Where | Name | Value |
+|---|---|---|
+| Environment `rules-gate` | secret `READARXIV_CI_TOKEN` | the read-only token on the bucket `readarxiv-ci` |
+| Environment `rules-staging` | secret `RULES_PUBLISH_SECRET` | the staging Worker's publish secret |
+| Environment `rules-production` | secret `RULES_PUBLISH_SECRET`; the maintainer as required reviewer | the production Worker's publish secret |
+| Repository variables | `CF_ACCOUNT_ID`, `RULES_STAGING_URL`, `RULES_PRODUCTION_URL`, `RULES_PRODUCTION` | the account id; the staging and production origins (`https://…`, no path); `on` once production exists |
+
+Locally, the same two runs and the verdict: `node lab/pdf/spikes/rules-gate.mjs run --engine=<worktree> --rules=<file> --pack=lab/pdf/out/gate-pack --out=<run.json>`
+for each side, then `node lab/pdf/spikes/rules-gate.mjs compare --base=<run.json> --head=<run.json> --out=<dir>`.
+
 ### The highlight
 
 The hover highlight lights a sentence and its translation on both sides. The Node gate holds what is found and where it

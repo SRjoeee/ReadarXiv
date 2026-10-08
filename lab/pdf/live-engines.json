@@ -1,0 +1,5 @@
+{
+  "schema": 1,
+  "note": "The engines readers run now, which the publish job (rules-publish.yml) measures a set on before production: the released extension's tag and the web's production pin, each a { name, ref } with a git ref of this repository. A set is measured on the engines whose RULES_SCHEMA is the set's. None is named until the first release that reads the rule set ships; while the list is empty the job measures nothing.",
+  "engines": []
+}
