@@ -52,7 +52,7 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
   // words alone, no chip at the end: padded there as at the start (reader.css)
   const alone = capsule?.kind === 'narrow' || (capsule?.kind === 'unavailable' && !capsule.href)
   // the capsule that leaves by itself holds nothing a keyboard can reach, so it is a stop of its own while it is shown: a
-  // group its words name, whose focus holds it as the pointer does (Codex and Devin on #307). The others are reached by
+  // group its words name, whose focus holds it as the pointer does. The others are reached by
   // their actions
   const words = useId()
   const timed = capsule?.kind === 'narrow' && now !== null ? { tabIndex: 0, role: 'group', 'aria-labelledby': words } : {}

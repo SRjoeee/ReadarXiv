@@ -95,7 +95,7 @@ export function unitsAtErrors(errors, files, lines) {
       // (a paragraph and its footnote) that both do, the inner, unless more than one inner one does. A nested unit
       // (`post`, what closes it in its outer unit: a footnote's brace) holds it too where it closes on this line and
       // the text before the place ends there (endsAtPlace): TeX had just read its argument — never where the text
-      // before the place merely stands in it (the re-review's N-2, Codex's second medium)
+      // before the place merely stands in it
       const own = here.length === 1 ? here : here.filter(x => {
         if (x.from === undefined) return false
         if (text(bytes, Math.max(line.from, x.from), Math.min(line.to, x.to)).some(t => holds(t, e))) return true

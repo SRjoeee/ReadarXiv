@@ -106,7 +106,7 @@ export function figureLabels(items, regions) {
 /**
  * A block's lines as one text for the engine, in the chain's wire format (mt.mjs WIRE), a placeholder numbered in order
  * between lines: markers `@a#`, `@b#` … escaped as a unit's text is, tags `<x id="1"/>` …. Every id once, as the
- * background's check wants before it caches a translation (Codex on #296). An engine that keeps no placeholder (runs)
+ * background's check wants before it caches a translation. An engine that keeps no placeholder (runs)
  * gets no block: null, and the lines go one by one
  */
 export function blockWire(texts, format = 'markers') {

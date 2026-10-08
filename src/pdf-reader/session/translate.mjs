@@ -22,8 +22,8 @@ export function paperContext(units) {
  * Why the reader cannot translate: no engine on the chain can run, or one refused for good (no key, a key refused).
  * Or some texts did not come back for a reason not theirs — a network down, a timeout, a rate limit the background's
  * queue has already retried: then `partial` holds what did come back, `{ text, by }` as translate() gives it (null
- * elsewhere), and `lost` the indices of the texts that did not, which are not to be sent again piece by piece (Codex on
- * #296)
+ * elsewhere), and `lost` the indices of the texts that did not, which are not to be sent again piece by piece
+ * (PDF-READER §10.3)
  */
 export class EngineError extends Error {
   constructor(kind, message, { partial, lost } = {}) {
@@ -56,12 +56,12 @@ export async function openEngine({ paper }) {
   const transport = createMessageTransport()
   const scope = `axt-pdf-${crypto.randomUUID()}`
   // withdrawn when the page goes, from before the status call that binds it: an extension page is no tab the background
-  // watches, and a page closed while that call was out left its scope bound (Devin and Codex on #296)
+  // watches, and a page closed while that call was out left its scope bound (PDF-READER §10.4)
   const withdraw = () => void transport.cancel(scope)
   addEventListener('pagehide', withdraw, { once: true })
   const status = await transport.status(scope, { fresh: true })
   if (!status.available && !status.fallback) {
-    // the status call bound the scope; nothing withdraws it but us (Codex on #296)
+    // the status call bound the scope; nothing withdraws it but us
     removeEventListener('pagehide', withdraw)
     await transport.cancel(scope)
     // why, as the chain's error kinds, so that the reader words it as the popup does: the reason it was put aside; a
@@ -70,7 +70,7 @@ export async function openEngine({ paper }) {
     throw new EngineError(kind, `the chosen service (${status.chosen}) cannot translate now: see the extension's settings`)
   }
   // the service that answers: the chosen one, its fallback while it cannot, and after a hand-over the one that took
-  // over, as each answer names it (Codex on #296)
+  // over, as each answer names it
   let serving = status.available ? (status.model ? `${status.providerId} (${status.model})` : status.providerId) : status.fallback.id
   const target = status.targetLanguage
   // (a PDF's texts: the key holds none of the HTML page's rules, cache/key.ts CacheSource)

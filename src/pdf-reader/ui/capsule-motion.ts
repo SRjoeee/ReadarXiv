@@ -125,7 +125,7 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
   }
   /**
    * Shown after `delay`: unseen until then, held below its place, blurred (the fade's first look, filled backwards), and
-   * inert, so that no action in it can be focused, pressed or told while it cannot be seen (Codex on #317). It is lifted
+   * inert, so that no action in it can be focused, pressed or told while it cannot be seen. It is lifted
    * as the entrance begins: once the animation's start is fixed, at its delay from there. With no delay (shrinking,
    * reduced motion) nothing waits
    */

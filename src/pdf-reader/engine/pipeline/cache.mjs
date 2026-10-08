@@ -16,8 +16,8 @@ export const figureKeyOf = texts => JSON.stringify(texts)
 /**
  * The seed for this paper's units from a record: index → { pieces, by, tried, state, sentences?, inSource? } for each unit
  * whose source the record has a translation of, matched by hash. A unit cut differently since has none. Repeated
- * paragraphs (table cells, often) share a hash, and each takes the best translation of their source: whole before partial
- * (Devin on #298). The hashes are kept for the record. `inSource` goes with the translation: the copy's PDF set that
+ * paragraphs (table cells, often) share a hash, and each takes the best translation of their source: whole before partial.
+ * The hashes are kept for the record. `inSource` goes with the translation: the copy's PDF set that
  * translation in the source, and a run that sets no final keeps that PDF (inSourceOf).
  * A unit whose source is the record's but for the numbers of its pairs has the record's translation too, numbered as the
  * unit is (renumbered): a pair's id is its place among its file's pairs, and a pair the front end makes earlier in the
@@ -28,7 +28,7 @@ export const figureKeyOf = texts => JSON.stringify(texts)
  * The state of a unit's translation, whatever is shown of it: a cell of a table group kept whole (groups.mjs) is shown in
  * the source (`kept`) but keeps what the translator gave it (`translation`: whole, partial, none or lost), which decides
  * whether it is taken again as it is; undefined for a name kept without asking, and for a kept cell of a copy made
- * before kept cells kept it (Codex's review of PR A: a partial cell recorded `kept` was taken as whole on the next run)
+ * before kept cells kept it (a partial cell recorded only as `kept` was taken as whole on the next run)
  */
 export const translationOf = u => (u?.state === 'kept' ? u.translation : u?.state)
 const keptAs = u => (u?.state === 'kept' && u.translation ? { translation: u.translation } : {})
@@ -91,7 +91,7 @@ const ownNested = (unit, pieces) => {
 
 /**
  * A translation's mark that a final set it in the source (CachedUnit.inSource: the author block under CJKutf8), as a seed
- * or a run's result carries it (Devin and Codex on #309): the mark is the PDF's, and a run that sets no final writes the
+ * or a run's result carries it: the mark is the PDF's, and a run that sets no final writes the
  * units' provenance over the copy's PDF (decideWrite), which still sets that translation in the source. So it goes with
  * the translation, from the record to the seed (seedFrom), to the run again's seed (seedAgain) and to the run's results
  * (live.mjs runLive), and only a final that sets the unit again says anew whether it set it in the source
@@ -210,22 +210,21 @@ export const knownOriginal = (row, now) => (row && row.pipeline === now.pipeline
 
 /**
  * What a run writes (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum, "Writing"): the whole record when it ended with a final that
- * settled and is on screen (`shown`: this run's own final), since the right side's marks are read from the document shown
- * (Devin on #298); with nothing typeset changed — every unit's text the copy's PDF sets —, the units' provenance alone, if
+ * settled and is on screen (`shown`: this run's own final), since the right side's marks are read from the document shown;
+ * with nothing typeset changed — every unit's text the copy's PDF sets —, the units' provenance alone, if
  * it changed, or the left side's marks, if the copy had none and this run compiled them; else nothing — a run ended
  * before its final among them
  */
 export function decideWrite({ result, cached, units, marks, shown }) {
   if (result.changed) return result.settled && shown ? 'full' : null
   if (!cached) return null
-  // the units compared as a whole, not by hash: repeated paragraphs share one (Devin on #298); a kept cell with what the
-  // translator gave it, which a retry may make whole with the same pieces (Codex on #323: left partial in the copy, it
-  // was asked for again on every run)
+  // the units compared as a whole, not by hash: repeated paragraphs share one; a kept cell with what the translator gave
+  // it, which a retry may make whole with the same pieces (left partial in the copy, it was asked for again on every run)
   const tally = us => us.map(u => `${u.hash}|${u.state}|${u.translation ?? ''}|${u.by}|${u.tried}`).sort().join('\n')
   // a provenance write keeps the copy's PDF, so only units that set what it sets — the same text, set in the source or
   // not as there — are written over it: a run that changed nothing against its seed may still hold a translation the
-  // copy's PDF does not set (C1 of #309's fix round: a run again seeded with a last run's translation whose final never
-  // reached the screen wrote it over a PDF that sets the old one, labelled current)
+  // copy's PDF does not set (a run again seeded with a last run's translation whose final never reached the screen
+  // would write it over a PDF that sets the old one, labelled current)
   const typeset = us => us.map(u => `${u.hash}|${u.tr ?? ''}|${u.inSource ? 1 : 0}`).sort().join('\n')
   if (typeset(cached.units) !== typeset(units)) return null
   const marksGained = !cached.marks?.length && !!marks?.length
@@ -233,7 +232,7 @@ export function decideWrite({ result, cached, units, marks, shown }) {
 }
 
 /**
- * What a visit holds between its runs (C1 of #309's fix round): whether the translation its last runs made is one no PDF
+ * What a visit holds between its runs: whether the translation its last runs made is one no PDF
  * on hand sets. A run whose translation changed (runLive's `changed`) and whose own final did not reach the screen
  * (`shown`: the TeX page down, a final that did not settle) leaves the next run seeded with that translation
  * (seedAgain), which it would find unchanged; so it is held until a run's own final is shown — a final an earlier run
@@ -253,16 +252,16 @@ export const pipelineCurrentFor = ({ copy, finalShown, unset }) => !unset && (co
  * of this visit on screen and no final (`compiledOnce`, `finalShown`), the translation is shown in part (`shown in part`,
  * S-R-19: the preview stays, the progress line no longer says the translation is whole —
  * plans/2026-10-04-compile-resilience.md, Task 5) — unless the run's last preview held all of it (runLive's
- * `shownPartial` false: S-R-19's "the rest is the original" would be false; the review of 2026-10-04, M-2); with a
+ * `shownPartial` false: S-R-19's "the rest is the original" would be false); with a
  * final or this machine's copy on screen, nothing more is said
  */
 export const endOf = (r, { compiledOnce, finalShown, cached }) => (!r.exhausted || r.stopped ? null : !compiledOnce && !cached ? 'cannot typeset' : compiledOnce && !finalShown && r.shownPartial !== false ? 'shown in part' : null)
 
 /**
- * The versions a write labels its record with (`how`, decideWrite's), or null where it writes nothing (the F2 review's
- * M3): a full write this run's — with no typesetting where a passing failure kept the rule from its final (live.mjs
- * runLive `passing`), so that the next visit sets it again, asking the service nothing —; a provenance write keeps the
- * copy's PDF, and so the copy's typesetting, and is made only on the copy's own pipeline, whose units these are
+ * The versions a write labels its record with (`how`, decideWrite's), or null where it writes nothing: a full write
+ * this run's — with no typesetting where a passing failure kept the rule from its final (live.mjs runLive `passing`), so
+ * that the next visit sets it again, asking the service nothing —; a provenance write keeps the copy's PDF, and so the
+ * copy's typesetting, and is made only on the copy's own pipeline, whose units these are
  */
 export function labelOf(how, { pipeline, typesetting, passing, cached }) {
   if (how === 'full') return { pipeline, typesetting: passing ? undefined : typesetting }
@@ -277,10 +276,10 @@ export function labelOf(how, { pipeline, typesetting, passing, cached }) {
  * translation, as a copy is current only when every unit is (unitIsCurrent). The rule errs toward asking again: a retry
  * wasted is cheaper than a wrong "cannot typeset", which the visits after it would never question.
  * - A unit left `none` or `lost`, or `partial`, leaves none: the run did not make the whole translation, and another
- *   try could (Codex 6 on #306). The run's results hold every unit it tried — the mark is left only once translation
+ *   try could. The run's results hold every unit it tried — the mark is left only once translation
  *   has ended and was not stopped (live.mjs awaits it), so every unit sent has its result.
  * - A run a hand-over or a demotion mixed — the reader's key refused midway and the free service finishing — leaves
- *   none: the service that would answer then never translated the whole paper (the final review of Codex 1 on #306).
+ *   none: the service that would answer then never translated the whole paper.
  * - A run with nothing tried leaves none: its failure was not a translation's.
  * - Names kept in the source (nameCells) are never sent (live.mjs `todo`), so they have no result and do not block; a
  *   cell of a table group kept whole (groups.mjs) was sent, and counts by what came back (translationOf).

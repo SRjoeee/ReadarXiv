@@ -929,7 +929,7 @@ function walk(s, from, to, b, ctx) {
         // the footnote's text is a unit of its own, rendered inside its paragraph's unit so the two ranges never overlap
         endText()
         const parent = b.cur, before = b.units.length
-        // …and never the title, even inside it: \title{A\thanks{Supported by B}} (Devin and Codex on #296)
+        // …and never the title, even inside it: \title{A\thanks{Supported by B}}
         const title = b.title, depth = b.depth
         b.cur = null; b.kind = 'footnote'; b.title = false; b.depth = undefined; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.kind = saved; b.title = title; b.depth = depth
         const made = b.units.length - before
@@ -1863,7 +1863,7 @@ export const FONT_PROBE = '\\AtEndDocument{\\typeout{AXT-FONTS rm=\\rmdefault;sf
 /** The TeX log of a compile's last pass. The browser's compiler (parked/tex-page/poc-site/tex.js) joins each step's log with its terminal
  *  output — `$ <command>`, then `LOG:` … `==` `STDOUT:` — and the terminal output repeats the errors; the last TeX step's
  *  log is taken, as the one that made the PDF, whatever the earlier passes' logs hold (BusyTeX's pipeline empties them
- *  today, Devin and Codex on #294). bibtex, biber, makeindex and xdvipdfmx are no TeX passes. A native compile's .log is
+ *  today). bibtex, biber, makeindex and xdvipdfmx are no TeX passes. A native compile's .log is
  *  the last pass's already. Every reader of a compile's log lines takes it (live.mjs lostIn, typeset/tex.mjs readLines,
  *  readForced, typeset/density.mjs readWidthProbe, readSizeProbe): read whole, the echo invents a forced break before a
  *  pass's first unit */
