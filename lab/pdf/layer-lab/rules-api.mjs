@@ -8,11 +8,13 @@
 //   GET  /api/rules/published?env=staging|production
 //                              the published current set, fetched from the URL the lab was given for it (the web's rules
 //                              route); 404 where none was given or the route answers 404, 502 where it is unreachable
-//   POST /api/rules            a save: the set as JSON, `note` required, its `version` the file's as the page last read
-//                              it. Validated as a reader validates a set (readRules); refused with a 409 `stale`, and
-//                              nothing written, where the file has moved on since (another tab, an edit by hand); else
-//                              its version set to the file's plus one, written in the canonical form (writeRules); the
-//                              answer names the fields that changed
+//   POST /api/rules            a save: the set as JSON, `note` required, its `version` and an `If-Match` header (the digest
+//                              the page was given with the file, as a GET's ETag) both the file's as the page last read
+//                              it. Validated as a reader validates a set (readRules); refused with a 428 `precondition`
+//                              where the header is missing, and with a 409 `stale`, nothing written, where the file has
+//                              moved on since, by its version or by its bytes (another tab, a checkout, an edit by hand
+//                              that kept the version); else its version set to the file's plus one, written in the
+//                              canonical form (writeRules); the answer names the fields that changed
 // The server listens on 127.0.0.1 and nothing else; a POST is refused unless it is application/json and its Origin is exactly
 // the lab's own (a page of another origin can send neither without being refused), and one save at a time is written, by
 // a temporary file renamed over the file, so that the file is either what it was or what the save made.
@@ -154,15 +156,21 @@ export function createRulesApi({ root, origin, rules, published = {}, fetch: fet
       throw e
     }
     if (set.note.trim() === '') return refuse(res, 422, 'refused', 'a note says what changed and why', { field: 'note' })
+    // (the digest of the file the page was given, as the strong ETag it came with: a save names what it was built on)
+    const built = /^"([0-9a-f]{64})"$/.exec(String(req.headers['if-match'] ?? ''))?.[1]
+    if (!built) return refuse(res, 428, 'precondition', "a save names the file it was built on: an If-Match header holding the digest the file came with")
     return alone(async () => {
-      let current
-      try { ({ set: current } = await readRules(new Uint8Array(await readFile(file)))) } catch (e) {
+      let current, onDisk
+      try { ({ set: current, sha256: onDisk } = await readRules(new Uint8Array(await readFile(file)))) } catch (e) {
         if (e instanceof RulesRefusal || e?.code === 'ENOENT') return refuse(res, 500, 'file', `the worktree's file cannot be read (${e.field ?? 'missing'}: ${e.why ?? e.message}); restore it first`, e.field ? { field: e.field } : {})
         throw e
       }
-      // (a save carries the file's version as its page last read it: where the file has moved on, the set is built on a file that
-      // is no more, and writing it would take the newer edits away. The page says so and loads the file; nothing is merged here)
-      if (set.version !== current.version) return refuse(res, 409, 'stale', `the file is at version ${current.version} now; this set was built on version ${set.version}`, { version: current.version })
+      // (a save carries the file's version and digest as its page last read them: where either differs, the file has moved on, the
+      // set is built on a file that is no more, and writing it would take the newer edits away. A digest catches what a version
+      // cannot: a checkout or a hand edit that left the counter as it was. The page says so and loads the file; nothing is merged here)
+      if (set.version !== current.version || built !== onDisk) {
+        return refuse(res, 409, 'stale', set.version !== current.version ? `the file is at version ${current.version} now; this set was built on version ${set.version}` : `the file changed (it is still version ${current.version}); this set was built on its earlier bytes`, { version: current.version, sha256: onDisk })
+      }
       const changed = diffRules(current, set)
       if (!changed.length) return refuse(res, 409, 'unchanged', 'no field differs from the file')
       const text = writeRules({ ...set, version: current.version + 1 })

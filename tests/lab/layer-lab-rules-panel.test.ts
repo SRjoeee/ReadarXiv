@@ -35,7 +35,7 @@ const answerWith = (bytes: Buffer) => Promise.resolve({
   arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
 })
 
-interface Post { body: string; answer: (version?: number) => void; refuse: (status: number, body: object) => void }
+interface Post { body: string; headers: Record<string, string>; answer: (version?: number) => void; refuse: (status: number, body: object) => void }
 let posts: Post[]
 let root: HTMLElement
 /** what GET /api/rules answers (the worktree's file), and what a ref's route does */
@@ -52,10 +52,11 @@ beforeEach(() => {
   root = document.createElement('div')
   document.body.replaceChildren(root)
   vi.stubGlobal('confirm', () => true)
-  vi.stubGlobal('fetch', (url: string, init?: { method?: string; body?: string }) => {
+  vi.stubGlobal('fetch', (url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) => {
     if (init?.method === 'POST') {
       return new Promise(done => posts.push({
         body: String(init.body),
+        headers: init.headers ?? {},
         answer: (version = 2) => done({ ok: true, status: 200, json: async () => ({ ok: true, version, sha256: 'f'.repeat(64), bytes: 1, changed: [] }) }),
         refuse: (status, body) => done({ ok: false, status, json: async () => body }),
       }))
@@ -194,6 +195,23 @@ describe('the save', () => {
     expect(JSON.parse(posts[0]!.body).version).toBe(1)
   })
 
+  it('names the file it was built on by the digest the file came with (If-Match), then by the digest the last save wrote', async () => {
+    await panel()
+    flip('keepAll')
+    writeNote('keep all')
+    save()
+    await settle()
+    expect(posts[0]!.headers['if-match']).toBe(`"${shaOf(FILE)}"`)
+    posts[0]!.answer(2)
+    await settle()
+    flip('cjkQuotes')
+    writeNote('and the quotes')
+    save()
+    await settle()
+    // (answer() gives the digest of the bytes written as 64 f's)
+    expect(posts[1]!.headers['if-match']).toBe(`"${'f'.repeat(64)}"`)
+  })
+
   it('builds the next save on the version the file has after the one before', async () => {
     await panel()
     flip('keepAll')
@@ -233,6 +251,18 @@ describe('the save', () => {
     expect(p.set()!.languages.zh!.keepAll).not.toBe(true)
     expect(p.dirty()).toBe(false)
     expect(message.querySelector('button')).toBeNull()
+  })
+
+  it('says the file changed when it is still the same version (a checkout, a hand edit), and offers to load it', async () => {
+    await panel()
+    flip('keepAll')
+    writeNote('keep all')
+    save()
+    await settle()
+    posts[0]!.refuse(409, { ok: false, error: 'stale', why: 'the file changed', version: 1, sha256: 'a'.repeat(64) })
+    await settle()
+    expect(message().textContent).toContain('rules.stale 1 1')
+    expect(message().querySelector('button')!.textContent).toBe('rules.staleLoad')
   })
 
   it('lets a save that is answered after another set was loaded change the file only, not the set shown', async () => {

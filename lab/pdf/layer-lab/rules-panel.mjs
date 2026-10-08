@@ -216,10 +216,13 @@ export function createRulesPanel({ root, h, icon, t, R, names, catalog, onChange
     // from elsewhere): the server writes it only where the file is still that version
     const sent = { ...structuredClone(S.working), version: S.file.set.version, note }
     const mine = generation
+    const builtOn = S.file.sha256
     ui.save.disabled = true
     let r, body
     try {
-      r = await fetch('/api/rules', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sent) })
+      // (If-Match: the digest the file came with, which the server holds against the file as it is: a version cannot tell a file that was
+      // changed by hand, or by a checkout, from the one this page read)
+      r = await fetch('/api/rules', { method: 'POST', headers: { 'content-type': 'application/json', ...(builtOn ? { 'if-match': `"${builtOn}"` } : {}) }, body: JSON.stringify(sent) })
       body = await r.json()
     } catch (e) { say('warn', t('rules.failed', t('rules.save'), String(e?.message ?? e).slice(0, 200))); refreshAll(); return }
     if (!r.ok) {

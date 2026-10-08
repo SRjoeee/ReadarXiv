@@ -95,8 +95,10 @@ gives it to the engine owner, who commits it and opens the PR.
 - **Compare:** what differs from the worktree's file and from the published set last fetched (*Fetch staging* and *Fetch
   production* read one without loading it), each field with its two values.
 - **Save:** a note (required: what changed and why) and `POST /api/rules`. The page sends the set with the `version` of the
-  file as it last read it. The server validates the set as a reader does, refuses it (409 `stale`, nothing written) where the
-  file's version is another, sets `version` to the file's plus one, writes the file in its canonical form (`writeRules`: one
+  file as it last read it and, as `If-Match`, the digest the file came with (the ETag of the GET, or the digest a save wrote). The
+  server validates the set as a reader does; refuses it with a 428, for want of an `If-Match`, or a 409 `stale` (nothing written)
+  where the file's version or its digest is another (a checkout or a hand edit that kept the version moves the digest); sets
+  `version` to the file's plus one, writes the file in its canonical form (`writeRules`: one
   field a line, so a changed value is one line of a diff) by a temporary file renamed over it, and answers with the fields
   that changed. A save that changes no field is refused. On a stale refusal (the file changed in another tab or by hand) the
   panel says so and offers to load the file again, which replaces the edits after the usual question; nothing is merged. A save
@@ -111,7 +113,7 @@ worktree's file):
 | `GET /api/rules` | the worktree's file, its bytes, the digest as the ETag |
 | `GET /api/rules?ref=<ref>` | that commit's file (`git show <commit>:<path>`): a commit sha, full or abbreviated, or an existing branch of the repository (local or remote-tracking), checked by `git rev-parse`, the ref one argument of git and never through a shell; any other ref is refused |
 | `GET /api/rules/published?env=staging\|production` | the published current set, fetched from the URL the lab was given (below); 404 where none was given or the route says 404, 502 where it is unreachable or answers an error |
-| `POST /api/rules` | a save. Refused (writing nothing) unless `Content-Type` is `application/json` and `Origin` is exactly the lab's own (`http://127.0.0.1:<its port>`); the body is the set, at most `RULES_CAP` bytes; its `note` is required; its `version` must be the file's (else 409 `stale`); one save at a time |
+| `POST /api/rules` | a save. Refused (writing nothing) unless `Content-Type` is `application/json` and `Origin` is exactly the lab's own (`http://127.0.0.1:<its port>`); the body is the set, at most `RULES_CAP` bytes; its `note` is required; its `version` and the `If-Match` header (the digest of the file as the page read it) must be the file's (else 409 `stale`; 428 without the header); one save at a time |
 
 The server listens on 127.0.0.1 only, and answers 403, reading and writing nothing, to any request whose `Host` is not exactly
 `127.0.0.1:<its port>` (`own-host.mjs`, the guard against a rebound name: a page of another site could otherwise read the

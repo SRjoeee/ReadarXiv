@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, request, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -48,7 +49,7 @@ function repo(): { dir: string; file: string; first: string } {
 
 interface Reply { status: number; headers: Record<string, string | string[] | undefined>; text: string; json: Edit }
 /** the lab's server, on a free port of 127.0.0.1: the API alone, anything else a 404 */
-async function lab(dir: string, o: { published?: { staging?: string | null; production?: string | null } } = {}): Promise<{ origin: string; call: (method: string, path: string, o?: { headers?: Record<string, string | undefined>; body?: string | Buffer }) => Promise<Reply> }> {
+async function lab(dir: string, o: { published?: { staging?: string | null; production?: string | null } } = {}): Promise<{ origin: string; dir: string; call: (method: string, path: string, o?: { headers?: Record<string, string | undefined>; body?: string | Buffer }) => Promise<Reply> }> {
   let origin = ''
   const api = createRulesApi({ root: dir, origin: () => origin, rules, ...(o.published ? { published: o.published } : {}) })
   const server = createServer((req, res) => { api.handle(req, res).then(handled => { if (!handled) { res.writeHead(404); res.end() } }, () => { res.writeHead(500); res.end() }) })
@@ -71,12 +72,14 @@ async function lab(dir: string, o: { published?: { staging?: string | null; prod
     req.on('error', fail)
     req.end(body)
   })
-  return { origin, call }
+  return { origin, dir, call }
 }
 const builtin = (edit?: (s: Edit) => void): Edit => { const s = JSON.parse(readFileSync(BUILTIN, 'utf8')); edit?.(s); return s }
-/** a save: JSON from the lab's own origin */
+/** the digest of the file as it is now, as the ETag a GET gives it */
+const etagOf = (dir: string) => `"${createHash('sha256').update(readFileSync(join(dir, RULES_PATH))).digest('hex')}"`
+/** a save: JSON from the lab's own origin, built on the file as it is when the save is sent (its digest as If-Match) */
 const save = (l: Awaited<ReturnType<typeof lab>>, set: unknown, headers: Record<string, string | undefined> = {}) =>
-  l.call('POST', '/api/rules', { headers: { 'content-type': JSON_TYPE, origin: l.origin, ...headers }, body: typeof set === 'string' ? set : JSON.stringify(set) })
+  l.call('POST', '/api/rules', { headers: { 'content-type': JSON_TYPE, origin: l.origin, 'if-match': etagOf(l.dir), ...headers }, body: typeof set === 'string' ? set : JSON.stringify(set) })
 /** the lines `git diff` shows changed in the rules file, without the file headers */
 const changedLines = (dir: string) => git(dir, 'diff', '-U0', '--', RULES_PATH).split('\n').filter(x => /^[+-]/.test(x) && !/^(\+\+\+|---)/.test(x))
 /** what a directory holds beside the rules file: nothing else may be left behind by a refused save */
@@ -210,6 +213,7 @@ describe('saving (POST /api/rules)', () => {
       ['a wrong type, named', s => { s.hyphenation.minWord = '5' }, 'hyphenation.minWord'],
       ['a face the catalog lacks', s => { s.scripts.Hans.cjkFaces.group = 'no-such-group' }, 'scripts.Hans.cjkFaces.group'],
       ['a target missing', s => { delete s.languages.fr }, 'languages.fr'],
+      ['the extension\'s Portuguese missing', s => { delete s.languages.pt }, 'languages.pt'],
       ['a label with a control character', s => { s.languages.de.labels.figure = 'Abb\u0007' }, 'languages.de.labels.figure'],
     ]
     for (const [name, edit, field] of cases) {
@@ -249,6 +253,41 @@ describe('saving (POST /api/rules)', () => {
     expect(r.status).toBe(409)
     expect(r.json.error).toBe('unchanged')
     expect(readFileSync(file).equals(before)).toBe(true)
+  })
+
+  it('refuses a save built on a file that changed without a new version (a checkout, a hand edit), and writes nothing', async () => {
+    const { dir, file } = repo()
+    const l = await lab(dir)
+    // (the page read the file; then another tool replaced it with other values at the same version)
+    const read = etagOf(dir)
+    const handEdited = rules.writeRules(rules.parseRules(builtin(s => { s.scripts.Hans.leadBase = 1.31; s.note = 'edited by hand' })))
+    writeFileSync(file, handEdited)
+    const r = await save(l, builtin(s => { s.scripts.Hans.spaceMax = 0.5; s.note = 'built on the file as read' }), { 'if-match': read })
+    expect(r.status).toBe(409)
+    expect(r.json).toMatchObject({ ok: false, error: 'stale', version: 1 })
+    expect(r.json.sha256).toBe(etagOf(dir).slice(1, -1))
+    expect(readFileSync(file, 'utf8')).toBe(handEdited)
+    expect(siblings(file)).toEqual([RULES_PATH.split('/').pop()])
+    // (built on the file as it now is, the same change is written)
+    const again = await save(l, builtin(s => { s.scripts.Hans.leadBase = 1.31; s.scripts.Hans.spaceMax = 0.5; s.note = 'built on the file as it is' }))
+    expect(again.status).toBe(200)
+    expect(again.json.version).toBe(2)
+  })
+
+  it('refuses a save that does not name the file it was built on (an If-Match of the digest the file came with), and writes nothing', async () => {
+    const { dir, file } = repo()
+    const before = readFileSync(file)
+    const l = await lab(dir)
+    const set = builtin(s => { s.scripts.Hans.leadBase = 1.35; s.note = 'tune' })
+    const good = etagOf(dir)
+    // (none; a weak tag, which never matches; the any-file form; the wrong length; capitals; the digest unquoted)
+    for (const header of [undefined, `W/${good}`, '*', `"${good.slice(2, -1)}"`, good.toUpperCase(), good.slice(1, -1)]) {
+      const r = await save(l, set, { 'if-match': header })
+      expect(r.status, String(header)).toBe(428)
+      expect(r.json, String(header)).toMatchObject({ ok: false, error: 'precondition' })
+    }
+    expect(readFileSync(file).equals(before)).toBe(true)
+    expect(siblings(file)).toEqual([RULES_PATH.split('/').pop()])
   })
 
   it('does not interleave two saves: the one that comes second, built on the version the first replaced, is refused', async () => {
