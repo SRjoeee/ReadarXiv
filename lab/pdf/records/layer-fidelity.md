@@ -5,7 +5,7 @@ Written by `spikes/layer-gate.mjs --record`. Each run below: the engine at its c
 - **pixel**: the engine at `b3f68afc` (exp/layer-t12-gate), the gate at `b3f68afc`, 2026-10-06; the engine's own layout files; 68.2 s.
 - **pixel-fixed**: the engine at `b3f68afc` (exp/layer-t12-gate), the gate at `b3f68afc`, 2026-10-06; the fixtures' layout files, as made for the layer lab; 73.5 s.
 - **pixel-proto-tex-lines**: the engine at `f8672a0f` (exp/layer-s3), the gate at `f8672a0f`, 2026-10-07; v0 (the prototype in the engine), no layout file: the prototype's geometry and the fixtures' record.json, the role table's faces; the hybrid: each unit the fixture's layout file locates whole takes its lines, label and placeholders from the file, with the units only the file holds (but cells); 61.5 s.
-- **pixel-proto-tex-lines-removal-draw**: the engine at `46eeb0fb` (exp/quality-d6), the gate at `46eeb0fb`, 2026-10-08; v0 (the prototype in the engine), no layout file: the prototype's geometry and the fixtures' record.json, the role table's faces; the hybrid: each unit the fixture's layout file locates whole takes its lines, label and placeholders from the file, with the units only the file holds (but cells); the layout files made by the engine's maker (out/layer-gate/fixtures/0705b7ab0f07711b), the references of out/layer-gate/cut-p10/refs, the prototype's geometry of lab/pdf/out/layer-gate/cut-p10/geometry, the translations of out/layer-gate/cut-p10/records; 110 s.
+- **pixel-proto-tex-lines-removal-draw**: the engine at `3d33e1a7` (exp/quality-d1a), the gate at `3d33e1a7`, 2026-10-08; v0 (the prototype in the engine), no layout file: the prototype's geometry and the fixtures' record.json, the role table's faces; the hybrid: each unit the fixture's layout file locates whole takes its lines, label and placeholders from the file, with the units only the file holds (but cells); the layout files made by the engine's maker (out/layer-gate/fixtures/6a061cf294aa64ff), the references of out/layer-gate/cut-p10/refs, the prototype's geometry of lab/pdf/out/layer-gate/cut-p10/geometry, the translations of out/layer-gate/cut-p10/records; 121.8 s.
 - **pixel-proto-tex-lines-removal-measure**: the engine at `bbf3d143` (exp/layer-remove), the gate at `bbf3d143`, 2026-10-06; v0 (the prototype in the engine), no layout file: the prototype's geometry and the fixtures' record.json, the role table's faces; the hybrid: each unit the fixture's layout file locates whole takes its lines, label and placeholders from the file, with the units only the file holds (but cells); 147.7 s.
 
 Every measure is against arXiv's original page, whose own value is the first column. The prototype's floor is the approved prototype as this gate measures it (v0, the prototype ported into the engine, under its own units and faces at the gate's text place); the floors it replaces stand beside it: the one before it, and the parity run's (measured at the prototype page's text place, 0.19 CSS px off, with coverage read from the translation's ink). Both are the ten outputs the prototype shares with the engine, pages 1-12. A defect is its count and, in brackets, its rate per 1,000 translated text cells (the model tier: per 1,000 cells of the drawn units' frames), which is what the merge rule compares.
@@ -16,23 +16,23 @@ Every measure is against arXiv's original page, whose own value is the first col
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | text translated | 100.0 % | 82.2 % | 87.8 % | 90.7 % | 65.8 % | 60.8 % | 65.8 % | 60.7 % | 88.0 % | 84.1 % | 82.7 % | 84.0 % | 87.8 % | 82.6 % |
 | text English | 0.0 % | 6.7 % | 0.4 % | 0.5 % | 20.0 % | 22.7 % | 20.0 % | 22.8 % | 0.3 % | 0.9 % | 0.2 % | 1.3 % | 0.3 % | 0.9 % |
-| text blank | 0.0 % | 11.1 % | 11.9 % | 8.8 % | 14.2 % | 16.6 % | 14.2 % | 16.5 % | 11.7 % | 15.0 % | 17.1 % | 14.7 % | 12.0 % | 16.5 % |
+| text blank | 0.0 % | 11.1 % | 11.9 % | 8.8 % | 14.2 % | 16.6 % | 14.2 % | 16.5 % | 11.7 % | 15.0 % | 17.0 % | 14.7 % | 12.0 % | 16.5 % |
 | table cells translated | 100.0 % | 4.4 % | 5.8 % | 6.1 % | 40.5 % | 38.1 % | 40.5 % | 38.1 % | 6.0 % | 7.3 % | 41.8 % | 48.8 % | 5.7 % | 7.2 % |
 | text units left English | 0 | 7 / 1186 | 7 / 1194 | 7 / 1194 | 186 / 1194 | 684 / 3979 | 186 / 1194 | 686 / 3979 | 0 / 1194 | 10 / 3979 | 0 / 1238 | 17 / 4058 | 0 / 1194 | 9 / 3979 |
 | cells left English | 0 | 635 / 686 | 635 / 686 | 635 / 686 | 217 / 686 | 499 / 1601 | 217 / 686 | 499 / 1601 | 635 / 686 | 1440 / 1601 | 177 / 683 | 350 / 1665 | 635 / 686 | 1431 / 1601 |
-| fill (median) | 1 | 0.925 | 0.927 | 0.916 | 0.892 | 0.893 | 0.892 | 0.894 | 0.928 | 0.952 | 0.997 | 0.982 | 0.926 | 0.938 |
-| blank lines / frame | 0 | 0.533 | 0.535 | 0.611 | 0.755 | 0.723 | 0.753 | 0.721 | 0.532 | 0.446 | 0.150 | 0.199 | 0.541 | 0.515 |
-| frames with a blank line | 0.0 % | 24.0 % | 24.1 % | 27.0 % | 34.6 % | 33.0 % | 34.5 % | 32.9 % | 24.3 % | 19.3 % | 7.5 % | 8.7 % | 24.6 % | 22.7 % |
+| fill (median) | 1 | 0.925 | 0.927 | 0.916 | 0.892 | 0.893 | 0.892 | 0.894 | 0.928 | 0.952 | 0.997 | 0.983 | 0.926 | 0.938 |
+| blank lines / frame | 0 | 0.533 | 0.535 | 0.611 | 0.755 | 0.723 | 0.753 | 0.721 | 0.532 | 0.446 | 0.149 | 0.199 | 0.541 | 0.515 |
+| frames with a blank line | 0.0 % | 24.0 % | 24.1 % | 27.0 % | 34.6 % | 33.0 % | 34.5 % | 32.9 % | 24.3 % | 19.3 % | 7.3 % | 8.7 % | 24.6 % | 22.7 % |
 | pitch spread | 0 | 0.071 | 0.071 | 0.088 | 0.044 | 0.057 | 0.044 | 0.071 | 0.070 | 0.140 | 0.135 | 0.129 | 0.078 | 0.149 |
 | size (median) | 1 | 0.978 | 0.978 | 0.978 | 0.957 | 0.941 | 0.957 | 0.941 | 0.981 | 0.992 | 0.968 | 0.963 | 0.981 | 0.972 |
 | full size | 100.0 % | 64.4 % | 64.4 % | 64.0 % | 59.8 % | 47.6 % | 59.8 % | 47.3 % | 64.5 % | 61.2 % | 63.1 % | 60.2 % | 64.3 % | 59.9 % |
 | size spread | 0 | 0.067 | 0.067 | 0.069 | 0.038 | 0.019 | 0.038 | 0.019 | 0.068 | 0.088 | 0.077 | 0.086 | 0.068 | 0.069 |
 | frames past the right edge | 0.0 % | 13.1 % | 13.2 % | 14.0 % | 0.0 % | 1.0 % | 0.0 % | 1.0 % | 13.0 % | 12.6 % | 14.3 % | 12.7 % | 12.8 % | 11.6 % |
-| paragraph gap / the original's (median) | - | - | - | - | - | - | - | - | - | - | 1.155 | 1.206 | - | - |
-| paragraph gaps a pitch or more wider | - | - | - | - | - | - | - | - | - | - | 6.0 % | 7.0 % | - | - |
+| paragraph gap / the original's (median) | - | - | - | - | - | - | - | - | - | - | 1.153 | 1.205 | - | - |
+| paragraph gaps a pitch or more wider | - | - | - | - | - | - | - | - | - | - | 5.8 % | 6.9 % | - | - |
 | overlap regions | 0 | 122 (0.96) | 122 (0.95) | 119 (0.90) | 324 (3.35) | 8391 (25.71) | 326 (3.37) | 8446 (25.91) | 11 (0.09) | 460 (1.02) | 0 (0) | 352 (0.76) | 11 (0.09) | 432 (0.97) |
 | stray text | 0 | 49 (0.39) | 49 (0.38) | 62 (0.47) | 2 (0.02) | 8 (0.03) | 2 (0.02) | 8 (0.03) | 28 (0.22) | 141 (0.31) | 17 (0.13) | 114 (0.25) | 29 (0.23) | 142 (0.32) |
-| residue regions | 0 | 604 (4.75) | 589 (4.57) | 587 (4.41) | 31335 (324.14) | 247183 (757.43) | 31361 (324.55) | 246677 (756.68) | 474 (3.67) | 1486 (3.29) | 557 (4.35) | 1444 (3.12) | 528 (4.09) | 1594 (3.59) |
+| residue regions | 0 | 604 (4.75) | 589 (4.57) | 587 (4.41) | 31335 (324.14) | 247183 (757.43) | 31361 (324.55) | 246677 (756.68) | 474 (3.67) | 1486 (3.29) | 557 (4.34) | 1444 (3.12) | 528 (4.09) | 1594 (3.59) |
 | erase bites | 0 | 61 (0.48) | 61 (0.47) | 168 (1.26) | 1880 (19.45) | 5331 (16.34) | 1879 (19.45) | 5447 (16.71) | 149 (1.15) | 830 (1.84) | 55 (0.43) | 544 (1.18) | 45 (0.35) | 662 (1.49) |
 | vanished math | 0 | 13 (0.10) | 13 (0.10) | 13 (0.10) | 261 (2.70) | 684 (2.10) | 261 (2.70) | 752 (2.31) | 9 (0.07) | 697 (1.54) | 11 (0.09) | 478 (1.03) | 11 (0.09) | 765 (1.73) |
 | doubled crops | 0 | 5 (0.04) | 5 (0.04) | 5 (0.04) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 2 (0.01) | 24 (0.05) | 1 (0.01) | 34 (0.07) | 2 (0.02) | 31 (0.07) |
@@ -61,6 +61,7 @@ Every measure is against arXiv's original page, whose own value is the first col
 | placeholders' page: other ink or a crop's glyph missing | 0 | - | - | - | - | - | - | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
 | units whose removal is not the plan's | 0 | - | - | - | - | - | - | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
 | pages refused by the remover | 0 | - | - | - | - | - | - | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| generated text left in the source language (babel names) | - | - | - | - | - | - | - | - | - | - | 0 | 0 | - | - |
 | table groups drawn partly | - | 0 | - | - | - | - | - | - | - | - | 0 | 0 | - | - |
 | labels left in the source language the final names | - | 0 | - | - | - | - | - | - | - | - | 0 | 0 | - | - |
 | pitch ratio (not gated) | 1 | 1.094 | 1.094 | 1.094 | 1.076 | 1.025 | 1.076 | 1.025 | 1.096 | 1.051 | 1.198 | 1.123 | 1.096 | 1.050 |
