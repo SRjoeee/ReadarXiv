@@ -45,3 +45,17 @@ export declare const NEXT_BATCH: 12000
 export declare function batchOf(order: Iterable<number>, sizeOf: (id: number) => number, max: number): number[]
 /** source text is read byte for byte (latin1); its characters are UTF-8 */
 export declare const utf8: (s: string) => string
+/** a text with `@`, `&`, `<` and `>` escaped as a unit's text is on the wire */
+export declare const escape: (s: string) => string
+/** the entities of a reply (`&amp;`, `&#x41;`, `&nbsp;` …) as their characters */
+export declare const decode: (s: string) => string
+/** the wire formats as the chain negotiates them, by `renderPath`: a unit's wire, a reply's reading back, a run's text out and in */
+export declare const WIRE: {
+  markers: { serialize: typeof serialize; rehydrate: (text: string, ser: ReturnType<typeof serialize>) => ReturnType<typeof rehydrate>; tolerant: (text: string, ser: ReturnType<typeof serialize>) => ReturnType<typeof rehydrate>; run: (s: string) => string; unrun: (s: string) => string }
+  tags: { serialize: typeof serializeTags; rehydrate: typeof rehydrateTags; run: (s: string) => string; unrun: (s: string) => string }
+  runs: { run: (s: string) => string; unrun: (s: string) => string }
+}
+/** whether a short text (a table cell, a figure label) is only a name, judged against the paper's prose */
+export declare function isName(text: string, prose: string): boolean
+/** the table cells and figure texts that are only names: they keep their source */
+export declare function nameCells<U extends { kind: string; pieces: Piece[] }>(units: U[]): Set<U>

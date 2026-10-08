@@ -32,3 +32,12 @@ export declare const NO_ARG_COMMANDS: ReadonlySet<string>
 export declare const MARK_DEF: string
 /** a string's code units as bytes, each its low eight bits (source text is read byte for byte) */
 export declare const latin1Bytes: (s: string) => Uint8Array
+/** a/./b/../c → a/c: a file as the package holds it and as TeX's file system has it, whatever spelling named it */
+export declare const normalizePath: (p: string) => string
+/** the name TeX gives what it writes for a main file: its own name without the directory and the extension */
+export declare const jobName: (main: string) => string
+/** bytes as a string of the same code units (latin1, byte for byte): the scanner's view of a source */
+export declare const latin1: (bytes: Uint8Array) => string
+/** a display's letters as the page sets them, for telling its lines from a float's: the source's letters, the paper's own
+ *  macros (`macros`, name → body) put in and the commands left out */
+export declare function displayLetters(src: string, macros?: Map<string, string>): string
