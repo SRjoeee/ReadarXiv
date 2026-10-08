@@ -199,8 +199,8 @@ const sleep = ms => new Promise(ok => setTimeout(ok, ms))
 /**
  * A pack restored into `dir` from the bucket: each distinct digest read once (a file already there with the right digest
  * is kept; the several outputs of one paper share an object), checked against the manifest's digest and size before it is
- * written, and a read that fails for want of the network or the server (not for a 4xx) tried again twice. Nothing the
- * token is in is printed or thrown: the errors say the status and the key.
+ * written, and a read that fails for want of the network or the server (not for a 4xx; the body's read is part of it) tried
+ * again twice. Nothing the token is in is printed or thrown: the errors say the status and the key.
  */
 export async function restorePack({ pack, dir, token, account, fetchImpl = fetch, retryMs = 1000, log = () => {} }) {
   if (typeof token !== 'string' || !token) throw new Error('READARXIV_CI_TOKEN is not set')
@@ -216,8 +216,11 @@ export async function restorePack({ pack, dir, token, account, fetchImpl = fetch
   const get = async (f, url) => {
     for (let attempt = 0; ; attempt++) {
       let res
-      try { res = await fetchImpl(url, { headers: { authorization: `Bearer ${token}` } }) } catch { res = null }
-      if (res?.ok) return Buffer.from(await res.arrayBuffer())
+      // (the body is part of the operation: a connection that drops while it is read is the same failure as one that never opened)
+      try {
+        res = await fetchImpl(url, { headers: { authorization: `Bearer ${token}` } })
+        if (res.ok) return Buffer.from(await res.arrayBuffer())
+      } catch { res = null }
       const retry = !res || res.status >= 500 || res.status === 429
       if (!retry || attempt >= 2) throw new Error(`${f.url}: ${res ? `HTTP ${res.status}` : 'the request failed'}${res?.status === 404 ? ' (is the pack uploaded?)' : res?.status === 401 || res?.status === 403 ? ' (does the token read this bucket?)' : ''}`)
       await sleep(retryMs * (attempt + 1))

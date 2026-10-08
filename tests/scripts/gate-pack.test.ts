@@ -121,7 +121,7 @@ describe('the pack is restored by digest from the bucket', () => {
     const store = new Map<string, Uint8Array>()
     for (const f of pack.files) store.set(`gate-pack/${f.sha256}`, new Uint8Array(readFileSync(join(i.root, 'made', f.path))))
     const requests: { url: string; authorization: string | undefined }[] = []
-    let respond: (key: string, n: number) => { status: number; body?: Uint8Array } = key => (store.has(key) ? { status: 200, body: store.get(key) } : { status: 404 })
+    let respond: (key: string, n: number) => { status: number; body?: Uint8Array; bodyFails?: boolean } = key => (store.has(key) ? { status: 200, body: store.get(key) } : { status: 404 })
     const seen = new Map<string, number>()
     const fetchImpl = async (url: string, init: { headers: Record<string, string> }) => {
       requests.push({ url, authorization: init.headers.authorization })
@@ -129,7 +129,8 @@ describe('the pack is restored by digest from the bucket', () => {
       const n = (seen.get(key) ?? 0) + 1
       seen.set(key, n)
       const r = respond(key, n)
-      return { ok: r.status === 200, status: r.status, arrayBuffer: async () => (r.body ?? new Uint8Array()).slice().buffer }
+      // (a body that fails is a connection that dropped after the headers: the status was 200)
+      return { ok: r.status === 200, status: r.status, arrayBuffer: async () => { if (r.bodyFails) throw new TypeError('terminated'); return (r.body ?? new Uint8Array()).slice().buffer } }
     }
     return { i, pack, requests, fetchImpl, setRespond: (f: typeof respond) => { respond = f } }
   }
@@ -176,6 +177,27 @@ describe('the pack is restored by digest from the bucket', () => {
     expect(good.requests.length).toBeGreaterThan(before)
     expect([e404, ...logged].join('\n')).not.toContain(TOKEN)
     await expect(restorePack(args(b, { token: undefined }))).rejects.toThrow('READARXIV_CI_TOKEN is not set')
+  })
+
+  it('tries a read again when the body fails after a 200, as it does for a server error', async () => {
+    const b = bucket()
+    const whole = (key: string) => new Uint8Array(readFileSync(join(b.i.root, 'made', b.pack.files.find(f => `gate-pack/${f.sha256}` === key)!.path)))
+    // the first read of each object drops its connection while the body is read, the second is whole
+    b.setRespond((key, n) => ({ status: 200, body: whole(key), bodyFails: n === 1 }))
+    const r = await restorePack(args(b))
+    expect(r).toMatchObject({ files: b.pack.files.length, fetched: new Set(b.pack.files.map(f => f.sha256)).size })
+    expect(b.requests.length).toBe(2 * r.fetched)
+    expect(verifyPack({ pack: b.pack, dir: join(b.i.root, 'restored') })).toEqual([])
+  })
+
+  it('gives up on a body that never reads, saying the request failed and never the token', async () => {
+    const b = bucket()
+    b.setRespond(() => ({ status: 200, bodyFails: true }))
+    const message = await why(restorePack(args(b)))
+    expect(message).toMatch(/r2:\/\/readarxiv-ci\/gate-pack\/[0-9a-f]{64}: the request failed$/)
+    expect(message).not.toContain(TOKEN)
+    // three reads of an object, the first and two more
+    expect(b.requests.length).toBeGreaterThanOrEqual(3)
   })
 
   it('reads objects of the pack\'s bucket only, by a key that goes nowhere else', () => {
