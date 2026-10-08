@@ -1057,20 +1057,34 @@ instant layer (`parked/engine/`).
 
 ### 19.3 What holds
 
-- **Imports.** A file of the engine imports by relative path: the engine's own files, `src/core/sentences`,
-  `src/core/protector/tokens` and `src/core/names`, a `node:` module, and in `rules/` the layout rules' validator (`zod/mini`). No alias
-  (an alias is refused for its spelling), no other package, no module of the extension. A TypeScript file is reached by its
+- **Imports.** A whitelist, applied to every file of the engine (modules, TypeScript and declaration files) and to every way
+  a module is named: a value import or a type one, `export … from`, `import(…)`, `require(…)` and `new URL(…, import.meta.url)`.
+  A file of the engine names a module by relative path, to the engine's own files, `src/core/sentences`,
+  `src/core/protector/tokens` or `src/core/names`; or a `node:` module; or, in `rules/`, the layout rules' validator
+  (`zod/mini`). Nothing else: no alias (refused for its spelling), no build setting's name (`#imports`), no root-absolute
+  path, no other package, no module of the extension, and no specifier that is computed. A TypeScript file is reached by its
   extension, which Node reads with its own type stripping; the closure behind the three core modules is those three files.
 - **Loading.** `pipeline`, `translate` and `rules` load in plain Node with no bundler (a child process in the contract test);
   `layer` and `view` load in a browser's environment. The closures of `translate`, `rules`, `layer` and `view` hold none of the
-  server's modules (the front end, the compile path, the layout maker, the marks, the remover and the add-on's maker).
+  server's modules (the front end, the compile path, the layout maker, the marks, the remover and the add-on's maker). The
+  `pipeline` entry's names leave the compile path out, but its closure still loads `cache`, `scripts` and `typeset/*` through
+  `live.mjs`; PR 5 splits `live.mjs` into the paper's pipeline and the compile run before that path is parked.
 - **Licence.** No file in the closure of the five entries states that it is ported from a reference project or a scoped
   package (the web's R21 detector, `portedInClosure`). The shared interface (`controller.ts`, `src/pdf-reader/ui/**`,
-  `src/ui/controls/**`) does reach four ported files today (the language table, the Microsoft client, the prompt library and the
-  retry policy, by one import each); the test pins them as a list that may shrink and never grow, until they are cut or the web
-  takes them as ported code with the registry's entry.
-- **Reached.** Every module of the engine is reached by an entry, by the checker the layer gate names, or by what ships or is
-  kept in the lab (`unreached`); a module only a test reaches is parked with its tests.
+  `src/ui/controls/**`) reaches four GPL-ported files today, by one import each: `src/config/languages.ts` (the language
+  table), `src/providers/microsoft.ts`, `src/providers/prompt-library.ts` and `src/providers/request/retry-policy.ts`. The
+  web imports `controller.ts` and `src/pdf-reader/ui/**` through its pin today and replaces modules by its own seams (an
+  importer-scoped alias: `@/config/languages` and `pdf-reader/ui/languages` are its own files), so it must carry none of the
+  four in its bundle: each is either replaced by a web seam or not imported, which the web's own R21 gate checks. That holds
+  until Task 7 cuts the four from the shared interface's closure (the `ReaderHost` seams). The test pins the four as a list
+  that may shrink and never grow.
+- **Notices.** What the web carries with the engine and the shared interface: the LaTeXML acknowledgement now
+  (`rules/latexml-args.mjs` is in the closures of `pipeline` and `layer`; `docs/THIRD_PARTY.md` has its row), and Lucide (ISC)
+  and Noto Sans SC (OFL) with the shared interface (the icons of `src/ui/controls/Icon.tsx`, the glyphs of
+  `src/pdf-reader/ui/display-glyphs.ts`).
+- **Reached.** Every module of the engine is reached by an entry, by the checker the layer gate names, or by a file under
+  `src/` or `lab/` outside the engine (`unreached`: the shipped extension and every file of the lab, its bench and spikes, not
+  only its kept gates); a module only a test or a script reaches is parked with its tests.
 - **Versions.** The identities of §18 move with the code that owns them; a change of an entry's names is made on purpose, by
   recording `engine-contract.json` again (`WRITE_CONTRACT=1 pnpm vitest run tests/pdf-reader/engine-contract.test.ts`), and
   the web sees it as a change of the surface it pins.
@@ -1104,4 +1118,6 @@ tags they ask by (`layer-proto/bundle.mjs`).
 The web moves its imports to the five entries, once: its server takes `pipeline` and `translate`, its reader `layer`, `view`,
 `translate` and `rules`; its fork-session script and the copies of the session it makes go with the reading view that replaces
 them. The extension's own modules are not importable from the web, and a module the web needs that no entry exports is a
-request for an entry's change, made here with its test, not an import by path.
+request for an entry's change, made here with its test, not an import by path. The shared interface it imports besides
+(`controller.ts`, `src/pdf-reader/ui/**`) stays under the licence rule of section 19.3: the four ported files are replaced by
+its seams or left out of its bundle until they are cut from it.

@@ -9,7 +9,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node script, deliberately dependency-free and untyped
-import { closureOf, ENGINE_ALLOW, engineFiles, portedInClosure, trackedFiles, unreached, valueImportsOf, withoutComments } from '../../scripts/check-boundary.mjs'
+import { closureOf, ENGINE_ALLOW, engineFiles, engineViolations, namedModulesOf, portedInClosure, trackedFiles, unreached, withoutComments } from '../../scripts/check-boundary.mjs'
 
 const ENGINE = 'src/pdf-reader/engine'
 const ENTRIES = ['pipeline', 'translate', 'rules', 'layer', 'view'] as const
@@ -88,13 +88,23 @@ describe('plain node', () => {
 })
 
 describe('the engine\'s imports', () => {
-  it('are relative paths, the engine\'s own and the three core modules\', in every file of the closure of the entries', () => {
-    const closure = [...closureOf(ENTRIES.map(entryFile))] as string[]
-    const core = new Set<string>(ENGINE_ALLOW)
-    for (const file of closure.filter(f => f.endsWith('.mjs') || f.endsWith('.ts'))) {
-      for (const spec of valueImportsOf(readFileSync(file, 'utf8')) as string[]) {
-        if (!spec.startsWith('.') || spec.startsWith('node:')) continue
-        expect(file.startsWith(`${ENGINE}/`) || [...core].some(c => file === `${c}.ts` || file === `${c}/index.ts`), file).toBe(true)
+  const closure = [...closureOf(ENTRIES.map(entryFile))] as string[]
+  const core = (f: string) => (ENGINE_ALLOW as string[]).some(c => f === `${c}.ts` || f === `${c}/index.ts`)
+
+  it('hold the engine\'s rule in every file of the closure of the entries: a relative path, a node: module or the rules\' validator, in every form', () => {
+    const inEngine = closure.filter(f => f.startsWith(`${ENGINE}/`) && /\.(?:mjs|ts)$/.test(f))
+    expect(inEngine.length).toBeGreaterThan(30)
+    expect(engineViolations(inEngine)).toEqual([])
+  })
+
+  it('reach the core by the three allowed modules alone, each file of them naming modules by relative path only', () => {
+    const outside = closure.filter(f => !f.startsWith(`${ENGINE}/`))
+    // (the entries reach two of the three: names.ts is the figures' and the extension's session's)
+    expect(outside.every(core), outside.join(' ')).toBe(true)
+    expect(outside.length).toBeGreaterThanOrEqual(2)
+    for (const file of outside) {
+      for (const { spec, display } of namedModulesOf(readFileSync(file, 'utf8')) as { spec: string | null; display?: string }[]) {
+        expect(spec !== null && spec.startsWith('.'), `${file}: ${spec ?? display}`).toBe(true)
       }
     }
   })
@@ -126,9 +136,20 @@ describe('the licence of what a reader loads', () => {
     expect(portedInClosure(ENTRIES.map(entryFile))).toEqual([])
   })
 
-  // The brief held the shared interface to the same empty closure. It reaches four ported files today, each by one import
-  // (listed with the file that brings it); the list is a ratchet — it may shrink, never grow — until those four are cut
-  // from controller.ts and the shared components or the web takes them as ported code with the registry's entry.
+  // What section 19.3 says the web carries with the engine and the shared interface is so, and the registry holds its rows
+  it('has the notices the web carries: LaTeXML\'s table is in the closures of pipeline and layer, and the registry names LaTeXML, Lucide and Noto', () => {
+    for (const name of ['pipeline', 'layer'] as const) expect([...closureOf([entryFile(name)])], name).toContain(`${ENGINE}/rules/latexml-args.mjs`)
+    const registry = readFileSync('docs/THIRD_PARTY.md', 'utf8')
+    for (const word of ['LaTeXML', 'Lucide', 'Noto Sans SC']) expect(registry, word).toContain(word)
+    expect(shared).toContain('src/ui/controls/Icon.tsx')
+    expect(shared).toContain('src/pdf-reader/ui/display-glyphs.ts')
+  })
+
+  // The brief held the shared interface to the same empty closure. It reaches four GPL-ported files today, each by one import
+  // (listed with the file that brings it). The web imports controller.ts and the components through its pin and replaces
+  // modules by its own seams, so it must carry none of the four: each is replaced by a web seam or not imported, which the
+  // web's own R21 gate checks. The list is a ratchet — it may shrink, never grow — until Task 7 cuts the four from the closure
+  // (the ReaderHost seams)
   it('keeps the closure of controller.ts, src/pdf-reader/ui/** and src/ui/controls/** to the four ported files it reaches today, and no more', () => {
     expect(shared.length).toBeGreaterThan(30)
     expect(portedInClosure(shared)).toEqual([

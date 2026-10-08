@@ -78,7 +78,7 @@ export function createWarmup(deps: WarmupDeps) {
     const record = await deps.load()
     if (deps.saveData()) return note(record, 'save-data', `${reason}: skipped, the browser asks to save data`)
     const lang = toBcp47(await deps.target())
-    // the reader typesets no other language yet (scripts.mjs VERIFIED): nothing it would ask for
+    // the reader typesets no other language yet (session/verified.mjs VERIFIED): nothing it would ask for
     if (!verified(lang)) return
     const now = deps.now()
     // a page that takes no warm-up: asked again a day on, or once a reader has seen it under other versions (seen)

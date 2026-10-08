@@ -92,7 +92,7 @@ joined them (`layer/layer.mjs`), and `rules/layer-rules.mjs`, its per-script rul
 opened through the reader's door (`layer-proto/reader.mjs`); nothing in an entry or in a kept gate imports these any more.
 `tests/` holds their unit tests and the two helpers they share (`helpers/layer-fixtures.ts`, `helpers/layer-layout.ts`; the
 layout builder the live tests use is `tests/pdf-reader/helpers/layout-of.ts`). The checker `layer/check.mjs` stayed in the engine,
-since the layer gate's instrument imports it by its address; its test, which sets units with the fit, is here.
+since the layer gate's instrument imports it by its address; its test, which sets units with the fit, is here, and the cases of its lost-ink function, which need no fit, stayed live (`tests/pdf-reader/layer-check-ink.test.ts`).
 
 Last ran at the freeze: the tag `exp-freeze-2026-10-07`, which names commit `a2267b287b2c7cb87dfdb70481a3832d140b8eb8`, and
 with the engine's tests at commit `010c578996e1d0764337f1f42f9e22a40d722d37` (`next` after pull request #331).

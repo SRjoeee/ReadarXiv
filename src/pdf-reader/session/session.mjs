@@ -2341,7 +2341,7 @@ async function live() {
       void loaded?.then(f => f.frame.remove(), () => {})
       return fail('cannot typeset', `${paper} could not be typeset into ${lang} by ${engine.engine} on this machine before: the right side shows the original`)
     }
-    // single language first: a language whose typesetting the gate has not verified is not set (scripts.mjs VERIFIED)
+    // single language first: a language whose typesetting the gate has not verified is not set (verified.mjs VERIFIED)
     if (!verified(lang)) return fail('not verified', `Typesetting ${lang} is not verified yet (issue #295): the reader sets ${VERIFIED.join(', ')} for now; choose one in the extension's settings`)
     // the decision to translate, the step the controller's phase moves at: a copy on screen is translated again, and
     // its progress counted from nothing (final review); a run again goes on from what the last one left translated

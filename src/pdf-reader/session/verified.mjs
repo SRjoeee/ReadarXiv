@@ -1,4 +1,4 @@
-// The languages the reader typesets (scripts.mjs, which re-exports them): apart, so that the background's warm-up can
+// The languages the reader typesets: apart, so that the background's warm-up can
 // read them without the typesetting's LaTeX parser, which a service worker's bundle cannot carry.
 
 /** The languages whose typesetting the multi-language gate verifies (parked/lab/spikes/lang-gate.mjs). Until #295 takes up the

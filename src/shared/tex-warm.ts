@@ -2,7 +2,7 @@
 // Shared by both, and by the messages' table (shared/messages.ts)
 
 /** download ahead, into the extension's store, what a first visit in `lang` fetches from the TeX page at `site` (the
- *  document makes the page's hints for it: pdf-reader/engine/pipeline/scripts.mjs texHints) */
+ *  document makes the page's hints for it: pdf-reader/session/hints.mjs texHints) */
 export interface TexWarmRequest {
   site: string
   /** the target language (BCP 47), given back in the result */

@@ -1,4 +1,8 @@
-// The engine's server entry (Node): a paper's source to its units, the original compiled with the marks, the layout file, the add-on and the bundle that carries them. What the web's server imports; nothing of the compile path's typesetting or cache, and no module of the extension.
+// The engine's server entry (Node): a paper's source to its units, the original compiled with the marks, the layout file, the
+// add-on and the bundle that carries them. What the web's server imports, and no module of the extension.
+// The compile path's names (runLive, translationFiles, the strategies, the typesetting, the cache) are not exported, but live.mjs
+// still imports cache.mjs, scripts.mjs and typeset/* for them, so that this entry's closure loads them: Stage 5's PR 5 splits
+// live.mjs into the paper's pipeline and the compile run before the compile path is parked.
 // Re-exports only: the directory is the contract (docs/PDF-READER.md, the engine's contract), tests/pdf-reader/engine-contract.json its snapshot.
 
 // the paper, its marked original and the readings of a compile
