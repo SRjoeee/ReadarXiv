@@ -400,6 +400,12 @@ describe("the leftover packed (P.leftover 'pack', D6's F6c): each paragraph keep
     expect([...(await pack([a2!, b2!, c2!], [], [{ ch: 'x', x0: 50, x1: 55, yb: 452, size: 10 }]))]).toEqual([[3, 12]])
     const far = [unitOf(1, [500, 488, 476, 464], [500, 485]), unitOf(2, [400, 388], [400, 388])]
     expect((await pack(far)).size).toBe(0)
+    // (and none whose first line holds what stays: a run-in heading's line beside it, or a label's characters before it)
+    const [a3, b3, c3] = run()
+    expect([...(await pack([a3!, b3!, c3!], [[9, [1, 0, 437.85, 40, 446.83]]]))]).toEqual([[3, 12]])
+    const [a4, b4, c4] = run()
+    b4!.blocks[0] = { ...b4!.blocks[0]!, indent: 40 } as never
+    expect([...(await pack([a4!, b4!, c4!], [], [{ ch: 'B', x0: 2, x1: 30, yb: 440, size: 10 }]))]).toEqual([[3, 12]])
   })
 
   it("moves no unit of two blocks, on two pages or not of the body, and none drawn to its frame's foot", async () => {

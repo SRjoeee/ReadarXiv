@@ -206,8 +206,9 @@ export function fillPage(units, P, running = null, onFilled = () => {}) {
  * the next fixed thing. A unit moves where it is a body unit of one block, on this page alone, below another body unit of
  * the page in its column with nothing between them: no other unit's line (`rects`, every unit's rectangles on the page:
  * [id, [page, x0, y0, x1, y1]]), no character of the page (`chars`: a display, a label), and no more than three of the
- * upper's pitches of the original's (a figure's room). A heading, a display, a float, a unit drawn on two pages or one
- * left the original's is fixed: a run ends at it. Its first line is then set as far under the upper's last drawn line as
+ * upper's pitches of the original's (a figure's room); and its first line its own (no other unit's line on it, no
+ * character before its start: a run-in heading stays with its text). A heading, a display, a float, a unit drawn on two
+ * pages or one left the original's is fixed: a run ends at it. Its first line is then set as far under the upper's last drawn line as
  * the original's are apart, never lower than it was, its lines moved together; the units are taken from the top, so that
  * a run's moves add up. The cost: a paragraph's top leaves its original's line.
  * Returns the moves by unit id (PDF units up), the units that moved in the order they were taken.
@@ -240,6 +241,10 @@ export function packPage(pg, units, rects, chars) {
     const across = (l, r) => Math.min(x1, r) - Math.max(x0, l) > 1
     if (rects.some(([id, r]) => id !== p.id && id !== q.id && r[0] === pg && across(r[1], r[3]) && r[4] > top + 0.1 && r[2] < foot - 0.1)) continue
     if (chars.some(c => /\S/.test(c.ch) && across(c.x0, c.x1) && c.yb + 0.28 * c.size > top && c.yb + 0.28 * c.size < foot)) continue
+    // (nor one whose first line it shares with what stays: a run-in heading, a label, the tail of a unit before it)
+    const start = b.x0 + (b.indent ?? 0) - 1
+    if (rects.some(([id, r]) => id !== q.id && r[0] === pg && r[2] < b.B[0] && r[4] > b.B[0] && r[3] > b.x0 && r[1] < b.x1)) continue
+    if (chars.some(c => /\S/.test(c.ch) && Math.abs(c.yb - b.B[0]) < 0.3 * c.size && c.x1 > b.x0 && c.x1 < start)) continue
     // (by baselines: the upper's last drawn line as it now stands, a unit above it that moved having moved it, above its
     // original's last by what its fill left; the lower's first as far from it as the original's are. A size smaller than the
     // original's is not made up for: its glyphs' smaller ascent is no blank line, and its lines stay on the original's pitch)
