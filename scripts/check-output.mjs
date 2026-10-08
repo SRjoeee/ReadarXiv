@@ -57,7 +57,7 @@ const NOTICES = join(OUT, 'licenses/third-party.txt')
 const notices = existsSync(NOTICES) ? readFileSync(NOTICES, 'utf8') : ''
 
 const filesUnder = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry => (entry.isDirectory() ? filesUnder(join(dir, entry.name)) : [join(dir, entry.name)]))
-// What only a development build may hold (DESIGN §16): this machine's TeX pages, the one spikes/serve-live.mjs runs at
+// What only a development build may hold (DESIGN §16): this machine's TeX pages, the one parked/tex-page/spikes/serve-live.mjs runs at
 // 127.0.0.1:8071 and the TeX Live file server a protocol-1 page reads at localhost:8070 (addresses.mjs) — a release
 // naming one would typeset a reader's paper with whatever answers there —, and the TeX page's compiler, BusyTeX in
 // texlyre's build, which runs on the TeX page and never in the extension. Every file of the package is read, as

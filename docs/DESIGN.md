@@ -91,7 +91,9 @@ pages: popup · options · gallery (dev)     abstract-page script     │   cont
 | `src/core/sentences` | The sentence splitter (§8.6) |
 | `src/core/run`, `src/core/session` | The ledger both runs share; the page session (§4.3, §4.4) |
 | `src/core/abstract` | The bilingual link on the abstract page (§4.0b) |
-| `src/pdf-reader` | The bilingual PDF reader: its controller, the typesetting engine (`engine/`), the page viewer, the outline, the recogniser's bridge and its interface (`ui/`) — the reader's own design document |
+| `src/pdf-reader` | The bilingual PDF reader: its controller, the typesetting engine (`engine/`), the page viewer, the outline, the recogniser's bridge and its interface (`ui/`); how it meets the extension is §16, its interface design is `docs/PDF-READER.md` |
+| `lab/pdf` | The gates and measurements of the reader's engine and their records, never built or shipped (`lab/pdf/README.md`) |
+| `parked` | Code and records the product no longer uses, kept for their history (`parked/README.md`) |
 | `src/providers` | The engines, the queues (`request/`), the translate service, the fallback chain, prompts, glossary, alignment (§8) |
 | `src/cache` | The Dexie store and the cache key (§9) |
 | `src/config` | The schema, versions and migrations, languages, appearance, services (§9) |
@@ -734,7 +736,7 @@ A key the endpoint refused is remembered outside the configuration (`local:servi
 | `pnpm e2e:image` | 18 | Bitmaps read by the recogniser the extension ships, in its offscreen document as a reader's browser runs it: the recogniser alone on a drawn figure (a transparent ground, a label on its side); an SVG figure in a box of other proportions, every label held to its word's glyphs, one blur a figure and a blur a label in the viewer (1706.03762v7); overlays in every mode, gone after restore; a graphic that stands in no figure (2609.20818v1's teaser) translated on its copy in side and only, on the original in stack. Nothing to install, so it runs wherever the other suites do |
 | `pnpm e2e:placeholders` | live | Placeholder survival per sentence shape against real engines (§6.3); a probe, not a regression suite |
 
-**Probes** under `tests/e2e/probes/` record one-off measurements a decision rests on, so that it can be re-run: `chrome-floor.mjs` (the extension on a Chrome below 138, §8.4); the redesign's (2026-09-27): `align.mjs` (centre lines and edges, shared), `controls.mjs` (the shared controls on the development build's controls sheet), `popup-align.mjs` and `settings-align.mjs` (every state's alignment and shots, both themes and languages), `popup-first-paint.mjs` (the popup's first paint against a kept build), `floating-shots.mjs` (the floating button before and after; exits 1 on a part that moved), `reflow-shots.mjs` (the arXiv-page surfaces at 200 % and 400 %), `pages-a11y.mjs` (axe on the extension's pages); and the reader's pixels, `experiments/pdf-bilingual/spikes/reader-pixels.mjs`.
+**Probes** under `tests/e2e/probes/` record one-off measurements a decision rests on, so that it can be re-run: `chrome-floor.mjs` (the extension on a Chrome below 138, §8.4); the redesign's (2026-09-27): `align.mjs` (centre lines and edges, shared), `controls.mjs` (the shared controls on the development build's controls sheet), `popup-align.mjs` and `settings-align.mjs` (every state's alignment and shots, both themes and languages), `popup-first-paint.mjs` (the popup's first paint against a kept build), `floating-shots.mjs` (the floating button before and after; exits 1 on a part that moved), `reflow-shots.mjs` (the arXiv-page surfaces at 200 % and 400 %), `pages-a11y.mjs` (axe on the extension's pages); and the reader's pixels, `lab/pdf/spikes/reader-pixels.mjs`.
 
 **Fixtures**: `tests/fixtures/arxiv/<id>.html`, twelve real papers plus the synthetic file, all oxide 0.7.6, parsed by happy-dom in about 0.6 s for a 1.8 MB page; `tests/fixtures/ocr/` holds a real recognition result the merge and filter rules are tested against. **The tree holds only the fixtures it may redistribute**: seven papers are under CC BY or CC BY-SA and are in it with their attribution, and the synthetic file's one borrowed excerpt is from a CC BY paper; five papers and one figure are under arXiv's non-exclusive licence, and one more figure under CC BY-NC-ND, so `tests/fixtures/remote.json` pins each to a version of the paper, its size and the SHA-256 of what arXiv served, and `scripts/fetch-fixtures.mjs` downloads a missing one and accepts only those bytes — before the first test file (all byte-identical on 2026-09-17 to the captures of 2026-09-03…09). A missing file with no network fails the run rather than skipping — five papers left out in silence would be coverage reported and not had — and other bytes from arXiv are refused, because the snapshots and the numbers in this document were taken from the pinned ones; moving a pin is a reviewed change (`tests/fixtures/README.md`). CI restores them from a cache keyed by the manifest, fetches after typecheck, lint and build, and saves the moment they verify. **Nor does the history**: on 2026-09-17 the eight files that were in it — the seven pinned at the time, the reference image of the macOS helper of those days among them, and `qed3d-string-breaking-exif6.jpg`, derived from it — were removed from every commit (git filter-repo, the maintainer's decision) and every branch and tag was force-pushed, so every commit hash from the first fixture commit of 2026-09-03 onwards changed; a hash quoted in an older issue or pull request no longer resolves. GitHub's pull request refs to the old commits are GitHub's to purge, on request. The numbers the MVP measured (long tasks, prep passes, request counts) are kept beside the decisions they justify (§7.2, §7.7, §10); the reader tasks the suites keep verifying are listed under each suite above.
 
@@ -874,9 +876,11 @@ A figure the column shows too small to read is opened large in a dialog, zoomed 
 
 A bilingual reader for arXiv's PDFs (issue #290): an extension page (`pdf-reader.html`; `src/entrypoints/pdf-reader`,
 `src/pdf-reader`) that translates the paper's TeX source, typesets it again, and shows it beside arXiv's own PDF,
-paragraph matched to paragraph. Its design and its measurements live with the experiment,
-`experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md` and `experiments/pdf-bilingual/REPORT.md`. Here
-is only how it meets the rest of the extension.
+paragraph matched to paragraph. Its interface design is `docs/PDF-READER.md`, and the gates that hold its engine are
+`lab/pdf/README.md`; the experiment it grew in (its running record and its plans) is read from the freeze's tag:
+`git show exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md`, and
+`git show exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/<file>`. Here is only how it meets the rest of the
+extension.
 
 - **How it is reached** (§4.0b). `pdf.content.ts` lays the reader over arXiv's PDF page in a full-window frame when
   `pdfReader.enabled` is on, or when the address carries `#readarxiv`, which also asks for a translation. The address
@@ -920,7 +924,7 @@ is only how it meets the rest of the extension.
 - **Typesetting** runs in a TeX page outside the extension (BusyTeX): our site's, `https://tex.readarxiv.org`, in a
   production build, and one on this machine in development (`addresses.mjs` `TEX_PAGE`, a build setting). No
   reader-facing word names it (UI.md §3.5). The translation is set by the Flow rule (`src/pdf-reader/engine/typeset/`;
-  `experiments/pdf-bilingual/records/typesetting.md`): each unit's leading, the paper's type and the floats' pages
+  `parked/lab/records/typesetting.md`): each unit's leading, the paper's type and the floats' pages
   planned from our marked original's line probes and marks. The original is compiled in full in a TeX frame of its
   own from the run's start, beside the probe and the first preview, which never waits for it, and the frame goes once
   it is in (150–450 MB more meanwhile); what the rule reads of it is kept for the visit and, with the left side's
@@ -984,7 +988,7 @@ is only how it meets the rest of the extension.
   original's aux, for any key it cites, in its order (`citationLines`: apacite's `\APACbibcite`, harvard's, backref's)
   —, and one citation's key went out as prose, apacite's `\cite<>[…]{modified_code}`, whose prenote in angle brackets
   the walker did not read: a citation is one placeholder with every argument it takes, the prenote among them
-  (`latex-front.mjs` `citationArgs`); `experiments/pdf-bilingual/plans/2026-10-04-compile-resilience.md`). The
+  (`latex-front.mjs` `citationArgs`); `exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/2026-10-04-compile-resilience.md`). The
   reader speaks the TeX page's protocol 2 and still serves a page of protocol 1: it names the engines and the CJK
   faces the visit will use, so that the page fetches them ahead;
   a compile whose files did not all arrive, or that the page itself failed (no log: an engine it could not bring up), is
@@ -1026,7 +1030,7 @@ is only how it meets the rest of the extension.
   Chinese warm-up, 9.9 s with nothing warmed). No new permission, and nothing a reader sees: the diagnostics log says
   what happened, a state that lasts once. Measured (2026-10-02, Chromium 153, partitioning on, the page served on
   this machine over a link like this machine's to tex.readarxiv.org — 13 Mbit/s, 30 ms —, the gate's translations,
-  `spikes/reader-typeset.mjs`), first on the page before the hashes and zlib level 6: the warm-up downloads 39.3 MB in
+  `parked/lab/spikes/reader-typeset.mjs`), first on the page before the hashes and zlib level 6: the warm-up downloads 39.3 MB in
   24.5 s for Chinese (45 requests) and 15.0 MB in 9.5 s for German (11); a first visit over arXiv's PDF page then
   starts its TeX page in 0.89 s instead of 25.0 s and shows its first preview in 6.4 s instead of 30.5 s (Chinese,
   2608.02163), in 0.63 s and 3.6 s instead of 9.9 s and 12.9 s (German, 2608.02785), as the reader open as a tab does;
@@ -1052,7 +1056,7 @@ is only how it meets the rest of the extension.
   — on arXiv's PDF before our marked original's marks come — by a text match covering 80 % of the unit's words. The
   record keeps each unit's sentences beside its translation, additively; an older copy lights by paragraph until
   translated again. The geometry, the pointer's path, the costs and the known limits:
-  `experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md` §17.
+  `docs/PDF-READER.md` §17.
 - **A paper that cannot be had** — no source, or none of the ways of setting it worked (every one tried, none for want
   of time: a slow machine says nothing of the paper) — shows the original with the side-by-side and translation
   displays greyed and a capsule that says so, without why, offering the HTML version where arXiv has one (UI.md

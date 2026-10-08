@@ -1,0 +1,74 @@
+// The extension with the PDF reader as one of its pages, for the spikes that drive the reader: Chromium with the
+// repository's build loaded (the reader is its page pdf-reader.html, src/entrypoints/pdf-reader), and the reader's
+// address in it. The reader translates through that build's background, with its default settings unless
+// a spike changes them. Build first: `pnpm build` at the repository root.
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+const REPO = new URL('../../../', import.meta.url).pathname
+const { chromium } = createRequire(REPO)('playwright')
+export const BUILD = join(REPO, '.output/chrome-mv3')
+/**
+ * The features Playwright turns off (its chromiumSwitches.ts, 1.63), save one: storage partitioning, which a reader's
+ * Chrome has on. A later --disable-features replaces Playwright's list. Left off, the TeX page framed by the reader over
+ * arXiv's PDF page shared the cache of the one framed by an extension page, which in Chrome it does not (measured in
+ * Chrome 145, 153 and 154: the warm-up's report)
+ */
+const PLAYWRIGHT_OFF = ['AvoidUnnecessaryBeforeUnloadCheckSync', 'DestroyProfileOnBrowserClose', 'DialMediaRouteProvider', 'GlobalMediaControls', 'HttpsUpgrades', 'LensOverlay', 'MediaRouter', 'PaintHolding', 'BlockOriginHeaderModificationOnRedirect', 'Translate', 'AutoDeElevate', 'OptimizationHints']
+
+/**
+ * { context, worker, id, readerUrl(query) }: `profile` names the temporary profile's directory, `extension` another
+ * build, `args` more of the browser's switches, `languages` the browser's (its accept-languages, which the extension's first
+ * target follows: `--lang` is ignored on macOS); the browser partitions storage as Chrome does. `demos`: the precompiled demo papers (lab/pdf/poc-reader/papers, made on this machine by lab/pdf/spikes/reader-papers.mjs) staged into
+ * a temporary copy of the build, for the spikes that open them — a build never holds them, since arXiv's papers may not
+ * be redistributed (Codex on #296).
+ *
+ * Both temporary directories go when the context closes: a copy of the build and a profile a run, never removed, once
+ * filled the disk (25 GiB). `context.close()` removes them once the browser has exited; a context that closes on its
+ * own (the browser crashing, a headed window shut) removes them from its `close` event
+ */
+export async function launchWithReader({ profile = 'reader', extension = BUILD, demos = false, headless = true, viewport = { width: 1600, height: 1000 }, args = [], languages = null } = {}) {
+  if (!existsSync(join(extension, 'pdf-reader.html'))) throw new Error(`no reader in ${extension}: \`pnpm build\` at the repository root`)
+  const temporary = []
+  const removeTemporary = () => {
+    for (const dir of temporary.splice(0)) {
+      try { rmSync(dir, { recursive: true, force: true, maxRetries: 3 }) } catch (e) { console.warn(`could not remove ${dir}: ${e.message}`) }
+    }
+  }
+  if (demos) {
+    const papers = new URL('../../../lab/pdf/poc-reader/papers', import.meta.url).pathname
+    if (!existsSync(papers)) throw new Error('no demo papers: node lab/pdf/spikes/reader-papers.mjs first')
+    const copy = mkdtempSync(join(tmpdir(), 'reader-demos-'))
+    temporary.push(copy)
+    cpSync(extension, copy, { recursive: true })
+    cpSync(papers, join(copy, 'pdf-reader/papers'), { recursive: true })
+    extension = copy
+  }
+  const profileDir = mkdtempSync(join(tmpdir(), `${profile}-`))
+  temporary.push(profileDir)
+  if (languages) {
+    mkdirSync(join(profileDir, 'Default'), { recursive: true })
+    writeFileSync(join(profileDir, 'Default', 'Preferences'), JSON.stringify({ intl: { accept_languages: languages } }))
+  }
+  let context
+  try {
+    context = await chromium.launchPersistentContext(profileDir, { channel: 'chromium', headless, viewport, args: [`--disable-features=${PLAYWRIGHT_OFF.join(',')}`, `--disable-extensions-except=${extension}`, `--load-extension=${extension}`, ...args] })
+  } catch (e) {
+    removeTemporary()
+    throw e
+  }
+  // the event fires inside `close()` too, before the browser may have let go of its profile: that path removes after
+  // the close has returned instead
+  let closing = false
+  const close = context.close.bind(context)
+  context.close = async (...args) => {
+    closing = true
+    try { await close(...args) } finally { removeTemporary() }
+  }
+  context.once('close', () => { if (!closing) removeTemporary() })
+  const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'))
+  const id = new URL(worker.url()).host, base = `chrome-extension://${id}/pdf-reader.html`
+  return { context, worker, id, readerUrl: query => `${base}?${typeof query === 'string' ? query : new URLSearchParams(query)}` }
+}

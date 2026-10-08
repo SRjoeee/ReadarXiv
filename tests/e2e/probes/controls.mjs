@@ -1,6 +1,6 @@
 // The shared controls in a real browser (the redesign's Part 3): the controls sheet (src/entrypoints/controls, a dev
 // page) in both interface languages, light and dark side by side. Each specimen is shot at rest per language and theme
-// into experiments/pdf-bilingual/out/controls/ (at twice the pixels: the 200 % look), every row's items are held to the
+// into lab/pdf/out/controls/ (at twice the pixels: the 200 % look), every row's items are held to the
 // row's centre line (align.mjs), and each control is measured against the values the prototypes agreed. The popup's and
 // the settings page's own documents are checked for the pointer's and the keyboard's turns. Exits 1 on a failure or a
 // page error. The sheet is in development builds only (wxt.config.ts DEV_PAGES):
@@ -13,7 +13,7 @@ import { edges, offCentre, shootEach } from './align.mjs'
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const EXT = fileURLToPath(new URL('../../../.output/chrome-mv3-dev', import.meta.url))
-const OUT = fileURLToPath(new URL('../../../experiments/pdf-bilingual/out/controls', import.meta.url))
+const OUT = fileURLToPath(new URL('../../../lab/pdf/out/controls', import.meta.url))
 const PROFILE = `${E2E}.profile-controls`
 const SHEET = join(EXT, 'controls.html')
 // a dev server's build loads its scripts from localhost, and is no use without the server

@@ -1,0 +1,6 @@
+# What reviving a parked part makes on a machine, as the experiment's own .gitignore kept it out of the repository:
+# papers and everything made from them, and the third-party files the setup fetches or builds (README.md)
+data/
+out/
+compare/
+node_modules/

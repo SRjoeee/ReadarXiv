@@ -246,7 +246,7 @@ export function createController({ open, params }: { open: (host: SessionHost) =
       return session
     },
     setDisplay: display => later(s => s.setDisplay(display)),
-    // the interface's switch is the owner's design or nothing (REPORT, sixteenth addendum): top alignment, or off
+    // the interface's switch is the owner's design or nothing (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, sixteenth addendum): top alignment, or off
     setSync: on => later(s => s.setSyncMode(on ? 'same' : 'off')),
     setFigures: on => later(s => s.setFigures(on)),
     zoomBy: factor => { set({ zoom: null }); later(s => s.zoomBy(factor)) },

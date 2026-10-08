@@ -13,7 +13,7 @@
 // Lua-only code fails (none of the corpus's 123 papers is set with LuaLaTeX, so no LuaLaTeX CJK path could be measured).
 // When no strategy sets the translation, the reader keeps what it shows. A script not listed here has no strategy yet:
 // strategiesFor throws, and the reader says it cannot typeset that language (Devin on #294). Every font named is in
-// TeX Live 2026. Measured with spikes/lang-gate.mjs.
+// TeX Live 2026. Measured with parked/lab/spikes/lang-gate.mjs.
 import { scriptOf } from './layer-rules.mjs'
 import { latinFontsFor } from './latex-front.mjs'
 
@@ -43,7 +43,7 @@ const EIGHT_BIT = new Set(['pdflatex', 'latex'])
  * CJK. xeCJK sets the script in a family of its own, leaves the paper's Latin faces (latinFontsFor) to everything
  * else, breaks lines between characters and keeps punctuation off a line's start; a script that spaces its words
  * (Hangul) keeps the spaces. CJKutf8 under the paper's own pdfLaTeX takes the papers XeLaTeX cannot (the chain took
- * Chinese from 98 to 106 of 113, REPORT fourth addendum); babel has no CJK captions under pdfTeX, so there they stay
+ * Chinese from 98 to 106 of 113, exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, fourth addendum); babel has no CJK captions under pdfTeX, so there they stay
  * the paper's.
  *
  * `leading` multiplies the paper's own line spacing inside translated units alone (live.mjs translationFiles,
@@ -52,7 +52,7 @@ const EIGHT_BIT = new Set(['pdflatex', 'latex'])
  * size against 1.10), and a class that sets its spacing in the body, as ICASSP's \ninept does, escaped it; the unit's
  * own spacing is multiplied now, whatever set it. CJK characters fill their em square, so lines of them stand closer
  * than Latin lines at the same spacing, and a translation is as long as its language makes it: the factor is the
- * script's, measured on the gate's pages (`--tune`, REPORT eleventh addendum). Chinese at ctex's 1.3 comes out as long
+ * script's, measured on the gate's pages (`--tune`, exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eleventh addendum). Chinese at ctex's 1.3 comes out as long
  * as the original (median pages 1.00, 19 of 24 papers within 10 %). Japanese and Korean translations are longer: at 1.3
  * they came out a fifth longer (median 1.20 and 1.17, 1 of 24 within 10 %), at the paper's own spacing as long (median
  * 1.00, 22 of 24). Which face, size and spacing suit each language beside the paper's Latin text is open (#295).

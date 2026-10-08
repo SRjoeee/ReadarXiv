@@ -6,7 +6,7 @@
 // without). A paper arXiv says has no HTML version keeps the button; the panel's HTML entry is disabled there, saying
 // why (UI.md S-P-33).
 //
-// On this experiment branch the page opens in the bilingual PDF reader instead (experiments/pdf-bilingual, #290), laid
+// On this experiment branch the page opens in the bilingual PDF reader instead (#290), laid
 // over the browser's viewer, which stays underneath, when the settings say so (`pdfReader.enabled`) or the address
 // asks for it (`#readarxiv`, which asks for a translation too): the address stays the paper's, and the reader's way
 // back to the browser's viewer takes the reader away and shows the floating button. A browser the reader's PDF.js

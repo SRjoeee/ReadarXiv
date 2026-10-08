@@ -383,7 +383,7 @@ export async function translateUnits(units, send, format = 'markers') {
   const wire = WIRE[format]
   // unit → { pieces, state, by, sentences? }: whole (read back strictly or tolerantly, or every run back), partial (some runs back),
   // none (the engine could not take it, runs included), lost (a failure of the service; engine.mjs, EngineError's
-  // `lost`). `by` is the identity that answered, MIXED when runs of one unit had two (REPORT, eighteenth addendum)
+  // `lost`). `by` is the identity that answered, MIXED when runs of one unit had two (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum)
   const results = new Map(), how = { whole: 0, tolerant: 0, runs: 0, untranslated: 0, lost: 0 }, failed = []
   // what came back, when some texts did not for a reason not theirs (engine.mjs, EngineError's `lost`): those stay in
   // the source language, counted, and the failure is kept — sent again piece by piece they would only fail again, as

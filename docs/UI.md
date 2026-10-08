@@ -3,7 +3,7 @@
 The single basis for the interface implementation; a change to the interface starts here. The design canvas that preceded it is not in the repository.
 Numbering: `P` popup states, `O` the options page, `I` in-page components; copy ids are `S-<surface>-<number>`. Cite the ids directly in feedback.
 
-Status: **implemented** — the copy of §3, the tokens of §5 and the language of §6 are in `src/ui/strings.ts`, `src/locales/` and `src/shared/tokens.ts` (§5); the [open] marks of §1, §2, §3 and §5 dated from the drafting and were changed to [implemented] on 2026-09-13; the popup, the settings page and the controls on arXiv's pages were redrawn on 2026-09-27 (the redesign: `experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-design.md`). Settled sections are marked [decided]. "The redesign's §n" names a section of that design; a bare §n is this document's.
+Status: **implemented** — the copy of §3, the tokens of §5 and the language of §6 are in `src/ui/strings.ts`, `src/locales/` and `src/shared/tokens.ts` (§5); the [open] marks of §1, §2, §3 and §5 dated from the drafting and were changed to [implemented] on 2026-09-13; the popup, the settings page and the controls on arXiv's pages were redrawn on 2026-09-27 (the redesign: `git show exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-design.md`). Settled sections are marked [decided]. "The redesign's §n" names a section of that design; a bare §n is this document's.
 
 ---
 
@@ -232,7 +232,7 @@ Retired 2026-09-28: S-I-03 (an in-page notice of a switched service, never built
 
 ### 3.5 PDF reader (S-R) [decided 2026-09-25, built in the reader's Part 3]
 
-The bilingual PDF reader's own words (the reader's design, `experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md`
+The bilingual PDF reader's own words (the reader's design, `docs/PDF-READER.md`
 §15). Where the popup already says the same thing, the reader shows the popup's string: 翻译服务 (S-P-10), 目标语言
 (S-P-20), 搜索语言 and 没有匹配的语言 (S-P-22/23), 对照高亮 (S-P-80), 图片翻译 (S-P-85), 设置 (S-P-02), {n} 处翻译失败 and
 重试 (S-P-60/61), and the reasons (S-E). No reader-facing string names a technical path (a test checks both packs).

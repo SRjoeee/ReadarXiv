@@ -1,6 +1,6 @@
 // The offscreen document's warm-up (src/entrypoints/ocr/tex-warm.ts): the TeX page framed, asked to warm into the
 // extension's store, its files kept, the frame gone. The page, Cache Storage and the lock manager are fakes here; in a
-// browser against the built page it runs in experiments/pdf-bilingual/spikes/reader-typeset.mjs (WARM=1)
+// browser against the built page it runs in parked/lab/spikes/reader-typeset.mjs (WARM=1)
 import { describe, expect, it, vi } from 'vitest'
 import { type TexFrame, warmPace, warmSlot, warmTexPage } from '@/entrypoints/ocr/tex-warm'
 import { LOCK, STORE } from '@/pdf-reader/engine/tex-store.mjs'

@@ -7,14 +7,14 @@
 /**
  * The TeX page the reader typesets with (the S3a report's protocol 2), a build setting: our site's in a production build —
  * `pnpm build`, the one a reader or the maintainer's test gets —, and in development (`pnpm dev`, `wxt build --mode
- * development`, the unit tests) the one spikes/serve-live.mjs runs on this machine. Chosen by nothing a paper, a service
+ * development`, the unit tests) the one parked/tex-page/spikes/serve-live.mjs runs on this machine. Chosen by nothing a paper, a service
  * or a page that frames the reader says (the F2 review's I1: the test build met the protocol-1 page at 8071)
  */
 export const TEX_PAGE = import.meta.env?.PROD ? 'https://tex.readarxiv.org' : 'http://127.0.0.1:8071'
 /**
- * The TeX Live file server a protocol-1 page reads, a build setting too: in development the one spikes/serve-live.mjs
+ * The TeX Live file server a protocol-1 page reads, a build setting too: in development the one parked/tex-page/spikes/serve-live.mjs
  * runs on this machine; a production build names none, since our site's page reads its own tree and ignores an init's
- * endpoint (poc-site/tex-page.mjs), and a release names no address on this machine (scripts/check-output.mjs)
+ * endpoint (parked/tex-page/poc-site/tex-page.mjs), and a release names no address on this machine (scripts/check-output.mjs)
  */
 export const FILE_SERVER = import.meta.env?.PROD ? null : 'http://localhost:8070'
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]'])
@@ -28,7 +28,7 @@ export function readerAddresses(params, paper, texPage = TEX_PAGE, fileServer = 
   const origin = (name, fallback) => { const u = parse(params.get(name)); return u && local(u) ? u.origin : fallback }
   const address = (name, fallback) => { const u = parse(params.get(name)); return u && (local(u) || (u.origin === 'https://arxiv.org' && !u.username && !u.password)) ? u.href : fallback }
   return {
-    // our TeX page; in development, and the TeX Live file server a protocol-1 page reads, as spikes/serve-live.mjs starts
+    // our TeX page; in development, and the TeX Live file server a protocol-1 page reads, as parked/tex-page/spikes/serve-live.mjs starts
     // them on this machine
     site: origin('site', texPage),
     endpoint: origin('endpoint', fileServer),

@@ -1,4 +1,4 @@
-// How much room a translation takes, from its text alone (records/typesetting.md in experiments/pdf-bilingual). Widths
+// How much room a translation takes, from its text alone (parked/lab/records/typesetting.md). Widths
 // in em of the running text's size: the paper's Latin face and the Cyrillic face the T2A design gives it, as TeX sets
 // them (faces.mjs, measured under pdfLaTeX T1/T2A at 10 pt); CJK characters an em each, with xeCJK's ways with
 // punctuation, spaces and the glue beside Latin (measured under XeLaTeX with the reader's Fandol, IPAex and UnBatang).

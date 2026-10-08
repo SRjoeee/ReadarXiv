@@ -1,6 +1,6 @@
 // The typesetting rule chosen on 2026-10-01 — Flow, even, with option A in steps for CJK — as two steps a reader's
-// compiles go through (records/typesetting.md in experiments/pdf-bilingual; the engineers' notes in
-// experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md):
+// compiles go through (parked/lab/records/typesetting.md; the engineers' notes in
+// exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md):
 //   previewTypesetting — from the original's probes and the translation's text: one type for the paper, each unit's
 //     leading along the original's flow, each float held to its original's page; the preview compile is set with it;
 //   finalTypesetting — from what that preview measured: the preview's type kept, each unit's leading set again from its
@@ -16,7 +16,7 @@ import { columnOf, drifts } from './places.mjs'
 import { completeLog, readForced, readLines, typesetting } from './tex.mjs'
 import { designFor, heightAtSize, solveType, unitHeights } from './type.mjs'
 
-/** The rule's parameters, each as the round of 34 chose it (records/typesetting.md) */
+/** The rule's parameters, each as the round of 34 chose it (parked/lab/records/typesetting.md) */
 export const FLOW = {
   /** the window of the original's lines a unit's leading follows, and the lines a drift is taken back over */
   window: 46, horizon: 50,
@@ -123,7 +123,7 @@ export function finalTypesetting(state, preview, translated) {
 // six around them: 29 of 3,484 so, 56 at the paper's type — where it also cost 2 papers their page count and 0.006
 // column of start drift (34 → 32 pages equal, 0.062 → 0.068; the re-review of 2026-10-02): it holds places too — and 43
 // with such units measured by their text and set by the flow themselves, which lost the Chinese holdout a page and
-// 0.04 column (records/typesetting.md)
+// 0.04 column (parked/lab/records/typesetting.md)
 function typesettingOf(state, type, leads, faces) {
   const { units, translated, design, strategy, lo, floatsAt } = state, cjk = design.cjk
   const factors = new Map(), factor = (i, l) => { if (lo.get(i)?.size) factors.set(i, (l * lo.get(i).bs) / lo.get(i).size) }
