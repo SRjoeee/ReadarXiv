@@ -6,7 +6,8 @@ name: Rules point
 #
 # One pointer, one queue: this job and the publish job of the same environment (rules-publish.yml) write the same pointer, so they
 # share a concurrency group (rules-pointer-staging, rules-pointer-production) and never run together. A production rollback also
-# cancels the publishes that wait for the maintainer's approval first: one approved after it would move the pointer back over it.
+# first cancels every publish run that has not finished: one still measuring the live engines, or waiting for the maintainer's
+# approval, would otherwise reach production after it and move the pointer back over it.
 
 on:
   workflow_dispatch:
@@ -34,8 +35,8 @@ permissions:
 jobs:
   # (no environment: cancelling a run is what anyone who may dispatch this workflow may do by hand, and the rollback itself still
   # waits for the reviewer below. It holds the only write permission of the three workflows, and no secret.)
-  cancel-waiting:
-    name: Cancel the publishes waiting for production
+  cancel-publishes:
+    name: Cancel the publishes not finished
     if: inputs.environment == 'production'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -47,16 +48,19 @@ jobs:
     steps:
       - name: Cancel
         run: |
-          for id in $(gh run list --workflow rules-publish.yml --status waiting --limit 100 --json databaseId --jq '.[].databaseId'); do
-            gh run cancel "$id"
-            echo "cancelled run $id, which was waiting for its production approval"
+          # every state a run has before it ends: one that is still measuring the live engines reaches the approval later
+          for status in requested queued pending in_progress waiting; do
+            for id in $(gh run list --workflow rules-publish.yml --status "$status" --limit 100 --json databaseId --jq '.[].databaseId'); do
+              gh run cancel "$id"
+              echo "cancelled run $id ($status)"
+            done
           done
 
   point:
     name: Point ${{ inputs.environment }} to version ${{ inputs.version }}
-    # a rollback that could not cancel the waiting publishes is not made: one approved later would undo it
-    needs: cancel-waiting
-    if: ${{ !cancelled() && (needs.cancel-waiting.result == 'success' || needs.cancel-waiting.result == 'skipped') }}
+    # a rollback that could not cancel the unfinished publishes is not made: one approved later would undo it
+    needs: cancel-publishes
+    if: ${{ !cancelled() && (needs.cancel-publishes.result == 'success' || needs.cancel-publishes.result == 'skipped') }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment == 'production' && 'rules-production' || 'rules-staging' }}
     timeout-minutes: 5

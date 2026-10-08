@@ -141,10 +141,11 @@ gives the version `package.json` names.
 
 **One pointer, one queue.** Every job that writes a pointer is in the one concurrency group of its environment,
 `rules-pointer-staging` or `rules-pointer-production`: the publish job and the rollback share it, queued and never cancelled, so
-two writes of a pointer never interleave. A production rollback begins by cancelling every `rules-publish.yml` run that waits
-for its production approval (`gh run list --workflow rules-publish.yml --status waiting`, then `gh run cancel`), in the one job
+two writes of a pointer never interleave. A production rollback begins by cancelling every `rules-publish.yml` run that has not
+finished, whether it is still measuring the live engines or waiting for its production approval (`gh run list` for each
+unfinished status, then `gh run cancel`), in the one job
 of the three workflows that holds `actions: write`, which has no secret and no environment; the rollback is not made where that
-job failed. Without it a publish approved after the rollback would move the pointer back over it.
+job failed. Without it a publish approved after the rollback would move the pointer back over it. A set whose run was cancelled so is published by re-running that run, or by the next merge.
 
 **The newest set only.** A queue of publishes can run out of order, and GitHub replaces a pending job when a third arrives, so
 a publish does not write what it was queued with. Before it writes, each staging and production publish fetches `origin/next`

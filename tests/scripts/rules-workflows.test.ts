@@ -204,13 +204,14 @@ describe('one pointer, one queue', () => {
     // the group of the live-engines check is nobody's: it writes no pointer
     expect(concurrencyOf(publish.get('engines')!)).toBeNull()
   })
-  it('cancels the publishes waiting for their approval before a production rollback, with the one write permission there is, and no secret', () => {
-    const cancel = point.get('cancel-waiting')!
+  it('cancels every unfinished publish before a production rollback (one still measuring reaches the approval later), with the one write permission there is, and no secret', () => {
+    const cancel = point.get('cancel-publishes')!
     expect(cancel).toContain("if: inputs.environment == 'production'")
     expect(cancel).toMatch(/\n {4}permissions:\n {6}actions: write\n/)
     expect(cancel).not.toMatch(/secrets\.|environment:/)
     const body = runBodies(cancel).join('\n')
-    expect(body).toContain('gh run list --workflow rules-publish.yml --status waiting')
+    expect(body).toContain('for status in requested queued pending in_progress waiting; do')
+    expect(body).toContain('gh run list --workflow rules-publish.yml --status "$status"')
     expect(body).toContain('gh run cancel "$id"')
     // that job alone holds a write permission; the workflows' own are read
     for (const name of WORKFLOWS) {
@@ -221,9 +222,9 @@ describe('one pointer, one queue', () => {
     }
     // the rollback follows it, and is not made where it failed (a skipped one is staging's)
     const rollback = point.get('point')!
-    expect(rollback).toContain('needs: cancel-waiting')
+    expect(rollback).toContain('needs: cancel-publishes')
     // biome-ignore lint/suspicious/noTemplateCurlyInString: a GitHub expression, not a template
-    expect(rollback).toContain("if: ${{ !cancelled() && (needs.cancel-waiting.result == 'success' || needs.cancel-waiting.result == 'skipped') }}")
+    expect(rollback).toContain("if: ${{ !cancelled() && (needs.cancel-publishes.result == 'success' || needs.cancel-publishes.result == 'skipped') }}")
   })
 })
 
