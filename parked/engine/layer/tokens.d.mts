@@ -1,9 +1,9 @@
 // tokens.mjs's types: a unit's translation as the tokens the line breaker places
-import type { FaceId, RoleSet } from '../rules/font-roles.mjs'
+import type { FaceId, RoleSet } from '../../../src/pdf-reader/engine/rules/font-roles.mjs'
 import type { LayerRules } from '../rules/layer-rules.mjs'
-import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
+import type { LayoutIndex, LayoutUnit } from '../../../src/pdf-reader/engine/layout/file.mjs'
 import type { Hyphenator } from './hyphen.mjs'
-import type { TrPiece } from './pieces.mjs'
+import type { TrPiece } from '../../../src/pdf-reader/engine/layer/pieces.mjs'
 
 /** a text's width at 100 px in a face (canvas measureText, in that face once it has loaded; the web's) */
 export type Measure = (text: string, face: FaceId, caps: boolean) => number

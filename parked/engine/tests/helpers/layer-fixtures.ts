@@ -1,9 +1,9 @@
-import { rolesFor } from './roles'
-import { layerRulesFor } from '@/pdf-reader/engine/rules/layer-rules.mjs'
-import type { Slot } from '@/pdf-reader/engine/layer/breaks.mjs'
-import type { Hyphenator } from '@/pdf-reader/engine/layer/hyphen.mjs'
+import { rolesFor } from '../../../../tests/pdf-reader/helpers/roles'
+import { layerRulesFor } from '../../rules/layer-rules.mjs'
+import type { Slot } from '../../layer/breaks.mjs'
+import type { Hyphenator } from '../../layer/hyphen.mjs'
 import type { TrPiece } from '@/pdf-reader/engine/layer/pieces.mjs'
-import { type Measure, type Token, tokensOf } from '@/pdf-reader/engine/layer/tokens.mjs'
+import { type Measure, type Token, tokensOf } from '../../layer/tokens.mjs'
 import type { LayoutIndex, LayoutUnit } from '@/pdf-reader/engine/layout/file.mjs'
 
 // What the layer's token and line-breaking tests share: the brief's fake measure and a hand-made unit and layout index.

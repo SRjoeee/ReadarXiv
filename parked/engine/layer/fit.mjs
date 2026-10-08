@@ -21,7 +21,7 @@ import { scriptOf } from '../rules/layer-rules.mjs'
 import { breakLines, placeLines } from './breaks.mjs'
 import { checkPieces, heldByNone, lostIn, netOf } from './net.mjs'
 import { linesOn } from './page.mjs'
-import { trText } from './pieces.mjs'
+import { trText } from '../../../src/pdf-reader/engine/layer/pieces.mjs'
 import { faceSize, tokensOf } from './tokens.mjs'
 
 /** a split part's sentence start is taken within this share of the translation's length from its frame's share */

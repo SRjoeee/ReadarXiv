@@ -10,10 +10,10 @@
 //
 // Pure, as the layer is: no DOM, no clock, no randomness. An original module (no port statement), importing only relative
 // modules, so that the reader's bundle holds it.
-import { canDraw, faceFor } from '../rules/font-roles.mjs'
-import { PH_FLAG } from '../layout/file.mjs'
-import { PIECES_MAX, STRING_MAX } from '../layout/json.mjs'
-import { COLOUR_SHIFT, LAYER_COLOURS, STYLE } from './pieces.mjs'
+import { canDraw, faceFor } from '../../../src/pdf-reader/engine/rules/font-roles.mjs'
+import { PH_FLAG } from '../../../src/pdf-reader/engine/layout/file.mjs'
+import { PIECES_MAX, STRING_MAX } from '../../../src/pdf-reader/engine/layout/json.mjs'
+import { COLOUR_SHIFT, LAYER_COLOURS, STYLE } from '../../../src/pdf-reader/engine/layer/pieces.mjs'
 import { BRACKETED, beside, bracketPairs, CLOSES, echoesOf, faceSize, OPENS, ownText, pageTextOf } from './tokens.mjs'
 
 /** the most pieces a translated unit may have (layout/json.mjs's, a row's too) */

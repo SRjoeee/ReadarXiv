@@ -1,6 +1,6 @@
 // page.mjs's types: page-even
 import type { LayerRules } from '../rules/layer-rules.mjs'
-import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
+import type { LayoutIndex, LayoutUnit } from '../../../src/pdf-reader/engine/layout/file.mjs'
 import type { LaidUnit } from './fit.mjs'
 
 /** the kinds a page evens; the scorer's BODY_KINDS (Plan 8a) is the same three, which Plan 8d asserts */

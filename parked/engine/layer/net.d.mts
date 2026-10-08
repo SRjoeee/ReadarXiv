@@ -1,8 +1,8 @@
 // net.mjs's types: the instant layer's completeness net
-import type { RoleSet } from '../rules/font-roles.mjs'
-import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
+import type { RoleSet } from '../../../src/pdf-reader/engine/rules/font-roles.mjs'
+import type { LayoutIndex, LayoutUnit } from '../../../src/pdf-reader/engine/layout/file.mjs'
 import type { LayerInput, LaidUnit, Tr, Unfit } from './fit.mjs'
-import type { TrPiece } from './pieces.mjs'
+import type { TrPiece } from '../../../src/pdf-reader/engine/layer/pieces.mjs'
 
 /** the most pieces a translated unit may have: 20,000 */
 export declare const PIECES_MAX: number

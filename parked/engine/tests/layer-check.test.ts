@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { checkPage, lostInk } from '@/pdf-reader/engine/layer/check.mjs'
-import { type LaidItem, type LaidUnit, layUnit, type Tr } from '@/pdf-reader/engine/layer/fit.mjs'
+import { type LaidItem, type LaidUnit, layUnit, type Tr } from '../layer/fit.mjs'
 import type { TrPiece } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { type LayoutIndex, type LayoutUnit, PH_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { column, han, inputOf, layoutOf, withText } from './helpers/layer-layout'

@@ -1,9 +1,9 @@
 // fit.mjs's types: a unit's translation set into the original's frames
-import type { FaceId, RoleSet } from '../rules/font-roles.mjs'
+import type { FaceId, RoleSet } from '../../../src/pdf-reader/engine/rules/font-roles.mjs'
 import type { LayerRules } from '../rules/layer-rules.mjs'
-import type { LayoutIndex } from '../layout/file.mjs'
+import type { LayoutIndex } from '../../../src/pdf-reader/engine/layout/file.mjs'
 import type { Hyphenator } from './hyphen.mjs'
-import type { TrPiece } from './pieces.mjs'
+import type { TrPiece } from '../../../src/pdf-reader/engine/layer/pieces.mjs'
 import type { Measure, TextIn } from './tokens.mjs'
 
 /** what the fit is given beside a unit's translation. `measure` is a face's width at 100 px; a face the role table gives a

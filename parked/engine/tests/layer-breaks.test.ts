@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { layerRulesFor } from '@/pdf-reader/engine/rules/layer-rules.mjs'
-import { type Broken, breakLines, CJK_JUST_MAX, placeLines, SPACE_MIN } from '@/pdf-reader/engine/layer/breaks.mjs'
-import { type Hyphenator, loadHyphenator } from '@/pdf-reader/engine/layer/hyphen.mjs'
+import { layerRulesFor } from '../rules/layer-rules.mjs'
+import { type Broken, breakLines, CJK_JUST_MAX, placeLines, SPACE_MIN } from '../layer/breaks.mjs'
+import { type Hyphenator, loadHyphenator } from '../layer/hyphen.mjs'
 import { STYLE } from '@/pdf-reader/engine/layer/pieces.mjs'
-import { NO_END, NO_START, type Token } from '@/pdf-reader/engine/layer/tokens.mjs'
+import { NO_END, NO_START, type Token } from '../layer/tokens.mjs'
 import { contextOf, slotsOf, tokenize } from './helpers/layer-fixtures'
 
 // Tokens into lines, greedily, and the lines' items placed: kinsoku, compression, autospace, Korean's spaces, hyphenation,

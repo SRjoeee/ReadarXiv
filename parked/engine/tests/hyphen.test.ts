@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HYPHEN_LANGS, loadHyphenator } from '@/pdf-reader/engine/layer/hyphen.mjs'
+import { HYPHEN_LANGS, loadHyphenator } from '../layer/hyphen.mjs'
 
 // Slice 1's hyphenation is the interface alone: the layer asks, and no language hyphenates until Slice 2's patterns
 

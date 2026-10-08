@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { drawUnit, type UnitDraw } from '@/pdf-reader/engine/layer/draw.mjs'
-import { type LayerInput, type Laid, type LaidUnit, layUnit, type Tr } from '@/pdf-reader/engine/layer/fit.mjs'
-import { checkPieces, netOf, PIECES_MAX } from '@/pdf-reader/engine/layer/net.mjs'
+import { drawUnit, type UnitDraw } from '../layer/draw.mjs'
+import { type LayerInput, type Laid, type LaidUnit, layUnit, type Tr } from '../layer/fit.mjs'
+import { checkPieces, netOf, PIECES_MAX } from '../layer/net.mjs'
 import { COLOUR_SHIFT, LAYER_COLOURS, STYLE, type TrPiece, trText } from '@/pdf-reader/engine/layer/pieces.mjs'
-import { PAGE_TEXT_MAX, PAGE_TEXT_MIN } from '@/pdf-reader/engine/layer/tokens.mjs'
+import { PAGE_TEXT_MAX, PAGE_TEXT_MIN } from '../layer/tokens.mjs'
 import { PH_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { column, type EraseSpec, han, inputOf, layoutOf, type PhSpec, type UnitDef, withText } from './helpers/layer-layout'
 
@@ -17,8 +17,8 @@ import { column, type EraseSpec, han, inputOf, layoutOf, type PhSpec, type UnitD
 // the lines on the line after its own, a fault past the fit's own checks (a placeholder in two items is never a fit there),
 // which the net must still catch
 const double = vi.hoisted(() => ({ twice: false }))
-vi.mock('@/pdf-reader/engine/layer/breaks.mjs', async importOriginal => {
-  const real = await importOriginal<typeof import('@/pdf-reader/engine/layer/breaks.mjs')>()
+vi.mock('../layer/breaks.mjs', async importOriginal => {
+  const real = await importOriginal<typeof import('../layer/breaks.mjs')>()
   return {
     ...real,
     placeLines: (...args: Parameters<typeof real.placeLines>) => {

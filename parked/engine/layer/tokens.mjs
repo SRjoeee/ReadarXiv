@@ -7,10 +7,10 @@
 //
 // Pure, as the layer is: no DOM, no clock; text is measured only through the function it is given. An original module (no
 // port statement), importing only relative modules, so that the reader's bundle holds it.
-import { canDraw, classifyFont, FACES, faceFor } from '../rules/font-roles.mjs'
+import { canDraw, classifyFont, FACES, faceFor } from '../../../src/pdf-reader/engine/rules/font-roles.mjs'
 import { scriptOf } from '../rules/layer-rules.mjs'
-import { PH_FLAG } from '../layout/file.mjs'
-import { COLOUR_SHIFT, STYLE } from './pieces.mjs'
+import { PH_FLAG } from '../../../src/pdf-reader/engine/layout/file.mjs'
+import { COLOUR_SHIFT, STYLE } from '../../../src/pdf-reader/engine/layer/pieces.mjs'
 
 /** the kinsoku sets: no character of NO_START begins a line, none of NO_END ends one */
 export const NO_START = '\u3001\u3002\uff0c\uff0e,.\uff01\uff1f!?\uff09)]\u300d\u300f\u3011\u3015\u3009\u300b\u3019\u3017\u201d\u2019\uff1a:\uff1b;\u30fb\u30fc\u301c\u2026\u3005\u309d\u309e\u3041\u3043\u3045\u3047\u3049\u3063\u3083\u3085\u3087\u308e\u30a1\u30a3\u30a5\u30a7\u30a9\u30c3\u30e3\u30e5\u30e7\u30ee\u30f5\u30f6%\uff05'

@@ -5,7 +5,7 @@
 // it equals the TeX path's, or LAYER_DIVERGES says why it does not.
 //
 // A module of its own, importing only the script of a tag (script.mjs, where scriptOf moved from here).
-import { scriptOf } from './script.mjs'
+import { scriptOf } from '../../../src/pdf-reader/engine/rules/script.mjs'
 export { scriptOf }
 
 const freeze = rules => Object.freeze(rules)

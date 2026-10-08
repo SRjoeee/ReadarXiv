@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { type FitState, type Laid, type LaidUnit, type LayerInput, layUnit, type Tr } from '@/pdf-reader/engine/layer/fit.mjs'
-import { bodyUnits, EVEN_KINDS, evenOf } from '@/pdf-reader/engine/layer/page.mjs'
+import { type FitState, type Laid, type LaidUnit, type LayerInput, layUnit, type Tr } from '../layer/fit.mjs'
+import { bodyUnits, EVEN_KINDS, evenOf } from '../layer/page.mjs'
 import type { TrPiece } from '@/pdf-reader/engine/layer/pieces.mjs'
-import { layerRulesFor } from '@/pdf-reader/engine/rules/layer-rules.mjs'
+import { layerRulesFor } from '../rules/layer-rules.mjs'
 import type { LayoutIndex } from '@/pdf-reader/engine/layout/file.mjs'
 import { column, han, inputOf, layoutOf, type UnitDef, words } from './helpers/layer-layout'
 

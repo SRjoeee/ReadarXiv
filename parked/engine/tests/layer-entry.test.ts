@@ -1,13 +1,13 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node script, deliberately dependency-free and untyped
-import { resolveSpecifier, valueImportsOf, withoutComments } from '../../scripts/check-boundary.mjs'
+import { resolveSpecifier, valueImportsOf, withoutComments } from '../../../scripts/check-boundary.mjs'
 
 // The reader's entry (Plan 8d imports it): what it pulls in, and what it gives. Everything it reaches is in the reader's
 // bundle, so none of it may be a module only the server runs (the compile, the marks, the maker, the pixel checker), and
 // every specifier on the way is relative, so that the web's build through its pin and a plain browser page load it alike
 
-const ENTRY = 'src/pdf-reader/engine/layer/layer.mjs'
+const ENTRY = 'parked/engine/layer/layer.mjs'
 const ENGINE = 'src/pdf-reader/engine/'
 /** the modules the reader must never load (Plan 8b's Global Constraints, Task 11's Invariants) */
 const SERVER = ['layout/marks', 'layout/make', 'layout/ink', 'layout/carry', 'layer/check', 'live', 'latex-front', 'mt', 'scripts'].map(m => `${ENGINE}${m}`)
@@ -53,7 +53,7 @@ describe("the reader's entry", () => {
   })
 
   it("the entry's exports are the contract's", async () => {
-    const entry = await import('@/pdf-reader/engine/layer/layer.mjs')
+    const entry = await import('../layer/layer.mjs')
     expect(Object.keys(entry).sort()).toEqual([
       'parseLayout', 'indexLayout', 'LAYOUT', 'LAYOUT_CAP', 'LAYOUT_VALUES', 'LayoutRefusal',
       'layerRulesFor',
@@ -70,7 +70,7 @@ describe("the reader's entry", () => {
     ].sort())
     // each the module's own, not a copy
     const [file, pieces, fit, draw] = await Promise.all([
-      import('@/pdf-reader/engine/layout/file.mjs'), import('@/pdf-reader/engine/layer/pieces.mjs'), import('@/pdf-reader/engine/layer/fit.mjs'), import('@/pdf-reader/engine/layer/draw.mjs'),
+      import('@/pdf-reader/engine/layout/file.mjs'), import('@/pdf-reader/engine/layer/pieces.mjs'), import('../layer/fit.mjs'), import('../layer/draw.mjs'),
     ])
     expect(entry.parseLayout).toBe(file.parseLayout)
     expect(entry.LAYER_COLOURS).toBe(pieces.LAYER_COLOURS)
