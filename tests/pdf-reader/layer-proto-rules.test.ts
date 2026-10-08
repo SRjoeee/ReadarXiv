@@ -161,3 +161,58 @@ describe("v0's open takes every choice for its target from the rule set it is gi
     expect(plain.rows[0]!.svg.textContent).toContain('\u56fe 1:')
   })
 })
+
+describe("the leftover switch over a whole run (openProto, D6's F6c): 'pack' moves a paragraph up under a short one and paints it last; 'foot' moves nothing", () => {
+  /** units in one column of a 300 x 300 page, each { kind, rows (its lines, 12 pt apart from y 200), tr }: every line 200
+   *  pt wide in words of Times at 10 pt, the unit's source their text */
+  function column(units: { kind: string; rows: number[]; tr: string }[]) {
+    const H = 300
+    const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
+    const words = (u: number, r: number) => `unit${u} line${r} alpha beta gamma delta`
+    const items = units.flatMap((u, ui) => u.rows.map(r => ({ str: words(ui, r), transform: [10, 0, 0, 10, 20, 200 - 12 * r], width: 200, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false })))
+    const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), cleanup() {}, commonObjs: { get: () => ({ name: 'NimbusRomNo9L-Regu' }) } }
+    return {
+      doc: { numPages: 1, getPage: async () => page },
+      geometry: { schema: 1, kinds: units.map(u => u.kind), left: { pages: [[0, 0, 300, 300]], units: units.map((u, i) => [i, i, u.rows.map(r => [1, 20, 197.85 - 12 * r, 220, 206.83 - 12 * r])]) } },
+      units: units.map((u, ui) => ({ kind: u.kind, src: u.rows.map(r => words(ui, r)).join(' '), state: 'whole', pieces: [{ t: 'text', tr: true, s: u.tr }] })),
+    }
+  }
+  // A, six lines, translated in two (thirty characters, twenty a line): filled to 2 em of 10 pt over a pitch of 12, 1.667,
+  // its last line at 180, 40 over its original's last (140); B, two lines under it, translated in one; C, a caption below
+  const page = () => column([{ kind: 'para', rows: [0, 1, 2, 3, 4, 5], tr: '\u6c49'.repeat(30) }, { kind: 'para', rows: [6, 7], tr: '\u5b57'.repeat(20) }, { kind: 'caption', rows: [9], tr: '\u56fe'.repeat(10) }])
+  const packed = () => { const set = editable(); set.scripts.Hans!.leftover = 'pack'; return set }
+  type Laid = { id: number; layout: { lines: { baseline: number }[] } }
+  const linesOf = (run: Awaited<ReturnType<typeof open>>, id: number) => (run.placed.find((p: { id: number }) => p.id === id) as unknown as Laid).layout.lines.map(l => l.baseline)
+  /** the units in the order their drawing was made on the page (the audit's first entry of each) */
+  const painted = (run: Awaited<ReturnType<typeof open>>) => [...new Set(run.audit.map((a: { unit: number }) => a.unit))]
+
+  it("with 'pack', B rises the 40 A leaves, its record says so, and it is painted after the others, top first", async () => {
+    const run = await open({ rules: packed() }, page())
+    await run.until(1)
+    const [a0, a1] = linesOf(run, 0)
+    expect([a0, a1!]).toEqual([200, expect.closeTo(180, 2)])
+    const [b0] = linesOf(run, 1)
+    // (it rises exactly what A's last line stands over A's original last: the original's distance between them kept)
+    expect(b0! - 128).toBeCloseTo(a1! - 140, 6)
+    expect(b0! - 128).toBeCloseTo(40, 1)
+    expect((run.stats.find(r => r.id === 1) as unknown as { pack: number }).pack).toBeCloseTo(40, 1)
+    expect(run.stats.find(r => r.id === 0)).not.toHaveProperty('pack')
+    // (the caption is no paragraph: it stays, and is painted before the unit that moved)
+    expect(linesOf(run, 2)).toEqual([92])
+    expect(painted(run)).toEqual([0, 2, 1])
+  })
+
+  it("with 'foot', nothing moves, and the drawing is the built-in set's: the same SVG and the same operations", async () => {
+    const set = editable()
+    expect(set.scripts.Hans!.leftover).toBe('foot')
+    const foot = await open({ rules: set }, page()), built = await open({}, page()), pack = await open({ rules: packed() }, page())
+    await Promise.all([foot.until(1), built.until(1), pack.until(1)])
+    expect(linesOf(foot, 1)).toEqual([128])
+    expect(foot.stats.some(r => 'pack' in r)).toBe(false)
+    expect(painted(foot)).toEqual([0, 1, 2])
+    expect(foot.rows[0]!.svg.outerHTML).toBe(built.rows[0]!.svg.outerHTML)
+    expect(foot.rows[0]!.ops).toEqual(built.rows[0]!.ops)
+    expect(pack.rows[0]!.svg.outerHTML).not.toBe(foot.rows[0]!.svg.outerHTML)
+    for (const r of [foot, built, pack]) r.dispose()
+  })
+})
