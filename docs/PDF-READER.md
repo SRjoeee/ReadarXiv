@@ -988,7 +988,7 @@ The rule set is one schema-validated file, `rules/layout-rules.json`: configurat
 | `autospace` | script | fit | 0 to 1, step 0.05 | The space set between CJK text and Latin letters or digits, in em. |
 | `even` | script | fit | `0`, `1`, `2` | How a page's body units are set alike: 0 each at its own, 1 at one size, 2 at one size and one leading. |
 | `fillSize` | script | fit | 0 to 1.5, step 0.05 | How far a unit's size may grow to fill a loose original's paragraph, × the original's size; 0 is off. |
-| `adaptiveFill` | script | fit | band, track, size; or none | Spreading each unit's lines over its original's space, the page's body units to one leading near the last page's and one size (D6); empty keeps the script's leading on the original's pitch alone (B). |
+| `adaptiveFill` | script | fit | band, track, size; or none | Spreading each unit's lines over its original's space, the page's body units to one leading and one size, the leading within a band of the page before's and of the fullest page's so far (D6); empty keeps the script's leading on the original's pitch alone (B). |
 | `fillLead` | script | fit | 1 to 3, step 0.05, or none | The loosest line pitch the fill spreads a unit's lines to, in em of the size it is drawn at; empty: the original's own pitch. |
 | `leftover` | script | fit | `foot`, `pack` | Where what the fill leaves over goes: at each paragraph's foot, or packed to the end of its run of paragraphs, each keeping the original's gap to the one above it. |
 | `keepAll` | script | breaking | yes or no | Whether lines break only at spaces (Korean and the alphabets) rather than between any two CJK characters. |

@@ -311,7 +311,7 @@ describe("the page fill (adaptiveFill, D6's F6b): every original's units spread 
     return p
   }
   type Held = { last: number; anchor: number; lines: number }
-  type Told = { target: number; own: number; body: boolean; lines: number }
+  type Told = { target: number | null; own: number | null; body: boolean; lines: number; anchor: number | null }
   const fill = async (units: Unit[], PP: Record<string, unknown> = P(), held: Held | null = null) => (await import('@/pdf-reader/engine/layer-proto/run.mjs')).fillPage(units as never, PP as never, held)
   /** pages passed in order, each { units, own } (the own target its units are made to tell): the targets they are held to */
   const paper = async (pages: { units: Unit[]; own: number }[], PP: Record<string, unknown>) => {
@@ -321,7 +321,7 @@ describe("the page fill (adaptiveFill, D6's F6b): every original's units spread 
     for (const pg of pages) {
       for (const u of pg.units) { u.fillLead = pg.own; (u as unknown as { fillTop: number }).fillTop = 3 }
       const r: Told = (await fill(pg.units, PP, held))!
-      targets.push(r.target)
+      targets.push(r.target!)
       held = nextHeld(held, r)
     }
     return targets
@@ -405,6 +405,33 @@ describe("the page fill (adaptiveFill, D6's F6b): every original's units spread 
     await fill([b])
     expect(b.fillLead).toBe(1.25)
     expect(b.layout.lines).toHaveLength(5)
+  })
+
+  it("leaves a unit the fit had to shrink at its own size: two units fitted at 0.925 and 0.85 keep them", async () => {
+    // (blocks of two lines; at the original's pitch, its tracking tightened, 22 characters take 0.925, eleven a line, and
+    // 24 take 0.85, twelve. Setting both at 0.85, one size a page below 1, left the alphabets' units short of their frames:
+    // the coordinator's ruling of 2026-10-09 keeps one size for growth alone)
+    const two = (id: number, n: number) => { const u = laid(id, n); u.blocks = [{ ...(u.blocks[0] as object), B: [500, 488], rects: [[1, 0, 498, 100, 508], [1, 0, 486, 100, 496]], exact: [true, true], sizes: [10, 10] }]; u.layout = L2.layoutUnit2(u.tokens as never, u.blocks as never, 10, u.P as never) as never; return u }
+    const a = two(1, 22), b = two(2, 24)
+    expect([a.layout.scale, b.layout.scale]).toEqual([0.925, 0.85])
+    await fill([a, b])
+    expect([a.layout.scale, b.layout.scale]).toEqual([0.925, 0.85])
+  })
+
+  it("counts a page's continuations in its body lines for the anchor: a page of a continuation alone can become the anchor", async () => {
+    const { fillPage, nextHeld } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const PP = P({ fillLead: 3 })
+    // (a unit begun on page 1 and running on over the whole of page 2: ten lines there, 1.4 its fill leading)
+    const u = laid(1, 20, PP)
+    const b1 = u.blocks[0] as { B: number[] }
+    u.pages = [1, 2]
+    u.blocks = [b1, { ...(b1 as object), page: 2, B: Array.from({ length: 10 }, (_, k) => 600 - 12 * k) }]
+    u.fillLead = 1.4
+    const r = fillPage([] as never, PP as never, null, () => {}, { page: 2, continuing: [u] as never })
+    expect(r).toMatchObject({ body: false, lines: 10, anchor: 1.4 })
+    // (held from a page of six lines at 1.3: the continuation's page, fuller, becomes the anchor; the last stays)
+    expect(nextHeld({ last: 1.3, anchor: 1.3, lines: 6 }, r)).toEqual({ last: 1.3, anchor: 1.4, lines: 10 })
+    expect(nextHeld({ last: 1.3, anchor: 1.3, lines: 12 }, r)).toEqual({ last: 1.3, anchor: 1.3, lines: 12 })
   })
 
   it("grows the page's body units to one size where each is still short, and none where one cannot grow: never a size a unit", async () => {

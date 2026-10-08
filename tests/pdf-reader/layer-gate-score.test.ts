@@ -80,6 +80,22 @@ describe('the gaps between paragraphs (paraGap, D6): the drawn gap against the o
     expect(geoB.blank).toBeCloseTo(2, 6)
   })
 
+  it("reads a frame's rhythm within its flow's segments: never across a held display, which its pitch does", () => {
+    // (six lines 12 apart, a display of 30 between the third and the fourth; drawn: two lines 15 apart in the first block,
+    // one after the display in the second)
+    const orig = [700, 688, 676, 646, 634, 622].map(b => ({ x0: 72, x1: 472, baseline: b, top: b + 7, bottom: b - 2.5, size: 10 }))
+    const drawn = [[700, 0], [685, 0], [646, 1]].map(([baseline, block]) => ({ baseline: baseline!, size: 10, x0: 72, x1: 472, block }))
+    const m = modelPage({ units: [unit({ id: 1, orig, lines: drawn })], ref: [{ id: 1, kind: 'para', orig }], items: [], translated: new Set([1]) })
+    expect(m.geo).toHaveLength(1)
+    expect(m.geo[0]!.rhythm).toBeCloseTo(15 / 12, 6)
+    expect(m.geo[0]!.pitch).toBeCloseTo(39 / 12, 3)
+    // (a display of two stacked baselines 8.5 apart among the original's lines: the rhythm stays against the frame's own
+    // pitch, 12, not the closest gap)
+    const stacked = [700, 688, 676, 650, 641.5, 620, 608].map(b => ({ x0: 72, x1: 472, baseline: b, top: b + 7, bottom: b - 2.5, size: 10 }))
+    const m2 = modelPage({ units: [unit({ id: 1, orig: stacked, lines: drawn })], ref: [{ id: 1, kind: 'para', orig: stacked }], items: [], translated: new Set([1]) })
+    expect(m2.geo[0]!.rhythm).toBeCloseTo(15 / 12, 6)
+  })
+
   it('pairs frames of one column only', () => {
     const right = B.map(l => ({ ...l, x0: 320, x1: 540 }))
     const left = A.map(l => ({ ...l, x1: 300 }))
@@ -88,14 +104,14 @@ describe('the gaps between paragraphs (paraGap, D6): the drawn gap against the o
   })
 
   it("totals each page's and fixture's median ratio and share of gaps a pitch or more wider, and the drawn pitch's drift", () => {
-    // (a page's drawn pitch: its body frames' median pitch against the original's; none where no body frame has one)
-    const geo = (pitch: number | null) => (pitch === null ? [] : [{ id: 1, kind: 'para', n: 5, dTop: 0, blank: 0, dRight: 0, pitch, onGrid: 1, scale: 1 }])
+    // (a page's drawn rhythm: its body frames' median rhythm against the original's; none where no body frame has one)
+    const geo = (rhythm: number | null) => (rhythm === null ? [] : [{ id: 1, kind: 'para', n: 5, dTop: 0, blank: 0, dRight: 0, pitch: rhythm, rhythm, onGrid: 1, scale: 1 }])
     const page = (p: number, gaps: { ratio: number; extra: number }[], pitch: number | null) => pageEntry(p, {
       model: { units: { textOn: 1, textDrawn: 1, cellsOn: 0, cellsDrawn: 0, left: {} }, fills: [], geo: geo(pitch), gaps, wrongPageText: 0, droppedPh: 0, cropForeign: 0, modelCells: 100 },
       check: { missing: [], twice: [], brackets: [], duplicated: [], numbers: { shown: 0, total: 0 }, clipped: 0 }, where: {}, style: [0, 0], drawn: 1,
     }, null)
     const es = [page(1, [{ ratio: 1, extra: 0 }, { ratio: 3, extra: 1.5 }], 1.4), page(2, [{ ratio: 1.1, extra: 0.1 }], null), page(3, [{ ratio: 2, extra: 1 }], 1.45), page(4, [], 1.38)]
-    expect(es[0]!.entry).toMatchObject({ paraGaps: 2, paraGap: 2, paraGapWide: 1, pitch: 1.4 })
+    expect(es[0]!.entry).toMatchObject({ paraGaps: 2, paraGap: 2, paraGapWide: 1, rhythm: 1.4 })
     const t = fixtureTotals(es.map(e => e.entry), es.map(e => e.frames), 'model')
     // four gaps: 1, 1.1, 2, 3; two of them a pitch or more wider. The pitches 1.4, 1.45, 1.38: drifts 0.05 and 0.07
     expect(t).toMatchObject({ paraGapN: 4, paraGap: 1.55, paraGapWide: 0.5 })

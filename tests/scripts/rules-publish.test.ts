@@ -1,0 +1,157 @@
+import { createHash } from 'node:crypto'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { originOf, point, publish, RULES_FILE, setOn, supersededBy } from '../../lab/pdf/spikes/rules-publish.mjs'
+import { BUILTIN_RULES, readRules, writeRules } from '@/pdf-reader/engine/rules/layout.mjs'
+
+// The two writes of the web Worker's rules routes (lab/pdf/spikes/rules-publish.mjs, Task R6): the set published and the
+// pointer moved, with a secret that never leaves the request's header and a route that is not there said aloud.
+
+const SECRET = 'publish-secret-that-must-never-be-printed'
+const ORIGIN = 'https://app-staging.readarxiv.org'
+const file = (version = 3) => {
+  const f = join(mkdtempSync(join(tmpdir(), 'rules-publish-')), 'layout-rules.json')
+  writeFileSync(f, writeRules({ ...structuredClone(BUILTIN_RULES), version, note: 'a test set' }))
+  return f
+}
+type Seen = { url: string; method: string; headers: Record<string, string>; body: string | Uint8Array; redirect: string }
+function worker(answers: Record<string, { status: number; body?: unknown }>) {
+  const seen: Seen[] = []
+  const fetchImpl = async (url: string, init: Omit<Seen, 'url'>) => {
+    seen.push({ url, ...init })
+    const a = answers[url.slice(url.lastIndexOf('/') + 1)] ?? { status: 500 }
+    return { status: a.status, text: async () => JSON.stringify(a.body ?? {}) }
+  }
+  return { seen, fetchImpl }
+}
+/** a set as next holds it: its version and the sha256 of its bytes (the file's own, or other bytes under the same version) */
+const sha = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex')
+const onNextOf = (f: string) => ({ version: JSON.parse(readFileSync(f, 'utf8')).version as number, sha256: sha(readFileSync(f)) })
+const fails = async (p: Promise<unknown>) => String(((await p.catch((e: Error) => e)) as Error).message)
+
+describe('publishing a rule set', () => {
+  it('posts the file\'s own bytes with the secret, then moves the pointer to its version', async () => {
+    const w = worker({ publish: { status: 201 }, point: { status: 200 } })
+    const f = file(3)
+    const lines = await publish({ url: `${ORIGIN}/`, file: f, secret: SECRET, fetchImpl: w.fetchImpl, engine: { readRules } })
+    expect(w.seen.map(r => `${r.method} ${r.url}`)).toEqual([`POST ${ORIGIN}/api/v1/rules/publish`, `POST ${ORIGIN}/api/v1/rules/point`])
+    expect(w.seen[0]!.headers).toMatchObject({ authorization: `Bearer ${SECRET}`, 'content-type': 'application/json' })
+    expect(Buffer.from(w.seen[0]!.body as Uint8Array).toString('utf8')).toBe(writeRules({ ...structuredClone(BUILTIN_RULES), version: 3, note: 'a test set' }))
+    expect(JSON.parse(w.seen[1]!.body as string)).toEqual({ schema: BUILTIN_RULES.schema, version: 3 })
+    expect(w.seen.every(r => r.redirect === 'error')).toBe(true)
+    expect(lines[0]).toMatch(new RegExp(`published s${BUILTIN_RULES.schema} version 3 \\([0-9a-f]{12}\\)`))
+    expect(lines[1]).toMatch(new RegExp(`pointer of s${BUILTIN_RULES.schema} is at version 3`))
+  })
+
+  it('takes the same bytes already there as done (the job may run again), and still moves the pointer', async () => {
+    const w = worker({ publish: { status: 200 }, point: { status: 200 } })
+    const lines = await publish({ url: ORIGIN, file: file(), secret: SECRET, fetchImpl: w.fetchImpl, engine: { readRules } })
+    expect(lines[0]).toMatch(/already on/)
+    expect(w.seen).toHaveLength(2)
+  })
+
+  it('fails loudly where the route is not there, where the version holds other bytes, and where the secret is refused', async () => {
+    expect(await fails(publish({ url: ORIGIN, file: file(), secret: SECRET, fetchImpl: worker({ publish: { status: 404 } }).fetchImpl, engine: { readRules } }))).toMatch(/no rules routes.*is the Worker deployed/)
+    expect(await fails(publish({ url: ORIGIN, file: file(), secret: SECRET, fetchImpl: worker({ publish: { status: 409, body: { why: 'version-taken' } } }).fetchImpl, engine: { readRules } }))).toMatch(new RegExp(`version 3 of s${BUILTIN_RULES.schema} holds other bytes`))
+    expect(await fails(publish({ url: ORIGIN, file: file(), secret: SECRET, fetchImpl: worker({ publish: { status: 401 } }).fetchImpl, engine: { readRules } }))).toMatch(/secret is refused \(HTTP 401\)/)
+    expect(await fails(publish({ url: ORIGIN, file: file(), secret: SECRET, fetchImpl: worker({ publish: { status: 413, body: { why: 'too-large' } } }).fetchImpl, engine: { readRules } }))).toMatch(/not published \(HTTP 413, too-large\)/)
+  })
+
+  it('sends nothing for a file the engine refuses or without a secret, and prints the secret nowhere', async () => {
+    const w = worker({ publish: { status: 201 }, point: { status: 200 } })
+    const bad = join(mkdtempSync(join(tmpdir(), 'rules-publish-')), 'bad.json')
+    writeFileSync(bad, '{"schema":1}')
+    await expect(publish({ url: ORIGIN, file: bad, secret: SECRET, fetchImpl: w.fetchImpl, engine: { readRules } })).rejects.toThrow()
+    await expect(publish({ url: ORIGIN, file: file(), secret: undefined, fetchImpl: w.fetchImpl, engine: { readRules } })).rejects.toThrow('RULES_PUBLISH_SECRET is not set')
+    expect(w.seen).toHaveLength(0)
+    const messages = await Promise.all([404, 409, 401, 500].map(status => fails(publish({ url: ORIGIN, file: file(), secret: SECRET, fetchImpl: worker({ publish: { status } }).fetchImpl, engine: { readRules } }))))
+    expect(messages.join('\n')).not.toContain(SECRET)
+  })
+})
+
+describe('the newest set only', () => {
+  // a queue of publishes can run out of order, and GitHub replaces a pending job when a third arrives: each publish reads next
+  // just before it writes, and stands down where next holds a newer version (its own run publishes that one)
+  it('knows a newer version on next, and other bytes under its own, from its own set and an older one', () => {
+    const own = { version: 3, sha256: 'a'.repeat(64) }
+    expect(supersededBy(own, { version: 4, sha256: 'b'.repeat(64) })).toBe('superseded by version 4; its own run publishes it')
+    expect(supersededBy(own, { version: 9, sha256: own.sha256 })).toMatch(/version 9/)
+    // two pull requests that raised the version from one base: the same version, other bytes, a change merged since
+    expect(supersededBy(own, { version: 3, sha256: 'b'.repeat(64) })).toBe('next holds other bytes under version 3, a change merged since; its own run publishes it')
+    expect(supersededBy(own, { version: 3, sha256: own.sha256 })).toBeNull()
+    expect(supersededBy(own, { version: 2, sha256: 'b'.repeat(64) })).toBeNull()
+    // a ref with no version to compare is no reason to stand down
+    expect(supersededBy(own, null)).toBeNull()
+    expect(supersededBy(own, { version: null, sha256: 'b'.repeat(64) })).toBeNull()
+    expect(supersededBy(own, undefined)).toBeNull()
+  })
+
+  it('writes nothing where next holds a newer version, and says so', async () => {
+    const w = worker({ publish: { status: 201 }, point: { status: 200 } })
+    const lines = await publish({ url: ORIGIN, file: file(3), secret: SECRET, fetchImpl: w.fetchImpl, engine: { readRules }, onNext: onNextOf(file(5)) })
+    expect(lines).toEqual(['superseded by version 5; its own run publishes it'])
+    expect(w.seen).toHaveLength(0)
+  })
+
+  it('writes nothing where next holds other bytes under its own version: the later merge publishes them', async () => {
+    const w = worker({ publish: { status: 201 }, point: { status: 200 } })
+    const later = join(mkdtempSync(join(tmpdir(), 'rules-publish-')), 'layout-rules.json')
+    writeFileSync(later, writeRules({ ...structuredClone(BUILTIN_RULES), version: 3, note: 'a later change, merged since' }))
+    const lines = await publish({ url: ORIGIN, file: file(3), secret: SECRET, fetchImpl: w.fetchImpl, engine: { readRules }, onNext: onNextOf(later) })
+    expect(lines).toEqual(['next holds other bytes under version 3, a change merged since; its own run publishes it'])
+    expect(w.seen).toHaveLength(0)
+  })
+
+  it('publishes its own set where next holds the same version or an older one', async () => {
+    const own = file(3)
+    for (const onNext of [onNextOf(own), onNextOf(file(2)), null]) {
+      const w = worker({ publish: { status: 201 }, point: { status: 200 } })
+      const lines = await publish({ url: ORIGIN, file: own, secret: SECRET, fetchImpl: w.fetchImpl, engine: { readRules }, onNext })
+      expect(lines[0], String(onNext)).toMatch(new RegExp(`published s${BUILTIN_RULES.schema} version 3`))
+      expect(w.seen.map(r => r.url.slice(r.url.lastIndexOf('/') + 1))).toEqual(['publish', 'point'])
+    }
+  })
+
+  it('still refuses a file the engine refuses, though next is newer, and needs its secret', async () => {
+    const bad = join(mkdtempSync(join(tmpdir(), 'rules-publish-')), 'bad.json')
+    writeFileSync(bad, '{"schema":1}')
+    await expect(publish({ url: ORIGIN, file: bad, secret: SECRET, fetchImpl: worker({}).fetchImpl, engine: { readRules }, onNext: onNextOf(file(9)) })).rejects.toThrow()
+    await expect(publish({ url: ORIGIN, file: file(3), secret: undefined, fetchImpl: worker({}).fetchImpl, engine: { readRules }, onNext: onNextOf(file(9)) })).rejects.toThrow('RULES_PUBLISH_SECRET is not set')
+  })
+
+  it('reads the set on a ref through git, its version and its bytes\' digest, and does not guess where it cannot', () => {
+    const shown: string[] = []
+    const text = JSON.stringify({ schema: 1, version: 7, note: 'x' })
+    const show = (ref: string, path: string) => { shown.push(`${ref}:${path}`); return text }
+    expect(setOn('origin/next', { show })).toEqual({ version: 7, sha256: sha(text) })
+    expect(shown).toEqual([`origin/next:${RULES_FILE}`])
+    expect(setOn('origin/next', { show: () => '{"schema":1}' }).version).toBeNull()
+    expect(setOn('origin/next', { show: () => 'not json' }).version).toBeNull()
+    expect(() => setOn('origin/next', { show: () => { throw new Error('fatal: invalid object name') } })).toThrow(/cannot read .* on origin\/next: was it fetched\?/)
+    for (const ref of ['', '-x', '--output=/tmp/x', 'a b', 'a;b', 'x'.repeat(101)]) expect(() => setOn(ref, { show }), ref).toThrow(/git ref/)
+  })
+})
+
+describe('moving the pointer', () => {
+  it('posts the schema and the version, and says a version that is not there', async () => {
+    const w = worker({ point: { status: 200 } })
+    await expect(point({ url: ORIGIN, schema: 1, version: 2, secret: SECRET, fetchImpl: w.fetchImpl })).resolves.toMatch(/version 2/)
+    expect(JSON.parse(w.seen[0]!.body as string)).toEqual({ schema: 1, version: 2 })
+    expect(await fails(point({ url: ORIGIN, schema: 1, version: 9, secret: SECRET, fetchImpl: worker({ point: { status: 404, body: { why: 'unknown-version' } } }).fetchImpl }))).toMatch(/no version 9 of s1.*unknown-version/)
+    await expect(point({ url: ORIGIN, schema: 1, version: 0, secret: SECRET, fetchImpl: w.fetchImpl })).rejects.toThrow(/positive integers/)
+  })
+})
+
+describe('the Worker\'s address', () => {
+  it('is an https origin with nothing after the host, and no credentials in it', () => {
+    expect(originOf('https://app-staging.readarxiv.org/')).toBe(ORIGIN)
+    expect(originOf('https://app-staging.readarxiv.org/api/v1')).toBe(ORIGIN)
+    expect(originOf('http://127.0.0.1:8787')).toBe('http://127.0.0.1:8787')
+    expect(() => originOf('http://app-staging.readarxiv.org')).toThrow(/not https/)
+    expect(() => originOf('https://user:pw@app-staging.readarxiv.org')).toThrow(/credentials/)
+    expect(() => originOf('not a url')).toThrow()
+    expect(() => originOf('')).toThrow()
+  })
+})
