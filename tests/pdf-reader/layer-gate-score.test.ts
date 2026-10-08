@@ -266,3 +266,37 @@ describe("a local path as the gate's records keep it (layer-gate/ref.mjs shownPa
     expect(shownPath('out/relative')).toBe('out/relative')
   })
 })
+
+describe("the frozen references' babel names (layer-gate/ref.mjs makeRef, withNames: D1a)", () => {
+  // two makers' layout files of one paper: the old one locates units 0 and 2 and no name, the new one its own lines of
+  // them and two names (the abstract's on page 1, the references' on page 2)
+  const unitsOf = () => [[0, 0, 9, 0, 4], [2, 0, 9, 0, 4]]
+  const nameAt = (occ: number, key: number, page: number, x0: number) => [occ, key, page, x0, 700, x0 + 40, 707, 697.5, 10, 0, 0, -1, 0, 72, 540]
+  const old = { units: unitsOf(), lines: [[0, [1, 72, 300, 680, 687, 677.5, 10, 0, 1, 72, 300, 668, 675, 665.5, 10, 0]], [2, [2, 72, 200, 650, 657, 647.5, 10, 0]]], names: [] }
+  const later = (names: number[][]) => ({ units: unitsOf(), lines: [[0, [1, 72, 301, 680, 687, 677.5, 10, 0]], [2, [2, 72, 201, 650, 657, 647.5, 10, 0]]], names })
+  const bytes = (o: object) => new TextEncoder().encode(JSON.stringify(o))
+
+  it("makeRef: the units' rows by id, then the names by occurrence, the names from the first file that locates any", async () => {
+    const { makeRef } = await import('../../lab/pdf/spikes/layer-gate/ref.mjs')
+    const ref = makeRef([bytes(later([nameAt(1, 0, 1, 120), nameAt(3, 1, 2, 72)])), bytes(old)], null)
+    expect(ref.pages['1']).toEqual([[0, 'para', [72, 301, 680, 687, 677.5, 10]], ['name:1', 'name', [120, 160, 700, 707, 697.5, 10]]])
+    expect(ref.pages['2']).toEqual([[2, 'para', [72, 201, 650, 657, 647.5, 10]], ['name:3', 'name', [72, 112, 700, 707, 697.5, 10]]])
+    expect(ref.from.names).toBe(2)
+  })
+
+  it("withNames: every unit's rows byte for byte as they were, the later maker's names after them, earlier names replaced", async () => {
+    const { makeRef, withNames } = await import('../../lab/pdf/spikes/layer-gate/ref.mjs')
+    const ref = makeRef(bytes(old), null)
+    const first = withNames(ref, [bytes(later([nameAt(1, 0, 1, 120), nameAt(3, 1, 2, 72)]))])
+    const units = (r: { pages: Record<string, unknown[][]> }) => Object.fromEntries(Object.entries(r.pages).map(([p, l]) => [p, l.filter(x => x[1] !== 'name')]))
+    expect(JSON.stringify(units(first))).toBe(JSON.stringify(ref.pages))
+    expect(first.pages['1']?.map(r => r[0])).toEqual([0, 'name:1'])
+    expect(first.pages['2']?.map(r => r[0])).toEqual([2, 'name:3'])
+    // again with other names: those replace the first's, the units' rows still the same
+    const again = withNames(first, [bytes(later([nameAt(2, 1, 2, 80)]))])
+    expect(JSON.stringify(units(again))).toBe(JSON.stringify(ref.pages))
+    expect(again.pages['1']?.map(r => r[0])).toEqual([0])
+    expect(again.pages['2']?.map(r => r[0])).toEqual([2, 'name:2'])
+    expect(again.from.names).toBe(1)
+  })
+})
