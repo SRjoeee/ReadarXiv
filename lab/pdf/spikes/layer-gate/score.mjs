@@ -71,8 +71,9 @@ export const MEASURES = [
   ['labelsSource', 'model', 'count', 'down', 'labels left in the source language the final names'],
 ]
 /** recorded beside them, not gated: the pitch is the rules' (CJK's leading is 1.3 by rule), the top a position, and the
- *  page fill's target leading the most it moves from one page to the next (D6: at most the rules' band) */
-export const REPORTED = [['pitch', 'pitch ratio'], ['dTop', '|top shift| (pt)'], ['onGrid', 'lines on a layout baseline'], ['pageDrift', "page target's drift (most)"]]
+ *  most a page's drawn rhythm (its body frames' median pitch against the original's) moves from the last page before it
+ *  that has one (D6: the rhythm a reader sees, page to page) */
+export const REPORTED = [['pitch', 'pitch ratio'], ['dTop', '|top shift| (pt)'], ['onGrid', 'lines on a layout baseline'], ['pageDrift', "page pitch's drift (most)"]]
 export const TOLERANCE = { share: 0.002, ratio: 0.02, count: 0, defect: 0 }
 /** the defects that are counts of things (their rates compared), and the counts each sums from a page */
 const DEFECTS = MEASURES.filter(m => m[2] === 'defect').map(m => m[0])
@@ -82,8 +83,8 @@ const median = xs => { const s = xs.filter(x => x !== null && x !== undefined &&
 const share = (a, b) => (b ? a / b : null)
 const sum = (xs, f) => xs.reduce((a, x) => a + (f(x) ?? 0), 0)
 const r = (v, d = 4) => (v === null || v === undefined ? null : Math.round(v * 10 ** d) / 10 ** d)
-/** the most a page's target leading moves from the last page before it that has one (pages in order) */
-const driftOf = targets => { let last = null, most = null; for (const t of targets) { if (t === null || t === undefined) continue; if (last !== null) most = Math.max(most ?? 0, Math.abs(t - last)); last = t } return most === null ? null : r(most, 3) }
+/** the most a page's value (its drawn pitch) moves from the last page before it that has one (pages in order) */
+const driftOf = values => { let last = null, most = null; for (const t of values) { if (t === null || t === undefined) continue; if (last !== null) most = Math.max(most ?? 0, Math.abs(t - last)); last = t } return most === null ? null : r(most, 3) }
 
 /**
  * A page's entry in the record from what the page measured: the model's counts and frames, the checker's, and (pixel)
@@ -109,7 +110,7 @@ export function pageEntry(page, model, pixel) {
     clipped: model.check.clipped, markerResidue: model.check.markerResidue ?? 0, numbersTotal: model.check.numbers.total, numbersShown: model.check.numbers.shown, numbersLost: model.check.numbers.total - model.check.numbers.shown,
     where: model.where, style: model.style, drawn: model.drawn,
     groupsSplit: model.consistency?.groupsSplit ?? 0, labelsSource: model.consistency?.labelsSource ?? 0,
-    paraGaps: gaps.length, paraGap: r(median(gaps.map(g => g.ratio)), 3), paraGapWide: gaps.filter(g => g.extra >= 1).length, target: model.target ?? null,
+    paraGaps: gaps.length, paraGap: r(median(gaps.map(g => g.ratio)), 3), paraGapWide: gaps.filter(g => g.extra >= 1).length,
   }
   if (model.removal) Object.assign(e, { rmRefused: model.removal.refused, rmMismatched: model.removal.mismatched, rmUnits: model.removal.units, rmSwapped: model.removal.swapped })
   const ck = model.removalCheck
@@ -147,7 +148,7 @@ export function fixtureTotals(pages, frames, tier) {
     groupsSplit: sum(pages, p => p.groupsSplit), labelsSource: sum(pages, p => p.labelsSource),
     style: [sum(pages, p => p.style?.[0]), sum(pages, p => p.style?.[1])],
     paraGapN: gaps.length, paraGap: r(median(gaps.map(g => g.ratio)), 3), paraGapWide: r(share(gaps.filter(g => g.extra >= 1).length, gaps.length)),
-    pageDrift: driftOf(pages.map(p => p.target)),
+    pageDrift: driftOf(pages.map(p => p.pitch)),
   }
   if (tier === 'pixel') {
     const tc = sum(pages, p => p.textCells), cc = sum(pages, p => p.cellCells)

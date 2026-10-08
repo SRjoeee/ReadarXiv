@@ -462,9 +462,7 @@ window.gate = {
     const split = S.consistency.splitOn(p), labels = recs.filter(r => r.pages[0] === p && S.consistency.labelSource(r.id))
     if (split.length) where.groupsSplit = split.map(x => x.ids[0])
     if (labels.length) where.labelsSource = labels.map(r => r.id)
-    // the page fill's target leading (run.mjs fillPage: each unit it filled records it), for the drift from page to page
-    const target = recs.find(r => r.pages[0] === p && r.fill)?.fill.target ?? null
-    const out = { page: p, ms, model, check, where, consistency: { groupsSplit: split.length, labelsSource: labels.length }, style: [first.filter(r => r.match.base).length, first.length], drawn: recs.length, evened: false, target }
+    const out = { page: p, ms, model, check, where, consistency: { groupsSplit: split.length, labelsSource: labels.length }, style: [first.filter(r => r.match.base).length, first.length], drawn: recs.length, evened: false }
     // the text-removed PDF: whether this page is removed, and its units drawn by it or the old way (their removal not the
     // plan's)
     if (S.rm) {

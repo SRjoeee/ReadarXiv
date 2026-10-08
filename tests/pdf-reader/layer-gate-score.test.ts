@@ -87,15 +87,17 @@ describe('the gaps between paragraphs (paraGap, D6): the drawn gap against the o
     expect(m.gaps).toEqual([])
   })
 
-  it("totals each page's and fixture's median ratio and share of gaps a pitch or more wider, and the page target's drift", () => {
-    const page = (p: number, gaps: { ratio: number; extra: number }[], target: number | null) => pageEntry(p, {
-      model: { units: { textOn: 1, textDrawn: 1, cellsOn: 0, cellsDrawn: 0, left: {} }, fills: [], geo: [], gaps, wrongPageText: 0, droppedPh: 0, cropForeign: 0, modelCells: 100 },
-      check: { missing: [], twice: [], brackets: [], duplicated: [], numbers: { shown: 0, total: 0 }, clipped: 0 }, where: {}, style: [0, 0], drawn: 1, target,
+  it("totals each page's and fixture's median ratio and share of gaps a pitch or more wider, and the drawn pitch's drift", () => {
+    // (a page's drawn pitch: its body frames' median pitch against the original's; none where no body frame has one)
+    const geo = (pitch: number | null) => (pitch === null ? [] : [{ id: 1, kind: 'para', n: 5, dTop: 0, blank: 0, dRight: 0, pitch, onGrid: 1, scale: 1 }])
+    const page = (p: number, gaps: { ratio: number; extra: number }[], pitch: number | null) => pageEntry(p, {
+      model: { units: { textOn: 1, textDrawn: 1, cellsOn: 0, cellsDrawn: 0, left: {} }, fills: [], geo: geo(pitch), gaps, wrongPageText: 0, droppedPh: 0, cropForeign: 0, modelCells: 100 },
+      check: { missing: [], twice: [], brackets: [], duplicated: [], numbers: { shown: 0, total: 0 }, clipped: 0 }, where: {}, style: [0, 0], drawn: 1,
     }, null)
     const es = [page(1, [{ ratio: 1, extra: 0 }, { ratio: 3, extra: 1.5 }], 1.4), page(2, [{ ratio: 1.1, extra: 0.1 }], null), page(3, [{ ratio: 2, extra: 1 }], 1.45), page(4, [], 1.38)]
-    expect(es[0]!.entry).toMatchObject({ paraGaps: 2, paraGap: 2, paraGapWide: 1, target: 1.4 })
+    expect(es[0]!.entry).toMatchObject({ paraGaps: 2, paraGap: 2, paraGapWide: 1, pitch: 1.4 })
     const t = fixtureTotals(es.map(e => e.entry), es.map(e => e.frames), 'model')
-    // four gaps: 1, 1.1, 2, 3; two of them a pitch or more wider. The targets 1.4, 1.45, 1.38: drifts 0.05 and 0.07
+    // four gaps: 1, 1.1, 2, 3; two of them a pitch or more wider. The pitches 1.4, 1.45, 1.38: drifts 0.05 and 0.07
     expect(t).toMatchObject({ paraGapN: 4, paraGap: 1.55, paraGapWide: 0.5 })
     expect(t.pageDrift).toBeCloseTo(0.07, 6)
     const p = pooled([t, fixtureTotals([es[0]!.entry], [es[0]!.frames], 'model')], 'model')!
