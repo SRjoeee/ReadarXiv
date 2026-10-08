@@ -72,6 +72,21 @@ export function parseRuling(json, name) {
   return { name, date: text(json.date), by: json.by, on: text(json.on), quote: json.quote, english: text(json.english), scope: text(json.scope), why: json.why, measures: new Set(json.measures), targets: new Set(json.targets) }
 }
 
+/**
+ * A ruling file read: { ruling } where it is one, else { problem, detail }. The comment shows `problem` and the comment is public
+ * markdown, so a file that is not JSON gets a sentence of ours (the file's name, which `parseRuling` checks too, and nothing the
+ * parser said: V8 quotes the first characters of the source, which can be an image, a mention or HTML); the parser's own words are
+ * `detail`, for a log of the runner that nothing shows. The other refusals are `parseRuling`'s, which name a field and nothing else.
+ */
+export function loadRuling(file, { read = readFileSync } = {}) {
+  const name = basename(file)
+  let json
+  try { json = JSON.parse(read(file, 'utf8')) } catch (e) {
+    return { problem: /^[A-Za-z0-9._-]{1,80}$/.test(name) ? `the ruling file \`${name}\` is not valid JSON` : 'a ruling file is not valid JSON', detail: `${name}: ${String(e?.message ?? e)}` }
+  }
+  try { return { ruling: parseRuling(json, name) } } catch (e) { return { problem: String(e?.message ?? e) } }
+}
+
 /** a page of a run as the compare reads it: the record drops a zero, so a defect or a count it lacks is 0 */
 const ZERO = Object.fromEntries([...DEFECTS, 'textOn', 'textDrawn', 'cellsOn', 'cellsDrawn', 'modelCells'].map(k => [k, 0]))
 const withZeros = fixtures => Object.fromEntries(Object.entries(fixtures).map(([n, f]) => [n, { totals: f.totals, pages: (f.pages ?? []).map(e => ({ ...ZERO, ...e })) }]))
@@ -463,8 +478,8 @@ async function compareCommand(argv) {
   const base = readJson(resolve(arg('base'))), head = readJson(resolve(arg('head')))
   const out = resolve(arg('out') ?? 'rules-gate')
   const headSha = arg('head-sha') || head.engine?.commit, baseSha = arg('base-sha') || base.engine?.commit
-  const rulings = [], bad = []
-  for (const f of options(argv, 'ruling')) { try { rulings.push(parseRuling(readJson(resolve(f)), basename(f))) } catch (e) { bad.push(String(e?.message ?? e)) } }
+  const rulings = [], bad = [], detail = []
+  for (const f of options(argv, 'ruling')) { const r = loadRuling(resolve(f)); if (r.ruling) rulings.push(r.ruling); else bad.push(r.problem); if (r.detail) detail.push(r.detail) }
   // the pack the runs are held to: a flag that names no file is a mistake, not a pack to do without
   if (typeof arg('pack') === 'string' && !existsSync(resolve(arg('pack')))) throw new Error('--pack: no such file')
   const pack = typeof arg('pack') === 'string' ? readJson(resolve(arg('pack'))) : null
@@ -483,11 +498,18 @@ async function compareCommand(argv) {
     const rulesOf = (set, t) => { const { version: _, ...rules } = E.resolveRules(set, t); return JSON.stringify(rules) }
     if (sets[0] && sets[1]) meta.changedTargets = E.TARGETS.filter(t => rulesOf(sets[0], t) !== rulesOf(sets[1], t))
   }
-  const pipeline = /export const PIPELINE_VERSION = '([^']+)'/.exec(readFileSync(join(engineDir, 'versions.mjs'), 'utf8'))?.[1] ?? null
+  // (the engine keeps its versions in pipeline/; an engine from before the move, as --head-engine may name, keeps them at its root)
+  const versionsFile = ['pipeline/versions.mjs', 'versions.mjs'].map(f => join(engineDir, f)).find(f => existsSync(f))
+  const pipeline = versionsFile ? /export const PIPELINE_VERSION = '([^']+)'/.exec(readFileSync(versionsFile, 'utf8'))?.[1] ?? null : null
   meta.pack = pack
   const text = commentOf(report, { headSha, baseSha, pack, enginePipeline: pipeline, targets: E.TARGETS, changedTargets: meta.changedTargets, rulings, label: typeof arg('label') === 'string' ? arg('label') : undefined })
   const json = `${JSON.stringify(reportJson(report, meta), null, 1)}\n`
   mkdirSync(out, { recursive: true })
+  // (what a parser said of a ruling file is the pull request author's text: a file of the runner, which the job does not show or upload)
+  if (detail.length) {
+    writeFileSync(join(out, 'rulings-private.log'), `${detail.join('\n')}\n`)
+    console.log(`(${detail.length} ruling file${detail.length === 1 ? '' : 's'} could not be parsed; the parser's words are in ${join(out, 'rulings-private.log')}, which the job does not show)`)
+  }
   // (the numbers first, so that a comment withheld below leaves them in the log; they are counts, labels and names the report was built from)
   for (const t of report.targets) console.log(`${t.target.padEnd(6)} ${String(t.outputs.length)} outputs: ${t.worse} worse, ${t.better} better`)
   for (const r of report.regressions) console.log(`  regression ${r.target} ${r.label}: ${r.from} -> ${r.to}${r.ruling ? ` (ruling ${r.ruling})` : ''}`)

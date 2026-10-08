@@ -26,4 +26,6 @@ form of the layer gate's `--ruling` (`lab/pdf/spikes/layer-gate.mjs`), with the 
 - Only a file the pull request **adds** counts: a ruling on the branch's base is history, and accepts nothing new.
 - The comment quotes `english` (else `quote`) and `why`, which are the only free text in it, each as a code span (nothing in
   them becomes an image, a mention or HTML); the gate refuses to write a comment that carries a stretch of a paper. A ruling's
-  file name is letters, digits, dots, dashes and underscores.
+  file name is letters, digits, dots, dashes and underscores. A file that is not valid JSON fails the run with a sentence of the
+  gate's own naming it (``the ruling file `x.json` is not valid JSON``), never with the parser's words, which quote the start of
+  the file: those go to a log of the runner that the job does not show.

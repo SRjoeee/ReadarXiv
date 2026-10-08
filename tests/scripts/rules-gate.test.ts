@@ -1,8 +1,10 @@
-import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { fixtureTotals, MEASURES, type PageEntry } from '../../lab/pdf/spikes/layer-gate/score.mjs'
-import { checkRulesFile, commentOf, fragmentsIn, gateArgs, judge, labLink, leaksIn, MARK, outputsOfPack, parseRuling, publicLine, textsOf } from '../../lab/pdf/spikes/rules-gate.mjs'
+import { checkRulesFile, commentOf, fragmentsIn, gateArgs, judge, labLink, leaksIn, loadRuling, MARK, outputsOfPack, parseRuling, publicLine, textsOf } from '../../lab/pdf/spikes/rules-gate.mjs'
 import { BUILTIN_RULES, readRules, writeRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // The rules gate's verdict (lab/pdf/spikes/rules-gate.mjs, rules-as-data plan §8, Task R6): two model-tier runs of one
@@ -204,6 +206,76 @@ describe('a regression fails the run unless a ruling covers its measure and its 
     for (const missing of ['by', 'quote', 'measures', 'targets', 'why']) expect(() => parseRuling({ ...whole, [missing]: undefined }, 'a.json')).toThrow(new RegExp(`a\\.json.*${missing}`))
     expect(() => parseRuling({ ...whole, measures: [] }, 'a.json')).toThrow(/measures/)
     expect(() => parseRuling({ ...whole, targets: 'ja' }, 'a.json')).toThrow(/targets/)
+  })
+})
+
+describe('a ruling file that cannot be parsed is a sentence of ours, never the parser\'s words', () => {
+  // the comment is public markdown, and V8 quotes the first characters of a source it cannot parse: an image, a ping or HTML
+  const HOSTILE = '@everyone ![x](http://example.com/a.png) <img src=x onerror=1> and more text of the file'
+  const script = join(resolve(__dirname, '../..'), 'lab/pdf/spikes/rules-gate.mjs')
+
+  it('says the file is not valid JSON with its validated name, and keeps the parser\'s message for the private log', () => {
+    const r = loadRuling('/work/rulings/zh-lead.json', { read: () => HOSTILE })
+    expect(r.ruling).toBeUndefined()
+    expect(r.problem).toBe('the ruling file `zh-lead.json` is not valid JSON')
+    // what the parser said is kept, apart from the comment: it quotes the source
+    expect(r.detail).toContain('zh-lead.json: ')
+    expect(r.detail).toContain('@everyone')
+    // a file whose name is no name is not named, and cannot be read as a ruling either
+    expect(loadRuling('/work/rulings/a|b`c.json', { read: () => HOSTILE }).problem).toBe('a ruling file is not valid JSON')
+    expect(loadRuling('/work/rulings/gone.json', { read: () => { throw new Error(`ENOENT: ${HOSTILE}`) } }).problem).toBe('the ruling file `gone.json` is not valid JSON')
+  })
+  it('leaves a valid ruling and a JSON that is no ruling to parseRuling, whose words name a field and nothing else', () => {
+    const whole = { date: '2026-10-08', by: 'the maintainer', quote: 'q', measures: ['m'], targets: ['ja'], why: 'w' }
+    expect(loadRuling('/work/rulings/ok.json', { read: () => JSON.stringify(whole) }).ruling).toMatchObject({ name: 'ok.json', by: 'the maintainer' })
+    expect(loadRuling('/work/rulings/few.json', { read: () => JSON.stringify({ ...whole, why: HOSTILE, measures: [] }) }).problem).toBe('ruling few.json: measures is missing or not a non-empty list of strings')
+    expect(loadRuling('/work/rulings/list.json', { read: () => JSON.stringify([HOSTILE]) }).problem).toBe('ruling list.json: not an object')
+  })
+  it('reaches neither the comment nor the numbers in a compare, which fails for it', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rules-gate-compare-'))
+    const write = (name: string, content: string) => { writeFileSync(join(dir, name), content); return join(dir, name) }
+    const runFile = write('run.json', JSON.stringify(run(base())))
+    write('hostile.json', HOSTILE)
+    const out = join(dir, 'verdict')
+    const r = spawnSync(process.execPath, [script, 'compare', `--base=${runFile}`, `--head=${runFile}`, `--out=${out}`, `--ruling=${join(dir, 'hostile.json')}`], { encoding: 'utf8' })
+    expect(r.status, r.stderr).toBe(1)
+    const comment = readFileSync(join(out, 'rules-gate.md'), 'utf8'), numbers = readFileSync(join(out, 'rules-gate.json'), 'utf8')
+    expect(comment).toContain('- the ruling file `hostile.json` is not valid JSON')
+    expect(comment).toMatch(/^## Rules gate: failed/m)
+    for (const text of [comment, numbers, r.stdout]) expect(text).not.toMatch(/@everyone|!\[x\]|<img|example\.com|more text of the file/)
+    // the parser's words are in a file of the runner that nothing uploads (the artifact is rules-gate.json alone)
+    expect(readFileSync(join(out, 'rulings-private.log'), 'utf8')).toContain('hostile.json: ')
+  })
+})
+
+describe('compare as the job runs it', () => {
+  // the command line itself, on runs of numbers: what the workflow's Verdict step calls
+  const root = resolve(__dirname, '../..'), script = join(root, 'lab/pdf/spikes/rules-gate.mjs')
+  const dir = mkdtempSync(join(tmpdir(), 'rules-gate-cli-'))
+  const write = (name: string, content: unknown) => { writeFileSync(join(dir, name), typeof content === 'string' ? content : JSON.stringify(content)); return join(dir, name) }
+  const compareRun = (...args: string[]) => spawnSync(process.execPath, [script, 'compare', ...args], { encoding: 'utf8' })
+  const enginePipeline = /export const PIPELINE_VERSION = '([^']+)'/.exec(readFileSync(join(root, 'src/pdf-reader/engine/pipeline/versions.mjs'), 'utf8'))![1]!
+  const manifest = (pipeline: string, names: string[]) => ({ schema: 1, pipeline, files: names.map(n => ({ path: `refs/${n}/ref.json` })) })
+
+  it('holds both runs to the pack\'s outputs, and warns of a pack made under another PIPELINE than the engine\'s (it finds the engine\'s version where the engine keeps it)', () => {
+    const file = write('run.json', run(base()))
+    const names = Object.keys(base())
+    const ok = compareRun(`--base=${file}`, `--head=${file}`, `--out=${join(dir, 'ok')}`, `--pack=${write('pack-ok.json', manifest('9', names))}`)
+    expect(ok.status, ok.stderr).toBe(0)
+    expect(readFileSync(join(dir, 'ok', 'rules-gate.md'), 'utf8')).toContain(`The pack was made under PIPELINE 9 and the engine is at PIPELINE ${enginePipeline}: remake the pack.`)
+    // a pack with one more output than the runs hold: both runs lack it
+    const more = compareRun(`--base=${file}`, `--head=${file}`, `--out=${join(dir, 'more')}`, `--pack=${write('pack-more.json', manifest(enginePipeline, [...names, '2001.00001v1-zh']))}`)
+    expect(more.status).toBe(1)
+    const comment = readFileSync(join(dir, 'more', 'rules-gate.md'), 'utf8')
+    expect(comment).toContain("- the base run lacks 1 output of the pack's: 2001.00001v1-zh")
+    expect(comment).toContain("- the head run lacks 1 output of the pack's: 2001.00001v1-zh")
+    expect(comment).not.toContain('remake the pack')
+  })
+  it('stops at a --pack that names no file, instead of going without one', () => {
+    const file = write('run.json', run(base()))
+    const r = compareRun(`--base=${file}`, `--head=${file}`, `--out=${join(dir, 'none')}`, `--pack=${join(dir, 'no-such-pack.json')}`)
+    expect(r.status).toBe(2)
+    expect(r.stderr).toContain('--pack: no such file')
   })
 })
 
