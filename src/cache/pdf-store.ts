@@ -4,7 +4,7 @@
 // reader's reads and writes is a miss, as in the translation cache (./store.ts); the settings page's count and clear
 // report theirs. Its own database, so that neither's schema or migrations touch the other's.
 import Dexie, { type DexieOptions, type Table } from 'dexie'
-import { atLeastAsGood, mergeFigures, type FigureEntry, type Now, type OriginalReadings, type PdfRecord, type PdfRecordBody, type UntypesetMark } from './pdf-record'
+import { atLeastAsGood, mergeFigures, type FigureEntry, type Now, type OriginalReadings, type PdfRecord, type PdfRecordBody, type UntypesetMark } from '../pdf-reader/engine/pipeline/record'
 
 /** The small row eviction reads: no PDF, no units */
 interface Entry {

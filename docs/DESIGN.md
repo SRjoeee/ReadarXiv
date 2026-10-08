@@ -932,7 +932,7 @@ extension.
   where every one had been. The settings page counts them and clears them (UI.md S-O-73).
 - **Typesetting** runs in a TeX page outside the extension (BusyTeX): our site's, `https://tex.readarxiv.org`, in a
   production build, and one on this machine in development (`addresses.mjs` `TEX_PAGE`, a build setting). No
-  reader-facing word names it (UI.md §3.5). The translation is set by the Flow rule (`src/pdf-reader/engine/typeset/`;
+  reader-facing word names it (UI.md §3.5). The translation is set by the Flow rule (`src/pdf-reader/engine/pipeline/typeset/`;
   `parked/lab/records/typesetting.md`): each unit's leading, the paper's type and the floats' pages
   planned from our marked original's line probes and marks. The original is compiled in full in a TeX frame of its
   own from the run's start, beside the probe and the first preview, which never waits for it, and the frame goes once
@@ -1007,14 +1007,14 @@ extension.
   marked original is not asked again and the run goes on to its final, which is asked once more and, timed out
   again, leaves what is shown.
 - **The TeX page's warm-up** (2026-10-02; `background/warmup.ts`, `entrypoints/ocr/tex-warm.ts`,
-  `engine/tex-store.mjs`): nothing of the engine ships in the package (35 MB of engine and preloads, 39 MB of CJK faces,
+  `session/tex-store.mjs`): nothing of the engine ships in the package (35 MB of engine and preloads, 39 MB of CJK faces,
   downloaded again with every update); instead, **as early as possible** — once the extension is installed or updated
   and the target language is known, again when that language changes, and at a worker's start when the last warm-up is
   not the current language's of the last day, or a reader has since seen the page under other versions (how a new
   version of the page is noticed: its files are versioned, and only what is missing is downloaded) — the offscreen
   document frames the TeX page and has it download what a first
   visit in that language fetches ahead: BusyTeX, the hinted engines' preloads and bundles, the index, the script's CJK
-  faces (the hints of `engine/hints.mjs`, a module that imports nothing, kept equal to `strategiesFor` by a test).
+  faces (the hints of `session/hints.mjs`, a module that imports nothing, kept equal to `strategiesFor` by a test).
   **They are kept in the extension's own Cache Storage, not the page's**: with storage partitioning on (Playwright
   turns it off by default; `tests/e2e/probes/tex-partition.mjs`), the page framed by the reader over arXiv's PDF page
   has a Cache Storage and an HTTP cache of its own, apart from the page framed by any extension page — the offscreen

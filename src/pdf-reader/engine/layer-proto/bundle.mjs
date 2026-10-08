@@ -17,7 +17,7 @@
 import { ADDON_CAP, checkAddonManifest, REMOVAL } from '../layout/addon-manifest.mjs'
 import { checkLayout, encodeLayout, isPaperId, LAYOUT, UNIT_KINDS, VERSION_MAX } from '../layout/file.mjs'
 import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal, PAGES_MAX, STRING_MAX, told, utf8Strict } from '../layout/json.mjs'
-import { PDFJS, PIPELINE_VERSION } from '../versions.mjs'
+import { PDFJS, PIPELINE_VERSION } from '../pipeline/versions.mjs'
 
 /** the bundle's format: raised with any change to what it holds (the left's tokens and spans, with the highlight) */
 export const BUNDLE = '1'

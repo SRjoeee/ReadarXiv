@@ -1,7 +1,7 @@
 // The highlight gate's floats (plans/2026-10-01-pdf-highlight.md, B4): highlight-gate.mjs calls it for each paper
 // (floatsOfPaper, with the sides it anchored) and at its end (floatsVerdict, which prints and holds the floats to their
 // own baseline, highlight-gate-floats.baseline.json; WRITE_BASELINE=1 records it with the gate's). On each side, each
-// page's floats as the reader makes them on the page's first drawing (src/pdf-reader/engine/floats.mjs, from the
+// page's floats as the reader makes them on the page's first drawing (src/pdf-reader/engine/view/floats.mjs, from the
 // page's operator list, read here again from the PDF), measured against the source's floats:
 //  - found: per paper, side and float environment (figure, table, algorithm; a caption in none is `other`), the
 //    captions anchored there and those with a float; on both sides; the floats whose kind is not their environment's (a
@@ -34,9 +34,9 @@
 // dropped, PANELS 0, GAP 3 (floats' extents moved against the baseline).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { floatHitOf, floatsAgree, floatShapes, pageFloats, pathsOf, wantsFloats } from '../../../src/pdf-reader/engine/floats.mjs'
-import { figureRegions } from '../../../src/pdf-reader/engine/figures.mjs'
-import { blockOf, hitOf, layoutOf, pageGeometry, runsOf } from '../../../src/pdf-reader/engine/highlight.mjs'
+import { floatHitOf, floatsAgree, floatShapes, pageFloats, pathsOf, wantsFloats } from '../../../src/pdf-reader/engine/view/floats.mjs'
+import { figureRegions } from '../../../src/pdf-reader/engine/view/figures.mjs'
+import { blockOf, hitOf, layoutOf, pageGeometry, runsOf } from '../../../src/pdf-reader/engine/view/highlight.mjs'
 
 const BASELINE = new URL('highlight-gate-floats.baseline.json', import.meta.url).pathname
 

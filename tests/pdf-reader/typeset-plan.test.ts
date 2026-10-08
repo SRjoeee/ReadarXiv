@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { openPaper, translationFiles } from '@/pdf-reader/engine/live.mjs'
-import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
-import type { Marks } from '@/pdf-reader/engine/typeset/places.mjs'
-import { finalTypesetting, previewTypesetting } from '@/pdf-reader/engine/typeset/plan.mjs'
+import { openPaper, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
+import type { Marks } from '@/pdf-reader/engine/pipeline/typeset/places.mjs'
+import { finalTypesetting, previewTypesetting } from '@/pdf-reader/engine/pipeline/typeset/plan.mjs'
 
 // The rule's two steps on a small paper and the logs and marks its compiles would give: what goes in, what comes out.
 // The numbers the rule reaches on real papers are the gate's (parked/lab/spikes/typeset-gate.mjs)

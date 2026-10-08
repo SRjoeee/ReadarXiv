@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { inMemory, lineBreaks, loadProject, localizeNames, markUnits, patch } from '@/pdf-reader/engine/latex-front.mjs'
-import { serialize } from '@/pdf-reader/engine/mt.mjs'
+import { inMemory, lineBreaks, loadProject, localizeNames, markUnits, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { serialize } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The PDF reader's LaTeX front end: what of a paper's source is prose to translate
 

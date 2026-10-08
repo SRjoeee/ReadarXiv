@@ -1,6 +1,16 @@
 // check.mjs's types: the layer's completeness checker, for the gate and its test only (the reader never loads it)
 import type { LayoutIndex } from '../layout/file.mjs'
-import type { Laid, Tr } from './fit.mjs'
+import type { TrPiece } from './pieces.mjs'
+
+/** a unit as the checker reads it once laid (parked/engine/layer/fit.mjs LaidUnit, the v1 fit's: a unit drawn is `fit: true`,
+ *  with its lines' items and how each placeholder is drawn; any other unit stays the original's and is passed over) */
+export interface Laid {
+  id: number; fit: boolean
+  lines?: { page: number; frame: number; x0: number; x1: number; baseline: number; size: number; items: { kind: 'text' | 'crop' | 'page-text'; x: number; w: number; text?: string; ph?: number; from: number; to: number }[] }[]
+  drawn?: ReadonlyMap<number, 'crop' | 'page-text' | 'text' | 'kept'>
+}
+/** a unit's translation: its pieces and the sentence starts in them */
+export interface Tr { pieces: readonly TrPiece[]; sentences: readonly number[] | null }
 
 /** ink is a luminance below this (0-255, over white) */
 export declare const INK: number

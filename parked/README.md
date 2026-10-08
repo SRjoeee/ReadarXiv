@@ -51,7 +51,7 @@ Change the list and the files together, or not at all.
   publish) and `node spikes/serve-live.mjs` for the page on this machine;
 - the engine of the reader under `src/pdf-reader/engine/` as it stood at the commit above: `tex-page/jobs.mjs`,
   `measure.mjs` and `speed.mjs` import it, and the extension still frames the production page by a constant address
-  (`src/pdf-reader/engine/addresses.mjs`) until its own compile client is parked.
+  (`src/pdf-reader/addresses.mjs`) until its own compile client is parked.
 
 ## parked/lab/ — the typesetting gates and the compile-path checks
 
@@ -64,7 +64,7 @@ TeX the engine writes (`typeset-tex-cases.mjs`, `typeset-busytex-cases.mjs`, `co
 (`cache-revisit.mjs`, `cache-faults.mjs`), and the reader's browser checks that need the local TeX page: `diag-anchors`,
 `reader-a11y`, `reader-click`, `reader-in-source`, `reader-live`, `reader-partial`, `reader-ui-live`, `service-faults`,
 `sync-frames`, `sync-smoke` and `viewer-faults` (all `.mjs`). `records/`: `typesetting.md`, the record the typesetting
-rule in `src/pdf-reader/engine/typeset/` cites, `typeset-gate.json` (each paper's record the gate holds a change to) and
+rule in `src/pdf-reader/engine/pipeline/typeset/` cites, `typeset-gate.json` (each paper's record the gate holds a change to) and
 `round-34.json` (the round of 34 papers the rule was chosen on).
 
 Last ran at the freeze: the tag `exp-freeze-2026-10-07`, which names commit `a2267b287b2c7cb87dfdb70481a3832d140b8eb8`,
@@ -83,6 +83,25 @@ standard fonts by a path under `node_modules/` need the `npm install` of `lab/pd
 engine from `src/pdf-reader/engine/`, and the siblings that stayed alive from `lab/pdf/spikes/`; paths they build from
 their own location (`out/…`, `data/…`, `new URL('..', import.meta.url)`) name the experiment's layout, which a part's
 root is, not the lab's.
+
+## parked/engine/ — the first instant layer (v1) and its tests
+
+The engine's first layer, `layer/{breaks,draw,fit,hyphen,layer,net,page,tokens}.mjs` (with their `.d.mts`): the unit-by-unit fit
+into the layout file's frames, the line breaker, the net that refused a failing unit, the page-even pass and the entry that
+joined them (`layer/layer.mjs`), and `rules/layer-rules.mjs`, its per-script rules. The drawn layer is v0, `layer-proto/`,
+opened through the reader's door (`layer-proto/reader.mjs`); nothing in an entry or in a kept gate imports these any more.
+`tests/` holds their unit tests and the two helpers they share (`helpers/layer-fixtures.ts`, `helpers/layer-layout.ts`; the
+layout builder the live tests use is `tests/pdf-reader/helpers/layout-of.ts`). The checker `layer/check.mjs` stayed in the engine,
+since the layer gate's instrument imports it by its address; its test, which sets units with the fit, is here, and the cases of its lost-ink function, which need no fit, stayed live (`tests/pdf-reader/layer-check-ink.test.ts`).
+
+Last ran at the freeze: the tag `exp-freeze-2026-10-07`, which names commit `a2267b287b2c7cb87dfdb70481a3832d140b8eb8`, and
+with the engine's tests at commit `010c578996e1d0764337f1f42f9e22a40d722d37` (`next` after pull request #331).
+
+**Reviving it needs** that commit's tree around it: the files import the live engine from `src/pdf-reader/engine/` (the font
+roles, the layout file's parser, the pieces) by relative paths, and `scriptOf`, which `layer-rules.mjs` re-exports, is now
+`rules/script.mjs`'s. The layer gate's default kind is `proto`, the drawn layer; it refuses `--engine-kind=layer` for an engine
+that has no `layer/layer.mjs`, and the layer lab's v1 view loads the entry and reports that it is not there. The gate measures
+v0 (`--engine-kind=proto`, `--door`).
 
 ## Still to come
 

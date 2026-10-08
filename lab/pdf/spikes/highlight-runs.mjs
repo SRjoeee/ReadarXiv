@@ -9,7 +9,7 @@
 // in as one with no text: nothing anchors it, nothing lights it, and the gate counts it apart (`cut`). Units the tree
 // cuts now and the runs did not (the author block's) are not the runs': left out
 import { readFileSync } from 'node:fs'
-import { openPaper } from '../../../src/pdf-reader/engine/live.mjs'
+import { openPaper } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 
 const CUTTING = JSON.parse(readFileSync(new URL('highlight-runs.units.json', import.meta.url), 'utf8'))
 

@@ -1,6 +1,6 @@
 // layout.mjs's types: the layout rule set, its schema, the built-in copy, reading and resolving
 import type { ZodMiniType } from 'zod/mini'
-import type { CjkFaces } from '../font-roles.mjs'
+import type { CjkFaces } from './font-roles.mjs'
 import type { Params } from '../layer-proto/layer2.mjs'
 
 /** the schema's number: the shape and how the engine reads it */

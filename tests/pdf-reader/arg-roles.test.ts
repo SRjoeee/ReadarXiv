@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import * as argRoles from '@/pdf-reader/engine/arg-roles.mjs'
-import { bindingsOf, commandParams, environmentParams, readArgs, textArgsOf, textless } from '@/pdf-reader/engine/arg-roles.mjs'
+import * as argRoles from '@/pdf-reader/engine/rules/arg-roles.mjs'
+import { bindingsOf, commandParams, environmentParams, readArgs, textArgsOf, textless } from '@/pdf-reader/engine/rules/arg-roles.mjs'
 
 // The role table: what each argument of a command is (text, a dimension, keys, a name …), from LaTeXML's prototypes and
 // the commands written out by hand where LaTeXML leaves an argument untyped

@@ -7,7 +7,7 @@
 // one that would outlast the reader's patience at its pace, is stopped, and the reader takes what the store holds; one
 // of its language nearly done is let finish and waited for — a stop loses the files in flight, which the reader's page
 // would fetch again.
-import { answerWant, keepFile, LOCK, pruneStore } from '@/pdf-reader/engine/tex-store.mjs'
+import { answerWant, keepFile, LOCK, pruneStore } from '@/pdf-reader/session/tex-store.mjs'
 import type { TexWarmRequest, TexWarmResult } from '@/shared/tex-warm'
 
 /** a warm-up: the request, with the page's protocol 2 hints for its language (scripts.mjs texHints) */

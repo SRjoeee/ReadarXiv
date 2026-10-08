@@ -3,9 +3,9 @@
 // a preview held while a unit has no translation, and nothing compiled when nothing changed. Exits non-zero on a failure.
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/cache-cases.mjs   (from the repository root: the engine imports the extension's source by @/)
 import assert from 'node:assert/strict'
-import { decideWrite, knownMarks, seedFrom, sourceHash, unitsOf } from '../../../src/pdf-reader/engine/cache.mjs'
-import { compilerKeeper, openPaper, runLive } from '../../../src/pdf-reader/engine/live.mjs'
-import { translateUnits } from '../../../src/pdf-reader/engine/mt.mjs'
+import { decideWrite, knownMarks, seedFrom, sourceHash, unitsOf } from '../../../src/pdf-reader/engine/pipeline/cache.mjs'
+import { compilerKeeper, openPaper, runLive } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
+import { translateUnits } from '../../../src/pdf-reader/engine/translate/mt.mjs'
 
 const tex = paras => new Map([['main.tex', new TextEncoder().encode(`\\documentclass{article}\n\\begin{document}\n${paras.join('\n\n')}\n\\end{document}\n`)]])
 const PARAS = ['The first paragraph of the paper says something here.', 'The second paragraph of the paper says more.']

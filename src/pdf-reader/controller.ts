@@ -5,10 +5,10 @@ import { toBcp47 } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { ConfigReading } from '@/config/storage'
 import type { PackState } from '@/shared/pack'
-import type { OutlineEntry } from './outline'
+import type { OutlineEntry } from './engine/view/outline'
 import { PROVIDER_ERROR_KINDS, type ProviderErrorKind } from '@/providers/types'
-import type { EngineDisplay, SessionEvent, SessionHost } from './engine/session.mjs'
-import type * as SessionModule from './engine/session.mjs'
+import type { EngineDisplay, SessionEvent, SessionHost } from './session/session.mjs'
+import type * as SessionModule from './session/session.mjs'
 
 export type Display = EngineDisplay
 export type Side = 'left' | 'right'

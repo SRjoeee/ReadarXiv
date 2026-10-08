@@ -1,5 +1,5 @@
 // experiments/pdf-bilingual/spikes/compile-resilience-cases.mjs
-// The compile's safety net under TeX (plans/2026-10-04-compile-resilience.md; src/pdf-reader/engine/tex-errors.mjs and
+// The compile's safety net under TeX (plans/2026-10-04-compile-resilience.md; src/pdf-reader/engine/pipeline/tex-errors.mjs and
 // live.mjs runLive's remedies): small synthetic documents through the reader's own translationFiles, compiled natively
 // in Docker — halting on the first error as BusyTeX does, and in nonstop mode with latexmk -f as the gates' native
 // compiler does —, each checking that TeX's log places a failure in the unit it stands in, and nowhere else.
@@ -9,9 +9,9 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { citationLines, openPaper, translationFiles } from '../../../src/pdf-reader/engine/live.mjs'
-import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
-import { texErrors, unitsAtErrors } from '../../../src/pdf-reader/engine/tex-errors.mjs'
+import { citationLines, openPaper, translationFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
+import { strategiesFor } from '../../../src/pdf-reader/engine/pipeline/scripts.mjs'
+import { texErrors, unitsAtErrors } from '../../../src/pdf-reader/engine/pipeline/tex-errors.mjs'
 
 const dir = mkdtempSync(join(tmpdir(), 'compile-resilience-cases-'))
 let failed = 0

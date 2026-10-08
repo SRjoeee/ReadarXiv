@@ -24,8 +24,8 @@ import { clearRejected, clearRejectedAmong, markRejected, rejectedServices, watc
 import { createHealthKeeper } from './health-guard'
 import { createOffscreenDocument } from './offscreen'
 import { createWarmup, type WarmRecord } from './warmup'
-import { TEX_PAGE } from '@/pdf-reader/engine/addresses.mjs'
-import { LOCK as TEX_LOCK } from '@/pdf-reader/engine/tex-store.mjs'
+import { TEX_PAGE } from '@/pdf-reader/addresses.mjs'
+import { LOCK as TEX_LOCK } from '@/pdf-reader/session/tex-store.mjs'
 
 /**
  * The saved settings with the status of the chain in force they were read from: one read per press, for the decision
@@ -141,7 +141,7 @@ export default defineBackground(() => {
   /**
    * The TeX page's warm-up (DESIGN §16): the files a first visit in the target language fetches from the page,
    * downloaded ahead into the extension's store by the offscreen document. The record of the last one in local storage;
-   * whether a reader that typesets is open, from the lock every one of them shares (pdf-reader/engine/tex-store.mjs)
+   * whether a reader that typesets is open, from the lock every one of them shares (pdf-reader/session/tex-store.mjs)
    */
   const WARM_KEY = 'axt-tex-warm'
   const warmup = createWarmup({

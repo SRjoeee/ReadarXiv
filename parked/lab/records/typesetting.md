@@ -372,7 +372,7 @@ the original's columns page by page — and writes numbers only (`records/typese
 
 ## Where things are
 
-- In the engine (branch `exp/flow-typesetting`): `src/pdf-reader/engine/typeset/` — the rule as pure modules
+- In the engine (branch `exp/flow-typesetting`): `src/pdf-reader/engine/pipeline/typeset/` — the rule as pure modules
   (`plan.mjs`, `type.mjs`, `flow.mjs`, `density.mjs`, `places.mjs`, `tex.mjs`); its cases in
   `tests/pdf-reader/typeset-*.test.ts` and `spikes/typeset-tex-cases.mjs`; the gate on the round and the holdouts in
   `spikes/typeset-gate.mjs`, its papers and each one's record in `typeset-gate.json`, the holdouts' translations made
@@ -381,7 +381,7 @@ the original's columns page by page — and writes numbers only (`records/typese
   `exp/geometry-lock`.
 - Rules: `spikes/generic-type.mjs` (design table, type, flow, option A), `spikes/lock.mjs` (TeX of the unit
   macros, floats held, probes, readers), `spikes/density.mjs` (width and size probes, density),
-  `spikes/alignment.mjs` (places), `src/pdf-reader/engine/latex-front.mjs` (unit leading, marks).
+  `spikes/alignment.mjs` (places), `src/pdf-reader/engine/source/latex-front.mjs` (unit leading, marks).
 - Cases: `spikes/generic-type-cases.mjs` (flow, type, option A), `spikes/lock-cases.mjs` (TeX, in Docker),
   `spikes/alignment-cases.mjs`.
 - Evaluation: `spikes/visual-eval.mjs` (a column per rule; `--flow=46 --floats --phys=8 --rate=5 --breaks

@@ -1,5 +1,5 @@
 // experiments/pdf-bilingual/spikes/line-env-cases.mjs
-// Environments TeX reads line by line (src/pdf-reader/engine/latex-front.mjs LINE_ENVS) under TeX: small papers, each
+// Environments TeX reads line by line (src/pdf-reader/engine/source/latex-front.mjs LINE_ENVS) under TeX: small papers, each
 // with every kind — comment.sty's own and the paper's (\excludecomment, \specialcomment, a class's), the kernel's and
 // verbatim.sty's verbatim, fancyvrb's, listings' (and their environments of the paper's own), a table holding a hidden
 // row — a paragraph after each, compiled natively in Docker as the gates compile (latexmk -f in nonstop mode for every

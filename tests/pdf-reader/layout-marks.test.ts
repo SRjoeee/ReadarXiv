@@ -1,15 +1,15 @@
 import { createHash } from 'node:crypto'
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SourceUnit } from '@/pdf-reader/engine/latex-front.mjs'
-import type { UnitLines } from '@/pdf-reader/engine/tex-errors.mjs'
-import { patch } from '@/pdf-reader/engine/latex-front.mjs'
+import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
+import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
+import { patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, OWNED_ALL, parseLayoutMarks, POINTS_TEX, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
-import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/live.mjs'
+import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
-import { marksOf } from '@/pdf-reader/engine/typeset/places.mjs'
+import { marksOf } from '@/pdf-reader/engine/pipeline/typeset/places.mjs'
 
 // The layout marks as text: which placeholder gets which mark, the units' own marks, the TeX that goes with them, the
 // marks file and its bounds. What the TeX does under TeX — that no line moves, that nothing written to a file changes —

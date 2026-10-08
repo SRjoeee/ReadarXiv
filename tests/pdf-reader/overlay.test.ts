@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { keepOverlays, pinned } from '@/pdf-reader/engine/overlay.mjs'
+import { keepOverlays, pinned } from '@/pdf-reader/engine/view/overlay.mjs'
 
 describe('pinned: an overlay that scales with its page (the reader\'s design, §10.1)', () => {
   const box = { left: 12, top: 30.5, width: 100, height: 20 }

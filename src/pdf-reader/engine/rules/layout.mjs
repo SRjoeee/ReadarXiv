@@ -27,8 +27,8 @@
 // Only this directory imports a package (zod, the mini build): the readers' bundles take the validator once, here. The
 // engine's drawing modules import resolveRules' answers, never the schema.
 import * as z from 'zod/mini'
-import { ENGLISH_FAMILIES, FACES } from '../font-roles.mjs'
-import { scriptOf } from '../layer-rules.mjs'
+import { ENGLISH_FAMILIES, FACES } from './font-roles.mjs'
+import { scriptOf } from './script.mjs'
 import { countValues, LayoutRefusal, told } from '../layout/json.mjs'
 import BUILTIN_JSON from './layout-rules.json' with { type: 'json' }
 
@@ -41,7 +41,7 @@ export const RULES_VALUES = 20_000
 /** a set nests at most this deep (its deepest field: scripts.<script>.cjkFaces.light) */
 const DEPTH_MAX = 8
 /** the targets either reader offers, each of which must resolve or the set is refused: the web's eight and Portuguese, which the
- *  extension's reader also typesets (scripts.mjs VERIFIED, compared by language and script: the extension's tag for Traditional
+ *  extension's reader also typesets (session/verified.mjs VERIFIED, compared by language and script: the extension's tag for Traditional
  *  Chinese is zh-TW). A test holds that every VERIFIED language is here */
 export const TARGETS = Object.freeze(['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru', 'pt'])
 export const SCRIPTS = Object.freeze(['Hans', 'Hant', 'Jpan', 'Kore', 'Latn', 'Cyrl'])

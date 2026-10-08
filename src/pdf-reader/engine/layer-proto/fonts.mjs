@@ -13,7 +13,7 @@
 //   fallback guess, and gives "sans-serif" for Nimbus Roman (Times) on every paper measured. The name is what TeX and
 //   the class chose: NimbusRomNo9L-Medi (Times bold), CMTI10 (Computer Modern text italic), SFBX1200, LMRoman10-Bold…
 // - facesFor: per target, the faces a translated run takes by its class, weight and slant. CJK faces follow the
-//   public repo's TeX path (src/pdf-reader/engine/scripts.mjs CJK): a Song/Ming serif, its bold, Kai for italic in
+//   public repo's TeX path (src/pdf-reader/engine/pipeline/scripts.mjs CJK): a Song/Ming serif, its bold, Kai for italic in
 //   Chinese (FandolKai, bkai00mp: ctex's own \itshape); Japanese and Korean have no italic face there, and take an
 //   oblique of their serif here (see the report). Latin and Cyrillic runs keep the original's family where the browser
 //   has one (Times, Latin Modern from TinyTeX's OpenType files served by serve.mjs, Palatino, Charter, Helvetica).
@@ -27,8 +27,8 @@
 // restricted to its code points, or the whole file), a unit drawn only in what is served of its runs' faces, never in a
 // face the reader's device holds: no source of a face but its URL, no font rule written here, no generic family. A
 // character no served slice holds keeps its unit the original's.
-import { COVERAGE } from '../font-coverage.mjs'
-import { canDrawIn, FACES, faceFor, rolesFor } from '../font-roles.mjs'
+import { COVERAGE } from '../rules/font-coverage.mjs'
+import { canDrawIn, FACES, faceFor, rolesFor } from '../rules/font-roles.mjs'
 
 /** the PostScript name without its subset tag */
 const bare = name => String(name ?? '').replace(/^[A-Z]{6}\+/, '')

@@ -1,5 +1,5 @@
 // reader.mjs's types: the reader's door, the one module both readers take the instant layer's engine values from
-import type { FaceId } from '../font-roles.mjs'
+import type { FaceId } from '../rules/font-roles.mjs'
 import type { ReadBundle } from './bundle.mjs'
 import type { FaceSources } from './fonts.mjs'
 import type { Row } from './rows.mjs'
@@ -11,12 +11,12 @@ export { batchesOf, layerRows, rowOf, runRows, toTranslate, unitOf } from './row
 export { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, parseAddonManifest } from '../layout/addon-manifest.mjs'
 export { indexLayout, LAYOUT, LAYOUT_CAP, LAYOUT_VALUES, LayoutRefusal, parseLayout } from '../layout/file.mjs'
 export { trPiecesOf } from '../layer/pieces.mjs'
-export { FACES } from '../font-roles.mjs'
-export { translateUnits } from '../mt.mjs'
+export { FACES } from '../rules/font-roles.mjs'
+export { translateUnits } from '../translate/mt.mjs'
 export type { LayerBundle, ReadBundle } from './bundle.mjs'
 export type { Row } from './rows.mjs'
 export type { Unit } from './run.mjs'
-export type { FaceId } from '../font-roles.mjs'
+export type { FaceId } from '../rules/font-roles.mjs'
 export type { FaceSources } from './fonts.mjs'
 export type { RemovalManifest } from '../layout/addon-manifest.mjs'
 

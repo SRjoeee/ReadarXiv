@@ -1,9 +1,9 @@
-# The font role table's measured data (src/pdf-reader/engine/font-coverage.mjs), from the very files: each face's code
+# The font role table's measured data (src/pdf-reader/engine/rules/font-coverage.mjs), from the very files: each face's code
 # points as ranges (start, end, inclusive; its cmap's, but controls and private use: drawn below) and its metrics (units per em, hhea's ascent and descent, whether GSUB has small
 # capitals, the file's SHA-256), and each source's release. The faces are font-roles.mjs's FACE_TABLE, read here as text so
 # that one table names them for both. Prints the module, or writes it with --out (only on success):
-#   python3 scripts/font-roles.py lab/pdf/data/fonts > src/pdf-reader/engine/font-coverage.mjs
-#   python3 scripts/font-roles.py lab/pdf/data/fonts --out src/pdf-reader/engine/font-coverage.mjs
+#   python3 scripts/font-roles.py lab/pdf/data/fonts > src/pdf-reader/engine/rules/font-coverage.mjs
+#   python3 scripts/font-roles.py lab/pdf/data/fonts --out src/pdf-reader/engine/rules/font-coverage.mjs
 # The fonts folder (git-ignored: no font file is committed) holds every face's file under its table name, and
 # releases.json, which names each source's release: {"source-han-serif": "<the GitHub release's tag>",
 # "urw-base35-fonts": "<the tag>", "texlive": "texlive/texlive@sha256:<the image's digest>"}. Gathering it: Source Han
@@ -28,8 +28,8 @@ from pathlib import Path
 from fontTools.ttLib import TTFont
 
 ROOT = Path(__file__).resolve().parent.parent
-ROLES = ROOT / 'src/pdf-reader/engine/font-roles.mjs'
-COVERAGE_PATH = 'src/pdf-reader/engine/font-coverage.mjs'
+ROLES = ROOT / 'src/pdf-reader/engine/rules/font-roles.mjs'
+COVERAGE_PATH = 'src/pdf-reader/engine/rules/font-coverage.mjs'
 FREE_MIN = 10 * 1024 ** 3
 RELEASE_FORM = {'texlive': re.compile(r'^texlive/texlive@sha256:[0-9a-f]{64}$'), 'source-han-serif': re.compile(r'^\d+\.\d+R?$'),
                 'urw-base35-fonts': re.compile(r'^\d{8}(\.\d+)?$')}

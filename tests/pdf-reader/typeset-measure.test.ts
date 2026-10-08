@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { atomWidth, type Face, citeStyleOf, facesOf, linesAt, piecesWidth, readSizeProbe, readWidthProbe, SIZE_PROBE, textWidth, WIDTH_PROBE, WIDTH_SAMPLE } from '@/pdf-reader/engine/typeset/density.mjs'
-import { alignment, drifts } from '@/pdf-reader/engine/typeset/places.mjs'
+import { atomWidth, type Face, citeStyleOf, facesOf, linesAt, piecesWidth, readSizeProbe, readWidthProbe, SIZE_PROBE, textWidth, WIDTH_PROBE, WIDTH_SAMPLE } from '@/pdf-reader/engine/pipeline/typeset/density.mjs'
+import { alignment, drifts } from '@/pdf-reader/engine/pipeline/typeset/places.mjs'
 
 // What the typesetting rule measures: a translation's width as TeX sets it, and where a compile put each unit against the
 // original. Widths measured 2026-09-30 with the faces and xeCJK settings the reader uses (pdfLaTeX T1/T2A, XeLaTeX + xeCJK,

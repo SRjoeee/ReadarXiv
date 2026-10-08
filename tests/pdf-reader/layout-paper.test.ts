@@ -2,7 +2,7 @@ import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
 import { inkSamples, LAYOUT_CLASSES, parseLayoutMarks, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
 import { layoutMarksOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
-import { type Compiled, type CompileRequest, openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/live.mjs'
+import { type Compiled, type CompileRequest, openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 
 // A paper's layout marks in one call (layout/paper.mjs): the order of the two compiles and what each is asked, what the
 // probe's answers set in the second, the log the marks are read from, the refusals and the PDF's `close`. The marks of the

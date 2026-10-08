@@ -1,11 +1,11 @@
 import 'pdfjs-dist/web/pdf_viewer.css'
 import '@/styles/image.css'
-import '@/pdf-reader/engine/engine.css'
+import '@/pdf-reader/engine/view/engine.css'
 import './reader.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createController, type Session } from '@/pdf-reader/controller'
-import { setHost } from '@/pdf-reader/engine/host.mjs'
+import { setHost } from '@/pdf-reader/session/host.mjs'
 import { trackModality } from '@/ui/controls/modality'
 import { readConfig } from '@/config/storage'
 import { applyPageLocale } from '@/ui/apply-locale'
@@ -21,7 +21,7 @@ const params = new URLSearchParams(location.search)
 // the session runs once, at load: it is loaded only when the panes are there and the host is set (host.mjs)
 const open = async (host: Parameters<typeof setHost>[0]): Promise<Session> => {
   setHost(host)
-  return import('@/pdf-reader/engine/session.mjs')
+  return import('@/pdf-reader/session/session.mjs')
 }
 const controller = createController({ open, params, reading })
 // the focus rings are the keyboard's (modality.ts)

@@ -725,7 +725,7 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
 ### 17.2 Where the sentences come from
 
 - **Microsoft** reports its own sentence lengths for the text it was sent (`sentLen`); the extension's service
-  verifies them, its translation cache keeps them, and the reader's engine passes them on (`engine.mjs`). Nothing is
+  verifies them, its translation cache keeps them, and the reader's engine passes them on (`session/translate.mjs`). Nothing is
   added to the request, and the wording is Microsoft's own.
 - **Google and an LLM** take the tags path's markers (DESIGN §8.6): the reader cuts each unit's wire text into
   sentences (`mt.mjs cutsOf`: the shared splitter, with a split context that reads the LaTeX placeholders — a citation
@@ -903,7 +903,7 @@ A rule that does two of these is split, or classed by the more expensive.
 |---|---|---|---|---|---|
 | Extraction | the server, when a paper's bundle is made | engine code: `latex-front.mjs`, `arg-roles.mjs`, `latexml-args.mjs`, `groups.mjs` `groupOf`, the layout maker, the remover. HTML: `src/core/rules/latexml.ts`, in the extension | `PIPELINE_VERSION`, `LAYOUT`, `REMOVAL`: the bundle's content versions, in its key (HTML: `RULES_VERSION`, in the per-text key) | the web's deploy. Each paper's bundle is made again on its next open (§18.4). HTML: an extension release | one compile per opened paper. Rows are rebuilt, and the per-text cache answers every unit the change left alone |
 | Layout | each reader, at draw time | the rule set, `rules/layout-rules.json` (§18.5) | `RULES_SCHEMA` (the shape and how the engine reads it) and the set's `version` (the values) | publishing: both readers take it on their next load | none |
-| Translation | each reader (the extension), the translation workflow (the web) | engine code: `mt.mjs` (`serialize`, `rehydrate`, the wires, `translateUnits`), `translate/kept.mjs` and `keptFor`, `groups.mjs` `decideGroups` and `NAMES_SHARE`, `batchesOf`, `paperContext` | `TRANSLATE_VERSION` (`translate/version.mjs`) | the next release of each reader's engine. Rows of the old version are translated again on open | the rows. The per-text cache holds the translator's raw answers, so the translator is asked again only for texts that changed |
+| Translation | each reader (the extension), the translation workflow (the web) | engine code: `translate/mt.mjs` (`serialize`, `rehydrate`, the wires, `translateUnits`), `translate/kept.mjs` and `keptFor`, `translate/groups.mjs` `decideGroups` and `NAMES_SHARE`, `batchesOf`; and, held by each reader, the paper's context sent with every batch (`paperContext`) | `TRANSLATE_VERSION` (`translate/version.mjs`) | the next release of each reader's engine. Rows of the old version are translated again on open | the rows. The per-text cache holds the translator's raw answers, so the translator is asked again only for texts that changed |
 
 The edge cases, decided:
 
@@ -920,9 +920,9 @@ The edge cases, decided:
 |---|---|---|---|---|
 | `BUNDLE` (web `'1'`, engine `'1'`) | reader contract | everything a reader parses: the bundle's shape, the units' tuple, kinds and flags, the layout file's schema, the manifest's schema, the left geometry | the request (§18.4) and the R2 key | readers older than it get `unknown-versions` until they update |
 | `PDFJS` | reader contract | the PDF.js whose reading the layout and the manifest are made against | as `BUNDLE` | as `BUNDLE` |
-| `PIPELINE_VERSION` | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or `paperContext` | the R2 key; the rows' identities | bundles made again lazily; rows again |
+| `PIPELINE_VERSION` | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT`, `REMOVAL` | extraction | the layout maker, the remover | the R2 key | bundles made again lazily |
-| `TRANSLATE_VERSION` (`translate/version.mjs`, `'1'`) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, `paperContext` | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
+| `TRANSLATE_VERSION` (`translate/version.mjs`, `'1'`) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
 | `RULES_SCHEMA` (`rules/layout.mjs`, `1`) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
 | the set's `version` | layout | the values | its immutable URL | readers take it on their next load |
 | `RULES_VERSION` (`src/core/rules/latexml.ts`) | HTML extraction | the HTML page's rule file | the HTML page's per-text key only | as DESIGN §5.5 |
@@ -930,7 +930,7 @@ The edge cases, decided:
 
 - **The web's translation identity** is `axt-tr/2|<paper>|v<version>|<target>|<chain>|p<PIPELINE>|t<TRANSLATE>|b<BUNDLE>`, with no `r<RULES>`: the rules of the HTML page cut none of a PDF's units.
 - **The background's per-text key** keeps `RULES_VERSION` for the HTML page's blocks only; a PDF text's key holds none (`cache/key.ts` `CacheSource`, named by every cache descriptor and `CACHE_KEY_VERSION` still 6: no HTML key changed, and a PDF text's old entries are no key of the new ones). The cache holds the translator's raw answer to a text, which no rule of reading changes.
-- **Until the extension's rows cache replaces `session.mjs`'s copies** (the extension's stage 5, task 10), a copy is judged by `PIPELINE_VERSION` alone, so a change of the translation rules that must void copies raises both.
+- **Until the extension's rows cache replaces `session/session.mjs`'s copies** (the extension's stage 5, task 10), a copy is judged by `PIPELINE_VERSION` alone, so a change of the translation rules that must void copies raises both.
 - **A file is refused by its schema, never by its maker.** `parseLayout` refuses a layout file whose `schema` is not 1 and `checkAddonManifest` a manifest whose `schema` is not 1; the file's `layout` and the manifest's `removal` are read for their shape (a version token) and never compared, so a reader opens what a newer maker or remover wrote. A change of either file's fields, bounds or meaning raises its `schema` and `BUNDLE`, not `LAYOUT` or `REMOVAL`.
 
 ### 18.3 Bump rules
@@ -964,7 +964,7 @@ GET /api/v1/layer/<id>v<n>/<vtag>   200 immutable
 
 ### 18.5 The rule set's fields
 
-The rule set is one schema-validated file, `rules/layout-rules.json`: configuration in a closed vocabulary (numbers, booleans, enumerations and short lists of characters), never a pattern, a selector or code. It has three scopes. A **script's** fields (`Hans`, `Hant`, `Jpan`, `Kore`, `Latn`, `Cyrl`) are v0's own `Params`; a **language** (a target) may override any of them field by field, and has its own `labels`; the **set** holds the hyphenation minimums. `resolveRules(set, target)` gives one target's rules, and a set that fails any bound is refused whole, naming the field. **A set holds a `languages` entry for every one of `TARGETS`**, the targets either reader offers: the web's eight (`zh`, `zh-TW`, `ja`, `ko`, `de`, `fr`, `es`, `ru`) and the extension's Portuguese (`pt`). A set that omits one is refused when it is read, not when that language's run opens; other languages (`pt-BR`, the language wave's) may be added beside them. `TARGETS` must cover every language of `VERIFIED` (`engine/verified.mjs`, compared by language and script: `zh-Hant` there is `zh-TW` here), which a test holds, so a language added to `VERIFIED` is added to `TARGETS` and to the built-in file with it. The engine's built-in copy is the fallback. The words are `RULES_FIELDS`', the lab's rows.
+The rule set is one schema-validated file, `rules/layout-rules.json`: configuration in a closed vocabulary (numbers, booleans, enumerations and short lists of characters), never a pattern, a selector or code. It has three scopes. A **script's** fields (`Hans`, `Hant`, `Jpan`, `Kore`, `Latn`, `Cyrl`) are v0's own `Params`; a **language** (a target) may override any of them field by field, and has its own `labels`; the **set** holds the hyphenation minimums. `resolveRules(set, target)` gives one target's rules, and a set that fails any bound is refused whole, naming the field. **A set holds a `languages` entry for every one of `TARGETS`**, the targets either reader offers: the web's eight (`zh`, `zh-TW`, `ja`, `ko`, `de`, `fr`, `es`, `ru`) and the extension's Portuguese (`pt`). A set that omits one is refused when it is read, not when that language's run opens; other languages (`pt-BR`, the language wave's) may be added beside them. `TARGETS` must cover every language of `VERIFIED` (`session/verified.mjs`, compared by language and script: `zh-Hant` there is `zh-TW` here), which a test holds, so a language added to `VERIFIED` is added to `TARGETS` and to the built-in file with it. The engine's built-in copy is the fallback. The words are `RULES_FIELDS`', the lab's rows.
 
 | Field | Scope | Group | Range or values | What it does |
 |---|---|---|---|---|
@@ -1017,3 +1017,107 @@ What a host (the web's door, the extension's session, the gate, the lab) calls. 
   - **`etag`** is the answer's `ETag` header, given where there is one. It is compared with the SHA-256 of the bytes given to `readRules`, the body decoded of any content coding, and a different one is refused with the field `etag`. Two forms are read: the strong `"<sha256>"` and the weak `W/"<sha256>"`, which a CDN may put in the strong one's place when it recodes the body. Any other form is refused. A host passes the header as it came, or `null`.
 - **The reader's choice** is the same in both readers: the server's answer, when one comes and is read; else the last read answer the reader cached; else the built-in. The server is the authority, so a lower version is taken like any other. A refused answer is ignored and counted, and the reader keeps what it had. The set is chosen when the composed document is ready, and an answer that has not come by then serves the next open: a rule-set fetch never delays a page.
 - **A `rules` must come from `readRules` or `parseRules`**, or be `BUILTIN_RULES`. The door checks only a set's shape (an object holding `scripts` and `languages`, else a `TypeError`), not its values; a set built by hand can fail to resolve a target, or draw badly. `BUILTIN_RULES` is frozen to every depth and typed read-only, so a set to edit is `structuredClone(BUILTIN_RULES)`.
+
+## 19. The engine's contract
+
+`src/pdf-reader/engine/` is what the web imports, and nothing else of the reader is. The directory is the boundary: a gate
+holds what may be imported into it (`scripts/check-boundary.mjs`, run by `pnpm lint`), a snapshot holds what it exports
+(`tests/pdf-reader/engine-contract.json`), and a test holds that it loads where it is meant to
+(`tests/pdf-reader/engine-contract.test.ts`).
+
+### 19.1 The tree
+
+```
+src/pdf-reader/engine/
+  pipeline.mjs translate.mjs rules.mjs layer.mjs view.mjs      the five entries: re-exports only
+  source/       latex-front, tar, paper-meta, node-files                          a paper's source: the server
+  pipeline/     live, anchors, versions, record.ts, tex-errors, and the compile path's cache, scripts, typeset/   the server
+  layout/       file, json, marks, make, paper, ink, carry, match, stream, remove, addon, addon-manifest         the layout file and the add-on (file, json and addon-manifest also the readers')
+  translate/    mt, groups, kept, mixed, version                                    the wires and the units a target keeps: both
+  rules/        layout (the rule set and its reader), font-roles, font-coverage, script, arg-roles, latexml-args   both
+  layer-proto/  run, reader (the reader's door), bundle, rows, fonts, hyph, removal, tex, check, layer1, layer2     the drawn layer: the browser
+  layer/        pieces, swap, and check (the pixel checker the layer gate's instrument loads)                       the browser
+  view/         highlight, floats, figures, pointer, sync, overlay, outline, engine.css                              the browser
+```
+
+What the engine does not hold: the extension's session (`src/pdf-reader/session/`), its translation client
+(`session/translate.mjs`, with `paperContext`), the TeX page's store and hints, the languages the reader typesets
+(`session/verified.mjs`) and the addresses (`src/pdf-reader/addresses.mjs`); and, parked (`parked/README.md`), the first
+instant layer (`parked/engine/`).
+
+### 19.2 The five entries
+
+| Entry | Loads in | What it gives |
+|---|---|---|
+| `pipeline` | Node (the server) | A paper's source to its units (`openPaper`, `loadProject`, `unpackSource`, `analyze`); the marked original and the probes (`originalFiles`, `probeFiles`, `readingsOf`, `stoppedShort`); the left geometry (`anchors`); the layout marks, the layout maker and the add-on's maker (`layoutMarksOfPaper`, `makeLayout`, `paperAddon`, the remover); the layout file and the add-on's manifest, with their caps; the bundle's writer (`writeBundle`, `bundleUnitsOf`); the faces' coverage; `PIPELINE_VERSION`, `PDFJS`. Not the compile path's typesetting, strategies or cache, and not `runLive`. |
+| `translate` | Node and browser | The wires a unit goes out as and the reading back (`serialize`, `rehydrate`, `serializeTags`, `rehydrateTags`, `translateUnits`, the sentences, the batches); the table groups (`decideGroups`, `groupOf`); the units a target keeps (`authorsTranslated`); the rows (`rowOf`, `unitOf`, `layerRows`, `toTranslate`, `batchesOf`, `runRows`); `TRANSLATE_VERSION`. No DOM, no network. |
+| `rules` | Node and browser | The layout rule set and its reader (`readRules`, `parseRules`, `resolveRules`, `BUILTIN_RULES`, `RULES_SCHEMA`, `RULES_CAP`, `TARGETS`), the font roles (`FACES`, `rolesFor`, `faceFor`, `familyOfFonts`) and the script of a tag (`scriptOf`). |
+| `layer` | browser | The reader's door whole (`layer-proto/reader.mjs`): `openLayer`, `firstFaceOf`, `readBundle` and its caps and refusal, `BUNDLE`, `CTAG`, `VTAG`, `parseLayout`, `indexLayout`, `parseAddonManifest`, the rows' helpers it takes. |
+| `view` | browser | What is lit under the pointer (`highlight`, `floats`, `figures`, `pointer`), the synchronised scrolling (`sync`), the overlays kept through a zoom (`overlay`) and the outline. |
+
+### 19.3 What holds
+
+- **Imports.** A whitelist, applied to every file of the engine (modules, TypeScript and declaration files) and to every way
+  a module is named: a value import or a type one, `export … from`, `import(…)`, `require(…)` and `new URL(…, import.meta.url)`.
+  A file of the engine names a module by relative path, to the engine's own files, `src/core/sentences`,
+  `src/core/protector/tokens` or `src/core/names`; or a `node:` module; or, in `rules/`, the layout rules' validator
+  (`zod/mini`). Nothing else: no alias (refused for its spelling), no build setting's name (`#imports`), no root-absolute
+  path, no other package, no module of the extension, and no specifier that is computed. A TypeScript file is reached by its
+  extension, which Node reads with its own type stripping; the closure behind the three core modules is those three files.
+- **Loading.** `pipeline`, `translate` and `rules` load in plain Node with no bundler (a child process in the contract test);
+  `layer` and `view` load in a browser's environment. The closures of `translate`, `rules`, `layer` and `view` hold none of the
+  server's modules (the front end, the compile path, the layout maker, the marks, the remover and the add-on's maker). The
+  `pipeline` entry's names leave the compile path out, but its closure still loads `cache`, `scripts` and `typeset/*` through
+  `live.mjs`; PR 5 splits `live.mjs` into the paper's pipeline and the compile run before that path is parked.
+- **Licence.** No file in the closure of the five entries states that it is ported from a reference project or a scoped
+  package (the web's R21 detector, `portedInClosure`). The shared interface (`controller.ts`, `src/pdf-reader/ui/**`,
+  `src/ui/controls/**`) reaches four GPL-ported files today, by one import each: `src/config/languages.ts` (the language
+  table), `src/providers/microsoft.ts`, `src/providers/prompt-library.ts` and `src/providers/request/retry-policy.ts`. The
+  web imports `controller.ts` and `src/pdf-reader/ui/**` through its pin today and replaces modules by its own seams (an
+  importer-scoped alias: `@/config/languages` and `pdf-reader/ui/languages` are its own files), so it must carry none of the
+  four in its bundle: each is either replaced by a web seam or not imported, which the web's own R21 gate checks. That holds
+  until Task 7 cuts the four from the shared interface's closure (the `ReaderHost` seams). The test pins the four as a list
+  that may shrink and never grow.
+- **Notices.** What the web carries with the engine and the shared interface: the LaTeXML acknowledgement now
+  (`rules/latexml-args.mjs` is in the closures of `pipeline` and `layer`; `docs/THIRD_PARTY.md` has its row), and Lucide (ISC)
+  and Noto Sans SC (OFL) with the shared interface (the icons of `src/ui/controls/Icon.tsx`, the glyphs of
+  `src/pdf-reader/ui/display-glyphs.ts`).
+- **Reached.** Every module of the engine is reached by an entry, by the checker the layer gate names, or by a file under
+  `src/` or `lab/` outside the engine (`unreached`: the shipped extension and every file of the lab, its bench and spikes, not
+  only its kept gates); a module only a test or a script reaches is parked with its tests.
+- **Versions.** The identities of §18 move with the code that owns them; a change of an entry's names is made on purpose, by
+  recording `engine-contract.json` again (`WRITE_CONTRACT=1 pnpm vitest run tests/pdf-reader/engine-contract.test.ts`), and
+  the web sees it as a change of the surface it pins.
+- **Behaviour.** `tests/pdf-reader/engine-golden.test.ts` holds, as SHA-256 values, what the engine makes of inputs the
+  repository wrote itself (units, wires, the files of every compile, the bundle, the layout file, the add-on's manifest,
+  the rows). A move or a refactor leaves every hash as it is.
+
+### 19.4 The layer API, as the web defines it
+
+The routes are the web's, `/api/v1/` kept for every released extension; the engine holds the format both readers parse and the
+tags they ask by (`layer-proto/bundle.mjs`).
+
+- **One file per paper version.** The bundle is a single JSON file: `{ schema, paper { id, version, pages }, base { bytes,
+  sha256, url }, versions { bundle, pipeline, layout, removal, pdfjs, image }, units, left, layout | null, addon { manifest,
+  tail } | null }`. Both readers parse it with `readBundle(json, caps)` after the byte cap (`BUNDLE_CAP`) and the value count
+  (`BUNDLE_VALUES`) are checked before `JSON.parse`; a refused bundle draws no layer, a refused unit is dropped and counted, a
+  layout of `null` draws the layer without the hybrid, an add-on of `null` erases and restores.
+- **Routes by tag.** `GET /api/v1/layer/<id>v<n>/<tag>` answers 200 with the bundle, 202 `Preparing { position, stage,
+  progress, retryAfterMs }`, 404 `{ why }` (`not-prepared`, `no-source`, `no-pdf`, `cannot-prepare`, `unknown-versions`) or 429
+  `{ retryAfterMs }`; `POST …/<tag>/prepare` (JSON body `{}`) answers 202, 200 `{ ready: true }`, 404 or 429; `GET
+  /api/v1/original/<id>v<n>` is `base.url`, our copy of arXiv's bytes. The tag is the engine's `VTAG`, or its contract
+  tag `CTAG` where the server redirects to the newest bundle made under it (§18.4). The public GETs answer CORS `*`; the prepare
+  POST relies on the extension's host permission.
+- **What the reader sends.** A paper's id and version, and the engine's public versions (the tag). Nothing else leaves the machine.
+- **The rows.** `runRows` makes a language's rows from the bundle's units; the reader draws them through the door
+  (`openLayer(…).take(rows)`). The rows are cached by the bundle's key, the target and the chain.
+- **The faces and the patterns.** From the web's `/static-fonts/*` and its `hyph` files, which answer CORS `*`.
+
+### 19.5 The hand-off
+
+The web moves its imports to the five entries, once: its server takes `pipeline` and `translate`, its reader `layer`, `view`,
+`translate` and `rules`; its fork-session script and the copies of the session it makes go with the reading view that replaces
+them. The extension's own modules are not importable from the web, and a module the web needs that no entry exports is a
+request for an entry's change, made here with its test, not an import by path. The shared interface it imports besides
+(`controller.ts`, `src/pdf-reader/ui/**`) stays under the licence rule of section 19.3: the four ported files are replaced by
+its seams or left out of its bundle until they are cut from it.

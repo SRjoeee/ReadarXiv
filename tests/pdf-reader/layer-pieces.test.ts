@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { COLOUR_SHIFT, kOfSource, LAYER_COLOURS, STYLE, slotKs, styleOf, type TrPiece, trPiecesOf, trText } from '@/pdf-reader/engine/layer/pieces.mjs'
-import { openPaper } from '@/pdf-reader/engine/live.mjs'
-import { plainTranslated, SPACING, serialize, shown, translateUnits } from '@/pdf-reader/engine/mt.mjs'
+import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { plainTranslated, SPACING, serialize, shown, translateUnits } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // A translated unit's pieces as the layer takes them (spec §4.3): each placeholder, and each group's open and close, by
 // `k`, the index of its source piece in its unit; text as the compiled PDF shows it; a group's style as flags

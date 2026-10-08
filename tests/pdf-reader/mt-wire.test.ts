@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { rehydrate, serialize } from '@/pdf-reader/engine/mt.mjs'
+import { rehydrate, serialize } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The markers wire the PDF reader sends a machine translator (mt.mjs): what an engine reads as part of a word
 

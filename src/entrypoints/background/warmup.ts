@@ -13,7 +13,7 @@
 // disk that cannot keep the files); a page that takes no warm-up (one from before it) is asked again a day on. Nothing
 // a reader sees: the diagnostics log alone says what happened, a state that lasts once.
 import { toBcp47 } from '@/config/languages'
-import { verified } from '@/pdf-reader/engine/verified.mjs'
+import { verified } from '@/pdf-reader/session/verified.mjs'
 import type { TexWarmRequest, TexWarmResult } from '@/shared/tex-warm'
 
 export type WarmReason = 'install' | 'update' | 'language' | 'check'
@@ -37,7 +37,7 @@ export interface WarmRecord {
 }
 
 export interface WarmupDeps {
-  /** the TeX page's site (pdf-reader/engine/addresses.mjs TEX_PAGE) */
+  /** the TeX page's site (pdf-reader/addresses.mjs TEX_PAGE) */
   site: string
   /** the target language in force, as the configuration stores it (ISO 639-3) */
   target(): Promise<string>
@@ -78,7 +78,7 @@ export function createWarmup(deps: WarmupDeps) {
     const record = await deps.load()
     if (deps.saveData()) return note(record, 'save-data', `${reason}: skipped, the browser asks to save data`)
     const lang = toBcp47(await deps.target())
-    // the reader typesets no other language yet (scripts.mjs VERIFIED): nothing it would ask for
+    // the reader typesets no other language yet (session/verified.mjs VERIFIED): nothing it would ask for
     if (!verified(lang)) return
     const now = deps.now()
     // a page that takes no warm-up: asked again a day on, or once a reader has seen it under other versions (seen)

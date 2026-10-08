@@ -1,14 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SourceUnit } from '@/pdf-reader/engine/latex-front.mjs'
+import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import {
   BUNDLE, BUNDLE_CAP, BUNDLE_VALUES, type BundleParts, type BundleUnit, BundleRefusal, bundleKey, bundleUnitsOf, CTAG, type ReadBundle, readBundle, UNIT_FLAG_BITS, VTAG, writeBundle,
 } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { ADDON_CAP, REMOVAL, type RemovalManifest } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { encodeLayout, LAYOUT, type LayoutFile, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
-import { PIPELINE_VERSION as LIVE_PIPELINE } from '@/pdf-reader/engine/live.mjs'
-import { displayEdges } from '@/pdf-reader/engine/mt.mjs'
-import { PDFJS, PIPELINE_VERSION } from '@/pdf-reader/engine/versions.mjs'
+import { PIPELINE_VERSION as LIVE_PIPELINE } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { displayEdges } from '@/pdf-reader/engine/translate/mt.mjs'
+import { PDFJS, PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
 
 // The layer bundle (the layer-only plan §3, A2's E7): one JSON file a paper version, written by the engine where the
 // paper is prepared and read by both readers with the engine's one parser, within bounds. Synthetic inputs only: the
