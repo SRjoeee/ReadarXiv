@@ -82,6 +82,18 @@ describe('parseAddonManifest', () => {
     expect(refusalOf(edited(m => { m.sets = { R: 3, P: 7 } }, check))?.path).toBe('sets.P')
   })
 
+  it('refuses, in the shipped form, a page with kept ink under its units that names no removed page (at.R)', () => {
+    const shippedForm = (m: unknown) => { try { parseAddonManifest(bytesOf(m), { pages: 3, shipped: true }) } catch (e) { if (e instanceof LayoutRefusal) return e; throw e } return null }
+    expect(shippedForm(shipped())).toBeNull()
+    expect(shippedForm(edited(m => { delete m.page[1].at }))?.path).toBe('page.1.at')
+    expect(shippedForm(edited(m => { m.page[1].at = {} }))?.path).toBe('page.1.at')
+    // (no kept ink, filled with paper: no removed page needed; the R set at its fixed place names it)
+    expect(shippedForm(edited(m => { delete m.page[1].at; m.page[1].dirty = [] }))).toBeNull()
+    expect(shippedForm(edited(m => { delete m.page[1].at; m.sets = { R: 3 } }))).toBeNull()
+    // (the check's form names every set's place: its pages need none)
+    expect(refusalOf(check())).toBeNull()
+  })
+
   it('refuses a stride broken', () => {
     expect(refusalOf(edited(m => { m.page[1].dirty.push(1) }))?.path).toBe('page.1.dirty')
     expect(refusalOf(edited(m => { m.page[2].rules.pop() }))?.path).toBe('page.2.rules')

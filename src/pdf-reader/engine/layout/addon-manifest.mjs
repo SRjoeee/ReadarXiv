@@ -80,7 +80,8 @@ export function checkBoxes(v, page, views, path) {
  * each page 1 to `pages`: `ok`, a refused page's reason (1 to REFUSED_MAX code units) and nothing removed on it, a
  * removed page's `units` (boxes by unit id) and `at` (its pages in the add-on's document by set, each past arXiv's own,
  * within the document's pages — arXiv's, each set's, and one for each `at` — and each named once), and either's `dirty`
- * and `rules` (boxes); `appended` and `stats`, counts; the check's crops' `colours` (rgb by page and crop) and outline
+ * and `rules` (boxes), a shipped page with `dirty` boxes naming its removed page (`at.R`) where the R set has no fixed
+ * place; `appended` and `stats`, counts; the check's crops' `colours` (rgb by page and crop) and outline
  * table (a font's characters and their boxes in thousandths of an em, stride 5). Returns the manifest as it is; throws
  * LayoutRefusal
  */
@@ -130,7 +131,12 @@ export function checkAddonManifest(m, { pages, views = null, shipped = false }) 
       const at = keysOf(e.at, [], setNames, `${path}.at`)
       for (const s of Object.keys(at)) { ats.push(at[s]); atPaths.push(`${path}.at.${s}`) }
     }
-    if (Object.hasOwn(e, 'dirty')) checkBoxes(e.dirty, p, views, `${path}.dirty`)
+    if (Object.hasOwn(e, 'dirty')) {
+      checkBoxes(e.dirty, p, views, `${path}.dirty`)
+      // (the shipped add-on swaps a removed page in where kept ink lies under a unit's boxes: a compact one names that
+      // page, or a reader would swap in arXiv's own page p, the R set's fixed place being none)
+      if (shipped && e.ok && e.dirty.length && !Object.hasOwn(sets, 'R') && !(Object.hasOwn(e, 'at') && isObject(e.at) && Object.hasOwn(e.at, 'R'))) throw refuse(`${path}.at`, 'missing: kept ink under its units, and no removed page named (at.R)')
+    }
     if (Object.hasOwn(e, 'rules')) checkBoxes(e.rules, p, views, `${path}.rules`)
   }
   // the add-on's document: arXiv's pages, each set's block of them, and the pages named by `at`
