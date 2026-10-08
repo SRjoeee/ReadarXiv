@@ -9,7 +9,7 @@
 //            the one comment (<!-- rules-gate -->) and the numbers (rules-gate.json). Exit 1 where the run cannot pass
 //   engines  the same verdict for head's set on each engine lab/pdf/live-engines.json names, against the set published for it
 //
-//   node lab/pdf/spikes/rules-gate.mjs run --engine=<worktree> --rules=<file> --pack=<dir> [--out=<run.json>] [--workers=4]
+//   node lab/pdf/spikes/rules-gate.mjs run --engine=<worktree> --rules=<file> --pack=<dir> [--out=<run.json>] [--log=<file>] [--workers=4]
 //   node lab/pdf/spikes/rules-gate.mjs compare --base=<run.json> --head=<run.json> --out=<dir> [--base-sha=<sha>] [--head-sha=<sha>]
 //       [--base-rules=<file> --head-rules=<file>] [--ruling=<file>]… [--pack=<gate-pack.json>] [--records=<fixtures dir>] [--label=<text>]
 //   node lab/pdf/spikes/rules-gate.mjs engines --list=<live-engines.json> --head-rules=<file> --pack=<dir> --published=<origin> --out=<dir>
@@ -20,9 +20,9 @@
 // comment and the numbers are searched for every string of the fixtures' translations before they are written, and withheld
 // (exit 2) where one is found. A ruling's words are the maintainer's, and are the only free text in the comment.
 import { execFileSync, spawn } from 'node:child_process'
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { appendFileSync, copyFileSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { nameOf } from './layer-gate/ref.mjs'
 import { compare, MEASURES, pooled, worse } from './layer-gate/score.mjs'
@@ -37,8 +37,11 @@ const MODEL = MEASURES.filter(m => m[1] === 'model')
 const DEFECTS = MODEL.filter(m => m[2] === 'defect').map(m => m[0])
 const FIXTURE = /^[A-Za-z0-9._-]+v\d+-[A-Za-z-]+$/
 const GIT_SHA = /^[0-9a-f]{7,40}$/
-/** the inputs of a run that make it another instrument. Not among them: the rule set, the engine's commit and its remover, which are what the two runs vary */
-const INSTRUMENT = ['tier', 'pages', 'scale', 'inkScale', 'inkMin', 'composite', 'layouts', 'fixtures', 'refs', 'geometry', 'chromium', 'pdfjs', 'fonts', 'checker', 'measures', 'kind', 'protoUnits', 'place', 'order', 'faces', 'tex', 'hyphenation', 'removal']
+/** The inputs of a run that make it another instrument: what the gate takes from the checkout it runs from, the pack and the browser,
+ *  the same for both runs. Not among them: the rule set, the engine's commit, its remover and the hyphenation digest, which the
+ *  engine under test computes itself (layer-gate.mjs reads the hyph.mjs of the engine measured), so that a pull request that
+ *  changes them is a change to measure, not a different instrument. The pack's patterns are the same for both runs, and verified. */
+const INSTRUMENT = ['tier', 'pages', 'scale', 'inkScale', 'inkMin', 'composite', 'layouts', 'fixtures', 'refs', 'geometry', 'chromium', 'pdfjs', 'fonts', 'checker', 'measures', 'kind', 'protoUnits', 'place', 'order', 'faces', 'tex', 'removal']
 /** the longest list of pages a comment holds; the numbers hold them all */
 const PAGES_SHOWN = 60
 
@@ -59,6 +62,7 @@ export function labLink(fixture, page, sha) {
  * or its key ("text units left English", `unitsLeft`).
  */
 export function parseRuling(json, name) {
+  if (!/^[A-Za-z0-9._-]{1,80}$/.test(name)) throw new Error('a ruling\'s file name is letters, digits, dots, dashes and underscores')
   const fail = field => { throw new Error(`ruling ${name}: ${field} is missing or not ${field === 'measures' || field === 'targets' ? 'a non-empty list of strings' : 'a non-empty string'}`) }
   if (json === null || typeof json !== 'object' || Array.isArray(json)) throw new Error(`ruling ${name}: not an object`)
   for (const f of ['by', 'quote', 'why']) if (typeof json[f] !== 'string' || !json[f].trim()) fail(f)
@@ -70,6 +74,12 @@ export function parseRuling(json, name) {
 /** a page of a run as the compare reads it: the record drops a zero, so a defect or a count it lacks is 0 */
 const ZERO = Object.fromEntries([...DEFECTS, 'textOn', 'textDrawn', 'cellsOn', 'cellsDrawn', 'modelCells'].map(k => [k, 0]))
 const withZeros = fixtures => Object.fromEntries(Object.entries(fixtures).map(([n, f]) => [n, { totals: f.totals, pages: (f.pages ?? []).map(e => ({ ...ZERO, ...e })) }]))
+
+/** Text as one inline code span, so that nothing of it is markdown, an image, a mention or HTML: whitespace folded, cut at 400
+ *  characters, backticks made apostrophes (a span cannot hold its own fence) */
+export function codeSpan(text, max = 400) {
+  return `\`${String(text).replace(/\s+/g, ' ').replace(/`/g, "'").trim().slice(0, max)}\``
+}
 
 /** the value a table shows: a share in per cent, a ratio to 3 places, a count; a defect with its rate per 1,000 cells */
 function shown(row, side) {
@@ -224,11 +234,12 @@ export function commentOf(report, o) {
   if (report.regressions.length) {
     L.push('### Regressions', '', '| target | measure | base | head | |', '|---|---|---|---|---|')
     const rate = (r, v) => (v === null ? '–' : String(Math.round(v * 10000) / 10000))
-    for (const r of report.regressions) L.push(`| ${r.target} | ${r.label} | ${rate(r, r.from)} | ${rate(r, r.to)} | ${r.ruling ? `accepted by ruling \`${r.ruling}\`` : '**not accepted**'} |`)
+    for (const r of report.regressions) L.push(`| ${r.target} | ${r.label} | ${rate(r, r.from)} | ${rate(r, r.to)} | ${r.ruling ? `accepted by ruling ${codeSpan(r.ruling)}` : '**not accepted**'} |`)
     L.push('')
     for (const name of [...new Set(report.regressions.map(r => r.ruling).filter(Boolean))]) {
       const g = o.rulings?.find(x => x.name === name)
-      if (g) L.push(`> \`${name}\` (${g.date ?? 'undated'}, ${g.by}): ${g.english ?? g.quote}${g.why ? ` — ${g.why}` : ''}`, '')
+      // (the maintainer's words, and the one free text of the comment: code spans, whatever they hold)
+      if (g) L.push(`> ${codeSpan(name)} (${codeSpan(g.date ?? 'undated')}, ${codeSpan(g.by)}): ${codeSpan(g.english ?? g.quote)}${g.why ? ` — ${codeSpan(g.why)}` : ''}`, '')
     }
     L.push('A defect is compared as a rate per 1,000 cells of the drawn units\' frames; the other measures as their values.', '')
   }
@@ -260,18 +271,53 @@ export function gateArgs({ engine, rules, pack, workers = 4 }) {
   }
 }
 
+/** the output of the gate that is names and numbers: an output's `ok` line, the tier's line, the completeness line */
+const NAME = '[A-Za-z0-9._-]+v\\d+-[A-Za-z-]+'
+const CHECK = '(?:missing|twice|brackets|duplicated|clipped|groupsSplit|labelsSource|lostInk|numbers)'
+const OK_LINE = new RegExp(`^ok   ${NAME}: \\d+ pages, \\d+/\\d+ text units drawn(?:, in \\d+ parts)? \\(\\d+(?:\\.\\d+)? s\\)$`)
+const TIER_LINE = /^model tier: \d+ outputs, \d+ pages in \d+(?:\.\d+)? s on \d+ workers; the run in .+\.json$/
+const COMPLETE_LINE = new RegExp(`^completeness \\(spec §5\\): (?:every one of \\d+ outputs passes|\\d+ of \\d+ outputs fail: ${NAME} \\[${CHECK}(?:, ${CHECK})*\\](?:; ${NAME} \\[${CHECK}(?:, ${CHECK})*\\])*)$`)
+const FAIL_LINE = new RegExp(`^FAIL (${NAME})(?::|$)`)
+
+/**
+ * What of a line the gate prints may be echoed to a job log anyone can read, or null. The gate prints exception stacks, the
+ * reason an output failed and what a check names, which can carry a unit's text. An output's `ok` line and the tier's and
+ * completeness lines are names and numbers and pass as they are; a failure is cut after the output's name; the rest is held back
+ * (the whole output is in a file of the runner that nothing uploads).
+ */
+export function publicLine(line) {
+  if (OK_LINE.test(line) || TIER_LINE.test(line) || COMPLETE_LINE.test(line)) return line
+  const fail = FAIL_LINE.exec(line)
+  if (fail) return `FAIL ${fail[1]}`
+  if (line.startsWith('FAIL requests that would have left the machine')) return 'FAIL requests that would have left the machine'
+  return null
+}
+
 /** the gate run on one side; resolves with the run file it wrote. The gate exits 1 for a completeness count the merge rule
- *  decides, so only a missing run file is a failure here */
+ *  decides, so only a missing run file is a failure here. Its whole output goes to the file `log` (a file of the runner, never
+ *  uploaded); the job log gets `publicLine`'s lines alone */
 export function runGate(o) {
   const { args, env } = gateArgs(o)
+  const log = resolve(o.log ?? join(tmpdir(), `rules-gate-${process.pid}-${basename(o.engine)}.log`))
+  mkdirSync(dirname(log), { recursive: true })
+  const sink = createWriteStream(log)
   return new Promise((ok, fail) => {
-    const child = spawn(join(REPO, 'node_modules/.bin/tsx'), [join(here, 'layer-gate.mjs'), ...args], { cwd: REPO, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'inherit'] })
-    let out = ''
-    child.stdout.on('data', d => { process.stdout.write(d); out += d })
+    const child = spawn(join(REPO, 'node_modules/.bin/tsx'), [join(here, 'layer-gate.mjs'), ...args], { cwd: REPO, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
+    let out = '', pending = '', hidden = 0
+    const echo = text => {
+      const lines = (pending + text).split('\n')
+      pending = lines.pop()
+      for (const line of lines) { const shown = publicLine(line); if (shown === null) hidden++; else console.log(shown) }
+    }
+    child.stdout.on('data', d => { sink.write(d); out += d; echo(String(d)) })
+    child.stderr.on('data', d => { sink.write(d); hidden += String(d).split('\n').filter(Boolean).length })
     child.on('error', fail)
     child.on('close', code => {
+      echo('\n')
+      sink.end()
+      console.log(`(${hidden} more lines of the gate's output are in ${log}, which the job does not show)`)
       const file = /the run in (.+\.json)\s*$/m.exec(out)?.[1]
-      if (!file || !existsSync(file)) return fail(new Error(`the gate wrote no run file (exit ${code})`))
+      if (!file || !existsSync(file)) return fail(new Error(`the gate wrote no run file (exit ${code}); its output is in ${log}`))
       if (o.out) copyFileSync(file, o.out)
       ok(o.out ?? file)
     })
@@ -324,8 +370,8 @@ async function engines(argv) {
         else if (res.status !== 404) throw new Error(`${url}: HTTP ${res.status}`)
       }
       console.log(`${e.name} (${e.ref}): head's set against ${from}`)
-      const base = JSON.parse(readFileSync(await runGate({ engine: dir, rules: published, pack }), 'utf8'))
-      const next = JSON.parse(readFileSync(await runGate({ engine: dir, rules: headFile, pack }), 'utf8'))
+      const base = JSON.parse(readFileSync(await runGate({ engine: dir, rules: published, pack, log: join(out, `${basename(dir)}-base.log`) }), 'utf8'))
+      const next = JSON.parse(readFileSync(await runGate({ engine: dir, rules: headFile, pack, log: join(out, `${basename(dir)}-head.log`) }), 'utf8'))
       const report = judge(base, next)
       const md = commentOf(report, { headSha: git('rev-parse', 'HEAD').trim(), baseSha: sha, label: `engine ${e.name}` }).replace(MARK, `<!-- rules-gate engine ${basename(dir)} -->`)
       writeFileSync(join(out, `${basename(dir)}.md`), md)
@@ -385,20 +431,21 @@ async function compareCommand(argv) {
   const text = commentOf(report, { headSha, baseSha, pack, enginePipeline: pipeline, targets: E.TARGETS, changedTargets: meta.changedTargets, rulings, label: typeof arg('label') === 'string' ? arg('label') : undefined })
   const json = `${JSON.stringify(reportJson(report, meta), null, 1)}\n`
   mkdirSync(out, { recursive: true })
+  // (the numbers first, so that a comment withheld below leaves them in the log; they are counts, labels and names the report was built from)
+  for (const t of report.targets) console.log(`${t.target.padEnd(6)} ${String(t.outputs.length)} outputs: ${t.worse} worse, ${t.better} better`)
+  for (const r of report.regressions) console.log(`  regression ${r.target} ${r.label}: ${r.from} -> ${r.to}${r.ruling ? ` (ruling ${r.ruling})` : ''}`)
   if (typeof arg('records') === 'string') {
     const strings = packStrings(resolve(arg('records'))), haystack = [...strings].join('\u0000')
     const free = rulings.flatMap(r => [r.by, r.on, r.quote, r.english, r.scope, r.why].filter(Boolean))
     const leaks = leaksIn(text + json, strings) + free.reduce((n, t) => n + fragmentsIn(t, haystack), 0)
     if (leaks) {
-      writeFileSync(join(out, 'rules-gate.md'), `${MARK}\n## Rules gate: withheld\n\nThe comment held text of a paper and was not written. The job log has the numbers.\n`)
+      writeFileSync(join(out, 'rules-gate.md'), `${MARK}\n## Rules gate: withheld\n\nThe comment held text of a paper and was not written. The numbers are in the job log.\n`)
       console.log(`FAIL the comment would carry ${leaks} string${leaks === 1 ? '' : 's'} of the fixtures' translations: withheld`)
       return 2
     }
   }
   writeFileSync(join(out, 'rules-gate.md'), text)
   writeFileSync(join(out, 'rules-gate.json'), json)
-  for (const t of report.targets) console.log(`${t.target.padEnd(6)} ${String(t.outputs.length)} outputs: ${t.worse} worse, ${t.better} better`)
-  for (const r of report.regressions) console.log(`  regression ${r.target} ${r.label}: ${r.from} -> ${r.to}${r.ruling ? ` (ruling ${r.ruling})` : ''}`)
   for (const p of report.problems) console.log(`FAIL ${p}`)
   console.log(`${report.ok ? 'ok' : 'FAIL'}: ${report.pages.length} pages moved; ${join(out, 'rules-gate.md')}`)
   return report.ok ? 0 : 1
@@ -409,7 +456,7 @@ async function main(argv) {
   const rest = argv.filter((x, i) => !(i === 0 && x === command))
   if (command === 'run') {
     const arg = n => option(rest, n)
-    const file = await runGate({ engine: resolve(arg('engine')), rules: resolve(arg('rules')), pack: resolve(arg('pack')), out: typeof arg('out') === 'string' ? resolve(arg('out')) : undefined, workers: arg('workers') ? Number(arg('workers')) : 4 })
+    const file = await runGate({ engine: resolve(arg('engine')), rules: resolve(arg('rules')), pack: resolve(arg('pack')), out: typeof arg('out') === 'string' ? resolve(arg('out')) : undefined, log: typeof arg('log') === 'string' ? arg('log') : undefined, workers: arg('workers') ? Number(arg('workers')) : 4 })
     console.log(`RUN ${file}`)
     return 0
   }

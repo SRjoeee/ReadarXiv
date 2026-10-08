@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fixtureTotals, MEASURES, type PageEntry } from '../../lab/pdf/spikes/layer-gate/score.mjs'
-import { checkRulesFile, commentOf, fragmentsIn, gateArgs, judge, labLink, leaksIn, MARK, parseRuling, textsOf } from '../../lab/pdf/spikes/rules-gate.mjs'
+import { checkRulesFile, commentOf, fragmentsIn, gateArgs, judge, labLink, leaksIn, MARK, parseRuling, publicLine, textsOf } from '../../lab/pdf/spikes/rules-gate.mjs'
 import { BUILTIN_RULES, readRules, writeRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // The rules gate's verdict (lab/pdf/spikes/rules-gate.mjs, rules-as-data plan §8, Task R6): two model-tier runs of one
@@ -90,8 +90,10 @@ describe('a target is pooled over its outputs and held to score.mjs\' thresholds
     delete (noJa as Record<string, unknown>)['1512.03385v1-ja']
     const failed = judge(run(base()), run(noJa, { failed: [{ name: '1512.03385v1-ja', why: 'no layout file' }] }))
     expect(failed.problems).toEqual(['1512.03385v1-ja did not run in the head run'])
-    // the rule sets differing is the point of the run, not a reason to refuse
+    // the rule sets differing is the point of the run, not a reason to refuse; so is anything else the engine under test computes
+    // for itself: the hyphenation digest is made by the hyph.mjs of the engine measured, which a pull request may change
     expect(judge(run(base()), run(base(), { version: 2 })).problems).toEqual([])
+    expect(judge(run(base()), run(base(), { inputs: { hyphenation: '0123456789abcdef', remover: '0123456789abcdef' } })).problems).toEqual([])
   })
 })
 
@@ -134,7 +136,7 @@ describe('the comment holds no fixture text', () => {
   const RECORD = {
     units: [
       { kind: 'para', src: 'The quick brown fox jumps over the lazy dog near the river bank', tr: 'Der schnelle braune Fuchs springt über den faulen Hund am Flussufer', pieces: [{ t: 'text', tr: true, s: 'Der schnelle braune Fuchs springt' }, { t: 'ph', src: '\\mathcal{L}_{\\mathrm{total}}' }], sentences: { src: ['The quick brown fox jumps over the lazy dog.'], tr: ['Der schnelle braune Fuchs.'] } },
-      { kind: 'heading', src: 'Residual learning for image recognition', tr: 'Residuelles Lernen für die Bilderkennung', pieces: [{ t: 'text', s: 'Residuelles Lernen für die Bilderkennung' }] },
+      { kind: 'heading', src: 'A synthetic heading of the second unit', tr: 'Eine synthetische Überschrift der zweiten Einheit', pieces: [{ t: 'text', s: 'Eine synthetische Überschrift der zweiten Einheit' }] },
     ],
   }
   const strings = textsOf(RECORD)
@@ -142,7 +144,7 @@ describe('the comment holds no fixture text', () => {
   it('finds the strings of a record to keep out: sources, translations, pieces and sentences, none shorter than ten characters', () => {
     expect(strings.has('The quick brown fox jumps over the lazy dog near the river bank')).toBe(true)
     expect(strings.has('Der schnelle braune Fuchs springt')).toBe(true)
-    expect(strings.has('Residuelles Lernen für die Bilderkennung')).toBe(true)
+    expect(strings.has('Eine synthetische Überschrift der zweiten Einheit')).toBe(true)
     expect(strings.has('\\mathcal{L}_{\\mathrm{total}}')).toBe(true)
     expect([...strings].every(s => s.length >= 10)).toBe(true)
   })
@@ -255,9 +257,49 @@ describe('the comment', () => {
     expect(text).toContain('ja.json')
     expect(text).toMatch(/No output for zh-TW/)
   })
+  it('renders a ruling\'s words as code spans: no image, no ping, no raw HTML, whatever it holds', () => {
+    const hostile = parseRuling({ date: '2026-10-08', by: 'the @maintainer', quote: 'see ![x](http://example.com/a.png) and <img src=x onerror=1> and @everyone `tick` and\nnew line', english: 'plain', measures: [labelOf('unitsLeft')], targets: ['ja'], why: '<b>why</b> ```fence``` @team' }, 'ja.json')
+    const text = commentOf(judge(run(base()), run(base({ ja: [{ textDrawn: 9 }, {}] })), { rulings: [hostile] }), { headSha: SHA_HEAD, baseSha: SHA_BASE, rulings: [hostile] })
+    const quoted = text.split('\n').find(l => l.startsWith('> '))!
+    // what is left of the line outside its code spans carries none of it
+    const outside = quoted.replace(/(`+)[^`]+?\1/g, '')
+    expect(outside).not.toMatch(/[!<@[\]]/)
+    expect(quoted).toContain('`plain`')
+    expect(quoted).not.toContain('\n')
+    // a file name that is no name is no ruling
+    expect(() => parseRuling({ date: 'x', by: 'b', quote: 'q', measures: ['m'], targets: ['ja'], why: 'w' }, 'a|b`c.json')).toThrow(/file name/)
+  })
   it('warns when the pack was made under another PIPELINE than the engine\'s', () => {
     const text = commentOf(judge(run(base()), run(base())), { headSha: SHA_HEAD, baseSha: SHA_BASE, pack: { digest: 'f'.repeat(64), pipeline: '10' }, enginePipeline: '11' })
     expect(text).toMatch(/PIPELINE 10.*PIPELINE 11/)
+  })
+})
+
+describe('the job log is public: the gate\'s output is filtered before it is echoed', () => {
+  const NAME = '1512.03385v1-zh'
+  const TEXT = 'The quick brown fox jumps over the lazy dog near the river bank'
+  it('lets through the lines that are names and numbers, and cuts a failure after the output\'s name', () => {
+    expect(publicLine(`ok   ${NAME}: 12 pages, 133/133 text units drawn (4.8 s)`)).toBe(`ok   ${NAME}: 12 pages, 133/133 text units drawn (4.8 s)`)
+    expect(publicLine(`ok   ${NAME}: 12 pages, 111/111 text units drawn, in 9 parts (3.0 s)`)).toContain('in 9 parts')
+    expect(publicLine(`FAIL ${NAME}: TypeError: cannot read ${TEXT} at layer-proto/run.mjs:12`)).toBe(`FAIL ${NAME}`)
+    expect(publicLine(`FAIL ${NAME}: v0 changed its inputs (the geometry or the units) as it drew`)).toBe(`FAIL ${NAME}`)
+    expect(publicLine(`FAIL requests that would have left the machine: http://example.com/${TEXT.replaceAll(' ', '%20')}`)).toBe('FAIL requests that would have left the machine')
+    expect(publicLine('model tier: 29 outputs, 483 pages in 34.2 s on 4 workers; the run in /work/out/layer-gate/model-010c5789-2026-10-08T08-05-36-198Z.json')).toMatch(/^model tier: 29 outputs/)
+    expect(publicLine(`completeness (spec §5): 1 of 29 outputs fail: ${NAME} [missing, twice]`)).toContain(`${NAME} [missing, twice]`)
+    expect(publicLine('completeness (spec §5): every one of 29 outputs passes')).toContain('every one of 29')
+  })
+  it('holds back everything else: a stack, a reason, a table, a line of a debug print, an ok line that carries more than numbers', () => {
+    for (const line of [
+      `    at loadUnit (file:///work/src/pdf-reader/engine/layer-proto/run.mjs:88:11)`, `Error: ${TEXT}`, `TypeError at ${TEXT}`, TEXT, '',
+      `1512.03385v1-zh	0	12	0.911`, `ok   ${NAME}: ${TEXT}`, `ok   ${NAME}: 12 pages, 133/133 text units drawn (4.8 s) ${TEXT}`,
+      `completeness (spec §5): 1 of 29 outputs fail: ${NAME} [${TEXT}]`, `FAILED ${TEXT}`, `FAIL ${TEXT}`,
+    ]) expect(publicLine(line), line).toBe(null)
+  })
+  it('shows no stretch of a paper whatever the gate prints', () => {
+    const printed = [`ok   ${NAME}: 12 pages, 133/133 text units drawn (4.8 s)`, `FAIL ${NAME}: Error: ${TEXT}`, `  stack: ${TEXT}`, `${TEXT}\t1\t2`, 'model tier: 1 outputs, 12 pages in 1 s on 4 workers; the run in /tmp/x.json']
+    const echoed = printed.map(publicLine).filter(Boolean).join('\n')
+    expect(leaksIn(echoed, new Set([TEXT]))).toBe(0)
+    expect(echoed.split('\n')).toHaveLength(3)
   })
 })
 

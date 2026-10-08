@@ -113,8 +113,22 @@ node lab/pdf/spikes/gate-pack.mjs objects     # the objects to upload, once each
 The objects are content-addressed (`gate-pack/<sha256>` in the bucket `readarxiv-ci`, which has no public access), so the
 outputs of one paper share one, and an upload is each distinct digest once. In CI `gate-pack.mjs restore` reads each from
 Cloudflare's REST API with the read-only token (`READARXIV_CI_TOKEN`, a Cloudflare API token with *Workers R2 Storage Bucket
-Item Read* on that bucket alone), checks it against the manifest and writes it; the directory is cached by the pack's digest,
-and `verify` checks every file again before the gate reads any. A fork's pull request has no token and runs no job.
+Item Read* on that bucket alone), checks it against the manifest and writes it; and `verify` checks every file again before
+the gate reads any. A fork's pull request has no token and runs no job.
+
+**Where the pack is cached.** In a pull request's own cache, by the pack's digest (`rules-gate.yml`), and nowhere else. A cache
+saved by a push to `next` is readable by a fork's pull request, which runs its own edited workflow and can restore the
+caches of its base branch (the key is public, in `gate-pack.json`): it could then publish the papers. So no workflow that a
+push runs saves the pack: `rules-publish.yml` downloads it each time, digest-checked, and keeps nothing, and
+`tests/scripts/rules-workflows.test.ts` fails a workflow that caches it and is run by anything but a pull request. The price is
+that each new pull request downloads the whole pack once.
+
+**The job log is public**, and the layer gate prints exception stacks and the reasons an output failed, which can carry a unit's
+text. `rules-gate.mjs run` writes the gate's whole output to a file of the runner (`--log`, in `RUNNER_TEMP`, never uploaded)
+and echoes only the lines that are names and numbers (an output's `ok` line, the tier's and the completeness lines; a failure
+cut after the output's name). The comment and the numbers are searched for the translations' strings before they are written
+(`--records`), and a ruling's words are shown in code spans. The runner has no pnpm action of a third party's: `corepack enable`
+gives the version `package.json` names.
 
 **Live engines.** Before production, `rules-gate.mjs engines` runs the model tier of head's set on each engine
 `lab/pdf/live-engines.json` names (the released extension's tag and the web's production pin, each a git ref of this
@@ -126,7 +140,7 @@ names the engine. While the file names no engine nothing is measured.
 
 | Where | Name | Value |
 |---|---|---|
-| Environment `rules-gate` | secret `READARXIV_CI_TOKEN` | the read-only token on the bucket `readarxiv-ci` |
+| Environment `rules-gate` | secret `READARXIV_CI_TOKEN` | the read-only token on the bucket `readarxiv-ci`, created with an expiry and rotated before it lapses: any process of a job that references a secret can read it, and the pack is on the runner's disk for the same code, so the token is worth only its lifetime (the next pack) |
 | Environment `rules-staging` | secret `RULES_PUBLISH_SECRET` | the staging Worker's publish secret |
 | Environment `rules-production` | secret `RULES_PUBLISH_SECRET`; the maintainer as required reviewer | the production Worker's publish secret |
 | Repository variables | `CF_ACCOUNT_ID`, `RULES_STAGING_URL`, `RULES_PRODUCTION_URL`, `RULES_PRODUCTION` | the account id; the staging and production origins (`https://…`, no path); `on` once production exists |

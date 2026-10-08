@@ -42,7 +42,9 @@ export declare function commentOf(report: Verdict, o: CommentOptions): string
 export declare function reportJson(report: Verdict, meta?: { base?: { commit?: string | null; rules?: { version: number; sha256: string } }; head?: { commit?: string | null; rules?: { version: number; sha256: string } }; pack?: { digest: string; pipeline: string } | null; changedTargets?: string[] }): Record<string, unknown>
 
 export declare function gateArgs(o: { engine: string; rules: string; pack: string; workers?: number }): { args: string[]; env: Record<string, string> }
-export declare function runGate(o: { engine: string; rules: string; pack: string; out?: string; workers?: number }): Promise<string>
+export declare function publicLine(line: string): string | null
+export declare function codeSpan(text: string, max?: number): string
+export declare function runGate(o: { engine: string; rules: string; pack: string; out?: string; log?: string; workers?: number }): Promise<string>
 
 export declare function schemaOf(source: string): number | null
 export declare function parseEngines(json: unknown): { name: string; ref: string }[]

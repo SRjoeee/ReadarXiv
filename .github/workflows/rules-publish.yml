@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - run: corepack enable
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -60,7 +60,7 @@ jobs:
         id: list
         run: echo "count=$(node -p "require('./lab/pdf/live-engines.json').engines.length")" >> "$GITHUB_OUTPUT"
       - if: steps.list.outputs.count != '0'
-        uses: pnpm/action-setup@v4
+        run: corepack enable
       - if: steps.list.outputs.count != '0'
         uses: actions/setup-node@v4
         with:
@@ -71,29 +71,15 @@ jobs:
       - name: Chromium
         if: steps.list.outputs.count != '0'
         run: pnpm exec playwright install --with-deps chromium
-      - name: Pack digest
-        if: steps.list.outputs.count != '0'
-        id: pack
-        run: echo "digest=$(node lab/pdf/spikes/gate-pack.mjs digest)" >> "$GITHUB_OUTPUT"
-      - name: Pack from the cache
-        if: steps.list.outputs.count != '0'
-        id: pack-cache
-        uses: actions/cache/restore@v4
-        with:
-          key: gate-pack-${{ steps.pack.outputs.digest }}
-          path: lab/pdf/out/gate-pack
+      # The pack is downloaded here every time, digest-checked, and kept nowhere. A cache saved by a push to next can be read by a
+      # fork's pull request (it runs its own workflow and restores the caches of its base branch), and the pack is arXiv's
+      # papers: only a pull request's own cache may hold it (rules-gate.yml), and a test holds this
       - name: Pack from the bucket
-        if: steps.list.outputs.count != '0' && steps.pack-cache.outputs.cache-hit != 'true'
+        if: steps.list.outputs.count != '0'
         env:
           READARXIV_CI_TOKEN: ${{ secrets.READARXIV_CI_TOKEN }}
           CF_ACCOUNT_ID: ${{ vars.CF_ACCOUNT_ID }}
         run: node lab/pdf/spikes/gate-pack.mjs restore
-      - name: Keep the pack
-        if: steps.list.outputs.count != '0' && steps.pack-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          key: gate-pack-${{ steps.pack.outputs.digest }}
-          path: lab/pdf/out/gate-pack
       - name: Check the pack
         if: steps.list.outputs.count != '0'
         run: node lab/pdf/spikes/gate-pack.mjs verify
@@ -120,7 +106,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - run: corepack enable
       - uses: actions/setup-node@v4
         with:
           node-version: 22

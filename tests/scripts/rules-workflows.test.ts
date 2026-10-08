@@ -94,8 +94,23 @@ describe('the secrets', () => {
     expect(/- name: Pack from the bucket\n\s+if: .*\n\s+env:\n\s+READARXIV_CI_TOKEN: \$\{\{ secrets\.READARXIV_CI_TOKEN \}\}/.test(gate)).toBe(true)
     for (const name of ['rules-publish.yml', 'rules-point.yml']) for (const m of text(name).matchAll(/secrets\.(\w+)/g)) expect(['RULES_PUBLISH_SECRET', 'READARXIV_CI_TOKEN']).toContain(m[1])
   })
-  it('go to actions of GitHub\'s and pnpm\'s alone, at a major version', () => {
-    for (const name of WORKFLOWS) for (const m of text(name).matchAll(/uses: (\S+)/g)) expect(m[1], name).toMatch(/^(actions\/[a-z-]+(\/[a-z-]+)?|pnpm\/action-setup)@v\d+$/)
+  it('go to actions of GitHub\'s alone, at a major version: pnpm comes with corepack, not a third party\'s action', () => {
+    for (const name of WORKFLOWS) for (const m of text(name).matchAll(/uses: (\S+)/g)) expect(m[1], name).toMatch(/^actions\/[a-z-]+(\/[a-z-]+)?@v\d+$/)
+    for (const name of WORKFLOWS.filter(n => text(n).includes('pnpm '))) expect(text(name), name).toContain('run: corepack enable')
+  })
+})
+
+describe('the pack\'s cache', () => {
+  it('is kept only by a workflow that pull requests alone run: a cache of next is read by a fork\'s pull request', () => {
+    for (const name of WORKFLOWS) {
+      const yml = text(name)
+      if (!/uses: actions\/cache/.test(yml)) continue
+      const on = /^on:\n((?: {2}.*\n| *\n)+)/m.exec(yml)?.[1] ?? ''
+      expect([...on.matchAll(/^ {2}([a-z_]+):/gm)].map(m => m[1]), `${name} caches the pack`).toEqual(['pull_request'])
+    }
+    // the publish workflow downloads the pack fresh, digest-checked, and saves nothing
+    expect(text('rules-publish.yml')).not.toMatch(/actions\/cache/)
+    expect(text('rules-publish.yml')).toContain('gate-pack.mjs restore')
   })
 })
 
@@ -108,6 +123,10 @@ describe('the pull request gate', () => {
     expect(yml).toContain('timeout-minutes: 15')
     // biome-ignore lint/suspicious/noTemplateCurlyInString: a GitHub expression, not a template
     expect(yml).toContain('ref: ${{ github.event.pull_request.head.sha }}')
+  })
+  it('comments unless the run was cancelled (a superseded run says nothing), and finds its comment without a pipe that can break', () => {
+    expect(yml).toMatch(/- name: Comment\n\s+if: \$\{\{ !cancelled\(\) \}\}/)
+    expect(yml).not.toMatch(/\| head /)
   })
   it('edits one comment found by the marker the script writes, and uploads the numbers alone', () => {
     expect(yml).toContain(`startswith("${MARK}")`)

@@ -24,5 +24,6 @@ form of the layer gate's `--ruling` (`lab/pdf/spikes/layer-gate.mjs`), with the 
 - A ruling covers a regression when it names the regression's measure and its target. A regression it does not name still
   fails the run.
 - Only a file the pull request **adds** counts: a ruling on the branch's base is history, and accepts nothing new.
-- The comment quotes `english` (else `quote`) and `why`, which are the only free text in it; the gate refuses to write a
-  comment that carries a stretch of a paper.
+- The comment quotes `english` (else `quote`) and `why`, which are the only free text in it, each as a code span (nothing in
+  them becomes an image, a mention or HTML); the gate refuses to write a comment that carries a stretch of a paper. A ruling's
+  file name is letters, digits, dots, dashes and underscores.

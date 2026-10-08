@@ -60,7 +60,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      # (pnpm comes with corepack, at the version package.json names: no third party's action runs in a job that holds a token)
+      - run: corepack enable
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -69,7 +70,10 @@ jobs:
       - name: Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      # The pack: from the cache by its digest, else from the bucket with the read-only token, which only this step holds
+      # The pack: from this pull request's own cache by its digest, else from the bucket with the read-only token. Only this step
+      # names the token, but any process of the job could read it: it is read-only, it expires, and it is rotated (lab/pdf/README.md).
+      # The cache is the pull request's: a cache saved on a push to next is readable by a fork's pull request, which runs its own
+      # workflow, so no workflow that runs on a push may save the pack (rules-publish.yml downloads it, and a test holds this)
       - name: Pack digest
         id: pack
         run: echo "digest=$(node lab/pdf/spikes/gate-pack.mjs digest)" >> "$GITHUB_OUTPUT"
@@ -95,7 +99,9 @@ jobs:
         run: node lab/pdf/spikes/gate-pack.mjs verify
 
       # Two runs on this runner: the merge base's engine with its own built-in set, the pull request's with its own. The
-      # instrument (the gate's scripts) is the pull request's for both, so that the two runs differ in the engine alone
+      # instrument (the gate's scripts) is the pull request's for both, so that the two runs differ in the engine alone. This log
+      # is public and the gate prints stacks and reasons that can carry a paper's text: each run's whole output goes to a file in
+      # RUNNER_TEMP (never uploaded), and the log gets the lines that are names and numbers
       - name: Merge base
         run: |
           base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
@@ -103,9 +109,9 @@ jobs:
           git worktree add --detach "$RUNNER_TEMP/base" "$base"
           ln -s "$PWD/node_modules" "$RUNNER_TEMP/base/node_modules"
       - name: Gate on the merge base
-        run: node lab/pdf/spikes/rules-gate.mjs run --engine="$RUNNER_TEMP/base" --rules="$RUNNER_TEMP/base/src/pdf-reader/engine/rules/layout-rules.json" --pack=lab/pdf/out/gate-pack --out="$RUNNER_TEMP/base-run.json"
+        run: node lab/pdf/spikes/rules-gate.mjs run --engine="$RUNNER_TEMP/base" --rules="$RUNNER_TEMP/base/src/pdf-reader/engine/rules/layout-rules.json" --pack=lab/pdf/out/gate-pack --out="$RUNNER_TEMP/base-run.json" --log="$RUNNER_TEMP/gate-base.log"
       - name: Gate on the pull request
-        run: node lab/pdf/spikes/rules-gate.mjs run --engine="$PWD" --rules="$PWD/src/pdf-reader/engine/rules/layout-rules.json" --pack=lab/pdf/out/gate-pack --out="$RUNNER_TEMP/head-run.json"
+        run: node lab/pdf/spikes/rules-gate.mjs run --engine="$PWD" --rules="$PWD/src/pdf-reader/engine/rules/layout-rules.json" --pack=lab/pdf/out/gate-pack --out="$RUNNER_TEMP/head-run.json" --log="$RUNNER_TEMP/gate-head.log"
 
       # The verdict: a regression fails the run unless the pull request adds a ruling file (lab/pdf/rulings/README.md)
       - name: Verdict
@@ -126,7 +132,7 @@ jobs:
 
       # One comment, found again by its marker and edited in place. Numbers, names and links: no image and no text of a paper
       - name: Comment
-        if: always()
+        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -135,14 +141,14 @@ jobs:
             mkdir -p "$RUNNER_TEMP/verdict"
             printf '<!-- rules-gate -->\n## Rules gate: did not finish\n\nThe job stopped before it had a verdict: %s/%s/actions/runs/%s\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > "$body"
           fi
-          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- rules-gate -->"))) | .id' | head -n 1)
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- rules-gate -->"))) | .id' | sed -n 1p)
           if [ -n "$id" ]; then
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$body" > /dev/null
           else
             gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@"$body" > /dev/null
           fi
       - name: Numbers
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: rules-gate
