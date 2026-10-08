@@ -21,7 +21,7 @@ export declare const UNIT_FLAG: { readonly TITLE: 1; readonly FRONT: 2; readonly
 export { NAME_KEYS, type NameKey } from './names.mjs'
 import type { NameKey } from './names.mjs'
 /** a name's flags: centred in its column; its glyphs capitals where its macro's own text is not */
-export declare const NAME_FLAG: { readonly CENTRED: 1; readonly CAPITALS: 2 }
+export declare const NAME_FLAG: { readonly CENTRED: 1; readonly CAPITALS: 2; readonly RUN_IN: 4 }
 /** a file's names at most */
 export declare const NAMES_MAX: number
 export declare const PH_FLAG: { readonly SOURCE_BRACKETS: 1; readonly NUMBERED: 2; readonly RAISED: 4; readonly LOWERED: 8; readonly EMPTY: 16; readonly LOST: 32; readonly TEXT: 64 }
@@ -54,7 +54,8 @@ export interface LayoutFile {
   /** per unit, the lines its source does not write, by index rising: held (no slot, never erased) */
   held: [id: number, lines: number[]][]
   /** each occurrence of a babel name TeX set (marks.mjs's name marks), by occurrence rising: occurrence, key (NAME_KEYS),
-   *  page, x0, baseline, x1, top, bottom, size, font, flags (NAME_FLAG) */
+   *  page, x0, baseline, x1, top, bottom, size, font, flags (NAME_FLAG), unit (the unit a RUN_IN name leads, else -1),
+   *  glue (the original's space between its joint and that unit's text, 0 where not RUN_IN), its TeX column's x0 and x1 */
   names: number[][]
 }
 /** bytes, then UTF-8, then values and nesting counted, then JSON.parse, then every bound; a file of another `schema` is
@@ -81,6 +82,12 @@ export interface LayoutUnit {
 export interface LayoutName {
   occurrence: number; key: NameKey; page: number; x0: number; baseline: number; x1: number; top: number; bottom: number; size: number; font: number
   centred: boolean; capitals: boolean
+  /** the unit whose first line it leads (RUN_IN: set right before it on that line), else -1 */
+  unit: number
+  /** RUN_IN: the original's space after its joint, before the unit's text (PDF units, 0 for none) */
+  glue: number
+  /** its TeX column's text edges: the room it has on its line */
+  cx0: number; cx1: number
 }
 export interface LayoutIndex {
   readonly file: LayoutFile

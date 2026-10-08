@@ -773,16 +773,17 @@ export function labelInTarget(label, names, captions, to) {
   return `${name} ${m[2]}${punct}`
 }
 /**
- * A babel name (D1a: a generated heading the layout file locates, layout/file.mjs `names`) as the final sets it in the
+ * A babel name (D1a: a generated heading the layout file locates, layout/file.mjs `names`) as the layer sets it in the
  * target: the target's word for its key (the layout rules' labels: babel's [captions]), in capitals where the original's
- * glyphs are and its macro's own text is not (`capitals`: a class's case change, which the target's word takes too). Null
- * where the target has no word for it (an empty one keeps the original's), where a compile of the translation said the
- * final keeps the paper's own (`captions`, live.mjs captionsOf: `source`; a key it did not answer for is the target's, as a
- * reader, which compiles nothing, names every one), or where the word is the original's already (`own`, its characters)
+ * glyphs are and its macro's own text is not (`capitals`: a class's case change, which the target's word takes too).
+ * Wherever TeX identified the heading (its macro, a style's literal by the definition it sits in, a name after the
+ * paper's own \selectlanguage): what a compile of the translation sets there (live.mjs captionsOf) does not decide, as
+ * it does a float's label (the coordinator's ruling on D1a's I4; PDF-READER §18.1). Null where the target has no word for
+ * it (an empty one keeps the original's) or the word is the original's already (`own`, its characters)
  */
-export function nameInTarget(name, own, labels, captions, to) {
+export function nameInTarget(name, own, labels, to) {
   const word = labels?.[name.key]
-  if (!word || captions?.[name.key] === 'source') return null
+  if (!word) return null
   const text = name.capitals ? word.toLocaleUpperCase(to) : word
   return text.replace(/\s+/g, '') === String(own ?? '').replace(/\s+/g, '') ? null : text
 }
@@ -1665,9 +1666,11 @@ function w100(s, face) {
 /**
  * A unit's pieces as tokens: { s, st, face, cls ('cjk'|'latin'), w100, glue (no break before), punct ('open'|'close'),
  * asp (CJK–Latin autospace before it), hyph (a language to hyphenate it in) }, { space }, { crop }, { sup }. `base`: the
- * unit's style ({ fam, bold, italic, caps, design }); `designs`: the paper's serif, sans and mono designs. `lead`: text
- * set before the unit's own, in its own style ({ text, st }: a float's label in the target's name, labelInTarget), a
- * space after it. `measure(s, face)`: a run's width at 100 px (the canvas's, cached); a host passes its own to read the
+ * unit's style ({ fam, bold, italic, caps, design }); `designs`: the paper's serif, sans and mono designs. `lead`: what
+ * the unit's first line starts with before its own text, each part in its own style ({ parts: [{ text, st }], gap }: a
+ * float's label in the target's name, labelInTarget; a run-in heading and the joint TeX set after it, run.mjs), then
+ * `gap`: a space where it is undefined, else that many em of the unit's size (0: none, IEEEtran's dash against the
+ * text). `measure(s, face)`: a run's width at 100 px (the canvas's, cached); a host passes its own to read the
  * tokens (their faces and texts) before any face is loaded, without a width entering the cache that a face not yet there
  * would give
  */
@@ -1735,7 +1738,12 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       })
     }
   }
-  if (lead?.text) { pushText(lead.text, { ...base, ...lead.st }, { label: true }); pushText(' ', { ...base, ...lead.st }) }
+  if (lead?.parts?.length) {
+    for (const part of lead.parts) pushText(part.text, { ...base, ...part.st }, { label: true })
+    const st = { ...base, ...lead.parts.at(-1).st }
+    if (lead.gap === undefined) pushText(' ', st)
+    else if (lead.gap > 0) tokens.push({ space: true, st, face: faceOf(st, 'latin', to), w100: 100 * lead.gap })
+  }
   unit.pieces.forEach((p, k) => {
     if (p.t === 'text') {
       pushText(p.s.replace(/\n/g, ' ').replace(/---/g, '—').replace(/--/g, '–').replace(/``/g, '“').replace(/''/g, '”'), style())

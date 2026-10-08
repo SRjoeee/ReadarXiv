@@ -70,7 +70,8 @@ export interface NameDrawn {
   box: { x0: number; x1: number; baseline: number; top: number; bottom: number; size: number }
   /** where drawn: its word, size, left edge and width (unfit: its word, its width at the original's size and the room) */
   text?: string; size?: number; x?: number; w?: number; room?: number
-  /** set as the start of this unit's first line (`inline`: a run-in name past its own room), drawn with the unit */
+  /** the unit it leads (the file's RUN_IN): set as the start of that unit's first line, drawn with it (`inline: <why>`
+   *  where the unit is left the original's) */
   unit?: number
 }
 export interface ProtoRun {
@@ -186,7 +187,8 @@ export declare function openProto(o: {
   /** the text-removed PDF: null, v0's own drawing */
   removal?: RemovalOptions | null
   /** which floats the final names in the target's language (live.mjs captionsOf): a float's label is drawn in the target's
-   *  name for it, which the rule set gives, where the final's is; null, every label kept as the original's */
+   *  name for it, which the rule set gives, where the final's is, and every babel name in the target's word whatever the
+   *  captions say; null, every label and name kept as the original's */
   labels?: { captions: Captions | null } | null
   /** the layout rule set every choice made for the target is read from, resolved once at the open (absent: BUILTIN_RULES) */
   rules?: FrozenRuleSet

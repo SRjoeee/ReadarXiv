@@ -1149,8 +1149,9 @@ describe("makeLayout, babel's names (D1a)", () => {
   it('locates an occurrence by its two marks and the text between them: its line box, size, font, centred in its column', async () => {
     const h = heading('Abstract', 119.5)
     const { file, stats } = await made({ pages: [{ runs: [h, ...body] }], marks: [...bodyMarks, ...nameMarks(h)], units: [para] })
-    expect(file.names).toEqual([[1, NAME_KEYS.indexOf('abstract'), 1, 119.5, 700, endOf(h), 707.5, 697.5, 10, 0, NAME_FLAG.CENTRED]])
-    expect(stats.names).toEqual({ marked: 1, located: 1, why: {} })
+    // (leading no unit: -1 and no glue; its room its TeX column's text edges, the paragraph's 72 to 207)
+    expect(file.names).toEqual([[1, NAME_KEYS.indexOf('abstract'), 1, 119.5, 700, endOf(h), 707.5, 697.5, 10, 0, NAME_FLAG.CENTRED, -1, 0, 72, endOf(body[0] as Run)]])
+    expect(stats.names).toEqual({ marked: 1, located: 1, runIn: 0, why: {} })
     // (left where it stands: its left edge kept, no flag)
     const l = heading('Abstract', 72)
     expect((await made({ pages: [{ runs: [l, ...body] }], marks: [...bodyMarks, ...nameMarks(l)], units: [para] })).file.names[0]?.[10]).toBe(0)
@@ -1189,5 +1190,34 @@ describe("makeLayout, babel's names (D1a)", () => {
     expect(file.names.map(r => r.slice(0, 6))).toEqual([[1, NAME_KEYS.indexOf('abstract'), 1, 72, 700, endOf(name)]])
     // the label: the dash alone, never the name's glyphs
     expect(file.labels.map(l => [l[0], l[3], l[5]])).toEqual([[0, dash.x, endOf(dash)]])
+  })
+
+  it("leads the unit TeX sets right after it on that unit's first line (RUN_IN), with the original's glue after its joint", async () => {
+    const lead = async (gap: number) => {
+      const name: Run = { s: 'Abstract', x: 72, y: 700 }, dash: Run = { s: '\u2014', x: endOf(name), y: 700 }, first: Run = { s: 'we show a model of it', x: endOf(dash) + gap, y: 700 }
+      const second: Run = { s: 'and more words here', x: 72, y: 688 }
+      const marks: Mark[] = [['0s', 1, first.x, 700], ['0e', 1, endOf(second), 688], ...nameMarks(name)]
+      return made({ pages: [{ runs: [name, dash, first, second] }], marks, units: [unit('abstract', [text('we show a model of it and more words here')])] })
+    }
+    // IEEEtran's dash touching the text: no glue
+    const touching = await lead(0)
+    expect(touching.file.names.map(r => [r[10], r[11], r[12]])).toEqual([[NAME_FLAG.RUN_IN, 0, 0]])
+    expect(touching.stats.names.runIn).toBe(1)
+    // a space after the joint (amsthm's \labelsep): its width
+    expect((await lead(3)).file.names.map(r => [r[10], r[11], r[12]])).toEqual([[NAME_FLAG.RUN_IN, 0, 3]])
+  })
+
+  it("is a caption's label where a figure's or a table's name leads a caption (longtable's, no \\@captype): no row", async () => {
+    const name: Run = { s: 'Table', x: 72, y: 700 }, first: Run = { s: '1: the results of it', x: endOf(name) + 3, y: 700 }
+    const marks: Mark[] = [['0s', 1, first.x, 700], ['0e', 1, endOf(first), 700], ...nameMarks(name, 'table')]
+    const { file, stats } = await made({ pages: [{ runs: [name, first, ...body] }], marks: [...marks, ['1s', 1, 72, 680], ['1e', 1, endOf(body[2] as Run), 656]], units: [unit('caption', [text('1: the results of it')]), para] })
+    expect(file.names).toEqual([])
+    expect(stats.names.why).toEqual({ "a caption's label": 1 })
+  })
+
+  it("takes its column's edges from the pages like its own where its page has no unit (a page of references alone)", async () => {
+    const h = heading('References', 72)
+    const { file } = await made({ pages: [{ runs: body }, { runs: [h] }], marks: [...bodyMarks, [`n1.ref.s`, 2, h.x, h.y], [`n1.ref.e`, 2, endOf(h), h.y]], units: [para] })
+    expect(file.names.map(r => [r[2], r[13], r[14]])).toEqual([[2, 72, endOf(body[0] as Run)]])
   })
 })

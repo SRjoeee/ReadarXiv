@@ -178,13 +178,16 @@ export declare function snapFirstRect2(rects: Rect[], charsByPage: readonly (rea
 export declare function extendRects(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, wordChars?: readonly (readonly Char[] | undefined)[]): number
 /** a unit's translation as tokens; `.base` is its base style. `measure(s, face)`: a run's width at 100 px (the canvas's, cached,
  *  by default); a host reading the tokens' faces and texts before the faces are loaded passes a measure that takes none */
-export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, baseIn: Style, designs: { serif: string; sans: string; mono: string }, P: Params, lead?: { text: string; st: Partial<Style> } | null, measure?: (s: string, face: Face) => number): Token[] & { base: Style }
+/** what a unit's first line starts with before its own text: each part in its own style, then a space (`gap`
+ *  undefined) or that many em of the unit's size (0: none) */
+export interface Lead { parts: { text: string; st: Partial<Style> }[]; gap?: number }
+export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, baseIn: Style, designs: { serif: string; sans: string; mono: string }, P: Params, lead?: Lead | null, measure?: (s: string, face: Face) => number): Token[] & { base: Style }
 /** a float's label as the final sets it in the target: the target's name (capitals where the original's are), a space,
  *  the original's number and punctuation; null where the final keeps the paper's name or the name is the original's */
 export declare function labelInTarget(label: { text?: string; chars?: { ch: string }[] } | null | undefined, names: { figure: string; table: string } | null | undefined, captions: { figure?: string; table?: string } | null | undefined, to: string): string | null
-/** a babel name as the final sets it in the target: the target's word for its key (capitals where the original's are); null
- *  where the target has none, where the final keeps the paper's (`source`), or where the word is the original's */
-export declare function nameInTarget(name: { key: string; capitals: boolean }, own: string | null | undefined, labels: Readonly<Record<string, string>> | null | undefined, captions: Readonly<Record<string, string | undefined>> | null | undefined, to: string): string | null
+/** a babel name as the layer sets it in the target, wherever TeX identified the heading: the target's word for its key
+ *  (capitals where the original's are); null where the target has none, or where the word is the original's */
+export declare function nameInTarget(name: { key: string; capitals: boolean }, own: string | null | undefined, labels: Readonly<Record<string, string>> | null | undefined, to: string): string | null
 /** a text's width at size 1 in a face */
 export declare const widthOf: (s: string, face: Face) => number
 /** a babel name drawn in the target's word, as SVG markup (a <g data-n="occurrence">) */

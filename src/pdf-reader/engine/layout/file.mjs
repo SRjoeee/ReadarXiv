@@ -33,8 +33,10 @@ export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4 })
 /** babel's names (names.mjs), whose occurrences the file locates (`names`) */
 export { NAME_KEYS } from './names.mjs'
 /** a name's flags. CENTRED: centred in its column, as a unit is (UNIT_FLAG.CENTRED); CAPITALS: its glyphs capitals where
- *  its macro's own text is not (a class's case change, which the target's name takes too) */
-export const NAME_FLAG = Object.freeze({ CENTRED: 1, CAPITALS: 2 })
+ *  its macro's own text is not (a class's case change, which the target's name takes too); RUN_IN: the lead of a unit's
+ *  first line, which TeX sets right after it on that line (IEEEtran's "Abstract—…", amsthm's "Proof. …"), its row naming
+ *  the unit */
+export const NAME_FLAG = Object.freeze({ CENTRED: 1, CAPITALS: 2, RUN_IN: 4 })
 /** a placeholder's flags. TEXT: a LaTeX text symbol (\%, \_) drawn as its one character, the file's pageText, where
  *  the unit's lines on arXiv's page show it (a macro's only, no segments: its ink is the line's, erased with it) */
 export const PH_FLAG = Object.freeze({ SOURCE_BRACKETS: 1, NUMBERED: 2, RAISED: 4, LOWERED: 8, EMPTY: 16, LOST: 32, TEXT: 64 })
@@ -70,7 +72,9 @@ const LINES_UNIT = 2000, LINES_ALL = 200000, SIZE_MAX = 200
 const SHARE_MAX = 1000, ERASE_LINE = 16, SEGS_INLINE = 4, SEGS_DISPLAY = 64, LABELS_UNIT = 4, SRC_MAX = 4000
 /** a file's names at most: a heading a babel name sets is a few a paper, a thesis's some tens */
 export const NAMES_MAX = 10_000
-const NAME_BITS = NAME_FLAG.CENTRED | NAME_FLAG.CAPITALS
+const NAME_BITS = NAME_FLAG.CENTRED | NAME_FLAG.CAPITALS | NAME_FLAG.RUN_IN
+/** a name's row: its values */
+const NAME_ROW = 15
 /** a rectangle lies within its page's view by this, PDF units */
 const SLACK = 1
 const UNIT_BITS = UNIT_FLAG.TITLE | UNIT_FLAG.FRONT | UNIT_FLAG.CENTRED
@@ -373,14 +377,16 @@ export function checkLayout(value) {
     last = e[0]
   }
 
-  // names: occurrence, key, page, x0, baseline, x1, top, bottom, size, font, flags; by occurrence rising, at most
-  // NAMES_MAX, each a rectangle as a line's
+  // names: occurrence, key, page, x0, baseline, x1, top, bottom, size, font, flags, unit, glue, column x0, column x1; by
+  // occurrence rising, at most NAMES_MAX, each a rectangle as a line's. unit: the unit a RUN_IN name leads (one of the
+  // file's), else -1; glue: the original's space between its joint and the unit's text (0 where not RUN_IN); the column:
+  // its TeX column's text edges on the page, the room a name has
   const names = array(f.names, 'names')
   if (names.length > NAMES_MAX) throw refuse('names', `more than ${NAMES_MAX} names`)
   last = -1
   for (let i = 0; i < names.length; i++) {
     const r = names[i]
-    if (!Array.isArray(r) || r.length !== 11) throw refuse(`names[${i}]`, `not [occurrence, key, page, x0, baseline, x1, top, bottom, size, font, flags] (${kindOf(r)})`)
+    if (!Array.isArray(r) || r.length !== NAME_ROW) throw refuse(`names[${i}]`, `not [occurrence, key, page, x0, baseline, x1, top, bottom, size, font, flags, unit, glue, column x0, column x1] (${kindOf(r)})`)
     if (!isInteger(r[0], last + 1, ID_MAX)) throw refuse(`names[${i}][0]`, 'not an occurrence above the last')
     if (!isInteger(r[1], 0, NAME_KEYS.length - 1)) throw refuse(`names[${i}][1]`, 'not a key of NAME_KEYS')
     checkBox(r, 2, 1, 3, 2, 4, 5, true, views, pages, 'names', i, -1)
@@ -388,6 +394,10 @@ export function checkLayout(value) {
     if (!isNumber(size) || size <= 0 || size > SIZE_MAX) throw refuse(`names[${i}][8]`, `not a size above 0 to ${SIZE_MAX} (${kindOf(size)})`)
     if (!isInteger(r[9], 0, nFonts - 1)) throw refuse(`names[${i}][9]`, 'not an index of fonts')
     if (!isInteger(r[10], 0, NAME_BITS)) throw refuse(`names[${i}][10]`, 'not flags of NAME_FLAG')
+    const runIn = (r[10] & NAME_FLAG.RUN_IN) !== 0, v = 4 * (r[2] - 1), width = views[v + 2] - views[v]
+    if (runIn ? !(isInteger(r[11], 0, ID_MAX) && slot.has(r[11])) : r[11] !== -1) throw refuse(`names[${i}][11]`, runIn ? 'not a unit of the file' : 'not -1, the name leading no unit')
+    if (!isNumber(r[12]) || r[12] < 0 || r[12] > width || (!runIn && r[12] !== 0)) throw refuse(`names[${i}][12]`, runIn ? 'not a glue 0 to the page\'s width' : 'not 0, the name leading no unit')
+    if (!isNumber(r[13]) || !isNumber(r[14]) || r[13] < views[v] - 1 || r[14] > views[v + 2] + 1 || r[13] >= r[14]) throw refuse(`names[${i}][13]`, "not a column's edges on the page")
     zeroes(r)
     last = r[0]
   }
@@ -398,7 +408,7 @@ export function checkLayout(value) {
 const r2 = v => Math.round(v * 100) / 100
 /** rows of `stride` with the coordinates (offsets `exact` excepted) to a hundredth */
 const rounded = (rows, stride, exact) => rows.map((v, j) => (exact.includes(j % stride) ? v : r2(v)))
-const LINE_EXACT = [0, 7], FRAME_EXACT = [0, 1, 2, 3, 4], ERASE_EXACT = [0], LABEL_EXACT = [0, 1, 2], NAME_EXACT = [0, 1, 2, 9, 10]
+const LINE_EXACT = [0, 7], FRAME_EXACT = [0, 1, 2, 3, 4], ERASE_EXACT = [0], LABEL_EXACT = [0, 1, 2], NAME_EXACT = [0, 1, 2, 9, 10, 11]
 
 /** the file as written: keys in the schema's order, numbers to a hundredth, no white space */
 export function encodeLayout(file) {
@@ -419,7 +429,7 @@ export function encodeLayout(file) {
     headings,
     pageText,
     held,
-    names: names.map(r => rounded(r, 11, NAME_EXACT)),
+    names: names.map(r => rounded(r, NAME_ROW, NAME_EXACT)),
   })
 }
 
@@ -491,7 +501,7 @@ export function indexLayout(file) {
   for (let i = 0; i < names.length; i++) {
     const r = names[i], p = r[2]
     if (namesOn[p] === NO_NAMES) namesOn[p] = []
-    namesOn[p].push(Object.freeze({ occurrence: r[0], key: NAME_KEYS[r[1]], page: p, x0: r[3], baseline: r[4], x1: r[5], top: r[6], bottom: r[7], size: r[8], font: r[9], centred: (r[10] & NAME_FLAG.CENTRED) !== 0, capitals: (r[10] & NAME_FLAG.CAPITALS) !== 0 }))
+    namesOn[p].push(Object.freeze({ occurrence: r[0], key: NAME_KEYS[r[1]], page: p, x0: r[3], baseline: r[4], x1: r[5], top: r[6], bottom: r[7], size: r[8], font: r[9], centred: (r[10] & NAME_FLAG.CENTRED) !== 0, capitals: (r[10] & NAME_FLAG.CAPITALS) !== 0, unit: r[11], glue: r[12], cx0: r[13], cx1: r[14] }))
   }
   for (let p = 1; p <= pages; p++) Object.freeze(namesOn[p])
   const viewOf = new Array(pages + 1)

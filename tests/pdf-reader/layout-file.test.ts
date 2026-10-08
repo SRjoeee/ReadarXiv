@@ -79,10 +79,12 @@ function made(): LayoutFile {
     pageText: [[2, 3, '[12, 3]']],
     // unit 5's second line: a line its source does not write, not erased
     held: [[5, [1]]],
-    // the abstract's name centred over page 1's paragraph, and the references' in capitals on page 3
+    // the abstract's name centred over page 1's paragraph, the references' in capitals on page 3, and a proof's name
+    // leading unit 7's first line there (RUN_IN), 2.5 pt of glue after it
     names: [
-      [1, NAME_KEYS.indexOf('abstract'), 1, 280, 680, 332.5, 687, 677.5, 9, 1, NAME_FLAG.CENTRED],
-      [4, NAME_KEYS.indexOf('ref'), 3, 72, 500, 140.25, 508.4, 497.5, 12, 1, NAME_FLAG.CAPITALS],
+      [1, NAME_KEYS.indexOf('abstract'), 1, 280, 680, 332.5, 687, 677.5, 9, 1, NAME_FLAG.CENTRED, -1, 0, 72, 540],
+      [4, NAME_KEYS.indexOf('ref'), 3, 72, 500, 140.25, 508.4, 497.5, 12, 1, NAME_FLAG.CAPITALS, -1, 0, 72, 300],
+      [6, NAME_KEYS.indexOf('proof'), 3, 100, 400, 140, 407, 397.5, 9, 1, NAME_FLAG.RUN_IN, 7, 2.5, 72, 540],
     ],
   }
 }
@@ -157,8 +159,8 @@ describe('a valid file', () => {
     expect(index.font(2)).toBe('CMMI10')
     expect(index.file).toEqual(f)
     // babel's names by page, in the file's order, with their flags read
-    expect(index.names(1)).toEqual([{ occurrence: 1, key: 'abstract', page: 1, x0: 280, baseline: 680, x1: 332.5, top: 687, bottom: 677.5, size: 9, font: 1, centred: true, capitals: false }])
-    expect(index.names(3).map(n => [n.key, n.capitals, n.centred])).toEqual([['ref', true, false]])
+    expect(index.names(1)).toEqual([{ occurrence: 1, key: 'abstract', page: 1, x0: 280, baseline: 680, x1: 332.5, top: 687, bottom: 677.5, size: 9, font: 1, centred: true, capitals: false, unit: -1, glue: 0, cx0: 72, cx1: 540 }])
+    expect(index.names(3).map(n => [n.key, n.capitals, n.centred, n.unit, n.glue, n.cx1])).toEqual([['ref', true, false, -1, 0, 300], ['proof', false, false, 7, 2.5, 540]])
     expect(index.names(2)).toEqual([])
     expect(index.names(9)).toEqual([])
   })
@@ -474,7 +476,7 @@ const ROWS: [string, Edit, string][] = [
   ['a label with bottom = top', f => { f.labels[0][7] = 728.5 }, 'labels[0][7]'],
   // babel's names (D1a)
   ['names not an array', f => { f.names = {} }, 'names'],
-  ['a name row of 10', f => { f.names[0].pop() }, 'names[0]'],
+  ['a name row of 14', f => { f.names[0].pop() }, 'names[0]'],
   ['names not by occurrence rising', f => { f.names[1][0] = 1 }, 'names[1][0]'],
   ['a name of a key past NAME_KEYS', f => { f.names[0][1] = NAME_KEYS.length }, 'names[0][1]'],
   ['a name on page 4', f => { f.names[0][2] = 4 }, 'names[0][2]'],
@@ -482,8 +484,16 @@ const ROWS: [string, Edit, string][] = [
   ["a name's baseline 2 pt over its top", f => { f.names[0][4] = 690 }, 'names[0][4]'],
   ['a name of size 0', f => { f.names[0][8] = 0 }, 'names[0][8]'],
   ['a name of a font past fonts', f => { f.names[0][9] = 3 }, 'names[0][9]'],
-  ['a name of flags 4', f => { f.names[0][10] = 4 }, 'names[0][10]'],
-  ['10,001 names', f => { f.names = Array.from({ length: 10_001 }, (_, i) => [i, 0, 1, 280, 680, 332.5, 687, 677.5, 9, 1, 0]) }, 'names'],
+  ['a name of flags 8', f => { f.names[0][10] = 8 }, 'names[0][10]'],
+  ['a run-in name leading no unit of the file', f => { f.names[2][11] = 4 }, 'names[2][11]'],
+  ['a name not run in that leads a unit', f => { f.names[0][11] = 7 }, 'names[0][11]'],
+  ['a run-in name of no unit', f => { f.names[2][11] = -1 }, 'names[2][11]'],
+  ['a glue on a name not run in', f => { f.names[0][12] = 1 }, 'names[0][12]'],
+  ['a negative glue', f => { f.names[2][12] = -1 }, 'names[2][12]'],
+  ["a glue past the page's width", f => { f.names[2][12] = 700 }, 'names[2][12]'],
+  ["a name's column with x0 = x1", f => { f.names[0][14] = f.names[0][13] }, 'names[0][13]'],
+  ["a name's column past the page", f => { f.names[0][14] = 700 }, 'names[0][13]'],
+  ['10,001 names', f => { f.names = Array.from({ length: 10_001 }, (_, i) => [i, 0, 1, 280, 680, 332.5, 687, 677.5, 9, 1, 0, -1, 0, 72, 540]) }, 'names'],
   // headings
   ['a heading id of a paragraph', f => { f.headings[1][0] = 2 }, 'headings[1][0]'],
   ['a heading of an unlocated unit', f => { f.headings[0][0] = 1 }, 'headings[0][0]'],

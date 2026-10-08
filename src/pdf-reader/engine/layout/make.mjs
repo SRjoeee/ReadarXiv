@@ -312,7 +312,7 @@ function blank(units) {
     ph: { marked: 0, found: 0, empty: 0, lost: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, foreign: 0, shared: 0, texts: 0, heads: [0, 0] },
     match: { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0 },
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
-    names: { marked: 0, located: 0, why: {} },
+    names: { marked: 0, located: 0, runIn: 0, why: {} },
     capped: [], timedOut: [], over: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
   }
 }
@@ -533,7 +533,14 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
    * Located after the units' lines, which keep what they hold, and before the labels and the heads, which then never
    * take a name's glyphs (2608's abstract label was IEEEtran's "Abstract—"). Its row: its line box from its glyphs, their
    * size and font, centred where a unit is, in capitals where its glyphs' letters all are and its macro's own text is
-   * not (the probe's answer: a case change, which the target's name takes too)
+   * not (the probe's answer: a case change, which the target's name takes too), and its TeX column's text edges (the
+   * room it has: edgesOf, the pages like it where its own has no unit; else its column's side of the page).
+   * A name TeX sets right before a unit on that unit's first line (IEEEtran's "Abstract—Task…", amsthm's "Proof. The…")
+   * leads it (RUN_IN, the unit in its row): the unit's start mark is the first after the name's end on that line in our
+   * compile, and carried on that line after the name's carried end on arXiv's page. Its joint, what TeX set between the
+   * two (IEEEtran's dash), is the unit's label; its glue, the space after the joint before the unit's text (the unit's
+   * carried start less the joint's last advance, none within the carry's 0.05 pt). A figure's or a table's name leading a
+   * caption is its label (longtable's, whose captions set no \@captype), the label path's: no row
    */
   const named = []
   {
@@ -558,13 +565,26 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       if (letters(gs.slice().sort((g, h) => P.x0[g] - P.x0[h] || g - h).map(g => P.u[g]).join('')) !== want) { why("not arXiv's glyphs there"); continue }
       const row = rowOf(P, gs, S.page, [], S.y)
       if (!(r2(row.size) > 0 && row.size <= SIZE_MAX)) { why('no size'); continue }
+      // the unit it leads: the first unit start after its end on its line in our compile, carried after it on that line
+      let lead = -1, leadX = Infinity
+      for (const [k, m] of unitMarks) if (k.endsWith('s') && m.page === b.page && Math.abs(m.y - b.y) <= 0.5 && m.x >= b.x - 0.05 && m.x < leadX) { lead = Number(k.slice(0, -1)); leadX = m.x }
+      let glue = 0
+      if (lead >= 0) {
+        const L = carriedUnit.get(`${lead}s`)
+        if (!L || L.page !== E.page || Math.abs(L.y - E.y) > 1 || L.x < E.x - 0.05) { why('leading a unit, not carried'); continue }
+        if ((x[2] === 'figure' || x[2] === 'table') && units[lead].kind === 'caption') { why("a caption's label"); continue }
+        // its joint's last advance (IEEEtran's dash), else its own end; the glue past it to the unit's text
+        let end = E.x
+        for (const g of band(P, S.y - SCRIPT(P.most), S.y + SCRIPT(P.most))) if (Math.abs(P.y[g] - S.y) < 0.25 * Math.max(P.size[g], 5) && mid(P, g) > E.x && mid(P, g) < L.x) end = Math.max(end, P.x1[g])
+        glue = L.x - end > 0.05 ? L.x - end : 0
+      }
       // centred as a unit is (its one line's centre its column's, the line short of it)
-      const edge = edgesOf(S.page, columnOf(S.page, row.x0, row.x1))
+      const col = columnOf(S.page, row.x0, row.x1), edge = edgesOf(S.page, col)
       const centred = !!edge && Math.abs((row.x0 + row.x1) / 2 - (edge[0] + edge[1]) / 2) <= CENTRE && row.x1 - row.x0 < SHORT * (edge[1] - edge[0])
       const cased = [...gs.map(g => P.u[g]).join('').normalize('NFKC')].filter(c => c.toUpperCase() !== c.toLowerCase())
       const capitals = cased.length >= 2 && cased.every(c => c === c.toUpperCase()) && marks.marking.names?.[x[2]] === 1
       for (const g of gs) P.owner[g] = NAME_OWNER
-      named.push({ occurrence: Number(x[1]), key, row, flags: (centred ? NAME_FLAG.CENTRED : 0) | (capitals ? NAME_FLAG.CAPITALS : 0) })
+      named.push({ occurrence: Number(x[1]), key, row, flags: (centred ? NAME_FLAG.CENTRED : 0) | (capitals ? NAME_FLAG.CAPITALS : 0) | (lead >= 0 ? NAME_FLAG.RUN_IN : 0), lead, glue, column: edge ?? sideOf(S.page, col) })
     }
     named.sort((p, q) => p.occurrence - q.occurrence)
     if (named.length > NAMES_MAX) named.length = NAMES_MAX
@@ -1215,17 +1235,22 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     if (S && S.page === rows[0].page && Math.abs(S.y - rows[0].base) < 0.5 * rows[0].size) stats.baselines.first.push(Math.abs(r2(rows[0].base) - S.y))
     if (E && E.page === rows.at(-1).page && Math.abs(E.y - rows.at(-1).base) < 0.5 * rows.at(-1).size) stats.baselines.last.push(Math.abs(r2(rows.at(-1).base) - E.y))
   }
-  // the names, on a page with ink: a name whose face would take the file past FONTS_MAX names stays the original's
-  const outNames = []
-  for (const nm of named) {
-    const r = nm.row
-    if (!fontIndex.has(r.font) && fonts.length >= FONTS_MAX) { stats.names.why['past the fonts a file may name'] = (stats.names.why['past the fonts a file may name'] ?? 0) + 1; continue }
-    const view = viewAt(r.page), [x0, bottom, x1, top] = solid(view, r.x0, r.bottom, r.x1, r.top)
-    outNames.push([nm.occurrence, nm.key, r.page, x0, Math.min(top, Math.max(bottom, r2(r.base))), x1, top, bottom, r2(Math.min(SIZE_MAX, r.size)), fontOf(r.font), nm.flags])
-    stats.names.located++
-  }
   // what the file holds of the units it does not: nothing; their placeholders and labels go with them
   const kept1 = new Set(outUnits.map(r => r[0]))
+  // the names, on a page with ink: a name whose face would take the file past FONTS_MAX names stays the original's, and
+  // one leading a unit the file does not hold stays with it
+  const outNames = []
+  const nameWhy = w => { stats.names.why[w] = (stats.names.why[w] ?? 0) + 1 }
+  for (const nm of named) {
+    const r = nm.row
+    if (nm.lead >= 0 && !kept1.has(nm.lead)) { nameWhy('leading a unit the file does not hold'); continue }
+    if (!fontIndex.has(r.font) && fonts.length >= FONTS_MAX) { nameWhy('past the fonts a file may name'); continue }
+    const view = viewAt(r.page), [x0, bottom, x1, top] = solid(view, r.x0, r.bottom, r.x1, r.top)
+    const cx0 = Math.max(view[0] - 1, r2(nm.column[0])), cx1 = Math.min(view[2] + 1, r2(nm.column[1]))
+    outNames.push([nm.occurrence, nm.key, r.page, x0, Math.min(top, Math.max(bottom, r2(r.base))), x1, top, bottom, r2(Math.min(SIZE_MAX, r.size)), fontOf(r.font), nm.flags, nm.lead, r2(nm.glue), cx0, cx1])
+    stats.names.located++
+    if (nm.lead >= 0) stats.names.runIn++
+  }
   const file = {
     schema: LAYOUT_SCHEMA, layout: LAYOUT, pdfjs, paper: { id: paper.id, version: paper.version, pages }, left, views, fonts,
     units: outUnits, lines: outLines, frames: outFrames, erase: outErase,
