@@ -49,8 +49,8 @@ export interface ReaderState {
   /** the writes of the settings that storage refused, counted: each is told until it is closed or mended (S-R-22). Not
    *  those refused for the settings being unreadable, which `settingsUnreadable` says */
   refusals: number
-  /** the refusals there were when the settings last landed: a landing proves storage takes a write, so a refusal before
-   *  it is told no more (a retry that succeeds leaves no stale "couldn't save") */
+  /** the refusals there were when a write of this page last went through: it proves storage takes a write, so a refusal
+   *  before it is told no more (a retry that succeeds leaves no stale "couldn't save") */
   mended: number
   /** the extension's settings as they last landed; null before the first read */
   settings: Config | null
@@ -126,7 +126,9 @@ const kindOf = (kind: string | undefined): ProviderErrorKind => (PROVIDER_ERROR_
 export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
   switch (event.type) {
     case 'display':
-      return event.mode === state.display ? state : { ...state, display: event.mode }
+      // an address with no paper has no translated display to be had: the original stays selected, whatever the saved
+      // settings ask for (the radio of a display out of reach was left selected, and its pane hidden)
+      return state.noPaper || event.mode === state.display ? state : { ...state, display: event.mode }
     case 'scale':
       return event.scale === state.scale ? state : { ...state, scale: event.scale }
     case 'loading': {
@@ -153,7 +155,11 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     case 'html':
       return event.url === state.htmlVersion ? state : { ...state, htmlVersion: event.url }
     case 'settings':
-      return event.config === state.settings && event.pack === state.pack && state.mended === state.refusals ? state : { ...state, settings: event.config, pack: event.pack, mended: state.refusals }
+      return event.config === state.settings && event.pack === state.pack ? state : { ...state, settings: event.config, pack: event.pack }
+    // a write of this page that went through: storage takes a write, so a refusal before it is told no more. Only that
+    // proves it: the settings shown again (a language pack that came, a read, another tab's change) prove nothing
+    case 'saved':
+      return state.mended === state.refusals ? state : { ...state, mended: state.refusals }
     case 'fail':
       if (CANNOT_BE_HAD.has(event.event)) return { ...state, available: false, phase: 'ready' }
       // the translation shown in part: said, the preview kept, the displays as they are; the run's end follows
@@ -231,9 +237,9 @@ const NO_PAPER: Partial<ReaderState> = { noPaper: true, phase: 'ready', availabl
  * `reading`: the page's own first read of the settings (main.tsx, ui/first-read.ts), made before the first paint and not
  * waiting for the session, which is a heavy module that reads them again: the chrome is drawn with what storage holds
  * from its first frame. A read that did not answer in the time the page gave it (`null`) paints the defaults, and so does
- * one whose value cannot be read (its `fallbackReason`): both said to be unreadable (S-R-21). The session shows the
- * settings as it reads them, and the page is itself again if they come. Without `reading` nothing is known until the
- * session says
+ * one whose value cannot be read (its `fallbackReason`): both said to be unreadable (S-R-21). The session is handed it
+ * (`SessionHost.reading`): one that did not answer is not waited on again, the PDF opens on the defaults, and the
+ * session shows the settings as they come. Without `reading` nothing is known until the session says
  */
 export function createController({ open, params, reading }: { open: (host: SessionHost) => Promise<Session>; params: URLSearchParams; reading?: ConfigReading | null }): ReaderController {
   const id = params.get('paper') ?? ''
@@ -273,7 +279,7 @@ export function createController({ open, params, reading }: { open: (host: Sessi
     },
     attach(panes) {
       // a session that cannot be opened (its module not loaded) is a failure the interface shows, as a crash is
-      session ??= open({ ...panes, params, emit }).catch((e: unknown) => {
+      session ??= open({ ...panes, params, emit, ...(reading === undefined ? {} : { reading }) }).catch((e: unknown) => {
         emit({ type: 'fail', event: 'crashed', text: String((e as Error)?.message ?? e) })
         throw e
       })

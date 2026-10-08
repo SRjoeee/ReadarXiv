@@ -757,6 +757,43 @@ const OPTIONS_BUTTON = 'header button[aria-haspopup="dialog"]'
   await page.close()
 }
 
+// D1b (Devin on #329): with the saved display a translated one, an address with no paper still shows the original: no
+// translated display is there to be had, and its radio was left selected, its pane's mate hidden
+{
+  const setup = await open({ mode: 'original' })
+  const was = await setup.evaluate(() => { const c = window.__reader.controller.getState().settings; return { mode: c.mode, original: c.pdfReader.original } })
+  await patch(setup, { mode: 'only', pdfReader: { original: false } })
+  await setup.waitForTimeout(800)
+  await setup.close()
+  const page = await context.newPage()
+  page.on('pageerror', e => check('no page error', false, e.message))
+  await page.goto(readerUrl({}))
+  await page.waitForSelector('.card a', { timeout: 15000 })
+  await page.waitForTimeout(600)
+  const shown = await page.evaluate(() => ({ mode: document.documentElement.getAttribute('data-axt-pdf-mode'), state: window.__reader.controller.getState().display, checked: [...document.querySelectorAll('.seg.display [role="radio"]')].map(b => b.getAttribute('aria-checked')), left: getComputedStyle(document.querySelector('.pane[data-side="left"]')).display }))
+  check('no paper, a translated display saved: the original is shown and selected, its pane not hidden', shown.mode === 'original' && shown.state === 'original' && JSON.stringify(shown.checked) === '["true","false","false"]' && shown.left !== 'none', JSON.stringify(shown))
+  await page.close()
+  const restore = await open({ mode: 'original' })
+  await patch(restore, was)
+  await restore.waitForTimeout(800)
+  await restore.close()
+}
+
+// D3b (Devin on #329): an address with no paper and settings that do not answer: the note and its link stand beside the
+// card, so that the greyed controls keep their reason
+{
+  const page = await context.newPage()
+  page.on('pageerror', e => check('no page error', false, e.message))
+  await page.addInitScript(HANG_STORAGE)
+  await page.goto(readerUrl({}), { waitUntil: 'commit' })
+  await page.waitForSelector('.card a', { timeout: 15000 })
+  await page.waitForSelector('.capsule[data-kind="unreadable"]:not([data-out])', { timeout: 10000 })
+  const both = await page.evaluate(() => ({ card: document.querySelector('main .card p')?.textContent.length > 0, note: document.querySelector('.capsule[data-kind="unreadable"] a')?.href.endsWith('/options.html#reading/pdf'), greyed: [...document.querySelectorAll('header .menu-btn')].every(b => b.getAttribute('aria-disabled') === 'true') }))
+  check('no paper, settings that do not answer: the card and the note with its link, the menus greyed', both.card && both.note && both.greyed, JSON.stringify(both))
+  await page.evaluate(() => window.__release())
+  await page.close()
+}
+
 // D6: a healthy read draws the chrome with the settings from its first frame, before the session (a heavy module) has loaded:
 // the language and service menus are in reach, with their own values, the first time they are drawn
 {
@@ -784,7 +821,8 @@ const OPTIONS_BUTTON = 'header button[aria-haspopup="dialog"]'
   const geometry = () => page.evaluate(() => ({ trail: Math.round(document.querySelector('[data-zone="trail"]').getBoundingClientRect().left * 10) / 10, lead: Math.round(document.querySelector('[data-zone="lead"]').getBoundingClientRect().width * 10) / 10 }))
   const during = await geometry()
   const unread = await page.evaluate(() => {
-    const need = ['.menu-btn', 'button[data-side-by-side]'].flatMap(q => [...document.querySelectorAll(`header ${q}`)])
+    // the menus and swap, which write the settings; not sync, which a visit can apply without them (its write is refused)
+    const need = [...document.querySelectorAll('header .menu-btn'), document.querySelector('header button[data-side-by-side]')]
     return { settings: document.querySelector('.capsule[data-kind="unreadable"]') !== null, disabled: need.map(b => b.getAttribute('aria-disabled')), opens: need.map(b => b.hasAttribute('popovertarget')), options: document.querySelector('header button[aria-haspopup="dialog"]')?.hasAttribute('popovertarget'), link: document.querySelector('.capsule[data-kind="unreadable"] a')?.href }
   })
   check('a first read that does not answer: the defaults and the note by 1,500 ms (+ the page\'s own start)', painted >= 1400 && painted < 3500, `${painted} ms`)
@@ -816,6 +854,50 @@ const OPTIONS_BUTTON = 'header button[aria-haspopup="dialog"]'
   }
 }
 
+// a storage that never answers does not hold the PDF (Codex on #329): the session opens it on the defaults at once the
+// page has given up, and the answer that comes at last is followed as a change of the settings, not dropped for being
+// the first. A stored language that is not the defaults' tells the two apart
+{
+  const setup = await open({ mode: 'original' })
+  const wasLanguage = await setup.evaluate(() => window.__reader.controller.getState().settings.targetLanguage)
+  await patch(setup, { targetLanguage: wasLanguage === 'jpn' ? 'kor' : 'jpn' })
+  await setup.waitForTimeout(800)
+  const storedLanguage = await setup.evaluate(() => window.__reader.controller.getState().settings.targetLanguage)
+  await setup.close()
+  const page = await context.newPage()
+  page.on('pageerror', e => check('no page error', false, e.message))
+  await page.addInitScript(HANG_STORAGE)
+  await page.goto(readerUrl({ paper, mode: 'bilingual' }), { waitUntil: 'commit' })
+  await page.waitForSelector('.capsule[data-kind="unreadable"]', { timeout: 10000 })
+  const opened = await page.waitForFunction(() => window.__reader?.ready && window.__reader.controller.getState().sides.left.pages > 0, null, { timeout: 20000 }).then(() => true, () => false)
+  const meanwhile = opened ? await page.evaluate(() => ({ pages: window.__reader.controller.getState().sides.left.pages, language: window.__reader.controller.getState().settings.targetLanguage, note: document.querySelector('.capsule[data-kind="unreadable"]:not([data-out])') !== null })) : null
+  check('a storage that never answers: the PDF opens on the defaults, with the note still said', opened && meanwhile.pages > 0 && meanwhile.note && meanwhile.language !== storedLanguage, JSON.stringify(meanwhile))
+  await page.evaluate(() => window.__release())
+  await page.waitForFunction(() => window.__reader?.controller?.getState().settingsUnreadable === false, null, { timeout: 90000 })
+  await page.waitForTimeout(700)
+  const late = await page.evaluate(() => ({ language: window.__reader.controller.getState().settings.targetLanguage, button: [...document.querySelectorAll('header .menu-btn [data-value]')][0]?.getAttribute('lang') }))
+  check('…and the late answer is followed: the stored language is the one in the state and on the bar', late.language === storedLanguage && !!late.button, JSON.stringify(late))
+  await page.close()
+  const unset = await open({ mode: 'original' })
+  await patch(unset, { targetLanguage: wasLanguage })
+  await unset.waitForTimeout(800)
+  await unset.close()
+}
+
+// a storage that refuses its reads (an invalidated extension context): the note at once, and the PDF opens on the defaults
+{
+  const page = await context.newPage()
+  // WXT's storage items read the store as they are defined and leave a refused read unhandled, on any page that has one
+  // (the library's, not the reader's): the injected refusal is not counted, any other error is
+  page.on('pageerror', e => { if (!/Extension context invalidated\./.test(e.message)) check('no page error', false, e.message) })
+  await page.addInitScript(`(() => { chrome.storage.local.get = () => Promise.reject(new Error('Extension context invalidated.')) })()`)
+  await page.goto(readerUrl({ paper, mode: 'bilingual' }), { waitUntil: 'commit' })
+  await page.waitForSelector('.capsule[data-kind="unreadable"]', { timeout: 10000 })
+  const opened = await page.waitForFunction(() => window.__reader?.ready && window.__reader.controller.getState().sides.left.pages > 0, null, { timeout: 20000 }).then(() => true, () => false)
+  check('a storage that refuses its reads: the note, and the PDF open on the defaults', opened && (await page.evaluate(() => window.__reader.controller.getState().settingsUnreadable)))
+  await page.close()
+}
+
 // D2b: a write storage refuses says so in the reader, in the settings page's sentence, until it is closed or a later write
 // lands, and the control keeps its value
 {
@@ -831,6 +913,10 @@ const OPTIONS_BUTTON = 'header button[aria-haspopup="dialog"]'
   await page.keyboard.press('Escape')
   check('a write refused: counted, the settings page\'s sentence in a capsule with a close', told.refusals === 1 && told.text.length > 0 && told.close, JSON.stringify(told))
   check('…the switch still shows the value stored', (await images.getAttribute('aria-checked')) === was)
+  // the settings shown again (a pack that came, a read) are no write that went through (Devin on #329)
+  await page.evaluate(() => { const s = window.__reader.controller.getState(); window.__reader.host.emit({ type: 'settings', config: s.settings, pack: s.pack }) })
+  await page.waitForTimeout(400)
+  check('…the settings shown again do not mend it', (await page.locator('.capsule[data-kind="saveFailed"]:not([data-out])').count()) === 1)
   await page.waitForTimeout(6500)
   check('…the error is not timed out: it stands 6.5 s later', (await page.locator('.capsule[data-kind="saveFailed"]:not([data-out])').count()) === 1)
   await page.locator('.capsule[data-kind="saveFailed"] .close').click()

@@ -135,7 +135,9 @@ describe('the states (the reader\'s design, §8)', () => {
     // before the paper's own notes: the controls these would speak of are out of reach until they are read
     expect(capsuleOf(at({ phase: 'ready', settingsUnreadable: true, available: false }), none)).toEqual(note)
     expect(capsuleOf(at({ phase: 'failed', failure: 'network', settingsUnreadable: true }), none)).toBeNull()
-    expect(capsuleOf(at({ phase: 'ready', settingsUnreadable: true, noPaper: true }), none)).toBeNull()
+    // beside the card of an address with no paper, which names no note of its own: the settings are as unreadable there
+    expect(capsuleOf(at({ phase: 'ready', settingsUnreadable: true, noPaper: true, available: false }), none)).toEqual(note)
+    expect(capsuleOf(at({ phase: 'ready', settingsUnreadable: true, noPaper: true }), none)).toEqual(note)
     expect(capsuleOf(at({ phase: 'ready', settingsUnreadable: false }), none)).toBeNull()
   })
 
@@ -164,7 +166,12 @@ describe('the states (the reader\'s design, §8)', () => {
   it('an address with no paper: the card says it cannot be found and offers arXiv; no capsule, whatever else the state holds (D1)', () => {
     const missing = at({ phase: 'ready', noPaper: true, available: false })
     expect(cardOf(missing)).toEqual({ reason: R.status.noPaper, action: 'arxiv' })
+    // nothing paper-specific is said of it: not a paper that cannot be had, a partial translation, failed passages, a narrow window, a language
+    expect(capsuleOf({ ...missing, partial: true, failedUnits: 2, narrow: true, languageSupported: false }, none)).toBeNull()
     expect(capsuleOf(missing, none)).toBeNull()
+    // …but what is true of the settings is: the note and a refused write stand beside the card (Devin on #329)
+    expect(capsuleOf({ ...missing, settingsUnreadable: true }, none)).toMatchObject({ kind: 'unreadable' })
+    expect(capsuleOf({ ...missing, refusals: 1 }, none)).toMatchObject({ kind: 'saveFailed' })
     // a paper named has no such card, and a failure's card is the failure's
     expect(cardOf(at({ phase: 'ready' }))).toBeNull()
     expect(cardOf(at({ phase: 'failed', failure: 'network' }))).toMatchObject({ action: 'retry' })

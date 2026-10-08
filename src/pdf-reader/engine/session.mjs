@@ -23,10 +23,11 @@ import { renderImage, setImageModes } from '@/core/renderer/image'
 import { sendMessage } from '@/shared/messages'
 import { createSurfaceConfig } from '@/shared/surface-config'
 import { R } from '@/ui/strings'
+import { firstReadTime } from '@/ui/first-read'
 import { localeStale } from '@/ui/use-surface-config'
 import { ocrCall } from '../ocr'
 import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFViewer, pdfjsLib } from '../pdfjs'
-import { displayOf, figuresShown, followOf, withDisplay } from '../settings'
+import { displayOf, figuresShown, firstConfig, followOf, withDisplay } from '../settings'
 import { isName, nameEvidence } from '../../core/names'
 import { whenVisible } from '../visible'
 import { contentsOf, outlineOf } from '../outline'
@@ -74,8 +75,12 @@ const MODES = ['original', 'translation', 'bilingual']
 /** the settings as they last landed; null until the first read */
 let config = null
 const surface = createSurfaceConfig({ localeStale, reload: () => location.reload(), onLanded: (next, from) => landed(next, from) })
-await new Promise(resolve => { const off = surface.subscribe(() => { if (surface.state().config) { off(); resolve() } }); surface.start() })
-config = surface.state().config
+// The first landing is not waited on for ever: storage that is silent or refuses its first read would hold the session,
+// and the PDF with it, and the page has already said the settings could not be read (main.tsx). One that did not answer
+// the page in its time (`host.reading` null) is not waited on again; else the surface has the same time (settings.ts
+// firstConfig). Given up on, the reader opens on the defaults, and a landing that comes later is followed as a change
+let fellBack
+;({ config, fellBack } = await firstConfig(surface, host.reading === null ? Promise.resolve() : firstReadTime()))
 // the offline service's language pack, which the surface looks up once the settings have landed: the service menu
 // follows it as it comes (the final review: it was read once, before it came, and the offline service stayed greyed)
 let pack = surface.state().pack ?? null
@@ -84,7 +89,7 @@ surface.subscribe(() => { const now = surface.state().pack ?? null; if (now !== 
 // asked to translate (#readarxiv on the PDF address, the reader's design, §2): the translated display the settings
 // name, not an original left on — the reader asked for a translation, not for what it last read
 const askTranslate = params.get('ask') === 'translate'
-let mode = MODES.includes(params.get('mode')) ? params.get('mode') : askTranslate ? (config.mode === 'only' ? 'translation' : 'bilingual') : displayOf(config)
+let mode = !paper ? 'original' : MODES.includes(params.get('mode')) ? params.get('mode') : askTranslate ? (config.mode === 'only' ? 'translation' : 'bilingual') : displayOf(config)
 let narrow = false // the window too narrow for two sides (setNarrow)
 function showMode() {
   document.documentElement.setAttribute('data-axt-pdf-mode', mode)
@@ -117,15 +122,16 @@ function showSettings() {
   sheet.textContent = appearanceRule(lookOf(config))
   pack = surface.state().pack ?? null
   host.emit({ type: 'settings', config, pack })
-  // the defaults are in effect — the service and its key set on the settings page are not — until they are repaired there
-  host.emit({ type: 'notice', why: surface.state().fallbackReason ?? null })
+  // the defaults are in effect — the service and its key set on the settings page are not — until they are repaired there,
+  // or until storage answers, if the first read was given up on
+  host.emit({ type: 'notice', why: surface.state().fallbackReason ?? (fellBack ? { kind: 'unknown' } : null) })
 }
 showSettings()
 /** this page's writes of the settings, one after another; a new language's reload waits for them. A write the store
  *  refuses (its stored value cannot be read, config/storage.ts, or storage itself fails) is dropped: what the reader
  *  chose still holds on screen, and the interface is told (S-R-22) */
 let writes = Promise.resolve()
-const save = change => (writes = writes.then(() => surface.patch(change)).catch(e => { console.warn('[settings]', e?.message ?? e); host.emit({ type: 'refused' }) }))
+const save = change => (writes = writes.then(() => surface.patch(change)).then(() => host.emit({ type: 'saved' }), e => { console.warn('[settings]', e?.message ?? e); host.emit({ type: 'refused' }) }))
 // an original left on is let go when the reader was asked to translate: the next PDF opens as this one does
 if (askTranslate && config.pdfReader.original) void save(c => ({ ...c, pdfReader: { ...c.pdfReader, original: false } }))
 /** a change of the settings from the interface (the controller's patchSettings) */
@@ -134,7 +140,7 @@ export function patchSettings(change) { void save(change) }
 let translating = false
 /** the original held for this visit: the paper or its language cannot be had as a bilingual PDF, and a display chosen
  *  on another page is not followed into a translation there is none of (the final review) */
-let held = false
+let held = !paper
 /** why the last translation stopped short, when a retry can mend it: { event, kind }; null otherwise (the reader's design, §8) */
 let stopped = null
 /** the translation under way, and the way to run it again in place, which live() sets once the paper is open; null
@@ -148,7 +154,11 @@ let viewersMade = false
  *  the highlight and figure text as they now are. A refused write lands the defaults, which the reader's own choices on
  *  screen outlive: nothing is followed, not even a target language the defaults name (Part 2's final review) */
 function landed(next, from) {
-  if (!config || from === 'first') return
+  if (!config) return
+  // the first landing, after the reader gave up on it and opened on the defaults, is a change of the settings like any
+  // other: the display, the sync, the language and the services it brings are followed
+  if (from === 'first') { if (!fellBack) return; from = 'elsewhere' }
+  fellBack = false
   const prev = config
   config = next
   showSettings()

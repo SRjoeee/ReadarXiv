@@ -345,7 +345,7 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
   header, not the line — and then for no capsule while it runs: the line says it.)
 - The paragraphs that failed are told once the run has ended, not while it runs.
 - **A notice** carries a chip action and a close button, whose tooltip stands above it; closing it is remembered for this paper's visit, each notice apart — the partial one's close does not close the count of failed passages it stood before (#314).
-- **Two notes that are not a notice**: settings that cannot be read stand for as long as it is so, with a link to the settings page and no close (UI.md S-R-21); a write storage refused is told with the settings page's sentence until it is closed or a later write lands (S-R-22).
+- **Two notes that are not a notice**: settings that cannot be read stand for as long as it is so, with a link to the settings page and no close (UI.md S-R-21); a write storage refused is told with the settings page's sentence until it is closed or a later write of this page goes through (S-R-22).
 - **When the translation's pane has nothing to show**, the same anatomy is a card centred in that pane (300 px, 14 px
   radius, the popover shadow), with a filled action; the capsule is not shown as well.
 
@@ -391,8 +391,8 @@ No state that tells the reader nothing is shown (no "done").
 | Language not supported | the shared target language is not one of the nine | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the nine translates |
 | Nothing translated | a service failure with no paragraph done | card in the translation's pane: the reason (网络连接失败, API Key 无效或已过期, 尚未配置 API Key, …) · 重试, or 设置 when the reason is a key (opening the settings page at the services) |
 | Cannot be had | the paper has no source, or none of the ways of typesetting it worked (every one tried, none for want of time) | 对照 and 译文 greyed in the switch; the reader shows 原文, with the capsule: 这篇论文暂不支持 PDF 翻译, and 改用 HTML 翻译 where arXiv has an HTML version (opened where `reading.openIn` says); no close. Remembered on this machine by paper version, language and pipeline, when the paper's own source set there: a visit again asks nothing of the service, a new pipeline tries once more (the maintainer, 2026-09-26; the words first had none) |
-| No paper | the address names none (a hand-typed one) | the phase is ready, not loading; 对照 and 译文 greyed; a card in the document area: 找不到这篇论文 · 前往 arXiv (a link, opened where `reading.openIn` says) |
-| Settings cannot be read | storage did not answer in a page's first 1,500 ms, or its value cannot be used | the defaults in use; capsule: 设置读取失败，当前使用默认设置 · 设置, for as long as it is so; the controls that write the settings greyed, with the reason in their tooltips; the menus keep their places |
+| No paper | the address names none (a hand-typed one) | the phase is ready, not loading; 对照 and 译文 greyed and 原文 selected whatever the saved display; a card in the document area: 找不到这篇论文 · 前往 arXiv (a link, opened where `reading.openIn` says) |
+| Settings cannot be read | storage did not answer in a page's first 1,500 ms, or its value cannot be used | the defaults in use and the PDF opened on them, not held for the storage; capsule: 设置读取失败，当前使用默认设置 · 设置, for as long as it is so, beside an address with no paper's card too; the controls that write the settings greyed, with the reason in their tooltips; the menus keep their places |
 | Narrow window | 对照 chosen, the document area under 840 px (§5) | the translation alone; capsule, once: 窗口较窄，暂只显示译文 |
 
 - Recovery is automatic where it can be: when the network comes back the translation goes on by itself; 重试 asks only

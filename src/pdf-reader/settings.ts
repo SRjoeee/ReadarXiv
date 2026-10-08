@@ -1,9 +1,23 @@
 // The reader's settings are the extension's (the reader's design, §3, §9.1): these say which display they ask for,
 // what a display chosen in the reader writes back, and whether figure text shows in a display
 import { chainConfigChanged } from '@/config/revision'
-import type { Config } from '@/config/schema'
-import type { Landing } from '@/shared/surface-config'
+import { type Config, DEFAULT_CONFIG } from '@/config/schema'
+import type { Landing, SurfaceConfig } from '@/shared/surface-config'
 import type { EngineDisplay } from './engine/session.mjs'
+
+/**
+ * The session's first configuration: what the surface lands, or — when `giveUp` is over first — the defaults, said to
+ * have fallen back. Storage that never answers, or refuses its first read (the surface swallows a refused first read and
+ * publishes nothing), would otherwise hold the whole session, and with it the PDF, for ever; the reader opens on the
+ * defaults and the surface goes on reading, its late answer followed as any change of the settings is (session.mjs
+ * `landed`). A configuration that landed is never thrown away for being late
+ */
+export async function firstConfig(surface: Pick<SurfaceConfig, 'state' | 'subscribe' | 'start'>, giveUp: Promise<void>): Promise<{ config: Config; fellBack: boolean }> {
+  const landing = new Promise<void>(resolve => { const off = surface.subscribe(() => { if (surface.state().config) { off(); resolve() } }); surface.start() })
+  await Promise.race([landing, giveUp])
+  const config = surface.state().config
+  return config ? { config, fellBack: false } : { config: DEFAULT_CONFIG, fellBack: true }
+}
 
 /** the display the settings ask for: the HTML page's mode, unless the reader was last left on the original alone */
 export function displayOf(config: Config): EngineDisplay {

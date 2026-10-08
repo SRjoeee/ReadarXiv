@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { createSurfaceConfig } from '@/shared/surface-config'
+import * as configStorage from '@/config/storage'
 import { DEFAULT_CONFIG, type Config } from '@/config/schema'
-import { displayOf, figuresShown, followOf, withDisplay } from '@/pdf-reader/settings'
+import { displayOf, figuresShown, firstConfig, followOf, withDisplay } from '@/pdf-reader/settings'
 
 const with_ = (patch: Partial<Config>, reader: Partial<Config['pdfReader']> = {}): Config => ({ ...DEFAULT_CONFIG, ...patch, pdfReader: { ...DEFAULT_CONFIG.pdfReader, ...reader } })
 
@@ -102,5 +104,39 @@ describe("followOf: what a landing of the settings changes in the reader (Part 2
     expect(followOf(side, off, 'elsewhere', at({ addressSync: true })).sync).toBeNull()
     expect(followOf(side, off, 'elsewhere', at({ syncMode: 'pointer' })).sync).toBeNull()
     expect(followOf(side, off, 'own', at({ syncMode: 'off' })).sync).toBeNull()
+  })
+})
+
+describe('firstConfig: the session\'s first configuration, never waited on for ever (Codex on #329)', () => {
+  const surface = () => createSurfaceConfig({ localeStale: () => false, reload: () => undefined })
+  const stored = with_({ targetLanguage: 'jpn' })
+
+  it('is what the surface lands, when it lands before the page gives up', async () => {
+    vi.spyOn(configStorage, 'readConfig').mockResolvedValueOnce({ config: stored, fallbackReason: null })
+    expect(await firstConfig(surface(), new Promise(() => {}))).toEqual({ config: stored, fellBack: false })
+    vi.restoreAllMocks()
+  })
+
+  it('is the defaults, said to have fallen back, when storage never answers', async () => {
+    vi.spyOn(configStorage, 'readConfig').mockReturnValueOnce(new Promise(() => {}))
+    expect(await firstConfig(surface(), Promise.resolve())).toEqual({ config: DEFAULT_CONFIG, fellBack: true })
+    vi.restoreAllMocks()
+  })
+
+  it('is the defaults when storage rejects: the surface swallows a refused first read and publishes nothing', async () => {
+    vi.spyOn(configStorage, 'readConfig').mockRejectedValueOnce(new Error('the extension context was invalidated'))
+    const s = surface()
+    expect(await firstConfig(s, Promise.resolve())).toEqual({ config: DEFAULT_CONFIG, fellBack: true })
+    expect(s.state().config).toBeNull()
+    vi.restoreAllMocks()
+  })
+
+  it('is the surface\'s own when both are ready at once: a configuration that landed is never thrown away', async () => {
+    vi.spyOn(configStorage, 'readConfig').mockResolvedValueOnce({ config: stored, fallbackReason: null })
+    const s = surface()
+    // landed already (the surface publishes the pack\'s state before the configuration: wait for the configuration)
+    await new Promise<void>(resolve => { s.subscribe(() => { if (s.state().config) resolve() }); s.start() })
+    expect(await firstConfig(s, Promise.resolve())).toEqual({ config: stored, fellBack: false })
+    vi.restoreAllMocks()
   })
 })

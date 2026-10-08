@@ -216,6 +216,18 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
     })
   })
 
+  it('an address with no paper and unreadable settings: the note and its link stand beside the card, and the controls it explains keep their reason (Devin on #329)', async () => {
+    const fake = fakeController({ phase: 'ready', noPaper: true, available: false, settingsUnreadable: true })
+    const { container } = await mountElement(createElement('div', null, createElement(FailureCard, { controller: fake.controller, of: 'page' }), createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} })))
+    expect(container.querySelector('.card p')?.textContent).toBe(R.status.noPaper)
+    const note = container.querySelector('.capsule[data-kind="unreadable"]:not([data-out])')
+    expect([note?.querySelector('.sr-only')?.textContent, note?.querySelector('a[data-action]')?.textContent, note?.querySelector('.close')]).toEqual([R.status.unreadable, S.settings, null])
+    // the settings read at last: the note goes, the card stays
+    await act(async () => fake.set({ settingsUnreadable: false }))
+    await act(async () => { await new Promise(r => setTimeout(r, 220)) })
+    expect([container.querySelector('.capsule'), container.querySelector('.card')?.nodeName]).toEqual([null, 'DIV'])
+  })
+
   it('a paper that cannot be had: the sentence, and its HTML version a link opened where the settings say; no close (the maintainer, 2026-09-26)', async () => {
     const href = 'https://arxiv.org/html/2608.02163#readarxiv'
     const fake = fakeController({ phase: 'ready', available: false, htmlVersion: href })

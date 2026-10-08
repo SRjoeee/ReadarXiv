@@ -138,17 +138,23 @@ describe('reduce: the session events folded into the reader state', () => {
     expect(fold([{ type: 'notice', why: { kind: 'tooNew' } }, { type: 'notice', why: null }]).settingsUnreadable).toBe(false)
   })
 
-  it('counts the writes of the settings that were refused, except while the settings cannot be read, which the notice says; a landing of the settings mends the refusals before it (D2)', () => {
+  it('counts the writes of the settings that were refused, except while the settings cannot be read, which the notice says; only a write of this page that went through mends them (D2, Devin on #329)', () => {
     expect(INITIAL).toMatchObject({ refusals: 0, mended: 0 })
     expect(fold([{ type: 'refused' }, { type: 'refused' }])).toMatchObject({ refusals: 2, mended: 0 })
     // the session tells of the unreadable settings before the refusal that follows from them
     expect(fold([{ type: 'notice', why: { kind: 'tooNew' } }, { type: 'refused' }]).refusals).toBe(0)
-    // the settings land: storage took a write, and a refusal after is a new one
-    const mended = fold([{ type: 'refused' }, { type: 'settings', config: DEFAULT_CONFIG, pack: null }])
+    // the settings shown again — a language pack that came, a read, another tab's change — mend nothing: no write went through
+    const refused = fold([{ type: 'refused' }])
+    for (const event of [{ type: 'settings', config: DEFAULT_CONFIG, pack: null }, { type: 'settings', config: DEFAULT_CONFIG, pack: 'available' }, { type: 'settings', config: { ...DEFAULT_CONFIG, targetLanguage: 'jpn' }, pack: null }] as SessionEvent[]) {
+      expect(fold([event], refused), JSON.stringify(event)).toMatchObject({ refusals: 1, mended: 0 })
+    }
+    // a write that went through proves storage takes one, and a refusal after is a new one
+    const mended = fold([{ type: 'saved' }], refused)
     expect(mended).toMatchObject({ refusals: 1, mended: 1 })
     expect(fold([{ type: 'refused' }], mended)).toMatchObject({ refusals: 2, mended: 1 })
-    // the same settings again, with nothing refused, change nothing
-    expect(reduce(mended, { type: 'settings', config: DEFAULT_CONFIG, pack: null })).toBe(mended)
+    // nothing refused: a write that went through changes nothing
+    expect(reduce(INITIAL, { type: 'saved' })).toBe(INITIAL)
+    expect(reduce(mended, { type: 'saved' })).toBe(mended)
   })
 
   it('knows the paper and its title', () => {
@@ -319,6 +325,32 @@ describe('createController', () => {
       expect(made(undefined).getState()).toMatchObject({ settings: null, settingsUnreadable: false })
       expect(made(null, '').getState()).toMatchObject({ settings: DEFAULT_CONFIG, settingsUnreadable: true, noPaper: true })
     })
+  })
+
+  it('an address with no paper keeps the original selected whatever display the session or the settings ask for: no translated display is there to be had (Devin on #329)', async () => {
+    let host!: SessionHost
+    const controller = createController({ open: async h => { host = h; return fakeSession() }, params: new URLSearchParams() })
+    await controller.attach(panes())
+    // the session\'s first display comes from the saved settings, and another tab\'s change can bring another
+    for (const mode of ['translation', 'bilingual', 'translation'] as const) {
+      host.emit({ type: 'display', mode })
+      expect(controller.getState(), mode).toMatchObject({ display: 'original', noPaper: true })
+    }
+    // a paper named follows the session as ever
+    const named = createController({ open: async h => { host = h; return fakeSession() }, params: new URLSearchParams('paper=2608.02163') })
+    await named.attach(panes())
+    host.emit({ type: 'display', mode: 'translation' })
+    expect(named.getState().display).toBe('translation')
+  })
+
+  it('hands the session the page\'s first read of the settings, so that a storage that did not answer is not waited on twice (Codex on #329)', async () => {
+    const reading = { config: DEFAULT_CONFIG, fallbackReason: null }
+    for (const given of [reading, null, undefined]) {
+      let host!: SessionHost
+      const controller = createController({ open: async h => { host = h; return fakeSession() }, params: new URLSearchParams('paper=2608.02163'), ...(given === undefined ? {} : { reading: given }) })
+      await controller.attach(panes())
+      expect(host.reading, String(given && 'read')).toBe(given)
+    }
   })
 
   it('remembers the zoom chosen from the menu, and forgets it on a step', async () => {

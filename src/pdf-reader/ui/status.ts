@@ -44,15 +44,15 @@ const running = (state: ReaderState) => state.phase === 'translating' || state.p
 export interface Seen { partialClosed: boolean; noticeClosed: boolean; narrowShown: boolean; refusalsSeen: number }
 
 export function capsuleOf(state: ReaderState, seen: Seen): Capsule | null {
-  // no paper: its card says that much, and nothing else on the page is true of it
-  if (state.noPaper) return null
   // what the reader just did or cannot do, over a load too (its controls are in reach then), but not beside a failure's
-  // card, which is the pane's whole answer: the unreadable settings first, since they are why a write is refused
+  // card, which is the pane's whole answer: the unreadable settings first, since they are why a write is refused. They
+  // are true of an address with no paper too, whose controls they explain, and stand beside its card
   if (state.phase !== 'failed') {
     if (state.settingsUnreadable) return { kind: 'unreadable', words: plain(R.status.unreadable) }
     if (state.refusals > Math.max(seen.refusalsSeen, state.mended)) return { kind: 'saveFailed', words: plain(O.saveFailed) }
   }
-  if (state.phase === 'failed' || state.phase === 'loading') return null
+  // no paper: its card says that much, and nothing about a paper is true of it
+  if (state.noPaper || state.phase === 'failed' || state.phase === 'loading') return null
   // before anything else: it says why the translated displays are greyed (the maintainer, 2026-09-26)
   if (!state.available) return state.htmlVersion ? { kind: 'unavailable', words: plain(R.status.noPdf), href: state.htmlVersion } : { kind: 'unavailable', words: plain(R.status.noPdf) }
   if (!state.languageSupported && state.settings) {
