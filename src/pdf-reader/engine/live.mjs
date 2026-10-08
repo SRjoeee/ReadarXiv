@@ -21,7 +21,8 @@
 import { analyze } from './paper-meta.mjs'
 import { inkSamples, LAYOUT_TEX, layoutMarking, markProbeTex, probeSamples } from './layout/marks.mjs'
 import { BALANCE_DEF, documentBounds, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
-import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
+import { strategiesFor, typesetBy } from './scripts.mjs'
+import { authorsTranslated } from './translate/kept.mjs'
 import { passagesInSource, translationOf } from './cache.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
 import { decideGroups, groupOf } from './groups.mjs'
@@ -124,7 +125,7 @@ export const citationLines = aux => {
  * What names a translation's floats (the table-groups brief, Problem 2): at the document's end, each float's label as
  * the class defines it (\fnum@figure, \fnum@table, one level of it) and the meaning of its name (\figurename,
  * \tablename), written to the log for captionsOf. Whether the final labels a figure with the name babel gives the
- * target (scripts.mjs, \babelprovide{axttarget}; caption-names.mjs holds those names) is the paper's as much as the
+ * target (scripts.mjs, \babelprovide{axttarget}; the layout rules' labels, rules/layout-rules.json, hold those names) is the paper's as much as the
  * target's: a class that writes its own word into the label (naaclhlt2019.sty's \fnum@figure, "Figure \thefigure"),
  * a paper that selects another language in its body (2307.16209's \selectlanguage{english}), polyglossia (babel not
  * loaded), and CJKutf8 (no babel) keep the paper's names. Read, never expanded: nothing in it can fail a compile
@@ -314,14 +315,16 @@ function unitLines(raw, patched, out, main, skip) {
 }
 
 /** the units a translation into `lang` leaves as they are: the names a table holds (nameCells), and the author block's
- *  names and places where the target writes them as the paper does (scripts.mjs authorsTranslated) */
+ *  names and places where the target writes them as the paper does (translate/kept.mjs authorsTranslated) */
 export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : new Set([...paper.kept, ...paper.units.filter(u => u.kind === 'author')]))
 
 /**
  * The reader's versions (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum), apart since 2026-10-02 so that a change to the typesetting never
  * asks the service again (the evaluation's ruling 4):
- * - PIPELINE_VERSION, the translation's: defined in versions.mjs (re-exported here), which the readers load without
- *   this module.
+ * - PIPELINE_VERSION, the extraction's (the units' cutting, kinds and texts, the cells' places, the left side's marks):
+ *   defined in versions.mjs (re-exported here), which the readers load without this module. A copy is judged by it alone
+ *   until the rows cache replaces these copies (Stage 5, Task 10), so a change of TRANSLATE_VERSION (translate/version.mjs:
+ *   the wire and its reading back, which units a language sends) that must void copies raises it with it.
  * - TYPESETTING_VERSION: raised with any change to how a compile sets a translation it is given — latex-front's TeX,
  *   the scripts' strategies, the fonts, the typesetting rule (typeset/), the TeX tree. A record of another version is
  *   compiled again from its translation; a paper none of the ways could set is tried again.

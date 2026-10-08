@@ -216,8 +216,9 @@ const DESIGNS = [
   { design: 'garamond', cls: 'serif', nfss: /^(?:ebg|EBGaramond|ugm|mdugm|zgm|GaramondLibre|garamondx)/, ps: /^(?:EBGaramond|AGaramond|AdobeGaramond|Garamond|URWGaramond)/ },
   { design: 'utopia', cls: 'serif', nfss: /^(?:put|mdput|fut|Erewhon|Utopia)/, ps: /^(?:Utopia|Erewhon)/ },
 ]
-const ENGLISH = ['cm', 'times', 'libertine', 'palatino', 'charter', 'garamond', 'utopia', 'other']
-const SERIF_DESIGN = new Set(ENGLISH)
+/** the English families a paper's body is set in, and a rule may name as one a CJK face is light beside */
+export const ENGLISH_FAMILIES = Object.freeze(['cm', 'times', 'libertine', 'palatino', 'charter', 'garamond', 'utopia', 'other'])
+const SERIF_DESIGN = new Set(ENGLISH_FAMILIES)
 
 // style words: URW's Medi(um) is its bold, and its Regu, Ital and Obli abbreviations; Medium spelled out is not bold
 const BOLD = /(?:Bold|Bol(?![a-z])|Black|Heavy|Demi|Semibold|SemiBold|ExtraBold|Medi(?![a-z]))/
@@ -304,7 +305,7 @@ export function familyOfProbe(probe) {
 /** the paper's body family, from the layout file's fonts weighted by the lines each sets: the text family that sets the
  *  most (math, sans and mono faces are not the body); a name of no family weighs for `other` */
 export function familyOfFonts(names, weights) {
-  const total = new Map(ENGLISH.map(f => [f, 0]))
+  const total = new Map(ENGLISH_FAMILIES.map(f => [f, 0]))
   const n = Math.min(names?.length ?? 0, weights?.length ?? 0)
   for (let i = 0; i < n; i++) {
     const w = weights[i]
@@ -314,37 +315,25 @@ export function familyOfFonts(names, weights) {
     total.set(c.design, total.get(c.design) + w)
   }
   let best = 'other', most = 0
-  for (const f of ENGLISH) if (total.get(f) > most) { best = f; most = total.get(f) }
+  for (const f of ENGLISH_FAMILIES) if (total.get(f) > most) { best = f; most = total.get(f) }
   return best
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
 // The roles
 
-// CJK: the family and its Kai. Light beside the lightest English families, its bold SemiBold (the same step of 300);
-// Regular and Bold beside the rest (spec §4.4; the sweep chooses between Medium and SemiBold, §4.5)
-const CJK_FAMILY = {
-  Hans: { group: 'shs-sc', kai: 'fandolkai' }, Hant: { group: 'shs-tc', kai: 'bkai00mp' }, Jpan: { group: 'haranoaji', kai: null },
-  Kore: { group: 'shs-k', kai: null },
-}
-const LIGHT = Object.freeze(['cm', 'garamond'])
 const ALPHABETS = new Set(['Latn', 'Cyrl'])
 // every Latin and Cyrillic face's missing symbols from Latin Modern Math
 const LATIN_FALLBACKS = Object.fromEntries(Object.values(FACES).filter(f => !CJK_GROUPS.test(f.family) && f.id !== 'lm-math').map(f => [f.id, Object.freeze(['lm-math'])]))
 
-/** the CJK faces a target's script takes as this table has them: its group, its Kai (null: emphasis upright) and the
- *  English designs beside which it takes the light weights; null for a script with none. A layout rule, not a fact about
- *  the files: the instant layer asks for it through its one per-target call (layer-proto/target-rules.mjs), where a rule
- *  set read as data will give it instead, and hands it back to rolesFor */
-export function cjkFacesOf(target) {
-  const script = scriptOf(target)
-  if (!Object.hasOwn(CJK_FAMILY, script)) return null
-  const { group, kai } = CJK_FAMILY[script]
-  return { group, kai, light: LIGHT }
-}
-
-/** what a target draws in, for a paper's English family; its CJK faces this table's own (cjkFacesOf) unless given */
-export function rolesFor(target, family, cjkFaces = cjkFacesOf(target)) {
+/**
+ * What a target draws in, for a paper's English family. `cjkFaces`: the target's CJK family as the layout rule set gives
+ * it (rules/layout.mjs: its group, its Kai, the English designs beside which it takes the light weights), null for an
+ * alphabet. Which family a script takes is a layout rule, not a fact about the files: this table only builds the roles
+ * from it (Light beside Computer Modern and Garamond, its bold SemiBold; Regular and Bold beside the rest, spec §4.4).
+ * A script that is no alphabet's and is given none has no roles to draw in
+ */
+export function rolesFor(target, family, cjkFaces) {
   const script = scriptOf(target)
   let cjk = null
   const fallbacks = { ...LATIN_FALLBACKS }

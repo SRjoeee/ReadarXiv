@@ -51,23 +51,11 @@
 //   their punctuation and caption labels kept.
 // - Erasing: what a unit's erasing covers that no painted unit accounts for is put back from the original (kept lines
 //   whole, the ink no accounted character stands on); crops grown over the ink they touch and darkened in.
-import { blocksOf, CITE, gapClass, lcsMatched, median, NO_END, NO_START, norm, phClass, texToText, wordsOf } from './layer1.mjs'
-import { CJK_TARGETS, faceOf, fontString, OBLIQUE_DEG, styleKey } from './fonts.mjs'
+import { blocksOf, CITE, gapClass, kinsokuOf, lcsMatched, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
+import { faceOf, fontString, OBLIQUE_DEG, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
 
-// ---- parameters: per script, each a prior from the public repo's typesetting research, swept on the layer
-
-/** step 3: the fit's further steps for a unit its states leave clipped (run.mjs fitFurther), in order, and the size the
- *  last may go down to: on the gate's 29 outputs they took clipped characters from 943 to 140 (widen 100, flow 138, the
- *  size 465), most below the floor at 0.775 */
-const FURTHER = Object.freeze(['widen', 'flow', 'shrink']), FLOOR_MIN = 0.6
-/** the defaults, before the sweep chose (main.js overrides any of them from the query) */
-export function defaultParams(to) {
-  const cjk = CJK_TARGETS.has(to)
-  if (to === 'zh' || to === 'zh-TW') return { cjk: true, leadBase: 1.3, leadFloor: 1.0, trackMin: -0.03, compressMax: to === 'zh-TW' ? 0 : 2, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 1, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.25, spaceMax: 1.0, autospace: 0.2, spaceMin: 0.8, hyphen: 1, further: FURTHER, floorMin: FLOOR_MIN }
-  if (cjk) return { cjk: true, leadBase: 1.0, leadFloor: 1.0, trackMin: -0.03, compressMax: 2, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 1, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.25, spaceMax: 1.0, autospace: to === 'ja' ? 0.2 : 0, spaceMin: 0.8, hyphen: 1, further: FURTHER, floorMin: FLOOR_MIN }
-  return { cjk: false, leadBase: 1.0, leadFloor: 0.95, trackMin: 0, compressMax: 0, borrow: 1, borrowGap: 0.35, floor: 0.8, step: 0.025, grid: 0, order: ['track', 'borrow', 'lead', 'shrink'], cjkJust: 0.12, spaceMax: 1.2, autospace: 0, spaceMin: 0.8, hyphen: 1, further: FURTHER, floorMin: FLOOR_MIN }
-}
+// (the fit's parameters, per script and language, are the layout rules': rules/layout.mjs resolveRules gives a run its P)
 
 // ---- the page's characters, each with its font's class
 
@@ -230,10 +218,12 @@ export function phClass2(src) {
  * the extent of as it is laid (its rectangle, or its block's x0 to x1 where that is wider: a line widened). Each line's band: from the nearest rule over it less `clear` (or the original's own top, where that is
  * higher: never held below the original) down to the nearest under it plus `clear`, never past the original's own foot
  * (its line's band, not the next line's); with no rule over it, its em box's top at the original's baseline. Returns the
- * largest size every band holds the em box at (`cap`, a share of `s`; never below 0.6, the fit's last floor) and the
- * bands by block (`bands`: each line's baseline B, lo, hi), or null where no rule is near
+ * largest size every band holds the em box at (`cap`, a share of `s`; never below the rules' cellCapMin, the fit's last
+ * floor) and the bands by block (`bands`: each line's baseline B, lo, hi), or null where no rule is near. `P` holds the
+ * layout rules' `cellClear` (the room kept to a rule, PDF units) and `cellCapMin`
  */
-export function cellBands(blocks, rulesOf, s, clear = 0.5) {
+export function cellBands(blocks, rulesOf, s, P) {
+  const { cellClear: clear, cellCapMin } = P
   let cap = 1
   const bands = new Map()
   blocks.forEach((b, bi) => {
@@ -259,7 +249,7 @@ export function cellBands(blocks, rulesOf, s, clear = 0.5) {
       ;(bands.get(bi) ?? bands.set(bi, []).get(bi)).push({ B, lo, hi })
     })
   })
-  return bands.size ? { cap: Math.max(0.6, Math.min(1, Math.floor(cap * 1000) / 1000)), bands } : null
+  return bands.size ? { cap: Math.max(cellCapMin, Math.min(1, Math.floor(cap * 1000) / 1000)), bands } : null
 }
 /**
  * Each laid line that stands on one of the original's lines (its baseline the original's) moved into that line's band
@@ -764,7 +754,7 @@ export function labelOf(out, unit, rects, charsByPage, gapsIn) {
 /**
  * A float's label as the final sets it in the target (the table-groups brief, Problem 2): `label` the label v0 or the
  * layout file found on the unit's first line (labelOf: "Table 2:", the file's "Table2:"), `names` the target's names of a
- * figure and a table (caption-names.mjs: babel's, which the final prints), `captions` which of the two the final names so
+ * figure and a table (the layout rules' labels: babel's, which the final prints), `captions` which of the two the final names so
  * (live.mjs captionsOf: `target` or `source`), `to` the target. The name the final's babel gives the float, in capitals
  * where the original's is (a class's \MakeUppercase: TABLE I), a space, then the original's own number and punctuation;
  * null where the label is no figure's or table's, where the final keeps the paper's own name for it, or where the name is
@@ -1592,12 +1582,13 @@ export function extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, 
 
 const PUNCT_CLOSE = /^[\u3001\u3002\uFF0C\uFF0E\uFF1A\uFF1B\uFF01\uFF1F\uFF09\u300D\u300F\u3011\u3015\u3009\u300B\u3019\u3017”’]$/
 const PUNCT_OPEN = /^[\uFF08\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3016“‘]$/
-/** the characters a CJK run takes: CJK, full-width forms, and in Chinese and Japanese the curly quotes and dashes, which
- *  xeCJK sets full width there (Korean sets them as its Western punctuation). Tested a code point at a time (`u`): a
+/** the characters a CJK run takes: CJK, full-width forms, and where the rules say so (Chinese and Japanese) the curly quotes
+ *  and dashes, which xeCJK sets full width there (Korean sets them as its Western punctuation). Tested a code point at a time (`u`): a
  *  character outside the BMP is CJK only in the two ideographic planes, U+20000 to U+3FFFF (the CJK extensions B to J and
  *  the compatibility supplement), where a non-`u` class took every astral character for CJK through its surrogates and
- *  sent Mathematical Alphanumeric Symbols, which the body face lacks, to it */
-const cjkClassRe = to => (to === 'ko' ? /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u{20000}-\u{3FFFF}]/u : /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F“”‘’—…·\u{20000}-\u{3FFFF}]/u)
+ *  sent Mathematical Alphanumeric Symbols, which the body face lacks, to it. `quotes` (the rules' cjkQuotes): whether the
+ *  curly quotes, dashes, ellipsis and middle dot are CJK's too */
+const cjkClassRe = quotes => (!quotes ? /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u{20000}-\u{3FFFF}]/u : /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F“”‘’—…·\u{20000}-\u{3FFFF}]/u)
 const STYLE_CMDS = [
   [/^\\(?:textbf|bf|bfseries|mathbf|boldsymbol)\b/, (s) => ({ ...s, bold: true })],
   [/^\\(?:textmd|mdseries)\b/, s => ({ ...s, bold: false })],
@@ -1668,17 +1659,17 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
   const base = baseOf(unit, baseIn)
   const stack = [{ ...base }]
   const style = () => stack.at(-1)
-  const cjkT = CJK_TARGETS.has(to)
-  const keepAll = to === 'ko' || !cjkT
-  const cjkRe = cjkClassRe(to)
-  const centred = to === 'zh-TW'
-  const latinLang = to === 'de' ? 'de' : 'en'
+  // (the layout rules': whether lines break only at spaces, which quotes are CJK's, centred punctuation, the Latin words'
+  // hyphenation patterns and shortest hyphenated word, the line-break marks)
+  const { keepAll, cjkQuotes, centredPunct: centred, latinPatterns: latinLang, hyphenation: { minWord } } = P
+  const cjkRe = cjkClassRe(cjkQuotes)
+  const kinsoku = kinsokuOf(P.noStart, P.noEnd)
   const prevNonSpace = () => { for (let q = tokens.length - 1; q >= 0; q--) if (!tokens[q].space) return tokens[q]; return null }
   const lastIsSpace = () => tokens.length > 0 && tokens.at(-1).space
   const push = t => {
     const prev = tokens.at(-1)
     if (prev && !prev.space && !t.space) {
-      if (NO_START.test(t.s ?? '') || (prev.s && NO_END.test(prev.s))) t.glue = true
+      if (kinsoku.starts(t.s ?? '') || (prev.s && kinsoku.ends(prev.s))) t.glue = true
       // Latin after Latin with nothing between them (a number and its ×, a word and its placeholder's text) stands
       // together, but not after a word's own hyphen
       if (!t.brk && t.cls === 'latin' && prev.cls === 'latin' && !prev.crop) t.glue = true
@@ -1717,10 +1708,10 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
           // character, and a word may break after its own hyphen
           if (q === 0 && n > 0 && !(!keepAll && (p.cls === 'cjk' || parts[n - 1].cls === 'cjk'))) t.glue = true
           if (p.cls === 'cjk' && s.length === 1 && !centred && P.compressMax >= 0) t.punct = PUNCT_CLOSE.test(s) ? 'close' : PUNCT_OPEN.test(s) ? 'open' : null
-          if (p.cls === 'latin' && P.hyphen && !extra.ph && st.fam !== 'mono' && s.length >= 5 && unit.kind !== 'heading' && !unit.title) {
+          if (p.cls === 'latin' && P.hyphen && !extra.ph && st.fam !== 'mono' && s.length >= minWord && unit.kind !== 'heading' && !unit.title) {
             const word = s.replace(/[^A-Za-zÀ-ɏЀ-ӿ]+$/, '').replace(/^[^A-Za-zÀ-ɏЀ-ӿ]+/, '')
             const cyr = /[Ѐ-ӿ]/.test(word)
-            if (word.length >= 5 && (cyr ? /^[Ѐ-ӿ]+$/.test(word) : /^[A-Za-zÀ-ɏ][a-zà-ɏß]+$/.test(word))) t.hyph = cyr ? 'ru' : latinLang
+            if (word.length >= minWord && (cyr ? /^[Ѐ-ӿ]+$/.test(word) : /^[A-Za-zÀ-ɏ][a-zà-ɏß]+$/.test(word))) t.hyph = cyr ? 'ru' : latinLang
           }
           push(t)
         })
@@ -1778,13 +1769,13 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
 }
 
 /** the faces a target will most likely need, each measured once in a task of its own (a system CJK face loads on
- *  its first use, 10–40 ms, which would otherwise fall in the first unit's layout). `ready(face, text)`: awaited before
+ *  its first use, 10–40 ms, which would otherwise fall in the first unit's layout); the CJK ones where the target is set by
+ *  CJK rules (`cjk`, the run's P.cjk). `ready(face, text)`: awaited before
  *  each measure, so that a face served in slices has the slice of the text it is measured with (resolves with the face
  *  usable, or not: the measure is taken either way) */
-export async function warmFaces(to, designs, yieldNow, ready = async () => {}) {
-  const cjkT = CJK_TARGETS.has(to)
+export async function warmFaces(to, cjk, designs, yieldNow, ready = async () => {}) {
   const sts = [{ bold: false, italic: false }, { bold: true, italic: false }, { bold: false, italic: true }].map(x => ({ fam: 'serif', caps: false, design: designs.serif, ...x }))
-  for (const st of sts) for (const cls of cjkT ? ['cjk', 'latin'] : ['latin']) {
+  for (const st of sts) for (const cls of cjk ? ['cjk', 'latin'] : ['latin']) {
     const face = faceOf(st, cls, to), text = cls === 'cjk' ? '\u6C38' : 'a'
     await ready(face, text)
     w100(text, face)
@@ -2037,7 +2028,7 @@ function breakLines(tokensIn, slots, f, st, P, scale, strict = true) {
     // a word hyphenated: the most of it that fits, with its hyphen
     if (P.hyphen && t0.hyph && t0.s) {
       const word = t0.s
-      const pts = breakPoints(word.replace(/[^A-Za-zÀ-ɏЀ-ӿ]+$/, ''), t0.hyph, hyphenData.get(t0.hyph))
+      const pts = breakPoints(word.replace(/[^A-Za-zÀ-ɏЀ-ӿ]+$/, ''), t0.hyph, hyphenData.get(t0.hyph), P.hyphenation[t0.hyph])
       const asp = items[0].asp
       const room = cap + shrink - line.x - asp
       let cut = null
@@ -2065,7 +2056,7 @@ function breakLines(tokensIn, slots, f, st, P, scale, strict = true) {
 
 /** each line's items placed: justified where the slack is within the caps (CJK per gap, spaces per space), else left
  *  aligned; the unit's last line left aligned; a centred block centred */
-function placeItems(lines, f, P, to) {
+function placeItems(lines, f, P) {
   const last = lines.at(-1)
   for (const line of lines) {
     const cap = line.x1 - line.x0
@@ -2077,7 +2068,7 @@ function placeItems(lines, f, P, to) {
     const spaces = line.items.filter(it => it.t.space)
     const spW = spaces.reduce((s, it) => s + it.w, 0)
     const cjkItems = line.items.filter(it => it.t.cls === 'cjk').length
-    const latinish = spaces.length > 0 && (to === 'ko' || !CJK_TARGETS.has(to) || cjkItems < line.items.length / 2)
+    const latinish = spaces.length > 0 && (P.keepAll || cjkItems < line.items.length / 2)
     let perSpace = 0, perGap = 0
     line.mode = line.centred ? 'centred' : line === last ? 'last' : 'just'
     if (slack < 0 && spaces.length) perSpace = slack / spaces.length // shrunk spaces (never past spaceMin by the breaking)
@@ -2151,7 +2142,7 @@ function* statesOf(P, blocks, s) {
  * the text run past the region (breakLines 'flow').
  * `s`: the original's size (PDF units). Returns { lines, f, s, scale, state, knob, clipped, lostChars, chars, tried }.
  */
-export function layoutUnit2(tokens, blocks, s, P, to) {
+export function layoutUnit2(tokens, blocks, s, P) {
   let last = null, tried = 0
   for (const st of statesOf(P, blocks, s)) {
     tried++
@@ -2188,7 +2179,7 @@ export function layoutUnit2(tokens, blocks, s, P, to) {
   const { r, st, f } = last
   const clipped = r.rest < r.total
   P._compress = st.compress
-  placeItems(r.lines, f, P, to)
+  placeItems(r.lines, f, P)
   const count = t => (t.s ? [...t.s].length : t.crop ? 1 : 0)
   const allChars = r.tokens.reduce((a, t) => a + count(t), 0)
   const drawn = r.lines.reduce((a, l) => a + l.items.reduce((b, it) => b + count(it.t), 0), 0)

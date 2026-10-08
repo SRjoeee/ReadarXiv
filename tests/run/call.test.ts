@@ -11,11 +11,11 @@ describe('translateCall', () => {
   it('carries the session\'s target, paper and scope, and the render path of this call', () => {
     expect(translateCall(BASE, SEGMENTS, 'tags')).toEqual({
       request: { segments: SEGMENTS, source: 'en', target: 'cmn', context: BASE.context },
-      cache: { paper: '2410.00260', renderPath: 'tags' },
+      cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const },
       scope: 's1',
     })
     // A block resent as runs is cached apart from its tagged self (§6.3): the path is the call's, not the session's
-    expect(translateCall(BASE, SEGMENTS, 'runs').cache).toEqual({ paper: '2410.00260', renderPath: 'runs' })
+    expect(translateCall(BASE, SEGMENTS, 'runs').cache).toEqual({ paper: '2410.00260', renderPath: 'runs', source: 'html' })
   })
 
   it('reads the segments under their heading — for an image, its caption — on top of the paper\'s context', () => {
@@ -33,14 +33,14 @@ describe('translateCall', () => {
   })
 
   it('why it matters: to the cache key an absent context and an empty one are two contexts', async () => {
-    const identity = { providerId: 'svc-1', model: 'm', promptKey: 'default', target: 'cmn', renderPath: 'tags' as const, text: 'Hello.' }
+    const identity = { providerId: 'svc-1', model: 'm', promptKey: 'default', target: 'cmn', renderPath: 'tags' as const, text: 'Hello.', source: 'html' as const }
     const absent = await cacheKeyFor(identity)
     const empty = await cacheKeyFor({ ...identity, context: {} })
     expect(empty).not.toBe(absent)
   })
 
   it('asks the cache to be bypassed only when told to, and names no scope where there is none', () => {
-    expect(translateCall(BASE, SEGMENTS, 'tags', { bypassCache: true }).cache).toEqual({ paper: '2410.00260', renderPath: 'tags', bypass: true })
+    expect(translateCall(BASE, SEGMENTS, 'tags', { bypassCache: true }).cache).toEqual({ paper: '2410.00260', renderPath: 'tags', source: 'html', bypass: true })
     expect(translateCall(BASE, SEGMENTS, 'tags').cache).not.toHaveProperty('bypass')
     expect(translateCall({ target: 'cmn', paper: 'p' }, SEGMENTS, 'tags')).not.toHaveProperty('scope')
   })

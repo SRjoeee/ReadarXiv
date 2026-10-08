@@ -28,7 +28,7 @@
 //       [--engine-kind=layer|proto] [--proto-units=fixture|p7] [--progress=<name|path>] [--previous=<name|path>] [--panels-only] [--proto-panels=<dir>]
 //       [--proto-faces=roles|prototype] [--proto-place=<file>] [--proto-order=<file>] [--dump=<dir>] [--write-floor]
 //       [--proto-tex=ph|lines] [--proto-tex-only=no] [--proto-symbols=text|strict] [--proto-extents=v0|tex]
-//       [--against=<record key>] [--proto-params=<json>] [--ruling=<file>] [--parts[=<n>]] [--slices[=blocks|alphabet]] [--door[=<n>]]
+//       [--against=<record key>] [--rules=<file>] [--ruling=<file>] [--parts[=<n>]] [--slices[=blocks|alphabet]] [--door[=<n>]]
 //   --engine     the engine measured: <worktree>/src/pdf-reader/engine served as /engine/ (the checker, layer/check.mjs, is
 //                always this repository's: the instrument is the same for every branch); default this repository
 //   --layouts    made (the default): the layout files the engine's own maker makes from the fixtures' papers (spikes/
@@ -111,7 +111,7 @@
 //                one does not, and the run is written to out/layer-gate/door-<commit>-<time>.json
 // The consistency measures (the table-groups brief, 2026-10-07), checked with the completeness ones and each to be 0: a
 // table group drawn partly (the record's translated cells of one `group`, some drawn and some not) and a float's label
-// left in the source language where the final names it in the target's (the record's `captions`, caption-names.mjs's
+// left in the source language where the final names it in the target's (the record's `captions`, the layout rules' labels'
 // names); the fixtures carry groups and captions as spikes/table-groups.mjs --write gives them (--fixtures).
 // Exits 1 on any completeness failure (the brief's gate; under --check the merge rule decides, each completeness count
 // being one of its measures), on a regression under --check, or where a fixture could not be run.
@@ -123,7 +123,6 @@ import { constants as zlibConstants, gzipSync, inflateRawSync, inflateSync } fro
 import { availableParallelism, homedir } from 'node:os'
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
 import { chromium } from 'playwright'
-import { captionNames } from '../../../src/pdf-reader/engine/caption-names.mjs'
 import { encodePng } from './layer-gate/png.mjs'
 import { geometryFile, nameOf, PROTO_GEOMETRY, refBytesOf, refPages, sha256, shownPath } from './layer-gate/ref.mjs'
 import { compare, fixtureTotals, MEASURES, pageEntry, pooled, REPORTED } from './layer-gate/score.mjs'
@@ -163,8 +162,16 @@ const AGAINST = typeof arg('against') === 'string' ? arg('against') : null
  *  drawing by it (draw), or its own way (measure: the baseline the new measures are taken of, against the same add-on) */
 const REMOVAL = typeof arg('removal') === 'string' ? arg('removal') : null
 if (REMOVAL && !['draw', 'measure'].includes(REMOVAL)) throw new Error(`--removal=${REMOVAL}: draw or measure`)
-/** --proto-params=<json>: v0's fit parameters over its defaults (layer2.mjs defaultParams), recorded with the run */
-const PROTO_PARAMS = typeof arg('proto-params') === 'string' ? JSON.parse(arg('proto-params')) : null
+/** --rules=<file>: the layout rule set v0 draws by (rules/layout.mjs; default the engine's built-in, rules/layout-rules.json),
+ *  read here by the engine's own reader before any minute is spent, served to the page, recorded with the run as
+ *  inputs.rules = { version, sha256 }. Every choice v0 makes for a target is the set's; there is no per-field override */
+const RULES_FILE = PROTO ? resolve(typeof arg('rules') === 'string' ? arg('rules') : join(ENGINE, 'src/pdf-reader/engine/rules/layout-rules.json')) : null
+let RULES = null, RULES_SHA = null, RULES_LABELS = () => null
+if (RULES_FILE) {
+  const { readRules, resolveRules } = await import(join(ENGINE, 'src/pdf-reader/engine/rules/layout.mjs'))
+  ;({ set: RULES, sha256: RULES_SHA } = await readRules(new Uint8Array(readFileSync(RULES_FILE))))
+  RULES_LABELS = target => resolveRules(RULES, target).labels
+}
 const PROTO_PANELS = typeof arg('proto-panels') === 'string' ? resolve(arg('proto-panels')) : null
 /** --proto-place=<file>: the place, by fixture and page, the prototype's own page gave each page's text (its .pg box,
  *  CSS px: { [fixture]: { [page]: [x, y] } }), which its floor was measured at; --dump=<dir>: v0's records, audit and
@@ -221,6 +228,8 @@ const MAKER = join(here, 'layer-fixtures.mjs')
 const SWITCH = process.env.GATE_SWITCH ? process.env.GATE_SWITCH !== '0' : LAYOUTS === 'made' && HAS_MAKER && ((await import(join(ENGINE, 'src/pdf-reader/engine/layout/marks.mjs'))).MARKS_SCHEMA ?? 0) >= 2
 const FONTS = resolve(join(DATA, 'fonts'))
 const PDFJS = resolve(REPO, 'node_modules/pdfjs-dist')
+/** the layout rules' validator (zod, the mini build), served at /zod/ for the page's import map */
+const ZOD = resolve(REPO, 'node_modules/zod')
 const GATE = join(here, 'layer-gate')
 const CHECKER = join(REPO, 'src/pdf-reader/engine/layer/check.mjs')
 const PROGRESS = process.env.LAYER_PROGRESS ?? join(homedir(), 'Downloads/readarxiv-test/layer-progress')
@@ -292,6 +301,8 @@ function fileFor(path) {
   if (path.startsWith('/gate/')) return ['page.html', 'page.mjs', 'proto.mjs', 'measure.mjs', ...(DOOR !== null ? ['door.mjs'] : [])].includes(path.slice(6)) ? join(GATE, path.slice(6)) : null
   if (path.startsWith('/proto-fonts/')) return /^\/proto-fonts\/lm(?:roman|sans|mono)10-[a-z]+\.otf$/.test(path) ? join(TEXMF, 'fonts/opentype/public/lm', path.slice(13)) : null
   if (path === '/engine/layer/check.mjs') return CHECKER
+  if (path === '/rules/layout-rules.json') return RULES_FILE
+  if (path.startsWith('/zod/')) return /^\/zod\/(?:mini|v4)\/[\w./-]+\.js$/.test(path) ? under(ZOD, path.slice(5)) : null
   if (path.startsWith('/engine/')) return /\.(m?js|json)$/.test(path) ? under(join(ENGINE, 'src/pdf-reader/engine'), path.slice(8)) : null
   if (path.startsWith('/pdfjs/')) return /^\/pdfjs\/(build|cmaps|standard_fonts|wasm|iccs)\//.test(path) ? under(PDFJS, path.slice(7)) : null
   if (path.startsWith('/fonts/')) return /^\/fonts\/[A-Za-z0-9._-]+\.(otf|ttf)$/.test(path) ? under(FONTS, path.slice(7)) : null
@@ -322,6 +333,8 @@ const DOOR_FILES = new Map()
 const server = createServer((req, res) => {
   let path
   try { path = decodeURIComponent(new URL(req.url, 'http://127.0.0.1').pathname) } catch { res.writeHead(400); return res.end() }
+  // (--door: the engine's own `../../core/…` imports, read from /engine/mt.mjs, name the repository's src/core)
+  if (DOOR !== null && path.startsWith('/core/')) path = `/src${path}`
   const hy = /^\/hyph\/([a-z]+)\.json$/.exec(path)
   if (PROTO && hy) {
     if (!HYPH.has(hy[1])) { res.writeHead(404, { 'content-type': 'text/plain' }); return res.end('not found') }
@@ -365,7 +378,7 @@ const inputs = {
   // the instrument: the measures, their arithmetic, and the page that draws and accounts (lost ink's own glyphs)
   measures: sha256(['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => readFileSync(join(GATE, f))).join('\n')).slice(0, 16),
   ...(PARTS ? { parts: String(PARTS) } : {}),
-  ...(PROTO ? { kind: 'proto', protoUnits: PROTO_UNITS, place: PROTO_PLACE ? 'the prototype page\'s' : 'the gate\'s', order: PROTO_ORDER ? 'given' : 'layGroups', faces: PROTO_FACES ?? 'the engine\'s default', tex: TEX ? JSON.stringify(TEX) : 'none', params: PROTO_PARAMS ? JSON.stringify(PROTO_PARAMS) : 'none', hyphenation: sha256([...HYPH].map(([l, j]) => `${l}:${j}`).join('\n')).slice(0, 16), removal: REMOVAL ?? 'none', ...(REMOVAL ? { remover: removerDigest() } : {}) } : {}),
+  ...(PROTO ? { kind: 'proto', protoUnits: PROTO_UNITS, place: PROTO_PLACE ? 'the prototype page\'s' : 'the gate\'s', order: PROTO_ORDER ? 'given' : 'layGroups', faces: PROTO_FACES ?? 'the engine\'s default', tex: TEX ? JSON.stringify(TEX) : 'none', rules: { version: RULES.version, sha256: RULES_SHA }, hyphenation: sha256([...HYPH].map(([l, j]) => `${l}:${j}`).join('\n')).slice(0, 16), removal: REMOVAL ?? 'none', ...(REMOVAL ? { remover: removerDigest() } : {}) } : {}),
 }
 const leaks = []
 const t0 = Date.now()
@@ -414,7 +427,7 @@ async function runFixture(page, name, errors) {
   if (removal) Object.assign(meta, { addon: removal.key })
   // (--perf: what a reader is sent, the R set and its manifest, no plan)
   const addon = removal ? (PERF ? { url: `/removal/${name}.pdf`, manifest: removal.shippedManifest, plan: null } : { url: `/removal/${name}.pdf`, manifest: removal.manifest, plan: removal.plan }) : null
-  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES, tex: TEX, params: PROTO_PARAMS, names: captionNames(target), removal: REMOVAL, addon, perf: PERF, parts: PARTS, slices: SLICES })
+  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES, tex: TEX, rules: '/rules/layout-rules.json', names: RULES_LABELS(target), removal: REMOVAL, addon, perf: PERF, parts: PARTS, slices: SLICES })
   if (!info.ready) { failures.push(name); return { name, ready: false, why: info.why, meta } }
   const n = Math.min(info.pages, PAGES ?? (ALL_PAGES.has(paper) ? info.pages : PAGES_OF))
   const pages = [], frames = []
@@ -479,7 +492,7 @@ async function doorFixture(page, name, errors) {
   const made = await doorBundleOf(name, removal)
   DOOR_FILES.set(`/door/${name}/bundle.json`, made.bytes)
   DOOR_FILES.set(`/door/${name}/rows.json`, JSON.stringify(made.rows))
-  const o = { name, target, names: captionNames(target), pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), part: DOOR }
+  const o = { name, target, rules: '/rules/layout-rules.json', pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), part: DOOR }
   const open = async () => { await page.goto(`${ORIGIN}/gate/page.html?kind=proto&door=1`); await page.waitForFunction(() => window.gateReady === true) }
   await open()
   const gate = await page.evaluate(x => window.door.gate(x), o)

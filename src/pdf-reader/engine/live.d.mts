@@ -12,7 +12,7 @@ export declare function openPaper(files: Map<string, Uint8Array>): Paper
 /** the translation so far, with unit marks, set by one of strategiesFor: the files that differ from the paper's */
 /** `spans`, where given, gets `lines()`: each unit's lines and bytes in the files as written, worked out when asked */
 export declare function translationFiles(paper: Paper, translated: Map<SourceUnit, unknown[]>, options: { strategy: Pick<Strategy, 'engine' | 'pre'> & Partial<Strategy>; fonts: unknown; draft?: boolean; aux?: string | null; bbl?: string | null; typeset?: Typeset | null; evenSpaces?: boolean; spans?: { lines?: () => import('./tex-errors.mjs').UnitLines<SourceUnit>[] } | null; note?: (event: string, data: unknown) => void }): Map<string, Uint8Array>
-/** the reader's versions: the translation's (what a unit is and what is sent for it; versions.mjs's) and the typesetting's */
+/** the reader's versions: the extraction's (what a unit is; versions.mjs's, which a copy is judged by) and the typesetting's */
 export { PIPELINE_VERSION } from './versions.mjs'
 /** the earlier pipelines whose copies carry their translations over into this one, unit by unit, with the test each
  *  translation's pieces must pass (cache.mjs copyReuse) */
@@ -79,7 +79,7 @@ export interface BatchReport {
    *  (groups.mjs decideGroups): the layer draws none of them, as the final sets none translated */
   held: number[]
 }
-/** what names a compile's figures and tables: the target's names babel gives (caption-names.mjs), or the paper's own */
+/** what names a compile's figures and tables: the target's names babel gives (the layout rules' labels, rules/layout-rules.json), or the paper's own */
 export interface Captions { figure: 'target' | 'source'; table: 'target' | 'source' }
 /** the TeX that writes what names the floats to the log, at the document's end, in every compile of the translation */
 export declare const CAPTIONS_PROBE: string

@@ -17,7 +17,7 @@
 // (live.mjs CAPTIONS_PROBE, captionsOf): the fixture's translation set by its final's strategy, one pass natively in
 // Docker (texlive/texlive:latest, no network), in out/table-groups/work/, deleted after; then each float label of arXiv's
 // PDF ("Table 2:") looked for in the final the fixture holds (final.pdf, by pdftotext: PDF.js reads no text from the
-// finals' CJK faces), named as the probe says — the target's name from caption-names.mjs where `target`, the
+// finals' CJK faces), named as the probe says — the target's name from the layout rules' labels (rules/layout-rules.json) where `target`, the
 // original's where `source` —, with the original's number and punctuation. Written to out/table-groups/captions.json.
 // --write=<dir> writes each fixture again as the pipeline now records it — record.json from the decided results through
 // cache.mjs unitsOf, with every cell's group, and the captions where --captions read them —, beside links to the
@@ -40,7 +40,7 @@ const engine = path => import(pathToFileURL(join(ENGINE, 'src/pdf-reader/engine'
 const { sourceHash, unitsOf, seedFrom } = await engine('cache.mjs')
 const { captionsOf, openPaper, translationFiles } = await engine('live.mjs')
 const { strategiesFor } = await engine('scripts.mjs')
-const { captionNames } = await engine('caption-names.mjs')
+const { BUILTIN_RULES, resolveRules } = await engine('rules/layout.mjs')
 const { unpackSource } = await engine('tar.mjs')
 const { plainSource, plainTranslated, rehydrate, serialize, texEscape } = await engine('mt.mjs')
 const G = await engine('groups.mjs')
@@ -207,7 +207,7 @@ if (process.argv.includes('--captions')) {
     const said = existsSync(logFile) ? captionsOf(readFileSync(logFile, 'latin1')) : null
     rmSync(dir, { recursive: true, force: true })
     captions.set(f.name, said)
-    const c = captionNames(target)
+    const c = resolveRules(BUILTIN_RULES, target).labels
     const orig = labelsIn(text(join(FIXTURES, f.name, 'arxiv.pdf')), ORIGINAL)
     const kindOf = l => (/^t/i.test(l.name) ? 'table' : 'figure')
     const want = orig.map(l => ({ ...l, name: said?.[kindOf(l)] === 'target' ? c[kindOf(l)] : l.name }))

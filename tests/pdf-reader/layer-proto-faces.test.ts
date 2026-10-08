@@ -323,7 +323,7 @@ describe('a slice that does not load', () => {
 describe("a unit's tokens as runs", () => {
   it('holds the characters each face draws and measures: a space, and the hyphen of a hyphenated word, in their words\' face', async () => {
     const { setRoleFaces, faceOf, runsOfTokens } = await import('@/pdf-reader/engine/layer-proto/fonts.mjs')
-    setRoleFaces('ru', 'times')
+    setRoleFaces('ru', 'times', null)
     const reg = faceOf({ fam: 'serif', design: 'times', bold: false, italic: false, caps: false }, 'latin', 'ru')
     const bold = faceOf({ fam: 'serif', design: 'times', bold: true, italic: false, caps: false }, 'latin', 'ru')
     const runs = runsOfTokens([

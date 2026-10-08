@@ -190,5 +190,26 @@ export function lcsMatched(S, O) {
 // ---- the line-break marks
 
 export const CJK = /[\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/
-export const NO_START = /^[\u3001\u3002\uFF0C\uFF0E,.\uFF01\uFF1F!?\uFF09)\]\u300D\u300F\u3011\u3015\u3009\u300B\u3019\u3017”’\uFF1A:\uFF1B;\u30FB\u30FC\u301C…\u3005\u309D\u309E\u3041\u3043\u3045\u3047\u3049\u3063\u3083\u3085\u3087\u308E\u30A1\u30A3\u30A5\u30A7\u30A9\u30C3\u30E3\u30E5\u30E7\u30EE\u30F5\u30F6%\uFF05]/
-export const NO_END = /[\uFF08([\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3016“‘]$/
+const kinsoku = new Map()
+/** the code point a string ends with, -1 for none */
+const lastOf = s => {
+  const n = s.length
+  if (n === 0) return -1
+  const c = s.charCodeAt(n - 1), hi = n > 1 ? s.charCodeAt(n - 2) : 0
+  return c >= 0xdc00 && c <= 0xdfff && hi >= 0xd800 && hi <= 0xdbff ? s.codePointAt(n - 2) : c
+}
+/**
+ * The line-break marks as a rule set gives them: `noStart` and `noEnd`, the characters no line starts or ends with (the
+ * layout rules' own lists, rules/layout.mjs), as { starts(s), ends(s) }: whether a token begins with one, or ends with one.
+ * A set of code points, not a pattern, so that nothing a set holds is read as syntax; made once for a pair of lists
+ */
+export function kinsokuOf(noStart, noEnd) {
+  const key = JSON.stringify([noStart, noEnd])
+  let k = kinsoku.get(key)
+  if (!k) {
+    const start = new Set([...noStart].map(ch => ch.codePointAt(0))), end = new Set([...noEnd].map(ch => ch.codePointAt(0)))
+    k = { starts: s => start.has(s.codePointAt(0)), ends: s => end.has(lastOf(s)) }
+    kinsoku.set(key, k)
+  }
+  return k
+}

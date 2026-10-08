@@ -8,7 +8,7 @@ import type { Service } from '@/config/services'
 import type { WireFormat } from '@/core/protector'
 import { wireFormatOf } from '@/cache/key'
 import type { CachedEntry } from '@/cache/store'
-import { cacheKeyFor, translationIdentity, type RenderPath } from '@/cache/key'
+import { cacheKeyFor, type CacheSource, translationIdentity, type RenderPath } from '@/cache/key'
 import { type SentenceAlignment, verifyAlignment } from './alignment'
 import { markSentences, stripMarkers, unmarkSentences, type MarkedText } from './sentence-markers'
 // validate is imported deep rather than through the protector's barrel: serialize / rehydrate touch the DOM and must not enter the background bundle
@@ -66,6 +66,8 @@ export type TranslateMessageRequest = {
     renderPath: RenderPath
     /** Write only, no read: the resend after a failed placeholder validation must not get that bad translation back (§6.3) */
     bypass?: boolean
+    /** Where the texts were read from, named by every caller: the key holds the HTML page's rules only for its own blocks (cache/key.ts CacheSource) */
+    source: CacheSource
   }
 }
 
@@ -516,7 +518,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
       const translated = new Map<string, TranslationOutcome>()
       if (store && cache) {
         const computed = await Promise.all(request.segments.map(segment =>
-          cacheKeyFor({ providerId: provider.cacheId ?? provider.id, model, promptKey: provider.promptKey ?? '', context: contextFor(segment), target: request.target, renderPath: cache.renderPath, text: segment.text, ...(segment.cuts ? { cuts: segment.cuts } : {}), ...(markedOverCap(provider, shaped.get(segment.id)!) ? { markedOverCap: true } : {}) }),
+          cacheKeyFor({ providerId: provider.cacheId ?? provider.id, model, promptKey: provider.promptKey ?? '', context: contextFor(segment), target: request.target, renderPath: cache.renderPath, text: segment.text, source: cache.source, ...(segment.cuts ? { cuts: segment.cuts } : {}), ...(markedOverCap(provider, shaped.get(segment.id)!) ? { markedOverCap: true } : {}) }),
         ))
         request.segments.forEach((segment, i) => {
           keys.set(segment.id, computed[i]!)

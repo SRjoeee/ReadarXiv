@@ -69,7 +69,7 @@ const relabelledOf = recs => new Set(recs.filter(r => S.byId.get(r.id)?.prep?.la
  * record's translated cells of one `group` (cache.mjs unitsOf; spikes/table-groups.mjs writes the fixtures so), and a
  * group drawn partly where some of its cells are drawn and some are not, at the first page one is drawn on; and whether
  * a drawn unit's float label stands in the source language where the final names it in the target's — the record's
- * `captions` (live.mjs captionsOf: `target` for figures or tables) and the target's names (`names`, caption-names.mjs,
+ * `captions` (live.mjs captionsOf: `target` for figures or tables) and the target's names (`names`, the layout rules' labels,
  * the gate's own) differing from the label's own word, and the unit drawing no label of its own (`prep.label.drawn`)
  */
 function consistencyOf(record, S, names) {
@@ -308,7 +308,7 @@ window.gate = {
    * the driver's: arXiv's PDF with it at `url`, its manifest, the plan it was made from), v0 is opened over it, and a
    * second reading of the add-on drawn by the CPU is kept for the exactness check's and the truth's planes
    */
-  async open({ name, target, ref, units: which, pages, params, place, dump, order, faces, tex, removal, addon = null, names = null, perf = false, parts: cut = null, slices = null }) {
+  async open({ name, target, ref, units: which, pages, place, dump, order, faces, tex, removal, addon = null, names = null, rules = null, perf = false, parts: cut = null, slices = null }) {
     let V
     try { V = await import('/engine/layer-proto/run.mjs') } catch (e) { return { ready: false, why: `layer-proto/run.mjs: ${String(e?.message ?? e).slice(0, 200)}` } }
     const base = `/fixtures/${name}/`
@@ -347,8 +347,10 @@ window.gate = {
       const [{ FACES }, { COVERAGE }] = await Promise.all([import('/engine/font-roles.mjs'), import('/engine/font-coverage.mjs')])
       faceSources = async id => sliceTable(FACES[id], COVERAGE[id], slices)
     }
+    // the layout rule set v0 is given (--rules, else the engine's built-in): read by the engine's own reader, as a host reads it
+    const ruleSet = rules ? (await (await import('/engine/rules/layout.mjs')).readRules(await bytes(rules))).set : null
     // (--perf: no copy of v0's own, as a reader opens it: the page's drawing is drawCopy's, at a view's resolution)
-    const opts = { doc, geometry, units: parts ? [] : unitsFile.units, ...(parts ? { expect: parts.flat().map(([id]) => id), groups: tableGroups } : {}), target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, params: params ?? {}, order: order ?? null, ...(faces ? { faces } : {}), ...(faceSources ? { faceSources } : {}), ...(texIn ? { tex: texIn } : {}), labels: { names, captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`, ...(perf ? { copy: false } : {}) }
+    const opts = { doc, geometry, units: parts ? [] : unitsFile.units, ...(parts ? { expect: parts.flat().map(([id]) => id), groups: tableGroups } : {}), target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, ...(ruleSet ? { rules: ruleSet } : {}), order: order ?? null, ...(faces ? { faces } : {}), ...(faceSources ? { faceSources } : {}), ...(texIn ? { tex: texIn } : {}), labels: { captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`, ...(perf ? { copy: false } : {}) }
     let rm = null
     if (one) {
       rm = { mode: removal, manifest: addon.manifest, plan: { pages: {} }, rdoc: doc, cdoc: null }

@@ -1,4 +1,4 @@
-import { rolesFor } from '@/pdf-reader/engine/font-roles.mjs'
+import { rolesFor } from './roles'
 import { layerRulesFor } from '@/pdf-reader/engine/layer-rules.mjs'
 import type { Slot } from '@/pdf-reader/engine/layer/breaks.mjs'
 import type { Hyphenator } from '@/pdf-reader/engine/layer/hyphen.mjs'

@@ -1,4 +1,4 @@
-import { rolesFor } from '@/pdf-reader/engine/font-roles.mjs'
+import { rolesFor } from './roles'
 import type { LayerInput } from '@/pdf-reader/engine/layer/fit.mjs'
 import { layerRulesFor } from '@/pdf-reader/engine/layer-rules.mjs'
 import {

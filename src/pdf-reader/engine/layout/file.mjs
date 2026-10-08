@@ -5,11 +5,14 @@
 // never by its text. Coordinates are arXiv's PDF units, each page unrotated, y up as in PDF, pages 1-based: a rectangle is not
 // empty, x0 < x1 and bottom < top. Every string is returned as it is; nothing here or downstream builds markup from one.
 // Imports json.mjs alone: the reader loads it.
-import { boundedJson, checkPages, checkViews, isInteger, isNumber, isObject, LayoutRefusal } from './json.mjs'
+import { boundedJson, checkPages, checkViews, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal } from './json.mjs'
 
 export { LayoutRefusal } from './json.mjs'
 
-/** the maker's version: raised with any change to the layout maker or to this schema; it enters no output identity.
+/** the maker's version: raised with any change to what the layout maker writes under this schema; it enters a bundle's
+ *  key (bundle.mjs VTAG) and the file as `layout`, which a reader reads for its shape alone: a file is refused by its
+ *  `schema`, never by the maker that wrote it (the rules-as-data plan, §9.3), so a change of the schema's fields,
+ *  bounds or meaning raises `schema` (and BUNDLE, which holds the file), not this.
  *  2: placeholders found by their own ink in the content stream, and the page text of citations and references;
  *  3: a text symbol the marking could not mark drawn as its character (PH_FLAG.TEXT), no row for a macro TeX said
  *  sets no ink, glyph boxes by their own ink, and the lines a unit's source does not write held (`held`) */
@@ -151,7 +154,7 @@ export function parseLayout(bytes) {
 export function checkLayout(value) {
   const f = exactKeys(value, KEYS, '')
   if (f.schema !== 1) throw refuse('schema', 'not 1')
-  if (f.layout !== LAYOUT) throw refuse('layout', `not '${LAYOUT}'`)
+  if (!isVersionToken(f.layout)) throw refuse('layout', `not a version, 1 to 32 letters, digits or points (${kindOf(f.layout)})`)
   if (!printable(f.pdfjs, 1, PDFJS_MAX)) throw refuse('pdfjs', `not 1 to ${PDFJS_MAX} printable ASCII characters (${kindOf(f.pdfjs)})`)
   const paper = exactKeys(f.paper, PAPER_KEYS, 'paper')
   if (!isPaperId(paper.id)) throw refuse('paper.id', `not an arXiv identifier (${kindOf(paper.id)})`)

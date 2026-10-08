@@ -4,9 +4,13 @@
 // stay beside their parsers, which the readers load already. Imports nothing.
 
 /**
- * PIPELINE_VERSION, the translation's: raised with any change to what a unit is or what is sent for it and made of
- * the answer — the units' cutting, kinds and texts (latex-front), the wire and its reading back (mt), paperContext(),
- * the left side's marks. A record of another version is translated again, its translations shown meanwhile (session.mjs
+ * PIPELINE_VERSION, the extraction's: raised with any change to what a unit is — the units' cutting, kinds and texts
+ * (latex-front), the cells' places, the left side's marks. It enters a bundle's key (bundle.mjs VTAG) and the identity
+ * of the rows made over its units. It is no longer the wire, its reading back or paperContext(): those are the
+ * translation's, TRANSLATE_VERSION (translate/version.mjs), and a change that touches both raises both (the rules-as-data
+ * plan, §9.2). Until the rows cache replaces session.mjs's copies (Stage 5, Task 10) a copy is judged by this alone,
+ * so a change of the wire that must void copies raises it too.
+ * A record of another version is translated again, its translations shown meanwhile (session.mjs
  * seedFrom), but for the units a version that carries over into this one leaves as they were (live.mjs PIPELINE_CARRIES); one
  * of this version gives its whole units by the identity that would answer now as they are (cache.mjs reusable).
  */

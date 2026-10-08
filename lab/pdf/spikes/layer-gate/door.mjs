@@ -57,6 +57,10 @@ async function faceSourcesOf() {
   return async id => (FACES[id] && COVERAGE[id] ? [{ url: `/fonts/${encodeURIComponent(FACES[id].file)}`, ranges: COVERAGE[id] }] : null)
 }
 const hyphUrl = lang => `/hyph/${lang}.json`
+/** the layout rule set the run is given (the driver's --rules, else the engine's built-in), read by the engine's own reader */
+async function ruleSetOf(url) {
+  return url ? (await (await import('/engine/rules/layout.mjs')).readRules(await bytes(url))).set : null
+}
 /** the reader's document: arXiv's bytes, their fingerprint the bundle's, followed by the bundle's add-on */
 async function composedOf(name, bundle) {
   const original = await bytes(`/fixtures/${name}/arxiv.pdf`)
@@ -75,18 +79,19 @@ window.door = {
   /** the gate's own run with the door's inputs, its first `pages` pages in turn, those before each let go first; at the
    *  door's resolution (scale 2.5, dpr 1), or at another of the same device pixels a unit (the gate's recorded runs': 1.25
    *  at this page's dpr of 2), whose records and copy are compared with it */
-  async gate({ name, target, names, pages, scale = K, dpr = 1, png = true }) {
+  async gate({ name, target, rules, pages, scale = K, dpr = 1, png = true }) {
     const [R, V, F] = await Promise.all([import('/engine/layer-proto/reader.mjs'), import('/engine/layer-proto/run.mjs'), import('/engine/layout/file.mjs')])
     const base = `/fixtures/${name}/`
     const [bundleBytes, geometry, record, unitsFile, layout] = await Promise.all([bytes(`/door/${name}/bundle.json`), json(`${base}geometry.json`), json(`${base}record.json`), json(`${base}units.json`), bytes(`${base}layout.json`)])
     const bundle = R.readBundle(bundleBytes)
+    const ruleSet = await ruleSetOf(rules)
     const doc = await pdfjs.getDocument({ data: await composedOf(name, bundle), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
     const run = await V.openProto({
       doc, geometry, units: record.units, target, pages: Number.POSITIVE_INFINITY, scale, dpr, copy: true,
       tex: { use: 'lines', texOnly: true, symbols: 'text', extents: 'v0', index: F.indexLayout(F.parseLayout(layout)), pieces: new Map(unitsFile.units.map(u => [u.id, u.pieces])) },
       removal: bundle.addon ? { OPS: pdfjs.OPS, mode: 'draw', doc, manifest: bundle.addon.manifest } : null,
-      labels: { names, captions: { figure: 'target', table: 'target' } },
-      faceSources: await faceSourcesOf(), hyphUrl,
+      labels: { captions: { figure: 'target', table: 'target' } },
+      ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl,
     })
     const out = []
     for (let p = 1; p <= Math.min(pages, run.N); p++) {
@@ -106,13 +111,14 @@ window.door = {
   },
 
   /** the reader's door over the bundle, its rows taken `part` a part as they come, the same pages asked for in turn */
-  async door({ name, target, pages, part }) {
+  async door({ name, target, rules, pages, part }) {
     const R = await import('/engine/layer-proto/reader.mjs')
     const [bundleBytes, rows] = await Promise.all([bytes(`/door/${name}/bundle.json`), json(`/door/${name}/rows.json`)])
     const bundle = R.readBundle(bundleBytes)
     const doc = await pdfjs.getDocument({ data: await composedOf(name, bundle), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
     const sheets = ownSheets().length
-    const layer = await R.openLayer({ bundle, doc, target, faceSources: await faceSourcesOf(), hyphUrl })
+    const ruleSet = await ruleSetOf(rules)
+    const layer = await R.openLayer({ bundle, doc, target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl })
     const complete = []
     const fed = (async () => {
       for (let i = 0; i < rows.length; i += part) { await macrotask(); complete.push(...layer.take(rows.slice(i, i + part)).complete) }

@@ -66,7 +66,7 @@ export const OPEN_FAMILY = 'times'
 /** the role table's roles v0 draws in (setRoleFaces), or null: the prototype's own faces */
 let ROLES = null
 /** v0 drawn in the role table's faces for a target and the paper's English family (font-roles.mjs familyOfFonts), its CJK
- *  faces the run's rules' (target-rules.mjs; the role table's own where not given); a falsy target goes back to the
+ *  faces the run's layout rules' (rules/layout.mjs cjkFaces; null for an alphabet); a falsy target goes back to the
  *  prototype's faces */
 export function setRoleFaces(target, family, cjkFaces) { ROLES = target ? rolesFor(target, family, cjkFaces) : null }
 export const roleFaces = () => ROLES
@@ -279,6 +279,7 @@ const LATIN = {
 /** a Cyrillic face for a Latin design that has none (Latin Modern has no Cyrillic; CM-Super's Cyrillic is not served) */
 const CYRILLIC = { cm: '"Times New Roman"', cmss: 'Helvetica', cmtt: 'Menlo', libertine: '"Times New Roman"', charter: '"Times New Roman"' }
 
+// target-literals: begin prototype faces (the only place a target is named: faces: 'prototype', the floor's measurement)
 /** per target: the CJK families for serif, sans and Kai, and how an italic CJK run is drawn */
 const CJK_FACES = {
   zh: { serif: '"Songti SC", STSong', sans: '"PingFang SC", "Heiti SC"', kai: '"Kaiti SC", STKaiti', italic: 'kai' },
@@ -286,18 +287,11 @@ const CJK_FACES = {
   ja: { serif: '"Hiragino Mincho ProN"', sans: '"Hiragino Sans", "Hiragino Kaku Gothic ProN"', kai: null, italic: 'oblique' },
   ko: { serif: '"Nanum Myeongjo", NanumMyeongjo, AppleMyungjo', sans: '"Apple SD Gothic Neo", NanumGothic', kai: null, italic: 'oblique' },
 }
-export const CJK_TARGETS = new Set(Object.keys(CJK_FACES))
-export const scriptOfTarget = to => (to === 'zh' ? 'Hans' : to === 'zh-TW' ? 'Hant' : to === 'ja' ? 'Jpan' : to === 'ko' ? 'Kore' : to === 'ru' ? 'Cyrl' : 'Latn')
 /** the slant of an oblique CJK run, in degrees (Times Italic's is 15.5; a CJK face slanted as far reads as broken) */
 export const OBLIQUE_DEG = 10
 
-/**
- * The face a run is drawn in: { family (CSS list), weight, style ('normal'|'italic'), oblique (degrees, a skew the SVG
- * applies), stand (what the run's slant became: 'italic', 'kai', 'oblique', '') }. `cls`: 'cjk' for a run of CJK
- * characters, 'latin' for the rest. `st`: { fam, bold, italic, design, caps }.
- */
-export function faceOf(st, cls, to) {
-  if (ROLES) return roleFaceOf(st, cls)
+/** the prototype's own face of a run (faces: 'prototype'): the system families it was approved in */
+function prototypeFaceOf(st, cls, to) {
   const design = st.fam === 'mono' ? (st.design === 'cmtt' ? 'cmtt' : 'courier') : st.fam === 'sans' ? (st.design === 'cmss' ? 'cmss' : 'helvetica') : (LATIN[st.design] ? st.design : 'times')
   const latin = LATIN[design]
   const cyr = to === 'ru' && CYRILLIC[design] ? `, ${CYRILLIC[design]}` : ''
@@ -310,6 +304,17 @@ export function faceOf(st, cls, to) {
   }
   const tail = cjk ? `, ${st.fam === 'sans' || st.fam === 'mono' ? cjk.sans : cjk.serif}` : ''
   return { family: `${latin}${cyr}${tail}, serif`, weight, style: st.italic ? 'italic' : 'normal', oblique: 0, stand: st.italic ? 'italic' : '', caps: !!st.caps }
+}
+// target-literals: end prototype faces
+
+/**
+ * The face a run is drawn in: { family (CSS list), weight, style ('normal'|'italic'), oblique (degrees, a skew the SVG
+ * applies), stand (what the run's slant became: 'italic', 'kai', 'oblique', '') }. `cls`: 'cjk' for a run of CJK
+ * characters, 'latin' for the rest. `st`: { fam, bold, italic, design, caps }. `to`: the target, read only by the
+ * prototype's own faces
+ */
+export function faceOf(st, cls, to) {
+  return ROLES ? roleFaceOf(st, cls) : prototypeFaceOf(st, cls, to)
 }
 
 /** the canvas font string of a face at `px` */

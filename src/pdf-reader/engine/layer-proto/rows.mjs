@@ -14,7 +14,7 @@
 import { decideGroups, groupOf } from '../groups.mjs'
 import { kOfSource } from '../layer/pieces.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource, translateUnits, utf8 } from '../mt.mjs'
-import { authorsTranslated } from '../scripts.mjs'
+import { authorsTranslated } from '../translate/kept.mjs'
 import { PIECES_MAX } from '../layout/json.mjs'
 import { STRING_MAX, UNIT_FLAG_BITS } from './bundle.mjs'
 
@@ -117,7 +117,7 @@ export const sourceUnitsOf = bundle => sourceOf(bundle).units
 /** the units a translation into `lang` leaves as they are: live.mjs keptFor's rule, over the bundle's flags and kinds */
 const keptOf = (s, lang) => (authorsTranslated(lang) ? s.kept : s.keptAll)
 /** the ids a language translates, rising: the units that stand, but the names kept (the KEPT flag) and, where the language
- *  does not write them as the paper does (scripts.mjs authorsTranslated), the author block */
+ *  does not write them as the paper does (translate/kept.mjs authorsTranslated), the author block */
 export function toTranslate(bundle, lang) {
   const s = sourceOf(bundle), kept = keptOf(s, lang), ids = []
   s.units.forEach((u, i) => { if (u && !kept.has(u)) ids.push(i) })

@@ -16,7 +16,7 @@
 // nothing more.
 import { ADDON_CAP, checkAddonManifest, REMOVAL } from '../layout/addon-manifest.mjs'
 import { checkLayout, encodeLayout, isPaperId, LAYOUT, UNIT_KINDS, VERSION_MAX } from '../layout/file.mjs'
-import { COORD_MAX, countValues, isInteger, isNumber, isObject, LayoutRefusal, PAGES_MAX, STRING_MAX, told, utf8Strict } from '../layout/json.mjs'
+import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal, PAGES_MAX, STRING_MAX, told, utf8Strict } from '../layout/json.mjs'
 import { PDFJS, PIPELINE_VERSION } from '../versions.mjs'
 
 /** the bundle's format: raised with any change to what it holds (the left's tokens and spans, with the highlight) */
@@ -45,8 +45,6 @@ const SLACK = 1
 const DEPTH_MIN = -1, DEPTH_MAX = 9
 /** a PDF's bytes at most */
 const BASE_MAX = 2 ** 31
-/** a version a bundle names: a token of letters, digits and points */
-const VERSION = /^[0-9A-Za-z.]{1,32}$/
 const SHA256 = /^[0-9a-f]{64}$/
 const KEYS = ['schema', 'paper', 'base', 'versions', 'units', 'left', 'layout', 'addon']
 const VERSIONS = ['bundle', 'pipeline', 'layout', 'removal', 'pdfjs', 'image']
@@ -310,7 +308,7 @@ export function readBundle(json, caps = {}) {
   if (b.schema !== 1) throw fail('schema', 'not 1')
   const versions = exactKeys(b.versions, VERSIONS, 'versions')
   for (const [k, want] of CONTRACT) if (versions[k] !== want) throw fail(`versions.${k}`, `not this reader's '${want}'`)
-  for (const k of NAMED) if (typeof versions[k] !== 'string' || versions[k].length > 32 || !VERSION.test(versions[k])) throw fail(`versions.${k}`, `not a version, 1 to 32 letters, digits or points (${kindOf(versions[k])})`)
+  for (const k of NAMED) if (!isVersionToken(versions[k])) throw fail(`versions.${k}`, `not a version, 1 to 32 letters, digits or points (${kindOf(versions[k])})`)
 
   const paper = exactKeys(b.paper, ['id', 'version', 'pages'], 'paper')
   if (!isPaperId(paper.id)) throw fail('paper.id', `not an arXiv identifier (${kindOf(paper.id)})`)

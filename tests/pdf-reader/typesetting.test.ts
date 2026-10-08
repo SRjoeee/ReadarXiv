@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { keptFor, openPaper, translationFiles } from '@/pdf-reader/engine/live.mjs'
-import { authorsTranslated, strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
+import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
+import { authorsTranslated } from '@/pdf-reader/engine/translate/kept.mjs'
 
 // How a translation is typeset around its text: the leading of translated units and the hyphenation of the English left
 

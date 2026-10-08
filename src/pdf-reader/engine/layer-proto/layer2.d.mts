@@ -5,23 +5,31 @@ import type { Face, FontClass, Style } from './fonts.mjs'
 import type { Patterns } from './hyph.mjs'
 import type { Block, Rect } from './layer1.mjs'
 
-/** the fit's parameters, per script (the sweep's choice) */
+/** the fit's parameters and the breaking's: the layout rules' for a target (rules/layout.mjs resolveRules), the field names
+ *  v0's own. `maxScale`, `capScale`, `growTo`, `flowPast`, `refuse` and `_compress` are the run's own, set unit by unit */
 export interface Params {
-  cjk: boolean; leadBase: number; leadFloor: number; trackMin: number; compressMax: number; borrow: number; borrowGap: number
-  floor: number; step: number; grid: number; order: string[]; cjkJust: number; spaceMax: number; autospace: number; spaceMin: number
-  hyphen: number; even?: number; maxScale?: number; _compress?: number
+  cjk: boolean; leadBase: number; leadFloor: number; trackMin: number; compressMax: 0 | 1 | 2; borrow: 0 | 1; borrowGap: number
+  floor: number; step: number; grid: 0 | 1; order: ('track' | 'borrow' | 'lead' | 'shrink')[]; cjkJust: number; spaceMax: number; autospace: number; spaceMin: number
+  hyphen: 0 | 1; even: 0 | 1 | 2; maxScale?: number; _compress?: number
   /** the most the unit may be set at: its lines' room between the rules over and under them (cellBands) */
   capScale?: number
   /** step 3: the further steps for a unit the states leave clipped (run.mjs fitFurther), and the size the last goes down to */
-  further?: readonly ('widen' | 'flow' | 'shrink')[]; floorMin?: number; refuse?: number; flowPast?: boolean
-  /** step 3: the CJK runs' tracking the fit's first state takes (run.mjs: a face's size correction given back) */
-  trackStart?: number
+  further: readonly ('widen' | 'flow' | 'shrink')[]; floorMin: number; refuse?: number; flowPast?: boolean
+  /** step 3: the CJK runs' tracking the fit's first state takes, in em; null: a face's size correction given back (run.mjs) */
+  trackStart: number | null
   /** the leading relative to the original's pitch (leadOf; false: leadBase on any pitch); fillBySize's cap (run.mjs
    *  fillSize, off at 0) and the size a unit may grow to (growTo) */
-  leadRel?: boolean; fillSize?: number; growTo?: number
-  /** run.mjs's adaptiveFill (D, the default since 2026-10-07; false: B): a loose original's units spread over their
+  leadRel: boolean; fillSize: number; growTo?: number
+  /** run.mjs's adaptiveFill (D, the default since 2026-10-07; null: B): a loose original's units spread over their
    *  frames, page by page */
-  adaptiveFill?: { band?: number; track?: number; size?: number } | false
+  adaptiveFill: { band: number; track: number; size: number } | null
+  /** breaking: lines break only at spaces, which quotes are CJK's, centred punctuation, the characters no line starts or
+   *  ends with, and the hyphenation patterns of a Latin word */
+  keepAll: boolean; cjkQuotes: boolean; centredPunct: boolean; noStart: string; noEnd: string; latinPatterns: 'en' | 'de'
+  /** a table cell's room to a rule (PDF units) and the least share of the size it may be capped to between its rules */
+  cellClear: number; cellCapMin: number
+  /** the shortest word hyphenated, and the fewest letters before and after a break, by language */
+  hyphenation: { minWord: number; en: { left: number; right: number }; de: { left: number; right: number } }
 }
 /** a character of the original page: its box from its item (PDF units), its baseline and size, its item and place in it,
  *  its font's class */
@@ -127,7 +135,6 @@ export interface InkMap { w: number; h: number; ink: Uint8Array; factor: number 
 export interface Block2 extends Block { B: number[]; exact: boolean[]; sizes: number[]; pitch0: number | null; free: number; after?: number; freeOf?: () => number }
 type ToDev = (x: number, y: number) => [number, number]
 
-export declare function defaultParams(to: string): Params
 /** a spacing accent TeX sets as a glyph of its own */
 export declare const ACCENT: RegExp
 /** a page's text content as characters, each with its font's class (`fontOf(fontName)`) */
@@ -172,9 +179,9 @@ export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, ba
 /** a float's label as the final sets it in the target: the target's name (capitals where the original's are), a space,
  *  the original's number and punctuation; null where the final keeps the paper's name or the name is the original's */
 export declare function labelInTarget(label: { text?: string; chars?: { ch: string }[] } | null | undefined, names: { figure: string; table: string } | null | undefined, captions: { figure?: string; table?: string } | null | undefined, to: string): string | null
-/** the target's likely faces measured once each, a task apart; `ready(face, text)` is awaited before each measure (a face
- *  served in slices has the slice of the text by then) */
-export declare function warmFaces(to: string, designs: { serif: string }, yieldNow: () => Promise<unknown>, ready?: (face: Face, text: string) => Promise<unknown>): Promise<void>
+/** the target's likely faces measured once each, a task apart, the CJK ones too where `cjk` (the run's P.cjk); `ready(face, text)`
+ *  is awaited before each measure (a face served in slices has the slice of the text by then) */
+export declare function warmFaces(to: string, cjk: boolean, designs: { serif: string }, yieldNow: () => Promise<unknown>, ready?: (face: Face, text: string) => Promise<unknown>): Promise<void>
 export declare function blocks2(rects: readonly Rect[], pageViews: readonly number[][], keep: ReadonlySet<string> | null, lineInfo: Prepared['lineInfo'], regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null): Block2[]
 export declare function inkMapOf(canvas: HTMLCanvasElement | OffscreenCanvas, factor?: number): InkMap
 export declare function freeBelow(map: InkMap | undefined, toDev: ToDev, k: number, x0: number, x1: number, yStart: number, yLimit: number): number
@@ -185,7 +192,7 @@ export declare function cropBaselineOf(real: readonly Char[], lineInfo: Prepared
 export declare const SOLID: number
 /** the unit's leading relative to the original's own pitch: leadBase of a solid line, never closer than the original's */
 export declare function leadOf(blocks: readonly Pick<Block2, 'pitch0'>[], s: number, P: Pick<Params, 'leadBase'>): number
-export declare function layoutUnit2(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params, to: string): Layout
+export declare function layoutUnit2(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params): Layout
 /** a box in v0's device pixels on the page: [x, y, w, h] */
 export type DevBox = [number, number, number, number]
 /** one of the layer's drawing operations (unitOps'): the paper's white, the page's own pixels put back within the erased
@@ -216,6 +223,6 @@ export declare function styleMatch(orig: Prepared['orig'] | undefined, drawn: re
 /** a line's band between the rules over and under it: its original baseline, and how low and high its em box may reach */
 export interface CellBand { B: number; lo: number; hi: number }
 /** a table cell's room between the rules over and under its lines: the largest size its em boxes fit at, and each line's band by block */
-export declare function cellBands(blocks: readonly { page: number; B: readonly number[]; rects: readonly (readonly number[])[] }[], rulesOf: (page: number) => readonly number[] | undefined, s: number, clear?: number): { cap: number; bands: Map<number, CellBand[]> } | null
+export declare function cellBands(blocks: readonly { page: number; B: readonly number[]; rects: readonly (readonly number[])[] }[], rulesOf: (page: number) => readonly number[] | undefined, s: number, P: Pick<Params, 'cellClear' | 'cellCapMin'>): { cap: number; bands: Map<number, CellBand[]> } | null
 /** each laid line on one of the original's lines moved into that line's band at the size it is drawn at */
 export declare function clearLines(lines: { block: number; baseline: number }[], bands: Map<number, CellBand[]>, f: number): void

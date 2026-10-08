@@ -83,7 +83,7 @@ describe('startTranslation', () => {
     expect(doc.querySelectorAll(`.${PENDING_CLASS}`)).toHaveLength(0)
     // One text batch per section + one table batch
     expect(requests).toHaveLength(3)
-    expect(requests[0]?.cache).toEqual({ paper: 'test', renderPath: 'tags' })
+    expect(requests[0]?.cache).toEqual({ paper: 'test', renderPath: 'tags', source: 'html' })
     expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p1"]`)?.querySelector('math')).not.toBeNull()
     expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="T1"]`)?.querySelector(TABLE_RULES.cell)?.textContent).toBe('Model')
     expect(doc.documentElement.hasAttribute('data-axt-on')).toBe(true)
@@ -141,7 +141,7 @@ describe('startTranslation', () => {
     await run.translate(blocks)
     expect(run.progress()).toMatchObject({ done: 6, failed: 0 })
     const retry = requests.find(r => r.request.segments.length === 1 && r.request.segments[0]?.id === 'p2')
-    expect(retry?.cache).toEqual({ paper: 'test', renderPath: 'tags', bypass: true })
+    expect(retry?.cache).toEqual({ paper: 'test', renderPath: 'tags', source: 'html', bypass: true })
     expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p2"]`)?.querySelector('math')).not.toBeNull()
   })
 

@@ -2,10 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { copyTexts, decideWrite, reusable, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
 import { decideGroups, groupOf, NAMES_SHARE, unchanged } from '@/pdf-reader/engine/groups.mjs'
 import { inMemory, loadProject, type SourceUnit, tableGrid } from '@/pdf-reader/engine/latex-front.mjs'
-import { CAPTION_NAMES, captionNames } from '@/pdf-reader/engine/caption-names.mjs'
 import { CAPTIONS_PROBE, captionsOf, type Compiled, keptFor, openPaper, runLive, translationFiles } from '@/pdf-reader/engine/live.mjs'
 import { plainSource as plainOf } from '@/pdf-reader/engine/mt.mjs'
-import { babelTags, VERIFIED } from '@/pdf-reader/engine/scripts.mjs'
 
 // A table's consistency groups (the table-groups brief, 2026-10-07): the grid the TeX front end reads, each cell's
 // group, the decision over what came back, and the run that sets the final and keeps the record by it
@@ -250,19 +248,6 @@ describe("a kept cell's record: what the translator gave it and its sentences, k
 })
 
 describe('what names the floats: the target\'s names babel gives, where the final uses them', () => {
-  it('the table holds each target the reader typesets, found by the tags the final\'s babel tries', () => {
-    for (const lang of [...VERIFIED, 'zh-TW']) {
-      const names = captionNames(lang)
-      expect(names, lang).not.toBeNull()
-      expect(Object.values(CAPTION_NAMES)).toContain(names)
-      const tag = babelTags(lang).find(t => Object.hasOwn(CAPTION_NAMES, t))
-      expect(names).toBe(CAPTION_NAMES[tag as keyof typeof CAPTION_NAMES])
-    }
-    expect(captionNames('zh-TW')).toEqual({ figure: '\u5716', table: '\u8868' })
-    expect(captionNames('ja')).toEqual({ figure: '\u56f3', table: '\u8868' })
-    expect(captionNames('es')).toEqual({ figure: 'Figura', table: 'Cuadro' })
-    expect(captionNames('ru')?.figure).toBe('\u0420\u0438\u0441.')
-  })
   it('every compile of the translation writes what names its floats; captionsOf reads it, wrapped as TeX wraps its log', () => {
     const paper = openPaper(new Map([['main.tex', enc(doc('Some prose.'))]]))
     const files = translationFiles(paper, new Map(), { strategy: { name: 'x', engine: 'pdflatex', xe: false, pre: () => '' }, fonts: {} })

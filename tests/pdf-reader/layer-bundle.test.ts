@@ -235,7 +235,7 @@ describe('readBundle refuses', () => {
 
   it('another bundle format or PDF.js than the reader\'s; a newer maker is read (its pipeline, layout, remover and image named, never compared)', () => {
     for (const k of ['bundle', 'pdfjs']) expect(refusalOf(broken(b => { b.versions[k] = `${b.versions[k]}0` }))?.why).toMatch(new RegExp(`^versions\\.${k}: not this reader's`))
-    // (the layout file and the manifest name their own versions, which their own rules still check)
+    // (the layout file and the manifest name their makers' too, and are read whoever made them: refused by their schema)
     for (const [k, v] of [['pipeline', '11'], ['layout', '4'], ['removal', '5'], ['image', '2'], ['image', 'sha.0123abc']] as const) {
       const r = readBundle(bytesOf(broken(b => { b.versions[k] = v })))
       expect(r.versions[k]).toBe(v)
@@ -301,6 +301,12 @@ describe('readBundle refuses', () => {
     expect(refusalOf(broken(b => { b.layout.units[1][0] = 9; b.layout.lines[1][0] = 9; b.layout.frames[1][0] = 9; b.layout.ph[0][0] = 9 }))?.why).toMatch(/^layout\.units\[1\]\[0\]/)
     expect(refusalOf(broken(b => { b.layout.units[1][1] = UNIT_KINDS.indexOf('caption') }))?.why).toMatch(/^layout\.units\[1\]\[1\]/)
     expect(refusalOf(broken(b => { b.layout.units[1][4] = 8 }))?.why).toMatch(/^layout\.units\[1\]\[4\]/)
+  })
+
+  it("a layout file of a newer maker and a manifest of a newer remover are read: a part is refused by its schema, never by what made it (decision 4)", () => {
+    const r = readBundle(bytesOf(broken(b => { b.versions.layout = '4'; b.layout.layout = '4'; b.versions.removal = '5'; b.addon.manifest.removal = '5' })))
+    expect([r.layout?.layout, r.addon?.manifest.removal, r.dropped]).toEqual(['4', '5', []])
+    expect(refusalOf(broken(b => { b.addon.manifest.schema = 2 }))?.why).toMatch(/^addon\.manifest\.schema/)
   })
 
   it('a manifest refused by its own rules, its pages the paper\'s; a tail that is not base64 or not the manifest\'s bytes', () => {

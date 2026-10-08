@@ -39,6 +39,5 @@ export declare function wordsOf(chars: readonly { ch: string; sep?: boolean }[],
 /** which of O's words a longest common subsequence with S's takes (1 each) */
 export declare function lcsMatched(S: readonly string[], O: readonly string[]): Uint8Array
 export declare const CJK: RegExp
-/** what may not start a line, and what may not end one */
-export declare const NO_START: RegExp
-export declare const NO_END: RegExp
+/** the line-break marks of a rule set's `noStart` and `noEnd` lists: whether a token begins with a character no line starts with, or ends with one no line ends with */
+export declare function kinsokuOf(noStart: string, noEnd: string): { starts(s: string): boolean; ends(s: string): boolean }

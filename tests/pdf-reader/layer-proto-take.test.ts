@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { indexLayout, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
 import { trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
+import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // v0 fed its units as they arrive (layer-proto/run.mjs openProto's `expect`, take, end): over a paper of its own making,
 // three pages of a PDF.js document's shape (its text layer, its views; nothing drawn), a layout file and v0's geometry,
@@ -371,7 +372,7 @@ describe('a run let go while it waits (dispose)', () => {
     await tick()
     run.dispose()
     // (the newer layer's, set at its open)
-    setRoleFaces('ja', 'times')
+    setRoleFaces('ja', 'times', resolveRules(BUILTIN_RULES, 'ja').cjkFaces)
     const newer = roleFaces()
     go()
     await under
