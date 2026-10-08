@@ -1,4 +1,6 @@
 // mt.mjs's types (JavaScript until the engine's port), for the reader's tests
+/** the translation rules' version (translate/version.mjs), re-exported: what is sent for a unit and how a reply is read back */
+export { TRANSLATE_VERSION } from './translate/version.mjs'
 type Piece = { t: string; s?: string; src?: string; tr?: boolean; id?: number }
 /** a unit's plain text in the source, placeholders dropped */
 export declare function plainSource(u: { pieces: Piece[] }): string

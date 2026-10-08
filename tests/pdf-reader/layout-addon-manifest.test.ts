@@ -146,9 +146,13 @@ describe('parseAddonManifest', () => {
     expect(refusalOf(edited(m => { m.page[3].at = { R: 4 } }))?.path).toBe('page.3.at')
   })
 
-  it('refuses another schema, another remover, a key not of the schema, and a value by its type', () => {
+  it('refuses another schema, a remover that is no version, a key not of the schema, and a value by its type', () => {
     expect(refusalOf(edited(m => { m.schema = 2 }))?.path).toBe('schema')
-    expect(refusalOf(edited(m => { m.removal = '3' }))?.path).toBe('removal')
+    // (a manifest is refused by its schema, never by the remover that wrote it: any remover's is read)
+    expect(refusalOf(edited(m => { m.removal = '3' }))).toBeNull()
+    expect(refusalOf(edited(m => { m.removal = '5' }))).toBeNull()
+    expect(refusalOf(edited(m => { m.removal = '' }))?.path).toBe('removal')
+    expect(refusalOf(edited(m => { m.removal = 4 }))?.path).toBe('removal')
     expect(refusalOf(edited(m => { m.extra = 1 }))?.path).toBe('extra')
     expect(refusalOf(edited(m => { m.page[1].more = 1 }))?.path).toBe('page.1.more')
     expect(refusalOf(edited(m => { m.page[2].ok = 1 }))?.path).toBe('page.2.ok')

@@ -7,7 +7,7 @@ const cancel = vi.fn(async () => {})
 // the background's answer to a translate call; each test sets what it needs
 let answer: unknown
 // the translate calls the background was sent
-const sent: { request: { segments: { id: string; text: string; cuts?: number[] }[] } }[] = []
+const sent: { request: { segments: { id: string; text: string; cuts?: number[] }[] }; cache?: { paper: string; renderPath: string; source?: string } }[] = []
 vi.mock('@/shared/transport', () => ({ createMessageTransport: () => ({ status: async () => status, cancel, translate: vi.fn(async (call: (typeof sent)[number]) => { sent.push(call); return answer }) }) }))
 const { openEngine } = await import('@/pdf-reader/engine/engine.mjs')
 
@@ -49,5 +49,14 @@ describe('openEngine: translate keeps what the background answered of each text'
     sent.length = 0
     expect(await engine.translate(['Aa. Bb.', 'C'], {}, [[4], undefined])).toEqual([{ text: 'Aa. Bb.', by: 'g', alignment: { source: [4, 3], target: [4, 3] } }, { text: 'C', by: 'g' }])
     expect(sent.at(-1)?.request.segments).toEqual([{ id: '0', text: 'Aa. Bb.', cuts: [4] }, { id: '1', text: 'C' }])
+  })
+
+  it("every call says its texts are a PDF's, so that the key holds none of the HTML page's rules (rules as data, §9.1)", async () => {
+    status = { available: true, providerId: 'microsoft', chosen: 'microsoft', targetLanguage: 'cmn', renderPath: 'markers', maxBatchChars: 1000, maxBatchItems: 10, identity: 'ms' } as Partial<ProviderStatus>
+    answer = { ok: true, result: { provider: 'microsoft', segments: [{ id: '0', text: '\u7532', identity: 'ms' }] } }
+    const engine = await openEngine({ paper: '2608.02163' })
+    sent.length = 0
+    await engine.translate(['A'])
+    expect(sent.at(-1)).toMatchObject({ cache: { paper: '2608.02163', renderPath: 'markers', source: 'pdf' } })
   })
 })

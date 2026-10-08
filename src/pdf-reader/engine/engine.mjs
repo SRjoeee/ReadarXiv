@@ -73,7 +73,8 @@ export async function openEngine({ paper }) {
   // over, as each answer names it (Codex on #296)
   let serving = status.available ? (status.model ? `${status.providerId} (${status.model})` : status.providerId) : status.fallback.id
   const target = status.targetLanguage
-  const cache = { paper, renderPath: status.renderPath }
+  // (a PDF's texts: the key holds none of the HTML page's rules, cache/key.ts CacheSource)
+  const cache = { paper, renderPath: status.renderPath, source: 'pdf' }
   /**
    * Texts in the chain's wire format → their translations, `{ text, by, alignment? }` with `by` the identity that
    * translated the text (the background's TranslatedSegment.identity) and `alignment` the engine's sentence lengths

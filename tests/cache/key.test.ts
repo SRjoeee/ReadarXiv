@@ -29,7 +29,7 @@ describe('buildCacheKey', () => {
   it('any field differing gives a different key', async () => {
     const key = await buildCacheKey(base)
     const variants: Partial<CacheIdentity>[] = [
-      { providerId: 'x' }, { model: 'x' }, { promptVersion: '2' }, { rulesVersion: '0.3.0' }, { target: 'ja' }, { renderPath: 'runs' }, { text: 'Hello <x id="2"/> world' },
+      { providerId: 'x' }, { model: 'x' }, { promptVersion: '2' }, { rulesVersion: '0.3.0' }, { rulesVersion: null }, { target: 'ja' }, { renderPath: 'runs' }, { text: 'Hello <x id="2"/> world' },
     ]
     for (const v of variants) expect(await buildCacheKey({ ...base, ...v }), JSON.stringify(v)).not.toBe(key)
   })

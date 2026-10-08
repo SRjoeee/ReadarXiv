@@ -832,6 +832,33 @@ describe('sentence markers: inserted by the service layer when the engine report
   })
 })
 
+describe("the rules in a text's cache key are the caller's: the HTML page's, or none for a PDF's (rules as data, §9.1)", () => {
+  const echo = provider(async ({ segments }) => ({ segments: segments.map(s => ({ id: s.id, text: `\u8bd1:${s.text}` })), provider: 'mock' }))
+  const identity = { providerId: 'mock', model: '', promptKey: '', target: 'zh-CN', renderPath: 'tags' as RenderPath, text: 'text-a' }
+
+  it('a call from the HTML page is read and written under the key with its rules; one from a PDF under the key with none', async () => {
+    const html = await cacheKeyFor(identity), pdf = await cacheKeyFor({ ...identity, source: 'pdf' })
+    expect(pdf).not.toBe(html)
+    for (const [cache, want] of [[{ paper: 'p', renderPath: 'tags' as RenderPath }, html], [{ paper: 'p', renderPath: 'tags' as RenderPath, source: 'html' as const }, html], [{ paper: 'p', renderPath: 'tags' as RenderPath, source: 'pdf' as const }, pdf]] as const) {
+      const { port, reads, writes } = fakePort()
+      const service = build({ getProvider: async () => echo, cache: port })
+      await service.translate({ request: { segments: [{ id: 'a', text: 'text-a' }], source: 'en', target: 'zh-CN' }, cache })
+      expect(reads[0]).toEqual([want])
+      expect(writes.flat().map(w => w.key)).toEqual([want])
+    }
+  })
+
+  it('a translation cached for a PDF text answers the PDF text, and is no answer to the same text of the HTML page', async () => {
+    const pdf = await cacheKeyFor({ ...identity, source: 'pdf' })
+    const { port } = fakePort({ [pdf]: 'cached for the PDF' })
+    const service = build({ getProvider: async () => echo, cache: port })
+    const ask = (source?: 'pdf') => service.translate({ request: { segments: [{ id: 'a', text: 'text-a' }], source: 'en', target: 'zh-CN' }, cache: { paper: 'p', renderPath: 'tags', ...(source ? { source } : {}) } })
+    const fromPdf = await ask('pdf'), fromHtml = await ask()
+    expect(fromPdf.ok && fromPdf.result.segments[0]?.text).toBe('cached for the PDF')
+    expect(fromHtml.ok && fromHtml.result.segments[0]?.text).toBe('\u8bd1:text-a')
+  })
+})
+
 describe('attributing failures: isolatable travels with the error across the message boundary (research audit F14 / A02)', () => {
   it('the default by kind: true only where a smaller split might succeed', () => {
     // The criterion is “was this failure caused by one segment, or is the whole path down”

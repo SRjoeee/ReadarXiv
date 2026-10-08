@@ -1,4 +1,5 @@
-// The cache key (DESIGN §9): sha256(CACHE_KEY_VERSION | providerId | model | PROMPT_VERSION | promptKey | context | RULES_VERSION | target | renderPath | normalizedText | cuts [| marked-over-cap]).
+// The cache key (DESIGN §9): sha256(CACHE_KEY_VERSION | providerId | model | PROMPT_VERSION | promptKey | context | rules | target | renderPath | normalizedText | cuts [| marked-over-cap]),
+// `rules` being RULES_VERSION for a block of the HTML page and null for a text read from a PDF (CacheSource).
 // The prompt and the context enter the payload as **structured source text**, not squeezed into a 32-bit hash first:
 // a DJB2 collision cannot be told apart by the outer SHA-256 (Codex on #28 gave the instance: the titles
 // 19k04n01vcr73f and 1efm0uaep90s9 share a DJB2). After FluentRead: identity is a structured, deterministic
@@ -41,7 +42,13 @@ export interface CacheIdentity {
   promptKey: string
   /** The context that enters the prompt: the translation follows the title / abstract / section / glossary, and the same passage in another paper must not hit. A free engine reads no context and passes undefined */
   context?: CacheContext
-  rulesVersion: string
+  /**
+   * The HTML page's extraction rules (RULES_VERSION) that cut this block, or null for a text read from a PDF. The slot is
+   * the caller's: a PDF's texts are cut by the reader's engine (PIPELINE_VERSION, in the reader's record), not by the rule
+   * file, and the cache holds the translator's raw answer to a text, which no rule of reading changes — so a PDF text's key
+   * must not move when RULES_VERSION does (the rules-as-data plan, §9.1)
+   */
+  rulesVersion: string | null
   target: string
   renderPath: RenderPath
   /** The text sent to the model (placeholders included); normalised here */
@@ -76,10 +83,12 @@ export interface CacheIdentity {
  * sent changed** — the same text now goes out with `<x id="N"/>` boundary markers — so an old entry no longer
  * describes the same request. Unbumped, every paper translated within the 30-day TTL would hit the old entries
  * without alignment, and the highlight would stay dark on those pages (Codex on #137).
+ * 7: a PDF text's key stopped carrying RULES_VERSION (CacheSource: the slot is the caller's, null for a PDF) — the
+ * PDF reader's texts had moved with the HTML page's rule file, which cuts none of them. The entries of 6 are left behind.
  * The thinking switch of a service did not move this number: it entered that provider's own identity with both states
  * named (`cacheId`, providers/openai-compat.ts), which retires the ambiguous entries of that provider alone.
  */
-export const CACHE_KEY_VERSION = 6
+export const CACHE_KEY_VERSION = 7
 
 /** NFC + runs of whitespace collapsed to one space + trimmed. For the key only; the text sent for translation is untouched */
 export function normalizeText(text: string): string {
@@ -105,9 +114,16 @@ export async function buildCacheKey(identity: CacheIdentity): Promise<string> {
   return sha256Hex(payload)
 }
 
-/** Compute the key with PROMPT_VERSION / RULES_VERSION filled into the identity */
-export function cacheKeyFor(identity: Omit<CacheIdentity, 'promptVersion' | 'rulesVersion'>): Promise<string> {
-  return buildCacheKey({ ...identity, promptVersion: PROMPT_VERSION, rulesVersion: RULES_VERSION })
+/**
+ * Where a text was read from, which decides the rules in its key: a block of the HTML page was cut by the rule file
+ * (RULES_VERSION enters its key), a text of a PDF by the reader's engine (nothing of the rule file does)
+ */
+export type CacheSource = 'html' | 'pdf'
+
+/** Compute the key with PROMPT_VERSION filled into the identity, and RULES_VERSION where the text is the HTML page's (the default) */
+export function cacheKeyFor(identity: Omit<CacheIdentity, 'promptVersion' | 'rulesVersion'> & { source?: CacheSource }): Promise<string> {
+  const { source, ...rest } = identity
+  return buildCacheKey({ ...rest, promptVersion: PROMPT_VERSION, rulesVersion: source === 'pdf' ? null : RULES_VERSION })
 }
 
 /**

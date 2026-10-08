@@ -9,6 +9,12 @@ import { MIXED } from '@/cache/pdf-record'
 import { fromAlpha, MARKER_CLOSER, markerReader, TAG_RE, toAlpha } from '../../core/protector/tokens'
 import { sentenceCuts } from '@/core/sentences'
 
+// This file is the translation's: the wire a unit goes out as, and the reading back of a reply. A change here that alters
+// what is sent for a unit or what its reply is read as raises TRANSLATE_VERSION, the identity of the translation rules
+// (translate/version.mjs holds what it covers); one that alters a unit's cutting or text raises PIPELINE_VERSION
+// (versions.mjs) too.
+export { TRANSLATE_VERSION } from './translate/version.mjs'
+
 // ---------------------------------------------------------------- markers wire format
 export { fromAlpha, toAlpha }
 export const escape = s => s.replace(/@/g, '@@').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -187,7 +193,7 @@ const sameBut = (withSentinels, b) => {
  * What a copy keeps (CachedUnit.sentences) is these offsets, and their meaning is three functions': plainSource and
  * plainTranslated, the texts they count in, and anchors.mjs tokens, which turns an offset into the word a side finds
  * (sentenceStarts). Those three are the record's contract: a change to any of them changes what a kept copy's offsets
- * name, and is a change of the record (live.mjs PIPELINE_VERSION)
+ * name, and is a change of the record (TRANSLATE_VERSION for the first two, PIPELINE_VERSION for the third)
  */
 export function sentencesOf(u, ser, text, alignment, pieces, tolerant = false, format = 'markers') {
   const { source, target } = alignment ?? {}, W = SENTENCE_WIRE[format]
