@@ -310,7 +310,7 @@ describe("the page fill (adaptiveFill, D6's F6b): every original's units spread 
     p.layout = L2.layoutUnit2(p.tokens as never, p.blocks as never, 10, p.P as never) as never
     return p
   }
-  const fill = async (units: Unit[], PP = P(), running: number | null = null) => (await import('@/pdf-reader/engine/layer-proto/run.mjs')).fillPage(units as never, PP as never, running)
+  const fill = async (units: Unit[], PP: Record<string, unknown> = P(), running: number | null = null) => (await import('@/pdf-reader/engine/layer-proto/run.mjs')).fillPage(units as never, PP as never, running)
   const baselines = (p: Unit) => p.layout.lines.map(l => l.baseline)
 
   it('builds in a top of 2 em for Chinese, 1.7 for Japanese and Korean, and the original\'s own pitch for the alphabets', () => {
