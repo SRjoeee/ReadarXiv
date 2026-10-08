@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { fixtureTotals, MEASURES, type PageEntry } from '../../lab/pdf/spikes/layer-gate/score.mjs'
-import { checkRulesFile, commentOf, fragmentsIn, gateArgs, judge, labLink, leaksIn, MARK, parseRuling, publicLine, textsOf } from '../../lab/pdf/spikes/rules-gate.mjs'
+import { checkRulesFile, commentOf, fragmentsIn, gateArgs, judge, labLink, leaksIn, MARK, outputsOfPack, parseRuling, publicLine, textsOf } from '../../lab/pdf/spikes/rules-gate.mjs'
 import { BUILTIN_RULES, readRules, writeRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // The rules gate's verdict (lab/pdf/spikes/rules-gate.mjs, rules-as-data plan §8, Task R6): two model-tier runs of one
@@ -27,10 +29,10 @@ const fixture = (pages: PageEntry[]) => ({ totals: fixtureTotals(pages, pages.ma
 const output = (...overs: Record<string, unknown>[]) => fixture(overs.map((o, i) => page(i + 1, o)))
 
 type Fixtures = Record<string, ReturnType<typeof fixture>>
-function run(fixtures: Fixtures, o: { commit?: string; inputs?: Record<string, unknown>; failed?: { name: string; why: string }[]; version?: number } = {}) {
+function run(fixtures: Fixtures, o: { commit?: string; inputs?: Record<string, unknown>; failed?: { name: string; why: string }[]; failures?: string[]; version?: number } = {}) {
   return {
     schema: 1, tier: 'model', made: '2026-10-08T00:00:00.000Z', seconds: 30, gate: { commit: SHA_HEAD, dirty: false }, engine: { root: '.', commit: o.commit ?? SHA_HEAD, branch: 'x', dirty: false },
-    inputs: { ...SAME_INPUTS, rules: { version: o.version ?? 1, sha256: 'a'.repeat(64) }, ...o.inputs }, totals: {}, fixtures, failed: o.failed ?? [],
+    inputs: { ...SAME_INPUTS, rules: { version: o.version ?? 1, sha256: 'a'.repeat(64) }, ...o.inputs }, totals: {}, fixtures, failed: o.failed ?? [], failures: o.failures ?? [],
   }
 }
 const labelOf = (key: string) => MEASURES.find(m => m[0] === key)![4]
@@ -94,6 +96,80 @@ describe('a target is pooled over its outputs and held to score.mjs\' thresholds
     // for itself: the hyphenation digest is made by the hyph.mjs of the engine measured, which a pull request may change
     expect(judge(run(base()), run(base(), { version: 2 })).problems).toEqual([])
     expect(judge(run(base()), run(base(), { inputs: { hyphenation: '0123456789abcdef', remover: '0123456789abcdef' } })).problems).toEqual([])
+  })
+})
+
+describe('a run is accepted only when it is whole', () => {
+  // the layer gate exits 1 for an output that threw, one that changed its inputs and a request that left the machine, and the run
+  // file used to say none of it: two runs that lost the same outputs agreed on every output they shared
+  const JA = '1512.03385v1-ja', DE = '1512.03385v1-de'
+  const manifest = { files: Object.keys(base()).flatMap(n => [`refs/${n}/ref.json`, `refs/${n}/layout.json`, `fixtures/${n}/arxiv.pdf`]).map(path => ({ path })).concat([{ path: 'data/fonts/A.otf' }, { path: 'refs/not-a-fixture/ref.json' }]) }
+  const OUTPUTS = outputsOfPack(manifest)
+  const without = (...names: string[]) => { const f = base() as Record<string, unknown>; for (const n of names) delete f[n]; return f as Fixtures }
+
+  it('takes the pack\'s outputs from its frozen references, and nothing that is no output\'s name', () => {
+    expect(OUTPUTS).toEqual(['1512.03385v1-de', '1512.03385v1-ja', '1512.03385v1-zh', '1706.03762v7-zh'])
+    expect(outputsOfPack({ files: [] })).toEqual([])
+    expect(outputsOfPack(null)).toEqual([])
+  })
+  it('refuses an output that threw, though both runs lost the same one and agree on all the others', () => {
+    const lost = () => run(without(JA), { failures: [JA] })
+    const r = judge(lost(), lost(), { outputs: OUTPUTS })
+    expect(r.ok).toBe(false)
+    expect(r.problems).toEqual([`${JA} failed in the base run`, `${JA} failed in the head run`])
+    // without a pack to hold them to, the failure alone is enough
+    expect(judge(lost(), lost()).problems).toEqual([`${JA} failed in the base run`, `${JA} failed in the head run`])
+  })
+  it('refuses an output that ran but changed its inputs, which is in the run\'s fixtures', () => {
+    const r = judge(run(base()), run(base(), { failures: [DE] }), { outputs: OUTPUTS })
+    expect(r.problems).toEqual([`${DE} failed in the head run`])
+  })
+  it('refuses a request that would have left the machine', () => {
+    const r = judge(run(base(), { failures: ['network'] }), run(base()), { outputs: OUTPUTS })
+    expect(r.ok).toBe(false)
+    expect(r.problems).toEqual(['the base run made a request that would have left the machine'])
+  })
+  it('names an output that was not ready once, as the run that could not run it', () => {
+    const r = judge(run(base()), run(without(JA), { failed: [{ name: JA, why: 'no geometry for v0' }], failures: [JA] }), { outputs: OUTPUTS })
+    expect(r.problems).toEqual([`${JA} did not run in the head run`])
+  })
+  it('refuses two empty runs, with a pack or without one', () => {
+    const empty = () => run({} as Fixtures)
+    const withPack = judge(empty(), empty(), { outputs: OUTPUTS })
+    expect(withPack.ok).toBe(false)
+    expect(withPack.problems).toEqual([`the base run holds no output`, `the head run holds no output`])
+    expect(judge(empty(), empty()).ok).toBe(false)
+    expect(judge(empty(), empty()).problems).toEqual(withPack.problems)
+  })
+  it('refuses a run that lacks an output of the pack, or holds one the pack does not, naming the side and the names', () => {
+    const r = judge(run(without(JA, DE)), run(base()), { outputs: OUTPUTS })
+    expect(r.problems).toEqual([`the base run lacks 2 outputs of the pack's: ${DE}, ${JA}`, `${DE} only in the head run`, `${JA} only in the head run`])
+    const more = judge(run(base()), run({ ...base(), '2001.00001v1-zh': output({}, {}) }), { outputs: OUTPUTS })
+    expect(more.problems).toEqual([`the head run holds 1 output the pack does not: 2001.00001v1-zh`, `2001.00001v1-zh only in the head run`])
+  })
+  it('refuses a run that does not say what failed (another gate\'s), and one that names a failure by something that is no name', () => {
+    const old = run(base()) as Record<string, unknown>
+    old.failures = undefined
+    expect(judge(old as ReturnType<typeof run>, run(base()), { outputs: OUTPUTS }).problems).toEqual(['the base run does not say what failed: it was made by another gate'])
+    const odd = judge(run(base()), run(base(), { failures: ['x'.repeat(5) + '\n<img src=x>'] }), { outputs: OUTPUTS })
+    expect(odd.problems).toEqual(['1 output failed in the head run'])
+    expect(odd.problems.join('')).not.toContain('<img')
+  })
+  it('still compares a run that is whole and fails the gate\'s completeness count: that exit is in neither the failures nor the outputs', () => {
+    // (the gate exits 1 for a completeness count the merge rule decides; the run it wrote is whole)
+    const r = judge(run(base()), run(base({ ja: [{ textDrawn: 9 }, {}] })), { outputs: OUTPUTS })
+    expect(r.problems).toEqual([])
+    expect(r.regressions.map(x => `${x.target}:${x.measure}`)).toEqual(['ja:unitsLeft'])
+    expect(r.ok).toBe(false)
+    expect(judge(run(base()), run(base()), { outputs: OUTPUTS }).ok).toBe(true)
+  })
+  it('is written into the run file by the gate, after the last place that adds to it and before the file is', () => {
+    const source = readFileSync(join(resolve(__dirname, '../..'), 'lab/pdf/spikes/layer-gate.mjs'), 'utf8')
+    const leak = source.indexOf("failures.push('network')"), literal = source.indexOf('const run = {'), written = source.indexOf('writeFileSync(runFile')
+    expect(leak).toBeGreaterThan(0)
+    expect(leak).toBeLessThan(literal)
+    expect(literal).toBeLessThan(written)
+    expect(source.slice(literal, written)).toContain('failures: [...new Set(failures)].sort()')
   })
 })
 

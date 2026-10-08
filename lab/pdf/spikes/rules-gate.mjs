@@ -4,15 +4,16 @@
 // on one runner, the merge base's engine with its own built-in set (base) and the pull request's with its own (head), so
 // that the platform stays out of every delta: no baseline from another machine is compared.
 //   run      the layer gate's model tier in the production configuration, from the fixture pack alone
-//   compare  (the default) two runs' verdict: each target's outputs pooled over the model-tier measures and held to the merge
-//            rule's thresholds (layer-gate/score.mjs compare), the pages that moved, the checks of a changed layout-rules.json,
-//            the one comment (<!-- rules-gate -->) and the numbers (rules-gate.json). Exit 1 where the run cannot pass
+//   compare  (the default) two runs' verdict: each run must be whole (nothing failed, every output of the pack in it), each
+//            target's outputs pooled over the model-tier measures and held to the merge rule's thresholds (layer-gate/score.mjs
+//            compare), the pages that moved, the checks of a changed layout-rules.json, the one comment (<!-- rules-gate -->)
+//            and the numbers (rules-gate.json). Exit 1 where the run cannot pass
 //   engines  the same verdict for head's set on each engine lab/pdf/live-engines.json names, against the set published for it
 //
 //   node lab/pdf/spikes/rules-gate.mjs run --engine=<worktree> --rules=<file> --pack=<dir> [--out=<run.json>] [--log=<file>] [--workers=4]
 //   node lab/pdf/spikes/rules-gate.mjs compare --base=<run.json> --head=<run.json> --out=<dir> [--base-sha=<sha>] [--head-sha=<sha>]
 //       [--base-rules=<file> --head-rules=<file>] [--ruling=<file>]… [--pack=<gate-pack.json>] [--records=<fixtures dir>] [--label=<text>]
-//   node lab/pdf/spikes/rules-gate.mjs engines --list=<live-engines.json> --head-rules=<file> --pack=<dir> --published=<origin> --out=<dir>
+//   node lab/pdf/spikes/rules-gate.mjs engines --list=<live-engines.json> --head-rules=<file> --pack=<dir> --published=<origin> --out=<dir> [--pack-json=<gate-pack.json>]
 //
 // What it never does: show a page, or a word of a paper. The papers are under arXiv's licence, and the comment is public.
 // Everything it writes is a number, a fixture's name, a measure's label or a commit; a run file's other fields (the page
@@ -91,25 +92,76 @@ function shown(row, side) {
   return String(v)
 }
 
+/** the outputs a pack holds: the frozen references of its listing (`refs/<name>/ref.json`), the set the layer gate itself requires
+ *  of each fixture it runs. `pack` is gate-pack.json, or any `{ files: [{ path }] }` */
+export function outputsOfPack(pack) {
+  const names = new Set()
+  for (const f of pack?.files ?? []) { const m = /^refs\/([^/]+)\/ref\.json$/.exec(f?.path ?? ''); if (m && FIXTURE.test(m[1])) names.add(m[1]) }
+  return [...names].sort(byName)
+}
+
+/** names for a line of a comment: only what is shaped like an output's name is shown, the first few of them */
+const SHOWN = 6
+function namesIn(list) {
+  const own = list.filter(n => typeof n === 'string' && FIXTURE.test(n)), rest = own.length - Math.min(own.length, SHOWN) + (list.length - own.length)
+  if (!own.length) return countOf(list.length, 'output')
+  return `${own.slice(0, SHOWN).join(', ')}${rest ? ` and ${rest} more` : ''}`
+}
+const countOf = (n, what) => `${n} ${what}${n === 1 ? '' : 's'}`
+
+/**
+ * Why a run is not whole. The layer gate exits 1 for an output that threw, one that did not get ready, one whose inputs
+ * changed and a request that would have left the machine, and for a completeness count the merge rule decides; the run file
+ * keeps the first group in `failures` (names and the word `network`) and not the last, which is a number of the file. A run
+ * is whole when no `failure` is in it and its `fixtures` and `failed` are the pack's outputs, no more and no fewer: two runs
+ * that lost the same outputs agree on every output they share, and two empty ones on all of none. `outputs` is the pack's
+ * (`outputsOfPack`), or null where there is no pack to hold the run to (a run with no output at all is refused anyway).
+ */
+export function wholeness(side, run, outputs) {
+  const out = [], reported = new Set()
+  const failed = new Set((run.failed ?? []).map(f => f?.name))
+  if (!Array.isArray(run.failures)) out.push(`the ${side} run does not say what failed: it was made by another gate`)
+  else {
+    const named = run.failures.filter(n => n !== 'network')
+    // (an output that was not ready is in `failed`, which says so)
+    const lost = named.filter(n => !failed.has(n))
+    for (const n of named) reported.add(n)
+    if (lost.length) out.push(`${namesIn(lost)} failed in the ${side} run`)
+    if (run.failures.includes('network')) out.push(`the ${side} run made a request that would have left the machine`)
+  }
+  const have = new Set([...Object.keys(run.fixtures ?? {}), ...failed])
+  if (!have.size) out.push(`the ${side} run holds no output`)
+  else if (outputs) {
+    // (an output that threw is named above: it is also among the missing)
+    const missing = outputs.filter(n => !have.has(n) && !reported.has(n)), extra = [...have].filter(n => !outputs.includes(n))
+    if (missing.length) out.push(`the ${side} run lacks ${countOf(missing.length, 'output')} of the pack's: ${namesIn(missing)}`)
+    if (extra.length) out.push(`the ${side} run holds ${countOf(extra.length, 'output')} the pack does not: ${namesIn(extra)}`)
+  }
+  return out
+}
+
 /**
  * The verdict of two model-tier runs. Each target's outputs (the fixtures named <paper>v<n>-<target>: zh five, the others
  * four) are pooled by the gate's own arithmetic (score.mjs pooled) and the pools compared with the merge rule (score.mjs
  * compare: a share by 0.2 points, a ratio by 0.02, a count at all, a defect as a rate per 1,000 cells at all). The pages
  * whose measures moved come from the same compare on the outputs. Returns { ok, problems, targets, regressions,
  * improvements, pages, perFixture }: `problems` is what fails the run besides a regression (a run that is no model run, a
- * different instrument, an output missing or failed), and a regression fails it unless one of the `rulings` covers its target and its measure.
+ * different instrument, a run that is not whole (`wholeness`), an output missing or failed), and a regression fails it unless
+ * one of the `rulings` covers its target and its measure.
  */
-export function judge(base, head, { rulings = [] } = {}) {
+export function judge(base, head, { rulings = [], outputs = null } = {}) {
   const problems = []
   for (const [side, run] of [['base', base], ['head', head]]) {
     if (run.tier !== 'model') problems.push(`the ${side} run is not the model tier`)
     for (const f of run.failed ?? []) problems.push(typeof f?.name === 'string' && FIXTURE.test(f.name) ? `${f.name} did not run in the ${side} run` : `an output did not run in the ${side} run`)
+    problems.push(...wholeness(side, run, outputs))
   }
   for (const k of INSTRUMENT) {
     const a = base.inputs?.[k], b = head.inputs?.[k]
     if (String(a) !== String(b)) problems.push(`the runs are not one instrument: ${k} is ${String(a).slice(0, 60)} in the base run and ${String(b).slice(0, 60)} in the head run`)
   }
-  const failed = side => new Set((side.failed ?? []).map(f => f?.name))
+  // (an output that is missing from a side for what that side says failed is not also "only in" the other)
+  const failed = side => new Set([...(side.failed ?? []).map(f => f?.name), ...(Array.isArray(side.failures) ? side.failures : [])])
   const names = { base: Object.keys(base.fixtures ?? {}).filter(n => FIXTURE.test(n)).sort(byName), head: Object.keys(head.fixtures ?? {}).filter(n => FIXTURE.test(n)).sort(byName) }
   for (const n of names.base) if (!names.head.includes(n) && !failed(head).has(n)) problems.push(`${n} only in the base run`)
   for (const n of names.head) if (!names.base.includes(n) && !failed(base).has(n)) problems.push(`${n} only in the head run`)
@@ -135,11 +187,11 @@ export function judge(base, head, { rulings = [] } = {}) {
     return { target: t, outputs: byTarget.get(t), rows: r, worse: r.filter(x => x.moved === 'worse').length, better: r.filter(x => x.moved === 'better').length }
   })
 
-  const outputs = compare(withZeros(pick(base.fixtures, common)), withZeros(pick(head.fixtures, common)), 'model')
-  const moved = outputs.pages.map(p => ({ fixture: p.fixture, page: p.page, worse: p.worse.map(labelOf), better: p.better.map(labelOf) }))
+  const perOutput = compare(withZeros(pick(base.fixtures, common)), withZeros(pick(head.fixtures, common)), 'model')
+  const moved = perOutput.pages.map(p => ({ fixture: p.fixture, page: p.page, worse: p.worse.map(labelOf), better: p.better.map(labelOf) }))
   // the pages that got worse first, each group in the runs' order
   const pages = [...moved.filter(p => p.worse.length), ...moved.filter(p => !p.worse.length)]
-  const perFixture = { regressions: outputs.regressions.map(r => ({ fixture: r.fixture, measure: r.measure, label: r.label })), improvements: outputs.improvements.length }
+  const perFixture = { regressions: perOutput.regressions.map(r => ({ fixture: r.fixture, measure: r.measure, label: r.label })), improvements: perOutput.improvements.length }
   return { ok: problems.length === 0 && regressions.every(r => r.ruling), problems, targets: targetRows, regressions, improvements, pages, perFixture }
 }
 const pick = (o, keys) => Object.fromEntries(keys.map(k => [k, o[k]]))
@@ -294,7 +346,8 @@ export function publicLine(line) {
 }
 
 /** the gate run on one side; resolves with the run file it wrote. The gate exits 1 for a completeness count the merge rule
- *  decides, so only a missing run file is a failure here. Its whole output goes to the file `log` (a file of the runner, never
+ *  decides, so only a missing run file is a failure here; whether the file is a whole run (nothing failed, every output of the
+ *  pack in it) is `judge`'s to say, with the side's name. Its whole output goes to the file `log` (a file of the runner, never
  *  uploaded); the job log gets `publicLine`'s lines alone */
 export function runGate(o) {
   const { args, env } = gateArgs(o)
@@ -349,6 +402,8 @@ async function engines(argv) {
   mkdirSync(out, { recursive: true })
   const head = await headEngine()
   const { set: headSet } = await head.readRules(new Uint8Array(readFileSync(headFile)))
+  // (the pack the job verified is the committed manifest's: its outputs are what each run must hold)
+  const outputs = outputsOfPack(readJson(typeof arg('pack-json') === 'string' ? resolve(arg('pack-json')) : join(REPO, 'lab/pdf/gate-pack.json')))
   const failures = []
   const work = join(tmpdir(), `rules-engines-${process.pid}`)
   for (const e of list) {
@@ -372,7 +427,7 @@ async function engines(argv) {
       console.log(`${e.name} (${e.ref}): head's set against ${from}`)
       const base = JSON.parse(readFileSync(await runGate({ engine: dir, rules: published, pack, log: join(out, `${basename(dir)}-base.log`) }), 'utf8'))
       const next = JSON.parse(readFileSync(await runGate({ engine: dir, rules: headFile, pack, log: join(out, `${basename(dir)}-head.log`) }), 'utf8'))
-      const report = judge(base, next)
+      const report = judge(base, next, { outputs })
       const md = commentOf(report, { headSha: git('rev-parse', 'HEAD').trim(), baseSha: sha, label: `engine ${e.name}` }).replace(MARK, `<!-- rules-gate engine ${basename(dir)} -->`)
       writeFileSync(join(out, `${basename(dir)}.md`), md)
       writeFileSync(join(out, `${basename(dir)}.json`), `${JSON.stringify(reportJson(report), null, 1)}\n`)
@@ -410,7 +465,10 @@ async function compareCommand(argv) {
   const headSha = arg('head-sha') || head.engine?.commit, baseSha = arg('base-sha') || base.engine?.commit
   const rulings = [], bad = []
   for (const f of options(argv, 'ruling')) { try { rulings.push(parseRuling(readJson(resolve(f)), basename(f))) } catch (e) { bad.push(String(e?.message ?? e)) } }
-  let report = judge(base, head, { rulings })
+  // the pack the runs are held to: a flag that names no file is a mistake, not a pack to do without
+  if (typeof arg('pack') === 'string' && !existsSync(resolve(arg('pack')))) throw new Error('--pack: no such file')
+  const pack = typeof arg('pack') === 'string' ? readJson(resolve(arg('pack'))) : null
+  let report = judge(base, head, { rulings, outputs: pack ? outputsOfPack(pack) : null })
   if (bad.length) report = { ...report, ok: false, problems: [...report.problems, ...bad] }
   const meta = { base: { commit: baseSha, rules: base.inputs?.rules }, head: { commit: headSha, rules: head.inputs?.rules } }
   const engineDir = typeof arg('head-engine') === 'string' ? resolve(arg('head-engine')) : join(REPO, ENGINE)
@@ -425,7 +483,6 @@ async function compareCommand(argv) {
     const rulesOf = (set, t) => { const { version: _, ...rules } = E.resolveRules(set, t); return JSON.stringify(rules) }
     if (sets[0] && sets[1]) meta.changedTargets = E.TARGETS.filter(t => rulesOf(sets[0], t) !== rulesOf(sets[1], t))
   }
-  const pack = typeof arg('pack') === 'string' && existsSync(resolve(arg('pack'))) ? readJson(resolve(arg('pack'))) : null
   const pipeline = /export const PIPELINE_VERSION = '([^']+)'/.exec(readFileSync(join(engineDir, 'versions.mjs'), 'utf8'))?.[1] ?? null
   meta.pack = pack
   const text = commentOf(report, { headSha, baseSha, pack, enginePipeline: pipeline, targets: E.TARGETS, changedTargets: meta.changedTargets, rulings, label: typeof arg('label') === 'string' ? arg('label') : undefined })

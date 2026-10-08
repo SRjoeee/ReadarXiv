@@ -775,6 +775,11 @@ const run = {
   totals: { all: pooled(ran.map(r => r.totals), TIER), shared: pooled(ran.filter(r => floor.shared.includes(r.name)).map(r => r.totals), TIER) },
   fixtures: Object.fromEntries(ran.map(r => [r.name, { meta: r.meta, info: { pages: r.info.pages, units: r.info.units, located: r.info.located, even: r.info.even, family: r.info.family }, summary: r.summary, totals: r.totals, pages: r.pages.map(compact) }])),
   failed: [...results.values()].filter(r => !r.ready).map(r => ({ name: r.name, why: r.why })),
+  // what made the gate exit 1 and left no other trace in the file: an output that threw (it is in neither `fixtures` nor `failed`), one
+  // that changed its inputs or took its parts late (it is in `fixtures`), a not-ready one (also in `failed`) and 'network'. Names and
+  // that one word, never a message. Every worker is done and the leak check has run: nothing adds to it after this (rules-gate.mjs
+  // refuses a run that holds any)
+  failures: [...new Set(failures)].sort(),
 }
 // the server's costs, a paper each (--perf): its first output's
 if (PERF) {

@@ -88,7 +88,12 @@ its comment is numbers, fixture names and links that open the layer lab on the m
 merge rule's thresholds (`layer-gate/score.mjs` `compare`: a share by 0.2 points, a ratio by 0.02, a count at all, a defect
 as a rate per 1,000 cells at all). The run fails on a regression no ruling accepts; on a changed `layout-rules.json` whose
 `version` is not the base's plus one, whose `note` is the base's, or whose bytes are not the canonical form (`writeRules`);
-and on two runs that are not one instrument (the gate's inputs differ) or an output that did not run. The comment lists the
+and on two runs that are not one instrument (the gate's inputs differ) or a run that is not whole. A run is whole when the
+gate lists nothing in its `failures` (an output that threw, did not get ready or changed its inputs as it drew, or a request
+that would have left the machine: the gate exits 1 for each and, before, left no trace in the file) and its outputs are the
+pack's, no more and no fewer (the frozen references `gate-pack.json` lists), so that two runs that lost the same outputs
+cannot pass on the ones they share, and two empty runs cannot pass at all. A completeness count that makes the gate exit 1
+refuses nothing: the merge rule decides it. The comment lists the
 pages that moved, each as a lab link, `http://127.0.0.1:8093/#f=<fixture>&p=<page>&rules=<head sha>` (start the lab as
 `lab/pdf/layer-lab/README.md` says; the link loads the pull request's set). A target with no fixture (zh-TW, pt) is named as
 unmeasured. The comparison is of two runs on the same runner, so the platform stays out of every delta; no baseline from
