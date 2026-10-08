@@ -94,6 +94,18 @@ describe('parseAddonManifest', () => {
     expect(refusalOf(check())).toBeNull()
   })
 
+  it("refuses an `at` naming a page a set at its fixed place gives another page (two pages, R at 2, page 1's at R 4: page 2's)", () => {
+    const m = (at: number) => ({ schema: 1, removal: REMOVAL, pages: 2, sets: { R: 2 }, page: { 1: { ok: true, at: { R: at } }, 2: { ok: true } }, appended: 0, stats: {} })
+    for (const shippedForm of [false, true]) {
+      const read = (x: unknown) => { try { parseAddonManifest(bytesOf(x), { pages: 2, shipped: shippedForm }) } catch (e) { if (e instanceof LayoutRefusal) return e; throw e } return null }
+      expect(read(m(4))?.path).toBe('page.1.at.R')
+      expect(read(m(4))?.why).toBe('a page named twice')
+      // (its own page in the set, or the one past the set's pages that its `at` adds: read)
+      expect(read(m(3))).toBeNull()
+      expect(read(m(5))).toBeNull()
+    }
+  })
+
   it('refuses a stride broken', () => {
     expect(refusalOf(edited(m => { m.page[1].dirty.push(1) }))?.path).toBe('page.1.dirty')
     expect(refusalOf(edited(m => { m.page[2].rules.pop() }))?.path).toBe('page.2.rules')

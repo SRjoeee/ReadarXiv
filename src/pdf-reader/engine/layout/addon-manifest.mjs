@@ -139,8 +139,10 @@ export function checkAddonManifest(m, { pages, views = null, shipped = false }) 
     }
     if (Object.hasOwn(e, 'rules')) checkBoxes(e.rules, p, views, `${path}.rules`)
   }
-  // the add-on's document: arXiv's pages, each set's block of them, and the pages named by `at`
+  // the add-on's document: arXiv's pages, each set's block of them, and the pages named by `at`; each page of a set at
+  // its fixed place is the one a page naming none in that set takes, and no `at` may name it too
   const total = pages * (1 + names.length) + ats.length, seen = new Set()
+  for (const s of names) for (let p = 1; p <= pages; p++) if (!Object.hasOwn(page[p].at ?? {}, s)) seen.add(sets[s] + p)
   for (let i = 0; i < ats.length; i++) {
     if (!isInteger(ats[i], pages + 1, total)) throw refuse(atPaths[i], `not a page of the add-on's ${pages + 1} to ${total}`)
     if (seen.has(ats[i])) throw refuse(atPaths[i], 'a page named twice')
