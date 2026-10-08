@@ -9,6 +9,7 @@ import { createSessionRouter } from '@/entrypoints/background/sessions'
 import { CHAIN_CONFIG_FIELDS, VOLATILE_CONFIG_FIELDS, chainConfigChanged, chainRevision } from '@/config/revision'
 import { createLocalTransport } from '@/providers/transport'
 import { translationIdentity } from '@/cache/key'
+import { RECORD_SHAPES } from '@/shared/diagnostics'
 import type { CachePort } from '@/providers/translate-service'
 import { ProviderError, type TranslateRequest, type TranslationProvider } from '@/providers/types'
 
@@ -37,6 +38,55 @@ const portOf = (cache: TranslationCache): CachePort => ({
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
+})
+
+describe('createLocalTransport: the records (issue #237)', () => {
+  it('a hand-over leaves the batch of the engine that failed, the chain\'s outcome and the batch of the one that answered, in that order, all in the ring\'s grammar', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const notes: string[] = []
+    const failing = mockProvider(async () => { throw new ProviderError('auth', 'Unauthorized') }, { id: 'llm' })
+    const free = mockProvider(async r => ({ segments: r.segments.map(s => ({ ...s, text: `\u8bd1:${s.text}` })), provider: 'free' }), { id: 'free', kind: 'mt' })
+    const t = await withChain([failing, free], { note: line => notes.push(line), batch: { maxRetries: 0 } })
+    expect((await t.translate({ request: req, scope: 'abcdef12-3456' })).ok).toBe(true)
+    expect(notes).toEqual([
+      'batch abcdef12 segments=1 cached=0 calls=1 done=0 outcome=failed:auth',
+      'batch abcdef12 segments=1 cached=0 calls=1 done=1 outcome=ok',
+      'chain abcdef12 tried=2 served-by=free outcome=ok',
+    ])
+    for (const line of notes) expect(RECORD_SHAPES.some(shape => shape.test(line)), line).toBe(true)
+  })
+})
+
+describe('createLocalTransport: the records of a connection test (issue #237; Codex on #329)', () => {
+  const onChain = () => ({ ...mockProvider(async r => ({ segments: r.segments, provider: SVC.id })), id: SVC.id })
+
+  it('a candidate, which is never on the chain, leaves its batch in the ring as a call of the chain does, in the ring\'s grammar', async () => {
+    const notes: string[] = []
+    const t = await withChain([onChain()], { note: line => notes.push(line), batch: { maxRetries: 0 } })
+    const fresh = { ...SVC, id: 'svc-fresh000', apiKey: '' }
+    expect(await t.translate({ request: req, providerId: fresh.id, candidate: fresh })).toMatchObject({ ok: false, error: { kind: 'no-key' } })
+    expect(notes).toHaveLength(1)
+    expect(notes[0]).toMatch(/^batch .*segments=1 .*outcome=failed:no-key$/)
+    for (const line of notes) expect(RECORD_SHAPES.some(shape => shape.test(line)), line).toBe(true)
+  })
+
+  it('a stored service the chain is not built around, tested by its id, does too', async () => {
+    const notes: string[] = []
+    const spare = { ...SVC, id: 'svc-99999999', apiKey: '' }
+    const t = await createLocalTransport(
+      { ...DEFAULT_CONFIG, provider: SVC.id, services: [SVC, spare] },
+      { cancelled: new CancelledScopeRegistry(), note: line => notes.push(line), batch: { maxRetries: 0 }, buildChain: async () => ({ chain: [onChain()], renderPath: 'tags' as const }) },
+    )
+    expect(await t.translate({ request: req, providerId: spare.id })).toMatchObject({ ok: false, error: { kind: 'no-key' } })
+    expect(notes).toHaveLength(1)
+    expect(notes[0]).toMatch(/^batch .*outcome=failed:no-key$/)
+  })
+
+  it('with no note given an off-chain test still answers, as before', async () => {
+    const t = await withChain([onChain()])
+    const fresh = { ...SVC, id: 'svc-fresh000', apiKey: '' }
+    expect(await t.translate({ request: req, providerId: fresh.id, candidate: fresh })).toMatchObject({ ok: false, error: { kind: 'no-key' } })
+  })
 })
 
 describe('createLocalTransport: translation', () => {

@@ -390,6 +390,7 @@ const R = {
   download: { name: '下载', translation: '译文 PDF', original: '原文 PDF' }, // S-R-09
   leave: '在默认查看器中打开', // S-R-10
   pill: { original: '原文页码', translation: '译文页码', previous: '上一页', next: '下一页' }, // S-R-11
+  fold: { expand: '展开', collapse: '收起' }, // S-R-02a: the contents' folds, in their tooltips
   pageName: (side: 'original' | 'translation', n: number): string => `${R.display[side]} · 第 ${n} 页`, // S-R-11a: a page's name, said to screen readers; the number is a parameter, which a language places as it does its own numbers
   status: {
     loading: '正在加载', // S-R-12
@@ -403,6 +404,10 @@ const R = {
     noPdf: '这篇论文暂不支持 PDF 翻译', // S-R-17: no source, or nothing typeset (the maintainer, 2026-09-26)
     useHtml: '改用 HTML 翻译', // S-R-18: the capsule's action, where the paper has an HTML version
     partial: '这篇论文只能显示部分译文，其余为原文', // S-R-19: a preview on screen, the whole not set (the maintainer, 2026-10-04)
+    noPaper: '找不到这篇论文', // S-R-20: an address that names no paper
+    goToArxiv: '前往 arXiv', // S-R-20's action
+    unreadable: '设置读取失败，当前使用默认设置', // S-R-21: the note while the settings cannot be read, as S-O-02 words it
+    unreadableHint: '设置读取失败', // S-R-21: the tooltip's second thought on a control that needs them
   },
 }
 

@@ -4,15 +4,17 @@
 // the reader leaves it
 import { ChevronRight } from 'lucide'
 import { useEffect, useMemo, useState } from 'react'
+import { toBcp47 } from '@/config/languages'
 import { R } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import type { OutlineEntry } from '../outline'
 import { Icon } from '@/ui/controls/Icon'
 import { useTip } from '@/ui/controls/tip'
+import { TippedButton } from './TippedButton'
 import { useReader } from './use-reader'
 
 export function Outline({ controller, open }: { controller: ReaderController; open: boolean }) {
-  const { outline: entries, currentHeading } = useReader(controller, s => ({ outline: s.outline, currentHeading: s.currentHeading }))
+  const { outline: entries, currentHeading, lang } = useReader(controller, s => ({ outline: s.outline, currentHeading: s.currentHeading, lang: s.settings ? toBcp47(s.settings.targetLanguage) : undefined }))
   const parents = useMemo(() => entries.map((e, k) => { for (let p = k - 1; p >= 0; p--) if (entries[p]!.level < e.level) return p; return -1 }), [entries])
   const hasKids = (k: number) => parents.includes(k)
   // the section being read is the session's to say, by the reading line: a heading at a page's foot, gone to, is read
@@ -36,7 +38,7 @@ export function Outline({ controller, open }: { controller: ReaderController; op
       <div className="toc-h">{R.contents}</div>
       <ul className="toc-list">
         {entries.map((e, k) => (
-          <Row key={e.id} entry={e} hidden={!shownRow(k)} current={k === current} folds={hasKids(k)} expanded={expanded.has(k)}
+          <Row key={e.id} entry={e} lang={lang} hidden={!shownRow(k)} current={k === current} folds={hasKids(k)} expanded={expanded.has(k)}
             onFold={() => setExpanded(old => { const next = new Set(old); if (next.has(k)) next.delete(k); else next.add(k); return next })}
             onGo={() => controller.goToHeading(e.id)} />
         ))}
@@ -45,16 +47,17 @@ export function Outline({ controller, open }: { controller: ReaderController; op
   )
 }
 
-function Row({ entry, hidden, current, folds, expanded, onFold, onGo }: { entry: OutlineEntry; hidden: boolean; current: boolean; folds: boolean; expanded: boolean; onFold: () => void; onGo: () => void }) {
+function Row({ entry, lang, hidden, current, folds, expanded, onFold, onGo }: { entry: OutlineEntry; lang: string | undefined; hidden: boolean; current: boolean; folds: boolean; expanded: boolean; onFold: () => void; onGo: () => void }) {
   const { props, tip } = useTip(entry.original, undefined, { side: 'right' })
   return (
     <li data-entry={entry.id} data-level={entry.level} hidden={hidden}>
       <div className="entry" aria-current={current || undefined}>
-        <button type="button" className={`fold${folds ? '' : ' leaf'}`} aria-expanded={folds ? expanded : undefined} aria-label={entry.title} tabIndex={folds ? 0 : -1} aria-hidden={folds ? undefined : 'true'} onClick={onFold}>
+        {/* named by the section, with what a press does in its tooltip (P3-M11); its title in the language it is in */}
+        <TippedButton label={entry.title} tip={expanded ? R.fold.collapse : R.fold.expand} side="right" className={`fold${folds ? '' : ' leaf'}`} aria-expanded={folds ? expanded : undefined} tabIndex={folds ? 0 : -1} aria-hidden={folds ? undefined : 'true'} onClick={onFold}>
           <Icon node={ChevronRight} size={12} />
-        </button>
+        </TippedButton>
         <a href={`#h${entry.id}`} onClick={e => { e.preventDefault(); onGo() }} {...props}>
-          <span className="t">{entry.title}</span>
+          <span className="t" lang={entry.title === entry.original ? 'en' : lang}>{entry.title}</span>
           {entry.page != null && <span className="p">{entry.page}</span>}
         </a>
         {tip}

@@ -15,6 +15,7 @@ import { type CallBase, translateCall } from '@/core/run/call'
 import { createRunLedger } from '@/core/run/ledger'
 import type { PreloadOptions } from '@/core/scheduler/lazy'
 import type { RenderPath } from '@/cache/key'
+import { failureReason, splitLine } from '@/shared/diagnostics'
 import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
 import { planBatches, sectionTitles, type Batch, type Segment } from './batches'
 import { cutsOf } from './cuts'
@@ -62,6 +63,11 @@ export interface RunOptions {
   context?: TranslateContext
   /** The cancellation scope = the session id: carried by every call, and on stop the caller withdraws the queued and in-flight requests (§10) */
   scope?: string
+  /**
+   * Where a record of the run goes: the session's trace, which reaches the diagnostics log (issue #237). The halving of
+   * a batch is the one thing recorded here (`shared/diagnostics.ts` `splitLine`)
+   */
+  trace?: (line: string) => void
   /** The viewport trigger distance and threshold (§10) */
   preload: PreloadOptions
   /**
@@ -108,7 +114,12 @@ const MISMATCH: SegmentResult = { error: 'invalid-response: the translation plac
  * serialises the block afresh, which is the cure
  */
 const stale = (e: PlaceholderIntegrityError): SegmentResult => ({ error: `stale: ${e.detail}` })
-const errorOf = (res: Extract<TranslateMessageResponse, { ok: false }>): SegmentResult => ({ error: `${res.error.kind}: ${res.error.message}` })
+/**
+ * A failure the service reported, as the page holds it (`data-axt-reason`, which the page's own scripts can read): the
+ * kind, the HTTP status and the length of the message — the log's rule (`failureReason`, DESIGN §7.6). The reasons
+ * above are this file's own words and stay as written
+ */
+const errorOf = (res: Extract<TranslateMessageResponse, { ok: false }>): SegmentResult => ({ error: failureReason(res.error.kind, res.error.message, res.error.status) })
 
 export function startTranslation(options: RunOptions): TranslationRun {
   const { doc, blocks, transport } = options
@@ -274,6 +285,7 @@ export function startTranslation(options: RunOptions): TranslationRun {
       // content layer no longer guesses for itself
       if (ledger.fatalReason() === undefined && left.length > 1 && res.error.isolatable) {
         const mid = Math.ceil(left.length / 2)
+        options.trace?.(splitLine(options.scope, left.length, [mid, left.length - mid]))
         await translateSegments(left.slice(0, mid), sectionTitle, out)
         await translateSegments(left.slice(mid), sectionTitle, out)
       } else {

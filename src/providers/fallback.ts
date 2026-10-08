@@ -7,7 +7,7 @@
 // auth trigger scheduler.disconnect()), the reader waiting over half a translation. Hard rule 3: a failure must be recoverable and trigger the fallback chain.
 import type { TranslateCall, TranslateMessageResponse, TranslateService } from './translate-service'
 import { isPermanentErrorKind, type ProviderErrorKind, type TranslatedSegment, type TranslationProvider } from './types'
-import { failureLine } from '@/shared/diagnostics'
+import { chainLine, failureLine } from '@/shared/diagnostics'
 import { getRequestErrorMeta } from './request/retry-policy'
 
 export interface FallbackStep {
@@ -72,7 +72,7 @@ interface Demotion {
 
 export function createFallbackService(
   steps: readonly FallbackStep[],
-  opts: { cooldownMs?: number; now?: () => number; warn?: (line: string) => void; demoted?: readonly DemotedInfo[]; onFailure?: (info: DemotedInfo) => void } = {},
+  opts: { cooldownMs?: number; now?: () => number; warn?: (line: string) => void; note?: (line: string) => void; demoted?: readonly DemotedInfo[]; onFailure?: (info: DemotedInfo) => void } = {},
 ): FallbackService {
   if (steps.length === 0) throw new Error('a fallback chain needs at least one engine')
   const cooldownMs = opts.cooldownMs ?? DEFAULT_COOLDOWN_MS
@@ -140,6 +140,8 @@ export function createFallbackService(
       if (response.ok) {
         // One success clears that engine's hand-over record: a transient failure must not keep it in the cool-down
         demotions.delete(step.provider.id)
+        // How a call that went past its first engine ended (issue #237): a call the first one answered says nothing
+        if (index > 0) opts.note?.(chainLine({ ...(call.scope !== undefined ? { scope: call.scope } : {}), tried: index + 1, servedBy: step.provider.id }))
         return response
       }
       // Every failed step is reported, whether or not it goes on to demote: with fallback off the chain is one
@@ -150,7 +152,10 @@ export function createFallbackService(
       for (const segment of response.partial ?? []) gathered.set(segment.id, segment)
       last = response
       const isLast = index === chain.length - 1
-      if (isLast || !FALLBACK_KINDS.has(response.error.kind)) return withGathered(response)
+      if (isLast || !FALLBACK_KINDS.has(response.error.kind)) {
+        if (index > 0) opts.note?.(chainLine({ ...(call.scope !== undefined ? { scope: call.scope } : {}), tried: index + 1, failed: kind }))
+        return withGathered(response)
+      }
       demote(step, response.error)
     }
     // chain is non-empty, so the loop runs at least once

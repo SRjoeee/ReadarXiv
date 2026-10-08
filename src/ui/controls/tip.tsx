@@ -1,7 +1,7 @@
 // Tooltips (the reader's design, §6.1, §13; shared by every surface since the redesign's §2.3): one line always; after
 // 500 ms of hover, at once on keyboard focus, never on a press; a shortcut or a second thought in a lighter span. A hint
 // popover (it closes no menu) anchored to its control by CSS anchor positioning, below it and kept inside the window by
-// position-try (controls.css .tip), so nothing is measured.
+// position-try (controls.css .tip), so nothing is measured; above or aside where below has no room.
 // Its words are the control's name already, so the tip is hidden from assistive technology
 import { type CSSProperties, type FocusEvent, type ReactNode, useId, useRef } from 'react'
 
@@ -10,7 +10,7 @@ export interface Tip {
   tip: ReactNode
 }
 
-export function useTip(label: string, hint?: string, { side = 'bottom' }: { side?: 'bottom' | 'right' } = {}): Tip {
+export function useTip(label: string, hint?: string, { side = 'bottom' }: { side?: 'bottom' | 'right' | 'top' } = {}): Tip {
   const name = `--tip-${useId().replace(/[^\w-]/g, '')}`
   const ref = useRef<HTMLDivElement>(null)
   const timer = useRef(0)

@@ -20,7 +20,7 @@ export function App({ controller, embedded }: { controller: ReaderController; em
   const left = useRef<HTMLDivElement>(null)
   const right = useRef<HTMLDivElement>(null)
   // what the page itself shows; each part below takes its own (use-reader.ts)
-  const state = useReader(controller, s => ({ appearance: s.settings?.theme, dimPages: s.settings?.pdfReader.dimPages, swapped: s.settings?.pdfReader.swapped ?? false, title: s.paper.title, card: cardOf(s) !== null }))
+  const state = useReader(controller, s => ({ appearance: s.settings?.theme, dimPages: s.settings?.pdfReader.dimPages, swapped: s.settings?.pdfReader.swapped ?? false, title: s.paper.title, card: cardOf(s) !== null && !s.noPaper, noPaper: s.noPaper }))
   const doc = useRef<HTMLElement>(null)
   usePinch(controller, doc)
   // a document area under 840 px shows the translation alone in side by side (the design, §5); the session applies it
@@ -70,8 +70,10 @@ export function App({ controller, embedded }: { controller: ReaderController; em
       {/* the page's main landmark, beside the toolbar's banner and the contents' complementary region (Part 6's
           accessibility audit); its layout is the class's */}
       <main className="doc" ref={doc}>
-        <Pane controller={controller} side="left" scroller={left} />
-        <Pane controller={controller} side="right" scroller={right} card={state.card} />
+        <Pane controller={controller} side="left" scroller={left} empty={state.noPaper} />
+        <Pane controller={controller} side="right" scroller={right} card={state.card} empty={state.noPaper} />
+        {/* an address with no paper: its card is the page's, not a pane's (the display may hide the pane) */}
+        {state.noPaper && <FailureCard controller={controller} of="page" />}
       </main>
       <StatusCapsule controller={controller} onChooseLanguage={chooseLanguage} />
     </>
@@ -90,9 +92,12 @@ function chooseLanguage() {
 
 /**
  * One pane: the scroller the engine draws into (and owns: it replaces the right one as translations come), and what floats
- * over it, its page pill and its scroll indicator, shown while it scrolls without React rendering on a scroll
+ * over it, its page pill and its scroll indicator, shown while it scrolls without React rendering on a scroll. `empty`: an
+ * address with no paper has nothing in either pane, and the pill's arrows, though drawn transparent, are in the Tab order
+ * and a "1 / 0" pager that does nothing stood before the card's link (Codex on #329): the pane is inert, as a closed
+ * contents sidebar is
  */
-function Pane({ controller, side, scroller, card = false }: { controller: ReaderController; side: Side; scroller: RefObject<HTMLDivElement | null>; card?: boolean }) {
+function Pane({ controller, side, scroller, card = false, empty = false }: { controller: ReaderController; side: Side; scroller: RefObject<HTMLDivElement | null>; card?: boolean; empty?: boolean }) {
   const section = useRef<HTMLElement>(null)
   const pill = useRef<HTMLDivElement>(null)
   const indicator = useRef<HTMLDivElement>(null)
@@ -100,7 +105,7 @@ function Pane({ controller, side, scroller, card = false }: { controller: Reader
   useScrollShow(section, targets)
   return (
     // data-card: the failure's card covers the pane's scroller (reader.css; no relational selector there, §12)
-    <section ref={section} className="pane" data-side={side} data-card={card || undefined}>
+    <section ref={section} className="pane" data-side={side} data-card={card || undefined} inert={empty}>
       <div className="viewerContainer" id={side} ref={scroller}>
         <div className="pdfViewer" />
       </div>

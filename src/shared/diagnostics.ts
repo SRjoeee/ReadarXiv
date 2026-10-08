@@ -34,6 +34,59 @@ export function failureLine(kind: string, message: string, status?: number): str
   return `${kind}${status !== undefined ? ` (HTTP ${status})` : ''} — message withheld (${message.length} chars)`
 }
 
+/**
+ * The same rule where the page holds the reason (the failure widget's `data-axt-reason`, readable by the page's own
+ * scripts and by other extensions' content scripts), in the `kind: detail` shape `parseFatal` reads. **One policy for a
+ * failure's words, whichever way they leave the extension: an error's message, which an endpoint or a model had a hand
+ * in, stays in the console of whoever is looking; the log and the page hold the kind, the HTTP status when there was
+ * one, and the message's length** (issue #237; DESIGN §4.6, §7.6). A reason the extension itself wrote — a placeholder
+ * that did not match, a block the page changed under — is its own words and is kept as it is
+ */
+export function failureReason(kind: string, message: string, status?: number): string {
+  return `${kind}: ${status !== undefined ? `HTTP ${status}, ` : ''}message withheld (${message.length} chars)`
+}
+
+// ── The records (issue #237): what a reader's export shows of the requests and the router, and of nothing else ──
+// Each is one line of numbers, fixed words and a kind: no page text, no paper, no address, no key. `RECORD_SHAPES` is
+// the whole grammar, and a test holds every producer to it. The unit of a batch is one call to the translate service
+// (what the page asked in one go, DESIGN §8.2), and `calls` is how many requests to an engine carried its segments —
+// the queue's retries, the per-item fallback, the batch retries all counted — so the export shows the amplification
+// directly: 8 segments that cost 15 calls were once found by measurement after the fact
+
+/** A session's id as a record writes it: eight characters tell two sessions of one export apart and lead nowhere else */
+export const scopeTag = (scope: string | undefined): string => (scope === undefined ? '-' : scope.slice(0, 8))
+
+/** `batch <session> segments=<n> cached=<n> calls=<n> done=<n> outcome=ok|failed:<kind>` — the service's call, once it has settled */
+export function batchLine(r: { scope?: string; segments: number; cached: number; calls: number; done: number; failed?: string }): string {
+  return `batch ${scopeTag(r.scope)} segments=${r.segments} cached=${r.cached} calls=${r.calls} done=${r.done} outcome=${r.failed === undefined ? 'ok' : `failed:${r.failed}`}`
+}
+
+/** `split <session> segments=<n> into=<a>+<b>` — the page halved a batch that failed because of one of its segments */
+export function splitLine(scope: string | undefined, segments: number, [a, b]: readonly [number, number]): string {
+  return `split ${scopeTag(scope)} segments=${segments} into=${a}+${b}`
+}
+
+/** `chain <session> tried=<n> served-by=<engine>|- outcome=ok|failed:<kind>` — a call that had to go past its first engine, as it ended */
+export function chainLine(r: { scope?: string; tried: number; servedBy?: string; failed?: string }): string {
+  return `chain ${scopeTag(r.scope)} tried=${r.tried} served-by=${r.servedBy ?? '-'} outcome=${r.failed === undefined ? 'ok' : `failed:${r.failed}`}`
+}
+
+/** `session <session> tab=<id>|- <event>` — a decision of the session router (background/sessions.ts) */
+export function sessionLine(scope: string | undefined, tabId: number | undefined, event: string): string {
+  return `session ${scopeTag(scope)} tab=${tabId ?? '-'} ${event}`
+}
+
+/** Every shape a record may take; the kinds are the providers' fixed words, the events the router's, and nothing in them is free text */
+const KIND = '[a-z-]+'
+const SESSION = '(?:\\S{1,8}|-)'
+export const RECORD_SHAPES: readonly RegExp[] = [
+  new RegExp(`^batch ${SESSION} segments=\\d+ cached=\\d+ calls=\\d+ done=\\d+ outcome=(?:ok|failed:${KIND})$`),
+  new RegExp(`^split ${SESSION} segments=\\d+ into=\\d+\\+\\d+$`),
+  new RegExp(`^chain ${SESSION} tried=\\d+ served-by=[\\w.:-]+ outcome=(?:ok|failed:${KIND})$`),
+  new RegExp(`^session ${SESSION} tab=(?:\\d+|-) (?:grace armed|grace re-armed round=\\d+|probe (?:same|other|unknown)|kept|dropped \\((?:ended|tab closed|left|unconfirmed|superseded)\\) cancelled=\\d+|rebound \\(pack\\))$`),
+  /^sessions rebound all \(service deleted\) cancelled=\d+ moved=\d+$/,
+]
+
 /** What comes back from storage is not trusted either: the shape checked, every line redacted and capped again (Devin on #214) */
 export function normalizeEntries(stored: unknown): DiagnosticEntry[] {
   if (!Array.isArray(stored)) return []

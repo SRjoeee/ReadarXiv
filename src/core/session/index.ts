@@ -355,6 +355,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
       capabilities: { maxBatchChars: status.maxBatchChars, maxBatchItems: status.maxBatchItems, renderPath: status.renderPath },
       transport: request => backend.translate(request),
       scope: session,
+      trace,
       preload: preloadOf(config.preload),
       // A figure's text — the labels inside a picture, blocks like any other (§15.6) — is asked for where the reader
       // has figures translated, the images' gate: refused, a label waits unasked and the gate opening offers it again

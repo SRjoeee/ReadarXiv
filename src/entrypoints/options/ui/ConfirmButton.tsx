@@ -1,7 +1,7 @@
 // Clearing what cannot be undone is confirmed in place (the redesign's design, §6.6): a neutral button (O.data.clear)
 // turns into its confirmation (O.data.clearConfirm) with a trash icon, its words in danger on the destructive button's ground (4.83:1 light, 5.01:1 dark);
-// untouched for 3 s it turns back — not while the pointer rests on it or the keyboard is on it. Done, the owner's words
-// stand in its place with the success icon arriving
+// untouched for 3 s it turns back — not while the pointer rests on it or the keyboard is on it — and Escape turns it back
+// at once, wherever the focus is (R82). Done, the owner's words stand in its place with the success icon arriving
 import { CircleCheck, Trash2 } from 'lucide'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/ui/controls/Button'
@@ -22,6 +22,18 @@ export function ConfirmButton({ label, confirmLabel, doneLabel, done = false, on
     }, DISARM_MS)
   }
   useEffect(() => () => clearTimeout(timer.current), [])
+  // Escape is the way out of a question that has been asked: heard on the document while one is, so that it works with
+  // the pointer resting on the button as with the keyboard on it
+  useEffect(() => {
+    if (!armed) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      clearTimeout(timer.current)
+      setArmed(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [armed])
   if (done && doneLabel) {
     return <span className="o-status" data-tone="ok"><Icon node={CircleCheck} size={14} className="o-arrive" />{doneLabel}</span>
   }

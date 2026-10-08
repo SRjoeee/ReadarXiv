@@ -344,6 +344,7 @@ const R: Locale['R'] = {
   download: { name: 'Download', translation: 'Translation PDF', original: 'Original PDF' },
   leave: 'Open in the default viewer',
   pill: { original: "Original's page", translation: "Translation's page", previous: 'Previous page', next: 'Next page' },
+  fold: { expand: 'Expand', collapse: 'Collapse' },
   pageName: (side, n) => `${R.display[side]} · Page ${n}`,
   status: {
     loading: 'Loading',
@@ -357,6 +358,10 @@ const R: Locale['R'] = {
     noPdf: "This paper can't be read as a bilingual PDF yet",
     useHtml: 'Translate HTML instead',
     partial: "Only part of this paper's translation can be shown; the rest is in the original",
+    noPaper: "The paper can't be found",
+    goToArxiv: 'Go to arXiv',
+    unreadable: 'The settings could not be read, so the defaults are in use',
+    unreadableHint: 'The settings could not be read',
   },
 }
 

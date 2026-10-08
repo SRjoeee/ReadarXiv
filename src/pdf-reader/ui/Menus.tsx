@@ -3,6 +3,7 @@
 import { ChevronDown, Download } from 'lucide'
 import { browser } from 'wxt/browser'
 import { type LangCode, toBcp47 } from '@/config/languages'
+import { DEFAULT_CONFIG } from '@/config/schema'
 import { isBuiltInService } from '@/config/services'
 import { MANAGE_SERVICES, serviceItems } from '@/ui/service-items'
 import { R, S, serviceName } from '@/ui/strings'
@@ -11,6 +12,7 @@ import { Icon } from '@/ui/controls/Icon'
 import { languageItems, ownName } from './languages'
 import { Popover, usePopover } from '@/ui/controls/Popover'
 import { MenuList } from '@/ui/controls/MenuList'
+import { useSettingsLock } from './settings-lock'
 import { ToolbarButton } from './ToolbarButton'
 import { useReader } from './use-reader'
 import { useRejected } from '@/ui/use-rejected'
@@ -45,17 +47,21 @@ export function ZoomMenu({ controller }: { controller: ReaderController }) {
  *  interface's language: Japanese in Japanese, never in English (the maintainer, 2026-10-04). The name and the rows carry
  *  the language they are written in (`lang`) */
 export function LanguageMenu({ controller, name }: { controller: ReaderController; name?: string }) {
-  const current = useReader(controller, s => s.settings?.targetLanguage ?? '')
+  // before the settings land the defaults stand in the button's place, greyed, so that the bar does not reflow (S-R-21)
+  const current = useReader(controller, s => (s.settings ?? DEFAULT_CONFIG).targetLanguage)
+  const lock = useSettingsLock(controller)
   const pop = usePopover('listbox', name)
   return (
     <>
-      <ToolbarButton label={S.rows.language} value={current ? ownName(current) : ''} valueLang={current ? toBcp47(current) : undefined} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
+      <ToolbarButton label={S.rows.language} value={current ? ownName(current) : ''} valueLang={current ? toBcp47(current) : undefined} anchor={pop.anchor} disabled={lock.locked} why={lock.why} {...(lock.locked ? {} : pop.trigger)} className="menu-btn">
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
-      <Popover {...pop.popover} role="listbox" label={S.rows.language}>
-        <MenuList key={pop.generation} kind="listbox" label={S.rows.language} search={S.menu.searchLanguages} noMatch={S.menu.noMatch} items={languageItems(current).map(i => ({ ...i, checked: i.selected, lang: toBcp47(i.id) }))} onClose={() => shut(pop.popover.id)}
-          onPick={code => { controller.patchSettings(c => ({ ...c, targetLanguage: code as LangCode })); shut(pop.popover.id) }} />
-      </Popover>
+      {!lock.locked && (
+        <Popover {...pop.popover} role="listbox" label={S.rows.language}>
+          <MenuList key={pop.generation} kind="listbox" label={S.rows.language} search={S.menu.searchLanguages} noMatch={S.menu.noMatch} items={languageItems(current).map(i => ({ ...i, checked: i.selected, lang: toBcp47(i.id) }))} onClose={() => shut(pop.popover.id)}
+            onPick={code => { controller.patchSettings(c => ({ ...c, targetLanguage: code as LangCode })); shut(pop.popover.id) }} />
+        </Popover>
+      )}
     </>
   )
 }
@@ -64,27 +70,30 @@ export function ServiceMenu({ controller }: { controller: ReaderController }) {
   const state = useReader(controller, s => ({ settings: s.settings, pack: s.pack }))
   // a refused key says so in the list, as in the popup (the redesign's design, §5.2; the controller's ruling 22)
   const rejected = useRejected()
+  const lock = useSettingsLock(controller)
   const pop = usePopover('listbox')
-  const config = state.settings
-  if (!config) return null
-  const items = serviceItems(config, state.pack, rejected).map(i => ({ id: i.id, name: i.name, hint: i.hint, checked: i.selected, disabled: i.disabled && !i.action }))
+  // before the settings land the defaults stand in the button's place, greyed, so that the bar does not reflow (S-R-21)
+  const config = state.settings ?? DEFAULT_CONFIG
+  const items = lock.locked ? [] : serviceItems(config, state.pack, rejected).map(i => ({ id: i.id, name: i.name, hint: i.hint, checked: i.selected, disabled: i.disabled && !i.action }))
   return (
     <>
-      <ToolbarButton label={S.rows.service} value={serviceName(config.provider, config.services)} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
+      <ToolbarButton label={S.rows.service} value={serviceName(config.provider, config.services)} anchor={pop.anchor} disabled={lock.locked} why={lock.why} {...(lock.locked ? {} : pop.trigger)} className="menu-btn">
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
-      <Popover {...pop.popover} role="listbox" label={S.rows.service}>
-        <MenuList key={pop.generation} kind="listbox" label={S.rows.service} items={items} onClose={() => shut(pop.popover.id)}
-          onPick={id => {
-            shut(pop.popover.id)
-            // managing the services, or a pack to download: the settings page's (the reader downloads no pack itself)
-            const item = serviceItems(config, state.pack, rejected).find(i => i.id === id)
-            if (id === MANAGE_SERVICES || item?.action) return openOptions('translate/services')
-            // a service another tab deleted meanwhile is not written: the chain would take an unknown id for Microsoft
-            // while the bar showed the raw id (the popup's rule; Codex on #301)
-            controller.patchSettings(c => (isBuiltInService(id) || c.services.some(s => s.id === id) ? { ...c, provider: id } : c))
-          }} />
-      </Popover>
+      {!lock.locked && (
+        <Popover {...pop.popover} role="listbox" label={S.rows.service}>
+          <MenuList key={pop.generation} kind="listbox" label={S.rows.service} items={items} onClose={() => shut(pop.popover.id)}
+            onPick={id => {
+              shut(pop.popover.id)
+              // managing the services, or a pack to download: the settings page's (the reader downloads no pack itself)
+              const item = serviceItems(config, state.pack, rejected).find(i => i.id === id)
+              if (id === MANAGE_SERVICES || item?.action) return openOptions('translate/services')
+              // a service another tab deleted meanwhile is not written: the chain would take an unknown id for Microsoft
+              // while the bar showed the raw id (the popup's rule; Codex on #301)
+              controller.patchSettings(c => (isBuiltInService(id) || c.services.some(s => s.id === id) ? { ...c, provider: id } : c))
+            }} />
+        </Popover>
+      )}
     </>
   )
 }

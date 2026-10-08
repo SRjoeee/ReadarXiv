@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSessionRouter, type SessionRouterDeps } from '@/entrypoints/background/sessions'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
+import { RECORD_SHAPES } from '@/shared/diagnostics'
 import type { TranslationTransport } from '@/providers/transport'
 
 /** A transport that only keeps books: which chain it is, which scopes it was asked to drain, whether it was retired */
@@ -719,5 +720,86 @@ describe('createSessionRouter', () => {
     // `b` was never bound: draining it builds a chain first — `a` is drained before that await resolves
     expect(await router.drop(['a', 'b'])).toBe(2)
     expect(seen).toEqual({ a: [true, true], b: [true, true] })
+  })
+})
+
+describe('the router writes down what it decides (issue #237)', () => {
+  const A = 'aaaaaaaa-1111-4222-8333-444444444444'
+  const B = 'bbbbbbbb-1111-4222-8333-444444444444'
+  const noted = (rest: Partial<Omit<SessionRouterDeps, 'current' | 'note'>> = {}) => {
+    const notes: string[] = []
+    const transport = fakeTransport('chain')
+    const router = routerOver(async () => transport, { note: line => notes.push(line), ...rest })
+    return { notes, router, transport }
+  }
+  const grammar = (notes: string[]) => { for (const line of notes) expect(RECORD_SHAPES.some(shape => shape.test(line)), line).toBe(true) }
+
+  it('a tab that may have left: the grace armed, the page asked, and the page there — kept', async () => {
+    vi.useFakeTimers()
+    const { notes, router } = noted({ stillThere: async () => 'same' })
+    await router.forCall(A, 7)
+    router.mayHaveLeft(7)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(notes).toEqual(['session aaaaaaaa tab=7 grace armed', 'session aaaaaaaa tab=7 probe same', 'session aaaaaaaa tab=7 kept'])
+    grammar(notes)
+  })
+
+  it('the page answering with another session, or not answering: dropped as left, or drained as unconfirmed — with how much was withdrawn', async () => {
+    vi.useFakeTimers()
+    for (const [answer, why] of [['other', 'left'], ['unknown', 'unconfirmed']] as const) {
+      const { notes, router } = noted({ stillThere: async () => answer })
+      await router.forCall(A, 7)
+      router.mayHaveLeft(7)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(notes).toEqual(['session aaaaaaaa tab=7 grace armed', `session aaaaaaaa tab=7 probe ${answer}`, `session aaaaaaaa tab=7 dropped (${why}) cancelled=1`])
+      grammar(notes)
+    }
+  })
+
+  it('a tab still loading: the grace armed again, round by round', async () => {
+    vi.useFakeTimers()
+    let loading = 2
+    const { notes, router } = noted({ stillThere: async () => 'same', stillLoading: async () => loading-- > 0 })
+    await router.forCall(A, 7)
+    router.mayHaveLeft(7)
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(notes.filter(line => line.includes('re-armed'))).toEqual(['session aaaaaaaa tab=7 grace re-armed round=1', 'session aaaaaaaa tab=7 grace re-armed round=2'])
+    expect(notes.at(-1)).toBe('session aaaaaaaa tab=7 kept')
+    grammar(notes)
+  })
+
+  it('a tab without a session has nothing to decide, and says nothing', async () => {
+    vi.useFakeTimers()
+    const { notes, router } = noted()
+    router.mayHaveLeft(9)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(notes).toEqual([])
+  })
+
+  it('names why a session was dropped: the tab closed, the reader stopped it, a newer session took the tab', async () => {
+    const { notes, router } = noted()
+    await router.forCall(A, 7)
+    await router.dropTab(7)
+    await router.forCall(B, 8)
+    await router.drop([B])
+    // a dropped scope stays dead, so the newer session on a tab is a scope of its own
+    await router.forCall('cccccccc-1111', 9)
+    await router.forCall('dddddddd-1111', 9)
+    expect(notes).toEqual([
+      'session aaaaaaaa tab=7 dropped (tab closed) cancelled=1',
+      'session bbbbbbbb tab=8 dropped (ended) cancelled=1',
+      'session cccccccc tab=9 dropped (superseded) cancelled=1',
+    ])
+    grammar(notes)
+  })
+
+  it('a session moved onto the chain in force by a language pack, and every session by a deleted service, with the count', async () => {
+    const { notes, router } = noted()
+    await router.forCall(A, 7)
+    await router.rebind(A)
+    await router.rebind('unknown-scope')
+    await router.dropAndRebindAll()
+    expect(notes).toEqual(['session aaaaaaaa tab=7 rebound (pack)', 'sessions rebound all (service deleted) cancelled=0 moved=0'])
+    grammar(notes)
   })
 })

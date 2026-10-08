@@ -3,7 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { FailureCard } from '@/pdf-reader/ui/FailureCard'
 import { StatusCapsule } from '@/pdf-reader/ui/StatusCapsule'
-import { R, S, setLocale } from '@/ui/strings'
+import { O, R, S, setLocale } from '@/ui/strings'
 import { mountElement } from '../../ui/render-hook'
 import { fakeController } from './fake-controller'
 import { stubPopovers } from './popover-stub'
@@ -45,6 +45,14 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
     expect(container.querySelector('[role="status"]')!.textContent).not.toContain('翻译失败')
   })
 
+  it('a notice\'s close is named in a tooltip, above it: the capsule stands near the foot of the page (P3-M11)', async () => {
+    const fake = fakeController({ phase: 'ready', failedUnits: 2, failure: 'network' })
+    const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
+    const close = container.querySelector<HTMLElement>(`.capsule button[aria-label="${R.status.close}"]`)!
+    const tip = close.nextElementSibling!
+    expect([tip.matches('.tip[popover]'), tip.textContent, tip.getAttribute('data-side')]).toEqual([true, R.status.close, 'top'])
+  })
+
   it('a notice of passages no retry can mend has no retry, and closes (I-5 of 2026-10-04)', async () => {
     const fake = fakeController({ phase: 'ready', failedUnits: 1, failure: null })
     const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
@@ -64,6 +72,19 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
     expect(capsule.querySelector('a[data-action]')?.getAttribute('href')).toBe('https://arxiv.org/html/x#readarxiv')
     expect(capsule.querySelector('a[data-action]')?.textContent).toBe(R.status.useHtml)
     await act(async () => capsule.querySelector<HTMLElement>(`button[aria-label="${R.status.close}"]`)!.click())
+    await act(async () => { await new Promise(r => setTimeout(r, 220)) })
+    expect(container.querySelector('.capsule')).toBeNull()
+  })
+
+  it('closing the partial notice tells the count of failed passages it stood before, which has its own close (#314)', async () => {
+    const fake = fakeController({ phase: 'ready', partial: true, failedUnits: 2, failure: 'network' })
+    const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
+    const close = () => container.querySelector<HTMLElement>(`.capsule:not([data-out]) button[aria-label="${R.status.close}"]`)!
+    expect(container.querySelector('.capsule:not([data-out])')!.getAttribute('data-kind')).toBe('partial')
+    await act(async () => close().click())
+    expect(container.querySelector('.capsule:not([data-out])')!.getAttribute('data-kind')).toBe('notice')
+    expect(container.querySelector('.capsule:not([data-out]) .sr-only')!.textContent).toBe(S.failed.text(2))
+    await act(async () => close().click())
     await act(async () => { await new Promise(r => setTimeout(r, 220)) })
     expect(container.querySelector('.capsule')).toBeNull()
   })
@@ -141,6 +162,72 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
     })
   })
 
+  it('settings that could not be read: the note stays while it is so, with the way to the settings page; no close (S-R-21)', async () => {
+    const fake = fakeController({ phase: 'loading', settingsUnreadable: true })
+    const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
+    const capsule = () => container.querySelector<HTMLElement>('.capsule[data-kind="unreadable"]:not([data-out])')
+    const link = () => capsule()?.querySelector<HTMLAnchorElement>('a[data-action]')
+    expect([capsule()?.querySelector('.sr-only')?.textContent, link()?.textContent, link()?.getAttribute('href')?.endsWith('/options.html#reading/pdf'), link()?.target, capsule()?.querySelector('.close')]).toEqual([R.status.unreadable, S.settings, true, '_blank', null])
+    // not a stop of its own: reached by its link, as the capsule that cannot be had is
+    expect(capsule()!.hasAttribute('tabindex')).toBe(false)
+    await act(async () => fake.set({ settingsUnreadable: false }))
+    await act(async () => { await new Promise(r => setTimeout(r, 220)) })
+    expect(container.querySelector('.capsule')).toBeNull()
+  })
+
+  describe('a write storage refused: the settings page\'s sentence, an error that stays until it is closed or a later write lands (S-R-22)', () => {
+    async function refused() {
+      const fake = fakeController({ phase: 'ready' })
+      const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
+      const refuse = () => act(async () => fake.set({ refusals: fake.controller.getState().refusals + 1 }))
+      await refuse()
+      const capsule = () => container.querySelector<HTMLElement>('.capsule[data-kind="saveFailed"]:not([data-out])')
+      const gone = () => act(async () => { await new Promise(r => setTimeout(r, 220)) })
+      return { capsule, fake, refuse, gone, container }
+    }
+
+    it('says the one sentence, in a line of its own for a screen reader, with a close; it does not leave by itself', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'], shouldAdvanceTime: true })
+      try {
+        const { capsule } = await refused()
+        expect([capsule()?.querySelector('.words')?.textContent, capsule()?.querySelector('.sr-only')?.textContent, capsule()?.querySelector(`button[aria-label="${R.status.close}"]`) !== null, capsule()?.hasAttribute('tabindex')]).toEqual([O.saveFailed, O.saveFailed, true, false])
+        await act(async () => { vi.advanceTimersByTime(60000) })
+        expect(capsule()).not.toBeNull()
+      } finally { vi.useRealTimers() }
+    })
+
+    it('closed, it is not told again for the refusal it told, and is told for the next', async () => {
+      const { capsule, refuse, gone, container } = await refused()
+      await act(async () => capsule()!.querySelector<HTMLElement>(`button[aria-label="${R.status.close}"]`)!.click())
+      await gone()
+      expect(container.querySelector('.capsule')).toBeNull()
+      await refuse()
+      expect(capsule()).not.toBeNull()
+    })
+
+    it('a later write that lands mends it: the capsule goes with no word of its own, and a refusal after is told again', async () => {
+      const { capsule, fake, refuse, gone, container } = await refused()
+      // the settings landing is the proof that storage takes a write (controller.ts reduce)
+      await act(async () => fake.set({ mended: fake.controller.getState().refusals }))
+      await gone()
+      expect(container.querySelector('.capsule')).toBeNull()
+      await refuse()
+      expect(capsule()).not.toBeNull()
+    })
+  })
+
+  it('an address with no paper and unreadable settings: the note and its link stand beside the card, and the controls it explains keep their reason (Devin on #329)', async () => {
+    const fake = fakeController({ phase: 'ready', noPaper: true, available: false, settingsUnreadable: true })
+    const { container } = await mountElement(createElement('div', null, createElement(FailureCard, { controller: fake.controller, of: 'page' }), createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} })))
+    expect(container.querySelector('.card p')?.textContent).toBe(R.status.noPaper)
+    const note = container.querySelector('.capsule[data-kind="unreadable"]:not([data-out])')
+    expect([note?.querySelector('.sr-only')?.textContent, note?.querySelector('a[data-action]')?.textContent, note?.querySelector('.close')]).toEqual([R.status.unreadable, S.settings, null])
+    // the settings read at last: the note goes, the card stays
+    await act(async () => fake.set({ settingsUnreadable: false }))
+    await act(async () => { await new Promise(r => setTimeout(r, 220)) })
+    expect([container.querySelector('.capsule'), container.querySelector('.card')?.nodeName]).toEqual([null, 'DIV'])
+  })
+
   it('a paper that cannot be had: the sentence, and its HTML version a link opened where the settings say; no close (the maintainer, 2026-09-26)', async () => {
     const href = 'https://arxiv.org/html/2608.02163#readarxiv'
     const fake = fakeController({ phase: 'ready', available: false, htmlVersion: href })
@@ -165,6 +252,20 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
     const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
     const told = container.querySelector('.capsule[data-kind="unsupported"] .sr-only')!
     expect([told.textContent, told.querySelector('[lang="ja"]')?.textContent]).toEqual([R.status.unsupported('日本語'), '日本語'])
+  })
+
+  it('an address with no paper: the card says so and links to arXiv, in this tab or a new one as the settings say; the status region says it too (D1)', async () => {
+    const fake = fakeController({ phase: 'ready', noPaper: true, available: false })
+    const { container } = await mountElement(createElement(FailureCard, { controller: fake.controller, of: 'page' }))
+    const link = () => container.querySelector<HTMLAnchorElement>('.card a')
+    expect([container.querySelector('.card p')?.textContent, link()?.textContent, link()?.getAttribute('href'), link()?.target, link()?.rel, container.querySelector('.card button')]).toEqual([R.status.noPaper, R.status.goToArxiv, 'https://arxiv.org/', '_blank', 'noopener', null])
+    await act(async () => fake.set({ settings: { ...DEFAULT_CONFIG, reading: { ...DEFAULT_CONFIG.reading, openIn: 'same-tab' } } }))
+    expect(link()?.target).toBe('_top')
+    // a card of the pane is not this one, and this one is not the pane's
+    const pane = await mountElement(createElement(FailureCard, { controller: fake.controller, of: 'pane' }))
+    expect(pane.container.querySelector('.card')).toBeNull()
+    const region = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
+    expect(region.container.querySelector('[role="status"]')!.textContent).toContain(R.status.noPaper)
   })
 
   it('the card says the reason and offers what can be done, never taking the focus', async () => {

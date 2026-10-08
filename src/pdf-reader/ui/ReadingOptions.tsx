@@ -4,6 +4,7 @@
 // download, the settings and the way back
 import { type IconNode, LogOut, Monitor, Moon, Settings, SlidersHorizontal, Sun } from 'lucide'
 import { useRef } from 'react'
+import { DEFAULT_CONFIG } from '@/config/schema'
 import { R, S, profileName } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import { Icon } from '@/ui/controls/Icon'
@@ -12,6 +13,7 @@ import { DownloadMenu, LanguageMenu, ServiceMenu } from './Menus'
 import { Popover, usePopover } from '@/ui/controls/Popover'
 import { radioKeys } from '@/ui/controls/radio'
 import { Switch } from '@/ui/controls/Switch'
+import { useSettingsLock } from './settings-lock'
 import { ToolbarButton } from './ToolbarButton'
 import { useReader } from './use-reader'
 import { useTip } from '@/ui/controls/tip'
@@ -22,14 +24,16 @@ const APPEARANCES = ['system', 'light', 'dark'] as const
 const GLYPHS: Record<(typeof APPEARANCES)[number], IconNode> = { system: Monitor, light: Sun, dark: Moon }
 
 export function ReadingOptions({ controller, embedded = false }: { controller: ReaderController; embedded?: boolean }) {
-  const config = useReader(controller, s => s.settings)
+  // before the settings land the defaults stand in their places, greyed (S-R-21), so that the button that opens this holds
+  // its place, and the narrow window's download and way back in it are reachable at once
+  const config = useReader(controller, s => s.settings) ?? DEFAULT_CONFIG
+  const lock = useSettingsLock(controller)
   const pop = usePopover('dialog', 'options')
   const radios = useRef<(HTMLButtonElement | null)[]>([])
-  if (!config) return null
   const names = { light: R.options.light, dark: R.options.dark, system: R.options.system }
   // the extension's appearance (the redesign's design, §3): chosen here, the popup and the settings page follow
   const appearance = config.theme
-  const setAppearance = (a: (typeof APPEARANCES)[number]) => controller.patchSettings(c => ({ ...c, theme: a }))
+  const setAppearance = (a: (typeof APPEARANCES)[number]) => { if (!lock.locked) controller.patchSettings(c => ({ ...c, theme: a })) }
   return (
     <>
       <ToolbarButton label={R.options.name} anchor={pop.anchor} {...pop.trigger}>
@@ -70,14 +74,14 @@ export function ReadingOptions({ controller, embedded = false }: { controller: R
         {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
         <label className="row">
           {S.rows.highlight}
-          <Switch label={S.rows.highlight} checked={config.reading.sentenceHighlight} onChange={on => controller.patchSettings(c => ({ ...c, reading: { ...c.reading, sentenceHighlight: on } }))} />
+          <Switch label={S.rows.highlight} checked={config.reading.sentenceHighlight} disabled={lock.locked} why={lock.why} onChange={on => controller.patchSettings(c => ({ ...c, reading: { ...c.reading, sentenceHighlight: on } }))} />
         </label>
         <div className="row">
           {R.options.color}
           <span className="flex gap-2">
             {config.appearance.highlights.map(h => (
-              <button key={h.id} type="button" data-swatch aria-label={profileName(h, 'highlights')} aria-pressed={h.id === config.appearance.activeHighlight} className="swatch" style={{ background: h.color || 'var(--axt-green)' }}
-                onClick={() => controller.patchSettings(c => ({ ...c, appearance: { ...c.appearance, activeHighlight: h.id } }))} />
+              <Swatch key={h.id} name={profileName(h, 'highlights')} color={h.color || 'var(--axt-green)'} chosen={h.id === config.appearance.activeHighlight} locked={lock.locked} why={lock.why}
+                onPick={() => controller.patchSettings(c => ({ ...c, appearance: { ...c.appearance, activeHighlight: h.id } }))} />
             ))}
           </span>
         </div>
@@ -85,7 +89,7 @@ export function ReadingOptions({ controller, embedded = false }: { controller: R
         {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
         <label className="row">
           {S.rows.images}
-          <Switch label={S.rows.images} checked={config.image.enabled} onChange={on => controller.patchSettings(c => ({ ...c, image: { ...c.image, enabled: on } }))} />
+          <Switch label={S.rows.images} checked={config.image.enabled} disabled={lock.locked} why={lock.why} onChange={on => controller.patchSettings(c => ({ ...c, image: { ...c.image, enabled: on } }))} />
         </label>
         <div className="sep" />
         <div className="row">
@@ -94,29 +98,40 @@ export function ReadingOptions({ controller, embedded = false }: { controller: R
             onKeyDown={radioKeys(APPEARANCES, appearance, () => true, setAppearance, i => radios.current[i]?.focus())}>
             <span className="thumb" aria-hidden="true" />
             {APPEARANCES.map((a, i) => (
-              <AppearanceSegment key={a} name={names[a]} glyph={GLYPHS[a]} checked={a === appearance} onPick={() => setAppearance(a)} buttonRef={el => { radios.current[i] = el }} />
+              <AppearanceSegment key={a} name={names[a]} glyph={GLYPHS[a]} checked={a === appearance} locked={lock.locked} why={lock.why} onPick={() => setAppearance(a)} buttonRef={el => { radios.current[i] = el }} />
             ))}
           </div>
         </div>
         {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
         <label className="row">
           {R.options.dim}
-          <Switch label={R.options.dim} checked={config.pdfReader.dimPages} onChange={on => controller.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, dimPages: on } }))} />
+          <Switch label={R.options.dim} checked={config.pdfReader.dimPages} disabled={lock.locked} why={lock.why} onChange={on => controller.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, dimPages: on } }))} />
         </label>
       </Popover>
     </>
   )
 }
 
-function AppearanceSegment({ name, glyph, checked, onPick, buttonRef }: { name: string; glyph: IconNode; checked: boolean; onPick: () => void; buttonRef: (el: HTMLButtonElement | null) => void }) {
-  const { props, tip } = useTip(name)
+function AppearanceSegment({ name, glyph, checked, locked, why, onPick, buttonRef }: { name: string; glyph: IconNode; checked: boolean; locked: boolean; why: string | undefined; onPick: () => void; buttonRef: (el: HTMLButtonElement | null) => void }) {
+  const { props, tip } = useTip(name, why)
   return (
     <>
       {/* biome-ignore lint/a11y/useSemanticElements: an ARIA radio drawn as a segment (the design, §6.1), as the display switch's; its keys are the group's */}
-      <button ref={buttonRef} type="button" role="radio" aria-checked={checked} aria-label={name} tabIndex={checked ? 0 : -1} onClick={onPick} {...props}>
+      <button ref={buttonRef} type="button" role="radio" aria-checked={checked} aria-disabled={locked || undefined} aria-label={name} aria-description={why} tabIndex={checked ? 0 : -1} onClick={locked ? undefined : onPick} {...props}>
         <Icon node={glyph} />
       </button>
       {tip}
+    </>
+  )
+}
+
+/** a highlight colour: greyed out of reach, with the reason in its tooltip beside its name (S-R-21) */
+function Swatch({ name, color, chosen, locked, why, onPick }: { name: string; color: string; chosen: boolean; locked: boolean; why: string | undefined; onPick: () => void }) {
+  const { props, tip } = useTip(name, why)
+  return (
+    <>
+      <button type="button" data-swatch aria-label={name} aria-description={why} aria-pressed={chosen} aria-disabled={locked || undefined} className="swatch" style={{ background: color }} onClick={locked ? undefined : onPick} {...(why ? { ...props, style: { background: color, ...props.style } } : {})} />
+      {why && tip}
     </>
   )
 }

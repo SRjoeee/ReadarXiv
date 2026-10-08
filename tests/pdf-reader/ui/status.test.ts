@@ -4,10 +4,10 @@ import { DEFAULT_CONFIG } from '@/config/schema'
 import { INITIAL, type ReaderState } from '@/pdf-reader/controller'
 import { plain, textOf, withCount } from '@/pdf-reader/ui/capsule-words'
 import { capsuleOf, cardOf, lineOf, spokenOf } from '@/pdf-reader/ui/status'
-import { R, S, setLocale } from '@/ui/strings'
+import { O, R, S, setLocale } from '@/ui/strings'
 
 const at = (over: Partial<ReaderState>): ReaderState => ({ ...INITIAL, settings: DEFAULT_CONFIG, display: 'bilingual', ...over })
-const none = { closed: false, narrowShown: false }
+const none = { partialClosed: false, noticeClosed: false, narrowShown: false, refusalsSeen: 0 }
 
 // the interface's words as the maintainer reads them
 beforeAll(() => setLocale('zh-CN'))
@@ -57,12 +57,12 @@ describe('the states (the reader\'s design, §8)', () => {
     expect(capsuleOf(at({ phase: 'ready', failedUnits: 3, failure: 'network' }), none)).toEqual({ kind: 'notice', words: withCount('3 处翻译失败', 3), action: 'retry' })
     // the count a part of its own, so that it changes in place
     expect(capsuleOf(at({ phase: 'ready', failedUnits: 3, failure: 'network' }), none)).toMatchObject({ words: { prefix: '', count: 3, suffix: ' 处翻译失败' } })
-    expect(capsuleOf(at({ phase: 'ready', failedUnits: 3, failure: 'network' }), { ...none, closed: true })).toBeNull()
+    expect(capsuleOf(at({ phase: 'ready', failedUnits: 3, failure: 'network' }), { ...none, noticeClosed: true })).toBeNull()
   })
 
   it('passages the typesetting left in the original, and no stop to resume: counted, with no retry — the same translation fails the same way (the review of 2026-10-04, I-5)', () => {
     expect(capsuleOf(at({ phase: 'ready', failedUnits: 2, failure: null }), none)).toEqual({ kind: 'notice', words: withCount(S.failed.text(2), 2), action: null })
-    expect(capsuleOf(at({ phase: 'ready', failedUnits: 2, failure: null }), { ...none, closed: true })).toBeNull()
+    expect(capsuleOf(at({ phase: 'ready', failedUnits: 2, failure: null }), { ...none, noticeClosed: true })).toBeNull()
   })
 
   it('names a language the reader cannot typeset, and offers the menu', () => {
@@ -108,15 +108,52 @@ describe('the states (the reader\'s design, §8)', () => {
   it('a paper that cannot be had as a bilingual PDF: said, with the HTML version offered where there is one; not closable, before any other capsule (the maintainer, 2026-09-26)', () => {
     expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: 'https://arxiv.org/html/1706.03762#readarxiv' }), none)).toEqual({ kind: 'unavailable', words: plain(R.status.noPdf), href: 'https://arxiv.org/html/1706.03762#readarxiv' })
     expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: null }), none)).toEqual({ kind: 'unavailable', words: plain(R.status.noPdf) })
-    expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: null, failedUnits: 3, narrow: true }), { closed: true, narrowShown: false })).toMatchObject({ kind: 'unavailable' })
+    expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: null, failedUnits: 3, narrow: true }), { ...none, partialClosed: true, noticeClosed: true })).toMatchObject({ kind: 'unavailable' })
     expect(capsuleOf(at({ phase: 'ready', available: false, languageSupported: false, htmlVersion: null }), none)).toMatchObject({ kind: 'unavailable' })
   })
 
   it('a translation shown in part: said, the HTML version offered where there is one, closable, before the notice of passages that failed (S-R-19)', () => {
     expect(capsuleOf(at({ phase: 'ready', partial: true, htmlVersion: 'https://arxiv.org/html/x#readarxiv' }), none)).toEqual({ kind: 'partial', words: plain(R.status.partial), href: 'https://arxiv.org/html/x#readarxiv' })
     expect(capsuleOf(at({ phase: 'ready', partial: true, htmlVersion: null, failedUnits: 2 }), none)).toEqual({ kind: 'partial', words: plain(R.status.partial) })
-    expect(capsuleOf(at({ phase: 'ready', partial: true }), { closed: true, narrowShown: false })).toBeNull()
+    expect(capsuleOf(at({ phase: 'ready', partial: true }), { ...none, partialClosed: true })).toBeNull()
     expect(capsuleOf(at({ phase: 'translating', partial: true }), none)).toBeNull()
+  })
+
+  it('the partial notice and the notice of failed passages are closed apart: closing one tells the other, which it had covered (#314)', () => {
+    const both = at({ phase: 'ready', partial: true, failedUnits: 2, failure: 'network' })
+    expect(capsuleOf(both, none)).toMatchObject({ kind: 'partial' })
+    // the partial notice closed: the count of passages that failed, which it stood before, is told now
+    expect(capsuleOf(both, { ...none, partialClosed: true })).toMatchObject({ kind: 'notice', words: { count: 2 }, action: 'retry' })
+    expect(capsuleOf(both, { ...none, partialClosed: true, noticeClosed: true })).toBeNull()
+    // the notice's close is the notice's alone: it was never shown while the partial one stood
+    expect(capsuleOf(both, { ...none, noticeClosed: true })).toMatchObject({ kind: 'partial' })
+  })
+
+  it('settings that could not be read: a note that stays while it is so, over a load that waits for them too; a failure\'s card has none beside it (S-R-21)', () => {
+    const note = { kind: 'unreadable', words: plain(R.status.unreadable) }
+    for (const phase of ['loading', 'translating', 'ready'] as const) expect(capsuleOf(at({ phase, settingsUnreadable: true }), none), phase).toEqual(note)
+    // before the paper's own notes: the controls these would speak of are out of reach until they are read
+    expect(capsuleOf(at({ phase: 'ready', settingsUnreadable: true, available: false }), none)).toEqual(note)
+    expect(capsuleOf(at({ phase: 'failed', failure: 'network', settingsUnreadable: true }), none)).toBeNull()
+    // beside the card of an address with no paper, which names no note of its own: the settings are as unreadable there
+    expect(capsuleOf(at({ phase: 'ready', settingsUnreadable: true, noPaper: true, available: false }), none)).toEqual(note)
+    expect(capsuleOf(at({ phase: 'ready', settingsUnreadable: true, noPaper: true }), none)).toEqual(note)
+    expect(capsuleOf(at({ phase: 'ready', settingsUnreadable: false }), none)).toBeNull()
+  })
+
+  it('a write storage refused: told until it is closed or a later write lands, as the settings page says it, and told again for the next (S-R-22)', () => {
+    const refused = at({ phase: 'ready', refusals: 1 })
+    expect(capsuleOf(refused, none)).toEqual({ kind: 'saveFailed', words: plain(O.saveFailed) })
+    expect(capsuleOf(refused, { ...none, refusalsSeen: 1 })).toBeNull()
+    expect(capsuleOf({ ...refused, refusals: 2 }, { ...none, refusalsSeen: 1 })).toMatchObject({ kind: 'saveFailed' })
+    // mended: a write landed after it
+    expect(capsuleOf({ ...refused, mended: 1 }, none)).toBeNull()
+    expect(capsuleOf({ ...refused, refusals: 2, mended: 1 }, none)).toMatchObject({ kind: 'saveFailed' })
+    // over a load too, since the controls are in reach then; and before the notes that stand
+    expect(capsuleOf(at({ phase: 'loading', refusals: 1 }), none)).toMatchObject({ kind: 'saveFailed' })
+    expect(capsuleOf(at({ phase: 'ready', refusals: 1, available: false }), none)).toMatchObject({ kind: 'saveFailed' })
+    expect(capsuleOf(at({ phase: 'ready', refusals: 1, available: false }), { ...none, refusalsSeen: 1 })).toMatchObject({ kind: 'unavailable' })
+    expect(capsuleOf(at({ phase: 'failed', failure: 'network', refusals: 1 }), none)).toBeNull()
   })
 
   it('nothing translated: the card, with the reason; 设置 for a key, 重试 otherwise; no capsule', () => {
@@ -124,6 +161,21 @@ describe('the states (the reader\'s design, §8)', () => {
     expect(cardOf(at({ phase: 'failed', failure: 'no-key' }))).toEqual({ reason: '尚未配置 API Key', action: 'settings' })
     expect(cardOf(at({ phase: 'failed', failure: 'auth' }))!.action).toBe('settings')
     expect(capsuleOf(at({ phase: 'failed', failure: 'network' }), none)).toBeNull()
+  })
+
+  it('an address with no paper: the card says it cannot be found and offers arXiv; no capsule, whatever else the state holds (D1)', () => {
+    const missing = at({ phase: 'ready', noPaper: true, available: false })
+    expect(cardOf(missing)).toEqual({ reason: R.status.noPaper, action: 'arxiv' })
+    // nothing paper-specific is said of it: not a paper that cannot be had, a partial translation, failed passages, a narrow window, a language
+    expect(capsuleOf({ ...missing, partial: true, failedUnits: 2, narrow: true, languageSupported: false }, none)).toBeNull()
+    expect(capsuleOf(missing, none)).toBeNull()
+    // …but what is true of the settings is: the note and a refused write stand beside the card (Devin on #329)
+    expect(capsuleOf({ ...missing, settingsUnreadable: true }, none)).toMatchObject({ kind: 'unreadable' })
+    expect(capsuleOf({ ...missing, refusals: 1 }, none)).toMatchObject({ kind: 'saveFailed' })
+    // a paper named has no such card, and a failure's card is the failure's
+    expect(cardOf(at({ phase: 'ready' }))).toBeNull()
+    expect(cardOf(at({ phase: 'failed', failure: 'network' }))).toMatchObject({ action: 'retry' })
+    expect(R.status.noPaper).not.toBe('')
   })
 
   it('too many requests: the card promises no retry of its own — a stopped run waits for the reader\'s (Part 6\'s interface review)', () => {

@@ -122,7 +122,9 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .arxiv-id:focus-visible { color: var(--ink); background: var(--fill); }
   .arxiv-id:focus-visible svg { opacity: 1; translate: 0 0; }
   @media (hover: hover) { .arxiv-id:hover { color: var(--ink); background: var(--fill); } .arxiv-id:hover svg { opacity: 1; translate: 0 0; } }
-  @container lead (width < 320px) { .paper-title [data-title] { display: none; } }
+  /* too narrow to read: out of sight but in the page, as the page's heading (PaperTitle; P3-M12, P6) — display: none took
+     it out of assistive technology's tree with it */
+  @container lead (width < 320px) { .paper-title [data-title] { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); } }
   .paper-title[data-cramped] [data-arxiv] { display: none; }
   .menu-btn { padding-inline: 8px 6px; color: var(--ink); font-size: 12.5px; font-weight: 500; }
   /* a name longer than the bar can give (a service's is up to 40 characters) is cut short; the tooltip holds it whole */
@@ -242,8 +244,9 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
     display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; background: var(--chrome); color: var(--ink); box-shadow: var(--pop-shadow); }
   .card svg { color: var(--danger); }
   .card p { margin: 0; font-size: 13px; font-weight: 500; text-wrap: balance; }
-  .card button { height: 30px; padding: 0 16px; border-radius: 8px; background: var(--ink); color: var(--chrome); font-weight: 500; transition: scale 150ms ease-out; }
+  .card button, .card a { display: inline-flex; align-items: center; height: 30px; padding: 0 16px; border-radius: 8px; background: var(--ink); color: var(--chrome); font-weight: 500; text-decoration: none; transition: scale 150ms ease-out; }
   .card button:active { scale: 0.96; }
+  .card a:active { scale: 0.96; }
 }
 @media (prefers-reduced-motion: reduce) { .tbtn, .tbtn:active { transition: none; scale: 1; } }
 @media (width < 900px) { .pop .row.narrow-only { display: flex; } .pop .sep.narrow-only { display: block; } [data-zone="trail"] > .menu-btn { display: none; } }
@@ -285,5 +288,5 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .arxiv-id svg { translate: none; transition: opacity 150ms; }
   .fold svg { transition: none; }
   .indicator i { transition: background-color 150ms; }
-  .card button, .card button:active, .capsule .chip, .capsule .chip:active { transition: none; scale: 1; }
+  .card button, .card button:active, .card a, .card a:active, .capsule .chip, .capsule .chip:active { transition: none; scale: 1; }
 }
