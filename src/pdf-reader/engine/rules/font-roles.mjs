@@ -340,7 +340,7 @@ export function rolesFor(target, family, cjkFaces) {
   if (cjkFaces) {
     const { group, kai } = cjkFaces
     const light = cjkFaces.light.includes(family)
-    cjk = { body: `${group}-${light ? 'light' : 'regular'}`, bold: `${group}-${light ? 'semibold' : 'bold'}`, italic: kai, boldItalic: kai }
+    cjk = { body: `${group}-${light ? 'light' : 'regular'}`, bold: `${group}-${light ? 'semibold' : 'bold'}`, italic: kai }
     // Traditional Chinese's characters Source Han Serif TC lacks, from SC at the same weight; the Kai's, from the body
     if (script === 'Hant') for (const w of ['light', 'regular', 'medium', 'semibold', 'bold']) fallbacks[`shs-tc-${w}`] = Object.freeze([`shs-sc-${w}`])
     if (kai) fallbacks[kai] = Object.freeze([cjk.body])
@@ -399,15 +399,18 @@ const styled = (group, bold, italic, letters) => {
 }
 
 /** the face a run is drawn in. A CJK run takes its target's CJK family by weight and slant, whatever its class (no
- *  sans, no fangsong: §4.4); emphasis is the Kai, or upright where the target has none. A Latin run takes its design's
+ *  sans, no fangsong: §4.4); emphasis is the Kai, or upright where the target has none; and weight wins over slant: a
+ *  bold italic run (IEEEtran's bold italic "Abstract", a heading's emphasis) is the bold serif, the original's serif bold,
+ *  which the Kai, having no bold, would set lighter than the heading it is (the coordinator's ruling on D1a's Q5, under
+ *  the maintainer's rule that a heading keeps the original's form). A Latin run takes its design's
  *  group (math the math face); small capitals take Latin Modern's caps face, and elsewhere stay the face's: the drawing
  *  sets them by its smcp feature where METRICS says it has one, else as capitals at 0.8 of the size. A CJK run of a
  *  target with no CJK roles is set as a Latin run, and canDraw then finds what its face cannot draw */
 export function faceFor(roles, run) {
   const c = roles.cjk
   if (run.script === 'cjk' && c) {
-    if (run.italic) return (run.bold ? c.boldItalic : c.italic) ?? (run.bold ? c.bold : c.body)
-    return run.bold ? c.bold : c.body
+    if (run.bold) return c.bold
+    return run.italic ? (c.italic ?? c.body) : c.body
   }
   if (run.cls === 'math') return 'lm-math'
   const cyrillic = scriptOf(roles.target) === 'Cyrl' ? 1 : 0
