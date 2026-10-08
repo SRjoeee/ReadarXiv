@@ -98,6 +98,10 @@ export const isObject = v => typeof v === 'object' && v !== null && !Array.isArr
 /** a finite number (JSON has no NaN, and a number written 1e400 is Infinity once parsed) */
 export const isNumber = v => typeof v === 'number' && Number.isFinite(v)
 export const isInteger = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi
+/** the version a file or a bundle names of what made it (the layout maker, the remover, the pipeline): a token of 1 to 32
+ *  letters, digits and points. Read for its shape alone and never compared: a reader refuses a file by its schema, so that
+ *  a newer maker's output is read (the rules-as-data plan, §9.3) */
+export const isVersionToken = v => typeof v === 'string' && v.length <= 32 && /^[0-9A-Za-z.]{1,32}$/.test(v)
 
 /** an untrusted string as a refusal names it: its first 20 code units, a control or bidi character escaped (a line
  *  break, U+202E), never the whole of it; anything else by its type */

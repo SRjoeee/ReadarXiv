@@ -36,7 +36,7 @@ function fakePort(seed: Record<string, string> = {}) {
 
 const req = (ids: string[]) => ({
   request: { segments: ids.map(id => ({ id, text: `text-${id}` })), source: 'en' as const, target: 'zh-CN' },
-  cache: { paper: '2410.00260', renderPath: 'tags' as RenderPath },
+  cache: { paper: '2410.00260', renderPath: 'tags' as RenderPath, source: 'html' as const },
 })
 
 const rateLimited = () => attachRequestErrorMeta(new ProviderError('rate-limit', '429'), { statusCode: 429, responseHeaders: { 'retry-after': '1' }, isRetryable: true })
@@ -411,7 +411,7 @@ describe('createTranslateService', () => {
       cache: port,
     })
     await service.translate(req(['a']))
-    const again = await service.translate({ ...req(['a']), cache: { paper: '2410.00260', renderPath: 'tags', bypass: true } })
+    const again = await service.translate({ ...req(['a']), cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const, bypass: true } })
     expect(calls).toBe(2)
     expect(reads).toHaveLength(1)
     expect(writes).toHaveLength(2)
@@ -455,7 +455,7 @@ describe('createTranslateService', () => {
       cache: port,
     })
     const call = req(['a', 'b'])
-    call.cache = { paper: '2410.00260', renderPath: 'markers' }
+    call.cache = { paper: '2410.00260', renderPath: 'markers', source: 'html' }
     call.request.segments = [
       { id: 'a', text: '公式 @a# 见此处。' },
       { id: 'b', text: '公式 @a#。' },
@@ -475,7 +475,7 @@ describe('createTranslateService', () => {
       })),
       cache: port,
     })
-    const res = await service.translate({ ...req(['a', 'b']), cache: { paper: '2410.00260', renderPath: 'runs' } })
+    const res = await service.translate({ ...req(['a', 'b']), cache: { paper: '2410.00260', renderPath: 'runs', source: 'html' as const } })
     expect(res.ok && res.result.segments.map(s => s.text)).toEqual(['译文 <x id="7"/>', '译:text-b'])
     expect(writes[0]!.map(w => w.translation)).toEqual(['译:text-b'])
   })
@@ -506,7 +506,7 @@ describe('createTranslateService', () => {
     const expected = await translationIdentity({ providerId: 'mock', model: '', promptKey: '', target: 'zh-CN', renderPath: 'tags' })
     const service = build({ getProvider: async () => provider(async r => ({ segments: r.segments.map(s => ({ ...s, text: `T:${s.text}` })), provider: 'mock' })) })
     const request = { segments: [{ id: 'a', text: 'x' }], source: 'en' as const, target: 'zh-CN' }
-    const ok = await service.translate({ request, cache: { paper: 'p', renderPath: 'tags' } })
+    const ok = await service.translate({ request, cache: { paper: 'p', renderPath: 'tags', source: 'html' as const } })
     expect(ok.ok && ok.result.segments.every(s => s.identity === expected)).toBe(true)
     const bare = await service.translate({ request })
     expect(bare.ok && bare.result.segments.every(s => s.identity === undefined)).toBe(true)
@@ -773,7 +773,7 @@ describe('sentence markers: inserted by the service layer when the engine report
   // The cut points come from the caller: where to cut depends on the block itself (§8.6); the service layer inserts at the positions given only
   const twoSentences = (ids: string[]) => ({
     request: { segments: ids.map(id => ({ id, text: 'One sentence here. Two sentences here.', cuts: [19] })), source: 'en' as const, target: 'zh-CN' },
-    cache: { paper: 'p', renderPath: 'tags' as RenderPath },
+    cache: { paper: 'p', renderPath: 'tags' as RenderPath, source: 'html' as const },
   })
 
   it('inserts the markers, removes them, and brings the boundaries of both sides out as the alignment', async () => {
@@ -797,7 +797,7 @@ describe('sentence markers: inserted by the service layer when the engine report
     const service = build({ getProvider: async () => echoing(t => { sent = t; return '译文' }) })
     await service.translate({
       request: { segments: [{ id: 'a', text: 'One sentence here. Two sentences here.' }], source: 'en', target: 'zh-CN' },
-      cache: { paper: 'p', renderPath: 'tags' as RenderPath },
+      cache: { paper: 'p', renderPath: 'tags' as RenderPath, source: 'html' as const },
     })
     expect(sent).toBe('One sentence here. Two sentences here.')
   })
@@ -842,7 +842,7 @@ describe('sentence markers: inserted by the service layer when the engine report
     const service = build({ getProvider: async () => echoing(t => { sent = t; return '一句译文。' }) })
     const res = await service.translate({
       request: { segments: [{ id: 'a', text: 'Only one sentence here.', cuts: [] }], source: 'en', target: 'zh-CN' },
-      cache: { paper: 'p', renderPath: 'tags' as RenderPath },
+      cache: { paper: 'p', renderPath: 'tags' as RenderPath, source: 'html' as const },
     })
     expect(sent).toBe('Only one sentence here.')
     if (!res.ok) return
@@ -863,7 +863,7 @@ describe('sentence markers: inserted by the service layer when the engine report
     })
     const res = await service.translate({
       request: { segments: [{ id: 'a', text: short, cuts: [19] }, { id: 'b', text: long, cuts: [42] }], source: 'en', target: 'zh-CN' },
-      cache: { paper: 'p', renderPath: 'tags' as RenderPath },
+      cache: { paper: 'p', renderPath: 'tags' as RenderPath, source: 'html' as const },
     })
     expect(res.ok).toBe(true)
     if (!res.ok) return
@@ -880,14 +880,14 @@ describe('sentence markers: inserted by the service layer when the engine report
     // Until 2026-10-02 a segment over the cap went unmarked under the key its marked request has now: that entry's
     // translation has no sentences, and hit, it would keep the paragraph unlit (hard rule 4: the request changed)
     const long = `${'x'.repeat(40)}. ${'y'.repeat(40)}.`, short = 'One sentence here. Two sentences here.'
-    const identity = { providerId: 'mock', model: '', promptKey: '', target: 'zh-CN', renderPath: 'tags' as RenderPath }
+    const identity = { providerId: 'mock', model: '', promptKey: '', target: 'zh-CN', renderPath: 'tags' as RenderPath, source: 'html' as const }
     const before = { long: await cacheKeyFor({ ...identity, text: long, cuts: [42] }), short: await cacheKeyFor({ ...identity, text: short, cuts: [19] }), whole: await cacheKeyFor({ ...identity, text: long, cuts: [] }) }
     const { port, reads, writes } = fakePort({ [before.long]: 'the old translation, whole' })
     const service = build({ getProvider: async () => echoing(t => t, { maxBatchChars: long.length + 5 }), cache: port })
     const res = await service.translate({
       // c: the same text taken as one sentence — nothing is inserted there, and its request is as it was
       request: { segments: [{ id: 'a', text: short, cuts: [19] }, { id: 'b', text: long, cuts: [42] }, { id: 'c', text: long, cuts: [] }], source: 'en', target: 'zh-CN' },
-      cache: { paper: 'p', renderPath: 'tags' as RenderPath },
+      cache: { paper: 'p', renderPath: 'tags' as RenderPath, source: 'html' as const },
     })
     const [shortKey, longKey, wholeKey] = reads[0]!
     expect([shortKey, wholeKey]).toEqual([before.short, before.whole])
@@ -904,8 +904,8 @@ describe('sentence markers: inserted by the service layer when the engine report
     const { port, writes } = fakePort()
     const service = build({ getProvider: async () => echoing(() => '译文一。译文二。'), cache: port })
     const text = 'One sentence here. Two sentences here.'
-    await service.translate({ request: { segments: [{ id: 'a', text, cuts: [19] }], source: 'en', target: 'zh-CN' }, cache: { paper: 'p', renderPath: 'tags' as RenderPath } })
-    await service.translate({ request: { segments: [{ id: 'b', text, cuts: [] }], source: 'en', target: 'zh-CN' }, cache: { paper: 'p', renderPath: 'tags' as RenderPath } })
+    await service.translate({ request: { segments: [{ id: 'a', text, cuts: [19] }], source: 'en', target: 'zh-CN' }, cache: { paper: 'p', renderPath: 'tags' as RenderPath, source: 'html' as const } })
+    await service.translate({ request: { segments: [{ id: 'b', text, cuts: [] }], source: 'en', target: 'zh-CN' }, cache: { paper: 'p', renderPath: 'tags' as RenderPath, source: 'html' as const } })
     const keys = writes.flat().map(w => w.key)
     expect(new Set(keys).size).toBe(2)
   })
@@ -916,7 +916,7 @@ describe('sentence markers: inserted by the service layer when the engine report
       const service = build({ getProvider: async () => echoing(t => { sent = t; return '译文' }) })
       await service.translate({
         request: { segments: [{ id: 'a', text: 'One sentence here. Two sentences here.', cuts: [19] }], source: 'en', target: 'zh-CN' },
-        cache: { paper: 'p', renderPath },
+        cache: { paper: 'p', renderPath, source: 'html' as const },
       })
       expect([renderPath, sent]).toEqual([renderPath, 'One sentence here. Two sentences here.'])
     }
@@ -927,6 +927,33 @@ describe('sentence markers: inserted by the service layer when the engine report
     const service = build({ getProvider: async () => echoing(t => { sent = t; return '译文' }) })
     await service.translate({ request: { segments: [{ id: 'a', text: 'One sentence here. Two sentences here.', cuts: [19] }], source: 'en', target: 'zh-CN' } })
     expect(sent).toBe('One sentence here. Two sentences here.')
+  })
+})
+
+describe("the rules in a text's cache key are the caller's: the HTML page's, or none for a PDF's (rules as data, §9.1)", () => {
+  const echo = provider(async ({ segments }) => ({ segments: segments.map(s => ({ id: s.id, text: `\u8bd1:${s.text}` })), provider: 'mock' }))
+  const identity = { providerId: 'mock', model: '', promptKey: '', target: 'zh-CN', renderPath: 'tags' as RenderPath, text: 'text-a' }
+  const ask = (service: ReturnType<typeof build>, source: 'html' | 'pdf') =>
+    service.translate({ request: { segments: [{ id: 'a', text: 'text-a' }], source: 'en', target: 'zh-CN' }, cache: { paper: 'p', renderPath: 'tags', source } })
+
+  it('a call from the HTML page is read and written under the key with its rules; one from a PDF under the key with none', async () => {
+    const html = await cacheKeyFor({ ...identity, source: 'html' }), pdf = await cacheKeyFor({ ...identity, source: 'pdf' })
+    expect(pdf).not.toBe(html)
+    for (const [source, want] of [['html', html], ['pdf', pdf]] as const) {
+      const { port, reads, writes } = fakePort()
+      await ask(build({ getProvider: async () => echo, cache: port }), source)
+      expect(reads[0]).toEqual([want])
+      expect(writes.flat().map(w => w.key)).toEqual([want])
+    }
+  })
+
+  it('a translation cached for a PDF text answers the PDF text, and is no answer to the same text of the HTML page', async () => {
+    const pdf = await cacheKeyFor({ ...identity, source: 'pdf' })
+    const { port } = fakePort({ [pdf]: 'cached for the PDF' })
+    const service = build({ getProvider: async () => echo, cache: port })
+    const fromPdf = await ask(service, 'pdf'), fromHtml = await ask(service, 'html')
+    expect(fromPdf.ok && fromPdf.result.segments[0]?.text).toBe('cached for the PDF')
+    expect(fromHtml.ok && fromHtml.result.segments[0]?.text).toBe('\u8bd1:text-a')
   })
 })
 
@@ -979,7 +1006,7 @@ describe('only the glossary entries in use are sent (§8.2)', () => {
       }, 'llm', { promptKey: 'default' }),
       cache: port,
     })
-    const res = await service.translate({ request: { segments, source: 'en', target: 'zho', context: context as never }, cache: { paper: 'p', renderPath: 'tags' } })
+    const res = await service.translate({ request: { segments, source: 'en', target: 'zho', context: context as never }, cache: { paper: 'p', renderPath: 'tags', source: 'html' as const } })
     expect(res.ok).toBe(true)
     // The key used to read the cache is this segment's key (writes are asynchronous; reads are steadier)
     return { context: seen[0] as { glossary?: { term: string }[] } | undefined, keys: reads[0] ?? [] }

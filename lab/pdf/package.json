@@ -4,6 +4,9 @@
   "description": "The PDF engine's lab: the gates and measurements of the bilingual PDF reader's engine (lab/pdf/README.md)",
   "license": "GPL-3.0-only",
   "type": "module",
+  "scripts": {
+    "layer-lab": "node layer-lab/serve.mjs"
+  },
   "dependencies": {
     "pdfjs-dist": "^6.3.289"
   }

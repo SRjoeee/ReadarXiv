@@ -21,6 +21,8 @@ export declare const PIECES_MAX: 20000
 export declare const isObject: (v: unknown) => v is Record<string, unknown>
 export declare const isNumber: (v: unknown) => v is number
 export declare const isInteger: (v: unknown, lo: number, hi: number) => v is number
+/** a version a file or a bundle names of what made it: 1 to 32 letters, digits or points; read for its shape alone, never compared */
+export declare const isVersionToken: (v: unknown) => v is string
 /** an untrusted string as a refusal names it: its first 20 code units, control and bidi characters escaped; else its type */
 export declare const told: (v: unknown) => string
 /** an object with exactly `keys` */

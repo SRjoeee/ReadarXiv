@@ -36,7 +36,7 @@ const CAPTIONS = new Set(['caption', 'subcaption', 'subcaptionbox', 'captionof',
 /** the front matter's blocks of names and places: their notes (\\thanks, \\footnote) each a footnote of its own
  *  (1706.03762's author block: its footnotes stayed in English, the whole block one opaque command), and the names and
  *  places between them units of kind 'author' — translated where the target's script writes names its own way
- *  (scripts.mjs authorsTranslated), else kept as the paper has them; the marks, addresses and spacing stay */
+ *  (translate/kept.mjs authorsTranslated), else kept as the paper has them; the marks, addresses and spacing stay */
 const FRONT_MATTER = new Set(['author', 'affil', 'affiliation', 'institute', 'address'])
 /** commands inside an author block whose argument is a name or a place: IEEEtran's blocks, acmart's parts of an
  *  affiliation. Anything else there — \\email, \\orcid, \\inst{1}, \\textsuperscript — stays as it is */

@@ -332,7 +332,10 @@ const ROWS: [string, Edit, string][] = [
   ['an extra key', f => { f.extra = 1 }, 'extra'],
   ['an extra key of 10,000 characters is named by its first 20', f => { f['k'.repeat(10000)] = 1 }, `${'k'.repeat(20)}…`],
   ['schema 2', f => { f.schema = 2 }, 'schema'],
-  ["layout '1', the maker's before the content stream", f => { f.layout = '1' }, 'layout'],
+  // (the maker's version is read for its shape alone: any maker's file under schema 1 is read, identities.test.ts)
+  ['layout empty', f => { f.layout = '' }, 'layout'],
+  ['layout with a space', f => { f.layout = '3 1' }, 'layout'],
+  ['layout of 33 characters', f => { f.layout = '3'.repeat(33) }, 'layout'],
   ['layout 1 as a number', f => { f.layout = 1 }, 'layout'],
   ['pdfjs empty', f => { f.pdfjs = '' }, 'pdfjs'],
   ['pdfjs of 33 characters', f => { f.pdfjs = '5'.repeat(33) }, 'pdfjs'],

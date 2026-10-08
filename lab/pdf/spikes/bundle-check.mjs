@@ -12,7 +12,8 @@
 // Checked: readBundle(writeBundle(parts)) gives every part back (bytes and string alike, no unit dropped, the layout
 // written as its file is, arXiv's bytes then the tail the cached add-on), and the same parts give the same bytes. And
 // every cached manifest (out/layer-gate/removal/*/shipped-manifest.json and manifest.json) read by parseAddonManifest:
-// those of this REMOVAL parse; the others are refused by their `removal` (or their bytes), their shape the reader's. And
+// those of this REMOVAL parse; the others are read by the same rules (a manifest is refused by its schema, never by the
+// remover that wrote it) or refused by their shape or their bytes. And
 // the units of every paper of the corpus (data/corpus/*/source.gz), openPaper's through bundleUnitsOf, in a bundle of
 // their own (no layout, no add-on) read back: none dropped.
 // Recorded (records/layer-bundle.md, sizes alone, no paper text): each part's bytes raw and gzipped (level 9), the
@@ -174,7 +175,7 @@ if (RECORD) {
     '',
     '## Every cached add-on manifest, read by `parseAddonManifest`',
     '',
-    `The gate's cached add-ons (\`out/layer-gate/removal/\`): the shipped manifest and the check's (with every set, the outline table and the crops' colours). Those of this remover (REMOVAL ${REMOVAL}) parse; an earlier remover's are refused by their \`removal\`, or before it by their bytes (REMOVAL 1's check manifests are past \`ADDON_MANIFEST_CAP\`).`,
+    `The gate's cached add-ons (\`out/layer-gate/removal/\`): the shipped manifest and the check's (with every set, the outline table and the crops' colours). Those of this remover (REMOVAL ${REMOVAL}) parse; an earlier remover's are read by the same rules, a manifest being refused by its schema and never by the remover that wrote it, and where one is refused the table says why (REMOVAL 1's check manifests are past \`ADDON_MANIFEST_CAP\`).`,
     '',
     '| Manifests | Read |',
     '|---|---|',

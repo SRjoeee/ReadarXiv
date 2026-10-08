@@ -5,8 +5,8 @@ Agreed with the maintainer over nine rounds of a variants harness (local, never 
 built) between 2026-09-24 and 09-25; the maintainer's words are quoted where a decision rests on them. This document is
 what the implementation was argued from. Where it and the harness disagreed, this document won.
 
-How the reader meets the rest of the extension is DESIGN §16; the gates and measurements of its engine are
-`lab/pdf/README.md`. The experiment's running record and its plans are no longer in the tree
+How the reader meets the rest of the extension is DESIGN §16; the identities its rules are versioned by are §18; the gates
+and measurements of its engine are `lab/pdf/README.md`. The experiment's running record and its plans are no longer in the tree
 (`git show exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md`). §3 (the displays) and §8 (the states) describe the
 reader as it was built, with a final compile; they are rewritten for the instant layer in a later change of the reader's
 rebuild. The original's §16, the stage's open items, is not kept: its first item is the next stage's work, and its second
@@ -880,3 +880,140 @@ within noise.
   of 738 on the ten papers; 29181 38 of 90).
 - A copy made before the highlight lights by paragraph until it is translated again; an LLM's sentences are measured
   on one model (above); with Google the markers change the wording (above).
+
+## 18. Rules and their versions
+
+Three kinds of rule decide what the reader shows, and they change at three different costs. Each has its own identity,
+and no identity names another kind's change: a tuning of how a page is drawn must not make a paper compile again, and a
+fix to a unit's cutting must not wait for the store. This section is the contract the engine, the web and the extension
+read their versions by (the rules-as-data plan of 2026-10-08, agreed with the maintainer the same day); a test holds the
+table of §18.2 to the identities the engine exports and the table of §18.5 to the fields of the rule set.
+
+### 18.1 The three kinds
+
+**The test that classifies a rule.** Ask what the change alters:
+
+- **the units, their geometry, the layout file or the add-on** (what our server makes per paper): **extraction**;
+- **what is sent to a translator, or how a reply becomes a row** (what a language's translation holds): **translation**;
+- **only the pixels and text a reader draws from the same bundle and the same rows**: **layout**.
+
+A rule that does two of these is split, or classed by the more expensive.
+
+| Kind | Where it runs | Where it lives | Its identity | A change reaches readers by | Cost of a change |
+|---|---|---|---|---|---|
+| Extraction | the server, when a paper's bundle is made | engine code: `latex-front.mjs`, `arg-roles.mjs`, `latexml-args.mjs`, `groups.mjs` `groupOf`, the layout maker, the remover. HTML: `src/core/rules/latexml.ts`, in the extension | `PIPELINE_VERSION`, `LAYOUT`, `REMOVAL`: the bundle's content versions, in its key (HTML: `RULES_VERSION`, in the per-text key) | the web's deploy. Each paper's bundle is made again on its next open (§18.4). HTML: an extension release | one compile per opened paper. Rows are rebuilt, and the per-text cache answers every unit the change left alone |
+| Layout | each reader, at draw time | the rule set, `rules/layout-rules.json` (§18.5) | `RULES_SCHEMA` (the shape and how the engine reads it) and the set's `version` (the values) | publishing: both readers take it on their next load | none |
+| Translation | each reader (the extension), the translation workflow (the web) | engine code: `mt.mjs` (`serialize`, `rehydrate`, the wires, `translateUnits`), `translate/kept.mjs` and `keptFor`, `groups.mjs` `decideGroups` and `NAMES_SHARE`, `batchesOf`, `paperContext` | `TRANSLATE_VERSION` (`translate/version.mjs`) | the next release of each reader's engine. Rows of the old version are translated again on open | the rows. The per-text cache holds the translator's raw answers, so the translator is asked again only for texts that changed |
+
+The edge cases, decided:
+
+- **`NAMES_SHARE` (a table's groups)** is a translation rule. The workflow decides groups, and the rows a reader gets hold the decision (`state: 'kept'`), not the cells' translations. Making it a layout rule would mean rows that carry every kept cell's translation, for a threshold measured once.
+- **`authorsTranslated`** decides which units a target sends, so it is a translation rule and lives in `translate/kept.mjs`, apart from the TeX path's `scripts.mjs`.
+- **Float labels** (the names a language gives a figure or a table, and whether to use them) are layout: one language's choice at draw time. **Hyphenation** (which patterns a target uses, and their minimums) is layout; the pattern files are assets the host serves, and the algorithms are code.
+- **The font roles** (which CJK family, Kai and weights a script takes) are layout. The face catalog (files, licences, size corrections, coverage) and the Latin design table are facts about files and stay code.
+- **`textless`** is extraction, but v0 also applies it at draw time to a unit's source (only the alignment fallback reads it). A reader applying an extraction rule to a bundle's content is a defect class; it is listed for the debt pass.
+- **Cell membership** (`groupOf`, from `tableGrid`) is extraction: the bundle carries each cell's place.
+
+### 18.2 The identities
+
+| Identity | Kind | Covers | Enters | A bump means |
+|---|---|---|---|---|
+| `BUNDLE` (web `'1'`, engine `'1'`) | reader contract | everything a reader parses: the bundle's shape, the units' tuple, kinds and flags, the layout file's schema, the manifest's schema, the left geometry | the request (§18.4) and the R2 key | readers older than it get `unknown-versions` until they update |
+| `PDFJS` | reader contract | the PDF.js whose reading the layout and the manifest are made against | as `BUNDLE` | as `BUNDLE` |
+| `PIPELINE_VERSION` | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or `paperContext` | the R2 key; the rows' identities | bundles made again lazily; rows again |
+| `LAYOUT`, `REMOVAL` | extraction | the layout maker, the remover | the R2 key | bundles made again lazily |
+| `TRANSLATE_VERSION` (`translate/version.mjs`, `'1'`) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, `paperContext` | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
+| `RULES_SCHEMA` (`rules/layout.mjs`, `1`) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
+| the set's `version` | layout | the values | its immutable URL | readers take it on their next load |
+| `RULES_VERSION` (`src/core/rules/latexml.ts`) | HTML extraction | the HTML page's rule file | the HTML page's per-text key only | as DESIGN §5.5 |
+| `TYPESETTING_VERSION` (`live.mjs`) | parked | the compile path | parked records | none |
+
+- **The web's translation identity** is `axt-tr/2|<paper>|v<version>|<target>|<chain>|p<PIPELINE>|t<TRANSLATE>|b<BUNDLE>`, with no `r<RULES>`: the rules of the HTML page cut none of a PDF's units.
+- **The background's per-text key** keeps `RULES_VERSION` for the HTML page's blocks only; a PDF text's key holds none (`cache/key.ts` `CacheSource`, named by every cache descriptor and `CACHE_KEY_VERSION` still 6: no HTML key changed, and a PDF text's old entries are no key of the new ones). The cache holds the translator's raw answer to a text, which no rule of reading changes.
+- **Until the extension's rows cache replaces `session.mjs`'s copies** (the extension's stage 5, task 10), a copy is judged by `PIPELINE_VERSION` alone, so a change of the translation rules that must void copies raises both.
+- **A file is refused by its schema, never by its maker.** `parseLayout` refuses a layout file whose `schema` is not 1 and `checkAddonManifest` a manifest whose `schema` is not 1; the file's `layout` and the manifest's `removal` are read for their shape (a version token) and never compared, so a reader opens what a newer maker or remover wrote. A change of either file's fields, bounds or meaning raises its `schema` and `BUNDLE`, not `LAYOUT` or `REMOVAL`.
+
+### 18.3 Bump rules
+
+- **A change of a value in the rule set** raises `version` by one. Nothing else moves.
+- **A field added, removed or renamed, a range or enumeration changed, or the engine reading a field differently** raises `RULES_SCHEMA`.
+  - The new schema publishes under `s<n+1>`, and `s<n>`'s pointer stays at its last set.
+  - A newer engine's built-in carries the new field, and the published set gains it in the same pull request.
+- **Adding a language:** the published set gains its entry first. Engines that do not offer it ignore it. The engine that offers it follows.
+- **A drawing code change that keeps every field's meaning** bumps nothing. The layer gate measures it, and the live-engines check guards each published set on the engines that read it.
+- **Extraction and translation changes** bump their identity as §18.2 says. A change that touches two kinds bumps both.
+- **The classification test of §18.1 decides which kind a change is.** When it is unclear, the change takes the more expensive kind and the pull request says why.
+
+### 18.4 Bundles: the reader names its contract, the server names the content
+
+Were a reader to ask for a bundle by all of its own versions, every extraction fix would strand each released extension for new papers until the store shipped its update. So the reader names only what it can verify, its contract, and the server names the content:
+
+```
+ctag (the reader's contract) = b<BUNDLE>-j<PDFJS>
+vtag (the content)           = <ctag>-p<PIPELINE>-l<LAYOUT>-r<REMOVAL>      // the R2 key
+GET /api/v1/layer/<id>v<n>/<ctag>   302 to /api/v1/layer/<id>v<n>/<vtag>, the newest made under that ctag (max-age=300)
+                                    and, when that vtag is not the server's own, the server's own prepare begun in the background
+                                    | 202 Preparing | 404 | 429
+GET /api/v1/layer/<id>v<n>/<vtag>   200 immutable
+```
+
+- **The engine's half:** `CTAG` and `VTAG` are `layer-proto/bundle.mjs`'s. `readBundle` compares the contract's two versions (`bundle`, `pdfjs`) with the reader's and names the maker's three and the image's, never comparing them; the layout file and the manifest it holds are refused by their schemas (§18.2).
+- **What it buys:** an extraction fix reaches every reader on its next open, at one compile a paper, with no release.
+- **What it costs:** one redirect, and the first open after a bump reads the previous bundle while the new one is made.
+- The routes are the web's (its layer API v1); this section is the contract they are built to.
+
+### 18.5 The rule set's fields
+
+The rule set is one schema-validated file, `rules/layout-rules.json`: configuration in a closed vocabulary (numbers, booleans, enumerations and short lists of characters), never a pattern, a selector or code. It has three scopes. A **script's** fields (`Hans`, `Hant`, `Jpan`, `Kore`, `Latn`, `Cyrl`) are v0's own `Params`; a **language** (a target) may override any of them field by field, and has its own `labels`; the **set** holds the hyphenation minimums. `resolveRules(set, target)` gives one target's rules, and a set that fails any bound is refused whole, naming the field. **A set holds a `languages` entry for every one of `TARGETS`**, the targets either reader offers: the web's eight (`zh`, `zh-TW`, `ja`, `ko`, `de`, `fr`, `es`, `ru`) and the extension's Portuguese (`pt`). A set that omits one is refused when it is read, not when that language's run opens; other languages (`pt-BR`, the language wave's) may be added beside them. `TARGETS` must cover every language of `VERIFIED` (`engine/verified.mjs`, compared by language and script: `zh-Hant` there is `zh-TW` here), which a test holds, so a language added to `VERIFIED` is added to `TARGETS` and to the built-in file with it. The engine's built-in copy is the fallback. The words are `RULES_FIELDS`', the lab's rows.
+
+| Field | Scope | Group | Range or values | What it does |
+|---|---|---|---|---|
+| `order` | script | fit | an ordering of track, borrow, lead, shrink | The knobs the fit turns when a translation does not fit, in order: tracking, borrowing free space below, the leading, then the size. |
+| `leadBase` | script | fit | 0.8 to 2, step 0.05 | The translation's line pitch, × the original's line pitch. |
+| `leadFloor` | script | fit | 0.8 to 2, step 0.05 | The tightest line pitch the fit falls back to, × the original's. |
+| `leadRel` | script | fit | yes or no | Whether the leading is taken relative to the original's own pitch (never stacked on a loose original's) or applied as it is. |
+| `grid` | script | fit | `0`, `1` | Whether the lines stay on the original's baseline grid while the size shrinks (1) or not (0). |
+| `trackMin` | script | fit | -0.3 to 0, step 0.005 | The tightest letter spacing the fit uses, in em (zero or less). |
+| `trackStart` | script | fit | -0.3 to 0.3, step 0.005, or none | The letter spacing the fit starts from, in em; empty gives back the face's size correction. |
+| `compressMax` | script | fit | `0`, `1`, `2` | How far full-width punctuation is compressed: 0 not at all, 1 at a line's start and between two marks, 2 every mark. |
+| `centredPunct` | script | fit | yes or no | Whether punctuation is centred in its em box (Traditional Chinese): no mark is then compressed or hung. |
+| `borrow` | script | fit | `0`, `1` | Whether a unit may borrow the free space below its last line (1) or not (0). |
+| `borrowGap` | script | fit | 0 to 2, step 0.05 | The gap kept clear under borrowed space, × the original's line pitch. |
+| `floor` | script | fit | 0.4 to 1, step 0.05 | The smallest size the fit sets a unit at, × the original's size. |
+| `step` | script | fit | 0.01 to 0.1, step 0.005 | The size step between the fit's tries, × the original's size. |
+| `further` | script | fit | some of widen, flow, shrink, in that order | The steps tried, in order, for a unit the fit leaves clipped: widen its lines, flow past a kept region, shrink below the floor. |
+| `floorMin` | script | fit | 0.3 to 1, step 0.05 | The smallest size the last of those steps reaches, × the original's size. |
+| `cjkJust` | script | fit | 0 to 1, step 0.01 | The most a line may open between CJK characters to justify, in em a gap. |
+| `spaceMin` | script | fit | 0.3 to 1, step 0.05 | The least a word space shrinks to, × its natural width. |
+| `spaceMax` | script | fit | 0 to 3, step 0.05 | The most a word space opens to justify a line, × its natural width. |
+| `autospace` | script | fit | 0 to 1, step 0.05 | The space set between CJK text and Latin letters or digits, in em. |
+| `even` | script | fit | `0`, `1`, `2` | How a page's body units are set alike: 0 each at its own, 1 at one size, 2 at one size and one leading. |
+| `fillSize` | script | fit | 0 to 1.5, step 0.05 | How far a unit's size may grow to fill a loose original's paragraph, × the original's size; 0 is off. |
+| `adaptiveFill` | script | fit | band, track, size; or none | Spreading a loose original's paragraphs over their space (D); empty keeps the script's leading on the original's pitch alone (B). |
+| `keepAll` | script | breaking | yes or no | Whether lines break only at spaces (Korean and the alphabets) rather than between any two CJK characters. |
+| `cjkQuotes` | script | breaking | yes or no | Whether curly quotes, dashes, the ellipsis and the middle dot are set as CJK characters. |
+| `noStart` | script | breaking | a list of characters | The characters no line starts with. |
+| `noEnd` | script | breaking | a list of characters | The characters no line ends with. |
+| `hyphen` | script | breaking | `0`, `1` | Whether a Latin word is hyphenated at a line's end (1) or not (0). |
+| `latinPatterns` | script | breaking | `en`, `de` | The hyphenation patterns a Latin word uses. |
+| `cellClear` | script | cells | 0 to 5, step 0.1 | The room kept between a table cell's text and a rule over or under it, in PDF units. |
+| `cellCapMin` | script | cells | 0.3 to 1, step 0.05 | The smallest share of the size a cell's text may be capped to between its rules. |
+| `cjkFaces` | script | faces | group, kai, light; or none | The CJK family the script is drawn in; empty for an alphabet. |
+| `labels` | language | labels | figure, table; or none | A float's label in this language's words; empty keeps each label as the original's. |
+| `hyphenation.minWord` | set | hyphenation | 2 to 20 | The shortest word, in letters, that is hyphenated. |
+| `hyphenation.en.left` | set | hyphenation | 1 to 6 | The fewest letters English leaves before a hyphen. |
+| `hyphenation.en.right` | set | hyphenation | 1 to 6 | The fewest letters English leaves after a hyphen. |
+| `hyphenation.de.left` | set | hyphenation | 1 to 6 | The fewest letters German leaves before a hyphen. |
+| `hyphenation.de.right` | set | hyphenation | 1 to 6 | The fewest letters German leaves after a hyphen. |
+
+### 18.6 Hosts: opening a layer with a rule set
+
+What a host (the web's door, the extension's session, the gate, the lab) calls. Each host owns its fetch and its cache; the engine owns the reading.
+
+- **`openLayer({ …, rules? })`** (`layer-proto/reader.mjs`) and **`openProto({ …, rules? })`** (`layer-proto/run.mjs`, v0's open, which the gate and the lab call) take the set that every choice made for the target is read from, resolved once at the open. Absent: `BUILTIN_RULES`, the engine's copy of the published file. Neither takes a single rule as an argument.
+- **`firstFaceOf(target, rules?)`** is the host's early face request, made before the paper's family is known: the CJK body face the set names for the target, else `null`. Pass it the set the layer will be opened with (absent: the built-in).
+- **`stats().rules`** is `{ schema, version }` of the set the layer was opened with (`ProtoRun.rules` likewise). While no set was passed it is the built-in's. A host records it.
+- **`readRules(bytes, { etag })`** (`rules/layout.mjs`) reads an answer's body as a set and returns `{ set, sha256 }`. It refuses, naming the field, a body of more than `RULES_CAP` (65,536) bytes, a body of malformed UTF-8, more JSON values than `RULES_VALUES`, text that is not JSON, and a set that fails the schema or a cross-check; a refused set is never partly used.
+  - **`etag`** is the answer's `ETag` header, given where there is one. It is compared with the SHA-256 of the bytes given to `readRules`, the body decoded of any content coding, and a different one is refused with the field `etag`. Two forms are read: the strong `"<sha256>"` and the weak `W/"<sha256>"`, which a CDN may put in the strong one's place when it recodes the body. Any other form is refused. A host passes the header as it came, or `null`.
+- **The reader's choice** is the same in both readers: the server's answer, when one comes and is read; else the last read answer the reader cached; else the built-in. The server is the authority, so a lower version is taken like any other. A refused answer is ignored and counted, and the reader keeps what it had. The set is chosen when the composed document is ready, and an answer that has not come by then serves the next open: a rule-set fetch never delays a page.
+- **A `rules` must come from `readRules` or `parseRules`**, or be `BUILTIN_RULES`. The door checks only a set's shape (an object holding `scripts` and `languages`, else a `TypeError`), not its values; a set built by hand can fail to resolve a target, or draw badly. `BUILTIN_RULES` is frozen to every depth and typed read-only, so a set to edit is `structuredClone(BUILTIN_RULES)`.

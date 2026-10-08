@@ -114,7 +114,7 @@ describe('startImageTranslation', () => {
     const call = translate.mock.calls[0]![0] as { request: { segments: { id: string; text: string }[]; context?: { sectionTitle?: string; paperTitle?: string } }; cache: unknown; scope?: string }
     expect(call.request.segments).toEqual([{ id: 'F1.g1#L0', text: 'Static charge' }, { id: 'F1.g1#L1', text: 'Even sites' }])
     expect(call.request.context).toEqual({ paperTitle: 'Paper', sectionTitle: 'Figure 1. Escape velocity versus radius.' })
-    expect(call.cache).toEqual({ paper: '2507.00150', renderPath: 'tags' })
+    expect(call.cache).toEqual({ paper: '2507.00150', renderPath: 'tags', source: 'html' })
     expect(call.scope).toBe('s1')
     expect(rendered).toEqual([targets])
     expect(run.progress()).toEqual({ total: 1, requested: 1, done: 1, failed: 0 })

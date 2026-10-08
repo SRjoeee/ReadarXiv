@@ -13,7 +13,7 @@ import { indexLayout } from '../layout/file.mjs'
 import { OPEN_FAMILY } from './fonts.mjs'
 import { sourceUnitsOf, toTranslate, unitOf } from './rows.mjs'
 import { openProto } from './run.mjs'
-import { rulesFor } from './target-rules.mjs'
+import { BUILTIN_RULES, resolveRules } from '../rules/layout.mjs'
 
 export { PDF_OPTIONS } from './run.mjs'
 export { BUNDLE, BUNDLE_CAP, BUNDLE_VALUES, BundleRefusal, bundleKey, CTAG, readBundle, VTAG } from './bundle.mjs'
@@ -36,17 +36,25 @@ const CAPTIONS = Object.freeze({ figure: 'target', table: 'target' })
 
 /** what a value is, for a refusal: its type, never its text */
 const kindOf = v => (v === null ? 'null' : Array.isArray(v) ? 'an array' : typeof v)
+/** a rule set a host passes (rules/layout.mjs RuleSet, as readRules reads it): an object holding the schema's scripts and
+ *  languages, or a TypeError like the door's other arguments */
+function checkRules(rules) {
+  const isObject = v => v !== null && typeof v === 'object' && !Array.isArray(v)
+  if (!isObject(rules) || !isObject(rules.scripts) || !isObject(rules.languages)) throw new TypeError(`rules: a rule set (readRules's), not ${isObject(rules) ? 'an object that holds none' : kindOf(rules)}`)
+  return rules
+}
 /** the layer open in this realm, from its open to its dispose: v0's faces are the page's (fonts.mjs setRoleFaces holds one
  *  target's and one family's roles for every run), so that a second layer open at once would set the first's faces */
 let opened = null
 
 /**
  * The face a host asks for first, at the open, before the paper's English family is known: the target's CJK body face,
- * light where its rules say so beside the family v0 opens with (OPEN_FAMILY), else null. It is the face openLayer's run
- * warms at its open, asked through the rules rather than the role table, so that no host decides a face.
+ * light where the layout rules say so beside the family v0 opens with (OPEN_FAMILY), else null. It is the face
+ * openLayer's run warms at its open, asked through the rules (the set a host passes to openLayer, the built-in one if
+ * none) rather than the role table, so that no host decides a face.
  */
-export function firstFaceOf(target) {
-  const { cjkFaces } = rulesFor(target)
+export function firstFaceOf(target, rules = BUILTIN_RULES) {
+  const { cjkFaces } = resolveRules(checkRules(rules), target)
   return cjkFaces ? rolesFor(target, OPEN_FAMILY, cjkFaces).cjk.body : null
 }
 
@@ -68,8 +76,9 @@ function shapesOf(units) {
  * (toTranslate), each table cell's group from the bundle's cells, the target's caption names on every float (L7), the
  * host's served faces (`faceSources`) and hyphenation patterns (`hyphUrl`), at scale 2.5 and a device pixel ratio of 1,
  * no copy kept at v0's own resolution: one set of choices on every device. Each choice made for the target is the
- * rules' (target-rules.mjs), none a host's. Its rows are taken as they come. One layer is open a page (a realm) at a time:
- * v0's faces are the page's, and a second open before the first's dispose throws.
+ * layout rules' (`rules`, the set a host loaded with readRules; the built-in set where none), none a host's own. Its rows
+ * are taken as they come. One layer is open a page (a realm) at a time: v0's faces are the page's, and a second open
+ * before the first's dispose throws.
  *
  *   take(rows)           each row as v0's unit (rows.mjs unitOf), into the run: the pages newly complete. A row that is no
  *                        unit of the bundle's is skipped and counted (stats().dropped)
@@ -88,21 +97,21 @@ function shapesOf(units) {
  *                        document.fonts (the browser keeps what they loaded) and the sheet of the faces' classes the SVG
  *                        text names (layer2.mjs faceClass: each face's class made once a page, for every run)
  */
-export async function openLayer({ bundle, doc, target, faceSources, hyphUrl } = {}) {
+export async function openLayer({ bundle, doc, target, faceSources, hyphUrl, rules = BUILTIN_RULES } = {}) {
   if (bundle === null || typeof bundle !== 'object' || !Array.isArray(bundle.units) || bundle.left === null || typeof bundle.left !== 'object') throw new TypeError(`bundle: a read bundle (readBundle's), not ${kindOf(bundle)}`)
   if (doc === null || typeof doc !== 'object' || typeof doc.getPage !== 'function' || !Number.isSafeInteger(doc.numPages)) throw new TypeError(`doc: a PDF.js document, not ${kindOf(doc)}`)
   if (typeof target !== 'string') throw new TypeError(`target: a language tag, not ${kindOf(target)}`)
   if (typeof faceSources !== 'function') throw new TypeError(`faceSources: a function, not ${kindOf(faceSources)}`)
   if (typeof hyphUrl !== 'function') throw new TypeError(`hyphUrl: a function, not ${kindOf(hyphUrl)}`)
+  checkRules(rules)
   if (opened) throw new Error('openLayer: one open layer a page; dispose the open one first')
   // (taken before the open's first await: two opens at once are refused alike)
   const token = {}
   opened = token
-  try { return await openOne({ bundle, doc, target, faceSources, hyphUrl }, token) } catch (e) { if (opened === token) opened = null; throw e }
+  try { return await openOne({ bundle, doc, target, faceSources, hyphUrl, rules }, token) } catch (e) { if (opened === token) opened = null; throw e }
 }
 
-async function openOne({ bundle, doc, target, faceSources, hyphUrl }, token) {
-  const rules = rulesFor(target)
+async function openOne({ bundle, doc, target, faceSources, hyphUrl, rules }, token) {
   const expect = toTranslate(bundle, target)
   // (each cell's group as the bundle's cells give it: a group is read once its own cells' rows are in)
   const groups = new Map()
@@ -114,8 +123,8 @@ async function openOne({ bundle, doc, target, faceSources, hyphUrl }, token) {
     pages: Number.POSITIVE_INFINITY, scale: SCALE, dpr: 1, copy: false,
     tex: bundle.layout ? { ...HYBRID, index: indexLayout(bundle.layout), pieces: new Map() } : null,
     removal: bundle.addon ? { mode: 'draw', doc, manifest: bundle.addon.manifest } : null,
-    labels: { names: rules.labels, captions: CAPTIONS },
-    faceSources, hyphUrl,
+    labels: { captions: CAPTIONS },
+    rules, faceSources, hyphUrl,
   })
   let dropped = 0, disposed = false, shapes = null
   const live = () => { if (disposed) throw new Error('openLayer: the layer was let go (dispose)') }

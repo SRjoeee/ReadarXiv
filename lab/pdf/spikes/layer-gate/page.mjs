@@ -74,7 +74,7 @@ class Faces {
 
 /** a fixture's layer, laid page by page */
 class Run {
-  constructor({ E, index, units, target, doc }) {
+  constructor({ E, index, units, target, doc, cjkFaces }) {
     this.E = E
     this.index = index
     this.doc = doc
@@ -84,7 +84,7 @@ class Run {
     for (const [, rows] of file.lines) for (let i = 7; i < rows.length; i += 8) weights[rows[i]] = (weights[rows[i]] ?? 0) + 1
     this.rules = E.layerRulesFor(target)
     this.family = E.familyOfFonts(file.fonts, weights)
-    this.roles = E.rolesFor(target, this.family)
+    this.roles = E.rolesFor(target, this.family, cjkFaces)
     this.faces = new Faces(E.FACES)
     this.text = new Map()
     this.laid = new Map()
@@ -257,7 +257,9 @@ window.gate = {
     try { index = E.indexLayout(E.parseLayout(await bytes(`${base}layout.json`))) } catch (e) { return { ready: false, why: `layout refused: ${String(e?.message ?? e).slice(0, 200)}` } }
     const units = (await (await fetch(`${base}units.json`)).json()).units
     const doc = await pdfjs.getDocument({ data: await bytes(`${base}arxiv.pdf`), ...ASSETS }).promise
-    const run = await new Run({ E, index, units, target, doc }).init()
+    // (the role table's CJK family for the target: the layout rules' built-in set's, the v0 layer's)
+    const { BUILTIN_RULES, resolveRules } = await import('/engine/rules/layout.mjs')
+    const run = await new Run({ E, index, units, target, doc, cjkFaces: resolveRules(BUILTIN_RULES, target).cjkFaces }).init()
     Object.assign(S, { E, index, units, doc, run, target, name, ref, composite, translated: new Set(units.map(u => u.id)), COLOURS: E.LAYER_COLOURS ?? [] })
     return { ready: true, pages: doc.numPages, units: units.length, located: index.file.units.length, even: run.rules.even, family: run.family }
   },

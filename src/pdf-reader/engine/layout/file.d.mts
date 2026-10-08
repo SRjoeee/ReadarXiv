@@ -1,6 +1,7 @@
 // file.mjs's types (JavaScript until the engine's port), for the reader and its tests
 export { LayoutRefusal } from './json.mjs'
-/** the maker's version: raised with any change to the layout maker or the schema; it enters no output identity */
+/** the maker's version: raised with any change to what the maker writes under the schema; it enters a bundle's key, and a file
+ *  names it as `layout`, which a reader reads for its shape alone: a file is refused by its `schema` (§9.3 of the plan) */
 export declare const LAYOUT: '3'
 /** a new-style arXiv identifier, or an old one (archive, subject class, a slash and 7 digits); never a version suffix */
 export declare const isPaperId: (id: unknown) => id is string
@@ -45,7 +46,8 @@ export interface LayoutFile {
   /** per unit, the lines its source does not write, by index rising: held (no slot, never erased) */
   held: [id: number, lines: number[]][]
 }
-/** bytes, then UTF-8, then values and nesting counted, then JSON.parse, then every bound; throws LayoutRefusal */
+/** bytes, then UTF-8, then values and nesting counted, then JSON.parse, then every bound; a file of another `schema` is
+ *  refused, one of another maker's `layout` is read; throws LayoutRefusal */
 export declare function parseLayout(bytes: Uint8Array): LayoutFile
 /** a file already parsed, within the bounds of what holds it (a layer bundle): every bound parseLayout checks past
  *  JSON.parse; returns the value itself, its -0s written 0; throws LayoutRefusal */

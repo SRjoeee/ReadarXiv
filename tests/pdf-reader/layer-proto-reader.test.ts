@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { captionNames } from '@/pdf-reader/engine/caption-names.mjs'
 import { rolesFor } from '@/pdf-reader/engine/font-roles.mjs'
 import type { SourceUnit } from '@/pdf-reader/engine/latex-front.mjs'
 import { type BundleParts, bundleUnitsOf, type ReadBundle, readBundle, STRING_MAX, writeBundle } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
@@ -9,6 +8,7 @@ import { layerRows, type Row, rowOf, toTranslate, unitOf } from '@/pdf-reader/en
 import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { LAYOUT, type LayoutFile, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
+import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 import { PDFJS } from '@/pdf-reader/engine/versions.mjs'
 
 // The reader's door (layer-proto/reader.mjs, A2's E4): both readers open the instant layer through openLayer, over a
@@ -139,18 +139,54 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect(o.tex?.pieces).toEqual(new Map())
     // (v0's removal reads no OPS: none is passed, and none asked of the host)
     expect(o.removal).toEqual({ mode: 'draw', doc, manifest: bundle.addon!.manifest })
-    expect(o.labels).toEqual({ names: captionNames('zh'), captions: { figure: 'target', table: 'target' } })
+    // (the names of a float come from the rule set, given to the run whole: the built-in one where the host passes none)
+    expect(o.labels).toEqual({ captions: { figure: 'target', table: 'target' } })
+    expect(o.rules).toBe(BUILTIN_RULES)
     expect(o.faceSources).toBe(faceSources)
     expect(o.hyphUrl).toBe(hyphUrl)
-    expect(o.params).toBeUndefined()
+    // (the door passes the rule set, never a parameter of its own)
+    expect(Object.keys(o)).not.toContain('params')
     layer.dispose()
     // a bundle the maker and the remover refused: v0 from the left alone, every unit erased and put back
     const bare = bundleOf({ layout: false, addon: false })
     const plain = await openLayer({ bundle: bare, doc, target: 'de', faceSources, hyphUrl })
     const p = seen.opens.at(-1) as unknown as Opened
     expect([p.tex, p.removal]).toEqual([null, null])
-    expect(p.labels).toEqual({ names: captionNames('de'), captions: { figure: 'target', table: 'target' } })
+    expect(p.labels).toEqual({ captions: { figure: 'target', table: 'target' } })
     plain.dispose()
+  })
+
+  it('refuses a rule set that is none with a TypeError of its own, before it takes the page\'s one open, like the door\'s other arguments', async () => {
+    const { firstFaceOf, openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const o = { bundle: bundleOf(), doc: docOf(), target: 'zh', faceSources, hyphUrl }
+    for (const rules of [null, 7, 'set', true, [], {}, { schema: 1 }, { ...structuredClone(BUILTIN_RULES), languages: null }, { ...structuredClone(BUILTIN_RULES), scripts: 3 }]) {
+      const refused = { name: 'TypeError', message: expect.stringMatching(/^rules: a rule set \(readRules's\), not /) }
+      await expect(openLayer({ ...o, rules } as never), JSON.stringify(rules)).rejects.toMatchObject(refused)
+      expect(() => firstFaceOf('zh', rules as never), JSON.stringify(rules)).toThrow(expect.objectContaining(refused))
+    }
+    // (no open was begun by any of them: the next, with a set, is the page's one)
+    const layer = await openLayer({ ...o, rules: structuredClone(BUILTIN_RULES) })
+    layer.dispose()
+  })
+
+  it('opens v0 with the rule set a host passes, and says which in its stats; the built-in one where it passes none', async () => {
+    const { firstFaceOf, openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const set = structuredClone(BUILTIN_RULES) as unknown as { version: number; scripts: Record<string, { leadBase: number; cjkFaces: { light: string[] } }> }
+    set.version = 7
+    set.scripts.Hans!.leadBase = 1.5
+    set.scripts.Hans!.cjkFaces.light.push('times')
+    const layer = await openLayer({ bundle: bundleOf(), doc: docOf(), target: 'zh', faceSources, hyphUrl, rules: set as never })
+    const o = seen.opens.at(-1) as unknown as Opened
+    expect(o.rules).toBe(set)
+    expect(layer.stats().rules).toEqual({ schema: 1, version: 7 })
+    // (the face asked first is the set's: light beside Times, which the built-in set does not say)
+    expect(facesAsked[0]).toBe('shs-sc-light')
+    expect(firstFaceOf('zh', set as never)).toBe('shs-sc-light')
+    expect(firstFaceOf('zh')).toBe('shs-sc-regular')
+    layer.dispose()
+    const built = await openLayer({ bundle: bundleOf(), doc: docOf(), target: 'zh', faceSources, hyphUrl })
+    expect(built.stats().rules).toEqual({ schema: 1, version: 1 })
+    built.dispose()
   })
 
   it('draws, with its rows taken in parts as they come, the pages one open over every unit draws: pageOf\'s SVG, copyOf\'s canvas, unitAt, stats', async () => {
@@ -166,7 +202,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
       pages: Number.POSITIVE_INFINITY, scale: 2.5, dpr: 1, copy: false, faceSources, hyphUrl,
       tex: { use: 'lines', texOnly: true, symbols: 'text', extents: 'v0', index: (await import('@/pdf-reader/engine/layout/file.mjs')).indexLayout(bundle.layout!), pieces: pieces as never },
       removal: { mode: 'draw', doc: docOf(), manifest: bundle.addon!.manifest },
-      labels: { names: captionNames('zh'), captions: { figure: 'target', table: 'target' } },
+      labels: { captions: { figure: 'target', table: 'target' } },
     })
     await whole.until(2)
     const want = whole.rows.map(r => r.svg.outerHTML)
@@ -237,7 +273,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     const { firstFaceOf, openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     for (const t of ['zh', 'zh-TW', 'ja', 'ko']) {
       facesAsked.length = 0
-      expect(firstFaceOf(t)).toBe(rolesFor(t, 'times').cjk!.body)
+      expect(firstFaceOf(t)).toBe(rolesFor(t, 'times', resolveRules(BUILTIN_RULES, t).cjkFaces).cjk!.body)
       const layer = await openLayer({ bundle: bundleOf(), doc: docOf(), target: t, faceSources, hyphUrl })
       expect(facesAsked[0]).toBe(firstFaceOf(t))
       layer.dispose()
@@ -421,7 +457,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
 })
 
 describe('the door reaches no server-only module', () => {
-  it('walks every module reader.mjs imports and re-exports: none of the server\'s, no node: specifier, no package', () => {
+  it('walks every module reader.mjs imports and re-exports: none of the server\'s, no node: specifier, no package but zod, in rules/ alone', () => {
     const SERVER = ['live.mjs', 'layout/remove.mjs', 'layout/addon.mjs', 'layout/make.mjs', 'layout/marks.mjs', 'layout/carry.mjs', 'layer/check.mjs'].map(f => resolve('src/pdf-reader/engine', f))
     // (static import and export … from, relative and the repository's @/ alias; a module of the alias is TypeScript)
     const SPEC = /(?:^|[\n;])\s*(?:import|export)\s+(?:type\s+)?(?:[^'";]*?\s+from\s+)?['"]([^'"]+)['"]/g
@@ -433,7 +469,7 @@ describe('the door reaches no server-only module', () => {
       for (const f of [base, `${base}.ts`, join(base, 'index.ts')]) { try { readFileSync(f); return f } catch {} }
       throw new Error(`${from}: ${spec} resolves to no file`)
     }
-    const seenFiles = new Set<string>(), others = new Set<string>(), dynamic: string[] = [], awaiting: string[] = []
+    const seenFiles = new Set<string>(), others = new Map<string, string[]>(), dynamic: string[] = [], awaiting: string[] = []
     const todo = [resolve('src/pdf-reader/engine/layer-proto/reader.mjs')]
     while (todo.length) {
       const f = todo.pop()!
@@ -443,7 +479,7 @@ describe('the door reaches no server-only module', () => {
       for (const m of text.matchAll(SPEC)) {
         const spec = m[1]!
         if (spec.startsWith('.') || spec.startsWith('@/')) todo.push(fileOf(f, spec))
-        else others.add(spec)
+        else others.set(spec, [...(others.get(spec) ?? []), f])
       }
       for (const m of text.matchAll(DYNAMIC)) dynamic.push(`${f}|${text.slice(m.index, m.index + 40)}`)
       // (a statement at the column of the module's own: `await …`, `const x = await …`)
@@ -454,7 +490,10 @@ describe('the door reaches no server-only module', () => {
     expect(awaiting).toEqual([])
     expect(seenFiles.size).toBeGreaterThan(20)
     for (const f of SERVER) expect(seenFiles.has(f), f).toBe(false)
-    expect([...others]).toEqual([])
+    // (the layout rules' validator is the one package the door's closure holds, imported by the rules' module and by none
+    // other: the rest of the engine takes the rules' answers, never the schema)
+    expect([...others.keys()]).toEqual(['zod/mini'])
+    expect(others.get('zod/mini')!.map(f => f.slice(resolve('src/pdf-reader/engine').length + 1))).toEqual(['rules/layout.mjs'])
     // (the walk reaches what it should: the run, the rows, the bundle, the translation)
     for (const f of ['layer-proto/run.mjs', 'layer-proto/rows.mjs', 'layer-proto/bundle.mjs', 'mt.mjs', 'layer-proto/check.mjs']) expect(seenFiles.has(resolve('src/pdf-reader/engine', f)), f).toBe(true)
   })

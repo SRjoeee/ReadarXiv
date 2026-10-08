@@ -5,7 +5,8 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { COVERAGE, COVERAGE_SOURCE, METRICS } from '@/pdf-reader/engine/font-coverage.mjs'
-import { canDraw, canDrawIn, classifyFont, type Design, FACES, type FaceId, type FontClass, faceFor, familyOfFonts, familyOfProbe, rolesFor } from '@/pdf-reader/engine/font-roles.mjs'
+import { canDraw, canDrawIn, classifyFont, type Design, FACES, type FaceId, type FontClass, faceFor, familyOfFonts, familyOfProbe } from '@/pdf-reader/engine/font-roles.mjs'
+import { rolesFor } from './helpers/roles'
 
 const cls = (name: string) => { const c = classifyFont(name); return { cls: c.cls, bold: c.bold, italic: c.italic, caps: c.caps, design: c.design, known: c.known } }
 const covers = (id: FaceId, cp: number) => {

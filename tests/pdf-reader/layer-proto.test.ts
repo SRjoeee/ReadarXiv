@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import type { Audit } from '@/pdf-reader/engine/layer-proto/check.mjs'
 import { breakPoints, patternsOfTex } from '@/pdf-reader/engine/layer-proto/hyph.mjs'
 import { layGroups, layOrder } from '@/pdf-reader/engine/layer-proto/run.mjs'
+import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // The layer's v0: the approved prototype ported into the engine (layer-proto/, from readarxiv-web's exp/instant-layer
 // at 9e56fca). Its drawing is measured by the layer gate against the prototype's own floor (--engine-kind=proto); these
@@ -40,9 +41,18 @@ describe("v0's hyphenation: TeX's pattern files read as the prototype's host rea
   })
   it('breaks a word where the patterns allow, and an exception as written', () => {
     const data = { pats: new Map([['ab', [0, 1, 0]]]), exceptions: new Map([['table', 'ta-ble']]), maxLen: 2 }
-    expect(breakPoints('xxabxx', 'de', data)).toEqual([3])
-    expect(breakPoints('table', 'en', data)).toEqual([2])
-    // Russian by its rules: never a single letter left
+    // (the fewest letters before and after a break are the layout rules': English's 2 and 3, German's 2 and 2)
+    expect(breakPoints('xxabxx', 'de', data, { left: 2, right: 2 })).toEqual([3])
+    expect(breakPoints('table', 'en', data, { left: 2, right: 3 })).toEqual([2])
+    // (a minimum is part of the answer: the same word under another is not the cached one)
+    expect(breakPoints('xxabxx', 'de', data, { left: 4, right: 2 })).toEqual([])
+    expect(breakPoints('xxabxx', 'de', data, { left: 2, right: 2 })).toEqual([3])
+    // the minimums are required for a language of patterns (a type error to leave out, and a refusal named by what is missing)
+    // @ts-expect-error — mins is required for 'en'
+    expect(() => breakPoints('table', 'en', data)).toThrow(/mins/)
+    expect(() => breakPoints('table', 'de', data, undefined as never)).toThrow(TypeError)
+    expect(() => breakPoints('table', 'en', data, { left: 2 } as never)).toThrow(/mins/)
+    // Russian by its rules: never a single letter left (and needs no minimums)
     for (const at of breakPoints('\u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u0430', 'ru', true)) expect(at >= 2 && at <= 7).toBe(true)
   })
 })
@@ -81,11 +91,12 @@ describe("v0's CJK class: a character is CJK by its code point", () => {
     : /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u201C\u201D\u2018\u2019\u2014\u2026\u00B7]/)
   const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
   const DESIGNS = { serif: 'times', sans: 'helvetica', mono: 'courier' }
-  const PARAMS = { autospace: false, compressMax: -1, hyphen: false }
+  // (a target's own parameters, the layout rules' built-in ones, but no autospace, no compressed punctuation, no hyphenation)
+  const paramsFor = (to: string) => ({ ...resolveRules(BUILTIN_RULES, to).params, autospace: 0, compressMax: -1, hyphen: 0 })
   /** the class (`cjk` or `latin`) each of `chars` is set in for a target, one character a token */
   const classes = (chars: string[], to: string) => {
     const unit = { kind: 'para', pieces: [{ t: 'text', s: chars.join(' ') }] }
-    const tokens = L2.tokensOf2(unit as never, new Map() as never, to, BASE as never, DESIGNS, PARAMS as never, null, () => 0).filter(t => !t.space)
+    const tokens = L2.tokensOf2(unit as never, new Map() as never, to, BASE as never, DESIGNS, paramsFor(to) as never, null, () => 0).filter(t => !t.space)
     expect(tokens.map(t => t.s)).toEqual(chars)
     return tokens.map(t => t.cls)
   }
@@ -110,7 +121,7 @@ describe("v0's CJK class: a character is CJK by its code point", () => {
       0x1d44e, 0x1d7d8, 0x1d6fd, 0x1d714, // Mathematical Alphanumeric Symbols: an italic a, a double-struck 8, a bold beta, an italic omega
       0x1f600, 0x10400, 0x1e900, 0x10fffd, // an emoji, Deseret, Adlam, a private use character
     ]
-    for (const to of ['zh', 'zh-TW', 'ja', 'ko', 'en']) {
+    for (const to of ['zh', 'zh-TW', 'ja', 'ko', 'fr']) {
       expect(classes(cjk.map(cp => String.fromCodePoint(cp)), to), to).toEqual(cjk.map(() => 'cjk'))
       expect(classes(other.map(cp => String.fromCodePoint(cp)), to), to).toEqual(other.map(() => 'latin'))
     }
@@ -118,7 +129,7 @@ describe("v0's CJK class: a character is CJK by its code point", () => {
 
   it("a Chinese word holding a math letter breaks between its CJK characters only: the letter stays with the Latin run it is in", () => {
     const unit = { kind: 'para', pieces: [{ t: 'text', s: '\u6c49\u5b57\u{1D44E}\u{1D44F}\u6c49' }] }
-    const tokens = L2.tokensOf2(unit as never, new Map() as never, 'zh', BASE as never, DESIGNS, PARAMS as never, null, () => 0)
+    const tokens = L2.tokensOf2(unit as never, new Map() as never, 'zh', BASE as never, DESIGNS, paramsFor('zh') as never, null, () => 0)
     expect(tokens.map(t => [t.s, t.cls])).toEqual([['\u6c49', 'cjk'], ['\u5b57', 'cjk'], ['\u{1D44E}\u{1D44F}', 'latin'], ['\u6c49', 'cjk']])
   })
 })

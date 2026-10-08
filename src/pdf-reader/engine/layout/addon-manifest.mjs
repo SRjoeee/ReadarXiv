@@ -8,9 +8,12 @@
 // place, with the gate's outline table and the crops' colours); the layer bundle's reader (layer-proto/bundle.mjs) reads
 // the manifest a bundle holds in the shipped form alone. No key of an object read names a prototype. Imports json.mjs
 // alone, and no PDF object layer: the reader's door loads it.
-import { boundedJson, COORD_MAX, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
+import { boundedJson, COORD_MAX, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal, told } from './json.mjs'
 
-/** the remover's version: raised with any change to what it writes; it enters the add-on's key (2: compact sets; 3: a
+/** the remover's version: raised with any change to what it writes under the manifest's schema; it enters the add-on's key
+ *  and a bundle's (bundle.mjs VTAG), and the manifest names it as `removal`, which a reader reads for its shape alone: a
+ *  manifest is refused by its `schema`, never by the remover that wrote it (the rules-as-data plan, §9.3), so a change of
+ *  the manifest's fields, bounds or meaning raises `schema` (and BUNDLE, which holds it), not this (2: compact sets; 3: a
  *  Type 3 glyph's removed advance with its font matrix's translation, an unusable matrix refused; 4: a hex string read as
  *  PDF.js reads it, and a page refused past its budgets: what it holds by kind, what it decodes). Defined here, beside
  *  the manifest that names it, so that a reader checks a manifest without loading the remover (which re-exports it) */
@@ -89,7 +92,7 @@ export function checkAddonManifest(m, { pages, views = null, shipped = false }) 
   const setNames = shipped ? SHIPPED_SETS : SET_NAMES
   keysOf(m, TOP, shipped ? [] : TOP_CHECK, '')
   if (m.schema !== 1) throw refuse('schema', 'not 1')
-  if (m.removal !== REMOVAL) throw refuse('removal', `not '${REMOVAL}'`)
+  if (!isVersionToken(m.removal)) throw refuse('removal', `not a version, 1 to 32 letters, digits or points (${kindOf(m.removal)})`)
   if (m.pages !== pages) throw refuse('pages', `not the paper's ${pages}`)
 
   const sets = keysOf(m.sets, [], setNames, 'sets'), names = Object.keys(sets)

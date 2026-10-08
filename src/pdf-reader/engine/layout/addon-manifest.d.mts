@@ -1,5 +1,6 @@
 // addon-manifest.mjs's types: the add-on's manifest as a reader reads it, for the readers, the remover and their tests
-/** the remover's version: it enters the add-on's key (layout/remove.mjs re-exports it) */
+/** the remover's version: it enters the add-on's key and a bundle's; a manifest names it, and a reader reads that for its shape
+ *  alone (layout/remove.mjs re-exports it) */
 export declare const REMOVAL: '4'
 /** the add-on's bytes at most (the bytes after arXiv's), its manifest's bytes and values */
 export declare const ADDON_CAP: number
@@ -23,7 +24,7 @@ export interface RemovalManifest {
  *  (where given) each page's x0, y0, x1, y1, a box then within its page's; `shipped`, the shipped add-on's form alone (no
  *  check's set, outline table nor colours). Returns it as it is; throws LayoutRefusal */
 export declare function checkAddonManifest(manifest: unknown, o: { pages: number; views?: readonly number[] | null; shipped?: boolean }): RemovalManifest
-/** the manifest read within bounds: schema 1, removal REMOVAL, pages the layout file's, sets, each page's entry (ok,
+/** the manifest read within bounds: schema 1, removal a version token (any remover's), pages the layout file's, sets, each page's entry (ok,
  *  refused at most 200 characters, at within the add-on's pages, dirty and rules finite numbers stride 4 within the
  *  page's view, units' boxes likewise); values counted before JSON.parse; throws LayoutRefusal */
 export declare function parseAddonManifest(bytes: Uint8Array, o: { pages: number; views?: readonly number[] | null; shipped?: boolean }): RemovalManifest

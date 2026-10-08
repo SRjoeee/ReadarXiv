@@ -29,10 +29,11 @@ export interface RoleSet {
 }
 /** a script's CJK faces: its group, its Kai (null: emphasis upright), the English designs beside which it is light */
 export interface CjkFaces { group: string; kai: string | null; light: readonly string[] }
-/** the CJK faces a target's script takes by the role table, or null for a script with none */
-export declare function cjkFacesOf(target: string): CjkFaces | null
-/** what a target draws in, for a paper's English family; its CJK faces the table's own (cjkFacesOf) unless given */
-export declare function rolesFor(target: string, family: EnglishFamily, cjkFaces?: CjkFaces | null): RoleSet
+/** the English families a paper's body is set in; a rule may name them as the ones a CJK face is light beside */
+export declare const ENGLISH_FAMILIES: readonly EnglishFamily[]
+/** what a target draws in, for a paper's English family; `cjkFaces` is the target's CJK family as the layout rule set gives
+ *  it (null for an alphabet), and a script of no alphabet's given none throws */
+export declare function rolesFor(target: string, family: EnglishFamily, cjkFaces: CjkFaces | null): RoleSet
 /** the face a run is drawn in */
 export declare function faceFor(roles: RoleSet, run: { script: 'cjk' | 'latin'; cls: FontClass['cls']; design: Design; bold: boolean; italic: boolean; caps: boolean }): FaceId
 /** whether every character of `text` (but white space and the default ignorable) is in one of `faces`' coverage or

@@ -3,7 +3,7 @@
 // here, so the next rewrite cannot lose one.
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node script, deliberately dependency-free and untyped
-import { platformImportsOf, resolveSpecifier, valueImportsOf, withoutComments } from '../../scripts/check-boundary.mjs'
+import { enginePackagesOf, platformImportsOf, resolveSpecifier, valueImportsOf, withoutComments } from '../../scripts/check-boundary.mjs'
 
 const FROM = 'src/core/renderer/failed.ts'
 const forbidden = (text: string, file = FROM) => (platformImportsOf(file, text) as { spec: string }[]).map(p => p.spec)
@@ -84,5 +84,27 @@ describe('valueImportsOf', () => {
   it('reports every specifier of a file in the order they appear', () => {
     const text = "import a from './a'\nimport type { B } from './b'\nexport { c } from './c'\nconst d = await import('./d')\n"
     expect(valueImportsOf(text)).toEqual(['./a', './c', './d'])
+  })
+})
+
+describe('the engine imports no package but the layout rules\' validator, in rules/ alone', () => {
+  const packages = (file: string, text: string) => (enginePackagesOf(file, text) as { spec: string }[]).map(p => p.spec)
+  it('allows zod (and its mini build) in src/pdf-reader/engine/rules/, and nowhere else in the engine', () => {
+    expect(packages('src/pdf-reader/engine/rules/layout.mjs', "import * as z from 'zod/mini'\n")).toEqual([])
+    expect(packages('src/pdf-reader/engine/rules/layout.mjs', "import { z } from 'zod'\n")).toEqual([])
+    expect(packages('src/pdf-reader/engine/layer-proto/run.mjs', "import * as z from 'zod/mini'\n")).toEqual(['zod/mini'])
+    expect(packages('src/pdf-reader/engine/font-roles.mjs', "import { z } from 'zod'\n")).toEqual(['zod'])
+    expect(packages('src/pdf-reader/engine/rulesx/layout.mjs', "import { z } from 'zod'\n")).toEqual(['zod'])
+  })
+  it('refuses any other package, scoped or not, even in rules/, and a dynamic or required one', () => {
+    expect(packages('src/pdf-reader/engine/rules/layout.mjs', "import { a } from 'lodash'\n")).toEqual(['lodash'])
+    expect(packages('src/pdf-reader/engine/layout/addon.mjs', "import PL from '@cantoo/pdf-lib'\n")).toEqual(['@cantoo/pdf-lib'])
+    expect(packages('src/pdf-reader/engine/layer-proto/x.mjs', "const m = await import('pdfjs-dist')\n")).toEqual(['pdfjs-dist'])
+    expect(packages('src/pdf-reader/engine/x.mjs', "const m = require('zod')\n")).toEqual(['zod'])
+  })
+  it('lets relative paths, the repository\'s aliases, node: modules and type-only imports pass, and judges only the engine', () => {
+    expect(packages('src/pdf-reader/engine/x.mjs', "import { a } from './a.mjs'\nimport { b } from '../b.mjs'\nimport { c } from '@/core/c'\nimport { d } from 'node:fs'\n")).toEqual([])
+    expect(packages('src/pdf-reader/engine/x.d.mts', "import type { ZodMiniType } from 'zod/mini'\n")).toEqual([])
+    expect(packages('src/core/x.ts', "import { z } from 'zod'\n")).toEqual([])
   })
 })
