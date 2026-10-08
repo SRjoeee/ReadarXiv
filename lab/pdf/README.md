@@ -64,7 +64,7 @@ missing or drawn twice, and the fidelity measures against the original page, no 
 
 Records: `lab/pdf/records/layer-fidelity.md`, `lab/pdf/records/layer-gate.md`, `lab/pdf/records/layer-perf.md`.
 
-The first layer (`layer/layer.mjs`, with the fit and the line breaker under `layer/`) is parked (`parked/README.md`): the gate's default kind, `--engine-kind=layer`, and the layer lab's first view report that it is not there. The gate measures the drawn layer, `--engine-kind=proto` (the mode of the records) and `--door`; the checker `layer/check.mjs` stays, since the gate's instrument imports it by its address.
+The gate measures the drawn layer, v0 (`--engine-kind=proto`, its default; the records' mode is `--proto-tex=lines --removal=draw`; `--door` is the reader's door). The first layer (`layer/layer.mjs`, with the fit and the line breaker under `layer/`) is parked (`parked/README.md`): `--engine-kind=layer` is refused with a message that says so, for an older worktree given by `--engine=<it>` that still has the entry it measures it as it was, and the layer lab's first view reports that the entry is not there. The checker `layer/check.mjs` stays, since the gate's instrument imports it by its address.
 
 ### The highlight
 

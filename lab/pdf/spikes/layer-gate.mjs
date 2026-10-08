@@ -25,7 +25,7 @@
 //   pnpm exec tsx lab/pdf/spikes/layer-gate.mjs [--tier=model|pixel] [--engine=<worktree>] [--only=<fixture>,…]
 //       [--layouts=made|fixed] [--fixtures=<dir>] [--pages=<n>] [--workers=<n>] [--check[=<record>]] [--record[=<record>]] [--label=<short>]
 //       [--composite=source-over|darken] [--no-progress] [--panel-width=<px>] [--freeze[=force]]
-//       [--engine-kind=layer|proto] [--proto-units=fixture|p7] [--progress=<name|path>] [--previous=<name|path>] [--panels-only] [--proto-panels=<dir>]
+//       [--engine-kind=proto|layer] [--proto-units=fixture|p7] [--progress=<name|path>] [--previous=<name|path>] [--panels-only] [--proto-panels=<dir>]
 //       [--proto-faces=roles|prototype] [--proto-place=<file>] [--proto-order=<file>] [--dump=<dir>] [--write-floor]
 //       [--proto-tex=ph|lines] [--proto-tex-only=no] [--proto-symbols=text|strict] [--proto-extents=v0|tex]
 //       [--against=<record key>] [--rules=<file>] [--ruling=<file>] [--parts[=<n>]] [--slices[=blocks|alphabet]] [--door[=<n>]]
@@ -72,11 +72,13 @@
 //                apart (<tier>-proto-tex-<ph|lines>, and each further choice)
 //   --against    --check against another of the record's runs than this run's own (a hybrid against v0's, pixel-proto):
 //                the inputs that make it another run (tex) are not compared
-//   --engine-kind  layer (the default): the engine's layer entry (layer/layer.mjs) over a layout file; proto: the layer's
-//                v0, the approved prototype ported into the engine (layer-proto/run.mjs), which has no layout file: it
+//   --engine-kind  proto (the default): the layer's v0, the approved prototype ported into the engine (layer-proto/run.mjs),
+//                which has no layout file: it
 //                reads the made output's geometry (the prototype's own, layer-gate/ref.mjs PROTO_GEOMETRY, by paper) and a
 //                units file, and is measured on the same pages, fixtures, references and measures (layer-gate/proto.mjs).
-//                Its runs are recorded apart (<tier>-proto), the fixtures' own layout files serving only the instrument
+//                Its runs are recorded apart (<tier>-proto), the fixtures' own layout files serving only the instrument. layer: the
+//                first layer, the engine's layer entry (layer/layer.mjs) over a layout file, parked (parked/engine/layer/): refused
+//                for an engine that has none, measured for an older worktree (--engine=<it>) that still has it
 //   --proto-units  fixture (the default): v0 translates what the engine does, each fixture's record.json; p7: the
 //                prototype's own staging output, which its floor was measured on (the ten shared outputs have one)
 //   --progress   the progress folder: a name under the progress folders, or a path (default <NN>-<label>); --previous the
@@ -123,6 +125,7 @@ import { constants as zlibConstants, gzipSync, inflateRawSync, inflateSync } fro
 import { availableParallelism, homedir } from 'node:os'
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
 import { chromium } from 'playwright'
+import { engineKindOf } from './layer-gate/kind.mjs'
 import { encodePng } from './layer-gate/png.mjs'
 import { geometryFile, nameOf, PROTO_GEOMETRY, refBytesOf, refPages, sha256, shownPath } from './layer-gate/ref.mjs'
 import { compare, fixtureTotals, MEASURES, pageEntry, pooled, REPORTED } from './layer-gate/score.mjs'
@@ -140,9 +143,8 @@ const PERF = !!arg('perf')
 const TIER = PERF ? 'model' : arg('tier') ?? 'model'
 if (TIER !== 'model' && TIER !== 'pixel') throw new Error(`--tier=${TIER}: model or pixel`)
 const ENGINE = resolve(typeof arg('engine') === 'string' ? arg('engine') : REPO)
-/** the layer measured: the engine's layer entry over a layout file, or its v0 with none (proto.mjs) */
-const KIND = arg('engine-kind') ?? 'layer'
-if (!['layer', 'proto'].includes(KIND)) throw new Error(`--engine-kind=${KIND}: layer or proto`)
+/** the layer measured: its v0 with no layout file (proto.mjs), the default, or the first layer over one where the engine still has it */
+const KIND = engineKindOf(arg('engine-kind'), ENGINE)
 const PROTO = KIND === 'proto'
 const PROTO_UNITS = arg('proto-units') ?? 'fixture'
 if (!['fixture', 'p7'].includes(PROTO_UNITS)) throw new Error(`--proto-units=${PROTO_UNITS}: fixture or p7`)
@@ -335,7 +337,7 @@ const DOOR_FILES = new Map()
 const server = createServer((req, res) => {
   let path
   try { path = decodeURIComponent(new URL(req.url, 'http://127.0.0.1').pathname) } catch { res.writeHead(400); return res.end() }
-  // (--door: the engine's own `../../core/…` imports, read from /engine/mt.mjs, name the repository's src/core)
+  // (--door: the engine's own `../../../core/…` imports, read from /engine/translate/mt.mjs, clamp at the root and name /core, the repository's src/core)
   if (DOOR !== null && path.startsWith('/core/')) path = `/src${path}`
   const hy = /^\/hyph\/([a-z]+)\.json$/.exec(path)
   if (PROTO && hy) {
