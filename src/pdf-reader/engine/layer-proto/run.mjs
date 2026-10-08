@@ -108,54 +108,110 @@ export function settleLayout(p) {
 }
 
 /**
- * adaptiveFill (D, P.adaptiveFill: { band, track, size }; the default since 2026-10-07, null for B): the units of a
- * loose original's page that begin on it (`loose`, each laid already: tokens, blocks, s, P, fillRange), each spread over
- * its original paragraph's space, the page's lines kept to one rhythm. Each unit's fill leading is the loosest, between
- * its leading relative to the original's pitch and the script's on it (leadBase), at which its most natural state still
- * sets it whole: its text then reaches its frame's foot. The page's target is the median of its body units' (of all its
- * loose units' where it has none); each unit takes its fill leading, but never more than `band` over the target, so
- * that neighbouring paragraphs keep one line spacing. A unit the band stops short of its fill then takes tracking, up to
- * `track` em, and where that is not enough its size, up to `size` x the original's. A unit that does not fit naturally
- * even at its relative leading keeps its own fit. Each unit filled is laid anew in place (p.P, p.layout, its extents
- * kept), then `onFilled(p, target)`.
+ * adaptiveFill (P.adaptiveFill: { band, track, size }; D since 2026-10-07, generalised by D6's F6b on 2026-10-08; null
+ * for B): the units that begin on a page (`units`, each laid already: tokens, blocks, s, P, layout), each spread over
+ * its original's frame, the page's lines kept to one rhythm. A unit is filled at the state its fit set it at, its
+ * leading apart: its fill leading is the loosest, from its fitted leading up to P.fillLead em of the size it is drawn
+ * at (null: the original's own pitch), at which that state still sets it whole, so that its text reaches its frame's
+ * foot. The page's target is the median of its body units' fill leadings (of all its units' where it has no body unit;
+ * a unit of one line has no leading to tell, and tells only where no unit has more), held within `band` of `held.last`,
+ * the target of the last page before it whose body units told it, and within `band` of `held.anchor`, the target of the
+ * fullest page passed (the most body lines of the original's on it, `continuing` units, those running on from a page
+ * before, counted with its own; the earliest of equals; nextHeld) (null: no page has): a page's rhythm moves from the
+ * last page's by no more than the band, and the paper's comes to and stays within a band of its fullest page's, however
+ * many pages it runs to (the coordinator's ruling of 2026-10-08, one rhythm across the paper, the maintainer's standing
+ * preference; anchored on the fullest page, not the first, which a title page's few lines made the thesis's, holding
+ * its pages a fifth of a pitch under their own). Each unit takes its fill leading, but never more than `band` over the
+ * target, so that neighbouring paragraphs keep one line spacing. A CJK unit the band or its fill leading's top stops
+ * short of its fill then takes tracking, up to `track` em; and where every body unit of the page is still short with
+ * all of it, the page's body units take one size, the largest up to `size` x the original's at which every one of them
+ * is still set whole: one size a page where it grows, never a unit's own (D grew each unit apart, and a page mixed 1.0
+ * and 1.1); a unit the fit had to shrink keeps its own largest fitting size. A unit its fitted state does not set again
+ * (the text run past a display) keeps its own fit. Each unit filled is laid anew in place (p.P, p.layout, its extents
+ * kept), then `onFilled(p, target)`. Returns the page's target, its own (`own`, before it is held), whether its body
+ * units told it (`body`), and, for the anchor, the original's lines of every body unit on the page (`lines`) and their
+ * fill leadings' median (`anchor`); a page whose units begun on it tell none answers its lines and anchor alone
+ * (`target` null), and null where nothing tells.
  */
-export function fillPage(loose, P, onFilled = () => {}) {
+export function fillPage(units, P, held = null, onFilled = () => {}, { page = units[0]?.pages[0] ?? null, continuing = [] } = {}) {
   const { band, track, size } = P.adaptiveFill
-  const fitsNaturally = (p, PP) => { const l = L2.layoutUnit2(p.tokens, p.blocks, p.s, PP); return l.tried === 1 && !l.clipped ? l : null }
-  const fillLeadOf = p => {
-    const [lo, hi] = p.fillRange
-    for (let k = Math.round((hi - lo) / 0.01); k >= 0; k--) {
-      const L = Math.min(hi, Math.round((lo + k * 0.01) * 1000) / 1000)
-      if (fitsNaturally(p, { ...p.P, leadBase: L, growTo: 0 })) return L
-    }
-    return null
+  const r3 = x => Math.round(x * 1000) / 1000
+  const at = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); return l.clipped ? null : l }
+  /** the loosest leading P.fillLead allows a unit at the size it is set at, × its original's pitch */
+  const topOf = p => {
+    if (P.fillLead === null) return 1
+    const pitches = p.blocks.map(b => b.pitch0).filter(v => v > 0).sort((a, b) => a - b)
+    const p0 = pitches.length ? pitches[pitches.length >> 1] : 1.2 * p.s
+    return r3((P.fillLead * p.s * p.layout.state.scale) / p0)
   }
-  for (const p of loose) if (p.fillLead === undefined) p.fillLead = fillLeadOf(p)
-  const body = loose.filter(p => p.fillLead !== null && EVEN_KINDS.has(p.unit.kind))
-  const leads = (body.length ? body : loose.filter(p => p.fillLead !== null)).map(p => p.fillLead)
-  if (!leads.length) return null
-  const target = median(leads)
-  for (const p of loose) {
+  // (a looser leading holds no more lines than a closer one: the loosest that sets the unit is found by halving, a few
+  // layouts a unit where trying each hundredth from the top took up to forty. Monotone in practice, not by construction:
+  // the greedy breaking's kinsoku and hanging marks could make a looser value set a unit a closer one does not; the linear
+  // search from the top is the reference, and the halving drew the same on every fixture. So for the tracking and size)
+  const fillLeadOf = p => {
+    const st = p.layout.state
+    if (!at(p, st)) return null
+    const lo = st.lead, hi = p.fillTop, L = k => Math.min(hi, r3(lo + k * 0.01))
+    let ok = 0, no = Math.round((hi - lo) / 0.01) + 1
+    while (no - ok > 1) { const k = (ok + no) >> 1; if (at(p, { ...st, lead: L(k) })) ok = k; else no = k }
+    return ok ? L(ok) : lo
+  }
+  for (const p of units) if (p.fillLead === undefined) { p.fillTop = topOf(p); p.fillLead = fillLeadOf(p) }
+  const withLead = units.filter(p => p.fillLead !== null)
+  const telling = withLead.filter(p => p.layout.lines.length >= 2)
+  const body = telling.filter(p => EVEN_KINDS.has(p.unit.kind))
+  // (the page as the paper's anchor reads it: every body unit with lines on it, those running on from a page before as
+  // well, their original's lines on this page and the fill leadings of those that tell; their laying stays the page's
+  // they begin on)
+  const present = [...units, ...continuing].filter(p => EVEN_KINDS.has(p.unit.kind) && !p.refused)
+  const lines = present.reduce((n, p) => n + p.blocks.reduce((m, b) => m + (b.page === page ? b.B.length : 0), 0), 0)
+  const anchorLeads = present.filter(p => p.fillLead !== null && p.fillLead !== undefined && p.layout.lines.length >= 2).map(p => p.fillLead)
+  const anchor = anchorLeads.length ? r3(median(anchorLeads)) : null
+  const leads = (body.length ? body : telling.length ? telling : withLead).map(p => p.fillLead)
+  if (!leads.length) return anchor === null ? null : { target: null, own: null, body: false, lines, anchor }
+  const own = median(leads)
+  const hold = (v, at) => Math.min(at + band, Math.max(at - band, v))
+  // (the anchor's window first, the page before's step last: a page moves by the band at most, and so reaches a window it
+  // stands outside of, a band a page)
+  const target = r3(held === null ? own : hold(hold(own, held.anchor), held.last))
+  const filled = []
+  for (const p of units) {
     if (p.fillLead === null) continue
-    let PP = { ...p.P, leadBase: Math.min(p.fillLead, Math.round((target + band) * 1000) / 1000), growTo: 0 }
-    let l = fitsNaturally(p, PP)
+    let st = { ...p.layout.state, lead: Math.min(p.fillLead, r3(target + band)) }
+    let l = at(p, st)
     if (!l) continue
-    if (p.fillLead > target + band + 1e-9 || p.fillLead >= p.fillRange[1] - 1e-9) {
-      // short of its fill at the band's edge or at the script's leading: tracking, the most that still sets it
-      // naturally, then the size
-      let t = 0
-      for (let k = Math.round(track / 0.01); k >= 1; k--) {
-        const P2 = { ...PP, trackStart: Math.round(((p.P.trackStart ?? 0) + k * 0.01) * 1000) / 1000 }
-        const l2 = fitsNaturally(p, P2)
-        if (l2) { PP = P2; l = l2; t = k * 0.01; break }
-      }
-      if (t >= track - 1e-9 && size > 1) {
-        const l3 = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...PP, growTo: size })
-        if (!l3.clipped) { PP = { ...PP, growTo: size }; l = l3 }
-      }
+    // short of its fill at the band's edge or at its fill leading's top: tracking, the most that still sets it, then the
+    // page's size
+    const short = p.fillLead > target + band + 1e-9 || p.fillLead >= p.fillTop - 1e-9
+    let full = !short
+    if (short && P.cjk) {
+      // (the most tracking that still sets it: halving, as a wider tracking holds no more on a line)
+      const K = Math.round(track / 0.01), st2 = k => ({ ...st, track: r3(st.track + k * 0.01) })
+      let ok = 0, no = K + 1, lk = null
+      while (no - ok > 1) { const k = (ok + no) >> 1, l2 = at(p, st2(k)); if (l2) { ok = k; lk = l2 } else no = k }
+      if (ok) { st = st2(ok); l = lk }
+      full = ok < K
     }
+    filled.push({ p, st, l, full })
+  }
+  // the page's one size where it grows: every body unit's, where none is full yet; the largest at which every one is still
+  // set whole, by halving (a larger size sets no more), a unit that fails ending the try. A unit the fit had to shrink
+  // keeps its own largest fitting size: setting the page's other body units at it (PR #335's reviews) left the alphabets'
+  // and Japanese's units short of their frames, the alphabets unable to spread past the original's pitch (paraGap 1.255
+  // -> 1.708, as before D6; full size 0.25 -> 0; Japanese 1.011 -> 1.289), the coordinator's ruling of 2026-10-09
+  const grown = filled.filter(f => EVEN_KINDS.has(f.p.unit.kind))
+  if (size > 1 && grown.length && grown.every(f => !f.full)) {
+    const scaleOf = k => r3(1 + k * P.step)
+    const all = k => { const ls = []; for (const f of grown) { const l = at(f.p, { ...f.st, scale: scaleOf(k), knob: 'grow' }); if (!l) return null; ls.push(l) } return ls }
+    let ok = 0, no = Math.round((size - 1) / P.step) + 1, best = null
+    while (no - ok > 1) { const k = (ok + no) >> 1, ls = all(k); if (ls) { ok = k; best = ls } else no = k }
+    if (ok) grown.forEach((f, i) => { f.st = { ...f.st, scale: scaleOf(ok), knob: 'grow' }; f.l = best[i] })
+  }
+  for (const { p, st, l } of filled) {
     const keep = p.layout.extents
-    p.P = PP
+    p.P = { ...p.P, leadBase: st.lead }
+    // (its fit's knob kept, a step past its states among them (widen, below-floor), but the page's size grown)
+    if (st.knob !== 'grow') l.knob = p.layout.knob
     p.layout = l
     p.layout.extents = keep
     // (laid anew: its clearance at its new size, before it is recorded or painted; the pass put a cleared CJK cell's
@@ -163,7 +219,120 @@ export function fillPage(loose, P, onFilled = () => {}) {
     settleLayout(p)
     onFilled(p, target)
   }
-  return target
+  return { target, own: r3(own), body: body.length > 0, lines, anchor }
+}
+
+/**
+ * The targets the next page's fill is held to, from the last held and a page's pass (fillPage's answer): the page's target
+ * as the last, where its body told one, and as the anchor the target of the page with the most body lines passed so far
+ * (its body units' fill leadings, those running on from a page before as well; the earliest of equals). A page that
+ * tells neither changes nothing. Pages are passed in their laying order, so that no page reads a later one
+ */
+export function nextHeld(held, r) {
+  if (!r) return held
+  if (held === null) return r.body ? { last: r.target, anchor: r.anchor ?? r.target, lines: r.lines } : null
+  const fuller = r.anchor !== null && r.lines > held.lines
+  return { last: r.body ? r.target : held.last, anchor: fuller ? r.anchor : held.anchor, lines: fuller ? r.lines : held.lines }
+}
+
+/**
+ * The ink of a page that stays visible where a unit's lines would move to (E3 for the leftover packed, packPage): the
+ * page's ink map (layer2.mjs inkMapOf, of the original page as PDF.js draws it: text, rules, images and vector paths
+ * alike), less the glyphs the drawing takes away (`accounted`: the boxes of the characters the page's painted units
+ * account for, erased with them or removed by the add-on, each grown by a map cell, as the map holds a cell any of whose
+ * pixels is inked), and the add-on's `dirty` boxes (kept ink under the units' rectangles, where the removed page is swapped
+ * in). Boxes are [x0, y0, x1, y1] in PDF units; `toDev` and `toPdf` map between them and the map's canvas. Returns
+ * foot(x0, x1, y0, y1): the PDF y of the lowest staying ink's foot in that box, or null where it holds none.
+ */
+export function stayingInk({ map, toDev, toPdf, accounted = [], dirty = [] }) {
+  const { w, h, factor: f } = map
+  const cells = (x0, y0, x1, y1, pad) => {
+    const [ax, ay] = toDev(x0, y1), [bx, by] = toDev(x1, y0)
+    return [Math.max(0, Math.floor(Math.min(ax, bx) / f) - pad), Math.max(0, Math.floor(Math.min(ay, by) / f) - pad), Math.min(w - 1, Math.floor(Math.max(ax, bx) / f) + pad), Math.min(h - 1, Math.floor(Math.max(ay, by) / f) + pad)]
+  }
+  const stay = map.ink.slice()
+  const fill = (b, pad, v) => { const [c0, r0, c1, r1] = cells(b[0], b[1], b[2], b[3], pad); for (let r = r0; r <= r1; r++) stay.fill(v, r * w + c0, r * w + c1 + 1) }
+  for (const b of accounted) fill(b, 1, 0)
+  for (const b of dirty) fill(b, 0, 1)
+  return (x0, x1, y0, y1) => {
+    if (!(y1 > y0) || !(x1 > x0)) return null
+    const [c0, r0, c1, r1] = cells(x0, y0, x1, y1, 0)
+    for (let r = r1; r >= r0; r--) for (let c = c0; c <= c1; c++) if (stay[r * w + c]) return toPdf((c + 0.5) * f, (r + 1) * f)[1]
+    return null
+  }
+}
+
+/**
+ * The leftover packed (P.leftover 'pack', D6's F6c, the maintainer's experiment of 2026-10-08; 'foot' keeps it at each
+ * unit's foot): a page's body units (`units`, laid and filled: blocks, layout, s) moved up so that each paragraph keeps
+ * the original's gap to the one above it, and what its fill leaves over gathers at the end of the run of paragraphs, before
+ * the next fixed thing. A unit moves where it is a body unit of one block, on this page alone, below another body unit of
+ * the page in its column with nothing between them: no other unit's line (`rects`, every unit's rectangles on the page:
+ * [id, [page, x0, y0, x1, y1]]), no character of the page (`chars`: a display, a label), and no more than three of the
+ * upper's pitches of the original's (a figure's room); and its first line its own (no other unit's line on it, no
+ * character before its start: a run-in heading stays with its text). A heading, a display, a float, a unit drawn on two
+ * pages or one left the original's is fixed: a run ends at it. Its first line is then set as far under the upper's last drawn line as
+ * the original's are apart, never lower than it was, its lines moved together; the units are taken from the top, so that
+ * a run's moves add up. The cost: a paragraph's top leaves its original's line.
+ * And it moves over no ink that stays (E3, by construction): `stays(x0, x1, y0, y1)`, the foot (PDF y) of the lowest ink in
+ * a box that the drawing leaves visible, or null (stayingInk: the page's ink but the glyphs its painted units take away,
+ * and the add-on's dirty boxes). A unit whose own lines' band holds such ink does not move; one that would rise into it
+ * stops short of its foot by `gap` of its pitch (P.borrowGap: the room a unit's borrowed lines keep above ink below
+ * them). Null: no ink is read (the tests of the rest).
+ * Returns the moves by unit id (PDF units up), the units that moved in the order they were taken.
+ */
+export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
+  const lastOf = p => { let i = -1; p.blocks.forEach((b, j) => { if (b.page === pg) i = j }); return i }
+  const linesOf = (p, bi) => p.layout.lines.filter(l => l.page === pg && l.block === bi)
+  const body = units.filter(p => EVEN_KINDS.has(p.unit.kind) && !p.refused && p.layout)
+  const movable = body.filter(p => p.pages.length === 1 && p.pages[0] === pg && p.blocks.length === 1 && p.blocks[0].page === pg && linesOf(p, 0).length)
+    .sort((a, b) => b.blocks[0].B[0] - a.blocks[0].B[0])
+  const moves = new Map()
+  for (const q of movable) {
+    const b = q.blocks[0], top = b.B[0] + 0.75 * (b.sizes[0] ?? q.s)
+    let upper = null
+    for (const p of body) {
+      if (p === q) continue
+      const ai = lastOf(p)
+      if (ai < 0 || !linesOf(p, ai).length) continue
+      const a = p.blocks[ai]
+      const span = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)
+      if (span < 0.5 * Math.min(a.x1 - a.x0, b.x1 - b.x0) || !(a.B.at(-1) > b.B[0])) continue
+      // (the nearest above it: the lowest last line over its first)
+      if (!upper || a.B.at(-1) < upper.a.B.at(-1)) upper = { p, a, ai }
+    }
+    if (!upper) continue
+    const { p, a, ai } = upper
+    const foot = a.B.at(-1) - 0.22 * (a.sizes.at(-1) ?? p.s), g0 = foot - top
+    if (!(g0 > 0) || g0 > 3 * (a.pitch0 ?? 1.2 * p.s)) continue
+    const x0 = Math.max(a.x0, b.x0), x1 = Math.min(a.x1, b.x1)
+    const across = (l, r) => Math.min(x1, r) - Math.max(x0, l) > 1
+    if (rects.some(([id, r]) => id !== p.id && id !== q.id && r[0] === pg && across(r[1], r[3]) && r[4] > top + 0.1 && r[2] < foot - 0.1)) continue
+    if (chars.some(c => /\S/.test(c.ch) && across(c.x0, c.x1) && c.yb + 0.28 * c.size > top && c.yb + 0.28 * c.size < foot)) continue
+    // (nor one whose first line it shares with what stays: a run-in heading, a label, the tail of a unit before it)
+    const start = b.x0 + (b.indent ?? 0) - 1
+    if (rects.some(([id, r]) => id !== q.id && r[0] === pg && r[2] < b.B[0] && r[4] > b.B[0] && r[3] > b.x0 && r[1] < b.x1)) continue
+    if (chars.some(c => /\S/.test(c.ch) && Math.abs(c.yb - b.B[0]) < 0.3 * c.size && c.x1 > b.x0 && c.x1 < start)) continue
+    // (by baselines: the upper's last drawn line as it now stands, a unit above it that moved having moved it, above its
+    // original's last by what its fill left; the lower's first as far from it as the original's are. A size smaller than the
+    // original's is not made up for: its glyphs' smaller ascent is no blank line, and its lines stay on the original's pitch)
+    const own = linesOf(q, 0), up = linesOf(p, ai)
+    let d = Math.round(((Math.min(...up.map(l => l.baseline)) - a.B.at(-1)) - (Math.max(...own.map(l => l.baseline)) - b.B[0])) * 1000) / 1000
+    if (d <= 0) continue
+    // (over no ink that stays: its glyphs' band as drawn, a CJK em over the baseline to a descender under it, must hold
+    // none, and the band it rises into is held clear of the lowest by the clearance)
+    if (stays) {
+      const f = q.layout.f, clearance = gap * (b.pitch0 ?? 1.2 * q.s)
+      const top = Math.max(...own.map(l => l.baseline)) + 0.88 * f, low = Math.min(...own.map(l => l.baseline)) - 0.25 * f
+      if (stays(b.x0, b.x1, low, top) !== null) continue
+      const ink = stays(b.x0, b.x1, top, top + d + clearance)
+      if (ink !== null) d = Math.round((ink - clearance - top) * 1000) / 1000
+      if (d <= 0) continue
+    }
+    for (const l of q.layout.lines) l.baseline += d
+    moves.set(q.id, d)
+  }
+  return moves
 }
 
 /**
@@ -261,6 +430,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // the host's: the fit's parameters, the hyphenation patterns, the CJK family, the float labels' names
   const R = resolveRules(rules, to)
   const P = R.params
+  /** whether a page's units are set together once all are laid (the even pass, the page fill, the leftover packed) */
+  const PASSES = !!(P.even || P.adaptiveFill || P.leftover === 'pack')
   // iteration 2's hyphenation, fetched at once (local, small)
   const hyphP = Promise.all(R.patterns.map(async l => L2.setHyphenData(l, await loadHyphenation(l, hyphUrl(l)))))
   // the target's likely faces loaded meanwhile (Times-like until the paper's own designs are known), and Latin Modern at
@@ -746,10 +917,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const c = faceOf({ fam: 'serif', bold: false, italic: false, caps: false, design: designs.serif }, 'cjk', to).size ?? 1
     return c < 1 ? Math.round((1 - c) * 1000) / 1000 : 0
   }
-  /** a laid unit's lines as its record holds them: page, baseline, target baseline, exact, mode, overflow, x0, x1 */
+  /** a laid unit's lines as its record holds them: page, baseline, target baseline, exact, mode, overflow, x0, x1, block (a
+   *  line's flow segment: no rhythm is read across two, the gate's pageDrift) */
   const recLinesOf = p => p.layout.lines.map(l => {
     const b = p.blocks[l.block]
-    return [l.page, r1(l.baseline), l.target !== null ? r1(b.B[l.target]) : null, l.target !== null ? b.exact[l.target] : false, l.mode, r1(Math.max(0, l.used - l.cap - (l.items.at(-1)?.t.punct === 'close' ? 0.5 * p.layout.f : 0))), r1(l.x0), r1(l.x0 + l.used)]
+    return [l.page, r1(l.baseline), l.target !== null ? r1(b.B[l.target]) : null, l.target !== null ? b.exact[l.target] : false, l.mode, r1(Math.max(0, l.used - l.cap - (l.items.at(-1)?.t.punct === 'close' ? 0.5 * p.layout.f : 0))), r1(l.x0), r1(l.x0 + l.used), l.block]
   })
   // (the time the font waits of the unit in hand took, so that its timings are its own work's: lap())
   let fontWait = 0
@@ -870,18 +1042,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // leading on a loose original, the paragraph is filled by its text's size instead, up to P.fillSize × the
     // original's; a solid-set original keeps the script's leading, and its units are never grown)
     if (P.fillSize > 1 && p.P.leadBase <= P.leadBase - 0.05 + 1e-9) p.P.growTo = P.fillSize
-    // (adaptiveFill, D: a unit on a loose original, where the leading relative to the original's pitch gives up a step or
-    // more of the script's, is laid at that leading here and filled by its page's pass, fillPass)
-    // (a solid-set original's units are not touched: spreading them by a band of leading, page by page or one leading a
-    // page, filled their frames but moved their pages' pitches apart, S3-12)
+    // (adaptiveFill: every unit is laid at its leading relative to the original's own pitch, the script's own on a solid-set
+    // original, and filled by its page's pass, fillPass. D filled a loose original's units alone (S3-12, against a band of
+    // leading page by page moving the pages' pitches apart); D6's F6b fills every original's, its page's target held within
+    // the band of the last page's)
     if (P.adaptiveFill) {
-      const rel = L2.leadOf(p.blocks, s, { ...P, leadRel: true })
-      if (rel <= P.leadBase - 0.05 + 1e-9) {
-        p.fillable = true
-        p.fillRange = [rel, P.leadBase]
-        p.P.leadBase = rel
-        p.P.growTo = 0
-      }
+      p.fillable = true
+      p.P.leadBase = L2.leadOf(p.blocks, s, { ...P, leadRel: true })
+      p.P.growTo = 0
     }
     p.layout = L2.layoutUnit2(tokens, p.blocks, s, p.P)
     // (step 3: never drawn in part: given more room where the page has it, else left the original's, whole)
@@ -938,11 +1106,33 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (p.rec) Object.assign(p.rec, { f: r1(p.layout.f), sizeRatio: r1(p.layout.f / p.s), fitScale: p.layout.scale, knob: p.layout.knob, lead: p.layout.state.lead, lines: recLinesOf(p) })
     }
   }
-  // adaptiveFill's pass over a page's units that begin on it (fillPage), each filled unit's record updated
-  const fillPass = pg => fillPage(laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg), P, (p, target) => {
-    const l = p.layout
-    if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
-  })
+  // adaptiveFill's pass over a page's units that begin on it (fillPage), each filled unit's record updated; the paper's
+  // targets a page is held to, the last a page's body units told and the fullest page's own, in the order the pages'
+  // passes run (the
+  // units' laying order, the same whether the rows come at once or in parts: no page waits for a later one)
+  let held = null
+  const fillPass = pg => {
+    const r = fillPage(laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg), P, held, (p, target) => {
+      const l = p.layout
+      if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
+    }, { page: pg, continuing: laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] !== pg) })
+    held = nextHeld(held, r)
+  }
+  // the leftover packed (packPage) over a page's units laid, each moved unit's record updated
+  const packPass = pg => {
+    // (the ink that stays, by the page's ink map: no move is made on a page whose map is not read)
+    const map = inkOf(pg), dev = pxOf(pg), vw = views[pg - 1]
+    const accounted = []
+    // (a table's cell may be withheld with its group after this pass: its glyphs are not taken as gone)
+    for (const p of laid[pg]) {
+      if (p.refused || p.unit.kind === 'cell' || !p.prep?.cat) continue
+      for (const c of p.prep.uc ?? []) if (c.page === pg && !c.sep && !c.space && p.prep.cat.get(L2.charKey(c)) === 'acc') accounted.push([c.x0, c.yb - 0.25 * c.size, c.x1, c.yb + 0.88 * c.size])
+    }
+    const stays = map ? stayingInk({ map, toDev: dev, toPdf: (x, y) => vw.convertToPdfPoint(x / dpr, y / dpr), accounted, dirty: removedPage(pg) ? dirtyOf(pg) : [] }) : () => -Infinity
+    const moved = packPage(pg, laid[pg], rectsByPage.get(pg) ?? [], chars2[pg - 1] ?? [], stays, P.borrowGap)
+    for (const [id, d] of moved) { const p = byId.get(id); if (p?.rec) Object.assign(p.rec, { lines: recLinesOf(p), pack: r1(d) }) }
+    return moved
+  }
   const ms = new Map()
   // A table group's cells laid, then painted all together or not at all (the table-groups brief): a cell is painted
   // only once every cell of its group is laid, and none is where one could be set only clipped (its fit past its floor)
@@ -980,7 +1170,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (p.refused) skipped.push({ id: p.id, kind: p.unit.kind, why: p.why ?? 'unfit', ...(p.missing ? { missing: p.missing } : {}), chars: trCharsOf(p.unit), pages: p.pages })
     const g = p.unit.group && groupCells.has(p.unit.group) ? p.unit.group : null
     if (g) (groupLaid.get(g) ?? groupLaid.set(g, { list: [], done: false }).get(g)).list.push(p)
-    if (P.even || P.adaptiveFill) {
+    if (PASSES) {
       // (a page's pass sets the units that begin on it, which are then painted on each of their pages: a unit is never
       // painted from two layouts; a table's cells with their group, once it is laid whole)
       for (const pg of p.pages) {
@@ -988,7 +1178,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         if (laid[pg].length === expected[pg]) {
           if (P.even) evenPass(pg)
           if (P.adaptiveFill) fillPass(pg)
-          for (const u of laid[pg]) if (!u.refused && u.pages[0] === pg && (!u.unit.group || !groupCells.has(u.unit.group))) for (const q of u.pages) paint(u, q)
+          // (the leftover packed: the units moved are painted after the others, from the top, so that no erasing of the
+          // unit above takes what they draw over its foot)
+          const moved = P.leftover === 'pack' ? packPass(pg) : null
+          const order = moved?.size ? [...laid[pg].filter(u => !moved.has(u.id)), ...laid[pg].filter(u => moved.has(u.id)).sort((a, b) => b.blocks[0].B[0] - a.blocks[0].B[0])] : laid[pg]
+          for (const u of order) if (!u.refused && u.pages[0] === pg && (!u.unit.group || !groupCells.has(u.unit.group))) for (const q of u.pages) paint(u, q)
           for (const gg of new Set(laid[pg].map(u => u.unit.group).filter(x => x && groupCells.has(x)))) settleGroup(gg)
         }
       }
@@ -1103,7 +1297,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // open's (a unit not translated, an author, a cell whose group is withheld, the file's lines in place of the geometry's
   // decide which units are placed, and so the batches). A unit's row is fixed once it is placed (a row taken for it
   // later is late), and every row once a table's group is read
-  const need = needsOf(K, N, !!(P.even || P.adaptiveFill), c => !c.rects)
+  const need = needsOf(K, N, PASSES, c => !c.rects)
   /** the units placed, in the stream's order, as layGroups and doneAt read them (`placed` is the same less each table
    *  group withheld as its cells are laid), and by id */
   const laidOut = [], byId = new Map()
@@ -1152,9 +1346,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     for (const [pg, ids] of groups) for (const id of ids) groupOf.set(id, pg)
     doneAt = Array.from({ length: N + 1 }, (_, pg) => pg)
     for (const p of laidOut) for (const pg of p.pages) doneAt[pg] = Math.max(doneAt[pg], groupOf.get(p.id) ?? pg)
-    // (with a page pass, P.even or P.adaptiveFill: a page is done once the first page of each unit on it is, whose pass
-    // sets that unit)
-    if (P.even || P.adaptiveFill) for (let pg = 1; pg <= N; pg++) for (const p of laidOut) if (p.pages.includes(pg)) doneAt[pg] = Math.max(doneAt[pg], doneAt[p.pages[0]])
+    // (with a page pass, PASSES (the even pass, the page fill, the leftover packed): a page is done once the first page
+    // of each unit on it is, whose pass sets that unit)
+    if (PASSES) for (let pg = 1; pg <= N; pg++) for (const p of laidOut) if (p.pages.includes(pg)) doneAt[pg] = Math.max(doneAt[pg], doneAt[p.pages[0]])
   }
   /** page pg's doneAt once the units it reads are placed and planned, else Infinity */
   const doneAtOf = pg => (pg >= 1 && pg <= N && plannedTo <= need.done[pg] ? Infinity : doneAt[pg])

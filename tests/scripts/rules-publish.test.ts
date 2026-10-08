@@ -39,10 +39,10 @@ describe('publishing a rule set', () => {
     expect(w.seen.map(r => `${r.method} ${r.url}`)).toEqual([`POST ${ORIGIN}/api/v1/rules/publish`, `POST ${ORIGIN}/api/v1/rules/point`])
     expect(w.seen[0]!.headers).toMatchObject({ authorization: `Bearer ${SECRET}`, 'content-type': 'application/json' })
     expect(Buffer.from(w.seen[0]!.body as Uint8Array).toString('utf8')).toBe(writeRules({ ...structuredClone(BUILTIN_RULES), version: 3, note: 'a test set' }))
-    expect(JSON.parse(w.seen[1]!.body as string)).toEqual({ schema: 1, version: 3 })
+    expect(JSON.parse(w.seen[1]!.body as string)).toEqual({ schema: BUILTIN_RULES.schema, version: 3 })
     expect(w.seen.every(r => r.redirect === 'error')).toBe(true)
-    expect(lines[0]).toMatch(/published s1 version 3 \([0-9a-f]{12}\)/)
-    expect(lines[1]).toMatch(/pointer of s1 is at version 3/)
+    expect(lines[0]).toMatch(new RegExp(`published s${BUILTIN_RULES.schema} version 3 \\([0-9a-f]{12}\\)`))
+    expect(lines[1]).toMatch(new RegExp(`pointer of s${BUILTIN_RULES.schema} is at version 3`))
   })
 
   it('takes the same bytes already there as done (the job may run again), and still moves the pointer', async () => {
@@ -54,7 +54,7 @@ describe('publishing a rule set', () => {
 
   it('fails loudly where the route is not there, where the version holds other bytes, and where the secret is refused', async () => {
     expect(await fails(publish({ url: ORIGIN, file: file(), secret: SECRET, fetchImpl: worker({ publish: { status: 404 } }).fetchImpl, engine: { readRules } }))).toMatch(/no rules routes.*is the Worker deployed/)
-    expect(await fails(publish({ url: ORIGIN, file: file(), secret: SECRET, fetchImpl: worker({ publish: { status: 409, body: { why: 'version-taken' } } }).fetchImpl, engine: { readRules } }))).toMatch(/version 3 of s1 holds other bytes/)
+    expect(await fails(publish({ url: ORIGIN, file: file(), secret: SECRET, fetchImpl: worker({ publish: { status: 409, body: { why: 'version-taken' } } }).fetchImpl, engine: { readRules } }))).toMatch(new RegExp(`version 3 of s${BUILTIN_RULES.schema} holds other bytes`))
     expect(await fails(publish({ url: ORIGIN, file: file(), secret: SECRET, fetchImpl: worker({ publish: { status: 401 } }).fetchImpl, engine: { readRules } }))).toMatch(/secret is refused \(HTTP 401\)/)
     expect(await fails(publish({ url: ORIGIN, file: file(), secret: SECRET, fetchImpl: worker({ publish: { status: 413, body: { why: 'too-large' } } }).fetchImpl, engine: { readRules } }))).toMatch(/not published \(HTTP 413, too-large\)/)
   })
@@ -109,7 +109,7 @@ describe('the newest set only', () => {
     for (const onNext of [onNextOf(own), onNextOf(file(2)), null]) {
       const w = worker({ publish: { status: 201 }, point: { status: 200 } })
       const lines = await publish({ url: ORIGIN, file: own, secret: SECRET, fetchImpl: w.fetchImpl, engine: { readRules }, onNext })
-      expect(lines[0], String(onNext)).toMatch(/published s1 version 3/)
+      expect(lines[0], String(onNext)).toMatch(new RegExp(`published s${BUILTIN_RULES.schema} version 3`))
       expect(w.seen.map(r => r.url.slice(r.url.lastIndexOf('/') + 1))).toEqual(['publish', 'point'])
     }
   })

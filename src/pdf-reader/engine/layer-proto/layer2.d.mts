@@ -9,7 +9,7 @@ import type { Block, Rect } from './layer1.mjs'
  *  v0's own. `maxScale`, `capScale`, `growTo`, `flowPast`, `refuse` and `_compress` are the run's own, set unit by unit */
 export interface Params {
   cjk: boolean; leadBase: number; leadFloor: number; trackMin: number; compressMax: 0 | 1 | 2; borrow: 0 | 1; borrowGap: number
-  floor: number; step: number; grid: 0 | 1; order: ('track' | 'borrow' | 'lead' | 'shrink')[]; cjkJust: number; spaceMax: number; autospace: number; spaceMin: number
+  floor: number; step: number; order: ('track' | 'borrow' | 'lead' | 'shrink')[]; cjkJust: number; spaceMax: number; autospace: number; spaceMin: number
   hyphen: 0 | 1; even: 0 | 1 | 2; maxScale?: number; _compress?: number
   /** the most the unit may be set at: its lines' room between the rules over and under them (cellBands) */
   capScale?: number
@@ -20,9 +20,12 @@ export interface Params {
   /** the leading relative to the original's pitch (leadOf; false: leadBase on any pitch); fillBySize's cap (run.mjs
    *  fillSize, off at 0) and the size a unit may grow to (growTo) */
   leadRel: boolean; fillSize: number; growTo?: number
-  /** run.mjs's adaptiveFill (D, the default since 2026-10-07; null: B): a loose original's units spread over their
-   *  frames, page by page */
-  adaptiveFill: { band: number; track: number; size: number } | null
+  /** run.mjs's adaptiveFill (the page fill, D6's since 2026-10-08; null: B): every unit spread over its frame, the page's
+   *  body units held to one leading and one size; and the loosest pitch it spreads to, in em of the size drawn (null: the
+   *  original's own) */
+  adaptiveFill: { band: number; track: number; size: number } | null; fillLead: number | null
+  /** what the fill leaves over: at each unit's foot, or packed to the end of its run of paragraphs (run.mjs packPage) */
+  leftover: 'foot' | 'pack'
   /** breaking: lines break only at spaces, which quotes are CJK's, centred punctuation, the characters no line starts or
    *  ends with, and the hyphenation patterns of a Latin word */
   keepAll: boolean; cjkQuotes: boolean; centredPunct: boolean; noStart: string; noEnd: string; latinPatterns: 'en' | 'de'
@@ -193,6 +196,8 @@ export declare const SOLID: number
 /** the unit's leading relative to the original's own pitch: leadBase of a solid line, never closer than the original's */
 export declare function leadOf(blocks: readonly Pick<Block2, 'pitch0'>[], s: number, P: Pick<Params, 'leadBase'>): number
 export declare function layoutUnit2(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params): Layout
+/** a unit laid at one state of the fit, with no search (the page fill's): clipped where the state does not set it whole */
+export declare function layoutAt(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params, st: Layout['state']): Layout
 /** a box in v0's device pixels on the page: [x, y, w, h] */
 export type DevBox = [number, number, number, number]
 /** one of the layer's drawing operations (unitOps'): the paper's white, the page's own pixels put back within the erased
