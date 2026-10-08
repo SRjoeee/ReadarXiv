@@ -166,7 +166,9 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
    */
   const offChainFor = (own: Service) => {
     const engine = createOpenAICompatProvider(own, { prompts: config.prompts })
-    return createTranslateService({ getProvider: async () => engine, getModel: async () => own.model, cancelled: deps.cancelled, retired: isRetired, ...(deps.warn ? { warn: deps.warn } : {}) })
+    // the cost of the test's call goes to the ring as any call's does (issue #237): the usual way a connection test is
+    // asked is through here, and a ring that leaves the endpoint's request out would tell nothing of the one asked
+    return createTranslateService({ getProvider: async () => engine, getModel: async () => own.model, cancelled: deps.cancelled, retired: isRetired, ...(deps.warn ? { warn: deps.warn } : {}), ...(deps.note ? { note: deps.note } : {}) })
   }
   /** Off-chain services with a call inside: built per named call, they are drained and retired with the chain */
   const offChainLive = new Set<TranslateService>()

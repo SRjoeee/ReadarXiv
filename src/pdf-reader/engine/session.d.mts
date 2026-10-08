@@ -42,9 +42,10 @@ export interface SessionHost {
   right: HTMLElement
   params: URLSearchParams
   emit(event: SessionEvent): void
-  /** the page's own first read of the settings, bounded (ui/first-read.ts): `null` when it did not answer in its time —
-   *  the session then opens on the defaults at once, not waiting on a storage that is silent; absent, the session waits
-   *  on its own read for as long as that clock allows */
+  /** the page's own first read of the settings, bounded (ui/first-read.ts): the session starts on it at once, with its
+   *  reason if it fell back, and its own read goes on behind it, its landing followed as a change; `null` when it did not
+   *  answer in its time — the session then opens on the defaults at once, not waiting on a storage that is silent;
+   *  absent, the session waits on its own read for as long as that clock allows */
   reading?: ConfigReading | null
 }
 export declare function setDisplay(mode: EngineDisplay): void

@@ -110,33 +110,69 @@ describe("followOf: what a landing of the settings changes in the reader (Part 2
 describe('firstConfig: the session\'s first configuration, never waited on for ever (Codex on #329)', () => {
   const surface = () => createSurfaceConfig({ localeStale: () => false, reload: () => undefined })
   const stored = with_({ targetLanguage: 'jpn' })
+  const readOk = { config: stored, fallbackReason: null }
+  const never = () => new Promise<never>(() => {})
 
-  it('is what the surface lands, when it lands before the page gives up', async () => {
-    vi.spyOn(configStorage, 'readConfig').mockResolvedValueOnce({ config: stored, fallbackReason: null })
-    expect(await firstConfig(surface(), new Promise(() => {}))).toEqual({ config: stored, fellBack: false })
-    vi.restoreAllMocks()
+  describe('the page has read the settings (its own read, before its first paint)', () => {
+    it('starts on that reading at once, whatever the session\'s own read does: it stalls, or it rejects — no timer, no unreadable note (Codex on #329, round 2)', async () => {
+      vi.spyOn(configStorage, 'readConfig').mockReturnValueOnce(never())
+      expect(await firstConfig(surface(), readOk, never())).toEqual({ config: stored, provisional: { why: null } })
+      vi.spyOn(configStorage, 'readConfig').mockRejectedValueOnce(new Error('the extension context was invalidated'))
+      const s = surface()
+      expect(await firstConfig(s, readOk, never())).toEqual({ config: stored, provisional: { why: null } })
+      expect(s.state().config).toBeNull()
+      vi.restoreAllMocks()
+    })
+
+    it('a reading that fell back to the defaults carries its reason: the session says it too, as the page did', async () => {
+      const reason = { kind: 'tooNew' as const, stored: 99, supported: 20 }
+      vi.spyOn(configStorage, 'readConfig').mockReturnValueOnce(never())
+      expect(await firstConfig(surface(), { config: DEFAULT_CONFIG, fallbackReason: reason }, never())).toEqual({ config: DEFAULT_CONFIG, provisional: { why: reason } })
+      vi.restoreAllMocks()
+    })
+
+    it('the surface goes on reading behind it: its landing is there to be followed', async () => {
+      const read = vi.spyOn(configStorage, 'readConfig').mockResolvedValue({ config: with_({ targetLanguage: 'kor' }), fallbackReason: null })
+      const s = surface()
+      await firstConfig(s, readOk, never())
+      await vi.waitFor(() => expect(s.state().config?.targetLanguage).toBe('kor'))
+      expect(read).toHaveBeenCalled()
+      vi.restoreAllMocks()
+    })
   })
 
-  it('is the defaults, said to have fallen back, when storage never answers', async () => {
-    vi.spyOn(configStorage, 'readConfig').mockReturnValueOnce(new Promise(() => {}))
-    expect(await firstConfig(surface(), Promise.resolve())).toEqual({ config: DEFAULT_CONFIG, fellBack: true })
-    vi.restoreAllMocks()
+  describe('the page\'s read did not answer (null)', () => {
+    it('the defaults at once, said to be provisional: not waited on twice', async () => {
+      vi.spyOn(configStorage, 'readConfig').mockReturnValueOnce(never())
+      expect(await firstConfig(surface(), null, never())).toEqual({ config: DEFAULT_CONFIG, provisional: { why: { kind: 'unknown' } } })
+      vi.restoreAllMocks()
+    })
+
+    it('the surface\'s own landing, when it was there already: a configuration that landed is never thrown away', async () => {
+      vi.spyOn(configStorage, 'readConfig').mockResolvedValueOnce({ config: stored, fallbackReason: null })
+      const s = surface()
+      // landed already (the surface publishes the pack\'s state before the configuration: wait for the configuration)
+      await new Promise<void>(resolve => { s.subscribe(() => { if (s.state().config) resolve() }); s.start() })
+      expect(await firstConfig(s, null, Promise.resolve())).toEqual({ config: stored, provisional: null })
+      vi.restoreAllMocks()
+    })
   })
 
-  it('is the defaults when storage rejects: the surface swallows a refused first read and publishes nothing', async () => {
-    vi.spyOn(configStorage, 'readConfig').mockRejectedValueOnce(new Error('the extension context was invalidated'))
-    const s = surface()
-    expect(await firstConfig(s, Promise.resolve())).toEqual({ config: DEFAULT_CONFIG, fellBack: true })
-    expect(s.state().config).toBeNull()
-    vi.restoreAllMocks()
-  })
+  describe('no reading given (a host that made none)', () => {
+    it('is what the surface lands, when it lands before the clock is over', async () => {
+      vi.spyOn(configStorage, 'readConfig').mockResolvedValueOnce({ config: stored, fallbackReason: null })
+      expect(await firstConfig(surface(), undefined, never())).toEqual({ config: stored, provisional: null })
+      vi.restoreAllMocks()
+    })
 
-  it('is the surface\'s own when both are ready at once: a configuration that landed is never thrown away', async () => {
-    vi.spyOn(configStorage, 'readConfig').mockResolvedValueOnce({ config: stored, fallbackReason: null })
-    const s = surface()
-    // landed already (the surface publishes the pack\'s state before the configuration: wait for the configuration)
-    await new Promise<void>(resolve => { s.subscribe(() => { if (s.state().config) resolve() }); s.start() })
-    expect(await firstConfig(s, Promise.resolve())).toEqual({ config: stored, fellBack: false })
-    vi.restoreAllMocks()
+    it('is the defaults when the clock is over first: storage that never answers, or refuses its first read (the surface swallows it and publishes nothing)', async () => {
+      vi.spyOn(configStorage, 'readConfig').mockReturnValueOnce(never())
+      expect(await firstConfig(surface(), undefined, Promise.resolve())).toEqual({ config: DEFAULT_CONFIG, provisional: { why: { kind: 'unknown' } } })
+      vi.spyOn(configStorage, 'readConfig').mockRejectedValueOnce(new Error('the extension context was invalidated'))
+      const s = surface()
+      expect(await firstConfig(s, undefined, Promise.resolve())).toEqual({ config: DEFAULT_CONFIG, provisional: { why: { kind: 'unknown' } } })
+      expect(s.state().config).toBeNull()
+      vi.restoreAllMocks()
+    })
   })
 })

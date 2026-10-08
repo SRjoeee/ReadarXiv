@@ -57,6 +57,38 @@ describe('createLocalTransport: the records (issue #237)', () => {
   })
 })
 
+describe('createLocalTransport: the records of a connection test (issue #237; Codex on #329)', () => {
+  const onChain = () => ({ ...mockProvider(async r => ({ segments: r.segments, provider: SVC.id })), id: SVC.id })
+
+  it('a candidate, which is never on the chain, leaves its batch in the ring as a call of the chain does, in the ring\'s grammar', async () => {
+    const notes: string[] = []
+    const t = await withChain([onChain()], { note: line => notes.push(line), batch: { maxRetries: 0 } })
+    const fresh = { ...SVC, id: 'svc-fresh000', apiKey: '' }
+    expect(await t.translate({ request: req, providerId: fresh.id, candidate: fresh })).toMatchObject({ ok: false, error: { kind: 'no-key' } })
+    expect(notes).toHaveLength(1)
+    expect(notes[0]).toMatch(/^batch .*segments=1 .*outcome=failed:no-key$/)
+    for (const line of notes) expect(RECORD_SHAPES.some(shape => shape.test(line)), line).toBe(true)
+  })
+
+  it('a stored service the chain is not built around, tested by its id, does too', async () => {
+    const notes: string[] = []
+    const spare = { ...SVC, id: 'svc-99999999', apiKey: '' }
+    const t = await createLocalTransport(
+      { ...DEFAULT_CONFIG, provider: SVC.id, services: [SVC, spare] },
+      { cancelled: new CancelledScopeRegistry(), note: line => notes.push(line), batch: { maxRetries: 0 }, buildChain: async () => ({ chain: [onChain()], renderPath: 'tags' as const }) },
+    )
+    expect(await t.translate({ request: req, providerId: spare.id })).toMatchObject({ ok: false, error: { kind: 'no-key' } })
+    expect(notes).toHaveLength(1)
+    expect(notes[0]).toMatch(/^batch .*outcome=failed:no-key$/)
+  })
+
+  it('with no note given an off-chain test still answers, as before', async () => {
+    const t = await withChain([onChain()])
+    const fresh = { ...SVC, id: 'svc-fresh000', apiKey: '' }
+    expect(await t.translate({ request: req, providerId: fresh.id, candidate: fresh })).toMatchObject({ ok: false, error: { kind: 'no-key' } })
+  })
+})
+
 describe('createLocalTransport: translation', () => {
   it('the successful response shape', async () => {
     const t = await withChain([mockProvider(async r => ({ segments: r.segments.map(s => ({ ...s, text: `译:${s.text}` })), provider: 'mock' }))])

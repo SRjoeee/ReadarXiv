@@ -884,6 +884,43 @@ const OPTIONS_BUTTON = 'header button[aria-haspopup="dialog"]'
   await unset.close()
 }
 
+// the page's own read answered and the session's second one does not (Codex on #329, round 2): the PDF opens at once on
+// the page's configuration — a stored language other than the defaults' tells them apart —, with no unreadable note at
+// any moment, the session's read stalled or refused alike
+for (const how of ['stalls', 'is refused']) {
+  const setup = await open({ mode: 'original' })
+  const wasLanguage = await setup.evaluate(() => window.__reader.controller.getState().settings.targetLanguage)
+  await patch(setup, { targetLanguage: wasLanguage === 'jpn' ? 'kor' : 'jpn' })
+  await setup.waitForTimeout(800)
+  const storedLanguage = await setup.evaluate(() => window.__reader.controller.getState().settings.targetLanguage)
+  await setup.close()
+  const page = await context.newPage()
+  // the library's unhandled refusals of a storage that refuses (see below) are not the reader's
+  page.on('pageerror', e => { if (!/Extension context invalidated\./.test(e.message)) check('no page error', false, e.message) })
+  // storage answers until the page has painted — the page's own read is made — and not after: the session's read is the next
+  await page.addInitScript(`(() => {
+    const area = chrome.storage.local, get = area.get.bind(area)
+    let after = false
+    area.get = (...args) => (after ? ${how === 'stalls' ? 'new Promise(() => {})' : "Promise.reject(new Error('Extension context invalidated.'))"} : get(...args))
+    new MutationObserver((_, o) => { if (document.getElementById('root')?.childElementCount) { after = true; o.disconnect() } }).observe(document, { childList: true, subtree: true })
+    window.__noteSeen = false
+    setInterval(() => { if (document.querySelector('.capsule[data-kind="unreadable"]')) window.__noteSeen = true }, 25)
+  })()`)
+  const t0 = Date.now()
+  await page.goto(readerUrl({ paper, mode: 'bilingual' }), { waitUntil: 'commit' })
+  const opened = await page.waitForFunction(() => window.__reader?.ready && window.__reader.controller.getState().sides.left.pages > 0, null, { timeout: 20000 }).then(() => true, () => false)
+  const took = Date.now() - t0
+  const got = opened ? await page.evaluate(() => ({ language: window.__reader.controller.getState().settings.targetLanguage, unreadable: window.__reader.controller.getState().settingsUnreadable, noteSeen: window.__noteSeen })) : null
+  check(`the page's read answered, the session's ${how}: the PDF opens on the page's configuration, no unreadable note`, opened && got.language === storedLanguage && !got.unreadable && !got.noteSeen, JSON.stringify({ ...got, ms: took }))
+  // not a second timeout window on top of the page's: the PDF is open well inside the 1,500 ms a fresh clock would add
+  console.log(`     the PDF open ${took} ms after the address was committed`)
+  await page.close()
+  const unset = await open({ mode: 'original' })
+  await patch(unset, { targetLanguage: wasLanguage })
+  await unset.waitForTimeout(800)
+  await unset.close()
+}
+
 // a storage that refuses its reads (an invalidated extension context): the note at once, and the PDF opens on the defaults
 {
   const page = await context.newPage()

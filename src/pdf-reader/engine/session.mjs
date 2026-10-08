@@ -75,12 +75,13 @@ const MODES = ['original', 'translation', 'bilingual']
 /** the settings as they last landed; null until the first read */
 let config = null
 const surface = createSurfaceConfig({ localeStale, reload: () => location.reload(), onLanded: (next, from) => landed(next, from) })
-// The first landing is not waited on for ever: storage that is silent or refuses its first read would hold the session,
-// and the PDF with it, and the page has already said the settings could not be read (main.tsx). One that did not answer
-// the page in its time (`host.reading` null) is not waited on again; else the surface has the same time (settings.ts
-// firstConfig). Given up on, the reader opens on the defaults, and a landing that comes later is followed as a change
-let fellBack
-;({ config, fellBack } = await firstConfig(surface, host.reading === null ? Promise.resolve() : firstReadTime()))
+// The first landing is not waited on for ever: storage that is silent or refuses a read would hold the session, and the
+// PDF with it. The page has read the settings once already, bounded (main.tsx): the session starts on that reading at
+// once, with its reason if it fell back, and the surface reads on behind it; one the page got no answer to (`null`) is
+// not waited on again, the defaults standing in. Either way `provisional` stands until a landing of the surface, which
+// is then followed as a change of the settings (settings.ts firstConfig, `landed`)
+let provisional
+;({ config, provisional } = await firstConfig(surface, host.reading, host.reading === undefined ? firstReadTime() : Promise.resolve()))
 // the offline service's language pack, which the surface looks up once the settings have landed: the service menu
 // follows it as it comes (the final review: it was read once, before it came, and the offline service stayed greyed)
 let pack = surface.state().pack ?? null
@@ -123,8 +124,8 @@ function showSettings() {
   pack = surface.state().pack ?? null
   host.emit({ type: 'settings', config, pack })
   // the defaults are in effect — the service and its key set on the settings page are not — until they are repaired there,
-  // or until storage answers, if the first read was given up on
-  host.emit({ type: 'notice', why: surface.state().fallbackReason ?? (fellBack ? { kind: 'unknown' } : null) })
+  // or until storage answers, if the first read was given up on: what the page's own read said stands till the surface's
+  host.emit({ type: 'notice', why: surface.state().fallbackReason ?? provisional?.why ?? null })
 }
 showSettings()
 /** this page's writes of the settings, one after another; a new language's reload waits for them. A write the store
@@ -155,10 +156,10 @@ let viewersMade = false
  *  screen outlive: nothing is followed, not even a target language the defaults name (Part 2's final review) */
 function landed(next, from) {
   if (!config) return
-  // the first landing, after the reader gave up on it and opened on the defaults, is a change of the settings like any
-  // other: the display, the sync, the language and the services it brings are followed
-  if (from === 'first') { if (!fellBack) return; from = 'elsewhere' }
-  fellBack = false
+  // the first landing, once the reader has started on the page's reading or the defaults, is a change of the settings
+  // like any other: the display, the sync, the language and the services it brings are followed
+  if (from === 'first') { if (!provisional) return; from = 'elsewhere' }
+  provisional = null
   const prev = config
   config = next
   showSettings()
