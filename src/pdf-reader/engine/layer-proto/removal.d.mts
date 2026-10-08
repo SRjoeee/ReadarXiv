@@ -24,16 +24,16 @@ export declare function planOf(ink: RemovalInk, glyphs: readonly number[], paths
 export declare function indicesOf(ink: RemovalInk, plan: { glyphs: readonly number[]; paths?: readonly number[] }): { glyphs: number[]; paths: number[] } | null
 /** the paper's removal on a page from the layout file alone (the add-on's plan's page), and the ownership it was made from */
 export declare function pagePlan(index: LayoutIndex, page: number, ink: RemovalInk, own?: FileOwnership): {
-  units: { id: number; glyphs: number[]; paths: number[] }[]; crops: { id: number; k: number; glyphs: number[]; paths: number[] }[]
+  units: { id: number; glyphs: number[]; paths: number[] }[]; names: { occurrence: number; glyphs: number[] }[]; crops: { id: number; k: number; glyphs: number[]; paths: number[] }[]
   shows: number; glyphs: number; own: FileOwnership & { label: Int32Array }
 }
 /** the ink the add-on keeps on a page that meets its units' rectangles (the manifest's `dirty`: x0, y0, x1, y1 stride 4) */
-export declare function pageDirty(index: LayoutIndex, page: number, ink: RemovalInk, plan: { units: { glyphs: number[]; paths: number[] }[] } | undefined, pad?: number): number[]
+export declare function pageDirty(index: LayoutIndex, page: number, ink: RemovalInk, plan: { units: { glyphs: number[]; paths: number[] }[]; names?: { glyphs: number[] }[] } | undefined, pad?: number): number[]
 /** the rules on a page near its table cells' lines (the manifest's `rules`: x0, y0, x1, y1 stride 4), its paths' thin boxes */
 export declare function pageRules(index: LayoutIndex, page: number, ink: RemovalInk): number[]
 /** the rectangles on a page a fill keeps clear of (fileSwap's `others`): every unit's until the file's rectangles draw it
- *  there (`accept`), then those it keeps; `others(j, id)` leaves unit id's own out */
-export declare function protection(index: LayoutIndex): { accept(id: number, page: number, kept?: number[][]): void; others(page: number, self?: number | null): number[][] }
+ *  there (`accept`), then those it keeps; `others(j, id)` leaves unit id's own out; a babel name's box under `name:<occurrence>` */
+export declare function protection(index: LayoutIndex): { accept(id: number | string, page: number, kept?: number[][]): void; others(page: number, self?: number | string | null): number[][] }
 /** a unit's drawing over the text-removed PDF from the layout file's rectangles: swapped, filled with paper, erased extra,
  *  its crops' clips; PDF units */
 export declare function fileSwap(o: {

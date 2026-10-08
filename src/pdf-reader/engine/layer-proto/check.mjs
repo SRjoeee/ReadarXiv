@@ -51,9 +51,10 @@ const r1 = x => Math.round(x * 10) / 10
  * The whole check. `placed`: main.js's placed units (each with prep, tokens, layout, blocks); `rows`: each page's
  * { left (original canvas), right (layer canvas) }; `pxOf(pg)`: PDF to device pixels; `toPdf(pg, x, y)` back;
  * `chars2`: each page's characters; `audit`: unitOps' records; `cols(pg)`: the page's columns [[x0, x1]…];
- * `cellRects(pg)`: table cells' rectangles (no equation number there).
+ * `cellRects(pg)`: table cells' rectangles (no equation number there). `named`: the babel names drawn in the target's
+ * words (run.mjs paintNames), whose characters are their own text, accounted as a unit's.
  */
-export function checkAll({ N, placed, rows, pxOf, toPdf, chars2, audit, cols, cellRects }) {
+export function checkAll({ N, placed, rows, pxOf, toPdf, chars2, audit, cols, cellRects, named = [] }) {
   const units = placed.filter(p => p.prep && p.layout)
   const crops = audit.filter(a => a.what === 'crop')
   const erases = audit.filter(a => a.what === 'erase')
@@ -191,6 +192,8 @@ export function checkAll({ N, placed, rows, pxOf, toPdf, chars2, audit, cols, ce
       C.push({ unit: p.id, kind: p.unit.kind, page: p.pages[0], text: `${a.s} ${b.s}`, by })
     }
   }
+  // (a babel name drawn in the target's word: its characters its own text, wherever they stand)
+  for (const n of named) for (const c of n.chars) setCat(keyOf(n.page, c), 'acc')
   // a page character carried by two placeholders' drawings is drawn twice
   const seen = new Set()
   for (const [key, who] of carriers) {

@@ -1,7 +1,7 @@
 // addon-manifest.mjs's types: the add-on's manifest as a reader reads it, for the readers, the remover and their tests
 /** the remover's version: it enters the add-on's key and a bundle's; a manifest names it, and a reader reads that for its shape
  *  alone (layout/remove.mjs re-exports it) */
-export declare const REMOVAL: '4'
+export declare const REMOVAL: '5'
 /** the add-on's bytes at most (the bytes after arXiv's), its manifest's bytes and values */
 export declare const ADDON_CAP: number
 export declare const ADDON_MANIFEST_CAP: number

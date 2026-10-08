@@ -148,6 +148,27 @@ describe("the paper's plan, from the layout file alone", () => {
     expect(plan.units).toEqual([{ id: 7, glyphs: [0, 0, 1, 0, 1, 1, 1, 2], paths: [] }])
     // (and the ink no unit's text is: the glyph past the line, for a crop the file does not find)
     expect(plan.crops).toEqual([{ id: -1, k: -1, glyphs: [2, 0], paths: [] }, { id: 7, k: 3, glyphs: [1, 1], paths: [] }])
+    expect(plan.names).toEqual([])
+  })
+
+  it("removes a babel name's glyphs inside its box, none a unit's or a label's, and counts its box for the kept ink under it (D1a)", () => {
+    // the unit of the last case, and a name ("Ab", x 80-90) on its baseline beside a dash no unit holds
+    const unit = { lines: Float64Array.from([1, 10, 60, 100, 107, 98, 10, 0]), erase: [Float64Array.from([10, 98, 60, 107])], ph: new Map(), labels: new Float64Array(0) }
+    const name = { occurrence: 3, key: 'abstract', page: 1, x0: 80, baseline: 100, x1: 90, top: 107.5, bottom: 97.8, size: 10, font: 0, centred: false, capitals: false }
+    const index = { onPage: (p: number) => (p === 1 ? [7] : []), unit: () => unit, names: (p: number) => (p === 1 ? [name] : []) } as never
+    const ink = inkOf([g('a', 12, 100, 0, 0), g('A', 80, 100, 1, 0), g('b', 85, 100, 1, 1), g('\u2014', 90.5, 100, 1, 2)])
+    const plan = pagePlan(index, 1, ink)
+    expect(plan.units).toEqual([{ id: 7, glyphs: [0, 0], paths: [] }])
+    expect(plan.names).toEqual([{ occurrence: 3, glyphs: [1, 0, 1, 1] }])
+    // (the dash is the free ink a crop may be cut from; the name's glyphs are not)
+    expect(plan.crops).toEqual([{ id: -1, k: -1, glyphs: [1, 2], paths: [] }])
+    // the dash meets the name's box (grown by the swap's pad): kept ink under it, where the reader swaps the removed page in
+    expect(pageDirty(index, 1, ink, plan)).toEqual([90.5, 97.8, 95.5, 107.5])
+    // and every unit's fill keeps clear of a name's box until the name is drawn (run.mjs paintNames accepts it)
+    const guard = protection(index)
+    expect(guard.others(1, 7)).toEqual([[80, 97.8, 90, 107.5]])
+    guard.accept('name:3', 1, [])
+    expect(guard.others(1, 7)).toEqual([])
   })
 })
 

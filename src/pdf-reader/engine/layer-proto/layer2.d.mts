@@ -182,6 +182,15 @@ export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, ba
 /** a float's label as the final sets it in the target: the target's name (capitals where the original's are), a space,
  *  the original's number and punctuation; null where the final keeps the paper's name or the name is the original's */
 export declare function labelInTarget(label: { text?: string; chars?: { ch: string }[] } | null | undefined, names: { figure: string; table: string } | null | undefined, captions: { figure?: string; table?: string } | null | undefined, to: string): string | null
+/** a babel name as the final sets it in the target: the target's word for its key (capitals where the original's are); null
+ *  where the target has none, where the final keeps the paper's (`source`), or where the word is the original's */
+export declare function nameInTarget(name: { key: string; capitals: boolean }, own: string | null | undefined, labels: Readonly<Record<string, string>> | null | undefined, captions: Readonly<Record<string, string | undefined>> | null | undefined, to: string): string | null
+/** a text's width at size 1 in a face */
+export declare const widthOf: (s: string, face: Face) => number
+/** a babel name drawn in the target's word, as SVG markup (a <g data-n="occurrence">) */
+export declare function svgOfName(o: { occurrence: number; text: string; x: number; baseline: number; size: number; face: Face }, toPx: (x: number, y: number) => number[], scale: number): string
+/** what an erasing covered that no painted unit accounts for, put back from the original: the restore operation, or null */
+export declare function restoreUnaccounted(erased: readonly number[][], px: ToDev, restore: { items: { chars: Char[]; keys: string[]; box: number[] }[]; accounted: Set<string>; kept: { keys: Set<string>; hulls: number[][] } | null | undefined; ink: InkMap | undefined; cover: Uint8Array | null }, audit: Audit[] | null, id: number | null, page: number): DrawOp | null
 /** the target's likely faces measured once each, a task apart, the CJK ones too where `cjk` (the run's P.cjk); `ready(face, text)`
  *  is awaited before each measure (a face served in slices has the slice of the text by then) */
 export declare function warmFaces(to: string, cjk: boolean, designs: { serif: string }, yieldNow: () => Promise<unknown>, ready?: (face: Face, text: string) => Promise<unknown>): Promise<void>

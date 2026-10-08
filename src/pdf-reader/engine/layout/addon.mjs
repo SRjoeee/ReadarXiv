@@ -7,7 +7,8 @@
 // implementation, the server's.
 //
 // What it holds, page by page:
-//   - a page the plan names (a unit the file locates there owns glyphs or rules) and where kept ink lies under a unit's
+//   - a page the plan names (a unit the file locates there owns glyphs or rules, or a babel name's glyphs are there) and
+//     where kept ink lies under a unit's
 //     rectangles (pageDirty: a glyph no unit takes, a rule, an image): the removed page, R, compact (only these pages, each
 //     named in its entry's `at`), and the entry's `dirty`, the boxes of that ink, where the reader swaps R in;
 //   - a planned page with none: `{ ok: true }` and no page, for a fill with paper over the file's rectangles needs no
@@ -111,7 +112,7 @@ async function shipped({ bytes, index, doc, OPS, PL, deflate, inflate }) {
     if (ink.rotated || ink.capped) continue
     t = performance.now()
     const { own: _own, ...pp } = pagePlan(index, p, ink)
-    if (pp.units.length) {
+    if (pp.units.length || pp.names.length) {
       const d = pageDirty(index, p, ink, pp), r = pageRules(index, p, ink)
       const why = unfit(index.file.views, p, d, r, budget)
       if (why) unwritable[p] = why

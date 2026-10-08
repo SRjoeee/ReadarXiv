@@ -15,9 +15,11 @@ import { boundedJson, COORD_MAX, isInteger, isNumber, isObject, isVersionToken, 
  *  manifest is refused by its `schema`, never by the remover that wrote it (the rules-as-data plan, §9.3), so a change of
  *  the manifest's fields, bounds or meaning raises `schema` (and BUNDLE, which holds it), not this (2: compact sets; 3: a
  *  Type 3 glyph's removed advance with its font matrix's translation, an unusable matrix refused; 4: a hex string read as
- *  PDF.js reads it, and a page refused past its budgets: what it holds by kind, what it decodes). Defined here, beside
- *  the manifest that names it, so that a reader checks a manifest without loading the remover (which re-exports it) */
-export const REMOVAL = '4'
+ *  PDF.js reads it, and a page refused past its budgets: what it holds by kind, what it decodes; 5: the glyphs of the
+ *  babel names the layout file locates removed, and their boxes counted for the kept ink under them). Defined here,
+ *  beside the manifest that names it, so that a reader checks a manifest without loading the remover (which re-exports
+ *  it) */
+export const REMOVAL = '5'
 /** the add-on's bytes at most (the bytes after arXiv's: 32 KB for the 147-page thesis), its manifest's bytes and
  *  values */
 export const ADDON_CAP = 4 * 2 ** 20

@@ -27,6 +27,9 @@ export declare function checkAll(o: {
   audit: readonly Audit[]
   cols: (page: number) => number[][]
   cellRects: (page: number) => number[][]
+  /** the babel names drawn in the target's words: their characters accounted */
+  named?: readonly { page: number; chars: readonly { item: number; k: number }[] }[]
 }): CheckResult
 /** unitOps' record of what it drew: each erase, crop and restore */
-export interface Audit { what: 'erase' | 'crop' | 'restore'; unit: number; page: number; box?: number[]; k?: number; srcPage?: number; src?: number[]; dst?: number[]; boxes?: number }
+/** (`unit` -1 and `name` its occurrence: a babel name's erase, run.mjs paintNames) */
+export interface Audit { what: 'erase' | 'crop' | 'restore'; unit: number; name?: number; swap?: boolean; page: number; box?: number[]; k?: number; srcPage?: number; src?: number[]; dst?: number[]; boxes?: number }

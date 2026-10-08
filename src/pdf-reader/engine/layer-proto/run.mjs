@@ -48,6 +48,7 @@ import { loadHyphenation } from './hyph.mjs'
 import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
 import { fileSwap, protection } from './removal.mjs'
+import { SWAP_PAD, swapRects } from '../layer/swap.mjs'
 import { locatedWhole, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
@@ -400,8 +401,10 @@ function needsOf(K, N, passes, fileOnly) {
  * the old way, erased and put back, as on a page the add-on did not remove. Null: v0's own drawing.
  * `labels`: { captions }, which of the two floats, figures and tables, the final names in the target's language (the
  * record's `captions`, live.mjs captionsOf): a float's label is drawn in the target's name for it, which the layout rules
- * give (`rules`), where the final's is (layer2.mjs labelInTarget), else kept as the original's ink. A table's group (each
- * record unit's `group`) is drawn whole or not at all.
+ * give (`rules`), where the final's is (layer2.mjs labelInTarget), else kept as the original's ink; and each babel name
+ * the layout file locates (a generated heading: Abstract, References, Contents, …) in the target's word for it, unless the
+ * target has none or the captions say the final keeps the paper's (layer2.mjs nameInTarget; paintNames). A table's group
+ * (each record unit's `group`) is drawn whole or not at all.
  * `rules`: the layout rule set (rules/layout.mjs RuleSet) every choice made for the target is read from, resolved once at
  * the open and fixed for the run: the fit's parameters (leading, tracking, floor, adaptive fill and the rest), how a line
  * breaks, the hyphenation patterns and their minimums, the CJK family, the names of a float. Absent: BUILTIN_RULES. A
@@ -737,6 +740,85 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     T.ops += tCompose - tOps
     T.compose += tSvg - tCompose
     T.svg += performance.now() - tSvg
+  }
+
+  // ---- babel's names (D1a): each generated heading the layout file locates on a page (layout/file.mjs `names`: Abstract,
+  // References, Contents, …), set in the target's word for it where the target has one and the final names it so
+  // (layer2.mjs nameInTarget), painted as its page is drawn and before the page's units, so that a unit's put-back never
+  // returns a name's characters: its ink erased as a label's is (its characters accounted, what else its box covers put
+  // back; over the text-removed page, its box filled with paper or the removed page swapped in where kept ink lies under
+  // it, clear of every unit's rectangles), its word set at the original's size, weight and slant, its left edge kept or,
+  // centred, its centre, shrunk into the room on its line (its neighbours' characters, its column) to the script's last
+  // floor at most (P.floorMin), else left the original's (`unfit`). `names`: each name of the pages laid, drawn or why not
+  const names = []
+  const paintNames = async pg => {
+    if (!tex || !labels) return
+    for (const nm of tex.index.names(pg)) {
+      const rec = { occurrence: nm.occurrence, key: nm.key, page: pg, drawn: false, why: null, chars: [], box: { x0: nm.x0, x1: nm.x1, baseline: nm.baseline, top: nm.top, bottom: nm.bottom, size: nm.size } }
+      names.push(rec)
+      const mine = (chars2[pg - 1] ?? []).filter(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 >= nm.x0 - 0.5 && (c.x0 + c.x1) / 2 <= nm.x1 + 0.5 && Math.abs(c.yb - nm.baseline) < 0.3 * nm.size)
+      if (!mine.length) { rec.why = 'unread'; continue }
+      const text = L2.nameInTarget(nm, mine.map(c => c.ch).join(''), R.labels, labels.captions, to)
+      if (text === null) { rec.why = !R.labels?.[nm.key] ? 'no word' : labels.captions?.[nm.key] === 'source' ? 'source' : 'same'; continue }
+      // its style: its characters' (a class's bold or italic heading, small capitals), its design the paper's
+      const s0 = mine.find(c => c.st?.fam !== 'math')?.st ?? mine[0].st ?? {}
+      const st = { fam: s0.fam === 'math' || !s0.fam ? 'serif' : s0.fam, bold: !!s0.bold, italic: !!s0.italic, caps: !!s0.caps, design: s0.design ?? designs.serif }
+      const face = faceOf(st, /[\u2e80-\u9fff\uac00-\ud7af\u3040-\u30ff\uf900-\ufaff]/.test(text) ? 'cjk' : 'latin', to)
+      if (FS) {
+        const tFonts = performance.now()
+        const no = await FS.check([{ face, text }])
+        fontWait += performance.now() - tFonts
+        if (disposed) return
+        if (no) { rec.why = no.why; continue }
+      }
+      // its room on its line: from its column's edges, or the next characters of the line either side (a quarter of an
+      // em clear), never narrower than its own box
+      const mineSet = new Set(mine)
+      let [left, right] = columnOf({ page: pg, x0: nm.x0, x1: nm.x1 })
+      for (const c of chars2[pg - 1] ?? []) {
+        if (mineSet.has(c) || !/\S/.test(c.ch) || Math.abs(c.yb - nm.baseline) >= 0.4 * nm.size) continue
+        if (c.x1 <= nm.x0 + 0.1) left = Math.max(left, c.x1 + 0.25 * nm.size)
+        else if (c.x0 >= nm.x1 - 0.1) right = Math.min(right, c.x0 - 0.25 * nm.size)
+      }
+      left = Math.min(left, nm.x0); right = Math.max(right, nm.x1)
+      const w = L2.widthOf(text, face) * nm.size, mid = (nm.x0 + nm.x1) / 2
+      const room = nm.centred ? 2 * Math.min(mid - left, right - mid) : right - nm.x0
+      const k = w > room ? room / w : 1
+      if (k < P.floorMin - 1e-9) { rec.why = 'unfit'; continue }
+      const size = nm.size * k, x = nm.centred ? mid - (w * k) / 2 : nm.x0
+      // its ink erased: its characters the unit-like text it is, accounted on the page before any unit is painted there
+      const keys = mine.map(c => `${pg}|${c.item}|${c.k}`)
+      if (!accounted[pg]) accounted[pg] = new Set()
+      for (const key of keys) accounted[pg].add(key)
+      const r = rows[pg - 1], px = pxOf(pg), box = [nm.x0, nm.bottom, nm.x1, nm.top], ops = []
+      const dev = b => { const [ax, ay] = px(b[0], b[3]), [bx, by] = px(b[2], b[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)] }
+      if (RM?.mode === 'draw' && removedPage(pg) && guard) {
+        const self = `name:${nm.occurrence}`, dirty = dirtyOf(pg)
+        const meets = (q, d) => d[0] < q[2] && d[2] > q[0] && d[1] < q[3] && d[3] > q[1]
+        const swap = [], fill = []
+        for (const q of swapRects([box], guard.others(pg, self), SWAP_PAD)) (dirty.some(d => meets(q, d)) ? swap : fill).push(q)
+        guard.accept(self, pg, [])
+        if (swap.length) ops.push({ op: 'swap', page: pg, rects: swap.map(dev) })
+        if (fill.length) ops.push({ op: 'paper', rects: fill.map(dev) })
+        const [ax, ay, aw, ah] = dev(box)
+        audit.push({ what: 'erase', unit: -1, name: nm.occurrence, page: pg, box: [ax, ay, ax + aw, ay + ah], swap: true })
+      } else {
+        const [ax, ay, aw, ah] = dev([nm.x0 - 0.3, nm.bottom - 0.5, nm.x1 + 0.3, nm.top + 0.5])
+        ops.push({ op: 'erase', box: [ax, ay, aw, ah] })
+        audit.push({ what: 'erase', unit: -1, name: nm.occurrence, page: pg, box: [ax, ay, ax + aw, ay + ah] })
+        if (restoring) {
+          if (!keptOf[pg]) keptOf[pg] = { keys: new Set(), hulls: [] }
+          inkOf(pg)
+          pageItems[pg] ??= L2.pageItemsOf(chars2[pg - 1] ?? [], pg, px, inks[pg])
+          const back = L2.restoreUnaccounted([[ax, ay, ax + aw, ay + ah]], px, { items: pageItems[pg].items, cover: pageItems[pg].cover, ink: inks[pg], accounted: accounted[pg], kept: keptOf[pg] }, audit, -1, pg)
+          if (back) ops.push(back)
+        }
+      }
+      for (const o of ops) r.ops.push(o)
+      if (r.right) L2.drawOps(r.right.getContext('2d'), ops, 1, sourceOn)
+      r.svg.insertAdjacentHTML('beforeend', L2.svgOfName({ occurrence: nm.occurrence, text, x, baseline: nm.baseline, size, face }, cssOf(pg), scale))
+      Object.assign(rec, { drawn: true, text, size: r1(size), x: r1(x), w: r1(w * k), chars: mine.map(c => ({ ...c, page: pg })) })
+    }
   }
 
   // the columns of each page, as its paragraphs' lines span them: a line centred in its column (a caption under its
@@ -1363,6 +1445,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const pg = drawnTo + 1
     const t0 = performance.now()
     await drawPage(pg)
+    // (the page's names, before its units: layer2.mjs nameInTarget)
+    if (!disposed) await paintNames(pg)
     const t1 = performance.now()
     await settle(need.lay[pg])
     const waited = performance.now() - t1
@@ -1408,6 +1492,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
 
   return {
     N, P, rows, placed, skipped, stats, audit, order, ms, pageMs, pageTimes, chars: chars2, views,
+    /** babel's names of the pages laid (D1a): each { occurrence, key, page, drawn, why, chars, box (the original's), and
+     *  where drawn its text, size, x and width } */
+    names,
     /** the layout rule set the run was opened with (rules/layout.mjs): its schema and version */
     rules: { schema: RULES_SCHEMA, version: R.version },
     get designs() { return designs },
@@ -1529,12 +1616,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       needsCopy()
       const here = placed.filter(p => p.pages.includes(pg) && !p.refused)
       const only = rows.map((r, i) => (i === pg - 1 ? r : { ...r, base: false }))
-      return checkAll({ N, placed: here, rows: only, pxOf, toPdf, chars2, audit, cols: colsOf, cellRects })
+      return checkAll({ N, placed: here, rows: only, pxOf, toPdf, chars2, audit, cols: colsOf, cellRects, named: names.filter(n => n.drawn && n.page === pg) })
     },
     /** the prototype's completeness checker over every page still held (main.js check=1's window.__result.check) */
     check() {
       needsCopy()
-      return checkAll({ N, placed: placed.filter(p => !p.refused), rows, pxOf, toPdf, chars2, audit, cols: colsOf, cellRects })
+      return checkAll({ N, placed: placed.filter(p => !p.refused), rows, pxOf, toPdf, chars2, audit, cols: colsOf, cellRects, named: names.filter(n => n.drawn) })
     },
   }
 }

@@ -772,6 +772,23 @@ export function labelInTarget(label, names, captions, to) {
   const punct = m[3] || ((label.chars ?? []).map(c => c.ch).join('').match(/[.:]$/)?.[0] ?? '')
   return `${name} ${m[2]}${punct}`
 }
+/**
+ * A babel name (D1a: a generated heading the layout file locates, layout/file.mjs `names`) as the final sets it in the
+ * target: the target's word for its key (the layout rules' labels: babel's [captions]), in capitals where the original's
+ * glyphs are and its macro's own text is not (`capitals`: a class's case change, which the target's word takes too). Null
+ * where the target has no word for it (an empty one keeps the original's), where a compile of the translation said the
+ * final keeps the paper's own (`captions`, live.mjs captionsOf: `source`; a key it did not answer for is the target's, as a
+ * reader, which compiles nothing, names every one), or where the word is the original's already (`own`, its characters)
+ */
+export function nameInTarget(name, own, labels, captions, to) {
+  const word = labels?.[name.key]
+  if (!word || captions?.[name.key] === 'source') return null
+  const text = name.capitals ? word.toLocaleUpperCase(to) : word
+  return text.replace(/\s+/g, '') === String(own ?? '').replace(/\s+/g, '') ? null : text
+}
+/** a text's width at size 1 in a face (its run's at 100 px over 100: the canvas's, cached), for a name's room */
+export const widthOf = (s, face) => w100(s, face) / 100
+
 /** what a label reads as: a number, a mark, an item's, or a float's or a theorem's name and number */
 const LABEL = /^(?:[\d*†‡§¶•◦▪–·]{1,3}|\(?[a-z0-9ivx]{1,4}[.)]|(?:Figure|Fig\.|FIGURE|FIG\.|Table|TABLE|Algorithm|ALGORITHM|Listing|Theorem|Lemma|Definition|Proposition|Corollary|Remark|Example|Assumption)\s*[\dIVXL]+(?:\.\d+)?[a-z]?[.:]?)$/
 
@@ -2362,7 +2379,7 @@ export function drawOps(ctx, ops, z, sourceOf) {
  * `restore`: { items ([{ chars, keys }] of the page), accounted (Set), kept, ink, cover }. Returns the restore operation
  * (unitOps'), its boxes in whole device pixels as v0 drew them, or null.
  */
-function restoreUnaccounted(erased, px, { items, accounted, kept, ink, cover }, audit, id, page) {
+export function restoreUnaccounted(erased, px, { items, accounted, kept, ink, cover }, audit, id, page) {
   const boxes = []
   // the erased boxes' own extent first: most of the page's items are nowhere near them
   const ex0 = Math.min(...erased.map(e => e[0])), ex1 = Math.max(...erased.map(e => e[2])), ey0 = Math.min(...erased.map(e => e[1])), ey1 = Math.max(...erased.map(e => e[3]))
@@ -2536,6 +2553,18 @@ export function svgOfUnit(L, page, toPx, scale, id) {
     out += `<text y="${n2(by)}">${body}</text>${oblique}`
   }
   return `${out}</g>`
+}
+
+/**
+ * A babel name drawn in the target's word (run.mjs paintNames) as SVG: one <text> at its baseline (`baseline`, from `x`,
+ * PDF units), its word in `face` at `size`, the face's own size correction applied, an oblique face skewed about its
+ * baseline as a unit's run is (svgOfUnit). `toPx(x, y)`: PDF to the SVG's CSS pixels; `scale`: CSS pixels per PDF unit
+ */
+export function svgOfName({ occurrence, text, x, baseline, size, face }, toPx, scale) {
+  const [px, py] = toPx(x, baseline)
+  const span = `<tspan class="${faceClass(face)}" x="${n2(px)}" y="${n2(py)}" font-size="${n2(size * scale * (face.size ?? 1))}">${esc(text)}</tspan>`
+  const line = face.oblique ? `<text transform="translate(${n2(px)} ${n2(py)}) skewX(${-OBLIQUE_DEG}) translate(${-n2(px)} ${-n2(py)})">${span}</text>` : `<text y="${n2(py)}">${span}</text>`
+  return `<g data-n="${occurrence}">${line}</g>`
 }
 
 // ---- the scorer's view of a laid-out unit
