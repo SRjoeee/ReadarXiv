@@ -46,27 +46,37 @@ export class ProtoRun {
       const F = await import('/proto-engine/layout/file.mjs')
       texIn = { ...TEX, index: F.indexLayout(F.parseLayout(layout)), pieces: new Map(units.units.map(u => [u.id, u.pieces])) }
     }
-    // the document: arXiv's PDF with the paper's add-on appended (one document, as a reader opens it), or arXiv's own
-    let doc, addon = null
-    if (removal) {
-      status('addon')
-      addon = await json(`/api/addon/${encodeURIComponent(name)}`)
-      doc = await pdfjs.getDocument({ data: await bytes(`/addon/${addon.key}.pdf`), ...ASSETS, ...V.PDF_OPTIONS }).promise
-    } else doc = await pdfjs.getDocument({ data: await bytes(`${base}arxiv.pdf`), ...ASSETS, ...V.PDF_OPTIONS }).promise
-    const t0 = performance.now()
-    const run = await V.openProto({
-      doc, geometry, units: record.units, target, scale: 1.25, dpr: devicePixelRatio, ...(rules ? { rules } : {}), faces, copy: false,
-      ...(texIn ? { tex: texIn } : {}), ...(addon ? { removal: { OPS: pdfjs.OPS, mode: 'draw', doc, manifest: addon.manifest } } : {}),
-      labels: { captions: record.captions ?? null },
-      faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`,
-    })
-    return new ProtoRun(run, doc, { faces, addon, rules: run.rules, openMs: performance.now() - t0, tex: !!texIn })
+    // the document: arXiv's PDF with the paper's add-on appended (one document, as a reader opens it), or arXiv's own. Its
+    // loading task is this function's until a ProtoRun holds it: a failure from here on (the add-on, the engine refusing the
+    // paper or a face) destroys it, and so lets the document's worker go, before the failure is passed on
+    let task = null
+    try {
+      const load = async url => { task = pdfjs.getDocument({ data: await bytes(url), ...ASSETS, ...V.PDF_OPTIONS }); return task.promise }
+      let doc, addon = null
+      if (removal) {
+        status('addon')
+        addon = await json(`/api/addon/${encodeURIComponent(name)}`)
+        doc = await load(`/addon/${addon.key}.pdf`)
+      } else doc = await load(`${base}arxiv.pdf`)
+      const t0 = performance.now()
+      const run = await V.openProto({
+        doc, geometry, units: record.units, target, scale: 1.25, dpr: devicePixelRatio, ...(rules ? { rules } : {}), faces, copy: false,
+        ...(texIn ? { tex: texIn } : {}), ...(addon ? { removal: { OPS: pdfjs.OPS, mode: 'draw', doc, manifest: addon.manifest } } : {}),
+        labels: { captions: record.captions ?? null },
+        faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`,
+      })
+      return new ProtoRun(run, doc, { faces, addon, rules: run.rules, openMs: performance.now() - t0, tex: !!texIn })
+    } catch (e) {
+      await Promise.resolve(task?.destroy()).catch(() => {})
+      throw e
+    }
   }
   constructor(run, doc, meta) { this.run = run; this.doc = doc; this.meta = meta; this.done = new Map() }
-  /** the run let go (its sheet out of the page, its canvases freed, nothing drawn or laid after), then its document */
-  close() {
+  /** the run let go (its sheet out of the page, its canvases freed, nothing drawn or laid after), then its document: done when
+   *  the document is destroyed */
+  async close() {
     this.run.dispose()
-    this.doc.loadingTask.destroy()
+    await this.doc.loadingTask.destroy()
   }
   /** how the text removal went (null without it): pages removed, units drawn by it and the old way */
   removal() { return this.run.removalStats?.() ?? null }

@@ -14,6 +14,7 @@ import { CAPS_SCALE, drawCopy, drawText, LayerRun, loadEngine, loadLayout, svgOf
 import { createNoteSaver } from './notes.mjs'
 import { loadProto, ProtoRun } from './proto.mjs'
 import { createRulesPanel } from './rules-panel.mjs'
+import { createRunSlot } from './run-slot.mjs'
 import { ENDONYMS, missingKeys, STRINGS, UI_LANGS } from './strings.mjs'
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
@@ -116,6 +117,16 @@ const closeDoc = doc => { doc?.loadingTask.destroy() }
 const fetchJson = async url => { const r = await fetch(url); return r.ok ? r.json() : null }
 /** the documents a fixture load opens, which a load that a newer one replaces, or that fails, closes (doc-loads.mjs) */
 const docLoads = createDocLoads({ getDocument: bytes => pdfjs.getDocument({ data: bytes, ...ASSETS }), fetchBytes })
+/** the v0 runs: one at a time, since they share the engine's font roles (run-slot.mjs); a run is let go through `letGoProto` */
+const protoSlot = createRunSlot()
+/** the open fixture's v0 run, if there is one, let go: closed once it has started, and a new run starts after that */
+function letGoProto(at) {
+  if (!at?.proto) return
+  protoSlot.release(at.proto)
+  at.proto = null
+  at.protoRun = null
+  at.v0ms = null
+}
 async function sizesOf(doc) {
   return Promise.all(Array.from({ length: doc.numPages }, async (_, i) => { const v = (await doc.getPage(i + 1)).view; return [v[2] - v[0], v[3] - v[1]] }))
 }
@@ -126,7 +137,7 @@ async function openFixture(name) {
   const load = docLoads.begin()
   status(t('opening', `${f.paper}v${f.version} · ${ENDONYMS[f.target] ?? f.target}`))
   if (open) for (const d of Object.values(open.docs)) closeDoc(d)
-  if (open?.proto) open.proto.then(r => r?.close()).catch(() => {})
+  letGoProto(open)
   open = null
   const base = `/fixtures/${encodeURIComponent(name)}/`
   const has = file => f.files.includes(file)
@@ -355,10 +366,17 @@ async function protoPage(p, source, vp, token, div, renderMs) {
   status(t('drawing', p))
   let done, run
   const at = open
-  const runP = (open.proto ??= ProtoRun.open({ V: proto.V, rules: v0Rules(), name: open.f.name, target: open.f.target, faces: state.v0faces, removal: state.v0removal && open.f.files.includes('layout.json'), tex: state.v0tex && open.f.files.includes('layout.json'), status: k => status(t(k)) }))
+  if (!open.proto) {
+    // (the run's choices are taken now, as the reader has them; it starts when the run before it is gone)
+    const options = { V: proto.V, rules: v0Rules(), name: open.f.name, target: open.f.target, faces: state.v0faces, removal: state.v0removal && open.f.files.includes('layout.json'), tex: state.v0tex && open.f.files.includes('layout.json'), status: k => status(t(k)) }
+    open.proto = protoSlot.start(() => ProtoRun.open(options))
+  }
+  const runP = open.proto
   try {
     run = await runP
-    if (at.proto === runP) at.protoRun = run
+    // (let go before it began or while it started: another choice or fixture is open, which draws)
+    if (!run || at.proto !== runP) { status(''); return null }
+    at.protoRun = run
     done = await run.page(p)
   } catch (e) {
     status('')
@@ -672,7 +690,7 @@ function setV0Controls() {
 async function again() {
   setV0Controls()
   remember()
-  if (open?.proto) { open.proto.then(r => r?.close()).catch(() => {}); open.proto = null; open.protoRun = null; open.v0ms = null }
+  letGoProto(open)
   $('v0-summary').replaceChildren()
   for (const p of panes) if (p.kind === 'v0') { const at = p.position(); await p.show('v0'); p.scrollTo(at.page, at.frac) }
 }
