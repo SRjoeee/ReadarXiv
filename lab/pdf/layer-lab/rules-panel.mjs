@@ -54,6 +54,9 @@ export function createRulesPanel({ root, h, icon, t, R, names, catalog, onChange
     note: '', msg: null, saved: null, ref: '',
   }
   const open = new Set(OPEN_BY_DEFAULT)
+  /** which loaded set the working set is: counted up each time one is loaded, so that an answer that comes late (a save sent
+   *  before another set was loaded) can tell whether it still belongs to the set shown */
+  let generation = 0
   let ui = null
   let rest = null
   const fields = R.RULES_FIELDS
@@ -68,8 +71,10 @@ export function createRulesPanel({ root, h, icon, t, R, names, catalog, onChange
     clearTimeout(rest)
     if (now) onChange(); else rest = setTimeout(onChange, REST_MS)
   }
-  function say(kind, text) { S.msg = text ? { kind, text } : null; showMsg() }
+  /** a message under the loads, with an action beside it where there is one: { label, run } */
+  function say(kind, text, action = null) { S.msg = text ? { kind, text, action } : null; showMsg() }
   function adopt(loaded, from) {
+    generation++
     S.base = structuredClone(loaded.set)
     S.working = structuredClone(loaded.set)
     S.from = { ...from, version: loaded.set.version, sha256: loaded.sha256 }
@@ -184,8 +189,11 @@ export function createRulesPanel({ root, h, icon, t, R, names, catalog, onChange
 
   async function save() {
     const note = oneLine(S.note)
-    // the set as it is sent, copied before the answer is waited for: the file then holds this, whatever is edited meanwhile
-    const sent = { ...structuredClone(S.working), note }
+    // the set as it is sent, copied before the answer is waited for: the file then holds this, whatever is edited meanwhile.
+    // Its version is the file's as this page last read it (not the loaded set's own, which a ref or a published set has
+    // from elsewhere): the server writes it only where the file is still that version
+    const sent = { ...structuredClone(S.working), version: S.file.set.version, note }
+    const mine = generation
     ui.save.disabled = true
     let r, body
     try {
@@ -193,18 +201,29 @@ export function createRulesPanel({ root, h, icon, t, R, names, catalog, onChange
       body = await r.json()
     } catch (e) { say('warn', t('rules.failed', t('rules.save'), String(e?.message ?? e).slice(0, 200))); refreshAll(); return }
     if (!r.ok) {
-      say('warn', body?.field ? t('rules.refused', body.field, body.why) : t('rules.failed', t('rules.save'), body?.why ?? r.status))
+      // (the file has moved on since this page read it: nothing was written, and nothing is merged; the reader loads the file
+      // again, or goes on from the set shown and is refused again)
+      if (r.status === 409 && body?.error === 'stale') say('warn', t('rules.stale', sent.version, body.version), { label: t('rules.staleLoad'), run: () => loadFile() })
+      else say('warn', body?.field ? t('rules.refused', body.field, body.why) : t('rules.failed', t('rules.save'), body?.why ?? r.status))
       refreshAll()
       return
     }
+    // (the file now holds what was sent, whichever set is shown by now)
     const written = { ...sent, version: body.version }
     S.file = { set: structuredClone(written), sha256: body.sha256 }
+    if (oneLine(S.note) === note) S.note = ''
+    if (generation !== mine) {
+      // (another set was loaded while the save was in flight: that set stays as it was loaded, with its own base and where it
+      // came from; only what the file is, and so what it is compared with, has changed)
+      S.saved = { version: body.version, changed: body.changed }
+      refreshAll()
+      return
+    }
     S.base = structuredClone(written)
     // (an edit made while the save was in flight is not in the file: it stays an unsaved edit, over the version and note now there)
     S.working = { ...S.working, version: body.version, note }
     S.from = { kind: 'file', label: t('rules.from.file'), version: body.version, sha256: body.sha256 }
     S.saved = { version: body.version, changed: body.changed }
-    S.note = ''
     say('', '')
     refreshAll()
   }
@@ -382,7 +401,10 @@ export function createRulesPanel({ root, h, icon, t, R, names, catalog, onChange
     if (!ui) return
     ui.msg.hidden = !S.msg
     ui.msg.dataset.kind = S.msg?.kind ?? ''
-    ui.msg.textContent = S.msg?.text ?? ''
+    const action = S.msg?.action
+    const button = action ? h('button', { class: 'btn text sm', type: 'button' }, action.label) : null
+    button?.addEventListener('click', action.run)
+    ui.msg.replaceChildren(...(S.msg ? [h('span', {}, S.msg.text)] : []), ...(button ? [button] : []))
   }
   function loadsRow() {
     const btn = (key, run) => { const b = h('button', { class: 'btn text sm', type: 'button' }, t(key)); b.addEventListener('click', run); return b }

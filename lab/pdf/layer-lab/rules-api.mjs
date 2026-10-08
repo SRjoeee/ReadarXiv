@@ -8,7 +8,9 @@
 //   GET  /api/rules/published?env=staging|production
 //                              the published current set, fetched from the URL the lab was given for it (the web's rules
 //                              route); 404 where none was given or the route answers 404, 502 where it is unreachable
-//   POST /api/rules            a save: the set as JSON, `note` required. Validated as a reader validates a set (readRules),
+//   POST /api/rules            a save: the set as JSON, `note` required, its `version` the file's as the page last read
+//                              it. Validated as a reader validates a set (readRules); refused with a 409 `stale`, and
+//                              nothing written, where the file has moved on since (another tab, an edit by hand); else
 //                              its version set to the file's plus one, written in the canonical form (writeRules); the
 //                              answer names the fields that changed
 // The server listens on 127.0.0.1 and nothing else; a POST is refused unless it is application/json and its Origin is exactly
@@ -158,6 +160,9 @@ export function createRulesApi({ root, origin, rules, published = {}, fetch: fet
         if (e instanceof RulesRefusal || e?.code === 'ENOENT') return refuse(res, 500, 'file', `the worktree's file cannot be read (${e.field ?? 'missing'}: ${e.why ?? e.message}); restore it first`, e.field ? { field: e.field } : {})
         throw e
       }
+      // (a save carries the file's version as its page last read it: where the file has moved on, the set is built on a file that
+      // is no more, and writing it would take the newer edits away. The page says so and loads the file; nothing is merged here)
+      if (set.version !== current.version) return refuse(res, 409, 'stale', `the file is at version ${current.version} now; this set was built on version ${set.version}`, { version: current.version })
       const changed = diffRules(current, set)
       if (!changed.length) return refuse(res, 409, 'unchanged', 'no field differs from the file')
       const text = writeRules({ ...set, version: current.version + 1 })

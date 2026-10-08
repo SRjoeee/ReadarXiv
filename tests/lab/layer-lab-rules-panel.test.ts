@@ -10,7 +10,6 @@ import * as R from '@/pdf-reader/engine/rules/layout.mjs'
 // set it sent
 
 const FILE = readFileSync(resolve('src/pdf-reader/engine/rules/layout-rules.json'))
-const SHA = createHash('sha256').update(FILE).digest('hex')
 
 const h = (tag: string, attrs: Record<string, unknown> = {}, ...kids: (Node | string | null | undefined)[]) => {
   const e = document.createElement(tag)
@@ -22,23 +21,45 @@ const icon = () => document.createElementNS('http://www.w3.org/2000/svg', 'svg')
 /** the page's words are not what these tests read: a key stands for its string */
 const t = (key: string, ...args: unknown[]) => [key, ...args].join(' ')
 
-interface Post { body: string; answer: (version?: number) => void }
+/** a rule set's bytes as the lab's server sends them: the built-in set, edited */
+// biome-ignore lint/suspicious/noExplicitAny: a set under edit has no fixed shape
+const bytesOf = (edit: (s: any) => void) => {
+  const set = JSON.parse(FILE.toString('utf8'))
+  edit(set)
+  return Buffer.from(R.writeRules(R.parseRules(set)), 'utf8')
+}
+const shaOf = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex')
+const answerWith = (bytes: Buffer) => Promise.resolve({
+  ok: true, status: 200,
+  headers: { get: (k: string) => (k.toLowerCase() === 'etag' ? `"${shaOf(bytes)}"` : null) },
+  arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+})
+
+interface Post { body: string; answer: (version?: number) => void; refuse: (status: number, body: object) => void }
 let posts: Post[]
 let root: HTMLElement
+/** what GET /api/rules answers (the worktree's file), and what a ref's route does */
+let served: Buffer
+let ofRef: Buffer
 
 beforeEach(() => {
   posts = []
+  served = FILE
+  ofRef = FILE
   root = document.createElement('div')
   document.body.replaceChildren(root)
+  vi.stubGlobal('confirm', () => true)
   vi.stubGlobal('fetch', (url: string, init?: { method?: string; body?: string }) => {
     if (init?.method === 'POST') {
       return new Promise(done => posts.push({
         body: String(init.body),
         answer: (version = 2) => done({ ok: true, status: 200, json: async () => ({ ok: true, version, sha256: 'f'.repeat(64), bytes: 1, changed: [] }) }),
+        refuse: (status, body) => done({ ok: false, status, json: async () => body }),
       }))
     }
-    if (url !== '/api/rules') throw new Error(url)
-    return Promise.resolve({ ok: true, status: 200, headers: { get: (k: string) => (k.toLowerCase() === 'etag' ? `"${SHA}"` : null) }, arrayBuffer: async () => FILE.buffer.slice(FILE.byteOffset, FILE.byteOffset + FILE.byteLength) })
+    if (url === '/api/rules') return answerWith(served)
+    if (url.startsWith('/api/rules?ref=')) return answerWith(ofRef)
+    throw new Error(url)
   })
 })
 afterEach(() => { vi.unstubAllGlobals() })
@@ -57,13 +78,22 @@ const writeNote = (text: string) => {
   box.value = text
   box.dispatchEvent(new Event('input'))
 }
+/** let the click's promise chain run */
+const settle = () => new Promise<void>(done => setTimeout(done, 0))
+/** a set loaded from a git ref, through the loads row */
+const loadRef = async (ref: string) => {
+  const input = root.querySelector('.ref-row input') as HTMLInputElement
+  input.value = ref
+  input.dispatchEvent(new Event('input'))
+  ;(root.querySelector('.ref-row button') as HTMLButtonElement).click()
+  // (a set is read with a digest, which takes a turn of its own: wait for the panel to say it loaded)
+  await vi.waitFor(() => expect(root.querySelector('p.note[role="status"]')?.textContent).toContain('rules.loaded'))
+}
 const save = () => {
   const button = root.querySelector('#rules-save') as HTMLButtonElement
   expect(button.disabled).toBe(false)
   button.click()
 }
-/** let the click's promise chain run */
-const settle = () => new Promise<void>(done => setTimeout(done, 0))
 
 describe('the save', () => {
   it('sends the note as one line of text, whatever the textarea held: a set refuses a control in a string', async () => {
@@ -124,5 +154,87 @@ describe('the save', () => {
     expect(p.dirty()).toBe(false)
     expect(p.set()!.version).toBe(2)
     expect(p.set()!.note).toBe('keep all')
+  })
+
+  it('sends the version of the file it read, not the loaded set\'s own: the server writes it only if the file is still that', async () => {
+    const p = await panel()
+    // (a set from a commit, at a version of its own)
+    ofRef = bytesOf(s => { s.version = 5; s.scripts.Hans.leadBase = 1.31 })
+    await loadRef('feature')
+    expect(p.set()!.version).toBe(5)
+    flip('keepAll')
+    writeNote('keep all')
+    save()
+    await settle()
+    expect(JSON.parse(posts[0]!.body).version).toBe(1)
+  })
+
+  it('builds the next save on the version the file has after the one before', async () => {
+    await panel()
+    flip('keepAll')
+    writeNote('keep all')
+    save()
+    await settle()
+    posts[0]!.answer(2)
+    await settle()
+    flip('cjkQuotes')
+    writeNote('and the quotes')
+    save()
+    await settle()
+    expect(JSON.parse(posts[1]!.body).version).toBe(2)
+  })
+
+  it('on a stale file says so and offers to load it, changing nothing on its own', async () => {
+    const p = await panel()
+    flip('keepAll')
+    writeNote('keep all')
+    save()
+    await settle()
+    posts[0]!.refuse(409, { ok: false, error: 'stale', why: 'the file moved', version: 3 })
+    await settle()
+    const message = root.querySelector('p.note[role="status"]') as HTMLElement
+    expect(message.hidden).toBe(false)
+    expect(message.textContent).toContain('rules.stale 1 3')
+    // (the edit is still there, unsaved; nothing was taken from the file)
+    expect(p.dirty()).toBe(true)
+    expect(p.set()!.languages.zh!.keepAll).toBe(true)
+    // (the reader asks for the file: it replaces the edit, after the question every load asks)
+    served = bytesOf(s => { s.version = 3; s.scripts.Hans.leadBase = 1.31 })
+    const load = message.querySelector('button') as HTMLButtonElement
+    expect(load.textContent).toBe('rules.staleLoad')
+    load.click()
+    await vi.waitFor(() => expect(p.set()!.version).toBe(3))
+    expect(p.set()!.scripts.Hans!.leadBase).toBe(1.31)
+    expect(p.set()!.languages.zh!.keepAll).not.toBe(true)
+    expect(p.dirty()).toBe(false)
+    expect(message.querySelector('button')).toBeNull()
+  })
+
+  it('lets a save that is answered after another set was loaded change the file only, not the set shown', async () => {
+    const p = await panel()
+    flip('keepAll')
+    writeNote('keep all')
+    save()
+    await settle()
+    // (the answer has not come: another set is loaded)
+    ofRef = bytesOf(s => { s.version = 5; s.scripts.Hans.leadBase = 1.31 })
+    await loadRef('feature')
+    expect(p.from()!.kind).toBe('ref')
+    posts[0]!.answer(2)
+    await settle()
+    // the set shown is the one loaded, with its own version, base and origin
+    expect(p.from()!.kind).toBe('ref')
+    expect(p.set()!.version).toBe(5)
+    expect(p.set()!.scripts.Hans!.leadBase).toBe(1.31)
+    expect(p.set()!.languages.zh!.keepAll).not.toBe(true)
+    expect(p.dirty()).toBe(false)
+    // and the file is what the save wrote: version 2, which the shown set is compared with and the next save is built on
+    expect(root.querySelector('#rules-compare')!.textContent).toContain('rules.vsFile 2')
+    flip('cjkQuotes')
+    writeNote('next')
+    expect((root.querySelector('#rules-save-hint') as HTMLElement).textContent).toContain('rules.saveHint 3')
+    save()
+    await settle()
+    expect(JSON.parse(posts[1]!.body).version).toBe(2)
   })
 })

@@ -119,10 +119,10 @@ describe('saving (POST /api/rules)', () => {
     expect(siblings(file)).toEqual([RULES_PATH.split('/').pop()])
   })
 
-  it('writes a valid set in its canonical form, its version the file\'s plus one, whatever version the body carries', async () => {
+  it('writes a valid set in its canonical form, its version the file\'s plus one', async () => {
     const { dir, file } = repo()
     const l = await lab(dir)
-    const set = builtin(s => { s.scripts.Hans.leadBase = 1.35; s.note = 'zh leads a little looser'; s.version = 99 })
+    const set = builtin(s => { s.scripts.Hans.leadBase = 1.35; s.note = 'zh leads a little looser' })
     const r = await save(l, set)
     expect(r.status).toBe(200)
     expect(r.json.ok).toBe(true)
@@ -140,8 +140,8 @@ describe('saving (POST /api/rules)', () => {
     expect(r.json.sha256).toBe((await rules.readRules(new TextEncoder().encode(written))).sha256)
     expect(r.json.changed).toEqual([{ path: 'scripts.Hans.leadBase', from: 1.3, to: 1.35 }])
     expect(siblings(file)).toEqual([RULES_PATH.split('/').pop()])
-    // (the next save counts on from the file, not from the body)
-    const again = await save(l, builtin(s => { s.scripts.Hans.leadBase = 1.4; s.note = 'looser still'; s.version = 1 }))
+    // (the next save is built on the version the file now has)
+    const again = await save(l, builtin(s => { s.scripts.Hans.leadBase = 1.4; s.note = 'looser still'; s.version = 2 }))
     expect(again.json.version).toBe(3)
     expect(JSON.parse(readFileSync(file, 'utf8')).version).toBe(3)
   })
@@ -244,26 +244,53 @@ describe('saving (POST /api/rules)', () => {
     const { dir, file } = repo()
     const before = readFileSync(file)
     const l = await lab(dir)
-    // (only the note and the version differ, neither a field)
-    const r = await save(l, builtin(s => { s.note = 'a different note'; s.version = 7 }))
+    // (only the note differs, which is not a field)
+    const r = await save(l, builtin(s => { s.note = 'a different note' }))
     expect(r.status).toBe(409)
     expect(r.json.error).toBe('unchanged')
     expect(readFileSync(file).equals(before)).toBe(true)
   })
 
-  it('does not interleave two saves: each takes the version after the one before', async () => {
+  it('does not interleave two saves: the one that comes second, built on the version the first replaced, is refused', async () => {
     const { dir, file } = repo()
     const l = await lab(dir)
     const [a, b] = await Promise.all([
       save(l, builtin(s => { s.scripts.Hans.leadBase = 1.35; s.note = 'a' })),
       save(l, builtin(s => { s.scripts.Hans.leadBase = 1.4; s.note = 'b' })),
     ])
-    expect([a.status, b.status]).toEqual([200, 200])
-    expect([a.json.version, b.json.version].sort()).toEqual([2, 3])
+    const [won, lost] = a.status === 200 ? [a, b] : [b, a]
+    expect([won.status, lost.status]).toEqual([200, 409])
+    expect(won.json.version).toBe(2)
+    expect(lost.json.error).toBe('stale')
     const written = JSON.parse(readFileSync(file, 'utf8'))
-    expect(written.version).toBe(3)
-    expect(written.note).toBe(a.json.version === 3 ? 'a' : 'b')
+    expect(written.version).toBe(2)
+    expect(written.note).toBe(won === a ? 'a' : 'b')
     expect(siblings(file)).toEqual([RULES_PATH.split('/').pop()])
+  })
+
+  it('refuses a set built on another version than the file\'s, and writes nothing: a second tab does not take the first one\'s edit away', async () => {
+    const { dir, file } = repo()
+    const l = await lab(dir)
+    // (two tabs read version 1; the first saves a change to leadBase)
+    const first = await save(l, builtin(s => { s.scripts.Hans.leadBase = 1.35; s.note = 'first tab' }))
+    expect(first.status).toBe(200)
+    const after = readFileSync(file)
+    // (the second, which still has version 1, saves a change to another field)
+    const second = await save(l, builtin(s => { s.scripts.Hans.spaceMax = 0.5; s.note = 'second tab' }))
+    expect(second.status).toBe(409)
+    expect(second.json).toMatchObject({ ok: false, error: 'stale', version: 2 })
+    expect(readFileSync(file).equals(after)).toBe(true)
+    expect(JSON.parse(readFileSync(file, 'utf8')).scripts.Hans.leadBase).toBe(1.35)
+    expect(siblings(file)).toEqual([RULES_PATH.split('/').pop()])
+    // (a version ahead of the file's is as stale: the set was not built on this file)
+    const ahead = await save(l, builtin(s => { s.scripts.Hans.spaceMax = 0.5; s.note = 'ahead'; s.version = 9 }))
+    expect(ahead.status).toBe(409)
+    expect(ahead.json.error).toBe('stale')
+    expect(readFileSync(file).equals(after)).toBe(true)
+    // (built on the file as it now is, the same change is written)
+    const third = await save(l, builtin(s => { s.scripts.Hans.leadBase = 1.35; s.scripts.Hans.spaceMax = 0.5; s.note = 'second tab, reloaded'; s.version = 2 }))
+    expect(third.status).toBe(200)
+    expect(third.json.version).toBe(3)
   })
 
   it('answers a file it cannot read as such and writes nothing', async () => {

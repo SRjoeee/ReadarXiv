@@ -263,6 +263,7 @@ html[data-pointer] textarea:focus-visible, html[data-pointer] .page-field:focus-
 .note[data-kind="warn"]:not(.warn) { display: flex; gap: 6px; color: var(--ink); overflow-wrap: anywhere; }
 .note[data-kind="warn"]:not(.warn)::before { content: ""; flex: none; width: 6px; height: 6px; margin-top: 6px; border-radius: 999px; background: var(--danger); }
 .note[data-kind="ok"] { color: var(--ink-2); }
+.note > .btn { flex: none; align-self: flex-start; margin-left: auto; }
 .rules-scope-hint { margin: 16px 0 6px; }
 
 .rgroup { border-top: 0.5px solid var(--chrome-line); }
