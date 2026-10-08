@@ -72,7 +72,9 @@ export declare class BundleRefusal extends Error {
 }
 /** the bundle's units from openPaper's paper (its `units` and `kept`); throws on a piece the front end does not make */
 export declare function bundleUnitsOf(paper: { units: readonly SourceUnit[]; kept: ReadonlySet<SourceUnit> }): BundleUnit[]
-/** the bundle file's bytes (UTF-8 JSON) from its parts, under the engine's versions; the same parts, the same bytes */
+/** the bundle file's bytes (UTF-8 JSON) from its parts, under the engine's versions; the same parts, the same bytes.
+ *  Never past BUNDLE_CAP or BUNDLE_VALUES (readBundle's defaults): the add-on written null where it would be, then the
+ *  layout too, which the prepare sees reading the bundle back; past them with neither, throws BundleRefusal */
 export declare function writeBundle(parts: BundleParts): Uint8Array
 /** the bundle as received (bytes, or a string), within caps.bytes (BUNDLE_CAP) and caps.values (BUNDLE_VALUES) counted
  *  before JSON.parse, then every check of §3.3 (of the versions, the contract's compared, the maker's read as tokens); a

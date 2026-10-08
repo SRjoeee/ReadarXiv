@@ -271,6 +271,19 @@ describe('readBundle refuses', () => {
     expect(refusalOf(broken(b => { b.left.units[1][2][1][3] = '300' }))?.why).toMatch(/^left\.units\[1\]\[2\]\[1\]\[3\]/)
   })
 
+  it("a left rectangle that is not a box within its page's view, as the layout file's are (by 1 pt)", () => {
+    // (x1 not right of x0, y1 not above y0)
+    expect(refusalOf(broken(b => { b.left.units[1][2][0] = [1, 540, 647, 72, 657.5] }))?.why).toBe('left.units[1][2][0][3]: an empty box')
+    expect(refusalOf(broken(b => { b.left.units[1][2][0] = [1, 72, 657.5, 540, 647] }))?.why).toBe('left.units[1][2][0][4]: an empty box')
+    expect(refusalOf(broken(b => { b.left.units[1][2][0] = [1, 72, 647, 72, 657.5] }))?.why).toBe('left.units[1][2][0][3]: an empty box')
+    // (past its page's view, 612 by 792, by more than the point)
+    expect(refusalOf(broken(b => { b.left.units[1][2][0][3] = 640 }))?.why).toBe("left.units[1][2][0][3]: not a number within its page's view (number)")
+    expect(refusalOf(broken(b => { b.left.units[1][2][0][1] = -2 }))?.why).toBe("left.units[1][2][0][1]: not a number within its page's view (number)")
+    expect(refusalOf(broken(b => { b.left.units[1][2][0][4] = 793.5 }))?.why).toBe("left.units[1][2][0][4]: not a number within its page's view (number)")
+    // (within it by the point: read)
+    expect(refusalOf(broken(b => { b.left.units[1][2][0][3] = 612.5; b.left.units[1][2][0][1] = -0.5 }))).toBeNull()
+  })
+
   it('a layout refused by the layout file\'s own rules, or of another paper or other units', () => {
     expect(refusalOf(broken(b => { b.layout.schema = 2 }))?.why).toMatch(/^layout\.schema/)
     expect(refusalOf(broken(b => { b.layout.lines[1][1][0] = 3 }))?.why).toMatch(/^layout\.lines\[1\]\[1\]\[0\]/)
@@ -321,6 +334,39 @@ describe('readBundle refuses', () => {
     b.addon.tail = 'A'.repeat(4 * Math.floor(ADDON_CAP / 3))
     b.addon.manifest.appended = 3 * (b.addon.tail.length / 4)
     expect(refusalOf(b, { bytes: 8 * 2 ** 20 })).toBeNull()
+  })
+})
+
+describe('writeBundle never writes a bundle readBundle refuses', () => {
+  const para: BundleUnit = ['para', 0, null, null, null, [[0, 'x']]]
+  it('past BUNDLE_CAP bytes: the add-on written null, the layout kept', () => {
+    // (a tail of 3 MiB: its base64 is 4 MiB)
+    const tail = Uint8Array.from({ length: 3 * 2 ** 20 }, (_, i) => (i * 37 + 11) & 255)
+    const parts = { ...partsOf(), addon: { manifest: manifestOf(tail.length), tail } }
+    const bytes = writeBundle(parts)
+    expect(bytes.length).toBeLessThanOrEqual(BUNDLE_CAP)
+    const read = readBundle(bytes)
+    expect(read.addon).toBeNull()
+    expect(read.layout).toEqual(partsOf().layout)
+  })
+  it('past BUNDLE_VALUES with the add-on dropped: the layout written null too', () => {
+    // (a layout of 100 units, 2,000 lines each: 1.6 million values)
+    const n = 100, P = UNIT_KINDS.indexOf('para')
+    const line = [1, 72, 540, 650, 657.5, 647.25, 10, 0], rows = Array.from({ length: 2000 }, () => line).flat()
+    const layout: LayoutFile = {
+      ...layoutOf(), units: Array.from({ length: n }, (_, id) => [id, P, 9, 0, 1]), lines: Array.from({ length: n }, (_, id) => [id, rows]),
+      frames: Array.from({ length: n }, (_, id) => [id, [1, 0, 0, 2000, -1, 12.5]]), erase: [], ph: [], headings: [],
+    } as never
+    const parts = { ...partsOf(), units: Array.from({ length: n }, () => para), left: { ...partsOf().left, kinds: Array.from({ length: n }, () => 'para'), units: [] }, layout }
+    const read = readBundle(writeBundle(parts))
+    expect([read.layout, read.addon]).toEqual([null, null])
+    expect(read.units).toHaveLength(n)
+  })
+  it('past both with neither: throws BundleRefusal', () => {
+    // (300 units of 16,000 code units: 4.8 MB of units alone)
+    const big: BundleUnit = ['para', 0, null, null, null, [[0, 'x'.repeat(16_000)]]]
+    const parts = { ...partsOf(), units: Array.from({ length: 300 }, () => big), left: { ...partsOf().left, kinds: Array.from({ length: 300 }, () => 'para'), units: [] }, layout: null }
+    expect(() => writeBundle(parts)).toThrow(BundleRefusal)
   })
 })
 

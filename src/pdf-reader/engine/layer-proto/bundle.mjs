@@ -39,6 +39,8 @@ const DEPTH = 7
 export { STRING_MAX }
 /** a unit's kind, a lower-case word */
 const KIND = /^[a-z]{1,32}$/
+/** a rectangle of the left lies within its page's view by this, PDF units (the layout file's slack) */
+const SLACK = 1
 /** a heading's depth (latex-front.mjs DEPTH: -1 a \part, 0 a \chapter …), with the readers' margin */
 const DEPTH_MIN = -1, DEPTH_MAX = 9
 /** a PDF's bytes at most */
@@ -174,13 +176,24 @@ export function bundleUnitsOf(paper) {
  * arXiv's PDF it was made over and our copy's address; `image`, the compiler image's name; `units`, bundleUnitsOf's;
  * `left` { kinds, pages, units }, the original's side; `layout`, the layout file (written as its file is, encodeLayout)
  * or null; `addon` { manifest, tail: the bytes after arXiv's } or null. The versions are the engine's, with the image.
- * The same parts give the same bytes: every object of the bundle's own written in one order
+ * The same parts give the same bytes: every object of the bundle's own written in one order. Never bytes past
+ * BUNDLE_CAP or BUNDLE_VALUES, which readBundle refuses: the add-on is written null where the bundle would be past
+ * either, then the layout too (the prepare reads the bundle back, and sees which it holds); a bundle past them with
+ * neither throws BundleRefusal
  */
 export function writeBundle({ paper, base, image, units, left, layout, addon }) {
   const J = JSON.stringify
   const versions = { bundle: BUNDLE, pipeline: PIPELINE_VERSION, layout: LAYOUT, removal: REMOVAL, pdfjs: PDFJS, image }
-  const text = `{"schema":1,"paper":${J({ id: paper.id, version: paper.version, pages: paper.pages })},"base":${J({ bytes: base.bytes, sha256: base.sha256, url: base.url })},"versions":${J(versions)},"units":${J(units)},"left":${J({ kinds: left.kinds, pages: left.pages, units: left.units })},"layout":${layout === null ? 'null' : encodeLayout(layout)},"addon":${addon === null ? 'null' : `{"manifest":${J(addon.manifest)},"tail":"${toBase64(addon.tail)}"}`}}`
-  return new TextEncoder().encode(text)
+  const head = `{"schema":1,"paper":${J({ id: paper.id, version: paper.version, pages: paper.pages })},"base":${J({ bytes: base.bytes, sha256: base.sha256, url: base.url })},"versions":${J(versions)},"units":${J(units)},"left":${J({ kinds: left.kinds, pages: left.pages, units: left.units })}`
+  const tries = [[layout, addon]]
+  if (addon !== null) tries.push([layout, null])
+  if (layout !== null) tries.push([null, null])
+  for (const [l, a] of tries) {
+    const text = `${head},"layout":${l === null ? 'null' : encodeLayout(l)},"addon":${a === null ? 'null' : `{"manifest":${J(a.manifest)},"tail":"${toBase64(a.tail)}"}`}}`
+    const bytes = new TextEncoder().encode(text)
+    if (bytes.length <= BUNDLE_CAP && countValues(text, BUNDLE_VALUES, DEPTH) <= BUNDLE_VALUES) return bytes
+  }
+  throw new BundleRefusal(`more than ${BUNDLE_CAP} bytes or ${BUNDLE_VALUES} values with neither its layout nor its add-on`)
 }
 
 /** a paper version's bundle under this engine's versions: `layer/<id>v<n>/<VTAG>.json`, VTAG
@@ -277,7 +290,7 @@ function unitStands(u, i, stands) {
  * format and PDF.js the reader's (its contract, CTAG), the maker's versions and the image tokens, never compared; its
  * paper; its base's digest 64 hex digits, its bytes 1 to 2^31, its address our copy's; each unit (unitStands), one that
  * does not dropped; the left's kinds (a unit's each), pages (boxes, the paper's) and units ([id, stream, rects] of the
- * bundle's units, on its pages); the layout by its file's rules (layout/file.mjs checkLayout), of the bundle's paper and
+ * bundle's units, each rectangle a box within its page's view, as the layout file's are); the layout by its file's rules (layout/file.mjs checkLayout), of the bundle's paper and
  * units; the add-on's manifest by its own (layout/addon-manifest.mjs checkAddonManifest: the shipped add-on's, the
  * paper's pages, each box within its page's view as the left gives it), its tail decoded from base64 within ADDON_CAP,
  * the manifest's `appended` bytes. Returns the bundle with each unit dropped null at its id and `dropped` those ids
@@ -352,7 +365,13 @@ export function readBundle(json, caps = {}) {
       const r = rects[j]
       if (!Array.isArray(r) || r.length !== 5) throw fail(`${path}[2][${j}]`, `not [page, x0, y0, x1, y1] (${kindOf(r)})`)
       if (!isInteger(r[0], 1, pages)) throw fail(`${path}[2][${j}][0]`, `not a page 1 to ${pages}`)
-      for (let q = 1; q < 5; q++) if (!isNumber(r[q]) || Math.abs(r[q]) > COORD_MAX) throw fail(`${path}[2][${j}][${q}]`, `not a number within ±${COORD_MAX} (${kindOf(r[q])})`)
+      // (a box not empty, within its page's view as the layout file's are: x0, y0, x1, y1, each across or up)
+      const v = 4 * (r[0] - 1)
+      for (let q = 1; q < 5; q++) {
+        const x = r[q], up = (q - 1) % 2
+        if (!isNumber(x) || x < views[v + up] - SLACK || x > views[v + 2 + up] + SLACK) throw fail(`${path}[2][${j}][${q}]`, `not a number within its page's view (${kindOf(x)})`)
+        if (q >= 3 && x <= r[q - 2]) throw fail(`${path}[2][${j}][${q}]`, 'an empty box')
+      }
     }
   }
 
