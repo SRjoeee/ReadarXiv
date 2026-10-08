@@ -535,9 +535,11 @@ export const POINTS_TEX = [
 /**
  * The names (LAYOUT_TEX's, before its points): \axtnma{<key>} before a babel name's own text and \axtnmb{<key>} after it,
  * each a destination and a point named n<occurrence>.<key>.s and .e, the occurrence a count kept in a macro (no register).
- * - **Where.** In horizontal mode only, its glue, penalties and kerns taken off and put back (\axt@set, as a
- *   placeholder's closing mark), never while the gate is off (a contents list, the output routine); the end mark only
- *   where its start was set, so that an occurrence is never named by the one before it. A start in vertical mode (a
+ * - **Where.** In horizontal mode only, never while the gate is off (a contents list, the output routine): the start
+ *   where TeX stands, after the glue before it (a whatsit after a glue makes no place to break, and its glyphs follow
+ *   it: \centerline's \hss, which taken off and put back would leave the mark at the box's left), the end against the
+ *   name's last letter, the glue, penalties and kerns after it taken off and put back (\axt@set, as a placeholder's
+ *   closing mark); the end only where its start was set, so that an occurrence is never named by the one before it. A start in vertical mode (a
  *   chapter's title, `\Huge\bfseries #1`, which the name's first letter begins) waits for the paragraph that begins next
  *   (LaTeX's para/begin hook, once), where it is set after the paragraph's indentation as it would be in horizontal mode,
  *   unless the name's end comes first (an empty name). A figure's or a table's name only outside a float (\@captype
@@ -556,7 +558,7 @@ export const POINTS_TEX = [
 export const NAMES_TEX = [
   '\\gdef\\axt@nmn{0}\\global\\let\\axt@nmopen\\@empty\\global\\let\\axt@nmwait\\@empty\\newif\\ifaxt@nmon\\newif\\ifaxt@nmgo\\def\\axt@nmfigure{figure}\\def\\axt@nmtable{table}',
   '\\def\\axt@nmok#1{\\axt@nmgotrue\\ifdefined\\@captype\\def\\axt@nmt{#1}\\ifx\\axt@nmt\\axt@nmfigure\\axt@nmgofalse\\fi\\ifx\\axt@nmt\\axt@nmtable\\axt@nmgofalse\\fi\\fi}',
-  '\\def\\axt@nmstart#1{\\xdef\\axt@nmn{\\the\\numexpr\\axt@nmn+1\\relax}\\xdef\\axt@nmopen{#1}\\axt@set{n\\axt@nmn.#1.s}}',
+  '\\def\\axt@nmstart#1{\\xdef\\axt@nmn{\\the\\numexpr\\axt@nmn+1\\relax}\\xdef\\axt@nmopen{#1}\\relax\\axt@put{n\\axt@nmn.#1.s}}',
   '\\def\\axt@nmlate{\\ifx\\axt@nmwait\\@empty\\else\\ifaxt@off\\else\\ifhmode\\expandafter\\axt@nmstart\\expandafter{\\axt@nmwait}\\fi\\fi\\global\\let\\axt@nmwait\\@empty\\fi}',
   '\\protected\\def\\axt@nma#1{\\ifaxt@off\\else\\axt@nmok{#1}\\ifaxt@nmgo\\ifhmode\\axt@nmstart{#1}\\else\\ifvmode\\ifdefined\\AddToHookNext\\xdef\\axt@nmwait{#1}\\AddToHookNext{para/begin}{\\axt@nmlate}\\fi\\fi\\fi\\fi\\fi}',
   '\\protected\\def\\axt@nmb#1{\\global\\let\\axt@nmwait\\@empty\\ifaxt@off\\else\\ifhmode\\def\\axt@nmt{#1}\\ifx\\axt@nmt\\axt@nmopen\\global\\let\\axt@nmopen\\@empty\\axt@set{n\\axt@nmn.#1.e}\\fi\\fi\\fi}',

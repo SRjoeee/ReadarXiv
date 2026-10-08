@@ -531,7 +531,8 @@ describe("babel's names (D1a)", () => {
     expect(NAMES_TEX).toContain('\\def\\axtnmb{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@nmb\\else\\protect\\axtnmb\\fi}')
     // gated, hmode only, glue put back (\axt@set), the start waiting for a paragraph from vertical mode
     expect(NAMES_TEX).toMatch(/\\protected\\def\\axt@nma#1\{\\ifaxt@off\\else/)
-    expect(NAMES_TEX).toContain('\\axt@set{n\\axt@nmn.#1.s}')
+    expect(NAMES_TEX).toContain('\\relax\\axt@put{n\\axt@nmn.#1.s}')
+    expect(NAMES_TEX).toContain('\\axt@set{n\\axt@nmn.#1.e}')
     expect(NAMES_TEX).toContain('\\AddToHookNext{para/begin}{\\axt@nmlate}')
     // at \begin{document} and after babel's switches; the names kept off a float's label
     expect(NAMES_TEX).toContain('\\AddToHook{begindocument/end}{\\global\\axt@nmontrue\\axt@nmall}')
