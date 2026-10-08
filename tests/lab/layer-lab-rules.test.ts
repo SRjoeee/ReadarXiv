@@ -75,6 +75,8 @@ async function lab(dir: string, o: { published?: { staging?: string | null; prod
   return { origin, dir, call }
 }
 const builtin = (edit?: (s: Edit) => void): Edit => { const s = JSON.parse(readFileSync(BUILTIN, 'utf8')); edit?.(s); return s }
+/** the built-in set's version and note: what a first save replaces */
+const { version: V, note: NOTE } = builtin() as { version: number; note: string }
 /** the digest of the file as it is now, as the ETag a GET gives it */
 const etagOf = (dir: string) => `"${createHash('sha256').update(readFileSync(join(dir, RULES_PATH))).digest('hex')}"`
 /** a save: JSON from the lab's own origin, built on the file as it is when the save is sent (its digest as If-Match) */
@@ -129,14 +131,14 @@ describe('saving (POST /api/rules)', () => {
     const r = await save(l, set)
     expect(r.status).toBe(200)
     expect(r.json.ok).toBe(true)
-    expect(r.json.version).toBe(2)
+    expect(r.json.version).toBe(V + 1)
     const written = readFileSync(file, 'utf8')
-    const expected = rules.writeRules(rules.parseRules({ ...set, version: 2 }))
+    const expected = rules.writeRules(rules.parseRules({ ...set, version: V + 1 }))
     expect(written).toBe(expected)
     // (canonical: the file is what writeRules makes of what it holds)
     expect(rules.writeRules(rules.parseRules(JSON.parse(written)))).toBe(written)
     const parsed = JSON.parse(written)
-    expect(parsed.version).toBe(2)
+    expect(parsed.version).toBe(V + 1)
     expect(parsed.note).toBe('zh leads a little looser')
     expect(parsed.scripts.Hans.leadBase).toBe(1.35)
     // (the answer names the digest of the bytes written, the version, and the changed fields)
@@ -144,9 +146,9 @@ describe('saving (POST /api/rules)', () => {
     expect(r.json.changed).toEqual([{ path: 'scripts.Hans.leadBase', from: 1.3, to: 1.35 }])
     expect(siblings(file)).toEqual([RULES_PATH.split('/').pop()])
     // (the next save is built on the version the file now has)
-    const again = await save(l, builtin(s => { s.scripts.Hans.leadBase = 1.4; s.note = 'looser still'; s.version = 2 }))
-    expect(again.json.version).toBe(3)
-    expect(JSON.parse(readFileSync(file, 'utf8')).version).toBe(3)
+    const again = await save(l, builtin(s => { s.scripts.Hans.leadBase = 1.4; s.note = 'looser still'; s.version = V + 1 }))
+    expect(again.json.version).toBe(V + 2)
+    expect(JSON.parse(readFileSync(file, 'utf8')).version).toBe(V + 2)
   })
 
   it('shows a change to the script as one field line and the version in a git diff', async () => {
@@ -154,9 +156,9 @@ describe('saving (POST /api/rules)', () => {
     const l = await lab(dir)
     await save(l, builtin(s => { s.scripts.Hans.leadBase = 1.35; s.note = 'zh leads looser' }))
     expect(changedLines(dir)).toEqual([
-      '-  "version": 1,',
-      '-  "note": "migrated from the engine\'s code",',
-      '+  "version": 2,',
+      `-  "version": ${V},`,
+      `-  "note": ${JSON.stringify(NOTE)},`,
+      `+  "version": ${V + 1},`,
       '+  "note": "zh leads looser",',
       '-      "leadBase": 1.3,',
       '+      "leadBase": 1.35,',
@@ -169,7 +171,7 @@ describe('saving (POST /api/rules)', () => {
     await save(l, builtin(s => { s.languages.zh.leadBase = 1.35; s.note = 'zh only' }))
     const lines = changedLines(dir)
     expect(lines).toContain('+      "leadBase": 1.35')
-    expect(lines).toContain('+  "version": 2,')
+    expect(lines).toContain(`+  "version": ${V + 1},`)
     // (zh's labels line is the block's last, so it gains the comma: JSON's, not the lab's)
     expect(lines.filter(x => x.includes('"labels"'))).toHaveLength(2)
     expect(lines).toHaveLength(7)
@@ -264,14 +266,14 @@ describe('saving (POST /api/rules)', () => {
     writeFileSync(file, handEdited)
     const r = await save(l, builtin(s => { s.scripts.Hans.spaceMax = 0.5; s.note = 'built on the file as read' }), { 'if-match': read })
     expect(r.status).toBe(409)
-    expect(r.json).toMatchObject({ ok: false, error: 'stale', version: 1 })
+    expect(r.json).toMatchObject({ ok: false, error: 'stale', version: V })
     expect(r.json.sha256).toBe(etagOf(dir).slice(1, -1))
     expect(readFileSync(file, 'utf8')).toBe(handEdited)
     expect(siblings(file)).toEqual([RULES_PATH.split('/').pop()])
     // (built on the file as it now is, the same change is written)
     const again = await save(l, builtin(s => { s.scripts.Hans.leadBase = 1.31; s.scripts.Hans.spaceMax = 0.5; s.note = 'built on the file as it is' }))
     expect(again.status).toBe(200)
-    expect(again.json.version).toBe(2)
+    expect(again.json.version).toBe(V + 1)
   })
 
   it('refuses a save that does not name the file it was built on (an If-Match of the digest the file came with), and writes nothing', async () => {
@@ -299,10 +301,10 @@ describe('saving (POST /api/rules)', () => {
     ])
     const [won, lost] = a.status === 200 ? [a, b] : [b, a]
     expect([won.status, lost.status]).toEqual([200, 409])
-    expect(won.json.version).toBe(2)
+    expect(won.json.version).toBe(V + 1)
     expect(lost.json.error).toBe('stale')
     const written = JSON.parse(readFileSync(file, 'utf8'))
-    expect(written.version).toBe(2)
+    expect(written.version).toBe(V + 1)
     expect(written.note).toBe(won === a ? 'a' : 'b')
     expect(siblings(file)).toEqual([RULES_PATH.split('/').pop()])
   })
@@ -310,14 +312,14 @@ describe('saving (POST /api/rules)', () => {
   it('refuses a set built on another version than the file\'s, and writes nothing: a second tab does not take the first one\'s edit away', async () => {
     const { dir, file } = repo()
     const l = await lab(dir)
-    // (two tabs read version 1; the first saves a change to leadBase)
+    // (two tabs read the file's version; the first saves a change to leadBase)
     const first = await save(l, builtin(s => { s.scripts.Hans.leadBase = 1.35; s.note = 'first tab' }))
     expect(first.status).toBe(200)
     const after = readFileSync(file)
-    // (the second, which still has version 1, saves a change to another field)
+    // (the second, which still has that version, saves a change to another field)
     const second = await save(l, builtin(s => { s.scripts.Hans.spaceMax = 0.5; s.note = 'second tab' }))
     expect(second.status).toBe(409)
-    expect(second.json).toMatchObject({ ok: false, error: 'stale', version: 2 })
+    expect(second.json).toMatchObject({ ok: false, error: 'stale', version: V + 1 })
     expect(readFileSync(file).equals(after)).toBe(true)
     expect(JSON.parse(readFileSync(file, 'utf8')).scripts.Hans.leadBase).toBe(1.35)
     expect(siblings(file)).toEqual([RULES_PATH.split('/').pop()])
@@ -327,9 +329,9 @@ describe('saving (POST /api/rules)', () => {
     expect(ahead.json.error).toBe('stale')
     expect(readFileSync(file).equals(after)).toBe(true)
     // (built on the file as it now is, the same change is written)
-    const third = await save(l, builtin(s => { s.scripts.Hans.leadBase = 1.35; s.scripts.Hans.spaceMax = 0.5; s.note = 'second tab, reloaded'; s.version = 2 }))
+    const third = await save(l, builtin(s => { s.scripts.Hans.leadBase = 1.35; s.scripts.Hans.spaceMax = 0.5; s.note = 'second tab, reloaded'; s.version = V + 1 }))
     expect(third.status).toBe(200)
-    expect(third.json.version).toBe(3)
+    expect(third.json.version).toBe(V + 2)
   })
 
   it('answers a file it cannot read as such and writes nothing', async () => {
@@ -371,18 +373,18 @@ describe('reading the worktree\'s file (GET /api/rules)', () => {
     const l = await lab(dir)
     await save(l, builtin(s => { s.scripts.Hans.leadBase = 1.35; s.note = 'x' }))
     const r = await l.call('GET', '/api/rules')
-    expect(JSON.parse(r.text).version).toBe(2)
+    expect(JSON.parse(r.text).version).toBe(V + 1)
   })
 })
 
 describe('reading a commit\'s file (GET /api/rules?ref=)', () => {
-  /** a repository with a second commit, where the file is version 2 */
+  /** a repository with a second commit, where the file is a version on */
   async function twoCommits() {
     const r = repo()
     const l = await lab(r.dir)
     await save(l, builtin(s => { s.scripts.Hans.leadBase = 1.35; s.note = 'second' }))
     git(r.dir, 'add', RULES_PATH)
-    git(r.dir, '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'version 2')
+    git(r.dir, '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'the next version')
     return { ...r, l, second: git(r.dir, 'rev-parse', 'HEAD') }
   }
 
@@ -390,8 +392,8 @@ describe('reading a commit\'s file (GET /api/rules?ref=)', () => {
     const { dir, first, second, l } = await twoCommits()
     const atFirst = git(dir, 'show', `${first}:${RULES_PATH}`)
     const atSecond = git(dir, 'show', `${second}:${RULES_PATH}`)
-    expect(JSON.parse(atFirst).version).toBe(1)
-    expect(JSON.parse(atSecond).version).toBe(2)
+    expect(JSON.parse(atFirst).version).toBe(V)
+    expect(JSON.parse(atSecond).version).toBe(V + 1)
     for (const ref of [first, first.slice(0, 7), first.toUpperCase()]) {
       const r = await l.call('GET', `/api/rules?ref=${ref}`)
       expect(r.status, ref).toBe(200)
@@ -401,7 +403,7 @@ describe('reading a commit\'s file (GET /api/rules?ref=)', () => {
       expect(r.headers.etag, ref).toBe(`"${sha256}"`)
     }
     const r = await l.call('GET', `/api/rules?ref=${second.slice(0, 10)}`)
-    expect(JSON.parse(r.text).version).toBe(2)
+    expect(JSON.parse(r.text).version).toBe(V + 1)
   })
 
   it('answers an existing branch\'s file (a local branch, a remote-tracking one), not a tag\'s', async () => {
@@ -412,11 +414,11 @@ describe('reading a commit\'s file (GET /api/rules?ref=)', () => {
     for (const ref of ['exp/older', 'origin/pr-7']) {
       const r = await l.call('GET', `/api/rules?ref=${encodeURIComponent(ref)}`)
       expect(r.status, ref).toBe(200)
-      expect(JSON.parse(r.text).version, ref).toBe(1)
+      expect(JSON.parse(r.text).version, ref).toBe(V)
       expect(r.headers['x-rules-commit'], ref).toBe(first)
     }
     const main = await l.call('GET', '/api/rules?ref=main')
-    expect(JSON.parse(main.text).version).toBe(2)
+    expect(JSON.parse(main.text).version).toBe(V + 1)
     expect((await l.call('GET', '/api/rules?ref=v-older')).status).toBe(404)
   })
 

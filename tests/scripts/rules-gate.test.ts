@@ -23,7 +23,7 @@ function page(p: number, over: Record<string, unknown> = {}): PageEntry {
   }
 }
 /** a page's frames, as pageEntry returns them: the pitch spread is the pitches' */
-const frames = (e: PageEntry) => ({ body: [1, 2, 3].map(() => ({ kind: 'para', scale: 1, blank: 0, pitch: 1.3, dTop: 0, dRight: 0, onGrid: 1 })), fills: [0.92, 0.92, 0.92], pitches: [1.3, 1.3 + Number(e.pitchSpread)], scales: [1, 1] })
+const frames = (e: PageEntry) => ({ body: [1, 2, 3].map(() => ({ kind: 'para', scale: 1, blank: 0, pitch: 1.3, dTop: 0, dRight: 0, onGrid: 1 })), fills: [0.92, 0.92, 0.92], pitches: [1.3, 1.3 + Number(e.pitchSpread)], scales: [1, 1], gaps: [] })
 /** the record drops what is zero or empty (layer-gate.mjs compact), so that a page missing a defect has none */
 const compact = (e: PageEntry): PageEntry => Object.fromEntries(Object.entries(e).filter(([, v]) => !(v === 0 || v === null || (Array.isArray(v) && (!v.length || v.every(x => x === 0)))))) as PageEntry
 const fixture = (pages: PageEntry[]) => ({ totals: fixtureTotals(pages, pages.map(frames), 'model'), pages: pages.map(compact) })
@@ -291,7 +291,7 @@ describe('the live-engines check honours the rulings, as the pull request gate d
   afterEach(() => vi.restoreAllMocks())
 
   /** a tree at head's commit as { path: text }; the engine's own file is the schema line `engines` reads */
-  /** `versions`: the set's version at the merge that added each ruling file (by default the head's, 2: the change under check) */
+  /** `versions`: the set's version at the merge that added each ruling file (by default the head's, the built-in's plus one: the change under check) */
   function fakeGit(tree: Record<string, string>, versions: Record<string, number> = {}, asAdded: Record<string, string> = {}) {
     const calls: string[][] = []
     const paths = Object.keys(tree)
@@ -307,7 +307,7 @@ describe('the live-engines check honours the rulings, as the pull request gate d
       if (cmd === 'show') {
         if (rest[0] === `${ENGINE_SHA}:src/pdf-reader/engine/rules/layout.mjs`) return `export const RULES_SCHEMA = ${BUILTIN_RULES.schema}\n`
         const merge = /^merge-(\d+):src\/pdf-reader\/engine\/rules\/layout-rules\.json$/.exec(rest[0]!)
-        if (merge) return JSON.stringify({ version: versions[paths[Number(merge[1])]!] ?? 2 })
+        if (merge) return JSON.stringify({ version: versions[paths[Number(merge[1])]!] ?? BUILTIN_RULES.version + 1 })
         // a ruling file as the merge that added it holds it
         const at = /^merge-\d+:(.*)$/.exec(rest[0]!)
         if (at && at[1]! in tree) return asAdded[at[1]!] ?? tree[at[1]!]!
@@ -324,8 +324,8 @@ describe('the live-engines check honours the rulings, as the pull request gate d
     const dir = mkdtempSync(join(tmpdir(), 'rules-gate-engines-'))
     const write = (name: string, content: unknown) => { mkdirSync(join(dir, name, '..'), { recursive: true }); writeFileSync(join(dir, name), typeof content === 'string' ? content : JSON.stringify(content)); return join(dir, name) }
     const names = Object.keys(base())
-    const headRules = write('head/layout-rules.json', writeRules({ ...structuredClone(BUILTIN_RULES), version: 2, note: 'a test set' }))
-    const baseRun = write('base-run.json', run(base())), headRun = write('head-run.json', run(regress ? base({ ja: [{ textDrawn: 9 }, {}] }) : base(), { version: 2 }))
+    const headRules = write('head/layout-rules.json', writeRules({ ...structuredClone(BUILTIN_RULES), version: BUILTIN_RULES.version + 1, note: 'a test set' }))
+    const baseRun = write('base-run.json', run(base())), headRun = write('head-run.json', run(regress ? base({ ja: [{ textDrawn: 9 }, {}] }) : base(), { version: BUILTIN_RULES.version + 1 }))
     write('pack/fixtures/1512.03385v1-ja/record.json', { units: [{ src: PAPER, tr: PAPER }] })
     const argv = [`--list=${write('live-engines.json', { schema: 1, engines: [{ name: 'v0.4.1', ref: 'v0.4.1' }] })}`, `--head-rules=${headRules}`, `--pack=${join(dir, 'pack')}`, `--out=${join(dir, 'out')}`, `--pack-json=${write('gate-pack.json', { files: names.map(n => ({ path: `refs/${n}/ref.json` })) })}`]
     const t = { ...tree }
@@ -350,7 +350,7 @@ describe('the live-engines check honours the rulings, as the pull request gate d
     const r = await check(fileOf())
     expect(r.code).toBe(0)
     expect(r.said).toContain('rulings at bbbbbbbb: 1,')
-    expect(r.said).toContain("head's set (version 2) against the built-in set (none is published) (version 1); 1 ruling of the versions between")
+    expect(r.said).toContain(`head's set (version ${BUILTIN_RULES.version + 1}) against the built-in set (none is published) (version ${BUILTIN_RULES.version}); 1 ruling of the versions between`)
     expect(r.verdict).toMatch(/^## Rules gate: passed under a ruling/m)
     expect(r.verdict).toContain('accepted by ruling `ja-unit.json`')
     expect(r.files.calls.some(c => c[0] === 'ls-tree' && c.includes(HEAD) && c.includes('lab/pdf/rulings/'))).toBe(true)
@@ -363,10 +363,11 @@ describe('the live-engines check honours the rulings, as the pull request gate d
   })
   it('honours a ruling only for the change it came in with: after the engine\'s published set, up to the set published', async () => {
     const path = `${RULINGS}ja-unit.json`
-    // a ruling of an older change (the set the engine has, version 1) accepts nothing new; nor one of a later set (3)
-    expect((await check(fileOf(), { versions: { [path]: 1 } })).code).toBe(1)
-    expect((await check(fileOf(), { versions: { [path]: 3 } })).code).toBe(1)
-    expect((await check(fileOf(), { versions: { [path]: 2 } })).code).toBe(0)
+    // a ruling of an older change (the set the engine has) accepts nothing new; nor one of a later set
+    const V = BUILTIN_RULES.version
+    expect((await check(fileOf(), { versions: { [path]: V } })).code).toBe(1)
+    expect((await check(fileOf(), { versions: { [path]: V + 2 } })).code).toBe(1)
+    expect((await check(fileOf(), { versions: { [path]: V + 1 } })).code).toBe(0)
     expect(rulingsFor([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }], 1, 3).map(r => r.version)).toEqual([2, 3])
   })
   it('reads a ruling as it came in: a later edit that widens it accepts nothing', async () => {
@@ -398,7 +399,7 @@ describe('the live-engines check honours the rulings, as the pull request gate d
     const empty = rulingsAt(HEAD, { git: () => { throw new Error('fatal: not a tree') } })
     expect(empty).toEqual({ rulings: [], problems: [] })
     const two = rulingsAt(HEAD, { git: fakeGit({ ...fileOf(), [`${RULINGS}README.md`]: '# x', [`${RULINGS}zh-lead.json`]: JSON.stringify(accepted({ targets: ['zh'], measures: ['pitch spread'] })) }).git as never })
-    expect(two.rulings.map(r => [r.name, r.version])).toEqual([['ja-unit.json', 2], ['zh-lead.json', 2]])
+    expect(two.rulings.map(r => [r.name, r.version])).toEqual([['ja-unit.json', BUILTIN_RULES.version + 1], ['zh-lead.json', BUILTIN_RULES.version + 1]])
     expect(two.problems).toEqual([])
   })
 })

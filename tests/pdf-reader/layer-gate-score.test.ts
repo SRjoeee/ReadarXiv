@@ -33,6 +33,99 @@ describe('the model measures of a page', () => {
   })
 })
 
+describe('the gaps between paragraphs (paraGap, D6): the drawn gap against the original\'s, in one column, nothing between', () => {
+  // a paragraph of 5 lines from 700 and the next of 4 lines from 640, one pitch after its last line (no paragraph skip):
+  // the original's gap from the upper's foot (652 - 2.2) to the lower's top (640 + 7.5), 2.3
+  const drawnOn = (orig: OrigLine[], n = orig.length) => orig.slice(0, n).map(l => ({ baseline: l.baseline, size: 10, x0: l.x0, x1: l.x1 }))
+  const A = lines(5), B = lines(4, 640)
+  const gapsOf = (o: { upper?: number; items?: { x0: number; y0: number; x1: number; y1: number; str: string; math: boolean }[]; more?: { id: number; kind: string; orig: OrigLine[] }[]; lower?: OrigLine[] } = {}) => {
+    const lower = o.lower ?? B
+    return modelPage({
+      units: [unit({ id: 1, orig: A, lines: drawnOn(A, o.upper) }), unit({ id: 2, orig: lower, lines: drawnOn(lower) })],
+      ref: [{ id: 1, kind: 'para', orig: A }, { id: 2, kind: 'para', orig: lower }, ...(o.more ?? [])], items: o.items ?? [], translated: new Set([1, 2]),
+    }).gaps
+  }
+
+  it('is 1 where both are drawn on their own lines, and an upper frame drawn two lines short widens it by two pitches', () => {
+    const same = gapsOf()
+    expect(same).toHaveLength(1)
+    expect(same[0]!.ratio).toBeCloseTo(1, 6)
+    expect(same[0]!.extra).toBeCloseTo(0, 6)
+    const short = gapsOf({ upper: 3 })
+    expect(short[0]!.ratio).toBeCloseTo((2.3 + 24) / 2.3, 2)
+    expect(short[0]!.extra).toBeCloseTo(2, 6)
+  })
+
+  it('takes no pair with something between: another unit\'s frame (a heading), a text item (a display), or a graphic\'s room', () => {
+    // a heading's line at 646 between them, the lower paragraph moved down to 628
+    const lower = lines(4, 628)
+    expect(gapsOf({ lower, more: [{ id: 3, kind: 'heading', orig: [{ x0: 72, x1: 300, baseline: 640, top: 647, bottom: 637.5, size: 10 }] }] })).toEqual([])
+    expect(gapsOf({ lower })).toHaveLength(1)
+    // a display's item between them
+    expect(gapsOf({ lower, items: [{ x0: 200, y0: 637.8, x1: 300, y1: 647.8, str: 'x', math: true }] })).toEqual([])
+    // a lower paragraph more than three pitches below the upper's foot: a figure's room between them
+    expect(gapsOf({ lower: lines(4, 600) })).toEqual([])
+  })
+
+  it("takes a paragraph's lines moved above its frame as its frame's (the leftover packed): its top's shift, its gap kept", () => {
+    // (A ends two lines short; B moved up 24 under it: the original's gap, B's top 24 above its own)
+    const m = modelPage({
+      units: [unit({ id: 1, orig: A, lines: drawnOn(A, 3) }), unit({ id: 2, orig: B, lines: drawnOn(B).map(l => ({ ...l, baseline: l.baseline + 24 })) })],
+      ref: [{ id: 1, kind: 'para', orig: A }, { id: 2, kind: 'para', orig: B }], items: [], translated: new Set([1, 2]),
+    })
+    expect(m.gaps).toHaveLength(1)
+    expect(m.gaps[0]!.ratio).toBeCloseTo(1, 6)
+    const geoB = m.geo.find(g => g.id === 2)!
+    expect(geoB.dTop).toBeCloseTo(24, 6)
+    expect(geoB.blank).toBeCloseTo(2, 6)
+  })
+
+  it("reads a frame's rhythm within its flow's segments: never across a held display, which its pitch does", () => {
+    // (six lines 12 apart, a display of 30 between the third and the fourth; drawn: two lines 15 apart in the first block,
+    // one after the display in the second)
+    const orig = [700, 688, 676, 646, 634, 622].map(b => ({ x0: 72, x1: 472, baseline: b, top: b + 7, bottom: b - 2.5, size: 10 }))
+    const drawn = [[700, 0], [685, 0], [646, 1]].map(([baseline, block]) => ({ baseline: baseline!, size: 10, x0: 72, x1: 472, block }))
+    const m = modelPage({ units: [unit({ id: 1, orig, lines: drawn })], ref: [{ id: 1, kind: 'para', orig }], items: [], translated: new Set([1]) })
+    expect(m.geo).toHaveLength(1)
+    expect(m.geo[0]!.rhythm).toBeCloseTo(15 / 12, 6)
+    expect(m.geo[0]!.pitch).toBeCloseTo(39 / 12, 3)
+    // (a display of two stacked baselines 8.5 apart among the original's lines: the rhythm stays against the frame's own
+    // pitch, 12, not the closest gap)
+    const stacked = [700, 688, 676, 650, 641.5, 620, 608].map(b => ({ x0: 72, x1: 472, baseline: b, top: b + 7, bottom: b - 2.5, size: 10 }))
+    const m2 = modelPage({ units: [unit({ id: 1, orig: stacked, lines: drawn })], ref: [{ id: 1, kind: 'para', orig: stacked }], items: [], translated: new Set([1]) })
+    expect(m2.geo[0]!.rhythm).toBeCloseTo(15 / 12, 6)
+  })
+
+  it('pairs frames of one column only', () => {
+    const right = B.map(l => ({ ...l, x0: 320, x1: 540 }))
+    const left = A.map(l => ({ ...l, x1: 300 }))
+    const m = modelPage({ units: [unit({ id: 1, orig: left, lines: drawnOn(left) }), unit({ id: 2, orig: right, lines: drawnOn(right) })], ref: [{ id: 1, kind: 'para', orig: left }, { id: 2, kind: 'para', orig: right }], items: [], translated: new Set([1, 2]) })
+    expect(m.gaps).toEqual([])
+  })
+
+  it("totals each page's and fixture's median ratio and share of gaps a pitch or more wider, and the drawn pitch's drift", () => {
+    // (a page's drawn rhythm: its body frames' median rhythm against the original's; none where no body frame has one)
+    const geo = (rhythm: number | null) => (rhythm === null ? [] : [{ id: 1, kind: 'para', n: 5, dTop: 0, blank: 0, dRight: 0, pitch: rhythm, rhythm, onGrid: 1, scale: 1 }])
+    const page = (p: number, gaps: { ratio: number; extra: number }[], pitch: number | null) => pageEntry(p, {
+      model: { units: { textOn: 1, textDrawn: 1, cellsOn: 0, cellsDrawn: 0, left: {} }, fills: [], geo: geo(pitch), gaps, wrongPageText: 0, droppedPh: 0, cropForeign: 0, modelCells: 100 },
+      check: { missing: [], twice: [], brackets: [], duplicated: [], numbers: { shown: 0, total: 0 }, clipped: 0 }, where: {}, style: [0, 0], drawn: 1,
+    }, null)
+    const es = [page(1, [{ ratio: 1, extra: 0 }, { ratio: 3, extra: 1.5 }], 1.4), page(2, [{ ratio: 1.1, extra: 0.1 }], null), page(3, [{ ratio: 2, extra: 1 }], 1.45), page(4, [], 1.38)]
+    expect(es[0]!.entry).toMatchObject({ paraGaps: 2, paraGap: 2, paraGapWide: 1, rhythm: 1.4 })
+    const t = fixtureTotals(es.map(e => e.entry), es.map(e => e.frames), 'model')
+    // four gaps: 1, 1.1, 2, 3; two of them a pitch or more wider. The pitches 1.4, 1.45, 1.38: drifts 0.05 and 0.07
+    expect(t).toMatchObject({ paraGapN: 4, paraGap: 1.55, paraGapWide: 0.5 })
+    expect(t.pageDrift).toBeCloseTo(0.07, 6)
+    const p = pooled([t, fixtureTotals([es[0]!.entry], [es[0]!.frames], 'model')], 'model')!
+    expect(p.paraGapN).toBe(6)
+    expect(p.paraGap).toBeCloseTo((1.55 * 4 + 2 * 2) / 6, 3)
+    expect(p.pageDrift).toBeCloseTo(0.07, 6)
+    // gated: closer to 1 is better, and fewer wide gaps
+    expect(worse(measure('paraGap'), { paraGap: 2 }, { paraGap: 1.2 })?.better).toBe(true)
+    expect(worse(measure('paraGapWide'), { paraGapWide: 0.1 }, { paraGapWide: 0.2 })?.worse).toBe(true)
+  })
+})
+
 describe("the coverage of the original's text area", () => {
   // a 60 x 40 page at 1 px a unit: one reference line from 10 to 50 on baseline 20 at size 10, four cells of one em, each
   // with a block of the original's ink

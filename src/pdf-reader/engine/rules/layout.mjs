@@ -32,8 +32,10 @@ import { scriptOf } from './script.mjs'
 import { countValues, LayoutRefusal, told } from '../layout/json.mjs'
 import BUILTIN_JSON from './layout-rules.json' with { type: 'json' }
 
-/** the schema's number: the shape and how the engine reads it */
-export const RULES_SCHEMA = 1
+/** the schema's number: the shape and how the engine reads it. 2 (D6, 2026-10-08): `grid` gone (every script's lines on the
+ *  original's pitch while the size shrinks); `adaptiveFill` read for every original, its page's target held near the last
+ *  page's and one size a page; `fillLead` and `leftover` added */
+export const RULES_SCHEMA = 2
 /** a set's bytes at most, as received (the migrated set is about 8 KB) */
 export const RULES_CAP = 65_536
 /** a set's JSON values at most, counted before JSON.parse (layout/json.mjs countValues) */
@@ -49,6 +51,7 @@ export const SCRIPTS = Object.freeze(['Hans', 'Hant', 'Jpan', 'Kore', 'Latn', 'C
 const CJK_SCRIPTS = new Set(['Hans', 'Hant', 'Jpan', 'Kore'])
 const ORDER = Object.freeze(['track', 'borrow', 'lead', 'shrink'])
 const FURTHER = Object.freeze(['widen', 'flow', 'shrink'])
+const LEFTOVER = Object.freeze(['foot', 'pack'])
 /** the weights of a CJK group the role table builds its roles from (font-roles.mjs rolesFor) */
 const GROUP_WEIGHTS = Object.freeze(['light', 'regular', 'semibold', 'bold'])
 const NOTE_MAX = 1000
@@ -102,13 +105,12 @@ const SCRIPT_FIELDS = [
   // the fit (layer2.mjs layoutUnit2, statesOf; run.mjs fitFurther, fillPage). Each value is a prior from the public
   // repo's typesetting research, swept on the layer. Step 3's further steps took the gate's 29 outputs' clipped
   // characters from 943 to 140 (widen 100, flow 138, the size 465), most of them below the floor, at 0.775
-  { key: 'order', group: 'fit', kind: 'order', values: ORDER, words: 'The knobs the fit turns when a translation does not fit, in order: tracking, borrowing free space below, the leading, then the size.', schema: () => z.array(z.enum(ORDER)).check(z.refine(isPermutation, 'not an ordering of the four knobs')) },
+  { key: 'order', group: 'fit', kind: 'order', values: ORDER, words: 'The order in which the fit turns its knobs when a translation does not fit: tracking, borrowing free space below, the leading, the size.', schema: () => z.array(z.enum(ORDER)).check(z.refine(isPermutation, 'not an ordering of the four knobs')) },
   { key: 'leadBase', group: 'fit', kind: 'number', min: 0.8, max: 2, step: 0.05, words: "The translation's line pitch, × the original's line pitch.", schema: () => range(0.8, 2) },
   { key: 'leadFloor', group: 'fit', kind: 'number', min: 0.8, max: 2, step: 0.05, words: 'The tightest line pitch the fit falls back to, × the original\'s.', schema: () => range(0.8, 2) },
   // (leadRel false: the maintainer's ruling of 2026-10-07 on S3-11, the script's leading on the original's own pitch, which
   // reads more naturally on a loose original than the relative leading that stays a switch)
   { key: 'leadRel', group: 'fit', kind: 'boolean', words: "Whether the leading is taken relative to the original's own pitch (never stacked on a loose original's) or applied as it is.", schema: () => z.boolean() },
-  { key: 'grid', group: 'fit', kind: 'enum', values: [0, 1], words: "Whether the lines stay on the original's baseline grid while the size shrinks (1) or not (0).", schema: () => z.literal([0, 1]) },
   { key: 'trackMin', group: 'fit', kind: 'number', min: -0.3, max: 0, step: 0.005, words: 'The tightest letter spacing the fit uses, in em (zero or less).', schema: () => range(-0.3, 0) },
   { key: 'trackStart', group: 'fit', kind: 'number', nullable: true, min: -0.3, max: 0.3, step: 0.005, words: "The letter spacing the fit starts from, in em; empty gives back the face's size correction.", schema: () => z.nullable(range(-0.3, 0.3)) },
   { key: 'compressMax', group: 'fit', kind: 'enum', values: [0, 1, 2], words: "How far full-width punctuation is compressed: 0 not at all, 1 at a line's start and between two marks, 2 every mark.", schema: () => z.literal([0, 1, 2]) },
@@ -130,13 +132,18 @@ const SCRIPT_FIELDS = [
   {
     key: 'adaptiveFill', group: 'fit', kind: 'object', nullable: true,
     members: [
-      { key: 'band', min: 0, max: 0.5, step: 0.01, words: "how far above the page's median a unit's fill leading may stand" },
+      { key: 'band', min: 0, max: 0.5, step: 0.01, words: "how far above the page's target a unit's fill leading may stand, and the page's target from the page before's and from the fullest page's so far (the most body lines)" },
       { key: 'track', min: 0, max: 0.2, step: 0.01, words: 'the letter spacing a unit short of its fill may take, in em' },
-      { key: 'size', min: 1, max: 1.5, step: 0.05, words: "the size it may then grow to, × the original's" },
+      { key: 'size', min: 1, max: 1.5, step: 0.05, words: "the one size a page's body units may then grow to, × the original's" },
     ],
-    words: "Spreading a loose original's paragraphs over their space (D); empty keeps the script's leading on the original's pitch alone (B).",
+    words: "Spreading each unit's lines over its original's space, the page's body units to one leading and one size, the leading within a band of the page before's and of the fullest page's so far (D6); empty keeps the script's leading on the original's pitch alone (B).",
     schema: () => z.nullable(z.strictObject({ band: range(0, 0.5), track: range(0, 0.2), size: range(1, 1.5) })),
   },
+  // (D6's F6b, 2026-10-08: the top of a unit's fill leading, which replaced the script's leading on the original's pitch;
+  // in em of the size drawn, so that a shrunk unit is spread no looser for its size than one set at the full size)
+  { key: 'fillLead', group: 'fit', kind: 'number', nullable: true, min: 1, max: 3, step: 0.05, words: "The loosest line pitch the fill spreads a unit's lines to, in em of the size it is drawn at; empty: the original's own pitch.", schema: () => z.nullable(range(1, 3)) },
+  // (D6's F6c, 2026-10-08: built switchable, for the maintainer to decide by looking; 'foot' is what the fill left before)
+  { key: 'leftover', group: 'fit', kind: 'enum', values: LEFTOVER, words: "Where what the fill leaves over goes: at each paragraph's foot, or packed to the end of its run of paragraphs, each keeping the original's gap to the one above it.", schema: () => z.literal([...LEFTOVER]) },
   // breaking (layer2.mjs tokensOf2, placeItems; layer1.mjs kinsokuOf)
   { key: 'keepAll', group: 'breaking', kind: 'boolean', words: 'Whether lines break only at spaces (Korean and the alphabets) rather than between any two CJK characters.', schema: () => z.boolean() },
   { key: 'cjkQuotes', group: 'breaking', kind: 'boolean', words: 'Whether curly quotes, dashes, the ellipsis and the middle dot are set as CJK characters.', schema: () => z.boolean() },

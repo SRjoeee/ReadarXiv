@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-08",
+  "by": "the maintainer (his choice of foot; the other points by the coordinator's recommendation, not objected to)",
+  "on": "D6, paragraphs drawn no further apart than in the original (exp/quality-d6): every script's lines on the original's pitch while the size shrinks (F6a), every original filled to one rhythm, Chinese to 2 em, the paper held within a band of its fullest page (F6b), and what the fill leaves over kept at each paragraph's foot (F6c, 'foot'; 'pack' one data edit away)",
+  "quote": "\u5982\u679c\u65b9\u6848 A\u3001B \u5f88\u5bb9\u6613\u5207\u6362\u7684\u8bdd\uff0c\u90a3\u6211\u4eec\u5c31\u5148\u9009 a \u5427",
+  "english": "If plans A and B are easy to switch between, then let's choose A for now.",
+  "measures": [
+    "pitch spread",
+    "size (median)",
+    "size spread",
+    "frames past the right edge",
+    "full size",
+    "text translated",
+    "text blank"
+  ],
+  "targets": [
+    "zh",
+    "ko",
+    "ja",
+    "de",
+    "es",
+    "fr",
+    "ru"
+  ],
+  "scope": "against the drawing before D6 (010c5789; model tier, each target's median over its outputs): pitch spread within a page zh 0.050 -> 0.315 (the thesis 0.336 -> 0.401), ko 0.001 -> 0.115, ja 0 -> 0.032 (the alphabets' falls to 0); size de 0.938 -> 0.907, es 0.938 -> 0.913, fr 0.925 -> 0.901, ru 0.913 -> 0.875 (12 of 16 alphabet outputs); size spread de 0.138 -> 0.169, es 0.124 -> 0.148, fr 0.125 -> 0.172, ru 0.148 -> 0.186; frames past the right edge zh 0.204 -> 0.269, ko 0 -> 0.005, ja 0.205 -> 0.209 and 1-2 points on 7 alphabet outputs; full size down a point or less on 5 alphabet outputs (1706.03762-es; 2608.04322-de, -es, -fr, -ru); pixel tier, against the record at 94f1025a: text translated zh 0.793 -> 0.595 and text blank 0.206 -> 0.390 on the five zh outputs (the other targets' text translated rises: de 0.943 -> 0.986, ru 0.941 -> 0.989, ko 0.853 -> 0.891)",
+  "why": "D6's aim is met: the gap between paragraphs against the original's (paraGap) falls from zh 2.1-4.4, ko 1.0-2.6, the alphabets 1.1-2.2 to zh 1.02-1.34, ko 1.00-1.05, the alphabets 1.03-1.39 (1.00 by baselines: the rest is smaller glyphs on the original's lines), the thesis 1.65 -> 1.50, and no gap or fill measure is worse than before D6. The alphabets give up about one size step to keep the original's pitch and baselines (pitch 0.879 -> 1, lines on a layout baseline 0.225 -> 1, blank lines 0.341 -> 0.024). Chinese is set about 1.5 x the original's pitch to fill each paragraph's frame, so a page's paragraphs that cannot spread as far keep a closer leading (the spread), held within a band of the page before and of the paper's fullest page. The pixel tier's text translated counts the original's text area in cells one original pitch high: lines spread to 1.5 x it leave every other cell between lines, the blank that stood at each paragraph's foot moved inside it. Frames past the right edge are hung closing marks after the fill's tracking. Counting a page's continuations for the paper's anchor (PR #335's review) raised the targets of ten pages that units running on from the page before fill (1810.04805-zh pages 4 and 5; 2608.04322-ko pages 3 to 6 and 8 to 11): their paraGap, blank lines and fill came closer to the original's and their pitch spread rose (2608.04322-ko 0.099 -> 0.140), within this ruling's pitch spread. Beside these, the pixel tier's per-cell defect rates on zh rise as fewer cells count as translated, and F6a adds single defects this ruling does not name: 1512.03385-es, -fr and -ru, 2 vanished math and 1 doubled crop each (pages 10 and 11); 1810.04805-de, -es and -fr, 1 to 3 small overlap regions (page 7); 1512.03385-zh residue 121 -> 122, 2608.04322-zh lost ink 4 -> 5, the thesis graphics overdrawn 85 -> 91 px regions."
+}

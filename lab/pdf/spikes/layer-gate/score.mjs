@@ -26,6 +26,10 @@ export const MEASURES = [
   ['fullSize', 'model', 'share', 'up', 'full size'],
   ['scaleSpread', 'model', 'ratio', 'down', 'size spread'],
   ['overRight', 'model', 'share', 'down', 'frames past the right edge'],
+  // the gaps between paragraphs (D6, 2026-10-08; measure.mjs paraGapsOf): drawn ÷ original, median, and the share of
+  // gaps a pitch or more wider than the original's (a frame drawn short leaves its blank in the gap below it)
+  ['paraGap', 'model', 'ratio', 'one', 'paragraph gap / the original\'s (median)'],
+  ['paraGapWide', 'model', 'share', 'down', 'paragraph gaps a pitch or more wider'],
   ['overlap', 'pixel', 'defect', 'down', 'overlap regions'],
   ['stray', 'pixel', 'defect', 'down', 'stray text'],
   ['residue', 'pixel', 'defect', 'down', 'residue regions'],
@@ -66,8 +70,10 @@ export const MEASURES = [
   ['groupsSplit', 'model', 'count', 'down', 'table groups drawn partly'],
   ['labelsSource', 'model', 'count', 'down', 'labels left in the source language the final names'],
 ]
-/** recorded beside them, not gated: the pitch is the rules' (CJK's leading is 1.3 by rule), the top a position */
-export const REPORTED = [['pitch', 'pitch ratio'], ['dTop', '|top shift| (pt)'], ['onGrid', 'lines on a layout baseline']]
+/** recorded beside them, not gated: the pitch is the rules' (CJK's leading is 1.3 by rule), the top a position, and the
+ *  most a page's drawn rhythm (its body frames' median line gap within a flow segment against the original's, measure.mjs
+ *  rhythm) moves from the last page before it that has one (D6: the rhythm a reader sees, page to page) */
+export const REPORTED = [['pitch', 'pitch ratio'], ['dTop', '|top shift| (pt)'], ['onGrid', 'lines on a layout baseline'], ['pageDrift', "page pitch's drift (most)"]]
 export const TOLERANCE = { share: 0.002, ratio: 0.02, count: 0, defect: 0 }
 /** the defects that are counts of things (their rates compared), and the counts each sums from a page */
 const DEFECTS = MEASURES.filter(m => m[2] === 'defect').map(m => m[0])
@@ -77,6 +83,8 @@ const median = xs => { const s = xs.filter(x => x !== null && x !== undefined &&
 const share = (a, b) => (b ? a / b : null)
 const sum = (xs, f) => xs.reduce((a, x) => a + (f(x) ?? 0), 0)
 const r = (v, d = 4) => (v === null || v === undefined ? null : Math.round(v * 10 ** d) / 10 ** d)
+/** the most a page's value (its drawn pitch) moves from the last page before it that has one (pages in order) */
+const driftOf = values => { let last = null, most = null; for (const t of values) { if (t === null || t === undefined) continue; if (last !== null) most = Math.max(most ?? 0, Math.abs(t - last)); last = t } return most === null ? null : r(most, 3) }
 
 /**
  * A page's entry in the record from what the page measured: the model's counts and frames, the checker's, and (pixel)
@@ -87,13 +95,15 @@ export function pageEntry(page, model, pixel) {
   const body = m.geo.filter(g => ['para', 'abstract', 'theorem'].includes(g.kind))
   const fills = m.fills.filter(f => ['para', 'abstract', 'theorem'].includes(f.kind) && f.n >= 3).map(f => f.fill)
   const pitches = body.map(g => g.pitch).filter(x => x)
+  const rhythms = body.map(g => g.rhythm).filter(x => x)
   const scales = body.map(g => g.scale)
   const blanks = body.map(g => Math.max(0, g.blank))
+  const gaps = m.gaps ?? []
   const e = {
     p: page,
     textOn: m.units.textOn, textDrawn: m.units.textDrawn, cellsOn: m.units.cellsOn, cellsDrawn: m.units.cellsDrawn, left: m.units.left,
     frames: body.length, fills: fills.length, fill: r(median(fills), 3), blankLines: r(blanks.length ? sum(blanks, x => x) / blanks.length : null, 3),
-    framesBlank1: blanks.filter(b => b >= 1).length, pitch: r(median(pitches), 3), pitchSpread: pitches.length >= 2 ? r(Math.max(...pitches) - Math.min(...pitches), 3) : null,
+    framesBlank1: blanks.filter(b => b >= 1).length, pitch: r(median(pitches), 3), rhythm: r(median(rhythms), 3), pitchSpread: pitches.length >= 2 ? r(Math.max(...pitches) - Math.min(...pitches), 3) : null,
     scale: r(median(scales), 3), fullSize: scales.filter(s => s >= 0.999).length, scaleSpread: scales.length >= 2 ? r(Math.max(...scales) - Math.min(...scales), 3) : null,
     dTop: r(median(body.map(g => Math.abs(g.dTop))), 2), overRight: body.filter(g => g.dRight > 1).length, onGrid: r(median(body.map(g => g.onGrid)), 3),
     cropForeign: m.cropForeign, wrongPageText: m.wrongPageText, droppedPh: m.droppedPh, modelCells: m.modelCells,
@@ -101,6 +111,7 @@ export function pageEntry(page, model, pixel) {
     clipped: model.check.clipped, markerResidue: model.check.markerResidue ?? 0, numbersTotal: model.check.numbers.total, numbersShown: model.check.numbers.shown, numbersLost: model.check.numbers.total - model.check.numbers.shown,
     where: model.where, style: model.style, drawn: model.drawn,
     groupsSplit: model.consistency?.groupsSplit ?? 0, labelsSource: model.consistency?.labelsSource ?? 0,
+    paraGaps: gaps.length, paraGap: r(median(gaps.map(g => g.ratio)), 3), paraGapWide: gaps.filter(g => g.extra >= 1).length,
   }
   if (model.removal) Object.assign(e, { rmRefused: model.removal.refused, rmMismatched: model.removal.mismatched, rmUnits: model.removal.units, rmSwapped: model.removal.swapped })
   const ck = model.removalCheck
@@ -116,12 +127,12 @@ export function pageEntry(page, model, pixel) {
     const rm = pixel.removal
     if (rm) Object.assign(e, { trueResidue: rm.trueResidue, trueResiduePx: rm.trueResiduePx, traces: rm.traces, tracesPx: rm.tracesPx, trueBites: rm.trueBites, trueBitesPx: rm.trueBitesPx, cropForeignInk: rm.cropForeignInk, cropForeignInkPx: rm.cropForeignInkPx, rmCrops: rm.crops, truthAt: rm.at })
   }
-  return { entry: e, frames: { body, fills, pitches, scales } }
+  return { entry: e, frames: { body, fills, pitches, scales, gaps } }
 }
 
 /** a fixture's totals over its pages (summarize.py's): `pages` the entries, `frames` each page's frames (pageEntry's) */
 export function fixtureTotals(pages, frames, tier) {
-  const body = frames.flatMap(f => f.body), fills = frames.flatMap(f => f.fills)
+  const body = frames.flatMap(f => f.body), fills = frames.flatMap(f => f.fills), gaps = frames.flatMap(f => f.gaps ?? [])
   const blanks = body.map(g => Math.max(0, g.blank))
   const left = {}
   for (const p of pages) for (const [k, v] of Object.entries(p.left)) left[k] = (left[k] ?? 0) + v
@@ -137,6 +148,8 @@ export function fixtureTotals(pages, frames, tier) {
     modelCells: sum(pages, p => p.modelCells), numbersTotal: sum(pages, p => p.numbersTotal), numbersShown: sum(pages, p => p.numbersShown),
     groupsSplit: sum(pages, p => p.groupsSplit), labelsSource: sum(pages, p => p.labelsSource),
     style: [sum(pages, p => p.style?.[0]), sum(pages, p => p.style?.[1])],
+    paraGapN: gaps.length, paraGap: r(median(gaps.map(g => g.ratio)), 3), paraGapWide: r(share(gaps.filter(g => g.extra >= 1).length, gaps.length)),
+    pageDrift: driftOf(pages.map(p => p.rhythm)),
   }
   if (tier === 'pixel') {
     const tc = sum(pages, p => p.textCells), cc = sum(pages, p => p.cellCells)
@@ -183,6 +196,8 @@ export function pooled(list, tier) {
     modelCells: sum(list, t => t.modelCells), numbersTotal: sum(list, t => t.numbersTotal), numbersShown: sum(list, t => t.numbersShown),
     groupsSplit: sum(list, t => t.groupsSplit), labelsSource: sum(list, t => t.labelsSource),
     style: [sum(list, t => t.style[0]), sum(list, t => t.style[1])],
+    paraGapN: sum(list, t => t.paraGapN), paraGap: w('paraGap', 'paraGapN'), paraGapWide: w('paraGapWide', 'paraGapN'),
+    pageDrift: list.some(t => t.pageDrift !== null && t.pageDrift !== undefined) ? Math.max(...list.map(t => t.pageDrift ?? 0)) : null,
   }
   if (tier === 'pixel') {
     const tc = sum(list, t => t.textCells), cc = sum(list, t => t.cellCells)
@@ -221,6 +236,7 @@ function pageView(p, tier) {
     unitsLeft: p.textOn - p.textDrawn, cellsLeft: p.cellsOn - p.cellsDrawn, fill: p.fill, blankLines: p.blankLines,
     framesBlank1: p.frames ? p.framesBlank1 / p.frames : null, pitchSpread: p.pitchSpread, scale: p.scale, fullSize: p.frames ? p.fullSize / p.frames : null,
     scaleSpread: p.scaleSpread, overRight: p.frames ? p.overRight / p.frames : null, modelCells: p.modelCells, textTranslatedCells: p.textTranslatedCells,
+    paraGap: p.paraGap ?? null, paraGapWide: p.paraGaps ? p.paraGapWide / p.paraGaps : null,
   }
   if (tier === 'pixel') Object.assign(v, { textTranslated: share(p.textTranslatedCells, p.textCells), textEnglish: share(p.textEnglishCells, p.textCells), textBlank: share(p.textBlankCells, p.textCells), cellsTranslated: share(p.cellTranslatedCells, p.cellCells) })
   for (const d of DEFECTS) if (p[d] !== undefined) v[d] = p[d]

@@ -12,7 +12,9 @@ import { VERIFIED } from '@/pdf-reader/session/verified.mjs'
 // and the refusals of a set read as data. Every value the migration moved out of the engine's code is held here against the
 // frozen copy of the first version (rules/v1.json) and the Params the engine made before the migration (rules/params-v1.json,
 // captured from layer2.mjs defaultParams and run.mjs's defaults), so that tuning the built-in set later cannot make the
-// migration's proof vacuous. CJK text is written as \u escapes
+// migration's proof vacuous. The frozen copy is schema 1's, which a schema-2 reader refuses: it is read here lifted to the
+// current schema (v1 below), its values kept and the fields since added at the built-in set's. CJK text is written as \u
+// escapes
 
 const BUILTIN_FILE = resolve('src/pdf-reader/engine/rules/layout-rules.json')
 const V1_FILE = resolve('tests/pdf-reader/rules/v1.json')
@@ -22,7 +24,20 @@ const bytesOf = (s: string) => new TextEncoder().encode(s)
 /** the frozen first version, parsed afresh: a set to edit (any shape: the tests edit it into what they refuse) */
 // biome-ignore lint/suspicious/noExplicitAny: a set under edit has no fixed shape
 type Edit = any
-const v1 = (edit?: (s: Edit) => void): Edit => { const s = JSON.parse(text(V1_FILE)); edit?.(s); return s }
+/** the fields each schema since the first removed and added (schema 2, D6: `grid` gone, every script's lines on the
+ *  original's pitch while the size shrinks; `fillLead`, the page fill's top; `leftover`, where what it leaves goes) */
+const REMOVED = ['grid'], ADDED = ['fillLead', 'leftover']
+/** the frozen first version lifted to the current schema: its values as they were, less the fields removed since, the fields
+ *  added since at the built-in set's values for each script */
+const lift = (s: Edit): Edit => {
+  s.schema = RULES_SCHEMA
+  for (const r of [...Object.values(s.scripts), ...Object.values(s.languages)] as Record<string, unknown>[]) for (const k of REMOVED) delete r[k]
+  for (const [script, r] of Object.entries(s.scripts) as [keyof typeof BUILTIN_RULES.scripts, Record<string, unknown>][]) for (const k of ADDED) r[k] = structuredClone((BUILTIN_RULES.scripts[script] as Record<string, unknown>)[k])
+  // (in the schema's field order, as the frozen file has it)
+  for (const [script, r] of Object.entries(s.scripts)) s.scripts[script] = Object.fromEntries(RULES_FIELDS.filter(f => f.scope === 'script').map(f => [f.path, (r as Record<string, unknown>)[f.path]]))
+  return s
+}
+const v1 = (edit?: (s: Edit) => void): Edit => { const s = lift(JSON.parse(text(V1_FILE))); edit?.(s); return s }
 const V1 = parseRules(v1())
 const PARAMS_V1 = JSON.parse(text(resolve('tests/pdf-reader/rules/params-v1.json'))) as Record<string, Record<string, unknown>>
 /** the targets the engine had before the migration, which params-v1.json holds the Params of (the web's eight) */
@@ -42,14 +57,18 @@ afterEach(() => { vi.restoreAllMocks() })
 
 describe('the built-in set', () => {
   it('parses, is canonical (writeRules gives the file\'s bytes) and has a version of at least 1', () => {
-    expect(RULES_SCHEMA).toBe(1)
-    expect(BUILTIN_RULES.schema).toBe(1)
+    expect(RULES_SCHEMA).toBe(2)
+    expect(BUILTIN_RULES.schema).toBe(2)
     expect(BUILTIN_RULES.version).toBeGreaterThanOrEqual(1)
     expect(BUILTIN_RULES.note.length).toBeGreaterThan(0)
     expect(writeRules(BUILTIN_RULES)).toBe(text(BUILTIN_FILE))
     expect(parseRules(JSON.parse(text(BUILTIN_FILE)))).toEqual(BUILTIN_RULES)
-    // (the frozen first version is canonical too, and its version 1)
-    expect(writeRules(V1)).toBe(text(V1_FILE))
+    // (the frozen first version is schema 1's, refused by its schema; lifted to this one it is canonical, and its version 1)
+    expect(refusal(JSON.parse(text(V1_FILE))).field).toBe('schema')
+    const kept = text(V1_FILE).split('\n').filter(l => !l.startsWith('  "schema"') && !REMOVED.some(k => l.trim().startsWith(`"${k}":`)))
+    const lifted = writeRules(V1).split('\n')
+    expect(lifted.filter(l => !kept.includes(l)).map(l => l.trim().split(':')[0]).sort()).toEqual(['"schema"', ...ADDED.flatMap(k => Object.keys(V1.scripts).map(() => `"${k}"`))].sort())
+    expect(kept.every(l => lifted.includes(l))).toBe(true)
     expect(V1.version).toBe(1)
     expect(V1.note).toBe('migrated from the engine\'s code')
   })
@@ -100,9 +119,11 @@ describe('resolving a target (resolveRules)', () => {
   it('gives the Params the engine made before the migration, for every target: the resolver keeps today\'s meaning', () => {
     for (const t of MIGRATED) {
       const params = resolveRules(V1, t).params as unknown as Record<string, unknown>
-      const old = PARAMS_V1[t]!
+      // (but the fields the schema has removed since, which no Params holds now)
+      const old = Object.fromEntries(Object.entries(PARAMS_V1[t]!).filter(([k]) => !REMOVED.includes(k)))
       expect(Object.keys(old).length, t).toBeGreaterThan(15)
       expect(Object.fromEntries(Object.keys(old).map(k => [k, params[k]])), t).toEqual(old)
+      for (const k of REMOVED) expect(params, `${t} ${k}`).not.toHaveProperty(k)
     }
   })
 
@@ -284,7 +305,7 @@ describe('reading a set from bytes (readRules)', () => {
   })
 
   it('compares the server\'s etag with that digest: a differing etag is refused, a strong or a weak one of the digest is read', async () => {
-    const bytes = bytesOf(text(V1_FILE))
+    const bytes = bytesOf(text(BUILTIN_FILE))
     // (a CDN weakens a strong tag as it recodes the body; the digest is of the decoded body either way)
     for (const etag of [`"${sha(bytes)}"`, `W/"${sha(bytes)}"`, null]) expect((await readRules(bytes, { etag })).sha256, String(etag)).toBe(sha(bytes))
     for (const etag of [`"${'0'.repeat(64)}"`, `W/"${'0'.repeat(64)}"`, sha(bytes), `W/${sha(bytes)}`, `w/"${sha(bytes)}"`, `W/W/"${sha(bytes)}"`, `W/"${sha(bytes)}`, 'W/""', 'W/', '', '"x"', 'W/"x"']) {
@@ -302,7 +323,7 @@ describe('reading a set from bytes (readRules)', () => {
   })
 
   it('refuses text that is not UTF-8', async () => {
-    const good = bytesOf(text(V1_FILE))
+    const good = bytesOf(text(BUILTIN_FILE))
     const bad = new Uint8Array(good.length + 1)
     bad.set(good)
     bad[good.length] = 0xff
@@ -323,7 +344,7 @@ describe('reading a set from bytes (readRules)', () => {
     expect((await refusalOfBytes(bytesOf('['.repeat(1000)))).field).toBe('values')
     expect(parse).not.toHaveBeenCalled()
     // (a set within them is parsed)
-    await readRules(bytesOf(text(V1_FILE)))
+    await readRules(bytesOf(text(BUILTIN_FILE)))
     expect(parse).toHaveBeenCalled()
   })
 
@@ -331,7 +352,7 @@ describe('reading a set from bytes (readRules)', () => {
     expect((await refusalOfBytes(bytesOf('{"schema":'))).field).toBe('json')
     expect((await refusalOfBytes(bytesOf('null'))).field).toBe('set')
     expect((await refusalOfBytes(bytesOf('[]'))).field).toBe('set')
-    expect((await refusalOfBytes(bytesOf(JSON.stringify(v1(s => { s.schema = 2 }))))).field).toBe('schema')
+    expect((await refusalOfBytes(bytesOf(JSON.stringify(v1(s => { s.schema = 1 }))))).field).toBe('schema')
     expect((await refusalOfBytes(new Uint8Array(0))).field).toBe('json')
     await expect(readRules('{}' as never)).rejects.toThrow(RulesRefusal)
   })
@@ -356,8 +377,9 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     ['a script of the set missing', s => { delete s.scripts.Cyrl }, 'scripts.Cyrl'],
     ['a field of a script missing', s => { delete s.scripts.Latn.leadBase }, 'scripts.Latn.leadBase'],
     ['a language without its labels', s => { delete s.languages.de.labels }, 'languages.de.labels'],
-    ['schema not 1', s => { s.schema = 2 }, 'schema'],
-    ['schema a string', s => { s.schema = '1' }, 'schema'],
+    ['schema 1 (a set before D6)', s => { s.schema = 1 }, 'schema'],
+    ['schema not 2', s => { s.schema = 3 }, 'schema'],
+    ['schema a string', s => { s.schema = '2' }, 'schema'],
     ['version 0', s => { s.version = 0 }, 'version'],
     ['version not an integer', s => { s.version = 1.5 }, 'version'],
     ['version a string', s => { s.version = '1' }, 'version'],
@@ -449,7 +471,7 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
   })
 
   it('refuses a language the schema\'s tag shape does not allow, __proto__ among them, and never edits Object.prototype', () => {
-    const hostile = JSON.parse(text(V1_FILE).replace('"languages": {', '"languages": {\n    "__proto__": { "labels": null },'))
+    const hostile = JSON.parse(writeRules(V1).replace('"languages": {', '"languages": {\n    "__proto__": { "labels": null },'))
     expect(Object.hasOwn(hostile.languages, '__proto__')).toBe(true)
     expect(refusal(hostile).field).toBe('languages.__proto__')
     expect(({} as Record<string, unknown>).labels).toBeUndefined()
@@ -497,7 +519,9 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     // (the words of a range and of a list of values; a hostile value is named by its type, never shown)
     expect(refusal(v1(s => { s.scripts.Hans.leadBase = 2.5 })).why).toBe('above 2')
     expect(refusal(v1(s => { s.scripts.Hans.floor = 0.1 })).why).toBe('below 0.4')
-    expect(refusal(v1(s => { s.scripts.Hans.grid = 2 })).why).toBe('not one of 0, 1')
+    expect(refusal(v1(s => { s.scripts.Hans.borrow = 2 })).why).toBe('not one of 0, 1')
+    // (a field schema 2 removed is no key of it: D6's grid)
+    expect(refusal(v1(s => { s.scripts.Hans.grid = 1 })).why).toBe('not a key of the schema')
     expect(refusal(v1(s => { s.languages.de.labels.figure = 'x'.repeat(40) })).why).toBe('more than 32 characters')
     expect(refusal(v1(s => { s.scripts.Hans.leadBase = '<img src=x onerror=alert(1)>' })).why).not.toContain('onerror')
   })
@@ -568,7 +592,7 @@ describe('the fields the lab shows (RULES_FIELDS)', () => {
     const by = Object.fromEntries(RULES_FIELDS.map(f => [f.path, f]))
     expect(by.order!.values).toEqual(['track', 'borrow', 'lead', 'shrink'])
     expect(by.further!.values).toEqual(['widen', 'flow', 'shrink'])
-    for (const [path, ok] of [['grid', [0, 1]], ['compressMax', [0, 1, 2]], ['even', [0, 1, 2]], ['hyphen', [0, 1]], ['borrow', [0, 1]], ['latinPatterns', ['en', 'de']]] as const) {
+    for (const [path, ok] of [['leftover', ['foot', 'pack']], ['compressMax', [0, 1, 2]], ['even', [0, 1, 2]], ['hyphen', [0, 1]], ['borrow', [0, 1]], ['latinPatterns', ['en', 'de']]] as const) {
       expect(by[path]!.values, path).toEqual(ok)
       for (const v of ok) expect(() => parseRules(v1(s => { s.scripts.Hans[path] = v })), `${path} = ${v}`).not.toThrow()
     }
@@ -581,7 +605,7 @@ describe('writing a set (writeRules)', () => {
     expect(out.endsWith('}\n')).toBe(true)
     expect(out.endsWith('\n\n')).toBe(false)
     expect(out).not.toContain('\r')
-    expect(JSON.parse(out)).toEqual(JSON.parse(text(V1_FILE)))
+    expect(JSON.parse(out)).toEqual(v1())
     expect(parseRules(JSON.parse(out))).toEqual(V1)
     expect(Object.keys(JSON.parse(out))).toEqual(['schema', 'version', 'note', 'hyphenation', 'scripts', 'languages'])
     expect(Object.keys(JSON.parse(out).scripts.Hans)).toEqual(RULES_FIELDS.filter(f => f.scope === 'script').map(f => f.path))
@@ -597,7 +621,7 @@ describe('writing a set (writeRules)', () => {
     expect(writeRules(parseRules(JSON.parse(canon)))).toBe(canon)
     expect(Object.keys(JSON.parse(canon).languages)).toEqual([...Object.keys(JSON.parse(canon).languages)].sort())
     // (against the frozen file: the lines that are new are the version's and the one value's)
-    const before = text(V1_FILE).split('\n')
+    const before = writeRules(V1).split('\n')
     expect(canon.split('\n').filter(l => !before.includes(l))).toEqual(['  "version": 2,', '      "labels": { "figure": "Figure", "table": "Table" },', '      "leadBase": 1.1'])
   })
 

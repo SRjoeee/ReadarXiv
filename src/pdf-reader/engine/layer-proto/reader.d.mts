@@ -3,7 +3,7 @@ import type { FaceId } from '../rules/font-roles.mjs'
 import type { ReadBundle } from './bundle.mjs'
 import type { FaceSources } from './fonts.mjs'
 import type { Row } from './rows.mjs'
-import type { FrozenRuleSet } from '../rules/layout.mjs'
+import type { FrozenRuleSet, RULES_SCHEMA } from '../rules/layout.mjs'
 
 export { PDF_OPTIONS } from './run.mjs'
 export { BUNDLE, BUNDLE_CAP, BUNDLE_VALUES, BundleRefusal, bundleKey, CTAG, readBundle, VTAG } from './bundle.mjs'
@@ -38,7 +38,7 @@ export interface LayerStats {
   /** the rows skipped as no unit of the bundle's (unitOf's null) */
   dropped: number
   /** the layout rule set the layer was opened with: its schema and version */
-  rules: { schema: 1; version: number }
+  rules: { schema: typeof RULES_SCHEMA; version: number }
 }
 /** the layer of one paper and target, open */
 export interface Layer {
