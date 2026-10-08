@@ -19,7 +19,7 @@ const label = process.argv[2]
 if (label !== 'before' && label !== 'after') throw new Error('usage: node tests/e2e/probes/floating-shots.mjs <before|after>')
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
-const OUT = fileURLToPath(new URL('../../../experiments/pdf-bilingual/out/floating/', import.meta.url))
+const OUT = fileURLToPath(new URL('../../../lab/pdf/out/floating/', import.meta.url))
 const PROFILE = `${E2E}.profile-floating-shots`
 const PAPER = process.env.AXT_PAPER ?? '1706.03762'
 const [WIDTH, HEIGHT] = [1280, 860]

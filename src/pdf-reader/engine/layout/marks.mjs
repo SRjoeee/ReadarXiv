@@ -9,7 +9,7 @@
 // set in a contents list, a list of figures or the output routine's running heads (the gate); none goes after a paper's
 // macro or a footnote's call, which may look at what follows, nor after a control word, whose following spaces TeX
 // skips; and none is written to a file or a PDF string, so the
-// aux, the lists and the bookmarks are byte for byte the paper's. The native cases (experiments/pdf-bilingual/spikes/
+// aux, the lists and the bookmarks are byte for byte the paper's. The native cases (lab/pdf/spikes/
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) measures the layout
 // lines they carry and lose, and fails on a loss of no accepted cause.
 import { markUnits, NO_ARG_COMMANDS } from '../latex-front.mjs'

@@ -13,7 +13,7 @@
 // Build first (`pnpm build`). BUILD=<dir> another build; PAPER=<id> another demo paper. Exits non-zero on a FAIL.
 //   node tests/e2e/probes/page-names.mjs
 import AxeBuilder from '@axe-core/playwright'
-import { BUILD, launchWithReader } from '../../../experiments/pdf-bilingual/spikes/extension.mjs'
+import { BUILD, launchWithReader } from '../lib/extension.mjs'
 
 const paper = process.env.PAPER ?? '2608.02163'
 const extension = process.env.BUILD ?? BUILD

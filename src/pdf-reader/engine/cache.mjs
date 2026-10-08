@@ -1,6 +1,6 @@
-// The reader's side of its cache of compiled translations (REPORT, eighteenth addendum): the seed a translation made
+// The reader's side of its cache of compiled translations (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum): the seed a translation made
 // again starts from, the units a record keeps, when a run writes, the figures' keys. The store itself is the
-// extension's (src/cache/pdf-store.ts). Pure but for the hash, so that experiments/pdf-bilingual/spikes/cache-cases.mjs
+// extension's (src/cache/pdf-store.ts). Pure but for the hash, so that parked/lab/spikes/cache-cases.mjs
 // runs it in Node.
 import { groupOf } from './groups.mjs'
 import { displayEdges, plainSource, plainTranslated, sentencesKept, unitText } from './mt.mjs'
@@ -209,7 +209,7 @@ export const originalRow = (readings, left, made) => ({ pipeline: made.pipeline,
 export const knownOriginal = (row, now) => (row && row.pipeline === now.pipeline && row.typesetting === now.typesetting && row.page === now.page && row.left?.length ? { readings: { log: row.log, cites: row.cites, labels: row.labels, bbl: row.bbl, marks: { ...row.marks, marks: new Map(row.marks.marks) } }, left: row.left } : null)
 
 /**
- * What a run writes (REPORT, eighteenth addendum, "Writing"): the whole record when it ended with a final that
+ * What a run writes (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum, "Writing"): the whole record when it ended with a final that
  * settled and is on screen (`shown`: this run's own final), since the right side's marks are read from the document shown
  * (Devin on #298); with nothing typeset changed — every unit's text the copy's PDF sets —, the units' provenance alone, if
  * it changed, or the left side's marks, if the copy had none and this run compiled them; else nothing — a run ended

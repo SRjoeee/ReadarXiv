@@ -114,7 +114,7 @@ export function cacheKeyFor(identity: Omit<CacheIdentity, 'promptVersion' | 'rul
  * A translation's identity less its text: the parts of `buildCacheKey` that name who translates and how — the key's
  * version, the provider's cache id (an OpenAI-compatible endpoint's, for one), the model, PROMPT_VERSION, the prompt's
  * key (a custom prompt's whole text), the target and the render path. Two translations of one text under one identity
- * are the same translation. The PDF reader keeps its compiled copies current by it (experiments/pdf-bilingual/REPORT.md,
+ * are the same translation. The PDF reader keeps its compiled copies current by it (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md,
  * eighteenth addendum); the context and RULES_VERSION are the HTML page's, and are not in it
  */
 export function translationIdentity(identity: { providerId: string; model: string; promptKey: string; target: string; renderPath: RenderPath }): Promise<string> {

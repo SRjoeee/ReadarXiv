@@ -147,6 +147,20 @@ describe('createChainHolder', () => {
     expect(retired).toEqual(['build-1', 'build-2'])
   })
 
+  it('configs() names what every chain still around was built from: a session on a superseded one may still use its services\' origins, and a chain let go or retired names nothing', async () => {
+    // the origin keeper's question (origin-keeper.ts): an address edited away is still in use while a page translates on the chain built before
+    const owned = new Set<TranslationTransport>()
+    const holder = createChainHolder({ owned: t => owned.has(t), load: async config => ({ config: config ?? DEFAULT_CONFIG, transport: transport(config?.targetLanguage ?? 'stored') }) })
+    expect(holder.configs()).toEqual([])
+    owned.add(await holder.current())
+    await holder.activate({ ...DEFAULT_CONFIG, targetLanguage: 'afr' })
+    await holder.activate({ ...DEFAULT_CONFIG, targetLanguage: 'amh' })
+    await holder.current() // the sweep: afr, superseded and unowned, is let go
+    expect(holder.configs().map(c => c.targetLanguage)).toEqual([DEFAULT_CONFIG.targetLanguage, 'amh'])
+    holder.retireOthers()
+    expect(holder.configs().map(c => c.targetLanguage)).toEqual(['amh'])
+  })
+
   it('a configuration change starts its rebuild without waiting for a build that never settles', async () => {
     // The configuration watcher's rebuild used to chain onto the build in force; a deletion's hung build then kept
     // every later rebuild from starting, and the clean-up with it (local review)

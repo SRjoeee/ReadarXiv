@@ -3,7 +3,7 @@ import { openPaper, translationFiles } from '@/pdf-reader/engine/live.mjs'
 import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
 
 // What the CJK strategies under XeLaTeX add for papers that fail there as they stand (the investigation of XeLaTeX under
-// BusyTeX, 2026-10-01: causes A and E). Their TeX is checked natively by experiments/pdf-bilingual/spikes/cjk-cases.mjs
+// BusyTeX, 2026-10-01: causes A and E). Their TeX is checked natively by parked/lab/spikes/cjk-cases.mjs
 
 const SOURCE = '\\documentclass{article}\n\\usepackage{CJKutf8}\n\\usepackage{microtype}\n\\begin{document}\nA paragraph of the paper, with a name \\begin{CJK*}{UTF8}{gbsn}\u5f20\u4e09\\end{CJK*} in it.\n\\end{document}\n'
 const paper = () => openPaper(new Map([['main.tex', new TextEncoder().encode(SOURCE)]]))

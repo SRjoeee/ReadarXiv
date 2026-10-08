@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import { WxtVitest } from 'wxt/testing/vitest-plugin'
 
 // WxtVitest: in-memory browser extension APIs, auto-imports, the @/ alias
@@ -23,6 +23,8 @@ export default defineConfig({
       },
     },
     include: ['tests/**/*.test.ts'],
+    // parked/ (parked/README.md) holds tests that are no longer run
+    exclude: [...configDefaults.exclude, 'parked/**'],
     // The fixtures the repository may not hold are downloaded and verified once, before the first test file (tests/fixtures/README.md)
     globalSetup: ['tests/global-setup.ts'],
     setupFiles: ['tests/setup.ts'],

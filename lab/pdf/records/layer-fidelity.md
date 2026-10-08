@@ -1,0 +1,112 @@
+# The instant layer against the original: the fidelity record
+
+Written by `spikes/layer-gate.mjs --record`. Each run below: the engine at its commit, Chromium 153.0.8010.12, PDF.js 6.3.289; pages: the first 12 of each output, every page of 2307.16209v1; the planes at 2.5 device px a PDF unit, lost ink at 2x; crops drawn darken.
+
+- **pixel**: the engine at `b3f68afc` (exp/layer-t12-gate), the gate at `b3f68afc`, 2026-10-06; the engine's own layout files; 68.2 s.
+- **pixel-fixed**: the engine at `b3f68afc` (exp/layer-t12-gate), the gate at `b3f68afc`, 2026-10-06; the fixtures' layout files, as made for the layer lab; 73.5 s.
+- **pixel-proto-tex-lines**: the engine at `f8672a0f` (exp/layer-s3), the gate at `f8672a0f`, 2026-10-07; v0 (the prototype in the engine), no layout file: the prototype's geometry and the fixtures' record.json, the role table's faces; the hybrid: each unit the fixture's layout file locates whole takes its lines, label and placeholders from the file, with the units only the file holds (but cells); 61.5 s.
+- **pixel-proto-tex-lines-removal-draw**: the engine at `cd0036f8` (exp/layer-a2), the gate at `cd0036f8`, 2026-10-08; v0 (the prototype in the engine), no layout file: the prototype's geometry and the fixtures' record.json, the role table's faces; the hybrid: each unit the fixture's layout file locates whole takes its lines, label and placeholders from the file, with the units only the file holds (but cells); the layout files made by the engine's maker (out/layer-gate/fixtures/0343aafd18a06bfa), the references of out/layer-gate/cut-p10/refs, the prototype's geometry of lab/pdf/out/layer-gate/cut-p10/geometry, the translations of out/layer-gate/cut-p10/records; 88 s.
+- **pixel-proto-tex-lines-removal-measure**: the engine at `bbf3d143` (exp/layer-remove), the gate at `bbf3d143`, 2026-10-06; v0 (the prototype in the engine), no layout file: the prototype's geometry and the fixtures' record.json, the role table's faces; the hybrid: each unit the fixture's layout file locates whole takes its lines, label and placeholders from the file, with the units only the file holds (but cells); 147.7 s.
+
+Every measure is against arXiv's original page, whose own value is the first column. The prototype's floor is the approved prototype as this gate measures it (v0, the prototype ported into the engine, under its own units and faces at the gate's text place); the floors it replaces stand beside it: the one before it, and the parity run's (measured at the prototype page's text place, 0.19 CSS px off, with coverage read from the translation's ink). Both are the ten outputs the prototype shares with the engine, pages 1-12. A defect is its count and, in brackets, its rate per 1,000 translated text cells (the model tier: per 1,000 cells of the drawn units' frames), which is what the merge rule compares.
+
+## Against the original
+
+| measure | Original | Prototype floor (v0, this gate), shared ten | The floor before it, shared ten | The parity run's floor, shared ten | pixel, shared ten | pixel, all 29 | pixel-fixed, shared ten | pixel-fixed, all 29 | pixel-proto-tex-lines, shared ten | pixel-proto-tex-lines, all 29 | pixel-proto-tex-lines-removal-draw, shared ten | pixel-proto-tex-lines-removal-draw, all 29 | pixel-proto-tex-lines-removal-measure, shared ten | pixel-proto-tex-lines-removal-measure, all 29 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| text translated | 100.0 % | 82.2 % | 87.8 % | 90.7 % | 65.8 % | 60.8 % | 65.8 % | 60.7 % | 88.0 % | 84.1 % | 88.4 % | 84.1 % | 87.8 % | 82.6 % |
+| text English | 0.0 % | 6.7 % | 0.4 % | 0.5 % | 20.0 % | 22.7 % | 20.0 % | 22.8 % | 0.3 % | 0.9 % | 0.2 % | 1.3 % | 0.3 % | 0.9 % |
+| text blank | 0.0 % | 11.1 % | 11.9 % | 8.8 % | 14.2 % | 16.6 % | 14.2 % | 16.5 % | 11.7 % | 15.0 % | 11.3 % | 14.6 % | 12.0 % | 16.5 % |
+| table cells translated | 100.0 % | 4.4 % | 5.8 % | 6.1 % | 40.5 % | 38.1 % | 40.5 % | 38.1 % | 6.0 % | 7.3 % | 41.3 % | 48.2 % | 5.7 % | 7.2 % |
+| text units left English | 0 | 7 / 1186 | 7 / 1194 | 7 / 1194 | 186 / 1194 | 684 / 3979 | 186 / 1194 | 686 / 3979 | 0 / 1194 | 10 / 3979 | 0 / 1238 | 17 / 4058 | 0 / 1194 | 9 / 3979 |
+| cells left English | 0 | 635 / 686 | 635 / 686 | 635 / 686 | 217 / 686 | 499 / 1601 | 217 / 686 | 499 / 1601 | 635 / 686 | 1440 / 1601 | 177 / 683 | 350 / 1665 | 635 / 686 | 1431 / 1601 |
+| fill (median) | 1 | 0.925 | 0.927 | 0.916 | 0.892 | 0.893 | 0.892 | 0.894 | 0.928 | 0.952 | 0.929 | 0.953 | 0.926 | 0.938 |
+| blank lines / frame | 0 | 0.533 | 0.535 | 0.611 | 0.755 | 0.723 | 0.753 | 0.721 | 0.532 | 0.446 | 0.514 | 0.434 | 0.541 | 0.515 |
+| frames with a blank line | 0.0 % | 24.0 % | 24.1 % | 27.0 % | 34.6 % | 33.0 % | 34.5 % | 32.9 % | 24.3 % | 19.3 % | 23.0 % | 18.4 % | 24.6 % | 22.7 % |
+| pitch spread | 0 | 0.071 | 0.071 | 0.088 | 0.044 | 0.057 | 0.044 | 0.071 | 0.070 | 0.140 | 0.075 | 0.140 | 0.078 | 0.149 |
+| size (median) | 1 | 0.978 | 0.978 | 0.978 | 0.957 | 0.941 | 0.957 | 0.941 | 0.981 | 0.992 | 0.980 | 0.991 | 0.981 | 0.972 |
+| full size | 100.0 % | 64.4 % | 64.4 % | 64.0 % | 59.8 % | 47.6 % | 59.8 % | 47.3 % | 64.5 % | 61.2 % | 63.0 % | 60.3 % | 64.3 % | 59.9 % |
+| size spread | 0 | 0.067 | 0.067 | 0.069 | 0.038 | 0.019 | 0.038 | 0.019 | 0.068 | 0.088 | 0.073 | 0.089 | 0.068 | 0.069 |
+| frames past the right edge | 0.0 % | 13.1 % | 13.2 % | 14.0 % | 0.0 % | 1.0 % | 0.0 % | 1.0 % | 13.0 % | 12.6 % | 12.7 % | 12.2 % | 12.8 % | 11.6 % |
+| overlap regions | 0 | 122 (0.96) | 122 (0.95) | 119 (0.90) | 324 (3.35) | 8391 (25.71) | 326 (3.37) | 8446 (25.91) | 11 (0.09) | 460 (1.02) | 2 (0.01) | 353 (0.76) | 11 (0.09) | 432 (0.97) |
+| stray text | 0 | 49 (0.39) | 49 (0.38) | 62 (0.47) | 2 (0.02) | 8 (0.03) | 2 (0.02) | 8 (0.03) | 28 (0.22) | 141 (0.31) | 17 (0.12) | 114 (0.25) | 29 (0.23) | 142 (0.32) |
+| residue regions | 0 | 604 (4.75) | 589 (4.57) | 587 (4.41) | 31335 (324.14) | 247183 (757.43) | 31361 (324.55) | 246677 (756.68) | 474 (3.67) | 1486 (3.29) | 556 (4.06) | 1448 (3.13) | 528 (4.09) | 1594 (3.59) |
+| erase bites | 0 | 61 (0.48) | 61 (0.47) | 168 (1.26) | 1880 (19.45) | 5331 (16.34) | 1879 (19.45) | 5447 (16.71) | 149 (1.15) | 830 (1.84) | 61 (0.45) | 556 (1.20) | 45 (0.35) | 662 (1.49) |
+| vanished math | 0 | 13 (0.10) | 13 (0.10) | 13 (0.10) | 261 (2.70) | 684 (2.10) | 261 (2.70) | 752 (2.31) | 9 (0.07) | 697 (1.54) | 9 (0.07) | 477 (1.03) | 11 (0.09) | 765 (1.73) |
+| doubled crops | 0 | 5 (0.04) | 5 (0.04) | 5 (0.04) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 2 (0.01) | 24 (0.05) | 0 (0) | 31 (0.07) | 2 (0.02) | 31 (0.07) |
+| lost-ink regions | 0 | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 20 (0.15) | 65 (0.14) | 20 (0.15) | 60 (0.13) | 21 (0.16) | 66 (0.15) |
+| graphics px erased | 0 | 7 (0.06) | 7 (0.05) | 208 (1.56) | 2822 (29.19) | 11483 (35.19) | 2693 (27.87) | 10580 (32.45) | 4 (0.03) | 240 (0.53) | 4 (0.03) | 15 (0.03) | 4 (0.03) | 240 (0.54) |
+| graphics px overdrawn | 0 | 0 (0) | 0 (0) | 0 (0) | 14 (0.14) | 14 (0.04) | 14 (0.14) | 14 (0.04) | 0 (0) | 72 (0.16) | 0 (0) | 85 (0.18) | 0 (0) | 99 (0.22) |
+| text touching a rule or a figure | 0 | - | - | - | - | - | - | - | - | - | 0 (0) | 9 (0.02) | - | - |
+| crops with foreign ink | 0 | 11 (0.09) | 11 (0.09) | 11 (0.08) | 135 (1.40) | 247 (0.76) | 135 (1.40) | 248 (0.76) | 6 (0.05) | 24 (0.05) | 2 (0.01) | 15 (0.03) | 6 (0.05) | 30 (0.07) |
+| wrong page text | 0 | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| dropped placeholders | 0 | - | - | - | 0 (0) | 0 (0) | 0 (0) | 2 (0.01) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| placeholders missing | 0 | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 2 (0.00) | 0 (0) | 2 (0.00) | 0 (0) | 2 (0.01) |
+| placeholders twice | 0 | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 15 (0.03) | 0 (0) | 10 (0.02) | 0 (0) | 15 (0.03) |
+| doubled brackets | 0 | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| duplications | 0 | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| clipped characters | 0 | 99 (0.78) | 99 (0.77) | 99 (0.74) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 110 (0.85) | 2314 (5.22) |
+| marker or markup syntax left in drawn text | 0 | - | - | - | - | - | - | - | - | - | 0 (0) | 0 (0) | - | - |
+| equation numbers not shown | 0 | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 1 (0.00) |
+| leftover English (true residue) | 0 | - | - | - | - | - | - | - | - | - | 0 (0) | 0 (0) | 50 (0.39) | 276 (0.62) |
+| faint leftovers (traces) | 0 | - | - | - | - | - | - | - | - | - | 4 (0.03) | 7 (0.01) | 89 (0.69) | 351 (0.79) |
+| kept ink destroyed (true bites) | 0 | - | - | - | - | - | - | - | - | - | 0 (0) | 0 (0) | 12 (0.09) | 51 (0.12) |
+| crops carrying foreign ink (6 px or more) | 0 | - | - | - | - | - | - | - | - | - | 8 (0.06) | 169 (0.36) | 24 (0.19) | 287 (0.65) |
+| pixels changed outside the removed glyphs | 0 | - | - | - | - | - | - | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| glyphs and rules replaced, not removed | 0 | - | - | - | - | - | - | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| glyphs and rules removed, not replaced | 0 | - | - | - | - | - | - | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| kept glyphs moved | 0 | - | - | - | - | - | - | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| placeholders' page: other ink or a crop's glyph missing | 0 | - | - | - | - | - | - | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| units whose removal is not the plan's | 0 | - | - | - | - | - | - | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| pages refused by the remover | 0 | - | - | - | - | - | - | - | - | - | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| table groups drawn partly | - | 0 | - | - | - | - | - | - | - | - | 0 | 0 | - | - |
+| labels left in the source language the final names | - | 0 | - | - | - | - | - | - | - | - | 0 | 0 | - | - |
+| pitch ratio (not gated) | 1 | 1.094 | 1.094 | 1.094 | 1.076 | 1.025 | 1.076 | 1.025 | 1.096 | 1.051 | 1.093 | 1.048 | 1.096 | 1.050 |
+| |top shift| (pt) (not gated) | 0 | 0.186 | 0.185 | 0.184 | 0.322 | 0.454 | 0.322 | 0.454 | 0.167 | 0.409 | 0.173 | 0.406 | 0.167 | 0.227 |
+| lines on a layout baseline (not gated) | 100.0 % | 50.1 % | 49.3 % | 49.3 % | 53.3 % | 48.0 % | 54.9 % | 48.5 % | 49.8 % | 48.8 % | 47.9 % | 48.3 % | 49.8 % | 48.9 % |
+
+**Below the prototype's floor on the shared ten** (pixel): text translated, text English, text blank, text units left English, fill (median), blank lines / frame, frames with a blank line, size (median), full size, overlap regions, residue regions, erase bites, vanished math, graphics px erased, graphics px overdrawn, crops with foreign ink.
+
+## By output (pixel)
+
+| output | text translated | text English | text blank | table cells translated | text units left English | blank lines / frame | full size | overlap regions | residue regions | erase bites | vanished math | crops with foreign ink | lost-ink regions | wrong page text | clipped characters | why left |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1512.03385v1-de | 59.1 % | 29.1 % | 11.7 % | 42.1 % | 29 / 123 | 0.685 | 0.0 % | 83 (8.33) | 3053 (306.37) | 12 (1.20) | 4 (0.40) | 34 (3.41) | 0 (0) | 0 (0) | 0 (0) | lost 24, floor 3, unlocated 2 |
+| 1512.03385v1-es | 62.1 % | 29.1 % | 8.7 % | 40.9 % | 29 / 123 | 0.499 | 0.0 % | 88 (8.40) | 3066 (292.84) | 12 (1.15) | 4 (0.38) | 34 (3.25) | 0 (0) | 0 (0) | 0 (0) | lost 24, floor 3, unlocated 2 |
+| 1512.03385v1-fr | 59.8 % | 29.7 % | 10.5 % | 37.9 % | 31 / 123 | 0.733 | 3.1 % | 74 (7.34) | 3086 (306.12) | 12 (1.19) | 4 (0.40) | 34 (3.37) | 0 (0) | 0 (0) | 0 (0) | lost 24, floor 5, unlocated 2 |
+| 1512.03385v1-ja | 66.2 % | 27.6 % | 6.2 % | 28.4 % | 29 / 123 | 0.409 | 13.6 % | 56 (5.02) | 3218 (288.35) | 10 (0.90) | 4 (0.36) | 33 (2.96) | 0 (0) | 0 (0) | 0 (0) | lost 24, floor 3, unlocated 2 |
+| 1512.03385v1-ko | 60.1 % | 27.5 % | 12.5 % | 38.8 % | 27 / 123 | 0.697 | 63.2 % | 92 (9.09) | 3138 (310.08) | 12 (1.19) | 4 (0.40) | 34 (3.36) | 0 (0) | 0 (0) | 0 (0) | lost 24, unlocated 2, floor 1 |
+| 1512.03385v1-ru | 57.2 % | 29.8 % | 13.0 % | 32.8 % | 33 / 123 | 0.838 | 0.0 % | 61 (6.33) | 3083 (320.11) | 7 (0.73) | 0 (0) | 33 (3.43) | 0 (0) | 0 (0) | 0 (0) | lost 24, floor 7, unlocated 2 |
+| 1512.03385v1-zh | 55.9 % | 27.5 % | 16.6 % | 38.7 % | 27 / 123 | 1.129 | 100.0 % | 87 (9.24) | 3118 (331.03) | 12 (1.27) | 4 (0.42) | 34 (3.61) | 0 (0) | 0 (0) | 0 (0) | lost 24, unlocated 2, floor 1 |
+| 1706.03762v7-de | 89.0 % | 7.1 % | 3.9 % | 64.7 % | 9 / 110 | 0.148 | 40.0 % | 7 (0.71) | 2618 (265.60) | 365 (37.03) | 31 (3.15) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | unlocated 6, floor 3 |
+| 1706.03762v7-es | 90.6 % | 6.9 % | 2.5 % | 69.0 % | 8 / 110 | 0.115 | 53.9 % | 3 (0.30) | 2713 (270.27) | 366 (36.46) | 38 (3.79) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | unlocated 6, floor 2 |
+| 1706.03762v7-fr | 91.1 % | 6.8 % | 2.1 % | 67.2 % | 7 / 110 | 0.089 | 58.5 % | 3 (0.30) | 2720 (269.52) | 366 (36.27) | 39 (3.86) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | unlocated 6, floor 1 |
+| 1706.03762v7-ja | 88.0 % | 7.2 % | 4.8 % | 48.5 % | 10 / 110 | 0.174 | 87.5 % | 12 (1.23) | 2594 (266.11) | 366 (37.55) | 52 (5.33) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | unlocated 6, floor 4 |
+| 1706.03762v7-ko | 76.8 % | 6.8 % | 16.3 % | 53.3 % | 7 / 110 | 0.538 | 100.0 % | 16 (1.88) | 2602 (305.79) | 366 (43.01) | 48 (5.64) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | unlocated 6, floor 1 |
+| 1706.03762v7-ru | 87.9 % | 7.2 % | 4.9 % | 51.9 % | 10 / 110 | 0.153 | 36.9 % | 1 (0.10) | 2697 (276.99) | 365 (37.49) | 46 (4.72) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | unlocated 6, floor 4 |
+| 1706.03762v7-zh | 72.0 % | 6.8 % | 21.2 % | 55.5 % | 6 / 110 | 0.677 | 100.0 % | 7 (0.88) | 2700 (338.52) | 366 (45.89) | 50 (6.27) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | unlocated 6 |
+| 1810.04805v2-de | 58.0 % | 29.6 % | 12.4 % | 47.4 % | 29 / 128 | 0.771 | 1.6 % | 6 (0.69) | 3361 (384.82) | 5 (0.57) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | lost 18, floor 7, unlocated 4 |
+| 1810.04805v2-es | 60.4 % | 29.8 % | 9.8 % | 54.0 % | 30 / 128 | 0.613 | 4.8 % | 3 (0.33) | 3411 (374.92) | 5 (0.55) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | lost 18, floor 8, unlocated 4 |
+| 1810.04805v2-fr | 60.1 % | 29.7 % | 10.2 % | 45.6 % | 29 / 128 | 0.598 | 7.9 % | 5 (0.55) | 3404 (376.38) | 5 (0.55) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | lost 18, floor 7, unlocated 4 |
+| 1810.04805v2-ja | 59.1 % | 33.5 % | 7.4 % | 38.9 % | 30 / 128 | 0.513 | 13.3 % | 5 (0.56) | 3386 (380.36) | 5 (0.56) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | lost 18, floor 4, brackets 4, unlocated 4 |
+| 1810.04805v2-ko | 54.4 % | 30.9 % | 14.7 % | 50.9 % | 28 / 128 | 0.907 | 72.6 % | 9 (1.10) | 3268 (398.83) | 5 (0.61) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | lost 18, floor 4, unlocated 4, brackets 2 |
+| 1810.04805v2-ru | 58.1 % | 29.1 % | 12.8 % | 44.7 % | 30 / 128 | 0.681 | 4.6 % | 4 (0.46) | 3563 (407.20) | 5 (0.57) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | lost 18, floor 8, unlocated 4 |
+| 1810.04805v2-zh | 53.4 % | 28.7 % | 17.9 % | 38.9 % | 26 / 128 | 1.294 | 92.3 % | 4 (0.50) | 3543 (440.62) | 5 (0.62) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | lost 18, floor 4, unlocated 4 |
+| 2307.16209v1-zh | 35.0 % | 27.5 % | 37.5 % | 55.6 % | 122 / 514 | 0.958 | 97.0 % | 7750 (232.65) | 151499 (4547.88) | 55 (1.65) | 3 (0.09) | 4 (0.12) | 0 (0) | 0 (0) | 0 (0) | lost 99, unlocated 14, floor 7, missing 2 |
+| 2608.04322v1-de | 67.7 % | 17.8 % | 14.5 % | 27.4 % | 13 / 134 | 0.805 | 0.0 % | 2 (0.15) | 4447 (326.36) | 372 (27.30) | 23 (1.69) | 1 (0.07) | 0 (0) | 0 (0) | 0 (0) | lost 9, floor 3, unlocated 1 |
+| 2608.04322v1-es | 70.2 % | 17.2 % | 12.7 % | 29.7 % | 13 / 134 | 0.804 | 0.0 % | 1 (0.07) | 4458 (315.63) | 372 (26.34) | 26 (1.84) | 1 (0.07) | 0 (0) | 0 (0) | 0 (0) | lost 9, floor 3, unlocated 1 |
+| 2608.04322v1-fr | 69.1 % | 17.4 % | 13.5 % | 22.0 % | 15 / 134 | 0.967 | 0.0 % | 1 (0.07) | 4478 (321.81) | 372 (26.73) | 21 (1.51) | 1 (0.07) | 0 (0) | 0 (0) | 0 (0) | lost 9, floor 5, unlocated 1 |
+| 2608.04322v1-ja | 74.3 % | 17.2 % | 8.5 % | 25.6 % | 15 / 134 | 0.516 | 16.5 % | 3 (0.20) | 4579 (306.12) | 372 (24.87) | 67 (4.48) | 1 (0.07) | 0 (0) | 0 (0) | 0 (0) | lost 9, floor 5, unlocated 1 |
+| 2608.04322v1-ko | 63.4 % | 20.4 % | 16.2 % | 23.4 % | 13 / 134 | 0.856 | 100.0 % | 6 (0.47) | 4239 (331.87) | 372 (29.12) | 71 (5.56) | 1 (0.08) | 0 (0) | 0 (0) | 0 (0) | lost 9, floor 2, brackets 1, unlocated 1 |
+| 2608.04322v1-ru | 68.0 % | 18.2 % | 13.8 % | 17.9 % | 19 / 134 | 0.745 | 0.0 % | 0 (0) | 4438 (324.13) | 372 (27.17) | 71 (5.19) | 1 (0.07) | 0 (0) | 0 (0) | 0 (0) | lost 9, floor 9, unlocated 1 |
+| 2608.04322v1-zh | 61.5 % | 13.7 % | 24.9 % | 21.8 % | 10 / 134 | 1.397 | 97.9 % | 2 (0.16) | 4703 (379.98) | 372 (30.06) | 74 (5.98) | 1 (0.08) | 0 (0) | 0 (0) | 0 (0) | lost 9, unlocated 1 |
+
+Every measure of every output, and of every page, is in layer-fidelity.json.
+
+## The maintainer's rulings
+
+Where a record stands against the merge rule by the maintainer's choice: the ruling, the run it was given on, and the measures it covers.
+
+- **2026-10-07, the maintainer, on S3-12 (the original beside B, D and C)** (pixel-proto-tex-lines at `f8672a0f`): "We settle on version D's direction. Version D's approach as a whole feels the best for now." (`\u6211\u4eec\u5c31\u9009\u5b9a D \u7248\u672c\u65b9\u5411\u3002\u76ee\u524d D \u7248\u672c\u6574\u4f53\u7684\u65b9\u5f0f\u4f53\u611f\u662f\u6700\u4f18\u7684\u3002`). Over the merge rule for size (median) and size spread on a loose original, where D's adaptive fill may grow a unit's size up to 1.10 to reach its frame's foot (the thesis, 2307.16209v1-zh, against B's record at 51e5ee49: size 1 -> 1.099, size spread 0 -> 0.099; no solid-set output moves). The third measure that moved, frames past the right edge (0.2753 -> 0.3088 on the thesis), is the metric, not ink, and stands: 71 of the 74 new frames end in a hung CJK closing mark (half an em into the margin by rule, its ink a median 5.22 pt inside the frame's edge) and 3 are lines longer than a short original last line the measure takes as its own frame; at high resolution on pages 5, 7, 18, 20 and 27, 17 lines recorded past the edge, none with ink beyond it.
+- **2026-10-06, the maintainer, on the instant layer's faces (A2's E2, Task 6b)** (pixel-proto-tex-lines-removal-draw at `cd0036f8`): "(the same; the binding as Plan 8's layer-only plan of 2026-10-08 states the maintainer's ruling of 2026-10-06)" (`Fonts are only our own served web fonts, in unicode-range slices, cached after the first visit. They are the same files as the role table's. There is no local() and no system font.`). Over the merge rule for text translated, text English, text units left English, frames with a blank line, full size, frames past the right edge, overlap regions, stray text, residue regions, erase bites, vanished math, doubled crops, lost-ink regions, graphics px erased, graphics px overdrawn, text touching a rule or a figure, crops with foreign ink and placeholders missing on 1810.04805v2-ja and 2307.16209v1-zh only: the 8 units left the original's because no served face holds a character of theirs (1810.04805v2-ja unit 8 on pages 1 and 2; 2307.16209v1-zh units 121, 128, 132, 220, 248, 279 and 365 on pages 42, 43, 44, 66, 67, 74, 84 and 107; text translated 0.9452 -> 0.9211 on the first and 0.5216 -> 0.505 on the thesis, text units left English 0 -> 2 and 7 -> 15), and the 10 thesis units drawn again in the served math face (the one page of them whose measures move, 125, moves for the better); nothing else moves. A glyph from a face we do not serve is not the same on every device, so a unit that holds a character no served face covers stays the original's rather than being drawn in whatever the browser falls back to; the units it costs are the 8 above. No defect count rose (the thesis's overlap, stray, residue, bites, vanished, twice and foreign-ink counts fell, the rest stand): the rates that rose are per translated cell, and 1,562 fewer cells are translated on the thesis, 362 fewer on 1810.04805v2-ja.
+

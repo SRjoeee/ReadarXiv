@@ -1,5 +1,5 @@
 // C1 front end, spike: a LaTeX project → prose units with byte ranges and placeholders → the same project with each unit's
-// range replaced by its translation, everything else byte for byte. The approach the evidence favours (REPORT §4 and the
+// range replaced by its translation, everything else byte for byte. The approach the evidence favours (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md §4 and the
 // second addendum): patch source ranges in place, mask math, citations, references and unknown commands, send whole
 // paragraphs. Not a parser: a scanner that knows which constructs carry prose and treats everything else as opaque.
 // Runs the same in Node (the spikes) and in the browser (the reader): a project's files come as a file system of two
@@ -1428,7 +1428,7 @@ export function unitText(u) {
 /**
  * Per target language, the length of a real translation in grapheme clusters per letter of the English it comes from,
  * and a sample text (one English sentence as Microsoft's free endpoint translates it). Measured over 48 prose units of
- * four papers of four document classes (spikes/lang-ratio.mjs, 2026-09-22; each language's quartiles lie within 10 %
+ * four papers of four document classes (parked/lab/spikes/lang-ratio.mjs, 2026-09-22; each language's quartiles lie within 10 %
  * of its ratio): a page count or a line break measured on the pseudo-translation stands for the real one's only if it
  * is as long and written like the language. The first ratios, guessed (zh 0.45, ja 0.55, de 1.15), were a third too
  * long for Chinese and a sixth too short for German.
@@ -1860,7 +1860,7 @@ const fitsWide = u => !u.pieces.some(p => p.t === 'nested' || (p.t === 'ph' && /
 /** Goes before \\begin{document} of the original's own compile: the log then says which font families the document set
  *  for its roles, however it set them (its class, a package, a conference style) */
 export const FONT_PROBE = '\\AtEndDocument{\\typeout{AXT-FONTS rm=\\rmdefault;sf=\\sfdefault;tt=\\ttdefault;body=\\familydefault;}}\n'
-/** The TeX log of a compile's last pass. The browser's compiler (poc-site/tex.js) joins each step's log with its terminal
+/** The TeX log of a compile's last pass. The browser's compiler (parked/tex-page/poc-site/tex.js) joins each step's log with its terminal
  *  output — `$ <command>`, then `LOG:` … `==` `STDOUT:` — and the terminal output repeats the errors; the last TeX step's
  *  log is taken, as the one that made the PDF, whatever the earlier passes' logs hold (BusyTeX's pipeline empties them
  *  today, Devin and Codex on #294). bibtex, biber, makeindex and xdvipdfmx are no TeX passes. A native compile's .log is

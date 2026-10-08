@@ -3,6 +3,7 @@ import { cloneWithoutIds } from './clone'
 import { type Boundaries, restoreLeadingLabel } from './label'
 import { scanTokens, type WireSpan } from './offsets'
 import { type ProtectedBlock, staleSlot } from './serialize'
+import { isHashFree } from './tokens'
 import { PlaceholderIntegrityError, validate } from './validate'
 
 type TextToken = Extract<ReturnType<typeof scanTokens>[number], { kind: 'text' }>
@@ -65,7 +66,9 @@ export function rehydrate(translated: string, block: ProtectedBlock, doc: Docume
   /** Which slot each clone stands for; the label restore checks identities, not just counts */
   const ids = new Map<Node, number>()
 
-  const tokens = scanTokens(translated, block.format)
+  // A reply is read with the markers wire's one reader (`tokens.ts` markerReader): a marker's `#` set twice is the
+  // marker's where the block's text holds no `#` of its own (#320). The markers it finds are validation's
+  const tokens = scanTokens(translated, block.format, block.format === 'markers' ? { hashFree: isHashFree(block.text) } : undefined)
   /** Whether the marker beside a text run was set apart from a word on the side that faces the run (`spaced`) */
   const apart = (i: number, side: 'before' | 'after') => {
     const t = tokens[i]

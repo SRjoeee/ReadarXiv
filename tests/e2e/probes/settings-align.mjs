@@ -6,7 +6,7 @@
 // 14; a hovered row's fill on the card's inner edge, the separators on either side stepped aside; the small segmented
 // controls a state shows exactly the agreed set (220 and 200 in reading, 210, 300 and 120 in the style editor,
 // settings-2), each at its width. A state that measures no card or no row fails, so a selector that stopped matching
-// cannot pass. Each state is shot at 2x into experiments/pdf-bilingual/out/settings/, and the page at 320 px and at
+// cannot pass. Each state is shot at 2x into lab/pdf/out/settings/, and the page at 320 px and at
 // 200 % zoom, measured there too: no horizontal scroll, the sidebar above the column below 640 px, nothing past its
 // card, a trail that moved under its words still ending on the trailing edge. The frame, the sidebar and the column one
 // group (Task 103b): centred at 1300 px, the interface language at the sidebar's foot; from the window's edge at 1000
@@ -25,7 +25,7 @@ const E2E = fileURLToPath(new URL('../', import.meta.url))
 const SRC = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
 const EXT = `${E2E}.ext-settings-align`
 const PROFILE = `${E2E}.profile-settings-align`
-const OUT = fileURLToPath(new URL('../../../experiments/pdf-bilingual/out/settings/', import.meta.url))
+const OUT = fileURLToPath(new URL('../../../lab/pdf/out/settings/', import.meta.url))
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 /** The user message carries JSON.stringify(segments) (src/providers/prompt.ts): the longest valid array from the end (local-endpoint.mjs) */

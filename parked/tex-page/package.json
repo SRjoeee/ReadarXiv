@@ -1,0 +1,14 @@
+{
+  "name": "readarxiv-tex-page",
+  "private": true,
+  "description": "The TeX page of Read arXiv, parked (../README.md): BusyTeX in the browser with our patches, the build and checks of the site that serves it",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "setup": "node setup.mjs",
+    "serve": "node spikes/serve-live.mjs"
+  },
+  "dependencies": {
+    "texlyre-busytex": "^1.4.0"
+  }
+}

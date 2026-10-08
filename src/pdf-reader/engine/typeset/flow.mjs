@@ -1,5 +1,5 @@
 // Each translated unit's leading along the paper, and where a stretch at the leading's floor still runs long, its face
-// (records/typesetting.md in experiments/pdf-bilingual: the rule chosen on 2026-10-01).
+// (parked/lab/records/typesetting.md: the rule chosen on 2026-10-01).
 const clamp = (x, [lo, hi]) => Math.min(hi, Math.max(lo, x))
 
 /**

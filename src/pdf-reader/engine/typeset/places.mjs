@@ -1,4 +1,4 @@
-// Where a compile sets each unit against where the original does (records/typesetting.md in experiments/pdf-bilingual):
+// Where a compile sets each unit against where the original does (parked/lab/records/typesetting.md):
 // pages; drift — where each unit starts in reading order, as page, column and height down the text block, against
 // where the original starts it, in columns (one column is half a page in two columns, a page in one), and where it ends
 // against where the original ends it; block size — a
