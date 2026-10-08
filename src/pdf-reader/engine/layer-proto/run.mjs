@@ -165,24 +165,24 @@ export function fillPage(units, P, running = null, onFilled = () => {}) {
     const short = p.fillLead > target + band + 1e-9 || p.fillLead >= p.fillTop - 1e-9
     let full = !short
     if (short && P.cjk) {
-      let t = 0
-      for (let k = Math.round(track / 0.01); k >= 1; k--) {
-        const st2 = { ...st, track: r3(st.track + k * 0.01) }
-        const l2 = at(p, st2)
-        if (l2) { st = st2; l = l2; t = k * 0.01; break }
-      }
-      full = t < track - 1e-9
+      // (the most tracking that still sets it: halving, as a wider tracking holds no more on a line)
+      const K = Math.round(track / 0.01), st2 = k => ({ ...st, track: r3(st.track + k * 0.01) })
+      let ok = 0, no = K + 1, lk = null
+      while (no - ok > 1) { const k = (ok + no) >> 1, l2 = at(p, st2(k)); if (l2) { ok = k; lk = l2 } else no = k }
+      if (ok) { st = st2(ok); l = lk }
+      full = ok < K
     }
     filled.push({ p, st, l, full })
   }
-  // the page's one size: every body unit's, where none is full yet
+  // the page's one size: every body unit's, where none is full yet; the largest at which every one is still set whole,
+  // by halving (a larger size sets no more), a unit that fails ending the try
   const grown = filled.filter(f => EVEN_KINDS.has(f.p.unit.kind))
   if (size > 1 && grown.length && grown.every(f => !f.full)) {
-    for (let k = Math.round((size - 1) / P.step); k >= 1; k--) {
-      const scale = r3(1 + k * P.step)
-      const ls = grown.map(f => at(f.p, { ...f.st, scale, knob: 'grow' }))
-      if (ls.every(Boolean)) { grown.forEach((f, i) => { f.st = { ...f.st, scale, knob: 'grow' }; f.l = ls[i] }); break }
-    }
+    const scaleOf = k => r3(1 + k * P.step)
+    const all = k => { const ls = []; for (const f of grown) { const l = at(f.p, { ...f.st, scale: scaleOf(k), knob: 'grow' }); if (!l) return null; ls.push(l) } return ls }
+    let ok = 0, no = Math.round((size - 1) / P.step) + 1, best = null
+    while (no - ok > 1) { const k = (ok + no) >> 1, ls = all(k); if (ls) { ok = k; best = ls } else no = k }
+    if (ok) grown.forEach((f, i) => { f.st = { ...f.st, scale: scaleOf(ok), knob: 'grow' }; f.l = best[i] })
   }
   for (const { p, st, l } of filled) {
     const keep = p.layout.extents
