@@ -2,15 +2,16 @@
 // The layer lab's page (serve.mjs serves it): a fixture picked by paper and language; two panes, each Original, the
 // quick view (`v0`: the instant layer as the integrated engine draws it, the hybrid over the paper's add-on with D,
 // proto.mjs) or Final, pages kept in step; page jump (← and →), zoom, one page or continuous scroll; the quick view's
-// choices and D's parameters; notes kept per fixture in this browser (localStorage) and exported as JSON. The early
-// engine (Task 11's from-scratch entry, layer.mjs; retired by the 10-06 change of direction) is off the menus, and an old
-// link's `layer` still opens it, with no settings of its own. Its words are strings.mjs's, in Chinese (the default) or
-// English. The state is in the address (#f=<fixture>&a=<view>&b=<view>&p=<page>&z=<zoom>&s=<scroll>, the quick view's:
-// v0tex, v0rm, v0=roles|prototype, fill=D|B, band, track, size; the page's: ui=en, panel=0) so that a view can be
-// reopened or scripted.
+// choices and the layout rule set (rules-panel.mjs: edited, compared, saved and loaded); notes kept per fixture in this
+// browser (localStorage) and exported as JSON. The early engine (Task 11's from-scratch entry, layer.mjs; retired by the
+// 10-06 change of direction) is off the menus, and an old link's `layer` still opens it, with no settings of its own. Its
+// words are strings.mjs's, in Chinese (the default) or English. The state is in the address (#f=<fixture>&a=<view>&b=<view>&p=<page>&z=<zoom>&s=<scroll>, the quick view's:
+// v0tex, v0rm, v0=roles|prototype, rules=<git ref> (the rule set read from that commit or branch); the page's: ui=en,
+// panel=0) so that a view can be reopened or scripted. Unsaved edits to the rule set are not in the address.
 import * as pdfjs from 'pdfjs-dist'
 import { CAPS_SCALE, drawCopy, drawText, LayerRun, loadEngine, loadLayout, svgOf } from './layer.mjs'
 import { loadProto, ProtoRun } from './proto.mjs'
+import { createRulesPanel } from './rules-panel.mjs'
 import { ENDONYMS, missingKeys, STRINGS, UI_LANGS } from './strings.mjs'
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
@@ -19,10 +20,6 @@ const ASSETS = { cMapUrl: '/pdfjs/cmaps/', cMapPacked: true, standardFontDataUrl
  *  opened on it */
 const VIEWS = ['original', 'v0', 'final']
 const KNOWN = [...VIEWS, 'layer']
-/** D's parameters as the engine defaults them (run.mjs openProto, P.adaptiveFill): shown on the sliders; one left at its
- *  default is not passed, so the engine's own default holds */
-const D_DEFAULTS = { band: 0.05, track: 0.05, size: 1.1 }
-const D_RANGE = { band: [0, 0.5], track: [0, 0.2], size: [1, 1.5] }
 const NOTES = 'layer-lab:notes:'
 const PT = 96 / 72
 /** the gap the scroller keeps above its first page, and above a page it is brought to (lab.css .scroller's padding) */
@@ -59,14 +56,6 @@ function t(key, ...args) {
 // ---- state: the address first, then what this browser last had
 const saved = store.get('layer-lab:ui', {})
 const hash = Object.fromEntries(new URLSearchParams(location.hash.slice(1)))
-/** a D parameter from the address or this browser: a number in its range other than the default, else null */
-const dParam = k => {
-  const v = hash[k] ?? saved.v0d?.[k]
-  const n = Number(v)
-  if (v == null || v === '' || !Number.isFinite(n)) return null
-  const c = Math.max(D_RANGE[k][0], Math.min(D_RANGE[k][1], n))
-  return Math.abs(c - D_DEFAULTS[k]) < 1e-9 ? null : c
-}
 const state = {
   fixture: hash.f ?? saved.fixture ?? null,
   views: [hash.a ?? saved.a ?? 'v0', hash.b ?? saved.b ?? 'original'].map(v => (KNOWN.includes(v) ? v : 'original')),
@@ -80,29 +69,18 @@ const state = {
   v0removal: (hash.v0rm ?? saved.v0removal ?? '1') !== '0',
   /** the v0 view as the hybrid, each unit the layout file locates whole by its geometry (#v0tex=0: v0 alone) */
   v0tex: (hash.v0tex ?? saved.v0tex ?? '1') !== '0',
-  /** v0's fill: D, adaptive fill (the built-in rule set's), or B (#fill=B: an adaptiveFill of null, the script's leading on the
-   *  original's pitch alone) */
-  v0fill: (hash.fill ?? saved.v0fill) === 'B' ? 'B' : 'D',
-  /** D's parameters over the engine's defaults (null: its default) */
-  v0d: { band: dParam('band'), track: dParam('track'), size: dParam('size') },
   /** the interface's language (#ui=en; Chinese by default) and whether the settings are shown (#panel=0: hidden) */
   ui: (hash.ui ?? saved.ui) === 'en' ? 'en' : 'zh',
   panel: (hash.panel ?? saved.panel ?? '1') !== '0',
 }
 L = STRINGS[state.ui]
-/** the layout rule set v0 is opened with: a copy of the engine's built-in one, its adaptive fill (every script's) the
- *  panel's choice: B (none), or D with the sliders' parameters over its own. Null while the engine is not there */
-function v0Rules() {
-  if (!proto?.ready) return null
-  const set = structuredClone(proto.R.BUILTIN_RULES)
-  const over = Object.fromEntries(Object.entries(state.v0d).filter(([, v]) => v != null))
-  for (const rules of Object.values(set.scripts)) rules.adaptiveFill = state.v0fill === 'B' ? null : { ...rules.adaptiveFill, ...over }
-  return set
-}
+/** the layout rule set v0 is opened with: the panel's (the worktree's file, or what the panel loaded, and the edits made
+ *  to it). Null while there is none, and v0 then takes the engine's built-in set */
+const v0Rules = () => rules?.set() ?? null
 function remember() {
-  store.set('layer-lab:ui', { fixture: state.fixture, a: state.views[0], b: state.views[1], zoom: state.zoom, scroll: state.scroll, sync: state.sync, v0faces: state.v0faces, v0removal: state.v0removal ? '1' : '0', v0tex: state.v0tex ? '1' : '0', v0fill: state.v0fill, v0d: state.v0d, ui: state.ui, panel: state.panel ? '1' : '0' })
-  const q = new URLSearchParams({ f: state.fixture ?? '', a: state.views[0], b: state.views[1], p: String(state.page), z: state.zoom, s: state.scroll, v0: state.v0faces, v0rm: state.v0removal ? '1' : '0', v0tex: state.v0tex ? '1' : '0', fill: state.v0fill })
-  for (const [k, v] of Object.entries(state.v0d)) if (v != null && state.v0fill === 'D') q.set(k, String(v))
+  store.set('layer-lab:ui', { fixture: state.fixture, a: state.views[0], b: state.views[1], zoom: state.zoom, scroll: state.scroll, sync: state.sync, v0faces: state.v0faces, v0removal: state.v0removal ? '1' : '0', v0tex: state.v0tex ? '1' : '0', ui: state.ui, panel: state.panel ? '1' : '0' })
+  const q = new URLSearchParams({ f: state.fixture ?? '', a: state.views[0], b: state.views[1], p: String(state.page), z: state.zoom, s: state.scroll, v0: state.v0faces, v0rm: state.v0removal ? '1' : '0', v0tex: state.v0tex ? '1' : '0' })
+  if (rules?.from()?.kind === 'ref') q.set('rules', rules.from().ref)
   if (state.ui === 'en') q.set('ui', 'en')
   if (!state.panel) q.set('panel', '0')
   history.replaceState(null, '', `#${q}`)
@@ -126,9 +104,10 @@ function applyStrings() {
 applyStrings()
 document.documentElement.dataset.panel = state.panel ? 'open' : 'closed'
 $('g-v0').hidden = !state.views.includes('v0')
+$('g-rules').hidden = true
 
 // ---- what is open: the fixture, its documents, its layout and its layer
-let engine = null, proto = null, protoCommit = null, fixtures = [], open = null, opening = 0
+let engine = null, proto = null, protoCommit = null, rules = null, fixtures = [], open = null, opening = 0
 const fetchBytes = async url => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return new Uint8Array(await r.arrayBuffer()) }
 /** a document closed: PDF.js 6 closes it through its loading task */
 const closeDoc = doc => { doc?.loadingTask.destroy() }
@@ -169,6 +148,7 @@ async function openFixture(name) {
   showInfo()
   fillViews()
   setV0Controls()
+  rules?.setTarget(f.target)
   loadNotes()
   showInspect()
   await Promise.all(panes.map((p, i) => p.show(state.views[i])))
@@ -322,12 +302,12 @@ function headOf(kind) {
   const warn = text => h('span', { class: 'not-ready' }, icon('alert'), text)
   if (kind === 'original') return [t('headOriginal')]
   if (kind === 'final') return [!f.final ? t('headFinalNone') : f.final.ok ? `${t('headFinalOk', f.final.strategy, f.final.typeset)}${finalOlder() ? ` · ${t('finalOlder')}` : ''}` : warn(t('headFinalFailed'))]
-  if (kind === 'v0') return proto?.ready ? [t('headV0', { fill: state.v0fill, tex: state.v0tex, removal: state.v0removal, faces: state.v0faces })] : [warn(t('headNotLoaded'))]
+  if (kind === 'v0') return proto?.ready ? [t('headV0', { fill: rules?.resolved()?.params.adaptiveFill === null ? 'B' : 'D', tex: state.v0tex, removal: state.v0removal, faces: state.v0faces })] : [warn(t('headNotLoaded'))]
   if (!open.layer) return [warn(engine.ready ? t('headNotDrawn') : t('headNotReady'))]
   return []
 }
 /** the quick view's settings, while a pane shows it */
-function showGroups() { $('g-v0').hidden = !panes.some(p => p.kind === 'v0') }
+function showGroups() { const v0 = panes.some(p => p.kind === 'v0'); $('g-v0').hidden = !v0; $('g-rules').hidden = !v0 || !rules }
 /** the open fixture's final was compiled from the lab's own fixture, whose translation predates the gate's cut */
 const finalOlder = () => open?.f.final?.from === 'finals'
 /** each pane's menu: the views offered, the retired one too where the pane shows it; the final's entry says when its
@@ -413,6 +393,7 @@ function tech(name, rows) {
 const engineRows = () => [
   [t('techEngine'), info.proto ? t('techEngine1', info.proto.root === 'this worktree' ? (info.branch ?? info.proto.root) : info.proto.root, protoCommit ?? '-', info.proto.remover ?? '-') : '-', 'mono'],
   [t('techInputs'), t('techInputs1', info.inputs ?? {}), 'mono'],
+  rules?.from() ? [t('rules.current'), `${t('rules.setFrom', rules.from().label, rules.from().version)}${rules.dirty() ? ` · ${t('rules.src.edit')}` : ''}`, 'mono'] : null,
 ]
 
 /** the v0 view's page in the panel: its units by geometry, the text removal and what it cost; D's fills, the steps and
@@ -636,7 +617,7 @@ for (const r of document.querySelectorAll('input[name="ui"]')) {
     remember()
     setV0Controls()
     if (!open) return
-    showInfo(); showPageCount(); showInspect(); showSaved()
+    showInfo(); showPageCount(); showInspect(); showSaved(); rules?.render()
     for (const p of panes) { p.head(); if (!p.doc) p.build() }
     v0Summary(state.page)
   })
@@ -646,28 +627,23 @@ for (const r of document.querySelectorAll('input[name="ui"]')) {
 const info = (await fetchJson('/api/info')) ?? {}
 engine = await loadEngine()
 proto = await loadProto()
-// the v0 view's choices (the panel's first group): the fill and D's parameters, the hybrid, the add-on and the faces;
-// each change opens v0 again and draws its panes again. A slider says its value as it moves and applies it when it
-// rests (one opening a key press, not one a step)
 protoCommit = info.proto?.commit ? `${info.proto.commit.slice(0, 8)}${info.proto.dirty ? '+' : ''}` : null
-const sliders = { band: $('v0-band'), track: $('v0-track'), size: $('v0-size') }
-const shown = { band: v => `${Math.round(v * 100)}%`, track: v => `${v.toFixed(2)} ${t('unitEm')}`, size: v => `${v.toFixed(2)}×` }
-function sliderShows(k, v) {
-  const input = sliders[k], out = $(`v0-${k}-out`), [lo, hi] = D_RANGE[k]
-  out.textContent = shown[k](v)
-  out.toggleAttribute('data-default', Math.abs(v - D_DEFAULTS[k]) < 1e-9)
-  input.setAttribute('aria-valuetext', shown[k](v))
-  input.style.setProperty('--p', `calc(8px + (100% - 16px) * ${(v - lo) / (hi - lo)})`)
-  input.style.setProperty('--d', `calc(8px + (100% - 16px) * ${(D_DEFAULTS[k] - lo) / (hi - lo)})`)
+/** the rules panel: the layout rule set the quick view draws with (rules-panel.mjs). Its names for the faces come from the
+ *  engine's face catalog: the CJK groups (those with all four weights) and the faces to suggest */
+if (proto.ready) {
+  let catalog = { groups: [], faces: [], families: [] }
+  try {
+    const { FACES, ENGLISH_FAMILIES } = await import('/proto-engine/font-roles.mjs')
+    const ids = Object.keys(FACES)
+    catalog = { groups: ids.filter(id => id.endsWith('-light')).map(id => id.slice(0, -6)).filter(g => ['light', 'regular', 'semibold', 'bold'].every(w => ids.includes(`${g}-${w}`))), faces: ids, families: [...ENGLISH_FAMILIES] }
+  } catch {}
+  rules = createRulesPanel({ root: $('rules-root'), h, icon, t, R: proto.R, names: ENDONYMS, catalog, onChange: () => { if (open) again() } })
+  await rules.start(hash.rules)
 }
+// the v0 view's choices (the panel's first group): the hybrid, the add-on and the faces; each change opens v0 again and
+// draws its panes again
 function setV0Controls() {
   const layoutHere = !open || open.f.files.includes('layout.json')
-  for (const r of document.querySelectorAll('input[name="v0-fill"]')) r.checked = r.value === state.v0fill
-  $('fill-hint').textContent = t(state.v0fill === 'B' ? 'fillHintB' : 'fillHintD')
-  $('d-params').toggleAttribute('data-open', state.v0fill === 'D')
-  $('d-params').inert = state.v0fill !== 'D'
-  for (const [k, input] of Object.entries(sliders)) { const v = state.v0d[k] ?? D_DEFAULTS[k]; input.value = String(v); sliderShows(k, v) }
-  $('v0-defaults').disabled = !Object.values(state.v0d).some(v => v != null)
   for (const [id, on, needsLayout, desc] of [['v0-tex', state.v0tex, true, 'texDesc'], ['v0-removal', state.v0removal, true, 'removalDesc'], ['v0-faces', state.v0faces === 'prototype', false, 'facesDesc']]) {
     const off = needsLayout && !layoutHere
     $(id).disabled = off
@@ -689,23 +665,6 @@ setV0Controls()
 $('v0-faces').addEventListener('click', () => { state.v0faces = state.v0faces === 'prototype' ? 'roles' : 'prototype'; again() })
 $('v0-removal').addEventListener('click', () => { if (!$('v0-removal').disabled) { state.v0removal = !state.v0removal; again() } })
 $('v0-tex').addEventListener('click', () => { if (!$('v0-tex').disabled) { state.v0tex = !state.v0tex; again() } })
-for (const r of document.querySelectorAll('input[name="v0-fill"]')) r.addEventListener('change', () => { if (r.checked) { state.v0fill = r.value === 'B' ? 'B' : 'D'; again() } })
-const sliderTimers = {}
-for (const [k, input] of Object.entries(sliders)) {
-  input.addEventListener('input', () => sliderShows(k, Number(input.value)))
-  input.addEventListener('change', () => {
-    clearTimeout(sliderTimers[k])
-    sliderTimers[k] = setTimeout(() => {
-      const n = Number(input.value)
-      const v = !Number.isFinite(n) ? D_DEFAULTS[k] : Math.max(D_RANGE[k][0], Math.min(D_RANGE[k][1], n))
-      const next = Math.abs(v - D_DEFAULTS[k]) < 1e-9 ? null : v
-      if (next === state.v0d[k]) return
-      state.v0d[k] = next
-      again()
-    }, 350)
-  })
-}
-$('v0-defaults').addEventListener('click', () => { if (Object.values(state.v0d).some(v => v != null)) { state.v0d = { band: null, track: null, size: null }; again() } })
 try { const P = await import('/src/pdf-reader/engine/layer/pieces.mjs'); if (P.trText) trTextOf = P.trText } catch {}
 fixtures = (await fetchJson('/api/fixtures')) ?? []
 window.__lab = { state, panes, engine: () => engine, open: () => open, CAPS_SCALE }

@@ -20,6 +20,7 @@
   <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
   <symbol id="i-panel" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></symbol>
   <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
 </svg>
 
 <header class="bar">
@@ -69,39 +70,17 @@
     <section class="group" id="g-v0" aria-labelledby="g-v0-title" hidden>
       <h2 id="g-v0-title" data-t="views.v0"></h2>
       <p class="note warn" id="v0-engine" hidden></p>
-      <div class="field">
-        <span class="label" id="fill-label" data-t="fill"></span>
-        <div class="segment wide" role="radiogroup" aria-labelledby="fill-label" aria-describedby="fill-hint">
-          <label><input type="radio" name="v0-fill" value="D"><span data-t="fillD"></span></label>
-          <label><input type="radio" name="v0-fill" value="B"><span data-t="fillB"></span></label>
-        </div>
-        <p class="hint" id="fill-hint"></p>
-      </div>
-      <div class="reveal" id="d-params"><div>
-        <div class="sliders">
-          <div class="slider">
-            <label for="v0-band" data-t="band"></label><output id="v0-band-out" for="v0-band"></output>
-            <input type="range" id="v0-band" min="0" max="0.5" step="0.01" aria-describedby="v0-band-hint">
-            <span class="hint" id="v0-band-hint" data-t="bandHint"></span>
-          </div>
-          <div class="slider">
-            <label for="v0-track" data-t="track"></label><output id="v0-track-out" for="v0-track"></output>
-            <input type="range" id="v0-track" min="0" max="0.2" step="0.01">
-          </div>
-          <div class="slider">
-            <label for="v0-size" data-t="size"></label><output id="v0-size-out" for="v0-size"></output>
-            <input type="range" id="v0-size" min="1" max="1.5" step="0.01" aria-describedby="v0-size-hint">
-            <span class="hint" id="v0-size-hint" data-t="sizeHint"></span>
-          </div>
-          <div class="reset"><button id="v0-defaults" class="btn text sm" type="button" data-t="resetDefaults"></button></div>
-        </div>
-      </div></div>
       <div class="toggles">
         <div class="toggle"><label for="v0-tex" data-t="tex"></label><button id="v0-tex" class="switch" type="button" role="switch" aria-checked="false" aria-describedby="v0-tex-desc"></button><p class="hint" id="v0-tex-desc" data-t="texDesc"></p></div>
         <div class="toggle"><label for="v0-removal" data-t="removal"></label><button id="v0-removal" class="switch" type="button" role="switch" aria-checked="false" aria-describedby="v0-removal-desc"></button><p class="hint" id="v0-removal-desc" data-t="removalDesc"></p></div>
         <div class="toggle"><label for="v0-faces" data-t="faces"></label><button id="v0-faces" class="switch" type="button" role="switch" aria-checked="false" aria-describedby="v0-faces-desc"></button><p class="hint" id="v0-faces-desc" data-t="facesDesc"></p></div>
       </div>
       <div class="now" id="v0-summary"></div>
+    </section>
+
+    <section class="group" id="g-rules" aria-labelledby="g-rules-title" hidden>
+      <h2 id="g-rules-title" data-t="rules.title"></h2>
+      <div id="rules-root"></div>
     </section>
 
     <section class="group" id="g-inspect" aria-labelledby="g-inspect-title" hidden>

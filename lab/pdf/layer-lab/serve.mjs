@@ -3,8 +3,9 @@
 // layout. Pick a paper and a language; show any two of Original (arXiv's PDF), the quick view (the instant layer as the
 // engine draws it: layer-lab/proto.mjs) and Final (a compiled translation already made beside the fixture, which the lab
 // only reads: nothing here compiles) side by side, pages in step (an old link's `layer` still opens the retired early
-// engine, layer-lab/layer.mjs); set the quick view's choices and D's parameters; keep notes. A static server on
-// 127.0.0.1 and nothing else: the page (index.html, lab.mjs, lab.css, strings.mjs, layer.mjs, proto.mjs) and the
+// engine, layer-lab/layer.mjs); set the quick view's choices, and edit, save and load the layout rule set; keep notes. A
+// static server on 127.0.0.1 with the rules routes (rules-api.mjs) and nothing else: the page (index.html, lab.mjs, lab.css,
+// strings.mjs, rules-model.mjs, rules-panel.mjs, layer.mjs, proto.mjs) and the
 // extension's tokens and controls it is drawn with (/styles/…, src/styles), the engine's modules as they are
 // (/src/pdf-reader/engine/… and /proto-engine/…, every import relative), PDF.js's pinned modern build from the
 // repository's node_modules (/pdfjs/…, by the page's import map), the role table's faces from the local font folder
@@ -22,6 +23,11 @@
 //   LAYER_FINALS    the compiled finals where the fixtures have none; default data/layer-fixtures
 // LAYER_PROTO names another worktree whose engine the v0 view runs (default this one's); LAYER_ENTRY serves another file
 // at layer/layer.mjs (a stand-in for the Layer view).
+// The rule set: the quick view draws with the set the page holds (rules-panel.mjs), which a save writes to this worktree's
+// src/pdf-reader/engine/rules/layout-rules.json, validated and canonical, by this worktree's own rules module whatever
+// LAYER_PROTO names. LAYER_RULES_STAGING and LAYER_RULES_PRODUCTION give the URL of the web's current-set route for each
+// environment (https://…/api/v1/rules/s1); the page loads and compares the published set through them, and shows one that
+// was given no URL, or whose route answers 404 or is not there, as unavailable. The lab asks nothing else of the network.
 // The text-removed PDF: the paper's add-on, one a paper whatever the target, made from its layout file alone as the
 // server makes it (layout/addon.mjs paperAddon, the same function the gate's shipped half calls) and read as a reader
 // reads it: arXiv's PDF with the add-on appended, one document, and its manifest (GET /api/addon/<fixture>, GET
@@ -35,6 +41,7 @@ import { extname, join, normalize, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { deflateSync, inflateRawSync, inflateSync, constants as Z } from 'node:zlib'
 import { geometryFile, PROTO_GEOMETRY } from '../spikes/layer-gate/ref.mjs'
+import { createRulesApi, RULES_PATH } from './rules-api.mjs'
 
 const here = new URL('.', import.meta.url).pathname
 const root = resolve(here, '..')
@@ -51,7 +58,7 @@ const PDFJS = resolve(REPO, 'node_modules/pdfjs-dist')
 const ZOD = resolve(REPO, 'node_modules/zod')
 const ENTRY = process.env.LAYER_ENTRY ? resolve(process.env.LAYER_ENTRY) : null
 const PORT = Number(process.argv.find(a => a.startsWith('--port='))?.slice(7) ?? 8093)
-const PAGE_FILES = new Set(['index.html', 'lab.mjs', 'lab.css', 'strings.mjs', 'layer.mjs', 'proto.mjs'])
+const PAGE_FILES = new Set(['index.html', 'lab.mjs', 'lab.css', 'strings.mjs', 'rules-model.mjs', 'rules-panel.mjs', 'layer.mjs', 'proto.mjs'])
 /** the extension's style sheets the page is drawn with: its tokens (both themes) and its shared controls */
 const STYLES = resolve(REPO, 'src/styles')
 const STYLE_FILES = new Set(['tokens.css', 'controls.css'])
@@ -75,6 +82,15 @@ const HYPH = new Map()
 /** v0's geometry of a fixture's paper: its target's own, else another target's, from the gate's own folder of them
  *  (layer-gate/ref.mjs: LAYER_GEOMETRY or its default); null for a name that is no fixture's */
 const geometryOf = name => { try { return geometryFile(name) } catch { return null } }
+/** the web's current-set route by environment (an http or https URL; any other value is ignored with a word) */
+const publishedUrl = name => {
+  const v = process.env[name]
+  if (!v) return null
+  try { if (/^https?:$/.test(new URL(v).protocol)) return v } catch {}
+  console.warn(`layer lab: ${name} is not an http(s) URL, ignored`)
+  return null
+}
+const PUBLISHED = { staging: publishedUrl('LAYER_RULES_STAGING'), production: publishedUrl('LAYER_RULES_PRODUCTION') }
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8', '.pdf': 'application/pdf', '.otf': 'font/otf', '.ttf': 'font/ttf', '.wasm': 'application/wasm',
@@ -184,11 +200,18 @@ const info = () => ({
   commit: git(REPO, ['rev-parse', 'HEAD']), branch: git(REPO, ['rev-parse', '--abbrev-ref', 'HEAD']), subject: git(REPO, ['log', '-1', '--format=%s']), entry: ENTRY ? 'stand-in' : 'engine',
   proto: { root: PROTO_ROOT === REPO ? 'this worktree' : PROTO_ROOT, commit: git(PROTO_ROOT, ['rev-parse', 'HEAD']), dirty: !!git(PROTO_ROOT, ['status', '--porcelain', '--untracked-files=no', '--', 'src/pdf-reader/engine']), remover: removerDigest() },
   inputs: { fixtures: rel(FIXTURES), records: rel(RECORDS), geometry: rel(PROTO_GEOMETRY), finals: rel(FINALS) },
+  rules: { path: RULES_PATH, staging: !!PUBLISHED.staging, production: !!PUBLISHED.production },
 })
 
+const rulesApi = createRulesApi({ root: REPO, origin: () => `http://127.0.0.1:${server.address().port}`, rules: await import(pathToFileURL(join(ENGINE, 'rules/layout.mjs')).href), published: PUBLISHED })
 const server = createServer((req, res) => {
   let path
   try { path = decodeURIComponent(new URL(req.url, 'http://127.0.0.1').pathname) } catch { return send(res, 400, 'bad path') }
+  // the rules routes: a save is the one POST the lab takes
+  if (path === '/api/rules' || path === '/api/rules/published') {
+    rulesApi.handle(req, res).then(handled => { if (!handled) send(res, 404, 'not found') }, e => send(res, 500, String(e?.stack ?? e).slice(0, 2000)))
+    return
+  }
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'GET only')
   // the paper's add-on: its manifest (made first where none is kept), and the document a reader opens
   const ad = /^\/api\/addon\/([A-Za-z0-9._-]+)$/.exec(path)

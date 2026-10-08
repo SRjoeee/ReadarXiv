@@ -180,17 +180,8 @@ html[data-panel="closed"] .capsule { left: 50%; }
 .note { margin: 0 0 14px; font-size: 12px; line-height: 1.45; }
 .note.warn { display: flex; gap: 6px; color: var(--ink); overflow-wrap: anywhere; }
 .note.warn::before { content: ""; flex: none; width: 6px; height: 6px; margin-top: 6px; border-radius: 999px; background: var(--danger); }
-.field { display: flex; flex-direction: column; gap: 6px; }
-.field .hint { margin-top: 2px; }
 
-/* D's parameters: a name, its value and unit live at the trailing edge, the track under them, its default marked */
-.sliders { display: grid; gap: 16px; padding-top: 18px; }
-.slider { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; row-gap: 4px; column-gap: 12px; }
-.slider > label { font-size: 13px; line-height: 18px; cursor: pointer; }
-.slider > output { color: var(--ink); font-size: 12.5px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.slider > output[data-default] { color: var(--ink-2); font-weight: 400; }
-.slider > input, .slider > .hint { grid-column: 1 / -1; }
-.slider > .hint { margin-top: -2px; }
+/* a range: the track filled to the value, the value it was loaded at marked (--p and --d are set by the page) */
 input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 20px; margin: 0; background: none; cursor: pointer; --p: 0%; --d: 0%; }
 input[type="range"]::-webkit-slider-runnable-track {
   height: 4px; border-radius: 999px;
@@ -204,15 +195,11 @@ input[type="range"]::-webkit-slider-thumb {
 }
 input[type="range"]:active::-webkit-slider-thumb { scale: 1.1; }
 input[type="range"]:focus-visible { outline-offset: 2px; border-radius: 6px; }
-/* (the reveal clips what it holds: room enough round its contents for a focus ring) */
-#d-params > div { margin: 0 -16px -4px; padding: 0 16px 4px; }
-.reset { display: flex; justify-content: flex-end; margin: -8px -10px 0 0; }
 .btn.text:disabled { color: var(--ink-3); background: none; cursor: default; }
 .btn:disabled:active { scale: none; }
 
 /* the switches: a name and its switch on one line, what it does under the name */
-.toggles { display: grid; gap: 14px; margin-top: 20px; }
-.toggles:first-child { margin-top: 0; }
+.toggles { display: grid; gap: 14px; }
 .toggle { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 16px; row-gap: 2px; }
 .toggle > label { font-size: 13px; line-height: 18px; cursor: pointer; }
 .toggle > .switch { grid-row: 1; grid-column: 2; }
@@ -259,6 +246,91 @@ html[data-pointer] textarea:focus-visible, html[data-pointer] .page-field:focus-
 .foot-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; }
 .keys { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-2); font-size: 12px; }
 .keys .kbd:last-of-type { margin-inline-end: 4px; }
+
+/* ----- the rules panel: where the set came from and how to load another, then the fields by group, what differs, the save
+   ----- */
+#g-rules { --edit: oklch(0.72 0.15 80); }
+.rules-head { display: grid; gap: 12px; }
+.rules-head .facts { margin: 0; }
+.rules-head .row { margin-top: 0; }
+.row.tight { justify-content: space-between; gap: 8px; }
+.rules-head .row .btn.text { margin-inline-end: -10px; }
+.loads { display: grid; gap: 6px; }
+.load-buttons { display: flex; flex-wrap: wrap; gap: 2px; margin-inline: -10px; }
+.ref-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.ref-row .input { height: 28px; border-radius: 7px; font-size: 12.5px; }
+.rules-head .note { margin: 0; }
+.note[data-kind="warn"]:not(.warn) { display: flex; gap: 6px; color: var(--ink); overflow-wrap: anywhere; }
+.note[data-kind="warn"]:not(.warn)::before { content: ""; flex: none; width: 6px; height: 6px; margin-top: 6px; border-radius: 999px; background: var(--danger); }
+.note[data-kind="ok"] { color: var(--ink-2); }
+.rules-scope-hint { margin: 16px 0 6px; }
+
+.rgroup { border-top: 0.5px solid var(--chrome-line); }
+.rgroup:last-of-type { border-bottom: 0.5px solid var(--chrome-line); }
+.rgroup > summary {
+  display: flex; align-items: center; gap: 6px; min-height: 36px; margin-inline: -4px; padding-inline: 4px 6px; border-radius: 6px; font-size: 12.5px; font-weight: 600;
+  line-height: 17px; cursor: pointer; list-style: none; transition: background-color 150ms ease-out;
+}
+.rgroup > summary::-webkit-details-marker { display: none; }
+.rgroup > summary .ic { width: 12px; height: 12px; color: var(--ink-2); transition: rotate 150ms var(--ease); }
+.rgroup[open] > summary .ic { rotate: 90deg; }
+@media (hover: hover) { .rgroup > summary:hover { background: var(--fill); } }
+.badge { margin-inline-start: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--ink); color: var(--chrome); font: 600 11px/18px var(--font); text-align: center; font-variant-numeric: tabular-nums; }
+
+.rule { display: grid; gap: 8px; padding: 12px 0 14px; border-top: 0.5px solid var(--chrome-line); }
+.rule-head { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; min-height: 26px; }
+.rule-name { font-size: 12px; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+.rule-value { color: var(--ink); font-size: 12.5px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rule[data-source="edit"] .rule-value { color: var(--ink); }
+.rule-undo { height: 26px; min-width: 26px; border-radius: 6px; }
+.rule-undo .ic { width: 14px; height: 14px; }
+.rule-undo:disabled { visibility: hidden; }
+.rule > .hint { font-size: 11.5px; }
+.rule-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 20px; color: var(--ink-2); font-size: 11.5px; line-height: 16px; }
+.rule-source { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.rule[data-source="edit"] .rule-source { color: var(--ink); font-weight: 500; }
+.rule[data-source="edit"] .rule-source::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 999px; background: var(--edit); }
+.rule-scope { display: inline-flex; flex: none; align-items: center; gap: 8px; cursor: pointer; }
+
+.ctl { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ctl > input[type="range"] { flex: 1 1 auto; min-width: 0; }
+.ctl > .switch, .ctl.obj > .switch { flex: none; }
+.ctl.obj { flex-direction: column; align-items: stretch; gap: 10px; }
+.ctl.obj > .switch { align-self: flex-start; }
+.ctl .segment { flex: 1 1 auto; }
+.ctl .input { height: 28px; border-radius: 7px; font-size: 12.5px; }
+.ctl .input.mono { font-size: 12px; }
+.members { display: grid; gap: 14px; padding-inline-start: 12px; border-inline-start: 0.5px solid var(--chrome-line); }
+.member { display: grid; gap: 6px; }
+.member-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12px; }
+.member > .hint { font-size: 11.5px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip {
+  position: relative; display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 9px; border-radius: 7px; background: var(--well); color: var(--ink);
+  font-size: 12px; line-height: 16px; cursor: pointer; transition: background-color 150ms ease-out, color 150ms ease-out;
+}
+button.chip { padding-inline: 7px 9px; }
+button.chip .ic { width: 12px; height: 12px; color: var(--ink-2); }
+button.chip:disabled { padding-inline: 9px; cursor: default; }
+label.chip:has(:checked) { background: var(--ink); color: var(--chrome); }
+label.chip input { position: absolute; inset: 0; opacity: 0; margin: 0; pointer-events: none; }
+label.chip:has(:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (hover: hover) { button.chip:not(:disabled):hover { background: var(--fill); } }
+
+#rules-compare { margin-top: 16px; }
+.compare { display: grid; gap: 14px; margin-top: 10px; }
+.diff h3 { margin: 0 0 8px; }
+.diff-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.diff-list li { display: grid; gap: 1px; }
+.diff-list .path { color: var(--ink); overflow-wrap: anywhere; }
+.diff-list .change { color: var(--ink-2); overflow-wrap: anywhere; }
+.compare .row { margin-top: 0; flex-wrap: wrap; justify-content: flex-start; gap: 0; margin-inline: -10px; }
+
+.rules-save { display: grid; gap: 8px; margin-top: 20px; }
+.rules-save textarea { min-height: 56px; }
+.rules-save .row { flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 2px; }
+.rules-save .note { margin: 0; }
 
 /* ----- narrower windows: the settings come over the panes, then the toolbar keeps only what it must ----- */
 @media (width < 960px) {
