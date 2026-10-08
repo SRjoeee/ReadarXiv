@@ -27,9 +27,18 @@ export interface RoleSet {
   cjk: { body: FaceId; bold: FaceId; italic: FaceId | null; boldItalic: FaceId | null } | null   // italic null: upright
   fallbacks: Readonly<Record<FaceId, readonly FaceId[]>>
 }
-export declare function rolesFor(target: string, family: EnglishFamily): RoleSet
+/** a script's CJK faces: its group, its Kai (null: emphasis upright), the English designs beside which it is light */
+export interface CjkFaces { group: string; kai: string | null; light: readonly string[] }
+/** the CJK faces a target's script takes by the role table, or null for a script with none */
+export declare function cjkFacesOf(target: string): CjkFaces | null
+/** what a target draws in, for a paper's English family; its CJK faces the table's own (cjkFacesOf) unless given */
+export declare function rolesFor(target: string, family: EnglishFamily, cjkFaces?: CjkFaces | null): RoleSet
 /** the face a run is drawn in */
 export declare function faceFor(roles: RoleSet, run: { script: 'cjk' | 'latin'; cls: FontClass['cls']; design: Design; bold: boolean; italic: boolean; caps: boolean }): FaceId
 /** whether every character of `text` (but white space and the default ignorable) is in one of `faces`' coverage or
  *  their fallbacks' */
 export declare function canDraw(text: string, faces: readonly FaceId[], roles: RoleSet): boolean
+/** whether every character of `text` (but white space and the default ignorable) is in one of `ranges`: a list of range
+ *  lists, each [start, end, …] (inclusive), sorted and disjoint as COVERAGE's are. canDraw over what a host serves of the
+ *  faces, a slice's code points a list each */
+export declare function canDrawIn(text: string, ranges: readonly (readonly number[])[]): boolean

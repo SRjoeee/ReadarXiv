@@ -1,17 +1,16 @@
 // What arXiv would compile, and the features a failure might hang on. The main file and compiler come from arXiv's own
 // 00README.json when the package carries one (arXiv writes it on submission); otherwise from the same heuristics as
 // arXiv's preflight, in simplified form.
-// Runs in Node and in the browser alike: `dir` is a directory (Node) or a file system of latex-front.mjs (folder,
-// inMemory).
-import { folder, jobName, latin1, normalizePath } from './latex-front.mjs'
+// Runs in Node and in the browser alike: `fsys` is a file system of latex-front.mjs (inMemory), or of node-files.mjs (folder:
+// a directory under Node, which the spikes' paper-meta.mjs hands in).
+import { jobName, latin1, normalizePath } from './latex-front.mjs'
 
 const uncomment = s => s.replace(/(^|[^\\])%.*$/gm, '$1')
 const basename = p => p.slice(p.lastIndexOf('/') + 1)
 const extname = p => { const b = basename(p), i = b.lastIndexOf('.'); return i > 0 ? b.slice(i) : '' }
 const utf8 = bytes => new TextDecoder().decode(bytes)
 
-export function analyze(dir) {
-  const fsys = typeof dir === 'string' ? folder(dir) : dir
+export function analyze(fsys) {
   const files = fsys.list()
   const tex = files.filter(f => /\.(tex|ltx|latex)$/i.test(f))
   const read = f => { const b = fsys.read(f); return b ? uncomment(latin1(b)) : '' }
@@ -75,5 +74,3 @@ export function analyze(dir) {
   return meta
 }
 
-// run as a script under Node: node paper-meta.mjs <dir>
-if (typeof process !== 'undefined' && import.meta.url === `file://${process.argv[1]}`) console.log(JSON.stringify(analyze(process.argv[2]), null, 1))

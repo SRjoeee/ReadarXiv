@@ -2,6 +2,8 @@
 type Piece = { t: string; s?: string; src?: string; tr?: boolean; id?: number }
 /** a unit's plain text in the source, placeholders dropped */
 export declare function plainSource(u: { pieces: Piece[] }): string
+/** the unit's displays beyond its marks and between its words (`lead`, `trail`, `inner`): those it has, as strings */
+export declare function displayEdges(u: { lead?: unknown; trail?: unknown; inner?: unknown }): { lead?: string; trail?: string; inner?: string }
 /** a unit's plain text in its translation, as the compiled PDF shows it */
 export declare function plainTranslated(pieces: Piece[]): string
 /** a text piece as the compiled PDF shows it: a translation's TeX escapes undone, the source's bytes as UTF-8 */
@@ -33,3 +35,9 @@ export declare function textsShown<U extends { pieces: Piece[] }>(units: U[], do
 type Sent = { text: string; by: string | null; alignment?: { source: number[]; target: number[] } } | null
 /** units → their translations, by unit: pieces, how they came back, the identity that answered, and a whole unit's sentences */
 export declare function translateUnits<U extends { pieces: Piece[] }>(units: U[], send: (texts: string[], cuts?: number[][]) => Promise<Sent[]>, format?: 'markers' | 'tags' | 'runs'): Promise<{ results: Map<U, { pieces?: Piece[]; state: string; by?: string; sentences?: Sentences }>; how: Record<string, number> }>
+/** the characters of plain source a batch of units holds at most: the first, then the rest */
+export declare const FIRST_BATCH: 2500
+export declare const NEXT_BATCH: 12000
+/** a batch from the front of `order`: units as many as hold `max` characters (`sizeOf(i)` each), a unit never split, a
+ *  batch never empty (a unit over the limit goes alone) */
+export declare function batchOf(order: Iterable<number>, sizeOf: (id: number) => number, max: number): number[]

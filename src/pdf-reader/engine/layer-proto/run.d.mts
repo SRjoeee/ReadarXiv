@@ -1,16 +1,23 @@
 // run.mjs's types: the layer v0's driver, the prototype's page (main.js, ported at 9e56fca)
 import type { Audit, CheckResult } from './check.mjs'
 import type { Rect } from './layer1.mjs'
-import type { Block2, Char, DrawOp, DrawSource, Layout, Params, Prepared, Token, Unit } from './layer2.mjs'
+import type { Block2, Char, DrawOp, DrawSource, Layout, Params, Prepared, Token, Unit as LaidUnit } from './layer2.mjs'
 import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
 import type { TexLines, Whole } from './tex.mjs'
 import type { RemovalManifest } from '../layout/remove.mjs'
+import type { FaceSources } from './fonts.mjs'
 
+/** a unit as the units record holds it (a row): its kind, source and state; its translation's pieces, none where it has
+ *  none, each non-text one with its k (the layout file's index of its source piece: E6's row); its title, its table's
+ *  consistency group */
+export interface Unit { kind: string; src: string; pieces?: { t: string; s?: string; src?: string; k?: number }[]; state: string; title?: boolean; group?: string }
+/** which floats the final names in the target's language (live.mjs captionsOf) */
+export interface Captions { figure: 'target' | 'source'; table: 'target' | 'source' }
 /** the made output's geometry (schema 1): the pages' views, each unit's [id, stream, rects] on the original, its kind */
 export interface Geometry { schema: number; kinds: string[]; left: { pages: number[][]; units: [number, number, Rect[]][] }; right?: unknown }
 /** a unit v0 places: its rectangles (all of them: a unit cut by the pages shown is laid over its lines past them too), the
  *  pages shown it has lines on (`cut`: it has more past them), and once laid its reading, tokens, blocks and layout */
-export interface Placed { id: number; stream: number; rects: Rect[]; unit: Unit; pages: number[]; cut: boolean; blocks: Block2[]; prep?: Prepared; tokens?: Token[]; layout?: Layout; s?: number; rec?: Rec; local?: Char[][]; refused?: boolean; tex?: (Whole & { lu: LayoutUnit; lines?: TexLines }) | null }
+export interface Placed { id: number; stream: number; rects: Rect[]; unit: LaidUnit; pages: number[]; cut: boolean; blocks: Block2[]; prep?: Prepared; tokens?: Token[]; layout?: Layout; s?: number; rec?: Rec; local?: Char[][]; refused?: boolean; why?: string; missing?: number[]; tex?: (Whole & { lu: LayoutUnit; lines?: TexLines }) | null }
 /** the hybrid's options (openProto `tex`): the layout file, the units file's pieces by unit id, and how the file's
  *  geometry is taken */
 export interface HybridOptions {
@@ -48,24 +55,46 @@ export declare function fillPage(loose: unknown[], P: Params & { adaptiveFill: {
 export interface ProtoRun {
   N: number
   P: Params
+  /** the rules the run was opened with (target-rules.mjs): the built-in set's schema and version */
+  readonly rules: { schema: 1; version: number }
   rows: Row[]
   placed: Placed[]
-  skipped: { id: number; kind: string; why: string; chars: number; pages?: number[] }[]
+  /** the units left the original's and why: `unanchored`, `author`, `unfit`, `group: …`, and, in the role table's faces, `served`
+   *  (a character in no served slice of its runs' faces and their fallbacks, or a run's own face not served: `missing`, the
+   *  first code points) and `face` (a table or a slice that failed) */
+  skipped: { id: number; kind: string; why: string; chars: number; pages?: number[]; missing?: number[] }[]
   stats: Rec[]
   audit: Audit[]
   order: number[]
   ms: Map<number, number>
   pageMs: number[]
   /** each page's costs, ms: its original drawn, its text read, the removal's ink reading and plan, its removed and
-   *  placeholders' pages drawn, its units laid, their operations made, drawn on the copy and set as SVG */
-  pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; ops: number; compose: number; svg: number }[]
+   *  placeholders' pages drawn, its units laid (less the faces they waited for, `fonts`), their operations made, drawn on the
+   *  copy and set as SVG */
+  pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number }[]
   chars: Char[][]
   views: { convertToViewportPoint(x: number, y: number): number[]; convertToPdfPoint(x: number, y: number): number[] }[]
   readonly designs: { serif: string; sans: string; mono: string }
-  /** the hybrid's: each unit's source (empty lists where `tex` is null) */
-  sources: Sources
+  /** the hybrid's: each placed unit's source (empty lists where `tex` is null) */
+  readonly sources: Sources
+  /** the page after whose units page `page` is done; Infinity until the units it reads have come */
   doneAt(page: number): number
+  /** every page up to the one that finishes page `page` drawn and its units laid, a unit a task, once they have come */
   until(page: number): Promise<void>
+  /** units as they arrive (id → row): a row wins over one taken before it until its unit is placed; the hybrid's pieces
+   *  read from each translated row's pieces' k; a row no unit of this paper's (not a unit's shape, its kind not the
+   *  layout file's or the geometry's, its group not the open's `groups`, a k past its source's pieces) left the
+   *  original's, in `skipped`. The pages newly complete: those not reported complete before */
+  take(rows: ReadonlyMap<number, Unit>): { complete: number[] }
+  /** no more units: every page is complete with what it holds */
+  end(): void
+  /** whether every unit laying page `page` reads has come (or end()): until(page) waits for no take. It turns false
+   *  again only where a table cell's row is taken again before its group is read */
+  complete(page: number): boolean
+  /** every id taken whose row could no longer change the drawing, and changed nothing: its unit placed already (its
+   *  page perhaps not laid yet), its row fixed by a table group read, taken after end(), or never expected. Never a
+   *  page to draw again: no laid page changes */
+  late(): number[]
   /** a done page's copy at `k` device pixels a PDF unit onto `ctx`, from `source`, the page as PDF.js drew it at k */
   drawCopy(page: number, ctx: CanvasRenderingContext2D, source: DrawSource, k: number): Promise<void>
   release(page: number): void
@@ -75,6 +104,9 @@ export interface ProtoRun {
   removalStats(): RemovalStats | null
   /** a done page's removed page at v0's own resolution (mode 'draw', with v0's copy), until it is released */
   removedCanvas(page: number): HTMLCanvasElement | null
+  /** the run let go: its sheet removed, every page's canvases released (a page under way, once it ends), nothing drawn
+   *  or laid after; an until under way resolves */
+  dispose(): void
 }
 /** how the text-removed PDF went: pages removed, pages drawn the old way, units drawn by it (tex: the layout file's
  *  rectangles) and the old way (v0: its own reading), the rectangles filled with paper and swapped from the removed page,
@@ -87,7 +119,8 @@ export interface RemovalStats {
 }
 /** the text-removed PDF (removal.mjs, layout/remove.mjs) */
 export interface RemovalOptions {
-  OPS: Record<string, number>
+  /** PDF.js's OPS: read by no drawing (the gate's instrument reads a page's ink with it) */
+  OPS?: Record<string, number>
   /** 'draw': drawn by the add-on */
   mode: 'draw'
   /** arXiv's PDF with the paper's add-on (it may be openProto's `doc` itself, one document), its manifest (arXiv's page
@@ -98,7 +131,13 @@ export interface RemovalOptions {
 export declare function openProto(o: {
   doc: { numPages: number; getPage(n: number): Promise<unknown> }
   geometry: Geometry
-  units: Unit[]
+  /** the units by id; sparse where `expect` names units still to come (take) */
+  units: readonly (Unit | undefined)[]
+  /** the ids of the units the run will report, taken as they arrive; null (the default): every unit is in `units` */
+  expect?: readonly number[] | null
+  /** each unit's table group (groups.mjs groupOf), known at open: a group is read once its own cells' rows are in, and a
+   *  row whose group is another is no unit of this paper's; null (the default): a group waits for every row */
+  groups?: ReadonlyMap<number, string> | null
   target: string
   pages?: number
   scale?: number
@@ -109,6 +148,11 @@ export declare function openProto(o: {
   restoring?: boolean
   order?: number[] | null
   faces?: 'roles' | 'prototype'
+  /** what the host serves of each role table face, asynchronously: its slices (each { url, ranges }), null where it is not
+   *  served. A face is asked the first time a unit needs it and awaited; a unit with a character in no served slice of its
+   *  runs' faces and their fallbacks is left the original's (`served`), one whose slice fails to load too (`face`). Absent:
+   *  each face's whole file at `faceUrl(file)`, covering its COVERAGE. With faces 'roles' only */
+  faceSources?: FaceSources | null
   faceUrl?: (file: string) => string
   fontUrl?: (file: string) => string
   hyphUrl?: (lang: string) => string
@@ -120,5 +164,5 @@ export declare function openProto(o: {
   removal?: RemovalOptions | null
   /** the target's names of a figure and a table (caption-names.mjs) and which the final names so (live.mjs captionsOf):
    *  a float's label drawn in the target's name where the final's is; null, every label kept as the original's */
-  labels?: { names: { figure: string; table: string } | null; captions: { figure: 'target' | 'source'; table: 'target' | 'source' } | null } | null
+  labels?: { names: { figure: string; table: string } | null; captions: Captions | null } | null
 }): Promise<ProtoRun>

@@ -43,11 +43,11 @@
 //   - on a refusal, a crash, a limit reached or the clock run out, ship no add-on for the paper: its readers draw every
 //     unit the old way, erased from the original page and put back where it is kept (layer-proto/run.mjs with no
 //     `removal`, or a page the manifest refuses), which loses no unit.
+import { REMOVAL } from './addon-manifest.mjs'
 
-/** the remover's version: raised with any change to what it writes; it enters the add-on's key (2: compact sets; 3: a
- *  Type 3 glyph's removed advance with its font matrix's translation, an unusable matrix refused; 4: a hex string read as
- *  PDF.js reads it, and a page refused past its budgets: what it holds by kind, what it decodes) */
-export const REMOVAL = '4'
+/** the remover's version (addon-manifest.mjs, beside the manifest that names it, where a reader checks one without
+ *  loading this module) */
+export { REMOVAL }
 /** the page sets an add-on holds, in order after arXiv's own pages: R at N + p, then the check's (P, F, C) */
 export const SETS = Object.freeze(['R'])
 export const CHECK_SETS = Object.freeze(['P', 'F', 'C'])

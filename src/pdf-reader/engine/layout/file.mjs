@@ -49,7 +49,10 @@ const PAPER_KEYS = ['id', 'version', 'pages']
  *  cond-mat or plasm-ph, has 8; the rest is margin), a subject class, a slash and 7 digits, so 27 characters at most. The
  *  version is the paper's own field, never a suffix of the id */
 const PAPER_ID = /^(?:\d{4}\.\d{4,5}|[a-z-]{2,16}(?:\.[A-Z]{2})?\/\d{7})$/
-const PDFJS_MAX = 32, LEFT_MAX = 128, FONTS_MAX = 512, FONT_MAX = 128, VERSION_MAX = 1000
+export const isPaperId = id => typeof id === 'string' && PAPER_ID.test(id)
+/** a paper's version at most */
+export const VERSION_MAX = 1000
+const PDFJS_MAX = 32, LEFT_MAX = 128, FONTS_MAX = 512, FONT_MAX = 128
 const PIECES_MAX = 10000, DEPTH_MIN = -1, DEPTH_MAX = 5, DEPTH_NONE = 9
 const LINES_UNIT = 2000, LINES_ALL = 200000, SIZE_MAX = 200
 const SHARE_MAX = 1000, ERASE_LINE = 16, SEGS_INLINE = 4, SEGS_DISPLAY = 64, LABELS_UNIT = 4, SRC_MAX = 4000
@@ -140,12 +143,18 @@ function zeroes(r) {
 /** bytes, then UTF-8, then values and nesting counted, then JSON.parse, then every bound; throws LayoutRefusal */
 export function parseLayout(bytes) {
   if (!(bytes instanceof Uint8Array)) throw refuse('', `not bytes (${kindOf(bytes)})`)
-  const f = exactKeys(boundedJson(bytes, { cap: LAYOUT_CAP, values: LAYOUT_VALUES, depth: LAYOUT_DEPTH }), KEYS, '')
+  return checkLayout(boundedJson(bytes, { cap: LAYOUT_CAP, values: LAYOUT_VALUES, depth: LAYOUT_DEPTH }))
+}
+
+/** a file already parsed, within the bounds of what holds it (a layer bundle, layer-proto/bundle.mjs): every bound
+ *  parseLayout checks past JSON.parse. Returns the value itself, its -0s written 0; throws LayoutRefusal */
+export function checkLayout(value) {
+  const f = exactKeys(value, KEYS, '')
   if (f.schema !== 1) throw refuse('schema', 'not 1')
   if (f.layout !== LAYOUT) throw refuse('layout', `not '${LAYOUT}'`)
   if (!printable(f.pdfjs, 1, PDFJS_MAX)) throw refuse('pdfjs', `not 1 to ${PDFJS_MAX} printable ASCII characters (${kindOf(f.pdfjs)})`)
   const paper = exactKeys(f.paper, PAPER_KEYS, 'paper')
-  if (typeof paper.id !== 'string' || !PAPER_ID.test(paper.id)) throw refuse('paper.id', `not an arXiv identifier (${kindOf(paper.id)})`)
+  if (!isPaperId(paper.id)) throw refuse('paper.id', `not an arXiv identifier (${kindOf(paper.id)})`)
   if (!isInteger(paper.version, 1, VERSION_MAX)) throw refuse('paper.version', `not an integer 1 to ${VERSION_MAX}`)
   const pages = checkPages(paper.pages, 'paper.pages')
   if (!printable(f.left, 0, LEFT_MAX)) throw refuse('left', `not 0 to ${LEFT_MAX} printable ASCII characters (${kindOf(f.left)})`)
