@@ -2,6 +2,7 @@
 // The measured basis is in the file header of tokens.ts: Microsoft's Edge endpoint 0% on the tag format, 98% on markers; Google ~99% on both.
 import { describe, expect, it } from 'vitest'
 import { escapeText, expectationsFromText, fromAlpha, rehydrate, serialize, splitRuns, toAlpha, tokenize, unescapeText, validate } from '@/core/protector'
+import { isHashFree, markerReader } from '@/core/protector/tokens'
 import { rangesOf } from '@/core/protector/offsets'
 import { el, htmlOf } from './helpers'
 
@@ -244,6 +245,84 @@ describe('validate (markers)', () => {
     expect(reason('令 @ a # 为粗体，见 @b#。')).toBe('missing')
     expect(reason('令 @A# 为粗体，见 @b#。')).toBe('missing')
     expect(reason('令 @1# 为粗体，见 @b#。')).toBe('missing')
+  })
+})
+
+// Microsoft writes a marker's closing `#` twice now and then, `@e##`, or twice with a space between, `@d# #` (#320; the
+// PDF reader met both in its Chinese and Japanese replies for 2610.02069, #319). Read strictly, the marker is found and
+// the second `#` is set as text: "Figure 10#". Where the block's text holds no `#` of its own, every `#` beside a marker
+// is the marker's
+describe('a marker\'s `#` set twice is the marker\'s (#320)', () => {
+  const REF = '<a class="ltx_ref" href="#F10">10</a>'
+  const MATH = (v: string) => `<math class="ltx_Math"><mi>${v}</mi></math>`
+  // "as shown in" / "Figure", "threshold", "holds." in Chinese and Japanese, as \u escapes
+  const ZH = { as: '\u5982\u56fe', shown: '\u6240\u793a' }
+  const JA = { threshold: '\u95be\u5024', holds: '\u306f\u6210\u308a\u7acb\u3061\u307e\u3059\u3002' }
+  const fill = (html: string, reply: string) => {
+    const b = serialize(el(html), 'markers')
+    return { b, f: rehydrate(reply, b, document) }
+  }
+
+  it('doubled, `@a##`: the marker filled back, no `#` left in the text', () => {
+    const { b, f } = fill(`<p class="ltx_p">see Figure ${REF} for the cases</p>`, `${ZH.as} @a## ${ZH.shown}`)
+    expect(b.text).toBe('see Figure @a# for the cases')
+    expect(f.textContent).toBe(`${ZH.as} 10 ${ZH.shown}`)
+    expect(f.querySelectorAll('a.ltx_ref').length).toBe(1)
+  })
+
+  it('after the second of two adjacent markers, `@a#@b##` (Fig.~\\ref)', () => {
+    const { b, f } = fill(`<p class="ltx_p">as Fig. ${REF}${REF} shows</p>`, `${ZH.as}@a#@b##${ZH.shown}`)
+    expect(b.text).toBe('as Fig. @a#@b# shows')
+    expect(f.textContent).toBe(`${ZH.as}1010${ZH.shown}`)
+  })
+
+  it('twice with a space between, `@a# #`, and with more than one: the run is one closer', () => {
+    const html = `<p class="ltx_p">the threshold:${MATH('u')} thresholds ${MATH('v')} hold.</p>`
+    expect(serialize(el(html), 'markers').text).toBe('the threshold:@a# thresholds @b# hold.')
+    expect(fill(html, `${JA.threshold}:@a# # ${JA.threshold}@b#${JA.holds}`).f.textContent).toBe(`${JA.threshold}:u ${JA.threshold}v${JA.holds}`)
+    expect(fill(html, `${JA.threshold}:@a###\t# ${JA.threshold}@b## #${JA.holds}`).f.textContent).toBe(`${JA.threshold}:u ${JA.threshold}v${JA.holds}`)
+  })
+
+  it('the closer\'s run is the marker\'s on the wire too: its slot spans it, and the text after starts behind it', () => {
+    const reply = `${ZH.as} @a## ${ZH.shown}`
+    const { f } = fill(`<p class="ltx_p">see Figure ${REF} for the cases</p>`, reply)
+    const at = reply.indexOf('@a')
+    expect(f.offsets.map(s => [s.kind, s.from, s.to])).toEqual([['text', 0, at], ['slot', at, at + 4], ['text', at + 4, reply.length]])
+    expect(rangesOf(f.offsets, at + 4, reply.length).map(String).join('')).toBe(` ${ZH.shown}`)
+  })
+
+  it('validation is as it was: the set of markers is the same either way', () => {
+    const b = serialize(el(`<p class="ltx_p">see Figure ${REF} for the cases</p>`), 'markers')
+    expect(validate(`${ZH.as} @a## ${ZH.shown}`, b).ok).toBe(true)
+    expect(validate(`${ZH.as} @a## ${ZH.shown}`, expectationsFromText(b.text, 'markers')).ok).toBe(true)
+  })
+
+  it('the one reader: what each reading takes as a marker (the HTML page reads hash-free blocks so, the PDF reader every reply)', () => {
+    const read = (s: string, reading: Parameters<typeof markerReader>[0]) => [...s.matchAll(markerReader(reading))].map(m => m[0])
+    expect(read('x @a## y @b# # z @c#\t# w @@d# v', { hashFree: true })).toEqual(['@a##', '@b# #', '@c#\t#', '@@'])
+    // a hash the paper may own: as we write it, MARKER_RE's reading
+    expect(read('x @a## y @b# # z @c#\t# w @@d# v', { hashFree: false })).toEqual(['@a#', '@b#', '@c#', '@@'])
+    // the PDF reader's second reading: a marker without its `#` as well, of at most the block's widest id, no letter after it
+    const bare = (s: string) => [...s.matchAll(markerReader({ hashFree: true, bare: { width: 1 } }))].map(m => [m[1], m[2]])
+    expect(bare(`x @a\u4e2d @b## @cd @e`)).toEqual([[undefined, 'a'], ['b', undefined], [undefined, 'e']])
+    // a line break or a no-break space is no space of a closer's
+    expect(read('x @a#\n# y @b#\u00a0#', { hashFree: true })).toEqual(['@a#', '@b#'])
+  })
+
+  it('a block is hash-free while its text, outside its markers, holds no `#`', () => {
+    expect(isHashFree('see Figure @a# for @b#@c# the cases')).toBe(true)
+    expect(isHashFree('written in F# @a# holds')).toBe(false)
+    // a literal `@a#` of the paper's, escaped: its `#` is the paper's
+    expect(isHashFree('the @@a# literal @a#')).toBe(false)
+  })
+
+  it('a block whose text holds a `#` of its own keeps the reading it had: the second `#` may be the paper\'s', () => {
+    // `F#` before the formula: a `#` after the marker in the reply may be that one, moved
+    const html = `<p class="ltx_p">written in F# ${MATH('x')} holds</p>`
+    expect(serialize(el(html), 'markers').text).toBe('written in F# @a# holds')
+    expect(fill(html, `F# ${ZH.as} @a## ${ZH.shown}`).f.textContent).toBe(`F# ${ZH.as} x# ${ZH.shown}`)
+    // and the paper's own `#` right after a formula round-trips as it is
+    expect(fill(`<p class="ltx_p">case ${MATH('n')}#3 holds</p>`, 'case @a##3 holds').f.textContent).toBe('case n#3 holds')
   })
 })
 

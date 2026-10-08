@@ -29,6 +29,7 @@ function harness(over: Partial<HandlerDeps> = {}) {
     environment: vi.fn(),
     health: { reject: vi.fn(async () => undefined), clear: vi.fn(async () => false) },
     warmup: { done: vi.fn(async () => undefined), seen: vi.fn(async () => undefined), giveWay: vi.fn(async () => undefined) },
+    origins: { sweep: vi.fn(async () => 0) },
     ...over,
   } as unknown as HandlerDeps
   const handlers = createHandlers(deps)
@@ -307,9 +308,18 @@ describe('the background\'s handlers', () => {
     const { deps } = harness()
     expect(Object.keys(createHandlers(deps)).sort()).toEqual([
       'axt:cache-clear', 'axt:cache-stats', 'axt:cancel-scope', 'axt:diag', 'axt:diag-export', 'axt:engine-ready',
-      'axt:entry-settings', 'axt:ocr', 'axt:open-settings', 'axt:page-usable',
+      'axt:entry-settings', 'axt:ocr', 'axt:open-settings', 'axt:origins-reconcile', 'axt:page-usable',
       'axt:provider-status', 'axt:set-floating-entry', 'axt:tex-give-way', 'axt:tex-seen', 'axt:tex-warmed', 'axt:toggle', 'axt:toggle-decision', 'axt:translate',
     ])
+  })
+
+  describe('axt:origins-reconcile', () => {
+    it('a page that let an origin go asks the keeper to give back what nothing needs, and hears how many went (DESIGN §9)', async () => {
+      const sweep = vi.fn(async () => 2)
+      const { send } = harness({ origins: { sweep } })
+      await expect(send({ type: 'axt:origins-reconcile' })).resolves.toEqual({ removed: 2 })
+      expect(sweep).toHaveBeenCalledOnce()
+    })
   })
 
   describe('axt:tex-warmed', () => {

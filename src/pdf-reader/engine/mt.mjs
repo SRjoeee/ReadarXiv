@@ -6,7 +6,7 @@ import { tokens } from './anchors.mjs'
 import { bySentence } from './highlight.mjs'
 import { latin1Bytes } from './latex-front.mjs'
 import { MIXED } from '@/cache/pdf-record'
-import { fromAlpha, TAG_RE, toAlpha } from '@/core/protector/tokens'
+import { fromAlpha, MARKER_CLOSER, markerReader, TAG_RE, toAlpha } from '../../core/protector/tokens'
 import { sentenceCuts } from '@/core/sentences'
 
 // ---------------------------------------------------------------- markers wire format
@@ -87,14 +87,15 @@ export function rehydrate(text, { slots, lead, trail, stops, numbers, numbersAft
     if (afterNumber) s = s.replace(NUMBER_LEAD, '')
     if (s) pieces.push({ t: 'text', tr: true, s: texEscape(s) })
   }
-  // tolerant: the engine sometimes drops the closing # before a CJK character or punctuation (@b形, @g。). A lone @ can only
-  // be a marker's remains, because a literal @ went out as @@; accepted only when no letter follows, never inside a word.
-  // And a marker's `#` doubled is its own, read either way, a space between them or none: Microsoft wrote 2610.02069's
-  // `@e#` back as `@e##` and set the second `#` as text ("El Ni ñ#", and "Figure 10#" in its Chinese), and `@d#` as
-  // `@d# #` in its Japanese. One read without its `#` leaves it where the reply set it (that paper's unit 47 in Chinese:
-  // `@a` in the middle of the reply, a lone `#` at its end), dropped there as any stray `#` is (STRAY)
-  const L = toAlpha(Math.max(1, slots.length)).length
-  const re = tolerant ? new RegExp(`@@|@([a-z]{1,${L}})#(?:[ \t]*#)*|@([a-z]{1,${L}})(?![a-z#])`, 'g') : /@@|@([a-z]+)#(?:[ \t]*#)*/g
+  // read with the markers wire's one reader, the HTML page's (src/core/protector/tokens.ts markerReader): a marker's `#`
+  // doubled is its own, a space between them or none — Microsoft wrote 2610.02069's `@e#` back as `@e##` and set the
+  // second `#` as text ("El Ni ñ#", and "Figure 10#" in its Chinese), and `@d#` as `@d# #` in its Japanese — the
+  // source's text holding no `#` of its own. Tolerant: the engine sometimes drops the closing # before a CJK character
+  // or punctuation (@b形, @g。); a lone @ can only be a marker's remains, because a literal @ went out as @@, accepted
+  // only when no letter follows, never inside a word. One read without its `#` leaves it where the reply set it (that
+  // paper's unit 47 in Chinese: `@a` in the middle of the reply, a lone `#` at its end), dropped there as any stray `#`
+  // is (STRAY)
+  const re = markerReader(tolerant ? { hashFree: true, bare: { width: toAlpha(Math.max(1, slots.length)).length } } : { hashFree: true })
   let m, buf = ''
   while ((m = re.exec(text))) {
     buf += text.slice(last, m.index); last = re.lastIndex
@@ -124,7 +125,7 @@ export function rehydrate(text, { slots, lead, trail, stops, numbers, numbersAft
 /** what the wire writes as one thing, a boundary inside which goes to its end: a marker (read tolerantly too, `@b`
  *  without its `#`, and with its `#` doubled, `@e##` or `@e# #`, as rehydrate reads it), an escaped @, an entity */
 const ENTITY = '&(?:#[xX][0-9a-fA-F]+|#\\d+|amp|lt|gt|quot|apos|nbsp);'
-const ATOM = new RegExp(`@@|@[a-z]+(?:#(?:[ \\t]*#)*)?|${ENTITY}`, 'g')
+const ATOM = new RegExp(`@@|@[a-z]+(?:${MARKER_CLOSER})?|${ENTITY}`, 'g')
 /** on the tags wire (an LLM's, Google's): a tag, an entity */
 const TAG_ATOM = new RegExp(`(?:${TAG_RE.source})|${ENTITY}`, 'g')
 /** each wire format's atoms, and how a reply is read back on it (strictly, or tolerantly where the format has a reading) */

@@ -1,6 +1,7 @@
 // The settings page's connection test (the redesign's design, §6.3): the origin asked for, one sample translated through
 // that endpoint alone with the service carried whole, the time it took; a failure names its reason and the field at
-// fault, and gives back an origin this attempt granted. And the endpoint's list of models
+// fault, and gives nothing back itself — the form holds the origin until the service is stored or the attempt given up
+// (#299 F2c). And the endpoint's list of models
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Service } from '@/config/services'
 
@@ -9,17 +10,14 @@ const wire = vi.hoisted(() => {
   class PermissionError extends Error {
     constructor(readonly kind: 'badURL' | 'denied', readonly origin?: string) { super(kind) }
   }
-  return { sent: [] as unknown[], answer: null as unknown, granted: false, denied: false, released: [] as string[], configRejects: false, PermissionError }
+  return { sent: [] as unknown[], answer: null as unknown, denied: false, PermissionError }
 })
 vi.mock('@/shared/messages', () => ({ sendMessage: vi.fn(async (message: unknown) => { wire.sent.push(message); return wire.answer }) }))
-vi.mock('@/config/storage', () => ({ getConfig: async () => (wire.configRejects ? Promise.reject(new Error('storage unavailable')) : { services: [] }) }))
 vi.mock('@/entrypoints/options/permissions', () => ({
   PermissionError: wire.PermissionError,
   ensureHostPermission: vi.fn(async () => {
     if (wire.denied) throw new wire.PermissionError('denied', 'https://api.example.com/*')
-    return wire.granted
   }),
-  releaseHostPermission: vi.fn(async (url: string) => { wire.released.push(url) }),
 }))
 
 import { connectService } from '@/entrypoints/options/connect'
@@ -31,7 +29,7 @@ const SVC: Service = { id: 'svc-abcd1234', kind: 'openai-compat', name: 'Mine', 
 describe('connectService (§6.3)', () => {
   beforeEach(() => {
     setLocale('en')
-    Object.assign(wire, { sent: [], answer: null, granted: false, denied: false, released: [], configRejects: false })
+    Object.assign(wire, { sent: [], answer: null, denied: false })
   })
 
   it('carries the service whole, named, and answers with the time it took', async () => {
@@ -42,24 +40,16 @@ describe('connectService (§6.3)', () => {
     expect((wire.sent[0] as { cache?: unknown }).cache).toBeUndefined()
   })
 
-  it('a refused key names its reason and the key field, and gives back the origin this attempt granted', async () => {
-    wire.granted = true
+  it('a refused key names its reason and the key field, and asks for nothing to be given back: the origin is the form\'s to let go (#299 F2c)', async () => {
     wire.answer = { ok: false, error: { kind: 'auth', message: '401', isolatable: false } }
     expect(await connectService(SVC, 'cmn')).toEqual({ ok: false, field: 'apiKey', reason: O.services.failed(reasonText('auth')) })
-    expect(wire.released).toEqual([SVC.baseURL])
+    expect(wire.sent).toEqual([expect.objectContaining({ type: 'axt:translate' })])
   })
 
   it('a permission refused says so at the address, in today\'s words, and asks nothing of the endpoint', async () => {
     wire.denied = true
     expect(await connectService(SVC, 'cmn')).toEqual({ ok: false, field: 'baseURL', reason: O.services.permission.denied('https://api.example.com/*') })
     expect(wire.sent).toEqual([])
-  })
-
-  it('the attempt fails and the release\'s own read rejects: connectService still resolves with the failure', async () => {
-    wire.granted = true
-    wire.configRejects = true
-    wire.answer = { ok: false, error: { kind: 'auth', message: '401', isolatable: false } }
-    await expect(connectService(SVC, 'cmn')).resolves.toEqual({ ok: false, field: 'apiKey', reason: O.services.failed(reasonText('auth')) })
   })
 })
 
