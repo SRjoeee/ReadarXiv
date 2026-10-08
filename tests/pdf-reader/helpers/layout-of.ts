@@ -24,9 +24,9 @@ const bottom = (l: LineSpec) => l.baseline - 0.25 * (l.size ?? 10)
 /** a layout file of these units on `pages` US Letter pages, written and parsed as a reader would get it */
 export function layoutOf(units: UnitDef[], pages = 2): LayoutIndex {
   const file: LayoutFile = {
-    schema: 1, layout: LAYOUT, pdfjs: '5.4.296', paper: { id: '1512.03385', version: 1, pages }, left: '',
+    schema: 2, layout: LAYOUT, pdfjs: '5.4.296', paper: { id: '1512.03385', version: 1, pages }, left: '',
     views: Array.from({ length: pages }, () => [0, 0, 612, 792]).flat(), fonts: ['NimbusRomNo9L-Regu'],
-    units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [],
+    units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [],
   }
   for (const u of units) {
     file.units.push([u.id, UNIT_KINDS.indexOf(u.kind ?? 'para'), u.kind === 'heading' ? 1 : 9, u.flags ?? 0, u.pieces ?? 64])

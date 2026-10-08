@@ -57,12 +57,12 @@ const H = UNIT_KINDS.indexOf('heading'), P = UNIT_KINDS.indexOf('para'), MATH = 
 /** the paper's layout file: two pages, the title and the paragraph located, the paragraph's formula found */
 function layoutOf(): LayoutFile {
   return {
-    schema: 1, layout: LAYOUT, pdfjs: PDFJS, paper: { id: '2608.04322', version: 1, pages: 2 }, left: '',
+    schema: 2, layout: LAYOUT, pdfjs: PDFJS, paper: { id: '2608.04322', version: 1, pages: 2 }, left: '',
     views: [0, 0, 612, 792, 0, 0, 612, 792], fonts: ['CMR10'],
     units: [[0, H, 9, UNIT_FLAG.TITLE, 1], [2, P, 9, 0, 7]],
     lines: [[0, [1, 150, 460, 700, 712, 696, 17.28, 0]], [2, [1, 72, 540, 650, 657.5, 647.25, 10, 0]]],
     frames: [[0, [1, 0, 0, 1, -1, 30]], [2, [1, 0, 0, 1, -1, 12.5]]],
-    erase: [], ph: [[2, 4, MATH, 0, 1, 100, 650, 110, 657, 647]], labels: [], headings: [[0, 'A Title']], pageText: [], held: [],
+    erase: [], ph: [[2, 4, MATH, 0, 1, 100, 650, 110, 657, 647]], labels: [], headings: [[0, 'A Title']], pageText: [], held: [], names: [],
   }
 }
 /** the add-on's bytes after arXiv's: every byte value, so that base64 holds every character */
@@ -114,11 +114,11 @@ describe('the versions a bundle names', () => {
   })
 
   it('CTAG names the reader\'s contract, VTAG the content, and bundleKey is layer/<id>v<n>/<VTAG>.json, an old identifier\'s slash written _', () => {
-    expect(BUNDLE).toBe('1')
+    expect(BUNDLE).toBe('2')
     expect(CTAG).toBe(`b${BUNDLE}-j${PDFJS}`)
     expect(VTAG).toBe(`${CTAG}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
     const vtag = VTAG
-    expect(vtag).toBe('b1-j6.3.289-p10-l3-r4')
+    expect(vtag).toBe('b2-j6.3.289-p10-l4-r5')
     expect(bundleKey('1706.03762', 7)).toBe(`layer/1706.03762v7/${vtag}.json`)
     expect(bundleKey('hep-th/9901001', 1)).toBe(`layer/hep-th_9901001v1/${vtag}.json`)
     // (the web's vtag form, src/shared/identity.ts VTAG_FORM, is stricter than a token of letters, digits and points)
@@ -295,7 +295,7 @@ describe('readBundle refuses', () => {
   })
 
   it('a layout refused by the layout file\'s own rules, or of another paper or other units', () => {
-    expect(refusalOf(broken(b => { b.layout.schema = 2 }))?.why).toMatch(/^layout\.schema/)
+    expect(refusalOf(broken(b => { b.layout.schema = 1 }))?.why).toMatch(/^layout\.schema/)
     expect(refusalOf(broken(b => { b.layout.lines[1][1][0] = 3 }))?.why).toMatch(/^layout\.lines\[1\]\[1\]\[0\]/)
     expect(refusalOf(broken(b => { b.layout.paper.version = 2 }))?.why).toMatch(/^layout\.paper/)
     expect(refusalOf(broken(b => { b.layout.units[1][0] = 9; b.layout.lines[1][0] = 9; b.layout.frames[1][0] = 9; b.layout.ph[0][0] = 9 }))?.why).toMatch(/^layout\.units\[1\]\[0\]/)
@@ -304,8 +304,8 @@ describe('readBundle refuses', () => {
   })
 
   it("a layout file of a newer maker and a manifest of a newer remover are read: a part is refused by its schema, never by what made it (decision 4)", () => {
-    const r = readBundle(bytesOf(broken(b => { b.versions.layout = '4'; b.layout.layout = '4'; b.versions.removal = '5'; b.addon.manifest.removal = '5' })))
-    expect([r.layout?.layout, r.addon?.manifest.removal, r.dropped]).toEqual(['4', '5', []])
+    const r = readBundle(bytesOf(broken(b => { b.versions.layout = '5'; b.layout.layout = '5'; b.versions.removal = '6'; b.addon.manifest.removal = '6' })))
+    expect([r.layout?.layout, r.addon?.manifest.removal, r.dropped]).toEqual(['5', '6', []])
     expect(refusalOf(broken(b => { b.addon.manifest.schema = 2 }))?.why).toMatch(/^addon\.manifest\.schema/)
   })
 

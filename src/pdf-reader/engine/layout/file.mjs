@@ -4,8 +4,9 @@
 // and every bound with plain loops. A refusal is of the whole file, names its path, and describes a value by its type,
 // never by its text. Coordinates are arXiv's PDF units, each page unrotated, y up as in PDF, pages 1-based: a rectangle is not
 // empty, x0 < x1 and bottom < top. Every string is returned as it is; nothing here or downstream builds markup from one.
-// Imports json.mjs alone: the reader loads it.
+// Imports json.mjs and names.mjs alone: the reader loads it.
 import { boundedJson, checkPages, checkViews, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal } from './json.mjs'
+import { NAME_KEYS } from './names.mjs'
 
 export { LayoutRefusal } from './json.mjs'
 
@@ -15,8 +16,11 @@ export { LayoutRefusal } from './json.mjs'
  *  bounds or meaning raises `schema` (and BUNDLE, which holds the file), not this.
  *  2: placeholders found by their own ink in the content stream, and the page text of citations and references;
  *  3: a text symbol the marking could not mark drawn as its character (PH_FLAG.TEXT), no row for a macro TeX said
- *  sets no ink, glyph boxes by their own ink, and the lines a unit's source does not write held (`held`) */
-export const LAYOUT = '3'
+ *  sets no ink, glyph boxes by their own ink, and the lines a unit's source does not write held (`held`); 4: babel's
+ *  names located (`names`, the file's schema 2), and no unit's label holding one */
+export const LAYOUT = '4'
+/** the file's schema: 2 holds `names` */
+export const LAYOUT_SCHEMA = 2
 export const LAYOUT_CAP = 4 * 2 ** 20
 export const LAYOUT_VALUES = 1_000_000
 /** the deepest the file nests: its object, then lines, frames or erase (the arrays of entries), then an entry [id, rows],
@@ -26,11 +30,16 @@ export const UNIT_KINDS = Object.freeze(['para', 'heading', 'caption', 'footnote
 export const PH_KINDS = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other'])
 export const LABEL_KINDS = Object.freeze(['number', 'item', 'caption', 'footnote'])
 export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4 })
+/** babel's names (names.mjs), whose occurrences the file locates (`names`) */
+export { NAME_KEYS } from './names.mjs'
+/** a name's flags. CENTRED: centred in its column, as a unit is (UNIT_FLAG.CENTRED); CAPITALS: its glyphs capitals where
+ *  its macro's own text is not (a class's case change, which the target's name takes too) */
+export const NAME_FLAG = Object.freeze({ CENTRED: 1, CAPITALS: 2 })
 /** a placeholder's flags. TEXT: a LaTeX text symbol (\%, \_) drawn as its one character, the file's pageText, where
  *  the unit's lines on arXiv's page show it (a macro's only, no segments: its ink is the line's, erased with it) */
 export const PH_FLAG = Object.freeze({ SOURCE_BRACKETS: 1, NUMBERED: 2, RAISED: 4, LOWERED: 8, EMPTY: 16, LOST: 32, TEXT: 64 })
 
-const KEYS = ['schema', 'layout', 'pdfjs', 'paper', 'left', 'views', 'fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held']
+const KEYS = ['schema', 'layout', 'pdfjs', 'paper', 'left', 'views', 'fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held', 'names']
 /** the placeholders the layer may draw as text in the page's face (Task 9's tokens), whose own text the file may hold */
 export const PAGE_TEXT_KINDS = Object.freeze(['cite', 'ref', 'eqref'])
 /** a page text's code units at most, and a file's in all */
@@ -59,6 +68,9 @@ const PDFJS_MAX = 32, LEFT_MAX = 128, FONTS_MAX = 512, FONT_MAX = 128
 const PIECES_MAX = 10000, DEPTH_MIN = -1, DEPTH_MAX = 5, DEPTH_NONE = 9
 const LINES_UNIT = 2000, LINES_ALL = 200000, SIZE_MAX = 200
 const SHARE_MAX = 1000, ERASE_LINE = 16, SEGS_INLINE = 4, SEGS_DISPLAY = 64, LABELS_UNIT = 4, SRC_MAX = 4000
+/** a file's names at most: a heading a babel name sets is a few a paper, a thesis's some tens */
+export const NAMES_MAX = 10_000
+const NAME_BITS = NAME_FLAG.CENTRED | NAME_FLAG.CAPITALS
 /** a rectangle lies within its page's view by this, PDF units */
 const SLACK = 1
 const UNIT_BITS = UNIT_FLAG.TITLE | UNIT_FLAG.FRONT | UNIT_FLAG.CENTRED
@@ -152,8 +164,10 @@ export function parseLayout(bytes) {
 /** a file already parsed, within the bounds of what holds it (a layer bundle, layer-proto/bundle.mjs): every bound
  *  parseLayout checks past JSON.parse. Returns the value itself, its -0s written 0; throws LayoutRefusal */
 export function checkLayout(value) {
+  // (its schema first: a file of another names other fields, and is refused for what it is)
+  if (isObject(value) && Object.hasOwn(value, 'schema') && value.schema !== LAYOUT_SCHEMA) throw refuse('schema', `not ${LAYOUT_SCHEMA}`)
   const f = exactKeys(value, KEYS, '')
-  if (f.schema !== 1) throw refuse('schema', 'not 1')
+  if (f.schema !== LAYOUT_SCHEMA) throw refuse('schema', `not ${LAYOUT_SCHEMA}`)
   if (!isVersionToken(f.layout)) throw refuse('layout', `not a version, 1 to 32 letters, digits or points (${kindOf(f.layout)})`)
   if (!printable(f.pdfjs, 1, PDFJS_MAX)) throw refuse('pdfjs', `not 1 to ${PDFJS_MAX} printable ASCII characters (${kindOf(f.pdfjs)})`)
   const paper = exactKeys(f.paper, PAPER_KEYS, 'paper')
@@ -358,6 +372,25 @@ export function checkLayout(value) {
     if (e[0] === 0) e[0] = 0
     last = e[0]
   }
+
+  // names: occurrence, key, page, x0, baseline, x1, top, bottom, size, font, flags; by occurrence rising, at most
+  // NAMES_MAX, each a rectangle as a line's
+  const names = array(f.names, 'names')
+  if (names.length > NAMES_MAX) throw refuse('names', `more than ${NAMES_MAX} names`)
+  last = -1
+  for (let i = 0; i < names.length; i++) {
+    const r = names[i]
+    if (!Array.isArray(r) || r.length !== 11) throw refuse(`names[${i}]`, `not [occurrence, key, page, x0, baseline, x1, top, bottom, size, font, flags] (${kindOf(r)})`)
+    if (!isInteger(r[0], last + 1, ID_MAX)) throw refuse(`names[${i}][0]`, 'not an occurrence above the last')
+    if (!isInteger(r[1], 0, NAME_KEYS.length - 1)) throw refuse(`names[${i}][1]`, 'not a key of NAME_KEYS')
+    checkBox(r, 2, 1, 3, 2, 4, 5, true, views, pages, 'names', i, -1)
+    const size = r[8]
+    if (!isNumber(size) || size <= 0 || size > SIZE_MAX) throw refuse(`names[${i}][8]`, `not a size above 0 to ${SIZE_MAX} (${kindOf(size)})`)
+    if (!isInteger(r[9], 0, nFonts - 1)) throw refuse(`names[${i}][9]`, 'not an index of fonts')
+    if (!isInteger(r[10], 0, NAME_BITS)) throw refuse(`names[${i}][10]`, 'not flags of NAME_FLAG')
+    zeroes(r)
+    last = r[0]
+  }
   return f
 }
 
@@ -365,11 +398,11 @@ export function checkLayout(value) {
 const r2 = v => Math.round(v * 100) / 100
 /** rows of `stride` with the coordinates (offsets `exact` excepted) to a hundredth */
 const rounded = (rows, stride, exact) => rows.map((v, j) => (exact.includes(j % stride) ? v : r2(v)))
-const LINE_EXACT = [0, 7], FRAME_EXACT = [0, 1, 2, 3, 4], ERASE_EXACT = [0], LABEL_EXACT = [0, 1, 2]
+const LINE_EXACT = [0, 7], FRAME_EXACT = [0, 1, 2, 3, 4], ERASE_EXACT = [0], LABEL_EXACT = [0, 1, 2], NAME_EXACT = [0, 1, 2, 9, 10]
 
 /** the file as written: keys in the schema's order, numbers to a hundredth, no white space */
 export function encodeLayout(file) {
-  const { schema, layout, pdfjs, paper, left, views, fonts, units, lines, frames, erase, ph, labels, headings, pageText, held } = file
+  const { schema, layout, pdfjs, paper, left, views, fonts, units, lines, frames, erase, ph, labels, headings, pageText, held, names } = file
   return JSON.stringify({
     schema, layout, pdfjs,
     paper: { id: paper.id, version: paper.version, pages: paper.pages },
@@ -386,6 +419,7 @@ export function encodeLayout(file) {
     headings,
     pageText,
     held,
+    names: names.map(r => rounded(r, 11, NAME_EXACT)),
   })
 }
 
@@ -393,10 +427,11 @@ export function encodeLayout(file) {
 const NONE = Object.freeze(new Float64Array(0))
 const NO_UNITS = Object.freeze([])
 const NO_HELD = Object.freeze([])
+const NO_NAMES = Object.freeze([])
 
 /** a parsed file's index, in one pass over each array; every typed array holds numbers copied from the file */
 export function indexLayout(file) {
-  const { units, lines, frames, erase, ph, labels, headings, views, fonts, pageText, held } = file
+  const { units, lines, frames, erase, ph, labels, headings, views, fonts, pageText, held, names } = file
   const pages = file.paper.pages
   const byId = new Map()
   for (let i = 0; i < units.length; i++) {
@@ -451,12 +486,21 @@ export function indexLayout(file) {
     Object.freeze(unit.erase)
     Object.freeze(unit)
   }
+  // each page's names, in the file's order
+  const namesOn = new Array(pages + 1).fill(NO_NAMES)
+  for (let i = 0; i < names.length; i++) {
+    const r = names[i], p = r[2]
+    if (namesOn[p] === NO_NAMES) namesOn[p] = []
+    namesOn[p].push(Object.freeze({ occurrence: r[0], key: NAME_KEYS[r[1]], page: p, x0: r[3], baseline: r[4], x1: r[5], top: r[6], bottom: r[7], size: r[8], font: r[9], centred: (r[10] & NAME_FLAG.CENTRED) !== 0, capitals: (r[10] & NAME_FLAG.CAPITALS) !== 0 }))
+  }
+  for (let p = 1; p <= pages; p++) Object.freeze(namesOn[p])
   const viewOf = new Array(pages + 1)
   for (let p = 1; p <= pages; p++) viewOf[p] = Object.freeze(views.slice(4 * (p - 1), 4 * p))
   return Object.freeze({
     file,
     unit: id => byId.get(id) ?? null,
     onPage: page => onPage[page] ?? NO_UNITS,
+    names: page => namesOn[page] ?? NO_NAMES,
     view: page => {
       const v = Number.isInteger(page) ? viewOf[page] : undefined
       if (v === undefined) throw new RangeError('not a page of the file')
