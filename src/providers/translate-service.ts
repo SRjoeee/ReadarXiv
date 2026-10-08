@@ -195,6 +195,12 @@ interface QueueItem {
    * mixes two calls' segments adds to both
    */
   tally: { calls: number }
+  /**
+   * Set once a request carried this very item (`translateItems`). An item that settled without it was answered by a
+   * request another call made: BatchQueue joins a segment to a task still gathering, RequestQueue an identical batch
+   * to one waiting or in flight (another tab, the same uncached segment)
+   */
+  sent?: boolean
 }
 
 /**
@@ -343,6 +349,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
     // joiner during a retry backoff — is known to the queue alone, which drains by refcount
     if (deps.retired?.()) throw attachRequestErrorMeta(new TranslationCancelledError(items[0]?.scope), { isRetryable: false })
     const first = items[0]!
+    for (const item of items) item.sent = true
     for (const tally of new Set(items.map(item => item.tally))) tally.calls++
     try {
       const result = await first.provider.translate({
@@ -609,8 +616,14 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
           // What was written stays — sound translations under keys derived from their content
           if (refused(scope)) return refusal()
         }
-        // What the call cost, once it has settled (issue #237); a call withdrawn above says nothing
-        const record = (failed?: string) => deps.note?.(batchLine({ ...(scope !== undefined ? { scope } : {}), segments: request.segments.length, cached, calls: tally.calls, done: translated.size, ...(failed !== undefined ? { failed } : {}) }))
+        // What the call cost, once it has settled (issue #237); a call withdrawn above says nothing. A call that sent no
+        // request of its own, yet had a segment come back translated, was answered by a request another call made (`sent`:
+        // two tabs, the same uncached segment): that request carried its segment too, and is counted once, so that 0 is
+        // never what a miss the network answered reads as (Devin and Codex on #329). A call that sent requests of its own
+        // is not credited again, the request that carried its joined segment being most likely one of them; a failure
+        // waited on cannot be told from a refusal on the spot, and is not credited
+        const calls = tally.calls > 0 || !settled.some((outcome, i) => outcome.status === 'fulfilled' && !items[i]!.sent) ? tally.calls : 1
+        const record = (failed?: string) => deps.note?.(batchLine({ ...(scope !== undefined ? { scope } : {}), segments: request.segments.length, cached, calls, done: translated.size, ...(failed !== undefined ? { failed } : {}) }))
         if (failures.length > 0) {
           const error = pickError(failures)
           record(toErrorInfo(error).kind)

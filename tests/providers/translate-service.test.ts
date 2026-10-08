@@ -92,6 +92,42 @@ describe('the batch record (issue #237)', () => {
     expect(notes).toEqual([`batch abcdef12 segments=3 cached=0 calls=${sent} done=0 outcome=failed:invalid-response`])
   })
 
+  it('a call whose segment rode on a request another call made says so: two tabs, the same uncached segment, one request, and neither line reads as a miss that cost nothing (Devin and Codex on #329)', async () => {
+    const notes: string[] = []
+    const calls = { n: 0 }
+    const { port } = fakePort()
+    const service = build({ getProvider: async () => ok(calls), cache: port, note: line => notes.push(line) })
+    // the second call joins the first's task while it still gathers (BatchQueue), so its item never reaches the engine call
+    const [a, b] = await Promise.all([
+      service.translate({ ...req(['x']), scope: 'tabAAAAA-0000' }),
+      service.translate({ ...req(['x']), scope: 'tabBBBBB-0000' }),
+    ])
+    expect([a.ok, b.ok]).toEqual([true, true])
+    expect(calls.n).toBe(1)
+    expect(notes.toSorted()).toEqual([
+      'batch tabAAAAA segments=1 cached=0 calls=1 done=1 outcome=ok',
+      'batch tabBBBBB segments=1 cached=0 calls=1 done=1 outcome=ok',
+    ])
+  })
+
+  it('a call that sent requests of its own is not credited again for a segment that rode on the same batch: the line counts what carried it, once', async () => {
+    const notes: string[] = []
+    const calls = { n: 0 }
+    const { port } = fakePort()
+    const service = build({ getProvider: async () => ok(calls), cache: port, note: line => notes.push(line) })
+    // the first holds `x` and `y`, the second `y` and `z`: `y` is shared, and the one batch carries all three
+    await Promise.all([
+      service.translate({ ...req(['x', 'y']), scope: 'tabAAAAA-0000' }),
+      service.translate({ ...req(['y', 'z']), scope: 'tabBBBBB-0000' }),
+    ])
+    expect(calls.n).toBe(1)
+    expect(notes.toSorted()).toEqual([
+      'batch tabAAAAA segments=2 cached=0 calls=1 done=2 outcome=ok',
+      'batch tabBBBBB segments=2 cached=0 calls=1 done=2 outcome=ok',
+    ])
+    for (const line of notes) expect(RECORD_SHAPES.some(shape => shape.test(line)), line).toBe(true)
+  })
+
   it('names the kind of a failure and nothing of its message, whatever the message quotes', async () => {
     const notes: string[] = []
     const echo = attachRequestErrorMeta(new ProviderError('auth', 'Unauthorized: key=ZZZ-my-secret-shape; request was: the Fourier transform of f'), { statusCode: 401, isRetryable: false })
