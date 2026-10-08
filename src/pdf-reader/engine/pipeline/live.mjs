@@ -48,10 +48,10 @@ export const lostIn = log => {
 /** A compile that gave a PDF but could not set some letter of the translation: the paper's pdfLaTeX meeting a letter no
  *  encoding it has loaded holds (Vietnamese's, under T1), or one a class's primitive \uppercase broke into bytes (amsart's
  *  titles, a French apostrophe); or a font whose metrics are nowhere (a size of a METAFONT-only font the file server does
- *  not have); or a character its font lacks, which leaves a gap in the PDF where it was (Devin and Codex on #294).
+ *  not have); or a character its font lacks, which leaves a gap in the PDF where it was.
  *  `known` counts the characters the paper's own full compile could not set: the original lacks them too, and a
- *  translation that loses a character no more often is no worse; one more loss of it is a gap the translation added
- *  (Devin and Codex on #294). The chain moves on from it as from a compile with no PDF */
+ *  translation that loses a character no more often is no worse; one more loss of it is a gap the translation added.
+ *  The chain moves on from it as from a compile with no PDF */
 export const unsettable = (r, known = new Map()) => /^! Font .* not loadable/m.test(r.log ?? '') || [...lostIn(r.log)].some(([c, n]) => n > (known.get(c) ?? 0))
 /** Whether a compile's last TeX pass stopped short of the document's end: TeX's fatal errors — an emergency stop (a
  *  file that ended inside an argument, a line asked of no terminal, the job ended with no \\end), its capacity
@@ -456,7 +456,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
   const sentencesBy = new WeakMap()
   const keep = (pieces, sentences) => { if (sentences) sentencesBy.set(pieces, sentences) }
   // a seed's translation as the run keeps it: with its sentences, and its mark that the copy's final set it in the source
-  // (cache.mjs inSourceOf), which goes with it until a final sets the unit again (Devin and Codex on #309)
+  // (cache.mjs inSourceOf), which goes with it until a final sets the unit again
   const seeded = old => (old ? { pieces: old.pieces, by: old.by, ...(old.sentences ? { sentences: old.sentences } : {}), ...(old.inSource ? { inSource: true } : {}) } : {})
   if (seed) for (const [i, s] of seed) { translated.set(units[i], s.pieces); keep(s.pieces, s.sentences) }
   // a seed taken as it is (cache.mjs reusable: whole, by this identity, of the wire sent now) is not sent again: a change
@@ -530,7 +530,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
         for (const i of batch) todo.add(i)
         break
       }
-      // whether this batch changed what is typeset: a batch that gives back its seeds asks for no preview (Devin on #298)
+      // whether this batch changed what is typeset: a batch that gives back its seeds asks for no preview
       let fresh = false
       for (const i of batch) {
         const r = got.get(units[i]), old = seed?.get(i)
@@ -626,12 +626,11 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     /**
      * Whether a compile set the translation (unsettable). A character its font lacks counts only if the paper's own
      * compile set it, which only the original's full compile tells: the font probe has no body (probeFiles). So the
-     * original is asked for ahead of its turn, and only when a translation leaves a character out at all (Devin and
-     * Codex on #294)
+     * original is asked for ahead of its turn, and only when a translation leaves a character out at all
      */
     const settled = async r => r.ok && !unsettable(r, lostIn(r.log).size ? lostIn((await original()).log) : undefined)
-    // with a compiler of its own, the original from the start, beside the probe and the first preview (the F2 review's
-    // I2): off the final's path when the translation comes quickly. Its failure is met where it is awaited
+    // with a compiler of its own, the original from the start, beside the probe and the first preview:
+    // off the final's path when the translation comes quickly. Its failure is met where it is awaited
     if (readMarks && compileOriginal) original().catch(() => {})
     const { fonts, log: fontLog } = await fontsP
     // the preview flag (the instant layer's spec, §4.10 row 10): previews off, or not yet known, the original comes first
@@ -708,7 +707,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     /** the run's results with the table groups kept whole marked so (`kept`, their translation with them: the next run's
      *  seed, which decides them again), for the record (cache.mjs unitsOf): what is shown apart from what the translator
      *  gave (`translation`), so that a cell given in part is asked for again rather than taken as whole; and its sentence
-     *  cuts, which a whole cell taken as it is when its group is translated has from no other request (Codex on #323) */
+     *  cuts, which a whole cell taken as it is when its group is translated has from no other request */
     const markKept = snapshot => { for (const u of decided(snapshot).keep) { const i = indexOf.get(u), r = results.get(i); if (r?.pieces) { const { inSource: _, ...rest } = r; results.set(i, { ...rest, state: 'kept', translation: translationOf(r) }) } } }
     // the last compile of the translation: the files it was given, its units' lines in them (worked out when asked) and
     // the units it set translated — what the safety net places a failure by
@@ -774,16 +773,16 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
      * it, once, none in `out` already: those translated, and those still to come — a unit with no answer in yet, which
      * the source would hold all the same once it came —; not a unit left as it is (kept), lost to the service, or one the
      * strategy sets as the paper has it (the author block under one that cannot take its names). The passages the bounds
-     * count (Codex's first medium, both rounds: a paragraph's five footnotes are six passages, which the bound of three
-     * had counted as one — and as one again while the five were still being translated)
+     * count: a paragraph's five footnotes are six passages, which the bound of three had counted as one — and as one
+     * again while the five were still being translated
      */
     const reverting = (found, out, at) => [...new Set(found.flatMap(withNested))].filter(u => !out.has(u) && !kept.has(u) && !(strategies[at.s].authors === false && u.kind === 'author') && (translated.has(u) || !results.has(indexOf.get(u))))
     /** whether the letters a compile (`at`) lost beyond the original's, where the log names them by code point, stand in
      *  the translation of a unit or a few — no more passages than `room`, what the strategy may still set in the source
      *  besides `out`: lost in more, they are the strategy's font's, and in none, not a unit's (a caption babel sets).
      *  The units holding them by their own text, a footnote apart from its paragraph, each counted with what it would
-     *  take to the source (Codex's fourth medium, second round: a letter in one of a paragraph's five notes was counted
-     *  as the six, and never diagnosed); what the diagnosis places is counted again, exactly (fits) */
+     *  take to the source (a letter in one of a paragraph's five notes was counted as the six, and never diagnosed);
+     *  what the diagnosis places is counted again, exactly (fits) */
     const lostInFew = (at, known, out, room) => {
       const codes = [...lostIn(at.r.log)].filter(([c, n]) => n > (known.get(c) ?? 0)).map(([c]) => (/^[0-9A-F]+$/.test(c) ? String.fromCodePoint(parseInt(c, 16)) : null))
       if (codes.some(c => c === null)) return true
@@ -857,9 +856,9 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       if (episode.trying) {
         if (now !== episode.failure) {
           note('kept', { strategy: name, by: episode.trying })
-          // another failure, which the last one hid: the remedies taken back for that one are untried for this one — the
-          // references' fault before the rule's in the final, a unit's before the rule's once the unit is in the source
-          // (Codex's third medium, second round) —; those in effect stay so, and the budget is the run's
+          // another failure, which the last one hid: the remedies taken back for that one are untried for this one (the
+          // references' fault before the rule's in the final, a unit's before the rule's once the unit is in the source);
+          // those in effect stay so, and the budget is the run's
           episode.tried = new Set([...episode.tried].filter(how => how === 'units' || (how === 'rule' ? ruleFailed.has(name) : without[how].has(name))))
         } else if (episode.trying === 'rule') { ruleFailed.delete(name); note('typeset back', { strategy: name }) }
         else if (episode.trying !== 'units') { without[episode.trying].delete(name); note(`${episode.trying} back`, { strategy: name }) }
@@ -977,7 +976,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
         if (r.ok && r.bbl) bbl = r.bbl
         held = false
         previewMs = r.ms ?? 0
-        // shown only when it set every letter: a translation with letters missing is not one (Devin on #294); the note says
+        // shown only when it set every letter: a translation with letters missing is not one; the note says
         // ok for what is shown, and with no strategy left the reader keeps what it has
         const shown = await settled(r)
         note('preview', { ok: shown, units: snapshot.size, ms: r.ms, roundTrip: Date.now() - t0, strategy: strategy().name, typeset: !!plan, error: shown ? undefined : whyFailed(r) ?? whyUnset(r) })
@@ -1007,7 +1006,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     // nothing to show: nothing compiled, not even the marked original; the reader says why (the reader's design, §10.3)
     if (stopped && !translated.size) return { previews, translated: 0, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing(), original: readings, passing }
     // a seeded run that changed nothing typeset, on the same pipeline: nothing to compile but the marked original, for a
-    // copy that has no marks — else they would never come (Devin on #298)
+    // copy that has no marks — else they would never come
     if (seed && !changed && pipelineCurrent) {
       if (!marks) await original()
       note('unchanged')
@@ -1058,7 +1057,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
             aux = r.aux
             if (r.bbl) bbl = r.bbl
             r = await measure(plan)
-            // judged as the first: a list may be set in a face without a letter its heading's face has (Devin on #309)
+            // judged as the first: a list may be set in a face without a letter its heading's face has
             unset = r.ok && !(await settled(r))
           }
           // one that could not set a letter is no measure, as a preview that cannot is not shown: the chain moves on before
@@ -1110,7 +1109,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       // the run's remedies before the chain moves on (remedy). The rule left out by the remedy just tried comes back only
       // where the remedy took it back — with the final's plan, or, left out since a preview or the measure, the plan for
       // this strategy, uncorrected (the handoff, 6); kept off — the failure changed —, the final stays without it, and the
-      // next remedy is tried with the rule still off (the reviews of 2026-10-04: I-3, and Codex's second high)
+      // next remedy is tried with the rule still off
       const back = episode?.trying === 'rule'
       const how = await remedy(r, !!typeset, req)
       if (back) {

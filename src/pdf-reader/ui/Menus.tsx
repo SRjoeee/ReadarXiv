@@ -89,7 +89,7 @@ export function ServiceMenu({ controller }: { controller: ReaderController }) {
               const item = serviceItems(config, state.pack, rejected).find(i => i.id === id)
               if (id === MANAGE_SERVICES || item?.action) return openOptions('translate/services')
               // a service another tab deleted meanwhile is not written: the chain would take an unknown id for Microsoft
-              // while the bar showed the raw id (the popup's rule; Codex on #301)
+              // while the bar showed the raw id (the popup's rule)
               controller.patchSettings(c => (isBuiltInService(id) || c.services.some(s => s.id === id) ? { ...c, provider: id } : c))
             }} />
         </Popover>
@@ -100,7 +100,7 @@ export function ServiceMenu({ controller }: { controller: ReaderController }) {
 
 /** `wide`: the bar's, which leaves it in a narrow window for the reading options' own (reader.css data-wide) */
 export function DownloadMenu({ controller, wide = false }: { controller: ReaderController; wide?: boolean }) {
-  // the original only once its document is open: loading, or after a fetch that failed, there are no bytes to give (Codex on #301)
+  // the original only once its document is open: loading, or after a fetch that failed, there are no bytes to give
   const state = useReader(controller, s => ({ finalReady: s.finalReady, original: s.sides.left.pages > 0 }))
   const pop = usePopover('menu')
   const items = [{ id: 'translation', name: R.download.translation, disabled: !state.finalReady }, { id: 'original', name: R.download.original, disabled: !state.original }]

@@ -514,6 +514,11 @@ figures' text goes through the same service: once a run has stopped, none is sen
 {n} is the paragraphs left in the source language: a paragraph a stored copy had translated keeps it when its new try
 fails, and is not counted.
 
+Texts that did not come back for a reason that is not theirs (the service's own: a network down, a timeout, a rate limit
+the background's queue has already retried) are not sent again piece by piece, since they would only fail again, once for
+each piece. They stay in the source language, counted, and the failure is kept (`EngineError.lost`, `mt.mjs`
+`translateUnits`).
+
 ### 10.4 Small ones
 
 - A heading unit keeps the level of its sectioning command, for the contents (§6.3).
@@ -527,6 +532,10 @@ fails, and is not counted.
   for it after the teardown, and the document-level selection listener all text layers share is bound to the signal
   of whichever viewer's text layer came first, so aborting that viewer would take text selection from the viewers
   still on screen.
+- The translation scope the reader binds in the background is withdrawn when the page goes (`pagehide`), and that handler
+  is set before the status call that binds the scope: an extension page is no tab the background watches, so nothing else
+  withdraws it, and a page closed while that call was out left its scope bound. A reader that finds no engine able to
+  translate withdraws the scope it just bound at once (`session/translate.mjs` `openEngine`).
 - A test pins the PDF.js internals the engine reads (`_pages`, the page views' `pdfPage.view`, `renderingState`), so an
   upgrade that changes them fails at once.
 
@@ -537,6 +546,10 @@ fails, and is not counted.
 - `src/entrypoints/pdf-reader/` (`index.html`, `main.tsx`, `App.tsx`), built by WXT with React and TypeScript.
   `pdf.content.ts` opens it in its frame with `?paper=<id>`; `web_accessible_resources` names it.
 - Its compile page stays where it is, on our static site, in an `iframe` (`?site=`), unchanged.
+- **The reader's address is not trusted.** The reader is a page that arXiv's pages may frame, so its URL is not its own to
+  trust: a page that frames it must not point its requests, or the paper's project, anywhere else. It fetches the paper
+  from arXiv and sends its typesetting to our site's TeX page, or to a server on this machine when a probe says so; the
+  build, never a paper, a service or a framing page, chooses which TeX page it uses (`src/pdf-reader/addresses.mjs`).
 - The demo papers stay reachable by address for the probes and the e2e checks (`?paper=<id>` without `live=1`, the
   probes' form since the prototype), never from the interface.
 
@@ -593,6 +606,8 @@ interface ReaderController {
 
 The engine's failure classes (`EngineError`: permanent, isolatable, the service's) map to `ProviderErrorKind` here, so
 that the reasons are the popup's. The exact shapes are the plan's to fix; the boundary is this one.
+
+`retry()` on a reader whose session could not open loads the page again, as it first was: there is no session to resume.
 
 ### 11.4 Components
 
@@ -839,6 +854,18 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   the offsets mean rests on `plainSource`, `plainTranslated` and `anchors.mjs tokens` — a change to any is a change of
   the record. A run again (a retry, the network back) seeds itself with what the visit's last run made, sentences and
   all (`cache.mjs seedAgain`).
+- A translation's `inSource` mark (a final set it in the source: the author block under CJKutf8) belongs to the copy's PDF,
+  not to the run. A run that sets no final writes the units' provenance over the copy's PDF, which still sets that
+  translation in the source, so the mark goes with the translation from the record to the seed, to the run again's seed
+  and to the run's results, and only a final that sets the unit again says anew whether it set it there
+  (`cache.mjs inSourceOf`).
+- Units that share a source hash (table cells, often) each take the best translation of that source, whole before partial
+  (`cache.mjs seedFrom`); whether a run changed anything a stored copy holds is judged on the units as a whole, never by
+  hash (`decideWrite`).
+- A table group kept whole is shown in the source (`state: 'kept'`), and the record keeps beside it what the translator
+  gave its cells (`translation`: whole, partial, none or lost) and their sentence cuts, so that a cell given in part is
+  asked for again rather than taken as whole, and a retry that makes it whole with the same pieces is written. A cell
+  left partial in the copy was asked for on every run (`cache.mjs translationOf`).
 
 ### 17.6 What it costs (2026-10-02, interleaved against a base build)
 

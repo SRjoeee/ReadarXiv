@@ -54,7 +54,7 @@ Chinese that is product data stays: the locale packs (`src/locales/*`, `public/_
 pnpm install
 pnpm dev                 # WXT dev mode; load .output/chrome-mv3-dev unpacked
 pnpm typecheck           # tsc --noEmit — vitest does not type-check
-pnpm lint                # Biome linter, the English gate, the boundary gate; pnpm lint:fix applies safe fixes
+pnpm lint                # Biome linter, the English gate, the boundary gate, the review-citation gate (src/pdf-reader names no reviewer; the rest of src/ is counted); pnpm lint:fix applies safe fixes
 pnpm test                # vitest; pnpm test:watch
 pnpm build               # wxt build + scripts/check-output.mjs
 pnpm exec wxt build --mode development   # the dev pages too: the gallery (every popup state) and the controls sheet
