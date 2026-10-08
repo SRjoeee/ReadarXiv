@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-CN" data-panel="open">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Layer lab</title>
+<style>@layer base, components;</style>
+<link rel="stylesheet" href="/styles/tokens.css">
+<link rel="stylesheet" href="/styles/controls.css">
+<link rel="stylesheet" href="/lab/lab.css">
+<script type="importmap">{ "imports": { "pdfjs-dist": "/pdfjs/build/pdf.mjs", "pdfjs-dist/": "/pdfjs/" } }</script>
+<script type="module" src="/lab/lab.mjs"></script>
+</head>
+<body>
+<!-- the icons, Lucide's paths on their 24 px grid, drawn in the text's colour -->
+<svg hidden aria-hidden="true">
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+</svg>
+
+<header class="bar">
+  <div class="zone lead">
+    <select id="paper" class="menu paper" data-t-aria="paper"><button><selectedcontent></selectedcontent><svg class="ic chev" aria-hidden="true"><use href="#i-down"/></svg></button></select>
+    <select id="target" class="menu" data-t-aria="target"><button><selectedcontent></selectedcontent><svg class="ic chev" aria-hidden="true"><use href="#i-down"/></svg></button></select>
+  </div>
+  <div class="zone nav" role="group" data-t-aria="pages">
+    <button id="prev" class="tbtn" type="button" data-t-aria="prev" aria-keyshortcuts="ArrowLeft"><svg class="ic" aria-hidden="true"><use href="#i-left"/></svg></button>
+    <input id="page" class="page-field" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="1" data-t-aria="pageField">
+    <span id="pages" class="page-count"></span>
+    <button id="next" class="tbtn" type="button" data-t-aria="next" aria-keyshortcuts="ArrowRight"><svg class="ic" aria-hidden="true"><use href="#i-right"/></svg></button>
+  </div>
+  <div class="zone trail">
+    <select id="zoom" class="menu" data-t-aria="zoom">
+      <button><span class="widest"><selectedcontent></selectedcontent><span aria-hidden="true" data-t="zoomFit"></span></span><svg class="ic chev" aria-hidden="true"><use href="#i-down"/></svg></button>
+      <option value="fit" data-t="zoomFit"></option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option>
+      <option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option><option value="3">300%</option><option value="4">400%</option>
+    </select>
+    <div class="segment" role="radiogroup" data-t-aria="scroll">
+      <label><input type="radio" name="scroll" value="continuous"><span data-t="scrollContinuous"></span></label>
+      <label><input type="radio" name="scroll" value="single"><span data-t="scrollSingle"></span></label>
+    </div>
+    <span class="divider" aria-hidden="true"></span>
+    <label class="sync" for="sync" data-t-title="syncHint"><span data-t="sync"></span><button id="sync" class="switch" type="button" role="switch" aria-checked="true"></button></label>
+    <button id="panel-toggle" class="tbtn" type="button" aria-controls="side" aria-expanded="true" data-t-aria="panel" data-t-title="panel"><svg class="ic" aria-hidden="true"><use href="#i-panel"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <section class="pane" id="pane-a">
+    <div class="pane-head">
+      <select id="view-a" class="menu view" data-t-aria="paneA"><button><selectedcontent></selectedcontent><svg class="ic chev" aria-hidden="true"><use href="#i-down"/></svg></button></select>
+      <span class="head-note"></span>
+    </div>
+    <div class="scroller" tabindex="0" role="region" data-t-aria-pane="paneA"></div>
+  </section>
+  <section class="pane" id="pane-b">
+    <div class="pane-head">
+      <select id="view-b" class="menu view" data-t-aria="paneB"><button><selectedcontent></selectedcontent><svg class="ic chev" aria-hidden="true"><use href="#i-down"/></svg></button></select>
+      <span class="head-note"></span>
+    </div>
+    <div class="scroller" tabindex="0" role="region" data-t-aria-pane="paneB"></div>
+  </section>
+
+  <aside class="side" id="side" data-t-aria="settings">
+    <section class="group" id="g-v0" aria-labelledby="g-v0-title" hidden>
+      <h2 id="g-v0-title" data-t="views.v0"></h2>
+      <p class="note warn" id="v0-engine" hidden></p>
+      <div class="field">
+        <span class="label" id="fill-label" data-t="fill"></span>
+        <div class="segment wide" role="radiogroup" aria-labelledby="fill-label" aria-describedby="fill-hint">
+          <label><input type="radio" name="v0-fill" value="D"><span data-t="fillD"></span></label>
+          <label><input type="radio" name="v0-fill" value="B"><span data-t="fillB"></span></label>
+        </div>
+        <p class="hint" id="fill-hint"></p>
+      </div>
+      <div class="reveal" id="d-params"><div>
+        <div class="sliders">
+          <div class="slider">
+            <label for="v0-band" data-t="band"></label><output id="v0-band-out" for="v0-band"></output>
+            <input type="range" id="v0-band" min="0" max="0.5" step="0.01" aria-describedby="v0-band-hint">
+            <span class="hint" id="v0-band-hint" data-t="bandHint"></span>
+          </div>
+          <div class="slider">
+            <label for="v0-track" data-t="track"></label><output id="v0-track-out" for="v0-track"></output>
+            <input type="range" id="v0-track" min="0" max="0.2" step="0.01">
+          </div>
+          <div class="slider">
+            <label for="v0-size" data-t="size"></label><output id="v0-size-out" for="v0-size"></output>
+            <input type="range" id="v0-size" min="1" max="1.5" step="0.01" aria-describedby="v0-size-hint">
+            <span class="hint" id="v0-size-hint" data-t="sizeHint"></span>
+          </div>
+          <div class="reset"><button id="v0-defaults" class="btn text sm" type="button" data-t="resetDefaults"></button></div>
+        </div>
+      </div></div>
+      <div class="toggles">
+        <div class="toggle"><label for="v0-tex" data-t="tex"></label><button id="v0-tex" class="switch" type="button" role="switch" aria-checked="false" aria-describedby="v0-tex-desc"></button><p class="hint" id="v0-tex-desc" data-t="texDesc"></p></div>
+        <div class="toggle"><label for="v0-removal" data-t="removal"></label><button id="v0-removal" class="switch" type="button" role="switch" aria-checked="false" aria-describedby="v0-removal-desc"></button><p class="hint" id="v0-removal-desc" data-t="removalDesc"></p></div>
+        <div class="toggle"><label for="v0-faces" data-t="faces"></label><button id="v0-faces" class="switch" type="button" role="switch" aria-checked="false" aria-describedby="v0-faces-desc"></button><p class="hint" id="v0-faces-desc" data-t="facesDesc"></p></div>
+      </div>
+      <div class="now" id="v0-summary"></div>
+    </section>
+
+    <section class="group" id="g-inspect" aria-labelledby="g-inspect-title" hidden>
+      <h2 id="g-inspect-title" data-t="inspect"></h2>
+      <div id="inspect" aria-live="polite"></div>
+    </section>
+
+    <section class="group" id="g-paper" aria-labelledby="g-paper-title">
+      <h2 id="g-paper-title" data-t="paper"></h2>
+      <dl class="facts" id="info"></dl>
+      <details class="tech"><summary><svg class="ic" aria-hidden="true"><use href="#i-right"/></svg><span data-t="tech"></span></summary><dl class="facts" id="info-tech"></dl></details>
+    </section>
+
+    <section class="group" id="g-notes">
+      <h2><label for="notes" data-t="notes"></label></h2>
+      <textarea id="notes" rows="6" data-t-placeholder="notesPlaceholder"></textarea>
+      <div class="row"><button id="export" class="btn neutral sm" type="button"><span data-t="exportNotes"></span><span class="kbd">JSON</span></button><span id="saved" class="hint" aria-live="polite"></span></div>
+    </section>
+
+    <footer class="group foot">
+      <div class="foot-row">
+        <span class="label" id="ui-lang-label" data-t="uiLang"></span>
+        <div class="segment" role="radiogroup" aria-labelledby="ui-lang-label">
+          <label lang="zh-CN"><input type="radio" name="ui" value="zh"><span data-endonym="zh"></span></label>
+          <label lang="en"><input type="radio" name="ui" value="en"><span data-endonym="en"></span></label>
+        </div>
+      </div>
+      <div class="foot-row">
+        <span class="label" data-t="keys"></span>
+        <span class="keys"><kbd class="kbd">←</kbd><kbd class="kbd">→</kbd><span data-t="keysTurn"></span></span>
+      </div>
+    </footer>
+  </aside>
+
+  <div id="status" class="capsule" role="status"></div>
+</main>
+</body>
+</html>
