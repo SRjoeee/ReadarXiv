@@ -51,8 +51,10 @@ jobs:
           # every state a run has before it ends: one that is still measuring the live engines reaches the approval later
           for status in requested queued pending in_progress waiting; do
             for id in $(gh run list --workflow rules-publish.yml --status "$status" --limit 100 --json databaseId --jq '.[].databaseId'); do
-              gh run cancel "$id"
-              echo "cancelled run $id ($status)"
+              # a run that ended between the list and the cancel can no longer move the pointer; any other failure stops the rollback
+              if gh run cancel "$id"; then echo "cancelled run $id ($status)"
+              elif [ "$(gh run view "$id" --json status --jq .status)" = completed ]; then echo "run $id ended before it could be cancelled"
+              else exit 1; fi
             done
           done
 

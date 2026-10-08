@@ -215,7 +215,10 @@ describe('one pointer, one queue', () => {
     const body = runBodies(cancel).join('\n')
     expect(body).toContain('for status in requested queued pending in_progress waiting; do')
     expect(body).toContain('gh run list --workflow rules-publish.yml --status "$status"')
-    expect(body).toContain('gh run cancel "$id"')
+    expect(body).toContain('if gh run cancel "$id"; then')
+    // a run that ended between the list and the cancel is no failure; any other is
+    expect(body).toContain('elif [ "$(gh run view "$id" --json status --jq .status)" = completed ]; then')
+    expect(body).toContain('else exit 1; fi')
     // that job alone holds a write permission; the workflows' own are read
     for (const name of WORKFLOWS) {
       const yml = text(name)
