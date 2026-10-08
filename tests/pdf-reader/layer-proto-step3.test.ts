@@ -310,7 +310,23 @@ describe("the page fill (adaptiveFill, D6's F6b): every original's units spread 
     p.layout = L2.layoutUnit2(p.tokens as never, p.blocks as never, 10, p.P as never) as never
     return p
   }
-  const fill = async (units: Unit[], PP: Record<string, unknown> = P(), held: { last: number; first: number } | null = null) => (await import('@/pdf-reader/engine/layer-proto/run.mjs')).fillPage(units as never, PP as never, held)
+  type Held = { last: number; anchor: number; lines: number }
+  type Told = { target: number; own: number; body: boolean; lines: number }
+  const fill = async (units: Unit[], PP: Record<string, unknown> = P(), held: Held | null = null) => (await import('@/pdf-reader/engine/layer-proto/run.mjs')).fillPage(units as never, PP as never, held)
+  /** pages passed in order, each { units, own } (the own target its units are made to tell): the targets they are held to */
+  const paper = async (pages: { units: Unit[]; own: number }[], PP: Record<string, unknown>) => {
+    const { nextHeld } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    let held: Held | null = null
+    const targets: number[] = []
+    for (const pg of pages) {
+      for (const u of pg.units) { u.fillLead = pg.own; (u as unknown as { fillTop: number }).fillTop = 3 }
+      const r: Told = (await fill(pg.units, PP, held))!
+      targets.push(r.target)
+      held = nextHeld(held, r)
+    }
+    return targets
+  }
+  const steps = (ts: number[]) => ts.slice(1).every((t, k) => Math.abs(t - ts[k]!) <= 0.05 + 1e-9)
   const baselines = (p: Unit) => p.layout.lines.map(l => l.baseline)
 
   it('builds in a top of 2 em for Chinese, 1.7 for Japanese and Korean, and the original\'s own pitch for the alphabets', () => {
@@ -322,7 +338,7 @@ describe("the page fill (adaptiveFill, D6's F6b): every original's units spread 
     const PP = P({ adaptiveFill: { band: 0.05, track: 0, size: 1 } })
     const two = laid(1, 20, PP)
     expect(two.layout.state.lead).toBe(1.3)
-    expect(await fill([two], PP)).toEqual({ target: 1.5, body: true })
+    expect(await fill([two], PP)).toMatchObject({ target: 1.5, own: 1.5, body: true, lines: 6 })
     expect(baselines(two)).toEqual([500, 482])
     const P3 = { ...PP, fillLead: 3 }
     const three = laid(2, 30, P3)
@@ -331,31 +347,45 @@ describe("the page fill (adaptiveFill, D6's F6b): every original's units spread 
     expect(baselines(three)).toEqual([500, 470, 440])
   })
 
-  it("holds a long paper's targets within a band of its first page's, however steadily they climb", async () => {
-    // (forty pages, each of a unit whose own fill leading is 0.03 above the last page's, from 1.3: the first page's target
-    // 1.3, every later one within 0.05 of it and of the page before)
+  it("holds a long paper's targets within a band of its fullest page's, however steadily they climb", async () => {
+    // (forty pages of one six-line paragraph each, their own targets 0.03 above the last page's from 1.3: the pages are
+    // equally full, so the first stays the anchor, and every target stays within 0.05 of it and of the page before)
     const PP = P({ fillLead: 3 })
-    let held: { last: number; first: number } | null = null
-    const targets: number[] = []
-    for (let k = 0; k < 40; k++) {
-      const u = laid(k, 20, PP)
-      u.fillLead = Math.round((1.3 + 0.03 * k) * 1000) / 1000
-      ;(u as unknown as { fillTop: number }).fillTop = 3
-      const r: { target: number; body: boolean } = (await fill([u], PP, held))!
-      targets.push(r.target)
-      const first: number = held === null ? r.target : (held as { first: number }).first
-      held = { last: r.target, first }
-    }
-    expect(targets[0]).toBe(1.3)
-    expect(Math.max(...targets)).toBeCloseTo(1.35, 6)
-    expect(Math.min(...targets)).toBe(1.3)
-    for (let k = 1; k < 40; k++) expect(Math.abs(targets[k]! - targets[k - 1]!)).toBeLessThanOrEqual(0.05 + 1e-9)
+    const ts = await paper(Array.from({ length: 40 }, (_, k) => ({ units: [laid(k, 20, PP)], own: Math.round((1.3 + 0.03 * k) * 1000) / 1000 })), PP)
+    expect(ts[0]).toBe(1.3)
+    expect(Math.max(...ts)).toBeCloseTo(1.35, 6)
+    expect(steps(ts)).toBe(true)
+  })
+
+  it("anchors on the fullest page, not on a title page: the full pages climb to their own and stay within a band of it", async () => {
+    // (a title page of one six-line paragraph telling 1.08, then pages of three, their own 1.33 climbing 0.03 a page: the
+    // first full page anchors at 1.33; the targets step up 0.05 a page from 1.08 and stop at 1.38)
+    const PP = P({ fillLead: 3 })
+    const pages = [{ units: [laid(0, 20, PP)], own: 1.08 }, ...Array.from({ length: 12 }, (_, k) => ({ units: [laid(3 * k + 1, 20, PP), laid(3 * k + 2, 20, PP), laid(3 * k + 3, 20, PP)], own: Math.round((1.33 + 0.03 * k) * 1000) / 1000 }))]
+    const ts = await paper(pages, PP)
+    expect(ts.slice(0, 7)).toEqual([1.08, 1.13, 1.18, 1.23, 1.28, 1.33, 1.38])
+    expect(Math.max(...ts)).toBeCloseTo(1.38, 6)
+    expect(steps(ts)).toBe(true)
+  })
+
+  it('moves the anchor to a fuller page that comes later, and holds the pages after it to it', async () => {
+    // (five pages of one paragraph at 1.3, then one of three at 1.5, then pages of one at 1.6: the anchor moves to the
+    // fuller page's 1.5, and the targets climb by the band to 1.55, not to 1.6)
+    const PP = P({ fillLead: 3 })
+    const one = (k: number, own: number) => ({ units: [laid(k, 20, PP)], own })
+    const pages = [...[0, 1, 2, 3, 4].map(k => one(k, 1.3)), { units: [laid(5, 20, PP), laid(6, 20, PP), laid(7, 20, PP)], own: 1.5 }, ...[8, 9, 10, 11, 12, 13].map(k => one(k, 1.6))]
+    const ts = await paper(pages, PP)
+    expect(ts.slice(0, 5)).toEqual([1.3, 1.3, 1.3, 1.3, 1.3])
+    // (the fuller page itself is held by the anchor before it, 1.3, and the page before: 1.35)
+    expect(ts[5]).toBeCloseTo(1.35, 6)
+    expect(ts.slice(6)).toEqual([1.4, 1.45, 1.5, 1.55, 1.55, 1.55])
+    expect(steps(ts)).toBe(true)
   })
 
   it("holds the page's target within the band of the running one, and each unit within the band over the target", async () => {
     const PP = P({ fillLead: 3 })
     const a = laid(1, 30, PP), b = laid(2, 30, PP)
-    expect(await fill([a, b], PP, { last: 2, first: 2 })).toEqual({ target: 2.05, body: true })
+    expect(await fill([a, b], PP, { last: 2, anchor: 2, lines: 6 })).toMatchObject({ target: 2.05, body: true, lines: 12 })
     expect([a.layout.state.lead, b.layout.state.lead]).toEqual([2.1, 2.1])
   })
 
