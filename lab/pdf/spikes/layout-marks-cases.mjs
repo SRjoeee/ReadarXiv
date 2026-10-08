@@ -520,7 +520,7 @@ for (const [name, , engine] of stays) {
     if (!a || !b) { check(label, false, `no PDF (${a ? 'v1' : 'v0'})`); continue }
     const m = moved(a, b), newErrors = errorsOf(`${key}-v1`).filter(e => !errorsOf(`${key}-v0`).includes(e))
     const logA = readLog(`${key}-v0`), logB = readLog(`${key}-v1`)
-    const marks = [...b.dests.keys()].filter(k => /^[pnth]\d/.test(k)).length
+    const marks = [...b.dests.keys()].filter(k => /^(?:[pth]\d|n\d+\.\d+[ab])/.test(k)).length
     check(label, !m.length && !newErrors.length && marks > 0, JSON.stringify({ moved: m.slice(0, 6), newErrors, layoutMarks: marks }))
     check(`${label}: the log the run reads and LaTeX's warnings unchanged`, JSON.stringify(logA) === JSON.stringify(logB), JSON.stringify(logB.filter(l => !logA.includes(l)).slice(0, 4)))
   }
