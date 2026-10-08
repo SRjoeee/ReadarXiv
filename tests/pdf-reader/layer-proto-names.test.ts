@@ -12,7 +12,7 @@ vi.hoisted(() => {
   const ctxStub = (canvas?: { width: number; height: number }) => new Proxy({} as Record<string | symbol, unknown>, {
     get(t, k) {
       if (k in t) return t[k]
-      if (k === 'measureText') return (s: string) => { const px = Number(/(\d+(?:\.\d+)?)px/.exec(String(t.font ?? ''))?.[1] ?? 10); return { width: [...s].reduce((w, ch) => w + (/[　-鿿]/.test(ch) ? px : px / 2), 0), actualBoundingBoxAscent: 0.7 * px, actualBoundingBoxDescent: 0.2 * px, actualBoundingBoxLeft: 0, actualBoundingBoxRight: s.length * px } }
+      if (k === 'measureText') return (s: string) => { const px = Number(/(\d+(?:\.\d+)?)px/.exec(String(t.font ?? ''))?.[1] ?? 10); return { width: [...s].reduce((w, ch) => w + (/[\u3000-\u9fff]/.test(ch) ? px : px / 2), 0), actualBoundingBoxAscent: 0.7 * px, actualBoundingBoxDescent: 0.2 * px, actualBoundingBoxLeft: 0, actualBoundingBoxRight: s.length * px } }
       if (k === 'getImageData') return (_x: number, _y: number, w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(1, w * h) * 4).fill(255) })
       if (k === 'createImageData') return (w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(1, w * h) * 4) })
       if (k === 'canvas') return canvas
@@ -44,7 +44,7 @@ function paper({ name = 'Abstract', x = 20, width = 40, beside = null as [string
   return {
     doc: { numPages: 1, getPage: async () => page },
     geometry: { schema: 1, kinds: ['para'], left: { pages: [[0, 0, 300, 300]], units: [[0, 0, [[1, 20, 197.85, 120, 206.83]]]] } },
-    units: [{ kind: 'para', src: 'Alpha beta gamma', state: 'whole', pieces: [{ t: 'text', tr: true, s: '汉字汉字' }] }],
+    units: [{ kind: 'para', src: 'Alpha beta gamma', state: 'whole', pieces: [{ t: 'text', tr: true, s: '\u6c49\u5b57\u6c49\u5b57' }] }],
     tex: { use: 'lines', texOnly: true, index: indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(file)))), pieces: new Map() },
   }
 }
@@ -54,9 +54,9 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
   it("sets the target's word for a name the layout file locates, its ink erased, before the page's units", async () => {
     const run = await open()
     await run.until(1)
-    expect(run.names).toEqual([expect.objectContaining({ occurrence: 1, key: 'abstract', page: 1, drawn: true, why: null, text: '摘要', size: 10, x: 20 })])
+    expect(run.names).toEqual([expect.objectContaining({ occurrence: 1, key: 'abstract', page: 1, drawn: true, why: null, text: '\u6458\u8981', size: 10, x: 20 })])
     const svg = run.rows[0]!.svg
-    expect(svg.querySelector('[data-n="1"]')?.textContent).toBe('摘要')
+    expect(svg.querySelector('[data-n="1"]')?.textContent).toBe('\u6458\u8981')
     // its erase the page's first operation, the unit's after it; its characters accounted, which no put-back returns
     expect(run.rows[0]!.ops[0]).toMatchObject({ op: 'erase' })
     expect(run.audit.find(a => a.what === 'erase' && a.name === 1)).toBeDefined()
