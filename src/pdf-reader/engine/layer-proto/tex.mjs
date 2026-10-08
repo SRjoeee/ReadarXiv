@@ -12,7 +12,7 @@
 // page characters are PDF.js's in both, so that the paper's citations and macros a unit learns, and the characters the
 // restore counts as accounted for, are the same keys whichever source a unit took.
 import { PH_FLAG } from '../layout/file.mjs'
-import { charKey, charsOfUnit2, labelOf, learnCite, phClass2 } from './layer2.mjs'
+import { charKey, charsOfUnit2, cropOfBox, labelOf, learnCite, phClass2 } from './layer2.mjs'
 
 /** v0's placeholder classes that draw ink of their own (layer-proto/check.mjs VISIBLE; a nested footnote's mark is 'num') */
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
@@ -53,13 +53,16 @@ export function kOfPieces(unit, trPieces) {
  * that too). A text symbol the file draws as its character (PH_FLAG.TEXT: no segments, its glyph the line's) is found; a
  * text macro the file holds no row for sets no ink (inklessOf). Its lines need not be in reading order: those out of it
  * are a display's rows or number the file lists after the line below, which v0's reading keeps as the original's
- * (measured: asking it sent 123 units to v0 and drew worse).
+ * (measured: asking it sent 123 units to v0 and drew worse). With `held` (the file's lines taken, texParts 'lines'), a
+ * displayed formula LOST or with no segments is found too where the file's held lines cover it (displayCover: D4 step 1,
+ * 2026-10-08): it is kept where it stands, as its held lines are, and breaks the unit's text there.
  * Returns { ok, why, kOf }: why one of 'unlocated', 'pieces', 'no row', 'lost', 'empty'.
  */
-export function locatedWhole(lu, unit, trPieces, { symbols = 'text' } = {}) {
+export function locatedWhole(lu, unit, trPieces, { symbols = 'text', held = false } = {}) {
   if (!lu) return { ok: false, why: 'unlocated' }
   const kOf = kOfPieces(unit, trPieces)
   if (!kOf) return { ok: false, why: 'pieces' }
+  let cover
   for (const [i, p] of unit.pieces.entries()) {
     const cls = p.t === 'nested' ? 'num' : p.t === 'ph' ? phClass2(p.src).cls : null
     if (!cls || !VISIBLE.has(cls) || (cls === 'symbol' && symbols === 'text')) continue
@@ -67,9 +70,66 @@ export function locatedWhole(lu, unit, trPieces, { symbols = 'text' } = {}) {
     if (!row) { if (MACROS.has(cls)) continue; return { ok: false, why: 'no row' } }
     if (row.flags & PH_FLAG.EMPTY) return { ok: false, why: 'empty' }
     if (row.flags & PH_FLAG.TEXT) continue
-    if (row.flags & PH_FLAG.LOST || !row.segs.length) return { ok: false, why: 'lost' }
+    if (row.flags & PH_FLAG.LOST || !row.segs.length) {
+      if (cls === 'display' && held && (cover ??= displayCover(lu, unit, kOf)).has(i)) continue
+      return { ok: false, why: 'lost' }
+    }
   }
   return { ok: true, why: null, kOf }
+}
+
+/**
+ * Which of the unit's held runs covers each of its displayed formulas, by its piece's index (D4 step 1). A held run: the
+ * file's `held` lines (those the unit's source does not write: a display's rows; no slot, never erased) consecutive in
+ * one frame, so on one page and in one column, in the unit's line order. A display group: the unit's display pieces in
+ * source order with no visible piece between them (text holding a non-space character, or a placeholder v0 draws ink
+ * for), TeX's display rows one block; an inner group has a visible piece before and after it, an edge group stands
+ * before the unit's first or after its last (outside its marks, which patch sets at its first and last words). The
+ * groups pair with the runs in order: every group with one where they are as many, else the inner groups alone, the
+ * edge groups then outside the unit's lines (the maker holds no first line and drops a run at the end). A pairing holds
+ * where every segment of a found display of a paired group lies on its run (on one of the run's lines' pages, meeting
+ * its band) and of an unpaired one on none of the unit's lines. A display of an inner group so paired is covered by its
+ * run: the held lines between the unit's text lines before and after it, on its page and column. Returns a Map of
+ * those, empty where nothing pairs (a run that is no display, another unit's line the anchor took; a display whose rows
+ * hold the source's words and are not held; one display over two frames). An edge display is never covered: no text
+ * line stands on both sides of it
+ */
+export function displayCover(lu, unit, kOf) {
+  const L = lu.lines, F = lu.frames, held = new Set(lu.held ?? []), out = new Map()
+  const runs = []
+  for (let f = 0; f < F.length; f += 6) {
+    let run = null
+    for (let j = F[f + 2]; j < F[f + 2] + F[f + 3]; j++) {
+      if (!held.has(j)) { run = null; continue }
+      if (!run) runs.push((run = []))
+      run.push(j)
+    }
+  }
+  const groups = []
+  let group = null, before = false
+  for (const [i, p] of unit.pieces.entries()) {
+    const cls = p.t === 'nested' ? 'num' : p.t === 'ph' ? phClass2(p.src).cls : null
+    if (cls === 'display') {
+      if (!group) groups.push((group = { members: [], inner: before }))
+      group.members.push(i)
+    } else if (p.t === 'text' ? /\S/.test(p.s ?? '') : !!cls && VISIBLE.has(cls)) { group = null; before = true }
+  }
+  if (group) group.inner = false
+  const inner = groups.filter(g => g.inner)
+  const paired = runs.length === groups.length ? groups : runs.length === inner.length ? inner : null
+  if (!paired) return out
+  const meets = (j, page, top, bottom) => L[8 * j] === page && Math.min(top, L[8 * j + 4]) > Math.max(bottom, L[8 * j + 5])
+  const lines = Array.from({ length: L.length / 8 }, (_, j) => j)
+  for (const g of groups) {
+    const at = paired.indexOf(g), on = at >= 0 ? runs[at] : lines
+    for (const i of g.members) {
+      const row = lu.ph.get(kOf[i])
+      if (!row || row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY)) continue
+      for (let s = 0; s + 5 < row.segs.length; s += 6) if (on.some(j => meets(j, row.segs[s], row.segs[s + 4], row.segs[s + 5])) !== at >= 0) return out
+    }
+  }
+  paired.forEach((g, n) => { if (g.inner) for (const i of g.members) out.set(i, runs[n]) })
+  return out
 }
 
 /**
@@ -141,6 +201,45 @@ export function renderingOf(segs, uc, display) {
   return { text: chars.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars, box }
 }
 
+/** a display's rendering from the held run that covers it (displayCover): the unit's characters on the run's lines, and
+ *  the lines themselves (`held`, their keys), which hold it where its characters are none */
+function heldRendering(run, lines, uc) {
+  const keys = new Set()
+  lines.rects.forEach((r, i) => { if (run.includes(lines.jOf?.[i] ?? lines.lineOf.get(r))) keys.add(rectKey(r)) })
+  const chars = uc.filter(c => !c.sep && !c.space && /\S/.test(c.ch) && keys.has(`${c.page}|${c.rect.join()}`))
+  return { text: chars.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars, held: [...keys] }
+}
+
+/**
+ * Part 5, the crops (layer2.mjs prepareUnit), for any unit the hybrid draws: each crop of the unit's reading cut from its
+ * placeholder's own ink, the layout file's segment of its row on the crop's page (stream ownership, layout/stream.mjs),
+ * on that segment's baseline (layer2.mjs cropOfBox). A crop the segments gave (renderingOf's box) is that already; any
+ * other (v0's reading of a unit the file does not locate whole, or a rendering found a second time) takes its row's
+ * segment on its page that its rectangle meets, the same rendering's. Where none does (its row LOST, EMPTY or missing,
+ * the unit not in the file, `lu` null, or its pieces not the file's, `kOf` null) no source proves which ink is the
+ * placeholder's, and a crop of the page's rectangle carries whatever stands in it (2307.16209 page 38's "ıe", from the
+ * line above): the answer is that crop's k, and its unit stays the original's. Else -1. Mutates the resolutions.
+ */
+export function cropsOf(lu, kOf) {
+  return res => {
+    for (const r of res.values()) {
+      if (r?.mode !== 'crop' || r.gap?.box) continue
+      const row = lu && kOf ? lu.ph.get(kOf[r.k]) : null
+      const S = row && !(row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY)) ? row.segs : []
+      let seg = null
+      for (let s = 0; s + 5 < S.length && !seg; s += 6) {
+        if (S[s] !== r.page) continue
+        const box = { x0: S[s + 1], x1: S[s + 3], top: S[s + 4], bottom: S[s + 5], baseline: S[s + 2], lines: 1 }
+        if (Math.min(box.x1, r.crop[2]) > Math.max(box.x0, r.crop[0]) && Math.min(box.top, r.crop[3]) > Math.max(box.bottom, r.crop[1])) seg = box
+      }
+      if (!seg) return r.k
+      Object.assign(r, cropOfBox(seg))
+      r.gap = { ...r.gap, box: seg }
+    }
+    return -1
+  }
+}
+
 /**
  * The unit's parts from the file (layer2.d.mts UnitParts), for a unit locatedWhole passes. `use`:
  * - 'ph': part 4 alone, the placeholders' renderings by their segments (the unit's lines v0's);
@@ -148,15 +247,25 @@ export function renderingOf(segs, uc, display) {
  *   where the file has none, and a mark its first line holds before its first word);
  * - extents 'tex' (with 'lines'): part 2 too, the file's erase rectangles (its glyphs' boxes merged); else each line's
  *   extent as v0 reads it from its characters.
+ * - and part 5 for any `use`, each crop cut from its placeholder's segment (cropsOf).
  * `kOf`: each piece's source index (kOfPieces).
  */
 export function texParts(lu, kOf, { use, lines = null, extents = 'v0' }) {
   const parts = {
-    renderings({ phs, uc, gaps, citeMap }) {
+    crops: cropsOf(lu, kOf),
+    renderings({ unit, phs, uc, gaps, citeMap }) {
       const found = new Map()
+      let cover
       for (const p of phs) {
         if (p.cls === 'zero' || p.cls === 'space' || p.cls === 'symbol') continue
         const row = lu.ph.get(kOf[p.k])
+        // (a display the held lines cover, LOST or with no segments: its run's lines, kept where they stand, and a break
+        // in the unit's text, as a found display's rows are: locatedWhole)
+        if (p.cls === 'display' && lines?.lineOf && row && !(row.flags & PH_FLAG.EMPTY) && (row.flags & PH_FLAG.LOST || !row.segs.length)) {
+          const run = (cover ??= displayCover(lu, unit, kOf)).get(p.k)
+          if (run) found.set(p, heldRendering(run, lines, uc))
+          continue
+        }
         if (!row || row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY) || !row.segs.length) continue
         const g = renderingOf(row.segs, uc, p.cls === 'display')
         if (g) found.set(p, p.cls === 'cite' ? learnCite(p, g, citeMap) : g)

@@ -49,7 +49,7 @@ import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
 import { fileSwap, protection } from './removal.mjs'
 import { SWAP_PAD, swapRects } from '../layer/swap.mjs'
-import { locatedWhole, texParts, texRects } from './tex.mjs'
+import { cropsOf, kOfPieces, locatedWhole, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
 
@@ -433,6 +433,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // the host's: the fit's parameters, the hyphenation patterns, the CJK family, the float labels' names
   const R = resolveRules(rules, to)
   const P = R.params
+  /** the paper's \lineskip and \lineskiplimit, TeX's (the layout file's): where a laid line comes nearer the one before it
+   *  than the limit, its crops being taller or deeper than its room, it opens as TeX opens one (layer2.mjs breakLines);
+   *  null where the file has none, or with no file: no line opens */
+  const LINESKIP = tex?.index?.file?.lineskip ?? null
   /** whether a page's units are set together once all are laid (the even pass, the page fill, the leftover packed) */
   const PASSES = !!(P.even || P.adaptiveFill || P.leftover === 'pack')
   // iteration 2's hyphenation, fetched at once (local, small)
@@ -504,7 +508,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const judge = (id, u) => {
     if (!tex) return null
     const lu = tex.index.unit(id)
-    const w = locatedWhole(lu, u, tex.pieces.get(id), { symbols: tex.symbols ?? 'text' })
+    const w = locatedWhole(lu, u, tex.pieces.get(id), { symbols: tex.symbols ?? 'text', held: tex.use === 'lines' })
     return w.ok ? { lu, kOf: w.kOf } : { why: w.why }
   }
   const placeOf = (id, stream, rects, u, t) => {
@@ -1086,9 +1090,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (gx0 < x0 || gx1 > x1) local[pg - 1] = (chars2[pg - 1] ?? []).filter(c => c.x1 >= gx0 && c.x0 <= gx1 && c.yb >= y0 && c.yb <= y1)
     }
     const inkBefore = fileLines ? undefined : L2.snapFirstRect2(p.rects, local)
-    // the hybrid: a unit the file locates whole read with the file's parts
-    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0' }) : null
+    // the hybrid: a unit the file locates whole read with the file's parts; any other, v0's reading with its crops cut from
+    // their placeholders' own ink by the file (cropsOf), or left the original's where the file proves none of a crop's
+    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0' }) : tex ? { crops: cropsOf(tex.index.unit(p.id), kOfPieces(p.unit, tex.pieces.get(p.id))) } : null
     const prep = L2.prepareUnit(p.unit, p.rects, local, phMode === 'source' ? null : citeMap, null, parts)
+    if (prep.unproven !== undefined) { p.refused = true; p.why = 'unproven'; unlead(p); return }
     // a float's label in the target's name where the final names it so (labelInTarget): its ink erased and accounted as
     // the unit's text, and set as the line's start, in its own style, before the translation
     const relabel = labels ? L2.labelInTarget(prep.label, R.labels, labels.captions, to) : null
@@ -1166,7 +1172,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     p.tokens = tokens
     p.prep = prep
     p.s = s
-    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P), trackStart: P.trackStart ?? cjkAdvance() }
+    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P), trackStart: P.trackStart ?? cjkAdvance(), lineskip: LINESKIP }
     // (no larger than its lines' room between the rules over and under them leaves its script's em box: clearanceOf)
     p.clear = clearanceOf(p, s)
     if (p.clear && p.clear.cap < 1) p.P.capScale = p.clear.cap

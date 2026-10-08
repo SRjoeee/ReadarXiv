@@ -602,8 +602,11 @@ function rectStyle(uc) {
  *   3. labels (labelOf): a label the class sets before the unit's first line, kept as the original's;
  *   4. placeholder renderings (v0Renderings): which of the page's ink each placeholder is, and where it sits;
  *   then the resolution's rules (resolvePlaceholders, either source's renderings): how each placeholder is drawn, the
- *   paper's citations and macros learnt; and the finish (finishUnit): the kept lines in regions, each character's
- *   category (what the restore and the checker read).
+ *   paper's citations and macros learnt;
+ *   5. crops (none in v0 alone): each crop cut from its placeholder's own ink, where a layout file knows it, or the
+ *   placeholder whose ink no source proves (`unproven`, its k: the unit is then left the original's);
+ *   and the finish (finishUnit): the kept lines in regions, each character's category (what the restore and the
+ *   checker read).
  * `charsByPage`: pageChars2's (the unit's own part of each page).
  */
 export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = null, parts = null) {
@@ -620,6 +623,7 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   if (lines.held?.length) out.keep = [...new Set([...(out.keep ?? []), ...lines.held])]
   const gaps = (parts?.label ?? labelOf)(out, unit, rects, charsByPage, aligned)
   resolvePlaceholders(out, { unit, phs, rects, charsByPage, citeMap, gaps }, parts?.renderings ?? v0Renderings)
+  if (parts?.crops) { const k = parts.crops(out); if (k >= 0) out.unproven = k }
   finishUnit(out, unit, rects, charsByPage)
   // a displayed formula found, whose lines hold words the alignment took for the source's ("RMSE" in "RMSE_i(t) =",
   // while the text says "…using the RMSE:"): aligned again without its lines' words, once
@@ -1115,7 +1119,8 @@ function finishUnit(out, unit, rects, charsByPage) {
   out.referenced = new Set()
   for (const r of out.values()) {
     if (r.mode !== 'kept' || !r.gap) continue
-    const regs = r.gap.chars.filter(c => !c.sep && !c.space).map(c => out.regionOf.get(`${c.page}|${c.rect.join()}`)).filter(g => g !== undefined)
+    // (and the lines a display's rendering is, a held run's, where they hold none of its characters: tex.mjs)
+    const regs = [...r.gap.chars.filter(c => !c.sep && !c.space).map(c => `${c.page}|${c.rect.join()}`), ...(r.gap.held ?? [])].map(k => out.regionOf.get(k)).filter(g => g !== undefined)
     if (regs.length) { r.region = Math.max(...regs); out.referenced.add(r.region) }
   }
   // the translation's own text, letters only: a name it keeps as the page writes it ("Niño", whose ñ the source wrote
@@ -1200,20 +1205,28 @@ function drawnAs(p, g, cls, sup, lineInfo = null) {
   const box = g.box
   const broken = box ? box.lines > 1 : lines.size > 1 && !oneLine
   if (cls !== 'other' || broken || p.cls === 'macro' || p.cls === 'umacro') return { mode: 'orig-text', text: g.text, sup: sup || (cls === 'num' && real.length && real.every(c => c.size < lineSize * 0.85)), st: gst }
+  // (with a box, a layout file's segment: the piece's own ink, on the baseline of the line TeX set it on)
+  if (box?.top !== undefined) return { mode: 'crop', page: real[0].page, ...cropOfBox(box), text: texToText2(p.src) }
   const main = real.filter(c => c.size >= lineSize * 0.85)
-  const own = cropBaselineOf(real, lineInfo, main.length ? main : real)
-  // (with a box: the baseline of the line its ink sits on, where its characters stand on that line, so that a raised or
-  // lowered formula keeps its raise, which its characters' own baseline set on the line; and its ink's own extent
-  // across, which its characters' places in their items only estimate)
-  const baseline = box && Math.abs(box.baseline - own) <= 0.6 * big ? box.baseline : own
+  const baseline = cropBaselineOf(real, lineInfo, main.length ? main : real)
   // (a hanging glyph, a radical, from an em below its baseline to just above it: by its baseline, its box reached into
   // the line above, "√dk" taking "nd v." from "…dimension d_v.")
-  let y0 = Math.min(...real.map(c => (c.ybEff !== undefined ? c.yb - c.size : c.yb - c.size * 0.26))), y1 = Math.max(...real.map(c => (c.ybEff !== undefined ? c.yb + c.size * 0.15 : c.yb + c.size * 0.8)))
-  // (with a box, within its glyphs' boxes too: a big operator's origin, which the text layer gives, stands above its
-  // glyph, and the band by it reached into the line above, 1706.03762's footnote's sum)
-  if (box?.top !== undefined) { y0 = Math.max(y0, box.bottom - 0.3); y1 = Math.min(y1, box.top + 0.3) }
-  const x0 = box ? box.x0 : Math.min(...real.map(c => c.x0)), x1 = box ? box.x1 : Math.max(...real.map(c => c.x1))
+  const y0 = Math.min(...real.map(c => (c.ybEff !== undefined ? c.yb - c.size : c.yb - c.size * 0.26))), y1 = Math.max(...real.map(c => (c.ybEff !== undefined ? c.yb + c.size * 0.15 : c.yb + c.size * 0.8)))
+  const x0 = Math.min(...real.map(c => c.x0)), x1 = Math.max(...real.map(c => c.x1))
   return { mode: 'crop', page: real[0].page, crop: [x0 - 0.4, y0, x1 + 0.4, y1], baseline, text: texToText2(p.src) }
+}
+
+/**
+ * A crop from a layout file's segment (`box`: x0, x1, top, bottom, baseline, its piece's own glyphs' and rules' ink by
+ * the content stream, layout/stream.mjs): the box itself, its antialiased edge a fraction of a point around, set by the
+ * baseline of the line TeX set the piece on, so that a raised or lowered formula keeps its offset, a radical its bar
+ * above it and a fraction its denominator below. Its glyphs' own origins say neither: the text layer gives a radical's
+ * at its bar (1706.03762's √d_k at 400.59 over its line's 392.85, so its crop hung under its line) and a big operator's
+ * above its glyph; and an estimate from them cut the segment's own ink (2307.16209's subscript 2 on page 40). Returns
+ * { crop, baseline }
+ */
+export function cropOfBox(box) {
+  return { crop: [box.x0 - 0.4, box.bottom - 0.3, box.x1 + 0.4, box.top + 0.3], baseline: box.baseline }
 }
 
 const YEAR = /\b(?:19|20)\d\d[a-z]?\b/
@@ -1356,10 +1369,12 @@ function splitCites(g) {
  * in the text layer at all (1706.03762's "√dk": nothing between "by" and "d"), so the crop began at "d" and the radical
  * was erased. Cell by cell of the page's ink map: two cells (3 pt) up, two down or an em down for a radical or a big
  * operator, and to either side over ink no character outside the rendering stands on (a bracket, the next word stop
- * it), six cells at most. `pageChars`: the crop's page's characters. Mutates it.
+ * it), six cells at most. `pageChars`: the crop's page's characters. Mutates it. A crop cut from a layout file's
+ * segment (its rendering's `box`, cropOfBox) is never grown: the segment holds every glyph and rule TeX set for the
+ * piece, and the map's ink beyond it is another's (a neighbour's glyph or rule, which a crop grown there carried)
  */
 export function growCrop(r, ink, toDev, k, pageChars = []) {
-  if (!ink || !r?.crop) return
+  if (!ink || !r?.crop || r.gap?.box) return
   const f = ink.factor
   const cellPt = f / k
   const own = new Set((r.gap?.chars ?? []).map(c => `${c.item}|${c.k}`))
@@ -1373,14 +1388,12 @@ export function growCrop(r, ink, toDev, k, pageChars = []) {
   const colInk = (c, a, b) => { for (let row = a; row <= b; row++) if (at(row, c)) return true; return false }
   // the characters beside it on its line that are not its own: a column on one of them is theirs
   const y0 = r.crop[1], y1 = r.crop[3]
-  // (a math glyph touching it is the formula's own: a fraction's subscript the text layer put outside its gap; but not
-  // where the rendering's source knows its ink, a layout file's segments, g.box: every other glyph is another's)
-  const foreignMath = !!r.gap?.box
-  const beside = pageChars.filter(c => /\S/.test(c.ch) && !own.has(`${c.item}|${c.k}`) && (foreignMath || c.st?.fam !== 'math') && c.yb + 0.7 * c.size > y0 && c.yb - 0.2 * c.size < y1)
+  // (a math glyph touching it is the formula's own: a fraction's subscript the text layer put outside its gap)
+  const beside = pageChars.filter(c => /\S/.test(c.ch) && !own.has(`${c.item}|${c.k}`) && c.st?.fam !== 'math' && c.yb + 0.7 * c.size > y0 && c.yb - 0.2 * c.size < y1)
   const x0 = r.crop[0], x1 = r.crop[2]
   const blocked = (from, to) => beside.some(c => c.x1 > from + 0.2 && c.x0 < to - 0.2)
   // and up or down never into another line's text (a tight footnote's line above: its glyphs touch)
-  const above = pageChars.filter(c => /\S/.test(c.ch) && !own.has(`${c.item}|${c.k}`) && (foreignMath || c.st?.fam !== 'math') && c.x1 > x0 && c.x0 < x1 && Math.abs(c.yb - (y0 + y1) / 2) < 2.5 * c.size)
+  const above = pageChars.filter(c => /\S/.test(c.ch) && !own.has(`${c.item}|${c.k}`) && c.st?.fam !== 'math' && c.x1 > x0 && c.x0 < x1 && Math.abs(c.yb - (y0 + y1) / 2) < 2.5 * c.size)
   const blockedRow = (from, to) => above.some(c => c.yb - 0.22 * c.size < to && c.yb + 0.72 * c.size > from)
   const grown = { top: 0, bottom: 0, left: 0, right: 0 }
   for (let n = 0; n < Math.max(6, maxDown); n++) {
@@ -1649,18 +1662,34 @@ function baseOf(unit, base) {
   return out
 }
 
-const mcache = new Map()
-/** a run's width at 100 px in its face (canvas measureText, cached) */
+const mcache = new Map(), icache = new Map()
+/** a measure's ink over and under its baseline (TextMetrics' actual bounding box), 0 where the canvas gives none */
+const inkOfMetrics = m => ({ a: Number.isFinite(m.actualBoundingBoxAscent) ? m.actualBoundingBoxAscent : 0, d: Number.isFinite(m.actualBoundingBoxDescent) ? m.actualBoundingBoxDescent : 0 })
+/** a run's width at 100 px in its face (canvas measureText, cached; its ink beside it, ink100) */
 function w100(s, face) {
   const font = fontString(face, 100)
   const key = `${font}|${s}`
   let w = mcache.get(key)
   if (w === undefined) {
     mctx.font = font
-    w = mctx.measureText(s).width
+    const m = mctx.measureText(s)
+    w = m.width
     mcache.set(key, w)
+    icache.set(key, inkOfMetrics(m))
   }
   return w
+}
+/** a run's ink over (a) and under (d) its baseline at 100 px in its face: the drawn glyphs' own extent, from the measure
+ *  that gives its width (cached with it), as TeX's box of a line is its characters' */
+export function ink100(s, face) {
+  const font = fontString(face, 100), key = `${font}|${s}`
+  let v = icache.get(key)
+  if (v === undefined) {
+    mctx.font = font
+    v = inkOfMetrics(mctx.measureText(s))
+    icache.set(key, v)
+  }
+  return v
 }
 
 /**
@@ -1913,10 +1942,28 @@ function slotsAt(blocks, st, P, s) {
       const x0 = b.x0 + (bi === 0 && k === 0 && !b.centred ? b.indent : 0)
       // a sliver beside a formula (narrower than 1.5 em) holds no text: its words were the formula's
       if (b.x1 - x0 < 1.5 * s * st.scale) continue
-      out.push({ block: bi, page: b.page, x0, x1: b.x1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0 })
+      out.push({ block: bi, page: b.page, x0, x1: b.x1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, low })
     }
   }
   return out
+}
+
+/**
+ * A laid line's extent over its baseline (`a`) and under it (`d`), PDF units, at its drawn size `f` and the layout's
+ * `scale`: its text's ink (ink100, the drawn glyphs' own; a superscript at 0.62 of the size raised 0.36 em, as svgOfUnit
+ * sets it) and each crop's, over and under its TeX baseline, drawn at the scale (cropOfBox). `text`: its text's alone
+ */
+export function lineExtent(line, f, scale) {
+  let a = 0, d = 0, ta = 0, td = 0
+  for (const it of line.items) {
+    const t = it.t
+    if (t.crop) { a = Math.max(a, (t.crop.crop[3] - t.crop.baseline) * scale); d = Math.max(d, (t.crop.baseline - t.crop.crop[1]) * scale); continue }
+    if (!t.s || t.space || !t.face) continue
+    const m = ink100(t.s, t.face), k = t.sup ? 0.62 : 1, up = t.sup ? 0.36 * f : 0
+    ta = Math.max(ta, up + (m.a * k * f) / 100)
+    td = Math.max(td, (m.d * k * f) / 100 - up)
+  }
+  return { a: Math.max(a, ta), d: Math.max(d, td), text: { a: ta, d: td } }
 }
 
 const tokW = (t, f, st, scale) => {
@@ -1932,23 +1979,54 @@ const tokW = (t, f, st, scale) => {
  * Tokens into slots, greedily, at font size f: each line { ...slot, items: [{ t, w, shift }] } with the items' natural
  * widths (punctuation compressed as the state allows), the space a line may shrink, and `rest`, the first token left.
  */
-function breakLines(tokensIn, slots, f, st, P, scale, strict = true) {
+function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
   // (step 3, 'flow': a kept region breaks the line and skips no slot: the text after a display may stand above it, where
   // the slots below it are too few for it and those above it too many; the last resort before the unit is not drawn)
   const flow = strict === 'flow'
   let tokens = tokensIn
+  const slots = slotsIn.slice()
   const lines = []
   let li = 0, i = 0
   const half = 0.5 * f
   let line = null
   const open = () => {
-    line = { ...slots[li], items: [], x: 0, spaces: 0 }
+    line = { ...slots[li], items: [], x: 0, spaces: 0, from: i }
     lines.push(line)
+  }
+  // TeX's rule between two lines of a block (its \lineskip and \lineskiplimit, P.lineskip, the paper's own: the layout
+  // file's): where the line just closed comes nearer the one before it than lineskiplimit, its top to that line's foot
+  // (lineExtent: the drawn text's ink and its crops'), the two baselines are set that line's depth and its height plus
+  // lineskip apart, and the block's later slots move down with it, those past the block's foot dropped; one that lands
+  // past its own foot fails the state (`over`, the first token of its line), as a unit too long for its lines does. A
+  // slot never moves up. No values (a file that has none, v0 alone): no line opens
+  let over = null
+  const settle = () => {
+    if (!P.lineskip || !line?.items.length || over !== null) return
+    let k = lines.length - 2
+    while (k >= 0 && !lines[k].items.length) k--
+    const prev = lines[k]
+    if (!prev || prev.block !== line.block || prev.page !== line.page) return
+    const [skip, limit] = P.lineskip
+    const e0 = lineExtent(prev, f, scale), e1 = lineExtent(line, f, scale)
+    if (prev.baseline - e0.d - (line.baseline + e1.a) >= limit) return
+    const shift = e0.d + e1.a + skip - (prev.baseline - line.baseline)
+    if (!(shift > 0)) return
+    line.baseline -= shift
+    line.opened = shift
+    for (let q = slots.length - 1; q > li; q--) {
+      if (slots[q].block !== line.block) continue
+      const y = slots[q].baseline - shift
+      if (y < slots[q].low - 0.05) slots.splice(q, 1)
+      else slots[q] = { ...slots[q], baseline: y }
+    }
+    if (line.baseline < line.low - 0.05) { over = line.from; stop = true }
   }
   // iteration 3: the kept regions the text has passed (a break token each); the text may not run on into a block below
   // a region before its break (strict), or it reads before the formula it follows in the translation
   let consumed = 0, stop = false, spilled = false
   const advance = () => {
+    settle()
+    if (stop) return
     li++
     if (li >= slots.length) return
     if ((slots[li].after ?? 0) > consumed) {
@@ -1974,6 +2052,8 @@ function breakLines(tokensIn, slots, f, st, P, scale, strict = true) {
         while (q < slots.length && (slots[q].after ?? 0) < consumed) q++
         if (q < slots.length) {
           while (line.items.at(-1)?.t.space) { const sp = line.items.pop(); line.x -= sp.w; line.spaces -= sp.w }
+          settle()
+          if (stop) break
           li = q
           open()
         }
@@ -2083,9 +2163,11 @@ function breakLines(tokensIn, slots, f, st, P, scale, strict = true) {
     advance()
   }
   for (const l of lines) while (l.items.at(-1)?.t.space) { const sp = l.items.pop(); l.x -= sp.w; l.spaces -= sp.w }
+  // (the last line, settled as the others were when they closed)
+  if (!stop) settle()
   // break tokens left at the end place nothing
   while (i < tokens.length && tokens[i].blockTo !== undefined) i++
-  return { lines: lines.filter(l => l.items.length), rest: i, total: tokens.length, tokens, spilled }
+  return { lines: lines.filter(l => l.items.length), rest: over ?? i, total: tokens.length, tokens, spilled }
 }
 
 /** each line's items placed: justified where the slack is within the caps (CJK per gap, spaces per space), else left
