@@ -18,7 +18,8 @@
 //     name), as orig's, for the erase bites alone };
 //   ref: every unit of the frozen reference on the page, translated or not: { id, kind, orig };
 //   kept: rectangles a drawing must keep (displays' segments, labels); items: the page's text items { x0, y0, x1, y1, str,
-//   math } (str is read here and never returned).
+//   math } (str is read here and never returned); names: the babel names drawn in the target's words (D1a), each { orig,
+//   lines, erase } as a unit's, which the pixel measures count as a drawn unit's own text, and the model ones do not.
 
 const lum = (a, i) => a[i] * 0.299 + a[i + 1] * 0.587 + a[i + 2] * 0.114
 /** a value to d decimals, as the parity harness's toFixed */
@@ -253,7 +254,7 @@ function components(m, W, H, min, boxes = null) {
  * overdrawn } }. `drawnText`: every drawn run's text on the page, joined without white space (math the drawing sets as
  * text is not vanished)
  */
-export function pixelPage({ k, view, W, H, O, C, T, units, kept, items, ref, drawnText }) {
+export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, items, ref, drawnText }) {
   const toPx = (x, y) => [(x - view[0]) * k, (view[3] - y) * k]
   const boxPx = (b, pad = 0) => {
     const [ax, ay] = toPx(b[0] - pad, b[3] + pad), [bx, by] = toPx(b[2] + pad, b[1] - pad)
@@ -265,7 +266,8 @@ export function pixelPage({ k, view, W, H, O, C, T, units, kept, items, ref, dra
   const inkC = i => lum(C, 4 * i) < INK, traceC = i => lum(C, 4 * i) < TRACE
   const inkT = i => lum(T, 4 * i) < INK
 
-  const drawn = units.filter(u => u.drawn)
+  // (a babel name drawn in the target's word is a drawn unit's text here: its erase, its frame, its line drawn, its own band)
+  const drawn = [...units.filter(u => u.drawn), ...names.map(n => ({ ...n, drawn: true, crops: [] }))]
   const eraseM = mask(), cropM = mask(), keptM = mask(), regionM = mask()
   for (const u of drawn) {
     for (const e of u.erase) paint(eraseM, e, 2)

@@ -141,6 +141,29 @@ describe("the coverage of the original's text area", () => {
     expect(measure({ C: paper, T: paper, drawn: true, x1: 30 })).toEqual({ cells: 4, translated: 2, english: 0, blank: 2 })
     expect(measure({ C: O, T: paper, drawn: false })).toEqual({ cells: 4, translated: 0, english: 4, blank: 0 })
   })
+
+  it("a babel name's reference row is text: drawn in the target's word (names) translated, left in place English (D1a)", () => {
+    const named = [{ id: 'name:1', kind: 'name', orig: ref[0]!.orig }]
+    const of = (C: Uint8ClampedArray, names: { orig: typeof ref[0]['orig']; lines: { baseline: number; size: number; x0: number; x1: number }[]; erase: number[][] }[]) => (pixelPage({ k: 1, view: [0, 0, W, H], W, H, O, C, T: paper, units: [], names, kept: [], items: [], ref: named, drawnText: '' }) as { coverage: { text: Record<string, number> } }).coverage.text
+    expect(of(paper, [{ orig: ref[0]!.orig, lines: [{ baseline: 20, size: 10, x0: 10, x1: 50 }], erase: [[10, 17.5, 50, 27]] }])).toEqual({ cells: 4, translated: 4, english: 0, blank: 0 })
+    expect(of(O, [])).toEqual({ cells: 4, translated: 0, english: 4, blank: 0 })
+  })
+})
+
+describe('generated text left (D1a)', () => {
+  it("counts a page's names left by kind, sums them a fixture and a pool, and gates them down", () => {
+    const page = (p: number, generated: Record<string, number>) => pageEntry(p, {
+      model: { units: { textOn: 1, textDrawn: 1, cellsOn: 0, cellsDrawn: 0, left: {} }, fills: [], geo: [], gaps: [], wrongPageText: 0, droppedPh: 0, cropForeign: 0, modelCells: 100 },
+      check: { missing: [], twice: [], brackets: [], duplicated: [], numbers: { shown: 0, total: 0 }, clipped: 0 }, where: {}, style: [0, 0], drawn: 1, generated,
+    }, null)
+    const es = [page(1, { name: 2 }), page(2, {}), page(3, { name: 1 })]
+    expect(es.map(e => e.entry.generatedLeft)).toEqual([2, 0, 1])
+    const t = fixtureTotals(es.map(e => e.entry), es.map(e => e.frames), 'model')
+    expect(t).toMatchObject({ generatedLeft: 3, generated: { name: 3 } })
+    expect(pooled([t, t], 'model')).toMatchObject({ generatedLeft: 6, generated: { name: 6 } })
+    expect(worse(measure('generatedLeft'), { generatedLeft: 2 }, { generatedLeft: 0 })?.better).toBe(true)
+    expect(worse(measure('generatedLeft'), { generatedLeft: 0 }, { generatedLeft: 1 })?.worse).toBe(true)
+  })
 })
 
 describe('the merge rule', () => {
