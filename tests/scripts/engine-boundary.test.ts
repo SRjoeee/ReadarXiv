@@ -163,6 +163,35 @@ describe('every way a module is named is judged: the rule is a whitelist', () =>
   })
 })
 
+describe('the other ways an engine file reaches outside itself', () => {
+  it('judges a triple-slash reference path like any specifier, and refuses a reference to types or a lib', () => {
+    expect(violationsOf('/// <reference path="../../../ui/strings.d.ts" />\nexport declare const a: number\n', `${E}/pipeline/x.d.mts`)).toEqual(['../../../ui/strings.d.ts'])
+    expect(violationsOf('/// <reference path="/src/ui/strings.d.ts" />\n', `${E}/pipeline/x.d.mts`)).toEqual(['/src/ui/strings.d.ts'])
+    expect(violationsOf('/// <reference path="./a.d.mts" />\n/// <reference path="b.d.mts" />\n', `${E}/pipeline/x.d.mts`)).toEqual([])
+    expect(violationsOf('/// <reference types="node" />\n', `${E}/pipeline/x.d.mts`)).toEqual(['/// <reference types="node" />'])
+    expect(violationsOf('/// <reference lib="dom" />\n', `${E}/pipeline/x.d.mts`)).toEqual(['/// <reference lib="dom" />'])
+    expect(violationsOf('/// <reference no-default-lib="true" />\n', `${E}/pipeline/x.d.mts`)).toEqual(['/// <reference no-default-lib="true" />'])
+    // (the single-quoted form, a TypeScript file, and the directive's place among comments)
+    expect(violationsOf("// a comment\n/// <reference types='vite/client' />\n", `${E}/view/outline.ts`)).toEqual(["/// <reference types='vite/client' />"])
+  })
+  it('refuses import.meta.glob and import.meta.resolve, whatever they are given', () => {
+    expect(violationsOf("const files = import.meta.glob('./*.mjs')\n")).toEqual(["import.meta.glob('./*.mjs')"])
+    expect(violationsOf("const f = import.meta.resolve('../../../ui/strings.ts')\n")).toEqual(["import.meta.resolve('../../../ui/strings.ts')"])
+    expect(violationsOf("const f = import.meta.resolve('./a.mjs')\n")).toEqual(["import.meta.resolve('./a.mjs')"])
+  })
+  it('judges what a stylesheet of the engine imports or loads: @import and url() that leave it are refused', () => {
+    const css = `${E}/view/engine.css`
+    expect(violationsOf("@import url('../../../ui/x.css');\n.a { color: red }\n", css)).toEqual(['../../../ui/x.css'])
+    expect(violationsOf('@import "https://example.com/y.css";\n', css)).toEqual(['https://example.com/y.css'])
+    expect(violationsOf('.a { background: url(/fonts/a.woff2) }\n', css)).toEqual(['/fonts/a.woff2'])
+    expect(violationsOf('@font-face { src: url("../../../x.woff") format("woff"), url(\'../../y.woff\') }\n', css)).toEqual(['../../../x.woff', '../../y.woff'])
+    expect(violationsOf('@import "./b.css";\n.a { background: url(./a.png); mask: url(font.svg#m) }\n', css)).toEqual([])
+    // (a data URL holds its own bytes, a fragment names an element of the document, a comment says nothing)
+    expect(violationsOf('.a { background: url(data:image/png;base64,AAAA); filter: url(#blur) }\n/* @import "/x.css"; url(/y.png) */\n', css)).toEqual([])
+    expect(violationsOf('.a { content: "url(not a call" }\n', css)).toEqual([])
+  })
+})
+
 describe('the engine\'s packages', () => {
   it('refuses @cantoo/pdf-lib outside layout/, and in layout/ too: the layout maker is handed it as `PL`, it imports none', () => {
     expect(violationsOf("import * as PL from '@cantoo/pdf-lib'\n", `${E}/pipeline/x.mjs`)).toEqual(['@cantoo/pdf-lib'])

@@ -120,8 +120,9 @@ export function platformImportsOf(file, text) {
  *  names a module by relative path to the engine's own files or to three modules of the core, or by `node:`, or, in rules/,
  *  by the layout rules' validator, and in no other way: not by an alias, which only a bundler's configuration resolves, nor
  *  a build setting's name, a root-absolute path or a URL, nor a package out of place, nor a computed specifier. It is a
- *  whitelist over every file of the engine (modules, TypeScript and declaration files) and every form that names a module,
- *  a type-only import included: a consumer's build resolves a type as it resolves a value. */
+ *  whitelist over every file of the engine (modules, TypeScript and declaration files, stylesheets) and every form that names
+ *  a module or a file, a type-only import and a triple-slash reference included: a consumer's build resolves a type as it
+ *  resolves a value. */
 export const ENGINE = /^src\/pdf-reader\/engine\//
 
 /** The three modules of the core an engine file may import, by their path with no extension or index file (the
@@ -166,6 +167,7 @@ function packageOf(spec) {
 /** the `?inline` / `#hash` a bundler reads off a specifier */
 const QUERY = /[?#].*$/s
 const CODE = /\.(m|c)?[jt]sx?$/
+const STYLESHEET = /\.css$/
 const DECLARATION = /\.d\.(m|c)?ts$/
 const EXTENSIONS = ['.ts', '.tsx', '.mts', '.mjs', '.js', '/index.ts', '/index.tsx', '/index.mjs', '/index.js']
 const isFile = (root, path) => { try { return statSync(resolve(root, path)).isFile() } catch { return false } }
@@ -201,6 +203,13 @@ const NAMED = [
 export function namedModulesOf(text) {
   const src = withoutComments(text)
   const out = []
+  // triple-slash reference directives are comments to the scanner above and statements to the compiler: read apart. A `path` is
+  // a file beside the module, judged like a specifier; `types`, `lib` and `no-default-lib` pull in declarations no import names
+  for (const m of text.matchAll(/^[ \t]*\/\/\/[ \t]*<reference\s+(path|types|lib|no-default-lib)\s*=\s*(['"])([^'"\n]*)\2[^\n]*$/gm)) {
+    const at = m.index - 1e9
+    if (m[1] === 'path') out.push({ at, spec: /^(?:[a-z][a-z0-9+.-]*:|\/|\.)/i.test(m[3]) ? m[3] : `./${m[3]}` })
+    else out.push({ at, spec: null, display: m[0].trim(), why: 'a reference directive that loads declarations no import names: the engine\'s types come by its relative imports' })
+  }
   for (const re of NAMED) for (const m of src.matchAll(re)) out.push({ at: m.index, spec: m[2] })
   for (const m of src.matchAll(/\b(import|require)\s*\(\s*/g)) {
     const arg = firstArgument(src, m.index + m[0].length), lit = literalOf(arg)
@@ -214,7 +223,20 @@ export function namedModulesOf(text) {
     const lit = literalOf(arg)
     out.push(lit === null ? { at: m.index, spec: null, display: `new URL(${arg.trim()}, import.meta.url)` } : { at: m.index, spec: /^(?:[a-z][a-z0-9+.-]*:|\/|\.)/i.test(lit) ? lit : `./${lit}` })
   }
-  return out.sort((a, b) => a.at - b.at).map(({ spec, display }) => ({ spec, display }))
+  return out.sort((a, b) => a.at - b.at).map(({ spec, display, why }) => ({ spec, display, why }))
+}
+
+/** Every file a stylesheet names: `@import` and `url(…)`, outside comments. A data URL holds its own bytes and a fragment
+ *  (`url(#blur)`) names an element of the document; neither reaches a file. Same shape as namedModulesOf's */
+export function stylesheetModulesOf(text) {
+  const css = text.replace(/\/\*[\s\S]*?\*\//g, match => match.replace(/[^\n]/g, ' '))
+  const found = []
+  const imports = []
+  for (const m of css.matchAll(/@import\s+(?:url\(\s*)?(?:'([^'\n]*)'|"([^"\n]*)"|([^\s'")]+))/g)) { found.push({ at: m.index, spec: m[1] ?? m[2] ?? m[3] }); imports.push([m.index, m.index + m[0].length]) }
+  // (an @import's own url( is that import, not a second file)
+  for (const m of css.matchAll(/\burl\(\s*(?:'([^'\n]*)'|"([^"\n]*)"|([^\s'")]*))\s*\)/g)) if (!imports.some(([a, b]) => m.index >= a && m.index < b)) found.push({ at: m.index, spec: m[1] ?? m[2] ?? m[3] })
+  return found.filter(f => f.spec && !/^(?:data:|#)/i.test(f.spec)).sort((a, b) => a.at - b.at)
+    .map(({ spec }) => ({ spec: /^(?:[a-z][a-z0-9+.-]*:|\/|\.)/i.test(spec) ? spec : `./${spec}` }))
 }
 
 /** Why an engine file may not name a module so, or null: it is a `node:` module, a relative path that stays inside the
@@ -241,9 +263,10 @@ const norm = p => p.split('\\').join('/')
 export function engineViolations(files, { root = '.' } = {}) {
   const out = []
   for (const file of files) {
-    if (!ENGINE.test(file) || !CODE.test(file)) continue
-    for (const { spec, display } of namedModulesOf(readFileSync(resolve(root, file), 'utf8'))) {
-      if (spec === null) { out.push({ file, spec: display, why: 'a module named by a computed specifier: the engine\'s imports are literal, so that where they lead can be told' }); continue }
+    if (!ENGINE.test(file) || !(CODE.test(file) || STYLESHEET.test(file))) continue
+    const text = readFileSync(resolve(root, file), 'utf8')
+    for (const { spec, display, why: given } of STYLESHEET.test(file) ? stylesheetModulesOf(text) : namedModulesOf(text)) {
+      if (spec === null) { out.push({ file, spec: display, why: given ?? 'a module named by a computed specifier: the engine\'s imports are literal, so that where they lead can be told' }); continue }
       const why = whyRefused(file, spec)
       if (why !== null) out.push({ file, spec, why })
     }
@@ -319,7 +342,7 @@ export const coreFiles = () => execFileSync('git', ['ls-files', '-z', 'src'], { 
 
 export const engineFiles = () => execFileSync('git', ['ls-files', '-z', 'src/pdf-reader/engine'], { encoding: 'utf8' })
   .split('\0')
-  .filter(f => f && CODE.test(f))
+  .filter(f => f && (CODE.test(f) || STYLESHEET.test(f)))
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const files = coreFiles()

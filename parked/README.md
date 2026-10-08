@@ -99,8 +99,9 @@ with the engine's tests at commit `010c578996e1d0764337f1f42f9e22a40d722d37` (`n
 
 **Reviving it needs** that commit's tree around it: the files import the live engine from `src/pdf-reader/engine/` (the font
 roles, the layout file's parser, the pieces) by relative paths, and `scriptOf`, which `layer-rules.mjs` re-exports, is now
-`rules/script.mjs`'s. The layer gate's default kind (`--engine-kind=layer`) and the layer lab's v1 view load `layer/layer.mjs`
-and report that it is not there; the gate measures v0 (`--engine-kind=proto`, `--door`).
+`rules/script.mjs`'s. The layer gate's default kind is `proto`, the drawn layer; it refuses `--engine-kind=layer` for an engine
+that has no `layer/layer.mjs`, and the layer lab's v1 view loads the entry and reports that it is not there. The gate measures
+v0 (`--engine-kind=proto`, `--door`).
 
 ## Still to come
 
