@@ -27,7 +27,7 @@ import { readBundle, VTAG } from '../../src/pdf-reader/engine/layer-proto/bundle
 import { copyWithGrants } from './ext-copy.mjs'
 import { startEchoEndpoint } from './lib/echo-endpoint.mjs'
 import { launchWithReader } from './lib/extension.mjs'
-import { layerApi, mode } from './lib/layer-api.mjs'
+import { layerApi, mode, serves } from './lib/layer-api.mjs'
 import { RESOLVER_WALL, routeTable } from './lib/route-table.mjs'
 import { seedService } from './options-page.mjs'
 
@@ -112,7 +112,8 @@ const guard = await routeTable(context, [
   ['https://example.invalid', outside],
   ['https://tex.readarxiv.org', tex],
   [echo.origin, route => route.continue()],
-  ...LAYER_HOSTS.map(host => [host, (route, url) => (url.pathname.startsWith('/api/v1/') ? api.route(route) : false)]),
+  // (the stand-in's three routes only: any other path of these hosts is not handled, and so is a violation of the guard)
+  ...LAYER_HOSTS.map(host => [host, (route, url) => (serves(url.pathname) ? api.route(route) : false)]),
 ])
 console.log(`route table: ${guard.hosts.join(', ')}`)
 console.log(`echo endpoint at ${echo.baseURL}; the layer API's bundle key ${VTAG}`)
@@ -306,9 +307,12 @@ try {
     control('a page of the extension that is no panel offers no such entries', { ok: noEntries.length === 2, detail: `${noEntries.length} entries on the settings page` })
     await elsewhere.close()
 
-    // the popup, on the same page
-    await leave(page)
+    // the popup, on the same page: the reader must be off the page again first, or its appearing proves nothing
+    const readerOnPage = () => page.evaluate(() => !!document.querySelector('iframe[data-axt-pdf-reader]'))
+    control('the reader is over the page before its way back is taken the second time (so that it being gone, next, is the way back\'s doing)', { ok: !(await readerOnPage()), detail: `reader over the page: ${await readerOnPage()}` })
+    const leftAgain = await leave(page)
     await sleep(1500)
+    check('the reader is off the page again before the popup\'s entry is pressed', leftAgain && !(await readerOnPage()), `way back taken ${leftAgain}, reader over the page ${await readerOnPage()}`)
     const popup = track(await context.newPage())
     await popup.goto(`chrome-extension://${id}/popup.html`)
     await page.bringToFront()

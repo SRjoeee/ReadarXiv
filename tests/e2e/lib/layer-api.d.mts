@@ -21,14 +21,26 @@ export declare const mode: {
   reset(): Mode
   hang(): Mode
 }
-export interface ApiRequest { method: string; path: string; headers?: Record<string, string>; body?: Uint8Array | null }
+/** whether a path is one of the stand-in's three routes (a layer's GET, a prepare, the original) */
+export declare const serves: (path: string) => boolean
+/** a request as `handle` takes it: the URL's pathname and its query string (with the `?`, or ''), lower-case header names */
+export interface ApiRequest { method: string; path: string; search?: string; headers?: Record<string, string | string[] | undefined>; body?: Uint8Array | null }
+/** a request as the stand-in kept it, whole: its body's length and its text to 200 characters, and what it answered */
+export interface RecordedRequest {
+  method: string
+  path: string
+  search: string
+  headers: Record<string, string | string[] | undefined>
+  body: { bytes: number; text: string } | null
+  answered: number | 'reset' | 'hang'
+}
 export type Answer = { status: number; headers: Record<string, string>; body: Uint8Array } | { fault: 'reset' | 'hang'; status?: undefined }
 export interface LayerApi {
   /** the mode of the layer routes and of the original route, either alone (the other as it was) */
   set(modes: { layer?: Mode | Mode['kind']; original?: Mode | Mode['kind'] }): LayerApi
   readonly mode: { layer: Mode; original: Mode }
-  /** every request answered, in order */
-  requests: { method: string; path: string; answered: number | 'reset' | 'hang' }[]
+  /** every request answered, in order, each kept whole */
+  requests: RecordedRequest[]
   handle(request: ApiRequest): Answer
   /** a Playwright route handler */
   route(route: unknown): Promise<unknown>

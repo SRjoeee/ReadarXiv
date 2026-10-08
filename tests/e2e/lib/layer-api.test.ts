@@ -5,7 +5,7 @@ import { BUNDLE, readBundle, VTAG } from '@/pdf-reader/engine/layer-proto/bundle
 import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { LAYOUT } from '@/pdf-reader/engine/layout/file.mjs'
 import { PDFJS, PIPELINE_VERSION } from '@/pdf-reader/engine/versions.mjs'
-import { type Answer, layerApi, loadSample, mode, WHY } from './layer-api.mjs'
+import { type Answer, layerApi, loadSample, mode, serves, WHY } from './layer-api.mjs'
 
 // The stand-in of the layer API (tests/e2e/lib/layer-api.mjs) holds to the contract the web's API gives the reader, and
 // serves the sample paper's bundle, which the engine of this tree reads: the reader's browser checks stand on both
@@ -67,13 +67,28 @@ describe('the layer routes, the bundle ready', () => {
     expect(jsonOf(a)).toEqual({ why: 'no-source' })
   })
 
-  it('takes a prepare only as Content-Type: application/json with the body {} (else 415)', () => {
+  it('takes a prepare only as Content-Type: application/json (else 415) with the body {} (JSON that is not {} is 400)', () => {
     const api = layerApi({ sample })
-    for (const a of [prepare(api, { 'content-type': 'text/plain' }), prepare(api, {}), prepare(api, { 'content-type': 'application/json' }, '{"a":1}'), prepare(api, { 'content-type': 'application/json' }, 'nope'), prepare(api, { 'content-type': 'application/json' }, '[]'), prepare(api, { 'content-type': 'application/json' }, '')]) {
-      expect(a).toMatchObject({ status: 415 })
+    for (const a of [prepare(api, { 'content-type': 'text/plain' }), prepare(api, {}), prepare(api, { 'content-type': 'application/jsonp' }), prepare(api, { 'content-type': 'text/plain; charset=utf-8' })]) {
+      expect(a).toMatchObject({ status: 415, headers: { 'cache-control': 'no-store' } })
+      expect(jsonOf(a)).toEqual({ why: 'unsupported-media-type' })
     }
-    // (the media type as a browser spells it, in any case)
-    expect(prepare(api, { 'content-type': 'Application/JSON' })).toMatchObject({ status: 200 })
+    for (const body of ['{"a":1}', 'nope', '[]', '', 'null', '{"a":1', '[{}]']) {
+      const a = prepare(api, { 'content-type': 'application/json' }, body)
+      expect(a, body).toMatchObject({ status: 400, headers: { 'cache-control': 'no-store' } })
+      expect(jsonOf(a)).toEqual({ why: 'bad-request' })
+    }
+    // (the media type as a browser spells it: in any case, and with parameters)
+    for (const type of ['Application/JSON', 'application/json; charset=utf-8', ' application/json ;charset=UTF-8']) expect(prepare(api, { 'content-type': type }), type).toMatchObject({ status: 200 })
+    // (and the vtag and the paper are judged first: another vtag is unknown-versions whatever the body is)
+    expect(prepare(api, { 'content-type': 'text/plain' }, 'x', `/api/v1/layer/${sample.segment}/b0/prepare`)).toMatchObject({ status: 404 })
+  })
+
+  it('serves three routes and no other path', () => {
+    expect(serves(BUNDLE_PATH)).toBe(true)
+    expect(serves(`${BUNDLE_PATH}/prepare`)).toBe(true)
+    expect(serves(`/api/v1/original/${sample.segment}`)).toBe(true)
+    for (const path of ['/api/v1/', '/api/v1/nothing', '/api/v1/layer/x', `${BUNDLE_PATH}/prepare/more`, `${BUNDLE_PATH}/extra/more`, '/api/v1/original/a/b', '/api/v2/layer/x/y', '/']) expect(serves(path), path).toBe(false)
   })
 
   it('answers every miss in JSON, and a wrong method with the method that is right', () => {
@@ -241,7 +256,7 @@ describe('the answers a test asks for', () => {
     expect(api.set({ layer: 'ready' }).mode.layer).toEqual({ kind: 'ready' })
   })
 
-  it('keeps what it answered, in order', () => {
+  it('keeps what it answered, in order, each request whole', () => {
     const api = layerApi({ sample })
     get(api, BUNDLE_PATH)
     prepare(api)
@@ -249,11 +264,34 @@ describe('the answers a test asks for', () => {
     api.set({ layer: mode.reset() })
     get(api, BUNDLE_PATH)
     expect(api.requests).toEqual([
-      { method: 'GET', path: BUNDLE_PATH, answered: 200 },
-      { method: 'POST', path: `${BUNDLE_PATH}/prepare`, answered: 200 },
-      { method: 'GET', path: '/api/v1/nothing', answered: 404 },
-      { method: 'GET', path: BUNDLE_PATH, answered: 'reset' },
+      { method: 'GET', path: BUNDLE_PATH, search: '', headers: {}, body: null, answered: 200 },
+      { method: 'POST', path: `${BUNDLE_PATH}/prepare`, search: '', headers: { 'content-type': 'application/json' }, body: { bytes: 2, text: '{}' }, answered: 200 },
+      { method: 'GET', path: '/api/v1/nothing', search: '', headers: {}, body: null, answered: 404 },
+      { method: 'GET', path: BUNDLE_PATH, search: '', headers: {}, body: null, answered: 'reset' },
     ])
+  })
+
+  it('shows in its record a query string, a cookie, an extra header and a body that was not asked for, and answers none of them differently', () => {
+    const api = layerApi({ sample })
+    const plain = get(api, BUNDLE_PATH)
+    const sent = api.handle({ method: 'GET', path: BUNDLE_PATH, search: '?title=Secret&email=a@b', headers: { cookie: 'session=abc', 'x-extra': 'leaked', authorization: 'Bearer t' }, body: new TextEncoder().encode('a body no GET carries') })
+    // (the answer does not depend on any of it: a query is not refused)
+    expect(sent).toEqual(plain)
+    const [, kept] = api.requests
+    expect(kept).toMatchObject({ method: 'GET', path: BUNDLE_PATH, search: '?title=Secret&email=a@b', answered: 200 })
+    expect(kept?.headers).toEqual({ cookie: 'session=abc', 'x-extra': 'leaked', authorization: 'Bearer t' })
+    expect(kept?.body).toEqual({ bytes: 21, text: 'a body no GET carries' })
+    // (the record is a copy: a header changed afterwards does not change it)
+    const headers = { 'x-extra': 'one' }
+    api.handle({ method: 'GET', path: BUNDLE_PATH, headers })
+    headers['x-extra'] = 'two'
+    expect(api.requests[2]?.headers).toEqual({ 'x-extra': 'one' })
+    // (a body is kept to a small cap of its text, its length whole)
+    api.handle({ method: 'POST', path: `${BUNDLE_PATH}/prepare`, headers: { 'content-type': 'application/json' }, body: new TextEncoder().encode(`{"pad":"${'x'.repeat(5000)}"}`) })
+    const long = api.requests[3]
+    expect(long?.body?.bytes).toBe(5010)
+    expect(long?.body?.text).toHaveLength(200)
+    expect(long?.answered).toBe(400)
   })
 })
 
@@ -272,8 +310,25 @@ describe('on the wire (a local HTTP server over the same answers)', () => {
       expect(new TextDecoder().decode(await part.arrayBuffer())).toBe('%PDF-')
       const bad = await fetch(`${server.origin}${BUNDLE_PATH}/prepare`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: '{}' })
       expect(bad.status).toBe(415)
+      const notEmpty = await fetch(`${server.origin}${BUNDLE_PATH}/prepare`, { method: 'POST', headers: { 'content-type': 'application/json; charset=utf-8' }, body: '{"a":1}' })
+      expect(notEmpty.status).toBe(400)
       const good = await fetch(`${server.origin}${BUNDLE_PATH}/prepare`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
       expect(await good.json()).toEqual({ ready: true })
+    } finally { await server.close() }
+  })
+
+  it('records, from a real request, its query string, its headers and its body whole', async () => {
+    const api = layerApi({ sample })
+    const server = await api.listen()
+    try {
+      const res = await fetch(`${server.origin}${BUNDLE_PATH}?title=Secret&email=a@b`, { headers: { cookie: 'session=abc', 'x-extra': 'leaked' } })
+      expect(res.status).toBe(200)
+      await fetch(`${server.origin}${BUNDLE_PATH}/prepare?x=1`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      const [first, second] = api.requests
+      expect(first).toMatchObject({ method: 'GET', path: BUNDLE_PATH, search: '?title=Secret&email=a@b', body: null, answered: 200 })
+      expect(first?.headers).toMatchObject({ cookie: 'session=abc', 'x-extra': 'leaked' })
+      expect(second).toMatchObject({ method: 'POST', path: `${BUNDLE_PATH}/prepare`, search: '?x=1', body: { bytes: 2, text: '{}' }, answered: 200 })
+      expect(second?.headers['content-type']).toBe('application/json')
     } finally { await server.close() }
   })
 

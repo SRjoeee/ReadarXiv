@@ -7,9 +7,10 @@
 //                                               | 404 { why }, why one of not-prepared (no-store), no-source, no-pdf,
 //                                                 cannot-prepare, unknown-versions (max-age=300)
 //                                               | 429 { retryAfterMs } (no-store)
-//   POST /api/v1/layer/<id>v<n>/<vtag>/prepare  only `Content-Type: application/json` with the body {} (else 415);
-//                                               202 preparing (begun or joined) | 200 { ready: true } | 404 { why }
-//                                               | 429 { retryAfterMs }
+//   POST /api/v1/layer/<id>v<n>/<vtag>/prepare  only `Content-Type: application/json` (parameters such as charset are
+//                                               accepted, another type answers 415) with the body {} (JSON that is not {}
+//                                               answers 400); 202 preparing (begun or joined) | 200 { ready: true }
+//                                               | 404 { why } | 429 { retryAfterMs }
 //   GET  /api/v1/original/<id>v<n>              200 application/pdf, range requests answered | 404 { why: 'no-pdf' }
 //
 // Every answer carries `Access-Control-Allow-Origin: *` (never credentials) and `X-Content-Type-Options: nosniff`; JSON
@@ -24,6 +25,11 @@
 // The stand-in is a function of the request (`handle`): Playwright's router (`route`) and a local HTTP server (`listen`)
 // both call it, so that a browser check and a test of the wire meet the same answers. `now` is the clock a preparation is
 // timed by, which a test of its own may move.
+//
+// What it records is the request whole, since a later check that "nothing else was sent" reads the record and not the
+// answer: its method, path and query string (a query is no reason to refuse a request: the answer does not depend on it, and
+// the record shows it), every header the request carried (a cookie too, where the router gives it), and its body (its length
+// and its text to BODY_TEXT_MAX characters), beside what it answered.
 import { createServer } from 'node:http'
 import { readFileSync } from 'node:fs'
 import { VTAG } from '../../../src/pdf-reader/engine/layer-proto/bundle.mjs'
@@ -70,6 +76,14 @@ function checked(m) {
   return { ...(m.kind === 'preparing' ? { begun: true } : {}), ...m }
 }
 
+/** the three routes the stand-in serves: a layer's GET and prepare, and the original (the capture groups: the paper's
+ *  segment, the version tag, and `/prepare` where the request is one) */
+const LAYER_ROUTE = /^\/api\/v1\/layer\/([^/]+)\/([^/]+?)(\/prepare)?$/
+const ORIGINAL_ROUTE = /^\/api\/v1\/original\/([^/]+)$/
+/** whether a path is one of the stand-in's routes: what a route table gives it, and answers no other path with it */
+export const serves = path => LAYER_ROUTE.test(path) || ORIGINAL_ROUTE.test(path)
+/** a request's body kept in the record: its text at most this long (the length is kept whole) */
+const BODY_TEXT_MAX = 200
 const NO_STORE = 'no-store'
 const SHORT = 'public, max-age=300'
 const IMMUTABLE = 'public, max-age=31536000, immutable'
@@ -110,7 +124,8 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
       return state
     },
     get mode() { return { layer, original } },
-    /** every request answered, in order: its method, its path and its answer (the status, or the fault) */
+    /** every request answered, in order, each kept whole (the header comment): its method, path, query string, headers and
+     *  body beside its answer (the status, or the fault) */
     requests,
   }
 
@@ -129,9 +144,11 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
   function layerAnswer({ headers, body }, segment, tag, prepare) {
     if (tag !== vtag) return missing('unknown-versions')
     if (prepare) {
+      // (the media type alone: `application/json; charset=utf-8` is JSON; any other type is 415, and JSON that is not {} is 400)
+      if ((headers['content-type'] ?? '').split(';')[0].trim().toLowerCase() !== 'application/json') return json(415, { why: 'unsupported-media-type' }, NO_STORE)
       let empty = false
       try { const value = JSON.parse(new TextDecoder().decode(body ?? new Uint8Array())); empty = value !== null && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0 } catch { /* not JSON */ }
-      if ((headers['content-type'] ?? '').trim().toLowerCase() !== 'application/json' || !empty) return json(415, { why: 'unsupported-media-type' }, NO_STORE)
+      if (!empty) return json(400, { why: 'bad-request' }, NO_STORE)
     }
     if (segment !== sample.segment) return missing('no-source')
     if (layer.kind === 'refused') return json(429, { retryAfterMs: layer.retryAfterMs }, NO_STORE)
@@ -158,13 +175,14 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
   }
 
   /**
-   * The answer to a request { method, path (the URL's pathname), headers (lower-case names), body }: { status, headers, body },
-   * or { fault: 'reset' | 'hang' } where the connection is to be reset or left unanswered.
+   * The answer to a request { method, path (the URL's pathname), search (its query string, with the `?`, or ''), headers
+   * (lower-case names), body }: { status, headers, body }, or { fault: 'reset' | 'hang' } where the connection is to be reset
+   * or left unanswered.
    */
   function answer(request) {
     const { method, path } = request
-    const layerRoute = /^\/api\/v1\/layer\/([^/]+)\/([^/]+?)(\/prepare)?$/.exec(path)
-    const originalRoute = /^\/api\/v1\/original\/([^/]+)$/.exec(path)
+    const layerRoute = LAYER_ROUTE.exec(path)
+    const originalRoute = ORIGINAL_ROUTE.exec(path)
     const target = layerRoute ? layer : originalRoute ? original : null
     // (a route's faults come before anything of the request is read: a server that is down is down for every request)
     if (target?.kind === 'reset' || target?.kind === 'hang') return { fault: target.kind }
@@ -182,8 +200,14 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
     return missing('not-found')
   }
   function handle(request) {
-    const done = answer({ ...request, headers: request.headers ?? {} })
-    requests.push({ method: request.method, path: request.path, answered: done.fault ?? done.status })
+    const whole = { ...request, search: request.search ?? '', headers: request.headers ?? {}, body: request.body ?? null }
+    const done = answer(whole)
+    const text = whole.body ? new TextDecoder().decode(whole.body.subarray(0, BODY_TEXT_MAX * 4)).slice(0, BODY_TEXT_MAX) : null
+    requests.push({
+      method: whole.method, path: whole.path, search: whole.search, headers: { ...whole.headers },
+      body: whole.body ? { bytes: whole.body.length, text } : null,
+      answered: done.fault ?? done.status,
+    })
     return done
   }
 
@@ -191,7 +215,9 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
   async function route(r) {
     const request = r.request()
     const url = new URL(request.url())
-    const done = handle({ method: request.method(), path: url.pathname, headers: request.headers(), body: request.postDataBuffer() })
+    // (the whole header set, a cookie included, where the browser gives it within a moment; else the ones a page sees)
+    const headers = await Promise.race([request.allHeaders(), new Promise(resolve => setTimeout(resolve, 1000))]).catch(() => null) ?? request.headers()
+    const done = handle({ method: request.method(), path: url.pathname, search: url.search, headers, body: request.postDataBuffer() })
     if (done.fault === 'reset') return r.abort('connectionreset')
     if (done.fault === 'hang') { pending.add(r); return undefined }
     return r.fulfill({ status: done.status, headers: done.headers, body: Buffer.from(done.body) })
@@ -210,7 +236,9 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
       const chunks = []
       req.on('data', c => chunks.push(c))
       req.on('end', () => {
-        const done = handle({ method: req.method, path: new URL(req.url, 'http://localhost').pathname, headers: req.headers, body: new Uint8Array(Buffer.concat(chunks)) })
+        const url = new URL(req.url, 'http://localhost')
+        const body = Buffer.concat(chunks)
+        const done = handle({ method: req.method, path: url.pathname, search: url.search, headers: req.headers, body: body.length ? new Uint8Array(body) : null })
         if (done.fault === 'reset') return req.socket.destroy()
         if (done.fault === 'hang') return undefined
         res.writeHead(done.status, done.headers)

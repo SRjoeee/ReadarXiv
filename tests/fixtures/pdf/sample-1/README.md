@@ -34,7 +34,7 @@ pnpm exec tsx scripts/make-sample-bundle.mjs --check    # makes them again; exit
 ```
 
 Remake them when the engine's contract moves (`BUNDLE`, `PDFJS`, `PIPELINE_VERSION`, `LAYOUT` or `REMOVAL`, which the
-bundle's versions name, and which `tests/e2e/layer-api.test.ts` reads it against), when the source is edited, or when
+bundle's versions name, and which `tests/e2e/lib/layer-api.test.ts` reads it against), when the source is edited, or when
 TeX Live changes. `main.bbl` is BibTeX's output over `main.tex` and `refs.bib`, made once in the same image:
 
 ```

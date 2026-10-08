@@ -81,9 +81,14 @@ async function compile(sources, { once = false } = {}) {
       writeFileSync(file, bytes)
     }
     const flag = { xelatex: '-xelatex', lualatex: '-lualatex' }[paper.meta.compiler] ?? '-pdf'
-    const args = ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-e', 'FORCE_SOURCE_DATE=1', '-e', `SOURCE_DATE_EPOCH=${EPOCH}`, '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '600', 'latexmk', flag, ...(once ? ['-e', '$max_repeat=1'] : []), ...(paper.meta.bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main]
-    // (latexmk -f exits non-zero on a TeX error and still leaves what it made: judged by its files)
-    await run('docker', args, { maxBuffer: 1 << 26 }).catch(() => null)
+    const args = ['run', '--rm', '--init', '--pull', 'never', '--network', 'none', '--cpus', '2', '--memory', '3g', '-e', 'FORCE_SOURCE_DATE=1', '-e', `SOURCE_DATE_EPOCH=${EPOCH}`, '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '600', 'latexmk', flag, ...(once ? ['-e', '$max_repeat=1'] : []), ...(paper.meta.bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main]
+    // (latexmk -f exits non-zero on a TeX error and still leaves what it made: judged by its files. Docker's own failures are
+    // not that: no docker, no daemon, no image on this machine — the image is never pulled — each is said as itself)
+    await run('docker', args, { maxBuffer: 1 << 26 }).catch(e => {
+      if (e?.code === 'ENOENT') throw new Error('docker is not installed, or not on the PATH: the sample is compiled in its texlive/texlive:latest image')
+      if (/Cannot connect to the Docker daemon|Is the docker daemon running/i.test(String(e?.stderr ?? ''))) throw new Error('the Docker daemon is not running: start Docker, then make the outputs again')
+      if (e?.code === 125) throw new Error(`docker could not run the compile (exit 125): ${String(e.stderr ?? '').trim().split('\n')[0] || 'no message'}; the image texlive/texlive:latest must be on this machine, and the maker never pulls it`)
+    })
     const pdf = join(dir, `${stem}.pdf`), log = join(dir, `${stem}.log`)
     return existsSync(log) ? { pdf: existsSync(pdf) ? new Uint8Array(readFileSync(pdf)) : null, log: readFileSync(log, 'latin1') } : null
   } finally {
