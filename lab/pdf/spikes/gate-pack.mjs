@@ -10,6 +10,8 @@
 //   pack/data/fonts/<file>                        the served faces (AXT_DATA=pack/data)
 //   pack/texmf/<tex/generic/...>                  the en and de hyphenation patterns (TEXMF_DIST=pack/texmf)
 //   pack/manifest.json                            { schema, pipeline, made, digest, files: [{ path, sha256, bytes }] }
+// The outputs <fx> are the frozen references of the references folder (--refs): the set the gate itself requires. An output whose
+// reference is there and any other of its files is not makes the make fail, naming each one; it never drops out unseen.
 // The pack is a file set, not an archive: sorted, each file's mtime zeroed, and the listing digest (the paths, digests and
 // sizes, not the clock) is the same on every make. lab/pdf/gate-pack.json is the committed copy of the manifest with each
 // file's `url` in the bucket, a key of its digest, so that the several outputs of one paper share one object.
@@ -88,23 +90,28 @@ export function fontFiles(faces, known, used) {
   return [...new Set([...want].map(id => faces[id].file))].sort()
 }
 
-/** the outputs of a made fixtures folder: <paper>v<n>-<target>, each with its PDF and layout file */
-export function outputsOf(dir) {
-  return readdirSync(dir).filter(n => FIXTURE.test(n) && existsSync(join(dir, n, 'layout.json')) && existsSync(join(dir, n, 'arxiv.pdf'))).sort()
+/**
+ * The outputs of the pack: <paper>v<n>-<target>, one for each frozen reference (`refs/<name>/ref.json`) of the references folder.
+ * That is the set the layer gate itself requires (it refuses an output without a reference), so it is the expected set; taking
+ * it from the made fixtures instead let an output with no layout file drop out of the pack unseen.
+ */
+export function outputsOf(refs) {
+  return readdirSync(refs).filter(n => FIXTURE.test(n) && existsSync(join(refs, n, 'ref.json'))).sort()
 }
 
 /**
  * The pack's files as { path, from }, sorted by path. `o`: the folders of a make (fixtures, records, refs, geometry),
  * `fonts` the file names to take from the fonts folder, `fontsDir`, and `patterns` the hyphenation files ({ lang: relative
- * path under texmf }) with `texmf` their root. Throws naming everything missing, so that a pack is never partly made.
+ * path under texmf }) with `texmf` their root. The outputs are those of the references (`outputsOf`); every file the gate reads
+ * for each of them must be there. Throws naming everything missing, so that a pack is never partly made.
  */
 export function entriesOf(o) {
-  const names = outputsOf(o.fixtures)
-  if (!names.length) throw new Error(`no output in ${o.fixtures}`)
+  const names = outputsOf(o.refs)
+  if (!names.length) throw new Error(`no frozen reference in ${o.refs}`)
   const out = new Map(), missing = []
   const add = (path, from) => {
     safePath(path)
-    if (!existsSync(from)) { missing.push(from); return }
+    if (!existsSync(from)) { missing.push(`${path} (expected at ${from})`); return }
     if (out.has(path) && out.get(path) !== from) throw new Error(`${path}: two sources`)
     out.set(path, from)
   }
@@ -121,7 +128,7 @@ export function entriesOf(o) {
   }
   for (const f of o.fonts) add(`data/fonts/${f}`, join(o.fontsDir, f))
   for (const rel of Object.values(o.patterns)) add(`texmf/${rel}`, join(o.texmf, rel))
-  if (missing.length) throw new Error(`the pack is missing ${missing.length} input${missing.length === 1 ? '' : 's'}:\n  ${missing.slice(0, 20).join('\n  ')}${missing.length > 20 ? '\n  …' : ''}`)
+  if (missing.length) throw new Error(`the pack is missing ${missing.length} input${missing.length === 1 ? '' : 's'}:\n  ${missing.slice(0, 40).join('\n  ')}${missing.length > 40 ? '\n  …' : ''}`)
   return [...out].map(([path, from]) => ({ path, from })).sort(byPath)
 }
 
@@ -290,7 +297,7 @@ async function main(argv) {
     const E = f => import(pathToFileURL(join(engine, ENGINE, f)).href)
     const [{ FACES }, { BUILTIN_RULES, resolveRules, SCRIPTS }, { TEX_PATTERN_FILES }] = await Promise.all([E('rules/font-roles.mjs'), E('rules/layout.mjs'), E('layer-proto/hyph.mjs')])
     const fixtures = where(argv, 'fixtures'), records = where(argv, 'records')
-    const names = outputsOf(fixtures)
+    const names = outputsOf(where(argv, 'refs'))
     const targets = [...new Set(names.map(n => nameOf(n).target))].sort()
     const known = SCRIPTS.map(s => BUILTIN_RULES.scripts[s].cjkFaces).filter(Boolean)
     const used = [...new Map(targets.map(t => resolveRules(BUILTIN_RULES, t).cjkFaces).filter(Boolean).map(c => [`${c.group}|${c.kai}`, c])).values()]

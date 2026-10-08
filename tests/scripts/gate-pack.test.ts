@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -92,6 +92,44 @@ describe('the pack is the same on every make', () => {
     expect(s.objects).toBe(objects.length)
     expect(s.kinds.map(k => k.kind)).toContain('fixtures/arxiv.pdf')
     expect(s.kinds.find(k => k.kind === 'fixtures/arxiv.pdf')).toMatchObject({ files: 3 })
+  })
+})
+
+describe('the pack\'s outputs are the frozen references', () => {
+  // the gate requires a reference of each output it runs: that is the set the pack holds, and an output that has a reference and
+  // lacks any other file is a make that fails, not one that goes without it
+  it('fails the make for an output whose layout file is missing, naming it', () => {
+    const i = inputs()
+    rmSync(join(i.fixtures, '0002.00002v1-zh', 'layout.json'))
+    const message = (() => { try { entriesOf(i); return '' } catch (e) { return (e as Error).message } })()
+    expect(message).toMatch(/missing 1 input:/)
+    expect(message).toContain('fixtures/0002.00002v1-zh/layout.json')
+    // the other outputs' files are not named, and nothing is made
+    expect(message).not.toContain('0001.00001v1')
+  })
+  it('names every file that is missing, of every output, and not only the first', () => {
+    const i = inputs()
+    rmSync(join(i.fixtures, '0001.00001v1-de', 'layout.json'))
+    rmSync(join(i.fixtures, '0002.00002v1-zh', 'arxiv.pdf'))
+    rmSync(join(i.records, '0002.00002v1-zh', 'units.json'))
+    rmSync(join(i.geometry, '0001.00001v1-zh-geometry.json'))
+    const message = (() => { try { entriesOf(i); return '' } catch (e) { return (e as Error).message } })()
+    // (the de output takes the zh output's geometry, so both name it)
+    expect(message).toMatch(/missing 5 inputs:/)
+    for (const named of ['fixtures/0001.00001v1-de/layout.json', 'fixtures/0002.00002v1-zh/arxiv.pdf', 'fixtures/0002.00002v1-zh/units.json', '0001.00001v1-zh: no geometry', '0001.00001v1-de: no geometry']) expect(message).toContain(named)
+  })
+  it('fails for an output whose fixture folder is gone altogether', () => {
+    const i = inputs()
+    rmSync(join(i.fixtures, '0002.00002v1-zh'), { recursive: true })
+    expect(() => entriesOf(i)).toThrow(/fixtures\/0002\.00002v1-zh\/arxiv\.pdf.*\n.*fixtures\/0002\.00002v1-zh\/layout\.json/)
+  })
+  it('holds the outputs that have a reference, and none that was merely made', () => {
+    const i = inputs()
+    put(join(i.fixtures, '0003.00003v1-zh', 'arxiv.pdf'), 'pdf-three')
+    put(join(i.fixtures, '0003.00003v1-zh', 'layout.json'), 'layout of 0003.00003v1-zh')
+    expect(outputsOf(i.refs)).toEqual(['0001.00001v1-de', '0001.00001v1-zh', '0002.00002v1-zh'])
+    expect(entriesOf(i).some(e => e.path.includes('0003.00003v1'))).toBe(false)
+    expect(() => entriesOf({ ...i, refs: i.records })).toThrow(/no frozen reference/)
   })
 })
 

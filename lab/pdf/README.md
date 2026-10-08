@@ -106,7 +106,9 @@ Kai and the four weights the roles are built from), and the en and de hyphenatio
 the gate's own flags and variables read it: `--fixtures=<pack>/fixtures`, `LAYER_REFS`, `LAYER_GEOMETRY`, `AXT_DATA`
 (`<pack>/data`, which holds `fonts/`) and `TEXMF_DIST`; `rules-gate.mjs run` sets them. Its manifest lists each file by path,
 digest and size; its **digest** is that of the sorted listing, the same on every make (the clock is not in it, and every file
-is written with its mtime at the epoch).
+is written with its mtime at the epoch). Its outputs are its frozen references (`refs/<output>/ref.json`), the set the gate
+itself requires: a make fails, naming each file, when any other file of one of them is missing, so an output cannot drop out
+unseen; and the verdict holds both runs to that set.
 
 Remaking it, on the machine that holds the data (after the fixtures are made again, a PIPELINE moves, or the faces change;
 `rules-gate.mjs compare` warns when the engine's PIPELINE is not the pack's):
