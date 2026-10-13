@@ -2,13 +2,18 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { entriesOf, fontFiles, listingDigest, makePack, objectsOf, objectUrl, outputsOf, packJsonOf, pipelineOf, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
+import { entriesOf, fontFiles, listingDigest, makePack, objectsOf, objectUrl, outputsOf, packJsonOf, pipelineOf, restorePack, s3Credentials, sha256, signV4, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
 
 // The rules gate's fixture pack (lab/pdf/spikes/gate-pack.mjs, Task R6): made the same on every make, restored by digest
 // from a private bucket, and checked before the gate reads it. The inputs here are small synthetic files.
 
 const ACCOUNT = '612fe563f8ba720019ffa3b35269aaa4'
 const TOKEN = 'cf-token-that-must-never-be-printed'
+/** the token id Cloudflare's verify endpoint answers with (the S3 access key id) */
+const KEY_ID = '0123456789abcdef0123456789abcdef'
+const SECRET = sha256(TOKEN)
+const VERIFY_URL = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/tokens/verify`
+const NOW = new Date('2026-10-13T08:30:15.123Z')
 const tmp = () => mkdtempSync(join(tmpdir(), 'gate-pack-test-'))
 const put = (file: string, content: string | Uint8Array) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content) }
 /** the message a promise rejects with */
@@ -150,43 +155,125 @@ describe('the faces the pack holds', () => {
   })
 })
 
+describe('SigV4 signing (node:crypto)', () => {
+  // AWS's own "GET Object" example, "Signature Calculations for the Authorization Header: Transferring Payload in a Single Chunk"
+  // (https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html): the first 10 bytes of test.txt from examplebucket.
+  it('reproduces the signature AWS publishes for its GET Object example', () => {
+    const signed = signV4({
+      method: 'GET', url: 'https://examplebucket.s3.amazonaws.com/test.txt', headers: { range: 'bytes=0-9' },
+      accessKeyId: 'AKIAIOSFODNN7EXAMPLE', secret: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', region: 'us-east-1', service: 's3', date: new Date('2013-05-24T00:00:00Z'),
+    })
+    expect(signed.authorization).toBe('AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request,SignedHeaders=host;range;x-amz-content-sha256;x-amz-date,Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41')
+    expect(signed).toMatchObject({ range: 'bytes=0-9', 'x-amz-date': '20130524T000000Z', 'x-amz-content-sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' })
+    // (fetch sets Host from the URL: it is signed, not returned)
+    expect(Object.keys(signed).some(k => k.toLowerCase() === 'host')).toBe(false)
+  })
+})
+
+describe('the S3 credentials are derived from the token', () => {
+  const verified = (over: Record<string, unknown> = {}, status = 200) => async () => ({ ok: status >= 200 && status < 300, status, json: async () => ({ success: true, result: { id: KEY_ID, status: 'active' }, ...over }), arrayBuffer: async () => new ArrayBuffer(0) })
+
+  it('asks Cloudflare once who the token is, with the token as a Bearer, and takes sha256 of its value as the secret', async () => {
+    const seen: { url: string; headers: Record<string, string> }[] = []
+    const fetchImpl = async (url: string, init: { headers: Record<string, string> }) => { seen.push({ url, headers: init.headers }); return verified()() }
+    expect(await s3Credentials({ token: TOKEN, account: ACCOUNT, fetchImpl })).toEqual({ accessKeyId: KEY_ID, secret: SECRET })
+    expect(seen).toEqual([{ url: VERIFY_URL, headers: { authorization: `Bearer ${TOKEN}` } }])
+  })
+
+  it.each([
+    ['an inactive token', verified({ result: { id: KEY_ID, status: 'expired' } })],
+    ['success: false', verified({ success: false })],
+    ['an id that is no 32 hex', verified({ result: { id: 'not-a-token-id', status: 'active' } })],
+    ['an upper-case id', verified({ result: { id: KEY_ID.toUpperCase(), status: 'active' } })],
+    ['a 401', verified({ success: false }, 401)],
+    ['a 403', verified({ success: false }, 403)],
+  ])('refuses %s, naming neither the token nor its digest', async (_name, fetchImpl) => {
+    const message = await why(s3Credentials({ token: TOKEN, account: ACCOUNT, fetchImpl, retryMs: 0 }))
+    expect(message).toMatch(/^the token is not an active Account API token of this account \(HTTP \d{3}\)$/)
+    expect(message).not.toContain(TOKEN)
+    expect(message).not.toContain(SECRET)
+  })
+
+  it('tries a server error or a failed body again twice, and a 4xx not at all', async () => {
+    let calls = 0
+    const flaky = async () => { calls++; if (calls === 1) return { ok: false, status: 503, json: async () => ({}), arrayBuffer: async () => new ArrayBuffer(0) }; if (calls === 2) return { ok: true, status: 200, json: async () => { throw new TypeError('terminated') }, arrayBuffer: async () => new ArrayBuffer(0) }; return verified()() }
+    expect(await s3Credentials({ token: TOKEN, account: ACCOUNT, fetchImpl: flaky, retryMs: 0 })).toEqual({ accessKeyId: KEY_ID, secret: SECRET })
+    expect(calls).toBe(3)
+    calls = 0
+    const never = async () => { calls++; return verified({}, 503)() }
+    const message = await why(s3Credentials({ token: TOKEN, account: ACCOUNT, fetchImpl: never, retryMs: 0 }))
+    expect(message).toMatch(/\(HTTP 503\)$/)
+    expect(calls).toBe(3)
+    calls = 0
+    await why(s3Credentials({ token: TOKEN, account: ACCOUNT, fetchImpl: async () => { calls++; return verified({}, 401)() }, retryMs: 0 }))
+    expect(calls).toBe(1)
+  })
+
+  it('refuses a request that fails outright without the token in the message', async () => {
+    const message = await why(s3Credentials({ token: TOKEN, account: ACCOUNT, fetchImpl: async () => { throw new TypeError(`fetch failed for ${TOKEN}`) }, retryMs: 0 }))
+    expect(message).not.toContain(TOKEN)
+    expect(await why(s3Credentials({ token: TOKEN, account: 'nope', fetchImpl: verified() }))).toMatch(/account id/)
+  })
+})
+
 describe('the pack is restored by digest from the bucket', () => {
-  /** a pack made from the synthetic inputs and a fake bucket holding its objects, with every request recorded */
+  type Req = { url: string; headers: Record<string, string> }
+  /** a pack made from the synthetic inputs and a fake bucket holding its objects (and Cloudflare's verify endpoint), with every request recorded */
   function bucket() {
     const i = inputs()
     const manifest = makePack({ entries: entriesOf(i), out: join(i.root, 'made'), pipeline: '10' })
     const pack = packJsonOf(manifest)
     const store = new Map<string, Uint8Array>()
     for (const f of pack.files) store.set(`gate-pack/${f.sha256}`, new Uint8Array(readFileSync(join(i.root, 'made', f.path))))
-    const requests: { url: string; authorization: string | undefined }[] = []
+    const requests: Req[] = []
+    const verifies: Req[] = []
     let respond: (key: string, n: number) => { status: number; body?: Uint8Array; bodyFails?: boolean } = key => (store.has(key) ? { status: 200, body: store.get(key) } : { status: 404 })
     const seen = new Map<string, number>()
     const fetchImpl = async (url: string, init: { headers: Record<string, string> }) => {
-      requests.push({ url, authorization: init.headers.authorization })
-      const key = url.split('/objects/')[1]!
+      if (url === VERIFY_URL) { verifies.push({ url, headers: init.headers }); return { ok: true, status: 200, json: async () => ({ success: true, result: { id: KEY_ID, status: 'active' } }), arrayBuffer: async () => new ArrayBuffer(0) } }
+      requests.push({ url, headers: init.headers })
+      const key = url.split('/readarxiv-ci/')[1]!
       const n = (seen.get(key) ?? 0) + 1
       seen.set(key, n)
       const r = respond(key, n)
       // (a body that fails is a connection that dropped after the headers: the status was 200)
-      return { ok: r.status === 200, status: r.status, arrayBuffer: async () => { if (r.bodyFails) throw new TypeError('terminated'); return (r.body ?? new Uint8Array()).slice().buffer } }
+      return { ok: r.status === 200, status: r.status, json: async () => ({}), arrayBuffer: async () => { if (r.bodyFails) throw new TypeError('terminated'); return (r.body ?? new Uint8Array()).slice().buffer } }
     }
-    return { i, pack, requests, fetchImpl, setRespond: (f: typeof respond) => { respond = f } }
+    return { i, pack, requests, verifies, fetchImpl, setRespond: (f: typeof respond) => { respond = f } }
   }
-  const args = (b: ReturnType<typeof bucket>, over: Record<string, unknown> = {}) => ({ pack: b.pack, dir: join(b.i.root, 'restored'), token: TOKEN, account: ACCOUNT, fetchImpl: b.fetchImpl, retryMs: 0, ...over })
+  const args = (b: ReturnType<typeof bucket>, over: Record<string, unknown> = {}) => ({ pack: b.pack, dir: join(b.i.root, 'restored'), token: TOKEN, account: ACCOUNT, fetchImpl: b.fetchImpl, retryMs: 0, now: () => NOW, ...over })
+  /** every secret-bearing value a request or a message could carry */
+  const leaks = (text: string, requests: Req[]) => [TOKEN, SECRET, ...requests.map(q => q.headers.authorization).filter((a): a is string => !!a && !a.startsWith('Bearer')), ...requests.map(q => /Signature=([0-9a-f]+)/.exec(q.headers.authorization ?? '')?.[1]).filter((s): s is string => !!s)].filter(v => text.includes(v))
 
-  it('reads each distinct object once with the token, slashes of the key as they are, checks it, and writes every path that shares it', async () => {
+  it('asks Cloudflare once who the token is, then reads each distinct object once from the S3 endpoint, signed, checks it, and writes every path that shares it', async () => {
     const b = bucket()
     const r = await restorePack(args(b))
     expect(r).toMatchObject({ files: b.pack.files.length, fetched: new Set(b.pack.files.map(f => f.sha256)).size, kept: 0 })
+    expect(b.verifies).toEqual([{ url: VERIFY_URL, headers: { authorization: `Bearer ${TOKEN}` } }])
     expect(b.requests.length).toBe(r.fetched)
-    expect(b.requests.every(q => q.authorization === `Bearer ${TOKEN}`)).toBe(true)
-    expect(b.requests[0]!.url).toMatch(new RegExp(`^https://api\\.cloudflare\\.com/client/v4/accounts/${ACCOUNT}/r2/buckets/readarxiv-ci/objects/gate-pack/[0-9a-f]{64}$`))
+    for (const q of b.requests) {
+      expect(q.url).toMatch(new RegExp(`^https://${ACCOUNT}\\.r2\\.cloudflarestorage\\.com/readarxiv-ci/gate-pack/[0-9a-f]{64}$`))
+      expect(q.headers.authorization).not.toContain('Bearer')
+      expect(Object.keys(q.headers).sort()).toEqual(['authorization', 'x-amz-content-sha256', 'x-amz-date'])
+      // the headers are the signer's, which the AWS vector proved, over the derived key and the injected clock
+      expect(q.headers).toEqual(signV4({ method: 'GET', url: q.url, accessKeyId: KEY_ID, secret: SECRET, region: 'auto', service: 's3', date: NOW }))
+      expect(q.headers['x-amz-date']).toBe('20261013T083015Z')
+    }
     expect(verifyPack({ pack: b.pack, dir: join(b.i.root, 'restored') })).toEqual([])
     expect(readFileSync(join(b.i.root, 'restored', 'fixtures/0001.00001v1-de/arxiv.pdf'), 'utf8')).toBe('pdf-one')
-    // a second restore reads nothing: every file is there with its digest
+    // a second restore reads nothing, and asks nothing: every file is there with its digest
     const again = await restorePack(args(b))
     expect(again).toMatchObject({ fetched: 0 })
     expect(b.requests.length).toBe(r.fetched)
+    expect(b.verifies.length).toBe(1)
+  })
+
+  it('signs each read with the clock of that read', async () => {
+    const b = bucket()
+    let t = Date.parse('2026-10-13T08:30:00Z') / 1000
+    await restorePack(args(b, { now: () => new Date(t++ * 1000 + 1000) }))
+    const stamps = b.requests.map(q => q.headers['x-amz-date']!)
+    expect(new Set(stamps).size).toBe(stamps.length)
   })
 
   it('refuses bytes that are not the manifest\'s, writing nothing of them', async () => {
@@ -199,21 +286,23 @@ describe('the pack is restored by digest from the bucket', () => {
     expect(written.length).toBeLessThan(b.pack.files.length)
   })
 
-  it('says what a missing object or a refused token means, tries a server error again, and never prints the token', async () => {
+  it('says what a missing object or a refused key means, tries a server error again, and never prints the token, the secret or a signature', async () => {
     const b = bucket()
     const logged: string[] = []
     b.setRespond(() => ({ status: 404 }))
     const e404 = await why(restorePack(args(b, { log: (l: string) => logged.push(l) })))
     expect(e404).toMatch(/HTTP 404 \(is the pack uploaded\?\)/)
     b.setRespond(() => ({ status: 403 }))
-    expect(await why(restorePack(args(b)))).toMatch(/HTTP 403 \(does the token read this bucket\?\)/)
+    const e403 = await why(restorePack(args(b)))
+    expect(e403).toMatch(/HTTP 403 \(does the token read this bucket\?\)/)
     // a 503 on the first read of each object, then the bytes
     const good = bucket()
     const before = good.requests.length
     good.setRespond((key, n) => (n === 1 ? { status: 503 } : { status: 200, body: new Uint8Array(readFileSync(join(good.i.root, 'made', good.pack.files.find(f => `gate-pack/${f.sha256}` === key)!.path))) }))
     await expect(restorePack(args(good))).resolves.toMatchObject({ files: good.pack.files.length })
     expect(good.requests.length).toBeGreaterThan(before)
-    expect([e404, ...logged].join('\n')).not.toContain(TOKEN)
+    expect(b.requests.length).toBeGreaterThan(0)
+    expect(leaks([e404, e403, ...logged].join('\n'), [...b.requests, ...good.requests])).toEqual([])
     await expect(restorePack(args(b, { token: undefined }))).rejects.toThrow('READARXIV_CI_TOKEN is not set')
   })
 
@@ -233,15 +322,19 @@ describe('the pack is restored by digest from the bucket', () => {
     b.setRespond(() => ({ status: 200, bodyFails: true }))
     const message = await why(restorePack(args(b)))
     expect(message).toMatch(/r2:\/\/readarxiv-ci\/gate-pack\/[0-9a-f]{64}: the request failed$/)
-    expect(message).not.toContain(TOKEN)
+    expect(leaks(message, b.requests)).toEqual([])
     // three reads of an object, the first and two more
     expect(b.requests.length).toBeGreaterThanOrEqual(3)
   })
 
   it('reads objects of the pack\'s bucket only, by a key that goes nowhere else', () => {
-    expect(objectUrl(ACCOUNT, `r2://readarxiv-ci/gate-pack/${'a'.repeat(64)}`)).toMatch(/\/r2\/buckets\/readarxiv-ci\/objects\/gate-pack\/a{64}$/)
+    expect(objectUrl(ACCOUNT, `r2://readarxiv-ci/gate-pack/${'a'.repeat(64)}`)).toBe(`https://${ACCOUNT}.r2.cloudflarestorage.com/readarxiv-ci/gate-pack/${'a'.repeat(64)}`)
+    // (every segment escaped once, the slashes between them literal)
+    expect(objectUrl(ACCOUNT, 'r2://readarxiv-ci/gate-pack/a.b_c-d')).toMatch(/\/readarxiv-ci\/gate-pack\/a\.b_c-d$/)
     expect(() => objectUrl(ACCOUNT, 'r2://other-bucket/gate-pack/x')).toThrow(/not an object of readarxiv-ci/)
     expect(() => objectUrl(ACCOUNT, 'r2://readarxiv-ci/gate-pack/../secret')).toThrow()
+    expect(() => objectUrl(ACCOUNT, 'r2://readarxiv-ci/gate-pack//x')).toThrow()
+    expect(() => objectUrl(ACCOUNT, 'r2://readarxiv-ci/gate-pack/x y')).toThrow()
     expect(() => objectUrl(ACCOUNT, 'https://example.com/gate-pack/x')).toThrow()
     expect(() => objectUrl('not-an-account', 'r2://readarxiv-ci/gate-pack/x')).toThrow(/account id/)
   })
