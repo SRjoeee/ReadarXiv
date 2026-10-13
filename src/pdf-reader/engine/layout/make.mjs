@@ -1260,6 +1260,8 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     pageText: ph.filter(p => kept1.has(p.row[0]) && p.text).map(p => [p.row[0], p.row[1], p.text]),
     held: outHeld,
     names: outNames,
+    // the paper's \lineskip and \lineskiplimit as TeX gave them (marks.mjs readSkipProbe), which the layer opens a line by
+    lineskip: marks.marking.lineskip ?? null,
   }
   stats.ph.texts = file.pageText.length
   Object.assign(stats.match, matcher.stats)

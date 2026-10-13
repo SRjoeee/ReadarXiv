@@ -142,7 +142,9 @@ export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'lat
 /** a laid line: its slot, and its items at their places */
 export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number }[]; [more: string]: unknown }
 /** layoutUnit2's answer */
-export interface Layout { lines: Line[]; f: number; s: number; scale: number; state: { lead: number; scale: number; track: number; trackLatin?: number; compress: number; borrow: number; knob: string }; knob: string; clipped: boolean; lostChars: number; chars: number; tried: number; spilled: boolean; extents?: Map<string, number[]> }
+/** a unit laid: its lines and the state that set them; `opened`, the lines TeX's rule opened (P.lineskip), `unopened` the
+ *  lines it would have opened where it has no values (none read: they stay nearer the line before than nothing) */
+export interface Layout { lines: Line[]; f: number; s: number; scale: number; state: { lead: number; scale: number; track: number; trackLatin?: number; compress: number; borrow: number; knob: string }; knob: string; clipped: boolean; lostChars: number; chars: number; tried: number; spilled: boolean; opened: number; unopened: number; extents?: Map<string, number[]> }
 /** the original page's ink at a fraction of its canvas's resolution */
 export interface InkMap { w: number; h: number; ink: Uint8Array; factor: number }
 /** a unit's block with its lines' measured baselines */

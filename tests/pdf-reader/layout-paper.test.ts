@@ -18,7 +18,9 @@ const text = (files: Map<string, Uint8Array>) => Object.fromEntries([...files].m
  *  \footnote is a call; the macro \bert sets no ink (an empty box) */
 const CITE = 'LAYOUT-PROBE 1 punct 0 22220000', REF = 'LAYOUT-PROBE 1 punct 1 00000000', FOOTNOTE = 'LAYOUT-PROBE 1 punct 2 00220000'
 const INK = ['LAYOUT-PROBE 1 ink-at 0', '> \\box54=', '\\hbox(0.0+0.0)x0.0', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 0']
-const PROBE_LOG = ['This is pdfTeX', CITE, REF, FOOTNOTE, ...INK, ''].join('\n')
+/** and the paper's \lineskip and \lineskiplimit, LaTeX's own */
+const SKIP = 'LAYOUT-PROBE 1 lineskip 1.0pt 0.0pt'
+const PROBE_LOG = ['This is pdfTeX', CITE, REF, FOOTNOTE, ...INK, SKIP, ''].join('\n')
 /** a browser compiler's log: each step's log joined with its terminal output, the earlier pass's lines before the last's */
 const stepped = (...passes: string[]) => passes.map(p => `$ pdflatex main.tex\nLOG:\n${p}\n==\nSTDOUT:\nterminal output\n`).join('')
 
@@ -86,8 +88,9 @@ describe('layoutMarksOfPaper', () => {
     expect(close).toHaveBeenCalledTimes(1)
     const marks = parseLayoutMarks(made.marks)
     expect(marks.engine).toBe('pdflatex')
-    // (the probe's log answers no name: its own text not known, as a probe of a paper that wraps none)
-    expect(marks.marking).toEqual({ classes: [...LAYOUT_CLASSES], switches, inkless, texts: [], names: {} })
+    // (the probe's log answers no name: its own text not known, as a probe of a paper that wraps none; its skips, LaTeX's
+    // 1pt and 0pt, in PDF units)
+    expect(marks.marking).toEqual({ classes: [...LAYOUT_CLASSES], switches, inkless, texts: [], names: {}, lineskip: [72 / 72.27, 0] })
     expect(marks.marks).toEqual([['0s', 1, 72, 700]])
     expect(marks.lines).toEqual([[0, 3]])
     // (the units and PDF.js's operator codes were given: each page's operator list was read)

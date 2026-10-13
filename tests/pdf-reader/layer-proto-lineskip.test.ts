@@ -55,8 +55,11 @@ describe("a line opens by TeX's rule", () => {
     // a gap of 0 under it: 5 + 7 + 1 = 13, one more than the slot's
     expect(L2.layoutUnit2(unit(7.5, 5) as never, [block(4)] as never, 10, P([1, 2]) as never).lines.map(x => x.baseline)).toEqual([500, 487, 475])
   })
-  it("opens nothing with no values, the paper's none (a layout file without them, v0 alone)", () => {
-    expect(L2.layoutUnit2(unit(7.5, 6) as never, [block(4)] as never, 10, P(null) as never).lines.map(x => x.baseline)).toEqual([500, 488, 476])
+  it("opens nothing with no values, the paper's none (a layout file without them, v0 alone), and counts what it would have", () => {
+    const l = L2.layoutUnit2(unit(7.5, 6) as never, [block(4)] as never, 10, P(null) as never)
+    expect(l.lines.map(x => x.baseline)).toEqual([500, 488, 476])
+    expect([l.opened, l.unopened]).toEqual([0, 1])
+    expect([L2.layoutUnit2(unit(7.5, 6) as never, [block(4)] as never, 10, P([1, 0]) as never)].map(x => [x.opened, x.unopened])).toEqual([[1, 0]])
   })
   it("drops the block's slots its lines are moved past the foot of, so that the fit takes its next state, never runs past", () => {
     // three lines in three slots: the third, moved 2 down, is past the block's foot (476): this state does not set it

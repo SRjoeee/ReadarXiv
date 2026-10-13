@@ -70,7 +70,7 @@ const sourceUnits = (): { units: SourceUnit[]; kept: Set<SourceUnit> } => ({ uni
 function layoutOf(): LayoutFile {
   const file = SPECS.map((s, id) => ({ ...s, id })).filter(s => s.file)
   return {
-    schema: 2, layout: LAYOUT, pdfjs: PDFJS, paper: { id: '2610.00001', version: 1, pages: 2 }, left: '', views: [...VIEW, ...VIEW], fonts: ['F1'],
+    schema: 3, lineskip: null, layout: LAYOUT, pdfjs: PDFJS, paper: { id: '2610.00001', version: 1, pages: 2 }, left: '', views: [...VIEW, ...VIEW], fonts: ['F1'],
     units: file.map(s => [s.id, UNIT_KINDS.indexOf(s.kind as never), 9, 0, 1]),
     lines: file.map(s => [s.id, s.lines.flatMap(([p, x0, x1, b]) => [p, x0, x1, b, b + 7, b - 2, 10, 0])]),
     frames: file.map(s => [s.id, s.lines.flatMap(([p], j) => [p, 0, j, 1, j ? 0 : -1, 0])]),

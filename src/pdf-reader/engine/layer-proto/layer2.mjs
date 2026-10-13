@@ -2295,7 +2295,9 @@ export function layoutUnit2(tokens, blocks, s, P) {
   return laidOut(last, s, P, tried)
 }
 
-/** a fit's breaking at its state made a layout: its lines placed, and what it set and lost counted */
+/** a fit's breaking at its state made a layout: its lines placed, and what it set and lost counted; the lines TeX's rule
+ *  opened (`opened`), and with no values for it (P.lineskip none) the lines that come nearer the one before them in their
+ *  block than nothing, its foot over their top, and stay so (`unopened`: what the rule would have opened) */
 function laidOut({ r, st, f }, s, P, tried) {
   const clipped = r.rest < r.total
   P._compress = st.compress
@@ -2303,7 +2305,13 @@ function laidOut({ r, st, f }, s, P, tried) {
   const count = t => (t.s ? [...t.s].length : t.crop ? 1 : 0)
   const allChars = r.tokens.reduce((a, t) => a + count(t), 0)
   const drawn = r.lines.reduce((a, l) => a + l.items.reduce((b, it) => b + count(it.t), 0), 0)
-  return { lines: r.lines, f, s, scale: st.scale, state: st, knob: clipped ? 'clip' : st.knob, clipped, lostChars: Math.max(0, allChars - drawn), chars: allChars, tried, spilled: !!r.spilled }
+  let unopened = 0
+  if (!P.lineskip) for (let i = 1; i < r.lines.length; i++) {
+    const a = r.lines[i - 1], b = r.lines[i]
+    if (a.block !== b.block || a.page !== b.page) continue
+    if (a.baseline - lineExtent(a, f, st.scale).d < b.baseline + lineExtent(b, f, st.scale).a) unopened++
+  }
+  return { lines: r.lines, f, s, scale: st.scale, state: st, knob: clipped ? 'clip' : st.knob, clipped, lostChars: Math.max(0, allChars - drawn), chars: allChars, tried, spilled: !!r.spilled, opened: r.lines.filter(l => l.opened > 0).length, unopened }
 }
 
 /**

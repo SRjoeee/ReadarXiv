@@ -17,10 +17,11 @@ export { LayoutRefusal } from './json.mjs'
  *  2: placeholders found by their own ink in the content stream, and the page text of citations and references;
  *  3: a text symbol the marking could not mark drawn as its character (PH_FLAG.TEXT), no row for a macro TeX said
  *  sets no ink, glyph boxes by their own ink, and the lines a unit's source does not write held (`held`); 4: babel's
- *  names located (`names`, the file's schema 2), and no unit's label holding one */
-export const LAYOUT = '4'
-/** the file's schema: 2 holds `names` */
-export const LAYOUT_SCHEMA = 2
+ *  names located (`names`, the file's schema 2), and no unit's label holding one; 5: the paper's \lineskip and
+ *  \lineskiplimit (`lineskip`, the file's schema 3) */
+export const LAYOUT = '5'
+/** the file's schema: 2 holds `names`; 3 `lineskip` */
+export const LAYOUT_SCHEMA = 3
 export const LAYOUT_CAP = 4 * 2 ** 20
 export const LAYOUT_VALUES = 1_000_000
 /** the deepest the file nests: its object, then lines, frames or erase (the arrays of entries), then an entry [id, rows],
@@ -41,7 +42,7 @@ export const NAME_FLAG = Object.freeze({ CENTRED: 1, CAPITALS: 2, RUN_IN: 4 })
  *  the unit's lines on arXiv's page show it (a macro's only, no segments: its ink is the line's, erased with it) */
 export const PH_FLAG = Object.freeze({ SOURCE_BRACKETS: 1, NUMBERED: 2, RAISED: 4, LOWERED: 8, EMPTY: 16, LOST: 32, TEXT: 64 })
 
-const KEYS = ['schema', 'layout', 'pdfjs', 'paper', 'left', 'views', 'fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held', 'names']
+const KEYS = ['schema', 'layout', 'pdfjs', 'paper', 'left', 'views', 'fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held', 'names', 'lineskip']
 /** the placeholders the layer may draw as text in the page's face (Task 9's tokens), whose own text the file may hold */
 export const PAGE_TEXT_KINDS = Object.freeze(['cite', 'ref', 'eqref'])
 /** a page text's code units at most, and a file's in all */
@@ -75,6 +76,8 @@ export const NAMES_MAX = 10_000
 const NAME_BITS = NAME_FLAG.CENTRED | NAME_FLAG.CAPITALS | NAME_FLAG.RUN_IN
 /** a name's row: its values */
 const NAME_ROW = 15
+/** a skip at most: TeX's \maxdimen in PDF units, which \offinterlineskip sets \lineskiplimit to */
+const SKIP_MAX = (16384 * 72) / 72.27
 /** a rectangle lies within its page's view by this, PDF units */
 const SLACK = 1
 const UNIT_BITS = UNIT_FLAG.TITLE | UNIT_FLAG.FRONT | UNIT_FLAG.CENTRED
@@ -401,6 +404,14 @@ export function checkLayout(value) {
     zeroes(r)
     last = r[0]
   }
+
+  // lineskip: the paper's \lineskip and \lineskiplimit, PDF units, as TeX gave them (layout/marks.mjs readSkipProbe), or
+  // null where it gave none; each within TeX's \maxdimen
+  const ls = f.lineskip
+  if (ls !== null) {
+    if (!Array.isArray(ls) || ls.length !== 2) throw refuse('lineskip', `not null or [lineskip, lineskiplimit] (${kindOf(ls)})`)
+    for (let i = 0; i < 2; i++) if (!isNumber(ls[i]) || Math.abs(ls[i]) > SKIP_MAX) throw refuse(`lineskip[${i}]`, `not a number within ${Math.round(SKIP_MAX)} (${kindOf(ls[i])})`)
+  }
   return f
 }
 
@@ -412,7 +423,7 @@ const LINE_EXACT = [0, 7], FRAME_EXACT = [0, 1, 2, 3, 4], ERASE_EXACT = [0], LAB
 
 /** the file as written: keys in the schema's order, numbers to a hundredth, no white space */
 export function encodeLayout(file) {
-  const { schema, layout, pdfjs, paper, left, views, fonts, units, lines, frames, erase, ph, labels, headings, pageText, held, names } = file
+  const { schema, layout, pdfjs, paper, left, views, fonts, units, lines, frames, erase, ph, labels, headings, pageText, held, names, lineskip } = file
   return JSON.stringify({
     schema, layout, pdfjs,
     paper: { id: paper.id, version: paper.version, pages: paper.pages },
@@ -430,6 +441,7 @@ export function encodeLayout(file) {
     pageText,
     held,
     names: names.map(r => rounded(r, NAME_ROW, NAME_EXACT)),
+    lineskip,
   })
 }
 

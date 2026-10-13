@@ -103,19 +103,22 @@ describe('the per-text cache key (rules as data, §9.1)', () => {
 
 /** an empty layout file of one page, as a maker of `layout` writes it */
 const layoutFile = (over: Record<string, unknown> = {}) => ({
-  schema: 2, layout: LAYOUT, pdfjs: '6.3.289', paper: { id: '2608.04322', version: 1, pages: 1 }, left: '', views: [0, 0, 612, 792], fonts: [],
-  units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [], ...over,
+  schema: 3, layout: LAYOUT, pdfjs: '6.3.289', paper: { id: '2608.04322', version: 1, pages: 1 }, left: '', views: [0, 0, 612, 792], fonts: [],
+  units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [], lineskip: null, ...over,
 })
 const manifest = (over: Record<string, unknown> = {}) => ({ schema: 1, removal: '4', pages: 1, sets: {}, page: { 1: { ok: true } }, appended: 0, stats: {}, ...over })
 
 describe('a layout file is refused by its schema, not by its maker (decision 4)', () => {
-  it('reads a schema-2 file whose `layout` is a newer maker\'s, and refuses a schema-1 or a schema-3 file', () => {
-    expect(parseLayout(bytesOf(layoutFile({ layout: '5' }))).layout).toBe('5')
+  it('reads a schema-3 file whose `layout` is a newer maker\'s, and refuses a schema-2 or a schema-4 file', () => {
+    expect(parseLayout(bytesOf(layoutFile({ layout: '6' }))).layout).toBe('6')
     expect(parseLayout(bytesOf(layoutFile({ layout: '1' }))).layout).toBe('1')
-    expect(() => parseLayout(bytesOf(layoutFile({ schema: 3 })))).toThrow(LayoutRefusal)
-    expect(() => parseLayout(bytesOf(layoutFile({ schema: 3, layout: '5' })))).toThrow(/schema/)
-    // (a file before the names: refused by its schema, as no reader holds an older one's meaning)
-    const { names: _, ...old } = layoutFile({ schema: 1 })
+    expect(() => parseLayout(bytesOf(layoutFile({ schema: 4 })))).toThrow(LayoutRefusal)
+    expect(() => parseLayout(bytesOf(layoutFile({ schema: 4, layout: '6' })))).toThrow(/schema/)
+    // (a file before the interline glue, or before the names: refused by its schema, as no reader holds an older one's
+    // meaning)
+    const { lineskip: _, ...two } = layoutFile({ schema: 2 })
+    expect(() => parseLayout(bytesOf(two))).toThrow(/^schema/)
+    const { names: __, lineskip: ___, ...old } = layoutFile({ schema: 1 })
     expect(() => parseLayout(bytesOf(old))).toThrow(/^schema/)
   })
 
