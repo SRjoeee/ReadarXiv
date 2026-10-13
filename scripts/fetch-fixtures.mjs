@@ -10,7 +10,8 @@
 // `readarxiv-ci` under `fixtures/<sha256>` (only where READARXIV_CI_TOKEN and CF_ACCOUNT_ID are both set: CI, never a fork's
 // pull request or a contributor's machine), and arXiv. arXiv's pages carry its own chrome, which it redeploys independently
 // of the paper, so the pinned bytes are kept where they cannot move; what the bucket serves is checked against the pin like
-// every other copy, and a bucket that cannot be read says so in one line and gives way to arXiv.
+// every other copy, and a bucket that cannot be read says so in one line and gives way to arXiv. A fixture already on disk
+// prints nothing; each one fetched prints one line, its path, its source and the status.
 //
 // `pnpm test` fetches them first (tests/global-setup.ts), and so does `pnpm fixtures:stats`.
 import { createHash, randomBytes } from 'node:crypto'
@@ -147,7 +148,7 @@ async function download(entry, fetchImpl, gapMs) {
       if (response.redirected && !response.url.startsWith(ARXIV)) {
         throw new FinalError(`${entry.url} ended at ${response.url}, outside arXiv; nothing was written. The pin needs checking (tests/fixtures/README.md)`)
       }
-      if (response.ok) return Buffer.from(await response.arrayBuffer())
+      if (response.ok) return { bytes: Buffer.from(await response.arrayBuffer()), status: response.status }
       // Nothing more is read from an answer that is not the file: an unread body would keep the connection, and the process, open
       await response.body?.cancel().catch(() => undefined)
       if (response.status === 404 || response.status === 410) {
@@ -180,7 +181,7 @@ async function download(entry, fetchImpl, gapMs) {
  * The S3 credentials are derived once, by the first fixture that needs them; a derivation that fails says so once and every
  * later fixture goes to arXiv without asking again. Nothing logged carries the token, its digest or a signature
  *
- * @returns {((entry: { sha256: string; bytes: number }) => Promise<Buffer | null>) | null}
+ * @returns {((entry: { sha256: string; bytes: number }) => Promise<{ bytes: Buffer; status: number } | null>) | null}
  */
 function bucketSource({ env, fetchImpl, retryMs, now, log }) {
   const token = env.READARXIV_CI_TOKEN
@@ -205,7 +206,7 @@ function bucketSource({ env, fetchImpl, retryMs, now, log }) {
         log(`bucket ${key}: HTTP ${res.status}, but the bytes are not the pinned ones; nothing was written, reading arXiv instead`)
         return null
       }
-      return value
+      return { bytes: value, status: res.status }
     } catch {
       log(`bucket ${key}: could not be read; reading arXiv instead`)
       return null
@@ -237,18 +238,18 @@ export async function ensureFixtures({ root = ROOT, fetchImpl = fetch, log = () 
       if (digest !== entry.sha256) {
         throw new Error(`${entry.path} is not the pinned fixture (SHA-256 ${digest.slice(0, 12)}…, the manifest records ${entry.sha256.slice(0, 12)}…). Delete it to download the pinned copy, or see tests/fixtures/README.md for moving the pin.`)
       }
-      log(`${entry.path}: on disk`)
       verified.push(entry.path)
       continue
     }
-    let bytes = await fromBucket?.(entry)
+    let got = await fromBucket?.(entry)
     let source = `the bucket (fixtures/${entry.sha256})`
-    if (!bytes) {
+    if (!got) {
       // The gap is arXiv's: between two requests to it, not before the first
       if (askedArxiv) await sleep(gapMs)
       askedArxiv = true
-      bytes = await download(entry, fetchImpl, gapMs)
+      got = await download(entry, fetchImpl, gapMs)
       source = entry.url
+      const { bytes } = got
       const digest = sha256(bytes)
       if (digest === entry.sha256 && bytes.length !== entry.bytes) throw new Error(sizeMismatch(entry, bytes.length))
       if (digest !== entry.sha256) {
@@ -258,6 +259,7 @@ export async function ensureFixtures({ root = ROOT, fetchImpl = fetch, log = () 
         )
       }
     }
+    const { bytes, status } = got
     // The path as it really is, checked before anything is created: the part of it that exists must resolve to itself
     // under the root — a symbolic link on the way would carry a directory or the file elsewhere — and once created, the
     // directory must be inside a fixture directory
@@ -281,7 +283,7 @@ export async function ensureFixtures({ root = ROOT, fetchImpl = fetch, log = () 
       await rm(partial, { force: true })
       throw e
     }
-    log(`fetched ${entry.path} (${bytes.length} bytes) from ${source}`)
+    log(`fetched ${entry.path} (${bytes.length} bytes) from ${source}: HTTP ${status}`)
     downloaded.push(entry.path)
   }
   return { verified, downloaded }

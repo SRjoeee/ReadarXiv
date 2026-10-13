@@ -281,6 +281,11 @@ describe('the manifest', () => {
       return rest.slice(0, end < 0 ? undefined : end).join('\n').trim()
     }
     expect(blockOf('actions/cache/save@v4')).toBe(blockOf('actions/cache/restore@v4'))
+    // the key names every input of the step that fills the cache: the pins and the code that decides where the bytes come from, so
+    // that a change to how fixtures arrive is exercised cold on its own pull request
+    const key = /key: (remote-fixtures-\$\{\{ hashFiles\((.*)\) \}\})/.exec(blockOf('actions/cache/restore@v4'))
+    expect(key, 'the cache key').not.toBeNull()
+    expect(key![2]!.split(',').map(f => f.trim().replace(/^'|'$/g, ''))).toEqual(['tests/fixtures/remote.json', 'scripts/fetch-fixtures.mjs', 'scripts/r2-read.mjs'])
   })
 
   it('the script takes no argument and refuses one, rather than fetch on a mistyped command', () => {
@@ -366,8 +371,8 @@ describe('the bucket', () => {
     }
     expect(readdirSync(join(root, 'tests/fixtures/arxiv')).sort()).toEqual(['0000.00000.html', '0000.00001.html'])
     expect(lines).toEqual([
-      `fetched ${ENTRY.path} (${BODY.length} bytes) from the bucket (fixtures/${ENTRY.sha256})`,
-      `fetched ${ENTRY2.path} (${BODY2.length} bytes) from the bucket (fixtures/${ENTRY2.sha256})`,
+      `fetched ${ENTRY.path} (${BODY.length} bytes) from the bucket (fixtures/${ENTRY.sha256}): HTTP 200`,
+      `fetched ${ENTRY2.path} (${BODY2.length} bytes) from the bucket (fixtures/${ENTRY2.sha256}): HTTP 200`,
     ])
     expect(leaks(lines.join('\n'), w)).toEqual([])
   })
@@ -389,7 +394,7 @@ describe('the bucket', () => {
     expect(said).toHaveLength(1)
     expect(said[0]).toMatch(line)
     expect(said[0]).toContain(ENTRY.sha256)
-    expect(lines).toContain(`fetched ${ENTRY.path} (${BODY.length} bytes) from ${ENTRY.url}`)
+    expect(lines).toContain(`fetched ${ENTRY.path} (${BODY.length} bytes) from ${ENTRY.url}: HTTP 200`)
     expect(readdirSync(join(root, 'tests/fixtures/arxiv'))).toEqual(['0000.00000.html'])
     expect(leaks(lines.join('\n'), w)).toEqual([])
   })
@@ -440,7 +445,7 @@ describe('the bucket', () => {
     expect(lines.filter(l => l.startsWith('bucket'))).toEqual([])
   })
 
-  it('every fixture on disk: no request of any kind, the credentials not even derived, and each one says it is on disk', async () => {
+  it('every fixture on disk: no request of any kind, the credentials not even derived, and nothing logged', async () => {
     twoPins()
     mkdirSync(join(root, 'tests/fixtures/arxiv'), { recursive: true })
     writeFileSync(file(), BODY)
@@ -449,7 +454,7 @@ describe('the bucket', () => {
     const { lines, done } = run(w)
     expect(await done).toEqual({ verified: [ENTRY.path, ENTRY2.path], downloaded: [] })
     expect(w.requests).toEqual([])
-    expect(lines).toEqual([`${ENTRY.path}: on disk`, `${ENTRY2.path}: on disk`])
+    expect(lines).toEqual([])
   })
 
   it('one missing, one on disk: the credentials are derived for the missing one only', async () => {
@@ -470,7 +475,7 @@ describe('the bucket', () => {
     const { lines, done } = run(w, { gapMs: 400 })
     expect(await done).toEqual({ verified: [], downloaded: [ENTRY.path, ENTRY2.path] })
     expect(Date.now() - started).toBeLessThan(380)
-    expect(lines.at(-1)).toBe(`fetched ${ENTRY2.path} (${BODY2.length} bytes) from ${ENTRY2.url}`)
+    expect(lines.at(-1)).toBe(`fetched ${ENTRY2.path} (${BODY2.length} bytes) from ${ENTRY2.url}: HTTP 200`)
   })
 
   it('a token, its digest, a signature or an authorization value is in no line, whatever the bucket does', async () => {

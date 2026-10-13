@@ -29,7 +29,7 @@ jobs:
       - id: fixtures-cache
         uses: actions/cache/restore@v4
         with:
-          key: remote-fixtures-${{ hashFiles('tests/fixtures/remote.json') }}
+          key: remote-fixtures-${{ hashFiles('tests/fixtures/remote.json', 'scripts/fetch-fixtures.mjs', 'scripts/r2-read.mjs') }}
           path: |
             tests/fixtures/arxiv/2312.17527.html
             tests/fixtures/arxiv/2401.00418.html
@@ -45,7 +45,7 @@ jobs:
       - if: steps.fixtures-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          key: remote-fixtures-${{ hashFiles('tests/fixtures/remote.json') }}
+          key: remote-fixtures-${{ hashFiles('tests/fixtures/remote.json', 'scripts/fetch-fixtures.mjs', 'scripts/r2-read.mjs') }}
           path: |
             tests/fixtures/arxiv/2312.17527.html
             tests/fixtures/arxiv/2401.00418.html
