@@ -10,7 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      # (pnpm comes with corepack, at the version package.json names: the job that fetches the fixtures holds the bucket's read token,
+      # and no third party's action runs in a job that holds a token — tests/scripts/rules-workflows.test.ts)
+      - run: corepack enable
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -22,7 +24,8 @@ jobs:
       # The fixtures the repository may not hold (tests/fixtures/README.md): restored from the cache, fetched from arXiv
       # only when missing, and saved the moment they are verified — not at the end of the job, which a failing test
       # would skip. Last but the tests, which alone read them, so arXiv being unreachable costs the tests only. One path
-      # per entry `for` tests, the same list in both steps — a test holds them together
+      # per entry `for` tests, the same list in both steps — a test holds them together. The pinned bytes are also kept in the
+      # private bucket (tests/fixtures/README.md): the fetch reads them from there before arXiv, whose pages move
       - id: fixtures-cache
         uses: actions/cache/restore@v4
         with:
@@ -36,6 +39,9 @@ jobs:
             tests/fixtures/svg/2608.29808-bounter-case.svg
             tests/fixtures/svg/2607.24653-AET_blackbox_curve.svg
       - run: pnpm fixtures:fetch
+        env:
+          READARXIV_CI_TOKEN: ${{ secrets.READARXIV_CI_TOKEN }}
+          CF_ACCOUNT_ID: ${{ vars.CF_ACCOUNT_ID }}
       - if: steps.fixtures-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:

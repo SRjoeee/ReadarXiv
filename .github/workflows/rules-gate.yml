@@ -44,7 +44,6 @@ jobs:
     # CF_ACCOUNT_ID, lab/pdf/README.md): until then the job is skipped
     if: github.event.pull_request.head.repo.full_name == github.repository && vars.CF_ACCOUNT_ID != ''
     runs-on: ubuntu-latest
-    environment: rules-gate
     timeout-minutes: 15
     env:
       BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -67,8 +66,9 @@ jobs:
       - name: Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      # The pack: from this pull request's own cache by its digest, else from the bucket with the read-only token. Only this step
-      # names the token, but any process of the job could read it: it is read-only, it expires, and it is rotated (lab/pdf/README.md).
+      # The pack: from this pull request's own cache by its digest, else from the bucket with the read-only token (a repository
+      # secret, which the fixtures fetch of ci.yml reads too: no environment holds a copy of it). Only this step names the token,
+      # but any process of the job could read it: it is read-only, it expires, and it is rotated (lab/pdf/README.md).
       # The cache is the pull request's: a cache saved on a push to next is readable by a fork's pull request, which runs its own
       # workflow, so no workflow that runs on a push may save the pack (rules-publish.yml downloads it, and a test holds this)
       - name: Pack digest
