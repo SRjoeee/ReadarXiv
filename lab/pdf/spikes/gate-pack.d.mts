@@ -1,4 +1,4 @@
-// gate-pack.mjs's types, for its tests
+// gate-pack.mjs's types, for its tests (the S3 read it uses is scripts/r2-read.d.mts)
 export declare const PACK_SCHEMA: 1
 export declare const BUCKET: 'readarxiv-ci'
 export declare const KEY_PREFIX: 'gate-pack/'
@@ -17,8 +17,6 @@ export declare function packJsonOf(manifest: Manifest, bucket?: string): PackJso
 export declare function summaryOf(files: PackFile[]): { files: number; bytes: number; objects: number; objectBytes: number; kinds: { kind: string; files: number; bytes: number }[] }
 export declare function objectUrl(account: string, url: string, bucket?: string): string
 type Fetch = (url: string, init: { headers: Record<string, string> }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer> }>
-export declare function signV4(o: { method: string; url: string; headers?: Record<string, string>; accessKeyId: string; secret: string; region: string; service: string; date: Date }): Record<string, string>
-export declare function s3Credentials(o: { token: string; account: string | undefined; fetchImpl?: Fetch; retryMs?: number }): Promise<{ accessKeyId: string; secret: string }>
 export declare function restorePack(o: { pack: PackJson; dir: string; token: string | undefined; account: string | undefined; fetchImpl?: Fetch; retryMs?: number; now?: () => Date; log?: (line: string) => void }): Promise<{ files: number; objects: number; fetched: number; kept: number }>
 export declare function verifyPack(o: { pack: PackJson | Manifest; dir: string }): string[]
 export declare function objectsOf(pack: PackJson, bucket?: string): { key: string; bucket: string; sha256: string; bytes: number; path: string }[]

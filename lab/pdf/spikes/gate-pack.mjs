@@ -25,16 +25,17 @@
 // `make` and `objects` read and write local files only; `restore` is the only command that touches the network. Its token (an
 // R2 API token, Object Read on the bucket) is sent only to Cloudflare's token-verify endpoint, which answers the token's id;
 // the objects are read from R2's S3 endpoint, each request signed (SigV4) with the key derived from the token (that id, and
-// the SHA-256 of its value). Neither the token nor the derived secret is printed.
-import { createHash, createHmac } from 'node:crypto'
+// the SHA-256 of its value). Neither the token nor the derived secret is printed. The read itself (the derivation, the signer, the
+// retry rule) is scripts/r2-read.mjs, which the fixtures fetch (scripts/fetch-fixtures.mjs) uses as well.
 import { constants, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { accountOf, BUCKET, getObject, isKey, keyUrl, s3Credentials, sha256, tokenOf } from '../../../scripts/r2-read.mjs'
 import { geometryFile, nameOf } from './layer-gate/ref.mjs'
 
+export { BUCKET, sha256 }
 export const PACK_SCHEMA = 1
-export const BUCKET = 'readarxiv-ci'
 /** the pack's objects in the bucket: gate-pack/<sha256> */
 export const KEY_PREFIX = 'gate-pack/'
 /** the weights a CJK group's roles are built from (rules/font-roles.mjs rolesFor): the body, the bold, and the lights and semibolds
@@ -53,7 +54,6 @@ const DEFAULTS = {
 const FIXTURE = /^[A-Za-z0-9._-]+v\d+-[A-Za-z-]+$/
 const SHA = /^[0-9a-f]{64}$/
 
-export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'))
 /** a path in code-unit order, so that no locale decides the listing */
 const byPath = (a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
@@ -198,82 +198,12 @@ export function summaryOf(files) {
 
 // ---------------------------------------------------------------- restoring
 
-const accountOf = account => {
-  if (typeof account !== 'string' || !/^[0-9a-f]{32}$/.test(account)) throw new Error('CF_ACCOUNT_ID is not a Cloudflare account id')
-  return account
-}
-
-/** an object's url in the bucket as a read of R2's S3 API (path style): slashes of the key literal, the rest escaped once */
+/** the S3 url of a manifest's `r2://<bucket>/<key>` object, which must be of the pack's bucket (the read is scripts/r2-read.mjs's) */
 export function objectUrl(account, url, bucket = BUCKET) {
   accountOf(account)
-  const m = /^r2:\/\/([a-z0-9][a-z0-9-]{1,62})\/([A-Za-z0-9._/-]+)$/.exec(String(url))
-  if (!m || m[1] !== bucket || m[2].split('/').some(s => s === '' || s === '.' || s === '..')) throw new Error(`not an object of ${bucket}: ${JSON.stringify(String(url).slice(0, 80))}`)
-  return `https://${account}.r2.cloudflarestorage.com/${bucket}/${m[2].split('/').map(encodeURIComponent).join('/')}`
-}
-
-const EMPTY_SHA = sha256('')
-const hmac = (key, data) => createHmac('sha256', key).update(data).digest()
-
-/**
- * The headers of a body-less, query-less request signed with AWS Signature Version 4: `headers` plus `x-amz-date`,
- * `x-amz-content-sha256` (the empty payload's digest) and `authorization`. `host` is signed from the URL but not returned (fetch
- * sets it). The path is signed as the URL carries it, each segment escaped once; header values are trimmed, nothing more.
- * Proven against AWS's own GET Object example (tests/scripts/gate-pack.test.ts).
- */
-export function signV4({ method, url, headers = {}, accessKeyId, secret, region, service, date }) {
-  const u = new URL(url)
-  if (u.search) throw new Error('signV4 signs requests without a query string')
-  const stamp = date.toISOString().replace(/[-:]|\.\d{3}/g, '')
-  const scope = `${stamp.slice(0, 8)}/${region}/${service}/aws4_request`
-  const sent = { ...headers, 'x-amz-date': stamp, 'x-amz-content-sha256': EMPTY_SHA }
-  const signed = { host: u.host, ...Object.fromEntries(Object.entries(sent).map(([k, v]) => [k.toLowerCase(), String(v).trim()])) }
-  const names = Object.keys(signed).sort()
-  const canonical = `${method}\n${u.pathname}\n\n${names.map(n => `${n}:${signed[n]}\n`).join('')}\n${names.join(';')}\n${EMPTY_SHA}`
-  const key = [...scope.split('/')].reduce(hmac, `AWS4${secret}`)
-  const signature = hmac(key, `AWS4-HMAC-SHA256\n${stamp}\n${scope}\n${sha256(canonical)}`).toString('hex')
-  return { ...sent, authorization: `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${scope}, SignedHeaders=${names.join(';')}, Signature=${signature}` }
-}
-
-/** the token as it is signed with: white space in it (a pasted newline, which a header drops and a digest keeps) is refused */
-const tokenOf = token => {
-  if (typeof token !== 'string' || !token) throw new Error('READARXIV_CI_TOKEN is not set')
-  if (!/^\S+$/.test(token)) throw new Error('READARXIV_CI_TOKEN has white space in it: set the token alone')
-  return token
-}
-
-const sleep = ms => new Promise(ok => setTimeout(ok, ms))
-
-/**
- * A request `send()` makes and `read(res)` reads, tried again twice (after retryMs, then twice that) when it fails for want of
- * the network or the server: a throw, a 5xx or a 429. The read is part of the operation: a connection that drops while the body
- * is read is the same failure as one that never opened. Returns { res, value } of the one that worked, or { res } (null when no
- * response came) of the one that did not: a 4xx at once, the others when the tries are spent.
- */
-async function withRetry(send, read, retryMs) {
-  for (let attempt = 0; ; attempt++) {
-    let res = null
-    try {
-      res = await send()
-      if (res.ok) return { res, value: await read(res) }
-    } catch { res = null }
-    if (!(res === null || res.status >= 500 || res.status === 429) || attempt >= 2) return { res }
-    await sleep(retryMs * (attempt + 1))
-  }
-}
-
-/**
- * The S3 credentials of an R2 API token (Cloudflare: "Get S3 API credentials from an API token"): the access key id is the
- * token's own id, which Cloudflare's verify endpoint answers, and the secret is the SHA-256 of the token's value. The one request
- * that carries the token; nothing it fails with names the token or the secret.
- */
-export async function s3Credentials({ token, account, fetchImpl = fetch, retryMs = 1000 }) {
-  tokenOf(token)
-  const url = `https://api.cloudflare.com/client/v4/accounts/${accountOf(account)}/tokens/verify`
-  const { res, value } = await withRetry(() => fetchImpl(url, { headers: { authorization: `Bearer ${token}` } }), r => r.json(), retryMs)
-  if (!value) throw new Error(res && res.status < 500 && res.status !== 429 ? `the token is not an active Account API token of this account (HTTP ${res.status})` : `Cloudflare's token-verify endpoint could not be read (${res ? `HTTP ${res.status}` : 'the request failed'})`)
-  const id = value.result?.id
-  if (value.success !== true || value.result?.status !== 'active' || typeof id !== 'string' || !/^[0-9a-f]{32}$/.test(id)) throw new Error(`the token is not an active Account API token of this account (HTTP ${res.status})`)
-  return { accessKeyId: id, secret: sha256(token) }
+  const m = /^r2:\/\/([a-z0-9][a-z0-9-]{1,62})\/(.+)$/.exec(String(url))
+  if (!m || m[1] !== bucket || !isKey(m[2])) throw new Error(`not an object of ${bucket}: ${JSON.stringify(String(url).slice(0, 80))}`)
+  return keyUrl(account, m[2], bucket)
 }
 
 const fileIs = (file, f) => { try { const b = readFileSync(file); return b.length === f.bytes && sha256(b) === f.sha256 } catch { return false } }
@@ -301,12 +231,7 @@ export async function restorePack({ pack, dir, token, account, fetchImpl = fetch
   const get = async f => {
     const url = objectUrl(account, f.url, pack.bucket)
     credentials ??= s3Credentials({ token, account, fetchImpl, retryMs })
-    const { accessKeyId, secret } = await credentials
-    const { res, value } = await withRetry(
-      () => fetchImpl(url, { headers: signV4({ method: 'GET', url, accessKeyId, secret, region: 'auto', service: 's3', date: now() }) }),
-      async r => Buffer.from(await r.arrayBuffer()),
-      retryMs,
-    )
+    const { res, value } = await getObject({ url, credentials: await credentials, fetchImpl, retryMs, now })
     if (!value) throw new Error(`${f.url}: ${res ? `HTTP ${res.status}` : 'the request failed'}${res?.status === 404 ? ' (is the pack uploaded?)' : res?.status === 401 || res?.status === 403 ? ' (does the token read this bucket?)' : ''}`)
     return value
   }

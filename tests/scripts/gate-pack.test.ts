@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { entriesOf, fontFiles, listingDigest, makePack, objectsOf, objectUrl, outputsOf, packJsonOf, pipelineOf, restorePack, s3Credentials, sha256, signV4, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
+import { entriesOf, fontFiles, listingDigest, makePack, objectsOf, objectUrl, outputsOf, packJsonOf, pipelineOf, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
+import { signV4 } from '../../scripts/r2-read.mjs'
 
 // The rules gate's fixture pack (lab/pdf/spikes/gate-pack.mjs, Task R6): made the same on every make, restored by digest
 // from a private bucket, and checked before the gate reads it. The inputs here are small synthetic files.
@@ -152,83 +153,6 @@ describe('the faces the pack holds', () => {
     expect(files.some(f => f.startsWith('shs-k'))).toBe(true)
     expect(files).not.toContain('bkai00mp.otf')
     expect(() => fontFiles(faces, known, [{ group: 'shs-tc', kai: 'bkai00mp' }])).toThrow(/shs-tc-light/)
-  })
-})
-
-describe('SigV4 signing (node:crypto)', () => {
-  // AWS's own "GET Object" example, "Signature Calculations for the Authorization Header: Transferring Payload in a Single Chunk"
-  // (https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html): the first 10 bytes of test.txt from examplebucket.
-  it('reproduces the signature AWS publishes for its GET Object example', () => {
-    const signed = signV4({
-      method: 'GET', url: 'https://examplebucket.s3.amazonaws.com/test.txt', headers: { range: 'bytes=0-9' },
-      accessKeyId: 'AKIAIOSFODNN7EXAMPLE', secret: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', region: 'us-east-1', service: 's3', date: new Date('2013-05-24T00:00:00Z'),
-    })
-    // (the page prints the three parts joined by a bare comma; the signer joins them with ", " as the AWS SDK v3 and aws4fetch do, which the signature does not cover)
-    expect(signed.authorization).toBe('AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request, SignedHeaders=host;range;x-amz-content-sha256;x-amz-date, Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41')
-    expect(signed).toMatchObject({ range: 'bytes=0-9', 'x-amz-date': '20130524T000000Z', 'x-amz-content-sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' })
-    // (fetch sets Host from the URL: it is signed, not returned)
-    expect(Object.keys(signed).some(k => k.toLowerCase() === 'host')).toBe(false)
-  })
-  it('signs no query string', () => {
-    expect(() => signV4({ method: 'GET', url: 'https://examplebucket.s3.amazonaws.com/test.txt?versionId=1', accessKeyId: 'k', secret: 's', region: 'auto', service: 's3', date: NOW })).toThrow(/without a query string/)
-  })
-})
-
-describe('the S3 credentials are derived from the token', () => {
-  const verified = (over: Record<string, unknown> = {}, status = 200) => async () => ({ ok: status >= 200 && status < 300, status, json: async () => ({ success: true, result: { id: KEY_ID, status: 'active' }, ...over }), arrayBuffer: async () => new ArrayBuffer(0) })
-
-  it('asks Cloudflare once who the token is, with the token as a Bearer, and takes sha256 of its value as the secret', async () => {
-    const seen: { url: string; headers: Record<string, string> }[] = []
-    const fetchImpl = async (url: string, init: { headers: Record<string, string> }) => { seen.push({ url, headers: init.headers }); return verified()() }
-    expect(await s3Credentials({ token: TOKEN, account: ACCOUNT, fetchImpl })).toEqual({ accessKeyId: KEY_ID, secret: SECRET })
-    expect(seen).toEqual([{ url: VERIFY_URL, headers: { authorization: `Bearer ${TOKEN}` } }])
-  })
-
-  it.each([
-    ['an inactive token', verified({ result: { id: KEY_ID, status: 'expired' } })],
-    ['success: false', verified({ success: false })],
-    ['an id that is no 32 hex', verified({ result: { id: 'not-a-token-id', status: 'active' } })],
-    ['an upper-case id', verified({ result: { id: KEY_ID.toUpperCase(), status: 'active' } })],
-    ['a 401', verified({ success: false }, 401)],
-    ['a 403', verified({ success: false }, 403)],
-  ])('refuses %s, naming neither the token nor its digest', async (_name, fetchImpl) => {
-    const message = await why(s3Credentials({ token: TOKEN, account: ACCOUNT, fetchImpl, retryMs: 0 }))
-    expect(message).toMatch(/^the token is not an active Account API token of this account \(HTTP \d{3}\)$/)
-    expect(message).not.toContain(TOKEN)
-    expect(message).not.toContain(SECRET)
-  })
-
-  it('tries a server error or a failed body again twice, and a 4xx not at all', async () => {
-    let calls = 0
-    const flaky = async () => { calls++; if (calls === 1) return { ok: false, status: 503, json: async () => ({}), arrayBuffer: async () => new ArrayBuffer(0) }; if (calls === 2) return { ok: true, status: 200, json: async () => { throw new TypeError('terminated') }, arrayBuffer: async () => new ArrayBuffer(0) }; return verified()() }
-    expect(await s3Credentials({ token: TOKEN, account: ACCOUNT, fetchImpl: flaky, retryMs: 0 })).toEqual({ accessKeyId: KEY_ID, secret: SECRET })
-    expect(calls).toBe(3)
-    calls = 0
-    const never = async () => { calls++; return verified({}, 503)() }
-    const message = await why(s3Credentials({ token: TOKEN, account: ACCOUNT, fetchImpl: never, retryMs: 0 }))
-    expect(message).toMatch(/\(HTTP 503\)$/)
-    expect(calls).toBe(3)
-    calls = 0
-    await why(s3Credentials({ token: TOKEN, account: ACCOUNT, fetchImpl: async () => { calls++; return verified({}, 401)() }, retryMs: 0 }))
-    expect(calls).toBe(1)
-  })
-
-  it('refuses a token with white space in it before any request, naming neither the token nor its digest', async () => {
-    let calls = 0
-    const fetchImpl = async () => { calls++; return verified()() }
-    for (const token of [`${TOKEN}\n`, ` ${TOKEN}`, `${TOKEN} x`]) {
-      const message = await why(s3Credentials({ token, account: ACCOUNT, fetchImpl, retryMs: 0 }))
-      expect(message).toBe('READARXIV_CI_TOKEN has white space in it: set the token alone')
-      expect(message).not.toContain(TOKEN)
-      expect(message).not.toContain(sha256(token))
-    }
-    expect(calls).toBe(0)
-  })
-
-  it('refuses a request that fails outright without the token in the message', async () => {
-    const message = await why(s3Credentials({ token: TOKEN, account: ACCOUNT, fetchImpl: async () => { throw new TypeError(`fetch failed for ${TOKEN}`) }, retryMs: 0 }))
-    expect(message).not.toContain(TOKEN)
-    expect(await why(s3Credentials({ token: TOKEN, account: 'nope', fetchImpl: verified() }))).toMatch(/account id/)
   })
 })
 
