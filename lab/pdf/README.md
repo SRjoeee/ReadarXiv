@@ -108,14 +108,20 @@ the gate's own flags and variables read it: `--fixtures=<pack>/fixtures`, `LAYER
 digest and size; its **digest** is that of the sorted listing, the same on every make (the clock is not in it, and every file
 is written with its mtime at the epoch). Its outputs are its frozen references (`refs/<output>/ref.json`), the set the gate
 itself requires: a make fails, naming each file, when any other file of one of them is missing, so an output cannot drop out
-unseen; and the verdict holds both runs to that set.
+unseen; and the verdict holds both runs to that set. The manifest also names the layout files' version (`layout`: the `schema`
+and `layout` fields every `layout.json` carries, which the reader refuses a file by): a make fails unless all of them are the
+engine's own (`layout/file.mjs`, `LAYOUT_SCHEMA` and `LAYOUT`), and `tests/scripts/gate-pack.test.ts` holds the committed
+`gate-pack.json` to the engine's, so a pull request that moves the layout file cannot pass `pnpm test` with the pack as it was.
 
-Remaking it, on the machine that holds the data (after the fixtures are made again, a PIPELINE moves, or the faces change;
-`rules-gate.mjs compare` warns when the engine's PIPELINE is not the pack's):
+Remaking it, on the machine that holds the data (after the fixtures are made again, a PIPELINE moves, the layout file moves,
+or the faces change; `rules-gate.mjs compare` warns when the engine's PIPELINE is not the pack's). A pull request that moves the
+layout file makes the fixtures again with its engine (the layer gate's `--layouts=made`), re-makes the pack and uploads the new
+objects, before its CI can pass: the gate restores the committed `gate-pack.json`, and an object that is not in the bucket is a
+404 there.
 
 ```
-node lab/pdf/spikes/gate-pack.mjs make        # lab/pdf/out/gate-pack/, and lab/pdf/gate-pack.json (the defaults are the record's run:
-                                              # the made fixtures, the PIPELINE 10 cut's translations, references and geometry)
+node lab/pdf/spikes/gate-pack.mjs make        # lab/pdf/out/gate-pack/, and lab/pdf/gate-pack.json; its inputs (the made fixtures, the
+                                              # translations, references and geometry) are those `lab/pdf/records/layer-gate.json` names
 node lab/pdf/spikes/gate-pack.mjs objects     # the objects to upload, once each: key, size, digest, local path
 ```
 

@@ -1,18 +1,23 @@
 // gate-pack.mjs's types, for its tests
-export declare const PACK_SCHEMA: 1
+export declare const PACK_SCHEMA: 2
 export declare const BUCKET: 'readarxiv-ci'
 export declare const KEY_PREFIX: 'gate-pack/'
 export declare const ROLE_WEIGHTS: string[]
 export declare function sha256(bytes: Uint8Array | string): string
 export interface PackFile { path: string; sha256: string; bytes: number }
-export interface Manifest { schema: number; pipeline: string; made: string; digest: string; files: PackFile[] }
+export interface LayoutVersion { schema: number; version: string }
+export interface Manifest { schema: number; pipeline: string; layout: LayoutVersion; made: string; digest: string; files: PackFile[] }
 export interface PackJson extends Manifest { bucket: string; files: (PackFile & { url: string })[] }
 export declare function listingDigest(files: PackFile[]): string
 export declare function fontFiles(faces: Record<string, { file: string }>, known: { group: string; kai: string | null }[], used: { group: string; kai: string | null }[]): string[]
 export declare function outputsOf(dir: string): string[]
 export declare function entriesOf(o: { fixtures: string; records: string; refs: string; geometry: string; fontsDir: string; fonts: string[]; patterns: Record<string, string>; texmf: string }): { path: string; from: string }[]
 export declare function pipelineOf(records: string, names: string[]): string
-export declare function makePack(o: { entries: { path: string; from: string }[]; out: string; pipeline: string; made?: string }): Manifest
+export declare const RECORD_INPUTS: string[]
+export declare function inputsOfRecord(record: unknown, o: { root: string; repo: string; flags?: Record<string, string | boolean | null | undefined>; exists?: (path: string) => boolean; home?: string }): { fixtures: string; records: string; refs: string; geometry: string }
+export declare function layoutOfEngine(engine: string): Promise<LayoutVersion>
+export declare function layoutVersionOf(fixtures: string, names: string[], expected: LayoutVersion): LayoutVersion
+export declare function makePack(o: { entries: { path: string; from: string }[]; out: string; pipeline: string; layout: LayoutVersion; made?: string }): Manifest
 export declare function packJsonOf(manifest: Manifest, bucket?: string): PackJson
 export declare function summaryOf(files: PackFile[]): { files: number; bytes: number; objects: number; objectBytes: number; kinds: { kind: string; files: number; bytes: number }[] }
 export declare function objectUrl(account: string, url: string, bucket?: string): string
