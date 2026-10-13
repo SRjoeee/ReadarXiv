@@ -776,6 +776,8 @@ window.gate = {
     const ms = [...run.ms.values()]
     const checker = { lost: 0, missing: 0, twice: 0, brackets: 0 }
     for (const c of S.checks) for (const k of Object.keys(checker)) checker[k] += c[k]
+    // (the units drawn: laid and recorded; a unit placed may still be left the original's, run.mjs's refusals)
+    const drawnIds = new Set(run.stats.map(r => r.id))
     return {
       laid: run.stats.length, fit: run.stats.length, unfit: 0, why, knob, located: S.geometry.left.units.length,
       // the lines TeX's rule opened, and those it would have where the paper has no values for it (layer2.mjs Layout)
@@ -785,7 +787,7 @@ window.gate = {
       page1Ms: run.pageMs[1] ?? null, slowestUnitMs: ms.length ? Math.max(...ms) : null,
       faces: Object.values(run.designs), failedFaces: [], errors: 0, order: run.order.length, ownChecker: checker,
       // the hybrid: the units each source's geometry draws, and why the others are v0's
-      ...(run.sources?.tex.length || run.sources?.v0.length ? { sources: { tex: run.sources.tex.length, v0: run.sources.v0.length, texOnly: run.sources.texOnly ?? 0, why: run.sources.why, texIds: run.sources.tex } } : {}),
+      ...(run.sources?.tex.length || run.sources?.v0.length ? { sources: { tex: run.sources.tex.length, v0: run.sources.v0.length, v0Drawn: run.sources.v0.filter(id => drawnIds.has(id)).length, texOnly: run.sources.texOnly ?? 0, why: run.sources.why, texIds: run.sources.tex } } : {}),
       // whether v0 left its inputs (the geometry and the units) as they were given
       inputsChanged: S.inputs.of() !== S.inputs.before,
       ...(parts ? { parts } : {}),

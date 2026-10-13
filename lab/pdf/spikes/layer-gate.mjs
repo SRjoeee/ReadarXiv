@@ -509,9 +509,10 @@ async function runFixture(page, name, errors) {
       summary.removal.pixelMs = px.ms
     }
   }
-  // (reported beside the measures: the units v0 draws alone, the lines TeX's rule opened or would have, the run's own counts)
+  // (reported beside the measures: the units v0 draws alone, those it places and draws, not those it leaves the original's;
+  // the lines TeX's rule opened or would have; the run's own counts)
   const totals = fixtureTotals(pages, frames, TIER)
-  Object.assign(totals, { aloneUnits: summary.sources ? summary.sources.v0 : null, linesOpened: summary.linesOpened ?? null, linesUnopened: summary.linesUnopened ?? null })
+  Object.assign(totals, { aloneUnits: summary.sources ? summary.sources.v0Drawn : null, linesOpened: summary.linesOpened ?? null, linesUnopened: summary.linesUnopened ?? null })
   return { name, ready: true, info, meta, pages, totals, summary }
 }
 
