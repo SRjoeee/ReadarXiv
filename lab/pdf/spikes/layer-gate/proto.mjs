@@ -281,7 +281,7 @@ async function removalMeasures(cur, T) {
     const q = c.srcPage
     if (!manifest.page[q]?.ok) continue
     // (the plan names a crop by its placeholder's source index, the file's k; v0's audit by the piece's)
-    const fk = S.byId.get(u.id)?.tex?.kOf?.[c.k] ?? c.k
+    const fk = (await fileKOf(u.id))?.[c.k] ?? c.k
     const ci = (plan.pages[q]?.crops ?? []).findIndex(x => x.id === u.id && x.k === fk)
     const colour = manifest.colours?.[`${q}.${ci}`] ?? null
     const own = await plane(`C${q}`, () => cpuPlane(cdoc, set('C') + q))
@@ -306,6 +306,16 @@ async function removalMeasures(cur, T) {
   return { ...out, ok, crops, cropForeignInk: foreign, cropForeignInkPx: foreignPx }
 }
 
+/** each translated piece's source index (the layout file's k) of a unit drawn: the hybrid's own where the file locates
+ *  the unit whole, else read from the units file's pieces (tex.mjs kOfPieces), as the drawing cut its crops from the
+ *  file's segments; null where none is known. A v0 unit's piece index is not its k (2307.16209's unit 75: piece 2 is k 1) */
+async function fileKOf(id) {
+  const q = S.byId.get(id)
+  if (q?.tex?.kOf) return q.tex.kOf
+  if (!q || !S.texIndex?.unit(id)) return null
+  const T = await import('/engine/layer-proto/tex.mjs')
+  return T.kOfPieces(q.unit, S.texPieces?.get(id))
+}
 /** a drawn run's ink over (a) and under (d) its baseline at 100 px in its face, as the browser draws it (the gate's own
  *  reading, by the face the drawing names: an engine's measure is not the instrument's) */
 const inkCtx = new OffscreenCanvas(8, 8).getContext('2d'), inkSeen = new Map()
@@ -324,7 +334,7 @@ const inkOf = (s, font) => {
  */
 async function placementOf(p, recs, boxPdf) {
   if (!S.texIndex) return null
-  const [F, T] = await Promise.all([import('/engine/layer-proto/fonts.mjs'), import('/engine/layer-proto/tex.mjs')])
+  const F = await import('/engine/layer-proto/fonts.mjs')
   const extentOf = (l, f) => {
     let a = 0, d = 0
     for (const it of l.items) {
@@ -340,7 +350,7 @@ async function placementOf(p, recs, boxPdf) {
   for (const r of recs) {
     const q = S.byId.get(r.id)
     if (!q?.layout) continue
-    const lu = S.texIndex.unit(r.id), kOf = q.tex?.kOf ?? (lu ? T.kOfPieces(q.unit, S.texPieces?.get(r.id)) : null)
+    const lu = S.texIndex.unit(r.id), kOf = await fileKOf(r.id)
     const audit = (S.audit.get(`${r.id}|${p}`) ?? []).filter(a => a.what === 'crop')
     q.layout.lines.forEach((l, i) => {
       if (l.page !== p) return
