@@ -42,6 +42,10 @@ export const MEASURES = [
   // the translation's text on or a pixel from a rule's or a figure's ink (measure.mjs pixelPage graphics.touched)
   ['graphicsTouched', 'pixel', 'defect', 'down', 'text touching a rule or a figure'],
   ['cropForeign', 'model', 'defect', 'down', 'crops with foreign ink'],
+  // where the crops sit (the math placement round, measure.mjs cropPlacementOf): over another drawn line's text or another
+  // crop, and off the baseline TeX set them on; each must be 0
+  ['cropTextOverlap', 'model', 'count', 'down', "crops over another line's text or another crop"],
+  ['cropBaselineOff', 'model', 'count', 'down', 'crops off their TeX baseline'],
   ['wrongPageText', 'model', 'defect', 'down', 'wrong page text'],
   ['droppedPh', 'model', 'defect', 'down', 'dropped placeholders'],
   ['missing', 'model', 'defect', 'down', 'placeholders missing'],
@@ -76,7 +80,14 @@ export const MEASURES = [
 /** recorded beside them, not gated: the pitch is the rules' (CJK's leading is 1.3 by rule), the top a position, and the
  *  most a page's drawn rhythm (its body frames' median line gap within a flow segment against the original's, measure.mjs
  *  rhythm) moves from the last page before it that has one (D6: the rhythm a reader sees, page to page) */
-export const REPORTED = [['pitch', 'pitch ratio'], ['dTop', '|top shift| (pt)'], ['onGrid', 'lines on a layout baseline'], ['pageDrift', "page pitch's drift (most)"]]
+export const REPORTED = [['pitch', 'pitch ratio'], ['dTop', '|top shift| (pt)'], ['onGrid', 'lines on a layout baseline'], ['pageDrift', "page pitch's drift (most)"],
+  // the crops with no TeX baseline to hold them to, the units v0 draws alone (the layout file not locating them whole: D4),
+  // and the lines TeX's rule opened, or would have where the paper has no values for it (layer2.mjs breakLines)
+  ['cropNoTex', 'crops with no TeX baseline'], ['aloneUnits', 'units v0 draws alone'], ['linesOpened', "lines TeX's rule opened"], ['linesUnopened', "lines TeX's rule would open, no values"]]
+/** the reported counts a run's totals sum over its fixtures */
+const REPORTED_COUNTS = ['cropNoTex', 'aloneUnits', 'linesOpened', 'linesUnopened']
+/** the placement counts, which a run without a layout file (v0 alone) has none of */
+const PLACEMENT = ['cropTextOverlap', 'cropBaselineOff', 'cropNoTex']
 export const TOLERANCE = { share: 0.002, ratio: 0.02, count: 0, defect: 0 }
 /** the defects that are counts of things (their rates compared), and the counts each sums from a page */
 const DEFECTS = MEASURES.filter(m => m[2] === 'defect').map(m => m[0])
@@ -110,6 +121,7 @@ export function pageEntry(page, model, pixel) {
     scale: r(median(scales), 3), fullSize: scales.filter(s => s >= 0.999).length, scaleSpread: scales.length >= 2 ? r(Math.max(...scales) - Math.min(...scales), 3) : null,
     dTop: r(median(body.map(g => Math.abs(g.dTop))), 2), overRight: body.filter(g => g.dRight > 1).length, onGrid: r(median(body.map(g => g.onGrid)), 3),
     cropForeign: m.cropForeign, wrongPageText: m.wrongPageText, droppedPh: m.droppedPh, modelCells: m.modelCells,
+    ...Object.fromEntries(PLACEMENT.filter(k => m[k] !== undefined).map(k => [k, m[k]])),
     missing: model.check.missing.length, twice: model.check.twice.length, brackets: model.check.brackets.length, duplicated: model.check.duplicated.length,
     clipped: model.check.clipped, markerResidue: model.check.markerResidue ?? 0, numbersTotal: model.check.numbers.total, numbersShown: model.check.numbers.shown, numbersLost: model.check.numbers.total - model.check.numbers.shown,
     where: model.where, style: model.style, drawn: model.drawn,
@@ -156,6 +168,7 @@ export function fixtureTotals(pages, frames, tier) {
     pageDrift: driftOf(pages.map(p => p.rhythm)),
     generated: kindsOf(pages), generatedLeft: sum(pages, p => p.generatedLeft),
   }
+  for (const k of PLACEMENT) if (pages.some(p => p[k] !== undefined)) t[k] = sum(pages, p => p[k])
   if (tier === 'pixel') {
     const tc = sum(pages, p => p.textCells), cc = sum(pages, p => p.cellCells)
     Object.assign(t, {
@@ -208,6 +221,7 @@ export function pooled(list, tier) {
     pageDrift: list.some(t => t.pageDrift !== null && t.pageDrift !== undefined) ? Math.max(...list.map(t => t.pageDrift ?? 0)) : null,
     generated: kindsOf(list), generatedLeft: sum(list, t => t.generatedLeft),
   }
+  for (const k of [...PLACEMENT, ...REPORTED_COUNTS]) if (list.some(t => t[k] !== undefined && t[k] !== null)) out[k] = sum(list, t => t[k] ?? 0)
   if (tier === 'pixel') {
     const tc = sum(list, t => t.textCells), cc = sum(list, t => t.cellCells)
     Object.assign(out, {
@@ -246,6 +260,7 @@ function pageView(p, tier) {
     framesBlank1: p.frames ? p.framesBlank1 / p.frames : null, pitchSpread: p.pitchSpread, scale: p.scale, fullSize: p.frames ? p.fullSize / p.frames : null,
     scaleSpread: p.scaleSpread, overRight: p.frames ? p.overRight / p.frames : null, modelCells: p.modelCells, textTranslatedCells: p.textTranslatedCells,
     paraGap: p.paraGap ?? null, paraGapWide: p.paraGaps ? p.paraGapWide / p.paraGaps : null, generatedLeft: p.generatedLeft ?? 0,
+    cropTextOverlap: p.cropTextOverlap ?? null, cropBaselineOff: p.cropBaselineOff ?? null,
   }
   if (tier === 'pixel') Object.assign(v, { textTranslated: share(p.textTranslatedCells, p.textCells), textEnglish: share(p.textEnglishCells, p.textCells), textBlank: share(p.textBlankCells, p.textCells), cellsTranslated: share(p.cellTranslatedCells, p.cellCells) })
   for (const d of DEFECTS) if (p[d] !== undefined) v[d] = p[d]

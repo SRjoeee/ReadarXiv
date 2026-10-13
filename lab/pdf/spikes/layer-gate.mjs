@@ -509,7 +509,10 @@ async function runFixture(page, name, errors) {
       summary.removal.pixelMs = px.ms
     }
   }
-  return { name, ready: true, info, meta, pages, totals: fixtureTotals(pages, frames, TIER), summary }
+  // (reported beside the measures: the units v0 draws alone, the lines TeX's rule opened or would have, the run's own counts)
+  const totals = fixtureTotals(pages, frames, TIER)
+  Object.assign(totals, { aloneUnits: summary.sources ? summary.sources.v0 : null, linesOpened: summary.linesOpened ?? null, linesUnopened: summary.linesUnopened ?? null })
+  return { name, ready: true, info, meta, pages, totals, summary }
 }
 
 /** the browser's resident memory, KB: the process launched with MEMORY_MARK on its command line and every process under it */
@@ -1090,7 +1093,7 @@ function fidelityMd(record) {
   L.push('')
   const below = ms.filter(m => fl[m[0]] !== undefined && run.totals.shared && (() => { const w = closer(m, fl, run.totals.shared); return w !== null && w < 0 })())
   L.push(`**Below the prototype's floor on the shared ten** (${keys[0]}): ${below.length ? below.map(m => m[4]).join(', ') : 'none'}.`, '')
-  const head = ['textTranslated', 'textEnglish', 'textBlank', 'cellsTranslated', 'unitsLeft', 'blankLines', 'fullSize', 'overlap', 'residue', 'bites', 'vanished', 'cropForeign', 'lostInk', 'wrongPageText', 'clipped'].map(k => MEASURES.find(m => m[0] === k)).filter(m => ms.includes(m))
+  const head = ['textTranslated', 'textEnglish', 'textBlank', 'cellsTranslated', 'unitsLeft', 'blankLines', 'fullSize', 'overlap', 'residue', 'bites', 'vanished', 'cropForeign', 'cropTextOverlap', 'cropBaselineOff', 'lostInk', 'wrongPageText', 'clipped'].map(k => MEASURES.find(m => m[0] === k)).filter(m => ms.includes(m))
   L.push(`## By output (${keys[0]})`, '', `| output | ${head.map(m => m[4]).join(' | ')} | why left |`, `|---|${head.map(() => '---|').join('')}---|`)
   for (const [name, f] of Object.entries(run.fixtures)) L.push(`| ${name} | ${head.map(m => shown(f.totals, m)).join(' | ')} | ${Object.entries(f.totals.left).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ') || '-'} |`)
   L.push('', 'Every measure of every output, and of every page, is in layer-fidelity.json.', '')

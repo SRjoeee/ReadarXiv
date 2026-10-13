@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { modelPage, type OrigLine, pixelPage, type UnitIn } from '../../lab/pdf/spikes/layer-gate/measure.mjs'
+import { cropPlacementOf, modelPage, type OrigLine, pixelPage, type UnitIn } from '../../lab/pdf/spikes/layer-gate/measure.mjs'
 import { compare, fixtureTotals, type Measure, MEASURES, pageEntry, pooled, type Totals, worse } from '../../lab/pdf/spikes/layer-gate/score.mjs'
 
 // The layer gate's arithmetic (lab/pdf/spikes/layer-gate.mjs, Plan 8b Task 12): a page's model measures
@@ -30,6 +30,41 @@ describe('the model measures of a page', () => {
     expect(m.geo[0]!.blank).toBeCloseTo(2, 5)
     expect(m.geo[0]!.scale).toBe(1)
     expect(m.fills[0]!.fill).toBeLessThan(0.65)
+  })
+})
+
+describe('where the crops sit (the math placement round): over no other line nor crop, on their TeX baseline', () => {
+  // two drawn lines 12 apart, their text 7 high and 2 deep; a crop on the first, cut from a box whose top is 8 over its
+  // TeX baseline, drawn at its size
+  const lines = [{ key: 'a', x0: 72, x1: 300, baseline: 500, a: 7, d: 2 }, { key: 'b', x0: 72, x1: 300, baseline: 488, a: 7, d: 2 }]
+  const crop = (box: number[], o: object = {}) => ({ unit: 1, line: 'a', box, srcTop: 108, tex: 100, sc: 1, ...o })
+  it('counts a crop hanging into the next line\'s text, or over another crop, by more than half a point', () => {
+    // 4.5 deep: clear of the next line's text, whose top is 495
+    expect(cropPlacementOf({ lines, crops: [crop([100, 495.5, 120, 508])] })).toMatchObject({ cropTextOverlap: 0, cropBaselineOff: 0, cropNoTex: 0 })
+    // 1.5 below the next line's top (495): over its text
+    expect(cropPlacementOf({ lines, crops: [crop([100, 493.5, 120, 508])] }).cropTextOverlap).toBe(1)
+    // 0.4: within half a point
+    expect(cropPlacementOf({ lines, crops: [crop([100, 494.6, 120, 508])] }).cropTextOverlap).toBe(0)
+    // two crops whose boxes meet
+    const two = cropPlacementOf({ lines, crops: [crop([100, 495.5, 120, 508]), crop([110, 495.5, 130, 508], { unit: 2 })] })
+    expect([two.cropTextOverlap, two.cropWhere.cropTextOverlap]).toEqual([2, [1, 2]])
+  })
+  it('counts a crop drawn off its TeX baseline, at its drawn scale, and reports one with none', () => {
+    // its top 8 over the line's baseline, as its box's is over TeX's
+    expect(cropPlacementOf({ lines, crops: [crop([100, 494, 120, 508])] }).cropBaselineOff).toBe(0)
+    // drawn 7.7 low (a radical's origin taken for its baseline)
+    expect(cropPlacementOf({ lines, crops: [crop([100, 486.3, 120, 500.3])] }).cropBaselineOff).toBe(1)
+    // at half its size: 4 over the line's
+    expect(cropPlacementOf({ lines, crops: [crop([100, 497, 110, 504], { sc: 0.5 })] }).cropBaselineOff).toBe(0)
+    expect(cropPlacementOf({ lines, crops: [crop([100, 494, 120, 508], { tex: null })] })).toMatchObject({ cropBaselineOff: 0, cropNoTex: 1 })
+  })
+  it("reads a crop's foreign text on the page it is cut from: the crops cut from this page, not those drawn on it", () => {
+    // a crop drawn on this page, cut from the page before, over this page's text item of another line: none of its own
+    const drawn = unit({ id: 1, crops: [{ k: 1, src: [100, 90, 120, 100], dst: [200, 300, 220, 310] }] })
+    const items = [{ x0: 95, y0: 84, x1: 140, y1: 95, str: 'a word', math: false }]
+    expect(modelPage({ units: [drawn], ref: [], items, translated: new Set([1]), cut: [] }).cropForeign).toBe(0)
+    // the same box cut from this page: the item stands in it
+    expect(modelPage({ units: [drawn], ref: [], items, translated: new Set([1]), cut: [{ src: [100, 90, 120, 100], unit: 1 }] }).cropForeign).toBe(1)
   })
 })
 

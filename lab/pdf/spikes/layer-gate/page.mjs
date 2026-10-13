@@ -317,7 +317,7 @@ window.gate = {
       }
       units.push({ id, kind: u.kind, drawn: !!d, why: laid?.fit ? (d ? null : 'nodraw') : laid?.why ?? 'unlaid', orig: refOf.get(id)?.orig ?? rowsOf(u, p), lines, erase, crops, phs, pageText })
     }
-    const model = modelPage({ units, ref: refHere, items, translated: S.translated })
+    const model = modelPage({ units, ref: refHere, items, translated: S.translated, cut: units.flatMap(u => u.crops) })
     // the checker over the page's laid units, and the ids of the units each failure is in
     const laidHere = done.ids.map(id => run.laid.get(id)).filter(Boolean)
     const check = checkPage(index, p, laidHere, run.tr)
@@ -372,7 +372,7 @@ window.gate = {
     const T = tc.getImageData(0, 0, W, H).data
     S.cur.T = T
     const ref = S.ref[p] ?? []
-    const m = pixelPage({ k: K, view, W, H, O, C, T, units, kept, items, ref, drawnText })
+    const m = pixelPage({ k: K, view, W, H, O, C, T, units, kept, items, ref, drawnText, cut: units.flatMap(u => u.crops.map(c => ({ ...c, unit: u.id }))) })
     // lost ink at 2x: the copy erased and cropped before the text, against what the drawn units account for: their own
     // source glyphs, which their translation replaces. Those are the layout's glyph boxes (its erase for their lines on
     // the page), grown over the ink connected to them within the unit's own line bands (0.35 em below each baseline to
