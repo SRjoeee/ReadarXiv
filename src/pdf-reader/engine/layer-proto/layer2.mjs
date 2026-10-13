@@ -622,6 +622,9 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   // (the lines part 1's source says the unit's source does not write: kept as the original's, as a display's are)
   if (lines.held?.length) out.keep = [...new Set([...(out.keep ?? []), ...lines.held])]
   const gaps = (parts?.label ?? labelOf)(out, unit, rects, charsByPage, aligned)
+  // (a source that gives part 4 knows each placeholder's ink by its own segments, the layout file: what the renderings
+  // leave of the gaps is the unit's text, categoriesOf)
+  out.inkKnown = !!parts?.renderings
   resolvePlaceholders(out, { unit, phs, rects, charsByPage, citeMap, gaps }, parts?.renderings ?? v0Renderings)
   if (parts?.crops) { const k = parts.crops(out); if (k >= 0) out.unproven = k }
   finishUnit(out, unit, rects, charsByPage)
@@ -1126,7 +1129,7 @@ function finishUnit(out, unit, rects, charsByPage) {
   // the translation's own text, letters only: a name it keeps as the page writes it ("Niño", whose ñ the source wrote
   // as a command) is drawn, not shown twice
   const trLetters = norm(unit.pieces.filter(p => p.t === 'text').map(p => p.s).join(' ') + ' ' + [...out.values()].map(r => r?.text ?? '').join(' '))
-  out.cat = categoriesOf(out, uc, unit.src, keepSet, drawnTextOf(out, charsByPage), trLetters)
+  out.cat = categoriesOf(out, uc, unit.src, keepSet, drawnTextOf(out, charsByPage), trLetters, out.inkKnown)
 }
 
 /** the lines a located displayed formula holds a third of the characters of, or more */
@@ -1460,7 +1463,7 @@ export function nearIn(letters, hay, src = '') {
   return false
 }
 
-function categoriesOf(res, uc, src, keepSet, drawn = '', trLetters = '') {
+function categoriesOf(res, uc, src, keepSet, drawn = '', trLetters = '', inkKnown = false) {
   const cat = new Map()
   const srcLetters = norm(src)
   const used = new Map()
@@ -1483,7 +1486,10 @@ function categoriesOf(res, uc, src, keepSet, drawn = '', trLetters = '') {
     // erased, not shown twice
     const shown = normU(piece.map(c => c.ch).join(''))
     const long = letters.replace(/\d/g, '').length >= 4
-    if (!/[\p{L}\p{N}]/u.test(piece.map(c => c.ch).join('')) || (long && (nearIn(letters, srcLetters, src) || trLetters.includes(letters))) || (shown && drawn.includes(shown))) for (const c of piece) missed.add(charKey(c))
+    // (where the renderings' source knows each placeholder's ink, a layout file's segments, a piece none took is no
+    // rendering: the unit's own text, which TeX set on its lines, whatever its length; 1810.04805 p7's "old" of
+    // "thresh-old", three letters the alignment missed after the hyphen, was left standing under the translation)
+    if (inkKnown || !/[\p{L}\p{N}]/u.test(piece.map(c => c.ch).join('')) || (long && (nearIn(letters, srcLetters, src) || trLetters.includes(letters))) || (shown && drawn.includes(shown))) for (const c of piece) missed.add(charKey(c))
   }
   for (const c of uc) {
     if (c.sep || c.space || !/\S/.test(c.ch)) continue
@@ -1859,6 +1865,8 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
     // the rounding does not move, where their median may be off by a few thousandths and its lines' slots so a line off
     // the last baseline at 1.3 times it: 1512.03385's unit 59)
     if (d.length > 1 && b.rects.every(r => info(r)?.file) && d.every(v => Math.abs(v - b.pitch0) <= 0.02)) b.pitch0 = d.reduce((a, v) => a + v, 0) / d.length
+    // (its lines TeX's, a layout file's: two such blocks in a column with nothing kept between are one flow, breakLines)
+    b.file = b.rects.every(r => info(r)?.file)
     b.free = 0
   }
   return blocks
@@ -1942,7 +1950,7 @@ function slotsAt(blocks, st, P, s) {
       const x0 = b.x0 + (bi === 0 && k === 0 && !b.centred ? b.indent : 0)
       // a sliver beside a formula (narrower than 1.5 em) holds no text: its words were the formula's
       if (b.x1 - x0 < 1.5 * s * st.scale) continue
-      out.push({ block: bi, page: b.page, x0, x1: b.x1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, low })
+      out.push({ block: bi, page: b.page, x0, x1: b.x1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, low, file: !!b.file })
     }
   }
   return out
@@ -1993,28 +2001,34 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     line = { ...slots[li], items: [], x: 0, spaces: 0, from: i }
     lines.push(line)
   }
-  // TeX's rule between two lines of a block (its \lineskip and \lineskiplimit, P.lineskip, the paper's own: the layout
-  // file's): where the line just closed comes nearer the one before it than lineskiplimit, its top to that line's foot
+  // TeX's rule between two consecutive lines (its \lineskip and \lineskiplimit, P.lineskip, the paper's own: the layout
+  // file's): where the line just closed comes nearer the line before it than lineskiplimit, its top to that line's foot
   // (lineExtent: the drawn text's ink and its crops'), the two baselines are set that line's depth and its height plus
-  // lineskip apart, and the block's later slots move down with it, those past the block's foot dropped; one that lands
-  // past its own foot fails the state (`over`, the first token of its line), as a unit too long for its lines does. A
-  // slot never moves up. No values (a file that has none, v0 alone): no line opens
+  // lineskip apart, and the later slots of its flow move down with it, each block's past its foot dropped; one that lands
+  // past its own foot fails the state (`over`, the first token of its line), as a unit too long for its lines does. The
+  // line before is the last laid above it in its flow: its block; or, both blocks standing on TeX's lines (a layout
+  // file's, `file`), the block above it in its column on its page with no kept region between (`after` the same), where
+  // v0 split a paragraph's lines in two (at a gap TeX opened in the original). v0's own blocks (the anchors' rectangles
+  // of a unit the file does not locate whole, a display's rows among them) are no flow: nothing says the line below is
+  // the next. A slot never moves up. No values (a file that has none, v0 alone): no line opens
   let over = null
+  const flowOf = (a, b) => a.block === b.block || (a.file && b.file && a.page === b.page && (a.after ?? 0) === (b.after ?? 0) && Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0))
   const settle = () => {
     if (!P.lineskip || !line?.items.length || over !== null) return
     let k = lines.length - 2
     while (k >= 0 && !lines[k].items.length) k--
     const prev = lines[k]
-    if (!prev || prev.block !== line.block || prev.page !== line.page) return
+    if (!prev || !flowOf(prev, line) || !(prev.baseline > line.baseline)) return
     const [skip, limit] = P.lineskip
     const e0 = lineExtent(prev, f, scale), e1 = lineExtent(line, f, scale)
     if (prev.baseline - e0.d - (line.baseline + e1.a) >= limit) return
     const shift = e0.d + e1.a + skip - (prev.baseline - line.baseline)
     if (!(shift > 0)) return
+    const was = line.baseline
     line.baseline -= shift
     line.opened = shift
     for (let q = slots.length - 1; q > li; q--) {
-      if (slots[q].block !== line.block) continue
+      if (!flowOf(slots[q], line) || !(slots[q].baseline < was)) continue
       const y = slots[q].baseline - shift
       if (y < slots[q].low - 0.05) slots.splice(q, 1)
       else slots[q] = { ...slots[q], baseline: y }
@@ -2308,7 +2322,7 @@ function laidOut({ r, st, f }, s, P, tried) {
   let unopened = 0
   if (!P.lineskip) for (let i = 1; i < r.lines.length; i++) {
     const a = r.lines[i - 1], b = r.lines[i]
-    if (a.block !== b.block || a.page !== b.page) continue
+    if (!(a.block === b.block || (a.file && b.file && a.page === b.page && (a.after ?? 0) === (b.after ?? 0) && Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0))) || !(a.baseline > b.baseline)) continue
     if (a.baseline - lineExtent(a, f, st.scale).d < b.baseline + lineExtent(b, f, st.scale).a) unopened++
   }
   return { lines: r.lines, f, s, scale: st.scale, state: st, knob: clipped ? 'clip' : st.knob, clipped, lostChars: Math.max(0, allChars - drawn), chars: allChars, tried, spilled: !!r.spilled, opened: r.lines.filter(l => l.opened > 0).length, unopened }

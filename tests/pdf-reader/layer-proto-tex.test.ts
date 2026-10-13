@@ -181,6 +181,21 @@ describe("v0's reading with the file's renderings", () => {
     expect(r?.baseline).toBe(100)
     for (const [i, v] of [51.4, 97.3, 63.8, 108.9].entries()) expect(r?.crop?.[i]).toBeCloseTo(v, 6)
   })
+  it("takes a gap's piece no placeholder took for the unit's text where the file knows each placeholder's ink", () => {
+    // "Each value 2 old is squared here": three letters the alignment does not take (a hyphenated word's tail), beside
+    // the superscript the file's segment holds
+    const pg = [...item('Each value', 10, 100, 10, 0), ...item('2', 62, 103.6, 7, 1), ...item('old', 70, 100, 10, 2), ...item('is squared here', 88, 100, 10, 3)]
+    const keys = pg.filter(c => /[old]/.test(c.ch) && c.item === 2).map(c => `1|${c.item}|${c.k}`)
+    const lu = unitOf([[1, 10, 160, 100, 108, 97, 10, 0]], [[1, 0, [1, 61.8, 100, 65.6, 107.5, 101]]])
+    const line = [[1, 10, 97.85, 160, 106.83]]
+    const withFile = L2.prepareUnit(unit, line as never, [pg.map(c => ({ ...c, page: 1 })) as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'ph' }) as never)
+    expect(withFile.inkKnown).toBe(true)
+    expect(keys.map(k => withFile.cat.get(k))).toEqual(['acc', 'acc', 'acc'])
+    // (v0's own reading knows no rendering's ink: a short piece none took is a rendering, kept where it stands)
+    const own = L2.prepareUnit(unit, line as never, [pg.map(c => ({ ...c, page: 1 })) as never], new Map() as never)
+    expect(own.inkKnown).toBe(false)
+    expect(keys.map(k => own.cat.get(k))).toEqual(['orphan', 'orphan', 'orphan'])
+  })
   it("grows a crop v0 reads over the ink it touches, and one cut from the file's segment never", () => {
     const toDev = (x: number, y: number): [number, number] => [x * 2, (200 - y) * 2]
     const ink = { w: 100, h: 100, ink: new Uint8Array(100 * 100).fill(1), factor: 4 }

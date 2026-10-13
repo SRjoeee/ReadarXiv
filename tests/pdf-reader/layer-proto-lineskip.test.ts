@@ -61,6 +61,20 @@ describe("a line opens by TeX's rule", () => {
     expect([l.opened, l.unopened]).toEqual([0, 1])
     expect([L2.layoutUnit2(unit(7.5, 6) as never, [block(4)] as never, 10, P([1, 0]) as never)].map(x => [x.opened, x.unopened])).toEqual([[1, 0]])
   })
+  it("holds across a paragraph v0 split in two blocks of TeX's lines (at a gap TeX opened), never across a kept region", () => {
+    // block 0 two lines at 500 and 488, block 1 from 476 (12 below: one paragraph's lines); the formula on 488, 6 deep
+    const B = (from: number, n: number, after = 0, file = true) => ({ ...block(n), B: Array.from({ length: n }, (_, k) => from - 12 * k), rects: Array.from({ length: n }, (_, k) => [1, 0, from - 12 * k - 2, 100, from - 12 * k + 8]), after, file })
+    const tokens = [word(18), space, crop(7.5, 6), space, word(14), space, word(18), space, word(18)]
+    const split = L2.layoutUnit2(tokens as never, [B(500, 2), B(476, 3)] as never, 10, P([1, 0]) as never)
+    expect(split.lines.map(x => x.baseline)).toEqual([500, 488, 474, 462])
+    // (v0's own blocks, a unit the file does not hold: nothing says the line below is the next one)
+    const own = L2.layoutUnit2(tokens as never, [B(500, 2, 0, false), B(476, 3, 0, false)] as never, 10, P([1, 0]) as never)
+    expect(own.lines.map(x => x.baseline)).toEqual([500, 488, 476, 464])
+    // a display kept between them (the second block after it): the line below it is the display's, not the crop's line's
+    const past = [word(18), space, crop(7.5, 6), space, word(14), { blockTo: 0, w100: 0 }, word(18), space, word(18)]
+    const kept = L2.layoutUnit2(past as never, [B(500, 2), B(476, 3, 1)] as never, 10, P([1, 0]) as never)
+    expect(kept.lines.map(x => x.baseline)).toEqual([500, 488, 476, 464])
+  })
   it("drops the block's slots its lines are moved past the foot of, so that the fit takes its next state, never runs past", () => {
     // three lines in three slots: the third, moved 2 down, is past the block's foot (476): this state does not set it
     const one = L2.layoutUnit2(unit(7.5, 6) as never, [block(3)] as never, 10, P([1, 0], { order: [] }) as never)

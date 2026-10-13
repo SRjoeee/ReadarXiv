@@ -103,6 +103,8 @@ export interface Prepared extends Map<number, Resolved> {
   displayLines?: Set<string>
   /** part 5: the piece index of a crop whose ink no source proves its placeholder's (the unit is left the original's) */
   unproven?: number
+  /** part 4's source knows each placeholder's ink (a layout file's segments): a gap's piece none took is the unit's text */
+  inkKnown?: boolean
 }
 /** part 1 and part 2 as a source gives them */
 export interface UnitLines {
@@ -132,7 +134,7 @@ export interface UnitParts {
   extents?: (lines: UnitLines, rects: readonly Rect[]) => Map<Rect, Extent>
   /** part 3: sets out.label, returns the gaps without it */
   label?: (out: Prepared, unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], gaps: Gap[]) => Gap[]
-  /** part 4: which ink each placeholder is */
+  /** part 4: which ink each placeholder is, by a source that knows it (Prepared.inkKnown) */
   renderings?: (ctx: RenderingsContext) => Renderings
   /** part 5: each crop cut from its placeholder's own ink (mutates the resolutions); the k of one no source proves, or -1 */
   crops?: (out: Prepared) => number
