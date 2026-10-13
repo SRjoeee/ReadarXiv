@@ -126,6 +126,11 @@ R2's S3 API, SigV4-signed with the key derived from the read-only token (`READAR
 token-verify endpoint, and the SHA-256 of its value), checks it against the manifest and writes it; and `verify` checks every
 file again before the gate reads any. A fork's pull request has no token and runs no job.
 
+**Each side runs on its own commit's pack.** A pack is made by an engine (its layout files are that engine's), so the gate restores
+two: the pull request's, from its `gate-pack.json`, and the merge base's, from the merge base's own `gate-pack.json` with the merge
+base's own script; where the two digests are equal they are one pack and are downloaded once. A pull request that re-makes the
+pack (the layout file moved) uploads the new objects before its CI can pass.
+
 **Where the pack is cached.** In a pull request's own cache, by the pack's digest (`rules-gate.yml`), and nowhere else. A cache
 saved by a push to `next` is readable by a fork's pull request, which runs its own edited workflow and can restore the
 caches of its base branch (the key is public, in `gate-pack.json`): it could then publish the papers. So no workflow that a

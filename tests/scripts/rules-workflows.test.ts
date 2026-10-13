@@ -96,8 +96,11 @@ describe('the secrets', () => {
   })
   it('are the read token in the step that fetches the pack, the publish secret in the step that publishes', () => {
     const gate = text('rules-gate.yml')
-    expect(gate.match(/secrets\./g)).toHaveLength(1)
-    expect(/- name: Pack from the bucket\n\s+if: .*\n\s+env:\n\s+READARXIV_CI_TOKEN: \$\{\{ secrets\.READARXIV_CI_TOKEN \}\}/.test(gate)).toBe(true)
+    // the two restore steps (the pull request's pack, and the merge base's: 'each side runs on its own pack' below) and no other
+    expect(gate.match(/secrets\./g)).toHaveLength(2)
+    for (const step of ['Pack from the bucket', 'Merge base pack from the bucket']) {
+      expect(new RegExp(`- name: ${step}\\n\\s+if: .*\\n\\s+env:\\n\\s+READARXIV_CI_TOKEN: \\$\\{\\{ secrets\\.READARXIV_CI_TOKEN \\}\\}`).test(gate), step).toBe(true)
+    }
     for (const name of ['rules-publish.yml', 'rules-point.yml']) for (const m of text(name).matchAll(/secrets\.(\w+)/g)) expect(['RULES_PUBLISH_SECRET', 'READARXIV_CI_TOKEN']).toContain(m[1])
   })
   it('go to actions of GitHub\'s alone, at a major version: pnpm comes with corepack, not a third party\'s action', () => {
@@ -134,6 +137,66 @@ describe('the secrets', () => {
     // the order of the fetch among the steps stays: after the cache is restored, before the tests that read the fixtures
     const order = steps.map(step => (step.startsWith('id: fixtures-cache') ? 'restore' : step.startsWith('run: pnpm fixtures:fetch') ? 'fetch' : step.startsWith('run: pnpm test') ? 'test' : ''))
     expect(order.filter(Boolean)).toEqual(['restore', 'fetch', 'test'])
+  })
+})
+
+describe('each side of the gate runs on the pack its own commit names', () => {
+  const yml = text('rules-gate.yml')
+  /** the gate job's steps by name (a step's trailing comments stay with it; none of them names a secret or a path) */
+  const steps = new Map(yml.slice(yml.indexOf('\n    steps:\n')).split(/\n {6}- /).slice(1).flatMap(s => { const name = /^(?:name: (.*)|id: .*\n\s+name: (.*))/m.exec(s); return name ? [[(name[1] ?? name[2])!, s] as [string, string]] : [] }))
+  const step = (name: string) => { const s = steps.get(name); expect(s, name).toBeDefined(); return s! }
+  const order = [...steps.keys()]
+  const BASE_SCRIPT = '"$RUNNER_TEMP/base/lab/pdf/spikes/gate-pack.mjs"'
+  const BASE_MANIFEST = '--pack="$RUNNER_TEMP/base/lab/pdf/gate-pack.json"'
+
+  it('has the merge base\'s worktree before either pack is restored, and both packs before either run', () => {
+    const at = (name: string) => { expect(order, name).toContain(name); return order.indexOf(name) }
+    expect(at('Merge base')).toBeLessThan(at('Pack digests'))
+    expect(at('Pack digests')).toBeLessThan(at('Pack from the bucket'))
+    expect(at('Pack digests')).toBeLessThan(at('Merge base pack from the bucket'))
+    expect(at('Check the merge base pack')).toBeLessThan(at('Gate on the merge base'))
+    expect(at('Check the pack')).toBeLessThan(at('Gate on the merge base'))
+  })
+
+  it('reads the merge base\'s digest from its own manifest with its own script, and runs the base on the pull request\'s directory only where the two are equal', () => {
+    const digests = step('Pack digests')
+    expect(digests).toContain('head=$(node lab/pdf/spikes/gate-pack.mjs digest)')
+    expect(digests).toContain(`base=$(node ${BASE_SCRIPT} digest ${BASE_MANIFEST})`)
+    expect(digests).toContain('if [ "$head" = "$base" ]; then')
+    expect(digests).toMatch(/same=true.*\n\s+echo "BASE_PACK=\$PWD\/lab\/pdf\/out\/gate-pack" >> "\$GITHUB_ENV"\n\s+else\n\s+echo "same=false.*\n\s+echo "BASE_PACK=\$RUNNER_TEMP\/base-pack" >> "\$GITHUB_ENV"\n\s+fi/)
+  })
+
+  it('restores the merge base\'s pack with the merge base\'s own script and manifest, from a cache keyed by its own digest, only where the digests differ', () => {
+    const cache = step('Merge base pack from the cache'), bucket = step('Merge base pack from the bucket'), keep = step('Keep the merge base pack'), check = step('Check the merge base pack')
+    for (const s of [cache, bucket, keep, check]) expect(s).toContain("steps.pack.outputs.same != 'true'")
+    expect(cache).toContain('uses: actions/cache/restore@v4')
+    expect(keep).toContain('uses: actions/cache/save@v4')
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expressions, not templates
+    for (const s of [cache, keep]) { expect(s).toContain('key: gate-pack-${{ steps.pack.outputs.base }}'); expect(s).toContain('path: ${{ runner.temp }}/base-pack') }
+    // only a cache miss reads the bucket and saves
+    for (const s of [bucket, keep]) expect(s).toContain("steps.base-cache.outputs.cache-hit != 'true'")
+    expect(bucket).toContain(`run: node ${BASE_SCRIPT} restore ${BASE_MANIFEST} --out="$BASE_PACK"`)
+    expect(check).toContain(`run: node ${BASE_SCRIPT} verify ${BASE_MANIFEST} --out="$BASE_PACK"`)
+    // (the directory the digests step chose for the other branch is the one the cache holds)
+    expect(step('Pack digests')).toContain('BASE_PACK=$RUNNER_TEMP/base-pack')
+  })
+
+  it('keeps the pull request\'s pack on its own digest, and measures the base on the base\'s directory and the head on the pull request\'s', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expressions, not templates
+    for (const name of ['Pack from the cache', 'Keep the pack']) expect(step(name)).toContain('key: gate-pack-${{ steps.pack.outputs.digest }}')
+    expect(step('Gate on the merge base')).toContain('--pack="$BASE_PACK"')
+    expect(step('Gate on the merge base')).not.toContain('--pack=lab/pdf/out/gate-pack')
+    expect(step('Gate on the pull request')).toContain('--pack=lab/pdf/out/gate-pack ')
+    expect(step('Gate on the pull request')).not.toContain('BASE_PACK')
+    // the verdict reads the pull request's manifest and records
+    expect(step('Verdict')).toContain('--pack=lab/pdf/gate-pack.json --records=lab/pdf/out/gate-pack/fixtures')
+  })
+
+  it('names the token only in the two restore steps\' environments', () => {
+    const named = [...steps].filter(([, s]) => /secrets\.|READARXIV_CI_TOKEN|CF_ACCOUNT_ID/.test(s)).map(([name]) => name)
+    expect(named).toEqual(['Pack from the bucket', 'Merge base pack from the bucket'])
+    // and the job-level environment holds none
+    expect(/\n {4}env:\n((?: {6}.*\n)+)/.exec(yml)?.[1]).not.toMatch(/secrets|TOKEN|CF_ACCOUNT_ID/)
   })
 })
 
