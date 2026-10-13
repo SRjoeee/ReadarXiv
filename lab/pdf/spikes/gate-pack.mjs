@@ -215,22 +215,30 @@ const EMPTY_SHA = sha256('')
 const hmac = (key, data) => createHmac('sha256', key).update(data).digest()
 
 /**
- * The headers of a body-less request signed with AWS Signature Version 4: `headers` plus `x-amz-date`, `x-amz-content-sha256` (the
- * empty payload's digest) and `authorization`. `host` is signed from the URL but not returned (fetch sets it). The path is signed
- * as the URL carries it, each segment escaped once. Proven against AWS's own GET Object example (tests/scripts/gate-pack.test.ts).
+ * The headers of a body-less, query-less request signed with AWS Signature Version 4: `headers` plus `x-amz-date`,
+ * `x-amz-content-sha256` (the empty payload's digest) and `authorization`. `host` is signed from the URL but not returned (fetch
+ * sets it). The path is signed as the URL carries it, each segment escaped once; header values are trimmed, nothing more.
+ * Proven against AWS's own GET Object example (tests/scripts/gate-pack.test.ts).
  */
 export function signV4({ method, url, headers = {}, accessKeyId, secret, region, service, date }) {
   const u = new URL(url)
+  if (u.search) throw new Error('signV4 signs requests without a query string')
   const stamp = date.toISOString().replace(/[-:]|\.\d{3}/g, '')
   const scope = `${stamp.slice(0, 8)}/${region}/${service}/aws4_request`
   const sent = { ...headers, 'x-amz-date': stamp, 'x-amz-content-sha256': EMPTY_SHA }
   const signed = { host: u.host, ...Object.fromEntries(Object.entries(sent).map(([k, v]) => [k.toLowerCase(), String(v).trim()])) }
   const names = Object.keys(signed).sort()
-  const query = [...u.searchParams].map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).sort().join('&')
-  const canonical = `${method}\n${u.pathname}\n${query}\n${names.map(n => `${n}:${signed[n]}\n`).join('')}\n${names.join(';')}\n${EMPTY_SHA}`
+  const canonical = `${method}\n${u.pathname}\n\n${names.map(n => `${n}:${signed[n]}\n`).join('')}\n${names.join(';')}\n${EMPTY_SHA}`
   const key = [...scope.split('/')].reduce(hmac, `AWS4${secret}`)
   const signature = hmac(key, `AWS4-HMAC-SHA256\n${stamp}\n${scope}\n${sha256(canonical)}`).toString('hex')
   return { ...sent, authorization: `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${scope}, SignedHeaders=${names.join(';')}, Signature=${signature}` }
+}
+
+/** the token as it is signed with: white space in it (a pasted newline, which a header drops and a digest keeps) is refused */
+const tokenOf = token => {
+  if (typeof token !== 'string' || !token) throw new Error('READARXIV_CI_TOKEN is not set')
+  if (!/^\S+$/.test(token)) throw new Error('READARXIV_CI_TOKEN has white space in it: set the token alone')
+  return token
 }
 
 const sleep = ms => new Promise(ok => setTimeout(ok, ms))
@@ -259,6 +267,7 @@ async function withRetry(send, read, retryMs) {
  * that carries the token; nothing it fails with names the token or the secret.
  */
 export async function s3Credentials({ token, account, fetchImpl = fetch, retryMs = 1000 }) {
+  tokenOf(token)
   const url = `https://api.cloudflare.com/client/v4/accounts/${accountOf(account)}/tokens/verify`
   const { res, value } = await withRetry(() => fetchImpl(url, { headers: { authorization: `Bearer ${token}` } }), r => r.json(), retryMs)
   if (!value) throw new Error(res && res.status < 500 && res.status !== 429 ? `the token is not an active Account API token of this account (HTTP ${res.status})` : `Cloudflare's token-verify endpoint could not be read (${res ? `HTTP ${res.status}` : 'the request failed'})`)
@@ -273,11 +282,12 @@ const fileIs = (file, f) => { try { const b = readFileSync(file); return b.lengt
  * A pack restored into `dir` from the bucket: each distinct digest read once (a file already there with the right digest
  * is kept; the several outputs of one paper share an object), checked against the manifest's digest and size before it is
  * written, and a read that fails for want of the network or the server (not for a 4xx) tried again twice. The S3 credentials
- * are derived once, by the first read that needs them (a restore that finds everything there asks Cloudflare nothing; one that reads any object has verified the token first), and each
- * read is signed with `now()`. Nothing the token, the secret or a signature is in is printed or thrown: the errors say the status and the key.
+ * are derived once, by the first read that needs them (a restore that finds everything there asks Cloudflare nothing; one that
+ * reads any object has verified the token first), and each read is signed with `now()`. Nothing the token, the secret or a
+ * signature is in is printed or thrown: the errors say the status and the key.
  */
 export async function restorePack({ pack, dir, token, account, fetchImpl = fetch, retryMs = 1000, now = () => new Date(), log = () => {} }) {
-  if (typeof token !== 'string' || !token) throw new Error('READARXIV_CI_TOKEN is not set')
+  tokenOf(token)
   if (pack.schema !== PACK_SCHEMA) throw new Error(`gate-pack.json is schema ${pack.schema}, this script reads ${PACK_SCHEMA}`)
   const objects = new Map()
   for (const f of pack.files) {

@@ -122,8 +122,8 @@ node lab/pdf/spikes/gate-pack.mjs objects     # the objects to upload, once each
 The objects are content-addressed (`gate-pack/<sha256>` in the bucket `readarxiv-ci`, which has no public access), so the
 outputs of one paper share one, and an upload is each distinct digest once. In CI `gate-pack.mjs restore` reads each from
 R2's S3 API, SigV4-signed with the key derived from the read-only token (`READARXIV_CI_TOKEN`; its id, asked of Cloudflare's
-token-verify endpoint, and the SHA-256 of its value), checks it against the manifest and writes it; and `verify` checks every file again before
-the gate reads any. A fork's pull request has no token and runs no job.
+token-verify endpoint, and the SHA-256 of its value), checks it against the manifest and writes it; and `verify` checks every
+file again before the gate reads any. A fork's pull request has no token and runs no job.
 
 **Where the pack is cached.** In a pull request's own cache, by the pack's digest (`rules-gate.yml`), and nowhere else. A cache
 saved by a push to `next` is readable by a fork's pull request, which runs its own edited workflow and can restore the

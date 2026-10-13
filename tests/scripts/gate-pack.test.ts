@@ -169,6 +169,9 @@ describe('SigV4 signing (node:crypto)', () => {
     // (fetch sets Host from the URL: it is signed, not returned)
     expect(Object.keys(signed).some(k => k.toLowerCase() === 'host')).toBe(false)
   })
+  it('signs no query string', () => {
+    expect(() => signV4({ method: 'GET', url: 'https://examplebucket.s3.amazonaws.com/test.txt?versionId=1', accessKeyId: 'k', secret: 's', region: 'auto', service: 's3', date: NOW })).toThrow(/without a query string/)
+  })
 })
 
 describe('the S3 credentials are derived from the token', () => {
@@ -208,6 +211,18 @@ describe('the S3 credentials are derived from the token', () => {
     calls = 0
     await why(s3Credentials({ token: TOKEN, account: ACCOUNT, fetchImpl: async () => { calls++; return verified({}, 401)() }, retryMs: 0 }))
     expect(calls).toBe(1)
+  })
+
+  it('refuses a token with white space in it before any request, naming neither the token nor its digest', async () => {
+    let calls = 0
+    const fetchImpl = async () => { calls++; return verified()() }
+    for (const token of [`${TOKEN}\n`, ` ${TOKEN}`, `${TOKEN} x`]) {
+      const message = await why(s3Credentials({ token, account: ACCOUNT, fetchImpl, retryMs: 0 }))
+      expect(message).toBe('READARXIV_CI_TOKEN has white space in it: set the token alone')
+      expect(message).not.toContain(TOKEN)
+      expect(message).not.toContain(sha256(token))
+    }
+    expect(calls).toBe(0)
   })
 
   it('refuses a request that fails outright without the token in the message', async () => {
@@ -300,11 +315,19 @@ describe('the pack is restored by digest from the bucket', () => {
     const good = bucket()
     const before = good.requests.length
     good.setRespond((key, n) => (n === 1 ? { status: 503 } : { status: 200, body: new Uint8Array(readFileSync(join(good.i.root, 'made', good.pack.files.find(f => `gate-pack/${f.sha256}` === key)!.path))) }))
-    await expect(restorePack(args(good))).resolves.toMatchObject({ files: good.pack.files.length })
+    // (each attempt is signed with the clock of that attempt: the clock advances a second at every call)
+    let tick = 0
+    await expect(restorePack(args(good, { now: () => new Date(NOW.getTime() + 1000 * tick++) }))).resolves.toMatchObject({ files: good.pack.files.length })
     expect(good.requests.length).toBeGreaterThan(before)
+    const byKey = Map.groupBy(good.requests, q => q.url)
+    for (const [, [first, second]] of byKey) {
+      expect(first!.headers['x-amz-date']).not.toBe(second!.headers['x-amz-date'])
+      expect(first!.headers.authorization).not.toBe(second!.headers.authorization)
+    }
     expect(b.requests.length).toBeGreaterThan(0)
     expect(leaks([e404, e403, ...logged].join('\n'), [...b.requests, ...good.requests])).toEqual([])
     await expect(restorePack(args(b, { token: undefined }))).rejects.toThrow('READARXIV_CI_TOKEN is not set')
+    await expect(restorePack(args(b, { token: `${TOKEN}\n` }))).rejects.toThrow('READARXIV_CI_TOKEN has white space in it')
   })
 
   it('tries a read again when the body fails after a 200, as it does for a server error', async () => {
