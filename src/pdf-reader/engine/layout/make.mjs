@@ -534,7 +534,8 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
    * take a name's glyphs (2608's abstract label was IEEEtran's "Abstract—"). Its row: its line box from its glyphs, their
    * size and font, centred where a unit is, in capitals where its glyphs' letters all are and its macro's own text is
    * not (the probe's answer: a case change, which the target's name takes too), and its TeX column's text edges (the
-   * room it has: edgesOf, the pages like it where its own has no unit; else its column's side of the page).
+   * room it has: edgesOf, the pages like it where its own has no unit; where no page has a body line of its kind of
+   * column, its own box: no room past it is known).
    * A name TeX sets right before a unit on that unit's first line (IEEEtran's "Abstract—Task…", amsthm's "Proof. The…")
    * leads it (RUN_IN, the unit in its row): the unit's start mark is the first after the name's end on that line (in its
    * column) in our compile, and carried on that line after the name's carried end on arXiv's page. Its joint, what TeX set between the
@@ -586,7 +587,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       const cased = [...gs.map(g => P.u[g]).join('').normalize('NFKC')].filter(c => c.toUpperCase() !== c.toLowerCase())
       const capitals = cased.length >= 2 && cased.every(c => c === c.toUpperCase()) && marks.marking.names?.[x[2]] === 1
       for (const g of gs) P.owner[g] = NAME_OWNER
-      named.push({ occurrence: Number(x[1]), key, row, flags: (centred ? NAME_FLAG.CENTRED : 0) | (capitals ? NAME_FLAG.CAPITALS : 0) | (lead >= 0 ? NAME_FLAG.RUN_IN : 0), lead, glue, column: edge ?? sideOf(S.page, col) })
+      named.push({ occurrence: Number(x[1]), key, row, flags: (centred ? NAME_FLAG.CENTRED : 0) | (capitals ? NAME_FLAG.CAPITALS : 0) | (lead >= 0 ? NAME_FLAG.RUN_IN : 0), lead, glue, column: edge ?? [row.x0, row.x1] })
     }
     named.sort((p, q) => p.occurrence - q.occurrence)
     if (named.length > NAMES_MAX) named.length = NAMES_MAX
