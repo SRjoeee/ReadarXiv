@@ -28,8 +28,8 @@
     {
       "path": "tests/fixtures/arxiv/2609.00245.html",
       "url": "https://arxiv.org/html/2609.00245v1",
-      "sha256": "cc4faa72cfaacb951d0a1b0f91ea093fd5e2ede4d30fc38a7291979d60abb427",
-      "bytes": 1811493
+      "sha256": "177fc934c293108520336999aeb947a58fa90d40ee8adacc2ff0ad11a18ea2f2",
+      "bytes": 1811728
     },
     {
       "path": "tests/fixtures/svg/2608.29808-bounter-case.svg",

@@ -41,6 +41,7 @@ Five papers and one figure of one of them were submitted under [arXiv's non-excl
 - **No network and no files: the run fails**, saying which file is missing and why it is not in the repository. It does not skip: a suite that left five papers out in silence would report rule coverage it does not have. In `pnpm test:watch`, vitest keeps a failed global setup for the whole session: restart it once the files are fetched.
 - **arXiv serves other bytes** (a paper rendered again by a newer LaTeXML, or a page in its place) **or answers 404**: the download is refused and nothing is written. The rule-coverage snapshots and the numbers in DESIGN were taken from the pinned bytes, so moving a pin is a maintainer's change: put the new file in place, update `sha256` and `bytes` in `remote.json`, run the suite, and review every snapshot that moved as a change in what arXiv produces. A file on disk that is not the pinned one is never overwritten, for the same reason.
 - Measured 2026-09-17: all of them were byte-identical to the copies captured between 2026-09-03 and 2026-09-09; four papers at v1, `2401.00596` at v3.
+- Measured 2026-10-13: `2609.00245v1` re-pinned. arXiv's page header changed (its header stylesheet's version and a print rule in `<head>`); the LaTeXML output is byte-identical, and no snapshot moved. The other six are still the pinned bytes.
 
 ## Adding a fixture
 
