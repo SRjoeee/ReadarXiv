@@ -230,7 +230,7 @@ export function signV4({ method, url, headers = {}, accessKeyId, secret, region,
   const canonical = `${method}\n${u.pathname}\n${query}\n${names.map(n => `${n}:${signed[n]}\n`).join('')}\n${names.join(';')}\n${EMPTY_SHA}`
   const key = [...scope.split('/')].reduce(hmac, `AWS4${secret}`)
   const signature = hmac(key, `AWS4-HMAC-SHA256\n${stamp}\n${scope}\n${sha256(canonical)}`).toString('hex')
-  return { ...sent, authorization: `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${scope},SignedHeaders=${names.join(';')},Signature=${signature}` }
+  return { ...sent, authorization: `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${scope}, SignedHeaders=${names.join(';')}, Signature=${signature}` }
 }
 
 const sleep = ms => new Promise(ok => setTimeout(ok, ms))
@@ -273,7 +273,7 @@ const fileIs = (file, f) => { try { const b = readFileSync(file); return b.lengt
  * A pack restored into `dir` from the bucket: each distinct digest read once (a file already there with the right digest
  * is kept; the several outputs of one paper share an object), checked against the manifest's digest and size before it is
  * written, and a read that fails for want of the network or the server (not for a 4xx) tried again twice. The S3 credentials
- * are derived once, by the first read that needs them (a restore that finds everything there asks Cloudflare nothing), and each
+ * are derived once, by the first read that needs them (a restore that finds everything there asks Cloudflare nothing; one that reads any object has verified the token first), and each
  * read is signed with `now()`. Nothing the token, the secret or a signature is in is printed or thrown: the errors say the status and the key.
  */
 export async function restorePack({ pack, dir, token, account, fetchImpl = fetch, retryMs = 1000, now = () => new Date(), log = () => {} }) {
