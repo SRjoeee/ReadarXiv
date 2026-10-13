@@ -306,16 +306,36 @@ async function removalMeasures(cur, T) {
   return { ...out, ok, crops, cropForeignInk: foreign, cropForeignInkPx: foreignPx }
 }
 
+/** a drawn run's ink over (a) and under (d) its baseline at 100 px in its face, as the browser draws it (the gate's own
+ *  reading, by the face the drawing names: an engine's measure is not the instrument's) */
+const inkCtx = new OffscreenCanvas(8, 8).getContext('2d'), inkSeen = new Map()
+const inkOf = (s, font) => {
+  const key = `${font}|${s}`
+  let v = inkSeen.get(key)
+  if (!v) { inkCtx.font = font; const m = inkCtx.measureText(s); v = { a: m.actualBoundingBoxAscent || 0, d: m.actualBoundingBoxDescent || 0 }; inkSeen.set(key, v) }
+  return v
+}
 /**
  * Where page p's drawn crops sit, as measure.mjs cropPlacementOf reads them: each drawn line of the units drawn on it, its
- * text's extent over and under its baseline (the engine's lineExtent: the drawn glyphs' ink, by the measure that gives
- * their widths) across the line as placed, and each crop on it, its box as drawn (the audit's) and its TeX baseline, the
- * baseline of the layout file's segment of its placeholder's row on the page it is cut from that its source box meets;
- * none where the file has none (cropNoTex). Null with no hybrid (v0 alone: no TeX baseline to hold a crop to)
+ * text's extent over and under its baseline (its runs' ink as drawn, inkOf, a superscript at 0.62 of the size raised
+ * 0.36 em as the SVG sets it) across the line as placed, and each crop on it, its box as drawn (the audit's) and its TeX
+ * baseline, the baseline of the layout file's segment of its placeholder's row on the page it is cut from that its source
+ * box meets; none where the file has none (cropNoTex). Null with no hybrid (v0 alone: no TeX baseline to hold a crop to)
  */
 async function placementOf(p, recs, boxPdf) {
   if (!S.texIndex) return null
-  const [L2, T] = await Promise.all([import('/engine/layer-proto/layer2.mjs'), import('/engine/layer-proto/tex.mjs')])
+  const [F, T] = await Promise.all([import('/engine/layer-proto/fonts.mjs'), import('/engine/layer-proto/tex.mjs')])
+  const extentOf = (l, f) => {
+    let a = 0, d = 0
+    for (const it of l.items) {
+      const t = it.t
+      if (t.crop || !t.s || t.space || !t.face) continue
+      const m = inkOf(t.s, F.fontString(t.face, 100)), k = t.sup ? 0.62 : 1, up = t.sup ? 0.36 * f : 0
+      a = Math.max(a, up + (m.a * k * f) / 100)
+      d = Math.max(d, (m.d * k * f) / 100 - up)
+    }
+    return { a, d }
+  }
   const lines = [], crops = []
   for (const r of recs) {
     const q = S.byId.get(r.id)
@@ -324,7 +344,7 @@ async function placementOf(p, recs, boxPdf) {
     const audit = (S.audit.get(`${r.id}|${p}`) ?? []).filter(a => a.what === 'crop')
     q.layout.lines.forEach((l, i) => {
       if (l.page !== p) return
-      const key = `${r.id}|${i}`, e = L2.lineExtent(l, q.layout.f, q.layout.scale ?? 1).text
+      const key = `${r.id}|${i}`, e = extentOf(l, q.layout.f)
       lines.push({ key, x0: l.x0, x1: l.x0 + (l.used ?? l.x1 - l.x0), baseline: l.baseline, a: e.a, d: e.d })
       for (const it of l.items) {
         const c = it.t.crop
