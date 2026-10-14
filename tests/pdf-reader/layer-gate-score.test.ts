@@ -201,6 +201,31 @@ describe("the coverage of the original's text area", () => {
   })
 })
 
+describe("the erase bites: the original's ink erased that no drawn unit owns", () => {
+  // the same 60 x 40 page: a unit's line on baseline 20 (its own band PDF y 17 to 28.8), its erase from y 8, and a block of
+  // the original's ink under the band (x 20-25, y 10-13: a radical's foot hanging under the line)
+  const W = 60, H = 40
+  const planeOf = (paint: (x: number, y: number) => number) => {
+    const a = new Uint8ClampedArray(W * H * 4)
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const v = paint(x, y); a.set([v, v, v, 255], 4 * (y * W + x)) }
+    return a
+  }
+  const O = planeOf((x, y) => (x >= 20 && x < 26 && y >= H - 13 && y < H - 10 ? 0 : 255))
+  const paper = planeOf(() => 255)
+  const orig = [{ x0: 10, x1: 50, baseline: 20, top: 27, bottom: 17.5, size: 10 }]
+  const bites = (crops: { k: number; src: number[]; dst: number[] }[], cut: { src: number[]; unit: number }[]) =>
+    (pixelPage({ k: 1, view: [0, 0, W, H], W, H, O, C: paper, T: paper, units: [{ id: 1, kind: 'para', drawn: true, why: null, orig, lines: [{ baseline: 20, size: 10, x0: 10, x1: 50 }], erase: [[10, 8, 50, 27]], crops } as UnitIn], kept: [], items: [], ref: [{ id: 1, kind: 'para', orig }], drawnText: '', cut }) as { bites: number }).bites
+  it('counts ink erased beside no line and under no crop', () => {
+    expect(bites([], [])).toBe(1)
+  })
+  it("does not count ink inside a crop's source, cut from this page and drawn elsewhere (a crop on its TeX baseline stands off its source)", () => {
+    const crop = { k: 1, src: [18, 9, 28, 15], dst: [40, 17.5, 50, 25] }
+    expect(bites([crop], [{ src: crop.src, unit: 1 }])).toBe(0)
+    // (a crop whose source is elsewhere accounts for none of it)
+    expect(bites([{ ...crop, src: [30, 9, 40, 15] }], [{ src: [30, 9, 40, 15], unit: 1 }])).toBe(1)
+  })
+})
+
 describe('generated text left (D1a)', () => {
   it("counts a page's names left by kind, sums them a fixture and a pool, and gates them down", () => {
     const page = (p: number, generated: Record<string, number>) => pageEntry(p, {

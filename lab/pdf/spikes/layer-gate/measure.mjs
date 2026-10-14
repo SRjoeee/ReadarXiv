@@ -285,7 +285,7 @@ function components(m, W, H, min, boxes = null) {
  * overlap, overlapOrig, overlapPx, stray, residue, residuePx, doubled, vanished, bites, bitePx, graphics: { px, erased,
  * overdrawn } }. `drawnText`: every drawn run's text on the page, joined without white space (math the drawing sets as
  * text is not vanished); `cut`: the crops cut from this page ({ src, unit }), whatever page they are drawn on, which
- * `doubled` and `vanished` read here, where their source is
+ * `doubled`, `vanished` and `bites` read here, where their source is
  */
 export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, items, ref, drawnText, cut = [] }) {
   const toPx = (x, y) => [(x - view[0]) * k, (view[3] - y) * k]
@@ -434,8 +434,10 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
   }
 
   // erase bites: the original's ink erased outside every drawn unit's own lines (its glyphs' bands, and those it draws
-  // anew beside them, `own`: a float's label set in the target's name) and under no crop: ink of a line, a formula or a
-  // figure no drawn unit owns, destroyed
+  // anew beside them, `own`: a float's label set in the target's name), under no crop drawn here and in no crop's source
+  // (cut from this page, wherever it is drawn: a crop set on its TeX baseline stands off the ink it was cut from, a
+  // radical's foot or a fraction's bar hanging under its line, which the crop carries and the page no longer shows where
+  // it was, 1706.03762's p4 and p5): ink of a line, a formula or a figure no drawn unit owns, destroyed
   const ownM = mask(), eraseRaw = mask()
   for (const u of drawn) {
     for (const l of [...u.orig, ...(u.own ?? [])]) paint(ownM, [l.x0 - 1, l.baseline - 0.3 * l.size, l.x1 + 1, l.baseline + 0.88 * l.size])
@@ -443,7 +445,7 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
   }
   const bite = mask()
   let bitePx = 0
-  for (let i = 0; i < W * H; i++) if (eraseRaw[i] && !ownM[i] && !cropM[i] && inkO(i) && !traceC(i)) { bite[i] = 1; bitePx++ }
+  for (let i = 0; i < W * H; i++) if (eraseRaw[i] && !ownM[i] && !cropM[i] && !srcM[i] && inkO(i) && !traceC(i)) { bite[i] = 1; bitePx++ }
   const bites = components(bite, W, H, 4, where.bites)
 
   // graphics: the original's ink that is no text (outside every text item and every reference line), erased or written over
