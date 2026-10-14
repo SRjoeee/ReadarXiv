@@ -75,7 +75,7 @@ its comment is numbers, fixture names and links that open the layer lab on the m
 
 | File | What it is |
 |---|---|
-| `.github/workflows/rules-gate.yml` | On a pull request (not from a fork) that touches the drawing closure, the gate or the pack: the pack restored, then the layer gate's model tier twice on one runner, the merge base's engine with its own built-in set and the pull request's with its own, then the verdict as one comment (`<!-- rules-gate -->`, edited in place) and its numbers as an artifact. Environment `rules-gate`, 15 minutes. This is a measurement, not an end-to-end suite: Chromium runs on these paths alone. |
+| `.github/workflows/rules-gate.yml` | On a pull request (not from a fork) that touches the drawing closure, the gate or the pack: the pack restored, then the layer gate's model tier twice on one runner, the merge base's engine with its own built-in set and the pull request's with its own, then the verdict as one comment (`<!-- rules-gate -->`, edited in place) and its numbers as an artifact. 15 minutes. This is a measurement, not an end-to-end suite: Chromium runs on these paths alone. |
 | `.github/workflows/rules-publish.yml` | On a push to `next` that changes `layout-rules.json`: publish to staging (environment `rules-staging`, automatic) and move its pointer; then the set measured on each live engine (below); then production (environment `rules-production`, whose required reviewer is the maintainer: one click), which stays off until the repository variable `RULES_PRODUCTION` is `on`. |
 | `.github/workflows/rules-point.yml` | By hand: move a pointer to a version already published, on staging or on production (the same reviewer): the rollback. A production one first cancels the publishes that wait for the click (below). |
 | `lab/pdf/spikes/rules-gate.mjs` | `run` (the gate's model tier in the production configuration, from the pack alone), `compare` (the verdict and the comment) and `engines` (the live-engines check). `tests/scripts/rules-gate.test.ts` holds its arithmetic on synthetic runs of numbers. |
@@ -125,11 +125,24 @@ node lab/pdf/spikes/gate-pack.mjs make        # lab/pdf/out/gate-pack/, and lab/
 node lab/pdf/spikes/gate-pack.mjs objects     # the objects to upload, once each: key, size, digest, local path
 ```
 
-The objects are content-addressed (`gate-pack/<sha256>` in the bucket `readarxiv-ci`, which has no public access), so the
-outputs of one paper share one, and an upload is each distinct digest once. In CI `gate-pack.mjs restore` reads each from
+The objects are content-addressed (`gate-pack/<sha256>` in the bucket `readarxiv-ci`, which has no public access; the same bucket
+holds the pinned test fixtures as `fixtures/<sha256>`, tests/fixtures/README.md), so the outputs of one paper share one, and an
+upload is each distinct digest once. In CI `gate-pack.mjs restore` reads each from
 R2's S3 API, SigV4-signed with the key derived from the read-only token (`READARXIV_CI_TOKEN`; its id, asked of Cloudflare's
 token-verify endpoint, and the SHA-256 of its value), checks it against the manifest and writes it; and `verify` checks every
 file again before the gate reads any. A fork's pull request has no token and runs no job.
+
+**Each side runs on its own commit's pack.** A pack is made by an engine (its layout files are that engine's), so the gate restores
+two: the pull request's, from its `gate-pack.json`, and the merge base's, from the merge base's own `gate-pack.json` with the merge
+base's own script. One pack serves both sides while the layout file's schema and version (`layout` in `gate-pack.json`) are the same
+in both, as before: the base's engine reads the pull request's pack, and any other change of the pack is measured on the one pack.
+Where they differ the pull request that re-makes the pack uploads the new objects before its CI can pass, and the two runs are one
+instrument by what their packs hold, not where they are: `rules-gate.mjs run` stamps each run's `fixtures`, `refs`, `geometry`,
+`data` and `texmf` with the digests of those parts of the listing of the `gate-pack.json` it was given (`--pack-json`, the one
+`verify` checked the directory against), the made layout files excluded. Another reference, geometry, PDF, translation, face or
+pattern between the two sides is then another instrument and fails; so does a different set of outputs, so a pull request that
+moves the layout file does not also add an output or refresh the references: those go in their own pull request, where the layout
+version is unchanged and the one pack serves both sides.
 
 **Where the pack is cached.** In a pull request's own cache, by the pack's digest (`rules-gate.yml`), and nowhere else. A cache
 saved by a push to `next` is readable by a fork's pull request, which runs its own edited workflow and can restore the
@@ -181,7 +194,7 @@ whole, as on the pull request. While the file names no engine nothing is measure
 
 | Where | Name | Value |
 |---|---|---|
-| Environment `rules-gate` | secret `READARXIV_CI_TOKEN` | an R2 API token (R2 → Manage API tokens → Create Account API token, Object Read only, this bucket only, with an expiry), rotated before it lapses: any process of a job that references a secret can read it, and the pack is on the runner's disk for the same code, so the token is worth only its lifetime (the next pack) |
+| Repository secrets | `READARXIV_CI_TOKEN` | an R2 API token (R2 → Manage API tokens → Create Account API token, Object Read only, this bucket only, with an expiry), rotated before it lapses: any process of a job that references a secret can read it, and the pack is on the runner's disk for the same code, so the token is worth only its lifetime (the next pack). One secret serves both readers of the bucket, `ci.yml`'s fixtures fetch and the rules gate (`rules-gate.yml`, and the live-engines check of `rules-publish.yml`): no environment holds a copy, which at a rotation would shadow the repository's and leave one reader on the lapsed token |
 | Environment `rules-staging` | secret `RULES_PUBLISH_SECRET` | the staging Worker's publish secret |
 | Environment `rules-production` | secret `RULES_PUBLISH_SECRET`; the maintainer as required reviewer | the production Worker's publish secret |
 | Repository variables | `CF_ACCOUNT_ID`, `RULES_STAGING_URL`, `RULES_PRODUCTION_URL`, `RULES_PRODUCTION` | the account id; the staging and production origins (`https://…`, no path); `on` once production exists |

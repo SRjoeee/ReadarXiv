@@ -17,4 +17,10 @@ export function ensureFixtures(options?: {
   log?: (line: string) => void
   /** Between two downloads and before a retry; the tests pass 0 */
   gapMs?: number
+  /** Where READARXIV_CI_TOKEN and CF_ACCOUNT_ID are read from (the bucket is used only when both are set); process.env by default */
+  env?: Record<string, string | undefined>
+  /** Before a retry of a bucket read; the tests pass 0 */
+  retryMs?: number
+  /** The clock a bucket read is signed with */
+  now?: () => Date
 }): Promise<{ verified: string[]; downloaded: string[] }>

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fixtureTotals, MEASURES, type PageEntry } from '../../lab/pdf/spikes/layer-gate/score.mjs'
-import { checkRulesFile, commentOf, engines, fragmentsIn, gateArgs, judge, labLink, leaksIn, loadRuling, MARK, outputsOfPack, parseRuling, publicLine, rulingsAt, rulingsFor, textsOf } from '../../lab/pdf/spikes/rules-gate.mjs'
+import { checkRulesFile, commentOf, engines, fragmentsIn, gateArgs, instrumentOfPack, judge, labLink, leaksIn, loadRuling, MARK, outputsOfPack, parseRuling, publicLine, rulingsAt, rulingsFor, stampRun, textsOf } from '../../lab/pdf/spikes/rules-gate.mjs'
 import { BUILTIN_RULES, readRules, writeRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // The rules gate's verdict (lab/pdf/spikes/rules-gate.mjs, rules-as-data plan §8, Task R6): two model-tier runs of one
@@ -581,5 +581,52 @@ describe('the runs are the production configuration', () => {
     const { args, env } = gateArgs({ engine: '/work/base', rules: '/work/base/rules.json', pack: '/work/pack' })
     expect(args).toEqual(['--tier=model', '--engine-kind=proto', '--proto-tex=lines', '--removal=draw', '--fixtures=/work/pack/fixtures', '--engine=/work/base', '--rules=/work/base/rules.json', '--workers=4'])
     expect(env).toEqual({ AXT_DATA: '/work/pack/data', LAYER_REFS: '/work/pack/refs', LAYER_GEOMETRY: '/work/pack/geometry', TEXMF_DIST: '/work/pack/texmf' })
+  })
+})
+
+// Two runs on two packs in two directories (a pull request that moves the layout file restores its own pack and the merge base's)
+// are one instrument when the packs differ in the made layout files alone: the run names what the pack holds, not where it is.
+describe('the instrument of a pack', () => {
+  const file = (path: string, sha: string) => ({ path, sha256: sha.repeat(64).slice(0, 64), bytes: 1 })
+  const pack = (layout: string, over: Record<string, string> = {}) => ({
+    files: [
+      file('fixtures/0001.00001v1-zh/arxiv.pdf', over.pdf ?? 'a'), file('fixtures/0001.00001v1-zh/units.json', 'b'), file('fixtures/0001.00001v1-zh/layout.json', layout),
+      file('refs/0001.00001v1-zh/ref.json', over.ref ?? 'c'), file('refs/0001.00001v1-zh/layout.json', 'd'), file('geometry/0001.00001-zh-geometry.json', over.geometry ?? 'e'),
+      file('data/fonts/x.woff2', over.font ?? 'f'), file('texmf/tex/generic/hyph-en.tex', over.texmf ?? '7'),
+    ],
+  })
+
+  it('is the same for packs whose made layout files differ alone', () => {
+    expect(instrumentOfPack(pack('1'))).toEqual(instrumentOfPack(pack('2')))
+  })
+
+  it('differs for another PDF, reference, geometry, face or pattern, each in its own part alone', () => {
+    const base = instrumentOfPack(pack('1'))
+    for (const [over, part] of [[{ pdf: '9' }, 'fixtures'], [{ ref: '9' }, 'refs'], [{ geometry: '9' }, 'geometry'], [{ font: '9' }, 'data'], [{ texmf: '9' }, 'texmf']] as const) {
+      const got = instrumentOfPack(pack('1', over)) as Record<string, string>
+      expect(Object.keys(got).filter(k => got[k] !== (base as Record<string, string>)[k]), part).toEqual([part])
+    }
+  })
+
+  it('refuses a pack that names no files, and judge sees two instruments for packs that differ, stamped over the paths the gate recorded', () => {
+    expect(() => instrumentOfPack({})).toThrow(/names no files/)
+    expect(() => instrumentOfPack({ files: [...pack('1').files, file('newdir/x.bin', '1')] })).toThrow(/outside the parts.*newdir\/x\.bin/)
+    const paths = (dir: string) => ({ fixtures: `${dir}/fixtures`, refs: `${dir}/refs`, geometry: `${dir}/geometry` })
+    const stamped = (p: ReturnType<typeof pack>, dir: string) => run(base(), { inputs: { ...paths(dir), ...instrumentOfPack(p) } })
+    // two directories, layout files alone differ: no problem
+    expect(judge(stamped(pack('1'), 'out/base-pack'), stamped(pack('2'), 'out/gate-pack')).problems).toEqual([])
+    // another face: the instrument moved
+    expect(judge(stamped(pack('1'), 'a'), stamped(pack('1', { font: '9' }), 'b')).problems.join('\n')).toMatch(/not one instrument: data/)
+  })
+
+  it('stamps a run from the gate-pack.json it is given: no manifest.json is in a restored directory', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stamp-')), packJson = join(dir, 'gate-pack.json')
+    writeFileSync(packJson, JSON.stringify(pack('1')))
+    writeFileSync(join(dir, 'run.json'), JSON.stringify({ inputs: { tier: 'model', fixtures: '<local>/fixtures', refs: '<local>/refs', geometry: '<local>/geometry' }, fixtures: {} }))
+    stampRun(join(dir, 'run.json'), join(dir, 'stamped.json'), packJson)
+    const got = JSON.parse(readFileSync(join(dir, 'stamped.json'), 'utf8'))
+    expect(got.inputs).toEqual({ tier: 'model', ...instrumentOfPack(pack('1')) })
+    expect(existsSync(join(dir, 'manifest.json'))).toBe(false)
+    expect(() => stampRun(join(dir, 'run.json'), join(dir, 'x.json'), join(dir, 'missing.json'))).toThrow(/ENOENT/)
   })
 })

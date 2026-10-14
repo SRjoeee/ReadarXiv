@@ -6,12 +6,15 @@ import { MARK } from '../../lab/pdf/spikes/rules-gate.mjs'
 // The three workflows of the rules gate (.github/workflows/rules-gate.yml, rules-publish.yml, rules-point.yml, Task R6) cannot
 // run on a machine that is not GitHub's, so what keeps them honest is read here: that the gate runs when the files it loads
 // change, that no secret reaches a script but through a step's environment, that the production publish is off and waits for
-// its reviewer, and that every flag a workflow gives a script is one the script reads. `actionlint` checks the rest (the
-// syntax, the contexts, the expressions) where it is installed.
+// its reviewer, and that every flag a workflow gives a script is one the script reads. The same rules hold for ci.yml's fixtures
+// fetch, which reads the same repository secret. `actionlint` checks the rest (the syntax, the contexts, the expressions) where
+// it is installed.
 
 const ROOT = resolve(__dirname, '../..')
 const read = (file: string) => readFileSync(join(ROOT, file), 'utf8')
 const WORKFLOWS = ['rules-gate.yml', 'rules-publish.yml', 'rules-point.yml']
+/** the workflows whose jobs may hold the bucket's read token: the three above, and the fixtures fetch of ci.yml */
+const WITH_TOKEN = [...WORKFLOWS, 'ci.yml']
 const text = (name: string) => read(`.github/workflows/${name}`)
 
 /** the patterns of a workflow's `paths:` filter */
@@ -35,6 +38,9 @@ function closure(entries: string[]): string[] {
   entries.forEach(visit)
   return [...seen].map(f => relative(ROOT, f)).sort()
 }
+
+/** a workflow's jobs by name, each with its text (the comments before the next job's name stay with the one above it) */
+const jobsOf = (yml: string) => new Map(yml.slice(yml.indexOf('\njobs:\n') + 7).split(/\n(?= {2}[a-z][a-z-]*:\n)/).flatMap(part => { const name = /^ {2}([a-z][a-z-]*):/m.exec(part)?.[1]; return name ? [[name, part] as [string, string]] : [] }))
 
 /** the bodies of a workflow's `run:` steps */
 function runBodies(yml: string): string[] {
@@ -62,7 +68,7 @@ describe('the gate runs when what it loads changes', () => {
     expect(loaded.filter(f => !covered(patterns, f))).toEqual([])
   })
   it('covers the gate, its scorer and measures, the rules gate, the pack and its manifest, and itself', () => {
-    const gate = ['lab/pdf/spikes/layer-gate.mjs', ...readdirSync(join(ROOT, 'lab/pdf/spikes/layer-gate')).map(f => `lab/pdf/spikes/layer-gate/${f}`), 'lab/pdf/spikes/rules-gate.mjs', 'lab/pdf/spikes/gate-pack.mjs', 'lab/pdf/gate-pack.json', '.github/workflows/rules-gate.yml']
+    const gate = ['lab/pdf/spikes/layer-gate.mjs', ...readdirSync(join(ROOT, 'lab/pdf/spikes/layer-gate')).map(f => `lab/pdf/spikes/layer-gate/${f}`), 'lab/pdf/spikes/rules-gate.mjs', 'lab/pdf/spikes/gate-pack.mjs', 'scripts/r2-read.mjs', 'lab/pdf/gate-pack.json', '.github/workflows/rules-gate.yml']
     expect(gate.filter(f => !covered(patterns, f))).toEqual([])
     // and not the rest of the repository
     expect(covered(patterns, 'src/core/rules/latexml.ts')).toBe(false)
@@ -78,7 +84,7 @@ describe('the gate runs when what it loads changes', () => {
 
 describe('the secrets', () => {
   it('are named only as the value of a step\'s environment, and no expression is spliced into a script', () => {
-    for (const name of WORKFLOWS) {
+    for (const name of WITH_TOKEN) {
       const yml = text(name)
       for (const line of yml.split('\n').filter(l => l.includes('secrets.'))) {
         expect(line, `${name}: ${line.trim()}`).toMatch(/^ {10}[A-Z][A-Z0-9_]*: \$\{\{ secrets\.[A-Z][A-Z0-9_]* \}\}$/)
@@ -90,13 +96,113 @@ describe('the secrets', () => {
   })
   it('are the read token in the step that fetches the pack, the publish secret in the step that publishes', () => {
     const gate = text('rules-gate.yml')
-    expect(gate.match(/secrets\./g)).toHaveLength(1)
-    expect(/- name: Pack from the bucket\n\s+if: .*\n\s+env:\n\s+READARXIV_CI_TOKEN: \$\{\{ secrets\.READARXIV_CI_TOKEN \}\}/.test(gate)).toBe(true)
+    // the two restore steps (the pull request's pack, and the merge base's: 'each side runs on its own pack' below) and no other
+    expect(gate.match(/secrets\./g)).toHaveLength(2)
+    for (const step of ['Pack from the bucket', 'Merge base pack from the bucket']) {
+      expect(new RegExp(`- name: ${step}\\n\\s+if: .*\\n\\s+env:\\n\\s+READARXIV_CI_TOKEN: \\$\\{\\{ secrets\\.READARXIV_CI_TOKEN \\}\\}`).test(gate), step).toBe(true)
+    }
     for (const name of ['rules-publish.yml', 'rules-point.yml']) for (const m of text(name).matchAll(/secrets\.(\w+)/g)) expect(['RULES_PUBLISH_SECRET', 'READARXIV_CI_TOKEN']).toContain(m[1])
   })
   it('go to actions of GitHub\'s alone, at a major version: pnpm comes with corepack, not a third party\'s action', () => {
-    for (const name of WORKFLOWS) for (const m of text(name).matchAll(/uses: (\S+)/g)) expect(m[1], name).toMatch(/^actions\/[a-z-]+(\/[a-z-]+)?@v\d+$/)
-    for (const name of WORKFLOWS.filter(n => text(n).includes('pnpm '))) expect(text(name), name).toContain('run: corepack enable')
+    for (const name of WITH_TOKEN) for (const m of text(name).matchAll(/uses: (\S+)/g)) expect(m[1], name).toMatch(/^actions\/[a-z-]+(\/[a-z-]+)?@v\d+$/)
+    for (const name of WITH_TOKEN.filter(n => text(n).includes('pnpm '))) expect(text(name), name).toContain('run: corepack enable')
+    expect(text('ci.yml')).not.toContain('pnpm/action-setup')
+  })
+  it('are held by no environment: the read token is a repository secret, and a copy in an environment would shadow it at rotation', () => {
+    for (const name of WITH_TOKEN) expect(text(name), name).not.toContain('environment: rules-gate')
+    let restoring = 0
+    for (const name of WORKFLOWS) {
+      for (const [job, body] of jobsOf(text(name))) {
+        if (!body.includes('gate-pack.mjs restore')) continue
+        restoring++
+        expect(body, `${name}: ${job}`).not.toMatch(/^\s+environment:/m)
+        expect(body, `${name}: ${job}`).toMatch(/\n {8}env:\n {10}READARXIV_CI_TOKEN: \$\{\{ secrets\.READARXIV_CI_TOKEN \}\}\n {10}CF_ACCOUNT_ID: \$\{\{ vars\.CF_ACCOUNT_ID \}\}\n {8}run: node lab\/pdf\/spikes\/gate-pack\.mjs restore\n/)
+      }
+    }
+    // the gate and the live-engines check of the publish
+    expect(restoring).toBe(2)
+  })
+  it('reach the fixtures fetch of ci.yml in that step\'s environment and in no other step', () => {
+    const ci = text('ci.yml')
+    const steps = ci.slice(ci.indexOf('\n    steps:\n')).split(/\n {6}- /).slice(1)
+    const holding = steps.filter(step => /READARXIV_CI_TOKEN|CF_ACCOUNT_ID|secrets\./.test(step))
+    expect(holding).toHaveLength(1)
+    expect(holding[0]).toMatch(/^run: node scripts\/fetch-fixtures\.mjs\n {8}env:\n {10}READARXIV_CI_TOKEN: \$\{\{ secrets\.READARXIV_CI_TOKEN \}\}\n {10}CF_ACCOUNT_ID: \$\{\{ vars\.CF_ACCOUNT_ID \}\}\s*$/)
+    // not the job's, the workflow's or any other step's, and no environment to take it from
+    expect(ci).not.toMatch(/^env:/m)
+    expect(ci).not.toMatch(/^\s+environment:/m)
+    expect(ci.match(/READARXIV_CI_TOKEN/g)).toHaveLength(2)
+    expect(ci.match(/CF_ACCOUNT_ID/g)).toHaveLength(2)
+    expect(ci).not.toMatch(/pull_request_target/)
+    // the job that holds the token reads the repository alone, and keeps no git credential in the checkout
+    expect(ci).toMatch(/^permissions:\n {2}contents: read\n/m)
+    expect(ci).toMatch(/uses: actions\/checkout@v\d+\n {8}with:\n {10}persist-credentials: false\n/)
+    // the order of the fetch among the steps stays: after the cache is restored, before the tests that read the fixtures
+    const order = steps.map(step => (step.startsWith('id: fixtures-cache') ? 'restore' : step.startsWith('run: node scripts/fetch-fixtures.mjs') ? 'fetch' : step.startsWith('run: pnpm test') ? 'test' : ''))
+    expect(order.filter(Boolean)).toEqual(['restore', 'fetch', 'test'])
+  })
+})
+
+describe('each side of the gate runs on the pack its own commit names', () => {
+  const yml = text('rules-gate.yml')
+  /** the gate job's steps by name (a step's trailing comments stay with it; none of them names a secret or a path) */
+  const steps = new Map(yml.slice(yml.indexOf('\n    steps:\n')).split(/\n {6}- /).slice(1).flatMap(s => { const name = /^(?:name: (.*)|id: .*\n\s+name: (.*))/m.exec(s); return name ? [[(name[1] ?? name[2])!, s] as [string, string]] : [] }))
+  const step = (name: string) => { const s = steps.get(name); expect(s, name).toBeDefined(); return s! }
+  const order = [...steps.keys()]
+  const BASE_SCRIPT = '"$RUNNER_TEMP/base/lab/pdf/spikes/gate-pack.mjs"'
+  const BASE_MANIFEST = '--pack="$RUNNER_TEMP/base/lab/pdf/gate-pack.json"'
+
+  it('has the merge base\'s worktree before either pack is restored, and both packs before either run', () => {
+    const at = (name: string) => { expect(order, name).toContain(name); return order.indexOf(name) }
+    expect(at('Merge base')).toBeLessThan(at('Pack digests'))
+    expect(at('Pack digests')).toBeLessThan(at('Pack from the bucket'))
+    expect(at('Pack digests')).toBeLessThan(at('Merge base pack from the bucket'))
+    expect(at('Check the merge base pack')).toBeLessThan(at('Gate on the merge base'))
+    expect(at('Check the pack')).toBeLessThan(at('Gate on the merge base'))
+  })
+
+  it('reads the merge base\'s digest from its own manifest with its own script, and runs the base on the pull request\'s directory only where the layout file\'s version is the same (not where the digests are)', () => {
+    const digests = step('Pack digests')
+    expect(digests).toContain('head=$(node lab/pdf/spikes/gate-pack.mjs digest)')
+    expect(digests).toContain(`base=$(node ${BASE_SCRIPT} digest ${BASE_MANIFEST})`)
+    // the layout field of each side's gate-pack.json decides, not the digest: another pack under the same layout is measured on the one pack
+    expect(digests).toMatch(/hl=\$\(node -e '[^']*\.layout \?\? null[^']*' lab\/pdf\/gate-pack\.json\)/)
+    expect(digests).toMatch(/bl=\$\(node -e '[^']*\.layout \?\? null[^']*' "\$RUNNER_TEMP\/base\/lab\/pdf\/gate-pack\.json"\)/)
+    expect(digests).toContain('if [ "$hl" = "$bl" ]; then')
+    expect(digests).toMatch(/same=true.*\n\s+echo "BASE_PACK=\$PWD\/lab\/pdf\/out\/gate-pack" >> "\$GITHUB_ENV"\n\s+echo "BASE_PACK_JSON=\$PWD\/lab\/pdf\/gate-pack\.json" >> "\$GITHUB_ENV"\n\s+else\n\s+echo "same=false.*\n\s+echo "BASE_PACK=\$RUNNER_TEMP\/base-pack" >> "\$GITHUB_ENV"\n\s+echo "BASE_PACK_JSON=\$RUNNER_TEMP\/base\/lab\/pdf\/gate-pack\.json" >> "\$GITHUB_ENV"\n\s+fi/)
+  })
+
+  it('restores the merge base\'s pack with the merge base\'s own script and manifest, from a cache keyed by its own digest, only where the layout versions differ', () => {
+    const cache = step('Merge base pack from the cache'), bucket = step('Merge base pack from the bucket'), keep = step('Keep the merge base pack'), check = step('Check the merge base pack')
+    for (const s of [cache, bucket, keep, check]) expect(s).toContain("steps.pack.outputs.same != 'true'")
+    expect(cache).toContain('uses: actions/cache/restore@v4')
+    expect(keep).toContain('uses: actions/cache/save@v4')
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expressions, not templates
+    for (const s of [cache, keep]) { expect(s).toContain('key: gate-pack-${{ steps.pack.outputs.base }}'); expect(s).toContain('path: ${{ runner.temp }}/base-pack') }
+    // only a cache miss reads the bucket and saves
+    for (const s of [bucket, keep]) expect(s).toContain("steps.base-cache.outputs.cache-hit != 'true'")
+    expect(bucket).toContain(`run: node ${BASE_SCRIPT} restore ${BASE_MANIFEST} --out="$BASE_PACK"`)
+    expect(check).toContain(`run: node ${BASE_SCRIPT} verify ${BASE_MANIFEST} --out="$BASE_PACK"`)
+    // (the directory the digests step chose for the other branch is the one the cache holds)
+    expect(step('Pack digests')).toContain('BASE_PACK=$RUNNER_TEMP/base-pack')
+  })
+
+  it('keeps the pull request\'s pack on its own digest, and measures the base on the base\'s directory and the head on the pull request\'s', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expressions, not templates
+    for (const name of ['Pack from the cache', 'Keep the pack']) expect(step(name)).toContain('key: gate-pack-${{ steps.pack.outputs.digest }}')
+    expect(step('Gate on the merge base')).toContain('--pack="$BASE_PACK" --pack-json="$BASE_PACK_JSON"')
+    expect(step('Gate on the merge base')).not.toContain('--pack=lab/pdf/out/gate-pack')
+    expect(step('Gate on the pull request')).toContain('--pack=lab/pdf/out/gate-pack --pack-json=lab/pdf/gate-pack.json ')
+    expect(step('Gate on the pull request')).not.toContain('BASE_PACK')
+    // the verdict reads the pull request's manifest and records
+    expect(step('Verdict')).toContain('--pack=lab/pdf/gate-pack.json --records=lab/pdf/out/gate-pack/fixtures')
+  })
+
+  it('names the token only in the two restore steps\' environments', () => {
+    const named = [...steps].filter(([, s]) => /secrets\.|READARXIV_CI_TOKEN|CF_ACCOUNT_ID/.test(s)).map(([name]) => name)
+    expect(named).toEqual(['Pack from the bucket', 'Merge base pack from the bucket'])
+    // and the job-level environment holds none
+    expect(/\n {4}env:\n((?: {6}.*\n)+)/.exec(yml)?.[1]).not.toMatch(/secrets|TOKEN|CF_ACCOUNT_ID/)
   })
 })
 
@@ -116,9 +222,9 @@ describe('the pack\'s cache', () => {
 
 describe('the pull request gate', () => {
   const yml = text('rules-gate.yml')
-  it('holds the permissions the plan names, runs in its environment, skips a fork and an unset bucket, and keeps to its budget', () => {
+  it('holds the permissions the plan names, runs in no environment, skips a fork and an unset bucket, and keeps to its budget', () => {
     expect(/^permissions:\n {2}contents: read\n {2}pull-requests: write\n/m.test(yml)).toBe(true)
-    expect(yml).toContain('environment: rules-gate')
+    expect(yml).not.toMatch(/^\s+environment:/m)
     expect(yml).toContain("if: github.event.pull_request.head.repo.full_name == github.repository && vars.CF_ACCOUNT_ID != ''")
     expect(yml).toContain('timeout-minutes: 15')
     // biome-ignore lint/suspicious/noTemplateCurlyInString: a GitHub expression, not a template
@@ -139,7 +245,9 @@ describe('the publish', () => {
   const yml = text('rules-publish.yml')
   it('goes to staging by itself once staging exists, past the live engines, to production only when it is on and its reviewer says so', () => {
     expect(/\n {2}staging:\n\s+name: Staging\n(?:\s+#.*\n)*\s+if: vars\.RULES_STAGING_URL != ''\n(?:.*\n)*?\s+environment: rules-staging\n/.test(yml)).toBe(true)
-    expect(/\n {2}engines:\n\s+name: Live engines\n\s+needs: staging\n(?:.*\n)*?\s+environment: rules-gate\n/.test(yml)).toBe(true)
+    // (the live-engines check restores the pack with the repository secret: it names no environment)
+    expect(/\n {2}engines:\n\s+name: Live engines\n\s+needs: staging\n/.test(yml)).toBe(true)
+    expect(jobsOf(yml).get('engines')).not.toMatch(/^\s+environment:/m)
     expect(/\n {2}production:\n\s+name: Production\n\s+if: vars\.RULES_PRODUCTION == 'on'\n\s+needs: \[staging, engines\]\n(?:.*\n)*?\s+environment: rules-production\n/.test(yml)).toBe(true)
   })
   it('measures nothing while live-engines.json names no engine', () => {
@@ -177,8 +285,6 @@ describe('the rollback', () => {
 })
 
 describe('one pointer, one queue', () => {
-  /** a workflow's jobs by name, each with its text (the comments before the next job's name stay with the one above it) */
-  const jobsOf = (yml: string) => new Map(yml.slice(yml.indexOf('\njobs:\n') + 7).split(/\n(?= {2}[a-z][a-z-]*:\n)/).flatMap(part => { const name = /^ {2}([a-z][a-z-]*):/m.exec(part)?.[1]; return name ? [[name, part] as [string, string]] : [] }))
   // [group, cancel-in-progress, queue]: the queue is GitHub's `queue: max`, which keeps every pending job in order (the default keeps one
   // and cancels it for the next, so a rollback pending behind a publish would vanish)
   const concurrencyOf = (job: string) => /\n {4}concurrency:\n {6}group: (.*)\n {6}cancel-in-progress: (.*)\n(?: {6}#.*\n)* {6}queue: (.*)\n/.exec(job)?.slice(1) ?? null

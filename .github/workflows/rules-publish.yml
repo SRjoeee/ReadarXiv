@@ -56,7 +56,6 @@ jobs:
     name: Live engines
     needs: staging
     runs-on: ubuntu-latest
-    environment: rules-gate
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
