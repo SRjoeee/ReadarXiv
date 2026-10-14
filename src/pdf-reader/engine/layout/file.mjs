@@ -441,7 +441,7 @@ export function encodeLayout(file) {
     pageText,
     held,
     names: names.map(r => rounded(r, NAME_ROW, NAME_EXACT)),
-    lineskip,
+    lineskip: lineskip === null ? null : lineskip.map(r2),
   })
 }
 

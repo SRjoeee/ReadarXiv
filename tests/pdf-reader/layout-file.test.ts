@@ -86,8 +86,8 @@ function made(): LayoutFile {
       [4, NAME_KEYS.indexOf('ref'), 3, 72, 500, 140.25, 508.4, 497.5, 12, 1, NAME_FLAG.CAPITALS, -1, 0, 72, 300],
       [6, NAME_KEYS.indexOf('proof'), 3, 100, 400, 140, 407, 397.5, 9, 1, NAME_FLAG.RUN_IN, 7, 2.5, 72, 540],
     ],
-    // the paper's \lineskip and \lineskiplimit, LaTeX's own 1pt and 0pt in PDF units
-    lineskip: [0.996, 0],
+    // the paper's \lineskip and \lineskiplimit, LaTeX's own 1pt (0.9963 bp) and 0pt, to a hundredth as the writer sets them
+    lineskip: [1, 0],
   }
 }
 
@@ -202,6 +202,9 @@ describe('a valid file', () => {
     expect(Object.is(back.views[1], 0)).toBe(true)
     expect(back.lines[0]![1]).toEqual([1, 150.5, 461.25, 700, 712.4, 696.1, 17.28, 1])
     expect(encodeLayout(back)).toBe(JSON.stringify(back))
+    // (the paper's \lineskip as TeX gives it in PDF units, 1pt = 0.9962640099626402, to a hundredth like every number)
+    shuffled.lineskip = [0.9962640099626402, -0.004]
+    expect(parseLayout(utf8(encodeLayout(shuffled))).lineskip).toEqual([1, 0])
   })
 
   it('a zero written -0 reads as 0, so that the file round-trips', () => {
