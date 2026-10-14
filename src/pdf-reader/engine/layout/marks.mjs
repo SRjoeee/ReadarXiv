@@ -619,10 +619,15 @@ export const UNMARK_CS = ['axtpma', 'axtpm', 'axthmark', 'axtnma', 'axtnmb']
  *    microseconds; the regex runs only on a hit. A miss holds none of UNMARK_CS, which the regex's `\c{...}` alternation
  *    could not have matched, so the result is the regex's.
  *  - The memory holds the last list the regex ran on and what it made of it, and a list the same macro (\tl_if_eq:NN, its
- *    \ifx) is set to that result. The regex is a function of the list alone, so the result is the regex's. The hooks meet
- *    one list again and again: nameref's label hook cleans the title of the heading a label sits under on every label
- *    (the assignment is local to the label's group), a caption's title goes through the title hook twice in a row.
- *    The thesis: 276 runs a pass on 61 distinct lists, 21,669 tokens read for 7,936 distinct.
+ *    \ifx) is set to that result. The regex is a function of the token list alone, so the result's tokens are the regex's.
+ *    Its type is not: \regex_replace_all ends in \tl_set_eq, so the macro it leaves is plain, while a prefilter miss leaves
+ *    a \long or \protected one as it was, and a memory hit sets the macro to the plain result. Neither caller can tell:
+ *    \axt@title is always a \def, and \@currentlabelname goes straight into \@onelevel@sanitize.
+ *    The hooks meet one list again and again where nameref's title is set past gettitlestring (titlesec, memoir: the
+ *    thesis): the label hook cleans the heading's title on every label under it (the assignment is local to the label's
+ *    group), and a caption's title goes through the title hook twice in a row. On the standard path (nameref ->
+ *    GetTitleString) the title is clean already and the prefilter skips it. The thesis: 276 runs a pass on 61 distinct
+ *    lists, 21,669 tokens read for 7,936 distinct.
  *  The regex stays as it was: `\c[^BE].*` is any run of tokens but a brace, so a match ends at its own argument's close
  *  and never reaches across a group (unmark-finding); every mark name is brace-free (MARK_NAME) */
 const UNMARK_TEX = [
