@@ -26,6 +26,7 @@ on:
       - 'lab/pdf/spikes/layer-gate/**'
       - 'lab/pdf/spikes/rules-gate.mjs'
       - 'lab/pdf/spikes/gate-pack.mjs'
+      - 'scripts/r2-read.mjs'
       - 'lab/pdf/gate-pack.json'
       - '.github/workflows/rules-gate.yml'
 

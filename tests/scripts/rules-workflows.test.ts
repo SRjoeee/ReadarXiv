@@ -68,7 +68,7 @@ describe('the gate runs when what it loads changes', () => {
     expect(loaded.filter(f => !covered(patterns, f))).toEqual([])
   })
   it('covers the gate, its scorer and measures, the rules gate, the pack and its manifest, and itself', () => {
-    const gate = ['lab/pdf/spikes/layer-gate.mjs', ...readdirSync(join(ROOT, 'lab/pdf/spikes/layer-gate')).map(f => `lab/pdf/spikes/layer-gate/${f}`), 'lab/pdf/spikes/rules-gate.mjs', 'lab/pdf/spikes/gate-pack.mjs', 'lab/pdf/gate-pack.json', '.github/workflows/rules-gate.yml']
+    const gate = ['lab/pdf/spikes/layer-gate.mjs', ...readdirSync(join(ROOT, 'lab/pdf/spikes/layer-gate')).map(f => `lab/pdf/spikes/layer-gate/${f}`), 'lab/pdf/spikes/rules-gate.mjs', 'lab/pdf/spikes/gate-pack.mjs', 'scripts/r2-read.mjs', 'lab/pdf/gate-pack.json', '.github/workflows/rules-gate.yml']
     expect(gate.filter(f => !covered(patterns, f))).toEqual([])
     // and not the rest of the repository
     expect(covered(patterns, 'src/core/rules/latexml.ts')).toBe(false)

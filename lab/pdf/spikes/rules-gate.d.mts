@@ -58,7 +58,7 @@ export declare function reportJson(report: Verdict, meta?: { base?: { commit?: s
 export declare function gateArgs(o: { engine: string; rules: string; pack: string; workers?: number }): { args: string[]; env: Record<string, string> }
 export declare function publicLine(line: string): string | null
 export declare function codeSpan(text: string, max?: number): string
-export declare function runGate(o: { engine: string; rules: string; pack: string; out?: string; log?: string; workers?: number }): Promise<string>
+export declare function runGate(o: { engine: string; rules: string; pack: string; packJson: string; out?: string; log?: string; workers?: number }): Promise<string>
 export declare function engines(argv: string[], deps?: { run?: typeof runGate; git?: (...args: string[]) => string; fetchImpl?: (url: string, init: { headers: Record<string, string> }) => Promise<{ ok: boolean; status: number; arrayBuffer(): Promise<ArrayBuffer> }> }): Promise<number>
 
 export declare function schemaOf(source: string): number | null
