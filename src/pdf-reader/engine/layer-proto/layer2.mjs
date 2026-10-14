@@ -1870,16 +1870,26 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
   }
   // (TeX's lines, a layout file's: the blocks that continue each other in the file are one flow, breakLines. The next block
   // continues the last one's line where the file's lines between them, none or more, are all this unit's own (a script's
-  // row the text beside it holds, a held run: lines of the unit that are no block's) and in one frame, and no kept region
-  // the text passes lies between (`after`); another unit's line between them, a nested list's, is a break)
+  // row the text beside it holds, a held run: lines of the unit that are no block's) and in one frame, the file's (a line
+  // with no frame is in none), and no kept region the text passes lies between (`after`); another unit's line between
+  // them, a nested list's, is a break)
   const mine = new Set(rects.map(r => info(r)?.j).filter(Number.isInteger))
+  const where = r => rects.findIndex(q => q[0] === r[0] && q[2] === r[2] && q[3] === r[3] && q[4] === r[4])
   let flow = 0
   for (const [i, b] of blocks.entries()) {
     const a = blocks[i - 1]
     const from = info(b.rects[0]), to = info(a?.rects.at(-1) ?? b.rects[0])
-    let next = !!a && !!from?.file && !!to?.file && Number.isInteger(from.j) && Number.isInteger(to.j) && to.j < from.j && to.frame === from.frame && (a.after ?? 0) === (b.after ?? 0)
+    let next = !!a && !!from?.file && !!to?.file && Number.isInteger(from.j) && Number.isInteger(to.j) && to.j < from.j && Number.isInteger(from.frame) && to.frame === from.frame && (a.after ?? 0) === (b.after ?? 0)
     if (next) for (let j = to.j + 1; j < from.j; j++) if (!mine.has(j)) { next = false; break }
     b.flow = next ? a.flow : flow++
+    // (the room between two blocks of one flow is the paragraph's own, TeX's: where v0 split it at a gap TeX opened for a
+    // tall line, a line of the block above that TeX's rule moves down may go on into it (`through`, slotsAt's foot) where
+    // none of the lines between them the unit keeps lies lower than the block's last line, a script's row inside it:
+    // 1810.04805's page 6, unit 81; where one does, a held line in the gap, the block's foot stays its own)
+    if (next) {
+      const last = a.rects.at(-1), ia = where(last), ib = where(b.rects[0])
+      a.through = ia >= 0 && ib > ia && rects.slice(ia + 1, ib).every(r => r[2] >= last[2])
+    }
   }
   return blocks
 }
@@ -1952,12 +1962,17 @@ export const setHyphenData = (lang, data) => hyphenData.set(lang, data)
  *  script's lines now stay on the original's baselines while the size shrinks, as CJK's did) */
 function slotsAt(blocks, st, P, s) {
   const out = []
+  // (each block's foot, the lowest a line of it is laid at: its last baseline less what it borrows; a line TeX's rule moves
+  // down may go on past it into the next block of its flow where blocks2 found nothing kept between them, `through`, to
+  // the foot of the last block it so runs into, `foot`)
+  const lows = blocks.map(b => b.B.at(-1) - Math.min(b.free, st.borrow * (b.pitch0 ?? 1.2 * s)))
+  const feet = lows.slice()
+  for (let bi = blocks.length - 2; bi >= 0; bi--) if (blocks[bi].through) feet[bi] = feet[bi + 1]
   for (const [bi, b] of blocks.entries()) {
     const p0 = b.pitch0 ?? 1.2 * s
     const pitch = p0 * st.lead
     const onGrid = Math.abs(st.lead - 1) < 1e-6
-    const borrowPt = Math.min(b.free, st.borrow * p0)
-    const low = b.B.at(-1) - borrowPt
+    const low = lows[bi]
     for (let k = 0; k < 400; k++) {
       let y = onGrid ? (k < b.B.length ? b.B[k] : b.B.at(-1) - (k - b.B.length + 1) * pitch) : b.B[0] - k * pitch
       // never two lines closer than 0.7 of the pitch (a baseline the text layer could not tell)
@@ -1967,7 +1982,7 @@ function slotsAt(blocks, st, P, s) {
       const x0 = b.x0 + (bi === 0 && k === 0 && !b.centred ? b.indent : 0)
       // a sliver beside a formula (narrower than 1.5 em) holds no text: its words were the formula's
       if (b.x1 - x0 < 1.5 * s * st.scale) continue
-      out.push({ block: bi, page: b.page, x0, x1: b.x1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, low, flow: b.flow ?? bi })
+      out.push({ block: bi, page: b.page, x0, x1: b.x1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, foot: feet[bi], flow: b.flow ?? bi })
     }
   }
   return out
@@ -2032,13 +2047,19 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
   // TeX's rule between two consecutive lines (its \lineskip and \lineskiplimit, P.lineskip, the paper's own: the layout
   // file's): where the line just closed comes nearer the line before it than lineskiplimit, its top to that line's foot
   // (lineExtent: the drawn text's ink and its crops'), the two baselines are set that line's depth and its height plus
-  // lineskip apart, and the later slots of its flow move down with it, each block's past its foot dropped; one that lands
-  // past its own foot fails the state (`over`, the first token of its line), as a unit too long for its lines does. The
-  // line before is the last laid above it in its flow (inFlow): its block; or, the blocks on TeX's lines (a layout file's),
-  // the block that follows it in the file, its first line next to this one's last in the same frame with no kept region
-  // between, where v0 split a paragraph's lines in two (at a gap TeX opened in the original). v0's own blocks (the
-  // anchors' rectangles of a unit the file does not locate whole, a display's rows among them) are no flow: nothing says
-  // the line below is the next. A slot never moves up. No values (a file that has none, v0 alone): no line opens
+  // lineskip apart. The later slots of its flow are pushed down with it, each only as far as it then comes within its
+  // pitch of the slot above it (TeX's \baselineskip from the line set lower): a gap the grid holds wider than the pitch,
+  // the room TeX opened in the original for a tall line of its own (a formula the translation sets on another line, the
+  // gap v0 split a paragraph at), takes the push in, and the slots under it stay where they were. A slot pushed past its
+  // foot (slotsAt: its block's, or its flow's through a gap of the paragraph's own) is dropped; the line itself pushed
+  // past it fails the state (`over`, the first token of its line), as a unit too long for its lines does (1810.04805's
+  // page 6, unit 81: the formula one line higher than in the original, the line under it opened into the room TeX had
+  // opened under the formula, where v0's block ended). The line before is the last laid above it in its flow (inFlow):
+  // its block; or, the blocks on TeX's lines (a layout file's), the block that follows it in the file, its first line next
+  // to this one's last in the same frame with no kept region between, where v0 split a paragraph's lines in two (at a gap
+  // TeX opened in the original). v0's own blocks (the anchors' rectangles of a unit the file does not locate whole, a
+  // display's rows among them) are no flow: nothing says the line below is the next. A slot never moves up. No values (a
+  // file that has none, v0 alone): no line opens
   let over = null
   const settle = () => {
     if (!P.lineskip || !line?.items.length || over !== null) return
@@ -2054,13 +2075,17 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     const was = line.baseline
     line.baseline -= shift
     line.opened = shift
-    for (let q = slots.length - 1; q > li; q--) {
-      if (!inFlow(slots[q], line) || !(slots[q].baseline < was)) continue
-      const y = slots[q].baseline - shift
-      if (y < slots[q].low - 0.05) slots.splice(q, 1)
-      else slots[q] = { ...slots[q], baseline: y }
+    let push = shift, above = was
+    for (let q = li + 1; q < slots.length; q++) {
+      const sl = slots[q]
+      if (!inFlow(sl, line) || !(sl.baseline < above)) continue
+      push = Math.max(0, push - Math.max(0, above - sl.baseline - sl.pitch))
+      above = sl.baseline
+      if (!(push > 0)) break
+      if (sl.baseline - push < sl.foot - 0.05) { slots.splice(q, 1); q-- }
+      else slots[q] = { ...sl, baseline: sl.baseline - push }
     }
-    if (line.baseline < line.low - 0.05) { over = line.from; stop = true }
+    if (line.baseline < line.foot - 0.05) { over = line.from; stop = true }
   }
   // iteration 3: the kept regions the text has passed (a break token each); the text may not run on into a block below
   // a region before its break (strict), or it reads before the formula it follows in the translation

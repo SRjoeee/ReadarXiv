@@ -105,10 +105,20 @@ describe("a line opens by TeX's rule", () => {
     const withRow = L2.blocks2(five as never, [[0, 0, 612, 792]], new Set([`1|${row.slice(1).join()}`]), infoFive as never)
     expect(withRow.map(b => b.rects.length)).toEqual([2, 2])
     expect(withRow.map(b => b.flow)).toEqual([0, 0])
+    // (the room between them is the paragraph's own where nothing kept lies lower than the first block's last line: none
+    // between them, or a script's row inside that line; a row the unit keeps in the gap is stayed clear of)
+    expect(withRow[0]?.through).toBe(false)
+    expect(L2.blocks2(rects as never, [[0, 0, 612, 792]], null, info([10, 11, 12, 13]) as never)[0]?.through).toBe(true)
+    const inside = [1, 90, 487, 100, 494]
+    const fiveIn = [rects[0]!, rects[1]!, inside, rects[2]!, rects[3]!]
+    const infoIn = new Map(fiveIn.map((r, i) => [`${r[0]}|${r.slice(1).join()}`, { baseline: (r[2] ?? 0) + 2, size: 10, exact: true, file: true, j: [10, 11, 12, 13, 14][i], frame: 0 }]))
+    expect(L2.blocks2(fiveIn as never, [[0, 0, 612, 792]], new Set([`1|${inside.slice(1).join()}`]), infoIn as never).map(b => [b.flow, b.through])).toEqual([[0, true], [0, undefined]])
     // another unit's lines between them (an outer list item that goes on after a nested list, in the same column and page)
     expect(flows([10, 11, 20, 21])).toEqual([0, 1])
     // the next line of the file, but in another frame (a column or a page on)
     expect(flows([10, 11, 12, 13], [0, 0, 1, 1])).toEqual([0, 1])
+    // lines with no frame are in none, not in one: two flows
+    expect(flows([10, 11, 12, 13], [undefined, undefined, undefined, undefined] as never)).toEqual([0, 1])
     // lines that are not the file's (v0's own): no flow of TeX's
     const own = new Map(rects.map((r, i) => [`${r[0]}|${r.slice(1).join()}`, { baseline: (r[2] ?? 0) + 2, size: 10, exact: false }]))
     expect(L2.blocks2(rects as never, [[0, 0, 612, 792]], null, own as never).map(b => b.flow)).toEqual([0, 1])
@@ -123,6 +133,30 @@ describe("a line opens by TeX's rule", () => {
     const fit = L2.layoutUnit2(unit(7.5, 6).slice(0, 5) as never, [block(2)] as never, 10, P([1, 0]) as never)
     expect(fit.clipped).toBe(false)
     expect(Math.min(...fit.lines.map(x => x.baseline))).toBeGreaterThanOrEqual(488)
+  })
+  it('pushes the later slots only as far as their pitch under the line set lower: a gap of the original wider than it takes the push in', () => {
+    // one block whose original opened a gap of 18 (a tall line of its own) between 488 and 470: the formula on 500, 6 deep,
+    // opens the second line by 2, to 486; 470 is still 16 under it, more than the pitch: it stays on its baseline
+    const opened = (B: number[]) => ({ ...block(B.length), B, rects: B.map(b => [1, 0, b - 2, 100, b + 8]) })
+    const four = [crop(7.5, 6), space, word(14), space, word(18), space, word(18), space, word(18)]
+    expect(L2.layoutUnit2(four as never, [opened([500, 488, 470, 458])] as never, 10, P([1, 0]) as never).lines.map(x => x.baseline)).toEqual([500, 486, 470, 458])
+    // a gap of 14 takes 2 of a push of 3 (the formula 7 deep): the slots under it move 1, those after them with them (the
+    // last, 450, past the foot by it, dropped and not needed)
+    expect(L2.layoutUnit2([crop(7.5, 7), ...four.slice(1)] as never, [opened([500, 488, 474, 462, 450])] as never, 10, P([1, 0]) as never).lines.map(x => x.baseline)).toEqual([500, 485, 473, 461])
+  })
+  it("sets a line its rule moves past its block's foot into the room of its flow's next block, where nothing kept lies between", () => {
+    // block 0 at 500 and 488, block 1 from 470 (v0 split one paragraph at the 18 TeX opened there): the second line, opened
+    // by 2 to 486, is under block 0's foot but in the paragraph's own room; the third stays on 470. At full size, no state
+    // further (order: none)
+    const B = (from: number, n: number, through?: boolean) => ({ ...block(n), B: Array.from({ length: n }, (_, k) => from - 12 * k), rects: Array.from({ length: n }, (_, k) => [1, 0, from - 12 * k - 2, 100, from - 12 * k + 8]), flow: 0, ...(through === undefined ? {} : { through }) })
+    const three = unit(7.5, 6)
+    const room = L2.layoutUnit2(three as never, [B(500, 2, true), B(470, 3)] as never, 10, P([1, 0], { order: [] }) as never)
+    expect(room.clipped).toBe(false)
+    expect(room.lines.map(x => x.baseline)).toEqual([500, 486, 470])
+    // a line the unit keeps in that gap (no `through`): the opened line stays above its block's foot, and the state fails
+    const kept = L2.layoutUnit2(three as never, [B(500, 2), B(470, 3)] as never, 10, P([1, 0], { order: [] }) as never)
+    expect(kept.clipped).toBe(true)
+    expect(kept.lines.at(-1)?.baseline).toBe(486)
   })
   it("drops the block's slots its lines are moved past the foot of, so that the fit takes its next state, never runs past", () => {
     // three lines in three slots: the third, moved 2 down, is past the block's foot (476): this state does not set it
