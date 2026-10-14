@@ -1,10 +1,10 @@
 {
  "schema": 1,
  "tier": "pixel",
- "made": "2026-10-14T14:32:23.853Z",
+ "made": "2026-10-14T16:19:32.128Z",
  "engine": {
   "root": ".",
-  "commit": "d32cffce11e7fb91e2c88bb87084f47d2564ba43",
+  "commit": "225a17258828a4e0ca8c6309ff9459b2f4b76db6",
   "branch": "exp/quality-math",
   "dirty": false
  },
@@ -17,7 +17,7 @@
   "composite": "darken",
   "layouts": "made",
   "switch": true,
-  "fixtures": "out/layer-gate/fixtures/eb3b8da2464d7dd7",
+  "fixtures": "out/layer-gate/fixtures/396e8a157156d879",
   "records": "out/layer-gate/cut-p10/records",
   "refs": "out/layer-gate/cut-p10/refs",
   "geometry": "out/layer-gate/cut-p10/geometry",
@@ -38,7 +38,7 @@
   },
   "hyphenation": "7804b689a5987c36",
   "removal": "draw",
-  "remover": "0faa213f945e4185"
+  "remover": "8694631bf5a1d7e6"
  },
  "rows": [
   {
@@ -629,8 +629,8 @@
     "unfit": 2,
     "group: a cell unfit": 46
    },
-   "page1Ms": 178,
-   "slowestUnitMs": 22
+   "page1Ms": 181,
+   "slowestUnitMs": 23
   },
   "1512.03385v1-es": {
    "fullSize": 0.373,
@@ -652,8 +652,8 @@
     "unfit": 3,
     "group: a cell unfit": 47
    },
-   "page1Ms": 173,
-   "slowestUnitMs": 23
+   "page1Ms": 184,
+   "slowestUnitMs": 24
   },
   "1512.03385v1-fr": {
    "fullSize": 0.358,
@@ -675,8 +675,8 @@
     "unfit": 1,
     "group: a cell unfit": 1
    },
-   "page1Ms": 175,
-   "slowestUnitMs": 25
+   "page1Ms": 187,
+   "slowestUnitMs": 24
   },
   "1512.03385v1-ja": {
    "fullSize": 0.669,
@@ -699,8 +699,8 @@
     "unfit": 13,
     "group: a cell unfit": 51
    },
-   "page1Ms": 246,
-   "slowestUnitMs": 30
+   "page1Ms": 250,
+   "slowestUnitMs": 33
   },
   "1512.03385v1-ko": {
    "fullSize": 0.886,
@@ -723,8 +723,8 @@
     "unfit": 2,
     "group: a cell unfit": 46
    },
-   "page1Ms": 560,
-   "slowestUnitMs": 28
+   "page1Ms": 561,
+   "slowestUnitMs": 30
   },
   "1512.03385v1-ru": {
    "fullSize": 0.376,
@@ -746,7 +746,7 @@
     "unfit": 9,
     "group: a cell unfit": 53
    },
-   "page1Ms": 126,
+   "page1Ms": 157,
    "slowestUnitMs": 21
   },
   "1512.03385v1-zh": {
@@ -770,8 +770,8 @@
     "unfit": 1,
     "group: a cell unfit": 4
    },
-   "page1Ms": 655,
-   "slowestUnitMs": 27
+   "page1Ms": 596,
+   "slowestUnitMs": 28
   },
   "1706.03762v7-de": {
    "fullSize": 0.669,
@@ -789,8 +789,8 @@
    "bar": 0.03,
    "overBar": false,
    "why": {},
-   "page1Ms": 114,
-   "slowestUnitMs": 16
+   "page1Ms": 102,
+   "slowestUnitMs": 19
   },
   "1706.03762v7-es": {
    "fullSize": 0.629,
@@ -811,8 +811,8 @@
     "unfit": 1,
     "group: a cell unfit": 5
    },
-   "page1Ms": 115,
-   "slowestUnitMs": 19
+   "page1Ms": 102,
+   "slowestUnitMs": 18
   },
   "1706.03762v7-fr": {
    "fullSize": 0.635,
@@ -830,8 +830,8 @@
    "bar": 0.03,
    "overBar": false,
    "why": {},
-   "page1Ms": 109,
-   "slowestUnitMs": 17
+   "page1Ms": 157,
+   "slowestUnitMs": 18
   },
   "1706.03762v7-ja": {
    "fullSize": 0.819,
@@ -854,8 +854,8 @@
     "unfit": 3,
     "group: a cell unfit": 7
    },
-   "page1Ms": 231,
-   "slowestUnitMs": 23
+   "page1Ms": 271,
+   "slowestUnitMs": 21
   },
   "1706.03762v7-ko": {
    "fullSize": 0.881,
@@ -876,8 +876,8 @@
     "author": 2,
     "unanchored": 1
    },
-   "page1Ms": 573,
-   "slowestUnitMs": 19
+   "page1Ms": 504,
+   "slowestUnitMs": 20
   },
   "1706.03762v7-ru": {
    "fullSize": 0.626,
@@ -898,8 +898,8 @@
     "unfit": 4,
     "group: a cell unfit": 12
    },
-   "page1Ms": 142,
-   "slowestUnitMs": 20
+   "page1Ms": 106,
+   "slowestUnitMs": 17
   },
   "1706.03762v7-zh": {
    "fullSize": 0.896,
@@ -922,8 +922,8 @@
     "unfit": 3,
     "group: a cell unfit": 7
    },
-   "page1Ms": 543,
-   "slowestUnitMs": 22
+   "page1Ms": 780,
+   "slowestUnitMs": 20
   },
   "1810.04805v2-de": {
    "fullSize": 0.447,
@@ -945,7 +945,7 @@
     "unfit": 2,
     "group: a cell unfit": 4
    },
-   "page1Ms": 122,
+   "page1Ms": 135,
    "slowestUnitMs": 24
   },
   "1810.04805v2-es": {
@@ -966,7 +966,7 @@
    "why": {
     "unanchored": 7
    },
-   "page1Ms": 160,
+   "page1Ms": 141,
    "slowestUnitMs": 25
   },
   "1810.04805v2-fr": {
@@ -989,8 +989,8 @@
     "unfit": 2,
     "group: a cell unfit": 7
    },
-   "page1Ms": 163,
-   "slowestUnitMs": 26
+   "page1Ms": 130,
+   "slowestUnitMs": 25
   },
   "1810.04805v2-ja": {
    "fullSize": 0.698,
@@ -1014,7 +1014,7 @@
     "unfit": 6,
     "group: a cell unfit": 9
    },
-   "page1Ms": 215,
+   "page1Ms": 204,
    "slowestUnitMs": 31
   },
   "1810.04805v2-ko": {
@@ -1036,8 +1036,8 @@
     "author": 1,
     "unanchored": 8
    },
-   "page1Ms": 612,
-   "slowestUnitMs": 28
+   "page1Ms": 506,
+   "slowestUnitMs": 27
   },
   "1810.04805v2-ru": {
    "fullSize": 0.374,
@@ -1057,8 +1057,8 @@
    "why": {
     "unanchored": 7
    },
-   "page1Ms": 159,
-   "slowestUnitMs": 23
+   "page1Ms": 263,
+   "slowestUnitMs": 24
   },
   "1810.04805v2-zh": {
    "fullSize": 0.923,
@@ -1081,8 +1081,8 @@
     "unfit": 3,
     "group: a cell unfit": 4
    },
-   "page1Ms": 911,
-   "slowestUnitMs": 28
+   "page1Ms": 749,
+   "slowestUnitMs": 24
   },
   "2307.16209v1-zh": {
    "fullSize": 1,
@@ -1105,8 +1105,8 @@
     "served": 5,
     "unfit": 1
    },
-   "page1Ms": 610,
-   "slowestUnitMs": 324
+   "page1Ms": 624,
+   "slowestUnitMs": 320
   },
   "2608.04322v1-de": {
    "fullSize": 0.442,
@@ -1128,7 +1128,7 @@
     "unfit": 4,
     "group: a cell unfit": 13
    },
-   "page1Ms": 363,
+   "page1Ms": 229,
    "slowestUnitMs": 25
   },
   "2608.04322v1-es": {
@@ -1152,7 +1152,7 @@
     "group: a cell unfit": 11
    },
    "page1Ms": 177,
-   "slowestUnitMs": 30
+   "slowestUnitMs": 27
   },
   "2608.04322v1-fr": {
    "fullSize": 0.434,
@@ -1174,8 +1174,8 @@
     "unfit": 2,
     "group: a cell unfit": 5
    },
-   "page1Ms": 195,
-   "slowestUnitMs": 30
+   "page1Ms": 258,
+   "slowestUnitMs": 28
   },
   "2608.04322v1-ja": {
    "fullSize": 0.875,
@@ -1198,7 +1198,7 @@
     "unfit": 1,
     "group: a cell unfit": 2
    },
-   "page1Ms": 314,
+   "page1Ms": 350,
    "slowestUnitMs": 31
   },
   "2608.04322v1-ko": {
@@ -1220,7 +1220,7 @@
     "author": 1,
     "unanchored": 1
    },
-   "page1Ms": 686,
+   "page1Ms": 716,
    "slowestUnitMs": 27
   },
   "2608.04322v1-ru": {
@@ -1243,8 +1243,8 @@
     "unfit": 5,
     "group: a cell unfit": 16
    },
-   "page1Ms": 200,
-   "slowestUnitMs": 23
+   "page1Ms": 189,
+   "slowestUnitMs": 25
   },
   "2608.04322v1-zh": {
    "fullSize": 1,
@@ -1265,8 +1265,8 @@
     "author": 1,
     "unanchored": 1
    },
-   "page1Ms": 680,
-   "slowestUnitMs": 27
+   "page1Ms": 669,
+   "slowestUnitMs": 26
   }
  }
 }
