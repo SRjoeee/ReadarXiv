@@ -1,10 +1,10 @@
 {
  "schema": 1,
  "tier": "pixel",
- "made": "2026-10-13T07:10:11.194Z",
+ "made": "2026-10-14T13:40:52.373Z",
  "engine": {
   "root": ".",
-  "commit": "579580e236c89c9e7637b46ac17e49fdf4e797fe",
+  "commit": "3396f96fc3fff36f92a58b1eceb393c227365c71",
   "branch": "exp/quality-math",
   "dirty": false
  },
@@ -17,15 +17,15 @@
   "composite": "darken",
   "layouts": "made",
   "switch": true,
-  "fixtures": "out/layer-gate/fixtures/68c6c1c0bd3d4ddf",
+  "fixtures": "out/layer-gate/fixtures/dd452d1c630ec5c0",
   "records": "out/layer-gate/cut-p10/records",
   "refs": "out/layer-gate/cut-p10/refs",
-  "geometry": "lab/pdf/out/layer-gate/cut-p10/geometry",
+  "geometry": "out/layer-gate/cut-p10/geometry",
   "chromium": "153.0.8010.12",
   "pdfjs": "6.3.289",
   "fonts": "7aa6ebe2c491a740",
   "checker": "3497d4d5c8282447",
-  "measures": "70f5196ee4864c7d",
+  "measures": "216bccc695727412",
   "kind": "proto",
   "protoUnits": "fixture",
   "place": "the gate's",
@@ -38,7 +38,7 @@
   },
   "hyphenation": "7804b689a5987c36",
   "removal": "draw",
-  "remover": "d7d37c866552777b"
+  "remover": "0faa213f945e4185"
  },
  "rows": [
   {
@@ -629,8 +629,8 @@
     "unfit": 2,
     "group: a cell unfit": 46
    },
-   "page1Ms": 180,
-   "slowestUnitMs": 22
+   "page1Ms": 174,
+   "slowestUnitMs": 23
   },
   "1512.03385v1-es": {
    "fullSize": 0.373,
@@ -652,7 +652,7 @@
     "unfit": 3,
     "group: a cell unfit": 47
    },
-   "page1Ms": 187,
+   "page1Ms": 170,
    "slowestUnitMs": 23
   },
   "1512.03385v1-fr": {
@@ -675,8 +675,8 @@
     "unfit": 1,
     "group: a cell unfit": 1
    },
-   "page1Ms": 182,
-   "slowestUnitMs": 23
+   "page1Ms": 179,
+   "slowestUnitMs": 25
   },
   "1512.03385v1-ja": {
    "fullSize": 0.669,
@@ -699,8 +699,8 @@
     "unfit": 13,
     "group: a cell unfit": 51
    },
-   "page1Ms": 295,
-   "slowestUnitMs": 31
+   "page1Ms": 339,
+   "slowestUnitMs": 32
   },
   "1512.03385v1-ko": {
    "fullSize": 0.886,
@@ -723,8 +723,8 @@
     "unfit": 2,
     "group: a cell unfit": 46
    },
-   "page1Ms": 583,
-   "slowestUnitMs": 30
+   "page1Ms": 695,
+   "slowestUnitMs": 28
   },
   "1512.03385v1-ru": {
    "fullSize": 0.376,
@@ -746,8 +746,8 @@
     "unfit": 9,
     "group: a cell unfit": 53
    },
-   "page1Ms": 290,
-   "slowestUnitMs": 22
+   "page1Ms": 252,
+   "slowestUnitMs": 23
   },
   "1512.03385v1-zh": {
    "fullSize": 0.916,
@@ -770,8 +770,8 @@
     "unfit": 1,
     "group: a cell unfit": 4
    },
-   "page1Ms": 701,
-   "slowestUnitMs": 28
+   "page1Ms": 1543,
+   "slowestUnitMs": 31
   },
   "1706.03762v7-de": {
    "fullSize": 0.669,
@@ -789,11 +789,11 @@
    "bar": 0.03,
    "overBar": false,
    "why": {},
-   "page1Ms": 166,
-   "slowestUnitMs": 16
+   "page1Ms": 157,
+   "slowestUnitMs": 18
   },
   "1706.03762v7-es": {
-   "fullSize": 0.614,
+   "fullSize": 0.629,
    "medianScale": 1,
    "style": [
     132,
@@ -811,8 +811,8 @@
     "unfit": 1,
     "group: a cell unfit": 5
    },
-   "page1Ms": 135,
-   "slowestUnitMs": 17
+   "page1Ms": 144,
+   "slowestUnitMs": 20
   },
   "1706.03762v7-fr": {
    "fullSize": 0.635,
@@ -830,11 +830,11 @@
    "bar": 0.03,
    "overBar": false,
    "why": {},
-   "page1Ms": 109,
-   "slowestUnitMs": 18
+   "page1Ms": 212,
+   "slowestUnitMs": 19
   },
   "1706.03762v7-ja": {
-   "fullSize": 0.806,
+   "fullSize": 0.819,
    "medianScale": 1,
    "style": [
     144,
@@ -854,11 +854,11 @@
     "unfit": 3,
     "group: a cell unfit": 7
    },
-   "page1Ms": 566,
-   "slowestUnitMs": 22
+   "page1Ms": 396,
+   "slowestUnitMs": 21
   },
   "1706.03762v7-ko": {
-   "fullSize": 0.854,
+   "fullSize": 0.881,
    "medianScale": 1,
    "style": [
     151,
@@ -876,8 +876,8 @@
     "author": 2,
     "unanchored": 1
    },
-   "page1Ms": 541,
-   "slowestUnitMs": 18
+   "page1Ms": 3515,
+   "slowestUnitMs": 22
   },
   "1706.03762v7-ru": {
    "fullSize": 0.626,
@@ -898,8 +898,8 @@
     "unfit": 4,
     "group: a cell unfit": 12
    },
-   "page1Ms": 117,
-   "slowestUnitMs": 17
+   "page1Ms": 180,
+   "slowestUnitMs": 20
   },
   "1706.03762v7-zh": {
    "fullSize": 0.896,
@@ -922,8 +922,8 @@
     "unfit": 3,
     "group: a cell unfit": 7
    },
-   "page1Ms": 576,
-   "slowestUnitMs": 18
+   "page1Ms": 3740,
+   "slowestUnitMs": 21
   },
   "1810.04805v2-de": {
    "fullSize": 0.447,
@@ -945,8 +945,8 @@
     "unfit": 2,
     "group: a cell unfit": 4
    },
-   "page1Ms": 143,
-   "slowestUnitMs": 23
+   "page1Ms": 142,
+   "slowestUnitMs": 25
   },
   "1810.04805v2-es": {
    "fullSize": 0.388,
@@ -966,8 +966,8 @@
    "why": {
     "unanchored": 7
    },
-   "page1Ms": 129,
-   "slowestUnitMs": 23
+   "page1Ms": 128,
+   "slowestUnitMs": 27
   },
   "1810.04805v2-fr": {
    "fullSize": 0.369,
@@ -989,8 +989,8 @@
     "unfit": 2,
     "group: a cell unfit": 7
    },
-   "page1Ms": 168,
-   "slowestUnitMs": 29
+   "page1Ms": 120,
+   "slowestUnitMs": 25
   },
   "1810.04805v2-ja": {
    "fullSize": 0.698,
@@ -1014,11 +1014,11 @@
     "unfit": 6,
     "group: a cell unfit": 9
    },
-   "page1Ms": 219,
+   "page1Ms": 210,
    "slowestUnitMs": 29
   },
   "1810.04805v2-ko": {
-   "fullSize": 0.849,
+   "fullSize": 0.843,
    "medianScale": 1,
    "style": [
     172,
@@ -1036,8 +1036,8 @@
     "author": 1,
     "unanchored": 8
    },
-   "page1Ms": 515,
-   "slowestUnitMs": 27
+   "page1Ms": 504,
+   "slowestUnitMs": 30
   },
   "1810.04805v2-ru": {
    "fullSize": 0.374,
@@ -1057,8 +1057,8 @@
    "why": {
     "unanchored": 7
    },
-   "page1Ms": 127,
-   "slowestUnitMs": 25
+   "page1Ms": 131,
+   "slowestUnitMs": 23
   },
   "1810.04805v2-zh": {
    "fullSize": 0.923,
@@ -1081,8 +1081,8 @@
     "unfit": 3,
     "group: a cell unfit": 4
    },
-   "page1Ms": 522,
-   "slowestUnitMs": 25
+   "page1Ms": 615,
+   "slowestUnitMs": 24
   },
   "2307.16209v1-zh": {
    "fullSize": 1,
@@ -1105,8 +1105,8 @@
     "served": 5,
     "unfit": 1
    },
-   "page1Ms": 633,
-   "slowestUnitMs": 279
+   "page1Ms": 622,
+   "slowestUnitMs": 289
   },
   "2608.04322v1-de": {
    "fullSize": 0.442,
@@ -1128,8 +1128,8 @@
     "unfit": 4,
     "group: a cell unfit": 13
    },
-   "page1Ms": 172,
-   "slowestUnitMs": 23
+   "page1Ms": 266,
+   "slowestUnitMs": 25
   },
   "2608.04322v1-es": {
    "fullSize": 0.509,
@@ -1151,8 +1151,8 @@
     "unfit": 5,
     "group: a cell unfit": 11
    },
-   "page1Ms": 170,
-   "slowestUnitMs": 27
+   "page1Ms": 184,
+   "slowestUnitMs": 29
   },
   "2608.04322v1-fr": {
    "fullSize": 0.434,
@@ -1174,8 +1174,8 @@
     "unfit": 2,
     "group: a cell unfit": 5
    },
-   "page1Ms": 160,
-   "slowestUnitMs": 26
+   "page1Ms": 207,
+   "slowestUnitMs": 31
   },
   "2608.04322v1-ja": {
    "fullSize": 0.875,
@@ -1198,7 +1198,7 @@
     "unfit": 1,
     "group: a cell unfit": 2
    },
-   "page1Ms": 244,
+   "page1Ms": 310,
    "slowestUnitMs": 29
   },
   "2608.04322v1-ko": {
@@ -1220,8 +1220,8 @@
     "author": 1,
     "unanchored": 1
    },
-   "page1Ms": 676,
-   "slowestUnitMs": 26
+   "page1Ms": 594,
+   "slowestUnitMs": 30
   },
   "2608.04322v1-ru": {
    "fullSize": 0.5,
@@ -1265,7 +1265,7 @@
     "author": 1,
     "unanchored": 1
    },
-   "page1Ms": 577,
+   "page1Ms": 537,
    "slowestUnitMs": 27
   }
  }
