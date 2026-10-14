@@ -507,11 +507,12 @@ describe('LAYOUT_TEX', () => {
     const prefilter = [...LAYOUT_TEX.matchAll(/\\str_if_in:NnT#1\{\\([A-Za-z@]+)\}\{\\bool_gset_true:N\\g__axt_unmark_bool\}/g)].map(m => m[1])
     expect(alternation).toEqual([...UNMARK_CS])
     expect(prefilter).toEqual([...UNMARK_CS])
-    // the escape character is the backslash while the names are looked for, in a group the regex runs outside of (its
-    // assignment stays where \axt@unmark was called), and the regex runs only if the flag was set
+    // a list the memory holds is set to what the regex made of it; else the escape character is the backslash while the
+    // names are looked for, in a group the regex runs outside of (its assignment stays where \axt@unmark was called), and
+    // the regex runs only if the flag was set, its list and result kept in the memory
     const def = LAYOUT_TEX.slice(LAYOUT_TEX.indexOf('\\cs_new_protected:Npn\\axt@unmark#1'), LAYOUT_TEX.indexOf('\\ExplSyntaxOff', LAYOUT_TEX.indexOf('\\cs_new_protected:Npn\\axt@unmark#1')))
-    expect(def.startsWith('\\cs_new_protected:Npn\\axt@unmark#1{\\group_begin:\\int_set:Nn\\tex_escapechar:D{92}\\bool_gset_false:N\\g__axt_unmark_bool')).toBe(true)
-    expect(def.endsWith('\\group_end:\\bool_if:NT\\g__axt_unmark_bool{\\regex_replace_all:NnN\\c__axt_marks_regex{}#1}}')).toBe(true)
+    expect(def.startsWith('\\cs_new_protected:Npn\\axt@unmark#1{\\tl_if_eq:NNTF#1\\g__axt_unmark_in_tl{\\tl_set_eq:NN#1\\g__axt_unmark_out_tl}{\\group_begin:\\int_set:Nn\\tex_escapechar:D{92}\\bool_gset_false:N\\g__axt_unmark_bool')).toBe(true)
+    expect(def.endsWith('\\group_end:\\bool_if:NT\\g__axt_unmark_bool{\\tl_gset_eq:NN\\g__axt_unmark_in_tl#1\\regex_replace_all:NnN\\c__axt_marks_regex{}#1\\tl_gset_eq:NN\\g__axt_unmark_out_tl#1}}}')).toBe(true)
     expect(def.split('\\regex_replace_all').length).toBe(2)
     // every name is a mark LAYOUT_TEX or the names define, and the three the placeholders and headings carry are the ones the text holds
     for (const name of UNMARK_CS) expect(`${LAYOUT_TEX}`, name).toContain(`\\def\\${name}{`)

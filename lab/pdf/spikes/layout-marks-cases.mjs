@@ -223,8 +223,8 @@ queue('files', filesSrc, { passes: 3 })
 // titlesec sets nameref's title itself, past gettitlestring (2608.13505)
 // \axt@unmark (marks.mjs UNMARK_TEX): a heading and a caption each with a brace group between two pieces and a brace in
 // a formula, \nameref'd; a match of the regex would end at its own mark's argument, and a hit of the prefilter is all it
-// skips (a title with no mark is not run through the regex)
-const unmarkSrc = doc('\\usepackage{amsmath}\\usepackage{hyperref}', `\\tableofcontents\\listoffigures\\listoftables\n\\section{One $\\theta$ two \\cite{a} {z} three $i=\\{1,2,3\\}$ five}\\label{sec:b}\\section{Plain heading}\\label{sec:p}\nRead: [\\nameref{sec:b}] [\\nameref{sec:p}] [\\nameref{fig:b}].\n${prose(6, () => '')}\n\\begin{figure}[h]\\centering\\rule{1cm}{1cm}\\caption{Cap ($\\textbf{r},\\boldsymbol{\\theta}$) end {g} and for each $i=\\{1,2,3\\}$ x \\cite{a}.}\\label{fig:b}\\end{figure}\n${BIB}`)
+// skips (a title with no mark is not run through the regex, and a title the regex has just run on is not run again: several labels under one heading)
+const unmarkSrc = doc('\\usepackage{amsmath}\\usepackage{hyperref}', `\\tableofcontents\\listoffigures\\listoftables\n\\section{One $\\theta$ two \\cite{a} {z} three $i=\\{1,2,3\\}$ five}\\label{sec:b}\\label{sec:b2}\\label{sec:b3}\\section{Plain heading}\\label{sec:p}\nRead: [\\nameref{sec:b}] [\\nameref{sec:b2}] [\\nameref{sec:b3}] [\\nameref{sec:p}] [\\nameref{fig:b}].\n${prose(6, () => '')}\n\\begin{figure}[h]\\centering\\rule{1cm}{1cm}\\caption{Cap ($\\textbf{r},\\boldsymbol{\\theta}$) end {g} and for each $i=\\{1,2,3\\}$ x \\cite{a}.}\\label{fig:b}\\end{figure}\n${BIB}`)
 queue('unmark-files', unmarkSrc, { passes: 3 })
 queue('files-titlesec', filesSrc.replace('\\usepackage{hyperref}', '\\usepackage{titlesec}\\usepackage{hyperref}'), { passes: 3 })
 // the cells of a scaled table, under pdfTeX (failed) and under XeTeX (printed)

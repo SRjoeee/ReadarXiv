@@ -611,19 +611,25 @@ export const NAMES_TEX = [
  *  alternation and the prefilter from it, so the two cannot drift */
 export const UNMARK_CS = ['axtpma', 'axtpm', 'axthmark', 'axtnma', 'axtnmb']
 
-/** \axt@unmark<tl>: the regex that takes a mark and its argument out of a token list, guarded by a prefilter. The regex
- *  costs ~3 ms a run over the list's tokens whether or not the list holds a mark, and the nameref and gettitlestring hooks
- *  run it ~450 times a pass on the thesis (M1: 4.36 s of its layout compile). The prefilter looks for each name in the list
- *  as text: a control sequence prints as `\name` and a space (the escape character set to `\` for it, a paper's own change
- *  of \escapechar would hide it), a delimited match in microseconds; the regex runs only on a hit. A miss holds none of
- *  UNMARK_CS, which the regex's `\c{...}` alternation could not have matched, so the result is the regex's. The regex
- *  stays as it was: `\c[^BE].*` is any run of tokens but a brace, so a match ends at its own argument's close and never
- *  reaches across a group (unmark-finding); every mark name is brace-free (MARK_NAME) */
+/** \axt@unmark<tl>: the regex that takes a mark and its argument out of a token list, behind a memory and a prefilter.
+ *  The regex costs ~4 ms a run over a list that holds a mark (~50 µs a token) and ~3 ms over one that holds none, and the
+ *  nameref and gettitlestring hooks call it ~450 times a pass on the thesis (M1: 4.36 s of its layout compile).
+ *  - The prefilter looks for each name in the list as text: a control sequence prints as `\name` and a space (the escape
+ *    character set to `\` for it, so that a paper's own change of \escapechar hides nothing), a delimited match in
+ *    microseconds; the regex runs only on a hit. A miss holds none of UNMARK_CS, which the regex's `\c{...}` alternation
+ *    could not have matched, so the result is the regex's.
+ *  - The memory holds the last list the regex ran on and what it made of it, and a list the same macro (\tl_if_eq:NN, its
+ *    \ifx) is set to that result. The regex is a function of the list alone, so the result is the regex's. The hooks meet
+ *    one list again and again: nameref's label hook cleans the title of the heading a label sits under on every label
+ *    (the assignment is local to the label's group), a caption's title goes through the title hook twice in a row.
+ *    The thesis: 276 runs a pass on 61 distinct lists, 21,669 tokens read for 7,936 distinct.
+ *  The regex stays as it was: `\c[^BE].*` is any run of tokens but a brace, so a match ends at its own argument's close
+ *  and never reaches across a group (unmark-finding); every mark name is brace-free (MARK_NAME) */
 const UNMARK_TEX = [
   '\\ifdefined\\ExplSyntaxOn\\ExplSyntaxOn',
   `\\regex_const:Nn\\c__axt_marks_regex{\\c{${UNMARK_CS.join('|')}}\\cB.\\c[^BE].*\\cE.}`,
-  '\\bool_new:N\\g__axt_unmark_bool',
-  `\\cs_new_protected:Npn\\axt@unmark#1{\\group_begin:\\int_set:Nn\\tex_escapechar:D{92}\\bool_gset_false:N\\g__axt_unmark_bool${UNMARK_CS.map(n => `\\str_if_in:NnT#1{\\${n}}{\\bool_gset_true:N\\g__axt_unmark_bool}`).join('')}\\group_end:\\bool_if:NT\\g__axt_unmark_bool{\\regex_replace_all:NnN\\c__axt_marks_regex{}#1}}`,
+  '\\bool_new:N\\g__axt_unmark_bool\\tl_new:N\\g__axt_unmark_in_tl\\tl_new:N\\g__axt_unmark_out_tl',
+  `\\cs_new_protected:Npn\\axt@unmark#1{\\tl_if_eq:NNTF#1\\g__axt_unmark_in_tl{\\tl_set_eq:NN#1\\g__axt_unmark_out_tl}{\\group_begin:\\int_set:Nn\\tex_escapechar:D{92}\\bool_gset_false:N\\g__axt_unmark_bool${UNMARK_CS.map(n => `\\str_if_in:NnT#1{\\${n}}{\\bool_gset_true:N\\g__axt_unmark_bool}`).join('')}\\group_end:\\bool_if:NT\\g__axt_unmark_bool{\\tl_gset_eq:NN\\g__axt_unmark_in_tl#1\\regex_replace_all:NnN\\c__axt_marks_regex{}#1\\tl_gset_eq:NN\\g__axt_unmark_out_tl#1}}}`,
   '\\ExplSyntaxOff\\fi',
 ].join('')
 
