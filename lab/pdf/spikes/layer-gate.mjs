@@ -404,7 +404,7 @@ const MEMORY_MARK = `--axt-gate-memory=${process.pid}-${Date.now()}`
 const browser = await chromium.launch(MEMORY !== null ? { args: ['--js-flags=--expose-gc', '--enable-precise-memory-info', MEMORY_MARK] } : undefined)
 const inputs = {
   tier: TIER, pages: PAGES ? `the first ${PAGES}` : `the first ${PAGES_OF} of each output, every page of ${[...ALL_PAGES].join(', ')}`, scale: 2.5, inkScale: 2, inkMin: 4, composite: COMPOSITE,
-  layouts: LAYOUTS, ...(LAYOUTS === 'made' ? { switch: SWITCH } : {}), fixtures: FIXTURES === REFS ? 'data/layer-fixtures' : shownPath(FIXTURES, ROOT), ...(RECORDS ? { records: shownPath(RECORDS, ROOT) } : {}), ...(process.env.LAYER_REFS ? { refs: shownPath(REFS, ROOT) } : {}), ...(process.env.LAYER_GEOMETRY ? { geometry: shownPath(PROTO_GEOMETRY, ROOT) } : {}), chromium: browser.version(),
+  layouts: LAYOUTS, ...(LAYOUTS === 'made' ? { switch: SWITCH } : {}), fixtures: FIXTURES === REFS ? 'data/layer-fixtures' : shownPath(FIXTURES, ROOT), ...(RECORDS ? { records: shownPath(RECORDS, ROOT) } : {}), ...(process.env.LAYER_REFS ? { refs: shownPath(REFS, ROOT) } : {}), ...(process.env.LAYER_GEOMETRY ? { geometry: shownPath(resolve(PROTO_GEOMETRY), ROOT) } : {}), chromium: browser.version(),
   pdfjs: readJson(join(PDFJS, 'package.json')).version, fonts: fontsDigest.slice(0, 16), checker: fileSha(CHECKER).slice(0, 16),
   // the instrument: the measures, their arithmetic, and the page that draws and accounts (lost ink's own glyphs)
   measures: sha256(['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => readFileSync(join(GATE, f))).join('\n')).slice(0, 16),

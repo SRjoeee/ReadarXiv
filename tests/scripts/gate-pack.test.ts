@@ -2,8 +2,9 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { entriesOf, fontFiles, listingDigest, makePack, objectsOf, objectUrl, outputsOf, packJsonOf, pipelineOf, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
+import { LAYOUT, LAYOUT_SCHEMA } from '../../src/pdf-reader/engine/layout/file.mjs'
 import { signV4 } from '../../scripts/r2-read.mjs'
+import { entriesOf, fontFiles, inputsOfRecord, layoutOfEngine, layoutVersionOf, listingDigest, makePack, objectsOf, objectUrl, outputsOf, PACK_SCHEMA, packJsonOf, pipelineOf, RECORD_INPUTS, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
 
 // The rules gate's fixture pack (lab/pdf/spikes/gate-pack.mjs, Task R6): made the same on every make, restored by digest
 // from a private bucket, and checked before the gate reads it. The inputs here are small synthetic files.
@@ -14,6 +15,9 @@ const TOKEN = 'cf-token-that-must-never-be-printed'
 const KEY_ID = '0123456789abcdef0123456789abcdef'
 const SECRET = sha256(TOKEN)
 const VERIFY_URL = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/tokens/verify`
+/** the layout files' version of the synthetic fixtures */
+const LAYOUT_V = { schema: 2, version: '4' }
+const layoutText = (name: string, schema: unknown = LAYOUT_V.schema, layout: unknown = LAYOUT_V.version) => JSON.stringify({ schema, layout, name })
 const NOW = new Date('2026-10-13T08:30:15.123Z')
 const tmp = () => mkdtempSync(join(tmpdir(), 'gate-pack-test-'))
 const put = (file: string, content: string | Uint8Array) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content) }
@@ -27,7 +31,7 @@ function inputs() {
   const o = { fixtures: join(root, 'fixtures'), records: join(root, 'records'), refs: join(root, 'refs'), geometry: join(root, 'geometry'), fontsDir: join(root, 'fonts'), texmf: join(root, 'texmf') }
   for (const [name, pdf] of [['0001.00001v1-zh', 'pdf-one'], ['0001.00001v1-de', 'pdf-one'], ['0002.00002v1-zh', 'pdf-two']] as const) {
     put(join(o.fixtures, name, 'arxiv.pdf'), pdf)
-    put(join(o.fixtures, name, 'layout.json'), `layout of ${name}`)
+    put(join(o.fixtures, name, 'layout.json'), layoutText(name))
     put(join(o.records, name, 'units.json'), JSON.stringify({ pipeline: '10', units: [] }))
     put(join(o.records, name, 'record.json'), `record of ${name}`)
     put(join(o.refs, name, 'ref.json'), `ref of ${name}`)
@@ -51,43 +55,52 @@ describe('the pack is the same on every make', () => {
     expect(paths).toContain('texmf/tex/generic/hyphen/hyphen.tex')
     expect(paths).toContain('data/fonts/A.otf')
     // the translations are the records' files, in the fixtures' folder where the gate reads them
-    expect(readFileSync(join(i.fixtures, '0001.00001v1-zh', 'layout.json'), 'utf8')).toBe('layout of 0001.00001v1-zh')
-    const a = makePack({ entries, out: join(i.root, 'out-a'), pipeline: '10', made: '2026-10-08T01:00:00.000Z' })
-    const b = makePack({ entries: [...entries].reverse(), out: join(i.root, 'out-b'), pipeline: '10', made: '2026-10-09T09:00:00.000Z' })
+    expect(readFileSync(join(i.fixtures, '0001.00001v1-zh', 'layout.json'), 'utf8')).toBe(layoutText('0001.00001v1-zh'))
+    const a = makePack({ entries, out: join(i.root, 'out-a'), pipeline: '10', layout: LAYOUT_V, made: '2026-10-08T01:00:00.000Z' })
+    const b = makePack({ entries: [...entries].reverse(), out: join(i.root, 'out-b'), pipeline: '10', layout: LAYOUT_V, made: '2026-10-09T09:00:00.000Z' })
     expect(a.digest).toBe(b.digest)
     expect(a.files).toEqual(b.files)
     expect(a.digest).toBe(listingDigest(a.files))
     expect(a.files.map(f => f.path)).toEqual(paths)
     expect(walk(join(i.root, 'out-a'))).toEqual([...paths, 'manifest.json'].sort())
     for (const f of a.files) expect(statSync(join(i.root, 'out-a', f.path)).mtimeMs).toBe(0)
-    expect(a.files.find(f => f.path === 'fixtures/0002.00002v1-zh/layout.json')).toMatchObject({ bytes: 'layout of 0002.00002v1-zh'.length, sha256: sha256('layout of 0002.00002v1-zh') })
+    expect(a.files.find(f => f.path === 'fixtures/0002.00002v1-zh/layout.json')).toMatchObject({ bytes: layoutText('0002.00002v1-zh').length, sha256: sha256(layoutText('0002.00002v1-zh')) })
   })
 
   it('makes it again over an earlier pack, and another digest when one byte differs', () => {
     const i = inputs()
     const out = join(i.root, 'out')
-    const first = makePack({ entries: entriesOf(i), out, pipeline: '10' })
-    expect(makePack({ entries: entriesOf(i), out, pipeline: '10' }).digest).toBe(first.digest)
+    const first = makePack({ entries: entriesOf(i), out, pipeline: '10', layout: LAYOUT_V })
+    expect(makePack({ entries: entriesOf(i), out, pipeline: '10', layout: LAYOUT_V }).digest).toBe(first.digest)
     put(join(i.refs, '0001.00001v1-zh', 'ref.json'), 'another reference')
-    expect(makePack({ entries: entriesOf(i), out, pipeline: '10' }).digest).not.toBe(first.digest)
+    expect(makePack({ entries: entriesOf(i), out, pipeline: '10', layout: LAYOUT_V }).digest).not.toBe(first.digest)
   })
 
   it('refuses a pack with an input missing, naming it, and a directory that holds something else', () => {
     const i = inputs()
     put(join(i.root, 'elsewhere', 'precious.txt'), 'keep')
-    expect(() => makePack({ entries: entriesOf(i), out: join(i.root, 'elsewhere'), pipeline: '10' })).toThrow(/no pack's/)
+    expect(() => makePack({ entries: entriesOf(i), out: join(i.root, 'elsewhere'), pipeline: '10', layout: LAYOUT_V })).toThrow(/no pack's/)
     expect(readFileSync(join(i.root, 'elsewhere', 'precious.txt'), 'utf8')).toBe('keep')
     // (a browser extension's build has a manifest.json too, and is no pack to clear)
     put(join(i.root, 'extension', 'manifest.json'), '{"manifest_version":3}')
-    expect(() => makePack({ entries: entriesOf(i), out: join(i.root, 'extension'), pipeline: '10' })).toThrow(/no pack's/)
+    expect(() => makePack({ entries: entriesOf(i), out: join(i.root, 'extension'), pipeline: '10', layout: LAYOUT_V })).toThrow(/no pack's/)
     expect(readFileSync(join(i.root, 'extension', 'manifest.json'), 'utf8')).toBe('{"manifest_version":3}')
     expect(() => entriesOf({ ...i, fonts: ['A.otf', 'Missing.otf'] })).toThrow(/Missing\.otf/)
     expect(() => outputsOf(i.records)).not.toThrow()
   })
 
+  it('clears the pack of the schema before this one, which a schema bump must not leave in the way', () => {
+    const i = inputs()
+    const out = join(i.root, 'out')
+    put(join(out, 'fixtures', 'stale', 'layout.json'), 'old')
+    put(join(out, 'manifest.json'), JSON.stringify({ schema: 1, pipeline: '10', made: 'x', digest: listingDigest([{ path: 'fixtures/stale/layout.json', sha256: sha256('old'), bytes: 3 }]), files: [{ path: 'fixtures/stale/layout.json', sha256: sha256('old'), bytes: 3 }] }))
+    makePack({ entries: entriesOf(i), out, pipeline: '10', layout: LAYOUT_V })
+    expect(walk(out).some(p => p.includes('stale'))).toBe(false)
+  })
+
   it('keeps one object for the files that are the same bytes, and reports the pack by kind in counts and sizes alone', () => {
     const i = inputs()
-    const manifest = makePack({ entries: entriesOf(i), out: join(i.root, 'out'), pipeline: '10' })
+    const manifest = makePack({ entries: entriesOf(i), out: join(i.root, 'out'), pipeline: '10', layout: LAYOUT_V })
     const pack = packJsonOf(manifest)
     const objects = objectsOf(pack)
     expect(objects.length).toBe(new Set(manifest.files.map(f => f.sha256)).size)
@@ -132,7 +145,7 @@ describe('the pack\'s outputs are the frozen references', () => {
   it('holds the outputs that have a reference, and none that was merely made', () => {
     const i = inputs()
     put(join(i.fixtures, '0003.00003v1-zh', 'arxiv.pdf'), 'pdf-three')
-    put(join(i.fixtures, '0003.00003v1-zh', 'layout.json'), 'layout of 0003.00003v1-zh')
+    put(join(i.fixtures, '0003.00003v1-zh', 'layout.json'), layoutText('0003.00003v1-zh'))
     expect(outputsOf(i.refs)).toEqual(['0001.00001v1-de', '0001.00001v1-zh', '0002.00002v1-zh'])
     expect(entriesOf(i).some(e => e.path.includes('0003.00003v1'))).toBe(false)
     expect(() => entriesOf({ ...i, refs: i.records })).toThrow(/no frozen reference/)
@@ -161,7 +174,7 @@ describe('the pack is restored by digest from the bucket', () => {
   /** a pack made from the synthetic inputs and a fake bucket holding its objects (and Cloudflare's verify endpoint), with every request recorded */
   function bucket() {
     const i = inputs()
-    const manifest = makePack({ entries: entriesOf(i), out: join(i.root, 'made'), pipeline: '10' })
+    const manifest = makePack({ entries: entriesOf(i), out: join(i.root, 'made'), pipeline: '10', layout: LAYOUT_V })
     const pack = packJsonOf(manifest)
     const store = new Map<string, Uint8Array>()
     for (const f of pack.files) store.set(`gate-pack/${f.sha256}`, new Uint8Array(readFileSync(join(i.root, 'made', f.path))))
@@ -312,5 +325,105 @@ describe('the PIPELINE the pack is made under', () => {
     put('d-de', { pipeline: 'undefined', units: [] })
     expect(() => pipelineOf(dir, ['a-zh', 'd-de'])).toThrow(/d-de/)
     rmSync(dir, { recursive: true, force: true })
+  })
+})
+
+describe('the pack names its layout files\' version, and the engine\'s own holds it', () => {
+  const names = ['0001.00001v1-zh', '0001.00001v1-de', '0002.00002v1-zh']
+
+  it('is the schema and version every layout file names, which are the engine\'s: the manifest carries them', () => {
+    const i = inputs()
+    expect(layoutVersionOf(i.fixtures, names, LAYOUT_V)).toEqual(LAYOUT_V)
+    const manifest = makePack({ entries: entriesOf(i), out: join(i.root, 'out'), pipeline: '10', layout: LAYOUT_V })
+    expect(manifest.schema).toBe(PACK_SCHEMA)
+    expect(manifest.layout).toEqual(LAYOUT_V)
+    expect(packJsonOf(manifest).layout).toEqual(LAYOUT_V)
+    expect(JSON.parse(readFileSync(join(i.root, 'out', 'manifest.json'), 'utf8')).layout).toEqual(LAYOUT_V)
+    expect(() => makePack({ entries: entriesOf(i), out: join(i.root, 'out2'), pipeline: '10' } as never)).toThrow(/schema and version/)
+  })
+
+  it('refuses a layout set that is mixed, naming each output that differs and what its file says', () => {
+    const i = inputs()
+    put(join(i.fixtures, '0001.00001v1-de', 'layout.json'), layoutText('x', 1, '2'))
+    put(join(i.fixtures, '0002.00002v1-zh', 'layout.json'), layoutText('y', 2, '3'))
+    const message = (() => { try { layoutVersionOf(i.fixtures, names, LAYOUT_V); return '' } catch (e) { return (e as Error).message } })()
+    expect(message).toMatch(/^2 layout files not of the engine's version \(schema 2, layout "4"\)/)
+    expect(message).toContain('0001.00001v1-de: schema 1, layout "2"')
+    expect(message).toContain('0002.00002v1-zh: schema 2, layout "3"')
+    expect(message).not.toContain('0001.00001v1-zh:')
+  })
+
+  it('refuses a set of the old schema throughout, and a file that is no layout file', () => {
+    const i = inputs()
+    for (const n of names) put(join(i.fixtures, n, 'layout.json'), layoutText(n, 1, '4'))
+    expect(() => layoutVersionOf(i.fixtures, names, LAYOUT_V)).toThrow(/3 layout files.*\n.*schema 1, layout "4"/)
+    put(join(i.fixtures, names[0]!, 'layout.json'), 'not json')
+    rmSync(join(i.fixtures, names[1]!, 'layout.json'))
+    expect(() => layoutVersionOf(i.fixtures, names, LAYOUT_V)).toThrow(/0001\.00001v1-zh: not a layout file[\s\S]*0001\.00001v1-de: not a layout file/)
+  })
+
+  it('refuses to restore a pack of the schema before this one, asking no one', async () => {
+    const calls: string[] = []
+    const old = { schema: 1, pipeline: '10', made: 'x', digest: 'x', bucket: 'readarxiv-ci', files: [] }
+    const message = await why(restorePack({ pack: old as never, dir: tmp(), token: TOKEN, account: ACCOUNT, fetchImpl: (async (u: string) => { calls.push(u); throw new Error('no') }) as never, retryMs: 0 }))
+    expect(message).toMatch(/schema 1, this script reads 2/)
+    expect(calls).toEqual([])
+  })
+
+  it('reads the engine\'s version from its file.mjs, so that a make against another tree names that tree\'s', async () => {
+    expect(await layoutOfEngine(join(import.meta.dirname, '../..'))).toEqual({ schema: LAYOUT_SCHEMA, version: LAYOUT })
+  })
+
+  // The pack the CI gate restores is held to the engine here: a pull request that moves the layout file (file.mjs LAYOUT or
+  // LAYOUT_SCHEMA) and leaves the pack as it was fails this test, and the gate would fail on the same files, unread, in CI.
+  it('holds the committed gate-pack.json to the engine\'s layout file', () => {
+    const pack = JSON.parse(readFileSync(join(import.meta.dirname, '../../lab/pdf/gate-pack.json'), 'utf8'))
+    const remake = 'the layout file moved and gate-pack.json did not: re-make the pack (node lab/pdf/spikes/gate-pack.mjs make, after the fixtures are made again with this engine), upload its new objects (gate-pack.mjs objects), and commit the new gate-pack.json (lab/pdf/README.md, "The pack")'
+    expect(pack.schema, 'the pack\'s schema').toBe(PACK_SCHEMA)
+    expect(pack.layout?.schema, remake).toBe(LAYOUT_SCHEMA)
+    expect(pack.layout?.version, remake).toBe(LAYOUT)
+  })
+})
+
+describe('a make takes its inputs from the committed record', () => {
+  const root = '/r/lab/pdf', repo = '/r'
+  const record = { inputs: { fixtures: 'out/layer-gate/fixtures/abc', records: 'out/layer-gate/cut/records', refs: 'out/layer-gate/cut/refs', geometry: 'out/layer-gate/cut/geometry' } }
+  const there = (...paths: string[]) => (p: string) => paths.includes(p)
+
+  it('resolves each relative path under lab/pdf, the base the gate shows its paths by', () => {
+    const out = inputsOfRecord(record, { root, repo, exists: there('/r/lab/pdf/out/layer-gate/fixtures/abc', '/r/lab/pdf/out/layer-gate/cut/records', '/r/lab/pdf/out/layer-gate/cut/refs', '/r/lab/pdf/out/layer-gate/cut/geometry') })
+    expect(out).toEqual({ fixtures: '/r/lab/pdf/out/layer-gate/fixtures/abc', records: '/r/lab/pdf/out/layer-gate/cut/records', refs: '/r/lab/pdf/out/layer-gate/cut/refs', geometry: '/r/lab/pdf/out/layer-gate/cut/geometry' })
+  })
+
+  it('has one base for a relative path: a folder of the same name under the repository is not a second candidate', () => {
+    // both /r/lab/pdf/out/x and /r/out/x exist; the record's `out/x` is the first, and the second is never looked at
+    const asked: string[] = []
+    const exists = (p: string) => { asked.push(p); return true }
+    const out = inputsOfRecord({ inputs: { fixtures: 'out/x', records: 'out/x', refs: 'out/x', geometry: 'out/x' } }, { root, repo, exists })
+    expect(Object.values(out)).toEqual(['/r/lab/pdf/out/x', '/r/lab/pdf/out/x', '/r/lab/pdf/out/x', '/r/lab/pdf/out/x'])
+    expect(asked.every(p => p.startsWith('/r/lab/pdf/'))).toBe(true)
+    // and a path that is only under the repository is missing, not found there
+    expect(() => inputsOfRecord(record, { root, repo, exists: there('/r/out/layer-gate/fixtures/abc') })).toThrow(/inputs\.fixtures.*\/r\/lab\/pdf\/out\/layer-gate\/fixtures\/abc/)
+  })
+
+  it('takes a home path and an absolute path as they are, and a flag (relative to the repository) in place of the record\'s', () => {
+    const r = { inputs: { ...record.inputs, fixtures: '~/made/fx', records: '/abs/records' } }
+    const out = inputsOfRecord(r, { root, repo, home: '/h', flags: { refs: 'elsewhere/refs', geometry: null }, exists: there('/h/made/fx', '/abs/records', '/r/lab/pdf/out/layer-gate/cut/geometry') })
+    expect(out).toEqual({ fixtures: '/h/made/fx', records: '/abs/records', refs: '/r/elsewhere/refs', geometry: '/r/lab/pdf/out/layer-gate/cut/geometry' })
+  })
+
+  it('stops, naming the input, for a path that is nowhere, one the gate could not show, and one the record lacks', () => {
+    expect(() => inputsOfRecord(record, { root, repo, exists: () => false })).toThrow(/inputs\.fixtures.*out\/layer-gate\/fixtures\/abc.*--fixtures=/)
+    expect(() => inputsOfRecord({ inputs: { ...record.inputs, refs: '<scratch>/refs' } }, { root, repo, exists: () => true })).toThrow(/inputs\.refs.*no path/)
+    expect(() => inputsOfRecord({ inputs: { fixtures: 'a' } }, { root, repo, exists: () => true })).toThrow(/names no inputs\.records/)
+    expect(() => inputsOfRecord(null, { root, repo, exists: () => true })).toThrow(/names no inputs\.fixtures/)
+  })
+
+  it('reads the four inputs of the committed record, whose fixtures are the made ones of a key, not a digest this file holds', () => {
+    const real = JSON.parse(readFileSync(join(import.meta.dirname, '../../lab/pdf/records/layer-gate.json'), 'utf8'))
+    for (const n of RECORD_INPUTS) expect(typeof real.inputs[n], n).toBe('string')
+    expect(() => inputsOfRecord(real, { root, repo, exists: () => true })).not.toThrow()
+    const source = readFileSync(join(import.meta.dirname, '../../lab/pdf/spikes/gate-pack.mjs'), 'utf8')
+    expect(source).not.toMatch(/fixtures\/[0-9a-f]{16}/)
   })
 })
