@@ -89,8 +89,8 @@ describe('layoutMarksOfPaper', () => {
     const marks = parseLayoutMarks(made.marks)
     expect(marks.engine).toBe('pdflatex')
     // (the probe's log answers no name: its own text not known, as a probe of a paper that wraps none; its skips, LaTeX's
-    // 1pt and 0pt, in PDF units)
-    expect(marks.marking).toEqual({ classes: [...LAYOUT_CLASSES], switches, inkless, texts: [], names: {}, lineskip: [72 / 72.27, 0] })
+    // 1pt and 0pt, in PDF units as the file writes every number, to a hundredth: 72 / 72.27 is 1)
+    expect(marks.marking).toEqual({ classes: [...LAYOUT_CLASSES], switches, inkless, texts: [], names: {}, lineskip: [1, 0] })
     expect(marks.marks).toEqual([['0s', 1, 72, 700]])
     expect(marks.lines).toEqual([[0, 3]])
     // (the units and PDF.js's operator codes were given: each page's operator list was read)
