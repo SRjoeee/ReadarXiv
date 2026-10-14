@@ -218,6 +218,17 @@ describe("a line opens by TeX's rule", () => {
     expect(l.clipped).toBe(false)
     expect(l.lines.map(x => x.baseline)).toEqual([500, 486, 400])
   })
+  it('holds the slots after a dropped one to the last slot that stays: a dropped slot moves nothing', () => {
+    // block 0 at 500, 488, 476 and block 1 at 464, 452, one flow, no room of the paragraph's own between them (`through`
+    // false: block 0's foot is its own, 476). The second line opens by 2, to 486, and block 0's slot at 476 is pushed past
+    // its foot and dropped. Block 1's first slot is held to the line set at 486, 22 above it, not to the dropped slot:
+    // it stays on 464, and the four lines fit (held to 476, it went to 462, 450 was dropped, and the state clipped)
+    const B = (from: number, n: number) => ({ ...block(n), B: Array.from({ length: n }, (_, k) => from - 12 * k), rects: Array.from({ length: n }, (_, k) => [1, 0, from - 12 * k - 2, 100, from - 12 * k + 8]), flow: 0 })
+    const four = [...unit(7.5, 6), space, word(18)]
+    const l = L2.layoutUnit2(four as never, [B(500, 3), B(464, 2)] as never, 10, P([1, 0], { order: [] }) as never)
+    expect(l.clipped).toBe(false)
+    expect(l.lines.map(x => x.baseline)).toEqual([500, 486, 464, 452])
+  })
   it("drops the block's slots its lines are moved past the foot of, so that the fit takes its next state, never runs past", () => {
     // three lines in three slots: the third, moved 2 down, is past the block's foot (476): this state does not set it
     const one = L2.layoutUnit2(unit(7.5, 6) as never, [block(3)] as never, 10, P([1, 0], { order: [] }) as never)

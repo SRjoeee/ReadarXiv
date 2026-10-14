@@ -2090,15 +2090,19 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     const was = line.baseline
     line.baseline -= shift
     line.opened = shift
+    // (`above` and `push`: the last slot that stays, where it was and how far it moved; a slot dropped past its foot moves
+    // nothing, and the next is held to the one before it: a block's last slot dropped, the next block's first is a pitch
+    // under the line set lower, not under the slot that is gone)
     let push = shift, above = was
     for (let q = li + 1; q < slots.length; q++) {
       const sl = slots[q]
       if (!inFlow(sl, line) || !(sl.baseline < above)) continue
-      push = Math.max(0, push - Math.max(0, above - sl.baseline - sl.pitch))
+      const by = Math.max(0, push - Math.max(0, above - sl.baseline - sl.pitch))
+      if (!(by > 0)) break
+      if (sl.baseline - by < sl.foot - 0.05) { slots.splice(q, 1); q--; continue }
+      slots[q] = { ...sl, baseline: sl.baseline - by }
+      push = by
       above = sl.baseline
-      if (!(push > 0)) break
-      if (sl.baseline - push < sl.foot - 0.05) { slots.splice(q, 1); q-- }
-      else slots[q] = { ...sl, baseline: sl.baseline - push }
     }
     if (line.baseline < line.foot - 0.05) { over = line.from; stop = true }
   }
