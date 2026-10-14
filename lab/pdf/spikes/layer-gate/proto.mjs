@@ -492,8 +492,9 @@ window.gate = {
     for (const r of refHere) if (S.translated.has(r.id) && !drawnIds.has(r.id)) units.push({ id: r.id, kind: r.kind, drawn: false, why: S.skipped.get(r.id) ?? 'unanchored', orig: r.orig, lines: [], erase: [], crops: [] })
     if (S.parts) for (const u of units) if (!u.drawn) S.parts.whys.push([p, u.id, u.why])
     // the crops cut from this page, whatever page they are drawn on (a unit's text runs on past its page's foot), which the
-    // measures of their source read here; and where the crops drawn on this page sit (the math placement round)
-    const cut = run.audit.filter(a => a.what === 'crop' && a.srcPage === p).map(a => ({ src: a.src, unit: a.unit, plane: a.plane ?? 'O' }))
+    // measures of their source read here, each with the boxes of its own ink it is cut through where it is (removalOps'
+    // `clip`); and where the crops drawn on this page sit (the math placement round)
+    const cut = run.audit.filter(a => a.what === 'crop' && a.srcPage === p).map(a => ({ src: a.src, unit: a.unit, plane: a.plane ?? 'O', clip: a.clip ?? null }))
     const model = modelPage({ units, ref: refHere, items, translated: S.translated, cut, placement: await placementOf(p, recs, boxPdf) })
     // the prototype's own checker on the page: what it finds there, by the unit it is in (none for --perf: v0 is opened
     // with no copy of its own, as a reader opens it, and the checker reads that copy)

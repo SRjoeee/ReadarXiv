@@ -224,6 +224,28 @@ describe("the erase bites: the original's ink erased that no drawn unit owns", (
     // (a crop whose source is elsewhere accounts for none of it)
     expect(bites([{ ...crop, src: [30, 9, 40, 15] }], [{ src: [30, 9, 40, 15], unit: 1 }])).toBe(1)
   })
+  it('reads what a crop carries: the boxes of its own ink it is cut through, never the rest of its rectangle', () => {
+    // the source [18, 9, 28, 15] holds the ink (x 20-25, device rows 27-29); cut through a box of its own ink that takes
+    // only x 18-21 of it (device pixels [x, y, w, h]), the crop does not carry x 22-25: that ink is erased and lost
+    const crop = { k: 1, src: [18, 9, 28, 15], dst: [40, 17.5, 50, 25] }
+    expect(bites([crop], [{ src: crop.src, unit: 1, clip: [[18, H - 15, 4, 6]] } as never])).toBe(1)
+    expect(bites([crop], [{ src: crop.src, unit: 1, clip: [[18, H - 15, 10, 6]] } as never])).toBe(0)
+  })
+  it('reads a crop with no boxes of its own by its source rectangle as it is cut, with no margin beyond it', () => {
+    // at 10 device pixels a unit: the ink x 20-26, y 10-13; a source that ends 0.2 short of it, at 25.8, carries none of
+    // the last 0.2 (two columns of 30 rows), which a margin of 0.4 around the source would have hidden
+    const k = 10, w = 60 * k, h = 40 * k
+    const plane = (ink: (x: number, y: number) => boolean) => {
+      const a = new Uint8ClampedArray(w * h * 4)
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const v = ink(x / k, (h - y - 0.5) / k) ? 0 : 255; a.set([v, v, v, 255], 4 * (y * w + x)) }
+      return a
+    }
+    const O10 = plane((x, y) => x >= 20 && x < 26 && y >= 10 && y < 13), paper10 = plane(() => false)
+    const crop = { k: 1, src: [18, 9, 25.8, 15], dst: [40, 17.5, 50, 25] }
+    const run = (src: number[]) => (pixelPage({ k, view: [0, 0, 60, 40], W: w, H: h, O: O10, C: paper10, T: paper10, units: [{ id: 1, kind: 'para', drawn: true, why: null, orig, lines: [{ baseline: 20, size: 10, x0: 10, x1: 50 }], erase: [[10, 8, 50, 27]], crops: [{ ...crop, src }] } as UnitIn], kept: [], items: [], ref: [{ id: 1, kind: 'para', orig }], drawnText: '', cut: [{ src, unit: 1 }] }) as { bites: number; bitePx: number })
+    expect(run(crop.src)).toMatchObject({ bites: 1, bitePx: 60 })
+    expect(run([18, 9, 26, 15])).toMatchObject({ bites: 0, bitePx: 0 })
+  })
 })
 
 describe('generated text left (D1a)', () => {

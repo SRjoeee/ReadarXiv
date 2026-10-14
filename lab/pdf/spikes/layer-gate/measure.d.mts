@@ -10,8 +10,9 @@ export interface Item { x0: number; y0: number; x1: number; y1: number; str: str
 export declare const BODY: Set<string>
 export declare const MATH_FONT: RegExp
 export declare function frameGroups(orig: OrigLine[]): { lines: OrigLine[]; n: number; pitch: number; first: number; last: number; x0: number; x1: number; top: number; bottom: number; size: number }[]
-/** a crop cut from a page, whatever page it is drawn on */
-export interface CutCrop { src: number[]; unit: number; plane?: string }
+/** a crop cut from a page, whatever page it is drawn on; `clip`: its own ink's boxes it is cut through (device pixels,
+ *  [x, y, w, h]), where it has them */
+export interface CutCrop { src: number[]; unit: number; plane?: string; clip?: number[][] | null }
 /** a page's drawn lines and crops as cropPlacementOf reads them */
 export interface Placement {
   lines: { key: string; x0: number; x1: number; baseline: number; a: number; d: number }[]

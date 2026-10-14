@@ -284,8 +284,9 @@ function components(m, W, H, min, boxes = null) {
  * The pixel tier's measures of a page: { coverage: { text, cells } (each { cells, translated, english, blank }), neutral,
  * overlap, overlapOrig, overlapPx, stray, residue, residuePx, doubled, vanished, bites, bitePx, graphics: { px, erased,
  * overdrawn } }. `drawnText`: every drawn run's text on the page, joined without white space (math the drawing sets as
- * text is not vanished); `cut`: the crops cut from this page ({ src, unit }), whatever page they are drawn on, which
- * `doubled`, `vanished` and `bites` read here, where their source is
+ * text is not vanished); `cut`: the crops cut from this page ({ src, unit, clip }: `clip` the boxes of its own ink it is
+ * cut through, device pixels [x, y, w, h], where it is), whatever page they are drawn on, which `doubled`, `vanished`
+ * and `bites` read here, where their source is
  */
 export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, items, ref, drawnText, cut = [] }) {
   const toPx = (x, y) => [(x - view[0]) * k, (view[3] - y) * k]
@@ -434,18 +435,29 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
   }
 
   // erase bites: the original's ink erased outside every drawn unit's own lines (its glyphs' bands, and those it draws
-  // anew beside them, `own`: a float's label set in the target's name), under no crop drawn here and in no crop's source
-  // (cut from this page, wherever it is drawn: a crop set on its TeX baseline stands off the ink it was cut from, a
+  // anew beside them, `own`: a float's label set in the target's name), under no crop drawn here and outside what a crop
+  // cut from this page carries (wherever it is drawn: a crop set on its TeX baseline stands off the ink it was cut from, a
   // radical's foot or a fraction's bar hanging under its line, which the crop carries and the page no longer shows where
-  // it was, 1706.03762's p4 and p5): ink of a line, a formula or a figure no drawn unit owns, destroyed
-  const ownM = mask(), eraseRaw = mask()
+  // it was, 1706.03762's p4 and p5): ink of a line, a formula or a figure no drawn unit owns, destroyed. What a crop
+  // carries is what its drawing takes of its source: through its own ink's boxes where it is cut through them (`clip`,
+  // removalOps: nothing outside them, as cropForeignPx reads it), else its source rectangle as it is cut, and no margin
+  // beyond it (ink a crop's rectangle holds but does not carry, a neighbour's descender beside its glyphs, is lost)
+  const ownM = mask(), eraseRaw = mask(), carriedM = mask()
   for (const u of drawn) {
     for (const l of [...u.orig, ...(u.own ?? [])]) paint(ownM, [l.x0 - 1, l.baseline - 0.3 * l.size, l.x1 + 1, l.baseline + 0.88 * l.size])
     for (const e of u.erase) paint(eraseRaw, e, 0)
   }
+  for (const c of cut) {
+    if (!c.clip?.length) { paint(carriedM, c.src); continue }
+    const [sx0, sy0, sx1, sy1] = boxPx(c.src)
+    for (const [x, y, w, h] of c.clip) {
+      const x0 = Math.max(sx0, Math.floor(x)), y0 = Math.max(sy0, Math.floor(y)), x1 = Math.min(sx1, Math.ceil(x + w)), y1 = Math.min(sy1, Math.ceil(y + h))
+      for (let yy = y0; yy < y1; yy++) if (x1 > x0) carriedM.fill(1, yy * W + x0, yy * W + x1)
+    }
+  }
   const bite = mask()
   let bitePx = 0
-  for (let i = 0; i < W * H; i++) if (eraseRaw[i] && !ownM[i] && !cropM[i] && !srcM[i] && inkO(i) && !traceC(i)) { bite[i] = 1; bitePx++ }
+  for (let i = 0; i < W * H; i++) if (eraseRaw[i] && !ownM[i] && !cropM[i] && !carriedM[i] && inkO(i) && !traceC(i)) { bite[i] = 1; bitePx++ }
   const bites = components(bite, W, H, 4, where.bites)
 
   // graphics: the original's ink that is no text (outside every text item and every reference line), erased or written over
