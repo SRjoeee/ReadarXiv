@@ -606,6 +606,38 @@ export const NAMES_TEX = [
   '\\fi',
 ].join('')
 
+/** the control sequences \axt@unmark takes out of a title's copy, each with its argument: the marks a heading or a caption
+ *  can carry (\axtpma, \axtpm, \axthmark) and a babel name's (\axtnma, \axtnmb). One list: UNMARK_TEX builds the regex's
+ *  alternation and the prefilter from it, so the two cannot drift */
+export const UNMARK_CS = ['axtpma', 'axtpm', 'axthmark', 'axtnma', 'axtnmb']
+
+/** \axt@unmark<tl>: the regex that takes a mark and its argument out of a token list, behind a memory and a prefilter.
+ *  The regex costs ~4 ms a run over a list that holds a mark (~50 µs a token) and ~3 ms over one that holds none, and the
+ *  nameref and gettitlestring hooks call it ~450 times a pass on the thesis (M1: 4.36 s of its layout compile).
+ *  - The prefilter looks for each name in the list as text: a control sequence prints as `\name` and a space (the escape
+ *    character set to `\` for it, so that a paper's own change of \escapechar hides nothing), a delimited match in
+ *    microseconds; the regex runs only on a hit. A miss holds none of UNMARK_CS, which the regex's `\c{...}` alternation
+ *    could not have matched, so the result is the regex's.
+ *  - The memory holds the last list the regex ran on and what it made of it, and a list the same macro (\tl_if_eq:NN, its
+ *    \ifx) is set to that result. The regex is a function of the token list alone, so the result's tokens are the regex's.
+ *    Its type is not: \regex_replace_all ends in \tl_set_eq, so the macro it leaves is plain, while a prefilter miss leaves
+ *    a \long or \protected one as it was, and a memory hit sets the macro to the plain result. Neither caller can tell:
+ *    \axt@title is always a \def, and \@currentlabelname goes straight into \@onelevel@sanitize.
+ *    The hooks meet one list again and again where nameref's title is set past gettitlestring (titlesec, memoir: the
+ *    thesis): the label hook cleans the heading's title on every label under it (the assignment is local to the label's
+ *    group), and a caption's title goes through the title hook twice in a row. On the standard path (nameref ->
+ *    GetTitleString) the title is clean already and the prefilter skips it. The thesis: 276 runs a pass on 61 distinct
+ *    lists, 21,669 tokens read for 7,936 distinct.
+ *  The regex stays as it was: `\c[^BE].*` is any run of tokens but a brace, so a match ends at its own argument's close
+ *  and never reaches across a group (unmark-finding); every mark name is brace-free (MARK_NAME) */
+const UNMARK_TEX = [
+  '\\ifdefined\\ExplSyntaxOn\\ExplSyntaxOn',
+  `\\regex_const:Nn\\c__axt_marks_regex{\\c{${UNMARK_CS.join('|')}}\\cB.\\c[^BE].*\\cE.}`,
+  '\\bool_new:N\\g__axt_unmark_bool\\tl_new:N\\g__axt_unmark_in_tl\\tl_new:N\\g__axt_unmark_out_tl',
+  `\\cs_new_protected:Npn\\axt@unmark#1{\\tl_if_eq:NNTF#1\\g__axt_unmark_in_tl{\\tl_set_eq:NN#1\\g__axt_unmark_out_tl}{\\group_begin:\\int_set:Nn\\tex_escapechar:D{92}\\bool_gset_false:N\\g__axt_unmark_bool${UNMARK_CS.map(n => `\\str_if_in:NnT#1{\\${n}}{\\bool_gset_true:N\\g__axt_unmark_bool}`).join('')}\\group_end:\\bool_if:NT\\g__axt_unmark_bool{\\tl_gset_eq:NN\\g__axt_unmark_in_tl#1\\regex_replace_all:NnN\\c__axt_marks_regex{}#1\\tl_gset_eq:NN\\g__axt_unmark_out_tl#1}}}`,
+  '\\ExplSyntaxOff\\fi',
+].join('')
+
 export const LAYOUT_TEX = [
   '\\makeatletter\\newif\\ifaxt@off\\global\\let\\axt@pend\\@empty\\let\\axt@icr\\/\\def\\axt@icv{0pt}\\newif\\ifaxt@sig',
   '\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax}\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax\\fi}\\fi\\fi\\fi',
@@ -641,7 +673,7 @@ export const LAYOUT_TEX = [
   '\\AddToHook{package/nameref/after}{\\ifdefined\\NR@sanitize@labelname\\let\\axt@NRsanitize\\NR@sanitize@labelname\\def\\NR@sanitize@labelname{\\axt@unmark\\@currentlabelname\\axt@NRsanitize}\\fi}\\fi',
   '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtpma\\@gobble\\let\\axtpm\\@gobble\\let\\axthmark\\@gobble\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble\\let\\axt@nma\\@gobble\\let\\axt@nmb\\@gobble}\\fi}',
   '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axt@pma\\axt@pm\\axt@hm\\axtnma\\axtnmb\\axt@nma\\axt@nmb}\\fi',
-  '\\ifdefined\\ExplSyntaxOn\\ExplSyntaxOn\\regex_const:Nn\\c__axt_marks_regex{\\c{axtpma|axtpm|axthmark|axtnma|axtnmb}\\cB.\\c[^BE].*\\cE.}\\cs_new_protected:Npn\\axt@unmark#1{\\regex_replace_all:NnN\\c__axt_marks_regex{}#1}\\ExplSyntaxOff\\fi',
+  UNMARK_TEX,
   NAMES_TEX,
   POINTS_TEX,
   '\\makeatother',

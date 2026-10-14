@@ -6,7 +6,7 @@ import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
 import { patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
 import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
 import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
@@ -489,6 +489,50 @@ describe('LAYOUT_TEX', () => {
     // one line, no comment: the paper's lines keep their numbers in the log
     expect(LAYOUT_TEX).not.toContain('\n')
     expect(LAYOUT_TEX).not.toContain('%')
+  })
+  // \axt@unmark: the regex takes a mark and its argument out of a title's copy, and a prefilter keeps it from running on a
+  // list that holds none of the five (unmark-finding: 4.36 s of the thesis's layout compile, a miss costing 3 ms a run)
+  it('\\axt@unmark: the regex is the one that never reaches across a group, built from UNMARK_CS', () => {
+    expect(UNMARK_CS).toEqual(['axtpma', 'axtpm', 'axthmark', 'axtnma', 'axtnmb'])
+    expect(new Set(UNMARK_CS).size).toBe(UNMARK_CS.length)
+    // `\c[^BE]` tests the next item only and `*` repeats it: any run of tokens but a brace, so a match ends at its own argument
+    expect(LAYOUT_TEX).toContain('\\regex_const:Nn\\c__axt_marks_regex{\\c{axtpma|axtpm|axthmark|axtnma|axtnmb}\\cB.\\c[^BE].*\\cE.}')
+    expect(LAYOUT_TEX).toContain('\\cB.\\c[^BE].*\\cE.}')
+    expect(LAYOUT_TEX).not.toContain('.*?')
+    expect(LAYOUT_TEX.split('\\regex_const:Nn\\c__axt_marks_regex').length).toBe(2)
+    expect(LAYOUT_TEX.split('\\cs_new_protected:Npn\\axt@unmark#1').length).toBe(2)
+  })
+  it('\\axt@unmark: the prefilter looks for the names the regex takes, each once, and the regex runs only on a hit', () => {
+    const alternation = /\\c\{([^{}]*)\}\\cB\./.exec(LAYOUT_TEX)?.[1]?.split('|')
+    const prefilter = [...LAYOUT_TEX.matchAll(/\\str_if_in:NnT#1\{\\([A-Za-z@]+)\}\{\\bool_gset_true:N\\g__axt_unmark_bool\}/g)].map(m => m[1])
+    expect(alternation).toEqual([...UNMARK_CS])
+    expect(prefilter).toEqual([...UNMARK_CS])
+    // a list the memory holds is set to what the regex made of it; else the escape character is the backslash while the
+    // names are looked for, in a group the regex runs outside of (its assignment stays where \axt@unmark was called), and
+    // the regex runs only if the flag was set, its list and result kept in the memory
+    const def = LAYOUT_TEX.slice(LAYOUT_TEX.indexOf('\\cs_new_protected:Npn\\axt@unmark#1'), LAYOUT_TEX.indexOf('\\ExplSyntaxOff', LAYOUT_TEX.indexOf('\\cs_new_protected:Npn\\axt@unmark#1')))
+    expect(def.startsWith('\\cs_new_protected:Npn\\axt@unmark#1{\\tl_if_eq:NNTF#1\\g__axt_unmark_in_tl{\\tl_set_eq:NN#1\\g__axt_unmark_out_tl}{\\group_begin:\\int_set:Nn\\tex_escapechar:D{92}\\bool_gset_false:N\\g__axt_unmark_bool')).toBe(true)
+    expect(def.endsWith('\\group_end:\\bool_if:NT\\g__axt_unmark_bool{\\tl_gset_eq:NN\\g__axt_unmark_in_tl#1\\regex_replace_all:NnN\\c__axt_marks_regex{}#1\\tl_gset_eq:NN\\g__axt_unmark_out_tl#1}}}')).toBe(true)
+    expect(def.split('\\regex_replace_all').length).toBe(2)
+    // every name is a mark LAYOUT_TEX or the names define, and the three the placeholders and headings carry are the ones the text holds
+    for (const name of UNMARK_CS) expect(`${LAYOUT_TEX}`, name).toContain(`\\def\\${name}{`)
+    const text = Object.values(SOURCES).map(src => decode(originalFiles(paperOf(src), { lines: true, layout: MARK_CLASSES })).replace(LAYOUT_TEX, '')).join('\n')
+    const used = new Set([...text.matchAll(/\\(axt(?:pma|pm|hmark|nma|nmb))\{/g)].map(m => m[1]))
+    expect([...used].sort()).toEqual(['axthmark', 'axtpm', 'axtpma'])
+    for (const name of used) expect(UNMARK_CS, name).toContain(name)
+  })
+  it('\\axt@unmark: no mark name has a brace in it, so a match cannot end early or run on', () => {
+    // MARK_NAME takes no brace anywhere in a name, whatever the name would be
+    for (const name of ['12s', 'c2-7', 'h0s', 'p3.14a', 'g9t', 'n1.ref.s']) {
+      expect(MARK_NAME.test(name), name).toBe(true)
+      for (const at of [0, 1, name.length - 1, name.length]) for (const brace of ['{', '}']) expect(MARK_NAME.test(name.slice(0, at) + brace + name.slice(at)), `${name} + ${brace} at ${at}`).toBe(false)
+    }
+    // the name of every mark argument the marked originals hold, and every babel key
+    const text = Object.values(SOURCES).map(src => decode(originalFiles(paperOf(src), { lines: true, layout: MARK_CLASSES })).replace(LAYOUT_TEX, '')).join('\n')
+    const args = [...text.matchAll(/\\axt(?:pma|pm|hmark)\{([^}]*)\}/g)].map(m => m[1] as string)
+    expect(args.length).toBeGreaterThan(10)
+    for (const arg of args) expect(MARK_NAME.test(arg), arg).toBe(true)
+    for (const key of NAME_KEYS) expect(key, key).toMatch(/^[a-z]{1,16}$/)
   })
   it('LAYOUT_TEX sets a point beside each destination, around each column\'s body and around each float\'s box', () => {
     // a rendering intent named after the destination, in each engine's literal; none in DVI

@@ -12,7 +12,7 @@
 // XeLaTeX, with hyperref and without: every text item where v0 has it, the log the run reads unchanged, and each name's
 // two marks on its glyphs.
 //   pnpm exec tsx lab/pdf/spikes/layout-marks-cases.mjs            (ONLY=stream: the stream's cases alone; ONLY=names:
-//                                                                  the names' alone)
+//                                                                  the names' alone; ONLY=unmark: \axt@unmark's alone)
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -32,6 +32,8 @@ const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok 
 const STREAM_ONLY = process.env.ONLY === 'stream'
 /** the names' cases alone */
 const NAMES_ONLY = process.env.ONLY === 'names'
+/** \axt@unmark's case alone */
+const UNMARK_ONLY = process.env.ONLY === 'unmark'
 const dir = mkdtempSync(join(tmpdir(), 'layout-marks-cases-'))
 
 // ---------------------------------------------------------------- the documents
@@ -137,7 +139,7 @@ const jobs = [], queued = []
 function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', 'v1'], own = true, trace = false, files = {} } = {}) {
   const all = new Map([['main.tex', new TextEncoder().encode(src)], ...Object.entries(files).map(([f, t]) => [f, new TextEncoder().encode(t)])])
   const paper = openPaper(all)
-  if ((STREAM_ONLY && !name.startsWith('stream-')) || (NAMES_ONLY && !name.startsWith('names-'))) return paper
+  if ((STREAM_ONLY && !name.startsWith('stream-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-'))) return paper
   queued.push({ name, paper, engine, passes, variants, own, trace, files: all })
   return paper
 }
@@ -218,7 +220,53 @@ const tocPaper = queue('toc', doc('\\pagestyle{headings}', tocBody), { passes: 3
 // what TeX writes: the aux (labels, nameref's titles), the contents, the lists, hyperref's bookmarks
 const filesSrc = doc('\\usepackage{amsmath}\\usepackage{hyperref}', `\\tableofcontents\\listoffigures\\listoftables\n\\section{The $x$ method}\\label{sec:m}\n${prose(10, i => (i === 5 ? ' see \\nameref{sec:m} and \\nameref{fig:z}' : ''))}\n\\begin{figure}[h]\\centering\\rule{1cm}{1cm}\\caption{A $y$ figure \\cite{a}, see Eq.~\\protect\\eqref{eq:e}.}\\label{fig:z}\\end{figure}\n\\subsection{\\texttt{code} heading}\n${prose(8, () => '')}\n\\begin{equation}a\\label{eq:e}\\end{equation}\n\\begin{table}[h]\\centering\\begin{tabular}{l}x\\end{tabular}\\caption{A table, with \\ref{sec:m}.}\\label{tab:t}\\end{table}\n${BIB}`)
 queue('files', filesSrc, { passes: 3 })
-// titlesec sets nameref's title itself, past gettitlestring (2608.13505)
+// \axt@unmark (marks.mjs UNMARK_TEX): a heading and a caption each with a brace group between two pieces and a brace in a
+// formula, \nameref'd; a match of the regex would end at its own mark's argument. Under article and hyperref the title hook
+// has cleaned the title before nameref copies it, so the label hook meets clean lists (the prefilter skips them); titlesec
+// sets \@currentlabelname itself, past gettitlestring (titlesec.sty, 2608.13505), so the three labels under one heading each
+// meet its marked title, and the second and third are the memory's hits: the same job with titlesec
+const unmarkSrc = doc('\\usepackage{amsmath}\\usepackage{hyperref}', `\\tableofcontents\\listoffigures\\listoftables\n\\section{One $\\theta$ two \\cite{a} {z} three $i=\\{1,2,3\\}$ five}\\label{sec:b}\\label{sec:b2}\\label{sec:b3}\\section{Plain heading}\\label{sec:p}\nRead: [\\nameref{sec:b}] [\\nameref{sec:b2}] [\\nameref{sec:b3}] [\\nameref{sec:p}] [\\nameref{fig:b}].\n${prose(6, () => '')}\n\\begin{figure}[h]\\centering\\rule{1cm}{1cm}\\caption{Cap ($\\textbf{r},\\boldsymbol{\\theta}$) end {g} and for each $i=\\{1,2,3\\}$ x \\cite{a}.}\\label{fig:b}\\end{figure}\n${BIB}`)
+queue('unmark-files', unmarkSrc, { passes: 3 })
+queue('unmark-files-titlesec', unmarkSrc.replace('\\usepackage{hyperref}', '\\usepackage{titlesec}\\usepackage{hyperref}'), { passes: 3 })
+// \axt@unmark on hand-written lists, under the real head: the new one against the bare regex (\c__axt_marks_regex) on a copy,
+// by tokens. A list without a mark is left as it was, a list with one is what the regex makes of it, and the memory is no
+// different: the same tokens under another catcode, a bracket as brace, a group between the first use and the next, a
+// \long or \protected list, \escapechar changed
+const unmarkUnit = String.raw`\makeatletter
+\ExplSyntaxOn
+\int_new:N\g_unit_bad_int \int_new:N\g_unit_n_int
+\cs_new_protected:Npn\cmp#1#2{#2\cs_set_eq:NN\y\x\axt@unmark\x\regex_replace_all:NnN\c__axt_marks_regex{}\y\int_gincr:N\g_unit_n_int\exp_args:NVV\tl_if_eq:nnF\x\y{\int_gincr:N\g_unit_bad_int\iow_term:e{UNIT~DIFF~#1:~new=[\tl_to_str:N\x]~old=[\tl_to_str:N\y]}}}
+\ExplSyntaxOff
+\cmp{protected miss}{\protected\def\x{b c}}
+\cmp{long miss}{\long\def\x{b c}}
+\cmp{empty}{\def\x{}}
+\cmp{empty again}{\def\x{}}
+\cmp{protected hit}{\protected\def\x{\axtpm{a}b}}
+\cmp{long hit}{\long\def\x{\axtpm{a}b}}
+\cmp{prime}{\def\x{\axtpm{a}b}}
+\cmp{same tokens, another catcode}{\edef\x{\noexpand\axtpm{a}\string b}}
+\cmp{prime again}{\def\x{\axtpm{a}b}}
+{\catcode"5B=1 \catcode"5D=2 \cmp{brackets as braces}{\def\x{\axtpm[a]b}}}
+\cmp{after the brackets}{\def\x{\axtpm{a}b}}
+\let\foo\axtpm
+\cmp{a copy of a mark}{\def\x{\foo{a}b}}
+{\cmp{in a group}{\def\x{\axtpm{g}h}}}
+\cmp{the same list outside}{\def\x{\axtpm{g}h}}
+{{\cmp{in two groups}{\def\x{\axthmark{h1s}T \axtpma{p}$x$}}}}
+\cmp{outside, another}{\def\x{\axthmark{h1s}T \axtpma{q}$x$}}
+\cmp{outside, the first again}{\def\x{\axthmark{h1s}T \axtpma{p}$x$}}
+\cmp{a mark whose argument is a group}{\def\x{\axtpm{{q}}k}}
+\cmp{a mark with no argument group}{\def\x{\axtpm x}}
+\cmp{a mark with no argument group again}{\def\x{\axtpm x}}
+\cmp{the result as a list}{\def\x{b}}
+\def\@currentlabelname{\axthmark{h2s}Sec \axtpm{p1}$y$\axthmark{h2e}}
+\begingroup\cmp{label 1}{\let\x\@currentlabelname}\endgroup
+\begingroup\cmp{label 2}{\let\x\@currentlabelname}\endgroup
+\begingroup\escapechar=-1 \cmp{label 3, escapechar -1}{\let\x\@currentlabelname}\endgroup
+\begingroup\escapechar=65 \cmp{escapechar A, a miss}{\def\x{A\axtpm{z}}}\endgroup
+\ExplSyntaxOn\iow_term:e{UNIT~SUMMARY~n=\int_use:N\g_unit_n_int,~bad=\int_use:N\g_unit_bad_int}\ExplSyntaxOff
+\makeatother`
+queue('unmark-unit', doc(unmarkUnit, 'x'), { variants: ['v1'], passes: 1 })
 queue('files-titlesec', filesSrc.replace('\\usepackage{hyperref}', '\\usepackage{titlesec}\\usepackage{hyperref}'), { passes: 3 })
 // the cells of a scaled table, under pdfTeX (failed) and under XeTeX (printed)
 const cellSrc = /** @type {string} */ (STAY['a cell in \\resizebox'])
@@ -511,7 +559,7 @@ console.log(`compiling ${jobs.length} documents in ${dir}, after ${queued.filter
 compileAll(jobs)
 
 // ---------------------------------------------------------------- the checks
-if (!STREAM_ONLY && !NAMES_ONLY) {
+if (!STREAM_ONLY && !NAMES_ONLY && !UNMARK_ONLY) {
 for (const [name, , engine] of stays) {
   for (const hyper of [false, true]) {
     const key = `${stayKey(name, engine)}${hyper ? '-hyperref' : ''}`
@@ -633,8 +681,27 @@ for (const [job, label] of [['natmove-stop', "natbib [super] with natmove, a cit
 
 }
 
+// ---------------------------------------------------------------- \axt@unmark's check
+if (!STREAM_ONLY && !NAMES_ONLY) {
+  const unit = /^UNIT SUMMARY n=(\d+), bad=(\d+)/m.exec(read('unmark-unit-v1', 'log', 'latin1') ?? '')
+  check('\\axt@unmark on hand-written lists: the bare regex\'s result by tokens, in every case', !!unit && Number(unit[1]) >= 25 && unit[2] === '0', `${unit?.[0]} ${(read('unmark-unit-v1', 'log', 'latin1') ?? '').match(/^UNIT DIFF.*/gm)?.slice(0, 3)}`)
+  for (const [job, label] of [['unmark-files', 'with hyperref'], ['unmark-files-titlesec', 'and with titlesec']]) {
+    const same = ['aux', 'toc', 'lof', 'lot', 'out'].map(ext => [ext, read(`${job}-v0`, ext, 'latin1'), read(`${job}-v1`, ext, 'latin1')])
+    const differ = same.filter(([, a, b]) => a === null || a !== b).map(([ext]) => ext)
+    check(`a title with a brace group between two pieces, \\nameref'd: aux, toc, lof, lot, out as v0's, ${label}`, !differ.length, JSON.stringify(differ))
+    const aux = same[0]?.[1] ?? ''
+    check(`… and the aux holds the whole names (not vacuous: the group, the formula and the text after the last mark), ${label}`, /newlabel\{sec:b\}[^\n]*\{z\}[^\n]*three[^\n]*five/.test(aux) && /newlabel\{fig:b\}[^\n]*end \{g\}[^\n]*each[^\n]*x/.test(aux), aux.slice(0, 400))
+    const [a, b] = [await pdfOf(`${job}-v0`), await pdfOf(`${job}-v1`)]
+    const words = r => (r?.pages ?? []).map(pg => pg.map(it => it.str).join('|'))
+    const read1 = r => words(r).join('\n').match(/Read:[^\n]*/)?.[0]
+    check(`… and the PDF's text is v0's, a \`Read:\` line holding the names' text, ${label}`, !!a && !!b && JSON.stringify(words(a)) === JSON.stringify(words(b)) && !moved(a, b).length && /three/.test(read1(b) ?? '') && /each/.test(words(b).join('')), (read1(b) ?? '').slice(0, 300))
+    check(`… with no error in either log, ${label}`, !errorsOf(`${job}-v0`).length && !errorsOf(`${job}-v1`).length, JSON.stringify([errorsOf(`${job}-v0`), errorsOf(`${job}-v1`)]))
+  }
+}
+
+
 // ---------------------------------------------------------------- the names' checks
-if (!STREAM_ONLY) {
+if (!STREAM_ONLY && !UNMARK_ONLY) {
   for (const j of nameJobs) {
     const label = `a babel name: ${j.name} (${j.engine}${j.hyper ? ', with hyperref' : ''})`
     const [a, b] = [await pdfOf(`${j.key}-v0`), await pdfOf(`${j.key}-v1`)]
@@ -726,7 +793,7 @@ const OWN = {
   C: [['$\\phi$', '\u03d5'], ['$', glyphsOf], ['\\cite{one}', '[1]'], ['call:Note ', null], ['\\begin{align}', (src, nth) => rowsOf(src.trim(), [1, 9, 21, 37][nth])]],
   D: [['$b_', glyphsOf], ['$', null]],
 }
-for (const s of NAMES_ONLY ? [] : [...streams, luaStream]) {
+for (const s of NAMES_ONLY || UNMARK_ONLY ? [] : [...streams, luaStream]) {
   const label = `the stream, ${s.name} (${s.engine})`
   const [a, b] = [await inkOf(`${s.key}-v1`), await inkOf(`${s.key}-v1np`)]
   if (!a || !b) { check(`${label}: compiled`, false, `no PDF (${a ? 'v1np' : 'v1'})`); continue }
@@ -799,7 +866,7 @@ for (const s of NAMES_ONLY ? [] : [...streams, luaStream]) {
 }
 
 // TeX's own boxes: the points' nodes out (the corpus check's comparison), nothing else different
-for (const name of NAMES_ONLY ? [] : Object.keys(TRACED)) {
+for (const name of NAMES_ONLY || UNMARK_ONLY ? [] : Object.keys(TRACED)) {
   const boxesOf = v => { const log = read(`${traceKey(name)}-${v}`, 'log', 'latin1') ?? ''; const out = [], lines = log.split('\n'); for (let i = 0; i < lines.length; i++) if (/^Completed box being shipped out \[/.test(lines[i])) { const at = i; while (i < lines.length && lines[i] !== '') i++; out.push(...lines.slice(at, i), '') } return pageBoxes(out.join('\n')) }
   const [a, b] = [boxesOf('v1np'), boxesOf('v1')], d = boxDiff(a, b)
   check(`the stream, TeX's boxes with the points and without them the same: ${name}`, a.length > 0 && a.length === b.length && !d.length, JSON.stringify({ pages: [a.length, b.length], differences: d.length, first: d.slice(0, 3).map(x => [x.page, x.v0, x.v1]) }))
