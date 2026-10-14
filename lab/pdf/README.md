@@ -134,11 +134,14 @@ file again before the gate reads any. A fork's pull request has no token and run
 
 **Each side runs on its own commit's pack.** A pack is made by an engine (its layout files are that engine's), so the gate restores
 two: the pull request's, from its `gate-pack.json`, and the merge base's, from the merge base's own `gate-pack.json` with the merge
-base's own script; where the two digests are equal they are one pack and are downloaded once. A pull request that re-makes the
-pack (the layout file moved) uploads the new objects before its CI can pass. The two runs are one instrument by what their packs hold,
-not where they are: `rules-gate.mjs run` stamps each run's `fixtures`, `refs` and `geometry` with the digests of those parts of the
-pack's listing (`instrumentOfPack`), the made layout files excluded, so a re-made pack is the same instrument and another reference,
-geometry, PDF or translation is not.
+base's own script. One pack serves both sides while the layout file's schema and version (`layout` in `gate-pack.json`) are the same
+in both, as before: the base's engine reads the pull request's pack, and any other change of the pack is measured on the one pack.
+Where they differ the pull request that re-makes the pack uploads the new objects before its CI can pass, and the two runs are one
+instrument by what their packs hold, not where they are: `rules-gate.mjs run` stamps each run's `fixtures`, `refs`, `geometry`,
+`data` and `texmf` with the digests of those parts of the listing of the `gate-pack.json` it was given (`--pack-json`, the one
+`verify` checked the directory against), the made layout files excluded. Another reference, geometry, PDF, translation, face or
+pattern between the two sides is then another instrument and fails; so does a different set of outputs, so a pull request that
+moves the layout file does not also add an output.
 
 **Where the pack is cached.** In a pull request's own cache, by the pack's digest (`rules-gate.yml`), and nowhere else. A cache
 saved by a push to `next` is readable by a fork's pull request, which runs its own edited workflow and can restore the

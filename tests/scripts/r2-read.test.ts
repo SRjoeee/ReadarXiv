@@ -53,7 +53,7 @@ describe('the S3 credentials are derived from the token', () => {
     ['a 403', verified({ success: false }, 403)],
   ])('refuses %s, naming neither the token nor its digest', async (_name, fetchImpl) => {
     const message = await why(s3Credentials({ token: TOKEN, account: ACCOUNT, fetchImpl, retryMs: 0 }))
-    expect(message).toMatch(/^the token is not an active Account API token of this account \(HTTP \d{3}\)$/)
+    expect(message).toMatch(/^the token is not an active Account API token of this account \(HTTP \d{3}(?:, status [a-z_]+)?\)$/)
     expect(message).not.toContain(TOKEN)
     expect(message).not.toContain(SECRET)
   })

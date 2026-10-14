@@ -11,7 +11,7 @@
 //   engines  the same verdict for head's set on each engine lab/pdf/live-engines.json names, against the set published for it,
 //            under the same rulings (those in the tree at head's commit)
 //
-//   node lab/pdf/spikes/rules-gate.mjs run --engine=<worktree> --rules=<file> --pack=<dir> [--out=<run.json>] [--log=<file>] [--workers=4]
+//   node lab/pdf/spikes/rules-gate.mjs run --engine=<worktree> --rules=<file> --pack=<dir> --pack-json=<gate-pack.json> [--out=<run.json>] [--log=<file>] [--workers=4]
 //   node lab/pdf/spikes/rules-gate.mjs compare --base=<run.json> --head=<run.json> --out=<dir> [--base-sha=<sha>] [--head-sha=<sha>]
 //       [--base-rules=<file> --head-rules=<file>] [--ruling=<file>]… [--pack=<gate-pack.json>] [--records=<fixtures dir>] [--label=<text>]
 //   node lab/pdf/spikes/rules-gate.mjs engines --list=<live-engines.json> --head-rules=<file> --pack=<dir> --published=<origin> --out=<dir> [--pack-json=<gate-pack.json>]
@@ -43,8 +43,8 @@ const GIT_SHA = /^[0-9a-f]{7,40}$/
 /** The inputs of a run that make it another instrument: what the gate takes from the checkout it runs from, the pack and the browser,
  *  the same for both runs. Not among them: the rule set, the engine's commit, its remover and the hyphenation digest, which the
  *  engine under test computes itself (layer-gate.mjs reads the hyph.mjs of the engine measured), so that a pull request that
- *  changes them is a change to measure, not a different instrument. The pack's patterns are the same for both runs, and verified. */
-const INSTRUMENT = ['tier', 'pages', 'scale', 'inkScale', 'inkMin', 'composite', 'layouts', 'fixtures', 'refs', 'geometry', 'chromium', 'pdfjs', 'fonts', 'checker', 'measures', 'kind', 'protoUnits', 'place', 'order', 'faces', 'tex', 'removal']
+ *  changes them is a change to measure, not a different instrument. The pack's parts (references, geometry, faces, patterns, the fixtures' inputs) are the same for both runs: the run is stamped with their digests (instrumentOfPack). */
+const INSTRUMENT = ['tier', 'pages', 'scale', 'inkScale', 'inkMin', 'composite', 'layouts', 'fixtures', 'refs', 'geometry', 'data', 'texmf', 'chromium', 'pdfjs', 'fonts', 'checker', 'measures', 'kind', 'protoUnits', 'place', 'order', 'faces', 'tex', 'removal']
 /** the longest list of pages a comment holds; the numbers hold them all */
 const PAGES_SHOWN = 60
 
@@ -345,21 +345,32 @@ export function gateArgs({ engine, rules, pack, workers = 4 }) {
 /**
  * What of a pack is the instrument. The layer gate records the folders it was given as paths, which name no content, and the two
  * runs of a pull request that moves the layout file are on two packs in two directories (each commit's own, ci: rules-gate.yml), so
- * the paths of the two runs would differ though the instrument did not. A run is therefore recorded by what the pack holds: the
- * digest of the listing (the pack's manifest, whose files are digest-checked by `verify`) of the frozen references, of the
- * geometry, and of the fixtures' own inputs (the PDFs and the translations). Not among them, because an engine makes them and
- * the pull request may move them: the made layout files (`fixtures/<output>/layout.json`). A pack with another reference, another
- * geometry, another PDF or another translation is another instrument, whichever directory it is in.
+ * the paths of the two runs would differ though the instrument did not. A run is therefore recorded by what its pack holds: the
+ * digest of the parts of the committed listing (gate-pack.json, whose files `gate-pack.mjs verify` checked in the directory the
+ * run read) the references, the geometry, the fixtures' own inputs (the PDFs and the translations), the served faces and the
+ * hyphenation patterns. Not among them, because an engine makes them and the pull request may move them: the made layout files
+ * (`fixtures/<output>/layout.json`). A pack with another reference, another geometry, another PDF, translation, face or pattern
+ * is another instrument, whichever directory it is in.
  */
-export function instrumentOfPack(manifest) {
-  const files = manifest?.files
-  if (!Array.isArray(files) || !files.length) throw new Error('the pack names no files: its manifest.json is not a pack\'s')
+export function instrumentOfPack(pack) {
+  const files = pack?.files
+  if (!Array.isArray(files) || !files.length) throw new Error('the pack names no files: it is not a gate-pack.json')
   const part = test => listingDigest(files.filter(f => test(String(f.path))))
   return {
     fixtures: part(p => p.startsWith('fixtures/') && !/^fixtures\/[^/]+\/layout\.json$/.test(p)),
     refs: part(p => p.startsWith('refs/')),
     geometry: part(p => p.startsWith('geometry/')),
+    data: part(p => p.startsWith('data/')),
+    texmf: part(p => p.startsWith('texmf/')),
   }
+}
+
+/** the run file `file`, written to `out` with its pack's instrument in place of the folders it was given (the pack is named by its
+ *  gate-pack.json, which `gate-pack.mjs verify` checked the directory against: a restored directory carries no manifest of its own) */
+export function stampRun(file, out, packJson) {
+  const run = JSON.parse(readFileSync(file, 'utf8'))
+  run.inputs = { ...run.inputs, ...instrumentOfPack(JSON.parse(readFileSync(packJson, 'utf8'))) }
+  writeFileSync(out, JSON.stringify(run))
 }
 
 /** the output of the gate that is names and numbers: an output's `ok` line, the tier's line, the completeness line */
@@ -389,6 +400,7 @@ export function publicLine(line) {
  *  pack in it) is `judge`'s to say, with the side's name. Its whole output goes to the file `log` (a file of the runner, never
  *  uploaded); the job log gets `publicLine`'s lines alone */
 export function runGate(o) {
+  if (typeof o.packJson !== 'string') throw new Error('runGate: packJson (the gate-pack.json of the pack the run reads) is needed')
   const { args, env } = gateArgs(o)
   const log = resolve(o.log ?? join(tmpdir(), `rules-gate-${process.pid}-${basename(o.engine)}.log`))
   mkdirSync(dirname(log), { recursive: true })
@@ -411,11 +423,7 @@ export function runGate(o) {
       const file = /the run in (.+\.json)\s*$/m.exec(out)?.[1]
       if (!file || !existsSync(file)) return fail(new Error(`the gate wrote no run file (exit ${code}); its output is in ${log}`))
       // (the folders the run names are the pack's content, not the directory the pack happens to be in: instrumentOfPack)
-      try {
-        const run = JSON.parse(readFileSync(file, 'utf8'))
-        run.inputs = { ...run.inputs, ...instrumentOfPack(JSON.parse(readFileSync(join(o.pack, 'manifest.json'), 'utf8'))) }
-        writeFileSync(o.out ?? file, JSON.stringify(run))
-      } catch (e) { return fail(new Error(`the run could not be stamped with its pack's instrument (${e instanceof SyntaxError ? 'a file is not JSON' : e.message})`)) }
+      try { stampRun(file, o.out ?? file, o.packJson) } catch (e) { return fail(new Error(`the run could not be stamped with its pack's instrument (${e instanceof SyntaxError ? 'a file is not JSON' : e.message})`)) }
       ok(o.out ?? file)
     })
   })
@@ -490,7 +498,8 @@ export async function engines(argv, { run = runGate, git: gitFn = git, fetchImpl
   const head = await headEngine()
   const { set: headSet } = await head.readRules(new Uint8Array(readFileSync(headFile)))
   // (the pack the job verified is the committed manifest's: its outputs are what each run must hold)
-  const outputs = outputsOfPack(readJson(typeof arg('pack-json') === 'string' ? resolve(arg('pack-json')) : join(REPO, 'lab/pdf/gate-pack.json')))
+  const packJson = typeof arg('pack-json') === 'string' ? resolve(arg('pack-json')) : join(REPO, 'lab/pdf/gate-pack.json')
+  const outputs = outputsOfPack(readJson(packJson))
   // the same rulings as the pull request gate, those of the tree at head's commit; the second lock as in compare, since their words
   // go to the run's summary, which is public
   const headSha = gitFn('rev-parse', 'HEAD').trim()
@@ -522,8 +531,8 @@ export async function engines(argv, { run = runGate, git: gitFn = git, fetchImpl
       if (!Number.isInteger(fromVersion)) throw new Error(`${from} has no version`)
       const rulings = rulingsFor(all, fromVersion, headSet.version)
       console.log(`${e.name} (${e.ref}): head's set (version ${headSet.version}) against ${from} (version ${fromVersion}); ${rulings.length} ruling${rulings.length === 1 ? '' : 's'} of the versions between`)
-      const base = JSON.parse(readFileSync(await run({ engine: dir, rules: published, pack, log: join(out, `${basename(dir)}-base.log`) }), 'utf8'))
-      const next = JSON.parse(readFileSync(await run({ engine: dir, rules: headFile, pack, log: join(out, `${basename(dir)}-head.log`) }), 'utf8'))
+      const base = JSON.parse(readFileSync(await run({ engine: dir, rules: published, pack, packJson, log: join(out, `${basename(dir)}-base.log`) }), 'utf8'))
+      const next = JSON.parse(readFileSync(await run({ engine: dir, rules: headFile, pack, packJson, log: join(out, `${basename(dir)}-head.log`) }), 'utf8'))
       const report = judge(base, next, { outputs, rulings })
       const md = commentOf(report, { headSha, baseSha: sha, label: `engine ${e.name}`, rulings }).replace(MARK, `<!-- rules-gate engine ${basename(dir)} -->`)
       const json = `${JSON.stringify(reportJson(report), null, 1)}\n`
@@ -618,7 +627,7 @@ async function main(argv) {
   const rest = argv.filter((x, i) => !(i === 0 && x === command))
   if (command === 'run') {
     const arg = n => option(rest, n)
-    const file = await runGate({ engine: resolve(arg('engine')), rules: resolve(arg('rules')), pack: resolve(arg('pack')), out: typeof arg('out') === 'string' ? resolve(arg('out')) : undefined, log: typeof arg('log') === 'string' ? arg('log') : undefined, workers: arg('workers') ? Number(arg('workers')) : 4 })
+    const file = await runGate({ engine: resolve(arg('engine')), rules: resolve(arg('rules')), pack: resolve(arg('pack')), packJson: resolve(arg('pack-json')), out: typeof arg('out') === 'string' ? resolve(arg('out')) : undefined, log: typeof arg('log') === 'string' ? arg('log') : undefined, workers: arg('workers') ? Number(arg('workers')) : 4 })
     console.log(`RUN ${file}`)
     return 0
   }

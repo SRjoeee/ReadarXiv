@@ -92,7 +92,7 @@ export async function s3Credentials({ token, account, fetchImpl = fetch, retryMs
   const { res, value } = await withRetry(() => fetchImpl(url, { headers: { authorization: `Bearer ${token}` }, ...limit(timeoutMs) }), r => r.json(), retryMs)
   if (!value) throw new Error(res && res.status < 500 && res.status !== 429 ? `the token is not an active Account API token of this account (HTTP ${res.status})` : `Cloudflare's token-verify endpoint could not be read (${res ? `HTTP ${res.status}` : 'the request failed'})`)
   const id = value.result?.id
-  if (value.success !== true || value.result?.status !== 'active' || typeof id !== 'string' || !/^[0-9a-f]{32}$/.test(id)) throw new Error(`the token is not an active Account API token of this account (HTTP ${res.status})`)
+  if (value.success !== true || value.result?.status !== 'active' || typeof id !== 'string' || !/^[0-9a-f]{32}$/.test(id)) throw new Error(`the token is not an active Account API token of this account (HTTP ${res.status}${/^[a-z_]{1,24}$/.test(String(value.result?.status)) ? `, status ${value.result.status}` : ''})`)
   return { accessKeyId: id, secret: sha256(token) }
 }
 

@@ -161,12 +161,15 @@ describe('each side of the gate runs on the pack its own commit names', () => {
     expect(at('Check the pack')).toBeLessThan(at('Gate on the merge base'))
   })
 
-  it('reads the merge base\'s digest from its own manifest with its own script, and runs the base on the pull request\'s directory only where the two are equal', () => {
+  it('reads the merge base\'s digest from its own manifest with its own script, and runs the base on the pull request\'s directory only where the layout file\'s version is the same', () => {
     const digests = step('Pack digests')
     expect(digests).toContain('head=$(node lab/pdf/spikes/gate-pack.mjs digest)')
     expect(digests).toContain(`base=$(node ${BASE_SCRIPT} digest ${BASE_MANIFEST})`)
-    expect(digests).toContain('if [ "$head" = "$base" ]; then')
-    expect(digests).toMatch(/same=true.*\n\s+echo "BASE_PACK=\$PWD\/lab\/pdf\/out\/gate-pack" >> "\$GITHUB_ENV"\n\s+else\n\s+echo "same=false.*\n\s+echo "BASE_PACK=\$RUNNER_TEMP\/base-pack" >> "\$GITHUB_ENV"\n\s+fi/)
+    // the layout field of each side's gate-pack.json decides, not the digest: another pack under the same layout is measured on the one pack
+    expect(digests).toContain('hl=$(node -e')
+    expect(digests).toContain('bl=$(node -e')
+    expect(digests).toContain('if [ "$hl" = "$bl" ]; then')
+    expect(digests).toMatch(/same=true.*\n\s+echo "BASE_PACK=\$PWD\/lab\/pdf\/out\/gate-pack" >> "\$GITHUB_ENV"\n\s+echo "BASE_PACK_JSON=\$PWD\/lab\/pdf\/gate-pack\.json" >> "\$GITHUB_ENV"\n\s+else\n\s+echo "same=false.*\n\s+echo "BASE_PACK=\$RUNNER_TEMP\/base-pack" >> "\$GITHUB_ENV"\n\s+echo "BASE_PACK_JSON=\$RUNNER_TEMP\/base\/lab\/pdf\/gate-pack\.json" >> "\$GITHUB_ENV"\n\s+fi/)
   })
 
   it('restores the merge base\'s pack with the merge base\'s own script and manifest, from a cache keyed by its own digest, only where the digests differ', () => {
@@ -187,9 +190,9 @@ describe('each side of the gate runs on the pack its own commit names', () => {
   it('keeps the pull request\'s pack on its own digest, and measures the base on the base\'s directory and the head on the pull request\'s', () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expressions, not templates
     for (const name of ['Pack from the cache', 'Keep the pack']) expect(step(name)).toContain('key: gate-pack-${{ steps.pack.outputs.digest }}')
-    expect(step('Gate on the merge base')).toContain('--pack="$BASE_PACK"')
+    expect(step('Gate on the merge base')).toContain('--pack="$BASE_PACK" --pack-json="$BASE_PACK_JSON"')
     expect(step('Gate on the merge base')).not.toContain('--pack=lab/pdf/out/gate-pack')
-    expect(step('Gate on the pull request')).toContain('--pack=lab/pdf/out/gate-pack ')
+    expect(step('Gate on the pull request')).toContain('--pack=lab/pdf/out/gate-pack --pack-json=lab/pdf/gate-pack.json ')
     expect(step('Gate on the pull request')).not.toContain('BASE_PACK')
     // the verdict reads the pull request's manifest and records
     expect(step('Verdict')).toContain('--pack=lab/pdf/gate-pack.json --records=lab/pdf/out/gate-pack/fixtures')

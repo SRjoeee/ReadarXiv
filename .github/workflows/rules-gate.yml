@@ -77,8 +77,8 @@ jobs:
       # The packs, one for each side: a pack is made by an engine (its layout files are that engine's), and a pull request that moves
       # the layout file re-makes it, so the merge base's engine cannot read the pull request's pack. Each commit's own
       # lab/pdf/gate-pack.json names the pack its own engine reads: the pull request's, and the merge base's, which is restored by
-      # the merge base's own script and manifest. Where the two digests are equal the base run reads the pull request's pack
-      # (BASE_PACK is its directory) and nothing is downloaded twice.
+      # the merge base's own script and manifest. Where the layout file's schema and version are the same in both, the base run reads
+      # the pull request's pack (BASE_PACK is its directory) and nothing is downloaded twice.
       # Each is taken from this pull request's own cache by its digest, else from the bucket with the read-only token (a repository
       # secret, which the fixtures fetch of ci.yml reads too: no environment holds a copy of it). Only the two restore steps name
       # the token, but any process of the job could read it: it is read-only, it expires, and it is rotated (lab/pdf/README.md).
@@ -93,12 +93,18 @@ jobs:
           for d in "$head" "$base"; do printf '%s' "$d" | grep -Eq '^[0-9a-f]{64}$' || { echo "not a pack digest"; exit 1; }; done
           echo "digest=$head" >> "$GITHUB_OUTPUT"
           echo "base=$base" >> "$GITHUB_OUTPUT"
-          if [ "$head" = "$base" ]; then
+          # One pack serves both sides while the layout file's schema and version are the same (the base's engine reads the pull
+          # request's pack, and what else the pack changes is measured on the one pack); where they differ each side has its own
+          hl=$(node -e 'console.log(JSON.stringify(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).layout ?? null))' lab/pdf/gate-pack.json)
+          bl=$(node -e 'console.log(JSON.stringify(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).layout ?? null))' "$RUNNER_TEMP/base/lab/pdf/gate-pack.json")
+          if [ "$hl" = "$bl" ]; then
             echo "same=true" >> "$GITHUB_OUTPUT"
             echo "BASE_PACK=$PWD/lab/pdf/out/gate-pack" >> "$GITHUB_ENV"
+            echo "BASE_PACK_JSON=$PWD/lab/pdf/gate-pack.json" >> "$GITHUB_ENV"
           else
             echo "same=false" >> "$GITHUB_OUTPUT"
             echo "BASE_PACK=$RUNNER_TEMP/base-pack" >> "$GITHUB_ENV"
+            echo "BASE_PACK_JSON=$RUNNER_TEMP/base/lab/pdf/gate-pack.json" >> "$GITHUB_ENV"
           fi
       - name: Pack from the cache
         id: pack-cache
@@ -149,9 +155,9 @@ jobs:
       # is public and the gate prints stacks and reasons that can carry a paper's text: each run's whole output goes to a file in
       # RUNNER_TEMP (never uploaded), and the log gets the lines that are names and numbers
       - name: Gate on the merge base
-        run: node lab/pdf/spikes/rules-gate.mjs run --engine="$RUNNER_TEMP/base" --rules="$RUNNER_TEMP/base/src/pdf-reader/engine/rules/layout-rules.json" --pack="$BASE_PACK" --out="$RUNNER_TEMP/base-run.json" --log="$RUNNER_TEMP/gate-base.log"
+        run: node lab/pdf/spikes/rules-gate.mjs run --engine="$RUNNER_TEMP/base" --rules="$RUNNER_TEMP/base/src/pdf-reader/engine/rules/layout-rules.json" --pack="$BASE_PACK" --pack-json="$BASE_PACK_JSON" --out="$RUNNER_TEMP/base-run.json" --log="$RUNNER_TEMP/gate-base.log"
       - name: Gate on the pull request
-        run: node lab/pdf/spikes/rules-gate.mjs run --engine="$PWD" --rules="$PWD/src/pdf-reader/engine/rules/layout-rules.json" --pack=lab/pdf/out/gate-pack --out="$RUNNER_TEMP/head-run.json" --log="$RUNNER_TEMP/gate-head.log"
+        run: node lab/pdf/spikes/rules-gate.mjs run --engine="$PWD" --rules="$PWD/src/pdf-reader/engine/rules/layout-rules.json" --pack=lab/pdf/out/gate-pack --pack-json=lab/pdf/gate-pack.json --out="$RUNNER_TEMP/head-run.json" --log="$RUNNER_TEMP/gate-head.log"
 
       # The verdict: a regression fails the run unless the pull request adds a ruling file (lab/pdf/rulings/README.md)
       - name: Verdict
