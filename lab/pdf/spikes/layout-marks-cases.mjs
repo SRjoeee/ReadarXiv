@@ -685,19 +685,20 @@ for (const [job, label] of [['natmove-stop', "natbib [super] with natmove, a cit
 if (!STREAM_ONLY && !NAMES_ONLY) {
   const unit = /^UNIT SUMMARY n=(\d+), bad=(\d+)/m.exec(read('unmark-unit-v1', 'log', 'latin1') ?? '')
   check('\\axt@unmark on hand-written lists: the bare regex\'s result by tokens, in every case', !!unit && Number(unit[1]) >= 25 && unit[2] === '0', `${unit?.[0]} ${(read('unmark-unit-v1', 'log', 'latin1') ?? '').match(/^UNIT DIFF.*/gm)?.slice(0, 3)}`)
+  for (const [job, label] of [['unmark-files', 'with hyperref'], ['unmark-files-titlesec', 'and with titlesec']]) {
+    const same = ['aux', 'toc', 'lof', 'lot', 'out'].map(ext => [ext, read(`${job}-v0`, ext, 'latin1'), read(`${job}-v1`, ext, 'latin1')])
+    const differ = same.filter(([, a, b]) => a === null || a !== b).map(([ext]) => ext)
+    check(`a title with a brace group between two pieces, \\nameref'd: aux, toc, lof, lot, out as v0's, ${label}`, !differ.length, JSON.stringify(differ))
+    const aux = same[0]?.[1] ?? ''
+    check(`… and the aux holds the whole names (not vacuous: the group, the formula and the text after the last mark), ${label}`, /newlabel\{sec:b\}[^\n]*\{z\}[^\n]*three[^\n]*five/.test(aux) && /newlabel\{fig:b\}[^\n]*end \{g\}[^\n]*each[^\n]*x/.test(aux), aux.slice(0, 400))
+    const [a, b] = [await pdfOf(`${job}-v0`), await pdfOf(`${job}-v1`)]
+    const words = r => (r?.pages ?? []).map(pg => pg.map(it => it.str).join('|'))
+    const read1 = r => words(r).join('\n').match(/Read:[^\n]*/)?.[0]
+    check(`… and the PDF's text is v0's, a \`Read:\` line holding the names' text, ${label}`, !!a && !!b && JSON.stringify(words(a)) === JSON.stringify(words(b)) && !moved(a, b).length && /three/.test(read1(b) ?? '') && /each/.test(words(b).join('')), (read1(b) ?? '').slice(0, 300))
+    check(`… with no error in either log, ${label}`, !errorsOf(`${job}-v0`).length && !errorsOf(`${job}-v1`).length, JSON.stringify([errorsOf(`${job}-v0`), errorsOf(`${job}-v1`)]))
+  }
 }
-for (const [job, label] of [['unmark-files', 'with hyperref'], ['unmark-files-titlesec', 'and with titlesec']]) {
-  const same = ['aux', 'toc', 'lof', 'lot', 'out'].map(ext => [ext, read(`${job}-v0`, ext, 'latin1'), read(`${job}-v1`, ext, 'latin1')])
-  const differ = same.filter(([, a, b]) => a === null || a !== b).map(([ext]) => ext)
-  check(`a title with a brace group between two pieces, \\nameref'd: aux, toc, lof, lot, out as v0's, ${label}`, !differ.length, JSON.stringify(differ))
-  const aux = same[0]?.[1] ?? ''
-  check(`… and the aux holds the whole names (not vacuous: the group, the formula and the text after the last mark), ${label}`, /newlabel\{sec:b\}[^\n]*\{z\}[^\n]*three[^\n]*five/.test(aux) && /newlabel\{fig:b\}[^\n]*end \{g\}[^\n]*each[^\n]*x/.test(aux), aux.slice(0, 400))
-  const [a, b] = [await pdfOf(`${job}-v0`), await pdfOf(`${job}-v1`)]
-  const words = r => (r?.pages ?? []).map(pg => pg.map(it => it.str).join('|'))
-  const read1 = r => words(r).join('\n').match(/Read:[^\n]*/)?.[0]
-  check(`… and the PDF's text is v0's, a \`Read:\` line holding the names' text, ${label}`, !!a && !!b && JSON.stringify(words(a)) === JSON.stringify(words(b)) && !moved(a, b).length && /three/.test(read1(b) ?? '') && /each/.test(words(b).join('')), (read1(b) ?? '').slice(0, 300))
-  check(`… with no error in either log, ${label}`, !errorsOf(`${job}-v0`).length && !errorsOf(`${job}-v1`).length, JSON.stringify([errorsOf(`${job}-v0`), errorsOf(`${job}-v1`)]))
-}
+
 
 // ---------------------------------------------------------------- the names' checks
 if (!STREAM_ONLY && !UNMARK_ONLY) {
