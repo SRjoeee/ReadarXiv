@@ -298,14 +298,18 @@ export function readNameProbe(log) {
 const TEX_PT = /^(-?\d+(?:\.\d+)?)pt$/
 /** PDF units (big points) a TeX point */
 const BP_PER_PT = 72 / 72.27
-/** the most a skip may be, TeX's \maxdimen in big points, which \offinterlineskip sets \lineskiplimit to */
-const SKIP_MAX = 16384 * BP_PER_PT
+/** the most a skip may be, TeX's \maxdimen in big points, which \offinterlineskip sets \lineskiplimit to, as the file
+ *  writes it (to a hundredth: 16322.79, over the exact 16322.7895 by the rounding), so that a value read is read back */
+const SKIP_MAX = Math.round(16384 * BP_PER_PT * 100) / 100
 /**
  * The skip section of the probe (`lineskip`): one row `lineskip <\lineskip> <\lineskiplimit>`, the glue's natural size
  * and the dimension, as \the writes them, at the document's start in its body size, where the paper's own settings stand
  * (LaTeX's 1pt and 0pt where it sets none): what TeX sets two lines apart by where the one's depth and the other's height
  * come nearer than the limit. The layer opens a line by it (layer2.mjs breakLines). (TeX eats the space after \relax:
- * the second field's own \space parts the two.) Writes nothing, ships out nothing (readSkipProbe)
+ * the second field's own \space parts the two.) Writes nothing, ships out nothing (readSkipProbe). One pair a paper: the
+ * probe's body follows the paper's preamble and none of its body, so a value the body sets, or a scope sets for its own
+ * lines (an environment, a group: cvpr.sty's \lineskip .5em in its title's author block, 1512.03385), is not read, and the
+ * layer applies the pair to every unit
  */
 export const skipSection = () => probeRow('lineskip', '\\the\\dimexpr\\lineskip\\relax', '\\space\\the\\lineskiplimit')
 /** the paper's \lineskip and \lineskiplimit from the probe's log (skipSection), in PDF units: [lineskip, limit], or null
@@ -787,7 +791,7 @@ export const MARKS_DEPTH = 3
  *  null where no probe ran, the macros TeX said set no ink (`marking.inkless`) and the texts it showed they set
  *  (`marking.texts`), and the rest of a word given in parts (a token of word -1); 4 the babel names' marks (MARK_NAME's
  *  n<occurrence>.<key>) and whether each name's own text holds a lowercase letter (`marking.names`); 5 the paper's
- *  \lineskip and \lineskiplimit (`marking.lineskip`, PDF units, readSkipProbe) */
+ *  \lineskip and \lineskiplimit (`marking.lineskip`, PDF units, readSkipProbe: one pair, at the body's start) */
 export const MARKS_SCHEMA = 5
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
 const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens', 'chars', 'owned']

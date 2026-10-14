@@ -76,8 +76,9 @@ export const NAMES_MAX = 10_000
 const NAME_BITS = NAME_FLAG.CENTRED | NAME_FLAG.CAPITALS | NAME_FLAG.RUN_IN
 /** a name's row: its values */
 const NAME_ROW = 15
-/** a skip at most: TeX's \maxdimen in PDF units, which \offinterlineskip sets \lineskiplimit to */
-const SKIP_MAX = (16384 * 72) / 72.27
+/** a skip at most: TeX's \maxdimen in PDF units, which \offinterlineskip sets \lineskiplimit to, as the file writes it
+ *  (to a hundredth: 16322.79, over the exact 16322.7895 by the rounding), so that a value the marks file holds is read */
+const SKIP_MAX = Math.round(((16384 * 72) / 72.27) * 100) / 100
 /** a rectangle lies within its page's view by this, PDF units */
 const SLACK = 1
 const UNIT_BITS = UNIT_FLAG.TITLE | UNIT_FLAG.FRONT | UNIT_FLAG.CENTRED

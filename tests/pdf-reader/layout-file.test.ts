@@ -205,6 +205,13 @@ describe('a valid file', () => {
     // (the paper's \lineskip as TeX gives it in PDF units, 1pt = 0.9962640099626402, to a hundredth like every number)
     shuffled.lineskip = [0.9962640099626402, -0.004]
     expect(parseLayout(utf8(encodeLayout(shuffled))).lineskip).toEqual([1, 0])
+    // TeX's \maxdimen (16383.99998pt, \offinterlineskip's \lineskiplimit; 16322.7895 PDF units) and the 16384pt the probe
+    // reads at most are written 16322.79, over the exact bound by the rounding: the file still reads, either sign
+    const most = 16383.99998 * (72 / 72.27)
+    shuffled.lineskip = [-most, most]
+    expect(parseLayout(utf8(encodeLayout(shuffled))).lineskip).toEqual([-16322.79, 16322.79])
+    shuffled.lineskip = [0, (16384 * 72) / 72.27]
+    expect(parseLayout(utf8(encodeLayout(shuffled))).lineskip).toEqual([0, 16322.79])
   })
 
   it('a zero written -0 reads as 0, so that the file round-trips', () => {
@@ -354,6 +361,7 @@ const ROWS: [string, Edit, string][] = [
   ['a lineskip of one number', f => { (f as { lineskip: unknown }).lineskip = [1] }, 'lineskip'],
   ['a lineskip that is a string', f => { (f as { lineskip: unknown }).lineskip = ['1pt', 0] }, 'lineskip[0]'],
   ['a lineskiplimit past \\maxdimen', f => { (f as { lineskip: unknown }).lineskip = [1, 1e6] }, 'lineskip[1]'],
+  ['a lineskiplimit a hundredth past \\maxdimen as written', f => { (f as { lineskip: unknown }).lineskip = [1, 16322.8] }, 'lineskip[1]'],
   // (the maker's version is read for its shape alone: any maker's file under schema 2 is read, identities.test.ts)
   ['layout empty', f => { f.layout = '' }, 'layout'],
   ['layout with a space', f => { f.layout = '3 1' }, 'layout'],

@@ -724,6 +724,12 @@ describe('reading the marked original', () => {
     expect(skips.marking.lineskip).toEqual([0.9962640099626402, -0.004])
     expect(encodeLayoutMarks(skips)).toContain('"lineskip":[1,0]')
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(skips))).marking.lineskip).toEqual([1, 0])
+    // TeX's \maxdimen, which \offinterlineskip sets \lineskiplimit to, from the probe to the file and back: written
+    // 16322.79, over the exact 16322.7895 by the rounding, and read again (the 16384pt the probe reads at most alike)
+    for (const [log, max] of [['LAYOUT-PROBE 1 lineskip -16383.99998pt 16383.99998pt', [-16322.79, 16322.79]], ['LAYOUT-PROBE 1 lineskip 0.0pt 16384.0pt', [0, 16322.79]]] as const) {
+      const most = await layoutMarksOf(doc, '', { engine: 'pdflatex', lineskip: readSkipProbe(log) })
+      expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(most))).marking.lineskip, log).toEqual(max)
+    }
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m))).marking).toEqual(m.marking)
     await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', switches: { '\\cite': '2222000y' } })).rejects.toThrow(LayoutRefusal)
     await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', classes: ['math', 'tikz' as 'math'] })).rejects.toThrow(LayoutRefusal)
@@ -897,6 +903,7 @@ describe('the marks file', () => {
       ['schema 4, a file before the interline glue', m => { m.schema = 4 as 5 }, 'schema'],
       ['a lineskip of one number', m => { (m.marking as Record<string, unknown>).lineskip = [1] }, 'marking.lineskip'],
       ['a lineskip past \\maxdimen', m => { (m.marking as Record<string, unknown>).lineskip = [1, 1e6] }, 'marking.lineskip[1]'],
+      ['a lineskip a hundredth past \\maxdimen as written', m => { (m.marking as Record<string, unknown>).lineskip = [1, 16322.8] }, 'marking.lineskip[1]'],
       ['engine context', m => { m.engine = 'context' }, 'engine'],
       ['marking not an object', m => { (m as Record<string, unknown>).marking = ['math'] }, 'marking'],
       ['marking with a key of no schema', m => { (m.marking as Record<string, unknown>).extra = [] }, 'marking.extra'],
