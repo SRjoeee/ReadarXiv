@@ -9,29 +9,36 @@
 //   pack/geometry/<paper>-<target>-geometry.json  the geometry the gate resolves for each output (LAYER_GEOMETRY)
 //   pack/data/fonts/<file>                        the served faces (AXT_DATA=pack/data)
 //   pack/texmf/<tex/generic/...>                  the en and de hyphenation patterns (TEXMF_DIST=pack/texmf)
-//   pack/manifest.json                            { schema, pipeline, made, digest, files: [{ path, sha256, bytes }] }
+//   pack/manifest.json                            { schema, pipeline, layout: { schema, version }, made, digest, files: [{ path, sha256, bytes }] }
+// `layout` names the layout files' schema and version (their `schema` field, which the reader refuses a file by when it is not its own, and their `layout` field, the maker's version, which the reader reads as a version token and does not compare): a make
+// reads every fixtures/<fx>/layout.json (not refs/<fx>/layout.json, the instrument's kept layout, which no reader parses) and fails unless all of them are the --engine tree's own (file.mjs LAYOUT_SCHEMA and
+// LAYOUT), and tests/scripts/gate-pack.test.ts holds the committed gate-pack.json to the engine, so that a change of the layout
+// file cannot be merged while the pack is of the old one. `make` takes its inputs from the committed fidelity record
+// (lab/pdf/records/layer-gate.json, its `inputs`: fixtures, records, refs, geometry), so that with no flag it makes the record's run.
 // The outputs <fx> are the frozen references of the references folder (--refs): the set the gate itself requires. An output whose
 // reference is there and any other of its files is not makes the make fail, naming each one; it never drops out unseen.
 // The pack is a file set, not an archive: sorted, each file's mtime zeroed, and the listing digest (the paths, digests and
 // sizes, not the clock) is the same on every make. lab/pdf/gate-pack.json is the committed copy of the manifest with each
 // file's `url` in the bucket, a key of its digest, so that the several outputs of one paper share one object.
 //
-//   node lab/pdf/spikes/gate-pack.mjs make     [--out=<dir>] [--json=<gate-pack.json>] [--fixtures=<dir>] [--records=<dir>]
-//                                              [--refs=<dir>] [--geometry=<dir>] [--fonts=<dir>] [--texmf=<dir>] [--engine=<dir>]
-//   node lab/pdf/spikes/gate-pack.mjs restore  [--pack=<gate-pack.json>] [--out=<dir>]    READARXIV_CI_TOKEN, CF_ACCOUNT_ID
+//   node lab/pdf/spikes/gate-pack.mjs make     [--out=<dir>] [--json=<gate-pack.json>] [--record=<layer-gate.json>] [--fixtures=<dir>]
+//                                              [--records=<dir>] [--refs=<dir>] [--geometry=<dir>] [--fonts=<dir>] [--texmf=<dir>] [--engine=<dir>]
+//   node lab/pdf/spikes/gate-pack.mjs restore  [--pack=<gate-pack.json>] [--out=<dir>]    env READARXIV_CI_TOKEN, CF_ACCOUNT_ID
 //   node lab/pdf/spikes/gate-pack.mjs verify   [--pack=<gate-pack.json>] [--out=<dir>]
 //   node lab/pdf/spikes/gate-pack.mjs digest   [--pack=<gate-pack.json>]
 //   node lab/pdf/spikes/gate-pack.mjs objects  [--pack=<gate-pack.json>] [--out=<dir>]    the objects to upload, once each
-// `make` and `objects` read and write local files only; `restore` is the only command that touches the network, with a
-// read-only token that it sends to Cloudflare's API and nowhere else, and never prints.
-import { createHash } from 'node:crypto'
+// `make` and `objects` read and write local files only; `restore` is the only command that touches the network. Its token (an
+// R2 API token, Object Read on the bucket) is sent only to Cloudflare's token-verify endpoint, which answers the token's id;
+// the objects are read from R2's S3 endpoint, each request signed (SigV4) with the key derived from the token (that id, and
+// the SHA-256 of its value). Neither the token nor the derived secret is printed.
+import { createHash, createHmac } from 'node:crypto'
 import { constants, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { geometryFile, nameOf } from './layer-gate/ref.mjs'
 
-export const PACK_SCHEMA = 1
+export const PACK_SCHEMA = 2
 export const BUCKET = 'readarxiv-ci'
 /** the pack's objects in the bucket: gate-pack/<sha256> */
 export const KEY_PREFIX = 'gate-pack/'
@@ -42,12 +49,13 @@ export const ROLE_WEIGHTS = ['light', 'regular', 'semibold', 'bold']
 const here = new URL('.', import.meta.url).pathname
 const REPO = resolve(here, '../../..')
 const ENGINE = 'src/pdf-reader/engine'
-/** where each input of a make is, unless a flag says otherwise: the fidelity record's run (the made layout files of the
- *  engine at the record, the PIPELINE 10 cut's translations, references and geometry) */
-const DEFAULTS = {
-  fixtures: 'lab/pdf/out/layer-gate/fixtures/41795914c3c84238', records: 'lab/pdf/out/layer-gate/cut-p10/records', refs: 'lab/pdf/out/layer-gate/cut-p10/refs',
-  geometry: 'lab/pdf/out/layer-gate/cut-p10/geometry', fonts: 'lab/pdf/data/fonts', out: 'lab/pdf/out/gate-pack', json: 'lab/pdf/gate-pack.json',
-}
+/** the fidelity record a make takes its inputs from */
+const RECORD = 'lab/pdf/records/layer-gate.json'
+/** the inputs a make reads from the record (its `inputs`): the made layout files of the engine at the record, the translations,
+ *  the references and the geometry. No digest or run is named in this file: the record names them */
+export const RECORD_INPUTS = ['fixtures', 'records', 'refs', 'geometry']
+/** where the rest is, unless a flag says otherwise */
+const DEFAULTS = { fonts: 'lab/pdf/data/fonts', out: 'lab/pdf/out/gate-pack', json: 'lab/pdf/gate-pack.json', record: RECORD }
 const FIXTURE = /^[A-Za-z0-9._-]+v\d+-[A-Za-z-]+$/
 const SHA = /^[0-9a-f]{64}$/
 
@@ -143,11 +151,57 @@ export function pipelineOf(records, names) {
   return [...seen][0]
 }
 
-/** whether a directory holds a pack: a manifest.json of this schema whose digest is its listing's (a browser extension's manifest.json is no pack's) */
+/**
+ * The folders of a make as the record names them (`inputs.fixtures`, `records`, `refs`, `geometry`), each with one base: a
+ * relative path is under lab/pdf (`root`, which the gate shows its paths relative to: it resolves every folder before it shows
+ * it), `~/…` under the home directory, an absolute path as it is. A relative path is never tried under the repository too: a
+ * name that exists under both would mean two folders. A flag in `flags` (a path, relative to the repository) takes the
+ * place of the record's. A path the gate could not show (`<scratch>/…`, `<local>/…`) or that is not under its base names the
+ * input and stops the make.
+ */
+export function inputsOfRecord(record, { root, repo, flags = {}, exists = existsSync, home = homedir() }) {
+  const out = {}
+  for (const name of RECORD_INPUTS) {
+    if (typeof flags[name] === 'string') { out[name] = resolve(repo, flags[name]); continue }
+    const v = record?.inputs?.[name]
+    if (typeof v !== 'string' || !v) throw new Error(`the record names no inputs.${name}: give --${name}=<dir>`)
+    if (v.startsWith('<')) throw new Error(`the record's inputs.${name} is ${JSON.stringify(v)}, which is no path: give --${name}=<dir>`)
+    const found = v === '~' ? home : v.startsWith('~/') ? join(home, v.slice(2)) : v.startsWith('/') ? v : resolve(root, v)
+    if (!exists(found)) throw new Error(`the record's inputs.${name} (${JSON.stringify(v)}) is not at ${found}: give --${name}=<dir>`)
+    out[name] = found
+  }
+  return out
+}
+
+/** the engine's layout file version: the schema of the file and the maker's version (file.mjs LAYOUT_SCHEMA and LAYOUT) */
+export const layoutOfEngine = async engine => {
+  const { LAYOUT, LAYOUT_SCHEMA } = await import(pathToFileURL(join(engine, ENGINE, 'layout/file.mjs')).href)
+  return { schema: LAYOUT_SCHEMA, version: LAYOUT }
+}
+
+/**
+ * The layout files' version: the `schema` and `layout` fields every fixtures/<fx>/layout.json of the outputs names (the reader
+ * refuses a file whose schema is not its own, and takes `layout` as a version token only), which must all be `expected` (the engine's own). Throws naming each output that is not, with
+ * what its file says; a pack made of layout files of two makers, or of another maker than the engine's, is never made.
+ */
+export function layoutVersionOf(fixtures, names, expected) {
+  const bad = []
+  for (const n of names) {
+    let j = null
+    try { j = readJson(join(fixtures, n, 'layout.json')) } catch { /* named below */ }
+    const schema = j?.schema, version = j?.layout
+    if (schema !== expected.schema || version !== expected.version) bad.push(`${n}: ${j === null ? 'not a layout file' : `schema ${JSON.stringify(schema)}, layout ${JSON.stringify(version)}`}`)
+  }
+  if (bad.length) throw new Error(`${bad.length} layout file${bad.length === 1 ? '' : 's'} not of the engine's version (schema ${expected.schema}, layout ${JSON.stringify(expected.version)}); make the fixtures again with the engine (layer gate, --layouts=made):\n  ${bad.slice(0, 40).join('\n  ')}${bad.length > 40 ? '\n  …' : ''}`)
+  return { schema: expected.schema, version: expected.version }
+}
+
+/** whether a directory holds a pack: a manifest.json of this schema or an earlier one (a make over the pack before a schema
+ *  bump clears it) whose digest is its listing's (a browser extension's manifest.json is no pack's) */
 function isPack(dir) {
   try {
     const m = readJson(join(dir, 'manifest.json'))
-    return m.schema === PACK_SCHEMA && Array.isArray(m.files) && typeof m.digest === 'string' && listingDigest(m.files) === m.digest
+    return Number.isInteger(m.schema) && m.schema >= 1 && m.schema <= PACK_SCHEMA && Array.isArray(m.files) && typeof m.digest === 'string' && listingDigest(m.files) === m.digest
   } catch { return false }
 }
 
@@ -155,7 +209,8 @@ function isPack(dir) {
  * The pack written to `out`: each file copied (a clone where the filesystem has them), its mtime set to the epoch, its digest
  * and size read back from the copy; `manifest.json` last. An `out` that holds a pack is cleared first, one that holds anything else is refused. Returns the manifest.
  */
-export function makePack({ entries, out, pipeline, made = new Date().toISOString() }) {
+export function makePack({ entries, out, pipeline, layout, made = new Date().toISOString() }) {
+  if (!Number.isInteger(layout?.schema) || typeof layout?.version !== 'string') throw new Error('makePack: the layout files\' schema and version are needed (layoutVersionOf)')
   if (existsSync(out)) {
     if (isPack(out)) rmSync(out, { recursive: true })
     else if (readdirSync(out).length) throw new Error(`${out} holds files that are no pack's (no manifest.json of a pack): not touching them`)
@@ -170,14 +225,14 @@ export function makePack({ entries, out, pipeline, made = new Date().toISOString
     const bytes = readFileSync(to)
     files.push({ path, sha256: sha256(bytes), bytes: bytes.length })
   }
-  const manifest = { schema: PACK_SCHEMA, pipeline, made, digest: listingDigest(files), files }
+  const manifest = { schema: PACK_SCHEMA, pipeline, layout, made, digest: listingDigest(files), files }
   writeFileSync(join(out, 'manifest.json'), `${JSON.stringify(manifest, null, 1)}\n`)
   return manifest
 }
 
 /** the committed copy of a manifest: each file with the url of its object, a key of its digest */
 export function packJsonOf(manifest, bucket = BUCKET) {
-  return { schema: manifest.schema, pipeline: manifest.pipeline, made: manifest.made, digest: manifest.digest, bucket, files: manifest.files.map(f => ({ ...f, url: `r2://${bucket}/${KEY_PREFIX}${f.sha256}` })) }
+  return { schema: manifest.schema, pipeline: manifest.pipeline, layout: manifest.layout, made: manifest.made, digest: manifest.digest, bucket, files: manifest.files.map(f => ({ ...f, url: `r2://${bucket}/${KEY_PREFIX}${f.sha256}` })) }
 }
 
 /** the pack's files grouped by what they are, for the listing the maintainer sees before an upload (counts and sizes only) */
@@ -196,25 +251,96 @@ export function summaryOf(files) {
 
 // ---------------------------------------------------------------- restoring
 
-/** an object's url in the bucket as a read of Cloudflare's REST API: slashes of the key literal, as the API asks, the rest escaped */
-export function objectUrl(account, url, bucket = BUCKET) {
+const accountOf = account => {
   if (typeof account !== 'string' || !/^[0-9a-f]{32}$/.test(account)) throw new Error('CF_ACCOUNT_ID is not a Cloudflare account id')
+  return account
+}
+
+/** an object's url in the bucket as a read of R2's S3 API (path style): slashes of the key literal, the rest escaped once */
+export function objectUrl(account, url, bucket = BUCKET) {
+  accountOf(account)
   const m = /^r2:\/\/([a-z0-9][a-z0-9-]{1,62})\/([A-Za-z0-9._/-]+)$/.exec(String(url))
   if (!m || m[1] !== bucket || m[2].split('/').some(s => s === '' || s === '.' || s === '..')) throw new Error(`not an object of ${bucket}: ${JSON.stringify(String(url).slice(0, 80))}`)
-  return `https://api.cloudflare.com/client/v4/accounts/${account}/r2/buckets/${bucket}/objects/${m[2].split('/').map(encodeURIComponent).join('/')}`
+  return `https://${account}.r2.cloudflarestorage.com/${bucket}/${m[2].split('/').map(encodeURIComponent).join('/')}`
+}
+
+const EMPTY_SHA = sha256('')
+const hmac = (key, data) => createHmac('sha256', key).update(data).digest()
+
+/**
+ * The headers of a body-less, query-less request signed with AWS Signature Version 4: `headers` plus `x-amz-date`,
+ * `x-amz-content-sha256` (the empty payload's digest) and `authorization`. `host` is signed from the URL but not returned (fetch
+ * sets it). The path is signed as the URL carries it, each segment escaped once; header values are trimmed, nothing more.
+ * Proven against AWS's own GET Object example (tests/scripts/gate-pack.test.ts).
+ */
+export function signV4({ method, url, headers = {}, accessKeyId, secret, region, service, date }) {
+  const u = new URL(url)
+  if (u.search) throw new Error('signV4 signs requests without a query string')
+  const stamp = date.toISOString().replace(/[-:]|\.\d{3}/g, '')
+  const scope = `${stamp.slice(0, 8)}/${region}/${service}/aws4_request`
+  const sent = { ...headers, 'x-amz-date': stamp, 'x-amz-content-sha256': EMPTY_SHA }
+  const signed = { host: u.host, ...Object.fromEntries(Object.entries(sent).map(([k, v]) => [k.toLowerCase(), String(v).trim()])) }
+  const names = Object.keys(signed).sort()
+  const canonical = `${method}\n${u.pathname}\n\n${names.map(n => `${n}:${signed[n]}\n`).join('')}\n${names.join(';')}\n${EMPTY_SHA}`
+  const key = [...scope.split('/')].reduce(hmac, `AWS4${secret}`)
+  const signature = hmac(key, `AWS4-HMAC-SHA256\n${stamp}\n${scope}\n${sha256(canonical)}`).toString('hex')
+  return { ...sent, authorization: `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${scope}, SignedHeaders=${names.join(';')}, Signature=${signature}` }
+}
+
+/** the token as it is signed with: white space in it (a pasted newline, which a header drops and a digest keeps) is refused */
+const tokenOf = token => {
+  if (typeof token !== 'string' || !token) throw new Error('READARXIV_CI_TOKEN is not set')
+  if (!/^\S+$/.test(token)) throw new Error('READARXIV_CI_TOKEN has white space in it: set the token alone')
+  return token
+}
+
+const sleep = ms => new Promise(ok => setTimeout(ok, ms))
+
+/**
+ * A request `send()` makes and `read(res)` reads, tried again twice (after retryMs, then twice that) when it fails for want of
+ * the network or the server: a throw, a 5xx or a 429. The read is part of the operation: a connection that drops while the body
+ * is read is the same failure as one that never opened. Returns { res, value } of the one that worked, or { res } (null when no
+ * response came) of the one that did not: a 4xx at once, the others when the tries are spent.
+ */
+async function withRetry(send, read, retryMs) {
+  for (let attempt = 0; ; attempt++) {
+    let res = null
+    try {
+      res = await send()
+      if (res.ok) return { res, value: await read(res) }
+    } catch { res = null }
+    if (!(res === null || res.status >= 500 || res.status === 429) || attempt >= 2) return { res }
+    await sleep(retryMs * (attempt + 1))
+  }
+}
+
+/**
+ * The S3 credentials of an R2 API token (Cloudflare: "Get S3 API credentials from an API token"): the access key id is the
+ * token's own id, which Cloudflare's verify endpoint answers, and the secret is the SHA-256 of the token's value. The one request
+ * that carries the token; nothing it fails with names the token or the secret.
+ */
+export async function s3Credentials({ token, account, fetchImpl = fetch, retryMs = 1000 }) {
+  tokenOf(token)
+  const url = `https://api.cloudflare.com/client/v4/accounts/${accountOf(account)}/tokens/verify`
+  const { res, value } = await withRetry(() => fetchImpl(url, { headers: { authorization: `Bearer ${token}` } }), r => r.json(), retryMs)
+  if (!value) throw new Error(res && res.status < 500 && res.status !== 429 ? `the token is not an active Account API token of this account (HTTP ${res.status})` : `Cloudflare's token-verify endpoint could not be read (${res ? `HTTP ${res.status}` : 'the request failed'})`)
+  const id = value.result?.id
+  if (value.success !== true || value.result?.status !== 'active' || typeof id !== 'string' || !/^[0-9a-f]{32}$/.test(id)) throw new Error(`the token is not an active Account API token of this account (HTTP ${res.status})`)
+  return { accessKeyId: id, secret: sha256(token) }
 }
 
 const fileIs = (file, f) => { try { const b = readFileSync(file); return b.length === f.bytes && sha256(b) === f.sha256 } catch { return false } }
-const sleep = ms => new Promise(ok => setTimeout(ok, ms))
 
 /**
  * A pack restored into `dir` from the bucket: each distinct digest read once (a file already there with the right digest
  * is kept; the several outputs of one paper share an object), checked against the manifest's digest and size before it is
- * written, and a read that fails for want of the network or the server (not for a 4xx; the body's read is part of it) tried
- * again twice. Nothing the token is in is printed or thrown: the errors say the status and the key.
+ * written, and a read that fails for want of the network or the server (not for a 4xx) tried again twice. The S3 credentials
+ * are derived once, by the first read that needs them (a restore that finds everything there asks Cloudflare nothing; one that
+ * reads any object has verified the token first), and each read is signed with `now()`. Nothing the token, the secret or a
+ * signature is in is printed or thrown: the errors say the status and the key.
  */
-export async function restorePack({ pack, dir, token, account, fetchImpl = fetch, retryMs = 1000, log = () => {} }) {
-  if (typeof token !== 'string' || !token) throw new Error('READARXIV_CI_TOKEN is not set')
+export async function restorePack({ pack, dir, token, account, fetchImpl = fetch, retryMs = 1000, now = () => new Date(), log = () => {} }) {
+  tokenOf(token)
   if (pack.schema !== PACK_SCHEMA) throw new Error(`gate-pack.json is schema ${pack.schema}, this script reads ${PACK_SCHEMA}`)
   const objects = new Map()
   for (const f of pack.files) {
@@ -224,18 +350,18 @@ export async function restorePack({ pack, dir, token, account, fetchImpl = fetch
     e.paths.push(f.path)
     objects.set(f.sha256, e)
   }
-  const get = async (f, url) => {
-    for (let attempt = 0; ; attempt++) {
-      let res
-      // (the body is part of the operation: a connection that drops while it is read is the same failure as one that never opened)
-      try {
-        res = await fetchImpl(url, { headers: { authorization: `Bearer ${token}` } })
-        if (res.ok) return Buffer.from(await res.arrayBuffer())
-      } catch { res = null }
-      const retry = !res || res.status >= 500 || res.status === 429
-      if (!retry || attempt >= 2) throw new Error(`${f.url}: ${res ? `HTTP ${res.status}` : 'the request failed'}${res?.status === 404 ? ' (is the pack uploaded?)' : res?.status === 401 || res?.status === 403 ? ' (does the token read this bucket?)' : ''}`)
-      await sleep(retryMs * (attempt + 1))
-    }
+  let credentials = null
+  const get = async f => {
+    const url = objectUrl(account, f.url, pack.bucket)
+    credentials ??= s3Credentials({ token, account, fetchImpl, retryMs })
+    const { accessKeyId, secret } = await credentials
+    const { res, value } = await withRetry(
+      () => fetchImpl(url, { headers: signV4({ method: 'GET', url, accessKeyId, secret, region: 'auto', service: 's3', date: now() }) }),
+      async r => Buffer.from(await r.arrayBuffer()),
+      retryMs,
+    )
+    if (!value) throw new Error(`${f.url}: ${res ? `HTTP ${res.status}` : 'the request failed'}${res?.status === 404 ? ' (is the pack uploaded?)' : res?.status === 401 || res?.status === 403 ? ' (does the token read this bucket?)' : ''}`)
+    return value
   }
   const todo = [...objects.values()]
   let next = 0, fetched = 0, kept = 0
@@ -246,7 +372,7 @@ export async function restorePack({ pack, dir, token, account, fetchImpl = fetch
       if (have.length === e.paths.length) { kept++; continue }
       if (have.length) bytes = readFileSync(join(dir, have[0]))
       else {
-        bytes = await get(e.file, objectUrl(account, e.file.url, pack.bucket))
+        bytes = await get(e.file)
         if (bytes.length !== e.file.bytes || sha256(bytes) !== e.file.sha256) throw new Error(`${e.file.url}: the bytes are not the manifest's (${bytes.length} bytes, expected ${e.file.bytes}, or another digest)`)
         fetched++
       }
@@ -291,6 +417,13 @@ export function objectsOf(pack, bucket = pack.bucket) {
 
 const arg = (name, argv = process.argv) => { const a = argv.find(x => x === `--${name}` || x.startsWith(`--${name}=`)); return a === undefined ? null : a.includes('=') ? a.slice(name.length + 3) : true }
 const where = (argv, name) => resolve(REPO, typeof arg(name, argv) === 'string' ? arg(name, argv) : DEFAULTS[name])
+/** the four folders a make reads: the record's, a flag taking the place of each */
+const recordInputs = argv => {
+  const file = where(argv, 'record')
+  if (!existsSync(file) && RECORD_INPUTS.some(n => typeof arg(n, argv) !== 'string')) throw new Error(`no ${file}: it names the inputs of a make`)
+  const flags = Object.fromEntries(RECORD_INPUTS.map(n => [n, arg(n, argv)]))
+  return inputsOfRecord(existsSync(file) ? readJson(file) : null, { root: resolve(REPO, 'lab/pdf'), repo: REPO, flags })
+}
 const mb = n => `${(n / 1048576).toFixed(1)} MB`
 
 async function main(argv) {
@@ -300,17 +433,18 @@ async function main(argv) {
     const engine = resolve(typeof arg('engine', argv) === 'string' ? arg('engine', argv) : REPO)
     const E = f => import(pathToFileURL(join(engine, ENGINE, f)).href)
     const [{ FACES }, { BUILTIN_RULES, resolveRules, SCRIPTS }, { TEX_PATTERN_FILES }] = await Promise.all([E('rules/font-roles.mjs'), E('rules/layout.mjs'), E('layer-proto/hyph.mjs')])
-    const fixtures = where(argv, 'fixtures'), records = where(argv, 'records')
-    const names = outputsOf(where(argv, 'refs'))
+    const { fixtures, records, refs, geometry } = recordInputs(argv)
+    const names = outputsOf(refs)
+    const layout = layoutVersionOf(fixtures, names, await layoutOfEngine(engine))
     const targets = [...new Set(names.map(n => nameOf(n).target))].sort()
     const known = SCRIPTS.map(s => BUILTIN_RULES.scripts[s].cjkFaces).filter(Boolean)
     const used = [...new Map(targets.map(t => resolveRules(BUILTIN_RULES, t).cjkFaces).filter(Boolean).map(c => [`${c.group}|${c.kai}`, c])).values()]
     const texmf = resolve(typeof arg('texmf', argv) === 'string' ? arg('texmf', argv) : process.env.TEXMF_DIST ?? join(homedir(), 'Library/TinyTeX/texmf-dist'))
-    const entries = entriesOf({ fixtures, records, refs: where(argv, 'refs'), geometry: where(argv, 'geometry'), fontsDir: where(argv, 'fonts'), fonts: fontFiles(FACES, known, used), patterns: TEX_PATTERN_FILES, texmf })
-    const manifest = makePack({ entries, out: where(argv, 'out'), pipeline: pipelineOf(records, names) })
+    const entries = entriesOf({ fixtures, records, refs, geometry, fontsDir: where(argv, 'fonts'), fonts: fontFiles(FACES, known, used), patterns: TEX_PATTERN_FILES, texmf })
+    const manifest = makePack({ entries, out: where(argv, 'out'), pipeline: pipelineOf(records, names), layout })
     writeFileSync(packFile, `${JSON.stringify(packJsonOf(manifest), null, 1)}\n`)
     const s = summaryOf(manifest.files)
-    console.log(`pack ${manifest.digest} (PIPELINE ${manifest.pipeline}): ${s.files} files, ${mb(s.bytes)}; ${s.objects} distinct objects, ${mb(s.objectBytes)}`)
+    console.log(`pack ${manifest.digest} (PIPELINE ${manifest.pipeline}, layout schema ${layout.schema} version ${layout.version}): ${s.files} files, ${mb(s.bytes)}; ${s.objects} distinct objects, ${mb(s.objectBytes)}`)
     for (const k of s.kinds) console.log(`  ${k.kind.padEnd(24)} ${String(k.files).padStart(4)} files ${mb(k.bytes).padStart(10)}`)
     console.log(`  ${names.length} outputs of ${targets.length} targets (${targets.join(' ')}); written to ${where(argv, 'out')} and ${packFile}`)
     return 0

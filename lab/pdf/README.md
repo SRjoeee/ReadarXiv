@@ -108,22 +108,28 @@ the gate's own flags and variables read it: `--fixtures=<pack>/fixtures`, `LAYER
 digest and size; its **digest** is that of the sorted listing, the same on every make (the clock is not in it, and every file
 is written with its mtime at the epoch). Its outputs are its frozen references (`refs/<output>/ref.json`), the set the gate
 itself requires: a make fails, naming each file, when any other file of one of them is missing, so an output cannot drop out
-unseen; and the verdict holds both runs to that set.
+unseen; and the verdict holds both runs to that set. The manifest also names the layout files' version (`layout`: the `schema`
+and `layout` fields every `layout.json` carries; the reader refuses a file of another schema and takes `layout`, the maker's version, as a version token only): a make fails unless all of them are the
+engine's own (`layout/file.mjs`, `LAYOUT_SCHEMA` and `LAYOUT`), and `tests/scripts/gate-pack.test.ts` holds the committed
+`gate-pack.json` to the engine's, so a pull request that moves the layout file cannot pass `pnpm test` with the pack as it was.
 
-Remaking it, on the machine that holds the data (after the fixtures are made again, a PIPELINE moves, or the faces change;
-`rules-gate.mjs compare` warns when the engine's PIPELINE is not the pack's):
+Remaking it, on the machine that holds the data (after the fixtures are made again, a PIPELINE moves, the layout file moves,
+or the faces change; `rules-gate.mjs compare` warns when the engine's PIPELINE is not the pack's). A pull request that moves the
+layout file makes the fixtures again with its engine (the layer gate's `--layouts=made`), re-makes the pack and uploads the new
+objects, before its CI can pass: the gate restores the committed `gate-pack.json`, and an object that is not in the bucket is a
+404 there.
 
 ```
-node lab/pdf/spikes/gate-pack.mjs make        # lab/pdf/out/gate-pack/, and lab/pdf/gate-pack.json (the defaults are the record's run:
-                                              # the made fixtures, the PIPELINE 10 cut's translations, references and geometry)
+node lab/pdf/spikes/gate-pack.mjs make        # lab/pdf/out/gate-pack/, and lab/pdf/gate-pack.json; its inputs (the made fixtures, the
+                                              # translations, references and geometry) are those `lab/pdf/records/layer-gate.json` names
 node lab/pdf/spikes/gate-pack.mjs objects     # the objects to upload, once each: key, size, digest, local path
 ```
 
 The objects are content-addressed (`gate-pack/<sha256>` in the bucket `readarxiv-ci`, which has no public access), so the
 outputs of one paper share one, and an upload is each distinct digest once. In CI `gate-pack.mjs restore` reads each from
-Cloudflare's REST API with the read-only token (`READARXIV_CI_TOKEN`, a Cloudflare API token with *Workers R2 Storage Bucket
-Item Read* on that bucket alone), checks it against the manifest and writes it; and `verify` checks every file again before
-the gate reads any. A fork's pull request has no token and runs no job.
+R2's S3 API, SigV4-signed with the key derived from the read-only token (`READARXIV_CI_TOKEN`; its id, asked of Cloudflare's
+token-verify endpoint, and the SHA-256 of its value), checks it against the manifest and writes it; and `verify` checks every
+file again before the gate reads any. A fork's pull request has no token and runs no job.
 
 **Where the pack is cached.** In a pull request's own cache, by the pack's digest (`rules-gate.yml`), and nowhere else. A cache
 saved by a push to `next` is readable by a fork's pull request, which runs its own edited workflow and can restore the
@@ -175,7 +181,7 @@ whole, as on the pull request. While the file names no engine nothing is measure
 
 | Where | Name | Value |
 |---|---|---|
-| Environment `rules-gate` | secret `READARXIV_CI_TOKEN` | the read-only token on the bucket `readarxiv-ci`, created with an expiry and rotated before it lapses: any process of a job that references a secret can read it, and the pack is on the runner's disk for the same code, so the token is worth only its lifetime (the next pack) |
+| Environment `rules-gate` | secret `READARXIV_CI_TOKEN` | an R2 API token (R2 → Manage API tokens → Create Account API token, Object Read only, this bucket only, with an expiry), rotated before it lapses: any process of a job that references a secret can read it, and the pack is on the runner's disk for the same code, so the token is worth only its lifetime (the next pack) |
 | Environment `rules-staging` | secret `RULES_PUBLISH_SECRET` | the staging Worker's publish secret |
 | Environment `rules-production` | secret `RULES_PUBLISH_SECRET`; the maintainer as required reviewer | the production Worker's publish secret |
 | Repository variables | `CF_ACCOUNT_ID`, `RULES_STAGING_URL`, `RULES_PRODUCTION_URL`, `RULES_PRODUCTION` | the account id; the staging and production origins (`https://…`, no path); `on` once production exists |

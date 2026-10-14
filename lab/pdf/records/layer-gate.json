@@ -20,7 +20,7 @@
   "fixtures": "out/layer-gate/fixtures/eb3b8da2464d7dd7",
   "records": "out/layer-gate/cut-p10/records",
   "refs": "out/layer-gate/cut-p10/refs",
-  "geometry": "lab/pdf/out/layer-gate/cut-p10/geometry",
+  "geometry": "out/layer-gate/cut-p10/geometry",
   "chromium": "153.0.8010.12",
   "pdfjs": "6.3.289",
   "fonts": "7aa6ebe2c491a740",
