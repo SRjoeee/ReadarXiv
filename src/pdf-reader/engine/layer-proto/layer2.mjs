@@ -2068,9 +2068,9 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
   // its block; or, the blocks on TeX's lines (a layout file's), the block that follows it in the file, its first line next
   // to this one's last in the same frame with no kept region between, where v0 split a paragraph's lines in two (at a gap
   // TeX opened in the original). v0's own blocks (the anchors' rectangles of a unit the file does not locate whole, a
-  // display's rows among them) are no flow: nothing says the line below is the next. A slot never moves up: where the rule
-  // sets the two nearer than their slots (a \lineskiplimit over \lineskip), the line alone moves up (`opened` negative). No
-  // values (a file that has none, v0 alone): no line opens
+  // display's rows among them) are no flow: nothing says the line below is the next. A slot never moves up, nor does a
+  // line: the rule only opens (a \lineskiplimit over \lineskip that would set two lines nearer is not applied). No values
+  // (a file that has none, v0 alone): no line opens
   let over = null
   const settle = () => {
     if (!P.lineskip || !line?.items.length || over !== null) return
@@ -2082,13 +2082,14 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     const e0 = lineExtent(prev, f, scale), e1 = lineExtent(line, f, scale)
     if (prev.baseline - e0.d - (line.baseline + e1.a) >= limit) return
     const shift = e0.d + e1.a + skip - (prev.baseline - line.baseline)
-    if (!shift) return
+    // (a line opens; it never moves up. Where \lineskiplimit is over \lineskip, TeX sets a clearance between the two to
+    // \lineskip, nearer than the slots, and every line after it nearer with it: that needs each later slot moved up,
+    // which is not built. The line moved up alone spaced a paragraph unevenly, 10 and 14 apart where TeX sets 10, and a
+    // \lineskiplimit of \maxdimen set every line touching the one above; so a negative shift is not applied)
+    if (!(shift > 0)) return
     const was = line.baseline
     line.baseline -= shift
     line.opened = shift
-    // (a \lineskiplimit over \lineskip: a clearance between the two is set to \lineskip, and the line moves up, alone, as
-    // no slot moves up; nothing under it is pushed, and it stays above its foot)
-    if (shift < 0) return
     let push = shift, above = was
     for (let q = li + 1; q < slots.length; q++) {
       const sl = slots[q]

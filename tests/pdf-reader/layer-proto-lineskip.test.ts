@@ -71,17 +71,21 @@ describe("a line opens by TeX's rule", () => {
     // a gap of 0 under it: 5 + 7 + 1 = 13, one more than the slot's
     expect(L2.layoutUnit2(unit(7.5, 5) as never, [block(4)] as never, 10, P([1, 2]) as never).lines.map(x => x.baseline)).toEqual([500, 487, 475])
   })
-  it('sets a line nearer than its slot where the limit is over the skip, the line alone: no slot moves up', () => {
-    // \lineskip -1, \lineskiplimit 2: a clearance of 0 (5 deep, 7 high, 12 apart) is under the limit, and TeX sets the two
-    // 5 + 7 - 1 = 11 apart. The third line stays on its slot (476), its own clearance from the second (3) over the limit
+  it('never sets a line nearer than its slot where the limit is over the skip: the rule only opens', () => {
+    // \lineskip -1, \lineskiplimit 2: a clearance of 0 (5 deep, 7 high, 12 apart) is under the limit, and TeX would set the
+    // two 5 + 7 - 1 = 11 apart, and every line after them nearer too; the slots stay, and the line with them
     const l = L2.layoutUnit2(unit(7.5, 5) as never, [block(4)] as never, 10, P([-1, 2], { order: [] }) as never)
     expect(l.clipped).toBe(false)
-    expect(l.lines.map(x => x.baseline)).toEqual([500, 489, 476])
-    expect(l.lines.map(x => x.opened ?? 0)).toEqual([0, -1, 0])
-    // (a line moved up is not one TeX's rule opened)
-    expect(l.opened).toBe(0)
-    // \lineskip 0.5, \lineskiplimit 3: a clearance of 1 (4 deep) is set to 0.5
-    expect(L2.layoutUnit2(unit(7.5, 4) as never, [block(4)] as never, 10, P([0.5, 3], { order: [] }) as never).lines.map(x => x.baseline)).toEqual([500, 488.5, 476])
+    expect(l.lines.map(x => x.baseline)).toEqual([500, 488, 476])
+    expect([l.opened, ...l.lines.map(x => x.opened ?? 0)]).toEqual([0, 0, 0, 0])
+    // five lines of text 12 apart, 7 high and 2 deep, \lineskip 1 and \lineskiplimit 4: each pair clear by 3, under the
+    // limit, which TeX would set 10 apart. Moved up alone, every other line stood 10 and 14 from its neighbours; on its
+    // slots, the paragraph keeps one pitch
+    const text = [word(18), space, word(18), space, word(18), space, word(18), space, word(18)]
+    expect(L2.layoutUnit2(text as never, [block(5)] as never, 10, P([1, 4], { order: [] }) as never).lines.map(x => x.baseline)).toEqual([500, 488, 476, 464, 452])
+    // a \lineskiplimit of \maxdimen (\offinterlineskip at the body's start, as the file writes it): every pair under it;
+    // moved up, each line touched the one above (500, 491, 482, …) and the unit ended a line short
+    expect(L2.layoutUnit2(text as never, [block(5)] as never, 10, P([0, 16322.79], { order: [] }) as never).lines.map(x => x.baseline)).toEqual([500, 488, 476, 464, 452])
   })
   it("opens nothing with no values, the paper's none (a layout file without them, v0 alone), and counts what it would have", () => {
     const l = L2.layoutUnit2(unit(7.5, 6) as never, [block(4)] as never, 10, P(null) as never)
