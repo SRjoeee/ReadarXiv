@@ -482,7 +482,7 @@ describe('a make takes its inputs from the committed record', () => {
     expect(() => inputsOfRecord(record, { root, repo, exists: there('/r/out/layer-gate/fixtures/abc') })).toThrow(/inputs\.fixtures.*\/r\/lab\/pdf\/out\/layer-gate\/fixtures\/abc/)
   })
 
-  it('takes a home path and an absolute path as they are, and a flag (relative to the working directory) in place of the record\'s', () => {
+  it('takes a home path and an absolute path as they are, and a flag (relative to the repository) in place of the record\'s', () => {
     const r = { inputs: { ...record.inputs, fixtures: '~/made/fx', records: '/abs/records' } }
     const out = inputsOfRecord(r, { root, repo, home: '/h', flags: { refs: 'elsewhere/refs', geometry: null }, exists: there('/h/made/fx', '/abs/records', '/r/lab/pdf/out/layer-gate/cut/geometry') })
     expect(out).toEqual({ fixtures: '/h/made/fx', records: '/abs/records', refs: '/r/elsewhere/refs', geometry: '/r/lab/pdf/out/layer-gate/cut/geometry' })

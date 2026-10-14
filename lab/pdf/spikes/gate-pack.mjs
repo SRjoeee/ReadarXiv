@@ -11,7 +11,7 @@
 //   pack/texmf/<tex/generic/...>                  the en and de hyphenation patterns (TEXMF_DIST=pack/texmf)
 //   pack/manifest.json                            { schema, pipeline, layout: { schema, version }, made, digest, files: [{ path, sha256, bytes }] }
 // `layout` names the layout files' schema and version (their `schema` field, which the reader refuses a file by when it is not its own, and their `layout` field, the maker's version, which the reader reads as a version token and does not compare): a make
-// reads every fixtures/<fx>/layout.json and fails unless all of them are the --engine tree's own (file.mjs LAYOUT_SCHEMA and
+// reads every fixtures/<fx>/layout.json (not refs/<fx>/layout.json, the instrument's kept layout, which no reader parses) and fails unless all of them are the --engine tree's own (file.mjs LAYOUT_SCHEMA and
 // LAYOUT), and tests/scripts/gate-pack.test.ts holds the committed gate-pack.json to the engine, so that a change of the layout
 // file cannot be merged while the pack is of the old one. `make` takes its inputs from the committed fidelity record
 // (lab/pdf/records/layer-gate.json, its `inputs`: fixtures, records, refs, geometry), so that with no flag it makes the record's run.
@@ -155,7 +155,7 @@ export function pipelineOf(records, names) {
  * The folders of a make as the record names them (`inputs.fixtures`, `records`, `refs`, `geometry`), each with one base: a
  * relative path is under lab/pdf (`root`, which the gate shows its paths relative to: it resolves every folder before it shows
  * it), `~/…` under the home directory, an absolute path as it is. A relative path is never tried under the repository too: a
- * name that exists under both would mean two folders. A flag in `flags` (a path, relative to the working directory) takes the
+ * name that exists under both would mean two folders. A flag in `flags` (a path, relative to the repository) takes the
  * place of the record's. A path the gate could not show (`<scratch>/…`, `<local>/…`) or that is not under its base names the
  * input and stops the make.
  */
