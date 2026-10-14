@@ -3,6 +3,10 @@ import type { Totals } from './layer-gate/score.mjs'
 
 export declare const MARK: '<!-- rules-gate -->'
 export declare const LAB: string
+/** the digests of what a pack (gate-pack.json) holds that makes it one instrument: the references, the geometry, the fixtures' PDFs and translations, the faces and the patterns (not the made layout files) */
+export declare function instrumentOfPack(pack: { files?: { path: string; sha256: string; bytes: number }[] } | null): { fixtures: string; refs: string; geometry: string; data: string; texmf: string }
+/** a run file written to `out` with its pack's instrument (instrumentOfPack of the gate-pack.json at `packJson`) over the folders it names */
+export declare function stampRun(file: string, out: string, packJson: string): void
 export declare function labLink(fixture: string, page: number, sha: string): string
 
 export interface Ruling { name: string; date: string | null; by: string; on: string | null; quote: string; english: string | null; scope: string | null; why: string; measures: Set<string>; targets: Set<string> }
@@ -54,7 +58,7 @@ export declare function reportJson(report: Verdict, meta?: { base?: { commit?: s
 export declare function gateArgs(o: { engine: string; rules: string; pack: string; workers?: number }): { args: string[]; env: Record<string, string> }
 export declare function publicLine(line: string): string | null
 export declare function codeSpan(text: string, max?: number): string
-export declare function runGate(o: { engine: string; rules: string; pack: string; out?: string; log?: string; workers?: number }): Promise<string>
+export declare function runGate(o: { engine: string; rules: string; pack: string; packJson: string; out?: string; log?: string; workers?: number }): Promise<string>
 export declare function engines(argv: string[], deps?: { run?: typeof runGate; git?: (...args: string[]) => string; fetchImpl?: (url: string, init: { headers: Record<string, string> }) => Promise<{ ok: boolean; status: number; arrayBuffer(): Promise<ArrayBuffer> }> }): Promise<number>
 
 export declare function schemaOf(source: string): number | null
