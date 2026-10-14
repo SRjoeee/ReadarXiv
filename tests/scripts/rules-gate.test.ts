@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fixtureTotals, MEASURES, type PageEntry } from '../../lab/pdf/spikes/layer-gate/score.mjs'
-import { checkRulesFile, commentOf, engines, fragmentsIn, gateArgs, judge, labLink, leaksIn, loadRuling, MARK, outputsOfPack, parseRuling, publicLine, rulingsAt, rulingsFor, textsOf } from '../../lab/pdf/spikes/rules-gate.mjs'
+import { checkRulesFile, commentOf, engines, fragmentsIn, gateArgs, instrumentOfPack, judge, labLink, leaksIn, loadRuling, MARK, outputsOfPack, parseRuling, publicLine, rulingsAt, rulingsFor, textsOf } from '../../lab/pdf/spikes/rules-gate.mjs'
 import { BUILTIN_RULES, readRules, writeRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // The rules gate's verdict (lab/pdf/spikes/rules-gate.mjs, rules-as-data plan §8, Task R6): two model-tier runs of one
@@ -581,5 +581,38 @@ describe('the runs are the production configuration', () => {
     const { args, env } = gateArgs({ engine: '/work/base', rules: '/work/base/rules.json', pack: '/work/pack' })
     expect(args).toEqual(['--tier=model', '--engine-kind=proto', '--proto-tex=lines', '--removal=draw', '--fixtures=/work/pack/fixtures', '--engine=/work/base', '--rules=/work/base/rules.json', '--workers=4'])
     expect(env).toEqual({ AXT_DATA: '/work/pack/data', LAYER_REFS: '/work/pack/refs', LAYER_GEOMETRY: '/work/pack/geometry', TEXMF_DIST: '/work/pack/texmf' })
+  })
+})
+
+// Two runs on two packs in two directories (a pull request that moves the layout file restores its own pack and the merge base's)
+// are one instrument when the packs differ in the made layout files alone: the run names what the pack holds, not where it is.
+describe('the instrument of a pack', () => {
+  const file = (path: string, sha: string) => ({ path, sha256: sha.repeat(64).slice(0, 64), bytes: 1 })
+  const pack = (layout: string, over: Record<string, string> = {}) => ({
+    files: [
+      file('fixtures/0001.00001v1-zh/arxiv.pdf', over.pdf ?? 'a'), file('fixtures/0001.00001v1-zh/units.json', 'b'), file('fixtures/0001.00001v1-zh/layout.json', layout),
+      file('refs/0001.00001v1-zh/ref.json', over.ref ?? 'c'), file('refs/0001.00001v1-zh/layout.json', 'd'), file('geometry/0001.00001-zh-geometry.json', over.geometry ?? 'e'),
+      file('data/fonts/x.woff2', over.font ?? 'f'),
+    ],
+  })
+
+  it('is the same for packs whose made layout files differ alone', () => {
+    expect(instrumentOfPack(pack('1'))).toEqual(instrumentOfPack(pack('2')))
+  })
+
+  it('differs for another PDF, another reference or another geometry, each in its own part', () => {
+    const base = instrumentOfPack(pack('1'))
+    const pdf = instrumentOfPack(pack('1', { pdf: '9' })), ref = instrumentOfPack(pack('1', { ref: '9' })), geometry = instrumentOfPack(pack('1', { geometry: '9' }))
+    expect(pdf).toEqual({ ...base, fixtures: pdf.fixtures }); expect(pdf.fixtures).not.toBe(base.fixtures)
+    expect(ref).toEqual({ ...base, refs: ref.refs }); expect(ref.refs).not.toBe(base.refs)
+    expect(geometry).toEqual({ ...base, geometry: geometry.geometry }); expect(geometry.geometry).not.toBe(base.geometry)
+  })
+
+  it('refuses a manifest that names no files, and judge then sees two instruments for two such packs', () => {
+    expect(() => instrumentOfPack({})).toThrow(/names no files/)
+    const a = instrumentOfPack(pack('1')), b = instrumentOfPack(pack('1', { ref: '9' }))
+    const j = judge(run(base(), { inputs: a }), run(base(), { inputs: b }))
+    expect(j.problems.join('\n')).toMatch(/not one instrument: refs/)
+    expect(judge(run(base(), { inputs: instrumentOfPack(pack('1')) }), run(base(), { inputs: instrumentOfPack(pack('2')) })).problems).toEqual([])
   })
 })

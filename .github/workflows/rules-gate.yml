@@ -89,6 +89,8 @@ jobs:
         run: |
           head=$(node lab/pdf/spikes/gate-pack.mjs digest)
           base=$(node "$RUNNER_TEMP/base/lab/pdf/spikes/gate-pack.mjs" digest --pack="$RUNNER_TEMP/base/lab/pdf/gate-pack.json")
+          # (a digest is 64 hex digits before it reaches an output or the environment)
+          for d in "$head" "$base"; do printf '%s' "$d" | grep -Eq '^[0-9a-f]{64}$' || { echo "not a pack digest"; exit 1; }; done
           echo "digest=$head" >> "$GITHUB_OUTPUT"
           echo "base=$base" >> "$GITHUB_OUTPUT"
           if [ "$head" = "$base" ]; then

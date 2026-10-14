@@ -3,6 +3,8 @@ import type { Totals } from './layer-gate/score.mjs'
 
 export declare const MARK: '<!-- rules-gate -->'
 export declare const LAB: string
+/** the digests of what a pack holds that makes it one instrument: the frozen references, the geometry, the fixtures' PDFs and translations (not the made layout files) */
+export declare function instrumentOfPack(manifest: { files?: { path: string; sha256: string; bytes: number }[] } | null): { fixtures: string; refs: string; geometry: string }
 export declare function labLink(fixture: string, page: number, sha: string): string
 
 export interface Ruling { name: string; date: string | null; by: string; on: string | null; quote: string; english: string | null; scope: string | null; why: string; measures: Set<string>; targets: Set<string> }

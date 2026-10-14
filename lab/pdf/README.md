@@ -135,7 +135,10 @@ file again before the gate reads any. A fork's pull request has no token and run
 **Each side runs on its own commit's pack.** A pack is made by an engine (its layout files are that engine's), so the gate restores
 two: the pull request's, from its `gate-pack.json`, and the merge base's, from the merge base's own `gate-pack.json` with the merge
 base's own script; where the two digests are equal they are one pack and are downloaded once. A pull request that re-makes the
-pack (the layout file moved) uploads the new objects before its CI can pass.
+pack (the layout file moved) uploads the new objects before its CI can pass. The two runs are one instrument by what their packs hold,
+not where they are: `rules-gate.mjs run` stamps each run's `fixtures`, `refs` and `geometry` with the digests of those parts of the
+pack's listing (`instrumentOfPack`), the made layout files excluded, so a re-made pack is the same instrument and another reference,
+geometry, PDF or translation is not.
 
 **Where the pack is cached.** In a pull request's own cache, by the pack's digest (`rules-gate.yml`), and nowhere else. A cache
 saved by a push to `next` is readable by a fork's pull request, which runs its own edited workflow and can restore the

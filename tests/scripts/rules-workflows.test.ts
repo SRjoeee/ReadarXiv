@@ -127,15 +127,18 @@ describe('the secrets', () => {
     const steps = ci.slice(ci.indexOf('\n    steps:\n')).split(/\n {6}- /).slice(1)
     const holding = steps.filter(step => /READARXIV_CI_TOKEN|CF_ACCOUNT_ID|secrets\./.test(step))
     expect(holding).toHaveLength(1)
-    expect(holding[0]).toMatch(/^run: pnpm fixtures:fetch\n {8}env:\n {10}READARXIV_CI_TOKEN: \$\{\{ secrets\.READARXIV_CI_TOKEN \}\}\n {10}CF_ACCOUNT_ID: \$\{\{ vars\.CF_ACCOUNT_ID \}\}\s*$/)
+    expect(holding[0]).toMatch(/^run: node scripts\/fetch-fixtures\.mjs\n {8}env:\n {10}READARXIV_CI_TOKEN: \$\{\{ secrets\.READARXIV_CI_TOKEN \}\}\n {10}CF_ACCOUNT_ID: \$\{\{ vars\.CF_ACCOUNT_ID \}\}\s*$/)
     // not the job's, the workflow's or any other step's, and no environment to take it from
     expect(ci).not.toMatch(/^env:/m)
     expect(ci).not.toMatch(/^\s+environment:/m)
     expect(ci.match(/READARXIV_CI_TOKEN/g)).toHaveLength(2)
     expect(ci.match(/CF_ACCOUNT_ID/g)).toHaveLength(2)
     expect(ci).not.toMatch(/pull_request_target/)
+    // the job that holds the token reads the repository alone, and keeps no git credential in the checkout
+    expect(ci).toMatch(/^permissions:\n {2}contents: read\n/m)
+    expect(ci).toMatch(/uses: actions\/checkout@v\d+\n {8}with:\n {10}persist-credentials: false\n/)
     // the order of the fetch among the steps stays: after the cache is restored, before the tests that read the fixtures
-    const order = steps.map(step => (step.startsWith('id: fixtures-cache') ? 'restore' : step.startsWith('run: pnpm fixtures:fetch') ? 'fetch' : step.startsWith('run: pnpm test') ? 'test' : ''))
+    const order = steps.map(step => (step.startsWith('id: fixtures-cache') ? 'restore' : step.startsWith('run: node scripts/fetch-fixtures.mjs') ? 'fetch' : step.startsWith('run: pnpm test') ? 'test' : ''))
     expect(order.filter(Boolean)).toEqual(['restore', 'fetch', 'test'])
   })
 })

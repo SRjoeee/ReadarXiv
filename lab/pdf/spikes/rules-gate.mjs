@@ -22,10 +22,11 @@
 // comment and the numbers are searched for every string of the fixtures' translations before they are written, and withheld
 // (exit 2) where one is found. A ruling's words are the maintainer's, and are the only free text in the comment.
 import { execFileSync, spawn } from 'node:child_process'
-import { appendFileSync, copyFileSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { appendFileSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { listingDigest } from './gate-pack.mjs'
 import { nameOf } from './layer-gate/ref.mjs'
 import { compare, MEASURES, pooled, worse } from './layer-gate/score.mjs'
 
@@ -341,6 +342,26 @@ export function gateArgs({ engine, rules, pack, workers = 4 }) {
   }
 }
 
+/**
+ * What of a pack is the instrument. The layer gate records the folders it was given as paths, which name no content, and the two
+ * runs of a pull request that moves the layout file are on two packs in two directories (each commit's own, ci: rules-gate.yml), so
+ * the paths of the two runs would differ though the instrument did not. A run is therefore recorded by what the pack holds: the
+ * digest of the listing (the pack's manifest, whose files are digest-checked by `verify`) of the frozen references, of the
+ * geometry, and of the fixtures' own inputs (the PDFs and the translations). Not among them, because an engine makes them and
+ * the pull request may move them: the made layout files (`fixtures/<output>/layout.json`). A pack with another reference, another
+ * geometry, another PDF or another translation is another instrument, whichever directory it is in.
+ */
+export function instrumentOfPack(manifest) {
+  const files = manifest?.files
+  if (!Array.isArray(files) || !files.length) throw new Error('the pack names no files: its manifest.json is not a pack\'s')
+  const part = test => listingDigest(files.filter(f => test(String(f.path))))
+  return {
+    fixtures: part(p => p.startsWith('fixtures/') && !/^fixtures\/[^/]+\/layout\.json$/.test(p)),
+    refs: part(p => p.startsWith('refs/')),
+    geometry: part(p => p.startsWith('geometry/')),
+  }
+}
+
 /** the output of the gate that is names and numbers: an output's `ok` line, the tier's line, the completeness line */
 const NAME = '[A-Za-z0-9._-]+v\\d+-[A-Za-z-]+'
 const CHECK = '(?:missing|twice|brackets|duplicated|clipped|groupsSplit|labelsSource|lostInk|numbers)'
@@ -389,7 +410,12 @@ export function runGate(o) {
       console.log(`(${hidden} more lines of the gate's output are in ${log}, which the job does not show)`)
       const file = /the run in (.+\.json)\s*$/m.exec(out)?.[1]
       if (!file || !existsSync(file)) return fail(new Error(`the gate wrote no run file (exit ${code}); its output is in ${log}`))
-      if (o.out) copyFileSync(file, o.out)
+      // (the folders the run names are the pack's content, not the directory the pack happens to be in: instrumentOfPack)
+      try {
+        const run = JSON.parse(readFileSync(file, 'utf8'))
+        run.inputs = { ...run.inputs, ...instrumentOfPack(JSON.parse(readFileSync(join(o.pack, 'manifest.json'), 'utf8'))) }
+        writeFileSync(o.out ?? file, JSON.stringify(run))
+      } catch (e) { return fail(new Error(`the run could not be stamped with its pack's instrument (${e instanceof SyntaxError ? 'a file is not JSON' : e.message})`)) }
       ok(o.out ?? file)
     })
   })

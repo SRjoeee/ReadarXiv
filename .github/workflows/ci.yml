@@ -5,11 +5,17 @@ on:
     branches: [main]
   pull_request:
 
+# (the token-holding job reads the repository and nothing else: no write scope on GITHUB_TOKEN, none kept in the checkout's git config)
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       # (pnpm comes with corepack, at the version package.json names: the job that fetches the fixtures holds the bucket's read token,
       # and no third party's action runs in a job that holds a token — tests/scripts/rules-workflows.test.ts)
       - run: corepack enable
@@ -38,7 +44,7 @@ jobs:
             tests/fixtures/arxiv/2609.00245.html
             tests/fixtures/svg/2608.29808-bounter-case.svg
             tests/fixtures/svg/2607.24653-AET_blackbox_curve.svg
-      - run: pnpm fixtures:fetch
+      - run: node scripts/fetch-fixtures.mjs
         env:
           READARXIV_CI_TOKEN: ${{ secrets.READARXIV_CI_TOKEN }}
           CF_ACCOUNT_ID: ${{ vars.CF_ACCOUNT_ID }}

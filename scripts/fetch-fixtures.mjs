@@ -306,7 +306,7 @@ if (invoked()) {
     process.exit(2)
   }
   try {
-    const { verified, downloaded } = await ensureFixtures({ log: line => console.log(line) })
+    const { verified, downloaded } = await ensureFixtures({ log: line => console.log(process.env.GITHUB_ACTIONS === 'true' && line.startsWith('bucket') ? `::warning::${line}` : line) })
     console.log(`remote fixtures: ${downloaded.length} downloaded, ${verified.length} already there, all verified`)
   } catch (e) {
     console.error(e instanceof Error ? e.message : e)
