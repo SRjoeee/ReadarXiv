@@ -100,7 +100,7 @@ describe("a line opens by TeX's rule", () => {
     // a line between them the unit keeps and no block holds (a superscript's row the text beside it holds: 1810.04805's page 6)
     // is its own: still TeX's paragraph; kept, in no block
     const row = [1, 90, 463, 100, 468]
-    const five = [rects[0], rects[1], row, rects[2], rects[3]]
+    const five = [rects[0]!, rects[1]!, row, rects[2]!, rects[3]!]
     const infoFive = new Map(five.map((r, i) => [`${r[0]}|${r.slice(1).join()}`, { baseline: (r[2] ?? 0) + 2, size: 10, exact: true, file: true, j: [10, 11, 12, 13, 14][i], frame: 0 }]))
     const withRow = L2.blocks2(five as never, [[0, 0, 612, 792]], new Set([`1|${row.slice(1).join()}`]), infoFive as never)
     expect(withRow.map(b => b.rects.length)).toEqual([2, 2])
