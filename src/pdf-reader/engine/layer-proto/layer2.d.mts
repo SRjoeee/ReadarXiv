@@ -67,7 +67,9 @@ export interface Placeholder { k: number; src: string; cls: string; unknown?: bo
 /** the paper's citations as learnt in lay order (a key's number), an author-year key's text, a macro's rendering */
 export type CiteMap = Map<string, string | undefined> & { text?: Map<string, string>; macros?: Map<string, string> }
 /** a line's baseline and size: measured from its characters or given exactly (exact; by a layout file, file), else from its rectangle */
-export interface LineInfo { baseline: number; size: number; exact: boolean; file?: boolean }
+/** a line's measured baseline and size; a layout file's line (`file`) also says its place in the file, `j` its index and
+ *  `frame` its page's column */
+export interface LineInfo { baseline: number; size: number; exact: boolean; file?: boolean; j?: number; frame?: number }
 /** a line's erase extent, before the drawing's padding: one box [x0, y0, x1, y1], or several */
 export type Extent = number[] | number[][]
 /** a placeholder's resolution: how it is drawn ('none', 'symbol', 'kept', 'crop', 'orig-text', 'cite-map', 'source'),
@@ -103,7 +105,8 @@ export interface Prepared extends Map<number, Resolved> {
   displayLines?: Set<string>
   /** part 5: the piece index of a crop whose ink no source proves its placeholder's (the unit is left the original's) */
   unproven?: number
-  /** part 4's source knows each placeholder's ink (a layout file's segments): a gap's piece none took is the unit's text */
+  /** part 4's source knows each placeholder's ink (a layout file's segments) over part 1's lines (the file's): a gap's piece
+   *  none took is the unit's text */
   inkKnown?: boolean
 }
 /** part 1 and part 2 as a source gives them */
@@ -134,7 +137,7 @@ export interface UnitParts {
   extents?: (lines: UnitLines, rects: readonly Rect[]) => Map<Rect, Extent>
   /** part 3: sets out.label, returns the gaps without it */
   label?: (out: Prepared, unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], gaps: Gap[]) => Gap[]
-  /** part 4: which ink each placeholder is, by a source that knows it (Prepared.inkKnown) */
+  /** part 4: which ink each placeholder is, by a source that knows it (Prepared.inkKnown, with part 1) */
   renderings?: (ctx: RenderingsContext) => Renderings
   /** part 5: each crop cut from its placeholder's own ink (mutates the resolutions); the k of one no source proves, or -1 */
   crops?: (out: Prepared) => number
@@ -150,7 +153,7 @@ export interface Layout { lines: Line[]; f: number; s: number; scale: number; st
 /** the original page's ink at a fraction of its canvas's resolution */
 export interface InkMap { w: number; h: number; ink: Uint8Array; factor: number }
 /** a unit's block with its lines' measured baselines */
-export interface Block2 extends Block { B: number[]; exact: boolean[]; sizes: number[]; pitch0: number | null; free: number; after?: number; freeOf?: () => number }
+export interface Block2 extends Block { B: number[]; exact: boolean[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; freeOf?: () => number }
 type ToDev = (x: number, y: number) => [number, number]
 
 /** a spacing accent TeX sets as a glyph of its own */

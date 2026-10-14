@@ -622,9 +622,10 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   // (the lines part 1's source says the unit's source does not write: kept as the original's, as a display's are)
   if (lines.held?.length) out.keep = [...new Set([...(out.keep ?? []), ...lines.held])]
   const gaps = (parts?.label ?? labelOf)(out, unit, rects, charsByPage, aligned)
-  // (a source that gives part 4 knows each placeholder's ink by its own segments, the layout file: what the renderings
-  // leave of the gaps is the unit's text, categoriesOf)
-  out.inkKnown = !!parts?.renderings
+  // (a source that gives part 4 and part 1 knows each placeholder's ink by its own segments, the layout file, over the
+  // unit's lines the file's own: what the renderings leave of the gaps is the unit's text, categoriesOf. With part 4
+  // alone the unit's characters are v0's rectangles', and a leftover may be a rendering the segments do not reach)
+  out.inkKnown = !!(parts?.renderings && parts.lines)
   resolvePlaceholders(out, { unit, phs, rects, charsByPage, citeMap, gaps }, parts?.renderings ?? v0Renderings)
   if (parts?.crops) { const k = parts.crops(out); if (k >= 0) out.unproven = k }
   finishUnit(out, unit, rects, charsByPage)
@@ -1865,12 +1866,28 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
     // the rounding does not move, where their median may be off by a few thousandths and its lines' slots so a line off
     // the last baseline at 1.3 times it: 1512.03385's unit 59)
     if (d.length > 1 && b.rects.every(r => info(r)?.file) && d.every(v => Math.abs(v - b.pitch0) <= 0.02)) b.pitch0 = d.reduce((a, v) => a + v, 0) / d.length
-    // (its lines TeX's, a layout file's: two such blocks in a column with nothing kept between are one flow, breakLines)
-    b.file = b.rects.every(r => info(r)?.file)
     b.free = 0
+  }
+  // (TeX's lines, a layout file's: the blocks that continue each other in the file are one flow, breakLines. The next block
+  // continues the last one's line where the file's lines between them, none or more, are all this unit's own (a script's
+  // row the text beside it holds, a held run: lines of the unit that are no block's) and in one frame, and no kept region
+  // the text passes lies between (`after`); another unit's line between them, a nested list's, is a break)
+  const mine = new Set(rects.map(r => info(r)?.j).filter(Number.isInteger))
+  let flow = 0
+  for (const [i, b] of blocks.entries()) {
+    const a = blocks[i - 1]
+    const from = info(b.rects[0]), to = info(a?.rects.at(-1) ?? b.rects[0])
+    let next = !!a && !!from?.file && !!to?.file && Number.isInteger(from.j) && Number.isInteger(to.j) && to.j < from.j && to.frame === from.frame && (a.after ?? 0) === (b.after ?? 0)
+    if (next) for (let j = to.j + 1; j < from.j; j++) if (!mine.has(j)) { next = false; break }
+    b.flow = next ? a.flow : flow++
   }
   return blocks
 }
+
+/** whether two laid lines or slots are one flow of TeX's lines (blocks2: blocks of one unit that follow each other in the
+ *  layout file with only the unit's own lines between, in one frame, and no kept region the text passes; every other block
+ *  a flow of its own) */
+const inFlow = (a, b) => a.flow === b.flow
 
 /** a solid-set original's pitch, × its size: TeX's \baselineskip is 1.2 × the size at 10 and 12 pt, 1.24 at 11 pt */
 export const SOLID = 1.25
@@ -1950,10 +1967,21 @@ function slotsAt(blocks, st, P, s) {
       const x0 = b.x0 + (bi === 0 && k === 0 && !b.centred ? b.indent : 0)
       // a sliver beside a formula (narrower than 1.5 em) holds no text: its words were the formula's
       if (b.x1 - x0 < 1.5 * s * st.scale) continue
-      out.push({ block: bi, page: b.page, x0, x1: b.x1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, low, file: !!b.file })
+      out.push({ block: bi, page: b.page, x0, x1: b.x1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, low, flow: b.flow ?? bi })
     }
   }
   return out
+}
+
+/**
+ * A crop's own extent over its baseline (`up`) and under it (`down`), PDF units at the original's scale: the segment's box
+ * where the crop was cut from one (`gap.box`, the ink TeX set, cropOfBox), never the rectangle drawn, whose antialias
+ * margin is the drawing's and no part of TeX's box. A crop with no segment (v0 alone, which opens no line and only
+ * counts what it would have) takes its rectangle
+ */
+function cropExtent(r) {
+  const b = r.gap?.box
+  return b?.top !== undefined ? { up: b.top - b.baseline, down: b.baseline - b.bottom } : { up: r.crop[3] - r.baseline, down: r.baseline - r.crop[1] }
 }
 
 /**
@@ -1965,7 +1993,7 @@ export function lineExtent(line, f, scale) {
   let a = 0, d = 0, ta = 0, td = 0
   for (const it of line.items) {
     const t = it.t
-    if (t.crop) { a = Math.max(a, (t.crop.crop[3] - t.crop.baseline) * scale); d = Math.max(d, (t.crop.baseline - t.crop.crop[1]) * scale); continue }
+    if (t.crop) { const e = cropExtent(t.crop); a = Math.max(a, e.up * scale); d = Math.max(d, e.down * scale); continue }
     if (!t.s || t.space || !t.face) continue
     const m = ink100(t.s, t.face), k = t.sup ? 0.62 : 1, up = t.sup ? 0.36 * f : 0
     ta = Math.max(ta, up + (m.a * k * f) / 100)
@@ -2006,19 +2034,18 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
   // (lineExtent: the drawn text's ink and its crops'), the two baselines are set that line's depth and its height plus
   // lineskip apart, and the later slots of its flow move down with it, each block's past its foot dropped; one that lands
   // past its own foot fails the state (`over`, the first token of its line), as a unit too long for its lines does. The
-  // line before is the last laid above it in its flow: its block; or, both blocks standing on TeX's lines (a layout
-  // file's, `file`), the block above it in its column on its page with no kept region between (`after` the same), where
-  // v0 split a paragraph's lines in two (at a gap TeX opened in the original). v0's own blocks (the anchors' rectangles
-  // of a unit the file does not locate whole, a display's rows among them) are no flow: nothing says the line below is
-  // the next. A slot never moves up. No values (a file that has none, v0 alone): no line opens
+  // line before is the last laid above it in its flow (inFlow): its block; or, the blocks on TeX's lines (a layout file's),
+  // the block that follows it in the file, its first line next to this one's last in the same frame with no kept region
+  // between, where v0 split a paragraph's lines in two (at a gap TeX opened in the original). v0's own blocks (the
+  // anchors' rectangles of a unit the file does not locate whole, a display's rows among them) are no flow: nothing says
+  // the line below is the next. A slot never moves up. No values (a file that has none, v0 alone): no line opens
   let over = null
-  const flowOf = (a, b) => a.block === b.block || (a.file && b.file && a.page === b.page && (a.after ?? 0) === (b.after ?? 0) && Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0))
   const settle = () => {
     if (!P.lineskip || !line?.items.length || over !== null) return
     let k = lines.length - 2
     while (k >= 0 && !lines[k].items.length) k--
     const prev = lines[k]
-    if (!prev || !flowOf(prev, line) || !(prev.baseline > line.baseline)) return
+    if (!prev || !inFlow(prev, line) || !(prev.baseline > line.baseline)) return
     const [skip, limit] = P.lineskip
     const e0 = lineExtent(prev, f, scale), e1 = lineExtent(line, f, scale)
     if (prev.baseline - e0.d - (line.baseline + e1.a) >= limit) return
@@ -2028,7 +2055,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     line.baseline -= shift
     line.opened = shift
     for (let q = slots.length - 1; q > li; q--) {
-      if (!flowOf(slots[q], line) || !(slots[q].baseline < was)) continue
+      if (!inFlow(slots[q], line) || !(slots[q].baseline < was)) continue
       const y = slots[q].baseline - shift
       if (y < slots[q].low - 0.05) slots.splice(q, 1)
       else slots[q] = { ...slots[q], baseline: y }
@@ -2322,7 +2349,7 @@ function laidOut({ r, st, f }, s, P, tried) {
   let unopened = 0
   if (!P.lineskip) for (let i = 1; i < r.lines.length; i++) {
     const a = r.lines[i - 1], b = r.lines[i]
-    if (!(a.block === b.block || (a.file && b.file && a.page === b.page && (a.after ?? 0) === (b.after ?? 0) && Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0))) || !(a.baseline > b.baseline)) continue
+    if (!inFlow(a, b) || !(a.baseline > b.baseline)) continue
     if (a.baseline - lineExtent(a, f, st.scale).d < b.baseline + lineExtent(b, f, st.scale).a) unopened++
   }
   return { lines: r.lines, f, s, scale: st.scale, state: st, knob: clipped ? 'clip' : st.knob, clipped, lostChars: Math.max(0, allChars - drawn), chars: allChars, tried, spilled: !!r.spilled, opened: r.lines.filter(l => l.opened > 0).length, unopened }

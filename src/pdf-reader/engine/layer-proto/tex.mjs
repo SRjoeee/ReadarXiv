@@ -92,7 +92,9 @@ export function locatedWhole(lu, unit, trPieces, { symbols = 'text', held = fals
  * run: the held lines between the unit's text lines before and after it, on its page and column. Returns a Map of
  * those, empty where nothing pairs (a run that is no display, another unit's line the anchor took; a display whose rows
  * hold the source's words and are not held; one display over two frames). An edge display is never covered: no text
- * line stands on both sides of it
+ * line stands on both sides of it. Where every display of a group is LOST, no segment checks its pairing: it rests on
+ * the count of the groups and runs and their order alone, and a mispairing moves the break (which run the flow breaks at),
+ * never ink, since every held line stays the original's, drawn and never erased
  */
 export function displayCover(lu, unit, kOf) {
   const L = lu.lines, F = lu.frames, held = new Set(lu.held ?? []), out = new Map()
@@ -142,10 +144,10 @@ export function displayCover(lu, unit, kOf) {
  * unit's source does not write (the file's `held`: a display it does not hold, inside it) is kept as the original's
  * (`held`, its rectangles): v0's reading of a display's lines inside a unit, no slot, never erased, the text after it
  * starting below it. `jOf`: each rectangle's line in the file, by its place (a rectangle v0 later replaces, a line it
- * starts at its label, keeps its place).
+ * starts at its label, keeps its place). `frameOf`: each file line's frame (its page's column).
  */
 export function texRects(lu, maxPage = Infinity) {
-  const rects = [], exact = new Map(), lineOf = new Map(), held = [], jOf = []
+  const rects = [], exact = new Map(), lineOf = new Map(), held = [], jOf = [], frameOf = new Map()
   const L = lu.lines, F = lu.frames, heldLines = new Set(lu.held ?? [])
   for (let f = 0; f < F.length; f += 6) {
     for (let j = F[f + 2]; j < F[f + 2] + F[f + 3]; j++) {
@@ -156,10 +158,11 @@ export function texRects(lu, maxPage = Infinity) {
       exact.set(r, { baseline: base, size })
       lineOf.set(r, j)
       jOf.push(j)
+      frameOf.set(j, f / 6)
       if (heldLines.has(j)) held.push(r)
     }
   }
-  return { rects, exact, lineOf, held, jOf }
+  return { rects, exact, lineOf, held, jOf, frameOf }
 }
 
 /** whether a placeholder of the unit's sets no ink by the file: a text macro (v0's 'macro' or 'umacro') the file holds no
@@ -280,14 +283,14 @@ export function texParts(lu, kOf, { use, lines = null, extents = 'v0' }) {
     },
   }
   if (use !== 'lines') return parts
-  const { exact, lineOf } = lines
+  const { exact, lineOf } = lines, frameOf = lines.frameOf ?? new Map()
   const held = (lines.held ?? []).map(rectKey)
   parts.lines = (rects, charsByPage) => {
     const ext = new Map()
     const uc = charsOfUnit2(rects, charsByPage, ext, exact)
     const lineInfo = new Map()
     for (const r of rects) {
-      const e = exact.get(r), info = { baseline: e.baseline, size: e.size, exact: true, file: true }
+      const e = exact.get(r), j = lineOf.get(r), info = { baseline: e.baseline, size: e.size, exact: true, file: true, j, frame: frameOf.get(j) }
       lineInfo.set(rectKey(r), info)
       lineInfo.set(`${r[0]}|${r[2]}|${r[3]}|${r[4]}`, info)
     }
