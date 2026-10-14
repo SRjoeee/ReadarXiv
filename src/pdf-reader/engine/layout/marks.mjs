@@ -606,6 +606,27 @@ export const NAMES_TEX = [
   '\\fi',
 ].join('')
 
+/** the control sequences \axt@unmark takes out of a title's copy, each with its argument: the marks a heading or a caption
+ *  can carry (\axtpma, \axtpm, \axthmark) and a babel name's (\axtnma, \axtnmb). One list: UNMARK_TEX builds the regex's
+ *  alternation and the prefilter from it, so the two cannot drift */
+export const UNMARK_CS = ['axtpma', 'axtpm', 'axthmark', 'axtnma', 'axtnmb']
+
+/** \axt@unmark<tl>: the regex that takes a mark and its argument out of a token list, guarded by a prefilter. The regex
+ *  costs ~3 ms a run over the list's tokens whether or not the list holds a mark, and the nameref and gettitlestring hooks
+ *  run it ~450 times a pass on the thesis (M1: 4.36 s of its layout compile). The prefilter looks for each name in the list
+ *  as text: a control sequence prints as `\name` and a space (the escape character set to `\` for it, a paper's own change
+ *  of \escapechar would hide it), a delimited match in microseconds; the regex runs only on a hit. A miss holds none of
+ *  UNMARK_CS, which the regex's `\c{...}` alternation could not have matched, so the result is the regex's. The regex
+ *  stays as it was: `\c[^BE].*` is any run of tokens but a brace, so a match ends at its own argument's close and never
+ *  reaches across a group (unmark-finding); every mark name is brace-free (MARK_NAME) */
+const UNMARK_TEX = [
+  '\\ifdefined\\ExplSyntaxOn\\ExplSyntaxOn',
+  `\\regex_const:Nn\\c__axt_marks_regex{\\c{${UNMARK_CS.join('|')}}\\cB.\\c[^BE].*\\cE.}`,
+  '\\bool_new:N\\g__axt_unmark_bool',
+  `\\cs_new_protected:Npn\\axt@unmark#1{\\group_begin:\\int_set:Nn\\tex_escapechar:D{92}\\bool_gset_false:N\\g__axt_unmark_bool${UNMARK_CS.map(n => `\\str_if_in:NnT#1{\\${n}}{\\bool_gset_true:N\\g__axt_unmark_bool}`).join('')}\\group_end:\\bool_if:NT\\g__axt_unmark_bool{\\regex_replace_all:NnN\\c__axt_marks_regex{}#1}}`,
+  '\\ExplSyntaxOff\\fi',
+].join('')
+
 export const LAYOUT_TEX = [
   '\\makeatletter\\newif\\ifaxt@off\\global\\let\\axt@pend\\@empty\\let\\axt@icr\\/\\def\\axt@icv{0pt}\\newif\\ifaxt@sig',
   '\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax}\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax\\fi}\\fi\\fi\\fi',
@@ -641,7 +662,7 @@ export const LAYOUT_TEX = [
   '\\AddToHook{package/nameref/after}{\\ifdefined\\NR@sanitize@labelname\\let\\axt@NRsanitize\\NR@sanitize@labelname\\def\\NR@sanitize@labelname{\\axt@unmark\\@currentlabelname\\axt@NRsanitize}\\fi}\\fi',
   '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtpma\\@gobble\\let\\axtpm\\@gobble\\let\\axthmark\\@gobble\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble\\let\\axt@nma\\@gobble\\let\\axt@nmb\\@gobble}\\fi}',
   '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axt@pma\\axt@pm\\axt@hm\\axtnma\\axtnmb\\axt@nma\\axt@nmb}\\fi',
-  '\\ifdefined\\ExplSyntaxOn\\ExplSyntaxOn\\regex_const:Nn\\c__axt_marks_regex{\\c{axtpma|axtpm|axthmark|axtnma|axtnmb}\\cB.\\c[^BE].*\\cE.}\\cs_new_protected:Npn\\axt@unmark#1{\\regex_replace_all:NnN\\c__axt_marks_regex{}#1}\\ExplSyntaxOff\\fi',
+  UNMARK_TEX,
   NAMES_TEX,
   POINTS_TEX,
   '\\makeatother',
