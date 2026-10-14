@@ -2068,8 +2068,9 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
   // its block; or, the blocks on TeX's lines (a layout file's), the block that follows it in the file, its first line next
   // to this one's last in the same frame with no kept region between, where v0 split a paragraph's lines in two (at a gap
   // TeX opened in the original). v0's own blocks (the anchors' rectangles of a unit the file does not locate whole, a
-  // display's rows among them) are no flow: nothing says the line below is the next. A slot never moves up. No values (a
-  // file that has none, v0 alone): no line opens
+  // display's rows among them) are no flow: nothing says the line below is the next. A slot never moves up: where the rule
+  // sets the two nearer than their slots (a \lineskiplimit over \lineskip), the line alone moves up (`opened` negative). No
+  // values (a file that has none, v0 alone): no line opens
   let over = null
   const settle = () => {
     if (!P.lineskip || !line?.items.length || over !== null) return
@@ -2081,10 +2082,13 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     const e0 = lineExtent(prev, f, scale), e1 = lineExtent(line, f, scale)
     if (prev.baseline - e0.d - (line.baseline + e1.a) >= limit) return
     const shift = e0.d + e1.a + skip - (prev.baseline - line.baseline)
-    if (!(shift > 0)) return
+    if (!shift) return
     const was = line.baseline
     line.baseline -= shift
     line.opened = shift
+    // (a \lineskiplimit over \lineskip: a clearance between the two is set to \lineskip, and the line moves up, alone, as
+    // no slot moves up; nothing under it is pushed, and it stays above its foot)
+    if (shift < 0) return
     let push = shift, above = was
     for (let q = li + 1; q < slots.length; q++) {
       const sl = slots[q]
@@ -2127,10 +2131,13 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
         let q = li + 1
         while (q < slots.length && (slots[q].after ?? 0) < consumed) q++
         if (q < slots.length) {
+          // (the slot by itself, not by its index: settle may drop slots of this line's flow above the display, before
+          // it; the slot below the display is of another flow, which settle never moves)
+          const to = slots[q]
           while (line.items.at(-1)?.t.space) { const sp = line.items.pop(); line.x -= sp.w; line.spaces -= sp.w }
           settle()
           if (stop) break
-          li = q
+          li = slots.indexOf(to)
           open()
         }
       }

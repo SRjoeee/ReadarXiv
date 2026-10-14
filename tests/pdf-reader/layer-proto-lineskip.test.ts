@@ -71,6 +71,18 @@ describe("a line opens by TeX's rule", () => {
     // a gap of 0 under it: 5 + 7 + 1 = 13, one more than the slot's
     expect(L2.layoutUnit2(unit(7.5, 5) as never, [block(4)] as never, 10, P([1, 2]) as never).lines.map(x => x.baseline)).toEqual([500, 487, 475])
   })
+  it('sets a line nearer than its slot where the limit is over the skip, the line alone: no slot moves up', () => {
+    // \lineskip -1, \lineskiplimit 2: a clearance of 0 (5 deep, 7 high, 12 apart) is under the limit, and TeX sets the two
+    // 5 + 7 - 1 = 11 apart. The third line stays on its slot (476), its own clearance from the second (3) over the limit
+    const l = L2.layoutUnit2(unit(7.5, 5) as never, [block(4)] as never, 10, P([-1, 2], { order: [] }) as never)
+    expect(l.clipped).toBe(false)
+    expect(l.lines.map(x => x.baseline)).toEqual([500, 489, 476])
+    expect(l.lines.map(x => x.opened ?? 0)).toEqual([0, -1, 0])
+    // (a line moved up is not one TeX's rule opened)
+    expect(l.opened).toBe(0)
+    // \lineskip 0.5, \lineskiplimit 3: a clearance of 1 (4 deep) is set to 0.5
+    expect(L2.layoutUnit2(unit(7.5, 4) as never, [block(4)] as never, 10, P([0.5, 3], { order: [] }) as never).lines.map(x => x.baseline)).toEqual([500, 488.5, 476])
+  })
   it("opens nothing with no values, the paper's none (a layout file without them, v0 alone), and counts what it would have", () => {
     const l = L2.layoutUnit2(unit(7.5, 6) as never, [block(4)] as never, 10, P(null) as never)
     expect(l.lines.map(x => x.baseline)).toEqual([500, 488, 476])
@@ -184,6 +196,23 @@ describe("a line opens by TeX's rule", () => {
     const kept = L2.layoutUnit2(three as never, [B(500, 2), B(470, 3)] as never, 10, P([1, 0], { order: [] }) as never)
     expect(kept.clipped).toBe(true)
     expect(kept.lines.at(-1)?.baseline).toBe(486)
+    // a gap smaller than TeX's rule gives (12, the pitch: boxes a \lineskiplimit under 0 lets overlap), which blocks2 still
+    // takes for the paragraph's (`through` bounds the gap from above alone), holds no room: the push goes on into the next
+    // block, its lines moved with it (474, not 476), and none is set under its foot
+    const tight = L2.layoutUnit2(three as never, [B(500, 2, true), B(476, 3)] as never, 10, P([1, 0], { order: [] }) as never)
+    expect(tight.clipped).toBe(false)
+    expect(tight.lines.map(x => x.baseline)).toEqual([500, 486, 474])
+  })
+  it('starts the text after a kept display in the first slot below it, when the line before the display opens and drops slots above it', () => {
+    // block 0 (500 to 464) above a display, block 1 (400, 388, 376) below it. The second line, which the display's break
+    // token closes, opens by 2 (the formula 6 deep, its text 7 high), and the slot at 464 is pushed past block 0's foot and
+    // dropped. The text after the display still starts on 400, the first slot under it, not on the slot after that
+    const display = { blockTo: 0, w100: 0 }
+    const tokens = [crop(7.5, 6), space, word(14), space, word(18), display, space, word(18)]
+    const B = (from: number, n: number, after: number) => ({ ...block(n), B: Array.from({ length: n }, (_, k) => from - 12 * k), rects: Array.from({ length: n }, (_, k) => [1, 0, from - 12 * k - 2, 100, from - 12 * k + 8]), after })
+    const l = L2.layoutUnit2(tokens as never, [B(500, 4, 0), B(400, 3, 1)] as never, 10, P([1, 0], { order: [] }) as never)
+    expect(l.clipped).toBe(false)
+    expect(l.lines.map(x => x.baseline)).toEqual([500, 486, 400])
   })
   it("drops the block's slots its lines are moved past the foot of, so that the fit takes its next state, never runs past", () => {
     // three lines in three slots: the third, moved 2 down, is past the block's foot (476): this state does not set it
