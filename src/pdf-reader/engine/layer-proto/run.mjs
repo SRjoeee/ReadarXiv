@@ -1246,7 +1246,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (p.rec) Object.assign(p.rec, { f: r1(p.layout.f), sizeRatio: r1(p.layout.f / p.s), fitScale: p.layout.scale, knob: p.layout.knob, opened: p.layout.opened, unopened: p.layout.unopened, lead: p.layout.state.lead, lines: recLinesOf(p) })
     }
   }
-  // adaptiveFill's pass over a page's units that begin on it (fillPage), each filled unit's record updated; the paper's
+  // adaptiveFill's pass over a page's units that begin on it (fillPage), each filled unit's record updated from the layout
+  // it is drawn with (the lines TeX's rule opened among them: a looser leading may open none the fit's did); the paper's
   // targets a page is held to, the last a page's body units told and the fullest page's own, in the order the pages'
   // passes run (the
   // units' laying order, the same whether the rows come at once or in parts: no page waits for a later one)
@@ -1254,7 +1255,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const fillPass = pg => {
     const r = fillPage(laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg), P, held, (p, target) => {
       const l = p.layout
-      if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
+      if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, opened: l.opened, unopened: l.unopened, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
     }, { page: pg, continuing: laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] !== pg) })
     held = nextHeld(held, r)
   }
