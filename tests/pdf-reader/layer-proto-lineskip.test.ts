@@ -90,6 +90,40 @@ describe("a line opens by TeX's rule", () => {
     const apart = L2.layoutUnit2(tokens as never, [B(500, 2, 0), B(476, 3, 1)] as never, 10, P([1, 0]) as never)
     expect(apart.lines.map(x => x.baseline)).toEqual([500, 488, 476, 464])
   })
+  it("lets a block's line go on into the room of its flow's next block only where the gap is TeX's own for a tall line, the file's line boxes and \\lineskip", () => {
+    // two blocks of one paragraph, 500, 488 | 464, 452 (a gap of 24 where the pitch is 12); \lineskip 1
+    const ys = [500, 488, 464, 452]
+    const rects = ys.map(y => [1, 0, y - 2, 100, y + 8])
+    const lines = (depth: number, height: number) => new Map(rects.map((r, i) => [`${r[0]}|${r.slice(1).join()}`, { baseline: ys[i]!, size: 10, top: ys[i]! + (i === 2 ? height : 7), bottom: ys[i]! - (i === 1 ? depth : 2), exact: true, file: true, j: 10 + i, frame: 0 }]))
+    const through = (info: Map<string, object>, skip: [number, number] | null = [1, 0]) => L2.blocks2(rects as never, [[0, 0, 612, 792]], null, info as never, null, null, skip)[0]?.through
+    // the last line 12.5 deep (a formula), the next 10.5 high: 12.5 + 10.5 + 1 = 24, the gap
+    expect(through(lines(12.5, 10.5))).toBe(true)
+    // a shallower last line, or a lower next one: the gap is more than TeX's rule gives these two lines
+    expect(through(lines(8, 10.5))).toBe(false)
+    expect(through(lines(12.5, 6))).toBe(false)
+    // within the hundredth the file is written in, still TeX's; 0.1 short of it is not
+    expect(through(lines(12.49, 10.5))).toBe(true)
+    expect(through(lines(12.4, 10.5))).toBe(false)
+    // with no \lineskip values (a file that has none), no line opens, and no room is gone into
+    expect(through(lines(12.5, 10.5), null)).toBe(false)
+    // lines the file gives no boxes for: none
+    expect(through(new Map([...lines(12.5, 10.5)].map(([k, v]) => [k, { ...v, top: undefined, bottom: undefined }])))).toBe(false)
+    // 1810.04805's page 6, unit 81 (ko): the row j10 of a script inside the last line (it splits the blocks), the last line
+    // 9.64 deep (the formula), the next 7.45 high, \lineskip 1: 9.64 + 7.45 + 1 = 18.09 for a gap of 18.02
+    const a = [445.61, 431.06, 413.04, 399.49]
+    const real = a.map(y => [1, 0, y - 2.35, 100, y + 7.45])
+    const script = [1, 90, 438.17 - 2, 100, 442.38]
+    const rows = [real[0]!, real[1]!, script, real[2]!, real[3]!]
+    const boxes = [[453.3, 443.23], [442.38, 421.42], [442.38, 435.28], [420.49, 410.66], [406.9, 397.1]]
+    const info = (js: number[]) => new Map(rows.map((r, i) => [`${r[0]}|${r.slice(1).join()}`, { baseline: i === 2 ? 438.17 : a[i > 2 ? i - 1 : i]!, size: 10.91, top: boxes[i]![0], bottom: boxes[i]![1], exact: true, file: true, j: js[i], frame: 1 }]))
+    const unit81 = (js = [8, 9, 10, 11, 12]) => L2.blocks2(rows as never, [[0, 0, 612, 792]], new Set([`1|${script.slice(1).join()}`]), info(js) as never, null, null, [1, 0])
+    expect(unit81().map(b => [b.flow, b.through])).toEqual([[0, true], [0, undefined]])
+    // a kept line lower than the last line, in the gap: the block's foot stays its own
+    const held = [1, 90, 420, 100, 428]
+    const withHeld = [real[0]!, real[1]!, held, real[2]!, real[3]!]
+    const heldInfo = new Map(withHeld.map((r, i) => [`${r[0]}|${r.slice(1).join()}`, { ...(info([8, 9, 10, 11, 12]).get(`${rows[i]![0]}|${rows[i]!.slice(1).join()}`) as object), ...(i === 2 ? { baseline: 422 } : {}) }]))
+    expect(L2.blocks2(withHeld as never, [[0, 0, 612, 792]], new Set([`1|${held.slice(1).join()}`]), heldInfo as never, null, null, [1, 0]).map(b => [b.flow, b.through])).toEqual([[0, false], [0, undefined]])
+  })
   it("sets two blocks in one flow where only the unit's own lines lie between them in the file, in one frame", () => {
     // two blocks of v0 (a gap of 36 pt splits them: a paragraph's lines TeX opened, or the unit's two parts), 500, 488 | 440, 428
     const rects = [500, 488, 440, 428].map(y => [1, 0, y - 2, 100, y + 8])
@@ -105,15 +139,8 @@ describe("a line opens by TeX's rule", () => {
     const withRow = L2.blocks2(five as never, [[0, 0, 612, 792]], new Set([`1|${row.slice(1).join()}`]), infoFive as never)
     expect(withRow.map(b => b.rects.length)).toEqual([2, 2])
     expect(withRow.map(b => b.flow)).toEqual([0, 0])
-    // (the room between them is the paragraph's own where nothing kept lies lower than the first block's last line: none
-    // between them, or a script's row inside that line; a row the unit keeps in the gap is stayed clear of)
-    expect(withRow[0]?.through).toBe(false)
-    expect(L2.blocks2(rects as never, [[0, 0, 612, 792]], null, info([10, 11, 12, 13]) as never)[0]?.through).toBe(true)
-    const inside = [1, 90, 487, 100, 494]
-    const fiveIn = [rects[0]!, rects[1]!, inside, rects[2]!, rects[3]!]
-    const infoIn = new Map(fiveIn.map((r, i) => [`${r[0]}|${r.slice(1).join()}`, { baseline: (r[2] ?? 0) + 2, size: 10, exact: true, file: true, j: [10, 11, 12, 13, 14][i], frame: 0 }]))
-    expect(L2.blocks2(fiveIn as never, [[0, 0, 612, 792]], new Set([`1|${inside.slice(1).join()}`]), infoIn as never).map(b => [b.flow, b.through])).toEqual([[0, true], [0, undefined]])
-    // another unit's lines between them (an outer list item that goes on after a nested list, in the same column and page)
+    // (a stretch of rows of the unit's own that no rectangle holds is a break: `j` is the unit's own row in the file, so
+    // another unit's lines never show in it; they are not rows of the unit, and `through`, below, is what stays clear of them)
     expect(flows([10, 11, 20, 21])).toEqual([0, 1])
     // the next line of the file, but in another frame (a column or a page on)
     expect(flows([10, 11, 12, 13], [0, 0, 1, 1])).toEqual([0, 1])

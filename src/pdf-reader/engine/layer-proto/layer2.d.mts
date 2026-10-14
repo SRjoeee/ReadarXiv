@@ -69,7 +69,7 @@ export type CiteMap = Map<string, string | undefined> & { text?: Map<string, str
 /** a line's baseline and size: measured from its characters or given exactly (exact; by a layout file, file), else from its rectangle */
 /** a line's measured baseline and size; a layout file's line (`file`) also says its place in the file, `j` its index and
  *  `frame` its page's column */
-export interface LineInfo { baseline: number; size: number; exact: boolean; file?: boolean; j?: number; frame?: number }
+export interface LineInfo { baseline: number; size: number; top?: number; bottom?: number; exact: boolean; file?: boolean; j?: number; frame?: number }
 /** a line's erase extent, before the drawing's padding: one box [x0, y0, x1, y1], or several */
 export type Extent = number[] | number[][]
 /** a placeholder's resolution: how it is drawn ('none', 'symbol', 'kept', 'crop', 'orig-text', 'cite-map', 'source'),
@@ -153,7 +153,7 @@ export interface Layout { lines: Line[]; f: number; s: number; scale: number; st
 /** the original page's ink at a fraction of its canvas's resolution */
 export interface InkMap { w: number; h: number; ink: Uint8Array; factor: number }
 /** a unit's block with its lines' measured baselines */
-export interface Block2 extends Block { B: number[]; exact: boolean[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; freeOf?: () => number }
+export interface Block2 extends Block { B: number[]; exact: boolean[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number }
 type ToDev = (x: number, y: number) => [number, number]
 
 /** a spacing accent TeX sets as a glyph of its own */
@@ -215,7 +215,7 @@ export declare function restoreUnaccounted(erased: readonly number[][], px: ToDe
 /** the target's likely faces measured once each, a task apart, the CJK ones too where `cjk` (the run's P.cjk); `ready(face, text)`
  *  is awaited before each measure (a face served in slices has the slice of the text by then) */
 export declare function warmFaces(to: string, cjk: boolean, designs: { serif: string }, yieldNow: () => Promise<unknown>, ready?: (face: Face, text: string) => Promise<unknown>): Promise<void>
-export declare function blocks2(rects: readonly Rect[], pageViews: readonly number[][], keep: ReadonlySet<string> | null, lineInfo: Prepared['lineInfo'], regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null): Block2[]
+export declare function blocks2(rects: readonly Rect[], pageViews: readonly number[][], keep: ReadonlySet<string> | null, lineInfo: Prepared['lineInfo'], regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, lineskip?: readonly [skip: number, limit: number] | null): Block2[]
 export declare function inkMapOf(canvas: HTMLCanvasElement | OffscreenCanvas, factor?: number): InkMap
 export declare function freeBelow(map: InkMap | undefined, toDev: ToDev, k: number, x0: number, x1: number, yStart: number, yLimit: number): number
 export declare const setHyphenData: (lang: string, data: Patterns | true | null) => Map<string, Patterns | true | null>

@@ -118,7 +118,7 @@ describe("the file's lines as v0's rectangles", () => {
     const { rects, exact, lineOf } = T.texRects(unitOf([[1, 10, 200, 100, 109.5, 89, 10, 0], [1, 10, 150, 88, 95, 85, 10, 0], [2, 10, 200, 700, 707, 697, 10, 0]]), 1)
     expect(rects).toEqual([[1, 10, 97.85, 200, 106.83], [1, 10, 85.85, 150, 94.83]])
     const second = rects[1] as (typeof rects)[number]
-    expect(exact.get(second)).toEqual({ baseline: 88, size: 10 })
+    expect(exact.get(second)).toEqual({ baseline: 88, size: 10, top: 95, bottom: 85 })
     expect(lineOf.get(second)).toBe(1)
   })
   it("owns the page's characters by their baselines, scripts and all, within the line's ink", () => {

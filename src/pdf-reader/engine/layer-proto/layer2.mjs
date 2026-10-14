@@ -1853,7 +1853,7 @@ export async function warmFaces(to, cjk, designs, yieldNow, ready = async () => 
 // ---- the unit's blocks, with the original's baselines
 
 /** blocksOf's blocks, each with its lines' measured baselines (B), sizes, pitch and the free space below it */
-export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, referenced = null) {
+export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, referenced = null, lineskip = null) {
   const blocks = blocksOf2(rects, pageViews, keep, regionOf, referenced)
   const info = r => lineInfo.get(rectKey(r)) ?? lineInfo.get(`${r[0]}|${r[2]}|${r[3]}|${r[4]}`)
   for (const b of blocks) {
@@ -1871,8 +1871,10 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
   // (TeX's lines, a layout file's: the blocks that continue each other in the file are one flow, breakLines. The next block
   // continues the last one's line where the file's lines between them, none or more, are all this unit's own (a script's
   // row the text beside it holds, a held run: lines of the unit that are no block's) and in one frame, the file's (a line
-  // with no frame is in none), and no kept region the text passes lies between (`after`); another unit's line between
-  // them, a nested list's, is a break)
+  // with no frame is in none), and no kept region the text passes lies between (`after`). `j` is the unit's own row in the
+  // file, so another unit's lines never show in it: a gap in `j` is a row of this unit that no rectangle holds, a break; a
+  // line of the page that is not this unit's is no row of it, and what keeps a line from running on past it is `through`
+  // below, not the flow)
   const mine = new Set(rects.map(r => info(r)?.j).filter(Number.isInteger))
   const where = r => rects.findIndex(q => q[0] === r[0] && q[2] === r[2] && q[3] === r[3] && q[4] === r[4])
   let flow = 0
@@ -1883,12 +1885,20 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
     if (next) for (let j = to.j + 1; j < from.j; j++) if (!mine.has(j)) { next = false; break }
     b.flow = next ? a.flow : flow++
     // (the room between two blocks of one flow is the paragraph's own, TeX's: where v0 split it at a gap TeX opened for a
-    // tall line, a line of the block above that TeX's rule moves down may go on into it (`through`, slotsAt's foot) where
-    // none of the lines between them the unit keeps lies lower than the block's last line, a script's row inside it:
-    // 1810.04805's page 6, unit 81; where one does, a held line in the gap, the block's foot stays its own)
+    // tall line, a line of the block above that TeX's rule moves down may go on into it (`through`, slotsAt's foot). Two
+    // things say the gap is TeX's paragraph room and holds nothing else. No line of the unit that it keeps lies lower than
+    // the block's last line between them (a script's row inside that line is no matter; a held line in the gap is one).
+    // And the gap is no wider than the glue TeX sets between two consecutive lines of a tall one's opening: where
+    // \baselineskip would leave them nearer than \lineskiplimit, the last line's depth, the next line's height and
+    // \lineskip apart (their boxes the file's own). Ink in a wider gap that is no line of the file (a float without a
+    // caption inside the paragraph, a \vadjust rule) is not TeX's room, and the line stays above it. The box values are
+    // written to a hundredth (±0.005 each): a gap that is exactly that sum is within 0.025 of it.
+    // 1810.04805's page 6, unit 81: 9.64 + 7.45 + 1 = 18.09 for a gap of 18.02)
     if (next) {
       const last = a.rects.at(-1), ia = where(last), ib = where(b.rects[0])
-      a.through = ia >= 0 && ib > ia && rects.slice(ia + 1, ib).every(r => r[2] >= last[2])
+      const tight = lineskip && [to.baseline, to.bottom, from.baseline, from.top].every(Number.isFinite)
+        && to.baseline - from.baseline <= (to.baseline - to.bottom) + (from.top - from.baseline) + lineskip[0] + 0.025
+      a.through = !!tight && ia >= 0 && ib > ia && rects.slice(ia + 1, ib).every(r => r[2] >= last[2])
     }
   }
   return blocks

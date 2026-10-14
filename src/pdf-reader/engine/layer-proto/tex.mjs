@@ -151,11 +151,11 @@ export function texRects(lu, maxPage = Infinity) {
   const L = lu.lines, F = lu.frames, heldLines = new Set(lu.held ?? [])
   for (let f = 0; f < F.length; f += 6) {
     for (let j = F[f + 2]; j < F[f + 2] + F[f + 3]; j++) {
-      const page = L[8 * j], base = L[8 * j + 3], size = L[8 * j + 6]
+      const page = L[8 * j], base = L[8 * j + 3], size = L[8 * j + 6], top = L[8 * j + 4], bottom = L[8 * j + 5]
       if (page > maxPage) continue
       const r = [page, r2(L[8 * j + 1]), r2(base - BELOW * size), r2(L[8 * j + 2]), r2(base + ABOVE * size)]
       rects.push(r)
-      exact.set(r, { baseline: base, size })
+      exact.set(r, { baseline: base, size, top, bottom })
       lineOf.set(r, j)
       jOf.push(j)
       frameOf.set(j, f / 6)
@@ -290,7 +290,7 @@ export function texParts(lu, kOf, { use, lines = null, extents = 'v0' }) {
     const uc = charsOfUnit2(rects, charsByPage, ext, exact)
     const lineInfo = new Map()
     for (const r of rects) {
-      const e = exact.get(r), j = lineOf.get(r), info = { baseline: e.baseline, size: e.size, exact: true, file: true, j, frame: frameOf.get(j) }
+      const e = exact.get(r), j = lineOf.get(r), info = { baseline: e.baseline, size: e.size, top: e.top, bottom: e.bottom, exact: true, file: true, j, frame: frameOf.get(j) }
       lineInfo.set(rectKey(r), info)
       lineInfo.set(`${r[0]}|${r[2]}|${r[3]}|${r[4]}`, info)
     }
