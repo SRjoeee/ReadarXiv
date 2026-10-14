@@ -2,9 +2,9 @@
 export { LayoutRefusal } from './json.mjs'
 /** the maker's version: raised with any change to what the maker writes under the schema; it enters a bundle's key, and a file
  *  names it as `layout`, which a reader reads for its shape alone: a file is refused by its `schema` (§9.3 of the plan) */
-export declare const LAYOUT: '4'
-/** the file's schema: 2 holds `names` */
-export declare const LAYOUT_SCHEMA: 2
+export declare const LAYOUT: '5'
+/** the file's schema: 2 holds `names`; 3 `lineskip` */
+export declare const LAYOUT_SCHEMA: 3
 /** a new-style arXiv identifier, or an old one (archive, subject class, a slash and 7 digits); never a version suffix */
 export declare const isPaperId: (id: unknown) => id is string
 /** a paper's version at most */
@@ -35,7 +35,7 @@ export declare const PAGE_TEXT_ALL: number
 export declare function isPageText(s: unknown): s is string
 /** prep/<mid>/layout-<sha256>.json (spec §4.2). arXiv's PDF units, each page unrotated, y up, pages 1-based */
 export interface LayoutFile {
-  schema: 2
+  schema: 3
   layout: string
   pdfjs: string
   paper: { id: string; version: number; pages: number }
@@ -57,6 +57,8 @@ export interface LayoutFile {
    *  page, x0, baseline, x1, top, bottom, size, font, flags (NAME_FLAG), unit (the unit a RUN_IN name leads, else -1),
    *  glue (the original's space between its joint and that unit's text, 0 where not RUN_IN), its TeX column's x0 and x1 */
   names: number[][]
+  /** the paper's \lineskip and \lineskiplimit, PDF units, as TeX gave them (marks.mjs readSkipProbe); null: none given */
+  lineskip: [lineskip: number, lineskiplimit: number] | null
 }
 /** bytes, then UTF-8, then values and nesting counted, then JSON.parse, then every bound; a file of another `schema` is
  *  refused, one of another maker's `layout` is read; throws LayoutRefusal */

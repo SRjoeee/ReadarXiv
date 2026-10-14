@@ -20,8 +20,8 @@ import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, 
 import { PDFJS, PIPELINE_VERSION } from '../pipeline/versions.mjs'
 
 /** the bundle's format: raised with any change to what it holds (the left's tokens and spans, with the highlight); 2 the
- *  layout file's schema 2, its babel names (D1a) */
-export const BUNDLE = '2'
+ *  layout file's schema 2, its babel names (D1a); 3 its schema 3, the paper's \lineskip and \lineskiplimit */
+export const BUNDLE = '3'
 /** a bundle's bytes at most (the 147-page thesis's is 1.18 MiB) and its values (the thesis holds 165,659) */
 export const BUNDLE_CAP = 4 * 2 ** 20
 export const BUNDLE_VALUES = 1_000_000

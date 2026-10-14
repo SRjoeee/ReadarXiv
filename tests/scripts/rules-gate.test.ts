@@ -422,6 +422,15 @@ describe('the comment holds no fixture text', () => {
     expect([...strings].every(s => s.length >= 10)).toBe(true)
   })
 
+  it('counts ten characters of text, not of padding: a word a cell holds between spaces is no paper text to keep out', () => {
+    // (the comment's label "crops off their TeX baseline" holds " baseline "; a unit that is only that word withheld the gate's comment)
+    const got = textsOf({ units: [{ tr: ' baseline ' }, { tr: '  a longer phrase of text  ' }] })
+    expect(got.has(' baseline ')).toBe(false)
+    expect(got.has('baseline')).toBe(false)
+    expect(got.has('a longer phrase of text')).toBe(true)
+    expect(leaksIn('| crops off their TeX baseline | 2 | 0 |', got)).toBe(0)
+  })
+
   it('carries none into the comment or the numbers, though the run files they come from hold them', () => {
     // a run file's fields that hold text in a real run: a failed output's reason, the page errors, the units a check names
     const leaky = (f: Fixtures) => {

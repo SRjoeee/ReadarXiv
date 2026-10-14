@@ -6,7 +6,7 @@ import type { Patterns } from './hyph.mjs'
 import type { Block, Rect } from './layer1.mjs'
 
 /** the fit's parameters and the breaking's: the layout rules' for a target (rules/layout.mjs resolveRules), the field names
- *  v0's own. `maxScale`, `capScale`, `growTo`, `flowPast`, `refuse` and `_compress` are the run's own, set unit by unit */
+ *  v0's own. `maxScale`, `capScale`, `growTo`, `flowPast`, `refuse`, `lineskip` and `_compress` are the run's own, set unit by unit */
 export interface Params {
   cjk: boolean; leadBase: number; leadFloor: number; trackMin: number; compressMax: 0 | 1 | 2; borrow: 0 | 1; borrowGap: number
   floor: number; step: number; order: ('track' | 'borrow' | 'lead' | 'shrink')[]; cjkJust: number; spaceMax: number; autospace: number; spaceMin: number
@@ -15,6 +15,9 @@ export interface Params {
   capScale?: number
   /** step 3: the further steps for a unit the states leave clipped (run.mjs fitFurther), and the size the last goes down to */
   further: readonly ('widen' | 'flow' | 'shrink')[]; floorMin: number; refuse?: number; flowPast?: boolean
+  /** the paper's \lineskip and \lineskiplimit, PDF units (the layout file's, TeX's): a line nearer the one before it than
+   *  the limit is set the two's depth and height plus lineskip apart (breakLines); null: no line opens (the run's own) */
+  lineskip?: readonly [number, number] | null
   /** step 3: the CJK runs' tracking the fit's first state takes, in em; null: a face's size correction given back (run.mjs) */
   trackStart: number | null
   /** the leading relative to the original's pitch (leadOf; false: leadBase on any pitch); fillBySize's cap (run.mjs
@@ -51,7 +54,11 @@ export interface Unit { kind: string; src: string; pieces: { t: string; s?: stri
 /** a run of the unit's page characters: a gap (what its source does not write: a placeholder's rendering, a label), or a
  *  placeholder's rendering as its source found it. `of`: the gap it was cut from; `box`: where its ink is, where its
  *  source knows it exactly (drawnAs places a crop by it) */
-export interface Gap { text: string; chars: Char[]; of?: Gap; unbracketed?: boolean; norm?: string; taken?: boolean; box?: RenderingBox }
+export interface Gap {
+  text: string; chars: Char[]; of?: Gap; unbracketed?: boolean; norm?: string; taken?: boolean; box?: RenderingBox
+  /** a display's rendering from the held lines that cover it (tex.mjs displayCover): those lines' keys */
+  held?: string[]
+}
 /** a rendering's ink as its source knows it: its extent across, the baseline of the line it sits on, its lines */
 export interface RenderingBox { x0: number; x1: number; top?: number; bottom?: number; baseline: number; lines: number }
 /** a placeholder of the unit by its piece index `k` (placeholdersOf): its source, its class (phClass2), whether it is a
@@ -60,7 +67,9 @@ export interface Placeholder { k: number; src: string; cls: string; unknown?: bo
 /** the paper's citations as learnt in lay order (a key's number), an author-year key's text, a macro's rendering */
 export type CiteMap = Map<string, string | undefined> & { text?: Map<string, string>; macros?: Map<string, string> }
 /** a line's baseline and size: measured from its characters or given exactly (exact; by a layout file, file), else from its rectangle */
-export interface LineInfo { baseline: number; size: number; exact: boolean; file?: boolean }
+/** a line's measured baseline and size; a layout file's line (`file`) also says its place in the file, `j` its index and
+ *  `frame` its page's column */
+export interface LineInfo { baseline: number; size: number; top?: number; bottom?: number; exact: boolean; file?: boolean; j?: number; frame?: number }
 /** a line's erase extent, before the drawing's padding: one box [x0, y0, x1, y1], or several */
 export type Extent = number[] | number[][]
 /** a placeholder's resolution: how it is drawn ('none', 'symbol', 'kept', 'crop', 'orig-text', 'cite-map', 'source'),
@@ -94,6 +103,11 @@ export interface Prepared extends Map<number, Resolved> {
   cat: Map<string, 'acc' | 'keep' | 'orphan' | 'undrawn'>
   /** the finish: the lines a located display holds */
   displayLines?: Set<string>
+  /** part 5: the piece index of a crop whose ink no source proves its placeholder's (the unit is left the original's) */
+  unproven?: number
+  /** part 4's source knows each placeholder's ink (a layout file's segments) over part 1's lines (the file's): a gap's piece
+   *  none took is the unit's text */
+  inkKnown?: boolean
 }
 /** part 1 and part 2 as a source gives them */
 export interface UnitLines {
@@ -123,19 +137,23 @@ export interface UnitParts {
   extents?: (lines: UnitLines, rects: readonly Rect[]) => Map<Rect, Extent>
   /** part 3: sets out.label, returns the gaps without it */
   label?: (out: Prepared, unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], gaps: Gap[]) => Gap[]
-  /** part 4: which ink each placeholder is */
+  /** part 4: which ink each placeholder is, by a source that knows it (Prepared.inkKnown, with part 1) */
   renderings?: (ctx: RenderingsContext) => Renderings
+  /** part 5: each crop cut from its placeholder's own ink (mutates the resolutions); the k of one no source proves, or -1 */
+  crops?: (out: Prepared) => number
 }
 /** a token of a unit's translation */
 export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it
 /** a laid line: its slot, and its items at their places */
 export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number }[]; [more: string]: unknown }
 /** layoutUnit2's answer */
-export interface Layout { lines: Line[]; f: number; s: number; scale: number; state: { lead: number; scale: number; track: number; trackLatin?: number; compress: number; borrow: number; knob: string }; knob: string; clipped: boolean; lostChars: number; chars: number; tried: number; spilled: boolean; extents?: Map<string, number[]> }
+/** a unit laid: its lines and the state that set them; `opened`, the lines TeX's rule opened (P.lineskip), `unopened` the
+ *  lines it would have opened where it has no values (none read: they stay nearer the line before than nothing) */
+export interface Layout { lines: Line[]; f: number; s: number; scale: number; state: { lead: number; scale: number; track: number; trackLatin?: number; compress: number; borrow: number; knob: string }; knob: string; clipped: boolean; lostChars: number; chars: number; tried: number; spilled: boolean; opened: number; unopened: number; extents?: Map<string, number[]> }
 /** the original page's ink at a fraction of its canvas's resolution */
 export interface InkMap { w: number; h: number; ink: Uint8Array; factor: number }
 /** a unit's block with its lines' measured baselines */
-export interface Block2 extends Block { B: number[]; exact: boolean[]; sizes: number[]; pitch0: number | null; free: number; after?: number; freeOf?: () => number }
+export interface Block2 extends Block { B: number[]; exact: boolean[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number }
 type ToDev = (x: number, y: number) => [number, number]
 
 /** a spacing accent TeX sets as a glyph of its own */
@@ -197,17 +215,26 @@ export declare function restoreUnaccounted(erased: readonly number[][], px: ToDe
 /** the target's likely faces measured once each, a task apart, the CJK ones too where `cjk` (the run's P.cjk); `ready(face, text)`
  *  is awaited before each measure (a face served in slices has the slice of the text by then) */
 export declare function warmFaces(to: string, cjk: boolean, designs: { serif: string }, yieldNow: () => Promise<unknown>, ready?: (face: Face, text: string) => Promise<unknown>): Promise<void>
-export declare function blocks2(rects: readonly Rect[], pageViews: readonly number[][], keep: ReadonlySet<string> | null, lineInfo: Prepared['lineInfo'], regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null): Block2[]
+export declare function blocks2(rects: readonly Rect[], pageViews: readonly number[][], keep: ReadonlySet<string> | null, lineInfo: Prepared['lineInfo'], regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, lineskip?: readonly [skip: number, limit: number] | null): Block2[]
 export declare function inkMapOf(canvas: HTMLCanvasElement | OffscreenCanvas, factor?: number): InkMap
 export declare function freeBelow(map: InkMap | undefined, toDev: ToDev, k: number, x0: number, x1: number, yStart: number, yLimit: number): number
 export declare const setHyphenData: (lang: string, data: Patterns | true | null) => Map<string, Patterns | true | null>
-/** a crop's baseline: its glyphs' at its line's text size, else its line's measured baseline, else its largest glyphs' */
+/** a crop from a layout file's segment (its piece's own ink): the box, a fraction of a point around, on its line's
+ *  baseline */
+export declare function cropOfBox(box: { x0: number; x1: number; top: number; bottom: number; baseline: number }): { crop: number[]; baseline: number }
+/** a crop's baseline with no segment (v0's): its glyphs' at its line's text size, else its line's measured baseline, else
+ *  its largest glyphs' */
 export declare function cropBaselineOf(real: readonly Char[], lineInfo: Prepared['lineInfo'] | null, main: readonly Char[]): number
 /** a solid-set original's pitch, × its size (TeX's \baselineskip: 1.2 at 10 and 12 pt, 1.24 at 11) */
 export declare const SOLID: number
 /** the unit's leading relative to the original's own pitch: leadBase of a solid line, never closer than the original's */
 export declare function leadOf(blocks: readonly Pick<Block2, 'pitch0'>[], s: number, P: Pick<Params, 'leadBase'>): number
 export declare function layoutUnit2(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params): Layout
+/** a run's ink over (a) and under (d) its baseline at 100 px in its face (the measure that gives its width) */
+export declare function ink100(s: string, face: Face): { a: number; d: number }
+/** a laid line's extent over (a) and under (d) its baseline, PDF units: its text's ink and its crops' over their TeX
+ *  baselines; `text`, its text's alone */
+export declare function lineExtent(line: Pick<Line, 'items'>, f: number, scale: number): { a: number; d: number; text: { a: number; d: number } }
 /** a unit laid at one state of the fit, with no search (the page fill's): clipped where the state does not set it whole */
 export declare function layoutAt(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params, st: Layout['state']): Layout
 /** a box in v0's device pixels on the page: [x, y, w, h] */

@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-15",
+  "by": "the maintainer",
+  "on": "the math round (pull request 345): formulas drawn on TeX's baselines, TeX's lineskip rule, units kept the original's where no crop can be proven",
+  "quote": "\u90fd\u540c\u610f",
+  "english": "agreed to all, on 2026-10-13 (the trade and its side effects) and on 2026-10-15 (the final list)",
+  "measures": [
+    "text units left English",
+    "full size",
+    "paragraph gap / the original's (median)"
+  ],
+  "targets": [
+    "de",
+    "es",
+    "fr",
+    "ja",
+    "ko",
+    "ru",
+    "zh"
+  ],
+  "scope": "units left the original's where no segment proves a crop's ink (1512: 2 units on each target; the thesis: 14 units), a unit one size step smaller where TeX's lineskip rule opens a line (fr and ja full size), and the thesis's paragraph gap",
+  "why": "a crop is drawn only where a segment proves the ink is the placeholder's; the unit stays the original's where none does, rather than carrying a neighbour's ink. The smaller size step is TeX's own interline rule taking the room a tall inline formula needs. The full record is lab/pdf/records/layer-fidelity.md."
+}

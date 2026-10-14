@@ -51,7 +51,7 @@ describe("a table group withheld beside one drawn, the whole run (openProto): th
       const order = first === 'A' ? named : [named[1]!, named[2]!, named[0]!]
       const cells = order.map(([name, src, x0, x1, b, group], id) => ({ id, name, src, x0, x1, b, group }))
       const layout = {
-        schema: 2, layout: '4', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['F1'],
+        schema: 3, lineskip: null, layout: '5', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['F1'],
         units: cells.map(c => [c.id, 4, 9, 0, 1]),
         lines: cells.map(c => [c.id, [1, c.x0, c.x1, c.b, c.b + 7, c.b - 2, 10, 0]]),
         frames: cells.map(c => [c.id, [1, 0, 0, 1, -1, 0]]),
@@ -90,7 +90,7 @@ describe("a cell widened over the paper beside it, the whole run (openProto): he
     const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
     const cells = [{ id: 0, src: 'Delta', x0: 10, x1: 40, b: 100, tr: '\u6c49'.repeat(9) }, { id: 1, src: 'Omega', x0: 150, x1: 200, b: 60, tr: '\u6c49\u5b57' }]
     const layout = {
-      schema: 2, layout: '4', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['F1'],
+      schema: 3, lineskip: null, layout: '5', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['F1'],
       units: cells.map(c => [c.id, 4, 9, 0, 1]),
       lines: cells.map(c => [c.id, [1, c.x0, c.x1, c.b, c.b + 6.8, c.b - 2.14, 10, 0]]),
       frames: cells.map(c => [c.id, [1, 0, 0, 1, -1, 0]]),
@@ -117,6 +117,43 @@ describe("a cell widened over the paper beside it, the whole run (openProto): he
   })
 })
 
+describe("a unit the page fill lays anew, the whole run (openProto): its record's counts are the drawn layout's", () => {
+  it("counts the lines TeX's rule opens in the layout drawn, not in the fit's before the fill", async () => {
+    // a paragraph of four lines 12 apart, its translation two; the paper's \lineskip 5 and \lineskiplimit 2.5. The fit
+    // sets the two at 10 pt on the original's pitch, clear by 3 (2 deep, 7 high), over the limit: no line opens. The
+    // page's fill grows them to 11 pt, clear by 2.1, under it: the second line drawn opens by 2.2 + 7.7 + 5 - 12
+    const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const ys = [200, 188, 176, 164]
+    const words = ['Alpha beta gamma', 'delta epsilon zeta', 'theta iota kappa', 'lambda mu nu']
+    const layout = {
+      schema: 3, lineskip: [5, 2.5], layout: '5', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['F1'],
+      units: [[0, 0, 9, 0, 1]],
+      lines: [[0, ys.flatMap(b => [1, 10, 110, b, b + 7, b - 2, 10, 0])]],
+      frames: [[0, [1, 0, 0, 4, -1, 0]]],
+      erase: [[0, ys.flatMap((b, i) => [i, 10, b - 2, 110, b + 7])]],
+      ph: [], labels: [], headings: [], pageText: [], held: [], names: [],
+    }
+    const index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(layout))))
+    const doc = docOf(words.map((w, i) => [w, 10, ys[i]!, 5 * w.length]))
+    const run = await openProto({
+      doc, target: 'de', pages: 1, scale: 1, dpr: 1, copy: false,
+      geometry: { schema: 1, kinds: ['para'], left: { pages: [[0, 0, 300, 300]], units: [] } },
+      units: [{ kind: 'para', src: words.join(' '), state: 'whole', pieces: [{ t: 'text', tr: true, s: 'Eins zwei drei vier fuenf' }] }],
+      tex: { index, pieces: new Map([[0, [[0]]]]), use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
+      removal: { OPS: {}, mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: 1, sets: {}, page: { 1: { ok: true } } } },
+    } as never)
+    await run.until(1)
+    const p = run.placed.find((x: { id: number }) => x.id === 0) as unknown as { layout: { opened: number; unopened: number; scale: number; lines: { baseline: number }[] } }
+    const rec = run.stats.find((r: { id: number }) => r.id === 0) as { opened: number; unopened: number; fill?: unknown }
+    // filled at the page's size, its second line opened as it is drawn, and the record counts it
+    expect(rec.fill).toBeDefined()
+    expect(p.layout.scale).toBeCloseTo(1.1, 6)
+    expect(p.layout.lines.map(l => l.baseline)).toEqual([200, 185.1])
+    expect([p.layout.opened, p.layout.unopened]).toEqual([1, 0])
+    expect([rec.opened, rec.unopened]).toEqual([1, 0])
+  })
+})
+
 describe("a paper whose add-on is refused, the whole run (openProto): every unit drawn the old way, none lost", () => {
   // the remover's isolation contract (layout/remove.mjs's head): a paper the remover refuses, or whose remover crashed
   // or ran out of its limits, ships no add-on, and its readers draw every unit erased from the original page and put
@@ -125,7 +162,7 @@ describe("a paper whose add-on is refused, the whole run (openProto): every unit
     const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
     const cells = [{ id: 0, src: 'Alpha', x0: 10, x1: 40, b: 100 }, { id: 1, src: 'Betas', x0: 60, x1: 90, b: 100 }]
     const layout = {
-      schema: 2, layout: '4', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['F1'],
+      schema: 3, lineskip: null, layout: '5', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['F1'],
       units: cells.map(c => [c.id, 4, 9, 0, 1]),
       lines: cells.map(c => [c.id, [1, c.x0, c.x1, c.b, c.b + 7, c.b - 2, 10, 0]]),
       frames: cells.map(c => [c.id, [1, 0, 0, 1, -1, 0]]),

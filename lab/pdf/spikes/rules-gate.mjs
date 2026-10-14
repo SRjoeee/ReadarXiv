@@ -244,11 +244,12 @@ export function withRulesFile(report, check) {
   return out
 }
 
-/** every string of a fixture's translation (record.json, units.json) the comment must not carry: those of ten characters or more, at any depth of its units */
+/** every string of a fixture's translation (record.json, units.json) the comment must not carry: those of ten characters or more without their leading and trailing white space, at any depth of its units */
 export function textsOf(record, min = 10) {
   const out = new Set()
   const walk = v => {
-    if (typeof v === 'string') { if (v.length >= min) out.add(v) } else if (Array.isArray(v)) v.forEach(walk)
+    // (ten characters of text: the string without its padding, so that a word a cell holds between spaces is not a paper's text because a label of the comment contains it)
+    if (typeof v === 'string') { const t = v.trim(); if (t.length >= min) out.add(t) } else if (Array.isArray(v)) v.forEach(walk)
     else if (v !== null && typeof v === 'object') Object.values(v).forEach(walk)
   }
   walk(record?.units)

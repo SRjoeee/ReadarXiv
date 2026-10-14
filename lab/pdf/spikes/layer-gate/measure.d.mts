@@ -10,13 +10,23 @@ export interface Item { x0: number; y0: number; x1: number; y1: number; str: str
 export declare const BODY: Set<string>
 export declare const MATH_FONT: RegExp
 export declare function frameGroups(orig: OrigLine[]): { lines: OrigLine[]; n: number; pitch: number; first: number; last: number; x0: number; x1: number; top: number; bottom: number; size: number }[]
-export declare function modelPage(o: { units: UnitIn[]; ref: RefUnit[]; items: Item[]; translated: Set<number> }): {
+/** a crop cut from a page, whatever page it is drawn on; `clip`: its own ink's boxes it is cut through (device pixels,
+ *  [x, y, w, h]), where it has them */
+export interface CutCrop { src: number[]; unit: number; plane?: string; clip?: number[][] | null }
+/** a page's drawn lines and crops as cropPlacementOf reads them */
+export interface Placement {
+  lines: { key: string; x0: number; x1: number; baseline: number; a: number; d: number }[]
+  crops: { unit: number; line: string; box: number[]; srcTop: number; tex: number | null; sc: number }[]
+}
+export interface PlacementCounts { cropTextOverlap: number; cropBaselineOff: number; cropNoTex: number; cropWhere: Record<'cropTextOverlap' | 'cropBaselineOff' | 'cropNoTex', number[]> }
+export declare function cropPlacementOf(o: Placement): PlacementCounts
+export declare function modelPage(o: { units: UnitIn[]; ref: RefUnit[]; items: Item[]; translated: Set<number>; cut?: CutCrop[]; placement?: Placement | null }): {
   units: { textOn: number; textDrawn: number; cellsOn: number; cellsDrawn: number; left: Record<string, number> }
   fills: { kind: string; n: number; fill: number }[]
   geo: { id: number; kind: string; n: number; dTop: number; blank: number; dRight: number; pitch: number | null; rhythm: number | null; onGrid: number; scale: number }[]
   gaps: ParaGap[]
   wrongPageText: number; droppedPh: number; cropForeign: number; modelCells: number
-}
+} & Partial<PlacementCounts>
 /** a gap between two drawn body frames of a column with nothing between them: drawn ÷ original, and the drawn gap's excess
  *  in the upper frame's original pitches */
 export interface ParaGap { ratio: number; extra: number }

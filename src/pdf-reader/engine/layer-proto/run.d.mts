@@ -45,7 +45,10 @@ export interface Row { page: number; left: HTMLCanvasElement | null; right: HTML
 export interface Rec {
   id: number; kind: string; v: 2; pages: number[]; cut: boolean; s?: number; f?: number; fitScale: number; knob: string; clipped: boolean
   lostChars: number; chars: number; lead: number; lines: (number | string | boolean | null)[][]; match?: { match: number; total: number; base?: boolean }
-  sizeRatio?: number; modes: Record<string, number>; [more: string]: unknown
+  sizeRatio?: number; modes: Record<string, number>
+  /** the lines TeX's rule opened, and those it would have where the paper has no values for it (layer2.mjs Layout) */
+  opened?: number; unopened?: number
+  [more: string]: unknown
 }
 export declare const PDF_OPTIONS: { cMapPacked: true; enableHWA: true; disableStream: true }
 /** main.js's lay order, by the page whose drawing lays each unit: [page, ids] */

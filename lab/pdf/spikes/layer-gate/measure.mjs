@@ -109,10 +109,12 @@ function* cellsOf(orig) {
 }
 
 /**
- * The model tier's measures of a page: { units, fills, geo, wrongPageText, droppedPh, cropForeign, modelCells }.
- * `translated` holds the ids of the units with a translation, `located` those the engine's layout locates on the page
+ * The model tier's measures of a page: { units, fills, geo, wrongPageText, droppedPh, cropForeign, modelCells }, and with
+ * `placement` the crops' places (cropPlacementOf). `translated` holds the ids of the units with a translation, `located`
+ * those the engine's layout locates on the page; `cut` the crops cut from this page, whatever page they are drawn on
+ * ({ src, plane }: a unit's text runs on past a page's foot, and its crop with it)
  */
-export function modelPage({ units, ref, items, translated }) {
+export function modelPage({ units, ref, items, translated, cut = [], placement = null }) {
   const drawnIds = new Set(units.filter(u => u.drawn).map(u => u.id))
   const byId = new Map(units.map(u => [u.id, u]))
   // the units left as the original: every translated reference unit on the page (no author, no figure), drawn or not, and
@@ -166,10 +168,12 @@ export function modelPage({ units, ref, items, translated }) {
     for (const t of u.pageText ?? []) if (t.segW > 0 && t.w > 1.3 * t.segW) wrongPageText++
     for (const q of u.phs ?? []) if ((q.status === 'norow' || q.status === 'empty') && (q.kind === 'math' || q.kind === 'cite')) droppedPh++
   }
-  // crops whose source box holds a text item of a line above or below it (a crop cut from the placeholders' page, the
-  // text-removed PDF's, holds no line's text whatever its box: its foreign ink is the pixel tier's, cropForeignInk)
+  // crops whose source box holds a text item of a line above or below it, on the page it is cut from (a crop cut from the
+  // placeholders' page, the text-removed PDF's, holds no line's text whatever its box: its foreign ink is the pixel
+  // tier's, cropForeignInk). A crop drawn on the next page was read against that page's items, which are no neighbours of
+  // its source (1706.03762 p5's, cut from p4)
   let cropForeign = 0
-  for (const u of drawn) for (const c of u.crops) {
+  for (const c of cut) {
     if (c.plane === 'P') continue
     const [x0, y0, x1, y1] = c.src
     if (items.some(it => {
@@ -181,7 +185,30 @@ export function modelPage({ units, ref, items, translated }) {
   // the drawn text area in cells: the model tier's denominator for its defect rates
   let modelCells = 0
   for (const u of drawn) if (u.kind !== 'cell' && u.kind !== 'author' && u.kind !== 'figure') for (const _ of cellsOf(u.orig)) modelCells++
-  return { units: counts, fills, geo, gaps: paraGapsOf(drawn, ref, items), wrongPageText, droppedPh, cropForeign, modelCells }
+  return { units: counts, fills, geo, gaps: paraGapsOf(drawn, ref, items), wrongPageText, droppedPh, cropForeign, modelCells, ...(placement ? cropPlacementOf(placement) : {}) }
+}
+
+/**
+ * Where a page's drawn crops sit (the math placement round, 2026-10-08), from the drawing's geometry:
+ * - `cropTextOverlap`: crops whose drawn box meets another drawn line's text box (across the line, from its baseline
+ *   down its text's depth and up its height, the drawn glyphs' own ink) or another crop's box, by more than 0.5 pt both
+ *   ways;
+ * - `cropBaselineOff`: crops whose TeX baseline, carried by their offset from their source box's top, is drawn more than
+ *   0.5 pt off their line's baseline (`tex`: the layout file's segment's baseline);
+ * - `cropNoTex`: crops with no TeX baseline (no segment), reported.
+ * `lines`: { key, x0, x1, baseline, a, d }; `crops`: { unit, line (its line's key), box: [x0, y0, x1, y1] as drawn,
+ * srcTop, tex, sc (its drawn scale) }. With the units each count is of (`where`)
+ */
+export function cropPlacementOf({ lines, crops }) {
+  const meets = (a, b) => Math.min(a[2], b[2]) - Math.max(a[0], b[0]) > 0.5 && Math.min(a[3], b[3]) - Math.max(a[1], b[1]) > 0.5
+  const where = { cropTextOverlap: [], cropBaselineOff: [], cropNoTex: [] }
+  crops.forEach((c, i) => {
+    if (lines.some(l => l.key !== c.line && meets(c.box, [l.x0, l.baseline - l.d, l.x1, l.baseline + l.a])) || crops.some((o, j) => j !== i && meets(c.box, o.box))) where.cropTextOverlap.push(c.unit)
+    const line = lines.find(l => l.key === c.line)
+    if (c.tex === null || !line) where.cropNoTex.push(c.unit)
+    else if (Math.abs(c.box[3] - (c.srcTop - c.tex) * c.sc - line.baseline) > 0.5) where.cropBaselineOff.push(c.unit)
+  })
+  return { cropTextOverlap: where.cropTextOverlap.length, cropBaselineOff: where.cropBaselineOff.length, cropNoTex: where.cropNoTex.length, cropWhere: where }
 }
 
 /**
@@ -257,9 +284,11 @@ function components(m, W, H, min, boxes = null) {
  * The pixel tier's measures of a page: { coverage: { text, cells } (each { cells, translated, english, blank }), neutral,
  * overlap, overlapOrig, overlapPx, stray, residue, residuePx, doubled, vanished, bites, bitePx, graphics: { px, erased,
  * overdrawn } }. `drawnText`: every drawn run's text on the page, joined without white space (math the drawing sets as
- * text is not vanished)
+ * text is not vanished); `cut`: the crops cut from this page ({ src, unit, clip }: `clip` the boxes of its own ink it is
+ * cut through, device pixels [x, y, w, h], where it is), whatever page they are drawn on, which `doubled`, `vanished`
+ * and `bites` read here, where their source is
  */
-export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, items, ref, drawnText }) {
+export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, items, ref, drawnText, cut = [] }) {
   const toPx = (x, y) => [(x - view[0]) * k, (view[3] - y) * k]
   const boxPx = (b, pad = 0) => {
     const [ax, ay] = toPx(b[0] - pad, b[3] + pad), [bx, by] = toPx(b[2] + pad, b[1] - pad)
@@ -335,19 +364,21 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
   }
   const residue = components(res, W, H, 3, where.residue)
 
-  // crops shown twice: the source still showing in the copy where a crop of it is drawn
+  // crops shown twice: the source still showing in this page's copy where it is cut from it (read on the page it is cut
+  // from: one drawn on the next page was read against that page's ink, 1512.03385's p11)
   let doubled = 0
-  for (const u of drawn) for (const c of u.crops) {
+  for (const c of cut) {
     const [x0, y0, x1, y1] = boxPx(c.src)
     let o = 0, s = 0
     for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = y * W + x; if (cropM[i]) continue; if (inkO(i)) { o++; if (inkC(i)) s++ } }
-    if (o >= 8 && s / o >= 0.6) { doubled++; if (where.doubled.length < BOXES) where.doubled.push(c.src.map(v => Math.round(v * 10) / 10).concat(u.id)) }
+    if (o >= 8 && s / o >= 0.6) { doubled++; if (where.doubled.length < BOXES) where.doubled.push(c.src.map(v => Math.round(v * 10) / 10).concat(c.unit)) }
   }
 
   // math erased and drawn nowhere: a math-font item mostly inside a drawn unit's erase, gone from the copy, under no
-  // crop's source and no kept rectangle, and not drawn as text anywhere on the page
+  // crop's source (one cut from this page, wherever it is drawn: 1512.03385's p10, whose formula is drawn on p11) and no
+  // kept rectangle, and not drawn as text anywhere on the page
   const srcM = mask()
-  for (const u of drawn) for (const c of u.crops) paint(srcM, c.src, 0.4)
+  for (const c of cut) paint(srcM, c.src, 0.4)
   let vanished = 0
   for (const it of items) {
     if (!it.math) continue
@@ -404,16 +435,29 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
   }
 
   // erase bites: the original's ink erased outside every drawn unit's own lines (its glyphs' bands, and those it draws
-  // anew beside them, `own`: a float's label set in the target's name) and under no crop: ink of a line, a formula or a
-  // figure no drawn unit owns, destroyed
-  const ownM = mask(), eraseRaw = mask()
+  // anew beside them, `own`: a float's label set in the target's name), under no crop drawn here and outside what a crop
+  // cut from this page carries (wherever it is drawn: a crop set on its TeX baseline stands off the ink it was cut from, a
+  // radical's foot or a fraction's bar hanging under its line, which the crop carries and the page no longer shows where
+  // it was, 1706.03762's p4 and p5): ink of a line, a formula or a figure no drawn unit owns, destroyed. What a crop
+  // carries is what its drawing takes of its source: through its own ink's boxes where it is cut through them (`clip`,
+  // removalOps: nothing outside them, as cropForeignPx reads it), else its source rectangle as it is cut, and no margin
+  // beyond it (ink a crop's rectangle holds but does not carry, a neighbour's descender beside its glyphs, is lost)
+  const ownM = mask(), eraseRaw = mask(), carriedM = mask()
   for (const u of drawn) {
     for (const l of [...u.orig, ...(u.own ?? [])]) paint(ownM, [l.x0 - 1, l.baseline - 0.3 * l.size, l.x1 + 1, l.baseline + 0.88 * l.size])
     for (const e of u.erase) paint(eraseRaw, e, 0)
   }
+  for (const c of cut) {
+    if (!c.clip?.length) { paint(carriedM, c.src); continue }
+    const [sx0, sy0, sx1, sy1] = boxPx(c.src)
+    for (const [x, y, w, h] of c.clip) {
+      const x0 = Math.max(sx0, Math.floor(x)), y0 = Math.max(sy0, Math.floor(y)), x1 = Math.min(sx1, Math.ceil(x + w)), y1 = Math.min(sy1, Math.ceil(y + h))
+      for (let yy = y0; yy < y1; yy++) if (x1 > x0) carriedM.fill(1, yy * W + x0, yy * W + x1)
+    }
+  }
   const bite = mask()
   let bitePx = 0
-  for (let i = 0; i < W * H; i++) if (eraseRaw[i] && !ownM[i] && !cropM[i] && inkO(i) && !traceC(i)) { bite[i] = 1; bitePx++ }
+  for (let i = 0; i < W * H; i++) if (eraseRaw[i] && !ownM[i] && !cropM[i] && !carriedM[i] && inkO(i) && !traceC(i)) { bite[i] = 1; bitePx++ }
   const bites = components(bite, W, H, 4, where.bites)
 
   // graphics: the original's ink that is no text (outside every text item and every reference line), erased or written over

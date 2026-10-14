@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { modelPage, type OrigLine, pixelPage, type UnitIn } from '../../lab/pdf/spikes/layer-gate/measure.mjs'
+import { cropPlacementOf, modelPage, type OrigLine, pixelPage, type UnitIn } from '../../lab/pdf/spikes/layer-gate/measure.mjs'
 import { compare, fixtureTotals, type Measure, MEASURES, pageEntry, pooled, type Totals, worse } from '../../lab/pdf/spikes/layer-gate/score.mjs'
 
 // The layer gate's arithmetic (lab/pdf/spikes/layer-gate.mjs, Plan 8b Task 12): a page's model measures
@@ -30,6 +30,41 @@ describe('the model measures of a page', () => {
     expect(m.geo[0]!.blank).toBeCloseTo(2, 5)
     expect(m.geo[0]!.scale).toBe(1)
     expect(m.fills[0]!.fill).toBeLessThan(0.65)
+  })
+})
+
+describe('where the crops sit (the math placement round): over no other line nor crop, on their TeX baseline', () => {
+  // two drawn lines 12 apart, their text 7 high and 2 deep; a crop on the first, cut from a box whose top is 8 over its
+  // TeX baseline, drawn at its size
+  const lines = [{ key: 'a', x0: 72, x1: 300, baseline: 500, a: 7, d: 2 }, { key: 'b', x0: 72, x1: 300, baseline: 488, a: 7, d: 2 }]
+  const crop = (box: number[], o: object = {}) => ({ unit: 1, line: 'a', box, srcTop: 108, tex: 100, sc: 1, ...o })
+  it('counts a crop hanging into the next line\'s text, or over another crop, by more than half a point', () => {
+    // 4.5 deep: clear of the next line's text, whose top is 495
+    expect(cropPlacementOf({ lines, crops: [crop([100, 495.5, 120, 508])] })).toMatchObject({ cropTextOverlap: 0, cropBaselineOff: 0, cropNoTex: 0 })
+    // 1.5 below the next line's top (495): over its text
+    expect(cropPlacementOf({ lines, crops: [crop([100, 493.5, 120, 508])] }).cropTextOverlap).toBe(1)
+    // 0.4: within half a point
+    expect(cropPlacementOf({ lines, crops: [crop([100, 494.6, 120, 508])] }).cropTextOverlap).toBe(0)
+    // two crops whose boxes meet
+    const two = cropPlacementOf({ lines, crops: [crop([100, 495.5, 120, 508]), crop([110, 495.5, 130, 508], { unit: 2 })] })
+    expect([two.cropTextOverlap, two.cropWhere.cropTextOverlap]).toEqual([2, [1, 2]])
+  })
+  it('counts a crop drawn off its TeX baseline, at its drawn scale, and reports one with none', () => {
+    // its top 8 over the line's baseline, as its box's is over TeX's
+    expect(cropPlacementOf({ lines, crops: [crop([100, 494, 120, 508])] }).cropBaselineOff).toBe(0)
+    // drawn 7.7 low (a radical's origin taken for its baseline)
+    expect(cropPlacementOf({ lines, crops: [crop([100, 486.3, 120, 500.3])] }).cropBaselineOff).toBe(1)
+    // at half its size: 4 over the line's
+    expect(cropPlacementOf({ lines, crops: [crop([100, 497, 110, 504], { sc: 0.5 })] }).cropBaselineOff).toBe(0)
+    expect(cropPlacementOf({ lines, crops: [crop([100, 494, 120, 508], { tex: null })] })).toMatchObject({ cropBaselineOff: 0, cropNoTex: 1 })
+  })
+  it("reads a crop's foreign text on the page it is cut from: the crops cut from this page, not those drawn on it", () => {
+    // a crop drawn on this page, cut from the page before, over this page's text item of another line: none of its own
+    const drawn = unit({ id: 1, crops: [{ k: 1, src: [100, 90, 120, 100], dst: [200, 300, 220, 310] }] })
+    const items = [{ x0: 95, y0: 84, x1: 140, y1: 95, str: 'a word', math: false }]
+    expect(modelPage({ units: [drawn], ref: [], items, translated: new Set([1]), cut: [] }).cropForeign).toBe(0)
+    // the same box cut from this page: the item stands in it
+    expect(modelPage({ units: [drawn], ref: [], items, translated: new Set([1]), cut: [{ src: [100, 90, 120, 100], unit: 1 }] }).cropForeign).toBe(1)
   })
 })
 
@@ -163,6 +198,53 @@ describe("the coverage of the original's text area", () => {
     const of = (C: Uint8ClampedArray, names: { orig: typeof ref[0]['orig']; lines: { baseline: number; size: number; x0: number; x1: number }[]; erase: number[][] }[]) => (pixelPage({ k: 1, view: [0, 0, W, H], W, H, O, C, T: paper, units: [], names, kept: [], items: [], ref: named, drawnText: '' }) as { coverage: { text: Record<string, number> } }).coverage.text
     expect(of(paper, [{ orig: ref[0]!.orig, lines: [{ baseline: 20, size: 10, x0: 10, x1: 50 }], erase: [[10, 17.5, 50, 27]] }])).toEqual({ cells: 4, translated: 4, english: 0, blank: 0 })
     expect(of(O, [])).toEqual({ cells: 4, translated: 0, english: 4, blank: 0 })
+  })
+})
+
+describe("the erase bites: the original's ink erased that no drawn unit owns", () => {
+  // the same 60 x 40 page: a unit's line on baseline 20 (its own band PDF y 17 to 28.8), its erase from y 8, and a block of
+  // the original's ink under the band (x 20-25, y 10-13: a radical's foot hanging under the line)
+  const W = 60, H = 40
+  const planeOf = (paint: (x: number, y: number) => number) => {
+    const a = new Uint8ClampedArray(W * H * 4)
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const v = paint(x, y); a.set([v, v, v, 255], 4 * (y * W + x)) }
+    return a
+  }
+  const O = planeOf((x, y) => (x >= 20 && x < 26 && y >= H - 13 && y < H - 10 ? 0 : 255))
+  const paper = planeOf(() => 255)
+  const orig = [{ x0: 10, x1: 50, baseline: 20, top: 27, bottom: 17.5, size: 10 }]
+  const bites = (crops: { k: number; src: number[]; dst: number[] }[], cut: { src: number[]; unit: number }[]) =>
+    (pixelPage({ k: 1, view: [0, 0, W, H], W, H, O, C: paper, T: paper, units: [{ id: 1, kind: 'para', drawn: true, why: null, orig, lines: [{ baseline: 20, size: 10, x0: 10, x1: 50 }], erase: [[10, 8, 50, 27]], crops } as UnitIn], kept: [], items: [], ref: [{ id: 1, kind: 'para', orig }], drawnText: '', cut }) as { bites: number }).bites
+  it('counts ink erased beside no line and under no crop', () => {
+    expect(bites([], [])).toBe(1)
+  })
+  it("does not count ink inside a crop's source, cut from this page and drawn elsewhere (a crop on its TeX baseline stands off its source)", () => {
+    const crop = { k: 1, src: [18, 9, 28, 15], dst: [40, 17.5, 50, 25] }
+    expect(bites([crop], [{ src: crop.src, unit: 1 }])).toBe(0)
+    // (a crop whose source is elsewhere accounts for none of it)
+    expect(bites([{ ...crop, src: [30, 9, 40, 15] }], [{ src: [30, 9, 40, 15], unit: 1 }])).toBe(1)
+  })
+  it('reads what a crop carries: the boxes of its own ink it is cut through, never the rest of its rectangle', () => {
+    // the source [18, 9, 28, 15] holds the ink (x 20-25, device rows 27-29); cut through a box of its own ink that takes
+    // only x 18-21 of it (device pixels [x, y, w, h]), the crop does not carry x 22-25: that ink is erased and lost
+    const crop = { k: 1, src: [18, 9, 28, 15], dst: [40, 17.5, 50, 25] }
+    expect(bites([crop], [{ src: crop.src, unit: 1, clip: [[18, H - 15, 4, 6]] } as never])).toBe(1)
+    expect(bites([crop], [{ src: crop.src, unit: 1, clip: [[18, H - 15, 10, 6]] } as never])).toBe(0)
+  })
+  it('reads a crop with no boxes of its own by its source rectangle as it is cut, with no margin beyond it', () => {
+    // at 10 device pixels a unit: the ink x 20-26, y 10-13; a source that ends 0.2 short of it, at 25.8, carries none of
+    // the last 0.2 (two columns of 30 rows), which a margin of 0.4 around the source would have hidden
+    const k = 10, w = 60 * k, h = 40 * k
+    const plane = (ink: (x: number, y: number) => boolean) => {
+      const a = new Uint8ClampedArray(w * h * 4)
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const v = ink(x / k, (h - y - 0.5) / k) ? 0 : 255; a.set([v, v, v, 255], 4 * (y * w + x)) }
+      return a
+    }
+    const O10 = plane((x, y) => x >= 20 && x < 26 && y >= 10 && y < 13), paper10 = plane(() => false)
+    const crop = { k: 1, src: [18, 9, 25.8, 15], dst: [40, 17.5, 50, 25] }
+    const run = (src: number[]) => (pixelPage({ k, view: [0, 0, 60, 40], W: w, H: h, O: O10, C: paper10, T: paper10, units: [{ id: 1, kind: 'para', drawn: true, why: null, orig, lines: [{ baseline: 20, size: 10, x0: 10, x1: 50 }], erase: [[10, 8, 50, 27]], crops: [{ ...crop, src }] } as UnitIn], kept: [], items: [], ref: [{ id: 1, kind: 'para', orig }], drawnText: '', cut: [{ src, unit: 1 }] }) as { bites: number; bitePx: number })
+    expect(run(crop.src)).toMatchObject({ bites: 1, bitePx: 60 })
+    expect(run([18, 9, 26, 15])).toMatchObject({ bites: 0, bitePx: 0 })
   })
 })
 

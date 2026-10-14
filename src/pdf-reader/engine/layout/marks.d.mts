@@ -52,6 +52,12 @@ export declare const NAME_ENGLISH: Readonly<Record<NameKey, string>>
 export declare function nameSection(): string
 /** the name section's answers: 1 a name's own text holds a lowercase letter, 0 not, by key */
 export declare function readNameProbe(log: string): Partial<Record<NameKey, 0 | 1>>
+/** the probe's skip section: the paper's \lineskip (its natural size) and \lineskiplimit at the document's start */
+export declare function skipSection(): string
+/** the paper's \lineskip and \lineskiplimit from the probe's log, PDF units; null where the probe gave none */
+export declare function readSkipProbe(log: string): [number, number] | null
+/** the marking's lineskip: null, or two finite numbers within TeX's \maxdimen; else a LayoutRefusal at `path` */
+export declare function checkLineskip(v: unknown, path: string): [number, number] | null
 /** a babel name a style writes literally in the definition of the construct its macro names, wrapped as the macro's
  *  own text is; the text unchanged where it holds none */
 export declare function literalNames(text: string): string
@@ -93,7 +99,7 @@ export declare function layoutMarking(units: readonly SourceUnit[], classes: rea
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {
-  schema: 4
+  schema: 5
   /** the engine that compiled it (meta.compiler) */
   engine: string
   /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (TeX's answers to the
@@ -101,7 +107,8 @@ export interface LayoutMarks {
    *  have marks */
   /** `texts`: the probe's texts, flat (source, text, source, text, …), null where no probe ran */
   /** `names`: whether each babel name's own text holds a lowercase letter (readNameProbe), null where no probe ran */
-  marking: { classes: MarkClass[]; switches: Switches | null; inkless: string[] | null; texts: string[] | null; names: Partial<Record<NameKey, 0 | 1>> | null }
+  /** `lineskip`: the paper's \lineskip and \lineskiplimit, PDF units (readSkipProbe), null where the probe gave none */
+  marking: { classes: MarkClass[]; switches: Switches | null; inkless: string[] | null; texts: string[] | null; names: Partial<Record<NameKey, 0 | 1>> | null; lineskip: [number, number] | null }
   pages: number
   /** per page: x0, y0, x1, y1 (stride 4) */
   views: number[]
@@ -128,14 +135,14 @@ export interface LayoutMarks {
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number
-export declare const MARKS_SCHEMA: 4
+export declare const MARKS_SCHEMA: 5
 /** a piece's own ink at most, its glyphs and its rules; and a paper's in all */
 export declare const GLYPHS_PIECE: number
 export declare const RULES_PIECE: number
 export declare const OWNED_ALL: number
 /** from a PDF.js document of the marked original and its last TeX pass's log; the caller opens and destroys the
  *  document. With the paper's `units` and PDF.js's operator codes, each marked piece's own ink from its operator lists */
-export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; switches?: Switches | null; inkless?: readonly string[] | null; texts?: readonly (readonly [string, string])[] | readonly string[] | null; names?: Partial<Record<NameKey, 0 | 1>> | null; units?: readonly SourceUnit[] | null; OPS?: Record<string, number> | null }): Promise<LayoutMarks>
+export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; switches?: Switches | null; inkless?: readonly string[] | null; texts?: readonly (readonly [string, string])[] | readonly string[] | null; names?: Partial<Record<NameKey, 0 | 1>> | null; lineskip?: readonly [number, number] | null; units?: readonly SourceUnit[] | null; OPS?: Record<string, number> | null }): Promise<LayoutMarks>
 export declare function encodeLayoutMarks(m: LayoutMarks): string
 /** bytes, then values, then JSON.parse, then every bound below; throws LayoutRefusal */
 export declare function parseLayoutMarks(bytes: Uint8Array): LayoutMarks

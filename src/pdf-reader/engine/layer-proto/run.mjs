@@ -49,7 +49,7 @@ import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
 import { fileSwap, protection } from './removal.mjs'
 import { SWAP_PAD, swapRects } from '../layer/swap.mjs'
-import { locatedWhole, texParts, texRects } from './tex.mjs'
+import { cropsOf, kOfPieces, locatedWhole, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
 
@@ -433,6 +433,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // the host's: the fit's parameters, the hyphenation patterns, the CJK family, the float labels' names
   const R = resolveRules(rules, to)
   const P = R.params
+  /** the paper's \lineskip and \lineskiplimit, TeX's (the layout file's): where a laid line comes nearer the one before it
+   *  than the limit, its crops being taller or deeper than its room, it opens as TeX opens one (layer2.mjs breakLines);
+   *  null where the file has none, or with no file: no line opens */
+  const LINESKIP = tex?.index?.file?.lineskip ?? null
   /** whether a page's units are set together once all are laid (the even pass, the page fill, the leftover packed) */
   const PASSES = !!(P.even || P.adaptiveFill || P.leftover === 'pack')
   // iteration 2's hyphenation, fetched at once (local, small)
@@ -504,7 +508,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const judge = (id, u) => {
     if (!tex) return null
     const lu = tex.index.unit(id)
-    const w = locatedWhole(lu, u, tex.pieces.get(id), { symbols: tex.symbols ?? 'text' })
+    const w = locatedWhole(lu, u, tex.pieces.get(id), { symbols: tex.symbols ?? 'text', held: tex.use === 'lines' })
     return w.ok ? { lu, kOf: w.kOf } : { why: w.why }
   }
   const placeOf = (id, stream, rects, u, t) => {
@@ -1086,9 +1090,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (gx0 < x0 || gx1 > x1) local[pg - 1] = (chars2[pg - 1] ?? []).filter(c => c.x1 >= gx0 && c.x0 <= gx1 && c.yb >= y0 && c.yb <= y1)
     }
     const inkBefore = fileLines ? undefined : L2.snapFirstRect2(p.rects, local)
-    // the hybrid: a unit the file locates whole read with the file's parts
-    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0' }) : null
+    // the hybrid: a unit the file locates whole read with the file's parts; any other, v0's reading with its crops cut from
+    // their placeholders' own ink by the file (cropsOf), or left the original's where the file proves none of a crop's
+    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0' }) : tex ? { crops: cropsOf(tex.index.unit(p.id), kOfPieces(p.unit, tex.pieces.get(p.id))) } : null
     const prep = L2.prepareUnit(p.unit, p.rects, local, phMode === 'source' ? null : citeMap, null, parts)
+    if (prep.unproven !== undefined) { p.refused = true; p.why = 'unproven'; unlead(p); return }
     // a float's label in the target's name where the final names it so (labelInTarget): its ink erased and accounted as
     // the unit's text, and set as the line's start, in its own style, before the translation
     const relabel = labels ? L2.labelInTarget(prep.label, R.labels, labels.captions, to) : null
@@ -1135,7 +1141,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const s = orig?.size ?? median(p.rects.map(r => r[4] - r[2])) / 0.894
     const base = orig && orig.st.fam !== 'math' ? { ...orig.st } : { fam: 'serif', bold: p.unit.kind === 'heading', italic: false, caps: false, design: designs.serif }
     const keep = prep.keep?.length ? new Set(prep.keep) : null
-    p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced)
+    p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, LINESKIP)
     for (const b of p.blocks) if (!b.centred && centredInColumn(b)) b.centred = true
     if (p.unit.kind !== 'cell') for (const b of p.blocks) widen(b)
     // a label the first line starts with stays the original's: the line starts after it. A file's first line starts at
@@ -1168,7 +1174,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     p.tokens = tokens
     p.prep = prep
     p.s = s
-    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P), trackStart: P.trackStart ?? cjkAdvance() }
+    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P), trackStart: P.trackStart ?? cjkAdvance(), lineskip: LINESKIP }
     // (no larger than its lines' room between the rules over and under them leaves its script's em box: clearanceOf)
     p.clear = clearanceOf(p, s)
     if (p.clear && p.clear.cap < 1) p.P.capScale = p.clear.cap
@@ -1212,7 +1218,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const lines = recLinesOf(p)
     const drawnTok = new Set(p.layout.lines.flatMap(l => l.items.map(it => it.t)))
     const tr = tokens.filter(t => t.s && !t.ph && !t.sup)
-    record(p, { ...(tex ? { source: p.tex ? 'tex' : 'v0' } : {}), grown: p.grown, dropped: p.dropped, s, f: p.layout.f, fitScale: p.layout.scale, knob: p.layout.knob, clipped: p.layout.clipped, lostChars: p.layout.lostChars, chars: p.layout.chars, lead: p.layout.state.lead, track: p.layout.state.track || p.layout.state.trackLatin, compress: p.layout.state.compress, borrow: p.layout.state.borrow, free: r1(Math.max(0, ...p.blocks.map(b => b.free))), tried: p.layout.tried, lines, orig, drawnRuns: L2.drawnRuns(tokens), drawnBase: styleKey(tokens.base), trChars: tr.reduce((a, t) => a + [...t.s].length, 0), trDrawn: p.layout.lines.reduce((a, l) => a + l.items.reduce((b, it) => b + (it.t.s && !it.t.ph && !it.t.sup ? [...it.t.s].length - (it.t.hyphenated ? 1 : 0) : 0), 0), 0), modes: modesOf(prep), unused: drawnTok.size, ms: [r1(t1 - t0), r1(t2 - t1), r1(t3 - t2), r1(t4 - t3)], tokens: tokens.length })
+    record(p, { ...(tex ? { source: p.tex ? 'tex' : 'v0' } : {}), grown: p.grown, dropped: p.dropped, s, f: p.layout.f, fitScale: p.layout.scale, knob: p.layout.knob, clipped: p.layout.clipped, opened: p.layout.opened, unopened: p.layout.unopened, lostChars: p.layout.lostChars, chars: p.layout.chars, lead: p.layout.state.lead, track: p.layout.state.track || p.layout.state.trackLatin, compress: p.layout.state.compress, borrow: p.layout.state.borrow, free: r1(Math.max(0, ...p.blocks.map(b => b.free))), tried: p.layout.tried, lines, orig, drawnRuns: L2.drawnRuns(tokens), drawnBase: styleKey(tokens.base), trChars: tr.reduce((a, t) => a + [...t.s].length, 0), trDrawn: p.layout.lines.reduce((a, l) => a + l.items.reduce((b, it) => b + (it.t.s && !it.t.ph && !it.t.sup ? [...it.t.s].length - (it.t.hyphenated ? 1 : 0) : 0), 0), 0), modes: modesOf(prep), unused: drawnTok.size, ms: [r1(t1 - t0), r1(t2 - t1), r1(t3 - t2), r1(t4 - t3)], tokens: tokens.length })
   }
   function record(p, x) {
     const match = x.orig !== undefined ? L2.styleMatch(x.orig, x.drawnRuns, x.drawnBase) : undefined
@@ -1237,10 +1243,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       p.layout = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...PU, maxScale: target, leadBase: Math.min(PU.leadBase, leadTo) })
       p.layout.extents = keep.extents
       settleLayout(p)
-      if (p.rec) Object.assign(p.rec, { f: r1(p.layout.f), sizeRatio: r1(p.layout.f / p.s), fitScale: p.layout.scale, knob: p.layout.knob, lead: p.layout.state.lead, lines: recLinesOf(p) })
+      if (p.rec) Object.assign(p.rec, { f: r1(p.layout.f), sizeRatio: r1(p.layout.f / p.s), fitScale: p.layout.scale, knob: p.layout.knob, opened: p.layout.opened, unopened: p.layout.unopened, lead: p.layout.state.lead, lines: recLinesOf(p) })
     }
   }
-  // adaptiveFill's pass over a page's units that begin on it (fillPage), each filled unit's record updated; the paper's
+  // adaptiveFill's pass over a page's units that begin on it (fillPage), each filled unit's record updated from the layout
+  // it is drawn with (the lines TeX's rule opened among them: a looser leading may open none the fit's did); the paper's
   // targets a page is held to, the last a page's body units told and the fullest page's own, in the order the pages'
   // passes run (the
   // units' laying order, the same whether the rows come at once or in parts: no page waits for a later one)
@@ -1248,7 +1255,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const fillPass = pg => {
     const r = fillPage(laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg), P, held, (p, target) => {
       const l = p.layout
-      if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
+      if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, opened: l.opened, unopened: l.unopened, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
     }, { page: pg, continuing: laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] !== pg) })
     held = nextHeld(held, r)
   }

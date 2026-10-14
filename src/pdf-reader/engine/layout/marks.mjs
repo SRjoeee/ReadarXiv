@@ -186,7 +186,7 @@ export function inkSection(samples) {
   return `\\begingroup\\newbox\\axt@ibox${tests.join('\n')}\\endgroup`
 }
 /** the probe document of the layout marks: its punctuation section, then its ink section, then its name section */
-export const markProbeTex = (samples, ink = []) => probeTex([punctuationSection(samples), ...(ink.length ? [inkSection(ink)] : []), nameSection()])
+export const markProbeTex = (samples, ink = []) => probeTex([punctuationSection(samples), ...(ink.length ? [inkSection(ink)] : []), nameSection(), skipSection()])
 /** a node TeX lists that sets no ink: glue, a kern, a penalty, a math switch, a box (its own nodes listed below it), a
  *  mark, a colour stack, a write, a destination, a saved or restored matrix, an adjust's or a discretionary's head
  *  (theirs below), leaders' head (their box or rule below) */
@@ -291,6 +291,34 @@ export function readNameProbe(log) {
   const out = {}
   for (const r of readProbe(log)) if (r.schema === PROBE_SCHEMA && r.tag === 'name' && r.fields.length === 2 && NAME_KEYS.includes(r.fields[0]) && /^[01]$/.test(r.fields[1])) out[r.fields[0]] = Number(r.fields[1])
   return out
+}
+
+// ---- the paper's interline glue: TeX's \lineskip and \lineskiplimit
+/** a TeX dimension as \the writes it (\the\dimexpr of a glue: its natural size), TeX points */
+const TEX_PT = /^(-?\d+(?:\.\d+)?)pt$/
+/** PDF units (big points) a TeX point */
+const BP_PER_PT = 72 / 72.27
+/** the most a skip may be, TeX's \maxdimen in big points, which \offinterlineskip sets \lineskiplimit to, as the file
+ *  writes it (to a hundredth: 16322.79, over the exact 16322.7895 by the rounding), so that a value read is read back */
+const SKIP_MAX = Math.round(16384 * BP_PER_PT * 100) / 100
+/**
+ * The skip section of the probe (`lineskip`): one row `lineskip <\lineskip> <\lineskiplimit>`, the glue's natural size
+ * and the dimension, as \the writes them, at the document's start in its body size, where the paper's own settings stand
+ * (LaTeX's 1pt and 0pt where it sets none): what TeX sets two lines apart by where the one's depth and the other's height
+ * come nearer than the limit. The layer opens a line by it (layer2.mjs breakLines). (TeX eats the space after \relax:
+ * the second field's own \space parts the two.) Writes nothing, ships out nothing (readSkipProbe). One pair a paper: the
+ * probe's body follows the paper's preamble and none of its body, so a value the body sets, or a scope sets for its own
+ * lines (an environment, a group: cvpr.sty's \lineskip .5em in its title's author block, 1512.03385), is not read, and the
+ * layer applies the pair to every unit
+ */
+export const skipSection = () => probeRow('lineskip', '\\the\\dimexpr\\lineskip\\relax', '\\space\\the\\lineskiplimit')
+/** the paper's \lineskip and \lineskiplimit from the probe's log (skipSection), in PDF units: [lineskip, limit], or null
+ *  where no row of the schema and shape is there, one is twice, or a value is past TeX's \maxdimen (under 16384pt) */
+export function readSkipProbe(log) {
+  const rows = readProbe(log).filter(r => r.schema === PROBE_SCHEMA && r.tag === 'lineskip')
+  if (rows.length !== 1 || rows[0].fields.length !== 2) return null
+  const pt = rows[0].fields.map(f => Number(TEX_PT.exec(f)?.[1] ?? NaN))
+  return pt.every(x => Number.isFinite(x) && Math.abs(x) <= 16384) ? pt.map(x => x * BP_PER_PT) : null
 }
 
 /** the constructs a style may write a babel name literally in, by the environment or command defined, and the keys of
@@ -762,11 +790,12 @@ export const MARKS_DEPTH = 3
 /** the marks file's schema: 2 holds each piece's own ink (`chars`, `owned`) and the switch TeX answered; 3 the switch
  *  null where no probe ran, the macros TeX said set no ink (`marking.inkless`) and the texts it showed they set
  *  (`marking.texts`), and the rest of a word given in parts (a token of word -1); 4 the babel names' marks (MARK_NAME's
- *  n<occurrence>.<key>) and whether each name's own text holds a lowercase letter (`marking.names`) */
-export const MARKS_SCHEMA = 4
+ *  n<occurrence>.<key>) and whether each name's own text holds a lowercase letter (`marking.names`); 5 the paper's
+ *  \lineskip and \lineskiplimit (`marking.lineskip`, PDF units, readSkipProbe: one pair, at the body's start) */
+export const MARKS_SCHEMA = 5
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
 const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens', 'chars', 'owned']
-const MARKING_KEYS = ['classes', 'switches', 'inkless', 'texts', 'names']
+const MARKING_KEYS = ['classes', 'switches', 'inkless', 'texts', 'names', 'lineskip']
 /** a piece's own ink at most: its glyphs, its rules; and a paper's in all (each 5 values) */
 export const GLYPHS_PIECE = 20_000, RULES_PIECE = 2_000, OWNED_ALL = 250_000
 /** the distinct characters of the owned glyphs at most, and the code units of one */
@@ -825,6 +854,14 @@ function checkNames(v, path) {
     if (!NAME_KEYS.includes(k)) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a key of NAME_KEYS')
     if (v[k] !== 0 && v[k] !== 1) throw new LayoutRefusal(`${path}.${k}`, 'not 0 or 1')
   }
+  return v
+}
+/** the paper's \lineskip and \lineskiplimit as the marking takes them (readSkipProbe): null where the probe gave none, else
+ *  two finite numbers of PDF units, each within TeX's \maxdimen; else a refusal at `path` */
+export function checkLineskip(v, path) {
+  if (v === null) return null
+  if (!Array.isArray(v) || v.length !== 2) throw new LayoutRefusal(path, 'not null or two numbers')
+  for (let i = 0; i < 2; i++) if (typeof v[i] !== 'number' || !Number.isFinite(v[i]) || Math.abs(v[i]) > SKIP_MAX) throw new LayoutRefusal(`${path}[${i}]`, `not a number within ${Math.round(SKIP_MAX)}`)
   return v
 }
 /** a list of classes as the marking takes it: each one of MARK_CLASSES, none twice; else a refusal at `path` */
@@ -892,12 +929,12 @@ function followsOf(units, names) {
  * line holds nothing else holds its end mark (layout/carry.mjs); a token longer than a word may be, or off its page, is
  * left out, and its rests with it. Numbers to a hundredth. What it gives, parseLayoutMarks takes
  */
-export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLASSES, switches = null, inkless = null, texts = null, names = null, units = null, OPS = null }) {
+export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLASSES, switches = null, inkless = null, texts = null, names = null, lineskip = null, units = null, OPS = null }) {
   if (!ENGINES.includes(engine)) throw new LayoutRefusal('engine', `not one of ${ENGINES.join(', ')}`)
   const sw = checkSwitches(switches, 'switches'), none = checkInkless(inkless, 'inkless')
   const said = texts === null ? null : checkTexts(Array.isArray(texts) ? texts.flat() : texts, 'texts')
   const cased = checkNames(names, 'names')
-  const marking = { classes: [...checkClasses(classes, 'classes')], switches: sw === null ? null : { ...sw }, inkless: none === null ? null : [...none], texts: said === null ? null : [...said], names: cased === null ? null : Object.fromEntries(NAME_KEYS.filter(k => Object.hasOwn(cased, k)).map(k => [k, cased[k]])) }
+  const marking = { classes: [...checkClasses(classes, 'classes')], switches: sw === null ? null : { ...sw }, inkless: none === null ? null : [...none], texts: said === null ? null : [...said], names: cased === null ? null : Object.fromEntries(NAME_KEYS.filter(k => Object.hasOwn(cased, k)).map(k => [k, cased[k]])), lineskip: checkLineskip(lineskip, 'lineskip') === null ? null : [...lineskip] }
   const pdf = marked
   const pages = checkPages(pdf.numPages, 'pages')
   const views = [], text = [], stream = []
@@ -1016,7 +1053,7 @@ function fitted(m) {
 export function encodeLayoutMarks(m) {
   const { schema, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens, chars, owned } = m
   return JSON.stringify({
-    schema, engine, marking: { classes: marking.classes, switches: marking.switches, inkless: marking.inkless, texts: marking.texts, names: marking.names }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, words,
+    schema, engine, marking: { classes: marking.classes, switches: marking.switches, inkless: marking.inkless, texts: marking.texts, names: marking.names, lineskip: marking.lineskip === null ? null : marking.lineskip.map(r2) }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, words,
     tokens: tokens.map((v, i) => (i % 6 === 0 || i % 6 === 5 ? v : r2(v))), chars,
     owned: owned.map(ownedRow),
   })
@@ -1035,6 +1072,7 @@ export function parseLayoutMarks(bytes) {
   checkInkless(marking.inkless, 'marking.inkless')
   checkTexts(marking.texts, 'marking.texts')
   checkNames(marking.names, 'marking.names')
+  checkLineskip(marking.lineskip, 'marking.lineskip')
   const pages = checkPages(m.pages, 'pages')
   const views = checkViews(m.views, pages, 'views')
   if (!Array.isArray(m.columns) || m.columns.length !== pages) throw new LayoutRefusal('columns', `not ${pages} entries`)

@@ -6,7 +6,7 @@ import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
 import { patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
 import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
 import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
@@ -600,6 +600,20 @@ describe("babel's names (D1a)", () => {
     expect(readNameProbe(log)).toEqual({ abstract: 1, ref: 0 })
     expect(readNameProbe('')).toEqual({})
   })
+
+  it("the skip section writes the paper's \\lineskip and \\lineskiplimit as TeX does; readSkipProbe reads them in PDF units", () => {
+    // (TeX eats the space after \relax: the second field's \space parts the two)
+    expect(skipSection()).toBe('\\typeout{LAYOUT-PROBE 1 lineskip \\the\\dimexpr\\lineskip\\relax \\space\\the\\lineskiplimit}')
+    expect(markProbeTex([], [])).toContain(skipSection())
+    const bp = 72 / 72.27
+    expect(readSkipProbe('LAYOUT-PROBE 1 lineskip 1.0pt 0.0pt')).toEqual([bp, 0])
+    expect(readSkipProbe('x\nLAYOUT-PROBE 1 lineskip 2.5pt -1.0pt\ny')).toEqual([2.5 * bp, -bp])
+    // none, two, a row of another schema or shape, a unit TeX does not write, past \maxdimen: none
+    for (const log of ['', 'LAYOUT-PROBE 1 lineskip 1.0pt 0.0pt\nLAYOUT-PROBE 1 lineskip 1.0pt 0.0pt', 'LAYOUT-PROBE 2 lineskip 1.0pt 0.0pt', 'LAYOUT-PROBE 1 lineskip 1.0pt', 'LAYOUT-PROBE 1 lineskip 1.0pt0.0pt', 'LAYOUT-PROBE 1 lineskip 1.0bp 0.0pt', 'LAYOUT-PROBE 1 lineskip 1.0pt 99999.0pt'])
+      expect(readSkipProbe(log), log).toBeNull()
+    // (\offinterlineskip's \maxdimen is a limit TeX writes)
+    expect(readSkipProbe('LAYOUT-PROBE 1 lineskip 0.0pt 16383.99998pt')).toEqual([0, 16383.99998 * bp])
+  })
 })
 
 // a PDF.js document as layoutMarksOf and marksOf read it: its pages, their views and text, its destinations
@@ -685,12 +699,12 @@ describe('reading the marked original', () => {
     // no probe run: null, which the maker re-marks as LAYOUT_TEX sets every mark; a probe that answered nothing is {},
     // which the maker re-marks with no mark for an asked command (Task 2's m4): the two kept apart through the file
     const plain = await layoutMarksOf(doc, '', { engine: 'pdflatex' })
-    expect(plain.marking).toEqual({ classes: [...LAYOUT_CLASSES], switches: null, inkless: null, texts: null, names: null })
+    expect(plain.marking).toEqual({ classes: [...LAYOUT_CLASSES], switches: null, inkless: null, texts: null, names: null, lineskip: null })
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(plain))).marking.switches).toBeNull()
     const none = await layoutMarksOf(doc, '', { engine: 'pdflatex', switches: {} })
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(none))).marking.switches).toEqual({})
     const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', classes: ['math', 'cite'], switches: { '\\cite': '22220000', '\\ref': 'x0000000' } })
-    expect(m.marking).toEqual({ classes: ['math', 'cite'], switches: { '\\cite': '22220000', '\\ref': 'x0000000' }, inkless: null, texts: null, names: null })
+    expect(m.marking).toEqual({ classes: ['math', 'cite'], switches: { '\\cite': '22220000', '\\ref': 'x0000000' }, inkless: null, texts: null, names: null, lineskip: null })
     // the names' answers (readNameProbe), in NAME_KEYS' order; a key of none, or a value not 0 or 1, refused
     const cased = await layoutMarksOf(doc, '', { engine: 'pdflatex', names: { ref: 0, abstract: 1 } })
     expect(Object.keys(cased.marking.names ?? {})).toEqual(['abstract', 'ref'])
@@ -704,6 +718,18 @@ describe('reading the marked original', () => {
     await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', texts: [['\\bert', 'BE RT']] })).rejects.toThrow(LayoutRefusal)
     const none2 = await layoutMarksOf(doc, '', { engine: 'pdflatex', inkless: ['\\rule{0pt}{2ex}'] })
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(none2))).marking.inkless).toEqual(['\\rule{0pt}{2ex}'])
+    // the paper's \\lineskip and \\lineskiplimit as readSkipProbe gives them (PDF units: 1pt is 0.9962640099626402), written to
+    // a hundredth like every number of the file
+    const skips = await layoutMarksOf(doc, '', { engine: 'pdflatex', lineskip: [0.9962640099626402, -0.004] })
+    expect(skips.marking.lineskip).toEqual([0.9962640099626402, -0.004])
+    expect(encodeLayoutMarks(skips)).toContain('"lineskip":[1,0]')
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(skips))).marking.lineskip).toEqual([1, 0])
+    // TeX's \maxdimen, which \offinterlineskip sets \lineskiplimit to, from the probe to the file and back: written
+    // 16322.79, over the exact 16322.7895 by the rounding, and read again (the 16384pt the probe reads at most alike)
+    for (const [log, max] of [['LAYOUT-PROBE 1 lineskip -16383.99998pt 16383.99998pt', [-16322.79, 16322.79]], ['LAYOUT-PROBE 1 lineskip 0.0pt 16384.0pt', [0, 16322.79]]] as const) {
+      const most = await layoutMarksOf(doc, '', { engine: 'pdflatex', lineskip: readSkipProbe(log) })
+      expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(most))).marking.lineskip, log).toEqual(max)
+    }
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m))).marking).toEqual(m.marking)
     await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', switches: { '\\cite': '2222000y' } })).rejects.toThrow(LayoutRefusal)
     await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', classes: ['math', 'tikz' as 'math'] })).rejects.toThrow(LayoutRefusal)
@@ -827,7 +853,7 @@ describe('reading the marked original', () => {
 
 /** a made-up marks file of two pages, every field used */
 const valid = (): LayoutMarks => ({
-  schema: 4, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], switches: { '\\cite': '22220000', '\\footnote': '00000012' }, inkless: ['\\rule{0pt}{2ex}', '\\fontsize{7.6pt}{1em}'], texts: ['\\bert', 'BERT'], names: { abstract: 1, ref: 0 } }, pages: 2,
+  schema: 5, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], switches: { '\\cite': '22220000', '\\footnote': '00000012' }, inkless: ['\\rule{0pt}{2ex}', '\\fontsize{7.6pt}{1em}'], texts: ['\\bert', 'BERT'], names: { abstract: 1, ref: 0 }, lineskip: [1, 0] }, pages: 2,
   views: [0, 0, 612, 792, 0, 0, 612, 792],
   columns: [1, 2],
   marks: [['0s', 1, 72, 700], ['0e', 1, 300.5, 650.25], ['c1-1', 1, 0, 0], ['c2-2', 2, 0, 0], ['p0.3a', 1, 100, 700], ['p0.3b', 1, 120.75, 700], ['h1s', 2, 72, 720], ['t2s', 2, 80, 500], ['n0.5a', 1, 200, 680], ['g1t', 2, 300, 400]],
@@ -871,9 +897,13 @@ describe('the marks file', () => {
     parse.mockRestore()
     expect(refusal(new Uint8Array([0x7b, 0xc3, 0x28, 0x7d]))).toBe('')
     const rows: [string, (m: LayoutMarks & Record<string, unknown>) => void, string][] = [
-      ['schema 1, a file before the stream', m => { m.schema = 1 as 4 }, 'schema'],
-      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 4 }, 'schema'],
-      ['schema 3, a file before the babel names', m => { m.schema = 3 as 4 }, 'schema'],
+      ['schema 1, a file before the stream', m => { m.schema = 1 as 5 }, 'schema'],
+      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 5 }, 'schema'],
+      ['schema 3, a file before the babel names', m => { m.schema = 3 as 5 }, 'schema'],
+      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 5 }, 'schema'],
+      ['a lineskip of one number', m => { (m.marking as Record<string, unknown>).lineskip = [1] }, 'marking.lineskip'],
+      ['a lineskip past \\maxdimen', m => { (m.marking as Record<string, unknown>).lineskip = [1, 1e6] }, 'marking.lineskip[1]'],
+      ['a lineskip a hundredth past \\maxdimen as written', m => { (m.marking as Record<string, unknown>).lineskip = [1, 16322.8] }, 'marking.lineskip[1]'],
       ['engine context', m => { m.engine = 'context' }, 'engine'],
       ['marking not an object', m => { (m as Record<string, unknown>).marking = ['math'] }, 'marking'],
       ['marking with a key of no schema', m => { (m.marking as Record<string, unknown>).extra = [] }, 'marking.extra'],

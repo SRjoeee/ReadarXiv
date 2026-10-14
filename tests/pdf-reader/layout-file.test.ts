@@ -21,7 +21,7 @@ const MATH = PH_KINDS.indexOf('math'), DISPLAY = PH_KINDS.indexOf('display'), CI
  *  and onto the next page, a caption, a footnote */
 function made(): LayoutFile {
   return {
-    schema: 2,
+    schema: 3,
     layout: LAYOUT,
     pdfjs: '5.4.296',
     paper: { id: '2608.04322', version: 1, pages: 3 },
@@ -86,6 +86,8 @@ function made(): LayoutFile {
       [4, NAME_KEYS.indexOf('ref'), 3, 72, 500, 140.25, 508.4, 497.5, 12, 1, NAME_FLAG.CAPITALS, -1, 0, 72, 300],
       [6, NAME_KEYS.indexOf('proof'), 3, 100, 400, 140, 407, 397.5, 9, 1, NAME_FLAG.RUN_IN, 7, 2.5, 72, 540],
     ],
+    // the paper's \lineskip and \lineskiplimit, LaTeX's own 1pt (0.9963 bp) and 0pt, to a hundredth as the writer sets them
+    lineskip: [1, 0],
   }
 }
 
@@ -149,7 +151,7 @@ describe('a valid file', () => {
     expect([...index.unit(3)!.labels]).toEqual([0, 2, 50, 720, 66, 728.5, 717])
     expect([...index.unit(8)!.labels]).toEqual([3, 2, 66, 100, 70, 106, 98])
     expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.LOST, segs: new Float64Array(0), text: null })
-    expect(LAYOUT).toBe('4')
+    expect(LAYOUT).toBe('5')
     expect(index.unit(5)!.held).toEqual([1])
     expect(index.unit(2)!.held).toEqual([])
     expect(PAGE_TEXT_KINDS).toEqual(['cite', 'ref', 'eqref'])
@@ -200,6 +202,16 @@ describe('a valid file', () => {
     expect(Object.is(back.views[1], 0)).toBe(true)
     expect(back.lines[0]![1]).toEqual([1, 150.5, 461.25, 700, 712.4, 696.1, 17.28, 1])
     expect(encodeLayout(back)).toBe(JSON.stringify(back))
+    // (the paper's \lineskip as TeX gives it in PDF units, 1pt = 0.9962640099626402, to a hundredth like every number)
+    shuffled.lineskip = [0.9962640099626402, -0.004]
+    expect(parseLayout(utf8(encodeLayout(shuffled))).lineskip).toEqual([1, 0])
+    // TeX's \maxdimen (16383.99998pt, \offinterlineskip's \lineskiplimit; 16322.7895 PDF units) and the 16384pt the probe
+    // reads at most are written 16322.79, over the exact bound by the rounding: the file still reads, either sign
+    const most = 16383.99998 * (72 / 72.27)
+    shuffled.lineskip = [-most, most]
+    expect(parseLayout(utf8(encodeLayout(shuffled))).lineskip).toEqual([-16322.79, 16322.79])
+    shuffled.lineskip = [0, (16384 * 72) / 72.27]
+    expect(parseLayout(utf8(encodeLayout(shuffled))).lineskip).toEqual([0, 16322.79])
   })
 
   it('a zero written -0 reads as 0, so that the file round-trips', () => {
@@ -276,7 +288,7 @@ describe('nesting is refused before JSON.parse', () => {
     const f = made()
     // each key's value one bracket deeper than the file's own: the three entries arrays reach 4
     const reach = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, 1 + depthOf(v)]))
-    expect(reach).toEqual({ schema: 1, layout: 1, pdfjs: 1, paper: 2, left: 1, views: 2, fonts: 2, units: 3, lines: 4, frames: 4, erase: 4, ph: 3, labels: 3, headings: 3, pageText: 3, held: 4, names: 3 })
+    expect(reach).toEqual({ schema: 1, layout: 1, pdfjs: 1, paper: 2, left: 1, views: 2, fonts: 2, units: 3, lines: 4, frames: 4, erase: 4, ph: 3, labels: 3, headings: 3, pageText: 3, held: 4, names: 3, lineskip: 2 })
     expect(depthOf(f)).toBe(4)
     expect(LAYOUT_DEPTH).toBe(4)
     const parse = vi.spyOn(JSON, 'parse')
@@ -344,7 +356,12 @@ const ROWS: [string, Edit, string][] = [
   ['an extra key', f => { f.extra = 1 }, 'extra'],
   ['an extra key of 10,000 characters is named by its first 20', f => { f['k'.repeat(10000)] = 1 }, `${'k'.repeat(20)}…`],
   ['schema 1, a file before the names', f => { f.schema = 1 }, 'schema'],
-  ['schema 3', f => { f.schema = 3 }, 'schema'],
+  ['schema 2, a file before the interline glue', f => { f.schema = 2 }, 'schema'],
+  ['schema 4', f => { f.schema = 4 }, 'schema'],
+  ['a lineskip of one number', f => { (f as { lineskip: unknown }).lineskip = [1] }, 'lineskip'],
+  ['a lineskip that is a string', f => { (f as { lineskip: unknown }).lineskip = ['1pt', 0] }, 'lineskip[0]'],
+  ['a lineskiplimit past \\maxdimen', f => { (f as { lineskip: unknown }).lineskip = [1, 1e6] }, 'lineskip[1]'],
+  ['a lineskiplimit a hundredth past \\maxdimen as written', f => { (f as { lineskip: unknown }).lineskip = [1, 16322.8] }, 'lineskip[1]'],
   // (the maker's version is read for its shape alone: any maker's file under schema 2 is read, identities.test.ts)
   ['layout empty', f => { f.layout = '' }, 'layout'],
   ['layout with a space', f => { f.layout = '3 1' }, 'layout'],
@@ -601,7 +618,7 @@ function largest(): LayoutFile {
   const views: number[] = []
   for (let p = 0; p < PAGES; p++) views.push(0, 0, 612, 792)
   const fonts = Array.from({ length: 512 }, (_, i) => `NimbusRomNo9L-Regu${i}`)
-  const f: LayoutFile = { schema: 2, layout: LAYOUT, pdfjs: '5.4.296', paper: { id: '2608.30730', version: 3, pages: PAGES }, left: 'f'.repeat(64), views, fonts, units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [] }
+  const f: LayoutFile = { schema: 3, layout: LAYOUT, pdfjs: '5.4.296', paper: { id: '2608.30730', version: 3, pages: PAGES }, left: 'f'.repeat(64), views, fonts, units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [], lineskip: null }
   for (let i = 0; i < UNITS; i++) {
     const id = 2 * i, heading = i % 10 === 0, n = linesOf(i), page = 1 + (i % (PAGES - 1))
     f.units.push([id, heading ? H : P, heading ? 1 : 9, i % 8 === 0 ? UNIT_FLAG.CENTRED : 0, 40])
