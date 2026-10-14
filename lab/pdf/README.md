@@ -141,7 +141,8 @@ instrument by what their packs hold, not where they are: `rules-gate.mjs run` st
 `data` and `texmf` with the digests of those parts of the listing of the `gate-pack.json` it was given (`--pack-json`, the one
 `verify` checked the directory against), the made layout files excluded. Another reference, geometry, PDF, translation, face or
 pattern between the two sides is then another instrument and fails; so does a different set of outputs, so a pull request that
-moves the layout file does not also add an output.
+moves the layout file does not also add an output or refresh the references: those go in their own pull request, where the layout
+version is unchanged and the one pack serves both sides.
 
 **Where the pack is cached.** In a pull request's own cache, by the pack's digest (`rules-gate.yml`), and nowhere else. A cache
 saved by a push to `next` is readable by a fork's pull request, which runs its own edited workflow and can restore the

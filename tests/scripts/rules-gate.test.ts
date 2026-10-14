@@ -610,6 +610,7 @@ describe('the instrument of a pack', () => {
 
   it('refuses a pack that names no files, and judge sees two instruments for packs that differ, stamped over the paths the gate recorded', () => {
     expect(() => instrumentOfPack({})).toThrow(/names no files/)
+    expect(() => instrumentOfPack({ files: [...pack('1').files, file('newdir/x.bin', '1')] })).toThrow(/outside the parts.*newdir\/x\.bin/)
     const paths = (dir: string) => ({ fixtures: `${dir}/fixtures`, refs: `${dir}/refs`, geometry: `${dir}/geometry` })
     const stamped = (p: ReturnType<typeof pack>, dir: string) => run(base(), { inputs: { ...paths(dir), ...instrumentOfPack(p) } })
     // two directories, layout files alone differ: no problem

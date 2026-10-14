@@ -356,6 +356,8 @@ export function instrumentOfPack(pack) {
   const files = pack?.files
   if (!Array.isArray(files) || !files.length) throw new Error('the pack names no files: it is not a gate-pack.json')
   const part = test => listingDigest(files.filter(f => test(String(f.path))))
+  const stray = files.map(f => String(f.path)).filter(p => !/^(?:fixtures|refs|geometry|data|texmf)\//.test(p))
+  if (stray.length) throw new Error(`the pack holds ${stray.length} file${stray.length === 1 ? '' : 's'} outside the parts the instrument names (${stray[0]}…): name the part in instrumentOfPack`)
   return {
     fixtures: part(p => p.startsWith('fixtures/') && !/^fixtures\/[^/]+\/layout\.json$/.test(p)),
     refs: part(p => p.startsWith('refs/')),
@@ -627,7 +629,7 @@ async function main(argv) {
   const rest = argv.filter((x, i) => !(i === 0 && x === command))
   if (command === 'run') {
     const arg = n => option(rest, n)
-    const file = await runGate({ engine: resolve(arg('engine')), rules: resolve(arg('rules')), pack: resolve(arg('pack')), packJson: resolve(arg('pack-json')), out: typeof arg('out') === 'string' ? resolve(arg('out')) : undefined, log: typeof arg('log') === 'string' ? arg('log') : undefined, workers: arg('workers') ? Number(arg('workers')) : 4 })
+    const file = await runGate({ engine: resolve(arg('engine')), rules: resolve(arg('rules')), pack: resolve(arg('pack')), packJson: resolve(arg('pack-json') ?? (() => { throw new Error('run: --pack-json=<gate-pack.json> is needed (the pack\'s listing, which the run is stamped from)') })()), out: typeof arg('out') === 'string' ? resolve(arg('out')) : undefined, log: typeof arg('log') === 'string' ? arg('log') : undefined, workers: arg('workers') ? Number(arg('workers')) : 4 })
     console.log(`RUN ${file}`)
     return 0
   }

@@ -161,18 +161,18 @@ describe('each side of the gate runs on the pack its own commit names', () => {
     expect(at('Check the pack')).toBeLessThan(at('Gate on the merge base'))
   })
 
-  it('reads the merge base\'s digest from its own manifest with its own script, and runs the base on the pull request\'s directory only where the layout file\'s version is the same', () => {
+  it('reads the merge base\'s digest from its own manifest with its own script, and runs the base on the pull request\'s directory only where the layout file\'s version is the same (not where the digests are)', () => {
     const digests = step('Pack digests')
     expect(digests).toContain('head=$(node lab/pdf/spikes/gate-pack.mjs digest)')
     expect(digests).toContain(`base=$(node ${BASE_SCRIPT} digest ${BASE_MANIFEST})`)
     // the layout field of each side's gate-pack.json decides, not the digest: another pack under the same layout is measured on the one pack
-    expect(digests).toContain('hl=$(node -e')
-    expect(digests).toContain('bl=$(node -e')
+    expect(digests).toMatch(/hl=\$\(node -e '[^']*\.layout \?\? null[^']*' lab\/pdf\/gate-pack\.json\)/)
+    expect(digests).toMatch(/bl=\$\(node -e '[^']*\.layout \?\? null[^']*' "\$RUNNER_TEMP\/base\/lab\/pdf\/gate-pack\.json"\)/)
     expect(digests).toContain('if [ "$hl" = "$bl" ]; then')
     expect(digests).toMatch(/same=true.*\n\s+echo "BASE_PACK=\$PWD\/lab\/pdf\/out\/gate-pack" >> "\$GITHUB_ENV"\n\s+echo "BASE_PACK_JSON=\$PWD\/lab\/pdf\/gate-pack\.json" >> "\$GITHUB_ENV"\n\s+else\n\s+echo "same=false.*\n\s+echo "BASE_PACK=\$RUNNER_TEMP\/base-pack" >> "\$GITHUB_ENV"\n\s+echo "BASE_PACK_JSON=\$RUNNER_TEMP\/base\/lab\/pdf\/gate-pack\.json" >> "\$GITHUB_ENV"\n\s+fi/)
   })
 
-  it('restores the merge base\'s pack with the merge base\'s own script and manifest, from a cache keyed by its own digest, only where the digests differ', () => {
+  it('restores the merge base\'s pack with the merge base\'s own script and manifest, from a cache keyed by its own digest, only where the layout versions differ', () => {
     const cache = step('Merge base pack from the cache'), bucket = step('Merge base pack from the bucket'), keep = step('Keep the merge base pack'), check = step('Check the merge base pack')
     for (const s of [cache, bucket, keep, check]) expect(s).toContain("steps.pack.outputs.same != 'true'")
     expect(cache).toContain('uses: actions/cache/restore@v4')

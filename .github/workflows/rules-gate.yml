@@ -149,8 +149,8 @@ jobs:
         if: steps.pack.outputs.same != 'true'
         run: node "$RUNNER_TEMP/base/lab/pdf/spikes/gate-pack.mjs" verify --pack="$RUNNER_TEMP/base/lab/pdf/gate-pack.json" --out="$BASE_PACK"
 
-      # Two runs on this runner: the merge base's engine with its own built-in set on its own pack, the pull request's with its own on
-      # its own. The instrument (the gate's scripts) is the pull request's for both, so that the two runs differ in the engine (and
+      # Two runs on this runner: the merge base's engine with its own built-in set, the pull request's with its own, each on the pack
+      # the digests step chose for it (one pack for both where the layout file's version is the same). The instrument (the gate's scripts) is the pull request's for both, so that the two runs differ in the engine (and
       # the pack that engine made) alone. This log
       # is public and the gate prints stacks and reasons that can carry a paper's text: each run's whole output goes to a file in
       # RUNNER_TEMP (never uploaded), and the log gets the lines that are names and numbers
