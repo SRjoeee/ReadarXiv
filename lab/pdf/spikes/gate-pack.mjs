@@ -10,7 +10,7 @@
 //   pack/data/fonts/<file>                        the served faces (AXT_DATA=pack/data)
 //   pack/texmf/<tex/generic/...>                  the en and de hyphenation patterns (TEXMF_DIST=pack/texmf)
 //   pack/manifest.json                            { schema, pipeline, layout: { schema, version }, made, digest, files: [{ path, sha256, bytes }] }
-// `layout` names the layout files' schema and version (their `schema` and `layout` fields, which the reader checks): a make
+// `layout` names the layout files' schema and version (their `schema` field, which the reader refuses a file by when it is not its own, and their `layout` field, the maker's version, which the reader reads as a version token and does not compare): a make
 // reads every fixtures/<fx>/layout.json and fails unless all of them are the --engine tree's own (file.mjs LAYOUT_SCHEMA and
 // LAYOUT), and tests/scripts/gate-pack.test.ts holds the committed gate-pack.json to the engine, so that a change of the layout
 // file cannot be merged while the pack is of the old one. `make` takes its inputs from the committed fidelity record
@@ -152,11 +152,12 @@ export function pipelineOf(records, names) {
 }
 
 /**
- * The folders of a make as the record names them (`inputs.fixtures`, `records`, `refs`, `geometry`), each resolved as the gate
- * wrote it: a relative path under lab/pdf (`root`, where the gate shows the paths under it) or else under the repository
- * (a variable given relative to the working directory, as LAYER_GEOMETRY was), `~/…` under the home directory, an absolute path
- * as it is. A flag in `flags` (a path) takes the place of the record's. A path the gate could not show (`<scratch>/…`, `<local>/…`)
- * or that is under neither root names the input and stops the make.
+ * The folders of a make as the record names them (`inputs.fixtures`, `records`, `refs`, `geometry`), each with one base: a
+ * relative path is under lab/pdf (`root`, which the gate shows its paths relative to: it resolves every folder before it shows
+ * it), `~/…` under the home directory, an absolute path as it is. A relative path is never tried under the repository too: a
+ * name that exists under both would mean two folders. A flag in `flags` (a path, relative to the working directory) takes the
+ * place of the record's. A path the gate could not show (`<scratch>/…`, `<local>/…`) or that is not under its base names the
+ * input and stops the make.
  */
 export function inputsOfRecord(record, { root, repo, flags = {}, exists = existsSync, home = homedir() }) {
   const out = {}
@@ -165,9 +166,8 @@ export function inputsOfRecord(record, { root, repo, flags = {}, exists = exists
     const v = record?.inputs?.[name]
     if (typeof v !== 'string' || !v) throw new Error(`the record names no inputs.${name}: give --${name}=<dir>`)
     if (v.startsWith('<')) throw new Error(`the record's inputs.${name} is ${JSON.stringify(v)}, which is no path: give --${name}=<dir>`)
-    const candidates = v === '~' ? [home] : v.startsWith('~/') ? [join(home, v.slice(2))] : v.startsWith('/') ? [v] : [resolve(root, v), resolve(repo, v)]
-    const found = candidates.find(c => exists(c))
-    if (!found) throw new Error(`the record's inputs.${name} (${JSON.stringify(v)}) is not under ${root} or ${repo}: give --${name}=<dir>`)
+    const found = v === '~' ? home : v.startsWith('~/') ? join(home, v.slice(2)) : v.startsWith('/') ? v : resolve(root, v)
+    if (!exists(found)) throw new Error(`the record's inputs.${name} (${JSON.stringify(v)}) is not at ${found}: give --${name}=<dir>`)
     out[name] = found
   }
   return out
@@ -180,8 +180,8 @@ export const layoutOfEngine = async engine => {
 }
 
 /**
- * The layout files' version: the `schema` and `layout` fields every fixtures/<fx>/layout.json of the outputs names (what the
- * reader refuses a file by), which must all be `expected` (the engine's own). Throws naming each output that is not, with
+ * The layout files' version: the `schema` and `layout` fields every fixtures/<fx>/layout.json of the outputs names (the reader
+ * refuses a file whose schema is not its own, and takes `layout` as a version token only), which must all be `expected` (the engine's own). Throws naming each output that is not, with
  * what its file says; a pack made of layout files of two makers, or of another maker than the engine's, is never made.
  */
 export function layoutVersionOf(fixtures, names, expected) {

@@ -463,15 +463,26 @@ describe('the pack names its layout files\' version, and the engine\'s own holds
 
 describe('a make takes its inputs from the committed record', () => {
   const root = '/r/lab/pdf', repo = '/r'
-  const record = { inputs: { fixtures: 'out/layer-gate/fixtures/abc', records: 'out/layer-gate/cut/records', refs: 'out/layer-gate/cut/refs', geometry: 'lab/pdf/out/layer-gate/cut/geometry' } }
+  const record = { inputs: { fixtures: 'out/layer-gate/fixtures/abc', records: 'out/layer-gate/cut/records', refs: 'out/layer-gate/cut/refs', geometry: 'out/layer-gate/cut/geometry' } }
   const there = (...paths: string[]) => (p: string) => paths.includes(p)
 
-  it('resolves each path as the gate wrote it: under lab/pdf, else under the repository', () => {
+  it('resolves each relative path under lab/pdf, the base the gate shows its paths by', () => {
     const out = inputsOfRecord(record, { root, repo, exists: there('/r/lab/pdf/out/layer-gate/fixtures/abc', '/r/lab/pdf/out/layer-gate/cut/records', '/r/lab/pdf/out/layer-gate/cut/refs', '/r/lab/pdf/out/layer-gate/cut/geometry') })
     expect(out).toEqual({ fixtures: '/r/lab/pdf/out/layer-gate/fixtures/abc', records: '/r/lab/pdf/out/layer-gate/cut/records', refs: '/r/lab/pdf/out/layer-gate/cut/refs', geometry: '/r/lab/pdf/out/layer-gate/cut/geometry' })
   })
 
-  it('takes a home path and an absolute path as they are, and a flag in place of the record\'s', () => {
+  it('has one base for a relative path: a folder of the same name under the repository is not a second candidate', () => {
+    // both /r/lab/pdf/out/x and /r/out/x exist; the record's `out/x` is the first, and the second is never looked at
+    const asked: string[] = []
+    const exists = (p: string) => { asked.push(p); return true }
+    const out = inputsOfRecord({ inputs: { fixtures: 'out/x', records: 'out/x', refs: 'out/x', geometry: 'out/x' } }, { root, repo, exists })
+    expect(Object.values(out)).toEqual(['/r/lab/pdf/out/x', '/r/lab/pdf/out/x', '/r/lab/pdf/out/x', '/r/lab/pdf/out/x'])
+    expect(asked.every(p => p.startsWith('/r/lab/pdf/'))).toBe(true)
+    // and a path that is only under the repository is missing, not found there
+    expect(() => inputsOfRecord(record, { root, repo, exists: there('/r/out/layer-gate/fixtures/abc') })).toThrow(/inputs\.fixtures.*\/r\/lab\/pdf\/out\/layer-gate\/fixtures\/abc/)
+  })
+
+  it('takes a home path and an absolute path as they are, and a flag (relative to the working directory) in place of the record\'s', () => {
     const r = { inputs: { ...record.inputs, fixtures: '~/made/fx', records: '/abs/records' } }
     const out = inputsOfRecord(r, { root, repo, home: '/h', flags: { refs: 'elsewhere/refs', geometry: null }, exists: there('/h/made/fx', '/abs/records', '/r/lab/pdf/out/layer-gate/cut/geometry') })
     expect(out).toEqual({ fixtures: '/h/made/fx', records: '/abs/records', refs: '/r/elsewhere/refs', geometry: '/r/lab/pdf/out/layer-gate/cut/geometry' })

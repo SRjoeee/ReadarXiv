@@ -109,7 +109,7 @@ digest and size; its **digest** is that of the sorted listing, the same on every
 is written with its mtime at the epoch). Its outputs are its frozen references (`refs/<output>/ref.json`), the set the gate
 itself requires: a make fails, naming each file, when any other file of one of them is missing, so an output cannot drop out
 unseen; and the verdict holds both runs to that set. The manifest also names the layout files' version (`layout`: the `schema`
-and `layout` fields every `layout.json` carries, which the reader refuses a file by): a make fails unless all of them are the
+and `layout` fields every `layout.json` carries; the reader refuses a file of another schema and takes `layout`, the maker's version, as a version token only): a make fails unless all of them are the
 engine's own (`layout/file.mjs`, `LAYOUT_SCHEMA` and `LAYOUT`), and `tests/scripts/gate-pack.test.ts` holds the committed
 `gate-pack.json` to the engine's, so a pull request that moves the layout file cannot pass `pnpm test` with the pack as it was.
 
