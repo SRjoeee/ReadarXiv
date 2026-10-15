@@ -109,7 +109,18 @@
 // paragraph cut otherwise, 127 units' wires unanswered on the ten runs and 84 on the ground truth (spaces beside a
 // digit, paper macros' arguments as prose), and the baseline recorded again for the units the rule cut anew —
 // 2608.03063's (cells 55 → 53 on the left, a cell's head, its blocks, a paragraph aligned by sentence) and 2608.29181's
-// address footnote (its e-mail now a placeholder: aligned 112 → 111).
+// address footnote (its e-mail now a placeholder: aligned 112 → 111). Recorded again 2026-10-15, for two merges no
+// run of this gate followed. #319 (PIPELINE 8): the read-back drops a marker's doubled or displaced `#` (1ba9313c), and
+// 57 units of the ten runs and 38 of the ground truth typeset the old read-back's stray `\#`, so the path no longer
+// makes the translation their run typeset: the files made again give them none, and they are lit whole (aligned 30
+// fewer on the ten; highlight-sentences.mjs now keeps the sentences of the units this gate does not judge); an accent
+// read as its letter (15eb6e43) puts words before 7 of 2608.02459's starts that investigator B's units have no start
+// for. #323: a mark's word on its own baseline first (573327a7: five units' blocks, 2608.12502's first footnote anchored
+// on the left, a head and a fill); the front end's round, 2608.02991's abstract no longer cut as a run-in head
+// (a4e7661b, which also sends a macro's argument as text, "(i)", and puts words before 18 more of 2608.02459's starts),
+// and a blank line after a comment line ending the paragraph (4752417b: 13 run units cut otherwise on four papers, 5 of
+// them aligned before; 2608.08350's #85, a paragraph with a display, counted as a paragraph with no pieces left). No
+// start compared with the ground truth changed its line.
 //   pnpm exec tsx lab/pdf/spikes/highlight-gate.mjs [id …]   → out/highlight-gate.json
 //   RUNS=<dir> another set of runs; GT=<dir> another ground truth; ROUNDS=<n> the cost's repeats (default 7)
 import { createHash } from 'node:crypto'
