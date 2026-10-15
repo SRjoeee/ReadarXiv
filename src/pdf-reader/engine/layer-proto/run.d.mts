@@ -54,10 +54,6 @@ export declare const PDF_OPTIONS: { cMapPacked: true; enableHWA: true; disableSt
 /** main.js's lay order, by the page whose drawing lays each unit: [page, ids] */
 export declare function layGroups(placed: readonly { id: number; pages: readonly number[] }[], batch?: number): [number, number[]][]
 export declare const layOrder: (placed: readonly { id: number; pages: readonly number[] }[], batch?: number) => number[]
-/** one entry of the stream's K (the units v0 may place, by (slot, id)) as needsOf reads it: the pages each of its sources would draw it on, and every page their lines are on; `rects` null where only the layout file holds the unit */
-export interface NeedEntry { lists: readonly (readonly number[])[]; reach: Iterable<number>; rects?: unknown }
-/** what laying a paper's pages reads of its units, by page (an index into K): `lay[g]` up to which every unit must be in to lay page g's drawing; `done`, `complete` as the page passes add */
-export declare function needsOf(K: readonly NeedEntry[], N: number, passes: boolean, fileOnly: (c: NeedEntry) => boolean): { lay: number[]; done: number[]; complete: number[] }
 /** a unit's layout made final: a CJK cell's lines moved into their bands between the rules at the size it is drawn at */
 export declare function settleLayout(p: { clear?: { bands: Map<number, import('./layer2.mjs').CellBand[]> } | null; layout: { lines?: { block: number; baseline: number }[]; scale?: number }; s: number }): void
 /** the targets a page's fill is held to: the last page's, and the fullest page's own (`anchor`, of `lines` body lines) */
