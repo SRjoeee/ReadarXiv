@@ -593,8 +593,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // left the original's, and each of its pages has passed
   /** each page's readers still to be laid: the units of K placed or still to be decided whose lay reads it */
   const reads = new Int32Array(N + 1)
-  /** the pages let go */
-  const freed = new Uint8Array(N + 1)
+  /** the pages drawn and not let go yet (each of them is looked at by a sweep, every other page never again), and the last
+   *  page the sweeps have taken in */
+  const unswept = new Set()
+  let sweptTo = 0
   /** what the run lets go kept for the gate's measures (`records` with `free`): each page's characters, each unit as laid */
   const shelf = free && records ? { chars: [], units: new Map() } : null
   /** the pages a unit's lay reads, of those shown: the pages its sources' lines are on, and those of its placeholders'
@@ -609,7 +611,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const dropReads = c => { if (!c?.reads) return; for (const q of c.reads) reads[q]--; c.reads = null }
   /** a page's analysis state let go (its canvases, a copy's, are the gate's: release) */
   const letGoPage = q => {
-    freed[q] = 1
+    unswept.delete(q)
     chars2[q - 1] = undefined
     inks[q] = pageItems[q] = accounted[q] = keptOf[q] = laid[q] = undefined
   }
@@ -617,8 +619,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  paintOn): its paint elsewhere may cut a crop from q, on v0's own copy (release), and its own state stays until then */
   const awaitsPaint = q => PASSES && (laid[q] ?? []).some(u => !u.refused && u.pages.some(r => !partPainted(u, r)))
   /** every done page no unit still to be laid reads, and none on it still to be painted elsewhere, let go: after each page's
-   *  step, and once the rows end */
-  const sweep = () => { if (free) for (let q = 1; q <= drawnTo; q++) if (!freed[q] && !reads[q] && doneAtOf(q) <= drawnTo && !awaitsPaint(q)) letGoPage(q) }
+   *  step, and once the rows end. Only the pages drawn and not let go are looked at (a page let go is never again): a few a
+   *  step, the page in hand and those held for a unit still to come, not every page drawn at every step (half the pages'
+   *  count squared over a paper) */
+  const sweep = () => {
+    if (!free) return
+    for (; sweptTo < drawnTo; sweptTo++) unswept.add(sweptTo + 1)
+    for (const q of unswept) if (!reads[q] && doneAtOf(q) <= drawnTo && !awaitsPaint(q)) letGoPage(q)
+  }
   /** what a unit holds for its lay, its passes and its paint alone (and the file's lines it is laid by: `tex.lines`) */
   const HEAVY = ['prep', 'tokens', 'layout', 'blocks', 'local', 'lead', 'P', 'clear']
   /** a unit nothing reads again: painted on every page it is on, or left the original's (refused, or withheld with its
@@ -726,6 +734,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // (the units laid and drawn: their records with `records`, their count always)
   const stats = []
   let drawnUnits = 0
+  // (a record that could not be made, by unit: the gate reports them, a record never stands in for one)
+  const recordErrors = []
   // (the drawing's audit, the gate's: none kept without `records`)
   const audit = records ? [] : null
   let designs = { serif: 'times', sans: 'helvetica', mono: 'courier' }
@@ -1242,11 +1252,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  grows. Laid in order that is exact: every unit ranked before p on the page has been laid or left before p is, so a
    *  unit's own state says it and no other page is read. Laying out of order (1b-D), a unit ranked before p may not have
    *  been reached yet: one whose other page fails grows here, where in order it would not, unless the pages of the units
-   *  ranked before a laid unit are drawn first (and failed ones refused). Nor does the walk skip a unit already grown on
-   *  the page (`q.grew.has(g)`): laid in order a unit placed later ranks after every unit grown there (rankedOn), so the
-   *  grown stay a prefix; laid out of order (1b-D) one may rank before them, and the walk would grow them again, a unit the
-   *  run has let go among them (`free`: its `local` gone, its growth throwing into its stepError, silently). 1b-D skips a
-   *  unit grown on the page, or holds that a unit placed later never ranks before a grown one */
+   *  ranked before a laid unit are drawn first (and failed ones refused). A unit grown on the page already is never grown
+   *  again: laid in order the grown are a prefix of the rank, one placed later ranking after them (rankedOn); out of order
+   *  one may rank before them, and growing them again would move their lines twice, or read what a unit let go of (`free`) */
   const growTo = p => {
     for (const g of p.linePages) {
       if (p.grew.has(g)) continue
@@ -1254,6 +1262,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       let i = grownTo.get(g) ?? 0
       while (i < line.length) {
         const q = line[i++]
+        if (q.grew.has(g)) continue
         q.grew.add(g)
         if (q === p || !q.refused) {
           try { growOn(q, g) } catch (e) { if (q === p || isMemoryError(e)) { grownTo.set(g, i); throw e } q.stepError ??= e }
@@ -1414,10 +1423,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       record(p, { ...(tex ? { source: p.tex ? 'tex' : 'v0' } : {}), grown: p.grown, dropped: p.dropped, s, f: p.layout.f, fitScale: p.layout.scale, knob: p.layout.knob, clipped: p.layout.clipped, opened: p.layout.opened, unopened: p.layout.unopened, lostChars: p.layout.lostChars, chars: p.layout.chars, lead: p.layout.state.lead, track: p.layout.state.track || p.layout.state.trackLatin, compress: p.layout.state.compress, borrow: p.layout.state.borrow, free: r1(Math.max(0, ...p.blocks.map(b => b.free))), tried: p.layout.tried, lines, orig, drawnRuns: L2.drawnRuns(tokens), drawnBase: styleKey(tokens.base), trChars: tr.reduce((a, t) => a + [...t.s].length, 0), trDrawn: p.layout.lines.reduce((a, l) => a + l.items.reduce((b, it) => b + (it.t.s && !it.t.ph && !it.t.sup ? [...it.t.s].length - (it.t.hyphenated ? 1 : 0) : 0), 0), 0), modes: modesOf(prep), unused: drawnTok.size, ms: [r1(t1 - t0), r1(t2 - t1), r1(t3 - t2), r1(t4 - t3)], tokens: tokens.length })
     } catch (e) {
       if (isMemoryError(e)) throw e
-      // (in the records, not on the unit: no pass updates it, which would read what failed again)
-      p.recError = { id: p.id, kind: p.unit.kind, v: 2, pages: p.pages, cut: p.cut, recordError: String(e?.message ?? e) }
+      // (no record of it, nor one on the unit for a pass to update, which would read what failed again: the error alone)
       p.rec = undefined
-      stats.push(p.recError)
+      recordErrors.push({ id: p.id, error: String(e?.message ?? e) })
     }
   }
   function record(p, x) {
@@ -1486,7 +1494,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const withhold = (p, why) => {
     const at = placed.indexOf(p)
     if (at >= 0) placed.splice(at, 1)
-    const r = stats.indexOf(p.rec ?? p.recError)
+    const r = stats.indexOf(p.rec)
     if (r >= 0) stats.splice(r, 1)
     if (p.counted) { p.counted = false; drawnUnits-- }
     p.withheld = true
@@ -1953,6 +1961,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
 
   return {
     N, P, rows, placed, skipped, stats, audit: audit ?? [], order, ms, pageMs, pageTimes, views,
+    /** the records that could not be made (with `records`): each unit's id and the error; the unit drawn as without records */
+    recordErrors,
     /** each page's characters: the run's, or with `free` and `records` the gate's shelf (every page's, let go or not) */
     chars: shelf ? shelf.chars : chars2,
     /** the units laid and drawn, recorded or not (`stats` holds their records with `records`) */

@@ -952,6 +952,8 @@ window.gate = {
       // whether v0 left its inputs (the geometry and the units) as they were given
       inputsChanged: S.inputs.of() !== S.inputs.before,
       ...(parts ? { parts } : {}),
+      // (the units whose record could not be made: drawn, and measured by nothing, so a failure of the gate's)
+      ...(run.recordErrors?.length ? { recordErrors: run.recordErrors.length } : {}),
     }
   },
 }

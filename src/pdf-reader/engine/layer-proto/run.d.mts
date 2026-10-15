@@ -108,6 +108,8 @@ export interface ProtoRun {
   skipped: { id: number; kind: string; why: string; chars: number; pages?: number[]; missing?: number[] }[]
   /** each laid unit's record (with `records`; empty without) */
   stats: Rec[]
+  /** the records that could not be made (with `records`), by unit: its drawing is the same, the record the error alone */
+  recordErrors: { id: number; error: string }[]
   /** the drawing's audit (with `records`; empty without) */
   audit: Audit[]
   /** the units laid and drawn, recorded or not */
