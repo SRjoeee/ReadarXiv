@@ -1088,10 +1088,10 @@ instant layer (`parked/engine/`).
 - **Imports.** A whitelist, applied to every file of the engine (modules, TypeScript and declaration files) and to every way
   a module is named: a value import or a type one, `export … from`, `import(…)`, `require(…)` and `new URL(…, import.meta.url)`.
   A file of the engine names a module by relative path, to the engine's own files, `src/core/sentences`,
-  `src/core/protector/tokens` or `src/core/names`; or a `node:` module; or, in `rules/`, the layout rules' validator
+  `src/core/protector/tokens`, `src/core/names` or `src/core/protector/math-runs`; or a `node:` module; or, in `rules/`, the layout rules' validator
   (`zod/mini`). Nothing else: no alias (refused for its spelling), no build setting's name (`#imports`), no root-absolute
   path, no other package, no module of the extension, and no specifier that is computed. A TypeScript file is reached by its
-  extension, which Node reads with its own type stripping; the closure behind the three core modules is those three files.
+  extension, which Node reads with its own type stripping; the closure behind the four core modules is those four files.
 - **Loading.** `pipeline`, `translate` and `rules` load in plain Node with no bundler (a child process in the contract test);
   `layer` and `view` load in a browser's environment. The closures of `translate`, `rules`, `layer` and `view` hold none of the
   server's modules (the front end, the compile path, the layout maker, the marks, the remover and the add-on's maker). The

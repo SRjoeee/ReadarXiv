@@ -8,6 +8,7 @@
 
 // ---------------------------------------------------------------- files and bytes
 import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, paperOf, paperParams, paramsOf, readArgs } from '../rules/arg-roles.mjs'
+import { balancedRuns, RUN_SEPARATOR } from '../../../core/protector/math-runs.ts'
 /** unpacked files (a Map of relative path → bytes) as a project's file system */
 export function inMemory(map) { return { list: () => [...map.keys()], read: p => map.get(p) ?? null } }
 /** a/./b/../c → a/c: a file as the package holds it (tar.mjs untar names each so) and as TeX's file system has it,
@@ -617,7 +618,7 @@ class Builder {
   flush() {
     const u = this.cur; this.cur = null
     if (!u) return
-    u.pieces = joinLetters(keepAddresses(u.pieces))
+    u.pieces = formulaRuns(joinLetters(keepAddresses(u.pieces)))
     // trim placeholders and whitespace at both ends out of the unit: they stay in the source untouched
     const letters = u.pieces.filter(p => p.t === 'text').map(p => p.s).join('')
     if ((letters.match(/\p{L}/gu) ?? []).length < 2) {
@@ -648,6 +649,34 @@ const joinLetters = pieces => {
     if (p.t === 'text' && last?.t === 'text' && (p.src !== undefined || last.src !== undefined)) out[out.length - 1] = { t: 'text', s: last.s + p.s, src: (last.src ?? last.s) + (p.src ?? p.s) }
     else out.push(p)
   }
+  return out
+}
+/** an inline formula's TeX, its math shifts off: `$…$` or `\\(…\\)`, never a display */
+const inlineTex = src => (/^\$(?!\$)[\s\S]*\$$/.test(src) && src.length > 1 ? src.slice(1, -1) : /^\\\([\s\S]*\\\)$/.test(src) ? src.slice(2, -2) : null)
+/** a placeholder that is space or an ellipsis, as the text between a run's formulas may be: a tie, TeX's spaces, \\ldots */
+const RUN_SPACE = /^(?:~|\\[ ,;:!\n]|\\(?:q?quad|enspace|thinspace|nobreakspace|l?dots|textellipsis)(?![A-Za-z@])(?:\{\})?)\s*$/
+/**
+ * A formula the author split across inline formulas, `$\\{\\Phi_0$, $\\Phi_1$, $\\Phi_2\\}$`, one placeholder: the
+ * formulas of a run whose delimiters balance across them alone (core/protector/math-runs.ts balancedRuns), and the
+ * white space, commas, semicolons, ties and ellipses between them, as the source has them. Apart, Microsoft's Chinese
+ * put the set's first formula, its brace with it, before the words the other two follow, and the set was drawn broken
+ * apart (2307.16209's page 31). A word between two formulas is the translator's: no run crosses it (2608.18502's
+ * `$($intrinsic$)$`)
+ */
+function formulaRuns(pieces) {
+  const items = pieces.map(p => {
+    if (p.t === 'ph') { const tex = inlineTex(p.src); return tex !== null ? { tex } : RUN_SPACE.test(p.src) ? 'between' : null }
+    return p.t === 'text' && p.src === undefined && RUN_SEPARATOR.test(p.s) ? 'between' : null
+  })
+  const runs = balancedRuns(items)
+  if (!runs.length) return pieces
+  const out = []
+  let at = 0
+  for (const [first, last] of runs) {
+    out.push(...pieces.slice(at, first), { t: 'ph', src: pieces.slice(first, last + 1).map(p => (p.t === 'ph' ? p.src : p.s)).join('') })
+    at = last + 1
+  }
+  out.push(...pieces.slice(at))
   return out
 }
 // an e-mail address or a web address — the latter's last stop, comma or parenthesis the sentence's —, and the domain

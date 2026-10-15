@@ -308,6 +308,36 @@ describe('a copy made under pipeline 7, reopened under 8', () => {
   })
 })
 
+// A copy made under pipeline 10 or 11, reopened under 12: 12 makes a formula split across inline formulas one placeholder
+// (latex-front.mjs formulaRuns), and nothing else of what is sent or read back changed since 10. Only the unit that holds
+// such a run is sent; every other unit's translation is taken as the copy has it
+describe('a copy made under pipeline 10 or 11, reopened under 12', () => {
+  const PLAIN = Array.from({ length: 4 }, (_, k) => `Paragraph ${k} of the paper, with words that run on for a line or two of prose and an end.`)
+  const SET = 'This gives a system of equations for the three components $\\{\\Phi_0$, $\\Phi_1$, $\\Phi_2\\}$ of the field.'
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  const reopen = async (pipeline: string) => {
+    const paras = [PLAIN[0] as string, SET, ...PLAIN.slice(1)]
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode(`\\documentclass{article}\\begin{document}\n${paras.join('\n\n')}\n\\end{document}\n`)]])), n = p.units.length
+    expect(n).toBe(5)
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    // the set's unit as 11 cut it: three formulas, the commas between them text
+    const eleven = [{ t: 'text', s: 'This gives a system of equations for the three components ' }, { t: 'ph', src: '$\\{\\Phi_0$' }, { t: 'text', s: ', ' }, { t: 'ph', src: '$\\Phi_1$' }, { t: 'text', s: ', ' }, { t: 'ph', src: '$\\Phi_2\\}$' }, { t: 'text', s: ' of the field.' }]
+    const hashes = await Promise.all(p.units.map((u, i) => sourceHash(i === 1 ? ({ ...u, pieces: eleven } as never) : u)))
+    const record = JSON.parse(JSON.stringify({ pipeline, format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), hashes, r0.results) }))
+    const { seed } = await seedFrom(record, p.units)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES }) }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    return { r, sent }
+  }
+  for (const pipeline of ['10', '11']) {
+    it(`sends the unit whose set is one placeholder now, one of five, and takes the other four as the copy of ${pipeline} has them`, async () => {
+      const { r, sent } = await reopen(pipeline)
+      expect(sent).toEqual([expect.stringContaining('the three components @a# of the field.')])
+      expect(r.settled).toBe(true)
+    })
+  }
+})
+
 // The TeX page's protocol 2 (parked/tex-page/poc-site/tex-page.mjs; the S3a report, "what the reader must do",
 // and its review's I5): files a compile could not fetch for a network reason make it not the paper's; a failure of the
 // page's own (an error, no log) says nothing of the paper either

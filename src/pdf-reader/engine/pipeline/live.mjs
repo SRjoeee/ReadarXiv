@@ -392,9 +392,14 @@ export { PIPELINE_VERSION } from './versions.mjs'
  *   where its reply set a marker's `#` as text, which 10 reads as the marker's (dropped): a translation whose text holds
  *   a `\#` is not carried, as 7's
  * - 9: likewise
+ * - 10, 11: what 11 changes is where the patch inserts a lead or a mark (latex-front.mjs), and the units it cuts anew (a
+ *   macro's call, a subscript) have new hashes; what 12 changes is what a unit is where a formula is split across inline
+ *   formulas (latex-front.mjs formulaRuns), such a unit's hash new too. The wire and its reading back are 10's, so every
+ *   unit of the same pieces is translated as 12 translates it
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
-export const PIPELINE_CARRIES = { 7: NO_MARKER_HASH, 8: NO_MARKER_HASH, 9: NO_MARKER_HASH }
+const SAME_WIRE = () => true
+export const PIPELINE_CARRIES = { 7: NO_MARKER_HASH, 8: NO_MARKER_HASH, 9: NO_MARKER_HASH, 10: SAME_WIRE, 11: SAME_WIRE }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a
