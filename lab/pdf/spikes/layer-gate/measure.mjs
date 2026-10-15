@@ -26,6 +26,7 @@
 //   kept: rectangles a drawing must keep (displays' segments, labels); items: the page's text items { x0, y0, x1, y1, str,
 //   math } (str is read here and never returned); names: the babel names drawn in the target's words (D1a), each { orig,
 //   lines, erase } as a unit's, which the pixel measures count as a drawn unit's own text, and the model ones do not.
+import { noStart } from '../../../../src/pdf-reader/engine/layer-proto/no-start.mjs'
 
 const lum = (a, i) => a[i] * 0.299 + a[i + 1] * 0.587 + a[i + 2] * 0.114
 /** a value to d decimals, as the parity harness's toFixed */
@@ -417,21 +418,10 @@ export function slotsSkippedOf(units) {
   return { slotsSkipped: where.length, where }
 }
 
-/**
- * The code points UAX 14 does not let a line start with: its classes CL, CP, IS, EX and NS (a closing mark, a closing
- * parenthesis, a comma or full stop between numbers, an exclamation or question mark, a non-starter), as ranges of hex
- * code points from LineBreak-17.0.0.txt (TeX Live 2026's unicode-data, the file's own field `;CL` … `;NS`)
- */
-const NO_START = ('21 29 2c 2e 3a-3b 3f 5d 7d 37e 589 5c6 60c-60d 61b 61d-61f 6d4 7f8-7f9 f0d-f11 f14 f3b f3d 169c 17d6 1802-1803 '
-  + '1808-1809 1944-1945 203c-203d 2044 2046-2049 207e 208e 2309 230b 232a 2762-2763 2769 276b 276d 276f 2771 2773 2775 27c6 '
-  + '27e7 27e9 27eb 27ed 27ef 2984 2986 2988 298a 298c 298e 2990 2992 2994 2996 2998 29d9 29db 29fd 2cf9 2cfe 2e23 2e25 2e27 '
-  + '2e29 2e2e 2e53-2e54 2e56 2e58 2e5a 2e5c 3001-3002 3005 3009 300b 300d 300f 3011 3015 3017 3019 301b-301c 301e-301f '
-  + '303b-303c 309b-309e 30a0 30fb 30fd-30fe a015 a60e a876-a877 fd3e fe10-fe16 fe18 fe36 fe38 fe3a fe3c fe3e fe40 fe42 '
-  + 'fe44 fe48 fe50 fe52 fe54-fe57 fe5a fe5c fe5e ff01 ff09 ff0c ff0e ff1a-ff1b ff1f ff3d ff5d ff60-ff61 ff63-ff65 '
-  + 'ff9e-ff9f 115c4-115c5 11c71 1325b-1325d 13282 13287 13289 1337a-1337b 13438 1343d 1343f 145cf 16fe0-16fe3 16ff2-16ff3 '
-  + '1f679-1f67b').split(' ').map(r => r.split('-').map(h => Number.parseInt(h, 16))).map(([a, b]) => [a, b ?? a])
-/** whether a character (its first code point) is one UAX 14 does not let a line start with */
-export const noStart = ch => { const c = typeof ch === 'string' && ch ? ch.codePointAt(0) : -1; return NO_START.some(([a, b]) => c >= a && c <= b) }
+/** whether a character (its first code point) is one UAX 14 does not let a line start with: the engine's own table, one
+ *  place (layer-proto/no-start.mjs), the drawing's rule after a display and this measure's alike; the gate serves this
+ *  repository's copy whichever engine it measures */
+export { noStart }
 
 /**
  * The drawn lines that open with a character UAX 14 does not let a line start with (noStart), unless the original's line

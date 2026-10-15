@@ -51,7 +51,7 @@ export interface Rec {
   opened?: number; unopened?: number
   [more: string]: unknown
 }
-export declare const PDF_OPTIONS: { cMapPacked: true; enableHWA: true; disableStream: true }
+export declare const PDF_OPTIONS: { cMapPacked: true; enableHWA: true; disableStream: true; fontExtraProperties: true }
 /** main.js's lay order, by the page whose drawing lays each unit: [page, ids] */
 export declare function layGroups(placed: readonly { id: number; pages: readonly number[] }[], batch?: number): [number, number[]][]
 export declare const layOrder: (placed: readonly { id: number; pages: readonly number[] }[], batch?: number) => number[]
@@ -191,6 +191,10 @@ export declare function openProto(o: {
    *  row whose group is another is no unit of this paper's; null (the default): a group waits for every row */
   groups?: ReadonlyMap<number, string> | null
   target: string
+  /** the last page drawn at most (default 999). The run shows N, the least of it, the document's pages and the
+   *  manifest's, and the proof's `shown` is N: a piece whose segments all lie past it is drawn as its page text or as
+   *  nothing, for good, so a reader passes the paper's pages or none, never how far the parts received so far reach
+   *  (BUNDLE 4's PartChain.reach, which grows as parts are added) */
   pages?: number
   scale?: number
   dpr?: number
@@ -211,6 +215,9 @@ export declare function openProto(o: {
   copy?: boolean
   /** the hybrid (tex.mjs): null, v0 alone */
   tex?: HybridOptions | null
+  /** with `tex` null, every unit still drawn under the proof, which nothing proves but TeX's own nothing, a space and a
+   *  text symbol (a reader's paper with no layout file: reader.mjs); default false, v0 alone with no proof (the lab's) */
+  proof?: boolean
   /** the text-removed PDF: null, v0's own drawing */
   removal?: RemovalOptions | null
   /** which floats the final names in the target's language (live.mjs captionsOf): a float's label is drawn in the target's

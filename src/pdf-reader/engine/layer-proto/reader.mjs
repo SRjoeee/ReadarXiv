@@ -77,7 +77,9 @@ function addShapes(by, units) {
 /**
  * The layer of one paper and target, as either reader shows it: v0 opened over the composed document `doc` (arXiv's PDF
  * followed by the paper's removed pages, opened once by PDF.js with PDF_OPTIONS), its left as its geometry, its layout file
- * as the hybrid's, its add-on's manifest as the text removal's, the units to come the target's (toTranslate), each table
+ * as the hybrid's (none where the maker refused, or the bundle or a part dropped it: every rendering is still proven, by
+ * nothing then, so that a unit with a placeholder other than TeX's own nothing, a space or a text symbol stays the original's;
+ * run.mjs openProto's `proof`), its add-on's manifest as the text removal's, the units to come the target's (toTranslate), each table
  * cell's group from the cells, the target's caption names on every float (L7), the host's served faces (`faceSources`) and
  * hyphenation patterns (`hyphUrl`), at scale 2.5 and a device pixel ratio of 1, no copy kept at v0's own resolution: one set
  * of choices on every device. Each choice made for the target is the layout rules' (`rules`; the built-in set where none),
@@ -167,7 +169,9 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   const gone = new Promise((_, no) => { goneNow = no })
   gone.catch(() => {})
   const letGoError = () => new Error('openLayer: the layer was let go (dispose)')
-  const common = { units: [], expect, groups, target, scale: SCALE, dpr: 1, copy: false, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, onStep: () => evaluate() }
+  // (proof: a unit read with no layout file (none for the paper, or a part's `layout: null`) is still under the proof, which
+  // nothing then proves but TeX's own nothing, a space and a text symbol, so no unproven crop or source text is drawn)
+  const common = { units: [], expect, groups, target, scale: SCALE, dpr: 1, copy: false, proof: true, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, onStep: () => evaluate() }
   run = await openProto(four
     ? {
         ...common, parts: true, doc, pages: index.head.paper.pages, onRetired,

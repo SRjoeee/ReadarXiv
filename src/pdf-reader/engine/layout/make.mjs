@@ -8,7 +8,9 @@
 // an item's mark, a caption's "Figure 1:", a footnote's mark). A placeholder's rendering is its own ink: the glyphs and
 // rules the marked compile's content stream shows between its points (layout/stream.mjs, kept in the marks file), each
 // carried and matched on arXiv's page (layout/match.mjs); found where every one is matched, EMPTY where its points hold
-// nothing, else LOST; a citation's or a reference's own text with it, for the layer to set in the page's face. What
+// nothing, else LOST; a display group's later displays, which TeX gives no point, JOINED to its first, which owns the
+// group's ink; a LOST piece outside the unit's lines (before its start mark, a display after its end mark) OUTSIDE; a
+// citation's or a reference's own text with it, for the layer to set in the page's face. What
 // cannot be placed is left out, and the layer leaves that unit as the original's: a line of the marked original not
 // carried (a reflow of the layout compile costs only its own lines), a unit on a page whose ink is not whole (its
 // operator list too long, too slow, or its carry over its bound), a placeholder whose own ink is not all found. The file
@@ -23,6 +25,9 @@ import { packGlyphs, pageInk } from './ink.mjs'
 import { classOf, headEnd, layoutMarking, symbolText } from './marks.mjs'
 import { matcherOf } from './match.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
+
+/** the how of a later display of a display group (stream.mjs): its ink is the group's first display's */
+const IN_GROUP = OWNED_HOW.indexOf('in the display before it')
 
 /** the share of the marked original's lines carried, at least, for a file (the researched papers carry 97.5–99.4 %) */
 export const CARRY_MIN = 0.9
@@ -297,7 +302,7 @@ function blank(units) {
   return {
     lines: { carried: 0, total: 0, held: 0 },
     units: { located: 0, total: units.length, byKind: {}, unplaced: 0 },
-    ph: { marked: 0, found: 0, empty: 0, lost: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, foreign: 0, shared: 0, texts: 0, heads: [0, 0] },
+    ph: { marked: 0, found: 0, empty: 0, lost: 0, joined: 0, outside: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, foreign: 0, shared: 0, texts: 0, heads: [0, 0] },
     match: { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0 },
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
     names: { marked: 0, located: 0, runIn: 0, why: {} },
@@ -598,7 +603,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     const { units: copies } = layoutMarking(units, marks.marking.classes, { lines: false, switches: marks.marking.switches, inkless: marks.marking.inkless })
     copies.forEach((c, i) => {
       for (const p of c.pieces) {
-        const m = p.t === 'ph' && /^\\axtpma?\{[pn](\d+)\.(\d+)([ab])\}$/.exec(p.src ?? '')
+        const m = p.t === 'ph' && /^\\axtpm[am]?\{[pn](\d+)\.(\d+)([ab])\}$/.exec(p.src ?? '')
         if (!m || Number(m[1]) !== i) continue
         const key = `${i}.${m[2]}`, d = design.get(key) ?? design.set(key, { open: false, close: false }).get(key)
         if (m[3] === 'a') d.open = true; else d.close = true
@@ -683,11 +688,18 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       return best
     }
     const head = headEnd(u.pieces, 0), last = u.pieces.findLastIndex(p => p.t === 'text' && /[^ \t\r\n]/.test(p.s ?? ''))
+    /** whether the last visible piece is a display found, or one JOINED to a display found (a later display of the same
+     *  group, stream.mjs, may then be JOINED); text and any other piece end the group */
+    let groupFound = false
+    const entries = ph.length
     for (let k = 0; k < u.pieces.length; k++) {
       // every visible piece has its row, found, LOST or EMPTY: no row is a piece that draws nothing (an invisible one, a
       // group's open or close), as the layer reads the file
       const piece = u.pieces[k], cls = classOf(piece)
+      if (piece.t === 'text' && /\S/.test(piece.s ?? '')) groupFound = false
       if (!cls || (cls === 'macro' && inkless.has(piece.src))) continue
+      const wasFound = groupFound
+      groupFound = false
       const kind = PH_KIND.get(cls) ?? PH_KIND.get('other')
       const d = classes.has(cls) ? design.get(`${i}.${k}`) : null
       // a marked piece not found after the unit's end mark is a tail as an unmarked one is (besideMarks): \\renewcommand,
@@ -712,6 +724,14 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       const prefix = cls === 'footnote' ? 'n' : 'p', name = `${prefix}${i}.${k}a`, e = ownInk.get(name)
       // its own ink by its points in the marked compile's content stream (layout/stream.mjs), or why none is known
       if (!e) { lost('no own ink known'); continue }
+      // a later display of a display group, which TeX gives no point (the empty paragraph after a display): its ink is the
+      // group's, its first display's segments, where that was found (JOINED: no segments of its own)
+      if (e[1] === IN_GROUP) {
+        if (cls !== 'display' || !wasFound) { lost("its display group's first display not found"); continue }
+        ph.push({ row: [i, k, kind, PH_FLAG.JOINED], cls, state: 'joined' })
+        groupFound = true
+        continue
+      }
       if (e[1] >= OWNED) { lost(OWNED_HOW[e[1]] ?? 'no own ink known'); continue }
       const before = u.pieces[k - 1], after = u.pieces[k + 1]
       let flags = before?.t === 'text' && /[([]$/.test(before.s ?? '') && after?.t === 'text' && /^[)\]]/.test(after.s ?? '') ? PH_FLAG.SOURCE_BRACKETS : 0
@@ -742,8 +762,16 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
         const byRow = new Map(), partRow = []
         let off = false
         const openAt = markOf(name), closeAt = markOf(`${prefix}${i}.${k}b`)
+        // both its marks on one line of the unit: TeX broke no line between them, so the whole piece is in that line's box
+        // (a fraction's numerator and denominator, a limit, whatever their baselines). A part the part rule puts on no
+        // line goes there where its glyphs stand within the line's size of its baseline on arXiv's page; where arXiv's
+        // page broke the line elsewhere (another TeX's compile), the part rule's own line stands
+        const on = (M, j) => !!M && M.page === rows[j].page && Math.abs(M.y - rows[j].base) < 0.5 * rows[j].size
+        const both = openAt && closeAt ? rows.findIndex((_, j) => on(openAt, j) && on(closeAt, j)) : -1
+        const onLine = part => both >= 0 && part.page === rows[both].page && part.gs.every(g => Math.abs(ink[part.page].y[g] - rows[both].base) <= rows[both].size)
         for (const [q, part] of parts.entries()) {
-          const j = rowOfPart(part, q === 0 ? openAt : q === parts.length - 1 ? closeAt : null)
+          let j = rowOfPart(part, q === 0 ? openAt : q === parts.length - 1 ? closeAt : null)
+          if (j < 0 && onLine(part)) j = both
           if (j < 0) { off = true; break }
           partRow.push(j)
           ;(byRow.get(j) ?? byRow.set(j, { gs: [], boxes: [] }).get(j)).gs.push(...part.gs)
@@ -789,10 +817,15 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       stats.ph.owned += items.length + rules.length
       stats.ph.matched += gs.length + bs.length
       ph.push({ row, cls, state: 'found', inferred: e[1] !== 0, text: PAGE_TEXT.has(cls) ? pageTextOf(gs) : null })
+      if (cls === 'display') groupFound = true
     }
     if (one.symbols) symbolsOf(one)
     if (one.heads) besideMarks(one, false)
     if (one.tails) besideMarks(one, true)
+    // (its rows, for the pieces outside its lines: below)
+    one.entries = [entries, ph.length]
+    one.head = head
+    one.last = last
   }
   // the bars: an arXiv glyph matched by two found pieces, an owned glyph of a found piece not matched (none, both; each
   // true by the matcher's own rule); and what the layer draws: an arXiv glyph inside a found inline piece's segments
@@ -880,6 +913,40 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       entry.head = true
       matchedBy.set(`${i}.${h.k}`, gs.map(g => [M.page, g]))
     }
+  }
+
+  /**
+   * A unit's first line cut at its start mark, as lineOf cuts a first line (`from`), where the head drop made it the
+   * first after its rows were taken: its glyphs left of the mark are no glyph of the unit's (TeX set them before it: a
+   * head piece, or ink outside the unit's lines), and go free; its extent is its glyphs' again, with the found pieces'
+   * ink it takes in (`extra` and the unit's boxes on it); its baseline stays, on which those pieces' segments stand.
+   * But a head text symbol the unit draws as its character (PH_FLAG.TEXT: symbolsOf, which ran before the drop, counted
+   * its glyph on this line) keeps its glyph, by symbolsOf's head rule: of its character, nearest the mark and within 1.5
+   * em of it, as many as the unit has such symbols, so that it is erased once and drawn once
+   */
+  function cutAtStart(one) {
+    const { id: i, u, rows, S } = one, r = rows[0], P = ink[r.page]
+    if (!S || S.page !== r.page) return
+    const nf = s => s.normalize('NFKC'), heads = new Map(), held = new Set()
+    for (const x of one.symbols ?? []) {
+      if (x.entry.state !== 'text' || !u.pieces.slice(0, x.entry.row[1]).every(p => p.t !== 'text' || !/\S/.test(p.s ?? ''))) continue
+      heads.set(nf(x.sym), (heads.get(nf(x.sym)) ?? 0) + 1)
+    }
+    const left = r.gl.filter(g => mid(P, g) < S.x - 0.05 && P.x1[g] >= S.x - 1.5 * r.size).sort((a, b) => P.x1[b] - P.x1[a] || a - b)
+    for (const g of left) { const c = nf(P.u[g]), n = heads.get(c) ?? 0; if (n > 0) { held.add(g); heads.set(c, n - 1) } }
+    const keep = r.gl.filter(g => mid(P, g) >= S.x - 0.05 || held.has(g))
+    if (!keep.length || keep.length === r.gl.length) return
+    for (const g of held) (one.headSymbols ??= new Set()).add(g)
+    const kept = new Set(keep)
+    for (const g of r.gl) if (!kept.has(g) && P.owner[g] === i) P.owner[g] = -1
+    const row = rowOf(P, keep, r.page, r.ks, r.base)
+    row.base = r.base
+    if (r.extra?.length) {
+      row.extra = r.extra
+      for (const g of r.extra) { row.x0 = Math.min(row.x0, P.ix0[g]); row.x1 = Math.max(row.x1, P.ix1[g]); row.top = Math.max(row.top, P.top[g]); row.bottom = Math.min(row.bottom, P.bottom[g]) }
+    }
+    for (const [j, B] of one.boxes ?? []) if (j === 0) { row.x0 = Math.min(row.x0, B[0]); row.x1 = Math.max(row.x1, B[2]); row.top = Math.max(row.top, B[3]); row.bottom = Math.min(row.bottom, B[1]) }
+    rows[0] = row
   }
 
   /**
@@ -1037,9 +1104,8 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     const paired = new Set(a.pairs?.values() ?? [])
     const words = new Set([texts[i].text, texts[i].text.replace(/(?<=\p{L})-(?=\p{L})/gu, '')].flatMap(s => tokens(s).map(t => t.t)).filter(t => t.length >= 3 && /\p{L}/u.test(t)))
     const boxed = new Set((one.boxes ?? []).map(([row]) => row))
-    const held = new Set()
-    rows.forEach((r, j) => {
-      if (j === 0 || r.extra?.length || boxed.has(j)) return
+    /** a row's words, and those of them the source's */
+    const wordsOn = r => {
       let n = 0, hits = 0
       for (const k0 of r.ks) {
         let k = k0
@@ -1049,14 +1115,54 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
         n++
         if (paired.has(k) || words.has(t)) hits++
       }
+      return { n, hits }
+    }
+    const free = r => { const P = ink[r.page]; for (const g of r.gl) if (P.owner[g] === i) P.owner[g] = -1 }
+    // at the unit's head: the rows before its start mark's line (a display that opens it, before patch's start mark at
+    // its first text) that carry none of its source's words and no ink of its found pieces are no line of the unit's
+    // either, as the held rows at its end; then its start mark stands on its first line, which is cut at it as a first
+    // line is (lineOf's `from`: no glyph left of the mark is the unit's, a head glued to its first word under GLUE too),
+    // and the head pieces are looked for beside the mark there (besideMarks, which the per-unit pass ran on the row the
+    // drop took away, the mark on none of its)
+    const jS = one.S ? rows.findIndex(r => r.page === one.S.page && Math.abs(one.S.y - r.base) < 0.5 * r.size) : -1
+    if (jS > 0 && rows.slice(0, jS).every((r, j) => !r.extra?.length && !boxed.has(j) && wordsOn(r).hits === 0)) {
+      for (const r of rows.slice(0, jS)) free(r)
+      rows.splice(0, jS)
+      one.boxes = (one.boxes ?? []).filter(([row]) => row >= jS).map(([row, b]) => [row - jS, b])
+      boxed.clear()
+      for (const [row] of one.boxes) boxed.add(row)
+      stats.lines.held += jS
+      cutAtStart(one)
+      if (one.heads) besideMarks(one, false)
+    }
+    if (rows.length < 2) continue
+    const held = new Set()
+    rows.forEach((r, j) => {
+      if (j === 0 || r.extra?.length || boxed.has(j)) return
+      const { n, hits } = wordsOn(r)
       if (hits === 0 || (n >= 4 && hits < 0.2 * n)) held.add(j)
     })
     if (!held.size) continue
-    const free = r => { const P = ink[r.page]; for (const g of r.gl) if (P.owner[g] === i) P.owner[g] = -1 }
     // held at the unit's end: no line of the unit's
     while (rows.length > 1 && held.has(rows.length - 1)) { free(rows.at(-1)); held.delete(rows.length - 1); rows.pop(); stats.lines.held++ }
     for (const j of held) free(rows[j])
     if (held.size) { one.held = [...held].sort((x, y) => x - y); stats.lines.held += held.size }
+  }
+  // a LOST piece outside the unit's lines (OUTSIDE): one TeX set before its start mark (the marking passes over it at its
+  // head: patch sets the start mark at headEnd; a display, a \url opening a note), where that mark stands on the unit's
+  // first line (the rows before it no line of the unit's: above), or a display after its end mark (it ends the unit,
+  // after its last words: MARK_DEF sets the end mark before it), where that mark stands on its last line. No line of the
+  // unit's holds its ink, which is never erased, and the layer draws it as nothing, its ink the original's
+  for (const one of placed) {
+    const { id: i, u, rows, S, E } = one
+    if (!one.entries || !rows.length) continue
+    const on = (M, r) => !!M && M.page === r.page && Math.abs(M.y - r.base) < 0.5 * r.size
+    const tail = k => u.pieces.slice(k + 1).every(p => !classOf(p) || classOf(p) === 'display' || (p.t === 'text' && !/\S/.test(p.s ?? '')))
+    for (let q = one.entries[0]; q < one.entries[1]; q++) {
+      const x = ph[q], k = x.row[1]
+      if (x.row[0] !== i || !(x.row[3] & PH_FLAG.LOST)) continue
+      if ((k < one.head && on(S, rows[0])) || (x.cls === 'display' && one.last >= 0 && k > one.last && tail(k) && on(E, rows.at(-1)))) { x.row[3] |= PH_FLAG.OUTSIDE; x.outside = true }
+    }
   }
 
   // ---------------------------------------------------------------- labels
@@ -1266,6 +1372,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   // the placeholders and labels counted as the file holds them
   for (const p of ph) {
     if (!kept1.has(p.row[0])) continue
+    if (p.outside) stats.ph.outside++
     if (p.state === 'unmarked') { stats.ph.unmarked++; continue }
     if (p.state === 'text') { stats.ph.symbols++; continue }
     if (p.head) { stats.ph.heads[p.state === 'found' ? 0 : 1]++; continue }
@@ -1273,6 +1380,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     stats.ph.marked++
     tally[1]++
     if (p.state === 'found') { stats.ph.found++; tally[0]++; if (p.inferred) stats.ph.inferred++ } else if (p.state === 'empty') stats.ph.empty++
+    else if (p.state === 'joined') stats.ph.joined++
     else { stats.ph.lost++; stats.ph.why[p.why] = (stats.ph.why[p.why] ?? 0) + 1 }
   }
   for (const one of placed) {

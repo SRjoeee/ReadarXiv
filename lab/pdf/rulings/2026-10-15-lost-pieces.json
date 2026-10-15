@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-15",
+  "by": "the maintainer",
+  "on": "the LOST round (pull request 352): every LOST piece TeX can place is found and drawn, fix 4 (UAX 14 line-start marks)",
+  "quote": "accepted in full, the final list (lost-final-list.md): regressions A to G, the thesis trade (37 to 15 units left English, 479 to 501 drawn) and both instrument corrections, E and F, on 2026-10-15",
+  "english": "accepted in full on 2026-10-15, as relayed by the coordinator",
+  "measures": [
+    "placeholders the content measure cannot place",
+    "full size",
+    "pitch spread",
+    "frames past the right edge"
+  ],
+  "targets": [
+    "de",
+    "es",
+    "fr",
+    "ja",
+    "ko",
+    "ru",
+    "zh"
+  ],
+  "scope": "1512.03385 p1 unit 3: its first URL kept where it stands (0.05 per 1,000 cells, every target); 1810.04805 ja p12 unit 210: one size step for the page text of a reference TeX sets past the pages shown; the thesis: 14 newly drawn units that hold a display (pitch spread 0.334 to 0.420, full size 0.9931 to 0.9905: a display operator held as a line of its own); 2608.16117 zh: frames past the right edge 0.3582 to 0.3723 (a line-end CJK mark, half an em)",
+  "why": "units that were left the original's are drawn now, with every placeholder TeX can place put where TeX set it; each regression is a consequence of drawing them (or of an instrument limit they now reach), and the trade leaves 22 fewer units in English. The full list with causes and images is quality-round/lost-final-list.md."
+}

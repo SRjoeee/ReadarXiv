@@ -121,7 +121,8 @@ describe('the old experiment directory', () => {
   })
 
   it('leaves the old spelling only on the lines of the files the layer gate hashes, which it names itself', () => {
-    expect(readFileSync(join(ROOT, 'lab/pdf/spikes/layer-gate.mjs'), 'utf8')).toContain("['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => readFileSync(join(GATE, f)))")
+    // (and the engine's UAX 14 table the measure imports, this repository's: layer-gate.mjs NO_START_FILE)
+    expect(readFileSync(join(ROOT, 'lab/pdf/spikes/layer-gate.mjs'), 'utf8')).toContain("[...['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => join(GATE, f)), NO_START_FILE].map(f => readFileSync(f))")
     for (const file of HASHED) expect([file, FILES.has(file)]).toEqual([file, true])
   })
 })

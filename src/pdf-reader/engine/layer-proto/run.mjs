@@ -49,15 +49,18 @@ import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
 import { fileSwap, protection } from './removal.mjs'
 import { SWAP_PAD, swapRects } from '../layer/swap.mjs'
-import { cropsOf, kOfPieces, locatedWhole, texParts, texRects } from './tex.mjs'
+import { kOfPieces, locatedWhole, proofOf, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
 import { needsOf } from './need.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
 
 /** the prototype's getDocument options beside the host's asset URLs (main.js ASSETS): its canvases on the GPU, the whole
- *  file read at once */
-export const PDF_OPTIONS = { cMapPacked: true, enableHWA: true, disableStream: true }
+ *  file read at once; and each font's own ToUnicode map exported with it (fontExtraProperties: what the text layer reads a
+ *  glyph by, pageChars2's `nu`; on 2307.16209 in Node, 101 fonts, 1.5 MB of heap and no measurable time). A document
+ *  opened without it is refused as the run reads a page's fonts (layer2.mjs fontMappedOf), never read as one whose fonts
+ *  have no map */
+export const PDF_OPTIONS = { cMapPacked: true, enableHWA: true, disableStream: true, fontExtraProperties: true }
 /** the page's body units that the even pass sets alike (a unit on two pages keeps its own fit) */
 const EVEN_KINDS = new Set(['para', 'abstract', 'list', 'item'])
 /** the SVG's own rules (the prototype's index.html): its text set as laid, in the layer's ink, in the faces it was
@@ -362,7 +365,11 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * (`pieces`), and how its geometry is taken (`use`: 'ph', each placeholder's ink alone; 'lines', the unit's lines,
  * label too, its blocks v0's rule's over them; `extents`: 'v0' or 'tex', with 'lines'; `texOnly`: with 'lines', the units the file locates whole
  * that v0's geometry does not hold, but table cells; `symbols`: 'strict' or 'text', locatedWhole's). Each unit the file
- * locates whole takes them; every other unit is v0's own. Null: v0 alone.
+ * locates whole takes them; every other unit is v0's own, every rendering proven by the file (tex.mjs proofOf). Null: v0
+ * alone, and with `proof` (a reader's paper whose layout file the maker refused or the bundle dropped) every unit still
+ * under the proof, no file proving anything: only TeX's own nothing, a space and a text symbol draw, and any other
+ * placeholder leaves its unit the original's (`unproven`), so no crop or source text is drawn unproven. Without `proof`
+ * (the lab's v0 alone), no proof.
  * `copy`: whether each page's copy is kept at v0's own resolution (`right`), the plane the checker and the gate measure;
  * a view draws the page at its own (drawCopy) and needs none. Without it the original (`left`) is read once, for the page's
  * ink, and its canvas let go as the page is drawn (`left` is null): nothing else reads it, and the checker, which does, is
@@ -395,7 +402,7 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * the run read and no longer reads (swap, dispose), told once. `onStep(page)`: a page's step ended (its units laid, or it
  * failed). `onWait(what)`: the run waits, for a `part` or for `rows` (an instrument: the readiness its host tells is held by it).
  */
-export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, copy = true, removal = null, labels = null, rules = BUILTIN_RULES, parts: partsMode = false, onRetired = null, onStep = null, onWait = null }) {
+export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, proof = false, copy = true, removal = null, labels = null, rules = BUILTIN_RULES, parts: partsMode = false, onRetired = null, onStep = null, onWait = null }) {
   if (expect !== null && (!Array.isArray(expect) || !expect.every(id => Number.isSafeInteger(id) && id >= 0))) throw new TypeError(`expect: ids of units or null, not ${kindOf(expect)}`)
   if (tableGroups !== null && !(tableGroups instanceof Map)) throw new TypeError(`groups: a Map of ids to groups or null, not ${kindOf(tableGroups)}`)
   if (faceSources !== null && typeof faceSources !== 'function') throw new TypeError(`faceSources: a function or null, not ${kindOf(faceSources)}`)
@@ -455,16 +462,21 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const sheet = document.head.appendChild(document.createElement('style'))
   for (const rule of SVG_RULES) sheet.sheet.insertRule(rule, sheet.sheet.cssRules.length)
 
-  const fontClass = new Map()
+  const fontClass = new Map(), fontMapped = new Map()
+  const fontObj = (page, name) => { try { return page.commonObjs.get(name) } catch { return null } }
   const fontOfPage = (page, styles) => name => {
     let c = fontClass.get(name)
     if (!c) {
-      let obj = null
-      try { obj = page.commonObjs.get(name) } catch {}
-      c = classifyFont(obj?.name ?? '', styles?.[name]?.fontFamily)
+      c = classifyFont(fontObj(page, name)?.name ?? '', styles?.[name]?.fontFamily)
       fontClass.set(name, c)
     }
     return c
+  }
+  // (the characters each font's own map gives its glyphs, layer2.mjs mappedOf: null where it has none to read; a font
+  // exported with no map, the document not opened with PDF_OPTIONS, throws: fontMappedOf)
+  const mappedOfPage = page => name => {
+    if (!fontMapped.has(name)) fontMapped.set(name, L2.fontMappedOf(fontObj(page, name)))
+    return fontMapped.get(name)
   }
   const chars2 = [], inks = [], views = [], pageBottom = []
   const fontTally = new Map()
@@ -1083,9 +1095,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (gx0 < x0 || gx1 > x1) local[pg - 1] = (chars2[pg - 1] ?? []).filter(c => c.x1 >= gx0 && c.x0 <= gx1 && c.yb >= y0 && c.yb <= y1)
     }
     const inkBefore = fileLines ? undefined : L2.snapFirstRect2(p.rects, local)
-    // the hybrid: a unit the file locates whole read with the file's parts; any other, v0's reading with its crops cut from
-    // their placeholders' own ink by the file (cropsOf), or left the original's where the file proves none of a crop's
-    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0' }) : filed(p.id) ? { crops: cropsOf(tex.index.unit(p.id), kOfPieces(p.unit, tex.pieces.get(p.id))) } : null
+    // the hybrid: a unit the file locates whole read with the file's parts; any other, v0's reading, each rendering proven
+    // by the file (proofOf: a crop cut from its placeholder's own ink, page text in its segments), or the unit left the
+    // original's where the file proves one not; a unit of a part with no layout as with no file (filed), through the same proof
+    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0', shown: N }) : filed(p.id) ? { proof: proofOf(tex.index.unit(p.id), kOfPieces(p.unit, tex.pieces.get(p.id)), N) } : proof ? { proof: proofOf(null, null, N) } : null
     const prep = L2.prepareUnit(p.unit, p.rects, local, phMode === 'source' ? null : citeMap, null, parts)
     if (prep.unproven !== undefined) { p.refused = true; p.why = 'unproven'; unlead(p); return }
     // a float's label in the target's name where the final names it so (labelInTarget): its ink erased and accounted as
@@ -1399,7 +1412,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       }
       await Promise.all([...byFace.values()].map(e => FS.ready(e.face, e.text)))
     }
-    chars2[i - 1] = L2.pageChars2(tc, fontOf)
+    chars2[i - 1] = L2.pageChars2(tc, fontOf, mappedOfPage(page))
     timesOf(i).text += performance.now() - tRendered
     for (const c of chars2[i - 1]) if (c.st.fam !== 'math') { const key = `${c.st.fam}:${c.st.design}`; fontTally.set(key, (fontTally.get(key) ?? 0) + 1) }
     r.right?.getContext('2d').drawImage(r.left, 0, 0)

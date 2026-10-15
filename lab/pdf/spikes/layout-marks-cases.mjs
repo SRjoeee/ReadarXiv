@@ -16,7 +16,12 @@
 // (2310.20360's eqsplit, \bfm_1): v0 and v1 set with no error in three passes, the contents as v0's.
 //   pnpm exec tsx lab/pdf/spikes/layout-marks-cases.mjs            (ONLY=stream: the stream's cases alone; ONLY=names:
 //                                                                  the names' alone; ONLY=unmark: \axt@unmark's alone;
-//                                                                  ONLY=wrappers: the wrappers' alone)
+//                                                                  ONLY=wrappers: the wrappers' alone; ONLY=lost: the LOST
+//                                                                  survey's, an inline formula first after a display, a
+//                                                                  display group and a display at a page's foot)
+// NATIVE_TEX=1 compiles with this machine's TeX Live in place of Docker's (lab/pdf/spikes/native-tex/: its NATIVE_TEX_BIN,
+// NATIVE_TEXMFLOCAL and NATIVE_TEXMFVAR), the jobs one after another as in the container; a compile so is not the image's
+// package versions byte for byte
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -40,6 +45,10 @@ const NAMES_ONLY = process.env.ONLY === 'names'
 const UNMARK_ONLY = process.env.ONLY === 'unmark'
 /** the wrappers' case alone */
 const WRAPPERS_ONLY = process.env.ONLY === 'wrappers'
+/** the LOST survey's cases alone */
+const LOST_ONLY = process.env.ONLY === 'lost'
+/** this machine's TeX Live in place of Docker's */
+const NATIVE = process.env.NATIVE_TEX === '1'
 const dir = mkdtempSync(join(tmpdir(), 'layout-marks-cases-'))
 
 // ---------------------------------------------------------------- the documents
@@ -62,6 +71,12 @@ const STAY = {
   'an inline formula opening a paragraph': doc('', Array.from({ length: 6 }, (_, i) => `$x_${i}$ is ${prose(8, j => (j % 3 ? '' : ` $y_${j}$`))}`).join('\n\n')),
   // two displays in a row: TeX drops the empty paragraph between them, which a mark would keep (2608.20051)
   'two displays in a row': doc('\\usepackage{amsmath}', `${prose(6, () => '')} define\n\\[ a = b \\]\n\\[ c = d \\]\n\\begin{equation} e = f \\end{equation}\n$$ g = h $$\n${prose(6, () => '')}`),
+  // an inline formula first in the paragraph TeX resumes after a display: its opening mark is set on that empty list
+  // (\\axtpmm), which no line is made of and no \\ignorespaces is cut short by: the formula's math-on follows at once
+  // (the LOST survey of 2026-10-15: 2608.16117's $\\hat r^\\alpha$ and $(a_1,a_2,a_3)$); a display after a display and
+  // then a formula, the display without one
+  // (XeLaTeX too: its \special is the same kind of node as pdfTeX's, so the mark on the empty list is as harmless there)
+  'an inline formula first after a display': { engines: ['pdflatex', 'xelatex'], src: doc('\\usepackage{amsmath}', `${prose(6, () => '')} define\n\\[ a = b \\]\n$\\hat r^\\alpha$ is ${prose(6, () => '')}\n\\begin{equation} c = d \\end{equation}\n\\( z_0 \\) holds ${prose(6, () => '')}\n\\begin{align} e &= f \\end{align}\n\\begin{equation*} g = h \\end{equation*}\n\\ensuremath{\\theta} and ${prose(6, () => '')}\n\n${prose(4, () => '')} \\[ p = q \\] $x$, and \\[ u = v \\]\n$$ w = 1 $$\n$y$ ${prose(4, () => '')}`) },
   // amsmath's \\] ends in \\ignorespaces, which skips a macro that sets nothing and the line end after it; a mark set
   // there would end the skip, and the next line begin with a space (2608.29782's \\delete{…} after a display)
   'a macro that sets nothing after a display': doc('\\usepackage{amsmath}\\newcommand\\delete[1]{}', `${prose(6, () => '')} by\n\\[ a = b \\]\n\\delete{A passage $x$ set aside.}\n${prose(6, () => '')} and\n\\begin{align*} c = d \\end{align*}\n\\delete{More.}\n${prose(6, () => '')}`),
@@ -136,8 +151,14 @@ const STAY = {
 function compileAll(jobs) {
   // a traced job writes TeX's page boxes whole (no line cut at 79 characters)
   const pass = j => (j.engine === 'xelatex' && !j.probe ? 'xelatex -no-pdf -interaction=nonstopmode main.tex >> term.txt 2>&1; xdvipdfmx main.xdv >> term.txt 2>&1' : `${j.trace ? 'max_print_line=1000000 ' : ''}${j.engine} -interaction=nonstopmode main.tex >> term.txt 2>&1`)
-  const script = jobs.map(j => `cd /work/${j.name} && for i in ${Array.from({ length: j.passes }, (_, k) => k + 1).join(' ')}; do ${pass(j)}; done`).join('\n')
+  const script = jobs.map(j => `cd ${NATIVE ? dir : '/work'}/${j.name} && for i in ${Array.from({ length: j.passes }, (_, k) => k + 1).join(' ')}; do ${pass(j)}; done`).join('\n')
   writeFileSync(join(dir, 'run.sh'), `${script}\n`)
+  if (NATIVE) {
+    if (!process.env.NATIVE_TEXMFLOCAL) throw new Error('NATIVE_TEX=1: NATIVE_TEXMFLOCAL is not set (lab/pdf/spikes/native-tex/docker)')
+    const env = { ...process.env, PATH: `${process.env.NATIVE_TEX_BIN ?? join(process.env.HOME ?? '', 'Library/TinyTeX/bin/universal-darwin')}:/usr/bin:/bin`, TEXMFLOCAL: process.env.NATIVE_TEXMFLOCAL, texmf_casefold_search: '0', ...(process.env.NATIVE_TEXMFVAR ? { TEXMFVAR: process.env.NATIVE_TEXMFVAR } : {}) }
+    try { execFileSync('sh', [join(dir, 'run.sh')], { cwd: dir, env, stdio: 'ignore', timeout: 1_800_000 }) } catch {}
+    return
+  }
   try { execFileSync('docker', ['run', '--rm', '--network', 'none', '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'sh', 'run.sh'], { stdio: 'ignore', timeout: 1_800_000 }) } catch {}
 }
 const jobs = [], queued = []
@@ -145,7 +166,7 @@ const jobs = [], queued = []
 function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', 'v1'], own = true, trace = false, files = {} } = {}) {
   const all = new Map([['main.tex', new TextEncoder().encode(src)], ...Object.entries(files).map(([f, t]) => [f, new TextEncoder().encode(t)])])
   const paper = openPaper(all)
-  if ((STREAM_ONLY && !name.startsWith('stream-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-'))) return paper
+  if ((STREAM_ONLY && !name.startsWith('stream-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-')) || (LOST_ONLY && !name.startsWith('stay-an-inline-formula-first-after-a-display') && !name.startsWith('stream-E-'))) return paper
   queued.push({ name, paper, engine, passes, variants, own, trace, files: all })
   return paper
 }
@@ -570,6 +591,22 @@ Footnote: Words to fill the line before it so that the formula starts near the e
 \end{document}
 `,
 }
+// E (the LOST survey of 2026-10-15): an inline formula first after a display (its opening mark set on the empty list,
+// \\axtpmm), a display group (an align, an equation and an equation* with nothing between: the later two have no point),
+// and displays each at a page's foot, the text after them on the next page (a run of pages, each a few points fuller)
+STREAM.E = String.raw`\documentclass{article}
+\usepackage{amsmath}
+\begin{document}
+First words of a paragraph define
+\begin{equation} a = b \end{equation}
+$x_1$ is the first, and
+\begin{align} c &= d \end{align}
+\begin{equation} e = f \end{equation}
+\begin{equation*} g = h \end{equation*}
+where the text resumes with $u$ and more words.
+${Array.from({ length: 10 }, (_, i) => `\\newpage\\vspace*{${548 + 4 * i}pt}\\noindent Words before the display at the foot of page ${i + 2}:\n\\begin{equation} p_{${i}} = q_{${i}} \\end{equation}\nand the words after it with $w_{${i}}$ words.`).join('\n')}
+\end{document}
+`
 const streamKey = (name, engine) => `stream-${name}-${engine}`
 const streams = []
 for (const [name, src] of Object.entries(STREAM)) for (const engine of ['pdflatex', 'xelatex']) streams.push({ key: streamKey(name, engine), name, engine, paper: queue(streamKey(name, engine), src, { engine, variants: ['v1', 'v1np'] }) })
@@ -593,7 +630,7 @@ console.log(`compiling ${jobs.length} documents in ${dir}, after ${queued.filter
 compileAll(jobs)
 
 // ---------------------------------------------------------------- the checks
-if (!STREAM_ONLY && !NAMES_ONLY && !UNMARK_ONLY) {
+if (!STREAM_ONLY && !NAMES_ONLY && !UNMARK_ONLY && !LOST_ONLY) {
   const heads = wrappersPaper.units.filter(u => u.kind === 'heading').map(u => u.pieces.filter(p => p.t === 'text').map(p => p.s).join('').trim())
   check('the wrappers\' titles are headings, the paper\'s display one placeholder', ['Opening', 'The End of Training', 'A Chapter Numbered by Hand', 'The Long Title of It', 'Notes on the Method'].every(h => heads.includes(h)) && wrappersPaper.units.some(u => u.pieces.some(p => p.t === 'ph' && /^\\begin\{eqsplit\}[\s\S]*\\end\{eqsplit\}$/.test(p.src))), JSON.stringify(heads))
   for (const v of ['v0', 'v1']) {
@@ -605,6 +642,7 @@ if (!STREAM_ONLY && !NAMES_ONLY && !UNMARK_ONLY) {
 }
 if (!STREAM_ONLY && !NAMES_ONLY && !UNMARK_ONLY && !WRAPPERS_ONLY) {
 for (const [name, , engine] of stays) {
+  if (LOST_ONLY && !queued.some(q => q.name === stayKey(name, engine))) continue
   for (const hyper of [false, true]) {
     const key = `${stayKey(name, engine)}${hyper ? '-hyperref' : ''}`
     const [a, b] = [await pdfOf(`${key}-v0`), await pdfOf(`${key}-v1`)]
@@ -618,6 +656,7 @@ for (const [name, , engine] of stays) {
   }
 }
 
+if (!LOST_ONLY) {
 {
   // REVTeX's swap takes the closing mark into a \csname: the probe's box with both marks errors, so before `!`, `?` and
   // a word the answer is the opening mark alone, not every mark (a box that errors measured the previous box once)
@@ -722,11 +761,12 @@ for (const [job, label] of [['natmove-stop', "natbib [super] with natmove, a cit
   const m = a && b ? moved(a, b) : ['no PDF']
   console.log(`note ${label}, without the paper's switch: ${m.length ? `${m.length} items moved, e.g. ${m.slice(0, 2).join('; ')}` : 'ok'}`)
 }
+}
 
 }
 
 // ---------------------------------------------------------------- \axt@unmark's check
-if (!STREAM_ONLY && !NAMES_ONLY && !WRAPPERS_ONLY) {
+if (!STREAM_ONLY && !NAMES_ONLY && !WRAPPERS_ONLY && !LOST_ONLY) {
   const unit = /^UNIT SUMMARY n=(\d+), bad=(\d+)/m.exec(read('unmark-unit-v1', 'log', 'latin1') ?? '')
   check('\\axt@unmark on hand-written lists: the bare regex\'s result by tokens, in every case', !!unit && Number(unit[1]) >= 25 && unit[2] === '0', `${unit?.[0]} ${(read('unmark-unit-v1', 'log', 'latin1') ?? '').match(/^UNIT DIFF.*/gm)?.slice(0, 3)}`)
   for (const [job, label] of [['unmark-files', 'with hyperref'], ['unmark-files-titlesec', 'and with titlesec']]) {
@@ -745,7 +785,7 @@ if (!STREAM_ONLY && !NAMES_ONLY && !WRAPPERS_ONLY) {
 
 
 // ---------------------------------------------------------------- the names' checks
-if (!STREAM_ONLY && !UNMARK_ONLY && !WRAPPERS_ONLY) {
+if (!STREAM_ONLY && !UNMARK_ONLY && !WRAPPERS_ONLY && !LOST_ONLY) {
   for (const j of nameJobs) {
     const label = `a babel name: ${j.name} (${j.engine}${j.hyper ? ', with hyperref' : ''})`
     const [a, b] = [await pdfOf(`${j.key}-v0`), await pdfOf(`${j.key}-v1`)]
@@ -821,7 +861,8 @@ const rowsOf = (src, first) => {
 }
 /** what each document's pieces own, by source (a footnote's call by its note's first words), in order: a string of
  *  characters and rules, or a function of the source and its occurrence, or `LOST:` and why it owns nothing; a source
- *  not listed is not checked. An open display across a page owns nothing (the ruling: its end not inferred) */
+ *  not listed is not checked. An open display across a page or a column owns its rows through the break, to the text
+ *  after it (stream.mjs pastColumn: its end is where that text begins, never inferred) */
 const OWN = {
   A: [
     ['$\\sum_{i=1}^{n} x_i$', '\u2211ni=1xi'], ['$\\displaystyle\\sum_{i=0}^{n} A_i=-A_\\infty$', 'n\u2211i=0Ai=\u2212A\u221e'], ['$q\\cdot k=\\sum_{i=1}^{d_k}q_ik_i$', 'q\u00b7k=\u2211dki=1qiki'],
@@ -830,14 +871,17 @@ const OWN = {
     ['\\texttt{f(x)}', 'f(x)'], ['\\url{https://arxiv.org}', 'https://arxiv.org'], ['call:The footnote has', '1'], ['$f^2(x)$', 'f2(x)'], ['$y^2$', 'y2'], ['$z$', 'z'],
     ['$\\alpha_1$', '\u03b11'], ['$\\beta^{2}_{k}$', '\u03b22k'], ['$10^{-3}$', '10\u22123'], ['$\\gamma_t$', '\u03b3t'], ['\\cite{he}', '[2]'],
     ['$a_1+', glyphsOf], ['$b_1+', glyphsOf], ['$c_1+', glyphsOf], ['call:A second footnote', '2'],
-    ['\\begin{equation}', 'n\u2211i=1aibi=\u222b10f(x)dx(1)', 1], ['\\begin{align}\na &= b', src => rowsOf(src.trim(), 2)], ['\\begin{align}\nx_{1}', 'LOST:open, the next mark on another page'],
+    ['\\begin{equation}', 'n\u2211i=1aibi=\u222b10f(x)dx(1)', 1], ['\\begin{align}\na &= b', src => rowsOf(src.trim(), 2)], ['\\begin{align}\nx_{1}', src => rowsOf(src.trim(), 5)],
   ],
-  B: [['$p_1+', glyphsOf], ['$q_1+', glyphsOf], ['$r_1+', glyphsOf], ['$s_1+', glyphsOf], ['$t_1+', glyphsOf], ['call:Footnote text', '1'], ['$u^2$', 'u2'], ['\\cite{one}', '1'], ['\\cite{two}', '2'], ['\\begin{align}', 'LOST:open, the next mark on another page']],
+  B: [['$p_1+', glyphsOf], ['$q_1+', glyphsOf], ['$r_1+', glyphsOf], ['$s_1+', glyphsOf], ['$t_1+', glyphsOf], ['call:Footnote text', '1'], ['$u^2$', 'u2'], ['\\cite{one}', '1'], ['\\cite{two}', '2'], ['\\begin{align}', src => rowsOf(src.trim(), 1)]],
   // its aligns numbered on from 1, 9, 21 and 37
   C: [['$\\phi$', '\u03d5'], ['$', glyphsOf], ['\\cite{one}', '[1]'], ['call:Note ', null], ['\\begin{align}', (src, nth) => rowsOf(src.trim(), [1, 9, 21, 37][nth])]],
   D: [['$b_', glyphsOf], ['$', null]],
+  // the group's first display owns the group (an align's row, an equation's, an equation*'s); each foot display its own
+  E: [['\\begin{equation} a = b', 'a=b(1)'], ['$x_1$', 'x1'], ['\\begin{align} c', 'c=d(2)e=f(3)g=h'], ['\\begin{equation} e = f', 'LOST:in the display before it'], ['\\begin{equation*} g', 'LOST:in the display before it'], ['$u$', 'u'],
+    ['\\begin{equation} p_', (src, n) => ({ s: `${glyphsOf(src.replace(/\\(?:begin|end)\{equation\}/g, '')).s}(${4 + n})`, rules: 0 })], ['$w_', glyphsOf]],
 }
-for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : [...streams, luaStream]) {
+for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : LOST_ONLY ? streams.filter(x => x.name === 'E') : [...streams, luaStream]) {
   const label = `the stream, ${s.name} (${s.engine})`
   const [a, b] = [await inkOf(`${s.key}-v1`), await inkOf(`${s.key}-v1np`)]
   if (!a || !b) { check(`${label}: compiled`, false, `no PDF (${a ? 'v1np' : 'v1'})`); continue }
@@ -868,7 +912,7 @@ for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : [...streams, l
   const byName = new Map(m.owned.map(e => [e[0], e]))
   // the pieces the marking marked (the probe's switch as v1 was compiled with): the others have no point by design
   const design = new Set()
-  for (const c of layoutMarking(units, MARK_CLASSES, { lines: false, switches: queued.find(q => q.name === s.key)?.switches ?? {} }).units) for (const p of c.pieces) { const x = p.t === 'ph' && /^\\axtpma\{([pn]\d+\.\d+a)\}$/.exec(p.src ?? ''); if (x) design.add(x[1]) }
+  for (const c of layoutMarking(units, MARK_CLASSES, { lines: false, switches: queued.find(q => q.name === s.key)?.switches ?? {} }).units) for (const p of c.pieces) { const x = p.t === 'ph' && /^\\axtpm[am]\{([pn]\d+\.\d+a)\}$/.exec(p.src ?? ''); if (x) design.add(x[1]) }
   const tally = {}, bad = [], seen = new Map()
   units.forEach((u, i) => u.pieces.forEach((p, k) => {
     const cls = classOf(p)
@@ -890,6 +934,8 @@ for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : [...streams, l
   }))
   const named = [...seen.values()].reduce((x, y) => x + y, 0)
   check(`${label}: each named piece owns its own glyphs and rules, nothing else`, !bad.length && named > 0, JSON.stringify(bad.slice(0, 6)))
+  // E: not vacuous — a display at a page's foot owned past its column's end, a group, a formula after a display marked
+  if (s.name === 'E') check(`${label}: a display past its column's end, a display group and a formula first after a display among them`, (tally["open, past its column's end"] ?? 0) >= 1 && (tally['open, with the displays after it'] ?? 0) === 1 && (tally['in the display before it'] ?? 0) === 2 && !tally['no point'], JSON.stringify(tally))
   console.log(`note ${label}: ${points} points (${brackets} of brackets), ${named} pieces named; ${JSON.stringify(tally)}; with no point, ${none.owned.length} pieces own anything`)
   // A's display across a page: the stream holds its rows in order, the running foot and head and the footnote between
   // them outside the column bodies
@@ -910,7 +956,7 @@ for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : [...streams, l
 }
 
 // TeX's own boxes: the points' nodes out (the corpus check's comparison), nothing else different
-for (const name of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : Object.keys(TRACED)) {
+for (const name of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY || LOST_ONLY ? [] : Object.keys(TRACED)) {
   const boxesOf = v => { const log = read(`${traceKey(name)}-${v}`, 'log', 'latin1') ?? ''; const out = [], lines = log.split('\n'); for (let i = 0; i < lines.length; i++) if (/^Completed box being shipped out \[/.test(lines[i])) { const at = i; while (i < lines.length && lines[i] !== '') i++; out.push(...lines.slice(at, i), '') } return pageBoxes(out.join('\n')) }
   const [a, b] = [boxesOf('v1np'), boxesOf('v1')], d = boxDiff(a, b)
   check(`the stream, TeX's boxes with the points and without them the same: ${name}`, a.length > 0 && a.length === b.length && !d.length, JSON.stringify({ pages: [a.length, b.length], differences: d.length, first: d.slice(0, 3).map(x => [x.page, x.v0, x.v1]) }))
