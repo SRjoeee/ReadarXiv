@@ -8,7 +8,7 @@
 // with the composed document through it, opened beforehand). Door S (C') is BUNDLE 3's open of the bundle with its single tail,
 // its copies drawn over door A's PNGs as door B's are (never over its own drawing of arXiv's page: a first drawing varies).
 // The rows are the record's, all taken, then end().
-// Each page's answer: its SVG's markup, copyOf's pixels over the page as door A's load had PDF.js draw it (its PNG, so that both
+// Each page's answer: its SVG's markup, its word table's digest (words.mjs, 1b-E), copyOf's pixels over the page as door A's load had PDF.js draw it (its PNG, so that both
 // copies start from the same pixels), and the digest of the run's records of the units on the page (the run is reached through
 // the driver's stand-in of run.mjs, which keeps each run it opens and tells this page what the run waits for); and once the
 // pages are asked, every page's state and the units left and why. Door B then tells the parts its pages did not need and ends
@@ -27,6 +27,17 @@ const json = async url => { const r = await fetch(url); if (!r.ok) throw new Err
 const hex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('')
 const digest = async data => hex(await crypto.subtle.digest('SHA-256', data))
 const textDigest = s => digest(new TextEncoder().encode(s))
+/** a page's word table (src/pdf-reader/engine/layer-proto/words.mjs) as one digest: its columns' bytes, its spans and the units left
+ *  the original's; the same table gives the same digest */
+async function wordsDigest(w) {
+  const t = w.tokens
+  const parts = [new TextEncoder().encode(JSON.stringify([t.n, w.spans, w.original]))]
+  for (const a of [t.l, t.r, t.y, t.h, t.top, t.bottom, w.word]) parts.push(new Uint8Array(a.buffer, a.byteOffset, a.byteLength))
+  const all = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
+  let at = 0
+  for (const p of parts) { all.set(p, at); at += p.length }
+  return digest(all)
+}
 /** a canvas as PNG (lossless), its bytes */
 const pngOf = async c => new Uint8Array(await (await new Promise(ok => c.toBlob(ok, 'image/png'))).arrayBuffer())
 const base64 = b => { let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s) }
@@ -75,13 +86,13 @@ async function askEvery(R, layer, { target, pages, N, sourceOf }) {
   const run = () => window.__gateRuns.at(-1)
   const out = []
   for (let p = 1; p <= Math.min(pages, N); p++) {
-    const { svg, w, h } = await layer.pageOf(p, { lang: target })
+    const { svg, w, h, words } = await layer.pageOf(p, { lang: target })
     const markup = svg.cloneNode(true)
     const lang = markup.getAttribute('lang')
     markup.removeAttribute('lang')
     const { png, source } = await sourceOf(p)
     const copy = await layer.copyOf(p, source, K)
-    out.push({ p, svg: markup.outerHTML, lang, w, h, copy: await pixelsOf(copy), ...(png ? { png: base64(png) } : {}) })
+    out.push({ p, svg: markup.outerHTML, lang, w, h, words: await wordsDigest(words), copy: await pixelsOf(copy), ...(png ? { png: base64(png) } : {}) })
     for (const c of [source, copy]) { c.width = 0; c.height = 0 }
   }
   for (const e of out) e.recs = await recsOf(run(), e.p)

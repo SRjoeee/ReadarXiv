@@ -55,6 +55,7 @@ import { fileSwap, protection } from './removal.mjs'
 import { SWAP_PAD, swapRects } from '../layer/swap.mjs'
 import { kOfPieces, locatedWhole, proofOf, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
+import { addUnitWords, copyWords, freezeWords, newWords, plainOfPieces, wordIndexer } from './words.mjs'
 import { needsOf } from './need.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
@@ -474,13 +475,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** page i's row, at its view's size: its canvases and its record (the 1b design §1): the markup of its SVG, the strings its
    *  names and units are set in as each is painted (svgOf makes the element of them anew at each ask: the run holds no element
    *  of a page), its drawing as data, every painted unit's operations in turn, kept when the page's canvases are let go; its
-   *  words and links (the engine's 2b and 3a), its fill numbers (adaptiveFill's pass) */
+   *  words (the page's word table, built as each unit is painted in `wordsOpen` and frozen into `words` once the page is final:
+   *  words.mjs) and links (the engine's 3a), its fill numbers (adaptiveFill's pass) */
   const makeRow = i => {
     const view = geometry.left.pages[i - 1] ?? [0, 0, 612, 792]
     const w = (view[2] - view[0]) * scale, h = (view[3] - view[1]) * scale
     const left = document.createElement('canvas'), right = copy ? document.createElement('canvas') : null
     for (const c of [left, right]) if (c) { c.style.width = `${w}px`; c.style.height = `${h}px` }
-    rows[i - 1] = { page: i, left, right, w, h, base: false, ops: [], markup: [], words: null, links: null, fill: null }
+    rows[i - 1] = { page: i, left, right, w, h, base: false, ops: [], markup: [], words: null, wordsOpen: null, links: null, fill: null }
   }
   if (!partsMode) for (let i = 1; i <= N; i++) makeRow(i)
   const sheet = document.head.appendChild(document.createElement('style'))
@@ -609,8 +611,22 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const holdReads = c => { if (!free) return; c.reads = readsOf(c); for (const q of c.reads) reads[q]++ }
   /** a unit's lay is over (laid, or decided not placed): the pages it reads held for it no longer */
   const dropReads = c => { if (!c?.reads) return; for (const q of c.reads) reads[q]--; c.reads = null }
+  /** a page's word table frozen into its record once the page is final (every unit on it painted there): the columns cut to
+   *  the tokens, the open table dropped. The units left the original's are every unit with lines on the page (any of its
+   *  sources' pages) that has no span on it: skipped, unfit, withheld with its table group, refused, or untranslated (a row lost,
+   *  none, kept or never come), all shown as the original's. A page that has none painted keeps an empty table */
+  const freezeWordsOf = q => {
+    const r = rows[q - 1]
+    if (!r || r.words) return
+    const painted = new Set((r.wordsOpen?.spans ?? []).map(s => s[0]))
+    const original = []
+    for (const c of K) if (!painted.has(c.id) && c.lists.some(l => l.includes(q))) original.push(c.id)
+    r.words = freezeWords(r.wordsOpen, original)
+    r.wordsOpen = null
+  }
   /** a page's analysis state let go (its canvases, a copy's, are the gate's: release) */
   const letGoPage = q => {
+    freezeWordsOf(q)
     unswept.delete(q)
     chars2[q - 1] = undefined
     inks[q] = pageItems[q] = accounted[q] = keptOf[q] = laid[q] = undefined
@@ -628,7 +644,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     for (const q of unswept) if (!reads[q] && doneAtOf(q) <= drawnTo && !awaitsPaint(q)) letGoPage(q)
   }
   /** what a unit holds for its lay, its passes and its paint alone (and the file's lines it is laid by: `tex.lines`) */
-  const HEAVY = ['prep', 'tokens', 'layout', 'blocks', 'local', 'lead', 'P', 'clear']
+  const HEAVY = ['prep', 'tokens', 'layout', 'blocks', 'local', 'lead', 'P', 'clear', 'wordOf']
   /** a unit nothing reads again: painted on every page it is on, or left the original's (refused, or withheld with its
    *  group), its table group settled, and each of its pages passed (with a page pass: a pass reads the units running on to
    *  its page) */
@@ -863,10 +879,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (r.right) L2.drawOps(r.right.getContext('2d'), ops, 1, sourceOn)
     const tSvg = performance.now()
     r.markup.push(L2.svgOfUnit(p.layout, pg, cssOf(pg), scale, p.id))
+    const tWords = performance.now()
+    // (the page's word table, beside the markup: the unit's words in the order they are drawn; a page whose table is frozen is final)
+    if (!r.words) addUnitWords(r.wordsOpen ??= newWords(), p.layout, pg, p.id, (at, end) => (p.wordOf ??= wordIndexer(plainOfPieces(p.unit.pieces)))(at, end), L2.keptLines(p.rects, p.prep, pg), crop => hasSource(crop.page))
     const T = timesOf(pg)
     T.ops += tCompose - tOps
     T.compose += tSvg - tCompose
-    T.svg += performance.now() - tSvg
+    T.svg += tWords - tSvg
+    T.words += performance.now() - tWords
     // (painted on one more of its pages: on its last, and with its pages passed, it lets go of what it was laid with)
     p.painted = (p.painted ?? 0) + 1
     if (settledUnit(p)) letGoUnit(p)
@@ -1364,7 +1384,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (disposed) return
       if (no) { p.refused = true; p.why = no.why; p.missing = no.missing; unlead(p); return }
     }
-    const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead)
+    const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead, undefined, true)
     const t3 = lap()
     // (the unit's leading relative to the original's own pitch, step 3: leadOf)
     p.tokens = tokens
@@ -1630,7 +1650,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // page, less the faces it waited for, fonts) and painted, their operations made (ops: the erase and its put-back, or
   // the swap's rectangles), drawn on the copy (compose) and set as SVG (svg)
   const pageTimes = []
-  const timesOf = pg => (pageTimes[pg] ??= { render: 0, text: 0, ink: 0, rp: 0, lay: 0, fonts: 0, ops: 0, compose: 0, svg: 0 })
+  const timesOf = pg => (pageTimes[pg] ??= { render: 0, text: 0, ink: 0, rp: 0, lay: 0, fonts: 0, ops: 0, compose: 0, svg: 0, words: 0 })
   // the documents read: the original (`doc`) and the text-removed one (`removal.doc`, often the same). Under parts the newest
   // composed document, swapped at a part with a tail (swap); each read of a page holds its document (using), and one no longer
   // the newest is told to the host (onRetired) once no read holds it, the newest at dispose: each once, none destroyed here
@@ -1985,6 +2005,19 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       svg.setAttribute('xml:space', 'preserve')
       svg.innerHTML = r.markup.join('')
       return svg
+    },
+    /**
+     * Page `pg`'s word table (words.mjs; the 1b design §4): the drawn tokens in drawing order with each unit's span and each token's
+     * word in its translation, and the units left the original's. A new record on every ask, none of its arrays the run's (the
+     * caller may transfer or free them). Only a page that is final (`doneAt(pg) <= drawnTo`, what a ready page is) has one: it is
+     * frozen at the first ask if it is not already; a RangeError for another, never a table that would change
+     */
+    wordsOf(pg) {
+      const r = rows[pg - 1]
+      if (!r) throw new RangeError(`wordsOf: page ${pg} has no row`)
+      if (!(doneAtOf(pg) <= drawnTo)) throw new RangeError(`wordsOf: page ${pg} is not final`)
+      freezeWordsOf(pg)
+      return copyWords(r.words)
     },
     /**
      * What the run holds (the 1b design §3). With no page: whether it lets go (`free`), keeps the units' records and the

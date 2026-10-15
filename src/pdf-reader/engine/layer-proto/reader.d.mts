@@ -8,6 +8,7 @@ import type { ReadBundle } from './bundle.mjs'
 import type { FaceSources } from './fonts.mjs'
 import type { LayerIndex, ReadLeftPart, ReadPart, Ref } from './format.mjs'
 import type { Row } from './rows.mjs'
+import type { PageWords } from './words.mjs'
 import type { FrozenRuleSet, RULES_SCHEMA } from '../rules/layout.mjs'
 
 export { PDF_OPTIONS } from './run.mjs'
@@ -54,8 +55,7 @@ export interface LayerStats {
 export type PageState = 'ready' | 'laying' | 'waiting' | 'failed'
 /** a state `onPage` tells: `waiting` is the state before any is told */
 export type PageEvent = Exclude<PageState, 'waiting'>
-/** the page's drawn tokens in drawing order, plain data (the engine's 2b; D-9: empty until then, the view mirrors the left) */
-export interface PageWords { readonly tokens: readonly unknown[]; readonly spans: readonly unknown[]; readonly original: readonly unknown[] }
+export type { PageWords } from './words.mjs'
 /** a link of a laid page, plain data (the engine's 3a; D-9: empty until then) */
 export interface LinkRecord {
   /** [x0, y0, x1, y1] × n, PDF units of the page, one for each drawn line */
@@ -68,7 +68,8 @@ export interface LinkRecord {
   border?: { width: number; rgb: [number, number, number] }
 }
 /** a laid page, new on every call (DR1): `svg` a new element of equal `outerHTML`, `words` and `links` equal data that are not
- *  the same objects; lang set, scale 2.5; the host's to keep or drop */
+ *  the same objects (`words` always present: a page with no painted unit has an empty table, `tokens.n` 0); lang set, scale 2.5;
+ *  the host's to keep or drop */
 export interface LaidPage { svg: SVGSVGElement; w: number; h: number; words: PageWords; links: LinkRecord[] }
 /** a page of the left, parsed: the part's tokens, spans and pairs (an empty part, `table.n` 0, has no shapes) */
 export type LeftPage = ReadLeftPart
