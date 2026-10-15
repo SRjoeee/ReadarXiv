@@ -724,13 +724,21 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
     if (o >= 6 && inErase / o > 0.5 && gone / o > 0.5 && !asText) vanished++
   }
 
-  // the coverage of the original's text area: each reference unit's frames as a grid of one pitch by one em. A cell
-  // where the original has ink is translated where the drawn text covers half of it or more; still the original's text
-  // (English) where 0.3 of that ink still shows in the copy outside what is drawn; else blank. A cell over a kept display,
-  // a label or a formula line is neutral. What is drawn is read from the drawing's own geometry, never from its ink: each
-  // drawn line's box (from its first item to its last, 0.25 em below its baseline to 0.75 em above) and each crop's
-  // place. A face's stroke weight then moves no cell (a lighter face set on the same lines covers the same cells), nor
-  // does a fraction of a pixel in where the text is put; a line set shorter or lower does. Text and table cells apart
+  // the coverage of the original's text area: each reference unit's frames as a grid of one pitch by one em. The original's
+  // text area is the union of its lines' boxes (each from its first item to its last, 0.25 em below its baseline to 0.75 em
+  // above: the box a drawn line has, so a text set on the original's own lines covers all of it). A cell where the original
+  // has ink is translated by the share of the original's text area in it that the drawn text covers: area against area, so
+  // that whether a line counts does not depend on where it falls against the cell grid (a leading other than the original's
+  // moves it by half a row), a line in the gap between two original lines earns nothing, and a line over two adjacent rows
+  // is shared between them by the area it covers in each (the credit never exceeds the area drawn nor the area of the
+  // original). The rest of the cell is still the original's text (English) where 0.3 of its ink still shows in the copy
+  // outside what is drawn; else blank; the three shares add up to the cells. A cell over a kept display, a label or a
+  // formula line is neutral. What is drawn is read from the drawing's own geometry, never from its ink: each drawn line's box
+  // and each crop's place. A face's stroke weight then moves no cell (a lighter face set on the same lines covers the same
+  // cells), nor does a fraction of a pixel in where the text is put; a line set shorter or lower does, by the area it
+  // leaves. Text and table cells apart
+  const origM = mask()
+  for (const r of ref) if (r.kind !== 'author' && r.kind !== 'figure') for (const l of r.orig) paint(origM, [l.x0, l.baseline - 0.25 * l.size, l.x1, l.baseline + 0.75 * l.size])
   const drawnM = mask()
   for (const u of drawn) {
     for (const l of u.lines) paint(drawnM, [l.x0, l.baseline - 0.25 * l.size, l.x1, l.baseline + 0.75 * l.size])
@@ -743,11 +751,10 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
     const tally = r.kind === 'cell' ? coverage.cells : coverage.text
     for (const cell of cellsOf(r.orig)) {
       const [a, b, c, d] = boxPx(cell)
-      let n = 0, covered = 0, o = 0, e = 0, keptInk = 0
+      let text = 0, covered = 0, o = 0, e = 0, keptInk = 0
       for (let y = b; y < d; y++) for (let x = a; x < c; x++) {
         const i = y * W + x
-        n++
-        if (drawnM[i]) covered++
+        if (origM[i]) { text++; if (drawnM[i]) covered++ }
         if (!inkO(i)) continue
         o++
         if (keptM[i] || formulaM[i]) keptInk++
@@ -756,9 +763,10 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
       if (o < 3) continue
       if (keptInk > 0.5 * o) { neutral++; continue }
       tally.cells++
-      if (covered >= 0.5 * n) tally.translated++
-      else if (e >= 0.3 * o) tally.english++
-      else tally.blank++
+      const share = text ? covered / text : 0
+      tally.translated += share
+      if (e >= 0.3 * o) tally.english += 1 - share
+      else tally.blank += 1 - share
     }
   }
 
