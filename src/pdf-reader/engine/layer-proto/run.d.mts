@@ -39,9 +39,10 @@ export interface HybridOptions {
 }
 /** which source each placed unit's geometry is (ids), and why the others are v0's (by locatedWhole's why) */
 export interface Sources { tex: number[]; v0: number[]; why: Record<string, number>; texOnly?: number }
-/** a page's fill numbers (adaptiveFill's pass, fillPage's answer): its own target, the anchor its body units tell, the
- *  original's body lines on it, whether its body units told its target */
-export interface PageFill { own: number | null; anchor: number | null; lines: number; body: boolean }
+/** a page's fill numbers (adaptiveFill's pass, fillPage's answer): the median fill leading of the units begun on it (`own`),
+ *  that of every body unit drawn on it (`anchor`), the target (`own` held within the band of `anchor`; null where only a
+ *  continuation tells), whether its body units told its own */
+export interface PageFill { own: number | null; anchor: number | null; target: number | null; body: boolean }
 /** a page's record (the 1b design §1), kept for the run's life: its SVG at `w` × `h` CSS px as markup (the strings its names
  *  and units are set in, in turn: svgOf makes the element of them anew at each ask), its drawing as data (every painted
  *  unit's operations in turn: drawCopy draws them at any resolution), its view, its words (the page's word table, words.mjs:
@@ -73,14 +74,12 @@ export declare function layGroups(placed: readonly { id: number; pages: readonly
 export declare const layOrder: (placed: readonly { id: number; pages: readonly number[] }[], batch?: number) => number[]
 /** a unit's layout made final: a CJK cell's lines moved into their bands between the rules at the size it is drawn at */
 export declare function settleLayout(p: { clear?: { bands: Map<number, import('./layer2.mjs').CellBand[]> } | null; layout: { lines?: { block: number; baseline: number }[]; scale?: number }; s: number }): void
-/** the targets a page's fill is held to: the last page's, and the fullest page's own (`anchor`, of `lines` body lines) */
-export interface Held { last: number; anchor: number; lines: number }
-/** a page's fill pass's answer: its target and its own (null where the units begun on it tell none), whether its body told one, and for the anchor every body unit's lines on the page and their fill leadings' median */
-export interface Filled { target: number | null; own: number | null; body: boolean; lines: number; anchor: number | null }
-/** the page fill (adaptiveFill) over the units that begin on a page (`page`; `continuing`: the page's units begun before it, read for the anchor alone): each spread over its frame at its fitted state, the page's target held within the band of the last page's and of the fullest page's (`held`, null for none), the page's body grown at one size where it grows, each filled unit laid anew in place and settled, then onFilled; null where nothing tells */
-export declare function fillPage(units: unknown[], P: Params & { adaptiveFill: { band: number; track: number; size: number } }, held?: Held | null, onFilled?: (p: Placed, target: number) => void, o?: { page?: number | null; continuing?: unknown[] }): Filled | null
-/** the targets the next page is held to after a page's pass: its target the last where it told one, the fullest page's the anchor (the earliest of equals) */
-export declare function nextHeld(held: Held | null, r: Filled | null): Held | null
+/** a page's fill target (pageTarget's answer, fillPage's too): see PageFill */
+export type Filled = PageFill
+/** a page's fill target as a pure function of its page: the units that begin on it and those running on to it (each with its fit's `fillLead` and `fitLines`), and the band. Null where nothing tells a fill leading */
+export declare function pageTarget(units: readonly unknown[], continuing: readonly unknown[], band: number): Filled | null
+/** the page fill (adaptiveFill) over the units that begin on a page (`continuing`: the page's units begun before it, read for the anchor alone): each spread over its frame at its fitted state, the page's target held within the band of its own page's anchor (pageTarget), the page's body grown at one size where it grows, each filled unit laid anew in place and settled, then onFilled; null where nothing tells */
+export declare function fillPage(units: unknown[], P: Params & { adaptiveFill: { band: number; track: number; size: number } }, onFilled?: (p: Placed, target: number) => void, o?: { continuing?: unknown[] }): Filled | null
 /** the leftover packed (P.leftover 'pack'): a page's body units of one block moved up to keep the original's gap to the one above, the moves by id (PDF units up). `rects`: every unit's rectangles on the page, [id, [page, x0, y0, x1, y1]]; `chars`: the page's characters */
 export declare function packPage(page: number, units: unknown[], rects: readonly [number, readonly number[]][], chars: readonly { ch: string; x0: number; x1: number; yb: number; size: number }[], stays?: ((x0: number, x1: number, y0: number, y1: number) => number | null) | null, gap?: number): Map<number, number>
 /** the ink of a page that stays visible: its ink map less the glyphs the drawing takes away, and the add-on's dirty boxes; foot(x0, x1, y0, y1) gives the PDF y of the lowest such ink's foot in a box, or null */

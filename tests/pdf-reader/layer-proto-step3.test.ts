@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
+import { BUILTIN_RULES, resolveRules, TARGETS } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // Step 3 of the layer's new direction (2026-10-07): v0's (and the hybrid's) weak spots, each fixed at its root and
 // measured by the layer gate (--engine-kind=proto --proto-tex=lines); these are the fixes' pure rules.
@@ -291,17 +291,17 @@ describe("adaptiveFill (D, the default) keeps a CJK cell clear of its rule (Code
     expect(clearOf()).toBeLessThanOrEqual(107.13 + 1e-9)
     // the page's fill pass lays it anew: still clear
     let filled = false
-    fillPage([p] as never, P as never, null, () => { filled = true })
+    fillPage([p] as never, P as never, () => { filled = true })
     expect(filled).toBe(true)
     expect(clearOf()).toBeLessThanOrEqual(107.13 + 1e-9)
   })
 })
 
-describe("the page fill (adaptiveFill, D6's F6b): every original's units spread over their frames, to one rhythm a page", () => {
+describe("the page fill (adaptiveFill, D6's F6b, page-local since 1b-C): every original's units spread over their frames, to one rhythm a page", () => {
   // blocks of six lines 12 pt apart from 500, 100 pt wide, at size 10; CJK characters 10 pt wide at size 10, ten a line
   const block = (n = 6) => { const B = Array.from({ length: n }, (_, k) => 500 - 12 * k); return { page: 1, rects: B.map(b => [1, 0, b - 2, 100, b + 8]), x0: 0, x1: 100, B, exact: B.map(() => true), sizes: B.map(() => 10), pitch0: 12, free: 0, indent: 0, after: 0, centred: false } }
   const chars = (n: number) => Array.from({ length: n }, () => ({ s: '\u6c49', cls: 'cjk', w100: 100, st: {} }))
-  type Unit = { id: number; unit: { kind: string }; pages: number[]; tokens: unknown[]; blocks: unknown[]; s: number; P: Record<string, unknown>; layout: { lines: { baseline: number }[]; scale: number; state: { lead: number; scale: number; track: number } }; fillLead?: number | null }
+  type Unit = { id: number; unit: { kind: string }; pages: number[]; tokens: unknown[]; blocks: unknown[]; s: number; P: Record<string, unknown>; layout: { lines: { baseline: number }[]; scale: number; state: { lead: number; scale: number; track: number } }; fillLead?: number | null; fillTop?: number; fitLines?: number; refused?: boolean }
   // (the fill's top at 1.8 em, the mechanism's numbers: the built-in Chinese one is 2, as the next test holds)
   const P = (o: Record<string, unknown> = {}) => ({ ...params('zh'), borrow: 0, fillLead: 1.8, adaptiveFill: { band: 0.05, track: 0, size: 1.1 }, ...o })
   /** a unit laid as openProto lays it before its page's pass: at the script's leading on a solid-set original */
@@ -310,23 +310,11 @@ describe("the page fill (adaptiveFill, D6's F6b): every original's units spread 
     p.layout = L2.layoutUnit2(p.tokens as never, p.blocks as never, 10, p.P as never) as never
     return p
   }
-  type Held = { last: number; anchor: number; lines: number }
-  type Told = { target: number | null; own: number | null; body: boolean; lines: number; anchor: number | null }
-  const fill = async (units: Unit[], PP: Record<string, unknown> = P(), held: Held | null = null) => (await import('@/pdf-reader/engine/layer-proto/run.mjs')).fillPage(units as never, PP as never, held)
-  /** pages passed in order, each { units, own } (the own target its units are made to tell): the targets they are held to */
-  const paper = async (pages: { units: Unit[]; own: number }[], PP: Record<string, unknown>) => {
-    const { nextHeld } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
-    let held: Held | null = null
-    const targets: number[] = []
-    for (const pg of pages) {
-      for (const u of pg.units) { u.fillLead = pg.own; (u as unknown as { fillTop: number }).fillTop = 3 }
-      const r: Told = (await fill(pg.units, PP, held))!
-      targets.push(r.target!)
-      held = nextHeld(held, r)
-    }
-    return targets
-  }
-  const steps = (ts: number[]) => ts.slice(1).every((t, k) => Math.abs(t - ts[k]!) <= 0.05 + 1e-9)
+  /** a unit as its fit leaves it for a page's target: its fill leading and its lines, the fill top out of the way */
+  const told = (lead: number, o: { kind?: string; lines?: number; refused?: boolean } = {}): Unit => ({ id: 0, unit: { kind: o.kind ?? 'para' }, pages: [1], fillLead: lead, fillTop: 3, fitLines: o.lines ?? 6, refused: o.refused } as unknown as Unit)
+  type Told = { target: number | null; own: number | null; anchor: number | null; body: boolean }
+  const fill = async (units: Unit[], PP: Record<string, unknown> = P(), continuing: Unit[] = []): Promise<Told | null> => (await import('@/pdf-reader/engine/layer-proto/run.mjs')).fillPage(units as never, PP as never, () => {}, { continuing: continuing as never })
+  const target = async (units: Unit[], continuing: Unit[] = [], band = 0.05): Promise<Told | null> => (await import('@/pdf-reader/engine/layer-proto/run.mjs')).pageTarget(units as never, continuing as never, band)
   const baselines = (p: Unit) => p.layout.lines.map(l => l.baseline)
 
   it('builds in a top of 2 em for Chinese, 1.7 for Japanese and Korean, and the original\'s own pitch for the alphabets', () => {
@@ -338,7 +326,7 @@ describe("the page fill (adaptiveFill, D6's F6b): every original's units spread 
     const PP = P({ adaptiveFill: { band: 0.05, track: 0, size: 1 } })
     const two = laid(1, 20, PP)
     expect(two.layout.state.lead).toBe(1.3)
-    expect(await fill([two], PP)).toMatchObject({ target: 1.5, own: 1.5, body: true, lines: 6 })
+    expect(await fill([two], PP)).toMatchObject({ target: 1.5, own: 1.5, anchor: 1.5, body: true })
     expect(baselines(two)).toEqual([500, 482])
     const P3 = { ...PP, fillLead: 3 }
     const three = laid(2, 30, P3)
@@ -347,45 +335,60 @@ describe("the page fill (adaptiveFill, D6's F6b): every original's units spread 
     expect(baselines(three)).toEqual([500, 470, 440])
   })
 
-  it("holds a long paper's targets within a band of its fullest page's, however steadily they climb", async () => {
-    // (forty pages of one six-line paragraph each, their own targets 0.03 above the last page's from 1.3: the pages are
-    // equally full, so the first stays the anchor, and every target stays within 0.05 of it and of the page before)
-    const PP = P({ fillLead: 3 })
-    const ts = await paper(Array.from({ length: 40 }, (_, k) => ({ units: [laid(k, 20, PP)], own: Math.round((1.3 + 0.03 * k) * 1000) / 1000 })), PP)
-    expect(ts[0]).toBe(1.3)
-    expect(Math.max(...ts)).toBeCloseTo(1.35, 6)
-    expect(steps(ts)).toBe(true)
+  it("holds a page's own within a band of its anchor, the median of every body unit drawn on it", async () => {
+    // (own: the units begun on the page, 1.5, 1.5 and 1.3, median 1.5; with three continuations at 1.3 the anchor is 1.3, the upper median)
+    const here = [told(1.5), told(1.5), told(1.3)]
+    expect(await target(here)).toEqual({ target: 1.5, own: 1.5, anchor: 1.5, body: true })
+    const on = [told(1.3), told(1.3), told(1.3)]
+    expect(await target(here, on)).toEqual({ target: 1.35, own: 1.5, anchor: 1.3, body: true })
+    // (and below: held at the band under the anchor)
+    expect(await target([told(1.0)], [told(1.4), told(1.4)])).toEqual({ target: 1.35, own: 1, anchor: 1.4, body: true })
   })
 
-  it("anchors on the fullest page, not on a title page: the full pages climb to their own and stay within a band of it", async () => {
-    // (a title page of one six-line paragraph telling 1.08, then pages of three, their own 1.33 climbing 0.03 a page: the
-    // first full page anchors at 1.33; the targets step up 0.05 a page from 1.08 and stop at 1.38)
-    const PP = P({ fillLead: 3 })
-    const pages = [{ units: [laid(0, 20, PP)], own: 1.08 }, ...Array.from({ length: 12 }, (_, k) => ({ units: [laid(3 * k + 1, 20, PP), laid(3 * k + 2, 20, PP), laid(3 * k + 3, 20, PP)], own: Math.round((1.33 + 0.03 * k) * 1000) / 1000 }))]
-    const ts = await paper(pages, PP)
-    expect(ts.slice(0, 7)).toEqual([1.08, 1.13, 1.18, 1.23, 1.28, 1.33, 1.38])
-    expect(Math.max(...ts)).toBeCloseTo(1.38, 6)
-    expect(steps(ts)).toBe(true)
+  it('carries nothing from page to page: a title page, then full pages, each its own, in any order', async () => {
+    const title = [told(1.08)], fuller = [told(1.33), told(1.33), told(1.33)], fullest = [told(1.5), told(1.5), told(1.5)]
+    const pages = [title, fuller, fullest]
+    const forward = await Promise.all(pages.map(u => target(u)))
+    const backward = (await Promise.all([...pages].reverse().map(u => target(u)))).reverse()
+    expect(forward.map(r => r!.target)).toEqual([1.08, 1.33, 1.5])
+    expect(backward).toEqual(forward)
+    // (a later, fuller page changes no other page's target)
+    expect((await target(title))!.target).toBe(1.08)
   })
 
-  it('moves the anchor to a fuller page that comes later, and holds the pages after it to it', async () => {
-    // (five pages of one paragraph at 1.3, then one of three at 1.5, then pages of one at 1.6: the anchor moves to the
-    // fuller page's 1.5, and the targets climb by the band to 1.55, not to 1.6)
-    const PP = P({ fillLead: 3 })
-    const one = (k: number, own: number) => ({ units: [laid(k, 20, PP)], own })
-    const pages = [...[0, 1, 2, 3, 4].map(k => one(k, 1.3)), { units: [laid(5, 20, PP), laid(6, 20, PP), laid(7, 20, PP)], own: 1.5 }, ...[8, 9, 10, 11, 12, 13].map(k => one(k, 1.6))]
-    const ts = await paper(pages, PP)
-    expect(ts.slice(0, 5)).toEqual([1.3, 1.3, 1.3, 1.3, 1.3])
-    // (the fuller page itself is held by the anchor before it, 1.3, and the page before: 1.35)
-    expect(ts[5]).toBeCloseTo(1.35, 6)
-    expect(ts.slice(6)).toEqual([1.4, 1.45, 1.5, 1.55, 1.55, 1.55])
-    expect(steps(ts)).toBe(true)
+  it('tells nothing of its own for a page of a continuation alone, and the anchor it tells', async () => {
+    expect(await target([], [told(1.4, { lines: 10 })])).toEqual({ target: null, own: null, anchor: 1.4, body: false })
+    expect(await target([], [])).toBeNull()
+    // (a unit of one line tells only where no unit has more; a refused unit, nothing)
+    expect(await target([told(1.2, { lines: 1 })])).toEqual({ target: 1.2, own: 1.2, anchor: null, body: false })
+    expect(await target([told(1.2, { lines: 1 }), told(1.4, { kind: 'caption' })])).toEqual({ target: 1.4, own: 1.4, anchor: null, body: false })
+    expect(await target([told(1.2, { lines: 1 }), told(1.6, { refused: true })])).toEqual({ target: 1.2, own: 1.2, anchor: null, body: false })
   })
 
-  it("holds the page's target within the band of the running one, and each unit within the band over the target", async () => {
+  it("counts a continuing unit by the lines of its fit, not by its layout after its first page's fill", async () => {
+    // (a layout of one line now, a fit of ten: it tells, and enters the anchor)
+    const u = told(1.4, { lines: 10 })
+    ;(u as unknown as { layout: unknown }).layout = { lines: [{}] }
+    expect(await target([], [u])).toMatchObject({ anchor: 1.4 })
+    const one = told(1.4, { lines: 1 })
+    ;(one as unknown as { layout: unknown }).layout = { lines: [{}, {}, {}] }
+    expect(await target([], [one])).toBeNull()
+  })
+
+  it("reads a continuation at its fit where the even pass kept one, never at the leading its first page's pass left it", async () => {
+    const u = told(1.0, { lines: 6 })
+    ;(u as unknown as { fit: unknown }).fit = { fillLead: 1.5, fitLines: 6 }
+    // (it stands at 1.0 now, laid anew by the even pass; it entered at 1.5: with one of the page's own at 1.4 the anchor is 1.5)
+    expect(await target([told(1.4)], [u])).toMatchObject({ anchor: 1.5, own: 1.4, target: 1.45 })
+    expect(await target([told(1.4)], [told(1.0)])).toMatchObject({ anchor: 1.4, target: 1.4 })
+  })
+
+  it("holds each unit within the band over the page's target", async () => {
     const PP = P({ fillLead: 3 })
     const a = laid(1, 30, PP), b = laid(2, 30, PP)
-    expect(await fill([a, b], PP, { last: 2, anchor: 2, lines: 6 })).toMatchObject({ target: 2.05, body: true, lines: 12 })
+    // (their own 2.5, the page's anchor 2.0 with three continuations: held to 2.05, and each unit to 2.1)
+    const cont = [3, 4, 5].map(id => Object.assign(laid(id, 30, PP), { fillLead: 2, fitLines: 6, pages: [0, 1] }))
+    expect(await fill([a, b], PP, cont)).toMatchObject({ target: 2.05, own: 2.5, anchor: 2, body: true })
     expect([a.layout.state.lead, b.layout.state.lead]).toEqual([2.1, 2.1])
   })
 
@@ -396,6 +399,35 @@ describe("the page fill (adaptiveFill, D6's F6b): every original's units spread 
     await fill([de], PP)
     expect(de.fillLead).toBe(1)
     expect(baselines(de)).toEqual([500, 488])
+  })
+
+  it("lays an alphabet's unit the same at any target in [0.95, 1.05]: its fill leading lies in [leadFloor, 1] (L3)", async () => {
+    const PP = { ...params('de'), borrow: 0, adaptiveFill: { band: 0.05, track: 0, size: 1.1 } }
+    // (a deterministic generator: 20 seeds of a fill leading and of a target, the unit's lines and the companions')
+    let seed = 12345
+    const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648 }
+    for (let k = 0; k < 20; k++) {
+      const lead = Math.round((0.95 + 0.05 * rnd()) * 1000) / 1000, n = 16 + Math.floor(rnd() * 8)
+      const lay = async (T: number) => {
+        const u = laid(1, n, PP as never), c1 = laid(2, n, PP as never), c2 = laid(3, n, PP as never)
+        for (const x of [u]) { x.fillLead = lead; x.fillTop = 1; x.fitLines = 6 }
+        for (const x of [c1, c2]) { x.fillLead = T; x.fillTop = 1.1; x.fitLines = 6 }
+        const r = await fill([u, c1, c2], PP as never)
+        expect(r!.target, `seed ${k} T ${T}`).toBe(T)
+        return JSON.stringify([u.layout.lines, u.layout.scale, u.layout.state])
+      }
+      const first = await lay(0.95)
+      for (const T of [0.97, 1, 1.03, 1.05]) expect(await lay(T), `seed ${k} T ${T}`).toBe(first)
+    }
+  })
+
+  it('has a leading floor of 1 - band or more for every script with no fill top (L4): the alphabets cannot move with the target', () => {
+    for (const to of TARGETS) {
+      const P = resolveRules(BUILTIN_RULES, to).params
+      if (P.fillLead !== null || !P.adaptiveFill) continue
+      expect(P.leadFloor, to).toBeGreaterThanOrEqual(1 - P.adaptiveFill.band - 1e-9)
+    }
+    expect(TARGETS.some(to => resolveRules(BUILTIN_RULES, to).params.fillLead === null)).toBe(true)
   })
 
   it('sets a unit whose fit took a closer leading at it: its fill leading is the loosest that still sets it, from its own', async () => {
@@ -418,20 +450,15 @@ describe("the page fill (adaptiveFill, D6's F6b): every original's units spread 
     expect([a.layout.scale, b.layout.scale]).toEqual([0.925, 0.85])
   })
 
-  it("counts a page's continuations in its body lines for the anchor: a page of a continuation alone can become the anchor", async () => {
-    const { fillPage, nextHeld } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+  it("reads a continuation for its page's anchor alone: the page tells no target of its own, and lays nothing", async () => {
     const PP = P({ fillLead: 3 })
-    // (a unit begun on page 1 and running on over the whole of page 2: ten lines there, 1.4 its fill leading)
+    // (a unit begun on page 1 and running on over the whole of page 2: 1.4 its fill leading)
     const u = laid(1, 20, PP)
-    const b1 = u.blocks[0] as { B: number[] }
     u.pages = [1, 2]
-    u.blocks = [b1, { ...(b1 as object), page: 2, B: Array.from({ length: 10 }, (_, k) => 600 - 12 * k) }]
     u.fillLead = 1.4
-    const r = fillPage([] as never, PP as never, null, () => {}, { page: 2, continuing: [u] as never })
-    expect(r).toMatchObject({ body: false, lines: 10, anchor: 1.4 })
-    // (held from a page of six lines at 1.3: the continuation's page, fuller, becomes the anchor; the last stays)
-    expect(nextHeld({ last: 1.3, anchor: 1.3, lines: 6 }, r)).toEqual({ last: 1.3, anchor: 1.4, lines: 10 })
-    expect(nextHeld({ last: 1.3, anchor: 1.3, lines: 12 }, r)).toEqual({ last: 1.3, anchor: 1.3, lines: 12 })
+    u.fitLines = 6
+    const r = await fill([], PP, [u])
+    expect(r).toEqual({ target: null, own: null, anchor: 1.4, body: false })
   })
 
   it("grows the page's body units to one size where each is still short, and none where one cannot grow: never a size a unit", async () => {

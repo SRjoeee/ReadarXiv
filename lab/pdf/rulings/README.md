@@ -34,3 +34,12 @@ form of the layer gate's `--ruling` (`lab/pdf/spikes/layer-gate.mjs`), with the 
   file name is letters, digits, dots, dashes and underscores. A file that is not valid JSON fails the run with a sentence of the
   gate's own naming it (``the ruling file `x.json` is not valid JSON``), never with the parser's words, which quote the start of
   the file: those go to a log of the runner that the job does not show.
+
+## Rulings superseded in part
+
+- `2026-10-08-d6-paragraph-spacing.json` accepted a page's fill target held within a band of the page before's and of the
+  fullest page's so far. Since the page-local fill (1b-C), a page's target is its own paragraphs' median fill leading held
+  within `adaptiveFill.band` of the median of every body paragraph drawn on that page (a paragraph running on from the page
+  before included), read from nothing of another page. The ruling's other terms (the F6a pitch while the size shrinks, a
+  rhythm for every original, the top of the fill leading) stand. The regression it brings is accepted by
+  `2026-10-16-page-local-s3.json`.

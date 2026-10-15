@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { BUILTIN_RULES } from '@/pdf-reader/engine/rules/layout.mjs'
 import { indexLayout, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 
@@ -77,13 +78,13 @@ function paper(specs: Spec[], pages: number) {
 type Run = Awaited<ReturnType<typeof import('@/pdf-reader/engine/layer-proto/run.mjs').openProto>>
 /** v0 over the paper, every unit at once (with the hybrid where the paper has a layout file); `order`, the ids' order a
  *  page's units are laid in */
-async function open(P: ReturnType<typeof paper>, { order = null as number[] | null, free = false } = {}) {
+async function open(P: ReturnType<typeof paper>, { order = null as number[] | null, free = false, rules = undefined as unknown } = {}) {
   const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
   const units: unknown[] = []
   const pieces = new Map<number, unknown[]>()
   for (const [id, r] of P.rows) { units[id] = r; pieces.set(id, trPiecesOf(r.pieces, (p: unknown) => (p as { k: number }).k) ?? []) }
   return openProto({
-    doc: P.doc, target: 'zh', pages: P.pages, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, order, free,
+    doc: P.doc, target: 'zh', pages: P.pages, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, order, free, ...(rules ? { rules } : {}),
     tex: P.index ? { index: P.index, pieces, use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' } : null,
   } as never) as Promise<Run>
 }
@@ -203,6 +204,81 @@ describe("C1: a unit's fill leading is its fit's", () => {
     expect(lead).not.toBeUndefined()
     await run.until(3)
     expect((placedOf(run, 0) as { fillLead?: number | null }).fillLead).toBe(lead)
+  })
+})
+
+/** a paragraph of `n` lines on each of its pages `[page, top, n]`, its translation of `chars` characters from `at` */
+const para = (id: number, pages: [number, number, number][], chars: number, at = 0x4e00): Spec => {
+  const lines = pages.flatMap(([page, top, n]) => Array.from({ length: n }, (_, i) => line(page, top - 12 * i, [20, `Alpha beta ${page}${i}`])))
+  return { id, kind: 'para', src: lines.map(l => l.items[0]![1]).join(' '), lines, from: 'file', tr: [text(CJK(chars, at))] }
+}
+
+describe("S3: a page's fill target is a function of its page", () => {
+  // The fill leading of a paragraph is how loosely its translation can be spread over its original's frame: 1.0 for a long one
+  // on a short frame, up to the script's top for a short one. Page 1 is a title page (one paragraph at 1.0), page 2 a fuller
+  // page (1.25), page 3 two paragraphs at the top (1.667) and page 4 one at 1.5; a paragraph runs from page 2 to page 4, laid
+  // as page 4 is drawn, so that page 3's pass runs before page 2's (on next, page 3 is held to the title page's
+  // rhythm: the targets there depend on the order the passes run in)
+  const specs: Spec[] = [
+    para(0, [[1, 250, 4]], 20),
+    para(1, [[2, 250, 6]], 28, 0x4e40),
+    para(2, [[2, 100, 3], [4, 270, 2]], 30, 0x4e80),
+    para(3, [[3, 250, 6]], 16, 0x4ec0),
+    para(4, [[3, 120, 8]], 20, 0x4f00),
+    para(5, [[4, 200, 4]], 16, 0x4f40),
+  ]
+  PAPERS.push(['S3, a skipped page', specs, 4, [null, [0, 1, 3, 4, 5, 2], [0, 1, 4, 3, 2, 5]]])
+  /** what a page drew and recorded: its fill numbers, markup and operations */
+  const pageOf = (run: Run, q: number) => ({ fill: run.rows[q - 1]!.fill, markup: run.rows[q - 1]!.markup, ops: JSON.stringify(run.rows[q - 1]!.ops) })
+  it("is each page's own, held to its anchor alone: the targets are the pages' own, though page 3's pass runs before page 2's", async () => {
+    const run = await open(paper(specs, 4))
+    await run.until(4)
+    // (page 3 is passed with page 1, before page 2 and page 4, which wait for the paragraph laid as page 4 is drawn: page 3 is
+    // not held to the title page's 1.0, nor page 2 to anything)
+    expect(run.rows.map(r => r.fill?.target)).toEqual([1, 1.25, 1.667, 1.5])
+    expect(run.rows.map(r => r.fill?.anchor)).toEqual([1, 1.25, 1.667, 1.5])
+    expect(Object.keys(run.rows[1]!.fill!).sort()).toEqual(['anchor', 'body', 'own', 'target'])
+  })
+  it('draws every page alike, the units of a page laid in any order: fill, markup and operations', async () => {
+    const want = await open(paper(specs, 4))
+    await want.until(4)
+    for (const order of [[0, 1, 3, 4, 5, 2], [0, 1, 3, 4, 2, 5]]) {
+      const run = await open(paper(specs, 4), { order })
+      await run.until(4)
+      expect(run.order, `${order}`).toEqual(order)
+      for (const q of [1, 2, 3, 4]) expect(pageOf(run, q), `${order} page ${q}`).toEqual(pageOf(want, q))
+    }
+  })
+})
+
+describe('S3 with the even pass: a continuation enters its page\'s anchor at its fit', () => {
+  // page 1's pass waits for unit 2 (pages 1 and 4, laid as page 4 is drawn); unit 1 runs from page 1 to page 2, so page 2's
+  // pass (its units all laid at page 2) runs before page 1's, and so before the even pass has laid unit 1 anew. The even pass
+  // itself reads the units of a page as the pass before left them, so the opens that set it lay in order (C1 unchanged); what
+  // S3 reads of a continuation is its fit's, whether or not its first page has passed
+  const evenRules = () => { const r = structuredClone(BUILTIN_RULES) as unknown as { scripts: Record<string, Record<string, unknown>> }; r.scripts.Hans!.even = 1; return r }
+  const specsOf = (late: boolean): Spec[] => [
+    para(0, [[1, 250, 4]], 44),
+    para(1, [[1, 100, 3], [2, 270, 3]], 30, 0x4e40),
+    para(2, late ? [[1, 40, 2], [4, 270, 2]] : [[1, 40, 2]], 12, 0x4e80),
+    para(3, [[2, 200, 6]], 24, 0x4ec0),
+    para(4, [[4, 120, 4]], 16, 0x4f00),
+  ]
+  PAPERS.push(['S3, even', specsOf(true), 4, [null]])
+  type Fit = { fillLead: number; fit?: { fillLead: number; fitLines: number } }
+  const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[xs.length >> 1]!
+  it("reads the continuation's fit leading for page 2's anchor, with page 1's pass before it or after it", async () => {
+    const rules = evenRules()
+    const late = await open(paper(specsOf(true), 4), { rules }), early = await open(paper(specsOf(false), 4), { rules })
+    await late.until(4)
+    await early.until(4)
+    for (const run of [late, early]) {
+      const u = placedOf(run, 1) as unknown as Fit, own = placedOf(run, 3) as unknown as Fit
+      expect(u.fit?.fitLines).toBeGreaterThanOrEqual(2)
+      expect(run.rows[1]!.fill!.anchor).toBe(median([own.fillLead, u.fit!.fillLead]))
+    }
+    // (in `early` the even pass laid the continuation anew on page 1 before page 2 passed: its leading is no longer its fit's)
+    expect((placedOf(early, 1) as unknown as Fit).fillLead).not.toBe((placedOf(early, 1) as unknown as Fit).fit!.fillLead)
   })
 })
 
