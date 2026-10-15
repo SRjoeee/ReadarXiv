@@ -236,7 +236,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
       labels: { captions: { figure: 'target', table: 'target' } },
     })
     await whole.until(2)
-    const want = whole.rows.map(r => r.svg.outerHTML)
+    const want = whole.rows.map((_, i) => whole.svgOf(i + 1).outerHTML)
     expect(whole.stats.length).toBeGreaterThan(4)
     whole.dispose()
 
@@ -251,11 +251,14 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     })()
     const run = seen.runs.at(-1) as Run
     const pages = []
-    // (each page done let go once it is asked for, a page never before: as the gate asks for its pages)
+    // (each page let go of by the run once it is laid, whoever asks: nothing held of it but its record, its analysis state and
+    // its units' own gone, no element of it kept; no host releases a page, so it stays a page a crop may be cut from)
+    expect(run.held()).toEqual({ free: true, records: false, shelf: false })
     pages.push(await layer.pageOf(1, { lang: 'zh-Hans' }))
-    expect(run.rows.map(r => !!r.released)).toEqual([true, false])
+    expect(run.held(1)).toEqual({ state: [], units: [], reads: 0 })
     pages.push(await layer.pageOf(2, { lang: 'zh-Hans' }))
-    expect(run.rows.map(r => !!r.released)).toEqual([true, true])
+    expect([1, 2].map(p => run.held(p))).toEqual([1, 2].map(() => ({ state: [], units: [], reads: 0 })))
+    expect(run.rows.map(r => [Object.keys(r).includes('svg'), r.base, !!r.released])).toEqual([[false, true, false], [false, true, false]])
     expect(await fed).toEqual([1, 2])
     pages.forEach((pg, i) => {
       expect(pg.svg).toBeInstanceOf(SVGSVGElement)
@@ -513,7 +516,7 @@ describe("the original's canvas with no copy kept (openProto copy: false): read 
       labels: { captions: { figure: 'target', table: 'target' } },
     })
   }
-  const drawing = (run: Run) => run.rows.map(r => ({ svg: r.svg.outerHTML, ops: JSON.stringify(r.ops) }))
+  const drawing = (run: Run) => run.rows.map((r, i) => ({ svg: run.svgOf(i + 1).outerHTML, ops: JSON.stringify(r.ops) }))
 
   it('lets each canvas go before the host is done with the page, keeps base and released as they were, and draws what the same open with a copy draws', async () => {
     const kept = await open(true)
@@ -583,11 +586,13 @@ describe("the original's canvas with no copy kept (openProto copy: false): read 
     // (page 2 asked for first: page 1 is laid on the way and its canvas never outlives its ink)
     const jump = await layer.pageOf(2, { lang: 'zh' })
     expect(canvases.map(c => c.width)).toEqual([0, 0])
-    expect(run.rows.map(r => [r.left, r.base, r.released])).toEqual([[null, false, true], [null, false, true]])
+    // (and every page on the way let go of by the run once laid, each still drawn for a crop: no host's release)
+    expect(run.rows.map(r => [r.left, r.base, r.released])).toEqual([[null, true, undefined], [null, true, undefined]])
+    expect([1, 2].map(p => run.held(p).state)).toEqual([[], []])
     expect((await layer.pageOf(2, { lang: 'zh' })).svg.outerHTML).toBe(jump.svg.outerHTML)
     const one = (await layer.pageOf(1, { lang: 'zh' })).svg
     one.removeAttribute('lang')
-    expect(one.outerHTML).toBe(run.rows[0]!.svg.outerHTML)
+    expect(one.outerHTML).toBe(run.svgOf(1).outerHTML)
     const source = document.createElement('canvas')
     source.width = 750
     source.height = 750

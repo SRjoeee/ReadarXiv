@@ -19,8 +19,9 @@ import type { Captions } from '../layout/names.mjs'
 /** the made output's geometry (schema 1): the pages' views, each unit's [id, stream, rects] on the original, its kind */
 export interface Geometry { schema: number; kinds: string[]; left: { pages: number[][]; units: [number, number, Rect[]][] }; right?: unknown }
 /** a unit v0 places: its rectangles (all of them: a unit cut by the pages shown is laid over its lines past them too), the
- *  pages shown it has lines on (`cut`: it has more past them), and once laid its reading, tokens, blocks and layout */
-export interface Placed { id: number; stream: number; rects: Rect[]; unit: LaidUnit; pages: number[]; cut: boolean; blocks: Block2[]; prep?: Prepared; tokens?: Token[]; layout?: Layout; s?: number; rec?: Rec; local?: Char[][]; refused?: boolean; why?: string; missing?: number[]; tex?: (Whole & { lu: LayoutUnit; lines?: TexLines }) | null }
+ *  pages shown it has lines on (`cut`: it has more past them), and once laid its reading, tokens, blocks and layout, until
+ *  a run that frees (`free`) lets them go once it is painted for good (`full` gives it as laid on the gate's shelf) */
+export interface Placed { id: number; stream: number; rects: Rect[]; unit: LaidUnit; pages: number[]; cut: boolean; blocks?: Block2[]; prep?: Prepared; tokens?: Token[]; layout?: Layout; s?: number; rec?: Rec; local?: Char[][]; refused?: boolean; why?: string; missing?: number[]; tex?: (Whole & { lu: LayoutUnit; lines?: TexLines }) | null }
 /** the hybrid's options (openProto `tex`): the layout file, the units file's pieces by unit id, and how the file's
  *  geometry is taken */
 export interface HybridOptions {
@@ -37,11 +38,23 @@ export interface HybridOptions {
 }
 /** which source each placed unit's geometry is (ids), and why the others are v0's (by locatedWhole's why) */
 export interface Sources { tex: number[]; v0: number[]; why: Record<string, number>; texOnly?: number }
-/** a page's canvases at v0's own resolution (the original, its copy where `copy` keeps one), its SVG at `w` × `h` CSS px,
- *  and its drawing as data (every painted unit's operations in turn: drawCopy draws them at any resolution). Where `copy`
- *  keeps none, the original is let go as soon as the page is drawn and its ink read: `left` is null from then on. `base`:
- *  the page is drawn, and a crop may be cut from it, until the page is released */
-export interface Row { page: number; left: HTMLCanvasElement | null; right: HTMLCanvasElement | null; svg: SVGSVGElement; w: number; h: number; base: boolean; ops: DrawOp[]; view?: number[]; released?: boolean }
+/** a page's fill numbers (adaptiveFill's pass, fillPage's answer): its own target, the anchor its body units tell, the
+ *  original's body lines on it, whether its body units told its target */
+export interface PageFill { own: number | null; anchor: number | null; lines: number; body: boolean }
+/** a page's record (the 1b design §1), kept for the run's life: its SVG at `w` × `h` CSS px as markup (the strings its names
+ *  and units are set in, in turn: svgOf makes the element of them anew at each ask), its drawing as data (every painted
+ *  unit's operations in turn: drawCopy draws them at any resolution), its view, its words and links (the engine's 2b and 3a:
+ *  null until then), its fill numbers (null where no pass told them). Beside it the page's canvases at v0's own resolution
+ *  (the original, its copy where `copy` keeps one): where `copy` keeps none, the original is let go as soon as the page is
+ *  drawn and its ink read, `left` null from then on. `base`: the page is drawn, and a crop may be cut from it, until the page
+ *  is released */
+export interface Row {
+  page: number; w: number; h: number; view?: number[]; markup: string[]; ops: DrawOp[]; words: unknown | null; links: unknown[] | null; fill: PageFill | null
+  left: HTMLCanvasElement | null; right: HTMLCanvasElement | null; base: boolean; released?: boolean
+}
+/** what a run holds of a page (held(page)): its analysis state by name, the units on it still holding their own state, and the
+ *  units still to be laid that read it */
+export interface PageHeld { state: ('chars' | 'ink' | 'items' | 'accounted' | 'kept' | 'laid' | 'canvas' | 'removed')[]; units: number[]; reads: number }
 /** a laid unit's record, as main.js kept it (each line: page, baseline, target baseline, exact, mode, overflow, x0, x1) */
 export interface Rec {
   id: number; kind: string; v: 2; pages: number[]; cut: boolean; s?: number; f?: number; fitScale: number; knob: string; clipped: boolean
@@ -92,8 +105,12 @@ export interface ProtoRun {
    *  (a character in no served slice of its runs' faces and their fallbacks, or a run's own face not served: `missing`, the
    *  first code points) and `face` (a table or a slice that failed) */
   skipped: { id: number; kind: string; why: string; chars: number; pages?: number[]; missing?: number[] }[]
+  /** each laid unit's record (with `records`; empty without) */
   stats: Rec[]
+  /** the drawing's audit (with `records`; empty without) */
   audit: Audit[]
+  /** the units laid and drawn, recorded or not */
+  readonly drawn: number
   order: number[]
   ms: Map<number, number>
   pageMs: number[]
@@ -101,7 +118,8 @@ export interface ProtoRun {
    *  placeholders' pages drawn, its units laid (less the faces they waited for, `fonts`), their operations made, drawn on the
    *  copy and set as SVG */
   pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number }[]
-  chars: Char[][]
+  /** each page's characters (with `free` and `records`, the shelf's: every page's, let go or not) */
+  chars: (Char[] | undefined)[]
   views: { convertToViewportPoint(x: number, y: number): number[]; convertToPdfPoint(x: number, y: number): number[] }[]
   /** babel's names of the pages laid (D1a, the layout file's `names`): drawn in the target's word, or why not (`no word`,
    *  `source`, `same`, `unread`, `unfit`, `served`, `face`); a drawn one's characters, text, size and left edge */
@@ -149,6 +167,16 @@ export interface ProtoRun {
   late(): number[]
   /** a done page's copy at `k` device pixels a PDF unit onto `ctx`, from `source`, the page as PDF.js drew it at k */
   drawCopy(page: number, ctx: CanvasRenderingContext2D, source: DrawSource, k: number): Promise<void>
+  /** page `page`'s SVG, a new element each call, made of its record's markup (class, size and spacing as the page's own): a
+   *  parse alone, no layout, face, ink or PDF.js call, 0.3 to 8.6 ms (420 to 12,000 elements) */
+  svgOf(page: number): SVGSVGElement
+  /** what the run lets go (`free`), keeps of its units' records and audit (`records`), and keeps on the gate's shelf */
+  held(): { free: boolean; records: boolean; shelf: boolean }
+  /** what the run holds of a page */
+  held(page: number): PageHeld
+  /** a placed unit as it was laid: the shelf's where the run let it go (`free` and `records`), else the unit itself */
+  full(p: Placed): Placed
+  /** a done page's canvases let go (a copy's, the gate's): no unit paints it again, and no crop is cut from it */
   release(page: number): void
   checkPage(page: number): CheckResult
   check(): CheckResult
@@ -234,4 +262,9 @@ export declare function openProto(o: {
   onStep?: ((page: number) => void) | null
   /** the run waits: for a part, or for rows (an instrument) */
   onWait?: ((what: 'part' | 'rows') => void) | null
+  /** the memory contract (the reader's): a page's analysis state let go once the page is done and no unit still to be laid
+   *  reads it, a unit's own state once it is painted for good; default false, every state kept */
+  free?: boolean
+  /** each laid unit's record (`stats`) and the drawing's audit kept, the gate's (default true); without, their count alone */
+  records?: boolean
 }): Promise<ProtoRun>

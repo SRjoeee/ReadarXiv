@@ -122,7 +122,7 @@ async function open(P: ReturnType<typeof paper>, how: 'whole' | 'parts', { group
 /** what a run drew: each page's operations and SVG, the order its units were laid in, their records and why each unit
  *  left was left */
 const drawing = (run: Run) => ({
-  pages: run.rows.map(r => ({ ops: JSON.stringify(r.ops), svg: r.svg.innerHTML })),
+  pages: run.rows.map((r, i) => ({ ops: JSON.stringify(r.ops), svg: run.svgOf(i + 1).innerHTML })),
   order: run.order.slice(),
   stats: run.stats.map(({ ms: _, ...r }) => r),
   skipped: run.skipped.map(s => `${s.id}:${s.why}`).sort(),
@@ -358,7 +358,7 @@ describe('a run let go while it waits (dispose)', () => {
       expect(run.order).toEqual([0])
       expect(run.stats).toEqual([])
       expect(run.skipped.filter(x => x.id === 0)).toEqual([])
-      expect(run.rows.every(r => r.ops.length === 0 && r.svg.innerHTML === '')).toBe(true)
+      expect(run.rows.every((r, i) => r.ops.length === 0 && run.svgOf(i + 1).innerHTML === '')).toBe(true)
     } finally { fonts().load = was }
   })
   it("while its first page is drawn: a newer layer's roles stand once the page is", async () => {
