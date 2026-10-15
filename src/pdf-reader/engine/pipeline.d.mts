@@ -11,7 +11,9 @@ export { gunzip, unpackSource, untar } from './source/tar.mjs'
 // a directory as a project (Node only)
 export { folder } from './source/node-files.mjs'
 // the left geometry
-export { anchorUnits, boundsFromMarks, inkEdges, lineRects, markWords, sentenceStarts, tokenAtMark, tokenizeDocument, tokens } from './pipeline/anchors.mjs'
+export { anchorUnits, boundsFromMarks, inkEdges, lineRects, markWords, sentenceStarts, startRuns, startsAnchor, tokenAtMark, tokenizeDocument, tokens } from './pipeline/anchors.mjs'
+export { leftSideOf } from './pipeline/left-side.mjs'
+export type { LeftSide } from './pipeline/left-side.mjs'
 export { texErrors, unitsAtErrors } from './pipeline/tex-errors.mjs'
 // the layout file
 export { LABEL_KINDS, LAYOUT, LAYOUT_CAP, LAYOUT_DEPTH, LAYOUT_VALUES, LayoutRefusal, PAGE_TEXT_ALL, PAGE_TEXT_KINDS, PH_FLAG, PH_KINDS, TEXT_MAX, UNIT_FLAG, UNIT_KINDS, VERSION_MAX, checkLayout, encodeLayout, indexLayout, isPageText, isPaperId, parseLayout } from './layout/file.mjs'
@@ -25,7 +27,7 @@ export { BYTES_MAX, CHECK_SETS, COST, DecodeLimit, HELD_MAX, LexLimit, SETS, WAL
 // the bundle's writer (the reader's parsers are the layer entry's)
 export { bundleUnitsOf, writeBundle } from './layer-proto/bundle.mjs'
 // BUNDLE 4: the writers of a paper's objects, the keys and the bounds (the readers are the layer entry's), and the memory-class errors every catch lets through
-export { BUILD_END_WHYS, BUNDLE4, CATALOG_CAP, CATALOG_VALUES, CHUNKS_MAX, CONTENT_MAX, CTAG4, DEPTH_NONE, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, LEFT_CAP, LEFT_VALUES, PART_CAP, PART_VALUES, SPANNED_PER_TOKEN, TAIL_CAP, TOKENS_PAGE, TOKEN_LIMIT, TOKEN_SCALE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, VTAG4, catalogKey, isFinalEnd, keyOf, keyParts, KIND_NONE, RECORD_FLAG, partTarget, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks } from './layer-proto/format.mjs'
+export { BUILD_END_WHYS, BUNDLE4, CATALOG_CAP, CATALOG_VALUES, CHUNKS_MAX, CONTENT_MAX, CTAG4, DEPTH_NONE, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, LEFT_CAP, LEFT_VALUES, PART_CAP, PART_VALUES, SPANNED_PER_TOKEN, TAIL_CAP, TOKENS_PAGE, TOKEN_FIELDS, TOKEN_LIMIT, TOKEN_SCALE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, VTAG4, catalogKey, isFinalEnd, keyOf, keyParts, KIND_NONE, RECORD_FLAG, partTarget, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks } from './layer-proto/format.mjs'
 export { BundleRefusal } from './layer-proto/bundle.mjs'
 // the cut: a paper made whole, in BUNDLE 4's objects
 export { cutBundle, needFrontier } from './layer-proto/cut.mjs'

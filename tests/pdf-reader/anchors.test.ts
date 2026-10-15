@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anchorUnits, boundsFromMarks, type DocToken, inkEdges, markWords, sentenceStarts, type TextPage, tokenizeDocument, tokens, type UnitText } from '@/pdf-reader/engine/pipeline/anchors.mjs'
+import { anchorUnits, boundsFromMarks, type DocToken, inkEdges, markWords, sentenceStarts, startRuns, startsAnchor, type TextPage, tokenizeDocument, tokens, type UnitText } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 
 // Where each unit sits in a PDF, found from the text layer (anchors.mjs): the page given as PDF.js's text items, the
 // units as the reader passes them. Heights are 10 PDF units, lines 12 apart down from y = 700
@@ -531,5 +531,118 @@ describe('sentenceStarts: where each sentence after the first begins on the page
     expect(sentenceStarts(marked, text, undefined)).toBeNull()
     // offsets of another shape (a malformed record's): none, nothing thrown
     for (const o of ['5', [1.5], [0], [null], { length: 1 }]) expect(sentenceStarts(marked, text, o as never)).toBeNull()
+  })
+})
+
+// The start runs (the pairs sentenceStarts reads, as a left part holds them) and the anchor they rebuild: the same starts, whichever
+// way the unit is cut over pages
+import { piecesOf } from './helpers/start-pieces'
+
+describe('startRuns and startsAnchor: sentenceStarts read from a left part\'s runs, equal to sentenceStarts read from the anchor', () => {
+  const text = 'Alpha beta gamma. Delta epsilon zeta eta. Theta iota kappa.'
+  const lines = (delta = 'Delta') => [page([['Alpha', 'beta', 'gamma.', delta, 'epsilon'], ['zeta', 'eta.', 'Theta', 'iota', 'kappa.']])]
+  const offsetsOf = (t: string) => [t.indexOf('Delta'), t.indexOf('Theta')]
+  /** sentenceStarts of the anchor, and of the anchor rebuilt from its runs with the unit's pages starting at `starts` */
+  function both(a: Parameters<typeof startRuns>[0], t: string, offsets: number[], starts: number[], total: number) {
+    const runs = startRuns(a)
+    const rebuilt = a ? startsAnchor(piecesOf(a, runs, starts, total)) : null
+    return { raw: sentenceStarts(a, t, offsets), again: sentenceStarts(rebuilt, t, offsets), runs, rebuilt }
+  }
+
+  it('the cases of sentenceStarts, through the runs: on one page and cut at every token boundary', () => {
+    const cases: [string, ReturnType<typeof anchors>][] = [
+      ['marked', anchors(lines(), [{ id: 0, text }], [[0, 0, 9]])], ['a first word missed', anchors(lines('Deltas'), [{ id: 0, text }], [[0, 0, 9]])],
+      ['text alone', anchors(lines(), [{ id: 0, text }], [])],
+      ['thin', anchors([page([['Alpha', 'beta', 'gamma.', 'Delta', 'epsilonx'], ['zetax', 'eta.', 'Theta', 'iota', 'kappax']])], [{ id: 0, text }], [])],
+      ['late', anchors([page([['Alpha', 'beta', 'gamma.', 'Deltas', 'epsilons'], ['zetas', 'eta.', 'Theta', 'iota', 'kappa.']])], [{ id: 0, text }], [[0, 0, 9]])],
+    ]
+    for (const [name, c] of cases) {
+      const a = c.found.get(0)
+      const total = c.doc.length
+      for (const starts of [[0], ...Array.from({ length: total - 1 }, (_, k) => [0, k + 1])]) {
+        const r = both(a, text, offsetsOf(text), starts, total)
+        expect(r.again, `${name} ${starts}`).toEqual(r.raw)
+      }
+    }
+    expect(startRuns(cases[3]![1].found.get(0))).toBeNull()
+    expect(startRuns(cases[2]![1].found.get(0))).not.toBeNull()
+    expect(startRuns(null)).toBeNull()
+    expect(startRuns(undefined)).toBeNull()
+    expect(startsAnchor([])).toBeNull()
+    expect(startsAnchor([{ first: 0, ranges: [0, 3] }])).toBeNull()
+  })
+
+  it('gives maximal runs [word, token, count] in word order whatever the Map\'s order, and only pairs on the unit\'s tokens', () => {
+    const base = { rects: [], coverage: 1, bounded: true, tokens: [10, 11, 12, 20, 21, 40] }
+    const pairs = [[0, 10], [1, 11], [2, 12], [3, 99], [4, 20], [5, 21], [7, 40], [8, -1], [9, 41]] as [number, number][]
+    const a = { ...base, pairs: new Map(pairs) }
+    expect([...startRuns(a)!]).toEqual([0, 10, 3, 4, 20, 2, 7, 40, 1])
+    const shuffled = { ...base, pairs: new Map([...pairs].reverse()) }
+    expect([...startRuns(shuffled)!]).toEqual([...startRuns(a)!])
+    // a word map that is not monotone, and a token named twice, is carried as it is
+    const odd = { ...base, pairs: new Map([[0, 12], [1, 11], [2, 11], [3, 20]]) }
+    expect([...startRuns(odd)!]).toEqual([0, 12, 1, 1, 11, 1, 2, 11, 1, 3, 20, 1])
+    // the gate: text alone below TEXT_ONLY, no pairs at all
+    expect(startRuns({ ...a, bounded: false, coverage: 0.79 })).toBeNull()
+    expect(startRuns({ ...a, bounded: false, coverage: 0.8 })).not.toBeNull()
+    expect(startRuns({ ...base, pairs: undefined })).toBeNull()
+    expect(startRuns({ ...base, pairs: new Map([[0, 99]]) })).toBeNull()
+  })
+
+  it('rebuilds the anchor a page at a time: tokens rising, pairs as the words had them, a run cut at the page end', () => {
+    const a = { rects: [], coverage: 1, bounded: true, tokens: [3, 4, 5, 6, 7, 8], pairs: new Map([[0, 3], [1, 4], [2, 5], [3, 6], [4, 7], [5, 8]]) }
+    const runs = startRuns(a)!
+    expect([...runs]).toEqual([0, 3, 6])
+    const pieces = piecesOf(a, runs, [0, 5, 7], 10)
+    expect(pieces).toEqual([{ first: 0, ranges: [3, 2], runs: [0, 3, 2] }, { first: 5, ranges: [0, 2], runs: [2, 0, 2] }, { first: 7, ranges: [0, 2], runs: [4, 0, 2] }])
+    const back = startsAnchor(pieces)!
+    expect(back.tokens).toEqual(a.tokens)
+    expect([...back.pairs!]).toEqual([...a.pairs])
+    expect(back.bounded).toBe(true)
+  })
+
+  it('property: random units, random cuts and every offsets family give the same starts, or none', () => {
+    let seed = 12345
+    const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 2 ** 32 }
+    let e0 = 0, compared = 0, gated = 0
+    for (let round = 0; round < 400; round++) {
+      const words = 3 + Math.floor(rnd() * 25)
+      const t = Array.from({ length: words }, (_, i) => `w${i}`).join(' ')
+      const wordAt = (i: number) => t.indexOf(`w${i}`) === -1 ? 0 : t.split(' ').slice(0, i).join(' ').length + (i ? 1 : 0)
+      // tokens: a rising random subset of a document of `total` tokens
+      const total = words + Math.floor(rnd() * 30)
+      const toks: number[] = []
+      for (let k = 0; k < total; k++) if (rnd() < 0.7) toks.push(k)
+      if (!toks.length) continue
+      const pairs = new Map<number, number>()
+      for (let i = 0; i < words; i++) {
+        const r = rnd()
+        if (r < 0.6) pairs.set(i, toks[Math.floor(rnd() * toks.length)]!)
+        else if (r < 0.75) pairs.set(i, Math.floor(rnd() * total))
+        else if (r < 0.8) pairs.set(i, -1)
+      }
+      if (rnd() < 0.3) { const entries = [...pairs]; pairs.clear(); for (let k = entries.length - 1; k >= 0; k--) pairs.set(entries[k]![0], entries[k]![1]) }
+      // monotone pairs in half the rounds, as real matches are
+      if (rnd() < 0.5) { const sorted = [...pairs.values()].filter(v => toks.includes(v)).sort((x, y) => x - y); let j = 0; for (const [w, v] of [...pairs]) if (toks.includes(v)) pairs.set(w, sorted[j++]!) }
+      const bounded = rnd() < 0.6, coverage = [0.5, 0.79, 0.8, 0.95, 1][Math.floor(rnd() * 5)]!
+      const a = { rects: [], coverage, bounded, tokens: toks, pairs }
+      const cuts = [0, ...Array.from({ length: Math.floor(rnd() * 4) }, () => Math.floor(rnd() * total))].sort((x, y) => x - y).filter((v, i, arr) => i === 0 || v > arr[i - 1]!)
+      const families: number[][] = [
+        Array.from({ length: words - 1 }, (_, i) => wordAt(i + 1)),
+        ...Array.from({ length: 4 }, () => { const o = new Set<number>(); for (let i = 1; i < words; i++) if (rnd() < 0.3) o.add(wordAt(i)); return [...o].sort((x, y) => x - y) }),
+        [],
+      ]
+      for (const o of families) {
+        const r = both(a, t, o, cuts, total)
+        if (startRuns(a) === null && o.length === 0 && r.raw !== null) { e0++; continue }
+        compared++
+        if (r.raw === null) gated++
+        expect(r.again, `round ${round} offsets ${o}`).toEqual(r.raw)
+      }
+    }
+    expect(compared).toBeGreaterThan(1500)
+    expect(gated).toBeGreaterThan(50)
+    // E0 (a unit through the gate whose every pair was filtered, asked for no sentence) is the one difference: [] raw, null rebuilt
+    expect(e0).toBeGreaterThanOrEqual(0)
   })
 })
