@@ -1294,7 +1294,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const arrive = async p => {
     fontWait = 0
     const t0 = performance.now()
-    await layout2(p)
+    // (a unit that throws while it is laid is the original's, why `error`: its page completes, never blank for one unit; a
+    // memory error is no unit's, and goes on)
+    try { await layout2(p) } catch (e) {
+      if (isMemoryError(e)) throw e
+      p.refused = true
+      p.why = 'error'
+      unlead(p)
+    }
     // (let go while it was laid: neither recorded, nor painted, nor counted)
     if (disposed) return
     // (the faces it waited for apart from its laying: no task of v0's)

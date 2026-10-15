@@ -45,6 +45,11 @@ vi.mock('@/pdf-reader/engine/layer-proto/run.mjs', async importOriginal => {
     },
   }
 })
+// (a unit whose translation is BOOM throws while it is laid, in its reading: DR6's case)
+vi.mock('@/pdf-reader/engine/layer-proto/layer2.mjs', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/pdf-reader/engine/layer-proto/layer2.mjs')>()
+  return { ...actual, prepareUnit: (unit: { pieces?: { s?: string }[] }, ...rest: unknown[]) => { if (unit?.pieces?.some(q => q.s === 'BOOM')) throw new Error('a unit that throws while laid'); return (actual.prepareUnit as (...a: unknown[]) => unknown)(unit, ...rest) } }
+})
 type Run = Awaited<ReturnType<typeof import('@/pdf-reader/engine/layer-proto/run.mjs').openProto>>
 afterEach(() => { seen.starved = null })
 
@@ -182,6 +187,28 @@ describe('the door: three opens, the same pages', () => {
         expect(cold.log.filter(e => e === 'wait:part').length > 0 || feed === 'eager').toBe(true)
       }
     }
+  })
+
+  it('leaves a unit that throws while it is laid the original\'s, why error, and completes its page (DR6)', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const c = await cutSpec(SPEC)
+    const docFor = docsOf(SPEC) as unknown as (r: number) => LayerDocument
+    // (unit 8, page 2's own paragraph, throws; unit 1 runs on to page 2 and is drawn there)
+    const rows = rowsOfIndex(c.index).map(r => (r[0] === 8 ? ([8, ['BOOM'], 'whole', 'test', null] as typeof r) : r))
+    const layer = await openLayer({ index: c.index, doc: docFor(0), parts: c.parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+    layer.take(rows)
+    const states: string[] = []
+    layer.onPage((p, state) => states.push(`${state}:${p}`))
+    const pages = []
+    for (let p = 1; p <= SPEC.pages; p++) pages.push(await layer.pageOf(p, { lang: 'zh' }))
+    expect([1, 2, 3].map(p => layer.pageState(p))).toEqual(['ready', 'ready', 'ready'])
+    expect(states).not.toContain('failed:2')
+    const run = seen.runs.at(-1) as Run
+    expect(run.skipped.filter(s => s.id === 8).map(s => s.why)).toEqual(['error'])
+    expect(run.stats.some(r => r.id === 8)).toBe(false)
+    expect(pages[1]!.svg.querySelector('[data-u="8"]')).toBeNull()
+    expect(pages[1]!.svg.querySelector('[data-u="1"]')).not.toBeNull()
+    layer.dispose()
   })
 
   it('draws the format test\'s paper (tails, a part with no layout) told in parts as opened warm, swapping its documents', async () => {
