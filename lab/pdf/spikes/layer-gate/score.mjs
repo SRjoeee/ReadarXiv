@@ -153,8 +153,9 @@ export function pageEntry(page, model, pixel) {
   if (ck) Object.assign(e, { rmRemoved: ck.removed + ck.rulesRemoved, rmMissed: ck.missed + ck.rulesMissed, rmOther: ck.other + ck.extra + ck.rulesOther, rmMoved: ck.moved, rmPOther: ck.pOther + ck.pMissing })
   if (pixel) {
     Object.assign(e, {
-      textCells: pixel.coverage.text.cells, textTranslatedCells: pixel.coverage.text.translated, textEnglishCells: pixel.coverage.text.english, textBlankCells: pixel.coverage.text.blank,
-      cellCells: pixel.coverage.cells.cells, cellTranslatedCells: pixel.coverage.cells.translated, neutral: pixel.neutral,
+      textCells: pixel.coverage.text.cells, textTranslatedCells: r(pixel.coverage.text.translated, 3), textEnglishCells: r(pixel.coverage.text.english, 3), textBlankCells: r(pixel.coverage.text.blank, 3),
+      // (areas, not counts: the coverage is the share of each cell drawn; measure.mjs pixelPage)
+      cellCells: pixel.coverage.cells.cells, cellTranslatedCells: r(pixel.coverage.cells.translated, 3), neutral: pixel.neutral,
       overlap: pixel.overlap, overlapPx: pixel.overlapPx, stray: pixel.stray, residue: pixel.residue, residuePx: pixel.residuePx, bites: pixel.bites, bitePx: pixel.bitePx,
       vanished: pixel.vanished, doubled: pixel.doubled, graphicsPx: pixel.graphics.px, graphicsErased: pixel.graphics.erased, graphicsOverdrawn: pixel.graphics.overdrawn, graphicsTouched: pixel.graphics.touched,
       lostInk: pixel.lostInk.regions, lostInkPx: pixel.lostInk.px, lostBoxes: pixel.lostInk.boxes, regionsAt: pixel.regionsAt,
