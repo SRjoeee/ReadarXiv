@@ -397,10 +397,11 @@ export function charsOfUnit2(rects, charsByPage, extents, exact = null) {
  * extendRects, which grew only over the source's own words): also over a formula's tail (math glyphs, brackets,
  * digits, operators: "(z) =" at a line's end), and a line that is not its block's last, being justified, out to its
  * block's right edge. Before, those characters were erased with the line (its erasing reaches the block's edge) though
- * no placeholder held them. Mutates the rectangles.
+ * no placeholder held them. `first`: the unit's first line (`rects` may be its lines on one page alone: run.mjs grows a
+ * unit page by page). Mutates the rectangles.
  */
-export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn, pageViews, wordChars = charsByPage) {
-  let grown = extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, wordChars)
+export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn, pageViews, wordChars = charsByPage, first = rects[0]) {
+  let grown = extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, wordChars, first)
   const blocks = blocksOf(rects, pageViews)
   const lastOf = new Set(blocks.map(b => b.rects.at(-1).join()))
   const edgeOf = new Map()
@@ -446,7 +447,7 @@ export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn,
     }
     // to the left: math only (a formula the line starts with), never before the unit's first line
     let from = Math.min(...inside.map(c => c.x0))
-    if (r !== rects[0]) for (const c of line.filter(c => c.x1 <= from + 0.1).reverse()) {
+    if (r !== first) for (const c of line.filter(c => c.x1 <= from + 0.1).reverse()) {
       if (from - c.x1 > 0.6 * size || foreign(c) || !mathy(c) || c.x0 < bx0 - 1) break
       from = c.x0
     }
@@ -1700,9 +1701,10 @@ export function snapFirstRect2(rects, charsByPage) {
  * A unit's line rectangles grown along their baselines over the characters next to them that are no other unit's
  * (`others`: the page's other units' rectangles) where those hold the unit's own source words: the anchors may leave a
  * line's words out (1706.03762's "‡Work performed while at Google Research." anchored as "Research."), and what they
- * leave out is neither erased nor laid over. Mutates the rectangles; returns how many grew.
+ * leave out is neither erased nor laid over. `first`: the unit's first line, as extendRects2's. Mutates the rectangles;
+ * returns how many grew.
  */
-export function extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, wordChars = charsByPage) {
+export function extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, wordChars = charsByPage, first = rects[0]) {
   const srcWords = wordsOfFn([...src].map(ch => ({ ch }))).map(w => w.w)
   const want = new Set(srcWords)
   const srcStart = ` ${srcWords.join(' ')} `
@@ -1736,7 +1738,7 @@ export function extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, 
         // none of the source's ("whileatGoogle"), so that 1706.03762's "‡Work performed while at Google Research.",
         // anchored and located as "Research.", kept its English head unerased, and the translation, "Google Research…",
         // was laid after it: "Google Google Research")
-        if (dir > 0 || r !== rects[0]) continue
+        if (dir > 0 || r !== first) continue
         got = grow(dir, lineIn(wordChars[r[0] - 1] ?? []))
         const run = [...got].reverse()
         const text = run.map((c, n) => (n && (c.x0 - run[n - 1].x1 > 0.12 * c.size || (c.item !== run[n - 1].item && c.x0 - run[n - 1].x1 > 0.05 * c.size)) ? ` ${c.ch}` : c.ch)).join('')

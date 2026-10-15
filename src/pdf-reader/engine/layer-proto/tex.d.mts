@@ -12,7 +12,8 @@ export declare function kOfPieces(unit: Unit, trPieces: readonly unknown[] | und
 /** whether the file locates a unit whole: located, every placeholder v0 draws ink for found (a symbol drawn as text too
  *  only where `symbols` is 'strict'; with `held`, a LOST display its held lines cover) */
 export declare function locatedWhole(lu: LayoutUnit | null, unit: Unit, trPieces: readonly unknown[] | undefined, o?: { symbols?: 'text' | 'strict'; held?: boolean }): Whole
-/** the held run (its line indices) covering each inner displayed formula, by its piece index; empty where nothing pairs */
+/** the held run (its line indices) covering each displayed formula the unit's lines hold, by its piece index, read from the
+ *  layout file and the source's order (kOf), never the translation's pieces; empty where the two do not agree */
 export declare function displayCover(lu: LayoutUnit, unit: Unit, kOf: readonly number[]): Map<number, number[]>
 /** whether a placeholder sets no ink by the file: a text macro it holds no row for */
 export declare function inklessOf(lu: LayoutUnit, kOf: readonly number[], p: { k: number; cls: string }): boolean

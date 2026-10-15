@@ -24,6 +24,12 @@ export declare function markWords(doc: DocToken[], marks: Map<string, { page: nu
 export declare function anchorUnits(doc: DocToken[], units: UnitText[], options?: { minCoverage?: number; bounds?: Map<string, [number, number]>; floating?: (id: number) => boolean }): Map<number, Anchor | null>
 /** where each of a unit's sentences after the first begins on the page: the page token of its first word found, rising */
 export declare function sentenceStarts(anchor: Anchor | null | undefined, text: string, offsets: number[] | undefined): Int32Array | null
+/** the pairs sentenceStarts reads as runs [word, token, count, …] (global tokens, word rising, maximal): only for a unit it admits, and
+ *  only pairs on the unit's own tokens; null where there are none */
+export declare function startRuns(anchor: Anchor | null | undefined): Int32Array | null
+/** the anchor sentenceStarts reads as it reads the one startRuns came of, from the unit's entry on each of its pages in page order
+ *  ({ first, ranges: [first, count, …] page-local, runs?: [word, token, count, …] page-local }); null where no page has runs */
+export declare function startsAnchor(pieces: readonly { first: number; ranges: readonly number[]; runs?: readonly number[] }[]): Anchor | null
 /** each token's ink across, its box widened over the marks its item sets against it (a full stop, a bracket) */
 export declare function inkEdges(doc: DocToken[]): { l: Float32Array; r: Float32Array }
 /** tokens → one rectangle per line: same page, baselines within half a line of each other */
