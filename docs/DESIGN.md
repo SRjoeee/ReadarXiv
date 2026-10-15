@@ -915,7 +915,12 @@ extension.
   marked original, a unit left as it is or set in the source — the accent is written as the source has it. Only a
   letter every strategy sets: LaTeX's UTF-8 table declares it (pdfLaTeX sets it as the accent, in OT1, T1, T2A and
   CJKutf8) and Latin Modern, TeX Gyre and CMU hold it in every face (XeLaTeX), 145 letters measured on TL 2026; any
-  other, and an accent the paper defines anew (`\def\v{\varphi}`), stays a placeholder.
+  other, and an accent the paper defines anew (`\def\v{\varphi}`), stays a placeholder. A formula the author split
+  across inline formulas (`$\{\Phi_0$, $\Phi_1$, $\Phi_2\}$`: delimiters balanced across the parts alone, nothing but
+  white space and punctuation between them; `core/protector/math-runs.ts`) goes out as one marker, and its reply is read
+  back as the run's own pieces in their order (`mt.mjs` `formulaRuns`, TRANSLATE_VERSION 2): sent apart, Microsoft's
+  Chinese moved the set's first part away from the others (2307.16209, page 31). The unit keeps its parts, so each is
+  drawn as its own crop, as TeX may break the line between them (11 of the corpus's 16 runs take two lines).
 - **Its store**: the compiled translations (with each unit's sentences, where its engine gave them), one record per paper version and target language, encrypted, in an
   IndexedDB of their own (`src/cache/pdf-store.ts`), capped at 500 MB with the least recently opened going first. A
   copy's units always describe its own PDF: a run that typesets nothing writes only who made and tried each unit, and
@@ -924,9 +929,11 @@ extension.
   pipeline voids only what its change reaches**, §5.5's rule taken unit by unit: a copy is matched to the units by their
   source, and its translations are taken as they are where it was made by this pipeline, or by an earlier one that
   carries over into it (`live.mjs` `PIPELINE_CARRIES`, `cache.mjs` `copyReuse`) — in the same wire format and for the
-  same paper's context, each translation by that pipeline's test of what it made of the answer. A unit whose source
-  pieces are unchanged is sent the same wire and cuts as before, and one a pipeline cuts anew has a new hash and is
-  sent as the new text it is, the background's cache keyed by that text (§9; the key holds no version of the reader's);
+  same paper's context, each translation by that pipeline's test, given the unit it is of: what it made of the answer,
+  and whether the unit is one whose wire the pipeline changed (pipeline 12: a unit that holds a run of split formulas,
+  sent grouped). A unit whose source pieces are unchanged is sent the same wire and cuts as before but for such a
+  change, and one a pipeline cuts anew has a new hash and is sent as the new text it is, the background's cache keyed by
+  that text (§9; the key holds no version of the reader's);
   the left side's marks, the original's readings and the compile stay the pipeline's own. Pipeline 8 over a copy of 7
   of 2610.02069: 4 of its 103 units sent again — the two cut anew, the two whose translation held 7's stray `#` —
   where every one had been. The settings page counts them and clears them (UI.md S-O-73).
