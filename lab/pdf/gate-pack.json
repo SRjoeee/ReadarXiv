@@ -5,8 +5,8 @@
   "schema": 4,
   "version": "6"
  },
- "made": "2026-10-15T05:06:06.238Z",
- "digest": "e63382073076c2fb1ece1784d92f13d3c64fa23137f1856380034f69301d897f",
+ "made": "2026-10-15T05:31:56.007Z",
+ "digest": "3d66c7f014c6f4b04ae9407158112d00b6ee06b7e909b63562db333b6c1a51e2",
  "bucket": "readarxiv-ci",
  "files": [
   {
@@ -1013,9 +1013,9 @@
   },
   {
    "path": "fixtures/2307.16209v1-zh/layout.json",
-   "sha256": "e9a15376b902f3f4842d78693c5c989ab57199f3022a42c5a5907aafc8b862ec",
-   "bytes": 498958,
-   "url": "r2://readarxiv-ci/gate-pack/e9a15376b902f3f4842d78693c5c989ab57199f3022a42c5a5907aafc8b862ec"
+   "sha256": "cca0177d37a89e43e5c81fe72981aa7e56bdeb183af6e7c8fa18873876da8a75",
+   "bytes": 497492,
+   "url": "r2://readarxiv-ci/gate-pack/cca0177d37a89e43e5c81fe72981aa7e56bdeb183af6e7c8fa18873876da8a75"
   },
   {
    "path": "fixtures/2307.16209v1-zh/record.json",
