@@ -326,6 +326,7 @@ export async function readUnitsChunk(bytes, { ref, before = null, caps }) {
   if (before !== null && (before.paper.id !== paper.id || before.paper.version !== paper.version)) throw refuse(K, 'paper', 'not the paper of the chunk before')
   if (before !== null && before.pipeline !== v.pipeline) throw refuse(K, 'pipeline', 'not the pipeline of the chunk before')
   const from = ids[0], to = ids[1], units = v.units
+  if ((ref.from !== undefined && ref.from !== from) || (ref.to !== undefined && ref.to !== to)) throw refuse(K, 'ref', `the ref's ids ${ref.from ?? '?'} to ${ref.to ?? '?'} are not the chunk's ${from} to ${to}`)
   if (!Array.isArray(units)) throw refuse(K, 'units', `not an array (${kindOf(units)})`)
   if (units.length !== to - from + 1) throw refuse(K, 'units', `not the ${to - from + 1} units of ids ${from} to ${to}`)
   const stands = new Uint8Array(to + 1), dropped = []
@@ -400,7 +401,7 @@ export async function writeUnitChunks({ paper, units }) {
   // (the envelope's values do not depend on the digits of `ids`; its bytes do)
   const envelopeBytes = (from, to) => encoder.encode(head(from, to)).length + 2
   const envelopeValues = countValues(`${head(0, 0)}]}`)
-  const texts = [], out = []
+  const texts = [], out = [], stands = new Uint8Array(units.length)
   let from = 0, bytes = 0, values = 0, totalBytes = 0, totalValues = 0
   const close = async to => {
     out.push(await finish(K, `${head(from, to)}${texts.slice(from, to + 1).join(',')}]}`, UNITS_DEF, p, { from, to }))
@@ -412,6 +413,8 @@ export async function writeUnitChunks({ paper, units }) {
     if (totalValues > UNITS_TOTAL_VALUES) throw tooLarge('values', UNITS_TOTAL_VALUES, totalValues)
   }
   for (let i = 0; i < units.length; i++) {
+    if (!unitStands(units[i], i, stands)) throw Object.assign(refuse(K, '', `unit ${i}: does not stand (a shape the reader would drop, or a nested unit that does not stand)`), { id: i })
+    stands[i] = 1
     const text = unitText(units[i])
     const size = encoder.encode(text).length, count = inside(K, '', () => countValues(text, UNITS_VALUES, UNITS_DEPTH - 2))
     texts.push(text)
@@ -439,7 +442,7 @@ export async function writeUnitChunks({ paper, units }) {
  */
 export function unitsOfChunks(chunks) {
   const K = 'index'
-  if (chunks.length < 1 || chunks.length > CHUNKS_MAX) throw refuse(K, 'units', `not 1 to ${CHUNKS_MAX} chunks (${chunks.length})`)
+  if (chunks.length > CHUNKS_MAX) throw refuse(K, 'units', `more than ${CHUNKS_MAX} chunks (${chunks.length})`)
   const units = [], kinds = [], dropped = []
   let before = null, total = 0
   for (let i = 0; i < chunks.length; i++) {
@@ -487,7 +490,7 @@ function headShape(v) {
   digestField(K, base.sha256, 'base.sha256')
   if (!isInteger(base.xref, 0, base.bytes - 1)) throw refuse(K, 'base.xref', `not an offset in the ${base.bytes} bytes`)
   const versions = versionsOf(K, v.versions, 'versions')
-  rangesOf(K, v.units, 'units', { refKind: 'units', lo: 1, hi: CHUNKS_MAX, first: 0, last: ID_MAX, max: UNITS_CAP })
+  rangesOf(K, v.units, 'units', { refKind: 'units', lo: 0, hi: CHUNKS_MAX, first: 0, last: ID_MAX, max: UNITS_CAP })
   let total = 0
   for (const r of v.units) total += r.bytes
   if (total > UNITS_TOTAL_BYTES) throw tooLarge('bytes', UNITS_TOTAL_BYTES, total)
@@ -767,7 +770,7 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
   let end = was.end, xref = was.xref, next = was.next, root = was.root
   if (s.addon !== null && s.addon.tail !== null) {
     const tail = s.addon.tail, links = s.addon.links
-    if (links.startxref < end || links.startxref >= end + tail.length) throw refuse(K, 'addon.tail', 'its startxref does not lie inside the tail')
+    if (links.startxref !== end + links.xrefAt) throw refuse(K, 'addon.tail', 'its startxref is not where its cross-reference section is')
     if (links.prev !== xref) throw refuse(K, 'addon.tail', '/Prev is not the last cross-reference section\'s')
     if (root !== null && links.root !== root) throw refuse(K, 'addon.tail', 'rewrites another page tree root')
     if (next !== null && links.first !== next) throw refuse(K, 'addon.tail', 'its fresh objects do not follow the last tail\'s')
@@ -966,7 +969,7 @@ function catalogShape(v) {
   const paper = paperOf(K, v.paper, 'paper', true), N = paper.pages
   const versions = versionsOf(K, v.versions, 'versions')
   refOf(K, v.head, 'head', 'head', 'plain', HEAD_CAP)
-  rangesOf(K, v.units, 'units', { refKind: 'units', lo: 1, hi: CHUNKS_MAX, first: 0, last: ID_MAX, max: UNITS_CAP })
+  rangesOf(K, v.units, 'units', { refKind: 'units', lo: 0, hi: CHUNKS_MAX, first: 0, last: ID_MAX, max: UNITS_CAP })
   // parts: contiguous from page 1, each within the paper
   const parts = v.parts
   const through = rangesOf(K, parts, 'parts', { refKind: 'part', lo: 0, hi: N, first: 1, last: N, max: PART_CAP })
@@ -1048,6 +1051,7 @@ export function mergeParts(index, parts) {
   for (let i = 0; i < parts.length; i++) {
     if (parts[i].head !== index.sha256) throw refuse(K, `parts[${i}]`, 'not a part of the index\'s head')
     if (parts[i].pages[0] !== through + 1) throw refuse(K, `parts[${i}]`, `not beginning at page ${through + 1}`)
+    if (parts[i].prev !== (i === 0 ? null : parts[i - 1].sha256)) throw refuse(K, `parts[${i}]`, i === 0 ? 'the first part has a prev' : 'not following the digest of the part before it')
     through = parts[i].pages[1]
   }
   if (through !== N) throw refuse(K, 'parts', `reaching page ${through}, not the paper's ${N}`)

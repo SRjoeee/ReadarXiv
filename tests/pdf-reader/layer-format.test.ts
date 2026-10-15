@@ -229,6 +229,18 @@ describe('mergeParts is the whole', () => {
     expect(merged.versions).toEqual({ bundle: BUNDLE4, ...M.readHead.versions })
   })
 
+  it('refuses parts that are not one chain: the first with a prev, a part that does not follow the digest of the one before (two chains sharing a head)', async () => {
+    expect(() => mergeParts(M.index, [{ ...M.readParts[0]!, prev: 'a'.repeat(64) }, M.readParts[1]!, M.readParts[2]!])).toThrow(expect.objectContaining({ kind: 'index', path: 'parts[0]' }))
+    // an alternate second part (a stat changed), read after the first: it extends the first as the original does, and the third does not follow it
+    const input = partInputs(M.head.sha256, M.lefts, [null, M.parts[0]!.sha256, M.parts[1]!.sha256])[1]!
+    const alt = await writePart({ ...input, addon: { ...input.addon!, manifest: { ...input.addon!.manifest, stats: { removed: 4 } } } })
+    expect(alt.sha256).not.toBe(M.parts[1]!.sha256)
+    const readAlt = await readPart(alt.bytes, { ref: alt.ref, index: M.index, chain: M.readParts[0]!.chain })
+    expect(readAlt.prev).toBe(M.parts[0]!.sha256)
+    expect(() => mergeParts(M.index, [M.readParts[0]!, readAlt, M.readParts[2]!])).toThrow(expect.objectContaining({ kind: 'index', path: 'parts[2]' }))
+    expect(() => mergeParts(M.index, [M.readParts[0]!, M.readParts[1]!, M.readParts[2]!])).not.toThrow()
+  })
+
   it('refuses parts that are not a chain to the paper\'s last page, and is null where no part has a layout or an add-on', () => {
     expect(() => mergeParts(M.index, M.readParts.slice(0, 2))).toThrow(BundleRefusal)
     expect(() => mergeParts(M.index, [M.readParts[1]!, M.readParts[2]!])).toThrow(BundleRefusal)
@@ -530,6 +542,92 @@ function chunksOf(kinds: string[], pieces: unknown[][]) {
 }
 
 // ---------------------------------------------------------------- 6. the chunk cut
+describe('writeUnitChunks refuses a unit its reader would drop', () => {
+  const PARA = (pieces: unknown[]): (typeof UNITS)[number] => ['para', 0, null, null, null, pieces as never]
+  it('a bad kind, flags, depth, cell, edges or piece throws BundleRefusal naming the unit', async () => {
+    const bad: ((u: unknown[]) => void)[] = [
+      u => { u[0] = 'Para' }, u => { u[0] = 7 }, u => { u[1] = 16 }, u => { u[2] = 10 }, u => { u[3] = { table: 0, row: 0, col: 0, span: 0, head: false } },
+      u => { u[4] = {} }, u => { u[4] = { lead: 1 } }, u => { u[5] = [[9, 'x']] }, u => { u[5] = [[0, 'x'.repeat(16_001)]] },
+    ]
+    for (const edit of bad) {
+      const u = structuredClone(PARA([[0, 'a']])) as unknown[]
+      edit(u)
+      const e = await refusal(writeUnitChunks({ paper: PAPER, units: [PARA([[0, 'ok']]), u as never] }))
+      expect(e, JSON.stringify(u)).toMatchObject({ kind: 'units', id: 1, message: expect.stringMatching(/^units: unit 1: .*does not stand/) })
+    }
+  })
+
+  it('a nested piece naming an earlier unit that does not stand is refused at the first bad unit; one naming a standing unit is written', async () => {
+    const e = await refusal(writeUnitChunks({ paper: PAPER, units: [['Para', 0, null, null, null, [[0, 'a']]] as never, PARA([[4, 'x', 0, 'y']])] }))
+    expect(e).toMatchObject({ kind: 'units', id: 0 })
+    const ok = await writeUnitChunks({ paper: PAPER, units: [PARA([[0, 'a']]), PARA([[4, 'x', 0, 'y']])] })
+    expect((await readUnitsChunk(ok[0]!.bytes, { ref: ok[0]!.ref, before: null })).dropped).toEqual([])
+    // a nested unit after the unit that nests it, or itself
+    expect(await refusal(writeUnitChunks({ paper: PAPER, units: [PARA([[4, 'x', 1, 'y']]), PARA([[0, 'a']])] }))).toMatchObject({ id: 0 })
+  })
+
+  it('the paper\'s own units (bundleUnitsOf\'s) are all written', async () => {
+    const chunks = await writeUnitChunks({ paper: PAPER, units: UNITS })
+    expect(chunks).toHaveLength(1)
+  })
+})
+
+describe('a units chunk\'s ref names its ids', () => {
+  it('from and to of the ref are the chunk\'s ids, where the ref has them', async () => {
+    const c = M.chunks[0]!
+    await readUnitsChunk(c.bytes, { ref: c.ref, before: null })
+    for (const wrong of [{ from: 1 }, { to: 6 }, { from: 2, to: 9 }]) {
+      expect(await refusal(readUnitsChunk(c.bytes, { ref: { ...c.ref, ...wrong }, before: null })), JSON.stringify(wrong)).toMatchObject({ kind: 'units', path: 'ref' })
+    }
+    const { from: _f, to: _t, ...bare } = c.ref
+    await readUnitsChunk(c.bytes, { ref: bare, before: null })
+  })
+})
+
+describe('a paper with no units is a paper (readBundle reads one)', () => {
+  it('the whole round trip: no chunks, a head, an empty index, a part and a left part for its one page, the catalog, the merge', async () => {
+    const chunks = await writeUnitChunks({ paper: PAPER, units: [] })
+    expect(chunks).toEqual([])
+    const head = await writeHead({ paper: { ...PAPER, pages: 1 }, base: BASE, image: IMAGE, units: chunks, lineskip: null, cites: null })
+    const rh = await readHead(head.bytes, { ref: head.ref })
+    expect(rh.units).toEqual([])
+    const u = unitsOfChunks([])
+    expect(u).toMatchObject({ units: [], kinds: [], dropped: [], index: [] })
+    expect(u.records.kind).toHaveLength(0)
+    expect([...u.records.cells, ...u.records.headings]).toEqual([])
+    const index = indexOf(rh, [])
+    expect(index.units).toEqual([])
+    const left = await writeLeftPart({ paper: PAPER, page: 1, first: 0, tokens: tokenWire(0), spans: [], pairs: [] })
+    const part = await writePart({ paper: PAPER, head: head.sha256, prev: null, pages: [1, 1], views: [0, 0, 612, 792], left: [], fileOnly: [], layout: null, addon: null, leftParts: [left] })
+    const read = await readPart(part.bytes, { ref: part.ref, index, chain: null })
+    expect(read).toMatchObject({ pages: [1, 1], left: [], fileOnly: [], layout: null })
+    const cat = await writeCatalog({ head: rh, units: [], parts: [{ from: 1, to: 1, sha256: part.sha256, bytes: part.bytes.length }], end: { through: 1 } })
+    const c = await readCatalog(cat.bytes, { key: cat.key })
+    expect(c.units).toEqual([])
+    expect(indexOf(rh, [], { catalog: c }).units).toEqual([])
+    const merged = mergeParts(index, [read])
+    expect(merged).toMatchObject({ units: [], left: { kinds: [], units: [], pages: [[0, 0, 612, 792]] }, layout: null, addon: null })
+    // BUNDLE 3's reader reads the same paper
+    const bundle = readBundle(writeBundle({
+      paper: { ...PAPER, pages: 1 }, base: { bytes: BASE.bytes, sha256: BASE.sha256, url: `/api/v1/original/${PAPER.id}v${PAPER.version}` }, image: IMAGE, units: [],
+      left: { kinds: [], pages: [[0, 0, 612, 792]], units: [] }, layout: null, addon: null,
+    }))
+    expect(merged.units).toEqual(bundle.units)
+    expect(merged.left).toEqual(bundle.left)
+  })
+
+  it('the readers accept 0 to CHUNKS_MAX refs and refuse more', async () => {
+    const head = parsed(M.head)
+    head.units = []
+    const f = forged('head', head)
+    expect(await readHead(f.bytes, { ref: f.ref })).toMatchObject({ units: [] })
+    head.units = Array.from({ length: CHUNKS_MAX + 1 }, (_, i) => ({ kind: 'units', from: i, to: i, sha256: 'a'.repeat(64), bytes: 10 }))
+    const g = forged('head', head)
+    expect(await refusal(readHead(g.bytes, { ref: g.ref }))).toMatchObject({ path: 'units' })
+    expect(() => unitsOfChunks(Array.from({ length: CHUNKS_MAX + 1 }, () => M.readChunks[0]!))).toThrow(BundleRefusal)
+  })
+})
+
 describe('writeUnitChunks cuts by unit id within both caps', () => {
   const PARA = (text: string): (typeof UNITS)[number] => ['para', 0, null, null, null, [[0, text]]]
   /** units of `size` code units of text each: `n` of them */
@@ -616,7 +714,6 @@ describe('writeUnitChunks cuts by unit id within both caps', () => {
     head.units = refsOf(UNITS_TOTAL_BYTES / UNITS_CAP)
     const h = forged('head', head)
     expect(await readHead(h.bytes, { ref: h.ref })).toMatchObject({ kind: 'head' })
-    expect(() => unitsOfChunks([])).toThrow(BundleRefusal)
     expect(() => unitsOfChunks(Array.from({ length: CHUNKS_MAX + 1 }, () => M.readChunks[0]!))).toThrow(BundleRefusal)
   })
 })
@@ -713,7 +810,6 @@ describe('the head', () => {
   })
 
   it('refuses units refs that are none, not contiguous from 0, past a chunk\'s bytes, or of another kind', async () => {
-    await bad((h: never) => { (h as { units: unknown[] }).units = [] }, 'units')
     await bad((h: never) => { (h as { units: { from: number }[] }).units[0]!.from = 1 }, 'units[0].from')
     await bad((h: never) => { (h as { units: { to: number }[] }).units[0]!.to = -1 }, 'units[0].to')
     await bad((h: never) => { (h as { units: { bytes: number }[] }).units[0]!.bytes = UNITS_CAP + 1 }, 'units[0].bytes')
@@ -1012,6 +1108,28 @@ describe('a part against the chain', () => {
       await refused(1, withTail(end1, BASE.xref, 12, 104, 4) as never, 'addon.tail')
       await refused(1, withTail(end1, 5, 12, 104, 4) as never, 'addon.tail')
     })
+    it('refuses a startxref that is not where the section is, though it lies inside the tail (a stream form and a classic one)', async () => {
+      // the declaration moved to another place of the tail: the number after `startxref`, same digits
+      const t = tailOf(end1, TAILS[0]!.startxref, 12, 104, 4)
+      const text = textOf(t.tail)
+      for (const shift of [1, -1, 7, 20]) {
+        const other = text.replace(`startxref\n${t.startxref}\n`, `startxref\n${t.startxref + shift}\n`)
+        expect(other).not.toBe(text)
+        const tail = Uint8Array.from(other, c => c.charCodeAt(0))
+        await refused(1, ((p: Any) => { p.addon.tail = Buffer.from(tail).toString('base64'); p.addon.manifest.appended = tail.length }) as never, 'addon.tail')
+      }
+      // the stream form: the sample's real tail declares its section's place exactly, and a shifted declaration is refused
+      const sample = JSON.parse(readFileSync('tests/fixtures/pdf/sample-1/bundle.json', 'utf8')) as { addon: { tail: string }; base: { bytes: number } }
+      const real = Buffer.from(sample.addon.tail, 'base64')
+      const placed = (declared: number) => Buffer.from(textOf(real).replace(/startxref\n\d+\n/, `startxref\n${declared}\n`), 'latin1')
+      const at = sample.base.bytes + 132
+      const first = { head: M.head.sha256, through: 0, last: null, slot: -Infinity, id: -1, told: new Uint8Array(UNITS.length), reach: 0, ahead: [], end: sample.base.bytes, xref: 212001, next: null, root: null, r: 0 } as unknown as PartChain
+      const run = (tail: Buffer) => partWith(0, ((p: Any) => { p.addon.tail = tail.toString('base64'); p.addon.manifest.appended = tail.length }) as never, { chain: first })
+      // (the real stream tail, as its declaration places it, is read through the chain; the same tail declared elsewhere is not)
+      expect((await run(placed(at))).addon!.tail).toHaveLength(real.length)
+      for (const shift of [1, -1, 40]) expect(await refusal(run(placed(at + shift))), String(shift)).toMatchObject({ kind: 'part', path: 'addon.tail' })
+    })
+
     it('refuses a startxref outside the tail: before it, or past it', async () => {
       const t = tailOf(end1, TAILS[0]!.startxref, 12, 104, 4)
       for (const shift of [-100, t.tail.length]) {
@@ -1262,7 +1380,6 @@ describe('the catalog', () => {
     await refused(c => { c.versions.pdfjs = '5.0.0' }, 'versions.pdfjs')
     await refused(c => { c.versions.layout = '' }, 'versions.layout')
     await refused(c => { c.paper.pages = 0 }, 'paper.pages')
-    await refused(c => { c.units = [] }, 'units')
   })
 
   it('is the key\'s: of its paper and of the VTAG its versions make; and the paper asked for', async () => {
@@ -1555,7 +1672,6 @@ describe('a writer given what its reader would refuse throws BundleRefusal', () 
     const big = Array.from({ length: 200 }, () => [0, 'x'.repeat(16_000)])
     expect(await refusal(writeUnitChunks({ paper: PAPER, units: [['para', 0, null, null, null, big] as never] }))).toMatchObject({ kind: 'units', id: 0 })
     expect(await refusal(writeHead({ paper: { ...PAPER, pages: 0 }, base: BASE, image: IMAGE, units: M.chunks, lineskip: null, cites: null }))).toMatchObject({ kind: 'head', path: 'paper.pages' })
-    expect(await refusal(writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: [], lineskip: null, cites: null }))).toMatchObject({ kind: 'head', path: 'units' })
   })
 })
 
