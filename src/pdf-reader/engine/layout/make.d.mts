@@ -1,6 +1,7 @@
 // make.mjs's types (JavaScript until the engine's port), for the container's prepare and the maker's tests
 import type { SourceUnit } from '../source/latex-front.mjs'
 import type { LayoutFile } from './file.mjs'
+import type { ArxivText } from './arxiv.mjs'
 import type { LayoutMarks } from './marks.mjs'
 
 export interface MakeInput {
@@ -14,6 +15,10 @@ export interface MakeInput {
   paper: { id: string; version: number }
   left: string
   pdfjs: string
+  /** arXiv's text as layout/arxiv.mjs readArxivText read it from `arxiv` (step T), else read by the maker */
+  text?: ArxivText | null
+  /** anchors.mjs floatMatches of `text`'s tokens and the units' texts, else searched by the maker */
+  floatMatch?: Map<number, number[] | null> | null
 }
 export interface LayoutStats {
   lines: { carried: number; total: number; held: number }

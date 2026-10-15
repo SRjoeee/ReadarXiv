@@ -11,7 +11,10 @@ export interface Layout { readonly pagesOf: Map<number, number[]> }
 
 /** whether a kind of unit may light by sentence: running text */
 export declare function bySentence(kind: string | undefined): boolean
-export declare function layoutOf(doc: DocToken[], views: number[][], anchors: Map<number, Anchor | null>, kindOf?: (id: number) => string | undefined): Layout
+/** each page's columns by a rule (pageColumns, today's: from the located units' lines), [null, page 1, …] */
+export type ColumnRule = (views: number[][], anchors: Map<number, Anchor | null>, kindOf?: (id: number) => string | undefined) => unknown[]
+export declare const pageColumns: ColumnRule
+export declare function layoutOf(doc: DocToken[], views: number[][], anchors: Map<number, Anchor | null>, kindOf?: (id: number) => string | undefined, o?: { edges?: { l: ArrayLike<number>; r: ArrayLike<number> } | null; columns?: ColumnRule }): Layout
 /** a page's runs; the units whose head it took and the words it filled in (for the gate) */
 export declare function pageGeometry(layout: Layout, page: number): { runs: Run[]; byId: Map<number, Run[]>; heads: number[]; filled: number }
 export declare function runsOf(layout: Layout | null | undefined, id: number): Run[]

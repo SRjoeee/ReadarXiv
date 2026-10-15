@@ -16,7 +16,7 @@ export { gunzip, unpackSource, untar } from './source/tar.mjs'
 // a directory as a project (Node only)
 export { folder } from './source/node-files.mjs'
 // the left geometry
-export { anchorUnits, boundsFromMarks, inkEdges, lineRects, markWords, sentenceStarts, startRuns, startsAnchor, tokenAtMark, tokenizeDocument, tokens } from './pipeline/anchors.mjs'
+export { anchorUnits, boundsFromMarks, floatMatches, inkEdges, lineRects, markWords, matchUnits, pageFrame, placeUnits, sentenceStarts, startRuns, startsAnchor, tokenAtMark, tokenizeDocument, tokens } from './pipeline/anchors.mjs'
 export { leftSideOf } from './pipeline/left-side.mjs'
 export { texErrors, unitsAtErrors } from './pipeline/tex-errors.mjs'
 // the layout file
@@ -24,6 +24,7 @@ export { LABEL_KINDS, LAYOUT, LAYOUT_CAP, LAYOUT_DEPTH, LAYOUT_VALUES, LayoutRef
 export { COORD_MAX, PAGES_MAX, PIECES_MAX, STRING_MAX, boundedJson, checkKeys, checkPages, checkViews, countValues, inView, isInteger, isNumber, isObject, isVersionToken, told, utf8Strict } from './layout/json.mjs'
 export { DISPLAY, FOLLOWERS, GLYPHS_PIECE, INK_MAX, INK_TEXT_MAX, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, MARKS_CAP, MARKS_DEPTH, MARKS_SCHEMA, MARKS_VALUES, MARK_CLASSES, MARK_NAME, OWNED_ALL, POINTS_TEX, PROBE_MAX, PROBE_SCHEMA, RULE, RULES_PIECE, TEXT_SYMBOLS, asSet, askedCommands, classOf, commandOf, encodeLayoutMarks, headEnd, inkSamples, inkSection, layoutMarking, layoutMarksOf, markProbeTex, parseLayoutMarks, probeRow, probeSamples, probeTex, punctuationSection, readInkProbe, readInkTexts, readMarkProbe, readProbe, switchedOf, symbolText } from './layout/marks.mjs'
 export { CARRY_MIN, OPS_MS, OPS_PAPER_MS, fontName, makeLayout } from './layout/make.mjs'
+export { readArxivText } from './layout/arxiv.mjs'
 export { layoutMarksOfPaper } from './layout/paper.mjs'
 export { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, REFUSED_MAX, REMOVAL, checkAddonManifest, checkBoxes, parseAddonManifest } from './layout/addon-manifest.mjs'
 export { pagePlanOf, pagePlansOf, paperAddon } from './layout/addon.mjs'

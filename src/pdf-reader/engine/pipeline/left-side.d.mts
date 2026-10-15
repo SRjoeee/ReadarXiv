@@ -1,6 +1,7 @@
 // left-side.mjs's types: the original's side for the prepare, a page at a time
 import type { LeftPageInput } from '../layer-proto/cut.mjs'
 import type { Box, UnitWire } from '../layer-proto/bundle.mjs'
+import type { ColumnRule } from '../view/highlight.mjs'
 import type { Anchor, DocToken } from './anchors.mjs'
 
 export interface LeftSide {
@@ -19,6 +20,7 @@ export interface LeftSide {
 /**
  * `doc`: the tokens the anchors were made on, in page order (fitted: tokens whose fields are not finite are dropped before anchoring);
  * `views`: each page's box as PDF.js gives it, pages 1 to N; `anchors`: anchorUnits' result. Throws a RangeError for a token whose
- * page goes backwards or past the views
+ * page goes backwards or past the views. `edges`: the tokens' ink edges made already (layout/arxiv.mjs readArxivText's, whose tokens
+ * hold no item); `columns`: the pages' columns' rule (view/highlight.mjs pageColumns, today's)
  */
-export declare function leftSideOf(o: { doc: readonly DocToken[]; views: readonly (readonly number[])[]; anchors: ReadonlyMap<number, Anchor | null> }): LeftSide
+export declare function leftSideOf(o: { doc: readonly DocToken[]; views: readonly (readonly number[])[]; anchors: ReadonlyMap<number, Anchor | null>; edges?: { l: ArrayLike<number>; r: ArrayLike<number> } | null; columns?: ColumnRule }): LeftSide

@@ -51,11 +51,13 @@ function lowerBound(xs, v) {
  * tokens are tens of thousands) each page's columns, the document's column text edges and the half leading of each
  * kind of unit on each page; the units on each page. `doc` tokenizeDocument's tokens; `views` each page's box, [x0, y0, x1, y1]; `anchors`
  * anchorUnits' result; `kindOf(id)` a unit's kind. Nothing of `doc` is kept: its objects, with their words and items,
- * are ten times the copy (2608.02459: 9 and 11.6 MB a side)
+ * are ten times the copy (2608.02459: 9 and 11.6 MB a side). `o.edges`: the tokens' ink edges made already (inkEdges, as
+ * layout/arxiv.mjs makes them a page at a time while the text items are there), copied, for tokens whose items are let
+ * go; `o.columns`: the pages' columns' rule (pageColumns, today's: from every located unit's lines)
  */
-export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
+export function layoutOf(doc, views, anchors, kindOf = () => undefined, { edges = null, columns = pageColumns } = {}) {
   const n = doc.length, pages = views.length
-  const { l, r } = inkEdges(doc)
+  const { l, r } = edges ? { l: Float32Array.from(edges.l), r: Float32Array.from(edges.r) } : inkEdges(doc)
   const tok = { l, r, y: new Float32Array(n), h: new Float32Array(n), top: new Float32Array(n), bottom: new Float32Array(n) }
   // tokens are in page order: page p's are [pageStart[p], pageStart[p + 1])
   const pageStart = new Int32Array(pages + 2).fill(n), far = []
@@ -66,22 +68,44 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
     if (w.far > r[k]) far.push(k)
   }
   for (let p = pages; p >= 1; p--) if (pageStart[p] > pageStart[p + 1]) pageStart[p] = pageStart[p + 1]
-
-  // each page's columns: two where four long lines stand in each half, one where four cross the middle, else as most
-  // pages have them; the lines are the units' (running heads, page numbers and floats' texts are no text block's)
-  const page = [null]
-  // size: the page's, for the edges' pool; gaps: the space between consecutive lines of a unit there, by its kind
-  for (let p = 1; p <= pages; p++) { const v = views[p - 1]; page[p] = { mid: (v[0] + v[2]) / 2, width: v[2] - v[0], size: `${Math.round(v[2] - v[0])}x${Math.round(v[3] - v[1])}`, L: 0, R: 0, F: 0, x0: Infinity, x1: -Infinity, gaps: new Map() } }
-  const long = []
+  // the units on each page, and each unit's pages
   const unitsOn = Array.from({ length: pages + 2 }, () => [])
   const pagesOf = new Map()
   for (const [id, a] of anchors) {
     if (!a?.tokens?.length) continue
-    const ps = [], kind = kindOf(id) ?? ''
+    const ps = []
+    for (const rect of a.rects) if (Number.isInteger(rect.page) && rect.page >= 1 && rect.page <= pages && ps.at(-1) !== rect.page) { ps.push(rect.page); unitsOn[rect.page].push(id) }
+    pagesOf.set(id, [...new Set(ps)].sort((x, y) => x - y))
+  }
+  const page = columns(views, anchors, kindOf)
+  // a mark set apart after a token on its baseline (tokenizeDocument's `far`) is its ink where it ends at the token's
+  // column's text edge: a proof's box set flush right
+  for (const k of far) {
+    const w = doc[k], P = page[w.page], e = P && (P.cols[colOf(P, w.x, w.x + w.w)] ?? P.cols.F)
+    if (e && Math.abs(w.far - e.x1) < SNAP) r[k] = w.far
+  }
+  return { tok, pageStart, page, anchors, kindOf, unitsOn, pagesOf, cache: new Map(), indents: new Map() }
+}
+
+/**
+ * Each page's columns, by today's rule: [null, page 1, …], each { mid, width, size, x0, x1, two, cols, lead }. Two columns
+ * where four long lines stand in each half, one where four cross the middle, else as most pages have them; the lines are
+ * the located units' (running heads, page numbers and floats' texts are no text block's), so every page's columns read every
+ * unit's place. A rule that read arXiv's text alone would make a page's columns before any unit is located (a rule change:
+ * layoutOf's `columns`)
+ */
+export function pageColumns(views, anchors, kindOf = () => undefined) {
+  const pages = views.length
+  const page = [null]
+  // size: the page's, for the edges' pool; gaps: the space between consecutive lines of a unit there, by its kind
+  for (let p = 1; p <= pages; p++) { const v = views[p - 1]; page[p] = { mid: (v[0] + v[2]) / 2, width: v[2] - v[0], size: `${Math.round(v[2] - v[0])}x${Math.round(v[3] - v[1])}`, L: 0, R: 0, F: 0, x0: Infinity, x1: -Infinity, gaps: new Map() } }
+  const long = []
+  for (const [id, a] of anchors) {
+    if (!a?.tokens?.length) continue
+    const kind = kindOf(id) ?? ''
     a.rects.forEach((r, i) => {
       const P = page[r.page]
       if (!P) return
-      if (ps.at(-1) !== r.page) { ps.push(r.page); unitsOn[r.page].push(id) }
       if (r.x0 < P.x0) P.x0 = r.x0
       if (r.x1 > P.x1) P.x1 = r.x1
       // the leading: the space between a unit's consecutive lines of one size, less than a line apart
@@ -93,7 +117,6 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
       else if (r.x1 <= P.mid + 1) P.L++
       else P.R++
     })
-    pagesOf.set(id, [...new Set(ps)].sort((x, y) => x - y))
   }
   let twos = 0, ones = 0
   for (let p = 1; p <= pages; p++) {
@@ -144,13 +167,7 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
     P.lead.set(null, own)
     P.gaps = null
   }
-  // a mark set apart after a token on its baseline (tokenizeDocument's `far`) is its ink where it ends at the token's
-  // column's text edge: a proof's box set flush right
-  for (const k of far) {
-    const w = doc[k], P = page[w.page], e = P && (P.cols[colOf(P, w.x, w.x + w.w)] ?? P.cols.F)
-    if (e && Math.abs(w.far - e.x1) < SNAP) r[k] = w.far
-  }
-  return { tok, pageStart, page, anchors, kindOf, unitsOn, pagesOf, cache: new Map(), indents: new Map() }
+  return page
 }
 
 /** how far a unit's text stands inside its columns' text edges, on each side (PDF units): the least of its lines' —

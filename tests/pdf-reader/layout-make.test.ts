@@ -5,6 +5,9 @@ import { encodeLayout, type LayoutFile, NAME_FLAG, NAME_KEYS, PH_FLAG, parseLayo
 import { OPS_CAP } from '@/pdf-reader/engine/layout/ink.mjs'
 import { CARRY_MIN, fontName, type LayoutStats, makeLayout, OPS_MS, OPS_PAPER_MS } from '@/pdf-reader/engine/layout/make.mjs'
 import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks, type Switches } from '@/pdf-reader/engine/layout/marks.mjs'
+import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
+import { floatMatches } from '@/pdf-reader/engine/pipeline/anchors.mjs'
+import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The layout maker over a fake PDF.js document of arXiv's PDF and a marks file made, as the run makes it, from a fake
 // marked original: each run of text is a text item and the glyphs of an operator list alike, every character half an em
@@ -1351,5 +1354,38 @@ describe("makeLayout, babel's names (D1a)", () => {
     // no page with a body line of its kind of column: its own box (no room past it is known), never the page's half
     const alone = await made({ pages: [{ runs: [h] }], marks: [[`n1.ref.s`, 1, h.x, h.y], [`n1.ref.e`, 1, endOf(h), h.y]], units: [] })
     expect(alone.file.names.map(r => [r[3], r[5], r[13], r[14]])).toEqual([[72, endOf(h), 72, endOf(h)]])
+  })
+})
+
+describe('makeLayout over arXiv\'s text read once (the prepare\'s step T, layout/arxiv.mjs)', () => {
+  /** a world whose arXiv document counts its text reads */
+  const counted = (w: World) => {
+    const doc = arxivOf(w.pages), reads: number[] = []
+    return { reads, doc: { numPages: doc.numPages, getPage: async (n: number) => { const p = await doc.getPage(n); return { ...p, getTextContent: async () => { reads.push(n); return p.getTextContent() } } } } }
+  }
+  const worlds: [string, World][] = [['a paragraph with a display', DISPLAY], ['two columns', { pages: [{ runs: Array.from({ length: 6 }, (_, j): Run => ({ s: words(10 * j, 10), x: 60, y: 700 - 12 * j })) }], marks: [['0s', 1, 60, 700], ['0e', 1, endOf({ s: words(50, 10), x: 60, y: 640 }), 640]], units: [unit('para', [text(words(0, 60))])] }]]
+  for (const [name, w] of worlds) {
+    it(`${name}: with the text given, no page's text is read again and the file is the same bytes, the floats' matches given or not`, async () => {
+      const marks = await marksOf(w)
+      const base = { units: w.units, marks, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' }
+      const alone = counted(w), want = await makeLayout({ ...base, arxiv: alone.doc })
+      expect(alone.reads).toEqual(w.pages.map((_, i) => i + 1))
+      const read = counted(w), text = await readArxivText(read.doc)
+      expect(read.reads).toEqual(w.pages.map((_, i) => i + 1))
+      const texts = w.units.map((u, i) => ({ id: i, ...unitText(u.pieces as Parameters<typeof unitText>[0]), ...displayEdges(u) }))
+      const floatMatch = floatMatches(text.tokens, texts, id => ['caption', 'footnote', 'cell', 'figure'].includes(w.units[id]?.kind ?? ''))
+      for (const given of [{ text }, { text, floatMatch }]) {
+        const got = await makeLayout({ ...base, arxiv: read.doc, ...given })
+        if (!('file' in want) || !('file' in got)) throw new Error('refused')
+        expect(encodeLayout(got.file)).toBe(encodeLayout(want.file))
+      }
+      expect(read.reads).toEqual(w.pages.map((_, i) => i + 1))
+    })
+  }
+
+  it('a text of another page count than the document is the caller\'s mistake', async () => {
+    const marks = await marksOf(DISPLAY)
+    const text = await readArxivText(arxivOf([...DISPLAY.pages, ...DISPLAY.pages]))
+    await expect(makeLayout({ units: DISPLAY.units, marks, arxiv: arxivOf(DISPLAY.pages), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', text })).rejects.toThrow(TypeError)
   })
 })

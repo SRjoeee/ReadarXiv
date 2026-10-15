@@ -17,7 +17,8 @@
 // is refused where too few lines are carried, where arXiv's page count is out of bounds, and where its own parser refuses
 // it: a file the parser refuses is never returned.
 // Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes.
-import { anchorUnits, boundsFromMarks, markWords, tokenAtMark, tokenizeDocument, tokens } from '../pipeline/anchors.mjs'
+import { anchorUnits, boundsFromMarks, markWords, tokenAtMark, tokens } from '../pipeline/anchors.mjs'
+import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
 import { carrierOf, tokensOfMarks } from './carry.mjs'
 import { encodeLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, LayoutRefusal, NAME_FLAG, NAME_KEYS, NAMES_MAX, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
@@ -322,32 +323,28 @@ async function gzipSize(bytes) {
  * indices); `marks` the marks file of its layout compile; `arxiv` a PDF.js document of arXiv's PDF, which the caller
  * opens and destroys, each of its pages cleaned up once read (page.cleanup: its operator list and images let go), so
  * that a caller that reads its operator lists again pays a parse again (the add-on relies on PDF.js keeping them, and
- * takes a document of its own: addon.mjs); `OPS` PDF.js's operator codes
+ * takes a document of its own: addon.mjs); `OPS` PDF.js's operator codes. `text`: arXiv's text as layout/arxiv.mjs
+ * readArxivText read it from this document (the prepare's step T, read once for the left and the maker), else read here;
+ * `floatMatch`: anchors.mjs floatMatches of its tokens and the units' texts, else each float's is searched here
  */
-export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs }) {
+export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null }) {
   const stats = blank(units)
   for (const u of units) { const k = u.kind; stats.units.byKind[k] ??= [0, 0]; stats.units.byKind[k][1]++ }
   const pages = arxiv?.numPages
   if (!Number.isInteger(pages) || pages < 1 || pages > PAGES_MAX) return { refused: 'pages', stats }
   // ---------------------------------------------------------------- arXiv's text, page by page
   let t = now()
-  const views = [], text = [], held = [], dark = new Set()
+  const read = text ?? await readArxivText(arxiv)
+  if (read.pages !== pages) throw new TypeError(`arXiv's text is of ${read.pages} pages, its document of ${pages}`)
+  const views = [], dark = new Set()
   for (let p = 1; p <= pages; p++) {
-    let page = null, view = null, items = [], styles = {}
-    try {
-      page = await arxiv.getPage(p)
-      view = viewOf(page.view)
-      const tc = await page.getTextContent()
-      items = Array.isArray(tc?.items) ? tc.items : []
-      styles = tc?.styles ?? {}
-    } catch { page = null }
+    // a page that could not be had has no view; one whose text could not be read keeps its own
+    let view = read.views[p - 1] == null ? null : viewOf(read.views[p - 1])
     if (!view) { view = views.length ? views.slice(-4) : [0, 0, 612, 792]; dark.add(p) }
-    if (!page) dark.add(p)
+    if (!read.ok[p - 1]) dark.add(p)
     views.push(...view)
-    text.push({ page: p, items, styles })
-    held.push(page)
   }
-  const doc = tokenizeDocument(text)
+  const doc = read.tokens
   const viewAt = p => views.slice(4 * (p - 1), 4 * p)
   stats.ms.text = now() - t
   // ---------------------------------------------------------------- arXiv's ink: glyphs and graphics, page by page
@@ -357,8 +354,11 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   let waited = 0
   const seen = { warned: false }
   for (let p = 1; p <= pages; p++) {
-    const page = held[p - 1]
-    if (!page || dark.has(p)) continue
+    if (dark.has(p)) continue
+    // (the page its text was read from: PDF.js keeps each page's proxy)
+    let page = null
+    try { page = await arxiv.getPage(p) } catch {}
+    if (!page) { dark.add(p); continue }
     if (waited >= OPS_PAPER_MS) { stats.timedOut.push(p); dark.add(p); continue }
     const t0 = now()
     let ops = null
@@ -447,7 +447,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   }
   const linesTeX = new Map(marks.lines)
   const texts = units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
-  const anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? '') })
+  const anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch })
   stats.ms.anchor = now() - t
 
   // ---------------------------------------------------------------- each located unit's lines
