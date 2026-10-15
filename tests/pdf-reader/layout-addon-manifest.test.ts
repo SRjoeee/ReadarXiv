@@ -192,3 +192,60 @@ describe('parseAddonManifest', () => {
     expect(() => checkAddonManifest(edited(m => { m.page[1].dirty.push(1) }), { pages: 3 })).toThrow(LayoutRefusal)
   })
 })
+
+describe('a part of the manifest (bundle 4: part mode)', () => {
+  // a paper of 5 pages, the part covering 2 and 3, one page of R told before it: its removed pages are the document's 7th
+  // (5 + 1 + 1) on; page 2 is removed over kept ink (its R page the 7th), page 3 drawn over paper alone
+  const N = 5, PART = { from: 2, to: 3, atFrom: 7 }
+  const VIEWS_PART = [0, 0, 700, 800, 0, 0, 612, 792]
+  function part(): RemovalManifest {
+    return {
+      schema: 1, removal: REMOVAL, pages: N, sets: {},
+      page: { 2: { ok: true, units: { 4: [650, 640, 690, 660] }, at: { R: 7 }, dirty: [650, 640, 660, 650] }, 3: { ok: true, rules: [100, 500, 400, 500.5] } },
+      appended: 640, stats: { removed: 3 },
+    }
+  }
+  const check = (m: unknown, views: readonly number[] | null = VIEWS_PART, p = PART) => checkAddonManifest(m, { pages: N, views, shipped: true, part: p })
+  const refused = (m: unknown, views?: readonly number[] | null, p?: typeof PART): LayoutRefusal | null => {
+    try { check(m, views, p); return null } catch (e) { if (e instanceof LayoutRefusal) return e; throw e }
+  }
+
+  it('reads the entries of its pages alone, and their boxes within the views of pages from `from`', () => {
+    const m = part()
+    expect(check(m)).toBe(m)
+    // page 2 is wider than page 3: x = 690 lies on page 2 only
+    const on3 = edited(m => { m.page[3].rules = [650, 500, 690, 500.4] }, part)
+    expect(refused(on3)?.path).toBe('page.3.rules[0]')
+    // (read as a whole page 2 would be page 1's view, and a part's pages the wrong ones)
+    expect(refused(edited(m => { m.page[2].units[4] = [650, 640, 720, 660] }, part))?.path).toBe('page.2.units.4[2]')
+  })
+
+  it('refuses a page outside the part, a page missing, a set, another page count, and a part not the shipped form', () => {
+    expect(refused(edited(m => { m.page[1] = { ok: true } }, part))?.path).toBe('page.1')
+    expect(refused(edited(m => { m.page[4] = { ok: true } }, part))?.path).toBe('page.4')
+    expect(refused(edited(m => { delete m.page[3] }, part))?.path).toBe('page')
+    expect(refused(edited(m => { m.sets = { R: 5 } }, part))?.path).toBe('sets.R')
+    expect(refused(edited(m => { m.pages = 4 }, part))?.path).toBe('pages')
+    expect(() => checkAddonManifest(part(), { pages: N, views: VIEWS_PART, part: PART })).toThrow(RangeError)
+  })
+
+  it('numbers its removed pages from atFrom, consecutive, in page order, each once', () => {
+    expect(refused(part(), VIEWS_PART, { ...PART, atFrom: 8 })?.path).toBe('page.2.at.R')
+    expect(refused(part(), VIEWS_PART, { ...PART, atFrom: 6 })?.path).toBe('page.2.at.R')
+    const two = edited(m => { m.page[3].at = { R: 8 }; m.page[3].dirty = [100, 500, 110, 510] }, part)
+    expect(check(two)).toBe(two)
+    expect(refused(edited(m => { m.page[3].at = { R: 9 }; m.page[3].dirty = [100, 500, 110, 510] }, part))?.path).toBe('page.3.at.R')
+    expect(refused(edited(m => { m.page[3].at = { R: 7 }; m.page[3].dirty = [100, 500, 110, 510] }, part))?.path).toBe('page.3.at.R')
+    // no removed page named for a page with kept ink: today's rule still holds
+    expect(refused(edited(m => { delete m.page[2].at }, part))?.path).toBe('page.2.at')
+  })
+
+  it('a part with no tail has no removed page, and a refused page of the part is the entry\'s ok: false', () => {
+    const none = edited(m => { delete m.page[2].at; delete m.page[2].dirty; m.page[3] = { ok: false, refused: 'not planned' }; m.appended = 0 }, part)
+    expect(check(none)).toBe(none)
+  })
+
+  it('leaves today\'s mode as it was: the whole manifest\'s, from page 1', () => {
+    expect(checkAddonManifest(shipped(), { pages: 3, shipped: true, part: null })).toEqual(shipped())
+  })
+})

@@ -23,11 +23,14 @@ export interface RemovalManifest {
 /** a manifest already parsed, by every bound parseAddonManifest checks past JSON.parse; `pages` the paper's, `views`
  *  (where given) each page's x0, y0, x1, y1, a box then within its page's; `shipped`, the shipped add-on's form alone (no
  *  check's set, outline table nor colours). Returns it as it is; throws LayoutRefusal */
-export declare function checkAddonManifest(manifest: unknown, o: { pages: number; views?: readonly number[] | null; shipped?: boolean }): RemovalManifest
+export declare function checkAddonManifest(manifest: unknown, o: { pages: number; views?: readonly number[] | null; shipped?: boolean; part?: ManifestPart | null }): RemovalManifest
+/** a bundle 4 part's manifest (the shipped form, no set): an entry for exactly each page `from` to `to`, `views` the views
+ *  of pages from `from` on, and the entries' `at.R` the consecutive document pages `atFrom`, `atFrom` + 1 … in page order */
+export interface ManifestPart { from: number; to: number; atFrom: number }
 /** the manifest read within bounds: schema 1, removal a version token (any remover's), pages the layout file's, sets, each page's entry (ok,
  *  refused at most 200 characters, at within the add-on's pages, dirty and rules finite numbers stride 4 within the
  *  page's view, units' boxes likewise); values counted before JSON.parse; throws LayoutRefusal */
 export declare function parseAddonManifest(bytes: Uint8Array, o: { pages: number; views?: readonly number[] | null; shipped?: boolean }): RemovalManifest
-/** boxes x0, y0, x1, y1 (stride 4) on page `page` (1-based): finite, none empty, within the page's view by 1 where `views` is given (4 × pages numbers),
- *  else within the coordinate bound; throws LayoutRefusal at the number that breaks it */
-export declare function checkBoxes(boxes: unknown, page: number, views: readonly number[] | null, path: string): number[]
+/** boxes x0, y0, x1, y1 (stride 4) on page `page` (1-based): finite, none empty, within the page's view by 1 where `views` is given (4 × pages numbers,
+ *  from page `first`, 1 when not given), else within the coordinate bound; throws LayoutRefusal at the number that breaks it */
+export declare function checkBoxes(boxes: unknown, page: number, views: readonly number[] | null, path: string, first?: number): number[]

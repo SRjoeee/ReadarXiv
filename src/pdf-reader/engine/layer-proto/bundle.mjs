@@ -18,6 +18,10 @@ import { ADDON_CAP, checkAddonManifest, REMOVAL } from '../layout/addon-manifest
 import { checkLayout, encodeLayout, isPaperId, LAYOUT, UNIT_KINDS, VERSION_MAX } from '../layout/file.mjs'
 import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal, PAGES_MAX, STRING_MAX, told, utf8Strict } from '../layout/json.mjs'
 import { PDFJS, PIPELINE_VERSION } from '../pipeline/versions.mjs'
+import { bundleUnitsOf, fromBase64, toBase64, UNIT_FLAG_BITS, unitStands } from './units.mjs'
+
+// (the units and base64 moved to units.mjs, which BUNDLE 4's chunks take too)
+export { bundleUnitsOf, UNIT_FLAG_BITS }
 
 /** the bundle's format: raised with any change to what it holds (the left's tokens and spans, with the highlight); 2 the
  *  layout file's schema 2, its babel names (D1a); 3 its schema 3, the paper's \lineskip and \lineskiplimit. The layout
@@ -27,31 +31,18 @@ export const BUNDLE = '3'
 /** a bundle's bytes at most (the 147-page thesis's is 1.18 MiB) and its values (the thesis holds 165,659) */
 export const BUNDLE_CAP = 4 * 2 ** 20
 export const BUNDLE_VALUES = 1_000_000
-/** a unit's flags: the paper's title, the front matter, written back in the source's brackets, kept as it is (a name,
- *  live.mjs openPaper's `kept`) */
-export const UNIT_FLAG_BITS = Object.freeze({ TITLE: 1, FRONT: 2, BRACKETED: 4, KEPT: 8 })
-const FLAG_BITS = 15
-/** a piece's tag: a text, a placeholder, a group's open and close, a nested unit */
-const TEXT = 0, PH = 1, OPEN = 2, CLOSE = 3, NESTED = 4
-/** the display edges a unit may have (mt.mjs displayEdges), in their order */
-const EDGES = ['lead', 'trail', 'inner']
 /** the deepest the bundle nests: its object, `addon`, the manifest, its `page`, a page's entry, its `units`, a unit's
  *  boxes (a unit's piece, the left's rectangle and the layout's rows are no deeper) */
 const DEPTH = 7
 /** a unit's string at most, in code units: layout/json.mjs's, the rows' and the text pieces' too */
 export { STRING_MAX }
-/** a unit's kind, a lower-case word */
-const KIND = /^[a-z]{1,32}$/
 /** a rectangle of the left lies within its page's view by this, PDF units (the layout file's slack) */
 const SLACK = 1
-/** a heading's depth (latex-front.mjs DEPTH: -1 a \part, 0 a \chapter …), with the readers' margin */
-const DEPTH_MIN = -1, DEPTH_MAX = 9
 /** a PDF's bytes at most */
 const BASE_MAX = 2 ** 31
 const SHA256 = /^[0-9a-f]{64}$/
 const KEYS = ['schema', 'paper', 'base', 'versions', 'units', 'left', 'layout', 'addon']
 const VERSIONS = ['bundle', 'pipeline', 'layout', 'removal', 'pdfjs', 'image']
-const CELL = ['table', 'row', 'col', 'span', 'head']
 /** the reader's contract: the bundle's format and the PDF.js it reads the geometry with, what a reader asks by. A
  *  bundle of another is refused */
 export const CTAG = `b${BUNDLE}-j${PDFJS}`
@@ -64,12 +55,20 @@ const CONTRACT = [['bundle', BUNDLE], ['pdfjs', PDFJS]]
 /** those it reads for their shape alone: the maker's, and the compiler image's (an image change rewrites nothing) */
 const NAMED = ['pipeline', 'layout', 'removal', 'image']
 
-/** a bundle refused, and why: where (a JSON path) and what */
+/**
+ * A bundle refused, and why. BUNDLE 3's refusals carry their whole message as `why` ("<path>: <what>"); BUNDLE 4's
+ * (format.mjs) name the kind of object and the path: `o` { kind: 'units' | 'head' | 'part' | 'left' | 'catalog' | 'index',
+ * path, data }, the message `<kind>: <path>: <why>` (`<kind>: <why>` for the object as a whole); `data`, where a refusal
+ * carries figures (the bound and the size of `units-too-large`), is theirs, null otherwise
+ */
 export class BundleRefusal extends Error {
-  constructor(why) {
-    super(why)
+  constructor(why, o = null) {
+    super(o === null ? why : `${o.kind}: ${o.path ? `${o.path}: ` : ''}${why}`)
     this.name = 'BundleRefusal'
     this.why = why
+    this.kind = o === null ? null : o.kind
+    this.path = o === null ? null : o.path
+    this.data = o?.data ?? null
   }
 }
 const kindOf = v => (v === null ? 'null' : Array.isArray(v) ? 'an array' : typeof v)
@@ -86,92 +85,11 @@ function exactKeys(v, keys, path) {
   return v
 }
 /** the paper version's one path segment, as the web's keys spell it (an old identifier's slash as _) */
-const segmentOf = (id, version) => `${id.replace('/', '_')}v${version}`
+export const segmentOf = (id, version) => `${id.replace('/', '_')}v${version}`
 /** our copy of arXiv's PDF a bundle was made over (the layer API's original route) */
-const originalUrl = (id, version) => `/api/v1/original/${segmentOf(id, version)}`
-
-// ---------------------------------------------------------------- base64, the tail's
-const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-const SEXTET = new Int8Array(128).fill(-1)
-for (let i = 0; i < 64; i++) SEXTET[B64.charCodeAt(i)] = i
-
-/** bytes as base64, padded */
-function toBase64(b) {
-  let s = ''
-  const whole = b.length - (b.length % 3)
-  for (let i = 0; i < whole; i += 3) {
-    const v = (b[i] << 16) | (b[i + 1] << 8) | b[i + 2]
-    s += B64[v >> 18] + B64[(v >> 12) & 63] + B64[(v >> 6) & 63] + B64[v & 63]
-  }
-  if (b.length - whole === 1) s += `${B64[b[whole] >> 2]}${B64[(b[whole] & 3) << 4]}==`
-  else if (b.length - whole === 2) { const v = (b[whole] << 8) | b[whole + 1]; s += `${B64[v >> 10]}${B64[(v >> 4) & 63]}${B64[(v & 15) << 2]}=` }
-  return s
-}
-/** base64 as bytes: its length a multiple of 4, a byte at least and at most `cap` (refused before decoding), its
- *  characters of the alphabet, `=` padding the last quantum alone and the bits it pads 0, so that one spelling is read */
-function fromBase64(s, cap, path) {
-  if (typeof s !== 'string') throw fail(path, `not a string (${kindOf(s)})`)
-  if (s.length === 0 || s.length % 4 !== 0) throw fail(path, 'not base64: none, or not a multiple of 4 characters')
-  const pad = s.charCodeAt(s.length - 1) !== 61 ? 0 : s.charCodeAt(s.length - 2) === 61 ? 2 : 1
-  const n = (s.length / 4) * 3 - pad
-  if (n > cap) throw fail(path, `more than ${cap} bytes`)
-  const out = new Uint8Array(n)
-  const at = i => { const c = s.charCodeAt(i); return c < 128 ? SEXTET[c] : -1 }
-  let o = 0
-  for (let i = 0; i < s.length; i += 4) {
-    const last = i + 4 === s.length
-    const a = at(i), b = at(i + 1), c = last && pad === 2 ? 0 : at(i + 2), d = last && pad > 0 ? 0 : at(i + 3)
-    if (a < 0 || b < 0 || c < 0 || d < 0) throw fail(path, `not base64 at character ${i}`)
-    if (last && ((pad === 2 && (b & 15) !== 0) || (pad === 1 && (c & 3) !== 0))) throw fail(path, 'not base64: padded bits not 0')
-    const v = (a << 18) | (b << 12) | (c << 6) | d
-    out[o++] = v >> 16
-    if (o < n) out[o++] = (v >> 8) & 255
-    if (o < n) out[o++] = v & 255
-  }
-  return out
-}
+export const originalUrl = (id, version) => `/api/v1/original/${segmentOf(id, version)}`
 
 // ---------------------------------------------------------------- the writer's
-/** a piece as openPaper reads it, its positions dropped: a nested piece names its inner unit by id */
-function pieceOf(p, idOf) {
-  switch (p.t) {
-    case 'text': return p.src === undefined ? [TEXT, p.s] : [TEXT, p.s, p.src]
-    case 'ph': return [PH, p.src]
-    case 'open': return [OPEN, p.id, p.src]
-    case 'close': return [CLOSE, p.id, p.src]
-    case 'nested': {
-      const id = idOf.get(p.unit)
-      if (id === undefined) throw new Error('a nested piece whose unit is not one of the paper\'s')
-      return [NESTED, p.pre, id, p.post]
-    }
-    default: throw new Error(`a piece the front end does not make (${String(p.t).slice(0, 20)})`)
-  }
-}
-
-/**
- * The bundle's units from openPaper's paper: each unit [kind, flags, depth or null, its table cell or null, its display
- * edges or null, its pieces], by its index. Its flags TITLE, FRONT and BRACKETED as the front end set them, KEPT where
- * the paper keeps it (`kept`, nameCells); its edges displayEdges' (mt.mjs), restated here so that the reader's parse
- * loads no front end (a test holds the two equal). Language-independent and deterministic: every object written in one
- * order. Throws on a piece the front end does not make
- */
-export function bundleUnitsOf(paper) {
-  const idOf = new Map()
-  paper.units.forEach((u, i) => idOf.set(u, i))
-  return paper.units.map(u => {
-    const flags = (u.title ? UNIT_FLAG_BITS.TITLE : 0) | (u.front ? UNIT_FLAG_BITS.FRONT : 0) | (u.bracketed ? UNIT_FLAG_BITS.BRACKETED : 0) | (paper.kept.has(u) ? UNIT_FLAG_BITS.KEPT : 0)
-    const c = u.cell
-    const edges = {}
-    for (const k of EDGES) if (typeof u[k] === 'string') edges[k] = u[k]
-    return [
-      u.kind, flags, u.depth ?? null,
-      c ? { table: c.table, row: c.row, col: c.col, span: c.span, head: c.head } : null,
-      Object.keys(edges).length ? edges : null,
-      u.pieces.map(p => pieceOf(p, idOf)),
-    ]
-  })
-}
-
 /**
  * The bundle file's bytes (UTF-8 JSON) from its parts: `paper` { id, version, pages }; `base` { bytes, sha256, url },
  * arXiv's PDF it was made over and our copy's address; `image`, the compiler image's name; `units`, bundleUnitsOf's;
@@ -231,59 +149,6 @@ function textOf(json, cap) {
 }
 
 const isText = s => typeof s === 'string' && s.length <= STRING_MAX
-
-/**
- * Whether unit `u` (the bundle's `units[i]`) stands: its shape [kind, flags, depth, cell, edges, pieces], its kind a
- * lower-case word, every string within STRING_MAX, each piece one of the six of its tag's shape; a nested piece's unit
- * one before it that stands (`stands`), so that no unit nests itself. A group's open and close are not paired: the front
- * end makes an open with no close (`\multirow{`, whose close the next cell holds) and a close with no open before it (a
- * part with no text dropped with its open: the corpus's 2212.06817, 2608.03063, 2608.15761), and every reader of a unit
- * takes either alone (mt.mjs serialize)
- */
-function unitStands(u, i, stands) {
-  if (!Array.isArray(u) || u.length !== 6) return false
-  const kind = u[0], flags = u[1], depth = u[2], cell = u[3], edges = u[4], pieces = u[5]
-  if (typeof kind !== 'string' || kind.length > 32 || !KIND.test(kind)) return false
-  if (!isInteger(flags, 0, FLAG_BITS)) return false
-  if (depth !== null && !isInteger(depth, DEPTH_MIN, DEPTH_MAX)) return false
-  if (cell !== null) {
-    if (!isObject(cell)) return false
-    const own = Object.keys(cell)
-    if (own.length !== CELL.length) return false
-    for (let k = 0; k < own.length; k++) if (!CELL.includes(own[k])) return false
-    if (!isInteger(cell.table, 0, Number.MAX_SAFE_INTEGER) || !isInteger(cell.row, 0, Number.MAX_SAFE_INTEGER) || !isInteger(cell.col, 0, Number.MAX_SAFE_INTEGER)) return false
-    if (!isInteger(cell.span, 1, Number.MAX_SAFE_INTEGER) || typeof cell.head !== 'boolean') return false
-  }
-  if (edges !== null) {
-    if (!isObject(edges)) return false
-    const own = Object.keys(edges)
-    if (own.length === 0) return false
-    for (let k = 0; k < own.length; k++) if (!EDGES.includes(own[k]) || !isText(edges[own[k]])) return false
-  }
-  if (!Array.isArray(pieces)) return false
-  for (let k = 0; k < pieces.length; k++) {
-    const p = pieces[k]
-    if (!Array.isArray(p)) return false
-    switch (p[0]) {
-      case TEXT:
-        if (!((p.length === 2 || p.length === 3) && isText(p[1]) && (p.length === 2 || isText(p[2])))) return false
-        break
-      case PH:
-        if (!(p.length === 2 && isText(p[1]))) return false
-        break
-      case OPEN:
-      case CLOSE:
-        if (!(p.length === 3 && isInteger(p[1], 0, Number.MAX_SAFE_INTEGER) && isText(p[2]))) return false
-        break
-      case NESTED:
-        if (!(p.length === 4 && isText(p[1]) && isInteger(p[2], 0, i - 1) && stands[p[2]] && isText(p[3]))) return false
-        break
-      default:
-        return false
-    }
-  }
-  return true
-}
 
 /**
  * The bundle as received, read: bytes (or a string) within `caps.bytes` (BUNDLE_CAP), UTF-8, its values within
@@ -401,7 +266,8 @@ export function readBundle(json, caps = {}) {
     const a = exactKeys(b.addon, ['manifest', 'tail'], 'addon')
     let manifest
     try { manifest = checkAddonManifest(a.manifest, { pages, views, shipped: true }) } catch (e) { throw within('addon.manifest', e) }
-    const tail = fromBase64(a.tail, ADDON_CAP, 'addon.tail')
+    let tail
+    try { tail = fromBase64(a.tail, ADDON_CAP, 'addon.tail') } catch (e) { throw e instanceof LayoutRefusal ? new BundleRefusal(e.message) : e }
     if (tail.length !== manifest.appended) throw fail('addon.tail', `not the manifest's ${manifest.appended} bytes`)
     addon = { manifest, tail }
   }

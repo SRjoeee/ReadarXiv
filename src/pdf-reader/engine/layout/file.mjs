@@ -147,13 +147,13 @@ function entry(e, i, name, last, slot, stride) {
 
 /**
  * A page and a rectangle in r from o: the page at o, then x0, x1, baseline, top and bottom at their offsets from o. The
- * page one of the paper's; each coordinate a finite number within the page's view by SLACK; x0 < x1, bottom < top; with
+ * page one of `span` ({ lo, hi }: the pages `views` holds, from page lo); each coordinate a finite number within the page's view by SLACK; x0 < x1, bottom < top; with
  * `window`, the baseline from bottom − 1 to top + 1. Refused at the number that breaks it
  */
-function checkBox(r, o, X0, X1, BASE, TOP, BOT, window, views, pages, name, i, sub) {
+function checkBox(r, o, X0, X1, BASE, TOP, BOT, window, views, span, name, i, sub) {
   const page = r[o]
-  if (!isInteger(page, 1, pages)) throw refuse(at(name, i, sub, o), `not a page 1 to ${pages}`)
-  const v = 4 * (page - 1)
+  if (!isInteger(page, span.lo, span.hi)) throw refuse(at(name, i, sub, o), `not a page ${span.lo} to ${span.hi}`)
+  const v = 4 * (page - span.lo)
   const xlo = views[v] - SLACK, ylo = views[v + 1] - SLACK, xhi = views[v + 2] + SLACK, yhi = views[v + 3] + SLACK
   const x0 = r[o + X0], x1 = r[o + X1], base = r[o + BASE], top = r[o + TOP], bottom = r[o + BOT]
   if (!isNumber(x0) || x0 < xlo || x0 > xhi) throw refuse(at(name, i, sub, o + X0), `not a number within its page's view (${kindOf(x0)})`)
@@ -196,6 +196,47 @@ export function checkLayout(value) {
   const views = checkViews(f.views, pages, 'views')
   zeroes(views)
 
+  checkRows(f, { views, lo: 1, hi: pages })
+
+  checkLineskip(f.lineskip, 'lineskip')
+  return f
+}
+
+/** the paper's \lineskip and \lineskiplimit, PDF units, as TeX gave them (layout/marks.mjs readSkipProbe), or null where it
+ *  gave none; each within TeX's \maxdimen. `path` names it in a refusal (the file's `lineskip`, a bundle 4 head's) */
+export function checkLineskip(ls, path) {
+  if (ls !== null) {
+    if (!Array.isArray(ls) || ls.length !== 2) throw refuse(path, `not null or [lineskip, lineskiplimit] (${kindOf(ls)})`)
+    for (let i = 0; i < 2; i++) if (!isNumber(ls[i]) || Math.abs(ls[i]) > SKIP_MAX) throw refuse(`${path}[${i}]`, `not a number within ${Math.round(SKIP_MAX)} (${kindOf(ls[i])})`)
+  }
+  return ls
+}
+
+/** the keys of a layout part (C1.4), in their order: the layout file's rows and tables, less what is paper-wide (`schema`,
+ *  `layout`, `pdfjs`, `paper`, `lineskip`: the head's), the side key (`left`: parts are content-addressed) and the views
+ *  (the part's own) */
+export const PART_KEYS = Object.freeze(['fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held', 'names'])
+
+/**
+ * A layout part already parsed (a bundle 4 part holds one): the file's rows and tables of PART_KEYS, every bound
+ * checkLayout checks of them (the bounds per part: LINES_ALL, PAGE_TEXT_ALL, NAMES_MAX, FONTS_MAX), with every page a row
+ * names one of `lo` to `hi` and its box within that page's view. `views` are the views of pages lo to hi (stride 4, as
+ * checkViews has them), `pages` the paper's, which hi may not pass. Returns the value itself, its -0s written 0; throws
+ * LayoutRefusal
+ */
+export function checkLayoutPart(value, { pages, views, lo, hi }) {
+  if (!isInteger(lo, 1, pages) || !isInteger(hi, lo, pages)) throw new RangeError(`not pages lo to hi of ${pages}`)
+  if (!Array.isArray(views) || views.length !== 4 * (hi - lo + 1)) throw new RangeError(`not the ${4 * (hi - lo + 1)} numbers of the views of pages ${lo} to ${hi}`)
+  const f = exactKeys(value, PART_KEYS, '')
+  return checkRows(f, { views, lo, hi })
+}
+
+/**
+ * The rows and tables of a layout file or part, from `fonts` to `names`: the pages a row names are `lo` to `hi`, and
+ * `views` those pages' views (stride 4, from page lo). Bounds are of what `f` holds, so a part's are per part
+ */
+function checkRows(f, { views, lo, hi }) {
+  const span = { lo, hi }
   const fonts = array(f.fonts, 'fonts')
   if (fonts.length > FONTS_MAX) throw refuse('fonts', `more than ${FONTS_MAX} names`)
   for (let i = 0; i < fonts.length; i++) if (!printable(fonts[i], 1, FONT_MAX)) throw refuse(`fonts[${i}]`, `not 1 to ${FONT_MAX} printable ASCII characters (${kindOf(fonts[i])})`)
@@ -229,7 +270,7 @@ export function checkLayout(value) {
     total += r.length / 8
     if (total > LINES_ALL) throw refuse('lines', `more than ${LINES_ALL} lines`)
     for (let j = 0; j < r.length; j += 8) {
-      checkBox(r, j, 1, 2, 3, 4, 5, true, views, pages, 'lines', i, 1)
+      checkBox(r, j, 1, 2, 3, 4, 5, true, views, span, 'lines', i, 1)
       const size = r[j + 6]
       if (!isNumber(size) || size <= 0 || size > SIZE_MAX) throw refuse(at('lines', i, 1, j + 6), `not a size above 0 to ${SIZE_MAX} (${kindOf(size)})`)
       if (!isInteger(r[j + 7], 0, nFonts - 1)) throw refuse(at('lines', i, 1, j + 7), 'not an index of fonts')
@@ -250,7 +291,7 @@ export function checkLayout(value) {
     let next = 0, share = -1
     for (let j = 0; j < r.length; j += 6) {
       const page = r[j]
-      if (!isInteger(page, 1, pages)) throw refuse(at('frames', i, 1, j), `not a page 1 to ${pages}`)
+      if (!isInteger(page, lo, hi)) throw refuse(at('frames', i, 1, j), `not a page ${lo} to ${hi}`)
       const column = r[j + 1]
       if (column !== 0 && column !== 1 && column !== 2) throw refuse(at('frames', i, 1, j + 1), 'not a column 0, 1 or 2')
       if (r[j + 2] !== next) throw refuse(at('frames', i, 1, j + 2), j === 0 ? 'not 0' : "not the line after the last frame's")
@@ -260,7 +301,7 @@ export function checkLayout(value) {
       const s = r[j + 4]
       if (j === 0 ? s !== -1 : !isInteger(s, Math.max(share, 0), SHARE_MAX)) throw refuse(at('frames', i, 1, j + 4), j === 0 ? 'not -1 for the first frame' : `not a share from the last to ${SHARE_MAX}`)
       share = s
-      const below = r[j + 5], v = 4 * (page - 1)
+      const below = r[j + 5], v = 4 * (page - lo)
       if (!isNumber(below) || below < 0 || below > views[v + 3] - views[v + 1]) throw refuse(at('frames', i, 1, j + 5), `not 0 to its page's height (${kindOf(below)})`)
       next += k
     }
@@ -284,7 +325,7 @@ export function checkLayout(value) {
       if (!isInteger(line, 0, count - 1)) throw refuse(at('erase', i, 1, j), "not a line of the unit's")
       if (++onLine[line] > ERASE_LINE) throw refuse(at('erase', i, 1, j), `more than ${ERASE_LINE} rectangles on its line`)
       ;(erasedLines.get(u) ?? erasedLines.set(u, new Set()).get(u)).add(line)
-      const v = 4 * (own[8 * line] - 1)
+      const v = 4 * (own[8 * line] - lo)
       const xlo = views[v] - SLACK, ylo = views[v + 1] - SLACK, xhi = views[v + 2] + SLACK, yhi = views[v + 3] + SLACK
       for (let c = 1; c <= 4; c++) {
         const x = r[j + c], lo = c % 2 === 1 ? xlo : ylo, hi = c % 2 === 1 ? xhi : yhi
@@ -320,7 +361,7 @@ export function checkLayout(value) {
     if ((flags & PH_FLAG.NUMBERED) !== 0 && kind !== DISPLAY) throw refuse(`ph[${i}][3]`, 'NUMBERED on a kind not display')
     const segs = (r.length - 4) / 6, most = kind === DISPLAY ? SEGS_DISPLAY : SEGS_INLINE
     if (empty || lost || symbol || joined ? segs !== 0 : segs < 1 || segs > most) throw refuse(`ph[${i}]`, empty || lost || symbol || joined ? 'segments on an EMPTY, LOST, TEXT or JOINED placeholder' : `not 1 to ${most} segments`)
-    for (let o = 4; o < r.length; o += 6) checkBox(r, o, 1, 3, 2, 4, 5, false, views, pages, 'ph', i, -1)
+    for (let o = 4; o < r.length; o += 6) checkBox(r, o, 1, 3, 2, 4, 5, false, views, span, 'ph', i, -1)
     zeroes(r)
     if (!empty && !lost && !joined && PAGE_TEXT.has(kind)) pageTexts.add(key)
     if (symbol) { pageTexts.add(key); symbols.add(key) }
@@ -335,7 +376,7 @@ export function checkLayout(value) {
     if (u === undefined) throw refuse(`labels[${i}][0]`, 'not a unit of units')
     if (++onUnit[u] > LABELS_UNIT) throw refuse(`labels[${i}][0]`, `more than ${LABELS_UNIT} labels on its unit`)
     if (!isInteger(r[1], 0, LABEL_KINDS.length - 1)) throw refuse(`labels[${i}][1]`, 'not a kind of LABEL_KINDS')
-    checkBox(r, 2, 1, 3, 2, 4, 5, true, views, pages, 'labels', i, -1)
+    checkBox(r, 2, 1, 3, 2, 4, 5, true, views, span, 'labels', i, -1)
     zeroes(r)
   }
 
@@ -405,25 +446,17 @@ export function checkLayout(value) {
     if (!Array.isArray(r) || r.length !== NAME_ROW) throw refuse(`names[${i}]`, `not [occurrence, key, page, x0, baseline, x1, top, bottom, size, font, flags, unit, glue, column x0, column x1] (${kindOf(r)})`)
     if (!isInteger(r[0], last + 1, ID_MAX)) throw refuse(`names[${i}][0]`, 'not an occurrence above the last')
     if (!isInteger(r[1], 0, NAME_KEYS.length - 1)) throw refuse(`names[${i}][1]`, 'not a key of NAME_KEYS')
-    checkBox(r, 2, 1, 3, 2, 4, 5, true, views, pages, 'names', i, -1)
+    checkBox(r, 2, 1, 3, 2, 4, 5, true, views, span, 'names', i, -1)
     const size = r[8]
     if (!isNumber(size) || size <= 0 || size > SIZE_MAX) throw refuse(`names[${i}][8]`, `not a size above 0 to ${SIZE_MAX} (${kindOf(size)})`)
     if (!isInteger(r[9], 0, nFonts - 1)) throw refuse(`names[${i}][9]`, 'not an index of fonts')
     if (!isInteger(r[10], 0, NAME_BITS)) throw refuse(`names[${i}][10]`, 'not flags of NAME_FLAG')
-    const runIn = (r[10] & NAME_FLAG.RUN_IN) !== 0, v = 4 * (r[2] - 1), width = views[v + 2] - views[v]
+    const runIn = (r[10] & NAME_FLAG.RUN_IN) !== 0, v = 4 * (r[2] - lo), width = views[v + 2] - views[v]
     if (runIn ? !(isInteger(r[11], 0, ID_MAX) && slot.has(r[11])) : r[11] !== -1) throw refuse(`names[${i}][11]`, runIn ? 'not a unit of the file' : 'not -1, the name leading no unit')
     if (!isNumber(r[12]) || r[12] < 0 || r[12] > width || (!runIn && r[12] !== 0)) throw refuse(`names[${i}][12]`, runIn ? 'not a glue 0 to the page\'s width' : 'not 0, the name leading no unit')
     if (!isNumber(r[13]) || !isNumber(r[14]) || r[13] < views[v] - 1 || r[14] > views[v + 2] + 1 || r[13] >= r[14]) throw refuse(`names[${i}][13]`, "not a column's edges on the page")
     zeroes(r)
     last = r[0]
-  }
-
-  // lineskip: the paper's \lineskip and \lineskiplimit, PDF units, as TeX gave them (layout/marks.mjs readSkipProbe), or
-  // null where it gave none; each within TeX's \maxdimen
-  const ls = f.lineskip
-  if (ls !== null) {
-    if (!Array.isArray(ls) || ls.length !== 2) throw refuse('lineskip', `not null or [lineskip, lineskiplimit] (${kindOf(ls)})`)
-    for (let i = 0; i < 2; i++) if (!isNumber(ls[i]) || Math.abs(ls[i]) > SKIP_MAX) throw refuse(`lineskip[${i}]`, `not a number within ${Math.round(SKIP_MAX)} (${kindOf(ls[i])})`)
   }
   return f
 }
@@ -434,14 +467,10 @@ const r2 = v => Math.round(v * 100) / 100
 const rounded = (rows, stride, exact) => rows.map((v, j) => (exact.includes(j % stride) ? v : r2(v)))
 const LINE_EXACT = [0, 7], FRAME_EXACT = [0, 1, 2, 3, 4], ERASE_EXACT = [0], LABEL_EXACT = [0, 1, 2], NAME_EXACT = [0, 1, 2, 9, 10, 11]
 
-/** the file as written: keys in the schema's order, numbers to a hundredth, no white space */
-export function encodeLayout(file) {
-  const { schema, layout, pdfjs, paper, left, views, fonts, units, lines, frames, erase, ph, labels, headings, pageText, held, names, lineskip } = file
-  return JSON.stringify({
-    schema, layout, pdfjs,
-    paper: { id: paper.id, version: paper.version, pages: paper.pages },
-    left,
-    views: views.map(r2),
+/** the rows and tables of a file or a part as written, from `fonts` to `names`: numbers to a hundredth */
+function rowsOf(file) {
+  const { fonts, units, lines, frames, erase, ph, labels, headings, pageText, held, names } = file
+  return {
     fonts,
     units,
     lines: lines.map(([id, rows]) => [id, rounded(rows, 8, LINE_EXACT)]),
@@ -454,8 +483,72 @@ export function encodeLayout(file) {
     pageText,
     held,
     names: names.map(r => rounded(r, NAME_ROW, NAME_EXACT)),
+  }
+}
+
+/** the file as written: keys in the schema's order, numbers to a hundredth, no white space */
+export function encodeLayout(file) {
+  const { schema, layout, pdfjs, paper, left, views, lineskip } = file
+  return JSON.stringify({
+    schema, layout, pdfjs,
+    paper: { id: paper.id, version: paper.version, pages: paper.pages },
+    left,
+    views: views.map(r2),
+    ...rowsOf(file),
     lineskip: lineskip === null ? null : lineskip.map(r2),
   })
+}
+
+/** a layout part as it is written, keys in PART_KEYS' order, numbers to a hundredth: the object (a writer checks it with
+ *  checkLayoutPart before it stringifies it) */
+export function layoutPartRows(part) {
+  return rowsOf(part)
+}
+
+/** a layout part as written: encodeLayout's own encoders for the keys it keeps, no white space */
+export function encodeLayoutPart(part) {
+  return JSON.stringify(rowsOf(part))
+}
+
+/**
+ * The parts' layouts as one: each key's rows by unit id (`ph` and `pageText` by unit and piece, `names` by occurrence;
+ * `labels` by unit, a unit's own labels in the order given), and the fonts table anew, by the first appearance of a name in
+ * the merged rows (the lines by unit id, then the names by occurrence) with every row's font index set to it: a part's table
+ * is its own. The layout maker builds the whole file's table in that order, so parts cut from a file merge back to it. A
+ * font in no row is left out. The parts are not changed
+ */
+export function mergeLayout(parts) {
+  const out = { units: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [] }
+  const lineList = [], nameList = []
+  for (const p of parts) {
+    for (const key of Object.keys(out)) for (const row of p[key]) out[key].push(row)
+    for (const e of p.lines) lineList.push([e, p.fonts])
+    for (const r of p.names) nameList.push([r, p.fonts])
+  }
+  const byId = (a, b) => a[0] - b[0]
+  for (const key of ['units', 'frames', 'erase', 'headings', 'held', 'labels']) out[key].sort(byId)
+  out.ph.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  out.pageText.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  const fonts = [], index = new Map()
+  const fontAt = (table, i) => {
+    const name = table[i]
+    let at = index.get(name)
+    if (at === undefined) { at = fonts.length; index.set(name, at); fonts.push(name) }
+    return at
+  }
+  lineList.sort((a, b) => a[0][0] - b[0][0])
+  const lines = lineList.map(([[id, rows], table]) => {
+    const out = rows.slice()
+    for (let j = 7; j < out.length; j += 8) out[j] = fontAt(table, rows[j])
+    return [id, out]
+  })
+  nameList.sort((a, b) => a[0][0] - b[0][0])
+  const names = nameList.map(([r, table]) => {
+    const out = r.slice()
+    out[9] = fontAt(table, r[9])
+    return out
+  })
+  return { fonts, units: out.units, lines, frames: out.frames, erase: out.erase, ph: out.ph, labels: out.labels, headings: out.headings, pageText: out.pageText, held: out.held, names }
 }
 
 // ---------------------------------------------------------------- the index

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { countValues } from '@/pdf-reader/engine/layout/json.mjs'
 import {
-  encodeLayout, indexLayout, LABEL_KINDS, LAYOUT, LAYOUT_CAP, LAYOUT_DEPTH, LAYOUT_VALUES, type LayoutFile, LayoutRefusal, NAME_FLAG, NAME_KEYS, PAGE_TEXT_ALL, PAGE_TEXT_KINDS, PH_FLAG, PH_KINDS,
+  checkLayoutPart, checkLineskip, encodeLayout, encodeLayoutPart, indexLayout, layoutPartRows, mergeLayout, PART_KEYS, LABEL_KINDS, LAYOUT, LAYOUT_CAP, LAYOUT_DEPTH, LAYOUT_VALUES, type LayoutFile, LayoutRefusal, NAME_FLAG, NAME_KEYS, PAGE_TEXT_ALL, PAGE_TEXT_KINDS, PH_FLAG, PH_KINDS,
   parseLayout, TEXT_MAX, UNIT_FLAG, UNIT_KINDS,
 } from '@/pdf-reader/engine/layout/file.mjs'
 
@@ -624,6 +624,136 @@ describe('refused by every bound', () => {
     expect(refusal(broken(edit))?.path).toBe('pageText')
     const fewer: Edit = f => { edit(f); f.pageText.length = n - 2 }
     expect(refusal(broken(fewer))).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------- a layout part (bundle 4)
+/** the file's rows and tables of PART_KEYS, what a part holds */
+// biome-ignore lint/suspicious/noExplicitAny: a test breaks the part's types on purpose
+const partOf = (f: any) => Object.fromEntries(PART_KEYS.map(k => [k, f[k]])) as any
+
+describe('a layout part', () => {
+  const whole = made()
+  const checked = (part: unknown, lo = 1, hi = 3, views = whole.views.slice(4 * (lo - 1), 4 * hi)) => checkLayoutPart(structuredClone(part), { pages: 3, views, lo, hi })
+  const refused = (part: unknown, lo?: number, hi?: number, views?: number[]): LayoutRefusal | null => {
+    try { checked(part, lo, hi, views); return null } catch (e) { if (!(e instanceof LayoutRefusal)) throw e; return e }
+  }
+
+  it('is the file\'s own rows: PART_KEYS in the file\'s order, and the made file\'s part passes, whole or by pages', () => {
+    expect(PART_KEYS).toEqual(Object.keys(whole).filter(k => !['schema', 'layout', 'pdfjs', 'paper', 'left', 'views', 'lineskip'].includes(k)))
+    expect(checked(partOf(whole))).toEqual(partOf(whole))
+    expect(encodeLayoutPart(partOf(whole))).toBe(JSON.stringify(partOf(whole)))
+    expect(JSON.stringify(layoutPartRows(partOf(whole)))).toBe(encodeLayoutPart(partOf(whole)))
+  })
+
+  // every row bound of checkLayout, through the part: the same table, less what is the header's
+  it.each(ROWS.filter(([, , path]) => (PART_KEYS as readonly string[]).includes(path.split(/[[.]/)[0] ?? '')))('refuses at the same path: %s', (_, edit, path) => {
+    const f = structuredClone(made())
+    edit(f)
+    const e = refused(partOf(f))
+    expect(e, 'refused').not.toBeNull()
+    expect(e!.path).toBe(path)
+  })
+
+  it('refuses a key of the header, a key missing, and anything that is not an object', () => {
+    for (const extra of ['schema', 'paper', 'views', 'lineskip', 'left']) expect(refused({ ...partOf(whole), [extra]: 1 })?.path).toBe(extra)
+    const { names: _names, ...short } = partOf(whole)
+    expect(refused(short)?.path).toBe('names')
+    expect(refused([])?.path).toBe('')
+    expect(refused(null)?.path).toBe('')
+  })
+
+  it('takes a row on a page of [lo, hi] only, its box within that page\'s view (the views are the part\'s, from page lo)', () => {
+    // the units of pages 2 and 3: 3, 5, 7, 8 (their placeholders, labels, held lines), the names of page 3
+    const keep = new Set([3, 5, 7, 8])
+    const part = partOf(whole)
+    const onlyKept = (rows: number[][], at = 0) => rows.filter(r => keep.has(r[at] as number))
+    const later = {
+      ...part,
+      units: onlyKept(part.units), lines: onlyKept(part.lines), frames: onlyKept(part.frames), erase: onlyKept(part.erase),
+      ph: onlyKept(part.ph), labels: onlyKept(part.labels), headings: onlyKept(part.headings), pageText: [], held: onlyKept(part.held),
+      names: part.names.filter((r: number[]) => (r[2] ?? 0) >= 2),
+    }
+    // page 2 wider than page 3: a box at x = 650 is page 2's alone
+    const views = [0, 0, 700, 800, 0, 0, 612, 792]
+    expect(refused(later, 2, 3, views)).toBeNull()
+    expect(refused(part, 2, 3, views)?.path).toMatch(/^units\[0\]|^lines\[0\]\[1\]\[0\]/)
+    const wide = structuredClone(later)
+    wide.lines[0][1][2] = 650
+    expect(refused(wide, 2, 3, views)).toBeNull()
+    wide.lines[0][1][2] = 650
+    wide.lines[0][1][0] = 3
+    expect(refused(wide, 2, 3, views)?.path).toBe('lines[0][1][2]')
+    // a page outside [lo, hi] is named: page 1 here, and page 3 where hi is 2
+    const early = structuredClone(later)
+    early.lines[0][1][0] = 1
+    expect(refused(early, 2, 3, views)).toMatchObject({ path: 'lines[0][1][0]', message: expect.stringMatching(/not a page 2 to 3/) })
+    expect(refused(later, 2, 2, views.slice(0, 4))).toMatchObject({ message: expect.stringMatching(/not a page 2 to 2/) })
+  })
+
+  it('is bounded per part: FONTS_MAX names, NAMES_MAX names, in one part', () => {
+    const f = made()
+    expect(refused({ ...partOf(f), fonts: Array.from({ length: 513 }, (_, i) => `F${i}`) })?.path).toBe('fonts')
+    expect(refused({ ...partOf(f), fonts: Array.from({ length: 512 }, (_, i) => `F${i}`) })).toBeNull()
+  })
+
+  it('refuses a call that is not pages lo to hi of the paper with their views', () => {
+    const part = partOf(whole)
+    expect(() => checkLayoutPart(part, { pages: 3, views: whole.views, lo: 0, hi: 3 })).toThrow(RangeError)
+    expect(() => checkLayoutPart(part, { pages: 3, views: whole.views, lo: 2, hi: 1 })).toThrow(RangeError)
+    expect(() => checkLayoutPart(part, { pages: 3, views: whole.views, lo: 1, hi: 4 })).toThrow(RangeError)
+    expect(() => checkLayoutPart(part, { pages: 3, views: whole.views.slice(0, 8), lo: 1, hi: 3 })).toThrow(RangeError)
+  })
+
+  it('checkLineskip is the file\'s lineskip check, at the path it is given', () => {
+    expect(checkLineskip(null, 'lineskip')).toBeNull()
+    expect(checkLineskip([1, 0], 'lineskip')).toEqual([1, 0])
+    for (const bad of [[1], [1, 'x'], [1, 20000], {}, 7]) expect(() => checkLineskip(bad, 'head.lineskip')).toThrow(expect.objectContaining({ path: expect.stringMatching(/^head\.lineskip/) }))
+  })
+})
+
+/** the file with its fonts table renumbered by first appearance (the lines by unit id, then the names), as the maker builds it */
+function inFirstUse(f: LayoutFile): LayoutFile {
+  const order: number[] = []
+  const note = (i: number) => { if (!order.includes(i)) order.push(i) }
+  for (const [, rows] of [...f.lines].sort((a, b) => a[0] - b[0])) for (let j = 7; j < rows.length; j += 8) note(rows[j] as number)
+  for (const r of f.names) note(r[9] as number)
+  const at = (i: number) => order.indexOf(i)
+  return { ...f, fonts: order.map(i => f.fonts[i] as string), lines: f.lines.map(([id, rows]) => [id, rows.map((v, j) => (j % 8 === 7 ? at(v) : v))]), names: f.names.map(r => r.map((v, j) => (j === 9 ? at(v) : v))) }
+}
+
+describe('mergeLayout', () => {
+  it('puts parts cut from a file back as the file: rows by id, names by occurrence, the fonts table by first appearance', () => {
+    const f = inFirstUse(made())
+    // two parts: units 0-3 with names 1; units 5-8 with names 4, 6; each its own fonts table, in its own order
+    const cut = (ids: number[], names: number[][], fonts: string[]) => {
+      const part = partOf(structuredClone(f))
+      const keep = (r: number[]) => ids.includes(r[0] as number)
+      const remap = (i: number) => fonts.indexOf(f.fonts[i] as string)
+      const lines = part.lines.filter(keep).map(([id, rows]: [number, number[]]) => [id, rows.map((v, j) => (j % 8 === 7 ? remap(v) : v))])
+      return {
+        fonts, units: part.units.filter(keep), lines, frames: part.frames.filter(keep), erase: part.erase.filter(keep), ph: part.ph.filter(keep),
+        labels: part.labels.filter(keep), headings: part.headings.filter(keep), pageText: part.pageText.filter(keep), held: part.held.filter(keep),
+        names: names.map(r => r.map((v, j) => (j === 9 ? remap(v) : v))),
+      }
+    }
+    const a = cut([0, 2, 3], [f.names[0] as number[]], ['CMBX12', 'CMR10'])
+    const b = cut([5, 7, 8], [f.names[1] as number[], f.names[2] as number[]], ['CMMI10', 'CMBX12', 'CMR10'])
+    expect(a.fonts.length + b.fonts.length).toBeGreaterThan(f.fonts.length)
+    const merged = mergeLayout([a, b])
+    expect(merged).toEqual(partOf(f))
+    expect(encodeLayoutPart(merged)).toBe(encodeLayoutPart(partOf(f)))
+    // in the other order too, and the parts are not changed
+    const before = JSON.stringify([a, b])
+    expect(mergeLayout([b, a])).toEqual(partOf(f))
+    expect(JSON.stringify([a, b])).toBe(before)
+  })
+
+  it('leaves out a font in no row, and merges no parts to the empty part', () => {
+    const f = inFirstUse(made())
+    const part = { ...partOf(f), fonts: [...f.fonts, 'Unused'] }
+    expect(mergeLayout([part]).fonts).toEqual(f.fonts)
+    expect(mergeLayout([])).toEqual({ fonts: [], units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [] })
   })
 })
 

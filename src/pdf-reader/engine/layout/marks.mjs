@@ -617,6 +617,16 @@ export const NAMES_TEX = [
  *  alternation and the prefilter from it, so the two cannot drift */
 export const UNMARK_CS = ['axtpma', 'axtpmm', 'axtpm', 'axthmark', 'axtnma', 'axtnmb']
 
+/** a babel name's marks as a pass writes them into the aux and the lists \@starttoc reads (NAMES_TEX: `\protect \axtnma {<key>}`
+ *  and `\axtnmb`), inert where they are read (\@starttoc's \axt@off, pdfstringdef, the nameref names' unmark). Only these:
+ *  a mark in text the paper writes itself and reads back (an .xmpdata that pdfx reads, a .tex it \input s) has an effect in
+ *  the next pass, so a pass that differs there is not at latexmk's fixed point */
+const NAME_MARKS = /(?:\\protect\s*)?\\axtnm[ab]\s*\{[^{}]*\}/g
+/** the files a babel name's marks are written to: the aux and the lists (.toc .lof .lot and the common .loa .lol .lop) */
+export const NAME_MARK_FILE = /\.(?:aux|toc|lof|lot|loa|lol|lop)$/
+/** a file's text with its babel name marks, each with its own argument, taken out */
+export const withoutNameMarks = text => text.replace(NAME_MARKS, '')
+
 /** \axt@unmark<tl>: the regex that takes a mark and its argument out of a token list, behind a memory and a prefilter.
  *  The regex costs ~4 ms a run over a list that holds a mark (~50 µs a token) and ~3 ms over one that holds none, and the
  *  nameref and gettitlestring hooks call it ~450 times a pass on the thesis (M1: 4.36 s of its layout compile).
