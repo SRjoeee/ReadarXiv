@@ -3,136 +3,17 @@
 // drawn), over the format test's small paper (helpers/format-paper.ts: four pages, three parts, the first two with a tail), on
 // the reading view's PDF.js stand-ins and a clock moved by hand (helpers/reader-fakes.ts). The real door's rows are
 // layer-side-door.test.ts's
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Ref } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { describe, expect, it } from 'vitest'
+import { type Ref, writePart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { PDF_OPTIONS } from '@/pdf-reader/engine/layer-proto/run.mjs'
-import type { Row } from '@/pdf-reader/engine/layer-proto/rows.mjs'
-import { createLayerSide, type LayerSide, PAGE_MS, type TellRef } from '@/pdf-reader/engine/view/layer-side.mjs'
-import { createReaderView, type DocumentTask, internalsOf, type ReaderHost, type ReaderView, type ViewEvent, type ViewPrefs } from '@/pdf-reader/engine/view/reader-view.mjs'
-import { writePart } from '@/pdf-reader/engine/layer-proto/format.mjs'
-import { createFakeDoor, type FakeDoor, type FakeDoorOptions } from './helpers/fake-door'
-import { made, type Made, N, partInputs, TAILS } from './helpers/format-paper'
-import { ASSETS, clientOf, drawPanes, FakeIO, FakePDFPageView, FakePDFViewer, FakeRO, fakeDoc, fakeKit, fakeTask, type FakeTask, flush, installLayout, type ManualClock, manualClock, resetFakes } from './helpers/reader-fakes'
+import { createLayerSide, PAGE_MS } from '@/pdf-reader/engine/view/layer-side.mjs'
+import type { DocumentTask, ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
+import { N, partInputs, TAILS } from './helpers/format-paper'
+import { ASSETS, clientOf, FakePDFPageView, FakePDFViewer, fakeTask, flush } from './helpers/reader-fakes'
+import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, places, rowOf, type Setup, settle, setup } from './helpers/side-setup'
 
-let restoreLayout: () => void
-beforeAll(() => { restoreLayout = installLayout() })
-afterAll(() => restoreLayout())
-beforeEach(() => {
-  resetFakes()
-  FakeIO.live.clear(); FakeRO.live.clear()
-  vi.stubGlobal('IntersectionObserver', FakeIO)
-  vi.stubGlobal('ResizeObserver', FakeRO)
-  vi.spyOn(console, 'warn').mockImplementation(() => {})
-})
-const views: ReaderView[] = []
-afterEach(() => {
-  for (const v of views.splice(0)) v.dispose()
-  vi.unstubAllGlobals()
-  vi.restoreAllMocks()
-})
+installSideFakes()
 
-let paper: Made | null = null
-const M = async () => (paper ??= await made())
-const macrotask = () => new Promise(r => setTimeout(r, 0))
-const jobRef = (m: Made, i: number): TellRef => ({ ...(m.parts[i]!.ref as Ref), prev: i ? m.parts[i - 1]!.sha256 : null })
-const ALL = async () => { const m = await M(); return { head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(m, i)), end: { through: N } } }
-/** a row of each unit: its text as one translated piece; `sentences` where given */
-const rowOf = (id: number, text = `t${id}`, sentences: Row[4] = null): Row => [id, [text], 'whole', 'test', sentences]
-/** the units with lines on page n, rising */
-const unitsOn = (m: Made, n: number) => [...new Set(m.readParts.flatMap(p => p.left.filter(w => w[2].some(r => r[0] === n)).map(w => w[0])))].sort((a, b) => a - b)
-
-interface Setup {
-  view: ReaderView; side: LayerSide; door: FakeDoor; clock: ManualClock; events: ViewEvent[]; panes: { left: HTMLElement; right: HTMLElement }
-  fetched: string[]; refuse: Set<string>; objects: Map<string, Uint8Array>
-  composed: { tail: Uint8Array | null; options: Record<string, unknown>; task: FakeTask }[]
-  destroyed: string[]; warned: () => string[]; opens: number; highlight(on: boolean): void
-  /** each door opened: the rows it took, its ends, the copies it drew (page, source, k) */
-  doors: { taken: Row[]; ended: number; copies: [number, unknown, number][] }[]
-}
-interface Options { door?: FakeDoorOptions; bind?: () => Promise<boolean>; composedFails?: boolean; noOriginal?: boolean; extra?: { bytes: Uint8Array; sha256: string }[] }
-/** the view over the original (its four pages), its layer side over the fake door and the paper's objects served by digest */
-async function setup(o: Options = {}): Promise<Setup> {
-  const m = await M()
-  const panes = drawPanes()
-  const events: ViewEvent[] = []
-  const clock = manualClock()
-  let look: ViewPrefs = { swapped: false, dimPages: false, theme: 'light', highlight: true }
-  const lookers = new Set<(p: ViewPrefs) => void>()
-  const host: ReaderHost = {
-    panes, pdfjs: { ...fakeKit(), lib: { AnnotationMode: { DISABLE: 0, ENABLE: 1, ENABLE_FORMS: 2 }, OPS: {} } }, clock, scrollEnd: 'native',
-    words: { pageName: (s, n) => `${s} ${n}`, sideName: s => s },
-    prefs: { get: () => look, subscribe: l => { lookers.add(l); return () => { lookers.delete(l) } } }, links: { openExternal: () => {} }, emit: e => events.push(e),
-  }
-  const view = createReaderView(host)
-  views.push(view)
-  if (!o.noOriginal) {
-    const task = fakeTask()
-    const answer = view.showOriginal(() => task as unknown as DocumentTask)
-    task.resolve(fakeDoc(N))
-    expect(await answer).toBe('opened')
-  }
-  const objects = new Map<string, Uint8Array>()
-  for (const w of [...m.chunks, m.head, ...m.parts, ...Object.values(m.lefts), ...(o.extra ?? [])]) objects.set(w.sha256, w.bytes)
-  const fetched: string[] = [], refuse = new Set<string>(), destroyed: string[] = []
-  const fetchObject = async (ref: Ref) => {
-    fetched.push(ref.sha256)
-    await macrotask()
-    if (refuse.has(ref.sha256)) throw new Error('refused by the test')
-    const b = objects.get(ref.sha256)
-    if (!b) throw new Error('no such object')
-    return b
-  }
-  const rOf = (tail: Uint8Array | null) => (!tail ? 0 : tail.length === TAILS[0]!.tail.length ? m.readParts[0]!.chain.r : m.readParts[1]!.chain.r)
-  const composed: Setup['composed'] = []
-  const door = createFakeDoor({ laying: 'manual', ...o.door })
-  let opens = 0
-  const doors: Setup['doors'] = []
-  const side = createLayerSide(view, {
-    paper: { id: '2608.04322', version: 1 }, target: 'zh', faceSources: async () => null, hyphUrl: () => '',
-    fetchObject, bind: o.bind ?? (async () => true),
-    composed: (tail, options) => {
-      const task = fakeTask(destroyed, `composed ${composed.length}`)
-      composed.push({ tail, options, task })
-      if (o.composedFails) task.reject(new Error('no composed document')); else task.resolve(drawable(fakeDoc(N + rOf(tail))))
-      return task as unknown as DocumentTask
-    },
-    openLayer: (async (oo: Parameters<FakeDoor['openLayer']>[0]) => {
-      opens++
-      const layer = await door.openLayer(oo)
-      const seen: Setup['doors'][number] = { taken: [], ended: 0, copies: [] }
-      doors.push(seen)
-      const take = layer.take.bind(layer), end = layer.end.bind(layer), copyOf = layer.copyOf.bind(layer)
-      layer.take = r => { seen.taken.push(...r); return take(r) }
-      layer.end = () => { seen.ended++; end() }
-      layer.copyOf = (n, src, k) => { seen.copies.push([n, src, k]); return copyOf(n, src, k) }
-      // the fake lays no unit: every unit with lines on a page is shown there as the original's, as the real door's words say
-      const pageOf = layer.pageOf.bind(layer)
-      layer.pageOf = (n, oo2) => pageOf(n, oo2).then(laid => ({ ...laid, words: { ...laid.words, original: unitsOn(m, n) } }))
-      return layer
-    }) as never,
-  })
-  return {
-    view, side, door, clock, events, panes, fetched, refuse, objects, composed, destroyed,
-    warned: () => (console.warn as unknown as { mock: { calls: unknown[][] } }).mock.calls.map(c => String(c[0])),
-    get opens() { return opens },
-    doors,
-    highlight(on) { look = { ...look, highlight: on }; for (const l of lookers) l(look) },
-  }
-}
-/** a document whose pages draw (on a canvas, nothing: a page's copy drawn from the composed document) */
-function drawable(d: ReturnType<typeof fakeDoc>) {
-  const get = d.getPage.bind(d)
-  d.getPage = async (n: number) => Object.assign(await get(n), { render: () => ({ promise: Promise.resolve() }) })
-  return d
-}
-/** the side's tasks run: the door laying what is queued, the feed's digests, the view's frames and its 0 ms tasks */
-async function settle(s: Setup, n = 30) {
-  for (let i = 0; i < n; i++) { await macrotask(); if (s.door.layer) await s.door.advance(); await s.clock.advance(17) }
-}
-const places = (s: Setup) => [...s.panes.right.querySelectorAll<HTMLElement>(':scope > .pdfViewer > .page')]
-const nearOn = async (s: Setup, pages: number[], on = true) => { FakeIO.tell(pages.map(n => places(s)[n - 1] as HTMLElement), on); await flush(10) }
-const content = (s: Setup, n: number) => internalsOf(s.view).places.contentOf(n)
-const layerOf = (s: Setup, n: number) => places(s)[n - 1]?.querySelector('.axt-layer') as HTMLElement | null
 const leftViewer = () => FakePDFViewer.made[0] as FakePDFViewer
 
 describe('L4: the best version, page by page (§2.3)', () => {
