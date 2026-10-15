@@ -103,7 +103,8 @@ async function wholeRun(P: Paper) {
   const run = await openProto({
     doc, geometry: { schema: 1, kinds: merged.left.kinds, left: { pages: merged.left.pages, units: merged.left.units } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
     target: 'zh', pages: P.N, scale: 1, dpr: 1, copy: false, labels: LABELS as never,
-    tex: { ...HYBRID, index: indexLayout(merged.layout!), pieces: new Map() }, removal: { mode: 'draw', doc, manifest: merged.addon!.manifest },
+    // (BUNDLE 3's door: the text removal where the bundle has an add-on, v0's own drawing where it has none)
+    tex: { ...HYBRID, index: indexLayout(merged.layout!), pieces: new Map() }, removal: merged.addon ? { mode: 'draw', doc, manifest: merged.addon.manifest } : null,
   })
   run.take(unitsOfRows(P.index, rowsOfIndex(P.index)) as never)
   run.end()
@@ -160,8 +161,8 @@ async function partsRun(P: Paper, o: PartsOptions) {
   return { run, q1 }
 }
 
-async function takePaper(spec: PaperSpec, ends?: number[]): Promise<Paper & { honoured: boolean }> {
-  const c = await cutSpec(spec, ends)
+async function takePaper(spec: PaperSpec, ends?: number[], o: { addon?: boolean } = {}): Promise<Paper & { honoured: boolean }> {
+  const c = await cutSpec(spec, ends, o)
   // (the parts' last pages: those asked, and the paper's last)
   const asked = ends ? [...ends, spec.pages].join() : null
   return { N: spec.pages, index: c.index, parts: c.parts, docFor: docsOf(spec), honoured: asked === null || c.parts.map(p => p.pages[1]).join() === asked }
@@ -193,6 +194,24 @@ describe('the run in parts draws every page as the open over the whole paper doe
       expect(compared).toBeGreaterThan(0)
     })
   }
+
+  it('a paper with no add-on (M20): its parts carry none, and draw as the open over the whole with none, table groups drawn', async () => {
+    for (const [name, spec] of [['the take test\'s paper', TAKE], ['a float told late and a column across a page break', FLOAT]] as const) {
+      for (const ends of everySplit(spec.pages)) {
+        const P = await takePaper(spec, ends, { addon: false })
+        expect(P.parts.every(p => p.addon === null), `${name} ${ends}`).toBe(true)
+        const want = drawing(await wholeRun(P))
+        // (no group withheld for a page the text removal has no word of: the whole with no add-on draws them)
+        expect(want.skipped.filter(s => s.includes('its page not removed'))).toEqual([])
+        if (spec === TAKE) expect(want.order).toEqual(expect.arrayContaining([6, 7, 8]))
+        for (let before = 0; before <= P.parts.length; before += P.parts.length) for (const feed of ['eager', 'starved'] as const) {
+          const { run, q1 } = await partsRun(P, { before, ended: 'open', feed })
+          expect(drawing(run), `${name}, ends ${ends}, ${before} at the open, ${feed}`).toEqual(want)
+          expect(q1).toEqual([])
+        }
+      }
+    }
+  })
 
   it('a paper whose parts carry tails, and a part with no layout: every interleaving draws as the warm door', async () => {
     const M = await made()

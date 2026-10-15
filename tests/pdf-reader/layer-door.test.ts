@@ -189,6 +189,39 @@ describe('the door: three opens, the same pages', () => {
     }
   })
 
+  it('draws a paper with no add-on (M20) told in parts as BUNDLE 3\'s open of it with none, its table groups not withheld', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    for (const ends of [[1], [1, 2], []]) {
+      const c = await cutSpec(SPEC, ends, { addon: false })
+      expect(c.parts.every(p => p.addon === null)).toBe(true)
+      const docFor = docsOf(SPEC) as unknown as (r: number) => LayerDocument
+      const rows = rowsOfIndex(c.index)
+      seen.log.length = 0
+      const whole = await openLayer({ bundle: mergeParts(c.index, c.parts), doc: docFor(0), target: 'zh', faceSources, hyphUrl })
+      whole.take(rows)
+      const want = await askEvery(whole, SPEC.pages)
+      whole.end()
+      const wantLeft = (seen.runs.at(-1) as Run).skipped.map(x => `${x.id}:${x.why}`).sort()
+      whole.dispose()
+      expect(wantLeft.filter(x => x.includes('its page not removed'))).toEqual([])
+      seen.log.length = 0
+      const door = await openLayer({ index: c.index, doc: docFor(0), target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+      door.take(rows)
+      let next = 0
+      seen.starved = () => { if (next < c.parts.length) door.addPart(c.parts[next++]!) }
+      const cold = await askEvery(door, SPEC.pages)
+      seen.starved = null
+      while (next < c.parts.length) door.addPart(c.parts[next++]!)
+      door.end()
+      door.endParts()
+      const left = (seen.runs.at(-1) as Run).skipped.map(x => `${x.id}:${x.why}`).sort()
+      door.dispose()
+      expect({ pages: cold.pages, ops: cold.ops }, `${ends}`).toEqual({ pages: want.pages, ops: want.ops })
+      expect(left, `${ends}`).toEqual(wantLeft)
+      expect(q1Of(cold.log)).toEqual([])
+    }
+  })
+
   it('leaves a unit that throws while it is laid the original\'s, why error, and completes its page (DR6)', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const c = await cutSpec(SPEC)

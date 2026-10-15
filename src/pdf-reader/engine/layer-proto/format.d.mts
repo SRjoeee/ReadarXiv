@@ -113,6 +113,7 @@ export interface ReadPart {
   kind: 'part'; sha256: string; bytes: number; head: string; prev: string | null
   pages: [from: number, to: number]; reach: number; views: readonly number[]
   left: UnitWire[]; fileOnly: [id: number, after: number][]; layout: LayoutPart | null
+  /** null where the layout is, and where the part has no add-on for its pages (M20: its pages drawn by erase and restore) */
   addon: { manifest: RemovalManifest; tail: Uint8Array | null; r: number } | null
   leftParts: (Ref & { page: number })[]
   /** the state after this part */

@@ -616,7 +616,8 @@ const PART_DEF = { cap: PART_CAP, values: PART_VALUES, depth: PART_DEPTH }
  * no index): its pages [a, b] within the paper's N; the views of pages a … reach (stride 4, reach within N and past b); the
  * left units [id, stream, rects], ids rising, each rectangle on a page of [a, reach] within that page's view; `fileOnly`
  * [id, after], ids rising and not the left's; the layout part by checkLayoutPart, its units the left's or the file-only's and
- * those alone; the add-on null exactly where the layout is, its manifest by checkAddonManifest in part mode (`atFrom` the
+ * those alone; the add-on null where the layout is, and where the part has no add-on for its pages (M20: a producer with no
+ * remover, its pages drawn by v0's own erase and restore), else its manifest by checkAddonManifest in part mode (`atFrom` the
  * first removed page of the document it numbers, else the manifest's own first) and its tail base64 or null (null exactly
  * where no entry names a removed page, and then `appended` 0); one left-part ref for each page a … b
  */
@@ -697,7 +698,7 @@ function partShape(v, { N, unitCount, atFrom }) {
   let addon = null
   if (layout === null) {
     if (v.addon !== null) throw refuse(K, 'addon', 'not null where the layout is')
-  } else {
+  } else if (v.addon !== null) {
     const ad = exactKeys(K, v.addon, ['manifest', 'tail'], 'addon')
     const m = ad.manifest
     let at = atFrom
