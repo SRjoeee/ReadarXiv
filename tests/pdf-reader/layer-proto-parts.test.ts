@@ -1,3 +1,4 @@
+import { LAB_ON, LAB_PAPERS, labFiles } from './helpers/lab-data'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
@@ -505,19 +506,16 @@ describe('the layout facade', () => {
   })
 })
 
-// ---------------------------------------------------------------- H4: the local papers (AXT_LAB, the lab's root: lab/pdf)
+// ---------------------------------------------------------------- H4: the local papers (AXT_LAB and AXT_PACK, helpers/lab-data.ts)
 // The bookkeeping at scale without a browser: each paper made whole as the cutter's real-paper test makes it (its units from its
 // source, the layout file the gate's maker made, the geometry v0 is given), cut at the doubling, a page a part and a seeded
 // schedule, and run in parts, each part told when the run waits for it, against the open over the paper made whole again; the
 // text layer stands in (each unit's lines its text, no ink), the translation is the engine's own rows of a stand-in
-const LAB = process.env.AXT_LAB
-describe.skipIf(!LAB)('H4: the local papers in parts, as the open over each made whole', () => {
-  const PAPERS: [string, string][] = [['1512.03385v1', 'zh'], ['1706.03762v7', 'zh'], ['1810.04805v2', 'zh'], ['2307.16209v1', 'de'], ['2608.04322v1', 'zh']]
-  const FIXTURES = 'out/layer-gate/fixtures/f343494cf544323e', GEOMETRY = 'out/layer-gate/cut-p10/geometry'
+describe.skipIf(!LAB_ON)('H4: the local papers in parts, as the open over each made whole', () => {
   // (a part of 1 to 4 pages, drawn from the seed and the page it begins at, mixed as the gate's --door-parts=seed:<s> mixes them)
   const mix32 = (x: number) => { x = Math.imul(x ^ (x >>> 16), 0x85ebca6b); x = Math.imul(x ^ (x >>> 13), 0xc2b2ae35); return (x ^ (x >>> 16)) >>> 0 }
   const seeded = (seed: number) => (a: number, N: number) => Math.min(N, a + (mix32(Math.imul(seed, 0x9e3779b1) ^ a) % 4))
-  for (const [name, target] of PAPERS) {
+  for (const [name, target] of LAB_PAPERS) {
     it(name, async () => {
       const { existsSync } = await import('node:fs')
       const { openPaper } = await import('@/pdf-reader/engine/pipeline/live.mjs')
@@ -526,8 +524,7 @@ describe.skipIf(!LAB)('H4: the local papers in parts, as the open over each made
       const { parseLayout } = await import('@/pdf-reader/engine/layout/file.mjs')
       const { cutBundle } = await import('@/pdf-reader/engine/layer-proto/cut.mjs')
       const { readCut } = await import('./helpers/parts-paper')
-      const root = LAB as string
-      const layoutFile = join(root, FIXTURES, `${name}-zh`, 'layout.json'), geometryFile = join(root, GEOMETRY, `${name}-${target}-geometry.json`), sourceFile = join(root, 'data/layout', name, 'source.gz')
+      const { layoutFile, geometryFile, sourceFile } = labFiles(name, target)
       for (const f of [layoutFile, geometryFile, sourceFile]) if (!existsSync(f)) throw new Error(`missing ${f}`)
       const id = name.replace(/v\d+$/, ''), version = Number(name.slice(id.length + 1))
       const source = await unpackSource(new Uint8Array(readFileSync(sourceFile)))

@@ -2,8 +2,12 @@
 // sentences as the reader keeps them — Microsoft's answer for the very wire the reader sends (mt.mjs serialize), its
 // sentence lengths kept (as the extension's service keeps them: verifyAlignment), read back strictly or tolerantly as
 // translateUnits reads it, and cut by mt.mjs sentencesOf — where that answer is the translation the run typeset (its
-// pieces, `pieces/<id>.json` beside the runs, or the run's final texts); a unit whose answer differs, or has none, gets
-// none, and is lit whole.
+// pieces, `pieces/<id>.json` beside the runs, or the run's final texts); a unit whose answer differs gets none, and is
+// lit whole. A unit the gate leaves out of its check of these files — its wire, as the tree sends it now, has no answer
+// kept, or the tree cuts it otherwise (highlight-runs.mjs) — keeps the file's sentences, made when its wire was
+// answered: the run's sentences stand for it, as the gate says. Making the files again for a change to the path meant
+// (the read-back's stray `#` dropped, 1ba9313c) would otherwise drop every such unit's sentences too: on 2026-10-15,
+// the units aligned on the ten 850 instead of 928, and 2608.04322's ground-truth starts on their line 88 instead of 138.
 //   pnpm exec tsx lab/pdf/spikes/highlight-sentences.mjs [id …]   → <RUNS>/sentences/<id>.json
 //   RUNS=<dir> another set of runs (default data/runs/highlight-ten); FROM=en for runs translated from English (B's
 //   ground-truth compiles); MAX_REQUESTS=<n> caps the requests a run may make (default 200; 0 for the caches alone)
@@ -69,7 +73,7 @@ const boundaries = (ls, text) => {
   let at = 0
   return ls.slice(0, -1).some(n => { at += n; let c = at; for (const [a, b] of markers) if (c > a && c < b) c = b; return c < end })
 }
-const total = { units: 0, sent: 0, answered: 0, same: 0, aligned: 0, multi: 0, multiAligned: 0, sentences: 0 }
+const total = { units: 0, sent: 0, answered: 0, same: 0, aligned: 0, multi: 0, multiAligned: 0, sentences: 0, carried: 0 }
 for (const id of ids) {
   const { files } = await unpackSource(new Uint8Array(readFileSync(join(root, 'data/corpus', id, 'source.gz'))))
   const paper = runPaper(id, files), units = paper.units
@@ -78,9 +82,14 @@ for (const id of ids) {
   const todo = units.map((u, i) => i).filter(i => !paper.kept.has(units[i]))
   const sers = new Map(todo.map(i => [i, serialize(units[i])]))
   const got = await answers(todo.map(i => sers.get(i).wire))
-  const out = {}, n = { units: units.length, sent: todo.length, answered: 0, same: 0, aligned: 0, multi: 0, multiAligned: 0, sentences: 0 }
+  const out = {}, n = { units: units.length, sent: todo.length, answered: 0, same: 0, aligned: 0, multi: 0, multiAligned: 0, sentences: 0, carried: 0 }
+  // the file as it stands: a unit the gate does not judge keeps its entry (the gate's `unanswered`: a unit with pieces
+  // whose wire has no answer, or one the tree cuts otherwise)
+  const sf = join(RUNS, 'sentences', `${id}.json`), before = existsSync(sf) ? JSON.parse(readFileSync(sf, 'utf8')) : {}
+  const cut = new Set(paper.cut)
   todo.forEach((i, k) => {
     const a = got[k], ser = sers.get(i)
+    if ((cut.has(i) || (!a && units[i].pieces.length)) && before[i]) { out[i] = before[i]; n.carried++; return }
     if (!a) return
     n.answered++
     // read back as translateUnits reads it, and only the very translation the run typeset
@@ -101,7 +110,7 @@ for (const id of ids) {
     if (s.src.length) { n.multiAligned++; n.sentences += s.src.length + 1 }
   })
   mkdirSync(join(RUNS, 'sentences'), { recursive: true })
-  writeFileSync(join(RUNS, 'sentences', `${id}.json`), JSON.stringify(out))
+  writeFileSync(sf, JSON.stringify(out))
   console.log(id, JSON.stringify(n))
   for (const f of Object.keys(total)) total[f] += n[f]
 }
