@@ -47,7 +47,8 @@ export interface Compiled { ok: boolean; pdf?: Uint8Array | null; aux?: string |
 /** a compile asked of the TeX page. `draft` (with `rerun` false): one pass that writes no output (pdflatex
  *  -draftmode, xelatex -no-pdf with no driver, lualatex --draftmode). `files`: the files the compile wrote, returned
  *  (Compiled `files`), and, on a one-pass request, makeindex (-o ./<job>.ind ./<job>.idx) after the bibliography step
- *  where the pass wrote ./<job>.idx. A host that knows neither answers without `files`; the files a compile is given
+ *  where the pass wrote ./<job>.idx. The bibliography step (`bibtex: true`) is biber only where THIS pass wrote ./<job>.bcf (a
+ *  shipped or carried copy does not count), else BibTeX on ./<job>. A host that knows neither answers without `files`; the files a compile is given
  *  back come in `overrides`, as every other input does */
 export interface CompileRequest { main: string; engine: string; rerun: boolean; bibtex: boolean | null; overrides: Map<string, Uint8Array>; draft?: boolean; files?: boolean }
 /** the compiler a visit uses, opened when first needed and again after a compile the page failed */

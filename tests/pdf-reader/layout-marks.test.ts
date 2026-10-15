@@ -6,7 +6,7 @@ import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
 import { patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_CS, MARK_NAME, MARKS_CAP, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf, withoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
 import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
@@ -492,17 +492,16 @@ describe('LAYOUT_TEX', () => {
   })
   // \axt@unmark: the regex takes a mark and its argument out of a title's copy, and a prefilter keeps it from running on a
   // list that holds none of the five (unmark-finding: 4.36 s of the thesis's layout compile, a miss costing 3 ms a run)
-  it('withoutMarks: every layout mark and its own argument out of a written file, nothing else', () => {
-    expect(MARK_CS).toEqual(['axtmark', 'axtend', ...UNMARK_CS])
-    // each kind, behind a \\protect or not, with a space or none before its argument
-    for (const m of ['\\axtmark{12s}', '\\axtmark {12s}', '\\axtend{12e}', '\\axtpma{p1.2a}', '\\axtpm {p1.2b}', '\\axthmark{h3s}', '\\protect \\axtnma {abstract}', '\\protect\\axtnmb{abstract}'])
-      expect(withoutMarks(`a${m}b`), m).toBe('ab')
-    // in the middle of a line, at its start and end, many to a line; the text around them untouched
-    expect(withoutMarks('\\axtmark {1s}We use \\axtpma {p1.0a}$x$\\axtpm {p1.0b} here.\\axtend {1e}\n  next line \\axthmark{h2s}\n')).toBe('We use $x$ here.\n  next line \n')
-    // a mark's argument is its own braces: the group after it stays, as does a macro that only starts like a mark
-    expect(withoutMarks('\\axtpm{p1b}{keep}\\axtmarker{x}\\axtmarkx \\axtmark{1s')).toBe('{keep}\\axtmarker{x}\\axtmarkx \\axtmark{1s')
-    // no mark: the same text, byte for byte
-    expect(withoutMarks('\\contentsline {section}{1}{2}{section.1}\n')).toBe('\\contentsline {section}{1}{2}{section.1}\n')
+  it('withoutNameMarks: a babel name\'s marks and their arguments out, every other mark kept (it can have an effect where the paper reads its file back)', () => {
+    for (const m of ['\\axtnma{abstract}', '\\axtnmb {abstract}', '\\protect \\axtnma {contentsname}', '\\protect\\axtnmb{contentsname}'])
+      expect(withoutNameMarks(`a${m}b`), m).toBe('ab')
+    expect(withoutNameMarks('\\protect \\axtnma {abstract}Abstract\\protect \\axtnmb {abstract} here\n')).toBe('Abstract here\n')
+    // the unit, piece and heading marks stay: a file the paper writes and reads back is another file with them in it
+    for (const m of ['\\axtmark{12s}', '\\axtend{12e}', '\\axtpma{p1.2a}', '\\axtpm {p1.2b}', '\\axthmark{h3s}']) expect(withoutNameMarks(`a${m}b`), m).toBe(`a${m}b`)
+    expect(withoutNameMarks('\\axtnma{x}{keep}\\axtnmarker{x}')).toBe('{keep}\\axtnmarker{x}')
+    // and only in the aux and the lists \@starttoc reads
+    for (const f of ['main.aux', 'main.toc', 'main.lof', 'main.lot', 'main.loa', 'sub/chap.aux']) expect(NAME_MARK_FILE.test(f), f).toBe(true)
+    for (const f of ['main.xmpdata', 'comment.cut', 'main.tex', 'main.abs', 'main.bbl', 'main.out', 'main.log']) expect(NAME_MARK_FILE.test(f), f).toBe(false)
   })
 
   it('\\axt@unmark: the regex is the one that never reaches across a group, built from UNMARK_CS', () => {

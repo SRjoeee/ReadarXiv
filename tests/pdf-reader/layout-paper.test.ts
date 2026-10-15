@@ -263,6 +263,14 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
     }
   })
 
+  it('reads the aux from the first draft\'s files, not its lossy `aux` field', async () => {
+    const files = { 'main.aux': '\\relax \n\\@writefile{toc}{\\contentsline {section}{\\numberline {1}Intro}{1}{}}\n', 'main.toc': '' }
+    const first: Compiled = { ...draftOf(files, `No file main.toc.\n${END}`), aux: null }
+    const { made, asked } = await cmOf([PROBE, first, draftOf(files), markedOf(files)])
+    expect(made).toMatchObject({ cm: { drafts: 2, marked: 1, settled: true } })
+    expect(asked.map(r => r.draft)).toEqual([undefined, true, true, false])
+  })
+
   it('runs one draft where the first left a bibliography it never looked for or a blank one, or a list it found', async () => {
     const toc = '\\relax \n\\@writefile{toc}{\\contentsline {section}{\\numberline {1}Intro}{1}{}}\n'
     const cases: [Record<string, string>, string][] = [
@@ -290,7 +298,7 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
       // (BibTeX after this pass, a new bibliography: not the files it was given)
       markedOf({ 'main.aux': aux2, 'main.bbl': bbl2 }),
       markedOf({ 'main.aux': aux2 }),
-    ])
+    ], openPaper(new Map([['main.tex', enc(SOURCE)], ['refs.bib', enc('@article{a}')]])))
     expect(made).toMatchObject({ cm: { drafts: 2, marked: 2, settled: true } })
     expect(asked.map(r => r.bibtex)).toEqual([false, true, false, true, false])
     expect(given(asked[4])).toMatchObject({ 'main.aux': aux2, 'main.bbl': bbl2 })
@@ -350,12 +358,17 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
     expect(parseLayoutMarks(made.marks).lines).toEqual([[0, 4]])
   })
 
-  it('takes the marks in a file the paper writes itself as no difference, and a changed number in it as one', async () => {
-    const cut = '\\axtmark {3s}Some commented words\\axtend {3e}\n'
-    const bare = 'Some commented words\n'
-    const same = await cmOf([PROBE, draftOf({ 'main.aux': AUX, 'comment.cut': bare }), markedOf({ 'main.aux': AUX, 'comment.cut': cut })])
-    expect(same.made).toMatchObject({ cm: { drafts: 1, marked: 1, settled: true } })
-    const page = await cmOf([PROBE, draftOf({ 'main.aux': AUX, 'comment.cut': bare }), markedOf({ 'main.aux': AUX, 'comment.cut': cut.replace('words', 'words 2') }), markedOf({ 'main.aux': AUX, 'comment.cut': cut.replace('words', 'words 2') })])
+  it('takes a mark in a file the paper writes and reads back as a difference, a name\'s mark only in the aux and the lists as none', async () => {
+    // (pdfx reads a marked .xmpdata in the next pass: that pass is not latexmk's fixed point)
+    const xmp = (title: string) => `\\Title{${title}}\n`
+    const bare = await cmOf([PROBE, draftOf({ 'main.aux': AUX, 'main.xmpdata': xmp('A paper') }), markedOf({ 'main.aux': AUX, 'main.xmpdata': xmp('\\axthmark {h2s}A paper') }), markedOf({ 'main.aux': AUX, 'main.xmpdata': xmp('\\axthmark {h2s}A paper') })])
+    expect(bare.made).toMatchObject({ cm: { drafts: 1, marked: 2, settled: true } })
+    // a name's mark in a file that is not the aux or a list is one too
+    const named = '\\protect \\axtnma {abstract}Abstract\\protect \\axtnmb {abstract}'
+    const cut = await cmOf([PROBE, draftOf({ 'main.aux': AUX, 'comment.cut': 'Abstract\n' }), markedOf({ 'main.aux': AUX, 'comment.cut': `${named}\n` }), markedOf({ 'main.aux': AUX, 'comment.cut': `${named}\n` })])
+    expect(cut.made).toMatchObject({ cm: { drafts: 1, marked: 2, settled: true } })
+    // a changed number is a difference whatever the marks
+    const page = await cmOf([PROBE, draftOf({ 'main.aux': AUX, 'main.toc': `${named}\n` }), markedOf({ 'main.aux': AUX, 'main.toc': `${named}\n`.replace('Abstract', 'Abstract 2') }), markedOf({ 'main.aux': AUX, 'main.toc': `${named}\n`.replace('Abstract', 'Abstract 2') })])
     expect(page.made).toMatchObject({ cm: { drafts: 1, marked: 2, settled: true } })
   })
 
@@ -389,7 +402,7 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
 
   it('falls back to today\'s compile where a draft returned no files or did not run through', async () => {
     const bbl = '\\begin{thebibliography}{1}\n\\bibitem{a} A.\n\\end{thebibliography}\n'
-    const cases: [string, (Compiled | Error)[], 'no-files' | 'draft-failed' | 'aux-jobs', number][] = [
+    const cases: [string, (Compiled | Error)[], 'no-files' | 'draft-failed' | 'aux-jobs' | 'bib-missing', number][] = [
       ['a host that returns no files', [PROBE, { ok: true, pdf: null, log: END }], 'no-files', 1],
       ['a draft that is not ok', [PROBE, { ...draftOf({ 'main.aux': AUX }), ok: false, error: 'limit cpu' }], 'draft-failed', 1],
       ['a draft that timed out (a host returns files only with ok)', [PROBE, { ok: false, pdf: null, log: 'the log of a pass the wall stopped\n', error: 'Compilation timeout' }], 'draft-failed', 1],
@@ -397,6 +410,8 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
       ['a draft with no AXT-END', [PROBE, draftOf({ 'main.aux': AUX }, 'the log of a halted pass\n')], 'draft-failed', 1],
       ['a second draft that did not run through', [PROBE, draftOf({ 'main.aux': AUX, 'main.bbl': bbl }, `No file main.bbl.\n${END}`), draftOf({ 'main.aux': AUX }, '! TeX capacity exceeded, sorry [main memory size=5000000].\n')], 'draft-failed', 2],
       ['a bibliography job beside the main one\'s (chapterbib, multibib): latexmk runs BibTeX on it, a pass does not', [PROBE, draftOf({ 'main.aux': AUX, 'chap.aux': '\\relax \n\\bibstyle{plain}\n\\bibdata{refs}\n' })], 'aux-jobs', 1],
+      ['a bibliography whose .bib the project lacks: latexmk skips the step, BibTeX writes an empty one', [PROBE, draftOf({ 'main.aux': `${AUX}\\bibdata{refs,more}\n` })], 'bib-missing', 1],
+      ['a biber datasource the project lacks', [PROBE, draftOf({ 'main.aux': AUX, 'main.bcf': '<bcf:controlfile><bcf:bibdata><bcf:datasource type="file" datatype="bibtex">refs.bib</bcf:datasource></bcf:bibdata></bcf:controlfile>' })], 'bib-missing', 1],
       ['a marked pass that returned no files', [PROBE, draftOf({ 'main.aux': AUX }), { ok: true, pdf: PDF, log: `${LINES}${END}` }], 'no-files', 1],
     ]
     for (const [why, answers, fallback, drafts] of cases) {
@@ -413,6 +428,13 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
 
   it('takes an aux of another name with no \\bibdata (an \\include\'d chapter\'s) as no bibliography job', async () => {
     const made = await cmOf([PROBE, draftOf({ 'main.aux': AUX, 'chap.aux': '\\relax \n\\@setckpt{chap}{\\setcounter{page}{2}}\n' }), markedOf({ 'main.aux': AUX })])
+    expect(made.made).toMatchObject({ cm: { drafts: 1, marked: 1, settled: true } })
+    expect(made.made.cm).not.toHaveProperty('fallback')
+  })
+
+  it('keeps CM where every .bib the aux names is in the project', async () => {
+    const paper = openPaper(new Map([['main.tex', enc(SOURCE)], ['refs.bib', enc('@article{a}')], ['more.bib', enc('@article{b}')]]))
+    const made = await cmOf([PROBE, draftOf({ 'main.aux': `${AUX}\\bibdata{refs, more}\n` }), markedOf({ 'main.aux': `${AUX}\\bibdata{refs, more}\n` })], paper)
     expect(made.made).toMatchObject({ cm: { drafts: 1, marked: 1, settled: true } })
     expect(made.made.cm).not.toHaveProperty('fallback')
   })

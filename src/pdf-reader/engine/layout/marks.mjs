@@ -611,14 +611,15 @@ export const NAMES_TEX = [
  *  alternation and the prefilter from it, so the two cannot drift */
 export const UNMARK_CS = ['axtpma', 'axtpm', 'axthmark', 'axtnma', 'axtnmb']
 
-/** every mark macro a pass can write into a file of the paper's own (a \write of its text, a list, the aux): the title marks
- *  of UNMARK_CS and the unit marks \axtmark and \axtend (MARK_DEF, latex-front.mjs), each taking one brace-free name */
-export const MARK_CS = Object.freeze(['axtmark', 'axtend', ...UNMARK_CS])
-const WRITTEN_MARKS = new RegExp(String.raw`(?:\\protect\s*)?\\(?:${MARK_CS.join('|')})\s*\{[^{}]*\}`, 'g')
-/** a file's text with its layout marks taken out: each mark (written as `\axtpm {p1.2b}`, or behind a `\protect `) and its own
- *  argument, nothing else. The marked pass's certificate (paper.mjs) compares files by this, so that a mark in text the paper
- *  writes itself (a comment file, an author list, a ledger) is not a difference between two passes */
-export const withoutMarks = text => text.replace(WRITTEN_MARKS, '')
+/** a babel name's marks as a pass writes them into the aux and the lists \@starttoc reads (NAMES_TEX: `\protect \axtnma {<key>}`
+ *  and `\axtnmb`), inert where they are read (\@starttoc's \axt@off, pdfstringdef, the nameref names' unmark). Only these:
+ *  a mark in text the paper writes itself and reads back (an .xmpdata that pdfx reads, a .tex it \input s) has an effect in
+ *  the next pass, so a pass that differs there is not at latexmk's fixed point */
+const NAME_MARKS = /(?:\\protect\s*)?\\axtnm[ab]\s*\{[^{}]*\}/g
+/** the files a babel name's marks are written to: the aux and the lists (.toc .lof .lot and the common .loa .lol .lop) */
+export const NAME_MARK_FILE = /\.(?:aux|toc|lof|lot|loa|lol|lop)$/
+/** a file's text with its babel name marks, each with its own argument, taken out */
+export const withoutNameMarks = text => text.replace(NAME_MARKS, '')
 
 /** \axt@unmark<tl>: the regex that takes a mark and its argument out of a token list, behind a memory and a prefilter.
  *  The regex costs ~4 ms a run over a list that holds a mark (~50 µs a token) and ~3 ms over one that holds none, and the

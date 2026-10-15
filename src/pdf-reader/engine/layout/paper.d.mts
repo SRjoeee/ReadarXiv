@@ -3,9 +3,9 @@ import type { Compiled, CompileRequest, Paper } from '../pipeline/live.mjs'
 
 /** CM's record (converge then mark): the unmarked original's draft passes, the marked original's passes, whether the
  *  last marked pass wrote the files it was given (else the bound of five TeX passes was reached and its PDF kept), and
- *  why today's compile was asked instead, where it was: a host that returned no files, or a draft that did not run
- *  through. Pass counts enter no key and no file */
-export interface ConvergeRecord { drafts: number; marked: number; settled: boolean; fallback?: 'no-files' | 'draft-failed' | 'aux-jobs' }
+ *  why today's compile was asked instead, where it was: a host that returned no files, a draft that did not run
+ *  through, a bibliography job beside the main one's (aux-jobs), or a .bib the project lacks (bib-missing). Pass counts enter no key and no file */
+export interface ConvergeRecord { drafts: number; marked: number; settled: boolean; fallback?: 'no-files' | 'draft-failed' | 'aux-jobs' | 'bib-missing' }
 
 /**
  * a paper's layout marks: the mark probe compiled (probeFiles(paper, { marks: true }), one pass) and its answers read
@@ -20,8 +20,8 @@ export interface ConvergeRecord { drafts: number; marked: number; settled: boole
  * original (originalFiles(paper, { lines: true })) is compiled in one or two drafts (`draft`, `files`), then the marked
  * original one pass at a time (`files`) in the files the passes before returned (in place of the paper's own, never of
  * the pass's), until a pass writes the bytes it was given or five TeX passes have run; `ms.compile` is all of them, `cm`
- * their record. A pass that returns no `files`, or a draft that did not run through (a timeout too), gets today's
- * compile; a marked pass that did not run through, or a compile that throws, is the compile's refusal
+ * their record. A pass that returns no `files`, a draft that did not run through (a timeout too), a bibliography job beside the
+ * main one's or a missing .bib gets today's compile; a marked pass that did not run through, or a compile that throws, is the compile's refusal
  */
 export declare function layoutMarksOfPaper(paper: Paper, o: {
   compile(req: CompileRequest): Promise<Compiled>
