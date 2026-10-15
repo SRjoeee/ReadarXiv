@@ -34,8 +34,9 @@ export const VIEW: [number, number, number, number] = [0, 0, 300, H]
 export const CJK = (n: number, from = 0x4e00) => Array.from({ length: n }, (_, i) => String.fromCharCode(from + 7 * i)).join('')
 const rectOf = ([p, x0, x1, b]: [number, number, number, number]): [number, number, number, number, number] => [p, x0, b - 2.15, x1, b + 6.83]
 
-/** the paper the spec describes, whole (the cutter's input); `addon: false`, no add-on at all (a producer with no remover) */
-export function wholeOfSpec(spec: PaperSpec, o: { addon?: boolean } = {}): WholePaper & { layout: LayoutFile } {
+/** the paper the spec describes, whole (the cutter's input); `addon: false`, no add-on at all (a producer with no remover);
+ *  `layout: false`, no layout file (the maker refused: every part `layout: null`) */
+export function wholeOfSpec(spec: PaperSpec, o: { addon?: boolean; layout?: boolean } = {}): WholePaper & { layout: LayoutFile | null } {
   const N = spec.pages
   const units: BundleUnit[] = spec.units.map(u => [u.kind, 0, null, u.cell ?? null, null, u.cite ? [[0, u.text], [1, '\\cite{a}']] : [[0, u.text]]] as BundleUnit)
   const file = spec.units.map((u, id) => ({ ...u, id })).filter(u => u.file)
@@ -52,7 +53,7 @@ export function wholeOfSpec(spec: PaperSpec, o: { addon?: boolean } = {}): Whole
   const manifest: RemovalManifest = { schema: 1, removal: REMOVAL, pages: N, sets: {}, page: Object.fromEntries(Array.from({ length: N }, (_, i) => [i + 1, { ok: true }])), appended: 0, stats: {} } as never
   return {
     paper: { id: '2610.00001', version: 1, pages: N }, base: { bytes: 12_345, sha256: '0123456789abcdef'.repeat(4), xref: 12_000 }, versions: { image: '1' },
-    units, left: { pages: Array.from({ length: N }, () => VIEW), units: left }, layout, addon: o.addon === false ? null : { manifest },
+    units, left: { pages: Array.from({ length: N }, () => VIEW), units: left }, layout: o.layout === false ? null : layout, addon: o.addon === false || o.layout === false ? null : { manifest },
   }
 }
 
@@ -94,7 +95,7 @@ export async function readCut(c: Cut): Promise<{ index: LayerIndex; parts: ReadP
 }
 
 /** the spec's paper cut at `ends` (the cutter's target hook) and read back; `addon: false`, a paper with no add-on */
-export async function cutSpec(spec: PaperSpec, ends?: readonly number[], o: { addon?: boolean } = {}) {
+export async function cutSpec(spec: PaperSpec, ends?: readonly number[], o: { addon?: boolean; layout?: boolean } = {}) {
   const whole = wholeOfSpec(spec, o)
   const cut = await cutBundle(whole, { leftPages: leftPagesOfSpec(spec), ...(ends ? { target: splitAt(ends) } : {}) } as never)
   return { whole, cut, ...(await readCut(cut)) }
