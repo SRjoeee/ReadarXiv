@@ -180,7 +180,7 @@ describe("a paper whose add-on is refused, the whole run (openProto): every unit
     } as never)
     await run.until(1)
     const ops = run.rows[0]!.ops as unknown as { op: string }[]
-    return { placed: run.placed.map((p: { id: number }) => p.id), skipped: run.skipped.length, kinds: [...new Set(ops.map(o => o.op))].sort(), svg: run.rows[0]!.svg.innerHTML }
+    return { placed: run.placed.map((p: { id: number }) => p.id), skipped: run.skipped.length, kinds: [...new Set(ops.map(o => o.op))].sort(), svg: run.svgOf(1).innerHTML }
   }
   it('draws each unit of a paper with no add-on, or a page its manifest refuses, by erase and put back: the units of the paper with one', async () => {
     const withAddon = await open(doc => ({ OPS: {}, mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: 1, sets: {}, page: { 1: { ok: true } } } }))

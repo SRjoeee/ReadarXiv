@@ -105,7 +105,7 @@ type Run = Awaited<ReturnType<typeof import('@/pdf-reader/engine/layer-proto/run
 const groupsOf = () => new Map(SPECS.filter(s => s.group).map(s => [s.id, s.group!]))
 /** v0 over the paper: every unit at once (today's call), or none, the record's ids expected (taken later); `groups`,
  *  each unit's table group given at open */
-async function open(P: ReturnType<typeof paper>, how: 'whole' | 'parts', { groups = null as Map<number, string> | null } = {}) {
+async function open(P: ReturnType<typeof paper>, how: 'whole' | 'parts', { groups = null as Map<number, string> | null, order = null as number[] | null, free = false } = {}) {
   const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
   const units: unknown[] = []
   if (how === 'whole') for (const [id, r] of P.rows) units[id] = r
@@ -113,7 +113,7 @@ async function open(P: ReturnType<typeof paper>, how: 'whole' | 'parts', { group
   // (the units file's pieces: the translated units')
   if (how === 'whole') for (const [id, r] of P.rows) { const tr = r.pieces && r.state === 'whole' ? trPiecesOf(r.pieces, (p: unknown) => (p as { k: number }).k) : null; if (tr) pieces.set(id, tr) }
   return openProto({
-    doc: P.doc, target: 'zh', pages: 3, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units,
+    doc: P.doc, target: 'zh', pages: 3, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, order, free,
     ...(how === 'parts' ? { expect: [...P.rows.keys()] } : {}),
     ...(groups ? { groups } : {}),
     tex: { index: P.index, pieces, use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
@@ -122,7 +122,7 @@ async function open(P: ReturnType<typeof paper>, how: 'whole' | 'parts', { group
 /** what a run drew: each page's operations and SVG, the order its units were laid in, their records and why each unit
  *  left was left */
 const drawing = (run: Run) => ({
-  pages: run.rows.map(r => ({ ops: JSON.stringify(r.ops), svg: r.svg.innerHTML })),
+  pages: run.rows.map((r, i) => ({ ops: JSON.stringify(r.ops), svg: run.svgOf(i + 1).innerHTML })),
   order: run.order.slice(),
   stats: run.stats.map(({ ms: _, ...r }) => r),
   skipped: run.skipped.map(s => `${s.id}:${s.why}`).sort(),
@@ -336,6 +336,30 @@ describe('v0 fed its units as they arrive (take, end)', () => {
   })
 })
 
+describe('a recorded lay order, the rows in parts, the run letting go of what it laid', () => {
+  it('draws as the run that keeps everything, in any recorded order: no unit grown twice on a page, no growth error swallowed', async () => {
+    // (a recorded order sorts a page's lay group, so the rank a page's growth steps follow is no longer the stream's. Laid in
+    // order every unit with lines on a page is placed before the page's first growth, and one placed later is of a later lay
+    // group, so the grown stay a prefix of the rank; growTo still skips a unit grown on the page, which the run that lets go
+    // could not grow again)
+    const ids = [...paper().rows.keys()]
+    for (const order of [ids.slice().reverse(), shuffled(ids, 3), shuffled(ids, 11)]) for (const parts of [partsOf(ids, 1), partsOf(shuffled(ids, 5), 3)]) {
+      const runs = []
+      for (const free of [false, true]) {
+        const P = paper()
+        const run = await open(P, 'parts', { groups: groupsOf(), order, free })
+        const fed = feed(run, P, parts)
+        for (const p of [1, 2, 3]) await run.until(p)
+        await fed
+        expect(run.placed.filter(u => (u as { stepError?: unknown }).stepError !== undefined).map(u => u.id), `${order}`).toEqual([])
+        runs.push(run)
+      }
+      expect(drawing(runs[1]!), `${order}`).toEqual(drawing(runs[0]!))
+      for (const p of [1, 2, 3]) expect(runs[1]!.held(p), `${order} page ${p}`).toEqual({ state: [], units: [], reads: 0 })
+    }
+  })
+})
+
 describe('a run let go while it waits (dispose)', () => {
   // (the faces every run shares are the module's, fonts.mjs setRoleFaces: a newer layer sets its own once this one is let
   // go, and nothing of this one may write or read them after)
@@ -358,7 +382,7 @@ describe('a run let go while it waits (dispose)', () => {
       expect(run.order).toEqual([0])
       expect(run.stats).toEqual([])
       expect(run.skipped.filter(x => x.id === 0)).toEqual([])
-      expect(run.rows.every(r => r.ops.length === 0 && r.svg.innerHTML === '')).toBe(true)
+      expect(run.rows.every((r, i) => r.ops.length === 0 && run.svgOf(i + 1).innerHTML === '')).toBe(true)
     } finally { fonts().load = was }
   })
   it("while its first page is drawn: a newer layer's roles stand once the page is", async () => {
