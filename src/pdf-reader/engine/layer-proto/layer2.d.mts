@@ -39,7 +39,8 @@ export interface Params {
 }
 /** a character of the original page: its box from its item (PDF units), its baseline and size, its item and place in it,
  *  its font's class */
-export interface Char { ch: string; x0: number; x1: number; yb: number; size: number; item: number; ix: number; k: number; st: FontClass; ybEff?: number; page?: number; rect?: number[]; sep?: boolean; space?: boolean }
+/** a page character (pageChars2's); `nu`: no Unicode of the file's stands for its glyph (its text is no reading of it) */
+export interface Char { ch: string; x0: number; x1: number; yb: number; size: number; item: number; ix: number; k: number; st: FontClass; ybEff?: number; page?: number; rect?: number[]; sep?: boolean; space?: boolean; nu?: boolean }
 /** a unit of the units file, as the layer reads it */
 export interface Unit { kind: string; src: string; pieces: { t: string; s?: string; src?: string }[]; state?: string; title?: boolean; group?: string }
 // ---- the per-unit reading (prepareUnit): the contract the rest of v0 reads
@@ -161,7 +162,11 @@ type ToDev = (x: number, y: number) => [number, number]
 /** a spacing accent TeX sets as a glyph of its own */
 export declare const ACCENT: RegExp
 /** a page's text content as characters, each with its font's class (`fontOf(fontName)`) */
-export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (fontName: string) => FontClass): Char[]
+/** the characters a font's ToUnicode map gives its glyphs (PDF.js's `toUnicode`, with fontExtraProperties), or null */
+export declare function mappedOf(toUnicode: unknown): Set<string> | null
+/** whether a page character's text is no reading of its glyph (pageChars2's `nu`) */
+export declare function unmapped(ch: string, mapped: Set<string> | null | undefined): boolean
+export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (fontName: string) => FontClass, mapOf?: ((fontName: string) => Set<string> | null) | null): Char[]
 /** a placeholder's source as plain text, its environment, label and alignment marks left out */
 export declare function texToText2(src: string): string
 /** phClass with the paper's own macros told apart: { cls, unknown? } */

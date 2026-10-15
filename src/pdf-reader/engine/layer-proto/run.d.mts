@@ -50,7 +50,7 @@ export interface Rec {
   opened?: number; unopened?: number
   [more: string]: unknown
 }
-export declare const PDF_OPTIONS: { cMapPacked: true; enableHWA: true; disableStream: true }
+export declare const PDF_OPTIONS: { cMapPacked: true; enableHWA: true; disableStream: true; fontExtraProperties: true }
 /** main.js's lay order, by the page whose drawing lays each unit: [page, ids] */
 export declare function layGroups(placed: readonly { id: number; pages: readonly number[] }[], batch?: number): [number, number[]][]
 export declare const layOrder: (placed: readonly { id: number; pages: readonly number[] }[], batch?: number) => number[]

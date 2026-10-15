@@ -88,10 +88,31 @@ const wDesign = (ch, st) => {
 }
 /** a spacing accent TeX sets over a letter as a glyph of its own ("Zu¨rich"): no width of its own */
 export const ACCENT = /^(?:[\u00A8\u00B4\u00B8\u00AF\u02C6-\u02DD\u0060\u005E\u007E]|\p{M})$/u
-/** a page's text content as characters: each item's width shared by its design's widths (what is left over, a justified
- *  line's stretch, by its spaces where it has any), and the item's font class (`st`, from fontOf(fontName)) on every
- *  character */
-export function pageChars2(textContent, fontOf) {
+/**
+ * The characters a font's own map gives its glyphs (PDF.js's `toUnicode` of a font loaded with fontExtraProperties: the
+ * file's ToUnicode, or what its encoding names), each value as written and as PDF.js's text layer normalises it (a
+ * ligature "ﬁ" read as "fi"); null where the font has no such map to read (an identity map, or no extra properties).
+ */
+export function mappedOf(toUnicode) {
+  const map = toUnicode?._map
+  if (!Array.isArray(map)) return null
+  const out = new Set()
+  for (const v of map) if (typeof v === 'string') for (const s of [v, v.normalize('NFKC')]) for (const ch of s) out.add(ch)
+  return out
+}
+/** a character no Unicode stands for: private use, a replacement character, a control */
+const NO_UNICODE = /[\p{Co}\p{Cc}\uFFFD]/u
+/** whether a page character's text is no reading of its glyph (pageChars2's `nu`): one no Unicode stands for, or one
+ *  its font's own map (`mapped`, mappedOf's; null: none to read) gives none of its glyphs */
+export const unmapped = (ch, mapped) => /\S/.test(ch) && (NO_UNICODE.test(ch) || (mapped != null && !mapped.has(ch)))
+/**
+ * A page's text content as characters: each item's width shared by its design's widths (what is left over, a justified
+ * line's stretch, by its spaces where it has any), and the item's font class (`st`, from fontOf(fontName)) on every
+ * character. `mapOf(fontName)` (mappedOf's set, or null): a character the item's font maps none of its glyphs to is
+ * marked `nu`, no Unicode of the file's. PDF.js reads such a glyph by its code (2307.16209's newtx summation sign in
+ * txexs, read "Í"), so its text is not what the page shows; so is a private-use, replacement or control character.
+ */
+export function pageChars2(textContent, fontOf, mapOf = null) {
   const out = []
   for (const [item, it] of textContent.items.entries()) {
     if (!it.str || !it.transform) continue
@@ -99,6 +120,7 @@ export function pageChars2(textContent, fontOf) {
     if (Math.abs(b) > 0.01 || d < 0) continue
     const size = Math.hypot(a, b) || it.height
     const st = fontOf(it.fontName)
+    const mapped = mapOf?.(it.fontName) ?? null
     const chars = [...it.str]
     const nat = chars.map(ch => (ACCENT.test(ch) && chars.length > 1 ? 0 : wDesign(ch, st) || 50))
     const sum = nat.reduce((s, v) => s + v, 0) || 1
@@ -111,7 +133,8 @@ export function pageChars2(textContent, fontOf) {
       const w = ws[k]
       // a radical hangs from its baseline (CMSY10's √: 0.04 em high, 0.96 em deep): its line is the one below
       const hang = ch === '√' && st?.fam === 'math' ? { ybEff: y - 0.75 * size } : null
-      out.push({ ch, x0: cx, x1: cx + w, yb: y, size, item, ix: x, k, st, ...hang })
+      const nu = unmapped(ch, mapped) ? { nu: true } : null
+      out.push({ ch, x0: cx, x1: cx + w, yb: y, size, item, ix: x, k, st, ...hang, ...nu })
       cx += w
     })
   }
@@ -1142,6 +1165,16 @@ function finishUnit(out, unit, rects, charsByPage) {
     const next = uc.slice(last + 1).find(c => real(c) && !keepSet.has(`${c.page}|${c.rect.join()}`))
     r.origAfter = next?.ch ?? null
   }
+  // the original's own character a held line shows right after a kept placeholder's ink (1512.03385's footnote 1: a URL's
+  // line kept, its full stop with it), `heldAfter`: tokensOf2 drops the translation's mark there that would show it twice
+  for (const r of out.values()) {
+    if (r?.mode !== 'kept' || r.cls === 'display' || r.region === undefined || !r.gap) continue
+    const own = new Set(r.gap.chars.filter(real).map(charKey))
+    let last = -1
+    uc.forEach((c, i) => { if (own.has(charKey(c))) last = i })
+    const next = last >= 0 ? uc.slice(last + 1).find(real) : null
+    r.heldAfter = next && out.regionOf.get(`${next.page}|${next.rect.join()}`) === r.region ? next.ch : null
+  }
   // the translation's own text, letters only: a name it keeps as the page writes it ("Niño", whose ñ the source wrote
   // as a command) is drawn, not shown twice
   const trLetters = norm(unit.pieces.filter(p => p.t === 'text').map(p => p.s).join(' ') + ' ' + [...out.values()].map(r => r?.text ?? '').join(' '))
@@ -1805,7 +1838,8 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
   // a displayed formula the text after it starts below (or one before the unit's lines): the translation's text that
   // opens that segment with a mark UAX 14 does not let a line start with (a sentence's ideographic comma or full stop Microsoft sets after
   // a display piece, a "," or ")") is drawn without it, unless the original's own line there opens with one (its
-  // `origAfter`): the maintainer's fix 4 of 2026-10-15, for every script. The rows and the cache keep the translation
+  // `origAfter`): the maintainer's fix 4 of 2026-10-15, for every script. So is such a mark after a placeholder kept on
+  // its held line where that line shows the original's own mark after it (`heldAfter`). The rows and the cache keep the translation
   let after = null
   const dropped = s => {
     let t = s
@@ -1846,6 +1880,9 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       while (tokens.at(-1)?.space) tokens.pop()
       tokens.push({ blockTo: r.region, w100: 0 })
       if (r.cls === 'display') after = r
+      // (a held line's own mark after the placeholder stands with it, the original's: the translation's is not drawn
+      // again, finishUnit's `heldAfter`)
+      else if (noStart(r.heldAfter)) after = { origAfter: null }
       return
     }
     // (a display before the unit's lines, drawn as nothing: the text after it opens the unit's first line)

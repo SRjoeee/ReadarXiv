@@ -246,6 +246,11 @@ function heldRendering(run, lines, uc) {
  * pages past those the run shows (`shown`: a unit cut at the last page shown, its lines laid there too) is proven by the
  * file, and drawn as its page text where the file has one, else as nothing: never its source's "?" (no character of it
  * is read on a page not shown; a reader shows every page).
+ * Page text is drawn as its characters read, so a page-text rendering any of whose characters no Unicode of the file's
+ * stands for is no proof, whatever proves its ink (the file's own segments too), and its k the answer: layer2.mjs
+ * pageChars2's `nu`, a glyph its font's ToUnicode does not map, which PDF.js reads by its code, or a private-use,
+ * replacement or control character. The reader would see another character than the page's: 2307.16209 page 133, unit
+ * 442, drew "g(z′) = Í n g n (z′) n" for g(z') = Σ_n g_n(z')^n (newtx's display sum, in txexs, which no ToUnicode maps).
  * The one exemption (the controller's ruling of 2026-10-15): a LaTeX text symbol v0 draws from its source (\%,
  * $\times$: phClass2's 'symbol'). Its source is its rendering's content, a character LaTeX's own definition sets, and its
  * glyph is its line's, erased with it; the rule is against guessing where a formula's ink is, which a symbol asks for
@@ -254,7 +259,11 @@ function heldRendering(run, lines, uc) {
 export function proofOf(lu, kOf, shown = Infinity) {
   return res => {
     for (const r of res.values()) {
-      if (!r || r.cls === 'zero' || r.cls === 'space' || r.cls === 'symbol' || r.proof || r.gap?.proof) continue
+      if (!r) continue
+      // (whatever proves where its ink is: page text is drawn as its characters read, and one no Unicode of the file's
+      // stands for, pageChars2's `nu`, reads as no glyph the page shows)
+      if (r.mode === 'orig-text' && (r.gap?.chars ?? []).some(c => c.nu)) return r.k
+      if (r.cls === 'zero' || r.cls === 'space' || r.cls === 'symbol' || r.proof || r.gap?.proof) continue
       const row = lu && kOf ? lu.ph.get(kOf[r.k]) : null
       const S = row && !(row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY | PH_FLAG.JOINED)) ? row.segs : []
       let past = S.length > 0

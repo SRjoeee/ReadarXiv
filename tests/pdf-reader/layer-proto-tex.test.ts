@@ -357,6 +357,51 @@ describe("a piece past the pages shown, a source's own proof, and fix 4 (the LOS
   })
 })
 
+describe("page text no Unicode stands for, and a held line's own mark (the LOST round's images, 2026-10-15)", () => {
+  const L = (y: number) => [1, 10, 200, y, y + 7, y - 2, 10, 0]
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
+  const DESIGNS = { serif: 'times', sans: 'helvetica', mono: 'courier' }
+  const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0 }
+  const drawn = (u: never, prep: never) => L2.tokensOf2(u, prep, 'zh', BASE as never, DESIGNS as never, P as never, null, () => 0).filter(t => typeof t.s === 'string').map(t => t.s).join('')
+  it("reads the characters a font's own map gives its glyphs, and marks a character it maps none to", () => {
+    const set = L2.mappedOf({ _map: ['a', undefined, '\uFB01', '\u{1D454}'] })
+    // (each as written and as the text layer normalises it: the ligature's letters, the math italic's g)
+    expect([...(set ?? [])].sort()).toEqual(['a', 'f', 'g', 'i', '\uFB01', '\u{1D454}'].sort())
+    expect(L2.mappedOf({ firstChar: 0, lastChar: 255 })).toBeNull()
+    expect(L2.mappedOf(undefined)).toBeNull()
+    const f8 = new Set(['g', '='])
+    expect(['g', ' ', '=', '\u00CD'].map(ch => L2.unmapped(ch, f8))).toEqual([false, false, false, true])
+    // a font with no map to read: only a character no Unicode stands for (private use, replacement, control)
+    expect(['a', '\uE001', '\uFFFD', '\u0001', ' '].map(ch => L2.unmapped(ch, null))).toEqual([false, true, true, true, false])
+  })
+  it('page text of a placeholder with a character no Unicode stands for is no proof, its segments the file\'s own or not', () => {
+    // a formula TeX broke over two lines (two segments: drawn as its page text), its sum sign read by its code
+    const u = { kind: 'para', src: 'a b c d', pieces: [text('\u7532 '), ph("$g(z')=\\sum_n g_n$"), text(' \u4E59')] } as never
+    const lu = unitOf([L(500), L(488)], [[1, 0, [1, 150, 500, 200, 507, 498, 1, 10, 488, 40, 495, 486]]]) as never
+    const t = T.texRects(lu)
+    const page = (sum: { nu?: boolean }) => [...item('a b', 10, 500, 10, 0), ...item('g=', 150, 500, 10, 1, math), ...item('\u00CD', 10, 488, 10, 2, math).map(c => ({ ...c, ...sum })), ...item('gn', 20, 488, 10, 3, math), ...item('c d', 50, 488, 10, 4)]
+    const read = (sum: { nu?: boolean }) => L2.prepareUnit(u, t.rects as never, [page(sum) as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+    expect(read({}).get(1)?.mode).toBe('orig-text')
+    expect(read({}).unproven).toBeUndefined()
+    expect(read({ nu: true }).unproven).toBe(1)
+    // and v0's page text proven by the segments alike
+    expect(L2.prepareUnit(u, t.rects as never, [page({ nu: true }) as never], new Map() as never, null, { proof: T.proofOf(lu, [-1, 1, -1]) } as never).unproven).toBe(1)
+  })
+  it("a mark after a placeholder kept on its held line, where that line shows the original's own, is not drawn again", () => {
+    // footnote 1 of 1512.03385: "… and \url{…}." with the URL's line kept (held), its full stop with it
+    const u = { kind: 'footnote', src: 'a b', pieces: [text('\u7532 '), ph('\\url{http://x.org/y}'), text('\u3002')] } as never
+    const lu = { ...(unitOf([L(500), L(488)], [[1, 0, [1, 10, 488, 80, 495, 486]]]) as object), held: [1] } as never
+    const t = T.texRects(lu)
+    const prep = (line: string) => L2.prepareUnit(u, t.rects as never, [[...item('a b', 10, 500, 10, 0), ...item(line, 10, 488, 10, 1)] as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+    const shown = prep('http://x.org/y.')
+    expect(shown.get(1)).toMatchObject({ mode: 'kept', heldAfter: '.' })
+    expect(drawn(u, shown as never)).toBe('\u7532')
+    // the held line shows no mark after it: the translation's is drawn
+    expect(drawn(u, prep('http://x.org/y') as never)).toBe('\u7532\u3002')
+  })
+})
+
 describe('the state units share, which a unit the file locates teaches as v0 does', () => {
   it("a citation found by its segments is learnt for the paper: a unit laid after it draws the same key's citation not found", () => {
     const page = [...item('as shown in', 10, 100, 10, 0), ...item('[12]', 70, 100, 10, 1), ...item('before', 95, 100, 10, 2)]

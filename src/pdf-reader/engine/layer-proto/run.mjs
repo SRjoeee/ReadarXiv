@@ -54,8 +54,9 @@ import { trPiecesOf } from '../layer/pieces.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
 
 /** the prototype's getDocument options beside the host's asset URLs (main.js ASSETS): its canvases on the GPU, the whole
- *  file read at once */
-export const PDF_OPTIONS = { cMapPacked: true, enableHWA: true, disableStream: true }
+ *  file read at once; and each font's own ToUnicode map exported with it (fontExtraProperties: what the text layer reads a
+ *  glyph by, pageChars2's `nu`; on 2307.16209 in Node, 101 fonts, 1.5 MB of heap and no measurable time) */
+export const PDF_OPTIONS = { cMapPacked: true, enableHWA: true, disableStream: true, fontExtraProperties: true }
 /** the page's body units that the even pass sets alike (a unit on two pages keeps its own fit) */
 const EVEN_KINDS = new Set(['para', 'abstract', 'list', 'item'])
 /** the SVG's own rules (the prototype's index.html): its text set as laid, in the layer's ink, in the faces it was
@@ -475,16 +476,20 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const sheet = document.head.appendChild(document.createElement('style'))
   for (const rule of SVG_RULES) sheet.sheet.insertRule(rule, sheet.sheet.cssRules.length)
 
-  const fontClass = new Map()
+  const fontClass = new Map(), fontMapped = new Map()
+  const fontObj = (page, name) => { try { return page.commonObjs.get(name) } catch { return null } }
   const fontOfPage = (page, styles) => name => {
     let c = fontClass.get(name)
     if (!c) {
-      let obj = null
-      try { obj = page.commonObjs.get(name) } catch {}
-      c = classifyFont(obj?.name ?? '', styles?.[name]?.fontFamily)
+      c = classifyFont(fontObj(page, name)?.name ?? '', styles?.[name]?.fontFamily)
       fontClass.set(name, c)
     }
     return c
+  }
+  // (the characters each font's own map gives its glyphs, layer2.mjs mappedOf: null where it has none to read)
+  const mappedOfPage = page => name => {
+    if (!fontMapped.has(name)) fontMapped.set(name, L2.mappedOf(fontObj(page, name)?.toUnicode))
+    return fontMapped.get(name)
   }
   const chars2 = [], inks = [], views = [], pageBottom = []
   const fontTally = new Map()
@@ -1371,7 +1376,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       }
       await Promise.all([...byFace.values()].map(e => FS.ready(e.face, e.text)))
     }
-    chars2[i - 1] = L2.pageChars2(tc, fontOf)
+    chars2[i - 1] = L2.pageChars2(tc, fontOf, mappedOfPage(page))
     timesOf(i).text += performance.now() - tRendered
     for (const c of chars2[i - 1]) if (c.st.fam !== 'math') { const key = `${c.st.fam}:${c.st.design}`; fontTally.set(key, (fontTally.get(key) ?? 0) + 1) }
     r.right?.getContext('2d').drawImage(r.left, 0, 0)
