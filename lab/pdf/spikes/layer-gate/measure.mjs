@@ -529,9 +529,10 @@ function components(m, W, H, min, boxes = null) {
  * text is not vanished); `cut`: the crops cut from this page ({ src, unit, clip }: `clip` the boxes of its own ink it is
  * cut through, device pixels [x, y, w, h], where it is), whatever page they are drawn on, which `doubled`, `vanished`
  * and `bites` read here, where their source is; `ownLines`: the drawn units' own text lines in TeX's file ({ unit, box }),
- * which `linesLeft` reads (with `linesLeftWhere`, the units), the segments of placeholders kept in place (`segs`) aside
+ * which `linesLeft` reads (with `linesLeftWhere`, the units), the segments of placeholders kept in place (`segs`) aside;
+ * `graphicsCut`: the crops for the graphics' exemption where they differ from `cut` ([] for none)
  */
-export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, items, ref, drawnText, cut = [], ownLines = null, segs = null }) {
+export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, items, ref, drawnText, cut = [], ownLines = null, segs = null, graphicsCut = null }) {
   const toPx = (x, y) => [(x - view[0]) * k, (view[3] - y) * k]
   const boxPx = (b, pad = 0) => {
     const [ax, ay] = toPx(b[0] - pad, b[3] + pad), [bx, by] = toPx(b[2] + pad, b[1] - pad)
@@ -709,20 +710,29 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
     for (const l of [...u.orig, ...(u.own ?? [])]) paint(ownM, [l.x0 - 1, l.baseline - 0.3 * l.size, l.x1 + 1, l.baseline + 0.88 * l.size])
     for (const e of u.erase) paint(eraseRaw, e, 0)
   }
-  for (const c of cut) {
-    if (!c.clip?.length) { paint(carriedM, c.src); continue }
-    const [sx0, sy0, sx1, sy1] = boxPx(c.src)
-    for (const [x, y, w, h] of c.clip) {
-      const x0 = Math.max(sx0, Math.floor(x)), y0 = Math.max(sy0, Math.floor(y)), x1 = Math.min(sx1, Math.ceil(x + w)), y1 = Math.min(sy1, Math.ceil(y + h))
-      for (let yy = y0; yy < y1; yy++) if (x1 > x0) carriedM.fill(1, yy * W + x0, yy * W + x1)
+  const carry = (m, list) => {
+    for (const c of list) {
+      if (!c.clip?.length) { paint(m, c.src); continue }
+      const [sx0, sy0, sx1, sy1] = boxPx(c.src)
+      for (const [x, y, w, h] of c.clip) {
+        const x0 = Math.max(sx0, Math.floor(x)), y0 = Math.max(sy0, Math.floor(y)), x1 = Math.min(sx1, Math.ceil(x + w)), y1 = Math.min(sy1, Math.ceil(y + h))
+        for (let yy = y0; yy < y1; yy++) if (x1 > x0) m.fill(1, yy * W + x0, yy * W + x1)
+      }
     }
   }
+  carry(carriedM, cut)
+  // (the graphics' exemption reads the crops by their source page, which only the default instrument holds: `graphicsCut`
+  // gives the list for it, [] for none; where it is not given, the crops cut from this page are the same list)
+  const carriedG = graphicsCut === null ? carriedM : mask()
+  if (graphicsCut !== null) carry(carriedG, graphicsCut)
   const bite = mask()
   let bitePx = 0
   for (let i = 0; i < W * H; i++) if (eraseRaw[i] && !ownM[i] && !cropM[i] && !carriedM[i] && inkO(i) && !traceC(i)) { bite[i] = 1; bitePx++ }
   const bites = components(bite, W, H, 4, where.bites)
 
-  // graphics: the original's ink that is no text (outside every text item and every reference line), erased or written over
+  // graphics: the original's ink that is no text (outside every text item and every reference line), erased or written over.
+  // Ink a crop carries elsewhere (carriedG, as the bites read it: the crops cut from this page whichever page they are drawn on)
+  // is not erased: it is drawn in the crop
   const textM = mask()
   for (const it of items) paint(textM, [it.x0, it.y0, it.x1, it.y1], 1)
   for (const r of ref) for (const l of r.orig) paint(textM, [l.x0, l.bottom, l.x1, l.top], 1)
@@ -732,7 +742,7 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
     if (textM[i] || !inkO(i)) continue
     graphics.px++
     graphicsM[i] = 1
-    if (!traceC(i)) graphics.erased++
+    if (!traceC(i) && !carriedG[i]) graphics.erased++
     if (inkT(i)) graphics.overdrawn++
   }
   // the translation's text against them: its ink on a rule's or a figure's, or a pixel from it (a table's rule a CJK
