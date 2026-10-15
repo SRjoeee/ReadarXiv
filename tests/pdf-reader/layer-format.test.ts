@@ -1125,7 +1125,7 @@ describe('a part against the index', () => {
     expect(lean).toMatchObject({ kind: 'index', sha256: M.index.sha256, dropped: M.index.dropped, kinds: M.index.kinds })
     expect(lean.records).toEqual(M.index.records)
     expect(lean.units).toEqual(M.index.units.map(u => (u === null ? null : true)))
-    M.index.units.forEach((u, i) => expect(lean.pieces[i], `unit ${i}`).toBe(u === null ? 0 : u[5].length))
+    for (const [i, u] of M.index.units.entries()) expect(lean.pieces[i], `unit ${i}`).toBe(u === null ? 0 : u[5].length)
     // every part of the paper, read in order against each index
     let a = null, b = null
     for (const w of M.parts) {
