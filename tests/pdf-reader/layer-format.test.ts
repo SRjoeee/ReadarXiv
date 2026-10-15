@@ -1,6 +1,43 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
+import { readBundle, writeBundle } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
+import {
+  BUILD_END_WHYS, BUNDLE4, CATALOG_CAP, CATALOG_VALUES, catalogKey, CHUNKS_MAX, CONTENT_MAX, CTAG4, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, indexOf,
+  isFinalEnd, keyOf, keyParts, LEFT_CAP, LEFT_VALUES, mergeParts, PART_CAP, PART_VALUES, partTarget, readCatalog, readHead, readLeftPart, readPart,
+  readUnitsChunk, TAIL_CAP, TOKENS_PAGE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_VALUES, unitsOfChunks, VTAG4, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks,
+} from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
+import { encodeLayout, LAYOUT, type LayoutFile } from '@/pdf-reader/engine/layout/file.mjs'
+import { PDFJS, PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
 import { isMemoryError } from '@/pdf-reader/engine/pipeline/memory.mjs'
+import {
+  BASE, forged, IMAGE, LEFT_OF, type Made, made, N, PAPER, parsed, partInputs, STREAM, textOf, TAILS, tailOf, TOKENS_ON_PAGE, tokenWire, UNITS, utf8, VIEWS,
+} from './helpers/format-paper'
+
+// BUNDLE 4's format (the prepare pipeline's bundle 4 contract and its amendments): the five kinds of object, each writer
+// then its reader, each reader refusing in its order, the part chain, the keys. A small paper of four pages in three parts
+// (tests/pdf-reader/helpers/format-paper.ts); the six papers' real data where this machine has it (AXT_LAB)
+
+afterEach(() => { vi.restoreAllMocks() })
+
+let M: Made
+beforeAll(async () => { M = await made() })
+
+/** the refusal a reader's promise ends in, or null; any other end is the test's failure */
+async function refusal(run: Promise<unknown>): Promise<BundleRefusal | null> {
+  try { await run } catch (e) { if (e instanceof BundleRefusal) return e; throw e }
+  return null
+}
+const chainBefore = (i: number) => (i === 0 ? null : (M.readParts[i - 1] as { chain: never }).chain)
+/** part i's JSON with `edit` made, read against the index and the chain of the parts before it */
+// biome-ignore lint/suspicious/noExplicitAny: a test breaks the part's types on purpose
+const partWith = (i: number, edit: (p: any) => void, o: { chain?: never | null } = {}) => {
+  const p = parsed(M.parts[i] as { bytes: Uint8Array })
+  edit(p)
+  const f = forged('part', p, { from: p.pages?.[0], to: p.pages?.[1] })
+  return readPart(f.bytes, { ref: f.ref, index: M.index, chain: o.chain === undefined ? chainBefore(i) : o.chain })
+}
 
 // isMemoryError (bundle 4 contract C8.4, amendment M7) is the web's predicate word for word (container/src/run/memory.ts):
 // this is the web's own truth table (container/tests/memory.test.ts), as the spec
@@ -37,5 +74,150 @@ describe('isMemoryError (the web\'s truth table)', () => {
       Object.assign(new Error('x'), { code: 'ERR_STRING_TOO_LONG' }), Object.assign(new Error('x'), { code: 'ERR_BUFFER_TOO_LARGE' }),
     ]
     for (const e of not) expect(isMemoryError(e), String((e as Error)?.message ?? e)).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------- 1. round trips
+describe('each writer then its reader is the identity', () => {
+  it('the units chunk: the units as bundleUnitsOf gave them, none dropped, the chunk of the paper and the pipeline', () => {
+    expect(M.chunks).toHaveLength(1)
+    const c = M.readChunks[0]!
+    expect(c).toMatchObject({ kind: 'units', from: 0, to: 7, paper: PAPER, pipeline: PIPELINE_VERSION, dropped: [], sha256: M.chunks[0]!.sha256, bytes: M.chunks[0]!.bytes.length })
+    expect(c.units).toEqual(UNITS)
+    expect(c.stands).toEqual(new Uint8Array(8).fill(1))
+    // the envelope: `format`, `kind`, then the paper (amendment M12); keys in the order written, no white space
+    expect(textOf(M.chunks[0]!.bytes).startsWith(`{"format":"${UNITS_FORMAT}","kind":"units","paper":{"id":"2608.04322","version":1},"pipeline":"${PIPELINE_VERSION}","ids":[0,7],"units":[[`)).toBe(true)
+    expect(Object.keys(parsed(M.chunks[0]!))).toEqual(['format', 'kind', 'paper', 'pipeline', 'ids', 'units'])
+  })
+
+  it('the head: the paper, the original (no url: amendment M13), the versions, the chunk by digest', () => {
+    const h = M.readHead
+    expect(h).toMatchObject({ kind: 'head', paper: { ...PAPER, pages: N }, base: BASE, lineskip: [1, 0], cites: null, sha256: M.head.sha256 })
+    expect(h.versions).toEqual({ pipeline: PIPELINE_VERSION, layout: LAYOUT, removal: REMOVAL, pdfjs: PDFJS, image: IMAGE })
+    expect(h.units).toEqual([{ kind: 'units', from: 0, to: 7, sha256: M.chunks[0]!.sha256, bytes: M.chunks[0]!.bytes.length }])
+    expect(Object.keys(parsed(M.head))).toEqual(['bundle', 'kind', 'paper', 'base', 'versions', 'units', 'lineskip', 'cites'])
+    expect(parsed(M.head).base).toEqual(BASE)
+  })
+
+  it('the index: every unit, its kind, none dropped', () => {
+    expect(M.index.units).toEqual(UNITS)
+    expect(M.index.kinds).toEqual(UNITS.map(u => u[0]))
+    expect(M.index.sha256).toBe(M.head.sha256)
+    expect(unitsOfChunks(M.readChunks)).toEqual({ units: UNITS, kinds: UNITS.map(u => u[0]), dropped: [] })
+  })
+
+  it('the parts: every field as written, the chain after each', () => {
+    const [p1, p2, p3] = M.readParts as [typeof M.readParts[0], typeof M.readParts[0], typeof M.readParts[0]]
+    const inputs = partInputs(M.head.sha256, M.lefts, [null, M.parts[0]!.sha256, M.parts[1]!.sha256])
+    expect([p1.pages, p2.pages, p3.pages]).toEqual([[1, 1], [2, 3], [4, 4]])
+    expect([p1.reach, p2.reach, p3.reach]).toEqual([2, 4, 4])
+    expect([p1.prev, p2.prev, p3.prev]).toEqual([null, M.parts[0]!.sha256, M.parts[1]!.sha256])
+    expect(p1.left).toEqual(inputs[0]!.left)
+    expect(p2.left).toEqual(inputs[1]!.left)
+    expect(p2.fileOnly).toEqual([[5, 41]])
+    expect([...p2.views]).toEqual(VIEWS.slice(1).flat())
+    expect(p1.layout).toEqual(inputs[0]!.layout)
+    expect(p3.layout).toBeNull()
+    expect(p3.addon).toBeNull()
+    expect(p1.addon).toMatchObject({ tail: TAILS[0]!.tail, r: 1 })
+    expect(p2.addon).toMatchObject({ tail: TAILS[1]!.tail, r: 1 })
+    expect(p2.addon!.manifest.page).toEqual(inputs[1]!.addon!.manifest.page)
+    expect(p1.leftParts).toEqual([M.lefts[1]!.ref])
+    expect(p2.leftParts).toEqual([M.lefts[2]!.ref, M.lefts[3]!.ref])
+    expect(p1.chain).toEqual({
+      head: M.head.sha256, through: 1, last: M.parts[0]!.sha256, slot: 12, id: 2, reach: 2, ahead: VIEWS[1], end: BASE.bytes + TAILS[0]!.tail.length,
+      xref: TAILS[0]!.startxref, next: 104, root: 12, r: 1,
+    })
+    expect(p2.chain).toMatchObject({ through: 3, slot: 41.5, id: 5, reach: 4, ahead: VIEWS[3], end: BASE.bytes + TAILS[0]!.tail.length + TAILS[1]!.tail.length, xref: TAILS[1]!.startxref, next: 108, root: 12, r: 2 })
+    expect(p3.chain).toMatchObject({ through: 4, slot: 70, id: 7, reach: 4, ahead: [], r: 2 })
+  })
+
+  it('the left parts: the tokens decoded once into typed arrays, the spans and the pairs as written', () => {
+    const wire = tokenWire(TOKENS_ON_PAGE, 2)
+    const l2 = M.readLefts[1]!
+    expect(l2).toMatchObject({ kind: 'left', page: 2, first: 20, spans: LEFT_OF[2]!.spans, pairs: LEFT_OF[2]!.pairs })
+    expect(l2.table.n).toBe(TOKENS_ON_PAGE)
+    expect(l2.table.l).toBeInstanceOf(Float32Array)
+    expect(l2.table.l[0]).toBe(Math.fround((wire.l[0] as number) / 1000))
+    expect(l2.table.l[2]).toBeCloseTo((wire.l[0]! + wire.l[1]! + wire.l[2]!) / 1000, 3)
+    expect(l2.table.y[1]).toBeCloseTo((wire.y[0]! + wire.y[1]!) / 1000, 3)
+  })
+
+  it('the catalog: the refs the Worker committed, how far they go; a complete one and one that ends early', async () => {
+    const parts = M.parts.map(p => ({ from: p.from, to: p.to, sha256: p.sha256, bytes: p.bytes.length }))
+    const units = M.chunks.map(c => ({ from: c.from, to: c.to, sha256: c.sha256, bytes: c.bytes.length }))
+    const done = await writeCatalog({ head: M.readHead, units, parts, end: { through: 4 } })
+    expect(done.key).toBe(catalogKey(PAPER.id, PAPER.version, VTAG4))
+    const c = await readCatalog(done.bytes, { key: done.key, paper: PAPER })
+    expect(c).toMatchObject({ kind: 'catalog', sha256: done.sha256, paper: { ...PAPER, pages: N }, head: { kind: 'head', sha256: M.head.sha256 }, end: { through: 4 } })
+    expect(c.parts).toEqual(parts.map(r => ({ kind: 'part', ...r })))
+    expect(Object.keys(parsed(done))).toEqual(['bundle', 'kind', 'paper', 'versions', 'head', 'units', 'parts', 'end'])
+    expect(indexOf(M.readHead, M.readChunks, { catalog: c })).toEqual(M.index)
+    for (const why of END_WHYS) {
+      const cut = await writeCatalog({ head: M.readHead, units, parts: parts.slice(0, 2), end: { through: 3, refused: why } })
+      expect((await readCatalog(cut.bytes)).end).toEqual({ through: 3, refused: why })
+    }
+    const none = await writeCatalog({ head: M.readHead, units, parts: [], end: { through: 0, refused: 'bound' } })
+    expect((await readCatalog(none.bytes)).parts).toEqual([])
+  })
+
+  it('the end whys: final and build-scoped (amendment M4)', () => {
+    expect(FINAL_END_WHYS).toEqual(['bound', 'part'])
+    expect(BUILD_END_WHYS).toEqual(['memory', 'internal', 'deadline'])
+    expect(END_WHYS).toEqual([...FINAL_END_WHYS, ...BUILD_END_WHYS])
+    for (const w of FINAL_END_WHYS) expect(isFinalEnd(w)).toBe(true)
+    for (const w of [...BUILD_END_WHYS, 'x', '']) expect(isFinalEnd(w)).toBe(false)
+  })
+})
+
+describe('mergeParts is the whole', () => {
+  it('equals readBundle of the BUNDLE 3 file made of the same paper: units, left, layout as encodeLayout bytes, manifest, tail', () => {
+    const merged = mergeParts(M.index, M.readParts)
+    // the whole file by hand: the layout's fonts by first appearance (lines by unit id, then names), page 4 not planned
+    const whole: LayoutFile = {
+      schema: 3, layout: LAYOUT, pdfjs: PDFJS, paper: { ...PAPER, pages: N }, left: '', views: VIEWS.flat(), fonts: ['CMR10', 'CMBX12'],
+      units: [[0, 1, 9, 1, 1], [2, 0, 9, 0, 7], [3, 4, 9, 0, 1], [5, 4, 9, 0, 3]],
+      lines: [
+        [0, [1, 150, 460, 700, 712, 696, 17.28, 0]], [2, [1, 72, 540, 650, 657.5, 647.25, 10, 0, 2, 72, 300, 700, 710, 698, 10, 0]],
+        [3, [2, 72, 200, 500, 508, 498, 9, 0]], [5, [3, 72, 200, 400, 408, 398, 9, 0]],
+      ],
+      frames: [[0, [1, 0, 0, 1, -1, 30]], [2, [1, 0, 0, 1, -1, 12.5, 2, 0, 1, 1, 500, 12]], [3, [2, 0, 0, 1, -1, 10]], [5, [3, 0, 0, 1, -1, 10]]],
+      erase: [], ph: [[2, 4, 0, 0, 1, 100, 650, 110, 657, 647]], labels: [], headings: [[0, 'A Title']], pageText: [], held: [],
+      names: [[0, 0, 3, 280, 680, 332.5, 687, 677.5, 9, 1, 1, -1, 0, 72, 540]], lineskip: [1, 0],
+    }
+    const tail = new Uint8Array(TAILS[0]!.tail.length + TAILS[1]!.tail.length)
+    tail.set(TAILS[0]!.tail)
+    tail.set(TAILS[1]!.tail, TAILS[0]!.tail.length)
+    const manifest = {
+      schema: 1 as const, removal: REMOVAL, pages: N, sets: {}, appended: tail.length, stats: { removed: 6 },
+      page: {
+        1: { ok: true, units: { 2: [72, 640, 300, 660] }, at: { R: 5 }, dirty: [72, 640, 80, 650] },
+        2: { ok: true, rules: [72, 500, 540, 500.4] },
+        3: { ok: true, units: { 3: [72, 300, 200, 320] }, at: { R: 6 }, dirty: [72, 300, 80, 310] },
+        4: { ok: false, refused: 'not planned' },
+      },
+    }
+    const url = `/api/v1/original/${PAPER.id}v${PAPER.version}`
+    const leftUnits = [...M.readParts.flatMap(p => p.left)].sort((a, b) => a[0] - b[0])
+    const bytes = writeBundle({
+      paper: { ...PAPER, pages: N }, base: { bytes: BASE.bytes, sha256: BASE.sha256, url }, image: IMAGE, units: UNITS,
+      left: { kinds: UNITS.map(u => u[0]), pages: VIEWS as [number, number, number, number][], units: leftUnits }, layout: whole, addon: { manifest, tail },
+    })
+    const read = readBundle(bytes)
+    expect(merged.units).toEqual(read.units)
+    expect(merged.dropped).toEqual(read.dropped)
+    expect(merged.paper).toEqual(read.paper)
+    expect(merged.base).toEqual(read.base)
+    expect(merged.left).toEqual(read.left)
+    expect(encodeLayout(merged.layout!)).toBe(encodeLayout(read.layout!))
+    expect(merged.addon!.manifest).toEqual(read.addon!.manifest)
+    expect(merged.addon!.tail).toEqual(read.addon!.tail)
+    expect(merged.versions).toEqual({ bundle: BUNDLE4, ...M.readHead.versions })
+  })
+
+  it('refuses parts that are not a chain to the paper\'s last page, and is null where no part has a layout or an add-on', () => {
+    expect(() => mergeParts(M.index, M.readParts.slice(0, 2))).toThrow(BundleRefusal)
+    expect(() => mergeParts(M.index, [M.readParts[1]!, M.readParts[2]!])).toThrow(BundleRefusal)
+    expect(() => mergeParts(M.index, [M.readParts[0]!, M.readParts[0]!, M.readParts[1]!, M.readParts[2]!])).toThrow(BundleRefusal)
   })
 })
