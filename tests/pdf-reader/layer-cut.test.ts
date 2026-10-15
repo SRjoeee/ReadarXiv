@@ -79,7 +79,7 @@ const r3 = (v: number) => Math.round(v * 1000) / 1000
 const contentBytes = (bytes: Uint8Array) => bytes.length
 
 /** every property the cut guarantees, on one paper */
-async function checkCut(name: string, whole: Whole, c: Cut): Promise<void> {
+async function checkCut(name: string, whole: Whole, c: Cut, o: { anySplit?: boolean } = {}): Promise<void> {
   const N = whole.paper.pages
   const back = await readBack(c)
   const { index, parts } = back
@@ -87,7 +87,7 @@ async function checkCut(name: string, whole: Whole, c: Cut): Promise<void> {
   let a = 1
   c.parts.forEach((p, i) => {
     expect(p.from, `${name}: part ${i}`).toBe(a)
-    expect(p.to, `${name}: part ${i}`).toBeLessThanOrEqual(partTarget(a, N))
+    if (!o.anySplit) expect(p.to, `${name}: part ${i}`).toBeLessThanOrEqual(partTarget(a, N))
     expect(p.leftParts.map(l => l.page)).toEqual(Array.from({ length: p.to - p.from + 1 }, (_, k) => p.from + k))
     expect(p.bytes.length).toBeLessThanOrEqual(PART_CAP)
     expect(contentBytes(p.bytes)).toBeLessThanOrEqual(CONTENT_MAX)
@@ -330,6 +330,19 @@ describe('the cut of a small paper', () => {
     await cutBundle(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, chainAddon: i => { asked.push(i); return null }, acceptAddon: i => { accepted.push(i) } })
     expect(asked).toEqual([])
     expect(accepted).toEqual([])
+  })
+
+  it('cuts at any split the target hook gives, and refuses one that is no page of the part', async () => {
+    const whole = wholeOf(SMALL)
+    const asked: [number, number][] = []
+    const c = await cutBundle(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, target: (a, N) => { asked.push([a, N]); return Math.min(N, a + 1) } })
+    expect(fits(c)).toEqual([[1, 2], [3, 4], [5, 6], [7, 8]])
+    expect(asked).toEqual([[1, 8], [3, 8], [5, 8], [7, 8]])
+    await checkCut('small, pairs', whole, c, { anySplit: true })
+    const every = await cutBundle(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, target: a => a })
+    expect(fits(every).length).toBe(8)
+    await checkCut('small, one page a part', whole, every, { anySplit: true })
+    for (const bad of [(a: number) => a - 1, () => 99, () => 1.5]) await expect(cutBundle(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, target: bad })).rejects.toThrow(RangeError)
   })
 
   it('refuses the paper whose unit was dropped, and a left unit that is no unit', async () => {

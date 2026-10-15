@@ -85,7 +85,8 @@ const empty = { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }
  * `whole`: BUNDLE 3's reading (readBundle) or the object the producer holds: `paper` { id, version, pages }, `base` { bytes,
  * sha256, xref } (`xref`: the original's startxref, which BUNDLE 3 does not carry: `o.base` may supply it), `units` (none
  * dropped), `left` { pages, units }, `layout` (the layout file or null) and, if `o.image` is not given, `versions.image`.
- * `o.leftPages(page)`: the page's { first, tokens, spans, pairs? } in the left part's input (null: a page with no tokens);
+ * `o.target(a, N)`: the last page the part that begins at `a` is cut to, 'a' to N (default partTarget, the doubling
+ * schedule); a harness cuts at any split with it. `o.leftPages(page)`: the page's { first, tokens, spans, pairs? } in the left part's input (null: a page with no tokens);
  * called once for each page, in page order, as the parts that cover it are cut. `o.frontier(K, N)`: F as an array indexed by
  * page 0 to N of indices into K (-1 for none), default needFrontier. `o.chainAddon(index, { pages, layout })`: the add-on
  * { manifest, tail } for a candidate range of the part, or null (the part's pages are refused, drawn by erase and restore);
@@ -143,7 +144,8 @@ export async function cutBundle(whole, o) {
   const parts = []
   let prev = null, taken = -1
   for (let a = 1; a <= N;) {
-    const target = partTarget(a, N)
+    const target = o.target ? o.target(a, N) : partTarget(a, N)
+    if (!Number.isInteger(target) || target < a || target > N) throw new RangeError(`target: ${target} is not a last page from ${a} to ${N}`)
     // the part for pages a..b: K's entries after the last of the parts before, up to the frontier of b (the last part also
     // takes any entry past the frontier of N: no page needs it)
     const upTo = b => (b === N ? K.length - 1 : F[b])
