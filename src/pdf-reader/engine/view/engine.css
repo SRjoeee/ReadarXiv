@@ -1,5 +1,6 @@
-/* The engine's overlays and pane scrollers, for any page that hosts the session (session.mjs): the highlight's bands,
-   the figures' overlays and the scrollers PDF.js draws into. The page's own layout is its own sheet's.
+/* The engine's overlays and pane scrollers, for any page that hosts the reading view (reader-view.mjs) or the extension's
+   session (session.mjs): the highlight's bands, the figures' overlays, the scrollers PDF.js draws into and the right pane's
+   places. The page's own layout is its own sheet's.
    --axt-green is the extension's default band colour (src/styles/presets.css); the active band's own colour and
    strength come in as --axt-hl-color and --axt-hl-mix from the look sheet (session.mjs, the extension's appearanceRule) */
 :root { --axt-green: oklch(0.693 0.17 162.48); }
@@ -28,3 +29,30 @@
    change its colours); drawn inside the figure's padded box */
 .axt-hl.axt-hl-frame { box-sizing: border-box; background: none;
   border: 1.5px solid color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) min(100%, calc(var(--axt-hl-mix, 22%) * 3)), transparent); }
+/* ----- the reading view's places (places.mjs): the right pane's page boxes, the original's pages at its sizes and zoom.
+   A place is a page box of the stack's (`.page`: the host sheet's page colour, shadow and margins, as the left's pages
+   have them); its size is the left page box's own style, read through the stack's --scale-factor. What it shows sits in
+   its holder, which fills it: the original's page drawn by PDF.js's page view, whose own box gives way to the place's,
+   or the skeleton, or the layer's content */
+.pdfViewer .page.axt-place { container-type: inline-size; }
+.axt-place-view { position: absolute; inset: 0; }
+.pdfViewer .page.axt-place .axt-place-view > .page { position: absolute !important; inset: 0; margin: 0 !important; border: 0 !important; box-shadow: none !important; }
+/* a page of text in grey, while there is no original to draw (round 4's skeleton): sized in the page's own width (cqw), so
+   that a page drawn at any zoom keeps its proportions; light, and dimmed in the dark */
+:root { --axt-sk: oklch(0.945 0.004 255); --axt-sk-paper: #fff; }
+html[data-axt-dim] { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29 29); }
+.axt-sk { position: absolute; inset: 9.5% 15.5% 9%; display: flex; flex-direction: column; overflow: hidden; }
+.axt-sk i { display: block; flex: none; background: var(--axt-sk); border-radius: 0.3cqw; }
+.axt-sk .axt-sk-lines { position: relative; block-size: calc(var(--axt-sk-n) * 2.05cqw - 0.9cqw); border-radius: 0;
+  background: repeating-linear-gradient(to bottom, var(--axt-sk) 0 1.15cqw, transparent 1.15cqw 2.05cqw); }
+/* a paragraph's last line, short */
+.axt-sk .axt-sk-lines::after { content: ""; position: absolute; inset-inline-end: 0; inset-block-end: 0; inline-size: var(--axt-sk-rest, 36%); block-size: 1.15cqw; background: var(--axt-sk-paper); }
+.axt-sk .axt-sk-gap { block-size: 2.2cqw; background: none; }
+.axt-sk .axt-sk-head { block-size: 1.7cqw; margin-block: 1.4cqw 2.2cqw; }
+.axt-sk .axt-sk-figure { block-size: 34cqw; margin-block: 1cqw 3cqw; border-radius: 0.6cqw; background: none; box-shadow: inset 0 0 0 0.25cqw var(--axt-sk); }
+.axt-sk .axt-sk-title { inline-size: 56%; block-size: 3.2cqw; margin: 4cqw auto 6cqw; }
+.axt-sk .axt-sk-label { inline-size: 13%; block-size: 1.7cqw; margin: 2cqw auto 2.6cqw; }
+.axt-sk-authors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.6cqw 4cqw; margin-block: 0 3cqw; margin-inline: 4%; }
+.axt-sk-authors i { block-size: 1.2cqw; }
+.axt-sk-authors i:nth-child(3n) { inline-size: 70%; justify-self: center; }
+.axt-sk-abstract { margin-inline: 9%; }

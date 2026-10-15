@@ -60,6 +60,28 @@ describe('the five entries', () => {
   })
 })
 
+describe('the reading view\'s document task', () => {
+  // V10's type row: what each host's opener returns is a DocumentTask, PDF.js's own loading task and the web's ranged one
+  // (a task of its shape, whose PDF.js task begins after its first range is read), with skipLibCheck off
+  it('takes pdfjs-dist\'s PDFDocumentLoadingTask and a ranged task of its shape, and an opener over getDocument', () => {
+    const check = [
+      `import type { PDFDocumentLoadingTask, PDFDocumentProxy } from '${ROOT}/node_modules/pdfjs-dist/types/src/pdf.d.ts'`,
+      `import type { DocumentOpener, DocumentTask } from '${ROOT}/src/pdf-reader/engine/view/reader-view.mjs'`,
+      'declare const pdfjs: PDFDocumentLoadingTask',
+      'export const own: DocumentTask = pdfjs',
+      'interface RangedTask { readonly promise: Promise<PDFDocumentProxy>; readonly opened: boolean; onProgress: ((p: { loaded: number; total: number }) => void) | null; destroy(): Promise<void> }',
+      'declare const ranged: RangedTask',
+      'export const web: DocumentTask = ranged',
+      'declare function getDocument(o: Record<string, unknown>): PDFDocumentLoadingTask',
+      "export const opener: DocumentOpener = options => getDocument({ ...options, url: 'https://arxiv.org/pdf/2600.00001' })",
+    ]
+    expect(tsc({ 'check.ts': `${check.join('\n')}\n` })).toEqual({ status: 0, errors: [] })
+    // the control: a task with no destroy is not one
+    const bad = tsc({ 'check.ts': `${[check[1], 'export const t: DocumentTask = { promise: Promise.resolve(null as never), onProgress: null }'].join('\n')}\n` })
+    expect(bad.status).not.toBe(0)
+  })
+})
+
 describe('the units readers, bodies-free (amendment M21)', () => {
   it('type a read without bodies as flags, and the default as the full chunk, with no cast', () => {
     const entry = `${ROOT}/src/pdf-reader/engine/layer.mjs`
