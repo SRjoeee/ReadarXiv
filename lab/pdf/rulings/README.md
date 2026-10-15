@@ -41,5 +41,5 @@ form of the layer gate's `--ruling` (`lab/pdf/spikes/layer-gate.mjs`), with the 
   fullest page's so far. Since the page-local fill (1b-C), a page's target is its own paragraphs' median fill leading held
   within `adaptiveFill.band` of the median of every body paragraph drawn on that page (a paragraph running on from the page
   before included), read from nothing of another page. The ruling's other terms (the F6a pitch while the size shrinks, a
-  rhythm for every original, the top of the fill leading) stand. The regressions the change brings are for the maintainer's
-  own ruling, and a file in this directory only when he gives it.
+  rhythm for every original, the top of the fill leading) stand. The regression it brings is accepted by
+  `2026-10-16-page-local-s3.json`.

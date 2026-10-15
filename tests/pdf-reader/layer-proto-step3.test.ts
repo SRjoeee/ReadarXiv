@@ -375,6 +375,14 @@ describe("the page fill (adaptiveFill, D6's F6b, page-local since 1b-C): every o
     expect(await target([], [one])).toBeNull()
   })
 
+  it("reads a continuation at its fit where the even pass kept one, never at the leading its first page's pass left it", async () => {
+    const u = told(1.0, { lines: 6 })
+    ;(u as unknown as { fit: unknown }).fit = { fillLead: 1.5, fitLines: 6 }
+    // (it stands at 1.0 now, laid anew by the even pass; it entered at 1.5: with one of the page's own at 1.4 the anchor is 1.5)
+    expect(await target([told(1.4)], [u])).toMatchObject({ anchor: 1.5, own: 1.4, target: 1.45 })
+    expect(await target([told(1.4)], [told(1.0)])).toMatchObject({ anchor: 1.4, target: 1.4 })
+  })
+
   it("holds each unit within the band over the page's target", async () => {
     const PP = P({ fillLead: 3 })
     const a = laid(1, 30, PP), b = laid(2, 30, PP)

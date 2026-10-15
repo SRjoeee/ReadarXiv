@@ -37,8 +37,9 @@ import BUILTIN_JSON from './layout-rules.json' with { type: 'json' }
 /** the schema's number: the shape and how the engine reads it. 2 (D6, 2026-10-08): `grid` gone (every script's lines on the
  *  original's pitch while the size shrinks); `adaptiveFill` read for every original, its page's target held near the last
  *  page's and one size a page; `fillLead` and `leftover` added. 3 (D1a, 2026-10-08): `labels` holds every babel name
- *  (layout/names.mjs NAME_KEYS), the generated headings' as well as the floats' */
-export const RULES_SCHEMA = 3
+ *  (layout/names.mjs NAME_KEYS), the generated headings' as well as the floats'. 4 (1b-C, 2026-10-16): `adaptiveFill.band` is read
+ *  against the page's own paragraphs (run.mjs pageTarget), no longer against the page before's and the fullest page's */
+export const RULES_SCHEMA = 4
 /** a set's bytes at most, as received (the migrated set is about 8 KB) */
 export const RULES_CAP = 65_536
 /** a set's JSON values at most, counted before JSON.parse (layout/json.mjs countValues) */

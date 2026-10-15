@@ -136,7 +136,10 @@ export function pageTarget(units, continuing, band) {
   const withLead = units.filter(p => !p.refused && tells(p))
   const telling = withLead.filter(p => p.fitLines >= 2)
   const body = telling.filter(p => EVEN_KINDS.has(p.unit.kind))
-  const anchorLeads = [...units, ...continuing].filter(p => EVEN_KINDS.has(p.unit.kind) && !p.refused && tells(p) && p.fitLines >= 2).map(p => p.fillLead)
+  // (a unit running on from a page before is read at its fit's (`fit`, kept where the even pass lays a unit anew on its first
+  // page: set at fit, so that it does not depend on whether that page's pass has run))
+  const anchorOf = [...units, ...continuing.map(p => { const f = p.fit ?? p; return { unit: p.unit, refused: p.refused, fillLead: f.fillLead, fitLines: f.fitLines } })]
+  const anchorLeads = anchorOf.filter(p => EVEN_KINDS.has(p.unit.kind) && !p.refused && tells(p) && p.fitLines >= 2).map(p => p.fillLead)
   const anchor = anchorLeads.length ? r3(median(anchorLeads)) : null
   const leads = (body.length ? body : telling.length ? telling : withLead).map(p => p.fillLead)
   if (!leads.length) return anchor === null ? null : { target: null, own: null, anchor, body: false }
@@ -1469,7 +1472,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // it is drawn with (the lines TeX's rule opened among them: a looser leading may open none the fit's did). A page's target
   // is a function of its own units alone (pageTarget): no page reads another's, whatever the order the passes run in
   const fillPass = pg => {
-    const r = fillPage(laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg), P, (p, target) => {
+    const begun = laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg)
+    // (after the even pass, which laid them anew: their fill leadings are the pass's, as they were)
+    if (P.even) for (const p of begun) fillLeadsOf(p, P)
+    const r = fillPage(begun, P, (p, target) => {
       const l = p.layout
       if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, opened: l.opened, unopened: l.unopened, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
     }, { continuing: laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] !== pg) })
@@ -1612,8 +1618,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (g) (groupLaid.get(g) ?? groupLaid.set(g, { list: [], done: false }).get(g)).list.push(p)
     if (PASSES) {
       // (its fill leading is its fit's, fixed now (fillLeadsOf). With the even pass, which lays the units of a page anew before
-      // the fill, the fill leading is the pass's, as it was)
-      if (P.adaptiveFill && !P.even && p.fillable && !p.refused) fillLeadsOf(p, P)
+      // the fill, the fill leading of a unit on its own first page is the pass's, as it was (fillPass), and `fit` keeps the
+      // fit's, which is all a page it runs on to reads of it: no page's target then reads another page's even pass)
+      if (P.adaptiveFill && p.fillable && !p.refused) {
+        fillLeadsOf(p, P)
+        if (P.even) p.fit = { fillLead: p.fillLead, fitLines: p.fitLines }
+      }
       // (a page's pass sets the units that begin on it, which are then painted on each of their pages, each page in its
       // own order (paintOn): a unit is never painted from two layouts; a table's cells with their group, once it is laid
       // whole)

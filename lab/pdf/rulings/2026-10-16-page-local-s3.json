@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-16",
+  "by": "the maintainer",
+  "on": "1b-C page-local S3 (PR 373): a page's fill target is its own paragraphs' median fill leading held within the band of the median of every body paragraph drawn on it, read from no other page",
+  "quote": "accepted the change (page-local S3, via the coordinator), 2026-10-16",
+  "english": "accepted the change (page-local S3, via the coordinator), 2026-10-16",
+  "measures": [
+    "frames with a blank line"
+  ],
+  "targets": [
+    "zh"
+  ],
+  "scope": "zh 0.188 to 0.193 pooled over its outputs (the rule moves 96 pages of 11 CJK outputs, none of the alphabets or ja): 2608.16117 0.168 to 0.212, 2608.04322 zh 0.154 to 0.163, the thesis 0.223 to 0.219; a page whose target rises from the old paper-wide hold to its own paragraphs' leading (1.45 to 1.5-1.67) lays more units at their full fill leading and leaves a few more frames one blank line short",
+  "why": "laying order can no longer change a page (the target is a function of the page: purity 0 mismatches on 30 of 30 outputs, which unlocks target-first laying) and the 2608.16117 cascade is gone; in the same run 2608.16117 size spread 0.05 to 0, paragraph gap to the original's 1.37 to 1.02, pitch spread 0.53 to 0.45, and the blank lines per frame fall on 1706 zh and both 2608 outputs; content, crops and line breaks are untouched. The list is in quality-round/1b-C-final-list.md."
+}

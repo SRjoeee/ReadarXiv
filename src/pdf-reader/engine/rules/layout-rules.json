@@ -1,6 +1,6 @@
 {
-  "schema": 3,
-  "version": 3,
+  "schema": 4,
+  "version": 4,
   "note": "D1a: each language's labels name every generated heading babel names, its [captions] (Abstract, References, Contents, ...), as well as the floats",
   "hyphenation": {
     "minWord": 5,
