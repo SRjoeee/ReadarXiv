@@ -7,7 +7,9 @@ import { constants as zlibConstants, deflateRawSync, deflateSync } from 'node:zl
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
-import { CHECK_SETS, checkPage, lex, makeAddon, openRemover, type RemovalPlan, removePaper, SETS } from '@/pdf-reader/engine/layout/remove.mjs'
+import { alignOf, CHECK_SETS, checkPage, lex, makeAddon, openRemover, type RemovalPlan, removePaper, SETS } from '@/pdf-reader/engine/layout/remove.mjs'
+import { tailLinks } from '@/pdf-reader/engine/layout/tail.mjs'
+import { oldAlign, type OpList, perturbed } from './helpers/align-oracle'
 
 // The text remover (layout/remove.mjs) on a PDF written here: two pages, a simple font with widths, a page's own text,
 // a TJ with a kerning number, a rule, a form painted once on page 1 and one painted twice on page 2. Each plan's result
@@ -445,5 +447,141 @@ describe("a Type 3 font's advance, as PDF.js draws it", () => {
     const bad = new TextDecoder('latin1').decode(t3).replace('/FontMatrix [0.001 0 0 0.001 0.1 0]', '/FontMatrix [0.001 0 0 0.001 (x) 0]')
     const r2 = await removed(new Uint8Array([...bad].map(c => c.charCodeAt(0))), ink => ({ pages: { 1: { shows: ink[0]!.shows, units: [{ id: 1, glyphs: [0, 0], paths: [] }], crops: [] } } }))
     expect(r2.out.manifest.page[1]).toMatchObject({ ok: false, refused: expect.stringMatching(/Type 3 font without widths/) })
+  })
+})
+
+// The remover with no PDF.js (E3): a page aligned by its alignment facts (alignOf of PDF.js's list, read where the plan is
+// made) exactly as by the list, refused where they disagree; and its updates chained, each a part's tail after the ones
+// before, the composed document valid at every prefix
+describe('the alignment facts: a page aligned by them as by the list it was read from', () => {
+  const hows = ['drop-show', 'extra-path', 'swap-shows', 'other-code', 'no-code', 'null-code'] as const
+  const streamPdf = async () => (await PL.PDFDocument.load(PDF, { updateMetadata: false })).save({ useObjectStreams: true })
+  it('gives the old reading\'s verdict on every page, the list as it is and perturbed every way, and the facts as the list', async () => {
+    for (const bytes of [PDF, await streamPdf()]) {
+      const { pages } = await inksOf(bytes)
+      const R = await openRemover(bytes, { PL })
+      let refused = 0
+      for (let i = 0; i < pages.length; i++) {
+        const list = pages[i]!.opList
+        const lists: [string, OpList][] = [['as read', list]]
+        for (const how of hows) for (const seed of [0, 1, 2, 5]) { const l = perturbed(OPS, list, how, seed); if (l) lists.push([`${how} ${seed}`, l]) }
+        for (const [what, l] of lists) {
+          const old = oldAlign(R.walkPage(i), R.encrypted, OPS, l)
+          for (const got of [R.alignPage(i, alignOf(OPS, l)), R.alignPage(i, OPS, l)]) {
+            const g = got as { ok: boolean; why: string[]; paints: unknown }
+            expect({ ok: g.ok, why: g.why, paints: g.paints !== null }, `page ${i + 1}, ${what}`).toEqual(old)
+          }
+          // (a reading that disagrees on what is compared refuses the page: fail closed)
+          if (/^(drop-show|other-code|null-code)/.test(what)) { expect(old.ok, `page ${i + 1}, ${what}`).toBe(false); refused++ }
+          if (/^extra-path/.test(what)) expect(old.paints, `page ${i + 1}, ${what}`).toBe(false)
+        }
+      }
+      expect(refused).toBeGreaterThan(8)
+    }
+  })
+
+  it('a facts\' reading that disagrees with the page refuses it in the add-on: nothing removed, no removed page', async () => {
+    const { pages } = await inksOf(PDF)
+    const plan = planOne(pages.map(x => x.ink))
+    for (const how of ['drop-show', 'other-code', 'null-code', 'extra-path'] as const) {
+      const out = await makeAddon({ R: await openRemover(PDF, { PL }), bytes: PDF, alignOf: async q => alignOf(OPS, (q === 1 ? perturbed(OPS, pages[0]!.opList, how, 1) : null) ?? pages[q - 1]!.opList), deflate, plan, compact: true })
+      expect(out.manifest.page[1], how).toMatchObject({ ok: false })
+      expect(out.manifest.page[1]?.at, how).toBeUndefined()
+      expect((await open(out.bytes)).numPages, how).toBe(2)
+    }
+    // (and as read, the page is removed: the facts are what the list gives)
+    const fine = await makeAddon({ R: await openRemover(PDF, { PL }), bytes: PDF, alignOf: async q => alignOf(OPS, pages[q - 1]!.opList), deflate, plan, compact: true })
+    expect(fine.manifest.page[1]).toMatchObject({ ok: true, at: { R: 3 } })
+  })
+})
+
+describe('chained updates (makeAddon\'s chain): each part\'s tail after the ones before', () => {
+  // three pages, each a line of its own; the plan takes a word out of each
+  const THREE = pdfOf([
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 6 0 R >> >> /Contents 7 0 R >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 6 0 R >> >> /Contents 8 0 R >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 6 0 R >> >> /Contents 9 0 R >>',
+    font,
+    ['', 'BT /F1 10 Tf 20 250 Td (Page one here) Tj ET'],
+    ['', 'BT /F1 10 Tf 20 250 Td (Page two here) Tj ET\n20 210 100 1 re f'],
+    ['', 'BT /F1 10 Tf 20 250 Td (Page three here) Tj ET'],
+  ])
+  const words = ['one', 'two', 'three']
+  const concatAll = (parts: Uint8Array[]) => { const out = new Uint8Array(parts.reduce((n, b) => n + b.length, 0)); let o = 0; for (const b of parts) { out.set(b, o); o += b.length } return out }
+  const startOf = (b: Uint8Array) => Number(/startxref\s+(\d+)\s+%%EOF\s*$/.exec(new TextDecoder('latin1').decode(b.subarray(b.length - 1024)))![1])
+  for (const [what, make] of [['a classic table', async () => THREE], ['a cross-reference stream', async () => (await PL.PDFDocument.load(THREE, { updateMetadata: false })).save({ useObjectStreams: true })]] as const) {
+    it(`a part a page: every prefix opens, its removed pages the single update's, the sections linked: ${what}`, async () => {
+      const bytes = await make()
+      const { pages } = await inksOf(bytes)
+      const plan: RemovalPlan = { pages: Object.fromEntries(pages.map((x, i) => [i + 1, { shows: x.ink.shows, units: [{ id: i + 1, glyphs: glyphsOf(x.ink, words[i]!, 250), paths: i === 1 ? [0] : [] }], crops: [] }])) }
+      const facts = async (q: number) => alignOf(OPS, pages[q - 1]!.opList)
+      const R = await openRemover(bytes, { PL })
+      const single = await makeAddon({ R, bytes, alignOf: facts, deflate, plan, compact: true })
+      // the whole, chained from arXiv's bytes alone, is the single update byte for byte
+      const initial = { end: bytes.length, xref: startOf(bytes), next: null, kids: [], empty: null }
+      const whole = await makeAddon({ R, bytes, alignOf: facts, deflate, plan, compact: true, chain: initial })
+      expect(Buffer.from(whole.tail!).equals(Buffer.from(single.tail))).toBe(true)
+      expect(whole.manifest).toEqual(single.manifest)
+      const singleInks = (await inksOf(single.bytes)).pages.map(x => x.ink.glyphs.map(g => [g.u, g.x0, g.y]))
+      // then one part a page
+      let chain: { end: number; xref: number; next: number | null; kids: number[]; empty: number | null } = { ...initial, kids: [] }
+      const tails: Uint8Array[] = []
+      for (let p = 1; p <= 3; p++) {
+        const made = await makeAddon({ R, bytes, alignOf: facts, deflate, plan, compact: true, pages: [p], chain })
+        expect(Object.keys(made.manifest.page)).toEqual([String(p)])
+        expect(made.manifest.page[p]).toMatchObject({ ok: true, at: { R: 3 + p } })
+        const tail = made.tail!
+        const links = tailLinks(tail)!
+        expect(links.prev).toBe(chain.xref)
+        expect(links.startxref).toBe(chain.end + links.xrefAt)
+        if (chain.next !== null) expect(links.first).toBe(chain.next)
+        expect(made.chain.next).toBe(links.last + 1)
+        expect(made.chain.kids).toHaveLength(1)
+        tails.push(tail)
+        chain = { end: chain.end + tail.length, xref: links.startxref, next: made.chain.next, kids: [...chain.kids, ...made.chain.kids], empty: made.chain.empty }
+        // the prefix: arXiv's pages as they were, then the removed pages so far, each the single update's
+        const doc = await inksOf(concatAll([bytes, ...tails]))
+        expect(doc.doc.numPages).toBe(3 + p)
+        const got = doc.pages.map(x => x.ink.glyphs.map(g => [g.u, g.x0, g.y]))
+        expect(got).toEqual(singleInks.slice(0, 3 + p))
+      }
+      // the empty stream once, in the first tail; every root the same object
+      expect(new Set(tails.map(t => tailLinks(t)!.root)).size).toBe(1)
+    })
+  }
+
+  it('an update that removes no page is none: no tail, no number used, the chain as it was', async () => {
+    const { pages } = await inksOf(THREE)
+    const R = await openRemover(THREE, { PL })
+    const chain = { end: THREE.length, xref: startOf(THREE), next: null, kids: [], empty: null }
+    // (a page the plan reads otherwise is refused; a page with no plan is not planned)
+    const plan: RemovalPlan = { pages: { 1: { shows: 99, units: [{ id: 1, glyphs: glyphsOf(pages[0]!.ink, 'one', 250), paths: [] }], crops: [] } } }
+    const made = await makeAddon({ R, bytes: THREE, alignOf: async q => alignOf(OPS, pages[q - 1]!.opList), deflate, plan, compact: true, pages: [1, 2], chain })
+    expect(made.tail).toBeNull()
+    expect(made.appended).toBe(0)
+    expect(made.chain).toEqual({ next: null, kids: [], empty: null })
+    expect(made.manifest.page).toEqual({ 1: { ok: false, refused: expect.stringMatching(/plan read 99/) }, 2: { ok: false, refused: 'not planned' } })
+    expect(made.manifest.stats).toMatchObject({ refused: 1, removed: 0 })
+  })
+
+  it('is refused for any other form than compact with the R set alone', async () => {
+    const { pages } = await inksOf(THREE)
+    const R = await openRemover(THREE, { PL })
+    const chain = { end: THREE.length, xref: startOf(THREE), next: null, kids: [], empty: null }
+    const o = { R, bytes: THREE, alignOf: async (q: number) => alignOf(OPS, pages[q - 1]!.opList), deflate, plan: { pages: {} }, chain }
+    await expect(makeAddon({ ...o, compact: false })).rejects.toThrow(RangeError)
+    await expect(makeAddon({ ...o, compact: true, sets: [...SETS, ...CHECK_SETS] })).rejects.toThrow(RangeError)
+  })
+
+  it('a remover let go between asks (release) writes the same bytes again', async () => {
+    const { pages } = await inksOf(PDF)
+    const R = await openRemover(PDF, { PL })
+    const o = { R, bytes: PDF, OPS, opListOf: async (q: number) => pages[q - 1]!.opList, deflate, plan: planOne(pages.map(x => x.ink)), compact: true }
+    const a = await makeAddon(o)
+    R.release()
+    const b = await makeAddon(o)
+    expect(Buffer.from(b.tail).equals(Buffer.from(a.tail))).toBe(true)
   })
 })

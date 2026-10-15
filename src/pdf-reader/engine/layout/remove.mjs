@@ -536,40 +536,69 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
   }
 
   /**
-   * One page against PDF.js's operator list of it (OPS, opList): { ok, why, walk, shows (the walk's text-showing events
-   * by n), paints (its painting operators by m, null where they do not align) }. The n-th showText of the list must be
-   * the n-th showing operator of the walk with as many glyphs, their character codes the same; an annotation's own
-   * appearance is not the page's.
+   * One page against PDF.js's reading of it: `facts` (alignOf's, what the reading shows and paints), or PDF.js's
+   * operator list itself (alignPage(i, OPS, opList), read by alignOf here). Returns { ok, why, walk, shows (the walk's
+   * text-showing events by n), paints (its painting operators by m, null where they do not align) }. The n-th show of the
+   * reading must be the n-th showing operator of the walk with as many glyphs, their character codes the same (a glyph
+   * with no code compared with none); an annotation's own appearance is not the page's. Any difference refuses the page
+   * (`why`): nothing on it is removed
    */
-  function alignPage(pageIndex, OPS, opList) {
+  function alignPage(pageIndex, facts, opList) {
+    if (opList !== undefined) facts = alignOf(facts, opList)
     const walk = walkPage(pageIndex)
     const why = [...walk.problems]
     if (encrypted) why.push('an encrypted file')
     const shows = walk.events.filter(e => e.kind === 'show'), paints = walk.events.filter(e => e.kind === 'paint')
-    const { fnArray, argsArray } = opList
-    const listShows = [], listPaths = []
-    let inAnnot = 0
-    for (let j = 0; j < fnArray.length; j++) {
-      const fn = fnArray[j]
-      if (fn === OPS.beginAnnotation) inAnnot++
-      else if (fn === OPS.endAnnotation) inAnnot = Math.max(0, inAnnot - 1)
-      else if (inAnnot) continue
-      else if (fn === OPS.showText || fn === OPS.showSpacedText) listShows.push(j)
-      else if (fn === OPS.constructPath) listPaths.push(j)
-    }
-    if (listShows.length !== shows.length) why.push(`${shows.length} showing operators walked, ${listShows.length} listed`)
-    for (let n = 0; n < Math.min(listShows.length, shows.length) && why.length < 4; n++) {
+    const listed = facts.codes
+    if (listed.length !== shows.length) why.push(`${shows.length} showing operators walked, ${listed.length} listed`)
+    for (let n = 0; n < Math.min(listed.length, shows.length) && why.length < 4; n++) {
       const e = shows[n]
       if (e.state.font.refused) { why.push(`show ${n}: ${e.state.font.refused}`); continue }
-      const gl = (argsArray[listShows[n]]?.[0] ?? []).filter(g => g && typeof g === 'object')
+      const gl = listed[n]
       if (gl.length !== e.codes.length) { why.push(`show ${n}: ${e.codes.length} codes, ${gl.length} glyphs`); continue }
-      for (let k = 0; k < gl.length; k++) if (gl[k].originalCharCode !== undefined && gl[k].originalCharCode !== e.codes[k].v) { why.push(`show ${n}: codes differ`); break }
+      for (let k = 0; k < gl.length; k++) if (gl[k] !== null && gl[k] !== e.codes[k].v) { why.push(`show ${n}: codes differ`); break }
     }
-    return { ok: why.length === 0, why, walk, shows, paints: listPaths.length === paints.length ? paints : null }
+    return { ok: why.length === 0, why, walk, shows, paints: facts.paths === paints.length ? paints : null }
   }
 
-  return { doc, ctx, PL, numPages: pages.length, encrypted, walkPage, alignPage, decode, look, get, nameOf }
+  /** what the remover keeps between pages let go: the decoded streams and the fonts read (a remover kept for a paper's
+   *  asks holds the object layer's parse alone between them) */
+  const release = () => { decoded.clear(); decodedBytes = 0; fontCache.clear() }
+
+  return { doc, ctx, PL, numPages: pages.length, encrypted, walkPage, alignPage, decode, look, get, nameOf, release }
 }
+
+/**
+ * What alignPage reads of PDF.js's operator list of a page (OPS, opList), its alignment facts: `codes`, for each
+ * text-showing operation (showText, showSpacedText) outside an annotation's appearance, in order, its glyph objects'
+ * character codes (`originalCharCode`; null for a glyph with none, which is not compared; -1 for one that is not a code,
+ * which no code equals); `paths`, the number of constructPath operations outside an annotation. The facts are what a
+ * remover with no PDF.js aligns a page by: the page is aligned by them exactly as by the list. Pure
+ */
+export function alignOf(OPS, opList) {
+  const { fnArray, argsArray } = opList
+  const codes = []
+  let paths = 0, inAnnot = 0
+  for (let j = 0; j < fnArray.length; j++) {
+    const fn = fnArray[j]
+    if (fn === OPS.beginAnnotation) inAnnot++
+    else if (fn === OPS.endAnnotation) inAnnot = Math.max(0, inAnnot - 1)
+    else if (inAnnot) continue
+    else if (fn === OPS.showText || fn === OPS.showSpacedText) {
+      const gl = (argsArray[j]?.[0] ?? []).filter(g => g && typeof g === 'object')
+      const row = new Array(gl.length)
+      for (let k = 0; k < gl.length; k++) {
+        const c = gl[k].originalCharCode
+        // (a code is a whole number below 2^32, as the walk splits a string; anything else is compared and never equal)
+        row[k] = c === undefined ? null : Number.isInteger(c) && c >= 0 && c < CODE_LIMIT ? c : -1
+      }
+      codes.push(row)
+    } else if (fn === OPS.constructPath) paths++
+  }
+  return { codes, paths }
+}
+/** a character code is below this (four bytes at most, as codesOf reads one) */
+const CODE_LIMIT = 2 ** 32
 
 /** a palette for the check's coloured set C: neighbours apart */
 const PALETTE = [[255, 0, 0], [0, 160, 0], [0, 0, 255], [0, 200, 200], [200, 0, 200], [200, 200, 0]]
@@ -689,28 +718,47 @@ export async function removePaper({ bytes, PL, inflate = null, walkMax, heldMax,
 
 /**
  * The add-on: arXiv's bytes with the sets appended as one incremental update. `R` is the remover (openRemover's);
- * `opListOf(p)` PDF.js's operator list of page p (1-based) of arXiv's PDF; `OPS` PDF.js's; `deflate` bytes -> zlib
- * bytes. `plan.pages[p]`: { units: [{ id, glyphs: [n, k, …], paths: [m, …] }], names?: [{ occurrence, glyphs }],
- * crops: [{ glyphs, paths }], shows?, glyphs? } (a name's glyphs removed as a unit's are, but named in no manifest entry) (shows and glyphs: the page's text-showing operations and its ink's glyphs as the planner read them, which
- * this reading must give too). `sets`: SETS, and CHECK_SETS for a check. `boxesOf(p, n, k)` and `pathBoxOf(p, m)`:
- * each glyph's and path's box on the page (the manifest's units), or null.
- * Returns { bytes, appended, manifest } where the manifest says, per page, whether it is removed (`ok`) or refused and
- * why, and each unit's removed boxes (x0, y0, x1, y1 stride 4, PDF units).
+ * each page aligned by `alignOf(p)`, its alignment facts (the module's alignOf of PDF.js's operator list: a remover with
+ * no PDF.js is given them), or by `opListOf(p)`, PDF.js's operator list of page p (1-based) of arXiv's PDF, with `OPS`
+ * PDF.js's; `deflate` bytes -> zlib bytes. `plan.pages[p]`: { units: [{ id, glyphs: [n, k, …], paths: [m, …] }], names?:
+ * [{ occurrence, glyphs }], crops: [{ glyphs, paths }], shows?, glyphs? } (a name's glyphs removed as a unit's are, but
+ * named in no manifest entry; shows and glyphs: the page's text-showing operations and its ink's glyphs as the planner
+ * read them, which this reading must give too). `sets`: SETS, and CHECK_SETS for a check. `boxesOf(p, n, k)` and
+ * `pathBoxOf(p, m)`: each glyph's and path's box on the page (the manifest's units), or null. `pages`: the pages it reads,
+ * rising (default every page, 1 to N), the manifest's entries for them alone.
+ *
+ * `chain` (compact, the R set alone; refused otherwise), the update chained after the updates before it, each a part's
+ * tail: { end, the document's bytes so far (arXiv's and the tails'); xref, its last cross-reference section's offset; next,
+ * the next free object number (null: none written yet, the original's largest + 1); kids, the object numbers of the
+ * removed pages the tails before appended, in order; empty, the empty content stream's (null: none written yet, then
+ * written first) }. Each removed page then goes at N + kids + its place, the page tree's root is written again with every
+ * kid, the section's /Prev is `xref` and its offsets run from `end`. Without `chain` the update follows arXiv's bytes
+ * alone (a chain of none), as one paper's whole add-on.
+ *
+ * Returns { tail, appended, manifest, chain } where `tail` is the update's bytes, the manifest says, per page, whether it
+ * is removed (`ok`) or refused and why, and each unit's removed boxes (x0, y0, x1, y1 stride 4, PDF units), and `chain`
+ * the state after it ({ next, kids: the removed pages' object numbers it appended, empty }). Without `chain`, `bytes` too
+ * (arXiv's followed by the update), and an update written whatever it removes; with it, no copy of arXiv's bytes, and
+ * where no page is removed `tail` null, `appended` 0 and the state as it was (no number used)
  */
-export async function makeAddon({ R, bytes, OPS, opListOf, deflate, plan, sets = SETS, boxesOf = null, pathBoxOf = null, compact = false }) {
+export async function makeAddon({ R, bytes, OPS, opListOf, alignOf: factsOf = null, deflate, plan, sets = SETS, boxesOf = null, pathBoxOf = null, compact = false, pages = null, chain = null }) {
   const { PL, ctx, doc } = R
   const { PDFName, PDFRef, PDFDict, PDFRawStream } = PL
   const N = R.numPages
-  const pagesOut = []
+  if (chain !== null && (!compact || sets.length !== 1 || sets[0] !== 'R')) throw new RangeError('a chained add-on is compact, the R set alone')
+  const pageList = pages ?? Array.from({ length: N }, (_, i) => i + 1)
+  const kidsBefore = chain?.kids ?? []
+  const pagesOut = new Map()
   const objects = [] // [ref, bytes]
-  let next = ctx.largestObjectNumber + 1
+  let next = chain?.next ?? ctx.largestObjectNumber + 1
   const alloc = () => PDFRef.of(next++, 0)
   const streamObj = (ref, dictText, data) => objects.push([ref, concat([enc(`${ref.objectNumber} ${ref.generationNumber} obj\n${dictText}\nstream\n`), data, enc('\nendstream\nendobj\n')])])
   const plainObj = (ref, text) => objects.push([ref, enc(`${ref.objectNumber} ${ref.generationNumber} obj\n${text}\nendobj\n`)])
   const dictText = entries => `<<${entries.map(([k, v]) => ` ${k} ${v}`).join('')} >>`
-  // one empty content stream for every page of a set that shows nothing
-  const empty = alloc()
-  streamObj(empty, '<< /Length 0 >>', new Uint8Array(0))
+  // one empty content stream for every page of a set that shows nothing, written once: first, in the chain's first update
+  const emptyBefore = chain === null ? null : chain.empty
+  const empty = emptyBefore === null ? alloc() : PDFRef.of(emptyBefore, 0)
+  if (emptyBefore === null) streamObj(empty, '<< /Length 0 >>', new Uint8Array(0))
   const manifest = { schema: 1, removal: REMOVAL, pages: N, sets: compact ? {} : Object.fromEntries(sets.map((s, i) => [s, (i + 1) * N])), page: {} }
   const stats = { removed: 0, rules: 0, cut: 0, hidden: 0, refused: 0, forms: 0, streams: 0 }
   const paletteOf = new Map()
@@ -770,18 +818,17 @@ export async function makeAddon({ R, bytes, OPS, opListOf, deflate, plan, sets =
     return { contents: refs.length ? `[${refs.join(' ')}]` : empty.toString(), resources: resText(pc) }
   }
 
-  for (let p = 1; p <= N; p++) {
+  for (const p of pageList) {
     const entry = plan.pages?.[p] ?? null
     const out = { ok: false }
     manifest.page[p] = out
     // (a page the plan leaves alone is not read: each of its sets shows the original's, or nothing)
     if (!entry) {
       out.refused = 'not planned'
-      pagesOut.push(Object.fromEntries(sets.map(s => [s, s === 'R' ? { contents: null, resources: null } : { contents: empty.toString(), resources: null }])))
+      pagesOut.set(p, Object.fromEntries(sets.map(s => [s, s === 'R' ? { contents: null, resources: null } : { contents: empty.toString(), resources: null }])))
       continue
     }
-    const opList = await opListOf(p)
-    const al = R.alignPage(p - 1, OPS, opList)
+    const al = factsOf ? R.alignPage(p - 1, await factsOf(p)) : R.alignPage(p - 1, OPS, await opListOf(p))
     const why = [...al.why]
     if (entry?.shows !== undefined && entry.shows !== al.shows.length) why.push(`the plan read ${entry.shows} showing operations, this reading ${al.shows.length}`)
     const glyphOf = (n, k) => { const e = al.shows[n]; return e && k >= 0 && k < e.codes.length ? e : null }
@@ -854,7 +901,7 @@ export async function makeAddon({ R, bytes, OPS, opListOf, deflate, plan, sets =
     if (why.length || !entry) {
       if (entry) { out.refused = why.slice(0, 4).join('; '); stats.refused++ }
       else out.refused = 'not planned'
-      pagesOut.push(Object.fromEntries(sets.map(s => [s, s === 'R' ? { contents: null, resources: null } : { contents: empty.toString(), resources: null }])))
+      pagesOut.set(p, Object.fromEntries(sets.map(s => [s, s === 'R' ? { contents: null, resources: null } : { contents: empty.toString(), resources: null }])))
       continue
     }
     out.ok = true
@@ -865,18 +912,25 @@ export async function makeAddon({ R, bytes, OPS, opListOf, deflate, plan, sets =
     stats.rules += made.R.counts.rules
     const row = {}
     for (const s of sets) row[s] = writeSet(al.walk, made[s].edits)
-    pagesOut.push(row)
+    pagesOut.set(p, row)
+  }
+  // (chained, an update that removes no page is none: no object, no number used, the chain as it was)
+  if (chain !== null && !pageList.some(p => manifest.page[p].ok)) {
+    manifest.appended = 0
+    manifest.stats = stats
+    return { tail: null, appended: 0, manifest, chain: { next: chain.next, kids: [], empty: chain.empty } }
   }
 
   // the appended pages, every set's page p at its place; and the root of the page tree holding them
   const cat = ctx.lookup(ctx.trailerInfo.Root), rootRef = cat.get(PDFName.of('Pages')), root = ctx.lookup(rootRef)
-  const kids = []
+  const kids = [], newKids = []
   for (const s of sets) {
-    for (let p = 1; p <= N; p++) {
-      // (compact: a page it did not remove has no page in the set; one it did is named where it is)
+    for (const p of pageList) {
+      // (compact: a page it did not remove has no page in the set; one it did is named where it is, after the pages the
+      // chain's updates appended before)
       if (compact && !manifest.page[p].ok) continue
-      if (compact) (manifest.page[p].at ??= {})[s] = N + kids.length + 1
-      const node = doc.getPages()[p - 1].node, o = pagesOut[p - 1][s]
+      if (compact) (manifest.page[p].at ??= {})[s] = N + kidsBefore.length + kids.length + 1
+      const node = doc.getPages()[p - 1].node, o = pagesOut.get(p)[s]
       const inh = k => { const v = node.getInheritableAttribute ? node.getInheritableAttribute(PDFName.of(k)) : node.get(PDFName.of(k)); return v ? ` /${k} ${v.toString()}` : '' }
       const own = k => { const v = node.get(PDFName.of(k)); return v ? ` /${k} ${v.toString()}` : '' }
       const contents = o.contents ?? node.get(PDFName.of('Contents'))?.toString() ?? empty.toString()
@@ -884,22 +938,27 @@ export async function makeAddon({ R, bytes, OPS, opListOf, deflate, plan, sets =
       const ref = alloc()
       plainObj(ref, `<< /Type /Page /Parent ${rootRef}${resources}${inh('MediaBox')}${inh('CropBox')}${inh('Rotate')}${own('Group')}${own('UserUnit')} /Contents ${contents} >>`)
       kids.push(ref.toString())
+      newKids.push(ref.objectNumber)
     }
   }
-  const oldKids = root.get(PDFName.of('Kids')).asArray().map(r => r.toString())
-  const count = R.look(root.get(PDFName.of('Count')))?.asNumber?.() ?? N
+  // (the root as the original has it, with every page the chain's updates appended: theirs, then these)
+  const oldKids = [...root.get(PDFName.of('Kids')).asArray().map(r => r.toString()), ...kidsBefore.map(n => `${n} 0 R`)]
+  const count = (R.look(root.get(PDFName.of('Count')))?.asNumber?.() ?? N) + kidsBefore.length
   const entries = root.entries().filter(([k]) => !['/Kids', '/Count'].includes(k.toString())).map(([k, v]) => [k.toString(), v.toString()])
   entries.push(['/Kids', `[${[...oldKids, ...kids].join(' ')}]`], ['/Count', String(count + kids.length)])
   objects.push([rootRef, enc(`${rootRef.objectNumber} ${rootRef.generationNumber} obj\n${dictText(entries)}\nendobj\n`)])
 
-  // the update: the objects, then a cross-reference section of the original's kind with /Prev
+  // the update: the objects, then a cross-reference section of the original's kind with /Prev (the original's startxref,
+  // or the last update's section where the chain has one), its offsets from the document's end so far
   const chunks = [enc('\n')]
-  let size = bytes.length + 1
+  let size = (chain === null ? bytes.length : chain.end) + 1
   const offsets = []
   for (const [ref, b] of objects) { offsets.push([ref.objectNumber, ref.generationNumber, size]); chunks.push(b); size += b.length }
   const tail = td.decode(bytes.subarray(Math.max(0, bytes.length - 1024)))
-  const prev = Number(/startxref\s+(\d+)\s+%%EOF\s*$/.exec(tail)?.[1] ?? /startxref\s+(\d+)/.exec(tail.slice(tail.lastIndexOf('startxref')))?.[1])
-  const isStream = !/^\s*xref/.test(td.decode(bytes.subarray(prev, prev + 16)))
+  const own = Number(/startxref\s+(\d+)\s+%%EOF\s*$/.exec(tail)?.[1] ?? /startxref\s+(\d+)/.exec(tail.slice(tail.lastIndexOf('startxref')))?.[1])
+  const prev = chain === null ? own : chain.xref
+  // (the section is of the original's kind, read at the original's own section)
+  const isStream = !/^\s*xref/.test(td.decode(bytes.subarray(own, own + 16)))
   const T = ctx.trailerInfo
   const tr = [`/Root ${T.Root}`, T.Info ? `/Info ${T.Info}` : '', T.ID ? `/ID ${T.ID}` : '', `/Prev ${prev}`].filter(Boolean).join(' ')
   let SIZE = Math.max(next, ctx.largestObjectNumber + 1)
@@ -916,11 +975,12 @@ export async function makeAddon({ R, bytes, OPS, opListOf, deflate, plan, sets =
     chunks.push(enc(`${xs} 0 obj\n<< /Type /XRef /Size ${SIZE} /W [1 4 2] /Index [${rows.map(([n]) => `${n} 1`).join(' ')}] ${tr} /Length ${data.length} >>\nstream\n`), data, enc(`\nendstream\nendobj\nstartxref\n${xrefAt}\n%%EOF\n`))
   }
   const update = concat(chunks)
-  const out = concat([bytes, update])
   manifest.appended = update.length
   manifest.stats = stats
   if (paletteOf.size) manifest.colours = Object.fromEntries(paletteOf)
-  return { bytes: out, appended: update.length, manifest }
+  const after = { next: SIZE, kids: newKids, empty: empty.objectNumber }
+  if (chain !== null) return { tail: update, appended: update.length, manifest, chain: after }
+  return { bytes: concat([bytes, update]), tail: update, appended: update.length, manifest, chain: after }
 }
 
 /**
