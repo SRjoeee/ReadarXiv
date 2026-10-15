@@ -5,7 +5,8 @@
 // indexOf, each part against the chain), and its pages drawn twice, each in a page load of its own: door A, openLayer over the
 // cut made whole again (mergeParts, BUNDLE 3's open, over arXiv's PDF and every tail), and door B, openLayer over the index with
 // no part, each part told when the run waits for one (addPart: every part late, as a slow prepare tells them; a part with a tail
-// with the composed document through it, opened beforehand). Door S (C') is BUNDLE 3's open of the bundle with its single tail.
+// with the composed document through it, opened beforehand). Door S (C') is BUNDLE 3's open of the bundle with its single tail,
+// its copies drawn over door A's PNGs as door B's are (never over its own drawing of arXiv's page: a first drawing varies).
 // The rows are the record's, all taken, then end().
 // Each page's answer: its SVG's markup, copyOf's pixels over the page as door A's load had PDF.js draw it (its PNG, so that both
 // copies start from the same pixels), and the digest of the run's records of the units on the page (the run is reached through
@@ -92,8 +93,10 @@ const heldOf = (layer, N) => ({ states: statesOf(layer, N), skipped: skippedOf(w
 window.doorParts = {
   /** door A: BUNDLE 3's open over the cut made whole (mergeParts) and arXiv's PDF through every tail, or (`bundle3`) over BUNDLE
    *  3's bundle itself: with no add-on ('none', door C, `addon: null`) or with its single tail ('single', door S); each page's
-   *  PDF.js drawing at K kept as PNG for door B (unless `png` is false) */
-  async whole({ name, target, rules, pages, bundle3 = false, png: keepPng = true }) {
+   *  PDF.js drawing at K kept as PNG for door B (unless `png` is false). `shared`: each page's copy drawn over door A's PNG of
+   *  it, as door B's is, not over this load's own drawing: PDF.js's first drawing of a page in a document is not always
+   *  another load's (layer-gate/door.mjs head), so two loads' copies are compared over the same pixels or not at all */
+  async whole({ name, target, rules, pages, bundle3 = false, png: keepPng = true, shared = false }) {
     const R = await import('/engine/layer-proto/reader.mjs')
     const { F, index, parts, composed } = await cutOf(name)
     const original = await bytes(`/fixtures/${name}/arxiv.pdf`)
@@ -108,6 +111,7 @@ window.doorParts = {
     layer.take(rows)
     layer.end()
     const sourceOf = async p => {
+      if (shared) return { png: null, source: await canvasOfPng(await bytes(`/door/${name}/s${p}.png`)) }
       const page = await doc.getPage(p)
       const viewport = page.getViewport({ scale: K })
       const drawn = document.createElement('canvas')
