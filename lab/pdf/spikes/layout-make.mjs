@@ -25,6 +25,7 @@ import { encodeLayout, PH_FLAG } from '../../../src/pdf-reader/engine/layout/fil
 import { pageInk } from '../../../src/pdf-reader/engine/layout/ink.mjs'
 import { makeLayout } from '../../../src/pdf-reader/engine/layout/make.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
+import { LITE } from './lite-pdfjs.mjs'
 
 const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname
@@ -32,7 +33,7 @@ const DATA = process.env.AXT_DATA ?? join(root, 'data')
 const UA = 'ReadarXiv/0.1 (+https://readarxiv.org; research)'
 const FREE_MIN = 10 * 2 ** 30
 const NM = new URL('../../../node_modules/pdfjs-dist/', import.meta.url).pathname
-const open = bytes => getDocument({ data: bytes, verbosity: 0, cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, useSystemFonts: false })
+const open = bytes => getDocument({ data: bytes, ...LITE, verbosity: 0, cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, useSystemFonts: false })
 /** the layout research's bars (2026-10-06), by paper: cells and footnotes located, heading labels found */
 const BARS = {
   '1512.03385v1': { cells: 0.95, headings: 13 },

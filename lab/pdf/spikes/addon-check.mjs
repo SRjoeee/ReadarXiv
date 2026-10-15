@@ -17,6 +17,7 @@ import { join } from 'node:path'
 import { constants as zlibConstants, deflateSync, inflateRawSync, inflateSync } from 'node:zlib'
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { LITE } from './lite-pdfjs.mjs'
 
 const ROOT = new URL('..', import.meta.url).pathname, REPO = new URL('../../..', import.meta.url).pathname
 const ENGINE = join(REPO, 'src/pdf-reader/engine')
@@ -43,7 +44,7 @@ const inflate = (b, limit) => {
 }
 const deflate = b => new Uint8Array(deflateSync(b))
 const PDFJS = join(REPO, 'node_modules/pdfjs-dist')
-const openNode = data => getDocument({ data: data.slice(), verbosity: 0, cMapUrl: `${PDFJS}/cmaps/`, cMapPacked: true, standardFontDataUrl: `${PDFJS}/standard_fonts/`, useSystemFonts: false }).promise
+const openNode = data => getDocument({ data: data.slice(), ...LITE, verbosity: 0, cMapUrl: `${PDFJS}/cmaps/`, cMapPacked: true, standardFontDataUrl: `${PDFJS}/standard_fonts/`, useSystemFonts: false }).promise
 
 console.log(`the cached add-ons: the gate's, at ${BASE} (remover digest ${baseDigest}); fixtures ${FIXTURES.slice(FIXTURES.lastIndexOf('/') + 1)}`)
 let failed = 0

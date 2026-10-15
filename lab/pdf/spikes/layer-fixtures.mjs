@@ -52,6 +52,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import { getDocument, OPS, version as PDFJS } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { LITE } from './lite-pdfjs.mjs'
 
 setDefaultResultOrder('ipv4first')
 const run = promisify(execFile)
@@ -92,7 +93,7 @@ const STAGING_VERSIONS = { pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_
 const FREE_MIN = 10 * 2 ** 30
 const ARXIV_GAP_MS = 3200
 const NM = new URL('../../../node_modules/pdfjs-dist/', import.meta.url).pathname
-const open = bytes => getDocument({ data: bytes, verbosity: 0, cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, useSystemFonts: false })
+const open = bytes => getDocument({ data: bytes, ...LITE, verbosity: 0, cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, useSystemFonts: false })
 
 /** Task 12's outputs (spec §5): iteration 3's fifteen, then zh-TW, fr, es and the thesis in CJK; the table-heavy, the
  *  footnote-heavy and the XeLaTeX paper are found by their rules (picks below) */
