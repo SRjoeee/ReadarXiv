@@ -44,6 +44,10 @@ export declare const TOKENS_PAGE: number
 export declare const SPANNED_PER_TOKEN: number
 /** the tokens' wire: integers of TOKEN_SCALE (thousandths of a PDF unit); a decoded value past ±TOKEN_LIMIT is no PDF's */
 export declare const TOKEN_SCALE: number
+/** the six coded fields of a left part's tokens, in the wire's order */
+export declare const TOKEN_FIELDS: readonly ['l', 'r', 'y', 'h', 'top', 'bottom']
+/** a number on the wire's grid (thousandths of a PDF unit), as the views and rectangles of a part are written */
+export declare const onGrid: (v: number) => number
 export declare const TOKEN_LIMIT: number
 /** why the parts end before the paper does: FINAL (the paper's own, which no other build changes) and BUILD-SCOPED (of the
  *  build's resources), and both */

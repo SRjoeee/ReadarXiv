@@ -101,6 +101,8 @@ const sub = (path, k) => (path ? `${path}.${k}` : k)
 const isDigest = v => typeof v === 'string' && v.length === 64 && SHA256.test(v)
 const r2 = v => Math.round(v * 100) / 100
 const r3 = v => Math.round(v * 1000) / 1000
+/** a number on the wire's grid (TOKEN_SCALE: thousandths of a PDF unit), as the views and rectangles of a part are written */
+export const onGrid = r3
 
 /** a layout module's refusal at `path` of the object, as the format's; any other error as it is */
 function inside(kind, path, fn) {
@@ -972,7 +974,8 @@ export async function writePart({ paper, head, prev, pages, views, left, fileOnl
 // ---------------------------------------------------------------- the left parts
 const LEFT_KEYS = ['bundle', 'kind', 'page', 'first', 'tokens', 'spans', 'pairs']
 const TOKEN_KEYS = ['perPage', 'l', 'r', 'y', 'h', 'top', 'bottom']
-const TOKEN_FIELDS = ['l', 'r', 'y', 'h', 'top', 'bottom']
+/** the six coded fields of a left part's tokens, in the wire's order */
+export const TOKEN_FIELDS = ['l', 'r', 'y', 'h', 'top', 'bottom']
 const LEFT_DEF = { cap: LEFT_CAP, values: LEFT_VALUES, depth: LEFT_DEPTH }
 const TOKEN_BOUND = TOKEN_LIMIT * TOKEN_SCALE
 
