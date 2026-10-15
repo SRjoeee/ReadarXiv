@@ -18,8 +18,11 @@ import { App } from './App'
 const reading = (await answeredBy(readConfig(), firstReadTime())) ?? null
 applyPageLocale(reading?.config.uiLanguage)
 const params = new URLSearchParams(location.search)
-// the session runs once, at load: it is loaded only when the panes are there and the host is set (host.mjs)
+// the session runs once, at load: it is loaded only when the panes are there and the host is set (host.mjs). The
+// development entry `?layer=1` runs the engine's reading view instead (session/host.ts; PDF-READER §11.7), until the
+// extension's reader is the view
 const open = async (host: Parameters<typeof setHost>[0]): Promise<Session> => {
+  if (params.get('layer') === '1') return (await import('@/pdf-reader/session/host.ts')).openView(host)
   setHost(host)
   return import('@/pdf-reader/session/session.mjs')
 }

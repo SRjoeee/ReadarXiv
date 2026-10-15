@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
-import { createController, INITIAL, reduce, type Session } from '@/pdf-reader/controller'
+import { createController, fromView, INITIAL, reduce, type Session } from '@/pdf-reader/controller'
 import type { SessionEvent, SessionHost } from '@/pdf-reader/session/session.mjs'
 
 const note = (event: string, counts: Partial<{ got: number; total: number; lost: number; again: boolean }> = {}): SessionEvent => ({ type: 'note', event, data: {}, got: 0, total: 0, lost: 0, again: false, ...counts })
@@ -388,3 +388,29 @@ describe('createController', () => {
     expect(heard).not.toHaveBeenCalled()
   })
 })
+
+describe('fromView: the reading view\'s events as the session\'s, the controller\'s second source', () => {
+  it('folds an open, a page, a scale with its zoom, the display and the sync into the same state the session gives', () => {
+    const state = fold([
+      { type: 'display', display: 'original' }, { type: 'loading', loaded: 5, total: 10 }, { type: 'opened', pages: 4 }, { type: 'paper', title: 'A paper' },
+      { type: 'page', side: 'right', page: 2, pages: 4, laid: false }, { type: 'scale', scale: 1.25, zoom: 'page-fit' }, { type: 'sync', on: false, available: true },
+    ].map(e => fromView(e as never, '2600.00001')).filter((e): e is SessionEvent => e !== null))
+    expect(state).toMatchObject({ display: 'original', loaded: 0.5, phase: 'ready', paper: { id: '2600.00001', title: 'A paper' }, scale: 1.25, zoom: 'page-fit', sync: false })
+    expect(state.sides.right).toEqual({ page: 2, pages: 4 })
+  })
+
+  it('says a PDF that could not be opened is the network\'s failure, and tells nothing of a dropped original or the layer', () => {
+    const failed = fromView({ type: 'failed', error: '404' }, '2600.00001')
+    expect(failed).toMatchObject({ type: 'fail', event: 'fetch failed', kind: 'network' })
+    expect(fold([failed as SessionEvent])).toMatchObject({ phase: 'failed', failure: 'network' })
+    expect(fromView({ type: 'dropped' }, 'x')).toBeNull()
+    expect(fromView({ type: 'layer', state: 'open', laid: 1, total: 4 }, 'x')).toBeNull()
+  })
+
+  it('keeps the zoom the controller chose where the engine does not say (the session\'s scale), and takes it where it does', () => {
+    const chose = { ...INITIAL, zoom: 'page-fit' as const }
+    expect(reduce(chose, { type: 'scale', scale: 2 }).zoom).toBe('page-fit')
+    expect(reduce(chose, { type: 'scale', scale: 2, zoom: null }).zoom).toBeNull()
+  })
+})
+

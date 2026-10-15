@@ -343,6 +343,7 @@
     "captionFor",
     "clickOf",
     "contentsOf",
+    "createReaderView",
     "figureLabels",
     "figureRegions",
     "floatHitOf",

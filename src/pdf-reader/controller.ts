@@ -1,11 +1,14 @@
 // The one boundary between the reader's engine and its interface (the reader's design, §11.3): the session's events
 // folded into a state the interface subscribes to, and the interface's commands passed on to the session. pdfslick's
-// per-viewer store, adopted: the engine's events drive the store, and nothing reads the viewers back
+// per-viewer store, adopted: the engine's events drive the store, and nothing reads the viewers back. Two sources of
+// them: the extension's own session (session.mjs), and the reading view the engine holds for both readers (§11.7), whose
+// events fromView turns into the same ones
 import { toBcp47 } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { ConfigReading } from '@/config/storage'
 import type { PackState } from '@/shared/pack'
 import type { OutlineEntry } from './engine/view/outline'
+import type { ViewEvent } from './engine/view.mjs'
 import { PROVIDER_ERROR_KINDS, type ProviderErrorKind } from '@/providers/types'
 import type { EngineDisplay, SessionEvent, SessionHost } from './session/session.mjs'
 import type * as SessionModule from './session/session.mjs'
@@ -129,8 +132,11 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       // an address with no paper has no translated display to be had: the original stays selected, whatever the saved
       // settings ask for (the radio of a display out of reach was left selected, and its pane hidden)
       return state.noPaper || event.mode === state.display ? state : { ...state, display: event.mode }
-    case 'scale':
-      return event.scale === state.scale ? state : { ...state, scale: event.scale }
+    case 'scale': {
+      // the zoom the engine applied, where it says (the reading view: a fit, a scale, or none after a step or a pinch)
+      const zoom = event.zoom === undefined ? state.zoom : event.zoom
+      return event.scale === state.scale && zoom === state.zoom ? state : { ...state, scale: event.scale, zoom }
+    }
     case 'loading': {
       const loaded = event.total > 0 ? Math.round(Math.min(1, event.loaded / event.total) * 100) / 100 : 0
       return loaded === state.loaded ? state : { ...state, loaded }
@@ -194,6 +200,25 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     }
     default:
       return state
+  }
+}
+
+/** the reading view's event as the session's (the reader's design, §11.7): what the interface's state is folded from. The
+ *  original opened is the session's `opened` note, a PDF that could not be opened its fetch failure; the paper's id is the
+ *  address's. None for what the interface does not hold (the original dropped, the layer's state until the layer side) */
+export function fromView(event: ViewEvent, paper: string): SessionEvent | null {
+  switch (event.type) {
+    case 'loading': return event
+    case 'opened': return { type: 'note', event: 'opened', data: {}, got: 0, total: 0, lost: 0, again: false }
+    case 'failed': return { type: 'fail', event: 'fetch failed', text: `Could not fetch ${paper}'s PDF (${event.error})`, kind: 'network' }
+    case 'paper': return { type: 'paper', id: paper, title: event.title }
+    case 'page': return { type: 'page', side: event.side, page: event.page, pages: event.pages }
+    case 'scale': return { type: 'scale', scale: event.scale, zoom: event.zoom }
+    case 'display': return { type: 'display', mode: event.display }
+    case 'sync': return { type: 'sync', on: event.on }
+    case 'outline': return event
+    case 'heading': return event
+    default: return null
   }
 }
 
