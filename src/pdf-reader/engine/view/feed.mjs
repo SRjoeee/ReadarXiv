@@ -23,14 +23,15 @@ const refOf = r => ({ kind: r.kind, sha256: r.sha256, bytes: r.bytes, ...(r.from
 export function createFeed({ fetchObject, changed = () => {}, warn = () => {} }) {
   const ac = new AbortController()
   let disposed = false
-  /** each object's bytes by digest, fetched once; a failed fetch is let go, so that a ref told again is fetched again */
+  /** each object's bytes by digest, fetched once; a part refused (its fetch or its read) is let go when it is told again,
+   *  and fetched again then */
   const bytes = new Map()
   const fetch = r => {
     let p = bytes.get(r.sha256)
     if (!p) {
       p = Promise.resolve().then(() => fetchObject(r, ac.signal))
+      p.catch(() => {})
       bytes.set(r.sha256, p)
-      p.catch(() => { if (bytes.get(r.sha256) === p) bytes.delete(r.sha256) })
     }
     return p
   }
@@ -126,7 +127,6 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
             if (at !== gen) break
             // the chain stops at the part before it; told again, it is fetched and read again
             refusedParts.add(r.sha256)
-            bytes.delete(r.sha256)
             warn(`the layer's part from page ${r.from}`, e)
             changed()
             break
@@ -154,7 +154,7 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
         if (known.has(r.sha256) && !refusedParts.has(r.sha256)) continue
         known.add(r.sha256)
         // a part refused and told again: fetched and read again
-        if (refusedParts.delete(r.sha256)) { moved = true; gen++ }
+        if (refusedParts.delete(r.sha256)) { bytes.delete(r.sha256); moved = true; gen++ }
         void fetch(r).catch(() => {})
         if (told.some(t => t.sha256 === r.sha256)) continue
         if (place(r)) moved = true

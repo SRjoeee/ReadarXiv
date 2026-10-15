@@ -259,6 +259,11 @@ export function createPlaces(o) {
       p.div.removeAttribute('data-axt-layer')
       if (p.near) show(p); else name(p)
     },
+    /** the canvas of place n's own page view, where PDF.js has drawn it whole; null else (read before a swap releases it) */
+    canvas(n) {
+      const v = list[n - 1]?.view
+      return v?.renderingState === FINISHED && v.canvas?.width ? v.canvas : null
+    },
     contentOf(n) {
       const p = list[n - 1]
       return !p ? 'none' : p.side ? 'layer' : p.view ? 'original' : p.skeleton ? 'skeleton' : 'none'

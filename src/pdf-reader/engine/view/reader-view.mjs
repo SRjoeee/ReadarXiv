@@ -85,7 +85,7 @@ export function createReaderView(host) {
   const counts = { events: 0, tasks: 0, opens: 0, failures: 0, layouts: 0 }
   let lastEvent = null, lastAlign = null
   const released = new WeakSet()
-  const listeners = { drawn: new Set(), want: new Set(), near: new Set(), original: new Set(), scale: new Set() }
+  const listeners = { drawn: new Set(), want: new Set(), near: new Set(), original: new Set(), scale: new Set(), scrolled: new Set() }
   const tell = (set, ...args) => { for (const l of [...set]) l(...args) }
   function emit(event) {
     if (disposed) return
@@ -292,6 +292,7 @@ export function createReaderView(host) {
       follower.scrolled(s)
       pointer.again()
       if (s === R) tellRightPage()
+      tell(listeners.scrolled, s.name)
     }, o)
     for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) c.addEventListener(type, () => follower.input(s, type), o)
     c.addEventListener('pointermove', () => follower.hover(s), o)
@@ -829,10 +830,26 @@ export function createReaderView(host) {
     places: {
       count: () => places.count(), page: n => places.page(n), view: n => places.views().get(n), near: n => places.near(n),
       contentOf: n => places.contentOf(n),
+      canvas: n => places.canvas(n),
       swap(n, content) { const ok = places.swap(n, content); if (ok) tellRightPage(); return ok },
       restore(n) { places.restore(n); tellRightPage() },
     },
-    left: { doc: () => current?.doc ?? null, scale: () => L.viewer.currentScale, canvas(n) { const pv = L.viewer.getPageView(n - 1); return pv?.renderingState === 3 && pv.canvas?.width ? pv.canvas : null } },
+    left: {
+      doc: () => current?.doc ?? null, scale: () => L.viewer.currentScale,
+      canvas(n) { const pv = L.viewer.getPageView(n - 1); return pv?.renderingState === 3 && pv.canvas?.width ? pv.canvas : null },
+      pdfPage: n => (laid ? L.viewer.getPageView(n - 1)?.pdfPage ?? null : null),
+    },
+    lib: kit.lib,
+    assets: kit.assets,
+    /** where the reader is reading: the page at the reading line of the pane read, and the line's height there (PDF units,
+     *  y up); null with no original laid out */
+    reading() {
+      if (!laid) return null
+      const s = readSide(), place = readingPlace(s)
+      if (!place.page) return null
+      const vp = pageView(s, place.page)?.viewport
+      return { page: place.page, y: vp ? vp.convertToPdfPoint(0, place.at * vp.height)[1] : null }
+    },
     words: host.words,
     dpr: () => globalThis.devicePixelRatio || 1,
     clock,
@@ -843,6 +860,7 @@ export function createReaderView(host) {
     onNear: l => { listeners.near.add(l); return () => listeners.near.delete(l) },
     onOriginal: l => { listeners.original.add(l); return () => listeners.original.delete(l) },
     onScale: l => { listeners.scale.add(l); return () => listeners.scale.delete(l) },
+    onScrolled: l => { listeners.scrolled.add(l); return () => listeners.scrolled.delete(l) },
     attach(s) {
       if (disposed) throw new Error('the reading view is disposed')
       if (side) throw new Error('the reading view has a layer side already')
