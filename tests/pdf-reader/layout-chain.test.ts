@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { type Cut, type CutOptions, cutBundle } from '@/pdf-reader/engine/layer-proto/cut.mjs'
 import { indexOf, mergeParts, type PartChain, partTarget, type ReadPart, type ReadUnitsChunk, readHead, readPart, readUnitsChunk } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { BOXES_BYTES, BOXES_VALUES, pagePlansOf, paperAddon, rangeEntries } from '@/pdf-reader/engine/layout/addon.mjs'
@@ -95,6 +96,7 @@ describe('the ask and the entries: round trips, and every bound refused before J
       ['a code as text', v => { v.plans[0].align.codes[0][0] = '72' }, /align.codes\[0\]\[0\]/],
       ['a crop of one list', v => { v.plans[0].crops = [[[0, 1]]] }, /crops\[0\]/],
       ['a unit as an object', v => { v.plans[0].units[0] = { id: 0 } }, /units\[0\]/],
+      ['a unit id past what an answer may name', v => { v.plans[0].units[0][0] = 1_000_000_000 }, /units\[0\]\[0\]/],
       ['a name with no glyphs', v => { v.plans[0].names = [[0]] }, /names\[0\]/],
       ['shows as text', v => { v.plans[0].shows = '3' }, /shows/],
       ['a prototype\'s key', v => { v.plans[0] = JSON.parse(`{"__proto__":1,${JSON.stringify(v.plans[0]).slice(1)}`) }, /not a key/],
@@ -105,6 +107,10 @@ describe('the ask and the entries: round trips, and every bound refused before J
       expect(() => readAsk(utf8(JSON.stringify(v))), what).toThrow(why)
     }
     expect(() => readAsk('{}' as never)).toThrow(/not bytes/)
+    // (the largest unit id an answer's entries may name is one an ask may carry)
+    const most = structuredClone(good)
+    most.plans[0].units[0][0] = 999_999_999
+    expect(readAsk(utf8(JSON.stringify(most))).plans[0]!.units[0]![0]).toBe(999_999_999)
   })
 
   it('refuses entries of any other shape, naming where', () => {
@@ -190,14 +196,16 @@ describe('the remover child (removerOf): refuses what it is sent wrong, never th
   })
 })
 
-describe('the chained writer takes a bad answer as the remover\'s failure, never a throw', () => {
+describe('the chained writer refuses a bad answer for its candidate alone, never a throw', () => {
+  /** hooks whose first answer is changed by `change`, every later one the remover's own */
   const corrupt = async (bytes: Uint8Array, change: (a: { tail: Uint8Array | null; entries: Loose }) => { tail: Uint8Array | null; entries: unknown }) => {
     const { planOf, remover } = await sixPlans(bytes)
+    let asks = 0
     const h = chainedAddon({
       N: 6, views, base: { bytes: bytes.length, xref: startxrefOf(bytes)! }, planOf, pdfjs: PDFJS,
       remove: async ({ plans }) => {
         const a = await remover.remove(plans)
-        if (!a.ok) return a
+        if (!a.ok || ++asks > 1) return a
         const changed = change({ tail: a.tail, entries: JSON.parse(new TextDecoder().decode(a.entries)) })
         return { ok: true, tail: changed.tail, entries: changed.entries instanceof Uint8Array ? changed.entries : utf8(JSON.stringify(changed.entries)) }
       },
@@ -222,18 +230,22 @@ describe('the chained writer takes a bad answer as the remover\'s failure, never
     ['over for one page', () => ({ tail: null, entries: { v: 1, over: true } })],
   ]
   for (const [what, change] of cases) {
-    it(what, async () => {
+    it(`${what}: that candidate's pages refused, the chain as it was, the remover asked again`, async () => {
       const h = await corrupt(SIX, change)
       const got = await h.chainAddon(0, { pages: [1, 1] })
       expect(got?.tail).toBeNull()
-      expect(got?.manifest.page[1]).toEqual({ ok: false, refused: 'tail not carried: crashed' })
+      expect(got?.manifest.page[1]).toEqual({ ok: false, refused: 'tail not carried: refused' })
       expect(got?.manifest.stats).toMatchObject({ uncarried: 1 })
+      expect(h.state()).toMatchObject({ dead: null, next: null, r: 0, end: SIX.length })
+      // (the same range asked again, as a later candidate would be: the remover answers it, and it chains)
+      const again = await h.chainAddon(0, { pages: [1, 1] })
+      expect(again?.manifest.page[1]).toMatchObject({ ok: true, at: { R: 7 } })
       h.acceptAddon(0, { pages: [1, 1] })
-      expect(h.state()).toMatchObject({ dead: 'crashed', next: null, r: 0, end: SIX.length })
+      expect(h.state()).toMatchObject({ dead: null, r: 1 })
     })
   }
 
-  it('a wrong first fresh number after a tail, on the stream form too', async () => {
+  it('a wrong first fresh number after a tail, on the stream form too: refused for that candidate', async () => {
     const bytes = await sixStream()
     let asks = 0
     const { planOf, remover } = await sixPlans(bytes)
@@ -253,9 +265,38 @@ describe('the chained writer takes a bad answer as the remover\'s failure, never
     expect(p1?.tail).not.toBeNull()
     h.acceptAddon(0, { pages: [1, 1] })
     const p2 = await h.chainAddon(1, { pages: [2, 4] })
-    expect(p2?.manifest.page[4]).toEqual({ ok: false, refused: 'tail not carried: crashed' })
-    expect(h.state().dead).toBe('crashed')
+    expect(p2?.manifest.page[4]).toEqual({ ok: false, refused: 'tail not carried: refused' })
+    expect(h.state().dead).toBeNull()
+    expect((await h.chainAddon(1, { pages: [2, 4] }))?.manifest.page[4]).toMatchObject({ ok: true, at: { R: 8 } })
     expect(p1?.manifest.removal).toBe(REMOVAL)
+  })
+
+  it('a transport that answers no answer at all is the remover\'s death (crashed)', async () => {
+    const { planOf } = await sixPlans(SIX)
+    const h = chainedAddon({ N: 6, views, base: { bytes: SIX.length, xref: startxrefOf(SIX)! }, planOf, pdfjs: PDFJS, remove: async () => null as never })
+    expect((await h.chainAddon(0, { pages: [1, 1] }))?.manifest.page[1]).toEqual({ ok: false, refused: 'tail not carried: crashed' })
+    expect(h.state().dead).toBe('crashed')
+  })
+
+  it('a defect of the plans surfaces: a dirty page with no alignment facts is a TypeError, not a size refusal', async () => {
+    const { planOf, remover } = await sixPlans(SIX)
+    const broken = (p: number) => { const x = planOf(p); return x?.remove ? { ...x, remove: { ...x.remove, align: undefined as never } } : x }
+    const h = chainedAddon({ N: 6, views, base: { bytes: SIX.length, xref: startxrefOf(SIX)! }, planOf: broken, pdfjs: PDFJS, remove: ({ plans }) => remover.remove(plans) })
+    await expect(h.chainAddon(0, { pages: [1, 1] })).rejects.toThrow(TypeError)
+  })
+
+  it('acceptAddon commits the last call\'s state for its range: a later call that throws or answers null leaves none', async () => {
+    const { planOf, remover } = await sixPlans(SIX)
+    let over = false
+    const h = chainedAddon({
+      N: 6, views, base: { bytes: SIX.length, xref: startxrefOf(SIX)! }, planOf, pdfjs: PDFJS,
+      remove: async ({ plans }) => (over ? { ok: true, tail: null, entries: encodeEntries({ over: true })! } : remover.remove(plans)),
+    })
+    expect((await h.chainAddon(0, { pages: [1, 5] }))?.tail).not.toBeNull()
+    over = true
+    await expect(h.chainAddon(0, { pages: [1, 5] })).rejects.toThrow(/pass what a part holds/)
+    h.acceptAddon(0, { pages: [1, 5] })
+    expect(h.state()).toMatchObject({ r: 0, next: null, end: SIX.length })
   })
 })
 
@@ -453,6 +494,41 @@ describe('the cut with the chained hooks (tests 3 to 6): the synthetic paper', (
     expect(late.back.parts[0]!.addon!.manifest.page[1]).toEqual({ ok: false, refused: 'tail not carried: deadline' })
     // a memory-class error of the transport is the prepare side's own: it goes on
     await expect(cutChained(whole, SIX, planOf, { remove: async () => { throw new RangeError(ALLOCATION_FAILED) } })).rejects.toThrow(ALLOCATION_FAILED)
+  }, 60_000)
+
+  it('5: a candidate the remover refuses and the cut drops for its size costs only that candidate: the shorter one asks again (PR #369)', async () => {
+    const whole = sixWhole(SIX), { planOf, remover } = await sixPlans(SIX)
+    const run = async (why: 'refused' | 'memory') => {
+      const asks: string[] = []
+      const h = chainedAddon({
+        N: 6, views: whole.left.pages, base: { bytes: whole.base.bytes, xref: whole.base.xref! }, planOf, pdfjs: PDFJS,
+        remove: async ({ from, to, plans }) => { asks.push(`${from}-${to}`); return from === 4 && to === 6 ? { ok: false, why } : remover.remove(plans) },
+      })
+      // (the doubling's target [4, 6] answered `why`, then dropped as the writer drops a part past its size: the cut tries shorter)
+      const chainAddon: NonNullable<CutOptions['chainAddon']> = async (i, o) => {
+        const got = await h.chainAddon(i, o)
+        if (o.pages[0] === 4 && o.pages[1] === 6) throw new BundleRefusal('more than a part holds', { kind: 'part', path: '', data: { bound: 'content' } })
+        return got
+      }
+      const c = await cutBundle(whole, { leftPages: leftPagesOf(whole), chainAddon, acceptAddon: h.acceptAddon })
+      return { c, asks, h, back: await readBack(c) }
+    }
+    // an input's refusal: [4, 4] and [4, 5] are asked again and removed; the chain goes on
+    const refused = await run('refused')
+    expect(fitsOf(refused.c)).toEqual([[1, 1], [2, 3], [4, 5], [6, 6]])
+    expect(refused.asks).toEqual(['1-1', '4-6', '4-4', '4-5', '6-6'])
+    expect(refused.h.state().dead).toBeNull()
+    const page = mergeParts(refused.back.index, refused.back.parts).addon!.manifest.page
+    expect(page[4]).toMatchObject({ ok: true, at: { R: 8 } })
+    expect(page[5]).toMatchObject({ ok: true, at: { R: 9 } })
+    // a remover out of memory (or its clock) on the dropped candidate is gone for the rest of the paper: the size search asks
+    // its largest candidate first, so such a failure there is final
+    const memory = await run('memory')
+    expect(memory.asks).toEqual(['1-1', '4-6'])
+    expect(memory.h.state().dead).toBe('memory')
+    const lost = mergeParts(memory.back.index, memory.back.parts).addon!.manifest.page
+    for (const p of [4, 5, 6]) expect(lost[p], `page ${p}`).toEqual({ ok: false, refused: 'tail not carried: memory' })
+    expect(lost[1]).toMatchObject({ ok: true, at: { R: 7 } })
   }, 60_000)
 
   it('5: a page past the boxes\' share is refused alone, mid-part; the share is the paper\'s over every part (as one add-on of the whole)', async () => {

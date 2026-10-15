@@ -13,18 +13,25 @@
 // (BOXES_BYTES, BOXES_VALUES) is the paper's, spent in page order over the parts accepted and the candidate's own pages, so
 // that many parts hold no more kept-ink boxes than one add-on of the whole paper could (equal to paperAddon wherever the
 // share does not bind, and where it binds the same pages refused); a page with no kept ink takes no ask; a removed page is
-// at N + the removed pages before it + 1. The remover's failure (refused, memory, clock, crashed, deadline, or an answer the
-// checks refuse) is its death for the run: from then on every dirty page is `tail not carried: <why>` (its units drawn by
-// erase and restore), counted in the manifest's `uncarried`, and the parts before keep their tails. Imports the add-on's
-// assembly, the exchange's payloads, the tail's reading, the manifest's check and the cutter's vocabulary: no object layer.
+// at N + the removed pages before it + 1. A remover gone for the run (its answer memory, clock, crashed or deadline, a
+// transport that throws or answers nothing) is its death: from then on every dirty page is `tail not carried: <why>` (its
+// units drawn by erase and restore), counted in the manifest's `uncarried`, and the parts before keep their tails. A refusal
+// of one ask (`refused`, or an answer the checks refuse) costs that candidate alone: its dirty pages `tail not carried:
+// refused`, the chain as it was, and the next candidate (a shorter range the cut tries) is asked again. The cut's size search
+// asks a part's largest candidate first (its target range), so a death there (a clock or memory spent on the most pages) is
+// final for the paper: the host sizes the per-ask clock for that ask. Imports the add-on's assembly, the exchange's payloads,
+// the tail's reading, the manifest's check and the cutter's vocabulary: no object layer.
 import { BundleRefusal } from '../layer-proto/bundle.mjs'
 import { TAIL_NOT_CARRIED } from '../layer-proto/cut.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { rangeEntries, withRemoved } from './addon.mjs'
 import { checkAddonManifest, REMOVAL } from './addon-manifest.mjs'
-import { encodeAsk, readEntries, REMOVER_STATS, REMOVER_WHYS } from './chain-wire.mjs'
+import { encodeAsk, readEntries, REMOVER_STATS } from './chain-wire.mjs'
 import { TAIL_CAP, tailLinks } from './tail.mjs'
 
+/** the remover's failures that end it for the run (chain-wire.mjs REMOVER_WHYS less `refused`); a refusal or a bad answer is
+ *  the ask's alone, and a word none of the service's is `crashed` */
+const GONE = Object.freeze(['memory', 'clock', 'crashed', 'deadline'])
 /** the reason of a page whose plan alone passes what an ask holds */
 export const PAST_ASK = 'its removal is more than the remover is asked at once'
 /** the cutter's size refusal: a shorter part may fit */
@@ -40,7 +47,7 @@ const tooBig = (a, b, why) => new BundleRefusal(`pages ${a} to ${b}: ${why}`, { 
  *
  * Returns { chainAddon, acceptAddon, state }: `chainAddon(index, { pages: [a, b] })` the add-on { manifest, tail } of the
  * range (tail null where no page is removed), or null; no effect on the chain until `acceptAddon(index, { pages })` commits
- * the range's; `state()` the chain committed (and the remover's death, null while it lives). Throws BundleRefusal (kind
+ * the range's last call's state; `state()` the chain committed (and the remover's death, null while it lives). Throws BundleRefusal (kind
  * `part`, data.bound `tail`) where the range's tail or entries pass what a part holds and it has more than one page with kept
  * ink, for the cutter to cut the part shorter; a memory-class error goes on as itself; nothing else is thrown
  */
@@ -67,48 +74,55 @@ export function chainedAddon({ N, views, base, planOf, remove, pdfjs }) {
     }
   }
 
-  /** the remover's answer read and checked against the chain and the pages asked: { over } | { tail, links, entries } | { why } */
+  /**
+   * The remover's answer read and checked against the chain and the pages asked: { over } | { tail, links, read } | { why }
+   * (`gone` where the remover is gone for the run: a failure of GONE's, a word none of the service's, or no answer at all; an
+   * answer the checks refuse is this ask's `refused`)
+   */
   function answerOf(answer, asked) {
-    if (!answer || typeof answer !== 'object') return { why: 'crashed' }
-    if (answer.ok !== true) return { why: REMOVER_WHYS.includes(answer.why) ? answer.why : 'crashed' }
+    const bad = { why: 'refused' }
+    if (!answer || typeof answer !== 'object') return { why: 'crashed', gone: true }
+    if (answer.ok !== true) return answer.why === 'refused' ? bad : { why: GONE.includes(answer.why) ? answer.why : 'crashed', gone: true }
     const { tail, entries } = answer
-    if (tail !== null && (!(tail instanceof Uint8Array) || tail.length < 1 || tail.length > TAIL_CAP)) return { why: 'crashed' }
+    if (tail !== null && (!(tail instanceof Uint8Array) || tail.length < 1 || tail.length > TAIL_CAP)) return bad
     let read
     try { read = readEntries(entries) } catch (e) {
       if (isMemoryError(e)) throw e
-      return { why: 'crashed' }
+      return bad
     }
-    if (read.over) return asked.length > 1 && tail === null ? { over: true } : { why: 'crashed' }
+    if (read.over) return asked.length > 1 && tail === null ? { over: true } : bad
     // the entries: exactly the pages asked; a removed page's units the plan's, its removed page the next of the document's
     const keys = Object.keys(read.page)
-    if (keys.length !== asked.length || asked.some(p => !Object.hasOwn(read.page, p))) return { why: 'crashed' }
+    if (keys.length !== asked.length || asked.some(p => !Object.hasOwn(read.page, p))) return bad
     let removed = 0
     for (const p of asked) {
       const e = read.page[p]
       if (!e.ok) continue
-      if (e.at.R !== N + committed.r + removed + 1) return { why: 'crashed' }
+      if (e.at.R !== N + committed.r + removed + 1) return bad
       removed++
       const ids = planOf(p).remove.units.map(u => String(u[0]))
       const got = Object.keys(e.units)
-      if (got.length !== new Set(ids).size || ids.some(id => !Object.hasOwn(e.units, id))) return { why: 'crashed' }
+      if (got.length !== new Set(ids).size || ids.some(id => !Object.hasOwn(e.units, id))) return bad
     }
-    if (read.kids.length !== removed || (removed === 0) !== (tail === null)) return { why: 'crashed' }
-    if (tail === null) return read.empty === committed.empty ? { tail: null, read } : { why: 'crashed' }
+    if (read.kids.length !== removed || (removed === 0) !== (tail === null)) return bad
+    if (tail === null) return read.empty === committed.empty ? { tail: null, read } : bad
     // the tail: its section continues the chain, as the part's reader checks it (readPart, chain check 5)
     const links = tailLinks(tail)
-    if (links === null || links.startxref !== committed.end + links.xrefAt || links.prev !== committed.xref) return { why: 'crashed' }
-    if ((committed.root !== null && links.root !== committed.root) || (committed.next !== null && links.first !== committed.next)) return { why: 'crashed' }
+    if (links === null || links.startxref !== committed.end + links.xrefAt || links.prev !== committed.xref) return bad
+    if ((committed.root !== null && links.root !== committed.root) || (committed.next !== null && links.first !== committed.next)) return bad
     // (its removed pages and the empty stream among its fresh numbers: the empty one written once, first, in the first tail)
     const fresh = n => Number.isInteger(n) && n >= links.first && n <= links.last
-    if (read.kids.some((n, i) => !fresh(n) || (i > 0 && n <= read.kids[i - 1]))) return { why: 'crashed' }
-    if (committed.empty === null ? read.empty !== links.first : read.empty !== committed.empty) return { why: 'crashed' }
-    if (read.kids.includes(read.empty)) return { why: 'crashed' }
+    if (read.kids.some((n, i) => !fresh(n) || (i > 0 && n <= read.kids[i - 1]))) return bad
+    if (committed.empty === null ? read.empty !== links.first : read.empty !== committed.empty) return bad
+    if (read.kids.includes(read.empty)) return bad
     return { tail, links, read }
   }
 
   async function chainAddon(_index, { pages }) {
     const [a, b] = pages
     const key = `${a}-${b}`
+    // (acceptAddon commits the range's last call: a call that throws or answers null leaves no state of an earlier one)
+    pending.delete(key)
     const { page, asked, spent } = rangeEntries(planOf, a, b, committed.boxes)
     const stats = {}
     for (const k of REMOVER_STATS) stats[k] = 0
@@ -134,8 +148,8 @@ export function chainedAddon({ N, views, base, planOf, remove, pdfjs }) {
         plans: asked.map(p => ({ p, ...planOf(p).remove })),
       })
     } catch (e) {
-      // (a text past what a string holds is an ask past its cap, as any other)
-      if (isMemoryError(e)) throw e
+      // (a text past what a string holds is an ask past its cap, as any other; any other error is a defect of the plans)
+      if (!(e instanceof RangeError && /Invalid string length/.test(e.message))) throw e
     }
     if (ask === null) {
       if (asked.length > 1) throw tooBig(a, b, 'the removal of its pages is more than the remover is asked at once')
@@ -150,8 +164,9 @@ export function chainedAddon({ N, views, base, planOf, remove, pdfjs }) {
     const got = answerOf(answer, asked)
     if (got.over) throw tooBig(a, b, 'its removed pages pass what a part holds')
     if (got.why !== undefined) {
-      dead = got.why
-      return uncarried(dead)
+      // (gone: dead for the run, whatever the cut tries next; refused: this candidate's pages alone, the chain as it was)
+      if (got.gone) dead = got.why
+      return uncarried(got.why)
     }
     withRemoved(page, asked, planOf, got.read.page)
     Object.assign(stats, got.read.stats)

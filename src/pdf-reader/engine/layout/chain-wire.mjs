@@ -37,6 +37,8 @@ export const REMOVER_STATS = Object.freeze(['removed', 'rules', 'cut', 'hidden',
 /** an object number at most (ISO 32000-1, annex C), a document's bytes, a count and a character code */
 const OBJECT_MAX = 8_388_607, END_MAX = 2 ** 31, COUNT_MAX = 2 ** 31, CODE_MAX = 2 ** 32 - 1
 const PAGE_KEY = /^[1-9]\d{0,4}$/, UNIT_KEY = /^(?:0|[1-9]\d{0,8})$/
+/** a unit's id at most: the largest an answer's entries name (UNIT_KEY, the manifest's) */
+const UNIT_ID_MAX = 999_999_999
 
 const kindOf = v => (v === null ? 'null' : Array.isArray(v) ? 'an array' : typeof v)
 const refuse = (path, why) => new LayoutRefusal(path, why)
@@ -122,7 +124,7 @@ export function readAsk(bytes) {
     for (let j = 0; j < units.length; j++) {
       const u = units[j], up = `${path}.units[${j}]`
       if (!Array.isArray(u) || u.length !== 3) throw refuse(up, `not [id, glyphs, paths] (${kindOf(u)})`)
-      if (!isInteger(u[0], 0, COUNT_MAX)) throw refuse(`${up}[0]`, 'not a unit\'s id')
+      if (!isInteger(u[0], 0, UNIT_ID_MAX)) throw refuse(`${up}[0]`, 'not a unit\'s id an answer may name')
       integers(u[1], 0, COUNT_MAX, `${up}[1]`, true)
       integers(u[2], 0, COUNT_MAX, `${up}[2]`)
     }

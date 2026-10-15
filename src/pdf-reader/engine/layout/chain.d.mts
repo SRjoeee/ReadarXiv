@@ -26,6 +26,7 @@ export declare function chainedAddon(o: {
   remove(ask: { from: number; to: number; plans: Uint8Array }): Promise<RemoverAnswer>
 }): {
   chainAddon(index: number, o: { pages: [number, number] }): Promise<{ manifest: RemovalManifest; tail: Uint8Array | null } | null>
+  /** commits the state of the range's last chainAddon call (none where that call threw or answered null) */
   acceptAddon(index: number, o: { pages: [number, number] }): void
   state(): AddonChainState
 }
