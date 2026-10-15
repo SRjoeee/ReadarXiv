@@ -7,7 +7,8 @@ import { trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 // (S2); a unit's lines on a page are dropped and grown by that page's growth step alone (S4); a unit's fill leading is its
 // fit's (C1); and a page is painted in one order, its painters' first pages ascending, whatever order their passes ran in.
 // Over papers of their own making: a PDF.js document's shape (its text layer, its views; nothing drawn), v0's geometry and,
-// where the hybrid reads it, a layout file
+// where the hybrid reads it, a layout file. Each paper is laid again by a run that lets go of what it has laid, as the
+// reader's does (`free`, the 1b design §3, PR 1b-A): it draws every page alike, and holds nothing of a page or a unit after (M2)
 
 /** a canvas context that draws nothing and reads a white page */
 const ctxStub = (canvas?: { width: number; height: number }) => new Proxy({} as Record<string | symbol, unknown>, {
@@ -76,19 +77,21 @@ function paper(specs: Spec[], pages: number) {
 type Run = Awaited<ReturnType<typeof import('@/pdf-reader/engine/layer-proto/run.mjs').openProto>>
 /** v0 over the paper, every unit at once (with the hybrid where the paper has a layout file); `order`, the ids' order a
  *  page's units are laid in */
-async function open(P: ReturnType<typeof paper>, { order = null as number[] | null } = {}) {
+async function open(P: ReturnType<typeof paper>, { order = null as number[] | null, free = false } = {}) {
   const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
   const units: unknown[] = []
   const pieces = new Map<number, unknown[]>()
   for (const [id, r] of P.rows) { units[id] = r; pieces.set(id, trPiecesOf(r.pieces, (p: unknown) => (p as { k: number }).k) ?? []) }
   return openProto({
-    doc: P.doc, target: 'zh', pages: P.pages, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, order,
+    doc: P.doc, target: 'zh', pages: P.pages, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, order, free,
     tex: P.index ? { index: P.index, pieces, use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' } : null,
   } as never) as Promise<Run>
 }
 const placedOf = (run: Run, id: number) => run.placed.find(p => p.id === id)!
+/** every paper of this file, its pages and the lay orders it is laid in (M2) */
+const PAPERS: [string, Spec[], number, (number[] | null)[]][] = []
 /** the units painted on a page, in their order (its SVG's groups) */
-const paintedOn = (run: Run, page: number) => [...run.rows[page - 1]!.svg.innerHTML.matchAll(/data-u="(\d+)"/g)].map(m => Number(m[1]))
+const paintedOn = (run: Run, page: number) => [...run.svgOf(page).innerHTML.matchAll(/data-u="(\d+)"/g)].map(m => Number(m[1]))
 
 describe('S1: a crop is cut from any page of the paper that was read', () => {
   // a paragraph from page 1 on to page 2, its formula on page 1: laid at page 2, as its last page is drawn, and painted then
@@ -99,6 +102,7 @@ describe('S1: a crop is cut from any page of the paper that was read', () => {
       ph: [[1, 0, 1, 60, 40, 70, 47, 38]], tr: [text(CJK(4, 0x4e10)), { t: 'ph', src: '$x^2$', k: 1 }, text(CJK(6, 0x4e30))],
     },
   ]
+  PAPERS.push(['S1', specs, 2, [null]])
   const cropsFrom = (run: Run, page: number) => run.rows.flatMap(r => r.ops.filter(o => o.op === 'crop' && (o as { page: number }).page === page))
   it('draws it though the host let the page go (its row no longer `base`) before the unit is painted', async () => {
     const whole = await open(paper(specs, 2))
@@ -123,6 +127,7 @@ describe('S2: a unit learns its own citations', () => {
     { id: 0, kind: 'para', src: 'Alpha \\cite{k} beta', lines: [line(1, 200, [20, 'Alpha'], [55, '[3]'], [80, 'beta'])], from: 'geometry', tr: [text(CJK(3)), { t: 'ph', src: '\\cite{k}', k: 1 }, text(CJK(2, 0x4e20))] },
     { id: 1, kind: 'para', src: 'Gamma \\cite{k} delta', lines: [line(1, 150, [20, 'Gamma'], [60, 'delta'])], from: 'geometry', tr: [text(CJK(3, 0x4e40)), { t: 'ph', src: '\\cite{k}', k: 1 }, text(CJK(2, 0x4e60))] },
   ]
+  PAPERS.push(['S2', specs, 1, [[0, 1], [1, 0]]])
   const resolutionOf = (run: Run, id: number) => { const r = placedOf(run, id).prep?.get(1) as { mode: string; text: string } | undefined; return r && { mode: r.mode, text: r.text } }
   it('resolves each placeholder as it is whatever the units laid before it', async () => {
     const first = await open(paper(specs, 1), { order: [0, 1] })
@@ -150,6 +155,7 @@ describe("S4: a unit's lines on a page are dropped and grown by that page alone"
     { id: 1, kind: 'para', src: 'Other words', lines: [line(1, 120, [20, 'Other words'])], rects: [rectOf(A)], from: 'geometry', tr: [text(CJK(4, 0x4e40))] },
     ...(claimedOn2 ? [{ id: 2, kind: 'para', src: 'More words', lines: [line(2, 120, [20, 'More words'])], rects: [rectOf(A2)], from: 'geometry', tr: [text(CJK(4, 0x4e60))] } as Spec] : []),
   ]
+  PAPERS.push(['S4, a page its own', specsOf(false), 2, [null]], ['S4, every page another\'s', specsOf(true), 2, [null]])
   const pagesOf = (run: Run) => placedOf(run, 0).rects.map(r => r[0])
   it("drops a page's lines another unit's cover where another page keeps one, and keeps all where every line is another's", async () => {
     const free = await open(paper(specsOf(false), 2))
@@ -170,6 +176,7 @@ describe("S4: a unit's lines on a page are dropped and grown by that page alone"
       { id: 0, kind: 'para', src: 'Alpha beta', lines: [line(1, 200, [20, 'Alpha beta'])], rects: [[1, 50, 200 - 2.15, 70, 200 + 6.83]], from: 'geometry', tr: [text(CJK(4))] },
       { id: 1, kind: 'para', src: 'Other', lines: [line(1, 200, [75, 'Other'])], from: 'geometry', tr: [text(CJK(2, 0x4e40))] },
     ]
+    PAPERS.push(['S4, grown', specs, 1, [null]])
     const run = await open(paper(specs, 1))
     await run.until(1)
     const [r] = placedOf(run, 0).rects
@@ -185,6 +192,7 @@ describe("C1: a unit's fill leading is its fit's", () => {
     { id: 1, kind: 'para', src: 'Epsilon zeta eta theta', lines: [line(2, 40, [20, 'Epsilon zeta']), line(3, 270, [20, 'eta theta'])], from: 'file', tr: [text(CJK(12, 0x4e40))] },
     { id: 2, kind: 'para', src: 'Iota kappa', lines: [line(1, 200, [20, 'Iota kappa'])], from: 'file', tr: [text(CJK(5, 0x4e80))] },
   ]
+  PAPERS.push(['C1, fill', specs, 3, [null]])
   it('is set as the unit is laid, before the pass of its page has run', async () => {
     const run = await open(paper(specs, 3))
     await run.until(2, () => run.drawnTo < 2)
@@ -209,6 +217,7 @@ describe("C1: a page is painted in the order its painters' first pages' passes r
     { id: 3, kind: 'para', src: 'Delta epsilon zeta', lines: [line(2, 200, [20, 'Delta epsilon']), line(3, 250, [20, 'zeta'])], from: 'file', tr: [text(CJK(6, 0x4e60))] },
     { id: 4, kind: 'para', src: 'Xi omicron', lines: [line(3, 100, [20, 'Xi omicron'])], from: 'file', tr: [text(CJK(5, 0x4e80))] },
   ]
+  PAPERS.push(['C1, paint order', specs, 3, [[0, 1, 2, 3, 4], [0, 2, 3, 1, 4]]])
   it('by the rank of the last unit laid on each first page', async () => {
     const one = await open(paper(specs, 3), { order: [0, 1, 2, 3, 4] })
     await one.until(3)
@@ -232,6 +241,7 @@ describe("C1: a page is painted in the order its painters' first pages' passes r
       { id: 5, kind: 'para', src: 'Pi rho', lines: [line(4, 100, [20, 'Pi rho'])], from: 'file', tr: [text(CJK(3, 0x4ea0))] },
       { id: 6, kind: 'para', src: 'Sigma tau', lines: [line(5, 100, [20, 'Sigma tau'])], from: 'file', tr: [text(CJK(4, 0x4ec0))] },
     ]
+    PAPERS.push(['C1, pages skipped', five, 5, [null]])
     const run = await open(paper(five, 5))
     await run.until(3, () => run.drawnTo < 3)
     expect(placedOf(run, 1).layout).toBeUndefined()
@@ -241,5 +251,26 @@ describe("C1: a page is painted in the order its painters' first pages' passes r
     expect(run.rows[1]!.released).toBe(true)
     await run.until(5)
     expect(paintedOn(run, 3)).toEqual([3, 1, 4])
+  })
+})
+
+describe('M2: a run that lets go of what it has laid draws every paper of this file alike, and holds nothing of it after', () => {
+  /** what a run drew: each page's operations and SVG, the order its units were laid in, their records, why each was left */
+  const drawing = (run: Run) => ({
+    pages: run.rows.map((r, i) => ({ ops: JSON.stringify(r.ops), svg: run.svgOf(i + 1).innerHTML })),
+    order: run.order.slice(), stats: run.stats.map(({ ms: _, ...r }) => r), skipped: run.skipped.map(x => `${x.id}:${x.why}`).sort(),
+  })
+  it('every paper, every lay order: the same pages, records and units left; no page state and no unit state held', async () => {
+    // (the papers registered as their describes are collected: S4's grown paper as its test runs, so after the file's other tests)
+    expect(PAPERS.length).toBeGreaterThanOrEqual(7)
+    for (const [name, specs, pages, orders] of PAPERS) for (const order of orders) {
+      const kept = await open(paper(specs, pages), { order })
+      await kept.until(pages)
+      const run = await open(paper(specs, pages), { order, free: true })
+      await run.until(pages)
+      expect(drawing(run), `${name} ${order}`).toEqual(drawing(kept))
+      for (let q = 1; q <= pages; q++) expect(run.held(q), `${name} ${order} page ${q}`).toEqual({ state: [], units: [], reads: 0 })
+      for (const u of run.placed) for (const k of ['prep', 'tokens', 'layout', 'blocks', 'local', 'lead']) expect((u as unknown as Record<string, unknown>)[k], `${name} unit ${u.id} ${k}`).toBeUndefined()
+    }
   })
 })

@@ -146,7 +146,7 @@ describe('slices or whole files give one drawing', () => {
   it('lays the same lines and widths and sets the same SVG, and measures no character before its slice has loaded', async () => {
     const whole = await open(PARAS)
     await whole.until(1)
-    const wholeStats = JSON.stringify(whole.stats.map(({ ms, ...r }) => r)), wholeSvg = whole.rows[0]!.svg.innerHTML
+    const wholeStats = JSON.stringify(whole.stats.map(({ ms, ...r }) => r)), wholeSvg = whole.svgOf(1).innerHTML
     const wholeFaces = faces.slice()
     expect(whole.stats).toHaveLength(3)
     expect(early).toEqual([])
@@ -160,7 +160,7 @@ describe('slices or whole files give one drawing', () => {
     await sliced.until(1)
     expect(early).toEqual([])
     expect(JSON.stringify(sliced.stats.map(({ ms, ...r }) => r))).toBe(wholeStats)
-    expect(sliced.rows[0]!.svg.innerHTML).toBe(wholeSvg)
+    expect(sliced.svgOf(1).innerHTML).toBe(wholeSvg)
     expect(sliced.skipped).toEqual([])
     // each slice one FontFace over its own code points, added once; the Chinese body in several, the others a few
     const urls = faces.map(f => f.url)
@@ -186,7 +186,7 @@ describe('a character in no served slice', () => {
     await run.until(1)
     expect(run.skipped).toEqual([{ id: 1, kind: 'para', why: 'served', missing: [0x8bed], chars: 6, pages: [1] }])
     expect(run.stats.map(r => r.id).sort()).toEqual([0, 2])
-    const svg = run.rows[0]!.svg.innerHTML
+    const svg = run.svgOf(1).innerHTML
     expect(svg).toContain('data-u="0"')
     expect(svg).toContain('data-u="2"')
     expect(svg).not.toContain('data-u="1"')
@@ -222,7 +222,7 @@ describe('an astral math letter in a Chinese unit', () => {
     await run.until(1)
     expect(run.skipped).toEqual([])
     expect(run.stats.map(r => r.id).sort()).toEqual([0, 1])
-    expect(run.rows[0]!.svg.innerHTML).toContain('\u{1D44E}\u{1D44F}')
+    expect(run.svgOf(1).innerHTML).toContain('\u{1D44E}\u{1D44F}')
     // the letters were asked of a run set in a Latin face whose family list reaches the math face, which was fetched
     const asked = fontLoads.filter(l => l.text.includes('\u{1D44E}'))
     expect(asked.length).toBeGreaterThan(0)
@@ -282,8 +282,8 @@ describe('a slice that does not load', () => {
     const asked = fontLoads.filter(l => l.text.includes('\u6c49'))
     expect(asked).toHaveLength(2)
     expect(new Set(asked.map(l => l.font)).size).toBe(1)
-    expect(run.rows[0]!.svg.innerHTML).not.toContain('data-u="0"')
-    expect(run.rows[0]!.svg.innerHTML).not.toContain('data-u="2"')
+    expect(run.svgOf(1).innerHTML).not.toContain('data-u="0"')
+    expect(run.svgOf(1).innerHTML).not.toContain('data-u="2"')
   })
 
   it('keeps a failed FontFace for the run it failed in, and lets it go before the next open, which declares it again', async () => {

@@ -539,8 +539,11 @@ function showInspect() {
 /** what the v0 view did with a unit: its record (drawn, by which geometry, its fit and D's fill), or why it was left */
 function v0Of(id) {
   const run = open.protoRun.run, r = run.stats.find(x => x.id === id)
-  if (!r) { const sk = run.skipped.find(x => x.id === id); return sk ? t('v0Left', sk.why) : t('v0NotLaid') }
   const by = (run.sources?.tex ?? []).includes(id) ? 'tex' : 'v0'
+  // (drawn, its record not made: the error, never a record's numbers)
+  const failed = run.recordErrors?.find(x => x.id === id)
+  if (failed) return t('v0Drawn', by, `no record (${failed.error})`)
+  if (!r) { const sk = run.skipped.find(x => x.id === id); return sk ? t('v0Left', sk.why) : t('v0NotLaid') }
   return t('v0Drawn', by, `${r.knob}, size ${fmt(r.fitScale, 3)} (${fmt(r.sizeRatio, 3)} of the original's), lead ${fmt(r.lead, 2)}${r.track ? `, track ${fmt(r.track, 3)}` : ''}${r.fill ? `; D's fill: page target ${fmt(r.fill.target, 3)}, its own ${fmt(r.fill.lead, 3)}` : ''}`)
 }
 let trTextOf = pieces => pieces.map(p => (p[0] === 0 ? p[1] : ' ')).join('').replace(/\s+/g, ' ').trim()

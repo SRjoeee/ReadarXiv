@@ -8,7 +8,9 @@
 // document with arXiv's pages, as a reader opens it; one slice a face, its whole file over its coverage). `door` is a
 // reader's: the bundle the driver made of the same parts, read by readBundle, the document composed from arXiv's bytes and
 // the bundle's tail, openLayer over it, the rows the driver made of the record (rows.mjs rowOf) taken in parts, a
-// macrotask apart, beside the pages asked for. Each page's answer: its SVG's markup, and its pixels' digests (SHA-256,
+// macrotask apart, beside the pages asked for. The gate's run keeps every state it lays with (openProto's `free` off), the
+// door's lets go of it as the reader's does (the 1b design §3): so the two equal also proves that letting go moves no drawing.
+// Each page's answer: its SVG's markup, and its pixels' digests (SHA-256,
 // and one FNV-1a hash a pixel row, to say where two differ): the gate's run's original and copy planes (v0's own canvases
 // at 2.5 device pixels a unit), the page the door's document draws by PDF.js at 2.5, and copyOf(page, the gate's run's
 // original, 2.5): the page as PDF.js drew it at 2.5, the same pixels for both copies (PDF.js's first drawing of a page in
@@ -102,7 +104,7 @@ window.door = {
       // door's copy to be drawn over: PDF.js's first drawing of a page in a document may differ from its later ones,
       // 2608.04322's page 3 by a few pixel rows from run to run)
       const recs = JSON.stringify(run.stats.filter(r => r.pages.includes(p)).map(({ ms: _, ...r }) => r))
-      out.push({ p, svg: row.svg.outerHTML, w: row.w, h: row.h, recs: await digest(new TextEncoder().encode(recs)), o: await pixelsOf(row.left), c: await pixelsOf(row.right), ...(png ? { png: await pngOf(row.left) } : {}) })
+      out.push({ p, svg: run.svgOf(p).outerHTML, w: row.w, h: row.h, recs: await digest(new TextEncoder().encode(recs)), o: await pixelsOf(row.left), c: await pixelsOf(row.right), ...(png ? { png: await pngOf(row.left) } : {}) })
     }
     const summary = { N: run.N, laid: run.stats.length, skipped: run.skipped.length }
     run.dispose()

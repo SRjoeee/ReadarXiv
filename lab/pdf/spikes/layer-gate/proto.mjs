@@ -67,6 +67,14 @@ function keptOf(layout, p, relabelled = new Set()) {
   for (const l of layout.labels) if (l[2] === p && !relabelled.has(l[0])) out.push([l[3], l[7], l[5], l[6]])
   return out
 }
+/** a placed unit as it was laid: one the run let go of (`free`) is kept so on the gate's shelf (run.mjs full); an engine
+ *  before the shelf keeps every unit whole */
+const laidOf = q => (q && S.run.full ? S.run.full(q) : q)
+/** the run's placed units by id, each as it was laid */
+function laidById(run) {
+  const m = new Map(run.placed.map(p => [p.id, p]))
+  return { get: id => laidOf(m.get(id)), set: (id, q) => m.set(id, q) }
+}
 /** the units drawn whose float label v0 draws in the target's name */
 const relabelledOf = recs => new Set(recs.filter(r => S.byId.get(r.id)?.prep?.label?.drawn).map(r => r.id))
 
@@ -237,7 +245,7 @@ async function truthOf(p, page) {
   // (a babel name's glyphs, D1a: removed, and replaced where the run drew the name in the target's word)
   const namesDrawn = new Set((run.names ?? []).filter(n => n.page === p && n.drawn).map(n => n.occurrence))
   for (const nm of plan.names ?? []) for (let q = 0; q + 1 < nm.glyphs.length; q += 2) { const g = at.get(`${nm.glyphs[q]}.${nm.glyphs[q + 1]}`); removed.add(g); if (namesDrawn.has(nm.occurrence)) done.add(g) }
-  for (const q of run.placed) {
+  for (const q of run.placed.map(laidOf)) {
     if (!q.tex || !q.prep || q.refused || !drawnHere.has(q.id) || !q.pages.includes(p)) continue
     const rm = R.unitRemoval({ id: q.id, page: p, prep: q.prep, tex: { lu: q.tex.lu, kOf: q.tex.kOf }, own, charMap, unmapped, ink, claimed, fileDrawn })
     for (const g of rm.glyphs) { done.add(g); if (!removed.has(g)) extraG.push(g) }
@@ -525,8 +533,10 @@ window.gate = {
     }
     // the layout rule set v0 is given (--rules, else the engine's built-in): read by the engine's own reader, as a host reads it
     const ruleSet = rules ? (await (await import('/engine/rules/layout.mjs')).readRules(await bytes(rules))).set : null
-    // (--perf: no copy of v0's own, as a reader opens it: the page's drawing is drawCopy's, at a view's resolution)
-    const opts = { doc, geometry, units: parts ? [] : unitsFile.units, ...(parts ? { expect: parts.flat().map(([id]) => id), groups: tableGroups } : {}), target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, ...(ruleSet ? { rules: ruleSet } : {}), order: order ?? null, ...(faces ? { faces } : {}), ...(faceSources ? { faceSources } : {}), ...(texIn ? { tex: texIn } : {}), labels: { captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`, ...(perf ? { copy: false } : {}) }
+    // (--perf: no copy of v0's own, as a reader opens it: the page's drawing is drawCopy's, at a view's resolution. And the run lets
+    // go of what it has laid as the reader's does, the 1b design §3, so that a page or a unit let go too early moves a measure:
+    // what it lets go is kept for the measures on the gate's shelf, `records`, read through laidOf)
+    const opts = { doc, geometry, units: parts ? [] : unitsFile.units, ...(parts ? { expect: parts.flat().map(([id]) => id), groups: tableGroups } : {}), target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, ...(ruleSet ? { rules: ruleSet } : {}), order: order ?? null, ...(faces ? { faces } : {}), ...(faceSources ? { faceSources } : {}), ...(texIn ? { tex: texIn } : {}), labels: { captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`, ...(perf ? { copy: false } : {}), free: true, records: true }
     let rm = null
     if (one) {
       rm = { mode: removal, manifest: addon.manifest, plan: { pages: {} }, rdoc: doc, cdoc: null }
@@ -546,7 +556,7 @@ window.gate = {
     // version, whose segments are a glyph's font box, not its ink, and which holds no `held` lines; nor any layout file of
     // a maker before FILE_LAYOUT_MIN, the fixture's own included where the run is given those, --layouts=fixed or v0
     // alone, or a folder of them: then the measures against TeX's file are not taken)
-    S = { V, run, doc, geometry, layout, file: Number(texFile?.layout) >= FILE_LAYOUT_MIN ? fileIndexOf(texFile) : null, trPieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), ref, name, target, texPieces: texIn?.pieces ?? null, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: new Map(run.placed.map(p => [p.id, p])), checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: inputs }, perf, texIndex }
+    S = { V, run, doc, geometry, layout, file: Number(texFile?.layout) >= FILE_LAYOUT_MIN ? fileIndexOf(texFile) : null, trPieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), ref, name, target, texPieces: texIn?.pieces ?? null, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: laidById(run), checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: inputs }, perf, texIndex }
     S.consistency = consistencyOf(unitsFile, S, names)
     if (parts) {
       // one part a macrotask from the open on, beside the driver's pages (until), then end()
@@ -670,10 +680,12 @@ window.gate = {
     }
     if (!pixel) return out
     const row = run.rows[p - 1]
+    // (the page's SVG made of its kept markup, run.mjs svgOf; an engine before it kept the element on its row)
+    const svg = run.svgOf ? run.svgOf(p) : row.svg
     const W = row.left.width, H = row.left.height
     const O = row.left.getContext('2d').getImageData(0, 0, W, H).data, C = row.right.getContext('2d').getImageData(0, 0, W, H).data
     const box = document.getElementById('text')
-    box.replaceChildren(row.svg)
+    box.replaceChildren(svg)
     box.style.width = `${row.w}px`
     box.style.height = `${row.h}px`
     // the place the prototype's own page gave the page's text, to the fraction of a pixel (--proto-place: what its floor
@@ -682,17 +694,17 @@ window.gate = {
     box.style.left = at ? `${at[0] - Math.floor(at[0])}px` : '0px'
     box.style.top = at ? `${at[1] - Math.floor(at[1])}px` : '0px'
     await document.fonts.ready
-    const drawnText = (row.svg.textContent ?? '').replace(/\s+/g, '')
+    const drawnText = (svg.textContent ?? '').replace(/\s+/g, '')
     if (S.dump) {
       // what the live prototype's page is compared by (--dump): the copy's pixels, the SVG's markup and the drawing's
       // operations, digested
       let h = 0x811c9dc5
       for (let i = 0; i < C.length; i++) { h ^= C[i]; h = Math.imul(h, 0x01000193) >>> 0 }
       const digest = async text => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map(b => b.toString(16).padStart(2, '0')).join('')
-      const svg = await digest(row.svg.innerHTML), ops = await digest(JSON.stringify(row.ops))
+      const svgDigest = await digest(svg.innerHTML), ops = await digest(JSON.stringify(row.ops))
       // (and what the checker found on the page, with its reasons)
       const why = list => list.filter(on).map(e => ({ unit: e.unit, k: e.k, mode: e.mode, why: e.why }))
-      S.dump.push({ p, W, H, copy: h.toString(16), svg, ops, check: { missing: why(ck.b.list.missing), duplicated: why(ck.b.list.duplicated), brackets: why(ck.b.list.brackets) } })
+      S.dump.push({ p, W, H, copy: h.toString(16), svg: svgDigest, ops, check: { missing: why(ck.b.list.missing), duplicated: why(ck.b.list.duplicated), brackets: why(ck.b.list.brackets) } })
     }
     // the names drawn, as the pixel measures read them: the original's line, the line drawn, the box erased (D1a); one set
     // as a unit's line start (`unit`) is that unit's line, its characters and band alone its own
@@ -857,7 +869,7 @@ window.gate = {
   dump() {
     const { run } = S
     // (each laid unit's resolutions, for a look at what a source made of it)
-    const units = run.placed.filter(p => p.prep).map(p => ({ id: p.id, source: p.tex ? 'tex' : 'v0', rects: p.rects, label: p.prep.label?.text, labelChars: p.prep.label?.chars.map(c => [c.ch, Math.round(c.x0 * 100) / 100, Math.round(c.x1 * 100) / 100, Math.round(c.yb * 100) / 100, Math.round(c.size * 100) / 100]), keep: p.prep.keep, res: [...p.prep.values()].map(r => ({ k: r.k, mode: r.mode, src: r.src?.slice(0, 60), text: r.text, crop: r.crop, baseline: r.baseline, gap: r.gap?.text, chars: r.gap?.chars.filter(c => !c.sep && !c.space).map(c => [c.ch, Math.round(c.x0 * 100) / 100, Math.round(c.yb * 100) / 100, Math.round(c.size * 100) / 100]) })) }))
+    const units = run.placed.map(laidOf).filter(p => p.prep).map(p => ({ id: p.id, source: p.tex ? 'tex' : 'v0', rects: p.rects, label: p.prep.label?.text, labelChars: p.prep.label?.chars.map(c => [c.ch, Math.round(c.x0 * 100) / 100, Math.round(c.x1 * 100) / 100, Math.round(c.yb * 100) / 100, Math.round(c.size * 100) / 100]), keep: p.prep.keep, res: [...p.prep.values()].map(r => ({ k: r.k, mode: r.mode, src: r.src?.slice(0, 60), text: r.text, crop: r.crop, baseline: r.baseline, gap: r.gap?.text, chars: r.gap?.chars.filter(c => !c.sep && !c.space).map(c => [c.ch, Math.round(c.x0 * 100) / 100, Math.round(c.yb * 100) / 100, Math.round(c.size * 100) / 100]) })) }))
     // (the babel names, drawn or why not, without their characters: D1a)
     const names = (run.names ?? []).map(({ chars, ...n }) => n)
     return { order: run.order, stats: run.stats.map(({ ms, ...r }) => r), skipped: run.skipped, audit: run.audit, pages: (S.dump ?? []).map(({ check, ...d }) => d), checks: (S.dump ?? []).map(d => ({ p: d.p, ...d.check })), units, names }
@@ -940,6 +952,8 @@ window.gate = {
       // whether v0 left its inputs (the geometry and the units) as they were given
       inputsChanged: S.inputs.of() !== S.inputs.before,
       ...(parts ? { parts } : {}),
+      // (the units whose record could not be made: drawn, and measured by nothing, so a failure of the gate's)
+      ...(run.recordErrors?.length ? { recordErrors: run.recordErrors.length } : {}),
     }
   },
 }
