@@ -228,12 +228,14 @@ const encoder = new TextEncoder()
  *  bounds that too (a part: less its tail's base64) */
 async function finish(kind, text, def, paper, pos, contentOf = null, vtag = null) {
   const bytes = encoder.encode(text)
-  if (bytes.length > def.cap) throw refuse(kind, '', `${bytes.length} bytes, past ${def.cap}`)
+  // (`data.bound` tells which bound a writer's output passed, for the cut, which closes a part before it does)
+  const past = (why, bound, size, max) => new BundleRefusal(why, { kind, path: '', data: { bound, size, max } })
+  if (bytes.length > def.cap) throw past(`${bytes.length} bytes, past ${def.cap}`, 'bytes', bytes.length, def.cap)
   const n = inside(kind, '', () => countValues(text, def.values, def.depth))
-  if (n > def.values) throw refuse(kind, '', `more than ${def.values} values`)
+  if (n > def.values) throw past(`more than ${def.values} values`, 'values', n, def.values)
   if (contentOf !== null) {
     const content = contentOf(bytes.length)
-    if (content > CONTENT_MAX) throw refuse(kind, '', `${content} bytes of content, past ${CONTENT_MAX}`)
+    if (content > CONTENT_MAX) throw past(`${content} bytes of content, past ${CONTENT_MAX}`, 'content', content, CONTENT_MAX)
   }
   const sha256 = await digestOf(bytes)
   const key = kind === 'catalog' ? catalogKey(paper.id, paper.version, vtag) : keyOf(paper.id, paper.version, CTAG4, sha256)
