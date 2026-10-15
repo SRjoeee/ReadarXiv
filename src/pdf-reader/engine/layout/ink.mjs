@@ -391,26 +391,35 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   return { glyphs, boxes, points, boxAt, ...(indices ? { paths, shows: showAt + 1 } : {}), capped: fnArray.length > OPS_CAP, rotated: false }
 }
 
+/** every column packGlyphs may keep */
+export const GLYPH_COLUMNS = Object.freeze(['x0', 'x1', 'y', 'top', 'bottom', 'ix0', 'ix1', 'size', 'font', 'u'])
 /**
- * A page's glyphs (pageInk's, a Glyph each) packed as columns, the form a reading keeps them in past its page: { n, x0,
- * x1, y, top, bottom, ix0, ix1, size, font, u, most }, the i-th of each column the glyph `order[i]` (indices into
- * `glyphs`; with no order, each glyph in its own place, the content stream's order). Each number as the Glyph holds it,
- * but `ix0` and `ix1`, its ink across with its advance (the lesser and the greater of the two: an italic's overhang past
- * its advance); `font` the id `fontIds` gives its font's name, -1 where none is asked; `most` the largest size. A Glyph is
- * an object of ten fields, some 290 bytes in Node; its columns some 80 (the prepare memory note of 2026-10-15). The
- * layout maker keeps arXiv's ink so (make.mjs glyphsOf), the marks read the marked compile's (marks.mjs layoutMarksOf)
+ * A page's glyphs (pageInk's, a Glyph each) packed as columns, the form a reading keeps them in past its page: { n, most,
+ * and each of `columns` (GLYPH_COLUMNS, all where none are given) }, the i-th of each column the glyph `order[i]`
+ * (indices into `glyphs`; with no order, each glyph in its own place, the content stream's order). Each number as the
+ * Glyph holds it, but `ix0` and `ix1`, its ink across with its advance (the lesser and the greater of the two: an
+ * italic's overhang past its advance); `font` the id `fontIds` gives its font's name, -1 where none is asked; `most` the
+ * largest size. A Glyph is an object of ten fields, some 290 bytes in Node; its ten columns 76, the four the marks read
+ * keeps 32 (the prepare memory note of 2026-10-15). The layout maker keeps arXiv's ink so, every column (make.mjs
+ * glyphsOf); the marks read the marked compile's, the columns ownedOf reads (marks.mjs layoutMarksOf, stream.mjs)
  */
-export function packGlyphs(glyphs, { order = null, fontIds = null } = {}) {
+export function packGlyphs(glyphs, { order = null, fontIds = null, columns = GLYPH_COLUMNS } = {}) {
   const n = order ? order.length : glyphs.length
-  const P = {
-    n, x0: new Float64Array(n), x1: new Float64Array(n), y: new Float64Array(n), top: new Float64Array(n), bottom: new Float64Array(n),
-    ix0: new Float64Array(n), ix1: new Float64Array(n), size: new Float64Array(n), font: new Int32Array(n).fill(-1), u: new Array(n), most: 0,
-  }
+  const P = { n, most: 0 }
+  for (const k of columns) P[k] = k === 'u' ? new Array(n) : k === 'font' ? new Int32Array(n).fill(-1) : new Float64Array(n)
+  const { x0, x1, y, top, bottom, ix0, ix1, size, font, u } = P
   for (let i = 0; i < n; i++) {
     const t = glyphs[order ? order[i] : i]
-    P.x0[i] = t.x0; P.x1[i] = t.x1; P.y[i] = t.y; P.top[i] = t.top; P.bottom[i] = t.bottom; P.size[i] = t.size; P.u[i] = t.u
-    P.ix0[i] = Math.min(t.x0, t.ix0 ?? t.x0); P.ix1[i] = Math.max(t.x1, t.ix1 ?? t.x1)
-    if (fontIds) P.font[i] = fontIds(t.font)
+    if (x0) x0[i] = t.x0
+    if (x1) x1[i] = t.x1
+    if (y) y[i] = t.y
+    if (top) top[i] = t.top
+    if (bottom) bottom[i] = t.bottom
+    if (ix0) ix0[i] = Math.min(t.x0, t.ix0 ?? t.x0)
+    if (ix1) ix1[i] = Math.max(t.x1, t.ix1 ?? t.x1)
+    if (size) size[i] = t.size
+    if (font && fontIds) font[i] = fontIds(t.font)
+    if (u) u[i] = t.u
     if (t.size > P.most) P.most = t.size
   }
   return P

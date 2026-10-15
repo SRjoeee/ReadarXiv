@@ -4,11 +4,15 @@ import type { InkPoint, PackedGlyphs } from './ink.mjs'
 /** how a piece's ink was found, or why none was: the first OWNED are owned */
 export declare const OWNED_HOW: readonly string[]
 export declare const OWNED: number
+/** the glyph columns ownedOf reads of a page, and the owned rows after it */
+export declare const STREAM_COLUMNS: readonly ['x0', 'y', 'size', 'u']
+/** a page's glyphs as ownedOf reads them: packGlyphs' columns STREAM_COLUMNS (more may be there) */
+export type StreamGlyphs = Pick<PackedGlyphs, 'n' | 'x0' | 'y' | 'size' | 'u'>
 /** the characters of the text after an opening point alone that it is found by */
 export declare const WANT: number
 /** a page of the marked compile as pageInk read it, its glyphs packed in stream order (packGlyphs), with its view (x0,
  *  y0, x1, y1) */
-export interface StreamPage { glyphs: PackedGlyphs; boxes: number[]; points: InkPoint[]; boxAt: number[]; view: number[] }
+export interface StreamPage { glyphs: StreamGlyphs; boxes: number[]; points: InkPoint[]; boxAt: ArrayLike<number>; view: number[] }
 /** what the marking says of a piece with an opening point: `closing`, it has a closing mark; `want`, the first WANT
  *  characters of the text after it in its unit (NFKC, lower case, no white space), '' for none; `ends`, the names of
  *  its unit's next marks (the next marked piece's opening mark, the unit's end marks); `blocked`, a visible piece with no

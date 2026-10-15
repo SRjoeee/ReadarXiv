@@ -32,6 +32,9 @@ export const OWNED_HOW = Object.freeze([
   'ink out of bounds',
 ])
 export const OWNED = 4
+/** the glyph columns ownedOf reads of a page (ink.mjs packGlyphs), and the owned rows after it (marks.mjs): a glyph's
+ *  origin, baseline, size and character */
+export const STREAM_COLUMNS = Object.freeze(['x0', 'y', 'size', 'u'])
 const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i]))
 /** a bracket's point: a column's body (b) or a float's box (f), its start (s) or end (e), by a number */
 const BRACKET = /^([bf])([se])\d+$/
@@ -82,7 +85,7 @@ function regionsOf(page) {
  * Each piece's own glyphs and rules in the marked compile, by its opening point's name: Map name → { how, glyphs, boxes }
  * (OWNED_HOW; glyphs and boxes [page, index] into the pages, in stream order, none where it is not owned). `pages`, page
  * by page (1-based at index 0), what pageInk read of the marked compile, its glyphs packed in stream order (ink.mjs
- * packGlyphs), with each page's view; `follows(name)`, for an opening point's name, what the marking says of its piece
+ * packGlyphs, STREAM_COLUMNS at least), with each page's view; `follows(name)`, for an opening point's name, what the marking says of its piece
  * ({ closing, want, ends, blocked }, Follow), or null for a name that is no piece of a unit; `dropped`, the names the
  * log reports set twice.
  * - Two points: the glyphs and boxes between them in the opening point's region; on another page only where it is a

@@ -21,7 +21,7 @@ import { readLines } from '../pipeline/typeset/tex.mjs'
 import { packGlyphs, pageInk } from './ink.mjs'
 import { NAME_KEYS } from './names.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
-import { OWNED, OWNED_HOW, ownedOf, WANT } from './stream.mjs'
+import { OWNED, OWNED_HOW, ownedOf, STREAM_COLUMNS, WANT } from './stream.mjs'
 
 // ---------------------------------------------------------------- the classes
 /** every class, in this order */
@@ -944,8 +944,10 @@ function followsOf(units, names) {
 
 /**
  * The marks file (internal, prep/<mid>/marks-<sha>.json) from a PDF.js document of the marked original and its last
- * TeX pass's log; the caller opens and destroys the document. Every destination MARK_NAME takes, by page (1-based) and
- * place, but one the log reports set twice (`dropped`: TeX kept the first, wherever that was) or off its page's view;
+ * TeX pass's log; the caller opens and destroys the document, each of its pages cleaned up once read (page.cleanup: its
+ * operator list let go), so that a caller that reads its operator lists again pays a parse again. Every destination
+ * MARK_NAME takes, by page (1-based) and place, but one the log reports set twice (`dropped`: TeX kept the first,
+ * wherever that was) or off its page's view;
  * each page's view and columns (MARK_DEF's c<n>-<k>); each unit's line count (LINES_TEX's AXT-LINES); the document's
  * text tokens (tokenizeDocument), their words once each; what the marked original was marked with (`marking`: the
  * classes and the paper's own switch it was given to layoutMarking, null where no probe was run: the two mark
@@ -976,14 +978,14 @@ export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLAS
     const content = await page.getTextContent()
     text.push({ page: p, items: content.items, styles: content.styles })
     if (units && OPS) {
-      // kept for ownedOf, every page to the last: its glyphs packed (ink.mjs packGlyphs, in stream order), not a Glyph
-      // object each
+      // kept for ownedOf, every page to the last: the columns of its glyphs it reads (ink.mjs packGlyphs, in stream
+      // order), not a Glyph object each, and each glyph's boxes before it as 32-bit integers
       const { glyphs, boxes, points, boxAt } = pageInk(OPS, await page.getOperatorList(), page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0 })
-      stream.push({ glyphs: packGlyphs(glyphs), boxes, points, boxAt, view: page.view.slice(0, 4) })
+      stream.push({ glyphs: packGlyphs(glyphs, { columns: STREAM_COLUMNS }), boxes, points, boxAt: Int32Array.from(boxAt), view: page.view.slice(0, 4) })
     }
     // its operator list let go once its ink is read, so that PDF.js holds one page's, not every page's to the end; nothing
     // reads it again, and the caller destroys the document after (paper.mjs). With the packing, the reading's live set on
-    // 2303.18223 (144 pages, 726,000 glyphs; arXiv's PDF for the marked original) is 259 MiB, not 449
+    // 2303.18223 (144 pages, 726,000 glyphs; arXiv's PDF for the marked original) is 224 MiB, not 449
     page.cleanup?.()
   }
   checkViews(views, pages, 'views')

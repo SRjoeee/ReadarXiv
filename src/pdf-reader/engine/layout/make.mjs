@@ -315,7 +315,9 @@ async function gzipSize(bytes) {
 /**
  * A paper's layout file, or why none is made: { file, stats } or { refused, stats }. `units` the paper's (ids their
  * indices); `marks` the marks file of its layout compile; `arxiv` a PDF.js document of arXiv's PDF, which the caller
- * opens and destroys; `OPS` PDF.js's operator codes
+ * opens and destroys, each of its pages cleaned up once read (page.cleanup: its operator list and images let go), so
+ * that a caller that reads its operator lists again pays a parse again (the add-on relies on PDF.js keeping them, and
+ * takes a document of its own: addon.mjs); `OPS` PDF.js's operator codes
  */
 export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs }) {
   const stats = blank(units)
@@ -357,13 +359,14 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     let ops = null
     try { ops = await within(page.getOperatorList(), Math.min(OPS_MS, OPS_PAPER_MS - waited)) } catch {}
     waited += now() - t0
-    if (!ops) { giveUp(page, seen); stats.timedOut.push(p); dark.add(p); continue }
+    // a page given up on let go as well: a list that failed has no stream left to cancel, and giveUp's cancellation of
+    // it cleans up nothing (PDF.js's _abortOperatorList returns early); after a cancellation, cleaning up is a no-op
+    if (!ops) { giveUp(page, seen); page.cleanup?.(); stats.timedOut.push(p); dark.add(p); continue }
     const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0 })
     // its operator list and decoded images let go once its ink is read, so that PDF.js holds them for one page at a time,
     // not every page's to the document's end (48 MiB on 2303.18223's 144 pages; an image a late decode brings is dropped
     // with them). Nothing here reads a page's list again, and the callers destroy the document after the maker (the
-    // add-on, which reads lists again, is made from a document of its own: addon.mjs). A page given up on (giveUp) is
-    // cleaned up by PDF.js's own cancellation
+    // add-on, which reads lists again, is made from a document of its own: addon.mjs)
     page.cleanup?.()
     if (got.capped) stats.capped.push(p)
     // a page whose ink is not whole has no ink: its units stay the original's, never erased in part

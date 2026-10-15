@@ -25,8 +25,14 @@ export interface PackedGlyphs {
   n: number; x0: Float64Array; x1: Float64Array; y: Float64Array; top: Float64Array; bottom: Float64Array
   ix0: Float64Array; ix1: Float64Array; size: Float64Array; font: Int32Array; u: string[]; most: number
 }
-/** pageInk's glyphs as the columns a reading keeps past its page */
-export declare function packGlyphs(glyphs: readonly Glyph[], o?: { order?: readonly number[] | null; fontIds?: ((font: string) => number) | null }): PackedGlyphs
+/** a column packGlyphs may keep */
+export type GlyphColumn = 'x0' | 'x1' | 'y' | 'top' | 'bottom' | 'ix0' | 'ix1' | 'size' | 'font' | 'u'
+/** every column packGlyphs may keep, its default */
+export declare const GLYPH_COLUMNS: readonly GlyphColumn[]
+type PackOptions = { order?: readonly number[] | null; fontIds?: ((font: string) => number) | null }
+/** pageInk's glyphs as the columns a reading keeps past its page: every column, or those asked for */
+export declare function packGlyphs(glyphs: readonly Glyph[], o?: PackOptions & { columns?: undefined }): PackedGlyphs
+export declare function packGlyphs<K extends GlyphColumn>(glyphs: readonly Glyph[], o: PackOptions & { columns: readonly K[] }): Pick<PackedGlyphs, 'n' | 'most' | K>
 /** a glyph's key in an outline table: its font's PostScript name, its character and its advance */
 export declare function outlineKey(font: unknown, fontId: string, g: { fontChar?: unknown; unicode?: unknown; width?: unknown }): string
 /** the outline boxes collected (pageInk's `collect`) as the reader is sent them, in thousandths of an em, by font */
