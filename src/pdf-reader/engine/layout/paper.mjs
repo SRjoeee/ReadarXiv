@@ -27,9 +27,9 @@ import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, layoutMarksOf, probeSamp
  * A paper's layout marks (paper.d.mts): the marks file's bytes, with each stage's time, or the stage that failed with the
  * times of those that ran. Never throws: a compiler that throws, a PDF that does not open and a reading that refuses
  * are each their stage's refusal. `converge`: the marked original made by convergeThenMark, its passes in `cm`, within
- * `compileBudgetMs` where the host gives one
+ * `compileBudgetMs` and `filesBound` where the host gives them
  */
-export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge = false, compileBudgetMs = null }) {
+export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge = false, compileBudgetMs = null, filesBound = null }) {
   const ms = {}
   /** a stage, timed; null where it fails or throws */
   const stage = async (name, run) => {
@@ -56,7 +56,7 @@ export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge =
   const result = r => (cm ? { ...r, cm } : r)
   const marked = await stage('compile', async () => {
     const files = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless })
-    if (cm) return convergeThenMark(paper, asked, files, cm, { wall, budget: compileBudgetMs })
+    if (cm) return convergeThenMark(paper, asked, files, cm, { wall, budget: compileBudgetMs, bound: filesBound })
     // (runLive's request for the marked original)
     const c = await compile({ main, engine, rerun: true, bibtex: paper.meta.bbl ? false : null, overrides: files })
     return c?.ok && c.pdf?.length ? c : null
@@ -131,10 +131,11 @@ const ranThrough = c => !!c?.ok && !stoppedShort(c.log) && completeLog(c.log)
  *     through and returned no files (a host that cannot, or files past its bound), or the first draft wrote a bibliography job
  *     beside the main one's (otherBibJobs: chapterbib, multibib, bibunits — no bibliography shipped), which latexmk runs
  *     and the one-pass request does not, or names a .bib the project lacks
- *     (bibMissing: latexmk skips the bibliography step then, BibTeX does not); a marked pass that did not run
+ *     (bibMissing: latexmk skips the bibliography step then, BibTeX does not); or the files the next pass would be given (carried and
+ *     returned, its own aside) are past the host's `filesBound` (a host holds one pass's files to it; `files-bound`); a marked pass that did not run
  *     through, or gave no PDF, is the compile's refusal (null), with no fallback after it
  */
-async function convergeThenMark(paper, compile, marked, cm, { wall, budget }) {
+async function convergeThenMark(paper, compile, marked, cm, { wall, budget, bound }) {
   const { main } = paper.project, engine = paper.meta.compiler, shipped = !!paper.meta.bbl
   const unmarked = originalFiles(paper, { lines: true })
   const carried = new Map()
@@ -156,6 +157,17 @@ async function convergeThenMark(paper, compile, marked, cm, { wall, budget }) {
     for (const [p, b] of c.files) carried.set(p, b)
     if (bibtex) bibSeen = bibInput(carried)
   }
+  /** whether the files the next pass would be given on top of its own (carried + the pass's returned, at paths other than
+   *  `own`'s) are within the host's bound (`bound` { count, bytes }, absent: unlimited): a host holds one pass's files to it,
+   *  and a set that grew past it across the passes is a frame outside the protocol */
+  const fits = (c, own) => {
+    if (!bound) return true
+    const held = new Map(carried)
+    for (const [p, b] of c.files) held.set(p, b)
+    let count = 0, bytes = 0
+    for (const [p, b] of held) if (!own.has(p)) { count++; bytes += b.length }
+    return count <= bound.count && bytes <= bound.bytes
+  }
   const bibtexNext = () => !shipped && bibInput(carried) !== bibSeen
   const fallback = async why => {
     cm.fallback = why
@@ -172,13 +184,16 @@ async function convergeThenMark(paper, compile, marked, cm, { wall, budget }) {
   const auxBytes = first.files.get(`${jobName(main)}.aux`), missed = notFound(first.log)
   const readNext = (p, b) => { const had = givenAt(unmarked, p); return had ? !sameFile(p, b, had) : missed.has(p) && /\S/.test(latin1(b)) }
   const more = [...first.files].some(([p, b]) => /\.(?:bbl|ind)$/.test(p) && readNext(p, b)) || listsMissing({ log: first.log, aux: auxBytes ? latin1(auxBytes) : null }, main)
+  const second = more && affordable()
+  if (!fits(first, second ? unmarked : marked)) return fallback('files-bound')
   take(first, !shipped)
-  if (more && affordable()) {
+  if (second) {
     const bibtex = bibtexNext()
-    const second = await pass(unmarked, true, bibtex)
-    if (!ranThrough(second)) return fallback('draft-failed')
-    if (!second.files) return fallback('no-files')
-    take(second, bibtex)
+    const again = await pass(unmarked, true, bibtex)
+    if (!ranThrough(again)) return fallback('draft-failed')
+    if (!again.files) return fallback('no-files')
+    if (!fits(again, marked)) return fallback('files-bound')
+    take(again, bibtex)
   }
   let last = null
   while (passes < PASSES && (!last || affordable())) {
@@ -188,8 +203,9 @@ async function convergeThenMark(paper, compile, marked, cm, { wall, budget }) {
     if (!c.files) return fallback('no-files')
     last = c
     cm.settled = [...c.files].every(([p, b]) => sameFile(p, b, givenAt(marked, p)))
+    if (cm.settled) { take(c, bibtex); break }
+    if (passes < PASSES && !fits(c, marked)) return fallback('files-bound')
     take(c, bibtex)
-    if (cm.settled) break
   }
   return last
 }

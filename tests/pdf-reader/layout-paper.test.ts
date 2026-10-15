@@ -206,9 +206,9 @@ const markedFiles = (paper: ReturnType<typeof paperOf>) => {
 }
 /** the files a request was given, each as text */
 const given = (req: CompileRequest | undefined) => text(req?.overrides ?? new Map())
-const cmOf = async (answers: (Compiled | Error)[], paper = paperOf(), doc = fakeDoc().doc) => {
+const cmOf = async (answers: (Compiled | Error)[], paper = paperOf(), doc = fakeDoc().doc, filesBound?: { count: number; bytes: number }) => {
   const c = compiler(answers), o = opener(doc)
-  const made = await layoutMarksOfPaper(paper, { compile: c.compile, open: o.open, OPS, converge: true })
+  const made = await layoutMarksOfPaper(paper, { compile: c.compile, open: o.open, OPS, converge: true, ...(filesBound ? { filesBound } : {}) })
   return { made, asked: c.asked, ...o, paper }
 }
 
@@ -437,6 +437,37 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
     const made = await cmOf([PROBE, draftOf({ 'main.aux': `${AUX}\\bibdata{refs, more}\n` }), markedOf({ 'main.aux': `${AUX}\\bibdata{refs, more}\n` })], paper)
     expect(made.made).toMatchObject({ cm: { drafts: 1, marked: 1, settled: true } })
     expect(made.made.cm).not.toHaveProperty('fallback')
+  })
+
+  it('holds the files it carries back, across its passes, to the host\'s bound, and asks today\'s compile past it', async () => {
+    const fresh = (n: number, from = 0, size = 4) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`n${from + i}.dat`, 'x'.repeat(size)]))
+    const bound = { count: 5, bytes: 1000 }
+    const fell = async (why: string, answers: (Compiled | Error)[], b = bound, drafts = 1) => {
+      const { made, asked, open, paper, close } = await cmOf([...answers, original()], paperOf(), fakeDoc().doc, b)
+      expect(made, why).toMatchObject({ marks: expect.any(Uint8Array), cm: { drafts, settled: false, fallback: 'files-bound' } })
+      // today's request for the marked original, exactly, and the PDF opened and closed
+      expect(asked.at(-1), why).toEqual({ main: 'main.tex', engine: 'pdflatex', rerun: true, bibtex: null, overrides: markedFiles(paper) })
+      expect(open, why).toHaveBeenCalledWith(PDF)
+      expect(close, why).toHaveBeenCalledTimes(1)
+      return asked
+    }
+    // a pass that returns fresh names every time: within the bound after the draft, past it by the first marked pass
+    const asked = await fell('fresh names each pass', [PROBE, draftOf({ 'main.aux': AUX, ...fresh(2) }), markedOf({ 'main.aux': AUX, ...fresh(3, 2) }), markedOf({ 'main.aux': AUX, ...fresh(3, 5) })])
+    expect(asked.map(r => [r.draft, r.rerun])).toEqual([[undefined, false], [true, false], [false, false], [undefined, true]])
+    // one pass whose files are past the bound alone is not carried
+    await fell('one big draft', [PROBE, draftOf({ 'main.aux': AUX, ...fresh(6) })])
+    // the bytes too
+    await fell('bytes', [PROBE, draftOf({ 'main.aux': AUX, ...fresh(1, 0, 2000) })])
+    // and a second draft's
+    await fell('second draft', [PROBE, draftOf({ 'main.aux': AUX, 'main.bbl': '\\begin{thebibliography}{1}\n\\bibitem{a} A.\n\\end{thebibliography}\n', ...fresh(1) }, `No file main.bbl.\n${END}`), draftOf({ 'main.aux': AUX, ...fresh(5, 1) })], bound, 2)
+    // the pass's own files do not count (the paper's marked main.tex is rewritten every pass), nor does a set within the bound
+    const own = Object.fromEntries([...markedFiles(paperOf())].map(([p, b]) => [p, new TextDecoder().decode(b)]))
+    const within = await cmOf([PROBE, draftOf({ 'main.aux': AUX, ...fresh(2) }), markedOf({ 'main.aux': AUX, ...own, ...fresh(2, 0, 5) }), markedOf({ 'main.aux': AUX, ...own, ...fresh(2, 0, 5) })], paperOf(), fakeDoc().doc, bound)
+    expect(within.made).toMatchObject({ cm: { drafts: 1, marked: 2, settled: true } })
+    expect(within.made.cm).not.toHaveProperty('fallback')
+    // no bound: as before
+    const free = await cmOf([PROBE, draftOf({ 'main.aux': AUX, ...fresh(300) }), markedOf({ 'main.aux': AUX, ...fresh(300) })])
+    expect(free.made.cm).not.toHaveProperty('fallback')
   })
 
   it('refuses at the compile where a draft throws or a marked pass did not run through, and opens nothing', async () => {

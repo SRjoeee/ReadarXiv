@@ -4,8 +4,8 @@ import type { Compiled, CompileRequest, Paper } from '../pipeline/live.mjs'
 /** CM's record (converge then mark): the unmarked original's draft passes, the marked original's passes, whether the
  *  last marked pass wrote the files it was given (else the bound of five TeX passes was reached and its PDF kept), and
  *  why today's compile was asked instead, where it was: a host that returned no files, a draft that did not run
- *  through, a bibliography job beside the main one's (aux-jobs), or a .bib the project lacks (bib-missing). Pass counts enter no key and no file */
-export interface ConvergeRecord { drafts: number; marked: number; settled: boolean; fallback?: 'no-files' | 'draft-failed' | 'aux-jobs' | 'bib-missing' }
+ *  through, a bibliography job beside the main one's (aux-jobs), a .bib the project lacks (bib-missing), or files to carry past the host's bound (files-bound, treated like an absent `files`). Pass counts enter no key and no file */
+export interface ConvergeRecord { drafts: number; marked: number; settled: boolean; fallback?: 'no-files' | 'draft-failed' | 'aux-jobs' | 'bib-missing' | 'files-bound' }
 
 /**
  * a paper's layout marks: the mark probe compiled (probeFiles(paper, { marks: true }), one pass) and its answers read
@@ -32,4 +32,8 @@ export declare function layoutMarksOfPaper(paper: Paper, o: {
    *  compile took) across the probe and the passes; a bet (the second draft, a marked pass after the first) is not
    *  started with less left than 1.2 times the longest pass so far. Absent: unlimited */
   compileBudgetMs?: number | null
+  /** with `converge`: the host's bound on the files of one compile, { count, bytes } (the web's 256 and 8 MiB). The files CM carries
+   *  back accumulate across passes: before each pass that would carry them (carried + the previous pass's returned, the pass's
+   *  own overrides aside) they are held to it, and past it today's compile is asked (`files-bound`). Absent: unlimited */
+  filesBound?: { count: number; bytes: number } | null
 }): Promise<{ marks: Uint8Array; ms: { probe: number; compile: number; marks: number }; cm?: ConvergeRecord } | { refused: 'probe' | 'compile' | 'marks'; ms: Record<string, number>; cm?: ConvergeRecord }>

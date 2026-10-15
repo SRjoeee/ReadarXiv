@@ -41,7 +41,7 @@ export declare const notFound: (log: string | null | undefined) => Set<string>
  *  bibliography step, makeindex — wrote in the project, a rewrite of the same bytes too (never a deletion), by its path
  *  there, the last step's bytes, but its outputs and the tools' own logs (*.pdf *.xdv *.dvi *.log *.blg *.ilg *.glg
  *  *.fls *.synctex.gz *.fdb_latexmk); absent where the host does not return them, or past the host's bound (the web's:
- *  256 files, 8 MiB). A draft (`draft`) is `ok` where TeX ran to its end of its own (no limit, no signal) and left a
+ *  256 files, 8 MiB; CM holds the files it carries back, accumulated across its passes, to the same bound: `filesBound`, and past it treats them as absent). A draft (`draft`) is `ok` where TeX ran to its end of its own (no limit, no signal) and left a
  *  log, with no PDF. `aux` and `bbl` may be decoded lossily: the files' bytes are what a compile is given back */
 export interface Compiled { ok: boolean; pdf?: Uint8Array | null; aux?: string | null; bbl?: string | null; log?: string; ms?: number; error?: string; network?: string[]; passes?: number; files?: Map<string, Uint8Array> }
 /** a compile asked of the TeX page. `draft` (with `rerun` false): one pass that writes no output (pdflatex
