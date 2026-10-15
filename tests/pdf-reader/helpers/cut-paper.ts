@@ -20,6 +20,8 @@ export interface UnitSpec {
   kind?: (typeof UNIT_KINDS)[number]
   /** a heading's source in the layout file (the unit is a heading) */
   heading?: string
+  /** a table cell's place: the unit is a cell of this table (its column's consistency group) */
+  cell?: { table: number; row: number; col: number; span?: number; head?: boolean }
 }
 export interface PaperSpec {
   pages: number
@@ -39,7 +41,7 @@ const rowY = (k: number) => 750 - (k % 700)
 /** the paper the spec describes, whole */
 export function wholeOf(spec: PaperSpec, o: { layout?: boolean } = {}): Whole {
   const N = spec.pages
-  const units: BundleUnit[] = spec.units.map((u, id) => [u.heading === undefined ? u.kind ?? 'para' : 'heading', 0, null, null, null, [[0, `unit ${id}`]]])
+  const units: BundleUnit[] = spec.units.map((u, id) => [u.cell ? 'cell' : u.heading === undefined ? u.kind ?? 'para' : 'heading', 0, null, u.cell ? { span: 1, head: false, ...u.cell } : null, null, [[0, `unit ${id}`]]] as BundleUnit)
   const views: [number, number, number, number][] = Array.from({ length: N }, () => [0, 0, 612, 792])
   const left: UnitWire[] = []
   const fonts = spec.units.some(u => u.lines?.length) || (spec.names ?? []).length ? ['CMR10'] : []
@@ -66,7 +68,7 @@ export function wholeOf(spec: PaperSpec, o: { layout?: boolean } = {}): Whole {
       L.lines.push([id, rows])
       L.frames.push([id, frames])
     }
-    if (u.lines?.length || u.stream === null) L.units.push([id, UNIT_KINDS.indexOf(u.heading === undefined ? u.kind ?? 'para' : 'heading'), 9, 0, 1])
+    if (u.lines?.length || u.stream === null) L.units.push([id, UNIT_KINDS.indexOf(u.cell ? 'cell' : u.heading === undefined ? u.kind ?? 'para' : 'heading'), 9, 0, 1])
     if (u.heading !== undefined && (u.lines?.length || u.stream === null)) L.headings.push([id, u.heading])
   })
   for (const [i, n] of (spec.names ?? []).entries()) {
