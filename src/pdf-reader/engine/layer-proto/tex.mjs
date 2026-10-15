@@ -88,59 +88,108 @@ export function locatedWhole(lu, unit, trPieces, { symbols = 'text', held = fals
 }
 
 /**
- * Which of the unit's held runs covers each of its displayed formulas, by its piece's index (D4 step 1). A held run: the
- * file's `held` lines (those the unit's source does not write: a display's rows; no slot, never erased) consecutive in
- * one frame, so on one page and in one column, in the unit's line order. A display group: the unit's display pieces in
- * source order with no visible piece between them (text holding a non-space character, or a placeholder v0 draws ink
- * for), TeX's display rows one block; an inner group has a visible piece before and after it, an edge group stands
- * before the unit's first or after its last (outside its marks, which patch sets at its first and last words). The
- * groups pair with the runs in order: every group with one where they are as many, else the inner groups alone, the
- * edge groups then outside the unit's lines (the maker holds no first line and drops a run at the end). A pairing holds
- * where every segment of a found display of a paired group lies on its run (on one of the run's lines' pages, meeting
- * its band) and of an unpaired one on none of the unit's lines. A display of an inner group so paired is covered by its
- * run: the held lines between the unit's text lines before and after it, on its page and column. Returns a Map of
- * those, empty where nothing pairs (a run that is no display, another unit's line the anchor took; a display whose rows
- * hold the source's words and are not held; one display over two frames). An edge display is never covered: no text
- * line stands on both sides of it. Where every display of a group is LOST, no segment checks its pairing: it rests on
- * the count of the groups and runs and their order alone, and a mispairing moves the break (which run the flow breaks at),
- * never ink, since every held line stays the original's, drawn and never erased
+ * Which of the unit's held runs covers each of its displayed formulas, by its piece's index (D4 step 1), read from TeX's
+ * file and the source's order alone, never from the translation's pieces: a translation that sets nothing between two
+ * displays the source keeps apart, or moves its words across one, says nothing of where TeX set them (2307.16209 page
+ * 59, unit 198: Microsoft dropped the "with" between (3.53) and (3.54), the groups read from its pieces paired nothing,
+ * and v0 laid the text over (3.54)).
+ * - A held run: the file's `held` lines (those the unit's source does not write: a display's rows; no slot, never erased)
+ *   consecutive in one frame, so on one page and in one column, in the unit's line order. TeX sets the source in order,
+ *   so the runs stand in the source's order of the display groups they hold, one group a run.
+ * - The displays in their source order (`kOf`), in groups: a display JOINED to the one before it is of its group (TeX
+ *   gave it no point, its ink the first's); any other display after a found one, or a found one, is a group of its own
+ *   (it has its own point: the maker JOINs a display TeX set in the group of a found one), as is one with a placeholder
+ *   the file holds a row for between it and the one before (every visible piece has one). Two LOST displays with no row
+ *   between them are one group where only placeholders lie between them in the source (nothing visible: TeX's display
+ *   group); where a text piece of the source does, its words (white space, or a line of TeX's) are not the file's, and
+ *   the runs' count decides.
+ * - Where each group is: a group with a found display is where its segments are, each on the lines of one run (meeting
+ *   one of their bands on its page), or off the unit's lines, no segment meeting any (a display after the unit's last
+ *   line, before its first, at a column's foot past its lines); a LOST group the file says lies outside the unit's
+ *   lines (OUTSIDE: a display after its end mark, which stands on the unit's last line) is off them, left as the
+ *   original's ink. The LOST groups between two found groups on runs (or before the first, after the last) take the
+ *   runs between theirs in order, each its own where they are as many, or joined across the text between them where
+ *   the joined are.
+ * Returns a Map of each display of a group on a run to its run's lines: a display LOST or with no segments so covered is
+ * kept where it stands, as its held lines are. Empty where the file and the order do not agree (a segment on another
+ * line of the unit or on two runs, a found group out of order, a run no group takes or a LOST group no run is left for:
+ * a run that is no display, another unit's line the anchor took; a display whose rows hold the source's words and are
+ * not held; one display over two frames; three LOST groups and the runs' count saying neither all apart nor all joined).
+ * A LOST group's run rests on the order and the count alone, no segment checks it, and a misplacement moves the break
+ * (which run the flow breaks at), never ink, since every held line stays the original's, drawn and never erased
  */
 export function displayCover(lu, unit, kOf) {
-  const L = lu.lines, F = lu.frames, held = new Set(lu.held ?? []), out = new Map()
-  const runs = []
+  const L = lu.lines, F = lu.frames, held = new Set(lu.held ?? []), none = new Map()
+  const runs = [], runOf = new Map()
   for (let f = 0; f < F.length; f += 6) {
     let run = null
     for (let j = F[f + 2]; j < F[f + 2] + F[f + 3]; j++) {
       if (!held.has(j)) { run = null; continue }
       if (!run) runs.push((run = []))
       run.push(j)
+      runOf.set(j, runs.length - 1)
     }
   }
-  const groups = []
-  let group = null, before = false
+  // the unit's displays by their source index, and the source's pieces the translation holds as no text
+  const ds = [], placed = new Set()
   for (const [i, p] of unit.pieces.entries()) {
-    const cls = p.t === 'nested' ? 'num' : p.t === 'ph' ? phClass2(p.src).cls : null
-    if (cls === 'display') {
-      if (!group) groups.push((group = { members: [], inner: before }))
-      group.members.push(i)
-    } else if (p.t === 'text' ? /\S/.test(p.s ?? '') : !!cls && VISIBLE.has(cls)) { group = null; before = true }
+    if (kOf[i] >= 0) placed.add(kOf[i])
+    if (p.t === 'ph' && phClass2(p.src).cls === 'display') ds.push({ i, k: kOf[i], row: lu.ph.get(kOf[i]) })
   }
-  if (group) group.inner = false
-  const inner = groups.filter(g => g.inner)
-  const paired = runs.length === groups.length ? groups : runs.length === inner.length ? inner : null
-  if (!paired) return out
-  const meets = (j, page, top, bottom) => L[8 * j] === page && Math.min(top, L[8 * j + 4]) > Math.max(bottom, L[8 * j + 5])
-  const lines = Array.from({ length: L.length / 8 }, (_, j) => j)
+  if (ds.some(d => !d.row)) return none
+  ds.sort((a, b) => a.k - b.k)
+  const rowBetween = (a, b) => { for (const k of lu.ph.keys()) if (k > a && k < b) return true; return false }
+  const textBetween = (a, b) => { for (let k = a + 1; k < b; k++) if (!placed.has(k)) return true; return false }
+  // the groups; `open`: one whose boundary with the group before it the file does not give (LOST both, text between)
+  const { LOST, EMPTY, JOINED, OUTSIDE } = PH_FLAG
+  const groups = []
+  for (const d of ds) {
+    const g = groups.at(-1), prev = g?.members.at(-1), f = d.row.flags
+    const lostPair = !!prev && !!(f & LOST) && !!(prev.row.flags & LOST) && !(f & OUTSIDE) === !(prev.row.flags & OUTSIDE) && !rowBetween(prev.k, d.k)
+    const open = lostPair && textBetween(prev.k, d.k)
+    if (prev && (f & JOINED || (lostPair && !open))) g.members.push(d)
+    else groups.push({ members: [d], at: null, open })
+  }
+  // each group's run (its index), -1 off the unit's lines, or null: LOST, the order's to place
+  const meets = (j, s, S) => L[8 * j] === S[s] && Math.min(S[s + 4], L[8 * j + 4]) > Math.max(S[s + 5], L[8 * j + 5])
   for (const g of groups) {
-    const at = paired.indexOf(g), on = at >= 0 ? runs[at] : lines
-    for (const i of g.members) {
-      const row = lu.ph.get(kOf[i])
-      if (!row || row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY)) continue
-      for (let s = 0; s + 5 < row.segs.length; s += 6) if (on.some(j => meets(j, row.segs[s], row.segs[s + 4], row.segs[s + 5])) !== at >= 0) return out
+    const found = g.members.filter(d => !(d.row.flags & (LOST | EMPTY | JOINED)) && d.row.segs.length)
+    if (!found.length) { if (g.members.every(d => d.row.flags & (OUTSIDE | EMPTY))) g.at = -1; continue }
+    for (const { row: { segs: S } } of found) {
+      for (let s = 0; s + 5 < S.length; s += 6) {
+        const on = new Set()
+        let any = false
+        for (let j = 0; j < L.length / 8; j++) if (meets(j, s, S)) { any = true; if (runOf.has(j)) on.add(runOf.get(j)) }
+        const r = on.size === 1 ? [...on][0] : any ? null : -1
+        if (r === null || (g.at !== null && g.at !== r)) return none
+        g.at = r
+      }
     }
   }
-  paired.forEach((g, n) => { if (g.inner) for (const i of g.members) out.set(i, runs[n]) })
-  return out
+  const out = new Map()
+  let next = 0, lost = []
+  const take = (g, r) => { for (const d of g.members) out.set(d.i, runs[r]) }
+  // the LOST groups since the last group on a run take the runs before `upTo`: each its own, or joined across their
+  // open boundaries, where those are as many
+  const settle = upTo => {
+    let stretch = lost
+    if (upTo - next !== lost.length) {
+      stretch = []
+      for (const g of lost) { if (g.open && stretch.length) stretch.at(-1).members.push(...g.members); else stretch.push({ members: [...g.members] }) }
+      if (upTo - next !== stretch.length) return false
+    }
+    stretch.forEach((g, n) => take(g, next + n))
+    lost = []
+    return true
+  }
+  for (const g of groups) {
+    if (g.at === null) { lost.push(g); continue }
+    if (g.at < 0) continue
+    if (g.at < next || !settle(g.at)) return none
+    take(g, g.at)
+    next = g.at + 1
+  }
+  return settle(runs.length) ? out : none
 }
 
 /**
