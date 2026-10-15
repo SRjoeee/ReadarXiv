@@ -637,7 +637,7 @@ async function doorFixture(page, name, errors) {
     return e
   })
   const all = key => pages.every(e => e[key])
-  const ok = pages.length === gate.pages.length && pages.length > 0 && all('svg') && all('lang') && all('size') && all('words') && all('original') && all('copy') && door.sheets[0] === door.sheets[1] && !errors.length
+  const ok = pages.length === gate.pages.length && pages.length > 0 && all('svg') && all('lang') && all('size') && all('words') && all('wordsAt') && all('original') && all('copy') && door.sheets[0] === door.sheets[1] && !errors.length
   if (!ok) failures.push(name)
   const n = key => pages.filter(e => e[key]).length
   const line = `${pages.length} pages: SVG ${n('svg')}/${pages.length} equal, words ${n('words')}, copy ${n('copy')}, this load's PDF.js page v0's original on ${n('source')}; at 1.25 x 2 records ${n('laid')}, words ${n('wordsAt')}, copy ${n('drawn')}, original ${n('read')}; rows ${made.meta.rows} (${made.meta.unexpected} not the target's) taken ${DOOR} a part, ${door.stats.dropped} dropped, ${door.stats.drawn} units drawn (the gate's run ${gate.summary.laid}); bundle ${made.meta.bytes} bytes, ${made.meta.dropped} units dropped${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
@@ -1019,10 +1019,11 @@ if (DOOR !== null) {
   const ran = [...results.values()].sort((a, b) => a.name.localeCompare(b.name))
   const all = ran.flatMap(r => r.pages ?? [])
   const count = key => all.filter(e => e[key]).length
+  const reach = key => ran.reduce((n, r) => n + (r.gate?.reach?.[key] ?? 0), 0)
   const made = new Date().toISOString()
   const file = join(ROOT, 'out/layer-gate', `door-${(engineInfo.commit ?? 'none').slice(0, 8)}${engineInfo.dirty ? '+' : ''}-${made.replace(/[:.]/g, '-')}.json`)
   writeFileSync(file, JSON.stringify({ schema: 1, made, seconds, engine: engineInfo, inputs: { ...inputs, door: DOOR }, fixtures: Object.fromEntries(ran.map(r => [r.name, r])) }))
-  console.log(`\ndoor: ${ran.length} outputs, ${all.length} pages: SVG markup equal on ${count('svg')}, the word tables on ${count('words')} (at the gate's recorded scale on ${count('wordsAt')}), copyOf's pixels the copy plane on ${count('copy')} (drawn over v0's original, whose PNG read back is it on ${count('original')}), the page this load's PDF.js draws v0's original on ${count('source')}; the gate's own run at 1.25 CSS px a unit and dpr 2 against it at 2.5 and dpr 1: the units' records equal on ${count('laid')} pages, the copy planes on ${count('drawn')}, the originals on ${count('read')}; ${failures.length ? `${failures.length} failed (${failures.join(' ')})` : 'none failed'}, in ${seconds} s; the run in ${file}`)
+  console.log(`\ndoor: ${ran.length} outputs, ${all.length} pages: SVG markup equal on ${count('svg')}, the word tables on ${count('words')} (at the gate's recorded scale on ${count('wordsAt')}), copyOf's pixels the copy plane on ${count('copy')} (drawn over v0's original, whose PNG read back is it on ${count('original')}), the page this load's PDF.js draws v0's original on ${count('source')}; the gate's own run at 1.25 CSS px a unit and dpr 2 against it at 2.5 and dpr 1: the units' records equal on ${count('laid')} pages, the copy planes on ${count('drawn')}, the originals on ${count('read')}; the words the translations have with no token carrying their index: ${reach('noToken')} of ${reach('words')}, and of the sentence starts (the records' sentences.tr) ${reach('startsNoToken')} of ${reach('starts')}; ${failures.length ? `${failures.length} failed (${failures.join(' ')})` : 'none failed'}, in ${seconds} s; the run in ${file}`)
   process.exit(failures.length || ran.length !== asked.length ? 1 : 0)
 }
 

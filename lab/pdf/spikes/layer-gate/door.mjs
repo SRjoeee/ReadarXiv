@@ -91,6 +91,39 @@ const macrotask = () => new Promise(ok => setTimeout(ok, 0))
 /** the page's sheets but the faces' classes' (layer2.mjs faceClass: made once a page, for every run, and kept) */
 const ownSheets = () => [...document.head.querySelectorAll('style')].filter(e => { const rules = [...(e.sheet?.cssRules ?? [])]; return !(rules.length && rules.every(r => /^\.axf\d+$/.test(r.selectorText ?? ''))) })
 
+/**
+ * Whether the words the translation has can be found in the page tables (1b-E; a sentence starts at a word, and the view finds the
+ * token that carries its index): over the units laid whose pages are all among the first `limit`, the words of their plain
+ * translated text (anchors.mjs tokens) and how many have no token carrying their index, and the same for the words sentences begin
+ * at (the record's `sentences.tr` offsets, counted as sentenceStarts counts them).
+ */
+async function reachOf(run, finals, record, limit) {
+  const [{ tokens }, { plainOfPieces }] = await Promise.all([import('/engine/pipeline/anchors.mjs'), import('/engine/layer-proto/words.mjs')])
+  const r = { units: 0, words: 0, noToken: 0, starts: 0, startsNoToken: 0 }
+  for (const u of run.placed) {
+    if (u.refused || u.withheld || !u.unit?.pieces || u.pages.some(q => q > limit || !finals[q])) continue
+    const plain = plainOfPieces(u.unit.pieces)
+    const n = tokens(plain).length
+    const has = new Set()
+    for (const q of u.pages) {
+      const f = finals[q], sp = f.spans.find(x => x[0] === u.id)
+      if (!sp) continue
+      for (let k = 0; k < sp[1].length; k += 2) for (let i = sp[1][k]; i < sp[1][k] + sp[1][k + 1]; i++) if (f.word[i] >= 0) has.add(f.word[i])
+    }
+    r.units++
+    r.words += n
+    r.noToken += n - has.size
+    const tr = record.units[u.id]?.sentences?.tr
+    if (Array.isArray(tr)) for (const o of tr) {
+      if (!(o > 0 && o < plain.length)) continue
+      const k = tokens(plain.slice(0, o)).length
+      if (k >= n) continue
+      r.starts++
+      if (!has.has(k)) r.startsNoToken++
+    }
+  }
+  return r
+}
 window.door = {
   /** the gate's own run with the door's inputs, its first `pages` pages in turn, those before each let go first; at the
    *  door's resolution (scale 2.5, dpr 1), or at another of the same device pixels a unit (the gate's recorded runs': 1.25
@@ -109,7 +142,7 @@ window.door = {
       labels: { captions: { figure: 'target', table: 'target' } },
       ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl,
     })
-    const out = []
+    const out = [], finals = []
     for (let p = 1; p <= Math.min(pages, run.N); p++) {
       for (let q = 1; q < p; q++) if (!run.rows[q - 1].released) run.release(q)
       await run.until(p)
@@ -124,8 +157,9 @@ window.door = {
       if (Number.isFinite(done) && done > p) await run.until(done)
       const final = run.wordsOf(p)
       Object.assign(out.at(-1), { words: await wordsDigest(final), wordsBytes: wordsBytes(final), wordsTokens: final.tokens.n })
+      finals[p] = final
     }
-    const summary = { N: run.N, laid: run.stats.length, skipped: run.skipped.length }
+    const summary = { N: run.N, laid: run.stats.length, skipped: run.skipped.length, reach: await reachOf(run, finals, record, Math.min(pages, run.N)) }
     run.dispose()
     await doc.loadingTask.destroy()
     return { pages: out, summary }

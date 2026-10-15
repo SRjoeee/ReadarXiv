@@ -14,7 +14,10 @@ export interface PageWords {
   /** per token: the index of its word among anchors.mjs `tokens(plainTranslated(row.pieces))`, which a sentence start counts in
    *  (`row.sentences.tr`); -1 for a crop, a kept line, a lead or label, a placeholder's rendering and a mark alone, and for every
    *  token of a unit whose text the layer cannot place exactly in that string (a source piece drawn other than shown, a text
-   *  NFKC does not fold cluster by cluster) */
+   *  NFKC does not fold cluster by cluster). A drawn token carries the index of the first word it covers: a token of several words
+   *  ('First.Second', a Korean word of several syllables) leaves the later ones with no token. A sentence starts at a word that
+   *  begins a token: on the 30 outputs 0 of 7,472 sentence starts (the records' `sentences.tr`) lack a token carrying their index,
+   *  though 0.3% to 2% of the words (62% of Korean's) do (the lab's `--door` counts both) */
   word: Int32Array
   /** each unit painted on the page: [id, ranges], ranges [first, count] pairs into the tokens as a left part's spans are, rising,
    *  but the spans themselves in PAINT order, not by id, and with empty ranges for a unit painted on the page with no line on it
