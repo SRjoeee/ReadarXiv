@@ -254,7 +254,8 @@ describe('the feed: the bytes, and an abort that is not the feed\'s', () => {
     let abort = true
     const fetchObject = async (ref: Ref, signal: AbortSignal) => {
       if (abort && ref.sha256 === M.parts[1]!.sha256) throw Object.assign(new Error('aborted by the host'), { name: 'AbortError' })
-      return s.fetchObject(ref, signal)
+      void signal
+      return s.fetchObject(ref)
     }
     const warned: string[] = []
     const f = createFeed({ fetchObject, warn: w => warned.push(w) })

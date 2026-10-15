@@ -165,6 +165,26 @@ describe('the layer\'s transport (layerTransport)', () => {
     vi.unstubAllGlobals()
   })
 
+  it('refuses a ref whose digest is no digest without a request; an answer past the ref\'s bytes, by its length or as it comes, without keeping the rest', async () => {
+    const asked: string[] = []
+    let cancelled = 0
+    const big = (n: number, length: boolean) => {
+      let sent = 0
+      const body = new ReadableStream<Uint8Array>({ pull(c) { if (sent >= n) { c.close(); return } sent += 4096; c.enqueue(new Uint8Array(4096)) }, cancel() { cancelled++ } })
+      return new Response(body, { headers: length ? { 'content-length': String(n) } : {} })
+    }
+    vi.stubGlobal('fetch', async (url: string) => { asked.push(url); return url.includes('/o/1') ? big(1 << 20, true) : big(1 << 20, false) })
+    const t = layerTransport(viewOf(original), 'https://readarxiv.com', { id: '2600.00001', version: 1 })
+    const signal = new AbortController().signal
+    for (const sha256 of ['../../evil', 'A'.repeat(64), 'a'.repeat(63)]) await expect(t.fetchObject({ kind: 'part', sha256, bytes: 3 }, signal), sha256).rejects.toThrow()
+    expect(asked).toEqual([])
+    await expect(t.fetchObject({ kind: 'part', sha256: '1'.repeat(64), bytes: 1000 }, signal)).rejects.toThrow(/bytes/)
+    await expect(t.fetchObject({ kind: 'part', sha256: '2'.repeat(64), bytes: 1000 }, signal)).rejects.toThrow(/bytes/)
+    expect(asked.length).toBe(2)
+    expect(cancelled).toBe(2)
+    vi.unstubAllGlobals()
+  })
+
   it('binds the base where the original\'s bytes are its length and its digest, and nowhere else', async () => {
     const base = { bytes: original.length, sha256: await sha256(original), xref: 0 }
     expect(await layerTransport(viewOf(original), 'https://x', { id: '2600.00001', version: 1 }).bind(base)).toBe(true)

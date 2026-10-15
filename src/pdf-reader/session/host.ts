@@ -106,6 +106,10 @@ export function readerHost(host: SessionHost, config: Config, paper: string, wat
 }
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('')
+/** an object's name: its whole digest, 64 lower-case hex digits */
+const DIGEST = /^[0-9a-f]{64}$/
+/** how far an answer's length may pass its ref's bytes (an encoded answer's own length) before it is refused unread */
+const OBJECT_MARGIN = 1024
 /**
  * The layer's transport for the view's layer side, over the layer API at `api` (an origin): each object by its whole digest
  * (`/api/v1/layer/<id>v<n>/<CTAG4>/o/<sha256>`, immutable; the side's readers check the digest); the base, the bytes the left
@@ -116,9 +120,28 @@ export function layerTransport(view: ReaderView, api: string, paper: { id: strin
   const at = `${api}/api/v1/layer/${paper.id.replace('/', '_')}v${paper.version}/${CTAG4}/o/`
   return {
     async fetchObject(ref, signal) {
+      // a digest in the path, nothing else; no more read than the ref's bytes (and a margin for an encoded answer's length):
+      // the side's readers refuse any object not exactly those bytes, so the rest is never kept
+      if (!DIGEST.test(ref.sha256) || !Number.isSafeInteger(ref.bytes) || ref.bytes < 0) throw new TypeError(`the layer's object: not a ref (${String(ref.sha256).slice(0, 80)})`)
       const r = await fetch(`${at}${ref.sha256}`, { signal, credentials: 'omit' })
       if (!r.ok) throw new Error(`the layer's object ${ref.sha256}: ${r.status}`)
-      return new Uint8Array(await r.arrayBuffer())
+      const cap = ref.bytes + OBJECT_MARGIN, past = (n: number) => new Error(`the layer's object ${ref.sha256}: ${n} bytes or more, past its ref's ${ref.bytes}`)
+      const length = Number(r.headers.get('content-length'))
+      if (length > cap) { void r.body?.cancel().catch(() => {}); throw past(length) }
+      if (!r.body) { const b = new Uint8Array(await r.arrayBuffer()); if (b.length > cap) throw past(b.length); return b }
+      const reader = r.body.getReader(), chunks: Uint8Array[] = []
+      let n = 0
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        n += value.length
+        if (n > cap) { void reader.cancel().catch(() => {}); throw past(n) }
+        chunks.push(value)
+      }
+      const out = new Uint8Array(n)
+      let k = 0
+      for (const c of chunks) { out.set(c, k); k += c.length }
+      return out
     },
     async bind(base) {
       const data = await view.originalData()
