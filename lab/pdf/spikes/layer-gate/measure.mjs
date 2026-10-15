@@ -234,8 +234,8 @@ const PH_KINDS = ['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro'
  * engine's reader), by page: `units`, each unit's placeholders with ink on the page ({ k, kind, segs }: each segment its
  * box [x0, y0, x1, y1], TeX's own; an EMPTY placeholder has none, a LOST or TEXT one none the file knows), its lines
  * ({ j, box, baseline, size, held }: `held` a line its source does not write, a display's row), its pitch (`pitch`: the
- * median gap between two of its own text lines next to each other in a column with no held line between, over all its
- * pages), and on its first
+ * median gap between two of its own text lines next to each other in one column, its lines whose spans overlap, with no
+ * held line of the column between, over all its pages), and on its first
  * page the placeholders the file has LOST (`lost`, their k: ink no measure can place); `displays`, every display's
  * segments
  */
@@ -262,14 +262,27 @@ export function fileIndexOf(layout) {
       if (PH_KINDS[kind] === 'display') pageOf(p).displays.push(...segs)
     }
   }
-  // (each unit's pitch: the gaps of its text lines next to each other, page by page, in a column, no held line between)
+  // (each unit's pitch: the gaps of its text lines next to each other, page by page and column by column (lines whose
+  // spans overlap, chained), no held line of the column between)
   const gaps = new Map()
+  const overlaps = (a, b) => Math.min(a.box[2], b.box[2]) > Math.max(a.box[0], b.box[0])
   for (const pg of pages.values()) for (const [id, u] of pg.units) {
-    const text = u.lines.filter(l => !l.held).sort((a, b) => b.baseline - a.baseline), held = u.lines.filter(l => l.held)
-    for (let i = 1; i < text.length; i++) {
-      const a = text[i - 1], b = text[i], g = a.baseline - b.baseline
-      if (!(g > 0) || Math.min(a.box[2], b.box[2]) <= Math.max(a.box[0], b.box[0]) || held.some(h => h.baseline < a.baseline && h.baseline > b.baseline)) continue
-      ;(gaps.get(id) ?? gaps.set(id, []).get(id)).push(g)
+    const columns = []
+    for (const l of u.lines.filter(l => !l.held)) {
+      const hit = columns.filter(c => c.some(m => overlaps(m, l)))
+      const into = hit[0] ?? []
+      if (!hit.length) columns.push(into)
+      for (const c of hit.slice(1)) { into.push(...c); columns.splice(columns.indexOf(c), 1) }
+      into.push(l)
+    }
+    const held = u.lines.filter(l => l.held)
+    for (const c of columns) {
+      const text = c.slice().sort((a, b) => b.baseline - a.baseline)
+      for (let i = 1; i < text.length; i++) {
+        const a = text[i - 1], b = text[i], g = a.baseline - b.baseline
+        if (!(g > 0) || held.some(h => h.baseline < a.baseline && h.baseline > b.baseline && (overlaps(h, a) || overlaps(h, b)))) continue
+        ;(gaps.get(id) ?? gaps.set(id, []).get(id)).push(g)
+      }
     }
   }
   for (const pg of pages.values()) for (const [id, u] of pg.units) {
@@ -301,7 +314,8 @@ export function displayRowsOf(page) {
  * - its crop of its ink: each of its crops cut from this page (`crops`: { unit, k, src, box }, `box` its source
  *   rectangle) that holds the centre of one of its segments;
  * - its rendering drawn from its source (a symbol, a citation as the page wrote it, its source's text: `texts`,
- *   { unit, k, src }), once;
+ *   { unit, k, src }, one for each translated piece drawn so: a piece the translation repeats is shown twice), by its own
+ *   k alone (with no place to tell them apart, two renderings of one source are each their own);
  * - its rendering drawn as the page's own characters (orig-text: `pageTexts`, { unit, k, src, chars }, the centres of
  *   its characters) whose characters stand in its segments;
  * - its ink left in place, once however often: a kept rendering's characters in its segments (`kept`, as pageTexts),
@@ -318,7 +332,7 @@ export function contentOf({ phs, crops = [], texts = [], pageTexts = [], kept = 
     const centres = ph.segs.map(centreOf)
     const own = r => r.unit === ph.unit && (r.k === ph.k || (typeof r.src === 'string' && r.src === ph.src))
     const inPlace = kept.some(r => holds(ph, r.chars)) || centres.some(pt => keptLines.some(r => inBox(pt, r)) || !erased.some(e => inBox(pt, e)))
-    const n = crops.filter(c => own(c) && centres.some(pt => inBox(pt, c.box))).length + (texts.some(own) ? 1 : 0) + pageTexts.filter(r => own(r) && holds(ph, r.chars)).length + (inPlace ? 1 : 0)
+    const n = crops.filter(c => own(c) && centres.some(pt => inBox(pt, c.box))).length + texts.filter(r => r.unit === ph.unit && r.k === ph.k).length + pageTexts.filter(r => own(r) && holds(ph, r.chars)).length + (inPlace ? 1 : 0)
     if (n !== 1) out.push([ph.unit, ph.k, n])
   }
   return { contentLost: out.length, contentWhere: out }
