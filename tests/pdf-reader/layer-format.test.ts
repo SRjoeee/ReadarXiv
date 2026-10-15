@@ -628,3 +628,135 @@ describe('unitsOfChunks gives windowed access (amendment M3\')', () => {
     expect(() => unitsOfChunks(heavy)).toThrow(expect.objectContaining({ why: 'units-too-large', data: expect.objectContaining({ what: 'values', bound: 3_500_000 }) }))
   })
 })
+
+// ---------------------------------------------------------------- 7. head and index
+describe('the head', () => {
+  // biome-ignore lint/suspicious/noExplicitAny: a test breaks the head's types on purpose
+  const headWith = (edit: (h: any) => void) => {
+    const h = parsed(M.head)
+    edit(h)
+    const f = forged('head', h)
+    return readHead(f.bytes, { ref: f.ref })
+  }
+  const bad = async (edit: (h: never) => void, path: string | RegExp) => {
+    const e = await refusal(headWith(edit as never))
+    expect(e, 'refused').not.toBeNull()
+    expect(e!.kind).toBe('head')
+    expect(e!.path).toMatch(typeof path === 'string' ? new RegExp(`^${path.replace(/[[\].]/g, '\\$&')}$`) : path)
+  }
+
+  it('refuses a base of another shape: a url (amendment M13), an xref past the bytes, a digest that is not 64 hex digits', async () => {
+    await bad((h: never) => { (h as { base: object }).base = { ...(h as { base: object }).base, url: '/api/v1/original/2608.04322v1' } }, 'base.url')
+    await bad((h: never) => { (h as { base: { xref: number } }).base.xref = BASE.bytes }, 'base.xref')
+    await bad((h: never) => { (h as { base: { xref: number } }).base.xref = -1 }, 'base.xref')
+    await bad((h: never) => { (h as { base: { sha256: string } }).base.sha256 = 'ABCDEF' }, 'base.sha256')
+    await bad((h: never) => { (h as { base: { bytes: number } }).base.bytes = 0 }, 'base.bytes')
+    await bad((h: never) => { (h as { base: { bytes: number } }).base.bytes = 2 ** 31 + 1 }, 'base.bytes')
+    await bad((h: never) => { delete (h as { base: { xref?: number } }).base.xref }, 'base.xref')
+  })
+
+  it('refuses a paper, a version, a PDF.js and a version token that are not the reader\'s', async () => {
+    await bad((h: never) => { (h as { paper: { id: string } }).paper.id = '../x' }, 'paper.id')
+    await bad((h: never) => { (h as { paper: { version: number } }).paper.version = 0 }, 'paper.version')
+    await bad((h: never) => { (h as { paper: { pages: number } }).paper.pages = 0 }, 'paper.pages')
+    await bad((h: never) => { (h as { versions: { pdfjs: string } }).versions.pdfjs = '5.0.0' }, 'versions.pdfjs')
+    for (const k of ['pipeline', 'layout', 'removal', 'image']) await bad((h: never) => { (h as { versions: Record<string, unknown> }).versions[k] = 'a b' }, `versions.${k}`)
+    await bad((h: never) => { (h as { versions: Record<string, unknown> }).versions.bundle = '4' }, 'versions.bundle')
+    // (the maker's versions are named, never compared: a newer remover's is read)
+    expect((await headWith(h => { h.versions.removal = '99'; h.versions.layout = '7'; h.versions.pipeline = '12' })).versions).toMatchObject({ removal: '99', layout: '7', pipeline: '12' })
+  })
+
+  it('refuses units refs that are none, not contiguous from 0, past a chunk\'s bytes, or of another kind', async () => {
+    await bad((h: never) => { (h as { units: unknown[] }).units = [] }, 'units')
+    await bad((h: never) => { (h as { units: { from: number }[] }).units[0]!.from = 1 }, 'units[0].from')
+    await bad((h: never) => { (h as { units: { to: number }[] }).units[0]!.to = -1 }, 'units[0].to')
+    await bad((h: never) => { (h as { units: { bytes: number }[] }).units[0]!.bytes = UNITS_CAP + 1 }, 'units[0].bytes')
+    await bad((h: never) => { (h as { units: { kind: string }[] }).units[0]!.kind = 'part' }, 'units[0].kind')
+    await bad((h: never) => { const u = (h as { units: { from: number; to: number }[] }).units; u.push({ ...u[0]!, from: 9, to: 9 }) }, 'units[1].from')
+    await bad((h: never) => { (h as { units: unknown[] }).units = 'x' }, 'units')
+  })
+
+  it('refuses a lineskip past its bounds, and cites past theirs: 5,000 pairs, a key of 1–128 and a label of 1–32 code units, keys unique (amendment M11)', async () => {
+    await bad((h: never) => { (h as { lineskip: unknown }).lineskip = [1] }, 'lineskip')
+    await bad((h: never) => { (h as { lineskip: unknown }).lineskip = [1, 20000] }, 'lineskip[1]')
+    expect((await headWith(h => { h.lineskip = null })).lineskip).toBeNull()
+    const pair = (i: number) => [`key${i}`, `l${i}`]
+    expect((await headWith(h => { h.cites = Array.from({ length: 5000 }, (_, i) => pair(i)) })).cites).toHaveLength(5000)
+    await bad((h: never) => { (h as { cites: unknown }).cites = Array.from({ length: 5001 }, (_, i) => pair(i)) }, 'cites')
+    await bad((h: never) => { (h as { cites: unknown }).cites = [['k'.repeat(129), 'l']] }, 'cites[0][0]')
+    await bad((h: never) => { (h as { cites: unknown }).cites = [['', 'l']] }, 'cites[0][0]')
+    await bad((h: never) => { (h as { cites: unknown }).cites = [['k', 'l'.repeat(33)]] }, 'cites[0][1]')
+    await bad((h: never) => { (h as { cites: unknown }).cites = [['k', '']] }, 'cites[0][1]')
+    await bad((h: never) => { (h as { cites: unknown }).cites = [['k', 'a'], ['k', 'b']] }, 'cites[1][0]')
+    await bad((h: never) => { (h as { cites: unknown }).cites = [['k']] }, 'cites[0]')
+    await bad((h: never) => { (h as { cites: unknown }).cites = {} }, 'cites')
+    // (the worst case fits the head's cap: 5,000 pairs of 128 and 32 code units, about 0.85 MB)
+    const worst = Array.from({ length: 5000 }, (_, i) => [String(i).padStart(128, 'k'), String(i).padStart(32, 'l')])
+    const w = await writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: M.chunks, lineskip: null, cites: worst as [string, string][] })
+    expect(w.bytes.length).toBeLessThan(HEAD_CAP)
+    expect(w.bytes.length).toBeGreaterThan(800_000)
+    expect((await readHead(w.bytes, { ref: w.ref })).cites).toHaveLength(5000)
+  })
+
+  it('writes what it reads: its refusals are the writer\'s too', async () => {
+    const w = (o: Partial<Parameters<typeof writeHead>[0]>) => writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: M.chunks, lineskip: [1, 0], cites: null, ...o })
+    expect(await refusal(w({ base: { ...BASE, xref: BASE.bytes } }))).toMatchObject({ kind: 'head', path: 'base.xref' })
+    expect(await refusal(w({ cites: [['a', 'b'], ['a', 'c']] }))).toMatchObject({ path: 'cites[1][0]' })
+    expect(await refusal(w({ lineskip: [1, 30000] }))).toMatchObject({ path: 'lineskip[1]' })
+    expect(await refusal(w({ image: 'a b' }))).toMatchObject({ path: 'versions.image' })
+  })
+})
+
+describe('the index', () => {
+  /** a paper of two chunks, written and read as the service does */
+  async function twoChunks(tweak: (units: (typeof UNITS)[number][]) => void = () => {}) {
+    const units: (typeof UNITS)[number][] = Array.from({ length: 2600 }, (_, i) => ['para', 0, null, null, null, [[0, `${'x'.repeat(995)}${i % 10}`]]])
+    tweak(units)
+    const chunks = await writeUnitChunks({ paper: PAPER, units })
+    expect(chunks.length).toBeGreaterThanOrEqual(2)
+    const head = await writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: chunks, lineskip: null, cites: null })
+    const rh = await readHead(head.bytes, { ref: head.ref })
+    const read: Awaited<ReturnType<typeof readUnitsChunk>>[] = []
+    for (const c of chunks) read.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: read.at(-1) ?? null }))
+    return { chunks, head, rh, read }
+  }
+
+  it('binds the head and its chunks: their number, ranges, digests and bytes the head\'s, in order', async () => {
+    const t = await twoChunks()
+    expect(indexOf(t.rh, t.read).units).toHaveLength(2600)
+    expect(() => indexOf(t.rh, [...t.read].reverse())).toThrow(expect.objectContaining({ kind: 'index', path: 'units[0]' }))
+    expect(() => indexOf(t.rh, t.read.slice(0, 1))).toThrow(expect.objectContaining({ kind: 'index', path: 'units' }))
+    expect(() => indexOf(t.rh, [...t.read, t.read[0]!])).toThrow(expect.objectContaining({ path: 'units' }))
+    // a chunk of the same ids and other bytes: not the one the head names
+    const other = await twoChunks(units => { units[10] = ['para', 0, null, null, null, [[0, `${'y'.repeat(995)}0`]]] })
+    expect(other.chunks[0]!.to).toBe(t.chunks[0]!.to)
+    expect(() => indexOf(t.rh, [other.read[0]!, t.read[1]!])).toThrow(expect.objectContaining({ path: 'units[0]', message: expect.stringMatching(/digest or bytes/) }))
+    // a range that is not the head's
+    expect(() => indexOf(t.rh, [{ ...t.read[0]!, to: t.read[0]!.to - 1 }, t.read[1]!])).toThrow(expect.objectContaining({ path: 'units[0]' }))
+  })
+
+  it('binds the paper and the pipeline, and the chain: chunks not read one after the other', async () => {
+    const t = await twoChunks()
+    expect(() => indexOf(t.rh, [{ ...t.read[0]!, pipeline: '99' }, t.read[1]!])).toThrow(expect.objectContaining({ message: expect.stringMatching(/pipeline/) }))
+    expect(() => indexOf(t.rh, [{ ...t.read[0]!, paper: { id: PAPER.id, version: 9 } }, t.read[1]!])).toThrow(expect.objectContaining({ message: expect.stringMatching(/paper/) }))
+    // a second chunk read with no chunk before it (its `stands` a fresh record): not the chain
+    const f = { bytes: t.chunks[1]!.bytes, ref: t.chunks[1]!.ref }
+    const alone = await readUnitsChunk(f.bytes, { ref: f.ref, before: { ...t.read[0]!, stands: new Uint8Array(t.read[0]!.to + 1) } })
+    expect(() => indexOf(t.rh, [t.read[0]!, alone])).toThrow(expect.objectContaining({ kind: 'index', message: expect.stringMatching(/after the chunk before/) }))
+  })
+
+  it('binds a catalog: its head, units, paper and versions the head\'s', async () => {
+    const t = await twoChunks()
+    const units = t.chunks.map(c => ({ from: c.from, to: c.to, sha256: c.sha256, bytes: c.bytes.length }))
+    const cat = await readCatalog((await writeCatalog({ head: t.rh, units, parts: [], end: { through: 0, refused: 'bound' } })).bytes)
+    expect(indexOf(t.rh, t.read, { catalog: cat }).units).toHaveLength(2600)
+    const otherHead = await writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: t.chunks, lineskip: [1, 0], cites: null })
+    const rh2 = await readHead(otherHead.bytes, { ref: otherHead.ref })
+    expect(rh2.sha256).not.toBe(t.rh.sha256)
+    expect(() => indexOf(rh2, t.read, { catalog: cat })).toThrow(expect.objectContaining({ kind: 'index', path: 'catalog.head' }))
+    // the same head, a catalog of other versions or another chunk
+    expect(() => indexOf(t.rh, t.read, { catalog: { ...cat, versions: { ...cat.versions, image: '9' } } })).toThrow(expect.objectContaining({ path: 'catalog.versions.image' }))
+    expect(() => indexOf(t.rh, t.read, { catalog: { ...cat, paper: { ...cat.paper, pages: N + 1 } } })).toThrow(expect.objectContaining({ path: 'catalog.paper' }))
+    expect(() => indexOf(t.rh, t.read, { catalog: { ...cat, units: [{ ...cat.units[0]!, bytes: 1 }, cat.units[1]!] } })).toThrow(expect.objectContaining({ path: 'catalog.units[0]' }))
+  })
+})
