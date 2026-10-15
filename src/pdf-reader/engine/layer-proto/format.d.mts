@@ -92,6 +92,8 @@ export interface PartChain {
   readonly last: string | null
   /** the last K entry told, in (slot, id) order (-Infinity, -1 before any) */
   readonly slot: number; readonly id: number
+  /** a flag for each unit of the paper that a part has told (as a left unit or a file-only one): none is told twice */
+  readonly told: Uint8Array
   /** the furthest page any part's views reached (a part whose own units reach less far leaves the rest to the part that told them) */
   readonly reach: number
   /** the views of pages through + 1 … reach */

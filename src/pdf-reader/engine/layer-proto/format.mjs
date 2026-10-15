@@ -685,7 +685,7 @@ function partShape(v, { N, unitCount, atFrom }) {
 /** the chain before any part */
 function initialChain(index) {
   const base = index.head.base
-  return { head: index.sha256, through: 0, last: null, slot: -Infinity, id: -1, reach: 0, ahead: [], end: base.bytes, xref: base.xref, next: null, root: null, r: 0 }
+  return { head: index.sha256, through: 0, last: null, slot: -Infinity, id: -1, told: new Uint8Array(index.units.length), reach: 0, ahead: [], end: base.bytes, xref: base.xref, next: null, root: null, r: 0 }
 }
 
 /**
@@ -729,8 +729,20 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
     if (slot > highSlot || (slot === highSlot && id > highId)) { highSlot = slot; highId = id }
     any = true
   }
-  for (const w of s.left) note(w[1], w[0])
-  for (const e of s.fileOnly) note(e[1] + 0.5, e[0])
+  // (and no unit twice: one told by an earlier part is refused at any slot, past the frontier too)
+  const told = was.told.slice()
+  for (let i = 0; i < s.left.length; i++) {
+    const w = s.left[i]
+    if (told[w[0]] === 1) throw refuse(K, `left[${i}][0]`, 'a unit already told by an earlier part')
+    told[w[0]] = 1
+    note(w[1], w[0])
+  }
+  for (let i = 0; i < s.fileOnly.length; i++) {
+    const e = s.fileOnly[i]
+    if (told[e[0]] === 1) throw refuse(K, `fileOnly[${i}][0]`, 'a unit already told by an earlier part')
+    told[e[0]] = 1
+    note(e[1] + 0.5, e[0])
+  }
   if (any && !(lowSlot > was.slot || (lowSlot === was.slot && lowId > was.id))) throw refuse(K, 'left', 'a unit that is not after the last one told (slot, id)')
   // (the views of the pages the last part reached past its own: those this part's views include are as told; a part whose own
   // units reach less far leaves the rest to the part that told them)
@@ -750,7 +762,7 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
     root = links.root
   }
   const after = Object.freeze({
-    head: was.head, through: s.b, last: sha256, slot: highSlot, id: highId, reach: Math.max(s.reach, was.reach),
+    head: was.head, through: s.b, last: sha256, slot: highSlot, id: highId, told, reach: Math.max(s.reach, was.reach),
     ahead: Object.freeze(s.reach >= was.reach ? s.views.slice(4 * (s.b - s.a + 1)) : was.ahead.slice(4 * (s.b - was.through))), end, xref, next, root, r: was.r + (s.addon === null ? 0 : s.addon.r),
   })
   return {

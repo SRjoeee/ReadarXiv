@@ -139,7 +139,7 @@ describe('each writer then its reader is the identity', () => {
     expect(p1.leftParts).toEqual([M.lefts[1]!.ref])
     expect(p2.leftParts).toEqual([M.lefts[2]!.ref, M.lefts[3]!.ref])
     expect(p1.chain).toEqual({
-      head: M.head.sha256, through: 1, last: M.parts[0]!.sha256, slot: 12, id: 2, reach: 2, ahead: VIEWS[1], end: BASE.bytes + TAILS[0]!.tail.length,
+      head: M.head.sha256, through: 1, last: M.parts[0]!.sha256, slot: 12, id: 2, told: Uint8Array.of(1, 0, 1, 0, 0, 0, 0, 0), reach: 2, ahead: VIEWS[1], end: BASE.bytes + TAILS[0]!.tail.length,
       xref: TAILS[0]!.startxref, next: 104, root: 12, r: 1,
     })
     expect(p2.chain).toMatchObject({ through: 3, slot: 41.5, id: 5, reach: 4, ahead: VIEWS[3], end: BASE.bytes + TAILS[0]!.tail.length + TAILS[1]!.tail.length, xref: TAILS[1]!.startxref, next: 108, root: 12, r: 2 })
@@ -862,19 +862,43 @@ describe('a part against the chain', () => {
     await refused(1, p => { (p as Any).fileOnly[0][1] = 11 }, 'left')
   })
 
-  it('refuses a unit told twice: unit 0 again in a later part', async () => {
+  it('refuses a unit told twice: below the frontier, and past it (the chain keeps the ids told)', async () => {
     const p = parsed(M.parts[2]!)
     p.pages = [2, 2]
     p.prev = M.parts[0]!.sha256
     p.views = VIEWS.slice(1, 4).flat()
-    p.left = [[0, 0, [[2, 72, 600, 200, 610]]]]
     p.leftParts = [M.lefts[2]!.ref]
+    // unit 0 again at its stream, below the frontier (12, 2)
+    p.left = [[0, 0, [[2, 72, 600, 200, 610]]]]
     const f = forged('part', p, { from: 2, to: 2 })
-    expect(await refusal(readPart(f.bytes, { ref: f.ref, index: M.index, chain: chain(0) }))).toMatchObject({ kind: 'part', path: 'left' })
-    // (unit 1, which no part told, and a stream after the last: the same part reads)
-    p.left = [[1, 13, [[2, 72, 600, 200, 610]]]]
+    expect(await refusal(readPart(f.bytes, { ref: f.ref, index: M.index, chain: chain(0) }))).toMatchObject({ kind: 'part', path: 'left[0][0]' })
+    // unit 0 again at a stream past the frontier: the frontier does not see it, the ids told do
+    p.left = [[0, 30, [[2, 72, 600, 200, 610]]]]
+    const again = forged('part', p, { from: 2, to: 2 })
+    expect(await refusal(readPart(again.bytes, { ref: again.ref, index: M.index, chain: chain(0) }))).toMatchObject({ kind: 'part', path: 'left[0][0]' })
+    // unit 1, which no part told, at the same stream: the same part reads
+    p.left = [[1, 30, [[2, 72, 600, 200, 610]]]]
     const g = forged('part', p, { from: 2, to: 2 })
     expect((await readPart(g.bytes, { ref: g.ref, index: M.index, chain: chain(0) })).left).toHaveLength(1)
+  })
+
+  it('refuses a unit told in an earlier part again as a left unit or a file-only one, whatever the slot', async () => {
+    // part 2 with unit 0 (told by part 1) added to its left at stream 30: past the frontier
+    await refused(1, p => { (p as Any).left.unshift([0, 30, [[2, 72, 600, 200, 610]]]) }, 'left[0][0]')
+    // and as a file-only unit, with a layout of its own (after 40: slot 40.5)
+    await refused(1, p => {
+      const l = (p as Any).layout
+      l.units.unshift([0, 1, 9, 1, 1])
+      l.lines.unshift([0, [2, 150, 460, 700, 712, 696, 17.28, 0]])
+      l.frames.unshift([0, [2, 0, 0, 1, -1, 30]])
+      ;(p as Any).fileOnly.unshift([0, 40])
+    }, 'fileOnly[0][0]')
+    // unit 2, told by part 1 and the frontier's own: its slot is the frontier's, not past it
+    await refused(1, p => { (p as Any).left.unshift([2, 13, [[2, 72, 600, 200, 610]]]) }, 'left[0][0]')
+    // the parts' ids told accumulate: part 3 cannot tell what part 2 told
+    await refused(2, p => { (p as Any).left.unshift([3, 80, [[4, 72, 600, 200, 610]]]) }, 'left[0][0]')
+    expect(chain(1).told.slice(0, 8)).toEqual(Uint8Array.of(1, 0, 1, 1, 1, 1, 0, 0))
+    expect(chain(0).told.length).toBe(UNITS.length)
   })
 
   it('refuses a unit in the left and the file-only both, a file-only unit not in the layout, a layout unit in neither', async () => {
