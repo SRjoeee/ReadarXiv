@@ -406,7 +406,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   if (expect !== null && (!Array.isArray(expect) || !expect.every(id => Number.isSafeInteger(id) && id >= 0))) throw new TypeError(`expect: ids of units or null, not ${kindOf(expect)}`)
   if (tableGroups !== null && !(tableGroups instanceof Map)) throw new TypeError(`groups: a Map of ids to groups or null, not ${kindOf(tableGroups)}`)
   if (faceSources !== null && typeof faceSources !== 'function') throw new TypeError(`faceSources: a function or null, not ${kindOf(faceSources)}`)
-  if (partsMode && (!tableGroups || !tex || removal?.mode !== 'draw')) throw new TypeError('parts: the open is given each unit\'s table group, the hybrid and the text removal (the door\'s choices)')
+  if (partsMode && (!tableGroups || !tex || removal?.mode !== 'draw' || !proof)) throw new TypeError('parts: the open is given each unit\'s table group, the hybrid, the text removal and the proof (the door\'s choices)')
   // (parts: the views and the left come with the parts, grow; the views given are none)
   if (partsMode) geometry = { ...geometry, left: { pages: [], units: [] } }
   // every choice made for the target, in one call: the layout rules' (rules/layout.mjs resolveRules), the built-in set's or
@@ -475,7 +475,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // (the characters each font's own map gives its glyphs, layer2.mjs mappedOf: null where it has none to read; a font
   // exported with no map, the document not opened with PDF_OPTIONS, throws: fontMappedOf)
   const mappedOfPage = page => name => {
-    if (!fontMapped.has(name)) fontMapped.set(name, L2.fontMappedOf(fontObj(page, name)))
+    if (!fontMapped.has(name)) {
+      // (the document's own fault, not the page's: every page of it would fail alike, so the run ends, as a host's bug must show)
+      try { fontMapped.set(name, L2.fontMappedOf(fontObj(page, name))) } catch (e) { throw Object.assign(e, { refusesDocument: true }) }
+    }
     return fontMapped.get(name)
   }
   const chars2 = [], inks = [], views = [], pageBottom = []
@@ -1608,13 +1611,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         // (the page's names, before its units: layer2.mjs nameInTarget)
         if (!disposed) await paintNames(pg)
       } catch (e) {
-        if (isMemoryError(e)) throw e
+        // (the run ends, never a page stepped over: a memory error; a document opened without PDF_OPTIONS (#352's refusal); and
+        // page 1, whose drawing sets the paper's designs, family, patterns and faces that every later page is laid in)
+        if (isMemoryError(e) || e?.refusesDocument || pg === 1) throw e
         failedPages.add(pg)
+        // (none of it a source to cut a crop from)
+        if (rows[pg - 1]) rows[pg - 1].base = false
       }
     }
-    // (page 1 not drawn: what its drawing awaits before any unit is laid, the hyphenation patterns and the prototype's faces, is
-    // awaited here, so that no line breaks by a fetch's timing)
-    if (pg === 1 && failedPages.has(1) && drawn < 1) { await hyphP.catch(() => {}); if (!roles) await Promise.all([warmP, lmP]).catch(() => {}) }
     if (disposed) return
     drawn = pg
     const t1 = performance.now()
@@ -1824,7 +1828,15 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const others = new Map()
       const need = (j, plane) => { const key = `${plane}${j}`; if (!(plane === 'O' && j === pg) && !others.has(key)) others.set(key, [j, plane]) }
       for (const o of r.ops) { if (o.op === 'swap') need(o.page, 'R'); else if (o.op === 'crop') need(o.page, o.plane ?? 'O') }
-      for (const [key, [j, plane]] of others) others.set(key, await renderAt(j, k, plane))
+      // (let go while it reads: no document read after, a retired one among them, and nothing drawn)
+      const rendered = []
+      for (const [key, [j, plane]] of others) {
+        if (disposed) { for (const c of rendered) { c.width = 0; c.height = 0 } return }
+        const c = await renderAt(j, k, plane)
+        rendered.push(c)
+        others.set(key, c)
+      }
+      if (disposed) { for (const c of rendered) { c.width = 0; c.height = 0 } return }
       ctx.drawImage(source, 0, 0)
       L2.drawOps(ctx, r.ops, k / (scale * dpr), (j, plane = 'O') => (j === pg && plane === 'O' ? source : (others.get(`${plane}${j}`) ?? null)))
       for (const c of others.values()) { c.width = 0; c.height = 0 }

@@ -102,7 +102,7 @@ async function wholeRun(P: Paper) {
   const doc = P.docFor(P.parts.at(-1)!.chain.r)
   const run = await openProto({
     doc, geometry: { schema: 1, kinds: merged.left.kinds, left: { pages: merged.left.pages, units: merged.left.units } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
-    target: 'zh', pages: P.N, scale: 1, dpr: 1, copy: false, labels: LABELS as never,
+    target: 'zh', pages: P.N, scale: 1, dpr: 1, copy: false, proof: true, labels: LABELS as never,
     // (BUNDLE 3's door: the text removal where the bundle has an add-on, v0's own drawing where it has none)
     tex: { ...HYBRID, index: indexLayout(merged.layout!), pieces: new Map() }, removal: merged.addon ? { mode: 'draw', doc, manifest: merged.addon.manifest } : null,
   })
@@ -125,7 +125,7 @@ async function partsRun(P: Paper, o: PartsOptions) {
   const doc = P.docFor(0)
   let waits = 0, starved: (() => void) | null = null
   const run = await openProto({
-    parts: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
+    parts: true, proof: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
     target: 'zh', pages: P.N, scale: 1, dpr: 1, copy: false, labels: LABELS as never,
     tex: { ...HYBRID, index: facade.index, pieces: new Map() }, removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: P.N, sets: {}, page: {} } as never },
     onRetired: o.onRetired ?? null, onWait: (what: string) => { waits++; if (what === 'part') starved?.() },
@@ -249,7 +249,7 @@ describe('the run in parts: waits, failures and documents', () => {
     const doc = P.docFor(0) as ReturnType<Paper['docFor']>
     const waits: string[] = []
     const run = await openProto({
-      parts: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
+      parts: true, proof: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
       target: 'zh', pages: P.N, scale: 1, dpr: 1, copy: false, labels: LABELS as never, tex: { ...HYBRID, index: facade.index, pieces: new Map() },
       removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: P.N, sets: {}, page: {} } as never }, onWait: (w: string) => waits.push(w),
     } as never)
@@ -274,37 +274,127 @@ describe('the run in parts: waits, failures and documents', () => {
     run.dispose()
   })
 
-  it('lays no unit before the hyphenation patterns are in, page 1 failed (m2: no line break that hangs on a fetch\'s timing)', async () => {
+  /** v0 in parts over a paper, every part told and the rows ended: `doc` its composed document, `target` its language, `copy` v0's own
+   *  copy kept */
+  const openWarm = async (P: Paper, doc: unknown, o: { target?: string; copy?: boolean } = {}) => {
+    const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const facade = layoutFacade(P.index.head)
+    const target = o.target ?? 'zh'
+    const run = await openProto({
+      parts: true, proof: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, target), groups: groupsOfIndex(P.index),
+      target, pages: P.N, scale: 1, dpr: 1, copy: o.copy ?? false, labels: LABELS as never, tex: { ...HYBRID, index: facade.index, pieces: new Map() },
+      removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: P.N, sets: {}, page: {} } as never },
+    } as never)
+    run.take(unitsOfRows(P.index, rowsOfIndex(P.index)) as never)
+    run.end()
+    for (const part of P.parts) { facade.add(part); run.grow(part); if (part.addon?.tail) run.swap(P.docFor(part.chain.r)) }
+    return run
+  }
+
+  it('lays no unit before the hyphenation patterns are in (m2: no line break that hangs on a fetch\'s timing)', async () => {
     // (German: its patterns are fetched by no other test of this file, and a realm fetches a language's once)
     const P = await takePaper(TAKE)
     const was = g.fetch
     try {
-      for (const fail of [[1]]) {
-        let release = () => {}, loaded = false
-        const held = new Promise<void>(ok => { release = ok })
-        g.fetch = async (url: string) => { if (String(url).includes('/hyph/de')) { await held; loaded = true } return { ok: false, json: async () => null } }
-        const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
-        const facade = layoutFacade(P.index.head)
-        const doc = docsOf(TAKE, { fail: () => fail })(0)
-        const run = await openProto({
-          parts: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'de'), groups: groupsOfIndex(P.index),
-          target: 'de', pages: P.N, scale: 1, dpr: 1, copy: false, labels: LABELS as never, tex: { ...HYBRID, index: facade.index, pieces: new Map() },
-          removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: P.N, sets: {}, page: {} } as never },
-        } as never)
-        run.take(unitsOfRows(P.index, rowsOfIndex(P.index)) as never)
-        run.end()
-        for (const part of P.parts) { facade.add(part); run.grow(part) }
-        const laid = run.until(3)
-        await ticks(20)
-        expect(run.failed(1)).toBe(true)
-        expect(run.order, 'page 1 failed, the patterns not in').toEqual([])
-        release()
-        await laid
-        expect(loaded).toBe(true)
-        expect(run.order.length).toBeGreaterThan(0)
-        run.dispose()
-      }
+      let release = () => {}, loaded = false
+      const held = new Promise<void>(ok => { release = ok })
+      g.fetch = async (url: string) => { if (String(url).includes('/hyph/de')) { await held; loaded = true } return { ok: false, json: async () => null } }
+      const run = await openWarm(P, docsOf(TAKE)(0), { target: 'de' })
+      const laid = run.until(3)
+      await ticks(20)
+      expect(run.order, 'the patterns not in').toEqual([])
+      release()
+      await laid
+      expect(loaded).toBe(true)
+      expect(run.order.length).toBeGreaterThan(0)
+      run.dispose()
     } finally { g.fetch = was }
+  })
+
+  it('ends the run where page 1 cannot be drawn: the paper\'s designs, family and patterns are read from it, so no later page is drawn (I1)', async () => {
+    const P = await takePaper(TAKE)
+    const doc = docsOf(TAKE, { fail: () => [1] })(0)
+    const run = await openWarm(P, doc)
+    const laid = await run.until(3).then(() => 'laid', (e: Error) => e.message)
+    expect(laid).toMatch(/page 1 cannot be read/)
+    expect(doc.reads).toEqual([1])
+    expect([run.drawnTo, run.order, run.stats]).toEqual([0, [], []])
+    run.dispose()
+  })
+
+  it('ends the run where a page\'s fonts were exported with no map to read (I2: a document not opened with PDF_OPTIONS)', async () => {
+    const P = await takePaper(TAKE)
+    const base = docsOf(TAKE)(0)
+    // (page 2's text in a font of its own, exported with no ToUnicode map: the document was opened without fontExtraProperties)
+    const doc = {
+      numPages: base.numPages, reads: [] as number[],
+      async getPage(n: number) {
+        doc.reads.push(n)
+        const pg = (await base.getPage(n)) as { getTextContent(): Promise<{ items: { fontName: string }[]; styles: Record<string, unknown> }> }
+        return {
+          ...pg,
+          getTextContent: async () => { const tc = await pg.getTextContent(); return { items: tc.items.map(it => ({ ...it, fontName: `f${n}` })), styles: { [`f${n}`]: tc.styles.f1 } } },
+          commonObjs: { get: (name: string) => ({ name: 'Times-Roman', isType3Font: false, ...(name === 'f2' ? {} : { toUnicode: { _map: [] } }) }) },
+        }
+      },
+    }
+    const run = await openWarm(P, doc)
+    const laid = await run.until(3).then(() => 'laid', (e: Error) => e.message)
+    expect(laid).toMatch(/PDF_OPTIONS/)
+    expect(doc.reads).toEqual([1, 2])
+    expect(run.drawnTo).toBe(1)
+    run.dispose()
+  })
+
+  it('refuses parts with no proof: a part with no layout is read through the proof that nothing proves (#352)', async () => {
+    const P = await takePaper(TAKE)
+    const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const doc = docsOf(TAKE)(0)
+    await expect(openProto({
+      parts: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: [], groups: groupsOfIndex(P.index),
+      target: 'zh', pages: P.N, scale: 1, copy: false, tex: { ...HYBRID, index: layoutFacade(P.index.head).index, pieces: new Map() },
+      removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: P.N, sets: {}, page: {} } as never },
+    } as never)).rejects.toThrow(TypeError)
+  })
+
+  it('reads no document for a copy once the run is let go (M10: a retired document is not read)', async () => {
+    const P = await takePaper(TAKE)
+    const base = docsOf(TAKE)(0)
+    let release = () => {}
+    let holding = false
+    const held = new Promise<void>(ok => { release = ok })
+    const doc = { numPages: base.numPages, reads: [] as number[], async getPage(n: number) { doc.reads.push(n); if (holding) await held; return base.getPage(n) } }
+    const run = await openWarm(P, doc)
+    await run.until(2)
+    // (page 2's drawing as if it cut from pages 1 and 3: two other pages to read for its copy)
+    run.rows[1]!.ops.push({ op: 'crop', page: 1, plane: 'O' } as never, { op: 'crop', page: 3, plane: 'O' } as never)
+    const reads = doc.reads.length
+    holding = true
+    const canvas = document.createElement('canvas')
+    canvas.width = 10
+    canvas.height = 10
+    const copying = run.drawCopy(2, canvas.getContext('2d')!, canvas, 1).then(() => 'drawn', (e: Error) => e.message)
+    await ticks()
+    run.dispose()
+    release()
+    await copying
+    // (the first read under way when it was let go ends; the second is never made)
+    expect(doc.reads.slice(reads)).toEqual([1])
+  })
+
+  it('keeps no source of a page that failed after its original was drawn (Minor 5: no crop cut from it)', async () => {
+    const M = await made()
+    const units = M.index.units.map((_, id) => ({ text: `unit ${id}`, lines: M.readParts.flatMap(p => p.left.filter(w => w[0] === id).flatMap(w => w[2].map(r => [r[0], r[1], r[3], r[2] + 2.15]))) }))
+    const plain = docsOf({ pages: 4, units })
+    // (page 3's removed page, the add-on's sixth page, cannot be read: page 3 fails after its original is drawn)
+    const docFor = (r: number) => { const d = plain(r); return { numPages: d.numPages, reads: d.reads, getPage: (n: number) => (n === 6 ? Promise.reject(new Error('page 6 cannot be read')) : d.getPage(n)) } }
+    const P: Paper = { N: 4, index: M.index, parts: M.readParts, docFor: docFor as never }
+    const run = await openWarm(P, docFor(0), { copy: true })
+    await run.until(4)
+    expect(run.failed(3)).toBe(true)
+    expect(run.rows[2]!.base).toBe(false)
+    expect(run.rows[1]!.base).toBe(true)
+    run.dispose()
   })
 
   it('steps over a page whose drawing throws: its units the original\'s on all their pages, why page; the others drawn', async () => {
@@ -351,7 +441,7 @@ describe('the run in parts: waits, failures and documents', () => {
     const facade = layoutFacade(P.index.head)
     const retired: unknown[] = []
     const run = await openProto({
-      parts: true, doc: docFor(0), geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
+      parts: true, proof: true, doc: docFor(0), geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
       target: 'zh', pages: 4, scale: 1, dpr: 1, copy: false, labels: LABELS as never, tex: { ...HYBRID, index: facade.index, pieces: new Map() },
       removal: { mode: 'draw', doc: docFor(0), manifest: { schema: 1, removal: REMOVAL, pages: 4, sets: {}, page: {} } as never }, onRetired: (d: unknown) => retired.push(d),
     } as never)

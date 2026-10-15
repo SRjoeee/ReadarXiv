@@ -377,6 +377,27 @@ describe('the door: three opens, the same pages', () => {
     layer.dispose()
   })
 
+  it('is terminal where page 1 cannot be drawn: every page told failed once, no later page drawn (I1)', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const c = await cutSpec(SPEC)
+    const doc = docsOf(SPEC, { fail: () => [1] })(0)
+    const layer = await openLayer({ index: c.index, doc: doc as never, parts: c.parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+    try {
+      layer.take(rowsOfIndex(c.index))
+      layer.end()
+      const told: string[] = []
+      layer.onPage((p, state) => told.push(`${state}:${p}`))
+      const two = await layer.pageOf(2, { lang: 'zh' }).then(() => 'value', (e: Error) => e.message)
+      expect(two).toMatch(/page 1 cannot be read/)
+      expect([1, 2, 3].map(p => layer.pageState(p))).toEqual(['failed', 'failed', 'failed'])
+      // (the pages told laying on the way are told failed after, each page's failed once)
+      expect(told.filter(e => e.startsWith('failed:'))).toEqual(['failed:1', 'failed:2', 'failed:3'])
+      expect(told.filter(e => !e.startsWith('failed:') && !e.startsWith('laying:'))).toEqual([])
+      expect(doc.reads).toEqual([1])
+      expect((seen.runs.at(-1) as Run).stats).toEqual([])
+    } finally { layer.dispose() }
+  })
+
   it('rejects a ready page\'s ask when dispose comes in the same task (PR #359)', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const c = await cutSpec(SPEC)
