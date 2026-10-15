@@ -25,7 +25,7 @@
 // fixture's layout file (its rows read by the instrument itself, fileIndexOf), whether or not the hybrid is given it.
 import * as pdfjs from 'pdfjs-dist'
 import { lostInk } from '/engine/layer/check.mjs'
-import { contentOf, cropForeignPx, displayRowsOf, fileIndexOf, footprintOf, glyphAccounted, lineStartsOf, markerResidueOf, markupResidueOf, MATH_FONT, modelPage, noStart, overDisplayOf, pixelPage, removalPage, replacedFoot, slotsSkippedOf } from '/gate/measure.mjs'
+import { contentOf, cropForeignPx, displayRowsOf, fileIndexOf, footprintOf, glyphAccounted, keptSegsOf, lineStartsOf, markerResidueOf, markupResidueOf, MATH_FONT, modelPage, noStart, overDisplayOf, pixelPage, removalPage, replacedFoot, slotsSkippedOf } from '/gate/measure.mjs'
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
 /** device pixels a PDF unit: v0's canvases at 1.25 CSS px and dpr 2 (the floor's), and the lost-ink check's 2x floor */
@@ -674,13 +674,13 @@ window.gate = {
     // as a unit's line start (`unit`) is that unit's line, its characters and band alone its own
     const named = drawnNames.filter(n => n.unit === undefined).map(n => ({ orig: [n.box], lines: [{ baseline: n.box.baseline, size: n.size, x0: n.x, x1: n.x + n.w }], erase: [[n.box.x0 - 0.3, n.box.bottom - 0.5, n.box.x1 + 0.3, n.box.top + 0.5]], chars: n.chars }))
     const namedInk = drawnNames.map(n => ({ orig: [n.box], chars: n.chars }))
-    S.cur = { p, page, W, H, view, O, C, units, named, namedInk, kept, items, drawnText, recs, cut, textsDrawn: content.inputs.texts }
+    S.cur = { p, page, W, H, view, O, C, units, named, namedInk, kept, items, drawnText, recs, cut, textsDrawn: content.inputs.texts, keptSegs: keptSegsOf(content.inputs) }
     return out
   },
 
   /** the pixel tier's measures of the page prepared last, its T plane the driver's screenshot (PNG, base64) */
   async analyse(b64) {
-    const { p, W, H, view, O, C, units, named, namedInk, kept, items, drawnText, recs, cut, textsDrawn } = S.cur
+    const { p, W, H, view, O, C, units, named, namedInk, kept, items, drawnText, recs, cut, textsDrawn, keptSegs } = S.cur
     const bmp = await createImageBitmap(await (await fetch(`data:image/png;base64,${b64}`)).blob())
     const tc = new OffscreenCanvas(W, H).getContext('2d', { willReadFrequently: true })
     tc.fillStyle = '#ffffff'
@@ -689,9 +689,9 @@ window.gate = {
     const T = tc.getImageData(0, 0, W, H).data
     S.cur.T = T
     const ref = S.ref[p] ?? []
-    // (each drawn unit's own text lines as TeX's file has them, neither held nor a label: what linesLeft reads)
+    // (each drawn unit's own text lines as TeX's file has them, not held: what linesLeft reads, its placeholders kept in place aside)
     const ownLines = recs.flatMap(r => (S.file.get(p)?.units.get(r.id)?.lines ?? []).filter(l => !l.held).map(l => ({ unit: r.id, box: l.box })))
-    const m = pixelPage({ k: K, view, W, H, O, C, T, units, names: named, kept, items, ref, drawnText, cut, ownLines })
+    const m = pixelPage({ k: K, view, W, H, O, C, T, units, names: named, kept, items, ref, drawnText, cut, ownLines, segs: keptSegs })
     // lost ink against what v0 accounts for
     const toPx = (x, y) => [(x - view[0]) * K, (view[3] - y) * K]
     const fill = (mask, x0, y0, x1, y1) => {

@@ -295,13 +295,18 @@ export function contentOf({ phs, crops = [], texts = new Set(), pageTexts = [], 
   const out = []
   for (const ph of phs) {
     const centres = ph.segs.map(centreOf)
-    const mine = chars => chars.some(pt => ph.segs.some(s => inBox(pt, s)))
+    const mine = chars => holds(ph, chars)
     const inPlace = kept.some(mine) || centres.some(pt => keptLines.some(r => inBox(pt, r)) || !erased.some(e => inBox(pt, e)))
     const n = crops.filter(c => centres.some(pt => inBox(pt, c))).length + (texts.has(`${ph.unit}|${ph.k}`) ? 1 : 0) + pageTexts.filter(mine).length + (inPlace ? 1 : 0)
     if (n !== 1) out.push([ph.unit, ph.k, n])
   }
   return { contentLost: out.length, contentWhere: out }
 }
+
+/** whether a rendering's characters (their centres) stand in a placeholder's segments: its ink */
+const holds = (ph, chars) => chars.some(pt => ph.segs.some(s => inBox(pt, s)))
+/** the segments of the placeholders a kept rendering leaves in place (contentOf's `kept`): ink the drawing keeps */
+export const keptSegsOf = ({ phs, kept = [] }) => phs.filter(ph => kept.some(chars => holds(ph, chars))).flatMap(ph => ph.segs)
 
 /**
  * Text laid over a display (the p59 finding, 2026-10-15): each drawn line (its text's own ink across it: cropPlacementOf's
@@ -463,9 +468,9 @@ function components(m, W, H, min, boxes = null) {
  * text is not vanished); `cut`: the crops cut from this page ({ src, unit, clip }: `clip` the boxes of its own ink it is
  * cut through, device pixels [x, y, w, h], where it is), whatever page they are drawn on, which `doubled`, `vanished`
  * and `bites` read here, where their source is; `ownLines`: the drawn units' own text lines in TeX's file ({ unit, box }),
- * which `linesLeft` reads (with `linesLeftWhere`, the units)
+ * which `linesLeft` reads (with `linesLeftWhere`, the units), the segments of placeholders kept in place (`segs`) aside
  */
-export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, items, ref, drawnText, cut = [], ownLines = [] }) {
+export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, items, ref, drawnText, cut = [], ownLines = [], segs = [] }) {
   const toPx = (x, y) => [(x - view[0]) * k, (view[3] - y) * k]
   const boxPx = (b, pad = 0) => {
     const [ax, ay] = toPx(b[0] - pad, b[3] + pad), [bx, by] = toPx(b[2] + pad, b[1] - pad)
@@ -531,15 +536,18 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
   const stray = strayItems.filter(it => !it.math && !formula.has(it) && /\p{L}{2,}/u.test(it.str)).length
 
   // unerased originals (the 2608.16117 survey, 2026-10-15): a drawn unit's own text line as TeX's file has it (`ownLines`:
-  // { unit, box }, not held; a kept rendering in it, its label, aside), its ink left intact where its translation is
-  // drawn, as an intact item is read: whatever line rule the drawing kept it by
+  // { unit, box }, not held), its ink (the segments of the placeholders the drawing keeps in place aside, `segs`, as a kept
+  // rendering and a label are) left intact where its translation is drawn, as an intact item is read: whatever line rule
+  // the drawing kept it by
+  const segM = mask()
+  for (const b of segs) paint(segM, b, 0.3)
   const linesLeftWhere = []
   for (const l of ownLines) {
     const [x0, y0, x1, y1] = boxPx(l.box)
     let o = 0, s = 0
     for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
       const i = y * W + x
-      if (cropM[i] || keptM[i] || inkT(i) || !inkO(i)) continue
+      if (cropM[i] || keptM[i] || segM[i] || inkT(i) || !inkO(i)) continue
       o++
       if (traceC(i)) s++
     }

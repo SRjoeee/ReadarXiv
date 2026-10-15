@@ -494,11 +494,20 @@ describe("TeX's file against the drawing (the 2608.16117 survey and the p59 find
       return a
     }
     const O = planeOf((x, y) => (y >= 14 && y < 20 && x >= 12 && x < 48 && x % 4 < 2 ? 0 : 255)), paper = planeOf(() => 255)
-    const of = (C: Uint8ClampedArray, T = paper) => pixelPage({ k: 1, view: [0, 0, W, H], W, H, O, C, T, units: [], kept: [], items: [], ref: [], drawnText: '', ownLines: [{ unit: 8, box: [10, 17.5, 50, 27] }] }) as { linesLeft: number; linesLeftWhere: number[] }
+    const of = (C: Uint8ClampedArray, T = paper, segs: number[][] = []) => pixelPage({ k: 1, view: [0, 0, W, H], W, H, O, C, T, units: [], kept: [], items: [], ref: [], drawnText: '', ownLines: [{ unit: 8, box: [10, 17.5, 50, 27] }], segs }) as { linesLeft: number; linesLeftWhere: number[] }
     expect(of(O)).toMatchObject({ linesLeft: 1, linesLeftWhere: [8] })
     expect(of(paper).linesLeft).toBe(0)
     // the translation's text over every pixel of it: not left, drawn over (overlap's)
     expect(of(O, O).linesLeft).toBe(0)
+    // a placeholder the drawing keeps in place filling the line (a citation kept as the original's): its ink aside
+    expect(of(O, paper, [[11, 18, 49, 26]]).linesLeft).toBe(0)
+  })
+
+  it('the segments a kept rendering leaves in place: those its characters stand in', async () => {
+    const { keptSegsOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    const phs = [{ unit: 46, k: 1, segs: [[143, 418, 180, 427]] }, { unit: 46, k: 3, segs: [[200, 418, 230, 427]] }]
+    expect(keptSegsOf({ phs, kept: [[[150, 421]]] })).toEqual([[143, 418, 180, 427]])
+    expect(keptSegsOf({ phs })).toEqual([])
   })
 
   it('records each as a defect of its tier, its rate compared, and reports what the content measure cannot place', () => {

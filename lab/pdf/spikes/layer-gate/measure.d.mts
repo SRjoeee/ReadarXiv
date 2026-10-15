@@ -44,6 +44,8 @@ export declare function fileIndexOf(layout: { lines?: [number, number[]][]; ph?:
 export declare function displayRowsOf(page: FilePage | undefined): number[][]
 /** each placeholder of a drawn unit whose ink TeX's file finds shown exactly once: those shown no time or more, [unit, k, times] */
 export declare function contentOf(o: { phs: { unit: number; k: number; segs: number[][] }[]; crops?: number[][]; texts?: Set<string>; pageTexts?: number[][][]; kept?: number[][][]; keptLines?: number[][]; erased?: number[][] }): { contentLost: number; contentWhere: [number, number, number][] }
+/** the segments of the placeholders a kept rendering leaves in place */
+export declare function keptSegsOf(o: { phs: { segs: number[][] }[]; kept?: number[][][] }): number[][]
 export declare function overDisplayOf(o: { lines: { unit: number; x0: number; x1: number; baseline: number; a: number; d: number }[]; boxes: number[][] }): { textInDisplay: number; where: number[] }
 export declare function slotsSkippedOf(units: { id: number; orig: OrigLine[]; lines: (DrawnLine & { pitch: number | null })[]; held?: number[][] }[], kept?: number[][]): { slotsSkipped: number; where: number[] }
 /** a character UAX #14 does not let a line start with (CL, CP, IS, EX, NS) */
