@@ -87,7 +87,7 @@ describe("v0's open takes every choice for its target from the rule set it is gi
       await Promise.all([bare.until(1), built.until(1)])
       expect(bare.P).toEqual(built.P)
       expect(bare.P).toEqual(resolveRules(BUILTIN_RULES, t).params)
-      expect(bare.rows[0]!.svg.outerHTML).toBe(built.rows[0]!.svg.outerHTML)
+      expect(bare.svgOf(1).outerHTML).toBe(built.svgOf(1).outerHTML)
       expect(bare.rows[0]!.ops).toEqual(built.rows[0]!.ops)
       bare.dispose()
       built.dispose()
@@ -150,7 +150,7 @@ describe("v0's open takes every choice for its target from the rule set it is gi
     set.languages.zh = { ...set.languages.zh!, labels: { ...set.languages.zh!.labels!, figure: '<img src=x onerror=alert(1)>', table: '\u8868' } }
     const run = await open({ rules: set, labels: { captions: { figure: 'target', table: 'target' } } }, LABELLED())
     await run.until(1)
-    const svg = run.rows[0]!.svg
+    const svg = run.svgOf(1)
     expect(svg.textContent).toContain('<img src=x onerror=alert(1)> 1:')
     const tags = [...svg.querySelectorAll('*')].map(e => e.localName)
     expect(new Set(tags)).toEqual(new Set(['g', 'text', 'tspan']))
@@ -158,7 +158,7 @@ describe("v0's open takes every choice for its target from the rule set it is gi
     // the built-in set's name for the same label
     const plain = await open({ labels: { captions: { figure: 'target', table: 'target' } } }, LABELLED())
     await plain.until(1)
-    expect(plain.rows[0]!.svg.textContent).toContain('\u56fe 1:')
+    expect(plain.svgOf(1).textContent).toContain('\u56fe 1:')
   })
 })
 
@@ -187,7 +187,7 @@ const SWITCH_PAGE = () => column([
 ])
 /** a page's drawing, its SVG and its operations, as one SHA-256 */
 const drawingOf = async (run: Awaited<ReturnType<typeof open>>) => {
-  const bytes = new TextEncoder().encode(`${run.rows[0]!.svg.outerHTML}\n${JSON.stringify(run.rows[0]!.ops)}`)
+  const bytes = new TextEncoder().encode(`${run.svgOf(1).outerHTML}\n${JSON.stringify(run.rows[0]!.ops)}`)
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('')
 }
 /** SWITCH_PAGE's drawing by the engine before the leftover switch (0be9390d, D6's F6b, built in a scratch directory from

@@ -62,7 +62,7 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     const run = await open()
     await run.until(1)
     expect(run.names).toEqual([expect.objectContaining({ occurrence: 1, key: 'abstract', page: 1, drawn: true, why: null, text: '\u6458\u8981', size: 10, x: 20 })])
-    const svg = run.rows[0]!.svg
+    const svg = run.svgOf(1)
     expect(svg.querySelector('[data-n="1"]')?.textContent).toBe('\u6458\u8981')
     // its erase the page's first operation, the unit's after it; its characters accounted, which no put-back returns
     expect(run.rows[0]!.ops[0]).toMatchObject({ op: 'erase' })
@@ -107,10 +107,10 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     const zh = await open({}, paper({ runIn: true }))
     await zh.until(1)
     expect(zh.names[0]).toMatchObject({ drawn: true, why: null, text: '\u6458\u8981', unit: 0, size: 10, x: 20 })
-    expect(zh.rows[0]!.svg.querySelector('[data-n]')).toBeNull()
+    expect(zh.svgOf(1).querySelector('[data-n]')).toBeNull()
     // the dash right where the word ends, no gap: its place after the second ideograph one advance on, as the second's
     // after the first (a run of single characters, each at its own place)
-    const run = [...(zh.rows[0]!.svg.querySelectorAll('tspan') ?? [])].find(t => t.textContent?.startsWith('\u6458\u8981\u2014'))
+    const run = [...(zh.svgOf(1).querySelectorAll('tspan') ?? [])].find(t => t.textContent?.startsWith('\u6458\u8981\u2014'))
     const xs = (run?.getAttribute('x') ?? '').split(' ').map(Number)
     expect(xs[0]).toBe(20)
     expect(xs[2]! - xs[1]!).toBeCloseTo(xs[1]! - xs[0]!, 1)
@@ -118,26 +118,26 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     // (the same where v0 lays the unit by its own geometry: the joint is the file's label of it)
     const own = await open({}, paper({ runIn: true, whole: false }))
     await own.until(1)
-    expect(own.rows[0]!.svg.textContent?.replace(/\s+/g, '')).toContain('\u6458\u8981\u2014\u6c49\u5b57')
+    expect(own.svgOf(1).textContent?.replace(/\s+/g, '')).toContain('\u6458\u8981\u2014\u6c49\u5b57')
     // de's, wider than its own room (75 against 40): not shrunk, and no space after the dash, as the original has none
     // (the unit's text begins with the source's white space after \begin{abstract}, which TeX skips)
     const de = await open({ target: 'de' }, paper({ runIn: true, text: ' Tiefe Netze' }))
     await de.until(1)
     expect(de.names[0]).toMatchObject({ drawn: true, why: null, text: 'Zusammenfassung', unit: 0, size: 10, x: 20 })
-    const line = [...(de.rows[0]!.svg.querySelectorAll('text') ?? [])].map(t => t.textContent).join('|')
+    const line = [...(de.svgOf(1).querySelectorAll('text') ?? [])].map(t => t.textContent).join('|')
     expect(line).toContain('Zusammenfassung\u2014Tiefe')
     // the original's glue after the joint kept, no place to break (amsthm's \labelsep: 3 pt at the original's 10): the
     // translation set that many ems after the dash's end (the stub's half an em), at whatever size the unit is drawn
     const glued = await open({ target: 'de' }, paper({ runIn: true, glue: 3, text: 'Tiefe Netze' }))
     await glued.until(1)
-    const spans = [...(glued.rows[0]!.svg.querySelectorAll('tspan') ?? [])]
+    const spans = [...(glued.svgOf(1).querySelectorAll('tspan') ?? [])]
     const dash = spans.find(t => t.textContent === '\u2014'), after = spans.find(t => t.textContent?.startsWith('Tiefe'))
     const size = Number(dash?.getAttribute('font-size'))
     expect(Number(after?.getAttribute('x')) - (Number(dash?.getAttribute('x')) + 0.5 * size)).toBeCloseTo(0.3 * size, 1)
     // (the glue's em the unit's own size, not the name's: a name of 20 before text of 10 keeps 3 pt as 0.3 em of the text)
     const big = await open({ target: 'de' }, paper({ runIn: true, glue: 3, nameSize: 20, text: 'Tiefe Netze' }))
     await big.until(1)
-    const bs = [...(big.rows[0]!.svg.querySelectorAll('tspan') ?? [])]
+    const bs = [...(big.svgOf(1).querySelectorAll('tspan') ?? [])]
     const bdash = bs.find(t => t.textContent === '\u2014'), bafter = bs.find(t => t.textContent?.startsWith('Tiefe'))
     const bsize = Number(bdash?.getAttribute('font-size'))
     expect(Number(bafter?.getAttribute('x')) - (Number(bdash?.getAttribute('x')) + 0.5 * bsize)).toBeCloseTo(0.3 * bsize, 1)
@@ -145,7 +145,7 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     const left = await open({ target: 'de' }, paper({ runIn: true }))
     await left.until(1)
     expect(left.names[0]).toMatchObject({ drawn: false, why: 'inline: served', unit: 0 })
-    expect(left.rows[0]!.svg.textContent).not.toContain('Zusammenfassung')
+    expect(left.svgOf(1).textContent).not.toContain('Zusammenfassung')
   })
 
   it("takes its room from its TeX column (the file's), on a page no unit holds as on any other", async () => {
