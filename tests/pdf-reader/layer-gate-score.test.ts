@@ -201,6 +201,45 @@ describe("the coverage of the original's text area", () => {
   })
 })
 
+describe('the coverage counts the area drawn, wherever a line falls against the original\'s cell grid', () => {
+  // a 60 x 70 page at 4 px a unit (so that a pixel's rounding is a small part of a cell): a unit of two reference lines
+  // (baselines 50 and 38, a pitch of 12, size 10, x 10 to 50), so two rows of four cells, each with a block of the
+  // original's ink; the translation drew ONE line of it
+  const K = 4, W = 60 * K, H = 70 * K
+  const planeOf = (paint: (x: number, y: number) => number) => {
+    const a = new Uint8ClampedArray(W * H * 4)
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const v = paint(x, y); a.set([v, v, v, 255], 4 * (y * W + x)) }
+    return a
+  }
+  const inked = (px: number, py: number) => { const x = px / K, y = py / K; return x >= 10 && x < 50 && (x - 10) % 10 >= 2 && (x - 10) % 10 < 8 && [50, 38].some(b => y >= 70 - b - 6 && y < 70 - b) }
+  const O = planeOf((x, y) => (inked(x, y) ? 0 : 255))
+  const paper = planeOf(() => 255)
+  const orig = [50, 38].map(b => ({ x0: 10, x1: 50, baseline: b, top: b + 7, bottom: b - 2.5, size: 10 }))
+  const ref = [{ id: 1, kind: 'para', orig }]
+  const at = (baseline: number) => {
+    const units: UnitIn[] = [{ id: 1, kind: 'para', drawn: true, why: null, orig, lines: [{ baseline, size: 10, x0: 10, x1: 50 }], erase: [[10, 35.5, 50, 57]], crops: [] }]
+    return (pixelPage({ k: K, view: [0, 0, 60, 70], W, H, O, C: paper, T: paper, units, kept: [], items: [], ref, drawnText: '' }) as { coverage: { text: Record<string, number> } }).coverage.text
+  }
+
+  it("one drawn line is one line's worth of cells, on the original's own baseline or between two of its rows", () => {
+    // 50: on a row; 44: its box (41.5 to 51.5) covers 0.57 of the upper row and 0.43 of the lower, neither by half
+    for (const b of [50, 44, 47, 41, 38]) {
+      const t = at(b)
+      expect(t.cells).toBe(8)
+      expect(t.translated).toBeGreaterThan(3.8)
+      expect(t.translated).toBeLessThan(4.2)
+    }
+  })
+
+  it('the three shares add up to the cells, whatever is drawn', () => {
+    for (const b of [50, 44, 20]) {
+      const t = at(b)
+      expect(t.translated! + t.english! + t.blank!).toBeCloseTo(t.cells!, 9)
+    }
+    expect(at(20)).toMatchObject({ cells: 8, translated: 0, english: 0, blank: 8 })
+  })
+})
+
 describe("the erase bites: the original's ink erased that no drawn unit owns", () => {
   // the same 60 x 40 page: a unit's line on baseline 20 (its own band PDF y 17 to 28.8), its erase from y 8, and a block of
   // the original's ink under the band (x 20-25, y 10-13: a radical's foot hanging under the line)
