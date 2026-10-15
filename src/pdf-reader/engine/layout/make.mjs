@@ -822,16 +822,10 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     if (one.symbols) symbolsOf(one)
     if (one.heads) besideMarks(one, false)
     if (one.tails) besideMarks(one, true)
-    // a LOST piece outside the unit's lines, whose ink TeX set before its start mark (one the marking passes over at its
-    // head: patch sets the start mark at headEnd, a display, a \url opening a note) or after its end mark (a display that
-    // ends it, after its last words: MARK_DEF sets the end mark before it): never erased, as no line of the unit holds it,
-    // and the layer draws it as nothing, its ink the original's (OUTSIDE)
-    const tail = k => u.pieces.slice(k + 1).every(p => !classOf(p) || classOf(p) === 'display' || (p.t === 'text' && !/\S/.test(p.s ?? '')))
-    for (let q = entries; q < ph.length; q++) {
-      const x = ph[q], k = x.row[1]
-      if (x.row[0] !== i || !(x.row[3] & PH_FLAG.LOST)) continue
-      if (k < head || (x.cls === 'display' && last >= 0 && k > last && tail(k))) { x.row[3] |= PH_FLAG.OUTSIDE; x.outside = true }
-    }
+    // (its rows, for the pieces outside its lines: below)
+    one.entries = [entries, ph.length]
+    one.head = head
+    one.last = last
   }
   // the bars: an arXiv glyph matched by two found pieces, an owned glyph of a found piece not matched (none, both; each
   // true by the matcher's own rule); and what the layer draws: an arXiv glyph inside a found inline piece's segments
@@ -1076,9 +1070,8 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     const paired = new Set(a.pairs?.values() ?? [])
     const words = new Set([texts[i].text, texts[i].text.replace(/(?<=\p{L})-(?=\p{L})/gu, '')].flatMap(s => tokens(s).map(t => t.t)).filter(t => t.length >= 3 && /\p{L}/u.test(t)))
     const boxed = new Set((one.boxes ?? []).map(([row]) => row))
-    const held = new Set()
-    rows.forEach((r, j) => {
-      if (j === 0 || r.extra?.length || boxed.has(j)) return
+    /** a row's words, and those of them the source's */
+    const wordsOn = r => {
       let n = 0, hits = 0
       for (const k0 of r.ks) {
         let k = k0
@@ -1088,14 +1081,49 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
         n++
         if (paired.has(k) || words.has(t)) hits++
       }
+      return { n, hits }
+    }
+    const free = r => { const P = ink[r.page]; for (const g of r.gl) if (P.owner[g] === i) P.owner[g] = -1 }
+    // at the unit's head: the rows before its start mark's line (a display that opens it, before patch's start mark at
+    // its first text) that carry none of its source's words and no ink of its found pieces are no line of the unit's
+    // either, as the held rows at its end; then its start mark stands on its first line
+    const jS = one.S ? rows.findIndex(r => r.page === one.S.page && Math.abs(one.S.y - r.base) < 0.5 * r.size) : -1
+    if (jS > 0 && rows.slice(0, jS).every((r, j) => !r.extra?.length && !boxed.has(j) && wordsOn(r).hits === 0)) {
+      for (const r of rows.slice(0, jS)) free(r)
+      rows.splice(0, jS)
+      one.boxes = (one.boxes ?? []).filter(([row]) => row >= jS).map(([row, b]) => [row - jS, b])
+      boxed.clear()
+      for (const [row] of one.boxes) boxed.add(row)
+      stats.lines.held += jS
+    }
+    if (rows.length < 2) continue
+    const held = new Set()
+    rows.forEach((r, j) => {
+      if (j === 0 || r.extra?.length || boxed.has(j)) return
+      const { n, hits } = wordsOn(r)
       if (hits === 0 || (n >= 4 && hits < 0.2 * n)) held.add(j)
     })
     if (!held.size) continue
-    const free = r => { const P = ink[r.page]; for (const g of r.gl) if (P.owner[g] === i) P.owner[g] = -1 }
     // held at the unit's end: no line of the unit's
     while (rows.length > 1 && held.has(rows.length - 1)) { free(rows.at(-1)); held.delete(rows.length - 1); rows.pop(); stats.lines.held++ }
     for (const j of held) free(rows[j])
     if (held.size) { one.held = [...held].sort((x, y) => x - y); stats.lines.held += held.size }
+  }
+  // a LOST piece outside the unit's lines (OUTSIDE): one TeX set before its start mark (the marking passes over it at its
+  // head: patch sets the start mark at headEnd; a display, a \url opening a note), where that mark stands on the unit's
+  // first line (the rows before it no line of the unit's: above), or a display after its end mark (it ends the unit,
+  // after its last words: MARK_DEF sets the end mark before it), where that mark stands on its last line. No line of the
+  // unit's holds its ink, which is never erased, and the layer draws it as nothing, its ink the original's
+  for (const one of placed) {
+    const { id: i, u, rows, S, E } = one
+    if (!one.entries || !rows.length) continue
+    const on = (M, r) => !!M && M.page === r.page && Math.abs(M.y - r.base) < 0.5 * r.size
+    const tail = k => u.pieces.slice(k + 1).every(p => !classOf(p) || classOf(p) === 'display' || (p.t === 'text' && !/\S/.test(p.s ?? '')))
+    for (let q = one.entries[0]; q < one.entries[1]; q++) {
+      const x = ph[q], k = x.row[1]
+      if (x.row[0] !== i || !(x.row[3] & PH_FLAG.LOST)) continue
+      if ((k < one.head && on(S, rows[0])) || (x.cls === 'display' && one.last >= 0 && k > one.last && tail(k) && on(E, rows.at(-1)))) { x.row[3] |= PH_FLAG.OUTSIDE; x.outside = true }
+    }
   }
 
   // ---------------------------------------------------------------- labels

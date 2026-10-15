@@ -781,6 +781,17 @@ describe('makeLayout, the LOST survey (2026-10-15): a display group, a piece out
     const none = await made({ pages: [{ runs: runs.slice(0, 3) }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700], ['p0.1a', 1, endOf(runs[0] as Run), 700]], units: [unit('para', [text(`${words(0, 10)} `), ph('\\[a=b\\]'), text('\n'), ph('\\[c=d\\]'), text(' where x holds')])] })
     expect((phOf(none.file, 0, 3)[3] ?? 0) & PH_FLAG.LOST).toBe(PH_FLAG.LOST)
   })
+  it("a display opening a unit, its start mark on the unit's first line, is OUTSIDE (the rows before the mark are no line of the unit's: the thesis's u69, u113, u432, u445)", async () => {
+    // the start mark at the first text below the display; the unit's lines from it
+    const runs: Run[] = [{ s: 'x=y+1', x: 150, y: 700 }, { s: words(0, 10), x: 72, y: 680 }, { s: words(10, 10), x: 72, y: 668 }]
+    const { file } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 680], ['0e', 1, endOf(runs[2] as Run), 668]],
+      units: [unit('para', [ph('\\[x=y+1\\]'), text(`\n${words(0, 20)}`)])],
+    })
+    expect(chunk(rowsOf(file, 0, 'lines'), 8).map(l => l[3])).toEqual([680, 668])
+    expect(phOf(file, 0, 0)).toEqual([0, 0, 1, PH_FLAG.LOST | PH_FLAG.OUTSIDE])
+  })
   it("an inline part on no line goes to the line both its marks stand on, within the line's size of its baseline (2608.16117's \\frac)", async () => {
     // a fraction's numerator 7.6 pt over its line's baseline, past the part rule's reach
     const runs: Run[] = [{ s: 'the quantity', x: 72, y: 700 }, { s: 'pq', x: 140, y: 707.6 }, { s: 'FM', x: 140, y: 693 }, { s: 'is the stress', x: 160, y: 700 }]
