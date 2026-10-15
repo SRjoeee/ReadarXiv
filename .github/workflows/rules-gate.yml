@@ -22,6 +22,7 @@ on:
       - 'src/pdf-reader/engine/layout/json.mjs'
       - 'src/pdf-reader/engine/layout/names.mjs'
       - 'src/pdf-reader/engine/layout/remove.mjs'
+      - 'src/pdf-reader/engine/pipeline/memory.mjs'
       - 'lab/pdf/spikes/layer-gate.mjs'
       - 'lab/pdf/spikes/layer-gate/**'
       - 'lab/pdf/spikes/rules-gate.mjs'
