@@ -16,7 +16,7 @@ export declare function translationFiles(paper: Paper, translated: Map<SourceUni
 export { PIPELINE_VERSION } from './versions.mjs'
 /** the earlier pipelines whose copies carry their translations over into this one, unit by unit, with the test each
  *  translation's pieces must pass (cache.mjs copyReuse) */
-export declare const PIPELINE_CARRIES: Record<string, (pieces: unknown[]) => boolean>
+export declare const PIPELINE_CARRIES: Record<string, (pieces: unknown[], unit?: { pieces: unknown[] } | null) => boolean>
 export declare const TYPESETTING_VERSION: string
 /** the font probe; with `width`, the width and size probes the typesetting rule measures the face by */
 export declare function probeFiles(paper: Paper, options?: { width?: boolean; marks?: boolean }): Map<string, Uint8Array>
@@ -31,10 +31,26 @@ export declare function keptFor(paper: Paper, lang: string): Set<SourceUnit>
 /** whether a compile's last TeX pass stopped short of the document's end (a fatal error), whatever PDF it left: such a
  *  compile is one that failed */
 export declare const stoppedShort: (log: string | null | undefined) => boolean
-/** a compile as the TeX page answers it */
-export interface Compiled { ok: boolean; pdf?: Uint8Array | null; aux?: string | null; bbl?: string | null; log?: string; ms?: number; error?: string; network?: string[] }
-/** a compile asked of the TeX page */
-export interface CompileRequest { main: string; engine: string; rerun: boolean; bibtex: boolean | null; overrides: Map<string, Uint8Array> }
+/** whether a pass set a contents list from nothing: one its aux writes whose file the pass did not find ("No file
+ *  <job>.<ext>."); `main`, the project's main file */
+export declare const listsMissing: (r: { log?: string | null; aux?: string | null }, main: string) => boolean
+/** the files a compile's last pass looked for and did not find ("No file <name>.") */
+export declare const notFound: (log: string | null | undefined) => Set<string>
+/** a compile as the TeX page answers it. `passes`, the TeX passes it ran (no tool), where the host counts them. `files`,
+ *  asked with the request's `files`, with `ok` only: every regular file (no link) the compile — its pass, the
+ *  bibliography step, makeindex — wrote in the project, a rewrite of the same bytes too (never a deletion), by its path
+ *  there, the last step's bytes, but its outputs and the tools' own logs (*.pdf *.xdv *.dvi *.log *.blg *.ilg *.glg
+ *  *.fls *.synctex.gz *.fdb_latexmk); absent where the host does not return them, or past the host's bound (the web's:
+ *  256 files, 8 MiB; CM holds the files it carries back, accumulated across its passes, to the same bound: `filesBound`, and past it treats them as absent). A draft (`draft`) is `ok` where TeX ran to its end of its own (no limit, no signal) and left a
+ *  log, with no PDF. `aux` and `bbl` may be decoded lossily: the files' bytes are what a compile is given back */
+export interface Compiled { ok: boolean; pdf?: Uint8Array | null; aux?: string | null; bbl?: string | null; log?: string; ms?: number; error?: string; network?: string[]; passes?: number; files?: Map<string, Uint8Array> }
+/** a compile asked of the TeX page. `draft` (with `rerun` false): one pass that writes no output (pdflatex
+ *  -draftmode, xelatex -no-pdf with no driver, lualatex --draftmode). `files`: the files the compile wrote, returned
+ *  (Compiled `files`), and, on a one-pass request, makeindex (-o ./<job>.ind ./<job>.idx) after the bibliography step
+ *  where the pass wrote ./<job>.idx. The bibliography step (`bibtex: true`) is biber only where THIS pass wrote ./<job>.bcf (a
+ *  shipped or carried copy does not count), else BibTeX on ./<job>. A host that knows neither answers without `files`; the files a compile is given
+ *  back come in `overrides`, as every other input does */
+export interface CompileRequest { main: string; engine: string; rerun: boolean; bibtex: boolean | null; overrides: Map<string, Uint8Array>; draft?: boolean; files?: boolean }
 /** the compiler a visit uses, opened when first needed and again after a compile the page failed */
 export declare function compilerKeeper(open: () => Promise<{ compile: (req: CompileRequest) => Promise<Compiled>; close: () => void }>): { ready: () => Promise<void>; compile: (req: CompileRequest) => Promise<Compiled>; close: () => void }
 /** the reader's run: translation as it comes in, the compiles, the final (the options as the reader passes them) */

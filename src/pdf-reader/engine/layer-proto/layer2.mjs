@@ -51,6 +51,7 @@
 //   their punctuation and caption labels kept.
 // - Erasing: what a unit's erasing covers that no painted unit accounts for is put back from the original (kept lines
 //   whole, the ink no accounted character stands on); crops grown over the ink they touch and darkened in.
+import { noStart } from './no-start.mjs'
 import { blocksOf, CITE, gapClass, kinsokuOf, lcsMatched, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
 import { faceOf, fontString, OBLIQUE_DEG, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
@@ -87,10 +88,42 @@ const wDesign = (ch, st) => {
 }
 /** a spacing accent TeX sets over a letter as a glyph of its own ("Zu¨rich"): no width of its own */
 export const ACCENT = /^(?:[\u00A8\u00B4\u00B8\u00AF\u02C6-\u02DD\u0060\u005E\u007E]|\p{M})$/u
-/** a page's text content as characters: each item's width shared by its design's widths (what is left over, a justified
- *  line's stretch, by its spaces where it has any), and the item's font class (`st`, from fontOf(fontName)) on every
- *  character */
-export function pageChars2(textContent, fontOf) {
+/**
+ * The characters a font's own map gives its glyphs (PDF.js's `toUnicode` of a font loaded with fontExtraProperties: the
+ * file's ToUnicode, or what its encoding names), each value as written and as PDF.js's text layer normalises it (a
+ * ligature "ﬁ" read as "fi"); null where the font has no such map to read (an identity map, or no extra properties).
+ */
+export function mappedOf(toUnicode) {
+  const map = toUnicode?._map
+  if (!Array.isArray(map)) return null
+  const out = new Set()
+  for (const v of map) if (typeof v === 'string') for (const s of [v, v.normalize('NFKC')]) for (const ch of s) out.add(ch)
+  return out
+}
+/**
+ * mappedOf of a font as PDF.js's `commonObjs` holds it, failing closed: a font object (not Type3) with no `toUnicode`
+ * key was exported without its extra properties (a document not opened with PDF_OPTIONS), and with no map to read
+ * pageChars2 could mark only what no Unicode stands for, so a glyph read by its code (u442's sum sign) would pass as
+ * proof. That throws. Anything else (a Type3 font, an error PDF.js resolved in a font's place, null) has none to read.
+ */
+export function fontMappedOf(font) {
+  if (font === null || typeof font !== 'object' || typeof font.isType3Font !== 'boolean') return null
+  if (!font.isType3Font && !('toUnicode' in font)) throw new Error("a font with no ToUnicode map to read: open the document with the engine's PDF_OPTIONS (fontExtraProperties)")
+  return mappedOf(font.toUnicode)
+}
+/** a character no Unicode stands for: private use, a replacement character, a control */
+const NO_UNICODE = /[\p{Co}\p{Cc}\uFFFD]/u
+/** whether a page character's text is no reading of its glyph (pageChars2's `nu`): one no Unicode stands for, or one
+ *  its font's own map (`mapped`, mappedOf's; null: none to read) gives none of its glyphs */
+export const unmapped = (ch, mapped) => /\S/.test(ch) && (NO_UNICODE.test(ch) || (mapped != null && !mapped.has(ch)))
+/**
+ * A page's text content as characters: each item's width shared by its design's widths (what is left over, a justified
+ * line's stretch, by its spaces where it has any), and the item's font class (`st`, from fontOf(fontName)) on every
+ * character. `mapOf(fontName)` (mappedOf's set, or null): a character the item's font maps none of its glyphs to is
+ * marked `nu`, no Unicode of the file's. PDF.js reads such a glyph by its code (2307.16209's newtx summation sign in
+ * txexs, read "Í"), so its text is not what the page shows; so is a private-use, replacement or control character.
+ */
+export function pageChars2(textContent, fontOf, mapOf = null) {
   const out = []
   for (const [item, it] of textContent.items.entries()) {
     if (!it.str || !it.transform) continue
@@ -98,6 +131,7 @@ export function pageChars2(textContent, fontOf) {
     if (Math.abs(b) > 0.01 || d < 0) continue
     const size = Math.hypot(a, b) || it.height
     const st = fontOf(it.fontName)
+    const mapped = mapOf?.(it.fontName) ?? null
     const chars = [...it.str]
     const nat = chars.map(ch => (ACCENT.test(ch) && chars.length > 1 ? 0 : wDesign(ch, st) || 50))
     const sum = nat.reduce((s, v) => s + v, 0) || 1
@@ -110,7 +144,8 @@ export function pageChars2(textContent, fontOf) {
       const w = ws[k]
       // a radical hangs from its baseline (CMSY10's √: 0.04 em high, 0.96 em deep): its line is the one below
       const hang = ch === '√' && st?.fam === 'math' ? { ybEff: y - 0.75 * size } : null
-      out.push({ ch, x0: cx, x1: cx + w, yb: y, size, item, ix: x, k, st, ...hang })
+      const nu = unmapped(ch, mapped) ? { nu: true } : null
+      out.push({ ch, x0: cx, x1: cx + w, yb: y, size, item, ix: x, k, st, ...hang, ...nu })
       cx += w
     })
   }
@@ -207,6 +242,30 @@ export function phClass2(src) {
   if (ci === 'zero' || ci === 'space') return { cls: ci }
   if (!/\\[A-Za-z]/.test(inner)) return { cls: c }
   return /^\$|^\\\(/.test(src) ? { cls: 'other', unknown: true } : { cls: 'umacro', unknown: true }
+}
+/** a 'symbol' placeholder's drawn text (resolvePlaceholders): its source's plain text, less the mark of the superscript
+ *  it is drawn as */
+const symbolDrawn = src => texToText2(src).replace(/^\^\(?|\)$/g, '')
+const GRAPHEMES = new Intl.Segmenter('en', { granularity: 'grapheme' })
+/**
+ * Whether a placeholder of phClass2's 'symbol' (no Latin letter or digit in its rendering) is a text symbol, the one
+ * kind the proof exempts (tex.mjs proofOf): its drawn text one grapheme (\%, \_, $\times$, $^\dagger$), and a formula's
+ * holding none of the marks texToText2 writes for a formula's structure, `_`, `^`, `/` or `√(` (a text source's one
+ * grapheme is that character: \_ is the maker's TEXT symbol too, marks.mjs TEXT_SYMBOLS). Any other is a formula the page
+ * sets as ink of its own ($\sum_{\alpha}^{\beta}$ drawn "Σ_α^β", $\int_{-\infty}^{\infty}$ "∫_(-∞)^∞",
+ * $\frac{\alpha}{\beta}$ "α/β"), which the proof must find like any formula: phClassProven's 'other' (the controller's
+ * ruling of 2026-10-15)
+ */
+export function textSymbol(src) {
+  const t = symbolDrawn(src)
+  if (/^\$|^\\\(/.test(src) && /[_^/]|√\(/.test(t)) return false
+  return [...GRAPHEMES.segment(t)].length === 1
+}
+/** phClass2 as a unit drawn under the proof reads its placeholders: a 'symbol' that is no text symbol (textSymbol) is
+ *  'other', looked for on the page and proven */
+export function phClassProven(src) {
+  const c = phClass2(src)
+  return c.cls === 'symbol' && !textSymbol(src) ? { cls: 'other' } : c
 }
 
 /**
@@ -338,10 +397,11 @@ export function charsOfUnit2(rects, charsByPage, extents, exact = null) {
  * extendRects, which grew only over the source's own words): also over a formula's tail (math glyphs, brackets,
  * digits, operators: "(z) =" at a line's end), and a line that is not its block's last, being justified, out to its
  * block's right edge. Before, those characters were erased with the line (its erasing reaches the block's edge) though
- * no placeholder held them. Mutates the rectangles.
+ * no placeholder held them. `first`: the unit's first line (`rects` may be its lines on one page alone: run.mjs grows a
+ * unit page by page). Mutates the rectangles.
  */
-export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn, pageViews, wordChars = charsByPage) {
-  let grown = extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, wordChars)
+export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn, pageViews, wordChars = charsByPage, first = rects[0]) {
+  let grown = extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, wordChars, first)
   const blocks = blocksOf(rects, pageViews)
   const lastOf = new Set(blocks.map(b => b.rects.at(-1).join()))
   const edgeOf = new Map()
@@ -387,7 +447,7 @@ export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn,
     }
     // to the left: math only (a formula the line starts with), never before the unit's first line
     let from = Math.min(...inside.map(c => c.x0))
-    if (r !== rects[0]) for (const c of line.filter(c => c.x1 <= from + 0.1).reverse()) {
+    if (r !== first) for (const c of line.filter(c => c.x1 <= from + 0.1).reverse()) {
       if (from - c.x1 > 0.6 * size || foreign(c) || !mathy(c) || c.x0 < bx0 - 1) break
       from = c.x0
     }
@@ -426,8 +486,10 @@ export function extendFirstLines(rects, pageViews, others) {
  * whose start the anchors missed, and left one where another unit's line stands before it (a run-in heading: 1810.04805's
  * "Model Architecture", 1706.03762's "Encoder:"), over which the translation was laid and which it never erased; a
  * layout file's first line starts at the unit's own mark (IEEE's "Index Terms—" before it).
+ * `breakAt`: a forced break's region by the key of the line TeX set after it (finishUnit), referenced: a block starts
+ * at that line and counts the region before it, as one after a kept region does.
  */
-export function blocksOf2(rects, pageViews, keep = null, regionOf = null, referenced = null) {
+export function blocksOf2(rects, pageViews, keep = null, regionOf = null, referenced = null, breakAt = null) {
   const kept = r => !!keep?.has(rectKey(r))
   const blocks = []
   let cur = null
@@ -456,12 +518,14 @@ export function blocksOf2(rects, pageViews, keep = null, regionOf = null, refere
     const widthsVary = Math.max(...rs.map(r => r[3] - r[1])) - Math.min(...rs.map(r => r[3] - r[1])) > 6
     b.centred = rs.length > 1 ? Math.max(...centres) - Math.min(...centres) < 3 && widthsVary : Math.abs(centres[0] - pageCentre) < 3 && b.x1 - b.x0 < 0.8 * (view ? view[2] - view[0] : 612)
   }
-  if (!keep?.size) { for (const b of blocks) b.after = 0; return blocks }
+  if (!keep?.size && !breakAt?.size) { for (const b of blocks) b.after = 0; return blocks }
   let after = 0
   return blocks.flatMap(b => {
     const runs = []
     let run = null
     b.rects.forEach((r, i) => {
+      const brk = breakAt?.get(rectKey(r))
+      if (brk !== undefined && referenced?.has(brk)) { run = null; after = Math.max(after, brk + 1) }
       if (kept(r)) {
         run = null
         const g = regionOf?.get(rectKey(r))
@@ -598,19 +662,22 @@ function rectStyle(uc) {
  *   1. frames and lines (linesOf): the unit's characters on its lines, each line's baseline and size;
  *   2. erase extents (the lines' own, linesOf's): each line's box to erase, before the drawing's padding;
  *   then the alignment (alignUnit, either source's lines): which characters are the source's words, the original's
- *   style, where the first word starts, the lines none of whose words are the source's (kept);
+ *   style, where the first word starts, and on v0's lines the lines none of whose words are the source's (kept; on the
+ *   file's, its held lines);
  *   3. labels (labelOf): a label the class sets before the unit's first line, kept as the original's;
  *   4. placeholder renderings (v0Renderings): which of the page's ink each placeholder is, and where it sits;
  *   then the resolution's rules (resolvePlaceholders, either source's renderings): how each placeholder is drawn, the
  *   paper's citations and macros learnt;
- *   5. crops (none in v0 alone): each crop cut from its placeholder's own ink, where a layout file knows it, or the
- *   placeholder whose ink no source proves (`unproven`, its k: the unit is then left the original's);
- *   and the finish (finishUnit): the kept lines in regions, each character's category (what the restore and the
- *   checker read).
+ *   5. the proof (none in v0 alone, tex.mjs proofOf): each rendering proven by the layout file (a crop cut from its
+ *   placeholder's own ink, page text or kept ink in its segments, the file's own rendering), or the placeholder whose
+ *   ink no source proves (`unproven`, its k: the unit is then left the original's);
+ *   and the finish (finishUnit): the kept lines in regions, a forced break the source locates (`breaks`, tex.mjs
+ *   forcedBreaks) a region of no lines before the line TeX set after it, each character's category (what the restore and
+ *   the checker read).
  * `charsByPage`: pageChars2's (the unit's own part of each page).
  */
 export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = null, parts = null) {
-  const phs = placeholdersOf(unit)
+  const phs = placeholdersOf(unit, !!parts?.proof)
   const out = new Map()
   const lines = (parts?.lines ?? linesOf)(rects, charsByPage)
   out.extents = parts?.extents ? parts.extents(lines, rects) : lines.extents
@@ -618,7 +685,9 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   // gap each placeholder took
   out.uc = lines.uc
   out.lineInfo = lines.lineInfo
-  const aligned = alignUnit(out, unit, rects, deny)
+  // (a unit on the file's own lines keeps the lines TeX says are no text of its own alone: the file's held lines, below,
+  // and its found displays' rows, the finish's; no alignment's guess at another unit's line, which TeX's lines never are)
+  const aligned = alignUnit(out, unit, rects, deny, !!parts?.lines)
   // (the lines part 1's source says the unit's source does not write: kept as the original's, as a display's are)
   if (lines.held?.length) out.keep = [...new Set([...(out.keep ?? []), ...lines.held])]
   const gaps = (parts?.label ?? labelOf)(out, unit, rects, charsByPage, aligned)
@@ -627,7 +696,9 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   // alone the unit's characters are v0's rectangles', and a leftover may be a rendering the segments do not reach)
   out.inkKnown = !!(parts?.renderings && parts.lines)
   resolvePlaceholders(out, { unit, phs, rects, charsByPage, citeMap, gaps }, parts?.renderings ?? v0Renderings)
-  if (parts?.crops) { const k = parts.crops(out); if (k >= 0) out.unproven = k }
+  if (parts?.proof) { const k = parts.proof(out); if (k >= 0) out.unproven = k }
+  // (a source that knows where TeX ended a line at a forced break `\\`: each of its pieces with the line set after it)
+  out.breaks = parts?.breaks?.(unit) ?? null
   finishUnit(out, unit, rects, charsByPage)
   // a displayed formula found, whose lines hold words the alignment took for the source's ("RMSE" in "RMSE_i(t) =",
   // while the text says "…using the RMSE:"): aligned again without its lines' words, once
@@ -640,11 +711,12 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   return out
 }
 
-/** a unit's placeholders by piece index, each with its source and class (phClass2); a nested footnote is its mark */
-export function placeholdersOf(unit) {
-  const phs = []
+/** a unit's placeholders by piece index, each with its source and class (phClass2; phClassProven where the unit is drawn
+ *  under the proof, `proven`); a nested footnote is its mark */
+export function placeholdersOf(unit, proven = false) {
+  const phs = [], classOf = proven ? phClassProven : phClass2
   unit.pieces.forEach((p, k) => {
-    if (p.t === 'ph') phs.push({ k, src: p.src, ...phClass2(p.src) })
+    if (p.t === 'ph') phs.push({ k, src: p.src, ...classOf(p.src) })
     else if (p.t === 'nested') phs.push({ k, src: '\\footnotemark', cls: 'num', nested: true })
   })
   return phs
@@ -665,8 +737,14 @@ export function linesOf(rects, charsByPage) {
  * (matchedKeys), its original style (orig), where its first word starts (firstX0), and the lines none of whose words are
  * the source's, kept as the original's (keep). Returns the gaps: the page's runs of the unit that the source does not
  * write, each a placeholder's rendering or a label.
+ * `fileLines`: part 1 gave the layout file's lines (the unit located whole, tex.mjs texParts 'lines'), every one of which
+ * TeX set as this unit's own: no line is kept by the alignment, neither one with no source word nor one with too few of
+ * them. The kept lines are then the file's (`held`, prepareUnit) and its found displays' rows (resolvePlaceholders,
+ * finishUnit) alone: the fix of the 2608.16117 survey, 2026-10-15, whose author-year citation lines ("networks (Kim et
+ * al., 2016). Islam and Picu…") the second rule kept as another unit's, their words a placeholder's and not the source's,
+ * the English left under the translation and a blank band above it.
  */
-function alignUnit(out, unit, rects, deny) {
+function alignUnit(out, unit, rects, deny, fileLines = false) {
   const uc = out.uc
   out.matchedKeys = new Set()
   let gaps = []
@@ -682,7 +760,7 @@ function alignUnit(out, unit, rects, deny) {
       const c0 = uc[O[q0].start]
       if (c0 && `${c0.page}|${c0.rect.join()}` === rectKey(rects[0])) out.firstX0 = c0.x0
     }
-    if (rects.length > 1) {
+    if (rects.length > 1 && !fileLines) {
       const minX = Math.min(...rects.map(r => r[1])), first = rectKey(rects[0])
       // (iteration 3: or of three words or more, where it starts: a line none of whose words are the source's is not
       // the unit's text, a rectangle the anchors gave it over another's line; kept, it is shown and no text is laid
@@ -1012,6 +1090,22 @@ export function v0Renderings({ phs, gaps: gapsIn, uc, citeMap, plain }) {
 }
 
 /**
+ * A rendering in its own brackets without them (`real`, its characters, the brackets first and last; `inner`, those
+ * between): their text and characters. A rendering a layout file's segment proves (`proof`, its `box`) keeps its box,
+ * clipped across to what lies between the brackets on its line, so that its crop is still cut from the segment's own ink
+ * (layer2.mjs drawnAs, tex.mjs proofOf), never estimated from the text layer's characters, which no proof covers
+ */
+function unbracketed(g, real, inner) {
+  const out = { text: inner.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars: inner, of: g.of ?? g, unbracketed: true, ...(g.proof ? { proof: true } : {}) }
+  const box = g.box
+  if (!box) return out
+  const open = real[0], close = real.at(-1)
+  const x0 = Math.max(box.x0, open.x1), x1 = Math.min(box.x1, close.x0)
+  out.box = box.lines === 1 && open.page === close.page && x1 > x0 ? { ...box, x0, x1 } : box
+  return out
+}
+
+/**
  * The resolution's rules, either source's renderings (`renderingsOf`, v0Renderings or a layout file's): each
  * placeholder by piece index drawn as nothing, a space, a symbol from its source, a kept rendering, its rendering's page
  * text or crop (drawnAs), a citation as the paper wrote it before (cite-map), or its source's plain text; a rendering in
@@ -1051,7 +1145,7 @@ function resolvePlaceholders(out, ctx, renderingsOf) {
         // the gap took from the source's text ("Eqn.(1)"), or the reader sees "\uFF08(1)\uFF09"
         const real = g.chars.filter(c => !c.sep && !c.space && /\S/.test(c.ch))
         const inner = g.chars.slice(g.chars.indexOf(real[0]) + 1, g.chars.indexOf(real.at(-1)))
-        if (inner.some(c => /[\p{L}\p{N}]/u.test(c.ch))) g = { text: inner.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars: inner, of: g.of ?? g, unbracketed: true }
+        if (inner.some(c => /[\p{L}\p{N}]/u.test(c.ch))) g = unbracketed(g, real, inner)
       }
       if (g) gapOf.set(p.k, g)
       if (!g && cls === 'cite' && citeMap && p.keys.length && p.keys.every(k => citeMap.has(k))) {
@@ -1088,7 +1182,7 @@ function resolvePlaceholders(out, ctx, renderingsOf) {
     const real = g.chars.filter(c => !c.sep && !c.space && /\S/.test(c.ch))
     const inner = g.chars.slice(g.chars.indexOf(real[0]) + 1, g.chars.indexOf(real.at(-1)))
     if (!inner.some(c => /[\p{L}\p{N}]/u.test(c.ch))) continue
-    const ng = { text: inner.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars: inner, of: g.of ?? g, unbracketed: true }
+    const ng = unbracketed(g, real, inner)
     const cls = p.cls === 'cite' ? 'cite' : p.cls === 'num' ? 'num' : 'other'
     out.set(p.k, { ...drawnAs(p, ng, cls, r.sup, out.lineInfo), k: p.k, src: p.src, cls: p.cls, gap: ng, second: r.second })
   }
@@ -1111,12 +1205,18 @@ function finishUnit(out, unit, rects, charsByPage) {
   // a located display's lines all kept: those it holds a third of, and their pieces on the same band (a fraction's
   // numerator line it holds less of was laid over and erased)
   out.keep = [...new Set([...(out.keep ?? []), ...displayTouched(out, uc)])]
-  // the kept lines in runs (regions), in the unit's order: the text after a kept placeholder starts below its region
+  // the kept lines in runs (regions), in the unit's order: the text after a kept placeholder starts below its region. A
+  // forced break the source locates (`breaks`: its pieces, each with the file's line TeX set after it) is a region of no
+  // lines of its own just before that line (`breakAt`, by its key), which its pieces hold: the text after it starts there
   const keepSet = new Set(out.keep ?? [])
   out.regionOf = new Map()
+  out.breakAt = new Map()
+  const breakNext = new Set(out.breaks?.values() ?? []), breakOf = new Map()
   let region = -1, inRun = false
   for (const r of rects) {
     const k = rectKey(r)
+    const j = breakNext.size ? out.lineInfo.get(k)?.j : undefined
+    if (j !== undefined && breakNext.has(j) && !keepSet.has(k) && !breakOf.has(j)) { region++; inRun = false; out.breakAt.set(k, region); breakOf.set(j, region) }
     if (keepSet.has(k)) { if (!inRun) region++; inRun = true; out.regionOf.set(k, region) }
     else inRun = false
   }
@@ -1126,6 +1226,41 @@ function finishUnit(out, unit, rects, charsByPage) {
     // (and the lines a display's rendering is, a held run's, where they hold none of its characters: tex.mjs)
     const regs = [...r.gap.chars.filter(c => !c.sep && !c.space).map(c => `${c.page}|${c.rect.join()}`), ...(r.gap.held ?? [])].map(k => out.regionOf.get(k)).filter(g => g !== undefined)
     if (regs.length) { r.region = Math.max(...regs); out.referenced.add(r.region) }
+  }
+  for (const [i, j] of out.breaks ?? []) {
+    const r = out.get(i), g = breakOf.get(j)
+    if (!r || g === undefined) continue
+    Object.assign(r, { region: g, brk: true })
+    out.referenced.add(g)
+  }
+  // the original's first character after each displayed formula the drawing breaks at (its region), or before which a
+  // display outside the unit's lines stands (`inPlace`: the unit's first): tokensOf2 drops a translation's mark that may
+  // not start a line at that segment's head where the original's line there opens with none
+  const real = c => !c.sep && !c.space && /\S/.test(c.ch)
+  for (const r of out.values()) {
+    if (r?.cls !== 'display') continue
+    if (r.mode === 'none' && r.inPlace) { r.origAfter = uc.find(real)?.ch ?? null; continue }
+    if (r.mode !== 'kept' || r.region === undefined) continue
+    let last = -1
+    uc.forEach((c, i) => { if (out.regionOf.get(`${c.page}|${c.rect.join()}`) === r.region) last = i })
+    const next = uc.slice(last + 1).find(c => real(c) && !keepSet.has(`${c.page}|${c.rect.join()}`))
+    r.origAfter = next?.ch ?? null
+  }
+  // the original's own character a held line shows right after a kept placeholder's ink (1512.03385's footnote 1: a URL's
+  // line kept, its full stop with it), `heldAfter`, and how many marks no line may start with it shows there in a row
+  // (`heldMarks`): tokensOf2 drops as many of the translation's there, which would show them twice, and no more (a
+  // closing corner bracket U+300D after the translation's ideographic full stop is its own)
+  for (const r of out.values()) {
+    if (r?.mode !== 'kept' || r.cls === 'display' || r.region === undefined || !r.gap) continue
+    const own = new Set(r.gap.chars.filter(real).map(charKey))
+    let last = -1
+    uc.forEach((c, i) => { if (own.has(charKey(c))) last = i })
+    const after = last >= 0 ? uc.slice(last + 1).filter(real) : []
+    const inRegion = c => out.regionOf.get(`${c.page}|${c.rect.join()}`) === r.region
+    r.heldAfter = after[0] && inRegion(after[0]) ? after[0].ch : null
+    let n = 0
+    while (n < after.length && inRegion(after[n]) && noStart(after[n].ch)) n++
+    r.heldMarks = n
   }
   // the translation's own text, letters only: a name it keeps as the page writes it ("Niño", whose ñ the source wrote
   // as a command) is drawn, not shown twice
@@ -1258,7 +1393,8 @@ function gapClass2(text) {
 function secondChance(out, phs, gaps, plain, lcs, unit, citeMap, uc) {
   const used = new Set()
   for (const r of out.values()) if (r?.gap) for (const c of r.gap.chars) used.add(c)
-  const want = phs.filter(p => { const r = out.get(p.k); return r && (r.mode === 'source' || r.mode === 'cite-map' || (r.mode === 'none' && p.cls === 'display')) })
+  // (never one a source already proves: a layout file's own rendering, a piece it draws as nothing, tex.mjs proofOf)
+  const want = phs.filter(p => { const r = out.get(p.k); return r && !r.proof && !r.gap?.proof && (r.mode === 'source' || r.mode === 'cite-map' || (r.mode === 'none' && p.cls === 'display')) })
   if (!want.length) return
   // the gaps' pieces no placeholder took, cut at what was taken
   const pieces = []
@@ -1565,9 +1701,10 @@ export function snapFirstRect2(rects, charsByPage) {
  * A unit's line rectangles grown along their baselines over the characters next to them that are no other unit's
  * (`others`: the page's other units' rectangles) where those hold the unit's own source words: the anchors may leave a
  * line's words out (1706.03762's "‡Work performed while at Google Research." anchored as "Research."), and what they
- * leave out is neither erased nor laid over. Mutates the rectangles; returns how many grew.
+ * leave out is neither erased nor laid over. `first`: the unit's first line, as extendRects2's. Mutates the rectangles;
+ * returns how many grew.
  */
-export function extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, wordChars = charsByPage) {
+export function extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, wordChars = charsByPage, first = rects[0]) {
   const srcWords = wordsOfFn([...src].map(ch => ({ ch }))).map(w => w.w)
   const want = new Set(srcWords)
   const srcStart = ` ${srcWords.join(' ')} `
@@ -1601,7 +1738,7 @@ export function extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, 
         // none of the source's ("whileatGoogle"), so that 1706.03762's "‡Work performed while at Google Research.",
         // anchored and located as "Research.", kept its English head unerased, and the translation, "Google Research…",
         // was laid after it: "Google Google Research")
-        if (dir > 0 || r !== rects[0]) continue
+        if (dir > 0 || r !== first) continue
         got = grow(dir, lineIn(wordChars[r[0] - 1] ?? []))
         const run = [...got].reverse()
         const text = run.map((c, n) => (n && (c.x0 - run[n - 1].x1 > 0.12 * c.size || (c.item !== run[n - 1].item && c.x0 - run[n - 1].x1 > 0.05 * c.size)) ? ` ${c.ch}` : c.ch)).join('')
@@ -1786,9 +1923,28 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       if (lead.gap > 0) { t.w100 += 100 * lead.gap; t.kern = true }
     }
   }
+  // a displayed formula the text after it starts below (or one before the unit's lines): the translation's text that
+  // opens that segment with a mark UAX 14 does not let a line start with (a sentence's ideographic comma or full stop Microsoft sets after
+  // a display piece, a "," or ")") is drawn without it, unless the original's own line there opens with one (its
+  // `origAfter`): the maintainer's fix 4 of 2026-10-15, for every script. So is such a mark after a placeholder kept on
+  // its held line where that line shows the original's own mark after it (`heldAfter`). The rows and the cache keep the translation
+  let after = null
+  // (after a display, every such mark: the original's line there opens with none; after a held line's mark, as many as it
+  // shows, `most`)
+  const dropped = s => {
+    let t = s
+    for (let n = 0; n < (after.most ?? Infinity); n++) {
+      const lead = /^\s*/.exec(t)[0], ch = String.fromCodePoint(t.codePointAt(lead.length) ?? 0x20)
+      if (lead.length >= t.length || !noStart(ch) || noStart(after.origAfter)) return t
+      t = t.slice(lead.length + ch.length)
+    }
+    return t
+  }
   unit.pieces.forEach((p, k) => {
     if (p.t === 'text') {
-      pushText(p.s.replace(/\n/g, ' ').replace(/---/g, '—').replace(/--/g, '–').replace(/``/g, '“').replace(/''/g, '”'), style())
+      let s = p.s
+      if (after && /\S/.test(s)) { s = dropped(s); after = null }
+      pushText(s.replace(/\n/g, ' ').replace(/---/g, '—').replace(/--/g, '–').replace(/``/g, '“').replace(/''/g, '”'), style())
       return
     }
     if (p.t === 'open') {
@@ -1810,12 +1966,28 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     }
     const r = resolved.get(k)
     if (!r) return
+    // (a forced break the file locates, finishUnit's: the laid line ends there, and the text after it starts on the line
+    // TeX set after the original's break, as after a display)
+    if (r.brk && r.region !== undefined && resolved.referenced?.has(r.region)) {
+      while (tokens.at(-1)?.space) tokens.pop()
+      // (a group's later pieces are the same break)
+      if (tokens.at(-1)?.blockTo !== r.region) tokens.push({ blockTo: r.region, w100: 0 })
+      return
+    }
     // iteration 3: a kept rendering (a displayed formula) stands where it is; the text after it starts below it
     if (r.mode === 'kept' && r.region !== undefined && resolved.referenced?.has(r.region)) {
       while (tokens.at(-1)?.space) tokens.pop()
       tokens.push({ blockTo: r.region, w100: 0 })
+      if (r.cls === 'display') after = r
+      // (a held line's own mark after the placeholder stands with it, the original's: the translation's is not drawn
+      // again, finishUnit's `heldAfter`)
+      else if (noStart(r.heldAfter)) after = { origAfter: null, most: r.heldMarks ?? 1 }
       return
     }
+    // (a display before the unit's lines, drawn as nothing: the text after it opens the unit's first line)
+    if (r.cls === 'display' && r.inPlace && !tokens.some(t => !t.space)) { after = r; return }
+    // (anything else drawn ends the segment's head: a crop, a rendering's text; nothing drawn and a space do not)
+    if (r.mode !== 'none' && r.text !== ' ' && !(r.mode === 'kept' && r.cls === 'display')) after = null
     if (r.mode === 'crop') {
       const glue = tokens.length > 0 && !lastIsSpace()
       tokens.push({ crop: r, cw: r.crop[2] - r.crop[0], glue, w100: 0 })
@@ -1853,8 +2025,8 @@ export async function warmFaces(to, cjk, designs, yieldNow, ready = async () => 
 // ---- the unit's blocks, with the original's baselines
 
 /** blocksOf's blocks, each with its lines' measured baselines (B), sizes, pitch and the free space below it */
-export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, referenced = null, lineskip = null) {
-  const blocks = blocksOf2(rects, pageViews, keep, regionOf, referenced)
+export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, referenced = null, lineskip = null, breakAt = null) {
+  const blocks = blocksOf2(rects, pageViews, keep, regionOf, referenced, breakAt)
   const info = r => lineInfo.get(rectKey(r)) ?? lineInfo.get(`${r[0]}|${r[2]}|${r[3]}|${r[4]}`)
   for (const b of blocks) {
     b.B = b.rects.map(r => info(r)?.baseline ?? r[2] + 0.24 * (r[4] - r[2]))

@@ -27,7 +27,7 @@ const bytesOf = (v: unknown) => utf8(JSON.stringify(v))
 describe('TRANSLATE_VERSION', () => {
   it('is exported by translate/, and mt.mjs re-exports that one constant', async () => {
     const { TRANSLATE_VERSION } = await import('@/pdf-reader/engine/translate/version.mjs')
-    expect(TRANSLATE_VERSION).toBe('1')
+    expect(TRANSLATE_VERSION).toBe('2')
     // (a token of the form the web's identity and a bundle's versions take)
     expect(TRANSLATE_VERSION).toMatch(/^[0-9a-z.]{1,16}$/)
     const mt = await import('@/pdf-reader/engine/translate/mt.mjs')
@@ -103,19 +103,20 @@ describe('the per-text cache key (rules as data, §9.1)', () => {
 
 /** an empty layout file of one page, as a maker of `layout` writes it */
 const layoutFile = (over: Record<string, unknown> = {}) => ({
-  schema: 3, layout: LAYOUT, pdfjs: '6.3.289', paper: { id: '2608.04322', version: 1, pages: 1 }, left: '', views: [0, 0, 612, 792], fonts: [],
+  schema: 4, layout: LAYOUT, pdfjs: '6.3.289', paper: { id: '2608.04322', version: 1, pages: 1 }, left: '', views: [0, 0, 612, 792], fonts: [],
   units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [], lineskip: null, ...over,
 })
 const manifest = (over: Record<string, unknown> = {}) => ({ schema: 1, removal: '4', pages: 1, sets: {}, page: { 1: { ok: true } }, appended: 0, stats: {}, ...over })
 
 describe('a layout file is refused by its schema, not by its maker (decision 4)', () => {
-  it('reads a schema-3 file whose `layout` is a newer maker\'s, and refuses a schema-2 or a schema-4 file', () => {
-    expect(parseLayout(bytesOf(layoutFile({ layout: '6' }))).layout).toBe('6')
+  it('reads a schema-4 file whose `layout` is a newer maker\'s, and refuses a schema-3 or a schema-5 file', () => {
+    expect(parseLayout(bytesOf(layoutFile({ layout: '7' }))).layout).toBe('7')
     expect(parseLayout(bytesOf(layoutFile({ layout: '1' }))).layout).toBe('1')
-    expect(() => parseLayout(bytesOf(layoutFile({ schema: 4 })))).toThrow(LayoutRefusal)
-    expect(() => parseLayout(bytesOf(layoutFile({ schema: 4, layout: '6' })))).toThrow(/schema/)
-    // (a file before the interline glue, or before the names: refused by its schema, as no reader holds an older one's
-    // meaning)
+    expect(() => parseLayout(bytesOf(layoutFile({ schema: 5 })))).toThrow(LayoutRefusal)
+    expect(() => parseLayout(bytesOf(layoutFile({ schema: 5, layout: '7' })))).toThrow(/schema/)
+    // (a file before JOINED and OUTSIDE, before the interline glue, or before the names: refused by its schema, as no
+    // reader holds an older one's meaning)
+    expect(() => parseLayout(bytesOf(layoutFile({ schema: 3, layout: '5' })))).toThrow(/^schema/)
     const { lineskip: _, ...two } = layoutFile({ schema: 2 })
     expect(() => parseLayout(bytesOf(two))).toThrow(/^schema/)
     const { names: __, lineskip: ___, ...old } = layoutFile({ schema: 1 })

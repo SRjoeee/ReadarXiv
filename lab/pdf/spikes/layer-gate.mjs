@@ -29,7 +29,7 @@
 //       [--proto-faces=roles|prototype] [--proto-place=<file>] [--proto-order=<file>] [--dump=<dir>] [--write-floor]
 //       [--proto-tex=ph|lines] [--proto-tex-only=no] [--proto-symbols=text|strict] [--proto-extents=v0|tex]
 //       [--against=<record key>] [--rules=<file>] [--ruling=<file>] [--parts[=<n>]] [--slices[=blocks|alphabet]] [--door[=<n>]]
-//       [--door-memory[=<pages>]]
+//       [--door-memory[=<pages>]] [--door-parts[=doubling|splits:<n>|seed:<s>]] [--door-parts-addon=chained|carried|none]
 //   --engine     the engine measured: <worktree>/src/pdf-reader/engine served as /engine/ (the checker, layer/check.mjs, is
 //                always this repository's: the instrument is the same for every branch); default this repository
 //   --layouts    made (the default): the layout files the engine's own maker makes from the fixtures' papers (spikes/
@@ -119,6 +119,22 @@
 //                laid, the engine stopped before the next page's drawing: the canvases the page holds (count and bytes),
 //                its JS heap after a collection and the browser's resident memory. Written to
 //                out/layer-gate/memory-<commit>-<time>.json
+//   --door-parts  the door in parts (BUNDLE 4; never recorded; the door's choices as --door has them): each fixture's bundle as
+//                --door makes it, cut by the cutter (layer-proto/cut.mjs) with the chained add-on (layout/chain.mjs: each part's
+//                tail after the parts before it, the plans from arXiv's PDF and the layout file in Node, the remover in process,
+//                layout/remove.mjs removerOf) at the doubling schedule (the default), every <n> pages a part (splits:<n>), or at
+//                part lengths of 1 to 4 drawn from <s> (seed:<s>), and its pages drawn twice, each in a page load of its own
+//                (layer-gate/door-parts.mjs): door A over the cut made whole (mergeParts, BUNDLE 3's open, over arXiv's PDF and
+//                every tail), door B over the index with no part, each part told when the run waits for one (a part with a tail
+//                with the composed document through it). Each page's SVG markup, copyOf's pixels over the page as door A's load
+//                drew it, and the digest of the run's records of its units must be equal, the units left and why too, and no
+//                page told laying may wait for a part before it is ready (Q1); and door A must draw every page as BUNDLE 3's
+//                open of the bundle with its single tail does (C', door S: the same markup, copyOf's pixels over door A's
+//                drawing of the page as door B's, records, units left and states). The run is written to out/layer-gate/door-parts-<commit>-<time>.json. --door-parts-addon=carried: the
+//                cut with no hook (the whole add-on's manifest carried, its removed pages refused, no tail); none: the paper with
+//                no add-on (a producer with no remover, M20): the cut made of it with none (every part `addon: null`), door A
+//                then BUNDLE 3's open of the bundle with `addon: null` (door C: the same units, left and layout, v0's own erase
+//                and restore)
 // The consistency measures (the table-groups brief, 2026-10-07), checked with the completeness ones and each to be 0: a
 // table group drawn partly (the record's translated cells of one `group`, some drawn and some not) and a float's label
 // left in the source language where the final names it in the target's (the record's `captions`, the layout rules' labels'
@@ -199,8 +215,16 @@ if (SLICES && !['blocks', 'alphabet'].includes(SLICES)) throw new Error(`--slice
 /** --door-memory[=<pages>]: the memory the door holds as it lays that many pages (a measurement: never recorded) */
 const MEMORY = arg('door-memory') === true ? 40 : typeof arg('door-memory') === 'string' ? Number(arg('door-memory')) : null
 if (MEMORY !== null && !(Number.isInteger(MEMORY) && MEMORY >= 10)) throw new Error(`--door-memory=${arg('door-memory')}: a count of pages, 10 or more`)
+/** --door-parts[=doubling|splits:<n>|seed:<s>]: the door in parts against the door over the same cut made whole (a proof: never
+ *  recorded), at the schedule given */
+const DOOR_PARTS = arg('door-parts') === true ? 'doubling' : typeof arg('door-parts') === 'string' ? arg('door-parts') : null
+if (DOOR_PARTS !== null && !/^(?:doubling|splits:[1-9]\d*|seed:\d+)$/.test(DOOR_PARTS)) throw new Error(`--door-parts=${DOOR_PARTS}: doubling, splits:<n> or seed:<s>`)
+/** --door-parts-addon=chained|carried|none: the parts' add-on chained (the default: each part's tail), the whole's manifest
+ *  carried with no tail, or none (against BUNDLE 3's open of the paper with none) */
+const DOOR_PARTS_ADDON = typeof arg('door-parts-addon') === 'string' ? arg('door-parts-addon') : 'chained'
+if (!['chained', 'carried', 'none'].includes(DOOR_PARTS_ADDON) || (arg('door-parts-addon') !== null && DOOR_PARTS === null)) throw new Error(`--door-parts-addon=${DOOR_PARTS_ADDON}: chained, carried or none, with --door-parts`)
 /** --door[=<n>]: the reader's door against the gate's own page, its rows taken n a part (a proof: never recorded) */
-const DOOR = arg('door') === true || (MEMORY !== null && arg('door') === null) ? 16 : typeof arg('door') === 'string' ? Number(arg('door')) : null
+const DOOR = arg('door') === true || ((MEMORY !== null || DOOR_PARTS !== null) && arg('door') === null) ? 16 : typeof arg('door') === 'string' ? Number(arg('door')) : null
 if (DOOR !== null && !(Number.isInteger(DOOR) && DOOR > 0)) throw new Error(`--door=${arg('door')}: a count of rows a part`)
 if (DOOR !== null && (KIND !== 'proto' || TEX?.use !== 'lines' || !TEX.texOnly || TEX.symbols !== 'text' || TEX.extents !== 'v0' || REMOVAL !== 'draw')) throw new Error("--door: the door's choices, --engine-kind=proto --proto-tex=lines --removal=draw")
 if (DOOR !== null && (arg('record') || PARTS || SLICES || PERF || DUMP || TIER !== 'model')) throw new Error('--door: a proof of its own, the model tier, never a record, nor with --parts, --slices, --perf or --dump')
@@ -245,6 +269,9 @@ const PDFJS = resolve(REPO, 'node_modules/pdfjs-dist')
 const ZOD = resolve(REPO, 'node_modules/zod')
 const GATE = join(here, 'layer-gate')
 const CHECKER = join(REPO, 'src/pdf-reader/engine/layer/check.mjs')
+/** the UAX 14 table the measure reads (measure.mjs imports it by its address in this repository): this repository's, as
+ *  the checker is, whichever engine is measured */
+const NO_START_PATH = '/src/pdf-reader/engine/layer-proto/no-start.mjs', NO_START_FILE = join(REPO, NO_START_PATH.slice(1))
 const PROGRESS = process.env.LAYER_PROGRESS ?? join(homedir(), 'Downloads/readarxiv-test/layer-progress')
 const ONLY = typeof arg('only') === 'string' ? arg('only').split(',').filter(Boolean) : null
 const PAGES = typeof arg('pages') === 'string' ? Number(arg('pages')) : null
@@ -324,9 +351,10 @@ if (PROTO) {
   for (const [lang, rel] of Object.entries(TEX_PATTERN_FILES)) if (existsSync(join(TEXMF, rel))) HYPH.set(lang, JSON.stringify(patternsOfTex(readFileSync(join(TEXMF, rel), 'latin1'))))
 }
 function fileFor(path) {
-  if (path.startsWith('/gate/')) return ['page.html', 'page.mjs', 'proto.mjs', 'measure.mjs', ...(DOOR !== null ? ['door.mjs'] : [])].includes(path.slice(6)) ? join(GATE, path.slice(6)) : null
+  if (path.startsWith('/gate/')) return ['page.html', 'page.mjs', 'proto.mjs', 'measure.mjs', ...(DOOR !== null ? ['door.mjs'] : []), ...(DOOR_PARTS !== null ? ['door-parts.mjs'] : [])].includes(path.slice(6)) ? join(GATE, path.slice(6)) : null
   if (path.startsWith('/proto-fonts/')) return /^\/proto-fonts\/lm(?:roman|sans|mono)10-[a-z]+\.otf$/.test(path) ? join(TEXMF, 'fonts/opentype/public/lm', path.slice(13)) : null
   if (path === '/engine/layer/check.mjs') return CHECKER
+  if (path === NO_START_PATH) return NO_START_FILE
   if (path === '/rules/layout-rules.json') return RULES_FILE
   if (path.startsWith('/zod/')) return /^\/zod\/(?:mini|v4)\/[\w./-]+\.js$/.test(path) ? under(ZOD, path.slice(5)) : null
   if (path.startsWith('/engine/')) return /\.(m?js|json)$/.test(path) ? under(join(ENGINE, 'src/pdf-reader/engine'), path.slice(8)) : null
@@ -358,6 +386,12 @@ const MOVED_MODULES = { '/engine/font-roles.mjs': 'rules/font-roles.mjs', '/engi
 const ADDONS = new Map()
 /** --door: each fixture's bundle and rows, by the path the page asks for them at */
 const DOOR_FILES = new Map()
+/** --door-parts: run.mjs's stand-in, the instrument of door-parts.mjs (each run kept in __gateRuns, each wait told to __gateWait),
+ *  each run keeping its units' records (`records`, which the reader's does not) for the comparison of the pages' records */
+const RUN_STAND_IN = `export * from '/engine/layer-proto/run.mjs?real'
+import { openProto as real } from '/engine/layer-proto/run.mjs?real'
+export async function openProto(o) { const run = await real({ ...o, records: true, onWait: what => globalThis.__gateWait?.(what) }); (globalThis.__gateRuns ??= []).push(run); return run }
+`
 const server = createServer((req, res) => {
   let path
   try { path = decodeURIComponent(new URL(req.url, 'http://127.0.0.1').pathname) } catch { res.writeHead(400); return res.end() }
@@ -387,6 +421,12 @@ const server = createServer((req, res) => {
   // (the hashed instrument, layer-gate/proto.mjs, names two modules by the URLs they had before they moved into rules/: sent on
   // to where they are, so that their own imports resolve beside them; an engine that still has them there serves them itself)
   if (MOVED_MODULES[path] && !existsSync(join(ENGINE, 'src/pdf-reader/engine', path.slice(8)))) { res.writeHead(302, { location: `/engine/${MOVED_MODULES[path]}` }); return res.end() }
+  // (--door-parts: run.mjs as the reader imports it is a stand-in that keeps each run it opens and tells the page what it waits
+  // for; the module itself is served at ?real)
+  if (DOOR_PARTS !== null && path === '/engine/layer-proto/run.mjs' && !new URL(req.url, 'http://127.0.0.1').searchParams.has('real')) {
+    res.writeHead(200, { 'content-type': TYPES['.mjs'], 'cache-control': 'no-store' })
+    return res.end(RUN_STAND_IN)
+  }
   const file = fileFor(path)
   if (!file || !existsSync(file) || !statSync(file).isFile()) { res.writeHead(404, { 'content-type': 'text/plain' }); return res.end('not found') }
   res.writeHead(200, { 'content-type': TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream', 'cache-control': 'no-store' })
@@ -410,7 +450,7 @@ const inputs = {
   layouts: LAYOUTS, ...(LAYOUTS === 'made' ? { switch: SWITCH } : {}), fixtures: FIXTURES === REFS ? 'data/layer-fixtures' : shownPath(FIXTURES, ROOT), ...(RECORDS ? { records: shownPath(RECORDS, ROOT) } : {}), ...(process.env.LAYER_REFS ? { refs: shownPath(REFS, ROOT) } : {}), ...(process.env.LAYER_GEOMETRY ? { geometry: shownPath(resolve(PROTO_GEOMETRY), ROOT) } : {}), chromium: browser.version(),
   pdfjs: readJson(join(PDFJS, 'package.json')).version, fonts: fontsDigest.slice(0, 16), checker: fileSha(CHECKER).slice(0, 16),
   // the instrument: the measures, their arithmetic, and the page that draws and accounts (lost ink's own glyphs)
-  measures: sha256(['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => readFileSync(join(GATE, f))).join('\n')).slice(0, 16),
+  measures: sha256([...['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => join(GATE, f)), NO_START_FILE].map(f => readFileSync(f)).join('\n')).slice(0, 16),
   ...(PARTS ? { parts: String(PARTS) } : {}),
   ...(PROTO ? { kind: 'proto', protoUnits: PROTO_UNITS, place: PROTO_PLACE ? 'the prototype page\'s' : 'the gate\'s', order: PROTO_ORDER ? 'given' : 'layGroups', faces: PROTO_FACES ?? 'the engine\'s default', tex: TEX ? JSON.stringify(TEX) : 'none', rules: { version: RULES.version, sha256: RULES_SHA }, hyphenation: sha256([...HYPH].map(([l, j]) => `${l}:${j}`).join('\n')).slice(0, 16), removal: REMOVAL ?? 'none', ...(REMOVAL ? { remover: removerDigest() } : {}) } : {}),
 }
@@ -446,6 +486,7 @@ async function worker() {
 
 async function runFixture(page, name, errors) {
   if (MEMORY !== null) return memoryFixture(page, name, errors)
+  if (DOOR_PARTS !== null) return doorPartsFixture(page, name, errors)
   if (DOOR !== null) return doorFixture(page, name, errors)
   const { paper, target } = nameOf(name)
   const refFile = join(REFS, name, 'ref.json')
@@ -601,6 +642,134 @@ async function doorFixture(page, name, errors) {
   return { name, door: true, ok, ready: true, line, pages, made: made.meta, gate: gate.summary, stats: door.stats, sheets: door.sheets }
 }
 
+/** a 32-bit integer's bits mixed (murmur3's finaliser) */
+const mix32 = x => { x = Math.imul(x ^ (x >>> 16), 0x85ebca6b); x = Math.imul(x ^ (x >>> 13), 0xc2b2ae35); return (x ^ (x >>> 16)) >>> 0 }
+/** --door-parts: the last page of the part that begins at page a of N, by the schedule (null: the cutter's own, the doubling) */
+function targetOf(schedule) {
+  const [kind, n] = schedule.split(':')
+  if (kind === 'splits') return (a, N) => Math.min(N, a + Number(n) - 1)
+  // (a part of 1 to 4 pages, drawn from the seed and the page it begins at, mixed (murmur3's finaliser): the same cut on every run)
+  if (kind === 'seed') return (a, N) => Math.min(N, a + (mix32(Math.imul(Number(n), 0x9e3779b1) ^ a) % 4))
+  return null
+}
+/** Q1 over a door's log (its pages' states as it told them, the run's waits): a page told laying is ready (or failed) before the
+ *  run waits for a part */
+function q1Of(log) {
+  const out = [], laying = new Set()
+  for (const e of log) {
+    const [what, p] = e.split(':')
+    if (what === 'laying') laying.add(p)
+    else if (what === 'ready' || what === 'failed') laying.delete(p)
+    else if (e === 'wait:part' && laying.size) out.push(`a part waited for with page ${[...laying].join(', ')} laying`)
+  }
+  return out
+}
+/**
+ * --door-parts: a fixture's bundle made as --door makes it, cut at the schedule (cut.mjs cutBundle, the chained add-on's hooks
+ * by default), its objects served for the page to read as a host does (layer-gate/door-parts.mjs), with arXiv's PDF composed
+ * through each part's tail; its pages drawn by door A (the cut made whole, mergeParts, over arXiv's PDF and every tail) and door
+ * B (no part at the open, each told when the run waits for one, a part with a tail with its composed document), each in a page
+ * load of its own, and compared page by page: SVG markup, copyOf's pixels over door A's PNG of the page, the run's records of
+ * the page's units; the units left and why; Q1 over door B's log; and with the chained add-on, door A against door S (BUNDLE
+ * 3's open of the bundle with its single tail, C')
+ */
+async function doorPartsFixture(page, name, errors) {
+  const { paper, target } = nameOf(name)
+  const removal = await addonOf(name)
+  const made = await doorBundleOf(name, removal)
+  const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
+  const [{ readBundle }, { cutBundle }, { startxrefOf }] = await Promise.all(['layer-proto/bundle.mjs', 'layer-proto/cut.mjs', 'layout/tail.mjs'].map(f => import(E(f))))
+  const arxiv = new Uint8Array(readFileSync(join(FIXTURES, name, 'arxiv.pdf')))
+  const cutTo = targetOf(DOOR_PARTS), none = DOOR_PARTS_ADDON === 'none', chained = DOOR_PARTS_ADDON === 'chained'
+  const read3 = readBundle(new Uint8Array(made.bytes))
+  const base = { bytes: arxiv.length, sha256: sha256(arxiv), xref: startxrefOf(arxiv) }
+  const hooks = chained ? await chainedHooksOf(arxiv, read3, base) : null
+  const cut = await cutBundle(none ? { ...read3, addon: null } : read3, { leftPages: () => null, base, ...(cutTo ? { target: cutTo } : {}), ...(hooks ? { chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon } : {}) })
+  const at = `/door/${name}`, served = []
+  const serve = (path, body) => { DOOR_FILES.set(path, body); served.push(path) }
+  // (door C: BUNDLE 3's bundle itself, its add-on taken off in the page; door S: the same with its single tail)
+  if (none || chained) serve(`${at}/bundle.json`, made.bytes)
+  cut.units.forEach((u, i) => serve(`${at}/u${i}.json`, Buffer.from(u.bytes)))
+  serve(`${at}/head.json`, Buffer.from(cut.head.bytes))
+  cut.parts.forEach((p, i) => serve(`${at}/p${i}.json`, Buffer.from(p.bytes)))
+  // arXiv's PDF through each part's tail (the composed document a host opens for it), and through the last tail
+  const docs = {}, tails = []
+  let composed = null
+  cut.parts.forEach((p, i) => {
+    const tail = JSON.parse(Buffer.from(p.bytes).toString('utf8')).addon?.tail
+    if (!tail) return
+    tails.push(Buffer.from(tail, 'base64'))
+    composed = `${at}/c${i}.pdf`
+    docs[i] = composed
+    serve(composed, Buffer.concat([Buffer.from(arxiv), ...tails]))
+  })
+  serve(`${at}/cut.json`, JSON.stringify({ units: cut.units.map((u, i) => ({ path: `${at}/u${i}.json`, ref: u.ref })), head: { path: `${at}/head.json`, ref: cut.head.ref }, parts: cut.parts.map((p, i) => ({ path: `${at}/p${i}.json`, ref: p.ref })), docs, composed }))
+  serve(`${at}/rows.json`, JSON.stringify(made.rows))
+  const o = { name, target, rules: '/rules/layout-rules.json', pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF) }
+  const open = async () => { await page.goto(`${ORIGIN}/gate/page.html?kind=proto&doorparts=1`); await page.waitForFunction(() => window.gateReady === true) }
+  try {
+    await open()
+    const a = await page.evaluate(x => window.doorParts.whole(x), { ...o, bundle3: none ? 'none' : false })
+    for (const e of a.pages) { serve(`${at}/s${e.p}.png`, Buffer.from(e.png, 'base64')); delete e.png }
+    await open()
+    const b = await page.evaluate(x => window.doorParts.parts(x), o)
+    const q1 = q1Of(b.log), waits = b.log.filter(e => e === 'wait:part').length
+    const pages = b.pages.map((d, i) => {
+      const g = a.pages[i]
+      return { p: d.p, svg: d.svg === g?.svg, lang: d.lang === target, size: d.w === g?.w && d.h === g?.h, copy: d.copy.sha === g?.copy.sha, recs: d.recs === g?.recs }
+    })
+    const all = key => pages.every(e => e[key]), n = key => pages.filter(e => e[key]).length
+    // the units left: before endParts door B's are door A's less exactly what endParts' accounting adds (a multiset), and after
+    // it they are door A's; the pages' states equal at both
+    const counts = list => { const m = new Map(); for (const x of list) m.set(x, (m.get(x) ?? 0) + 1); return m }
+    const minus = (x, y) => { const m = counts(x); for (const v of y) m.set(v, (m.get(v) ?? 0) - 1); return m }
+    const nonNegative = m => [...m.values()].every(v => v >= 0)
+    const same = (m, k) => [...new Set([...m.keys(), ...k.keys()])].every(v => (m.get(v) ?? 0) === (k.get(v) ?? 0))
+    // C' (the chained add-on): door A, over every tail, against door S, BUNDLE 3's open over the bundle's single tail. Door S's
+    // copies are drawn over door A's PNG of each page (`shared`), as door B's are: two loads' own first drawings of one of
+    // arXiv's pages may differ (PDF.js, under load), so the copies are compared over the same pixels, never over each load's
+    // own original (that comparison failed some 10 of 523 pages a run, different pages each run, at six workers)
+    let single = null
+    if (chained) {
+      await open()
+      const sd = await page.evaluate(x => window.doorParts.whole(x), { ...o, bundle3: 'single', png: false, shared: true })
+      const same = sd.pages.length === a.pages.length && sd.pages.every((d, i) => d.svg === a.pages[i]?.svg && d.copy.sha === a.pages[i]?.copy.sha && d.recs === a.pages[i]?.recs && d.w === a.pages[i]?.w && d.h === a.pages[i]?.h)
+      single = { pages: sd.pages.filter((d, i) => d.svg === a.pages[i]?.svg && d.copy.sha === a.pages[i]?.copy.sha && d.recs === a.pages[i]?.recs).length, of: sd.pages.length, left: sd.skipped.join('\n') === a.skipped.join('\n'), states: sd.states === a.states, ok: false, tails: tails.length, removed: hooks.state().r }
+      single.ok = same && single.left && single.states && sd.addon === true
+    }
+    const lacking = minus(a.skipped, b.before.skipped), added = minus(b.after.skipped, b.before.skipped)
+    const left = {
+      subset: nonNegative(lacking), accounted: nonNegative(added) && same(lacking, added), after: b.after.skipped.join('\n') === a.skipped.join('\n'),
+      statesBefore: b.before.states === a.states, statesAfter: b.after.states === a.states,
+      lacking: [...lacking.values()].reduce((x, v) => x + v, 0), whys: [...new Set([...added].filter(([, v]) => v > 0).map(([e]) => e.slice(e.indexOf(':') + 1)))],
+    }
+    const leftOk = left.subset && left.accounted && left.after && left.statesBefore && left.statesAfter
+    // (with no add-on, door B's parts carry none and door C's bundle none)
+    const bare = !none || (b.addons === 0 && a.addon === false)
+    const ok = pages.length === a.pages.length && pages.length > 0 && all('svg') && all('lang') && all('size') && all('copy') && all('recs') && leftOk && bare && !q1.length && !errors.length && (single === null || single.ok)
+    if (!ok) failures.push(name)
+    const line = `${none ? `no add-on (door C, BUNDLE 3's with none${bare ? '' : ': NOT bare'}), ` : ''}${single ? `chained (${single.tails} tails, ${single.removed} removed pages; door A as BUNDLE 3's single tail on ${single.pages}/${single.of} pages, units left ${single.left ? 'equal' : 'NOT equal'}, states ${single.states ? 'equal' : 'NOT equal'}), ` : ''}${pages.length} pages, ${cut.parts.length} parts (${DOOR_PARTS}: ${b.parts.map(r => r.join('-')).join(' ')}): SVG ${n('svg')}/${pages.length} equal, copy ${n('copy')}, records ${n('recs')}; units left (${a.skipped.length}): before endParts ${left.subset && left.accounted ? `door A's less the ${left.lacking} its accounting adds${left.whys.length ? ` (${left.whys.join(', ')})` : ''}` : 'NOT door A\'s less the accounting'}, after it ${left.after ? 'equal' : 'NOT equal'}; states ${left.statesBefore && left.statesAfter ? 'equal' : 'NOT equal'} before and after; door B told ${b.needed} of ${b.of} parts as its run waited (${waits} waits), the rest at the end; Q1 ${q1.length ? `broken: ${q1.slice(0, 3).join('; ')}` : 'held'}; ${b.drawn} units drawn (door A ${a.drawn})${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
+    return { name, door: true, ok, ready: true, line, pages, schedule: DOOR_PARTS, addon: DOOR_PARTS_ADDON, parts: b.parts, needed: b.needed, waits, q1, left, bare, single }
+  } finally { for (const f of served) DOOR_FILES.delete(f) }
+}
+
+/** --door-parts' chained add-on: the cutter's hooks (layout/chain.mjs chainedAddon) over the plans of arXiv's PDF in Node
+ *  (layout/addon.mjs pagePlansOf over the bundle's layout file) and the remover in process (layout/remove.mjs removerOf over
+ *  arXiv's bytes), as the prepare child and the remover child run them */
+async function chainedHooksOf(arxiv, read3, base) {
+  const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
+  const [{ chainedAddon }, { pagePlansOf }, { removerOf }, { indexLayout }] = await Promise.all(['layout/chain.mjs', 'layout/addon.mjs', 'layout/remove.mjs', 'layout/file.mjs'].map(f => import(E(f))))
+  const PL = await import('@cantoo/pdf-lib')
+  // (the facts' reader named by its own version: the remover refuses another than its pinned one)
+  const { OPS, version } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const { deflateSync } = await import('node:zlib')
+  const doc = await openNode(arxiv)
+  const { plans } = await pagePlansOf({ doc, OPS, index: indexLayout(read3.layout) })
+  try { await doc.loadingTask.destroy() } catch {}
+  const remover = removerOf({ bytes: arxiv, PL, inflate: inflateTolerant, deflate: b => new Uint8Array(deflateSync(b)) })
+  return chainedAddon({ N: read3.paper.pages, views: read3.left.pages, base: { bytes: base.bytes, xref: base.xref }, planOf: p => plans.get(p) ?? null, pdfjs: version, remove: ({ plans: ask }) => remover.remove(ask) })
+}
+
 /** a record piece as a result's piece (spikes/rows-check.mjs resultOf): a text it translated stays itself, one it left is
  *  the unit's own text piece, white space the wire cut off a piece of its own; any other piece the unit's source piece the
  *  key rule finds (kOfSource), else what it is */
@@ -657,7 +826,9 @@ async function doorBundleOf(name, removal) {
 /** the remover's files, digested: a change of them makes every add-on again (the plan's, removal.mjs pagePlan, too; the
  *  manifest's reader, which holds REMOVAL and the bounds the maker checks its manifest by, and the maker, addon.mjs) */
 function removerDigest() {
-  return sha256(['src/pdf-reader/engine/layout/remove.mjs', 'src/pdf-reader/engine/layout/ink.mjs', 'src/pdf-reader/engine/layout/file.mjs', 'src/pdf-reader/engine/layout/addon-manifest.mjs', 'src/pdf-reader/engine/layout/addon.mjs', 'src/pdf-reader/engine/layer-proto/removal.mjs'].map(f => readFileSync(join(ENGINE, f))).join('\n')).slice(0, 16)
+  // (the exchange's payloads, the chained writer and the tail's reading since E3: the remover's side reads them)
+  const files = ['src/pdf-reader/engine/layout/remove.mjs', 'src/pdf-reader/engine/layout/ink.mjs', 'src/pdf-reader/engine/layout/file.mjs', 'src/pdf-reader/engine/layout/addon-manifest.mjs', 'src/pdf-reader/engine/layout/addon.mjs', 'src/pdf-reader/engine/layer-proto/removal.mjs', 'src/pdf-reader/engine/layout/chain-wire.mjs', 'src/pdf-reader/engine/layout/chain.mjs', 'src/pdf-reader/engine/layout/tail.mjs']
+  return sha256(files.filter(f => existsSync(join(ENGINE, f))).map(f => readFileSync(join(ENGINE, f))).join('\n')).slice(0, 16)
 }
 
 /**
@@ -835,6 +1006,16 @@ if (MEMORY !== null) {
   // (a fixture whose page raised an error is a failed reading, though it returned one)
   process.exit(failures.length || ran.length !== asked.length || ran.some(r => !r.ok) ? 1 : 0)
 }
+if (DOOR_PARTS !== null) {
+  const ran = [...results.values()].sort((a, b) => a.name.localeCompare(b.name))
+  const all = ran.flatMap(r => r.pages ?? [])
+  const count = key => all.filter(e => e[key]).length
+  const made = new Date().toISOString()
+  const file = join(ROOT, 'out/layer-gate', `door-parts-${(engineInfo.commit ?? 'none').slice(0, 8)}${engineInfo.dirty ? '+' : ''}-${made.replace(/[:.]/g, '-')}.json`)
+  writeFileSync(file, JSON.stringify({ schema: 1, made, seconds, engine: engineInfo, inputs: { ...inputs, doorParts: DOOR_PARTS, doorPartsAddon: DOOR_PARTS_ADDON }, fixtures: Object.fromEntries(ran.map(r => [r.name, r])) }))
+  console.log(`\ndoor-parts (${DOOR_PARTS}${DOOR_PARTS_ADDON === 'none' ? ', no add-on, against door C' : DOOR_PARTS_ADDON === 'chained' ? `, chained tails, door A as the single tail's on ${ran.reduce((n, r) => n + (r.single?.pages ?? 0), 0)} pages of ${ran.reduce((n, r) => n + (r.single?.of ?? 0), 0)} (${ran.reduce((n, r) => n + (r.single?.tails ?? 0), 0)} tails)` : ', the manifest carried'}): ${ran.length} outputs, ${all.length} pages: SVG markup equal on ${count('svg')}, copyOf's pixels on ${count('copy')}, the records on ${count('recs')}; units left as door A's on ${ran.filter(r => r.left?.subset && r.left.accounted && r.left.after && r.left.statesBefore && r.left.statesAfter).length} outputs (before endParts less its accounting, after it equal; the states too); Q1 held on ${ran.filter(r => r.q1 && !r.q1.length).length}, the runs waiting for a part ${ran.reduce((n, r) => n + (r.waits ?? 0), 0)} times; ${failures.length ? `${failures.length} failed (${failures.join(' ')})` : 'none failed'}, in ${seconds} s; the run in ${file}`)
+  process.exit(failures.length || ran.length !== asked.length ? 1 : 0)
+}
 if (DOOR !== null) {
   const ran = [...results.values()].sort((a, b) => a.name.localeCompare(b.name))
   const all = ran.flatMap(r => r.pages ?? [])
@@ -969,10 +1150,12 @@ function completenessRows(run) {
   return Object.entries(run.fixtures).map(([name, f]) => {
     const t = f.totals
     // (the consistency checks, the table-groups brief: a table group drawn partly, a label the final names left in the
-    // source language; each must be 0)
-    const row = { name, pages: t.pages, missing: t.missing ?? 0, twice: t.twice ?? 0, brackets: t.brackets ?? 0, duplicated: t.duplicated ?? 0, numbers: [t.numbersShown, t.numbersTotal], clipped: t.clipped ?? 0, groupsSplit: t.groupsSplit ?? 0, labelsSource: t.labelsSource ?? 0 }
+    // source language; each must be 0. And the measures of TeX's file whose cause a pull request removed, gated at 0 in
+    // it, README: a drawn line over a display, since the display grouping read from the file, 2026-10-15)
+    // (and a unit whose record the run could not make: drawn and measured by nothing, run.mjs recordErrors)
+    const row = { name, pages: t.pages, missing: t.missing ?? 0, twice: t.twice ?? 0, brackets: t.brackets ?? 0, duplicated: t.duplicated ?? 0, numbers: [t.numbersShown, t.numbersTotal], clipped: t.clipped ?? 0, groupsSplit: t.groupsSplit ?? 0, labelsSource: t.labelsSource ?? 0, textInDisplay: t.textInDisplay ?? 0, recordErrors: f.summary?.recordErrors ?? 0 }
     if (TIER === 'pixel') row.lostInk = t.lostInk ?? 0
-    row.fails = ['lostInk', 'missing', 'twice', 'brackets', 'duplicated', 'clipped', 'groupsSplit', 'labelsSource'].filter(k => row[k] > 0)
+    row.fails = ['lostInk', 'missing', 'twice', 'brackets', 'duplicated', 'clipped', 'groupsSplit', 'labelsSource', 'textInDisplay', 'recordErrors'].filter(k => row[k] > 0)
     if (t.numbersShown < t.numbersTotal) row.fails.push('numbers')
     return row
   })
@@ -1158,8 +1341,8 @@ function closer(m, a, b) {
 function gateMd(run, rows) {
   const L = ['# The instant layer\'s completeness gate (spec §5)', '']
   L.push(`Written by \`spikes/layer-gate.mjs --tier=${run.tier} --record\` on ${run.made.slice(0, 10)}, the engine at \`${run.engine.commit?.slice(0, 8)}\`. Pages: ${run.inputs.pages}; a check fails on any count above 0 (lost ink: regions of more than ${run.inputs.inkMin} device pixels at ${run.inputs.inkScale}x).`, '')
-  L.push('| output | pages | lost ink | missing | twice | doubled brackets | duplications | equation numbers shown | clipped | groups drawn partly | labels left in the source | fails |', '|---|---|---|---|---|---|---|---|---|---|---|---|')
-  for (const r of rows) L.push(`| ${r.name} | ${r.pages} | ${r.lostInk ?? '-'} | ${r.missing} | ${r.twice} | ${r.brackets} | ${r.duplicated} | ${r.numbers[0]} / ${r.numbers[1]} | ${r.clipped} | ${r.groupsSplit ?? 0} | ${r.labelsSource ?? 0} | ${r.fails.join(', ') || 'none'} |`)
+  L.push('| output | pages | lost ink | missing | twice | doubled brackets | duplications | equation numbers shown | clipped | groups drawn partly | labels left in the source | lines over a display | fails |', '|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+  for (const r of rows) L.push(`| ${r.name} | ${r.pages} | ${r.lostInk ?? '-'} | ${r.missing} | ${r.twice} | ${r.brackets} | ${r.duplicated} | ${r.numbers[0]} / ${r.numbers[1]} | ${r.clipped} | ${r.groupsSplit ?? 0} | ${r.labelsSource ?? 0} | ${r.textInDisplay ?? 0} | ${r.fails.join(', ') || 'none'} |`)
   // (TeX's file against the drawing: defects held to the run before as rates, until the pull request that removes a
   // cause gates its measure at 0, README)
   const fileMs = AGAINST_FILE.map(k => MEASURES.find(m => m[0] === k)).filter(m => run.tier === 'pixel' || m[1] === 'model')

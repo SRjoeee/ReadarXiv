@@ -26,6 +26,7 @@
 //   kept: rectangles a drawing must keep (displays' segments, labels); items: the page's text items { x0, y0, x1, y1, str,
 //   math } (str is read here and never returned); names: the babel names drawn in the target's words (D1a), each { orig,
 //   lines, erase } as a unit's, which the pixel measures count as a drawn unit's own text, and the model ones do not.
+import { noStart } from '../../../../src/pdf-reader/engine/layer-proto/no-start.mjs'
 
 const lum = (a, i) => a[i] * 0.299 + a[i + 1] * 0.587 + a[i + 2] * 0.114
 /** a value to d decimals, as the parity harness's toFixed */
@@ -228,14 +229,17 @@ const centreOf = b => [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]
 // ---------------------------------------------------------------- TeX's file, the instrument's (the 2608.16117 survey)
 
 /** the layout file's placeholder kinds and its LOST flag (src/pdf-reader/engine/layout/file.mjs PH_KINDS, PH_FLAG) */
-const PH_KINDS = ['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other'], PH_LOST = 32
+const PH_KINDS = ['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other'], PH_LOST = 32, PH_EMPTY = 16
 /**
  * TeX's file as the instrument reads it (a layout file, parsed: the rows of layout/file.mjs, read here, never by the
  * engine's reader), by page: `units`, each unit's placeholders with ink on the page ({ k, kind, segs }: each segment its
  * box [x0, y0, x1, y1], TeX's own; an EMPTY placeholder has none, a LOST or TEXT one none the file knows), its lines
  * ({ j, box, baseline, size, held }: `held` a line its source does not write, a display's row), its pitch (`pitch`: the
  * median gap between two of its own text lines next to each other in one column, its lines whose spans overlap, with no
- * held line of the column between, over all its pages), and on its first
+ * held line of the column between, over all its pages), the line ends a forced break shapes (`breaks`, { y, next, x0, x1 }:
+ * a text line whose ink ends short of its column's measure, the column's rightmost text ink, by more than SHORT of its
+ * size, with the unit's next line in the file a text line of that column on the page; `y` between the two baselines,
+ * `next` the next line's; `breaksAll`, the unit's count of them over all its pages), and on its first
  * page the placeholders the file has LOST (`lost`, their k: ink no measure can place); `displays`, every display's
  * segments
  */
@@ -252,8 +256,11 @@ export function fileIndexOf(layout) {
       unitOf(p, id).lines.push({ j, box: [rows[o + 1], rows[o + 5], rows[o + 2], rows[o + 4]], baseline: rows[o + 3], size: rows[o + 6], held: !!held.get(id)?.has(j) })
     }
   }
+  // (each unit's placeholders the file holds a row for that sets ink, LOST or not: its visible pieces, by k, their kind)
+  const rows = new Map()
   for (const r of layout.ph ?? []) {
     const [id, k, kind, flags] = r
+    if (!(flags & PH_EMPTY)) (rows.get(id) ?? rows.set(id, new Map()).get(id)).set(k, PH_KINDS[kind])
     if (flags & PH_LOST) { if (first.has(id)) unitOf(first.get(id), id).lost.push(k); continue }
     const by = new Map()
     for (let o = 4; o + 5 < r.length; o += 6) (by.get(r[o]) ?? by.set(r[o], []).get(r[o])).push([r[o + 1], r[o + 5], r[o + 3], r[o + 4]])
@@ -264,7 +271,7 @@ export function fileIndexOf(layout) {
   }
   // (each unit's pitch: the gaps of its text lines next to each other, page by page and column by column (lines whose
   // spans overlap, chained), no held line of the column between)
-  const gaps = new Map()
+  const gaps = new Map(), breaks = new Map()
   const overlaps = (a, b) => Math.min(a.box[2], b.box[2]) > Math.max(a.box[0], b.box[0])
   for (const pg of pages.values()) for (const [id, u] of pg.units) {
     const columns = []
@@ -276,6 +283,7 @@ export function fileIndexOf(layout) {
       into.push(l)
     }
     const held = u.lines.filter(l => l.held)
+    u.breaks = []
     for (const c of columns) {
       const text = c.slice().sort((a, b) => b.baseline - a.baseline)
       for (let i = 1; i < text.length; i++) {
@@ -283,14 +291,58 @@ export function fileIndexOf(layout) {
         if (!(g > 0) || held.some(h => h.baseline < a.baseline && h.baseline > b.baseline && (overlaps(h, a) || overlaps(h, b)))) continue
         ;(gaps.get(id) ?? gaps.set(id, []).get(id)).push(g)
       }
+      // (TeX's line breaks a forced break shapes: a text line its ink ends short of its column's measure, the next line of
+      // the unit in the file a text line of the column)
+      const measure = Math.max(...c.map(l => l.box[2])), x0 = Math.min(...c.map(l => l.box[0]))
+      for (const l of c) {
+        const n = c.find(m => m.j === l.j + 1)
+        if (n && l.box[2] < measure - SHORT * l.size) u.breaks.push({ y: (l.baseline + n.baseline) / 2, next: n.baseline, x0, x1: measure })
+      }
     }
+    breaks.set(id, (breaks.get(id) ?? 0) + u.breaks.length)
   }
   for (const pg of pages.values()) for (const [id, u] of pg.units) {
     const g = (gaps.get(id) ?? []).sort((a, b) => a - b)
     u.pitch = g.length ? (g[(g.length - 1) >> 1] + g[g.length >> 1]) / 2 : null
+    u.breaksAll = breaks.get(id) ?? 0
+    u.rows = rows.get(id) ?? new Map()
   }
   return pages
 }
+
+/** LaTeX's forced line breaks: `\\` (starred, or with its optional space) and \newline, each TeX's \hfil\break */
+const FORCED_BREAK = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
+/** a line ends short of its column's measure by more than this share of its size (a justified line's ink reaches it, to a
+ *  glyph's side bearing) */
+const SHORT = 0.5
+/** a piece's kind as forcedBreaksIn reads it with no file: a text by its characters, any other placeholder visible */
+const kindOfPiece = (i, p) => (p.t === 'text' ? (/\S/.test(p.s ?? '') ? 'text' : null) : p.t === 'ph' || p.t === 'nested' ? 'text' : null)
+/**
+ * The forced breaks of a unit's source (its pieces: { t, s } text, { t: 'ph', src } a placeholder) that end a line of it,
+ * as the engine counts them (layer-proto/tex.mjs forcedBreaks): groups of FORCED_BREAK placeholders with nothing visible
+ * between them, where the nearest visible piece before the group and after it are both no display (a display breaks the
+ * text by itself; a group at an edge of the unit ends none of its lines). `kindOf(i, piece)`: a non-break piece's kind,
+ * 'display', 'text' (any other visible piece) or null (nothing visible: white space, a placeholder TeX's file holds no row
+ * of ink for, as \label, \vspace or a tie), undefined where it cannot tell, and then the count is -1. By default a text is
+ * read by its characters and any other placeholder is visible
+ */
+export function forcedBreaksIn(pieces, kindOf = kindOfPiece) {
+  let n = 0, last = null, open = false, before = null
+  for (const [i, p] of (pieces ?? []).entries()) {
+    if (p.t === 'ph' && FORCED_BREAK.test(p.src ?? '')) { if (!open) { open = true; before = last } continue }
+    const kind = kindOf(i, p)
+    if (kind === undefined) return -1
+    if (!kind) continue
+    if (open && before === 'text' && kind === 'text') n++
+    open = false
+    last = kind
+  }
+  return n
+}
+/** the forced breaks a unit's line ends set aside on a page (fileIndexOf's `breaks`): where its source sets exactly as many
+ *  (forcedBreaksIn) as the file has such line ends over its pages, else none, so that a ragged or centred unit's short lines
+ *  keep every slot counted */
+export const forcedBreakRoom = (own, sourceBreaks) => (own?.breaks?.length && sourceBreaks === own.breaksAll ? own.breaks : [])
 
 /**
  * The display rows of a page in TeX's file: each unit's held lines that no line of its own text on the page shares a
@@ -383,8 +435,13 @@ export function overDisplayOf({ lines, boxes }) {
  * unit's own text lines of the file in the frame's column beyond its pitch (a blank line between paragraphs, a tall
  * line's opening: `tex`, { baseline, x0, x1 }, and `texPitch`), the share of it that lies between the two drawn lines;
  * and a line of the unit's text the drawing keeps as the original's (`keptRows`, their middles, no held line among
- * them), a pitch of TeX's each. `units`: the drawn units, { id, orig, lines: [{ baseline, size, x0, x1, pitch }], tex,
- * held, texPitch, keptRows }. Returns { slotsSkipped, where: the units, once a slot }
+ * them), a pitch of TeX's each. A forced break of TeX's between the two lines (`breaks`, fileIndexOf's: a line TeX ended
+ * short, where the unit's source sets as many forced breaks as the file has such lines, forcedBreaksIn) sets aside the room
+ * above the line TeX set after it (`next`), as the room before a display is set aside: the text before the break ends where
+ * its translation does, and the text after it starts on that line. The room from that line down is counted as any (a
+ * drawing that starts the text after the break lower skips those slots). `units`: the drawn units, { id, orig, lines:
+ * [{ baseline, size, x0, x1, pitch }], tex, held, texPitch, keptRows, breaks }. Returns { slotsSkipped, where: the units,
+ * once a slot }
  */
 export function slotsSkippedOf(units) {
   const where = []
@@ -400,16 +457,25 @@ export function slotsSkippedOf(units) {
         // (across the frame's column and the two lines: a display's rows stand beside a short line too)
         const x0 = Math.min(fr.x0, mine[j - 1].x0, mine[j].x0), x1 = Math.max(fr.x1, mine[j - 1].x1, mine[j].x1)
         if ((u.held ?? []).some(h => { const y = (h[1] + h[3]) / 2; return y > b && y < a && Math.min(h[2], x1) > Math.max(h[0], x0) })) continue
+        // (a forced break between them: counted from the line TeX set after it, `from`, as from a slot a pitch over it, the
+        // lower drawn line on that line skipping none)
+        // (two breaks or more between them: the text between two of them is laid nowhere there, each of TeX's lines of it a
+        // slot skipped)
+        const between = (u.breaks ?? []).filter(k => k.y > b && k.y < a && Math.min(k.x1, x1) > Math.max(k.x0, x0)).sort((p, q) => q.y - p.y)
+        for (let i = 1; i < between.length; i++) for (const t of tex) if (t < between[i - 1].y && t > between[i].y) where.push(u.id)
+        const from = between.length ? between.at(-1).next : a
+        if (from < a && b >= from - 0.5) continue
+        const top = from < a ? from + pitch : a
         // (TeX's own room between them: each gap of its text lines past its pitch, by the share of it they span)
         let room = 0
         if (p0 > 0) {
           for (let i = 1; i < tex.length; i++) {
-            const hi = tex[i - 1], lo = tex[i], span = Math.min(hi, a) - Math.max(lo, b)
+            const hi = tex[i - 1], lo = tex[i], span = Math.min(hi, from) - Math.max(lo, b)
             if (span > 0 && hi - lo > p0) room += ((hi - lo - p0) * span) / (hi - lo)
           }
-          room += p0 * (u.keptRows ?? []).filter(y => y > b && y < a).length
+          room += p0 * (u.keptRows ?? []).filter(y => y > b && y < from).length
         }
-        const slots = Math.floor(rd((a - b - pitch - room) / pitch, 2))
+        const slots = Math.floor(rd((top - b - pitch - room) / pitch, 2))
         for (let s = 0; s < slots; s++) where.push(u.id)
       }
     })
@@ -417,21 +483,10 @@ export function slotsSkippedOf(units) {
   return { slotsSkipped: where.length, where }
 }
 
-/**
- * The code points UAX 14 does not let a line start with: its classes CL, CP, IS, EX and NS (a closing mark, a closing
- * parenthesis, a comma or full stop between numbers, an exclamation or question mark, a non-starter), as ranges of hex
- * code points from LineBreak-17.0.0.txt (TeX Live 2026's unicode-data, the file's own field `;CL` … `;NS`)
- */
-const NO_START = ('21 29 2c 2e 3a-3b 3f 5d 7d 37e 589 5c6 60c-60d 61b 61d-61f 6d4 7f8-7f9 f0d-f11 f14 f3b f3d 169c 17d6 1802-1803 '
-  + '1808-1809 1944-1945 203c-203d 2044 2046-2049 207e 208e 2309 230b 232a 2762-2763 2769 276b 276d 276f 2771 2773 2775 27c6 '
-  + '27e7 27e9 27eb 27ed 27ef 2984 2986 2988 298a 298c 298e 2990 2992 2994 2996 2998 29d9 29db 29fd 2cf9 2cfe 2e23 2e25 2e27 '
-  + '2e29 2e2e 2e53-2e54 2e56 2e58 2e5a 2e5c 3001-3002 3005 3009 300b 300d 300f 3011 3015 3017 3019 301b-301c 301e-301f '
-  + '303b-303c 309b-309e 30a0 30fb 30fd-30fe a015 a60e a876-a877 fd3e fe10-fe16 fe18 fe36 fe38 fe3a fe3c fe3e fe40 fe42 '
-  + 'fe44 fe48 fe50 fe52 fe54-fe57 fe5a fe5c fe5e ff01 ff09 ff0c ff0e ff1a-ff1b ff1f ff3d ff5d ff60-ff61 ff63-ff65 '
-  + 'ff9e-ff9f 115c4-115c5 11c71 1325b-1325d 13282 13287 13289 1337a-1337b 13438 1343d 1343f 145cf 16fe0-16fe3 16ff2-16ff3 '
-  + '1f679-1f67b').split(' ').map(r => r.split('-').map(h => Number.parseInt(h, 16))).map(([a, b]) => [a, b ?? a])
-/** whether a character (its first code point) is one UAX 14 does not let a line start with */
-export const noStart = ch => { const c = typeof ch === 'string' && ch ? ch.codePointAt(0) : -1; return NO_START.some(([a, b]) => c >= a && c <= b) }
+/** whether a character (its first code point) is one UAX 14 does not let a line start with: the engine's own table, one
+ *  place (layer-proto/no-start.mjs), the drawing's rule after a display and this measure's alike; the gate serves this
+ *  repository's copy whichever engine it measures */
+export { noStart }
 
 /**
  * The drawn lines that open with a character UAX 14 does not let a line start with (noStart), unless the original's line
@@ -539,9 +594,10 @@ function components(m, W, H, min, boxes = null) {
  * text is not vanished); `cut`: the crops cut from this page ({ src, unit, clip }: `clip` the boxes of its own ink it is
  * cut through, device pixels [x, y, w, h], where it is), whatever page they are drawn on, which `doubled`, `vanished`
  * and `bites` read here, where their source is; `ownLines`: the drawn units' own text lines in TeX's file ({ unit, box }),
- * which `linesLeft` reads (with `linesLeftWhere`, the units), the segments of placeholders kept in place (`segs`) aside
+ * which `linesLeft` reads (with `linesLeftWhere`, the units), the segments of placeholders kept in place (`segs`) aside;
+ * `graphicsCut`: the crops for the graphics' exemption where they differ from `cut` ([] for none)
  */
-export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, items, ref, drawnText, cut = [], ownLines = null, segs = null }) {
+export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, items, ref, drawnText, cut = [], ownLines = null, segs = null, graphicsCut = null }) {
   const toPx = (x, y) => [(x - view[0]) * k, (view[3] - y) * k]
   const boxPx = (b, pad = 0) => {
     const [ax, ay] = toPx(b[0] - pad, b[3] + pad), [bx, by] = toPx(b[2] + pad, b[1] - pad)
@@ -719,20 +775,29 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
     for (const l of [...u.orig, ...(u.own ?? [])]) paint(ownM, [l.x0 - 1, l.baseline - 0.3 * l.size, l.x1 + 1, l.baseline + 0.88 * l.size])
     for (const e of u.erase) paint(eraseRaw, e, 0)
   }
-  for (const c of cut) {
-    if (!c.clip?.length) { paint(carriedM, c.src); continue }
-    const [sx0, sy0, sx1, sy1] = boxPx(c.src)
-    for (const [x, y, w, h] of c.clip) {
-      const x0 = Math.max(sx0, Math.floor(x)), y0 = Math.max(sy0, Math.floor(y)), x1 = Math.min(sx1, Math.ceil(x + w)), y1 = Math.min(sy1, Math.ceil(y + h))
-      for (let yy = y0; yy < y1; yy++) if (x1 > x0) carriedM.fill(1, yy * W + x0, yy * W + x1)
+  const carry = (m, list) => {
+    for (const c of list) {
+      if (!c.clip?.length) { paint(m, c.src); continue }
+      const [sx0, sy0, sx1, sy1] = boxPx(c.src)
+      for (const [x, y, w, h] of c.clip) {
+        const x0 = Math.max(sx0, Math.floor(x)), y0 = Math.max(sy0, Math.floor(y)), x1 = Math.min(sx1, Math.ceil(x + w)), y1 = Math.min(sy1, Math.ceil(y + h))
+        for (let yy = y0; yy < y1; yy++) if (x1 > x0) m.fill(1, yy * W + x0, yy * W + x1)
+      }
     }
   }
+  carry(carriedM, cut)
+  // (the graphics' exemption reads the crops by their source page, which only the default instrument holds: `graphicsCut`
+  // gives the list for it, [] for none; where it is not given, the crops cut from this page are the same list)
+  const carriedG = graphicsCut === null ? carriedM : mask()
+  if (graphicsCut !== null) carry(carriedG, graphicsCut)
   const bite = mask()
   let bitePx = 0
   for (let i = 0; i < W * H; i++) if (eraseRaw[i] && !ownM[i] && !cropM[i] && !carriedM[i] && inkO(i) && !traceC(i)) { bite[i] = 1; bitePx++ }
   const bites = components(bite, W, H, 4, where.bites)
 
-  // graphics: the original's ink that is no text (outside every text item and every reference line), erased or written over
+  // graphics: the original's ink that is no text (outside every text item and every reference line), erased or written over.
+  // Ink a crop carries elsewhere (carriedG, as the bites read it: the crops cut from this page whichever page they are drawn on)
+  // is not erased: it is drawn in the crop
   const textM = mask()
   for (const it of items) paint(textM, [it.x0, it.y0, it.x1, it.y1], 1)
   for (const r of ref) for (const l of r.orig) paint(textM, [l.x0, l.bottom, l.x1, l.top], 1)
@@ -742,7 +807,7 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
     if (textM[i] || !inkO(i)) continue
     graphics.px++
     graphicsM[i] = 1
-    if (!traceC(i)) graphics.erased++
+    if (!traceC(i) && !carriedG[i]) graphics.erased++
     if (inkT(i)) graphics.overdrawn++
   }
   // the translation's text against them: its ink on a rule's or a figure's, or a pixel from it (a table's rule a CJK

@@ -127,11 +127,12 @@ export function seedAgain(seed, made) {
  * made by this translation pipeline in this wire format (`copyWire`) — the same pipeline cuts the same units and writes
  * the same wire for the same source, which its hash matched. Any other seed is sent again, its translation shown meanwhile
  */
-export function reusable(seed, { identity, copyWire, carry = null, made = null }) {
+export function reusable(seed, { identity, copyWire, carry = null, made = null, units = null }) {
   const out = new Map()
   // (a cell of a table group kept whole is taken by its translation: whole as the translator gave it; one given in part,
-  // or of a copy that did not keep which, is asked for again)
-  for (const [i, s] of seed ?? []) out.set(i, { ...s, current: translationOf(s) === 'whole' && !!s.pieces && s.by === identity && (copyWire || !!carry?.(s.pieces) || !!made?.get(i)?.pieces) })
+  // or of a copy that did not keep which, is asked for again. A carry test is given the unit the translation is of, where
+  // the caller has the units: what the wire sends for it now)
+  for (const [i, s] of seed ?? []) out.set(i, { ...s, current: translationOf(s) === 'whole' && !!s.pieces && s.by === identity && (copyWire || !!carry?.(s.pieces, units?.[i] ?? null) || !!made?.get(i)?.pieces) })
   return out
 }
 

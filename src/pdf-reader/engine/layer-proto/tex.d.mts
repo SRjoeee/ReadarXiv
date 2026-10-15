@@ -12,17 +12,25 @@ export declare function kOfPieces(unit: Unit, trPieces: readonly unknown[] | und
 /** whether the file locates a unit whole: located, every placeholder v0 draws ink for found (a symbol drawn as text too
  *  only where `symbols` is 'strict'; with `held`, a LOST display its held lines cover) */
 export declare function locatedWhole(lu: LayoutUnit | null, unit: Unit, trPieces: readonly unknown[] | undefined, o?: { symbols?: 'text' | 'strict'; held?: boolean }): Whole
-/** the held run (its line indices) covering each inner displayed formula, by its piece index; empty where nothing pairs */
+/** the held run (its line indices) covering each displayed formula the unit's lines hold, by its piece index, read from the
+ *  layout file and the source's order (kOf), never the translation's pieces; empty where the two do not agree */
 export declare function displayCover(lu: LayoutUnit, unit: Unit, kOf: readonly number[]): Map<number, number[]>
 /** whether a placeholder sets no ink by the file: a text macro it holds no row for */
 export declare function inklessOf(lu: LayoutUnit, kOf: readonly number[], p: { k: number; cls: string }): boolean
+/** LaTeX's forced line breaks: `\\` (starred, or with its optional space) and \newline */
+export declare const FORCED_BREAK: RegExp
+/** where each forced break of the unit's row ends a line of the file: each piece of a break group paired with TeX's breaks
+ *  in order (the lines ended short of their frame's measure), by its index, to the file's line set after it; empty where
+ *  nothing pairs */
+export declare function forcedBreaks(lu: LayoutUnit | null, unit: Unit, kOf?: readonly number[] | null): Map<number, number>
 /** the unit's lines from the file, on the pages up to maxPage; `held` those its source does not write, kept */
 export declare function texRects(lu: LayoutUnit, maxPage?: number): TexLines
 /** a placeholder's rendering from its segments (stride 6): the unit's characters inside them and its ink's box */
 export declare function renderingOf(segs: Float64Array, uc: readonly Char[], display: boolean): Gap | null
-/** part 5 for any unit the hybrid draws: each crop cut from its placeholder's segment on its page, that segment's
- *  baseline its own; the k of a crop no segment proves (its unit stays the original's), else -1 */
-export declare function cropsOf(lu: LayoutUnit | null, kOf: readonly number[] | null): (out: Prepared) => number
+/** part 5 for any unit the hybrid draws, the safe rule's one place: every rendering proven by the file (the file's own
+ *  rendering, a crop cut from its placeholder's segment on its page, that segment's baseline its own, page text or kept
+ *  ink inside its segments); the k of one nothing proves (its unit stays the original's), else -1 */
+export declare function proofOf(lu: LayoutUnit | null, kOf: readonly number[] | null, shown?: number): (out: Prepared) => number
 /** the unit's parts from the file: 'ph' its placeholders' renderings; 'lines' its lines and label too; extents 'tex' the
- *  file's erase rectangles; every use, its crops (cropsOf) */
-export declare function texParts(lu: LayoutUnit, kOf: readonly number[], o: { use: 'ph' | 'lines'; lines?: TexLines | null; extents?: 'v0' | 'tex' }): UnitParts
+ *  file's erase rectangles; every use, the proof (proofOf) */
+export declare function texParts(lu: LayoutUnit, kOf: readonly number[], o: { use: 'ph' | 'lines'; lines?: TexLines | null; extents?: 'v0' | 'tex'; shown?: number }): UnitParts

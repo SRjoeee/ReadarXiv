@@ -70,7 +70,7 @@ const sourceUnits = (): { units: SourceUnit[]; kept: Set<SourceUnit> } => ({ uni
 function layoutOf(): LayoutFile {
   const file = SPECS.map((s, id) => ({ ...s, id })).filter(s => s.file)
   return {
-    schema: 3, lineskip: null, layout: LAYOUT, pdfjs: PDFJS, paper: { id: '2610.00001', version: 1, pages: 2 }, left: '', views: [...VIEW, ...VIEW], fonts: ['F1'],
+    schema: 4, lineskip: null, layout: LAYOUT, pdfjs: PDFJS, paper: { id: '2610.00001', version: 1, pages: 2 }, left: '', views: [...VIEW, ...VIEW], fonts: ['F1'],
     units: file.map(s => [s.id, UNIT_KINDS.indexOf(s.kind as never), 9, 0, 1]),
     lines: file.map(s => [s.id, s.lines.flatMap(([p, x0, x1, b]) => [p, x0, x1, b, b + 7, b - 2, 10, 0])]),
     frames: file.map(s => [s.id, s.lines.flatMap(([p], j) => [p, 0, j, 1, j ? 0 : -1, 0])]),
@@ -122,6 +122,12 @@ type Opened = Parameters<typeof import('@/pdf-reader/engine/layer-proto/run.mjs'
 afterEach(() => { vi.restoreAllMocks() })
 
 describe('the reader\'s door: two readers\' hosts are the same calls', () => {
+  it('refuses a light index (M24): the layer needs the units\' bodies', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const light = { kind: 'index', light: true, sha256: 'a'.repeat(64), head: { paper: { pages: 1 } }, units: [], kinds: [], pieces: new Uint32Array(0), dropped: [], records: {} }
+    await expect(openLayer({ index: light, doc: docOf(), target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} } as never)).rejects.toThrow(/light index/)
+  })
+
   it('opens v0 with the bundle\'s left, layout and add-on, the target\'s units and cells\' groups, L7\'s labels, the served faces and hyphenation, at 2.5 and dpr 1', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const bundle = bundleOf(), doc = docOf()
@@ -152,8 +158,39 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     const plain = await openLayer({ bundle: bare, doc, target: 'de', faceSources, hyphUrl })
     const p = seen.opens.at(-1) as unknown as Opened
     expect([p.tex, p.removal]).toEqual([null, null])
+    // (and every unit still drawn under the proof, which nothing proves then: below)
+    expect([o.proof, p.proof]).toEqual([true, true])
     expect(p.labels).toEqual({ captions: { figure: 'target', table: 'target' } })
     plain.dispose()
+  })
+
+  it("with no layout file every unit is still drawn under the proof: one with a placeholder nothing proves stays the original's", async () => {
+    const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const bundle = bundleOf({ layout: false, addon: false }), rows = rowsOf(bundle)
+    const units: unknown[] = []
+    for (const r of rows) units[r[0]] = unitOf(bundle, r)
+    // unit 0 holds a citation its page does not show, which only its source could draw; unit 2 a text symbol
+    const u0 = units[0] as { pieces: unknown[] }, u2 = units[2] as { pieces: unknown[] }
+    units[0] = { ...u0, pieces: [{ t: 'text', s: CJK(2) }, { t: 'ph', src: '\\cite{nobody}' }, { t: 'text', s: CJK(2, 0x4e40) }] }
+    units[2] = { ...u2, pieces: [{ t: 'text', s: CJK(2, 0x4e80) }, { t: 'ph', src: '\\%' }, { t: 'text', s: CJK(2, 0x4ec0) }] }
+    const skippedOf = async (proof: boolean) => {
+      const run = await openProto({
+        doc: docOf(), geometry: { schema: 1, kinds: bundle.left.kinds, left: { pages: bundle.left.pages, units: bundle.left.units } } as never, units: units as never, target: 'zh',
+        pages: Number.POSITIVE_INFINITY, scale: 2.5, dpr: 1, copy: false, faceSources, hyphUrl, tex: null, proof, labels: { captions: { figure: 'target', table: 'target' } },
+      })
+      await run.until(2)
+      const out = { unproven: run.skipped.filter(k => k.why === 'unproven').map(k => k.id), drawn: run.stats.map(r => r.id) }
+      run.dispose()
+      return out
+    }
+    const proven = await skippedOf(true)
+    expect(proven.unproven).toEqual([0])
+    expect(proven.drawn).toContain(2)
+    expect(proven.drawn).not.toContain(0)
+    // the lab's v0 alone, no proof: the citation drawn from its source, as before
+    const bare = await skippedOf(false)
+    expect(bare.unproven).toEqual([])
+    expect(bare.drawn).toContain(0)
   })
 
   it('refuses a rule set that is none with a TypeError of its own, before it takes the page\'s one open, like the door\'s other arguments', async () => {
@@ -205,7 +242,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
       labels: { captions: { figure: 'target', table: 'target' } },
     })
     await whole.until(2)
-    const want = whole.rows.map(r => r.svg.outerHTML)
+    const want = whole.rows.map((_, i) => whole.svgOf(i + 1).outerHTML)
     expect(whole.stats.length).toBeGreaterThan(4)
     whole.dispose()
 
@@ -220,11 +257,14 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     })()
     const run = seen.runs.at(-1) as Run
     const pages = []
-    // (each page done let go once it is asked for, a page never before: as the gate asks for its pages)
+    // (each page let go of by the run once it is laid, whoever asks: nothing held of it but its record, its analysis state and
+    // its units' own gone, no element of it kept; no host releases a page, so it stays a page a crop may be cut from)
+    expect(run.held()).toEqual({ free: true, records: false, shelf: false })
     pages.push(await layer.pageOf(1, { lang: 'zh-Hans' }))
-    expect(run.rows.map(r => !!r.released)).toEqual([true, false])
+    expect(run.held(1)).toEqual({ state: [], units: [], reads: 0 })
     pages.push(await layer.pageOf(2, { lang: 'zh-Hans' }))
-    expect(run.rows.map(r => !!r.released)).toEqual([true, true])
+    expect([1, 2].map(p => run.held(p))).toEqual([1, 2].map(() => ({ state: [], units: [], reads: 0 })))
+    expect(run.rows.map(r => [Object.keys(r).includes('svg'), r.base, !!r.released])).toEqual([[false, true, false], [false, true, false]])
     expect(await fed).toEqual([1, 2])
     pages.forEach((pg, i) => {
       expect(pg.svg).toBeInstanceOf(SVGSVGElement)
@@ -234,8 +274,12 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
       markup.removeAttribute('lang')
       expect(markup.outerHTML).toBe(want[i])
     })
-    // (the same element each time it is asked)
-    expect((await layer.pageOf(1, { lang: 'zh-Hans' })).svg).toBe(pages[0]!.svg)
+    // (a new element of the same markup each time it is asked)
+    const again = await layer.pageOf(1, { lang: 'zh-Hans' })
+    expect(again.svg).not.toBe(pages[0]!.svg)
+    expect(again.svg.outerHTML).toBe(pages[0]!.svg.outerHTML)
+    expect(again.words).toEqual({ tokens: [], spans: [], original: [] })
+    expect(again.links).toEqual([])
     const source = document.createElement('canvas')
     source.width = 1500
     source.height = 1500
@@ -334,11 +378,13 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect(styles()).toBe(before)
     // (the faces' classes stay, for the page's other runs)
     expect([...document.head.querySelectorAll('style')].some(faceSheet)).toBe(true)
-    await expect(layer.pageOf(2, { lang: 'zh' })).rejects.toThrow(/let go/)
+    // (the door's calls after dispose throw at once, but take, stats and unitAt)
+    expect(() => layer.pageOf(2, { lang: 'zh' })).toThrow(/let go/)
+    expect(() => layer.pageState(1)).toThrow(/let go/)
     const source = document.createElement('canvas')
     source.width = 10
     source.height = 10
-    await expect(layer.copyOf(1, source, 2.5)).rejects.toThrow(/let go/)
+    expect(() => layer.copyOf(1, source, 2.5)).toThrow(/let go/)
     expect(layer.take(rowsOf(bundle))).toEqual({ complete: [] })
     expect(layer.stats().rules).toEqual({ schema: 3, version: BUILTIN_RULES.version })
     expect(layer.unitAt(1, 100, 262)).toBe(0)
@@ -476,7 +522,7 @@ describe("the original's canvas with no copy kept (openProto copy: false): read 
       labels: { captions: { figure: 'target', table: 'target' } },
     })
   }
-  const drawing = (run: Run) => run.rows.map(r => ({ svg: r.svg.outerHTML, ops: JSON.stringify(r.ops) }))
+  const drawing = (run: Run) => run.rows.map((r, i) => ({ svg: run.svgOf(i + 1).outerHTML, ops: JSON.stringify(r.ops) }))
 
   it('lets each canvas go before the host is done with the page, keeps base and released as they were, and draws what the same open with a copy draws', async () => {
     const kept = await open(true)
@@ -546,9 +592,13 @@ describe("the original's canvas with no copy kept (openProto copy: false): read 
     // (page 2 asked for first: page 1 is laid on the way and its canvas never outlives its ink)
     const jump = await layer.pageOf(2, { lang: 'zh' })
     expect(canvases.map(c => c.width)).toEqual([0, 0])
-    expect(run.rows.map(r => [r.left, r.base, r.released])).toEqual([[null, false, true], [null, false, true]])
-    expect((await layer.pageOf(2, { lang: 'zh' })).svg).toBe(jump.svg)
-    expect((await layer.pageOf(1, { lang: 'zh' })).svg).toBe(run.rows[0]!.svg)
+    // (and every page on the way let go of by the run once laid, each still drawn for a crop: no host's release)
+    expect(run.rows.map(r => [r.left, r.base, r.released])).toEqual([[null, true, undefined], [null, true, undefined]])
+    expect([1, 2].map(p => run.held(p).state)).toEqual([[], []])
+    expect((await layer.pageOf(2, { lang: 'zh' })).svg.outerHTML).toBe(jump.svg.outerHTML)
+    const one = (await layer.pageOf(1, { lang: 'zh' })).svg
+    one.removeAttribute('lang')
+    expect(one.outerHTML).toBe(run.svgOf(1).outerHTML)
     const source = document.createElement('canvas')
     source.width = 750
     source.height = 750

@@ -892,3 +892,46 @@ export function sentenceStarts(anchor, text, offsets) {
 const LATE = 2
 /** the share of a unit's words its text match must cover for its starts, where it has no marks */
 const TEXT_ONLY = 0.8
+
+/**
+ * The pairs sentenceStarts reads, as runs a left part carries: [word, token, count] triples (global tokens), word rising,
+ * maximal (the next word on the next token extends a run). Only a unit sentenceStarts admits has any (the same gate: pairs, and
+ * bounded or coverage of TEXT_ONLY), and only the pairs whose token is among the unit's own (the `has` filter); null where
+ * there are none. A word map that is not monotone, or names a token twice, is carried as it is, in more runs. The Map's order
+ * is the match's, not the words': the keys are sorted, so the same unit gives the same runs
+ */
+export function startRuns(anchor) {
+  const pairs = anchor?.pairs
+  if (!pairs || (!anchor.bounded && anchor.coverage < TEXT_ONLY)) return null
+  const ts = anchor.tokens
+  const has = k => { let lo = 0, hi = ts.length; while (lo < hi) { const m = (lo + hi) >> 1; if (ts[m] < k) lo = m + 1; else hi = m } return ts[lo] === k }
+  const out = []
+  let word = -2, token = -2
+  for (const w of [...pairs.keys()].sort((x, y) => x - y)) {
+    const t = pairs.get(w)
+    if (t === undefined || !has(t)) continue
+    if (w === word + 1 && t === token + 1) out[out.length - 1]++
+    else out.push(w, t, 1)
+    word = w
+    token = t
+  }
+  return out.length ? Int32Array.from(out) : null
+}
+
+/**
+ * The anchor sentenceStarts reads as it reads the one startRuns came of, rebuilt from what a unit's left parts hold: `pieces` its
+ * entry on each page it has tokens on, in page order, { first: the page's first token, ranges: [first, count, …] page-local,
+ * runs?: [word, token, count, …] page-local }. The tokens are the unit's own, rising, and the pairs the runs' words; null where
+ * no page has runs (the unit gave none to read: a sentence's start is not found). The gate was applied by the writer, so the
+ * rebuilt anchor is bounded
+ */
+export function startsAnchor(pieces) {
+  const tokens = [], pairs = new Map()
+  let any = false
+  for (const p of pieces) {
+    for (let j = 0; j < p.ranges.length; j += 2) for (let k = 0; k < p.ranges[j + 1]; k++) tokens.push(p.first + p.ranges[j] + k)
+    const runs = p.runs
+    if (runs) for (let j = 0; j < runs.length; j += 3) for (let k = 0; k < runs[j + 2]; k++) { pairs.set(runs[j] + k, p.first + runs[j + 1] + k); any = true }
+  }
+  return any ? { rects: [], coverage: 1, tokens, bounded: true, pairs } : null
+}

@@ -248,6 +248,37 @@ describe("the erase bites: the original's ink erased that no drawn unit owns", (
   })
 })
 
+describe('ink a crop carries (the layer gate, 2026-10-15 F)', () => {
+  // a 60 x 40 page at one device pixel a unit: a drawn unit's frame over x 10-50, y 17.5-27
+  const W = 60, H = 40
+  const planeOf = (ink: (x: number, y: number) => boolean) => {
+    const a = new Uint8ClampedArray(W * H * 4)
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const v = ink(x, H - 1 - y) ? 0 : 255; a.set([v, v, v, 255], 4 * (y * W + x)) }
+    return a
+  }
+  const paper = planeOf(() => false)
+  const orig = [{ x0: 10, x1: 50, baseline: 20, top: 27, bottom: 17.5, size: 10 }]
+  const drawnUnit = { id: 1, kind: 'para', drawn: true, why: null, orig, lines: [{ baseline: 20, size: 10, x0: 10, x1: 50 }], erase: [[34, 17.5, 50, 27]], crops: [] } as UnitIn
+
+  it("F: the original's rule is not erased graphics where a crop carries it elsewhere, drawn on a later page too; with no crop, or one cut elsewhere, it is", () => {
+    // a rule of the original's (x 20-26, y 10-13) outside every text line, gone from the copy. `cut` holds the crops cut from
+    // this page by their source, whichever page they are drawn on (the instrument passes them so: proto.mjs): the unit has no
+    // crop of its own here, as one whose crop is drawn on page 2 has none on page 1
+    const O = planeOf((x, y) => x >= 20 && x < 26 && y >= 10 && y < 13)
+    const erased = (cut: { src: number[]; unit: number; clip?: number[][] }[]) =>
+      (pixelPage({ k: 1, view: [0, 0, W, H], W, H, O, C: paper, T: paper, units: [drawnUnit], kept: [], items: [], ref: [{ id: 1, kind: 'para', orig }], drawnText: '', cut }) as { graphics: { px: number; erased: number } }).graphics
+    expect(erased([])).toMatchObject({ px: 18, erased: 18 })
+    expect(erased([{ src: [18, 9, 28, 15], unit: 1 }])).toMatchObject({ px: 18, erased: 0 })
+    expect(erased([{ src: [30, 9, 40, 15], unit: 1 }]).erased).toBe(18)
+    // (cut through boxes of its own ink, it carries only those: the part of the rule outside them is erased)
+    expect(erased([{ src: [18, 9, 28, 15], unit: 1, clip: [[18, H - 15, 5, 6]] }]).erased).toBe(9)
+    // (the legacy instrument, page.mjs, gives the exemption no crops: graphics erased as before it, the bites still read `cut`)
+    const legacy = (cut: { src: number[]; unit: number }[]) =>
+      pixelPage({ k: 1, view: [0, 0, W, H], W, H, O, C: paper, T: paper, units: [drawnUnit], kept: [], items: [], ref: [{ id: 1, kind: 'para', orig }], drawnText: '', cut, graphicsCut: [] }) as { graphics: { erased: number } }
+    expect(legacy([{ src: [18, 9, 28, 15], unit: 1 }]).graphics.erased).toBe(18)
+  })
+})
+
 describe('generated text left (D1a)', () => {
   it("counts a page's names left by kind, sums them a fixture and a pool, and gates them down", () => {
     const page = (p: number, generated: Record<string, number>) => pageEntry(p, {
@@ -384,6 +415,7 @@ describe("the frozen references' babel names (layer-gate/ref.mjs makeRef, withNa
 })
 
 describe("TeX's file against the drawing (the 2608.16117 survey and the p59 finding: measure.mjs, the fixture's layout file)", () => {
+  const lines6 = () => lines(6)
   // a layout file's rows: unit 3's three lines on page 1 (its second held, a display's row) and one on page 2; a math
   // placeholder with a segment on each page, a display on page 1, a LOST one; unit 4 one line on page 1
   const line = (p: number, x0: number, x1: number, base: number) => [p, x0, x1, base, base + 7, base - 2.5, 10, 0]
@@ -492,6 +524,64 @@ describe("TeX's file against the drawing (the 2608.16117 survey and the p59 find
     expect(of([700, 676, 664], { keptRows: [688] }).slotsSkipped).toBe(0)
     // at a wider drawn pitch (1.3), the original's blank of one of its pitches sets aside its room, 12, not a drawn slot
     expect(of([700, 684.4, 656.8], { tex: texAt([700, 688, 676, 652, 640]), pitch: 15.6 }).slotsSkipped).toBe(0)
+  })
+
+  it("TeX's forced breaks: the file's lines ended short of their column, as many as the source's breaks inside the unit (fixes 2 and 3's C)", async () => {
+    const { fileIndexOf, forcedBreaksIn } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    // a paragraph, `\\ \\`, a paragraph: line 1 ends short, the blank line, lines 2 and 3; the last line short too, no break
+    const file = (rows: number[][], held: number[] = []) => fileIndexOf({ lines: [[3, rows.flat()]], held: [[3, held]], ph: [] }).get(1)!.units.get(3)!
+    const u = file([line(1, 72, 472, 700), line(1, 72, 300, 688), line(1, 72, 472, 664), line(1, 72, 200, 652)])
+    expect(u.breaks).toEqual([{ y: 676, next: 664, x0: 72, x1: 472 }])
+    expect(u.breaksAll).toBe(1)
+    // none where the next line is a display's row, the line reaches its measure, or it is the unit's last
+    expect(file([line(1, 72, 472, 700), line(1, 72, 300, 688), line(1, 150, 400, 664), line(1, 72, 472, 640)], [2]).breaks).toEqual([])
+    expect(file([line(1, 72, 472, 700), line(1, 72, 470, 688), line(1, 72, 472, 664)]).breaks).toEqual([])
+    // the source's breaks inside the unit: a group of `\\` (or \newline) with the unit's own before and after it, none at an edge
+    const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+    expect(forcedBreaksIn([text('a'), ph('\\\\'), text('\n'), ph('\\\\'), text(' b'), ph('\\\\'), ph('\\\\'), text('\n')])).toBe(1)
+    expect(forcedBreaksIn([text('a'), ph('\\\\[2pt]'), ph('$x$'), ph('\\newline'), text('c')])).toBe(2)
+    expect(forcedBreaksIn([ph('\\\\'), text('a b')])).toBe(0)
+  })
+
+  it('an empty slot: the room above the line TeX set after a forced break is the break\'s, the room below it is counted', async () => {
+    const { slotsSkippedOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    const orig = lines(6)
+    const drawnAt = (bs: number[]) => bs.map(baseline => ({ baseline, size: 10, x0: 72, x1: 472, pitch: 12 }))
+    const tex = [700, 688, 664, 652, 640].map(baseline => ({ baseline, x0: 72, x1: 472 }))
+    const brk = [{ y: 676, next: 664, x0: 72, x1: 472 }]
+    const of = (bs: number[], breaks: typeof brk = brk) => slotsSkippedOf([{ id: 11, orig, lines: drawnAt(bs), tex, held: [], texPitch: 12, keptRows: [], breaks }]).slotsSkipped
+    // the paragraph before the break one line shorter than the original's: its line 688 left empty, the next one at 664
+    expect(of([700, 664])).toBe(0)
+    // the same drawing with no break of TeX's there: a slot skipped (688's)
+    expect(of([700, 664], [])).toBe(1)
+    // the text after the break started one line low: the slot of 664 is skipped
+    expect(of([700, 652])).toBe(1)
+    // a break in another column holds no room of this one
+    expect(of([700, 664], [{ ...brk[0]!, x0: 480, x1: 540 }])).toBe(1)
+  })
+
+  it('forced breaks as the engine counts them: invisible pieces are no content, a display none, and only as many as the file has (#367 review)', async () => {
+    const { forcedBreakRoom, forcedBreaksIn, slotsSkippedOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+    const D = '\\begin{equation}x\\end{equation}'
+    // a placeholder TeX's file holds no row of ink for (\label, \vspace, a tie) is nothing visible: the group after it is at an edge
+    const kinds = (i: number, p: { t: string; s?: string; src?: string }) => (p.t === 'text' ? (/\S/.test(p.s ?? '') ? 'text' : null) : p.src === D ? 'display' : /^\\(?:label|vspace)/.test(p.src ?? '') ? null : 'text')
+    expect(forcedBreaksIn([ph('\\label{s}'), ph('\\\\'), text('a b')], kinds)).toBe(0)
+    expect(forcedBreaksIn([text('a'), ph('\\vspace{1em}'), ph('\\\\'), text('b')], kinds)).toBe(1)
+    // a display next to the group breaks the text itself; a piece the file cannot tell: no count
+    expect(forcedBreaksIn([text('a'), ph('\\\\'), ph(D), text('b')], kinds)).toBe(0)
+    expect(forcedBreaksIn([text('a'), ph('\\\\'), text('b')], () => undefined)).toBe(-1)
+    // the room is set aside only where the source sets exactly as many breaks as the file has line ends a break shapes:
+    // more in the source (a ragged or centred unit, a break at a line's end) keeps every slot counted
+    const own = { breaks: [{ y: 676, next: 664, x0: 72, x1: 472 }], breaksAll: 1 }
+    expect(forcedBreakRoom(own, 1)).toEqual(own.breaks)
+    expect(forcedBreakRoom(own, 2)).toEqual([])
+    expect(forcedBreakRoom(own, 0)).toEqual([])
+    // two breaks between the same two drawn lines: the text between them laid nowhere, its line a slot skipped
+    const tex = [700, 688, 676, 664, 652].map(baseline => ({ baseline, x0: 72, x1: 472 }))
+    const two = [{ y: 682, next: 676, x0: 72, x1: 472 }, { y: 670, next: 664, x0: 72, x1: 472 }]
+    const lines = [700, 664].map(baseline => ({ baseline, size: 10, x0: 72, x1: 472, pitch: 12 }))
+    expect(slotsSkippedOf([{ id: 11, orig: lines6(), lines, tex, held: [], texPitch: 12, keptRows: [], breaks: two }]).slotsSkipped).toBe(1)
   })
 
   it("a line opened by a mark UAX 14 keeps from a line's start, unless the original's line opens with one", async () => {

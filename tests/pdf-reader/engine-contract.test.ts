@@ -60,13 +60,18 @@ describe('the five entries', () => {
   it('give the layer the reader\'s door whole and the bundle\'s and the layout file\'s parsers it takes', async () => {
     const layer = await namesOf('layer')
     const door = await withCanvas(async () => Object.keys(await import('@/pdf-reader/engine/layer-proto/reader.mjs')).sort())
-    expect(layer).toEqual(door)
+    // (the door whole, and beyond it BUNDLE 4's readers, keys and bounds, and the memory-class errors: names of format.mjs and memory.mjs)
+    const format = Object.keys(await import('@/pdf-reader/engine/layer-proto/format.mjs'))
+    expect(layer.filter(n => door.includes(n))).toEqual(door)
+    expect(layer.filter(n => !door.includes(n) && !format.includes(n) && n !== 'isMemoryError')).toEqual([])
+    for (const name of ['readUnitsChunk', 'readHead', 'indexOf', 'unitsOfChunks', 'readPart', 'readLeftPart', 'readCatalog', 'mergeParts', 'keyOf', 'keyParts', 'catalogKey', 'writeCatalog', 'isMemoryError', 'BUNDLE4', 'CTAG4', 'VTAG4']) expect(layer, name).toContain(name)
+    for (const name of ['writeUnitChunks', 'writeHead', 'writePart', 'writeLeftPart']) expect(layer, name).not.toContain(name)
     for (const name of ['openLayer', 'readBundle', 'BundleRefusal', 'BUNDLE', 'BUNDLE_CAP', 'BUNDLE_VALUES', 'VTAG', 'parseLayout', 'indexLayout', 'parseAddonManifest']) expect(layer, name).toContain(name)
   })
 
   it('give the server the bundle\'s writer and the translation the rows, and not the other way about', async () => {
     const pipeline = await namesOf('pipeline'), translate = await namesOf('translate')
-    for (const name of ['openPaper', 'originalFiles', 'makeLayout', 'layoutMarksOfPaper', 'paperAddon', 'writeBundle', 'bundleUnitsOf', 'unpackSource', 'PDFJS']) expect(pipeline, name).toContain(name)
+    for (const name of ['openPaper', 'originalFiles', 'makeLayout', 'layoutMarksOfPaper', 'paperAddon', 'writeBundle', 'bundleUnitsOf', 'unpackSource', 'PDFJS', 'writeUnitChunks', 'writeHead', 'writePart', 'writeLeftPart', 'writeCatalog', 'partTarget', 'isMemoryError', 'BundleRefusal']) expect(pipeline, name).toContain(name)
     for (const name of ['serialize', 'rehydrate', 'serializeTags', 'translateUnits', 'decideGroups', 'authorsTranslated', 'TRANSLATE_VERSION', 'rowOf', 'unitOf', 'layerRows', 'toTranslate', 'batchesOf', 'runRows']) expect(translate, name).toContain(name)
     // (the compile path stays out of the server's entry, and the layout maker and the front end out of the translation's)
     for (const name of ['runLive', 'translationFiles', 'strategiesFor', 'typesetting']) expect(pipeline, name).not.toContain(name)
@@ -97,9 +102,9 @@ describe('the engine\'s imports', () => {
     expect(engineViolations(inEngine)).toEqual([])
   })
 
-  it('reach the core by the three allowed modules alone, each file of them naming modules by relative path only', () => {
+  it('reach the core by the four allowed modules alone, each file of them naming modules by relative path only', () => {
     const outside = closure.filter(f => !f.startsWith(`${ENGINE}/`))
-    // (the entries reach two of the three: names.ts is the figures' and the extension's session's)
+    // (the entries reach three of the four: names.ts is the figures' and the extension's session's)
     expect(outside.every(core), outside.join(' ')).toBe(true)
     expect(outside.length).toBeGreaterThanOrEqual(2)
     for (const file of outside) {
@@ -115,7 +120,7 @@ describe('what the translation, the rules and the browser load', () => {
   // the marks, the remover and the add-on's maker, and the pixel checker. The anchors and the versions are the pipeline's too,
   // and leaves that every reader takes
   const server = (f: string) => f.startsWith(`${ENGINE}/source/`)
-    || (f.startsWith(`${ENGINE}/pipeline/`) && !/\/pipeline\/(?:anchors|versions)\.mjs$/.test(f))
+    || (f.startsWith(`${ENGINE}/pipeline/`) && !/\/pipeline\/(?:anchors|versions|memory)\.mjs$/.test(f))
     || /\/layout\/(?:make|marks|paper|remove|addon|carry|match|stream)\.mjs$/.test(f)
     || f.endsWith('/layer/check.mjs')
   for (const name of ['translate', 'rules', 'layer', 'view'] as const) {

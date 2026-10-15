@@ -23,4 +23,6 @@
  * Until the rows cache replaces session.mjs's copies (Stage 5, Task 10) a copy is judged by PIPELINE_VERSION alone, so a
  * change here that must void copies raises PIPELINE_VERSION with it.
  */
-export const TRANSLATE_VERSION = '1'
+// 2: a formula split across inline formulas goes out as one marker, read back as its own pieces in their order (mt.mjs
+//    formulaRuns): 16 runs in 3 of the corpus's 124 papers, whose units' wires change; every other unit's is 1's
+export const TRANSLATE_VERSION = '2'

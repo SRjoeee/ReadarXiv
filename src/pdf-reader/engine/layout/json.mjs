@@ -3,13 +3,15 @@
 // its values and its nesting counted before JSON.parse, then its shape and every number with plain loops. A refusal names where and why.
 // Imports nothing: the reader's parser of the layout file loads it too.
 
-/** a file refused: where (a JSON path, e.g. 'lines[3][1][17]'; '' for the file as a whole) and why */
+/** a file refused: where (a JSON path, e.g. 'lines[3][1][17]'; '' for the file as a whole) and why. `bound`, where the
+ *  refusal is a total passing its bound (a part's lines, names, fonts or page text), says so ('rows'): a shorter part may fit */
 export class LayoutRefusal extends Error {
-  constructor(path, why) {
+  constructor(path, why, bound = null) {
     super(path ? `${path}: ${why}` : why)
     this.name = 'LayoutRefusal'
     this.path = path
     this.why = why
+    this.bound = bound
   }
 }
 

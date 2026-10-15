@@ -20,8 +20,9 @@
 //     each with its page, box (PDF points), the page's characters there and the unit that erased it. A kept rendering
 //     (a displayed formula, a label) that was erased is lost ink by this rule.
 //     (a2, reported with it) ink under text: original ink the layer still shows under its own translated text.
-// (b) placeholders: each placeholder that renders something must be drawn exactly once: missing (no crop, no text, a
-//     kept rendering erased, a rendering never found), duplicated (a crop drawn twice; a character of the page carried
+// (b) placeholders: each placeholder that renders something must be shown exactly once, drawn or left intact where it
+//     stands (a piece the layout file says lies outside the unit's lines, which the drawing never erases: `inPlace`):
+//     missing (no crop, no text, a kept rendering erased, a rendering never found), duplicated (a crop drawn twice; a character of the page carried
 //     by two placeholders; a placeholder drawn from its source while another's crop or text already shows it), and
 //     doubled brackets (a reference's "(1)" inside the translation's own "\uFF08…\uFF09").
 // (c) literal duplications: two equal runs of Latin, digits or math next to each other in a unit's drawn reading order
@@ -103,6 +104,8 @@ export function checkAll({ N, placed, rows, pxOf, toPdf, chars2, audit, cols, ce
       if (!VISIBLE.has(r.cls)) continue
       const where = { unit: p.id, kind: p.unit.kind, k: r.k, src: r.src.slice(0, 80), mode: r.mode, page: p.pages[0] }
       if (r.mode === 'none') {
+        // shown by its own ink, left where it stands: outside the unit's lines, which the drawing never erases
+        if (r.inPlace) continue
         // a rendering never found on the page: a display there may still stand outside the unit's lines, untouched
         if (r.cls === 'display') B.unlocated.push(where)
         else if (r.text !== ' ') B.missing.push({ ...where, why: 'not found, nothing drawn' })

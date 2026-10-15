@@ -64,7 +64,7 @@ missing or drawn twice, and the fidelity measures against the original page, no 
 
 Records: `lab/pdf/records/layer-fidelity.md`, `lab/pdf/records/layer-gate.md`, `lab/pdf/records/layer-perf.md`.
 
-The gate measures the drawn layer, v0 (`--engine-kind=proto`, its default; the records' mode is `--proto-tex=lines --removal=draw`; `--door` is the reader's door). The first layer (`layer/layer.mjs`, with the fit and the line breaker under `layer/`) is parked (`parked/README.md`): `--engine-kind=layer` is refused with a message that says so, for an older worktree given by `--engine=<it>` that still has the entry it measures it as it was, and the layer lab's first view reports that the entry is not there. The checker `layer/check.mjs` stays, since the gate's instrument imports it by its address.
+The gate measures the drawn layer, v0 (`--engine-kind=proto`, its default; the records' mode is `--proto-tex=lines --removal=draw`; `--door` is the reader's door; `--door-parts[=doubling|splits:<n>|seed:<s>]` the door in parts against the door over the same cut made whole, BUNDLE 4's equality proof, never recorded: each part's tail chained after the parts before it, and the cut made whole against BUNDLE 3's open over the single tail; `--door-parts-addon=carried|none` the cut without a tail, or without an add-on). The first layer (`layer/layer.mjs`, with the fit and the line breaker under `layer/`) is parked (`parked/README.md`): `--engine-kind=layer` is refused with a message that says so, for an older worktree given by `--engine=<it>` that still has the entry it measures it as it was, and the layer lab's first view reports that the entry is not there. The checker `layer/check.mjs` stays, since the gate's instrument imports it by its address.
 
 **TeX's file against the drawing** (the 2608.16117 survey and the p59 finding, 2026-10-15). Seven measures read the
 drawing against TeX's own file, the layout file the fixture's drawing is given (`fixtures/<output>/layout.json`, its rows
@@ -79,8 +79,8 @@ what the maker writes moves these measures' ground truth with it, in its own pac
 |---|---|---|
 | `contentLost` | model | A placeholder of a drawn unit whose ink the file finds on the page (its segments) that is not shown exactly once. A rendering drawn elsewhere shows it only where it is that placeholder's own (its unit and piece, or a piece of the same source) and drawn from its ink or source: its crop holding a segment's centre, its rendering from its source, its characters drawn as the page's own standing in its segments. Its ink left in place shows it whoever left it (a kept rendering's characters in it, a kept line, never erased). Another placeholder's rendering drawn from its ink is no showing, nor is the drawing's putting back of ink it lost track of. Shown no time or twice or more. |
 | `contentUnknown` | model | The placeholders of drawn units the content measure cannot place: LOST in the file (no segment, no ground truth for their ink), or of a unit the file does not hold on the page. Gated as the others, so that a maker that loses more ink cannot lower the content measures by it. |
-| `textInDisplay` | model | A drawn line whose text's ink meets a display's segment or a display's row (a held line no text line of its unit shares a band with). |
-| `slotsSkipped` | model | Room between two drawn lines of a unit in one frame, beyond their own pitch, that the original does not leave there itself, in slots: TeX's own room (between two of the unit's text lines of the file in that column beyond its pitch: a blank line between paragraphs, a tall line's opening) and a text line the drawing keeps as the original's are set aside. Two lines with a held line between them are no pair: the room before a display is the frame's blank lines' (`blankLines`, `fill`). On `next` it is 0 (2026-10-15), and it does not see the survey's cause 5 (a forced break `\\` drawn as a space, the original's blank landing mid-sentence): drawn so the page is the same shape as a right drawing, and fix step 6 adds its own measure. |
+| `textInDisplay` | model | A drawn line whose text's ink meets a display's segment or a display's row (a held line no text line of its unit shares a band with). Gated at 0 (below). |
+| `slotsSkipped` | model | Room between two drawn lines of a unit in one frame, beyond their own pitch, that the original does not leave there itself, in slots: TeX's own room (between two of the unit's text lines of the file in that column beyond its pitch: a blank line between paragraphs, a tall line's opening) and a text line the drawing keeps as the original's are set aside. Two lines with a held line between them are no pair: the room before a display is the frame's blank lines' (`blankLines`, `fill`). Nor is the room above the line TeX set after a forced break: the file's lines whose ink ends short of their column's measure, the next line a text line of the unit, where the unit's source sets exactly as many `\\` or `\newline` breaks as the engine counts them, a visible piece that is no display before and after each, a placeholder visible where the file holds a row of ink for it (`measure.mjs forcedBreaksIn`, `forcedBreakRoom`); the room from that line down is counted, and the text between two breaks laid nowhere is a slot skipped for each of TeX's lines of it. On `next` it was 0 (2026-10-15); it does not see the survey's cause 5 itself (a forced break drawn as a space, the original's blank landing mid-sentence: the page the same shape as a right drawing). |
 | `lineStartPunct` | model | A drawn line that opens with a character UAX 14 keeps from a line's start (CL, CP, IS, EX, NS; LineBreak-17.0.0), unless the original's line on that baseline opens with one. |
 | `glyphsLost` | pixel | Lost ink by the strict account (`measure.mjs glyphAccounted`): an erased glyph in a placeholder's segment counts only where that placeholder is drawn from it or from its source; one on the unit's own line in no segment is TeX's text, replaced; a leftover of a gap off the file's lines is never accounted. `lostInk` stays as it was. |
 | `linesLeft` | pixel | A drawn unit's own text line of the file (not held; its kept label and the placeholders kept in place aside) left intact on the copy, as `stray` reads an item intact. |
@@ -91,7 +91,11 @@ CI, the record locally), so that it fails only on a regression; `next`'s value i
 above entered so, on 2026-10-15. The pull request that removes a measure's cause brings it to 0 and, in the same pull
 request, gates it at 0: it adds the measure to the completeness checks (`layer-gate.mjs completenessRows`, where any count
 above 0 makes the gate exit 1, and `rules-gate.mjs`'s `CHECK`, the names its public line may show). From then on any count
-fails.
+fails. `textInDisplay` is gated so since the displays a held run covers are read from the file (2026-10-15): 0 on the 30
+outputs since the LOST round, and its cause in the hybrid, `layer-proto/tex.mjs displayCover` grouping the displays by the
+translation's pieces (the p59 finding: Microsoft dropped the "with" between two displays, the groups paired nothing, and v0
+laid the text over the display), removed: the groups and their runs are the file's (JOINED, the found displays' segments,
+OUTSIDE) in the source's order.
 
 **2608.16117v1-zh**, the thirtieth output (CC BY 4.0; staging's own translation, the paper the maintainer reported on):
 its PDF, layout file and translation are in the private bucket only, never in git, and it is not in `data/layer-fixtures`
@@ -104,6 +108,40 @@ tree linking the full TeX Live 2026 tree's package directories TinyTeX lacks, wi
 holding that tree's `pdftex.map`; `GATE_PDF_CACHE` unset, which would take the place of `COMPILES`, so that no make in
 Docker ever reads a native compile). Made three times so, the file is byte-equal; it is still not the Docker image's
 package versions byte for byte, and the next make in Docker replaces it (a new pack object).
+
+**The LOST survey's maker (LAYOUT 6, the file's schema 4, 2026-10-15).** All 30 layout files are made so, natively: the
+same command with `--engine=<the tree> --switch --only=<all 30>`, `AXT_DATA` a folder whose `layout/<id>v<n>/` link each
+paper's `source.gz` and `arxiv.pdf` and whose `layer-fixtures` links `data/layer-fixtures` (the 29 records), the 30th's
+record and units copied into its output folder first, `LAYER_FIXTURES` the gate's made folder for the engine
+(`out/layer-gate/fixtures/<key>`, the key `madeFixtures` computes, so that `--layouts=made` finds them), and the pack made
+from it (`gate-pack.mjs make --fixtures=<that folder>`). Every placeholder the old files found has the same row; only LOST
+ones moved. The measures read the new flags as TeX's file says: a `JOINED` display has no segments of its own (its ink is
+in its group's first display's, which `contentLost` and `textInDisplay` read), and an `OUTSIDE` piece is LOST
+(`contentUnknown`). A unit that opens with a display has its rows before its start mark's line taken off as no line of
+it (as the held rows at its end), so that an `OUTSIDE` piece is outside every line of its unit. The prototype's checker
+counts a placeholder shown when it is drawn or left intact where it stands (`inPlace`: an `OUTSIDE` piece, which the
+drawing never erases), never `missing`. The hybrid's safe rule is one place (`layer-proto/tex.mjs` `proofOf`): a
+rendering is drawn only from what the file proves (its segments, its page text, its held run or group, a piece the file
+draws as nothing), else the unit stays the original's; its one exemption is a LaTeX text symbol (`\%`, `$\times$`), whose
+source is its rendering's content: one grapheme drawn, with no `_`, `^`, `/` or `√(` (`layer2.mjs textSymbol`), so that a
+formula of no letter or digit (`$\sum_{\alpha}^{\beta}$`) is proven as any formula is; with no layout file (the maker
+refused, the bundle dropped it) the reader's units are still drawn under the rule, which nothing then proves; a piece whose segments all lie past the pages the run shows (the gate's 12) is
+proven and drawn as its page text, never `?`. Fix 4 (the maintainer's ruling of 2026-10-15, every script): a mark UAX 14
+does not let a line start with (`layer-proto/no-start.mjs`, the table `lineStartPunct` reads too, served to the gate from
+this repository) that opens the translation's text right after a displayed formula is dropped from the drawing, unless
+the original's line there opens with one; the rows and the cache keep the translation. The sample's bundle is made so too, over the committed stand-in PDF (`scripts/make-sample-bundle.mjs
+--keep-pdf`, the shim first on PATH: its stand-in compiled natively would differ by the packages' versions alone).
+
+**The 2608.16117 survey's fixes 2 and 3 (2026-10-15).** A unit drawn on the file's lines keeps the file's held lines and
+its found displays' rows alone: the alignment's two keep rules (a line with no source word; one of three or four words or
+more under a fifth of them the source's) stay on v0's own lines, a unit the file does not locate whole (`layer2.mjs
+alignUnit`). A forced break of the row (`\\`, `\newline`) between two visible pieces that are no display ends the laid
+line, and the text after it starts on the file's first line after the original's break (`layer-proto/tex.mjs
+forcedBreaks`): TeX's breaks are the file's lines a break's `\hfil` ended short of their frame's measure, paired with the
+row's break groups in order as D4 pairs displays with held runs, only where they are as many and every placeholder the
+file finds stands between the breaks its place in the row says; else the text runs through as before. `slotsSkipped`
+sets aside the room a break leaves after a translation of the text before it shorter than the original's lines, as it
+does the room before a display (the owner's ruling of 2026-10-16, `rulings/2026-10-16-fixes-2-3.json`).
 
 **Recording the 30 outputs.** The gate's defaults hold 29 (`data/layer-fixtures`); the record's inputs name the 30th's
 folders, and a `--record` that would drop an output the record's run of its kind holds (for a model run, the pixel run's
@@ -278,9 +316,10 @@ file. They must move no word of the paper.
 | File | When to run it | What it needs |
 |---|---|---|
 | `lab/pdf/spikes/layout-marks-gate.mjs` | After any change to `src/pdf-reader/engine/layout/marks.mjs`: the marks' quality on the corpus (what v0, the marked original as the run makes it, and v1, the same with the layout marks, carry and lose). `--bisect`, `--write` and `--classes` as its header says; exit 1 on a failing paper, a class to switch off or a regression. | The corpus, `out/corpus-meta.json`, Docker. |
-| `lab/pdf/spikes/layout-marks-cases.mjs` | Alongside it: small documents compiled natively, each a way a mark could move a line. Exit 1 on a failure. | Docker. |
+| `lab/pdf/spikes/layout-marks-cases.mjs` | Alongside it: small documents compiled natively, each a way a mark could move a line. Exit 1 on a failure. `ONLY=lost` the LOST survey's: an inline formula first after a display, a display group, displays at a page's foot. `NATIVE_TEX=1` compiles with this machine's TeX Live (the shim's `NATIVE_TEX_BIN`, `NATIVE_TEXMFLOCAL`, `NATIVE_TEXMFVAR`): there TinyTeX's pdfTeX gives cmex's big operators and delimiters raw codes (∑ as P), which case A (pdfLaTeX) then reports, the image's does not. | Docker, or a native TeX Live. |
 | `lab/pdf/spikes/layout-marks-compare.mjs`, `layout-marks-compare.d.mts` | The gate's judgements, pure; `tests/pdf-reader/layout-marks-gate.test.ts` tests them. | — |
 | `lab/pdf/spikes/layout-make.mjs` | To run the layout maker on the researched papers, end to end, against the bars of `lab/pdf/records/layout-maker.md`. | The papers' sources and PDFs in `data/layout/`, Docker. |
+| `lab/pdf/spikes/cm-check.mjs` | After any change to CM (`layout/paper.mjs` with `converge`) or to the compile contract's `draft`/`files`: today's layout compile against CM in one native TeX Live, the marked PDF, marks file and layout file compared byte for byte, CM's record and each compile's CPU printed; it is the reference host of `draft` and `files`. `--corpus`, `--layout`, `--runs` as its header says; exit 1 on a difference or a refusal. | The papers' sources (and arXiv's PDFs for the layout) in `data/layout/` or `data/corpus/`, a native TeX Live (`NATIVE_TEXMFLOCAL`, as its header says). No Docker, no network. |
 | `lab/pdf/spikes/gt-orig.mjs`, `marks-gate.mjs`, `layout-same.mjs` | Unit marks must not move a single word: the original compiled natively with marks and without (`PLAIN=1`), then compared. | The corpus, `out/corpus-meta.json`, `out/c0-browser-patched-full.json`, Docker. |
 | `lab/pdf/spikes/patch-identity.mjs` | Without compiling: patching with unit marks and taking them out again gives exactly what patching without marks gives. | The corpus. |
 

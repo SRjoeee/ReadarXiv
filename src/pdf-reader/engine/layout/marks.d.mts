@@ -84,6 +84,8 @@ export declare const LAYOUT_TEX: string
 /** the control sequences \\axt@unmark takes out of a title's copy with their arguments: the regex's alternation and the
  *  prefilter that keeps it from running on a list holding none of them are both built from this list */
 export declare const UNMARK_CS: readonly string[]
+export declare const NAME_MARK_FILE: RegExp
+export declare function withoutNameMarks(text: string): string
 /** LAYOUT_TEX's names: \\axtnma{<key>} and \\axtnmb{<key>} around each babel name macro's own text */
 export declare const NAMES_TEX: string
 /** LAYOUT_TEX's last part: a point (`/axt-<name> ri`) beside each destination, around each column's body and each
@@ -102,7 +104,7 @@ export declare function layoutMarking(units: readonly SourceUnit[], classes: rea
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {
-  schema: 5
+  schema: 6
   /** the engine that compiled it (meta.compiler) */
   engine: string
   /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (TeX's answers to the
@@ -138,7 +140,7 @@ export interface LayoutMarks {
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number
-export declare const MARKS_SCHEMA: 5
+export declare const MARKS_SCHEMA: 6
 /** a piece's own ink at most, its glyphs and its rules; and a paper's in all */
 export declare const GLYPHS_PIECE: number
 export declare const RULES_PIECE: number

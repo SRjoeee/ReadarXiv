@@ -57,7 +57,7 @@ const H = UNIT_KINDS.indexOf('heading'), P = UNIT_KINDS.indexOf('para'), MATH = 
 /** the paper's layout file: two pages, the title and the paragraph located, the paragraph's formula found */
 function layoutOf(): LayoutFile {
   return {
-    schema: 3, layout: LAYOUT, pdfjs: PDFJS, paper: { id: '2608.04322', version: 1, pages: 2 }, left: '',
+    schema: 4, layout: LAYOUT, pdfjs: PDFJS, paper: { id: '2608.04322', version: 1, pages: 2 }, left: '',
     views: [0, 0, 612, 792, 0, 0, 612, 792], fonts: ['CMR10'],
     units: [[0, H, 9, UNIT_FLAG.TITLE, 1], [2, P, 9, 0, 7]],
     lines: [[0, [1, 150, 460, 700, 712, 696, 17.28, 0]], [2, [1, 72, 540, 650, 657.5, 647.25, 10, 0]]],
@@ -109,7 +109,7 @@ describe('the versions a bundle names', () => {
     const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { dependencies: Record<string, string> }
     expect(PDFJS).toBe(pkg.dependencies['pdfjs-dist'])
     expect(JSON.parse(readFileSync('node_modules/pdfjs-dist/package.json', 'utf8')).version).toBe(PDFJS)
-    expect(PIPELINE_VERSION).toBe('11')
+    expect(PIPELINE_VERSION).toBe('12')
     expect(LIVE_PIPELINE).toBe(PIPELINE_VERSION)
   })
 
@@ -118,7 +118,7 @@ describe('the versions a bundle names', () => {
     expect(CTAG).toBe(`b${BUNDLE}-j${PDFJS}`)
     expect(VTAG).toBe(`${CTAG}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
     const vtag = VTAG
-    expect(vtag).toBe('b3-j6.3.289-p11-l5-r5')
+    expect(vtag).toBe('b3-j6.3.289-p12-l6-r6')
     expect(bundleKey('1706.03762', 7)).toBe(`layer/1706.03762v7/${vtag}.json`)
     expect(bundleKey('hep-th/9901001', 1)).toBe(`layer/hep-th_9901001v1/${vtag}.json`)
     // (the web's vtag form, src/shared/identity.ts VTAG_FORM, is stricter than a token of letters, digits and points)

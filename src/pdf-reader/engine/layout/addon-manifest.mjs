@@ -16,10 +16,12 @@ import { boundedJson, COORD_MAX, isInteger, isNumber, isObject, isVersionToken, 
  *  the manifest's fields, bounds or meaning raises `schema` (and BUNDLE, which holds it), not this (2: compact sets; 3: a
  *  Type 3 glyph's removed advance with its font matrix's translation, an unusable matrix refused; 4: a hex string read as
  *  PDF.js reads it, and a page refused past its budgets: what it holds by kind, what it decodes; 5: the glyphs of the
- *  babel names the layout file locates removed, and their boxes counted for the kept ink under them). Defined here,
+ *  babel names the layout file locates removed, and their boxes counted for the kept ink under them; 6: a part's add-on
+ *  its own tail, an update chained after the parts before it (layout/chain.mjs), each page aligned by PDF.js's facts
+ *  shipped with its plan, the boxes' share spent over the parts). Defined here,
  *  beside the manifest that names it, so that a reader checks a manifest without loading the remover (which re-exports
  *  it) */
-export const REMOVAL = '5'
+export const REMOVAL = '6'
 /** the add-on's bytes at most (the bytes after arXiv's: 32 KB for the 147-page thesis), its manifest's bytes and
  *  values */
 export const ADDON_CAP = 4 * 2 ** 20
@@ -61,13 +63,13 @@ function keysOf(v, required, optional, path) {
 
 /**
  * Boxes x0, y0, x1, y1 (stride 4) on page `page`: finite numbers, each box not empty (x0 < x1, y0 < y1), within the
- * page's view by SLACK where `views` is given (4 × pages numbers, the layout file's form), else within ±COORD_MAX.
+ * page's view by SLACK where `views` is given (4 × pages numbers, the layout file's form, from page `first`), else within ±COORD_MAX.
  * Refused at the number that breaks it, a LayoutRefusal. The maker (layout/addon.mjs) asks it of a page's boxes before it
  * writes them, so that one page the manifest cannot hold costs that page and not the paper
  */
-export function checkBoxes(v, page, views, path) {
+export function checkBoxes(v, page, views, path, first = 1) {
   if (!Array.isArray(v) || v.length % 4 !== 0) throw refuse(path, `not boxes of 4 numbers (${kindOf(v)})`)
-  const o = 4 * (page - 1)
+  const o = 4 * (page - first)
   const xlo = views ? views[o] - SLACK : -COORD_MAX, ylo = views ? views[o + 1] - SLACK : -COORD_MAX
   const xhi = views ? views[o + 2] + SLACK : COORD_MAX, yhi = views ? views[o + 3] + SLACK : COORD_MAX
   for (let i = 0; i < v.length; i++) {
@@ -88,9 +90,16 @@ export function checkBoxes(v, page, views, path) {
  * and `rules` (boxes), a shipped page with `dirty` boxes naming its removed page (`at.R`) where the R set has no fixed
  * place; `appended` and `stats`, counts; the check's crops' `colours` (rgb by page and crop) and outline
  * table (a font's characters and their boxes in thousandths of an em, stride 5). Returns the manifest as it is; throws
- * LayoutRefusal
+ * LayoutRefusal.
+ *
+ * `part` { from, to, atFrom } reads the shipped form as a bundle 4 part holds it, for the pages `from` to `to` alone: no
+ * set, an entry for exactly each of those pages, `views` the views of pages from `from` on (a box on a page after `to`
+ * may not be named, so these need reach no further), and the `at.R` of the entries that have one (the pages of the part
+ * that the remover wrote) the consecutive document pages `atFrom`, `atFrom` + 1 … in page order. The document's own
+ * length is the chain's to check, and `appended` the tail's. Without `part`, the check is the whole manifest's
  */
-export function checkAddonManifest(m, { pages, views = null, shipped = false }) {
+export function checkAddonManifest(m, { pages, views = null, shipped = false, part = null }) {
+  if (part !== null && !shipped) throw new RangeError('a part is the shipped form')
   const setNames = shipped ? SHIPPED_SETS : SET_NAMES
   keysOf(m, TOP, shipped ? [] : TOP_CHECK, '')
   if (m.schema !== 1) throw refuse('schema', 'not 1')
@@ -98,6 +107,7 @@ export function checkAddonManifest(m, { pages, views = null, shipped = false }) 
   if (m.pages !== pages) throw refuse('pages', `not the paper's ${pages}`)
 
   const sets = keysOf(m.sets, [], setNames, 'sets'), names = Object.keys(sets)
+  if (part !== null && names.length) throw refuse(`sets.${names[0]}`, 'a set in a part')
   for (let i = 0; i < names.length; i++) {
     // (the remover writes them in SET_NAMES' order, each a block of `pages` after the one before)
     if (names[i] !== SET_NAMES[i] || sets[names[i]] !== (i + 1) * pages) throw refuse(`sets.${names[i]}`, `not ${SET_NAMES[i]} at ${(i + 1) * pages}`)
@@ -106,15 +116,17 @@ export function checkAddonManifest(m, { pages, views = null, shipped = false }) 
   const page = m.page
   if (!isObject(page)) throw refuse('page', `not an object (${kindOf(page)})`)
   const keys = Object.keys(page)
-  if (keys.length !== pages) {
-    for (let i = 0; i < keys.length; i++) if (!PAGE_KEY.test(keys[i]) || Number(keys[i]) > pages) throw refuse(`page.${told(keys[i])}`, `not a page 1 to ${pages}`)
-    throw refuse('page', `not an entry for each of ${pages} pages`)
+  // (the pages it has entries for: the paper's, or a part's)
+  const first = part === null ? 1 : part.from, last = part === null ? pages : part.to
+  if (keys.length !== last - first + 1) {
+    for (let i = 0; i < keys.length; i++) if (!PAGE_KEY.test(keys[i]) || Number(keys[i]) < first || Number(keys[i]) > last) throw refuse(`page.${told(keys[i])}`, `not a page ${first} to ${last}`)
+    throw refuse('page', part === null ? `not an entry for each of ${pages} pages` : `not an entry for each of the pages ${first} to ${last}`)
   }
   // each `at`, checked against the document's pages once every entry is read
   const ats = [], atPaths = []
   for (let i = 0; i < keys.length; i++) {
     const k = keys[i], path = `page.${told(k)}`
-    if (!PAGE_KEY.test(k) || Number(k) > pages) throw refuse(path, `not a page 1 to ${pages}`)
+    if (!PAGE_KEY.test(k) || Number(k) < first || Number(k) > last) throw refuse(path, `not a page ${first} to ${last}`)
     const p = Number(k)
     const e = keysOf(page[k], ['ok'], ENTRY, path)
     if (typeof e.ok !== 'boolean') throw refuse(`${path}.ok`, `not a boolean (${kindOf(e.ok)})`)
@@ -129,7 +141,7 @@ export function checkAddonManifest(m, { pages, views = null, shipped = false }) 
       if (!isObject(units)) throw refuse(`${path}.units`, `not an object (${kindOf(units)})`)
       for (const id of Object.keys(units)) {
         if (!UNIT_KEY.test(id)) throw refuse(`${path}.units.${told(id)}`, 'not a unit\'s id')
-        checkBoxes(units[id], p, views, `${path}.units.${id}`)
+        checkBoxes(units[id], p, views, `${path}.units.${id}`, first)
       }
     }
     if (Object.hasOwn(e, 'at')) {
@@ -137,21 +149,26 @@ export function checkAddonManifest(m, { pages, views = null, shipped = false }) 
       for (const s of Object.keys(at)) { ats.push(at[s]); atPaths.push(`${path}.at.${s}`) }
     }
     if (Object.hasOwn(e, 'dirty')) {
-      checkBoxes(e.dirty, p, views, `${path}.dirty`)
+      checkBoxes(e.dirty, p, views, `${path}.dirty`, first)
       // (the shipped add-on swaps a removed page in where kept ink lies under a unit's boxes: a compact one names that
       // page, or a reader would swap in arXiv's own page p, the R set's fixed place being none)
       if (shipped && e.ok && e.dirty.length && !Object.hasOwn(sets, 'R') && !(Object.hasOwn(e, 'at') && isObject(e.at) && Object.hasOwn(e.at, 'R'))) throw refuse(`${path}.at`, 'missing: kept ink under its units, and no removed page named (at.R)')
     }
-    if (Object.hasOwn(e, 'rules')) checkBoxes(e.rules, p, views, `${path}.rules`)
+    if (Object.hasOwn(e, 'rules')) checkBoxes(e.rules, p, views, `${path}.rules`, first)
   }
   // the add-on's document: arXiv's pages, each set's block of them, and the pages named by `at`; each page of a set at
   // its fixed place is the one a page naming none in that set takes, and no `at` may name it too
-  const total = pages * (1 + names.length) + ats.length, seen = new Set()
-  for (const s of names) for (let p = 1; p <= pages; p++) if (!Object.hasOwn(page[p].at ?? {}, s)) seen.add(sets[s] + p)
-  for (let i = 0; i < ats.length; i++) {
-    if (!isInteger(ats[i], pages + 1, total)) throw refuse(atPaths[i], `not a page of the add-on's ${pages + 1} to ${total}`)
-    if (seen.has(ats[i])) throw refuse(atPaths[i], 'a page named twice')
-    seen.add(ats[i])
+  if (part !== null) {
+    // (a part's removed pages follow the ones told before it: consecutive, in page order, each once)
+    for (let i = 0; i < ats.length; i++) if (ats[i] !== part.atFrom + i) throw refuse(atPaths[i], `not the part's page ${part.atFrom + i} of the add-on's document (its removed pages follow in page order)`)
+  } else {
+    const total = pages * (1 + names.length) + ats.length, seen = new Set()
+    for (const s of names) for (let p = 1; p <= pages; p++) if (!Object.hasOwn(page[p].at ?? {}, s)) seen.add(sets[s] + p)
+    for (let i = 0; i < ats.length; i++) {
+      if (!isInteger(ats[i], pages + 1, total)) throw refuse(atPaths[i], `not a page of the add-on's ${pages + 1} to ${total}`)
+      if (seen.has(ats[i])) throw refuse(atPaths[i], 'a page named twice')
+      seen.add(ats[i])
+    }
   }
 
   if (!isInteger(m.appended, 0, BYTES_MAX)) throw refuse('appended', `not a count of bytes 0 to ${BYTES_MAX}`)
