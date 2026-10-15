@@ -121,6 +121,15 @@ const SPEC: PaperSpec = {
   ],
 }
 
+/** six pages, each with a paragraph of its own and one that runs on to the next page (the ordinary two-column page break) */
+const CASCADE: PaperSpec = {
+  pages: 6,
+  units: Array.from({ length: 6 }, (_, i) => [
+    para(`Own paragraph of page ${i + 1}`, i + 1, 260, { stream: 20 * i }),
+    ...(i < 5 ? [{ ...para(`Running from page ${i + 1} on to page ${i + 2}`, i + 1, 40, { stream: 20 * i + 10 }), lines: [[i + 1, 20, 280, 40], [i + 2, 20, 280, 270]] as [number, number, number, number][] }] : []),
+  ]).flat(),
+}
+
 interface Seen { pages: string[]; ops: string[]; log: string[] }
 /** a door's pages asked one at a time, 1 to N, each awaited: their SVG markup, the run's operations, and the log of what the
  *  run waited for and what the door told */
@@ -220,6 +229,52 @@ describe('the door: three opens, the same pages', () => {
       expect(left, `${ends}`).toEqual(wantLeft)
       expect(q1Of(cold.log)).toEqual([])
     }
+  })
+
+  it('lays, with the rows still coming, no more than the asked page\'s closure and the page that finishes it, in either open (B1)', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const c = await cutSpec(CASCADE, [1, 2, 3, 4, 5])
+    const docFor = docsOf(CASCADE) as unknown as (r: number) => LayerDocument
+    const rows = rowsOfIndex(c.index)
+    for (const how of ['bundle 3', 'warm', 'parts told after the ask'] as const) {
+      const layer = how === 'bundle 3'
+        ? await openLayer({ bundle: mergeParts(c.index, c.parts), doc: docFor(0), target: 'zh', faceSources, hyphUrl })
+        : await openLayer({ index: c.index, doc: docFor(0), parts: how === 'warm' ? c.parts : [], target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+      // (every row in, and end() not called: the web's state while the translation streams)
+      layer.take(rows)
+      const laying: number[] = []
+      layer.onPage((p, state) => { if (state === 'laying') laying.push(p) })
+      const one = layer.pageOf(1, { lang: 'zh' })
+      if (how === 'parts told after the ask') for (const part of c.parts) layer.addPart(part)
+      await one
+      await settleDown(layer, CASCADE.pages)
+      const run = seen.runs.at(-1) as Run
+      // (page 1's closure is pages 1 and 2; the drive goes on to the page that finishes page 2, and lays no further)
+      expect(run.drawnTo, how).toBeLessThanOrEqual(3)
+      expect([1, 2, 3, 4, 5, 6].map(p => layer.pageState(p)), how).toEqual(['ready', 'ready', 'waiting', 'waiting', 'waiting', 'waiting'])
+      expect(laying, how).toEqual([1, 2])
+      layer.dispose()
+    }
+  })
+
+  it('rejects with an AbortError a leftPageOf aborted after its covering part came, while its fetch is under way (m1)', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const M = await made()
+    const docFor = docsOf(textOf(M)) as unknown as (r: number) => LayerDocument
+    let release = (_: Uint8Array) => {}
+    const transport = new Promise<Uint8Array>(ok => { release = ok })
+    const layer = await openLayer({ index: M.index, doc: docFor(0), target: 'zh', faceSources, hyphUrl, leftPart: () => transport, onRetired: () => {} })
+    const c = new AbortController()
+    const asked = layer.leftPageOf(1, { signal: c.signal }).then(() => 'value', (e: Error) => e.name)
+    layer.addPart(M.readParts[0]!, { doc: docFor(1) })
+    await tick()
+    c.abort()
+    // (at once, not when the transport answers)
+    expect(await Promise.race([asked, (async () => { for (let i = 0; i < 20; i++) await tick(); return 'still pending' })()])).toBe('AbortError')
+    // (the fetch goes on for whoever asks next, and is kept)
+    release((M.lefts[1] as { bytes: Uint8Array }).bytes)
+    expect((await layer.leftPageOf(1)).page).toBe(1)
+    layer.dispose()
   })
 
   it('leaves a unit that throws while it is laid the original\'s, why error, and completes its page (DR6)', async () => {

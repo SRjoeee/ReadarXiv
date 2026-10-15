@@ -201,12 +201,14 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   const off = a => { if (a.signal && a.onAbort) a.signal.removeEventListener('abort', a.onAbort) }
 
   // ---- readiness: one pass over the pages, after each event (the door design §3)
-  /** the page the drive lays towards: the furthest of every asked page's and every page told laying, its doneAt where final */
+  /** the page the drive lays towards: the furthest of every asked page's doneAt (the page itself until it is final) and every
+   *  page told laying itself (until(q) lays on to doneAt(q): a laying page counted by its doneAt would let the next page be told
+   *  laying in turn, and one ask lay the paper while the rows come) */
   const aim = () => {
     let g = 0
     const E = q => { const d = run.doneAt(q); return Number.isFinite(d) ? d : q }
     for (const q of asks.keys()) g = Math.max(g, E(q))
-    for (let q = 1; q <= N; q++) if (told[q] === LAYING) g = Math.max(g, E(q))
+    for (let q = 1; q <= N; q++) if (told[q] === LAYING) g = Math.max(g, q)
     return g
   }
   let evaluating = false, again = false
@@ -385,7 +387,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       // (wait for the part that covers it; once no asker is left, nothing is fetched)
       return new Promise((resolve, reject) => {
         const w = {
-          go: () => { off(w); fetchLeft(page).then(resolve, reject) },
+          go: () => { off(w); withSignal(fetchLeft(page), signal).then(resolve, reject) },
           no: e => { off(w); reject(e) },
           signal, onAbort: null,
         }
