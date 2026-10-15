@@ -657,7 +657,8 @@ function rectStyle(uc) {
  *   1. frames and lines (linesOf): the unit's characters on its lines, each line's baseline and size;
  *   2. erase extents (the lines' own, linesOf's): each line's box to erase, before the drawing's padding;
  *   then the alignment (alignUnit, either source's lines): which characters are the source's words, the original's
- *   style, where the first word starts, the lines none of whose words are the source's (kept);
+ *   style, where the first word starts, and on v0's lines the lines none of whose words are the source's (kept; on the
+ *   file's, its held lines);
  *   3. labels (labelOf): a label the class sets before the unit's first line, kept as the original's;
  *   4. placeholder renderings (v0Renderings): which of the page's ink each placeholder is, and where it sits;
  *   then the resolution's rules (resolvePlaceholders, either source's renderings): how each placeholder is drawn, the
@@ -678,7 +679,9 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   // gap each placeholder took
   out.uc = lines.uc
   out.lineInfo = lines.lineInfo
-  const aligned = alignUnit(out, unit, rects, deny)
+  // (a unit on the file's own lines keeps the lines TeX says are no text of its own alone: the file's held lines, below,
+  // and its found displays' rows, the finish's; no alignment's guess at another unit's line, which TeX's lines never are)
+  const aligned = alignUnit(out, unit, rects, deny, !!parts?.lines)
   // (the lines part 1's source says the unit's source does not write: kept as the original's, as a display's are)
   if (lines.held?.length) out.keep = [...new Set([...(out.keep ?? []), ...lines.held])]
   const gaps = (parts?.label ?? labelOf)(out, unit, rects, charsByPage, aligned)
@@ -726,8 +729,14 @@ export function linesOf(rects, charsByPage) {
  * (matchedKeys), its original style (orig), where its first word starts (firstX0), and the lines none of whose words are
  * the source's, kept as the original's (keep). Returns the gaps: the page's runs of the unit that the source does not
  * write, each a placeholder's rendering or a label.
+ * `fileLines`: part 1 gave the layout file's lines (the unit located whole, tex.mjs texParts 'lines'), every one of which
+ * TeX set as this unit's own: no line is kept by the alignment, neither one with no source word nor one with too few of
+ * them. The kept lines are then the file's (`held`, prepareUnit) and its found displays' rows (resolvePlaceholders,
+ * finishUnit) alone: the fix of the 2608.16117 survey, 2026-10-15, whose author-year citation lines ("networks (Kim et
+ * al., 2016). Islam and Picu…") the second rule kept as another unit's, their words a placeholder's and not the source's,
+ * the English left under the translation and a blank band above it.
  */
-function alignUnit(out, unit, rects, deny) {
+function alignUnit(out, unit, rects, deny, fileLines = false) {
   const uc = out.uc
   out.matchedKeys = new Set()
   let gaps = []
@@ -743,7 +752,7 @@ function alignUnit(out, unit, rects, deny) {
       const c0 = uc[O[q0].start]
       if (c0 && `${c0.page}|${c0.rect.join()}` === rectKey(rects[0])) out.firstX0 = c0.x0
     }
-    if (rects.length > 1) {
+    if (rects.length > 1 && !fileLines) {
       const minX = Math.min(...rects.map(r => r[1])), first = rectKey(rects[0])
       // (iteration 3: or of three words or more, where it starts: a line none of whose words are the source's is not
       // the unit's text, a rectangle the anchors gave it over another's line; kept, it is shown and no text is laid

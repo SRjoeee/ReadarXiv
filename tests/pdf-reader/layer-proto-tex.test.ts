@@ -550,3 +550,27 @@ describe('the erase of a line of several boxes', () => {
     expect((second[0] ?? 0) + (second[2] ?? 0)).toBeCloseTo(301.8)
   })
 })
+
+describe("TeX's own lines, kept and broken (the 2608.16117 survey's fixes 2 and 3, 2026-10-15)", () => {
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const key = (r: number[]) => `${r[0]}|${r.slice(1).join()}`
+  it('fix 2: a unit on the file\'s lines keeps its held lines alone, its author-year citation line its own text', () => {
+    // "delta (Kim Lee Park Choi Han 2016)": seven words, one the source's, the rest the citation's rendering. On v0's
+    // lines the alignment keeps that line as another unit's (four words or more, under a fifth of them the source's)
+    const lines = [[1, 10, 200, 500, 507, 498, 10, 0], [1, 10, 200, 488, 495, 486, 10, 0], [1, 10, 200, 476, 483, 474, 10, 0]]
+    const lu = unitOf(lines, [[1, 0, [1, 40, 488, 180, 495, 486]]]) as { ph: Map<number, { kind: string }> }
+    const row = lu.ph.get(1)
+    if (row) row.kind = 'cite'
+    const u = { kind: 'para', src: 'alpha beta gamma delta epsilon zeta eta', pieces: [text('\u7532\u4E59\u4E19\u4E01 '), ph('\\citep{kim,lee,park,choi,han}'), text(' \u620A\u5DF1\u5E9A')] } as never
+    const page = [...item('alpha beta gamma', 10, 500, 10, 0), ...item('delta (Kim Lee Park Choi Han 2016)', 10, 488, 10, 1), ...item('epsilon zeta eta', 10, 476, 10, 2)]
+    const t = T.texRects(lu as never)
+    const citeLine = key(t.rects[1] as number[])
+    const tex = L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu as never, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+    expect(tex.keep ?? []).not.toContain(citeLine)
+    expect(tex.get(1)?.mode).not.toBe('kept')
+    // the control: on v0's own lines (a unit the file does not locate whole) the rule stays, the anchors' rectangle may be
+    // over another unit's line
+    const v0 = L2.prepareUnit(u, t.rects.map(r => [...r]) as never, [page as never], new Map() as never)
+    expect(v0.keep).toContain(citeLine)
+  })
+})
