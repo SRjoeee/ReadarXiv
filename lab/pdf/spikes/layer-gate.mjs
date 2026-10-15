@@ -380,10 +380,11 @@ const MOVED_MODULES = { '/engine/font-roles.mjs': 'rules/font-roles.mjs', '/engi
 const ADDONS = new Map()
 /** --door: each fixture's bundle and rows, by the path the page asks for them at */
 const DOOR_FILES = new Map()
-/** --door-parts: run.mjs's stand-in, the instrument of door-parts.mjs (each run kept in __gateRuns, each wait told to __gateWait) */
+/** --door-parts: run.mjs's stand-in, the instrument of door-parts.mjs (each run kept in __gateRuns, each wait told to __gateWait),
+ *  each run keeping its units' records (`records`, which the reader's does not) for the comparison of the pages' records */
 const RUN_STAND_IN = `export * from '/engine/layer-proto/run.mjs?real'
 import { openProto as real } from '/engine/layer-proto/run.mjs?real'
-export async function openProto(o) { const run = await real({ ...o, onWait: what => globalThis.__gateWait?.(what) }); (globalThis.__gateRuns ??= []).push(run); return run }
+export async function openProto(o) { const run = await real({ ...o, records: true, onWait: what => globalThis.__gateWait?.(what) }); (globalThis.__gateRuns ??= []).push(run); return run }
 `
 const server = createServer((req, res) => {
   let path

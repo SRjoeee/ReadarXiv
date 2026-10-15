@@ -91,9 +91,9 @@ export class ProtoRun {
     for (let q = 1; q <= run.N; q++) {
       if (this.done.has(q) || run.doneAt(q) > run.doneAt(p) || !run.rows[q - 1].base) continue
       const row = run.rows[q - 1]
-      // (the SVG as the engine set it, its own size in v0's CSS px and no viewBox: a viewBox, even at scale 1, rasterizes
-      // the text otherwise than the gate's SVG; the view scales it by a transform)
-      const svg = row.svg.cloneNode(true)
+      // (the SVG as the engine set it, made of its kept markup, its own size in v0's CSS px and no viewBox: a viewBox, even at
+      // scale 1, rasterizes the text otherwise than the gate's SVG; the view scales it by a transform)
+      const svg = run.svgOf(q)
       const st = run.removalStats?.()?.byPage?.[q] ?? null
       this.done.set(q, { svg: svg.outerHTML, w: row.w, h: row.h, recs: run.stats.filter(r => r.pages.includes(q)), ms: run.pageMs[q] ?? null, times: run.pageTimes?.[q] ?? null, wait: q === p ? wait : null, removal: this.meta.addon ? { removed: !!this.meta.addon.manifest.page?.[q]?.ok, ...(st ?? {}) } : null })
       run.release(q)
