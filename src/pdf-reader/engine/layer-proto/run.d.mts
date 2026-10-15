@@ -131,11 +131,22 @@ export interface ProtoRun {
   readonly designs: { serif: string; sans: string; mono: string }
   /** the hybrid's: each placed unit's source (empty lists where `tex` is null) */
   readonly sources: Sources
-  /** the page after whose units page `page` is done; Infinity until the units it reads have come */
+  /** `page` once it is ready, Infinity before (the lab's and the gate's) */
   doneAt(page: number): number
-  /** every page up to the one that finishes page `page` drawn and its units laid, a unit a task, once they have come;
-   *  `still`, read between pages and at each wait, false ends it there (a page under way is finished first) */
+  /** every page up to `page` ready or failed: each page's closure laid in turn from page 1 (the gate's in-order run), a unit a
+   *  task, once what it reads has come; `still`, read between pages and units and at each wait, false ends it there (a page
+   *  under way is finished first) */
   until(page: number, still?: () => boolean): Promise<void>
+  /** page `page`'s closure laid (Need(p), the 1b-D design §2.1): page 1 drawn first, then its pages, its rows decided, and once
+   *  its parts and rows are in its units in their rank, a frame between two; it ends once the page is ready or failed, or
+   *  `still` is false (what is done stays done). One closure at a time, as until's */
+  layFor(page: number, still?: () => boolean): Promise<void>
+  /** the page's closure over K so far (need.mjs closureOf; the prefix needsOf lays, where the rules lay in order) */
+  closure(page: number): import('./need.mjs').Closure
+  /** whether the page is ready: drawn and laid, final within the run */
+  ready(page: number): boolean
+  /** the ids of the units whose rows laying the page still waits for (its closure's over K so far), in id order */
+  rowsFor(page: number): number[]
   /** parts: the next part, read by readPart against the chain (its layout merged into the hybrid's index before: facade.mjs) */
   grow(part: ReadPart): void
   /** parts: no more parts; every page past the last covered fails as it is reached */
@@ -145,12 +156,11 @@ export interface ProtoRun {
   /** the last page a part covers (every page, a whole open) */
   readonly through: number
   readonly partsEnded: boolean
-  /** the last page whose step has ended (its units laid, or it failed) */
+  /** the last page up to which every page is ready or failed */
   readonly drawnTo: number
-  /** how far into the stream every unit's row decides what it is */
-  extent(): number
-  /** whether until(page) waits for nothing more to come, neither a part nor a row (`at`: extent(), read once for many pages) */
-  inputs(page: number, at?: number): boolean
+  /** whether laying the page waits for nothing more to come, neither a part nor a row: its closure's bound covered (or the
+   *  parts ended) and every entry it decides in and settleable */
+  inputs(page: number): boolean
   /** whether the page failed: its drawing threw, or no part covers it and the parts have ended */
   failed(page: number): boolean
   /** a wait under way looks again at what it waits for */
@@ -158,12 +168,12 @@ export interface ProtoRun {
   /** units as they arrive (id → row): a row wins over one taken before it until its unit is placed; the hybrid's pieces
    *  read from each translated row's pieces' k; a row no unit of this paper's (not a unit's shape, its kind not the
    *  layout file's or the geometry's, its group not the open's `groups`, a k past its source's pieces) left the
-   *  original's, in `skipped`. The pages newly complete: those not reported complete before */
+   *  original's, in `skipped`. The pages newly complete (inputs: each by its own closure, out of the stream's order): those not
+   *  reported complete before */
   take(rows: ReadonlyMap<number, Unit>): { complete: number[] }
   /** no more units: every page is complete with what it holds */
   end(): void
-  /** whether every unit laying page `page` reads has come (or end()): until(page) waits for no take. It turns false
-   *  again only where a table cell's row is taken again before its group is read */
+  /** inputs(page): laying the page waits for no take and no part */
   complete(page: number): boolean
   /** every id taken whose row could no longer change the drawing, and changed nothing: its unit placed already (its
    *  page perhaps not laid yet), its row fixed by a table group read, taken after end(), or never expected. Never a
@@ -174,7 +184,7 @@ export interface ProtoRun {
   /** page `page`'s SVG, a new element each call, made of its record's markup (class, size and spacing as the page's own): a
    *  parse alone, no layout, face, ink or PDF.js call, 0.3 to 8.6 ms (420 to 12,000 elements) */
   svgOf(page: number): SVGSVGElement
-  /** the page's word table, a new record on every ask (words.mjs; the 1b design §4), frozen at the first ask if the page is not already; a RangeError for a page that is not final (`doneAt(page) <= drawnTo`) */
+  /** the page's word table, a new record on every ask (words.mjs; the 1b design §4), frozen at the first ask if the page is not already; a RangeError for a page that is not final (ready) */
   wordsOf(page: number): PageWords
   /** what the run lets go (`free`), keeps of its units' records and audit (`records`), and keeps on the gate's shelf */
   held(): { free: boolean; records: boolean; shelf: boolean }
@@ -264,7 +274,7 @@ export declare function openProto(o: {
   parts?: boolean
   /** a document the run read and no longer reads (a swap, dispose), told once */
   onRetired?: ((doc: unknown) => void) | null
-  /** a page's step ended: its units laid, or it failed */
+  /** a page is ready (or failed), told once */
   onStep?: ((page: number) => void) | null
   /** the run waits: for a part, or for rows (an instrument) */
   onWait?: ((what: 'part' | 'rows') => void) | null

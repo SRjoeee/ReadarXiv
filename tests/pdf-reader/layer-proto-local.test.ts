@@ -95,28 +95,30 @@ const PAPERS: [string, Spec[], number, (number[] | null)[]][] = []
 const paintedOn = (run: Run, page: number) => [...run.svgOf(page).innerHTML.matchAll(/data-u="(\d+)"/g)].map(m => Number(m[1]))
 
 describe('S1: a crop is cut from any page of the paper that was read', () => {
-  // a paragraph from page 1 on to page 2, its formula on page 1: laid at page 2, as its last page is drawn, and painted then
+  // a paragraph from page 1 on to page 2, its formula on page 1, and a paragraph of page 3: page 3's closure draws page 1 (its
+  // setup) and lays none of page 1's units
   const specs: Spec[] = [
     { id: 0, kind: 'para', src: 'Kappa lambda', lines: [line(1, 200, [20, 'Kappa lambda'])], from: 'file', tr: [text(CJK(5))] },
     {
       id: 1, kind: 'para', src: 'Alpha $x^2$ beta gamma', lines: [line(1, 40, [20, 'Alpha'], [60, 'x2']), line(2, 270, [20, 'beta gamma'])], from: 'file', pieces: 3,
       ph: [[1, 0, 1, 60, 40, 70, 47, 38]], tr: [text(CJK(4, 0x4e10)), { t: 'ph', src: '$x^2$', k: 1 }, text(CJK(6, 0x4e30))],
     },
+    { id: 2, kind: 'para', src: 'Mu nu', lines: [line(3, 200, [20, 'Mu nu'])], from: 'file', tr: [text(CJK(3, 0x4e60))] },
   ]
-  PAPERS.push(['S1', specs, 2, [null]])
+  PAPERS.push(['S1', specs, 3, [null]])
   const cropsFrom = (run: Run, page: number) => run.rows.flatMap(r => r.ops.filter(o => o.op === 'crop' && (o as { page: number }).page === page))
   it('draws it though the host let the page go (its row no longer `base`) before the unit is painted', async () => {
-    const whole = await open(paper(specs, 2))
-    await whole.until(2)
+    const whole = await open(paper(specs, 3))
+    await whole.until(3)
     const want = cropsFrom(whole, 1)
     expect(want.length).toBe(1)
-    const run = await open(paper(specs, 2))
-    // (page 1 drawn and its own units laid, the paragraph from it still to come; then page 1 let go, as release lets it)
-    await run.until(1, () => run.drawnTo < 1)
-    expect(run.drawnTo).toBe(1)
+    const run = await open(paper(specs, 3))
+    // (page 1 drawn for page 3's closure, the paragraph from it still to come; then page 1 let go, as a host lets a page go)
+    await run.layFor(3)
+    expect([1, 2, 3].map(q => run.ready(q))).toEqual([false, false, true])
     expect(placedOf(run, 1).layout).toBeUndefined()
     run.rows[0]!.base = false
-    await run.until(2)
+    await run.until(3)
     expect(cropsFrom(run, 1)).toEqual(want)
     expect(run.rows.map(r => JSON.stringify(r.ops))).toEqual(whole.rows.map(r => JSON.stringify(r.ops)))
   })
@@ -196,8 +198,10 @@ describe("C1: a unit's fill leading is its fit's", () => {
   PAPERS.push(['C1, fill', specs, 3, [null]])
   it('is set as the unit is laid, before the pass of its page has run', async () => {
     const run = await open(paper(specs, 3))
-    await run.until(2, () => run.drawnTo < 2)
-    expect(run.drawnTo).toBe(2)
+    // (page 2's closure: its paragraph laid first, by its rank, then stopped before the one running on to page 3)
+    await run.layFor(2, () => run.order.length < 1)
+    expect(run.order).toEqual([0])
+    expect(run.rows[1]!.fill).toBeNull()
     expect(placedOf(run, 0).layout).toBeDefined()
     expect(placedOf(run, 1).layout).toBeUndefined()
     const lead = (placedOf(run, 0) as { fillLead?: number | null }).fillLead
@@ -245,7 +249,9 @@ describe("S3: a page's fill target is a function of its page", () => {
     for (const order of [[0, 1, 3, 4, 5, 2], [0, 1, 3, 4, 2, 5]]) {
       const run = await open(paper(specs, 4), { order })
       await run.until(4)
-      expect(run.order, `${order}`).toEqual(order)
+      // (the units' rank is the order given; the records are in it, whatever order the closures laid them in)
+      expect(run.stats.map(r => r.id), `${order}`).toEqual(order)
+      expect([...run.order].sort(), `${order}`).toEqual([...order].sort())
       for (const q of [1, 2, 3, 4]) expect(pageOf(run, q), `${order} page ${q}`).toEqual(pageOf(want, q))
     }
   })
@@ -299,10 +305,11 @@ describe("C1: a page is painted in the order its painters' first pages' passes r
     await one.until(3)
     const two = await open(paper(specs, 3), { order: [0, 2, 3, 1, 4] })
     await two.until(3)
-    // (page 3's group lays the paragraph from page 1 first in one, the one from page 2 first in the other: page 1's pass runs
-    // first in one, page 2's in the other, and each page is painted in that order)
-    expect(one.order.indexOf(1)).toBeLessThan(one.order.indexOf(3))
-    expect(two.order.indexOf(3)).toBeLessThan(two.order.indexOf(1))
+    // (page 3's group ranks the paragraph from page 1 first in one, the one from page 2 first in the other: page 1's pass runs
+    // first in one, page 2's in the other, laid in order, and each page is painted in that order whatever order they were laid in)
+    const rankOf = (run: Run) => run.stats.map(r => r.id)
+    expect(rankOf(one).indexOf(1)).toBeLessThan(rankOf(one).indexOf(3))
+    expect(rankOf(two).indexOf(3)).toBeLessThan(rankOf(two).indexOf(1))
     expect(paintedOn(one, 3)).toEqual([1, 3, 4])
     expect(paintedOn(two, 3)).toEqual([3, 1, 4])
   })
@@ -319,7 +326,8 @@ describe("C1: a page is painted in the order its painters' first pages' passes r
     ]
     PAPERS.push(['C1, pages skipped', five, 5, [null]])
     const run = await open(paper(five, 5))
-    await run.until(3, () => run.drawnTo < 3)
+    // (page 2's closure: u laid, page 2 passed, its part of page 3 painted, w not laid)
+    await run.layFor(2)
     expect(placedOf(run, 1).layout).toBeUndefined()
     // (u's part of page 3 painted already, and page 2 let go: no unit on it is still to be painted)
     expect(paintedOn(run, 3)).toEqual([3])

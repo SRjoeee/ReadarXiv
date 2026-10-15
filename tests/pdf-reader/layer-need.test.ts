@@ -1,14 +1,15 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { type NeedEntry, needsOf } from '@/pdf-reader/engine/layer-proto/need.mjs'
+import { type Closure, closureOf, type NeedEntry, needBound, needsOf } from '@/pdf-reader/engine/layer-proto/need.mjs'
 
-// needsOf (what laying a paper's pages reads of its units' rows) lives in a leaf the door and the cutter both import. These tests
-// hold it to a restatement written from its documentation, on random K, and hold run.mjs to using it
+// needsOf (what laying a paper's pages reads of its units' rows, in order) and closureOf (Need(p), what laying page p alone
+// reads: the 1b-D design §1.2) live in a leaf the door and the cutter both import. These tests hold them to restatements written
+// from their documentation, on random K, and hold run.mjs to using them
 
 function rng(seed: number) { let s = seed >>> 0; return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 2 ** 32 } }
 
-type Entry = NeedEntry & { rects: unknown }
+type Entry = NeedEntry & { rects: unknown; reach: Set<number> }
 function randomK(seed: number): { K: Entry[]; N: number } {
   const r = rng(seed), N = 1 + Math.floor(r() * 12), K: Entry[] = []
   for (let i = 0, n = Math.floor(r() * 30); i < n; i++) {
@@ -20,7 +21,9 @@ function randomK(seed: number): { K: Entry[]; N: number } {
     }
     const reach = new Set(lists.flat())
     if (r() < 0.3) reach.add(1 + Math.floor(r() * N))
-    K.push({ lists, reach, rects: fileOnly ? null : [] })
+    const reads = r() < 0.15 ? [1 + Math.floor(r() * N)] : []
+    const group = r() < 0.2 ? `g${Math.floor(r() * 3)}` : null
+    K.push({ lists, reach, rects: fileOnly ? null : [], reads, group })
   }
   return { K, N }
 }
@@ -42,6 +45,39 @@ function layOf(K: Entry[], N: number, fileOnly: (c: Entry) => boolean): number[]
   return lay
 }
 
+/** Need(p) restated from the design's §1.2, by brute force over K (no index): what closureOf must give */
+function needOf(K: Entry[], N: number, p: number): Closure {
+  const idx = K.map((_, i) => i)
+  const lists = (i: number) => K[i]!.lists
+  const U = (q: number) => idx.filter(i => lists(i).some(l => l.includes(q)))
+  const Ur = (g: number) => idx.filter(i => K[i]!.reach.has(g))
+  const passOf = (q: number) => new Set([q, ...U(q).flatMap(i => lists(i).map(l => l[0]!))])
+  const pass = passOf(p)
+  const lay = new Set([...pass].flatMap(U))
+  const draw = new Set([1, p])
+  for (const i of lay) for (const q of [...K[i]!.reach, ...(K[i]!.reads ?? [])]) if (q >= 1 && q <= N) draw.add(q)
+  const G = new Set([...lay].flatMap(i => [...K[i]!.reach]))
+  const peers = new Set([...lay, ...[...G].flatMap(Ur)])
+  const R = new Set([...peers].flatMap(i => [...K[i]!.reach]))
+  const rows = new Set(peers)
+  for (const i of idx) if (!K[i]!.rects && [...K[i]!.reach].some(q => R.has(q))) rows.add(i)
+  for (const i of [...rows]) { const g = K[i]!.group; if (g != null) for (const j of idx) if (K[j]!.group === g) rows.add(j) }
+  // (the batch race: a unit of the closure's pages that runs on from page 1 to x, every unit first framed by x before it)
+  for (const i of peers) for (const l of lists(i)) if (l[0] === 1 && l.length > 1) {
+    const x = l[1]!
+    let last = -1
+    idx.forEach(j => { if (lists(j).length && Math.min(...lists(j).flat()) <= x) last = j })
+    for (let j = 0; j <= last; j++) rows.add(j)
+  }
+  let bound = Math.max(...draw)
+  for (const q of R) if (q <= N) bound = Math.max(bound, q)
+  const ready = [...draw].filter(q => [...passOf(q)].every(f => pass.has(f)))
+  const up = (s: Iterable<number>) => [...s].sort((a, b) => a - b)
+  return { pass: up(pass), lay: up(lay), draw: up(draw), rows: up(rows), ready: up(ready), bound }
+}
+
+const sub = (a: readonly number[], b: readonly number[]) => a.every(x => b.includes(x))
+
 describe('needsOf', () => {
   it('gives lay as the documentation reads, on 300 random papers', () => {
     for (let seed = 1; seed <= 300; seed++) {
@@ -54,20 +90,135 @@ describe('needsOf', () => {
         for (let p = 0; p <= N; p++) {
           expect(got.complete[p]).toBeGreaterThanOrEqual(got.done[p] as number)
           expect(got.complete[p]).toBeGreaterThanOrEqual(got.lay[p] as number)
+          // (the latest page p may be done after: p itself at least, a page of the paper at most)
+          expect(got.bound[p]).toBeGreaterThanOrEqual(p)
+          expect(got.bound[p]).toBeLessThanOrEqual(Math.max(N, p))
         }
       }
     }
   })
 
   it('needs nothing of a paper with no unit', () => {
-    expect(needsOf([], 3, true, () => false)).toEqual({ lay: [-1, -1, -1, -1], done: [-1, -1, -1, -1], complete: [-1, -1, -1, -1] })
+    expect(needsOf([], 3, true, () => false)).toEqual({ lay: [-1, -1, -1, -1], done: [-1, -1, -1, -1], complete: [-1, -1, -1, -1], bound: [0, 1, 2, 3] })
   })
 
   it('is the one run.mjs uses: imported from need.mjs, defined nowhere else', () => {
     const run = readFileSync('src/pdf-reader/engine/layer-proto/run.mjs', 'utf8')
-    expect(run).toContain("import { needsOf } from './need.mjs'")
-    expect(run).not.toMatch(/function needsOf/)
+    expect(run).toMatch(/import \{ [^}]*\bneedsOf\b[^}]*\} from '\.\/need\.mjs'/)
+    expect(run).toMatch(/import \{ [^}]*\bclosureOf\b[^}]*\} from '\.\/need\.mjs'/)
+    expect(run).not.toMatch(/function (needsOf|closureOf)/)
     // (over K, or under parts K and the entry standing for the parts not told yet: the door design §0.3)
     expect(run).toMatch(/needsOf\(partsEnded \|\| through >= N \? K : \[\.\.\.K, [^\n]*\], N, PASSES,/)
+  })
+})
+
+describe('closureOf: Need(p), the 1b-D design §1.2', () => {
+  /** the format test's paper as run.mjs's K holds it (helpers/format-paper.ts): its units in the stream's order, each with the
+   *  pages its two sources draw it on (the left's rectangles, the layout file's lines), its placeholders' pages, its table group */
+  const FORMAT: Entry[] = [
+    { lists: [[1], [1]], reach: new Set([1]), rects: [], reads: [], group: null },
+    // (unit 2: a paragraph from page 1 on to page 2, its formula on page 1)
+    { lists: [[1, 2], [1, 2]], reach: new Set([1, 2]), rects: [], reads: [1], group: null },
+    { lists: [[2], [2]], reach: new Set([2]), rects: [], reads: [], group: '0:h' },
+    { lists: [[3]], reach: new Set([3]), rects: [], reads: [], group: '0:c0+2' },
+    // (unit 5: a cell only the layout file holds)
+    { lists: [[3]], reach: new Set([3]), rects: null, reads: [], group: '0:c0' },
+    { lists: [[4]], reach: new Set([4]), rects: [], reads: [], group: null },
+    { lists: [[4]], reach: new Set([4]), rects: [], reads: [], group: null },
+  ]
+
+  it("gives the format test's paper its closures: page 2 laid with page 1, pages 3 and 4 each alone after page 1", () => {
+    const of = (p: number) => closureOf(FORMAT, 4, p)
+    expect([1, 2, 3, 4].map(p => of(p).draw)).toEqual([[1, 2], [1, 2], [1, 3], [1, 4]])
+    expect([1, 2, 3, 4].map(p => of(p).ready)).toEqual([[1], [1, 2], [3], [4]])
+    expect([1, 2, 3, 4].map(p => of(p).pass)).toEqual([[1], [1, 2], [3], [4]])
+    expect([1, 2, 3, 4].map(p => of(p).bound)).toEqual([2, 2, 3, 4])
+    // (page 1's units laid, page 2's cell only decided: it ranks against the paragraph that runs on to page 2; and every unit
+    // framed by page 2, the paragraph's batch race)
+    expect(of(1).lay).toEqual([0, 1])
+    expect(of(1).rows).toEqual([0, 1, 2])
+    expect(of(3)).toEqual({ pass: [3], lay: [3, 4], draw: [1, 3], rows: [3, 4], ready: [3], bound: 3 })
+    expect([...needBound(FORMAT, 4)]).toEqual([0, 2, 2, 3, 4])
+  })
+
+  it('is Need(p) as the design defines it, on 300 random papers', () => {
+    for (let seed = 1; seed <= 300; seed++) {
+      const { K, N } = randomK(seed)
+      for (let p = 1; p <= N; p++) expect(closureOf(K, N, p), `seed ${seed}, page ${p}`).toEqual(needOf(K, N, p))
+    }
+  })
+
+  it('holds its own properties: 1 drawn first, pass in draw, lay in rows, a ready page\'s closure inside, needBound alike', () => {
+    for (let seed = 1; seed <= 300; seed++) {
+      const { K, N } = randomK(seed)
+      const B = needBound(K, N)
+      expect(B.length).toBe(N + 1)
+      expect(B[0]).toBe(0)
+      for (let p = 1; p <= N; p++) {
+        const C = closureOf(K, N, p), as = `seed ${seed}, page ${p}`
+        expect(C.draw[0], as).toBe(1)
+        expect(C.draw, as).toEqual([...C.draw].sort((a, b) => a - b))
+        expect(sub(C.pass, C.draw), as).toBe(true)
+        expect(sub(C.lay, C.rows), as).toBe(true)
+        expect(C.ready, as).toContain(p)
+        expect(C.bound, as).toBeGreaterThanOrEqual(Math.max(...C.draw))
+        expect(C.bound, as).toBeLessThanOrEqual(N)
+        expect(B[p], as).toBe(C.bound)
+        for (const q of C.ready) {
+          const D = closureOf(K, N, q)
+          expect(sub(D.pass, C.pass) && sub(D.lay, C.lay) && sub(D.draw, C.draw) && sub(D.rows, C.rows), `${as}: ready ${q}`).toBe(true)
+        }
+      }
+    }
+  })
+
+  it('is final over any part of K a cut tells once its bound is covered: K so far gives the whole paper\'s closure', () => {
+    // (a cut tells K as a prefix, closed over the table groups, and an entry it has not told touches no page up to `through`:
+    // the bundle 4 contract C3b and M18)
+    for (let seed = 1; seed <= 300; seed++) {
+      const { K, N } = randomK(seed)
+      for (let through = 1; through <= N; through++) {
+        let F = -1
+        K.forEach((c, i) => { if ([...c.reach, ...c.lists.flat()].some(q => q <= through)) F = i })
+        for (let again = true; again;) {
+          again = false
+          for (const g of new Set(K.slice(0, F + 1).map(c => c.group).filter(x => x != null))) K.forEach((c, i) => { if (c.group === g && i > F) { F = i; again = true } })
+        }
+        const sofar = K.slice(0, F + 1)
+        for (let p = 1; p <= through; p++) {
+          const C = closureOf(sofar, N, p)
+          if (C.bound <= through) expect(C, `seed ${seed}, through ${through}, page ${p}`).toEqual(closureOf(K, N, p))
+        }
+      }
+    }
+  })
+
+  it('is the prefix needsOf lays where the rules lay in order (orderFree false)', () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const { K, N } = randomK(seed)
+      for (const passes of [false, true]) {
+        const need = needsOf(K, N, passes, c => !c.rects)
+        for (let p = 1; p <= N; p++) {
+          const B = need.bound[p]!, upTo = (a: number, b: number) => Array.from({ length: Math.max(0, b - a + 1) }, (_, i) => a + i)
+          expect(closureOf(K, N, p, { orderFree: false, passes }), `seed ${seed}, page ${p}`).toEqual({
+            pass: upTo(1, B), lay: upTo(0, need.complete[p]!), draw: upTo(1, B), rows: upTo(0, need.complete[p]!),
+            ready: upTo(1, B).filter(q => need.bound[q]! <= B), bound: B,
+          })
+        }
+      }
+    }
+  })
+
+  it('reads the layout-only entries by `fileOnly`', () => {
+    // (a paragraph of page 2; a unit drawn on page 1 whose other source's lines reach pages 2 and 3, so that it grows on page 2
+    // and ranks against the paragraph there; and one only the layout file holds on page 3, which that unit's growth reads as
+    // placed: the keepAll hop)
+    const K: Entry[] = [
+      { lists: [[2]], reach: new Set([2]), rects: [], reads: [], group: null },
+      { lists: [[1]], reach: new Set([1, 2, 3]), rects: [], reads: [], group: null },
+      { lists: [[3]], reach: new Set([3]), rects: null, reads: [], group: null },
+    ]
+    expect(closureOf(K, 3, 2)).toEqual({ pass: [2], lay: [0], draw: [1, 2], rows: [0, 1, 2], ready: [2], bound: 3 })
+    expect(closureOf(K, 3, 2, { fileOnly: () => false }).rows).toEqual([0, 1])
   })
 })

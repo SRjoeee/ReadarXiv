@@ -342,6 +342,9 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     layer.end()
     expect(layer.stats().dropped).toBe(5)
     await layer.pageOf(2, { lang: 'zh' })
+    // (page 2 laid by its closure alone: no unit of it runs on from page 1, so page 1 is drawn first and laid only when asked)
+    expect(layer.stats().pages).toEqual([2])
+    await layer.pageOf(1, { lang: 'zh' })
     expect(layer.stats().pages).toEqual([1, 2])
     expect(layer.stats().drawn).toBeGreaterThan(3)
     layer.dispose()
@@ -592,16 +595,21 @@ describe("the original's canvas with no copy kept (openProto copy: false): read 
     layer.end()
     const run = seen.runs.at(-1) as Run
     const canvases = run.rows.map(r => r.left!)
-    // (page 2 asked for first: page 1 is laid on the way and its canvas never outlives its ink)
+    // (page 2 asked for first: page 1 is drawn first, page 2's closure, and its canvas never outlives its ink)
     const jump = await layer.pageOf(2, { lang: 'zh' })
     expect(canvases.map(c => c.width)).toEqual([0, 0])
-    // (and every page on the way let go of by the run once laid, each still drawn for a crop: no host's release)
+    // (page 2 let go of by the run once laid, still drawn for a crop: no host's release; page 1, drawn and not laid (a side
+    // page: its units are laid with its own closure), keeps what its laying reads until then: it is never drawn twice, M1)
     expect(run.rows.map(r => [r.left, r.base, r.released])).toEqual([[null, true, undefined], [null, true, undefined]])
-    expect([1, 2].map(p => run.held(p).state)).toEqual([[], []])
+    expect([1, 2].map(p => run.ready(p))).toEqual([false, true])
+    expect(run.held(1).state).toEqual(['chars', 'ink', 'laid'])
+    expect(run.held(2).state).toEqual([])
     expect((await layer.pageOf(2, { lang: 'zh' })).svg.outerHTML).toBe(jump.svg.outerHTML)
     const one = (await layer.pageOf(1, { lang: 'zh' })).svg
     one.removeAttribute('lang')
     expect(one.outerHTML).toBe(run.svgOf(1).outerHTML)
+    // (and let go of once its own closure is laid, M2)
+    expect([1, 2].map(p => run.held(p).state)).toEqual([[], []])
     const source = document.createElement('canvas')
     source.width = 750
     source.height = 750

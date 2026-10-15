@@ -207,38 +207,57 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   }
   const off = a => { if (a.signal && a.onAbort) a.signal.removeEventListener('abort', a.onAbort) }
 
-  // ---- readiness: one pass over the pages, after each event (the door design §3)
-  /** the page the drive lays towards: the furthest of every asked page's doneAt (the page itself until it is final) and every
-   *  page told laying itself (until(q) lays on to doneAt(q): a laying page counted by its doneAt would let the next page be told
-   *  laying in turn, and one ask lay the paper while the rows come) */
-  const aim = () => {
-    let g = 0
-    const E = q => { const d = run.doneAt(q); return Number.isFinite(d) ? d : q }
-    for (const q of asks.keys()) g = Math.max(g, E(q))
-    for (let q = 1; q <= N; q++) if (told[q] === LAYING) g = Math.max(g, q)
-    return g
+  // ---- readiness: one pass over the pages, after each event (the door design §3), and the drive: one target at a time, laid
+  // by its closure alone (run.layFor; the 1b-D design §2.2)
+  /** each live ask's turn (the newest last), and the order the pages were told laying in (the oldest first) */
+  let seq = 0
+  const askedAt = new Map(), committed = new Map()
+  /** what the drive lays next, and why: (1) the newest live ask whose closure has all it needs (its parts and rows in), (2) a
+   *  page told laying and not ready yet, the oldest first (a state never goes back: a page told laying is laid before the
+   *  drive is idle), (3) the newest live ask whose closure waits for a part or a row: the work it can do meanwhile (page 1,
+   *  its covered pages, its rows in), the run waiting inside. A newer ask overtakes at the next unit or page */
+  const pick = () => {
+    let newest = null, ready = null
+    for (const [q, at] of askedAt) {
+      if (told[q] >= READY) continue
+      if (newest === null || at > askedAt.get(newest)) newest = q
+      if ((ready === null || at > askedAt.get(ready)) && run.inputs(q)) ready = q
+    }
+    if (ready !== null) return { page: ready, take: true }
+    for (const q of committed.keys()) if (told[q] === LAYING) return { page: q, take: false }
+    return newest === null ? null : { page: newest, take: false }
+  }
+  /** the page the drive lays (null: none); a page is taken (told laying, with every page its closure makes ready that has all
+   *  it needs too, in page order) when the drive turns to it with its inputs in: not at its ask, so that an ask a newer one
+   *  overtakes before the drive reaches it commits nothing (pageof-contract §7) */
+  let current = null
+  const take = p => {
+    for (const q of run.closure(p).ready) {
+      if (told[q] !== WAITING || (q !== p && !run.inputs(q))) continue
+      told[q] = LAYING
+      committed.set(q, seq++)
+      for (const l of [...listeners]) { try { l(q, 'laying') } catch { /* a listener's own error */ } }
+    }
   }
   let evaluating = false, again = false
   const step = () => {
-    const at = run.extent(), G = aim(), changes = []
+    const changes = []
     for (let p = 1; p <= N; p++) {
       if (told[p] >= READY) continue
-      if (run.failed(p)) { told[p] = FAILED; changes.push([p, 'failed']); continue }
-      const d = run.doneAt(p)
-      if (Number.isFinite(d) && d <= run.drawnTo) {
+      if (run.failed(p)) { told[p] = FAILED; committed.delete(p); changes.push([p, 'failed']); continue }
+      if (run.ready(p)) {
         if (told[p] === WAITING) changes.push([p, 'laying'])
         told[p] = READY
+        committed.delete(p)
         changes.push([p, 'ready'])
-        continue
       }
-      // (laying: nothing more is to come for it, and it is asked or on the drive's way to what is)
-      if (told[p] === WAITING && run.inputs(p, at) && (asks.has(p) || (Number.isFinite(d) ? d <= G : p <= G))) { told[p] = LAYING; changes.push([p, 'laying']) }
     }
     for (const [p, state] of changes) {
       if (state === 'laying') continue
       const list = asks.get(p)
       if (!list) continue
       asks.delete(p)
+      askedAt.delete(p)
       for (const a of list) {
         off(a)
         if (state === 'ready') a.resolve(fresh(p, a.lang))
@@ -255,6 +274,8 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     dead = e
     for (const [, list] of asks) for (const a of list) { off(a); a.reject(e) }
     asks.clear()
+    askedAt.clear()
+    committed.clear()
     for (const [, list] of leftWaiters) for (const w of list) w.no(e)
     leftWaiters.clear()
     goneNow(e)
@@ -266,25 +287,35 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     if (disposed || !told || dead) return
     if (evaluating) { again = true; return }
     evaluating = true
-    try { do { again = false; step() } while (again && !disposed) } finally { evaluating = false }
+    try {
+      do {
+        again = false
+        step()
+        // (the drive's page taken where it is the drive's already, or the drive is idle and turns to it now)
+        const t = pick()
+        if (t?.take && (current === null || current === t.page)) take(t.page)
+      } while (again && !disposed)
+    } finally { evaluating = false }
+    // (a drive waiting in another page's closure looks again at what it lays)
+    if (driving && pick()?.page !== current) run.poke()
     drive()
   }
-  // ---- the drive: in order, towards the target, a `still` that stops it once the target falls below where it was going
+  // ---- the drive: one target at a time, its closure laid until it is ready, failed or overtaken (`still`)
   let driving = false
   const drive = () => {
-    if (driving || disposed || aim() === 0) return
+    if (driving || disposed || !pick()) return
     driving = true
     void (async () => {
       try {
-        for (let g = aim(); g > 0 && !disposed; g = aim()) {
-          const was = run.drawnTo
-          await run.until(g, () => !disposed && aim() >= g)
+        for (let t = pick(); t && !disposed; t = pick()) {
+          if (t.take) take(t.page)
+          current = t.page
+          await run.layFor(t.page, () => !disposed && pick()?.page === t.page)
+          current = null
           if (disposed) return
           evaluate()
-          // (nothing laid and the same page to lay towards: the next event drives it again)
-          if (run.drawnTo === was && aim() === g) return
         }
-      } catch (e) { die(e) } finally { driving = false }
+      } catch (e) { die(e) } finally { driving = false; current = null }
     })()
   }
 
@@ -364,6 +395,11 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       pageIn(page)
       return STATES[told[page]]
     },
+    rowsFor(page) {
+      live()
+      pageIn(page)
+      return told[page] >= READY ? [] : run.rowsFor(page)
+    },
     onPage(listener) {
       if (typeof listener !== 'function') throw new TypeError(`listener: a function, not ${kindOf(listener)}`)
       listeners.add(listener)
@@ -384,7 +420,8 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
           a.onAbort = () => {
             const list = asks.get(page)
             if (!list?.delete(a)) return
-            if (!list.size) asks.delete(page)
+            // (no asker left: the page leaves the targets, unless it was told laying already)
+            if (!list.size) { asks.delete(page); askedAt.delete(page) }
             reject(abortError())
             evaluate()
             run.poke()
@@ -392,6 +429,8 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
           signal.addEventListener('abort', a.onAbort, { once: true })
         }
         ;(asks.get(page) ?? asks.set(page, new Set()).get(page)).add(a)
+        // (the page's turn: its newest ask's)
+        askedAt.set(page, seq++)
         evaluate()
       })
     },
@@ -468,6 +507,8 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       const e = letGoError()
       for (const [, list] of asks) for (const a of list) { off(a); a.reject(e) }
       asks.clear()
+      askedAt.clear()
+      committed.clear()
       for (const [, list] of leftWaiters) for (const w of list) w.no(e)
       leftWaiters.clear()
       goneNow(e)

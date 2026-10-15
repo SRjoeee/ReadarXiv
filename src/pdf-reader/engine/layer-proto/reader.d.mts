@@ -48,10 +48,13 @@ export interface LayerStats {
 }
 
 /** a page's state moves `waiting` > `laying` > `ready` or `failed`, nothing else (DR5), each told once (D-1). `waiting`: no
- *  part covers it yet, or what its closure needs is not in (a part, a row), or nobody has asked for it (the Layer lays what is
- *  asked, and the pages of an asked page's closure); `laying`: asked, or in an asked page's closure, with all of that in;
- *  `ready`: laid, final within the Layer (DR3); `failed`: its composed page did not render or read, or no part will cover it
- *  (after endParts()). A part with `layout: null` still covers its pages */
+ *  part covers it yet, or what its closure (Need(p): the pages and units laying it reads) needs is not in (a part, a row), or
+ *  the Layer has not taken it (it lays what is asked, a page by its closure alone, not every page before it); `laying`: taken
+ *  with all of that in, when the drive turns to it (an asked page at once where nothing else is laid; one an ask overtook
+ *  before the drive reached it is never taken), or laid with a page taken (its closure inside that one's); `ready`: laid, final
+ *  within the Layer (DR3), told too where another page's closure made it so; `failed`: its composed page did not render or
+ *  read, or no part will cover it (after endParts()). A page drawn for another page's closure and not laid with it stays
+ *  `waiting`. A part with `layout: null` still covers its pages */
 export type PageState = 'ready' | 'laying' | 'waiting' | 'failed'
 /** a state `onPage` tells: `waiting` is the state before any is told */
 export type PageEvent = Exclude<PageState, 'waiting'>
@@ -97,11 +100,16 @@ export interface Layer {
   pageState(page: number): PageState
   /** each page's `laying`, then its `ready` or `failed`, once, in the order they happen (pages of a closure too). Returns the unsubscribe */
   onPage(listener: (page: number, state: PageEvent) => void): () => void
+  /** the ids of the units whose rows laying the page still waits for (taken neither, nor ended), in id order: its closure's
+   *  over the parts told so far (a later part may add to it), [] once it is ready or nothing waits. A host that translates as it
+   *  shows (the extension) translates a jump's units first by it. Throws after dispose */
+  rowsFor(page: number): number[]
   /**
    * The page laid, a fresh LaidPage on every call (D-2). On `waiting` or `laying` it resolves when laid. It rejects on
    * `failed`, on a page uncovered when endParts() ends the parts, on dispose, and on `signal` abort (an AbortError). An aborted
    * ask drops its page from the targets: a page still `waiting` is not laid when a part covers it unless asked again; a page
-   * already `laying` is laid anyway (a state never goes back). Throws synchronously after dispose
+   * already `laying` is laid anyway (a state never goes back). The newest ask is laid first, by its closure alone; a page told
+   * `laying` is finished before the drive goes idle. Throws synchronously after dispose
    */
   pageOf(page: number, o: { lang: string; signal?: AbortSignal }): Promise<LaidPage>
   /**
