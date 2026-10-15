@@ -230,6 +230,21 @@ describe('the cut of a small paper', () => {
     expect(asked).toEqual(fits(c).map((p, i) => [i, p]))
   })
 
+  it('writes no add-on where the whole has none and no hook makes one (M20): every part with a layout has addon null', async () => {
+    const whole = wholeOf(SMALL)
+    expect(whole.addon ?? null).toBeNull()
+    const c = await cutBundle(whole, { leftPages: leftPagesOf(whole), base: BASE_OF })
+    const back = await readBack(c)
+    expect(back.parts.some(p => p.layout !== null)).toBe(true)
+    for (const p of back.parts) { expect(p.addon).toBeNull(); expect(p.chain.r).toBe(0) }
+    // (made whole again: no add-on, as BUNDLE 3's bundle with none)
+    expect(mergeParts(back.index, back.parts).addon).toBeNull()
+    await checkCut('small, no add-on', whole, c)
+    // a hook that answers null still plans the pages as not planned: its pages are drawn by erase and restore
+    const hooked = await readBack(await cutBundle(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, chainAddon: () => null }))
+    expect(hooked.parts.filter(p => p.layout !== null).every(p => Object.values(p.addon!.manifest.page).every(e => e.ok === false && e.refused === 'not planned'))).toBe(true)
+  })
+
   it('carries the whole add-on\'s manifest without its tail: clean pages stay, removed pages and refused pages are refused', async () => {
     const whole = wholeOf(SMALL)
     // 8 pages: 1 clean; 2 removed (R page 9, dirty boxes, units); 3 refused by the remover; 4 clean with rules; 5 removed (R page 10);

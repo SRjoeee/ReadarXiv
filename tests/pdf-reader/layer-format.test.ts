@@ -1091,9 +1091,17 @@ describe('a part against the chain', () => {
     await refused(1, p => { (p as Any).addon.manifest.sets = { R: 4 } }, 'addon.manifest.sets.R')
   })
 
-  it('refuses an add-on where the layout is null, none where it is not, and a tail the manifest does not account for', async () => {
+  it('refuses an add-on where the layout is null and a tail the manifest does not account for; a layout with no add-on is a part (M20)', async () => {
     await refused(2, p => { (p as Any).addon = { manifest: parsed(M.parts[1]!).addon.manifest, tail: null } }, 'addon')
-    await refused(0, p => { (p as Any).addon = null }, 'addon')
+    // (no add-on for the part's pages: no manifest entry, no tail, no removed page counted)
+    const bare = await partWith(0, p => { (p as Any).addon = null })
+    expect(bare.layout).not.toBeNull()
+    expect(bare.addon).toBeNull()
+    expect([bare.chain.r, bare.chain.end, bare.chain.xref, bare.chain.next, bare.chain.root]).toEqual([0, BASE.bytes, BASE.xref, null, null])
+    // (and the writer writes one: its reader reads it back)
+    const w = await writePart({ ...partInputs(M.head.sha256, M.lefts)[0]!, addon: null })
+    const back = await readPart(w.bytes, { ref: w.ref, index: M.index, chain: null })
+    expect([back.layout !== null, back.addon, back.chain.r]).toEqual([true, null, 0])
     await refused(0, p => { (p as Any).addon.manifest.appended = 1 }, 'addon.tail')
     await refused(0, p => { (p as Any).addon.tail = null }, 'addon.manifest.appended')
     await refused(0, p => { (p as Any).addon.tail = '' }, 'addon.tail')
