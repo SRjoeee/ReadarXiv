@@ -1509,3 +1509,80 @@ describe('a memory-class error goes through a reader or a writer as itself', () 
     await expect(readPart(p.bytes, { ref: p.ref, index: M.index, chain: null })).rejects.toBe(e)
   })
 })
+
+// ---------------------------------------------------------------- seeded hostile mutations of every kind
+describe('seeded hostile mutations of a valid object, every kind', () => {
+  /** a small seeded generator, so that a failure is the same failure again */
+  function random(seed: number) {
+    let s = seed >>> 0
+    return () => {
+      s = (s + 0x6d2b79f5) >>> 0
+      let t = s
+      t = Math.imul(t ^ (t >>> 15), t | 1)
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+  }
+  const POOL: unknown[] = [null, true, false, 0, -1, 1, 2, 3, 4, 1.5, -0.25, 2 ** 31 + 1, 1e300, -1e300, '', 'x', 'Para', 'para', '‮', 'x'.repeat(300), [], {}, [0], [0, 'x'], [3, 1, '}'], [4, 'a', 99, 'b'], { lead: 1 }, [1, 0, 0, 1, 1], '0'.repeat(64)]
+  const pick = <T>(r: () => number, a: readonly T[]): T => a[Math.floor(r() * a.length)] as T
+  const ownKeys = (v: unknown, out: string[] = []): string[] => {
+    if (Array.isArray(v)) for (const x of v) ownKeys(x, out)
+    else if (v !== null && typeof v === 'object' && !(v instanceof Uint8Array) && !(ArrayBuffer.isView(v)) && !(v instanceof Map)) for (const k of Object.keys(v)) { out.push(k); ownKeys((v as Record<string, unknown>)[k], out) }
+    return out
+  }
+  const nodes = (v: unknown, path: (string | number)[] = [], out: (string | number)[][] = []) => {
+    out.push(path)
+    if (Array.isArray(v)) v.forEach((x, i) => { nodes(x, [...path, i], out) })
+    else if (v !== null && typeof v === 'object') for (const k of Object.keys(v)) nodes((v as Record<string, unknown>)[k], [...path, k], out)
+    return out
+  }
+  // biome-ignore lint/suspicious/noExplicitAny: the mutator walks any JSON
+  function mutated(base: any, r: () => number): string {
+    const paths = nodes(base).filter(p => p.length)
+    const b = structuredClone(base)
+    for (let m = 1 + Math.floor(r() * 3); m > 0; m--) {
+      const path = pick(r, paths)
+      let parent = b
+      for (const k of path.slice(0, -1)) parent = parent?.[k]
+      if (parent === null || typeof parent !== 'object') continue
+      const k = path[path.length - 1] as string | number, v = parent[k], how = r()
+      if (how < 0.5) parent[k] = structuredClone(pick(r, POOL))
+      else if (how < 0.6) { if (Array.isArray(parent)) parent.splice(Number(k), 1); else delete parent[k] }
+      else if (how < 0.7) { if (Array.isArray(parent)) parent.splice(Number(k), 0, structuredClone(v)); else parent[`${k}x`] = structuredClone(v) }
+      else if (how < 0.85 && typeof v === 'number') parent[k] = pick(r, [v + 1, v - 1, -v, v * 1e6, v + 0.5])
+      else if (typeof v === 'string') parent[k] = pick(r, [`${v}x`, v.slice(1), v.toUpperCase(), `${v}\u0000`])
+      else parent[k] = structuredClone(pick(r, POOL))
+    }
+    let json = JSON.stringify(b)
+    if (r() < 0.1) json = r() < 0.5 ? json.slice(0, Math.floor(r() * json.length)) : (i => json.slice(0, i) + pick(r, ['{', '}', '[', ']', ',', ':', '"', '\\', '0', 'x']) + json.slice(i))(Math.floor(r() * json.length))
+    if (r() < 0.05) { const opens = [...json.matchAll(/\{/g)].map(m => m.index); const i = pick(r, opens) + 1; json = `${json.slice(0, i)}"${pick(r, ['__proto__', 'constructor', 'prototype'])}":${pick(r, ['0', '{}', '[]', '"x"'])},${json.slice(i)}` }
+    return json
+  }
+
+  const KINDS: { kind: 'units' | 'head' | 'part' | 'left' | 'catalog'; base: () => unknown; read: (b: Uint8Array, ref: ReturnType<typeof asRef>) => Promise<unknown> }[] = [
+    { kind: 'units', base: () => parsed(M.chunks[0]!), read: (b, ref) => readUnitsChunk(b, { ref, before: null }) },
+    { kind: 'head', base: () => parsed(M.head), read: (b, ref) => readHead(b, { ref }) },
+    { kind: 'part', base: () => parsed(M.parts[1]!), read: (b, ref) => readPart(b, { ref, index: M.index, chain: M.readParts[0]!.chain }) },
+    { kind: 'left', base: () => parsed(M.lefts[2]!), read: (b, ref) => readLeftPart(b, { ref: { ...ref, page: 2 } as never, streamOf: id => STREAM.get(id) }) },
+    { kind: 'catalog', base: () => JSON.parse(textOf(CAT.bytes)), read: b => readCatalog(b) },
+  ]
+  for (const k of KINDS) {
+    it(`${k.kind}: throws nothing but BundleRefusal, or reads`, async () => {
+      const r = random(20261015), base = k.base()
+      const outcome = { refused: 0, read: 0 }
+      for (let n = 0; n < 700; n++) {
+        const bytes = utf8(mutated(base, r))
+        try {
+          const read = await k.read(bytes, asRef(k.kind, bytes))
+          outcome.read++
+          expect(ownKeys(read).filter(x => x === '__proto__' || x === 'constructor' || x === 'prototype')).toEqual([])
+        } catch (e) {
+          if (!(e instanceof BundleRefusal)) throw new Error(`${k.kind} mutation ${n}: ${e instanceof Error ? `${e.name}: ${e.message}` : String(e)}`)
+          outcome.refused++
+        }
+      }
+      expect(outcome.refused).toBeGreaterThan(100)
+      expect(outcome.read).toBeGreaterThan(5)
+    })
+  }
+})
