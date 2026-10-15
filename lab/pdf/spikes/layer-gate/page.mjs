@@ -25,7 +25,7 @@ const WANTED = 100
 /** small capitals: lower-case letters as capitals at this share of the size (Plan 8d's CAPS_SCALE) */
 const CAPS_SCALE = 0.8
 // layout/file.mjs PH_FLAG's
-const EMPTY = 16, LOST = 32
+const EMPTY = 16, LOST = 32, OUTSIDE = 256
 
 const S = {}
 const bytes = async url => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return new Uint8Array(await r.arrayBuffer()) }
@@ -281,6 +281,15 @@ window.gate = {
       for (const row of u.ph.values()) if (row.kind === 'display') for (let s = 0; s + 5 < row.segs.length; s += 6) if (row.segs[s] === p) kept.push([row.segs[s + 1], row.segs[s + 5], row.segs[s + 3], row.segs[s + 4]])
       for (let o = 0; o + 6 < u.labels.length; o += 7) if (u.labels[o + 1] === p) kept.push([u.labels[o + 2], u.labels[o + 6], u.labels[o + 4], u.labels[o + 5]])
     }
+    // the units with a piece the file says lies outside their lines (kept where it stands), with their lines on this page
+    const outside = []
+    for (const id of index.onPage(p)) {
+      const u = index.unit(id)
+      if (![...u.ph.values()].some(row => row.flags & OUTSIDE)) continue
+      const lines = []
+      for (let o = 0; o + 7 < u.lines.length; o += 8) if (u.lines[o] === p) lines.push([u.lines[o + 1], u.lines[o + 5], u.lines[o + 2], u.lines[o + 4]])
+      outside.push({ unit: id, lines })
+    }
     const refHere = S.ref[p] ?? []
     const refOf = new Map(refHere.map(r => [r.id, r]))
     const units = []
@@ -357,13 +366,13 @@ window.gate = {
     box.append(svg)
     await document.fonts.ready
     const drawnText = done.draws.flatMap(d => d.lines.flatMap(l => l.runs.map(r => r.text))).join('').replace(/\s+/g, '')
-    S.cur = { p, page, W, H, view: page.view, O: oc.getImageData(0, 0, W, H).data, C: cc.getImageData(0, 0, W, H).data, units, kept, items, drawnText, done }
+    S.cur = { p, page, W, H, view: page.view, O: oc.getImageData(0, 0, W, H).data, C: cc.getImageData(0, 0, W, H).data, units, kept, outside, items, drawnText, done }
     return out
   },
 
   /** the pixel tier's measures of the page prepared last, its T plane the driver's screenshot (PNG, base64) */
   async analyse(b64) {
-    const { p, page, W, H, view, O, C, units, kept, items, drawnText, done } = S.cur
+    const { p, page, W, H, view, O, C, units, kept, outside, items, drawnText, done } = S.cur
     const bmp = await createImageBitmap(await (await fetch(`data:image/png;base64,${b64}`)).blob())
     const tc = new OffscreenCanvas(W, H).getContext('2d', { willReadFrequently: true })
     tc.fillStyle = '#ffffff'
@@ -372,7 +381,7 @@ window.gate = {
     const T = tc.getImageData(0, 0, W, H).data
     S.cur.T = T
     const ref = S.ref[p] ?? []
-    const m = pixelPage({ k: K, view, W, H, O, C, T, units, kept, items, ref, drawnText, cut: units.flatMap(u => u.crops.map(c => ({ ...c, unit: u.id }))) })
+    const m = pixelPage({ k: K, view, W, H, O, C, T, units, kept, outside, items, ref, drawnText, cut: units.flatMap(u => u.crops.map(c => ({ ...c, unit: u.id }))) })
     // lost ink at 2x: the copy erased and cropped before the text, against what the drawn units account for: their own
     // source glyphs, which their translation replaces. Those are the layout's glyph boxes (its erase for their lines on
     // the page), grown over the ink connected to them within the unit's own line bands (0.35 em below each baseline to
