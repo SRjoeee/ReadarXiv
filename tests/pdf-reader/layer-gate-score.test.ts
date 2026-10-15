@@ -272,6 +272,10 @@ describe('ink a crop carries (the layer gate, 2026-10-15 F)', () => {
     expect(erased([{ src: [30, 9, 40, 15], unit: 1 }]).erased).toBe(18)
     // (cut through boxes of its own ink, it carries only those: the part of the rule outside them is erased)
     expect(erased([{ src: [18, 9, 28, 15], unit: 1, clip: [[18, H - 15, 5, 6]] }]).erased).toBe(9)
+    // (the legacy instrument, page.mjs, gives the exemption no crops: graphics erased as before it, the bites still read `cut`)
+    const legacy = (cut: { src: number[]; unit: number }[]) =>
+      pixelPage({ k: 1, view: [0, 0, W, H], W, H, O, C: paper, T: paper, units: [drawnUnit], kept: [], items: [], ref: [{ id: 1, kind: 'para', orig }], drawnText: '', cut, graphicsCut: [] }) as { graphics: { erased: number } }
+    expect(legacy([{ src: [18, 9, 28, 15], unit: 1 }]).graphics.erased).toBe(18)
   })
 })
 
