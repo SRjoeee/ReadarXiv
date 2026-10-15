@@ -48,7 +48,7 @@ export function cutAt(layout: LayoutFile, left: readonly UnitWire[]): CutPart[] 
     done = Math.max(done, upTo)
     const have = new Set(mine.map(e => e.id))
     const reach = Math.max(b, ...mine.map(e => (e.last > 0 ? e.last : 0)))
-    const inPart = <T>(rows: T[], idOf: (r: T) => number) => rows.filter(r => have.has(idOf(r)))
+    const inPart = <T>(rows: T[], idOf: (r: T) => number | undefined) => rows.filter(r => have.has(idOf(r) as number))
     const lines = inPart(layout.lines, r => r[0])
     // the part's fonts by first use: its lines by unit id, then its names
     const names = layout.names.filter(r => (r[10]! & NAME_FLAG.RUN_IN ? have.has(r[11] as number) : (r[2] as number) >= a && (r[2] as number) <= b))

@@ -1612,8 +1612,9 @@ describe.skipIf(!LAB)('the real papers: units, layout files and left cut at the 
       for (const f of [layoutFile, geometryFile, sourceFile]) if (!existsSync(f)) throw new Error(`missing ${f}`)
       const id = name.replace(/v\d+$/, ''), version = Number(name.slice(id.length + 1))
       const paper = { id, version }
-      const { files } = await unpackSource(new Uint8Array(readFileSync(sourceFile)))
-      const units = bundleUnitsOf(openPaper(files))
+      const source = await unpackSource(new Uint8Array(readFileSync(sourceFile)))
+      if (!('files' in source)) throw new Error(`${name}: the source is a PDF`)
+      const units = bundleUnitsOf(openPaper(source.files))
       const layout = parseLayout(new Uint8Array(readFileSync(layoutFile)))
       expect(readFileSync(layoutFile).length).toBeLessThan(LAYOUT_CAP)
       const geometry = JSON.parse(readFileSync(geometryFile, 'utf8')) as { left: { units: UnitWireLoose[] } }
@@ -1639,7 +1640,11 @@ describe.skipIf(!LAB)('the real papers: units, layout files and left cut at the 
       let prev: string | null = null
       for (const p of cut) {
         const leftParts = []
-        for (let pg = p.pages[0]; pg <= p.pages[1]; pg++) leftParts.push(lefts[pg] = await writeLeftPart({ paper, page: pg, first: 0, tokens: tokenWire(0), spans: [], pairs: [] }))
+        for (let pg = p.pages[0]; pg <= p.pages[1]; pg++) {
+          const l = await writeLeftPart({ paper, page: pg, first: 0, tokens: tokenWire(0), spans: [], pairs: [] })
+          lefts[pg] = l
+          leftParts.push(l)
+        }
         const w = await writePart({ paper, head: head.sha256, prev, pages: p.pages, views: p.views, left: p.left, fileOnly: p.fileOnly, layout: p.layout, addon: { manifest: p.manifest, tail: null }, leftParts })
         const r = await readPart(w.bytes, { ref: w.ref, index, chain })
         readParts.push(r)
