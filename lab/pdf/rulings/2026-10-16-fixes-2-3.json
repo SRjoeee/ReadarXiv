@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-16",
+  "by": "the maintainer",
+  "on": "the 2608.16117 survey's fixes 2 and 3 (a unit on the file's lines keeps its held lines and its displays' rows alone; a forced break ends the laid line where TeX ended the original's) and the slotsSkipped instrument's forced breaks (C)",
+  "quote": "approved B + C (accept the trade; page-local S3 removes the 2608 cascade; fix the slotsSkipped instrument), 2026-10-16, relayed by the coordinator",
+  "english": "approved B + C (accept the trade; page-local S3 removes the 2608 cascade; fix the slotsSkipped instrument), 2026-10-16, relayed by the coordinator",
+  "measures": [
+    "frames past the right edge"
+  ],
+  "targets": [
+    "ja",
+    "zh"
+  ],
+  "scope": "ja 0.208 to 0.211: 1810.04805 ja p1, one more frame (2 to 3 of 5) past the original's line end, the abstract and the introduction laid in full where their citation lines were kept in English (fix 2), a CJK line-end mark; zh 0.258 to 0.261: 2608.16117 51 to 56 of 137 frames, 2 on the forced breaks' own pages (p1 unit 8, p11 unit 32), 3 net on later pages from the paper-wide fill rhythm (p2 unit 8's leading 1.51 to 1.37 holds every later page at 1.42 or less)",
+  "why": "the trade: content lost on 1810.04805 11 or 12 to 0 or 1 on every target and 4 to 0 on 2608.16117, its English text 1.46 to 0.01 percent and stray text 12 to 0 on every target, 2608.16117 translated 51.3 to 59.9 percent, and the paragraphs a forced break separates set as TeX set them; the cascade on 2608.16117 is the adaptive fill's paper-wide state, which page-local S3 removes. The full list is quality-round/fix23-final-list.md."
+}
