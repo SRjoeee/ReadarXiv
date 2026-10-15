@@ -87,9 +87,11 @@ const empty = { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }
  * dropped), `left` { pages, units }, `layout` (the layout file or null) and, if `o.image` is not given, `versions.image`.
  * `o.leftPages(page)`: the page's { first, tokens, spans, pairs? } in the left part's input (null: a page with no tokens);
  * called once for each page, in page order, as the parts that cover it are cut. `o.frontier(K, N)`: F as an array indexed by
- * page 0 to N of indices into K (-1 for none), default needFrontier. `o.chainAddon(index, { pages, layout })`: the part's
- * add-on { manifest, tail } or null, called once for each part that has a layout, in order (null: the part's pages are
- * refused, drawn by erase and restore). Without the hook, the part carries the whole's add-on manifest (`whole.addon`) without
+ * page 0 to N of indices into K (-1 for none), default needFrontier. `o.chainAddon(index, { pages, layout })`: the add-on
+ * { manifest, tail } for a candidate range of the part, or null (the part's pages are refused, drawn by erase and restore);
+ * the add-on takes part in the part's size, so the hook is called for each candidate range the size search tries (several
+ * times for one index) and must have no effect until `o.acceptAddon(index, { pages })`, called once for each part that has a
+ * layout, in order, when its range is final (a chained writer keeps its state there). Without the hook, the part carries the whole's add-on manifest (`whole.addon`) without
  * its tail: clean pages as they are, removed pages TAIL_NOT_CARRIED, refused pages refused; with no add-on in the whole, every
  * page refused. Throws BundleRefusal for a whole that
  * cannot be written (a dropped unit, a unit past the chunk caps) and `bound` for a page that no part can hold
@@ -183,9 +185,12 @@ export async function cutBundle(whole, o) {
       for (let p = a; p <= b; p++) page[p] = carry ? carriedEntry(carry, p) : { ok: false, refused: 'not planned' }
       return { manifest: { schema: 1, removal: REMOVAL, pages: N, sets: {}, page, appended: 0, stats: {} }, tail: null }
     }
-    const write = async (b, withLayout, ad = null) => {
+    // the hook is consulted for each candidate range once (the add-on is part of the part's size), so it must be free of side
+    // effects until `acceptAddon` tells it which range was kept
+    const write = async (b, withLayout) => {
       await leftTo(b)
       const x = input(b, withLayout)
+      const ad = withLayout && layout && o.chainAddon ? await o.chainAddon(parts.length, { pages: [a, b], layout: x.part }) : null
       const w = await writePart({ paper, head: head.sha256, prev, pages: x.pages, views: x.views, left: x.left, fileOnly: x.fileOnly, layout: x.part, addon: addonOf(b, withLayout, ad), leftParts: lefts.slice(a - 1, b) })
       return { w, x }
     }
@@ -218,10 +223,7 @@ export async function cutBundle(whole, o) {
         if (at === null) throw refuse('part', 'pages', `page ${a} alone passes the bounds of a part, with no layout`, { bound: 'part', page: a })
       }
     }
-    if (withLayout && layout && o.chainAddon) {
-      const ad = await o.chainAddon(parts.length, { pages: [a, b], layout: at.x.part })
-      if (ad) at = await write(b, true, ad)
-    }
+    if (withLayout && layout && o.acceptAddon) await o.acceptAddon(parts.length, { pages: [a, b] })
     const { w } = at
     parts.push(Object.assign(w, { leftParts: lefts.slice(a - 1, b) }))
     prev = w.sha256

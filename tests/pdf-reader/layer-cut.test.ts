@@ -250,6 +250,47 @@ describe('the cut of a small paper', () => {
     expect(Object.assign({}, ...hookedBack.parts.map(p => p.addon!.manifest.page))[1]).toEqual({ ok: false, refused: 'not planned' })
   })
 
+  it('lets the hook\'s add-on take part in the fit: a manifest that overflows [2,3] shortens the part, hook calls counted, acceptAddon once for each final part', async () => {
+    // 3 pages of 550 headings of 4,000 characters (2.2 MB a page): [2,3] fits alone (4.4 MB), not with 2 × 300 KB of manifest boxes
+    const units: PaperSpec['units'] = []
+    for (let p = 1; p <= 3; p++) for (let k = 0; k < 550; k++) units.push({ stream: null, lines: [p], heading: 'x'.repeat(4000) })
+    const whole = wholeOf({ pages: 3, units })
+    const heavy = (pages: number[]) => {
+      const page: Record<number, unknown> = {}
+      for (const p of pages) page[p] = { ok: true, rules: Array.from({ length: 15_000 }, () => [72, 500, 540, 500.4]).flat() }
+      return { manifest: { schema: 1 as const, removal: REMOVAL, pages: 3, sets: {}, page, appended: 0, stats: {} }, tail: null }
+    }
+    const asked: [number, number[]][] = [], accepted: [number, number[]][] = []
+    const chainAddon: NonNullable<CutOptions['chainAddon']> = (i, { pages }) => {
+      asked.push([i, pages])
+      return heavy(Array.from({ length: pages[1] - pages[0] + 1 }, (_, k) => pages[0] + k)) as never
+    }
+    const c = await cutBundle(whole, { leftPages: () => null, base: BASE_OF, chainAddon, acceptAddon: (i, { pages }) => { accepted.push([i, pages]) } })
+    expect(fits(c)).toEqual([[1, 1], [2, 2], [3, 3]])
+    expect(asked).toEqual([[0, [1, 1]], [1, [2, 3]], [1, [2, 2]], [2, [3, 3]]])
+    expect(accepted).toEqual([[0, [1, 1]], [1, [2, 2]], [2, [3, 3]]])
+    // (the add-on the hook gave is in the part that was written, and the parts read)
+    const back = await readBack(c)
+    expect(Object.keys(back.parts[1]!.addon!.manifest.page)).toEqual(['2'])
+    expect((back.parts[1]!.addon!.manifest.page[2] as { rules: number[] }).rules.length).toBe(60_000)
+  }, 120_000)
+
+  it('takes a hook that returns null as the default add-on, and calls acceptAddon for it', async () => {
+    const whole = wholeOf(SMALL)
+    const accepted: [number, number[]][] = []
+    const c = await cutBundle(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, chainAddon: () => null, acceptAddon: (i, { pages }) => { accepted.push([i, pages]) } })
+    expect(accepted).toEqual(fits(c).map((p, i) => [i, p]))
+    await checkCut('small, null hook', whole, c)
+  })
+
+  it('does not call the hook for a part with no layout, nor accept one', async () => {
+    const whole = wholeOf(SMALL, { layout: false })
+    const asked: number[] = [], accepted: number[] = []
+    await cutBundle(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, chainAddon: i => { asked.push(i); return null }, acceptAddon: i => { accepted.push(i) } })
+    expect(asked).toEqual([])
+    expect(accepted).toEqual([])
+  })
+
   it('refuses the paper whose unit was dropped, and a left unit that is no unit', async () => {
     const whole = wholeOf(SMALL)
     const dropped = { ...whole, units: whole.units.map((u, i) => (i === 3 ? null : u)) } as unknown as Whole

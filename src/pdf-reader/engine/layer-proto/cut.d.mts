@@ -35,10 +35,13 @@ export interface CutOptions {
   leftPages(page: number): LeftPageInput | null | Promise<LeftPageInput | null>
   /** F as an array indexed by page 0..N of indices into K (-1 for none); default `needFrontier` (the door's rule, need.mjs) */
   frontier?(K: readonly CutEntry[], N: number): readonly number[]
-  /** the add-on of the part just cut (its pages and layout), or null; called once for each part with a layout, in order.
-   *  (null: the part's pages are refused, drawn by erase and restore). Without the hook, `whole.addon`'s manifest is carried
+  /** the add-on for a candidate page range of part `index` (its layout part), or null (the part's pages are refused, drawn by
+   *  erase and restore). It takes part in the part's size, so the hook is called for each range the size search tries, several
+   *  times for one index, and must have no effect until `acceptAddon`. Without the hook, `whole.addon`'s manifest is carried
    *  without its tail (clean pages stay, removed pages are refused as TAIL_NOT_CARRIED), else all pages are refused */
   chainAddon?(index: number, part: { pages: [number, number]; layout: LayoutPart }): Promise<{ manifest: RemovalManifest; tail: Uint8Array | null } | null> | { manifest: RemovalManifest; tail: Uint8Array | null } | null
+  /** called once for each part that has a layout, in order, with the range that was kept: the hook's state advances here */
+  acceptAddon?(index: number, part: { pages: [number, number] }): Promise<void> | void
   base?: { bytes: number; sha256: string; xref: number }
   image?: string
   lineskip?: [number, number] | null
