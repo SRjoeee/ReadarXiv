@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { type Anchor, type DocToken, lineRects, sentenceStarts, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { readLeftPart, writeLeftPart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { type Box, pageFloats } from '@/pdf-reader/engine/view/floats.mjs'
-import { blockOf, layoutOf, pageGeometry, runsOf, sentenceOf } from '@/pdf-reader/engine/view/highlight.mjs'
+import { blockOf, clickOf, layoutOf, pageGeometry, runsOf, sentenceOf } from '@/pdf-reader/engine/view/highlight.mjs'
 import { createShapes, leftPageInput, mirror, pdfShapes } from '@/pdf-reader/engine/view/shapes.mjs'
 // the gate's own harness (SH1 on the ten papers), here on a paper of the test's
 import { cutSide, pagesAgree } from '../../lab/pdf/spikes/highlight-pages.mjs'
@@ -376,9 +376,9 @@ describe('the feed: pages and parts told again, a left part malformed, floats on
 })
 
 describe('the mirror beside a float (the right\'s sentences keep from under the left\'s floats)', () => {
-  it('a display beside a figure, inside a sentence from the page before: the right\'s row keeps to its ink as the left\'s does, and what it paints lights what it paints', () => {
-    // floats.test.ts's paper: the paragraph's sentence goes on from page 1 through a display at the head of page 2 (x
-    // 60–85) beside a figure (160–300) whose caption is under it; then the paragraph goes on under the caption
+  /** floats.test.ts's paper: the paragraph's sentence goes on from page 1 through a display at the head of page 2 (x
+   *  60–85) beside a figure (160–300) whose caption is under it; then the paragraph goes on under the caption */
+  function besideFloat() {
     const ps = [
       [...prose(780, 20, 50, 300), line('alpha beta gamma delta and words go on', 496, 50, 300), line('a sentence begins here and goes', 484, 50, 300), item('x = y', 150, 466, { eol: true })],
       [item('i = a', 60, 760, { eol: true }), line('Figure 1: the chart', 733, 160, 300), line('then the end. More words go here', 715, 50, 300), line('and here the unit ends now', 703, 50, 300), ...prose(680, 20, 50, 300)],
@@ -391,13 +391,48 @@ describe('the mirror beside a float (the right\'s sentences keep from under the 
     const rest = [1, 2].map(p => [1000 + p, d.flatMap((t, k) => (t.page === p && t.t === 'text' && !used.has(k) ? [k] : []))] as [number, number[]])
     const as = new Map<number, Anchor | null>([[0, unit] as [number, number[]], [1, cap] as [number, number[]], ...rest].map(([id, tokens]) => [id, { tokens, rects: lineRects(d, tokens), coverage: 1, bounded: true }]))
     const kinds = (id: number) => (id === 1 ? 'caption' : 'para'), vs = ps.map(() => VIEW)
-    const { parts: P, lefts: Ls } = cutSide(layoutOf(d, vs, as, kinds), as, vs)
+    const W = layoutOf(d, vs, as, kinds)
+    const starts = Int32Array.from([at('begins'), at2('more')])
+    return { W, as, vs, kinds, starts, ...cutSide(W, as, vs) }
+  }
+  const FIGURE = { x0: 160, y0: 745, x1: 300, y1: 790 }
+
+  it('a click that is the first lookup makes the page\'s floats as a hit does, on both panes: after their inputs came before the page, and after a part moved the document part', () => {
+    const { W, kinds, starts, parts: P, lefts: Ls } = besideFloat(), startsOf = (i: number) => (i === 0 ? starts : null), px = 2
+    // the gap right of the display's ink beside the figure: no sentence paints there, so a click there levels by nothing
+    const x = 120, y = 762
+    pageFloats(W, 2, [FIGURE])
+    expect(clickOf(W, 2, x, y, px, startsOf)).toBeNull()
+    // the page's floats given before its part; and the rest unit of page 2 told by a later part, which moves the document part
+    const held = P.map(p => ({ ...p, left: p.left.filter(([id]) => id !== 1002) })), late = { ...nth(P, 1), left: nth(P, 1).left.filter(([id]) => id === 1002) }
+    const l = createShapes({ kindOf: kinds }), m = mirror(l)
+    l.addParts(held)
+    l.floats(2, [FIGURE])
+    l.addPage(nth(Ls, 1))
+    l.addPage(nth(Ls, 2))
+    expect(l.shapes.click(2, x, y, px, startsOf)).toBeNull()
+    expect(m.shapes.click(2, x, y, px, startsOf)).toBeNull()
+    l.addParts([late])
+    expect(l.shapes.click(2, x, y, px, startsOf)).toBeNull()
+    const l2 = createShapes({ kindOf: kinds }), m2 = mirror(l2)
+    l2.addParts(held)
+    l2.floats(2, [FIGURE])
+    l2.addPage(nth(Ls, 1))
+    l2.addPage(nth(Ls, 2))
+    l2.addParts([late])
+    expect(m2.shapes.click(2, x, y, px, startsOf)).toBeNull()
+    // and where a sentence does paint, the click levels by its unit there as the whole layout's does
+    expect(l.shapes.click(2, 70, 762, px, startsOf)).toEqual(clickOf(W, 2, 70, 762, px, startsOf))
+  })
+
+  it('a display beside a figure, inside a sentence from the page before: the right\'s row keeps to its ink as the left\'s does, and what it paints lights what it paints', () => {
+    const { kinds, starts, parts: P, lefts: Ls } = besideFloat()
     const l = createShapes({ kindOf: kinds }), m = mirror(l)
     l.addParts(P)
     l.addPage(nth(Ls, 1))
     l.addPage(nth(Ls, 2))
-    l.floats(2, [{ x0: 160, y0: 745, x1: 300, y1: 790 }])
-    const starts = Int32Array.from([at('begins'), at2('more')]), startsOf = (i: number) => (i === 0 ? starts : null), px = 2
+    l.floats(2, [FIGURE])
+    const startsOf = (i: number) => (i === 0 ? starts : null), px = 2
     const display = (sh: typeof l.shapes) => nth(sh.runs(0).filter(r => r.page === 2 && r.rows.length === 1), 0)
     const left = l.shapes.sentence(display(l.shapes), starts, 1, px)
     expect(nth(left, 0).x1).toBeLessThan(100)
