@@ -274,6 +274,8 @@ export function layerShapes(source) {
     for (const [id, ks] of spans) if (ks.length && L.pagesOf.get(id)?.[0] === p) layoutStream(L, id, ks[0])
     made.add(p)
     wordAt.set(p, word)
+    // (the words are in the page's table now: let go, the page kept as given)
+    words.set(p, null)
     return true
   }
   reset()
@@ -298,7 +300,7 @@ export function layerShapes(source) {
   return {
     get layout() { return L },
     shapes,
-    lay(p, w) { if (words.has(p)) return false; words.set(p, w); make(p); return true },
+    lay(p, w) { if (words.has(p) || !w?.tokens) return false; words.set(p, w); make(p); return true },
     laid,
     starts(id, text, offsets, left) {
       const m = mode(id)
