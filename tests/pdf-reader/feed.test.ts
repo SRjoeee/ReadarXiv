@@ -271,6 +271,55 @@ describe('the feed: the bytes, and an abort that is not the feed\'s', () => {
   })
 })
 
+describe('the feed: the PR\'s review', () => {
+  it('a catalog that names a shorter chain: the parts read past it let go, the end at the catalog\'s (4288064787)', async () => {
+    const M = await made()
+    const f = createFeed({ fetchObject: server(M).fetchObject })
+    f.tell({ head: M.head.ref, units: M.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(M, i)) })
+    await flush()
+    expect(f.state().parts.length).toBe(3)
+    f.tell({ parts: [catalogRef(M, 0)], end: { through: 1 } })
+    await flush()
+    expect(shas(f.state().parts)).toEqual([M.parts[0]!.sha256])
+    expect(f.state().ended).toBe(true)
+    f.dispose()
+  })
+
+  it('a head whose fetch fails is refused as the head (4288065447)', async () => {
+    const M = await made()
+    const s = server(M)
+    s.refuse.add(M.head.sha256)
+    const f = createFeed({ fetchObject: s.fetchObject })
+    f.tell({ head: M.head.ref, units: M.chunks.map(c => c.ref) })
+    expect(await f.index()).toBeNull()
+    expect(f.state().refused).toBe('head')
+    f.dispose()
+  })
+
+  it('reads an index of two units chunks, each chunk\'s bytes let go once it is read (4288144918)', async () => {
+    const { writeHead, writeUnitChunks } = await import('@/pdf-reader/engine/layer-proto/format.mjs')
+    const paper = { id: '2608.04322', version: 1 }
+    // units past one chunk's 2 MiB: two chunks
+    const units = Array.from({ length: 150 }, (_, i) => ['para', 0, null, null, null, [[0, `${i} ${'x'.repeat(15_000)}`]]] as never)
+    const chunks = await writeUnitChunks({ paper, units })
+    expect(chunks.length).toBe(2)
+    const head = await writeHead({ paper: { ...paper, pages: 1 }, base: { bytes: 10_000, sha256: '0123456789abcdef'.repeat(4), xref: 9_000 }, image: '1', units: chunks, lineskip: null })
+    let release!: () => void
+    const late = new Promise<void>(r => { release = r })
+    const objects = new Map([...chunks, head].map(w => [w.sha256, w.bytes]))
+    const f = createFeed({ fetchObject: async (ref: Ref) => { if (ref.sha256 === chunks[1]!.sha256) await late; return objects.get(ref.sha256)! } })
+    f.tell({ head: head.ref })
+    await flush(60)
+    // the first chunk read, the second's fetch awaited: the first's bytes let go
+    expect(f.state().held).toBe(1)
+    release()
+    const index = await f.index()
+    expect(index?.units.length).toBe(150)
+    expect(f.state().held).toBe(0)
+    f.dispose()
+  })
+})
+
 describe('the feed: dispose', () => {
   it('lets the fetches go and resolves no index after it', async () => {
     const M = await made()

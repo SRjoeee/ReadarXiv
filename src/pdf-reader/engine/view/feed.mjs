@@ -61,7 +61,7 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
     if (reading || index || refused || !headRef) return
     reading = true
     try {
-      const head = await readHead(await fetch(headRef), { ref: refOf(headRef) }).catch(e => { throw coded(e, 'head') })
+      const head = await fetch(headRef).then(b => readHead(b, { ref: refOf(headRef) })).catch(e => { throw coded(e, 'head') })
       bytes.delete(headRef.sha256)
       if (gone()) return
       // the head names its chunks: fetched at once, read in id order (each after the one before)
@@ -72,6 +72,8 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
       for (let i = 0; i < head.units.length; i++) {
         const b = await got[i]
         chunks.push(await readUnitsChunk(b, { ref: refOf(head.units[i]), before: chunks.at(-1) ?? null }).catch(e => { throw coded(e, 'units') }))
+        // (each chunk's bytes let go once it is read, not at the index: a later chunk may be long in coming)
+        bytes.delete(head.units[i].sha256)
         if (gone()) return
       }
       index = indexOf(head, chunks)
@@ -139,6 +141,8 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
       do {
         rechain = false
         const at = gen
+        // a chain told shorter (a catalog's): what was read past it let go
+        if (read.length > told.length) { read = read.slice(0, told.length); changed() }
         for (let i = 0; i < told.length && !disposed && at === gen; i++) {
           const r = told[i]
           if (read[i]?.sha256 === r.sha256) continue
