@@ -102,13 +102,23 @@ export function pageLayout(kindOf = () => undefined) {
  * The document part, as parts come (format.mjs ReadPart: its `pages` [a, b], `views` of pages a … reach, stride 4, and
  * `left`, its units [id, stream, rects], rects [page, x0, y0, x1, y1]): a page's view and a unit as first told, the
  * document part made again of every unit told so far, by id rising, and every page's geometry let go, to be made again
- * from it — the columns' edges, the half leadings and the floats' frames are the document's
+ * from it — the columns' edges, the half leadings and the floats' frames are the document's. Parts that tell no view
+ * and no unit not told before change nothing, and keep every page's geometry (false)
  */
 export function layoutParts(L, parts) {
+  let told = false
   for (const { pages, views, left } of parts) {
-    for (let i = 0; 4 * i < views.length; i++) L.views[pages[0] - 1 + i] ??= views.slice(4 * i, 4 * i + 4)
-    for (const [id, stream, rects] of left) if (!L.told.has(id)) L.told.set(id, { stream, rects: rects.map(([page, x0, y0, x1, y1]) => ({ page, x0, y0, x1, y1 })) })
+    for (let i = 0; 4 * i < views.length; i++) {
+      const at = pages[0] - 1 + i
+      if (!L.views[at]) { L.views[at] = views.slice(4 * i, 4 * i + 4); told = true }
+    }
+    for (const [id, stream, rects] of left) {
+      if (L.told.has(id)) continue
+      L.told.set(id, { stream, rects: rects.map(([page, x0, y0, x1, y1]) => ({ page, x0, y0, x1, y1 })) })
+      told = true
+    }
   }
+  if (!told) return false
   const units = [...L.told].sort((a, b) => a[0] - b[0])
   Object.assign(L, documentOf(Array.from(L.views, v => v ?? null), units.map(([id, u]) => [id, u.rects]), L.kindOf))
   for (const [id, u] of units) if (!L.anchors.has(id)) L.anchors.set(id, { rects: u.rects, tokens: tokensOf(L, id, u.stream) })
@@ -116,6 +126,7 @@ export function layoutParts(L, parts) {
   L.indents.clear()
   L.frames = undefined
   L.floats = undefined
+  return true
 }
 
 /**

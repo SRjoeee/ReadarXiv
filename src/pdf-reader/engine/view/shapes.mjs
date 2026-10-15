@@ -85,9 +85,11 @@ export function createShapes({ kindOf = () => undefined, warn = warnOnce } = {})
     try { pageFloats(L, p, at.regions, at.paths) } catch (e) { floatsIn.delete(p); L.floats?.delete(p); once(`the floats of page ${p}`, e) }
   }
   const refuse = (page, e) => once(`the left part of page ${page}`, e)
-  // the float a unit lights and what a point lights read its pages' floats, made then
+  // the float a unit lights, what a point lights and a sentence's shape (which keeps from under a float, highlight.mjs
+  // reachAt) read their pages' floats, made then
   const shapes = {
     ...base,
+    sentence: (run, starts, s, padX) => { floatsOn(run.page); return base.sentence(run, starts, s, padX) },
     float: id => { for (const p of L.pagesOf.get(id) ?? []) floatsOn(p); return base.float(id) },
     hit: (page, x, y, padX, startsOf) => { floatsOn(page); return base.hit(page, x, y, padX, startsOf) },
   }
@@ -97,10 +99,10 @@ export function createShapes({ kindOf = () => undefined, warn = warnOnce } = {})
     layout: L,
     shapes,
     /** parts told (format.mjs ReadPart: pages, views, left): the document part as they come, in page order; the mirrors
-     *  told them too. No page's geometry nor floats made here: each on its next use */
+     *  told them too. No page's geometry nor floats made here: each on its next use. A part telling nothing new changes
+     *  nothing, and is not passed on */
     addParts(parts) {
-      if (!parts.length) return
-      layoutParts(L, parts)
+      if (!parts.length || !layoutParts(L, parts)) return
       state.parts.push(...parts)
       for (const f of state.followers) f.addParts(parts)
     },
@@ -172,7 +174,8 @@ const copyPart = part => ({ pages: [...part.pages], views: [...part.views], left
  * of what `source` (createShapes) was told and is told from now on — each part's rectangles and each page's tokens —, so
  * that its runs, blocks and sentence shapes equal the left's from objects of its own. A float, and its shapes, pass
  * through (the right's floats are the left's: lighting a float on the right lights the left's); what a point lights is
- * the right's own runs, the floats the left's. `dispose` stops following the source
+ * the right's own runs, the floats the left's; a sentence keeps from under the left's floats, as the left's sentence
+ * does. `dispose` stops following the source
  */
 export function mirror(source) {
   const state = told.get(source.shapes)
@@ -185,15 +188,18 @@ export function mirror(source) {
   if (state.parts.length) follower.addParts(state.parts)
   for (const input of state.pages.values()) follower.addPage(input)
   state.followers.add(follower)
+  // a sentence keeps from under the floats painted on its page (highlight.mjs reachAt), here the left's: the right's
+  // layout reads the left's floats, made then, as they are now (their map is let go and made again with the left's)
+  const floatsOf = p => { state.floatsOn(p); R.floats = source.layout.floats }
   const shapes = {
     runs: own.runs,
     block: own.block,
-    sentence: own.sentence,
+    sentence: (run, starts, s, padX) => { floatsOf(run.page); return own.sentence(run, starts, s, padX) },
     fits: own.fits,
     click: own.click,
     float: from.float,
     floatShapes: from.floatShapes,
-    hit: (page, x, y, padX, startsOf) => { state.floatsOn(page); return floatHitOf(source.layout, page, x, y, padX, hitOf(R, page, x, y, padX, startsOf)) },
+    hit: (page, x, y, padX, startsOf) => { floatsOf(page); return floatHitOf(source.layout, page, x, y, padX, hitOf(R, page, x, y, padX, startsOf)) },
   }
   return { layout: R, shapes, forget: p => { R.cache.delete(p) }, dispose: () => { state.followers.delete(follower) } }
 }

@@ -914,7 +914,8 @@ within noise.
   `createShapes`). On the layer path the left's tokens come a page at a time (the door's `leftPageOf`, on the first want
   of the page) and its units' rectangles a part at a time. The document part — each page's columns, the columns' text
   edges, the half leadings — is made again of every unit told whenever a part comes, and each page's geometry made before
-  is let go and made again from it; a page's part is its left part's tokens and spans when it lands. Built so, in any
+  is let go and made again from it (a part that tells no view or unit not told before changes nothing); a page's part
+  is its left part's tokens and spans when it lands. Built so, in any
   order, it is the layout made whole: on the ten papers, both sides cut as the wire carries them and made again with the
   pages shuffled among the parts, every page's geometry (4 049 runs on 483 pages) and every sentence shape (7 669, of
   2 340 units' starts read from their pairs) equal the whole layout's (the highlight gate, 2026-10-15).
@@ -928,7 +929,8 @@ within noise.
 - **The right, mirrored** (`mirror`): until the layer's pages bring words of their own, the right's shapes are a layout of
   the right's own over copies of the left's tokens and rectangles, following the left as it is told. Its blocks equal
   the left's from run objects of its own: the paint keeps what it drew by the run, and a run shared would move the left's
-  element into the right's pane. A float passes through (the right's floats are the left's). The right has no starts
+  element into the right's pane. A float passes through (the right's floats are the left's), and the right's sentence
+  shapes keep from under it as the left's do. The right has no starts
   yet, so every unit lights whole on both panes; the same calls light sentences once it has.
 - **The left's starts** are its units' pairs (the left part's runs of words to tokens) read as `sentenceStarts` reads an
   anchor's, once every page the unit is on has come. The reader takes every pair shipped, so the producer ships them only

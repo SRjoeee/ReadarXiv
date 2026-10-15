@@ -289,12 +289,27 @@ describe('the feed: pages and parts told again, a left part malformed, floats on
   const cacheOf = (layout: object) => (layout as { cache: Map<number, unknown> }).cache
   const { parts, lefts } = cutSide(whole, anchors, views)
 
-  it('a page given again changes nothing (false); a part told again leaves every page as it was', () => {
-    const h = built([1, 2, 3]), runs = h.shapes.runs(5)
+  /** the parts with unit 6 (page 3) held back, and a part that tells it alone, later: a part that moves the document part */
+  const held = parts.map(p => ({ ...p, left: p.left.filter(([id]) => id !== 6) }))
+  const late = { ...nth(parts, 1), left: nth(parts, 1).left.filter(([id]) => id === 6) }
+  function builtLate() {
+    const h = createShapes({ kindOf })
+    h.addParts(held)
+    for (const p of [1, 2, 3]) h.addPage(nth(lefts, p))
+    return h
+  }
+
+  it('a page given again changes nothing (false); a part told again changes nothing either: every page\'s runs and floats kept, the same objects, the mirror told nothing', () => {
+    const h = built([1, 2, 3]), m = mirror(h), runs = h.shapes.runs(5), mine = m.shapes.runs(5)
+    h.floats(2)
+    const f = h.shapes.float(4)
     expect(h.addPage(nth(lefts, 2))).toBe(false)
     expect(nth(h.shapes.runs(5), 0)).toBe(nth(runs, 0))
     h.addParts(parts)
-    expect(h.shapes.runs(5)).toEqual(runs)
+    h.addParts([nth(parts, 1)])
+    expect(nth(h.shapes.runs(5), 0)).toBe(nth(runs, 0))
+    expect(h.shapes.float(4)).toBe(f)
+    expect(nth(m.shapes.runs(5), 0)).toBe(nth(mine, 0))
   })
 
   it('a malformed left part goes to the refusal: one warning, nothing thrown, a good one taken after', () => {
@@ -333,29 +348,69 @@ describe('the feed: pages and parts told again, a left part malformed, floats on
   })
 
   it('a part makes no page again in its own task: floats come back on their next use, from the page\'s geometry made then', () => {
-    const h = built([1, 2, 3])
+    const h = builtLate()
     h.floats(2)
     expect(h.shapes.float(4)).toMatchObject({ id: 4, kind: 'table' })
-    h.addParts(parts)
+    h.addParts([late])
     expect(cacheOf(h.layout).size).toBe(0)
     expect(h.shapes.float(4)).toMatchObject({ id: 4, kind: 'table' })
     expect(cacheOf(h.layout).has(2)).toBe(true)
-    // the float the whole layout makes of the same page
+    // the float the whole layout makes of the same page; the unit told late lit from its page's tokens given before
     const W = layoutOf(doc, views, anchors, kindOf), [f] = pageFloats(W, 2)
     expect(h.shapes.float(4)).toEqual(f)
+    expect(h.shapes.runs(6)).toEqual(runsOf(whole, 6))
   })
 
   it('forget lets a page\'s floats and their inputs go: no part makes them again, the caller gives them again on its redraw', () => {
-    const h = built([1, 2, 3])
+    const h = builtLate()
     h.floats(2)
     expect(h.shapes.float(4)).not.toBeNull()
     h.forget(2)
     expect(h.shapes.float(4)).toBeNull()
-    h.addParts(parts)
+    h.addParts([late])
     expect(h.shapes.float(4)).toBeNull()
     expect(cacheOf(h.layout).has(2)).toBe(false)
     h.floats(2)
     expect(h.shapes.float(4)).toMatchObject({ id: 4, kind: 'table' })
+  })
+})
+
+describe('the mirror beside a float (the right\'s sentences keep from under the left\'s floats)', () => {
+  it('a display beside a figure, inside a sentence from the page before: the right\'s row keeps to its ink as the left\'s does, and what it paints lights what it paints', () => {
+    // floats.test.ts's paper: the paragraph's sentence goes on from page 1 through a display at the head of page 2 (x
+    // 60–85) beside a figure (160–300) whose caption is under it; then the paragraph goes on under the caption
+    const ps = [
+      [...prose(780, 20, 50, 300), line('alpha beta gamma delta and words go on', 496, 50, 300), line('a sentence begins here and goes', 484, 50, 300), item('x = y', 150, 466, { eol: true })],
+      [item('i = a', 60, 760, { eol: true }), line('Figure 1: the chart', 733, 160, 300), line('then the end. More words go here', 715, 50, 300), line('and here the unit ends now', 703, 50, 300), ...prose(680, 20, 50, 300)],
+    ]
+    const d = tokenizeDocument(ps.map((items, i) => ({ page: i + 1, items, styles: {} })))
+    const at = (t: string, from = 0) => d.findIndex((w, k) => k >= from && w.t === t), p2 = d.findIndex(w => w.page === 2), at2 = (t: string) => at(t, p2)
+    const range = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => a + i)
+    const unit = [...range(at('alpha'), at2('a')), ...range(at2('then'), at2('now'))], cap = range(at2('figure'), at2('chart'))
+    const used = new Set([...unit, ...cap])
+    const rest = [1, 2].map(p => [1000 + p, d.flatMap((t, k) => (t.page === p && t.t === 'text' && !used.has(k) ? [k] : []))] as [number, number[]])
+    const as = new Map<number, Anchor | null>([[0, unit] as [number, number[]], [1, cap] as [number, number[]], ...rest].map(([id, tokens]) => [id, { tokens, rects: lineRects(d, tokens), coverage: 1, bounded: true }]))
+    const kinds = (id: number) => (id === 1 ? 'caption' : 'para'), vs = ps.map(() => VIEW)
+    const { parts: P, lefts: Ls } = cutSide(layoutOf(d, vs, as, kinds), as, vs)
+    const l = createShapes({ kindOf: kinds }), m = mirror(l)
+    l.addParts(P)
+    l.addPage(nth(Ls, 1))
+    l.addPage(nth(Ls, 2))
+    l.floats(2, [{ x0: 160, y0: 745, x1: 300, y1: 790 }])
+    const starts = Int32Array.from([at('begins'), at2('more')]), startsOf = (i: number) => (i === 0 ? starts : null), px = 2
+    const display = (sh: typeof l.shapes) => nth(sh.runs(0).filter(r => r.page === 2 && r.rows.length === 1), 0)
+    const left = l.shapes.sentence(display(l.shapes), starts, 1, px)
+    expect(nth(left, 0).x1).toBeLessThan(100)
+    expect(m.shapes.sentence(display(m.shapes), starts, 1, px)).toEqual(left)
+    // on the right, what is painted lights what is painted: the sentence on its row, the figure beside it
+    const shapes = [0, 1, 2].map(s => m.shapes.runs(0).filter(r => r.page === 2).flatMap(r => m.shapes.sentence(r, starts, s, px)))
+    const bad: string[] = []
+    for (let x = 40.25; x < 320; x += 1.5) for (let y = 690.25; y < 790; y += 1.5) {
+      const ins = shapes.flatMap((rs, s) => (rs.some(r => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1) ? [s] : []))
+      const h = m.shapes.hit(2, x, y, px, startsOf), mine = h?.id === 0 ? h.s : null
+      if (ins.length > 1 || (ins.length ? mine !== ins[0] : mine !== null)) bad.push(`${x},${y}: ${ins} ${JSON.stringify(h && { id: h.id, s: h.s })}`)
+    }
+    expect(bad.slice(0, 5)).toEqual([])
   })
 })
 

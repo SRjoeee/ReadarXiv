@@ -20,8 +20,9 @@ export interface PageTable { n: number; l: Float32Array; r: Float32Array; y: Flo
 export interface PartRects { readonly pages: readonly [number, number]; readonly views: readonly number[]; readonly left: readonly UnitWire[] }
 /** a side's layout made page by page: empty until told (layoutParts, layoutPage) */
 export declare function pageLayout(kindOf?: (id: number) => string | undefined): Layout
-/** the document part made again with these parts' views and units; every page's geometry made again from it */
-export declare function layoutParts(layout: Layout, parts: readonly PartRects[]): void
+/** the document part made again with these parts' views and units, every page's geometry let go; false where they told
+ *  nothing new, every page's geometry kept */
+export declare function layoutParts(layout: Layout, parts: readonly PartRects[]): boolean
 /** a page's part: its tokens, ids from `first`, and each unit's tokens there; false where it was given already; a
  *  RangeError where its ids reach into another page's */
 export declare function layoutPage(layout: Layout, page: number, part: { first: number; table: PageTable; spans: readonly (readonly [number, ArrayLike<number>])[] }): boolean
