@@ -1,9 +1,11 @@
 // json.mjs's types (JavaScript until the engine's port), for the reader's tests
 /** a file refused: where (a JSON path, e.g. 'lines[3][1][17]') and why */
 export declare class LayoutRefusal extends Error {
-  constructor(path: string, why: string)
+  constructor(path: string, why: string, bound?: 'rows' | null)
   readonly path: string
   readonly why: string
+  /** 'rows' where the refusal is a total passing its bound (a layout part's lines, names, fonts or page text), else null */
+  readonly bound: 'rows' | null
 }
 /** the values a JSON text holds (every object, array, string, number, true, false, null), counted outside strings
  *  without parsing, stopped once past `max` (the web's src/shared/json-values.ts valuesOf, written anew here) */

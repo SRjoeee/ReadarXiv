@@ -102,7 +102,7 @@ const r3 = v => Math.round(v * 1000) / 1000
 /** a layout module's refusal at `path` of the object, as the format's; any other error as it is */
 function inside(kind, path, fn) {
   try { return fn() } catch (e) {
-    if (e instanceof LayoutRefusal) throw refuse(kind, e.path ? sub(path, e.path) : path, e.why)
+    if (e instanceof LayoutRefusal) throw new BundleRefusal(e.why, { kind, path: e.path ? sub(path, e.path) : path, ...(e.bound ? { data: { bound: e.bound } } : {}) })
     throw e
   }
 }
@@ -228,12 +228,14 @@ const encoder = new TextEncoder()
  *  bounds that too (a part: less its tail's base64) */
 async function finish(kind, text, def, paper, pos, contentOf = null, vtag = null) {
   const bytes = encoder.encode(text)
-  if (bytes.length > def.cap) throw refuse(kind, '', `${bytes.length} bytes, past ${def.cap}`)
+  // (`data.bound` tells which bound a writer's output passed, for the cut, which closes a part before it does)
+  const past = (why, bound, size, max) => new BundleRefusal(why, { kind, path: '', data: { bound, size, max } })
+  if (bytes.length > def.cap) throw past(`${bytes.length} bytes, past ${def.cap}`, 'bytes', bytes.length, def.cap)
   const n = inside(kind, '', () => countValues(text, def.values, def.depth))
-  if (n > def.values) throw refuse(kind, '', `more than ${def.values} values`)
+  if (n > def.values) throw past(`more than ${def.values} values`, 'values', n, def.values)
   if (contentOf !== null) {
     const content = contentOf(bytes.length)
-    if (content > CONTENT_MAX) throw refuse(kind, '', `${content} bytes of content, past ${CONTENT_MAX}`)
+    if (content > CONTENT_MAX) throw past(`${content} bytes of content, past ${CONTENT_MAX}`, 'content', content, CONTENT_MAX)
   }
   const sha256 = await digestOf(bytes)
   const key = kind === 'catalog' ? catalogKey(paper.id, paper.version, vtag) : keyOf(paper.id, paper.version, CTAG4, sha256)
@@ -812,6 +814,8 @@ function manifestText(m) {
  */
 export async function writePart({ paper, head, prev, pages, views, left, fileOnly, layout, addon, leftParts }) {
   const K = 'part'
+  // (a tail past TAIL_CAP is the cut's to answer with a shorter part: E3's writer keeps one page's tail within it)
+  if (addon !== null && addon.tail !== null && addon.tail.length > TAIL_CAP) throw new BundleRefusal(`more than ${TAIL_CAP} bytes (${addon.tail.length})`, { kind: K, path: 'addon.tail', data: { bound: 'tail', size: addon.tail.length, max: TAIL_CAP } })
   const obj = {
     bundle: BUNDLE4, kind: 'part', head, prev, pages: [pages[0], pages[1]],
     views: views.map(r3),
