@@ -156,7 +156,13 @@ export function displayCover(lu, unit, kOf) {
   }
   const runs = all.filter(run => !metBy(run, false) || metBy(run, true)), runOf = new Map()
   runs.forEach((run, n) => { for (const j of run) runOf.set(j, n) })
-  const rowBetween = (a, b) => { for (const k of lu.ph.keys()) if (k > a && k < b) return true; return false }
+  // (the rows' source indices sorted once, each boundary a binary search: a unit may hold thousands of pieces)
+  const rowKs = Float64Array.from(lu.ph.keys()).sort()
+  const rowBetween = (a, b) => {
+    let lo = 0, hi = rowKs.length
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (rowKs[mid] <= a) lo = mid + 1; else hi = mid }
+    return lo < rowKs.length && rowKs[lo] < b
+  }
   const textBetween = (a, b) => { for (let k = a + 1; k < b; k++) if (!placed.has(k)) return true; return false }
   // the groups; `open`: one whose boundary with the group before it the file does not give (LOST both, text between)
   const groups = []
