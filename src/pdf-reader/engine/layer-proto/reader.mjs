@@ -96,9 +96,9 @@ function addShapes(by, units) {
  *   addPart(part, { doc })  the next part (readPart's), with the composed document through its tail where it has one
  *   endParts()           no more parts: every page no part covers fails
  *   pageState(page), onPage(listener)  each page's state, and each change told once: laying, then ready or failed
- *   pageOf(page, { lang, signal })  the page laid, a new LaidPage each call (its SVG a clone, lang set; words and links
- *                        empty until the engine's 2b and 3a); it waits for what the page needs, and rejects where the page
- *                        fails, the layer is let go or the signal aborts
+ *   pageOf(page, { lang, signal })  the page laid, a new LaidPage each call (its SVG made anew of the page's kept markup, lang
+ *                        set; words and links empty until the engine's 2b and 3a); it waits for what the page needs, and
+ *                        rejects where the page fails, the layer is let go or the signal aborts
  *   leftPageOf(page, { signal })  the page's left part, fetched once through leftPart and read, once a part covers it
  *   copyOf(page, source, k)  a ready page's copy at a view's resolution, over `source` (the page as PDF.js drew it at k)
  *   unitAt(page, x, y)   the unit of the left whose shape holds the point (PDF units), the smallest; null where none
@@ -173,7 +173,9 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   const letGoError = () => new Error('openLayer: the layer was let go (dispose)')
   // (proof: a unit read with no layout file (none for the paper, or a part's `layout: null`) is still under the proof, which
   // nothing then proves but TeX's own nothing, a space and a text symbol, so no unproven crop or source text is drawn)
-  const common = { units: [], expect, groups, target, scale: SCALE, dpr: 1, copy: false, proof: true, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, onStep: () => evaluate() }
+  // (the memory contract, the 1b design §3: each page's analysis state let go once it is laid and read by nothing more, each
+  // unit's once it is painted; the units' records and the audit, the gate's, not kept: their counts alone)
+  const common = { units: [], expect, groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, proof: true, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, onStep: () => evaluate() }
   run = await openProto(four
     ? {
         ...common, parts: true, doc, pages: index.head.paper.pages, onRetired,
@@ -193,17 +195,15 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
 
   const live = () => { if (disposed) throw letGoError() }
   const pageIn = page => { if (!Number.isSafeInteger(page) || page < 1 || page > N) throw new RangeError(`page: 1 to ${N}, not ${typeof page === 'number' ? page : kindOf(page)}`) }
-  /** a ready page as a host keeps it: a new element of the run's markup, its lang set; words and links empty until the
-   *  engine's 2b and 3a (their shapes are fixed now) */
+  /** a ready page as a host keeps it: a new element made of the page's kept markup (run.svgOf: no layout, face, ink or PDF.js
+   *  call), its lang set; words and links new empty data until the engine's 2b and 3a (their shapes are fixed now). The run
+   *  holds no element of a page: a host drops a far page's and asks again */
   const fresh = (page, lang) => {
     const r = run.rows[page - 1]
-    const svg = r.svg.cloneNode(true)
+    const svg = run.svgOf(page)
     svg.setAttribute('lang', lang)
     return { svg, w: r.w, h: r.h, words: { tokens: [], spans: [], original: [] }, links: [] }
   }
-  /** every page up to `page` done let go (its canvases; its SVG and drawing stay): as the gate asks for its pages, a page let
-   *  go before the units of the next are laid */
-  const release = page => { for (let q = 1; q <= page; q++) if (!run.rows[q - 1]?.released) run.release(q) }
   const off = a => { if (a.signal && a.onAbort) a.signal.removeEventListener('abort', a.onAbort) }
 
   // ---- readiness: one pass over the pages, after each event (the door design §3)
@@ -243,7 +243,6 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
         if (state === 'ready') a.resolve(fresh(p, a.lang))
         else a.reject(new Error(`page ${p} failed: ${run.through < p ? 'no part covers it' : 'its page could not be drawn'}`))
       }
-      if (state === 'ready') release(p)
     }
     // (told once the state has changed: a call a listener makes runs after, and a listener that throws stops no other)
     for (const [p, state] of changes) for (const l of [...listeners]) { try { l(p, state) } catch { /* a listener's own error */ } }
@@ -377,7 +376,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       if (dead && told[page] !== READY) return Promise.reject(dead)
       if (told[page] === FAILED) return Promise.reject(new Error(`page ${page} failed`))
       // (answered in a microtask: a dispose or an abort in between rejects it, as they reject every pending ask)
-      if (told[page] === READY) return Promise.resolve().then(() => { live(); if (signal?.aborted) throw abortError(); release(page); return fresh(page, lang) })
+      if (told[page] === READY) return Promise.resolve().then(() => { live(); if (signal?.aborted) throw abortError(); return fresh(page, lang) })
       return new Promise((resolve, reject) => {
         const a = { resolve, reject, lang, signal, onAbort: null }
         if (signal) {
@@ -460,7 +459,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       }
       let slowestTaskMs = 0
       for (const ms of run.ms.values()) if (ms > slowestTaskMs) slowestTaskMs = ms
-      return { units: expect.length, drawn: run.stats.length, pages, slowestTaskMs, pageMs, dropped, rules: { schema: run.rules.schema, version: run.rules.version }, parts: { through: chain.through, told: toldParts.size } }
+      return { units: expect.length, drawn: run.drawn, pages, slowestTaskMs, pageMs, dropped, rules: { schema: run.rules.schema, version: run.rules.version }, parts: { through: chain.through, told: toldParts.size } }
     },
     dispose() {
       if (disposed) return

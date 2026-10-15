@@ -570,6 +570,8 @@ describe('the job log is public: the gate\'s output is filtered before it is ech
     expect(publicLine(`completeness (spec §5): 1 of 29 outputs fail: ${NAME} [missing, twice]`)).toContain(`${NAME} [missing, twice]`)
     // (a measure of TeX's file gated at 0 by the pull request that removed its cause: a drawn line over a display)
     expect(publicLine(`completeness (spec §5): 1 of 30 outputs fail: ${NAME} [textInDisplay]`)).toContain(`${NAME} [textInDisplay]`)
+    // (a unit whose record the run could not make: drawn, measured by nothing)
+    expect(publicLine(`completeness (spec §5): 1 of 30 outputs fail: ${NAME} [recordErrors]`)).toContain(`${NAME} [recordErrors]`)
     expect(publicLine('completeness (spec §5): every one of 29 outputs passes')).toContain('every one of 29')
   })
   it('holds back everything else: a stack, a reason, a table, a line of a debug print, an ok line that carries more than numbers', () => {

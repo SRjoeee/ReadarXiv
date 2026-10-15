@@ -116,7 +116,7 @@ const result = await tab.evaluate(async ({ fixture, pages, again, zooms }) => {
   const canvases = run.rows.reduce((a, r) => a + [r.left, r.right].filter(Boolean).reduce((b, c) => b + c.width * c.height * 4, 0), 0)
   const ops = run.rows.reduce((a, r) => a + (r.ops?.length ?? 0), 0)
   const opsBytes = run.rows.reduce((a, r) => a + JSON.stringify(r.ops ?? []).length, 0)
-  const svgBytes = run.rows.reduce((a, r) => a + r.svg.outerHTML.length, 0)
+  const svgBytes = run.rows.reduce((a, _, i) => a + run.svgOf(i + 1).outerHTML.length, 0)
   const images = [...kept.values()].reduce((a, k) => a + k.bytes, 0)
   return { vector, N, pages: pageRows, later, memory: { heap: performance.memory?.usedJSHeapSize ?? null, canvases, images, ops, opsBytes, svgBytes } }
 }, { fixture: FIXTURE, pages: PAGES, again: AGAIN, zooms: ZOOMS })
