@@ -362,6 +362,10 @@ export async function readUnitsChunk(bytes, { ref, before = null, dropped: dropp
     if (unitStands(units[i], from + i, stands)) stands[from + i] = 1
     else { units[i] = null; dropped.push(from + i) }
   }
+  // (a paper with more dropped units than a service forwards is junk: the chain is read as the standalone start would be told it)
+  let lost = 0
+  for (let i = 0; i <= to; i++) if (stands[i] === 0) lost++
+  if (lost > DROPPED_MAX) throw refuse(K, 'dropped', `more than ${DROPPED_MAX} units that do not stand`)
   const out = { kind: 'units', sha256, bytes: bytes.length, values, paper: { id: paper.id, version: paper.version }, pipeline: v.pipeline, from, to, units, dropped, stands }
   if (!bodies) {
     // (bodies-free, amendment M21: what the index keeps of each unit, worked out now, and the bodies let go with the parsed text)
@@ -398,8 +402,9 @@ function recordsOf(units, from = 0, standsBefore = null) {
   const n = units.length
   const kind = new Uint8Array(n).fill(KIND_NONE), flags = new Uint8Array(n), depth = new Int8Array(n).fill(DEPTH_NONE), plainLength = new Uint32Array(n)
   const cells = new Map(), headings = new Map()
-  // (a chunk alone: the units before it are stand-ins that stand where the chunks before it say, which is all a nested piece asks of one)
-  const list = from === 0 ? units : [...Array.from({ length: from }, (_, i) => (standsBefore[i] === 1 ? STANDS : null)), ...units]
+  // (a chunk alone: all a nested piece asks of an earlier unit is that it stands, so the units are worked on with the earlier ids
+  // they name alone, as stand-ins that stand where the chunks before say, and the ids made local: nothing is sized by `from`)
+  const { list, at } = from === 0 ? { list: units, at: 0 } : localUnits(units, from, standsBefore)
   const source = sourceUnitsOf({ units: list })
   for (let i = 0; i < n; i++) {
     const b = units[i]
@@ -408,7 +413,7 @@ function recordsOf(units, from = 0, standsBefore = null) {
     if (k >= 0) kind[i] = k
     flags[i] = b[1] | (b[0] === 'author' ? RECORD_FLAG.AUTHOR : 0)
     if (b[2] !== null) depth[i] = b[2]
-    const u = source[from + i]
+    const u = source[at + i]
     if (!u) continue
     const plain = plainSource(u)
     plainLength[i] = plain.length
@@ -446,6 +451,26 @@ function indexGroups(index) {
 }
 
 const STANDS = Object.freeze(['para', 0, null, null, null, []])
+/**
+ * A chunk's units with the earlier ids they name made local (rows.mjs reads a nested piece as the unit of that index, and asks
+ * it to be there): a slot for a unit that does not stand, one stand-in for each earlier unit that stands and is named, then the
+ * chunk's own units, their nested pieces renumbered. Returns the list and where the chunk's first unit is in it
+ */
+function localUnits(units, from, standsBefore) {
+  const named = new Map()
+  for (const u of units) {
+    if (u === null) continue
+    for (const p of u[5]) if (p[0] === 4 && p[2] < from && standsBefore[p[2]] === 1 && !named.has(p[2])) named.set(p[2], 0)
+  }
+  const ids = [...named.keys()].sort((a, b) => a - b)
+  ids.forEach((id, k) => named.set(id, k + 1))
+  const at = ids.length + 1
+  const list = [null, ...ids.map(() => STANDS), ...units.map(u => {
+    if (u === null || !u[5].some(p => p[0] === 4)) return u
+    return [u[0], u[1], u[2], u[3], u[4], u[5].map(p => (p[0] === 4 ? [4, p[1], p[2] < from ? (named.get(p[2]) ?? 0) : p[2] - from + at, p[3]] : p))]
+  })]
+  return { list, at }
+}
 /** what a chunk read without bodies keeps (amendment M21): each unit's kind, its records, and the earlier units its nested pieces name */
 function partOf(units, from, stands) {
   const kinds = units.map(u => (u === null ? null : u[0]))
@@ -534,6 +559,7 @@ export function unitsOfChunks(chunks, { bodies = true } = {}) {
     if (c.part !== undefined) for (let q = 0; q < c.units.length; q++) { units.push(c.units[q]); kinds.push(c.part.kinds[q]) }
     else for (let q = 0; q < c.units.length; q++) { units.push(c.units[q]); kinds.push(c.units[q] === null ? null : c.units[q][0]) }
     for (let q = 0; q < c.dropped.length; q++) dropped.push(c.dropped[q])
+    if (dropped.length > DROPPED_MAX) throw refuse(K, 'dropped', `more than ${DROPPED_MAX} units that do not stand`)
     before = c
   }
   const index = chunks.map(c => ({ from: c.from, to: c.to }))
