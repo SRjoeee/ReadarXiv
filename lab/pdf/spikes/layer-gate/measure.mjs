@@ -228,8 +228,8 @@ const centreOf = b => [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]
 
 // ---------------------------------------------------------------- TeX's file, the instrument's (the 2608.16117 survey)
 
-/** the layout file's placeholder kinds and its LOST and OUTSIDE flags (src/pdf-reader/engine/layout/file.mjs PH_KINDS, PH_FLAG) */
-const PH_KINDS = ['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other'], PH_LOST = 32, PH_OUTSIDE = 256
+/** the layout file's placeholder kinds and its LOST flag (src/pdf-reader/engine/layout/file.mjs PH_KINDS, PH_FLAG) */
+const PH_KINDS = ['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other'], PH_LOST = 32
 /**
  * TeX's file as the instrument reads it (a layout file, parsed: the rows of layout/file.mjs, read here, never by the
  * engine's reader), by page: `units`, each unit's placeholders with ink on the page ({ k, kind, segs }: each segment its
@@ -237,16 +237,15 @@ const PH_KINDS = ['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro'
  * ({ j, box, baseline, size, held }: `held` a line its source does not write, a display's row), its pitch (`pitch`: the
  * median gap between two of its own text lines next to each other in one column, its lines whose spans overlap, with no
  * held line of the column between, over all its pages), and on its first
- * page the placeholders the file has LOST (`lost`, their k: ink no measure can place); `outside`, set (true) on each
- * page's entry of a unit holding a piece the file says lies outside the unit's lines (PH_FLAG.OUTSIDE); `displays`,
- * every display's segments
+ * page the placeholders the file has LOST (`lost`, their k: ink no measure can place); `displays`, every display's
+ * segments
  */
 export function fileIndexOf(layout) {
   const pages = new Map()
   const pageOf = p => pages.get(p) ?? pages.set(p, { units: new Map(), displays: [] }).get(p)
   const unitOf = (p, id) => { const u = pageOf(p).units; return u.get(id) ?? u.set(id, { phs: [], lines: [], lost: [] }).get(id) }
   const held = new Map((layout.held ?? []).map(([id, rows]) => [id, new Set(rows)]))
-  const first = new Map(), outside = new Set()
+  const first = new Map()
   for (const [id, rows] of layout.lines ?? []) {
     for (let j = 0; 8 * j < rows.length; j++) {
       const o = 8 * j, p = rows[o]
@@ -256,7 +255,6 @@ export function fileIndexOf(layout) {
   }
   for (const r of layout.ph ?? []) {
     const [id, k, kind, flags] = r
-    if (flags & PH_OUTSIDE) outside.add(id)
     if (flags & PH_LOST) { if (first.has(id)) unitOf(first.get(id), id).lost.push(k); continue }
     const by = new Map()
     for (let o = 4; o + 5 < r.length; o += 6) (by.get(r[o]) ?? by.set(r[o], []).get(r[o])).push([r[o + 1], r[o + 5], r[o + 3], r[o + 4]])
@@ -265,7 +263,6 @@ export function fileIndexOf(layout) {
       if (PH_KINDS[kind] === 'display') pageOf(p).displays.push(...segs)
     }
   }
-  for (const pg of pages.values()) for (const [id, u] of pg.units) if (outside.has(id)) u.outside = true
   // (each unit's pitch: the gaps of its text lines next to each other, page by page and column by column (lines whose
   // spans overlap, chained), no held line of the column between)
   const gaps = new Map()
@@ -532,12 +529,9 @@ function components(m, W, H, min, boxes = null) {
  * text is not vanished); `cut`: the crops cut from this page ({ src, unit, clip }: `clip` the boxes of its own ink it is
  * cut through, device pixels [x, y, w, h], where it is), whatever page they are drawn on, which `doubled`, `vanished`
  * and `bites` read here, where their source is; `ownLines`: the drawn units' own text lines in TeX's file ({ unit, box }),
- * which `linesLeft` reads (with `linesLeftWhere`, the units), the segments of placeholders kept in place (`segs`) aside;
- * `outside`: the drawn units whose layout file holds a piece outside their lines (PH_FLAG.OUTSIDE, LOST: kept where it
- * stands, its ink the original's, which the file does not place), each with its file lines on this page ({ unit, lines }:
- * boxes [x0, y0, x1, y1]), so that an intact item of the unit's frame off every one of those lines is that piece kept
+ * which `linesLeft` reads (with `linesLeftWhere`, the units), the segments of placeholders kept in place (`segs`) aside
  */
-export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, items, ref, drawnText, cut = [], ownLines = null, segs = null, outside = [] }) {
+export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, items, ref, drawnText, cut = [], ownLines = null, segs = null }) {
   const toPx = (x, y) => [(x - view[0]) * k, (view[3] - y) * k]
   const boxPx = (b, pad = 0) => {
     const [ax, ay] = toPx(b[0] - pad, b[3] + pad), [bx, by] = toPx(b[2] + pad, b[1] - pad)
@@ -584,15 +578,7 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
   for (let i = 0; i < W * H; i++) if (ov[i] && !cropM[i]) ovOrig[i] = 1
   const overlapOrig = components(ovOrig, W, H, 6)
 
-  // the original's text items inside a drawn unit's frames: intact (stray), partly erased (residue), erased. An item in
-  // the frame of a unit that has a piece outside its lines, and off every line of the unit's in TeX's file, is that piece
-  // kept in place (never erased, its ink the original's): kept, as a kept placeholder is, not stray
-  const inPlaceOf = new Map(outside.map(o => [o.unit, o.lines]))
-  const keptOutside = it => {
-    const cx = (it.x0 + it.x1) / 2, cy = it.y0 + 0.4 * (it.y1 - it.y0)
-    const at = (b, pad) => cx >= b[0] - pad && cx <= b[2] + pad && cy >= b[1] - pad && cy <= b[3] + pad
-    return drawn.some(u => inPlaceOf.has(u.id) && framesOf(u.orig).some(fb => at(fb, 1)) && !inPlaceOf.get(u.id).some(l => at(l, 0.5)))
-  }
+  // the original's text items inside a drawn unit's frames: intact (stray), partly erased (residue), erased
   const strayItems = []
   for (const it of items) {
     const [px, py] = toPx((it.x0 + it.x1) / 2, it.y0 + 0.4 * (it.y1 - it.y0))
@@ -608,7 +594,7 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
     }
     if (intact(o, s)) strayItems.push(it)
   }
-  const stray = strayItems.filter(it => !it.math && !keptOutside(it) && !formula.has(it) && /\p{L}{2,}/u.test(it.str)).length
+  const stray = strayItems.filter(it => !it.math && !formula.has(it) && /\p{L}{2,}/u.test(it.str)).length
 
   // unerased originals (the 2608.16117 survey, 2026-10-15): a drawn unit's own text line as TeX's file has it (`ownLines`:
   // { unit, box }, not held), its ink (the segments of the placeholders the drawing keeps in place aside, `segs`, as a kept
@@ -737,7 +723,8 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
   const bites = components(bite, W, H, 4, where.bites)
 
   // graphics: the original's ink that is no text (outside every text item and every reference line), erased or written over.
-  // Ink a crop carries elsewhere (carriedM, as the bites read it) is not erased: it is drawn in the crop
+  // Ink a crop carries elsewhere (carriedM, as the bites read it, the crops cut from this page whichever page they are drawn on)
+  // is not erased: it is drawn in the crop
   const textM = mask()
   for (const it of items) paint(textM, [it.x0, it.y0, it.x1, it.y1], 1)
   for (const r of ref) for (const l of r.orig) paint(textM, [l.x0, l.bottom, l.x1, l.top], 1)

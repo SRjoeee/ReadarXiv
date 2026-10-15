@@ -715,9 +715,7 @@ window.gate = {
     const ref = S.ref[p] ?? []
     // (each drawn unit's own text lines as TeX's file has them, not held: what linesLeft reads, its placeholders kept in place aside)
     const ownLines = S.file ? recs.flatMap(r => (S.file.get(p)?.units.get(r.id)?.lines ?? []).filter(l => !l.held).map(l => ({ unit: r.id, box: l.box }))) : null
-    // (the drawn units with a piece the file says lies outside their lines, kept where it stands: with their lines on the page)
-    const outside = S.file ? recs.flatMap(r => { const u = S.file.get(p)?.units.get(r.id); return u?.outside ? [{ unit: r.id, lines: u.lines.map(l => l.box) }] : [] }) : []
-    const m = pixelPage({ k: K, view, W, H, O, C, T, units, names: named, kept, items, ref, drawnText, cut, ownLines, segs: keptSegs, outside })
+    const m = pixelPage({ k: K, view, W, H, O, C, T, units, names: named, kept, items, ref, drawnText, cut, ownLines, segs: keptSegs })
     // lost ink against what v0 accounts for
     const toPx = (x, y) => [(x - view[0]) * K, (view[3] - y) * K]
     const fill = (mask, x0, y0, x1, y1) => {

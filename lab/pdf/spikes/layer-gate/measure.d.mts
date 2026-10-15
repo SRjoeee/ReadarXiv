@@ -39,7 +39,7 @@ export declare function markupResidueOf(text: string, src: string): string[]
 /** TeX's file as the instrument holds it, by page (the kept layout's rows): each unit's placeholders with ink there, its
  *  lines, the LOST placeholders on its first page; every display's segments. Boxes are [x0, y0, x1, y1] */
 export interface FileLine { j: number; box: number[]; baseline: number; size: number; held: boolean }
-export interface FilePage { units: Map<number, { phs: { k: number; kind: string; segs: number[][] }[]; lines: FileLine[]; lost: number[]; pitch: number | null; outside?: true }>; displays: number[][] }
+export interface FilePage { units: Map<number, { phs: { k: number; kind: string; segs: number[][] }[]; lines: FileLine[]; lost: number[]; pitch: number | null }>; displays: number[][] }
 export declare function fileIndexOf(layout: { lines?: [number, number[]][]; ph?: number[][]; held?: [number, number[]][] }): Map<number, FilePage>
 export declare function displayRowsOf(page: FilePage | undefined): number[][]
 /** a rendering of a placeholder by its unit and its piece's source index: a crop's source, or its characters' centres */

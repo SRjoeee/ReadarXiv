@@ -248,7 +248,7 @@ describe("the erase bites: the original's ink erased that no drawn unit owns", (
   })
 })
 
-describe('pieces kept in place and ink a crop carries (the layer gate, 2026-10-15 E and F)', () => {
+describe('ink a crop carries (the layer gate, 2026-10-15 F)', () => {
   // a 60 x 40 page at one device pixel a unit: a drawn unit's frame over x 10-50, y 17.5-27
   const W = 60, H = 40
   const planeOf = (ink: (x: number, y: number) => boolean) => {
@@ -260,31 +260,10 @@ describe('pieces kept in place and ink a crop carries (the layer gate, 2026-10-1
   const orig = [{ x0: 10, x1: 50, baseline: 20, top: 27, bottom: 17.5, size: 10 }]
   const drawnUnit = { id: 1, kind: 'para', drawn: true, why: null, orig, lines: [{ baseline: 20, size: 10, x0: 10, x1: 50 }], erase: [[34, 17.5, 50, 27]], crops: [] } as UnitIn
 
-  it("E: an intact item off the lines of a unit with a piece outside them is that piece kept, not stray; on its lines, or in a unit with none, it still is", () => {
-    // the original's word "https" at x 12-30 stands intact on the copy; the unit's lines in TeX's file start at x 35
-    const O = planeOf((x, y) => x >= 12 && x < 30 && y >= 19 && y < 24)
-    const item = { x0: 12, x1: 30, y0: 18, y1: 26, str: 'https', math: false }
-    const stray = (outside: { unit: number; lines: number[][] }[] | undefined) =>
-      (pixelPage({ k: 1, view: [0, 0, W, H], W, H, O, C: O, T: paper, units: [drawnUnit], kept: [], items: [item], ref: [{ id: 1, kind: 'para', orig }], drawnText: '', ...(outside ? { outside } : {}) }) as { stray: number }).stray
-    expect(stray(undefined)).toBe(1)
-    expect(stray([{ unit: 1, lines: [[35, 17, 50, 28]] }])).toBe(0)
-    // (a line of the unit's holding the item: its own text left intact, as before)
-    expect(stray([{ unit: 1, lines: [[10, 17, 50, 28]] }])).toBe(1)
-    // (another unit's piece outside its lines is no excuse for this unit's item)
-    expect(stray([{ unit: 2, lines: [[35, 17, 50, 28]] }])).toBe(1)
-  })
-
-  it('E: the file index marks the units that hold a piece outside their lines (PH_FLAG.OUTSIDE), on each page of theirs', async () => {
-    const { fileIndexOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
-    const line = (page: number, x0: number, x1: number, base: number) => [page, x0, x1, base, base + 7, base - 2.5, 10, 1]
-    const f = fileIndexOf({ lines: [[3, [...line(1, 72, 472, 700), ...line(2, 72, 472, 700)]], [4, line(1, 72, 472, 650)]], ph: [[3, 1, 7, 32 | 256], [4, 1, 7, 32]] })
-    expect(f.get(1)!.units.get(3)!.outside).toBe(true)
-    expect(f.get(2)!.units.get(3)!.outside).toBe(true)
-    expect(f.get(1)!.units.get(4)!.outside).toBeUndefined()
-  })
-
-  it("F: the original's rule is not erased graphics where a crop carries it elsewhere; with no crop, or one cut elsewhere, it is", () => {
-    // a rule of the original's (x 20-26, y 10-13) outside every text line, gone from the copy
+  it("F: the original's rule is not erased graphics where a crop carries it elsewhere, drawn on a later page too; with no crop, or one cut elsewhere, it is", () => {
+    // a rule of the original's (x 20-26, y 10-13) outside every text line, gone from the copy. `cut` holds the crops cut from
+    // this page by their source, whichever page they are drawn on (the instrument passes them so: proto.mjs): the unit has no
+    // crop of its own here, as one whose crop is drawn on page 2 has none on page 1
     const O = planeOf((x, y) => x >= 20 && x < 26 && y >= 10 && y < 13)
     const erased = (cut: { src: number[]; unit: number; clip?: number[][] }[]) =>
       (pixelPage({ k: 1, view: [0, 0, W, H], W, H, O, C: paper, T: paper, units: [drawnUnit], kept: [], items: [], ref: [{ id: 1, kind: 'para', orig }], drawnText: '', cut }) as { graphics: { px: number; erased: number } }).graphics
