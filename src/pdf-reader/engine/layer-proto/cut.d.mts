@@ -1,0 +1,56 @@
+// cut.mjs's types: a paper made whole, cut into BUNDLE 4's objects (the bundle 4 contract C3b, C3c)
+import type { LayoutFile, LayoutPart } from '../layout/file.mjs'
+import type { RemovalManifest } from '../layout/addon-manifest.mjs'
+import type { Box, UnitWire } from './bundle.mjs'
+import type { TokenWire, Written } from './format.mjs'
+import type { NeedEntry } from './need.mjs'
+import type { BundleUnit } from './units.mjs'
+
+/** the paper made whole: BUNDLE 3's reading (readBundle) or the object the producer holds */
+export interface WholePaper {
+  paper: { id: string; version: number; pages: number }
+  /** `xref`: the original's startxref, which BUNDLE 3 does not carry (`CutOptions.base` may supply it) */
+  base: { bytes: number; sha256: string; xref?: number }
+  versions?: { image: string }
+  /** the paper's units, none dropped (a null is refused: the chunks hold what stands) */
+  units: readonly (BundleUnit | null)[]
+  left: { pages: readonly Box[]; units: readonly UnitWire[] }
+  layout: LayoutFile | null
+}
+/** one page's left part input: the tokens (the web's TokenWire), the spans [id, ranges] and, optionally, the pairs */
+export interface LeftPageInput {
+  first: number; tokens: TokenWire
+  spans: readonly (readonly [number, readonly number[]])[]; pairs?: readonly (readonly [number, readonly number[]])[]
+}
+/** a K entry: what needsOf reads, and the unit it stands for */
+export interface CutEntry extends NeedEntry {
+  id: number; slot: number
+  /** a layout-only unit's `after` (today's `before`), null for a left unit */
+  after: number | null
+}
+export interface CutOptions {
+  /** the page's left part input, called once for each page in page order (null: a page with no tokens) */
+  leftPages(page: number): LeftPageInput | null | Promise<LeftPageInput | null>
+  /** F as an array indexed by page 0..N of indices into K (-1 for none); default `needFrontier` (the door's rule, need.mjs) */
+  frontier?(K: readonly CutEntry[], N: number): readonly number[]
+  /** the add-on of the part just cut (its pages and layout), or null; called once for each part with a layout, in order.
+   *  Without it each such part's manifest refuses all its pages (drawn by erase and restore) */
+  chainAddon?(index: number, part: { pages: [number, number]; layout: LayoutPart }): Promise<{ manifest: RemovalManifest; tail: Uint8Array | null } | null> | { manifest: RemovalManifest; tail: Uint8Array | null } | null
+  base?: { bytes: number; sha256: string; xref: number }
+  image?: string
+  lineskip?: [number, number] | null
+  cites?: [string, string][] | null
+}
+export interface Cut {
+  units: (Written & { from: number; to: number })[]
+  head: Written
+  /** in page order; `leftParts` the part's own, pages from..to */
+  parts: (Written & { from: number; to: number; leftParts: (Written & { page: number })[] })[]
+  /** one for each page 1..N */
+  left: (Written & { page: number })[]
+  /** what the catalog's `end` is (the Worker writes it) */
+  end: { through: number }
+}
+/** the frontier by the door's rule: needsOf(K, N, false, layout-only).lay */
+export declare function needFrontier(K: readonly NeedEntry[], N: number): number[]
+export declare function cutBundle(whole: WholePaper, o: CutOptions): Promise<Cut>
