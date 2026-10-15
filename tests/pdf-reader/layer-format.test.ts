@@ -1228,6 +1228,18 @@ describe('the catalog', () => {
     await refused(() => {}, 'paper', { paper: { id: PAPER.id, version: 2 } })
   })
 
+  it('is named by the head\'s versions, the reader\'s own expression, whatever engine writes it (a head of another pipeline, layout or remover)', async () => {
+    const h = parsed(M.head)
+    h.versions = { ...h.versions, pipeline: '12', layout: '7', removal: '99' }
+    const f = forged('head', h)
+    const other = await readHead(f.bytes, { ref: f.ref })
+    const w = await writeCatalog({ head: other, units: units(), parts: parts(), end: { through: 4 } })
+    expect(w.key).toBe(catalogKey(PAPER.id, PAPER.version, `b4-j${PDFJS}-p12-l7-r99`))
+    expect(w.key).not.toBe(catalogKey(PAPER.id, PAPER.version, VTAG4))
+    const c = await readCatalog(w.bytes, { key: w.key, paper: PAPER })
+    expect(c.versions).toMatchObject({ pipeline: '12', layout: '7', removal: '99' })
+  })
+
   it('is written only for what it would read: the end, the chunks and the parts the head and the parts make', async () => {
     const w = (o: Partial<Parameters<typeof writeCatalog>[0]>) => writeCatalog({ head: M.readHead, units: units(), parts: parts(), end: { through: 4 }, ...o })
     expect(await refusal(w({ end: { through: 3 } }))).toMatchObject({ kind: 'catalog', path: 'end.through' })

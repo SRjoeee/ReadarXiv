@@ -219,7 +219,7 @@ const encoder = new TextEncoder()
 /** a text already built, counted as the reader will (bytes, values, nesting), digested and keyed; `pos` ({ from, to } or
  *  { page }) is the object's place, on its ref and on the result. `contentOf` gives, of the bytes, the content where the kind
  *  bounds that too (a part: less its tail's base64) */
-async function finish(kind, text, def, paper, pos, contentOf = null) {
+async function finish(kind, text, def, paper, pos, contentOf = null, vtag = null) {
   const bytes = encoder.encode(text)
   if (bytes.length > def.cap) throw refuse(kind, '', `${bytes.length} bytes, past ${def.cap}`)
   const n = inside(kind, '', () => countValues(text, def.values, def.depth))
@@ -229,10 +229,13 @@ async function finish(kind, text, def, paper, pos, contentOf = null) {
     if (content > CONTENT_MAX) throw refuse(kind, '', `${content} bytes of content, past ${CONTENT_MAX}`)
   }
   const sha256 = await digestOf(bytes)
-  const key = kind === 'catalog' ? catalogKey(paper.id, paper.version, VTAG4) : keyOf(paper.id, paper.version, CTAG4, sha256)
+  const key = kind === 'catalog' ? catalogKey(paper.id, paper.version, vtag) : keyOf(paper.id, paper.version, CTAG4, sha256)
   return { kind, bytes, sha256, key, ref: { kind, ...pos, sha256, bytes: bytes.length }, ...pos, values: n }
 }
-const written = (kind, obj, def, paper, pos, contentOf = null) => finish(kind, JSON.stringify(obj), def, paper, pos, contentOf)
+const written = (kind, obj, def, paper, pos, contentOf = null, vtag = null) => finish(kind, JSON.stringify(obj), def, paper, pos, contentOf, vtag)
+
+/** the VTAG the versions of a head or a catalog make: what names the catalog, for its writer and for its reader */
+const vtagOf = v => `b${BUNDLE4}-j${v.pdfjs}-p${v.pipeline}-l${v.layout}-r${v.removal}`
 
 // ---------------------------------------------------------------- keys
 const CTAG_FORM = /^b[0-9]+-j[0-9A-Za-z.]+$/
@@ -976,7 +979,7 @@ export async function readCatalog(bytes, o = {}) {
     const k = keyParts(o.key)
     if (k === null || k.vtag === undefined) throw refuse(K, 'key', 'not the key of a catalog')
     if (k.paper !== c.paper.id || k.version !== c.paper.version) throw refuse(K, 'paper', 'not the paper version of its key')
-    const vtag = `b${BUNDLE4}-j${c.versions.pdfjs}-p${c.versions.pipeline}-l${c.versions.layout}-r${c.versions.removal}`
+    const vtag = vtagOf(c.versions)
     if (k.vtag !== vtag) throw refuse(K, 'versions', `not the key's ${k.vtag}`)
   }
   return { kind: 'catalog', sha256, bytes: bytes.length, paper: c.paper, versions: c.versions, head: c.head, units: c.units, parts: c.parts, end: c.end }
@@ -1006,7 +1009,7 @@ export async function writeCatalog({ head, units, parts, end }) {
   }
   if (end.through !== through) throw refuse('catalog', 'end.through', `not ${through}, the last part's last page`)
   catalogShape(obj)
-  return written('catalog', obj, CATALOG_DEF, head.paper, {})
+  return written('catalog', obj, CATALOG_DEF, head.paper, {}, null, vtagOf(head.versions))
 }
 
 // ---------------------------------------------------------------- the parts as the whole
