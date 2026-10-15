@@ -346,7 +346,7 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * units on p and, with a page pass (`passes`), on each one's first page). `complete[p]`, both, up to the latest page p
  * may be done after.
  */
-function needsOf(K, N, passes, fileOnly) {
+export function needsOf(K, N, passes, fileOnly) {
   const lp = new Array(N + 1).fill(-1), dp = new Array(N + 1).fill(-1), far = Array.from({ length: N + 1 }, (_, p) => p)
   const fileOn = new Map(), on = Array.from({ length: N + 1 }, () => [])
   K.forEach((c, i) => { if (fileOnly(c) && c.lists.length) for (const x of c.reach) fileOn.set(x, i) })
