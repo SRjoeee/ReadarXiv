@@ -732,9 +732,9 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
   for (const w of s.left) note(w[1], w[0])
   for (const e of s.fileOnly) note(e[1] + 0.5, e[0])
   if (any && !(lowSlot > was.slot || (lowSlot === was.slot && lowId > was.id))) throw refuse(K, 'left', 'a unit that is not after the last one told (slot, id)')
-  // (the views of the pages the last part reached past its own)
-  if (s.views.length < was.ahead.length) throw refuse(K, 'views', 'not reaching the pages the last part\'s views reached')
-  for (let i = 0; i < was.ahead.length; i++) if (s.views[i] !== was.ahead[i]) throw refuse(K, `views[${i}]`, 'not the view told by the last part')
+  // (the views of the pages the last part reached past its own: those this part's views include are as told; a part whose own
+  // units reach less far leaves the rest to the part that told them)
+  for (let i = 0, n = Math.min(s.views.length, was.ahead.length); i < n; i++) if (s.views[i] !== was.ahead[i]) throw refuse(K, `views[${i}]`, 'not the view told by the last part')
 
   let end = was.end, xref = was.xref, next = was.next, root = was.root
   if (s.addon !== null && s.addon.tail !== null) {
@@ -750,8 +750,8 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
     root = links.root
   }
   const after = Object.freeze({
-    head: was.head, through: s.b, last: sha256, slot: highSlot, id: highId, reach: s.reach,
-    ahead: Object.freeze(s.views.slice(4 * (s.b - s.a + 1))), end, xref, next, root, r: was.r + (s.addon === null ? 0 : s.addon.r),
+    head: was.head, through: s.b, last: sha256, slot: highSlot, id: highId, reach: Math.max(s.reach, was.reach),
+    ahead: Object.freeze(s.reach >= was.reach ? s.views.slice(4 * (s.b - s.a + 1)) : was.ahead.slice(4 * (s.b - was.through))), end, xref, next, root, r: was.r + (s.addon === null ? 0 : s.addon.r),
   })
   return {
     kind: 'part', sha256, bytes: bytes.length, head: v.head, prev: v.prev, pages: [s.a, s.b], reach: s.reach, views: Object.freeze(s.views),

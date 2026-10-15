@@ -896,9 +896,12 @@ describe('a part against the chain', () => {
     await refused(1, p => { (p as Any).views[0] = 1 }, 'views[0]')
     // part 3 begins at page 4, which part 2 reached: its view as told
     await refused(2, p => { (p as Any).views[2] = 611 }, 'views[2]')
-    // a part whose views stop short of the last part's reach (the chain says page 4 was reached; this one stops at page 3)
+    // a part whose own units reach less far than the last part's did (the chain says page 4 was reached; this one stops at page 3)
+    // leaves the views it does not hold to the part that told them: those it holds are as told, and the reach stays page 4
     const reached = { ...chain(0), reach: 4, ahead: [...VIEWS.slice(1).flat()] }
-    await refused(1, p => { (p as Any).views = (p as Any).views.slice(0, 8) }, 'views', reached)
+    const short = await partWith(1, p => { (p as Any).views = (p as Any).views.slice(0, 8) }, { chain: reached })
+    expect([short.reach, short.chain.reach, short.chain.ahead]).toEqual([3, 4, VIEWS[3]])
+    await refused(1, p => { (p as Any).views = (p as Any).views.slice(0, 8); (p as Any).views[6] = 600 }, 'views[6]', reached)
   })
 
   it('refuses a manifest that numbers its removed pages from anywhere but N + R + 1, or not in page order', async () => {
@@ -1584,5 +1587,74 @@ describe('seeded hostile mutations of a valid object, every kind', () => {
       expect(outcome.refused).toBeGreaterThan(100)
       expect(outcome.read).toBeGreaterThan(5)
     })
+  }
+})
+
+// ---------------------------------------------------------------- the real papers (where this machine has them)
+// AXT_LAB=<a lab/pdf directory with data/ and out/> (see lab/pdf/README.md): each paper's units (openPaper over its source), its
+// layout file (the layer gate's made fixtures) and its left (the p10 cut's geometry), cut at the doubling schedule, written,
+// read against the chain and merged back; the units through the chunk writer and the reader
+const LAB = process.env.AXT_LAB
+describe.skipIf(!LAB)('the real papers: units, layout files and left cut at the doubling schedule', () => {
+  const PAPERS: [string, string][] = [['1512.03385v1', 'zh'], ['1706.03762v7', 'zh'], ['1810.04805v2', 'zh'], ['2307.16209v1', 'de'], ['2608.04322v1', 'zh']]
+  const FIXTURES = 'out/layer-gate/fixtures/f343494cf544323e', GEOMETRY = 'out/layer-gate/cut-p10/geometry'
+  for (const [name, target] of PAPERS) {
+    it(name, async () => {
+      const { existsSync, readFileSync } = await import('node:fs')
+      const { join } = await import('node:path')
+      const { openPaper } = await import('@/pdf-reader/engine/pipeline/live.mjs')
+      const { unpackSource } = await import('@/pdf-reader/engine/source/tar.mjs')
+      const { bundleUnitsOf } = await import('@/pdf-reader/engine/layer-proto/units.mjs')
+      const { parseLayout, LAYOUT_CAP } = await import('@/pdf-reader/engine/layout/file.mjs')
+      const { cutAt } = await import('./helpers/format-cut')
+      const root = LAB as string
+      const layoutFile = join(root, FIXTURES, `${name}-zh`, 'layout.json'), geometryFile = join(root, GEOMETRY, `${name}-${target}-geometry.json`), sourceFile = join(root, 'data/layout', name, 'source.gz')
+      for (const f of [layoutFile, geometryFile, sourceFile]) if (!existsSync(f)) throw new Error(`missing ${f}`)
+      const id = name.replace(/v\d+$/, ''), version = Number(name.slice(id.length + 1))
+      const paper = { id, version }
+      const { files } = await unpackSource(new Uint8Array(readFileSync(sourceFile)))
+      const units = bundleUnitsOf(openPaper(files))
+      const layout = parseLayout(new Uint8Array(readFileSync(layoutFile)))
+      expect(readFileSync(layoutFile).length).toBeLessThan(LAYOUT_CAP)
+      const geometry = JSON.parse(readFileSync(geometryFile, 'utf8')) as { left: { units: UnitWireLoose[] } }
+      type UnitWireLoose = [number, number, [number, number, number, number, number][]]
+      const N = layout.paper.pages
+
+      // the units: through the chunk writer and the reader, none dropped
+      const chunks = await writeUnitChunks({ paper, units })
+      const head = await writeHead({ paper: { ...paper, pages: N }, base: { bytes: 1_000_000, sha256: 'a'.repeat(64), xref: 999_000 }, image: IMAGE, units: chunks, lineskip: layout.lineskip, cites: null })
+      const rh = await readHead(head.bytes, { ref: head.ref })
+      const read: Awaited<ReturnType<typeof readUnitsChunk>>[] = []
+      for (const c of chunks) read.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: read.at(-1) ?? null }))
+      const index = indexOf(rh, read)
+      expect(index.units).toEqual(units)
+      expect(index.dropped).toEqual([])
+      // the layout file through its part encoders
+      const cut = cutAt(layout, geometry.left.units)
+      expect(cut.map(p => p.pages)).toEqual(((): [number, number][] => { const out: [number, number][] = []; for (let a = 1; a <= N;) { const b = partTarget(a, N); out.push([a, b]); a = b + 1 } return out })())
+      // the parts, written and read in order against the chain
+      const readParts = []
+      const lefts: Record<number, Awaited<ReturnType<typeof writeLeftPart>>> = {}
+      let chain = null
+      let prev: string | null = null
+      for (const p of cut) {
+        const leftParts = []
+        for (let pg = p.pages[0]; pg <= p.pages[1]; pg++) leftParts.push(lefts[pg] = await writeLeftPart({ paper, page: pg, first: 0, tokens: tokenWire(0), spans: [], pairs: [] }))
+        const w = await writePart({ paper, head: head.sha256, prev, pages: p.pages, views: p.views, left: p.left, fileOnly: p.fileOnly, layout: p.layout, addon: { manifest: p.manifest, tail: null }, leftParts })
+        const r = await readPart(w.bytes, { ref: w.ref, index, chain })
+        readParts.push(r)
+        chain = r.chain
+        prev = w.sha256
+        expect(w.bytes.length).toBeLessThanOrEqual(PART_CAP)
+      }
+      // and merged back: the file's layout (its fonts table by first use, as the maker builds it), the left's units
+      const merged = mergeParts(index, readParts)
+      expect(encodeLayout({ ...merged.layout!, left: layout.left })).toBe(encodeLayout(layout))
+      expect(merged.left.units).toEqual([...geometry.left.units].sort((a, b) => a[0] - b[0]).map(w => [w[0], w[1], w[2].map(r => [r[0], Math.round(r[1] * 1000) / 1000, Math.round(r[2] * 1000) / 1000, Math.round(r[3] * 1000) / 1000, Math.round(r[4] * 1000) / 1000])]))
+      expect(merged.units).toEqual(units)
+      // the K order is the chain's: the parts' ids are the whole's, each once
+      const told = readParts.flatMap(p => [...p.left.map(w => w[0]), ...p.fileOnly.map(e => e[0])])
+      expect(new Set(told).size).toBe(told.length)
+    }, 120_000)
   }
 })
