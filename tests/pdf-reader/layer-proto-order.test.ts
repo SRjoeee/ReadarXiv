@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { askPage, build, type Built, bundleOf, installStubs, layerSnap, openRun, PAPERS, type Run, rowsOf, runSnap, shuffled } from './helpers/order-paper'
+import { askPage, build, type Built, bundleOf, installStubs, layerSnap, openRun, PAPERS, type Run, rowsOf, runSnap, shuffled, unitsOn } from './helpers/order-paper'
 
 // The order of the asks (the 1b-D design §5, X1 and X2; PR 1b-D0): a page's answer is the same whichever page was asked before it
 // and whatever else is asked beside it. Over the synthetic papers of helpers/order-paper.ts (units across page breaks, a table on
@@ -7,8 +7,8 @@ import { askPage, build, type Built, bundleOf, installStubs, layerSnap, openRun,
 // fill): each page's markup, operations, fill numbers, word table and unit records, taken as the page is ready, equal the page
 // asked in order, 1 to N — whether the pages are asked in reverse, the last first, in the order three seeds give, each alone
 // in a run of its own (X1), or, at the reader's door, in bursts of concurrent asks with aborts by signal and asks made again
-// (X2). Today the engine lays the pages in order whatever is asked, so these pass on the prefix; they are the guards of the day
-// it lays a page by what it needs (1b-D1), and a unit's record or a fill number that depends on the order would fail one
+// (X2). The engine lays a page asked by its closure alone (Need(p), 1b-D1): a unit's record or a fill number that depended on
+// the order would fail one. And a page asked alone reads no more than its closure: the pages drawn, the units laid (X2's bound)
 
 const seen = vi.hoisted(() => ({ runs: [] as unknown[] }))
 vi.mock('@/pdf-reader/engine/layer-proto/run.mjs', async importOriginal => {
@@ -67,6 +67,24 @@ describe('the run: a page asked in any order answers as the page asked in order'
       }
     })
   }
+
+  for (const paper of PAPERS) it(`${paper.name}: a page asked alone draws, lays and readies no more and no less than its closure (X2)`, async () => {
+    const P0 = build(paper)
+    for (let p = 1; p <= P0.paper.pages; p++) {
+      const P = build(paper)
+      const run = await openRun(P)
+      const C = run.closure(p)
+      await askPage(run, p)
+      const as = `${paper.name} page ${p}`
+      // (page 1 drawn first, then the closure's pages in order, each once: its draw, the failed one among them read too)
+      expect(P.doc.asked, as).toEqual(C.draw)
+      // (the units laid are those on its pass pages, in their rank; every page its closure makes ready is)
+      expect(run.order.every(id => unitsOn(P, C.pass).includes(id)), `${as}: laid ${run.order}`).toBe(true)
+      expect(run.order.length, as).toBeLessThanOrEqual(C.lay.length)
+      for (const q of C.ready) expect(run.ready(q) || run.failed(q), `${as}: page ${q} of its ready set`).toBe(true)
+      expect(run.ready(p) || run.failed(p), as).toBe(true)
+    }
+  })
 
   it('a title page then fuller pages: each page\'s fill target is its own, whichever page is asked first', async () => {
     const paper = PAPERS.find(x => x.name === 'S3 fill')!

@@ -124,6 +124,40 @@ describe('S1: a crop is cut from any page of the paper that was read', () => {
   })
 })
 
+describe('L2: a unit is laid once every page it reads is drawn, its placeholders\' too', () => {
+  // a paragraph of page 1 whose formula the layout file places on page 2 (a placeholder's segment past its last page), and a
+  // paragraph of page 2: page 1's closure draws page 2 before the paragraph is laid, in order too, so that whether its crop's
+  // page is drawn is never the order's (the hybrid leaves such a unit the original's, unproven: nothing proves a crop it has no
+  // line beside; what it reads is drawn all the same)
+  const specs: Spec[] = [
+    { id: 0, kind: 'para', src: 'Alpha $x^2$ beta', lines: [line(1, 200, [20, 'Alpha'], [80, 'beta'])], from: 'file', pieces: 3, ph: [[1, 0, 2, 60, 150, 70, 157, 148]], tr: [text(CJK(3)), { t: 'ph', src: '$x^2$', k: 1 }, text(CJK(2, 0x4e20))] },
+    { id: 1, kind: 'para', src: 'Gamma delta x2', lines: [line(2, 250, [20, 'Gamma delta']), line(2, 150, [60, 'x2'])], from: 'file', tr: [text(CJK(5, 0x4e40))] },
+  ]
+  PAPERS.push(['L2', specs, 2, [null]])
+  /** the paper, each page's read logged with the units laid by then */
+  const logged = () => {
+    const P = paper(specs, 2), get = P.doc.getPage, log: string[] = []
+    let run: Run | null = null
+    P.doc.getPage = async (n: number) => { log.push(`read ${n} after ${run?.order.join(',') ?? ''}`); return get(n) }
+    return { P, log, bind: (r: Run) => { run = r } }
+  }
+  it('draws the page of its placeholder before it is laid, whatever page is asked first', async () => {
+    const want = await open(paper(specs, 2))
+    expect(want.closure(1).draw).toEqual([1, 2])
+    await want.until(2)
+    for (const first of [1, 2]) {
+      const { P, log, bind } = logged()
+      const run = await open(P)
+      bind(run)
+      await run.layFor(first)
+      await run.until(2)
+      expect(log, `page ${first} first`).toEqual(['read 1 after ', 'read 2 after '])
+      expect(run.rows.map(r => JSON.stringify(r.ops)), `page ${first} first`).toEqual(want.rows.map(r => JSON.stringify(r.ops)))
+      expect(run.skipped, `page ${first} first`).toEqual(want.skipped)
+    }
+  })
+})
+
 describe('S2: a unit learns its own citations', () => {
   // two paragraphs of page 1 citing one key: the first's rendering on the page ("[3]"), the second's not there
   const specs: Spec[] = [
@@ -285,6 +319,41 @@ describe('S3 with the even pass: a continuation enters its page\'s anchor at its
     }
     // (in `early` the even pass laid the continuation anew on page 1 before page 2 passed: its leading is no longer its fit's)
     expect((placedOf(early, 1) as unknown as Fit).fillLead).not.toBe((placedOf(early, 1) as unknown as Fit).fit!.fillLead)
+  })
+})
+
+describe('the rules that lay in order (the even pass; no page pass): a page asked lays the prefix, in the stream\'s order', () => {
+  const specs: Spec[] = [
+    para(0, [[1, 250, 4]], 44),
+    para(1, [[1, 100, 3], [2, 270, 3]], 30, 0x4e40),
+    para(2, [[1, 40, 2], [4, 270, 2]], 12, 0x4e80),
+    para(3, [[2, 200, 6]], 24, 0x4ec0),
+    para(4, [[3, 120, 4]], 16, 0x4f00),
+    para(5, [[4, 120, 4]], 16, 0x4f40),
+  ]
+  const rulesOf = (how: 'even' | 'no pass') => {
+    const r = structuredClone(BUILTIN_RULES) as unknown as { scripts: Record<string, Record<string, unknown>> }
+    if (how === 'even') r.scripts.Hans!.even = 1
+    else r.scripts.Hans!.adaptiveFill = null
+    return r
+  }
+  for (const how of ['even', 'no pass'] as const) it(`${how}: page 3 asked first lays the prefix up to it, as laid in order`, async () => {
+    const rules = rulesOf(how)
+    const want = await open(paper(specs, 4), { rules })
+    await want.until(4)
+    const run = await open(paper(specs, 4), { rules })
+    // (its closure is the prefix needsOf reads: pages 1 to the last page 3 may be done after)
+    expect(run.closure(3).draw).toEqual(run.closure(3).pass)
+    expect(run.closure(3).draw.slice(0, 3)).toEqual([1, 2, 3])
+    await run.layFor(3)
+    // (page 3 ready, and every page done by it: page 1's paragraph that runs on to page 4 is laid with page 4)
+    expect(run.ready(3)).toBe(true)
+    expect(run.ready(1)).toBe(false)
+    // (laid in the stream's order: the units' order is the run's laid in order, a prefix of it)
+    expect(want.order.slice(0, run.order.length)).toEqual(run.order)
+    await run.until(4)
+    expect(run.order).toEqual(want.order)
+    for (let q = 1; q <= 4; q++) expect(JSON.stringify(run.rows[q - 1]!.ops), `${how} page ${q}`).toEqual(JSON.stringify(want.rows[q - 1]!.ops))
   })
 })
 

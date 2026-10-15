@@ -265,6 +265,86 @@ describe('the door: three opens, the same pages', () => {
     }
   })
 
+  /** the six-page paper's door, every part told and every row taken (`end`: and ended), its document reads counted */
+  async function cascadeDoor({ end = true } = {}) {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const c = await cutSpec(CASCADE, [1, 2, 3, 4, 5])
+    const doc = docsOf(CASCADE)(0)
+    const layer = await openLayer({ index: c.index, doc: doc as never, parts: c.parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+    layer.take(rowsOfIndex(c.index))
+    if (end) layer.end()
+    const told: string[] = []
+    layer.onPage((p, state) => told.push(`${state}:${p}`))
+    return { layer, doc, told, run: seen.runs.at(-1) as Run }
+  }
+  /** each page of the six-page paper asked in order, 1 to 6: its markup */
+  async function cascadeInOrder() {
+    const { layer } = await cascadeDoor()
+    const out: string[] = []
+    for (let p = 1; p <= CASCADE.pages; p++) out.push((await layer.pageOf(p, { lang: 'zh' })).svg.outerHTML)
+    layer.dispose()
+    return out
+  }
+
+  it('A1: an ask aborted before the drive turns to it commits nothing: never told, nothing of its closure drawn', async () => {
+    const { layer, doc, told, run } = await cascadeDoor()
+    try {
+      // (page 3 taken at once; page 5 asked and aborted in the same task, before the drive could turn to it)
+      const three = layer.pageOf(3, { lang: 'zh' })
+      expect(layer.pageState(3)).toBe('laying')
+      const ctl = new AbortController()
+      const five = layer.pageOf(5, { lang: 'zh', signal: ctl.signal }).then(() => 'value', (e: Error) => e.name)
+      expect(layer.pageState(5)).toBe('waiting')
+      ctl.abort()
+      expect(await five).toBe('AbortError')
+      await three
+      await settleDown(layer, CASCADE.pages)
+      // (page 3's closure: pages 2 and 3's paragraphs, those running on to pages 3 and 4: pages 1 to 4 drawn, never 5 or 6)
+      expect(run.closure(3).draw).toEqual([1, 2, 3, 4])
+      expect([...new Set(doc.reads)].sort((a, b) => a - b)).toEqual([1, 2, 3, 4])
+      expect(told.filter(e => e.endsWith(':5'))).toEqual([])
+      expect(layer.pageState(5)).toBe('waiting')
+    } finally { layer.dispose() }
+  })
+
+  it('A2, A3: the newest ask overtakes at the next unit; a page told laying and aborted is laid anyway, resumed after it; both as asked in order', async () => {
+    const want = await cascadeInOrder()
+    const g = globalThis as { scheduler?: unknown }
+    const { layer, told, run } = await cascadeDoor()
+    // (between two units the run gives way, scheduler.yield among it: the first time, page 5 is asked and page 3's ask aborted)
+    const ctl = new AbortController()
+    let five: Promise<string> | null = null, yields = 0
+    g.scheduler = { yield: () => { if (++yields === 2 && !five) { five = layer.pageOf(5, { lang: 'zh' }).then(p => p.svg.outerHTML); ctl.abort() } return new Promise(ok => setTimeout(ok, 0)) } }
+    try {
+      const three = layer.pageOf(3, { lang: 'zh', signal: ctl.signal }).then(() => 'value', (e: Error) => e.name)
+      expect(await three).toBe('AbortError')
+      for (let i = 0; i < 200 && !five; i++) await tick()
+      const fifth = await five!
+      await settleDown(layer, CASCADE.pages)
+      // (page 3 told laying before page 5, page 5 ready before page 3: overtaken mid-closure, page 3 resumed and finished though
+      // its ask was aborted, a state never going back)
+      expect(told.indexOf('laying:3')).toBeLessThan(told.indexOf('laying:5'))
+      expect(told.indexOf('ready:5')).toBeLessThan(told.indexOf('ready:3'))
+      expect(layer.pageState(3)).toBe('ready')
+      const strip = (svg: string) => svg.replace(' lang="zh"', '')
+      expect(strip(fifth)).toBe(strip(want[4]!))
+      expect(strip((await layer.pageOf(3, { lang: 'zh' })).svg.outerHTML)).toBe(strip(want[2]!))
+      expect(run.ready(4)).toBe(true)
+    } finally { delete g.scheduler; layer.dispose() }
+  })
+
+  it('names the rows a page still waits for (rowsFor): its closure\'s, none once it is ready', async () => {
+    const { layer, run } = await cascadeDoor({ end: false })
+    try {
+      // (every row taken: nothing waited for; a page laid has none)
+      expect([1, 2, 3, 4, 5, 6].map(p => layer.rowsFor(p))).toEqual([[], [], [], [], [], []])
+      await layer.pageOf(2, { lang: 'zh' })
+      expect(layer.rowsFor(2)).toEqual([])
+      expect(run.rowsFor(6)).toEqual([])
+    } finally { layer.dispose() }
+    expect(() => layer.rowsFor(1)).toThrow()
+  })
+
   it('rejects with an AbortError a leftPageOf aborted after its covering part came, while its fetch is under way (m1)', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const M = await made()

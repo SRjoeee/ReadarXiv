@@ -151,8 +151,8 @@
 //                2307.16209v1 and 2608.16117v1; --pages=<n> says another count: 523 pages), or <fixture>:<page>,…
 //                (a fixture's name, or its paper's, as 2307.16209:147 for 2307.16209v1-zh). Each compared with the reference
 //                (as --door-order) and J reported, what the ask drew and laid before the page was ready (pages PDF.js was asked
-//                for, units laid; the engine's closure Need(p), where it exposes one, is reported as exposed, and
-//                compared by D1: 'closure: n/a' until then). The tasks (a fixture's pages, 6 to a task) are shared among --workers; with --perf also the time to the
+//                for, units laid, held to the page's closure Need(p) where the engine exposes one: the pages drawn
+//                among its draw, the units laid no more than its entries; 'closure: n/a' where it exposes none). The tasks (a fixture's pages, 6 to a task) are shared among --workers; with --perf also the time to the
 //                page (a fresh open, then the ask) and the longest task of 50 ms or more, on one worker. The run is written to
 //                out/layer-gate/door-jump-<commit>-<time>.json
 // The consistency measures (the table-groups brief, 2026-10-07), checked with the completeness ones and each to be 0: a
@@ -785,8 +785,8 @@ async function doorOrderFixture(page, name, errors) {
 /**
  * --door-jump: a task of a fixture's pages (the key `<fixture>#<i>`), each asked first and alone in a fresh page load
  * (layer-gate/door-jump.mjs) and compared with the reference's page, with J: the pages PDF.js was asked for and the units laid
- * before the page was ready, and with --perf the time to it and the longest task. The engine's closure, where it exposes
- * one, is Need(p) these are held to (1b-D1): until then 'n/a'
+ * before the page was ready, and with --perf the time to it and the longest task, held to the page's closure Need(p) where
+ * the engine exposes one (1b-D1: the pages drawn among its draw, the units laid no more than its lay entries), gated
  */
 async function doorJumpTask(page, key, errors) {
   const { name, pages } = JUMP_TASKS.get(key)
@@ -801,11 +801,11 @@ async function doorJumpTask(page, key, errors) {
       out.push({ p, ...sameAs(r, ref.pages[p - 1], target), completes: r.completes.ok, j: r.j, closure: r.closure, ...(r.ms ? { ms: r.ms, longest: r.longest } : {}) })
     }
     const n = key => out.filter(e => e[key]).length
-    const ok = out.length === pages.length && KEYS.every(k => n(k) === out.length) && out.every(e => e.completes) && !errors.length
+    const ok = out.length === pages.length && KEYS.every(k => n(k) === out.length) && out.every(e => e.completes && (!e.closure || e.closure.within)) && !errors.length
     if (!ok) failures.push(key)
     const mean = f => (out.reduce((a, e) => a + f(e), 0) / out.length).toFixed(1)
     const detail = JUMP_LIST || PERF ? out.map(e => `p${e.p}${e.ms ? ` ${secondsOf(e.ms.open + e.ms.ask)} s (open ${secondsOf(e.ms.open)} + ask ${secondsOf(e.ms.ask)}), longest task ${e.longest} ms,` : ''} ${e.j.drawn.length} pages drawn ${e.j.drawn.length > 8 ? `(${e.j.drawn[0]}..${e.j.drawn.at(-1)})` : `(${e.j.drawn.join(' ')})`}, ${e.j.units} units laid`).join('; ') : ''
-    const line = `${out.length} pages asked first and alone (${pages[0]}..${pages.at(-1)}): SVG ${n('svg')}/${out.length} equal, words ${n('words')}, copy ${n('copy')}, records ${n('recs')}, completions ${n('completes')}; J: ${mean(e => e.j.drawn.length)} pages drawn and ${mean(e => e.j.units)} units laid a page; closure: ${out.some(e => e.closure) ? 'exposed, not compared yet' : 'n/a'}${detail ? `; ${detail}` : ''}${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
+    const line = `${out.length} pages asked first and alone (${pages[0]}..${pages.at(-1)}): SVG ${n('svg')}/${out.length} equal, words ${n('words')}, copy ${n('copy')}, records ${n('recs')}, completions ${n('completes')}; J: ${mean(e => e.j.drawn.length)} pages drawn and ${mean(e => e.j.units)} units laid a page; closure: ${out.some(e => e.closure) ? `J within Need(p) on ${out.filter(e => e.closure?.within).length}/${out.length}` : 'n/a'}${detail ? `; ${detail}` : ''}${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
     return { name, key, door: true, ok, ready: true, line, pages: out }
   } finally { doneWith(name) }
 }
@@ -1205,7 +1205,7 @@ if (DOOR_JUMP !== null) {
   const drawn = all.map(e => e.j.drawn.length), units = all.map(e => e.j.units)
   const stats = xs => `${(xs.reduce((a, x) => a + x, 0) / Math.max(1, xs.length)).toFixed(1)} on average, ${Math.max(0, ...xs)} at most`
   const longest = all.filter(e => e.longest !== undefined).map(e => e.longest)
-  console.log(`\ndoor-jump (${DOOR_JUMP}): ${new Set(ran.map(r => r.name)).size} outputs, ${all.length} pages each asked first and alone in a fresh load: SVG markup equal to the page asked in order on ${count('svg')}, the word tables on ${count('words')}, copyOf's pixels on ${count('copy')}, the records on ${count('recs')}; J: pages drawn ${stats(drawn)}, units laid ${stats(units)}; closure: ${all.some(e => e.closure) ? 'exposed, not compared yet' : 'n/a'}${longest.length ? `; the longest task of 50 ms or more a page: ${Math.max(0, ...longest)} ms at most` : ''}; ${failures.length ? `${failures.length} failed (${failures.join(' ')})` : 'none failed'}, in ${seconds} s; the run in ${file}`)
+  console.log(`\ndoor-jump (${DOOR_JUMP}): ${new Set(ran.map(r => r.name)).size} outputs, ${all.length} pages each asked first and alone in a fresh load: SVG markup equal to the page asked in order on ${count('svg')}, the word tables on ${count('words')}, copyOf's pixels on ${count('copy')}, the records on ${count('recs')}; J: pages drawn ${stats(drawn)}, units laid ${stats(units)}; closure: ${all.some(e => e.closure) ? `J within Need(p) on ${all.filter(e => e.closure?.within).length}/${all.length} (Need drew ${stats(all.filter(e => e.closure).map(e => e.closure.draw.length))} pages)` : 'n/a'}${longest.length ? `; the longest task of 50 ms or more a page: ${Math.max(0, ...longest)} ms at most` : ''}; ${failures.length ? `${failures.length} failed (${failures.join(' ')})` : 'none failed'}, in ${seconds} s; the run in ${file}`)
   process.exit(failures.length || new Set(ran.map(r => r.name)).size !== asked.length ? 1 : 0)
 }
 if (DOOR !== null) {
