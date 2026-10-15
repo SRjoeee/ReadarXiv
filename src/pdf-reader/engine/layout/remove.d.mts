@@ -80,3 +80,13 @@ export declare function checkPage(o: { orig: Ink; removed: Ink; kept: Ink; entry
 }
 /** the remover's entry for one paper, under the module's isolation contract: the add-on, or the paper refused for any error; never throws */
 export declare function removePaper(o: { bytes: Uint8Array; PL: PdfLib; inflate?: ((bytes: Uint8Array, limit: number) => Uint8Array) | null; walkMax?: number; heldMax?: number; bytesMax?: number; OPS: Record<string, number>; opListOf: (page: number) => Promise<{ fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }>; deflate: (bytes: Uint8Array) => Uint8Array; plan: RemovalPlan; sets?: readonly string[]; boxesOf?: ((p: number, n: number, k: number) => number[] | null) | null; pathBoxOf?: ((p: number, m: number) => number[] | null) | null; compact?: boolean }): Promise<({ ok: true } & { bytes: Uint8Array; appended: number; manifest: RemovalManifest }) | { ok: false; refused: string }>
+/** a plan's removal on a page (tuples: layout/addon.mjs pagePlanOf's `remove`, an ask's plan) as makeAddon's plan entry */
+export declare function removalEntry(r: { shows?: number | null; units: [number, number[], number[]][]; names: [number, number[]][]; crops: [number[], number[]][] }): RemovalPlan['pages'][number]
+/** the reason of a page whose removed page alone is more than a part's tail or entries hold */
+export declare const PAST_PART: string
+/** the remover child's one call: one part's removed pages for an ask (chain-wire.mjs), the remover opened at the first and
+ *  kept, no chain kept; refused (never thrown) but for a memory-class error */
+export declare function removerOf(o: {
+  bytes: Uint8Array; PL: PdfLib; inflate?: ((bytes: Uint8Array, limit: number) => Uint8Array) | null; deflate(bytes: Uint8Array): Uint8Array
+  walkMax?: number; heldMax?: number; bytesMax?: number
+}): { remove(plans: Uint8Array): Promise<{ ok: true; tail: Uint8Array | null; entries: Uint8Array } | { ok: false; why: 'refused' }> }

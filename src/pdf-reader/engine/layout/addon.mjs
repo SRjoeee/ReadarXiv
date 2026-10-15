@@ -42,7 +42,7 @@
 import { pageDirty, pagePlan, pageRules } from '../layer-proto/removal.mjs'
 import { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, checkBoxes, parseAddonManifest, REFUSED_MAX } from './addon-manifest.mjs'
 import { pageInk } from './ink.mjs'
-import { alignOf, makeAddon, openRemover, SETS } from './remove.mjs'
+import { alignOf, makeAddon, openRemover, removalEntry, SETS } from './remove.mjs'
 
 /** the share of the manifest's byte and value caps that the paper's `dirty` and `rules` boxes may take, in page order: the
  *  other half is for the rest of the manifest (an entry a page, its units' ids, its reasons), which no page's ink changes.
@@ -163,9 +163,6 @@ export function withRemoved(page, asked, planOf, removed) {
   }
   return page
 }
-
-/** a plan's `remove` as makeAddon's plan entry reads it */
-export const removalEntry = r => ({ shows: r.shows, units: r.units.map(([id, glyphs, paths]) => ({ id, glyphs, paths })), names: r.names.map(([occurrence, glyphs]) => ({ occurrence, glyphs })), crops: r.crops.map(([glyphs, paths]) => ({ glyphs, paths })) })
 
 async function shipped({ bytes, index, doc, OPS, PL, deflate, inflate }) {
   if (!(bytes instanceof Uint8Array)) return refusal('the PDF is not bytes')

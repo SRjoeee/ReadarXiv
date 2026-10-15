@@ -2,7 +2,7 @@
 import type { RemovalManifest } from './addon-manifest.mjs'
 import type { LayoutIndex } from './file.mjs'
 import type { pageInk } from './ink.mjs'
-import type { AlignFacts, PdfLib, RemovalPlan } from './remove.mjs'
+import type { AlignFacts, PdfLib } from './remove.mjs'
 
 /** a page of PDF.js's document as the maker reads it (a PDFPageProxy is one) */
 export interface AddonPage {
@@ -51,5 +51,3 @@ export type PlannedEntry = RemovalManifest['page'][number] | null
 export declare function rangeEntries(planOf: (p: number) => PagePlan | null, from: number, to: number, spent: { bytes: number; values: number }): { page: Record<number, PlannedEntry>; asked: number[]; spent: { bytes: number; values: number } }
 /** the asked pages' entries with the remover's word on each, written into `page` (and returned) */
 export declare function withRemoved(page: Record<number, PlannedEntry>, asked: readonly number[], planOf: (p: number) => PagePlan | null, removed: RemovalManifest['page']): RemovalManifest['page']
-/** a plan's removal as makeAddon's plan entry reads it */
-export declare function removalEntry(r: PageRemoval): RemovalPlan['pages'][number]

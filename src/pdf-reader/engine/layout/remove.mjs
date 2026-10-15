@@ -28,9 +28,11 @@
 // six numbers. A form that is edited is copied for the appended page (copy on write), with every form between it and the
 // page, so that the original page draws as it did.
 //
-// An original module (no port statement). It imports nothing but the engine's own reading of a page's ink (checkPage's):
-// the PDF object layer (@cantoo/pdf-lib, MIT), deflate and a tolerant inflate are given. It runs where the layout file is
-// made, once a paper.
+// An original module (no port statement). It imports none of PDF.js: a page is aligned by its facts (alignOf, read where
+// the plan is made) or a list given, and the PDF object layer (@cantoo/pdf-lib, MIT), deflate and a tolerant inflate are
+// given; of the engine, the manifest's bounds, the remover exchange's payloads (chain-wire.mjs), the tail's reading and the
+// memory-class errors. It runs in the remover child (removerOf, a part's tail an ask) or where a whole paper's add-on is
+// made (layout/addon.mjs paperAddon).
 //
 // Isolation, the caller's contract (the coordinator's ruling of 2026-10-07): arXiv's PDF is untrusted, and the hard bound
 // on what it may cost is the process the remover runs in, not this module. Its budgets (WALK_MAX, HELD_MAX, BYTES_MAX,
@@ -43,7 +45,11 @@
 //   - on a refusal, a crash, a limit reached or the clock run out, ship no add-on for the paper: its readers draw every
 //     unit the old way, erased from the original page and put back where it is kept (layer-proto/run.mjs with no
 //     `removal`, or a page the manifest refuses), which loses no unit.
-import { REMOVAL } from './addon-manifest.mjs'
+import { isMemoryError } from '../pipeline/memory.mjs'
+import { PDFJS } from '../pipeline/versions.mjs'
+import { REFUSED_MAX, REMOVAL } from './addon-manifest.mjs'
+import { encodeEntries, readAsk } from './chain-wire.mjs'
+import { startxrefOf, TAIL_CAP } from './tail.mjs'
 
 /** the remover's version (addon-manifest.mjs, beside the manifest that names it, where a reader checks one without
  *  loading this module) */
@@ -714,6 +720,64 @@ export async function removePaper({ bytes, PL, inflate = null, walkMax, heldMax,
   } catch (e) {
     return { ok: false, refused: `the paper could not be read: ${String(e?.message ?? e).slice(0, 200)}` }
   }
+}
+
+/** a plan's removal on a page (layout/addon.mjs pagePlanOf's `remove`, the ask's plan: tuples) as makeAddon's plan entry
+ *  reads it (objects); a `shows` of null is none read */
+export const removalEntry = r => ({ shows: r.shows ?? undefined, units: r.units.map(([id, glyphs, paths]) => ({ id, glyphs, paths })), names: r.names.map(([occurrence, glyphs]) => ({ occurrence, glyphs })), crops: r.crops.map(([glyphs, paths]) => ({ glyphs, paths })) })
+
+/** the reason of a page whose removed page alone is more than a part's tail or entries hold */
+export const PAST_PART = 'its removed page passes what a part holds'
+const ZERO_STATS = Object.freeze({ removed: 0, rules: 0, cut: 0, hidden: 0, refused: 0, forms: 0, streams: 0 })
+
+/**
+ * The remover child's one call (the bundle 4 contract's C8.2, M6; E3): `bytes` arXiv's PDF as the service checked it, `PL`,
+ * `inflate` and `deflate` as openRemover's and makeAddon's. Returns { remove(plans) }: one part's removed pages, `plans` the
+ * ask's bytes (chain-wire.mjs encodeAsk, read here within its bounds). The remover is opened at the first ask and kept (its
+ * decoded streams and fonts let go after each); it keeps no chain: each ask carries the state the tails so far leave, so
+ * that the cut's repeated asks for one part change nothing, and a remover opened again (or one a ask) answers alike.
+ *
+ * An ask is refused (`{ ok: false, why: 'refused' }`) where it does not read, where its facts were read by another PDF.js
+ * than the engine's pinned one (PDFJS: the facts are aligned only against the reading they came from), where its pages
+ * are not the PDF's, where a first chain's `end` and `xref` are not this PDF's own length and startxref, or a later one
+ * names numbers of the PDF's own, and on any error of the reading. Otherwise { ok: true, tail, entries }: the update
+ * chained after the ask's chain (makeAddon's `chain`; null where it removes no page), and its entries (encodeEntries:
+ * every asked page's entry, its counts, the removed pages' object numbers and the empty stream's). Where the tail passes
+ * TAIL_CAP or the entries ENTRIES_CAP, one page asked is refused alone (PAST_PART, nothing written) and several are
+ * `over` (the part is cut shorter). Never throws but a memory-class error (pipeline/memory.mjs), which ends the child
+ */
+export function removerOf({ bytes, PL, inflate = null, deflate, walkMax, heldMax, bytesMax }) {
+  if (!(bytes instanceof Uint8Array)) throw new TypeError('bytes: arXiv\'s PDF, as the service checked it')
+  let opened = null
+  const NO = Object.freeze({ ok: false, why: 'refused' })
+  async function remove(plans) {
+    let R = null
+    try {
+      const ask = readAsk(plans)
+      if (ask.pdfjs !== PDFJS) return NO
+      opened ??= openRemover(bytes, { PL, inflate, ...(walkMax ? { walkMax } : {}), ...(heldMax ? { heldMax } : {}), ...(bytesMax ? { bytesMax } : {}) })
+      R = await opened
+      const c = ask.chain, largest = R.ctx.largestObjectNumber
+      if (ask.pages !== R.numPages) return NO
+      if (c.next === null ? c.end !== bytes.length || c.xref !== startxrefOf(bytes) : c.end <= bytes.length || c.xref < bytes.length || c.empty <= largest || c.kids[0] <= largest) return NO
+      const pages = ask.plans.map(x => x.p), byPage = new Map(ask.plans.map(x => [x.p, x]))
+      const made = await makeAddon({
+        R, bytes, alignOf: p => byPage.get(p).align, deflate, plan: { pages: Object.fromEntries(ask.plans.map(x => [x.p, removalEntry(x)])) }, sets: SETS, compact: true, pages,
+        chain: { end: c.end, xref: c.xref, next: c.next, kids: c.kids, empty: c.empty },
+      })
+      for (const e of Object.values(made.manifest.page)) if (e.refused !== undefined) e.refused = e.refused.slice(0, REFUSED_MAX)
+      const entries = made.tail === null || made.tail.length <= TAIL_CAP ? encodeEntries({ page: made.manifest.page, stats: made.manifest.stats, kids: made.chain.kids, empty: made.chain.empty }) : null
+      if (entries !== null) return { ok: true, tail: made.tail, entries }
+      if (pages.length > 1) return { ok: true, tail: null, entries: encodeEntries({ over: true }) }
+      return { ok: true, tail: null, entries: encodeEntries({ page: { [pages[0]]: { ok: false, refused: PAST_PART } }, stats: { ...ZERO_STATS, refused: 1 }, kids: [], empty: c.empty }) }
+    } catch (e) {
+      if (isMemoryError(e)) throw e
+      return NO
+    } finally {
+      R?.release()
+    }
+  }
+  return { remove }
 }
 
 /**
