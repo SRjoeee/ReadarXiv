@@ -181,6 +181,13 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
       expect(await settle(ask(d.layer, 2))).toHaveProperty('error')
       await d.advance()
       expect(d.eventsOf(2)).toEqual([[2, 'laying'], [2, 'failed']])
+      // a page whose closure does not hold the failed one still lays (a door whose closures overlap it has none to try)
+      const apart = [1, 3, 4].find(q => !d.closure(q).includes(2))
+      if (apart !== undefined) {
+        const other = settle(ask(d.layer, apart))
+        await d.advance()
+        expect(await other).toHaveProperty('value')
+      }
       d.layer.dispose()
     })
 

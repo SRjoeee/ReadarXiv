@@ -420,6 +420,19 @@ describe('table groups', () => {
     }
   })
 
+  it('refuses, loudly, a group that cannot be told whole: its layout-only cells dropped by the no-layout fallback', async () => {
+    // one left cell on page 1 and 80 layout-only cells of its column on page 2 (152,000 lines): the closure puts them all in the
+    // first part, whose layout is past the bounds, and without its layout the part would tell the one cell and drop the rest
+    const units: PaperSpec['units'] = [{ stream: 1, rects: [1], lines: [1], cell: cell(0) }]
+    for (let k = 1; k <= 80; k++) units.push({ stream: null, lines: [2], perPage: 1900, cell: cell(k) })
+    const whole = wholeOf({ pages: 2, units })
+    const refused = await cutBundle(whole, { leftPages: () => null, base: BASE_OF }).catch(e => e)
+    expect(refused).toBeInstanceOf(BundleRefusal)
+    expect(refused.kind).toBe('part')
+    expect(refused.data).toMatchObject({ bound: 'part', page: 1 })
+    expect(refused.message).toMatch(/table group/)
+  }, 120_000)
+
   it('has readPart refuse a part that tells a member of a group an earlier part told', async () => {
     const whole = wholeOf(COLUMN)
     const c = await cutBundle(whole, { leftPages: leftPagesOf(whole), base: BASE_OF })

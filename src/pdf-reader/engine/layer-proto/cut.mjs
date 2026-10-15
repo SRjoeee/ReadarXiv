@@ -83,8 +83,7 @@ export const needFrontier = (K, N) => needsOf(K, N, false, c => !c.rects).lay
  * prefix of K: F(b) grows to the last of those, to a fixpoint (the last of one group may be the first of another's reach). Only
  * ever up, so an entry goes to an earlier part and never a later one.
  */
-function closedOver(F, K, units) {
-  const { members } = groupsOfUnits(units)
+function closedOver(F, K, { members }) {
   const at = new Map(K.map((e, i) => [e.id, i]))
   // each group's first and last place in K, the groups by first place with the furthest last place up to each
   const spans = []
@@ -154,7 +153,8 @@ export async function cutBundle(whole, o) {
   if (!Array.isArray(given) || given.length !== N + 1) throw new TypeError(`frontier: an array of the ${N + 1} indices of pages 0 to ${N}`)
   for (let b = 0; b <= N; b++) if (!Number.isInteger(given[b]) || given[b] < -1 || given[b] >= K.length || (b > 0 && given[b] < given[b - 1])) throw new RangeError(`frontier: page ${b} is not an index of K, rising`)
   if (given[0] !== -1) throw new RangeError('frontier: page 0 is not -1')
-  const F = closedOver(given, K, whole.units)
+  const grouped = groupsOfUnits(whole.units)
+  const F = closedOver(given, K, grouped)
 
   // the left parts, written as the parts reach their pages
   const lefts = []
@@ -226,6 +226,15 @@ export async function cutBundle(whole, o) {
     const write = async (b, withLayout) => {
       await leftTo(b)
       const x = input(b, withLayout)
+      if (!withLayout && layout) {
+        // (without its layout a part tells its left units alone, and a layout-only unit of the range is lost to the stream: that is
+        // the documented price of a page too big for a layout, but never for a table group, which would be told in part)
+        const told = new Set(x.mine.map(e => e.id))
+        const groupsTold = new Set(x.mine.map(e => grouped.of[e.id]).filter(g => g >= 0))
+        for (const e of K.slice(taken + 1, Math.max(taken, upTo(b)) + 1)) {
+          if (!told.has(e.id) && groupsTold.has(grouped.of[e.id])) throw refuse('part', 'pages', `unit ${e.id}, a member of a table group the part tells in part: page ${a} cannot be told whole without its layout`, { bound: 'part', page: a, unit: e.id })
+        }
+      }
       const ad = withLayout && layout && o.chainAddon ? await o.chainAddon(parts.length, { pages: [a, b], layout: x.part }) : null
       const w = await writePart({ paper, head: head.sha256, prev, pages: x.pages, views: x.views, left: x.left, fileOnly: x.fileOnly, layout: x.part, addon: addonOf(b, withLayout, ad), leftParts: lefts.slice(a - 1, b) })
       return { w, x }
