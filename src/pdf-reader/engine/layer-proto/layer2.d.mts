@@ -180,7 +180,8 @@ export declare function textSymbol(src: string): boolean
 export declare function phClassProven(src: string): { cls: string; unknown?: boolean }
 /** the unit's characters by its rectangles; `exact`: each rectangle's baseline and size where a layout file gives them */
 export declare function charsOfUnit2(rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], extents?: Map<Rect, number[]>, exact?: ReadonlyMap<Rect, { baseline: number; size: number }> | null): Char[]
-export declare function extendRects2(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, pageViews: readonly number[][], wordChars?: readonly (readonly Char[] | undefined)[]): number
+/** `first`: the unit's first line (default rects[0]; `rects` may be its lines on one page alone) */
+export declare function extendRects2(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, pageViews: readonly number[][], wordChars?: readonly (readonly Char[] | undefined)[], first?: Rect): number
 export declare function extendFirstLines(rects: Rect[], pageViews: readonly number[][], others: readonly (readonly Rect[] | undefined)[]): void
 export declare function blocksOf2(rects: readonly Rect[], pageViews: readonly number[][], keep?: ReadonlySet<string> | null, regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null): Block[]
 export declare function gapsOf2(unitChars: readonly Char[], src: string, deny?: ReadonlySet<string> | null): { text: string; chars: Char[] }[]
@@ -207,7 +208,7 @@ export declare const charKey: (c: { page?: number; item: number; k: number }) =>
 export declare function snapFirstRect(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[]): number | undefined
 export declare function snapFirstRect2(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[]): number | undefined
 /** wordChars: the page's characters the first line may grow over the words its source begins with (step 3) */
-export declare function extendRects(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, wordChars?: readonly (readonly Char[] | undefined)[]): number
+export declare function extendRects(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, wordChars?: readonly (readonly Char[] | undefined)[], first?: Rect): number
 /** a unit's translation as tokens; `.base` is its base style. `measure(s, face)`: a run's width at 100 px (the canvas's, cached,
  *  by default); a host reading the tokens' faces and texts before the faces are loaded passes a measure that takes none */
 /** what a unit's first line starts with before its own text: each part in its own style, then a space (`gap`
