@@ -105,6 +105,29 @@ holding that tree's `pdftex.map`; `GATE_PDF_CACHE` unset, which would take the p
 Docker ever reads a native compile). Made three times so, the file is byte-equal; it is still not the Docker image's
 package versions byte for byte, and the next make in Docker replaces it (a new pack object).
 
+**The LOST survey's maker (LAYOUT 6, the file's schema 4, 2026-10-15).** All 30 layout files are made so, natively: the
+same command with `--engine=<the tree> --switch --only=<all 30>`, `AXT_DATA` a folder whose `layout/<id>v<n>/` link each
+paper's `source.gz` and `arxiv.pdf` and whose `layer-fixtures` links `data/layer-fixtures` (the 29 records), the 30th's
+record and units copied into its output folder first, `LAYER_FIXTURES` the gate's made folder for the engine
+(`out/layer-gate/fixtures/<key>`, the key `madeFixtures` computes, so that `--layouts=made` finds them), and the pack made
+from it (`gate-pack.mjs make --fixtures=<that folder>`). Every placeholder the old files found has the same row; only LOST
+ones moved. The measures read the new flags as TeX's file says: a `JOINED` display has no segments of its own (its ink is
+in its group's first display's, which `contentLost` and `textInDisplay` read), and an `OUTSIDE` piece is LOST
+(`contentUnknown`). A unit that opens with a display has its rows before its start mark's line taken off as no line of
+it (as the held rows at its end), so that an `OUTSIDE` piece is outside every line of its unit. The prototype's checker
+counts a placeholder shown when it is drawn or left intact where it stands (`inPlace`: an `OUTSIDE` piece, which the
+drawing never erases), never `missing`. The hybrid's safe rule is one place (`layer-proto/tex.mjs` `proofOf`): a
+rendering is drawn only from what the file proves (its segments, its page text, its held run or group, a piece the file
+draws as nothing), else the unit stays the original's; its one exemption is a LaTeX text symbol (`\%`, `$\times$`), whose
+source is its rendering's content: one grapheme drawn, with no `_`, `^`, `/` or `√(` (`layer2.mjs textSymbol`), so that a
+formula of no letter or digit (`$\sum_{\alpha}^{\beta}$`) is proven as any formula is; with no layout file (the maker
+refused, the bundle dropped it) the reader's units are still drawn under the rule, which nothing then proves; a piece whose segments all lie past the pages the run shows (the gate's 12) is
+proven and drawn as its page text, never `?`. Fix 4 (the maintainer's ruling of 2026-10-15, every script): a mark UAX 14
+does not let a line start with (`layer-proto/no-start.mjs`, the table `lineStartPunct` reads too, served to the gate from
+this repository) that opens the translation's text right after a displayed formula is dropped from the drawing, unless
+the original's line there opens with one; the rows and the cache keep the translation. The sample's bundle is made so too, over the committed stand-in PDF (`scripts/make-sample-bundle.mjs
+--keep-pdf`, the shim first on PATH: its stand-in compiled natively would differ by the packages' versions alone).
+
 **Recording the 30 outputs.** The gate's defaults hold 29 (`data/layer-fixtures`); the record's inputs name the 30th's
 folders, and a `--record` that would drop an output the record's run of its kind holds (for a model run, the pixel run's
 where the record has no model run of its own) is refused (`score.mjs droppedOutputs`). The record of 2026-10-15:
@@ -278,7 +301,7 @@ file. They must move no word of the paper.
 | File | When to run it | What it needs |
 |---|---|---|
 | `lab/pdf/spikes/layout-marks-gate.mjs` | After any change to `src/pdf-reader/engine/layout/marks.mjs`: the marks' quality on the corpus (what v0, the marked original as the run makes it, and v1, the same with the layout marks, carry and lose). `--bisect`, `--write` and `--classes` as its header says; exit 1 on a failing paper, a class to switch off or a regression. | The corpus, `out/corpus-meta.json`, Docker. |
-| `lab/pdf/spikes/layout-marks-cases.mjs` | Alongside it: small documents compiled natively, each a way a mark could move a line. Exit 1 on a failure. | Docker. |
+| `lab/pdf/spikes/layout-marks-cases.mjs` | Alongside it: small documents compiled natively, each a way a mark could move a line. Exit 1 on a failure. `ONLY=lost` the LOST survey's: an inline formula first after a display, a display group, displays at a page's foot. `NATIVE_TEX=1` compiles with this machine's TeX Live (the shim's `NATIVE_TEX_BIN`, `NATIVE_TEXMFLOCAL`, `NATIVE_TEXMFVAR`): there TinyTeX's pdfTeX gives cmex's big operators and delimiters raw codes (∑ as P), which case A (pdfLaTeX) then reports, the image's does not. | Docker, or a native TeX Live. |
 | `lab/pdf/spikes/layout-marks-compare.mjs`, `layout-marks-compare.d.mts` | The gate's judgements, pure; `tests/pdf-reader/layout-marks-gate.test.ts` tests them. | — |
 | `lab/pdf/spikes/layout-make.mjs` | To run the layout maker on the researched papers, end to end, against the bars of `lab/pdf/records/layout-maker.md`. | The papers' sources and PDFs in `data/layout/`, Docker. |
 | `lab/pdf/spikes/cm-check.mjs` | After any change to CM (`layout/paper.mjs` with `converge`) or to the compile contract's `draft`/`files`: today's layout compile against CM in one native TeX Live, the marked PDF, marks file and layout file compared byte for byte, CM's record and each compile's CPU printed; it is the reference host of `draft` and `files`. `--corpus`, `--layout`, `--runs` as its header says; exit 1 on a difference or a refusal. | The papers' sources (and arXiv's PDFs for the layout) in `data/layout/` or `data/corpus/`, a native TeX Live (`NATIVE_TEXMFLOCAL`, as its header says). No Docker, no network. |

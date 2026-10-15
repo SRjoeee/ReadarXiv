@@ -1,4 +1,8 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { beforeAll, describe, expect, it } from 'vitest'
+import { PH_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // The layer's hybrid (layer-proto/tex.mjs): v0's per-unit reading with its parts from the layout file wherever the file
@@ -222,7 +226,7 @@ describe("each crop the hybrid draws cut from its placeholder's own ink", () => 
   const page = [...item('Each value', 10, 100, 10, 0), ...item('2', 62, 103.6, 7, 1), ...item('is squared here', 70, 100, 10, 2)]
   const unit = { kind: 'para', src: 'Each value is squared here', pieces: [{ t: 'text', s: '\u6BCF\u4E2A\u503C ' }, { t: 'ph', src: '$^{2}$' }, { t: 'text', s: ' \u5E73\u65B9' }] } as never
   const rect = [1, 10, 97.85, 145, 106.83]
-  const read = (lu: never | null, kOf: number[] | null) => L2.prepareUnit(unit, [rect.slice()] as never, [page as never], new Map() as never, null, { crops: T.cropsOf(lu, kOf) } as never)
+  const read = (lu: never | null, kOf: number[] | null) => L2.prepareUnit(unit, [rect.slice()] as never, [page as never], new Map() as never, null, { proof: T.proofOf(lu, kOf) } as never)
   it("v0's crop takes the segment of its placeholder's row that it meets, and that segment's baseline", () => {
     const r = read(unitOf([[1, 10, 145, 100, 108, 97, 10, 0]], [[1, 0, [1, 61.8, 100, 65.6, 107.5, 101]]]), [-1, 1, -1])
     expect(r.unproven).toBeUndefined()
@@ -230,12 +234,280 @@ describe("each crop the hybrid draws cut from its placeholder's own ink", () => 
     expect(r.get(1)?.baseline).toBe(100)
     expect((r.get(1)?.gap as { box?: unknown })?.box).toBeTruthy()
   })
+  it("a rendering in its own brackets, the translation setting its own, keeps the segment's box clipped between them", () => {
+    // "(x+y)" on the page, the source's own round brackets inside the translation's: its crop is the segment's ink
+    // between the brackets, on the segment's baseline, never estimated from the text layer's characters
+    const pg = [...item('see', 10, 100, 10, 0), ...item('(x+y)', 60, 100, 10, 1, math), ...item('here', 90, 100, 10, 2)]
+    const u = { kind: 'para', src: 'see here', pieces: [{ t: 'text', s: '\u5F0F\uFF08' }, { t: 'ph', src: '$(x+y)$' }, { t: 'text', s: '\uFF09\u6240\u793A' }] } as never
+    const lu = unitOf([[1, 10, 145, 100, 108, 97, 10, 0]], [[1, 0, [1, 60, 100, 85, 108, 97]]])
+    const r = L2.prepareUnit(u, [rect.slice()] as never, [pg as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'ph' }) as never)
+    expect(r.unproven).toBeUndefined()
+    expect(r.get(1)).toMatchObject({ mode: 'crop', baseline: 100 })
+    for (const [i, v] of [64.6, 96.7, 80.4, 108.3].entries()) expect(r.get(1)?.crop?.[i]).toBeCloseTo(v, 6)
+    expect((r.get(1)?.gap as { box?: unknown; unbracketed?: boolean })).toMatchObject({ unbracketed: true, box: { x0: 65, x1: 80, top: 108, bottom: 97 } })
+  })
   it('a crop no segment proves: its row LOST, its segment elsewhere, its unit not in the file, its pieces not the file\'s', () => {
     const line = [1, 10, 145, 100, 108, 97, 10, 0]
     expect(read(unitOf([line], [[1, 32, []]]), [-1, 1, -1]).unproven).toBe(1)
     expect(read(unitOf([line], [[1, 0, [1, 120, 100, 130, 107.5, 101]]]), [-1, 1, -1]).unproven).toBe(1)
     expect(read(null, null).unproven).toBe(1)
     expect(read(unitOf([line], [[1, 0, [1, 61.8, 100, 65.6, 107.5, 101]]]), null).unproven).toBe(1)
+  })
+})
+
+describe('every rendering proven by the file, or the unit the original\'s (proofOf, the safe rule)', () => {
+  const page = [...item('as shown in', 10, 100, 10, 0), ...item('[12]', 70, 100, 10, 1), ...item('before', 95, 100, 10, 2)]
+  const cite = { kind: 'para', src: 'as shown in before', pieces: [{ t: 'text', s: '\u5982 ' }, { t: 'ph', src: '\\cite{smith2019}' }, { t: 'text', s: ' \u6240\u793A' }] } as never
+  const rect = [1, 10, 97.85, 125, 106.83]
+  const line = [1, 10, 125, 100, 108, 97, 10, 0]
+  const read = (lu: never | null, kOf: number[] | null, unit = cite) => L2.prepareUnit(unit, [rect.slice()] as never, [page as never], new Map() as never, null, { proof: T.proofOf(lu, kOf) } as never)
+  it("v0's page text of a placeholder is proven where its characters stand in its row's segments", () => {
+    const r = read(unitOf([line], [[1, 0, [1, 70, 100, 90, 108, 97]]]), [-1, 1, -1])
+    expect(r.get(1)?.mode).toBe('orig-text')
+    expect(r.unproven).toBeUndefined()
+  })
+  it('and not where they stand elsewhere, its row is LOST, or the unit is not in the file', () => {
+    expect(read(unitOf([line], [[1, 0, [1, 100, 100, 120, 108, 97]]]), [-1, 1, -1]).unproven).toBe(1)
+    expect(read(unitOf([line], [[1, 32, []]]), [-1, 1, -1]).unproven).toBe(1)
+    expect(read(null, null).unproven).toBe(1)
+  })
+  it("a rendering from its source (a citation found nowhere) is no proof; TeX's own nothing and a text symbol are", () => {
+    const none = { kind: 'para', src: 'as shown in before', pieces: [{ t: 'text', s: '\u5982 ' }, { t: 'ph', src: '\\cite{nobody}' }, { t: 'text', s: ' ' }, { t: 'ph', src: '\\%' }, { t: 'ph', src: '~' }] } as never
+    const bare = [...item('as shown in', 10, 100, 10, 0), ...item('before', 95, 100, 10, 2)]
+    const r = L2.prepareUnit(none, [rect.slice()] as never, [bare as never], new Map() as never, null, { proof: T.proofOf(null, null) } as never)
+    expect(r.get(1)?.mode).toBe('source')
+    expect(r.unproven).toBe(1)
+    const sym = { kind: 'para', src: 'as shown', pieces: [{ t: 'text', s: '\u5982 ' }, { t: 'ph', src: '\\%' }, { t: 'ph', src: '~' }] } as never
+    expect(L2.prepareUnit(sym, [rect.slice()] as never, [bare as never], new Map() as never, null, { proof: T.proofOf(null, null) } as never).unproven).toBeUndefined()
+  })
+})
+
+describe('a display group and a piece outside the unit\'s lines (JOINED, OUTSIDE: LAYOUT 6)', () => {
+  // a unit of text, two displays with nothing between them, text: lines 0 and 1 its text, 2 and 3 the displays' rows
+  // (held), 4 text; the first display's segments hold the group's ink, the second is JOINED
+  const L = (y: number) => [1, 10, 200, y, y + 7, y - 2, 10, 0]
+  const lines = [L(500), L(488), L(470), L(458), L(440)]
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const D = '\\begin{equation}x=1\\end{equation}', E = '\\begin{equation}y=2\\end{equation}'
+  const u = { kind: 'para', src: 'a b c d', pieces: [text('\u7532 '), ph(D), text(' '), ph(E), text(' \u4E59')] } as never
+  const tr = [[0, '\u7532 '], [1, 1], [0, ' '], [1, 3], [0, ' \u4E59']]
+  const kOf = [-1, 1, -1, 3, -1]
+  const fileUnit = (second: number, first = [1, 50, 470, 80, 477, 456]) => {
+    const lu = unitOf(lines, [[1, 0, first], [3, second, []]]) as { ph: Map<number, { kind: string }> }
+    for (const k of [1, 3]) { const row = lu.ph.get(k); if (row) row.kind = 'display' }
+    return { ...lu, held: [2, 3] } as never
+  }
+  it('a JOINED display is located with its group, which a LOST one is not', () => {
+    expect(T.locatedWhole(fileUnit(PH_FLAG.JOINED), u, tr, { held: true }).ok).toBe(true)
+    expect(T.locatedWhole(fileUnit(PH_FLAG.JOINED), u, tr).ok).toBe(true)
+    // the control: the later display LOST, not JOINED. Without the file's held lines it is not located; with them it is the
+    // held run's (displayCover, D4 step 1), whatever its flag, so that case proves nothing of JOINED's
+    expect(T.locatedWhole(fileUnit(PH_FLAG.LOST), u, tr).why).toBe('lost')
+    expect(T.locatedWhole(fileUnit(PH_FLAG.LOST), u, tr, { held: true }).ok).toBe(true)
+  })
+  it('reads as its group: kept, the same region as the first, a break the text after them starts below', () => {
+    const lu = fileUnit(PH_FLAG.JOINED)
+    const t = T.texRects(lu)
+    const page = [...item('a b', 10, 500, 10, 0), ...item('c', 10, 488, 10, 1), ...item('x=1', 60, 470, 10, 2, math), ...item('y=2', 60, 458, 10, 3, math), ...item('d', 10, 440, 10, 4)]
+    const prep = L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu, kOf, { use: 'lines', lines: t }) as never)
+    expect(prep.unproven).toBeUndefined()
+    const r1 = prep.get(1), r3 = prep.get(3)
+    expect([r1?.mode, r3?.mode]).toEqual(['kept', 'kept'])
+    expect(r3?.region).toBe(r1?.region)
+    const blocks = L2.blocks2(t.rects as never, [[0, 0, 612, 792]], new Set(prep.keep), prep.lineInfo, prep.regionOf, prep.referenced)
+    expect(blocks.map(b => [b.B, b.after])).toEqual([[[500, 488], 0], [[440], 1]])
+  })
+  it('a LOST piece outside the unit\'s lines is located with the file\'s lines alone, and drawn as nothing', () => {
+    const head = { kind: 'para', src: 'a b c', pieces: [ph('\\url{http://x.org}'), text(' a b c')] } as never
+    const lu = unitOf([L(500)], [[0, PH_FLAG.LOST | PH_FLAG.OUTSIDE, []]]) as never
+    expect(T.locatedWhole(lu, head, [[1, 0], [0, ' a b c']], { held: true }).ok).toBe(true)
+    expect(T.locatedWhole(lu, head, [[1, 0], [0, ' a b c']]).why).toBe('lost')
+    const t = T.texRects(lu)
+    const prep = L2.prepareUnit(head, t.rects as never, [item('a b c', 60, 500, 10, 0) as never], new Map() as never, null, T.texParts(lu, [0, -1], { use: 'lines', lines: t }) as never)
+    expect(prep.get(0)).toMatchObject({ mode: 'none', text: '' })
+    expect(prep.unproven).toBeUndefined()
+  })
+})
+
+describe("a piece past the pages shown, a source's own proof, and fix 4 (the LOST round's review, 2026-10-15)", () => {
+  const L = (y: number) => [1, 10, 200, y, y + 7, y - 2, 10, 0]
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const D = '\\begin{equation}x=1\\end{equation}'
+  const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
+  const DESIGNS = { serif: 'times', sans: 'helvetica', mono: 'courier' }
+  const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0 }
+  const drawn = (u: never, prep: never) => L2.tokensOf2(u, prep, 'zh', BASE as never, DESIGNS as never, P as never, null, () => 0).filter(t => typeof t.s === 'string').map(t => t.s).join('')
+  it('a found row whose segments all lie past the pages shown is proven, drawn as its page text, never "?"', () => {
+    const u = { kind: 'para', src: 'in Section here', pieces: [text('\u5728\u7B2C '), ph('\\ref{sec:x}'), text(' \u8282')] } as never
+    const lu = unitOf([[1, 10, 145, 100, 108, 97, 10, 0]], [[1, 0, [13, 181.41, 568.58, 196.87, 575.95, 568.43]]]) as { ph: Map<number, { text?: string }> }
+    const row = lu.ph.get(1)
+    if (row) row.text = 'C.1'
+    const read = (shown: number) => L2.prepareUnit(u, [[1, 10, 97.85, 145, 106.83]] as never, [item('in here', 10, 100, 10, 0) as never], new Map() as never, null, { proof: T.proofOf(lu as never, [-1, 1, -1], shown) } as never)
+    const r = read(12)
+    expect(r.unproven).toBeUndefined()
+    expect(r.get(1)).toMatchObject({ mode: 'source', text: 'C.1' })
+    // with its page shown, not so: its characters are read there, and here none is
+    expect(read(13).unproven).toBe(1)
+  })
+  it('a piece the file draws as nothing (OUTSIDE) is never handed a guessed rendering by the second chance', () => {
+    const head = { kind: 'para', src: 'alpha beta gamma', pieces: [ph(D), text(' alpha beta gamma')] } as never
+    const lu = unitOf([L(500)], [[0, PH_FLAG.LOST | PH_FLAG.OUTSIDE, []]]) as { ph: Map<number, { kind: string }> }
+    const row = lu.ph.get(0)
+    if (row) row.kind = 'display'
+    const t = T.texRects(lu as never)
+    // a run of the line no source word takes, the display's own text: what the second chance would hand it (kept, a
+    // guess, and the unit then unproven)
+    const prep = L2.prepareUnit(head, t.rects as never, [[...item('alpha beta gamma', 12, 500, 10, 0), ...item('x=1', 120, 500, 10, 9, math)] as never], new Map() as never, null, T.texParts(lu as never, [0, -1], { use: 'lines', lines: t }) as never)
+    expect(prep.get(0)).toMatchObject({ mode: 'none', inPlace: true })
+    expect(prep.unproven).toBeUndefined()
+  })
+  it("fix 4: a mark that may not start a line opening the text after a display is dropped, unless the original's line opens with one", () => {
+    const lines = [L(500), L(488), L(470), L(458), L(440)]
+    const lu = { ...(unitOf(lines, [[1, 0, [1, 50, 470, 80, 477, 456]]]) as object), held: [2, 3] } as unknown as { ph: Map<number, { kind: string }> }
+    const row = lu.ph.get(1)
+    if (row) row.kind = 'display'
+    const t = T.texRects(lu as never)
+    const u = { kind: 'para', src: 'a b c d', pieces: [text('\u7532 '), ph(D), text('\uFF0C\u4E59')] } as never
+    const page = (after: string) => [...item('a b', 10, 500, 10, 0), ...item('c', 10, 488, 10, 1), ...item('x=1', 60, 470, 10, 2, math), ...item('(1)', 180, 458, 10, 3), ...item(after, 10, 440, 10, 4)]
+    const prep = (after: string) => L2.prepareUnit(u, t.rects as never, [page(after) as never], new Map() as never, null, T.texParts(lu as never, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+    expect(drawn(u, prep('where d') as never)).toBe('\u7532\u4E59')
+    // the original's own line after the display opens with a comma: kept
+    expect(drawn(u, prep(', where d') as never)).toBe('\u7532\uFF0C\u4E59')
+  })
+})
+
+describe("page text no Unicode stands for, and a held line's own mark (the LOST round's images, 2026-10-15)", () => {
+  const L = (y: number) => [1, 10, 200, y, y + 7, y - 2, 10, 0]
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
+  const DESIGNS = { serif: 'times', sans: 'helvetica', mono: 'courier' }
+  const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0 }
+  const drawn = (u: never, prep: never) => L2.tokensOf2(u, prep, 'zh', BASE as never, DESIGNS as never, P as never, null, () => 0).filter(t => typeof t.s === 'string').map(t => t.s).join('')
+  it("reads the characters a font's own map gives its glyphs, and marks a character it maps none to", () => {
+    const set = L2.mappedOf({ _map: ['a', undefined, '\uFB01', '\u{1D454}'] })
+    // (each as written and as the text layer normalises it: the ligature's letters, the math italic's g)
+    expect([...(set ?? [])].sort()).toEqual(['a', 'f', 'g', 'i', '\uFB01', '\u{1D454}'].sort())
+    expect(L2.mappedOf({ firstChar: 0, lastChar: 255 })).toBeNull()
+    expect(L2.mappedOf(undefined)).toBeNull()
+    const f8 = new Set(['g', '='])
+    expect(['g', ' ', '=', '\u00CD'].map(ch => L2.unmapped(ch, f8))).toEqual([false, false, false, true])
+    // a font with no map to read: only a character no Unicode stands for (private use, replacement, control)
+    expect(['a', '\uE001', '\uFFFD', '\u0001', ' '].map(ch => L2.unmapped(ch, null))).toEqual([false, true, true, true, false])
+  })
+  it("reads each font's map from the pinned PDF.js opened with PDF_OPTIONS (its private `_map`), and refuses a font exported without it", async () => {
+    // the CC0 sample paper's page 1, its fonts as PDF.js's commonObjs holds them once the page's operators are read
+    const { PDF_OPTIONS } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const data = new Uint8Array(readFileSync(join(process.cwd(), 'tests/fixtures/pdf/sample-1/sample-1.pdf')))
+    const fontsOf = async (options: object) => {
+      const task = getDocument({ data: data.slice(), verbosity: 0, ...options })
+      try {
+        const page = await (await task.promise).getPage(1)
+        const ops = await page.getOperatorList()
+        const names = new Set<string>()
+        ops.fnArray.forEach((fn, i) => { if (fn === OPS.setFont) names.add(String((ops.argsArray[i] as unknown[])[0])) })
+        return [...names].map(n => page.commonObjs.get(n) as { name: string; isType3Font: boolean })
+      } finally {
+        await task.destroy()
+      }
+    }
+    const fonts = await fontsOf(PDF_OPTIONS)
+    expect(fonts.length).toBeGreaterThan(3)
+    for (const f of fonts) {
+      expect(f.isType3Font).toBe(false)
+      expect(L2.fontMappedOf(f)?.size, f.name).toBeGreaterThan(0)
+    }
+    // (CMR10's map gives its letters, CMMI10's the math italic's)
+    expect(L2.fontMappedOf(fonts.find(f => /CMR10$/.test(f.name)))?.has('a')).toBe(true)
+    // the same document opened without the font's extra properties: no map exported, which is refused, not read as none
+    const bare = await fontsOf({ ...PDF_OPTIONS, fontExtraProperties: false })
+    expect(bare.length).toBe(fonts.length)
+    for (const f of bare) expect(() => L2.fontMappedOf(f)).toThrow(/PDF_OPTIONS/)
+    // a Type3 font, an error PDF.js resolved in a font's place, none: no map to read
+    expect(L2.fontMappedOf({ isType3Font: true })).toBeNull()
+    expect(L2.fontMappedOf('Error: a font that did not load')).toBeNull()
+    expect(L2.fontMappedOf(null)).toBeNull()
+  })
+  it('page text of a placeholder with a character no Unicode stands for is no proof, its segments the file\'s own or not', () => {
+    // a formula TeX broke over two lines (two segments: drawn as its page text), its sum sign read by its code
+    const u = { kind: 'para', src: 'a b c d', pieces: [text('\u7532 '), ph("$g(z')=\\sum_n g_n$"), text(' \u4E59')] } as never
+    const lu = unitOf([L(500), L(488)], [[1, 0, [1, 150, 500, 200, 507, 498, 1, 10, 488, 40, 495, 486]]]) as never
+    const t = T.texRects(lu)
+    const page = (sum: { nu?: boolean }) => [...item('a b', 10, 500, 10, 0), ...item('g=', 150, 500, 10, 1, math), ...item('\u00CD', 10, 488, 10, 2, math).map(c => ({ ...c, ...sum })), ...item('gn', 20, 488, 10, 3, math), ...item('c d', 50, 488, 10, 4)]
+    const read = (sum: { nu?: boolean }) => L2.prepareUnit(u, t.rects as never, [page(sum) as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+    expect(read({}).get(1)?.mode).toBe('orig-text')
+    expect(read({}).unproven).toBeUndefined()
+    expect(read({ nu: true }).unproven).toBe(1)
+    // and v0's page text proven by the segments alike
+    expect(L2.prepareUnit(u, t.rects as never, [page({ nu: true }) as never], new Map() as never, null, { proof: T.proofOf(lu, [-1, 1, -1]) } as never).unproven).toBe(1)
+  })
+  it("a mark after a placeholder kept on its held line, where that line shows the original's own, is not drawn again", () => {
+    // footnote 1 of 1512.03385: "… and \url{…}." with the URL's line kept (held), its full stop with it
+    const u = { kind: 'footnote', src: 'a b', pieces: [text('\u7532 '), ph('\\url{http://x.org/y}'), text('\u3002')] } as never
+    const lu = { ...(unitOf([L(500), L(488)], [[1, 0, [1, 10, 488, 80, 495, 486]]]) as object), held: [1] } as never
+    const t = T.texRects(lu)
+    const prep = (line: string) => L2.prepareUnit(u, t.rects as never, [[...item('a b', 10, 500, 10, 0), ...item(line, 10, 488, 10, 1)] as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+    const shown = prep('http://x.org/y.')
+    expect(shown.get(1)).toMatchObject({ mode: 'kept', heldAfter: '.' })
+    expect(drawn(u, shown as never)).toBe('\u7532')
+    // the held line shows no mark after it: the translation's is drawn
+    expect(drawn(u, prep('http://x.org/y') as never)).toBe('\u7532\u3002')
+    // as many dropped as the held line shows: one, so the translation's closing quote after its full stop is drawn
+    const quoted = { ...(u as object), pieces: [text('\u7532 '), ph('\\url{http://x.org/y}'), text('\u3002\u300D')] } as never
+    const one = L2.prepareUnit(quoted, t.rects as never, [[...item('a b', 10, 500, 10, 0), ...item('http://x.org/y.', 10, 488, 10, 1)] as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+    expect(one.get(1)).toMatchObject({ heldAfter: '.', heldMarks: 1 })
+    expect(drawn(quoted, one as never)).toBe('\u7532\u300D')
+    // two the held line shows (".)"): both of the translation's
+    const two = L2.prepareUnit(quoted, t.rects as never, [[...item('a b', 10, 500, 10, 0), ...item('http://x.org/y.)', 10, 488, 10, 1)] as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+    expect(two.get(1)).toMatchObject({ heldMarks: 2 })
+    expect(drawn(quoted, two as never)).toBe('\u7532')
+  })
+})
+
+describe("a formula of no letter or digit is no text symbol: proven as any formula is (the controller's ruling of 2026-10-15)", () => {
+  // the review's three probes, each drawn from its source as a symbol before ("Σ_α^β", "∫_(-∞)^∞", "α/β")
+  const PROBES = ['$\\sum_{\\alpha}^{\\beta}$', '$\\int_{-\\infty}^{\\infty}$', '$\\frac{\\alpha}{\\beta}$']
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  it('a text symbol is one grapheme drawn with none of the marks of a formula\'s structure; the probes are formulas', () => {
+    expect(PROBES.map(s => L2.phClass2(s).cls)).toEqual(['symbol', 'symbol', 'symbol'])
+    expect(PROBES.map(s => [L2.textSymbol(s), L2.phClassProven(s).cls])).toEqual([[false, 'other'], [false, 'other'], [false, 'other']])
+    // (a text source's one grapheme is that character, \\_ the maker's TEXT symbol too)
+    expect(['\\%', '\\_', '$\\times$', '$^\\dagger$', '$\\alpha$', '$\\leq$'].map(s => [L2.textSymbol(s), L2.phClassProven(s).cls])).toEqual(Array(6).fill([true, 'symbol']))
+    expect(['$\\alpha\\beta$', '$^{\\dagger\\ddagger}$', '$\\nabla_\\theta$', '$/$'].map(L2.textSymbol)).toEqual([false, false, false, false])
+    // (any other class as it was)
+    expect(['$x_i$', '\\cite{a}', '~'].map(s => L2.phClassProven(s).cls)).toEqual(['other', 'cite', 'space'])
+  })
+  const line = [1, 10, 145, 100, 108, 97, 10, 0]
+  const rect = [1, 10, 97.85, 145, 106.83]
+  const page = [...item('as shown', 10, 100, 10, 0), ...item('\u03A3\u03B1\u03B2', 60, 100, 10, 1, math), ...item('here', 90, 100, 10, 2)]
+  for (const src of PROBES) {
+    const unit = { kind: 'para', src: 'as shown here', pieces: [text('\u5982 '), ph(src), text(' \u6240\u793A')] } as never
+    const read = (parts: object | null) => L2.prepareUnit(unit, [rect.slice()] as never, [page as never], new Map() as never, null, parts as never)
+    it(`${src}: drawn only where the file proves its ink, else its unit the original's`, () => {
+      const tr = [[0, '\u5982 '], [1, 1], [0, ' \u6240\u793A']], kOf = [-1, 1, -1]
+      const found = unitOf([line], [[1, 0, [1, 60, 100, 75, 108, 97]]]), lost = unitOf([line], [[1, PH_FLAG.LOST, []]])
+      // v0 alone (no proof): a symbol from its source, as before
+      expect(read(null).get(1)?.mode).toBe('symbol')
+      // the file locates the unit whole only where it finds the formula (it is asked for, as any formula is)
+      expect(T.locatedWhole(found, unit, tr).ok).toBe(true)
+      expect(T.locatedWhole(lost, unit, tr).why).toBe('lost')
+      // then its rendering is the segment's own ink: a crop cut from it, proven
+      const whole = read(T.texParts(found, kOf, { use: 'ph' }))
+      expect(whole.unproven).toBeUndefined()
+      expect(whole.get(1)).toMatchObject({ mode: 'crop', crop: [59.6, 96.7, 75.4, 108.3], baseline: 100 })
+      // v0's own reading under the proof, no file, the row LOST, or found: none proves it (v0 reads no word in symbols
+      // alone, so it would draw the source's text): the unit the original's
+      for (const lu of [null, lost, found]) expect(read({ proof: T.proofOf(lu, lu ? kOf : null) }).unproven).toBe(1)
+    })
+  }
+  it('a text symbol stays exempt: drawn from its source under the proof with no file, and asked for by no file', () => {
+    for (const [src, drawn] of [['$\\times$', '\u00D7'], ['\\_', '_']] as const) {
+      const unit = { kind: 'para', src: 'as shown here', pieces: [text('\u5982 '), ph(src), text(' \u6240\u793A')] } as never
+      const r = L2.prepareUnit(unit, [rect.slice()] as never, [page as never], new Map() as never, null, { proof: T.proofOf(null, null) } as never)
+      expect(r.unproven, src).toBeUndefined()
+      expect(r.get(1), src).toMatchObject({ mode: 'symbol', text: drawn })
+      // (its row LOST: the unit still located whole, the symbol's glyph its line's)
+      expect(T.locatedWhole(unitOf([line], [[1, PH_FLAG.LOST, []]]), unit, [[0, '\u5982 '], [1, 1], [0, ' \u6240\u793A']]).ok, src).toBe(true)
+    }
   })
 })
 

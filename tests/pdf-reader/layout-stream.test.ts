@@ -51,7 +51,7 @@ describe('ownedOf', () => {
     // a fraction's numerator, its bar and its denominator; a sum's limits above and below
     const page = pageOf(['the sum ', { at: 'p0.1a' }, { u: 'n', x: 120, y: 708, size: 7 }, { u: '∑', x: 118, y: 700 }, { u: 'i', x: 119, y: 693, size: 7 }, { at: 'p0.1b' }, ' and ', { at: 'p0.3a' }, '1', { rule: [150, 703, 160, 703.4] }, { u: 'd', x: 152, y: 695 }, { at: 'p0.3b' }, ' more'])
     expect(owned([page], { 'p0.1a': closed, 'p0.3a': closed })).toEqual({ 'p0.1a': ['n∑i', 0], 'p0.3a': ['1d', 1] })
-    expect(OWNED_HOW[OWNED - 1]).toBe("open, to its column's end")
+    expect(OWNED_HOW[OWNED - 1]).toBe('open, with the displays after it')
   })
 
   it('nothing between its two points: a piece of nothing (EMPTY); the closing point first: out of order', () => {
@@ -139,6 +139,46 @@ describe('ownedOf', () => {
     // a body begun again before the next mark (the display may go on in the next column): not so ended
     const next = pageOf([{ at: 'bs1' }, 'words', { at: '7e' }, { at: 'p7.2a' }, '\na=b', { at: 'be1' }, '\n7 A note', { at: 'bs2' }, 'c=d(3)', { at: '6s' }, 'more'])
     expect(owned([next], { 'p7.2a': open('', ['7e']) })).toEqual({ 'p7.2a': "open, the next mark not its unit's" })
+  })
+
+  it("a display at its column's foot, the text after it in the next body, owns what its region holds to that text (pastColumn)", () => {
+    // 2608.16117's (12): the display the column's last line, its text after it on the next page, the next mark there
+    const p1 = pageOf([{ at: 'bs1' }, 'words ', { at: 'p0.1a' }, '\na=b(1)', { at: 'be1' }, '\nNote', { at: '3s' }, ' text'])
+    // (the page's column mark set where MARK_DEF sets it, in the shipout's background: outside any body, region 0)
+    const p2 = pageOf([{ at: 'c1-2' }, 'Head', { at: 'bs2' }, '\nwhere more words', { at: 'p0.3a' }, 'x', { at: 'p0.3b' }])
+    const got = ownedOf([p1, p2], { follows: n => ({ 'p0.1a': open('wheremor'), 'p0.3a': closed })[n] ?? null })
+    expect(owned([p1, p2], { 'p0.1a': open('wheremor'), 'p0.3a': closed })['p0.1a']).toEqual(['a=b(1)', 0])
+    expect(got.get('p0.1a')?.how).toBe(how("open, past its column's end"))
+    expect(how("open, past its column's end")).toBeLessThan(OWNED)
+    // its text after it on its own page, no mark before the page breaks (2307.16209's u64.7)
+    const mid = pageOf([{ at: 'bs1' }, 'words ', { at: 'p0.1a' }, '\na=b(1)', '\nfor complex', { at: 'be1' }])
+    const next = pageOf([{ at: 'bs2' }, 'words', { at: '0e' }])
+    expect(owned([mid, next], { 'p0.1a': open('forcompl') })).toEqual({ 'p0.1a': ['a=b(1)', 0] })
+    // the text after it in neither body: still not known
+    expect(owned([p1, p2], { 'p0.1a': open('nowhere') })).toEqual({ 'p0.1a': 'open, the text after it not found' })
+  })
+
+  it("a display that ends its unit at its column's foot, the next mark on the next page, ends with the body", () => {
+    const p1 = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { at: 'p0.1a' }, '\na=b(3)', { at: 'be1' }, '\n7'])
+    const p2 = pageOf([{ at: 'c1-2' }, { at: 'bs2' }, 'Next', { at: '1s' }, ' unit'])
+    expect(owned([p1, p2], { 'p0.1a': open('', ['0e']) })).toEqual({ 'p0.1a': ['a=b(3)', 0] })
+    // its unit's next piece across the break: through to its mark (a display \allowdisplaybreaks breaks)
+    const q2 = pageOf([{ at: 'bs2' }, 'c=d(4)', { at: 'p0.3a' }, 'x', { at: 'p0.3b' }])
+    expect(owned([p1, q2], { 'p0.1a': open('', ['p0.3a', '0e']), 'p0.3a': closed })['p0.1a']).toEqual(['a=b(3)c=d(4)', 0])
+    // an unmarked piece next: as before
+    expect(owned([p1, p2], { 'p0.1a': open('', ['0e'], true) })).toEqual({ 'p0.1a': 'open, the next mark on another page' })
+  })
+
+  it('a display group: the first display owns its group, to the text after the last; each later one is in it', () => {
+    // two displays, nothing between them: TeX sets no point for the second (the empty paragraph between them)
+    const page = pageOf([{ at: 'bs1' }, 'define ', { at: 'p0.1a' }, '\na=b(1)', '\nc=d(2)', '\nwhere x', { at: '0e' }, { at: 'be1' }])
+    const group: Follow = { ...open('wherex'), group: ['p0.3a'] }
+    const got = ownedOf([page], { follows: n => ({ 'p0.1a': group })[n] ?? null })
+    expect(owned([page], { 'p0.1a': group })).toEqual({ 'p0.1a': ['a=b(1)c=d(2)', 0], 'p0.3a': 'in the display before it' })
+    expect(got.get('p0.1a')?.how).toBe(how('open, with the displays after it'))
+    expect(how('in the display before it')).toBeGreaterThanOrEqual(OWNED)
+    // its first not owned: no later one is in it
+    expect(owned([page], { 'p0.1a': { ...group, want: 'nowhere' } })).toEqual({ 'p0.1a': 'open, the text after it not found' })
   })
 
   it("a babel name's points are no piece's next mark, whatever case its key is in (a primitive \\uppercase's capitals)", () => {

@@ -20,9 +20,10 @@ export declare function inklessOf(lu: LayoutUnit, kOf: readonly number[], p: { k
 export declare function texRects(lu: LayoutUnit, maxPage?: number): TexLines
 /** a placeholder's rendering from its segments (stride 6): the unit's characters inside them and its ink's box */
 export declare function renderingOf(segs: Float64Array, uc: readonly Char[], display: boolean): Gap | null
-/** part 5 for any unit the hybrid draws: each crop cut from its placeholder's segment on its page, that segment's
- *  baseline its own; the k of a crop no segment proves (its unit stays the original's), else -1 */
-export declare function cropsOf(lu: LayoutUnit | null, kOf: readonly number[] | null): (out: Prepared) => number
+/** part 5 for any unit the hybrid draws, the safe rule's one place: every rendering proven by the file (the file's own
+ *  rendering, a crop cut from its placeholder's segment on its page, that segment's baseline its own, page text or kept
+ *  ink inside its segments); the k of one nothing proves (its unit stays the original's), else -1 */
+export declare function proofOf(lu: LayoutUnit | null, kOf: readonly number[] | null, shown?: number): (out: Prepared) => number
 /** the unit's parts from the file: 'ph' its placeholders' renderings; 'lines' its lines and label too; extents 'tex' the
- *  file's erase rectangles; every use, its crops (cropsOf) */
-export declare function texParts(lu: LayoutUnit, kOf: readonly number[], o: { use: 'ph' | 'lines'; lines?: TexLines | null; extents?: 'v0' | 'tex' }): UnitParts
+ *  file's erase rectangles; every use, the proof (proofOf) */
+export declare function texParts(lu: LayoutUnit, kOf: readonly number[], o: { use: 'ph' | 'lines'; lines?: TexLines | null; extents?: 'v0' | 'tex'; shown?: number }): UnitParts
