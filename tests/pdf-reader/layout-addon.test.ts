@@ -341,6 +341,35 @@ describe('paperAddon in a worker under a 64 MB heap: the remover\'s probes, refu
 })
 
 describe('the plans (pagePlansOf) and the range assembly (rangeEntries): the add-on\'s pages before the remover', () => {
+  it('cleans each page up once its plan is made, a page with no plan too, and the plans are the same', async () => {
+    const index = layoutOf(UNITS, 4)
+    const base = await pagePlansOf({ doc: await open(PAPER), OPS, index })
+    // a document whose pages record their cleanups, and whose cleanup empties the operator list the page gave (as a freed list
+    // would be unreadable): a plan made after its page was cleaned up would differ
+    const real = await open(PAPER)
+    const events: string[] = []
+    const doc = {
+      numPages: real.numPages,
+      getPage: async (n: number) => {
+        const page = await real.getPage(n)
+        let list: { fnArray: unknown[]; argsArray: unknown[] } | null = null
+        return new Proxy(page, {
+          get(target, key) {
+            if (key === 'getOperatorList') return async () => { events.push(`ops ${n}`); list = await target.getOperatorList(); return list }
+            if (key === 'cleanup') return () => { events.push(`cleanup ${n}`); if (list) { list.fnArray.length = 0; list.argsArray.length = 0 } target.cleanup() }
+            const v = Reflect.get(target, key)
+            return typeof v === 'function' ? v.bind(target) : v
+          },
+        })
+      },
+    }
+    const cleaned = await pagePlansOf({ doc: doc as never, OPS, index })
+    expect(events).toEqual(['ops 1', 'cleanup 1', 'ops 2', 'cleanup 2', 'ops 3', 'cleanup 3', 'ops 4', 'cleanup 4'])
+    expect([...cleaned.plans.keys()]).toEqual([...base.plans.keys()])
+    expect(cleaned.plans.has(3)).toBe(false)
+    expect(JSON.stringify([...cleaned.plans])).toBe(JSON.stringify([...base.plans]))
+  })
+
   it('plan each page alone, and any split of the paper assembles as the whole, the boxes\' share spent in page order', async () => {
     const index = layoutOf(UNITS, 4)
     const { plans } = await pagePlansOf({ doc: await open(PAPER), OPS, index })
