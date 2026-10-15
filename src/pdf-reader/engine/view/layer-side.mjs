@@ -43,6 +43,8 @@ const WANTED_KEPT = 20
 /** the commits the probe keeps */
 const RING = 32
 const isAbort = e => e?.name === 'AbortError'
+/** an error tagged with the side's code for why there is no layer (a BundleRefusal's own `why` is its message) */
+const coded = (e, code) => { const out = e instanceof Error ? e : new Error(String(e ?? code)); out.axtCode ??= code; return out }
 const release = c => { if (c) { c.width = 0; c.height = 0; c.remove() } }
 const isPrefix = (a, b) => a.length <= b.length && a.every((p, i) => p.sha256 === b[i].sha256)
 
@@ -68,6 +70,8 @@ export function createLayerSide(view, o) {
   let state = 'idle', why = null
   let index = null, bound = null, door = null, doorParts = [], gen = 0, token = null, offPage = null
   let partsEnded = false, reopenWanted = false
+  /** the part the open door refused (its later parts not added to it) */
+  let stuck = null
   /** the composed documents opened: each its task, its document once open, the holders that read it (the side's own hold on
    *  the latest, each door that was given it), and whether its task is destroyed (once) */
   const entries = new Set(), byDoc = new Map()
@@ -136,7 +140,7 @@ export function createLayerSide(view, o) {
     try {
       do { pumpAgain = false; await step() } while (pumpAgain && !disposed)
     } catch (e) {
-      if (!disposed && !isAbort(e)) refuse(e?.why ?? 'open', e)
+      if (!disposed && !isAbort(e)) refuse(e?.axtCode ?? 'open', e)
     } finally { pumping = false }
   }
   async function step() {
@@ -145,8 +149,9 @@ export function createLayerSide(view, o) {
     if (f.refused) return refuse(f.refused)
     if (!f.index) return
     if (!index) indexed(f.index)
-    // the original open first: the extension's base check digests the bytes it holds (the web's is bound by its route)
-    if (!V.left.doc()) return
+    // the original open before the first open: the extension's base check digests the bytes it holds (the web's is bound by
+    // its route). Once a door is open, a dropped original stops nothing: the door reads the composed document
+    if (!V.left.doc() && !counts.opens) return
     if (bound === null) {
       state = 'opening'
       emitLayer()
@@ -156,23 +161,33 @@ export function createLayerSide(view, o) {
     }
     shapeParts(f.parts)
     const parts = f.parts
-    if (!door || reopenWanted || !isPrefix(doorParts, parts)) {
+    // a fork; or parts past the end the door was told (a later build's): the door opened again over every part
+    const outgrown = partsEnded && parts.length > doorParts.length
+    if (!door || reopenWanted || !isPrefix(doorParts, parts) || outgrown) {
       if (door && !reopenWanted) counts.forks++
       await reopen(parts)
       if (!door) return
     }
-    for (let i = doorParts.length; i < parts.length && door; i++) {
+    for (let i = doorParts.length; i < parts.length && door && !stuck; i++) {
       const part = parts[i], my = gen
-      if (part.addon?.tail) {
-        const doc = await composedFor(parts.slice(0, i + 1)).catch(e => { throw Object.assign(e ?? new Error('composed'), { why: 'composed' }) })
-        if (disposed || my !== gen || !door) return
-        door.addPart(part, { doc })
-        held(doc, token)
-      } else door.addPart(part)
+      try {
+        if (part.addon?.tail) {
+          const doc = await composedFor(parts.slice(0, i + 1)).catch(e => { throw coded(e, 'composed') })
+          if (disposed || my !== gen || !door) return
+          door.addPart(part, { doc })
+          held(doc, token)
+        } else door.addPart(part)
+      } catch (e) {
+        if (e?.axtCode) throw e
+        // the door refuses the part: the chain stops at the part before it on this door, its later pages the original's
+        stuck = part.sha256
+        warn('part', e)
+        break
+      }
       doorParts = parts.slice(0, i + 1)
       counts.added++
     }
-    if (f.ended && door && !partsEnded && doorParts.length === parts.length) { partsEnded = true; door.endParts() }
+    if (f.ended && door && !partsEnded && !stuck && doorParts.length === parts.length) { partsEnded = true; door.endParts() }
   }
   /** the door opened (again): the one open disposed first, its pages kept as drawn until the new door's are ready (DR7); the
    *  rows held taken, or after a fork every row so far (a later attempt's, again(), carries none) */
@@ -183,6 +198,7 @@ export function createLayerSide(view, o) {
     door = null
     doorParts = []
     partsEnded = false
+    stuck = null
     rowsTold = false
     offPage?.()
     offPage = null
@@ -198,7 +214,7 @@ export function createLayerSide(view, o) {
     shapesChanged()
     state = 'opening'
     emitLayer()
-    const doc = await composedFor(parts).catch(e => { throw Object.assign(e ?? new Error('composed'), { why: 'composed' }) })
+    const doc = await composedFor(parts).catch(e => { throw coded(e, 'composed') })
     if (disposed || my !== gen) return
     const me = {}
     let layer
@@ -208,7 +224,7 @@ export function createLayerSide(view, o) {
         leftPart: (_page, ref) => o.fetchObject(ref, ac.signal),
         onRetired: d => retired(d, me),
       })
-    } catch (e) { throw Object.assign(e ?? new Error('open'), { why: 'open' }) }
+    } catch (e) { throw coded(e, 'open') }
     if (disposed || my !== gen) { layer.dispose(); return }
     door = layer
     token = me
@@ -272,7 +288,7 @@ export function createLayerSide(view, o) {
   function stalled(n, my) {
     if (disposed || my !== gen) return
     const P = rec(n)
-    if (P.content?.gen === gen) return
+    if (P.content?.wrap && P.content.gen === gen) return
     P.stalled = true
     stalls++
     rearm.add(n)
@@ -298,7 +314,7 @@ export function createLayerSide(view, o) {
     if (P.content && !P.content.wrap) return
     const was = P.content
     P.content = { wrap: null, svg: null, copy: null, k: 0, gen }
-    if (V.places.swap(n, empty())) counts.retired++
+    if (V.places.swap(n, empty(), { blank: true })) counts.retired++
     else P.content = null
     release(was?.copy)
   }
@@ -383,7 +399,14 @@ export function createLayerSide(view, o) {
     const P = rec(n), k = kOf(n), d = door
     if (k === null || !d) return
     let got
-    try { got = await copyAt(d, n, k, my) } catch (e) { if (!disposed && my === gen) warn('copy', e); return }
+    try { got = await copyAt(d, n, k, my) } catch (e) {
+      if (disposed || my !== gen) return
+      // the page shows the original; asked again on the next scroll or a zoom
+      warn('copy', e)
+      P.failed = true
+      rearm.add(n)
+      return
+    }
     if (!got) return
     if (!V.places.near(n) || P.content?.gen === my && P.content.wrap) { release(got.canvas); if (!V.places.near(n)) retire(n); return }
     laid.svg.setAttribute('viewBox', `0 0 ${laid.w} ${laid.h}`)
@@ -441,7 +464,9 @@ export function createLayerSide(view, o) {
       } else {
         abortAsk(n)
         rearm.delete(n)
-        if (pages.get(n)?.content?.wrap) retire(n)
+        // a page this door laid is retired; a drawing kept from an earlier door goes, the place back to its own content
+        const c = pages.get(n)?.content
+        if (c?.wrap) { if (c.gen === gen) retire(n); else unlay(n) }
       }
       windowed()
     }),

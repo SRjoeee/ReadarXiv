@@ -51,6 +51,8 @@ export interface Setup {
   /** the door the side holds now (the last opened, while it lives) */
   layer(): Layer | null
   real: boolean
+  /** the original's loading task, as the view was given it (null with none) */
+  original: FakeTask | null
 }
 export interface Options {
   door?: FakeDoorOptions
@@ -63,6 +65,8 @@ export interface Options {
   faceSources?: LayerSideOptions['faceSources']
   /** another paper's objects served (its pages `pages`), in place of the format test's */
   paper?: { objects: readonly { bytes: Uint8Array; sha256: string }[]; pages: number }
+  /** pages whose first copy the door fails to draw */
+  copyFails?: readonly number[]
 }
 /** the view over the original (its four pages), its layer side over the door and the paper's objects served by digest */
 export async function setup(o: Options = {}): Promise<Setup> {
@@ -79,8 +83,10 @@ export async function setup(o: Options = {}): Promise<Setup> {
   }
   const view = createReaderView(host)
   views.push(view)
+  let original: FakeTask | null = null
   if (!o.noOriginal) {
     const task = fakeTask()
+    original = task
     const answer = view.showOriginal(() => task as unknown as DocumentTask)
     task.resolve(fakeDoc(o.paper?.pages ?? N))
     expect(await answer).toBe('opened')
@@ -120,7 +126,12 @@ export async function setup(o: Options = {}): Promise<Setup> {
       const take = layer.take.bind(layer), end = layer.end.bind(layer), copyOf = layer.copyOf.bind(layer), dispose = layer.dispose.bind(layer)
       layer.take = r => { seen.taken.push(...r); return take(r) }
       layer.end = () => { seen.ended++; end() }
-      layer.copyOf = (n, src, k) => { seen.copies.push([n, src, k]); return copyOf(n, src, k) }
+      const failing = new Set(o.copyFails ?? [])
+      layer.copyOf = (n, src, k) => {
+        seen.copies.push([n, src, k])
+        if (failing.delete(n)) return Promise.reject(new Error(`the copy of page ${n} failed (the test's)`))
+        return copyOf(n, src, k)
+      }
       layer.dispose = () => { if (live === layer) live = null; dispose() }
       // the fake lays no unit: every unit with lines on a page is shown there as the original's, as the real door's words say
       if (!o.real) {
@@ -137,6 +148,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
     doors,
     layer: () => live,
     real: !!o.real,
+    original,
     highlight(on) { look = { ...look, highlight: on }; for (const l of lookers) l(look) },
   }
 }
@@ -146,9 +158,10 @@ export function drawable(d: ReturnType<typeof fakeDoc>) {
   d.getPage = async (n: number) => Object.assign(await get(n), { render: () => ({ promise: Promise.resolve() }) })
   return d
 }
-/** the side's tasks run: the door laying what is queued (the fake's), the feed's digests, the view's frames and its 0 ms tasks */
-export async function settle(s: Setup, n = 30) {
-  for (let i = 0; i < n; i++) { await macrotask(); if (!s.real && s.door.layer) await s.door.advance(); await s.clock.advance(17) }
+/** the side's tasks run: the door laying what is queued (the fake's; `lay` false: nothing laid), the feed's digests, the view's
+ *  frames and its 0 ms tasks */
+export async function settle(s: Setup, n = 30, lay = true) {
+  for (let i = 0; i < n; i++) { await macrotask(); if (lay && !s.real && s.door.layer) await s.door.advance(); await s.clock.advance(17) }
 }
 export const places = (s: Setup) => [...s.panes.right.querySelectorAll<HTMLElement>(':scope > .pdfViewer > .page')]
 export const nearOn = async (s: Setup, pages: number[], on = true) => { FakeIO.tell(pages.map(n => places(s)[n - 1] as HTMLElement), on); await flush(10) }

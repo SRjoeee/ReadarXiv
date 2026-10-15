@@ -164,7 +164,7 @@ export function createPlaces(o) {
   }
   /** a place's name for assistive technology: a page of the right where it shows one, else hidden (a skeleton, nothing) */
   function name(p) {
-    if (p.side || p.view) {
+    if ((p.side && !p.blank) || p.view) {
       p.div.removeAttribute('aria-hidden')
       p.div.setAttribute('role', 'region')
       p.div.setAttribute('aria-label', o.name(p.n))
@@ -197,7 +197,7 @@ export function createPlaces(o) {
         holder.className = 'axt-place-view'
         div.append(holder)
         // drawnAt: the scale its page view was last drawn at
-        return { n: i + 1, div, holder, view: null, skeleton: null, side: null, near: false, drawnAt: 0 }
+        return { n: i + 1, div, holder, view: null, skeleton: null, side: null, blank: false, near: false, drawnAt: 0 }
       })
       // a place as a page view is read: its element, and the left's viewport and page box for its page, as they are now
       slots = list.map(p => ({ id: p.n, div: p.div, get viewport() { return o.original(p.n)?.viewport ?? null }, get pdfPage() { return o.original(p.n)?.pdfPage ?? null } }))
@@ -238,13 +238,16 @@ export function createPlaces(o) {
       for (const p of list) if (p.near && !p.side) show(p)
     },
     /** the layer's content in place `n`, in place: its page view destroyed with its canvas first, its skeleton gone, the
-     *  content in its holder. The place keeps its size, the pane its scroll */
-    swap(n, content) {
+     *  content in its holder. The place keeps its size, the pane its scroll. `blank`: content that shows nothing (a page the
+     *  layer side let go far from the view, which holds the place so that no page view is made of it): the place is no page
+     *  shown, to assistive technology and to contentOf */
+    swap(n, content, { blank = false } = {}) {
       const p = list[n - 1]
       if (!p || disposed) return false
       releaseView(p)
       dropSkeleton(p)
       p.side = content
+      p.blank = blank
       p.holder.replaceChildren(content)
       p.div.setAttribute('data-axt-layer', '')
       name(p)
@@ -256,6 +259,7 @@ export function createPlaces(o) {
       if (!p?.side) return
       p.side.remove()
       p.side = null
+      p.blank = false
       p.div.removeAttribute('data-axt-layer')
       if (p.near) show(p); else name(p)
     },
@@ -266,7 +270,7 @@ export function createPlaces(o) {
     },
     contentOf(n) {
       const p = list[n - 1]
-      return !p ? 'none' : p.side ? 'layer' : p.view ? 'original' : p.skeleton ? 'skeleton' : 'none'
+      return !p ? 'none' : p.side ? (p.blank ? 'none' : 'layer') : p.view ? 'original' : p.skeleton ? 'skeleton' : 'none'
     },
     near: n => !!list[n - 1]?.near,
     page: n => list[n - 1]?.div ?? null,
@@ -274,10 +278,10 @@ export function createPlaces(o) {
     /** the places as page views are read: place n's element with the left's viewport and page box for page n */
     views: () => views,
     /** the names of the places that show a page, again (the interface's language changed) */
-    rename() { for (const p of list) if (p.side || p.view) name(p) },
+    rename() { for (const p of list) if ((p.side && !p.blank) || p.view) name(p) },
     probe() {
       let views = 0, skeletons = 0, laid = 0, near = 0
-      for (const p of list) { if (p.view) views++; if (p.skeleton) skeletons++; if (p.side) laid++; if (p.near) near++ }
+      for (const p of list) { if (p.view) views++; if (p.skeleton) skeletons++; if (p.side && !p.blank) laid++; if (p.near) near++ }
       return { places: list.length, pageViews: views, skeletons, laidPlaces: laid, nearPlaces: near, pageViewsMade: counts.made }
     },
     dispose() {

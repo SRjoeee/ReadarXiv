@@ -831,7 +831,7 @@ export function createReaderView(host) {
       count: () => places.count(), page: n => places.page(n), view: n => places.views().get(n), near: n => places.near(n),
       contentOf: n => places.contentOf(n),
       canvas: n => places.canvas(n),
-      swap(n, content) { const ok = places.swap(n, content); if (ok) tellRightPage(); return ok },
+      swap(n, content, o) { const ok = places.swap(n, content, o); if (ok) tellRightPage(); return ok },
       restore(n) { places.restore(n); tellRightPage() },
     },
     left: {

@@ -142,8 +142,9 @@ export interface Internals {
     contentOf(n: number): PlaceContent
     /** the canvas of place n's own page view where PDF.js drew it whole (read before a swap releases it), else null */
     canvas(n: number): HTMLCanvasElement | null
-    /** the layer's content in place n, in place: its page view destroyed with its canvas first; size and scroll unchanged */
-    swap(n: number, content: HTMLElement): boolean
+    /** the layer's content in place n, in place: its page view destroyed with its canvas first; size and scroll unchanged.
+     *  `blank`: content that shows nothing (a page let go far from the view): the place is no page shown (contentOf 'none') */
+    swap(n: number, content: HTMLElement, o?: { blank?: boolean }): boolean
     /** place n back to its pre-layer content */
     restore(n: number): void
   }
