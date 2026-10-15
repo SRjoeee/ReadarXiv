@@ -216,8 +216,44 @@ describe('the real door: (g) parts with no add-on', () => {
   })
 })
 
+describe('the real door: a fork, and L8', () => {
+  it('a fork on the real door: the door disposed before the new one opens over the new chain, its rows carried, its page laid; nothing left after dispose', async () => {
+    const m = await M()
+    const { partInputs } = await import('./helpers/format-paper')
+    const { writePart } = await import('@/pdf-reader/engine/layer-proto/format.mjs')
+    const input = partInputs(m.head.sha256, m.lefts)[1]!
+    const other = await writePart({ ...input, prev: m.parts[0]!.sha256, addon: { ...input.addon!, manifest: { ...input.addon!.manifest, stats: { removed: 9 } } } })
+    const sheets = () => document.querySelectorAll('style, link[rel="stylesheet"]').length + (document.adoptedStyleSheets?.length ?? 0)
+    const before = sheets()
+    const s = await real({ extra: [other] })
+    await nearOn(s, [1, 2])
+    s.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(m, i)) })
+    s.side.take(rowsOfIndex(m.index))
+    await still(s)
+    expect(content(s, 1)).toBe('layer')
+    s.side.tell({ parts: [{ ...(other.ref as never as object), prev: m.parts[0]!.sha256 } as never] })
+    await still(s)
+    expect(s.opens).toBe(2)
+    expect(s.side.probe()).toMatchObject({ state: 'open', forks: 1 })
+    expect(s.warned().filter(w => w.includes('open'))).toEqual([])
+    // the first door let go, the second over the new chain (page 4's part followed the part let go: not added)
+    expect(() => s.doors[0]?.layer.pageState(1)).toThrow()
+    expect(s.doors[1]?.layer.stats().parts).toEqual({ through: 3, told: 2 })
+    expect(s.doors[1]?.taken.length).toBe(rowsOfIndex(m.index).length)
+    expect(s.doors[1]?.layer.pageState(1)).toBe('ready')
+    expect(content(s, 1)).toBe('layer')
+    s.side.dispose()
+    await macrotask()
+    await macrotask()
+    // L8: every composed document destroyed, no copy and no sheet left
+    expect(s.destroyed.length).toBe(s.composed.length)
+    expect(s.panes.right.querySelectorAll('.axt-layer, canvas.axt-layer-copy').length).toBe(0)
+    expect(sheets()).toBe(before)
+  })
+})
+
 describe('the real door: (e) documents, (f) one open layer a page', () => {
-  it('each composed document told retired is destroyed once, the last at dispose; again() and a fork dispose before they open', async () => {
+  it('each composed document told retired is destroyed once, the last at dispose; again() disposes before it opens', async () => {
     const m = await M()
     const s = await real()
     await nearOn(s, [1])
