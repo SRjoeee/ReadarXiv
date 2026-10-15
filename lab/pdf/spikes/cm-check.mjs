@@ -55,7 +55,7 @@ const argOf = name => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(
 const DATA = resolve(process.env.AXT_DATA ?? join(root, 'data'))
 const OUT = resolve(argOf('out') ?? join(root, 'out/cm-check'))
 const RUNS = Number(argOf('runs') ?? 1)
-const LAYOUT_ALL = process.argv.includes('--layout')
+const LAYOUT_ALL = process.argv.includes('--layout'), TRACE = process.argv.includes('--trace')
 const FREE_MIN = 15 * 2 ** 30
 const TIMEOUT_MS = 600_000
 const NM = new URL('../../../node_modules/pdfjs-dist/', import.meta.url).pathname
@@ -166,6 +166,15 @@ function nativeCompile(source, req, records) {
   }
   const us = steps.reduce((n, s) => n + (s.us ?? 0), 0), real = steps.reduce((n, s) => n + (s.real ?? 0), 0)
   records.push({ kind, us: Number(us.toFixed(2)), real: Number(real.toFixed(2)), passes, steps, ...(missing.length ? { missing } : {}), ok, ...(wrote ? { files: wrote } : {}), aux: read('aux', 'utf8'), ind: read('ind') })
+  // --trace: each file the compile wrote, and whether its bytes are those it was given (the request's, else the paper's)
+  if (TRACE && files) {
+    const given = p => req.overrides.get(p) ?? source.get(p)
+    console.log(`     trace ${kind} bibtex=${req.bibtex}: ${[...files].map(([p, b]) => `${p} ${b.length} ${given(p) ? (Buffer.from(given(p)).equals(Buffer.from(b)) ? 'same' : 'other') : 'new'}`).join(', ')}`)
+    // (and the files themselves, by the compile's number: <out>/trace/<n>-<kind>/)
+    const at = join(OUT, 'trace', `${records.length}-${kind}`)
+    rmSync(at, { recursive: true, force: true })
+    for (const [p, b] of files) { mkdirSync(dirname(join(at, p)), { recursive: true }); writeFileSync(join(at, p), b) }
+  }
   return { ok, pdf: req.draft ? null : pdf, log, aux: read('aux', 'utf8'), bbl: req.bibtex === false ? null : read('bbl', 'utf8'), ms: Math.round(real * 1000), passes, ...(files ? { files } : {}) }
 }
 
