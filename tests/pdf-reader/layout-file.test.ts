@@ -652,7 +652,7 @@ describe('a layout part', () => {
       ...part,
       units: onlyKept(part.units), lines: onlyKept(part.lines), frames: onlyKept(part.frames), erase: onlyKept(part.erase),
       ph: onlyKept(part.ph), labels: onlyKept(part.labels), headings: onlyKept(part.headings), pageText: [], held: onlyKept(part.held),
-      names: part.names.filter((r: number[]) => r[2] >= 2),
+      names: part.names.filter((r: number[]) => (r[2] ?? 0) >= 2),
     }
     // page 2 wider than page 3: a box at x = 650 is page 2's alone
     const views = [0, 0, 700, 800, 0, 0, 612, 792]
