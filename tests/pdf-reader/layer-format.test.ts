@@ -760,3 +760,243 @@ describe('the index', () => {
     expect(() => indexOf(t.rh, t.read, { catalog: { ...cat, units: [{ ...cat.units[0]!, bytes: 1 }, cat.units[1]!] } })).toThrow(expect.objectContaining({ path: 'catalog.units[0]' }))
   })
 })
+
+// ---------------------------------------------------------------- 8. parts, against the index
+describe('a part against the index', () => {
+  const refused = async (i: number, edit: (p: never) => void, path: string | RegExp, chain?: PartChain | null) => {
+    const e = await refusal(partWith(i, edit as never, chain === undefined ? {} : { chain }))
+    expect(e, 'refused').not.toBeNull()
+    expect(e!.kind).toBe('part')
+    expect(e!.path).toMatch(typeof path === 'string' ? new RegExp(`^${path.replace(/[[\].]/g, '\\$&')}$`) : path)
+  }
+  type P = Record<string, unknown[] & { [k: number]: never }>
+
+  it('refuses a part of another head', async () => {
+    await refused(0, p => { (p as unknown as { head: string }).head = '0'.repeat(64) }, 'head')
+    await refused(0, p => { (p as unknown as { head: string }).head = 'XYZ' }, 'head')
+    // (the head of the index and the chain's agree: a chain of another head is the caller's)
+    const other = { ...M.readParts[0]!.chain, head: '1'.repeat(64) }
+    await refused(1, () => {}, 'head', other)
+  })
+
+  it('refuses an id past the units, in the left, the file-only and the layout', async () => {
+    await refused(0, p => { (p as unknown as P).left![1]![0] = 99 as never }, 'left[1][0]')
+    await refused(1, p => { (p as unknown as P).fileOnly![0]![0] = 99 as never }, 'fileOnly[0][0]')
+    await refused(1, p => { const l = (p as unknown as { layout: { units: number[][] } }).layout; l.units[1]![0] = 99; l.lines[1]![0] = 99; l.frames[1]![0] = 99 }, 'layout.units[1][0]')
+  })
+
+  it('refuses a layout unit of another kind or another piece count than its unit\'s, where the unit stands', async () => {
+    await refused(0, p => { (p as unknown as { layout: { units: number[][] } }).layout.units[1]![1] = 2 }, 'layout.units[1][1]')
+    await refused(0, p => { (p as unknown as { layout: { units: number[][] } }).layout.units[1]![4] = 8 }, 'layout.units[1][4]')
+    // a unit that does not stand is not compared
+    const o = parsed(M.chunks[0]!)
+    o.units[2][0] = 'Para'
+    const f = forged('units', o)
+    const dropped = await readUnitsChunk(f.bytes, { ref: f.ref, before: null })
+    const head = parsed(M.head)
+    head.units = [{ ...head.units[0], sha256: f.ref.sha256, bytes: f.ref.bytes }]
+    const g = forged('head', head)
+    const index = indexOf(await readHead(g.bytes, { ref: g.ref }), [dropped])
+    expect(index.dropped).toEqual([2])
+    const part = parsed(M.parts[0]!)
+    part.head = index.sha256
+    part.layout.units[1][1] = 2
+    const h = forged('part', part, { from: 1, to: 1 })
+    expect((await readPart(h.bytes, { ref: h.ref, index, chain: null })).left.map(w => w[0])).toEqual([0, 2])
+  })
+
+  it('needs an index: units to place the part\'s ids against', async () => {
+    const p = M.parts[0]!
+    await expect(readPart(p.bytes, { ref: p.ref, index: undefined as never, chain: null })).rejects.toThrow()
+  })
+})
+
+// ---------------------------------------------------------------- 9. parts, against the chain
+describe('a part against the chain', () => {
+  const refused = async (i: number, edit: (p: never) => void, path: string | RegExp, chain?: PartChain | null) => {
+    const e = await refusal(partWith(i, edit as never, chain === undefined ? {} : { chain }))
+    expect(e, 'refused').not.toBeNull()
+    expect(e!.kind).toBe('part')
+    expect(e!.path).toMatch(typeof path === 'string' ? new RegExp(`^${path.replace(/[[\].]/g, '\\$&')}$`) : path)
+  }
+  // biome-ignore lint/suspicious/noExplicitAny: a test breaks the part's types on purpose
+  type Any = any
+  const chain = (i: number) => M.readParts[i]!.chain
+
+  it('reads each part after the one before, and the same part again is no part after it', async () => {
+    expect(await partWith(1, () => {})).toMatchObject({ pages: [2, 3] })
+    // a gap: the third after the first; an overlap: the second after the second
+    await refused(2, () => {}, 'pages[0]', chain(0))
+    await refused(1, () => {}, 'pages[0]', chain(1))
+    // the first part after one: it begins at page 1
+    await refused(0, () => {}, 'pages[0]', chain(0))
+  })
+
+  it('refuses a `prev` that is not the last part\'s digest, and a first part with one', async () => {
+    await refused(1, p => { (p as Any).prev = '0'.repeat(64) }, 'prev')
+    await refused(1, p => { (p as Any).prev = null }, 'prev')
+    await refused(0, p => { (p as Any).prev = M.parts[0]!.sha256 }, 'prev')
+  })
+
+  it('refuses a unit that is not after the last K entry told: before it, at it, or twice', async () => {
+    // unit 3's stream before the last told (12)
+    await refused(1, p => { (p as Any).left[0][1] = 5 }, 'left')
+    // a stream equal to the last told's (12, unit 2) with a smaller id than it is before it; one above it is after
+    await refused(1, p => { (p as Any).left[0][0] = 1; (p as Any).left[0][1] = 12; (p as Any).layout.units[0][0] = 1; (p as Any).layout.lines[0][0] = 1; (p as Any).layout.frames[0][0] = 1 }, /^layout\.units\[0\]\[1\]$|^left$/)
+    expect(await partWith(1, p => { (p as Any).left[0][1] = 12 })).toMatchObject({ pages: [2, 3] })
+    // a file-only unit's slot is after + 0.5: after = 12 is slot 12.5, after the (12, 2) told
+    expect(await partWith(1, p => { (p as Any).left[0][1] = 13; (p as Any).fileOnly[0][1] = 12 })).toMatchObject({ pages: [2, 3] })
+    await refused(1, p => { (p as Any).fileOnly[0][1] = 11 }, 'left')
+  })
+
+  it('refuses a unit told twice: unit 0 again in a later part', async () => {
+    const p = parsed(M.parts[2]!)
+    p.pages = [2, 2]
+    p.prev = M.parts[0]!.sha256
+    p.views = VIEWS.slice(1, 4).flat()
+    p.left = [[0, 0, [[2, 72, 600, 200, 610]]]]
+    p.leftParts = [M.lefts[2]!.ref]
+    const f = forged('part', p, { from: 2, to: 2 })
+    expect(await refusal(readPart(f.bytes, { ref: f.ref, index: M.index, chain: chain(0) }))).toMatchObject({ kind: 'part', path: 'left' })
+    // (unit 1, which no part told, and a stream after the last: the same part reads)
+    p.left = [[1, 13, [[2, 72, 600, 200, 610]]]]
+    const g = forged('part', p, { from: 2, to: 2 })
+    expect((await readPart(g.bytes, { ref: g.ref, index: M.index, chain: chain(0) })).left).toHaveLength(1)
+  })
+
+  it('refuses a unit in the left and the file-only both, a file-only unit not in the layout, a layout unit in neither', async () => {
+    await refused(1, p => { (p as Any).fileOnly = [[3, 41]] }, 'fileOnly[0][0]')
+    await refused(1, p => { (p as Any).fileOnly[0][0] = 6 }, /^layout\.units\[1\]\[0\]$|^fileOnly\[0\]\[0\]$/)
+    await refused(1, p => { (p as Any).fileOnly = [] }, /^layout\.units\[1\]\[0\]$/)
+    await refused(1, p => { (p as Any).left = [] }, /^layout\.units\[0\]\[0\]$/)
+    await refused(2, p => { (p as Any).fileOnly = [[5, 41]] }, 'fileOnly')
+  })
+
+  it('refuses a unit for a page already told: a rectangle or a layout row on a page before the part\'s first', async () => {
+    await refused(1, p => { (p as Any).left[0][2][0][0] = 1 }, 'left[0][2][0][0]')
+    await refused(1, p => { (p as Any).layout.lines[0][1][0] = 1 }, 'layout.lines[0][1][0]')
+    await refused(2, p => { (p as Any).left[0][2][0][0] = 3 }, 'left[0][2][0][0]')
+  })
+
+  it('refuses the view of a page the last part told, changed; a part that reaches less than the last did', async () => {
+    await refused(1, p => { (p as Any).views[2] = 701 }, 'views[2]', chain(0))
+    await refused(1, p => { (p as Any).views[0] = 1 }, 'views[0]')
+    // part 3 begins at page 4, which part 2 reached: its view as told
+    await refused(2, p => { (p as Any).views[2] = 611 }, 'views[2]')
+    // a part whose views stop short of the last part's reach (the chain says page 4 was reached; this one stops at page 3)
+    const reached = { ...chain(0), reach: 4, ahead: [...VIEWS.slice(1).flat()] }
+    await refused(1, p => { (p as Any).views = (p as Any).views.slice(0, 8) }, 'views', reached)
+  })
+
+  it('refuses a manifest that numbers its removed pages from anywhere but N + R + 1, or not in page order', async () => {
+    await refused(0, p => { (p as Any).addon.manifest.page[1].at.R = 6 }, 'addon.manifest.page.1.at.R')
+    await refused(0, p => { (p as Any).addon.manifest.page[1].at.R = 4 }, 'addon.manifest.page.1.at.R')
+    await refused(1, p => { (p as Any).addon.manifest.page[3].at.R = 5 }, 'addon.manifest.page.3.at.R')
+    // (R: one removed page told before part 2, so it begins at 4 + 1 + 1 = 6; read with no part before it, at 5)
+    expect(await partWith(1, p => { (p as Any).addon.manifest.page[3].at.R = 5 }, { chain: { ...chain(0), r: 0 } })).toMatchObject({ pages: [2, 3] })
+    // two removed pages: rising in page order
+    const two = (a: number, b: number) => (p: Any) => {
+      p.addon.manifest.page[2].at = { R: a }
+      p.addon.manifest.page[2].dirty = [72, 500, 80, 510]
+      p.addon.manifest.page[3].at.R = b
+    }
+    await refused(1, two(7, 6) as never, 'addon.manifest.page.2.at.R')
+    expect(await refusal(partWith(1, two(6, 7)))).toBeNull()
+  })
+
+  it('refuses a manifest entry outside the part\'s pages, a page missing, and a manifest of another page count', async () => {
+    await refused(1, p => { (p as Any).addon.manifest.page[1] = { ok: true } }, 'addon.manifest.page.1')
+    await refused(1, p => { (p as Any).addon.manifest.page[4] = { ok: true } }, 'addon.manifest.page.4')
+    await refused(1, p => { delete (p as Any).addon.manifest.page[2] }, 'addon.manifest.page')
+    await refused(1, p => { (p as Any).addon.manifest.pages = 5 }, 'addon.manifest.pages')
+    await refused(1, p => { (p as Any).addon.manifest.sets = { R: 4 } }, 'addon.manifest.sets.R')
+  })
+
+  it('refuses an add-on where the layout is null, none where it is not, and a tail the manifest does not account for', async () => {
+    await refused(2, p => { (p as Any).addon = { manifest: parsed(M.parts[1]!).addon.manifest, tail: null } }, 'addon')
+    await refused(0, p => { (p as Any).addon = null }, 'addon')
+    await refused(0, p => { (p as Any).addon.manifest.appended = 1 }, 'addon.tail')
+    await refused(0, p => { (p as Any).addon.tail = null }, 'addon.manifest.appended')
+    await refused(0, p => { (p as Any).addon.tail = '' }, 'addon.tail')
+    await refused(0, p => { (p as Any).addon.tail = 'a'.repeat(7) }, 'addon.tail')
+  })
+
+  describe('the tail continues the last cross-reference section', () => {
+    /** part 2 with its tail replaced by the section made from these numbers */
+    const withTail = (end: number, prev: number, root: number, first: number, count: number, at?: number) => {
+      const t = tailOf(end, prev, root, first, count)
+      return (p: Any) => {
+        p.addon.tail = Buffer.from(t.tail).toString('base64')
+        p.addon.manifest.appended = t.tail.length
+        void at
+      }
+    }
+    const end1 = BASE.bytes + TAILS[0]!.tail.length
+    it('is the second tail of the paper', async () => {
+      expect(await partWith(1, withTail(end1, TAILS[0]!.startxref, 12, 104, 4))).toMatchObject({ pages: [2, 3] })
+    })
+    it('refuses a /Prev that is not the last startxref', async () => {
+      await refused(1, withTail(end1, BASE.xref, 12, 104, 4) as never, 'addon.tail')
+      await refused(1, withTail(end1, 5, 12, 104, 4) as never, 'addon.tail')
+    })
+    it('refuses a startxref outside the tail: before it, or past it', async () => {
+      const t = tailOf(end1, TAILS[0]!.startxref, 12, 104, 4)
+      for (const shift of [-100, t.tail.length]) {
+        const moved = tailOf(end1 + shift, TAILS[0]!.startxref, 12, 104, 4)
+        await refused(1, ((p: Any) => { p.addon.tail = Buffer.from(moved.tail).toString('base64'); p.addon.manifest.appended = moved.tail.length }) as never, 'addon.tail')
+      }
+      // (and the first tail's, read as if it began elsewhere: the end is the chain's)
+      await refused(0, withTail(BASE.bytes - 100, BASE.xref, 12, 100, 4) as never, 'addon.tail')
+    })
+    it('refuses a run of fresh numbers that does not follow the last tail\'s, or overlaps it, and another page tree root', async () => {
+      await refused(1, withTail(end1, TAILS[0]!.startxref, 12, 105, 4) as never, 'addon.tail')
+      await refused(1, withTail(end1, TAILS[0]!.startxref, 12, 100, 4) as never, 'addon.tail')
+      await refused(1, withTail(end1, TAILS[0]!.startxref, 12, 103, 4) as never, 'addon.tail')
+      await refused(1, withTail(end1, TAILS[0]!.startxref, 11, 104, 4) as never, 'addon.tail')
+      // the first tail's run is unchecked
+      expect(await partWith(0, withTail(BASE.bytes, BASE.xref, 12, 9000, 2))).toMatchObject({ pages: [1, 1] })
+    })
+    it('refuses a tail that ends in no cross-reference section', async () => {
+      const junk = new Uint8Array(40).fill(0x41)
+      await refused(0, ((p: Any) => { p.addon.tail = Buffer.from(junk).toString('base64'); p.addon.manifest.appended = 40 }) as never, 'addon.tail')
+    })
+  })
+
+  it('refuses left parts that are not one for each page of the part, in page order, of a left kind', async () => {
+    await refused(1, p => { (p as Any).leftParts.pop() }, 'leftParts')
+    await refused(1, p => { (p as Any).leftParts.reverse() }, 'leftParts[0].page')
+    await refused(1, p => { (p as Any).leftParts[0].kind = 'part' }, 'leftParts[0].kind')
+    await refused(1, p => { (p as Any).leftParts[0].bytes = 0 }, 'leftParts[0].bytes')
+    await refused(1, p => { (p as Any).leftParts[0].sha256 = 'x' }, 'leftParts[0].sha256')
+  })
+
+  it('refuses pages and views of another shape', async () => {
+    await refused(1, p => { (p as Any).pages = [2] }, 'pages')
+    await refused(1, p => { (p as Any).pages = [2, 5] }, 'pages[1]')
+    await refused(1, p => { (p as Any).pages = [0, 3] }, 'pages[0]')
+    await refused(1, p => { (p as Any).views = [] }, 'views')
+    await refused(1, p => { (p as Any).views = [...(p as Any).views, 0, 0, 612, 792] }, 'views')
+    await refused(1, p => { (p as Any).views[2] = 0 }, 'views[2]')
+    await refused(1, p => { (p as Any).views[0] = 20000 }, 'views[0]')
+  })
+
+  it('refuses a left of another shape: its rectangles within the page\'s view, not empty, a stream and ids rising', async () => {
+    await refused(1, p => { (p as Any).left[0][2][0][1] = 702 }, 'left[0][2][0][1]')
+    await refused(1, p => { (p as Any).left[0][2][0][1] = 700 }, 'left[0][2][0][3]')
+    await refused(1, p => { (p as Any).left[0][2][0] = [2, 200, 498, 72, 508] }, 'left[0][2][0][3]')
+    await refused(1, p => { (p as Any).left[0][2] = [] }, 'left[0][2]')
+    await refused(1, p => { (p as Any).left[0][1] = -1 }, 'left[0][1]')
+    await refused(1, p => { (p as Any).left[1][0] = 3 }, 'left[1][0]')
+    await refused(1, p => { (p as Any).left[0] = [3, 25] }, 'left[0]')
+    await refused(1, p => { (p as Any).left[0][2][0][4] = 802 }, 'left[0][2][0][4]')
+    // (a rectangle lies within its page's view, the part's, by a point)
+    expect(await refusal(partWith(1, p => { (p as Any).left[0][2][0][1] = -1; (p as Any).left[0][2][0][3] = 701 }))).toBeNull()
+  })
+
+  it('a refused part changes nothing: the chain is the same one for the next', async () => {
+    const before = JSON.stringify(chain(0))
+    await refusal(partWith(1, p => { (p as Any).prev = null }))
+    expect(JSON.stringify(chain(0))).toBe(before)
+    expect(await partWith(1, () => {})).toMatchObject({ pages: [2, 3] })
+  })
+})

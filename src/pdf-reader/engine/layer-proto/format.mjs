@@ -660,7 +660,11 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
   const was = chain ?? initialChain(index)
   const { value: v, sha256 } = await opened(K, bytes, ref, PART_DEF, caps)
   envelope(K, v, PART_KEYS_WIRE)
+  // (what the chain says of where the part begins and what it follows, before the shape that needs the chain's counts)
   if (v.head !== index.sha256) throw refuse(K, 'head', 'not the head of the index')
+  if (v.head !== was.head) throw refuse(K, 'head', 'not the head of the parts told')
+  if (Array.isArray(v.pages) && v.pages.length === 2 && v.pages[0] !== was.through + 1) throw refuse(K, 'pages[0]', `not ${was.through + 1}, the page after the last part's`)
+  if (v.prev !== was.last) throw refuse(K, 'prev', 'not the digest of the last part told')
   const s = partShape(v, { N, unitCount: index.units.length, atFrom: N + was.r + 1 })
 
   // against the index: a layout unit is its unit's kind and piece count, where the unit stands
@@ -674,9 +678,6 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
   }
 
   // against the chain
-  if (v.head !== was.head) throw refuse(K, 'head', 'not the head of the parts told')
-  if (s.a !== was.through + 1) throw refuse(K, 'pages[0]', `not ${was.through + 1}, the page after the last part's`)
-  if (v.prev !== was.last) throw refuse(K, 'prev', 'not the digest of the last part told')
   // (K: one entry for each unit the part places, ordered by (slot, id); all after the last told, strictly)
   let lowSlot = 0, lowId = 0, highSlot = was.slot, highId = was.id, any = false
   const note = (slot, id) => {
