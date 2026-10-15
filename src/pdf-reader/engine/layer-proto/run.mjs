@@ -1594,6 +1594,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         failedPages.add(pg)
       }
     }
+    // (page 1 not drawn: what its drawing awaits before any unit is laid, the hyphenation patterns and the prototype's faces, is
+    // awaited here, so that no line breaks by a fetch's timing)
+    if (pg === 1 && failedPages.has(1)) { await hyphP.catch(() => {}); if (!roles) await Promise.all([warmP, lmP]).catch(() => {}) }
     const t1 = performance.now()
     await settle(() => need.lay[pg])
     const waited = performance.now() - t1

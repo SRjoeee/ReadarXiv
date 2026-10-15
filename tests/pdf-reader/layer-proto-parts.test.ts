@@ -274,6 +274,39 @@ describe('the run in parts: waits, failures and documents', () => {
     run.dispose()
   })
 
+  it('lays no unit before the hyphenation patterns are in, page 1 failed (m2: no line break that hangs on a fetch\'s timing)', async () => {
+    // (German: its patterns are fetched by no other test of this file, and a realm fetches a language's once)
+    const P = await takePaper(TAKE)
+    const was = g.fetch
+    try {
+      for (const fail of [[1]]) {
+        let release = () => {}, loaded = false
+        const held = new Promise<void>(ok => { release = ok })
+        g.fetch = async (url: string) => { if (String(url).includes('/hyph/de')) { await held; loaded = true } return { ok: false, json: async () => null } }
+        const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+        const facade = layoutFacade(P.index.head)
+        const doc = docsOf(TAKE, { fail: () => fail })(0)
+        const run = await openProto({
+          parts: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'de'), groups: groupsOfIndex(P.index),
+          target: 'de', pages: P.N, scale: 1, dpr: 1, copy: false, labels: LABELS as never, tex: { ...HYBRID, index: facade.index, pieces: new Map() },
+          removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: P.N, sets: {}, page: {} } as never },
+        } as never)
+        run.take(unitsOfRows(P.index, rowsOfIndex(P.index)) as never)
+        run.end()
+        for (const part of P.parts) { facade.add(part); run.grow(part) }
+        const laid = run.until(3)
+        await ticks(20)
+        expect(run.failed(1)).toBe(true)
+        expect(run.order, 'page 1 failed, the patterns not in').toEqual([])
+        release()
+        await laid
+        expect(loaded).toBe(true)
+        expect(run.order.length).toBeGreaterThan(0)
+        run.dispose()
+      }
+    } finally { g.fetch = was }
+  })
+
   it('steps over a page whose drawing throws: its units the original\'s on all their pages, why page; the others drawn', async () => {
     const P = await takePaper(TAKE)
     const fail = [2]
