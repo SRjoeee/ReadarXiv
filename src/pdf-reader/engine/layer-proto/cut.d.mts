@@ -33,6 +33,8 @@ export interface CutEntry extends NeedEntry {
 export interface CutOptions {
   /** the page's left part input, called once for each page in page order (null: a page with no tokens) */
   leftPages(page: number): LeftPageInput | null | Promise<LeftPageInput | null>
+  /** the last page of the part that begins at page `a` of `N` (a to N); default `partTarget` (the doubling schedule). A harness cuts at any split with it */
+  target?(a: number, N: number): number
   /** F as an array indexed by page 0..N of indices into K (-1 for none); default `needFrontier` (the door's rule, need.mjs) */
   frontier?(K: readonly CutEntry[], N: number): readonly number[]
   /** the add-on for a candidate page range of part `index` (its layout part), or null (the part's pages are refused, drawn by

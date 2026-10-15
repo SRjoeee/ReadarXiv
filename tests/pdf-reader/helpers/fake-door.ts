@@ -32,6 +32,8 @@ const tick = () => new Promise<void>(r => setTimeout(r, 0))
 
 interface Waiter { resolve(p: LaidPage): void; reject(e: unknown): void; lang: string; signal: AbortSignal | undefined; onAbort: (() => void) | null }
 interface LeftWaiter { resolve(): void; reject(e: unknown): void }
+/** a left page's fetch: its promise, the askers it has, whether it still awaits its covering part (and how to stop awaiting) */
+interface LeftEntry { promise: Promise<LeftPage>; askers: number; waiting: boolean; drop: (() => void) | null }
 
 class FakeLayer implements Layer {
   private disposed = false
@@ -48,7 +50,7 @@ class FakeLayer implements Layer {
   private readonly asked = new Set<number>()
   private readonly waiters = new Map<number, Waiter[]>()
   private readonly leftWaiters = new Map<number, LeftWaiter[]>()
-  private readonly leftCache = new Map<number, Promise<LeftPage>>()
+  private readonly leftCache = new Map<number, LeftEntry>()
   private readonly listeners = new Set<(page: number, state: PageEvent) => void>()
   private readonly queue: number[] = []
   private readonly taken = new Set<number>()
@@ -194,8 +196,11 @@ class FakeLayer implements Layer {
     if (this.disposed) return
     const closure = this.fake.opts.closure ?? ((p: number) => [p])
     for (const g of [...this.asked].sort((a, b) => a - b)) {
-      for (const c of closure(g)) {
-        if (c < 1 || c > this.N || this.state[c] !== 'waiting' || c > this.through || !this.rowsIn(c)) continue
+      // (the closure is laid together: not one of its pages begins while a part or the rows of any of them is missing)
+      const members = closure(g).filter(c => c >= 1 && c <= this.N)
+      if (members.some(c => c > this.through || !this.rowsIn(c))) continue
+      for (const c of members) {
+        if (this.state[c] !== 'waiting') continue
         this.state[c] = 'laying'
         this.tell(c, 'laying')
         this.queue.push(c)
@@ -223,13 +228,14 @@ class FakeLayer implements Layer {
     const run = (async () => {
       while (this.queue.length && !this.disposed) {
         const page = this.queue.shift() as number
-        let failure: unknown = null
+        let failed = false, failure: unknown = null
         try {
           if (this.fake.failing.has(page)) throw new Error(`page ${page}: the test made it fail`)
           await this.read(this.doc, page)
-        } catch (e) { failure = e }
+        } catch (e) { failed = true; failure = e }
         if (this.disposed) return
-        if (failure) this.settle(page, 'failed', failure)
+        // (a read can reject with any value, a falsy one among them)
+        if (failed) this.settle(page, 'failed', failure ?? new Error(`page ${page} cannot be read`))
         else this.settle(page, 'ready')
       }
     })()
@@ -290,19 +296,47 @@ class FakeLayer implements Layer {
   }
 
   // ---------------------------------------------------------------- the left
-  leftPageOf(page: number): Promise<LeftPage> {
+  leftPageOf(page: number, o: { signal?: AbortSignal } = {}): Promise<LeftPage> {
     this.check()
     this.range(page)
-    const cached = this.leftCache.get(page)
-    if (cached) return cached
-    const p = this.fetchLeft(page).catch(e => { this.leftCache.delete(page); throw e })
-    this.leftCache.set(page, p)
-    return p
+    const signal = o.signal
+    if (signal?.aborted) return Promise.reject(abortError())
+    let entry = this.leftCache.get(page)
+    if (!entry) {
+      const made: LeftEntry = { promise: null as never, askers: 0, waiting: false, drop: null }
+      made.promise = this.fetchLeft(page, made).catch(e => { if (this.leftCache.get(page) === made) this.leftCache.delete(page); throw e })
+      this.leftCache.set(page, made)
+      entry = made
+    }
+    const asked = entry
+    asked.askers++
+    if (!signal) return asked.promise
+    return new Promise<LeftPage>((resolve, reject) => {
+      const onAbort = () => {
+        asked.askers--
+        reject(abortError())
+        // (the last asker gone while the part covering the page is awaited: the wait is dropped and nothing is fetched)
+        if (asked.askers === 0 && asked.waiting) asked.drop?.()
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+      asked.promise.then(v => { signal.removeEventListener('abort', onAbort); resolve(v) }, e => { signal.removeEventListener('abort', onAbort); reject(e) })
+    })
   }
-  private async fetchLeft(page: number): Promise<LeftPage> {
+  private async fetchLeft(page: number, entry: LeftEntry): Promise<LeftPage> {
     if (page > this.through) {
       if (this.partsEnded) throw new Error(`page ${page} is covered by no part`)
-      await new Promise<void>((resolve, reject) => { this.leftWaiters.set(page, [...(this.leftWaiters.get(page) ?? []), { resolve, reject }]) })
+      entry.waiting = true
+      await new Promise<void>((resolve, reject) => {
+        const w: LeftWaiter = { resolve, reject }
+        this.leftWaiters.set(page, [...(this.leftWaiters.get(page) ?? []), w])
+        entry.drop = () => {
+          const rest = (this.leftWaiters.get(page) ?? []).filter(x => x !== w)
+          if (rest.length) this.leftWaiters.set(page, rest)
+          else this.leftWaiters.delete(page)
+          reject(abortError())
+        }
+      })
+      entry.waiting = false
     }
     if (this.disposed) throw new Error('the layer is disposed')
     const part = this.parts.find(q => q.pages[0] <= page && page <= q.pages[1]) as ReadPart

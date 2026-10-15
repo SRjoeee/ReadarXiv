@@ -6,7 +6,7 @@
 import { NAME_FLAG } from '../layout/file.mjs'
 import { REMOVAL } from '../layout/addon-manifest.mjs'
 import { BundleRefusal } from './bundle.mjs'
-import { partTarget, writeHead, writeLeftPart, writePart, writeUnitChunks } from './format.mjs'
+import { groupsOfUnits, partTarget, writeHead, writeLeftPart, writePart, writeUnitChunks } from './format.mjs'
 import { needsOf } from './need.mjs'
 
 const refuse = (kind, path, why, data) => new BundleRefusal(why, { kind, path, ...(data ? { data } : {}) })
@@ -77,6 +77,37 @@ function entriesOf(whole, N) {
 /** the frontier of the whole paper by the door's rule: F[b] is the index in K of the last entry page b's drawing may need */
 export const needFrontier = (K, N) => needsOf(K, N, false, c => !c.rects).lay
 
+/**
+ * The frontier closed over the table groups (amendment M18): a group is read whole (a column across a page break is laid and
+ * filled together), so every K entry of a group with an entry up to F(b) is told by the same part, and what is told is a
+ * prefix of K: F(b) grows to the last of those, to a fixpoint (the last of one group may be the first of another's reach). Only
+ * ever up, so an entry goes to an earlier part and never a later one.
+ */
+function closedOver(F, K, { members }) {
+  const at = new Map(K.map((e, i) => [e.id, i]))
+  // each group's first and last place in K, the groups by first place with the furthest last place up to each
+  const spans = []
+  for (const ids of members) {
+    const places = ids.map(id => at.get(id)).filter(i => i !== undefined)
+    if (places.length > 1) spans.push([Math.min(...places), Math.max(...places)])
+  }
+  spans.sort((x, y) => x[0] - y[0])
+  const furthest = []
+  let top = -1
+  for (const [, last] of spans) { top = Math.max(top, last); furthest.push(top) }
+  const reach = f => {
+    for (;;) {
+      // (the groups that begin at or before f)
+      let lo = 0, hi = spans.length
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (spans[mid][0] <= f) lo = mid + 1; else hi = mid }
+      const next = lo === 0 ? f : Math.max(f, furthest[lo - 1])
+      if (next === f) return f
+      f = next
+    }
+  }
+  return F.map(f => (f < 0 ? f : reach(f)))
+}
+
 const empty = { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }
 
 /**
@@ -85,7 +116,8 @@ const empty = { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }
  * `whole`: BUNDLE 3's reading (readBundle) or the object the producer holds: `paper` { id, version, pages }, `base` { bytes,
  * sha256, xref } (`xref`: the original's startxref, which BUNDLE 3 does not carry: `o.base` may supply it), `units` (none
  * dropped), `left` { pages, units }, `layout` (the layout file or null) and, if `o.image` is not given, `versions.image`.
- * `o.leftPages(page)`: the page's { first, tokens, spans, pairs? } in the left part's input (null: a page with no tokens);
+ * `o.target(a, N)`: the last page the part that begins at `a` is cut to, 'a' to N (default partTarget, the doubling
+ * schedule); a harness cuts at any split with it. `o.leftPages(page)`: the page's { first, tokens, spans, pairs? } in the left part's input (null: a page with no tokens);
  * called once for each page, in page order, as the parts that cover it are cut. `o.frontier(K, N)`: F as an array indexed by
  * page 0 to N of indices into K (-1 for none), default needFrontier. `o.chainAddon(index, { pages, layout })`: the add-on
  * { manifest, tail } for a candidate range of the part, or null (the part's pages are refused, drawn by erase and restore);
@@ -117,10 +149,12 @@ export async function cutBundle(whole, o) {
 
   // K and its frontier
   const K = entriesOf(whole, N)
-  const F = frontier(K, N)
-  if (!Array.isArray(F) || F.length !== N + 1) throw new TypeError(`frontier: an array of the ${N + 1} indices of pages 0 to ${N}`)
-  for (let b = 0; b <= N; b++) if (!Number.isInteger(F[b]) || F[b] < -1 || F[b] >= K.length || (b > 0 && F[b] < F[b - 1])) throw new RangeError(`frontier: page ${b} is not an index of K, rising`)
-  if (F[0] !== -1) throw new RangeError('frontier: page 0 is not -1')
+  const given = frontier(K, N)
+  if (!Array.isArray(given) || given.length !== N + 1) throw new TypeError(`frontier: an array of the ${N + 1} indices of pages 0 to ${N}`)
+  for (let b = 0; b <= N; b++) if (!Number.isInteger(given[b]) || given[b] < -1 || given[b] >= K.length || (b > 0 && given[b] < given[b - 1])) throw new RangeError(`frontier: page ${b} is not an index of K, rising`)
+  if (given[0] !== -1) throw new RangeError('frontier: page 0 is not -1')
+  const grouped = groupsOfUnits(whole.units)
+  const F = closedOver(given, K, grouped)
 
   // the left parts, written as the parts reach their pages
   const lefts = []
@@ -128,10 +162,10 @@ export async function cutBundle(whole, o) {
   const leftTo = async b => {
     while (lefts.length < b) {
       const page = lefts.length + 1
-      const given = await o.leftPages(page)
-      const first = given ? given.first : tokens
-      const t = given ? given.tokens : empty
-      const w = await writeLeftPart({ paper, page, first, tokens: t, spans: given?.spans ?? [], pairs: given?.pairs ?? [] })
+      const got = await o.leftPages(page)
+      const first = got ? got.first : tokens
+      const t = got ? got.tokens : empty
+      const w = await writeLeftPart({ paper, page, first, tokens: t, spans: got?.spans ?? [], pairs: got?.pairs ?? [] })
       lefts.push(w)
       tokens = first + t.perPage[0]
     }
@@ -143,7 +177,8 @@ export async function cutBundle(whole, o) {
   const parts = []
   let prev = null, taken = -1
   for (let a = 1; a <= N;) {
-    const target = partTarget(a, N)
+    const target = o.target ? o.target(a, N) : partTarget(a, N)
+    if (!Number.isInteger(target) || target < a || target > N) throw new RangeError(`target: ${target} is not a last page from ${a} to ${N}`)
     // the part for pages a..b: K's entries after the last of the parts before, up to the frontier of b (the last part also
     // takes any entry past the frontier of N: no page needs it)
     const upTo = b => (b === N ? K.length - 1 : F[b])
@@ -191,6 +226,15 @@ export async function cutBundle(whole, o) {
     const write = async (b, withLayout) => {
       await leftTo(b)
       const x = input(b, withLayout)
+      if (!withLayout && layout) {
+        // (without its layout a part tells its left units alone, and a layout-only unit of the range is lost to the stream: that is
+        // the documented price of a page too big for a layout, but never for a table group, which would be told in part)
+        const told = new Set(x.mine.map(e => e.id))
+        const groupsTold = new Set(x.mine.map(e => grouped.of[e.id]).filter(g => g >= 0))
+        for (const e of K.slice(taken + 1, Math.max(taken, upTo(b)) + 1)) {
+          if (!told.has(e.id) && groupsTold.has(grouped.of[e.id])) throw refuse('part', 'pages', `unit ${e.id}, a member of a table group the part tells in part: page ${a} cannot be told whole without its layout`, { bound: 'part', page: a, unit: e.id })
+        }
+      }
       const ad = withLayout && layout && o.chainAddon ? await o.chainAddon(parts.length, { pages: [a, b], layout: x.part }) : null
       const w = await writePart({ paper, head: head.sha256, prev, pages: x.pages, views: x.views, left: x.left, fileOnly: x.fileOnly, layout: x.part, addon: addonOf(b, withLayout, ad), leftParts: lefts.slice(a - 1, b) })
       return { w, x }

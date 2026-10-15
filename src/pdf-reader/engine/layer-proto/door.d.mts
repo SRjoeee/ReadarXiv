@@ -70,9 +70,10 @@ export interface Layer {
   /**
    * The page of the left, parsed and cached (D-5): its ref is fetched once, on the first want, through `openLayer`'s
    * `leftPart(page, ref)`. Waits until the part covering the page is added; rejects on a page uncovered when endParts() ends the
-   * parts and on dispose; a failed fetch is not cached. Throws synchronously after dispose
+   * parts and on dispose; a failed fetch is not cached. `signal` aborts the wait: an AbortError for this ask, and once no ask is left
+   * for a page still awaiting its covering part, nothing is fetched. Throws synchronously after dispose
    */
-  leftPageOf(page: number): Promise<LeftPage>
+  leftPageOf(page: number, o?: { signal?: AbortSignal }): Promise<LeftPage>
   /** the ready page's copy at a view's resolution, for any ready page after end() until dispose (D-4); throws after dispose */
   copyOf(page: number, source: CanvasImageSource & { width: number; height: number }, k: number): Promise<HTMLCanvasElement>
   /** the unit at a point of a page (the parts' left rectangles, PDF units), the smallest where several hold it; null where none
