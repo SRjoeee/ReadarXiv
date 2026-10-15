@@ -309,9 +309,9 @@ describe('a copy made under pipeline 7, reopened under 8', () => {
 })
 
 // A copy made under pipeline 10 or 11, reopened under 12: 12 sends a formula split across inline formulas as one marker
-// (mt.mjs formulaRuns, TRANSLATE_VERSION 2), the units and their hashes as they were. A unit whose translation holds a
-// formula that does not balance on its own may have had a run's parts set apart, and is sent again; every other unit's
-// translation is taken as the copy has it
+// (mt.mjs formulaRuns, TRANSLATE_VERSION 2), the units and their hashes as they were. Given the units, the carry test
+// asks whether the unit holds a run: such a unit's translation was made of its parts sent apart, and it is sent again;
+// every other unit's translation is taken as the copy has it
 describe('a copy made under pipeline 10 or 11, reopened under 12', () => {
   const PLAIN = Array.from({ length: 4 }, (_, k) => `Paragraph ${k} of the paper, with words that run on for a line or two of prose and an end.`)
   const SET = 'This gives a system of equations for the three components $\\{\\Phi_0$, $\\Phi_1$, $\\Phi_2\\}$ of the field.'

@@ -377,12 +377,13 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 export { PIPELINE_VERSION } from './versions.mjs'
 /**
  * The earlier pipelines whose copies carry their translations over into this one, unit by unit (cache.mjs copyReuse),
- * each with the test a unit's translation, its pieces, must pass: DESIGN §5.5's rule for the HTML page's cache, here per
- * unit — a version voids only what its change can reach. A unit whose source pieces are what they were (its hash) is
- * sent the same wire and cuts as before; one a pipeline cuts otherwise has a new hash and no seed, and is sent as the new
- * text it is. What is left to judge is what the pipeline makes of the answer, from the pieces a copy keeps (it keeps no
- * reply). A pipeline that changes the wire for the same pieces, or what an answer is read as in a way its pieces do not
- * show, carries nothing over: it has no entry.
+ * each with the test a unit's translation must pass, given its pieces and, where the caller has it, the unit it is of:
+ * DESIGN §5.5's rule for the HTML page's cache, here per unit — a version voids only what its change can reach. A unit
+ * one pipeline cuts otherwise has a new hash and no seed, and is sent as the new text it is. One whose source pieces are
+ * what they were (its hash) is judged by the test: what the pipeline makes of the answer, from the pieces a copy keeps
+ * (it keeps no reply), and, where the wire changed for some units of the same pieces, whether the unit is one of them
+ * (12's: whether it holds a run). A pipeline whose change no test can tell, unit by unit, carries nothing over: it has
+ * no entry.
  * - 7: its reading back set a marker's `#` doubled or displaced as text, which this pipeline's takes with the marker
  *   (mt.mjs rehydrate); TeX's `#` is never the text's own (`\#` and a bare `#` are placeholders), so a translation whose
  *   text holds no `\#` was read back as this pipeline reads it, its sentences too. Units of 7 that fix 2 or 4 cut anew
@@ -394,11 +395,12 @@ export { PIPELINE_VERSION } from './versions.mjs'
  * - 9: likewise
  * - 10, 11: 11 changes where the patch inserts a lead or a mark (latex-front.mjs), and the units it cuts anew (a macro's
  *   call, a subscript) have new hashes. 12 sends a formula split across inline formulas as one marker (mt.mjs formulaRuns,
- *   TRANSLATE_VERSION 2), its unit's pieces and hash as they were: the translation of a unit that holds a run was made of
- *   its parts sent apart, and is sent again — the units whose wire 12 changes, and no other. Given no unit (a caller that
- *   has none), a translation that holds a formula whose delimiters do not balance on its own (mt.mjs holdsUnbalanced) is
- *   sent again, a few more units, whose wire is unchanged and which the per-text cache answers. 7, 8 and 9 take that test
- *   with their own
+ *   TRANSLATE_VERSION 2), its unit's pieces and hash as they were: the test is whether the unit holds a run (formulaRuns
+ *   over its pieces), whose translation was made of its parts sent apart and is sent again — the units whose wire 12
+ *   changes, and no other. Only where no unit is passed, a translation that holds a formula whose delimiters do not
+ *   balance on its own (mt.mjs holdsUnbalanced) is sent again: a few more units, whose wire is unchanged and which the
+ *   per-text cache answers. 7, 8 and 9 take that test with their own. 10 is carried for the first time: under 11 a copy
+ *   of 10 was sent again whole
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
 const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))

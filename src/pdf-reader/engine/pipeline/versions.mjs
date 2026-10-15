@@ -68,8 +68,8 @@
 // 12: raised with TRANSLATE_VERSION 2 (a formula split across inline formulas sent as one marker, mt.mjs formulaRuns), so
 //     that copies are judged again; the units are 11's, byte for byte. 2307.16209's `$\{\Phi_0$, $\Phi_1$, $\Phi_2\}$`
 //     went out as three markers, Microsoft's Chinese moved the first one, its brace with it, and page 31 drew the set
-//     broken apart. A copy of 10 or 11 carries every unit but one holding a formula whose delimiters do not balance on its
-//     own (live.mjs PIPELINE_CARRIES)
+//     broken apart. A copy of 10 or 11 carries every unit but one that holds a run (live.mjs PIPELINE_CARRIES, given the
+//     unit; with none, every unit but one whose translation holds a formula that does not balance on its own)
 export const PIPELINE_VERSION = '12'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */

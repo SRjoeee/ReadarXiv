@@ -409,7 +409,8 @@ async function microsoftRecord(paper, target, hashes) {
  * A record of this cut of the paper's units, its translations carried over from records of another cut (`from`: the
  * gate's fixed fixture's, made by an earlier front end, with its pipeline): each unit whose source is one of theirs, by
  * its hash or but for its pairs' numbers (cache.mjs seedFrom, as a copy's seed), and whose translation that pipeline's
- * carries over into this one (live.mjs PIPELINE_CARRIES: not one holding a marker's `#`); every other unit the target
+ * carries over into this one (live.mjs PIPELINE_CARRIES, given the unit: not one holding a marker's `#`, nor, from 10 or
+ * 11, a unit that holds a run, which 12 sends as one marker); every other unit the target
  * does not keep sent through
  * Microsoft's endpoint on the markers wire, as microsoftRecord sends a paper's, at its rate. A front end that cuts the
  * units anew (PIPELINE 10's) sends only what it made new

@@ -122,3 +122,23 @@ describe('a copy of 10 or 11 (live.mjs PIPELINE_CARRIES): the units whose wire 1
     }
   })
 })
+
+describe('the wire around a run\'s marker', () => {
+  const back = (body: string, reply: string) => { const u = unitOf(body), r = rehydrate(reply, serialize(u)); return 'pieces' in r ? joined(r.pieces).trim() : r.error }
+  it('two runs in one unit: two markers, each read back as its own parts', () => {
+    const u = unitOf('Take $\\{a$, $b\\}$, $(c$, $d)$ here.')
+    expect(serialize(u).wire).toBe('Take @a#, @b# here.')
+    expect(back('Take $\\{a$, $b\\}$, $(c$, $d)$ here.', 'Nimm @b# und @a# hier.')).toBe('Nimm $(c$, $d)$ und $\\{a$, $b\\}$ hier.')
+  })
+  it('the wire\'s spaces beside it taken off again: after a full stop, and beside a digit on either side', () => {
+    expect(serialize(unitOf('Done.$\\{a$, $b\\}$ is the set.')).wire).toBe('Done. @a# is the set.')
+    expect(back('Done.$\\{a$, $b\\}$ is the set.', 'Fertig. @a# ist die Menge.')).toBe('Fertig.$\\{a$, $b\\}$ ist die Menge.')
+    expect(serialize(unitOf('In 3$\\{a$, $b\\}$2 ways.')).wire).toBe('In 3 @a# 2 ways.')
+    expect(back('In 3$\\{a$, $b\\}$2 ways.', 'Auf 3 @a# 2 Arten.')).toBe('Auf 3$\\{a$, $b\\}$2 Arten.')
+  })
+  it('on the tags wire too, a run\'s void lost or doubled is refused whole', () => {
+    const u = unitOf(SET), ser = serializeTags(u)
+    expect(rehydrateTags('These are the equations <x id="2"/>:', ser)).toEqual({ error: 'lost placeholder' })
+    expect(rehydrateTags('These are <x id="1"/> the equations of <x id="1"/> <x id="2"/>:', ser)).toEqual({ error: 'duplicated placeholder' })
+  })
+})
