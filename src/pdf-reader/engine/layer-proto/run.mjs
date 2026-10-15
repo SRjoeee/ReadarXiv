@@ -515,10 +515,6 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // given stays as it was (a second run over it draws as the first: the text removal's plan run and its drawing)
   const GU = geometry.left.units.map(([id, stream, rects]) => [id, stream, rects.map(r => r.slice())])
   const placed = [], skipped = []
-  /** the units left the original's on each page (a unit skipped, unfit, withheld with its group, or refused with its page): the
-   *  page's word table lists them (`original`), whose words the view reads from the left */
-  const originalOn = []
-  const leftOn = (id, pages) => { for (const q of pages) (originalOn[q] ??= new Set()).add(id) }
   const inGeometry = new Set(GU.map(u => u[0]))
   // the units as they have come (take), by id: none for one not yet arrived, or never to come; and the ids still
   // awaited (expect's, but those given at once)
@@ -615,12 +611,17 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const holdReads = c => { if (!free) return; c.reads = readsOf(c); for (const q of c.reads) reads[q]++ }
   /** a unit's lay is over (laid, or decided not placed): the pages it reads held for it no longer */
   const dropReads = c => { if (!c?.reads) return; for (const q of c.reads) reads[q]--; c.reads = null }
-  /** a page's word table frozen into its record once the page is final (its units painted there, its units left the original's
-   *  told): the columns cut to the tokens, the open table dropped. A page that has none painted keeps an empty table */
+  /** a page's word table frozen into its record once the page is final (every unit on it painted there): the columns cut to
+   *  the tokens, the open table dropped. The units left the original's are every unit with lines on the page (any of its
+   *  sources' pages) that has no span on it: skipped, unfit, withheld with its table group, refused, or untranslated (a row lost,
+   *  none, kept or never come), all shown as the original's. A page that has none painted keeps an empty table */
   const freezeWordsOf = q => {
     const r = rows[q - 1]
     if (!r || r.words) return
-    r.words = freezeWords(r.wordsOpen, originalOn[q] ?? [])
+    const painted = new Set((r.wordsOpen?.spans ?? []).map(s => s[0]))
+    const original = []
+    for (const c of K) if (!painted.has(c.id) && c.lists.some(l => l.includes(q))) original.push(c.id)
+    r.words = freezeWords(r.wordsOpen, original)
     r.wordsOpen = null
   }
   /** a page's analysis state let go (its canvases, a copy's, are the gate's: release) */
@@ -880,7 +881,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     r.markup.push(L2.svgOfUnit(p.layout, pg, cssOf(pg), scale, p.id))
     const tWords = performance.now()
     // (the page's word table, beside the markup: the unit's words in the order they are drawn; a page whose table is frozen is final)
-    if (!r.words) addUnitWords(r.wordsOpen ??= newWords(), p.layout, pg, p.id, (at, end) => (p.wordOf ??= wordIndexer(plainOfPieces(p.unit.pieces)))(at, end), L2.keptLines(p.rects, p.prep, pg))
+    if (!r.words) addUnitWords(r.wordsOpen ??= newWords(), p.layout, pg, p.id, (at, end) => (p.wordOf ??= wordIndexer(plainOfPieces(p.unit.pieces)))(at, end), L2.keptLines(p.rects, p.prep, pg), crop => hasSource(crop.page))
     const T = timesOf(pg)
     T.ops += tCompose - tOps
     T.compose += tSvg - tCompose
@@ -1518,7 +1519,6 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (p.counted) { p.counted = false; drawnUnits-- }
     p.withheld = true
     skipped.push({ id: p.id, kind: p.unit.kind, why: `group: ${why}`, chars: trCharsOf(p.unit), pages: p.pages })
-    leftOn(p.id, p.pages)
   }
   /** group g decided once every cell of it is laid: withheld, or to be painted whole (true) */
   const settleGroup = g => {
@@ -1620,7 +1620,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     dropReads(candOf.get(p.id))
     // (a unit no step fits is the original's: neither erased nor drawn, nor checked; nor one whose characters no served
     // slice holds (`served`) or whose slice did not load (`face`))
-    if (p.refused) { skipped.push({ id: p.id, kind: p.unit.kind, why: p.why ?? 'unfit', ...(p.missing ? { missing: p.missing } : {}), chars: trCharsOf(p.unit), pages: p.pages }); leftOn(p.id, p.pages) }
+    if (p.refused) skipped.push({ id: p.id, kind: p.unit.kind, why: p.why ?? 'unfit', ...(p.missing ? { missing: p.missing } : {}), chars: trCharsOf(p.unit), pages: p.pages })
     const g = p.unit.group && groupCells.has(p.unit.group) ? p.unit.group : null
     if (g) (groupLaid.get(g) ?? groupLaid.set(g, { list: [], done: false }).get(g)).list.push(p)
     if (PASSES) {
@@ -1806,12 +1806,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (!c.lists.length) { deferred.push(c); dropReads(c); return }
     fixed.add(c.id)
     const u = U.get(c.id), d = decisionOf(c)
-    if (d.skip) { skipped.push(d.skip); leftOn(c.id, c.lists.flat()) }
+    if (d.skip) skipped.push(d.skip)
     let p = d.p
     if (p && u.group) {
       if (!tableGroups) freezeAll()
       else if (!read.has(u.group)) readGroup(u.group, membersOf.get(u.group) ?? [])
-      if (split.has(u.group)) { skipped.push({ id: p.id, kind: u.kind, why: 'group: a cell not drawn', chars: trCharsOf(u), pages: p.pages }); leftOn(p.id, p.pages); p = null }
+      if (split.has(u.group)) { skipped.push({ id: p.id, kind: u.kind, why: 'group: a cell not drawn', chars: trCharsOf(u), pages: p.pages }); p = null }
     }
     if (!p) { dropReads(c); return }
     laidOut.push(p)
@@ -2009,12 +2009,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     /**
      * Page `pg`'s word table (words.mjs; the 1b design §4): the drawn tokens in drawing order with each unit's span and each token's
      * word in its translation, and the units left the original's. A new record on every ask, none of its arrays the run's (the
-     * caller may transfer or free them); the page's own is frozen at the first ask if it is not already (the page is final when
-     * its units are painted: ask a page that is ready)
+     * caller may transfer or free them). Only a page that is final (`doneAt(pg) <= drawnTo`, what a ready page is) has one: it is
+     * frozen at the first ask if it is not already; a RangeError for another, never a table that would change
      */
     wordsOf(pg) {
       const r = rows[pg - 1]
       if (!r) throw new RangeError(`wordsOf: page ${pg} has no row`)
+      if (!(doneAtOf(pg) <= drawnTo)) throw new RangeError(`wordsOf: page ${pg} is not final`)
       freezeWordsOf(pg)
       return copyWords(r.words)
     },

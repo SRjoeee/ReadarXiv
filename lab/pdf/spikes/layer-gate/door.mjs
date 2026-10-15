@@ -118,7 +118,12 @@ window.door = {
       // door's copy to be drawn over: PDF.js's first drawing of a page in a document may differ from its later ones,
       // 2608.04322's page 3 by a few pixel rows from run to run)
       const recs = JSON.stringify(run.stats.filter(r => r.pages.includes(p)).map(({ ms: _, ...r }) => r))
-      out.push({ p, svg: run.svgOf(p).outerHTML, w: row.w, h: row.h, recs: await digest(new TextEncoder().encode(recs)), words: await wordsDigest(run.wordsOf(p)), wordsBytes: wordsBytes(run.wordsOf(p)), wordsTokens: run.wordsOf(p).tokens.n, o: await pixelsOf(row.left), c: await pixelsOf(row.right), ...(png ? { png: await pngOf(row.left) } : {}) })
+      out.push({ p, svg: run.svgOf(p).outerHTML, w: row.w, h: row.h, recs: await digest(new TextEncoder().encode(recs)), o: await pixelsOf(row.left), c: await pixelsOf(row.right), ...(png ? { png: await pngOf(row.left) } : {}) })
+      // (and the page's word table, a final page's: the pages its units run on to drawn first, after the page is read)
+      const done = run.doneAt(p)
+      if (Number.isFinite(done) && done > p) await run.until(done)
+      const final = run.wordsOf(p)
+      Object.assign(out.at(-1), { words: await wordsDigest(final), wordsBytes: wordsBytes(final), wordsTokens: final.tokens.n })
     }
     const summary = { N: run.N, laid: run.stats.length, skipped: run.skipped.length }
     run.dispose()

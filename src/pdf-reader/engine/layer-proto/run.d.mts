@@ -122,7 +122,7 @@ export interface ProtoRun {
   /** each page's costs, ms: its original drawn, its text read, the removal's ink reading and plan, its removed and
    *  placeholders' pages drawn, its units laid (less the faces they waited for, `fonts`), their operations made, drawn on the
    *  copy and set as SVG */
-  pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number }[]
+  pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number; words: number }[]
   /** each page's characters (with `free` and `records`, the shelf's: every page's, let go or not) */
   chars: (Char[] | undefined)[]
   views: { convertToViewportPoint(x: number, y: number): number[]; convertToPdfPoint(x: number, y: number): number[] }[]
@@ -175,7 +175,7 @@ export interface ProtoRun {
   /** page `page`'s SVG, a new element each call, made of its record's markup (class, size and spacing as the page's own): a
    *  parse alone, no layout, face, ink or PDF.js call, 0.3 to 8.6 ms (420 to 12,000 elements) */
   svgOf(page: number): SVGSVGElement
-  /** the page's word table, a new record on every ask (words.mjs; the 1b design §4), frozen at the first ask if the page is not already */
+  /** the page's word table, a new record on every ask (words.mjs; the 1b design §4), frozen at the first ask if the page is not already; a RangeError for a page that is not final (`doneAt(page) <= drawnTo`) */
   wordsOf(page: number): PageWords
   /** what the run lets go (`free`), keeps of its units' records and audit (`records`), and keeps on the gate's shelf */
   held(): { free: boolean; records: boolean; shelf: boolean }

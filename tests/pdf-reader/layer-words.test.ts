@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { plainTranslated } from '@/pdf-reader/engine/translate/mt.mjs'
 import { tokens as wordsIn } from '@/pdf-reader/engine/pipeline/anchors.mjs'
-import { addUnitWords, copyWords, freezeWords, newWords, plainOfPieces, plainTracker, transformMap, wordIndexer } from '@/pdf-reader/engine/layer-proto/words.mjs'
+import { addUnitWords, copyWords, escapeMap, freezeWords, newWords, plainOfPieces, plainTracker, transformMap, wordIndexer } from '@/pdf-reader/engine/layer-proto/words.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // 1b-E: the page's word table (words.mjs; the 1b design §4). W1: a text token's box lies within its drawn run and its baseline is
@@ -136,12 +136,114 @@ describe('W1: a token lies within its drawn run, on its line\'s baseline', () =>
     expect(next).toBe(words.length)
   })
 
-  it('draws a placeholder\'s rendering, a lead and a label as tokens with no word, and tags no piece it cannot place', () => {
-    // a translated piece and a source piece whose shown text is not what is drawn (a TeX escape): the escaped one is tagged with none
-    const l = lay([text('Alpha beta'), { t: 'text', tr: true, s: 'gamma \\# delta' }], 'de', block(2), { hyphen: 0 })
-    const tagged = l.tokens.filter(t => t.s).map(t => [t.s, t.at, t.end])
-    expect(tagged.slice(0, 2)).toEqual([['Alpha', 0, 5], ['beta', 6, 10]])
-    expect(tagged.slice(2).every(([, at]) => at === undefined)).toBe(true)
+  it('maps a translated piece through TeX\'s escapes, and tags a source piece drawn other than shown with none', () => {
+    // `\\%` is shown as `%` and `\\textbackslash{}` as a space; the raw text is what is drawn
+    const l = lay([text('Alpha 50\\% and \\textbackslash{} beta'), { t: 'text', s: ' caf\u00c3\u00a9 gamma' }], 'de', block(2), { hyphen: 0 })
+    expect(l.plain).toBe('Alpha 50% and beta caf\u00e9 gamma')
+    const toks = l.tokens.filter(t => t.s)
+    const at = (s: string) => toks.find(t => t.s === s)
+    expect([at('50\\%')!.at, at('50\\%')!.end]).toEqual([6, 9])
+    expect([at('beta')!.at, at('beta')!.end]).toEqual([l.plain.indexOf('beta'), l.plain.indexOf('beta') + 4])
+    // the word of the escaped number is the number (word 1), the rest follow in the translation's order
+    const W = tableOf(l)
+    const drawn = l.layout.lines.flatMap(line => line.items.filter(it => !it.t.space)).map(it => it.t.s)
+    expect(drawn.slice(0, 2)).toEqual(['Alpha', '50\\%'])
+    expect([...W.word.slice(0, 2)]).toEqual([0, 1])
+    // (the source piece's bytes are drawn as they are, which is not what the PDF shows: none of its tokens is tagged)
+    expect(toks.filter(t => /caf|gamma/.test(t.s!)).every(t => t.at === undefined)).toBe(true)
+    expect(escapeMap('a\\%b', 'a%b')).toEqual(new Int32Array([0, 1, 1, 2]))
+    expect(escapeMap('a\\%b', 'a b')).toBeNull()
+  })
+
+  it('draws a lead, a label and a placeholder\'s rendering as tokens with no word', () => {
+    const unit = { kind: 'para', pieces: [text('Alpha beta')] }
+    const params = { ...resolveRules(BUILTIN_RULES, 'de').params, hyphen: 0 }
+    const lead = { parts: [{ text: 'Proof.', st: {} }], gap: 0.5 }
+    const tokens = L2.tokensOf2(unit as never, new Map() as never, 'de', BASE as never, DESIGNS, params as never, lead as never, undefined, true)
+    const layout = L2.layoutUnit2(tokens, [block(2)] as never, 10, params as never)
+    const W = newWords()
+    addUnitWords(W, layout, 1, 7, wordIndexer(plainOfPieces(unit.pieces as never)))
+    expect([...W.word.slice(0, W.n)]).toEqual([-1, 0, 1])
+    // the lead's last token is the text alone: not the original's glue after it (0.5 em of the unit's size)
+    const items = layout.lines[0]!.items.filter(it => !it.t.space)
+    expect(items[0]!.t.kern).toBe(true)
+    expect(W.r[0]! - W.l[0]!).toBeCloseTo(items[0]!.w - 0.5 * layout.f, 3)
+    expect(W.r[0]! - W.l[0]!).toBeCloseTo(0.5 * 6 * layout.f, 3)
+  })
+})
+
+describe('W1 extended: the boxes of marks, tracking, superscripts, crops and kept lines', () => {
+  it('holds a compressed opening mark in its slot, so that the tokens of a Chinese line tile', () => {
+    // an opening mark at the line\'s start loses its blank half, and is drawn half an em left of its slot (into the margin)
+    const l = lay([text('\u300c\u6a21\u578b\u300d\u6570\u636e')], 'zh', block(1, 300))
+    const items = l.layout.lines[0]!.items.filter(it => !it.t.space)
+    expect(items[0]!.t.punct).toBe('open')
+    expect((items[0] as { shift?: number }).shift).toBeLessThan(0)
+    const W = tableOf(l)
+    // the slot starts at the line\'s start, not in the margin before it; the glyph is drawn at it.x
+    expect(items[0]!.x).toBeLessThan(0)
+    expect(W.l[0]).toBeCloseTo(0, 3)
+    expect(W.r[0]).toBeCloseTo(items[0]!.w, 3)
+    for (let i = 1; i < W.n; i++) expect(W.l[i]!, `token ${i}`).toBeCloseTo(W.r[i - 1]!, 3)
+    // a CJK token has the em box
+    expect(W.top[1]! - W.y[1]!).toBeCloseTo(0.88 * W.h[1]!, 3)
+    expect(W.y[1]! - W.bottom[1]!).toBeCloseTo(0.12 * W.h[1]!, 3)
+  })
+
+  it('has the width the layout gives under tracking', () => {
+    const l = lay([text('\u6a21\u578b\u6570\u636e')], 'zh', block(1, 300), { trackStart: -0.04 })
+    const W = tableOf(l)
+    expect(l.layout.state.track).toBeCloseTo(-0.04, 5)
+    // a character is half an em in the test\'s measure, less the tracking
+    for (let i = 0; i < W.n; i++) expect(W.r[i]! - W.l[i]!).toBeCloseTo((0.5 - 0.04) * l.layout.f, 3)
+  })
+
+  it('draws a superscript on the baseline it is drawn on, at its size', () => {
+    const unit = { kind: 'para', pieces: [text('Alpha '), { t: 'ph', src: '$^2$' }, text(' beta')] }
+    const params = { ...resolveRules(BUILTIN_RULES, 'de').params, hyphen: 0 }
+    const resolved = new Map([[1, { mode: 'orig-text', text: '2', sup: true }]])
+    const tokens = L2.tokensOf2(unit as never, resolved as never, 'de', BASE as never, DESIGNS, params as never, null, undefined, true)
+    const layout = L2.layoutUnit2(tokens, [block(2)] as never, 10, params as never)
+    const W = newWords()
+    addUnitWords(W, layout, 1, 7, wordIndexer(plainOfPieces(unit.pieces as never)))
+    const by = layout.lines[0]!.baseline
+    const sup = layout.lines.flatMap(line => line.items).findIndex(it => it.t.sup)
+    expect(sup).toBeGreaterThanOrEqual(0)
+    const k = layout.lines.flatMap(line => line.items).slice(0, sup + 1).filter(it => !it.t.space).length - 1
+    expect(W.y[k]!).toBeCloseTo(by + 0.36 * layout.f, 3)
+    expect(W.h[k]!).toBeCloseTo(0.62 * layout.f, 3)
+    expect(W.word[k]).toBe(-1)
+  })
+
+  it('draws a crop at its drawn box where it is drawn, and none where its page is not', () => {
+    const unit = { kind: 'para', pieces: [text('Alpha '), { t: 'ph', src: '$x$' }, text(' beta')] }
+    const params = { ...resolveRules(BUILTIN_RULES, 'de').params, hyphen: 0 }
+    const crop = { mode: 'crop', crop: [0, 100, 20, 112], baseline: 102, page: 1, text: 'x' }
+    const tokens = L2.tokensOf2(unit as never, new Map([[1, crop]]) as never, 'de', BASE as never, DESIGNS, params as never, null, undefined, true)
+    const layout = L2.layoutUnit2(tokens, [block(2)] as never, 10, params as never)
+    const line = layout.lines.find(x => x.items.some(it => it.t.crop))!
+    const item = line.items.find(it => it.t.crop)!
+    const all = newWords()
+    addUnitWords(all, layout, 1, 7, wordIndexer('Alpha beta'))
+    const none = newWords()
+    addUnitWords(none, layout, 1, 7, wordIndexer('Alpha beta'), [], () => false)
+    expect(none.n).toBe(all.n - 1)
+    const at = layout.lines.flatMap(x => x.items).filter(it => !it.t.space).indexOf(item)
+    expect([all.l[at], all.r[at]]).toEqual([Math.fround(item.x), Math.fround(item.x + item.w)])
+    expect(all.h[at]!).toBeCloseTo(12 * layout.scale, 3)
+    expect(all.top[at]!).toBeCloseTo(line.baseline + (112 - 102) * layout.scale, 3)
+    expect(all.top[at]! - all.bottom[at]!).toBeCloseTo(all.h[at]!, 3)
+    expect(all.word[at]).toBe(-1)
+  })
+
+  it('appends the unit\'s kept lines at their original rectangles, after its drawn ones, in its span', () => {
+    const l = lay([text('Alpha beta')], 'de', block(1), { hyphen: 0 })
+    const W = newWords()
+    addUnitWords(W, l.layout, 1, 7, wordIndexer(l.plain), [{ x0: 10, x1: 90, baseline: 300, size: 10, top: 308, bottom: 298 }])
+    expect(W.n).toBe(3)
+    expect([W.l[2], W.r[2], W.y[2], W.top[2], W.bottom[2], W.word[2]]).toEqual([10, 90, 300, 308, 298, -1])
+    expect(W.spans).toEqual([[7, [0, 3]]])
+    expect(L2.keptLines([[1, 10, 298, 90, 308], [2, 10, 298, 90, 308]], { keep: ['1|10,298,90,308'], lineInfo: new Map([['1|10,298,90,308', { baseline: 300, size: 10 }]]) } as never, 1)).toEqual([{ x0: 10, x1: 90, baseline: 300, size: 10, top: 308, bottom: 298 }])
   })
 })
 
@@ -190,15 +292,25 @@ describe('the word index', () => {
     expect(wordIndexer('x (one)')(2, 7)).toBe(1)
   })
 
-  it('counts in the folded text where NFKC spells characters out: an ellipsis, a ligature', () => {
-    const plain = 'a… b ﬁx c'
+  it('counts in the folded text where NFKC spells characters out: an ellipsis, a ligature, combining marks', () => {
+    const plain = 'a\u2026 b \ufb01x c e\u0301\u0302 d'
     expect(plain.normalize('NFKC').length).not.toBe(plain.length)
     const w = wordIndexer(plain)
     const at = (s: string) => plain.indexOf(s)
-    expect(wordsIn(plain).map(x => x.t)).toEqual(['a', 'b', 'fix', 'c'])
+    expect(wordsIn(plain).map(x => x.t)).toEqual(['a', 'b', 'fix', 'c', '\u00e9', 'd'])
     expect(w(at('b'), at('b') + 1)).toBe(1)
-    expect(w(at('ﬁx'), at('ﬁx') + 2)).toBe(2)
+    expect(w(at('\ufb01x'), at('\ufb01x') + 2)).toBe(2)
     expect(w(at('c'), at('c') + 1)).toBe(3)
+    expect(w(at('e\u0301'), at('e\u0301') + 3)).toBe(4)
+    expect(w(at('d'), at('d') + 1)).toBe(5)
+  })
+
+  it('is -1 for every range of a text it cannot map exactly: a sequence that composes across clusters', () => {
+    // Hangul jamo compose into a syllable across code points that are no marks
+    const plain = 'a \u1100\u1161 b'
+    expect(plain.normalize('NFKC')).not.toBe(plain)
+    const w = wordIndexer(plain)
+    expect([w(0, 1), w(2, 4), w(5, 6)]).toEqual([-1, -1, -1])
   })
 })
 

@@ -42,7 +42,9 @@ type Run = Awaited<ReturnType<typeof import('@/pdf-reader/engine/layer-proto/run
 const faceSources = async (id: string) => [{ url: `/f/${id}.otf`, ranges: [0, 0x10ffff] }]
 const hyphUrl = (lang: string) => `/hyph/${lang}.json`
 const para = (text: string, page: number, b: number, o: Partial<PaperSpec['units'][number]> = {}) => ({ kind: 'para', text, lines: [[page, 20, 280, b]] as [number, number, number, number][], file: true, stream: null, ...o })
-/** three pages: a paragraph running on to page 2, a caption, a table column across pages 2 and 3, and a paragraph that throws */
+const cell = (text: string, row: number, col: number, page: number, x0: number, b: number) => ({ kind: 'cell', text, lines: [[page, x0, x0 + 60, b]] as [number, number, number, number][], file: true, stream: null, cell: { table: 0, row, col, span: 1, head: false } })
+/** three pages: a paragraph running on to page 2, a paragraph that throws, a table column across pages 1 and 2 (its group is withheld:
+ *  on two pages), a paragraph whose row is lost and one whose row never comes */
 const SPEC: PaperSpec = {
   pages: 3,
   units: [
@@ -51,9 +53,16 @@ const SPEC: PaperSpec = {
     para('Boom', 2, 200, { stream: 20 }),
     para('Third page', 3, 220, { stream: 60 }),
     para('A paragraph of page 2', 2, 120, { stream: 30 }),
+    cell('Upper', 1, 0, 1, 20, 200),
+    cell('Middle', 2, 0, 1, 20, 180),
+    cell('Lower', 3, 0, 2, 20, 250),
+    para('Its row is lost', 3, 150, { stream: 70 }),
+    para('Its row never comes', 3, 100, { stream: 80 }),
   ],
 }
-const BOOM = 2
+const BOOM = 2, LOST = 8, ABSENT = 9
+/** the units with a line on a page (the spec's, not the engine's) */
+const onPage = (p: number) => SPEC.units.flatMap((u, id) => (u.lines.some(l => l[0] === p) ? [id] : []))
 
 /** the page's table as plain data (typed arrays as arrays), to compare */
 const plain = (w: PageWords) => JSON.parse(JSON.stringify({ n: w.tokens.n, l: [...w.tokens.l], r: [...w.tokens.r], y: [...w.tokens.y], h: [...w.tokens.h], top: [...w.tokens.top], bottom: [...w.tokens.bottom], word: [...w.word], spans: w.spans, original: w.original }))
@@ -67,7 +76,7 @@ async function open(order: readonly number[], how: 'whole' | 'parts') {
   const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
   const c = await cutSpec(SPEC, [1, 2])
   const docFor = docsOf(SPEC) as unknown as (r: number) => LayerDocument
-  const rows = rowsOfIndex(c.index).map(r => (r[0] === BOOM ? ([r[0], ['BOOM'], ...r.slice(2)] as typeof r) : r))
+  const rows = rowsOfIndex(c.index).filter(r => r[0] !== ABSENT).map(r => (r[0] === BOOM ? ([r[0], ['BOOM'], ...r.slice(2)] as typeof r) : r[0] === LOST ? ([r[0], [], 'lost', 'test', null] as unknown as typeof r) : r))
   const layer: Layer = how === 'whole'
     ? await openLayer({ bundle: mergeParts(c.index, c.parts), doc: docFor(c.parts.at(-1)!.chain.r), target: 'zh', faceSources, hyphUrl })
     : await openLayer({ index: c.index, doc: docFor(0), parts: c.parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
@@ -106,12 +115,16 @@ describe('W3: the page\'s spans and the units left the original\'s', () => {
       for (const f of ['l', 'r', 'y', 'h', 'top', 'bottom'] as const) expect(w.tokens[f].length).toBe(w.tokens.n)
       expect(w.word.length).toBe(w.tokens.n)
       for (let i = 0; i < w.tokens.n; i++) { expect(w.tokens.r[i]!).toBeGreaterThan(w.tokens.l[i]!); expect(w.tokens.top[i]!).toBeGreaterThan(w.tokens.bottom[i]!) }
-      // the units left the original's on the page: the run's, rising
-      const left = [...new Set(run.skipped.filter(s => s.pages?.includes(p)).map(s => s.id))].sort((a, b) => a - b)
-      expect(w.original, `page ${p}`).toEqual(left)
+      // the units left the original's on the page: every unit with a line on it that has no span, rising (by the spec's lines, not the run's records)
+      const painted = new Set(w.spans.map(s => s[0]))
+      expect(w.original, `page ${p}`).toEqual(onPage(p).filter(id => !painted.has(id)))
     }
-    expect(got.get(2)!.words.original).toContain(BOOM)
+    // the unit that threw, the table group withheld (cells on pages 1 and 2), the lost row and the row that never came
+    expect(got.get(1)!.words.original).toEqual([5, 6])
+    expect(got.get(2)!.words.original).toEqual([BOOM, 7])
+    expect(got.get(3)!.words.original).toEqual([LOST, ABSENT])
     expect(got.get(2)!.words.spans.map(s => s[0])).not.toContain(BOOM)
+    void run
     // a unit running on to the next page has a span on each, tokens of its own on each
     expect(got.get(1)!.words.spans.map(s => s[0])).toContain(1)
     expect(got.get(2)!.words.spans.map(s => s[0])).toContain(1)
@@ -146,6 +159,13 @@ describe('W3: the page\'s spans and the units left the original\'s', () => {
     expect(await tablesIn([1, 2, 3], 'parts')).toEqual(want)
     expect(await tablesIn([3, 2, 1], 'parts')).toEqual(want)
     expect([...want.values()].every(w => w.n > 0)).toBe(true)
+  })
+
+  it('is asked of a final page only: a page not drawn yet has no table to freeze', async () => {
+    const o = await open([1], 'whole')
+    expect(() => o.run.wordsOf(3)).toThrow(RangeError)
+    expect(o.run.wordsOf(1).tokens.n).toBeGreaterThan(0)
+    o.layer.dispose()
   })
 
   it('is always present: a page with no painted unit has an empty table', async () => {

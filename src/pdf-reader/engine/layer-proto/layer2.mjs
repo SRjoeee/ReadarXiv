@@ -56,7 +56,7 @@ import { blocksOf, CITE, gapClass, kinsokuOf, lcsMatched, median, norm, phClass,
 import { faceOf, fontString, OBLIQUE_DEG, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
 import { shown } from '../layer/pieces.mjs'
-import { plainTracker, transformMap } from './words.mjs'
+import { escapeMap, plainTracker, transformMap } from './words.mjs'
 
 // (the fit's parameters, per script and language, are the layout rules': rules/layout.mjs resolveRules gives a run its P)
 
@@ -1824,7 +1824,8 @@ export function ink100(s, face) {
 export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, measure = w100, tagWords = false) {
   const tokens = []
   // (`tagWords`, the page's word table: each token of a text piece carries `at` and `end`, its range in plainTranslated(pieces),
-  // words.mjs; no other field of a token changes, and a token of a lead, a label or a placeholder's rendering has none)
+  // words.mjs, and a lead's last token `kernEm`, the glue after it; no other field of a token changes, and a token of a lead, a
+  // label or a placeholder's rendering has no range)
   const plain = tagWords ? plainTracker() : null
   const base = baseOf(unit, baseIn)
   const stack = [{ ...base }]
@@ -1880,8 +1881,9 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
           const t = { s, st, face, cls: p.cls, w100: measure(s, face), ...extra, ...(q > 0 ? { brk: true } : {}) }
           if (track && s.length) {
             const i = m.index + p.off + po, last = i + s.length - 1
-            t.at = track.at[track.base + track.map.from[i]]
-            t.end = track.at[track.base + track.map.from[last]] + track.map.span[last]
+            const sm = track.sm, a = track.base + track.map.from[i], z = track.base + track.map.from[last] + track.map.span[last] - 1
+            t.at = track.at[sm ? sm[a] : a]
+            t.end = track.at[sm ? sm[z] : z] + 1
           }
           po += s.length
           // within a chunk, parts stand together (no break), but Chinese and Japanese break before and after a CJK
@@ -1905,7 +1907,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     else if (tokens.length) {
       const t = tokens[tokens.length - 1]
       t.leadEnd = true
-      if (lead.gap > 0) { t.w100 += 100 * lead.gap; t.kern = true }
+      if (lead.gap > 0) { t.w100 += 100 * lead.gap; t.kern = true; if (plain) t.kernEm = lead.gap }
     }
   }
   // a displayed formula the text after it starts below (or one before the unit's lines): the translation's text that
@@ -1933,8 +1935,11 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       const sh = plain ? shown(p) : null, at = plain?.text(sh)
       if (after && /\S/.test(s)) { s = dropped(s); after = null }
       const text = s.replace(/\n/g, ' ').replace(/---/g, '—').replace(/--/g, '–').replace(/``/g, '“').replace(/''/g, '”')
-      const map = at && sh === p.s ? transformMap(s, text) : null
-      pushText(text, style(), {}, map && { at, base: p.s.length - s.length, map })
+      // (a translated piece holds TeX's escapes, which `shown` undoes: its characters are mapped through them; a source piece must
+      // be drawn as it is shown)
+      const sm = at ? (p.tr ? escapeMap(p.s, sh) : sh === p.s ? true : null) : null
+      const map = sm ? transformMap(s, text) : null
+      pushText(text, style(), {}, map && { at, base: p.s.length - s.length, map, sm: sm === true ? null : sm })
       return
     }
     plain?.gap()

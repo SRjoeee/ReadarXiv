@@ -68,29 +68,52 @@ export function transformMap(s, expected) {
 }
 
 /**
+ * For a translated piece (TeX's escapes in its text), the index in its shown string (layer/pieces.mjs `shown`: `\%` as `%`,
+ * `\textbackslash{}` as a space) of each UTF-16 index of the raw text, an escape's characters all at its one shown character.
+ * Null where the string so made is not `expected` (the shown string): the caller then tags nothing
+ */
+export function escapeMap(raw, expected) {
+  const at = new Int32Array(raw.length)
+  let out = ''
+  for (let i = 0; i < raw.length;) {
+    let n = 1, ch = raw[i]
+    if (ch === '\\') {
+      const m = /^\\(?:textbackslash|textasciitilde|textasciicircum)\{\}/.exec(raw.slice(i, i + 20))
+      if (m) { n = m[0].length; ch = ' ' } else if (i + 1 < raw.length && '#$%&_{}'.includes(raw[i + 1])) { n = 2; ch = raw[i + 1] }
+    }
+    for (let q = 0; q < n; q++) at[i + q] = out.length
+    out += ch
+    i += n
+  }
+  return out === expected ? at : null
+}
+
+/**
  * The word index of a range of plain text: the index, in anchors.mjs tokens(plain), of the entry that covers the range's
  * start, else the first entry that begins inside the range (a word with a mark before it); -1 where there is none (a mark
- * alone). tokens() counts in the NFKC, lower-case string: where that has the plain text's length the offsets are the same,
- * else (an ellipsis or a ligature NFKC spells out) they are mapped character by character, and a text whose mapping does not
- * sum to the whole's gives -1 for every range (never a wrong word)
+ * alone). tokens() counts in the NFKC, lower-case string. For plain ASCII that has the text's own offsets; otherwise each
+ * code point with the combining marks after it is folded by itself (an ellipsis becomes three full stops, a ligature its
+ * letters) and the offsets are mapped through those clusters, provided the clusters folded one by one are the whole text folded
+ * (not so where a sequence composes across clusters, as Hangul jamo do): else every range has -1, never a wrong word
  */
 export function wordIndexer(plain) {
   const entries = wordsIn(plain)
   if (!entries.length) return () => -1
-  const folded = plain.normalize('NFKC').toLowerCase()
   let toFolded = null
-  if (folded.length !== plain.length) {
+  if (/\P{ASCII}/u.test(plain)) {
     toFolded = new Int32Array(plain.length + 1)
-    let n = 0
+    let n = 0, joined = ''
     for (let i = 0; i < plain.length;) {
-      const cp = plain.codePointAt(i), w = cp > 0xffff ? 2 : 1
-      const f = String.fromCodePoint(cp).normalize('NFKC').toLowerCase().length
-      for (let q = 0; q < w; q++) toFolded[i + q] = n
-      n += f
-      i += w
+      let j = i + (plain.codePointAt(i) > 0xffff ? 2 : 1)
+      while (j < plain.length) { const c = plain.codePointAt(j); if (!MARK.test(String.fromCodePoint(c))) break; j += c > 0xffff ? 2 : 1 }
+      const f = plain.slice(i, j).normalize('NFKC').toLowerCase()
+      for (let q = i; q < j; q++) toFolded[q] = n
+      joined += f
+      n += f.length
+      i = j
     }
     toFolded[plain.length] = n
-    if (n !== folded.length) return () => -1
+    if (joined !== plain.normalize('NFKC').toLowerCase()) return () => -1
   }
   const starts = entries.map(e => e.at)
   return (at, end) => {
@@ -103,6 +126,7 @@ export function wordIndexer(plain) {
     return k < entries.length && entries[k].at < z ? k : -1
   }
 }
+const MARK = /\p{M}/u
 
 /** a unit's plain translated text from its pieces: plainTranslated's (translate/mt.mjs), as layer/pieces.mjs writes it */
 export function plainOfPieces(pieces) {
@@ -110,7 +134,8 @@ export function plainOfPieces(pieces) {
 }
 
 // ---------------------------------------------------------------- the page's table
-const ASC = 0.75, DESC = -0.22
+/** the face's ascent and descent in em: a Times-like face's (the left's default), and a CJK face's em box (Noto CJK's ideographic box) */
+const ASC = 0.75, DESC = -0.22, CJK_ASC = 0.88, CJK_DESC = -0.12
 const FIELDS = ['l', 'r', 'y', 'h', 'top', 'bottom']
 
 /** a page's table as it is built: one growable column a field, in drawing order */
@@ -131,15 +156,17 @@ function push(W, l, r, y, h, top, bottom, word) {
 
 /**
  * The tokens of one unit on one page, appended to the page's table: its lines in their order, each line's items in theirs (the
- * walk svgOfUnit makes), then the original's lines it keeps in place. A text token is [x, x + the layout's width] on the line's
- * baseline (a superscript on the baseline it is drawn on), `h` the size it is drawn at and `top`, `bottom` the ascent and
- * descent of a Times-like face (the left's defaults); a crop is its drawn box (at the line's baseline, its height the crop's
- * times the layout's scale); a kept line the unit's original rectangle. `word` is the token's word in the unit's translation
- * (`wordOf(at, end)` over what tokensOf2 tagged: -1 for a lead, a label, a placeholder's rendering, a crop, a kept line and
- * a mark alone, which have none). A space is no token. The unit's tokens are one run of the table, recorded as its span (empty
- * ranges where the unit is painted on the page with no line on it: a paragraph that ran on to a page its text did not reach)
+ * walk svgOfUnit makes), then the original's lines it keeps in place. A text token is the item's slot, [x, x + the layout's width]
+ * (an opening mark a compressed line shifts left of its slot is still in it: the ink the slot holds, so that neighbours tile; a
+ * lead's last token without the original's glue after it), on the line's baseline (a superscript on the baseline it is drawn on);
+ * `h` is the size drawn, and `top`, `bottom` the ascent and descent of a Times-like face, or of a CJK face's em box. A crop is its
+ * drawn box (at the line's baseline, its height the crop's times the layout's scale), none where `drawnCrop` says it is not drawn;
+ * a kept line the unit's original rectangle. `word` is the token's word in the unit's translation (`wordOf(at, end)` over what
+ * tokensOf2 tagged: -1 for a lead, a label, a placeholder's rendering, a crop, a kept line and a mark alone, which have none). A
+ * space is no token. The unit's tokens are one run of the table, recorded as its span (empty ranges where the unit is painted on
+ * the page with no line on it: a paragraph that ran on to a page its text did not reach)
  */
-export function addUnitWords(W, L, page, id, wordOf, kept = []) {
+export function addUnitWords(W, L, page, id, wordOf, kept = [], drawnCrop = () => true) {
   const first = W.n
   for (const line of L.lines) {
     if (line.page !== page) continue
@@ -147,14 +174,17 @@ export function addUnitWords(W, L, page, id, wordOf, kept = []) {
     for (const it of line.items) {
       const t = it.t
       if (t.space) continue
+      const l = it.x - (it.shift ?? 0)
       if (t.crop) {
+        if (!drawnCrop(t.crop)) continue
         const c = t.crop.crop, h = (c[3] - c[1]) * L.scale, top = by + (c[3] - t.crop.baseline) * L.scale
-        push(W, it.x, it.x + it.w, by, h, top, top - h, -1)
+        push(W, l, l + it.w, by, h, top, top - h, -1)
         continue
       }
       if (typeof t.s !== 'string') continue
       const h = L.f * (t.sup ? 0.62 : 1) * (t.face.size ?? 1), y = t.sup ? by + 0.36 * L.f : by
-      push(W, it.x, it.x + it.w, y, h, y + ASC * h, y + DESC * h, t.at === undefined || !wordOf ? -1 : wordOf(t.at, t.end))
+      const cjk = t.cls === 'cjk'
+      push(W, l, l + it.w - (t.kern ? (t.kernEm ?? 0) * L.f : 0), y, h, y + (cjk ? CJK_ASC : ASC) * h, y + (cjk ? CJK_DESC : DESC) * h, t.at === undefined || !wordOf ? -1 : wordOf(t.at, t.end))
     }
   }
   for (const k of kept) push(W, k.x0, k.x1, k.baseline, k.size, k.top, k.bottom, -1)
