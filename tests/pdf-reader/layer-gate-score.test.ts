@@ -415,6 +415,7 @@ describe("the frozen references' babel names (layer-gate/ref.mjs makeRef, withNa
 })
 
 describe("TeX's file against the drawing (the 2608.16117 survey and the p59 finding: measure.mjs, the fixture's layout file)", () => {
+  const lines6 = () => lines(6)
   // a layout file's rows: unit 3's three lines on page 1 (its second held, a display's row) and one on page 2; a math
   // placeholder with a segment on each page, a display on page 1, a LOST one; unit 4 one line on page 1
   const line = (p: number, x0: number, x1: number, base: number) => [p, x0, x1, base, base + 7, base - 2.5, 10, 0]
@@ -557,6 +558,30 @@ describe("TeX's file against the drawing (the 2608.16117 survey and the p59 find
     expect(of([700, 652])).toBe(1)
     // a break in another column holds no room of this one
     expect(of([700, 664], [{ ...brk[0]!, x0: 480, x1: 540 }])).toBe(1)
+  })
+
+  it('forced breaks as the engine counts them: invisible pieces are no content, a display none, and only as many as the file has (#367 review)', async () => {
+    const { forcedBreakRoom, forcedBreaksIn, slotsSkippedOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+    const D = '\\begin{equation}x\\end{equation}'
+    // a placeholder TeX's file holds no row of ink for (\label, \vspace, a tie) is nothing visible: the group after it is at an edge
+    const kinds = (i: number, p: { t: string; s?: string; src?: string }) => (p.t === 'text' ? (/\S/.test(p.s ?? '') ? 'text' : null) : p.src === D ? 'display' : /^\\(?:label|vspace)/.test(p.src ?? '') ? null : 'text')
+    expect(forcedBreaksIn([ph('\\label{s}'), ph('\\\\'), text('a b')], kinds)).toBe(0)
+    expect(forcedBreaksIn([text('a'), ph('\\vspace{1em}'), ph('\\\\'), text('b')], kinds)).toBe(1)
+    // a display next to the group breaks the text itself; a piece the file cannot tell: no count
+    expect(forcedBreaksIn([text('a'), ph('\\\\'), ph(D), text('b')], kinds)).toBe(0)
+    expect(forcedBreaksIn([text('a'), ph('\\\\'), text('b')], () => undefined)).toBe(-1)
+    // the room is set aside only where the source sets exactly as many breaks as the file has line ends a break shapes:
+    // more in the source (a ragged or centred unit, a break at a line's end) keeps every slot counted
+    const own = { breaks: [{ y: 676, next: 664, x0: 72, x1: 472 }], breaksAll: 1 }
+    expect(forcedBreakRoom(own, 1)).toEqual(own.breaks)
+    expect(forcedBreakRoom(own, 2)).toEqual([])
+    expect(forcedBreakRoom(own, 0)).toEqual([])
+    // two breaks between the same two drawn lines: the text between them laid nowhere, its line a slot skipped
+    const tex = [700, 688, 676, 664, 652].map(baseline => ({ baseline, x0: 72, x1: 472 }))
+    const two = [{ y: 682, next: 676, x0: 72, x1: 472 }, { y: 670, next: 664, x0: 72, x1: 472 }]
+    const lines = [700, 664].map(baseline => ({ baseline, size: 10, x0: 72, x1: 472, pitch: 12 }))
+    expect(slotsSkippedOf([{ id: 11, orig: lines6(), lines, tex, held: [], texPitch: 12, keptRows: [], breaks: two }]).slotsSkipped).toBe(1)
   })
 
   it("a line opened by a mark UAX 14 keeps from a line's start, unless the original's line opens with one", async () => {

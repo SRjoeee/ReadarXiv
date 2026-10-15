@@ -229,7 +229,7 @@ const centreOf = b => [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]
 // ---------------------------------------------------------------- TeX's file, the instrument's (the 2608.16117 survey)
 
 /** the layout file's placeholder kinds and its LOST flag (src/pdf-reader/engine/layout/file.mjs PH_KINDS, PH_FLAG) */
-const PH_KINDS = ['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other'], PH_LOST = 32
+const PH_KINDS = ['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other'], PH_LOST = 32, PH_EMPTY = 16
 /**
  * TeX's file as the instrument reads it (a layout file, parsed: the rows of layout/file.mjs, read here, never by the
  * engine's reader), by page: `units`, each unit's placeholders with ink on the page ({ k, kind, segs }: each segment its
@@ -256,8 +256,11 @@ export function fileIndexOf(layout) {
       unitOf(p, id).lines.push({ j, box: [rows[o + 1], rows[o + 5], rows[o + 2], rows[o + 4]], baseline: rows[o + 3], size: rows[o + 6], held: !!held.get(id)?.has(j) })
     }
   }
+  // (each unit's placeholders the file holds a row for that sets ink, LOST or not: its visible pieces, by k, their kind)
+  const rows = new Map()
   for (const r of layout.ph ?? []) {
     const [id, k, kind, flags] = r
+    if (!(flags & PH_EMPTY)) (rows.get(id) ?? rows.set(id, new Map()).get(id)).set(k, PH_KINDS[kind])
     if (flags & PH_LOST) { if (first.has(id)) unitOf(first.get(id), id).lost.push(k); continue }
     const by = new Map()
     for (let o = 4; o + 5 < r.length; o += 6) (by.get(r[o]) ?? by.set(r[o], []).get(r[o])).push([r[o + 1], r[o + 5], r[o + 3], r[o + 4]])
@@ -302,6 +305,7 @@ export function fileIndexOf(layout) {
     const g = (gaps.get(id) ?? []).sort((a, b) => a - b)
     u.pitch = g.length ? (g[(g.length - 1) >> 1] + g[g.length >> 1]) / 2 : null
     u.breaksAll = breaks.get(id) ?? 0
+    u.rows = rows.get(id) ?? new Map()
   }
   return pages
 }
@@ -311,23 +315,34 @@ const FORCED_BREAK = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
 /** a line ends short of its column's measure by more than this share of its size (a justified line's ink reaches it, to a
  *  glyph's side bearing) */
 const SHORT = 0.5
+/** a piece's kind as forcedBreaksIn reads it with no file: a text by its characters, any other placeholder visible */
+const kindOfPiece = (i, p) => (p.t === 'text' ? (/\S/.test(p.s ?? '') ? 'text' : null) : p.t === 'ph' || p.t === 'nested' ? 'text' : null)
 /**
- * The forced breaks of a unit's source (its pieces: { t, s } text, { t: 'ph', src } a placeholder) that end a line of it:
- * groups of FORCED_BREAK placeholders with no other piece between them but white space, with something of the unit
- * before and after the group (a text holding a non-space character, or a placeholder or footnote that is no forced
- * break). A group at an edge of the unit ends none of its lines (the blank after its last paragraph)
+ * The forced breaks of a unit's source (its pieces: { t, s } text, { t: 'ph', src } a placeholder) that end a line of it,
+ * as the engine counts them (layer-proto/tex.mjs forcedBreaks): groups of FORCED_BREAK placeholders with nothing visible
+ * between them, where the nearest visible piece before the group and after it are both no display (a display breaks the
+ * text by itself; a group at an edge of the unit ends none of its lines). `kindOf(i, piece)`: a non-break piece's kind,
+ * 'display', 'text' (any other visible piece) or null (nothing visible: white space, a placeholder TeX's file holds no row
+ * of ink for, as \label, \vspace or a tie), undefined where it cannot tell, and then the count is -1. By default a text is
+ * read by its characters and any other placeholder is visible
  */
-export function forcedBreaksIn(pieces) {
-  let n = 0, before = false, group = false
-  for (const p of pieces ?? []) {
-    if (p.t === 'ph' && FORCED_BREAK.test(p.src ?? '')) { if (before) group = true; continue }
-    if (p.t === 'text' ? !/\S/.test(p.s ?? '') : p.t !== 'ph' && p.t !== 'nested') continue
-    if (group) n++
-    group = false
-    before = true
+export function forcedBreaksIn(pieces, kindOf = kindOfPiece) {
+  let n = 0, last = null, open = false, before = null
+  for (const [i, p] of (pieces ?? []).entries()) {
+    if (p.t === 'ph' && FORCED_BREAK.test(p.src ?? '')) { if (!open) { open = true; before = last } continue }
+    const kind = kindOf(i, p)
+    if (kind === undefined) return -1
+    if (!kind) continue
+    if (open && before === 'text' && kind === 'text') n++
+    open = false
+    last = kind
   }
   return n
 }
+/** the forced breaks a unit's line ends set aside on a page (fileIndexOf's `breaks`): where its source sets exactly as many
+ *  (forcedBreaksIn) as the file has such line ends over its pages, else none, so that a ragged or centred unit's short lines
+ *  keep every slot counted */
+export const forcedBreakRoom = (own, sourceBreaks) => (own?.breaks?.length && sourceBreaks === own.breaksAll ? own.breaks : [])
 
 /**
  * The display rows of a page in TeX's file: each unit's held lines that no line of its own text on the page shares a
@@ -444,8 +459,11 @@ export function slotsSkippedOf(units) {
         if ((u.held ?? []).some(h => { const y = (h[1] + h[3]) / 2; return y > b && y < a && Math.min(h[2], x1) > Math.max(h[0], x0) })) continue
         // (a forced break between them: counted from the line TeX set after it, `from`, as from a slot a pitch over it, the
         // lower drawn line on that line skipping none)
-        let from = a
-        for (const k of u.breaks ?? []) if (k.y > b && k.y < a && Math.min(k.x1, x1) > Math.max(k.x0, x0)) from = Math.min(from, k.next)
+        // (two breaks or more between them: the text between two of them is laid nowhere there, each of TeX's lines of it a
+        // slot skipped)
+        const between = (u.breaks ?? []).filter(k => k.y > b && k.y < a && Math.min(k.x1, x1) > Math.max(k.x0, x0)).sort((p, q) => q.y - p.y)
+        for (let i = 1; i < between.length; i++) for (const t of tex) if (t < between[i - 1].y && t > between[i].y) where.push(u.id)
+        const from = between.length ? between.at(-1).next : a
         if (from < a && b >= from - 0.5) continue
         const top = from < a ? from + pitch : a
         // (TeX's own room between them: each gap of its text lines past its pitch, by the share of it they span)

@@ -236,7 +236,9 @@ const SHORT = 0.5
  * display stands before it and after it (a display breaks it by itself; one at an edge of the unit ends no line of it).
  * TeX's breaks: each line of the file (not held) that ends short of its frame's measure (the rightmost ink of the frame's
  * lines not held, less SHORT of its size: the \hfil a forced break sets) with a line of the unit after it that is not
- * held either, and no display's segment between the two. The groups pair with TeX's breaks in order, as D4 pairs
+ * held either, no display's segment between the two nor on the line (a display's row the file does not hold). A unit in
+ * two columns of one page pairs nothing (a placeholder's line is read by its baseline, which the other column's line may
+ * share). The groups pair with TeX's breaks in order, as D4 pairs
  * displays with held runs (displayCover): only where they are as many; and the pairing holds only where every placeholder
  * the file finds (its segments, by the unit's line nearest each on its page) stands between the breaks its place in the
  * row says, as TeX set it. Returns a Map of each piece of a paired group, by its index, to the file's line after its
@@ -263,9 +265,14 @@ export function forcedBreaks(lu, unit, kOf = null) {
   const breaks = groups.filter(g => g.before === 'text' && g.after === 'text')
   if (!breaks.length) return out
   const L = lu.lines, F = lu.frames, held = new Set(lu.held ?? []), n = L.length / 8
-  // (a display's segments, which may stand between two lines of the unit that are no display's rows: its own break)
+  // (a unit in two columns of one page: a placeholder's line is read by its baseline alone below, which another column's
+  // line may share, so nothing pairs)
+  const columns = new Map()
+  for (let f = 0; f < F.length; f += 6) { const c = columns.get(F[f]); if (c !== undefined && c !== F[f + 1]) return out; columns.set(F[f], F[f + 1]) }
+  // (a display's segments, which may stand between two lines of the unit that are no display's rows, its own break, or
+  // on a line of it, a display's row that is no held line: no line a forced break ends)
   const displays = []
-  for (const row of lu.ph.values()) if (row.kind === 'display' && !(row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY))) for (let s = 0; s + 5 < row.segs.length; s += 6) displays.push([row.segs[s], row.segs[s + 2]])
+  for (const row of lu.ph.values()) if (row.kind === 'display' && !(row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY))) for (let s = 0; s + 5 < row.segs.length; s += 6) displays.push([row.segs[s], row.segs[s + 2], row.segs[s + 4], row.segs[s + 5]])
   const cands = []
   for (let f = 0; f < F.length; f += 6) {
     const first = F[f + 2], count = F[f + 3]
@@ -275,6 +282,7 @@ export function forcedBreaks(lu, unit, kOf = null) {
       if (held.has(j) || j + 1 >= n || held.has(j + 1) || !(L[8 * j + 2] < right - SHORT * L[8 * j + 6])) continue
       const page = L[8 * j], hi = L[8 * j + 3], lo = L[8 * (j + 1) + 3]
       if (L[8 * (j + 1)] === page && displays.some(([pg, base]) => pg === page && base < hi && base > lo)) continue
+      if (displays.some(([pg, , top, bottom]) => pg === page && Math.min(top, L[8 * j + 4]) > Math.max(bottom, L[8 * j + 5]))) continue
       cands.push(j)
     }
   }

@@ -41,7 +41,7 @@ export declare function markupResidueOf(text: string, src: string): string[]
 export interface FileLine { j: number; box: number[]; baseline: number; size: number; held: boolean }
 /** a line end of TeX's that a forced break shapes (fileIndexOf): between the two baselines, the next line's, its column */
 export interface FileBreak { y: number; next: number; x0: number; x1: number }
-export interface FilePage { units: Map<number, { phs: { k: number; kind: string; segs: number[][] }[]; lines: FileLine[]; lost: number[]; pitch: number | null; breaks: FileBreak[]; breaksAll: number }>; displays: number[][] }
+export interface FilePage { units: Map<number, { phs: { k: number; kind: string; segs: number[][] }[]; lines: FileLine[]; lost: number[]; pitch: number | null; breaks: FileBreak[]; breaksAll: number; rows: Map<number, string> }>; displays: number[][] }
 export declare function fileIndexOf(layout: { lines?: [number, number[]][]; ph?: number[][]; held?: [number, number[]][] }): Map<number, FilePage>
 export declare function displayRowsOf(page: FilePage | undefined): number[][]
 /** a rendering of a placeholder by its unit and its piece's source index: a crop's source, or its characters' centres */
@@ -51,8 +51,11 @@ export declare function contentOf(o: { phs: { unit: number; k: number; src?: str
 /** the segments of the placeholders their own kept rendering leaves in place */
 export declare function keptSegsOf(o: { phs: { unit: number; k: number; segs: number[][] }[]; kept?: Rendering[] }): number[][]
 export declare function overDisplayOf(o: { lines: { unit: number; x0: number; x1: number; baseline: number; a: number; d: number }[]; boxes: number[][] }): { textInDisplay: number; where: number[] }
-/** the forced breaks of a unit's source pieces that end a line of it: groups with the unit's own before and after */
-export declare function forcedBreaksIn(pieces: readonly { t: string; s?: string; src?: string }[] | null | undefined): number
+/** the forced breaks of a unit's source pieces that end a line of it, as the engine counts them: groups with a visible piece
+ *  that is no display before and after; `kindOf` a piece's kind ('display', 'text', null: invisible; undefined: cannot tell, -1) */
+export declare function forcedBreaksIn(pieces: readonly { t: string; s?: string; src?: string }[] | null | undefined, kindOf?: (i: number, piece: { t: string; s?: string; src?: string }) => 'display' | 'text' | null | undefined): number
+/** a unit's line ends on a page set aside as forced breaks: where its source sets exactly as many as the file has, else none */
+export declare function forcedBreakRoom(own: { breaks?: FileBreak[]; breaksAll?: number } | null | undefined, sourceBreaks: number): FileBreak[]
 export declare function slotsSkippedOf(units: { id: number; orig: OrigLine[]; lines: (DrawnLine & { pitch: number | null })[]; tex?: { baseline: number; x0: number; x1: number }[]; held?: number[][]; texPitch?: number | null; keptRows?: number[]; breaks?: FileBreak[] }[]): { slotsSkipped: number; where: number[] }
 /** a character UAX 14 does not let a line start with (CL, CP, IS, EX, NS) */
 export declare function noStart(ch: string | null | undefined): boolean

@@ -690,6 +690,18 @@ describe("TeX's own lines, kept and broken (the 2608.16117 survey's fixes 2 and 
     expect(T.forcedBreaks(unitOf(lines, [[3, 0, [1, 60, 500, 80, 507, 498]]]) as never, cited, kOf).size).toBe(0)
     expect([...T.forcedBreaks(unitOf(lines, [[3, 0, [1, 60, 464, 80, 471, 462]]]) as never, cited, kOf)]).toEqual([[1, 2]])
   })
+  it('pairs nothing in a unit in two columns of one page, nor at a short line that is a display\'s row (#367 review)', () => {
+    // two columns of page 1: the left one's line 1 ends short, as the break's line would
+    const two = { ...(unitOf([L(500), L(488, 90), [1, 320, 520, 500, 507, 498, 10, 0], [1, 320, 520, 488, 495, 486, 10, 0]]) as object), frames: Float64Array.from([1, 0, 0, 2, -1, 0, 1, 1, 2, 2, 500, 0]) }
+    const one = unit(text('\u7532'), ph(BR), text(' \u4E59'))
+    expect([...T.forcedBreaks(unitOf([L(500), L(488, 90), L(464), L(452)]) as never, one)]).toEqual([[1, 2]])
+    expect(T.forcedBreaks(two as never, one).size).toBe(0)
+    // a display's row the file does not hold, short of the measure: no line a forced break ends
+    const row = unitOf([L(500), L(488, 90), L(464), L(452, 120)], [[7, 0, [1, 40, 488, 90, 495, 486]]]) as { ph: Map<number, { kind: string }> }
+    const d = row.ph.get(7)
+    if (d) d.kind = 'display'
+    expect(T.forcedBreaks(row as never, one).size).toBe(0)
+  })
   it('breaks the text there: the laid line ends at the break, the text after it starts on the line TeX set after it', () => {
     const lu = unitOf(lines)
     const t = T.texRects(lu)
