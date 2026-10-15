@@ -372,7 +372,9 @@ const LAB = process.env.AXT_LAB
 describe.skipIf(!LAB)('H4: the local papers in parts, as the open over each made whole', () => {
   const PAPERS: [string, string][] = [['1512.03385v1', 'zh'], ['1706.03762v7', 'zh'], ['1810.04805v2', 'zh'], ['2307.16209v1', 'de'], ['2608.04322v1', 'zh']]
   const FIXTURES = 'out/layer-gate/fixtures/f343494cf544323e', GEOMETRY = 'out/layer-gate/cut-p10/geometry'
-  const seeded = (seed: number) => (a: number, N: number) => Math.min(N, a + (((seed * 2654435761 + a * 40503) >>> 0) % 4))
+  // (a part of 1 to 4 pages, drawn from the seed and the page it begins at, mixed as the gate's --door-parts=seed:<s> mixes them)
+  const mix32 = (x: number) => { x = Math.imul(x ^ (x >>> 16), 0x85ebca6b); x = Math.imul(x ^ (x >>> 13), 0xc2b2ae35); return (x ^ (x >>> 16)) >>> 0 }
+  const seeded = (seed: number) => (a: number, N: number) => Math.min(N, a + (mix32(Math.imul(seed, 0x9e3779b1) ^ a) % 4))
   for (const [name, target] of PAPERS) {
     it(name, async () => {
       const { existsSync } = await import('node:fs')

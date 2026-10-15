@@ -626,12 +626,14 @@ async function doorFixture(page, name, errors) {
   return { name, door: true, ok, ready: true, line, pages, made: made.meta, gate: gate.summary, stats: door.stats, sheets: door.sheets }
 }
 
+/** a 32-bit integer's bits mixed (murmur3's finaliser) */
+const mix32 = x => { x = Math.imul(x ^ (x >>> 16), 0x85ebca6b); x = Math.imul(x ^ (x >>> 13), 0xc2b2ae35); return (x ^ (x >>> 16)) >>> 0 }
 /** --door-parts: the last page of the part that begins at page a of N, by the schedule (null: the cutter's own, the doubling) */
 function targetOf(schedule) {
   const [kind, n] = schedule.split(':')
   if (kind === 'splits') return (a, N) => Math.min(N, a + Number(n) - 1)
-  // (a part of 1 to 4 pages, drawn from the seed and the page it begins at: the same cut on every run)
-  if (kind === 'seed') return (a, N) => Math.min(N, a + (((Number(n) * 2654435761 + a * 40503) >>> 0) % 4))
+  // (a part of 1 to 4 pages, drawn from the seed and the page it begins at, mixed (murmur3's finaliser): the same cut on every run)
+  if (kind === 'seed') return (a, N) => Math.min(N, a + (mix32(Math.imul(Number(n), 0x9e3779b1) ^ a) % 4))
   return null
 }
 /** Q1 over a door's log (its pages' states as it told them, the run's waits): a page told laying is ready (or failed) before the
