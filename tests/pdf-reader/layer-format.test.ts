@@ -1117,6 +1117,63 @@ describe('a part against the index', () => {
     expect((await readPart(h.bytes, { ref: h.ref, index, chain: null })).left.map(w => w[0])).toEqual([0, 2])
   })
 
+  it('reads against a light index (M24) as against the full one: the same parts, the same refusals', async () => {
+    const light: ReadUnitsChunkLight[] = []
+    for (const c of M.chunks) light.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: light.at(-1) ?? null, bodies: false }))
+    const lean = indexOf(M.readHead, light)
+    expect(lean.light).toBe(true)
+    expect(lean).toMatchObject({ kind: 'index', sha256: M.index.sha256, dropped: M.index.dropped, kinds: M.index.kinds })
+    expect(lean.records).toEqual(M.index.records)
+    expect(lean.units).toEqual(M.index.units.map(u => (u === null ? null : true)))
+    M.index.units.forEach((u, i) => expect(lean.pieces[i], `unit ${i}`).toBe(u === null ? 0 : u[5].length))
+    // every part of the paper, read in order against each index
+    let a = null, b = null
+    for (const w of M.parts) {
+      const x = await readPart(w.bytes, { ref: w.ref, index: M.index, chain: a }), y = await readPart(w.bytes, { ref: w.ref, index: lean, chain: b })
+      expect(y).toEqual(x)
+      a = x.chain
+      b = y.chain
+    }
+    // and refused alike: a layout unit of another kind or piece count, a unit past the paper's, another head
+    const same = async (i: number, edit: (p: never) => void) => {
+      const p = parsed(M.parts[i] as { bytes: Uint8Array })
+      edit(p as never)
+      const f = forged('part', p, { from: p.pages[0], to: p.pages[1] })
+      const chain = i === 0 ? null : M.readParts[i - 1]!.chain
+      const x = await refusal(readPart(f.bytes, { ref: f.ref, index: M.index, chain })), y = await refusal(readPart(f.bytes, { ref: f.ref, index: lean, chain }))
+      expect(x).not.toBeNull()
+      expect([y?.kind, y?.path, y?.message]).toEqual([x?.kind, x?.path, x?.message])
+    }
+    await same(0, p => { (p as { layout: { units: number[][] } }).layout.units[1]![1] = 2 })
+    await same(0, p => { (p as { layout: { units: number[][] } }).layout.units[1]![4] = 8 })
+    await same(0, p => { (p as { left: unknown[][] }).left[0]![0] = 99 })
+    await same(0, p => { (p as { head: string }).head = 'f'.repeat(64) })
+    // a unit that does not stand is not compared, in the light index too
+    const o = parsed(M.chunks[0]!)
+    o.units[2][0] = 'Para'
+    const f = forged('units', o)
+    const dropped = await readUnitsChunk(f.bytes, { ref: f.ref, before: null, bodies: false })
+    expect(dropped.pieces[2]).toBe(0)
+    const head = parsed(M.head)
+    head.units = [{ ...head.units[0], sha256: f.ref.sha256, bytes: f.ref.bytes }]
+    const g = forged('head', head)
+    const index = indexOf(await readHead(g.bytes, { ref: g.ref }), [dropped])
+    const part = parsed(M.parts[0]!)
+    part.head = index.sha256
+    part.layout.units[1][1] = 2
+    const h = forged('part', part, { from: 1, to: 1 })
+    expect((await readPart(h.bytes, { ref: h.ref, index, chain: null })).left.map(w => w[0])).toEqual([0, 2])
+  })
+
+  it('has a light index refused by what needs the bodies: mergeParts', async () => {
+    const light: ReadUnitsChunkLight[] = []
+    for (const c of M.chunks) light.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: light.at(-1) ?? null, bodies: false }))
+    expect(() => mergeParts(indexOf(M.readHead, light) as never, M.readParts)).toThrow(TypeError)
+    // chunks of the two kinds in one index are no index
+    const full = await readUnitsChunk(M.chunks[0]!.bytes, { ref: M.chunks[0]!.ref, before: null })
+    expect(() => indexOf(M.readHead, [full, ...light.slice(1)] as never)).not.toThrow()
+  })
+
   it('needs an index: units to place the part\'s ids against', async () => {
     const p = M.parts[0]!
     await expect(readPart(p.bytes, { ref: p.ref, index: undefined as never, chain: null })).rejects.toThrow()

@@ -84,6 +84,8 @@ export interface ReadUnitsChunk {
 export interface ReadUnitsChunkLight extends Omit<ReadUnitsChunk, 'units'> {
   units: (true | null)[]
   part: { kinds: (string | null)[]; records: UnitRecords; external: number[] }
+  /** each unit's piece count, 0 for a unit that does not stand (amendment M24) */
+  pieces: Uint32Array
 }
 export interface ReadHead {
   kind: 'head'; sha256: string; bytes: number; paper: { id: string; version: number; pages: number }
@@ -95,6 +97,17 @@ export interface LayerIndex {
   head: ReadHead
   units: readonly (BundleUnit | null)[]; kinds: readonly (string | null)[]; dropped: readonly number[]
   /** derived once from the units (amendment M15): the index's shape is frozen with it */
+  records: UnitRecords
+}
+/**
+ * An index made of chunks read without bodies (amendment M24): each unit a stands flag, its kind and its piece count, the
+ * records as the full index has them. What readPart checks a part against is all in it; the door, the rows and the merge need
+ * the bodies and refuse it (a TypeError)
+ */
+export interface LightLayerIndex {
+  kind: 'index'; light: true; sha256: string
+  head: ReadHead
+  units: readonly (true | null)[]; kinds: readonly (string | null)[]; pieces: Uint32Array; dropped: readonly number[]
   records: UnitRecords
 }
 /** what the parts told so far fix: a pure function of the parts' sequence */
@@ -189,7 +202,7 @@ export interface ReadUnits {
   externalRefs(k: number): number[]
 }
 /** the same, bodies-free: `units` holds `true` (stands) or null */
-export interface ReadUnitsLight extends Omit<ReadUnits, 'units'> { units: (true | null)[] }
+export interface ReadUnitsLight extends Omit<ReadUnits, 'units'> { units: (true | null)[]; pieces: Uint32Array }
 /** chunks read as one chain: each after the one before, of one paper and pipeline, 1 to CHUNKS_MAX of them; throws BundleRefusal */
 export declare function unitsOfChunks(chunks: readonly ReadUnitsChunk[], o?: { bodies?: true }): ReadUnits
 /** bodies-free (M21): `units` holds `true` or null; the chunks may be read with `bodies: false` or with their bodies (a chunk read bodies-free given to the first form throws a TypeError) */
@@ -197,8 +210,10 @@ export declare function unitsOfChunks(chunks: readonly (ReadUnitsChunk | ReadUni
 /** sync: the head and its chunks bound (each chunk's range, digest and bytes the head's ref, in order, read as one `before`
  *  chain; paper and pipeline the head's); with `catalog`, its head and units equal these */
 export declare function indexOf(head: ReadHead, chunks: readonly ReadUnitsChunk[], o?: { catalog?: ReadCatalog }): LayerIndex
+/** chunks read with `bodies: false` give a light index (M24; chunks of the two kinds mixed, too, at runtime) */
+export declare function indexOf(head: ReadHead, chunks: readonly ReadUnitsChunkLight[], o?: { catalog?: ReadCatalog }): LightLayerIndex
 /** a part against the index and the chain (null before the first part): any failure refuses the whole part */
-export declare function readPart(bytes: Uint8Array, o: { ref: Ref; index: LayerIndex; chain?: PartChain | null; caps?: Caps }): Promise<ReadPart>
+export declare function readPart(bytes: Uint8Array, o: { ref: Ref; index: LayerIndex | LightLayerIndex; chain?: PartChain | null; caps?: Caps }): Promise<ReadPart>
 export declare function readLeftPart(bytes: Uint8Array, o: { ref: Ref & { page: number }; streamOf(id: number): number | undefined; caps?: Caps }): Promise<ReadLeftPart>
 /** the catalog as fetched by name (no ref: its digest is computed); with `key`, its directory is the VTAG its versions make */
 export declare function readCatalog(bytes: Uint8Array, o?: { key?: string; paper?: { id: string; version: number }; caps?: Caps }): Promise<ReadCatalog>

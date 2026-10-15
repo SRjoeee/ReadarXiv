@@ -23,5 +23,8 @@ for (const name of ['1512.03385v1', '1706.03762v7', '1810.04805v2', '2307.16209v
   expect(thin.kinds).toEqual(all.kinds)
   for (let k = 0; k < read.length; k++) expect(thin.externalRefs(k)).toEqual(all.externalRefs(k))
   expect(chunks.length).toBeGreaterThan(0)
+  // the piece counts (M24)
+  expect(thin.pieces).toEqual(Uint32Array.from(units, u => u[5].length))
+  all.units.forEach((u, i) => expect(thin.pieces[i], `unit ${i}`).toBe(u === null ? 0 : u[5].length))
 })
 })

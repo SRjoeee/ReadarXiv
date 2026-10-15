@@ -110,6 +110,7 @@ export async function openLayer(o = {}) {
   const four = bundle === undefined
   if (four) {
     if (index === null || typeof index !== 'object' || index.kind !== 'index' || !Array.isArray(index.units) || !index.head) throw new TypeError(`index: a layer index (indexOf's), not ${kindOf(index)}`)
+    if (index.light === true) throw new TypeError('index: a light index holds no unit bodies, which the layer needs (indexOf of chunks read with their bodies)')
     if (parts !== undefined && !Array.isArray(parts)) throw new TypeError(`parts: the parts read so far, not ${kindOf(parts)}`)
     if (typeof leftPart !== 'function') throw new TypeError(`leftPart: the host's transport for the left parts, not ${kindOf(leftPart)}`)
     if (typeof onRetired !== 'function') throw new TypeError(`onRetired: a function, not ${kindOf(onRetired)}`)

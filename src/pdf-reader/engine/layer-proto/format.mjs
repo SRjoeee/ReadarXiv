@@ -370,6 +370,8 @@ export async function readUnitsChunk(bytes, { ref, before = null, dropped: dropp
   if (!bodies) {
     // (bodies-free, amendment M21: what the index keeps of each unit, worked out now, and the bodies let go with the parsed text)
     out.part = partOf(units, from, stands)
+    // (the piece count of each unit, for the layout's cross-check against a part: M24)
+    out.pieces = Uint32Array.from(units, u => (u === null ? 0 : u[5].length))
     out.units = units.map(u => (u === null ? null : true))
   }
   return out
@@ -591,7 +593,9 @@ export function unitsOfChunks(chunks, { bodies = true } = {}) {
       for (const [id, cell] of r.cells) records.cells.set(id, cell)
       for (const [id, h] of r.headings) records.headings.set(id, h)
     })
-    return { units: units.map(u => (u === null ? null : true)), kinds, dropped, index, chunkOf, externalRefs, records }
+    const pieces = new Uint32Array(n)
+    chunks.forEach(c => pieces.set(c.pieces ?? Uint32Array.from(c.units, u => (u === null ? 0 : u[5].length)), c.from))
+    return { units: units.map(u => (u === null ? null : true)), kinds, dropped, index, chunkOf, externalRefs, records, pieces }
   }
   return { units, kinds, dropped, index, chunkOf, externalRefs, records: recordsOf(units) }
 }
@@ -674,7 +678,9 @@ export function indexOf(head, chunks, o = {}) {
     if (c.paper.id !== head.paper.id || c.paper.version !== head.paper.version) throw refuse(K, path, 'not the head\'s paper')
     if (c.pipeline !== head.versions.pipeline) throw refuse(K, path, 'not the head\'s pipeline')
   }
-  const { units, kinds, dropped, records } = unitsOfChunks(chunks)
+  // (amendment M24: chunks read without bodies make a light index, which the readers of the parts take and the door refuses)
+  const light = chunks.some(c => c.part !== undefined)
+  const { units, kinds, dropped, records, pieces } = light ? unitsOfChunks(chunks, { bodies: false }) : unitsOfChunks(chunks)
   const cat = o.catalog
   if (cat !== undefined) {
     if (cat.head.sha256 !== head.sha256 || cat.head.bytes !== head.bytes) throw refuse(K, 'catalog.head', 'not the head the index is made of')
@@ -686,6 +692,7 @@ export function indexOf(head, chunks, o = {}) {
       if (a.from !== b.from || a.to !== b.to || a.sha256 !== b.sha256 || a.bytes !== b.bytes) throw refuse(K, `catalog.units[${i}]`, 'not the head\'s chunk')
     }
   }
+  if (light) return Object.freeze({ kind: 'index', light: true, sha256: head.sha256, head, units: Object.freeze(units), kinds: Object.freeze(kinds), pieces, dropped: Object.freeze(dropped), records })
   return Object.freeze({ kind: 'index', sha256: head.sha256, head, units: Object.freeze(units), kinds: Object.freeze(kinds), dropped: Object.freeze(dropped), records })
 }
 
@@ -848,10 +855,12 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
   // against the index: a layout unit is its unit's kind and piece count, where the unit stands
   if (s.layout !== null) {
     for (let i = 0; i < s.layout.units.length; i++) {
-      const [id, kind, , , count] = s.layout.units[i], u = index.units[id]
-      if (u === null) continue
-      if (UNIT_KINDS[kind] !== u[0]) throw refuse(K, `layout.units[${i}][1]`, 'not its unit\'s kind')
-      if (count !== u[5].length) throw refuse(K, `layout.units[${i}][4]`, 'not its unit\'s pieces')
+      const [id, kind, , , count] = s.layout.units[i]
+      if (index.units[id] === null) continue
+      // (a light index (M24) holds each unit's kind and piece count, which is all this reads of it)
+      const unitKind = index.light === true ? index.kinds[id] : index.units[id][0], pieces = index.light === true ? index.pieces[id] : index.units[id][5].length
+      if (UNIT_KINDS[kind] !== unitKind) throw refuse(K, `layout.units[${i}][1]`, 'not its unit\'s kind')
+      if (count !== pieces) throw refuse(K, `layout.units[${i}][4]`, 'not its unit\'s pieces')
     }
   }
 
@@ -1174,6 +1183,7 @@ export async function writeCatalog({ head, units, parts, end }) {
  */
 export function mergeParts(index, parts) {
   const K = 'index'
+  if (index.light === true) throw new TypeError('index: a light index holds no unit bodies, which the merge needs')
   const head = index.head, N = head.paper.pages
   let through = 0
   for (let i = 0; i < parts.length; i++) {
