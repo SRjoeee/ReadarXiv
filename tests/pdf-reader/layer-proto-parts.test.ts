@@ -8,6 +8,7 @@ import { type LayerIndex, mergeParts, type ReadPart } from '@/pdf-reader/engine/
 import { toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { indexLayout, PH_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
+import { BUILTIN_RULES } from '@/pdf-reader/engine/rules/layout.mjs'
 import { made } from './helpers/format-paper'
 import { cutSpec, docsOf, everySplit, groupsOfIndex, leftPagesOfSpec, type PaperSpec, readCut, rowsOfIndex, splitAt, unitsOfRows, wholeOfSpec } from './helpers/parts-paper'
 
@@ -22,10 +23,13 @@ import { cutSpec, docsOf, everySplit, groupsOfIndex, leftPagesOfSpec, type Paper
 /** the calls the runs make of layer2's reading, laying, ink and drawing, by name (R2: a ready page is answered from its
  *  record alone) */
 const calls = vi.hoisted(() => new Map<string, number>())
+/** a fault a test sets: drawnRuns, which the units' records alone read, throws for the tokens it names */
+const faults = vi.hoisted(() => ({ record: null as ((tokens: { s?: string }[]) => boolean) | null }))
 vi.mock('@/pdf-reader/engine/layer-proto/layer2.mjs', async importOriginal => {
   const actual = await importOriginal<Record<string, (...a: unknown[]) => unknown>>()
   const counted = (name: string) => (...a: unknown[]) => { calls.set(name, (calls.get(name) ?? 0) + 1); return actual[name]!(...a) }
-  return { ...actual, ...Object.fromEntries(['pageChars2', 'inkMapOf', 'prepareUnit', 'growCrop', 'tokensOf2', 'layoutUnit2', 'layoutAt', 'unitOps', 'removalOps', 'svgOfUnit', 'svgOfName'].map(n => [n, counted(n)])) }
+  const drawnRuns = (tokens: { s?: string }[]) => { if (faults.record?.(tokens)) throw new Error('a record that cannot be made'); return actual.drawnRuns!(tokens) }
+  return { ...actual, drawnRuns, ...Object.fromEntries(['pageChars2', 'inkMapOf', 'prepareUnit', 'growCrop', 'tokensOf2', 'layoutUnit2', 'layoutAt', 'unitOps', 'removalOps', 'svgOfUnit', 'svgOfName'].map(n => [n, counted(n)])) }
 })
 
 /** a canvas context that draws nothing and reads a white page */
@@ -109,13 +113,13 @@ const drawing = (run: Run) => ({
 })
 
 /** the open over the whole paper: mergeParts' geometry, layout and manifest, every row, then end() */
-async function wholeRun(P: Paper) {
+async function wholeRun(P: Paper, o: { records?: boolean; rules?: unknown } = {}) {
   const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
   const merged = mergeParts(P.index, P.parts)
   const doc = P.docFor(P.parts.at(-1)!.chain.r)
   const run = await openProto({
     doc, geometry: { schema: 1, kinds: merged.left.kinds, left: { pages: merged.left.pages, units: merged.left.units } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
-    target: 'zh', pages: P.N, scale: 1, dpr: 1, copy: false, proof: true, labels: LABELS as never,
+    target: 'zh', pages: P.N, scale: 1, dpr: 1, copy: false, proof: true, labels: LABELS as never, ...(o as object),
     // (BUNDLE 3's door: the text removal where the bundle has an add-on, v0's own drawing where it has none)
     tex: { ...HYBRID, index: indexLayout(merged.layout!), pieces: new Map() }, removal: merged.addon ? { mode: 'draw', doc, manifest: merged.addon.manifest } : null,
   })
@@ -133,14 +137,14 @@ interface PartsOptions { before: number; ended: 'open' | 'last'; feed?: 'eager' 
  *  it ('parts', readiness alone: the rest, and end(), after the last part). Each page asked whose inputs are in is laid with no
  *  wait at all (Q1). It lets go of what it laid as the reader's run does (`free`), its records kept for the comparison (the
  *  gate's shelf); `records: false` (the reader's), their count alone. `onPage(run, p)`: after each page asked is laid */
-async function partsRun(P: Paper, o: PartsOptions & { records?: boolean; onPage?: (run: Run, p: number) => void }) {
+async function partsRun(P: Paper, o: PartsOptions & { records?: boolean; rules?: unknown; onPage?: (run: Run, p: number) => void }) {
   const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
   const facade = layoutFacade(P.index.head)
   const doc = P.docFor(0)
   let waits = 0, starved: (() => void) | null = null
   const run = await openProto({
     parts: true, proof: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
-    target: 'zh', pages: P.N, scale: 1, dpr: 1, copy: false, free: true, records: o.records ?? true, labels: LABELS as never,
+    target: 'zh', pages: P.N, scale: 1, dpr: 1, copy: false, free: true, records: o.records ?? true, labels: LABELS as never, ...(o.rules ? { rules: o.rules } : {}),
     tex: { ...HYBRID, index: facade.index, pieces: new Map() }, removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: P.N, sets: {}, page: {} } as never },
     onRetired: o.onRetired ?? null, onWait: (what: string) => { waits++; if (what === 'part') starved?.() },
   } as never)
@@ -607,6 +611,46 @@ describe('the kept record and what the run holds (the 1b design §1, §3)', () =
     expect(run.drawn).toBe(recorded.stats.length)
     expect(recorded.drawn).toBe(recorded.stats.length)
     for (let p = 1; p <= P.N; p++) expect(run.svgOf(p).outerHTML).toBe(recorded.svgOf(p).outerHTML)
+  })
+})
+
+describe('the run that lets go, with no page pass, and a record that throws', () => {
+  it('lets go as it paints, where the rules set no page pass (no fill, no even pass, the leftover at the foot)', async () => {
+    // (the built-in set with no page fill for Chinese: every unit painted as it is laid, a table's cells with their group)
+    const rules = structuredClone(BUILTIN_RULES) as unknown as { scripts: Record<string, { adaptiveFill: unknown; even: number; leftover: string }> }
+    rules.scripts.Hans!.adaptiveFill = null
+    for (const spec of [TAKE, FLOAT]) for (const ends of everySplit(spec.pages)) {
+      const P = await takePaper(spec, ends)
+      const whole = await wholeRun(P, { rules })
+      expect([whole.P.adaptiveFill, whole.P.even, whole.P.leftover]).toEqual([null, 0, 'foot'])
+      const want = drawing(whole)
+      expect(want.order.length).toBeGreaterThan(5)
+      const { run } = await partsRun(P, { before: 0, ended: 'open', feed: 'starved', rules })
+      expect(drawing(run), `${ends}`).toEqual(want)
+      for (let q = 1; q <= P.N; q++) expect(run.held(q), `${ends} page ${q}`).toEqual(NOTHING)
+      for (const u of run.placed) expect(heavyOf(u), `${ends} unit ${u.id}`).toEqual([])
+    }
+  })
+
+  it("draws a unit whose record throws as a run with no records draws it: the record is the error's, the drawing the same", async () => {
+    const P = await takePaper(TAKE, [1])
+    const want = drawing(await wholeRun(P))
+    // (unit 0's translation, the rows' CJK from U+4E00: its record cannot be made)
+    faults.record = tokens => tokens.some(t => t.s?.includes('\u4e00'))
+    try {
+      for (const run of [await wholeRun(P), (await partsRun(P, { before: 0, ended: 'open', feed: 'starved' })).run]) {
+        const got = drawing(run)
+        expect(got.pages).toEqual(want.pages)
+        expect(got.order).toEqual(want.order)
+        expect(got.skipped).toEqual(want.skipped)
+        expect(run.skipped.some(x => x.id === 0)).toBe(false)
+        expect(run.stats.filter(r => r.recordError).map(r => r.id)).toEqual([0])
+        expect(run.drawn).toBe(want.stats.length)
+      }
+      const bare = await wholeRun(P, { records: false })
+      expect(drawing(bare).pages).toEqual(want.pages)
+      expect([bare.stats, bare.drawn]).toEqual([[], want.stats.length])
+    } finally { faults.record = null }
   })
 })
 

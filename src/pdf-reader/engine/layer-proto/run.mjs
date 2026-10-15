@@ -33,7 +33,8 @@
 //   is laid a task at a time, a yield between two units' lays, so that no long task holds a page's units.
 // - The page's DOM (its rows, the banner, the status line), the timings and long tasks, the scorer's extras (score=1)
 //   and the compiled final drawn beside (compare) are the host's or the measurement's, and are left out. The checker's
-//   audit of every erase and crop (main.js check=1) is always kept: it is what a gate measures the drawing by.
+//   audit of every erase and crop (main.js check=1) is kept with `records`, the gate's and the lab's: it is what a gate
+//   measures the drawing by, and the reader keeps none (the 1b design §3).
 // - The prototype's host is the caller's: the PDF.js document (opened with PDF_OPTIONS, the prototype's), where the
 //   faces and the hyphenation patterns are served (fontUrl, hyphUrl).
 // - The faces are the role table's (faces: 'roles', the default since the maintainer's ruling of 2026-10-06; fonts.mjs
@@ -1241,7 +1242,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  grows. Laid in order that is exact: every unit ranked before p on the page has been laid or left before p is, so a
    *  unit's own state says it and no other page is read. Laying out of order (1b-D), a unit ranked before p may not have
    *  been reached yet: one whose other page fails grows here, where in order it would not, unless the pages of the units
-   *  ranked before a laid unit are drawn first (and failed ones refused) */
+   *  ranked before a laid unit are drawn first (and failed ones refused). Nor does the walk skip a unit already grown on
+   *  the page (`q.grew.has(g)`): laid in order a unit placed later ranks after every unit grown there (rankedOn), so the
+   *  grown stay a prefix; laid out of order (1b-D) one may rank before them, and the walk would grow them again, a unit the
+   *  run has let go among them (`free`: its `local` gone, its growth throwing into its stepError, silently). 1b-D skips a
+   *  unit grown on the page, or holds that a unit placed later never ranks before a grown one */
   const growTo = p => {
     for (const g of p.linePages) {
       if (p.grew.has(g)) continue
@@ -1397,14 +1402,23 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         p.layout.extents.set(r0.join(), multi ? [[x0, e[1], e[2], e[3]], ...ext.slice(1)] : [x0, e[1], e[2], e[3]])
       }
     }
-    // (laid to be drawn: counted, and recorded with `records`)
+    // (laid to be drawn: counted, and recorded with `records`. The record is the gate's and reads the laid unit alone, so that
+    // what it does never changes a drawing: one that throws is a record of the error, the unit drawn as without records)
     drawnUnits++
     p.counted = true
     if (!records) return
-    const lines = recLinesOf(p)
-    const drawnTok = new Set(p.layout.lines.flatMap(l => l.items.map(it => it.t)))
-    const tr = tokens.filter(t => t.s && !t.ph && !t.sup)
-    record(p, { ...(tex ? { source: p.tex ? 'tex' : 'v0' } : {}), grown: p.grown, dropped: p.dropped, s, f: p.layout.f, fitScale: p.layout.scale, knob: p.layout.knob, clipped: p.layout.clipped, opened: p.layout.opened, unopened: p.layout.unopened, lostChars: p.layout.lostChars, chars: p.layout.chars, lead: p.layout.state.lead, track: p.layout.state.track || p.layout.state.trackLatin, compress: p.layout.state.compress, borrow: p.layout.state.borrow, free: r1(Math.max(0, ...p.blocks.map(b => b.free))), tried: p.layout.tried, lines, orig, drawnRuns: L2.drawnRuns(tokens), drawnBase: styleKey(tokens.base), trChars: tr.reduce((a, t) => a + [...t.s].length, 0), trDrawn: p.layout.lines.reduce((a, l) => a + l.items.reduce((b, it) => b + (it.t.s && !it.t.ph && !it.t.sup ? [...it.t.s].length - (it.t.hyphenated ? 1 : 0) : 0), 0), 0), modes: modesOf(prep), unused: drawnTok.size, ms: [r1(t1 - t0), r1(t2 - t1), r1(t3 - t2), r1(t4 - t3)], tokens: tokens.length })
+    try {
+      const lines = recLinesOf(p)
+      const drawnTok = new Set(p.layout.lines.flatMap(l => l.items.map(it => it.t)))
+      const tr = tokens.filter(t => t.s && !t.ph && !t.sup)
+      record(p, { ...(tex ? { source: p.tex ? 'tex' : 'v0' } : {}), grown: p.grown, dropped: p.dropped, s, f: p.layout.f, fitScale: p.layout.scale, knob: p.layout.knob, clipped: p.layout.clipped, opened: p.layout.opened, unopened: p.layout.unopened, lostChars: p.layout.lostChars, chars: p.layout.chars, lead: p.layout.state.lead, track: p.layout.state.track || p.layout.state.trackLatin, compress: p.layout.state.compress, borrow: p.layout.state.borrow, free: r1(Math.max(0, ...p.blocks.map(b => b.free))), tried: p.layout.tried, lines, orig, drawnRuns: L2.drawnRuns(tokens), drawnBase: styleKey(tokens.base), trChars: tr.reduce((a, t) => a + [...t.s].length, 0), trDrawn: p.layout.lines.reduce((a, l) => a + l.items.reduce((b, it) => b + (it.t.s && !it.t.ph && !it.t.sup ? [...it.t.s].length - (it.t.hyphenated ? 1 : 0) : 0), 0), 0), modes: modesOf(prep), unused: drawnTok.size, ms: [r1(t1 - t0), r1(t2 - t1), r1(t3 - t2), r1(t4 - t3)], tokens: tokens.length })
+    } catch (e) {
+      if (isMemoryError(e)) throw e
+      // (in the records, not on the unit: no pass updates it, which would read what failed again)
+      p.recError = { id: p.id, kind: p.unit.kind, v: 2, pages: p.pages, cut: p.cut, recordError: String(e?.message ?? e) }
+      p.rec = undefined
+      stats.push(p.recError)
+    }
   }
   function record(p, x) {
     const match = x.orig !== undefined ? L2.styleMatch(x.orig, x.drawnRuns, x.drawnBase) : undefined
@@ -1472,7 +1486,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const withhold = (p, why) => {
     const at = placed.indexOf(p)
     if (at >= 0) placed.splice(at, 1)
-    const r = stats.indexOf(p.rec)
+    const r = stats.indexOf(p.rec ?? p.recError)
     if (r >= 0) stats.splice(r, 1)
     if (p.counted) { p.counted = false; drawnUnits-- }
     p.withheld = true
