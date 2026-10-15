@@ -1,6 +1,10 @@
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { type DocToken, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
-import { carrierOf, linesOf, tokensOfMarks } from '@/pdf-reader/engine/layout/carry.mjs'
+import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
+import { carrier, carrierOf, linesOf, tokensOfMarks } from '@/pdf-reader/engine/layout/carry.mjs'
 import { encodeLayoutMarks, layoutMarksOf, parseLayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 
 // The marked original's lines carried to arXiv's PDF: our compile is not arXiv's file (another TeX Live, another day), so
@@ -303,17 +307,19 @@ describe('carrierOf, the review of 2026-10-06', () => {
     // a search a line took 11.3 s on a laptop, the neighbours found once 0.2 s: the bound is the test's time
   }, 3000)
 
-  it("a paper's pages together are bounded: past PAPER_WORK the pages after carry nothing", () => {
-    // 1,400 one-word lines alike on each page: about 2 million each, under the page's bound
+  it("a page's work is bounded on its own: no bound of the paper's makes a later page carry nothing (the page stream, E2a)", () => {
+    // 1,400 one-word lines alike on each page: about 2 million each, under the page's bound; twelve of them, past the 20
+    // million the paper's bound was, all carry (a page is carried as soon as it is read, whatever the pages before it cost)
     const page = (p: number) => Array.from({ length: 1400 }, (_, i) => tok(`x${p}`, p, 72, 790 - i * 0.5, 3, 0.4))
     expect(carrierOf(page(1), page(1)).over).toEqual([])
     const all = Array.from({ length: 12 }, (_, p) => page(p + 1)).flat()
-    const over = carrierOf(all, all).over
-    expect(over.length).toBeGreaterThan(0)
-    expect(over).not.toContain(1)
-    expect(over.at(-1)).toBe(12)
-    // about 20 million steps by design: 1-5 s alone, past the default 30 s in the full suite on a loaded machine; the row
-    // holds the bound's effect, not its speed
+    expect(carrierOf(all, all).over).toEqual([])
+    // a page past its own bound alone: 3,000 such lines on page 5
+    const heavy = Array.from({ length: 3000 }, (_, i) => tok('x5', 5, 72, 790 - i * 0.25, 3, 0.2))
+    const mixed = [...page(4), ...heavy, ...page(6)]
+    expect(carrierOf(mixed, mixed).over).toEqual([5])
+    // about 30 million steps by design: seconds alone, longer in the full suite on a loaded machine; the row holds the
+    // bound's effect, not its speed
   }, 120_000)
 
   it("words twice on arXiv's page are not unique there, whatever the page beside it holds", () => {
@@ -362,4 +368,70 @@ describe('tokensOfMarks', () => {
     // carried onto the same document: every line where it was
     expect(carrierOf(back, direct).lines).toMatchObject({ total: 3, same: 3 })
   })
+})
+
+// the carrier a page at a time (the page stream, E2a): arXiv's tokens whole, the marked pages added as they are read
+/** the marked tokens' page ranges, in their order (the tokens go page by page) */
+const pageRanges = (ts: readonly DocToken[]) => {
+  const out: [number, number][] = []
+  ts.forEach((t, k) => { if (!out.length || ts[k - 1]?.page !== t.page) out.push([k, k + 1]); else (out.at(-1) as [number, number])[1] = k + 1 })
+  return out
+}
+/** carrierOf's and the page-by-page carrier's answers over every marked token's two edges and a grid between them */
+function sameCarry(marked: DocToken[], arxiv: DocToken[]) {
+  const whole = carrierOf(marked, arxiv), paged = carrier(marked, arxiv)
+  for (const [a, b] of pageRanges(marked)) paged.add(a, b)
+  expect(paged.lines).toEqual(whole.lines)
+  expect(paged.over).toEqual(whole.over)
+  let asked = 0
+  for (const t of marked) for (const x of [t.x - 1, t.x, t.x + t.w / 2, t.x + t.w, t.x + t.w + 2]) for (const y of [t.y, t.y + 0.3 * t.h]) {
+    expect(paged.carry(t.page, x, y)).toEqual(whole.carry(t.page, x, y))
+    asked++
+  }
+  return asked
+}
+
+describe('carrier: carrierOf a page at a time', () => {
+  it('three pages, a line moved to the next page, a respaced line, a fuzzy one, a word given in parts', () => {
+    const marked = [
+      ...words(TEN, 1, 72, 700), ...words(['attention', 'is', 'all', 'you', 'need'], 1, 72, 688),
+      ...words(['we', 'propose', 'a', 'new', 'network'], 2, 72, 700), tok('archi', 2, 72, 688, 25), tok('', 2, 97, 688, 20),
+      ...words(['the', 'last', 'page', 'line'], 3, 72, 700),
+    ]
+    const ours = [...TEN]
+    ours[4] = '1and'
+    const arxiv = [
+      ...words(ours, 1, 72, 699), ...words(['we', 'propose', 'a', 'new', 'network'], 1, 72, 600, [4, 6, 2.5, 5]),
+      ...words(['attention', 'is', 'all', 'you', 'need'], 2, 72, 699.4), tok('architecture', 2, 72, 680, 45),
+      ...words(['the', 'last', 'page', 'line'], 3, 72, 700),
+    ]
+    expect(sameCarry(marked, arxiv)).toBeGreaterThan(100)
+  })
+
+  it('a page added twice, or a range that is not whole pages, is refused', () => {
+    const marked = [...words(TEN, 1, 72, 700), ...words(TEN, 2, 72, 700)]
+    const c = carrier(marked, words(TEN, 1, 72, 700))
+    c.add(0, 10)
+    expect(() => c.add(5, 10)).toThrow(RangeError)
+    c.add(10, 20)
+    expect(c.lines.total).toBe(2)
+  })
+})
+
+// the lab's papers (AXT_LAB): each marks file's tokens and arXiv's PDF read by step T
+const LAB = process.env.AXT_LAB
+const labIds = LAB && existsSync(join(LAB, 'data/layout')) ? readdirSync(join(LAB, 'data/layout')).filter(id => existsSync(join(LAB, 'data/layout', id, 'arxiv.pdf')) && existsSync(join(LAB, 'data/layout', id, 'marks.json'))) : []
+describe.skipIf(!labIds.length)('carrier over the lab\'s papers: the same carry, page by page', () => {
+  for (const id of labIds) {
+    it(id, async () => {
+      // (the tokens and words alone: an older marks file's schema need not be this engine's)
+      const m = JSON.parse(readFileSync(join(LAB as string, 'data/layout', id, 'marks.json'), 'utf8'))
+      const marked = tokensOfMarks(m)
+      const task = getDocument({ data: new Uint8Array(readFileSync(join(LAB as string, 'data/layout', id, 'arxiv.pdf'))), verbosity: 0 })
+      try {
+        const { tokens } = await readArxivText((await task.promise) as never)
+        expect(sameCarry(marked, tokens)).toBeGreaterThan(1000)
+      } finally { await task.destroy() }
+    }, 300_000)
+  }
 })
