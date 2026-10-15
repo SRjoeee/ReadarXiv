@@ -754,15 +754,16 @@ async function doorPartsFixture(page, name, errors) {
  *  arXiv's bytes), as the prepare child and the remover child run them */
 async function chainedHooksOf(arxiv, read3, base) {
   const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
-  const [{ chainedAddon }, { pagePlansOf }, { removerOf }, { indexLayout }, { PDFJS: PINNED }] = await Promise.all(['layout/chain.mjs', 'layout/addon.mjs', 'layout/remove.mjs', 'layout/file.mjs', 'pipeline/versions.mjs'].map(f => import(E(f))))
+  const [{ chainedAddon }, { pagePlansOf }, { removerOf }, { indexLayout }] = await Promise.all(['layout/chain.mjs', 'layout/addon.mjs', 'layout/remove.mjs', 'layout/file.mjs'].map(f => import(E(f))))
   const PL = await import('@cantoo/pdf-lib')
-  const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  // (the facts' reader named by its own version: the remover refuses another than its pinned one)
+  const { OPS, version } = await import('pdfjs-dist/legacy/build/pdf.mjs')
   const { deflateSync } = await import('node:zlib')
   const doc = await openNode(arxiv)
   const { plans } = await pagePlansOf({ doc, OPS, index: indexLayout(read3.layout) })
   try { await doc.loadingTask.destroy() } catch {}
   const remover = removerOf({ bytes: arxiv, PL, inflate: inflateTolerant, deflate: b => new Uint8Array(deflateSync(b)) })
-  return chainedAddon({ N: read3.paper.pages, views: read3.left.pages, base: { bytes: base.bytes, xref: base.xref }, planOf: p => plans.get(p) ?? null, pdfjs: PINNED, remove: ({ plans: ask }) => remover.remove(ask) })
+  return chainedAddon({ N: read3.paper.pages, views: read3.left.pages, base: { bytes: base.bytes, xref: base.xref }, planOf: p => plans.get(p) ?? null, pdfjs: version, remove: ({ plans: ask }) => remover.remove(ask) })
 }
 
 /** a record piece as a result's piece (spikes/rows-check.mjs resultOf): a text it translated stays itself, one it left is
