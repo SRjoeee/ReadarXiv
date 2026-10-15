@@ -43,5 +43,37 @@ describe('the settings as they change elsewhere', () => {
     expect(heard).toEqual([prefsOf(next, false)])
     host.stop()
   })
+
+  const panes = () => ({ left: document.createElement('div'), right: document.createElement('div'), params: new URLSearchParams('') })
+  it('a first read the page gave up on (no answer in its time) is read again, and the late answer followed', async () => {
+    const emit = vi.fn()
+    const stored = { ...DEFAULT_CONFIG, theme: 'dark' as const }
+    let answer: (r: { config: typeof DEFAULT_CONFIG; fallbackReason: null }) => void = () => {}
+    const read = vi.fn(() => new Promise<{ config: typeof DEFAULT_CONFIG; fallbackReason: null }>(r => { answer = r }))
+    const host = readerHost({ ...panes(), emit, reading: null }, DEFAULT_CONFIG, '2600.00001', () => () => {}, read)
+    const heard: unknown[] = []
+    host.prefs.subscribe(p => heard.push(p))
+    expect(read).toHaveBeenCalledTimes(1)
+    answer({ config: stored, fallbackReason: null })
+    await Promise.resolve(); await Promise.resolve()
+    expect(emit).toHaveBeenCalledWith({ type: 'settings', config: stored, pack: null })
+    // and the settings are no longer said to be unreadable
+    expect(emit).toHaveBeenCalledWith({ type: 'notice', why: null })
+    expect(heard).toEqual([prefsOf(stored, false)])
+    // a page whose first read answered reads nothing again
+    const again = vi.fn()
+    readerHost({ ...panes(), emit: vi.fn(), reading: { config: stored, fallbackReason: null } }, stored, 'x', () => () => {}, again).stop()
+    expect(again).not.toHaveBeenCalled()
+    host.stop()
+  })
+
+  it('valid settings coming in clear the notice of unreadable ones', () => {
+    let changed: (c: typeof DEFAULT_CONFIG) => void = () => {}
+    const emit = vi.fn()
+    const host = readerHost({ ...panes(), emit, reading: { config: DEFAULT_CONFIG, fallbackReason: { kind: 'unknown' } } }, DEFAULT_CONFIG, 'x', cb => { changed = cb; return () => {} }, vi.fn())
+    changed({ ...DEFAULT_CONFIG, theme: 'light' })
+    expect(emit).toHaveBeenCalledWith({ type: 'notice', why: null })
+    host.stop()
+  })
 })
 

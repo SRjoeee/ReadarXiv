@@ -349,7 +349,8 @@ export function createFollower(o) {
     }
     if (!until) return again()
     const ended = new AbortController()
-    o.signal.addEventListener('abort', () => ended.abort(), { once: true })
+    // ended with the view, and gone with the input: a press made during each rest would otherwise leave one for the view's life
+    o.signal.addEventListener('abort', () => ended.abort(), { once: true, signal: ended.signal })
     for (const type of until) o.window.addEventListener(type, () => { ended.abort(); clock.later(again, 0) }, { capture: true, once: true, passive: true, signal: ended.signal })
   }
 

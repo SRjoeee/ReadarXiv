@@ -3,6 +3,7 @@
 // probe and its dispose, on PDF.js stand-ins, a clock moved by hand and a small layout model (helpers/reader-fakes.ts).
 // The real PDF.js, in a real browser, is pnpm e2e:reader's (its development entry, ?layer=1).
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFollower } from '@/pdf-reader/engine/view/sync.mjs'
 import { createReaderView, type DocumentTask, internalsOf, type ReaderHost, type ReaderView, type Shapes, type ViewEvent, type ViewPrefs } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { clientOf, drawPanes, FakeEventBus, FakeIO, FakePDFPageView, FakePDFViewer, FakeRO, fakeDoc, fakeKit, fakeTask, flush, installLayout, type ManualClock, manualClock, reads, resetFakes } from './helpers/reader-fakes'
 
@@ -359,6 +360,31 @@ describe('V4 and V9: sync is one mode, the identity follower, available once the
       expect(anims[0]?.cancel).toHaveBeenCalled()
       expect(s.view.probe().driver).toBe('right')
     } finally { delete (HTMLElement.prototype as unknown as { animate?: unknown }).animate }
+  })
+})
+
+describe('the follower\'s rest armed again after an input', () => {
+  it('ends its listener on the view\'s signal with the input, not with the view', async () => {
+    const { left, right } = drawPanes()
+    const pane = (container: HTMLElement) => ({ container, stack: container.firstElementChild as HTMLElement, redraw() {}, lend() {} })
+    const ac = new AbortController(), clock = manualClock()
+    const on: { options: AddEventListenerOptions | undefined }[] = []
+    const add = ac.signal.addEventListener.bind(ac.signal)
+    ac.signal.addEventListener = ((type: string, fn: never, options?: AddEventListenerOptions) => { on.push({ options }); add(type, fn, options) }) as typeof ac.signal.addEventListener
+    const L = pane(left), R = pane(right)
+    const f = createFollower({ panes: { left: L, right: R }, active: () => true, target: () => 0, clock, timer: false, compositor: null, reduced: () => false, laidOut: async () => {}, window, signal: ac.signal })
+    // a page tall enough to scroll, a scroll of the left's, its end: a rest is to come
+    for (const s of [left, right]) { const p = document.createElement('div'); p.className = 'page'; p.style.height = '3000px'; s.firstElementChild?.append(p) }
+    f.input(L, 'wheel')
+    left.scrollTop = 300
+    f.scrolled(L)
+    f.ended(L)
+    // a press within the rest's wait calls it off, to be armed again at its release
+    f.input(L, 'pointerdown')
+    expect(on).toHaveLength(1)
+    window.dispatchEvent(new Event('pointerup'))
+    expect(on[0]?.options?.signal?.aborted).toBe(true)
+    f.stop()
   })
 })
 

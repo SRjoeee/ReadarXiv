@@ -12,7 +12,7 @@
 import { appearanceRule } from '@/core/renderer/style-preset'
 import { lookOf } from '@/config/appearance'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
-import { watchConfig } from '@/config/storage'
+import { readConfig, watchConfig } from '@/config/storage'
 import { R } from '@/ui/strings'
 import { createReaderView, type DocumentTask, type ReaderHost, type ReaderView, type ViewPrefs } from '../engine/view.mjs'
 import { readerAddresses } from '../addresses.mjs'
@@ -43,8 +43,8 @@ export function outward(url: string): boolean {
 }
 
 /** the reader page's host of the view, over the panes the page drew; `config` the settings as the page read them, `watch`
- *  how their changes are heard (the extension's storage) */
-export function readerHost(host: SessionHost, config: Config, paper: string, watch: typeof watchConfig = watchConfig): ReaderHost & { stop(): void } {
+ *  how their changes are heard and `read` how they are read (the extension's storage) */
+export function readerHost(host: SessionHost, config: Config, paper: string, watch: typeof watchConfig = watchConfig, read: typeof readConfig = readConfig): ReaderHost & { stop(): void } {
   let latest = config
   const dark = globalThis.matchMedia?.('(prefers-color-scheme: dark)')
   const listeners = new Set<(p: ViewPrefs) => void>()
@@ -58,14 +58,22 @@ export function readerHost(host: SessionHost, config: Config, paper: string, wat
     if (sheet.textContent !== text) sheet.textContent = text
   }
   showLook()
-  const unwatch = watch(next => {
+  let stopped = false, heard = false
+  /** settings that came: shown, told to the controller (the page draws its look of its state: App.tsx's theme, dimmed
+   *  pages and panes swapped) with whether they could be read, and to the view */
+  const landed = (next: Config, why: unknown) => {
     latest = next
     showLook()
-    // the page draws its look of the controller's state (App.tsx: the theme, the dimmed pages, the panes swapped)
     host.emit({ type: 'settings', config: next, pack: null })
+    host.emit({ type: 'notice', why })
     const p = prefs()
     for (const l of listeners) l(p)
-  })
+  }
+  // a change the storage holds is valid by then (watchConfig parses it): the settings are readable again
+  const unwatch = watch(next => { heard = true; landed(next, null) })
+  // the page's own first read given up on (no answer in its time, ui/first-read.ts), the defaults standing in: read again,
+  // and the late answer followed as a change of the settings, unless a change came first
+  if (host.reading == null) void read().then(r => { if (!stopped && !heard) landed(r.config, r.fallbackReason) }, () => {})
   return {
     panes: { left: host.left, right: host.right },
     pdfjs: { lib: pdfjsLib, viewer: { EventBus, PDFViewer, PDFPageView, PDFLinkService, LinkTarget }, assets: ASSETS },
@@ -73,7 +81,7 @@ export function readerHost(host: SessionHost, config: Config, paper: string, wat
     prefs: { get: prefs, subscribe: l => { listeners.add(l); return () => { listeners.delete(l) } } },
     links: { openExternal: url => { if (outward(url)) globalThis.open(url, '_blank', 'noopener') } },
     emit: event => { const e = fromView(event, paper); if (e) host.emit(e) },
-    stop() { unwatch(); listeners.clear(); sheet?.remove() },
+    stop() { stopped = true; unwatch(); listeners.clear(); sheet?.remove() },
   }
 }
 
