@@ -53,10 +53,11 @@ export function chainedAddon({ N, views, base, planOf, remove, pdfjs }) {
   /** the remover's failure, once it fails: a fact of the remover, kept across candidates, unlike the chain */
   let dead = null
 
-  /** the part's manifest checked as its reader will (format.mjs partShape: views from `a`, its removed pages after the told) */
+  /** the part's manifest checked as its reader will (format.mjs partShape: views from `a` to a thousandth, as the part writes
+   *  them, its removed pages after the told) */
   const holds = (manifest, a, b) => {
     const flat = []
-    for (let p = a; p <= b; p++) for (const x of views[p - 1]) flat.push(x)
+    for (let p = a; p <= b; p++) for (const x of views[p - 1]) flat.push(Math.round(x * 1000) / 1000)
     try {
       checkAddonManifest(manifest, { pages: N, views: flat, shipped: true, part: { from: a, to: b, atFrom: N + committed.r + 1 } })
       return true
