@@ -961,6 +961,44 @@ within noise.
 - A copy made before the highlight lights by paragraph until it is translated again; an LLM's sentences are measured
   on one model (above); with Google the markers change the wording (above).
 
+### 17.8 On the layer path: the shapes made page by page
+
+- **One layout, made page by page** (`highlight.mjs` `pageLayout`, `layoutParts`, `layoutPage`; `shapes.mjs`
+  `createShapes`). On the layer path the left's tokens come a page at a time (the door's `leftPageOf`, on the first want
+  of the page) and its units' rectangles a part at a time. The document part — each page's columns, the columns' text
+  edges, the half leadings — is made again of every unit told whenever a part comes, and each page's geometry made before
+  is let go and made again from it (a part that tells no view or unit not told before changes nothing); a page's part
+  is its left part's tokens and spans when it lands. Built so, in any
+  order, it is the layout made whole: on the ten papers, both sides cut as the wire carries them and made again with the
+  pages shuffled among the parts, every page's geometry (4 049 runs on 483 pages) and every sentence shape (7 669, of
+  2 340 units' starts read from their pairs) equal the whole layout's (the highlight gate, 2026-10-15).
+- **Token ids are the side's stream**, from the left part's `first`, as the parts' units name their streams: they rise
+  page by page whatever order the pages come in, a unit's first token is known before its page comes (its head on the
+  page, whether a sentence began before a run), and they equal the whole layout's. Each page's tokens are a table of its
+  own; a layout made whole reads its arrays through views of them.
+- **A unit's sentences wait for all its pages** (`tokensIn`): a run's sentence shapes read the unit's tokens beyond the
+  run — whether a sentence began before it or goes on after it — so a unit over a page break lights whole on the pages
+  that have come until the others have, then by sentence.
+- **The right, mirrored** (`mirror`): until the layer's pages bring words of their own, the right's shapes are a layout of
+  the right's own over copies of the left's tokens and rectangles, following the left as it is told. Its blocks equal
+  the left's from run objects of its own: the paint keeps what it drew by the run, and a run shared would move the left's
+  element into the right's pane. A float passes through (the right's floats are the left's), and the right's sentence
+  shapes keep from under it as the left's do. The right has no starts
+  yet, so every unit lights whole on both panes; the same calls light sentences once it has.
+- **The left's starts** are its units' pairs (the left part's runs of words to tokens) read as `sentenceStarts` reads an
+  anchor's, once every page the unit is on has come. The reader takes every pair shipped, so the producer ships them only
+  for a unit `sentenceStarts` would read (located by its marks, or by its text over 80 % of it): on the ten papers, one
+  unit's pairs read where the whole layout's anchor refused them.
+- **An empty or refused left part** (a page past the left part's caps ships none, M8): no shapes on that page and
+  nothing thrown; a refusal warns once a page, and a later left part for it is taken. A left part whose token ids reach
+  into a page already in is refused, and the first of the two keeps its place: a bogus page that comes first leaves its
+  true neighbour refused, since nothing in the two tells which is wrong.
+- **Floats and the view's window**: a page's floats are made of what its drawing gives (its figures and paths,
+  `floats`), and again on the page's first use after a part moves the document part — never in the part's task, which
+  would make every such page's geometry again at once. A page leaving the window (`forget`) lets its geometry, its
+  floats and their inputs go; its drawing gives them again. Inputs that throw are let go with one warning, and the page
+  has no floats.
+
 ## 18. Rules and their versions
 
 Three kinds of rule decide what the reader shows, and they change at three different costs. Each has its own identity,
