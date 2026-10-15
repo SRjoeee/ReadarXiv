@@ -53,8 +53,7 @@ const UNITS_DEPTH = 5
 export const CHUNKS_MAX = 20, UNITS_TOTAL_BYTES = 32 * 2 ** 20, UNITS_TOTAL_VALUES = 3_500_000
 /** the last unit id a paper the guard accepts can hold (every unit is at least one value), and the most ids a service forwards as `dropped` (amendments M19, M21) */
 export const UNIT_ID_MAX = UNITS_TOTAL_VALUES, DROPPED_MAX = 148_000
-/** the head's: the object, `units` and a ref in it (`cites` and a pair in it as deep); at most 5,000 cites of a key of 1–128
- *  and a label of 1–32 code units fill about 0.85 MB of it (amendment M11) */
+/** the head's: the object, `units` and a ref in it */
 export const HEAD_CAP = 1024 * 1024, HEAD_VALUES = 64_000
 const HEAD_DEPTH = 3
 /** a part's: the object, `addon`, the manifest, its `page`, a page's entry, its `units`, a unit's boxes */
@@ -89,7 +88,6 @@ const SLACK = 1
 const SHA256 = /^[0-9a-f]{64}$/
 const BASE_MAX = 2 ** 31
 const ID_MAX = Number.MAX_SAFE_INTEGER
-const CITES_MAX = 5_000, CITE_KEY_MAX = 128, CITE_LABEL_MAX = 32
 /** the version tokens of a head, in order; the reader compares `pdfjs` with its own and reads the rest as tokens */
 const VERSION_KEYS = ['pipeline', 'layout', 'removal', 'pdfjs', 'image']
 const NAMED_VERSIONS = ['pipeline', 'layout', 'removal', 'image']
@@ -609,7 +607,7 @@ export function droppedOf(chunks) {
 }
 
 // ---------------------------------------------------------------- the head
-const HEAD_KEYS = ['bundle', 'kind', 'paper', 'base', 'versions', 'units', 'lineskip', 'cites']
+const HEAD_KEYS = ['bundle', 'kind', 'paper', 'base', 'versions', 'units', 'lineskip']
 const HEAD_DEF = { cap: HEAD_CAP, values: HEAD_VALUES, depth: HEAD_DEPTH }
 
 /** the head's fields, checked: what a reader and a writer share */
@@ -626,40 +624,26 @@ function headShape(v) {
   for (const r of v.units) total += r.bytes
   if (total > UNITS_TOTAL_BYTES) throw tooLarge('bytes', UNITS_TOTAL_BYTES, total)
   inside(K, '', () => checkLineskip(v.lineskip, 'lineskip'))
-  const cites = v.cites
-  if (cites !== null) {
-    if (!Array.isArray(cites)) throw refuse(K, 'cites', `not null or an array (${kindOf(cites)})`)
-    if (cites.length > CITES_MAX) throw refuse(K, 'cites', `more than ${CITES_MAX} pairs`)
-    const seen = new Set()
-    for (let i = 0; i < cites.length; i++) {
-      const c = cites[i]
-      if (!Array.isArray(c) || c.length !== 2) throw refuse(K, `cites[${i}]`, `not [key, label] (${kindOf(c)})`)
-      if (typeof c[0] !== 'string' || c[0].length < 1 || c[0].length > CITE_KEY_MAX) throw refuse(K, `cites[${i}][0]`, `not 1 to ${CITE_KEY_MAX} code units (${kindOf(c[0])})`)
-      if (typeof c[1] !== 'string' || c[1].length < 1 || c[1].length > CITE_LABEL_MAX) throw refuse(K, `cites[${i}][1]`, `not 1 to ${CITE_LABEL_MAX} code units (${kindOf(c[1])})`)
-      if (seen.has(c[0])) throw refuse(K, `cites[${i}][0]`, 'a key twice')
-      seen.add(c[0])
-    }
-  }
-  return { paper, base, versions, units: v.units, lineskip: v.lineskip, cites }
+  return { paper, base, versions, units: v.units, lineskip: v.lineskip }
 }
 
 /**
  * The head as received: within its caps and its ref, the envelope and shape. `paper.pages` is the original's page count;
  * `base` the original (its bytes and digest, and the `startxref` the remover reads; our copy's route is derived, as BUNDLE 3's
  * reader derives it); the versions (the PDF.js this reader's, the rest read as tokens); the units chunks it names, 1 to
- * CHUNKS_MAX of at most UNITS_TOTAL_BYTES in all, contiguous from unit 0, by digest; the probe's `lineskip` and the aux's
- * `cites`, each null or within its bounds. Throws BundleRefusal
+ * CHUNKS_MAX of at most UNITS_TOTAL_BYTES in all, contiguous from unit 0, by digest; the probe's `lineskip`, null or within
+ * its bounds. Throws BundleRefusal
  */
 export async function readHead(bytes, { ref, caps }) {
   const { value: v, sha256 } = await opened('head', bytes, ref, HEAD_DEF, caps)
   envelope('head', v, HEAD_KEYS)
   const h = headShape(v)
-  return { kind: 'head', sha256, bytes: bytes.length, paper: h.paper, base: h.base, versions: h.versions, units: h.units, lineskip: h.lineskip, cites: h.cites }
+  return { kind: 'head', sha256, bytes: bytes.length, paper: h.paper, base: h.base, versions: h.versions, units: h.units, lineskip: h.lineskip }
 }
 
 /** the head written: the paper, the original, the versions this engine writes (with the compiler image's name) and the
  *  chunks `writeUnitChunks` gave, in order */
-export async function writeHead({ paper, base, image, units, lineskip, cites }) {
+export async function writeHead({ paper, base, image, units, lineskip }) {
   const obj = {
     bundle: BUNDLE4, kind: 'head',
     paper: { id: paper.id, version: paper.version, pages: paper.pages },
@@ -667,7 +651,6 @@ export async function writeHead({ paper, base, image, units, lineskip, cites }) 
     versions: { pipeline: PIPELINE_VERSION, layout: LAYOUT, removal: REMOVAL, pdfjs: PDFJS, image },
     units: units.map(u => ({ kind: 'units', from: u.from, to: u.to, sha256: u.sha256, bytes: u.bytes.length })),
     lineskip: lineskip === null ? null : lineskip.map(r2),
-    cites: cites === null ? null : cites.map(([k, l]) => [k, l]),
   }
   headShape(obj)
   return written('head', obj, HEAD_DEF, paper, {})

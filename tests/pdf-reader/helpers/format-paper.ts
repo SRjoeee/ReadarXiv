@@ -130,7 +130,7 @@ export interface Made {
 /** the paper written, then read back by the readers in the order the service reads it */
 export async function made(): Promise<Made> {
   const chunks = await writeUnitChunks({ paper: PAPER, units: UNITS })
-  const head = await writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: chunks, lineskip: [1, 0], cites: null })
+  const head = await writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: chunks, lineskip: [1, 0] })
   const rh = await readHead(head.bytes, { ref: head.ref })
   const readChunks: ReadUnitsChunk[] = []
   for (const c of chunks) readChunks.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: readChunks.at(-1) ?? null }))

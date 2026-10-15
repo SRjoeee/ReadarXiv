@@ -88,7 +88,7 @@ export interface ReadUnitsChunkLight extends Omit<ReadUnitsChunk, 'units'> {
 export interface ReadHead {
   kind: 'head'; sha256: string; bytes: number; paper: { id: string; version: number; pages: number }
   base: { bytes: number; sha256: string; xref: number }; versions: HeadVersions
-  units: (Ref & { from: number; to: number })[]; lineskip: [number, number] | null; cites: [string, string][] | null
+  units: (Ref & { from: number; to: number })[]; lineskip: [number, number] | null
 }
 export interface LayerIndex {
   kind: 'index'; sha256: string
@@ -221,7 +221,7 @@ export interface Written {
 export declare function writeUnitChunks(o: { paper: { id: string; version: number }; units: readonly BundleUnit[] }): Promise<(Written & { from: number; to: number })[]>
 export declare function writeHead(o: {
   paper: { id: string; version: number; pages: number }; base: { bytes: number; sha256: string; xref: number }; image: string
-  units: readonly (Written & { from: number; to: number })[]; lineskip: readonly [number, number] | null; cites: readonly (readonly [string, string])[] | null
+  units: readonly (Written & { from: number; to: number })[]; lineskip: readonly [number, number] | null
 }): Promise<Written>
 export declare function writeLeftPart(o: {
   paper: { id: string; version: number }; page: number; first: number; tokens: TokenWire
