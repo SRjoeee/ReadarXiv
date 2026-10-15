@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { writePart, type Ref } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { createFeed } from '@/pdf-reader/engine/view/feed.mjs'
 import type { TellRef } from '@/pdf-reader/engine/view/feed.mjs'
-import { made, type Made, partInputs } from './helpers/format-paper'
+import { made, type Made, N, partInputs } from './helpers/format-paper'
 
 const flush = async (n = 30) => { for (let i = 0; i < n; i++) await new Promise(r => setTimeout(r, 0)) }
 
@@ -179,6 +179,93 @@ describe('the feed: L15, a fork', () => {
     await flush()
     expect(shas(f.state().parts)).toEqual(shas(M.readParts))
     expect(f.state().ended).toBe(true)
+    f.dispose()
+  })
+})
+
+describe('the feed: a fork that does not read, a source that comes late (the review\'s probe 1)', () => {
+  it('a fork part that is refused: the catalog telling the true chain again restores it, through its end', async () => {
+    const M = await made()
+    const s = server(M)
+    const f = createFeed({ fetchObject: s.fetchObject })
+    f.tell({ head: M.head.ref, units: M.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(M, i)) })
+    await flush()
+    expect(f.state().parts.length).toBe(3)
+    // a job update telling a "fork" at part 2's pages whose object is none (its digest wrong)
+    f.tell({ parts: [{ ...(M.parts[1]!.ref as Ref), sha256: 'a'.repeat(64), prev: M.parts[0]!.sha256 }] })
+    await flush()
+    expect(shas(f.state().parts)).toEqual([M.parts[0]!.sha256])
+    f.tell({ parts: [0, 1, 2].map(i => catalogRef(M, i)), end: { through: N } })
+    await flush()
+    expect(shas(f.state().parts)).toEqual(shas(M.readParts))
+    expect(f.state().ended).toBe(true)
+    f.dispose()
+  })
+
+  it('a job\'s fork, then a 202 made before it telling the old chain: the fork stands; the catalog\'s chain is the one kept', async () => {
+    const M = await made()
+    const input = partInputs(M.head.sha256, M.lefts)[1]!
+    const other = await writePart({ ...input, prev: M.parts[0]!.sha256, addon: { ...input.addon!, manifest: { ...input.addon!.manifest, stats: { removed: 9 } } } })
+    const f = createFeed({ fetchObject: server(M, [other]).fetchObject })
+    f.tell({ head: M.head.ref, units: M.chunks.map(c => c.ref), parts: [0, 1].map(i => jobRef(M, i)) })
+    await flush()
+    // the job's fork at page 2
+    f.tell({ parts: [{ ...(other.ref as Ref), prev: M.parts[0]!.sha256 }] })
+    await flush()
+    expect(shas(f.state().parts)).toEqual([M.parts[0]!.sha256, other.sha256])
+    // a 202 computed before it, delivered after: the old chain, which is no newer
+    f.tell({ parts: [0, 1].map(i => jobRef(M, i)) })
+    await flush()
+    expect(shas(f.state().parts)).toEqual([M.parts[0]!.sha256, other.sha256])
+    // the catalog names the chain: it is kept, whatever came before
+    f.tell({ parts: [0, 1, 2].map(i => catalogRef(M, i)), end: { through: N } })
+    await flush()
+    expect(shas(f.state().parts)).toEqual(shas(M.readParts))
+    // and a stale source after it changes nothing
+    f.tell({ parts: [{ ...(other.ref as Ref), prev: M.parts[0]!.sha256 }] })
+    await flush()
+    expect(shas(f.state().parts)).toEqual(shas(M.readParts))
+    f.dispose()
+  })
+})
+
+describe('the feed: the bytes, and an abort that is not the feed\'s', () => {
+  it('keeps no object\'s bytes once it is read: the index\'s, the parts\', and a units ref the head does not name', async () => {
+    const M = await made()
+    const s = server(M)
+    const f = createFeed({ fetchObject: s.fetchObject })
+    f.tell({ head: M.head.ref, units: M.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(M, i)) })
+    await flush()
+    expect(f.state().parts.length).toBe(3)
+    expect(f.state().held).toBe(0)
+    // a part that waits (its predecessor not told) is not fetched until it joins
+    const g = createFeed({ fetchObject: s.fetchObject })
+    const before = s.fetched.length
+    g.tell({ parts: [jobRef(M, 2)] })
+    await flush()
+    expect(s.fetched.length).toBe(before)
+    g.dispose()
+    f.dispose()
+  })
+
+  it('an AbortError that is not the feed\'s own dispose refuses the object; told again, it is fetched again', async () => {
+    const M = await made()
+    const s = server(M)
+    let abort = true
+    const fetchObject = async (ref: Ref, signal: AbortSignal) => {
+      if (abort && ref.sha256 === M.parts[1]!.sha256) throw Object.assign(new Error('aborted by the host'), { name: 'AbortError' })
+      return s.fetchObject(ref, signal)
+    }
+    const warned: string[] = []
+    const f = createFeed({ fetchObject, warn: w => warned.push(w) })
+    f.tell({ head: M.head.ref, units: M.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(M, i)) })
+    await flush()
+    expect(f.state().parts.length).toBe(1)
+    expect(warned).toEqual(['the layer\'s part from page 2'])
+    abort = false
+    f.tell({ parts: [jobRef(M, 1)] })
+    await flush()
+    expect(f.state().parts.length).toBe(3)
     f.dispose()
   })
 })

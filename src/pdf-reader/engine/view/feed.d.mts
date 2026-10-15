@@ -19,6 +19,8 @@ export interface FeedState {
   ended: boolean
   /** why there is no layer: the head, a units chunk or the index refused */
   refused: string | null
+  /** the objects whose bytes are held now (fetched and not yet read) */
+  held: number
 }
 export interface Feed {
   tell(refs: Told): void
