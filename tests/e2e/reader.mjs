@@ -15,7 +15,11 @@
 //     opens in a new tab, and a PDF that cannot be fetched (an error, nothing, a page that is no PDF) says so and mends;
 //   - reader settings: the display and the sync follow the extension's settings and are written back.
 //   - the reading view, on its development entry (?layer=1): the original on both panes, the places at the left's page boxes
-//     and what they show, the follower levelling the pair at rest, a zoom, a pinch over the right, a narrow window.
+//     and what they show, the follower levelling the pair at rest, a zoom, a pinch over the right, a narrow window;
+//   - the reading view on the layer (?layer=1, its layer side): the sample cut into BUNDLE 4's objects (lib/layer-cut.mjs),
+//     told from the stand-in's 202s and catalog, its objects fetched by digest, a translation's rows taken: the pages laid on
+//     the right in place, the original until then, the place kept, the highlight on both panes (the left's part fetched on
+//     the first want alone), a figure lit whole, the dark look, the contents and the heading read, the pair level.
 // To come with the layer reader (Tasks 7 to 12): the reader's states on the layer (preparing, drawn, a unit lit, a
 // refusal), the faults of the layer API (refused, none, 5xx, nothing, which the stand-in already answers) and the
 // reading place kept between displays. The shipped reader's translated displays, which need the TeX page, are not checked.
@@ -28,6 +32,8 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { readBundle, VTAG } from '../../src/pdf-reader/engine/layer-proto/bundle.mjs'
+import { CTAG4 } from '../../src/pdf-reader/engine/layer-proto/format.mjs'
+import { cutSample, rowsOf, sampleFiles } from './lib/layer-cut.mjs'
 import { copyWithGrants } from './ext-copy.mjs'
 import { startEchoEndpoint } from './lib/echo-endpoint.mjs'
 import { launchWithReader } from './lib/extension.mjs'
@@ -41,7 +47,11 @@ const EXT = `${HERE}.ext-reader`
 const SHOTS = `${HERE}.shots`
 
 // ---- the paper, and the stand-in of the layer API over it
-const api = layerApi()
+/** the sample as BUNDLE 4's objects, which the stand-in serves under CTAG4 beside BUNDLE 3's bundle */
+const sampleCut = await cutSample(sampleFiles())
+const api = layerApi({ layer4: sampleCut })
+/** a face for the layer's Latin text, of the PDF.js package this tree holds (the extension's served faces are its run's, PR 5) */
+const LATIN_FACE = readFileSync(fileURLToPath(new URL('../../node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf', import.meta.url)))
 const { sample } = api
 const PAPER = sample.id
 const TITLE = 'Counting Lattice Paths Around Blocked Cells'
@@ -119,7 +129,13 @@ const guard = await routeTable(context, [
   ['https://tex.readarxiv.org', tex],
   [echo.origin, route => route.continue()],
   // (the stand-in's three routes only: any other path of these hosts is not handled, and so is a violation of the guard)
-  ...LAYER_HOSTS.map(host => [host, (route, url) => (serves(url.pathname) ? api.route(route) : false)]),
+  ...LAYER_HOSTS.map(host => [host, (route, url) => {
+    if (serves(url.pathname)) return api.route(route)
+    // the site's face the layer side is given, and no hyphenation patterns (the layer draws without them)
+    if (url.pathname === '/fonts/LiberationSans-Regular.ttf') return route.fulfill({ status: 200, contentType: 'font/ttf', headers: { 'access-control-allow-origin': '*' }, body: LATIN_FACE })
+    if (/^\/hyph\/[a-z-]+\.json$/.test(url.pathname)) return route.fulfill({ status: 404, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '{"why":"none"}' })
+    return false
+  }]),
 ])
 console.log(`route table: ${guard.hosts.join(', ')}`)
 console.log(`echo endpoint at ${echo.baseURL}; the layer API's bundle key ${VTAG}`)
@@ -621,6 +637,154 @@ try {
     check('a link out of the paper on the right opens in a new tab through the host, the reader staying where it is', drawn && tab?.url() === LINK && page.url().includes('layer=1'), `drawn ${drawn}, opened ${tab?.url() ?? 'nothing'}`)
     await tab?.close()
     await page.screenshot({ path: `${SHOTS}/reader-view.png` })
+    await page.close()
+  }
+
+  // --------------------------------------------------------------------------------- the reading view on the layer (VC)
+  section('the reading view on the layer (?layer=1): the pages laid on the right, the original until then, the place kept, the highlight on both panes, the contents')
+  if (!viewBuilt) check('the build holds the reading view\'s development entry: build it with AXT_READER_VIEW=1 pnpm build', false, `no chunk of ${BUILD} holds the places`)
+  else {
+    const page = await openReader({ layer: '1', mode: 'bilingual' })
+    const probe = () => page.evaluate(() => window.__reader.view.probe())
+    const side = () => page.evaluate(() => window.__reader.side?.probe() ?? null)
+    const opened = await page.waitForFunction(() => window.__reader?.view?.probe().original === 'open', null, { timeout: 30_000 }).then(() => true, () => false)
+    check('the development entry opens the sample in the view', opened, JSON.stringify(opened ? await probe() : {}))
+    await page.waitForTimeout(600)
+    // the main thread's long tasks while the layer works: a reading (L7 is reader-perf's, on a quiet machine)
+    await page.evaluate(() => { window.__long = []; new PerformanceObserver(l => { for (const e of l.getEntries()) window.__long.push(Math.round(e.duration)) }).observe({ type: 'longtask' }) })
+    const objectsAsked = () => api.requests.filter(r => /\/o\/[0-9a-f]{64}$/.test(r.path)).map(r => r.path.slice(-64))
+    const lefts = new Set(Object.values(sampleCut.leftRefs))
+    const opts = { api: 'https://readarxiv.com', paper: { id: PAPER, version: sample.version }, target: 'de', faces: [{ url: 'https://readarxiv.com/fonts/LiberationSans-Regular.ttf', ranges: [32, 126, 160, 255] }] }
+    await page.evaluate(o => window.__reader.openSide(o), opts)
+    /** what each place shows: the layer (its copy drawn, its SVG's text), the original's page view, nothing */
+    const shown = () => page.evaluate(() => [...document.querySelectorAll('#right .axt-place')].map(p => {
+      const l = p.querySelector('.axt-place-view > .axt-layer')
+      return { layer: p.hasAttribute('data-axt-layer'), copy: l?.querySelector('canvas.axt-layer-copy')?.width ?? 0, text: l?.querySelector('svg')?.textContent ?? '', original: !!p.querySelector('.axt-place-view > .page canvas') }
+    }))
+    const s0 = await shown()
+    check('before the layer is told, the places near the view show the original\'s page view, none the layer', s0[0]?.original && s0.every(p => !p.layer), JSON.stringify(s0.map(p => p.original)))
+
+    // the look: 202s with the objects made so far, then the catalog, each told to the side as the extension's run will
+    api.set({ layer: mode.preparing(1600) })
+    const look = () => page.evaluate(async path => {
+      const r = await fetch(path, { credentials: 'omit' }), body = await r.json()
+      if (r.status === 202 && body.layer) window.__reader.side.tell(body.layer)
+      if (r.status === 200) window.__reader.side.tell({ head: body.head, units: body.units, parts: body.parts, end: body.end })
+      return { status: r.status, parts: body.layer?.parts?.length ?? body.parts?.length ?? 0 }
+    }, `https://readarxiv.com/api/v1/layer/${sample.segment}/${CTAG4}`)
+    const looks = []
+    for (let i = 0; i < 12; i++) { const a = await look(); looks.push(a); if (a.status === 200) break; await page.waitForTimeout(400) }
+    api.set({ layer: mode.ready() })
+    await page.waitForFunction(() => window.__reader.side.probe().ended === true, null, { timeout: 15_000 }).catch(() => undefined)
+    const p1 = await side()
+    check('the look\'s 202s carry the objects made so far, the catalog the rest: the side reads them all, its parts through the end', looks.some(a => a.status === 202 && a.parts > 0) && looks.at(-1)?.status === 200 && p1?.ended === true && p1?.parts === sampleCut.refs.parts.length, `${JSON.stringify(looks)} ${JSON.stringify(p1)}`)
+    // no row yet: every page waits for its rows, and its place keeps the original's page
+    await page.waitForTimeout(500)
+    const s1 = await shown()
+    const before = await page.evaluate(() => { const p = document.querySelector('#right .axt-place'), r = p.getBoundingClientRect(); return { scroll: document.getElementById('right').scrollTop, box: [r.top, r.width, r.height] } })
+    check('the parts in, no row yet: the places the original\'s, none laid', s1[0]?.original && s1.every(p => !p.layer) && (await side())?.ready === 0, JSON.stringify((await side())))
+    // the rows, in two batches, then their end
+    const rows = rowsOf(sampleCut.index, 'de', (id, text) => `Ubersetzt ${id} ${text.replace(/[^A-Za-z0-9 ,.]/g, '').slice(0, 40)}`)
+    await page.evaluate(r => window.__reader.side.take(r), rows.slice(0, rows.length >> 1))
+    await page.evaluate(r => { window.__reader.side.take(r); window.__reader.side.end() }, rows.slice(rows.length >> 1))
+    const laid = await page.waitForFunction(() => { const l = document.querySelector('#right .axt-place[data-page-number="1"] .axt-layer'); return l?.querySelector('canvas.axt-layer-copy')?.width > 0 && /Ubersetzt/.test(l.querySelector('svg')?.textContent ?? '') }, null, { timeout: 30_000 }).then(() => true, () => false)
+    const s2 = await shown()
+    check('the rows taken: the page laid on the right in place, its copy drawn and its translation drawn as text, no page view left in it', laid && s2[0]?.layer && !s2[0]?.original, JSON.stringify({ ...s2[0], text: s2[0]?.text.slice(0, 60) }))
+    control('a place the layer has not drawn shows no translation: the last page, far from the view', { ok: /Ubersetzt/.test(s2.at(-1)?.text ?? ''), detail: JSON.stringify(s2.at(-1)) })
+    const after = await page.evaluate(() => { const p = document.querySelector('#right .axt-place'), r = p.getBoundingClientRect(); return { scroll: document.getElementById('right').scrollTop, box: [r.top, r.width, r.height] } })
+    check('laid in place: the place\'s box and the pane\'s scroll as they were', JSON.stringify(after) === JSON.stringify(before), `${JSON.stringify(before)} then ${JSON.stringify(after)}`)
+
+    // the highlight: nothing of the left fetched before the pointer wants a page (trap 2); a want over the right fetches it once
+    check('nothing of the left is fetched before the pointer wants a page', objectsAsked().filter(x => lefts.has(x)).length === 0, `${objectsAsked().length} objects fetched`)
+    /** where a unit's first rectangle's middle is on the screen, on a pane's page */
+    const screenOf = (pane, unit) => page.evaluate(([pane, page, r, view]) => {
+      const box = document.querySelector(`#${pane} .pdfViewer > .page[data-page-number="${page}"]`).getBoundingClientRect()
+      const x = (r[0] + r[2]) / 2, y = (r[1] + r[3]) / 2
+      return { x: box.left + ((x - view[0]) / (view[2] - view[0])) * box.width, y: box.top + ((view[3] - y) / (view[3] - view[1])) * box.height }
+    }, [pane, unit[2][0][0], unit[2][0].slice(1), sampleCut.views[unit[2][0][0] - 1]])
+    const onPage1 = sampleCut.located.filter(u => u[2][0]?.[0] === 1 && sampleCut.kinds[u[0]] === 'para')
+    const unit = onPage1[0]
+    const litOf = () => page.evaluate(() => ({ lit: window.__reader.view.probe().lit, left: document.querySelectorAll('#left .page[data-page-number="1"] .axt-hl').length, right: document.querySelectorAll('#right .page[data-page-number="1"] .axt-hl').length }))
+    const at = await screenOf('right', unit)
+    await page.mouse.move(at.x, at.y)
+    await page.waitForTimeout(150)
+    await page.mouse.move(at.x + 1, at.y)
+    const lightRight = await page.waitForFunction(id => window.__reader.view.probe().lit === id, unit[0], { timeout: 10_000 }).then(() => true, () => false)
+    const h1 = await litOf()
+    const fetchedLeft = objectsAsked().filter(x => lefts.has(x))
+    check('the pointer over the right lights the unit under it on both panes, its page\'s left part fetched once', lightRight && h1.left > 0 && h1.right > 0 && fetchedLeft.length === 1 && fetchedLeft[0] === sampleCut.leftRefs[1], `${JSON.stringify(h1)}, left parts fetched ${fetchedLeft.length}`)
+    const other = onPage1[1] ?? onPage1[0]
+    const atL = await screenOf('left', other)
+    await page.mouse.move(atL.x, atL.y)
+    await page.waitForTimeout(150)
+    await page.mouse.move(atL.x + 1, atL.y)
+    const lightLeft = await page.waitForFunction(id => window.__reader.view.probe().lit === id, other[0], { timeout: 10_000 }).then(() => true, () => false)
+    const h2 = await litOf()
+    check('the pointer over the left lights the unit on both panes; the page\'s left part not fetched again', lightLeft && h2.left > 0 && h2.right > 0 && objectsAsked().filter(x => lefts.has(x)).length === 1, JSON.stringify(h2))
+    // the dark look: the layer's text dimmed by the reader's filter, its copy by the page canvas's, the wash over the layer screened
+    await page.evaluate(() => document.documentElement.setAttribute('data-axt-dim', ''))
+    const dark = await page.evaluate(() => ({ svg: getComputedStyle(document.querySelector('#right .axt-layer > svg')).filter, copy: getComputedStyle(document.querySelector('#right .axt-layer > canvas')).filter, wash: getComputedStyle(document.querySelector('#right .axt-hl') ?? document.body).mixBlendMode }))
+    check('the dark look over the layer: its SVG and its copy dimmed alike, the wash screened', /invert/.test(dark.svg) && dark.svg === dark.copy && dark.wash === 'screen', JSON.stringify(dark))
+    await page.screenshot({ path: `${SHOTS}/reader-layer-dark.png` })
+    await page.evaluate(() => document.documentElement.removeAttribute('data-axt-dim'))
+    // a figure: its caption lights the float whole, on both panes
+    const caption = sampleCut.located.find(u => sampleCut.kinds[u[0]] === 'caption')
+    if (caption) {
+      await page.mouse.move(5, 5)
+      await page.evaluate(n => window.__reader.controller.goToPage('right', n), caption[2][0][0])
+      await page.waitForTimeout(1500)
+      const atC = await screenOf('right', caption)
+      await page.mouse.move(atC.x, atC.y)
+      await page.waitForTimeout(150)
+      await page.mouse.move(atC.x + 1, atC.y)
+      const litC = await page.waitForFunction(id => window.__reader.view.probe().lit === id, caption[0], { timeout: 10_000 }).then(() => true, () => false)
+      const f = await page.evaluate(p => ({ left: document.querySelectorAll(`#left .page[data-page-number="${p}"] .axt-hl`).length, right: document.querySelectorAll(`#right .page[data-page-number="${p}"] .axt-hl`).length, frames: document.querySelectorAll(`.page[data-page-number="${p}"] .axt-hl-frame`).length }), caption[2][0][0])
+      check('a caption lights its float whole on both panes (the figure framed, or the table washed)', litC && f.left > 0 && f.right > 0, JSON.stringify(f))
+      await page.screenshot({ path: `${SHOTS}/reader-layer-float.png` })
+    }
+
+    // the zoom keeps the place; the laid pages' copies are drawn again at the new k, none laid again
+    const pz = await side()
+    await page.evaluate(() => window.__reader.controller.zoomTo(1.5))
+    await page.waitForTimeout(1600)
+    const z = await probe(), pz2 = await side()
+    check('a zoom: the left and the places at 1.5, the laid pages\' copies drawn again, no page asked again for a layer it holds', Math.abs(z.scale - 1.5) < 1e-3 && pz2.copies > pz.copies && pz2.ready === pz.ready, JSON.stringify({ scale: z.scale, copies: [pz.copies, pz2.copies], ready: [pz.ready, pz2.ready] }))
+    await page.evaluate(() => window.__reader.controller.zoomTo('page-width'))
+    await page.waitForTimeout(800)
+
+    // the contents: the index's headings, their pages from the parts, their titles from the rows; the heading read on a scroll
+    const st = await page.evaluate(() => window.__reader.controller.getState())
+    const located = st.outline.filter(e => e.page)
+    check('the contents: the paper\'s headings, located by the parts, titled by the rows', st.outline.length >= 5 && located.length === st.outline.length && st.outline.every(e => /^Ubersetzt/.test(e.title) && e.original && !/^Ubersetzt/.test(e.original)), JSON.stringify(st.outline.slice(0, 3)))
+    const L0 = await page.locator('#left').boundingBox()
+    await page.mouse.move(L0.x + L0.width / 2, L0.y + L0.height / 2)
+    await page.mouse.wheel(0, 6000)
+    await page.waitForFunction(() => window.__reader.view.probe().motion === null, null, { timeout: 5000 }).catch(() => undefined)
+    await page.waitForTimeout(900)
+    const deep = await page.evaluate(() => window.__reader.controller.getState().currentHeading)
+    const lvl = await probe()
+    check('the heading read follows the scroll: further down, a later heading of the contents', deep !== null && st.outline.findIndex(e => e.id === deep) > 0, `${deep}`)
+    check('on the layer the pair stands level at rest (levelError within 24 px)', Math.abs(lvl.levelError ?? 999) <= 24, `levelError ${lvl.levelError}`)
+    // the window: through the paper and back, the right holds the layer near the view alone (§3.2), what it let go released
+    const R1 = await page.locator('#right').boundingBox()
+    const held = async () => page.evaluate(() => {
+      const near = window.__reader.view.probe().nearPlaces, sp = window.__reader.side.probe()
+      const right = document.getElementById('right')
+      return { near, laid: sp.laid, retired: sp.retired, svgs: right.querySelectorAll('.axt-layer > svg').length, copies: [...right.querySelectorAll('canvas.axt-layer-copy')].filter(c => c.width > 0).length, nodes: right.querySelectorAll('*').length, heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e5) / 10 : null }
+    })
+    const w0 = await held()
+    await page.mouse.move(R1.x + R1.width / 2, R1.y + R1.height / 2)
+    for (const dy of [4000, 4000, -8000]) { await page.mouse.wheel(0, dy); await page.waitForTimeout(700) }
+    await page.waitForFunction(() => window.__reader.view.probe().motion === null, null, { timeout: 5000 }).catch(() => undefined)
+    await page.waitForTimeout(1200)
+    const w1 = await held()
+    check('through the paper and back: the layer held near the view alone, each page far from it let go (its copy and SVG)', w1.laid <= w1.near && w1.svgs === w1.laid && w1.copies === w1.laid && w1.laid + w1.retired <= sampleCut.paper.pages, `${JSON.stringify(w0)} then ${JSON.stringify(w1)}`)
+    note(`the window on the sample (4 pages; JS heap in MB): before ${JSON.stringify(w0)}, after a scroll through it and back ${JSON.stringify(w1)}. A paper of a hundred pages is the web's layer-memory row at the pin move`)
+    const long = await page.evaluate(() => window.__long)
+    note(`the layer's longest main-thread task in this run: ${Math.max(0, ...long)} ms over ${long.length} long task(s) (a reading on a shared machine: L7 is reader-perf's)`)
+    const ps = await side()
+    note(`the side: ${JSON.stringify({ ready: ps.ready, laid: ps.laid, retired: ps.retired, commits: ps.commits, copies: ps.copies, leftParts: ps.leftParts, composed: ps.composed, docs: ps.docs })}`)
+    await page.screenshot({ path: `${SHOTS}/reader-layer.png` })
     await page.close()
   }
 

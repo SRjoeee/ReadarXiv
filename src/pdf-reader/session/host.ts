@@ -5,8 +5,10 @@
 // come back as a Session.
 //
 // The development entry `?layer=1` (main.tsx) runs the reader on this host: the original on both panes, as the reader shows
-// a paper before its translation. The layer's side (its bundle from the layer API, the rows, the add-on's composed
-// document) joins it with the layer side's PR; the extension's own session (session.mjs) stays the reader until then.
+// a paper before its translation, and the layer's side over the layer API's transport (layerTransport: its objects by
+// digest, the base checked against the original shown, the composed document over the original's bytes and the tails),
+// made on the harness's word (`__reader.openSide`) and told by it: the run that tells it the layer and the rows, the faces
+// and the hyphenation are the extension's run's (PR 5); the extension's own session (session.mjs) stays the reader until then.
 // Nothing here writes the settings: the view takes no preference, and the reader's switches write through the settings
 // surface once the extension runs on the view (Task 12, with Task 7 Step 5's rows).
 import { appearanceRule } from '@/core/renderer/style-preset'
@@ -14,7 +16,9 @@ import { lookOf } from '@/config/appearance'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { readConfig, watchConfig } from '@/config/storage'
 import { R } from '@/ui/strings'
-import { createReaderView, type DocumentTask, type ReaderHost, type ReaderView, type ViewPrefs } from '../engine/view.mjs'
+import { CTAG4 } from '../engine/layer.mjs'
+import type { FaceSlice } from '../engine/layer-proto/fonts.mjs'
+import { createLayerSide, createReaderView, type DocumentTask, type LayerSide, type LayerSideOptions, type ReaderHost, type ReaderView, type ViewPrefs } from '../engine/view.mjs'
 import { readerAddresses } from '../addresses.mjs'
 import { fromView, type Session } from '../controller'
 import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFPageView, PDFViewer, pdfjsLib } from '../pdfjs'
@@ -101,6 +105,67 @@ export function readerHost(host: SessionHost, config: Config, paper: string, wat
   }
 }
 
+const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('')
+/** an object's name: its whole digest, 64 lower-case hex digits */
+const DIGEST = /^[0-9a-f]{64}$/
+/** how far an answer's length may pass its ref's bytes (an encoded answer's own length) before it is refused unread */
+const OBJECT_MARGIN = 1024
+/**
+ * The layer's transport for the view's layer side, over the layer API at `api` (an origin): each object by its whole digest
+ * (`/api/v1/layer/<id>v<n>/<CTAG4>/o/<sha256>`, immutable; the side's readers check the digest); the base, the bytes the left
+ * holds digested against the head's (a mismatch is no layer here: fetching our copy and showing it is the extension's run's);
+ * the composed document, PDF.js over the original's bytes followed by the tails told, with the side's options
+ */
+export function layerTransport(view: ReaderView, api: string, paper: { id: string; version: number }): Pick<LayerSideOptions, 'fetchObject' | 'bind' | 'composed'> {
+  const at = `${api}/api/v1/layer/${paper.id.replace('/', '_')}v${paper.version}/${CTAG4}/o/`
+  return {
+    async fetchObject(ref, signal) {
+      // a digest in the path, nothing else; no more read than the ref's bytes (and a margin for an encoded answer's length):
+      // the side's readers refuse any object not exactly those bytes, so the rest is never kept
+      if (!DIGEST.test(ref.sha256) || !Number.isSafeInteger(ref.bytes) || ref.bytes < 0) throw new TypeError(`the layer's object: not a ref (${String(ref.sha256).slice(0, 80)})`)
+      const r = await fetch(`${at}${ref.sha256}`, { signal, credentials: 'omit' })
+      if (!r.ok) throw new Error(`the layer's object ${ref.sha256}: ${r.status}`)
+      const cap = ref.bytes + OBJECT_MARGIN, past = (n: number) => new Error(`the layer's object ${ref.sha256}: ${n} bytes or more, past its ref's ${ref.bytes}`)
+      const length = Number(r.headers.get('content-length'))
+      if (length > cap) { void r.body?.cancel().catch(() => {}); throw past(length) }
+      if (!r.body) { const b = new Uint8Array(await r.arrayBuffer()); if (b.length > cap) throw past(b.length); return b }
+      const reader = r.body.getReader(), chunks: Uint8Array[] = []
+      let n = 0
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        n += value.length
+        if (n > cap) { void reader.cancel().catch(() => {}); throw past(n) }
+        chunks.push(value)
+      }
+      const out = new Uint8Array(n)
+      let k = 0
+      for (const c of chunks) { out.set(c, k); k += c.length }
+      return out
+    },
+    async bind(base) {
+      const data = await view.originalData()
+      if (!data || data.length !== base.bytes) return false
+      return hex(await crypto.subtle.digest('SHA-256', data as Uint8Array<ArrayBuffer>)) === base.sha256
+    },
+    composed(tail, options) {
+      let inner: { destroy(): Promise<void> } | null = null, gone = false
+      const promise = (async () => {
+        const source = await view.originalData()
+        if (!source) throw new Error('no original to compose the layer\'s document over')
+        if (gone) throw new Error('the composed document was let go')
+        const data = new Uint8Array(source.length + (tail?.length ?? 0))
+        data.set(source)
+        if (tail) data.set(tail, source.length)
+        const task = pdfjsLib.getDocument({ ...options, data })
+        inner = task
+        return task.promise
+      })()
+      return { promise, onProgress: null, destroy: async () => { gone = true; await inner?.destroy() } } as unknown as DocumentTask
+    },
+  }
+}
+
 /**
  * The reading view opened in the reader page's panes, on arXiv's PDF of the address's paper, and the controller's Session
  * over it. A retry opens the original again; the download gives the original's bytes, read through its document
@@ -120,7 +185,16 @@ export function openView(host: SessionHost, io: { watch?: typeof watchConfig; re
   const view: ReaderView = createReaderView(vh)
   const pdf = readerAddresses(params, paper).pdf
   const original = (options: Readonly<Record<string, unknown>>) => pdfjsLib.getDocument({ ...options, url: pdf }) as unknown as DocumentTask
-  const reader = { ready: false, view, probe: () => view.probe() }
+  // the harness's layer side (the development entry's: the run that tells it is the extension's, PR 5): over the layer API at
+  // `api`, its faces the slices given for every face, its hyphenation the API host's
+  const reader: { ready: boolean; view: ReaderView; probe(): object; side: LayerSide | null; openSide(o: { api: string; paper: { id: string; version: number }; target: string; faces?: FaceSlice[] | null }): boolean } = {
+    ready: false, view, probe: () => view.probe(), side: null,
+    openSide(o) {
+      reader.side?.dispose()
+      reader.side = createLayerSide(view, { paper: o.paper, target: o.target, faceSources: async () => o.faces ?? null, hyphUrl: lang => `${o.api}/hyph/${lang}.json`, ...layerTransport(view, o.api, o.paper) })
+      return true
+    },
+  }
   ;(window as unknown as { __reader: object }).__reader = reader
   const show = () => { if (paper) void view.showOriginal(original).then(r => { if (r === 'opened') reader.ready = true }) }
   view.setDisplay(paper ? displayFrom(params, config) : 'original')

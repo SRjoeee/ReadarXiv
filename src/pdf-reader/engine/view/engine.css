@@ -56,3 +56,14 @@ html[data-axt-dim] { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29
 .axt-sk-authors i { block-size: 1.2cqw; }
 .axt-sk-authors i:nth-child(3n) { inline-size: 70%; justify-self: center; }
 .axt-sk-abstract { margin-inline: 9%; }
+/* ----- the layer drawn in a place (layer-side.mjs; the web's placeholders.css as it drew it): the page's copy and the
+   engine's SVG over it fill the place, the SVG scaled by its viewBox. The copy is a canvas of the page, dimmed in the dark by
+   the reader sheet's own rule for a page's canvas; the SVG's text by the same filter, so that the layer's page reads as the
+   original's beside it. Its text is drawn with fractional advances (geometricPrecision): the engine measures a word by the
+   canvas, and a system that draws SVG text with a hinted face's advances (Chromium on Linux at a pixel ratio of 1) rounds
+   each to a whole pixel. A place retired (far from the view) holds an empty one */
+.axt-layer { position: absolute; inset: 0; }
+.axt-layer > .axt-layer-copy { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.axt-layer > svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; font-synthesis: none; text-rendering: geometricPrecision; }
+.axt-layer > svg text { white-space: pre; }
+html[data-axt-dim] .axt-layer > svg { filter: invert(88.8%) hue-rotate(180deg); }

@@ -216,7 +216,8 @@ describe('v0 fed its units as they arrive (take, end)', () => {
     await ticks()
     expect(done).toBe(false)
     // page 1's lost paragraph in: every page complete, each laid as the one-shot open lays it, the lost units nowhere
-    expect(run.take(rowsOf(P, [5])).complete).toEqual([1, 2])
+    // (the pages complete a take together, in no order the pages have: a set, each once)
+    expect(run.take(rowsOf(P, [5])).complete.slice().sort()).toEqual([1, 2])
     await laid
     await run.until(3)
     expect(drawing(run)).toEqual(want)
@@ -277,7 +278,7 @@ describe('v0 fed its units as they arrive (take, end)', () => {
     // each unit's table group given: the table on page 2 is read once its own cells are in
     const P = paper()
     const run = await open(P, 'parts', { groups: groupsOf() })
-    expect(run.take(rowsOf(P, early)).complete).toEqual([1, 2])
+    expect(run.take(rowsOf(P, early)).complete.slice().sort()).toEqual([1, 2])
     expect([1, 2, 3].map(p => run.complete(p))).toEqual([true, true, false])
     await run.until(2)
     expect(run.order).toEqual(want.order.slice(0, 6))
