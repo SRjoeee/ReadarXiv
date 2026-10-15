@@ -919,14 +919,26 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
    * A unit's first line cut at its start mark, as lineOf cuts a first line (`from`), where the head drop made it the
    * first after its rows were taken: its glyphs left of the mark are no glyph of the unit's (TeX set them before it: a
    * head piece, or ink outside the unit's lines), and go free; its extent is its glyphs' again, with the found pieces'
-   * ink it takes in (`extra` and the unit's boxes on it); its baseline stays, on which those pieces' segments stand
+   * ink it takes in (`extra` and the unit's boxes on it); its baseline stays, on which those pieces' segments stand.
+   * But a head text symbol the unit draws as its character (PH_FLAG.TEXT: symbolsOf, which ran before the drop, counted
+   * its glyph on this line) keeps its glyph, by symbolsOf's head rule: of its character, nearest the mark and within 1.5
+   * em of it, as many as the unit has such symbols, so that it is erased once and drawn once
    */
   function cutAtStart(one) {
-    const { id: i, rows, S } = one, r = rows[0], P = ink[r.page]
+    const { id: i, u, rows, S } = one, r = rows[0], P = ink[r.page]
     if (!S || S.page !== r.page) return
-    const keep = r.gl.filter(g => mid(P, g) >= S.x - 0.05)
+    const nf = s => s.normalize('NFKC'), heads = new Map(), held = new Set()
+    for (const x of one.symbols ?? []) {
+      if (x.entry.state !== 'text' || !u.pieces.slice(0, x.entry.row[1]).every(p => p.t !== 'text' || !/\S/.test(p.s ?? ''))) continue
+      heads.set(nf(x.sym), (heads.get(nf(x.sym)) ?? 0) + 1)
+    }
+    const left = r.gl.filter(g => mid(P, g) < S.x - 0.05 && P.x1[g] >= S.x - 1.5 * r.size).sort((a, b) => P.x1[b] - P.x1[a] || a - b)
+    for (const g of left) { const c = nf(P.u[g]), n = heads.get(c) ?? 0; if (n > 0) { held.add(g); heads.set(c, n - 1) } }
+    const keep = r.gl.filter(g => mid(P, g) >= S.x - 0.05 || held.has(g))
     if (!keep.length || keep.length === r.gl.length) return
-    for (const g of r.gl) if (mid(P, g) < S.x - 0.05 && P.owner[g] === i) P.owner[g] = -1
+    for (const g of held) (one.headSymbols ??= new Set()).add(g)
+    const kept = new Set(keep)
+    for (const g of r.gl) if (!kept.has(g) && P.owner[g] === i) P.owner[g] = -1
     const row = rowOf(P, keep, r.page, r.ks, r.base)
     row.base = r.base
     if (r.extra?.length) {

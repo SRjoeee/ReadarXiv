@@ -470,8 +470,9 @@ describe("a formula of no letter or digit is no text symbol: proven as any formu
   it('a text symbol is one grapheme drawn with none of the marks of a formula\'s structure; the probes are formulas', () => {
     expect(PROBES.map(s => L2.phClass2(s).cls)).toEqual(['symbol', 'symbol', 'symbol'])
     expect(PROBES.map(s => [L2.textSymbol(s), L2.phClassProven(s).cls])).toEqual([[false, 'other'], [false, 'other'], [false, 'other']])
-    expect(['\\%', '$\\times$', '$^\\dagger$', '$\\alpha$', '$\\leq$'].map(s => [L2.textSymbol(s), L2.phClassProven(s).cls])).toEqual(Array(5).fill([true, 'symbol']))
-    expect(['$\\alpha\\beta$', '$^{\\dagger\\ddagger}$', '$\\nabla_\\theta$', '$/$', '\\_'].map(L2.textSymbol)).toEqual([false, false, false, false, false])
+    // (a text source's one grapheme is that character, \\_ the maker's TEXT symbol too)
+    expect(['\\%', '\\_', '$\\times$', '$^\\dagger$', '$\\alpha$', '$\\leq$'].map(s => [L2.textSymbol(s), L2.phClassProven(s).cls])).toEqual(Array(6).fill([true, 'symbol']))
+    expect(['$\\alpha\\beta$', '$^{\\dagger\\ddagger}$', '$\\nabla_\\theta$', '$/$'].map(L2.textSymbol)).toEqual([false, false, false, false])
     // (any other class as it was)
     expect(['$x_i$', '\\cite{a}', '~'].map(s => L2.phClassProven(s).cls)).toEqual(['other', 'cite', 'space'])
   })
@@ -498,11 +499,15 @@ describe("a formula of no letter or digit is no text symbol: proven as any formu
       for (const lu of [null, lost, found]) expect(read({ proof: T.proofOf(lu, lu ? kOf : null) }).unproven).toBe(1)
     })
   }
-  it('a text symbol stays exempt: drawn from its source under the proof with no file', () => {
-    const unit = { kind: 'para', src: 'as shown here', pieces: [text('\u5982 '), ph('$\\times$'), text(' \u6240\u793A')] } as never
-    const r = L2.prepareUnit(unit, [rect.slice()] as never, [page as never], new Map() as never, null, { proof: T.proofOf(null, null) } as never)
-    expect(r.unproven).toBeUndefined()
-    expect(r.get(1)).toMatchObject({ mode: 'symbol', text: '\u00D7' })
+  it('a text symbol stays exempt: drawn from its source under the proof with no file, and asked for by no file', () => {
+    for (const [src, drawn] of [['$\\times$', '\u00D7'], ['\\_', '_']] as const) {
+      const unit = { kind: 'para', src: 'as shown here', pieces: [text('\u5982 '), ph(src), text(' \u6240\u793A')] } as never
+      const r = L2.prepareUnit(unit, [rect.slice()] as never, [page as never], new Map() as never, null, { proof: T.proofOf(null, null) } as never)
+      expect(r.unproven, src).toBeUndefined()
+      expect(r.get(1), src).toMatchObject({ mode: 'symbol', text: drawn })
+      // (its row LOST: the unit still located whole, the symbol's glyph its line's)
+      expect(T.locatedWhole(unitOf([line], [[1, PH_FLAG.LOST, []]]), unit, [[0, '\u5982 '], [1, 1], [0, ' \u6240\u793A']]).ok, src).toBe(true)
+    }
   })
 })
 

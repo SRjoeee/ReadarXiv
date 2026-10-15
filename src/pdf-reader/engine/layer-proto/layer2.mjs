@@ -249,14 +249,17 @@ const symbolDrawn = src => texToText2(src).replace(/^\^\(?|\)$/g, '')
 const GRAPHEMES = new Intl.Segmenter('en', { granularity: 'grapheme' })
 /**
  * Whether a placeholder of phClass2's 'symbol' (no Latin letter or digit in its rendering) is a text symbol, the one
- * kind the proof exempts (tex.mjs proofOf): its drawn text one grapheme (\%, $\times$, $^\dagger$), holding none of the
- * marks texToText2 writes for a formula's structure, `_`, `^`, `/` or `√(`. Any other is a formula the page sets as ink of
- * its own ($\sum_{\alpha}^{\beta}$ drawn "Σ_α^β", $\int_{-\infty}^{\infty}$ "∫_(-∞)^∞", $\frac{\alpha}{\beta}$ "α/β"),
- * which the proof must find like any formula: phClassProven's 'other' (the controller's ruling of 2026-10-15)
+ * kind the proof exempts (tex.mjs proofOf): its drawn text one grapheme (\%, \_, $\times$, $^\dagger$), and a formula's
+ * holding none of the marks texToText2 writes for a formula's structure, `_`, `^`, `/` or `√(` (a text source's one
+ * grapheme is that character: \_ is the maker's TEXT symbol too, marks.mjs TEXT_SYMBOLS). Any other is a formula the page
+ * sets as ink of its own ($\sum_{\alpha}^{\beta}$ drawn "Σ_α^β", $\int_{-\infty}^{\infty}$ "∫_(-∞)^∞",
+ * $\frac{\alpha}{\beta}$ "α/β"), which the proof must find like any formula: phClassProven's 'other' (the controller's
+ * ruling of 2026-10-15)
  */
 export function textSymbol(src) {
   const t = symbolDrawn(src)
-  return !/[_^/]|√\(/.test(t) && [...GRAPHEMES.segment(t)].length === 1
+  if (/^\$|^\\\(/.test(src) && /[_^/]|√\(/.test(t)) return false
+  return [...GRAPHEMES.segment(t)].length === 1
 }
 /** phClass2 as a unit drawn under the proof reads its placeholders: a 'symbol' that is no text symbol (textSymbol) is
  *  'other', looked for on the page and proven */
