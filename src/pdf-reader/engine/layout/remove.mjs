@@ -735,7 +735,7 @@ const ZERO_STATS = Object.freeze({ removed: 0, rules: 0, cut: 0, hidden: 0, refu
  * `inflate` and `deflate` as openRemover's and makeAddon's. Returns { remove(plans) }: one part's removed pages, `plans` the
  * ask's bytes (chain-wire.mjs encodeAsk, read here within its bounds). The remover is opened at the first ask and kept (its
  * decoded streams and fonts let go after each); it keeps no chain: each ask carries the state the tails so far leave, so
- * that the cut's repeated asks for one part change nothing, and a remover opened again (or one a ask) answers alike.
+ * that the cut's repeated asks for one part change nothing, and a remover opened again (or one opened for each ask) answers alike.
  *
  * An ask is refused (`{ ok: false, why: 'refused' }`) where it does not read, where its facts were read by another PDF.js
  * than the engine's pinned one (PDFJS: the facts are aligned only against the reading they came from), where its pages
