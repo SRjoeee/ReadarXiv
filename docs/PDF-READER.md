@@ -689,19 +689,27 @@ side. The host tells it what it hears of the paper's layer — refs, rows and th
 gives it a transport (`fetchObject`, an object by its ref), the base's check (`bind`) and the composed document's opener
 (`composed`, arXiv's PDF followed by every tail told). No host calls the door.
 
-- **The feed** (`feed.mjs`) merges what is told, deduplicated by digest, fetches each object once and reads it with the
-  format's own readers (cap, digest against its ref, values, shape, chain): the units chunks and the head into the index,
-  then the parts in page order against the chain they make. A part extends the chain where it begins after the last one
-  and names its digest as `prev` (a catalog's part, which names none, by its pages); one beginning at or before the last
-  told, under another digest, is a fork, and the chain is reset from its page; one that does not follow yet waits. A part
-  refused stops the chain at the part before it, and is fetched and read again when it is told again. A second head is
-  passed over with one warning.
+- **The feed** (`feed.mjs`) merges what is told, deduplicated by digest, fetches each object once while it is wanted and
+  reads it with the format's own readers (cap, digest against its ref, values, shape, chain): the units chunks and the head
+  into the index, then the parts in page order against the chain they make. An object's bytes go once it is read (the door
+  holds what it reads); a part that waits is not fetched before it joins. A part extends the chain where it begins after
+  the last one and names its digest as `prev` (a catalog's part, which names none, by its pages). One beginning at or
+  before the last told, under another digest, is a fork, and the chain is reset from its page, where it joins and is heard
+  later than every part it lets go (a source that comes late, a 202 made before a job's fork, does not undo it) or those
+  are refused. A tell with the parts' end (the catalog) names the chain whole, and no later part forks it; one may extend
+  it. A part that does not follow yet waits; one refused stops the chain at the part before it, and is fetched and read
+  again when it is told again (an abort of the host's transport is a refusal too). A second head is passed over with one
+  warning.
 - **The order** (the reader view's contract §2.2): the index read; the base bound, once (false is no layer); the original
   open; the composed document through the parts read so far opened with the view's assets, `PDF_OPTIONS` and
   `disableAutoFetch`; the door opened over it with those parts; each later part added in page order, a part with a tail
   over the composed document through it; the rows held until the door opens, then taken; the parts ended once the
-  catalog's `through` is added. A fork, or a later attempt (`again()`), disposes the door before it opens it again (one open
-  layer a page): `again()` carries no row (the host takes its rows again), a fork every row so far (the units are the head's).
+  catalog's `through` is added. A fork, a later attempt (`again()`), or parts past the end the door was told (a later
+  build's) dispose the door before it is opened again (one open layer a page): `again()` carries no row (the host takes
+  its rows again), the others every row so far (the units are the head's). Only the first open waits for the original: a
+  dropped original stops no later part, no `again()`. A part the door refuses stops the parts added to that door there,
+  with one warning; the side stays open. A refusal of the whole side carries a code (`head`, `units`, `index`, `base`,
+  `composed`, `open`).
 - **The documents** are the side's: each composed task is destroyed once no door reads it (the door's `onRetired`) and the
   side holds a later one, and at dispose; none twice. `again()` reuses the latest.
 - **Each place shows the best version there is** (§11.7): its pre-layer content until the door has laid its page and the
@@ -709,12 +717,15 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   2^24 pixels; from the left's canvas where PDF.js drew it within 2 % of that k, else the place's own page view's canvas,
   else the page drawn from the composed document) and its SVG, put in one task, in place: the place's size and the pane's
   scroll unchanged, its page view destroyed first, no viewer document set. A zoom draws the copies again at the new k
-  600 ms after it, nothing laid again. A laid page leaving the view lets its SVG and its copy go and holds an empty element
-  (retired), so that no page view is made of it; a page the door makes ready while it is far is retired at once, and
-  committed directly when it comes near. A page that fails shows the original and is asked again on a zoom or on coming
-  near; one asked, told `laying` and not laid within 30 s (`PAGE_MS`) shows the original, warns once a side and is asked
-  again on the next scroll, its late `ready` taken. A page still `waiting` (its part, its closure or its rows) is never a
-  stall. After a fork or `again()` a laid page keeps its drawing until the new door's page is ready.
+  600 ms after it, nothing laid again. A page this door laid that leaves the view lets its SVG and its copy go and holds an
+  empty element (retired: the place shows no page, and no page view is made of it); a page the door makes ready while it
+  is far is retired at once, and committed directly when it comes near. A page that fails, or whose copy fails, shows the
+  original and is asked again on a zoom, on coming near or (a copy) on the next scroll; one asked, told `laying` and not
+  laid within 30 s (`PAGE_MS`) shows the original, warns once a side and is asked again on the next scroll, its late
+  `ready` taken. A page still `waiting` (its part, its closure or its rows) is never a stall. After a reopen a laid page
+  keeps its drawing until the new door's page is ready; leaving the view, that drawing goes and the place shows its own
+  content again. The window holds a copy for the places near the view alone: their pixels are bounded by the near area at
+  any zoom, so no copy of a far page is kept.
 - **The highlight's data** (§17.8): the left's shapes from the parts' rectangles as they come and, on the first want of a
   page from either pane, its left part (`leftPageOf`, once a page; nothing fetched before), added in a task of its own; the
   right's from the laid page's words where its place shows the layer, the left's mirrored elsewhere (`layerShapes`); a
