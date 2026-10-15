@@ -81,6 +81,14 @@ describe('layoutMarking', () => {
     expect(units).toEqual(before)
     expect(marked[0]).not.toBe(units[0])
   })
+  it("an inline formula's opening mark is \\axtpmm, set on the empty list after a display too; a display's \\axtpma", () => {
+    const marked = layoutMarking([unit('para', [text('the '), ph('\\[a=b\\]'), text('\n'), ph('$x$'), text(' and '), ph('\\(y\\)'), text(' or '), ph('\\ensuremath{z}'), text(' then '), ph('\\cite{k}')])], MARK_CLASSES, { lines: false }).units[0]
+    expect(srcs(marked).filter(s => /axtpm[am]/.test(s))).toEqual(['ph \\axtpma{p0.1a}', 'ph \\axtpmm{p0.3a}', 'ph \\axtpmm{p0.5a}', 'ph \\axtpmm{p0.7a}', 'ph \\axtpma{p0.9a}'])
+    // LAYOUT_TEX's \\axt@pmm: \\axt@pma with no test of the empty list
+    expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@pmm{\\ifaxt@off\\expandafter\\@gobble\\else\\expandafter\\axt@pmn\\fi}')
+    expect(LAYOUT_TEX).toContain('\\def\\axt@pmn{\\ifhmode\\expandafter\\axt@pmd\\else\\expandafter\\axt@pmv\\fi}')
+    expect(LAYOUT_TEX).toContain('\\def\\axt@pmc{\\ifnum\\lastnodetype=-1 \\expandafter\\@gobble\\else\\expandafter\\axt@pmd\\fi}')
+  })
   it('a class switched off is not marked', () => {
     const units = [unit('para', PARA)]
     const noCite = layoutMarking(units, MARK_CLASSES.filter(c => c !== 'cite'), { lines: false }).units[0]
@@ -844,6 +852,18 @@ describe('reading the marked original', () => {
     expect(large.owned.filter(e => e.length === 2 && e[1] === past).length).toBeGreaterThan(1)
     expect(large.owned.some(e => e.length > 2)).toBe(true)
   }, 120_000)
+  it('layoutMarksOf: a display group\'s first display owns the group, to the text after it; a later one, which TeX gives no point, is in it', async () => {
+    // the empty paragraph between two displays holds no mark: p0.3a is never set, and its ink is the first's
+    const units = [unit('para', [text('define '), ph('\\[a=b\\]'), text('\n'), ph('\\[c=d\\]'), text(' where '), ph('$x$'), text(' holds')])]
+    const shown: Shown[] = [{ at: 'bs1' }, ['define', 72, 700], { at: '0s' }, { at: 'p0.1a' }, ['a=b', 150, 680], ['c=d', 150, 660], ['where', 72, 640], { at: 'p0.5a' }, ['x', 110, 640], { at: 'p0.5b' }, ['holds', 120, 640], { at: '0e' }, { at: 'be1' }]
+    const dests: [string, number, number, number][] = [['0s', 1, 72, 700], ['p0.1a', 1, 102, 700], ['p0.5a', 1, 105, 640], ['p0.5b', 1, 115, 640], ['0e', 1, 145, 640]]
+    const doc = streamDocument([{ view: [0, 0, 612, 792], items: [item('define', 72, 700)], shown }], dests.map(([n, ...r]) => [`axt-${n}`, ...r]))
+    const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', units, OPS })
+    const of = (name: string) => m.owned.find(e => e[0] === name)
+    expect(of('p0.1a')?.slice(0, 3)).toEqual(['p0.1a', OWNED_HOW.indexOf('open, with the displays after it'), 6])
+    expect(of('p0.3a')).toEqual(['p0.3a', OWNED_HOW.indexOf('in the display before it')])
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m)))).toEqual(m)
+  })
   it('layoutMarksOf reads the marked compile\'s operator lists: each piece\'s own glyphs and rules by its points, and how', async () => {
     const units = [unit('para', [text('see '), ph('$x^2$'), text(' and '), ph('$\\frac{1}{d}$'), text(' by '), ph('\\bert'), text(' models. '), ph('\\[a=b\\]')]), unit('para', [text('Next words')])]
     const shown: Shown[] = [

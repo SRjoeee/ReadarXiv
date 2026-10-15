@@ -8,7 +8,9 @@
 // an item's mark, a caption's "Figure 1:", a footnote's mark). A placeholder's rendering is its own ink: the glyphs and
 // rules the marked compile's content stream shows between its points (layout/stream.mjs, kept in the marks file), each
 // carried and matched on arXiv's page (layout/match.mjs); found where every one is matched, EMPTY where its points hold
-// nothing, else LOST; a citation's or a reference's own text with it, for the layer to set in the page's face. What
+// nothing, else LOST; a display group's later displays, which TeX gives no point, JOINED to its first, which owns the
+// group's ink; a LOST piece outside the unit's lines (before its start mark, a display after its end mark) OUTSIDE; a
+// citation's or a reference's own text with it, for the layer to set in the page's face. What
 // cannot be placed is left out, and the layer leaves that unit as the original's: a line of the marked original not
 // carried (a reflow of the layout compile costs only its own lines), a unit on a page whose ink is not whole (its
 // operator list too long, too slow, or its carry over its bound), a placeholder whose own ink is not all found. The file

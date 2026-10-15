@@ -763,6 +763,40 @@ describe('makeLayout, the re-review of 2026-10-06', () => {
   })
 })
 
+describe('makeLayout, the LOST survey (2026-10-15): a display group, a piece outside the unit, a part on its marks\' line', () => {
+  it('a display group: the first display found with the group\'s ink, the later one JOINED, no segments of its own', async () => {
+    // TeX sets no point for the second display (the empty paragraph between two displays): its ink is the first's
+    const runs: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: 'a=b', x: 150, y: 680 }, { s: 'c=d', x: 150, y: 660 }, { s: 'where x holds', x: 72, y: 640 }]
+    const { file, stats } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[3] as Run), 640], ['p0.1a', 1, endOf(runs[0] as Run), 700]],
+      units: [unit('para', [text(`${words(0, 10)} `), ph('\\[a=b\\]'), text('\n'), ph('\\[c=d\\]'), text(' where x holds')])],
+    })
+    const first = phOf(file, 0, 1)
+    expect(first[3]).toBe(0)
+    expect(chunk(first.slice(4), 6).map(sg => sg[2])).toEqual([680, 660])
+    expect(phOf(file, 0, 3)).toEqual([0, 3, 1, PH_FLAG.JOINED])
+    expect(stats.ph).toMatchObject({ joined: 1, lost: 0, found: 1 })
+    // the first not found: the later one LOST too
+    const none = await made({ pages: [{ runs: runs.slice(0, 3) }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700], ['p0.1a', 1, endOf(runs[0] as Run), 700]], units: [unit('para', [text(`${words(0, 10)} `), ph('\\[a=b\\]'), text('\n'), ph('\\[c=d\\]'), text(' where x holds')])] })
+    expect((phOf(none.file, 0, 3)[3] ?? 0) & PH_FLAG.LOST).toBe(PH_FLAG.LOST)
+  })
+  it("an inline part on no line goes to the line both its marks stand on, within the line's size of its baseline (2608.16117's \\frac)", async () => {
+    // a fraction's numerator 7.6 pt over its line's baseline, past the part rule's reach
+    const runs: Run[] = [{ s: 'the quantity', x: 72, y: 700 }, { s: 'pq', x: 140, y: 707.6 }, { s: 'FM', x: 140, y: 693 }, { s: 'is the stress', x: 160, y: 700 }]
+    const { file, stats } = await made({
+      // in the stream, the fraction between its two points
+      pages: [{ runs, points: { 'p0.1a': [1, 0], 'p0.1b': [3, 0] } }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[3] as Run), 700], ['p0.1a', 1, 135, 700], ['p0.1b', 1, 152, 700]],
+      units: [unit('para', [text('the quantity '), ph('$\\frac{pq}{FM}$'), text(' is the stress')])],
+    })
+    const row = phOf(file, 0, 1)
+    expect((row[3] ?? 0) & PH_FLAG.LOST).toBe(0)
+    expect(row[6]).toBe(700)
+    expect(stats.ph.lost).toBe(0)
+  })
+})
+
 describe('makeLayout, the content stream (Task 6b)', () => {
   const segsOf = (row: number[]) => chunk(row.slice(4), 6)
 

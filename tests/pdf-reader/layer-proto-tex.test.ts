@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
+import { PH_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // The layer's hybrid (layer-proto/tex.mjs): v0's per-unit reading with its parts from the layout file wherever the file
@@ -236,6 +237,76 @@ describe("each crop the hybrid draws cut from its placeholder's own ink", () => 
     expect(read(unitOf([line], [[1, 0, [1, 120, 100, 130, 107.5, 101]]]), [-1, 1, -1]).unproven).toBe(1)
     expect(read(null, null).unproven).toBe(1)
     expect(read(unitOf([line], [[1, 0, [1, 61.8, 100, 65.6, 107.5, 101]]]), null).unproven).toBe(1)
+  })
+})
+
+describe('every rendering proven by the file, or the unit the original\'s (proofOf, the safe rule)', () => {
+  const page = [...item('as shown in', 10, 100, 10, 0), ...item('[12]', 70, 100, 10, 1), ...item('before', 95, 100, 10, 2)]
+  const cite = { kind: 'para', src: 'as shown in before', pieces: [{ t: 'text', s: '\u5982 ' }, { t: 'ph', src: '\\cite{smith2019}' }, { t: 'text', s: ' \u6240\u793A' }] } as never
+  const rect = [1, 10, 97.85, 125, 106.83]
+  const line = [1, 10, 125, 100, 108, 97, 10, 0]
+  const read = (lu: never | null, kOf: number[] | null, unit = cite) => L2.prepareUnit(unit, [rect.slice()] as never, [page as never], new Map() as never, null, { proof: T.proofOf(lu, kOf) } as never)
+  it("v0's page text of a placeholder is proven where its characters stand in its row's segments", () => {
+    const r = read(unitOf([line], [[1, 0, [1, 70, 100, 90, 108, 97]]]), [-1, 1, -1])
+    expect(r.get(1)?.mode).toBe('orig-text')
+    expect(r.unproven).toBeUndefined()
+  })
+  it('and not where they stand elsewhere, its row is LOST, or the unit is not in the file', () => {
+    expect(read(unitOf([line], [[1, 0, [1, 100, 100, 120, 108, 97]]]), [-1, 1, -1]).unproven).toBe(1)
+    expect(read(unitOf([line], [[1, 32, []]]), [-1, 1, -1]).unproven).toBe(1)
+    expect(read(null, null).unproven).toBe(1)
+  })
+  it("a rendering from its source (a citation found nowhere) is no proof; TeX's own nothing and a text symbol are", () => {
+    const none = { kind: 'para', src: 'as shown in before', pieces: [{ t: 'text', s: '\u5982 ' }, { t: 'ph', src: '\\cite{nobody}' }, { t: 'text', s: ' ' }, { t: 'ph', src: '\\%' }, { t: 'ph', src: '~' }] } as never
+    const bare = [...item('as shown in', 10, 100, 10, 0), ...item('before', 95, 100, 10, 2)]
+    const r = L2.prepareUnit(none, [rect.slice()] as never, [bare as never], new Map() as never, null, { proof: T.proofOf(null, null) } as never)
+    expect(r.get(1)?.mode).toBe('source')
+    expect(r.unproven).toBe(1)
+    const sym = { kind: 'para', src: 'as shown', pieces: [{ t: 'text', s: '\u5982 ' }, { t: 'ph', src: '\\%' }, { t: 'ph', src: '~' }] } as never
+    expect(L2.prepareUnit(sym, [rect.slice()] as never, [bare as never], new Map() as never, null, { proof: T.proofOf(null, null) } as never).unproven).toBeUndefined()
+  })
+})
+
+describe('a display group and a piece outside the unit\'s lines (JOINED, OUTSIDE: LAYOUT 6)', () => {
+  // a unit of text, two displays with nothing between them, text: lines 0 and 1 its text, 2 and 3 the displays' rows
+  // (held), 4 text; the first display's segments hold the group's ink, the second is JOINED
+  const L = (y: number) => [1, 10, 200, y, y + 7, y - 2, 10, 0]
+  const lines = [L(500), L(488), L(470), L(458), L(440)]
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const D = '\\begin{equation}x=1\\end{equation}', E = '\\begin{equation}y=2\\end{equation}'
+  const u = { kind: 'para', src: 'a b c d', pieces: [text('\u7532 '), ph(D), text(' '), ph(E), text(' \u4E59')] } as never
+  const tr = [[0, '\u7532 '], [1, 1], [0, ' '], [1, 3], [0, ' \u4E59']]
+  const kOf = [-1, 1, -1, 3, -1]
+  const fileUnit = (second: number, first = [1, 50, 470, 80, 477, 456]) => {
+    const lu = unitOf(lines, [[1, 0, first], [3, second, []]]) as { ph: Map<number, { kind: string }> }
+    for (const k of [1, 3]) { const row = lu.ph.get(k); if (row) row.kind = 'display' }
+    return { ...lu, held: [2, 3] } as never
+  }
+  it('a JOINED display is located with its group, which a LOST one is not', () => {
+    expect(T.locatedWhole(fileUnit(PH_FLAG.JOINED), u, tr, { held: true }).ok).toBe(true)
+    expect(T.locatedWhole(fileUnit(PH_FLAG.JOINED), u, tr).ok).toBe(true)
+  })
+  it('reads as its group: kept, the same region as the first, a break the text after them starts below', () => {
+    const lu = fileUnit(PH_FLAG.JOINED)
+    const t = T.texRects(lu)
+    const page = [...item('a b', 10, 500, 10, 0), ...item('c', 10, 488, 10, 1), ...item('x=1', 60, 470, 10, 2, math), ...item('y=2', 60, 458, 10, 3, math), ...item('d', 10, 440, 10, 4)]
+    const prep = L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu, kOf, { use: 'lines', lines: t }) as never)
+    expect(prep.unproven).toBeUndefined()
+    const r1 = prep.get(1), r3 = prep.get(3)
+    expect([r1?.mode, r3?.mode]).toEqual(['kept', 'kept'])
+    expect(r3?.region).toBe(r1?.region)
+    const blocks = L2.blocks2(t.rects as never, [[0, 0, 612, 792]], new Set(prep.keep), prep.lineInfo, prep.regionOf, prep.referenced)
+    expect(blocks.map(b => [b.B, b.after])).toEqual([[[500, 488], 0], [[440], 1]])
+  })
+  it('a LOST piece outside the unit\'s lines is located with the file\'s lines alone, and drawn as nothing', () => {
+    const head = { kind: 'para', src: 'a b c', pieces: [ph('\\url{http://x.org}'), text(' a b c')] } as never
+    const lu = unitOf([L(500)], [[0, PH_FLAG.LOST | PH_FLAG.OUTSIDE, []]]) as never
+    expect(T.locatedWhole(lu, head, [[1, 0], [0, ' a b c']], { held: true }).ok).toBe(true)
+    expect(T.locatedWhole(lu, head, [[1, 0], [0, ' a b c']]).why).toBe('lost')
+    const t = T.texRects(lu)
+    const prep = L2.prepareUnit(head, t.rects as never, [item('a b c', 60, 500, 10, 0) as never], new Map() as never, null, T.texParts(lu, [0, -1], { use: 'lines', lines: t }) as never)
+    expect(prep.get(0)).toMatchObject({ mode: 'none', text: '' })
+    expect(prep.unproven).toBeUndefined()
   })
 })
 
