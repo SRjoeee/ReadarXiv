@@ -1,7 +1,7 @@
 {
   "schema": 4,
   "version": 4,
-  "note": "D1a: each language's labels name every generated heading babel names, its [captions] (Abstract, References, Contents, ...), as well as the floats",
+  "note": "1b-C: a page's fill target is its own paragraphs' median fill leading held within the band of the median of every body paragraph drawn on it, replacing the hold carried from page to page; the paper-wide hold is removed and the alphabets are unchanged (schema 4)",
   "hyphenation": {
     "minWord": 5,
     "en": { "left": 2, "right": 3 },
