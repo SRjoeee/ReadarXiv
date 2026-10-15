@@ -1882,8 +1882,12 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
           if (track && s.length) {
             const i = m.index + p.off + po, last = i + s.length - 1
             const sm = track.sm, a = track.base + track.map.from[i], z = track.base + track.map.from[last] + track.map.span[last] - 1
-            t.at = track.at[sm ? sm[a] : a]
-            t.end = track.at[sm ? sm[z] : z] + 1
+            // (a token that is only escapes `shown` spells as white space, a lone backslash, tilde or caret, has no place of its own:
+            // the plain text collapses it into the white space around it, whose offset is the next word's)
+            if (!sm || /\S/.test(track.sh.slice(sm[a], sm[z] + 1))) {
+              t.at = track.at[sm ? sm[a] : a]
+              t.end = track.at[sm ? sm[z] : z] + 1
+            }
           }
           po += s.length
           // within a chunk, parts stand together (no break), but Chinese and Japanese break before and after a CJK
@@ -1939,7 +1943,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       // be drawn as it is shown)
       const sm = at ? (p.tr ? escapeMap(p.s, sh) : sh === p.s ? true : null) : null
       const map = sm ? transformMap(s, text) : null
-      pushText(text, style(), {}, map && { at, base: p.s.length - s.length, map, sm: sm === true ? null : sm })
+      pushText(text, style(), {}, map && { at, sh, base: p.s.length - s.length, map, sm: sm === true ? null : sm })
       return
     }
     plain?.gap()

@@ -155,6 +155,17 @@ describe('W1: a token lies within its drawn run, on its line\'s baseline', () =>
     expect(escapeMap('a\\%b', 'a b')).toBeNull()
   })
 
+  it('gives a token of escapes that are shown as white space no place: it is no word, and the next word keeps its own', () => {
+    for (const [raw, shown] of [['\\textbackslash{}', ' '], ['\\textasciitilde{}', ' '], ['\\textasciicircum{}', ' ']] as const) {
+      const l = lay([text(`end. ${raw} Next`)], 'de', block(2), { hyphen: 0 })
+      expect(l.plain, shown).toBe('end. Next')
+      const lone = l.tokens.find(t => t.s === raw)!
+      expect([lone.at, lone.end]).toEqual([undefined, undefined])
+      const W = tableOf(l)
+      expect([...W.word.slice(0, W.n)], raw).toEqual([0, -1, 1])
+    }
+  })
+
   it('draws a lead, a label and a placeholder\'s rendering as tokens with no word', () => {
     const unit = { kind: 'para', pieces: [text('Alpha beta')] }
     const params = { ...resolveRules(BUILTIN_RULES, 'de').params, hyphen: 0 }
