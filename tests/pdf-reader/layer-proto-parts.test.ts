@@ -362,3 +362,57 @@ describe('the layout facade', () => {
     }
   })
 })
+
+// ---------------------------------------------------------------- H4: the local papers (AXT_LAB, the lab's root: lab/pdf)
+// The bookkeeping at scale without a browser: each paper made whole as the cutter's real-paper test makes it (its units from its
+// source, the layout file the gate's maker made, the geometry v0 is given), cut at the doubling, a page a part and a seeded
+// schedule, and run in parts, each part told when the run waits for it, against the open over the paper made whole again; the
+// text layer stands in (each unit's lines its text, no ink), the translation is the engine's own rows of a stand-in
+const LAB = process.env.AXT_LAB
+describe.skipIf(!LAB)('H4: the local papers in parts, as the open over each made whole', () => {
+  const PAPERS: [string, string][] = [['1512.03385v1', 'zh'], ['1706.03762v7', 'zh'], ['1810.04805v2', 'zh'], ['2307.16209v1', 'de'], ['2608.04322v1', 'zh']]
+  const FIXTURES = 'out/layer-gate/fixtures/f343494cf544323e', GEOMETRY = 'out/layer-gate/cut-p10/geometry'
+  const seeded = (seed: number) => (a: number, N: number) => Math.min(N, a + (((seed * 2654435761 + a * 40503) >>> 0) % 4))
+  for (const [name, target] of PAPERS) {
+    it(name, async () => {
+      const { existsSync } = await import('node:fs')
+      const { openPaper } = await import('@/pdf-reader/engine/pipeline/live.mjs')
+      const { unpackSource } = await import('@/pdf-reader/engine/source/tar.mjs')
+      const { bundleUnitsOf } = await import('@/pdf-reader/engine/layer-proto/units.mjs')
+      const { parseLayout } = await import('@/pdf-reader/engine/layout/file.mjs')
+      const { cutBundle } = await import('@/pdf-reader/engine/layer-proto/cut.mjs')
+      const { readCut } = await import('./helpers/parts-paper')
+      const root = LAB as string
+      const layoutFile = join(root, FIXTURES, `${name}-zh`, 'layout.json'), geometryFile = join(root, GEOMETRY, `${name}-${target}-geometry.json`), sourceFile = join(root, 'data/layout', name, 'source.gz')
+      for (const f of [layoutFile, geometryFile, sourceFile]) if (!existsSync(f)) throw new Error(`missing ${f}`)
+      const id = name.replace(/v\d+$/, ''), version = Number(name.slice(id.length + 1))
+      const source = await unpackSource(new Uint8Array(readFileSync(sourceFile)))
+      if (!('files' in source)) throw new Error(`${name}: the source is a PDF`)
+      const units = bundleUnitsOf(openPaper(source.files))
+      const layout = parseLayout(new Uint8Array(readFileSync(layoutFile)))
+      const geometry = JSON.parse(readFileSync(geometryFile, 'utf8')) as { left: { pages: [number, number, number, number][]; units: [number, number, number[][]][] } }
+      const N = layout.paper.pages
+      const whole = {
+        paper: { id, version, pages: N }, base: { bytes: 1_000_000, sha256: 'a'.repeat(64), xref: 999_000 }, versions: { image: '1' }, units,
+        left: { kinds: units.map(u => u[0]), pages: geometry.left.pages, units: [...geometry.left.units].sort((a, b) => a[0] - b[0]) }, layout,
+        addon: { manifest: { schema: 1, removal: REMOVAL, pages: N, sets: {}, page: Object.fromEntries(Array.from({ length: N }, (_, i) => [i + 1, { ok: true }])), appended: 0, stats: {} } },
+      }
+      // (the text layer: each unit's left rectangles and layout lines, its id its text)
+      const lines = new Map<number, number[][]>()
+      for (const [uid, , rects] of whole.left.units) for (const r of rects) (lines.get(uid) ?? lines.set(uid, []).get(uid)!).push([r[0]!, r[1]!, r[3]!, r[2]! + 2.15])
+      for (const [uid, rows] of layout.lines) for (let j = 0; j < rows.length; j += 8) (lines.get(uid) ?? lines.set(uid, []).get(uid)!).push([rows[j]!, rows[j + 1]!, rows[j + 2]!, rows[j + 3]!])
+      const docFor = docsOf({ pages: N, units: units.map((_, uid) => ({ text: `unit ${uid}`, lines: lines.get(uid) ?? [] })) })
+      for (const [schedule, to] of [['the doubling', undefined], ['a page a part', (a: number) => a], ['seeded', seeded(7)]] as const) {
+        const cut = await cutBundle(whole as never, { leftPages: () => null, ...(to ? { target: to } : {}) })
+        const { index, parts } = await readCut(cut)
+        const P: Paper = { N, index, parts, docFor }
+        // (a part that ships no layout draws its units as with no file: the warm door is its reference, not the whole)
+        const want = drawing(parts.some(p => p.layout === null) ? (await partsRun(P, { before: parts.length, ended: 'open' })).run : await wholeRun(P))
+        const { run, q1 } = await partsRun(P, { before: 0, ended: 'open', feed: 'starved' })
+        expect(drawing(run), `${name}, ${schedule}, ${parts.length} parts`).toEqual(want)
+        expect(q1, `${name}, ${schedule}`).toEqual([])
+        run.dispose()
+      }
+    }, 600_000)
+  }
+})
