@@ -148,6 +148,13 @@ export declare const OWNED_ALL: number
 /** from a PDF.js document of the marked original and its last TeX pass's log; the caller opens and destroys the
  *  document. With the paper's `units` and PDF.js's operator codes, each marked piece's own ink from its operator lists */
 export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; switches?: Switches | null; inkless?: readonly string[] | null; texts?: readonly (readonly [string, string])[] | readonly string[] | null; names?: Partial<Record<NameKey, 0 | 1>> | null; lineskip?: readonly [number, number] | null; units?: readonly SourceUnit[] | null; OPS?: Record<string, number> | null }): Promise<LayoutMarks>
+/** the unit marks the left is anchored by: `<id>s` / `<id>e` → the destination's place and the word it stands by (markWords) */
+export type UnitMarks = Map<string, { page: number; x: number; y: number; t: string | null }>
+/** the marked original read once, a page at a time: the marks in memory (as parseLayoutMarks reads their file; never trimmed
+ *  to the file's bounds) and the unit marks (null: a page's text, or a unit mark's page, could not be read) */
+export declare function readMarked(marked: unknown, log: string, o: Parameters<typeof layoutMarksOf>[2]): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null }>
+/** the marks file as the lab writes it: encodeLayoutMarks of the marks within the file's own bounds */
+export declare function marksFile(m: LayoutMarks): string
 export declare function encodeLayoutMarks(m: LayoutMarks): string
 /** bytes, then values, then JSON.parse, then every bound below; throws LayoutRefusal */
 export declare function parseLayoutMarks(bytes: Uint8Array): LayoutMarks

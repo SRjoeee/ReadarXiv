@@ -43,7 +43,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { getDocument, OPS, version } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { encodeLayout } from '../../../src/pdf-reader/engine/layout/file.mjs'
 import { makeLayout } from '../../../src/pdf-reader/engine/layout/make.mjs'
-import { parseLayoutMarks } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { marksFile, parseLayoutMarks } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { layoutMarksOfPaper } from '../../../src/pdf-reader/engine/layout/paper.mjs'
 import { openPaper } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { jobName } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
@@ -190,6 +190,8 @@ async function side(paper, source, converge) {
     try { return { doc: await task.promise, close: () => task.destroy() } } catch (e) { await task.destroy().catch(() => {}); throw e }
   }
   const made = await layoutMarksOfPaper(paper, { compile: async req => nativeCompile(source, req, records), open, OPS, converge })
+  // (the marks are handed on in memory: their file, as this check compares files)
+  if ('marks' in made) made.marks = new TextEncoder().encode(marksFile(made.marks))
   const last = records.filter(r => r.kind === 'latexmk' || r.kind === 'marked').at(-1)
   return { made, pdf, records, aux: last?.aux ?? null, ind: last?.ind ?? null }
 }

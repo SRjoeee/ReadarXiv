@@ -20,7 +20,7 @@ import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { layoutMarksOfPaper } from '../../../src/pdf-reader/engine/layout/paper.mjs'
-import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, layoutMarksOf, probeSamples, readInkProbe, readInkTexts, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, layoutMarksOf, marksFile, probeSamples, readInkProbe, readInkTexts, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 
@@ -146,11 +146,13 @@ for (const id of ids.length ? ids : PAPERS) {
   const made = await layoutMarksOfPaper(paper, { compile, open: opened, OPS })
   console.log(`${id}: ${ran.join(', ')}; ${JSON.stringify('ms' in made ? made.ms : null)} ms (${((Date.now() - t0) / 1000).toFixed(1)} s)`)
   if (!('marks' in made)) { failed++; console.log(`FAIL ${id}: refused at ${made.refused}`); continue }
+  // (the marks are handed on in memory: their file, as this check compares files)
+  const marksBytes = Buffer.from(marksFile(made.marks))
   mkdirSync(join(OUT, 'marks', tag), { recursive: true })
-  writeFileSync(join(OUT, 'marks', tag, `${id}.marks.json`), made.marks)
+  writeFileSync(join(OUT, 'marks', tag, `${id}.marks.json`), marksBytes)
   if (!reference) { failed++; continue }
   writeFileSync(join(OUT, 'marks', tag, `${id}.reference.json`), reference)
-  if (Buffer.compare(Buffer.from(made.marks), reference) === 0) console.log(`ok   ${id}: ${reference.length} bytes, equal`)
-  else { failed++; console.log(`FAIL ${id}: the marks differ`); for (const l of differences(reference, made.marks)) console.log(l) }
+  if (Buffer.compare(marksBytes, reference) === 0) console.log(`ok   ${id}: ${reference.length} bytes, equal`)
+  else { failed++; console.log(`FAIL ${id}: the marks differ`); for (const l of differences(reference, marksBytes)) console.log(l) }
 }
 process.exitCode = failed ? 1 : 0

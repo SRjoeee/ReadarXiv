@@ -1,6 +1,6 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
-import { inkSamples, LAYOUT_CLASSES, parseLayoutMarks, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
+import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, MARKS_SCHEMA, parseLayoutMarks, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
 import { layoutMarksOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
 import { type Compiled, type CompileRequest, openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 
@@ -88,7 +88,11 @@ describe('layoutMarksOfPaper', () => {
     expect(open).toHaveBeenCalledTimes(1)
     expect(open).toHaveBeenCalledWith(PDF)
     expect(close).toHaveBeenCalledTimes(1)
-    const marks = parseLayoutMarks(made.marks)
+    const marks = made.marks
+    // (in memory as the file is read back: the maker takes them as they are)
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(marks)))).toEqual(marks)
+    // the unit marks the left is anchored by, read from the same document: the start mark of unit 0 (no word on the page)
+    expect(made.unitMarks).toEqual(new Map([['0s', { page: 1, x: 72, y: 700, t: null }]]))
     expect(marks.engine).toBe('pdflatex')
     // (the probe's log answers no name: its own text not known, as a probe of a paper that wraps none; its skips, LaTeX's
     // 1pt and 0pt, in PDF units as the file writes every number, to a hundredth: 72 / 72.27 is 1)
@@ -119,7 +123,7 @@ describe('layoutMarksOfPaper', () => {
     const made = await layoutMarksOfPaper(paper, { compile: c.compile, open: opener().open, OPS })
     if (!('marks' in made)) throw new Error(`refused: ${made.refused}`)
     expect(text(c.asked[1]?.overrides ?? new Map())).toEqual(text(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless: readInkProbe(last, inkSamples(paper.units)) })))
-    const marks = parseLayoutMarks(made.marks)
+    const marks = made.marks
     expect(marks.lines).toEqual([[0, 3], [1, 2]])
     expect(marks.dropped).toEqual([])
     expect(marks.marks).toEqual([['0s', 1, 72, 700]])
@@ -243,7 +247,7 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
     expect(asked[2]).toMatchObject({ main: 'main.tex', engine: 'pdflatex', rerun: false, draft: false, files: true, bibtex: false })
     expect(given(asked[2])).toEqual({ ...text(markedFiles(paper)), 'main.aux': AUX })
     expect(open).toHaveBeenCalledWith(PDF)
-    expect(parseLayoutMarks(made.marks).lines).toEqual([[0, 3]])
+    expect(made.marks.lines).toEqual([[0, 3]])
     expect(made.ms).toEqual({ probe: expect.any(Number), compile: expect.any(Number), marks: expect.any(Number) })
   })
 
@@ -355,7 +359,7 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
     expect(given(asked[3])['main.aux']).toBe('\\relax \n\\newlabel{s}{{1}{2}}\n')
     expect(open).toHaveBeenCalledTimes(1)
     expect(open).toHaveBeenCalledWith(pdf2)
-    expect(parseLayoutMarks(made.marks).lines).toEqual([[0, 4]])
+    expect(made.marks.lines).toEqual([[0, 4]])
   })
 
   it('takes a mark in a file the paper writes and reads back as a difference, a name\'s mark only in the aux and the lists as none', async () => {
@@ -376,7 +380,7 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
     const pdf5 = enc('%PDF-1.7 the fifth pass')
     const moving = (n: number, pdf = PDF) => markedOf({ 'main.aux': `\\relax \n\\newlabel{s}{{1}{${n}}}\n` }, { pdf })
     const one = await cmOf([PROBE, draftOf({ 'main.aux': AUX }), moving(2), moving(3), moving(4), moving(5, pdf5), moving(6)])
-    expect(one.made).toMatchObject({ marks: expect.any(Uint8Array), cm: { drafts: 1, marked: 4, settled: false } })
+    expect(one.made).toMatchObject({ marks: expect.objectContaining({ schema: MARKS_SCHEMA }), cm: { drafts: 1, marked: 4, settled: false } })
     expect(one.asked).toHaveLength(6)
     expect(one.open).toHaveBeenCalledWith(pdf5)
     const bbl = '\\begin{thebibliography}{1}\n\\bibitem{a} A.\n\\end{thebibliography}\n'
@@ -416,7 +420,7 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
     ]
     for (const [why, answers, fallback, drafts] of cases) {
       const { made, asked, open, paper } = await cmOf([...answers, original()])
-      expect(made, why).toMatchObject({ marks: expect.any(Uint8Array), cm: { drafts, settled: false, fallback } })
+      expect(made, why).toMatchObject({ marks: expect.objectContaining({ schema: MARKS_SCHEMA }), cm: { drafts, settled: false, fallback } })
       // today's request for the marked original, exactly
       expect(asked.at(-1), why).toEqual({ main: 'main.tex', engine: 'pdflatex', rerun: true, bibtex: null, overrides: markedFiles(paper) })
       expect(open, why).toHaveBeenCalledWith(PDF)
@@ -444,7 +448,7 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
     const bound = { count: 5, bytes: 1000 }
     const fell = async (why: string, answers: (Compiled | Error)[], b = bound, drafts = 1) => {
       const { made, asked, open, paper, close } = await cmOf([...answers, original()], paperOf(), fakeDoc().doc, b)
-      expect(made, why).toMatchObject({ marks: expect.any(Uint8Array), cm: { drafts, settled: false, fallback: 'files-bound' } })
+      expect(made, why).toMatchObject({ marks: expect.objectContaining({ schema: MARKS_SCHEMA }), cm: { drafts, settled: false, fallback: 'files-bound' } })
       // today's request for the marked original, exactly, and the PDF opened and closed
       expect(asked.at(-1), why).toEqual({ main: 'main.tex', engine: 'pdflatex', rerun: true, bibtex: null, overrides: markedFiles(paper) })
       expect(open, why).toHaveBeenCalledWith(PDF)
@@ -505,7 +509,7 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
     // 210 left after them: room for a pass of 1.2 x 100; 200 - 110 = 90 is not, and the marked pass comes next
     expect((await run([timed(PROBE, 10), draft, timed(draftOf({ 'main.aux': AUX }), 100), moving(1, 100)], 320)).made).toMatchObject({ cm: { drafts: 2, marked: 1, settled: true } })
     const thin = await run([timed(PROBE, 10), draft, moving(1, 100)], 200)
-    expect(thin.made).toMatchObject({ marks: expect.any(Uint8Array), cm: { drafts: 1, marked: 1, settled: true } })
+    expect(thin.made).toMatchObject({ marks: expect.objectContaining({ schema: MARKS_SCHEMA }), cm: { drafts: 1, marked: 1, settled: true } })
     expect(thin.asked.map(r => r.draft)).toEqual([undefined, true, false])
     // the longest compile counts the probe's: probe 150, draft 50, 60 left is under 1.2 x 150 (not under 1.2 x 50)
     const slowProbe = await run([timed(PROBE, 150), timed(draftOf({ 'main.aux': AUX, 'main.bbl': bbl }, `No file main.bbl.\n${END}`), 50), moving(1, 50)], 260)
@@ -513,12 +517,12 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
     // a marked pass past the files' bound that leaves no room for another is kept: no pass would carry them
     const big = Object.fromEntries(Array.from({ length: 3 }, (_, i) => [`n${i}.dat`, 'x']))
     const heavy = await run([timed(PROBE, 10), timed(draftOf({ 'main.aux': AUX }), 100), timed(markedOf({ 'main.aux': '\\relax \n\\newlabel{s}{{1}{2}}\n', ...big }), 150)], 250, { count: 1, bytes: 1e6 })
-    expect(heavy.made).toMatchObject({ marks: expect.any(Uint8Array), cm: { drafts: 1, marked: 1, settled: false } })
+    expect(heavy.made).toMatchObject({ marks: expect.objectContaining({ schema: MARKS_SCHEMA }), cm: { drafts: 1, marked: 1, settled: false } })
     expect(heavy.made.cm).not.toHaveProperty('fallback')
     // a marked pass that did not settle is kept where the next does not fit: the first marked pass is no bet, and is asked
     const pdf1 = enc('%PDF-1.7 the first marked pass')
     const kept = await run([timed(PROBE, 10), timed(draftOf({ 'main.aux': AUX }), 100), timed(markedOf({ 'main.aux': '\\relax \n\\newlabel{s}{{1}{2}}\n' }, { pdf: pdf1 }), 150), moving(3, 150)], 300)
-    expect(kept.made).toMatchObject({ marks: expect.any(Uint8Array), cm: { drafts: 1, marked: 1, settled: false } })
+    expect(kept.made).toMatchObject({ marks: expect.objectContaining({ schema: MARKS_SCHEMA }), cm: { drafts: 1, marked: 1, settled: false } })
     expect(kept.asked).toHaveLength(3)
     expect(kept.open).toHaveBeenCalledWith(pdf1)
     // (no budget, or null: every bet as the bound allows)
@@ -532,6 +536,7 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
     const on = await cmOf([PROBE, draftOf({ 'main.aux': AUX }), markedOf({ 'main.aux': '\\relax \n' }, { log }), markedOf({ 'main.aux': '\\relax \n' }, { log })])
     if (!('marks' in off) || !('marks' in on.made)) throw new Error('refused')
     expect(on.made.cm).toEqual({ drafts: 1, marked: 2, settled: true })
-    expect(Buffer.from(on.made.marks).equals(Buffer.from(off.marks))).toBe(true)
+    expect(encodeLayoutMarks(on.made.marks)).toBe(encodeLayoutMarks(off.marks))
+    expect(on.made.unitMarks).toEqual(off.unitMarks)
   })
 })

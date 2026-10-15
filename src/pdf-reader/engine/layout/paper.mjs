@@ -14,14 +14,16 @@
 //      read it (the file carries the switch, MARKS_SCHEMA 2 or more). With `converge` (CM, converge then mark:
 //      convergeThenMark below), the passes that only make the aux and its lists are those of the unmarked original, as
 //      drafts, and the marked one is compiled once in their files, for as long as its own files differ from them
-//   3. its PDF opened by the caller, and layoutMarksOf over that document and the compile's last pass's log, with the
-//      paper's units and PDF.js's operator codes, so that each marked piece's own ink is read from its operator lists
+//   3. its PDF opened by the caller, and read once (marks.mjs readMarked) with the compile's last pass's log, the paper's
+//      units and PDF.js's operator codes, so that each marked piece's own ink is read from its operator lists: the marks
+//      in memory (the maker takes them as they are: no file is written and read back) and the unit marks the left is
+//      anchored by (their words read from the same pages)
 // The compile and the opening are the caller's (a native TeX Live and PDF.js in Node, the TeX page and a worker in a
 // browser), so that this imports neither PDF.js nor a `node:*` module.
 import { jobName, lastTexLog, latin1 } from '../source/latex-front.mjs'
 import { listsMissing, notFound, originalFiles, probeFiles, stoppedShort } from '../pipeline/live.mjs'
 import { completeLog } from '../pipeline/typeset/tex.mjs'
-import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, layoutMarksOf, probeSamples, readInkProbe, readInkTexts, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
+import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
 
 /**
  * A paper's layout marks (paper.d.mts): the marks file's bytes, with each stage's time, or the stage that failed with the
@@ -62,17 +64,19 @@ export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge =
     return c?.ok && c.pdf?.length ? c : null
   })
   if (!marked) return result({ refused: 'compile', ms })
-  const marks = await stage('marks', async () => {
+  const read = await stage('marks', async () => {
     const opened = await open(marked.pdf)
     try {
-      return new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(opened.doc, lastTexLog(marked.log), { engine, classes: LAYOUT_CLASSES, switches, inkless, texts, names, lineskip, units: paper.units, OPS })))
+      // (read once, a page at a time: the marks in memory, handed to the maker as they are, and the unit marks the left is
+      // anchored by, from the same pages)
+      return await readMarked(opened.doc, lastTexLog(marked.log), { engine, classes: LAYOUT_CLASSES, switches, inkless, texts, names, lineskip, units: paper.units, OPS })
     } finally {
       // (a failing close loses nothing: the marks are read)
       try { await opened.close() } catch {}
     }
   })
-  if (!marks) return result({ refused: 'marks', ms })
-  return result({ marks, ms })
+  if (!read) return result({ refused: 'marks', ms })
+  return result({ marks: read.marks, unitMarks: read.unitMarks, ms })
 }
 
 /** CM's bound: the TeX passes it runs at most, its drafts and marked passes together (latexmk's max_repeat) */
