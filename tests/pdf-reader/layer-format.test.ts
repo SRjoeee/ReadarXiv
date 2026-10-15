@@ -330,6 +330,39 @@ describe('a reader\'s digest and ref', () => {
   })
 })
 
+describe('a reader\'s options are checked: a ref wherever a digest is, caps that are positive integers', () => {
+  it('a ref of null is a TypeError for every kind that has one, and the catalog needs none', async () => {
+    for (const r of READERS.filter(k => k.kind !== 'catalog')) await expect(r.read(r.sample().bytes, null), r.kind).rejects.toThrow(TypeError)
+    await expect(readCatalog(CAT.bytes, { caps: undefined })).resolves.toMatchObject({ kind: 'catalog' })
+  })
+
+  it('caps that are NaN, zero, negative, fractional, infinite or not numbers are a TypeError, not caps turned off', async () => {
+    for (const r of READERS) {
+      const bytes = r.sample().bytes, ref = r.kind === 'catalog' ? null : asRef(r.kind, bytes)
+      for (const bad of [Number.NaN, 0, -1, 1.5, Infinity, '9', null]) {
+        await expect(r.read(bytes, ref, { bytes: bad as never }), `${r.kind} bytes ${String(bad)}`).rejects.toThrow(TypeError)
+        await expect(r.read(bytes, ref, { values: bad as never }), `${r.kind} values ${String(bad)}`).rejects.toThrow(TypeError)
+      }
+      await r.read(bytes, ref, { bytes: r.cap, values: r.values })
+      await r.read(bytes, ref, {})
+    }
+  })
+})
+
+describe('a part\'s ref names its place', () => {
+  it('the ref\'s from and to are the part\'s pages, where the ref has them', async () => {
+    const p = M.parts[1]!
+    expect(p.ref).toMatchObject({ from: 2, to: 3 })
+    await readPart(p.bytes, { ref: p.ref, index: M.index, chain: chainBefore(1) })
+    for (const wrong of [{ from: 1 }, { to: 4 }, { from: 3, to: 3 }]) {
+      expect(await refusal(readPart(p.bytes, { ref: { ...p.ref, ...wrong }, index: M.index, chain: chainBefore(1) })), JSON.stringify(wrong)).toMatchObject({ kind: 'part', path: 'ref' })
+    }
+    // (a ref without a place, as a host that has only the digest holds it, is read)
+    const { from: _f, to: _t, ...bare } = p.ref
+    await readPart(p.bytes, { ref: bare, index: M.index, chain: chainBefore(1) })
+  })
+})
+
 describe('a reader\'s envelope', () => {
   const valid = {
     units: () => parsed(M.chunks[0]!), head: () => parsed(M.head), part: () => parsed(M.parts[0]!), left: () => parsed(M.lefts[1]!),
@@ -1138,6 +1171,25 @@ describe('a left part', () => {
     await refused(2, l => { l.pairs = 'x' }, 'pairs')
   })
 
+  it('the writer is the reader\'s mirror on both ways to the empty part: a bad page or first still throws, and a size bound empties', async () => {
+    // too many tokens, but a page that is none: the empty part is checked as the reader checks it
+    expect(await refusal(writeLeftPart({ paper: PAPER, page: 0, first: 0, tokens: tokenWire(TOKENS_PAGE + 1), spans: [], pairs: [] }))).toMatchObject({ kind: 'left', path: 'page' })
+    expect(await refusal(writeLeftPart({ paper: PAPER, page: 1, first: -1, tokens: tokenWire(TOKENS_PAGE + 1), spans: [], pairs: [] }))).toMatchObject({ kind: 'left', path: 'first' })
+    // spans naming more than SPANNED_PER_TOKEN times the page's tokens: a size bound, so the page ships empty
+    const spans = [[0, [0, 20]], [1, [0, 20]], [2, [0, 20]]] as [number, number[]][]
+    const w = await writeLeftPart({ paper: PAPER, page: 1, first: 0, tokens: tokenWire(20), spans, pairs: [] })
+    expect(w.emptied).toBe(true)
+    expect((await readLeftPart(w.bytes, { ref: w.ref as never, streamOf })).table.n).toBe(0)
+    // and the reader refuses the same object given whole
+    const whole = parsed(M.lefts[1]!)
+    whole.spans = spans
+    whole.tokens = tokenWire(20)
+    const f = forged('left', whole, { page: 1 })
+    expect(await refusal(readLeftPart(f.bytes, { ref: f.ref as never, streamOf: () => 0 }))).toMatchObject({ kind: 'left', path: 'spans' })
+    // a shape wrong in another way (a range outside the page) is not size, and throws
+    expect(await refusal(writeLeftPart({ paper: PAPER, page: 1, first: 0, tokens: tokenWire(20), spans: [[0, [19, 3]]], pairs: [] }))).toMatchObject({ kind: 'left' })
+  })
+
   it('a page that would pass its caps ships an empty left part, never a throw (amendment M8)', async () => {
     expect([LEFT_CAP, LEFT_VALUES, TOKENS_PAGE]).toEqual([1024 * 1024, 200_000, 15_000])
     // n past TOKENS_PAGE
@@ -1468,12 +1520,25 @@ describe('a writer given what its reader would refuse throws BundleRefusal', () 
   })
 
   it('a tail past TAIL_CAP, and a tail at it', async () => {
-    const tail = (n: number) => { const t = new Uint8Array(n).fill(0x20); return t }
-    const withTail = (n: number) => writeRefused(p => { const t = tail(n); p.addon = { manifest: { ...p.addon!.manifest, appended: n }, tail: t } })
-    expect(await withTail(TAIL_CAP + 1)).toMatchObject({ kind: 'part', path: 'addon.tail', message: expect.stringMatching(/more than 1048576 bytes/) })
-    // (a tail of white space has no section: its chain is the reader's, and the writer sees a tail within the cap)
-    expect(await withTail(TAIL_CAP)).toBeNull()
-    expect(await withTail(0)).toMatchObject({ path: 'addon.tail' })
+    // a tail of n bytes that ends in a real cross-reference section: white space, then the section
+    const tail = (n: number) => {
+      // (the section's startxref is its own place in the document: the tail begins at the end of the original)
+      let section = tailOf(0, BASE.xref, 12, 100, 4).tail
+      for (let pass = 0; pass < 3; pass++) section = tailOf(BASE.bytes + n - section.length, BASE.xref, 12, 100, 4).tail
+      const t = new Uint8Array(n).fill(0x20)
+      t.set(section, n - section.length)
+      return t
+    }
+    const withTail = (t: Uint8Array) => writeRefused(p => { p.addon = { manifest: { ...p.addon!.manifest, appended: t.length }, tail: t } })
+    expect(await withTail(tail(TAIL_CAP + 1))).toMatchObject({ kind: 'part', path: 'addon.tail', message: expect.stringMatching(/more than 1048576 bytes/) })
+    expect(await withTail(tail(TAIL_CAP))).toBeNull()
+    // a tail its reader cannot parse is not written: white space, a section cut short, a classic table with no trailer
+    expect(await withTail(new Uint8Array(64).fill(0x20))).toMatchObject({ kind: 'part', path: 'addon.tail', message: expect.stringMatching(/cross-reference section/) })
+    expect(await withTail(tail(300).subarray(0, 290))).toMatchObject({ path: 'addon.tail' })
+    expect(await withTail(new Uint8Array(0))).toMatchObject({ path: 'addon.tail' })
+    // (and what the writer writes the reader reads: a section in a tail of the cap's size)
+    const w = await writePart({ ...input(), addon: { manifest: { ...input().addon!.manifest, appended: TAIL_CAP }, tail: tail(TAIL_CAP) } })
+    expect((await readPart(w.bytes, { ref: w.ref, index: M.index, chain: null })).addon!.tail).toHaveLength(TAIL_CAP)
   })
 
   it('a shape the part alone shows wrong: a rectangle off its page, a unit in both lists, an add-on without a layout, a missing left part', async () => {

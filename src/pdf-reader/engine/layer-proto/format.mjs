@@ -193,7 +193,14 @@ async function digestOf(bytes) {
 async function opened(kind, bytes, ref, def, caps) {
   if (!(bytes instanceof Uint8Array)) throw new TypeError(`${kind}: not a Uint8Array (${kindOf(bytes)})`)
   if (ref !== null && (!isObject(ref) || !isDigest(ref.sha256) || !Number.isSafeInteger(ref.bytes) || ref.bytes < 0)) throw new TypeError(`${kind}: not a ref { sha256, bytes }`)
-  const cap = Math.min(def.cap, caps?.bytes ?? Infinity), most = Math.min(def.values, caps?.values ?? Infinity)
+  // (a ref wherever a digest is checked, caps that are positive integers: the host's options are not trusted to turn a check off)
+  if (ref === null && kind !== 'catalog') throw new TypeError(`${kind}: a ref { kind, sha256, bytes } is required`)
+  const lower = (v, name) => {
+    if (v === undefined) return Infinity
+    if (!Number.isSafeInteger(v) || v < 1) throw new TypeError(`${kind}: caps.${name} is not a positive integer (${kindOf(v)})`)
+    return v
+  }
+  const cap = Math.min(def.cap, lower(caps?.bytes, 'bytes')), most = Math.min(def.values, lower(caps?.values, 'values'))
   if (ref !== null && ref.kind !== kind) throw refuse(kind, 'ref', `a ref to a ${typeof ref.kind === 'string' ? told(ref.kind) : kindOf(ref.kind)}, not a ${kind}`)
   if (ref !== null && bytes.length !== ref.bytes) throw refuse(kind, '', `${bytes.length} bytes, not the ref's ${ref.bytes}`)
   if (bytes.length > cap) throw refuse(kind, '', `${bytes.length} bytes, more than ${cap}`)
@@ -663,16 +670,19 @@ function partShape(v, { N, unitCount, atFrom }) {
     const manifest = inside(K, 'addon.manifest', () => checkAddonManifest(m, { pages: N, views, shipped: true, part: { from: a, to: b, atFrom: at ?? N + 1 } }))
     let r = 0
     for (const k of Object.keys(manifest.page)) if (Object.hasOwn(manifest.page[k], 'at')) r++
-    let tail = null
+    let tail = null, links = null
     if (ad.tail !== null) {
       tail = inside(K, '', () => fromBase64(ad.tail, TAIL_CAP, 'addon.tail'))
       if (tail.length !== manifest.appended) throw refuse(K, 'addon.tail', `not the manifest's ${manifest.appended} bytes`)
       if (r === 0) throw refuse(K, 'addon.tail', 'a tail, and no page of the manifest names a removed page')
+      // (a tail the reader could not read: the chain's values are the reader's, the section is the tail's own)
+      links = tailLinks(tail)
+      if (links === null) throw refuse(K, 'addon.tail', 'does not end in a cross-reference section')
     } else {
       if (manifest.appended !== 0) throw refuse(K, 'addon.manifest.appended', 'not 0, and no tail')
       if (r !== 0) throw refuse(K, 'addon.manifest.page', 'a removed page named, and no tail')
     }
-    addon = { manifest, tail, r }
+    addon = { manifest, tail, r, links }
   }
 
   // leftParts
@@ -714,6 +724,9 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
   if (v.prev !== was.last) throw refuse(K, 'prev', 'not the digest of the last part told')
   const s = partShape(v, { N, unitCount: index.units.length, atFrom: N + was.r + 1 })
 
+  // the ref's place, where it has one (a catalog's part refs do), is the part's pages
+  if ((ref.from !== undefined && ref.from !== s.a) || (ref.to !== undefined && ref.to !== s.b)) throw refuse(K, 'ref', `the ref's pages ${ref.from ?? '?'} to ${ref.to ?? '?'} are not the part's ${s.a} to ${s.b}`)
+
   // against the index: a layout unit is its unit's kind and piece count, where the unit stands
   if (s.layout !== null) {
     for (let i = 0; i < s.layout.units.length; i++) {
@@ -753,8 +766,7 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
 
   let end = was.end, xref = was.xref, next = was.next, root = was.root
   if (s.addon !== null && s.addon.tail !== null) {
-    const tail = s.addon.tail, links = tailLinks(tail)
-    if (links === null) throw refuse(K, 'addon.tail', 'does not end in a cross-reference section')
+    const tail = s.addon.tail, links = s.addon.links
     if (links.startxref < end || links.startxref >= end + tail.length) throw refuse(K, 'addon.tail', 'its startxref does not lie inside the tail')
     if (links.prev !== xref) throw refuse(K, 'addon.tail', '/Prev is not the last cross-reference section\'s')
     if (root !== null && links.root !== root) throw refuse(K, 'addon.tail', 'rewrites another page tree root')
@@ -770,7 +782,7 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
   })
   return {
     kind: 'part', sha256, bytes: bytes.length, head: v.head, prev: v.prev, pages: [s.a, s.b], reach: s.reach, views: Object.freeze(s.views),
-    left: s.left, fileOnly: s.fileOnly, layout: s.layout, addon: s.addon, leftParts: s.leftParts, chain: after,
+    left: s.left, fileOnly: s.fileOnly, layout: s.layout, addon: s.addon === null ? null : { manifest: s.addon.manifest, tail: s.addon.tail, r: s.addon.r }, leftParts: s.leftParts, chain: after,
   }
 }
 
@@ -862,7 +874,7 @@ function leftShape(v) {
       next = r[j] + r[j + 1]
       named += r[j + 1]
     }
-    if (named > SPANNED_PER_TOKEN * n) throw refuse(K, 'spans', `names more than ${SPANNED_PER_TOKEN} × the page's ${n} tokens`)
+    if (named > SPANNED_PER_TOKEN * n) throw new BundleRefusal(`names more than ${SPANNED_PER_TOKEN} × the page's ${n} tokens`, { kind: K, path: 'spans', data: { bound: 'spanned' } })
   }
   if (!Array.isArray(pairs)) throw refuse(K, 'pairs', `not an array (${kindOf(pairs)})`)
   last = -1
@@ -927,13 +939,21 @@ export async function writeLeftPart({ paper, page, first, tokens, spans, pairs }
     spans: spans.map(([id, ranges]) => [id, [...ranges]]),
     pairs: pairs.map(([id, runs]) => [id, [...runs]]),
   }
+  // (what the reader refuses of a page for its size, the writer empties; what it refuses for anything else, the writer throws)
   let emptied = obj.tokens.perPage[0] > TOKENS_PAGE
   if (!emptied) {
-    leftShape(obj)
+    try { leftShape(obj) } catch (e) {
+      if (!(e instanceof BundleRefusal) || e.data?.bound !== 'spanned') throw e
+      emptied = true
+    }
+  }
+  if (!emptied) {
     const text = JSON.stringify(obj)
     emptied = encoder.encode(text).length > LEFT_CAP || inside('left', '', () => countValues(text, LEFT_VALUES, LEFT_DEPTH)) > LEFT_VALUES
   }
-  const w = await written('left', emptied ? emptyLeft(page, first) : obj, LEFT_DEF, paper, { page })
+  const out = emptied ? emptyLeft(page, first) : obj
+  if (emptied) leftShape(out)
+  const w = await written('left', out, LEFT_DEF, paper, { page })
   return { ...w, emptied }
 }
 
