@@ -20,7 +20,7 @@
 // shows beside the engine's (<fixture>/proto/p<n>.png, the parity run's of the approved prototype), the role
 // table's served faces (data/fonts), Playwright's pinned Chromium, PDF.js from this repository's node_modules, and no
 // network: a static server on 127.0.0.1 serves every file, and the browser aborts any other request. Pages: the first 12
-// of each output, every page of the thesis (2307.16209v1).
+// of each output, every page of the thesis (2307.16209v1) and of 2608.16117v1.
 //
 //   pnpm exec tsx lab/pdf/spikes/layer-gate.mjs [--tier=model|pixel] [--engine=<worktree>] [--only=<fixture>,…]
 //       [--layouts=made|fixed] [--fixtures=<dir>] [--pages=<n>] [--workers=<n>] [--check[=<record>]] [--record[=<record>]] [--label=<short>]
@@ -136,7 +136,7 @@ import { chromium } from 'playwright'
 import { engineKindOf } from './layer-gate/kind.mjs'
 import { encodePng } from './layer-gate/png.mjs'
 import { geometryFile, nameOf, PROTO_GEOMETRY, refBytesOf, refPages, sha256, shownPath, withNames } from './layer-gate/ref.mjs'
-import { compare, fixtureTotals, MEASURES, pageEntry, pooled, REPORTED } from './layer-gate/score.mjs'
+import { compare, droppedOutputs, fixtureTotals, MEASURES, pageEntry, pooled, REPORTED } from './layer-gate/score.mjs'
 
 const here = new URL('.', import.meta.url).pathname
 const ROOT = resolve(here, '..')
@@ -263,8 +263,11 @@ const TEXMF = process.env.TEXMF_DIST ?? join(process.env.HOME ?? '', 'Library/Ti
 let PREVIOUS_DIR = null
 /** --debug-lost=<fixture>:<page>: that page's lost-ink regions written as images (out/layer-gate/lost/) */
 const DEBUG_LOST = arg('debug-lost')
-/** the brief's exact values: 12 pages an output, every page of the thesis */
-const PAGES_OF = 12, ALL_PAGES = new Set(['2307.16209v1'])
+/** TeX's file against the drawing (score.mjs, the 2608.16117 survey): the measures each output's records show apart */
+const AGAINST_FILE = ['contentLost', 'contentUnknown', 'textInDisplay', 'slotsSkipped', 'lineStartPunct', 'glyphsLost', 'linesLeft']
+/** the brief's exact values: 12 pages an output, every page of the thesis; and every page of 2608.16117v1, whose
+ *  defects the maintainer saw on staging reach page 14 (the 2608.16117 survey, 2026-10-15) */
+const PAGES_OF = 12, ALL_PAGES = new Set(['2307.16209v1', '2608.16117v1'])
 /** the progress images' pages (the controller's set) and their width */
 const PANELS_SET = { '1512.03385v1-zh': [1, 2, 3], '1706.03762v7-ja': [1, 2], '2608.04322v1-de': [2], '1810.04805v2-ru': [2], '2307.16209v1-zh': [10] }
 /** --panel-pages=<fixture>:<p>,<p>;<fixture>:<p>: the progress images' pages in place of the controller's set (a look at others) */
@@ -899,7 +902,14 @@ if (arg('check')) {
 if (arg('record')) {
   if (PROTO_PLACE || PROTO_ORDER) { console.log('FAIL --record: --proto-place and --proto-order are comparisons with the live prototype, never a record'); exit = 1 }
   else if (ONLY || PAGES) { console.log('FAIL --record: a whole run only (no --only, no --pages)'); exit = 1 }
-  else writeRecords(recordAt, run, completeness)
+  else {
+    // (and every output the record's run of this kind holds: a run given another folder of references, the gate's default
+    // of 29, is whole by itself and would drop the 30th unseen. An output leaves the record by its own pull request, the
+    // record edited so)
+    const dropped = droppedOutputs(existsSync(recordAt) ? readJson(recordAt) : null, KEY, Object.keys(run.fixtures))
+    if (dropped.length) { console.log(`FAIL --record: the record's ${KEY} run (or its pixel run) holds ${dropped.length} output${dropped.length === 1 ? '' : 's'} this run has not (${dropped.join(' ')}): give the references, translations and geometry its inputs name (LAYER_REFS, LAYER_RECORDS, LAYER_GEOMETRY; lab/pdf/README.md)`); exit = 1 }
+    else writeRecords(recordAt, run, completeness)
+  }
 }
 if (arg('write-floor')) {
   // the prototype's floor as this gate measures it: v0 under the floor's conditions (the prototype's own staging units
@@ -1094,7 +1104,7 @@ function fidelityMd(record) {
   L.push('')
   const below = ms.filter(m => fl[m[0]] !== undefined && run.totals.shared && (() => { const w = closer(m, fl, run.totals.shared); return w !== null && w < 0 })())
   L.push(`**Below the prototype's floor on the shared ten** (${keys[0]}): ${below.length ? below.map(m => m[4]).join(', ') : 'none'}.`, '')
-  const head = ['textTranslated', 'textEnglish', 'textBlank', 'cellsTranslated', 'unitsLeft', 'blankLines', 'fullSize', 'overlap', 'residue', 'bites', 'vanished', 'cropForeign', 'cropTextOverlap', 'cropBaselineOff', 'lostInk', 'wrongPageText', 'clipped'].map(k => MEASURES.find(m => m[0] === k)).filter(m => ms.includes(m))
+  const head = ['textTranslated', 'textEnglish', 'textBlank', 'cellsTranslated', 'unitsLeft', 'blankLines', 'fullSize', 'overlap', 'residue', 'bites', 'vanished', 'cropForeign', 'cropTextOverlap', 'cropBaselineOff', 'lostInk', 'wrongPageText', 'clipped', ...AGAINST_FILE].map(k => MEASURES.find(m => m[0] === k)).filter(m => ms.includes(m))
   L.push(`## By output (${keys[0]})`, '', `| output | ${head.map(m => m[4]).join(' | ')} | why left |`, `|---|${head.map(() => '---|').join('')}---|`)
   for (const [name, f] of Object.entries(run.fixtures)) L.push(`| ${name} | ${head.map(m => shown(f.totals, m)).join(' | ')} | ${Object.entries(f.totals.left).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ') || '-'} |`)
   L.push('', 'Every measure of every output, and of every page, is in layer-fidelity.json.', '')
@@ -1150,6 +1160,11 @@ function gateMd(run, rows) {
   L.push(`Written by \`spikes/layer-gate.mjs --tier=${run.tier} --record\` on ${run.made.slice(0, 10)}, the engine at \`${run.engine.commit?.slice(0, 8)}\`. Pages: ${run.inputs.pages}; a check fails on any count above 0 (lost ink: regions of more than ${run.inputs.inkMin} device pixels at ${run.inputs.inkScale}x).`, '')
   L.push('| output | pages | lost ink | missing | twice | doubled brackets | duplications | equation numbers shown | clipped | groups drawn partly | labels left in the source | fails |', '|---|---|---|---|---|---|---|---|---|---|---|---|')
   for (const r of rows) L.push(`| ${r.name} | ${r.pages} | ${r.lostInk ?? '-'} | ${r.missing} | ${r.twice} | ${r.brackets} | ${r.duplicated} | ${r.numbers[0]} / ${r.numbers[1]} | ${r.clipped} | ${r.groupsSplit ?? 0} | ${r.labelsSource ?? 0} | ${r.fails.join(', ') || 'none'} |`)
+  // (TeX's file against the drawing: defects held to the run before as rates, until the pull request that removes a
+  // cause gates its measure at 0, README)
+  const fileMs = AGAINST_FILE.map(k => MEASURES.find(m => m[0] === k)).filter(m => run.tier === 'pixel' || m[1] === 'model')
+  L.push('', "## TeX's file against the drawing (held to the run before, not yet at 0)", '', `| output | ${fileMs.map(m => m[4]).join(' | ')} |`, `|---|${fileMs.map(() => '---|').join('')}`)
+  for (const [name, f] of Object.entries(run.fixtures)) L.push(`| ${name} | ${fileMs.map(m => f.totals[m[0]] ?? '-').join(' | ')} |`)
   L.push('', '## Recorded, not gated (the brief\'s typography)', '')
   L.push('| output | full size | median size | style match | lines on a layout baseline | unfit (floor) | bar | page 1 ms | slowest unit ms |', '|---|---|---|---|---|---|---|---|---|')
   for (const [name, f] of Object.entries(run.fixtures)) {

@@ -36,3 +36,23 @@ export declare function pixelPage(o: Record<string, unknown>): Record<string, un
 export declare function markerResidueOf(text: string): string[]
 /** TeX's syntax a placeholder's rendering `text` left of its source `src`: each special character beyond the source's escapes of it */
 export declare function markupResidueOf(text: string, src: string): string[]
+/** TeX's file as the instrument holds it, by page (the kept layout's rows): each unit's placeholders with ink there, its
+ *  lines, the LOST placeholders on its first page; every display's segments. Boxes are [x0, y0, x1, y1] */
+export interface FileLine { j: number; box: number[]; baseline: number; size: number; held: boolean }
+export interface FilePage { units: Map<number, { phs: { k: number; kind: string; segs: number[][] }[]; lines: FileLine[]; lost: number[]; pitch: number | null }>; displays: number[][] }
+export declare function fileIndexOf(layout: { lines?: [number, number[]][]; ph?: number[][]; held?: [number, number[]][] }): Map<number, FilePage>
+export declare function displayRowsOf(page: FilePage | undefined): number[][]
+/** a rendering of a placeholder by its unit and its piece's source index: a crop's source, or its characters' centres */
+export interface Rendering { unit: number; k: number | null; src?: string | null; chars: number[][] }
+/** each placeholder of a drawn unit whose ink TeX's file finds shown exactly once, by its own renderings: those shown no time or more, [unit, k, times] */
+export declare function contentOf(o: { phs: { unit: number; k: number; src?: string | null; segs: number[][] }[]; crops?: { unit: number; k: number | null; src?: string | null; box: number[] }[]; texts?: { unit: number; k: number | null; src?: string | null }[]; pageTexts?: Rendering[]; kept?: Rendering[]; keptLines?: number[][]; erased?: number[][] }): { contentLost: number; contentWhere: [number, number, number][] }
+/** the segments of the placeholders their own kept rendering leaves in place */
+export declare function keptSegsOf(o: { phs: { unit: number; k: number; segs: number[][] }[]; kept?: Rendering[] }): number[][]
+export declare function overDisplayOf(o: { lines: { unit: number; x0: number; x1: number; baseline: number; a: number; d: number }[]; boxes: number[][] }): { textInDisplay: number; where: number[] }
+export declare function slotsSkippedOf(units: { id: number; orig: OrigLine[]; lines: (DrawnLine & { pitch: number | null })[]; tex?: { baseline: number; x0: number; x1: number }[]; held?: number[][]; texPitch?: number | null; keptRows?: number[] }[]): { slotsSkipped: number; where: number[] }
+/** a character UAX 14 does not let a line start with (CL, CP, IS, EX, NS) */
+export declare function noStart(ch: string | null | undefined): boolean
+export declare function lineStartsOf(lines: { unit: number; first: string | null; orig: string | null }[]): { lineStartPunct: number; where: number[] }
+export declare function glyphAccounted(g: { cat: string | undefined; inSeg: boolean; fromSource?: boolean; onLine: boolean; inGap: boolean; used: string | null; drawn: boolean }): boolean
+/** each translated piece's source index of a unit, read by the instrument as layer-proto/tex.mjs kOfPieces reads it */
+export declare function kOfPiecesOf(pieces: { t: string }[] | undefined, tr: unknown): number[] | null

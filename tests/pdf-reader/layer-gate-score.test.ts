@@ -382,3 +382,215 @@ describe("the frozen references' babel names (layer-gate/ref.mjs makeRef, withNa
     expect(again.from.names).toBe(1)
   })
 })
+
+describe("TeX's file against the drawing (the 2608.16117 survey and the p59 finding: measure.mjs, the fixture's layout file)", () => {
+  // a layout file's rows: unit 3's three lines on page 1 (its second held, a display's row) and one on page 2; a math
+  // placeholder with a segment on each page, a display on page 1, a LOST one; unit 4 one line on page 1
+  const line = (p: number, x0: number, x1: number, base: number) => [p, x0, x1, base, base + 7, base - 2.5, 10, 0]
+  const layout = {
+    lines: [[3, [...line(1, 72, 472, 700), ...line(1, 200, 340, 680), ...line(1, 72, 472, 660), ...line(2, 72, 472, 700)]], [4, line(1, 72, 472, 600)]] as [number, number[]][],
+    held: [[3, [1]]] as [number, number[]][],
+    // unit, k, kind, flags, then per segment: page, x0, baseline, x1, top, bottom
+    ph: [[3, 1, 0, 0, 1, 100, 700, 120, 707, 698, 2, 90, 700, 110, 707, 698], [3, 3, 1, 2, 1, 200, 680, 340, 688, 676], [3, 5, 1, 32]],
+  }
+
+  it('reads the file by page: each unit\'s placeholders with ink and lines there, the LOST ones on its first page, the displays', async () => {
+    const { displayRowsOf, fileIndexOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    const f = fileIndexOf(layout)
+    const u = f.get(1)!.units.get(3)!
+    expect(u.phs).toEqual([{ k: 1, kind: 'math', segs: [[100, 698, 120, 707]] }, { k: 3, kind: 'display', segs: [[200, 676, 340, 688]] }])
+    expect(u.lines.map(l => [l.j, l.held])).toEqual([[0, false], [1, true], [2, false]])
+    expect(u.lines[0]!.box).toEqual([72, 697.5, 472, 707])
+    expect(u.lost).toEqual([5])
+    expect(f.get(2)!.units.get(3)).toMatchObject({ phs: [{ k: 1, segs: [[90, 698, 110, 707]] }], lost: [] })
+    expect(f.get(1)!.displays).toEqual([[200, 676, 340, 688]])
+    // the held line stands apart from the unit's text lines: a display's row; one that shares a band with one is not
+    expect(displayRowsOf(f.get(1))).toEqual([[200, 677.5, 340, 687]])
+    const shared = fileIndexOf({ ...layout, lines: [[3, [...line(1, 72, 190, 680), ...line(1, 200, 340, 680)]]], held: [[3, [1]]] })
+    expect(displayRowsOf(shared.get(1))).toEqual([])
+    // its pitch: the gaps of its text lines next to each other in a column, never one across a held line (a display's room)
+    expect(u.pitch).toBe(null)
+    const three = fileIndexOf({ lines: [[3, [...line(1, 72, 472, 700), ...line(1, 72, 472, 688), ...line(1, 200, 340, 670), ...line(1, 72, 472, 640), ...line(1, 72, 472, 628)]]], held: [[3, [2]]], ph: [] })
+    expect(three.get(1)!.units.get(3)!.pitch).toBe(12)
+    // two columns at the same heights: each column's own gaps, never a line of one beside the other's
+    const columns = fileIndexOf({ lines: [[3, [...line(1, 72, 290, 700), ...line(1, 320, 540, 700), ...line(1, 72, 290, 688), ...line(1, 320, 540, 688)]]], held: [], ph: [] })
+    expect(columns.get(1)!.units.get(3)!.pitch).toBe(12)
+  })
+
+  it('content: a placeholder is shown once by its own crop of its ink, its source drawn, its characters drawn, or its ink in place', async () => {
+    const { contentOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    const ph = { unit: 3, k: 1, src: '$x$', segs: [[100, 698, 120, 707]] }, erased = [[70, 695, 475, 710]]
+    const crop = (box: number[], k = 1, src = '$x$') => ({ unit: 3, k, src, box })
+    const text = (k = 1, src = '$x$') => [{ unit: 3, k, src }]
+    // erased, and nothing drawn of it: lost
+    expect(contentOf({ phs: [ph], erased })).toEqual({ contentLost: 1, contentWhere: [[3, 1, 0]] })
+    // its crop whose source holds its segment's centre, or its source drawn as text: shown once
+    expect(contentOf({ phs: [ph], erased, crops: [crop([99.6, 697.7, 120.4, 707.3])] }).contentLost).toBe(0)
+    expect(contentOf({ phs: [ph], erased, texts: text() }).contentLost).toBe(0)
+    // another placeholder's crop of its ink shows it no time
+    expect(contentOf({ phs: [ph], erased, crops: [crop([99.6, 697.7, 120.4, 707.3], 3, '$y$')] }).contentWhere).toEqual([[3, 1, 0]])
+    // its crop cut beside it ("r" of "r,\u03b8" alone): its centre is not in it, so it is lost
+    expect(contentOf({ phs: [ph], erased, crops: [crop([99.6, 697.7, 106, 707.3])] }).contentWhere).toEqual([[3, 1, 0]])
+    // both its crop and its text: shown twice
+    expect(contentOf({ phs: [ph], erased, crops: [crop([99.6, 697.7, 120.4, 707.3])], texts: text() }).contentWhere).toEqual([[3, 1, 2]])
+    // its ink in place: never erased, on a line the drawing keeps, or a kept rendering's characters in it, once however often
+    expect(contentOf({ phs: [ph] }).contentLost).toBe(0)
+    expect(contentOf({ phs: [ph], erased, keptLines: [[72, 697.5, 472, 707]], kept: [{ unit: 3, k: 1, chars: [[110, 701]] }] }).contentLost).toBe(0)
+    // kept by whichever placeholder (a display's kept rendering over its row): its ink stands where it is, shown
+    expect(contentOf({ phs: [ph], erased, kept: [{ unit: 3, k: 9, chars: [[110, 701]] }] }).contentLost).toBe(0)
+    // and its own rendering drawn as well: twice (a placeholder in a display's kept row, drawn again in the text)
+    expect(contentOf({ phs: [ph], erased, kept: [{ unit: 3, k: 9, chars: [[110, 701]] }], texts: text() }).contentWhere).toEqual([[3, 1, 2]])
+    // left in place and drawn as text as well: twice (the kept citation line drawn again)
+    expect(contentOf({ phs: [ph], erased, keptLines: [[72, 697.5, 472, 707]], texts: text() }).contentWhere).toEqual([[3, 1, 2]])
+  })
+
+  it("content: a rendering handed out one off shows every placeholder it passes as lost; one of the same source is its own", async () => {
+    const { contentOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    // k 1's rendering took k 9's ink ("(2.4)"); k 9's own rendering took nothing: neither is shown
+    const a = { unit: 3, k: 1, src: '\\eqref{a}', segs: [[232, 201, 261, 206]] }, b = { unit: 3, k: 9, src: '\\eqref{b}', segs: [[200, 183, 223, 188]] }
+    const erased = [[190, 180, 262, 207]]
+    expect(contentOf({ phs: [a, b], erased, pageTexts: [{ unit: 3, k: 1, src: a.src, chars: [[201, 186.6], [206, 186.6]] }] }).contentWhere).toEqual([[3, 1, 0], [3, 9, 0]])
+    // drawn from their own ink, each once
+    expect(contentOf({ phs: [a, b], erased, pageTexts: [{ unit: 3, k: 1, src: a.src, chars: [[240, 204]] }, { unit: 3, k: 9, src: b.src, chars: [[206, 186.6]] }] }).contentLost).toBe(0)
+    // a piece the translation repeats, drawn from its source twice: shown twice; two of one source drawn so: each its own
+    expect(contentOf({ phs: [a], erased, texts: [{ unit: 3, k: 1, src: a.src }, { unit: 3, k: 1, src: a.src }] }).contentWhere).toEqual([[3, 1, 2]])
+    expect(contentOf({ phs: [a, { ...b, src: a.src }], erased, texts: [{ unit: 3, k: 1, src: a.src }, { unit: 3, k: 9, src: a.src }] }).contentLost).toBe(0)
+    // two \\eqref of one label, their renderings swapped: each shows the same text where the other stood, both shown once
+    const c = { ...b, src: a.src }
+    expect(contentOf({ phs: [a, c], erased, pageTexts: [{ unit: 3, k: 1, src: a.src, chars: [[206, 186.6]] }, { unit: 3, k: 9, src: a.src, chars: [[240, 204]] }] }).contentLost).toBe(0)
+  })
+
+  it('a drawn line over a display: its text\'s ink meets a display\'s segment or row by more than half a point', async () => {
+    const { overDisplayOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    const at = (baseline: number) => [{ unit: 198, x0: 289, x1: 315, baseline, a: 8, d: 2 }]
+    expect(overDisplayOf({ lines: at(625.28), boxes: [[125, 605, 469, 738]] })).toEqual({ textInDisplay: 1, where: [198] })
+    // its ink's foot 0.4 into the display's top: clear; 0.6 into it: over it
+    expect(overDisplayOf({ lines: at(739.6), boxes: [[125, 605, 469, 738]] }).textInDisplay).toBe(0)
+    expect(overDisplayOf({ lines: at(739.4), boxes: [[125, 605, 469, 738]] }).textInDisplay).toBe(1)
+  })
+
+  it("an empty slot between two drawn lines of a frame, beyond TeX's own room and the lines the drawing keeps", async () => {
+    const { slotsSkippedOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    const orig = lines(6)
+    const drawnAt = (bs: number[], pitch = 12) => bs.map(baseline => ({ baseline, size: 10, x0: 72, x1: 472, pitch }))
+    // TeX's own lines at the original's pitch, 12, in the frame's column: nothing set aside
+    const texAt = (bs: number[], x0 = 72, x1 = 472) => bs.map(baseline => ({ baseline, x0, x1 }))
+    const of = (bs: number[], o: { tex?: { baseline: number; x0: number; x1: number }[]; keptRows?: number[]; held?: number[][]; pitch?: number } = {}) => slotsSkippedOf([{ id: 8, orig, lines: drawnAt(bs, o.pitch), tex: o.tex ?? texAt([700, 688, 676, 664, 652, 640]), held: o.held ?? [], texPitch: 12, keptRows: o.keptRows ?? [] }])
+    expect(of([700, 688, 676, 664]).slotsSkipped).toBe(0)
+    // a gap of two pitches holds one empty slot, three pitches two
+    expect(of([700, 676, 664])).toEqual({ slotsSkipped: 1, where: [8] })
+    expect(of([700, 664]).slotsSkipped).toBe(2)
+    // the original's own blank line between two paragraphs of the unit (its lines 676 and 652): none left empty by the drawing
+    expect(of([700, 688, 676, 652, 640], { tex: texAt([700, 688, 676, 652, 640]) }).slotsSkipped).toBe(0)
+    // the original's blank, and the line after it left empty too: one
+    expect(of([700, 688, 676, 640], { tex: texAt([700, 688, 676, 652, 640]) }).slotsSkipped).toBe(1)
+    // TeX's lines of another column beside it hold no room of this one
+    expect(of([700, 688, 676, 652, 640], { tex: [...texAt([700, 688]), ...texAt([676, 652, 640], 480, 540)] }).slotsSkipped).toBe(1)
+    // a held row (a display) between them: no pair, the room before a display the frame's blank lines' (an empty row too)
+    expect(of([700, 664], { held: [[200, 684, 340, 692]] }).slotsSkipped).toBe(0)
+    // a text line the drawing keeps as the original's (English left in place): its row is not empty
+    expect(of([700, 676, 664], { keptRows: [688] }).slotsSkipped).toBe(0)
+    // at a wider drawn pitch (1.3), the original's blank of one of its pitches sets aside its room, 12, not a drawn slot
+    expect(of([700, 684.4, 656.8], { tex: texAt([700, 688, 676, 652, 640]), pitch: 15.6 }).slotsSkipped).toBe(0)
+  })
+
+  it("a line opened by a mark UAX 14 keeps from a line's start, unless the original's line opens with one", async () => {
+    const { lineStartsOf, noStart } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    for (const c of ['\uff0c', '\u3002', '\u3001', ')', ',', '.', '!', '?', ';', ':', '\u300d', '\u30fb', '\u{1f679}']) expect(noStart(c)).toBe(true)
+    for (const c of ['(', 'a', '\u4e2d', '\u2014', '%', '/', '[', '\u300c', null, '']) expect(noStart(c)).toBe(false)
+    expect(lineStartsOf([{ unit: 28, first: '\uff0c', orig: 'w' }, { unit: 28, first: '\u5176', orig: 'w' }, { unit: 30, first: ',', orig: ',' }, { unit: 30, first: null, orig: null }, { unit: 31, first: '\u3002', orig: null }])).toEqual({ lineStartPunct: 2, where: [28, 31] })
+  })
+
+  it("the strict account of an erased glyph: TeX's text replaced, a placeholder's ink only where drawn from it, no leftover", async () => {
+    const { glyphAccounted } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    const g = { cat: 'acc', inSeg: false, onLine: false, inGap: false, used: null, drawn: false }
+    // a placeholder's ink (in its segment), even as a word the alignment matched ("and" of a reference): only where its
+    // placeholder is drawn from its source or a rendering drawn as the page's own characters took it
+    expect(glyphAccounted({ ...g, inSeg: true })).toBe(false)
+    expect(glyphAccounted({ ...g, inSeg: true, fromSource: true })).toBe(true)
+    expect(glyphAccounted({ ...g, inSeg: true, used: 'orig-text', drawn: true })).toBe(true)
+    expect(glyphAccounted({ ...g, inSeg: true, used: 'orig-text', drawn: false })).toBe(false)
+    // TeX's text on the unit's own line, a leftover of a gap too (the alignment missed it): replaced, unless kept
+    expect(glyphAccounted({ ...g, onLine: true, cat: 'orphan', inGap: true })).toBe(true)
+    expect(glyphAccounted({ ...g, onLine: true, cat: 'keep' })).toBe(false)
+    // where the file has no line for it: the drawing's matched source word, never a leftover whose letters it draws elsewhere
+    expect(glyphAccounted(g)).toBe(true)
+    expect(glyphAccounted({ ...g, inGap: true })).toBe(false)
+    expect(glyphAccounted({ ...g, used: 'crop' })).toBe(false)
+  })
+
+  it("unerased originals: a drawn unit's own line of TeX's file left intact, never one erased or drawn over", async () => {
+    // a 60 x 40 page at 1 px a unit: one line from 10 to 50 on baseline 20, its ink rows 14 to 19
+    const W = 60, H = 40
+    const planeOf = (paint: (x: number, y: number) => number) => {
+      const a = new Uint8ClampedArray(W * H * 4)
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const v = paint(x, y); a.set([v, v, v, 255], 4 * (y * W + x)) }
+      return a
+    }
+    const O = planeOf((x, y) => (y >= 14 && y < 20 && x >= 12 && x < 48 && x % 4 < 2 ? 0 : 255)), paper = planeOf(() => 255)
+    const of = (C: Uint8ClampedArray, T = paper, segs: number[][] = []) => pixelPage({ k: 1, view: [0, 0, W, H], W, H, O, C, T, units: [], kept: [], items: [], ref: [], drawnText: '', ownLines: [{ unit: 8, box: [10, 17.5, 50, 27] }], segs }) as { linesLeft: number; linesLeftWhere: number[] }
+    expect(of(O)).toMatchObject({ linesLeft: 1, linesLeftWhere: [8] })
+    expect(of(paper).linesLeft).toBe(0)
+    // the translation's text over every pixel of it: not left, drawn over (overlap's)
+    expect(of(O, O).linesLeft).toBe(0)
+    // a placeholder the drawing keeps in place filling the line (a citation kept as the original's): its ink aside
+    expect(of(O, paper, [[11, 18, 49, 26]]).linesLeft).toBe(0)
+  })
+
+  it('the segments a kept rendering leaves in place: those its characters stand in', async () => {
+    const { keptSegsOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    const phs = [{ unit: 46, k: 1, segs: [[143, 418, 180, 427]] }, { unit: 46, k: 3, segs: [[200, 418, 230, 427]] }]
+    expect(keptSegsOf({ phs, kept: [{ unit: 46, k: 1, chars: [[150, 421]] }] })).toEqual([[143, 418, 180, 427]])
+    // whoever kept it: its ink stands where it is
+    expect(keptSegsOf({ phs, kept: [{ unit: 46, k: 3, chars: [[150, 421]] }] })).toEqual([[143, 418, 180, 427]])
+    expect(keptSegsOf({ phs })).toEqual([])
+  })
+
+  it('records each as a defect of its tier, its rate compared, what the content measure cannot place too', () => {
+    for (const [key, tier] of [['contentLost', 'model'], ['contentUnknown', 'model'], ['textInDisplay', 'model'], ['slotsSkipped', 'model'], ['lineStartPunct', 'model'], ['glyphsLost', 'pixel'], ['linesLeft', 'pixel']] as const) {
+      expect(measure(key).slice(1, 4)).toEqual([tier, 'defect', 'down'])
+    }
+    const model = (n: number) => ({
+      model: { units: { textOn: 1, textDrawn: 1, cellsOn: 0, cellsDrawn: 0, left: {} }, fills: [], geo: [], gaps: [], wrongPageText: 0, droppedPh: 0, cropForeign: 0, modelCells: 1000, contentLost: n, textInDisplay: 0, slotsSkipped: 2, lineStartPunct: 1, contentUnknown: 3 },
+      check: { missing: [], twice: [], brackets: [], duplicated: [], numbers: { shown: 0, total: 0 }, clipped: 0 }, where: {}, style: [0, 0], drawn: 1,
+    })
+    const es = [pageEntry(1, model(1), null), pageEntry(2, model(2), null)]
+    expect(es[0]!.entry).toMatchObject({ contentLost: 1, slotsSkipped: 2, lineStartPunct: 1, contentUnknown: 3 })
+    const t = fixtureTotals(es.map(e => e.entry), es.map(e => e.frames), 'model')
+    expect(t).toMatchObject({ contentLost: 3, slotsSkipped: 4, contentUnknown: 6 })
+    expect(t.modelRates).toMatchObject({ contentLost: 1.5, textInDisplay: 0 })
+    expect(worse(measure('contentLost'), t, { ...t, modelRates: { ...t.modelRates, contentLost: 2 } }, 'model')?.worse).toBe(true)
+  })
+})
+
+describe('what the instrument reads itself, against the engine (the measures against TeX\'s file)', () => {
+  it("kOfPiecesOf reads a unit's pieces' source indices as layer-proto/tex.mjs kOfPieces does", async () => {
+    const { kOfPiecesOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    const { kOfPieces } = await import('../../src/pdf-reader/engine/layer-proto/tex.mjs')
+    const pieces = [{ t: 'text' }, { t: 'ph' }, { t: 'text' }, { t: 'open' }, { t: 'text' }, { t: 'close' }, { t: 'ph' }]
+    const cases = [
+      [[0], [1, 4], [0], [2, 6], [0], [3, 6], [1, 9]],
+      // a placeholder the translation sets as text, a piece of another kind where a group stands, a short list
+      [[0], [0, 'x'], [0], [2, 6], [0], [3, 6], [1, 9]],
+      [[0], [1, 4], [0], [1, 6], [0], [3, 6], [1, 9]],
+      [[0], [1, 4], [1, 5], [2, 6], [0], [3, 6], [1, 9]],
+      [[0], [1, 4]],
+      [[0], 'x', [0], [2, 6], [0], [3, 6], [1, 9]],
+    ]
+    for (const tr of cases) expect(kOfPiecesOf(pieces, tr)).toEqual(kOfPieces({ kind: 'para', src: '', pieces } as unknown as Parameters<typeof kOfPieces>[0], tr as Parameters<typeof kOfPieces>[1]))
+  })
+
+  it('a record that a run would drop an output of is named: its run of the kind, for a model run its pixel run', async () => {
+    const { droppedOutputs } = await import('../../lab/pdf/spikes/layer-gate/score.mjs')
+    const record = { tiers: { 'pixel-proto-x': { fixtures: { a: {}, b: {}, c: {} } } } }
+    expect(droppedOutputs(record, 'pixel-proto-x', ['a', 'b', 'c'])).toEqual([])
+    expect(droppedOutputs(record, 'pixel-proto-x', ['a', 'b'])).toEqual(['c'])
+    // a model record over a record whose model run the pixel run replaced: held to the pixel run's outputs
+    expect(droppedOutputs(record, 'model-proto-x', ['b'])).toEqual(['a', 'c'])
+    expect(droppedOutputs(null, 'model-proto-x', ['b'])).toEqual([])
+    expect(droppedOutputs({ tiers: { 'model-proto-x': { fixtures: { b: {} } }, 'pixel-proto-x': { fixtures: { a: {}, b: {} } } } }, 'model-proto-x', ['b'])).toEqual([])
+    // a pixel record over a record that holds only a model run of the kind, which recording it deletes: held to it
+    expect(droppedOutputs({ tiers: { 'model-proto-x': { fixtures: { a: {}, b: {} } } } }, 'pixel-proto-x', ['b'])).toEqual(['a'])
+    expect(droppedOutputs({ tiers: { 'model-proto-x': { fixtures: { a: {} } }, 'pixel-proto-x': { fixtures: { b: {} } } } }, 'pixel-proto-x', ['b'])).toEqual(['a'])
+  })
+})

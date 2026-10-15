@@ -76,6 +76,22 @@ export const MEASURES = [
   // the consistency measures (the table-groups brief, 2026-10-07): each must be 0
   ['groupsSplit', 'model', 'count', 'down', 'table groups drawn partly'],
   ['labelsSource', 'model', 'count', 'down', 'labels left in the source language the final names'],
+  // TeX's file against the drawing (the 2608.16117 survey and the p59 finding, 2026-10-15; measure.mjs): a placeholder of a
+  // drawn unit not shown exactly once, its ink its file row's segments (contentOf); a drawn line over a display's segment or
+  // row (overDisplayOf); an empty slot between two drawn lines of a unit's frame (slotsSkippedOf); a drawn line opened by a
+  // character UAX 14 keeps from a line's start where the original's is not (lineStartsOf); an erased glyph the strict rule
+  // does not account for (glyphAccounted); a drawn unit's own text line left intact (pixelPage linesLeft). Each is a defect
+  // compared as a rate against the run it is held to, as the others are, until the pull request that removes its cause
+  // gates it at 0 (lab/pdf/README.md, the layer gate)
+  ['contentLost', 'model', 'defect', 'down', 'placeholders not shown once (TeX\'s segments)'],
+  ['textInDisplay', 'model', 'defect', 'down', 'drawn lines over a display'],
+  ['slotsSkipped', 'model', 'defect', 'down', 'empty slots between two lines of a unit'],
+  ['lineStartPunct', 'model', 'defect', 'down', 'lines opened by a mark UAX 14 keeps from a line start'],
+  // (and the placeholders the content measure cannot place, LOST in the file or of a unit it does not hold: compared as
+  // the others, so that a maker that loses more ink cannot lower the content measures by it)
+  ['contentUnknown', 'model', 'defect', 'down', 'placeholders the content measure cannot place'],
+  ['glyphsLost', 'pixel', 'defect', 'down', 'erased glyphs not accounted for (strict)'],
+  ['linesLeft', 'pixel', 'defect', 'down', "a drawn unit's own lines left intact"],
 ]
 /** recorded beside them, not gated: the pitch is the rules' (CJK's leading is 1.3 by rule), the top a position, and the
  *  most a page's drawn rhythm (its body frames' median line gap within a flow segment against the original's, measure.mjs
@@ -86,6 +102,8 @@ export const REPORTED = [['pitch', 'pitch ratio'], ['dTop', '|top shift| (pt)'],
   ['cropNoTex', 'crops with no TeX baseline'], ['aloneUnits', 'units v0 draws alone'], ['linesOpened', "lines TeX's rule opened"], ['linesUnopened', "lines TeX's rule would open, no values"]]
 /** the reported counts a run's totals sum over its fixtures */
 const REPORTED_COUNTS = ['cropNoTex', 'aloneUnits', 'linesOpened', 'linesUnopened']
+/** the content and line measures a page's model holds (measure.mjs) */
+const FILE_MEASURES = ['contentLost', 'textInDisplay', 'slotsSkipped', 'lineStartPunct', 'contentUnknown']
 /** the placement counts, which a run without a layout file (v0 alone) has none of */
 const PLACEMENT = ['cropTextOverlap', 'cropBaselineOff', 'cropNoTex']
 export const TOLERANCE = { share: 0.002, ratio: 0.02, count: 0, defect: 0 }
@@ -122,6 +140,7 @@ export function pageEntry(page, model, pixel) {
     dTop: r(median(body.map(g => Math.abs(g.dTop))), 2), overRight: body.filter(g => g.dRight > 1).length, onGrid: r(median(body.map(g => g.onGrid)), 3),
     cropForeign: m.cropForeign, wrongPageText: m.wrongPageText, droppedPh: m.droppedPh, modelCells: m.modelCells,
     ...Object.fromEntries(PLACEMENT.filter(k => m[k] !== undefined).map(k => [k, m[k]])),
+    ...Object.fromEntries(FILE_MEASURES.filter(k => m[k] !== undefined).map(k => [k, m[k]])),
     missing: model.check.missing.length, twice: model.check.twice.length, brackets: model.check.brackets.length, duplicated: model.check.duplicated.length,
     clipped: model.check.clipped, markerResidue: model.check.markerResidue ?? 0, numbersTotal: model.check.numbers.total, numbersShown: model.check.numbers.shown, numbersLost: model.check.numbers.total - model.check.numbers.shown,
     where: model.where, style: model.style, drawn: model.drawn,
@@ -139,7 +158,10 @@ export function pageEntry(page, model, pixel) {
       overlap: pixel.overlap, overlapPx: pixel.overlapPx, stray: pixel.stray, residue: pixel.residue, residuePx: pixel.residuePx, bites: pixel.bites, bitePx: pixel.bitePx,
       vanished: pixel.vanished, doubled: pixel.doubled, graphicsPx: pixel.graphics.px, graphicsErased: pixel.graphics.erased, graphicsOverdrawn: pixel.graphics.overdrawn, graphicsTouched: pixel.graphics.touched,
       lostInk: pixel.lostInk.regions, lostInkPx: pixel.lostInk.px, lostBoxes: pixel.lostInk.boxes, regionsAt: pixel.regionsAt,
+      ...(pixel.glyphsLost ? { glyphsLost: pixel.glyphsLost.regions, glyphsLostPx: pixel.glyphsLost.px, glyphsLostBoxes: pixel.glyphsLost.boxes } : {}),
+      ...(pixel.linesLeft !== undefined ? { linesLeft: pixel.linesLeft } : {}),
     })
+    if (pixel.linesLeftWhere?.length) e.where = { ...e.where, linesLeft: [...new Set(pixel.linesLeftWhere)] }
     const rm = pixel.removal
     if (rm) Object.assign(e, { trueResidue: rm.trueResidue, trueResiduePx: rm.trueResiduePx, traces: rm.traces, tracesPx: rm.tracesPx, trueBites: rm.trueBites, trueBitesPx: rm.trueBitesPx, cropForeignInk: rm.cropForeignInk, cropForeignInkPx: rm.cropForeignInkPx, rmCrops: rm.crops, truthAt: rm.at })
   }
@@ -176,7 +198,7 @@ export function fixtureTotals(pages, frames, tier) {
       cellCells: cc, cellTranslatedCells: sum(pages, p => p.cellTranslatedCells),
       textTranslated: r(share(sum(pages, p => p.textTranslatedCells), tc)), textEnglish: r(share(sum(pages, p => p.textEnglishCells), tc)), textBlank: r(share(sum(pages, p => p.textBlankCells), tc)),
       cellsTranslated: r(share(sum(pages, p => p.cellTranslatedCells), cc)),
-      overlapPx: sum(pages, p => p.overlapPx), residuePx: sum(pages, p => p.residuePx), bitePx: sum(pages, p => p.bitePx), lostInkPx: sum(pages, p => p.lostInkPx), graphicsPx: sum(pages, p => p.graphicsPx),
+      overlapPx: sum(pages, p => p.overlapPx), residuePx: sum(pages, p => p.residuePx), bitePx: sum(pages, p => p.bitePx), lostInkPx: sum(pages, p => p.lostInkPx), graphicsPx: sum(pages, p => p.graphicsPx), glyphsLostPx: sum(pages, p => p.glyphsLostPx),
     })
   }
   // the text-removed PDF's sums, where the run has them
@@ -300,4 +322,18 @@ export function compare(prev, cur, tier) {
     }
   }
   return out
+}
+
+/**
+ * The outputs a record (layer-fidelity.json's) holds in the runs a new run of `key` would be recorded over, or held to,
+ * that `fixtures` (the new run's output names) lacks: for a model run its own, else the pixel run of the same key (as
+ * --check reads it); for a pixel run its own and the model run of the same key, which recording it deletes. A run
+ * given another folder of references is whole by itself, and recorded it would drop those outputs unseen
+ */
+export function droppedOutputs(record, key, fixtures) {
+  const t = record?.tiers ?? {}, model = key.replace(/^pixel/, 'model'), pixel = key.replace(/^model/, 'pixel')
+  const runs = key.startsWith('model') ? [t[key] ?? t[pixel]] : [t[key], t[model]]
+  const have = new Set(fixtures), out = new Set()
+  for (const r of runs) for (const n of Object.keys(r?.fixtures ?? {})) if (!have.has(n)) out.add(n)
+  return [...out].sort()
 }
