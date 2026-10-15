@@ -5,8 +5,9 @@ import type { translateUnits } from '../translate/mt.mjs'
 import type { ReadBundle } from './bundle.mjs'
 import type { Unit } from './run.mjs'
 
-/** what the rows need of a bundle: its units, by index, a dropped one null (the written bundle and the read one both are) */
-export type RowsBundle = Pick<ReadBundle, 'units'>
+/** what the rows need of a bundle: its units, by index, a dropped one null (the written bundle and the read one both are, and
+ *  BUNDLE 4's index, format.mjs indexOf) */
+export type RowsBundle = { readonly units: Readonly<ReadBundle['units']> }
 /** a row's state: the unit's translation whole or partial, none (the engine could not take it), lost (to the service,
  *  to be asked again), or kept (a table cell held whole in its source with its group) */
 export type RowState = 'whole' | 'partial' | 'none' | 'lost' | 'kept'

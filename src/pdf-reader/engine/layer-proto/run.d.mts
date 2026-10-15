@@ -7,6 +7,7 @@ import type { TexLines, Whole } from './tex.mjs'
 import type { RemovalManifest } from '../layout/remove.mjs'
 import type { FaceSources } from './fonts.mjs'
 import type { FrozenRuleSet, RULES_SCHEMA } from '../rules/layout.mjs'
+import type { ReadPart } from './format.mjs'
 
 /** a unit as the units record holds it (a row): its kind, source and state; its translation's pieces, none where it has
  *  none, each non-text one with its k (the layout file's index of its source piece: E6's row); its title, its table's
@@ -84,6 +85,7 @@ export interface ProtoRun {
   P: Params
   /** the layout rule set the run was opened with (rules/layout.mjs): its schema and version */
   readonly rules: { schema: typeof RULES_SCHEMA; version: number }
+  /** each page's row (under parts, null at runtime for a page whose view no part has told yet: none is drawn there) */
   rows: Row[]
   placed: Placed[]
   /** the units left the original's and why: `unanchored`, `author`, `unfit`, `group: …`, and, in the role table's faces, `served`
@@ -109,8 +111,28 @@ export interface ProtoRun {
   readonly sources: Sources
   /** the page after whose units page `page` is done; Infinity until the units it reads have come */
   doneAt(page: number): number
-  /** every page up to the one that finishes page `page` drawn and its units laid, a unit a task, once they have come */
-  until(page: number): Promise<void>
+  /** every page up to the one that finishes page `page` drawn and its units laid, a unit a task, once they have come;
+   *  `still`, read between pages and at each wait, false ends it there (a page under way is finished first) */
+  until(page: number, still?: () => boolean): Promise<void>
+  /** parts: the next part, read by readPart against the chain (its layout merged into the hybrid's index before: facade.mjs) */
+  grow(part: ReadPart): void
+  /** parts: no more parts; every page past the last covered fails as it is reached */
+  endParts(): void
+  /** parts: the newest composed document, read from now on; the one it replaces told to `onRetired` once no read holds it */
+  swap(doc: { numPages: number; getPage(n: number): Promise<unknown> }): void
+  /** the last page a part covers (every page, a whole open) */
+  readonly through: number
+  readonly partsEnded: boolean
+  /** the last page whose step has ended (its units laid, or it failed) */
+  readonly drawnTo: number
+  /** how far into the stream every unit's row decides what it is */
+  extent(): number
+  /** whether until(page) waits for nothing more to come, neither a part nor a row (`at`: extent(), read once for many pages) */
+  inputs(page: number, at?: number): boolean
+  /** whether the page failed: its drawing threw, or no part covers it and the parts have ended */
+  failed(page: number): boolean
+  /** a wait under way looks again at what it waits for */
+  poke(): void
   /** units as they arrive (id → row): a row wins over one taken before it until its unit is placed; the hybrid's pieces
    *  read from each translated row's pieces' k; a row no unit of this paper's (not a unit's shape, its kind not the
    *  layout file's or the geometry's, its group not the open's `groups`, a k past its source's pieces) left the
@@ -204,4 +226,12 @@ export declare function openProto(o: {
   labels?: { captions: Captions | null } | null
   /** the layout rule set every choice made for the target is read from, resolved once at the open (absent: BUILTIN_RULES) */
   rules?: FrozenRuleSet
+  /** the paper in parts (grow, endParts): no view and no left unit given, `groups`, `tex` and `removal` ('draw') required */
+  parts?: boolean
+  /** a document the run read and no longer reads (a swap, dispose), told once */
+  onRetired?: ((doc: unknown) => void) | null
+  /** a page's step ended: its units laid, or it failed */
+  onStep?: ((page: number) => void) | null
+  /** the run waits: for a part, or for rows (an instrument) */
+  onWait?: ((what: 'part' | 'rows') => void) | null
 }): Promise<ProtoRun>

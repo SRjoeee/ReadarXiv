@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import type { Layer, LayerDocument, PageEvent } from '@/pdf-reader/engine/layer-proto/door.mjs'
+import type { Layer, LayerDocument, PageEvent } from '@/pdf-reader/engine/layer-proto/reader.mjs'
 import type { Ref } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { type Made, made, N } from './format-paper'
 
-// The door's readiness protocol (layer-proto/door.d.mts; the bundle 4 contract C7, M9, M10 and the reader view's D-1 to D-9) as
+// The door's readiness protocol (layer-proto/reader.d.mts; the bundle 4 contract C7, M9, M10 and the reader view's D-1 to D-9) as
 // a suite any door runs: the fake (tests/pdf-reader/door-fake.test.ts) now, E4b's real one when it lands. It holds what the
 // view and the web code against: states, onPage, pageOf (waiting, rejection, signal), leftPageOf, addPart's refusals,
 // endParts, onRetired and dispose. Drawing is the engine lane's own rows. A door is reached through `makeDoor`, which opens it over
@@ -384,11 +384,12 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
       d.layer.endParts()
       expect(await three).toHaveProperty('error')
       expect(await settle(d.layer.leftPageOf(4))).toHaveProperty('error')
+      // (one open layer at a time: the first let go before the next opens)
+      d.layer.dispose()
       const e = await open()
       const pending = settle(e.layer.leftPageOf(1))
       e.layer.dispose()
       expect(await pending).toHaveProperty('error')
-      d.layer.dispose()
     })
 
     it('rejects a pending leftPageOf at dispose without waiting for the transport', async () => {
