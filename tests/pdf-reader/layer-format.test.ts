@@ -763,6 +763,16 @@ describe('unitsOfChunks gives windowed access (amendment M3\')', () => {
     expect(unitsOfChunks([first, second]).externalRefs(1)).toEqual([0])
   })
 
+  it('refuses chunks whose bytes in all pass UNITS_TOTAL_BYTES, as the head\'s refs and the writer are', async () => {
+    const [c0] = await chain()
+    // 20 chunks of 2 MiB each are 40 MiB: every one valid, the count within CHUNKS_MAX, the total past the guard
+    const heavy = Array.from({ length: CHUNKS_MAX }, (_, i) => ({ ...c0!, from: 2 * i, to: 2 * i + 1, bytes: UNITS_CAP, values: 10, stands: new Uint8Array(2 * i + 2).fill(1) }))
+    expect(CHUNKS_MAX * UNITS_CAP).toBeGreaterThan(UNITS_TOTAL_BYTES)
+    expect(() => unitsOfChunks(heavy)).toThrow(expect.objectContaining({ kind: 'units', why: 'units-too-large', data: expect.objectContaining({ what: 'bytes', bound: UNITS_TOTAL_BYTES }) }))
+    // (the bound itself is read)
+    expect(unitsOfChunks(heavy.slice(0, UNITS_TOTAL_BYTES / UNITS_CAP)).units).toHaveLength(2 * (UNITS_TOTAL_BYTES / UNITS_CAP))
+  })
+
   it('refuses the guard\'s breach: more chunks than CHUNKS_MAX, and values in all past UNITS_TOTAL_VALUES', async () => {
     const [c0] = await chain()
     expect(() => unitsOfChunks(Array.from({ length: CHUNKS_MAX + 1 }, () => c0!))).toThrow(expect.objectContaining({ kind: 'index' }))

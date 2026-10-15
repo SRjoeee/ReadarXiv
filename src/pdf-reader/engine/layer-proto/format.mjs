@@ -434,7 +434,7 @@ export async function writeUnitChunks({ paper, units }) {
 /**
  * The units of chunks read in order, head-less (amendment M3; the head's indexOf takes the same): each chunk after the one
  * before it (its `from` the last `to` + 1, the first 0), of one paper and one pipeline, read as one chain (each chunk's
- * `stands` begins as the one before's); no more than CHUNKS_MAX chunks, and their values in all within UNITS_TOTAL_VALUES.
+ * `stands` begins as the one before's); no more than CHUNKS_MAX chunks, and their bytes and values in all within UNITS_TOTAL_BYTES and UNITS_TOTAL_VALUES.
  * Gives every unit (null where dropped), its kind (null likewise) and the ids dropped, their `records` (M15), and the windowed access amendment M3'
  * asks for: `index`, each chunk's { from, to }; `chunkOf(id)`, the chunk holding a unit; `externalRefs(k)`, the ids below chunk
  * k's `from` that its nested pieces name (rising), so that a reader holding one chunk at a time knows which earlier units it
@@ -444,13 +444,15 @@ export function unitsOfChunks(chunks) {
   const K = 'index'
   if (chunks.length > CHUNKS_MAX) throw refuse(K, 'units', `more than ${CHUNKS_MAX} chunks (${chunks.length})`)
   const units = [], kinds = [], dropped = []
-  let before = null, total = 0
+  let before = null, total = 0, totalBytes = 0
   for (let i = 0; i < chunks.length; i++) {
     const c = chunks[i], path = `units[${i}]`
     if (c.from !== (before === null ? 0 : before.to + 1)) throw refuse(K, path, 'not the units after the last chunk\'s')
     if (before !== null && (c.paper.id !== before.paper.id || c.paper.version !== before.paper.version)) throw refuse(K, path, 'not the paper of the chunk before')
     if (before !== null && c.pipeline !== before.pipeline) throw refuse(K, path, 'not the pipeline of the chunk before')
     if (before !== null) for (let q = 0; q < before.stands.length; q++) if (c.stands[q] !== before.stands[q]) throw refuse(K, path, 'not read after the chunk before it (its nested units)')
+    totalBytes += c.bytes
+    if (totalBytes > UNITS_TOTAL_BYTES) throw tooLarge('bytes', UNITS_TOTAL_BYTES, totalBytes)
     total += c.values
     if (total > UNITS_TOTAL_VALUES) throw tooLarge('values', UNITS_TOTAL_VALUES, total)
     for (let q = 0; q < c.units.length; q++) { units.push(c.units[q]); kinds.push(c.units[q] === null ? null : c.units[q][0]) }
