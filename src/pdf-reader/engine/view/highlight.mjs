@@ -8,7 +8,9 @@
 // inside the column's text edges. The edges are the document's (per page size, parity and column, from every page's
 // long lines): a page of displays has too few lines of prose to give its own, a two-sided class shifts the text between
 // odd and even pages, and a landscape page or one of another size has a measure of its own. The document's layout is made once a side is anchored; a page's runs when the page is first
-// drawn or pointed at, since most pages of a long paper are never looked at in a visit.
+// drawn or pointed at, since most pages of a long paper are never looked at in a visit. On the layer path the layout
+// is made page by page (pageLayout): its document part from the parts' rectangles as they come, a page's tokens as its
+// left part lands — the same layout once all are in (docs/PDF-READER.md §17.8).
 // The look was chosen on a draft (round 1 of the highlight, 2026-10-01): one block per run, padded half the leading
 // above and below and 3 px beside, one outline with 3 px corners. Where a unit's sentences are known on both sides
 // (anchors.mjs sentenceStarts), a sentence instead: its first row from its start, the rows between across its unit's
@@ -66,26 +68,115 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
     if (w.far > r[k]) far.push(k)
   }
   for (let p = pages; p >= 1; p--) if (pageStart[p] > pageStart[p + 1]) pageStart[p] = pageStart[p + 1]
+  const units = []
+  for (const [id, a] of anchors) if (a?.tokens?.length) units.push([id, a.rects])
+  const { page, unitsOn, pagesOf } = documentOf(views, units, kindOf)
+  // a mark set apart after a token on its baseline (tokenizeDocument's `far`) is its ink where it ends at the token's
+  // column's text edge: a proof's box set flush right
+  for (const k of far) {
+    const w = doc[k], P = page[w.page], e = P && (P.cols[colOf(P, w.x, w.x + w.w)] ?? P.cols.F)
+    if (e && Math.abs(w.far - e.x1) < SNAP) r[k] = w.far
+  }
+  // each page's tokens as its geometry reads them (pageGeometry): views of the side's arrays, its tokens' ids from k0
+  const pt = [null]
+  for (let p = 1; p <= pages; p++) {
+    const k0 = pageStart[p], k1 = pageStart[p + 1]
+    pt[p] = { k0, n: k1 - k0, l: l.subarray(k0, k1), r: r.subarray(k0, k1), y: tok.y.subarray(k0, k1), h: tok.h.subarray(k0, k1), top: tok.top.subarray(k0, k1), bottom: tok.bottom.subarray(k0, k1) }
+  }
+  return { tok, pageStart, pt, page, anchors, kindOf, unitsOn, pagesOf, cache: new Map(), indents: new Map() }
+}
 
+/**
+ * A side's layout made page by page (the shared reader view, its contract §2.7): nothing until it is told, then the
+ * document part from the units' line rectangles and the pages' views as the parts come (layoutParts), and a page's part
+ * from its tokens as they come (layoutPage). Once every part and page is in, it is the layout layoutOf makes of the same
+ * tokens and rectangles, in every page's geometry and every sentence shape, whatever order the pages came in (the
+ * highlight's gate, SH1). A page's tokens are a table of its own, their ids from the page's first (the left part's
+ * `first`: the side's stream, as the parts' units name their streams), rising page by page
+ */
+export function pageLayout(kindOf = () => undefined) {
+  return { tok: null, pageStart: null, pt: [null], page: [null], anchors: new Map(), kindOf, unitsOn: [], pagesOf: new Map(), cache: new Map(), indents: new Map(), views: [], told: new Map(), spans: new Map() }
+}
+
+/**
+ * The document part, as parts come (format.mjs ReadPart: its `pages` [a, b], `views` of pages a … reach, stride 4, and
+ * `left`, its units [id, stream, rects], rects [page, x0, y0, x1, y1]): a page's view and a unit as first told, the
+ * document part made again of every unit told so far, by id rising, and every page's geometry let go, to be made again
+ * from it — the columns' edges, the half leadings and the floats' frames are the document's
+ */
+export function layoutParts(L, parts) {
+  for (const { pages, views, left } of parts) {
+    for (let i = 0; 4 * i < views.length; i++) L.views[pages[0] - 1 + i] ??= views.slice(4 * i, 4 * i + 4)
+    for (const [id, stream, rects] of left) if (!L.told.has(id)) L.told.set(id, { stream, rects: rects.map(([page, x0, y0, x1, y1]) => ({ page, x0, y0, x1, y1 })) })
+  }
+  const units = [...L.told].sort((a, b) => a[0] - b[0])
+  Object.assign(L, documentOf(Array.from(L.views, v => v ?? null), units.map(([id, u]) => [id, u.rects]), L.kindOf))
+  for (const [id, u] of units) if (!L.anchors.has(id)) L.anchors.set(id, { rects: u.rects, tokens: tokensOf(L, id, u.stream) })
+  L.cache.clear()
+  L.indents.clear()
+  L.frames = undefined
+  L.floats = undefined
+}
+
+/**
+ * A page's part: its tokens (`table` { n, l, r, y, h, top, bottom }, as a layout keeps them — the ink after the closing
+ * marks' push to the column's edge), their ids `first` … `first` + n − 1, and each unit's tokens there (`spans` [id,
+ * tokens], each rising). The table is kept as given and never written. A page given again changes nothing (false); one
+ * whose ids reach into another page's, or fall where the pages rise, is refused (a RangeError) and nothing of it kept
+ */
+export function layoutPage(L, p, { first, table, spans }) {
+  if (!Number.isSafeInteger(p) || p < 1 || !Number.isSafeInteger(first) || first < 0) throw new RangeError(`not a page and its first token (${p}, ${first})`)
+  if (L.pt[p]) return false
+  const n = table.n
+  for (let q = p - 1; q >= 1; q--) { const t = L.pt[q]; if (!t) continue; if (t.k0 + t.n > first) throw new RangeError(`page ${p}'s tokens from ${first} reach into page ${q}'s, to ${t.k0 + t.n}`); break }
+  for (let q = p + 1; q < L.pt.length; q++) { const t = L.pt[q]; if (!t) continue; if (first + n > t.k0) throw new RangeError(`page ${p}'s tokens to ${first + n} reach into page ${q}'s, from ${t.k0}`); break }
+  L.pt[p] = { k0: first, n, l: table.l, r: table.r, y: table.y, h: table.h, top: table.top, bottom: table.bottom }
+  for (const [id, tokens] of spans) {
+    ;(L.spans.get(id) ?? L.spans.set(id, new Map()).get(id)).set(p, tokens)
+    const u = L.told.get(id)
+    if (u) L.anchors.get(id).tokens = tokensOf(L, id, u.stream)
+  }
+  L.cache.delete(p)
+  return true
+}
+
+/** a unit's tokens in a layout made page by page: those of every page given, rising, and its stream (its first token,
+ *  which a page's geometry tells its head by, and its sentences whether one began before a run) */
+function tokensOf(L, id, stream) {
+  const on = L.spans.get(id), out = []
+  if (on) for (const p of [...on.keys()].sort((a, b) => a - b)) for (const k of on.get(p)) out.push(k)
+  const at = lowerBound(out, stream)
+  if (out[at] !== stream) out.splice(at, 0, stream)
+  return out
+}
+
+/**
+ * A side's document part (layoutOf's, and a layout's made page by page: pageLayout): from the units' line rectangles and
+ * the pages' views alone — no token — each page's columns, its columns' text edges (the document's, per page size,
+ * parity and column) and the half leading of each kind of unit on it; the units on each page and the pages of each
+ * unit. `views` each page's box (null for a page not yet told: no page part, its rectangles none), `units` [id, rects]
+ * in the order the layout takes them (a page's units in it: the first holding a token owns it)
+ */
+function documentOf(views, units, kindOf) {
+  const pages = views.length
   // each page's columns: two where four long lines stand in each half, one where four cross the middle, else as most
   // pages have them; the lines are the units' (running heads, page numbers and floats' texts are no text block's)
   const page = [null]
   // size: the page's, for the edges' pool; gaps: the space between consecutive lines of a unit there, by its kind
-  for (let p = 1; p <= pages; p++) { const v = views[p - 1]; page[p] = { mid: (v[0] + v[2]) / 2, width: v[2] - v[0], size: `${Math.round(v[2] - v[0])}x${Math.round(v[3] - v[1])}`, L: 0, R: 0, F: 0, x0: Infinity, x1: -Infinity, gaps: new Map() } }
+  for (let p = 1; p <= pages; p++) { const v = views[p - 1]; page[p] = v ? { mid: (v[0] + v[2]) / 2, width: v[2] - v[0], size: `${Math.round(v[2] - v[0])}x${Math.round(v[3] - v[1])}`, L: 0, R: 0, F: 0, x0: Infinity, x1: -Infinity, gaps: new Map() } : null }
   const long = []
   const unitsOn = Array.from({ length: pages + 2 }, () => [])
   const pagesOf = new Map()
-  for (const [id, a] of anchors) {
-    if (!a?.tokens?.length) continue
+  for (const [id, rects] of units) {
     const ps = [], kind = kindOf(id) ?? ''
-    a.rects.forEach((r, i) => {
+    rects.forEach((r, i) => {
       const P = page[r.page]
       if (!P) return
       if (ps.at(-1) !== r.page) { ps.push(r.page); unitsOn[r.page].push(id) }
       if (r.x0 < P.x0) P.x0 = r.x0
       if (r.x1 > P.x1) P.x1 = r.x1
       // the leading: the space between a unit's consecutive lines of one size, less than a line apart
-      const q = a.rects[i + 1], h = r.y1 - r.y0
+      const q = rects[i + 1], h = r.y1 - r.y0
       if (q && q.page === r.page && Math.abs(q.y1 - q.y0 - h) < h * 0.15 && r.y0 > q.y1 && r.y0 - q.y1 < h * 1.2) (P.gaps.get(kind) ?? P.gaps.set(kind, []).get(kind)).push(r.y0 - q.y1)
       if (r.x1 - r.x0 <= P.width * LONG) return
       long.push(r)
@@ -98,11 +189,12 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
   let twos = 0, ones = 0
   for (let p = 1; p <= pages; p++) {
     const P = page[p]
+    if (!P) continue
     P.two = P.L >= COLUMN_LINES && P.R >= COLUMN_LINES ? true : P.F >= COLUMN_LINES ? false : null
     if (P.two === true) twos++
     else if (P.two === false) ones++
   }
-  for (let p = 1; p <= pages; p++) if (page[p].two === null) page[p].two = twos > ones
+  for (let p = 1; p <= pages; p++) if (page[p]?.two === null) page[p].two = twos > ones
   // a long line's column for the edges' pool, before the columns' edges are known: the half it is in, both where it
   // crosses the middle
   const halfOf = (P, x0, x1) => (!P.two || (x0 < P.mid - 1 && x1 > P.mid + 1) ? 'F' : x1 <= P.mid + 1 ? 'L' : 'R')
@@ -132,10 +224,11 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
   // with the page's median, 294 with each kind's, 167 with each kind's lower quartile
   const half = xs => (xs && xs.length >= 3 ? quartile(xs) / 2 : null)
   const byKind = new Map(), every = []
-  for (let p = 1; p <= pages; p++) for (const [kind, xs] of page[p].gaps) { (byKind.get(kind) ?? byKind.set(kind, []).get(kind)).push(...xs); every.push(...xs) }
+  for (let p = 1; p <= pages; p++) for (const [kind, xs] of page[p]?.gaps ?? []) { (byKind.get(kind) ?? byKind.set(kind, []).get(kind)).push(...xs); every.push(...xs) }
   const kindLead = new Map([...byKind].map(([kind, xs]) => [kind, half(xs)])), docLead = every.length ? quartile(every) / 2 : 1
   for (let p = 1; p <= pages; p++) {
     const P = page[p]
+    if (!P) continue
     const at = col => { const e = edges.get(poolOf(p, col)); return { x0: e?.x0 ?? P.x0, x1: e?.x1 ?? P.x1 } }
     P.cols = P.two ? { L: at('L'), R: at('R') } : { F: at('F') }
     if (P.two) P.cols.F = { x0: P.cols.L.x0, x1: P.cols.R.x1 }
@@ -144,13 +237,7 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
     P.lead.set(null, own)
     P.gaps = null
   }
-  // a mark set apart after a token on its baseline (tokenizeDocument's `far`) is its ink where it ends at the token's
-  // column's text edge: a proof's box set flush right
-  for (const k of far) {
-    const w = doc[k], P = page[w.page], e = P && (P.cols[colOf(P, w.x, w.x + w.w)] ?? P.cols.F)
-    if (e && Math.abs(w.far - e.x1) < SNAP) r[k] = w.far
-  }
-  return { tok, pageStart, page, anchors, kindOf, unitsOn, pagesOf, cache: new Map(), indents: new Map() }
+  return { page, unitsOn, pagesOf }
 }
 
 /** how far a unit's text stands inside its columns' text edges, on each side (PDF units): the least of its lines' —
@@ -190,21 +277,24 @@ function colOf(P, x0, x1) {
  * page, and each unit's runs there; and what the geometry took beyond the anchors, which the gate holds to its
  * baseline: the units whose head it took, the words it filled in. A run: { id, page, col, x0, x1, top, bottom, lead,
  * rows: [{ y0, y1, x0, x1, r0, r1 }], mids, sx0, sx1 } in PDF units, `mids` the boundaries between its rows, a row's
- * r0 and r1 how far its sentences reach across (reachOf), sx0 and sx1 the furthest of them and of the run.
+ * r0 and r1 how far its sentences reach across (reachOf), sx0 and sx1 the furthest of them and of the run. A page whose
+ * tokens a layout made page by page does not hold yet has none, and nothing of it is kept
  */
 export function pageGeometry(L, p) {
   let g = L.cache.get(p)
   if (g) return g
-  const { tok } = L, P = L.page[p], k0 = L.pageStart[p], k1 = L.pageStart[p + 1]
+  const P = L.page[p], tok = L.pt[p]
+  if (!P || !tok) return emptyGeometry()
+  const k0 = tok.k0, k1 = k0 + tok.n
   // the page's lines, as anchors.mjs lineRects has them: baselines within half a line of the first's, the line's
   // height its body text's (a script or a limit does not stretch it), its reach the ink of all its tokens; lo, hi:
   // the glyphs of all its tokens, a script's and an inline fraction's too
   const lines = [], lineOf = new Int32Array(k1 - k0)
   let cur = null
   for (let k = k0; k < k1; k++) {
-    const l = tok.l[k], r = tok.r[k], y = tok.y[k], bottom = tok.bottom[k], top = tok.top[k]
+    const i = k - k0, l = tok.l[i], r = tok.r[i], y = tok.y[i], bottom = tok.bottom[i], top = tok.top[i]
     if (!cur || Math.abs(y - cur.base) > cur.h * 0.5 || r < cur.x0 - cur.h * 30) {
-      cur = { x0: l, x1: r, y0: bottom, y1: top, lo: bottom, hi: top, base: y, h: tok.h[k], k0: k, col: 'F' }
+      cur = { x0: l, x1: r, y0: bottom, y1: top, lo: bottom, hi: top, base: y, h: tok.h[i], k0: k, col: 'F' }
       lines.push(cur)
     } else {
       if (l < cur.x0) cur.x0 = l
@@ -241,11 +331,14 @@ export function pageGeometry(L, p) {
   L.cache.set(p, g)
   return g
 }
+/** the geometry of a page with no tokens yet: no line, no run */
+const emptyGeometry = () => ({ runs: [], byId: new Map(), heads: [], filled: 0, at: { k0: 0, tok: null, lines: [], lineOf: new Int32Array(0), owner: new Int32Array(0), lineOwner: new Int32Array(0), heads: [], filled: 0 } })
 
 /** a unit's runs on page p, from its tokens there */
 function unitRuns(L, p, at, id, toks) {
   const { k0, lines, lineOf, owner, lineOwner } = at
-  const { l: inkL, r: inkR } = L.tok, P = L.page[p]
+  // the page's own: token k's at k - k0
+  const { l: inkL, r: inkR } = at.tok, P = L.page[p]
   const line = k => lineOf[k - k0]
   const lineOk = k => { const o = lineOwner[line(k)]; return o === -1 || o === id }
   // in running text, what stands between two of the unit's words in the stream, on their page and in their column, and
@@ -272,7 +365,7 @@ function unitRuns(L, p, at, id, toks) {
   if (first === toks[0]) {
     for (let k = lines[line(first)].k0; k < first; k++) {
       if (owner[k - k0] !== -1) head = null
-      else head = Math.min(head ?? Infinity, inkL[k])
+      else head = Math.min(head ?? Infinity, inkL[k - k0])
     }
   }
   // by column, the unit's lines and each one's reach across (the unit's tokens on it)
@@ -281,7 +374,8 @@ function unitRuns(L, p, at, id, toks) {
     const ln = line(k), col = lines[ln].col
     const m = byCol.get(col) ?? byCol.set(col, new Map()).get(col)
     const x = m.get(ln)
-    if (x) { if (inkL[k] < x.x0) x.x0 = inkL[k]; if (inkR[k] > x.x1) x.x1 = inkR[k] } else m.set(ln, { x0: inkL[k], x1: inkR[k] })
+    const a = inkL[k - k0], b = inkR[k - k0]
+    if (x) { if (a < x.x0) x.x0 = a; if (b > x.x1) x.x1 = b } else m.set(ln, { x0: a, x1: b })
   }
   let headAt = null
   if (head !== null) { const x = byCol.get(lines[line(first)].col)?.get(line(first)); if (x && head < x.x0) { x.x0 = head; at.heads.push(id); headAt = line(first) } }
@@ -354,7 +448,7 @@ function reachOf(at, id, row, tx0, tx1) {
     const j = js[n], o = lineOwner[j], l = lines[j]
     if (o === id || Math.min(l.y1, row.y1) - Math.max(l.y0, row.y0) <= OVERLAP || l.x1 < tx0 - OVERHANG || l.x0 > tx1 + OVERHANG) continue
     if (o >= 0) { other(l.x0, l.x1); continue }
-    for (let k = l.k0, end = lines[j + 1]?.k0 ?? k0 + owner.length; k < end; k++) { const w = owner[k - k0]; if (w !== -1 && w !== id) other(inkL[k], inkR[k]) }
+    for (let k = l.k0, end = lines[j + 1]?.k0 ?? k0 + owner.length; k < end; k++) { const w = owner[k - k0]; if (w !== -1 && w !== id) other(inkL[k - k0], inkR[k - k0]) }
   }
 }
 
@@ -437,7 +531,7 @@ export function hitOf(L, p, x, y, padX, startsOf = () => null) {
     if (x < Math.min(b.x0, run.sx0 - padX) || x > Math.max(b.x1, run.sx1 + padX) || y < b.y0 || y > b.y1) continue
     const a = (b.x1 - b.x0) * (b.y1 - b.y0)
     if (a >= area) continue
-    const starts = NOT_RUNNING.has(L.kindOf(run.id)) ? null : startsOf(run.id)
+    const starts = NOT_RUNNING.has(L.kindOf(run.id)) || !tokensIn(L, run.id) ? null : startsOf(run.id)
     if (!starts && (x < b.x0 || x > b.x1)) continue
     let s = -1
     if (starts) {
@@ -467,7 +561,8 @@ const segsMade = new WeakMap()
 function segsOf(L, run, starts) {
   const made = segsMade.get(run)
   if (made?.starts === starts) return made
-  const { l, r } = L.tok, rows = run.rows.map(() => []), first = [], last = []
+  // the run's page's tokens: token k's at k - k0
+  const T = L.pt[run.page], k0 = T.k0, { l, r } = T, rows = run.rows.map(() => []), first = [], last = []
   // each token's sentence by the stream's order, then rows from the top, none before the latest begun above it
   const of = new Int32Array(run.toks.length)
   let s = 0
@@ -481,7 +576,8 @@ function segsOf(L, run, starts) {
     for (const n of ns) {
       const k = run.toks[n], t = Math.max(of[n], floor), row = rows[w], g = row.find(q => q.s === t)
       of[n] = t
-      if (g) { if (l[k] < g.x0) g.x0 = l[k]; if (r[k] > g.x1) g.x1 = r[k] } else row.push({ s: t, x0: l[k], x1: r[k] })
+      const a = l[k - k0], b = r[k - k0]
+      if (g) { if (a < g.x0) g.x0 = a; if (b > g.x1) g.x1 = b } else row.push({ s: t, x0: a, x1: b })
       if (first[t] === undefined) first[t] = w
       last[t] = w
       if (t > top) top = t
@@ -509,9 +605,9 @@ function segsOf(L, run, starts) {
   // whole then (sentencesFit). Two sentences' ink may overlap a little on a row — a Latin word's box is an even share
   // of its text item, a CJK full stop's half em too — and the boundary halfway between still divides their words
   {
-    const ys = edgesOf(run, 0), spans = rows.map((_, i) => spansOf(null, out, run, i, 0)), { top, bottom } = L.tok
+    const ys = edgesOf(run, 0), spans = rows.map((_, i) => spansOf(null, out, run, i, 0)), { top, bottom } = T
     for (let n = 0; n < run.toks.length && out.fits; n++) {
-      const k = run.toks[n], x = (l[k] + r[k]) / 2, y = (top[k] + bottom[k]) / 2
+      const k = run.toks[n] - k0, x = (l[k] + r[k]) / 2, y = (top[k] + bottom[k]) / 2
       let i = 0
       while (i < rows.length - 1 && y < ys[i + 1]) i++
       const s = of[n]
@@ -525,18 +621,28 @@ function segsOf(L, run, starts) {
 /** how far a word's ink's centre may stand past its sentence's span (PDF units) */
 const FIT = 0.5
 /** whether a unit is lit by sentence on a side: running text (headings, captions, cells and a figure's text light
- *  whole), and every run's shapes hold their words. `made`: from the pages whose geometry is made alone, undefined
- *  where one of the unit's is not yet — the caller makes them in a task of its own, never in the pointer's frame (a
- *  unit over two pages, its other page's geometry and every run's sentences made there: 3.6 ms, 2608.29181) */
+ *  whole), its tokens all in (a layout made page by page: tokensIn), and every run's shapes hold their words. `made`:
+ *  from the pages whose geometry is made alone, undefined where one of the unit's is not yet — the caller makes them in
+ *  a task of its own, never in the pointer's frame (a unit over two pages, its other page's geometry and every run's
+ *  sentences made there: 3.6 ms, 2608.29181) */
 export function sentencesFit(L, id, starts, made = false) {
-  if (NOT_RUNNING.has(L.kindOf(id))) return false
+  if (NOT_RUNNING.has(L.kindOf(id)) || !tokensIn(L, id)) return false
   if (made && (L.pagesOf.get(id) ?? []).some(p => !L.cache.has(p))) return undefined
   return runsOf(L, id).every(run => segsOf(L, run, starts).fits)
 }
 /** a page's sentences worked out — each run's on it whose unit's starts `startsOf` gives —, as the page is first drawn
  *  or its unit's starts found: the pointer's frame then reads them made */
 export function pageSentences(L, p, startsOf) {
-  for (const run of pageGeometry(L, p).runs) { const st = startsOf(run.id); if (st) segsOf(L, run, st) }
+  for (const run of pageGeometry(L, p).runs) { const st = tokensIn(L, run.id) && startsOf(run.id); if (st) segsOf(L, run, st) }
+}
+/** whether a unit's tokens are all in its layout: always for one made whole; for one made page by page, where every
+ *  page the unit is on has given its tokens there (its left part's span). A run's sentences read the unit's tokens on
+ *  the pages beyond it (segsOf: whether a sentence began before the run or goes on after it), and what they make is
+ *  kept by the run: a unit still short of a page lights whole, and its sentences are made once it is whole */
+export function tokensIn(L, id) {
+  if (!L?.spans) return true
+  const spans = L.spans.get(id)
+  return !!spans && (L.pagesOf.get(id) ?? []).every(p => spans.has(p))
 }
 /**
  * What each sentence on row `i` of a run paints across (PDF units), tiling the row: two sentences meet halfway through
