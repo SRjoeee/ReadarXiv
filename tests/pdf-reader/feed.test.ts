@@ -320,6 +320,29 @@ describe('the feed: the PR\'s review', () => {
   })
 })
 
+describe('the feed: the PR\'s review, second round', () => {
+  it('a catalog shortening the chain does not bring back a part that waited before it (4289064224)', async () => {
+    const M = await made()
+    const input = partInputs(M.head.sha256, M.lefts)[1]!
+    const other = await writePart({ ...input, prev: M.parts[0]!.sha256, addon: { ...input.addon!, manifest: { ...input.addon!.manifest, stats: { removed: 9 } } } })
+    const f = createFeed({ fetchObject: server(M, [other]).fetchObject })
+    f.tell({ head: M.head.ref, units: M.chunks.map(c => c.ref), parts: [0, 1].map(i => jobRef(M, i)) })
+    await flush()
+    // a job's fork at page 2, then the old page 2 told again late: it waits (heard before the fork)
+    f.tell({ parts: [{ ...(other.ref as Ref), prev: M.parts[0]!.sha256 }] })
+    await flush()
+    f.tell({ parts: [jobRef(M, 1)] })
+    await flush()
+    expect(shas(f.state().parts)).toEqual([M.parts[0]!.sha256, other.sha256])
+    // the catalog names page 1 alone
+    f.tell({ parts: [catalogRef(M, 0)], end: { through: 1 } })
+    await flush()
+    expect(shas(f.state().parts)).toEqual([M.parts[0]!.sha256])
+    expect(f.state().ended).toBe(true)
+    f.dispose()
+  })
+})
+
 describe('the feed: dispose', () => {
   it('lets the fetches go and resolves no index after it', async () => {
     const M = await made()

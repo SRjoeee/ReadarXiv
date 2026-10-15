@@ -696,8 +696,8 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   the last one and names its digest as `prev` (a catalog's part, which names none, by its pages). One beginning at or
   before the last told, under another digest, is a fork, and the chain is reset from its page, where it joins and is heard
   later than every part it lets go (a source that comes late, a 202 made before a job's fork, does not undo it) or those
-  are refused. A tell with the parts' end (the catalog) names the chain whole, and no later part forks it; one may extend
-  it. A part that does not follow yet waits; one refused stops the chain at the part before it, and is fetched and read
+  are refused. A tell with the parts' end whose parts reach it (the catalog) names the chain whole: a part waiting from before
+  it is let go, and no later part forks it; one may extend it. A part that does not follow yet waits; one refused stops the chain at the part before it, and is fetched and read
   again when it is told again (an abort of the host's transport is a refusal too). A second head is passed over with one
   warning.
 - **The order** (the reader view's contract §2.2): the index read; the base bound, once (false is no layer); the original

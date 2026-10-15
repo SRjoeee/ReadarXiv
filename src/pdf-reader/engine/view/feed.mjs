@@ -179,11 +179,12 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
     } finally { chaining = false }
   }
 
-  /** the parts of a tell that carries the end, as the chain whole: contiguous from page 1, in page order; null where they are not */
-  function chainOf(parts) {
+  /** the parts of a tell that carries the end, as the chain whole: contiguous from page 1 to the end's `through`, in page
+   *  order (the catalog's); null where they are not (a job's last parts told with the end are placed as any part is) */
+  function chainOf(parts, through) {
     const sorted = [...parts].sort((a, b) => a.from - b.from)
     for (let i = 0; i < sorted.length; i++) if (sorted[i].from !== (i ? sorted[i - 1].to + 1 : 1) || !(sorted[i].to >= sorted[i].from)) return null
-    return sorted
+    return sorted.at(-1)?.to === through ? sorted : null
   }
 
   return {
@@ -202,7 +203,7 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
         if (refusedParts.delete(r.sha256)) { bytes.delete(r.sha256); moved = true; gen++ }
       }
       // a tell with the end names the chain whole (the catalog's)
-      const whole = told1 && parts?.length ? chainOf(parts) : null
+      const whole = told1 && parts?.length ? chainOf(parts, told1.through) : null
       if (whole) {
         const same = whole.length === told.length && whole.every((r, i) => r.sha256 === told[i].sha256)
         if (!same) {
@@ -213,6 +214,9 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
           moved = true
         }
         named = new Set(whole.map(r => r.sha256))
+        // a part waiting from before the catalog is none of its chain's: it does not join it later (a later build's
+        // part, heard after it, may)
+        waiting.clear()
       } else {
         for (const r of parts ?? []) {
           if (told.some(t => t.sha256 === r.sha256)) continue
