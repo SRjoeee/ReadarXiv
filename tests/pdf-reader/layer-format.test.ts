@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { LAB_ON, LAB_PAPERS, labFiles } from './helpers/lab-data'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
@@ -1912,24 +1913,19 @@ describe('seeded hostile mutations of a valid object, every kind', () => {
 })
 
 // ---------------------------------------------------------------- the real papers (where this machine has them)
-// AXT_LAB=<a lab/pdf directory with data/ and out/> (see lab/pdf/README.md): each paper's units (openPaper over its source), its
+// AXT_LAB=<a lab/pdf directory> AXT_PACK=<a gate pack of LAYOUT 6> (helpers/lab-data.ts): each paper's units (openPaper over its source), its
 // layout file (the layer gate's made fixtures) and its left (the p10 cut's geometry), cut at the doubling schedule, written,
 // read against the chain and merged back; the units through the chunk writer and the reader
-const LAB = process.env.AXT_LAB
-describe.skipIf(!LAB)('the real papers: units, layout files and left cut at the doubling schedule', () => {
-  const PAPERS: [string, string][] = [['1512.03385v1', 'zh'], ['1706.03762v7', 'zh'], ['1810.04805v2', 'zh'], ['2307.16209v1', 'de'], ['2608.04322v1', 'zh']]
-  const FIXTURES = 'out/layer-gate/fixtures/f343494cf544323e', GEOMETRY = 'out/layer-gate/cut-p10/geometry'
-  for (const [name, target] of PAPERS) {
+describe.skipIf(!LAB_ON)('the real papers: units, layout files and left cut at the doubling schedule', () => {
+  for (const [name, target] of LAB_PAPERS) {
     it(name, async () => {
       const { existsSync, readFileSync } = await import('node:fs')
-      const { join } = await import('node:path')
       const { openPaper } = await import('@/pdf-reader/engine/pipeline/live.mjs')
       const { unpackSource } = await import('@/pdf-reader/engine/source/tar.mjs')
       const { bundleUnitsOf } = await import('@/pdf-reader/engine/layer-proto/units.mjs')
       const { parseLayout, LAYOUT_CAP } = await import('@/pdf-reader/engine/layout/file.mjs')
       const { cutAt } = await import('./helpers/format-cut')
-      const root = LAB as string
-      const layoutFile = join(root, FIXTURES, `${name}-zh`, 'layout.json'), geometryFile = join(root, GEOMETRY, `${name}-${target}-geometry.json`), sourceFile = join(root, 'data/layout', name, 'source.gz')
+      const { layoutFile, geometryFile, sourceFile } = labFiles(name, target)
       for (const f of [layoutFile, geometryFile, sourceFile]) if (!existsSync(f)) throw new Error(`missing ${f}`)
       const id = name.replace(/v\d+$/, ''), version = Number(name.slice(id.length + 1))
       const paper = { id, version }

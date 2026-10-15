@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { LAB_ON, LAB_PAPERS, labFiles } from './helpers/lab-data'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
@@ -647,20 +648,15 @@ describe('the sample paper\'s bundle (tests/fixtures/pdf/sample-1)', () => {
 })
 
 // ---------------------------------------------------------------- the real papers (where this machine has them)
-const LAB = process.env.AXT_LAB
-describe.skipIf(!LAB)('the real papers cut', () => {
-  const PAPERS: [string, string][] = [['1512.03385v1', 'zh'], ['1706.03762v7', 'zh'], ['1810.04805v2', 'zh'], ['2307.16209v1', 'de'], ['2608.04322v1', 'zh']]
-  const FIXTURES = 'out/layer-gate/fixtures/f343494cf544323e', GEOMETRY = 'out/layer-gate/cut-p10/geometry'
-  for (const [name, target] of PAPERS) {
+describe.skipIf(!LAB_ON)('the real papers cut', () => {
+  for (const [name, target] of LAB_PAPERS) {
     it(name, async () => {
       const { existsSync } = await import('node:fs')
-      const { join } = await import('node:path')
       const { openPaper } = await import('@/pdf-reader/engine/pipeline/live.mjs')
       const { unpackSource } = await import('@/pdf-reader/engine/source/tar.mjs')
       const { bundleUnitsOf } = await import('@/pdf-reader/engine/layer-proto/units.mjs')
       const { parseLayout } = await import('@/pdf-reader/engine/layout/file.mjs')
-      const root = LAB as string
-      const layoutFile = join(root, FIXTURES, `${name}-zh`, 'layout.json'), geometryFile = join(root, GEOMETRY, `${name}-${target}-geometry.json`), sourceFile = join(root, 'data/layout', name, 'source.gz')
+      const { layoutFile, geometryFile, sourceFile } = labFiles(name, target)
       for (const f of [layoutFile, geometryFile, sourceFile]) if (!existsSync(f)) throw new Error(`missing ${f}`)
       const id = name.replace(/v\d+$/, ''), version = Number(name.slice(id.length + 1))
       const source = await unpackSource(new Uint8Array(readFileSync(sourceFile)))
