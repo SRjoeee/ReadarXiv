@@ -1,5 +1,7 @@
 // memory.mjs's types
-/** whether `e` is a memory-class error: a RangeError of V8's allocation messages (`Array buffer allocation failed`, `Invalid
- *  typed array length`, `Invalid array buffer length`, `Invalid string length`, `WebAssembly.Memory`), an error coded
- *  ERR_STRING_TOO_LONG or ERR_BUFFER_TOO_LARGE, or one with such an error as its `cause`, up to 4 deep; never a stack overflow */
+/** V8's words for a backing store it could not allocate */
+export declare const ALLOCATION_FAILED: 'Array buffer allocation failed'
+/** whether `e` is a failed allocation: V8's RangeError of its exact words, PDF.js's UnknownErrorException wrapping of one, or
+ *  Node's ERR_MEMORY_ALLOCATION_FAILED; none of a length no array may have, a stack overflow, ERR_STRING_TOO_LONG or
+ *  ERR_BUFFER_TOO_LARGE. The web's container/src/run/memory.ts isMemoryError, word for word */
 export declare function isMemoryError(e: unknown): boolean
