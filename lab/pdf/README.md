@@ -71,15 +71,16 @@ drawing against TeX's own file, the layout file the fixture's drawing is given (
 read by the instrument itself, `measure.mjs fileIndexOf`), never against the engine's own matching of the page's ink,
 which the older completeness checks trust. Not the kept layout (`refs/<output>/layout.json`): the 29 earlier fixtures'
 were made by the layout maker's first version, whose segments are a glyph's font box rather than its ink and which holds
-no `held` lines; so they are not taken where the run is given the fixtures' own layout files (`--layouts=fixed`, v0
-alone). A pull request that changes what the maker writes moves these measures' ground truth with it, in its own pack:
+no `held` lines. So the measures are taken only from a file of the maker's version 3 or later (its own `layout` field),
+which `--layouts=fixed`, v0 alone and a folder of old files given by `--fixtures` are not. A pull request that changes
+what the maker writes moves these measures' ground truth with it, in its own pack:
 
 | Measure | Tier | What is counted |
 |---|---|---|
-| `contentLost` | model | A placeholder of a drawn unit whose ink the file finds on the page (its segments) that is not shown exactly once. A rendering shows it only where it is that placeholder's own (its unit and piece) and drawn from its ink or source: its crop holding a segment's centre, its rendering from its source, its characters drawn as the page's own standing in its segments, or its ink left in place (kept, on a kept line, or never erased). Another placeholder's rendering drawn from its ink is no showing, nor is the drawing's putting back of ink it lost track of. Shown no time or twice or more. |
+| `contentLost` | model | A placeholder of a drawn unit whose ink the file finds on the page (its segments) that is not shown exactly once. A rendering drawn elsewhere shows it only where it is that placeholder's own (its unit and piece, or a piece of the same source) and drawn from its ink or source: its crop holding a segment's centre, its rendering from its source, its characters drawn as the page's own standing in its segments. Its ink left in place shows it whoever left it (a kept rendering's characters in it, a kept line, never erased). Another placeholder's rendering drawn from its ink is no showing, nor is the drawing's putting back of ink it lost track of. Shown no time or twice or more. |
 | `contentUnknown` | model | The placeholders of drawn units the content measure cannot place: LOST in the file (no segment, no ground truth for their ink), or of a unit the file does not hold on the page. Gated as the others, so that a maker that loses more ink cannot lower the content measures by it. |
 | `textInDisplay` | model | A drawn line whose text's ink meets a display's segment or a display's row (a held line no text line of its unit shares a band with). |
-| `slotsSkipped` | model | Room between two drawn lines of a unit in one frame, beyond their own pitch, that the original does not leave there itself, in slots: TeX's own room (between two of the unit's text lines of the file beyond its pitch: a blank line between paragraphs, a display's rows) and a line the drawing keeps as the original's are set aside. |
+| `slotsSkipped` | model | Room between two drawn lines of a unit in one frame, beyond their own pitch, that the original does not leave there itself, in slots: TeX's own room (between two of the unit's text lines of the file in that column beyond its pitch: a blank line between paragraphs, a tall line's opening) and a text line the drawing keeps as the original's are set aside. Two lines with a held line between them are no pair: the room before a display is the frame's blank lines' (`blankLines`, `fill`). On `next` it is 0 (2026-10-15), and it does not see the survey's cause 5 (a forced break `\\` drawn as a space, the original's blank landing mid-sentence): drawn so the page is the same shape as a right drawing, and fix step 6 adds its own measure. |
 | `lineStartPunct` | model | A drawn line that opens with a character UAX 14 keeps from a line's start (CL, CP, IS, EX, NS; LineBreak-17.0.0), unless the original's line on that baseline opens with one. |
 | `glyphsLost` | pixel | Lost ink by the strict account (`measure.mjs glyphAccounted`): an erased glyph in a placeholder's segment counts only where that placeholder is drawn from it or from its source; one on the unit's own line in no segment is TeX's text, replaced; a leftover of a gap off the file's lines is never accounted. `lostInk` stays as it was. |
 | `linesLeft` | pixel | A drawn unit's own text line of the file (not held; its kept label and the placeholders kept in place aside) left intact on the copy, as `stray` reads an item intact. |
@@ -100,11 +101,13 @@ that made it): `layer-fixtures.mjs --offline --engine=<next> --only=2608.16117v1
 `COMPILES` naming folders of its own and `lab/pdf/spikes/native-tex/` first on `PATH`, whose `docker` answers the one
 `docker run` the maker makes with the same latexmk command run by the local TinyTeX (TeX Live 2026; `NATIVE_TEXMFLOCAL`, a
 tree linking the full TeX Live 2026 tree's package directories TinyTeX lacks, with its `ls-R`; `NATIVE_TEXMFVAR`, one
-holding that tree's `pdftex.map`). Made twice so, the file is byte-equal; it is still not the Docker image's package
-versions byte for byte, and the next make in Docker replaces it (a new pack object).
+holding that tree's `pdftex.map`; `GATE_PDF_CACHE` unset, which would take the place of `COMPILES`, so that no make in
+Docker ever reads a native compile). Made three times so, the file is byte-equal; it is still not the Docker image's
+package versions byte for byte, and the next make in Docker replaces it (a new pack object).
 
 **Recording the 30 outputs.** The gate's defaults hold 29 (`data/layer-fixtures`); the record's inputs name the 30th's
-folders, and a `--record` that would drop an output the record's run holds is refused. The record of 2026-10-15:
+folders, and a `--record` that would drop an output the record's run of its kind holds (for a model run, the pixel run's
+where the record has no model run of its own) is refused (`score.mjs droppedOutputs`). The record of 2026-10-15:
 
 ```
 LAYER_RECORDS=lab/pdf/out/layer-gate/cut-p10-s2608/records LAYER_REFS=lab/pdf/out/layer-gate/cut-p10-s2608/refs \

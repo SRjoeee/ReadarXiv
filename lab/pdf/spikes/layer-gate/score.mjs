@@ -323,3 +323,15 @@ export function compare(prev, cur, tier) {
   }
   return out
 }
+
+/**
+ * The outputs a record (layer-fidelity.json's) holds in the run a new run of `key` would be recorded over, or held to:
+ * that key's run, else for a model run the pixel run of the same key (as --check reads it), that `fixtures` (the new
+ * run's output names) lacks. A run given another folder of references is whole by itself, and recorded it would drop
+ * those outputs unseen
+ */
+export function droppedOutputs(record, key, fixtures) {
+  const had = record?.tiers?.[key] ?? (key.startsWith('model') ? record?.tiers?.[key.replace(/^model/, 'pixel')] : null)
+  const have = new Set(fixtures)
+  return Object.keys(had?.fixtures ?? {}).filter(n => !have.has(n)).sort()
+}

@@ -15,3 +15,5 @@ export declare function pooled(list: Totals[], tier: Tier): Totals | null
 export declare function worse(m: Measure, prev: Totals, cur: Totals, tier?: Tier): { by: number; worse: boolean; better: boolean; from: number; to: number } | null
 export interface Moved { fixture: string; measure: string; label: string; from: number; to: number }
 export declare function compare(prev: Record<string, { totals: Totals; pages: PageEntry[] }>, cur: Record<string, { totals: Totals; pages: PageEntry[] }>, tier: Tier): { regressions: Moved[]; improvements: Moved[]; pages: { fixture: string; page: number; worse: string[]; better: string[] }[]; unmatched: string[] }
+/** the outputs a record's run of `key` (for a model key, else its pixel run) holds that `fixtures` lacks */
+export declare function droppedOutputs(record: { tiers?: Record<string, { fixtures?: Record<string, unknown> }> } | null, key: string, fixtures: string[]): string[]

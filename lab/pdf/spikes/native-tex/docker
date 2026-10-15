@@ -27,7 +27,7 @@ done
 [ "${cmd[0]:-}" = latexmk ] || { echo "native-tex/docker: only latexmk is run" >&2; exit 1; }
 [ -n "${NATIVE_TEXMFLOCAL:-}" ] || { echo "native-tex/docker: NATIVE_TEXMFLOCAL is not set" >&2; exit 1; }
 export PATH="${NATIVE_TEX_BIN:-$HOME/Library/TinyTeX/bin/universal-darwin}:/usr/bin:/bin"
-export TEXMFLOCAL="$NATIVE_TEXMFLOCAL" texmf_casefold_search=0 FORCE_SOURCE_DATE=1 SOURCE_DATE_EPOCH=1767225600
+export TEXMFLOCAL="$NATIVE_TEXMFLOCAL" texmf_casefold_search=0
 [ -n "${NATIVE_TEXMFVAR:-}" ] && export TEXMFVAR="$NATIVE_TEXMFVAR"
 # (the image's 600 s limit, as perl's alarm: macOS has no timeout)
 cd "$build" && exec perl -e 'alarm 600; exec @ARGV' "${cmd[@]}"

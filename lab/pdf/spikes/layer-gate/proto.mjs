@@ -25,12 +25,15 @@
 // fixture's layout file (its rows read by the instrument itself, fileIndexOf), whether or not the hybrid is given it.
 import * as pdfjs from 'pdfjs-dist'
 import { lostInk } from '/engine/layer/check.mjs'
-import { contentOf, cropForeignPx, displayRowsOf, fileIndexOf, footprintOf, glyphAccounted, keptSegsOf, lineStartsOf, markerResidueOf, markupResidueOf, MATH_FONT, modelPage, noStart, overDisplayOf, pixelPage, removalPage, replacedFoot, slotsSkippedOf } from '/gate/measure.mjs'
+import { contentOf, cropForeignPx, displayRowsOf, fileIndexOf, footprintOf, glyphAccounted, keptSegsOf, kOfPiecesOf, lineStartsOf, markerResidueOf, markupResidueOf, MATH_FONT, modelPage, noStart, overDisplayOf, pixelPage, removalPage, replacedFoot, slotsSkippedOf } from '/gate/measure.mjs'
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
 /** device pixels a PDF unit: v0's canvases at 1.25 CSS px and dpr 2 (the floor's), and the lost-ink check's 2x floor */
 const K = 2.5, INK_SCALE = 2, INK_MIN = 4
 const LOST_MIN = Math.floor(INK_MIN * (K / INK_SCALE) ** 2)
+/** the layout maker's first version whose file the measures against TeX's file read (layout/file.mjs LAYOUT 3: glyph boxes
+ *  by their own ink, the lines a unit's source does not write held); an earlier one's segments are a glyph's font box */
+const FILE_LAYOUT_MIN = 3
 /** the layout file's placeholder kinds (layout/file.mjs), for its displays */
 const PHK = ['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other']
 
@@ -358,25 +361,11 @@ async function drawnLinesOf(p, recs) {
   }
   return out
 }
-/**
- * Each translated piece's source index (the layout file's k) of a unit, for the content measure, read here from the units
- * file's pieces against the record's (as layer-proto/tex.mjs kOfPieces reads them, which the instrument does not import:
- * a text piece -1, a placeholder its source's k, an open or close its group's), whichever layout file the run was given;
- * null where the two do not match piece by piece
- */
-function contentKOf(id) {
-  const unit = S.byId.get(id)?.unit, tr = S.trPieces.get(id)
-  if (!unit?.pieces || !Array.isArray(tr) || tr.length !== unit.pieces.length) return null
-  const out = []
-  for (const [i, q] of unit.pieces.entries()) {
-    const t = tr[i]
-    if (!Array.isArray(t)) return null
-    if (q.t === 'text') { if (t[0] !== 0) return null; out.push(-1); continue }
-    if ((q.t === 'open' && t[0] !== 2) || (q.t === 'close' && t[0] !== 3)) return null
-    out.push(t[0] === 0 ? -1 : t[1])
-  }
-  return out
-}
+/** each translated piece's source index (the layout file's k) of a unit, for the content measure: measure.mjs
+ *  kOfPiecesOf over its record's pieces and its units file's, whichever layout file the run was given */
+const contentKOf = id => kOfPiecesOf(S.byId.get(id)?.unit?.pieces, S.trPieces.get(id))
+/** a translated piece's source (its TeX), by which two placeholders of one source are one rendering */
+const srcOf = (id, i) => S.byId.get(id)?.unit?.pieces?.[i]?.src ?? null
 /**
  * What the content measure (measure.mjs contentOf) reads of page p, from the drawing and TeX's file (the fixture's layout
  * file, S.file): the placeholders with ink on the page of the units drawn on it, the crops cut from it, the placeholders
@@ -387,7 +376,7 @@ function contentKOf(id) {
  */
 function contentInputsOf(p, recs, boxPdf) {
   const page = S.file.get(p)
-  const phs = [], texts = new Set(), pageTexts = [], kept = [], keptLines = []
+  const phs = [], texts = [], pageTexts = [], kept = [], keptLines = []
   let unknown = 0
   const centres = r => (r.gap?.chars ?? []).filter(c => c.page === p && !c.sep && !c.space && /\S/.test(c.ch)).map(c => [(c.x0 + c.x1) / 2, c.yb + 0.3 * c.size])
   for (const r of recs) {
@@ -398,12 +387,14 @@ function contentInputsOf(p, recs, boxPdf) {
     unknown += own.lost.length
     const kOf = contentKOf(r.id)
     if (!kOf) { unknown += own.phs.length; continue }
-    for (const ph of own.phs) phs.push({ unit: r.id, ...ph })
+    // (each placeholder with its source: the translation's piece of its k)
+    for (const ph of own.phs) phs.push({ unit: r.id, ...ph, src: srcOf(r.id, kOf.indexOf(ph.k)) })
     const items = q.layout.lines.flatMap(l => l.items).map(it => it.t)
-    for (const t of items) if (t.ph && t.ph !== 'orig-text' && !t.crop && !t.label && t.k !== undefined) texts.add(`${r.id}|${kOf[t.k]}`)
+    const fromSource = new Set()
+    for (const t of items) if (t.ph && t.ph !== 'orig-text' && !t.crop && !t.label && t.k !== undefined && !fromSource.has(t.k)) { fromSource.add(t.k); texts.push({ unit: r.id, k: kOf[t.k] ?? null, src: srcOf(r.id, t.k) }) }
     for (const res of q.prep.values()) {
       if (!res?.gap) continue
-      const shown = { unit: r.id, k: kOf[res.k] ?? null, chars: centres(res) }
+      const shown = { unit: r.id, k: kOf[res.k] ?? null, src: srcOf(r.id, res.k), chars: centres(res) }
       if (res.mode === 'kept') kept.push(shown)
       else if (res.mode === 'orig-text' && items.some(t => t.ph === 'orig-text' && t.k === res.k)) pageTexts.push(shown)
     }
@@ -412,7 +403,7 @@ function contentInputsOf(p, recs, boxPdf) {
       if (Number(pg) === p) keptLines.push(box.split(',').map(Number))
     }
   }
-  const crops = S.run.audit.filter(a => a.what === 'crop' && a.srcPage === p).map(a => ({ unit: a.unit, k: contentKOf(a.unit)?.[a.k] ?? null, src: a.src }))
+  const crops = S.run.audit.filter(a => a.what === 'crop' && a.srcPage === p).map(a => ({ unit: a.unit, k: contentKOf(a.unit)?.[a.k] ?? null, src: srcOf(a.unit, a.k), box: a.src }))
   const erased = S.run.audit.filter(a => a.what === 'erase' && a.page === p).map(a => boxPdf(a.box))
   return { inputs: { phs, crops, texts, pageTexts, kept, keptLines, erased }, unknown }
 }
@@ -461,10 +452,11 @@ function againstFileOf(p, recs, units, drawnLines, items, refOf, boxPdf) {
   const shown = contentOf(content.inputs)
   const over = overDisplayOf({ lines: drawnLines, boxes: [...(fpage?.displays ?? []), ...displayRowsOf(fpage)] })
   // (each drawn unit's own text lines in the file, its pitch, and the lines the drawing keeps of it as the original's)
-  const keptRowsOf = id => (S.byId.get(id)?.prep?.keep ?? []).map(key => key.split('|')).filter(([pg]) => Number(pg) === p).map(([, b]) => { const r = b.split(',').map(Number); return (r[1] + r[3]) / 2 })
+  // (v0's kept lines include a display's held rows, which the pair's own test sets apart: its text's lines alone)
+  const keptRowsOf = (id, held) => (S.byId.get(id)?.prep?.keep ?? []).map(key => key.split('|')).filter(([pg]) => Number(pg) === p).map(([, b]) => { const r = b.split(',').map(Number); return (r[1] + r[3]) / 2 }).filter(y => !held.some(h => y >= h[1] && y <= h[3]))
   const slots = slotsSkippedOf(units.filter(u => u.drawn).map(u => {
-    const own = fpage?.units.get(u.id)
-    return { id: u.id, orig: u.orig, tex: (own?.lines ?? []).filter(l => !l.held).map(l => l.baseline), texPitch: own?.pitch ?? null, keptRows: keptRowsOf(u.id), lines: drawnLines.filter(l => l.unit === u.id).map(l => ({ baseline: l.baseline, size: S.byId.get(u.id)?.layout?.f ?? 0, x0: l.x0, x1: l.x1, pitch: l.pitch })) }
+    const own = fpage?.units.get(u.id), held = (own?.lines ?? []).filter(l => l.held).map(l => l.box)
+    return { id: u.id, orig: u.orig, tex: (own?.lines ?? []).filter(l => !l.held).map(l => ({ baseline: l.baseline, x0: l.box[0], x1: l.box[2] })), held, texPitch: own?.pitch ?? null, keptRows: keptRowsOf(u.id, held), lines: drawnLines.filter(l => l.unit === u.id).map(l => ({ baseline: l.baseline, size: S.byId.get(u.id)?.layout?.f ?? 0, x0: l.x0, x1: l.x1, pitch: l.pitch })) }
   }))
   // (the original's line a drawn line stands on: the unit's own reference line on its baseline, within half a point; its
   // first character, the page's first item on that line from its left edge on)
@@ -480,7 +472,7 @@ function againstFileOf(p, recs, units, drawnLines, items, refOf, boxPdf) {
   for (const [key, ids] of [['textInDisplay', over.where], ['slotsSkipped', slots.where], ['lineStartPunct', starts.where]]) if (ids.length) where[key] = [...new Set(ids)]
   return {
     values: { contentLost: shown.contentLost, contentUnknown: content.unknown, textInDisplay: over.textInDisplay, slotsSkipped: slots.slotsSkipped, lineStartPunct: starts.lineStartPunct },
-    where, texts: content.inputs.texts, keptSegs: keptSegsOf(content.inputs),
+    where, texts: new Set(content.inputs.texts.map(t => `${t.unit}|${t.k}`)), keptSegs: keptSegsOf(content.inputs),
   }
 }
 
@@ -491,7 +483,7 @@ window.gate = {
    * the driver's: arXiv's PDF with it at `url`, its manifest, the plan it was made from), v0 is opened over it, and a
    * second reading of the add-on drawn by the CPU is kept for the exactness check's and the truth's planes
    */
-  async open({ name, target, ref, units: which, pages, place, dump, order, faces, tex, removal, addon = null, names = null, rules = null, perf = false, parts: cut = null, slices = null, againstFile = false }) {
+  async open({ name, target, ref, units: which, pages, place, dump, order, faces, tex, removal, addon = null, names = null, rules = null, perf = false, parts: cut = null, slices = null }) {
     let V
     try { V = await import('/engine/layer-proto/run.mjs') } catch (e) { return { ready: false, why: `layer-proto/run.mjs: ${String(e?.message ?? e).slice(0, 200)}` } }
     const base = `/fixtures/${name}/`
@@ -499,7 +491,7 @@ window.gate = {
     try {
       // (layout: the instrument's, the fixture's own, whichever layout file the hybrid is given; texFile: the layout file the
       // fixture's drawing is given, TeX's file as its maker made it, which the content and line measures read)
-      ;[geometry, unitsFile, layout, fixtureUnits, data, texFile] = await Promise.all([json(`${base}geometry.json`), json(`${base}${which === 'p7' ? 'units-p7.json' : 'record.json'}`), json(`${base}kept-layout.json`), json(`${base}units.json`), bytes(`${base}arxiv.pdf`), againstFile ? json(`${base}layout.json`) : null])
+      ;[geometry, unitsFile, layout, fixtureUnits, data, texFile] = await Promise.all([json(`${base}geometry.json`), json(`${base}${which === 'p7' ? 'units-p7.json' : 'record.json'}`), json(`${base}kept-layout.json`), json(`${base}units.json`), bytes(`${base}arxiv.pdf`), json(`${base}layout.json`)])
     } catch (e) { return { ready: false, why: String(e?.message ?? e).slice(0, 200) } }
     // (--perf, drawing by the add-on: as a reader opens it, one document, arXiv's pages and the add-on's appended to
     // them, its fonts parsed once; neither the check's second reading nor the plan, which no reader has)
@@ -551,9 +543,10 @@ window.gate = {
     const run = await V.openProto(opts)
     // (TeX's file as the instrument reads it, the fixture's layout file's rows by page, and the units file's pieces by unit:
     // the content and line measures'. Not the kept layout: the fixtures' own were made by the layout maker's first
-    // version, whose segments are a glyph's font box, not its ink, and which holds no `held` lines; nor the fixture's own
-    // where the run is given those, --layouts=fixed or v0 alone: then the measures against TeX's file are not taken)
-    S = { V, run, doc, geometry, layout, file: againstFile ? fileIndexOf(texFile) : null, trPieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), ref, name, target, texPieces: texIn?.pieces ?? null, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: new Map(run.placed.map(p => [p.id, p])), checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: inputs }, perf, texIndex }
+    // version, whose segments are a glyph's font box, not its ink, and which holds no `held` lines; nor any layout file of
+    // a maker before FILE_LAYOUT_MIN, the fixture's own included where the run is given those, --layouts=fixed or v0
+    // alone, or a folder of them: then the measures against TeX's file are not taken)
+    S = { V, run, doc, geometry, layout, file: Number(texFile?.layout) >= FILE_LAYOUT_MIN ? fileIndexOf(texFile) : null, trPieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), ref, name, target, texPieces: texIn?.pieces ?? null, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: new Map(run.placed.map(p => [p.id, p])), checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: inputs }, perf, texIndex }
     S.consistency = consistencyOf(unitsFile, S, names)
     if (parts) {
       // one part a macrotask from the open on, beside the driver's pages (until), then end()

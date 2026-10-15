@@ -234,7 +234,8 @@ const PH_KINDS = ['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro'
  * engine's reader), by page: `units`, each unit's placeholders with ink on the page ({ k, kind, segs }: each segment its
  * box [x0, y0, x1, y1], TeX's own; an EMPTY placeholder has none, a LOST or TEXT one none the file knows), its lines
  * ({ j, box, baseline, size, held }: `held` a line its source does not write, a display's row), its pitch (`pitch`: the
- * median gap between two of its own text lines next to each other in a column, over all its pages), and on its first
+ * median gap between two of its own text lines next to each other in a column with no held line between, over all its
+ * pages), and on its first
  * page the placeholders the file has LOST (`lost`, their k: ink no measure can place); `displays`, every display's
  * segments
  */
@@ -261,13 +262,14 @@ export function fileIndexOf(layout) {
       if (PH_KINDS[kind] === 'display') pageOf(p).displays.push(...segs)
     }
   }
-  // (each unit's pitch: its text lines' gaps, page by page, in a column)
+  // (each unit's pitch: the gaps of its text lines next to each other, page by page, in a column, no held line between)
   const gaps = new Map()
   for (const pg of pages.values()) for (const [id, u] of pg.units) {
-    const text = u.lines.filter(l => !l.held).sort((a, b) => b.baseline - a.baseline)
+    const text = u.lines.filter(l => !l.held).sort((a, b) => b.baseline - a.baseline), held = u.lines.filter(l => l.held)
     for (let i = 1; i < text.length; i++) {
       const a = text[i - 1], b = text[i], g = a.baseline - b.baseline
-      if (g > 0 && Math.min(a.box[2], b.box[2]) > Math.max(a.box[0], b.box[0])) (gaps.get(id) ?? gaps.set(id, []).get(id)).push(g)
+      if (!(g > 0) || Math.min(a.box[2], b.box[2]) <= Math.max(a.box[0], b.box[0]) || held.some(h => h.baseline < a.baseline && h.baseline > b.baseline)) continue
+      ;(gaps.get(id) ?? gaps.set(id, []).get(id)).push(g)
     }
   }
   for (const pg of pages.values()) for (const [id, u] of pg.units) {
@@ -293,15 +295,16 @@ export function displayRowsOf(page) {
 /**
  * The content measure (the 2608.16117 survey, 2026-10-15): each placeholder of a drawn unit whose ink TeX's file finds on
  * the page (`phs`: { unit, k, segs }, its segments TeX's own boxes; never the drawing's own matching of the page's ink) is
- * shown exactly once. A rendering shows it only where it is its own (its `unit` and its piece's source index `k` the
- * placeholder's) and is drawn from its own ink or source; a showing is
- * - its crop of its ink: each of its crops cut from this page (`crops`: { unit, k, src }) whose source holds the centre of
- *   one of its segments;
- * - its rendering drawn from its source (a symbol, a citation as the page wrote it, its source's text: `texts`, the
- *   `${unit}|${k}` drawn so);
- * - its rendering drawn as the page's own characters (orig-text: `pageTexts`, { unit, k, chars }, the centres of its
- *   characters) whose characters stand in its segments;
- * - its ink left in place, once however often: its kept rendering's characters in its segments (`kept`, as pageTexts),
+ * shown exactly once. A rendering drawn elsewhere shows it only where it is its own (its `unit` and its piece's source
+ * index `k` the placeholder's, or a piece of the same source, `src`: two \eqref of one label are one rendering) and is
+ * drawn from its ink or source; ink left where it stands shows it whoever kept it. A showing is
+ * - its crop of its ink: each of its crops cut from this page (`crops`: { unit, k, src, box }, `box` its source
+ *   rectangle) that holds the centre of one of its segments;
+ * - its rendering drawn from its source (a symbol, a citation as the page wrote it, its source's text: `texts`,
+ *   { unit, k, src }), once;
+ * - its rendering drawn as the page's own characters (orig-text: `pageTexts`, { unit, k, src, chars }, the centres of
+ *   its characters) whose characters stand in its segments;
+ * - its ink left in place, once however often: a kept rendering's characters in its segments (`kept`, as pageTexts),
  *   a segment's centre on a line the drawing keeps as the original's (`keptLines`), or outside everything it erased
  *   (`erased`).
  * Another placeholder's rendering drawn from its ink shows it no time: a rendering handed out one off shows every
@@ -309,13 +312,13 @@ export function displayRowsOf(page) {
  * ink stands where the original set it, under the translation's text. A placeholder shown no time is lost and one shown
  * twice or more doubled: `contentLost` counts both, `contentWhere` lists each [unit, k, times]
  */
-export function contentOf({ phs, crops = [], texts = new Set(), pageTexts = [], kept = [], keptLines = [], erased = [] }) {
+export function contentOf({ phs, crops = [], texts = [], pageTexts = [], kept = [], keptLines = [], erased = [] }) {
   const out = []
   for (const ph of phs) {
     const centres = ph.segs.map(centreOf)
-    const own = r => r.unit === ph.unit && r.k === ph.k
-    const inPlace = kept.some(r => own(r) && holds(ph, r.chars)) || centres.some(pt => keptLines.some(r => inBox(pt, r)) || !erased.some(e => inBox(pt, e)))
-    const n = crops.filter(c => own(c) && centres.some(pt => inBox(pt, c.src))).length + (texts.has(`${ph.unit}|${ph.k}`) ? 1 : 0) + pageTexts.filter(r => own(r) && holds(ph, r.chars)).length + (inPlace ? 1 : 0)
+    const own = r => r.unit === ph.unit && (r.k === ph.k || (typeof r.src === 'string' && r.src === ph.src))
+    const inPlace = kept.some(r => holds(ph, r.chars)) || centres.some(pt => keptLines.some(r => inBox(pt, r)) || !erased.some(e => inBox(pt, e)))
+    const n = crops.filter(c => own(c) && centres.some(pt => inBox(pt, c.box))).length + (texts.some(own) ? 1 : 0) + pageTexts.filter(r => own(r) && holds(ph, r.chars)).length + (inPlace ? 1 : 0)
     if (n !== 1) out.push([ph.unit, ph.k, n])
   }
   return { contentLost: out.length, contentWhere: out }
@@ -323,8 +326,28 @@ export function contentOf({ phs, crops = [], texts = new Set(), pageTexts = [], 
 
 /** whether a rendering's characters (their centres) stand in a placeholder's segments: its ink */
 const holds = (ph, chars) => chars.some(pt => ph.segs.some(s => inBox(pt, s)))
-/** the segments of the placeholders their own kept rendering leaves in place (contentOf's `kept`): ink the drawing keeps */
-export const keptSegsOf = ({ phs, kept = [] }) => phs.filter(ph => kept.some(r => r.unit === ph.unit && r.k === ph.k && holds(ph, r.chars))).flatMap(ph => ph.segs)
+/** the segments of the placeholders a kept rendering leaves in place (contentOf's `kept`, whoever kept them): ink the
+ *  drawing keeps where it stands */
+export const keptSegsOf = ({ phs, kept = [] }) => phs.filter(ph => kept.some(r => holds(ph, r.chars))).flatMap(ph => ph.segs)
+
+/**
+ * Each translated piece's source index (the layout file's k) of a unit, read from its units file's pieces (`tr`, TrPiece:
+ * [0, …] a text, [1, k] a placeholder, [2, k] an open, [3, k] a close) against the record's (`pieces`), as
+ * layer-proto/tex.mjs kOfPieces reads them (the instrument reads them itself): a text piece -1; null where the two do not
+ * match piece by piece
+ */
+export function kOfPiecesOf(pieces, tr) {
+  if (!Array.isArray(pieces) || !Array.isArray(tr) || tr.length !== pieces.length) return null
+  const out = []
+  for (const [i, q] of pieces.entries()) {
+    const t = tr[i]
+    if (!Array.isArray(t)) return null
+    if (q.t === 'text') { if (t[0] !== 0) return null; out.push(-1); continue }
+    if ((q.t === 'open' && t[0] !== 2) || (q.t === 'close' && t[0] !== 3)) return null
+    out.push(t[0] === 0 ? -1 : t[1])
+  }
+  return out
+}
 
 /**
  * Text laid over a display (the p59 finding, 2026-10-15): each drawn line (its text's own ink across it: cropPlacementOf's
@@ -340,22 +363,29 @@ export function overDisplayOf({ lines, boxes }) {
 /**
  * The empty slots between two drawn lines of a unit in one frame of its original (the 2608.16117 survey's M4): the room
  * left between two lines of the frame next to each other beyond their slots' pitch (`pitch`, the drawing's own, the
- * larger of the two) that the original does not leave there itself, in slots (rounded as a frame's blank lines are).
- * What the original leaves is TeX's: the room between two of the unit's own text lines of the file beyond its pitch (a
- * blank line between paragraphs, a display's rows, a tall line's opening: `tex`, their baselines on the page, and
- * `texPitch`), the share of it that lies between the two drawn lines; and a line of the unit the drawing keeps as the
- * original's (`keptRows`, their middles), a pitch of TeX's each. `units`: the drawn units, { id, orig, lines: [{ baseline,
- * size, x0, x1, pitch }], tex, texPitch, keptRows }. Returns { slotsSkipped, where: the units, once a slot }
+ * larger of the two) that the original does not leave there itself, in slots (rounded as a frame's blank lines are). Two
+ * lines with a held line of the unit between them across the frame's column (`held`, its boxes: a display's rows) are no
+ * pair: the room before a display is the frame's blank lines', not a slot skipped. What the original leaves is TeX's: the room between two of the
+ * unit's own text lines of the file in the frame's column beyond its pitch (a blank line between paragraphs, a tall
+ * line's opening: `tex`, { baseline, x0, x1 }, and `texPitch`), the share of it that lies between the two drawn lines;
+ * and a line of the unit's text the drawing keeps as the original's (`keptRows`, their middles, no held line among
+ * them), a pitch of TeX's each. `units`: the drawn units, { id, orig, lines: [{ baseline, size, x0, x1, pitch }], tex,
+ * held, texPitch, keptRows }. Returns { slotsSkipped, where: the units, once a slot }
  */
 export function slotsSkippedOf(units) {
   const where = []
   for (const u of units) {
-    const tex = (u.tex ?? []).slice().sort((a, b) => b - a), p0 = u.texPitch ?? 0
-    for (const inFrame of linesOfFrames(u, frameGroups(u.orig))) {
+    const p0 = u.texPitch ?? 0, frames = frameGroups(u.orig)
+    linesOfFrames(u, frames).forEach((inFrame, f) => {
+      const fr = frames[f]
+      const tex = (u.tex ?? []).filter(l => Math.min(l.x1, fr.x1) > Math.max(l.x0, fr.x0)).map(l => l.baseline).sort((a, b) => b - a)
       const mine = inFrame.slice().sort((a, b) => b.baseline - a.baseline)
       for (let j = 1; j < mine.length; j++) {
         const a = mine[j - 1].baseline, b = mine[j].baseline, pitch = Math.max(mine[j - 1].pitch ?? 0, mine[j].pitch ?? 0)
         if (!(pitch > 0)) continue
+        // (across the frame's column and the two lines: a display's rows stand beside a short line too)
+        const x0 = Math.min(fr.x0, mine[j - 1].x0, mine[j].x0), x1 = Math.max(fr.x1, mine[j - 1].x1, mine[j].x1)
+        if ((u.held ?? []).some(h => { const y = (h[1] + h[3]) / 2; return y > b && y < a && Math.min(h[2], x1) > Math.max(h[0], x0) })) continue
         // (TeX's own room between them: each gap of its text lines past its pitch, by the share of it they span)
         let room = 0
         if (p0 > 0) {
@@ -368,7 +398,7 @@ export function slotsSkippedOf(units) {
         const slots = Math.floor(rd((a - b - pitch - room) / pitch, 2))
         for (let s = 0; s < slots; s++) where.push(u.id)
       }
-    }
+    })
   }
   return { slotsSkipped: where.length, where }
 }
