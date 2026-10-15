@@ -3,13 +3,13 @@
 // drawn), over the format test's small paper (helpers/format-paper.ts: four pages, three parts, the first two with a tail), on
 // the reading view's PDF.js stand-ins and a clock moved by hand (helpers/reader-fakes.ts). The real door's rows are
 // layer-side-door.test.ts's
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { type Ref, writePart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { PDF_OPTIONS } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { createLayerSide, PAGE_MS } from '@/pdf-reader/engine/view/layer-side.mjs'
 import type { DocumentTask, ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { N, partInputs, TAILS } from './helpers/format-paper'
-import { ASSETS, clientOf, FakePDFPageView, FakePDFViewer, fakeTask, flush } from './helpers/reader-fakes'
+import { ASSETS, clientOf, FakePDFPageView, FakePDFViewer, fakeDoc, fakeTask, flush } from './helpers/reader-fakes'
 import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, places, rowOf, type Setup, settle, setup } from './helpers/side-setup'
 
 installSideFakes()
@@ -449,6 +449,29 @@ describe('H1, H2, H4, H5, H6: the highlight\'s data on both panes', () => {
     expect(s.fetched.filter(x => lefts.includes(x)).sort()).toEqual([m.lefts[1]!.sha256, m.lefts[2]!.sha256].sort())
     expect(s.warned().filter(w => w.includes('left part of page 2')).length).toBe(1)
     expect(s.view.probe().available).toBe(true)
+  })
+})
+
+describe('the order (§2.2): the original before the base and the door', () => {
+  it('a side told everything before the original is shown binds nothing and opens nothing; the original shown, it opens', async () => {
+    const bind = vi.fn(async () => true)
+    const s = await setup({ noOriginal: true, bind })
+    s.side.tell(await ALL())
+    await settle(s)
+    expect(bind).not.toHaveBeenCalled()
+    expect(s.composed.length).toBe(0)
+    expect(s.opens).toBe(0)
+    // the index read all the same: the contents told
+    expect(s.events.some(e => e.type === 'outline')).toBe(true)
+    const task = fakeTask()
+    const answer = s.view.showOriginal(() => task as unknown as DocumentTask)
+    task.resolve(fakeDoc(N))
+    expect(await answer).toBe('opened')
+    await nearOn(s, [1])
+    await settle(s)
+    expect(bind).toHaveBeenCalledTimes(1)
+    expect(s.opens).toBe(1)
+    expect(content(s, 1)).toBe('layer')
   })
 })
 

@@ -145,6 +145,8 @@ export function createLayerSide(view, o) {
     if (f.refused) return refuse(f.refused)
     if (!f.index) return
     if (!index) indexed(f.index)
+    // the original open first: the extension's base check digests the bytes it holds (the web's is bound by its route)
+    if (!V.left.doc()) return
     if (bound === null) {
       state = 'opening'
       emitLayer()
@@ -153,7 +155,6 @@ export function createLayerSide(view, o) {
       if (!bound) return refuse('base')
     }
     shapeParts(f.parts)
-    if (!V.left.doc()) return
     const parts = f.parts
     if (!door || reopenWanted || !isPrefix(doorParts, parts)) {
       if (door && !reopenWanted) counts.forks++
@@ -361,15 +362,16 @@ export function createLayerSide(view, o) {
     } catch (e) { release(canvas); page.cleanup?.(); throw e }
     return { canvas, k, from: 'doc', page }
   }
-  /** the page's copy at the place's k from `src`, drawn by the door; again from the document where the source was let go meanwhile */
-  async function copyAt(n, k, my) {
+  /** the page's copy at the place's k, drawn by `d` (the door asked, which a later open does not replace here) from the page's
+   *  source; again from the document where the source was let go meanwhile */
+  async function copyAt(d, n, k, my) {
     let src = await sourceOf(n, k)
     try {
-      let canvas = await door.copyOf(n, src.canvas, src.k)
+      let canvas = await d.copyOf(n, src.canvas, src.k)
       if (src.from !== 'doc' && !src.canvas.width) {
         release(canvas)
         src = await sourceOf(n, k, true)
-        canvas = await door.copyOf(n, src.canvas, src.k)
+        canvas = await d.copyOf(n, src.canvas, src.k)
       }
       if (disposed || my !== gen) { release(canvas); return null }
       counts.copies++
@@ -378,10 +380,10 @@ export function createLayerSide(view, o) {
   }
   /** a laid page in its place: its copy, then the copy and the SVG put in one task */
   async function commit(n, laid, my) {
-    const P = rec(n), k = kOf(n)
-    if (k === null || !door) return
+    const P = rec(n), k = kOf(n), d = door
+    if (k === null || !d) return
     let got
-    try { got = await copyAt(n, k, my) } catch (e) { if (!disposed && my === gen) warn('copy', e); return }
+    try { got = await copyAt(d, n, k, my) } catch (e) { if (!disposed && my === gen) warn('copy', e); return }
     if (!got) return
     if (!V.places.near(n) || P.content?.gen === my && P.content.wrap) { release(got.canvas); if (!V.places.near(n)) retire(n); return }
     laid.svg.setAttribute('viewBox', `0 0 ${laid.w} ${laid.h}`)
@@ -411,7 +413,7 @@ export function createLayerSide(view, o) {
     P.copying = true
     const my = gen
     try {
-      const got = await copyAt(n, k, my)
+      const got = await copyAt(door, n, k, my)
       if (!got) return
       const c = P.content
       if (!c?.wrap || c.gen !== my) { release(got.canvas); return }
@@ -525,12 +527,14 @@ export function createLayerSide(view, o) {
     if (leftAsked.has(p)) return
     if (!door) { wantsBefore.add(p); return }
     leftAsked.add(p)
-    const my = gen
+    const my = gen, L0 = left
     door.leftPageOf(p, { signal: leftAc.signal }).then(lp => {
       if (disposed) return
+      // (the shapes made again for a fork meanwhile: a left part of the chain let go is not theirs; asked again on a want)
+      if (left !== L0) { leftAsked.delete(p); return }
       // in a task of its own: the page's part of the layout, its sentences and the panes' shapes
       clock.later(() => {
-        if (disposed || !left) return
+        if (disposed || left !== L0) return
         counts.leftParts++
         if (left.addPage(lp)) {
           startsFor(lp.spans.map(s => s[0]))
