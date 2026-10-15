@@ -26,9 +26,10 @@ import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, layoutMarksOf, probeSamp
 /**
  * A paper's layout marks (paper.d.mts): the marks file's bytes, with each stage's time, or the stage that failed with the
  * times of those that ran. Never throws: a compiler that throws, a PDF that does not open and a reading that refuses
- * are each their stage's refusal. `converge`: the marked original made by convergeThenMark, its passes in `cm`
+ * are each their stage's refusal. `converge`: the marked original made by convergeThenMark, its passes in `cm`, within
+ * `compileBudgetMs` where the host gives one
  */
-export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge = false }) {
+export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge = false, compileBudgetMs = null }) {
   const ms = {}
   /** a stage, timed; null where it fails or throws */
   const stage = async (name, run) => {
@@ -36,9 +37,13 @@ export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge =
     try { return await run() } catch { return null } finally { ms[name] = Math.round(performance.now() - t0) }
   }
   const { main } = paper.project, engine = paper.meta.compiler
+  // (CM: each compile's wall as the host counts it, its `ms`, else as long as it took here — what the host's compile
+  // budget is spent by —, and the last one's)
+  const wall = { spent: 0, last: 0 }
+  const asked = converge ? async req => { const t0 = performance.now(), c = await compile(req); wall.last = c?.ms ?? performance.now() - t0; wall.spent += wall.last; return c } : compile
   const probe = await stage('probe', async () => {
     // (runLive's request for its font probe)
-    const c = await compile({ main, engine, rerun: false, bibtex: false, overrides: probeFiles(paper, { marks: true }) })
+    const c = await asked({ main, engine, rerun: false, bibtex: false, overrides: probeFiles(paper, { marks: true }) })
     const log = lastTexLog(c?.log)
     if (!log) return null
     const ink = inkSamples(paper.units)
@@ -51,7 +56,7 @@ export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge =
   const result = r => (cm ? { ...r, cm } : r)
   const marked = await stage('compile', async () => {
     const files = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless })
-    if (cm) return convergeThenMark(paper, compile, files, cm)
+    if (cm) return convergeThenMark(paper, asked, files, cm, { wall, budget: compileBudgetMs })
     // (runLive's request for the marked original)
     const c = await compile({ main, engine, rerun: true, bibtex: paper.meta.bbl ? false : null, overrides: files })
     return c?.ok && c.pdf?.length ? c : null
@@ -106,16 +111,21 @@ const ranThrough = c => !!c?.ok && !stoppedShort(c.log) && completeLog(c.log)
  *     aside; a file it was given none of is new) is the fixed point latexmk would stop at: its PDF and log are the
  *     marks'. Else the next pass is a marked one again, to PASSES TeX passes in all, where the last one's PDF is kept,
  *     not settled
- *   - a draft that did not run through (not ok — a limit, the shared wall spent —, stopped short, no AXT-END: nonstop
+ *   - a bet — the second draft, a marked pass after the first — is not started where the host's compile budget
+ *     (`budget`, ms of its wall across the probe and the passes) has less left than 1.2 times the longest pass so far:
+ *     without draft 2 the marked passes go on; without the next marked pass the last one's PDF is kept, not settled
+ *   - a draft that did not run through (not ok — a limit, the budget spent —, stopped short, no AXT-END: nonstop
  *     mode goes on after an error as latexmk -f does) falls back to today's compile (`fallback`), as does a pass that ran
  *     through and returned no files (a host that cannot, or files past its bound); a marked pass that did not run
  *     through, or gave no PDF, is the compile's refusal (null), with no fallback after it
  */
-async function convergeThenMark(paper, compile, marked, cm) {
+async function convergeThenMark(paper, compile, marked, cm, { wall, budget }) {
   const { main } = paper.project, engine = paper.meta.compiler, shipped = !!paper.meta.bbl
   const unmarked = originalFiles(paper, { lines: true })
   const carried = new Map()
-  let passes = 0, bibSeen = null
+  let passes = 0, bibSeen = null, longest = 0
+  /** whether the budget leaves room for one more pass as long as the longest so far */
+  const affordable = () => budget === null || budget === undefined || budget - wall.spent >= 1.2 * longest
   /** the bytes a pass given `own` had at a path: its own file, else the latest carried, else the paper's */
   const givenAt = (own, p) => own.get(p) ?? carried.get(p) ?? paper.fsys.read(p)
   const pass = async (own, draft, bibtex) => {
@@ -123,6 +133,7 @@ async function convergeThenMark(paper, compile, marked, cm) {
     if (draft) cm.drafts++
     else cm.marked++
     const c = await compile({ main, engine, rerun: false, bibtex, overrides: new Map([...carried, ...own]), draft, files: true })
+    longest = Math.max(longest, wall.last)
     return c ?? null
   }
   /** a pass's files carried to the next, and the bibliography step's input where it ran */
@@ -145,7 +156,7 @@ async function convergeThenMark(paper, compile, marked, cm) {
   const readNext = (p, b) => { const had = givenAt(unmarked, p); return had ? !sameFile(b, had) : missed.has(p) && /\S/.test(latin1(b)) }
   const more = [...first.files].some(([p, b]) => /\.(?:bbl|ind)$/.test(p) && readNext(p, b)) || listsMissing({ log: first.log, aux: auxBytes ? latin1(auxBytes) : null }, main)
   take(first, !shipped)
-  if (more) {
+  if (more && affordable()) {
     const bibtex = bibtexNext()
     const second = await pass(unmarked, true, bibtex)
     if (!ranThrough(second)) return fallback('draft-failed')
@@ -153,7 +164,7 @@ async function convergeThenMark(paper, compile, marked, cm) {
     take(second, bibtex)
   }
   let last = null
-  while (passes < PASSES) {
+  while (passes < PASSES && (!last || affordable())) {
     const bibtex = bibtexNext()
     const c = await pass(marked, false, bibtex)
     if (!ranThrough(c) || !c.pdf?.length) return null

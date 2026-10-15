@@ -422,6 +422,32 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
     expect(thrown.asked).toHaveLength(2)
   })
 
+  it('starts no bet the host\'s compile budget cannot hold: a second draft or a marked pass after the first', async () => {
+    const bbl = '\\begin{thebibliography}{1}\n\\bibitem{a} A.\n\\end{thebibliography}\n'
+    const timed = (c: Compiled, ms: number): Compiled => ({ ...c, ms })
+    const moving = (n: number, ms: number) => timed(markedOf({ 'main.aux': `\\relax \n\\newlabel{s}{{1}{${n}}}\n` }), ms)
+    const run = async (answers: Compiled[], compileBudgetMs?: number | null) => {
+      const c = compiler(answers), o = opener()
+      const made = await layoutMarksOfPaper(paperOf(), { compile: c.compile, open: o.open, OPS, converge: true, ...(compileBudgetMs === undefined ? {} : { compileBudgetMs }) })
+      return { made, asked: c.asked, open: o.open }
+    }
+    // a draft that would have asked for a second (a bibliography it looked for): probe 10 ms, draft 100 ms
+    const draft = timed(draftOf({ 'main.aux': AUX, 'main.bbl': bbl }, `No file main.bbl.\n${END}`), 100)
+    // 210 left after them: room for a pass of 1.2 x 100; 200 - 110 = 90 is not, and the marked pass comes next
+    expect((await run([timed(PROBE, 10), draft, timed(draftOf({ 'main.aux': AUX }), 100), moving(1, 100)], 320)).made).toMatchObject({ cm: { drafts: 2, marked: 1, settled: true } })
+    const thin = await run([timed(PROBE, 10), draft, moving(1, 100)], 200)
+    expect(thin.made).toMatchObject({ marks: expect.any(Uint8Array), cm: { drafts: 1, marked: 1, settled: true } })
+    expect(thin.asked.map(r => r.draft)).toEqual([undefined, true, false])
+    // a marked pass that did not settle is kept where the next does not fit: the first marked pass is no bet, and is asked
+    const pdf1 = enc('%PDF-1.7 the first marked pass')
+    const kept = await run([timed(PROBE, 10), timed(draftOf({ 'main.aux': AUX }), 100), timed(markedOf({ 'main.aux': '\\relax \n\\newlabel{s}{{1}{2}}\n' }, { pdf: pdf1 }), 150), moving(3, 150)], 300)
+    expect(kept.made).toMatchObject({ marks: expect.any(Uint8Array), cm: { drafts: 1, marked: 1, settled: false } })
+    expect(kept.asked).toHaveLength(3)
+    expect(kept.open).toHaveBeenCalledWith(pdf1)
+    // (no budget, or null: every bet as the bound allows)
+    for (const budget of [undefined, null]) expect((await run([timed(PROBE, 10), timed(draftOf({ 'main.aux': AUX }), 100), moving(2, 1e6), moving(2, 1e6)], budget)).made).toMatchObject({ cm: { drafts: 1, marked: 2, settled: true } })
+  })
+
   it('gives the marks file today\'s compile gives for the same PDF and log: no pass count enters it', async () => {
     const log = stepped('AXT-LINES 0 2 12.0pt 10\n', `AXT-LINES 0 3 12.0pt 10\nAXT-LINES 1 2 12.0pt 10\n${END}`)
     const today = compiler([PROBE, { ok: true, pdf: PDF, log }])

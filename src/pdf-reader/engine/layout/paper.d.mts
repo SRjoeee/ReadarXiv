@@ -28,4 +28,8 @@ export declare function layoutMarksOfPaper(paper: Paper, o: {
   open(pdf: Uint8Array): Promise<{ doc: unknown; close(): Promise<void> }>
   OPS: Record<string, number>
   converge?: boolean
+  /** with `converge`: the host's compile budget for the paper, in ms of its wall (each answer's `ms`, else the time the
+   *  compile took) across the probe and the passes; a bet (the second draft, a marked pass after the first) is not
+   *  started with less left than 1.2 times the longest pass so far. Absent: unlimited */
+  compileBudgetMs?: number | null
 }): Promise<{ marks: Uint8Array; ms: { probe: number; compile: number; marks: number }; cm?: ConvergeRecord } | { refused: 'probe' | 'compile' | 'marks'; ms: Record<string, number>; cm?: ConvergeRecord }>
