@@ -16,6 +16,8 @@ export interface WholePaper {
   units: readonly (BundleUnit | null)[]
   left: { pages: readonly Box[]; units: readonly UnitWire[] }
   layout: LayoutFile | null
+  /** the whole add-on (BUNDLE 3's): only its manifest is read, by the default (no `chainAddon`); its tail cannot be cut */
+  addon?: { manifest: RemovalManifest } | null
 }
 /** one page's left part input: the tokens (the web's TokenWire), the spans [id, ranges] and, optionally, the pairs */
 export interface LeftPageInput {
@@ -34,7 +36,8 @@ export interface CutOptions {
   /** F as an array indexed by page 0..N of indices into K (-1 for none); default `needFrontier` (the door's rule, need.mjs) */
   frontier?(K: readonly CutEntry[], N: number): readonly number[]
   /** the add-on of the part just cut (its pages and layout), or null; called once for each part with a layout, in order.
-   *  Without it each such part's manifest refuses all its pages (drawn by erase and restore) */
+   *  (null: the part's pages are refused, drawn by erase and restore). Without the hook, `whole.addon`'s manifest is carried
+   *  without its tail (clean pages stay, removed pages are refused as TAIL_NOT_CARRIED), else all pages are refused */
   chainAddon?(index: number, part: { pages: [number, number]; layout: LayoutPart }): Promise<{ manifest: RemovalManifest; tail: Uint8Array | null } | null> | { manifest: RemovalManifest; tail: Uint8Array | null } | null
   base?: { bytes: number; sha256: string; xref: number }
   image?: string
@@ -51,6 +54,8 @@ export interface Cut {
   /** what the catalog's `end` is (the Worker writes it) */
   end: { through: number }
 }
+/** a removed page's reason when the whole add-on's manifest is carried without its tail */
+export declare const TAIL_NOT_CARRIED: 'tail not carried'
 /** the frontier by the door's rule: needsOf(K, N, false, layout-only).lay */
 export declare function needFrontier(K: readonly NeedEntry[], N: number): number[]
 export declare function cutBundle(whole: WholePaper, o: CutOptions): Promise<Cut>

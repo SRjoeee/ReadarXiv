@@ -11,6 +11,22 @@ import { needsOf } from './need.mjs'
 
 const refuse = (kind, path, why, data) => new BundleRefusal(why, { kind, path, ...(data ? { data } : {}) })
 const SIZE_BOUNDS = ['bytes', 'values', 'content']
+/** a removed page's reason when the whole add-on's manifest is carried without its tail (one incremental update, not cuttable by
+ *  bytes): its units are drawn the old way, erased and put back */
+export const TAIL_NOT_CARRIED = 'tail not carried'
+
+/**
+ * The entry of one page when the whole add-on's manifest is carried without its tail: a clean planned page (`ok`, no removed
+ * page of its own: no `at`, no `dirty` boxes) stays as it is; a removed page, whose bytes are in the tail, is refused; a page
+ * the remover refused stays so. With a fixed-place R set (`sets.R`) every page has its removed page in the tail: all refused.
+ */
+function carriedEntry(manifest, p) {
+  const e = manifest.page[p]
+  if (e === undefined) return { ok: false, refused: 'not planned' }
+  if (!e.ok) return structuredClone(e)
+  if (Object.hasOwn(e, 'at') || Object.hasOwn(e, 'dirty') || Object.hasOwn(manifest.sets, 'R')) return { ok: false, refused: TAIL_NOT_CARRIED }
+  return structuredClone(e)
+}
 
 /** the pages of a flat rows array: the value at `at` of every `stride` */
 function pagesAt(rows, at, stride, into) {
@@ -72,8 +88,10 @@ const empty = { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }
  * `o.leftPages(page)`: the page's { first, tokens, spans, pairs? } in the left part's input (null: a page with no tokens);
  * called once for each page, in page order, as the parts that cover it are cut. `o.frontier(K, N)`: F as an array indexed by
  * page 0 to N of indices into K (-1 for none), default needFrontier. `o.chainAddon(index, { pages, layout })`: the part's
- * add-on { manifest, tail } or null, called once for each part that has a layout, in order; without it every such part
- * carries a manifest that refuses all its pages (they are drawn by erase and restore). Throws BundleRefusal for a whole that
+ * add-on { manifest, tail } or null, called once for each part that has a layout, in order (null: the part's pages are
+ * refused, drawn by erase and restore). Without the hook, the part carries the whole's add-on manifest (`whole.addon`) without
+ * its tail: clean pages as they are, removed pages TAIL_NOT_CARRIED, refused pages refused; with no add-on in the whole, every
+ * page refused. Throws BundleRefusal for a whole that
  * cannot be written (a dropped unit, a unit past the chunk caps) and `bound` for a page that no part can hold
  */
 export async function cutBundle(whole, o) {
@@ -160,8 +178,9 @@ export async function cutBundle(whole, o) {
     const addonOf = (b, withLayout, ad) => {
       if (!withLayout || !layout) return null
       if (ad) return ad
+      const carry = !o.chainAddon && whole.addon ? whole.addon.manifest : null
       const page = {}
-      for (let p = a; p <= b; p++) page[p] = { ok: false, refused: 'not planned' }
+      for (let p = a; p <= b; p++) page[p] = carry ? carriedEntry(carry, p) : { ok: false, refused: 'not planned' }
       return { manifest: { schema: 1, removal: REMOVAL, pages: N, sets: {}, page, appended: 0, stats: {} }, tail: null }
     }
     const write = async (b, withLayout, ad = null) => {

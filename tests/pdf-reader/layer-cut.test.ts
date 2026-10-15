@@ -2,12 +2,13 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import { type Cut, type CutEntry, cutBundle, type CutOptions, needFrontier } from '@/pdf-reader/engine/layer-proto/cut.mjs'
+import { type Cut, type CutEntry, cutBundle, type CutOptions, needFrontier, TAIL_NOT_CARRIED } from '@/pdf-reader/engine/layer-proto/cut.mjs'
 import {
   CONTENT_MAX, indexOf, type LayerIndex, mergeParts, PART_CAP, PART_VALUES, type PartChain, partTarget, type ReadPart, readHead, readLeftPart, readPart, readUnitsChunk,
   type ReadUnitsChunk, type Ref,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { needsOf } from '@/pdf-reader/engine/layer-proto/need.mjs'
+import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { encodeLayout, indexLayout } from '@/pdf-reader/engine/layout/file.mjs'
 import { BASE_OF, leftPagesOf, type PaperSpec, TOKENS_PER_PAGE, type Whole, wholeOf } from './helpers/cut-paper'
 import { tokenWire } from './helpers/format-paper'
@@ -221,6 +222,34 @@ describe('the cut of a small paper', () => {
     expect(asked).toEqual(fits(c).map((p, i) => [i, p]))
   })
 
+  it('carries the whole add-on\'s manifest without its tail: clean pages stay, removed pages and refused pages are refused', async () => {
+    const whole = wholeOf(SMALL)
+    // 8 pages: 1 clean; 2 removed (R page 9, dirty boxes, units); 3 refused by the remover; 4 clean with rules; 5 removed (R page 10);
+    // 6 refused; 7 clean; 8 removed (R page 11)
+    const page = {
+      1: { ok: true }, 2: { ok: true, units: { 3: [72, 640, 300, 660] }, at: { R: 9 }, dirty: [72, 640, 80, 650] }, 3: { ok: false, refused: 'a form painted twice' },
+      4: { ok: true, rules: [72, 500, 540, 500.4] }, 5: { ok: true, at: { R: 10 } }, 6: { ok: false, refused: 'not planned' }, 7: { ok: true }, 8: { ok: true, at: { R: 11 }, units: { 7: [72, 100, 200, 120] } },
+    }
+    const manifest = { schema: 1 as const, removal: REMOVAL, pages: 8, sets: {}, page, appended: 1234, stats: { removed: 3, rules: 1 } }
+    const c = await cutBundle({ ...whole, addon: { manifest } }, { leftPages: leftPagesOf(whole), base: BASE_OF })
+    const back = await readBack(c)
+    const entries = Object.assign({}, ...back.parts.map(p => p.addon!.manifest.page))
+    expect(entries[1]).toEqual({ ok: true })
+    expect(entries[2]).toEqual({ ok: false, refused: TAIL_NOT_CARRIED })
+    expect(entries[3]).toEqual({ ok: false, refused: 'a form painted twice' })
+    expect(entries[4]).toEqual({ ok: true, rules: [72, 500, 540, 500.4] })
+    expect(entries[5]).toEqual({ ok: false, refused: TAIL_NOT_CARRIED })
+    expect(entries[6]).toEqual({ ok: false, refused: 'not planned' })
+    expect(entries[7]).toEqual({ ok: true })
+    expect(entries[8]).toEqual({ ok: false, refused: TAIL_NOT_CARRIED })
+    for (const p of back.parts) { expect(p.addon!.tail).toBeNull(); expect(p.addon!.manifest.appended).toBe(0); expect(p.addon!.r).toBe(0) }
+    await checkCut('small, add-on manifest', whole, c)
+    // with the hook, the hook decides: the whole's manifest is not read
+    const hooked = await cutBundle({ ...whole, addon: { manifest } }, { leftPages: leftPagesOf(whole), base: BASE_OF, chainAddon: () => null })
+    const hookedBack = await readBack(hooked)
+    expect(Object.assign({}, ...hookedBack.parts.map(p => p.addon!.manifest.page))[1]).toEqual({ ok: false, refused: 'not planned' })
+  })
+
   it('refuses the paper whose unit was dropped, and a left unit that is no unit', async () => {
     const whole = wholeOf(SMALL)
     const dropped = { ...whole, units: whole.units.map((u, i) => (i === 3 ? null : u)) } as unknown as Whole
@@ -386,6 +415,24 @@ describe('a dense paper', () => {
     expect(refused.kind).toBe('part')
     expect(refused.data).toEqual({ bound: 'part', page: 1 })
   }, 120_000)
+})
+
+// ---------------------------------------------------------------- the repository's own bundle
+describe('the sample paper\'s bundle (tests/fixtures/pdf/sample-1)', () => {
+  it('cuts and reads back, carrying its add-on manifest without the tail', async () => {
+    const { readBundle } = await import('@/pdf-reader/engine/layer-proto/bundle.mjs')
+    const whole = readBundle(new Uint8Array(readFileSync('tests/fixtures/pdf/sample-1/bundle.json'))) as unknown as Whole
+    const c = await cutBundle(whole, { leftPages: () => null, base: { ...BASE_OF, bytes: whole.base.bytes, sha256: whole.base.sha256 } })
+    await checkCut('sample-1', whole, c)
+    const back = await readBack(c)
+    const was = (whole.addon as unknown as { manifest: { page: Record<string, { ok: boolean; at?: unknown }> } }).manifest.page
+    const now = Object.assign({}, ...back.parts.map(p => p.addon!.manifest.page)) as Record<string, { ok: boolean; refused?: string }>
+    for (const [k, e] of Object.entries(was)) {
+      if (!e.ok) expect(now[k]!.ok).toBe(false)
+      else if (e.at === undefined) expect(now[k]!.ok).toBe(true)
+      else expect(now[k]).toEqual({ ok: false, refused: TAIL_NOT_CARRIED })
+    }
+  })
 })
 
 // ---------------------------------------------------------------- the real papers (where this machine has them)
