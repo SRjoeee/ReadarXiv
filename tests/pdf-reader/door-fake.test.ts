@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import type { LayerDocument } from '@/pdf-reader/engine/layer-proto/door.mjs'
+import type { Row } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { BUILTIN_RULES } from '@/pdf-reader/engine/rules/layout.mjs'
 import { type DoorSetup, runDoorConformance } from './helpers/door-conformance'
 import { createFakeDoor, type FakeDoorOptions } from './helpers/fake-door'
@@ -16,7 +17,7 @@ async function openFake(s: DoorSetup, opts: FakeDoorOptions = {}) {
   const docFor = (r: number): LayerDocument => {
     let d = docs.get(r)
     if (!d) {
-      d = { numPages: N + r, getPage: async (n: number) => { if (s.failPages?.includes(n)) throw new Error(`page ${n} cannot be read`); return { n } } }
+      d = { numPages: N + r, getPage: async (n: number) => { await s.hold?.(n); if (s.failPages?.includes(n)) throw new Error(`page ${n} cannot be read`); return { n } } }
       docs.set(r, d)
     }
     return d
@@ -30,6 +31,15 @@ async function openFake(s: DoorSetup, opts: FakeDoorOptions = {}) {
 
 describe('the fake door', () => {
   runDoorConformance(s => openFake(s))
+})
+
+describe('the fake door gating on rows', () => {
+  // the units' rows come from the harness after each part, as a door that waits for them is given them
+  runDoorConformance(async s => {
+    const h = await openFake(s, { rows: 'gate' })
+    const rows = s.paper.index.units.map((_, id) => [id, [], 'whole', null, null] as Row)
+    return { ...h, supplyRows: () => { h.layer.take(rows) } }
+  })
 })
 
 describe('the fake door in auto mode', () => {

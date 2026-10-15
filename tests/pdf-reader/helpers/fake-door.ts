@@ -53,9 +53,17 @@ class FakeLayer implements Layer {
   private readonly queue: number[] = []
   private readonly taken = new Set<number>()
   private draining: Promise<void> | null = null
+  /** the reads in flight on each document, and the documents superseded (or disposed with) that wait for their last read */
+  private readonly reads = new Map<LayerDocument, number>()
+  private readonly retiring = new Set<LayerDocument>()
+  /** rejected at dispose: what waits on the host's transport races it */
+  private readonly gone: Promise<never>
+  private goneNow!: (e: unknown) => void
 
   constructor(private readonly o: OpenLayerOptions, private readonly fake: { opts: FakeDoorOptions; failing: Set<number>; released(): void }) {
     this.N = o.index.head.paper.pages
+    this.gone = new Promise<never>((_, reject) => { this.goneNow = reject })
+    this.gone.catch(() => {})
     this.doc = o.doc
     this.state = new Array(this.N + 1).fill('waiting')
     let chain: ReadPart['chain'] | null = null
@@ -95,7 +103,7 @@ class FakeLayer implements Layer {
     if (tail && doc !== this.doc) {
       const old = this.doc
       this.doc = doc as LayerDocument
-      this.o.onRetired(old)
+      this.retire(old)
     }
     for (const [page, list] of [...this.leftWaiters]) if (page <= this.through) { this.leftWaiters.delete(page); for (const w of list) w.resolve() }
     this.promote()
@@ -109,6 +117,23 @@ class FakeLayer implements Layer {
       if (this.state[p] === 'waiting') this.settle(p, 'failed', new Error(`page ${p} is covered by no part`))
     }
     for (const [page, list] of [...this.leftWaiters]) if (page > this.through) { this.leftWaiters.delete(page); for (const w of list) w.reject(new Error(`page ${page} is covered by no part`)) }
+  }
+
+  /** a document no longer wanted: told to the host once no task reads it */
+  private retire(doc: LayerDocument): void {
+    if (this.reads.get(doc)) this.retiring.add(doc)
+    else this.o.onRetired(doc)
+  }
+  private async read(doc: LayerDocument, page: number): Promise<void> {
+    this.reads.set(doc, (this.reads.get(doc) ?? 0) + 1)
+    try { await doc.getPage(page) } finally {
+      const left = (this.reads.get(doc) as number) - 1
+      if (left > 0) this.reads.set(doc, left)
+      else {
+        this.reads.delete(doc)
+        if (this.retiring.delete(doc)) this.o.onRetired(doc)
+      }
+    }
   }
 
   // ---------------------------------------------------------------- rows
@@ -201,7 +226,7 @@ class FakeLayer implements Layer {
         let failure: unknown = null
         try {
           if (this.fake.failing.has(page)) throw new Error(`page ${page}: the test made it fail`)
-          await this.doc.getPage(page)
+          await this.read(this.doc, page)
         } catch (e) { failure = e }
         if (this.disposed) return
         if (failure) this.settle(page, 'failed', failure)
@@ -282,7 +307,8 @@ class FakeLayer implements Layer {
     if (this.disposed) throw new Error('the layer is disposed')
     const part = this.parts.find(q => q.pages[0] <= page && page <= q.pages[1]) as ReadPart
     const ref = part.leftParts.find(r => r.page === page) as ReadPart['leftParts'][number]
-    const bytes = await this.o.leftPart(page, ref)
+    // (the transport may never answer: disposal ends the wait)
+    const bytes = await Promise.race([this.o.leftPart(page, ref), this.gone])
     if (this.disposed) throw new Error('the layer is disposed')
     const streams = new Map<number, number>()
     for (const q of this.parts) for (const w of q.left) streams.set(w[0], w[1])
@@ -333,7 +359,8 @@ class FakeLayer implements Layer {
     this.listeners.clear()
     this.queue.length = 0
     this.fake.released()
-    this.o.onRetired(this.doc)
+    this.goneNow(gone)
+    this.retire(this.doc)
   }
 }
 

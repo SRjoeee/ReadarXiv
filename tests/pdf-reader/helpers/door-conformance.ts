@@ -17,6 +17,8 @@ export interface DoorSetup {
   parts: number
   /** pages whose composed page cannot be read: laying them fails */
   failPages?: readonly number[]
+  /** a promise a composed page's read waits for before it answers (null: none), so that a test holds a read in flight */
+  hold?(page: number): Promise<void> | null
   /** the host's transport for left parts */
   leftPart(page: number, ref: Ref & { page: number }): Promise<Uint8Array>
   onRetired(doc: LayerDocument): void
@@ -25,6 +27,9 @@ export interface DoorHarness {
   layer: Layer
   /** lets the door do all it can with what it holds now (a fake lays what is pending; a real one waits until it is idle) */
   advance(): Promise<void>
+  /** gives the door the rows it waits for (a door that gates a page on its units' rows; the fake in `rows: 'gate'` mode): called
+   *  after each part is added and at the open, before the suite expects a covered page to lay. Absent: the door asks for none */
+  supplyRows?(): void | Promise<void>
   /** the composed document through `r` removed pages (numPages N + r), one object for each r; the one the door was opened with
    *  is `docFor(the last told part's chain.r)` */
   docFor(r: number): LayerDocument
@@ -36,7 +41,7 @@ const flush = () => new Promise<void>(r => setTimeout(r, 0))
 export function runDoorConformance(makeDoor: MakeDoor): void {
   let M: Made
   /** an opened door and what the host saw */
-  async function open(o: { parts?: number; failPages?: readonly number[]; leftPart?: DoorSetup['leftPart'] } = {}) {
+  async function open(o: { parts?: number; failPages?: readonly number[]; hold?: DoorSetup['hold']; leftPart?: DoorSetup['leftPart'] } = {}) {
     M ??= await made()
     const fetched: [number, Ref & { page: number }][] = []
     const retired: LayerDocument[] = []
@@ -44,14 +49,16 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
       fetched.push([page, ref])
       return (M.lefts[page] as { bytes: Uint8Array }).bytes
     })
-    const h = await makeDoor({ paper: M, parts: o.parts ?? 0, failPages: o.failPages, leftPart, onRetired: d => retired.push(d) })
+    const h = await makeDoor({ paper: M, parts: o.parts ?? 0, failPages: o.failPages, hold: o.hold, leftPart, onRetired: d => retired.push(d) })
+    await h.supplyRows?.()
     const events: [number, PageEvent][] = []
     h.layer.onPage((page, state) => events.push([page, state]))
     /** part i, with its document where it has a tail */
-    const add = (i: number) => {
+    const add = async (i: number) => {
       const part = M.readParts[i]!
       if (part.addon?.tail) h.layer.addPart(part, { doc: h.docFor(part.chain.r) })
       else h.layer.addPart(part)
+      await h.supplyRows?.()
     }
     return { ...h, fetched, retired, events, add }
   }
@@ -69,7 +76,7 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
 
     it('lays a covered page once asked: laying at once, then ready, told once each in order', async () => {
       const d = await open()
-      d.add(0)
+      await d.add(0)
       expect(d.layer.pageState(1)).toBe('waiting')
       const laid = ask(d.layer, 1)
       expect(d.layer.pageState(1)).toBe('laying')
@@ -87,14 +94,14 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
 
     it('holds a page until a part with to >= page is added, then lays it', async () => {
       const d = await open()
-      d.add(0)
+      await d.add(0)
       const second = settle(ask(d.layer, 2))
       expect(d.layer.pageState(2)).toBe('waiting')
       await d.advance()
       await flush()
       expect(d.layer.pageState(2)).toBe('waiting')
       expect(d.events).toEqual([])
-      d.add(1)
+      await d.add(1)
       expect(d.layer.pageState(2)).toBe('laying')
       await d.advance()
       expect(await second).toHaveProperty('value')
@@ -106,7 +113,7 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
     it('covers a page with a part that has no layout', async () => {
       const d = await open({ parts: 2 })
       expect(M.readParts[2]!.layout).toBeNull()
-      d.add(2)
+      await d.add(2)
       const four = settle(ask(d.layer, 4))
       await d.advance()
       expect(await four).toHaveProperty('value')
@@ -152,10 +159,10 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
 
     it('counts the parts told and the pages through', async () => {
       const d = await open()
-      d.add(0)
-      d.add(1)
+      await d.add(0)
+      await d.add(1)
       expect(d.layer.stats().parts).toEqual({ through: 3, told: 2 })
-      d.add(2)
+      await d.add(2)
       expect(d.layer.stats().parts).toEqual({ through: 4, told: 3 })
       d.layer.dispose()
     })
@@ -178,11 +185,11 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
       expect(() => d.layer.addPart(p1, { doc: d.docFor(2) })).toThrow(BundleRefusal)
       expect(() => d.layer.addPart({ ...p0, prev: 'a'.repeat(64) }, { doc: d.docFor(1) })).toThrow(BundleRefusal)
       expect(d.layer.stats().parts).toEqual({ through: 0, told: 0 })
-      d.add(0)
+      await d.add(0)
       expect(() => d.layer.addPart({ ...p1, prev: 'a'.repeat(64) }, { doc: d.docFor(2) })).toThrow(BundleRefusal)
       expect(() => d.layer.addPart({ ...p1, pages: [3, 3] }, { doc: d.docFor(2) })).toThrow(BundleRefusal)
       expect(d.layer.stats().parts).toEqual({ through: 1, told: 1 })
-      d.add(1)
+      await d.add(1)
       expect(d.layer.stats().parts).toEqual({ through: 3, told: 2 })
       d.layer.dispose()
     })
@@ -194,8 +201,8 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
       expect(() => d.layer.addPart(p0, { doc: {} as LayerDocument })).toThrow(TypeError)
       expect(() => d.layer.addPart(p0, { doc: d.docFor(0) })).toThrow(BundleRefusal)
       expect(d.layer.stats().parts).toEqual({ through: 0, told: 0 })
-      d.add(0)
-      d.add(1)
+      await d.add(0)
+      await d.add(1)
       // (a document with a part that has no tail: refused)
       expect(() => d.layer.addPart(M.readParts[2]!, { doc: d.docFor(2) })).toThrow(TypeError)
       expect(d.layer.stats().parts).toEqual({ through: 3, told: 2 })
@@ -204,7 +211,7 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
 
     it('takes the same part again as a no-op', async () => {
       const d = await open()
-      d.add(0)
+      await d.add(0)
       d.layer.addPart(M.readParts[0]!)
       d.layer.addPart(M.readParts[0]!, { doc: d.docFor(1) })
       expect(d.layer.stats().parts).toEqual({ through: 1, told: 1 })
@@ -216,7 +223,7 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
   describe('the door: endParts', () => {
     it('fails every page no part covers, told once, and rejects its pageOf', async () => {
       const d = await open()
-      d.add(0)
+      await d.add(0)
       const three = settle(ask(d.layer, 3))
       expect(d.layer.pageState(3)).toBe('waiting')
       d.layer.endParts()
@@ -236,7 +243,7 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
 
     it('refuses a part after it, and takes a part told before it again as a no-op', async () => {
       const d = await open()
-      d.add(0)
+      await d.add(0)
       d.layer.endParts()
       expect(() => d.layer.addPart(M.readParts[1]!, { doc: d.docFor(2) })).toThrow(BundleRefusal)
       d.layer.addPart(M.readParts[0]!)
@@ -248,7 +255,7 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
   describe('the door: pageOf and signal', () => {
     it('rejects an aborted ask with an AbortError and drops the page from the targets', async () => {
       const d = await open()
-      d.add(0)
+      await d.add(0)
       const c = new AbortController()
       const three = settle(ask(d.layer, 3, c.signal))
       c.abort()
@@ -256,7 +263,7 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
       expect(r).toHaveProperty('error')
       expect((r as { error: Error }).error.name).toBe('AbortError')
       // the page was dropped from the targets: covered later, nobody asked, it stays waiting
-      d.add(1)
+      await d.add(1)
       await d.advance()
       await flush()
       expect(d.layer.pageState(3)).toBe('waiting')
@@ -287,13 +294,13 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
 
     it('keeps another ask of the page alive when one is aborted', async () => {
       const d = await open()
-      d.add(0)
+      await d.add(0)
       const c = new AbortController()
       const aborted = settle(ask(d.layer, 3, c.signal))
       const kept = settle(ask(d.layer, 3))
       c.abort()
       expect(await aborted).toHaveProperty('error')
-      d.add(1)
+      await d.add(1)
       await d.advance()
       expect(await kept).toHaveProperty('value')
       expect(d.layer.pageState(3)).toBe('ready')
@@ -304,11 +311,11 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
   describe('the door: leftPageOf', () => {
     it('waits for the covering part, fetches the ref once through leftPart and caches the parse', async () => {
       const d = await open()
-      d.add(0)
+      await d.add(0)
       const two = settle(d.layer.leftPageOf(2))
       await flush()
       expect(d.fetched).toEqual([])
-      d.add(1)
+      await d.add(1)
       const r = await two
       expect(r).toHaveProperty('value')
       const page = (r as { value: Awaited<ReturnType<Layer['leftPageOf']>> }).value
@@ -326,7 +333,7 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
 
     it('rejects a page uncovered when the parts end, and a pending one on dispose', async () => {
       const d = await open()
-      d.add(0)
+      await d.add(0)
       const three = settle(d.layer.leftPageOf(3))
       d.layer.endParts()
       expect(await three).toHaveProperty('error')
@@ -336,6 +343,14 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
       e.layer.dispose()
       expect(await pending).toHaveProperty('error')
       d.layer.dispose()
+    })
+
+    it('rejects a pending leftPageOf at dispose without waiting for the transport', async () => {
+      const d = await open({ parts: 3, leftPart: () => new Promise<Uint8Array>(() => {}) })
+      const pending = settle(d.layer.leftPageOf(1))
+      await flush()
+      d.layer.dispose()
+      expect(await pending).toHaveProperty('error')
     })
 
     it('does not cache a failed fetch', async () => {
@@ -355,16 +370,50 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
     it('tells onRetired for a superseded document at the swap, and for the last at dispose, once', async () => {
       const d = await open()
       expect(d.retired).toEqual([])
-      d.add(0)
+      await d.add(0)
       expect(d.retired).toEqual([d.docFor(0)])
-      d.add(1)
+      await d.add(1)
       expect(d.retired).toEqual([d.docFor(0), d.docFor(1)])
-      d.add(2)
+      await d.add(2)
       expect(d.retired.length).toBe(2)
       d.layer.dispose()
       expect(d.retired).toEqual([d.docFor(0), d.docFor(1), d.docFor(2)])
       d.layer.dispose()
       expect(d.retired.length).toBe(3)
+    })
+
+    it('holds onRetired for a document a task is still reading until the read settles', async () => {
+      let release!: () => void
+      const held = new Promise<void>(r => { release = r })
+      const d = await open({ parts: 1, hold: p => (p === 1 ? held : null) })
+      const one = settle(ask(d.layer, 1))
+      const advanced = d.advance()
+      await flush()
+      // the swap while page 1 is read from the document the door was opened with
+      await d.add(1)
+      expect(d.retired).toEqual([])
+      release()
+      await advanced
+      expect(await one).toHaveProperty('value')
+      expect(d.retired).toEqual([d.docFor(1)])
+      d.layer.dispose()
+      expect(d.retired).toEqual([d.docFor(1), d.docFor(2)])
+    })
+
+    it('holds the last document\'s onRetired at dispose until a read in flight settles', async () => {
+      let release!: () => void
+      const held = new Promise<void>(r => { release = r })
+      const d = await open({ parts: 1, hold: p => (p === 1 ? held : null) })
+      const one = settle(ask(d.layer, 1))
+      const advanced = d.advance()
+      await flush()
+      d.layer.dispose()
+      expect(await one).toHaveProperty('error')
+      expect(d.retired).toEqual([])
+      release()
+      await advanced
+      await flush()
+      expect(d.retired).toEqual([d.docFor(1)])
     })
 
     it('tells the document it was opened with at dispose when no part came', async () => {
@@ -375,7 +424,7 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
 
     it('rejects what is pending, throws on pageOf, leftPageOf, copyOf and pageState, and answers stats and unitAt', async () => {
       const d = await open()
-      d.add(0)
+      await d.add(0)
       const pending = settle(ask(d.layer, 3))
       const pendingLeft = settle(d.layer.leftPageOf(3))
       const heard = d.events.length
@@ -427,13 +476,13 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
 
     it('finds the smallest unit under a point on a covered page, and none on an uncovered one', async () => {
       const d = await open()
-      d.add(0)
+      await d.add(0)
       // part 1's unit 0 lies at [150, 696, 460, 712] on page 1, unit 2 at [72, 647, 540, 657.5]
       expect(d.layer.unitAt(1, 200, 700)).toBe(0)
       expect(d.layer.unitAt(1, 100, 650)).toBe(2)
       expect(d.layer.unitAt(1, 10, 10)).toBeNull()
       expect(d.layer.unitAt(3, 100, 500)).toBeNull()
-      d.add(1)
+      await d.add(1)
       expect(d.layer.unitAt(3, 100, 300)).toBe(4)
       d.layer.dispose()
     })
