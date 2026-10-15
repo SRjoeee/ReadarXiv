@@ -573,4 +573,49 @@ describe("TeX's own lines, kept and broken (the 2608.16117 survey's fixes 2 and 
     const v0 = L2.prepareUnit(u, t.rects.map(r => [...r]) as never, [page as never], new Map() as never)
     expect(v0.keep).toContain(citeLine)
   })
+
+  // a paragraph, `\\ \\`, a paragraph: lines 0 and 1 the first (1 ended short at the forced break), the blank line, 2 and 3
+  // the second; and `\\ \\` after the unit's last words, which ends no line of it
+  const L = (y: number, x1 = 200) => [1, 10, x1, y, y + 7, y - 2, 10, 0]
+  const lines = [L(500), L(488, 90), L(464), L(452, 120)]
+  const BR = '\\\\'
+  const unit = (...p: object[]) => ({ kind: 'para', src: 'a b c d', pieces: p }) as never
+  const u = unit(text('\u7532'), ph(BR), ph(BR), text(' \u4E59'), ph(BR), ph(BR), text('\n'))
+  it("fix 3: pairs each forced break between two visible pieces with a line TeX ended short, in order, never one at an edge", () => {
+    expect([...T.forcedBreaks(unitOf(lines) as never, u)]).toEqual([[1, 2], [2, 2]])
+    // a break before a display ends no line of the text: the display does
+    const D = '\\begin{equation}x=1\\end{equation}'
+    expect(T.forcedBreaks(unitOf(lines) as never, unit(text('\u7532'), ph(BR), ph(D), text(' \u4E59'))).size).toBe(0)
+  })
+  it('pairs nothing where the breaks and the short lines are not as many, nor where a found piece stands across its break', () => {
+    // no line ended short (the break at a line's end), and two for one break (a ragged unit)
+    expect(T.forcedBreaks(unitOf([L(500), L(488), L(464), L(452, 120)]) as never, u).size).toBe(0)
+    expect(T.forcedBreaks(unitOf([L(500, 150), L(488, 90), L(464), L(452, 120)]) as never, u).size).toBe(0)
+    // a citation the translation sets after the break, whose segments the file puts on line 0, before it
+    const cited = unit(text('\u7532'), ph(BR), text(' \u4E59'), ph('\\cite{x}'), text('\u4E19'))
+    const kOf = [-1, -1, -1, 3, -1]
+    expect(T.forcedBreaks(unitOf(lines, [[3, 0, [1, 60, 500, 80, 507, 498]]]) as never, cited, kOf).size).toBe(0)
+    expect([...T.forcedBreaks(unitOf(lines, [[3, 0, [1, 60, 464, 80, 471, 462]]]) as never, cited, kOf)]).toEqual([[1, 2]])
+  })
+  it('breaks the text there: the laid line ends at the break, the text after it starts on the line TeX set after it', () => {
+    const lu = unitOf(lines)
+    const t = T.texRects(lu)
+    const page = [...item('a', 10, 500, 10, 0), ...item('b', 10, 488, 10, 1), ...item('c', 10, 464, 10, 2), ...item('d', 10, 452, 10, 3)]
+    const prep = L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu, [-1, -1, -1, -1, -1, -1, -1], { use: 'lines', lines: t }) as never)
+    const r = prep.get(1)
+    expect(r).toMatchObject({ mode: 'none', brk: true })
+    expect(prep.get(2)?.region).toBe(r?.region)
+    expect(prep.referenced.has(r?.region as number)).toBe(true)
+    // (the edge break is a space, as before)
+    expect(prep.get(4)?.brk).toBeUndefined()
+    const blocks = L2.blocks2(t.rects as never, [[0, 0, 612, 792]], prep.keep ? new Set(prep.keep) : null, prep.lineInfo, prep.regionOf, prep.referenced, null, prep.breakAt)
+    expect(blocks.map(b => [b.B, b.after])).toEqual([[[500, 488], 0], [[464, 452], 1]])
+    const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
+    const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0, borrow: 0 }
+    const tokens = L2.tokensOf2(u, prep, 'zh', BASE as never, { serif: 'times', sans: 'helvetica', mono: 'courier' } as never, P as never, null, () => 50)
+    expect(tokens.map(x => (x.blockTo !== undefined ? '|' : x.space ? '_' : x.s)).join('')).toBe('\u7532|_\u4E59')
+    const l = L2.layoutUnit2(tokens, blocks as never, 10, P as never)
+    expect(l.clipped).toBe(false)
+    expect(l.lines.filter(x => x.items.some(it => it.t.s)).map(x => [x.baseline, x.items.map(it => it.t.s ?? '').join('')])).toEqual([[500, '\u7532'], [464, '\u4E59']])
+  })
 })
