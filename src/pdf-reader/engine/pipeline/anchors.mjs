@@ -274,11 +274,13 @@ export function boundsFromMarks(doc, marks) {
 
 // ---------------------------------------------------------------- text matching
 /** the document's 3-grams → the token indices of each occurrence; over the tokens with text, since the second part of a
- *  word joined across two items keeps a box and no text (tokenizeDocument), and would break every 3-gram through it */
-function buildIndex(doc) {
+ *  word joined across two items keeps a box and no text (tokenizeDocument), and would break every 3-gram through it.
+ *  Over doc[from..to] alone: every 3-gram of tokens inside it, in the same order, so that a search inside it (locate's
+ *  hits are only those inside [lo, hi]) finds what the whole document's index finds */
+function buildIndex(doc, from = 0, to = doc.length - 1) {
   const index = new Map()
   const live = []
-  for (let k = 0; k < doc.length; k++) if (doc[k].t) live.push(k)
+  for (let k = Math.max(0, from); k <= Math.min(doc.length - 1, to); k++) if (doc[k].t) live.push(k)
   for (let m = 0; m + K <= live.length; m++) {
     const js = live.slice(m, m + K)
     const key = js.map(j => doc[j].t).join('\u0001')
@@ -481,9 +483,10 @@ const HELD = 'held'
  * down, the running head's and foot's baselines — the highest and the lowest word of a page, no unit's, above or below
  * the text on most pages, at one height on a quarter of the pages at least (a display that opens or closes a page is
  * none: it stands where the text does). Outside it are the margin (arXiv's stamp, line numbers) and the page's head and
- * foot, never a unit
+ * foot, never a unit. The frame's rule today (placeUnits' `frame`): it reads every located unit of the document, so a
+ * place of the units of some pages is exact only under the whole document's frame
  */
-function pageFrame(doc, ms) {
+export function pageFrame(doc, ms) {
   // arrays by page number, the document's tokens being in page order
   const pages = doc.length ? doc[doc.length - 1].page + 1 : 1
   const x0 = new Float64Array(pages).fill(Infinity), x1 = new Float64Array(pages).fill(-Infinity), y0 = new Float64Array(pages).fill(Infinity), y1 = new Float64Array(pages).fill(-Infinity)
@@ -588,8 +591,7 @@ function inOrder(doc, words, dir) {
  * them — a display's limits, scripts and fractions' parts. Further, or smaller and apart, is a float, a footnote, the
  * page's foot. What is taken becomes the unit's, so that no other unit takes it
  */
-function walker(doc, ms, owner, line) {
-  const inFrame = pageFrame(doc, ms)
+function walker(doc, ms, owner, line, inFrame) {
   // which unit each line holds words of: -1 none, -2 several
   const lineOwner = new Int32Array((line[doc.length - 1] ?? 0) + 1).fill(-1)
   const own = (k, u) => { const l = line[k]; lineOwner[l] = lineOwner[l] === -1 || lineOwner[l] === u ? u : -2 }
@@ -646,24 +648,80 @@ function walker(doc, ms, owner, line) {
  * `floating(id)`: a unit TeX sets away from where the source has it — a caption, with its float; a footnote, at the
  * foot of the page — which is no neighbour to search between: a heading's neighbours in the source were a caption
  * placed a column later, and the heading was searched in a range that ended before it began (2608.02163, Japanese).
+ * `floatMatch`: floatMatches' of this `doc` and these units, taken in place of a float's search of the whole document.
+ * `frame(doc, ms)`: the pages' frame's rule (pageFrame, today's). The matching (matchUnits) and the placing (placeUnits),
+ * one after the other
  */
-export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = () => false } = {}) {
-  const index = buildIndex(doc)
-  const hard = units.map(u => bounds?.get(String(u.id)) ?? null)
-  // a unit without marks — a heading, whose words are also in the running head of every page of its section — is
-  // searched between its marked neighbours in the text only, with room for a float or a footnote that the stream
-  // passes through
-  const MARGIN = 100
+export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = () => false, floatMatch = null, frame = pageFrame } = {}) {
+  return placeUnits(doc, units, matchUnits(doc, units, { minCoverage, bounds, floating, floatMatch }), { frame })
+}
+
+/** a unit without marks — a heading, whose words are also in the running head of every page of its section — is searched
+ *  between its marked neighbours in the text only, with room for a float or a footnote that the stream passes through:
+ *  MARGIN tokens either side */
+const MARGIN = 100
+/** each unit's nearest marked neighbours in the text (no float: its marks are where TeX set it), by the units' order: the
+ *  last token of the one before (-1 for none), the first token of the one after (doc.length for none) */
+function neighbours(doc, units, hard, floating) {
   const before = [], after = []
   const inText = u => hard[u] && !floating(units[u].id)
   for (let u = 0, e = -1; u < units.length; u++) { before[u] = e; if (inText(u)) e = hard[u][1] }
   for (let u = units.length - 1, a = doc.length; u >= 0; u--) { after[u] = a; if (inText(u)) a = hard[u][0] }
+  return { before, after }
+}
+/** where unit u's text is searched: its own bounds; with marks elsewhere, between its marked neighbours, MARGIN past them;
+ *  with no marks at all, the whole document */
+function windowOf(doc, u, hard, bounds, before, after) {
+  return hard[u] ?? (bounds?.size ? [Math.max(0, before[u] + 1 - MARGIN), Math.min(doc.length - 1, after[u] - 1 + MARGIN)] : [0, doc.length - 1])
+}
+
+/**
+ * Every floating unit's match over the whole document, as anchorUnits makes it where its search between its neighbours
+ * found nothing: Map id → its tokens, or null (a float of fewer than K words has none). From the document and the units'
+ * words alone, so made before any mark is known (the prepare's step T, beside the compile); its index built here and let go
+ */
+export function floatMatches(doc, units, floating = () => false) {
+  const out = new Map()
+  let index = null
+  for (const { id, text, gaps } of units) {
+    if (!floating(id)) continue
+    const { ws } = unitWords(text, gaps)
+    if (ws.length < K) continue
+    index ??= buildIndex(doc)
+    out.set(id, locate(doc, index, ws, 0, doc.length - 1, false)?.tokens ?? null)
+  }
+  return out
+}
+
+/**
+ * Each unit's match (anchorUnits' first half): an array by the units' order, each { m, coverage, bounded, ws?, pairs?,
+ * textPairs? } or null. `only`: a Set of indices into `units`, the units matched (the others null), their neighbours still
+ * read from every unit's bounds: a unit's match is a function of its own bounds, its neighbours', its text and the document's
+ * tokens in its window. The 3-gram index is made over the windows searched alone and let go (a window's hits are those
+ * inside it: locate)
+ */
+export function matchUnits(doc, units, { minCoverage = 0.6, bounds, floating = () => false, floatMatch = null, only = null } = {}) {
+  const hard = units.map(u => bounds?.get(String(u.id)) ?? null)
+  const { before, after } = neighbours(doc, units, hard, floating)
+  // the units' words, and the span of the document their searches by 3-grams read
+  const words = units.map(({ text, gaps }, u) => (only && !only.has(u) ? null : unitWords(text, hard[u] ? null : gaps)))
+  let from = Infinity, to = -Infinity
+  units.forEach(({ id }, u) => {
+    const w = words[u]
+    if (!w || w.ws.length < K) return
+    const [lo, hi] = windowOf(doc, u, hard, bounds, before, after)
+    // (a float's search of the whole document, where no match of it is given)
+    const all = !hard[u] && bounds?.size && floating(id) && !floatMatch?.has(id)
+    from = Math.min(from, all ? 0 : lo); to = Math.max(to, all ? doc.length - 1 : hi)
+  })
+  const index = from <= to ? buildIndex(doc, from, to) : new Map()
   const found = []
-  units.forEach(({ id, text, gaps }, u) => {
+  units.forEach(({ id }, u) => {
+    if (!words[u]) { found.push(null); return }
     const b = hard[u]
     // where its placeholders stood matters to a unit found as a run of words, which a unit with marks never is
-    const { ws, gap } = unitWords(text, b ? null : gaps)
-    const [lo, hi] = b ?? (bounds?.size ? [Math.max(0, before[u] + 1 - MARGIN), Math.min(doc.length - 1, after[u] - 1 + MARGIN)] : [0, doc.length - 1])
+    const { ws, gap } = words[u]
+    const [lo, hi] = windowOf(doc, u, hard, bounds, before, after)
     // a heading — no marks, in the text between its located neighbours: its words in a row in the gap between them
     // alone, no margin, the last place they come there, since a heading is followed by its own text; a running head
     // with its words comes before it, and the next section's text is past the gap. By 3-grams it was taken from a
@@ -677,7 +735,7 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
     if (!m && !b && ws.length && ws.length < K && bounds?.size) m = inRow(doc, ws, before[u] + 1, after[u] - 1, false, gap)
     // a float's text that is not there: its float may stand anywhere, so the whole document, as with no marks at all —
     // the words of a located unit are that unit's (owner, below)
-    if (!m && !b && ws.length >= K && bounds?.size && floating(id)) m = locate(doc, index, ws, 0, doc.length - 1, false)?.tokens ?? null
+    if (!m && !b && ws.length >= K && bounds?.size && floating(id)) m = (floatMatch?.has(id) ? floatMatch.get(id) : locate(doc, index, ws, 0, doc.length - 1, false)?.tokens) ?? null
     // a run takes a placeholder's words besides the unit's own, which are all there
     const coverage = m ? Math.min(1, m.length / ws.length) : 0
     if (!b && (!m || coverage < minCoverage)) { found.push(null); return }
@@ -685,6 +743,16 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
     // its text alone keeps the match's map too, for its sentences' starts before any marks come (sentenceStarts, B3c)
     found.push(b ? { m: m ?? [], coverage, bounded: b, ws, pairs } : { m: m ?? [], coverage, bounded: b, textPairs: pairs })
   })
+  return found
+}
+
+/**
+ * The units' places from their matches (anchorUnits' second half): Map id → Anchor | null. `found` is matchUnits' for
+ * these units, by their order; `units` may be any of the paper's units in their order, with their matches: a unit's place
+ * reads the matches of the units whose tokens share its pages, and of those that share theirs (their walks), and the
+ * frame (`frame(doc, ms)`, its rule: pageFrame, which reads every located unit)
+ */
+export function placeUnits(doc, units, found, { frame = pageFrame } = {}) {
   // who owns each token: a marked unit its whole range, the innermost range winning (a footnote inside a paragraph
   // is the footnote's); an unmarked unit its matched words
   const owner = new Int32Array(doc.length).fill(-1)
@@ -730,7 +798,7 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
   // line a lead walk takes stands up to 19.6 pt above the unit's first line at a 10 pt body — 5 of 62 over 16 pt, each
   // a row of the display before it. So a table at a page's head, headed by single letters over rows of digits (which
   // no letters refuse), is still taken where the display closed the page before (the re-review of A1, n1: open)
-  const walk = walker(doc, ms, owner, line)
+  const walk = walker(doc, ms, owner, line, frame(doc, ms))
   const beyond = []
   for (const edge of ['lead', 'trail']) {
     units.forEach((unit, u) => {
