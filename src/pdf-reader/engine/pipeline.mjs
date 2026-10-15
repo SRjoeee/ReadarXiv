@@ -26,8 +26,11 @@ export { DISPLAY, FOLLOWERS, GLYPHS_PIECE, INK_MAX, INK_TEXT_MAX, INVISIBLE, LAY
 export { CARRY_MIN, OPS_MS, OPS_PAPER_MS, fontName, makeLayout } from './layout/make.mjs'
 export { layoutMarksOfPaper } from './layout/paper.mjs'
 export { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, REFUSED_MAX, REMOVAL, checkAddonManifest, checkBoxes, parseAddonManifest } from './layout/addon-manifest.mjs'
-export { paperAddon } from './layout/addon.mjs'
-export { BYTES_MAX, CHECK_SETS, COST, DecodeLimit, HELD_MAX, LexLimit, SETS, WALK_MAX, checkPage, lex, makeAddon, openRemover, removePaper } from './layout/remove.mjs'
+export { pagePlanOf, pagePlansOf, paperAddon } from './layout/addon.mjs'
+export { BYTES_MAX, CHECK_SETS, COST, DecodeLimit, HELD_MAX, LexLimit, SETS, WALK_MAX, alignOf, checkPage, lex, makeAddon, openRemover, removePaper, removerOf } from './layout/remove.mjs'
+// the remover exchange (E3): the ask and the answer's entries, their bounds, and a part's add-on chained after the parts before it
+export { ANSWER_CAP, ASK_CAP, ASK_VALUES, ENTRIES_CAP, ENTRIES_VALUES, REMOVER_WHYS, encodeAsk, encodeEntries, readAsk, readEntries } from './layout/chain-wire.mjs'
+export { chainedAddon } from './layout/chain.mjs'
 // the bundle's writer (the reader's parsers are the layer entry's)
 export { bundleUnitsOf, writeBundle } from './layer-proto/bundle.mjs'
 // BUNDLE 4: the writers of a paper's objects, the keys and the bounds (the readers are the layer entry's), and the memory-class errors every catch lets through
