@@ -108,7 +108,8 @@ export function pagePlanOf(index, p, ink, facts) {
 /**
  * Every page's plan (pagePlanOf) of PDF.js's document `doc` of arXiv's PDF, `OPS` PDF.js's operator codes, `index` the layout
  * file's: { plans, a Map from each planned page to its plan, ms { ops, ink, plan } }. Reads each page's operator list once
- * and keeps none
+ * and keeps none: each page is cleaned up (page.cleanup) once its plan is made, so a caller that reads the page's operator list
+ * again pays the parse again. The document is the caller's to destroy
  */
 export async function pagePlansOf({ doc, OPS, index }) {
   const plans = new Map(), ms = { ops: 0, ink: 0, plan: 0 }
@@ -123,6 +124,9 @@ export async function pagePlansOf({ doc, OPS, index }) {
     t = performance.now()
     const plan = pagePlanOf(index, p, ink, () => alignOf(OPS, list))
     if (plan) plans.set(p, plan)
+    // (the page's operator list and images let go: the plan has copied what it keeps, and the alignment facts were read inside
+    // pagePlanOf, so this comes after it)
+    page.cleanup?.()
     ms.plan += performance.now() - t
   }
   return { plans, ms }
