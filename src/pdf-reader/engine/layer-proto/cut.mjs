@@ -10,7 +10,7 @@ import { partTarget, writeHead, writeLeftPart, writePart, writeUnitChunks } from
 import { needsOf } from './need.mjs'
 
 const refuse = (kind, path, why, data) => new BundleRefusal(why, { kind, path, ...(data ? { data } : {}) })
-const SIZE_BOUNDS = ['bytes', 'values', 'content']
+const SIZE_BOUNDS = ['bytes', 'values', 'content', 'tail', 'rows']
 /** a removed page's reason when the whole add-on's manifest is carried without its tail (one incremental update, not cuttable by
  *  bytes): its units are drawn the old way, erased and put back */
 export const TAIL_NOT_CARRIED = 'tail not carried'
@@ -91,7 +91,8 @@ const empty = { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }
  * { manifest, tail } for a candidate range of the part, or null (the part's pages are refused, drawn by erase and restore);
  * the add-on takes part in the part's size, so the hook is called for each candidate range the size search tries (several
  * times for one index) and must have no effect until `o.acceptAddon(index, { pages })`, called once for each part that has a
- * layout, in order, when its range is final (a chained writer keeps its state there). Without the hook, the part carries the whole's add-on manifest (`whole.addon`) without
+ * layout, in order, when its range is final (a chained writer keeps its state there). A tail past TAIL_CAP shortens the part like
+ * any size refusal; a page whose tail alone passes it ships with no layout. Without the hook, the part carries the whole's add-on manifest (`whole.addon`) without
  * its tail: clean pages as they are, removed pages TAIL_NOT_CARRIED, refused pages refused; with no add-on in the whole, every
  * page refused. Throws BundleRefusal for a whole that
  * cannot be written (a dropped unit, a unit past the chunk caps) and `bound` for a page that no part can hold

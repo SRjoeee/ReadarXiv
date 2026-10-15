@@ -11,7 +11,7 @@ import { needsOf } from '@/pdf-reader/engine/layer-proto/need.mjs'
 import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { encodeLayout, indexLayout } from '@/pdf-reader/engine/layout/file.mjs'
 import { BASE_OF, leftPagesOf, type PaperSpec, TOKENS_PER_PAGE, type Whole, wholeOf } from './helpers/cut-paper'
-import { tokenWire } from './helpers/format-paper'
+import { tailOf, tokenWire } from './helpers/format-paper'
 
 // The cutter (bundle 4 contract C3b, C3c): a paper made whole, cut into the units' chunks, the head, the parts at the doubling
 // schedule closed by page and by the stream's prefix, and the left parts. The properties are the writers' guarantees to the
@@ -274,6 +274,47 @@ describe('the cut of a small paper', () => {
     expect(Object.keys(back.parts[1]!.addon!.manifest.page)).toEqual(['2'])
     expect((back.parts[1]!.addon!.manifest.page[2] as { rules: number[] }).rules.length).toBe(60_000)
   }, 120_000)
+
+  it('shortens a part whose tail passes TAIL_CAP: two 600 KiB per-page tails give one part a page, and a page whose tail alone passes it ships no layout', async () => {
+    const whole = wholeOf({ pages: 3, units: [1, 2, 3].map(p => ({ stream: p, rects: [p], lines: [p] })) })
+    const hook = (kib: number) => {
+      const asked: [number, number[]][] = [], accepted: [number, number[]][] = []
+      let removed = 0
+      const chainAddon: NonNullable<CutOptions['chainAddon']> = (i, { pages }) => {
+        asked.push([i, pages])
+        const count = pages[1] - pages[0] + 1
+        // (the tail of `count` removed pages: filler, then a classic cross-reference section)
+        const filler = new Uint8Array(kib * 1024 * count).fill(0x25)
+        const section = tailOf(10_000 + filler.length, 9_000, 12, 100 + removed, count)
+        const tail = new Uint8Array(filler.length + section.tail.length)
+        tail.set(filler)
+        tail.set(section.tail, filler.length)
+        const page: Record<number, unknown> = {}
+        for (let k = 0; k < count; k++) page[pages[0] + k] = { ok: true, at: { R: 3 + removed + 1 + k } }
+        return { manifest: { schema: 1 as const, removal: REMOVAL, pages: 3, sets: {}, page, appended: tail.length, stats: {} }, tail } as never
+      }
+      return { asked, accepted, chainAddon, acceptAddon: ((i: number, { pages }: { pages: [number, number] }) => { accepted.push([i, pages]); removed += pages[1] - pages[0] + 1 }) as never }
+    }
+    const h = hook(600)
+    const c = await cutBundle(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, chainAddon: h.chainAddon, acceptAddon: h.acceptAddon })
+    expect(fits(c)).toEqual([[1, 1], [2, 2], [3, 3]])
+    expect(h.asked).toEqual([[0, [1, 1]], [1, [2, 3]], [1, [2, 2]], [2, [3, 3]]])
+    expect(h.accepted).toEqual([[0, [1, 1]], [1, [2, 2]], [2, [3, 3]]])
+    // a page whose tail alone is past TAIL_CAP: the existing fallback, the page ships with no layout, no add-on, no accept
+    const big = hook(1100)
+    const d = await cutBundle(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, chainAddon: big.chainAddon, acceptAddon: big.acceptAddon })
+    expect(fits(d)).toEqual([[1, 1], [2, 2], [3, 3]])
+    expect(big.accepted).toEqual([])
+    expect((await readBack(d)).parts.every(p => p.layout === null && p.addon === null)).toBe(true)
+  }, 60_000)
+
+  it('shortens a part whose layout passes a per-part bound (here 10,000 names)', async () => {
+    const whole = wholeOf({ pages: 3, units: [], names: [1, 2, 3].flatMap(page => Array.from({ length: 6000 }, () => ({ page }))) })
+    const c = await cutBundle(whole, { leftPages: () => null, base: BASE_OF })
+    expect(fits(c)).toEqual([[1, 1], [2, 2], [3, 3]])
+    const back = await readBack(c)
+    expect(back.parts.map(p => p.layout!.names.length)).toEqual([6000, 6000, 6000])
+  }, 60_000)
 
   it('takes a hook that returns null as the default add-on, and calls acceptAddon for it', async () => {
     const whole = wholeOf(SMALL)

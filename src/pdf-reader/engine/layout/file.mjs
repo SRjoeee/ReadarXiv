@@ -228,7 +228,7 @@ export function checkLayoutPart(value, { pages, views, lo, hi }) {
 function checkRows(f, { views, lo, hi }) {
   const span = { lo, hi }
   const fonts = array(f.fonts, 'fonts')
-  if (fonts.length > FONTS_MAX) throw refuse('fonts', `more than ${FONTS_MAX} names`)
+  if (fonts.length > FONTS_MAX) throw new LayoutRefusal('fonts', `more than ${FONTS_MAX} names`, 'rows')
   for (let i = 0; i < fonts.length; i++) if (!printable(fonts[i], 1, FONT_MAX)) throw refuse(`fonts[${i}]`, `not 1 to ${FONT_MAX} printable ASCII characters (${kindOf(fonts[i])})`)
 
   // units: by id, their index in units; each unit's kind, pieces and line rows by that index
@@ -258,7 +258,7 @@ function checkRows(f, { views, lo, hi }) {
     const e = lines[i], u = entry(e, i, 'lines', last, slot, 8), r = e[1]
     if (r.length > 8 * LINES_UNIT) throw refuse(`lines[${i}][1]`, `more than ${LINES_UNIT} lines`)
     total += r.length / 8
-    if (total > LINES_ALL) throw refuse('lines', `more than ${LINES_ALL} lines`)
+    if (total > LINES_ALL) throw new LayoutRefusal('lines', `more than ${LINES_ALL} lines`, 'rows')
     for (let j = 0; j < r.length; j += 8) {
       checkBox(r, j, 1, 2, 3, 4, 5, true, views, span, 'lines', i, 1)
       const size = r[j + 6]
@@ -398,7 +398,7 @@ function checkRows(f, { views, lo, hi }) {
     const text = e[2]
     if (!isPageText(text)) throw refuse(`pageText[${i}][2]`, `not 1 to ${TEXT_MAX} code units of text (${kindOf(text)})`)
     all += text.length
-    if (all > PAGE_TEXT_ALL) throw refuse('pageText', `more than ${PAGE_TEXT_ALL} code units`)
+    if (all > PAGE_TEXT_ALL) throw new LayoutRefusal('pageText', `more than ${PAGE_TEXT_ALL} code units`, 'rows')
     if (e[0] === 0) e[0] = 0
     symbols.delete(key)
   }
@@ -427,7 +427,7 @@ function checkRows(f, { views, lo, hi }) {
   // file's), else -1; glue: the original's space between its joint and the unit's text (0 where not RUN_IN); the column:
   // its TeX column's text edges on the page, the room a name has
   const names = array(f.names, 'names')
-  if (names.length > NAMES_MAX) throw refuse('names', `more than ${NAMES_MAX} names`)
+  if (names.length > NAMES_MAX) throw new LayoutRefusal('names', `more than ${NAMES_MAX} names`, 'rows')
   last = -1
   for (let i = 0; i < names.length; i++) {
     const r = names[i]

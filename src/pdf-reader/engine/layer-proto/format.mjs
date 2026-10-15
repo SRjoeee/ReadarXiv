@@ -102,7 +102,7 @@ const r3 = v => Math.round(v * 1000) / 1000
 /** a layout module's refusal at `path` of the object, as the format's; any other error as it is */
 function inside(kind, path, fn) {
   try { return fn() } catch (e) {
-    if (e instanceof LayoutRefusal) throw refuse(kind, e.path ? sub(path, e.path) : path, e.why)
+    if (e instanceof LayoutRefusal) throw new BundleRefusal(e.why, { kind, path: e.path ? sub(path, e.path) : path, ...(e.bound ? { data: { bound: e.bound } } : {}) })
     throw e
   }
 }
@@ -814,6 +814,8 @@ function manifestText(m) {
  */
 export async function writePart({ paper, head, prev, pages, views, left, fileOnly, layout, addon, leftParts }) {
   const K = 'part'
+  // (a tail past TAIL_CAP is the cut's to answer with a shorter part: E3's writer keeps one page's tail within it)
+  if (addon !== null && addon.tail !== null && addon.tail.length > TAIL_CAP) throw new BundleRefusal(`more than ${TAIL_CAP} bytes (${addon.tail.length})`, { kind: K, path: 'addon.tail', data: { bound: 'tail', size: addon.tail.length, max: TAIL_CAP } })
   const obj = {
     bundle: BUNDLE4, kind: 'part', head, prev, pages: [pages[0], pages[1]],
     views: views.map(r3),
