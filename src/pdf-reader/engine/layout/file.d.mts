@@ -68,6 +68,26 @@ export declare function parseLayout(bytes: Uint8Array): LayoutFile
 export declare function checkLayout(value: unknown): LayoutFile
 /** the file as written: keys in the schema's order, numbers to a hundredth, no white space */
 export declare function encodeLayout(file: LayoutFile): string
+/** the paper's \lineskip and \lineskiplimit, or null: each within TeX's \maxdimen; `path` names it in a refusal */
+export declare function checkLineskip(lineskip: unknown, path: string): [lineskip: number, lineskiplimit: number] | null
+/** the keys of a layout part, in their order: the file's rows and tables, less the header, the side key, the views and
+ *  `lineskip` */
+export declare const PART_KEYS: readonly ['fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held', 'names']
+/** a layout part: the file's rows and tables of PART_KEYS for the units of one part (a bundle 4 part holds one); its
+ *  `fonts` is its own table, which its lines' font indices and its names' name an index of */
+export type LayoutPart = Pick<LayoutFile, (typeof PART_KEYS)[number]>
+/** a layout part already parsed: every row bound checkLayout checks, per part, with each row's page one of `lo` to `hi` and
+ *  its box within that page's view; `views` are the views of pages lo to hi (stride 4), `pages` the paper's. Returns the
+ *  value itself, its -0s written 0; throws LayoutRefusal (a RangeError for a call that is no pages of the paper) */
+export declare function checkLayoutPart(value: unknown, o: { pages: number; views: readonly number[]; lo: number; hi: number }): LayoutPart
+/** a layout part as written: the file's own encoders, numbers to a hundredth, keys in PART_KEYS' order, no white space */
+export declare function encodeLayoutPart(part: LayoutPart): string
+/** a layout part as encodeLayoutPart writes it, as the object (a writer checks it before it stringifies it) */
+export declare function layoutPartRows(part: LayoutPart): LayoutPart
+/** the parts' layouts as one part: rows by unit id (names by occurrence), the fonts table anew by first appearance (the
+ *  lines by unit id, then the names), the parts unchanged; the layout maker's own order, so that parts cut from a file
+ *  merge back to it */
+export declare function mergeLayout(parts: readonly LayoutPart[]): LayoutPart
 /** one located unit as the layer reads it */
 export interface LayoutUnit {
   id: number; kind: (typeof UNIT_KINDS)[number]; depth: number; title: boolean; front: boolean; centred: boolean; pieces: number
