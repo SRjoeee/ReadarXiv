@@ -343,3 +343,60 @@ describe('on the wire (a local HTTP server over the same answers)', () => {
     } finally { await server.close() }
   })
 })
+
+describe('BUNDLE 4: the catalog, the 202s with the objects made so far, the objects by digest', async () => {
+  const { cutSample, sampleFiles } = await import('./layer-cut.mjs')
+  const { CTAG4, readCatalog } = await import('@/pdf-reader/engine/layer-proto/format.mjs')
+  const layer4 = await cutSample(sampleFiles())
+  const PATH = `/api/v1/layer/${sample.segment}/${CTAG4}`
+
+  it('answers the CTAG\'s GET with the catalog, which names the head, the chunks and the parts the job tells', async () => {
+    const a = get(layerApi({ sample, layer4 }), PATH)
+    expect(a).toMatchObject({ status: 200, headers: { 'cache-control': 'public, max-age=31536000, immutable', 'access-control-allow-origin': '*' } })
+    const c = await readCatalog((a as { body: Uint8Array }).body)
+    expect(c.head).toEqual(layer4.refs.head)
+    expect(c.units).toEqual(layer4.refs.units)
+    expect(c.parts.map(p => p.sha256)).toEqual(layer4.refs.parts.map(p => p.sha256))
+    expect(c.end).toEqual(layer4.refs.end)
+    expect(layer4.refs.parts.length).toBeGreaterThan(1)
+  })
+
+  it('answers 202s while it prepares, each with the objects made so far: the chunks and the head at once, the parts as they come, each part its prev', () => {
+    const t = clock(), api = layerApi({ sample, layer4, now: t.now }).set({ layer: mode.preparing(4000) })
+    const seen: number[] = []
+    for (let i = 0; i < 4; i++) {
+      const a = jsonOf(get(api, PATH))
+      expect(a.layer.head).toEqual(layer4.refs.head)
+      expect(a.layer.units).toEqual(layer4.refs.units)
+      seen.push(a.layer.parts.length)
+      for (const [k, p] of a.layer.parts.entries()) expect(p.prev).toBe(k ? a.layer.parts[k - 1].sha256 : null)
+      t.advance(1000)
+    }
+    expect(seen).toEqual([...seen].sort((x, y) => x - y))
+    expect(seen[0]).toBe(0)
+    expect(seen.at(-1)).toBeGreaterThan(0)
+    expect(get(api, PATH).status).toBe(200)
+    // (BUNDLE 3's tag answers as before, its bundle)
+    expect('body' in get(api, BUNDLE_PATH) && (get(api, BUNDLE_PATH) as { body: Uint8Array }).body).toEqual(sample.bundle)
+  })
+
+  it('serves each object by its whole digest, immutable; a digest it does not hold, another paper or another tag 404 not-prepared', () => {
+    const api = layerApi({ sample, layer4 })
+    for (const [sha, bytes] of layer4.objects) {
+      const a = get(api, `${PATH}/o/${sha}`)
+      expect(a).toMatchObject({ status: 200, headers: { 'cache-control': 'public, max-age=31536000, immutable', 'access-control-allow-origin': '*' } })
+      expect(createHash('sha256').update((a as { body: Uint8Array }).body).digest('hex')).toBe(sha)
+      expect((a as { body: Uint8Array }).body).toEqual(bytes)
+    }
+    for (const path of [`${PATH}/o/${'0'.repeat(64)}`, `/api/v1/layer/2600.99999v1/${CTAG4}/o/${[...layer4.objects.keys()][0]}`, `/api/v1/layer/${sample.segment}/${VTAG}/o/${[...layer4.objects.keys()][0]}`]) {
+      const a = get(api, path)
+      expect(a.status, path).toBe(404)
+      expect(jsonOf(a)).toEqual({ why: 'not-prepared' })
+    }
+    expect(serves(`${PATH}/o/${'a'.repeat(64)}`)).toBe(true)
+    expect(serves(`${PATH}/o/abc`)).toBe(false)
+    expect(api.handle({ method: 'POST', path: `${PATH}/o/${'a'.repeat(64)}` }).status).toBe(405)
+    // (without the objects, the CTAG is a version the stand-in does not hold)
+    expect(jsonOf(get(layerApi({ sample }), PATH))).toEqual({ why: 'unknown-versions' })
+  })
+})

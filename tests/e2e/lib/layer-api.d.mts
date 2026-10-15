@@ -21,7 +21,7 @@ export declare const mode: {
   reset(): Mode
   hang(): Mode
 }
-/** whether a path is one of the stand-in's three routes (a layer's GET, a prepare, the original) */
+/** whether a path is one of the stand-in's routes (a layer's GET, a prepare, the original, an object of BUNDLE 4's) */
 export declare const serves: (path: string) => boolean
 /** a request as `handle` takes it: the URL's pathname and its query string (with the `?`, or ''), lower-case header names */
 export interface ApiRequest { method: string; path: string; search?: string; headers?: Record<string, string | string[] | undefined>; body?: Uint8Array | null }
@@ -50,4 +50,6 @@ export interface LayerApi {
   sample: Sample
   vtag: string
 }
-export declare function layerApi(o?: { sample?: Sample; vtag?: string; pollMs?: number; now?: () => number }): LayerApi
+/** BUNDLE 4's objects of the sample (layer-cut.mjs cutSample's) */
+export interface Layer4 { objects: Map<string, Uint8Array>; refs: { head: unknown; units: unknown[]; parts: unknown[]; end: unknown }; catalog: Uint8Array }
+export declare function layerApi(o?: { sample?: Sample; vtag?: string; pollMs?: number; now?: () => number; layer4?: Layer4 | null }): LayerApi

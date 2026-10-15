@@ -8,7 +8,7 @@ vi.mock('@/pdf-reader/pdfjs', () => ({ ASSETS: {}, EventBus: class {}, LinkTarge
 // the view itself is its own file's to test (reader-view.test.ts): here, what the host asks of it
 const view = vi.hoisted(() => ({ setDisplay: vi.fn(), setSync: vi.fn(), showOriginal: vi.fn(async () => 'opened'), dispose: vi.fn(), probe: vi.fn(() => ({})), originalData: vi.fn(() => null) }))
 vi.mock('@/pdf-reader/engine/view.mjs', () => ({ createReaderView: () => view }))
-const { displayFrom, openView, outward, prefsOf, readerHost } = await import('@/pdf-reader/session/host.ts')
+const { displayFrom, layerTransport, openView, outward, prefsOf, readerHost } = await import('@/pdf-reader/session/host.ts')
 
 describe('the host of the reading view', () => {
   it('reads the look of the settings: the panes swapped, the pages dimmed, the theme (the system\'s where asked), the highlight', () => {
@@ -146,3 +146,30 @@ describe('the paper\'s title where its PDF has none', () => {
   })
 })
 
+
+describe('the layer\'s transport (layerTransport)', () => {
+  const sha256 = async (b: Uint8Array) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', b as Uint8Array<ArrayBuffer>))].map(x => x.toString(16).padStart(2, '0')).join('')
+  const original = new Uint8Array([37, 80, 68, 70, 45, 49])
+  const viewOf = (data: Uint8Array | null) => ({ originalData: () => (data ? Promise.resolve(data) : null) }) as never
+
+  it('fetches an object by its whole digest under the reader\'s ctag, with no credentials; an answer that is not ok refuses it', async () => {
+    const { CTAG4 } = await import('@/pdf-reader/engine/layer-proto/format.mjs')
+    const calls: [string, RequestInit][] = []
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => { calls.push([url, init]); return url.endsWith('b'.repeat(64)) ? new Response('nope', { status: 404 }) : new Response(new Uint8Array([1, 2, 3])) })
+    const t = layerTransport(viewOf(original), 'https://readarxiv.com', { id: 'math/0601001', version: 2 })
+    const signal = new AbortController().signal
+    expect([...(await t.fetchObject({ kind: 'part', sha256: 'a'.repeat(64), bytes: 3 }, signal))]).toEqual([1, 2, 3])
+    expect(calls[0]?.[0]).toBe(`https://readarxiv.com/api/v1/layer/math_0601001v2/${CTAG4}/o/${'a'.repeat(64)}`)
+    expect(calls[0]?.[1]).toMatchObject({ credentials: 'omit', signal })
+    await expect(t.fetchObject({ kind: 'part', sha256: 'b'.repeat(64), bytes: 3 }, signal)).rejects.toThrow(/404/)
+    vi.unstubAllGlobals()
+  })
+
+  it('binds the base where the original\'s bytes are its length and its digest, and nowhere else', async () => {
+    const base = { bytes: original.length, sha256: await sha256(original), xref: 0 }
+    expect(await layerTransport(viewOf(original), 'https://x', { id: '2600.00001', version: 1 }).bind(base)).toBe(true)
+    expect(await layerTransport(viewOf(original), 'https://x', { id: '2600.00001', version: 1 }).bind({ ...base, sha256: 'c'.repeat(64) })).toBe(false)
+    expect(await layerTransport(viewOf(original), 'https://x', { id: '2600.00001', version: 1 }).bind({ ...base, bytes: 7 })).toBe(false)
+    expect(await layerTransport(viewOf(null), 'https://x', { id: '2600.00001', version: 1 }).bind(base)).toBe(false)
+  })
+})
