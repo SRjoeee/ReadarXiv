@@ -4,11 +4,11 @@ import { readFileSync } from 'node:fs'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { readBundle, writeBundle } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import type { PartChain } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import type { PartChain, ReadUnitsChunk, ReadUnitsChunkLight } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import {
   BUILD_END_WHYS, BUNDLE4, DEPTH_NONE, KIND_NONE, RECORD_FLAG, CATALOG_CAP, CATALOG_VALUES, catalogKey, CHUNKS_MAX, CONTENT_MAX, CTAG4, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, indexOf,
   isFinalEnd, keyOf, keyParts, LEFT_CAP, LEFT_VALUES, mergeParts, PART_CAP, PART_VALUES, partTarget, readCatalog, readHead, readLeftPart, readPart,
-  readUnitsChunk, TAIL_CAP, TOKENS_PAGE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, unitsOfChunks, droppedOf, VTAG4, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks,
+  readUnitsChunk, TAIL_CAP, TOKENS_PAGE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, unitsOfChunks, droppedOf, DROPPED_MAX, VTAG4, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { authorsTranslated } from '@/pdf-reader/engine/translate/kept.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
@@ -526,7 +526,7 @@ describe('a bad unit is dropped and counted, the rest standing (BUNDLE 3\'s drop
       forgedChunks.push(forged('units', o, { from: id, to: id + 1 }))
       id += 2
     }
-    const chainRead: Awaited<ReturnType<typeof readUnitsChunk>>[] = []
+    const chainRead: ReadUnitsChunk[] = []
     for (const f of forgedChunks) chainRead.push(await readUnitsChunk(f.bytes, { ref: f.ref, before: chainRead.at(-1) ?? null }))
     const all = unitsOfChunks(chainRead)
     expect(all.dropped).toEqual([0, 2, 4])
@@ -553,9 +553,36 @@ describe('a bad unit is dropped and counted, the rest standing (BUNDLE 3\'s drop
     await expect(readUnitsChunk(f.bytes, { ref: { ...f.ref, from: 4, to: 5 }, before: null, dropped: [] })).rejects.toBeInstanceOf(BundleRefusal)
   })
 
+  it('bounds a chunk read alone before it allocates anything by its ids (M19)', async () => {
+    const [a] = chunksOf(['para'], [[]])
+    const at = (ids: unknown[], ref: { from?: number; to?: number } = {}) => {
+      const f = forged('units', { ...a, ids }, ref as { from: number; to: number })
+      return readUnitsChunk(f.bytes, { ref: f.ref, before: null })
+    }
+    const started = performance.now()
+    for (const [ids, ref] of [
+      [[-1, -1], { from: -1, to: -1 }], [[-1, 0], { from: -1 }], [[0.5, 0.5], { from: 0.5 }], [[2 ** 40, 2 ** 40], { from: 2 ** 40, to: 2 ** 40 }],
+      [[UNITS_TOTAL_VALUES + 1, UNITS_TOTAL_VALUES + 1], { from: UNITS_TOTAL_VALUES + 1 }], [[0, UNITS_TOTAL_VALUES + 1], {}], [['0', '0'], {}], [[Number.NaN, 1], {}],
+    ] as const) {
+      const r = await refusal(at([...ids], ref))
+      expect(r, JSON.stringify(ids)).toMatchObject({ kind: 'units' })
+      expect(r!.path, JSON.stringify(ids)).toMatch(/^(ids|ref)/)
+    }
+    // a chunk at the last id a paper the guard accepts can hold is read (one unit, ids [N, N])
+    expect((await at([UNITS_TOTAL_VALUES, UNITS_TOTAL_VALUES], { from: UNITS_TOTAL_VALUES, to: UNITS_TOTAL_VALUES })).from).toBe(UNITS_TOTAL_VALUES)
+    // `dropped` is bounded before anything is read: a huge list, ids past the bound, a `from` past it
+    const f = forged('units', { ...a, ids: [5, 5] }, { from: 5, to: 5 })
+    const huge = Array.from({ length: DROPPED_MAX + 1 }, (_, i) => i)
+    expect(await refusal(readUnitsChunk(f.bytes, { ref: { ...f.ref, from: 2 ** 40 }, before: null, dropped: [] }))).toMatchObject({ kind: 'units', path: 'ref' })
+    expect(await refusal(readUnitsChunk(f.bytes, { ref: f.ref, before: null, dropped: huge }))).toMatchObject({ kind: 'units', path: 'dropped' })
+    const bigFrom = forged('units', { ...a, ids: [DROPPED_MAX + 10, DROPPED_MAX + 10] }, { from: DROPPED_MAX + 10, to: DROPPED_MAX + 10 })
+    expect((await readUnitsChunk(bigFrom.bytes, { ref: bigFrom.ref, before: null, dropped: huge.slice(0, DROPPED_MAX) })).from).toBe(DROPPED_MAX + 10)
+    expect(performance.now() - started).toBeLessThan(2000)
+  })
+
   it('reads bodies-free (M21): flags for units, and the same kinds, records, dropped and external refs', async () => {
     const same = async (written: { bytes: Uint8Array; ref: import('@/pdf-reader/engine/layer-proto/format.mjs').Ref }[]) => {
-      const full: Awaited<ReturnType<typeof readUnitsChunk>>[] = [], lean: Awaited<ReturnType<typeof readUnitsChunk>>[] = []
+      const full: ReadUnitsChunk[] = [], lean: ReadUnitsChunkLight[] = []
       for (const c of written) {
         full.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: full.at(-1) ?? null }))
         lean.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: lean.at(-1) ?? null, bodies: false }))
@@ -573,7 +600,7 @@ describe('a bad unit is dropped and counted, the rest standing (BUNDLE 3\'s drop
       expect(lean.map(l => l.dropped)).toEqual(full.map(f => f.dropped))
       // the bodies are let go; indexOf and bodies: true refuse chunks read without them
       for (const l of lean) expect((l.units as unknown[]).every(u => u === true || u === null)).toBe(true)
-      expect(() => unitsOfChunks(lean)).toThrow(TypeError)
+      expect(() => unitsOfChunks(lean as never)).toThrow(TypeError)
       return { full, lean }
     }
     await same(M.chunks as never)
@@ -733,7 +760,7 @@ describe('writeUnitChunks cuts by unit id within both caps', () => {
       expect(c.values).toBeLessThanOrEqual(UNITS_VALUES)
     }
     expect(next).toBe(units.length)
-    const read: Awaited<ReturnType<typeof readUnitsChunk>>[] = []
+    const read: ReadUnitsChunk[] = []
     for (const c of chunks) read.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: read.at(-1) ?? null }))
     expect(unitsOfChunks(read).units).toEqual(units)
     expect(read.map(r => r.values)).toEqual(chunks.map(c => c.values))
@@ -815,7 +842,7 @@ describe('unitsOfChunks gives windowed access (amendment M3\')', () => {
     [['para', []], ['para', [nest(1), nest(3), nest(4), nest(3)]]],
   ] as const
   async function chain() {
-    const read: Awaited<ReturnType<typeof readUnitsChunk>>[] = []
+    const read: ReadUnitsChunk[] = []
     let id = 0
     for (const units of spec) {
       const o = { format: UNITS_FORMAT, kind: 'units', paper: PAPER, pipeline: PIPELINE_VERSION, ids: [id, id + 1], units: units.map(([kind, pieces]) => [kind, 0, null, null, null, [[0, 'a'], ...pieces]]) }
@@ -955,7 +982,7 @@ describe('the index', () => {
     expect(chunks.length).toBeGreaterThanOrEqual(2)
     const head = await writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: chunks, lineskip: null, cites: null })
     const rh = await readHead(head.bytes, { ref: head.ref })
-    const read: Awaited<ReturnType<typeof readUnitsChunk>>[] = []
+    const read: ReadUnitsChunk[] = []
     for (const c of chunks) read.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: read.at(-1) ?? null }))
     return { chunks, head, rh, read }
   }
@@ -1569,7 +1596,7 @@ describe('records (amendment M15): derived once, the engine\'s own predicates', 
     it(`equal the engine's own derivation on ${name}: toTranslate for every language, groupOf, the batches of batchesOf`, async () => {
       const units = getUnits()
       const chunks = await writeUnitChunks({ paper: PAPER, units: units as never })
-      const read: Awaited<ReturnType<typeof readUnitsChunk>>[] = []
+      const read: ReadUnitsChunk[] = []
       for (const c of chunks) read.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: read.at(-1) ?? null }))
       const { records: r } = unitsOfChunks(read)
       const bundle = { units }
@@ -1942,7 +1969,7 @@ describe.skipIf(!LAB_ON)('the real papers: units, layout files and left cut at t
       const chunks = await writeUnitChunks({ paper, units })
       const head = await writeHead({ paper: { ...paper, pages: N }, base: { bytes: 1_000_000, sha256: 'a'.repeat(64), xref: 999_000 }, image: IMAGE, units: chunks, lineskip: layout.lineskip, cites: null })
       const rh = await readHead(head.bytes, { ref: head.ref })
-      const read: Awaited<ReturnType<typeof readUnitsChunk>>[] = []
+      const read: ReadUnitsChunk[] = []
       for (const c of chunks) read.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: read.at(-1) ?? null }))
       const index = indexOf(rh, read)
       expect(index.units).toEqual(units)

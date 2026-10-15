@@ -51,6 +51,8 @@ const UNITS_DEPTH = 5
  *  If a guard would bind before memory does on a real paper, the answer is per chunk, never a lower total. They are here
  *  and nowhere else */
 export const CHUNKS_MAX = 20, UNITS_TOTAL_BYTES = 32 * 2 ** 20, UNITS_TOTAL_VALUES = 3_500_000
+/** the last unit id a paper the guard accepts can hold (every unit is at least one value), and the most ids a service forwards as `dropped` (amendments M19, M21) */
+export const UNIT_ID_MAX = UNITS_TOTAL_VALUES, DROPPED_MAX = 148_000
 /** the head's: the object, `units` and a ref in it (`cites` and a pair in it as deep); at most 5,000 cites of a key of 1–128
  *  and a label of 1–32 code units fill about 0.85 MB of it (amendment M11) */
 export const HEAD_CAP = 1024 * 1024, HEAD_VALUES = 64_000
@@ -321,6 +323,7 @@ export async function readUnitsChunk(bytes, { ref, before = null, dropped: dropp
   if (droppedBefore !== undefined) {
     if (before !== null) throw new TypeError('units: `dropped` is for a chunk read with no `before`')
     if (!Array.isArray(droppedBefore)) throw new TypeError('units: `dropped` is not an array of ids')
+    if (droppedBefore.length > DROPPED_MAX) throw refuse(K, 'dropped', `more than ${DROPPED_MAX} ids`)
     const from = ref.from ?? 0
     for (let i = 0, last = -1; i < droppedBefore.length; i++) {
       const d = droppedBefore[i]
@@ -329,17 +332,20 @@ export async function readUnitsChunk(bytes, { ref, before = null, dropped: dropp
     }
   }
   if (typeof bodies !== 'boolean') throw new TypeError('units: `bodies` is not a boolean')
+  // (nothing is sized by the ids before they are known to be a paper's: ids are 0 to UNIT_ID_MAX)
+  for (const k of ['from', 'to']) if (ref[k] !== undefined && !isInteger(ref[k], 0, UNIT_ID_MAX)) throw refuse(K, 'ref', `the ref's ${k} is not an id 0 to ${UNIT_ID_MAX}`)
   const { value: v, sha256, values } = await opened(K, bytes, ref, UNITS_DEF, caps)
   envelope(K, v, UNITS_KEYS)
   const paper = paperOf(K, v.paper, 'paper', false)
   if (!isVersionToken(v.pipeline)) throw refuse(K, 'pipeline', `not a version, 1 to 32 letters, digits or points (${kindOf(v.pipeline)})`)
   const ids = v.ids
   if (!Array.isArray(ids) || ids.length !== 2) throw refuse(K, 'ids', `not [from, to] (${kindOf(ids)})`)
+  if (!isInteger(ids[0], 0, UNIT_ID_MAX)) throw refuse(K, 'ids[0]', `not an id 0 to ${UNIT_ID_MAX}`)
+  if (!isInteger(ids[1], ids[0], UNIT_ID_MAX)) throw refuse(K, 'ids[1]', `not an integer from \`from\` up to ${UNIT_ID_MAX}`)
   if (Array.isArray(ids) && ((ref.from !== undefined && ref.from !== ids[0]) || (ref.to !== undefined && ref.to !== ids[1]))) throw refuse(K, 'ref', `the ref's ids ${ref.from ?? '?'} to ${ref.to ?? '?'} are not the chunk's ${ids[0]} to ${ids[1]}`)
   const want = before === null ? (ref.from ?? 0) : before.to + 1
   if (before === null && droppedBefore !== undefined && ref.from === undefined && droppedBefore.length) throw new TypeError('units: `dropped` needs the ref\'s `from`')
   if (ids[0] !== want) throw refuse(K, 'ids[0]', `not ${want}${before === null ? ', the first unit' : ', the one after the last chunk\'s'}`)
-  if (!isInteger(ids[1], ids[0], ID_MAX)) throw refuse(K, 'ids[1]', 'not an integer from `from` up')
   if (before !== null && (before.paper.id !== paper.id || before.paper.version !== paper.version)) throw refuse(K, 'paper', 'not the paper of the chunk before')
   if (before !== null && before.pipeline !== v.pipeline) throw refuse(K, 'pipeline', 'not the pipeline of the chunk before')
   const from = ids[0], to = ids[1], units = v.units
