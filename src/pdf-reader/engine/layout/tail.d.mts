@@ -1,4 +1,6 @@
 // tail.mjs's types
+/** a part's tail at most, raw (layer-proto/format.mjs re-exports it) */
+export declare const TAIL_CAP: number
 /** the `startxref` of a PDF as the remover reads it (the last 1024 bytes); null where there is none */
 export declare function startxrefOf(pdf: Uint8Array): number | null
 /** the last cross-reference section of the add-on's tail: where it starts in the document (`startxref`), the section it

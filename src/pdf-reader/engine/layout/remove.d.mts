@@ -24,11 +24,22 @@ export declare const BYTES_MAX: number
 export type PdfLib = Record<string, any>
 /** the operators a page's walk may visit, its forms' as often as they are painted; past it the page is refused */
 export declare const WALK_MAX: number
+/** PDF.js's operator list of a page, as the remover reads it */
+export interface OpList { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }
+/** what alignPage reads of a page's operator list (alignOf): each text-showing operation's glyph codes outside an annotation
+ *  (null: a glyph with no code, not compared; -1: one that is not a code, equal to none), and the paths it constructs */
+export interface AlignFacts { codes: (number | null)[][]; paths: number }
+/** a page's alignment facts from PDF.js's operator list (pure): the page aligns by them exactly as by the list */
+export declare function alignOf(OPS: Record<string, number>, opList: OpList): AlignFacts
 export interface Remover {
   numPages: number; encrypted: boolean
-  alignPage(pageIndex: number, OPS: Record<string, number>, opList: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }): { ok: boolean; why: string[] }
+  /** a page against PDF.js's reading of it: its alignment facts, or (OPS, opList) the list itself; any difference refuses the page */
+  alignPage(pageIndex: number, facts: AlignFacts): { ok: boolean; why: string[] }
+  alignPage(pageIndex: number, OPS: Record<string, number>, opList: OpList): { ok: boolean; why: string[] }
   /** a page walked: what could not be walked (`problems`, any one refuses the page) and the operators visited */
   walkPage(pageIndex: number): { problems: string[]; walked: number; held: number; bytes: number; events: { kind: string; codes?: unknown[] }[] }
+  /** the decoded streams and the fonts read let go (a remover kept across asks holds the object layer's parse alone) */
+  release(): void
 }
 export declare function openRemover(bytes: Uint8Array, o: { PL: PdfLib; inflate?: ((bytes: Uint8Array, limit: number) => Uint8Array) | null; walkMax?: number; heldMax?: number; bytesMax?: number }): Promise<Remover>
 /** a unit's removal on a page: its glyphs as n, k pairs (pageInk's `indices`) and its rules as painted paths' places */
@@ -39,14 +50,27 @@ export interface PlannedCrop { id?: number; k?: number; glyphs: number[]; paths:
 export interface PlannedName { occurrence: number; glyphs: number[] }
 /** the plan: per page (1-based), its units' removals, its names', its crops, and what the planner read of the page */
 export interface RemovalPlan { pages: Record<number, { units: PlannedUnit[]; names?: PlannedName[]; crops: PlannedCrop[]; shows?: number; glyphs?: number }> }
-/** arXiv's bytes with the sets appended as one incremental update */
-export declare function makeAddon(o: {
-  R: Remover; bytes: Uint8Array; OPS: Record<string, number>; opListOf(page: number): Promise<{ fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }>
+/** the updates a chained add-on follows (makeAddon's `chain`): the document's bytes so far, its last cross-reference section's
+ *  offset, the next free object number (null: none written yet), the removed pages' object numbers appended so far, the
+ *  empty content stream's (null: none written yet) */
+export interface AddonChain { end: number; xref: number; next: number | null; kids: readonly number[]; empty: number | null }
+/** what a page is aligned by: its facts (alignOf), or PDF.js's operator list with OPS */
+type AlignedBy = { alignOf(page: number): AlignFacts | Promise<AlignFacts>; OPS?: Record<string, number>; opListOf?: (page: number) => Promise<OpList> } | { alignOf?: null; OPS: Record<string, number>; opListOf(page: number): Promise<OpList> }
+type MakeAddonOptions = AlignedBy & {
+  R: Remover; bytes: Uint8Array
   deflate(bytes: Uint8Array): Uint8Array; plan: RemovalPlan; sets?: readonly string[]
   boxesOf?: ((page: number, n: number, k: number) => number[] | null) | null; pathBoxOf?: ((page: number, m: number) => number[] | null) | null
   /** only the pages it removes, each named in its manifest entry (`at`), not every page at its set's fixed place */
   compact?: boolean
-}): Promise<{ bytes: Uint8Array; appended: number; manifest: RemovalManifest }>
+  /** the pages it reads, rising (default every page); the manifest's entries are theirs alone */
+  pages?: readonly number[] | null
+}
+/** the state after an update: the next free object number, the removed pages' object numbers it appended, the empty stream's */
+export interface AddonChainStep { next: number | null; kids: number[]; empty: number | null }
+/** arXiv's bytes with the sets appended as one incremental update (`tail`), and arXiv's followed by it (`bytes`) */
+export declare function makeAddon(o: MakeAddonOptions & { chain?: null }): Promise<{ bytes: Uint8Array; tail: Uint8Array; appended: number; manifest: RemovalManifest; chain: AddonChainStep }>
+/** the update chained after `chain`'s (compact, the R set alone): null where no page is removed, the state then as it was */
+export declare function makeAddon(o: MakeAddonOptions & { chain: AddonChain }): Promise<{ tail: Uint8Array | null; appended: number; manifest: RemovalManifest; chain: AddonChainStep }>
 type Ink = { glyphs: Glyph[]; boxes: number[]; paths: number[] }
 /** an add-on's page p checked by PDF.js's own reading of it: R lacks exactly the planned glyphs and rules, P holds exactly
  *  the crops' */
@@ -56,3 +80,13 @@ export declare function checkPage(o: { orig: Ink; removed: Ink; kept: Ink; entry
 }
 /** the remover's entry for one paper, under the module's isolation contract: the add-on, or the paper refused for any error; never throws */
 export declare function removePaper(o: { bytes: Uint8Array; PL: PdfLib; inflate?: ((bytes: Uint8Array, limit: number) => Uint8Array) | null; walkMax?: number; heldMax?: number; bytesMax?: number; OPS: Record<string, number>; opListOf: (page: number) => Promise<{ fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }>; deflate: (bytes: Uint8Array) => Uint8Array; plan: RemovalPlan; sets?: readonly string[]; boxesOf?: ((p: number, n: number, k: number) => number[] | null) | null; pathBoxOf?: ((p: number, m: number) => number[] | null) | null; compact?: boolean }): Promise<({ ok: true } & { bytes: Uint8Array; appended: number; manifest: RemovalManifest }) | { ok: false; refused: string }>
+/** a plan's removal on a page (tuples: layout/addon.mjs pagePlanOf's `remove`, an ask's plan) as makeAddon's plan entry */
+export declare function removalEntry(r: { shows?: number | null; units: [number, number[], number[]][]; names: [number, number[]][]; crops: [number[], number[]][] }): RemovalPlan['pages'][number]
+/** the reason of a page whose removed page alone is more than a part's tail or entries hold */
+export declare const PAST_PART: string
+/** the remover child's one call: one part's removed pages for an ask (chain-wire.mjs), the remover opened at the first and
+ *  kept, no chain kept; refused (never thrown) but for a memory-class error */
+export declare function removerOf(o: {
+  bytes: Uint8Array; PL: PdfLib; inflate?: ((bytes: Uint8Array, limit: number) => Uint8Array) | null; deflate(bytes: Uint8Array): Uint8Array
+  walkMax?: number; heldMax?: number; bytesMax?: number
+}): { remove(plans: Uint8Array): Promise<{ ok: true; tail: Uint8Array | null; entries: Uint8Array } | { ok: false; why: 'refused' }> }

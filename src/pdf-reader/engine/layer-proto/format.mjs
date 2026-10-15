@@ -21,7 +21,7 @@
 import { checkAddonManifest, REMOVAL } from '../layout/addon-manifest.mjs'
 import { checkLayoutPart, checkLineskip, isPaperId, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, mergeLayout, UNIT_KINDS, VERSION_MAX } from '../layout/file.mjs'
 import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal, PAGES_MAX, told } from '../layout/json.mjs'
-import { tailLinks } from '../layout/tail.mjs'
+import { TAIL_CAP, tailLinks } from '../layout/tail.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { PDFJS, PIPELINE_VERSION } from '../pipeline/versions.mjs'
 import { groupOf } from '../translate/groups.mjs'
@@ -65,10 +65,10 @@ const LEFT_DEPTH = 4
 /** the catalog's: the object, a list, a ref */
 export const CATALOG_CAP = 2 * 2 ** 20, CATALOG_VALUES = 200_000
 const CATALOG_DEPTH = 3
-/** a part's tail at most, raw (the largest today is 32.9 KB a whole paper), and the part's content (everything but the tail's
- *  base64) at most: the cap less the base64 of a tail of TAIL_CAP and 64 KiB for the digests and the rest. The cut holds a
- *  part to it, so that a part's size is bounded by the cut and not by the paper */
-export const TAIL_CAP = 2 ** 20
+/** a part's tail at most (layout/tail.mjs's, where the remover's side reads it too), and the part's content (everything but
+ *  the tail's base64) at most: the cap less the base64 of a tail of TAIL_CAP and 64 KiB for the digests and the rest. The cut
+ *  holds a part to it, so that a part's size is bounded by the cut and not by the paper */
+export { TAIL_CAP }
 export const CONTENT_MAX = PART_CAP - 4 * Math.ceil(TAIL_CAP / 3) - 64 * 1024
 /** a left part's tokens at most (a page of a dense paper holds thousands), and the tokens its spans may name, per token */
 export const TOKENS_PAGE = 15_000, SPANNED_PER_TOKEN = 2
