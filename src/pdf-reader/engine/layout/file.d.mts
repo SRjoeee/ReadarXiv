@@ -2,9 +2,9 @@
 export { LayoutRefusal } from './json.mjs'
 /** the maker's version: raised with any change to what the maker writes under the schema; it enters a bundle's key, and a file
  *  names it as `layout`, which a reader reads for its shape alone: a file is refused by its `schema` (§9.3 of the plan) */
-export declare const LAYOUT: '5'
+export declare const LAYOUT: '6'
 /** the file's schema: 2 holds `names`; 3 `lineskip` */
-export declare const LAYOUT_SCHEMA: 3
+export declare const LAYOUT_SCHEMA: 4
 /** a new-style arXiv identifier, or an old one (archive, subject class, a slash and 7 digits); never a version suffix */
 export declare const isPaperId: (id: unknown) => id is string
 /** a paper's version at most */
@@ -24,7 +24,7 @@ import type { NameKey } from './names.mjs'
 export declare const NAME_FLAG: { readonly CENTRED: 1; readonly CAPITALS: 2; readonly RUN_IN: 4 }
 /** a file's names at most */
 export declare const NAMES_MAX: number
-export declare const PH_FLAG: { readonly SOURCE_BRACKETS: 1; readonly NUMBERED: 2; readonly RAISED: 4; readonly LOWERED: 8; readonly EMPTY: 16; readonly LOST: 32; readonly TEXT: 64 }
+export declare const PH_FLAG: { readonly SOURCE_BRACKETS: 1; readonly NUMBERED: 2; readonly RAISED: 4; readonly LOWERED: 8; readonly EMPTY: 16; readonly LOST: 32; readonly TEXT: 64; readonly JOINED: 128; readonly OUTSIDE: 256 }
 /** the placeholders the layer may draw as text in the page's face, whose own text the file may hold */
 export declare const PAGE_TEXT_KINDS: readonly ['cite', 'ref', 'eqref']
 /** a page text's code units at most, and a file's in all */

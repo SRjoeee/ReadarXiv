@@ -48,7 +48,7 @@ describe('ownedOf', () => {
     // a fraction's numerator, its bar and its denominator; a sum's limits above and below
     const page = pageOf(['the sum ', { at: 'p0.1a' }, { u: 'n', x: 120, y: 708, size: 7 }, { u: '∑', x: 118, y: 700 }, { u: 'i', x: 119, y: 693, size: 7 }, { at: 'p0.1b' }, ' and ', { at: 'p0.3a' }, '1', { rule: [150, 703, 160, 703.4] }, { u: 'd', x: 152, y: 695 }, { at: 'p0.3b' }, ' more'])
     expect(owned([page], { 'p0.1a': closed, 'p0.3a': closed })).toEqual({ 'p0.1a': ['n∑i', 0], 'p0.3a': ['1d', 1] })
-    expect(OWNED_HOW[OWNED - 1]).toBe("open, to its column's end")
+    expect(OWNED_HOW[OWNED - 1]).toBe('open, with the displays after it')
   })
 
   it('nothing between its two points: a piece of nothing (EMPTY); the closing point first: out of order', () => {

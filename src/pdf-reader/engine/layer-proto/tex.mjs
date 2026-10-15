@@ -55,7 +55,13 @@ export function kOfPieces(unit, trPieces) {
  * are a display's rows or number the file lists after the line below, which v0's reading keeps as the original's
  * (measured: asking it sent 123 units to v0 and drew worse). With `held` (the file's lines taken, texParts 'lines'), a
  * displayed formula LOST or with no segments is found too where the file's held lines cover it (displayCover: D4 step 1,
- * 2026-10-08): it is kept where it stands, as its held lines are, and breaks the unit's text there.
+ * 2026-10-08): it is kept where it stands, as its held lines are, and breaks the unit's text there. A later display of a
+ * display group (PH_FLAG.JOINED) is found with its group's first display, whose segments hold its ink; a LOST piece the
+ * file says lies outside the unit's lines (PH_FLAG.OUTSIDE: before its start mark, a display after its end mark) is found
+ * with the file's lines (`held`) as drawn as nothing, its ink never erased (the maintainer's ruling of 2026-10-15, the p59 ruling's edge display). So a
+ * unit the file holds is drawn by the file, a piece by its own segments, wherever every piece of it is one the file
+ * accounts for; any other LOST piece sends it to v0's reading, where no rendering of it can be proven (proofOf) and the
+ * unit stays the original's.
  * Returns { ok, why, kOf }: why one of 'unlocated', 'pieces', 'no row', 'lost', 'empty'.
  */
 export function locatedWhole(lu, unit, trPieces, { symbols = 'text', held = false } = {}) {
@@ -69,7 +75,9 @@ export function locatedWhole(lu, unit, trPieces, { symbols = 'text', held = fals
     const row = lu.ph.get(kOf[i])
     if (!row) { if (MACROS.has(cls)) continue; return { ok: false, why: 'no row' } }
     if (row.flags & PH_FLAG.EMPTY) return { ok: false, why: 'empty' }
-    if (row.flags & PH_FLAG.TEXT) continue
+    if (row.flags & (PH_FLAG.TEXT | PH_FLAG.JOINED)) continue
+    // (outside the unit's lines: the file's lines, which never hold it; v0's rectangles may)
+    if (row.flags & PH_FLAG.OUTSIDE && held) continue
     if (row.flags & PH_FLAG.LOST || !row.segs.length) {
       if (cls === 'display' && held && (cover ??= displayCover(lu, unit, kOf)).has(i)) continue
       return { ok: false, why: 'lost' }
@@ -169,6 +177,20 @@ export function texRects(lu, maxPage = Infinity) {
  *  row for (locatedWhole) */
 export const inklessOf = (lu, kOf, p) => MACROS.has(p.cls) && !lu.ph.has(kOf[p.k])
 
+/** a row's segments (stride 6: page, x0, baseline, x1, top, bottom) as boxes */
+const segmentsOf = segs => {
+  const S = []
+  for (let s = 0; s + 5 < segs.length; s += 6) S.push({ page: segs[s], x0: segs[s + 1], base: segs[s + 2], x1: segs[s + 3], top: segs[s + 4], bottom: segs[s + 5] })
+  return S
+}
+/** whether a page character of the unit stands in one of the segments: within its ink's extent across, a half point either
+ *  side; an inline one's on its line, within a script's window of its baseline; a display's anywhere in its rows */
+const insideOf = (S, c, display) => S.some(s => {
+  const cx = (c.x0 + c.x1) / 2, y = c.ybEff ?? c.yb
+  if (c.page !== s.page || cx < s.x0 - 0.5 || cx > s.x1 + 0.5 || y < s.bottom - 1 || y > s.top + 1) return false
+  return display || Math.abs(y - s.base) < SCRIPT(c.size)
+})
+
 /**
  * A placeholder's rendering from its segments in the file (stride 6: page, x0, baseline, x1, top, bottom): the unit's
  * page characters inside them (within its ink's extent across, a half point either side; an inline one's on its line,
@@ -177,15 +199,9 @@ export const inklessOf = (lu, kOf, p) => MACROS.has(p.cls) && !lu.ph.has(kOf[p.k
  * character of the unit is inside, but for a display (its rows outside the unit's lines are shown where they are).
  */
 export function renderingOf(segs, uc, display) {
-  const S = []
-  for (let s = 0; s + 5 < segs.length; s += 6) S.push({ page: segs[s], x0: segs[s + 1], base: segs[s + 2], x1: segs[s + 3], top: segs[s + 4], bottom: segs[s + 5] })
-  const yOf = c => c.ybEff ?? c.yb
+  const S = segmentsOf(segs)
   const real = c => !c.sep && !c.space && /\S/.test(c.ch)
-  const inside = c => S.some(s => {
-    const cx = (c.x0 + c.x1) / 2, y = yOf(c)
-    if (c.page !== s.page || cx < s.x0 - 0.5 || cx > s.x1 + 0.5 || y < s.bottom - 1 || y > s.top + 1) return false
-    return display || Math.abs(y - s.base) < SCRIPT(c.size)
-  })
+  const inside = c => insideOf(S, c, display)
   const at = []
   uc.forEach((c, i) => { if (real(c) && inside(c)) at.push(i) })
   const box = { x0: Math.min(...S.map(s => s.x0)), x1: Math.max(...S.map(s => s.x1)), top: Math.max(...S.map(s => s.top)), bottom: Math.min(...S.map(s => s.bottom)), baseline: S[0].base, lines: S.length }
@@ -210,34 +226,48 @@ function heldRendering(run, lines, uc) {
   const keys = new Set()
   lines.rects.forEach((r, i) => { if (run.includes(lines.jOf?.[i] ?? lines.lineOf.get(r))) keys.add(rectKey(r)) })
   const chars = uc.filter(c => !c.sep && !c.space && /\S/.test(c.ch) && keys.has(`${c.page}|${c.rect.join()}`))
-  return { text: chars.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars, held: [...keys] }
+  return { text: chars.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars, held: [...keys], proof: true }
 }
 
 /**
- * Part 5, the crops (layer2.mjs prepareUnit), for any unit the hybrid draws: each crop of the unit's reading cut from its
- * placeholder's own ink, the layout file's segment of its row on the crop's page (stream ownership, layout/stream.mjs),
- * on that segment's baseline (layer2.mjs cropOfBox). A crop the segments gave (renderingOf's box) is that already; any
- * other (v0's reading of a unit the file does not locate whole, or a rendering found a second time) takes its row's
- * segment on its page that its rectangle meets, the same rendering's. Where none does (its row LOST, EMPTY or missing,
- * the unit not in the file, `lu` null, or its pieces not the file's, `kOf` null) no source proves which ink is the
- * placeholder's, and a crop of the page's rectangle carries whatever stands in it (2307.16209 page 38's "ıe", from the
- * line above): the answer is that crop's k, and its unit stays the original's. Else -1. Mutates the resolutions.
+ * Part 5, the proof (layer2.mjs prepareUnit), for any unit the hybrid draws: the one place the hybrid's safe rule is held
+ * (the math round's `unproven`, from its crops to every rendering; the maintainer's ruling of 2026-10-15). A placeholder
+ * is drawn only from what proves it: TeX's own (one that sets nothing, a space, a LaTeX text symbol's character; a
+ * rendering the file gives: a placeholder's segments, a display's held run or its group, a text symbol's TEXT row, one
+ * outside the unit's lines drawn as nothing, a macro TeX said sets no ink: `proof`), or of v0's reading:
+ * - a crop, cut from its placeholder's own ink, the file's segment of its row on the crop's page that its rectangle meets
+ *   (stream ownership, layout/stream.mjs), on that segment's baseline (layer2.mjs cropOfBox): its rendering the same;
+ * - its page text, or its ink kept where it stands, where every character of it stands in its row's segments.
+ * Where none does (its row LOST, EMPTY, JOINED or missing, the unit not in the file, `lu` null, or its pieces not the
+ * file's, `kOf` null), or the rendering is no page ink (its source's plain text, a citation as the page wrote it before,
+ * a display drawn as nothing), nothing proves which ink is the placeholder's — a crop of the page's rectangle carries
+ * whatever stands in it (2307.16209 page 38's "ıe", from the line above), v0's alignment hands a rendering to the next
+ * placeholder along (2608.16117's unit 28) — and the answer is that placeholder's k: its unit stays the original's (the
+ * run's `unproven`). Else -1. Mutates the crops it cuts.
  */
-export function cropsOf(lu, kOf) {
+export function proofOf(lu, kOf) {
   return res => {
     for (const r of res.values()) {
-      if (r?.mode !== 'crop' || r.gap?.box) continue
+      if (!r || r.cls === 'zero' || r.cls === 'space' || r.cls === 'symbol' || r.proof || r.gap?.proof) continue
       const row = lu && kOf ? lu.ph.get(kOf[r.k]) : null
-      const S = row && !(row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY)) ? row.segs : []
-      let seg = null
-      for (let s = 0; s + 5 < S.length && !seg; s += 6) {
-        if (S[s] !== r.page) continue
-        const box = { x0: S[s + 1], x1: S[s + 3], top: S[s + 4], bottom: S[s + 5], baseline: S[s + 2], lines: 1 }
-        if (Math.min(box.x1, r.crop[2]) > Math.max(box.x0, r.crop[0]) && Math.min(box.top, r.crop[3]) > Math.max(box.bottom, r.crop[1])) seg = box
+      const S = row && !(row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY | PH_FLAG.JOINED)) ? row.segs : []
+      if (r.mode === 'crop') {
+        if (r.gap?.box) continue
+        let seg = null
+        for (let s = 0; s + 5 < S.length && !seg; s += 6) {
+          if (S[s] !== r.page) continue
+          const box = { x0: S[s + 1], x1: S[s + 3], top: S[s + 4], bottom: S[s + 5], baseline: S[s + 2], lines: 1 }
+          if (Math.min(box.x1, r.crop[2]) > Math.max(box.x0, r.crop[0]) && Math.min(box.top, r.crop[3]) > Math.max(box.bottom, r.crop[1])) seg = box
+        }
+        if (!seg) return r.k
+        Object.assign(r, cropOfBox(seg))
+        r.gap = { ...r.gap, box: seg }
+        continue
       }
-      if (!seg) return r.k
-      Object.assign(r, cropOfBox(seg))
-      r.gap = { ...r.gap, box: seg }
+      const real = (r.gap?.chars ?? []).filter(c => !c.sep && !c.space && /\S/.test(c.ch))
+      const segs = segmentsOf(S)
+      if ((r.mode === 'orig-text' || r.mode === 'kept') && real.length && segs.length && real.every(c => insideOf(segs, c, r.cls === 'display'))) continue
+      return r.k
     }
     return -1
   }
@@ -250,18 +280,20 @@ export function cropsOf(lu, kOf) {
  *   where the file has none, and a mark its first line holds before its first word);
  * - extents 'tex' (with 'lines'): part 2 too, the file's erase rectangles (its glyphs' boxes merged); else each line's
  *   extent as v0 reads it from its characters.
- * - and part 5 for any `use`, each crop cut from its placeholder's segment (cropsOf).
+ * - and part 5 for any `use`, the proof of every rendering (proofOf).
  * `kOf`: each piece's source index (kOfPieces).
  */
 export function texParts(lu, kOf, { use, lines = null, extents = 'v0' }) {
   const parts = {
-    crops: cropsOf(lu, kOf),
+    proof: proofOf(lu, kOf),
     renderings({ unit, phs, uc, gaps, citeMap }) {
-      const found = new Map()
+      const found = new Map(), joined = []
       let cover
       for (const p of phs) {
         if (p.cls === 'zero' || p.cls === 'space' || p.cls === 'symbol') continue
         const row = lu.ph.get(kOf[p.k])
+        // (a later display of a display group: its group's rendering, below)
+        if (p.cls === 'display' && row && row.flags & PH_FLAG.JOINED) { joined.push(p); continue }
         // (a display the held lines cover, LOST or with no segments: its run's lines, kept where they stand, and a break
         // in the unit's text, as a found display's rows are: locatedWhole)
         if (p.cls === 'display' && lines?.lineOf && row && !(row.flags & PH_FLAG.EMPTY) && (row.flags & PH_FLAG.LOST || !row.segs.length)) {
@@ -271,13 +303,27 @@ export function texParts(lu, kOf, { use, lines = null, extents = 'v0' }) {
         }
         if (!row || row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY) || !row.segs.length) continue
         const g = renderingOf(row.segs, uc, p.cls === 'display')
-        if (g) found.set(p, p.cls === 'cite' ? learnCite(p, g, citeMap) : g)
+        if (g) found.set(p, { ...(p.cls === 'cite' ? learnCite(p, g, citeMap) : g), proof: true })
       }
-      // (a text macro that sets no ink is drawn as nothing; a text symbol the file draws as its character, as that)
+      // a later display of a display group: the group's ink is its first display's segments, its rendering kept where it
+      // stands with them, the same lines (`held`: their keys), so that it breaks the unit's text where its group does
+      if (joined.length) {
+        const byK = new Map(phs.map(p => [kOf[p.k], p]))
+        for (const p of joined) {
+          let k = kOf[p.k] - 1
+          while (k >= 0 && !(lu.ph.get(k)?.kind === 'display' && !(lu.ph.get(k).flags & PH_FLAG.JOINED))) k--
+          const g = found.get(byK.get(k))
+          if (!g) continue
+          found.set(p, { text: '', chars: [], held: [...new Set([...(g.held ?? []), ...g.chars.filter(c => !c.sep && !c.space).map(c => `${c.page}|${c.rect.join()}`)])], proof: true })
+        }
+      }
+      // (a text macro that sets no ink is drawn as nothing, as one outside the unit's lines is, its ink never erased; a
+      // text symbol the file draws as its character, as that)
       const fixed = p => {
-        if (inklessOf(lu, kOf, p)) return { mode: 'none', text: '' }
+        if (inklessOf(lu, kOf, p)) return { mode: 'none', text: '', proof: true }
         const row = lu.ph.get(kOf[p.k])
-        return row && row.flags & PH_FLAG.TEXT && row.text && p.cls !== 'symbol' ? { mode: 'source', text: row.text } : null
+        if (row && row.flags & PH_FLAG.OUTSIDE && lines?.lineOf) return { mode: 'none', text: '', proof: true }
+        return row && row.flags & PH_FLAG.TEXT && row.text && p.cls !== 'symbol' ? { mode: 'source', text: row.text, proof: true } : null
       }
       return { gaps, gapFor: p => found.get(p) ?? null, fixed }
     },

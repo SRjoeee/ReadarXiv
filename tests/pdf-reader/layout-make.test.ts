@@ -465,8 +465,8 @@ describe('makeLayout', () => {
       marks: [['0s', 1, 97, 700], ['0e', 1, endOf(runs[3] as Run), 688], ['n0.2a', 1, 122, 688]],
       units: [unit('para', [ph('\\textbf{Bold}'), text(' words follow here and a note'), { t: 'nested', unit: note }, text('. Then more')]), note],
     })
-    // the bold at the unit's head: no mark, LOST, counted apart
-    expect(phOf(file, 0, 0)).toEqual([0, 0, 6, PH_FLAG.LOST])
+    // the bold at the unit's head: no mark, LOST, counted apart; before the start mark, outside the unit's lines
+    expect(phOf(file, 0, 0)).toEqual([0, 0, 6, PH_FLAG.LOST | PH_FLAG.OUTSIDE])
     // the call: its number, raised, to the full stop after it
     expect(phOf(file, 0, 2)).toEqual([0, 2, 5, PH_FLAG.RAISED, 1, 122, 688, 125.5, 691.5 + 5.25, 691.5 - 1.75])
     expect(stats.ph).toMatchObject({ unmarked: 1, marked: 1, found: 1, inferred: 1 })
@@ -508,9 +508,10 @@ describe('makeLayout, the review of 2026-10-06', () => {
     expect(stats.ph.byKind.display).toEqual([1, 1])
     // the heading's number is its label, not the display's
     expect(file.labels.map(l => l.slice(0, 4))).toEqual([[1, 0, 1, 72]])
-    // nothing after it on its page: its end is not known (the next mark on the next page), LOST, not EMPTY
+    // nothing after it on its page, and no column body: its end is not known (the next mark on the next page), LOST, not
+    // EMPTY; after its unit's end mark, outside the unit's lines
     const alone = await made({ ...w, pages: [{ runs: runs.slice(0, 3) }], marks: (w.marks as Mark[]).slice(0, 3), units: [w.units[0] as SourceUnit] })
-    expect(phOf(alone.file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.LOST])
+    expect(phOf(alone.file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.LOST | PH_FLAG.OUTSIDE])
     expect(alone.stats.ph.why).toEqual({ 'open, the next mark on another page': 1 })
   })
 
@@ -726,7 +727,7 @@ describe('makeLayout, the re-review of 2026-10-06', () => {
       marks: [['0s', 1, 72, 700], ['0e', 1, 217, 700], ['p0.1a', 1, 217, 700], ['1s', 1, 72, 680], ['1e', 1, 267, 528]],
       units: [unit('para', [text(`${words(0, 10)} `), ph('\\[x=y\\]')]), unit('para', [text(`a=b and more ${words(10, 120)}`)])],
     })
-    expect(phOf(lost.file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.LOST])
+    expect(phOf(lost.file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.LOST | PH_FLAG.OUTSIDE])
     expect(lost.stats.ph.empty).toBe(0)
   })
 })
@@ -1030,7 +1031,7 @@ describe('makeLayout, a unit\'s head pieces: its macros before its start mark, w
   it('one whose letters are not the probe\'s, or with no answer, stays LOST, its glyphs a label as before', async () => {
     for (const texts of [undefined, [['\\bert', 'BART']] as [string, string][]]) {
       const { file, stats } = await made({ ...bert, ...(texts ? { texts } : {}) })
-      expect(phOf(file, 0, 0)[3]).toBe(PH_FLAG.LOST)
+      expect(phOf(file, 0, 0)[3]).toBe(PH_FLAG.LOST | PH_FLAG.OUTSIDE)
       expect(file.labels).toHaveLength(1)
       expect(stats.ph.heads).toEqual([0, 0])
     }

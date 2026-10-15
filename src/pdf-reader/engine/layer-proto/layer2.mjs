@@ -603,8 +603,9 @@ function rectStyle(uc) {
  *   4. placeholder renderings (v0Renderings): which of the page's ink each placeholder is, and where it sits;
  *   then the resolution's rules (resolvePlaceholders, either source's renderings): how each placeholder is drawn, the
  *   paper's citations and macros learnt;
- *   5. crops (none in v0 alone): each crop cut from its placeholder's own ink, where a layout file knows it, or the
- *   placeholder whose ink no source proves (`unproven`, its k: the unit is then left the original's);
+ *   5. the proof (none in v0 alone, tex.mjs proofOf): each rendering proven by the layout file (a crop cut from its
+ *   placeholder's own ink, page text or kept ink in its segments, the file's own rendering), or the placeholder whose
+ *   ink no source proves (`unproven`, its k: the unit is then left the original's);
  *   and the finish (finishUnit): the kept lines in regions, each character's category (what the restore and the
  *   checker read).
  * `charsByPage`: pageChars2's (the unit's own part of each page).
@@ -627,7 +628,7 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   // alone the unit's characters are v0's rectangles', and a leftover may be a rendering the segments do not reach)
   out.inkKnown = !!(parts?.renderings && parts.lines)
   resolvePlaceholders(out, { unit, phs, rects, charsByPage, citeMap, gaps }, parts?.renderings ?? v0Renderings)
-  if (parts?.crops) { const k = parts.crops(out); if (k >= 0) out.unproven = k }
+  if (parts?.proof) { const k = parts.proof(out); if (k >= 0) out.unproven = k }
   finishUnit(out, unit, rects, charsByPage)
   // a displayed formula found, whose lines hold words the alignment took for the source's ("RMSE" in "RMSE_i(t) =",
   // while the text says "…using the RMSE:"): aligned again without its lines' words, once
@@ -1051,7 +1052,7 @@ function resolvePlaceholders(out, ctx, renderingsOf) {
         // the gap took from the source's text ("Eqn.(1)"), or the reader sees "\uFF08(1)\uFF09"
         const real = g.chars.filter(c => !c.sep && !c.space && /\S/.test(c.ch))
         const inner = g.chars.slice(g.chars.indexOf(real[0]) + 1, g.chars.indexOf(real.at(-1)))
-        if (inner.some(c => /[\p{L}\p{N}]/u.test(c.ch))) g = { text: inner.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars: inner, of: g.of ?? g, unbracketed: true }
+        if (inner.some(c => /[\p{L}\p{N}]/u.test(c.ch))) g = { text: inner.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars: inner, of: g.of ?? g, unbracketed: true, ...(g.proof ? { proof: true } : {}) }
       }
       if (g) gapOf.set(p.k, g)
       if (!g && cls === 'cite' && citeMap && p.keys.length && p.keys.every(k => citeMap.has(k))) {
@@ -1088,7 +1089,7 @@ function resolvePlaceholders(out, ctx, renderingsOf) {
     const real = g.chars.filter(c => !c.sep && !c.space && /\S/.test(c.ch))
     const inner = g.chars.slice(g.chars.indexOf(real[0]) + 1, g.chars.indexOf(real.at(-1)))
     if (!inner.some(c => /[\p{L}\p{N}]/u.test(c.ch))) continue
-    const ng = { text: inner.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars: inner, of: g.of ?? g, unbracketed: true }
+    const ng = { text: inner.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars: inner, of: g.of ?? g, unbracketed: true, ...(g.proof ? { proof: true } : {}) }
     const cls = p.cls === 'cite' ? 'cite' : p.cls === 'num' ? 'num' : 'other'
     out.set(p.k, { ...drawnAs(p, ng, cls, r.sup, out.lineInfo), k: p.k, src: p.src, cls: p.cls, gap: ng, second: r.second })
   }

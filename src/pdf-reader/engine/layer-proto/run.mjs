@@ -49,7 +49,7 @@ import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
 import { fileSwap, protection } from './removal.mjs'
 import { SWAP_PAD, swapRects } from '../layer/swap.mjs'
-import { cropsOf, kOfPieces, locatedWhole, texParts, texRects } from './tex.mjs'
+import { kOfPieces, locatedWhole, proofOf, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
 
@@ -1090,9 +1090,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (gx0 < x0 || gx1 > x1) local[pg - 1] = (chars2[pg - 1] ?? []).filter(c => c.x1 >= gx0 && c.x0 <= gx1 && c.yb >= y0 && c.yb <= y1)
     }
     const inkBefore = fileLines ? undefined : L2.snapFirstRect2(p.rects, local)
-    // the hybrid: a unit the file locates whole read with the file's parts; any other, v0's reading with its crops cut from
-    // their placeholders' own ink by the file (cropsOf), or left the original's where the file proves none of a crop's
-    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0' }) : tex ? { crops: cropsOf(tex.index.unit(p.id), kOfPieces(p.unit, tex.pieces.get(p.id))) } : null
+    // the hybrid: a unit the file locates whole read with the file's parts; any other, v0's reading, each rendering proven
+    // by the file (proofOf: a crop cut from its placeholder's own ink, page text in its segments), or the unit left the
+    // original's where the file proves one not
+    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0' }) : tex ? { proof: proofOf(tex.index.unit(p.id), kOfPieces(p.unit, tex.pieces.get(p.id))) } : null
     const prep = L2.prepareUnit(p.unit, p.rects, local, phMode === 'source' ? null : citeMap, null, parts)
     if (prep.unproven !== undefined) { p.refused = true; p.why = 'unproven'; unlead(p); return }
     // a float's label in the target's name where the final names it so (labelInTarget): its ink erased and accounted as

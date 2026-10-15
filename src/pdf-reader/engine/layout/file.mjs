@@ -18,10 +18,13 @@ export { LayoutRefusal } from './json.mjs'
  *  3: a text symbol the marking could not mark drawn as its character (PH_FLAG.TEXT), no row for a macro TeX said
  *  sets no ink, glyph boxes by their own ink, and the lines a unit's source does not write held (`held`); 4: babel's
  *  names located (`names`, the file's schema 2), and no unit's label holding one; 5: the paper's \lineskip and
- *  \lineskiplimit (`lineskip`, the file's schema 3) */
-export const LAYOUT = '5'
-/** the file's schema: 2 holds `names`; 3 `lineskip` */
-export const LAYOUT_SCHEMA = 3
+ *  \lineskiplimit (`lineskip`, the file's schema 3); 6: a display that ends its column's body found past it, an inline
+ *  formula first after a display found by its own opening mark (marks.mjs \axtpmm), a display group's later displays
+ *  JOINED to its first, a LOST piece outside the unit's lines OUTSIDE (the file's schema 4), and an inline piece whose
+ *  two marks stand on one line of the unit wholly on it */
+export const LAYOUT = '6'
+/** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE */
+export const LAYOUT_SCHEMA = 4
 export const LAYOUT_CAP = 4 * 2 ** 20
 export const LAYOUT_VALUES = 1_000_000
 /** the deepest the file nests: its object, then lines, frames or erase (the arrays of entries), then an entry [id, rows],
@@ -38,9 +41,16 @@ export { NAME_KEYS } from './names.mjs'
  *  first line, which TeX sets right after it on that line (IEEEtran's "Abstract—…", amsthm's "Proof. …"), its row naming
  *  the unit */
 export const NAME_FLAG = Object.freeze({ CENTRED: 1, CAPITALS: 2, RUN_IN: 4 })
-/** a placeholder's flags. TEXT: a LaTeX text symbol (\%, \_) drawn as its one character, the file's pageText, where
- *  the unit's lines on arXiv's page show it (a macro's only, no segments: its ink is the line's, erased with it) */
-export const PH_FLAG = Object.freeze({ SOURCE_BRACKETS: 1, NUMBERED: 2, RAISED: 4, LOWERED: 8, EMPTY: 16, LOST: 32, TEXT: 64 })
+/** a placeholder's flags. EMPTY: its points hold nothing (it draws nothing); LOST: its own ink is not known (no
+ *  segments). TEXT: a LaTeX text symbol (\%, \_) drawn as its one character, the file's pageText, where the unit's lines
+ *  on arXiv's page show it (a macro's only, no segments: its ink is the line's, erased with it). JOINED: a display of a
+ *  display group (displays with nothing visible between them) after its first, which TeX gives no point of its own (the
+ *  paragraph TeX resumes after a display is empty, and a mark there would make it a line): its ink is in the group's
+ *  first display's segments, which is found, and it has none (a display's alone, never with another flag). OUTSIDE, with
+ *  LOST alone: a piece whose ink lies outside the unit's lines, set by TeX before the unit's start mark (one the marking
+ *  passes over at its head) or, a display, after its end mark (one that ends the unit): no line of the unit holds it, so
+ *  it is never erased, and the layer draws it as nothing, its ink the original's */
+export const PH_FLAG = Object.freeze({ SOURCE_BRACKETS: 1, NUMBERED: 2, RAISED: 4, LOWERED: 8, EMPTY: 16, LOST: 32, TEXT: 64, JOINED: 128, OUTSIDE: 256 })
 
 const KEYS = ['schema', 'layout', 'pdfjs', 'paper', 'left', 'views', 'fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held', 'names', 'lineskip']
 /** the placeholders the layer may draw as text in the page's face (Task 9's tokens), whose own text the file may hold */
@@ -82,7 +92,7 @@ const SKIP_MAX = Math.round(((16384 * 72) / 72.27) * 100) / 100
 /** a rectangle lies within its page's view by this, PDF units */
 const SLACK = 1
 const UNIT_BITS = UNIT_FLAG.TITLE | UNIT_FLAG.FRONT | UNIT_FLAG.CENTRED
-const PH_BITS = 127
+const PH_BITS = 511
 const HEADING = UNIT_KINDS.indexOf('heading'), DISPLAY = PH_KINDS.indexOf('display'), MACRO = PH_KINDS.indexOf('macro')
 const PAGE_TEXT = new Set(PAGE_TEXT_KINDS.map(k => PH_KINDS.indexOf(k)))
 const ID_MAX = Number.MAX_SAFE_INTEGER
@@ -302,15 +312,17 @@ export function checkLayout(value) {
     const kind = r[2], flags = r[3]
     if (!isInteger(kind, 0, PH_KINDS.length - 1)) throw refuse(`ph[${i}][2]`, 'not a kind of PH_KINDS')
     if (!isInteger(flags, 0, PH_BITS)) throw refuse(`ph[${i}][3]`, 'not flags of PH_FLAG')
-    const empty = (flags & PH_FLAG.EMPTY) !== 0, lost = (flags & PH_FLAG.LOST) !== 0, symbol = (flags & PH_FLAG.TEXT) !== 0
+    const empty = (flags & PH_FLAG.EMPTY) !== 0, lost = (flags & PH_FLAG.LOST) !== 0, symbol = (flags & PH_FLAG.TEXT) !== 0, joined = (flags & PH_FLAG.JOINED) !== 0
     if (empty && lost) throw refuse(`ph[${i}][3]`, 'EMPTY and LOST together')
+    if (joined && (flags !== PH_FLAG.JOINED || kind !== DISPLAY || r.length !== 4)) throw refuse(`ph[${i}]`, 'JOINED but on a display alone, with no other flag and no segments')
+    if ((flags & PH_FLAG.OUTSIDE) !== 0 && !lost) throw refuse(`ph[${i}][3]`, 'OUTSIDE but not LOST')
     if (symbol && (empty || lost || kind !== MACRO || r.length !== 4)) throw refuse(`ph[${i}]`, 'TEXT but on a macro alone, with no segments')
     if ((flags & PH_FLAG.NUMBERED) !== 0 && kind !== DISPLAY) throw refuse(`ph[${i}][3]`, 'NUMBERED on a kind not display')
     const segs = (r.length - 4) / 6, most = kind === DISPLAY ? SEGS_DISPLAY : SEGS_INLINE
-    if (empty || lost || symbol ? segs !== 0 : segs < 1 || segs > most) throw refuse(`ph[${i}]`, empty || lost || symbol ? 'segments on an EMPTY, LOST or TEXT placeholder' : `not 1 to ${most} segments`)
+    if (empty || lost || symbol || joined ? segs !== 0 : segs < 1 || segs > most) throw refuse(`ph[${i}]`, empty || lost || symbol || joined ? 'segments on an EMPTY, LOST, TEXT or JOINED placeholder' : `not 1 to ${most} segments`)
     for (let o = 4; o < r.length; o += 6) checkBox(r, o, 1, 3, 2, 4, 5, false, views, pages, 'ph', i, -1)
     zeroes(r)
-    if (!empty && !lost && PAGE_TEXT.has(kind)) pageTexts.add(key)
+    if (!empty && !lost && !joined && PAGE_TEXT.has(kind)) pageTexts.add(key)
     if (symbol) { pageTexts.add(key); symbols.add(key) }
   }
 

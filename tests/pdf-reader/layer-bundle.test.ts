@@ -57,7 +57,7 @@ const H = UNIT_KINDS.indexOf('heading'), P = UNIT_KINDS.indexOf('para'), MATH = 
 /** the paper's layout file: two pages, the title and the paragraph located, the paragraph's formula found */
 function layoutOf(): LayoutFile {
   return {
-    schema: 3, layout: LAYOUT, pdfjs: PDFJS, paper: { id: '2608.04322', version: 1, pages: 2 }, left: '',
+    schema: 4, layout: LAYOUT, pdfjs: PDFJS, paper: { id: '2608.04322', version: 1, pages: 2 }, left: '',
     views: [0, 0, 612, 792, 0, 0, 612, 792], fonts: ['CMR10'],
     units: [[0, H, 9, UNIT_FLAG.TITLE, 1], [2, P, 9, 0, 7]],
     lines: [[0, [1, 150, 460, 700, 712, 696, 17.28, 0]], [2, [1, 72, 540, 650, 657.5, 647.25, 10, 0]]],

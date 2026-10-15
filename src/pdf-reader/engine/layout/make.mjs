@@ -24,6 +24,9 @@ import { classOf, headEnd, layoutMarking, symbolText } from './marks.mjs'
 import { matcherOf } from './match.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
 
+/** the how of a later display of a display group (stream.mjs): its ink is the group's first display's */
+const IN_GROUP = OWNED_HOW.indexOf('in the display before it')
+
 /** the share of the marked original's lines carried, at least, for a file (the researched papers carry 97.5–99.4 %) */
 export const CARRY_MIN = 0.9
 /** a page's operator list is waited for at most OPS_MS, and a paper's in all OPS_PAPER_MS: past either the page has no
@@ -309,7 +312,7 @@ function blank(units) {
   return {
     lines: { carried: 0, total: 0, held: 0 },
     units: { located: 0, total: units.length, byKind: {}, unplaced: 0 },
-    ph: { marked: 0, found: 0, empty: 0, lost: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, foreign: 0, shared: 0, texts: 0, heads: [0, 0] },
+    ph: { marked: 0, found: 0, empty: 0, lost: 0, joined: 0, outside: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, foreign: 0, shared: 0, texts: 0, heads: [0, 0] },
     match: { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0 },
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
     names: { marked: 0, located: 0, runIn: 0, why: {} },
@@ -601,7 +604,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     const { units: copies } = layoutMarking(units, marks.marking.classes, { lines: false, switches: marks.marking.switches, inkless: marks.marking.inkless })
     copies.forEach((c, i) => {
       for (const p of c.pieces) {
-        const m = p.t === 'ph' && /^\\axtpma?\{[pn](\d+)\.(\d+)([ab])\}$/.exec(p.src ?? '')
+        const m = p.t === 'ph' && /^\\axtpm[am]?\{[pn](\d+)\.(\d+)([ab])\}$/.exec(p.src ?? '')
         if (!m || Number(m[1]) !== i) continue
         const key = `${i}.${m[2]}`, d = design.get(key) ?? design.set(key, { open: false, close: false }).get(key)
         if (m[3] === 'a') d.open = true; else d.close = true
@@ -686,11 +689,18 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       return best
     }
     const head = headEnd(u.pieces, 0), last = u.pieces.findLastIndex(p => p.t === 'text' && /[^ \t\r\n]/.test(p.s ?? ''))
+    /** whether the last visible piece is a display found, or one JOINED to a display found (a later display of the same
+     *  group, stream.mjs, may then be JOINED); text and any other piece end the group */
+    let groupFound = false
+    const entries = ph.length
     for (let k = 0; k < u.pieces.length; k++) {
       // every visible piece has its row, found, LOST or EMPTY: no row is a piece that draws nothing (an invisible one, a
       // group's open or close), as the layer reads the file
       const piece = u.pieces[k], cls = classOf(piece)
+      if (piece.t === 'text' && /\S/.test(piece.s ?? '')) groupFound = false
       if (!cls || (cls === 'macro' && inkless.has(piece.src))) continue
+      const wasFound = groupFound
+      groupFound = false
       const kind = PH_KIND.get(cls) ?? PH_KIND.get('other')
       const d = classes.has(cls) ? design.get(`${i}.${k}`) : null
       // a marked piece not found after the unit's end mark is a tail as an unmarked one is (besideMarks): \\renewcommand,
@@ -715,6 +725,14 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       const prefix = cls === 'footnote' ? 'n' : 'p', name = `${prefix}${i}.${k}a`, e = ownInk.get(name)
       // its own ink by its points in the marked compile's content stream (layout/stream.mjs), or why none is known
       if (!e) { lost('no own ink known'); continue }
+      // a later display of a display group, which TeX gives no point (the empty paragraph after a display): its ink is the
+      // group's, its first display's segments, where that was found (JOINED: no segments of its own)
+      if (e[1] === IN_GROUP) {
+        if (cls !== 'display' || !wasFound) { lost("its display group's first display not found"); continue }
+        ph.push({ row: [i, k, kind, PH_FLAG.JOINED], cls, state: 'joined' })
+        groupFound = true
+        continue
+      }
       if (e[1] >= OWNED) { lost(OWNED_HOW[e[1]] ?? 'no own ink known'); continue }
       const before = u.pieces[k - 1], after = u.pieces[k + 1]
       let flags = before?.t === 'text' && /[([]$/.test(before.s ?? '') && after?.t === 'text' && /^[)\]]/.test(after.s ?? '') ? PH_FLAG.SOURCE_BRACKETS : 0
@@ -745,8 +763,16 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
         const byRow = new Map(), partRow = []
         let off = false
         const openAt = markOf(name), closeAt = markOf(`${prefix}${i}.${k}b`)
+        // both its marks on one line of the unit: TeX broke no line between them, so the whole piece is in that line's box
+        // (a fraction's numerator and denominator, a limit, whatever their baselines). A part the part rule puts on no
+        // line goes there where its glyphs stand within the line's size of its baseline on arXiv's page; where arXiv's
+        // page broke the line elsewhere (another TeX's compile), the part rule's own line stands
+        const on = (M, j) => !!M && M.page === rows[j].page && Math.abs(M.y - rows[j].base) < 0.5 * rows[j].size
+        const both = openAt && closeAt ? rows.findIndex((_, j) => on(openAt, j) && on(closeAt, j)) : -1
+        const onLine = part => both >= 0 && part.page === rows[both].page && part.gs.every(g => Math.abs(ink[part.page].y[g] - rows[both].base) <= rows[both].size)
         for (const [q, part] of parts.entries()) {
-          const j = rowOfPart(part, q === 0 ? openAt : q === parts.length - 1 ? closeAt : null)
+          let j = rowOfPart(part, q === 0 ? openAt : q === parts.length - 1 ? closeAt : null)
+          if (j < 0 && onLine(part)) j = both
           if (j < 0) { off = true; break }
           partRow.push(j)
           ;(byRow.get(j) ?? byRow.set(j, { gs: [], boxes: [] }).get(j)).gs.push(...part.gs)
@@ -792,10 +818,21 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       stats.ph.owned += items.length + rules.length
       stats.ph.matched += gs.length + bs.length
       ph.push({ row, cls, state: 'found', inferred: e[1] !== 0, text: PAGE_TEXT.has(cls) ? pageTextOf(gs) : null })
+      if (cls === 'display') groupFound = true
     }
     if (one.symbols) symbolsOf(one)
     if (one.heads) besideMarks(one, false)
     if (one.tails) besideMarks(one, true)
+    // a LOST piece outside the unit's lines, whose ink TeX set before its start mark (one the marking passes over at its
+    // head: patch sets the start mark at headEnd, a display, a \url opening a note) or after its end mark (a display that
+    // ends it, after its last words: MARK_DEF sets the end mark before it): never erased, as no line of the unit holds it,
+    // and the layer draws it as nothing, its ink the original's (OUTSIDE)
+    const tail = k => u.pieces.slice(k + 1).every(p => !classOf(p) || classOf(p) === 'display' || (p.t === 'text' && !/\S/.test(p.s ?? '')))
+    for (let q = entries; q < ph.length; q++) {
+      const x = ph[q], k = x.row[1]
+      if (x.row[0] !== i || !(x.row[3] & PH_FLAG.LOST)) continue
+      if (k < head || (x.cls === 'display' && last >= 0 && k > last && tail(k))) { x.row[3] |= PH_FLAG.OUTSIDE; x.outside = true }
+    }
   }
   // the bars: an arXiv glyph matched by two found pieces, an owned glyph of a found piece not matched (none, both; each
   // true by the matcher's own rule); and what the layer draws: an arXiv glyph inside a found inline piece's segments
@@ -1269,6 +1306,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   // the placeholders and labels counted as the file holds them
   for (const p of ph) {
     if (!kept1.has(p.row[0])) continue
+    if (p.outside) stats.ph.outside++
     if (p.state === 'unmarked') { stats.ph.unmarked++; continue }
     if (p.state === 'text') { stats.ph.symbols++; continue }
     if (p.head) { stats.ph.heads[p.state === 'found' ? 0 : 1]++; continue }
@@ -1276,6 +1314,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     stats.ph.marked++
     tally[1]++
     if (p.state === 'found') { stats.ph.found++; tally[0]++; if (p.inferred) stats.ph.inferred++ } else if (p.state === 'empty') stats.ph.empty++
+    else if (p.state === 'joined') stats.ph.joined++
     else { stats.ph.lost++; stats.ph.why[p.why] = (stats.ph.why[p.why] ?? 0) + 1 }
   }
   for (const one of placed) {

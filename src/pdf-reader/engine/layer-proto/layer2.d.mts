@@ -103,7 +103,8 @@ export interface Prepared extends Map<number, Resolved> {
   cat: Map<string, 'acc' | 'keep' | 'orphan' | 'undrawn'>
   /** the finish: the lines a located display holds */
   displayLines?: Set<string>
-  /** part 5: the piece index of a crop whose ink no source proves its placeholder's (the unit is left the original's) */
+  /** part 5: the piece index of a placeholder whose rendering no source proves (tex.mjs proofOf: the unit is left the
+   *  original's) */
   unproven?: number
   /** part 4's source knows each placeholder's ink (a layout file's segments) over part 1's lines (the file's): a gap's piece
    *  none took is the unit's text */
@@ -127,7 +128,7 @@ export interface Renderings {
   gaps: Gap[]; gapFor(p: Placeholder, cls: 'cite' | 'num' | 'other'): Gap | null | undefined
   /** how a placeholder is drawn where the source knows it without the page (a layout file's macro that sets no ink: none;
    *  its text symbol: the character), else null */
-  fixed?(p: Placeholder): { mode: 'none' | 'source'; text: string } | null
+  fixed?(p: Placeholder): { mode: 'none' | 'source'; text: string; proof?: boolean } | null
 }
 /** the parts of a unit another source gives in place of v0's; a part not given is v0's */
 export interface UnitParts {
@@ -139,8 +140,9 @@ export interface UnitParts {
   label?: (out: Prepared, unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], gaps: Gap[]) => Gap[]
   /** part 4: which ink each placeholder is, by a source that knows it (Prepared.inkKnown, with part 1) */
   renderings?: (ctx: RenderingsContext) => Renderings
-  /** part 5: each crop cut from its placeholder's own ink (mutates the resolutions); the k of one no source proves, or -1 */
-  crops?: (out: Prepared) => number
+  /** part 5: every rendering proven, each crop cut from its placeholder's own ink (mutates the crops); the k of one no
+   *  source proves, or -1 */
+  proof?: (out: Prepared) => number
 }
 /** a token of a unit's translation */
 export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it
