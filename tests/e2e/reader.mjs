@@ -765,6 +765,21 @@ try {
     const lvl = await probe()
     check('the heading read follows the scroll: further down, a later heading of the contents', deep !== null && st.outline.findIndex(e => e.id === deep) > 0, `${deep}`)
     check('on the layer the pair stands level at rest (levelError within 24 px)', Math.abs(lvl.levelError ?? 999) <= 24, `levelError ${lvl.levelError}`)
+    // the window: through the paper and back, the right holds the layer near the view alone (§3.2), what it let go released
+    const R1 = await page.locator('#right').boundingBox()
+    const held = async () => page.evaluate(() => {
+      const near = window.__reader.view.probe().nearPlaces, sp = window.__reader.side.probe()
+      const right = document.getElementById('right')
+      return { near, laid: sp.laid, retired: sp.retired, svgs: right.querySelectorAll('.axt-layer > svg').length, copies: [...right.querySelectorAll('canvas.axt-layer-copy')].filter(c => c.width > 0).length, nodes: right.querySelectorAll('*').length, heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e5) / 10 : null }
+    })
+    const w0 = await held()
+    await page.mouse.move(R1.x + R1.width / 2, R1.y + R1.height / 2)
+    for (const dy of [4000, 4000, -8000]) { await page.mouse.wheel(0, dy); await page.waitForTimeout(700) }
+    await page.waitForFunction(() => window.__reader.view.probe().motion === null, null, { timeout: 5000 }).catch(() => undefined)
+    await page.waitForTimeout(1200)
+    const w1 = await held()
+    check('through the paper and back: the layer held near the view alone, each page far from it let go (its copy and SVG)', w1.laid <= w1.near && w1.svgs === w1.laid && w1.copies === w1.laid && w1.laid + w1.retired <= sampleCut.paper.pages, `${JSON.stringify(w0)} then ${JSON.stringify(w1)}`)
+    note(`the window on the sample (4 pages; JS heap in MB): before ${JSON.stringify(w0)}, after a scroll through it and back ${JSON.stringify(w1)}. A paper of a hundred pages is the web's layer-memory row at the pin move`)
     const long = await page.evaluate(() => window.__long)
     note(`the layer's longest main-thread task in this run: ${Math.max(0, ...long)} ms over ${long.length} long task(s) (a reading on a shared machine: L7 is reader-perf's)`)
     const ps = await side()
