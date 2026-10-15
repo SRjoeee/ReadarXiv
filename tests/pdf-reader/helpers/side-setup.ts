@@ -2,6 +2,7 @@
 // view over its PDF.js stand-ins and a clock moved by hand (reader-fakes.ts), the original's four pages shown, and its layer side
 // over a door and the format test's small paper (format-paper.ts) served by digest; what the side asked of each door recorded
 import { afterAll, afterEach, beforeAll, beforeEach, expect, vi } from 'vitest'
+import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import type { Ref } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import type { Layer, LayerDocument, OpenLayerOptions } from '@/pdf-reader/engine/layer-proto/reader.mjs'
 import type { Row } from '@/pdf-reader/engine/layer-proto/rows.mjs'
@@ -67,6 +68,8 @@ export interface Options {
   paper?: { objects: readonly { bytes: Uint8Array; sha256: string }[]; pages: number }
   /** pages whose first copy the door fails to draw */
   copyFails?: readonly number[]
+  /** the door refuses to open, as openLayer refuses a document of another page count */
+  openFails?: boolean
 }
 /** the view over the original (its four pages), its layer side over the door and the paper's objects served by digest */
 export async function setup(o: Options = {}): Promise<Setup> {
@@ -119,6 +122,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
     },
     openLayer: (async (oo: OpenLayerOptions) => {
       opens++
+      if (o.openFails) throw new BundleRefusal('the document has 9 pages, not 4', { kind: 'part', path: 'doc' })
       const layer = o.real ? await o.real.openLayer(oo) : await door.openLayer(oo)
       live = layer
       const seen: Setup['doors'][number] = { layer, taken: [], ended: 0, copies: [] }

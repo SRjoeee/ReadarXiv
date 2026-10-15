@@ -275,6 +275,14 @@ describe('L14: the feed\'s refusals', () => {
     }
   })
 
+  it('a door that refuses to open: refused with the side\'s code, not the refusal\'s message', async () => {
+    const s = await setup({ openFails: true })
+    s.side.tell(await ALL())
+    await settle(s)
+    expect(s.events.filter(e => e.type === 'layer').at(-1)).toMatchObject({ state: 'refused', why: 'open' })
+    expect(s.side.probe().why).toBe('open')
+  })
+
   it('a refused part stops the chain at the last good one; told again it is fetched again and added', async () => {
     const s = await setup()
     const m = await M()
