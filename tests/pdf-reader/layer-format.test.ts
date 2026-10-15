@@ -12,7 +12,7 @@ import { encodeLayout, LAYOUT, type LayoutFile } from '@/pdf-reader/engine/layou
 import { PDFJS, PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
 import { isMemoryError } from '@/pdf-reader/engine/pipeline/memory.mjs'
 import {
-  BASE, forged, IMAGE, LEFT_OF, type Made, made, N, PAPER, parsed, partInputs, STREAM, textOf, TAILS, tailOf, TOKENS_ON_PAGE, tokenWire, UNITS, utf8, VIEWS,
+  BASE, forged, IMAGE, LEFT_OF, type Made, made, N, PAPER, parsed, partInputs, sha256Of, STREAM, textOf, TAILS, tailOf, TOKENS_ON_PAGE, tokenWire, UNITS, utf8, VIEWS,
 } from './helpers/format-paper'
 
 // BUNDLE 4's format (the prepare pipeline's bundle 4 contract and its amendments): the five kinds of object, each writer
@@ -219,5 +219,154 @@ describe('mergeParts is the whole', () => {
     expect(() => mergeParts(M.index, M.readParts.slice(0, 2))).toThrow(BundleRefusal)
     expect(() => mergeParts(M.index, [M.readParts[1]!, M.readParts[2]!])).toThrow(BundleRefusal)
     expect(() => mergeParts(M.index, [M.readParts[0]!, M.readParts[0]!, M.readParts[1]!, M.readParts[2]!])).toThrow(BundleRefusal)
+  })
+})
+
+// ---------------------------------------------------------------- 2–4. the order of refusal, every reader
+type Reader = (bytes: Uint8Array, ref: ReturnType<typeof forged>['ref'] | null, caps?: { bytes?: number; values?: number }) => Promise<unknown>
+const READERS: { kind: 'units' | 'head' | 'part' | 'left' | 'catalog'; cap: number; values: number; depth: number; read: Reader; sample: () => { bytes: Uint8Array } }[] = [
+  { kind: 'units', cap: UNITS_CAP, values: UNITS_VALUES, depth: 5, sample: () => M.chunks[0]!, read: (b, ref, caps) => readUnitsChunk(b, { ref: ref!, before: null, caps }) },
+  { kind: 'head', cap: HEAD_CAP, values: HEAD_VALUES, depth: 3, sample: () => M.head, read: (b, ref, caps) => readHead(b, { ref: ref!, caps }) },
+  { kind: 'part', cap: PART_CAP, values: PART_VALUES, depth: 7, sample: () => M.parts[0]!, read: (b, ref, caps) => readPart(b, { ref: ref!, index: M.index, chain: null, caps }) },
+  { kind: 'left', cap: LEFT_CAP, values: LEFT_VALUES, depth: 4, sample: () => M.lefts[1]!, read: (b, ref, caps) => readLeftPart(b, { ref: ref as never, streamOf: id => STREAM.get(id), caps }) },
+  { kind: 'catalog', cap: CATALOG_CAP, values: CATALOG_VALUES, depth: 3, sample: () => ({ bytes: M.parts[0]!.bytes }), read: (b, _ref, caps) => readCatalog(b, { caps }) },
+]
+/** `bytes` with a ref that is theirs (their length and digest) */
+const asRef = (kind: (typeof READERS)[number]['kind'], bytes: Uint8Array) => ({ kind, ...(kind === 'left' ? { page: 1 } : {}), sha256: sha256Of(bytes), bytes: bytes.length })
+
+describe('a reader\'s caps, each kind', () => {
+  for (const r of READERS) {
+    describe(r.kind, () => {
+      it('refuses cap + 1 bytes before they are hashed or decoded', async () => {
+        const bytes = new Uint8Array(r.cap + 1).fill(0x20)
+        const digest = vi.spyOn(globalThis.crypto.subtle, 'digest')
+        const decode = vi.spyOn(TextDecoder.prototype, 'decode')
+        const e = await refusal(r.read(bytes, r.kind === 'catalog' ? null : asRef(r.kind, bytes)))
+        expect(e).toMatchObject({ kind: r.kind, message: expect.stringMatching(/more than/) })
+        expect(digest).not.toHaveBeenCalled()
+        expect(decode).not.toHaveBeenCalled()
+      })
+
+      it('refuses values past the cap before JSON.parse is called, and nesting one past the depth', async () => {
+        const many = utf8(`[${'0,'.repeat(r.values)}0]`)
+        expect(many.length).toBeLessThan(r.cap)
+        const parse = vi.spyOn(JSON, 'parse')
+        expect(await refusal(r.read(many, r.kind === 'catalog' ? null : asRef(r.kind, many)))).toMatchObject({ kind: r.kind, message: expect.stringMatching(/more than \d+ values/) })
+        const deep = utf8(`${'['.repeat(r.depth + 1)}0${']'.repeat(r.depth + 1)}`)
+        expect(await refusal(r.read(deep, r.kind === 'catalog' ? null : asRef(r.kind, deep)))).toMatchObject({ kind: r.kind, message: expect.stringMatching(/nested more than \d+ deep/) })
+        expect(parse).not.toHaveBeenCalled()
+        // (and one at the depth is read as far as JSON.parse and refused for what it is)
+        const edge = utf8(`${'['.repeat(r.depth)}0${']'.repeat(r.depth)}`)
+        expect(await refusal(r.read(edge, r.kind === 'catalog' ? null : asRef(r.kind, edge)))).toMatchObject({ message: expect.stringMatching(/not an object/) })
+      })
+
+      it('takes `caps` lower than its default, bytes and values', async () => {
+        const bytes = r.sample().bytes
+        const ref = r.kind === 'catalog' ? null : asRef(r.kind, bytes)
+        expect(await refusal(r.read(bytes, ref, { bytes: bytes.length - 1 }))).toMatchObject({ message: expect.stringMatching(/more than/) })
+        // (higher than the default is no higher)
+        expect(await refusal(r.read(new Uint8Array(r.cap + 1).fill(0x20), r.kind === 'catalog' ? null : asRef(r.kind, new Uint8Array(r.cap + 1).fill(0x20)), { bytes: r.cap * 2 }))).toMatchObject({ message: expect.stringMatching(/more than/) })
+        expect(await refusal(r.read(bytes, ref, { values: 3 }))).toMatchObject({ message: expect.stringMatching(/more than 3 values/) })
+      })
+    })
+  }
+})
+
+describe('a reader\'s digest and ref', () => {
+  for (const r of READERS.filter(k => k.kind !== 'catalog')) {
+    describe(r.kind, () => {
+      it('refuses one byte changed, bytes off by one and another object\'s ref, before it decodes anything', async () => {
+        const good = r.sample().bytes
+        const ref = asRef(r.kind, good)
+        const decode = vi.spyOn(TextDecoder.prototype, 'decode')
+        const parse = vi.spyOn(JSON, 'parse')
+        const flipped = good.slice()
+        flipped[flipped.length >> 1] ^= 1
+        expect(await refusal(r.read(flipped, ref))).toMatchObject({ kind: r.kind, message: expect.stringMatching(/digest/) })
+        // (bytes off by one: refused before they are hashed)
+        const digest = vi.spyOn(globalThis.crypto.subtle, 'digest')
+        expect(await refusal(r.read(good.subarray(1), ref))).toMatchObject({ message: expect.stringMatching(/bytes, not the ref's/) })
+        expect(await refusal(r.read(good, { ...ref, bytes: good.length + 1 }))).toMatchObject({ message: expect.stringMatching(/bytes, not the ref's/) })
+        expect(digest).not.toHaveBeenCalled()
+        const other = (r.kind === 'head' ? M.chunks[0]! : M.head).bytes
+        expect(await refusal(r.read(good, asRef(r.kind, other)))).not.toBeNull()
+        expect(decode).not.toHaveBeenCalled()
+        expect(parse).not.toHaveBeenCalled()
+        // (and the object itself is read)
+        vi.restoreAllMocks()
+        await r.read(good, ref)
+      })
+
+      it('refuses a ref to another kind of object, and is a TypeError for what is not bytes or a ref', async () => {
+        const good = r.sample().bytes
+        const other = READERS.find(k => k.kind !== r.kind && k.kind !== 'catalog')!.kind
+        expect(await refusal(r.read(good, { ...asRef(r.kind, good), kind: other }))).toMatchObject({ kind: r.kind, path: 'ref' })
+        await expect(r.read(textOf(good) as unknown as Uint8Array, asRef(r.kind, good))).rejects.toThrow(TypeError)
+        await expect(r.read(good, { ...asRef(r.kind, good), sha256: 'abc' })).rejects.toThrow(TypeError)
+        await expect(r.read(good, { kind: r.kind } as never)).rejects.toThrow(TypeError)
+      })
+    })
+  }
+
+  it('the catalog, fetched by name, has no ref: its digest is computed and returned', async () => {
+    const parts = M.parts.map(p => ({ from: p.from, to: p.to, sha256: p.sha256, bytes: p.bytes.length }))
+    const w = await writeCatalog({ head: M.readHead, units: M.chunks.map(c => ({ from: c.from, to: c.to, sha256: c.sha256, bytes: c.bytes.length })), parts, end: { through: 4 } })
+    expect((await readCatalog(w.bytes)).sha256).toBe(sha256Of(w.bytes))
+    await expect(readCatalog(textOf(w.bytes) as unknown as Uint8Array)).rejects.toThrow(TypeError)
+  })
+})
+
+describe('a reader\'s envelope', () => {
+  const valid = {
+    units: () => parsed(M.chunks[0]!), head: () => parsed(M.head), part: () => parsed(M.parts[0]!), left: () => parsed(M.lefts[1]!),
+  } as const
+  // biome-ignore lint/suspicious/noExplicitAny: a test breaks the object's types on purpose
+  const read = (kind: keyof typeof valid, edit: (o: any) => void) => {
+    const o = valid[kind]()
+    edit(o)
+    const f = forged(kind, o, kind === 'left' ? { page: 1 } : {})
+    return READERS.find(r => r.kind === kind)!.read(f.bytes, f.ref)
+  }
+
+  for (const kind of Object.keys(valid) as (keyof typeof valid)[]) {
+    describe(kind, () => {
+      const tag = kind === 'units' ? 'format' : 'bundle'
+      it('refuses another format, another kind, and a key of the schema missing or extra', async () => {
+        expect(await refusal(read(kind, o => { o[tag] = kind === 'units' ? '2' : '3' }))).toMatchObject({ kind, path: tag })
+        expect(await refusal(read(kind, o => { o[tag] = 4 }))).toMatchObject({ path: tag })
+        expect(await refusal(read(kind, o => { o.kind = kind === 'part' ? 'head' : 'part' }))).toMatchObject({ path: 'kind' })
+        expect(await refusal(read(kind, o => { delete o.kind }))).toMatchObject({ path: 'kind' })
+        expect(await refusal(read(kind, o => { o.extra = 1 }))).toMatchObject({ path: 'extra' })
+        const first = Object.keys(valid[kind]()).filter(k => k !== tag && k !== 'kind')[0] as string
+        expect(await refusal(read(kind, o => { delete o[first] }))).toMatchObject({ path: first, message: expect.stringMatching(/missing/) })
+        expect(await refusal(read(kind, () => {}))).toBeNull()
+      })
+    })
+  }
+
+  it('refuses a unit chunk\'s old envelope (`bundle` in place of `format`): the chunk\'s format is its own', async () => {
+    expect(await refusal(read('units', o => { o.bundle = '4'; delete o.format }))).toMatchObject({ kind: 'units', path: 'format' })
+    expect(UNITS_FORMAT).toBe('1')
+    expect(BUNDLE4).toBe('4')
+  })
+
+  it('refuses what is not an object, and a chunk given as a part and a part given as a chunk', async () => {
+    for (const text of ['[]', '7', 'null', '"x"']) {
+      const f = forged('head', JSON.parse(text))
+      expect(await refusal(readHead(f.bytes, { ref: f.ref }))).toMatchObject({ kind: 'head', message: expect.stringMatching(/not an object/) })
+    }
+    expect(await refusal(readPart(M.chunks[0]!.bytes, { ref: { ...M.chunks[0]!.ref, kind: 'part' }, index: M.index, chain: null }))).toMatchObject({ path: 'bundle' })
+    // (a part is nested deeper than a chunk or a head allows: refused before it is parsed, as what it is)
+    expect(await refusal(readUnitsChunk(M.parts[0]!.bytes, { ref: { ...M.parts[0]!.ref, kind: 'units' }, before: null }))).toMatchObject({ kind: 'units', message: expect.stringMatching(/nested more than 5 deep/) })
+    expect(await refusal(readHead(M.parts[0]!.bytes, { ref: { ...M.parts[0]!.ref, kind: 'head' } }))).toMatchObject({ kind: 'head' })
+    // (a head of the depth a chunk allows, given as a chunk, is refused for its envelope)
+    expect(await refusal(readUnitsChunk(M.head.bytes, { ref: { ...M.head.ref, kind: 'units' }, before: null }))).toMatchObject({ kind: 'units', path: 'format' })
+  })
+
+  it('refuses bytes that are not UTF-8 or not JSON, after the digest', async () => {
+    for (const bytes of [Uint8Array.of(0x7b, 0xc3, 0x28, 0x7d), utf8('{"bundle":'), utf8('')]) {
+      const e = await refusal(readHead(bytes, { ref: { kind: 'head', sha256: sha256Of(bytes), bytes: bytes.length } }))
+      expect(e).toMatchObject({ kind: 'head', message: expect.stringMatching(/UTF-8|not JSON/) })
+    }
   })
 })
