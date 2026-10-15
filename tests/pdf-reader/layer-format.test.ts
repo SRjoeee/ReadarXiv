@@ -1,13 +1,14 @@
 // @vitest-environment node
+import { LAB_ON, LAB_PAPERS, labFiles } from './helpers/lab-data'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { readBundle, writeBundle } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import type { PartChain } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import type { PartChain, ReadUnitsChunk, ReadUnitsChunkLight } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import {
   BUILD_END_WHYS, BUNDLE4, DEPTH_NONE, KIND_NONE, RECORD_FLAG, CATALOG_CAP, CATALOG_VALUES, catalogKey, CHUNKS_MAX, CONTENT_MAX, CTAG4, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, indexOf,
   isFinalEnd, keyOf, keyParts, LEFT_CAP, LEFT_VALUES, mergeParts, PART_CAP, PART_VALUES, partTarget, readCatalog, readHead, readLeftPart, readPart,
-  readUnitsChunk, TAIL_CAP, TOKENS_PAGE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, unitsOfChunks, VTAG4, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks,
+  readUnitsChunk, TAIL_CAP, TOKENS_PAGE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, unitsOfChunks, droppedOf, DROPPED_MAX, UNIT_ID_MAX, VTAG4, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { authorsTranslated } from '@/pdf-reader/engine/translate/kept.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
@@ -510,11 +511,179 @@ describe('a bad unit is dropped and counted, the rest standing (BUNDLE 3\'s drop
     expect(unitsOfChunks([c1, c2]).dropped).toEqual([0, 1])
   })
 
+  it('reads a chunk alone with the ids dropped before it (M19), as the chain reads it', async () => {
+    // chunk 0: unit 0 does not stand (upper-case kind), unit 1 does; chunk 1: unit 2 nests 0 (dropped), unit 3 nests 1; chunk 2: unit 4 nests 0, 5 nests 3 and 1
+    const nest = (id: number) => [4, 'x', id, 'y']
+    const spec = [
+      [['Para', []], ['para', []]],
+      [['para', [nest(0)]], ['para', [nest(1)]]],
+      [['para', [nest(0)]], ['para', [nest(3), nest(1)]]],
+    ] as const
+    const forgedChunks: ReturnType<typeof forged>[] = []
+    let id = 0
+    for (const units of spec) {
+      const o = { format: UNITS_FORMAT, kind: 'units', paper: PAPER, pipeline: PIPELINE_VERSION, ids: [id, id + 1], units: units.map(([kind, pieces]) => [kind, 0, null, null, null, [[0, 'a'], ...pieces]]) }
+      forgedChunks.push(forged('units', o, { from: id, to: id + 1 }))
+      id += 2
+    }
+    const chainRead: ReadUnitsChunk[] = []
+    for (const f of forgedChunks) chainRead.push(await readUnitsChunk(f.bytes, { ref: f.ref, before: chainRead.at(-1) ?? null }))
+    const all = unitsOfChunks(chainRead)
+    expect(all.dropped).toEqual([0, 2, 4])
+    expect(droppedOf(chainRead)).toEqual([0, 2, 4])
+    for (let k = 0; k < forgedChunks.length; k++) {
+      const f = forgedChunks[k]!, from = chainRead[k]!.from
+      const alone = await readUnitsChunk(f.bytes, { ref: f.ref, before: null, dropped: droppedOf(chainRead).filter(d => d < from) })
+      expect(alone.units, `chunk ${k}`).toEqual(chainRead[k]!.units)
+      expect(alone.dropped, `chunk ${k}`).toEqual(chainRead[k]!.dropped)
+      expect([...alone.stands], `chunk ${k}`).toEqual([...chainRead[k]!.stands])
+      // the nested pieces name what chunk k needs from before it, from the chunk alone
+      const lean = await readUnitsChunk(f.bytes, { ref: f.ref, before: null, dropped: droppedOf(chainRead).filter(d => d < from), bodies: false })
+      expect(lean.part!.external, `chunk ${k}`).toEqual(all.externalRefs(k))
+    }
+    // a chunk read alone without `dropped`: every earlier id stands, so the nested unit does too
+    const f = forgedChunks[1]!
+    expect((await readUnitsChunk(f.bytes, { ref: f.ref, before: null })).dropped).toEqual([])
+    // `dropped` is ids below `from`, once each, and only where `before` is null
+    for (const bad of [[2], [-1], [0.5], [0, 0], [1, 0], 'x' as never]) await expect(readUnitsChunk(f.bytes, { ref: f.ref, before: null, dropped: bad })).rejects.toBeInstanceOf(TypeError)
+    await expect(readUnitsChunk(f.bytes, { ref: f.ref, before: chainRead[0]!, dropped: [0] })).rejects.toBeInstanceOf(TypeError)
+    const first = forgedChunks[0]!
+    await expect(readUnitsChunk(first.bytes, { ref: first.ref, before: null, dropped: [0] })).rejects.toBeInstanceOf(TypeError)
+    // a ref that names another start than the chunk's is still refused
+    await expect(readUnitsChunk(f.bytes, { ref: { ...f.ref, from: 4, to: 5 }, before: null, dropped: [] })).rejects.toBeInstanceOf(BundleRefusal)
+  })
+
+  it('bounds a chunk read alone before it allocates anything by its ids (M19)', async () => {
+    const [a] = chunksOf(['para'], [[]])
+    const at = (ids: unknown[], ref: { from?: number; to?: number } = {}) => {
+      const f = forged('units', { ...a, ids }, ref as { from: number; to: number })
+      return readUnitsChunk(f.bytes, { ref: f.ref, before: null })
+    }
+    const started = performance.now()
+    for (const [ids, ref] of [
+      [[-1, -1], { from: -1, to: -1 }], [[-1, 0], { from: -1 }], [[0.5, 0.5], { from: 0.5 }], [[2 ** 40, 2 ** 40], { from: 2 ** 40, to: 2 ** 40 }],
+      [[UNITS_TOTAL_VALUES + 1, UNITS_TOTAL_VALUES + 1], { from: UNITS_TOTAL_VALUES + 1 }], [[0, UNITS_TOTAL_VALUES + 1], {}], [['0', '0'], {}], [[Number.NaN, 1], {}],
+    ] as const) {
+      const r = await refusal(at([...ids], ref))
+      expect(r, JSON.stringify(ids)).toMatchObject({ kind: 'units' })
+      expect(r!.path, JSON.stringify(ids)).toMatch(/^(ids|ref)/)
+    }
+    // a chunk at the last id a paper the guard accepts can hold is read (one unit, ids [N, N])
+    expect((await at([UNITS_TOTAL_VALUES, UNITS_TOTAL_VALUES], { from: UNITS_TOTAL_VALUES, to: UNITS_TOTAL_VALUES })).from).toBe(UNITS_TOTAL_VALUES)
+    // `dropped` is bounded before anything is read: a huge list, ids past the bound, a `from` past it
+    const f = forged('units', { ...a, ids: [5, 5] }, { from: 5, to: 5 })
+    const huge = Array.from({ length: DROPPED_MAX + 1 }, (_, i) => i)
+    expect(await refusal(readUnitsChunk(f.bytes, { ref: { ...f.ref, from: 2 ** 40 }, before: null, dropped: [] }))).toMatchObject({ kind: 'units', path: 'ref' })
+    expect(await refusal(readUnitsChunk(f.bytes, { ref: f.ref, before: null, dropped: huge }))).toMatchObject({ kind: 'units', path: 'dropped' })
+    const bigFrom = forged('units', { ...a, ids: [DROPPED_MAX + 10, DROPPED_MAX + 10] }, { from: DROPPED_MAX + 10, to: DROPPED_MAX + 10 })
+    expect((await readUnitsChunk(bigFrom.bytes, { ref: bigFrom.ref, before: null, dropped: huge.slice(0, DROPPED_MAX) })).from).toBe(DROPPED_MAX + 10)
+    expect(performance.now() - started).toBeLessThan(2000)
+  })
+
+  it('reads a one-unit chunk far from the start bodies-free with bounded time and memory, nested pieces by lookup', async () => {
+    const nest = (id: number) => [4, 'x', id, 'y']
+    for (const from of [1_000_000, UNIT_ID_MAX - 1]) {
+      // unit `from` names 5 (stands), 7 (dropped) and its own earlier... only the first two are earlier ids; unit from+1 names `from`
+      const rows = [['para', [nest(5)]], ['para', [nest(from)]]] as const
+      const last = from + rows.length - 1 > UNIT_ID_MAX ? from : from + rows.length - 1
+      const use = rows.slice(0, last - from + 1)
+      const f = forged('units', { format: UNITS_FORMAT, kind: 'units', paper: PAPER, pipeline: PIPELINE_VERSION, ids: [from, last], units: use.map(([kind, pieces]) => [kind, 0, null, null, null, [[0, 'some text'], ...pieces]]) }, { from, to: last })
+      const before = process.memoryUsage()
+      const started = performance.now()
+      const lean = await readUnitsChunk(f.bytes, { ref: f.ref, before: null, dropped: [7], bodies: false })
+      const took = performance.now() - started
+      const after = process.memoryUsage()
+      expect(took, `from ${from}`).toBeLessThan(1000)
+      expect(after.heapUsed - before.heapUsed, `from ${from}: heap`).toBeLessThan(50 * 2 ** 20)
+      expect(after.arrayBuffers - before.arrayBuffers, `from ${from}: buffers`).toBeLessThan(50 * 2 ** 20)
+      expect(lean.units).toEqual(use.map(() => true))
+      expect(lean.part.external).toEqual([5])
+      expect(lean.part.records.plainLength[0]).toBe('some text'.length)
+      expect([...lean.part.records.kind]).toEqual(use.map(() => 0))
+      // (the dropped earlier unit named: this unit does not stand)
+      const g = forged('units', { format: UNITS_FORMAT, kind: 'units', paper: PAPER, pipeline: PIPELINE_VERSION, ids: [from, from], units: [['para', 0, null, null, null, [[0, 'a'], nest(7)]]] }, { from, to: from })
+      const gone = await readUnitsChunk(g.bytes, { ref: g.ref, before: null, dropped: [7], bodies: false })
+      expect(gone.units).toEqual([null])
+      expect(gone.dropped).toEqual([from])
+    }
+  })
+
+  it('bounds the dropped ids of a paper by DROPPED_MAX, in a chain as standalone (M19)', async () => {
+    const chunkOf = (from: number, count: number, tail?: unknown[]) => forged('units', {
+      format: UNITS_FORMAT, kind: 'units', paper: PAPER, pipeline: PIPELINE_VERSION, ids: [from, from + count - 1 + (tail ? tail.length : 0)],
+      units: [...Array.from({ length: count }, () => 0), ...(tail ?? [])],
+    }, { from, to: from + count - 1 + (tail ? tail.length : 0) })
+    const good = ['para', 0, null, null, null, [[0, 'a']]]
+    // exactly DROPPED_MAX dropped: accepted, forwarded, and the next chunk read alone from them
+    const a = chunkOf(0, DROPPED_MAX)
+    const readA = await readUnitsChunk(a.bytes, { ref: a.ref, before: null })
+    expect(readA.dropped.length).toBe(DROPPED_MAX)
+    const b = forged('units', { format: UNITS_FORMAT, kind: 'units', paper: PAPER, pipeline: PIPELINE_VERSION, ids: [DROPPED_MAX, DROPPED_MAX], units: [good] }, { from: DROPPED_MAX, to: DROPPED_MAX })
+    const readB = await readUnitsChunk(b.bytes, { ref: b.ref, before: readA })
+    const alone = await readUnitsChunk(b.bytes, { ref: b.ref, before: null, dropped: droppedOf([readA]) })
+    expect(alone.units).toEqual(readB.units)
+    expect(unitsOfChunks([readA, readB]).dropped.length).toBe(DROPPED_MAX)
+    // one more, in the chunk itself, in the chain's next chunk, and on the standalone start
+    const over = chunkOf(0, DROPPED_MAX + 1)
+    expect(await refusal(readUnitsChunk(over.bytes, { ref: over.ref, before: null }))).toMatchObject({ kind: 'units', path: 'dropped' })
+    const c = forged('units', { format: UNITS_FORMAT, kind: 'units', paper: PAPER, pipeline: PIPELINE_VERSION, ids: [DROPPED_MAX, DROPPED_MAX], units: [0] }, { from: DROPPED_MAX, to: DROPPED_MAX })
+    expect(await refusal(readUnitsChunk(c.bytes, { ref: c.ref, before: readA }))).toMatchObject({ kind: 'units', path: 'dropped' })
+    expect(await refusal(readUnitsChunk(c.bytes, { ref: c.ref, before: null, dropped: droppedOf([readA]) }))).toMatchObject({ kind: 'units', path: 'dropped' })
+    // (a chain of chunks each within the bound but past it together is refused by unitsOfChunks as by the reader)
+    const half = chunkOf(0, 100_000), more = chunkOf(100_000, 48_001)
+    const readHalf = await readUnitsChunk(half.bytes, { ref: half.ref, before: null })
+    expect(await refusal(readUnitsChunk(more.bytes, { ref: more.ref, before: readHalf }))).toMatchObject({ kind: 'units', path: 'dropped' })
+  })
+
+  it('reads bodies-free (M21): flags for units, and the same kinds, records, dropped and external refs', async () => {
+    const same = async (written: { bytes: Uint8Array; ref: import('@/pdf-reader/engine/layer-proto/format.mjs').Ref }[]) => {
+      const full: ReadUnitsChunk[] = [], lean: ReadUnitsChunkLight[] = []
+      for (const c of written) {
+        full.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: full.at(-1) ?? null }))
+        lean.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: lean.at(-1) ?? null, bodies: false }))
+      }
+      const a = unitsOfChunks(full), b = unitsOfChunks(lean, { bodies: false }), c = unitsOfChunks(full, { bodies: false })
+      for (const x of [b, c]) {
+        expect(x.units as unknown[]).toEqual(a.units.map(u => (u === null ? null : true)))
+        expect(x.kinds).toEqual(a.kinds)
+        expect(x.dropped).toEqual(a.dropped)
+        expect(x.index).toEqual(a.index)
+        expect(x.records).toEqual(a.records)
+        for (let k = 0; k < full.length; k++) expect(x.externalRefs(k), `chunk ${k}`).toEqual(a.externalRefs(k))
+      }
+      expect(lean.map(l => l.stands)).toEqual(full.map(f => f.stands))
+      expect(lean.map(l => l.dropped)).toEqual(full.map(f => f.dropped))
+      // the bodies are let go; indexOf and bodies: true refuse chunks read without them
+      for (const l of lean) expect((l.units as unknown[]).every(u => u === true || u === null)).toBe(true)
+      expect(() => unitsOfChunks(lean as never)).toThrow(TypeError)
+      return { full, lean }
+    }
+    await same(M.chunks as never)
+    // a unit dropped for a bad shape and a nested unit naming it: null in both
+    const nest = (id: number) => [4, 'x', id, 'y']
+    const mk = (kind: string, pieces: unknown[], from: number) => ({ kind, from, pieces })
+    const o = (rows: { kind: string; pieces: unknown[] }[], from: number) => forged('units', { format: UNITS_FORMAT, kind: 'units', paper: PAPER, pipeline: PIPELINE_VERSION, ids: [from, from + rows.length - 1], units: rows.map(r => [r.kind, 0, null, null, null, [[0, 'a'], ...r.pieces]]) }, { from, to: from + rows.length - 1 })
+    void mk
+    const { full, lean } = await same([o([{ kind: 'Para', pieces: [] }, { kind: 'para', pieces: [] }], 0), o([{ kind: 'para', pieces: [nest(0)] }, { kind: 'para', pieces: [nest(1)] }], 2)])
+    expect(full[1]!.units[0]).toBeNull()
+    expect(lean[1]!.units as unknown[]).toEqual([null, true])
+    expect(lean[1]!.dropped).toEqual([2])
+    // and a chunk read bodies-free alone, with `dropped`
+    const second = o([{ kind: 'para', pieces: [nest(0)] }, { kind: 'para', pieces: [nest(1)] }], 2)
+    const alone = await readUnitsChunk(second.bytes, { ref: second.ref, before: null, dropped: [0], bodies: false })
+    expect(alone.units as unknown[]).toEqual([null, true])
+    expect(alone.part!.external).toEqual([1])
+    await expect(readUnitsChunk(second.bytes, { ref: second.ref, before: null, bodies: 1 as never })).rejects.toBeInstanceOf(TypeError)
+  })
+
   it('refuses `from` that is not the last `to` + 1 (or 0 for the first), another paper, another pipeline, units not as many as the ids', async () => {
     const [a, b] = chunksOf(['para', 'para'], [[], []])
     const f0 = forged('units', a, { from: 0, to: 0 }), f1 = forged('units', b, { from: 1, to: 1 })
     const c0 = await readUnitsChunk(f0.bytes, { ref: f0.ref, before: null })
-    expect(await refusal(readUnitsChunk(f1.bytes, { ref: f1.ref, before: null }))).toMatchObject({ kind: 'units', path: 'ids[0]' })
+    // (a chunk after the first, read with no `before`, is read alone, M19: its ref says where it begins; a ref that says nothing is the first's)
+    expect((await readUnitsChunk(f1.bytes, { ref: f1.ref, before: null })).from).toBe(1)
+    const { from: _f, to: _t, ...bare } = f1.ref
+    expect(await refusal(readUnitsChunk(f1.bytes, { ref: bare, before: null }))).toMatchObject({ kind: 'units', path: 'ids[0]' })
     expect(await refusal(readUnitsChunk(f0.bytes, { ref: f0.ref, before: c0 }))).toMatchObject({ path: 'ids[0]' })
     const otherPaper = forged('units', { ...b, paper: { id: '2608.04323', version: 1 } })
     expect(await refusal(readUnitsChunk(otherPaper.bytes, { ref: otherPaper.ref, before: c0 }))).toMatchObject({ path: 'paper' })
@@ -646,7 +815,7 @@ describe('writeUnitChunks cuts by unit id within both caps', () => {
       expect(c.values).toBeLessThanOrEqual(UNITS_VALUES)
     }
     expect(next).toBe(units.length)
-    const read: Awaited<ReturnType<typeof readUnitsChunk>>[] = []
+    const read: ReadUnitsChunk[] = []
     for (const c of chunks) read.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: read.at(-1) ?? null }))
     expect(unitsOfChunks(read).units).toEqual(units)
     expect(read.map(r => r.values)).toEqual(chunks.map(c => c.values))
@@ -728,7 +897,7 @@ describe('unitsOfChunks gives windowed access (amendment M3\')', () => {
     [['para', []], ['para', [nest(1), nest(3), nest(4), nest(3)]]],
   ] as const
   async function chain() {
-    const read: Awaited<ReturnType<typeof readUnitsChunk>>[] = []
+    const read: ReadUnitsChunk[] = []
     let id = 0
     for (const units of spec) {
       const o = { format: UNITS_FORMAT, kind: 'units', paper: PAPER, pipeline: PIPELINE_VERSION, ids: [id, id + 1], units: units.map(([kind, pieces]) => [kind, 0, null, null, null, [[0, 'a'], ...pieces]]) }
@@ -868,7 +1037,7 @@ describe('the index', () => {
     expect(chunks.length).toBeGreaterThanOrEqual(2)
     const head = await writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: chunks, lineskip: null, cites: null })
     const rh = await readHead(head.bytes, { ref: head.ref })
-    const read: Awaited<ReturnType<typeof readUnitsChunk>>[] = []
+    const read: ReadUnitsChunk[] = []
     for (const c of chunks) read.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: read.at(-1) ?? null }))
     return { chunks, head, rh, read }
   }
@@ -1482,7 +1651,7 @@ describe('records (amendment M15): derived once, the engine\'s own predicates', 
     it(`equal the engine's own derivation on ${name}: toTranslate for every language, groupOf, the batches of batchesOf`, async () => {
       const units = getUnits()
       const chunks = await writeUnitChunks({ paper: PAPER, units: units as never })
-      const read: Awaited<ReturnType<typeof readUnitsChunk>>[] = []
+      const read: ReadUnitsChunk[] = []
       for (const c of chunks) read.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: read.at(-1) ?? null }))
       const { records: r } = unitsOfChunks(read)
       const bundle = { units }
@@ -1826,24 +1995,19 @@ describe('seeded hostile mutations of a valid object, every kind', () => {
 })
 
 // ---------------------------------------------------------------- the real papers (where this machine has them)
-// AXT_LAB=<a lab/pdf directory with data/ and out/> (see lab/pdf/README.md): each paper's units (openPaper over its source), its
+// AXT_LAB=<a lab/pdf directory> AXT_PACK=<a gate pack of LAYOUT 6> (helpers/lab-data.ts): each paper's units (openPaper over its source), its
 // layout file (the layer gate's made fixtures) and its left (the p10 cut's geometry), cut at the doubling schedule, written,
 // read against the chain and merged back; the units through the chunk writer and the reader
-const LAB = process.env.AXT_LAB
-describe.skipIf(!LAB)('the real papers: units, layout files and left cut at the doubling schedule', () => {
-  const PAPERS: [string, string][] = [['1512.03385v1', 'zh'], ['1706.03762v7', 'zh'], ['1810.04805v2', 'zh'], ['2307.16209v1', 'de'], ['2608.04322v1', 'zh']]
-  const FIXTURES = 'out/layer-gate/fixtures/f343494cf544323e', GEOMETRY = 'out/layer-gate/cut-p10/geometry'
-  for (const [name, target] of PAPERS) {
+describe.skipIf(!LAB_ON)('the real papers: units, layout files and left cut at the doubling schedule', () => {
+  for (const [name, target] of LAB_PAPERS) {
     it(name, async () => {
       const { existsSync, readFileSync } = await import('node:fs')
-      const { join } = await import('node:path')
       const { openPaper } = await import('@/pdf-reader/engine/pipeline/live.mjs')
       const { unpackSource } = await import('@/pdf-reader/engine/source/tar.mjs')
       const { bundleUnitsOf } = await import('@/pdf-reader/engine/layer-proto/units.mjs')
       const { parseLayout, LAYOUT_CAP } = await import('@/pdf-reader/engine/layout/file.mjs')
       const { cutAt } = await import('./helpers/format-cut')
-      const root = LAB as string
-      const layoutFile = join(root, FIXTURES, `${name}-zh`, 'layout.json'), geometryFile = join(root, GEOMETRY, `${name}-${target}-geometry.json`), sourceFile = join(root, 'data/layout', name, 'source.gz')
+      const { layoutFile, geometryFile, sourceFile } = labFiles(name, target)
       for (const f of [layoutFile, geometryFile, sourceFile]) if (!existsSync(f)) throw new Error(`missing ${f}`)
       const id = name.replace(/v\d+$/, ''), version = Number(name.slice(id.length + 1))
       const paper = { id, version }
@@ -1860,7 +2024,7 @@ describe.skipIf(!LAB)('the real papers: units, layout files and left cut at the 
       const chunks = await writeUnitChunks({ paper, units })
       const head = await writeHead({ paper: { ...paper, pages: N }, base: { bytes: 1_000_000, sha256: 'a'.repeat(64), xref: 999_000 }, image: IMAGE, units: chunks, lineskip: layout.lineskip, cites: null })
       const rh = await readHead(head.bytes, { ref: head.ref })
-      const read: Awaited<ReturnType<typeof readUnitsChunk>>[] = []
+      const read: ReadUnitsChunk[] = []
       for (const c of chunks) read.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: read.at(-1) ?? null }))
       const index = indexOf(rh, read)
       expect(index.units).toEqual(units)

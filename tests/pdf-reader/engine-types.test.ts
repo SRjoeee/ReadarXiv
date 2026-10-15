@@ -59,3 +59,40 @@ describe('the five entries', () => {
     expect({ status, errors }).toEqual({ status: 0, errors: [] })
   })
 })
+
+describe('the units readers, bodies-free (amendment M21)', () => {
+  it('type a read without bodies as flags, and the default as the full chunk, with no cast', () => {
+    const entry = `${ROOT}/src/pdf-reader/engine/layer.mjs`
+    const check = `
+import { readUnitsChunk, unitsOfChunks, droppedOf } from '${entry}'
+import type { ReadUnitsChunk, ReadUnitsChunkLight, Ref } from '${entry}'
+type Eq<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
+type Expect<T extends true> = T
+declare const bytes: Uint8Array
+declare const ref: Ref
+export async function use() {
+  const full = await readUnitsChunk(bytes, { ref, before: null })
+  const light = await readUnitsChunk(bytes, { ref, before: null, bodies: false })
+  const alone = await readUnitsChunk(bytes, { ref, before: null, dropped: [0], bodies: false })
+  const dflt = await readUnitsChunk(bytes, { ref, before: null, bodies: true })
+  type A = Expect<Eq<typeof full, ReadUnitsChunk>>
+  type B = Expect<Eq<typeof light, ReadUnitsChunkLight>>
+  type C = Expect<Eq<typeof alone.units, (true | null)[]>>
+  type D = Expect<Eq<typeof dflt, ReadUnitsChunk>>
+  const chain = unitsOfChunks([full])
+  const thin = unitsOfChunks([light], { bodies: false })
+  const mixed = unitsOfChunks([full, light], { bodies: false })
+  type E = Expect<Eq<typeof thin.units, (true | null)[]>>
+  type F = Expect<Eq<typeof mixed.units, (true | null)[]>>
+  type G = Expect<Eq<ReturnType<typeof unitsOfChunks>['units'][number], unknown> extends false ? true : true>
+  const first: boolean = thin.units[0] === true
+  const part: string[] = [...light.part.kinds.filter((k): k is string => k !== null)]
+  const next = await readUnitsChunk(bytes, { ref, before: light, bodies: false })
+  return [chain, first, part, droppedOf([full, light]), next, {} as [A, B, C, D, E, F, G]]
+}
+// @ts-expect-error a light chunk is not a full one: the bodies-free chain needs the option
+unitsOfChunks([light])
+`
+    expect(tsc({ 'check.ts': check })).toEqual({ status: 0, errors: [] })
+  })
+})
