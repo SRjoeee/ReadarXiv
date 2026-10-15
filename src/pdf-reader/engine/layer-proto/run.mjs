@@ -1555,13 +1555,16 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  read at each wait, false ends it there */
   // (parts: at the end of K so far, a target past it waits for a part, unless the parts have ended)
   const settle = async (target, still = ALWAYS) => {
+    let ended = false
     while (!disposed && frontier <= target() && (frontier < K.length || !partsEnded)) {
       // (planned before waiting: doneAt never reads a placement it has not planned)
       const what = frontier >= K.length ? 'part' : settleable(K[frontier]) ? null : 'rows'
-      if (what) { if (plannedTo < frontier) plan(); if (!still()) break; await waitFor(what); continue }
+      if (what) { if (plannedTo < frontier) plan(); if (!still()) { ended = true; break } await waitFor(what); continue }
       consume(K[frontier])
     }
     if (plannedTo < frontier) plan()
+    // (whether it reached its target: false where `still` ended it)
+    return !ended && !disposed
   }
   /** every unit placed with what is in, and why each one left is left (once the parts have ended): the units no page shows,
    *  and those v0 neither holds nor the file alone locates */
@@ -1591,12 +1594,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // (parts: a page is drawn once a part covers it, the one wait `still` ends before anything is drawn; a page no part will
   // cover, or whose drawing or names throw, is stepped over, failed: nothing of it drawn, and every unit on it, on any of its
   // pages, left the original's, why `page`)
+  /** the page drawn and named whose units are not laid yet (its wait for rows ended by `still`): taken up where it stopped */
+  let drawn = 0
   const layNext = async (still = ALWAYS) => {
     const pg = drawnTo + 1
     while (!disposed && through < pg && !partsEnded) { if (!still()) return; await waitFor('part') }
     if (disposed) return
     const t0 = performance.now()
-    if (pg > through) failedPages.add(pg)
+    if (drawn >= pg) { /* drawn already, its wait for rows ended before */ } else if (pg > through) failedPages.add(pg)
     else {
       try {
         await drawPage(pg)
@@ -1609,9 +1614,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
     // (page 1 not drawn: what its drawing awaits before any unit is laid, the hyphenation patterns and the prototype's faces, is
     // awaited here, so that no line breaks by a fetch's timing)
-    if (pg === 1 && failedPages.has(1)) { await hyphP.catch(() => {}); if (!roles) await Promise.all([warmP, lmP]).catch(() => {}) }
+    if (pg === 1 && failedPages.has(1) && drawn < 1) { await hyphP.catch(() => {}); if (!roles) await Promise.all([warmP, lmP]).catch(() => {}) }
+    if (disposed) return
+    drawn = pg
     const t1 = performance.now()
-    await settle(() => need.lay[pg])
+    // (the units it lays wait for their rows: `still` ends that wait too, the page drawn and its units left to the next ask)
+    if (!(await settle(() => need.lay[pg], still))) return
     const waited = performance.now() - t1
     // (let go during the yield before a unit, as a host's dispose usually is: that unit is not laid either)
     for (const id of groups.get(pg) ?? []) {

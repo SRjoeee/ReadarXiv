@@ -73,7 +73,9 @@ export interface LaidPage { svg: SVGSVGElement; w: number; h: number; words: Pag
 /** a page of the left, parsed: the part's tokens, spans and pairs (an empty part, `table.n` 0, has no shapes) */
 export type LeftPage = ReadLeftPart
 
-/** the layer of one paper and target, open */
+/** the layer of one paper and target, open. A run that cannot go on (a memory error, or any other its drawing meets) leaves the
+ *  layer terminal: every page not ready is told `failed`, once; every pending and later pageOf (of a page not ready) and
+ *  leftPageOf rejects with that error; addPart and endParts are no-ops; a ready page still answers, until dispose */
 export interface Layer {
   /** each row as v0's unit: the pages that no longer wait for rows (a row that is no unit is skipped and counted) */
   take(rows: readonly Row[]): { complete: number[] }

@@ -159,7 +159,8 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   const groups = new Map()
   sourceUnitsOf(source).forEach((u, id) => { const g = u ? groupOf(u) : null; if (g) groups.set(id, g) })
   const facade = four ? layoutFacade(index.head) : null
-  let run = null, disposed = false, dropped = 0, told = null
+  // (dead: the error a run could not go on from, which leaves the layer terminal)
+  let run = null, disposed = false, dropped = 0, told = null, dead = null
   // the door's state: each page's asks, the listeners, the left's shapes, streams and refs, the left pages fetched or awaited,
   // the chain told
   const asks = new Map(), listeners = new Set(), shapes = new Map()
@@ -246,8 +247,22 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     // (told once the state has changed: a call a listener makes runs after, and a listener that throws stops no other)
     for (const [p, state] of changes) for (const l of [...listeners]) { try { l(p, state) } catch { /* a listener's own error */ } }
   }
+  /** a run that cannot go on (a memory error, or any other the drive meets): the layer is done. Every page not ready is told
+   *  failed, once; every ask and wait for a left page rejects with the error, as every later one does at once */
+  const die = e => {
+    if (dead || disposed) return
+    dead = e
+    for (const [, list] of asks) for (const a of list) { off(a); a.reject(e) }
+    asks.clear()
+    for (const [, list] of leftWaiters) for (const w of list) w.no(e)
+    leftWaiters.clear()
+    goneNow(e)
+    const changes = []
+    for (let p = 1; p <= N; p++) if (told[p] < READY) { told[p] = FAILED; changes.push(p) }
+    for (const p of changes) for (const l of [...listeners]) { try { l(p, 'failed') } catch { /* a listener's own error */ } }
+  }
   const evaluate = () => {
-    if (disposed || !told) return
+    if (disposed || !told || dead) return
     if (evaluating) { again = true; return }
     evaluating = true
     try { do { again = false; step() } while (again && !disposed) } finally { evaluating = false }
@@ -268,11 +283,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
           // (nothing laid and the same page to lay towards: the next event drives it again)
           if (run.drawnTo === was && aim() === g) return
         }
-      } catch (e) {
-        // (a run that cannot go on, a memory error: every ask fails with it)
-        for (const [, list] of asks) for (const a of list) { off(a); a.reject(e) }
-        asks.clear()
-      } finally { driving = false }
+      } catch (e) { die(e) } finally { driving = false }
     })()
   }
 
@@ -328,7 +339,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     },
     end() { if (!disposed) { run.end(); evaluate() } },
     addPart(part, o = {}) {
-      if (disposed) return
+      if (disposed || dead) return
       if (part !== null && typeof part === 'object' && toldParts.has(part.sha256)) return
       if (run.partsEnded) throw new BundleRefusal('the parts have ended', { kind: 'part', path: '' })
       checkPart(part, index, chain)
@@ -342,7 +353,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       evaluate()
     },
     endParts() {
-      if (disposed || run.partsEnded) return
+      if (disposed || dead || run.partsEnded) return
       run.endParts()
       for (const [page, list] of [...leftWaiters]) if (page > chain.through) { leftWaiters.delete(page); for (const w of list) w.no(new Error(`page ${page} is covered by no part`)) }
       evaluate()
@@ -362,8 +373,10 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       pageIn(page)
       if (typeof lang !== 'string') throw new TypeError(`lang: a language tag, not ${kindOf(lang)}`)
       if (signal?.aborted) return Promise.reject(abortError())
+      if (dead && told[page] !== READY) return Promise.reject(dead)
       if (told[page] === FAILED) return Promise.reject(new Error(`page ${page} failed`))
-      if (told[page] === READY) return Promise.resolve().then(() => { release(page); return fresh(page, lang) })
+      // (answered in a microtask: a dispose in between rejects it, as it rejects every pending ask)
+      if (told[page] === READY) return Promise.resolve().then(() => { live(); release(page); return fresh(page, lang) })
       return new Promise((resolve, reject) => {
         const a = { resolve, reject, lang, signal, onAbort: null }
         if (signal) {
@@ -385,6 +398,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       live()
       pageIn(page)
       if (signal?.aborted) return Promise.reject(abortError())
+      if (dead) return Promise.reject(dead)
       if (!four) return Promise.reject(new Error('leftPageOf: a bundle 3 layer has no left parts'))
       if (page <= chain.through) return withSignal(fetchLeft(page), signal)
       if (run.partsEnded) return Promise.reject(new Error(`page ${page} is covered by no part`))
