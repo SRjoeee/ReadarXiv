@@ -5,7 +5,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
 
 vi.mock('@/pdf-reader/pdfjs', () => ({ ASSETS: {}, EventBus: class {}, LinkTarget: {}, PDFLinkService: class {}, PDFPageView: class {}, PDFViewer: class {}, pdfjsLib: {} }))
-const { displayFrom, outward, prefsOf, readerHost } = await import('@/pdf-reader/session/host.ts')
+// the view itself is its own file's to test (reader-view.test.ts): here, what the host asks of it
+const view = vi.hoisted(() => ({ setDisplay: vi.fn(), setSync: vi.fn(), showOriginal: vi.fn(async () => 'opened'), dispose: vi.fn(), probe: vi.fn(() => ({})), originalData: vi.fn(() => null) }))
+vi.mock('@/pdf-reader/engine/view.mjs', () => ({ createReaderView: () => view }))
+const { displayFrom, openView, outward, prefsOf, readerHost } = await import('@/pdf-reader/session/host.ts')
 
 describe('the host of the reading view', () => {
   it('reads the look of the settings: the panes swapped, the pages dimmed, the theme (the system\'s where asked), the highlight', () => {
@@ -74,6 +77,32 @@ describe('the settings as they change elsewhere', () => {
     changed({ ...DEFAULT_CONFIG, theme: 'light' })
     expect(emit).toHaveBeenCalledWith({ type: 'notice', why: null })
     host.stop()
+  })
+})
+
+describe('the view opened on a first read given up on', () => {
+  const late = { ...DEFAULT_CONFIG, mode: 'only' as const, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: false, sync: false } }
+  const open = (read: () => Promise<{ config: typeof DEFAULT_CONFIG; fallbackReason: null }>) => openView({ left: document.createElement('div'), right: document.createElement('div'), params: new URLSearchParams('paper=2600.00001'), emit: vi.fn(), reading: null }, { watch: () => () => {}, read })
+  it('takes the display and the sync of the late answer, where the reader has not chosen them meanwhile', async () => {
+    view.setDisplay.mockClear(); view.setSync.mockClear()
+    open(async () => ({ config: late, fallbackReason: null }))
+    expect(view.setDisplay.mock.calls).toEqual([['bilingual']])
+    expect(view.setSync.mock.calls).toEqual([[true]])
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+    expect(view.setDisplay.mock.calls.at(-1)).toEqual(['translation'])
+    expect(view.setSync.mock.calls.at(-1)).toEqual([false])
+  })
+
+  it('keeps what the reader chose before the late answer came', async () => {
+    view.setDisplay.mockClear(); view.setSync.mockClear()
+    let answer: (r: { config: typeof DEFAULT_CONFIG; fallbackReason: null }) => void = () => {}
+    const session = open(() => new Promise(r => { answer = r }))
+    session.setDisplay('original')
+    session.setSyncMode('same')
+    answer({ config: late, fallbackReason: null })
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+    expect(view.setDisplay.mock.calls.at(-1)).toEqual(['original'])
+    expect(view.setSync.mock.calls.at(-1)).toEqual([true])
   })
 })
 

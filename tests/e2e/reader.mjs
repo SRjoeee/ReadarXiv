@@ -607,6 +607,16 @@ try {
     await page.waitForTimeout(800)
     const w = await boxes()
     check('wide again: both panes, the places at the left\'s boxes', w.width[0] > 0 && w.width[1] > 0 && sameBoxes(w), JSON.stringify({ widths: w.width }))
+    // a link out of the paper on the right: drawn by the place's page view, opened by the host (a new tab), the reader kept
+    await page.evaluate(() => window.__reader.controller.goToPage('right', 4))
+    const out = page.locator('#right .axt-place .annotationLayer a[href^="http"]')
+    const drawn = await out.first().waitFor({ timeout: 10_000 }).then(() => true, () => false)
+    const tabbed = drawn ? context.waitForEvent('page', { timeout: 10_000 }).catch(() => null) : null
+    if (drawn) await out.first().click()
+    const tab = await tabbed
+    await tab?.waitForLoadState('load').catch(() => undefined)
+    check('a link out of the paper on the right opens in a new tab through the host, the reader staying where it is', drawn && tab?.url() === LINK && page.url().includes('layer=1'), `drawn ${drawn}, opened ${tab?.url() ?? 'nothing'}`)
+    await tab?.close()
     await page.screenshot({ path: `${SHOTS}/reader-view.png` })
     await page.close()
   }

@@ -160,6 +160,11 @@ export class FakeLinkService {
   setDocument(doc: unknown) { this.pdfDocument = doc }
   setViewer(v: FakeLinkService["pdfViewer"]) { this.pdfViewer = v }
   goToPage(n: number) { this.pdfViewer?.scrollPageIntoView({ pageNumber: n }) }
+  /** PDF.js's binding of a link out of the paper (a URL annotation): its address and its target, nothing else */
+  addLinkAttributes(link: HTMLAnchorElement, url: string, newWindow = false) {
+    link.href = url
+    link.target = newWindow || this.externalLinkTarget === LinkTarget.BLANK ? '_blank' : ''
+  }
 }
 export const LinkTarget = { NONE: 0, SELF: 1, BLANK: 2, PARENT: 3, TOP: 4 }
 
@@ -330,8 +335,9 @@ export class FakePDFPageView {
     this.canvas.height = 130
     const text = document.createElement('div'); text.className = 'textLayer'; text.textContent = `page ${this.id}`
     const links = document.createElement('div'); links.className = 'annotationLayer'
-    const a = document.createElement('a'); a.href = 'https://example.invalid/out'
-    a.target = this.options.layerProperties?.linkService?.externalLinkTarget === LinkTarget.BLANK ? '_blank' : ''
+    // a URL annotation, bound as PDF.js's AnnotationLayer binds one: by the link service
+    const a = document.createElement('a')
+    this.options.layerProperties?.linkService?.addLinkAttributes(a, 'https://example.invalid/out')
     links.append(a)
     this.div.append(this.canvas, text, links)
     this.renderingState = 3
@@ -434,9 +440,11 @@ export function installLayout() {
     return y
   }
   // a pane's box is its scroller's: at (0, 40) on the left, (608, 40) on the right, its pages' offsetParent
-  define('offsetTop', { get(this: HTMLElement) { read('offsetTop'); return isPage(this) ? top(this) : isPane(this) ? 40 : 0 } })
+  // a page of a pane out of the display has no box (display: none)
+  const boxed = (el: HTMLElement) => isPage(el) && shownPane((el.parentElement as HTMLElement).parentElement as Element)
+  define('offsetTop', { get(this: HTMLElement) { read('offsetTop'); return boxed(this) ? top(this) : isPane(this) ? 40 : 0 } })
   define('offsetLeft', { get(this: HTMLElement) { return isPane(this) ? (this.id === 'left' ? 0 : 608) : 0 } })
-  define('offsetHeight', { get(this: HTMLElement) { read('offsetHeight'); return isPage(this) ? px(this.style.height) : isStack(this) ? stackHeight(this) : 0 } })
+  define('offsetHeight', { get(this: HTMLElement) { read('offsetHeight'); return boxed(this) ? px(this.style.height) : isStack(this) ? stackHeight(this) : 0 } })
   define('offsetWidth', { get(this: HTMLElement) { return isPage(this) ? px(this.style.width) : 0 } })
   define('offsetParent', { get(this: HTMLElement) { return isPage(this) ? (this.parentElement as HTMLElement).parentElement : isStack(this) ? this.parentElement : null } })
   define('clientTop', { get() { return 0 } })

@@ -5,7 +5,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFollower } from '@/pdf-reader/engine/view/sync.mjs'
 import { createReaderView, type DocumentTask, internalsOf, type ReaderHost, type ReaderView, type Shapes, type ViewEvent, type ViewPrefs } from '@/pdf-reader/engine/view/reader-view.mjs'
-import { clientOf, drawPanes, FakeEventBus, FakeIO, FakePDFPageView, FakePDFViewer, FakeRO, fakeDoc, fakeKit, fakeTask, flush, installLayout, type ManualClock, manualClock, reads, resetFakes } from './helpers/reader-fakes'
+import { clientOf, drawPanes, FakeEventBus, FakeIO, FakeLinkService, FakePDFPageView, FakePDFViewer, FakeRO, fakeDoc, fakeKit, fakeTask, flush, installLayout, type ManualClock, manualClock, reads, resetFakes } from './helpers/reader-fakes'
 
 vi.mock('@/pdf-reader/engine/view/highlight.mjs', async importOriginal => {
   const real = await importOriginal<typeof import('@/pdf-reader/engine/view/highlight.mjs')>()
@@ -235,6 +235,17 @@ describe('the places: the original\'s pages on the right', () => {
     s.view.zoomBy(1.25)
     expect(places(s).map(p => p.style.height)).toEqual([...s.panes.left.querySelectorAll<HTMLElement>('.page')].map(p => p.style.height))
     expect(places(s).every(p => p.dataset.pageNumber)).toBe(true)
+  })
+
+  it('say nothing of the right\'s page while its pane is out of the display, and its page in view once it is shown', async () => {
+    const s = setup()
+    s.view.setDisplay('original')
+    await opened(s, 4)
+    const right = () => s.events.filter(e => e.type === 'page' && e.side === 'right')
+    expect(right()).toEqual([])
+    s.view.setDisplay('bilingual')
+    await s.clock.tick(); await s.clock.tick(); await s.clock.tick()
+    expect(right().at(-1)).toEqual({ type: 'page', side: 'right', page: 1, pages: 4, laid: false })
   })
 
   it('say the right\'s page in view, one of N, laid or not', async () => {
@@ -659,6 +670,47 @@ describe('V11: the places before a layer', () => {
     links.pdfViewer.scrollPageIntoView({ pageNumber: 5, destArray: [null, { name: 'XYZ' }, 0, 792] })
     await flush()
     expect(s.panes.right.scrollTop).toBe((places(s)[4] as HTMLElement).offsetTop)
+  })
+
+  it('a link out of the paper, on either pane, goes out through the host alone', async () => {
+    const s = setup()
+    await opened(s, 6)
+    await nearOn(s, [1])
+    await flush(20)
+    const a = (places(s)[0] as HTMLElement).querySelector('.annotationLayer a') as HTMLAnchorElement
+    expect(a.href).toBe('https://example.invalid/out')
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true })
+    a.dispatchEvent(click)
+    expect(click.defaultPrevented).toBe(true)
+    expect(s.host.links.openExternal).toHaveBeenCalledWith('https://example.invalid/out')
+    // the left's own links, bound by PDF.js's viewer through its link service, the same way
+    const left = document.createElement('a')
+    ;(FakeLinkService.made[0] as FakeLinkService).addLinkAttributes(left, 'https://example.invalid/left')
+    s.panes.left.append(left)
+    left.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    expect(s.host.links.openExternal).toHaveBeenLastCalledWith('https://example.invalid/left')
+  })
+
+  it('the right\'s link service takes every named action PDF.js gives it: next and previous page, first and last, the optional content', async () => {
+    const s = setup()
+    await opened(s, 6)
+    await nearOn(s, [1])
+    await flush(20)
+    const viewer = (FakePDFPageView.made[0] as FakePDFPageView).options.layerProperties.linkService.pdfViewer
+    const top = (n: number) => (places(s)[n - 1] as HTMLElement).offsetTop
+    expect(viewer.nextPage()).toBe(true)
+    await flush()
+    expect(s.panes.right.scrollTop).toBe(top(2))
+    expect(viewer.previousPage()).toBe(true)
+    await flush()
+    expect(s.panes.right.scrollTop).toBe(top(1))
+    expect(viewer.previousPage()).toBe(false)
+    viewer.currentPageNumber = 6
+    await flush()
+    expect(s.panes.right.scrollTop).toBe(Math.min(top(6), s.panes.right.scrollHeight - 800))
+    viewer.pagesRotation = 90
+    expect(viewer.pagesRotation).toBe(0)
+    expect(() => viewer.optionalContentConfigPromise).not.toThrow()
   })
 
   it('a far place\'s page view is destroyed with its canvas; no second document is opened', async () => {

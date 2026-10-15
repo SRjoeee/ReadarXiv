@@ -114,13 +114,31 @@ export function createReaderView(host) {
   R.bus = new V.EventBus()
   R.links = new V.PDFLinkService({ eventBus: R.bus, externalLinkTarget: V.LinkTarget.BLANK })
   // the places' links jump through the view: the pane clicked is the pane scrolled
+  // the places' links jump through the view: the pane clicked is the pane scrolled. Everything PDF.js's link service asks of
+  // its viewer (pdf_viewer.mjs PDFLinkService: a destination, a page, the named actions NextPage, PrevPage, FirstPage and
+  // LastPage, a SetOCGState action), the right's pages answer; the optional content is the left viewer's, the document's
   R.links.setViewer({
     scrollPageIntoView: o => jump(R, o),
     get currentPageNumber() { return rightPage },
-    set currentPageNumber(n) { goToPage('right', n) },
+    set currentPageNumber(n) { goToPage('right', Math.min(places.count(), Math.max(1, n))) },
     get pagesCount() { return places.count() },
-    pagesRotation: 0, isInPresentationMode: false, pageLabelToPageNumber: () => null,
+    nextPage() { if (rightPage >= places.count()) return false; goToPage('right', rightPage + 1); return true },
+    previousPage() { if (rightPage <= 1) return false; goToPage('right', rightPage - 1); return true },
+    get pagesRotation() { return 0 },
+    set pagesRotation(_) {},
+    get optionalContentConfigPromise() { return L.viewer.optionalContentConfigPromise },
+    set optionalContentConfigPromise(p) { L.viewer.optionalContentConfigPromise = p },
+    isInPresentationMode: false, pageLabelToPageNumber: () => null,
   })
+  /** a link out of the paper, on either pane (a URL annotation, bound by PDF.js through its link service), goes out
+   *  through the host alone: its address kept for its title and a copy, its click the host's */
+  for (const links of [L.links, R.links]) {
+    const bind = links.addLinkAttributes.bind(links)
+    links.addLinkAttributes = (link, url, newWindow) => {
+      bind(link, url, newWindow)
+      link.addEventListener('click', e => { e.preventDefault(); host.links.openExternal(url) }, { signal })
+    }
+  }
 
   const places = createPlaces({
     stack: R.stack, root: R.container, kit, clock, signal, eventBus: R.bus,
@@ -372,7 +390,8 @@ export function createReaderView(host) {
   /** the right's page in view (the first whose box reaches below the top of the view, as PDF.js tells its own), and
    *  whether it shows the layer */
   function tellRightPage() {
-    if (!places.count()) return
+    // a pane out of the display has no boxes to read a page of: its page is told once it is shown (relayout)
+    if (!places.count() || !shown(R)) return
     const n = pageAt(R, follower.shownAt(R) + 1) || 1, pages = places.count(), isLaid = places.contentOf(n) === 'layer', key = `${n}/${pages}/${isLaid}`
     rightPage = n
     if (key === rightTold) return
@@ -634,6 +653,8 @@ export function createReaderView(host) {
       clock.frame(() => {
         relaying = false
         putAll(at)
+        // a pane brought into the display with its scroll as it was sends no scroll: its page told here
+        tellRightPage()
       })
     })
   }

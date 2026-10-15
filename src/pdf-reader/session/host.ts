@@ -31,9 +31,10 @@ export function prefsOf(config: Config, systemDark: boolean): ViewPrefs {
   }
 }
 /** the display a reader opens in: the one the address names (a probe's page), else the settings' */
+const isDisplay = (d: string | null): d is EngineDisplay => d === 'original' || d === 'bilingual' || d === 'translation'
 export function displayFrom(params: URLSearchParams, config: Config): EngineDisplay {
   const named = params.get('mode')
-  return named === 'original' || named === 'bilingual' || named === 'translation' ? named : displayOf(config)
+  return isDisplay(named) ? named : displayOf(config)
 }
 
 /** whether a link out of the paper may be opened: a web page or a mail address, never a script, data, or a page of the
@@ -43,8 +44,9 @@ export function outward(url: string): boolean {
 }
 
 /** the reader page's host of the view, over the panes the page drew; `config` the settings as the page read them, `watch`
- *  how their changes are heard and `read` how they are read (the extension's storage) */
-export function readerHost(host: SessionHost, config: Config, paper: string, watch: typeof watchConfig = watchConfig, read: typeof readConfig = readConfig): ReaderHost & { stop(): void } {
+ *  how their changes are heard and `read` how they are read (the extension's storage); `late` told of the settings a
+ *  first read given up on came to, once they land */
+export function readerHost(host: SessionHost, config: Config, paper: string, watch: typeof watchConfig = watchConfig, read: typeof readConfig = readConfig, late: (config: Config) => void = () => {}): ReaderHost & { stop(): void } {
   let latest = config
   const dark = globalThis.matchMedia?.('(prefers-color-scheme: dark)')
   const listeners = new Set<(p: ViewPrefs) => void>()
@@ -73,7 +75,7 @@ export function readerHost(host: SessionHost, config: Config, paper: string, wat
   const unwatch = watch(next => { heard = true; landed(next, null) })
   // the page's own first read given up on (no answer in its time, ui/first-read.ts), the defaults standing in: read again,
   // and the late answer followed as a change of the settings, unless a change came first
-  if (host.reading == null) void read().then(r => { if (!stopped && !heard) landed(r.config, r.fallbackReason) }, () => {})
+  if (host.reading == null) void read().then(r => { if (!stopped && !heard) { landed(r.config, r.fallbackReason); late(r.config) } }, () => {})
   return {
     panes: { left: host.left, right: host.right },
     pdfjs: { lib: pdfjsLib, viewer: { EventBus, PDFViewer, PDFPageView, PDFLinkService, LinkTarget }, assets: ASSETS },
@@ -89,10 +91,18 @@ export function readerHost(host: SessionHost, config: Config, paper: string, wat
  * The reading view opened in the reader page's panes, on arXiv's PDF of the address's paper, and the controller's Session
  * over it. A retry opens the original again; the download gives the original's bytes, read through its document
  */
-export function openView(host: SessionHost): Session {
+export function openView(host: SessionHost, io: { watch?: typeof watchConfig; read?: typeof readConfig } = {}): Session {
   const params = host.params, paper = params.get('paper') ?? ''
   const config = host.reading?.config ?? DEFAULT_CONFIG
-  const vh = readerHost(host, config, paper)
+  /** what the reader chose here: a late first read does not undo it */
+  const chosen = { display: false, sync: false }
+  // the settings a first read given up on came to: their display (where the address names none) and their sync, in place
+  // of the defaults the view opened on, unless the reader chose them meanwhile
+  const late = (next: Config) => {
+    if (paper && !chosen.display && !isDisplay(params.get('mode'))) view.setDisplay(displayFrom(params, next))
+    if (!chosen.sync) view.setSync(next.pdfReader.sync)
+  }
+  const vh = readerHost(host, config, paper, io.watch, io.read, late)
   const view: ReaderView = createReaderView(vh)
   const pdf = readerAddresses(params, paper).pdf
   const original = (options: Readonly<Record<string, unknown>>) => pdfjsLib.getDocument({ ...options, url: pdf }) as unknown as DocumentTask
@@ -104,8 +114,8 @@ export function openView(host: SessionHost): Session {
   show()
   addEventListener('pagehide', () => { view.dispose(); vh.stop() }, { once: true })
   return {
-    setDisplay: d => view.setDisplay(d),
-    setSyncMode: m => view.setSync(m !== 'off'),
+    setDisplay: d => { chosen.display = true; view.setDisplay(d) },
+    setSyncMode: m => { chosen.sync = true; view.setSync(m !== 'off') },
     // the compositor's follower is the browser's to have; figure text is a question of the layer's units (PR 5)
     setCompositor: () => {},
     setFigures: () => {},
