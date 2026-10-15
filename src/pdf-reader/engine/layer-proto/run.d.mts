@@ -8,6 +8,7 @@ import type { RemovalManifest } from '../layout/remove.mjs'
 import type { FaceSources } from './fonts.mjs'
 import type { FrozenRuleSet, RULES_SCHEMA } from '../rules/layout.mjs'
 import type { ReadPart } from './format.mjs'
+import type { OpenWords, PageWords } from './words.mjs'
 
 /** a unit as the units record holds it (a row): its kind, source and state; its translation's pieces, none where it has
  *  none, each non-text one with its k (the layout file's index of its source piece: E6's row); its title, its table's
@@ -44,14 +45,15 @@ export interface Sources { tex: number[]; v0: number[]; why: Record<string, numb
 export interface PageFill { own: number | null; anchor: number | null; target: number | null; body: boolean }
 /** a page's record (the 1b design §1), kept for the run's life: its SVG at `w` × `h` CSS px as markup (the strings its names
  *  and units are set in, in turn: svgOf makes the element of them anew at each ask), its drawing as data (every painted
- *  unit's operations in turn: drawCopy draws them at any resolution), its view, its words and links (the engine's 2b and 3a:
- *  null until then), its fill numbers (null where no pass told them). Beside it the page's canvases at v0's own resolution
+ *  unit's operations in turn: drawCopy draws them at any resolution), its view, its words (the page's word table, words.mjs:
+ *  built as each unit is painted in `wordsOpen`, frozen into `words` once the page is final: null before) and its links (the
+ *  engine's 3a: null until then), its fill numbers (null where no pass told them). Beside it the page's canvases at v0's own resolution
  *  (the original, its copy where `copy` keeps one): where `copy` keeps none, the original is let go as soon as the page is
  *  drawn and its ink read, `left` null from then on. `base`: the page is drawn and its canvases held, which v0's own copy cuts
  *  its crops and restores from, until the page is released (whether a crop is drawn at all is the page's own: it was read
  *  and did not fail) */
 export interface Row {
-  page: number; w: number; h: number; view?: number[]; markup: string[]; ops: DrawOp[]; words: unknown | null; links: unknown[] | null; fill: PageFill | null
+  page: number; w: number; h: number; view?: number[]; markup: string[]; ops: DrawOp[]; words: PageWords | null; wordsOpen: OpenWords | null; links: unknown[] | null; fill: PageFill | null
   left: HTMLCanvasElement | null; right: HTMLCanvasElement | null; base: boolean; released?: boolean
 }
 /** what a run holds of a page (held(page)): its analysis state by name, the units on it still holding their own state, and the
@@ -119,7 +121,7 @@ export interface ProtoRun {
   /** each page's costs, ms: its original drawn, its text read, the removal's ink reading and plan, its removed and
    *  placeholders' pages drawn, its units laid (less the faces they waited for, `fonts`), their operations made, drawn on the
    *  copy and set as SVG */
-  pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number }[]
+  pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number; words: number }[]
   /** each page's characters (with `free` and `records`, the shelf's: every page's, let go or not) */
   chars: (Char[] | undefined)[]
   views: { convertToViewportPoint(x: number, y: number): number[]; convertToPdfPoint(x: number, y: number): number[] }[]
@@ -172,6 +174,8 @@ export interface ProtoRun {
   /** page `page`'s SVG, a new element each call, made of its record's markup (class, size and spacing as the page's own): a
    *  parse alone, no layout, face, ink or PDF.js call, 0.3 to 8.6 ms (420 to 12,000 elements) */
   svgOf(page: number): SVGSVGElement
+  /** the page's word table, a new record on every ask (words.mjs; the 1b design §4), frozen at the first ask if the page is not already; a RangeError for a page that is not final (`doneAt(page) <= drawnTo`) */
+  wordsOf(page: number): PageWords
   /** what the run lets go (`free`), keeps of its units' records and audit (`records`), and keeps on the gate's shelf */
   held(): { free: boolean; records: boolean; shelf: boolean }
   /** what the run holds of a page */

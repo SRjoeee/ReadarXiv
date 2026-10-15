@@ -1,0 +1,288 @@
+// The right pane's places (docs/PDF-READER.md §11.7): a page box for each of the original's pages, at its size and its zoom,
+// so that both panes hold the same pages at the same places (the identity map) whatever each place shows. A place shows the
+// best version of its page there is: the layer's content once the layer side has laid it (swap), else the original's page,
+// drawn from the left's document by PDF.js's own page view (canvas, text layer, links), else, with no original, the skeleton
+// of a page of text. Only the places near the view (one pane's height above and below) hold any of it: a place leaving
+// NEAR lets its page view go, canvas and all, and its skeleton; a far place is an empty box of its page's size.
+//
+// A place is sized as PDF.js sizes the left's page of that number, by the same rule: its width and height are the left
+// page box's own style (PDF.js's `round(down, var(--total-scale-factor) * …px, var(--scale-round-x))`), and the stack
+// carries the left viewer's --scale-factor. So a zoom of the left resizes the places in the same layout, with nothing
+// measured, and a pinch's steps (CSS alone, until PDF.js draws again) move both stacks alike. Nothing here reads the
+// layout after writing it: whether a place is near is an IntersectionObserver's answer.
+//
+// The places borrow the left's document: a page view is made over `doc.getPage(n)` and let go by a reset that releases its
+// canvas. What PDF.js keeps of the page since it was drawn (its operator list, its decoded images) is let go with it only
+// where the left has not drawn that page: there it is the left's, which its own redraws and the floats read, and its
+// viewer lets it go as the page leaves its buffer. A page only the right drew (the right shown alone: the left, hidden,
+// draws nothing and lets nothing go) would otherwise be kept for the document's life. PDF.js cleans nothing up while a
+// drawing of the page is under way. A page view lives in a holder of its own inside the place, so that the --scale-factor
+// PDF.js writes on a standalone page view's container stays off the place.
+
+/** how far past the view a place is near: one pane's height above and below */
+export const NEAR = '100% 0px 100% 0px'
+/** PDF.js's page view states (pdf_viewer.mjs RenderingStates) */
+const INITIAL = 0, FINISHED = 3
+/** the style a place copies of the left's page box: what PDF.js sizes a page box by */
+const BOX = ['width', 'height']
+const VARS = ['--user-unit', '--scale-round-x', '--scale-round-y']
+
+const part = (cls, style = {}) => {
+  const e = document.createElement('i')
+  if (cls) e.className = cls
+  for (const [k, v] of Object.entries(style)) e.style.setProperty(k, v)
+  return e
+}
+/** a paragraph of `n` lines, its last one short by `rest` of the measure */
+const lines = (n, rest) => part('axt-sk-lines', { '--axt-sk-n': String(n), '--axt-sk-rest': `${rest}%` })
+const head = (width, more = {}) => part('axt-sk-head', { 'inline-size': `${width}%`, ...more })
+/** a page's grey text: the first page a title, twelve authors, the abstract's label and its lines, a heading; the others
+ *  a heading, paragraphs, every third page a figure. The same for page `n` whenever it is drawn */
+function skeleton(n) {
+  const sk = document.createElement('div')
+  sk.className = 'axt-sk'
+  if (n === 1) {
+    const authors = document.createElement('div')
+    authors.className = 'axt-sk-authors'
+    for (let i = 0; i < 12; i++) authors.append(part(''))
+    const abstract = document.createElement('div')
+    abstract.className = 'axt-sk-abstract'
+    abstract.append(lines(13, 54))
+    sk.append(part('axt-sk-title'), authors, part('axt-sk-label'), abstract, head(22, { 'margin-block-start': '4.6cqw' }), lines(7, 20))
+    return sk
+  }
+  sk.append(head(24 + ((n * 7) % 18)), lines(9 + (n % 4), 30 + ((n * 13) % 40)), part('axt-sk-gap'))
+  if (n % 3 === 0) sk.append(part('axt-sk-figure'))
+  sk.append(lines(11 + (n % 3), 22 + ((n * 11) % 45)), part('axt-sk-gap'), head(30 + ((n * 5) % 20)), lines(14, 40), part('axt-sk-gap'), lines(12, 18))
+  return sk
+}
+
+/**
+ * The places in `o.stack` (the right pane's page stack), near-tested against `o.root` (its scroller). `o.kit` the host's
+ * PDF.js; `o.original(n)` the left's page view n; `o.scale()` the left's scale; `o.layers()` the page views' layer
+ * properties (the right's link service, the document's annotation storage); `o.l10n` PDF.js's translator (the left
+ * viewer's: no second one); `o.eventBus` the right's (its page views tell `pagerendered` there); `o.name(n)` a place's name
+ * when it shows a page; `o.near(n, on)` a place come near or gone far; `o.clock`, `o.signal`, `o.warn`
+ */
+export function createPlaces(o) {
+  const { stack, root, kit, clock } = o
+  /** each place: its element, its holder, what it shows, whether it is near; and each as a page view is read */
+  let list = [], slots = []
+  let doc = null, disposed = false, redrawTimer = 0
+  /** the page views to draw, one at a time (PDF.js's own viewer draws one page at a time) */
+  const queue = []
+  let drawing = null
+  const counts = { made: 0, released: 0 }
+
+  const near = new IntersectionObserver(entries => {
+    for (const e of [...entries].sort((a, b) => Number(a.target.dataset.pageNumber) - Number(b.target.dataset.pageNumber))) {
+      const p = list[Number(e.target.dataset.pageNumber) - 1]
+      if (!p || p.div !== e.target || p.near === e.isIntersecting) continue
+      p.near = e.isIntersecting
+      if (p.near) show(p); else letGo(p)
+      o.near(p.n, p.near)
+    }
+  }, { root, rootMargin: NEAR })
+
+  /** a place's page box as the left's page n is sized now */
+  function sizeOf(p) {
+    const lv = o.original(p.n)
+    if (!lv?.div) return
+    const from = lv.div.style, to = p.div.style
+    for (const k of BOX) if (to[k] !== from[k]) to[k] = from[k]
+    for (const v of VARS) {
+      const x = from.getPropertyValue(v)
+      if (to.getPropertyValue(v) !== x) { if (x) to.setProperty(v, x); else to.removeProperty(v) }
+    }
+  }
+  /** what a place shows before its page is laid: the original's page view (an original open), else the skeleton */
+  function show(p) {
+    if (p.side || disposed) return
+    if (doc) {
+      dropSkeleton(p)
+      if (!p.view) makeView(p)
+    } else {
+      releaseView(p)
+      if (!p.skeleton) { p.skeleton = skeleton(p.n); p.holder.replaceChildren(p.skeleton) }
+    }
+    name(p)
+  }
+  function dropSkeleton(p) { if (p.skeleton) { p.skeleton.remove(); p.skeleton = null } }
+  /** a place's page view over the left's document, drawn when its page comes */
+  function makeView(p) {
+    const { PDFPageView } = kit.viewer, lv = o.original(p.n), mine = doc
+    if (!lv?.viewport) return
+    const view = new PDFPageView({
+      container: p.holder, id: p.n, scale: o.scale(), defaultViewport: lv.viewport, eventBus: o.eventBus,
+      textLayerMode: 1, annotationMode: kit.lib?.AnnotationMode?.ENABLE ?? 1, layerProperties: o.layers(), l10n: o.l10n(), abortSignal: o.signal,
+    })
+    // the place is the page's region, named; PDF.js's own name and landmark on its page go
+    view.div.removeAttribute('role')
+    view.div.removeAttribute('data-l10n-id')
+    view.div.removeAttribute('data-l10n-args')
+    p.view = view
+    counts.made++
+    mine.getPage(p.n).then(page => {
+      if (p.view !== view || doc !== mine || disposed) return
+      view.setPdfPage(page)
+      enqueue(p)
+    }, e => o.warn('the original\'s page', e))
+  }
+  /** a place's page view let go: its drawing cancelled, its canvas released, its element out of the place */
+  function releaseView(p) {
+    const v = p.view
+    if (!v) return
+    p.view = null
+    const i = queue.indexOf(p)
+    if (i >= 0) queue.splice(i, 1)
+    v.reset()
+    v.div.remove()
+    if (o.original(p.n)?.renderingState === INITIAL) v.pdfPage?.cleanup?.()
+    counts.released++
+  }
+  function letGo(p) {
+    releaseView(p)
+    dropSkeleton(p)
+    name(p)
+  }
+  function enqueue(p) {
+    if (!queue.includes(p)) queue.push(p)
+    pump()
+  }
+  function pump() {
+    if (drawing || disposed) return
+    const p = queue.shift()
+    if (!p) return
+    const v = p.view
+    if (!v?.pdfPage || v.renderingState !== INITIAL) return pump()
+    drawing = v
+    p.drawnAt = v.scale
+    v.draw().catch(e => { if (!/cancel/i.test(`${e?.name} ${e?.message}`)) o.warn('the original\'s page drawn', e) }).finally(() => {
+      if (drawing === v) drawing = null
+      pump()
+    })
+  }
+  /** a place's name for assistive technology: a page of the right where it shows one, else hidden (a skeleton, nothing) */
+  function name(p) {
+    if (p.side || p.view) {
+      p.div.removeAttribute('aria-hidden')
+      p.div.setAttribute('role', 'region')
+      p.div.setAttribute('aria-label', o.name(p.n))
+    } else {
+      p.div.setAttribute('aria-hidden', 'true')
+      p.div.removeAttribute('role')
+      p.div.removeAttribute('aria-label')
+    }
+  }
+  function remove() {
+    for (const p of list) { near.unobserve(p.div); releaseView(p); p.div.remove() }
+    list = []
+    slots = []
+    queue.length = 0
+  }
+  const views = { get: n => slots[n - 1] ?? null, all: () => slots, count: () => slots.length }
+
+  return {
+    /** `count` places, one for each of the original's pages; those already there kept where the count is the same */
+    lay(count) {
+      if (disposed) return
+      if (list.length === count) return
+      remove()
+      list = Array.from({ length: count }, (_, i) => {
+        const div = document.createElement('div')
+        div.className = 'page axt-place'
+        div.dataset.pageNumber = String(i + 1)
+        div.setAttribute('aria-hidden', 'true')
+        const holder = document.createElement('div')
+        holder.className = 'axt-place-view'
+        div.append(holder)
+        // drawnAt: the scale its page view was last drawn at
+        return { n: i + 1, div, holder, view: null, skeleton: null, side: null, near: false, drawnAt: 0 }
+      })
+      // a place as a page view is read: its element, and the left's viewport and page box for its page, as they are now
+      slots = list.map(p => ({ id: p.n, div: p.div, get viewport() { return o.original(p.n)?.viewport ?? null }, get pdfPage() { return o.original(p.n)?.pdfPage ?? null } }))
+      stack.append(...list.map(p => p.div))
+      for (const p of list) { sizeOf(p); near.observe(p.div) }
+    },
+    /** every place sized again as the left's page boxes are (the pages laid out, a page's own size, its rounding) */
+    size(n) {
+      if (n === undefined) for (const p of list) sizeOf(p)
+      else if (list[n - 1]) sizeOf(list[n - 1])
+    },
+    /** the left's scale changed: the stack's --scale-factor, and each page view's scale, by CSS until `drawingDelay` has
+     *  passed (a zoom's or a pinch's steps), then drawn again once */
+    scale(scaleFactor, scale, drawingDelay = -1) {
+      if (disposed) return
+      if (scaleFactor) stack.style.setProperty('--scale-factor', scaleFactor)
+      for (const p of list) sizeOf(p)
+      const views = list.filter(p => p.view)
+      for (const p of views) p.view.update(drawingDelay >= 0 ? { scale, drawingDelay } : { scale })
+      clock.clear(redrawTimer)
+      const redraw = () => {
+        redrawTimer = 0
+        for (const p of list) {
+          if (!p.view) continue
+          // drawn at another scale (a zoom's steps stretch its canvas by CSS): drawn again at its own
+          if (p.view.renderingState === FINISHED && p.view.scale !== p.drawnAt) p.view.update({ scale: p.view.scale })
+          if (p.view.renderingState === INITIAL && p.view.pdfPage) enqueue(p)
+        }
+      }
+      if (drawingDelay >= 0) redrawTimer = clock.later(redraw, drawingDelay)
+      else redraw()
+    },
+    /** the document the places' page views read: the left's, or null (its page views let go, the skeleton near) */
+    setDocument(next) {
+      if (disposed) return
+      for (const p of list) releaseView(p)
+      doc = next
+      for (const p of list) if (p.near && !p.side) show(p)
+    },
+    /** the layer's content in place `n`, in place: its page view destroyed with its canvas first, its skeleton gone, the
+     *  content in its holder. The place keeps its size, the pane its scroll */
+    swap(n, content) {
+      const p = list[n - 1]
+      if (!p || disposed) return false
+      releaseView(p)
+      dropSkeleton(p)
+      p.side = content
+      p.holder.replaceChildren(content)
+      p.div.setAttribute('data-axt-layer', '')
+      name(p)
+      return true
+    },
+    /** place `n` back to its pre-layer content */
+    restore(n) {
+      const p = list[n - 1]
+      if (!p?.side) return
+      p.side.remove()
+      p.side = null
+      p.div.removeAttribute('data-axt-layer')
+      if (p.near) show(p); else name(p)
+    },
+    contentOf(n) {
+      const p = list[n - 1]
+      return !p ? 'none' : p.side ? 'layer' : p.view ? 'original' : p.skeleton ? 'skeleton' : 'none'
+    },
+    near: n => !!list[n - 1]?.near,
+    page: n => list[n - 1]?.div ?? null,
+    count: () => list.length,
+    /** the places as page views are read: place n's element with the left's viewport and page box for page n */
+    views: () => views,
+    /** the names of the places that show a page, again (the interface's language changed) */
+    rename() { for (const p of list) if (p.side || p.view) name(p) },
+    probe() {
+      let views = 0, skeletons = 0, laid = 0, near = 0
+      for (const p of list) { if (p.view) views++; if (p.skeleton) skeletons++; if (p.side) laid++; if (p.near) near++ }
+      return { places: list.length, pageViews: views, skeletons, laidPlaces: laid, nearPlaces: near, pageViewsMade: counts.made }
+    },
+    dispose() {
+      if (disposed) return
+      disposed = true
+      clock.clear(redrawTimer)
+      near.disconnect()
+      remove()
+      stack.style.removeProperty('--scale-factor')
+      doc = null
+    },
+  }
+}

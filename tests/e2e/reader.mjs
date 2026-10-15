@@ -14,14 +14,18 @@
 //   - viewer faults, those that need no translated view: the original display finishes loading, a link out of the paper
 //     opens in a new tab, and a PDF that cannot be fetched (an error, nothing, a page that is no PDF) says so and mends;
 //   - reader settings: the display and the sync follow the extension's settings and are written back.
+//   - the reading view, on its development entry (?layer=1): the original on both panes, the places at the left's page boxes
+//     and what they show, the follower levelling the pair at rest, a zoom, a pinch over the right, a narrow window.
 // To come with the layer reader (Tasks 7 to 12): the reader's states on the layer (preparing, drawn, a unit lit, a
 // refusal), the faults of the layer API (refused, none, 5xx, nothing, which the stand-in already answers) and the
 // reading place kept between displays. The shipped reader's translated displays, which need the TeX page, are not checked.
 //
-// Usage: pnpm build && pnpm e2e:reader     (first time: npx playwright install chromium)
+// Usage: AXT_READER_VIEW=1 pnpm build && pnpm e2e:reader     (first time: npx playwright install chromium)
+// The build is asked for the reading view's development entry (AXT_READER_VIEW=1, wxt.config.ts), which a release build
+// leaves out: a build without it fails the view's section, saying so.
 // Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build.
 import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { readBundle, VTAG } from '../../src/pdf-reader/engine/layer-proto/bundle.mjs'
 import { copyWithGrants } from './ext-copy.mjs'
@@ -47,6 +51,8 @@ const ABSTRACT_PAGE = `<!doctype html><title>stand-in abstract</title><meta name
 const manifest = readFileSync(`${BUILD}/manifest.json`, 'utf8')
 const LAYER_HOSTS = ['https://readarxiv.com', ...['https://app-staging.readarxiv.org'].filter(host => manifest.includes(host))]
 const LINK = 'https://example.invalid/sample-1'
+/** whether the build holds the reading view's development entry: its places' code, in a chunk (wxt.config.ts READER_VIEW) */
+const viewBuilt = readdirSync(`${BUILD}/chunks`).some(f => f.endsWith('.js') && readFileSync(`${BUILD}/chunks/${f}`, 'utf8').includes('axt-place-view'))
 /** the panel's and the popup's two entries, by their words in either interface language */
 const ENTRY = { html: /Translate HTML|HTML 翻译/, pdf: /Translate PDF|PDF 翻译/ }
 
@@ -523,6 +529,99 @@ try {
     check('asked to translate: the translated display the mode names, the original let go', asked1.display === 'translation' && asked1.settings.pdfReader.original === false, `${asked1.display}, original ${asked1.settings.pdfReader.original}`)
     control('a reader that is not asked to translate opens in the original the settings leave on', { ok: plain.display === 'translation', detail: `${plain.display}, original ${plain.settings.pdfReader.original}` })
     for (const page of [a, b, c, e]) await page.close()
+  }
+
+  // ------------------------------------------------------------------------------- the reading view, its development entry
+  section('the reading view (?layer=1): the original on both panes, the places, the follower, zoom, pinch, narrow')
+  if (!viewBuilt) check('the build holds the reading view\'s development entry: build it with AXT_READER_VIEW=1 pnpm build', false, `no chunk of ${BUILD} holds the places`)
+  else {
+    const page = await openReader({ layer: '1', mode: 'bilingual' })
+    const probe = () => page.evaluate(() => window.__reader.view.probe())
+    const opened = await page.waitForFunction(() => window.__reader?.view?.probe().original === 'open', null, { timeout: 30_000 }).then(() => true, () => false)
+    const p0 = opened ? await probe() : {}
+    check('the development entry opens the sample in the view: the left\'s pages, a place for each on the right, one loading task', opened && p0.pages === bundle.paper.pages && p0.places === bundle.paper.pages && p0.tasks === 1 && p0.opens === 1, JSON.stringify({ pages: p0.pages, places: p0.places, tasks: p0.tasks }))
+    // the sample's PDF has no title of its own: the host's fallback, the abstract page's citation_title
+    const titled = await page.waitForFunction(t => window.__reader.controller.getState().paper.title === t, TITLE, { timeout: 10_000 }).then(() => true, () => false)
+    check('the paper\'s title, which its PDF lacks, is the abstract page\'s, through the host', titled && asked.arxiv.includes('GET /abs'), `${await page.evaluate(() => window.__reader.controller.getState().paper.title)}`)
+    /** each pane's page boxes on the screen, and the right's pane's scroller */
+    const boxes = () => page.evaluate(() => {
+      const of = sel => [...document.querySelectorAll(sel)].map(el => { const r = el.getBoundingClientRect(); return { top: r.top, width: r.width, height: r.height } })
+      const L = document.getElementById('left'), R = document.getElementById('right')
+      return { left: of('#left .pdfViewer > .page'), right: of('#right .pdfViewer > .page.axt-place'), scroll: [L.scrollTop, R.scrollTop], width: [L.clientWidth, R.clientWidth] }
+    })
+    const sameBoxes = b => b.left.length > 0 && b.left.length === b.right.length && b.left.every((l, i) => Math.abs(l.width - b.right[i].width) < 0.6 && Math.abs(l.height - b.right[i].height) < 0.6 && Math.abs(l.top - b.right[i].top) < 1.5)
+    await page.waitForTimeout(800)
+    const b0 = await boxes()
+    check('the places are the left\'s page boxes, at the same sizes and the same heights on the screen (the identity map)', sameBoxes(b0), JSON.stringify({ left: b0.left[1], right: b0.right[1], scroll: b0.scroll }))
+    // the places near the view show the original's page: PDF.js's page view drawn into each, its text selectable and its links there
+    const near = await page.waitForFunction(() => {
+      const first = document.querySelector('#right .axt-place .axt-place-view > .page')
+      return first?.querySelector('canvas')?.width > 0 && first.querySelectorAll('.textLayer span').length > 0
+    }, null, { timeout: 10_000 }).then(() => true, () => false)
+    const shows = await page.evaluate(() => [...document.querySelectorAll('#right .axt-place')].map(p => ({ view: !!p.querySelector('.axt-place-view > .page canvas'), label: p.getAttribute('aria-label') })))
+    check('a place near the view shows the original\'s page through PDF.js\'s page view: canvas, text, its name as a page of the right', near && shows[0]?.view && /\d/.test(shows[0]?.label ?? ''), JSON.stringify(shows))
+    control('a place far from the view shows nothing: the sample\'s last page, three viewports down, holds no page view at first', { ok: shows.at(-1)?.view === true, detail: JSON.stringify(shows.at(-1)) })
+
+    // the follower: a wheel on the left moves the right by the same steps, and the pair is levelled at rest
+    const restAfter = async () => {
+      await page.waitForFunction(() => { const p = window.__reader.view.probe(); return p.motion === null }, null, { timeout: 5000 }).catch(() => undefined)
+      await page.waitForTimeout(900)
+      return probe()
+    }
+    const L0 = await page.locator('#left').boundingBox(), R0 = await page.locator('#right').boundingBox()
+    await page.mouse.move(L0.x + L0.width / 2, L0.y + L0.height / 2)
+    await page.mouse.wheel(0, 900)
+    const afterLeft = await restAfter()
+    const b1 = await boxes()
+    check('a wheel on the left: the right follows, and at rest the pair stands level (levelError within 24 px)', Math.abs(afterLeft.levelError ?? 999) <= 24 && b1.scroll[0] > 100 && sameBoxes(b1), `levelError ${afterLeft.levelError}, driver ${afterLeft.driver}, compositing ${afterLeft.compositing}; scrolls ${b1.scroll.join(' / ')}`)
+    await page.mouse.move(R0.x + R0.width / 2, R0.y + R0.height / 2)
+    await page.mouse.wheel(0, -500)
+    const afterRight = await restAfter()
+    check('a wheel on the right: the left follows it back, level at rest', Math.abs(afterRight.levelError ?? 999) <= 24 && afterRight.driver === 'right', `levelError ${afterRight.levelError}, driver ${afterRight.driver}`)
+    // the control: the sync off, the same wheel leaves the other pane where it was, and the level's error says so
+    await page.evaluate(() => window.__reader.controller.setSync(false))
+    await page.mouse.move(L0.x + L0.width / 2, L0.y + L0.height / 2)
+    await page.mouse.wheel(0, 700)
+    const off = await restAfter()
+    control('with the sync off the pair is not levelled: the same check fails', { ok: Math.abs(off.levelError ?? 999) <= 24, detail: `levelError ${off.levelError}` })
+    await page.evaluate(() => window.__reader.controller.setSync(true))
+
+    // the zoom: the left's viewer scaled, the places with it, the menu's check the zoom applied
+    await page.evaluate(() => window.__reader.controller.zoomTo(1.5))
+    await page.waitForTimeout(900)
+    const z = await probe(), bz = await boxes()
+    check('a zoom to 150 %: the left at 1.5, the places at its page boxes, the zoom told', Math.abs(z.scale - 1.5) < 1e-3 && z.zoom === 1.5 && sameBoxes(bz), JSON.stringify({ scale: z.scale, zoom: z.zoom, left: bz.left[0], right: bz.right[0] }))
+    // a pinch over the right scales the left's viewer, and the places follow
+    const before = z.scale
+    for (let i = 0; i < 4; i++) { await page.evaluate(([x, y]) => window.__reader.controller.pinch('right', 1.05, [x, y]), [R0.x + R0.width / 2, R0.y + R0.height / 3]); await page.waitForTimeout(30) }
+    await page.waitForTimeout(1000)
+    const pz = await probe(), bp = await boxes()
+    check('a pinch over the right scales the left\'s viewer, the places with it; the zoom then none', pz.scale > before * 1.15 && pz.zoom === null && sameBoxes(bp), JSON.stringify({ from: before, to: pz.scale, zoom: pz.zoom }))
+    await page.evaluate(() => window.__reader.controller.zoomTo('page-width'))
+    await page.waitForTimeout(600)
+
+    // a narrow window: the right alone, fitted to its own pane through the left's viewer; wide again, both
+    await page.evaluate(() => window.__reader.controller.setNarrow(true))
+    await page.waitForTimeout(800)
+    const n = await boxes(), np = await probe()
+    const fitted = n.right[0] && n.width[0] === 0 && Math.abs(n.right[0].width - Math.min(n.width[1] - 40, 1060)) < 2
+    check('narrow: the left hidden, the right\'s pages fitted to the right pane (its width less 40 px, or the reading width)', fitted && np.narrow === true, JSON.stringify({ widths: n.width, place: n.right[0]?.width, scale: np.scale }))
+    await page.evaluate(() => window.__reader.controller.setNarrow(false))
+    await page.waitForTimeout(800)
+    const w = await boxes()
+    check('wide again: both panes, the places at the left\'s boxes', w.width[0] > 0 && w.width[1] > 0 && sameBoxes(w), JSON.stringify({ widths: w.width }))
+    // a link out of the paper on the right: drawn by the place's page view, opened by the host (a new tab), the reader kept
+    await page.evaluate(() => window.__reader.controller.goToPage('right', 4))
+    const out = page.locator('#right .axt-place .annotationLayer a[href^="http"]')
+    const drawn = await out.first().waitFor({ timeout: 10_000 }).then(() => true, () => false)
+    const tabbed = drawn ? context.waitForEvent('page', { timeout: 10_000 }).catch(() => null) : null
+    if (drawn) await out.first().click()
+    const tab = await tabbed
+    await tab?.waitForLoadState('load').catch(() => undefined)
+    check('a link out of the paper on the right opens in a new tab through the host, the reader staying where it is', drawn && tab?.url() === LINK && page.url().includes('layer=1'), `drawn ${drawn}, opened ${tab?.url() ?? 'nothing'}`)
+    await tab?.close()
+    await page.screenshot({ path: `${SHOTS}/reader-view.png` })
+    await page.close()
   }
 
   // ----------------------------------------------------------------------------------------------------- what nothing did

@@ -24,6 +24,7 @@ on:
       - 'src/pdf-reader/engine/layout/json.mjs'
       - 'src/pdf-reader/engine/layout/names.mjs'
       - 'src/pdf-reader/engine/layout/remove.mjs'
+      - 'src/pdf-reader/engine/pipeline/anchors.mjs'
       - 'src/pdf-reader/engine/layout/tail.mjs'
       - 'src/pdf-reader/engine/pipeline/memory.mjs'
       - 'src/pdf-reader/engine/pipeline/versions.mjs'

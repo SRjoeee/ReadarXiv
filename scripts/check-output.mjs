@@ -69,10 +69,16 @@ const COMPILER_PATH = /busytex|texlyre/i
 const COMPILER_FILES = /texlyre|busytex[\w.-]*\.(?:js|wasm|data)|busytex_pipeline/i
 const loopbackNamed = []
 const compilerNamed = []
+// The reading view's development entry (?layer=1, docs/PDF-READER.md §11.7) is built only where AXT_READER_VIEW=1 asks for
+// it (wxt.config.ts READER_VIEW): its places' code names their holder's class in a script (every build's style sheet holds
+// the rule)
+const READER_VIEW = process.env.AXT_READER_VIEW === '1'
+const viewNamed = []
 for (const path of filesUnder(OUT)) {
   const content = readFileSync(path).toString('latin1')
   if (COMPILER_PATH.test(relative(OUT, path)) || COMPILER_FILES.test(content)) compilerNamed.push(path)
   if (LOOPBACK_TEX.test(content)) loopbackNamed.push(path)
+  if (path.endsWith('.js') && content.includes('axt-place-view')) viewNamed.push(path)
 }
 for (const [what, ok] of [
   [`the website's hosts are read from src/shared/web-app.ts: ${siteMatches.join(', ') || 'none found'}`, siteHosts.length > 0 && siteMatches.every(match => /^https:\/\/[a-z0-9.-]+\/\*$/.test(match))],
@@ -92,6 +98,7 @@ for (const [what, ok] of [
   [`${OUT} holds no dev page`, ['gallery.html', 'controls.html', 'capsule.html'].every(page => !existsSync(join(OUT, page)))],
   [`${OUT} names no loopback TeX page${loopbackNamed.length > 0 ? ` (${loopbackNamed.join(', ')})` : ''}`, loopbackNamed.length === 0],
   [`${OUT} holds no BusyTeX or texlyre file${compilerNamed.length > 0 ? ` (${compilerNamed.join(', ')})` : ''}`, compilerNamed.length === 0],
+  [`${OUT} holds the reading view's development entry only where AXT_READER_VIEW=1 asks for it (${READER_VIEW ? 'asked' : 'not asked'}${viewNamed.length > 0 ? `: ${viewNamed.join(', ')}` : ''})`, READER_VIEW ? viewNamed.length > 0 : viewNamed.length === 0],
 ]) {
   if (ok) console.log(`✓ ${what}`)
   else {

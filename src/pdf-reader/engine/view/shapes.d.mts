@@ -1,0 +1,57 @@
+// shapes.mjs's types (JavaScript until the engine's port): the highlight's shapes on the shared reader view's panes
+import type { ReadLeftPart } from '../layer-proto/format.mjs'
+import type { Box, Float, Paths } from './floats.mjs'
+import type { Layout, PageTable, PartRects, Run } from './highlight.mjs'
+
+/** a rectangle on one of a pane's pages, in its PDF units */
+export interface PageBox { page: number; x0: number; y0: number; x1: number; y1: number }
+/** what a pane paints for the highlight, in its own pages' coordinates (the shapes seam, lighting.mjs's): a unit's runs
+ *  (the objects the paint keeps what it drew by), a run's block, a sentence's shape by the unit's starts, the float a
+ *  unit lights whole and what it paints, whether a unit's shapes hold its words by its starts (undefined where that is
+ *  not to be told in a frame), what a point lights and what a click there levels by */
+export interface Shapes<R extends { page: number } = { page: number }, F extends { page: number } = { page: number }> {
+  runs(id: number): readonly R[]
+  block(run: R, padX: number): PageBox
+  sentence(run: R, starts: Int32Array, s: number, padX: number): PageBox[]
+  float(id: number): F | null
+  floatShapes(f: F, padX: number): (PageBox & { frame: boolean })[]
+  fits(id: number, starts: Int32Array, now: boolean): boolean | undefined
+  hit(page: number, x: number, y: number, padX: number, startsOf: (id: number) => Int32Array | null | undefined): { id: number; s: number; float?: F } | null
+  click(page: number, x: number, y: number, padX: number, startsOf: (id: number) => Int32Array | null | undefined): { id: number; line: number; f: number } | null
+}
+/** a left part as a page's part of a layout: the side's token ids from `first`; each unit's tokens, and its words beside
+ *  the tokens they were matched to */
+export interface LeftPageInput {
+  page: number; first: number; table: PageTable
+  spans: [id: number, tokens: Int32Array][]
+  pairs: [id: number, words: Int32Array, tokens: Int32Array][]
+}
+/** a side's shapes made page by page from the layer's wire */
+export interface SideShapes {
+  readonly layout: Layout
+  readonly shapes: Shapes<Run, Float>
+  /** the document part as the parts come (format.mjs ReadPart), in page order */
+  addParts(parts: readonly PartRects[]): void
+  /** a page's left part (the door's leftPageOf); false where it was in already or is refused, malformed or overlapping
+   *  another page's ids (one warning a page) */
+  addPage(left: Pick<ReadLeftPart, 'page' | 'first' | 'table' | 'spans' | 'pairs'>): boolean
+  /** a page's left part refused: no shapes there, one warning a page; a later one is taken */
+  refuse(page: number, error: unknown): void
+  has(page: number): boolean
+  /** a page out of the view's window: its geometry, floats and their inputs let go (made again on its next use, the
+   *  floats once its drawing gives their inputs again) */
+  forget(page: number): void
+  /** a unit's sentence starts on the left by its plain source and its row's `sentences.src`, once every page it is on
+   *  has come; null where it lights whole */
+  starts(id: number, text: string, offsets: readonly number[] | undefined): Int32Array | null
+  /** a page's floats from its drawing's figures and paths: made now where its part is in, else on its first use, and
+   *  again on its first use after the document part moves; inputs that throw are let go, one warning */
+  floats(page: number, regions?: Box[], paths?: Partial<Paths>): void
+}
+/** the right's shapes, the left's mirrored over copies of its own */
+export interface MirroredShapes { readonly layout: Layout; readonly shapes: Shapes<Run, Float>; forget(page: number): void; dispose(): void }
+
+export declare function pdfShapes(layout: Layout): Shapes<Run, Float>
+export declare function leftPageInput(left: Pick<ReadLeftPart, 'page' | 'first' | 'table' | 'spans' | 'pairs'>): LeftPageInput
+export declare function createShapes(o?: { kindOf?: (id: number) => string | undefined; warn?: (what: string, error: unknown) => void }): SideShapes
+export declare function mirror(source: SideShapes): MirroredShapes

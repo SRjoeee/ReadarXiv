@@ -1,4 +1,5 @@
 // highlight.mjs's types (JavaScript until the engine's port), for the reader's tests
+import type { UnitWire } from '../layer-proto/bundle.mjs'
 import type { Anchor, DocToken } from '../pipeline/anchors.mjs'
 
 /** a run's row: lines merged where they overlap, and the unit's reach across them (PDF units); lo, hi: its glyphs' */
@@ -12,6 +13,21 @@ export interface Layout { readonly pagesOf: Map<number, number[]> }
 /** whether a kind of unit may light by sentence: running text */
 export declare function bySentence(kind: string | undefined): boolean
 export declare function layoutOf(doc: DocToken[], views: number[][], anchors: Map<number, Anchor | null>, kindOf?: (id: number) => string | undefined): Layout
+/** a page's tokens as a layout keeps them (format.mjs ReadLeftPart's table): ink across, baseline, size, the glyphs' top and foot */
+export interface PageTable { n: number; l: Float32Array; r: Float32Array; y: Float32Array; h: Float32Array; top: Float32Array; bottom: Float32Array }
+/** what the document part reads of a part (format.mjs ReadPart): its pages, the views of pages from its first (stride 4)
+ *  and its units, their line rectangles */
+export interface PartRects { readonly pages: readonly [number, number]; readonly views: readonly number[]; readonly left: readonly UnitWire[] }
+/** a side's layout made page by page: empty until told (layoutParts, layoutPage) */
+export declare function pageLayout(kindOf?: (id: number) => string | undefined): Layout
+/** the document part made again with these parts' views and units, every page's geometry let go; false where they told
+ *  nothing new, every page's geometry kept */
+export declare function layoutParts(layout: Layout, parts: readonly PartRects[]): boolean
+/** a page's part: its tokens, ids from `first`, and each unit's tokens there; false where it was given already; a
+ *  RangeError where its ids reach into another page's */
+export declare function layoutPage(layout: Layout, page: number, part: { first: number; table: PageTable; spans: readonly (readonly [number, ArrayLike<number>])[] }): boolean
+/** whether a unit's tokens are all in its layout (always for one made whole): its sentences wait for it */
+export declare function tokensIn(layout: Layout | null | undefined, id: number): boolean
 /** a page's runs; the units whose head it took and the words it filled in (for the gate) */
 export declare function pageGeometry(layout: Layout, page: number): { runs: Run[]; byId: Map<number, Run[]>; heads: number[]; filled: number }
 export declare function runsOf(layout: Layout | null | undefined, id: number): Run[]

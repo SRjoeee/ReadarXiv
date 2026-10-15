@@ -18,8 +18,9 @@ const put = (path: string, content: string | Uint8Array) => {
 }
 
 /** The script's verdict on the check whose line starts with `name`: '✓', '✗', or undefined when no line names it */
-const verdict = (name: string) => {
-  const result = spawnSync(process.execPath, [SCRIPT], { cwd: root, encoding: 'utf8' })
+const verdict = (name: string, env: Record<string, string> = {}) => {
+  const { AXT_READER_VIEW: _, ...rest } = process.env
+  const result = spawnSync(process.execPath, [SCRIPT], { cwd: root, encoding: 'utf8', env: { ...rest, ...env } })
   return `${result.stdout}\n${result.stderr}`.split('\n').find(line => line.slice(2).startsWith(name))?.[0]
 }
 
@@ -88,3 +89,21 @@ describe('a production build fails check-output when', () => {
     }
   })
 })
+
+// The reading view's development entry (?layer=1, PDF-READER §11.7) is built only where the build is asked for it
+// (AXT_READER_VIEW=1, which pnpm e2e:reader's build sets): a release build leaves it out, and a build asked for it holds it
+describe('the reading view\'s development entry', () => {
+  const ENTRY = `${OUT} holds the reading view's development entry only where AXT_READER_VIEW=1 asks for it`
+  it('fails a release package that holds it, and a package built for the entry that does not', () => {
+    expect(verdict(ENTRY)).toBe('✓')
+    put(`${OUT}/chunks/host-Ab12.js`, "const holder = document.createElement('div'); holder.className = 'axt-place-view'\n")
+    expect(verdict(ENTRY)).toBe('✗')
+    expect(verdict(ENTRY, { AXT_READER_VIEW: '1' })).toBe('✓')
+    rmSync(join(root, OUT, 'chunks/host-Ab12.js'))
+    expect(verdict(ENTRY, { AXT_READER_VIEW: '1' })).toBe('✗')
+    // the places' rule in the reader's style sheet is no entry: every build holds engine.css
+    put(`${OUT}/assets/pdf-reader.css`, '.axt-place-view{position:absolute;inset:0}\n')
+    expect(verdict(ENTRY)).toBe('✓')
+  })
+})
+

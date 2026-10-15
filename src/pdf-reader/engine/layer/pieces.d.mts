@@ -22,3 +22,6 @@ export declare function trPiecesOf(pieces: readonly unknown[], kOf: (piece: unkn
 /** the text sentence offsets count in: plainTranslated's, from TrPiece (each non-text piece a space, white space
  *  collapsed, trimmed) */
 export declare function trText(pieces: readonly TrPiece[]): string
+
+/** mt.mjs shown: a text piece as the compiled PDF shows it, a translation's TeX escapes undone, a source's bytes as UTF-8 */
+export declare function shown(p: { s: string; tr?: boolean }): string
