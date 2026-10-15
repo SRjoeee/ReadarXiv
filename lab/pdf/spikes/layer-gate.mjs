@@ -29,7 +29,7 @@
 //       [--proto-faces=roles|prototype] [--proto-place=<file>] [--proto-order=<file>] [--dump=<dir>] [--write-floor]
 //       [--proto-tex=ph|lines] [--proto-tex-only=no] [--proto-symbols=text|strict] [--proto-extents=v0|tex]
 //       [--against=<record key>] [--rules=<file>] [--ruling=<file>] [--parts[=<n>]] [--slices[=blocks|alphabet]] [--door[=<n>]]
-//       [--door-memory[=<pages>]] [--door-parts[=doubling|splits:<n>|seed:<s>]]
+//       [--door-memory[=<pages>]] [--door-parts[=doubling|splits:<n>|seed:<s>]] [--door-parts-addon=none]
 //   --engine     the engine measured: <worktree>/src/pdf-reader/engine served as /engine/ (the checker, layer/check.mjs, is
 //                always this repository's: the instrument is the same for every branch); default this repository
 //   --layouts    made (the default): the layout files the engine's own maker makes from the fixtures' papers (spikes/
@@ -127,7 +127,9 @@
 //                with no part, each part told when the run waits for one. Each page's SVG markup, copyOf's pixels over the page
 //                as door A's load drew it, and the digest of the run's records of its units must be equal, the units left and
 //                why too, and no page told laying may wait for a part before it is ready (Q1); the run is written to
-//                out/layer-gate/door-parts-<commit>-<time>.json
+//                out/layer-gate/door-parts-<commit>-<time>.json. --door-parts-addon=none: the paper with no add-on (a producer
+//                with no remover, M20): the cut made of it with none (every part `addon: null`), door A then BUNDLE 3's open of
+//                the bundle with `addon: null` (door C: the same units, left and layout, v0's own erase and restore)
 // The consistency measures (the table-groups brief, 2026-10-07), checked with the completeness ones and each to be 0: a
 // table group drawn partly (the record's translated cells of one `group`, some drawn and some not) and a float's label
 // left in the source language where the final names it in the target's (the record's `captions`, the layout rules' labels'
@@ -212,6 +214,9 @@ if (MEMORY !== null && !(Number.isInteger(MEMORY) && MEMORY >= 10)) throw new Er
  *  recorded), at the schedule given */
 const DOOR_PARTS = arg('door-parts') === true ? 'doubling' : typeof arg('door-parts') === 'string' ? arg('door-parts') : null
 if (DOOR_PARTS !== null && !/^(?:doubling|splits:[1-9]\d*|seed:\d+)$/.test(DOOR_PARTS)) throw new Error(`--door-parts=${DOOR_PARTS}: doubling, splits:<n> or seed:<s>`)
+/** --door-parts-addon=none: the paper with no add-on, against BUNDLE 3's open of it with none */
+const DOOR_PARTS_ADDON = typeof arg('door-parts-addon') === 'string' ? arg('door-parts-addon') : 'carried'
+if (!['carried', 'none'].includes(DOOR_PARTS_ADDON) || (DOOR_PARTS_ADDON === 'none' && DOOR_PARTS === null)) throw new Error(`--door-parts-addon=${DOOR_PARTS_ADDON}: none, with --door-parts`)
 /** --door[=<n>]: the reader's door against the gate's own page, its rows taken n a part (a proof: never recorded) */
 const DOOR = arg('door') === true || ((MEMORY !== null || DOOR_PARTS !== null) && arg('door') === null) ? 16 : typeof arg('door') === 'string' ? Number(arg('door')) : null
 if (DOOR !== null && !(Number.isInteger(DOOR) && DOOR > 0)) throw new Error(`--door=${arg('door')}: a count of rows a part`)
@@ -662,10 +667,13 @@ async function doorPartsFixture(page, name, errors) {
   const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
   const [{ readBundle }, { cutBundle }, { startxrefOf }] = await Promise.all(['layer-proto/bundle.mjs', 'layer-proto/cut.mjs', 'layout/tail.mjs'].map(f => import(E(f))))
   const arxiv = new Uint8Array(readFileSync(join(FIXTURES, name, 'arxiv.pdf')))
-  const cutTo = targetOf(DOOR_PARTS)
-  const cut = await cutBundle(readBundle(new Uint8Array(made.bytes)), { leftPages: () => null, base: { bytes: arxiv.length, sha256: sha256(arxiv), xref: startxrefOf(arxiv) }, ...(cutTo ? { target: cutTo } : {}) })
+  const cutTo = targetOf(DOOR_PARTS), none = DOOR_PARTS_ADDON === 'none'
+  const read3 = readBundle(new Uint8Array(made.bytes))
+  const cut = await cutBundle(none ? { ...read3, addon: null } : read3, { leftPages: () => null, base: { bytes: arxiv.length, sha256: sha256(arxiv), xref: startxrefOf(arxiv) }, ...(cutTo ? { target: cutTo } : {}) })
   const at = `/door/${name}`, served = []
   const serve = (path, body) => { DOOR_FILES.set(path, body); served.push(path) }
+  // (door C: BUNDLE 3's bundle itself, its add-on taken off in the page)
+  if (none) serve(`${at}/bundle.json`, made.bytes)
   cut.units.forEach((u, i) => serve(`${at}/u${i}.json`, Buffer.from(u.bytes)))
   serve(`${at}/head.json`, Buffer.from(cut.head.bytes))
   cut.parts.forEach((p, i) => serve(`${at}/p${i}.json`, Buffer.from(p.bytes)))
@@ -675,7 +683,7 @@ async function doorPartsFixture(page, name, errors) {
   const open = async () => { await page.goto(`${ORIGIN}/gate/page.html?kind=proto&doorparts=1`); await page.waitForFunction(() => window.gateReady === true) }
   try {
     await open()
-    const a = await page.evaluate(x => window.doorParts.whole(x), o)
+    const a = await page.evaluate(x => window.doorParts.whole(x), { ...o, bundle3: none })
     for (const e of a.pages) { serve(`${at}/s${e.p}.png`, Buffer.from(e.png, 'base64')); delete e.png }
     await open()
     const b = await page.evaluate(x => window.doorParts.parts(x), o)
@@ -698,10 +706,12 @@ async function doorPartsFixture(page, name, errors) {
       lacking: [...lacking.values()].reduce((x, v) => x + v, 0), whys: [...new Set([...added].filter(([, v]) => v > 0).map(([e]) => e.slice(e.indexOf(':') + 1)))],
     }
     const leftOk = left.subset && left.accounted && left.after && left.statesBefore && left.statesAfter
-    const ok = pages.length === a.pages.length && pages.length > 0 && all('svg') && all('lang') && all('size') && all('copy') && all('recs') && leftOk && !q1.length && !errors.length
+    // (with no add-on, door B's parts carry none and door C's bundle none)
+    const bare = !none || (b.addons === 0 && a.addon === false)
+    const ok = pages.length === a.pages.length && pages.length > 0 && all('svg') && all('lang') && all('size') && all('copy') && all('recs') && leftOk && bare && !q1.length && !errors.length
     if (!ok) failures.push(name)
-    const line = `${pages.length} pages, ${cut.parts.length} parts (${DOOR_PARTS}: ${a.parts.map(r => r.join('-')).join(' ')}): SVG ${n('svg')}/${pages.length} equal, copy ${n('copy')}, records ${n('recs')}; units left (${a.skipped.length}): before endParts ${left.subset && left.accounted ? `door A's less the ${left.lacking} its accounting adds${left.whys.length ? ` (${left.whys.join(', ')})` : ''}` : 'NOT door A\'s less the accounting'}, after it ${left.after ? 'equal' : 'NOT equal'}; states ${left.statesBefore && left.statesAfter ? 'equal' : 'NOT equal'} before and after; door B told ${b.needed} of ${b.of} parts as its run waited (${waits} waits), the rest at the end; Q1 ${q1.length ? `broken: ${q1.slice(0, 3).join('; ')}` : 'held'}; ${b.drawn} units drawn (door A ${a.drawn})${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
-    return { name, door: true, ok, ready: true, line, pages, schedule: DOOR_PARTS, parts: a.parts, needed: b.needed, waits, q1, left }
+    const line = `${none ? `no add-on (door C, BUNDLE 3's with none${bare ? '' : ': NOT bare'}), ` : ''}${pages.length} pages, ${cut.parts.length} parts (${DOOR_PARTS}: ${b.parts.map(r => r.join('-')).join(' ')}): SVG ${n('svg')}/${pages.length} equal, copy ${n('copy')}, records ${n('recs')}; units left (${a.skipped.length}): before endParts ${left.subset && left.accounted ? `door A's less the ${left.lacking} its accounting adds${left.whys.length ? ` (${left.whys.join(', ')})` : ''}` : 'NOT door A\'s less the accounting'}, after it ${left.after ? 'equal' : 'NOT equal'}; states ${left.statesBefore && left.statesAfter ? 'equal' : 'NOT equal'} before and after; door B told ${b.needed} of ${b.of} parts as its run waited (${waits} waits), the rest at the end; Q1 ${q1.length ? `broken: ${q1.slice(0, 3).join('; ')}` : 'held'}; ${b.drawn} units drawn (door A ${a.drawn})${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
+    return { name, door: true, ok, ready: true, line, pages, schedule: DOOR_PARTS, addon: DOOR_PARTS_ADDON, parts: b.parts, needed: b.needed, waits, q1, left, bare }
   } finally { for (const f of served) DOOR_FILES.delete(f) }
 }
 
@@ -945,8 +955,8 @@ if (DOOR_PARTS !== null) {
   const count = key => all.filter(e => e[key]).length
   const made = new Date().toISOString()
   const file = join(ROOT, 'out/layer-gate', `door-parts-${(engineInfo.commit ?? 'none').slice(0, 8)}${engineInfo.dirty ? '+' : ''}-${made.replace(/[:.]/g, '-')}.json`)
-  writeFileSync(file, JSON.stringify({ schema: 1, made, seconds, engine: engineInfo, inputs: { ...inputs, doorParts: DOOR_PARTS }, fixtures: Object.fromEntries(ran.map(r => [r.name, r])) }))
-  console.log(`\ndoor-parts (${DOOR_PARTS}): ${ran.length} outputs, ${all.length} pages: SVG markup equal on ${count('svg')}, copyOf's pixels on ${count('copy')}, the records on ${count('recs')}; units left as door A's on ${ran.filter(r => r.left?.subset && r.left.accounted && r.left.after && r.left.statesBefore && r.left.statesAfter).length} outputs (before endParts less its accounting, after it equal; the states too); Q1 held on ${ran.filter(r => r.q1 && !r.q1.length).length}, the runs waiting for a part ${ran.reduce((n, r) => n + (r.waits ?? 0), 0)} times; ${failures.length ? `${failures.length} failed (${failures.join(' ')})` : 'none failed'}, in ${seconds} s; the run in ${file}`)
+  writeFileSync(file, JSON.stringify({ schema: 1, made, seconds, engine: engineInfo, inputs: { ...inputs, doorParts: DOOR_PARTS, doorPartsAddon: DOOR_PARTS_ADDON }, fixtures: Object.fromEntries(ran.map(r => [r.name, r])) }))
+  console.log(`\ndoor-parts (${DOOR_PARTS}${DOOR_PARTS_ADDON === 'none' ? ', no add-on, against door C' : ''}): ${ran.length} outputs, ${all.length} pages: SVG markup equal on ${count('svg')}, copyOf's pixels on ${count('copy')}, the records on ${count('recs')}; units left as door A's on ${ran.filter(r => r.left?.subset && r.left.accounted && r.left.after && r.left.statesBefore && r.left.statesAfter).length} outputs (before endParts less its accounting, after it equal; the states too); Q1 held on ${ran.filter(r => r.q1 && !r.q1.length).length}, the runs waiting for a part ${ran.reduce((n, r) => n + (r.waits ?? 0), 0)} times; ${failures.length ? `${failures.length} failed (${failures.join(' ')})` : 'none failed'}, in ${seconds} s; the run in ${file}`)
   process.exit(failures.length || ran.length !== asked.length ? 1 : 0)
 }
 if (DOOR !== null) {

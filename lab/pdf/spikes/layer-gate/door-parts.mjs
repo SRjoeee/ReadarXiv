@@ -86,11 +86,12 @@ async function askEvery(R, layer, { target, pages, N, sourceOf }) {
 const heldOf = (layer, N) => ({ states: statesOf(layer, N), skipped: skippedOf(window.__gateRuns.at(-1)) })
 
 window.doorParts = {
-  /** door A: BUNDLE 3's open over the cut made whole (mergeParts); each page's PDF.js drawing at K kept as PNG for door B */
-  async whole({ name, target, rules, pages }) {
+  /** door A: BUNDLE 3's open over the cut made whole (mergeParts), or (`bundle3`, door C) over BUNDLE 3's bundle itself with no
+   *  add-on (`addon: null`); each page's PDF.js drawing at K kept as PNG for door B */
+  async whole({ name, target, rules, pages, bundle3 = false }) {
     const R = await import('/engine/layer-proto/reader.mjs')
     const { F, index, parts } = await cutOf(name)
-    const bundle = F.mergeParts(index, parts)
+    const bundle = bundle3 ? { ...R.readBundle(await bytes(`/door/${name}/bundle.json`)), addon: null } : F.mergeParts(index, parts)
     const rows = await json(`/door/${name}/rows.json`)
     const doc = await pdfjs.getDocument({ data: await bytes(`/fixtures/${name}/arxiv.pdf`), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
     const ruleSet = await ruleSetOf(rules)
@@ -116,7 +117,7 @@ window.doorParts = {
     const stats = layer.stats()
     layer.dispose()
     await doc.loadingTask.destroy()
-    return { ...out, ...held, parts: parts.map(p => p.pages), drawn: stats.drawn }
+    return { ...out, ...held, parts: parts.map(p => p.pages), addon: bundle.addon !== null, drawn: stats.drawn }
   },
 
   /** door B: openLayer over the index, no part at the open, each told when the run waits for one */
@@ -150,7 +151,7 @@ window.doorParts = {
     const stats = layer.stats()
     layer.dispose()
     await doc.loadingTask.destroy()
-    return { ...out, before, after, log, needed, of: parts.length, drawn: stats.drawn }
+    return { ...out, before, after, log, needed, of: parts.length, parts: parts.map(p => p.pages), addons: parts.filter(p => p.addon !== null).length, drawn: stats.drawn }
   },
 }
 window.gateReady = true
