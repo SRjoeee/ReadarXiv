@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { type Follow, OWNED, OWNED_HOW, ownedOf, type StreamPage } from '@/pdf-reader/engine/layout/stream.mjs'
+import { type Glyph, packGlyphs } from '@/pdf-reader/engine/layout/ink.mjs'
+import { type Follow, OWNED, OWNED_HOW, ownedOf, STREAM_COLUMNS, type StreamPage } from '@/pdf-reader/engine/layout/stream.mjs'
 
 // Each placeholder's own ink in the marked compile by content-stream order: a page here is what pageInk reads of one,
-// its glyphs and boxes in the order shown and its points among them. A glyph is written as its character and place,
-// every glyph 5 pt wide at 10 pt
+// its glyphs and boxes in the order shown and its points among them, its glyphs packed as the marks read keeps them
+// (packGlyphs, the columns STREAM_COLUMNS alone: a column ownedOf read and the marks read did not keep would be missing
+// here), each glyph's boxes before it as 32-bit integers. A glyph is written as its character and place, every glyph
+// 5 pt wide at 10 pt
 
 type Item = string | { u: string; x: number; y: number; size?: number } | { rule: [number, number, number, number] } | { at: string }
 /** a page from the items in stream order: a string is a run of glyphs on the current line, `{ at }` a point */
 function pageOf(items: Item[], view = [0, 0, 612, 792]): StreamPage {
-  const glyphs: StreamPage['glyphs'] = [], boxes: number[] = [], points: StreamPage['points'] = [], boxAt: number[] = []
+  const glyphs: Glyph[] = [], boxes: number[] = [], points: StreamPage['points'] = [], boxAt: number[] = []
   let x = 72, y = 700
   for (const it of items) {
     if (typeof it === 'string') {
@@ -29,7 +32,7 @@ function pageOf(items: Item[], view = [0, 0, 612, 792]): StreamPage {
       y = it.y
     }
   }
-  return { glyphs, boxes, points, boxAt, view }
+  return { glyphs: packGlyphs(glyphs, { columns: STREAM_COLUMNS }), boxes, points, boxAt: Int32Array.from(boxAt), view }
 }
 const closed: Follow = { closing: true, want: '', ends: [], blocked: false }
 const open = (want: string, ends: string[] = [], blocked = false): Follow => ({ closing: false, want, ends, blocked })
@@ -38,7 +41,7 @@ const how = (name: string) => OWNED_HOW.indexOf(name)
 function owned(pages: StreamPage[], follows: Record<string, Follow>, dropped: string[] = []) {
   const out: Record<string, string | [string, number]> = {}
   for (const [name, e] of ownedOf(pages, { follows: n => follows[n] ?? null, dropped })) {
-    out[name] = e.how < OWNED ? [e.glyphs.map(([p, g]) => pages[p - 1]?.glyphs[g]?.u).join(''), e.boxes.length] : OWNED_HOW[e.how] as string
+    out[name] = e.how < OWNED ? [e.glyphs.map(([p, g]) => pages[p - 1]?.glyphs.u[g]).join(''), e.boxes.length] : OWNED_HOW[e.how] as string
   }
   return out
 }
@@ -120,6 +123,9 @@ describe('ownedOf', () => {
     // MARK_DEF sets a unit's end mark before a display that ends it; the next unit a heading, its number on its line
     const page = pageOf(['define', { at: '0e' }, { at: 'p0.1a' }, '\na=b(1)', '\n', { u: '2', x: 72, y: 676 }, { at: 'h1s' }, { u: 'R', x: 85, y: 676 }, 'esults'])
     expect(owned([page], { 'p0.1a': open('', ['0e']) })).toEqual({ 'p0.1a': ['a=b(1)', 0] })
+    // the next unit's start mark after the page's last glyph: nothing after it on its line, nothing left out
+    const last = pageOf(['define', { at: '0e' }, { at: 'p0.1a' }, '\na=b(1)', { at: 'h1s' }])
+    expect(owned([last], { 'p0.1a': open('', ['0e']) })).toEqual({ 'p0.1a': ['a=b(1)', 0] })
     // the next mark an earlier unit's start: none
     const earlier = pageOf(['define', { at: 'p3.1a' }, '\na=b(1)', { at: '2s' }, 'text'])
     expect(owned([earlier], { 'p3.1a': open('', ['3e']) })).toEqual({ 'p3.1a': "open, the next mark not its unit's" })
