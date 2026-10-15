@@ -754,7 +754,15 @@ window.gate = {
         fill(band, rect[1] - 0.5, base - 0.35 * size, rect[3] + 0.5, base + 0.95 * size)
       }
     }
-    for (const a of S.run.audit) if (a.what === 'crop' && a.srcPage === p) both(a.src[0] - 0.3, a.src[1] - 0.3, a.src[2] + 0.3, a.src[3] + 0.3)
+    // (a crop's source: the legacy account its rectangle; the strict one what the crop carries, as the bites read it: the
+    // boxes of its own ink it is cut through where it has them (device pixels), else the rectangle it shows whole)
+    for (const a of S.run.audit) {
+      if (a.what !== 'crop' || a.srcPage !== p) continue
+      fill(accounted, a.src[0] - 0.3, a.src[1] - 0.3, a.src[2] + 0.3, a.src[3] + 0.3)
+      if (!S.file) continue
+      if (!a.clip?.length) { fill(strict, a.src[0] - 0.3, a.src[1] - 0.3, a.src[2] + 0.3, a.src[3] + 0.3); continue }
+      for (const [x, y, w, h] of a.clip) for (let yy = Math.max(0, Math.floor(y)); yy < Math.min(H, Math.ceil(y + h)); yy++) { const x0 = Math.max(0, Math.floor(x)), x1 = Math.min(W, Math.ceil(x + w)); if (x1 > x0) strict.fill(1, yy * W + x0, yy * W + x1) }
+    }
     // (a babel name drawn in the target's word: its characters its own text, its line's band its own, D1a)
     for (const n of namedInk) {
       for (const c of n.chars) both(c.x0, c.yb - 0.3 * c.size, c.x1, c.yb + 0.85 * c.size)
