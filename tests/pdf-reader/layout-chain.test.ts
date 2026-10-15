@@ -1,13 +1,24 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
-import { chainedAddon } from '@/pdf-reader/engine/layout/chain.mjs'
+import { type Cut, type CutOptions, cutBundle } from '@/pdf-reader/engine/layer-proto/cut.mjs'
+import { indexOf, mergeParts, type PartChain, partTarget, type ReadPart, type ReadUnitsChunk, readHead, readPart, readUnitsChunk } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { BOXES_BYTES, BOXES_VALUES, pagePlansOf, paperAddon, rangeEntries } from '@/pdf-reader/engine/layout/addon.mjs'
+import { REMOVAL, type RemovalManifest } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
+import { chainedAddon, type RemoverAnswer } from '@/pdf-reader/engine/layout/chain.mjs'
 import { ANSWER_CAP, ASK_CAP, ASK_VALUES, type AskChain, encodeAsk, encodeEntries, ENTRIES_CAP, ENTRIES_VALUES, readAsk, readEntries } from '@/pdf-reader/engine/layout/chain-wire.mjs'
-import { PAST_PART, removerOf } from '@/pdf-reader/engine/layout/remove.mjs'
+import { indexLayout, type LayoutIndex, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
+import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
+import { alignOf, checkPage, openRemover, PAST_PART, removalEntry, removerOf } from '@/pdf-reader/engine/layout/remove.mjs'
 import { startxrefOf, TAIL_CAP, tailLinks } from '@/pdf-reader/engine/layout/tail.mjs'
 import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 import { PDFJS } from '@/pdf-reader/engine/pipeline/versions.mjs'
-import { concat, deflate, inflate, open, PL, SIX, sixPlans, sixStream } from './helpers/chain-paper'
+import { oldAlign, type OpList, perturbed } from './helpers/align-oracle'
+import { concat, deflate, inflate, open, OPS, PL, SIX, SIX_UNITS, sha256, sixPlans, sixStream, sixWhole } from './helpers/chain-paper'
+import { leftPagesOf, type Whole } from './helpers/cut-paper'
+import { LAB_ON, LAB_PAPERS, labFiles, PACK } from './helpers/lab-data'
+import { layoutOf } from './helpers/layout-of'
 
 // The chained add-on (E3): the remover split from the plan, the plan on the prepare side (PDF.js's ink and the layout file),
 // the writing in the remover child (no PDF.js), the exchange between them bounded both ways, and a part's tail chained after
@@ -246,4 +257,313 @@ describe('the chained writer takes a bad answer as the remover\'s failure, never
     expect(h.state().dead).toBe('crashed')
     expect(p1?.manifest.removal).toBe(REMOVAL)
   })
+})
+
+// ---------------------------------------------------------------- a paper's tails, chained at a schedule
+type Plan = NonNullable<ReturnType<Awaited<ReturnType<typeof sixPlans>>['planOf']>>
+type Remove = (plans: Uint8Array) => Promise<RemoverAnswer>
+const mix32 = (x: number) => { x = Math.imul(x ^ (x >>> 16), 0x85ebca6b); x = Math.imul(x ^ (x >>> 13), 0xc2b2ae35); return (x ^ (x >>> 16)) >>> 0 }
+/** the schedules of the lab's --door-parts: one part, a page a part, the doubling, seed 7's parts of 1 to 4 pages */
+const TARGETS: Record<string, (a: number, N: number) => number> = {
+  one: (_a, N) => N, pages: a => a, doubling: partTarget, seed7: (a, N) => Math.min(N, a + (mix32(Math.imul(7, 0x9e3779b1) ^ a) % 4)),
+}
+const rangesOf = (target: (a: number, N: number) => number, N: number) => { const out: [number, number][] = []; for (let a = 1; a <= N;) { const b = target(a, N); out.push([a, b]); a = b + 1 } return out }
+const removedIn = (m: RemovalManifest) => Object.values(m.page).filter(e => e.at).length
+/** the hooks over `ranges`, each range asked and accepted in turn */
+async function chainOver(bytes: Uint8Array, N: number, planOf: (p: number) => Plan | null, ranges: [number, number][], remove: Remove, pageViews: number[][]) {
+  const asks: [number, number][] = []
+  const h = chainedAddon({ N, views: pageViews, base: { bytes: bytes.length, xref: startxrefOf(bytes)! }, planOf, pdfjs: PDFJS, remove: ({ from, to, plans }) => { asks.push([from, to]); return remove(plans) } })
+  const parts = []
+  for (const [i, pages] of ranges.entries()) {
+    const got = await h.chainAddon(i, { pages })
+    if (got === null) throw new Error(`pages ${pages}: no add-on`)
+    h.acceptAddon(i, { pages })
+    parts.push(got)
+  }
+  return { parts, asks, state: h.state() }
+}
+/** each page's glyphs as PDF.js reads them, from..to of a document */
+async function glyphsOf(doc: Awaited<ReturnType<typeof open>>, from: number, to: number) {
+  const out = []
+  for (let q = from; q <= to; q++) { const pg = await doc.getPage(q); out.push(pageInk(OPS, await pg.getOperatorList(), pg.commonObjs, { rotate: pg.rotate, indices: true })) }
+  return out
+}
+const sig = (ink: Awaited<ReturnType<typeof glyphsOf>>[number]) => ink.glyphs.map(g => `${g.u}|${g.font}|${g.x0.toFixed(4)}|${g.y.toFixed(4)}`).join(' ')
+const NO_INK = { glyphs: [], boxes: [], paths: [] }
+
+/**
+ * Tests 1 and 2 on one paper: the one-part chain is paperAddon's tail and manifest; at each schedule every prefix of the
+ * tails opens with N + r pages, its removed pages the single tail's (PDF.js's ink and checkPage's counts), its manifest
+ * entries paperAddon's
+ */
+async function proveChains(name: string, bytes: Uint8Array, index: LayoutIndex, schedules: string[]) {
+  const doc = await open(bytes)
+  const N = doc.numPages
+  const whole = await paperAddon({ bytes, index, doc, OPS, PL, deflate, inflate })
+  if (!whole.ok) throw new Error(`${name}: ${whole.refused}`)
+  const { plans } = await pagePlansOf({ doc, OPS, index })
+  const planOf = (p: number) => plans.get(p) ?? null
+  const remover = removerOf({ bytes, PL, inflate, deflate })
+  const pageViews = Array.from({ length: N }, (_, i) => [...index.view(i + 1)])
+  const R = removedIn(whole.manifest)
+  // 1: one part [1, N] is today's single tail, byte for byte (no tail where it removes no page), and its manifest's entries
+  const one = await chainOver(bytes, N, planOf, [[1, N]], remover.remove, pageViews)
+  const part = one.parts[0]!
+  if (R > 0) expect(Buffer.from(part.tail!).equals(Buffer.from(whole.tail)), `${name}: the one-part tail`).toBe(true)
+  else expect(part.tail, name).toBeNull()
+  expect(part.manifest.page, name).toEqual(whole.manifest.page)
+  expect(part.manifest.stats, name).toEqual(whole.manifest.stats)
+  // the single tail's removed pages, and the original's, as PDF.js reads them
+  const single = await open(concat([bytes, whole.tail]))
+  const singleInks = await glyphsOf(single, N + 1, N + R)
+  const at = Object.entries(whole.manifest.page).filter(([, e]) => e.at).map(([p]) => Number(p))
+  const origInks = await glyphsOf(doc, 1, N)
+  const counts = (ink: typeof singleInks[number], j: number) => {
+    const p = at[j]!, r = planOf(p)!.remove!
+    return checkPage({ orig: origInks[p - 1]! as never, removed: ink as never, kept: NO_INK, entry: removalEntry(r) })
+  }
+  for (const s of schedules) {
+    const ranges = rangesOf(TARGETS[s]!, N)
+    const run = await chainOver(bytes, N, planOf, ranges, remover.remove, pageViews)
+    const tails: Uint8Array[] = []
+    let r = 0
+    for (const [i, got] of run.parts.entries()) {
+      for (let p = ranges[i]![0]; p <= ranges[i]![1]; p++) expect(got.manifest.page[p], `${name} ${s}: page ${p}`).toEqual(whole.manifest.page[p])
+      if (got.tail === null) continue
+      tails.push(got.tail)
+      const was = r
+      r += removedIn(got.manifest)
+      const prefix = await open(concat([bytes, ...tails]))
+      expect(prefix.numPages, `${name} ${s}: after part ${i}`).toBe(N + r)
+      const inks = await glyphsOf(prefix, N + was + 1, N + r)
+      for (let j = was; j < r; j++) {
+        expect(sig(inks[j - was]!), `${name} ${s}: removed page ${N + j + 1}`).toBe(sig(singleInks[j]!))
+        expect(counts(inks[j - was]!, j), `${name} ${s}: removed page ${N + j + 1}`).toEqual(counts(singleInks[j]!, j))
+      }
+      await prefix.loadingTask.destroy()
+    }
+    expect(r, `${name} ${s}`).toBe(R)
+    expect(run.state.r, `${name} ${s}`).toBe(R)
+  }
+  await single.loadingTask.destroy()
+  await doc.loadingTask.destroy()
+  return { whole, plans }
+}
+
+describe('a part\'s tail chained after the parts before (tests 1, 2): the synthetic paper', () => {
+  for (const [what, make] of [['a classic table', async () => SIX], ['a cross-reference stream', sixStream]] as const) {
+    it(`the one-part chain is paperAddon's; every prefix at every schedule opens, its removed pages the single tail's: ${what}`, async () => {
+      const bytes = await make()
+      const { whole } = await proveChains(what, bytes, layoutOf(SIX_UNITS, 6), Object.keys(TARGETS))
+      // (pages 1, 4 and 5 removed; 6 refused by the remover; 2 clean, its rule; 3 not planned)
+      expect(Object.keys(whole.manifest.page).filter(p => whole.manifest.page[Number(p)]!.at)).toEqual(['1', '4', '5'])
+    }, 60_000)
+  }
+})
+
+// ---------------------------------------------------------------- the cut with the hooks
+async function readBack(c: Cut) {
+  const rh = await readHead(c.head.bytes, { ref: c.head.ref })
+  const read: ReadUnitsChunk[] = []
+  for (const u of c.units) read.push(await readUnitsChunk(u.bytes, { ref: u.ref, before: read.at(-1) ?? null }))
+  const index = indexOf(rh, read)
+  const parts: ReadPart[] = []
+  let chain: PartChain | null = null
+  for (const p of c.parts) { const r = await readPart(p.bytes, { ref: p.ref, index, chain }); parts.push(r); chain = r.chain }
+  return { index, parts }
+}
+/** the paper cut with the chained add-on's hooks over an in-process remover (or `remove`), and read back as the service reads it */
+async function cutChained(whole: Whole, bytes: Uint8Array, planOf: (p: number) => Plan | null, o: { remove?: Remove; target?: (a: number, N: number) => number; deflate?: (b: Uint8Array) => Uint8Array; leftPages?: CutOptions['leftPages'] } = {}) {
+  const remover = removerOf({ bytes, PL, inflate, deflate: o.deflate ?? deflate })
+  const asks: [number, number][] = []
+  const h = chainedAddon({
+    N: whole.paper.pages, views: whole.left.pages, base: { bytes: whole.base.bytes, xref: whole.base.xref! }, planOf, pdfjs: PDFJS,
+    remove: ({ from, to, plans }) => { asks.push([from, to]); return (o.remove ?? remover.remove)(plans) },
+  })
+  const c = await cutBundle(whole, { leftPages: o.leftPages ?? leftPagesOf(whole), chainAddon: h.chainAddon, acceptAddon: h.acceptAddon, ...(o.target ? { target: o.target } : {}) })
+  return { c, asks, h, back: await readBack(c) }
+}
+const fitsOf = (c: Cut) => c.parts.map(p => [p.from, p.to])
+const sum = (xs: number[]) => xs.reduce((n, x) => n + x, 0)
+
+/** test 3: every part read in order, the merge's entries paperAddon's page by page, its counts summed, `appended` the tails' */
+async function proveCut(name: string, whole: Whole, bytes: Uint8Array, index: LayoutIndex, o: { leftPages?: CutOptions['leftPages']; target?: (a: number, N: number) => number } = {}) {
+  const doc = await open(bytes)
+  const made = await paperAddon({ bytes, index, doc, OPS, PL, deflate, inflate })
+  if (!made.ok) throw new Error(`${name}: ${made.refused}`)
+  const { plans } = await pagePlansOf({ doc, OPS, index })
+  await doc.loadingTask.destroy()
+  const run = await cutChained(whole, bytes, p => plans.get(p) ?? null, o)
+  const { back } = run
+  expect(back.parts.every(p => p.layout !== null && p.addon !== null), `${name}: every part its layout and add-on`).toBe(true)
+  const merged = mergeParts(back.index, back.parts)
+  const m = merged.addon!.manifest
+  for (let p = 1; p <= whole.paper.pages; p++) expect(m.page[p], `${name}: page ${p}`).toEqual(made.manifest.page[p])
+  expect(m.stats, name).toEqual(made.manifest.stats)
+  const tails = back.parts.map(p => p.addon?.tail).filter((t): t is Uint8Array => t != null)
+  expect(m.appended, name).toBe(sum(tails.map(t => t.length)))
+  expect(merged.addon!.tail.length, name).toBe(m.appended)
+  const composed = await open(concat([bytes, ...tails]))
+  expect(composed.numPages, name).toBe(whole.paper.pages + back.parts.at(-1)!.chain.r)
+  await composed.loadingTask.destroy()
+  return { ...run, made, merged }
+}
+
+describe('the cut with the chained hooks (tests 3 to 6): the synthetic paper', () => {
+  it('3, 4: every part reads in order and merges to paperAddon\'s; a clean-only part asks nothing and the next chains on the last tail', async () => {
+    const whole = sixWhole(SIX)
+    const run = await proveCut('six', whole, SIX, layoutOf(SIX_UNITS, 6))
+    expect(fitsOf(run.c)).toEqual([[1, 1], [2, 3], [4, 6]])
+    // (part [2, 3] has no page with kept ink: no ask, no tail, no removed page; [4, 6]'s tail follows [1, 1]'s)
+    expect(run.asks).toEqual([[1, 1], [4, 6]])
+    const [p1, p2, p3] = run.back.parts
+    expect(p2!.addon).toMatchObject({ tail: null, r: 0 })
+    expect(p2!.chain.end).toBe(p1!.chain.end)
+    expect(tailLinks(p3!.addon!.tail!)!.prev).toBe(tailLinks(p1!.addon!.tail!)!.startxref)
+    expect(p3!.addon!.manifest.page[6]).toMatchObject({ ok: false, refused: expect.stringMatching(/painted more than once/) })
+    expect(p3!.addon!.manifest.page[4]).toMatchObject({ ok: true, at: { R: 8 } })
+  }, 60_000)
+
+  it('5: the remover failing at ask k: the parts before are as without it, the rest drawn the old way, all read', async () => {
+    const whole = sixWhole(SIX), { planOf, remover } = await sixPlans(SIX)
+    const pages = (a: number) => a
+    const clean = await cutChained(whole, SIX, planOf, { target: pages })
+    expect(clean.asks).toEqual([[1, 1], [4, 4], [5, 5], [6, 6]])
+    let asked = 0
+    const failing: Remove = async plans => (++asked === 2 ? { ok: false, why: 'clock' } : remover.remove(plans))
+    const run = await cutChained(whole, SIX, planOf, { target: pages, remove: failing })
+    // (dead after the second ask: no third)
+    expect(run.asks).toEqual([[1, 1], [4, 4]])
+    expect(run.h.state().dead).toBe('clock')
+    for (let i = 0; i < 3; i++) expect(run.c.parts[i]!.sha256, `part ${i}`).toBe(clean.c.parts[i]!.sha256)
+    for (const [i, p] of [[3, 4], [4, 5], [5, 6]] as const) {
+      const part = run.back.parts[i]!
+      expect(part.addon?.tail, `page ${p}`).toBeNull()
+      expect(part.addon?.manifest.page[p], `page ${p}`).toEqual({ ok: false, refused: 'tail not carried: clock' })
+      expect(part.addon?.manifest.stats, `page ${p}`).toMatchObject({ uncarried: 1 })
+    }
+    // a clean page after the death stays as it was
+    expect(run.back.parts[1]!.addon!.manifest.page[2]).toEqual(clean.back.parts[1]!.addon!.manifest.page[2])
+    // a transport that throws (not memory) is a death too; one whose word is none of the service's is 'crashed'
+    const thrown = await cutChained(whole, SIX, planOf, { remove: async () => { throw new Error('the pipe broke') } })
+    expect(thrown.back.parts[0]!.addon!.manifest.page[1]).toEqual({ ok: false, refused: 'tail not carried: crashed' })
+    const odd = await cutChained(whole, SIX, planOf, { remove: async () => ({ ok: false, why: 'tired' }) as never })
+    expect(odd.h.state().dead).toBe('crashed')
+    const late = await cutChained(whole, SIX, planOf, { remove: async () => ({ ok: false, why: 'deadline' }) })
+    expect(late.back.parts[0]!.addon!.manifest.page[1]).toEqual({ ok: false, refused: 'tail not carried: deadline' })
+    // a memory-class error of the transport is the prepare side's own: it goes on
+    await expect(cutChained(whole, SIX, planOf, { remove: async () => { throw new RangeError(ALLOCATION_FAILED) } })).rejects.toThrow(ALLOCATION_FAILED)
+  }, 60_000)
+
+  it('5: a page past the boxes\' share is refused alone, mid-part; the share is the paper\'s over every part (as one add-on of the whole)', async () => {
+    const whole = sixWhole(SIX), { planOf } = await sixPlans(SIX)
+    const probe = (p: number) => { const x = planOf(p); return x && p === 4 ? { ...x, cost: { bytes: BOXES_BYTES, values: 1 } } : x }
+    const run = await cutChained(whole, SIX, probe)
+    expect(fitsOf(run.c)).toEqual([[1, 1], [2, 3], [4, 6]])
+    const m = run.back.parts[2]!.addon!.manifest
+    expect(m.page[4]).toEqual({ ok: false, refused: expect.stringMatching(/more than the manifest has left/) })
+    expect(m.page[5]).toMatchObject({ ok: true, at: { R: 8 } })
+    // each planned page 30% of the share: pages 1, 2 and 4 hold it, 5 and 6 are past it, whatever the parts
+    const heavy = (p: number) => { const x = planOf(p); return x && { ...x, cost: { bytes: Math.floor(0.3 * BOXES_BYTES), values: 1 } } }
+    const whole1 = rangeEntries(heavy, 1, 6, { bytes: 0, values: 0 })
+    expect(whole1.asked).toEqual([1, 4])
+    for (const target of [TARGETS.one!, TARGETS.pages!, TARGETS.doubling!, TARGETS.seed7!]) {
+      const cut = await cutChained(whole, SIX, heavy, { target })
+      const page = mergeParts(cut.back.index, cut.back.parts).addon!.manifest.page
+      for (const p of [5, 6]) expect(page[p]).toEqual({ ok: false, refused: expect.stringMatching(/more than the manifest has left/) })
+      for (const p of [1, 4]) expect(page[p]).toMatchObject({ ok: true })
+      expect(cut.h.state().boxes.bytes).toBe(whole1.spent.bytes)
+    }
+  }, 120_000)
+
+  it('6: candidates asked in any order change nothing before one is accepted; then as the final range asked alone', async () => {
+    const { planOf, remover } = await sixPlans(SIX)
+    const hooks = () => chainedAddon({ N: 6, views, base: { bytes: SIX.length, xref: startxrefOf(SIX)! }, planOf, pdfjs: PDFJS, remove: ({ plans }) => remover.remove(plans) })
+    const a = hooks(), b = hooks()
+    for (const pages of [[1, 6], [1, 3], [1, 6], [1, 1], [1, 2]] as [number, number][]) await a.chainAddon(0, { pages })
+    expect(a.state()).toEqual(b.state())
+    const fromA = await a.chainAddon(0, { pages: [1, 1] }), fromB = await b.chainAddon(0, { pages: [1, 1] })
+    a.acceptAddon(0, { pages: [1, 1] })
+    b.acceptAddon(0, { pages: [1, 1] })
+    expect(a.state()).toEqual(b.state())
+    expect(Buffer.from(fromA!.tail!).equals(Buffer.from(fromB!.tail!))).toBe(true)
+    // (a candidate asked last but not accepted is not what is committed)
+    await a.chainAddon(1, { pages: [2, 6] })
+    await a.chainAddon(1, { pages: [2, 4] })
+    a.acceptAddon(1, { pages: [2, 6] })
+    const restB = await b.chainAddon(1, { pages: [2, 6] })
+    b.acceptAddon(1, { pages: [2, 6] })
+    expect(a.state()).toEqual(b.state())
+    expect(restB!.manifest.page[5]).toMatchObject({ ok: true, at: { R: 9 } })
+  }, 60_000)
+
+  it('6: an over shortens the part; one page whose tail alone passes TAIL_CAP is refused alone and keeps its layout', async () => {
+    const whole = sixWhole(SIX), { planOf } = await sixPlans(SIX)
+    const filler = (kib: number) => () => new Uint8Array(kib * 1024).fill(0x20)
+    const over = await cutChained(whole, SIX, planOf, { deflate: filler(600) })
+    expect(fitsOf(over.c)).toEqual([[1, 1], [2, 3], [4, 4], [5, 6]])
+    expect(over.back.parts.map(p => p.addon?.r)).toEqual([1, 0, 1, 1])
+    const alone = await cutChained(whole, SIX, planOf, { deflate: filler(1100) })
+    expect(alone.back.parts.every(p => p.layout !== null && p.addon !== null)).toBe(true)
+    const page = mergeParts(alone.back.index, alone.back.parts).addon!.manifest.page
+    for (const p of [1, 4, 5]) expect(page[p], `page ${p}`).toEqual({ ok: false, refused: PAST_PART })
+    expect(alone.back.parts.every(p => p.addon!.tail === null)).toBe(true)
+  }, 120_000)
+})
+
+// ---------------------------------------------------------------- the real papers (where this machine has them)
+const PACK_PAPERS = ['1512.03385v1', '1706.03762v7', '1810.04805v2', '2307.16209v1', '2608.04322v1', '2608.16117v1'] as const
+const packFiles = (paper: string) => ({ pdf: join(PACK!, 'fixtures', `${paper}-zh`, 'arxiv.pdf'), layout: join(PACK!, 'fixtures', `${paper}-zh`, 'layout.json') })
+const packIndex = (paper: string) => indexLayout(parseLayout(new Uint8Array(readFileSync(packFiles(paper).layout))))
+
+describe.skipIf(!PACK)('the pack\'s papers (AXT_PACK): one add-on a paper, the 30 fixtures\' six', () => {
+  for (const paper of PACK_PAPERS) {
+    it(`${paper}: tests 1, 2 and 8, and its pages aligned by their facts as by their lists`, async () => {
+      const bytes = new Uint8Array(readFileSync(packFiles(paper).pdf)), index = packIndex(paper)
+      const { whole, plans } = await proveChains(paper, bytes, index, ['pages', 'doubling', 'seed7'])
+      // 8: the paper-wide boxes' share never binds: no page refused for it, the whole's boxes within it
+      expect(Object.values(whole.manifest.page).filter(e => /more than the manifest has left/.test(e.refused ?? ''))).toEqual([])
+      expect(sum([...plans.values()].filter(x => x.unfit === null).map(x => x.cost.bytes))).toBeLessThanOrEqual(BOXES_BYTES)
+      expect(sum([...plans.values()].filter(x => x.unfit === null).map(x => x.cost.values))).toBeLessThanOrEqual(BOXES_VALUES)
+      // E1(b): every page's verdict over its facts is the old reading's of its list, as read and perturbed (fail closed)
+      const doc = await open(bytes)
+      const R = await openRemover(bytes, { PL, inflate })
+      for (let p = 1; p <= doc.numPages; p++) {
+        const list = await (await doc.getPage(p)).getOperatorList()
+        const lists: [string, OpList][] = [['as read', list]]
+        for (const how of ['drop-show', 'extra-path', 'other-code', 'null-code'] as const) { const l = perturbed(OPS, list, how, p); if (l) lists.push([how, l]) }
+        for (const [what, l] of lists) {
+          const old = oldAlign(R.walkPage(p - 1), R.encrypted, OPS, l)
+          const got = R.alignPage(p - 1, alignOf(OPS, l)) as { ok: boolean; why: string[]; paints: unknown }
+          expect({ ok: got.ok, why: got.why, paints: got.paints !== null }, `${paper} page ${p}, ${what}`).toEqual(old)
+          if (what !== 'as read' && what !== 'extra-path') expect(old.ok, `${paper} page ${p}, ${what}`).toBe(false)
+        }
+        R.release()
+      }
+      await doc.loadingTask.destroy()
+    }, 600_000)
+  }
+})
+
+describe.skipIf(!LAB_ON)('the real papers cut with the chained hooks (AXT_LAB, AXT_PACK; test 3)', () => {
+  for (const [name, target] of LAB_PAPERS) {
+    it(name, async () => {
+      const { openPaper } = await import('@/pdf-reader/engine/pipeline/live.mjs')
+      const { unpackSource } = await import('@/pdf-reader/engine/source/tar.mjs')
+      const { bundleUnitsOf } = await import('@/pdf-reader/engine/layer-proto/units.mjs')
+      const { geometryFile, sourceFile } = labFiles(name, target)
+      const bytes = new Uint8Array(readFileSync(packFiles(name).pdf)), index = packIndex(name)
+      const id = name.replace(/v\d+$/, ''), version = Number(name.slice(id.length + 1))
+      const source = await unpackSource(new Uint8Array(readFileSync(sourceFile)))
+      if (!('files' in source)) throw new Error(`${name}: the source is a PDF`)
+      const units = bundleUnitsOf(openPaper(source.files))
+      const geometry = JSON.parse(readFileSync(geometryFile, 'utf8')) as { left: { pages: [number, number, number, number][]; units: Whole['left']['units'] } }
+      const whole = {
+        paper: { id, version, pages: index.file.paper.pages }, base: { bytes: bytes.length, sha256: sha256(bytes), xref: startxrefOf(bytes)! }, versions: { image: '1' }, units,
+        left: { kinds: units.map(u => u[0]), pages: geometry.left.pages, units: [...geometry.left.units].sort((a, b) => a[0] - b[0]) }, layout: index.file,
+      } as Whole
+      const run = await proveCut(name, whole, bytes, index, { leftPages: () => null })
+      if (process.env.AXT_CUT_STATS) process.stderr.write(`CHAIN ${name} parts=${JSON.stringify(fitsOf(run.c))} asks=${JSON.stringify(run.asks)} r=${run.back.parts.at(-1)!.chain.r}\n`)
+    }, 600_000)
+  }
 })
