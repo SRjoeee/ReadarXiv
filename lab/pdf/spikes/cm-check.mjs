@@ -41,6 +41,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, statfsSync, utimesSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { getDocument, OPS, version } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { LITE } from './lite-pdfjs.mjs'
 import { encodeLayout } from '../../../src/pdf-reader/engine/layout/file.mjs'
 import { makeLayout } from '../../../src/pdf-reader/engine/layout/make.mjs'
 import { parseLayoutMarks } from '../../../src/pdf-reader/engine/layout/marks.mjs'
@@ -59,7 +60,7 @@ const LAYOUT_ALL = process.argv.includes('--layout'), TRACE = process.argv.inclu
 const FREE_MIN = 15 * 2 ** 30
 const TIMEOUT_MS = 600_000
 const NM = new URL('../../../node_modules/pdfjs-dist/', import.meta.url).pathname
-const pdfOf = bytes => getDocument({ data: Uint8Array.from(bytes), verbosity: 0, cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, useSystemFonts: false })
+const pdfOf = bytes => getDocument({ data: Uint8Array.from(bytes), ...LITE, verbosity: 0, cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, useSystemFonts: false })
 
 // ---------------------------------------------------------------- the native TeX
 const BIN = process.env.NATIVE_TEX_BIN ?? join(process.env.HOME ?? '', 'Library/TinyTeX/bin/universal-darwin')

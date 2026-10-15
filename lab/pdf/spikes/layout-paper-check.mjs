@@ -23,6 +23,7 @@ import { layoutMarksOfPaper } from '../../../src/pdf-reader/engine/layout/paper.
 import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, layoutMarksOf, probeSamples, readInkProbe, readInkTexts, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
+import { LITE } from './lite-pdfjs.mjs'
 
 const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname
@@ -35,7 +36,7 @@ const OUT = resolve(argOf('out') ?? join(root, 'out/layer-gate/e5-proof'))
 const FREE_MIN = 15 * 2 ** 30
 const PAPERS = ['1512.03385v1', '1706.03762v7', '1810.04805v2', '2307.16209v1', '2608.04322v1']
 const NM = new URL('../../../node_modules/pdfjs-dist/', import.meta.url).pathname
-const open = bytes => getDocument({ data: bytes, verbosity: 0, cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, useSystemFonts: false })
+const open = bytes => getDocument({ data: bytes, ...LITE, verbosity: 0, cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, useSystemFonts: false })
 const free = dir => { const s = statfsSync(dir); return s.bavail * s.bsize }
 const tag = IMAGE.replace(/[^A-Za-z0-9.-]+/g, '_')
 

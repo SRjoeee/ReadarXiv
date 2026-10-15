@@ -13,6 +13,7 @@ import { ADDON_CAP, parseAddonManifest, REFUSED_MAX, REMOVAL } from '@/pdf-reade
 import { encodeLayout, type LayoutIndex } from '@/pdf-reader/engine/layout/file.mjs'
 import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
 import { layoutOf, type UnitDef } from './helpers/layout-of'
+import { installLiteWorker, LITE } from './helpers/lite-pdfjs'
 
 // The paper's shipped add-on (layout/addon.mjs; Plan 8's layer bundle holds it): a four-page PDF written here, one page of
 // each kind the maker tells apart, and its layout file. The paper's own add-on, made from the five papers, is checked
@@ -69,7 +70,8 @@ const inflate = (b: Uint8Array, limit: number) => {
   const o = { finishFlush: zlibConstants.Z_SYNC_FLUSH, maxOutputLength: limit + 1 }
   try { return new Uint8Array(inflateSync(b, o)) } catch (e) { if ((e as { code?: string })?.code === 'ERR_BUFFER_TOO_LARGE') throw e; return new Uint8Array(inflateRawSync(b.subarray(2), o)) }
 }
-const open = (data: Uint8Array) => getDocument({ data: data.slice(), verbosity: 0 }).promise
+// (read without the images' pixels: the ink and the plans want the placement of an image, never its pixels; pdf-lite.mjs)
+const open = async (data: Uint8Array) => { await installLiteWorker(); return getDocument({ data: data.slice(), verbosity: 0, ...LITE }).promise }
 const concat = (a: Uint8Array, b: Uint8Array) => { const out = new Uint8Array(a.length + b.length); out.set(a); out.set(b, a.length); return out }
 const utf8 = (s: string) => new TextEncoder().encode(s)
 
