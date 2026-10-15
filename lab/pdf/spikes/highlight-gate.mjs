@@ -129,7 +129,9 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { floatsOfPaper, floatsVerdict } from './highlight-gate-floats.mjs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from '../../../src/pdf-reader/engine/pipeline/anchors.mjs'
+import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, startsAnchor, tokenizeDocument } from '../../../src/pdf-reader/engine/pipeline/anchors.mjs'
+import { readLeftPart, writeLeftPart } from '../../../src/pdf-reader/engine/layer-proto/format.mjs'
+import { leftSideOf } from '../../../src/pdf-reader/engine/pipeline/left-side.mjs'
 import { floatHitOf, floatShapes } from '../../../src/pdf-reader/engine/view/floats.mjs'
 import { blockOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, sentencesFit } from '../../../src/pdf-reader/engine/view/highlight.mjs'
 import { displayEdges, plainTranslated, serialize, unitText } from '../../../src/pdf-reader/engine/translate/mt.mjs'
@@ -186,6 +188,8 @@ function kindOf(paper, u) {
 }
 
 const median = xs => { const s = [...xs].sort((a, b) => a - b); return s[s.length >> 1] ?? null }
+/** per paper: the left parts' starts against the gate's own (the layer row) */
+const layerRow = {}
 const tally = {}, cost = {}, cuts = [], inkHoles = [], overlaps = [], pastEdge = [], unreachable = []
 /** per paper: the sentences' counts (B3); the holes and words outside listed */
 const sentences = {}, sentenceHoles = [], wordsOutside = [], inkCuts = [], goesOnShort = [], floatTaken = []
@@ -266,6 +270,36 @@ for (const id of ids) {
     }
     cost[`${id} ${S}`] = { pages: pdf.views.length, tokens: doc.length, layoutMs: +median(layoutMs).toFixed(2), allPagesMs: +median(pagesMs).toFixed(2), perPageMs: +(median(pagesMs) / pdf.views.length).toFixed(3), pageMaxMs: +median(pageMax).toFixed(2), startsMs: +median(startsMs).toFixed(2) }
     sides[S] = { anchors, doc, layout: layoutOf(doc, pdf.views, anchors, kinds), starts }
+    // the layer row (left-pages design T4): the left's starts as the view rebuilds them from the left parts the prepare writes (the
+    // producer's page inputs through writeLeftPart and readLeftPart, each unit's anchor from the parts of its pages) against the gate's own
+    if (S === 'L') {
+      const side = leftSideOf({ doc, views: pdf.views, anchors })
+      const paperId = { id: '2608.04322', version: 1 }
+      const streams = new Map(side.units.map(u => [u[0], u[1]]))
+      const lefts = []
+      for (let p = 1; p <= pdf.views.length; p++) {
+        const input = side.leftPages(p)
+        const w = await writeLeftPart({ paper: paperId, page: p, first: input?.first ?? (doc.findIndex(t => t.page >= p) < 0 ? doc.length : doc.findIndex(t => t.page >= p)), tokens: input?.tokens ?? { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }, spans: input?.spans ?? [], pairs: input?.pairs ?? [] })
+        lefts.push({ part: await readLeftPart(w.bytes, { ref: w.ref, streamOf: i => streams.get(i) }), emptied: w.emptied })
+      }
+      const row = (layerRow[id] = { units: 0, same: 0, differ: 0, emptied: lefts.filter(l => l.emptied).length, unplaced: 0 })
+      for (const [i, sn] of Object.entries(sents)) {
+        const a = anchors.get(+i), want = starts.get(+i) ?? null
+        if (!a || !streams.has(+i)) { row.unplaced++; if (want) row.differ++; continue }
+        if (a.rects.some(r => lefts[r.page - 1].emptied)) continue
+        row.units++
+        const pieces = []
+        for (const l of lefts) {
+          const spans = l.part.spans.find(x => x[0] === +i)
+          if (!spans) continue
+          const runs = l.part.pairs.find(x => x[0] === +i)
+          pieces.push({ first: l.part.first, ranges: spans[1], ...(runs ? { runs: runs[1] } : {}) })
+        }
+        const got = sentenceStarts(startsAnchor(pieces), textOf.get(+i) ?? '', sn.src)
+        if (JSON.stringify(got && [...got]) === JSON.stringify(want && [...want])) row.same++
+        else { row.differ++; (row.list ??= []).push(+i) }
+      }
+    }
   }
   // the left's starts by its text alone (B3c: arXiv's PDF before our marked original's marks are carried to it) against
   // those found with the marks: units both found, the starts on the marks' token and line, units found by one alone
@@ -571,6 +605,12 @@ if (Object.keys(cutAway).length) console.log('the runs\' units the tree now cuts
 console.log('units of more than one sentence (with a mark), their starts all found on arXiv\'s PDF and on our translation:', Object.entries(truth).filter(([, t]) => t).map(([id, t]) => `${id} ${t.pair.both}/${t.pair.multi}`).join(', '))
 // the gate: what must be none, and against the baseline what may not fall (or, for cuts, grow)
 const failures = []
+// the layer row: a unit whose starts, read back from the left parts, are not the anchors' own
+console.log('\nthe layer row (left-pages design T4): units whose starts the left parts give as the anchors do; the same, the different; pages the writer emptied; sentences of units the side does not locate')
+for (const [id, r] of Object.entries(layerRow)) {
+  console.log(`  ${id}: ${r.units} units, ${r.same} same, ${r.differ} different, ${r.emptied} emptied, ${r.unplaced} unplaced`)
+  if (r.differ) failures.push(`${id}: ${r.differ} units' starts from the left parts differ from the anchors' (${(r.list ?? []).slice(0, 8).join(', ')})`)
+}
 for (const c of ['unlitAnchored', 'holes', 'inkHoles', 'unreachable', 'fragmentedDisplays', 'overlapping']) if (sum[c] > 0) failures.push(`${c} ${sum[c]}`)
 for (const c of ['holes', 'otherSentence', 'wordsOutside', 'headsOutside', 'gaps', 'overlaps', 'goesOnShort', 'takenByFloat']) if (ssum[c] > 0) failures.push(`sentences: ${c} ${ssum[c]}`)
 if (!Object.keys(truth).length) failures.push(`no ground truth at ${GT}`)
@@ -613,7 +653,7 @@ else {
   }
 }
 mkdirSync(join(root, 'out'), { recursive: true })
-writeFileSync(join(root, 'out/highlight-gate.json'), JSON.stringify({ ids, tally, cost, cuts, inkHoles, overlaps, unreachable, counts, taken, sentences, truth, textOnly }, null, 1))
+writeFileSync(join(root, 'out/highlight-gate.json'), JSON.stringify({ ids, tally, cost, cuts, inkHoles, overlaps, unreachable, counts, taken, sentences, truth, textOnly, layerRow }, null, 1))
 console.log(failures.length ? `\nFAIL: ${failures.slice(0, 20).join('; ')}${failures.length > 20 ? ` (and ${failures.length - 20} more)` : ''}` : '\nok: every anchored unit lit and reachable, no hole, no ink hole, no fragmented display, no unit\'s blocks overlapping, the baseline met')
 process.exitCode = failures.length ? 1 : 0
 // the floats' report and verdict, held to their own baseline (highlight-gate-floats.mjs)
